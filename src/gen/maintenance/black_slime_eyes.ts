@@ -15,6 +15,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import {
   type MaintContentCtx, findMaintArea, openTile, setFeature, setWater, stampMaintRoom,
 } from './content_helpers';
+import { rng } from '../../core/rand';
 
 const TAG_SITE = 'ag67_black_slime';
 const TAG_SLIME = 'black_slime';
@@ -223,7 +224,7 @@ function spawnBlackSlimeEyes(ctx: BlackSlimeContext, source: WorldEvent): number
       type: EntityType.MONSTER,
       x: pos.x + 0.5,
       y: pos.y + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: scaleMonsterSpeed(def.speed, zoneLevel),

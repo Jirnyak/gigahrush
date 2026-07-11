@@ -24,6 +24,7 @@ import {
   proceduralScreenHash01,
   proceduralScreenTex,
 } from '../data/procedural_screen_textures';
+import { rng } from '../core/rand';
 
 export { SCREEN_FRAMES, SCREEN_VARIANTS } from '../data/procedural_screen_textures';
 
@@ -195,7 +196,7 @@ function collectRoomWallCells(world: World, room: Room): number[] {
 
 function shuffleNumbers(a: number[]): void {
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     const tmp = a[i];
     a[i] = a[j];
     a[j] = tmp;
@@ -363,11 +364,11 @@ function placeRoomScreens(world: World, floor: FloorLevel, cap: number, owned: S
   for (const room of world.rooms) {
     if (world.screenCells.length >= cap) break;
     if (!room || !isRoomEligible(floor, room)) continue;
-    if (Math.random() > roomChance(floor, room)) continue;
+    if (rng() > roomChance(floor, room)) continue;
     const cells = collectRoomWallCells(world, room);
     if (cells.length === 0) continue;
     shuffleNumbers(cells);
-    const count = room.w * room.h > 140 && Math.random() < 0.35 ? 2 : 1;
+    const count = room.w * room.h > 140 && rng() < 0.35 ? 2 : 1;
     for (let i = 0; i < count && i < cells.length && world.screenCells.length < cap; i++) {
       const ci = cells[i];
       const signal = pickSignal(world, floor, room, ci);
@@ -378,7 +379,7 @@ function placeRoomScreens(world: World, floor: FloorLevel, cap: number, owned: S
 
 function placeHellScreens(world: World, cap: number, owned: Set<number>): void {
   for (let attempt = 0; attempt < 7000 && world.screenCells.length < cap; attempt++) {
-    const ci = Math.floor(Math.random() * W * W);
+    const ci = Math.floor(rng() * W * W);
     if (world.cells[ci] !== Cell.WALL || world.features[ci] !== Feature.NONE) continue;
     if (world.wallTex[ci] !== Tex.MEAT && world.wallTex[ci] !== Tex.GUT) continue;
     const x = ci % W;
@@ -389,7 +390,7 @@ function placeHellScreens(world: World, cap: number, owned: Set<number>): void {
       if (world.cells[ni] === Cell.FLOOR) { facesFloor = true; break; }
     }
     if (!facesFloor) continue;
-    if (Math.random() < 0.10) {
+    if (rng() < 0.10) {
       const signal = pickSignal(world, FloorLevel.HELL, undefined, ci);
       placeScreenAt(world, ci, pickVariant(signal, x, y), owned);
     }

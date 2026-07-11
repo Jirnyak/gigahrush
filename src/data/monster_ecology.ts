@@ -1,6 +1,7 @@
 /* ── Monster ecology: spawn identity, counterplay, and loot hints ── */
 
 import { FloorLevel, MonsterKind, RoomType } from '../core/types';
+import { rng } from '../core/rand';
 
 export interface MonsterLootEntry {
   itemDefId: string;
@@ -1906,7 +1907,7 @@ export function likelyMonsterKinds(query: MonsterEcologyQuery, limit = 5): Monst
 }
 
 export function chooseFloorMonsterKind(query: MonsterEcologyQuery): MonsterKind {
-  const rand = query.rng ?? Math.random;
+  const rand = query.rng ?? rng;
   let total = 0;
   let chosen: MonsterKind | undefined;
 
@@ -1928,7 +1929,7 @@ export function chooseFloorMonsterKind(query: MonsterEcologyQuery): MonsterKind 
   return MonsterKind.SBORKA;
 }
 
-export function chooseMonsterRareDrop(kind: MonsterKind, rand = Math.random): MonsterRareDrop | undefined {
+export function chooseMonsterRareDrop(kind: MonsterKind, rand = rng): MonsterRareDrop | undefined {
   const def = getMonsterEcology(kind);
   if (!def) return undefined;
   for (const drop of def.rareDrops) {

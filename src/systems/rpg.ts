@@ -11,6 +11,7 @@ import {
   msg,
 } from '../core/types';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
+import { rng } from '../core/rand';
 
 export { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
 
@@ -93,7 +94,7 @@ export function randomRPG(level: number): RPGStats {
   const points = Math.max(0, cappedLevel - 1);
   let str = 0, agi = 0, int_ = 0;
   for (let i = 0; i < points; i++) {
-    const r = Math.random();
+    const r = rng();
     if (r < 0.34) str++;
     else if (r < 0.67) agi++;
     else int_++;
@@ -390,8 +391,8 @@ export function generateHeight(age: number, isFemale?: boolean): number {
 
 export function randomGaussian(center = 0, sigma = 1): number {
   // Box-Muller transform
-  const u1 = Math.random() || 0.001;
-  const u2 = Math.random();
+  const u1 = rng() || 0.001;
+  const u2 = rng();
   const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
   return center + z * sigma;
 }

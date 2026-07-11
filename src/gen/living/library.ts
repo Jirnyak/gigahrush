@@ -13,6 +13,7 @@ import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 import { Spr } from '../../render/sprite_index';
+import { rng } from '../../core/rand';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Маргарита Павловна',
@@ -196,13 +197,13 @@ function generateLibrary(
 
   // Phase 7: scatter a few books on floor (loot)
   for (let i = 0; i < 6; i++) {
-    const bx = rx + 1 + Math.floor(Math.random() * (LIB_W - 2));
-    const by = ry + 1 + Math.floor(Math.random() * (LIB_H - 2));
+    const bx = rx + 1 + Math.floor(rng() * (LIB_W - 2));
+    const by = ry + 1 + Math.floor(rng() * (LIB_H - 2));
     if (world.features[world.idx(bx, by)]) continue;
     entities.push({
       id: nextId.v++, type: EntityType.ITEM_DROP,
       x: bx + 0.5, y: by + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-      inventory: [{ defId: Math.random() < 0.3 ? 'note' : 'book', count: 1 }],
+      inventory: [{ defId: rng() < 0.3 ? 'note' : 'book', count: 1 }],
     });
   }
 

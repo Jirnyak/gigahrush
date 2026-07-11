@@ -12,6 +12,7 @@ import {
   type MaintContentCtx, findMaintArea, openTile, setFeature, setWater,
   stampMaintRoom,
 } from './content_helpers';
+import { rng } from '../../core/rand';
 
 const BRIDGE_W = 31;
 const BRIDGE_H = 15;
@@ -76,7 +77,7 @@ function spawnBridgeMonster(ctx: MaintContentCtx, kind: MonsterKind, x: number, 
   const monster: Entity = {
     id: ctx.nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel),
     sprite: def.sprite,

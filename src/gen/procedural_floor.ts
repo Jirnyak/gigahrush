@@ -28,7 +28,7 @@ import {
   type WorldContainer,
 } from '../core/types';
 import { World } from '../core/world';
-import { withSeededRandom, xorshift32 } from '../core/rand';
+import { rng, withSeededRandom, xorshift32 } from '../core/rand';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { ITEM_TAGS, getStack, spawnCount } from '../data/items';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
@@ -340,15 +340,15 @@ interface AtticWindLane {
 }
 
 function irng(lo: number, hi: number): number {
-  return lo + Math.floor(Math.random() * (hi - lo + 1));
+  return lo + Math.floor(rng() * (hi - lo + 1));
 }
 
 function chance(p: number): boolean {
-  return Math.random() < p;
+  return rng() < p;
 }
 
 function pick<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
+  return items[Math.floor(rng() * items.length)];
 }
 
 function cloneItems(items: readonly Item[]): Item[] {
@@ -854,7 +854,7 @@ function decorateProceduralRoom(world: World, room: Room, spec: ProceduralFloorS
   const industrial = isIndustrialGeometry(spec.geometryId);
   for (let dy = 1; dy < room.h - 1; dy++) {
     for (let dx = 1; dx < room.w - 1; dx++) {
-      if (Math.random() > 0.025) continue;
+      if (rng() > 0.025) continue;
       const i = world.idx(room.x + dx, room.y + dy);
       if (world.cells[i] !== Cell.FLOOR) continue;
       if (room.type === RoomType.PRODUCTION) world.features[i] = industrial ? Feature.MACHINE : Feature.TABLE;
@@ -3419,7 +3419,7 @@ function chooseItem(room: Room, spec: ProceduralFloorSpec, maxValue = Number.POS
     total += weight;
   }
   if (weighted.length === 0 || total <= 0) return null;
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (const item of weighted) {
     roll -= item.weight;
     if (roll <= 0) return item.def;
@@ -3724,7 +3724,7 @@ function pickReachablePanelCell(cells: readonly ReachablePanelCell[]): Reachable
   let total = 0;
   for (const cell of cells) total += cell.weight;
   if (cells.length === 0 || total <= 0) return null;
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (const cell of cells) {
     roll -= cell.weight;
     if (roll <= 0) return cell;
@@ -3775,7 +3775,7 @@ function pickReachableLootCell(cells: readonly ReachableLootCell[], used: Set<nu
     total += weight;
   }
   if (weighted.length === 0 || total <= 0) return null;
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (const item of weighted) {
     roll -= item.weight;
     if (roll <= 0) return item.cell;
@@ -3994,7 +3994,7 @@ function spawnNpcs(world: World, rooms: Room[], entities: Entity[], nextId: { v:
       type: EntityType.NPC,
       x: (cell % W) + 0.5,
       y: ((cell / W) | 0) + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: occupation === Occupation.CHILD ? 0.8 : 1.15,
@@ -4297,7 +4297,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: spawnPos.x + 0.5,
     y: spawnPos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed * (0.9 + spec.danger * 0.04),
@@ -4643,7 +4643,7 @@ function spawnSmogLooter(world: World, room: Room, entities: Entity[], nextId: {
     type: EntityType.NPC,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: 1.15,
@@ -4683,7 +4683,7 @@ function spawnSmogMonster(world: World, room: Room, entities: Entity[], nextId: 
     type: EntityType.MONSTER,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed * (0.95 + spec.danger * 0.035),
@@ -7196,8 +7196,8 @@ function applyVoidFillers(world: World, rooms: Room[]): void {
 
       if (isVoid) {
         // Carve a new room
-        const roomW = Math.floor(Math.random() * (minBlockSize - 2 - 4 + 1)) + 4;
-        const roomH = Math.floor(Math.random() * (minBlockSize - 2 - 4 + 1)) + 4;
+        const roomW = Math.floor(rng() * (minBlockSize - 2 - 4 + 1)) + 4;
+        const roomH = Math.floor(rng() * (minBlockSize - 2 - 4 + 1)) + 4;
         const rx = x + Math.floor((minBlockSize - roomW) / 2);
         const ry = y + Math.floor((minBlockSize - roomH) / 2);
 
@@ -9471,7 +9471,7 @@ function spawnLiquidatorCheckpointGuards(
       type: EntityType.NPC,
       x: x + 0.5,
       y: y + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: 1.1,
@@ -12220,7 +12220,7 @@ function spawnMyceliumAnchorMonster(world: World, entities: Entity[], nextId: { 
     type: EntityType.MONSTER,
     x: site.x + 0.5,
     y: site.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed * (0.86 + spec.danger * 0.03),
@@ -12561,7 +12561,7 @@ function pickTeleportEndpoint(
 ): number {
   const candidates = placement.candidates;
   for (let attempt = 0; attempt < 384 && candidates.length > 0; attempt++) {
-    const ci = candidates[Math.floor(Math.random() * candidates.length)];
+    const ci = candidates[Math.floor(rng() * candidates.length)];
     if (!teleportEndpointCandidate(world, placement, ci, used)) continue;
     const x = ci % W;
     const y = (ci / W) | 0;
@@ -14717,7 +14717,7 @@ function spawnWildMajorityAmbusher(
     type: EntityType.NPC,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: 1.2,
@@ -15448,7 +15448,7 @@ function spawnFalseSafeCaretaker(
     type: EntityType.NPC,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: 1.05,

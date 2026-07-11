@@ -14,6 +14,7 @@ import { MONSTERS } from '../../entities/monster';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { rng } from '../../core/rand';
 
 const DEN_MIN_DIST = 100;
 const DEN_MAX_DIST = 200;
@@ -47,7 +48,7 @@ export function generateVankaDen(
       return rZone === z.id;
     });
     if (candidates.length > 0) {
-      room = candidates[Math.floor(Math.random() * candidates.length)];
+      room = candidates[Math.floor(rng() * candidates.length)];
       room.name = spec.name;
       room.wallTex = spec.wallTex;
       room.floorTex = spec.floorTex;
@@ -101,8 +102,8 @@ export function spawnVankaShadows(
 
   const def = MONSTERS[MonsterKind.SHADOW];
   for (let i = 0, placed = 0; i < 2000 && placed < 10; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 10 + Math.random() * 40;
+    const angle = rng() * Math.PI * 2;
+    const dist = 10 + rng() * 40;
     const mx = (denCx + Math.round(Math.cos(angle) * dist) + W) % W;
     const my = (denCy + Math.round(Math.sin(angle) * dist) + W) % W;
     if (world.cells[world.idx(mx, my)] !== Cell.FLOOR) continue;
@@ -112,7 +113,7 @@ export function spawnVankaShadows(
     entities.push({
       id: nextId.v++, type: EntityType.MONSTER,
       x: mx + 0.5, y: my + 0.5,
-      angle: Math.random() * Math.PI * 2, pitch: 0,
+      angle: rng() * Math.PI * 2, pitch: 0,
       alive: true, speed: scaleMonsterSpeed(def.speed, zoneLevel), sprite: def.sprite,
       hp, maxHp: hp,
       monsterKind: MonsterKind.SHADOW, attackCd: 0,

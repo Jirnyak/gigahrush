@@ -8,6 +8,7 @@ import {
   resolveNpcPackageForEntity,
   selectNpcCuratedFallback,
 } from '../npc_package_speech';
+import { rng } from '../../core/rand';
 
 /* ── Probabilities ────────────────────────────────────────────── */
 
@@ -115,7 +116,7 @@ export function pushNpcBarkMessage(
 }
 
 export function emitMarkovBark(e: Entity, msgs: Msg[], time: number, signal: string, fallback: string, chance: number = 1.0, color = '#cca'): void {
-  if (Math.random() > chance) return;
+  if (rng() > chance) return;
   if (!e.name) return;
   const last = lastBarkByEntity.get(e.id);
   if (last && time - last.time < BARK_ENTITY_COOLDOWN_S && last.text === fallback) return;

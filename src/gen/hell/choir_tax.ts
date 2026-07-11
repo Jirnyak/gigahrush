@@ -14,12 +14,11 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import {
-  connectProtectedRoom, connectToNetwork, findClearArea, protectRoom, rng, stampRoom,
-} from '../shared';
+import { connectProtectedRoom, connectToNetwork, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
 import { isPlayerEntity } from '../../systems/player_actor';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng, irand } from '../../core/rand';
 
 const ROOM_W = 31;
 const ROOM_H = 25;
@@ -548,16 +547,16 @@ function findChoirSite(world: World): { x: number; y: number } {
   if (clear) return clear;
 
   for (let attempt = 0; attempt < 2600; attempt++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = rng(150, 380);
+    const angle = rng() * Math.PI * 2;
+    const dist = irand(150, 380);
     const x = world.wrap(cx + Math.round(Math.cos(angle) * dist) - (ROOM_W >> 1));
     const y = world.wrap(cy + Math.round(Math.sin(angle) * dist) - (ROOM_H >> 1));
     if (canReserveChoir(world, x, y)) return { x, y };
   }
 
   for (let attempt = 0; attempt < 1800; attempt++) {
-    const x = rng(8, W - ROOM_W - 8);
-    const y = rng(8, W - ROOM_H - 8);
+    const x = irand(8, W - ROOM_W - 8);
+    const y = irand(8, W - ROOM_H - 8);
     if (canReserveChoir(world, x, y)) return { x, y };
   }
 
@@ -775,7 +774,7 @@ function spawnChoirCultists(world: World, room: Room, entities: Entity[], nextId
       type: EntityType.NPC,
       x: x + 0.5,
       y: y + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: 1.05,
@@ -831,7 +830,7 @@ function spawnChoirMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

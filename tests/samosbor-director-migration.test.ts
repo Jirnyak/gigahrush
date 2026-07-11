@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SeedRng } from '../src/core/rand';
+import { SeedRng, _overrideRng, _restoreRng } from '../src/core/rand';
 
 import { World } from '../src/core/world';
 import {
@@ -54,14 +54,13 @@ function patrolWorld(): World {
 }
 
 function withRandom<T>(value: number, run: () => T): T {
-  const originalMath = Math.random;
   const originalSeed = SeedRng.prototype.random;
   try {
-    Math.random = () => value;
+    _overrideRng(() => value);
     SeedRng.prototype.random = () => value;
     return run();
   } finally {
-    Math.random = originalMath;
+    _restoreRng();
     SeedRng.prototype.random = originalSeed;
   }
 }

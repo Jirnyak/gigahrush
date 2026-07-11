@@ -30,6 +30,7 @@ import {
   floorRunEntryKind,
   floorRunEntryRouteId,
 } from './procedural_floors';
+import { rng } from '../core/rand';
 
 interface StoryDeathContext {
   killed: Entity;
@@ -149,7 +150,7 @@ export function spawnStoryDeathDrops(
   nextId: { v: number },
   state: GameState,
   msgs: Msg[],
-  rand = Math.random,
+  rand = rng,
 ): number {
   if (!killerIsPlayer && killed.type !== EntityType.NPC && killed.type !== EntityType.MONSTER) return 0;
   let spawned = 0;

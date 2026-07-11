@@ -12,6 +12,7 @@ import { freshNeeds } from '../data/catalog';
 import { getNpcPackageByPlotNpcId, npcPackageDisplayName, type NpcPackageDef, allNpcPackages } from '../data/npc_packages';
 import { freshRPG } from '../systems/rpg';
 import { findRandomFloorCell, pickRandomRoom } from './shared';
+import { rng } from '../core/rand';
 
 export interface PlotNpcSpawnOptions {
   angle?: number;
@@ -155,7 +156,7 @@ export function spawnPendingPlotNpcsForFloor(
 
     if (x > 0 || y > 0) {
       requireSpawnedPlotNpcFromPackage(entities, nextId, pack.content.plotNpcId, x, y, {
-        angle: Math.random() * Math.PI * 2,
+        angle: rng() * Math.PI * 2,
         canGiveQuest: true,
       });
     }

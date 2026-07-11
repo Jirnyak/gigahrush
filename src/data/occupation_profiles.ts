@@ -1,4 +1,5 @@
 import { Occupation, RoomType, Faction, type Entity } from '../core/types';
+import { rng } from '../core/rand';
 
 export interface OccupationProfile {
   id: string;
@@ -784,10 +785,10 @@ function appendFactionTradeOffers(npc: Entity, items: { defId: string; count: nu
 export function generateNpcTradeItems(npc: Entity): { defId: string; count: number }[] {
   const items: { defId: string; count: number }[] = [];
   const pool = occupationTradeItems(npc.occupation);
-  const count = 2 + Math.floor(Math.random() * 3);
+  const count = 2 + Math.floor(rng() * 3);
   for (let i = 0; i < count; i++) {
-    const defId = pool[Math.floor(Math.random() * pool.length)];
-    items.push({ defId, count: 1 + Math.floor(Math.random() * 3) });
+    const defId = pool[Math.floor(rng() * pool.length)];
+    items.push({ defId, count: 1 + Math.floor(rng() * 3) });
   }
   if (npc.occupation === Occupation.STOREKEEPER) {
     items.push({ defId: 'soap_72', count: 1 }, { defId: 'lice_shampoo', count: 1 });

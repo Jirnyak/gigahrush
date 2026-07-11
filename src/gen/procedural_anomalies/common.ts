@@ -18,6 +18,7 @@ import {
   type WalkablePlacementMap,
 } from '../shared';
 import { canSpawnEntityType } from '../../systems/entity_limits';
+import { rng } from '../../core/rand';
 
 export interface ProceduralAnomalyGenContext {
   world: World;
@@ -41,15 +42,15 @@ function placementForWorld(world: World): WalkablePlacementMap | null {
 }
 
 export function irng(lo: number, hi: number): number {
-  return lo + Math.floor(Math.random() * (hi - lo + 1));
+  return lo + Math.floor(rng() * (hi - lo + 1));
 }
 
 export function chance(p: number): boolean {
-  return Math.random() < p;
+  return rng() < p;
 }
 
 export function pick<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
+  return items[Math.floor(rng() * items.length)];
 }
 
 export function roomCenter(room: Room): { x: number; y: number } {

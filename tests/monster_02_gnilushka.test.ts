@@ -24,6 +24,7 @@ import { activateInteraction, findInteractionTarget } from '../src/systems/inter
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { makeGameState, makeTestPlayer } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 function openWorld(): World {
   const world = new World();
@@ -181,13 +182,12 @@ test('living lost cell spawns reachable gnilushka content and handoff supplies',
   world.cells[world.idx(90, 55)] = Cell.FLOOR;
   const entities: Entity[] = [];
   const nextId = { v: 1 };
-  const oldRandom = Math.random;
-  Math.random = () => 0;
+  _overrideRng(() => 0);
   try {
     const result = generateGnilushkaLostCell(world, 0, entities, nextId, 50, 50);
     assert.equal(result.nextRoomId > 0, true);
   } finally {
-    Math.random = oldRandom;
+    _restoreRng();
   }
 
   const room = world.rooms.find(candidate => candidate?.name === 'Потерянная ячейка Гнилушки');

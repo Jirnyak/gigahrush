@@ -10,6 +10,7 @@ import { findNoiseInvestigationTarget } from '../noise';
 import { pickupDrop } from '../inventory';
 import { getEntityIndex, ENTITY_MASK_NPC, ENTITY_MASK_ITEM_DROP } from '../entity_index';
 import { npcAutoEquipBestWeapon } from './combat';
+import { rng } from '../../core/rand';
 
 const _microQueryOut: Entity[] = new Array(32);
 
@@ -148,7 +149,7 @@ export function evaluateMicroStimuli(world: World, e: Entity, time: number, msgs
   }
   
   if ((ai.microScanCd ?? 0) > time) return;
-  ai.microScanCd = time + 0.3 + Math.random() * 0.3;
+  ai.microScanCd = time + 0.3 + rng() * 0.3;
   
   // Bounded scan for greet (can happen while walking)
   if (e.type === EntityType.NPC) {

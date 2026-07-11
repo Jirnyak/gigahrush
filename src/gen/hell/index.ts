@@ -7,7 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
-import { rng, pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
+import { pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { HELL_POPULATION_PROFILE } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
@@ -21,6 +21,7 @@ import { initializeCellTerritory } from '../../systems/territory';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import { runHellContent } from './content_manifest';
 import { buildHellGeometry, imprintHellArenaValleys, type HellGeometry } from './geometry';
+import { rng, irand } from '../../core/rand';
 
 const PSI_IDS = ['psi_strike', 'psi_rupture', 'psi_madness', 'psi_storm', 'psi_brainburn'];
 
@@ -62,7 +63,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   });
 
   for (let i = 0; i < W * W; i++) {
-    if (world.cells[i] === Cell.FLOOR && Math.random() < 0.0035) {
+    if (world.cells[i] === Cell.FLOOR && rng() < 0.0035) {
       world.features[i] = Feature.LAMP;
     }
   }
@@ -166,10 +167,10 @@ function carveOrganicBranches(field: Uint8Array): void {
   const walkers = 210;
 
   for (let i = 0; i < walkers; i++) {
-    let x = rng(0, W - 1);
-    let y = rng(0, W - 1);
-    let dir = rng(0, dirs.length - 1);
-    const len = rng(70, 240);
+    let x = irand(0, W - 1);
+    let y = irand(0, W - 1);
+    let dir = irand(0, dirs.length - 1);
+    const len = irand(70, 240);
     let width = 1;
     let fatTimer = 0;
 
@@ -178,10 +179,10 @@ function carveOrganicBranches(field: Uint8Array): void {
         const swell = hash2(x + step, y - step, 120 + i);
         if (swell > 0.985) {
           width = 3;
-          fatTimer = rng(6, 18);
+          fatTimer = irand(6, 18);
         } else if (swell > 0.9) {
           width = 2;
-          fatTimer = rng(8, 28);
+          fatTimer = irand(8, 28);
         } else {
           width = 1;
         }
@@ -196,7 +197,7 @@ function carveOrganicBranches(field: Uint8Array): void {
       }
       if (hash2(x + i, y + step, 123) > 0.965) {
         const branchDir = (dir + (hash2(x + step, y + i, 124) > 0.5 ? 1 : 3)) & 3;
-        carveBranch(field, x, y, branchDir, rng(18, 72));
+        carveBranch(field, x, y, branchDir, irand(18, 72));
       }
 
       x = wrapCoord(x + dirs[dir][0]);
@@ -351,7 +352,7 @@ function seedLoot(world: World, entities: Entity[], nextId: { v: number }): void
       alive: true,
       speed: 0,
       sprite: Spr.ITEM_DROP,
-      inventory: [{ defId: pick(drops), count: rng(1, 2) }],
+      inventory: [{ defId: pick(drops), count: irand(1, 2) }],
     });
   }
 }
@@ -468,7 +469,7 @@ function createHellMonster(world: World, nextId: { v: number }, kind: MonsterKin
     type: EntityType.MONSTER,
     x,
     y,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel + Math.max(1, bonus - 1)),
@@ -491,16 +492,16 @@ function createHellCultist(world: World, nextId: { v: number }, cell: number): E
   const maxHp = Math.round(getMaxHp(rpg) * 1.55);
   const nm = randomName(Faction.CULTIST);
   const psiId = pick(PSI_IDS);
-  const hasPsi = Math.random() < 0.72;
+  const hasPsi = rng() < 0.72;
   return {
     id: nextId.v++,
     type: EntityType.NPC,
     x: (cell % W) + 0.5,
     y: ((cell / W) | 0) + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
-    speed: 1.45 + Math.random() * 0.35,
+    speed: 1.45 + rng() * 0.35,
     sprite: Occupation.PILGRIM,
     name: nm.name,
     firstName: nm.firstName,
@@ -528,7 +529,7 @@ function createHellLiquidator(world: World, nextId: { v: number }, cell: number)
   const rpg = randomRPG(npcLevel);
   const maxHp = Math.round(getMaxHp(rpg) * 1.75);
   const nm = randomName(Faction.LIQUIDATOR);
-  const roll = Math.random();
+  const roll = rng();
   let weapon = 'rebar';
   let inventory = [{ defId: 'rebar', count: 1 }];
   if (roll < 0.25) {
@@ -558,10 +559,10 @@ function createHellLiquidator(world: World, nextId: { v: number }, cell: number)
     type: EntityType.NPC,
     x: (cell % W) + 0.5,
     y: ((cell / W) | 0) + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
-    speed: 1.35 + Math.random() * 0.25,
+    speed: 1.35 + rng() * 0.25,
     sprite: Occupation.HUNTER,
     name: nm.name,
     firstName: nm.firstName,
@@ -594,7 +595,7 @@ function pickHellMonsterKind(samosborCount: number): MonsterKind {
 
 function randomFloorCell(world: World): number {
   for (let attempt = 0; attempt < 2048; attempt++) {
-    const cell = rng(0, W * W - 1);
+    const cell = irand(0, W * W - 1);
     if (world.cells[cell] === Cell.FLOOR) return cell;
   }
   return -1;

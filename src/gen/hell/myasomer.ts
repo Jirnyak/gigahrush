@@ -30,6 +30,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { connectProtectedRoom, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { rng } from '../../core/rand';
 
 const MYASOMER_ID = 'myasomer';
 const MYASOMER_NAME = 'Мясомер';
@@ -144,8 +145,8 @@ function findMyasomerOrigin(world: World): { x: number; y: number } | null {
   if (direct && canReserve(world, direct.x, direct.y)) return direct;
 
   for (let attempt = 0; attempt < 1800; attempt++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 100 + Math.random() * 360;
+    const angle = rng() * Math.PI * 2;
+    const dist = 100 + rng() * 360;
     const x = world.wrap((W >> 1) + Math.round(Math.cos(angle) * dist) - (ROOM_W >> 1));
     const y = world.wrap((W >> 1) + Math.round(Math.sin(angle) * dist) - (ROOM_H >> 1));
     if (canReserve(world, x, y)) return { x, y };

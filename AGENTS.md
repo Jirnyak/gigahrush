@@ -278,6 +278,23 @@ For floor-wide population or loot scattering, use `src/gen/population_placement.
 
 Runtime geometry mutations must bump the relevant dirty versions on `World` (`cellVersion`, `surfaceVersion`, texture versions, fog version) through existing helpers or local precedent so AI/render caches stay valid.
 
+## Randomness
+
+All game randomness flows through the unified xorshift32 RNG in `src/core/rand.ts`. **Do not use `Math.random()` anywhere in game code.** This is a hard rule.
+
+Available API:
+
+- `rng()` — global game RNG, returns `[0, 1)`. The single source of randomness for all gameplay, generation, AI, loot, spawns, FX, and UI rolls.
+- `irand(lo, hi)` — integer in `[lo, hi]` inclusive, uses `rng()`.
+- `seedGlobalRng(seed)` — re-seed the global state (used at run start and floor transitions).
+- `seededRandom(seed)` / `SeedRng` / `xorshift32(seed)` — local deterministic sequences for procedural content that must be reproducible from a seed.
+- `pickFrom(arr)`, `shuffleWith(arr, rand)`, `irandFrom(rand, lo, hi)` — convenience wrappers.
+- `_overrideRng(fn)` / `_restoreRng()` — **test-only** hooks for mocking. Never use in production code.
+
+The only permitted exception to the `Math.random()` ban: cryptographic or network-identity values where determinism would be a security/collision risk (e.g., session tokens, online peer IDs in `online_client.ts` / `net_sphere.ts`). Such cases must be explicitly commented with the reason.
+
+In tests, do not mock `Math.random`. Use `_overrideRng(() => value)` / `_restoreRng()` or `seedGlobalRng(seed)`.
+
 ## Runtime Systems
 
 New systems must be generic and bounded.

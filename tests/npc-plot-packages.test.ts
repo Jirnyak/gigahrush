@@ -19,6 +19,7 @@ import { generateTalkText } from '../src/systems/dialogue';
 import { isPlotNpcDead, recordAlifeNpcDeath } from '../src/systems/alife';
 import { checkTalkQuest } from '../src/systems/quests';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 const MAIN_PLOT_IDS = [
   'marko_lolo',
@@ -109,15 +110,13 @@ test('main plot first-contact and post dialogue still use exact authored order',
 
   assert.equal(generateTalkText(barni, { state }), talkLines[0]);
   assert.equal(generateTalkText(barni, { state }), talkLines[1]);
-
-  const originalRandom = Math.random;
-  Math.random = () => 0;
+  _overrideRng(() => 0);
   try {
     barni.plotDone = true;
     const postLine = generateTalkText(barni, { state });
     assert.equal(talkLinesPost.includes(postLine), true);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 });
 

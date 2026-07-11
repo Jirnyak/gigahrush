@@ -11,6 +11,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, placeDoorAt, stampRoom } from '../shared';
+import { rng } from '../../core/rand';
 
 function setRoomTextures(world: World, rx: number, ry: number, rw: number, rh: number): void {
   for (let dy = -1; dy <= rh; dy++) {
@@ -43,7 +44,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

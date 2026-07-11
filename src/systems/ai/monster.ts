@@ -90,6 +90,7 @@ import { shareLocalTarget } from './monster_pack';
 import { selectMeleeTarget } from '../melee_targeting';
 import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
 import { isCarnivoreMonster } from '../../data/monster_ecology';
+import { rng } from '../../core/rand';
 
 /* ── Shared combat target finder ──────────────────────────────── */
 const MONSTER_DETECT = 20;
@@ -8726,8 +8727,8 @@ export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: num
     if (!item || item.count <= 0) continue;
     entities.push({
       id: nextId.v++, type: EntityType.ITEM_DROP,
-      x: e.x + (Math.random() - 0.5) * 0.5,
-      y: e.y + (Math.random() - 0.5) * 0.5,
+      x: e.x + (rng() - 0.5) * 0.5,
+      y: e.y + (rng() - 0.5) * 0.5,
       angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: item.defId, count: item.count, data: item.data }],
     });
@@ -9021,12 +9022,12 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
       // Phasing monsters: random direction wander
       if (e.phasing) {
-        ai.timer = 2 + Math.random() * 3;
-        ai.wanderAngle = Math.random() * Math.PI * 2;
+        ai.timer = 2 + rng() * 3;
+        ai.wanderAngle = rng() * Math.PI * 2;
       } else {
         wanderNearby(world, e);
       }
-      ai.timer = 1.5 + Math.random() * 2.5;
+      ai.timer = 1.5 + rng() * 2.5;
     }
     if (e.phasing) {
       const a = ai.wanderAngle ?? 0;

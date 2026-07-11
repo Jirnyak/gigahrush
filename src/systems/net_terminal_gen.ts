@@ -12,7 +12,7 @@ import {
   type Item,
 } from '../core/types';
 import { World } from '../core/world';
-import { hashSeed, seededRandom } from '../core/rand';
+import { rng, hashSeed, seededRandom } from '../core/rand';
 import { designFloorAtZ } from '../data/design_floors';
 import {
   FLOOR_RUN_MAX_Z,
@@ -866,7 +866,7 @@ function resolveTerminalHack(
   const floorKey = currentNetTerminalGenFloorKey(state);
   const routeTag = routeTagFromKey(floorKey);
   const successChance = Math.max(0.08, Math.min(0.55, 0.28 + (player.rpg?.int ?? 0) * 0.045 - difficulty * 0.045));
-  if (Math.random() < successChance) {
+  if (rng() < successChance) {
     grantNetTerminalGenAccess(state);
     state.msgs.push(msg('НЕТ-колодец принял обход. Доступ открыт.', state.time, NET_TERMINAL_GEN_PALETTE.open));
     publishEvent(state, {

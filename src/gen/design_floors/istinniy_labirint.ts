@@ -31,6 +31,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('istinniy_labirint');
 
@@ -275,7 +276,7 @@ function centerOf(idx: number): CellPoint {
 }
 
 function randInt(maxExclusive: number): number {
-  return Math.floor(Math.random() * maxExclusive);
+  return Math.floor(rng() * maxExclusive);
 }
 
 function degree(links: Uint8Array, idx: number): number {
@@ -302,7 +303,7 @@ function buildGrowingTreeMaze(): MazeGraph {
   visited[start] = 1;
 
   while (active.length > 0) {
-    const ai = Math.random() < 0.72 ? active.length - 1 : randInt(active.length);
+    const ai = rng() < 0.72 ? active.length - 1 : randInt(active.length);
     const cell = active[ai];
     const gx = gridX(cell);
     const gy = gridY(cell);
@@ -335,7 +336,7 @@ function buildGrowingTreeMaze(): MazeGraph {
 function braidDeadEnds(links: Uint8Array): number {
   let added = 0;
   for (let idx = 0; idx < GRID_N; idx++) {
-    if (degree(links, idx) !== 1 || Math.random() > 0.44) continue;
+    if (degree(links, idx) !== 1 || rng() > 0.44) continue;
     const gx = gridX(idx);
     const gy = gridY(idx);
     const options: { dir: Dir; next: number; score: number }[] = [];
@@ -1177,7 +1178,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),
@@ -1187,7 +1188,7 @@ function spawnMonster(
     maxHp: hp,
     monsterKind: kind,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    attackCd: Math.random(),
+    attackCd: rng(),
     rpg: randomRPG(level),
   });
 }

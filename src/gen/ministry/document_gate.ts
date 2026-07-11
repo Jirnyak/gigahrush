@@ -26,6 +26,7 @@ import { genLog } from '../log';
 import { spawnChernobogDocketHandlers } from './chernobog_archive_docket';
 import { isPlayerEntity } from '../../systems/player_actor';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const GATE_ROOM_NAME = 'Проверочный коридор N3';
 const GATE_W = 19;
@@ -853,7 +854,7 @@ function addGateContainer(
 function spawnGateGuard(entities: Entity[], nextId: NextId, x: number, y: number): number {
   const guardId = nextId.v;
   requireSpawnedPlotNpcFromPackage(entities, nextId, GATE_GUARD_ID, x + 0.5, y + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     weapon: 'makarov',
     canGiveQuest: false,
   });

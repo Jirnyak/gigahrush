@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { SeedRng } from '../src/core/rand';
+import { SeedRng, _overrideRng, _restoreRng } from '../src/core/rand';
 
 import {
   Cell,
@@ -581,10 +581,9 @@ test('active maronary door malfunction ignores protected hermetic doors', () => 
   world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_OPEN, roomA: 0, roomB: -1, keyId: '', timer: 0 });
   const player = makeTestEntity({ id: 0, x: 10.5, y: 10.5 });
   const nextId = { v: 100 };
-  const originalRandom = Math.random;
 
   try {
-    Math.random = () => 0;
+    _overrideRng(() => 0);
     const result = tickSamosborDirector(world, [player], state, nextId, testMaronarySamosborVariant(), 'active_cadence');
 
     assert.equal(result.fired, true);
@@ -594,7 +593,7 @@ test('active maronary door malfunction ignores protected hermetic doors', () => 
     assert.ok(event);
     assert.equal(event.data?.doors, 0);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 });
 
@@ -1054,13 +1053,12 @@ test('NPC assignment offer can use contract templates as timed contract quests',
     canGiveQuest: true,
   });
   const player = makeTestEntity({ id: 0, x: 11, y: 10 });
-  const originalRandom = Math.random;
 
   try {
-    Math.random = () => 0;
+    _overrideRng(() => 0);
     offerQuest(npc, player, world, [player, npc], state, state.msgs);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 
   assert.equal(state.quests.length, 1);
@@ -1100,13 +1098,12 @@ test('procedural quest offers have no global active quest cap', () => {
     canGiveQuest: true,
   });
   const player = makeTestEntity({ id: 0, x: 11, y: 10 });
-  const originalRandom = Math.random;
 
   try {
-    Math.random = () => 0;
+    _overrideRng(() => 0);
     offerQuest(npc, player, world, [player, npc], state, state.msgs);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 
   assert.equal(state.quests.length, 13);
@@ -1127,13 +1124,12 @@ test('procedural fetch quests do not target story-critical main plot items', () 
   });
   const player = makeTestEntity({ id: 0, x: 11, y: 10 });
   const randoms = [0.99, 0, 0];
-  const originalRandom = Math.random;
 
   try {
-    Math.random = () => randoms.shift() ?? 0;
+    _overrideRng(() => randoms.shift() ?? 0);
     offerQuest(npc, player, world, [player, npc], state, state.msgs);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 
   assert.equal(state.quests.length, 1);

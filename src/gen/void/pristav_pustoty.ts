@@ -15,6 +15,7 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { rng } from '../../core/rand';
 
 const PROTOCOL_ID = 'pristav_pustoty';
 const PROTOCOL_NAME = 'Пристав Пустоты';
@@ -216,7 +217,7 @@ function spawnPristavMonster(ctx: PristavContext, kind: MonsterKind, name: strin
     type: EntityType.MONSTER,
     x: cell.x + 0.5,
     y: cell.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

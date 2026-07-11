@@ -24,6 +24,7 @@ import {
   spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
+import { rng } from '../../core/rand';
 
 export const CHERNOBOZHIY_SVOD_TAG = 'chernobozhiy_svod';
 
@@ -514,7 +515,7 @@ function spawnSvodMonster(
     type: EntityType.MONSTER,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

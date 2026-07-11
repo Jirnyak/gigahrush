@@ -1,6 +1,7 @@
 /* -- Coarse fair maze graphs for floor generation ---------------- */
 
 import type { RandomSource } from '../core/rand';
+import { rng } from '../core/rand';
 
 export type MazeEdgeTag = 'backbone' | 'chord' | 'locked_optional' | 'reward_leaf';
 export type MazeSeamAxis = 'x' | 'y';
@@ -455,7 +456,7 @@ function finalizeMazeGraph(
 }
 
 export function generateGrowingTreeMaze(options: GrowingTreeMazeOptions): MazeGraph {
-  const rand = options.rand ?? Math.random;
+  const rand = options.rand ?? rng;
   const context = normalizeContext(options);
   const weights = normalizeSelectionWeights(options.selectionWeights);
   const visited = new Uint8Array(context.n);
@@ -485,7 +486,7 @@ export function generateGrowingTreeMaze(options: GrowingTreeMazeOptions): MazeGr
 }
 
 export function generateWilsonMaze(options: WilsonMazeOptions): MazeGraph {
-  const rand = options.rand ?? Math.random;
+  const rand = options.rand ?? rng;
   const context = normalizeContext(options);
   const visited = new Uint8Array(context.n);
   const edges: MazeGraphEdge[] = [];

@@ -36,6 +36,7 @@ import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('black_market_88');
 
@@ -2305,7 +2306,7 @@ function spawnMarketQueueCrowd(
       type: EntityType.NPC,
       x: x + 0.5,
       y: y + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: 0.72,

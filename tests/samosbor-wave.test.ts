@@ -1,5 +1,6 @@
 import { beforeEach, test } from 'node:test';
 import * as assert from 'node:assert/strict';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 import {
   Cell,
@@ -170,9 +171,8 @@ test('samosbor wave cleanup keeps player standing in an open door cell', () => {
 });
 
 test('samosbor scale can be local or full depending on roll', () => {
-  const originalRandom = Math.random;
   // High roll (> 0.4) → local wave (small or medium)
-  Math.random = () => 0.999999;
+  _overrideRng(() => 0.999999);
   try {
     for (const floor of [
       FloorLevel.MINISTRY,
@@ -187,39 +187,34 @@ test('samosbor scale can be local or full depending on roll', () => {
       assert.notEqual(chooseSamosborScale(state), 'full');
     }
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
   // Low roll (< 0.4) → full (global fronts only)
-  Math.random = () => 0.1;
+  _overrideRng(() => 0.1);
   try {
     const state = makeGameState({ currentFloor: FloorLevel.LIVING });
     assert.equal(chooseSamosborScale(state), 'full');
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 });
 
 test('samosbor duration grows and cooldown shrinks by absolute route z', () => {
-  const originalRandom = Math.random;
-  Math.random = () => 0.5;
+  _overrideRng(() => 0.5);
   try {
     const living = makeGameState({ currentFloor: FloorLevel.LIVING });
     const voidFloor = makeGameState({ currentFloor: FloorLevel.VOID });
-    // LIVING (depth=0): duration min=20, maxForDepth=20, result=20
-    // VOID (depth=1): duration min=20, maxForDepth=300, result=20 + 0.5*(300-20) = 160
     const dLiving = nextFloorRunSamosborDuration(living);
     const dVoid = nextFloorRunSamosborDuration(voidFloor);
     assert.ok(dLiving >= 20, `living duration ${dLiving} >= 20`);
     assert.ok(dVoid > dLiving, `void duration ${dVoid} > living ${dLiving}`);
-    // LIVING (depth=0): cooldown maxForDepth=1500, mid-band: 45 + 0.5*(1500-45) ≈ 772
-    // VOID (depth=1): cooldown maxForDepth=45, mid-band: 45 + 0.5*(45-45) = 45
     const cLiving = nextFloorRunSamosborCooldown(living);
     const cVoid = nextFloorRunSamosborCooldown(voidFloor);
     assert.ok(cLiving > cVoid, `living cooldown ${cLiving} > void ${cVoid}`);
     assert.ok(cLiving >= 45, `living cooldown ${cLiving} >= min 45`);
     assert.ok(cVoid >= 45, `void cooldown ${cVoid} >= min 45`);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 });
 

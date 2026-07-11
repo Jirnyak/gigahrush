@@ -8,6 +8,7 @@ import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { generateSlimeNiiDesignFloor } from '../src/gen/design_floors/slime_nii';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
 import { makeTestNpc, makeTestPlayer } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 const ITEM_ID = 'glass_ampoule_empty';
 
@@ -59,15 +60,13 @@ test('slime NII and scientist trade expose empty glass ampoules', () => {
 
   assert.ok(cabinet, 'slime_nii director storage should expose glass_ampoule_empty as stealable sampleware');
   assert.equal(cabinet.access, 'owner');
-
-  const savedRandom = Math.random;
   const rolls = [0, (10 + 0.01) / 13, 0];
-  Math.random = () => rolls.shift() ?? 0;
+  _overrideRng(() => rolls.shift() ?? 0);
   try {
     const npc = makeTestNpc({ occupation: Occupation.SCIENTIST });
     const trade = generateNpcTradeItems(npc);
     assert.ok(trade.some(item => item.defId === ITEM_ID), 'scientists should sell empty glass ampoules');
   } finally {
-    Math.random = savedRandom;
+    _restoreRng();
   }
 });

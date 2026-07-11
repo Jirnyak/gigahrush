@@ -14,7 +14,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { hashSeed, randSeed } from '../core/rand';
+import { rng, hashSeed, randSeed } from '../core/rand';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr } from '../render/sprite_index';
 import { stampMark, MarkType } from './surface_marks';
@@ -255,7 +255,7 @@ export function tryStartLiftArachnaEncounter(
 
   const chance = liftArachnaChance(ctx);
   const seed = hashSeed(key, Math.floor(state.time * 1000));
-  if (Math.random() >= chance) return false;
+  if (rng() >= chance) return false;
 
   const secondWarning = store.warnedCount > 0;
   const threatLevel = liftArachnaThreat(ctx);

@@ -90,6 +90,7 @@ import {
   type CraftRecipeLearnResult,
 } from './crafting';
 import { controlBindingLabel } from './controls';
+import { rng } from '../core/rand';
 
 const GOVNYAK_COURIER_ROUTE_SET = new Set<string>(GOVNYAK_COURIER_CONTRACT_IDS);
 const DIRECT_DOCUMENT_ACTION_ITEMS = new Set(['ammo_coupon_9mm', 'ammo_coupon_shells', 'fuel_issue_stamp', 'foam_grenade_act', 'water_reservoir_quota', 'shelter_seat_card', 'shelter_seat_forgery', 'concentrate_bonus_coupon']);
@@ -2354,7 +2355,7 @@ export function consumeDurability(e: Entity, msgs: Msg[], time: number, state?: 
     if (e.tool === itemId) e.tool = '';
     if (e.type === EntityType.NPC && e.name) {
       const pool = e.isFemale ? BREAK_EXCLAIM_F : BREAK_EXCLAIM;
-      const excl = pool[Math.floor(Math.random() * pool.length)];
+      const excl = pool[Math.floor(rng() * pool.length)];
       pushNpcLogMessage(e, msgs, time, `${e.name}: ${excl} ${name} ${e.isFemale ? 'сломалась' : 'сломался'}!`, '#f84');
     } else {
       msgs.push(msg(`${name} сломался!`, time, '#f84'));

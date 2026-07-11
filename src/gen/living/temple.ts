@@ -16,6 +16,7 @@ import { registerContentEntityDeathHook } from '../../systems/content_hooks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 /* ── NPC definition ──────────────────────────────────────────── */
 const NPC_DEF: PlotNpcDef = {
@@ -114,8 +115,8 @@ function generateTemple(
   zcx: number, zcy: number,
 ): { nextRoomId: number } {
   // rx,ry = top-left of nave interior
-  const rx = world.wrap(zcx + Math.floor(Math.random() * 20) - 10);
-  const ry = world.wrap(zcy + Math.floor(Math.random() * 20) - 10);
+  const rx = world.wrap(zcx + Math.floor(rng() * 20) - 10);
+  const ry = world.wrap(zcy + Math.floor(rng() * 20) - 10);
 
   // Phase 1: Bulldoze bounding box — overwrite non-apartment cells with WALL
   for (let dy = -2; dy < NAVE_H + 2; dy++) {
@@ -276,8 +277,8 @@ export function priestDeathCurse(
   for (const [x1, y1, x2, y2] of lines) {
     for (let j = 0; j < monstersPerLine && spawned < CURSE_COUNT; j++) {
       const t = j / monstersPerLine;
-      const mx = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 2;
-      const my = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 2;
+      const mx = x1 + (x2 - x1) * t + (rng() - 0.5) * 2;
+      const my = y1 + (y2 - y1) * t + (rng() - 0.5) * 2;
       const wx = ((Math.floor(mx) % W) + W) % W;
       const wy = ((Math.floor(my) % W) + W) % W;
       const ci = wy * W + wx;
@@ -299,7 +300,7 @@ export function priestDeathCurse(
         id: nextId.v++,
         type: EntityType.MONSTER,
         x: wx + 0.5, y: wy + 0.5,
-        angle: Math.random() * Math.PI * 2,
+        angle: rng() * Math.PI * 2,
         pitch: 0,
         alive: true,
         speed: scaleMonsterSpeed(def.speed, level),

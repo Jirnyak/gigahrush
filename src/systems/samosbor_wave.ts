@@ -26,6 +26,7 @@ import { publishEvent } from "./events";
 import { hideMapExplorationCells } from "./map_exploration";
 import { pruneRouteCuesInCells } from "./route_cues";
 import { isPlayerEntity } from "./player_actor";
+import { rng } from '../core/rand';
 
 export type SamosborWaveScale = "small" | "medium" | "full";
 
@@ -342,7 +343,7 @@ export function canRunSamosborWave(_state: GameState): boolean {
 export function chooseSamosborScale(state: GameState): SamosborWaveScale {
   if (!canRunSamosborWave(state)) return "full";
   // ~40% full (global fronts only), ~30% small, ~30% medium
-  const roll = Math.random();
+  const roll = rng();
   if (roll < 0.4) return "full";
   const defs = [
     SAMOSBOR_WAVE_SCALE_DEFS.small,
@@ -350,7 +351,7 @@ export function chooseSamosborScale(state: GameState): SamosborWaveScale {
   ];
   let total = 0;
   for (const def of defs) total += def.weight;
-  let localRoll = Math.random() * total;
+  let localRoll = rng() * total;
   for (const def of defs) {
     localRoll -= def.weight;
     if (localRoll <= 0) return def.scale;
@@ -1583,7 +1584,7 @@ export function applyFrontFieldStitch(
   clearFieldSideEffects(world, mask);
   rebuildPathBlockersFromWorldObjects(
     world,
-    (Math.random() * 0xffffffff) | 0,
+    (rng() * 0xffffffff) | 0,
     allIndices,
   );
   pruneRouteCuesInCells(world, fieldSet);

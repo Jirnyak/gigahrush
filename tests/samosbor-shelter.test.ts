@@ -39,6 +39,7 @@ import {
   updateSamosbor,
 } from '../src/systems/samosbor';
 import { makeGameState } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 const TEST_SHELTER_ROOM_ID = 777;
 
@@ -235,14 +236,13 @@ test('random samosbor transfer moves a random map entity and can pick player', (
     samosborCount: 1,
     worldEvents: createWorldEventState(),
   });
-  const originalRandom = Math.random;
   const targetRoll = (targetIdx + 0.25) / (W * W);
   const rolls = [0.75, targetRoll, 0];
-  Math.random = () => rolls.shift() ?? 0;
+  _overrideRng(() => rolls.shift() ?? 0);
   try {
     assert.equal(tickRandomEntityTransferForTests(ctx.world, ctx.entities, state, testVariant('classic')), true);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
   assert.equal(ctx.player.x, targetX + 0.5);
   assert.equal(ctx.player.y, targetY + 0.5);

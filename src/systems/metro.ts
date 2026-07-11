@@ -9,6 +9,7 @@ import {
 } from '../data/metro';
 import { hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
+import { rng } from '../core/rand';
 
 export interface MetroUseResult {
   route: MetroRouteDef;
@@ -48,7 +49,7 @@ function routeAtLookCell(world: World, lookX: number, lookY: number): MetroRoute
 }
 
 function pickWrongStop(route: MetroRouteDef): MetroDestination {
-  return route.wrongStops[Math.floor(Math.random() * route.wrongStops.length)] ?? route.destination;
+  return route.wrongStops[Math.floor(rng() * route.wrongStops.length)] ?? route.destination;
 }
 
 function adjustedWrongChance(route: MetroRouteDef, player: Entity, state: GameState): number {
@@ -167,7 +168,7 @@ export function tryUseMetroRoute(
   if (route.requiredItem) removeItem(player, route.requiredItem, 1);
 
   const wrongChance = adjustedWrongChance(route, player, state);
-  const wrongStop = route.wrongStops.length > 0 && Math.random() < wrongChance;
+  const wrongStop = route.wrongStops.length > 0 && rng() < wrongChance;
   const destination = wrongStop ? pickWrongStop(route) : route.destination;
   const transferHold = wrongStop && destination.kind === 'local' ? 8 : wrongStop ? 24 : 0;
   nextMetroUseAt = state.time + route.cooldownSec + transferHold;

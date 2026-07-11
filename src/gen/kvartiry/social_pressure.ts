@@ -3,6 +3,7 @@
 import { type Entity, EntityType, Faction, AIGoal, FloorLevel, type GameState, msg } from '../../core/types';
 import { World } from '../../core/world';
 import { publishEvent } from '../../systems/events';
+import { rng } from '../../core/rand';
 
 export type KvSocialPressurePoiId =
   | 'generic'
@@ -193,7 +194,7 @@ export function tryKvSocialPressureUprising(
   if (kvSocialPressureTime < nextGlobalUprisingAt) return null;
 
   const len = KV_SOCIAL_PRESSURE_POIS.length;
-  const start = (Math.random() * len) | 0;
+  const start = (rng() * len) | 0;
   const checks = Math.min(len, MAX_POI_CHECKS_PER_TICK);
   for (let i = 0; i < checks; i++) {
     const poi = KV_SOCIAL_PRESSURE_POIS[(start + i) % len];
@@ -201,7 +202,7 @@ export function tryKvSocialPressureUprising(
     const localCitizens = countConvertibleCitizens(world, entities, poi);
     if (localCitizens < poi.minCitizens) continue;
     const chance = Math.min(0.38, poi.chanceBase + poi.pressure * poi.chancePerPressure + localCitizens * 0.004);
-    if (Math.random() > chance) continue;
+    if (rng() > chance) continue;
     const result = triggerPoiUprising(world, entities, poi, localCitizens);
     if (result) {
       poi.cooldownUntil = kvSocialPressureTime + poi.cooldownSeconds;
@@ -307,8 +308,8 @@ function triggerPoiUprising(
     e.faction = Faction.WILD;
     if (e.ai) {
       e.ai.goal = AIGoal.GOTO;
-      e.ai.tx = world.wrap(poi.x + (Math.random() - 0.5) * Math.min(8, poi.radius));
-      e.ai.ty = world.wrap(poi.y + (Math.random() - 0.5) * Math.min(8, poi.radius));
+      e.ai.tx = world.wrap(poi.x + (rng() - 0.5) * Math.min(8, poi.radius));
+      e.ai.ty = world.wrap(poi.y + (rng() - 0.5) * Math.min(8, poi.radius));
     }
     converted++;
   }
@@ -323,8 +324,8 @@ function triggerPoiUprising(
     if (world.dist2(e.x, e.y, poi.x, poi.y) > responseR2) continue;
     if (e.ai) {
       e.ai.goal = AIGoal.GOTO;
-      e.ai.tx = world.wrap(poi.x + (Math.random() - 0.5) * 10);
-      e.ai.ty = world.wrap(poi.y + (Math.random() - 0.5) * 10);
+      e.ai.tx = world.wrap(poi.x + (rng() - 0.5) * 10);
+      e.ai.ty = world.wrap(poi.y + (rng() - 0.5) * 10);
     }
     responders++;
   }

@@ -35,6 +35,7 @@ import {
   stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { rng } from '../../core/rand';
 
 export const DESIGN_FLOOR_ID = 'shahta_atrium' as const;
 export const SHAHTA_ATRIUM_ROUTE_Z = -24 as const;
@@ -877,7 +878,7 @@ function spawnMonster(entities: Entity[], nextId: { v: number }, kind: MonsterKi
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed,

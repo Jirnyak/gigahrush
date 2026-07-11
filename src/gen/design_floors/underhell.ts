@@ -9,7 +9,7 @@ import {
   type WorldEvent, type WorldEventSeverity,
 } from '../../core/types';
 import { auditReachability, World, type ReachabilityAudit } from '../../core/world';
-import { withSeededRandom } from '../../core/rand';
+import { rng, withSeededRandom } from '../../core/rand';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
@@ -1462,7 +1462,7 @@ function spawnUnderhellMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: kind === MonsterKind.IDOL ? 0 : scaleMonsterSpeed(def.speed, level),

@@ -22,6 +22,7 @@ import { publishEvent } from './events';
 import { currentFloorRunEntry } from './procedural_floors';
 import { freshRPG, randomRPG, getMaxHp } from './rpg';
 import { tryAssignPathToCell } from './ai/pathfinding';
+import { rng } from '../core/rand';
 
 function scriptedArrivalStepIndex(def: ScriptedArrivalDef): number {
   return PLOT_CHAIN.findIndex(step => step.eventTags?.includes(def.triggerPlotEventTag));
@@ -196,11 +197,11 @@ function spawnArrivalEscort(
   const npc: Entity = {
     id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
-    angle: 0, pitch: 0, alive: true, speed: def.speedBase + Math.random() * def.speedSpread,
+    angle: 0, pitch: 0, alive: true, speed: def.speedBase + rng() * def.speedSpread,
     sprite: def.occupation,
     name: name.name, firstName: name.firstName, lastName: name.lastName, isFemale: name.female,
     needs: freshNeeds(), hp: maxHp, maxHp,
-    money: 20 + Math.floor(Math.random() * 50),
+    money: 20 + Math.floor(rng() * 50),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: [
       { defId: weapon, count: 1 },

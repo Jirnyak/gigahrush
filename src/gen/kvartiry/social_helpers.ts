@@ -8,10 +8,11 @@ import {
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef } from '../../data/plot';
-import { findClearArea, protectRoom, stampRoom, connectProtectedRoom, rng } from '../shared';
+import { findClearArea, protectRoom, stampRoom, connectProtectedRoom } from '../shared';
 import { Spr } from '../../render/sprite_index';
 import { registerKvSocialPressurePoi } from './social_pressure';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng, irand } from '../../core/rand';
 
 export interface SocialPoiRoom {
   room: Room;
@@ -199,8 +200,8 @@ export function placeDropNear(
   count = 1,
 ): void {
   for (let attempt = 0; attempt < 40; attempt++) {
-    const x = room.x + rng(1, Math.max(1, room.w - 2));
-    const y = room.y + rng(1, Math.max(1, room.h - 2));
+    const x = room.x + irand(1, Math.max(1, room.w - 2));
+    const y = room.y + irand(1, Math.max(1, room.h - 2));
     const ci = world.idx(x, y);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     entities.push({
@@ -225,7 +226,7 @@ export function spawnSocialNpc(
   const px = x + 0.5;
   const py = y + 0.5;
   requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, px, py, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     weapon: opts.weapon,
     isTraveler: opts.traveler,
     aiTarget: { x: px, y: py },
@@ -250,13 +251,13 @@ export function spawnAmbientNpc(
   entities.push({
     id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true, speed: occupation === Occupation.CHILD ? 0.8 : 1.0,
     sprite: occupation,
     spriteScale: occupation === Occupation.CHILD ? 0.6 : undefined,
     name,
     needs: freshNeeds(), hp: occupation === Occupation.CHILD ? 35 : 85, maxHp: occupation === Occupation.CHILD ? 35 : 85,
-    money: rng(0, 20),
+    money: irand(0, 20),
     ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: inventory.map(i => ({ ...i })),
     weapon,

@@ -15,6 +15,7 @@ import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
   setWater, spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
 } from './content_helpers';
+import { rng } from '../../core/rand';
 
 const CHOICE_TAG = 'floor16_collectors_choice';
 const DRAIN_LIVING_QUEST = 'floor16_collectors_drain_living';
@@ -339,7 +340,7 @@ function spawnWaterEel(ctx: MaintContentCtx, x: number, y: number): void {
   const eel: Entity = {
     id: ctx.nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel),
     sprite: def.sprite,

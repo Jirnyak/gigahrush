@@ -10,6 +10,7 @@ import { spawnGorlanov } from '../src/gen/kvartiry/gorlanov';
 import { spawnPolkovnikStreltsov } from '../src/gen/ministry/streltsov';
 import { spawnGordonFreeman } from '../src/gen/maintenance/gordon';
 import { generateTraceSealProtocol } from '../src/gen/void/trace_seal_protocol';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 function openTestWorld(): World {
   const world = new World();
@@ -19,12 +20,11 @@ function openTestWorld(): World {
 }
 
 function withFixedRandom<T>(value: number, run: () => T): T {
-  const original = Math.random;
-  Math.random = () => value;
+  _overrideRng(() => value);
   try {
     return run();
   } finally {
-    Math.random = original;
+    _restoreRng();
   }
 }
 

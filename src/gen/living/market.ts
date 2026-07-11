@@ -12,6 +12,7 @@ import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
 import { Spr } from '../../render/sprite_index';
+import { rng } from '../../core/rand';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Шурик Барыга',
@@ -194,13 +195,13 @@ function generateMarket(
   // Phase 7: scatter loot near stalls
   const lootPool = ['ammo_9mm', 'ammo_shells', 'cigs', 'bandage', 'note', 'kompot', 'flashlight', 'pipe'];
   for (let i = 0; i < 10; i++) {
-    const lx = rx + 1 + Math.floor(Math.random() * (MKT_W - 2));
-    const ly = ry + 1 + Math.floor(Math.random() * (MKT_H - 2));
+    const lx = rx + 1 + Math.floor(rng() * (MKT_W - 2));
+    const ly = ry + 1 + Math.floor(rng() * (MKT_H - 2));
     if (world.features[world.idx(lx, ly)]) continue;
     entities.push({
       id: nextId.v++, type: EntityType.ITEM_DROP,
       x: lx + 0.5, y: ly + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-      inventory: [{ defId: lootPool[Math.floor(Math.random() * lootPool.length)], count: 1 }],
+      inventory: [{ defId: lootPool[Math.floor(rng() * lootPool.length)], count: 1 }],
     });
   }
 

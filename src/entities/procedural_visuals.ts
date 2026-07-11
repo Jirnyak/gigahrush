@@ -133,7 +133,8 @@ function paintLine(t: Uint32Array, x0: number, y0: number, x1: number, y1: numbe
   }
 }
 
-function inferOccupation(occupation: Occupation | undefined, spriteHint: number | undefined): Occupation {
+function inferOccupation(occupation: Occupation | undefined, spriteHint: number | undefined, age?: number): Occupation {
+  if (age !== undefined && age < 16) return Occupation.CHILD;
   if (occupation !== undefined) return occupation;
   if (isOccupationSpriteHint(spriteHint)) return spriteHint;
   return Occupation.TRAVELER;
@@ -423,8 +424,9 @@ function generateDetailedNpcSprite(
   faction: Faction | undefined,
   isFemale: boolean | undefined,
   spriteHint: number | undefined,
+  age?: number,
 ): Uint32Array {
-  const occ = inferOccupation(occupation, spriteHint);
+  const occ = inferOccupation(occupation, spriteHint, age);
   const female = isFemale ?? rnd(seed, 1) > 0.56;
   const child = occ === Occupation.CHILD;
   const cult = faction === Faction.CULTIST || occ === Occupation.PILGRIM || occ === Occupation.PRIEST;
@@ -480,10 +482,11 @@ export function generateProceduralNpcSprite(
   faction: Faction | undefined,
   isFemale: boolean | undefined,
   spriteHint: number | undefined,
+  age?: number,
 ): Uint32Array {
-  const occ = inferOccupation(occupation, spriteHint);
+  const occ = inferOccupation(occupation, spriteHint, age);
   return isCultVisualOccupation(occ)
-    ? generateDetailedNpcSprite(seed, occupation, faction, isFemale, spriteHint)
+    ? generateDetailedNpcSprite(seed, occupation, faction, isFemale, spriteHint, age)
     : generateOccupationNpcSprite(seed, occ, faction, isFemale);
 }
 
@@ -505,12 +508,12 @@ export function generateNpcProfileSprite(
   }
   if (spriteHint !== undefined && isFloor69FemaleSprite(spriteHint)) {
     return generateNpcVisualSprite(NPC_VISUAL_FLOOR69_FEMALE, { seed, occupation, faction, isFemale, age, sprite: spriteHint })
-      ?? generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint);
+      ?? generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint, age);
   }
   const artVisualId = resolveNpcArtVisualId({ faction, occupation, isFemale, age });
   const art = generateNpcVisualSprite(artVisualId, { seed, occupation, faction, isFemale, age, sprite: spriteHint });
   if (art) return art;
-  return generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint);
+  return generateProceduralNpcSprite(seed, occupation, faction, isFemale, spriteHint, age);
 }
 
 function component(c: number, shift: number): number {
@@ -677,7 +680,7 @@ export function ensureProceduralSpriteSeeds(entities: Entity[]): void {
 export function proceduralEntitySpriteKey(e: Entity): number {
   ensureProceduralSpriteSeed(e);
   const kind = e.monsterKind ?? 0;
-  const occ = e.occupation ?? inferOccupation(undefined, e.sprite);
+  const occ = inferOccupation(e.occupation, e.sprite, e.age);
   let h = deriveEntitySpriteSeed(e);
   if (e.type === EntityType.NPC) {
     const visualId = e.npcVisualId ?? resolveNpcArtVisualId({
@@ -758,7 +761,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       sprite: e.sprite,
     });
     if (special) return special;
-    return generateProceduralNpcSprite(seed, e.occupation, e.faction, e.isFemale, e.sprite);
+    return generateProceduralNpcSprite(seed, e.occupation, e.faction, e.isFemale, e.sprite, e.age);
   }
   if (e.type === EntityType.MONSTER) {
     if (e.monsterKind === MonsterKind.HEAD_SLUG && e.monsterStage === HEAD_SLUG_DETACHED_STAGE) {

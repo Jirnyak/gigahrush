@@ -20,6 +20,7 @@ import {
 import { getRecentEvents } from '../src/systems/events';
 import { tryUseMetroRoute } from '../src/systems/metro';
 import { makeGameState } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 function makeMetroRoom(roomName: string, feature: Feature, panelSlot = 0): World {
   const world = new World();
@@ -66,12 +67,11 @@ function testPlayer(inventory: Entity['inventory'] = []): Entity {
 }
 
 function withRandom(value: number, fn: () => void): void {
-  const prev = Math.random;
-  Math.random = () => value;
+  _overrideRng(() => value);
   try {
     fn();
   } finally {
-    Math.random = prev;
+    _restoreRng();
   }
 }
 

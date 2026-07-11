@@ -8,6 +8,7 @@ import { ITEM_TAGS, ITEMS, getStack } from '../src/data/items';
 import { resourceForItem } from '../src/data/resources';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
 import { makeTestNpc, makeTestPlayer } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 const ITEM_ID = 'import_toiletpaper';
 
@@ -50,12 +51,11 @@ test('import toiletpaper can be bought, stolen, sold or saved', () => {
 });
 
 test('storekeeper trade can expose imported toiletpaper', () => {
-  const savedRandom = Math.random;
   try {
     let exposed = false;
     for (let selector = 0; selector < 1 && !exposed; selector += 0.001) {
-      Math.random = (() => {
-        const rolls = [0, selector, 0];
+      _overrideRng((() => {
+        const rolls = [0, selector, 0]);
         return () => rolls.shift() ?? 0;
       })();
 
@@ -64,6 +64,6 @@ test('storekeeper trade can expose imported toiletpaper', () => {
     }
     assert.ok(exposed, 'storekeepers should sell automagazine hygiene goods');
   } finally {
-    Math.random = savedRandom;
+    _restoreRng();
   }
 });

@@ -8,6 +8,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const NPC_ID = 'polkovnik_streltsov';
 
@@ -65,12 +66,12 @@ export function spawnPolkovnikStreltsov(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
   for (let i = 0; i < 3000; i++) {
-    const x = Math.floor(Math.random() * W);
-    const y = Math.floor(Math.random() * W);
+    const x = Math.floor(rng() * W);
+    const y = Math.floor(rng() * W);
     if (world.cells[world.idx(x, y)] !== Cell.FLOOR) continue;
     if (world.roomMap[world.idx(x, y)] < 0 && i < 2000) continue;
     requireSpawnedPlotNpcFromPackage(entities, nextId, NPC_ID, x + 0.5, y + 0.5, {
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       weapon: 'ppsh',
       canGiveQuest: true,
     });

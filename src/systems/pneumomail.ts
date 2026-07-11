@@ -23,6 +23,7 @@ import {
 import { addItem, hasItem, removeItem } from './inventory';
 import { spawnContractById } from './contracts';
 import { publishEvent } from './events';
+import { rng } from '../core/rand';
 
 type PneumomailRole = 'intake' | 'intercept' | 'jam' | 'report';
 type PneumomailEventType = 'received' | 'sent' | 'jammed' | 'intercepted' | 'reported' | 'contraband';
@@ -185,7 +186,7 @@ function weightedCapsule(capsules: readonly PneumomailCapsuleDef[], fallbackInde
   for (const capsule of capsules) total += Math.max(0, capsule.weight);
   if (total <= 0) return capsules[Math.max(0, fallbackIndex) % capsules.length];
 
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (const capsule of capsules) {
     roll -= Math.max(0, capsule.weight);
     if (roll <= 0) return capsule;

@@ -9,6 +9,7 @@ import { ITEM_TAGS, ITEMS, getStack } from '../src/data/items';
 import { RESOURCE_BY_ID, resourceForItem } from '../src/data/resources';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
 import { makeTestNpc, makeTestPlayer } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 const ITEM_ID = 'bottle_empty';
 
@@ -54,16 +55,15 @@ test('empty bottle is reachable through kitchens, living storage and braga produ
 });
 
 test('cook trade can expose empty bottles, leaving a save or sell decision', () => {
-  const savedRandom = Math.random;
   try {
-    Math.random = (() => {
-      const rolls = [0, 0.99, 0];
+    _overrideRng((() => {
+      const rolls = [0, 0.99, 0]);
       return () => rolls.shift() ?? 0;
     })();
     const trade = generateNpcTradeItems(makeTestNpc({ occupation: Occupation.COOK }));
     assert.ok(trade.some(item => item.defId === ITEM_ID), 'cook trade must expose bottle purchases');
   } finally {
-    Math.random = savedRandom;
+    _restoreRng();
   }
 
   const player = makeTestPlayer();

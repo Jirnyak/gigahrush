@@ -35,7 +35,7 @@ import { ITEMS } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
-import { hashSeed } from '../core/rand';
+import { rng, hashSeed } from '../core/rand';
 import { getResourceContractPressure } from './economy';
 import { publishEvent } from './events';
 import { addItem, removeItem } from './inventory';
@@ -885,7 +885,7 @@ function spawnZhelemishGuards(world: World, room: Room, entities: Entity[], next
       type: EntityType.MONSTER,
       x: pos.x + 0.5,
       y: pos.y + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: def.speed * (0.95 + target.danger * 0.03),

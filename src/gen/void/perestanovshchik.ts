@@ -27,6 +27,7 @@ import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
+import { rng } from '../../core/rand';
 
 export const PERESTANOVSHCHIK_ID = 'perestanovshchik' as const;
 
@@ -131,7 +132,7 @@ function spawnLoopThreat(world: World, entities: Entity[], nextId: { v: number }
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed * 0.9, level),

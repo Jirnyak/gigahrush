@@ -12,7 +12,7 @@ import {
   EntityType, AIGoal, FloorLevel, type GameState,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { rng, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
@@ -33,6 +33,7 @@ import {
   spawnKvartiryNamedNpcs,
   tryKvartiryContentUprising,
 } from './content_manifest';
+import { rng, irand } from '../../core/rand';
 
 /* ── Constants ────────────────────────────────────────────────── */
 const WALL_L = 4;  // grid spacing for wall sources
@@ -74,7 +75,7 @@ function pickKvRoomType(): { type: RoomType; name: string } {
     if (i === lastPickedIdx) continue;
     total += KV_ROOM_TYPES[i].weight;
   }
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (let i = 0; i < KV_ROOM_TYPES.length; i++) {
     if (i === lastPickedIdx) continue;
     roll -= KV_ROOM_TYPES[i].weight;
@@ -117,8 +118,8 @@ function placeRoomFeatures(world: World, room: Room): void {
   }
   for (const f of feats) {
     for (let attempt = 0; attempt < 20; attempt++) {
-      const fx = room.x + rng(1, Math.max(1, room.w - 2));
-      const fy = room.y + rng(1, Math.max(1, room.h - 2));
+      const fx = room.x + irand(1, Math.max(1, room.w - 2));
+      const fy = room.y + irand(1, Math.max(1, room.h - 2));
       const fi = world.idx(fx, fy);
       if (world.cells[fi] === Cell.FLOOR && world.features[fi] === Feature.NONE) {
         world.features[fi] = f;
@@ -149,23 +150,23 @@ function linkKvartiryDoorsToRooms(world: World): void {
 /* ── Weapon loadout ───────────────────────────────────────────── */
 function npcWeapon(faction: Faction, occupation: Occupation): { weapon: string; inv: { defId: string; count: number }[] } {
   if (faction === Faction.LIQUIDATOR || occupation === Occupation.HUNTER) {
-    const roll = Math.random();
-    if (roll < 0.20) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: rng(6, 16) }] };
-    if (roll < 0.32) return { weapon: 'shotgun', inv: [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: rng(4, 8) }] };
-    if (roll < 0.40) return { weapon: 'ppsh', inv: [{ defId: 'ppsh', count: 1 }, { defId: 'ammo_9mm', count: rng(20, 40) }] };
+    const roll = rng();
+    if (roll < 0.20) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: irand(6, 16) }] };
+    if (roll < 0.32) return { weapon: 'shotgun', inv: [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: irand(4, 8) }] };
+    if (roll < 0.40) return { weapon: 'ppsh', inv: [{ defId: 'ppsh', count: 1 }, { defId: 'ammo_9mm', count: irand(20, 40) }] };
     if (roll < 0.55) return { weapon: 'axe', inv: [{ defId: 'axe', count: 1 }] };
     if (roll < 0.75) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
     return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
   }
   if (faction === Faction.WILD) {
-    const roll = Math.random();
-    if (roll < 0.15) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: rng(4, 10) }] };
+    const roll = rng();
+    if (roll < 0.15) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: irand(4, 10) }] };
     if (roll < 0.35) return { weapon: 'rebar', inv: [{ defId: 'rebar', count: 1 }] };
     if (roll < 0.55) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
     if (roll < 0.75) return { weapon: 'wrench', inv: [{ defId: 'wrench', count: 1 }] };
     return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
   }
-  if (Math.random() < 0.15) return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
+  if (rng() < 0.15) return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
   return { weapon: '', inv: [] };
 }
 
@@ -187,14 +188,14 @@ function spawnNpcAtCell(
   entities.push({
     id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true,
     speed: occupation === Occupation.CHILD ? 0.8 : 1.2,
     sprite: occupation,
     spriteScale: occupation === Occupation.CHILD ? 0.6 : 1.0,
     name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
     needs: freshNeeds(), hp: maxHp, maxHp,
-    money: rng(5, 60),
+    money: irand(5, 60),
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: loadout.inv.map(i => ({ ...i })),
     weapon: loadout.weapon || undefined,
@@ -309,7 +310,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
       if (world.cells[sy * W + ((sx - 1) & W_MASK)] === Cell.WALL) wallSum++;
 
       if (wallSum < 2) {
-        let drop = rng(0, 3);
+        let drop = irand(0, 3);
         // Rotate if chosen direction already has a wall
         const nx = (sx + DX[drop]) & W_MASK;
         const ny = (sy + DY[drop]) & W_MASK;
@@ -323,7 +324,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
           const ni = cy * W + cx;
           // Don't overwrite another source
           if (isSource[ni]) continue;
-          if (j + 1 === Math.floor(WALL_L / 2) && Math.random() < KV_SEGMENT_DOOR_CANDIDATE_CHANCE) {
+          if (j + 1 === Math.floor(WALL_L / 2) && rng() < KV_SEGMENT_DOOR_CANDIDATE_CHANCE) {
             world.cells[ni] = Cell.DOOR;
           } else {
             world.cells[ni] = Cell.WALL;
@@ -410,14 +411,14 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
       if (candidates.length === 0) break;
       let opened = 0;
       for (const idx of candidates) {
-        if (Math.random() >= KV_CONNECTOR_DOOR_OPEN_CHANCE) continue;
+        if (rng() >= KV_CONNECTOR_DOOR_OPEN_CHANCE) continue;
         world.cells[idx] = Cell.FLOOR;
         visited[idx] = 1;
         queue.push(idx);
         opened++;
       }
       if (opened === 0) {
-        const idx = candidates[rng(0, candidates.length - 1)];
+        const idx = candidates[irand(0, candidates.length - 1)];
         world.cells[idx] = Cell.FLOOR;
         visited[idx] = 1;
         queue.push(idx);
@@ -596,15 +597,15 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   // ── Phase 10: Spawn items (ballots scattered everywhere) ─────
   for (let i = 0; i < 500; i++) {
     for (let attempt = 0; attempt < 50; attempt++) {
-      const x = Math.floor(Math.random() * W);
-      const y = Math.floor(Math.random() * W);
+      const x = Math.floor(rng() * W);
+      const y = Math.floor(rng() * W);
       const ci = world.idx(x, y);
       if (world.cells[ci] !== Cell.FLOOR) continue;
       entities.push({
         id: nextId++, type: EntityType.ITEM_DROP,
         x: x + 0.5, y: y + 0.5, angle: 0, pitch: 0,
         alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-        inventory: [{ defId: 'ballot', count: rng(1, 3) }],
+        inventory: [{ defId: 'ballot', count: irand(1, 3) }],
       });
       break;
     }
@@ -666,7 +667,7 @@ export function updateKvPopulation(
       return;
     }
     // Random background flare-up stays capped; POIs carry the readable unrest.
-    if (Math.random() < AMBIENT_UPRISING_CHANCE) {
+    if (rng() < AMBIENT_UPRISING_CHANCE) {
       triggerUprising(world, entities);
     }
   }
@@ -689,7 +690,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   for (const e of entities) {
     if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN || e.plotNpcId) continue;
     citizenCount++;
-    if (Math.random() < 1 / citizenCount) leader = e;
+    if (rng() < 1 / citizenCount) leader = e;
   }
   if (!leader || citizenCount < 50) return;
   const rallyX = leader.x, rallyY = leader.y;
@@ -715,8 +716,8 @@ function triggerUprising(world: World, entities: Entity[]): void {
     e.faction = Faction.WILD;
     if (e.ai) {
       e.ai.goal = AIGoal.GOTO;
-      e.ai.tx = world.wrap(rallyX + (Math.random() - 0.5) * 10);
-      e.ai.ty = world.wrap(rallyY + (Math.random() - 0.5) * 10);
+      e.ai.tx = world.wrap(rallyX + (rng() - 0.5) * 10);
+      e.ai.ty = world.wrap(rallyY + (rng() - 0.5) * 10);
     }
     converted++;
   }
@@ -730,8 +731,8 @@ function triggerUprising(world: World, entities: Entity[]): void {
     if (world.dist2(e.x, e.y, rallyX, rallyY) > responseR2) continue;
     if (e.ai) {
       e.ai.goal = AIGoal.GOTO;
-      e.ai.tx = world.wrap(rallyX + (Math.random() - 0.5) * 20);
-      e.ai.ty = world.wrap(rallyY + (Math.random() - 0.5) * 20);
+      e.ai.tx = world.wrap(rallyX + (rng() - 0.5) * 20);
+      e.ai.ty = world.wrap(rallyY + (rng() - 0.5) * 20);
     }
     responders++;
   }

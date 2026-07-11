@@ -8,6 +8,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Радист Глеб',
@@ -57,11 +58,11 @@ export function spawnRadistGleb(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
   for (let i = 0; i < 3000; i++) {
-    const x = Math.floor(Math.random() * W);
-    const y = Math.floor(Math.random() * W);
+    const x = Math.floor(rng() * W);
+    const y = Math.floor(rng() * W);
     if (world.cells[world.idx(x, y)] !== Cell.FLOOR) continue;
     requireSpawnedPlotNpcFromPackage(entities, nextId, 'radist_gleb', x + 0.5, y + 0.5, {
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       weapon: 'makarov',
       canGiveQuest: true,
       isTraveler: true,

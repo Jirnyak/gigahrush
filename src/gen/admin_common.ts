@@ -13,6 +13,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../systems/rpg';
 import { MONSTERS } from '../entities/monster';
 import { requireSpawnedPlotNpcFromPackage } from './plot_npc_spawn';
 import { genLog } from './log';
+import { rng } from '../core/rand';
 
 export type NextId = { v: number };
 
@@ -132,7 +133,7 @@ export function spawnAdminNpc(
   x: number, y: number, canGiveQuest = true, weapon?: string,
 ): void {
   requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     weapon,
     canGiveQuest,
     isTraveler: false,
@@ -147,7 +148,7 @@ export function spawnNamedCivilian(
   entities.push({
     id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true, speed: 0.8, sprite: occupation,
     name, isFemale,
     needs: freshNeeds(), hp: 70, maxHp: 70, money: 15,
@@ -173,7 +174,7 @@ export function spawnAdminMonster(
   const monster: Entity = {
     id: nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel),
     sprite: monsterSpr(kind),

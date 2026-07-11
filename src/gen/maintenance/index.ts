@@ -8,7 +8,7 @@ import {
   EntityType, AIGoal, MonsterKind, FloorLevel,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { rng, pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { runMaintenanceContent } from './content_manifest';
@@ -22,6 +22,7 @@ import {
   relocateMaintenanceFactionNpcSquads,
   spawnMaintenanceFactionNpcSquads,
 } from './territory';
+import { rng, irand } from '../../core/rand';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
@@ -43,7 +44,7 @@ const MAINT_ROOM_TYPES: { type: RoomType; name: string; weight: number }[] = [
 function pickRoomType(): { type: RoomType; name: string } {
   let total = 0;
   for (const r of MAINT_ROOM_TYPES) total += r.weight;
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (const r of MAINT_ROOM_TYPES) {
     roll -= r.weight;
     if (roll <= 0) return { type: r.type, name: r.name };
@@ -74,7 +75,7 @@ function openMazeEdge(mazeOpen: Uint8Array, gx: number, gy: number, d: number): 
 }
 
 function applyCoarseTunnelFamily(mazeOpen: Uint8Array): void {
-  const roll = Math.random();
+  const roll = rng();
   if (roll < 0.34) {
     addGrowingTreeDuctFamily(mazeOpen);
   } else if (roll < 0.67) {
@@ -89,44 +90,44 @@ function addGrowingTreeDuctFamily(mazeOpen: Uint8Array): void {
   const targetSteps = GRID * 3;
   for (let step = 0; step < targetSteps && active.length > 0; step++) {
     const newest = active.length - 1;
-    const pickIndex = Math.random() < 0.68 ? newest : rng(0, newest);
+    const pickIndex = rng() < 0.68 ? newest : irand(0, newest);
     const cur = active[pickIndex];
     const gx = cur % GRID;
     const gy = (cur / GRID) | 0;
-    const d = rng(0, 3);
+    const d = irand(0, 3);
     openMazeEdge(mazeOpen, gx, gy, d);
     active.push(gIdx(gx + DX[d], gy + DY[d]));
-    if (active.length > 144 || Math.random() < 0.22) active = active.filter((_, i) => i !== pickIndex);
+    if (active.length > 144 || rng() < 0.22) active = active.filter((_, i) => i !== pickIndex);
   }
 }
 
 function addHuntAndKillDuctFamily(mazeOpen: Uint8Array): void {
-  const stride = rng(5, 9);
-  for (let gy = rng(0, stride - 1); gy < GRID; gy += stride) {
-    let gx = rng(0, GRID - 1);
-    const run = rng(12, 28);
-    let d = Math.random() < 0.5 ? 0 : 2;
+  const stride = irand(5, 9);
+  for (let gy = irand(0, stride - 1); gy < GRID; gy += stride) {
+    let gx = irand(0, GRID - 1);
+    const run = irand(12, 28);
+    let d = rng() < 0.5 ? 0 : 2;
     for (let step = 0; step < run; step++) {
       openMazeEdge(mazeOpen, gx, gy, d);
-      if (Math.random() < 0.24) openMazeEdge(mazeOpen, gx, gy, Math.random() < 0.5 ? 1 : 3);
+      if (rng() < 0.24) openMazeEdge(mazeOpen, gx, gy, rng() < 0.5 ? 1 : 3);
       gx = gWrap(gx + DX[d]);
-      if (Math.random() < 0.18) d = (d + (Math.random() < 0.5 ? 1 : 3)) & 3;
+      if (rng() < 0.18) d = (d + (rng() < 0.5 ? 1 : 3)) & 3;
     }
   }
 }
 
 function addEllerLadderFamily(mazeOpen: Uint8Array): void {
-  const rowStep = rng(7, 11);
-  const colStep = rng(8, 13);
-  for (let gy = rng(0, rowStep - 1); gy < GRID; gy += rowStep) {
+  const rowStep = irand(7, 11);
+  const colStep = irand(8, 13);
+  for (let gy = irand(0, rowStep - 1); gy < GRID; gy += rowStep) {
     for (let gx = 0; gx < GRID; gx++) {
-      if ((gx + gy) % 5 !== 0 || Math.random() < 0.78) openMazeEdge(mazeOpen, gx, gy, 0);
+      if ((gx + gy) % 5 !== 0 || rng() < 0.78) openMazeEdge(mazeOpen, gx, gy, 0);
       if (gx % colStep === 0) openMazeEdge(mazeOpen, gx, gy, 1);
     }
   }
-  for (let gx = rng(0, colStep - 1); gx < GRID; gx += colStep) {
+  for (let gx = irand(0, colStep - 1); gx < GRID; gx += colStep) {
     for (let gy = 0; gy < GRID; gy += 2) {
-      if (Math.random() < 0.42) openMazeEdge(mazeOpen, gx, gy, 1);
+      if (rng() < 0.42) openMazeEdge(mazeOpen, gx, gy, 1);
     }
   }
 }
@@ -252,7 +253,7 @@ function generateCoarseMaze(): Uint8Array {
       continue;
     }
 
-    const d = nbrs[Math.floor(Math.random() * nbrs.length)];
+    const d = nbrs[Math.floor(rng() * nbrs.length)];
     const nx = gWrap(cx + DX[d]);
     const ny = gWrap(cy + DY[d]);
     const ni = gIdx(nx, ny);
@@ -268,8 +269,8 @@ function generateCoarseMaze(): Uint8Array {
   const totalCells = GRID * GRID;
   const extraCount = Math.floor(totalCells * EXTRA_CONN);
   for (let i = 0; i < extraCount; i++) {
-    const ci = rng(0, totalCells - 1);
-    const d = rng(0, 3);
+    const ci = irand(0, totalCells - 1);
+    const d = irand(0, 3);
     const cx = ci % GRID;
     const cy = (ci / GRID) | 0;
     openMazeEdge(mazeOpen, cx, cy, d);
@@ -317,8 +318,8 @@ function carveDeadEnds(world: World, mazeOpen: Uint8Array): void {
   };
 
   for (let i = 0; i < 600; i++) {
-    const gx = rng(0, GRID - 1);
-    const gy = rng(0, GRID - 1);
+    const gx = irand(0, GRID - 1);
+    const gy = irand(0, GRID - 1);
     const ox = gx * CELL + half;
     const oy = gy * CELL + half;
 
@@ -329,8 +330,8 @@ function carveDeadEnds(world: World, mazeOpen: Uint8Array): void {
     }
     if (closed.length === 0) continue;
 
-    const d = closed[Math.floor(Math.random() * closed.length)];
-    const len = rng(1, half);
+    const d = closed[Math.floor(rng() * closed.length)];
+    const len = irand(1, half);
     for (let s = 1; s <= len; s++) {
       carve(world.wrap(ox + DX[d] * s), world.wrap(oy + DY[d] * s));
     }
@@ -353,11 +354,11 @@ function carveRooms(world: World, mazeOpen: Uint8Array, nextRoomIdStart: number)
       const gi = gIdx(gx, gy);
       const conns = connCount(gi);
 
-      const isJunction = conns >= 3 && Math.random() < 0.5;
-      const isRandom = Math.random() < 0.03;
+      const isJunction = conns >= 3 && rng() < 0.5;
+      const isRandom = rng() < 0.03;
       if (!isJunction && !isRandom) continue;
 
-      const rw = rng(3, 6), rh = rng(3, 6);
+      const rw = irand(3, 6), rh = irand(3, 6);
       const ox = gx * CELL + half;
       const oy = gy * CELL + half;
       const rx = world.wrap(ox - Math.floor(rw / 2));
@@ -433,10 +434,10 @@ function carveRooms(world: World, mazeOpen: Uint8Array, nextRoomIdStart: number)
 
 function carveWaterCanals(world: World): void {
   for (let canal = 0; canal < 30; canal++) {
-    const horiz = Math.random() < 0.5;
-    const pos = rng(10, W - 10);
-    const start = rng(0, W - 100);
-    const len = rng(40, 200);
+    const horiz = rng() < 0.5;
+    const pos = irand(10, W - 10);
+    const start = irand(0, W - 100);
+    const len = irand(40, 200);
     for (let d = 0; d < len; d++) {
       let x: number, y: number;
       if (horiz) {
@@ -466,7 +467,7 @@ function placeLights(world: World, rooms: Room[]): void {
   for (let gy = 0; gy < GRID; gy++) {
     const cyOffset = (gy * CELL + half) * W;
     for (let gx = 0; gx < GRID; gx++) {
-      if (Math.random() < 0.06) {
+      if (rng() < 0.06) {
         const ci = cyOffset + (gx * CELL + half);
         if (world.cells[ci] === Cell.FLOOR && world.features[ci] === 0)
           world.features[ci] = Feature.LAMP;
@@ -479,12 +480,12 @@ function placeLights(world: World, rooms: Room[]): void {
 function placeItems(entities: Entity[], rooms: Room[], nextIdStart: number): number {
   let nextId = nextIdStart;
   for (const room of rooms) {
-    const numItems = rng(0, 3);
+    const numItems = irand(0, 3);
     for (let n = 0; n < numItems; n++) {
       const defs = ['pipe', 'wrench', 'flashlight', 'bandage', 'water', 'canned', 'bread', 'ammo_fuel', 'grenade'];
       const defId = pick(defs);
-      const ix = room.x + rng(0, Math.max(0, room.w - 1));
-      const iy = room.y + rng(0, Math.max(0, room.h - 1));
+      const ix = room.x + irand(0, Math.max(0, room.w - 1));
+      const iy = room.y + irand(0, Math.max(0, room.h - 1));
       entities.push({
         id: nextId++, type: EntityType.ITEM_DROP,
         x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0,
@@ -501,10 +502,10 @@ function placeMonsters(world: World, entities: Entity[], nextIdStart: number): n
   let monsterCount = 0;
   const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, activeActorCountAtDefaultSoftLimit(MAINTENANCE_MONSTER_TARGET_AT_DEFAULT_CAP));
   for (let attempt = 0; attempt < 50_000 && monsterCount < monsterTarget; attempt++) {
-    const ci = rng(0, W * W - 1);
+    const ci = irand(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR) continue;
     const mx = (ci % W) + 0.5, my = ((ci / W) | 0) + 0.5;
-    const kind = Math.random() < 0.10
+    const kind = rng() < 0.10
       ? pick([MonsterKind.EYE, MonsterKind.NIGHTMARE, MonsterKind.REBAR, MonsterKind.BETONNIK, MonsterKind.MATKA])
       : pick([
       MonsterKind.GNOME, MonsterKind.GNOME,
@@ -534,7 +535,7 @@ function placeMonsters(world: World, entities: Entity[], nextIdStart: number): n
     const rpg = randomRPG(zoneLevel);
     entities.push({
       id: nextId++, type: EntityType.MONSTER,
-      x: mx, y: my, angle: Math.random() * Math.PI * 2, pitch: 0,
+      x: mx, y: my, angle: rng() * Math.PI * 2, pitch: 0,
       alive: true, speed: scaleMonsterSpeed(def.speed, zoneLevel), sprite: def.sprite,
       hp: scaleMonsterHp(def.hp, zoneLevel), maxHp: scaleMonsterHp(def.hp, zoneLevel),
       monsterKind: kind, attackCd: 0,

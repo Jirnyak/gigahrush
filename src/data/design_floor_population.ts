@@ -221,7 +221,7 @@ const INDUSTRIAL_OCCUPATIONS: readonly WeightedDesignValue<Occupation>[] = [
 ];
 
 const CHILD_CAMP_OCCUPATIONS: readonly WeightedDesignValue<Occupation>[] = [
-  { value: Occupation.CHILD, weight: 76 },
+  { value: Occupation.CHILD, weight: 0 },
   { value: Occupation.COOK, weight: 6 },
   { value: Occupation.DOCTOR, weight: 5 },
   { value: Occupation.SECRETARY, weight: 4 },
@@ -1046,7 +1046,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
       { value: Occupation.SECRETARY, weight: 14 },
       { value: Occupation.HUNTER, weight: 12 },
       { value: Occupation.ELECTRICIAN, weight: 8 },
-      { value: Occupation.CHILD, weight: 6 },
+      { value: Occupation.CHILD, weight: 0 },
       { value: Occupation.TRAVELER, weight: 6 },
     ],
     monsterBiasKinds: [

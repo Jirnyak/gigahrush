@@ -14,9 +14,10 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import { connectProtectedRoom, findClearArea, protectRoom, rng, stampRoom } from '../shared';
+import { connectProtectedRoom, findClearArea, protectRoom, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng, irand } from '../../core/rand';
 
 const ROOM_W = 15;
 const ROOM_H = 11;
@@ -386,8 +387,8 @@ function findCacheOrigin(world: World): { x: number; y: number } {
   if (clear) return clear;
 
   for (let attempt = 0; attempt < 2400; attempt++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = rng(90, 260);
+    const angle = rng() * Math.PI * 2;
+    const dist = irand(90, 260);
     const x = world.wrap(cx + Math.round(Math.cos(angle) * dist));
     const y = world.wrap(cy + Math.round(Math.sin(angle) * dist));
     if (canReserve(world, x, y)) return { x, y };
@@ -540,7 +541,7 @@ function spawnGuard(
     type: EntityType.NPC,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: 1.0,
@@ -734,7 +735,7 @@ function findPressureCell(
 ): { x: number; y: number } | null {
   for (let attempt = 0; attempt < 80; attempt++) {
     const angle = (Math.PI * 2 * (idx + attempt / 17)) / total;
-    const dist = rng(5, 12);
+    const dist = irand(5, 12);
     const x = world.wrap(cx + Math.round(Math.cos(angle) * dist));
     const y = world.wrap(cy + Math.round(Math.sin(angle) * dist));
     const ci = world.idx(x, y);

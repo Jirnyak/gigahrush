@@ -1,4 +1,5 @@
 import { NpcState } from '../../core/types';
+import { rng } from '../../core/rand';
 
 const STATE_TEXTS: Record<NpcState, string[]> = {
   [NpcState.SLEEPING]: ['Сплю, если тут вообще можно спать.', 'Дай закрыть глаза.', 'Мне надо отлежаться.'],
@@ -15,5 +16,5 @@ const STATE_TEXTS: Record<NpcState, string[]> = {
 
 export function getNpcStateText(state: NpcState): string {
   const texts = STATE_TEXTS[state];
-  return texts[Math.floor(Math.random() * texts.length)];
+  return texts[Math.floor(rng() * texts.length)];
 }

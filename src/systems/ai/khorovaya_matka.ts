@@ -18,6 +18,7 @@ import { publishEvent } from '../events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../rpg';
 import { playGrowl, playSoundAt } from '../audio';
 import { hasClearLineOfFire } from './monster';
+import { rng } from '../../core/rand';
 
 export const KHOROVAYA_MATKA_CHILD_CAP = 7;
 export const KHOROVAYA_MATKA_VULNERABLE_SEC = 8;
@@ -146,7 +147,7 @@ function spawnChoirChild(
     type: EntityType.MONSTER,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level) * 0.92,

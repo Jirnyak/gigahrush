@@ -56,6 +56,7 @@ import {
   type NpcUtilityTargetCandidate,
   type NpcUtilityThreatSnapshot,
 } from './npc_utility';
+import { rng } from '../../core/rand';
 
 export type NpcAiProfile = 'default' | 'ministry';
 
@@ -627,10 +628,10 @@ function applyRoomRestoration(world: World, e: Entity, dt: number, time: number,
 
 function tryAmbientBark(e: Entity, dt: number, samosborActive: boolean): void {
   const ai = e.ai!;
-  ai.ambientBarkCd = Math.max(0, (ai.ambientBarkCd ?? (10 + Math.random() * 12)) - dt);
+  ai.ambientBarkCd = Math.max(0, (ai.ambientBarkCd ?? (10 + rng() * 12)) - dt);
   if (ai.ambientBarkCd > 0) return;
 
-  ai.ambientBarkCd = 18 + Math.random() * 28;
+  ai.ambientBarkCd = 18 + rng() * 28;
   if (samosborActive) return;
   if (ai.npcState === NpcState.SLEEPING || ai.npcState === NpcState.HIDING) return;
   if (ai.goal === AIGoal.FLEE || ai.goal === AIGoal.HIDE || ai.goal === AIGoal.HUNT) return;
@@ -764,7 +765,7 @@ function handleEat(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   const n = e.needs;
   
-  if (n && n.food < 15 && (e.faction === Faction.WILD || e.faction === Faction.CULTIST || Math.random() < 0.05)) {
+  if (n && n.food < 15 && (e.faction === Faction.WILD || e.faction === Faction.CULTIST || rng() < 0.05)) {
     const chunkCell = findMeatChunkCell(world, e.x, e.y, 16);
     if (chunkCell) {
       ai.goal = AIGoal.EAT;

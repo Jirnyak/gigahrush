@@ -33,6 +33,7 @@ import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('cayley_byuro');
 
@@ -985,7 +986,7 @@ function spawnNpc(
   weapon?: string,
 ): number {
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, room.x + dx + 0.5, room.y + dy + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     canGiveQuest: true,
     weapon,
     aiTarget: { x: room.x + dx, y: room.y + dy },
@@ -1007,7 +1008,7 @@ function spawnMonster(world: World, entities: Entity[], nextId: { v: number }, r
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel),

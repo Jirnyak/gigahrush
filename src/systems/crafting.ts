@@ -30,6 +30,7 @@ import {
 import { itemComposition } from '../data/item_composition';
 import { addItem, canAddItem } from './inventory';
 import { publishEvent } from './events';
+import { rng } from '../core/rand';
 
 export type { CraftingState, MutableCraftVector };
 export type { CraftMaterialId, CraftStationKind, CraftVector };
@@ -240,8 +241,8 @@ function stationMatches(recipe: CraftRecipeDef, station: CraftStationKind): bool
   return recipe.station === 'any' || recipe.station === station;
 }
 
-function randomUnit(rng?: () => number): number {
-  const n = rng ? Number(rng()) : Math.random();
+function randomUnit(rand?: () => number): number {
+  const n = rand ? Number(rand()) : rng();
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(0.999999, n));
 }
@@ -255,11 +256,11 @@ function removeInventorySlotItem(actor: Entity, slotIndex: number, defId: string
   return true;
 }
 
-function weightedMaterial(components: CraftVector, rng?: () => number): CraftMaterialId | undefined {
+function weightedMaterial(components: CraftVector, rand?: () => number): CraftMaterialId | undefined {
   let total = 0;
   for (const count of components) total += cleanMaterialCount(count);
   if (total <= 0) return undefined;
-  let roll = randomUnit(rng) * total;
+  let roll = randomUnit(rand) * total;
   for (let i = 0; i < CRAFT_MATERIAL_COUNT; i++) {
     roll -= cleanMaterialCount(components[i]);
     if (roll < 0) return CRAFT_MATERIAL_IDS[i];
@@ -321,7 +322,6 @@ export function sanitizeCraftingState(input: unknown): CraftingState {
     lastChangedAt: cleanTime(input.lastChangedAt),
   };
 }
-
 
 function countKnownRecipes(knownRecipes: Record<string, true>): number {
   let count = 0;

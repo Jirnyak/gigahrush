@@ -81,6 +81,7 @@ import { getAiStats } from './ai';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { CHALK_ITEM_ID } from './chalk';
 import { isPlayerEntity } from './player_actor';
+import { rng } from '../core/rand';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -1044,7 +1045,7 @@ function armLocalFloorInstance(world: World, player: Entity, state: GameState): 
     displayNumber: def.displayNumber,
     title: def.title,
     baseFloor: def.baseFloor,
-    seed: Math.floor(Math.random() * 0x7fffffff),
+    seed: Math.floor(rng() * 0x7fffffff),
     seedTag: def.seedTag,
     risk: def.risk,
     enteredAt: state.time,
@@ -1306,7 +1307,7 @@ export function execDebugCommand(
       const rpg = randomRPG(player.rpg?.level ?? 1);
       const maxHp = getMaxHp(rpg);
       const factions = [Faction.CITIZEN, Faction.LIQUIDATOR, Faction.CULTIST, Faction.WILD];
-      const faction = factions[Math.floor(Math.random() * factions.length)];
+      const faction = factions[Math.floor(rng() * factions.length)];
       entities.push({
         id: nextEntityId.v++, type: EntityType.NPC,
         x: player.x + Math.cos(player.angle) * 2,
@@ -1317,7 +1318,7 @@ export function execDebugCommand(
         needs: freshNeeds(), hp: maxHp, maxHp,
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         inventory: [], faction, occupation: Occupation.TRAVELER, isTraveler: true,
-        rpg, money: 20 + Math.floor(Math.random() * 80),
+        rpg, money: 20 + Math.floor(rng() * 80),
       });
       state.msgs.push(msg(`NPC ${nm.name} заспавнен`, state.time, '#ff0'));
       break;
@@ -1783,13 +1784,13 @@ export function execDebugCommand(
       for (let i = 0; i < MAX_CRITTERS && spawned < 10; i++) {
         const c = CRITTERS_POOL[i];
         if (!c.active) {
-          const angle = Math.random() * Math.PI * 2;
-          const dist = 1 + Math.random() * 3;
+          const angle = rng() * Math.PI * 2;
+          const dist = 1 + rng() * 3;
           const sx = Math.round(player.x + Math.cos(angle) * dist);
           const sy = Math.round(player.y + Math.sin(angle) * dist);
           if (world.get(sx, sy) === Cell.FLOOR) {
             c.active = true;
-            const r = Math.random();
+            const r = rng();
             c.defId = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
             c.x = sx;
             c.y = sy;

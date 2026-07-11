@@ -12,6 +12,7 @@ import { actorOccupyRadius, canActorOccupy, entityIgnoresFineBlockers } from '..
 import { setDoorState } from '../door_state';
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
+import { rng } from '../../core/rand';
 
 let _barkMsgs: Msg[] = [];
 let _barkTime = 0;
@@ -940,7 +941,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
     if (e.type === EntityType.NPC && ai.goal !== AIGoal.HIDE && ai.goal !== AIGoal.FLEE) {
       ai.stuck += dt;
       // Higher threshold reduces corridor ping-pong: NPCs linger longer before re-wandering
-      if (ai.stuck > 3 + Math.random() * 2) {
+      if (ai.stuck > 3 + rng() * 2) {
         wanderInRoom(world, e);
         // Fallback: if wanderInRoom found nothing (no room or tiny room), try wanderNearby
         if (ai.path.length === 0) wanderNearby(world, e);
@@ -1123,8 +1124,8 @@ export function gotoRoom(world: World, e: Entity, targetRoomType: RoomType): Ass
 export function wanderNearby(world: World, e: Entity): void {
   const ai = e.ai!;
   for (let attempt = 0; attempt < ROUTINE_WANDER_ATTEMPTS; attempt++) {
-    const wx = Math.floor(e.x) + Math.floor(Math.random() * 20 - 10);
-    const wy = Math.floor(e.y) + Math.floor(Math.random() * 20 - 10);
+    const wx = Math.floor(e.x) + Math.floor(rng() * 20 - 10);
+    const wy = Math.floor(e.y) + Math.floor(rng() * 20 - 10);
     const tx = world.wrap(wx);
     const ty = world.wrap(wy);
     if (world.solid(tx, ty)) continue;
@@ -1142,8 +1143,8 @@ export function wanderInRoom(world: World, e: Entity): void {
   const room = world.roomAt(e.x, e.y);
   if (!room || room.w < 3 || room.h < 3) return;
   for (let attempt = 0; attempt < ROUTINE_WANDER_ATTEMPTS; attempt++) {
-    const rx = room.x + 1 + Math.floor(Math.random() * (room.w - 2));
-    const ry = room.y + 1 + Math.floor(Math.random() * (room.h - 2));
+    const rx = room.x + 1 + Math.floor(rng() * (room.w - 2));
+    const ry = room.y + 1 + Math.floor(rng() * (room.h - 2));
     if (!world.solid(rx, ry)) {
       const status = tryAssignPathToCell(world, e, rx, ry);
       if (status !== 'not_found') return;
@@ -1155,7 +1156,7 @@ export function wanderInRoom(world: World, e: Entity): void {
 export function wanderFar(world: World, e: Entity): void {
   if (world.rooms.length > 0) {
     for (let attempt = 0; attempt < ROUTINE_FAR_ATTEMPTS; attempt++) {
-      const room = world.rooms[Math.floor(Math.random() * world.rooms.length)];
+      const room = world.rooms[Math.floor(rng() * world.rooms.length)];
       if (!room || room.w < 2 || room.h < 2) continue;
       const tx = room.x + Math.floor(room.w / 2);
       const ty = room.y + Math.floor(room.h / 2);

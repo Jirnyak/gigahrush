@@ -3,6 +3,7 @@ import { GameState } from '../core/types.js';
 import { World } from '../core/world.js';
 import { audioSuspended } from './audio.js';
 import { masterAudioEnabled, musicVolume } from './ui_orchestrator.js';
+import { SeedRng } from '../core/rand.js';
 
 // Import all .ogg files from the music folder. Vite will bundle them (as base64 via viteSingleFile or as static assets).
 const musicFiles = import.meta.glob('../../music/*.ogg', { eager: true, as: 'url' });
@@ -16,6 +17,7 @@ class MusicSystem {
   private fadeOutAudio: HTMLAudioElement | null = null;
   private fadeTimer: number = 0;
   private readonly fadeDuration = 2.0; // 2 seconds crossfade
+  private localRng = new SeedRng(Date.now() % 99999);
 
   private tracks: Record<string, string> = {};
 
@@ -33,8 +35,24 @@ class MusicSystem {
     const valid = Object.keys(this.tracks).filter(name => name.startsWith(prefix));
     
     if (valid.length === 0) return null;
-    return valid[Math.floor(Math.random() * valid.length)];
+    if (valid.length === 1) return valid[0];
+
+    let nextTrack;
+    do {
+      nextTrack = valid[Math.floor(this.localRng.random() * valid.length)];
+    } while (nextTrack === this.currentTrackName);
+    
+    return nextTrack;
   }
+
+  private onTrackEnded = () => {
+    const nextTrack = this.pickTrack(this.currentContext);
+    if (nextTrack && this.currentAudio) {
+      this.currentTrackName = nextTrack;
+      this.currentAudio.src = this.tracks[nextTrack];
+      this.currentAudio.play().catch(() => {});
+    }
+  };
 
   public tick(world: World, entities: readonly Entity[], cameraTarget: Entity, state: GameState, dt: number) {
 
@@ -100,6 +118,7 @@ class MusicSystem {
       
       if (nextTrack && nextTrack !== this.currentTrackName) {
         if (this.currentAudio) {
+          this.currentAudio.removeEventListener('ended', this.onTrackEnded);
           if (this.fadeOutAudio) {
             this.fadeOutAudio.pause();
             this.fadeOutAudio.removeAttribute('src');
@@ -110,7 +129,7 @@ class MusicSystem {
 
         this.currentTrackName = nextTrack;
         this.currentAudio = new Audio(this.tracks[nextTrack]);
-        this.currentAudio.loop = true;
+        this.currentAudio.addEventListener('ended', this.onTrackEnded);
         this.currentAudio.volume = 0;
         
         // Browsers block autoplay until interaction. The error is safely ignored.

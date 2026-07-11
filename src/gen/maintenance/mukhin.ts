@@ -4,6 +4,7 @@ import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { pick } from '../shared';
+import { rng } from '../../core/rand';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Валерий Мухин',
@@ -53,7 +54,7 @@ export function spawnMukhin(
   if (!room) return;
 
   requireSpawnedPlotNpcFromPackage(entities, nextId, 'valeriy_mukhin', room.x + Math.floor(room.w / 2) + 0.5, room.y + Math.floor(room.h / 2) + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     canGiveQuest: true,
     isTraveler: true,
   });

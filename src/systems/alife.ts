@@ -86,6 +86,7 @@ import {
   type RankStats,
 } from './alife_rating';
 import { getEntityIndex, ENTITY_MASK_NPC } from './entity_index';
+import { rng } from '../core/rand';
 
 const ALIFE_VERSION = 2;
 const ALIFE_POPULATION = ALIFE_POPULATION_CAPACITY;
@@ -1121,12 +1122,17 @@ function splitClampedMoney(cash: unknown, accountRubles: unknown): { money: numb
 function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed: number): AlifeNpcRecord {
   const faction = factionForPlan(plan, seed, id);
   const profile = profileForFaction(faction);
-  const occupation = occupationForRecord(plan, profile, seed, id);
   const level = levelForRecord(plan, faction, seed, id);
+  let occupation = occupationForRecord(plan, profile, seed, id);
+  const age = ageForRecord(plan, faction, occupation, level, seed, id);
+  
+  if (age < 16) {
+    occupation = Occupation.CHILD;
+  }
+  
   const rpg = rpgForRecord(level, seed, id);
   const maxHp = getMaxHp(rpg);
   const named = nameForRecord(plan, faction, occupation, seed, id);
-  const age = ageForRecord(plan, faction, occupation, level, seed, id);
   const wealth = wealthForRecord(plan, profile, level, seed, id);
   const money = cashForWealth(wealth, seed, id);
   const record: AlifeNpcRecord = {
@@ -1452,7 +1458,7 @@ function createAlifeState(state: GameState, seed: number, requestedTotal: number
 export function ensureAlifeState(state: GameState): AlifeState {
   const host = state as AlifeHost;
   if (host.alife?.version === ALIFE_VERSION && host.alife.npcs.length > 0 && host.alife.columns) return host.alife;
-  const seed = Math.floor(Math.random() * 0x7fffffff);
+  const seed = Math.floor(rng() * 0x7fffffff);
   host.alife = createAlifeState(state, seed, 0);
   return host.alife;
 }
@@ -1809,7 +1815,7 @@ export function resetAlifePlayerRelationsForNewPlayer(
 
 export function randomAliveAlifeNpcSnapshot(
   state: GameState,
-  random: () => number = Math.random,
+  random: () => number = rng,
   excludeIds: ReadonlySet<number> = new Set(),
 ): AlifeNpcSnapshot | undefined {
   const alife = ensureAlifeState(state);
@@ -2458,7 +2464,7 @@ function sanitizeRelationTargetAlifeId(alife: AlifeState, input: unknown): numbe
 
 export function setAlifeState(state: GameState, input: unknown): AlifeState {
   const save = isRecord(input) ? input : {};
-  const seed = clampInt(save.seed, Math.floor(Math.random() * 0x7fffffff), 1, 0x7fffffff);
+  const seed = clampInt(save.seed, Math.floor(rng() * 0x7fffffff), 1, 0x7fffffff);
   const total = typeof save.total === 'number' && Number.isFinite(save.total) && save.total >= ALIFE_POPULATION_MIN_RANDOM
     ? clampAlifePopulationTotal(save.total, 0)
     : 0;

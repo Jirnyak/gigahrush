@@ -1,12 +1,13 @@
 import { Cell, Tex, RoomType, Feature, type Entity, W } from '../../core/types';
 import { World } from '../../core/world';
-import { rng, stampRoom } from '../shared';
+import { stampRoom } from '../shared';
+import { irand } from '../../core/rand';
 
 export function generateLiquidatorBaseArena(world: World, entities: Entity[], nextId: number): number {
   const size = 50;
   // Let's find a place for the arena, let's say near the center but avoiding spawn.
-  const cx = Math.floor(W / 2) + rng(-50, 50);
-  const cy = Math.floor(W / 2) + rng(-50, 50);
+  const cx = Math.floor(W / 2) + irand(-50, 50);
+  const cy = Math.floor(W / 2) + irand(-50, 50);
 
   // We need to carve out a room.
   const room = stampRoom(world, world.rooms.length, RoomType.COMMON, cx, cy, size, size, 0);
@@ -37,7 +38,7 @@ export function generateLiquidatorBaseArena(world: World, entities: Entity[], ne
           }
         } else {
            // Tribunes
-           if (rng(1, 100) <= 30) {
+           if (irand(1, 100) <= 30) {
              world.setFeatureAt(idx, Feature.CHAIR);
            }
         }
@@ -55,7 +56,7 @@ export function generateLiquidatorBaseArena(world: World, entities: Entity[], ne
         const px = cx + xx;
         const py = cy + yy;
         const idx = world.idx(px, py);
-        if (world.cells[idx] === Cell.WALL && rng(1, 100) <= 5) {
+        if (world.cells[idx] === Cell.WALL && irand(1, 100) <= 5) {
           world.cells[idx] = Cell.DOOR;
           doorsAdded++;
         }

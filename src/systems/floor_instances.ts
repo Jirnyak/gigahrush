@@ -27,6 +27,7 @@ import {
   type FloorRunEntrySnapshot,
 } from './procedural_floors';
 import { floorKeyForFloorInstance } from './floor_keys';
+import { rng } from '../core/rand';
 
 export interface ActiveFloorInstance {
   id: string;
@@ -100,7 +101,7 @@ function normalizeRisk(value: unknown, fallback: 1 | 2 | 3 | 4 | 5): 1 | 2 | 3 |
 function normalizeSeed(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.abs(Math.trunc(value)) % 0x7fffffff
-    : Math.floor(Math.random() * 0x7fffffff);
+    : Math.floor(rng() * 0x7fffffff);
 }
 
 function normalizeFinite(value: unknown, fallback: number): number {
@@ -249,7 +250,7 @@ function pickInstance(fromFloor: FloorLevel, intendedFloor: FloorLevel): FloorIn
     for (let i = 0; i < weight; i++) candidates.push(def);
   }
   if (total <= 0 || candidates.length === 0) return undefined;
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  return candidates[Math.floor(rng() * candidates.length)];
 }
 
 function makeActiveInstance(
@@ -266,7 +267,7 @@ function makeActiveInstance(
     displayNumber: def.displayNumber,
     title: def.title,
     baseFloor: def.baseFloor,
-    seed: Math.floor(Math.random() * 0x7fffffff),
+    seed: Math.floor(rng() * 0x7fffffff),
     seedTag: def.seedTag,
     risk: def.risk,
     enteredAt: state.time,
@@ -374,7 +375,7 @@ export function resolveElevatorRoute(
   }
 
   store.lastStableFloor = fromFloor;
-  store.lastRoll = Math.random();
+  store.lastRoll = rng();
   if (store.lastRoll >= anomalyChance(state)) {
     return {
       targetFloor: intendedFloor,

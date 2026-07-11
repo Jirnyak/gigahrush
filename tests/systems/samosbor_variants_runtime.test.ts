@@ -10,17 +10,18 @@ import {
   getLastSamosborVariant,
 } from '../../src/systems/samosbor_variants_runtime.js';
 import { SAMOSBOR_VARIANTS, getSamosborVariantWeight } from '../../src/data/samosbor_variants.js';
+import { _overrideRng, _restoreRng } from '../../src/core/rand';
 
-let originalMathRandom: typeof Math.random;
+
 let originalCrypto: Crypto | undefined;
 
 let mockRandomValue = 0.5;
 
 beforeEach(() => {
-  originalMathRandom = Math.random;
+
   originalCrypto = globalThis.crypto;
 
-  Math.random = () => mockRandomValue;
+  _overrideRng(() => mockRandomValue);
   // Override crypto to make sure our mocked Math.random is used,
   // or mock crypto if we want to test secureRandom specifically.
   // The secureRandom function falls back to Math.random if crypto doesn't have getRandomValues
@@ -40,7 +41,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  Math.random = originalMathRandom;
+  _restoreRng();
   Object.defineProperty(globalThis, 'crypto', {
     value: originalCrypto,
     writable: true,

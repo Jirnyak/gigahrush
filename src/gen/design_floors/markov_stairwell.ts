@@ -30,6 +30,7 @@ import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('markov_stairwell');
 
@@ -354,7 +355,7 @@ const markovMetrics = new WeakMap<World, MarkovStairwellMetrics>();
 function weightedPick(options: readonly WeightedMotif[]): MotifId {
   let total = 0;
   for (const option of options) total += option.weight;
-  let roll = Math.random() * total;
+  let roll = rng() * total;
   for (const option of options) {
     roll -= option.weight;
     if (roll <= 0) return option.id;
@@ -369,7 +370,7 @@ function buildSequence(): MotifId[] {
     current = weightedPick(TRANSITIONS[current]);
     out.push(current);
   }
-  const rareStep = RARE_STEP_MIN + Math.floor(Math.random() * RARE_STEP_SPAN);
+  const rareStep = RARE_STEP_MIN + Math.floor(rng() * RARE_STEP_SPAN);
   out[rareStep] = 'rare';
   if (rareStep > 1) out[rareStep - 2] = 'kitchen';
   if (rareStep > 0) out[rareStep - 1] = 'bath';
@@ -381,8 +382,8 @@ function hiddenState(motif: MotifId, step: number, previous: MotifId): HiddenSta
   if (motif === 'rare') return 'rare';
   if (motif === previous && step > 0) return 'hunting';
   if ((motif === 'registry' && step % 3 === 1) || (motif === 'service' && step % 4 === 2)) return 'watched';
-  if ((motif === 'bath' || motif === 'storage') && Math.random() < 0.28) return 'hunting';
-  if (Math.random() < 0.18) return 'watched';
+  if ((motif === 'bath' || motif === 'storage') && rng() < 0.28) return 'hunting';
+  if (rng() < 0.18) return 'watched';
   return 'quiet';
 }
 
@@ -692,7 +693,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed * (1 + level * 0.04),

@@ -1,6 +1,7 @@
 /* ── NPC & monster name generation + freshNeeds ──────────────── */
 
 import { Faction, type Needs } from '../core/types';
+import { rng } from '../core/rand';
 
 // ═══════════════════════════════════════════════════════════════
 //  Name pools — single source of truth for randomName & A-Life
@@ -251,7 +252,7 @@ export const SCIENTIST_TITLE: readonly string[] = [
 //  Name generation
 // ═══════════════════════════════════════════════════════════════
 
-function _pick<T>(arr: readonly T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function _pick<T>(arr: readonly T[]): T { return arr[Math.floor(rng() * arr.length)]; }
 
 export interface NameResult {
   name: string;        // full display name (backward compat)
@@ -268,25 +269,25 @@ export function randomName(faction?: Faction): NameResult {
       return { name: `${rank} ${last}`, firstName: rank, lastName: last, female: false };
     }
     case Faction.WILD: {
-      const female = Math.random() < 0.33;
+      const female = rng() < 0.33;
       const first = female ? _pick(WILD_FIRST_F) : _pick(WILD_FIRST_M);
       const nick = _pick(WILD_NICK);
       return { name: `${first} «${nick}»`, firstName: first, lastName: nick, female };
     }
     case Faction.CULTIST: {
-      const female = Math.random() < 0.5;
+      const female = rng() < 0.5;
       const adj = _pick(female ? CULT_ADJ_F : CULT_ADJ_M);
       const noun = female ? _pick(CULT_NOUN_F) : _pick(CULT_NOUN_M);
       return { name: `${adj} ${noun}`, firstName: adj, lastName: noun, female };
     }
     case Faction.SCIENTIST: {
-      const female = Math.random() < 0.4;
+      const female = rng() < 0.4;
       const title = _pick(SCIENTIST_TITLE);
       const last = female ? _pick(CITIZEN_LAST_F) : _pick(CITIZEN_LAST_M);
       return { name: `${title} ${last}`, firstName: title, lastName: last, female };
     }
     default: {
-      const female = Math.random() < 0.5;
+      const female = rng() < 0.5;
       const first = female ? _pick(CITIZEN_FIRST_F) : _pick(CITIZEN_FIRST_M);
       const last = _pick(female ? CITIZEN_LAST_F : CITIZEN_LAST_M);
       return { name: `${first} ${last}`, firstName: first, lastName: last, female };
@@ -296,5 +297,5 @@ export function randomName(faction?: Faction): NameResult {
 
 // ── Helper: свежие потребности для NPC ───────────────────────────
 export function freshNeeds(): Needs {
-  return { food: 70 + Math.random() * 30, water: 70 + Math.random() * 30, sleep: 60 + Math.random() * 40, pee: Math.random() * 30, poo: Math.random() * 20 };
+  return { food: 70 + rng() * 30, water: 70 + rng() * 30, sleep: 60 + rng() * 40, pee: rng() * 30, poo: rng() * 20 };
 }

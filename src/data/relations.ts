@@ -2,6 +2,7 @@
 
 import { Faction, Occupation } from '../core/types';
 import { OCCUPATION_PROFILES } from './occupation_profiles';
+import { rng } from '../core/rand';
 
 /* ── Constants ────────────────────────────────────────────────── */
 export const FACTION_COUNT = 6; // CITIZEN, LIQUIDATOR, CULTIST, SCIENTIST, WILD, PLAYER
@@ -69,7 +70,7 @@ export const OCCUPATION_NAMES: Record<Occupation, string> = {
 
 /* ── Weighted faction/occupation assignment ────────────────────── */
 export function randomFaction(): Faction {
-  const r = Math.random();
+  const r = rng();
   if (r < 0.40) return Faction.CITIZEN;
   if (r < 0.60) return Faction.LIQUIDATOR;
   if (r < 0.75) return Faction.CULTIST;
@@ -87,7 +88,7 @@ const OCC_WEIGHTS: [Occupation, number][] = Object.values(OCCUPATION_PROFILES)
 const OCC_TOTAL = OCC_WEIGHTS.reduce((s, [, w]) => s + w, 0);
 
 export function randomOccupation(_faction: Faction): Occupation {
-  let r = Math.random() * OCC_TOTAL;
+  let r = rng() * OCC_TOTAL;
   for (const [occ, w] of OCC_WEIGHTS) {
     r -= w;
     if (r <= 0) return occ;

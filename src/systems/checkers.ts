@@ -1,5 +1,6 @@
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
+import { rng } from '../core/rand';
 
 export type CheckersSide = 'player' | 'npc';
 export type CheckersWinner = CheckersSide | 'draw' | '';
@@ -290,7 +291,7 @@ function chooseNpcMove(pieces: readonly CheckersPiece[], mustCaptureWithPieceId?
     if (ev > maxEval) {
       maxEval = ev;
       bestMove = move;
-    } else if (ev === maxEval && Math.random() < 0.3) {
+    } else if (ev === maxEval && rng() < 0.3) {
       bestMove = move;
     }
   }

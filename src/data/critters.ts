@@ -1,3 +1,4 @@
+import { rng } from '../core/rand';
 export type CritterBehavior = 'flee_player' | 'wander_pause' | 'swarm';
 
 export interface CritterDef {
@@ -64,7 +65,7 @@ const _spawnWeights = Object.values(CRITTER_DEFS).map(d => ({ id: d.id, w: d.spa
 const _totalWeight = _spawnWeights.reduce((a, b) => a + b.w, 0);
 
 export function getRandomCritterDefId(): string {
-  let r = Math.random() * _totalWeight;
+  let r = rng() * _totalWeight;
   for (const { id, w } of _spawnWeights) {
     if (r < w) return id;
     r -= w;

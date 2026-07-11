@@ -22,7 +22,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { hashSeed, withSeededRandom } from '../../core/rand';
+import { rng, hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
@@ -874,7 +874,7 @@ function spawnNpc(
   weapon?: string,
 ): number {
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     weapon,
     canGiveQuest: true,
     aiTarget: { x: x + 0.5, y: y + 0.5 },
@@ -960,7 +960,7 @@ function spawnAmbientNpc(
     type: EntityType.NPC,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: 0.85,
@@ -969,7 +969,7 @@ function spawnAmbientNpc(
     needs: freshNeeds(),
     hp: 80,
     maxHp: 80,
-    money: 5 + Math.floor(Math.random() * 16),
+    money: 5 + Math.floor(rng() * 16),
     ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: inventory.map(item => ({ ...item })),
     weapon,
@@ -1281,7 +1281,7 @@ function fillCommunalVoids(
         ], 'room', undefined, undefined, ['elite_storage', 'syndicate_loot']);
 
         // Спавн бдительной охраны госрезерва
-        if (Math.random() < 0.5) {
+        if (rng() < 0.5) {
           spawnAmbientNpc(entities, nextId, `Охранник госрезерва (${poi.name})`, Faction.CITIZEN, Occupation.STOREKEEPER, poi.x + 4, poi.y + Math.floor(poi.h / 2), [{ defId: 'canned', count: 1 }], 'pistol');
         }
       } else {
@@ -1299,7 +1299,7 @@ function fillCommunalVoids(
         
         // Геймплей: Опасные монстры водоочистки, охраняющие вентильные бирки
         spawnMonster(entities, nextId, MonsterKind.TUBE_EEL, poi.x + Math.floor(poi.w / 2), poi.y + 5);
-        if (Math.random() < 0.5) {
+        if (rng() < 0.5) {
           spawnMonster(entities, nextId, MonsterKind.SLIMEVIK, poi.x + Math.floor(poi.w / 2), poi.y + poi.h - 6);
         }
       }
@@ -1339,7 +1339,7 @@ function fillCommunalVoids(
       ];
 
       for (const q of quadrants) {
-        const type = roomTypes[Math.floor(Math.random() * roomTypes.length)];
+        const type = roomTypes[Math.floor(rng() * roomTypes.length)];
         const isTile = type === RoomType.KITCHEN || type === RoomType.BATHROOM || type === RoomType.MEDICAL;
         const isUtility = type === RoomType.STORAGE || type === RoomType.PRODUCTION;
         const isCommon = type === RoomType.COMMON;
@@ -1362,13 +1362,13 @@ function fillCommunalVoids(
   // 10 000 итераций змеевидных сбоек для 100% покрытия остаточных монолитов
   const sIter = 10000;
   for (let s = 0; s < sIter; s++) {
-    let rx = 16 + Math.floor(Math.random() * (W - 32));
-    let ry = 16 + Math.floor(Math.random() * (W - 32));
+    let rx = 16 + Math.floor(rng() * (W - 32));
+    let ry = 16 + Math.floor(rng() * (W - 32));
     if (world.cells[world.idx(rx, ry)] !== Cell.WALL || world.aptMask[world.idx(rx, ry)] === 1) continue;
 
-    let dx = Math.random() < 0.5 ? (Math.random() < 0.5 ? 1 : -1) : 0;
-    let dy = dx === 0 ? (Math.random() < 0.5 ? 1 : -1) : 0;
-    const len = 15 + Math.floor(Math.random() * 25);
+    let dx = rng() < 0.5 ? (rng() < 0.5 ? 1 : -1) : 0;
+    let dy = dx === 0 ? (rng() < 0.5 ? 1 : -1) : 0;
+    const len = 15 + Math.floor(rng() * 25);
 
     for (let step = 0; step < len; step++) {
       const i = world.idx(rx, ry);
@@ -1380,10 +1380,10 @@ function fillCommunalVoids(
       ry = world.wrap(ry + dy);
 
       // Высокий шанс поворота (30-35%)
-      if (Math.random() < 0.32) {
+      if (rng() < 0.32) {
         const temp = dx;
-        dx = dy === 0 ? 0 : (Math.random() < 0.5 ? 1 : -1);
-        dy = temp === 0 ? 0 : (Math.random() < 0.5 ? 1 : -1);
+        dx = dy === 0 ? 0 : (rng() < 0.5 ? 1 : -1);
+        dy = temp === 0 ? 0 : (rng() < 0.5 ? 1 : -1);
       }
     }
   }
@@ -1497,7 +1497,7 @@ function decorateAuxRoom(
     placeFeature(world, room.x + 2, room.y + room.h - 3, Feature.SHELF);
   }
 
-  const rand = Math.random();
+  const rand = rng();
   if (rand < 0.4) {
     const items: { defId: string; count: number }[] = [];
     if (room.type === RoomType.KITCHEN) items.push({ defId: 'bread', count: 1 }, { defId: 'tea', count: 1 });
@@ -1512,7 +1512,7 @@ function decorateAuxRoom(
     placeDrop(world, entities, nextId, room, Math.floor(room.w / 2), Math.floor(room.h / 2), defId, 1);
   }
 
-  if (Math.random() < 0.25) {
+  if (rng() < 0.25) {
     const occ = room.type === RoomType.PRODUCTION ? Occupation.LOCKSMITH : room.type === RoomType.KITCHEN ? Occupation.COOK : Occupation.TRAVELER;
     const npcName = room.type === RoomType.PRODUCTION ? 'Самодельный мастер' : room.type === RoomType.KITCHEN ? 'Стихийный кашевар' : 'Запоздалый свидетель';
     spawnAmbientNpc(entities, nextId, npcName, Faction.CITIZEN, occ, room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2), [{ defId: 'bread', count: 1 }]);

@@ -4,7 +4,10 @@
 
 import { W } from '../core/types';
 import { World } from '../core/world';
-import { bfsPath, subcellToWorld } from './ai/pathfinding';
+import { bfsPath, subcellToWorld } from './ai/pathfinding.js';
+import { SeedRng } from '../core/rand.js';
+const _localCameraRng = new SeedRng(Date.now() % 99999);
+const rng = () => _localCameraRng.random();
 
 export type CameraMode = 'player' | 'free' | 'death' | 'trailer' | 'cinematic';
 
@@ -201,7 +204,7 @@ export function startDeathCamera(
   px: number,
   py: number,
   pAngle: number,
-  random: () => number = Math.random,
+  random: () => number = rng,
 ): void {
   camera.mode = 'death';
   resetCameraBob(camera.bob);
@@ -319,8 +322,8 @@ export function startTrailerCamera(
 
 function findNewTrailerTarget(world: World, cx: number, cy: number): { x: number; y: number } | null {
   for (let i = 0; i < 50; i++) {
-    const rx = Math.floor(Math.random() * W);
-    const ry = Math.floor(Math.random() * W);
+    const rx = Math.floor(rng() * W);
+    const ry = Math.floor(rng() * W);
     if (!world.solid(rx, ry)) {
       const dx = world.delta(cx, rx);
       const dy = world.delta(cy, ry);

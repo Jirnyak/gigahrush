@@ -42,6 +42,7 @@ import {
   routeGateDirectionIsClosed,
 } from './route_gates';
 import { portalBlocksDesignFloor } from './platform_bridge';
+import { rng } from '../core/rand';
 
 export interface FloorRunState {
   runSeed: number;
@@ -126,7 +127,7 @@ const VALID_MAJORITY_IDS = new Set<FloorMajorityId>(FLOOR_MAJORITY_FACTIONS.map(
 const VALID_ANOMALY_IDS = new Set<FloorAnomalyId>(FLOOR_ANOMALIES.map(def => def.id));
 
 function randomRunSeed(): number {
-  return Math.floor(Math.random() * 0x7fffffff);
+  return Math.floor(rng() * 0x7fffffff);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -664,7 +665,7 @@ export function nextFloorRunSamosborDuration(state: GameState): number {
   const depth = floorRunSamosborDepth01(state);
   const maxForDepth = SAMOSBOR_DURATION_MIN_SEC +
     (SAMOSBOR_DURATION_MAX_SEC - SAMOSBOR_DURATION_MIN_SEC) * depth;
-  return SAMOSBOR_DURATION_MIN_SEC + Math.random() * (maxForDepth - SAMOSBOR_DURATION_MIN_SEC);
+  return SAMOSBOR_DURATION_MIN_SEC + rng() * (maxForDepth - SAMOSBOR_DURATION_MIN_SEC);
 }
 
 export function nextFloorRunSamosborCooldown(state: GameState): number {
@@ -672,16 +673,16 @@ export function nextFloorRunSamosborCooldown(state: GameState): number {
   const maxForDepth = SAMOSBOR_COOLDOWN_MAX_SEC -
     (SAMOSBOR_COOLDOWN_MAX_SEC - SAMOSBOR_COOLDOWN_MIN_SEC) * depth;
   // Luck-based variance: rare back-to-back or long gap
-  const luck = Math.random();
+  const luck = rng();
   if (luck < 0.08) {
     // ~8% chance: rapid double-strike, cooldown < 2 min
-    return SAMOSBOR_COOLDOWN_MIN_SEC + Math.random() * (120 - SAMOSBOR_COOLDOWN_MIN_SEC);
+    return SAMOSBOR_COOLDOWN_MIN_SEC + rng() * (120 - SAMOSBOR_COOLDOWN_MIN_SEC);
   }
   if (luck > 0.85) {
     // ~15% chance: long calm, cooldown > 20 min
-    return 20 * 60 + Math.random() * (maxForDepth - 20 * 60);
+    return 20 * 60 + rng() * (maxForDepth - 20 * 60);
   }
-  return SAMOSBOR_COOLDOWN_MIN_SEC + Math.random() * (maxForDepth - SAMOSBOR_COOLDOWN_MIN_SEC);
+  return SAMOSBOR_COOLDOWN_MIN_SEC + rng() * (maxForDepth - SAMOSBOR_COOLDOWN_MIN_SEC);
 }
 
 function clampRunDanger(value: number): 1 | 2 | 3 | 4 | 5 {

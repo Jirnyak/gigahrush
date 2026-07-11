@@ -15,6 +15,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { carveCorridor, findClearArea, placeDoor, placeDoorAt, stampRoom } from '../shared';
 import { genLog } from '../log';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { rng } from '../../core/rand';
 
 export const SERYY_SMOTRITEL_ID = 'seryy_smotritel' as const;
 export const SERYY_SMOTRITEL_RU_NAME = 'Серый Смотритель' as const;
@@ -317,7 +318,7 @@ function spawnShadowAmbush(ctx: SeryyContext, player: Entity | undefined, event:
     type: EntityType.MONSTER,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

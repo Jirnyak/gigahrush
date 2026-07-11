@@ -17,6 +17,7 @@ import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
+import { rng } from '../../core/rand';
 
 const HOSPITAL_W = 19;
 const HOSPITAL_H = 15;
@@ -505,7 +506,7 @@ function pushNpc(
   x: number, y: number, canGiveQuest: boolean, weapon?: string,
 ): void {
   requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     weapon,
     canGiveQuest,
     extra: { isTraveler: false },
@@ -517,7 +518,7 @@ function pushOutbreakMonster(world: World, entities: Entity[], nextId: { v: numb
   entities.push({
     id: nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true, speed: def.speed * 0.9, sprite: monsterSpr(MonsterKind.ZOMBIE),
     name: 'Карантинный мертвяк',
     hp: Math.round(def.hp * 1.5), maxHp: Math.round(def.hp * 1.5),
@@ -532,7 +533,7 @@ function pushHeadSlugHost(world: World, entities: Entity[], nextId: { v: number 
   entities.push({
     id: nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true, speed: def.speed * 0.9, sprite: monsterSpr(MonsterKind.HEAD_SLUG),
     name: 'Карантинный носитель слизня',
     hp: def.hp, maxHp: def.hp,

@@ -6,6 +6,7 @@ import { emitMarkovBark, pushNpcBarkMessage, setNpcBarkLogContext } from '../src
 import { offerQuest } from '../src/systems/quests';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 import type { Msg } from '../src/core/types';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 test('NPC barks only enter the log inside the configured player radius', () => {
   const world = new World();
@@ -50,7 +51,6 @@ test('out-of-radius bark attempts do not consume heard cooldown', () => {
   const player = makeTestPlayer({ id: 1, x: 10, y: 10 });
   const npc = makeTestNpc({ id: 9105, name: 'Слесарь', x: 90, y: 10 });
   const msgs: Msg[] = [];
-  const savedRandom = Math.random;
 
   setNpcBarkLogContext({
     listener: player,
@@ -59,7 +59,7 @@ test('out-of-radius bark attempts do not consume heard cooldown', () => {
   });
 
   try {
-    Math.random = () => 0;
+    _overrideRng(() => 0);
     emitMarkovBark(npc, msgs, 1, 'ambient', 'Шов держит.', 1);
     assert.equal(msgs.length, 0);
 
@@ -69,7 +69,7 @@ test('out-of-radius bark attempts do not consume heard cooldown', () => {
     assert.equal(msgs[0].text, 'Слесарь: Ведро у двери пустое. Значит, хозяин рядом.');
     assert.equal(msgs[0].distanceMeters, 20);
   } finally {
-    Math.random = savedRandom;
+    _restoreRng();
     setNpcBarkLogContext();
   }
 });

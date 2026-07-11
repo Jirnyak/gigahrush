@@ -16,6 +16,7 @@ import {
   type MaintContentCtx, findMaintArea, openTile, setFeature, setWater,
   spawnPlotNpc, stampMaintRoom,
 } from './content_helpers';
+import { rng } from '../../core/rand';
 
 export const NASOSNAYA_MATKA_ID = 'nasosnaya_matka';
 
@@ -300,7 +301,7 @@ function spawnNasosnayaMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level) * (options.speedMult ?? 1),

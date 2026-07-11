@@ -7,7 +7,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { secureRandom } from '../core/rand';
+import { rng, secureRandom } from '../core/rand';
 import { ITEMS } from '../data/catalog';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
 import { craftRecipeSourcesForQuest, getCraftRecipeSource } from '../data/craft_recipe_sources';
@@ -646,13 +646,13 @@ function spawnQuestMonstersAt(
   let spawned = 0;
   for (let i = 0; i < slots; i++) {
     // Pick random floor cell in radius 3-8 from anchor (tight corridors)
-    const angle = (Math.PI * 2 * i) / slots + (Math.random() - 0.5) * 0.5;
-    const dist = 3 + Math.random() * 5;
+    const angle = (Math.PI * 2 * i) / slots + (rng() - 0.5) * 0.5;
+    const dist = 3 + rng() * 5;
     let found = false;
     let mx = 0, my = 0;
     for (let attempt = 0; attempt < 60; attempt++) {
-      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.5 : 0);
-      const d = dist + (attempt > 0 ? (Math.random() - 0.5) * 4 : 0);
+      const a = angle + (attempt > 0 ? (rng() - 0.5) * 1.5 : 0);
+      const d = dist + (attempt > 0 ? (rng() - 0.5) * 4 : 0);
       const tx = ((Math.floor(x) + Math.round(Math.cos(a) * d)) % W + W) % W;
       const ty = ((Math.floor(y) + Math.round(Math.sin(a) * d)) % W + W) % W;
       if (world.cells[world.idx(tx, ty)] === Cell.FLOOR) {
@@ -742,17 +742,17 @@ function spawnKillPressureMonstersAt(
 ): void {
   const min = Math.max(0, Math.floor(def.spawnCountMin));
   const max = Math.max(min, Math.floor(def.spawnCountMax));
-  const count = min + Math.floor(Math.random() * (max - min + 1));
+  const count = min + Math.floor(rng() * (max - min + 1));
   const slots = entitySpawnSlots(entities, EntityType.MONSTER, count);
   let spawned = 0;
   for (let i = 0; i < slots; i++) {
-    const angle = (Math.PI * 2 * i) / Math.max(1, slots) + (Math.random() - 0.5) * 0.5;
-    const baseDist = 3 + Math.random() * 5;
+    const angle = (Math.PI * 2 * i) / Math.max(1, slots) + (rng() - 0.5) * 0.5;
+    const baseDist = 3 + rng() * 5;
     let mx = -1;
     let my = -1;
     for (let attempt = 0; attempt < 60; attempt++) {
-      const a = angle + (attempt > 0 ? (Math.random() - 0.5) * 1.5 : 0);
-      const d = baseDist + (attempt > 0 ? (Math.random() - 0.5) * 4 : 0);
+      const a = angle + (attempt > 0 ? (rng() - 0.5) * 1.5 : 0);
+      const d = baseDist + (attempt > 0 ? (rng() - 0.5) * 4 : 0);
       const tx = ((Math.floor(x) + Math.round(Math.cos(a) * d)) % W + W) % W;
       const ty = ((Math.floor(y) + Math.round(Math.sin(a) * d)) % W + W) % W;
       if (world.cells[world.idx(tx, ty)] === Cell.FLOOR) {
@@ -762,7 +762,7 @@ function spawnKillPressureMonstersAt(
       }
     }
     if (mx < 0) continue;
-    const kind = def.monsterKinds[Math.floor(Math.random() * def.monsterKinds.length)] ?? MonsterKind.TVAR;
+    const kind = def.monsterKinds[Math.floor(rng() * def.monsterKinds.length)] ?? MonsterKind.TVAR;
     const mdef = MONSTERS[kind];
     if (!mdef) continue;
     const ci = world.idx(mx, my);
@@ -1716,7 +1716,7 @@ function pickQuestChoice(npc: Entity, ctx: QuestContext): QuestChoice {
   if (npc.occupation === Occupation.CHILD) weights.kill = Math.max(3, weights.kill - 22);
 
   const total = weights.fetch + weights.visit + weights.kill + weights.talk;
-  let r = Math.random() * total;
+  let r = rng() * total;
   for (const choice of ['fetch', 'visit', 'kill', 'talk'] as QuestChoice[]) {
     r -= weights[choice];
     if (r <= 0) return choice;
@@ -1826,7 +1826,7 @@ function pickSystemQuest(
     if (isContractHiddenForAssignment(c)) continue;
     if (assignedContracts.has(c.id)) continue;
 
-    const score = contractScore(c, npc, ctx) + Math.random() * 0.01;
+    const score = contractScore(c, npc, ctx) + rng() * 0.01;
     if (score > 0) {
       scored.push({ def: c, score });
     }
@@ -1834,7 +1834,7 @@ function pickSystemQuest(
   scored.sort((a, b) => b.score - a.score);
   if (scored.length === 0) return null;
   const top = scored.slice(0, Math.min(3, scored.length));
-  const quest = questFromSystemContract(top[Math.floor(Math.random() * top.length)].def, npc, player, state);
+  const quest = questFromSystemContract(top[Math.floor(rng() * top.length)].def, npc, player, state);
   return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
     samosborDanger: ctx.samosborDanger,
     nearbyMonster: ctx.nearbyMonster !== undefined,
@@ -1847,7 +1847,7 @@ function shouldOfferSystemQuest(npc: Entity, ctx: QuestContext): boolean {
   if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(npc.occupation, 'combat')) chance += 0.18;
   if (ctx.samosborDanger || ctx.nearbyMonster) chance += 0.12;
   if (ctx.roomType === RoomType.OFFICE || ctx.roomType === RoomType.STORAGE || ctx.roomType === RoomType.PRODUCTION) chance += 0.08;
-  return Math.random() < Math.min(0.45, chance);
+  return rng() < Math.min(0.45, chance);
 }
 
 /* ── Generate quest based on NPC context ──────────────────────── */
@@ -2018,7 +2018,7 @@ function pickFetchItem(occ: Occupation | undefined, npc: Entity, ctx: QuestConte
   pushUnique(pool, occupationQuestFetchItems(occ));
   pushUnique(pool, ['bread', 'water', 'bandage', 'cigs']);
   const available = pool.filter(item => !PROCEDURAL_FETCH_ITEM_BLOCKLIST.has(item));
-  return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
+  return available.length > 0 ? available[Math.floor(rng() * available.length)] : null;
 }
 
 function targetCountForItem(item: string, ctx: QuestContext): number {
@@ -2036,7 +2036,7 @@ function pickRewardItem(occ?: Occupation, ctx?: QuestContext): string {
   if (ctx?.roomType === RoomType.PRODUCTION) pushUnique(pool, ['wrench', 'pipe', 'flashlight']);
   pushUnique(pool, occupationQuestRewardItems(occ));
   pushUnique(pool, ['bread', 'water', 'bandage']);
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(rng() * pool.length)];
 }
 
 function preferredVisitRooms(npc: Entity, ctx: QuestContext): RoomType[] {
@@ -2054,7 +2054,7 @@ function pickVisitRoom(world: World, npc: Entity, preferred: RoomType[] = []): {
   // Pick a room at some distance
   const candidates = rooms.filter(r => world.dist(npc.x, npc.y, r.x + r.w / 2, r.y + r.h / 2) > 15);
   const pool = candidates.length > 0 ? candidates : rooms;
-  const r = pool[Math.floor(Math.random() * pool.length)];
+  const r = pool[Math.floor(rng() * pool.length)];
   return { id: r.id, name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2 };
 }
 
@@ -2062,13 +2062,13 @@ function pickKillKind(npc: Entity, ctx: QuestContext): MonsterKind {
   if (ctx.nearbyMonster?.monsterKind !== undefined) return ctx.nearbyMonster.monsterKind;
   if (npc.faction === Faction.LIQUIDATOR || occupationHasProfileTag(npc.occupation, 'combat')) {
     const pool = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN, MonsterKind.SHADOW];
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pool[Math.floor(rng() * pool.length)];
   }
   if (ctx.roomType === RoomType.OFFICE) return MonsterKind.PECHATEED;
   if (ctx.roomType === RoomType.PRODUCTION) return MonsterKind.REBAR;
   if (ctx.samosborDanger) return MonsterKind.SBORKA;
   const pool = [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.POLZUN];
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(rng() * pool.length)];
 }
 
 function monsterQuestScale(kind: MonsterKind): number {
@@ -2092,10 +2092,10 @@ function pickTalkTarget(npc: Entity, world: World, entities: Entity[]): Entity |
     .filter(e => e.type === EntityType.NPC && e.alive && e.id !== npc.id)
     .map(e => {
       const f = e.faction === npc.faction ? -30 : 0;
-      return { e, score: world.dist2(npc.x, npc.y, e.x, e.y) + f + Math.random() * 0.99 };
+      return { e, score: world.dist2(npc.x, npc.y, e.x, e.y) + f + rng() * 0.99 };
     })
     .sort((a, b) => a.score - b.score);
   if (candidates.length === 0) return null;
   const top = candidates.slice(0, Math.min(12, candidates.length)).map(c => c.e);
-  return top[Math.floor(Math.random() * top.length)];
+  return top[Math.floor(rng() * top.length)];
 }

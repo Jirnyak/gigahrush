@@ -18,6 +18,7 @@ import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc,
 } from '../admin_common';
 import { genLog } from '../log';
+import { rng } from '../../core/rand';
 
 export const MATKA_DOKUMENTOV_ID = 'matka_dokumentov';
 export const MATKA_DOKUMENTOV_ROOM = 'Матка Документов: стол размножения';
@@ -305,7 +306,7 @@ function spawnPaperThreats(ctx: MatkaDokumentovContext, desired: number): number
       type: EntityType.MONSTER,
       x: pos.x + 0.5,
       y: pos.y + 0.5,
-      angle: Math.random() * Math.PI * 2,
+      angle: rng() * Math.PI * 2,
       pitch: 0,
       alive: true,
       speed: scaleMonsterSpeed(def.speed, zoneLevel) * 0.9,

@@ -29,6 +29,7 @@ import {
   tryUseNetTerminalGen,
 } from '../src/systems/net_terminal_gen';
 import { addTestRoom, makeGameState, makeTestPlayer } from './helpers';
+import { _overrideRng, _restoreRng } from '../src/core/rand';
 
 const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -143,14 +144,12 @@ test('missing GEN terminal access spawns one cooldowned Safeguard backlash when 
   const nextId = { v: 2 };
   const terminal = placeNetTerminalGenTerminal(world, 96, 100, SILICON_NET_WELL_TERMINAL_DEF);
   assert.ok(terminal);
-
-  const originalRandom = Math.random;
   let result: ReturnType<typeof tryUseNetTerminalGen>;
   try {
-    Math.random = () => 0.99;
+    _overrideRng(() => 0.99);
     result = tryUseNetTerminalGen(world, player, state, terminal.x, terminal.y, entities, nextId);
   } finally {
-    Math.random = originalRandom;
+    _restoreRng();
   }
 
   assert.equal(result.handled, true);

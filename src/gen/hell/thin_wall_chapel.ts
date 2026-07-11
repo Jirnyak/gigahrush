@@ -16,6 +16,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { connectProtectedRoom, findClearArea, protectRoom, stampRoom } from '../shared';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const CHAPEL_NAME = 'Пост тонкой стены';
 const BLACK_HAND_SCOUT_ID = 'ag78_black_hand_scout';
@@ -111,7 +112,7 @@ function spawnSpirit(world: World, entities: Entity[], nextId: { v: number }, x:
   const spirit: Entity = {
     id: nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, zoneLevel),
     sprite: monsterSpr(MonsterKind.SPIRIT),

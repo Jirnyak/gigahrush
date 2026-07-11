@@ -149,7 +149,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     ],
     occupationBias: [
       { value: Occupation.HOUSEWIFE, weight: 6 },
-      { value: Occupation.CHILD, weight: 4 },
+      { value: Occupation.CHILD, weight: 0 },
       { value: Occupation.TRAVELER, weight: 2 },
     ],
     maxRisk: 3,
@@ -292,7 +292,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     ],
     occupationBias: [
       { value: Occupation.HOUSEWIFE, weight: 5 },
-      { value: Occupation.CHILD, weight: 4 },
+      { value: Occupation.CHILD, weight: 0 },
       { value: Occupation.TRAVELER, weight: 3 },
       { value: Occupation.DOCTOR, weight: 1 },
     ],
@@ -322,7 +322,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     ],
     occupationBias: [
       { value: Occupation.HOUSEWIFE, weight: 6 },
-      { value: Occupation.CHILD, weight: 5 },
+      { value: Occupation.CHILD, weight: 0 },
       { value: Occupation.COOK, weight: 2 },
       { value: Occupation.TRAVELER, weight: 2 },
     ],

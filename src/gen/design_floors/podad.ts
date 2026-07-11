@@ -6,7 +6,7 @@ import {
   type Entity, type Item, type Room, type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { withSeededRandom } from '../../core/rand';
+import { rng, withSeededRandom, irand } from '../../core/rand';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -558,13 +558,13 @@ function buildPodadField(seed: number): Uint8Array {
   }
 
   for (let i = 0; i < 180; i++) {
-    let x = rng(0, W - 1);
-    let y = rng(0, W - 1);
-    let dir = rng(0, 3);
-    const len = rng(48, 170);
+    let x = irand(0, W - 1);
+    let y = irand(0, W - 1);
+    let dir = irand(0, 3);
+    const len = irand(48, 170);
     for (let step = 0; step < len; step++) {
       carveFieldDisc(field, x, y, step % 19 === 0 ? 3 : step % 7 === 0 ? 2 : 1);
-      if (hash2(x + step, y - step, seed + 40 + i) > 0.83) dir = (dir + (Math.random() < 0.5 ? 1 : 3)) & 3;
+      if (hash2(x + step, y - step, seed + 40 + i) > 0.83) dir = (dir + (rng() < 0.5 ? 1 : 3)) & 3;
       if (dir === 0) x = wrapCoord(x + 1);
       else if (dir === 1) x = wrapCoord(x - 1);
       else if (dir === 2) y = wrapCoord(y + 1);
@@ -656,8 +656,8 @@ function decoratePodadRooms(world: World, rooms: PodadRooms): void {
 
   for (const room of Object.values(rooms)) {
     for (let i = 0; i < 5; i++) {
-      const x = room.x + rng(1, room.w - 2);
-      const y = room.y + rng(1, room.h - 2);
+      const x = room.x + irand(1, room.w - 2);
+      const y = room.y + irand(1, room.h - 2);
       const ci = world.idx(x, y);
       if (world.features[ci] === Feature.NONE) world.features[ci] = i & 1 ? Feature.CANDLE : Feature.LAMP;
     }
@@ -1065,7 +1065,7 @@ function spawnPodadHeralds(world: World, entities: Entity[], nextId: { v: number
     entities.push({
       id: nextId.v++, type: EntityType.MONSTER,
       x: x + 0.5, y: y + 0.5,
-      angle: Math.random() * Math.PI * 2, pitch: 0,
+      angle: rng() * Math.PI * 2, pitch: 0,
       alive: true,
       speed: scaleMonsterSpeed(heraldDef.speed, zoneLevel),
       sprite: monsterSpr(MonsterKind.HERALD),
@@ -1088,7 +1088,7 @@ function findHeraldCell(
   maxDist: number,
 ): number {
   for (let attempt = 0; attempt < 5000; attempt++) {
-    const ci = rng(0, W * W - 1);
+    const ci = irand(0, W * W - 1);
     if (world.cells[ci] !== Cell.FLOOR || world.features[ci] === Feature.LIFT_BUTTON) continue;
     const x = ci % W;
     const y = (ci / W) | 0;
@@ -1186,9 +1186,6 @@ function hash32(v: number): number {
   return v >>> 0;
 }
 
-function rng(lo: number, hi: number): number {
-  return lo + Math.floor(Math.random() * (hi - lo + 1));
-}
 
 function wrapCoord(v: number): number {
   return ((v % W) + W) % W;

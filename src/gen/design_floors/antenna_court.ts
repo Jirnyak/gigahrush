@@ -22,6 +22,7 @@ import {
 } from '../shared';
 import { placeProceduralScreens, SCREEN_FRAMES } from '../procedural_screens';
 import type { FloorGeneration } from '../floor_manifest';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('antenna_court');
 
@@ -153,7 +154,6 @@ interface AntennaTerritorySeed {
   scaleSqInv?: number;
 }
 
-
 const ANTENNA_TERRITORY_TARGETS = [
   { owner: ZoneFaction.CITIZEN, share: 0.18 },
   { owner: ZoneFaction.LIQUIDATOR, share: 0.36 },
@@ -167,7 +167,6 @@ TARGET_SHARE_BY_FACTION.fill(0.1);
 for (const entry of ANTENNA_TERRITORY_TARGETS) {
   TARGET_SHARE_BY_FACTION[entry.owner] = entry.share;
 }
-
 
 const SIGNAL_CLUES: Record<AntennaRouteId, SignalClueDef> = {
   roof: {
@@ -1823,7 +1822,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed,

@@ -165,21 +165,39 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${window.location.host}/api/online/v1/ws?room=${roomId}&role=${role}`;
 
+  let welcomeReceived = false;
+
   ws = new WebSocket(url);
 
   ws.onopen = () => {
     console.log(`[online] connected to room ${roomId} as ${role}`);
+    // Auto-disconnect if server never sends 'welcome' (room doesn't exist)
+    setTimeout(() => {
+      if (!welcomeReceived && ws && ws.readyState === WebSocket.OPEN) {
+        console.warn('[online] no welcome received — room likely does not exist');
+        if (messageCallback) messageCallback({ type: 'server_error', reason: 'no_welcome' });
+        ws.close();
+      }
+    }, 5000);
   };
 
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'welcome') {
+        welcomeReceived = true;
         mySlot = data.slot;
         console.log(`[online] slot=${mySlot}, role=${role}`);
         if (role === 'peer') {
           ws?.send(JSON.stringify({ type: 'peer_join' }));
         }
+      }
+      // Server rejected (room not found, etc.) — auto-disconnect
+      if (data.type === 'error') {
+        console.warn('[online] server error:', data.reason ?? data);
+        if (messageCallback) messageCallback({ type: 'server_error', reason: data.reason ?? 'unknown' });
+        ws?.close();
+        return;
       }
       if (messageCallback) messageCallback(data);
     } catch (e) {

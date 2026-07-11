@@ -42,6 +42,7 @@ import {
   territoryOwnerAt,
   territoryOwnerAtIndex,
 } from './territory';
+import { rng } from '../core/rand';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -199,7 +200,7 @@ export interface CultProcessionCompulsion {
 }
 
 let schedulerAccum = 0;
-let nextEventAt = 25 + Math.random() * 25;
+let nextEventAt = 25 + rng() * 25;
 let forceCursor = 0;
 let nextProcessionId = 1;
 const zoneCooldownUntil = new Map<string, number>();
@@ -425,12 +426,12 @@ export function updateFactionEvents(
   const zoneId = currentZoneId(world, player);
   const def = pickEligibleDef(state, world, entities, zoneId, false);
   if (!def) {
-    nextEventAt = state.time + 20 + Math.random() * 25;
+    nextEventAt = state.time + 20 + rng() * 25;
     return;
   }
 
   const result = triggerFactionEvent(state, world, player, entities, nextId, zoneId, def, false);
-  nextEventAt = state.time + (result.ok ? MIN_EVENT_GAP_SEC + Math.random() * 70 : 25 + Math.random() * 35);
+  nextEventAt = state.time + (result.ok ? MIN_EVENT_GAP_SEC + rng() * 70 : 25 + rng() * 35);
 }
 
 export function forceFactionEvent(
@@ -546,16 +547,16 @@ function beginCultProcessionFollow(
 ): void {
   if (p.followed) return;
   p.followed = true;
-  const psiLoss = 2 + Math.floor(Math.random() * 3);
+  const psiLoss = 2 + Math.floor(rng() * 3);
   let riskText = `ПСИ -${psiLoss}`;
   if (player.rpg && player.rpg.psi > 0) {
     player.rpg.psi = Math.max(0, player.rpg.psi - psiLoss);
   } else if (player.hp !== undefined) {
-    const hpLoss = 1 + Math.floor(Math.random() * 3);
+    const hpLoss = 1 + Math.floor(rng() * 3);
     player.hp = Math.max(1, player.hp - hpLoss);
     riskText = `HP -${hpLoss}`;
   }
-  const foundRune = Math.random() < 0.18 && addItem(player, 'meat_rune', 1);
+  const foundRune = rng() < 0.18 && addItem(player, 'meat_rune', 1);
   publishProcessionAction(state, p, player, 'follow', 4, {
     actionText: 'Псалом процессии подхватил шаг игрока.',
     riskText,
@@ -782,7 +783,7 @@ function triggerFactionClash(
   if (activeFactionClashes.length >= MAX_ACTIVE_CLASHES) return blocked('достигнут лимит активных стычек');
 
   const sideCounts = clashDef.sides.map(side =>
-    Math.max(0, side.minGroup + Math.floor(Math.random() * (side.maxGroup - side.minGroup + 1)))
+    Math.max(0, side.minGroup + Math.floor(rng() * (side.maxGroup - side.minGroup + 1)))
   );
   const totalNpcs = sideCounts[0] + sideCounts[1];
   if (totalNpcs <= 1) return blocked('стороны стычки не собрались');
@@ -790,7 +791,7 @@ function triggerFactionClash(
   if (force && entitySpawnSlots(entities, EntityType.NPC, totalNpcs) < totalNpcs) return blocked('достигнут общий лимит NPC');
 
   const center = spawnCenter(world, player, zoneId);
-  const angle = Math.random() * Math.PI * 2;
+  const angle = rng() * Math.PI * 2;
   const anchors = [
     { x: center.x + Math.cos(angle) * 4, y: center.y + Math.sin(angle) * 4 },
     { x: center.x - Math.cos(angle) * 4, y: center.y - Math.sin(angle) * 4 },
@@ -1176,7 +1177,7 @@ function resetFactionEventRuntimeIfNeeded(state: GameState): void {
     return;
   }
   schedulerAccum = 0;
-  nextEventAt = state.time + 25 + Math.random() * 25;
+  nextEventAt = state.time + 25 + rng() * 25;
   forceCursor = 0;
   activeCultProcessions.length = 0;
   cultProcessionSnapshots.length = 0;
@@ -1251,7 +1252,7 @@ function triggerFactionEvent(
 
   const eventNpcCap = def.procession ? Math.min(MAX_PROCESSION_PILGRIMS, def.maxGroup) : def.maxGroup;
   const groupCap = Math.min(eventNpcCap, MAX_EVENT_NPCS - taggedNpcs, eventNpcSlots);
-  const groupSize = Math.max(0, Math.min(groupCap, def.minGroup + Math.floor(Math.random() * (def.maxGroup - def.minGroup + 1))));
+  const groupSize = Math.max(0, Math.min(groupCap, def.minGroup + Math.floor(rng() * (def.maxGroup - def.minGroup + 1))));
   const center = spawnCenter(world, player, zoneId);
   let spawnedNpcs = 0;
   const spawnedNpcIds: number[] = [];
@@ -1381,7 +1382,7 @@ function pickEligibleDef(
   let total = 0;
   for (const def of candidates) total += def.weight;
   if (total <= 0) return null;
-  let r = Math.random() * total;
+  let r = rng() * total;
   for (const def of candidates) {
     r -= def.weight;
     if (r <= 0) return def;
@@ -1420,8 +1421,8 @@ function findSpawnCell(
   maxR: number,
 ): { x: number; y: number } | null {
   for (let a = 0; a < 80; a++) {
-    const ang = Math.random() * Math.PI * 2;
-    const dist = minR + Math.random() * Math.max(1, maxR - minR);
+    const ang = rng() * Math.PI * 2;
+    const dist = minR + rng() * Math.max(1, maxR - minR);
     const x = world.wrap(Math.floor(cx + Math.cos(ang) * dist));
     const y = world.wrap(Math.floor(cy + Math.sin(ang) * dist));
     const i = world.idx(x, y);
@@ -1430,8 +1431,8 @@ function findSpawnCell(
   const zone = world.zones[zoneId];
   if (!zone) return null;
   for (let a = 0; a < 80; a++) {
-    const ang = Math.random() * Math.PI * 2;
-    const dist = Math.random() * 42;
+    const ang = rng() * Math.PI * 2;
+    const dist = rng() * 42;
     const x = world.wrap(Math.floor(zone.cx + Math.cos(ang) * dist));
     const y = world.wrap(Math.floor(zone.cy + Math.sin(ang) * dist));
     const i = world.idx(x, y);
@@ -1500,7 +1501,7 @@ function applyTemporaryControl(world: World, p: ActiveCultProcession, zf: ZoneFa
         return;
       }
       if (dx * dx + dy * dy > radius * radius) continue;
-      if (Math.random() > strength) continue;
+      if (rng() > strength) continue;
       const x = world.wrap(ix + dx);
       const y = world.wrap(iy + dy);
       const i = world.idx(x, y);
@@ -1809,10 +1810,10 @@ function createFactionNpc(
     id: nextId.v++,
     type: EntityType.NPC,
     x, y,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
-    speed: 1.25 + Math.random() * 0.35,
+    speed: 1.25 + rng() * 0.35,
     sprite: occupation,
     name: nm.name,
     firstName: nm.firstName,
@@ -1821,7 +1822,7 @@ function createFactionNpc(
     needs: freshNeeds(),
     hp: maxHp,
     maxHp,
-    money: Math.floor(Math.random() * 45),
+    money: Math.floor(rng() * 45),
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory,
     weapon,
@@ -1844,7 +1845,7 @@ function occupationFor(def: FactionEventDef, faction: Faction): Occupation {
 function pickWeapon(def: FactionEventDef, faction: Faction, weapons?: readonly string[]): string | undefined {
   const pool = weapons ?? def.weapons ?? defaultWeapons(faction);
   if (pool.length === 0) return undefined;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(rng() * pool.length)];
 }
 
 function isPsiCombatItem(itemId: string | undefined): itemId is string {
@@ -1865,7 +1866,7 @@ function addDefaultAmmo(inventory: Item[], weapon: string | undefined): void {
     : weapon === 'tt_pistol' ? 'ammo_762tt'
     : undefined;
   if (!ammo || inventory.some(i => i.defId === ammo)) return;
-  inventory.push({ defId: ammo, count: 8 + Math.floor(Math.random() * 9) });
+  inventory.push({ defId: ammo, count: 8 + Math.floor(rng() * 9) });
 }
 
 function cloneItems(items: readonly Item[] | undefined): Item[] {
@@ -1942,15 +1943,15 @@ function placeResidueMarks(world: World, cx: number, cy: number, zoneId: number,
 
 function stampResidueMark(world: World, x: number, y: number, mark: FactionResidueMarkDef, seed: number): void {
   const visual = residueMarkVisual(mark);
-  const fx = 0.2 + Math.random() * 0.6;
-  const fy = 0.2 + Math.random() * 0.6;
+  const fx = 0.2 + rng() * 0.6;
+  const fy = 0.2 + rng() * 0.6;
   stampMark(
     world,
     x, y,
     fx, fy,
     mark.radius,
     visual.type,
-    seed + Math.floor(Math.random() * 100_000),
+    seed + Math.floor(rng() * 100_000),
     visual.r, visual.g, visual.b,
     mark.intensity ?? visual.intensity,
   );
@@ -1981,7 +1982,7 @@ function applyLocalPressure(world: World, cx: number, cy: number, zoneId: number
     for (let dx = -radius; dx <= radius; dx++) {
       if (changed >= MAX_PRESSURE_CELLS) return changed;
       if (dx * dx + dy * dy > radius * radius) continue;
-      if (Math.random() > strength) continue;
+      if (rng() > strength) continue;
       const x = world.wrap(ix + dx);
       const y = world.wrap(iy + dy);
       const i = world.idx(x, y);

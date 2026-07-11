@@ -41,6 +41,7 @@ import {
 } from '../shared';
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
+import { rng } from '../../core/rand';
 
 export const DESIGN_FLOOR_ID = 'roof' as const;
 export const ROOF_ROUTE_ID = DESIGN_FLOOR_ID;
@@ -2110,7 +2111,7 @@ function spawnRoofMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed,

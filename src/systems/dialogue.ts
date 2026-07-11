@@ -13,6 +13,7 @@ import {
 import { markNpcSpokenTo } from './npc_memory';
 import { observeRecentRumorEventsForNpc, selectRumorForNpc } from './rumor';
 import { routeSpeech } from './speech_router';
+import { rng } from '../core/rand';
 
 /* ── Talk text (called from NPC menu "Talk" tab) ─────────────── */
 export function generateTalkText(npc: Entity, options: ContextBuildOptions = {}): string {
@@ -35,7 +36,7 @@ export function generateTalkText(npc: Entity, options: ContextBuildOptions = {})
   const rumorLine = selectRumorForNpc(npc, snapshot, now);
   if (rumorLine) return rumorLine;
 
-  if (npc.ai?.npcState !== undefined && Math.random() < 0.4) {
+  if (npc.ai?.npcState !== undefined && rng() < 0.4) {
     return getNpcStateText(npc.ai.npcState);
   }
 

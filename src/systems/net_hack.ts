@@ -11,6 +11,7 @@ import { getNetHackTerminalDef, NET_HACK_TERMINALS, type NetHackTerminalDef, typ
 import { publishEvent } from './events';
 import { floorKeyForStory } from './floor_keys';
 import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
+import { rng } from '../core/rand';
 
 export interface NetHackTerminal {
   idx: number;
@@ -262,7 +263,7 @@ export function attemptNetHack(
   world: World,
   state: GameState,
   player: Entity,
-  roll = Math.random(),
+  roll = rng(),
 ): boolean {
   const terminal = currentTerminal();
   const def = terminal ? getNetHackTerminalDef(terminal.defId) : undefined;

@@ -13,6 +13,7 @@ import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../
 import { Spr } from '../../render/sprite_index';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const PROFESSOR_ID = 'prof_tesla';
 const ASSISTANT_KLIM_ID = 'flooded_lab_assistant_klim';
@@ -170,8 +171,8 @@ export function generateFloodedLab(
   const lootPool = ['note', 'note', 'antidep', 'pills', 'bandage', 'ammo_energy', 'psi_strike', 'tea'];
   for (const defId of lootPool) {
     for (let attempt = 0; attempt < 30; attempt++) {
-      const lx = labX + 1 + Math.floor(Math.random() * (LAB_W - 2));
-      const ly = labY + 1 + Math.floor(Math.random() * (LAB_H - 2));
+      const lx = labX + 1 + Math.floor(rng() * (LAB_W - 2));
+      const ly = labY + 1 + Math.floor(rng() * (LAB_H - 2));
       const ci = world.idx(lx, ly);
       if (world.cells[ci] !== Cell.FLOOR) continue;
       if (world.features[ci]) continue;

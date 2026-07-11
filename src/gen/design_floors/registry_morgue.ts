@@ -40,6 +40,7 @@ import {
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('registry_morgue');
 
@@ -1187,7 +1188,7 @@ function spawnMorgueNpc(
   weapon?: string,
 ): Entity {
   return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     weapon,
     canGiveQuest,
     isTraveler: false,
@@ -1209,7 +1210,7 @@ function spawnMorgueMonster(
   entities.push({
     id: nextId.v++, type: EntityType.MONSTER,
     x: x + 0.5, y: y + 0.5,
-    angle: Math.random() * Math.PI * 2, pitch: 0,
+    angle: rng() * Math.PI * 2, pitch: 0,
     alive: true, speed: def.speed,
     sprite: monsterSpr(kind),
     name,

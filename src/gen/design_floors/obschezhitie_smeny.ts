@@ -20,7 +20,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { hashSeed, withSeededRandom } from '../../core/rand';
+import { rng, hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
@@ -769,7 +769,7 @@ function spawnNpc(
   weapon?: string,
 ): number {
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     canGiveQuest: true,
     weapon,
     aiTarget: { x: x + 0.5, y: y + 0.5 },

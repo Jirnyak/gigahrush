@@ -17,6 +17,7 @@ import { addItem, hasItem, removeItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { isPlayerEntity, getCurrentPlayerId } from './player_actor';
 import { ensureEntityIndex } from './entity_index';
+import { rng } from '../core/rand';
 
 type BorerSource = 'pre_samosbor' | 'post_samosbor' | 'debug';
 type BorerPhase = 'warning' | 'damaged' | 'compromised' | 'repaired' | 'resolved';
@@ -463,7 +464,7 @@ function maybeStartPreSamosbor(world: World, entities: Entity[], state: GameStat
   const store = storeFor(world);
   if (store.lastPreCycle === state.samosborCount) return;
   store.lastPreCycle = state.samosborCount;
-  if (Math.random() > PRE_SAMOSBOR_CHANCE) return;
+  if (rng() > PRE_SAMOSBOR_CHANCE) return;
   startBorer(world, entities, state, nextEntityId, 'pre_samosbor');
 }
 
@@ -474,7 +475,7 @@ function maybeStartPostSamosbor(world: World, entities: Entity[], state: GameSta
   if (state.samosborCount !== store.queuedPostCycle) return;
   store.lastPostCycle = store.queuedPostCycle;
   store.queuedPostCycle = -1;
-  if (Math.random() > POST_SAMOSBOR_CHANCE) return;
+  if (rng() > POST_SAMOSBOR_CHANCE) return;
   startBorer(world, entities, state, nextEntityId, 'post_samosbor');
 }
 

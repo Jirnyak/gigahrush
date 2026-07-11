@@ -7,7 +7,7 @@ import {
   W, type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { withSeededRandom } from '../../core/rand';
+import { rng, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { designFloorProfile, FLOOR_69_WORKER_ROLE_ID } from '../../data/design_floor_profiles';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
@@ -2380,7 +2380,7 @@ function spawnAmbientAdult(
     type: EntityType.NPC,
     x: world.wrap(x) + 0.5,
     y: world.wrap(y) + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: 0.8,

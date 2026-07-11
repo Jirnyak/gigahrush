@@ -14,6 +14,7 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { rng } from '../../core/rand';
 
 const ENCOUNTER_ID = 'maronary_signalshchik';
 const ENCOUNTER_NAME = 'Маронарный Сигнальщик';
@@ -329,7 +330,7 @@ function spawnSignalshchik(world: World, entities: Entity[], nextId: { v: number
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

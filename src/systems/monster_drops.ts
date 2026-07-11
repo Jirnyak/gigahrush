@@ -3,6 +3,7 @@ import { chooseMonsterRareDrop } from '../data/monster_ecology';
 import { generateMonsterLoot, type GeneratedLoot } from './procedural_loot';
 import { Spr } from '../render/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
+import { rng } from '../core/rand';
 
 export interface MonsterRareLootDrop {
   itemId: string;
@@ -14,7 +15,7 @@ export function dropMonsterRareLoot(
   monster: Entity,
   entities: Entity[],
   nextId: { v: number },
-  rand: () => number = Math.random,
+  rand: () => number = rng,
 ): MonsterRareLootDrop | undefined {
   if (monster.type !== EntityType.MONSTER || monster.monsterKind === undefined) return undefined;
   if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) return undefined;

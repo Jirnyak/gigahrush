@@ -41,6 +41,7 @@ import {
 } from './barks';
 import { selectMeleeTarget } from '../melee_targeting';
 import { publishEvent } from '../events';
+import { rng } from '../../core/rand';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
 let _barkMsgs: Msg[] = [];
@@ -84,7 +85,7 @@ function tryCombatLootGrab(world: World, e: Entity, dt: number): void {
 }
 
 export function trySimulateNpcAmmoRestock(e: Entity, dt: number): void {
-  if (Math.random() > 0.1 * dt) return;
+  if (rng() > 0.1 * dt) return;
 
   const weaponId = e.weapon;
   if (!weaponId) return;
@@ -197,7 +198,7 @@ function startFleeFromThreat(world: World, e: Entity, threat: Entity, dt: number
   if (len > 0.1) {
     nx = dx / len; ny = dy / len;
   } else {
-    const a = Math.random() * Math.PI * 2;
+    const a = rng() * Math.PI * 2;
     nx = Math.cos(a); ny = Math.sin(a);
   }
   const baseAngle = Math.atan2(ny, nx);
@@ -443,7 +444,7 @@ export function tryFactionCombat(
     const hitTarget = selectMeleeTarget(world, e, npcMeleeHitQuery, meleeRange, weaponId);
     
     if (hitTarget) {
-      const baseDmg = meleeWs.dmg > 0 ? meleeWs.dmg : (5 + Math.floor(Math.random() * 8));
+      const baseDmg = meleeWs.dmg > 0 ? meleeWs.dmg : (5 + Math.floor(rng() * 8));
       const rawDmg = meleeDamage(e.rpg, weaponId, baseDmg);
       let dmg = zhelemishIncomingMeleeDamage(hitTarget, _time, rawDmg);
       if (hitTarget.type === EntityType.MONSTER) dmg = applyMonsterIncomingDamage(world, hitTarget, dmg);
@@ -688,7 +689,7 @@ function npcFireProjectile(
   const spread = ws.spread ?? 0;
   const spd = ws.projSpeed ?? 15;
   for (let p = 0; p < pellets; p++) {
-    const a = ang + (Math.random() - 0.5) * spread;
+    const a = ang + (rng() - 0.5) * spread;
     const cos = Math.cos(a);
     const sin = Math.sin(a);
     const proj: Entity = {

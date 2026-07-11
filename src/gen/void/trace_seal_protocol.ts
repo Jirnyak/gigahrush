@@ -16,6 +16,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const CLERK_ID = 'floor20_void_protocol_clerk';
 const NEIGHBOR_ID = 'floor20_void_borrowed_neighbor';
@@ -204,7 +205,7 @@ function spawnTraceThreat(ctx: TraceSealContext, kind: MonsterKind, name: string
     type: EntityType.MONSTER,
     x: sx + 0.5,
     y: sy + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),

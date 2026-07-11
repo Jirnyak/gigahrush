@@ -41,6 +41,7 @@ import {
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { rng } from '../../core/rand';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('production_belt');
 
@@ -1233,7 +1234,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: pos.x,
     y: pos.y,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed,

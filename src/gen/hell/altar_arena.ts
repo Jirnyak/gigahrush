@@ -17,6 +17,7 @@ import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { findClearArea, protectRoom, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
+import { rng } from '../../core/rand';
 
 const ROOM_W = 23;
 const ROOM_H = 19;
@@ -181,16 +182,16 @@ function findArenaSite(world: World): Site | null {
   if (direct && canStampArena(world, direct.x, direct.y)) return direct;
 
   for (let attempt = 0; attempt < 1600; attempt++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 130 + Math.random() * 280;
+    const angle = rng() * Math.PI * 2;
+    const dist = 130 + rng() * 280;
     const x = world.wrap(cx + Math.round(Math.cos(angle) * dist) - (ROOM_W >> 1));
     const y = world.wrap(cy + Math.round(Math.sin(angle) * dist) - (ROOM_H >> 1));
     if (canStampArena(world, x, y)) return { x, y };
   }
 
   for (let attempt = 0; attempt < 1200; attempt++) {
-    const x = Math.floor(Math.random() * W);
-    const y = Math.floor(Math.random() * W);
+    const x = Math.floor(rng() * W);
+    const y = Math.floor(rng() * W);
     if (canStampArena(world, x, y)) return { x, y };
   }
   return null;
@@ -442,7 +443,7 @@ function createArenaMonster(
     type: EntityType.MONSTER,
     x,
     y,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level),
@@ -459,7 +460,7 @@ function createArenaMonster(
       path: [],
       pi: 0,
       stuck: 0,
-      timer: target ? 0 : 2 + Math.random() * 2,
+      timer: target ? 0 : 2 + rng() * 2,
     },
     rpg,
   };
@@ -493,16 +494,16 @@ function createArenaCultist(world: World, room: ArenaRoomRef, nextId: { v: numbe
   const rpg = randomRPG(gaussianLevel(zoneLevel + 2, 1.5));
   const maxHp = Math.max(1, Math.round(getMaxHp(rpg) * 1.35));
   const nm = randomName(Faction.CULTIST);
-  const weapon = Math.random() < 0.65 ? 'psi_meat_hook' : 'rebar';
+  const weapon = rng() < 0.65 ? 'psi_meat_hook' : 'rebar';
   return {
     id: nextId.v++,
     type: EntityType.NPC,
     x,
     y,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
-    speed: 1.25 + Math.random() * 0.25,
+    speed: 1.25 + rng() * 0.25,
     sprite: Occupation.PILGRIM,
     name: nm.name,
     firstName: nm.firstName,

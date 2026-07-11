@@ -25,7 +25,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { hashSeed, withSeededRandom } from '../../core/rand';
+import { rng, hashSeed, withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
@@ -1652,16 +1652,16 @@ function spawnAmbientNpc(
     type: EntityType.NPC,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
-    speed: faction === Faction.LIQUIDATOR ? 0.95 : 0.75 + Math.random() * 0.18,
+    speed: faction === Faction.LIQUIDATOR ? 0.95 : 0.75 + rng() * 0.18,
     sprite: occupation,
     name,
     needs: freshNeeds(),
     hp: faction === Faction.LIQUIDATOR ? 150 : 88,
     maxHp: faction === Faction.LIQUIDATOR ? 150 : 88,
-    money: 10 + Math.floor(Math.random() * 42),
+    money: 10 + Math.floor(rng() * 42),
     ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
     inventory: inventory.map(item => ({ ...item })),
     weapon,
@@ -1740,7 +1740,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed * (0.95 + level * 0.04),

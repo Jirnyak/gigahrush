@@ -27,7 +27,7 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { safeParseJson } from './core/json';
-import { hashSeed, randSeed , xorshift32 } from './core/rand';
+import { rng, hashSeed, randSeed, xorshift32 } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './gen/procedural_screens';
@@ -808,7 +808,7 @@ setOnlineMessageHandler((msgData: any) => {
             const spread = ws.spread ?? 0;
             const pt = ws.projType ?? ProjType.NORMAL;
             for (let p = 0; p < pellets; p++) {
-              const ang = actor.angle + (Math.random() - 0.5) * spread;
+              const ang = actor.angle + (rng() - 0.5) * spread;
               const spd = ws.projSpeed ?? 15;
               const proj: Entity = {
                 id: nextEntityId.v++,
@@ -1008,6 +1008,15 @@ setOnlineMessageHandler((msgData: any) => {
   if (msgData.type === 'host_disconnected' && isOnlinePeer()) {
     state.msgs.push(msg('Хост отключился. Сессия завершена.', state.time, '#f44'));
     onlinePeerFloorReady = false;
+  }
+
+  // ── Server error (room not found, no welcome) ──
+  if (msgData.type === 'server_error') {
+    onlinePeerFloorReady = false;
+    const reason = msgData.reason === 'no_welcome'
+      ? 'Комната не найдена — хост не отвечает.'
+      : `Ошибка сервера: ${msgData.reason ?? 'неизвестная'}`;
+    state.msgs.push(msg(reason, state.time, '#f44'));
   }
 
   // ── Connection lost ──
@@ -1641,7 +1650,7 @@ function makeCurrentPlayer(actor: Entity | undefined): boolean {
   return true;
 }
 
-function randomDeathContinuationNpc(random: () => number = Math.random): Entity | undefined {
+function randomDeathContinuationNpc(random: () => number = rng): Entity | undefined {
   let selected: Entity | undefined;
   let seen = 0;
   for (const candidate of entities) {
@@ -1696,7 +1705,7 @@ function continueDeathAsFloorNpc(): boolean {
 function continueDeathAsAlifePopulationNpc(): boolean {
   const excluded = new Set<number>();
   if (player.alifeId !== undefined) excluded.add(player.alifeId);
-  const snapshot = randomAliveAlifeNpcSnapshot(state, Math.random, excluded);
+  const snapshot = randomAliveAlifeNpcSnapshot(state, rng, excluded);
   if (!snapshot) {
     state.msgs.push(msg('В A-Life не осталось живого человека для продолжения пути.', state.time, '#f84'));
     return false;
@@ -2480,8 +2489,8 @@ function spawnSmokeStressPopulation(count: number): void {
   const monsterKinds = [MonsterKind.ZOMBIE, MonsterKind.TVAR, MonsterKind.SBORKA, MonsterKind.SHADOW];
   let spawned = 0;
   for (let attempt = 0; attempt < spawnTarget * 24 && spawned < spawnTarget; attempt++) {
-    const x = Math.floor(Math.random() * W);
-    const y = Math.floor(Math.random() * W);
+    const x = Math.floor(rng() * W);
+    const y = Math.floor(rng() * W);
     const ci = world.idx(x, y);
     if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
     if (world.dist2(player.x, player.y, x + 0.5, y + 0.5) < 8 * 8) continue;
@@ -2491,7 +2500,7 @@ function spawnSmokeStressPopulation(count: number): void {
         type: EntityType.NPC,
         x: x + 0.5,
         y: y + 0.5,
-        angle: Math.random() * Math.PI * 2,
+        angle: rng() * Math.PI * 2,
         pitch: 0,
         alive: true,
         speed: 1.05,
@@ -2506,7 +2515,7 @@ function spawnSmokeStressPopulation(count: number): void {
         occupation: Occupation.TRAVELER,
         questId: -1,
         isTraveler: true,
-        ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: Math.random() * 4, combatScanCd: Math.random() * 1.5 },
+        ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: rng() * 4, combatScanCd: rng() * 1.5 },
         inventory: [],
         rpg: randomRPG(2),
       });
@@ -2518,7 +2527,7 @@ function spawnSmokeStressPopulation(count: number): void {
         type: EntityType.MONSTER,
         x: x + 0.5,
         y: y + 0.5,
-        angle: Math.random() * Math.PI * 2,
+        angle: rng() * Math.PI * 2,
         pitch: 0,
         alive: true,
         speed: 1.1,
@@ -2528,7 +2537,7 @@ function spawnSmokeStressPopulation(count: number): void {
         maxHp: 80,
         monsterKind: kind,
         attackCd: 0,
-        ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: Math.random() * 4, combatScanCd: Math.random() * 1.5 },
+        ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: rng() * 4, combatScanCd: rng() * 1.5 },
         rpg: randomRPG(2),
       });
       monsterBudget--;
@@ -2681,7 +2690,7 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
     time: 0,
     clock: { hour: 8, minute: 0, totalMinutes: 0 },
     samosborActive: false,
-    samosborTimer: isTutorial ? 999999 : 120 + Math.random() * 60,
+    samosborTimer: isTutorial ? 999999 : 120 + rng() * 60,
     samosborCount: 0,
     paused: false,
     gameOver: false,
@@ -2794,7 +2803,6 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
   finishLoadedFloorVisuals(gen);
   rebuildEntityIndex(entities, 'load');
 }
-
 
 /* ── Input ────────────────────────────────────────────────────── */
 const input = createInput();
@@ -3344,7 +3352,6 @@ function handlePlayerAttack(_dt: number): void {
   const weaponId = equippedCombatItemId(player);
   const ws = getWeaponStats(player, weaponId);
 
-
   // Reload Logic
   if (player.reloading) {
     player.reloadTimer = Math.max(0, (player.reloadTimer ?? 0) - _dt);
@@ -3416,7 +3423,7 @@ function handlePlayerAttack(_dt: number): void {
           const spread = ws.spread ?? 0;
           const pt = ws.projType ?? ProjType.NORMAL;
           for (let p = 0; p < pellets; p++) {
-            const ang = player.angle + (Math.random() - 0.5) * spread;
+            const ang = player.angle + (rng() - 0.5) * spread;
             const spd = ws.projSpeed ?? 15;
             const proj: Entity = {
               id: nextEntityId.v++,
@@ -3430,12 +3437,12 @@ function handlePlayerAttack(_dt: number): void {
               sprite: ws.projSprite ?? Spr.BULLET,
               vx: Math.cos(ang) * spd,
               vy: Math.sin(ang) * spd,
-              vz: player.pitch * spd * 0.5 + (pt === ProjType.FLAME ? (Math.random() - 0.5) * 0.8 : 0),
+              vz: player.pitch * spd * 0.5 + (pt === ProjType.FLAME ? (rng() - 0.5) * 0.8 : 0),
               projDmg: ws.dmg,
               projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
               ownerId: player.id,
               weapon: weaponId,
-              spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + Math.random() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
+              spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + rng() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
               spriteZ: 0.5,
               projType: pt,
               projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
@@ -3575,8 +3582,8 @@ function dropEntityInventory(e: Entity): void {
     if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) break;
     entities.push({
       id: nextEntityId.v++, type: EntityType.ITEM_DROP,
-      x: e.x + (Math.random() - 0.5) * 0.5,
-      y: e.y + (Math.random() - 0.5) * 0.5,
+      x: e.x + (rng() - 0.5) * 0.5,
+      y: e.y + (rng() - 0.5) * 0.5,
       angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: item.defId, count: item.count, data: item.data }],
     });
@@ -4158,8 +4165,8 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   // Radial debris marks around explosion center
   const debrisCount = pt === ProjType.BFG ? 12 : 8;
   for (let i = 0; i < debrisCount; i++) {
-    const ang = (i / debrisCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-    const dist = 0.5 + Math.random() * (radius * 0.5);
+    const ang = (i / debrisCount) * Math.PI * 2 + (rng() - 0.5) * 0.5;
+    const dist = 0.5 + rng() * (radius * 0.5);
     const debX = p.x + Math.cos(ang) * dist;
     const debY = p.y + Math.sin(ang) * dist;
     const dcx = Math.floor(((debX % W) + W) % W);
@@ -4170,8 +4177,8 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
       const debrisR = pt === ProjType.BFG ? 10 : 15;
       const debrisG = pt === ProjType.BFG ? 30 : 10;
       const debrisB = pt === ProjType.BFG ? 10 : 5;
-      stampMark(world, dcx, dcy, dfx, dfy, 0.12 + Math.random() * 0.15, markType,
-        seed + i + 100, debrisR, debrisG, debrisB, 150 + Math.floor(Math.random() * 60));
+      stampMark(world, dcx, dcy, dfx, dfy, 0.12 + rng() * 0.15, markType,
+        seed + i + 100, debrisR, debrisG, debrisB, 150 + Math.floor(rng() * 60));
     }
   }
 
@@ -4845,7 +4852,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
 
 function debugTeleportToRandomProceduralFloor(): void {
   const run = ensureFloorRunState(state);
-  const z = PROCEDURAL_FLOOR_ZS[Math.floor(Math.random() * PROCEDURAL_FLOOR_ZS.length)];
+  const z = PROCEDURAL_FLOOR_ZS[Math.floor(rng() * PROCEDURAL_FLOOR_ZS.length)];
   const spec = run.specs[proceduralFloorKey(z)];
   debugTeleportTo({
     floor: spec.baseFloor,
@@ -5731,7 +5738,6 @@ function addRuntimeDoorToRoom(roomId: number, doorIdx: number): void {
 function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
   return cleanWorldSurfaceArea(world, cx, cy, radiusCells);
 }
-
 
 function handleUvSpotlightTool(player: Entity, wantsToolUse: boolean): void {
   if (!wantsToolUse || _toolActionCd > 0) return;
@@ -7005,7 +7011,6 @@ function applyMapLegendSelection(index: number): void {
 function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, rh: number): boolean {
   return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
 }
-
 
 function handleTapControls(y: number, h: number, sy: number): void {
   const top = 34 * sy;
@@ -8479,9 +8484,10 @@ function gameLoop(now: number): void {
         },
       });
       // Edge actions — sent immediately, bypass throttle
+      // NOTE: do NOT clear input.interact here — the local handlePlayerInteract
+      // must also see it so doors/containers/NPCs work for the peer locally.
       if (input.interact) {
         sendPeerAction({ interact: true });
-        input.interact = false;
       }
       if (input.attack || input.mouseAttack) {
         sendPeerAction({ fire: true });
@@ -8816,7 +8822,7 @@ function gameLoop(now: number): void {
       const lost = prevPlayerActorHp - curHp;
       const maxHp = damageActor.maxHp ?? 100;
       state.dmgFlash = Math.min(1, 0.3 + (lost / maxHp) * 1.5);
-      state.dmgSeed = Math.random() * 10000;
+      state.dmgSeed = rng() * 10000;
       recordUnattributedPlayerDamage(lost);
       playFleshHit();
     }

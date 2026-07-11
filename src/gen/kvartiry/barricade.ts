@@ -19,6 +19,7 @@ import {
   spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
+import { rng } from '../../core/rand';
 
 const ROOM_NAME = 'Баррикадированный пролёт';
 const REPAIR_QUEST_ID = 'kv_barricade_tools';
@@ -261,7 +262,7 @@ function spawnBarricadeMonster(
     type: EntityType.MONSTER,
     x: x + 0.5,
     y: y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed, level) * 0.85,

@@ -28,7 +28,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { hashSeed, withSeededRandom } from '../../core/rand';
+import { rng, hashSeed, withSeededRandom } from '../../core/rand';
 import { ITEMS } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
@@ -495,7 +495,7 @@ export function measureOranzhereyaBetonaGeometry(world: World): OranzhereyaBeton
   };
 }
 
-export function expandOranzhereyaBetonaRouteGeometry(world: World, rng: () => number = Math.random): void {
+export function expandOranzhereyaBetonaRouteGeometry(world: World, rand: () => number = rng): void {
   const anchors: Room[] = [];
   for (const spec of ORANZHEREYA_HQ_SPECS) {
     const hq = addHqCompound(world, spec);
@@ -505,7 +505,7 @@ export function expandOranzhereyaBetonaRouteGeometry(world: World, rng: () => nu
 
   const hubs: Room[] = [];
   for (const spec of GREENHOUSE_BLOCKS) {
-    const hub = addGreenhouseBlock(world, spec, rng);
+    const hub = addGreenhouseBlock(world, spec, rand);
     if (hub) hubs.push(hub);
   }
 
@@ -1751,7 +1751,7 @@ function spawnMonster(
     type: EntityType.MONSTER,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.random() * Math.PI * 2,
+    angle: rng() * Math.PI * 2,
     pitch: 0,
     alive: true,
     speed: def.speed * (0.95 + level * 0.03),
