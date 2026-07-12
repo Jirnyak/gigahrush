@@ -105,6 +105,8 @@ interface FloorMemoryWorldSave {
   railTrainCells: Array<[number, number]>;
   slideCells: number[];
   screenCells: number[];
+  globalCeilingTier?: number;
+  hasOpenSky?: boolean;
 }
 
 export interface FloorMemorySaveEntry {
@@ -441,6 +443,8 @@ export function worldForSave(world: World): FloorMemoryWorldSave {
     railTrainCells: numberEntryListForSave(world.railTrainCells.entries()),
     slideCells: numberListForSave(world.slideCells),
     screenCells: numberListForSave(world.screenCells),
+    globalCeilingTier: Number.isFinite(world.globalCeilingTier) ? Math.max(0, Math.min(255, Math.floor(world.globalCeilingTier as number))) : undefined,
+    hasOpenSky: world.hasOpenSky === true,
   };
 }
 
@@ -564,6 +568,9 @@ function sanitizeRooms(input: unknown): Room[] {
       apartmentId: finiteIntRange(raw.apartmentId, -1, 32767, -1),
       wallTex: finiteIntRange(raw.wallTex, 0, Tex.COUNT - 1, Tex.CONCRETE) as Tex,
       floorTex: finiteIntRange(raw.floorTex, 0, Tex.COUNT - 1, Tex.F_CONCRETE) as Tex,
+      ceilingTier: typeof raw.ceilingTier === 'number' && Number.isFinite(raw.ceilingTier)
+        ? Math.max(0, Math.min(255, Math.floor(raw.ceilingTier)))
+        : undefined,
     });
     if (out.length >= 32767) break;
   }
@@ -766,6 +773,10 @@ function sanitizedWorldSave(input: unknown): FloorMemoryWorldSave | null {
       .filter(([cell, train]) => cell >= 0 && cell < W * W && train >= 0),
     slideCells: restoreNumberList(input.slideCells),
     screenCells: restoreNumberList(input.screenCells),
+    globalCeilingTier: typeof input.globalCeilingTier === 'number' && Number.isFinite(input.globalCeilingTier)
+      ? Math.max(0, Math.min(255, Math.floor(input.globalCeilingTier)))
+      : undefined,
+    hasOpenSky: input.hasOpenSky === true,
   };
 }
 
@@ -801,6 +812,8 @@ export function worldFromSave(input: unknown, spawnX?: number, spawnY?: number):
   world.railTrainCells = new Map(savedWorld.railTrainCells);
   world.slideCells = savedWorld.slideCells;
   world.screenCells = savedWorld.screenCells;
+  world.globalCeilingTier = savedWorld.globalCeilingTier;
+  world.hasOpenSky = savedWorld.hasOpenSky;
   world.markCellsDirty();
   world.markSurfaceDirty();
   world.markWallTexDirty();

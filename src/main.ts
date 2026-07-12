@@ -864,6 +864,18 @@ function peerActorSnapshot(actor = player): PeerActorState {
   };
 }
 
+function sendPeerInventorySync(actor: Entity): void {
+  if (actor.peerSlot === undefined) return;
+  sendOnlineMessage({
+    type: 'peer_inventory_sync',
+    _targetSlot: actor.peerSlot,
+    weapon: actor.weapon ?? '',
+    tool: actor.tool ?? '',
+    money: actor.money,
+    inventory: actor.inventory?.map(i => i.data !== undefined ? { defId: i.defId, count: i.count, data: i.data } : { defId: i.defId, count: i.count }),
+  });
+}
+
 function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
   const toolId = actor.tool ?? '';
   if (!toolId) return;
@@ -1126,8 +1138,9 @@ setOnlineMessageHandler((msgData: any) => {
             if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
           }
           if (bestDrop) {
-            pickupDrop(world, bestDrop, actor, state.msgs, state.time, state);
-            handled = true;
+            const result = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state);
+            if (result.pickedAny) sendPeerInventorySync(actor);
+            handled = result.handled;
           }
         }
         // Try opening / searching a container in front of the peer. Host is the
@@ -1186,16 +1199,18 @@ setOnlineMessageHandler((msgData: any) => {
           const container = resolvePeerContainerAtCell(world, state.currentFloor, op.cx, op.cy);
           if (container) {
             const slot = Math.max(0, Math.floor(op.slot ?? 0));
+            let inventoryChanged = false;
             if (op.op === 'take') {
-              takeFromContainer(container, actor, slot, 1, { state, world, entities });
+              inventoryChanged = takeFromContainer(container, actor, slot, 1, { state, world, entities });
             } else if (op.op === 'put') {
-              putIntoContainer(container, actor, slot, 1, { state, world, entities });
+              inventoryChanged = putIntoContainer(container, actor, slot, 1, { state, world, entities });
             }
             sendOnlineMessage({
               type: 'container_sync',
               _targetSlot: actor.peerSlot,
               container: containerSyncPayload(container),
             });
+            if (inventoryChanged) sendPeerInventorySync(actor);
           }
         }
       }
@@ -1366,6 +1381,15 @@ setOnlineMessageHandler((msgData: any) => {
         }
       }
     }
+  }
+
+  // ── PEER: host-authoritative inventory correction (pickup/container) ──
+  if (msgData.type === 'peer_inventory_sync' && isOnlinePeer() && onlinePeerFloorReady) {
+    player.weapon = typeof msgData.weapon === 'string' ? msgData.weapon : '';
+    player.tool = typeof msgData.tool === 'string' ? msgData.tool : '';
+    player.money = typeof msgData.money === 'number' ? msgData.money : player.money;
+    player.inventory = Array.isArray(msgData.inventory) ? msgData.inventory : undefined;
+    notePeerActorState(peerActorSnapshot());
   }
 
   // ── PEER: host opened/searched a container → show its inventory copy ──
@@ -4177,7 +4201,6 @@ function tickPeerLocalToolResources(dt: number): 'edge' | 'hold' | undefined {
     if (canPlace) consumeToolDurability(player, 1, state.msgs, state.time, state);
     return canPlace ? 'edge' : undefined;
   }
-  if ((toolId === 'cleaning_kit' || toolId === 'vacuum') && useEdge && tryCoverSeroburmalineSource(world, player, state, tx, ty, toolId)) return 'edge';
   const cleanupTool = cleanupToolProfile(toolId);
   if (cleanupTool) {
     consumeToolDurability(player, cleanupTool.wear, state.msgs, state.time, state);
