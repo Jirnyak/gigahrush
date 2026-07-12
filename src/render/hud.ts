@@ -1758,7 +1758,7 @@ export function drawHUD(
   }
 
   if (!quietHud && uiElementEnabled('npc_barks')) {
-    drawWorldSpeechBubbles(ctx, world, player, entities, sx, sy, time);
+    drawWorldSpeechBubbles(ctx, world, player, entities, sx, sy, gameTime);
   }
 
   // ── Zone info + time + room (neuro-interface left panel) ──
