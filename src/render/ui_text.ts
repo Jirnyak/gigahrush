@@ -1,4 +1,4 @@
-import { translateText } from '../systems/localization';
+import { SKIP_TRANSLATE_PREFIX, translateText } from '../systems/localization';
 
 let uiTextTime = 0;
 const fitTextSeenAt = new Map<string, number>();
@@ -111,20 +111,23 @@ export function fitTextStable(
   const cacheKey = `${mode}|${fitTextCacheKey(ctx, text, maxW)}`;
   const cached = cachedFitTextStable(cacheKey);
   if (cached !== undefined) return cached;
-  if (ctx.measureText(text).width <= maxW) return rememberFitTextStable(cacheKey, text);
+  if (ctx.measureText(text).width <= maxW) return rememberFitTextStable(cacheKey, options?.skipTranslate && !text.startsWith(SKIP_TRANSLATE_PREFIX) ? SKIP_TRANSLATE_PREFIX + text : text);
   if (mode === 'clip') {
     const count = maxFittingChars(ctx, text, maxW);
-    return rememberFitTextStable(cacheKey, count <= 0 ? '' : text.slice(0, count));
+    const result = count <= 0 ? '' : text.slice(0, count);
+    return rememberFitTextStable(cacheKey, options?.skipTranslate && !result.startsWith(SKIP_TRANSLATE_PREFIX) ? SKIP_TRANSLATE_PREFIX + result : result);
   }
 
   const ellipsis = '...';
   const ellipsisW = ctx.measureText(ellipsis).width;
   if (ellipsisW >= maxW) {
     const count = maxFittingChars(ctx, text, maxW);
-    return rememberFitTextStable(cacheKey, count <= 0 ? '' : text.slice(0, count));
+    const result = count <= 0 ? '' : text.slice(0, count);
+    return rememberFitTextStable(cacheKey, options?.skipTranslate && !result.startsWith(SKIP_TRANSLATE_PREFIX) ? SKIP_TRANSLATE_PREFIX + result : result);
   }
   const count = maxFittingChars(ctx, text, maxW - ellipsisW);
-  return rememberFitTextStable(cacheKey, count <= 0 ? '' : `${text.slice(0, count)}${ellipsis}`);
+  const result = count <= 0 ? '' : `${text.slice(0, count)}${ellipsis}`;
+  return rememberFitTextStable(cacheKey, options?.skipTranslate && !result.startsWith(SKIP_TRANSLATE_PREFIX) ? SKIP_TRANSLATE_PREFIX + result : result);
 }
 
 function maxFittingUnits(ctx: CanvasRenderingContext2D, units: readonly string[], start: number, maxW: number): number {
@@ -154,12 +157,13 @@ function splitOverwideToken(ctx: CanvasRenderingContext2D, token: string, maxW: 
 export function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, options?: { skipTranslate?: boolean }): string {
   if (!options?.skipTranslate) text = translateText(text);
   if (maxW <= 0 || text.length === 0) return '';
-  if (ctx.measureText(text).width <= maxW) return text;
+  if (ctx.measureText(text).width <= maxW) return options?.skipTranslate && !text.startsWith(SKIP_TRANSLATE_PREFIX) ? SKIP_TRANSLATE_PREFIX + text : text;
   const count = maxFittingChars(ctx, text, maxW);
   if (count <= 0) return '';
   const maxStart = text.length - count;
   const elapsed = Math.max(0, uiTextTime - firstSeenTime(ctx, text, maxW));
-  return fittingTextSlice(ctx, text, maxW, snakeTextStart(elapsed, maxStart), count);
+  const result = fittingTextSlice(ctx, text, maxW, snakeTextStart(elapsed, maxStart), count);
+  return options?.skipTranslate && !result.startsWith(SKIP_TRANSLATE_PREFIX) ? SKIP_TRANSLATE_PREFIX + result : result;
 }
 
 export function wrapTextLines(

@@ -332,7 +332,10 @@ export function getLocalizationLanguage(): TitleLanguageId {
   return activeLanguage;
 }
 
+export const SKIP_TRANSLATE_PREFIX = '\u200B';
+
 export function translateText(input: string): string {
+  if (input.includes(SKIP_TRANSLATE_PREFIX)) return input.split(SKIP_TRANSLATE_PREFIX).join('');
   const catalog = catalogForActiveLanguage();
   if (!catalog || !input || !CYRILLIC_RE.test(input)) return input;
 

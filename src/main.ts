@@ -1983,10 +1983,6 @@ initPlatformBridge({
 
 setNetSphereChatHandler((nickname, text, chatNetGen) => {
   if (!isOnlineConnected()) return;
-  
-  // Keep local player's netGen updated to ensure their own chat bubbles work
-  const snap = getNetSphereSnapshot();
-  if (player && snap.netGen) player.netGen = snap.netGen;
 
   const isPlayerMatch = chatNetGen 
     ? player?.netGen === chatNetGen 
@@ -9179,6 +9175,14 @@ function gameLoop(now: number): void {
   uiTime += frameDt;
   let dt = frameDt;
   tickNetSphere(state, player);
+
+  const snap = getNetSphereSnapshot();
+  if (snap.netGen && player) {
+    player.netGen = snap.netGen;
+    if (snap.profile?.nickname) {
+      player.name = snap.profile.nickname;
+    }
+  }
 
   // ── Online: peer sends throttled input + immediate edge actions ──
   if (isOnlineConnected()) {
