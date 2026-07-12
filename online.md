@@ -4,7 +4,7 @@
 >
 > Роль: описывает optional future multiplayer/online mode, Cloudflare/Durable Object direction, relaxed trust, shared facts and budget constraints. It must not affect the core single-player browser game, which remains primary and fully playable offline.
 
-Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review, revised 2026-06-02 after host-player Cloudflare test planning and hundreds-player server-track review, revised 2026-07-12 after successful peer inventory sync and container loot tests.
+Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review, revised 2026-06-02 after host-player Cloudflare test planning and hundreds-player server-track review, revised 2026-07-12 after successful peer inventory sync, container loot tests and Net Sphere chat synchronization fixes.
 
 Scope: полноценный опциональный online mode через Cloudflare Workers/Durable Objects, где Cloudflare является sync/interaction authority для shared facts, а не полной удаленной копией offline-симуляции. Локальная single-player игра, `npm run dev`, single-file build и local save остаются полностью playable без Cloudflare, WebSocket, D1 и сети.
 

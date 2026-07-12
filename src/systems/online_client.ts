@@ -239,6 +239,10 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
         mySlot = data.slot;
         console.log(`[online] slot=${mySlot}, role=${role}`);
         if (role === 'peer') {
+          try {
+            const count = parseInt(localStorage.getItem('gigahrush_net_sessions_count') || '0', 10);
+            localStorage.setItem('gigahrush_net_sessions_count', String(count + 1));
+          } catch {}
           const snap = getNetSphereSnapshot();
           let nicknameStr = '';
           try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}

@@ -983,6 +983,21 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
 }
 
 setOnlineMessageHandler((msgData: any) => {
+  if (msgData.type === 'chat_ping') {
+    const text = msgData.text || '';
+    const duration = Math.max(0, Math.min(6, Math.max(2.5, text.length * 0.12)));
+    if (duration > 0 && entities) {
+      for (let i = 0; i < entities.length; i++) {
+        const e = entities[i];
+        if (e.id === player?.id) continue;
+        if ((e.peerSlot !== undefined || e.netGen) && (e.netGen === msgData.netGen || e.name === msgData.nickname)) {
+          e.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
+          break;
+        }
+      }
+    }
+  }
+
   // ── HOST: peer joined → spawn remote actor, send floor seed ──
   if (msgData.type === 'peer_join' && isOnlineHost()) {
     const peerSlot = msgData._peerSlot;
@@ -1981,16 +1996,18 @@ initPlatformBridge({
   },
 });
 
-setNetSphereChatHandler((nickname, text, chatNetGen) => {
+setNetSphereChatHandler((nickname, text, chatNetGen, createdAt) => {
   if (!isOnlineConnected()) return;
+
+  const ageSec = createdAt ? Math.max(0, (Date.now() - createdAt) / 1000) : 0;
 
   const isPlayerMatch = chatNetGen 
     ? player?.netGen === chatNetGen 
     : player?.name === nickname;
 
   if (isPlayerMatch && player) {
-    const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
-    player.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
+    const duration = Math.max(0, Math.min(6, Math.max(2.5, text.length * 0.12)) - ageSec);
+    if (duration > 0) player.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
     // Do not return early. In local testing (two tabs), both players share the same netGen.
     // If we return here, the receiver won't attach the bubble to the sender's remote entity.
   }
@@ -2004,8 +2021,8 @@ setNetSphereChatHandler((nickname, text, chatNetGen) => {
         : e.name === nickname;
       
       if ((e.peerSlot !== undefined || e.netGen) && isEntityMatch) {
-        const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
-        e.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
+        const duration = Math.max(0, Math.min(6, Math.max(2.5, text.length * 0.12)) - ageSec);
+        if (duration > 0) e.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
         break;
       }
     }

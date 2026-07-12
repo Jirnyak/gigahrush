@@ -2,7 +2,7 @@ import { FloorLevel, type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
 import { portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryRouteId } from './procedural_floors';
-import { startOnlineHost, joinOnlinePeer } from './online_client';
+import { startOnlineHost, joinOnlinePeer, isOnlineHost, getOnlineRoomId, isOnlineConnected, sendOnlineMessage } from './online_client';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
 export type NetSphereEventType = 'samosbor' | 'death';
@@ -32,8 +32,10 @@ export interface NetMarketSnapshot {
 export interface NetSphereStats {
   onlineUsers: number;
   totalPlayers: number;
+  totalSessions: number;
   totalSamosbors: number;
   totalDeaths: number;
+  randomRoomId: string | null;
   updatedAt: number;
 }
 
@@ -107,6 +109,8 @@ interface NetSphereProgress {
   day: number;
   hour: number;
   minute: number;
+  onlineSessions?: number;
+  hostingRoomId?: string;
 }
 
 interface NetSphereRuntime {
@@ -443,11 +447,13 @@ function progressFromState(state: GameState, player: Entity): NetSphereProgress 
     day: Math.max(0, Math.floor(totalMinutes / 1440)),
     hour: state.clock.hour,
     minute: state.clock.minute,
+    onlineSessions: parseInt(storageGet(localStorage, 'gigahrush_net_sessions_count') || '0', 10),
+    hostingRoomId: isOnlineHost() ? getOnlineRoomId() || undefined : undefined,
   };
 }
 
-let onChatMessageReceived: ((nickname: string, text: string, netGen?: string) => void) | null = null;
-export function setNetSphereChatHandler(cb: (nickname: string, text: string, netGen?: string) => void) {
+let onChatMessageReceived: ((nickname: string, text: string, netGen?: string, createdAt?: number) => void) | null = null;
+export function setNetSphereChatHandler(cb: (nickname: string, text: string, netGen?: string, createdAt?: number) => void) {
   onChatMessageReceived = cb;
 }
 
@@ -483,7 +489,7 @@ function applyServerPayload(payload: unknown): void {
         netGen: typeof line.netGen === 'string' ? line.netGen : undefined,
       });
       if (onChatMessageReceived) {
-        onChatMessageReceived(cleanNick, line.body, typeof line.netGen === 'string' ? line.netGen : undefined);
+        onChatMessageReceived(cleanNick, line.body, typeof line.netGen === 'string' ? line.netGen : undefined, typeof line.createdAt === 'number' ? line.createdAt : 0);
       }
       runtime.lastChatId = Math.max(runtime.lastChatId, line.id);
       added++;
@@ -646,6 +652,23 @@ async function sendChat(body: string): Promise<void> {
   if (!clean || runtime.chatBusy) return;
   runtime.chatBusy = true;
   runtime.error = '';
+
+  if (onChatMessageReceived) {
+    const cleanNick = typeof runtime.profile?.nickname === 'string' 
+      ? cleanNickname(runtime.profile.nickname) || 'Жилец' 
+      : 'Жилец';
+    onChatMessageReceived(cleanNick, clean, runtime.netGen, Date.now());
+
+    if (isOnlineConnected()) {
+      sendOnlineMessage({
+        type: 'chat_ping',
+        netGen: runtime.netGen,
+        nickname: cleanNick,
+        text: clean,
+      });
+    }
+  }
+
   try {
     const data = await postJson('/chat', {
       netGen: runtime.netGen,
@@ -732,12 +755,13 @@ function submitDraft(): void {
         return;
       }
       case '/join': {
-        if (!arg) {
-          addLocalSystemMessage('Укажите код комнаты: /join CODE');
+        const roomToJoin = arg || runtime.stats?.randomRoomId;
+        if (!roomToJoin) {
+          addLocalSystemMessage('Укажите код комнаты: /join CODE (или подождите пока кто-то откроет хост)');
           return;
         }
-        joinOnlinePeer(arg);
-        addLocalSystemMessage(`Подключение к комнате ${arg}...`);
+        joinOnlinePeer(roomToJoin);
+        addLocalSystemMessage(`Подключение к комнате ${roomToJoin}...`);
         return;
       }
       case '/help': {

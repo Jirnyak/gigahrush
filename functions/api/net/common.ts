@@ -43,6 +43,8 @@ export interface ProgressPayload {
   day: number;
   hour: number;
   minute: number;
+  onlineSessions?: number;
+  hostingRoomId?: string;
 }
 
 export interface MarketImpulsePayload {
@@ -372,6 +374,8 @@ export function normalizeProgress(value: unknown): ProgressPayload {
     day: num(input.day, 0, 0, 1_000_000),
     hour: num(input.hour, 0, 0, 23),
     minute: num(input.minute, 0, 0, 59),
+    onlineSessions: input.onlineSessions === undefined ? undefined : num(input.onlineSessions, 0, 0, 1_000_000_000),
+    hostingRoomId: typeof input.hostingRoomId === 'string' ? input.hostingRoomId.replace(/[^A-Z0-9]/g, '').slice(0, 16) : undefined,
   };
 }
 
@@ -415,15 +419,16 @@ export async function upsertPresence(
   await db.prepare(`
     INSERT INTO net_players (
       net_gen, nickname, created_at, last_seen_at, runs, total_samosbors, deaths,
-      best_level, best_samosbor_count, last_floor, progress_json
+      best_level, best_samosbor_count, last_floor, total_sessions, progress_json
     )
-    VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)
     ON CONFLICT(net_gen) DO UPDATE SET
       nickname = CASE WHEN excluded.nickname != '' THEN excluded.nickname ELSE nickname END,
       last_seen_at = excluded.last_seen_at,
       best_level = max(best_level, excluded.best_level),
       best_samosbor_count = max(best_samosbor_count, excluded.best_samosbor_count),
       last_floor = CASE WHEN excluded.last_floor != '' THEN excluded.last_floor ELSE last_floor END,
+      total_sessions = max(total_sessions, excluded.total_sessions),
       progress_json = excluded.progress_json
   `).bind(
     netGen,
@@ -433,16 +438,18 @@ export async function upsertPresence(
     progress.level,
     progress.samosborCount,
     progress.floorName,
+    progress.onlineSessions || 0,
     JSON.stringify(progress),
   ).run();
 
   await db.prepare(`
-    INSERT INTO net_sessions (session_id, net_gen, last_seen_at)
-    VALUES (?, ?, ?)
+    INSERT INTO net_sessions (session_id, net_gen, last_seen_at, hosting_room)
+    VALUES (?, ?, ?, ?)
     ON CONFLICT(session_id) DO UPDATE SET
       net_gen = excluded.net_gen,
-      last_seen_at = excluded.last_seen_at
-  `).bind(sessionId, netGen, now).run();
+      last_seen_at = excluded.last_seen_at,
+      hosting_room = excluded.hosting_room
+  `).bind(sessionId, netGen, now, progress.hostingRoomId || '').run();
 
   if (!existingSession) {
     await db.prepare('UPDATE net_players SET runs = runs + 1 WHERE net_gen = ?').bind(netGen).run();
@@ -450,12 +457,16 @@ export async function upsertPresence(
   await maybePruneNetStorage(db, now);
 }
 
-export async function readStats(db: D1Database, now: number): Promise<Record<string, number>> {
+export async function readStats(db: D1Database, now: number): Promise<Record<string, unknown>> {
   const online = await db
     .prepare('SELECT COUNT(*) AS value FROM net_sessions WHERE last_seen_at >= ?')
     .bind(now - ONLINE_WINDOW_MS)
     .first<{ value: number }>();
-  const players = await db.prepare('SELECT COUNT(*) AS value FROM net_players').first<{ value: number }>();
+  const randomRoom = await db
+    .prepare("SELECT hosting_room FROM net_sessions WHERE hosting_room != '' AND last_seen_at >= ? ORDER BY RANDOM() LIMIT 1")
+    .bind(now - ONLINE_WINDOW_MS)
+    .first<{ hosting_room: string }>();
+  const players = await db.prepare('SELECT COUNT(*) AS value, COALESCE(SUM(total_sessions), 0) AS total_sessions FROM net_players').first<{ value: number; total_sessions: number }>();
   const samosbors = await db
     .prepare('SELECT COALESCE(SUM(total_samosbors), 0) AS value FROM net_players')
     .first<{ value: number }>();
@@ -465,8 +476,10 @@ export async function readStats(db: D1Database, now: number): Promise<Record<str
   return {
     onlineUsers: num(online?.value, 0, 0, 1_000_000_000),
     totalPlayers: num(players?.value, 0, 0, 1_000_000_000),
+    totalSessions: num(players?.total_sessions, 0, 0, 1_000_000_000),
     totalSamosbors: num(samosbors?.value, 0, 0, 1_000_000_000),
     totalDeaths: num(deaths?.value, 0, 0, 1_000_000_000),
+    randomRoomId: randomRoom?.hosting_room || null,
     updatedAt: now,
   };
 }

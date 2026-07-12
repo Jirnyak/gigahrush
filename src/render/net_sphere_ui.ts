@@ -99,6 +99,7 @@ export function drawNetSphereMenu(
 
   const stats = net.stats;
   statLine(ctx, 'онлайн', String(stats?.onlineUsers ?? '-'), leftX, ly, leftW, valueOffset, '#7f8'); ly += 10 * s;
+  statLine(ctx, 'сессий', String(stats?.totalSessions ?? '-'), leftX, ly, leftW, valueOffset, '#8cf'); ly += 10 * s;
   statLine(ctx, 'всего', String(stats?.totalPlayers ?? '-'), leftX, ly, leftW, valueOffset, '#8cf'); ly += 10 * s;
   statLine(ctx, 'самосборов', String(stats?.totalSamosbors ?? '-'), leftX, ly, leftW, valueOffset, '#f6c'); ly += 10 * s;
   statLine(ctx, 'смертей', String(stats?.totalDeaths ?? '-'), leftX, ly, leftW, valueOffset, '#f86'); ly += 16 * s;
