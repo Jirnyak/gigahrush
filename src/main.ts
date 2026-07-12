@@ -1991,11 +1991,14 @@ setNetSphereChatHandler((nickname, text, chatNetGen) => {
   if (isPlayerMatch && player) {
     const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
     player.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
-    return;
+    // Do not return early. In local testing (two tabs), both players share the same netGen.
+    // If we return here, the receiver won't attach the bubble to the sender's remote entity.
   }
   if (entities) {
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
+      if (e.id === player?.id) continue;
+      
       const isEntityMatch = chatNetGen 
         ? e.netGen === chatNetGen 
         : e.name === nickname;
