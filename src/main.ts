@@ -1993,7 +1993,7 @@ setNetSphereChatHandler((nickname, text, chatNetGen) => {
 
   if (isPlayerMatch && player) {
     const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
-    player.activeBark = { text, until: state.time + duration, color: '#cca' };
+    player.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
     return;
   }
   if (entities) {
@@ -2003,9 +2003,9 @@ setNetSphereChatHandler((nickname, text, chatNetGen) => {
         ? e.netGen === chatNetGen 
         : e.name === nickname;
       
-      if (e.peerSlot !== undefined && isEntityMatch) {
+      if ((e.peerSlot !== undefined || e.netGen) && isEntityMatch) {
         const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
-        e.activeBark = { text, until: state.time + duration, color: '#cca' };
+        e.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
         break;
       }
     }

@@ -25,12 +25,13 @@ function statLine(
   w: number,
   valueOffset: number,
   tint = '#8cf',
+  options?: { skipTranslate?: boolean },
 ): void {
   const valueX = x + valueOffset;
   ctx.fillStyle = '#6f7d88';
   ctx.fillText(fitText(ctx, label, valueOffset - 4), x, y);
   ctx.fillStyle = tint;
-  ctx.fillText(fitText(ctx, value, w - valueOffset), valueX, y);
+  ctx.fillText(fitText(ctx, value, w - valueOffset, options), valueX, y);
 }
 
 type ChatVisualLine = {
@@ -92,7 +93,7 @@ export function drawNetSphereMenu(
   ctx.rect(leftX, ly - 2 * s, Math.max(1, leftW), Math.max(1, commandY + 22 * s - ly));
   ctx.clip();
   ctx.font = `${8 * s}px monospace`;
-  statLine(ctx, 'НЕТ-ИМЯ', net.nickname, leftX, ly, leftW, valueOffset, '#d8f6ff'); ly += 12 * s;
+  statLine(ctx, 'НЕТ-ИМЯ', net.nickname, leftX, ly, leftW, valueOffset, '#d8f6ff', { skipTranslate: true }); ly += 12 * s;
   statLine(ctx, 'НЕТ-ГЕН', net.netGen, leftX, ly, leftW, valueOffset, '#7da3ad'); ly += 10 * s;
   statLine(ctx, 'СЕССИЯ', net.sessionId, leftX, ly, leftW, valueOffset, '#6f8792'); ly += 14 * s;
 

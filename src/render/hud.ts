@@ -529,8 +529,8 @@ function drawSmallCaravanHint(
   ctx.restore();
 }
 
-function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
-  return fitUiText(ctx, text, maxW);
+function fitHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number, options?: { skipTranslate?: boolean }): string {
+  return fitUiText(ctx, text, maxW, 'clip', options);
 }
 
 function compactFloorLabel(entry: FloorRunEntry): string {
@@ -542,7 +542,7 @@ function compactFloorLabel(entry: FloorRunEntry): string {
   return `${z} ${name}`;
 }
 
-function wrapHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
+function wrapHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number, options?: { skipTranslate?: boolean }): string[] {
   const limit = Math.max(1, Math.floor(maxLines));
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [''];
@@ -562,9 +562,9 @@ function wrapHudText(ctx: CanvasRenderingContext2D, text: string, maxW: number, 
   if (lines.length === 0) lines.push(text);
   const overflow = words.join(' ') !== lines.join(' ');
   const last = lines.length - 1;
-  if (overflow && last >= 0) lines[last] = `${fitHudText(ctx, lines[last], Math.max(1, maxW - ctx.measureText('...').width))}...`;
-  else if (last >= 0) lines[last] = fitHudText(ctx, lines[last], maxW);
-  return lines.map(item => fitHudText(ctx, item, maxW));
+  if (overflow && last >= 0) lines[last] = `${fitHudText(ctx, lines[last], Math.max(1, maxW - ctx.measureText('...').width), options)}...`;
+  else if (last >= 0) lines[last] = fitHudText(ctx, lines[last], maxW, options);
+  return lines.map(item => fitHudText(ctx, item, maxW, options));
 }
 
 function compactNumber(value: number | undefined): string {
@@ -810,6 +810,7 @@ interface CombatTargetHud {
   screenX: number;
   headY: number;
   attitude: CombatTargetAttitude;
+  isOnlinePeer?: boolean;
 }
 
 type CombatTargetAttitude = 'hostile' | 'neutral' | 'friendly';
@@ -965,6 +966,7 @@ function findAimTarget(world: World, player: Entity, state: GameState): CombatTa
     screenX: projection?.screenX ?? SCR_W * 0.5,
     headY: projection?.headY ?? SCR_H * 0.5 - 44,
     attitude: combatTargetAttitude(best, player),
+    isOnlinePeer: best.peerSlot !== undefined || best.netGen !== undefined,
   };
 }
 
@@ -1220,7 +1222,7 @@ function drawCombatSightFeedback(
     }
     ctx.shadowColor = palette.glow;
     ctx.shadowBlur = 5;
-    ctx.fillText(fitHudText(ctx, label, textW), textX, ty + 3 * s);
+    ctx.fillText(fitHudText(ctx, label, textW, target.isOnlinePeer ? { skipTranslate: true } : undefined), textX, ty + 3 * s);
     ctx.shadowBlur = 0;
     const hpTrackW = tw - 10 * s;
     const hpW = hpTrackW * Math.max(0, Math.min(1, target.hpPct / 100));
@@ -1264,7 +1266,7 @@ function drawWorldSpeechBubbles(
     const color = e.activeBark.color;
     
     ctx.font = `${6 * s}px monospace`;
-    const lines = wrapHudText(ctx, text, 120 * s, 4);
+    const lines = wrapHudText(ctx, text, 120 * s, 4, e.activeBark.skipTranslate ? { skipTranslate: true } : undefined);
     const lh = 7.5 * s;
     const padding = 4 * s;
     const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
