@@ -239,11 +239,13 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
         mySlot = data.slot;
         console.log(`[online] slot=${mySlot}, role=${role}`);
         if (role === 'peer') {
-          const profile = getNetSphereSnapshot().profile;
+          const snap = getNetSphereSnapshot();
+          let nicknameStr = '';
+          try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
           ws?.send(JSON.stringify({
             type: 'peer_join',
-            netGen: profile?.netGen,
-            nickname: profile?.nickname,
+            netGen: snap.netGen,
+            nickname: nicknameStr || snap.profile?.nickname,
           }));
         }
       }

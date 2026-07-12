@@ -423,9 +423,11 @@ function progressFromState(state: GameState, player: Entity): NetSphereProgress 
   const totalMinutes = Math.floor(state.clock.totalMinutes);
   const run = ensureFloorRunState(state);
   const entry = currentFloorRunEntry(state);
+  let nicknameStr = '';
+  try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
   return {
     floorId: state.currentFloor,
-    nickname: cleanNickname(player.name ?? '') || 'Жилец',
+    nickname: cleanNickname(nicknameStr) || 'Жилец',
     floorName: FLOOR_NAMES[state.currentFloor] ?? `Этаж ${state.currentFloor}`,
     runSeed: run.runSeed,
     routeId: floorRunEntryRouteId(entry),

@@ -1279,6 +1279,7 @@ setOnlineMessageHandler((msgData: any) => {
         inventory: [],
         weapon: '', tool: '',
         name: 'Вы',
+        netGen: getNetSphereSnapshot().netGen,
         rpg: freshRPG(1),
         faction: Faction.PLAYER,
         peerSlot: peerMySlot,
@@ -1984,8 +1985,8 @@ setNetSphereChatHandler((nickname, text, chatNetGen) => {
   if (!isOnlineConnected()) return;
   
   // Keep local player's netGen updated to ensure their own chat bubbles work
-  const profile = getNetSphereSnapshot().profile;
-  if (player && profile?.netGen) player.netGen = profile.netGen;
+  const snap = getNetSphereSnapshot();
+  if (player && snap.netGen) player.netGen = snap.netGen;
 
   const isPlayerMatch = chatNetGen 
     ? player?.netGen === chatNetGen 
