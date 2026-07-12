@@ -71,6 +71,7 @@ export interface OnlineItemSnapshot {
 export interface PeerActorState {
   hp: number; maxHp: number; alive: boolean;
   weapon: string; tool: string; sprite: number;
+  spriteScale?: number;
   npcVisualId?: string; sex?: string;
   armorDefId?: string;
   money?: number;
@@ -121,6 +122,7 @@ export interface SyncEntity {
   name: string; peerSlot?: number;
   sex?: string; npcVisualId?: string;
   faction?: number; staggerTimer?: number;
+  spriteScale?: number;
   currentMag?: number; reloading?: boolean; reloadTimer?: number; attackCd?: number;
   speed: number; monsterKind?: number;
   dropDefId?: string; dropCount?: number; dropData?: unknown;
@@ -147,6 +149,7 @@ export function compactEntity(e: Entity, ackPeerGen?: number, ackPeerActorGen?: 
     name: e.name || '', peerSlot: e.peerSlot,
     sex: e.sex, npcVisualId: e.npcVisualId,
     faction: e.faction, staggerTimer: e.staggerTimer,
+    spriteScale: e.spriteScale,
     currentMag: e.currentMag, reloading: e.reloading, reloadTimer: e.reloadTimer, attackCd: e.attackCd,
     speed: e.speed, monsterKind: e.monsterKind,
     dropDefId: drop?.defId,

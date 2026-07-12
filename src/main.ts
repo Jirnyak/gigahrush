@@ -673,6 +673,7 @@ const _peerNextToolAt = new Map<number, number>(); // host-side peer world-tool 
 // container menu the peer views for a host-owned container. Its cell is remembered
 // so take/put/close requests can be addressed back to the host by (cx, cy).
 const PEER_REMOTE_CONTAINER_ID = -777001;
+const ONLINE_PLAYER_SPRITE_SCALE = 0.65;
 let _peerRemoteContainerCell: { x: number; y: number } | null = null;
 
 // Peer-side floor checkpoint reassembly (chunks arrive in order from host).
@@ -849,6 +850,7 @@ function peerActorSnapshot(actor = player): PeerActorState {
     weapon: actor.weapon ?? '',
     tool: actor.tool ?? '',
     sprite: actor.sprite,
+    spriteScale: actor.spriteScale,
     npcVisualId: actor.npcVisualId,
     sex: actor.sex,
     armorDefId: actor.armorDefId,
@@ -995,7 +997,8 @@ setOnlineMessageHandler((msgData: any) => {
       angle: -Math.PI / 2, pitch: 0,
       alive: true,
       speed: HUMANOID_BASE_MOVE_SPEED,
-      sprite: 0,
+      sprite: Occupation.TRAVELER,
+      spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
       needs: freshNeeds(),
       hp: 100, maxHp: 100,
       money: 100,
@@ -1072,8 +1075,10 @@ setOnlineMessageHandler((msgData: any) => {
         if (peerChanged('weapon')) actor.weapon = a.weapon;
         if (peerChanged('tool')) actor.tool = a.tool;
         if (peerChanged('sprite')) actor.sprite = a.sprite;
+        if (peerChanged('spriteScale')) actor.spriteScale = a.spriteScale;
         if (peerChanged('npcVisualId')) actor.npcVisualId = a.npcVisualId;
         if (peerChanged('sex')) actor.sex = a.sex;
+        actor.faction = Faction.PLAYER;
         if (peerChanged('armorDefId')) actor.armorDefId = a.armorDefId;
         if (peerChanged('money')) actor.money = a.money;
         if (peerChanged('staggerTimer')) actor.staggerTimer = a.staggerTimer;
@@ -1207,7 +1212,6 @@ setOnlineMessageHandler((msgData: any) => {
             }
             sendOnlineMessage({
               type: 'container_sync',
-              _targetSlot: actor.peerSlot,
               container: containerSyncPayload(container),
             });
             if (inventoryChanged) sendPeerInventorySync(actor);
@@ -1265,7 +1269,8 @@ setOnlineMessageHandler((msgData: any) => {
         angle: -Math.PI / 2, pitch: 0,
         alive: true,
         speed: HUMANOID_BASE_MOVE_SPEED,
-        sprite: 0,
+        sprite: Occupation.TRAVELER,
+        spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
         needs: freshNeeds(),
         hp: 100, maxHp: 100,
         money: 100,
@@ -1339,7 +1344,7 @@ setOnlineMessageHandler((msgData: any) => {
         }
         existing.angle = se.angle; existing.pitch = se.pitch;
         existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
-        existing.sprite = se.sprite; existing.weapon = se.weapon; existing.tool = se.tool;
+        existing.sprite = se.sprite; existing.spriteScale = se.spriteScale; existing.weapon = se.weapon; existing.tool = se.tool;
         existing.name = se.name; existing.peerSlot = se.peerSlot;
         existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
         existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
@@ -1414,7 +1419,8 @@ setOnlineMessageHandler((msgData: any) => {
   // ── PEER: fresh contents for the open container copy (after take/put) ──
   if (msgData.type === 'container_sync' && isOnlinePeer() && onlinePeerFloorReady) {
     const payload = msgData.container as ContainerSyncPayload | undefined;
-    if (payload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+    if (payload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID &&
+        _peerRemoteContainerCell && _peerRemoteContainerCell.x === payload.cx && _peerRemoteContainerCell.y === payload.cy) {
       const copy = buildRemoteContainer(world, payload, PEER_REMOTE_CONTAINER_ID);
       world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
       _peerRemoteContainerCell = { x: copy.x, y: copy.y };
