@@ -965,10 +965,12 @@ function ageForRecord(
 
   let min = 18;
   let max = 67;
+  let hasDesignRange = false;
   const designAgeRange = designFloorAgeRange(plan.key, occupation);
   if (designAgeRange) {
     min = designAgeRange.min;
     max = designAgeRange.max;
+    hasDesignRange = true;
   } else if (faction === Faction.LIQUIDATOR) {
     min = 22;
     max = 58;
@@ -993,11 +995,24 @@ function ageForRecord(
   }
 
   const spread = Math.max(0, max - min);
-  const base = min + Math.floor(Math.pow(unit(seed, index, 46), 1.18) * (spread + 1));
+  
+  const u1 = unit(seed, index, 46) || 0.001;
+  const u2 = unit(seed, index, 146);
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  
+  const center = min + spread * 0.3;
+  const sigma = spread * 0.23;
+  const base = Math.floor(center + z * sigma);
+
   const levelBias = Math.round(Math.sqrt(Math.max(1, level)) * (0.85 + unit(seed, index, 47) * 1.2));
   const prodigyPenalty = unit(seed, index, 48) < 0.11 ? Math.round(unit(seed, index, 49) * 9) : 0;
   const veteranBonus = unit(seed, index, 50) > 0.93 ? Math.round(unit(seed, index, 52) * 12) : 0;
-  return clampCharacterAge(Math.max(min, Math.min(max + 10, base + levelBias + veteranBonus - prodigyPenalty)), min);
+  
+  const rawAge = base + levelBias + veteranBonus - prodigyPenalty;
+  const allowChildren = !hasDesignRange && (faction === Faction.CITIZEN || faction === Faction.WILD || faction === Faction.CULTIST);
+  const lowerBound = allowChildren ? 7 : min;
+  
+  return clampCharacterAge(Math.max(lowerBound, Math.min(max + 10, rawAge)), min);
 }
 
 function rpgForRecord(level: number, seed: number, index: number): RPGStats {

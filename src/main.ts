@@ -496,6 +496,7 @@ import {
   isNetSphereOpen,
   openNetSphere,
   reportNetSphereEvent,
+  setNetSphereChatHandler,
   tickNetSphere,
   _test_storage
 } from './systems/net_sphere';
@@ -1976,6 +1977,26 @@ initPlatformBridge({
     }
   },
 });
+
+setNetSphereChatHandler((nickname, text) => {
+  if (!isOnlineConnected()) return;
+  if (player && player.name === nickname) {
+    const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
+    player.activeBark = { text, until: state.time + duration, color: '#cca' };
+    return;
+  }
+  if (entities) {
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e.peerSlot !== undefined && e.name === nickname) {
+        const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
+        e.activeBark = { text, until: state.time + duration, color: '#cca' };
+        break;
+      }
+    }
+  }
+});
+
 type PlayerBarAudioValues = Record<HudBarAudioId, number>;
 const playerBarAudio = {
   initialized: false,

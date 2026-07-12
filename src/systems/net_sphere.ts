@@ -443,6 +443,11 @@ function progressFromState(state: GameState, player: Entity): NetSphereProgress 
   };
 }
 
+let onChatMessageReceived: ((nickname: string, text: string) => void) | null = null;
+export function setNetSphereChatHandler(cb: (nickname: string, text: string) => void) {
+  onChatMessageReceived = cb;
+}
+
 function applyServerPayload(payload: unknown): void {
   if (!payload || typeof payload !== 'object') return;
   const data = payload as {
@@ -466,12 +471,16 @@ function applyServerPayload(payload: unknown): void {
     for (const line of data.chat) {
       if (!line || typeof line.id !== 'number' || typeof line.body !== 'string') continue;
       if (runtime.chat.some(existing => existing.id === line.id)) continue;
+      const cleanNick = typeof line.nickname === 'string' ? cleanNickname(line.nickname) || 'Жилец' : 'Жилец';
       runtime.chat.push({
         id: line.id,
-        nickname: typeof line.nickname === 'string' ? cleanNickname(line.nickname) || 'Жилец' : 'Жилец',
+        nickname: cleanNick,
         body: line.body,
         createdAt: typeof line.createdAt === 'number' ? line.createdAt : 0,
       });
+      if (onChatMessageReceived) {
+        onChatMessageReceived(cleanNick, line.body);
+      }
       runtime.lastChatId = Math.max(runtime.lastChatId, line.id);
       added++;
     }
