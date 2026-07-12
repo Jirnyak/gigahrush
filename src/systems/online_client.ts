@@ -1,7 +1,7 @@
 // ── Online client transport ────────────────────────────────
-// Minimal host-relay POC: host simulates, peer is render+input only.
-// Messages: peer→host continuous state at 20Hz, edge actions immediately,
-// host→peer entity sync at 8Hz.
+// Minimal host-relay POC: host simulates shared world, peer owns local body resources.
+// Messages: peer→host throttled state/action claims at 20Hz, host-owned interact
+// actions immediately, host→peer entity sync at 8Hz.
 
 import { type Entity } from '../core/types';
 
@@ -38,20 +38,36 @@ export function sendOnlineMessage(msg: any) {
   }
 }
 
-// ── Peer→Host: immediate edge action (interact, fire edge) ──
+// ── Peer→Host: immediate host-owned edge action (interact/container/drop) ──
 
-/** Send a one-shot action that must not be lost to throttling. */
+/** Send a one-shot shared-world action that must not be lost to throttling. */
 export function sendPeerAction(action: Record<string, unknown>): void {
   if (isHost) return;
   sendOnlineMessage({ type: 'peer_action', ...action });
 }
 
 let _peerGen = 0;  // generation counter: bumped on each peer_input send
+let _peerActorGen = 0;  // last peer_input gen whose actor payload changed
+let _lastPeerActorPayload = '';
 export function getPeerGen(): number { return _peerGen; }
+export function getPeerActorGen(): number { return _peerActorGen; }
+export function notePeerActorState(actor: PeerActorState): void {
+  const actorPayload = JSON.stringify(actor);
+  if (actorPayload !== _lastPeerActorPayload) {
+    _lastPeerActorPayload = actorPayload;
+    _peerActorGen = _peerGen + 1;
+  }
+}
 
 /** Full peer actor state snapshot. Host uses delta-merge: only applies fields
  *  the peer actually changed vs. the previous snapshot, preserving host-side
  *  mutations (monster damage, item pickups) that the peer hasn't seen yet. */
+export interface OnlineItemSnapshot {
+  defId: string;
+  count: number;
+  data?: unknown;
+}
+
 export interface PeerActorState {
   hp: number; maxHp: number; alive: boolean;
   weapon: string; tool: string; sprite: number;
@@ -59,25 +75,40 @@ export interface PeerActorState {
   armorDefId?: string;
   money?: number;
   staggerTimer?: number;
-  inventory?: { defId: string; count: number }[];
+  currentMag?: number;
+  reloading?: boolean;
+  reloadTimer?: number;
+  attackCd?: number;
+  inventory?: OnlineItemSnapshot[];
   needs?: { food: number; water: number; sleep: number; pee: number; poo: number };
   rpg?: { level: number; xp: number; attrPoints: number; str: number; agi: number; int: number; psi: number; maxPsi: number };
+}
+
+export interface PeerInputActionState {
+  fire?: boolean;
+  reload?: boolean;
+  toolUse?: 'edge' | 'hold';
 }
 
 export function maybeSendPeerInput(p: {
   x: number; y: number; angle: number; pitch: number;
   actor: PeerActorState;
-}): void {
-  if (isHost) return; // host doesn't send input to itself
+  action?: PeerInputActionState;
+}): boolean {
+  if (isHost) return false; // host doesn't send input to itself
   const now = performance.now();
-  if (now - lastInputSendTime < PEER_INPUT_INTERVAL_MS) return;
+  if (now - lastInputSendTime < PEER_INPUT_INTERVAL_MS) return false;
   lastInputSendTime = now;
+  notePeerActorState(p.actor);
   sendOnlineMessage({
     type: 'peer_input',
     x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
     actor: p.actor,
+    action: p.action,
     gen: ++_peerGen,
+    actorGen: _peerActorGen,
   });
+  return true;
 }
 
 // ── Host→Peers: compact entity sync ──────────────────────
@@ -90,16 +121,23 @@ export interface SyncEntity {
   name: string; peerSlot?: number;
   sex?: string; npcVisualId?: string;
   faction?: number; staggerTimer?: number;
+  currentMag?: number; reloading?: boolean; reloadTimer?: number; attackCd?: number;
   speed: number; monsterKind?: number;
-  dropDefId?: string; dropCount?: number;
-  syncInventory?: { defId: string; count: number }[];
-  ackPeerGen?: number;  // last processed peer gen — peer skips overwrite until acked
+  dropDefId?: string; dropCount?: number; dropData?: unknown;
+  syncInventory?: OnlineItemSnapshot[];
+  ackPeerGen?: number;  // last processed peer gen — peer skips position snaps until acked
+  ackPeerActorGen?: number;  // last processed changed actor payload — peer accepts inventory/combat reconciliation when acked
 }
 
-export function compactEntity(e: Entity, ackPeerGen?: number): SyncEntity {
-  const syncInv = e.peerSlot !== undefined && e.inventory
-    ? e.inventory.map(i => ({ defId: i.defId, count: i.count }))
-    : undefined;
+function compactItems(items: Entity['inventory']): OnlineItemSnapshot[] | undefined {
+  return items?.map(i => i.data !== undefined
+    ? { defId: i.defId, count: i.count, data: i.data }
+    : { defId: i.defId, count: i.count });
+}
+
+export function compactEntity(e: Entity, ackPeerGen?: number, ackPeerActorGen?: number): SyncEntity {
+  const syncInv = e.peerSlot !== undefined ? compactItems(e.inventory) : undefined;
+  const drop = e.inventory?.[0];
   return {
     id: e.id, type: e.type,
     x: +e.x.toFixed(2), y: +e.y.toFixed(2),
@@ -109,11 +147,14 @@ export function compactEntity(e: Entity, ackPeerGen?: number): SyncEntity {
     name: e.name || '', peerSlot: e.peerSlot,
     sex: e.sex, npcVisualId: e.npcVisualId,
     faction: e.faction, staggerTimer: e.staggerTimer,
+    currentMag: e.currentMag, reloading: e.reloading, reloadTimer: e.reloadTimer, attackCd: e.attackCd,
     speed: e.speed, monsterKind: e.monsterKind,
-    dropDefId: e.inventory?.[0]?.defId,
-    dropCount: e.inventory?.[0]?.count,
+    dropDefId: drop?.defId,
+    dropCount: drop?.count,
+    dropData: drop?.data,
     syncInventory: syncInv,
     ackPeerGen,
+    ackPeerActorGen,
   };
 }
 
@@ -159,6 +200,9 @@ export function disconnectOnline(): void {
   currentRoomId = null;
   isHost = false;
   mySlot = undefined;
+  _peerGen = 0;
+  _peerActorGen = 0;
+  _lastPeerActorPayload = '';
 }
 
 function connectWs(roomId: string, role: 'host' | 'peer') {
@@ -211,6 +255,9 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
     currentRoomId = null;
     isHost = false;
     mySlot = undefined;
+    _peerGen = 0;
+    _peerActorGen = 0;
+    _lastPeerActorPayload = '';
     // Notify game about disconnect
     if (messageCallback) messageCallback({ type: 'disconnected' });
   };

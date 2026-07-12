@@ -1,4 +1,3 @@
-import { countAmmo, removeItem, publishPlayerItemEvent } from './systems/inventory';
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
 import './index.css';
 import './systems/demos_runtime';
@@ -15,6 +14,9 @@ import {
   compactEntity,
   shouldSendHostSync,
   getPeerGen,
+  getPeerActorGen,
+  notePeerActorState,
+  type PeerActorState,
   type SyncEntity,
 } from './systems/online_client';
 
@@ -88,7 +90,7 @@ import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/com
 import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
-  updateInventoryConditions,
+  countAmmo, removeItem, publishPlayerItemEvent, updateInventoryConditions,
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { createMobileControls, type MobileControls } from './mobile';
@@ -662,7 +664,9 @@ setActiveActorSoftLimit(titleActiveActorSoftLimit);
 let onlinePeerFloorReady = false;
 const _lastPeerActor = new Map<number, Record<string, unknown>>();  // delta-merge: last received actor state per slot
 const _peerAckedGen = new Map<number, number>();  // last processed peer gen per slot
+const _peerAckedActorGen = new Map<number, number>();  // last changed peer actor payload reconciled by host
 const _peerNextFireAt = new Map<number, number>();  // wall-clock ms gate: next allowed peer attack per slot
+const _peerNextToolAt = new Map<number, number>(); // host-side peer world-tool effect gate
 
 // Peer-side transient remote container copy: a single reserved synthetic id kept
 // only in containerById (never containerMap/containers → no world mesh). Backs the
@@ -677,6 +681,291 @@ let _snapTotal = 0;
 let _snapReceived = 0;
 let _snapSpawnX = W / 2;
 let _snapSpawnY = W / 2;
+let _peerPendingFireAction = false;
+let _peerPendingReloadAction = false;
+let _peerPendingToolUse: 'edge' | 'hold' | undefined;
+
+function spawnPeerProjectile(actor: Entity, weaponId: string, ws: WeaponStats): void {
+  const cos = Math.cos(actor.angle);
+  const sin = Math.sin(actor.angle);
+  const pellets = ws.pellets ?? 1;
+  const spread = ws.spread ?? 0;
+  const pt = ws.projType ?? ProjType.NORMAL;
+  for (let p = 0; p < pellets; p++) {
+    const ang = actor.angle + (rng() - 0.5) * spread;
+    const spd = ws.projSpeed ?? 15;
+    const proj: Entity = {
+      id: nextEntityId.v++,
+      type: EntityType.PROJECTILE,
+      x: actor.x + cos * 0.85,
+      y: actor.y + sin * 0.85,
+      angle: ang, pitch: 0,
+      alive: true, speed: 0,
+      sprite: ws.projSprite ?? Spr.BULLET,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd,
+      vz: (actor.pitch ?? 0) * spd * 0.5 + (pt === ProjType.FLAME ? (rng() - 0.5) * 0.8 : 0),
+      projDmg: ws.dmg,
+      projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
+      ownerId: actor.id,
+      weapon: weaponId,
+      spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + rng() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
+      spriteZ: 0.5,
+      projType: pt,
+      projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
+        : (weaponId === 'shotgun' || weaponId === 'chainsaw') ? 3
+        : (weaponId === 'ak47' || weaponId === 'machinegun' || weaponId === 'nailgun' || weaponId === 'gauss' || weaponId === 'plasma') ? 2
+        : pt === ProjType.FLAME ? 1 : 1,
+    };
+    if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
+    entities.push(proj);
+  }
+}
+
+function spawnPeerPsiProjectile(actor: Entity, psiId: string, ws: WeaponStats): void {
+  const cos = Math.cos(actor.angle);
+  const sin = Math.sin(actor.angle);
+  const spd = ws.projSpeed ?? 14;
+  const proj: Entity = {
+    id: nextEntityId.v++,
+    type: EntityType.PROJECTILE,
+    x: actor.x + cos * 0.85,
+    y: actor.y + sin * 0.85,
+    angle: actor.angle,
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: ws.projSprite ?? Spr.PSI_BOLT,
+    vx: Math.cos(actor.angle) * spd,
+    vy: Math.sin(actor.angle) * spd,
+    vz: (actor.pitch ?? 0) * spd * 0.5,
+    projDmg: ws.dmg,
+    projLife: 3.0,
+    ownerId: actor.id,
+    weapon: psiId,
+    spriteScale: 0.3,
+    spriteZ: 0.5,
+  };
+  if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
+  entities.push(proj);
+}
+
+function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats): void {
+  const effect = ws.psiEffect ?? '';
+  if (!ws.isRanged && (effect === 'phase' || effect === 'shield' || effect === 'mark' || effect === 'recall' || effect === 'possession')) return;
+
+  if (ws.isRanged) {
+    spawnPeerPsiProjectile(actor, psiId, ws);
+  } else {
+    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, (e) => handleKill(e, true));
+    if (psiResult.beamLen) {
+      state.beamFx = 0.35;
+      state.beamAngle = actor.angle;
+      state.beamLen = psiResult.beamLen;
+    }
+  }
+  if (ws.psiEffect === 'beam') playPsiBeam(); else playPsiCast();
+  publishWeaponNoise(state, actor, psiId, ws);
+}
+
+function applyPeerFireAction(actor: Entity, slot: number): void {
+  const weaponId = equippedCombatItemId(actor);
+  const ws = getWeaponStats(actor, weaponId);
+  const nowMs = performance.now();
+  const nextAt = _peerNextFireAt.get(slot) ?? 0;
+  if (nowMs < nextAt) return;
+  const atkSpeedMod = actor.rpg ? agiAttackSpeedMult(actor.rpg) : 1;
+  _peerNextFireAt.set(slot, nowMs + Math.max(0.05, ws.speed * atkSpeedMod) * 1000);
+
+  if (ws.psiCost) {
+    applyPeerPsiWorldEffect(actor, weaponId, ws);
+    return;
+  }
+
+  if (ws.isRanged) {
+    if (!ws.ammoType && ws.magazineSize !== Infinity && (actor.currentMag ?? 0) <= 0) return;
+    if (ws.projType === ProjType.FLAME) reducePaupsinaWeb(actor, state.time, state.msgs, state, actor, 'fire');
+    if (ws.deletionBeam) {
+      fireDeletionBeam(world, entities, actor, state, weaponId, ws, handleKill);
+    } else {
+      spawnPeerProjectile(actor, weaponId, ws);
+    }
+    playWeaponSound(weaponId, ws);
+    publishWeaponNoise(state, actor, weaponId, ws);
+    notifyLiftArachnaNoise(world, actor, state, weaponId);
+    return;
+  }
+
+  const normalDmg = meleeDamage(actor.rpg, weaponId, ws.dmg);
+  const range = ws.range;
+  const ax = actor.x + Math.cos(actor.angle) * range;
+  const ay = actor.y + Math.sin(actor.angle) * range;
+  let hitSomething = isPaupsinaWebCuttingWeapon(weaponId)
+    ? reducePaupsinaWeb(actor, state.time, state.msgs, state, actor, 'cut')
+    : false;
+  const entityIndex = getEntityIndex();
+  const meleeQuery: Entity[] = [];
+  entityIndex.queryRadius(ax, ay, 1.2, meleeQuery, ENTITY_MASK_ACTOR);
+  const target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
+  if (target && target.hp !== undefined) {
+    const armor = applyMonsterArmorHit(world, state, target, { damage: normalDmg, attacker: actor, weaponId });
+    const dmg = armor.damage;
+    target.hp -= dmg;
+    target.staggerTimer = 0.15;
+    const mSpd = 6;
+    const mVx = Math.cos(actor.angle) * mSpd;
+    const mVy = Math.sin(actor.angle) * mSpd;
+    spawnBloodHit(world, target.x, target.y, actor.angle, dmg, target.type === EntityType.MONSTER, mVx, mVy, 0.5);
+    if (isPlayerEntity(target)) {
+      recordPlayerDamage(state, actor, dmg, `Удар от ${actor.name || 'игрока'}: -${dmg}`, 'npc');
+      state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.3 + dmg / (target.maxHp ?? 100) * 1.5));
+    } else {
+      notifyActorDamaged(world, target, actor, dmg, 'player_melee', state.time, state);
+    }
+    if (target.hp <= 0) {
+      target.hp = 0;
+      target.alive = false;
+      if (!isPlayerEntity(target)) handleKill(target, true, mVx, mVy, 1);
+    }
+    hitSomething = true;
+  }
+  if (!hitSomething) {
+    const attackIdx = world.idx(Math.floor(ax), Math.floor(ay));
+    if (world.cells[attackIdx] === Cell.DOOR && world.doors.has(attackIdx)) {
+      hitSomething = true;
+      if (damageDoor(world, world.doors.get(attackIdx)!, normalDmg)) updateWorldData(world);
+    }
+  }
+  if (weaponId === 'chainsaw') playChainsaw(); else playAttack();
+  publishWeaponNoise(state, actor, weaponId, ws);
+  notifyLiftArachnaNoise(world, actor, state, weaponId);
+}
+
+function peerActorSnapshot(actor = player): PeerActorState {
+  return {
+    hp: actor.hp ?? 100,
+    maxHp: actor.maxHp ?? 100,
+    alive: actor.alive,
+    weapon: actor.weapon ?? '',
+    tool: actor.tool ?? '',
+    sprite: actor.sprite,
+    npcVisualId: actor.npcVisualId,
+    sex: actor.sex,
+    armorDefId: actor.armorDefId,
+    money: actor.money,
+    staggerTimer: actor.staggerTimer,
+    currentMag: actor.currentMag,
+    reloading: actor.reloading,
+    reloadTimer: actor.reloadTimer,
+    attackCd: actor.attackCd,
+    inventory: actor.inventory?.map(i => i.data !== undefined ? { defId: i.defId, count: i.count, data: i.data } : { defId: i.defId, count: i.count }),
+    needs: actor.needs ? { food: actor.needs.food, water: actor.needs.water, sleep: actor.needs.sleep, pee: actor.needs.pee, poo: actor.needs.poo } : undefined,
+    rpg: actor.rpg ? { level: actor.rpg.level, xp: actor.rpg.xp, attrPoints: actor.rpg.attrPoints, str: actor.rpg.str, agi: actor.rpg.agi, int: actor.rpg.int, psi: actor.rpg.psi, maxPsi: actor.rpg.maxPsi } : undefined,
+  };
+}
+
+function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
+  const toolId = actor.tool ?? '';
+  if (!toolId) return;
+  if (!(actor.inventory ?? []).some(item => item.defId === toolId)) { actor.tool = ''; return; }
+  const now = performance.now();
+  if (now < (_peerNextToolAt.get(slot) ?? 0)) return;
+  const activeLightDrain = activeToolLightDrainPerSecond(toolId);
+  if (activeLightDrain > 0) {
+    _peerNextToolAt.set(slot, now + 125);
+    return;
+  }
+  if (WEAPON_STATS[toolId]?.psiCost) {
+    const psiToolStats = getWeaponStats(actor, toolId);
+    const atkSpeedMod = actor.rpg ? agiAttackSpeedMult(actor.rpg) : 1;
+    _peerNextToolAt.set(slot, now + Math.max(0.05, psiToolStats.speed * atkSpeedMod) * 1000);
+    applyPeerPsiWorldEffect(actor, toolId, psiToolStats);
+    return;
+  }
+  if (toolId === UV_SPOTLIGHT_ID) {
+    const inventoryBefore = actor.inventory ? structuredClone(actor.inventory) : undefined;
+    const toolBefore = actor.tool;
+    const result = useUvSpotlight(world, entities, actor, state);
+    actor.inventory = inventoryBefore;
+    actor.tool = toolBefore;
+    if (result) {
+      state.uvBeamFx = UV_SPOTLIGHT_FX_SECONDS;
+      state.uvBeamLen = result.beamLen;
+      playSoundAt(playEnergyImpact, actor.x, actor.y);
+    }
+    _peerNextToolAt.set(slot, now + 280);
+    return;
+  }
+  if (toolId === CHALK_ITEM_ID) {
+    const def = ITEMS[CHALK_ITEM_ID];
+    drawEquippedChalkPixel(world, actor, def?.durability ?? 0);
+    _peerNextToolAt.set(slot, now + 45);
+    return;
+  }
+  const lookRange = 1.4;
+  const tx = actor.x + Math.cos(actor.angle) * lookRange;
+  const ty = actor.y + Math.sin(actor.angle) * lookRange;
+  const cx = Math.floor(tx);
+  const cy = Math.floor(ty);
+  const ci = world.idx(cx, cy);
+  let changedWorld = false;
+  if (toolId === 'vacuum') {
+    let clearedFog = 0;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      const fi = world.idx(Math.floor(actor.x) + ox, Math.floor(actor.y) + oy);
+      if (world.fog[fi] <= 0) continue;
+      world.fog[fi] = 0;
+      clearedFog++;
+    }
+    if (clearedFog > 0) { world.markFogDirty(); changedWorld = true; }
+    _peerNextToolAt.set(slot, now + 150);
+  } else if (toolId === 'jackhammer') {
+    if (!world.hermoWall[ci] && !world.aptMask[ci] && world.cells[ci] === Cell.WALL) {
+      setCellToFloor(cx, cy);
+      notifyLiftArachnaNoise(world, actor, state, 'jackhammer');
+      changedWorld = true;
+    }
+    _peerNextToolAt.set(slot, now + 200);
+  } else if (edge && toolId === 'door_kit') {
+    if (!world.aptMask[ci] && world.cells[ci] === Cell.FLOOR) {
+      const l = world.cells[world.idx(cx - 1, cy)], r = world.cells[world.idx(cx + 1, cy)];
+      const u = world.cells[world.idx(cx, cy - 1)], d = world.cells[world.idx(cx, cy + 1)];
+      if ((l === Cell.WALL && r === Cell.WALL && u !== Cell.WALL && d !== Cell.WALL)
+        || (u === Cell.WALL && d === Cell.WALL && l !== Cell.WALL && r !== Cell.WALL)) {
+        const roomA = world.roomMap[world.idx(cx - 1, cy)] >= 0 ? world.roomMap[world.idx(cx - 1, cy)] : world.roomMap[world.idx(cx, cy - 1)];
+        const roomB = world.roomMap[world.idx(cx + 1, cy)] >= 0 ? world.roomMap[world.idx(cx + 1, cy)] : world.roomMap[world.idx(cx, cy + 1)];
+        world.cells[ci] = Cell.DOOR;
+        world.markCellsDirty();
+        world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
+        addRuntimeDoorToRoom(roomA, ci); addRuntimeDoorToRoom(roomB, ci);
+        changedWorld = true;
+      }
+    }
+    _peerNextToolAt.set(slot, now + 250);
+  } else if (edge && toolId === 'block_kit') {
+    const pci = world.idx(Math.floor(actor.x), Math.floor(actor.y));
+    if (ci !== pci && !world.aptMask[ci] && !world.hermoWall[ci] && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR)) {
+      if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
+      world.cells[ci] = Cell.WALL;
+      world.markCellsDirty();
+      const room = world.roomAt(actor.x, actor.y);
+      world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;
+      world.markWallTexDirty();
+      changedWorld = true;
+    }
+    _peerNextToolAt.set(slot, now + 250);
+  } else {
+    const cleanupTool = cleanupToolProfile(toolId);
+    if (cleanupTool) {
+      const cleaned = cleanSurfaceArea(tx, ty, cleanupTool.surfaceRadius);
+      const cleanedHazards = cleanCellHazardsNear(world, tx, ty, cleanupTool.hazardRadius, state, actor, cleanupTool.hazardReason);
+      if (cleaned > 0 || cleanedHazards > 0) notifyCleanupToolUse(actor, world, state, tx, ty, cleaned, cleanedHazards);
+      changedWorld = cleaned > 0 || cleanedHazards > 0;
+      _peerNextToolAt.set(slot, now + cleanupTool.cooldown * 1000);
+    }
+  }
+  if (changedWorld) updateWorldData(world);
+}
 
 setOnlineMessageHandler((msgData: any) => {
   // ── HOST: peer joined → spawn remote actor, send floor seed ──
@@ -776,16 +1065,24 @@ setOnlineMessageHandler((msgData: any) => {
         if (peerChanged('armorDefId')) actor.armorDefId = a.armorDefId;
         if (peerChanged('money')) actor.money = a.money;
         if (peerChanged('staggerTimer')) actor.staggerTimer = a.staggerTimer;
+        if (peerChanged('currentMag')) actor.currentMag = a.currentMag;
+        if (peerChanged('reloading')) actor.reloading = a.reloading;
+        if (peerChanged('reloadTimer')) actor.reloadTimer = a.reloadTimer;
+        if (peerChanged('attackCd')) actor.attackCd = a.attackCd;
         if (peerChanged('inventory')) actor.inventory = a.inventory;
         if (peerChanged('needs') && a.needs && actor.needs) Object.assign(actor.needs, a.needs);
         if (peerChanged('rpg') && a.rpg && actor.rpg) Object.assign(actor.rpg, a.rpg);
         _lastPeerActor.set(slot, structuredClone(a));
         if (typeof msgData.gen === 'number') _peerAckedGen.set(slot, msgData.gen);
+        if (typeof msgData.actorGen === 'number') _peerAckedActorGen.set(slot, msgData.actorGen);
+        const action = msgData.action as { fire?: boolean; reload?: boolean; toolUse?: 'edge' | 'hold' } | undefined;
+        if (action?.fire) applyPeerFireAction(actor, slot);
+        if (action?.toolUse) applyPeerToolUse(actor, slot, action.toolUse === 'edge');
       }
     }
   }
 
-  // ── HOST: peer edge action (interact, fire) — reliable, not throttled ──
+  // ── HOST: peer shared-world action (interact/container/drop) — reliable, not throttled ──
   if (msgData.type === 'peer_action' && isOnlineHost()) {
     const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
     if (actor) {
@@ -862,102 +1159,17 @@ setOnlineMessageHandler((msgData: any) => {
         const dropX = actor.x + Math.cos(actor.angle) * 3.0;
         const dropY = actor.y + Math.sin(actor.angle) * 3.0;
         const defId = msgData.defId as string;
-        const count = (msgData.count as number) || 1;
+        const count = Math.max(1, Math.floor((msgData.count as number) || 1));
         if (defId) {
+          removeItem(actor, defId, count);
+          if (actor.weapon === defId) actor.weapon = '';
+          if (actor.tool === defId) actor.tool = '';
           entities.push({
             id: nextEntityId.v++, type: EntityType.ITEM_DROP,
             x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-            inventory: [{ defId, count }],
+            inventory: [{ defId, count, data: msgData.data }],
           } as Entity);
           state.msgs.push(msg(`Игрок ${actor.peerSlot} выбросил предмет`, state.time, '#aa6'));
-        }
-      }
-
-      // ── Peer fire edge ──
-      if (msgData.fire) {
-        const slot = msgData._peerSlot as number;
-        const weaponId = equippedCombatItemId(actor);
-        const ws = getWeaponStats(actor, weaponId);
-        // Pace attacks by wall-clock, not by message count: the peer streams a
-        // `fire` edge every frame it holds attack, so decrementing a cooldown per
-        // message let damage arrive as an untimed trickle (the "HP siphon" bug).
-        // Gate on the weapon's real fire interval instead.
-        const nowMs = performance.now();
-        const nextAt = _peerNextFireAt.get(slot) ?? 0;
-        if (nowMs >= nextAt) {
-          _peerNextFireAt.set(slot, nowMs + Math.max(0.05, ws.speed) * 1000);
-          if (ws.isRanged) {
-            const cos = Math.cos(actor.angle);
-            const sin = Math.sin(actor.angle);
-            const pellets = ws.pellets ?? 1;
-            const spread = ws.spread ?? 0;
-            const pt = ws.projType ?? ProjType.NORMAL;
-            for (let p = 0; p < pellets; p++) {
-              const ang = actor.angle + (rng() - 0.5) * spread;
-              const spd = ws.projSpeed ?? 15;
-              const proj: Entity = {
-                id: nextEntityId.v++,
-                type: EntityType.PROJECTILE,
-                x: actor.x + cos * 0.85,
-                y: actor.y + sin * 0.85,
-                angle: ang, pitch: 0,
-                alive: true, speed: 0,
-                sprite: ws.projSprite ?? Spr.BULLET,
-                vx: Math.cos(ang) * spd,
-                vy: Math.sin(ang) * spd,
-                vz: (actor.pitch ?? 0) * spd * 0.5,
-                projDmg: ws.dmg,
-                projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
-                ownerId: actor.id,
-                weapon: weaponId,
-                spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? 0.55 : pt === ProjType.GRENADE ? 0.35 : 0.25,
-                spriteZ: 0.5,
-                projType: pt,
-              };
-              if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
-              entities.push(proj);
-            }
-          } else {
-            // ── Melee: resolve exactly like a host-owned attack so the hit
-            // registers (armor, blood, stagger, kill), and — when the victim is
-            // the host player — records the damage so it lands as a real hit
-            // with a death cause and vignette flash instead of silently draining.
-            const range = ws.range;
-            const ax = actor.x + Math.cos(actor.angle) * range;
-            const ay = actor.y + Math.sin(actor.angle) * range;
-            const entityIndex = getEntityIndex();
-            const meleeQuery: Entity[] = [];
-            entityIndex.queryRadius(ax, ay, 1.2, meleeQuery, ENTITY_MASK_ACTOR);
-            const target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
-            if (target && target.hp !== undefined) {
-              const armor = applyMonsterArmorHit(world, state, target, {
-                damage: ws.dmg,
-                attacker: actor,
-                weaponId,
-              });
-              const dmg = armor.damage;
-              target.hp -= dmg;
-              target.staggerTimer = 0.15;
-              const mSpd = 6;
-              const mVx = Math.cos(actor.angle) * mSpd;
-              const mVy = Math.sin(actor.angle) * mSpd;
-              spawnBloodHit(world, target.x, target.y, actor.angle, dmg, target.type === EntityType.MONSTER, mVx, mVy, 0.5);
-              if (isPlayerEntity(target)) {
-                // Peer-vs-host PvP: register the hit on the host's damage channel.
-                recordPlayerDamage(state, actor, dmg, `Удар от ${actor.name || 'игрока'}: -${dmg}`, 'npc');
-                state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.3 + dmg / (target.maxHp ?? 100) * 1.5));
-              } else {
-                notifyActorDamaged(world, target, actor, dmg, 'player_melee', state.time, state);
-              }
-              if (target.hp <= 0) {
-                target.hp = 0;
-                target.alive = false;
-                if (!isPlayerEntity(target)) {
-                  handleKill(target, true, mVx, mVy, 1);
-                }
-              }
-            }
-          }
         }
       }
 
@@ -1071,19 +1283,23 @@ setOnlineMessageHandler((msgData: any) => {
       seenIds.add(se.id);
       if (se.peerSlot === mySlot) {
         // Only snap position if far from host truth (>6 cells = teleport/correction)
+        // and the host has already processed our latest movement packet.
+        const hostAcked = se.ackPeerGen !== undefined && se.ackPeerGen >= getPeerGen();
         const pdx = world.delta(player.x, se.x);
         const pdy = world.delta(player.y, se.y);
-        if (pdx * pdx + pdy * pdy > 36) {
+        if (hostAcked && pdx * pdx + pdy * pdy > 36) {
           player.x = se.x;
           player.y = se.y;
         }
-        // Host-authoritative fields — only accept if host has acked our latest gen
-        // (prevents entity_sync from undoing local changes before host processes them)
-        const hostAcked = se.ackPeerGen !== undefined && se.ackPeerGen >= getPeerGen();
-        if (hostAcked) {
+        const hostAckedActor = se.ackPeerActorGen !== undefined && se.ackPeerActorGen >= getPeerActorGen();
+        if (hostAckedActor) {
           player.hp = se.hp;
           player.maxHp = se.maxHp;
           player.staggerTimer = se.staggerTimer;
+          player.currentMag = se.currentMag;
+          player.reloading = se.reloading;
+          player.reloadTimer = se.reloadTimer;
+          player.attackCd = se.attackCd;
           if (se.syncInventory) player.inventory = se.syncInventory;
         }
         // Death is always accepted unconditionally
@@ -1112,8 +1328,9 @@ setOnlineMessageHandler((msgData: any) => {
         existing.name = se.name; existing.peerSlot = se.peerSlot;
         existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
         existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
+        existing.currentMag = se.currentMag; existing.reloading = se.reloading; existing.reloadTimer = se.reloadTimer; existing.attackCd = se.attackCd;
         existing.speed = se.speed; existing.monsterKind = se.monsterKind;
-        existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1 }] : undefined;
+        existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined;
       } else {
         // New entity — add it
         entities.push({
@@ -1124,8 +1341,9 @@ setOnlineMessageHandler((msgData: any) => {
           name: se.name, peerSlot: se.peerSlot,
           sex: se.sex, npcVisualId: se.npcVisualId,
           faction: se.faction, staggerTimer: se.staggerTimer,
+          currentMag: se.currentMag, reloading: se.reloading, reloadTimer: se.reloadTimer, attackCd: se.attackCd,
           speed: se.speed, monsterKind: se.monsterKind,
-          inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1 }] : undefined,
+          inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined,
         } as Entity);
       }
     }
@@ -1190,7 +1408,9 @@ setOnlineMessageHandler((msgData: any) => {
     }
     _lastPeerActor.delete(slot);
     _peerAckedGen.delete(slot);
+    _peerAckedActorGen.delete(slot);
     _peerNextFireAt.delete(slot);
+    _peerNextToolAt.delete(slot);
     state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
   }
 
@@ -3762,6 +3982,210 @@ function playerActions(_dt: number): void {
 
   // Attack (cooldown-based: hold to auto-fire)
   handlePlayerAttack(_dt);
+}
+
+function peerLocalMeleeWouldHit(weaponId: string, ws: WeaponStats): boolean {
+  const range = ws.range;
+  const ax = player.x + Math.cos(player.angle) * range;
+  const ay = player.y + Math.sin(player.angle) * range;
+  const entityIndex = getEntityIndex();
+  entityIndex.queryRadius(ax, ay, 1.2, meleeHitQuery, ENTITY_MASK_ACTOR);
+  if (selectMeleeTarget(world, player, meleeHitQuery, range, weaponId)) return true;
+  const attackIdx = world.idx(Math.floor(ax), Math.floor(ay));
+  return world.cells[attackIdx] === Cell.DOOR && world.doors.has(attackIdx);
+}
+
+function tickPeerLocalCombatResources(dt: number): { fire: boolean; reload: boolean } {
+  const wantsAttack = input.attack || input.mouseAttack;
+  let fire = false;
+  let reload = false;
+  player.attackCd = Math.max(0, (player.attackCd ?? 0) - dt);
+
+  const weaponId = equippedCombatItemId(player);
+  const ws = getWeaponStats(player, weaponId);
+
+  if (player.reloading) {
+    player.reloadTimer = Math.max(0, (player.reloadTimer ?? 0) - dt);
+    if (player.reloadTimer <= 0) {
+      if (ws.magazineSize !== Infinity && ws.ammoType) {
+        const needed = (ws.magazineSize ?? 1) - (player.currentMag ?? 0);
+        const actual = Math.min(Math.max(0, needed), countAmmo(player, weaponId));
+        if (actual > 0) {
+          removeItem(player, ws.ammoType, actual);
+          player.currentMag = (player.currentMag ?? 0) + actual;
+          publishPlayerItemEvent(state, player, 'ammo_consumed', ws.ammoType, actual, 0);
+        }
+      } else if (ws.magazineSize === Infinity) {
+        player.currentMag = Infinity;
+      } else {
+        player.currentMag = ws.magazineSize ?? 1;
+      }
+      player.reloading = false;
+      reload = true;
+    }
+  }
+
+  if (input.reload && !player.reloading && ((player.currentMag ?? 0) < (ws.magazineSize ?? 1))) {
+    if (ws.magazineSize !== Infinity && countAmmo(player, weaponId) > 0) {
+      player.reloading = true;
+      player.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, player.rpg?.agi ?? 0);
+      reload = true;
+    } else if (ws.magazineSize === 1) {
+      player.reloading = true;
+      player.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, player.rpg?.agi ?? 0);
+      reload = true;
+    }
+  }
+
+  if (wantsAttack && !player.reloading && player.attackCd! <= 0 && !ws.psiCost && (player.currentMag ?? 0) <= 0 && ws.magazineSize !== Infinity) {
+    if (countAmmo(player, weaponId) > 0 || ws.magazineSize === 1 || !ws.ammoType) {
+      player.reloading = true;
+      player.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, player.rpg?.agi ?? 0);
+      reload = true;
+    } else {
+      player.attackCd = 0.5;
+    }
+  }
+
+  if (wantsAttack && player.attackCd! <= 0 && !player.reloading && (ws.psiCost || ws.magazineSize === Infinity || (player.currentMag ?? 0) > 0)) {
+    const atkSpeedMod = player.rpg ? agiAttackSpeedMult(player.rpg) : 1;
+    if (!weaponId) {
+      player.attackCd = ws.speed * atkSpeedMod;
+      fire = true;
+    } else if (ws.psiCost) {
+      const cost = ws.psiCost ?? 0;
+      if (player.rpg && player.rpg.psi >= cost) {
+        player.rpg.psi -= cost;
+        player.attackCd = ws.speed * atkSpeedMod;
+        fire = true;
+      } else {
+        player.attackCd = 0.5;
+      }
+    } else if (ws.isRanged) {
+      if (consumeAmmo(player, state, weaponId)) {
+        player.attackCd = ws.speed * atkSpeedMod;
+        fire = true;
+      } else {
+        player.attackCd = 0.5;
+      }
+    } else {
+      if (peerLocalMeleeWouldHit(weaponId, ws) && consumeDurability(player, state.msgs, state.time, state, weaponId)) playBreak();
+      if (ws.magazineSize === 1) {
+        player.currentMag = 0;
+        player.reloading = true;
+        player.reloadTimer = calculateReloadTime(ws.reloadTime ?? ws.speed, player.rpg?.agi ?? 0);
+        player.attackCd = 0;
+        reload = true;
+      } else if (ws.magazineSize !== Infinity) {
+        player.currentMag = Math.max(0, (player.currentMag ?? 1) - 1);
+        player.attackCd = ws.speed * atkSpeedMod;
+      } else {
+        player.attackCd = ws.speed * atkSpeedMod;
+      }
+      fire = true;
+    }
+  }
+
+  return { fire, reload };
+}
+
+function tickPeerLocalToolResources(dt: number): 'edge' | 'hold' | undefined {
+  if (!player.alive) {
+    _prevToolUse = input.use || input.mouseUse;
+    return undefined;
+  }
+  if (_toolActionCd > 0) _toolActionCd = Math.max(0, _toolActionCd - dt);
+  const toolId = player.tool ?? '';
+  const wantsToolUse = input.use || input.mouseUse;
+  const useEdge = wantsToolUse && !_prevToolUse;
+  _prevToolUse = wantsToolUse;
+  if (!toolId) return undefined;
+  if (!(player.inventory ?? []).some(item => item.defId === toolId)) { player.tool = ''; return undefined; }
+
+  const passiveLightDrain = passiveToolLightDrainPerSecond(toolId);
+  if (passiveLightDrain > 0) {
+    consumeToolDurability(player, dt * passiveLightDrain, state.msgs, state.time, state);
+    return undefined;
+  }
+  const activeLightDrain = activeToolLightDrainPerSecond(toolId);
+  if (activeLightDrain > 0) {
+    if (wantsToolUse) consumeToolDurability(player, dt * activeLightDrain, state.msgs, state.time, state);
+    return wantsToolUse ? (useEdge ? 'edge' : 'hold') : undefined;
+  }
+  const psiToolStats = WEAPON_STATS[toolId]?.psiCost ? getWeaponStats(player, toolId) : undefined;
+  if (psiToolStats) {
+    if (!wantsToolUse || _toolActionCd > 0) return undefined;
+    const cost = psiToolStats.psiCost ?? 0;
+    const atkSpeedMod = player.rpg ? agiAttackSpeedMult(player.rpg) : 1;
+    if (player.rpg && player.rpg.psi >= cost) {
+      player.rpg.psi -= cost;
+      _toolActionCd = psiToolStats.speed * atkSpeedMod;
+      return useEdge ? 'edge' : 'hold';
+    }
+    _toolActionCd = 0.5;
+    return undefined;
+  }
+  if (!wantsToolUse || _toolActionCd > 0) return undefined;
+  const lookRange = 1.4;
+  const tx = player.x + Math.cos(player.angle) * lookRange;
+  const ty = player.y + Math.sin(player.angle) * lookRange;
+  const cx = Math.floor(tx);
+  const cy = Math.floor(ty);
+  const ci = world.idx(cx, cy);
+  if (toolId === UV_SPOTLIGHT_ID) {
+    const charge = getEquippedToolDurability(player);
+    if (charge && charge.cur > 0) {
+      consumeToolDurability(player, 1, state.msgs, state.time, state);
+      _toolActionCd = 0.28;
+      return useEdge ? 'edge' : 'hold';
+    }
+    _toolActionCd = 0.35;
+    return undefined;
+  }
+  if (toolId === CHALK_ITEM_ID) {
+    consumeToolDurability(player, 0.1, state.msgs, state.time, state);
+    _toolActionCd = 0.04;
+    return useEdge ? 'edge' : 'hold';
+  }
+  if (toolId === 'vacuum') {
+    let hasFog = false;
+    for (let oy = -1; oy <= 1 && !hasFog; oy++) for (let ox = -1; ox <= 1; ox++) {
+      if (world.fog[world.idx(Math.floor(player.x) + ox, Math.floor(player.y) + oy)] > 0) { hasFog = true; break; }
+    }
+    if (hasFog) consumeToolDurability(player, 1, state.msgs, state.time, state);
+    _toolActionCd = 0.15;
+    return hasFog ? (useEdge ? 'edge' : 'hold') : undefined;
+  }
+  if (toolId === 'jackhammer') {
+    const canBreak = !world.hermoWall[ci] && !world.aptMask[ci] && world.cells[ci] === Cell.WALL;
+    if (canBreak) consumeToolDurability(player, 1, state.msgs, state.time, state);
+    _toolActionCd = canBreak ? 0.2 : 0.25;
+    return canBreak ? (useEdge ? 'edge' : 'hold') : undefined;
+  }
+  if (toolId === 'door_kit' && useEdge) {
+    const l = world.cells[world.idx(cx - 1, cy)], r = world.cells[world.idx(cx + 1, cy)];
+    const u = world.cells[world.idx(cx, cy - 1)], d = world.cells[world.idx(cx, cy + 1)];
+    const canPlace = !world.aptMask[ci] && world.cells[ci] === Cell.FLOOR
+      && ((l === Cell.WALL && r === Cell.WALL && u !== Cell.WALL && d !== Cell.WALL)
+        || (u === Cell.WALL && d === Cell.WALL && l !== Cell.WALL && r !== Cell.WALL));
+    if (canPlace) consumeToolDurability(player, 1, state.msgs, state.time, state);
+    return canPlace ? 'edge' : undefined;
+  }
+  if (toolId === 'block_kit' && useEdge) {
+    const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
+    const canPlace = ci !== pci && !world.aptMask[ci] && !world.hermoWall[ci] && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR);
+    if (canPlace) consumeToolDurability(player, 1, state.msgs, state.time, state);
+    return canPlace ? 'edge' : undefined;
+  }
+  if ((toolId === 'cleaning_kit' || toolId === 'vacuum') && useEdge && tryCoverSeroburmalineSource(world, player, state, tx, ty, toolId)) return 'edge';
+  const cleanupTool = cleanupToolProfile(toolId);
+  if (cleanupTool) {
+    consumeToolDurability(player, cleanupTool.wear, state.msgs, state.time, state);
+    _toolActionCd = cleanupTool.cooldown;
+    return useEdge ? 'edge' : 'hold';
+  }
+  if ((toolId === 'cleaning_kit' || toolId === 'vacuum') && useEdge) return 'edge';
+  return undefined;
 }
 
 /* ── Drop inventory as ITEM_DROP entities at death position ──── */
@@ -6791,6 +7215,7 @@ function dropInventorySelection(): void {
     if (!slot) return;
     const defId = slot.defId;
     const count = slot.count;
+    const data = slot.data;
     // Unequip if needed
     const def = ITEMS[defId];
     if (def) {
@@ -6800,7 +7225,7 @@ function dropInventorySelection(): void {
     }
     player.inventory!.splice(state.invSel, 1);
     state.msgs.push(msg(`Выброшено: ${def?.name ?? defId}${count > 1 ? ' ×' + count : ''}`, state.time, '#aa6'));
-    sendPeerAction({ drop: true, defId, count });
+    sendPeerAction(data !== undefined ? { drop: true, defId, count, data } : { drop: true, defId, count });
     return;
   }
   dropItem(player, state.invSel, entities, state.msgs, state.time, nextEntityId, state, world);
@@ -8692,36 +9117,30 @@ function gameLoop(now: number): void {
   // ── Online: peer sends throttled input + immediate edge actions ──
   if (isOnlineConnected()) {
     if (isOnlinePeer()) {
-      // Continuous state (position, angle, equipment) — throttled
-      maybeSendPeerInput({
-        x: player.x, y: player.y,
-        angle: player.angle, pitch: player.pitch ?? 0,
-        actor: {
-          hp: player.hp ?? 100, maxHp: player.maxHp ?? 100, alive: player.alive,
-          weapon: player.weapon ?? '', tool: player.tool ?? '',
-          sprite: player.sprite,
-          npcVisualId: player.npcVisualId, sex: player.sex,
-          armorDefId: player.armorDefId,
-          money: player.money,
-          staggerTimer: player.staggerTimer,
-          inventory: player.inventory?.map(i => ({ defId: i.defId, count: i.count })),
-          needs: player.needs ? { food: player.needs.food, water: player.needs.water, sleep: player.needs.sleep, pee: player.needs.pee, poo: player.needs.poo } : undefined,
-          rpg: player.rpg ? { level: player.rpg.level, xp: player.rpg.xp, attrPoints: player.rpg.attrPoints, str: player.rpg.str, agi: player.rpg.agi, int: player.rpg.int, psi: player.rpg.psi, maxPsi: player.rpg.maxPsi } : undefined,
-        },
-      });
-      // Edge actions — sent immediately, bypass throttle. The peer does NOT run
-      // playerActions/handlePlayerInteract (host-authoritative), so clear the
-      // interact edge here or it would re-fire every frame while E is held
-      // (reopening containers / re-toggling doors endlessly). Suppress world
-      // interact while any menu overlay is open — E then belongs to the menu.
       const peerMenuOpen = state.showContainerMenu || state.showInventory || state.showNpcMenu
         || state.showCraftMenu || state.showMenu;
+      // Continuous state + coarse action intent are throttled together: peer owns
+      // local inventory/resource simulation; host only applies visible world effects.
+      const peerInputSent = maybeSendPeerInput({
+        x: player.x, y: player.y,
+        angle: player.angle, pitch: player.pitch ?? 0,
+        actor: peerActorSnapshot(),
+        action: {
+          fire: _peerPendingFireAction || undefined,
+          reload: _peerPendingReloadAction || undefined,
+          toolUse: _peerPendingToolUse,
+        },
+      });
+      if (peerInputSent) {
+        _peerPendingFireAction = false;
+        _peerPendingReloadAction = false;
+        _peerPendingToolUse = undefined;
+      }
+      // Interact stays reliable/immediate because it opens host-owned doors,
+      // pickups and containers; gameplay resource ticks do not use this path.
       if (input.interact) {
         if (!peerMenuOpen) sendPeerAction({ interact: true });
         input.interact = false;
-      }
-      if (input.attack || input.mouseAttack) {
-        sendPeerAction({ fire: true });
       }
     }
     if (isOnlineHost() && shouldSendHostSync()) {
@@ -8759,7 +9178,8 @@ function gameLoop(now: number): void {
         for (let i = 0; i < candidates.length && syncEntities.length < MAX_SYNC; i++) {
           const ce = candidates[i].e;
           const ackGen = ce.peerSlot !== undefined ? _peerAckedGen.get(ce.peerSlot) : undefined;
-          syncEntities.push(compactEntity(ce, ackGen));
+          const ackActorGen = ce.peerSlot !== undefined ? _peerAckedActorGen.get(ce.peerSlot) : undefined;
+          syncEntities.push(compactEntity(ce, ackGen, ackActorGen));
         }
         sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
         // Send door state sync — only doors near any peer or host
@@ -8814,12 +9234,20 @@ function gameLoop(now: number): void {
     updateRuntimeCamera(runtimeCamera, world, dt);
   }
 
-  // ── Peer-mode local update: camera + movement only ──────
+  // ── Peer-mode local update: camera, movement and local body resources ──────
   if (peerMode && !state.paused && !state.gameOver) {
     state.time += dt;
     state.tick++;
+    updateInventoryConditions(player, state);
     applyKnockbackPhysics(dt);
     movePlayer(dt);
+    rebuildEntityIndexForSimulation(entities, entityIndexFrame).beginTelemetryFrame();
+    const peerCombat = tickPeerLocalCombatResources(dt);
+    const peerToolUse = tickPeerLocalToolResources(dt);
+    _peerPendingFireAction ||= peerCombat.fire;
+    _peerPendingReloadAction ||= peerCombat.reload;
+    _peerPendingToolUse = _peerPendingToolUse ?? peerToolUse;
+    notePeerActorState(peerActorSnapshot());
   }
 
   if (!state.paused && !state.gameOver && !peerMode) {
