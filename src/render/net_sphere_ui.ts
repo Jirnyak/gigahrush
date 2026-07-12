@@ -162,17 +162,17 @@ export function drawNetSphereMenu(
     const stamp = timeLabel(line.createdAt);
     const name = line.nickname || 'Жилец';
     const nameW = Math.max(24 * s, Math.min(96 * s, chatW * 0.3));
-    const label = `[${stamp} ${fitText(ctx, name, nameW)}]`;
+    const label = `[${stamp} ${fitText(ctx, name, nameW, { skipTranslate: true })}]`;
     const labelW = ctx.measureText(label).width;
     if (compactChat) {
       const bodyW = Math.max(20 * s, chatW - 16 * s);
-      vlines.push({ kind: 'compact_label', label: fitText(ctx, label, chatW - 12 * s), labelW, body: '' });
-      for (const body of wrapTextLines(ctx, line.body, bodyW, 3)) {
+      vlines.push({ kind: 'compact_label', label: fitText(ctx, label, chatW - 12 * s, { skipTranslate: true }), labelW, body: '' });
+      for (const body of wrapTextLines(ctx, line.body, bodyW, 3, { skipTranslate: true })) {
         vlines.push({ kind: 'compact_body', label: '', labelW: 0, body });
       }
     } else {
       const bodyW = Math.max(20 * s, chatW - 16 * s - labelW);
-      const wrapped = wrapTextLines(ctx, line.body, bodyW, 3);
+      const wrapped = wrapTextLines(ctx, line.body, bodyW, 3, { skipTranslate: true });
       for (let j = 0; j < wrapped.length; j++) {
         vlines.push({ kind: 'line', label: j === 0 ? label : '', labelW, body: wrapped[j] });
       }

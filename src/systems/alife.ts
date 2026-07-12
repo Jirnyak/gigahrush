@@ -2139,6 +2139,8 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
       faction,
       occupation,
       isFemale: recordFemale(alife, record),
+      age: recordAge(alife, record),
+      plotNpcId: record.plotNpcId,
     });
   }
   if (recordSprite(alife, record) === undefined) setRecordSprite(alife, record, templateSprite ?? occupation);

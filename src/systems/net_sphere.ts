@@ -58,6 +58,7 @@ export interface NetSphereChatLine {
   nickname: string;
   body: string;
   createdAt: number;
+  netGen?: string;
 }
 
 export interface NetSphereEventLine {
@@ -443,8 +444,8 @@ function progressFromState(state: GameState, player: Entity): NetSphereProgress 
   };
 }
 
-let onChatMessageReceived: ((nickname: string, text: string) => void) | null = null;
-export function setNetSphereChatHandler(cb: (nickname: string, text: string) => void) {
+let onChatMessageReceived: ((nickname: string, text: string, netGen?: string) => void) | null = null;
+export function setNetSphereChatHandler(cb: (nickname: string, text: string, netGen?: string) => void) {
   onChatMessageReceived = cb;
 }
 
@@ -477,9 +478,10 @@ function applyServerPayload(payload: unknown): void {
         nickname: cleanNick,
         body: line.body,
         createdAt: typeof line.createdAt === 'number' ? line.createdAt : 0,
+        netGen: typeof line.netGen === 'string' ? line.netGen : undefined,
       });
       if (onChatMessageReceived) {
-        onChatMessageReceived(cleanNick, line.body);
+        onChatMessageReceived(cleanNick, line.body, typeof line.netGen === 'string' ? line.netGen : undefined);
       }
       runtime.lastChatId = Math.max(runtime.lastChatId, line.id);
       added++;

@@ -521,7 +521,7 @@ export async function readEvents(db: D1Database): Promise<Record<string, unknown
 export async function readChat(db: D1Database, sinceChatId: number): Promise<Record<string, unknown>[]> {
   const since = Number.isFinite(sinceChatId) ? Math.max(0, Math.floor(sinceChatId)) : 0;
   const result = await db.prepare(`
-    SELECT c.id, COALESCE(NULLIF(p.nickname, ''), 'Жилец') AS nickname, c.body, c.created_at
+    SELECT c.id, c.net_gen, COALESCE(NULLIF(p.nickname, ''), 'Жилец') AS nickname, c.body, c.created_at
     FROM net_chat c
     LEFT JOIN net_players p ON p.net_gen = c.net_gen
     WHERE c.id > ?
@@ -530,6 +530,7 @@ export async function readChat(db: D1Database, sinceChatId: number): Promise<Rec
   `).bind(since, CHAT_LIMIT).all<Record<string, unknown>>();
   return (result.results ?? []).reverse().map(row => ({
     id: num(row.id, 0, 0, MAX_PUBLIC_ID),
+    netGen: row.net_gen ? String(row.net_gen) : undefined,
     nickname: publicNickname(row.nickname),
     body: cleanMessage(row.body),
     createdAt: num(row.created_at, 0, 0, 9_999_999_999_999),

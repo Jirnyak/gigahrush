@@ -104,8 +104,9 @@ export function fitTextStable(
   text: string,
   maxW: number,
   mode: 'ellipsis' | 'clip' = 'ellipsis',
+  options?: { skipTranslate?: boolean },
 ): string {
-  text = translateText(text);
+  if (!options?.skipTranslate) text = translateText(text);
   if (maxW <= 0 || text.length === 0) return '';
   const cacheKey = `${mode}|${fitTextCacheKey(ctx, text, maxW)}`;
   const cached = cachedFitTextStable(cacheKey);
@@ -150,8 +151,8 @@ function splitOverwideToken(ctx: CanvasRenderingContext2D, token: string, maxW: 
   return lines;
 }
 
-export function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
-  text = translateText(text);
+export function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, options?: { skipTranslate?: boolean }): string {
+  if (!options?.skipTranslate) text = translateText(text);
   if (maxW <= 0 || text.length === 0) return '';
   if (ctx.measureText(text).width <= maxW) return text;
   const count = maxFittingChars(ctx, text, maxW);
@@ -166,14 +167,14 @@ export function wrapTextLines(
   text: string,
   maxW: number,
   maxLines = 64,
-  options: { stable?: boolean; mode?: 'ellipsis' | 'clip' } = {},
+  options: { stable?: boolean; mode?: 'ellipsis' | 'clip'; skipTranslate?: boolean } = {},
 ): string[] {
-  text = translateText(text);
+  if (!options?.skipTranslate) text = translateText(text);
   if (maxW <= 0 || maxLines <= 0) return [];
   const lines: string[] = [];
   const pushLine = (line: string): boolean => {
     if (lines.length >= maxLines) return false;
-    lines.push(options.stable ? fitTextStable(ctx, line, maxW, options.mode ?? 'ellipsis') : fitText(ctx, line, maxW));
+    lines.push(options.stable ? fitTextStable(ctx, line, maxW, options.mode ?? 'ellipsis', options) : fitText(ctx, line, maxW, options));
     return lines.length < maxLines;
   };
   const pushOverwideWord = (word: string): boolean => {

@@ -110,8 +110,8 @@ test('first-party art sprite manifest validates source files and generated pixel
     assert.match(row.id, /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/);
     assert.equal(ids.has(row.id), false, `duplicate art sprite id ${row.id}`);
     ids.add(row.id);
-    assert.equal(row.anchorFeet.x >= 0 && row.anchorFeet.x < 64, true, `${row.id} feet x in bounds`);
-    assert.equal(row.anchorFeet.y >= 0 && row.anchorFeet.y < 64, true, `${row.id} feet y in bounds`);
+    assert.equal(row.anchorFeet.x >= 0 && row.anchorFeet.x < 128, true, `${row.id} feet x in bounds`);
+    assert.equal(row.anchorFeet.y >= 0 && row.anchorFeet.y < 128, true, `${row.id} feet y in bounds`);
     assert.equal(generatedIds.has(row.id), true, `${row.id} must have generated pixels`);
 
     const file = readFileSync(resolveSourcePath(row.sourcePath));

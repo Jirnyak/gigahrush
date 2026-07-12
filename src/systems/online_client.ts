@@ -4,6 +4,7 @@
 // actions immediately, host→peer entity sync at 8Hz.
 
 import { type Entity } from '../core/types';
+import { getNetSphereSnapshot } from './net_sphere';
 
 // ── Connection state ──────────────────────────────────────
 
@@ -129,6 +130,7 @@ export interface SyncEntity {
   syncInventory?: OnlineItemSnapshot[];
   ackPeerGen?: number;  // last processed peer gen — peer skips position snaps until acked
   ackPeerActorGen?: number;  // last processed changed actor payload — peer accepts inventory/combat reconciliation when acked
+  netGen?: string;
 }
 
 function compactItems(items: Entity['inventory']): OnlineItemSnapshot[] | undefined {
@@ -147,6 +149,7 @@ export function compactEntity(e: Entity, ackPeerGen?: number, ackPeerActorGen?: 
     alive: e.alive, hp: e.hp ?? 0, maxHp: e.maxHp ?? 100,
     sprite: e.sprite, weapon: e.weapon || '', tool: e.tool || '',
     name: e.name || '', peerSlot: e.peerSlot,
+    netGen: e.netGen,
     sex: e.sex, npcVisualId: e.npcVisualId,
     faction: e.faction, staggerTimer: e.staggerTimer,
     spriteScale: e.spriteScale,
@@ -236,7 +239,12 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
         mySlot = data.slot;
         console.log(`[online] slot=${mySlot}, role=${role}`);
         if (role === 'peer') {
-          ws?.send(JSON.stringify({ type: 'peer_join' }));
+          const profile = getNetSphereSnapshot().profile;
+          ws?.send(JSON.stringify({
+            type: 'peer_join',
+            netGen: profile?.netGen,
+            nickname: profile?.nickname,
+          }));
         }
       }
       // Server rejected (room not found, etc.) — auto-disconnect

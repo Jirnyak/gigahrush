@@ -1321,7 +1321,7 @@ test('Net Sphere chat stores sanitized body and rate-limits same NET-GEN', async
     assert.equal(first.status, 200);
     assert.equal(chat.at(-1)?.body, 'привет script');
     assert.equal(chat.at(-1)?.nickname, 'Жилец');
-    assert.equal(chat.at(-1)?.netGen, undefined);
+    assert.equal(chat.at(-1)?.netGen, 'NET-ABCD-1234');
 
     Date.now = () => 11_000;
     const second = await postChat({

@@ -30,7 +30,11 @@ export function resolveNpcArtVisualId(ctx: NpcArtVisualContext): string | undefi
     }
   }
 
-  const ageCat = categorizeNpcAge(ctx.age);
+  let ageCat = categorizeNpcAge(ctx.age);
+  if (ctx.occupation === Occupation.CHILD) {
+    ageCat = 'child';
+  }
+
   const sex = ctx.isFemale ? 'female' : 'male';
   const factionStr = ctx.faction !== undefined ? Faction[ctx.faction] : undefined;
   const occupationStr = ctx.occupation !== undefined ? Occupation[ctx.occupation] : undefined;

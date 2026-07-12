@@ -1005,7 +1005,8 @@ setOnlineMessageHandler((msgData: any) => {
       money: 100,
       inventory: [],
       weapon: '', tool: '',
-      name: `Игрок ${peerSlot}`,
+      name: msgData.nickname || `Игрок ${peerSlot}`,
+      netGen: msgData.netGen,
       rpg: freshRPG(1),
       faction: Faction.PLAYER,
       peerSlot,
@@ -1345,8 +1346,9 @@ setOnlineMessageHandler((msgData: any) => {
         }
         existing.angle = se.angle; existing.pitch = se.pitch;
         existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
+        // Sync non-simulated cosmetics
+        existing.name = se.name; existing.peerSlot = se.peerSlot; existing.netGen = se.netGen;
         existing.sprite = se.sprite; existing.spriteScale = se.spriteScale; existing.weapon = se.weapon; existing.tool = se.tool;
-        existing.name = se.name; existing.peerSlot = se.peerSlot;
         existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
         existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
         existing.currentMag = se.currentMag; existing.reloading = se.reloading; existing.reloadTimer = se.reloadTimer; existing.attackCd = se.attackCd;
@@ -1359,7 +1361,7 @@ setOnlineMessageHandler((msgData: any) => {
           x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
           alive: se.alive, hp: se.hp, maxHp: se.maxHp,
           sprite: se.sprite, weapon: se.weapon, tool: se.tool,
-          name: se.name, peerSlot: se.peerSlot,
+          name: se.name, peerSlot: se.peerSlot, netGen: se.netGen,
           sex: se.sex, npcVisualId: se.npcVisualId,
           faction: se.faction, staggerTimer: se.staggerTimer,
           currentMag: se.currentMag, reloading: se.reloading, reloadTimer: se.reloadTimer, attackCd: se.attackCd,
@@ -1978,9 +1980,18 @@ initPlatformBridge({
   },
 });
 
-setNetSphereChatHandler((nickname, text) => {
+setNetSphereChatHandler((nickname, text, chatNetGen) => {
   if (!isOnlineConnected()) return;
-  if (player && player.name === nickname) {
+  
+  // Keep local player's netGen updated to ensure their own chat bubbles work
+  const profile = getNetSphereSnapshot().profile;
+  if (player && profile?.netGen) player.netGen = profile.netGen;
+
+  const isPlayerMatch = chatNetGen 
+    ? player?.netGen === chatNetGen 
+    : player?.name === nickname;
+
+  if (isPlayerMatch && player) {
     const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
     player.activeBark = { text, until: state.time + duration, color: '#cca' };
     return;
@@ -1988,7 +1999,11 @@ setNetSphereChatHandler((nickname, text) => {
   if (entities) {
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (e.peerSlot !== undefined && e.name === nickname) {
+      const isEntityMatch = chatNetGen 
+        ? e.netGen === chatNetGen 
+        : e.name === nickname;
+      
+      if (e.peerSlot !== undefined && isEntityMatch) {
         const duration = Math.min(6, Math.max(2.5, text.length * 0.12));
         e.activeBark = { text, until: state.time + duration, color: '#cca' };
         break;
