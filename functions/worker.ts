@@ -76,6 +76,16 @@ export default {
       return npcIntakeWorker.fetch(npcIntakeRequest(request), env);
     }
     if (isNetApiPath(url.pathname)) {
+      if (request.method.toUpperCase() === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          }
+        });
+      }
       const route = NET_ROUTES[url.pathname];
       if (!route) return notFound();
       const handler = route[request.method.toUpperCase() as Method];

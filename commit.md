@@ -41,7 +41,9 @@ git push origin HEAD
 git rev-parse HEAD
 git ls-remote origin HEAD
 npm run cf:deploy
+npm run gh-pages:deploy
 curl -fsSI "https://gigahrush.bileter.workers.dev/?v=$(git rev-parse --short HEAD)"
+curl -fsSI "https://gigahrush.github.io/"
 curl -fsS "https://gigahrush.bileter.workers.dev/api/net/stats" | head -c 500
 ```
 
@@ -258,6 +260,16 @@ git status --short
 ```
 
 Если `npm run cf:deploy` изменил tracked-файл, например `dist/index.html`, значит коммит не совпадает с развернутым состоянием. В таком случае закоммить это изменение, снова push, снова проверь совпадение HEAD с `origin`, затем повтори deploy.
+
+## 6.5. GitHub Pages Deploy
+
+Если пользователь просит обновить GitHub Pages (для тестеров или друзей по бесплатной ссылке), запусти:
+
+```bash
+npm run gh-pages:deploy
+```
+
+Это соберет проект с правильным `base` URL и отправит папку `dist` в отдельную организацию GIGAHRUSH. Игра будет доступна по идеальному адресу `https://gigahrush.github.io/`.
 
 ## 7. Проверка Живого Сайта
 

@@ -148,7 +148,9 @@ class NetSphereApiError extends Error {
   }
 }
 
-const API_ROOT = '/api/net';
+const API_ROOT = window.location.hostname === 'gigahrush.github.io' 
+  ? 'https://gigahrush.bileter.workers.dev/api/net' 
+  : '/api/net';
 const NET_GEN_KEY = 'gigahrush_net_gen';
 const SESSION_KEY = 'gigahrush_net_session';
 const NET_GEN_NICK_RE = /^NET-[A-Z0-9-]{4,28}$/;

@@ -212,8 +212,10 @@ export function disconnectOnline(): void {
 }
 
 function connectWs(roomId: string, role: 'host' | 'peer') {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${window.location.host}/api/online/v1/ws?room=${roomId}&role=${role}`;
+  const isGithubPages = window.location.hostname === 'gigahrush.github.io';
+  const host = isGithubPages ? 'gigahrush.bileter.workers.dev' : window.location.host;
+  const protocol = isGithubPages || window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${host}/api/online/v1/ws?room=${roomId}&role=${role}`;
 
   let welcomeReceived = false;
 

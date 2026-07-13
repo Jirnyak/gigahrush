@@ -5,7 +5,13 @@ export async function handleJoin(context: any): Promise<Response> {
   // For POC, the client can just generate a random room code and share it.
   // We can just return a success indicating the endpoint works.
   return new Response(JSON.stringify({ ok: true }), {
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+    headers: { 
+      'Content-Type': 'application/json', 
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
   });
 }
 
