@@ -1,0 +1,4411 @@
+{
+  "version": 1,
+  "chunks": [
+    {
+      "fileName": "index-Dx3lJAvz.js",
+      "bytes": 21209553,
+      "moduleCount": 733
+    }
+  ],
+  "assets": [],
+  "modules": [
+    {
+      "id": "\u0000vite/modulepreload-polyfill.js",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1168,
+      "renderedLength": 1168
+    },
+    {
+      "id": "src/index.css",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6356,
+      "renderedLength": 0
+    },
+    {
+      "id": "src/core/types.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 54276,
+      "renderedLength": 17231
+    },
+    {
+      "id": "src/data/design_floors.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10170,
+      "renderedLength": 7611
+    },
+    {
+      "id": "src/data/entity_limits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3497,
+      "renderedLength": 3045
+    },
+    {
+      "id": "src/data/design_floor_population.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 107529,
+      "renderedLength": 100274
+    },
+    {
+      "id": "src/core/rand.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4772,
+      "renderedLength": 2280
+    },
+    {
+      "id": "src/data/economics.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4425,
+      "renderedLength": 3281
+    },
+    {
+      "id": "src/data/procedural_floors.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 38709,
+      "renderedLength": 34155
+    },
+    {
+      "id": "src/data/population_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9920,
+      "renderedLength": 6660
+    },
+    {
+      "id": "src/data/demos_posts.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8153,
+      "renderedLength": 5056
+    },
+    {
+      "id": "src/data/demos_social.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5275,
+      "renderedLength": 4419
+    },
+    {
+      "id": "src/data/floor_instances.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6835,
+      "renderedLength": 5535
+    },
+    {
+      "id": "src/data/floor_keys.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5344,
+      "renderedLength": 3931
+    },
+    {
+      "id": "src/data/chernobog_docket.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5285,
+      "renderedLength": 4705
+    },
+    {
+      "id": "src/data/inventory_limits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 262,
+      "renderedLength": 224
+    },
+    {
+      "id": "src/data/documents_access.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24041,
+      "renderedLength": 22612
+    },
+    {
+      "id": "src/data/items.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 154836,
+      "renderedLength": 156705
+    },
+    {
+      "id": "src/data/demos_traits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4276,
+      "renderedLength": 3769
+    },
+    {
+      "id": "src/data/npc_perks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1818,
+      "renderedLength": 298
+    },
+    {
+      "id": "src/data/rpg_progression.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 82,
+      "renderedLength": 67
+    },
+    {
+      "id": "src/data/art_sprite_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20311,
+      "renderedLength": 18853
+    },
+    {
+      "id": "src/data/npc_role_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5242,
+      "renderedLength": 1744
+    },
+    {
+      "id": "src/data/design_floor_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6551,
+      "renderedLength": 3622
+    },
+    {
+      "id": "src/render/pixutil.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1674,
+      "renderedLength": 1181
+    },
+    {
+      "id": "src/render/art_sprites.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 22818,
+      "renderedLength": 20783
+    },
+    {
+      "id": "src/render/generated_art_sprites.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1670932,
+      "renderedLength": 2424127
+    },
+    {
+      "id": "src/entities/npc.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23072,
+      "renderedLength": 19197
+    },
+    {
+      "id": "src/render/sprite_index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7231,
+      "renderedLength": 4677
+    },
+    {
+      "id": "src/entities/npc_visuals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16758,
+      "renderedLength": 13210
+    },
+    {
+      "id": "src/data/npc_package_schema.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 39771,
+      "renderedLength": 25157
+    },
+    {
+      "id": "src/data/npc_packages.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17217,
+      "renderedLength": 8836
+    },
+    {
+      "id": "src/data/npc_plot_packages.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 26772,
+      "renderedLength": 25530
+    },
+    {
+      "id": "src/data/craft_station_placement.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10274,
+      "renderedLength": 8845
+    },
+    {
+      "id": "src/data/floor_object_placement.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 35090,
+      "renderedLength": 29889
+    },
+    {
+      "id": "src/data/floor_territory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4624,
+      "renderedLength": 3844
+    },
+    {
+      "id": "src/data/floor_theme_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7167,
+      "renderedLength": 4853
+    },
+    {
+      "id": "src/data/alife_population_plan.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17719,
+      "renderedLength": 10720
+    },
+    {
+      "id": "src/data/alife_generation.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5762,
+      "renderedLength": 5051
+    },
+    {
+      "id": "src/data/npc_art_visuals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2187,
+      "renderedLength": 1713
+    },
+    {
+      "id": "src/data/occupation_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 33083,
+      "renderedLength": 30504
+    },
+    {
+      "id": "src/systems/rpg.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15317,
+      "renderedLength": 10436
+    },
+    {
+      "id": "src/data/weapons.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18334,
+      "renderedLength": 16233
+    },
+    {
+      "id": "src/data/psi.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3340,
+      "renderedLength": 2947
+    },
+    {
+      "id": "src/data/rooms.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2245,
+      "renderedLength": 1784
+    },
+    {
+      "id": "src/data/craft_materials.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4777,
+      "renderedLength": 2402
+    },
+    {
+      "id": "src/data/item_composition.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13431,
+      "renderedLength": 12030
+    },
+    {
+      "id": "src/data/craft_recipes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5963,
+      "renderedLength": 4459
+    },
+    {
+      "id": "src/data/names.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19502,
+      "renderedLength": 21971
+    },
+    {
+      "id": "src/data/craft_recipe_sources.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13410,
+      "renderedLength": 9628
+    },
+    {
+      "id": "src/data/notes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25672,
+      "renderedLength": 25358
+    },
+    {
+      "id": "src/data/plot.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 33329,
+      "renderedLength": 23294
+    },
+    {
+      "id": "src/data/plot_rooms.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2754,
+      "renderedLength": 1938
+    },
+    {
+      "id": "src/data/zhelemish_defs.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5944,
+      "renderedLength": 2887
+    },
+    {
+      "id": "src/data/catalog.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2293,
+      "renderedLength": 158
+    },
+    {
+      "id": "src/data/demographics.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2689,
+      "renderedLength": 1826
+    },
+    {
+      "id": "src/systems/floor_keys.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1232,
+      "renderedLength": 401
+    },
+    {
+      "id": "src/data/route_gates.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1495,
+      "renderedLength": 599
+    },
+    {
+      "id": "src/systems/route_gates.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3473,
+      "renderedLength": 1656
+    },
+    {
+      "id": "src/core/json.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 230,
+      "renderedLength": 206
+    },
+    {
+      "id": "src/data/alife_migration.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11717,
+      "renderedLength": 8214
+    },
+    {
+      "id": "src/systems/player_actor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1456,
+      "renderedLength": 738
+    },
+    {
+      "id": "src/systems/entity_limits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3049,
+      "renderedLength": 2359
+    },
+    {
+      "id": "src/data/monster_ecology.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 113520,
+      "renderedLength": 109730
+    },
+    {
+      "id": "src/systems/world_log.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 34076,
+      "renderedLength": 31528
+    },
+    {
+      "id": "src/data/rumors.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 292386,
+      "renderedLength": 291241
+    },
+    {
+      "id": "src/entities/sborka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3633,
+      "renderedLength": 3291
+    },
+    {
+      "id": "src/entities/tvar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3216,
+      "renderedLength": 2809
+    },
+    {
+      "id": "src/entities/polzun.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2801,
+      "renderedLength": 2371
+    },
+    {
+      "id": "src/entities/betonnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2329,
+      "renderedLength": 1943
+    },
+    {
+      "id": "src/entities/betonoed.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3412,
+      "renderedLength": 2882
+    },
+    {
+      "id": "src/entities/zombie.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5681,
+      "renderedLength": 5179
+    },
+    {
+      "id": "src/entities/eye.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5378,
+      "renderedLength": 4674
+    },
+    {
+      "id": "src/entities/nightmare.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8175,
+      "renderedLength": 6526
+    },
+    {
+      "id": "src/entities/shadow.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5393,
+      "renderedLength": 4587
+    },
+    {
+      "id": "src/entities/tonkaya_ten.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4042,
+      "renderedLength": 3370
+    },
+    {
+      "id": "src/entities/glubinnaya_ten.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4458,
+      "renderedLength": 3530
+    },
+    {
+      "id": "src/entities/rebar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5287,
+      "renderedLength": 4190
+    },
+    {
+      "id": "src/entities/matka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3531,
+      "renderedLength": 2915
+    },
+    {
+      "id": "src/entities/khorovaya_matka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3633,
+      "renderedLength": 3013
+    },
+    {
+      "id": "src/entities/idol.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10228,
+      "renderedLength": 8100
+    },
+    {
+      "id": "src/entities/kantselyarskiy_idol.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4744,
+      "renderedLength": 3928
+    },
+    {
+      "id": "src/entities/mancobus.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5213,
+      "renderedLength": 4430
+    },
+    {
+      "id": "src/entities/herald.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5461,
+      "renderedLength": 4778
+    },
+    {
+      "id": "src/entities/creator.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5146,
+      "renderedLength": 4483
+    },
+    {
+      "id": "src/entities/spirit.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4506,
+      "renderedLength": 3533
+    },
+    {
+      "id": "src/entities/robot.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10208,
+      "renderedLength": 8416
+    },
+    {
+      "id": "src/entities/shovnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1639,
+      "renderedLength": 1367
+    },
+    {
+      "id": "src/entities/lampovy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1756,
+      "renderedLength": 1504
+    },
+    {
+      "id": "src/entities/lampoglaz.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3806,
+      "renderedLength": 3282
+    },
+    {
+      "id": "src/entities/pechateed.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2463,
+      "renderedLength": 2222
+    },
+    {
+      "id": "src/entities/kontorshchik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3745,
+      "renderedLength": 3409
+    },
+    {
+      "id": "src/entities/tube_eel.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1503,
+      "renderedLength": 1247
+    },
+    {
+      "id": "src/entities/lotochnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3735,
+      "renderedLength": 3341
+    },
+    {
+      "id": "src/entities/paragraph.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2493,
+      "renderedLength": 2235
+    },
+    {
+      "id": "src/entities/nelyud.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2738,
+      "renderedLength": 2518
+    },
+    {
+      "id": "src/entities/krysnozhka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2116,
+      "renderedLength": 1874
+    },
+    {
+      "id": "src/entities/pomoynyy_roy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2717,
+      "renderedLength": 2288
+    },
+    {
+      "id": "src/entities/kostorez.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2955,
+      "renderedLength": 2499
+    },
+    {
+      "id": "src/entities/safeguard.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3713,
+      "renderedLength": 3061
+    },
+    {
+      "id": "src/entities/black_liquidator.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5365,
+      "renderedLength": 4918
+    },
+    {
+      "id": "src/entities/panelnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4382,
+      "renderedLength": 3595
+    },
+    {
+      "id": "src/entities/slimevik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3141,
+      "renderedLength": 2907
+    },
+    {
+      "id": "src/entities/sobrannyy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5047,
+      "renderedLength": 4311
+    },
+    {
+      "id": "src/entities/chernosliz.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3308,
+      "renderedLength": 3017
+    },
+    {
+      "id": "src/entities/borshchevik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4251,
+      "renderedLength": 3569
+    },
+    {
+      "id": "src/entities/zhornaya_tvar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3884,
+      "renderedLength": 3347
+    },
+    {
+      "id": "src/entities/tumannik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4017,
+      "renderedLength": 3213
+    },
+    {
+      "id": "src/entities/slepoglaz.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3120,
+      "renderedLength": 2874
+    },
+    {
+      "id": "src/entities/pseudolift.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2541,
+      "renderedLength": 2275
+    },
+    {
+      "id": "src/entities/olgoy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3234,
+      "renderedLength": 2937
+    },
+    {
+      "id": "src/entities/vodyanoy_koshmar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4234,
+      "renderedLength": 3752
+    },
+    {
+      "id": "src/entities/dikiy_mertvyak.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3599,
+      "renderedLength": 3116
+    },
+    {
+      "id": "src/entities/obzhivalshchik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4136,
+      "renderedLength": 3524
+    },
+    {
+      "id": "src/entities/rzhavnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4498,
+      "renderedLength": 3625
+    },
+    {
+      "id": "src/entities/zakalennaya_armatura.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4735,
+      "renderedLength": 3984
+    },
+    {
+      "id": "src/entities/protokolnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5268,
+      "renderedLength": 4694
+    },
+    {
+      "id": "src/entities/bezekhiy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2819,
+      "renderedLength": 2273
+    },
+    {
+      "id": "src/entities/trubnyy_avtomat.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4270,
+      "renderedLength": 3745
+    },
+    {
+      "id": "src/entities/lozhnyy_dukh.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3769,
+      "renderedLength": 3278
+    },
+    {
+      "id": "src/entities/treskotnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3298,
+      "renderedLength": 2926
+    },
+    {
+      "id": "src/entities/green_dog.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3587,
+      "renderedLength": 3254
+    },
+    {
+      "id": "src/entities/slime_woman.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4681,
+      "renderedLength": 3932
+    },
+    {
+      "id": "src/entities/gnilushka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4318,
+      "renderedLength": 3874
+    },
+    {
+      "id": "src/entities/paupsina.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3348,
+      "renderedLength": 2870
+    },
+    {
+      "id": "src/entities/head_slug.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4089,
+      "renderedLength": 3626
+    },
+    {
+      "id": "src/entities/chervie_avatar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4395,
+      "renderedLength": 3738
+    },
+    {
+      "id": "src/entities/mukhozhuk.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5474,
+      "renderedLength": 4817
+    },
+    {
+      "id": "src/entities/fog_shark.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5358,
+      "renderedLength": 4566
+    },
+    {
+      "id": "src/entities/blood_plant.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5066,
+      "renderedLength": 4286
+    },
+    {
+      "id": "src/entities/spore_carpet.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4063,
+      "renderedLength": 3698
+    },
+    {
+      "id": "src/entities/swarm_mass.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3255,
+      "renderedLength": 2778
+    },
+    {
+      "id": "src/entities/lishennyy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3194,
+      "renderedLength": 2648
+    },
+    {
+      "id": "src/entities/sculpture.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4641,
+      "renderedLength": 3945
+    },
+    {
+      "id": "src/entities/gnome.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3618,
+      "renderedLength": 2991
+    },
+    {
+      "id": "src/entities/monster.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19215,
+      "renderedLength": 10342
+    },
+    {
+      "id": "src/data/relations.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3790,
+      "renderedLength": 2077
+    },
+    {
+      "id": "src/systems/npc_relations.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1856,
+      "renderedLength": 1431
+    },
+    {
+      "id": "src/systems/markov_context.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 27213,
+      "renderedLength": 12260
+    },
+    {
+      "id": "src/systems/npc_package_speech.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14246,
+      "renderedLength": 9422
+    },
+    {
+      "id": "src/data/markov_text.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 89449,
+      "renderedLength": 66758
+    },
+    {
+      "id": "src/systems/markov_text.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 35140,
+      "renderedLength": 23528
+    },
+    {
+      "id": "src/systems/speech_router.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6597,
+      "renderedLength": 4272
+    },
+    {
+      "id": "src/systems/markov_router_adapters.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3252,
+      "renderedLength": 2231
+    },
+    {
+      "id": "src/systems/markov_dialogue.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6930,
+      "renderedLength": 4252
+    },
+    {
+      "id": "src/systems/markov_rumor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14608,
+      "renderedLength": 12421
+    },
+    {
+      "id": "src/systems/npc_memory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21551,
+      "renderedLength": 5815
+    },
+    {
+      "id": "src/systems/rumor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 45491,
+      "renderedLength": 41748
+    },
+    {
+      "id": "src/systems/room_memory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10346,
+      "renderedLength": 8270
+    },
+    {
+      "id": "src/systems/events.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 30292,
+      "renderedLength": 23128
+    },
+    {
+      "id": "src/core/path_blockers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3872,
+      "renderedLength": 2916
+    },
+    {
+      "id": "src/systems/surface_marks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21171,
+      "renderedLength": 16802
+    },
+    {
+      "id": "src/systems/entity_index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 30771,
+      "renderedLength": 27697
+    },
+    {
+      "id": "src/core/world.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 31449,
+      "renderedLength": 25571
+    },
+    {
+      "id": "src/data/visual_cell_slots.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11497,
+      "renderedLength": 10059
+    },
+    {
+      "id": "src/gen/visual_cell_slots.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 29411,
+      "renderedLength": 19648
+    },
+    {
+      "id": "src/systems/blood_fx.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25004,
+      "renderedLength": 19732
+    },
+    {
+      "id": "src/systems/monster_terrain.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3793,
+      "renderedLength": 2879
+    },
+    {
+      "id": "src/systems/monster_traits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6624,
+      "renderedLength": 5333
+    },
+    {
+      "id": "src/systems/psi.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20893,
+      "renderedLength": 16083
+    },
+    {
+      "id": "src/systems/damage.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4718,
+      "renderedLength": 3774
+    },
+    {
+      "id": "src/systems/cell_hazards.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24115,
+      "renderedLength": 18922
+    },
+    {
+      "id": "src/systems/movement_collision.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4392,
+      "renderedLength": 3259
+    },
+    {
+      "id": "src/systems/door_state.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1345,
+      "renderedLength": 946
+    },
+    {
+      "id": "src/systems/markov_barks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10141,
+      "renderedLength": 6071
+    },
+    {
+      "id": "src/systems/ai/barks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6224,
+      "renderedLength": 4664
+    },
+    {
+      "id": "src/systems/ai/pathfinding.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 38129,
+      "renderedLength": 30612
+    },
+    {
+      "id": "src/systems/alife_migration.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 44229,
+      "renderedLength": 35166
+    },
+    {
+      "id": "src/data/banking.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1464,
+      "renderedLength": 632
+    },
+    {
+      "id": "src/systems/banking.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11973,
+      "renderedLength": 7821
+    },
+    {
+      "id": "src/data/computers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2093,
+      "renderedLength": 1610
+    },
+    {
+      "id": "\u0000vite/preload-helper.js",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2141,
+      "renderedLength": 2135
+    },
+    {
+      "id": "src/systems/combat.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1844,
+      "renderedLength": 1328
+    },
+    {
+      "id": "src/data/metro.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9768,
+      "renderedLength": 6797
+    },
+    {
+      "id": "src/data/pneumomail.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4471,
+      "renderedLength": 3819
+    },
+    {
+      "id": "src/data/contracts.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 175572,
+      "renderedLength": 182186
+    },
+    {
+      "id": "src/data/permits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13738,
+      "renderedLength": 12071
+    },
+    {
+      "id": "src/data/visual_corridor_coverings.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7410,
+      "renderedLength": 5742
+    },
+    {
+      "id": "src/data/visual_geometry_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16340,
+      "renderedLength": 12887
+    },
+    {
+      "id": "src/systems/ui_orchestrator.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32230,
+      "renderedLength": 25968
+    },
+    {
+      "id": "src/systems/audio.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 48280,
+      "renderedLength": 41509
+    },
+    {
+      "id": "src/data/resources.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13566,
+      "renderedLength": 12350
+    },
+    {
+      "id": "src/data/economy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5184,
+      "renderedLength": 3921
+    },
+    {
+      "id": "src/core/math.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 121,
+      "renderedLength": 83
+    },
+    {
+      "id": "src/data/economy_rules.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12400,
+      "renderedLength": 6731
+    },
+    {
+      "id": "src/systems/economy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 22645,
+      "renderedLength": 14986
+    },
+    {
+      "id": "src/systems/document_scent.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4791,
+      "renderedLength": 3976
+    },
+    {
+      "id": "src/systems/floor_instances.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15767,
+      "renderedLength": 12110
+    },
+    {
+      "id": "src/systems/monster_bait.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19544,
+      "renderedLength": 15667
+    },
+    {
+      "id": "src/systems/ration_coupons.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19178,
+      "renderedLength": 17059
+    },
+    {
+      "id": "src/data/factions.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2439,
+      "renderedLength": 1799
+    },
+    {
+      "id": "src/data/faction_events.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 29979,
+      "renderedLength": 26518
+    },
+    {
+      "id": "src/data/container_defs.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4028,
+      "renderedLength": 3728
+    },
+    {
+      "id": "src/data/path_blockers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3802,
+      "renderedLength": 2966
+    },
+    {
+      "id": "src/gen/path_blockers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6917,
+      "renderedLength": 5675
+    },
+    {
+      "id": "src/systems/controls.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11834,
+      "renderedLength": 9911
+    },
+    {
+      "id": "src/systems/procedural_loot.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8530,
+      "renderedLength": 6531
+    },
+    {
+      "id": "src/systems/alife_rating.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2687,
+      "renderedLength": 2083
+    },
+    {
+      "id": "src/data/item_outcomes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4532,
+      "renderedLength": 3438
+    },
+    {
+      "id": "src/systems/maronary_shaving.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9315,
+      "renderedLength": 1894
+    },
+    {
+      "id": "src/systems/territory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 31925,
+      "renderedLength": 27611
+    },
+    {
+      "id": "src/systems/shelter_tally.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10125,
+      "renderedLength": 8666
+    },
+    {
+      "id": "src/systems/containers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 57889,
+      "renderedLength": 49245
+    },
+    {
+      "id": "src/systems/faction_events.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 73902,
+      "renderedLength": 62033
+    },
+    {
+      "id": "src/data/caravans.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7916,
+      "renderedLength": 6585
+    },
+    {
+      "id": "src/systems/caravans.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 43738,
+      "renderedLength": 36633
+    },
+    {
+      "id": "src/systems/noise.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 22462,
+      "renderedLength": 16525
+    },
+    {
+      "id": "src/systems/demos_save.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10088,
+      "renderedLength": 7580
+    },
+    {
+      "id": "src/systems/demos_social.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 48173,
+      "renderedLength": 35624
+    },
+    {
+      "id": "src/systems/alife/squad_logic.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1270,
+      "renderedLength": 958
+    },
+    {
+      "id": "src/systems/factions.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19677,
+      "renderedLength": 13589
+    },
+    {
+      "id": "src/systems/permits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5210,
+      "renderedLength": 3722
+    },
+    {
+      "id": "src/systems/govnyak.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11450,
+      "renderedLength": 9675
+    },
+    {
+      "id": "src/systems/chalk.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2393,
+      "renderedLength": 1773
+    },
+    {
+      "id": "src/systems/status.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21076,
+      "renderedLength": 18438
+    },
+    {
+      "id": "src/systems/content_hooks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4507,
+      "renderedLength": 1589
+    },
+    {
+      "id": "src/systems/tutorial.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2232,
+      "renderedLength": 2371
+    },
+    {
+      "id": "src/systems/inventory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 94920,
+      "renderedLength": 72855
+    },
+    {
+      "id": "src/systems/crafting.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21305,
+      "renderedLength": 15590
+    },
+    {
+      "id": "src/systems/computers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9041,
+      "renderedLength": 7061
+    },
+    {
+      "id": "src/systems/lift_arachna.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17494,
+      "renderedLength": 14290
+    },
+    {
+      "id": "src/systems/map_editor_catalog.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2455,
+      "renderedLength": 1341
+    },
+    {
+      "id": "src/systems/map_editor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 51095,
+      "renderedLength": 42580
+    },
+    {
+      "id": "src/data/net_hack.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 974,
+      "renderedLength": 538
+    },
+    {
+      "id": "src/systems/net_hack.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10981,
+      "renderedLength": 8686
+    },
+    {
+      "id": "src/data/net_terminal_gen.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3352,
+      "renderedLength": 2252
+    },
+    {
+      "id": "src/systems/safeguard.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7213,
+      "renderedLength": 5941
+    },
+    {
+      "id": "src/systems/net_terminal_gen.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32371,
+      "renderedLength": 24367
+    },
+    {
+      "id": "src/data/factories.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 28938,
+      "renderedLength": 26866
+    },
+    {
+      "id": "src/systems/production.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 34608,
+      "renderedLength": 28581
+    },
+    {
+      "id": "src/systems/pseudolift.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23933,
+      "renderedLength": 19882
+    },
+    {
+      "id": "src/systems/save_payload.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17772,
+      "renderedLength": 9952
+    },
+    {
+      "id": "src/data/corporations.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7954,
+      "renderedLength": 7028
+    },
+    {
+      "id": "src/data/stock_market.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 523,
+      "renderedLength": 279
+    },
+    {
+      "id": "src/systems/online_client.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9813,
+      "renderedLength": 5897
+    },
+    {
+      "id": "src/systems/net_sphere.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32338,
+      "renderedLength": 24427
+    },
+    {
+      "id": "src/systems/stock_market.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19389,
+      "renderedLength": 10758
+    },
+    {
+      "id": "src/systems/save_runtime.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3440,
+      "renderedLength": 1782
+    },
+    {
+      "id": "src/systems/platform_bridge.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25928,
+      "renderedLength": 18743
+    },
+    {
+      "id": "src/systems/procedural_floors.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 26870,
+      "renderedLength": 21288
+    },
+    {
+      "id": "src/systems/alife.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 103245,
+      "renderedLength": 83668
+    },
+    {
+      "id": "src/systems/demos_posts.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25736,
+      "renderedLength": 14682
+    },
+    {
+      "id": "src/systems/demos_social_director.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11033,
+      "renderedLength": 8083
+    },
+    {
+      "id": "src/data/demos_social_visits.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2498,
+      "renderedLength": 1878
+    },
+    {
+      "id": "src/systems/demos_social_feedback.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15579,
+      "renderedLength": 11671
+    },
+    {
+      "id": "src/data/demos_quest_notices.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 997,
+      "renderedLength": 125
+    },
+    {
+      "id": "src/systems/demos_quest_notices.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23666,
+      "renderedLength": 15425
+    },
+    {
+      "id": "src/systems/demos_runtime.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6910,
+      "renderedLength": 5150
+    },
+    {
+      "id": "src/pwa.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1525,
+      "renderedLength": 885
+    },
+    {
+      "id": "src/systems/melee_targeting.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1812,
+      "renderedLength": 1527
+    },
+    {
+      "id": "src/data/screen_signals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5910,
+      "renderedLength": 4727
+    },
+    {
+      "id": "src/data/procedural_screen_textures.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 696,
+      "renderedLength": 531
+    },
+    {
+      "id": "src/gen/procedural_screens.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16256,
+      "renderedLength": 14421
+    },
+    {
+      "id": "src/data/critters.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2115,
+      "renderedLength": 1280
+    },
+    {
+      "id": "src/render/critters.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6667,
+      "renderedLength": 5288
+    },
+    {
+      "id": "src/gen/shared.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 80139,
+      "renderedLength": 52018
+    },
+    {
+      "id": "src/data/emergency_panels.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4030,
+      "renderedLength": 2936
+    },
+    {
+      "id": "src/data/runtime_topology.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8551,
+      "renderedLength": 424
+    },
+    {
+      "id": "src/systems/rail_trains.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20660,
+      "renderedLength": 11353
+    },
+    {
+      "id": "src/data/route_objective_fallbacks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 614,
+      "renderedLength": 334
+    },
+    {
+      "id": "src/systems/quest_deadlines.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7686,
+      "renderedLength": 7005
+    },
+    {
+      "id": "src/systems/quest_rewards.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4979,
+      "renderedLength": 3608
+    },
+    {
+      "id": "src/systems/contracts.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 46564,
+      "renderedLength": 38939
+    },
+    {
+      "id": "src/systems/route_cues.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23982,
+      "renderedLength": 17599
+    },
+    {
+      "id": "src/systems/emergency_panels.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 28566,
+      "renderedLength": 22813
+    },
+    {
+      "id": "src/systems/hladon.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14322,
+      "renderedLength": 12272
+    },
+    {
+      "id": "src/systems/procedural_anomalies/bad_apple_world.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2218,
+      "renderedLength": 273
+    },
+    {
+      "id": "src/gen/carnivorous_fungus_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5083,
+      "renderedLength": 4271
+    },
+    {
+      "id": "src/data/interactive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9868,
+      "renderedLength": 7847
+    },
+    {
+      "id": "src/systems/interactive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25285,
+      "renderedLength": 18878
+    },
+    {
+      "id": "src/gen/interactive_placement.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2144,
+      "renderedLength": 291
+    },
+    {
+      "id": "src/gen/craft_stations.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18200,
+      "renderedLength": 12010
+    },
+    {
+      "id": "src/gen/interactive_fixtures.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1662,
+      "renderedLength": 1207
+    },
+    {
+      "id": "src/gen/floor_object_placement.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24746,
+      "renderedLength": 20231
+    },
+    {
+      "id": "src/gen/procedural_anomalies/common.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5337,
+      "renderedLength": 3875
+    },
+    {
+      "id": "src/gen/procedural_anomalies/cement_memory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6133,
+      "renderedLength": 5345
+    },
+    {
+      "id": "src/gen/procedural_anomalies/conveyor_sorter.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10010,
+      "renderedLength": 8710
+    },
+    {
+      "id": "src/gen/procedural_anomalies/conway_life.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8086,
+      "renderedLength": 7228
+    },
+    {
+      "id": "src/gen/procedural_anomalies/fractal_floor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19836,
+      "renderedLength": 17214
+    },
+    {
+      "id": "src/gen/procedural_anomalies/living_tunnels.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6892,
+      "renderedLength": 6166
+    },
+    {
+      "id": "src/gen/procedural_anomalies/mirror_run.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10482,
+      "renderedLength": 8873
+    },
+    {
+      "id": "src/gen/procedural_anomalies/radio_chess.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3844,
+      "renderedLength": 3306
+    },
+    {
+      "id": "src/gen/procedural_anomalies/sandpile_perekrytie.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8123,
+      "renderedLength": 7383
+    },
+    {
+      "id": "src/gen/procedural_anomalies/section_shift.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3004,
+      "renderedLength": 2629
+    },
+    {
+      "id": "src/gen/procedural_anomalies/wall_snake.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5682,
+      "renderedLength": 5083
+    },
+    {
+      "id": "src/gen/procedural_anomalies/zombie_apocalypse.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 33800,
+      "renderedLength": 29328
+    },
+    {
+      "id": "src/gen/procedural_anomalies/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3043,
+      "renderedLength": 1243
+    },
+    {
+      "id": "src/gen/maze_graph.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18877,
+      "renderedLength": 11023
+    },
+    {
+      "id": "src/gen/procedural_structure_library.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19910,
+      "renderedLength": 17583
+    },
+    {
+      "id": "src/gen/entity_filters.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 497,
+      "renderedLength": 367
+    },
+    {
+      "id": "src/gen/population_placement.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14451,
+      "renderedLength": 12118
+    },
+    {
+      "id": "src/gen/geometry_metrics.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23380,
+      "renderedLength": 17498
+    },
+    {
+      "id": "src/gen/decision_triangles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14805,
+      "renderedLength": 10939
+    },
+    {
+      "id": "src/gen/proxy_grid.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16396,
+      "renderedLength": 5541
+    },
+    {
+      "id": "src/gen/procedural_geometry_recipes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 43661,
+      "renderedLength": 33561
+    },
+    {
+      "id": "src/gen/procedural_floor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 652688,
+      "renderedLength": 549415
+    },
+    {
+      "id": "src/gen/plot_npc_spawn.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5239,
+      "renderedLength": 3784
+    },
+    {
+      "id": "src/gen/design_floors/liquidatorbase.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6616,
+      "renderedLength": 5721
+    },
+    {
+      "id": "src/gen/design_floors/antenna_court.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 72134,
+      "renderedLength": 60302
+    },
+    {
+      "id": "src/gen/design_floors/attractor_dvor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 52955,
+      "renderedLength": 47122
+    },
+    {
+      "id": "src/gen/design_floors/bank_floor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 54297,
+      "renderedLength": 48588
+    },
+    {
+      "id": "src/gen/design_floors/bolnichny_korpus.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 65167,
+      "renderedLength": 59799
+    },
+    {
+      "id": "src/systems/localization.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15052,
+      "renderedLength": 1669454
+    },
+    {
+      "id": "src/render/ui_text.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9128,
+      "renderedLength": 7854
+    },
+    {
+      "id": "src/render/ui_utils.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1076,
+      "renderedLength": 776
+    },
+    {
+      "id": "src/gen/design_floors/black_market_88.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 103415,
+      "renderedLength": 80579
+    },
+    {
+      "id": "src/gen/design_floors/cantor_pustoty.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 35054,
+      "renderedLength": 29290
+    },
+    {
+      "id": "src/gen/design_floors/cayley_byuro.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 47374,
+      "renderedLength": 41022
+    },
+    {
+      "id": "src/gen/log.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 181,
+      "renderedLength": 102
+    },
+    {
+      "id": "src/gen/design_floors/chthonic_attic.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 95655,
+      "renderedLength": 87254
+    },
+    {
+      "id": "src/gen/design_floors/communal_ring.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 63016,
+      "renderedLength": 57420
+    },
+    {
+      "id": "src/gen/design_floors/critical_leak_archive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 43179,
+      "renderedLength": 38378
+    },
+    {
+      "id": "src/gen/design_floors/dark_metro.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 83927,
+      "renderedLength": 72280
+    },
+    {
+      "id": "src/gen/design_floors/darkness.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 70801,
+      "renderedLength": 60150
+    },
+    {
+      "id": "src/gen/design_floors/horrorfloor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4698,
+      "renderedLength": 3886
+    },
+    {
+      "id": "src/gen/design_floors/floor_69.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 117438,
+      "renderedLength": 108613
+    },
+    {
+      "id": "src/gen/design_floors/harmonic_bathhouse.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 54785,
+      "renderedLength": 48587
+    },
+    {
+      "id": "src/gen/design_floors/hilbert_depot.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 44474,
+      "renderedLength": 39744
+    },
+    {
+      "id": "src/gen/design_floors/hyperbolic_switchyard.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 48862,
+      "renderedLength": 42345
+    },
+    {
+      "id": "src/gen/design_floors/istinniy_labirint.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 50549,
+      "renderedLength": 39767
+    },
+    {
+      "id": "src/gen/design_floors/manhattan_crossroads.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 86498,
+      "renderedLength": 70792
+    },
+    {
+      "id": "src/gen/design_floors/markov_stairwell.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 41080,
+      "renderedLength": 35334
+    },
+    {
+      "id": "src/gen/design_floors/moebius_podezd.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 72128,
+      "renderedLength": 63818
+    },
+    {
+      "id": "src/gen/design_floors/number_registry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 56305,
+      "renderedLength": 49781
+    },
+    {
+      "id": "src/gen/design_floors/obschezhitie_smeny.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 38776,
+      "renderedLength": 35444
+    },
+    {
+      "id": "src/gen/design_floors/oranzhereya_betona.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 68150,
+      "renderedLength": 62139
+    },
+    {
+      "id": "src/gen/design_floors/penrose_laundry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 53863,
+      "renderedLength": 47640
+    },
+    {
+      "id": "src/gen/design_floors/pioneer_camp.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 61712,
+      "renderedLength": 56801
+    },
+    {
+      "id": "src/gen/design_floors/podad.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 44963,
+      "renderedLength": 39783
+    },
+    {
+      "id": "src/gen/design_floors/production_belt.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 73838,
+      "renderedLength": 65528
+    },
+    {
+      "id": "src/gen/design_floors/radon_exchange.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 51362,
+      "renderedLength": 43058
+    },
+    {
+      "id": "src/gen/design_floors/raionsovet_archive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 68686,
+      "renderedLength": 57708
+    },
+    {
+      "id": "src/gen/design_floors/registry_morgue.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 55837,
+      "renderedLength": 50918
+    },
+    {
+      "id": "src/gen/design_floors/roof.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 83675,
+      "renderedLength": 71120
+    },
+    {
+      "id": "src/gen/design_floors/service_floor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 87834,
+      "renderedLength": 74255
+    },
+    {
+      "id": "src/gen/design_floors/shahta_atrium.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 41348,
+      "renderedLength": 36911
+    },
+    {
+      "id": "src/gen/design_floors/silicon_net_well.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 63674,
+      "renderedLength": 58539
+    },
+    {
+      "id": "src/gen/design_floors/slime_nii.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 68632,
+      "renderedLength": 63266
+    },
+    {
+      "id": "src/gen/design_floors/spetspriemnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 50749,
+      "renderedLength": 44290
+    },
+    {
+      "id": "src/gen/design_floors/spectral_chasovnya.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 54797,
+      "renderedLength": 48584
+    },
+    {
+      "id": "src/gen/design_floors/turing_nursery.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 77900,
+      "renderedLength": 70746
+    },
+    {
+      "id": "src/gen/design_floors/underhell.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 58600,
+      "renderedLength": 42414
+    },
+    {
+      "id": "src/gen/admin_common.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6452,
+      "renderedLength": 4904
+    },
+    {
+      "id": "src/gen/design_floors/upper_bureau.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 76852,
+      "renderedLength": 66437
+    },
+    {
+      "id": "src/gen/voronoi_cells.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13903,
+      "renderedLength": 11198
+    },
+    {
+      "id": "src/gen/design_floors/voronoi_quarantine.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 78566,
+      "renderedLength": 69061
+    },
+    {
+      "id": "src/gen/design_floors/route_shell.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25546,
+      "renderedLength": 22938
+    },
+    {
+      "id": "src/gen/design_floors/population.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7707,
+      "renderedLength": 6378
+    },
+    {
+      "id": "src/gen/design_floors/full_floor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 102381,
+      "renderedLength": 91744
+    },
+    {
+      "id": "src/gen/design_floors/manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11391,
+      "renderedLength": 6031
+    },
+    {
+      "id": "src/gen/fast_elevators.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5404,
+      "renderedLength": 3654
+    },
+    {
+      "id": "src/gen/ceiling_heights.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4924,
+      "renderedLength": 2793
+    },
+    {
+      "id": "src/gen/content_manifest_utils.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3397,
+      "renderedLength": 1914
+    },
+    {
+      "id": "src/gen/ministry/arkhivarius.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2457,
+      "renderedLength": 1935
+    },
+    {
+      "id": "src/gen/ministry/streltsov.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2681,
+      "renderedLength": 2138
+    },
+    {
+      "id": "src/gen/ministry/glafira.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2485,
+      "renderedLength": 1979
+    },
+    {
+      "id": "src/gen/ministry/npcs.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12055,
+      "renderedLength": 9432
+    },
+    {
+      "id": "src/gen/ministry/secret_smoking.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7655,
+      "renderedLength": 6330
+    },
+    {
+      "id": "src/gen/ministry/permit_office.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15703,
+      "renderedLength": 15020
+    },
+    {
+      "id": "src/gen/ministry/stamp_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11718,
+      "renderedLength": 10701
+    },
+    {
+      "id": "src/gen/ministry/weapon_permit_bureau.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11941,
+      "renderedLength": 11285
+    },
+    {
+      "id": "src/gen/ministry/interrogation.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5042,
+      "renderedLength": 4358
+    },
+    {
+      "id": "src/gen/ministry/queue_hall.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9898,
+      "renderedLength": 8991
+    },
+    {
+      "id": "src/gen/ministry/inspection_archive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11516,
+      "renderedLength": 10766
+    },
+    {
+      "id": "src/gen/ministry/liquidator_archive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15518,
+      "renderedLength": 14100
+    },
+    {
+      "id": "src/gen/ministry/raionsovet_archive.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11383,
+      "renderedLength": 10669
+    },
+    {
+      "id": "src/gen/ministry/refusal_clause.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2505,
+      "renderedLength": 2016
+    },
+    {
+      "id": "src/gen/ministry/chernobog_archive_docket.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11382,
+      "renderedLength": 10839
+    },
+    {
+      "id": "src/gen/ministry/document_gate.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32735,
+      "renderedLength": 28886
+    },
+    {
+      "id": "src/gen/ministry/lampoglaz_line.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1762,
+      "renderedLength": 1328
+    },
+    {
+      "id": "src/gen/ministry/kantselyarskiy_idol_line.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3185,
+      "renderedLength": 2579
+    },
+    {
+      "id": "src/gen/ministry/mukhozhuk_audit.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4734,
+      "renderedLength": 3983
+    },
+    {
+      "id": "src/gen/ministry/nii_contraband_audit.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16793,
+      "renderedLength": 15372
+    },
+    {
+      "id": "src/gen/ministry/kartotechnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16347,
+      "renderedLength": 14795
+    },
+    {
+      "id": "src/gen/ministry/matka_dokumentov.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23233,
+      "renderedLength": 20393
+    },
+    {
+      "id": "src/gen/design_floors/ministry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11531,
+      "renderedLength": 10545
+    },
+    {
+      "id": "src/gen/ministry/content_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4564,
+      "renderedLength": 2945
+    },
+    {
+      "id": "src/gen/ministry/geometry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 33321,
+      "renderedLength": 29312
+    },
+    {
+      "id": "src/gen/ministry/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 26316,
+      "renderedLength": 22658
+    },
+    {
+      "id": "src/gen/kvartiry/social_macro_graph.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 26063,
+      "renderedLength": 21797
+    },
+    {
+      "id": "src/gen/kvartiry/listovoy.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2898,
+      "renderedLength": 2255
+    },
+    {
+      "id": "src/gen/kvartiry/gorlanov.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2926,
+      "renderedLength": 2404
+    },
+    {
+      "id": "src/gen/kvartiry/tyotya_klava.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2795,
+      "renderedLength": 2290
+    },
+    {
+      "id": "src/gen/kvartiry/sery_gopnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2622,
+      "renderedLength": 2118
+    },
+    {
+      "id": "src/gen/kvartiry/pakhom.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2529,
+      "renderedLength": 1935
+    },
+    {
+      "id": "src/gen/kvartiry/red_corner.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7784,
+      "renderedLength": 6692
+    },
+    {
+      "id": "src/gen/kvartiry/social_pressure.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10582,
+      "renderedLength": 8484
+    },
+    {
+      "id": "src/gen/kvartiry/social_helpers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9292,
+      "renderedLength": 7577
+    },
+    {
+      "id": "src/gen/kvartiry/ration_queue.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6735,
+      "renderedLength": 5975
+    },
+    {
+      "id": "src/gen/kvartiry/ocherednik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13229,
+      "renderedLength": 11875
+    },
+    {
+      "id": "src/gen/kvartiry/water_riot.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18770,
+      "renderedLength": 16827
+    },
+    {
+      "id": "src/gen/kvartiry/print_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4022,
+      "renderedLength": 3486
+    },
+    {
+      "id": "src/gen/kvartiry/barricade.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14349,
+      "renderedLength": 12943
+    },
+    {
+      "id": "src/gen/kvartiry/communal_kitchen_feud.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15824,
+      "renderedLength": 14844
+    },
+    {
+      "id": "src/gen/kvartiry/lost_child_corner.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7130,
+      "renderedLength": 6217
+    },
+    {
+      "id": "src/gen/kvartiry/medicine_swap.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19845,
+      "renderedLength": 18197
+    },
+    {
+      "id": "src/gen/kvartiry/ammo_smelter.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7682,
+      "renderedLength": 6856
+    },
+    {
+      "id": "src/gen/kvartiry/cult_supply_kitchen.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8209,
+      "renderedLength": 7320
+    },
+    {
+      "id": "src/gen/kvartiry/chernobozhiy_svod.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 22015,
+      "renderedLength": 19606
+    },
+    {
+      "id": "src/gen/kvartiry/false_neighbor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7668,
+      "renderedLength": 6548
+    },
+    {
+      "id": "src/gen/kvartiry/pustoy_sosed.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16178,
+      "renderedLength": 14556
+    },
+    {
+      "id": "src/gen/kvartiry/kv08_route_assembly.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11835,
+      "renderedLength": 10645
+    },
+    {
+      "id": "src/gen/kvartiry/content_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5558,
+      "renderedLength": 3499
+    },
+    {
+      "id": "src/gen/kvartiry/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 28200,
+      "renderedLength": 21174
+    },
+    {
+      "id": "src/systems/context.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10565,
+      "renderedLength": 7696
+    },
+    {
+      "id": "src/systems/markov_procedural_quests.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15069,
+      "renderedLength": 12142
+    },
+    {
+      "id": "src/data/hearing_tools.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 200,
+      "renderedLength": 152
+    },
+    {
+      "id": "src/systems/hearing.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 636,
+      "renderedLength": 369
+    },
+    {
+      "id": "src/systems/samosbor_wave.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 55702,
+      "renderedLength": 37563
+    },
+    {
+      "id": "src/systems/map_exploration.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12216,
+      "renderedLength": 10086
+    },
+    {
+      "id": "src/systems/quests.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 83432,
+      "renderedLength": 71634
+    },
+    {
+      "id": "src/gen/living/apartments.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18096,
+      "renderedLength": 15969
+    },
+    {
+      "id": "src/render/text.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3571,
+      "renderedLength": 3395
+    },
+    {
+      "id": "src/gen/living/posters.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14370,
+      "renderedLength": 11633
+    },
+    {
+      "id": "src/gen/living/geometry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21892,
+      "renderedLength": 18743
+    },
+    {
+      "id": "src/gen/living/volatile.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15422,
+      "renderedLength": 11924
+    },
+    {
+      "id": "src/gen/design_floors/tutorial_apartments.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1236,
+      "renderedLength": 510
+    },
+    {
+      "id": "src/gen/living/tutor_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12962,
+      "renderedLength": 9824
+    },
+    {
+      "id": "src/gen/living/yakov_lab.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5567,
+      "renderedLength": 3957
+    },
+    {
+      "id": "src/gen/living/vanka_den.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5265,
+      "renderedLength": 3909
+    },
+    {
+      "id": "src/gen/living/zone_content.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3857,
+      "renderedLength": 1548
+    },
+    {
+      "id": "src/gen/living/temple.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13107,
+      "renderedLength": 9089
+    },
+    {
+      "id": "src/gen/living/istotit_supply_cache.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17121,
+      "renderedLength": 15645
+    },
+    {
+      "id": "src/gen/living/library.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8998,
+      "renderedLength": 7342
+    },
+    {
+      "id": "src/gen/living/market.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8400,
+      "renderedLength": 7223
+    },
+    {
+      "id": "src/gen/living/black_market_88.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14686,
+      "renderedLength": 13690
+    },
+    {
+      "id": "src/gen/living/mushroom_cellar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12910,
+      "renderedLength": 11875
+    },
+    {
+      "id": "src/gen/living/zhelemish_cellar.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13183,
+      "renderedLength": 11854
+    },
+    {
+      "id": "src/gen/living/zhelemishnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18545,
+      "renderedLength": 16809
+    },
+    {
+      "id": "src/gen/living/carnivorous_fungus_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4615,
+      "renderedLength": 3792
+    },
+    {
+      "id": "src/gen/living/art_studies.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4977,
+      "renderedLength": 4403
+    },
+    {
+      "id": "src/gen/living/soviet_housing_pack.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23792,
+      "renderedLength": 21732
+    },
+    {
+      "id": "src/gen/living/domkom_laundry_pack.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19579,
+      "renderedLength": 17479
+    },
+    {
+      "id": "src/gen/living/obzh_school.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17707,
+      "renderedLength": 16220
+    },
+    {
+      "id": "src/gen/living/hospital_quarantine.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 28361,
+      "renderedLength": 26977
+    },
+    {
+      "id": "src/gen/living/samosbornyy_ostov.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14247,
+      "renderedLength": 12175
+    },
+    {
+      "id": "src/gen/living/cartographer_zone_map.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11042,
+      "renderedLength": 9704
+    },
+    {
+      "id": "src/gen/living/domkom_ammo_locker.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9856,
+      "renderedLength": 8720
+    },
+    {
+      "id": "src/gen/living/emergency_medpost.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15185,
+      "renderedLength": 13979
+    },
+    {
+      "id": "src/gen/living/fake_medpost_zhelemish.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16654,
+      "renderedLength": 15018
+    },
+    {
+      "id": "src/gen/living/hermoseam_station.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6661,
+      "renderedLength": 5657
+    },
+    {
+      "id": "src/gen/living/expedition_prep.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18422,
+      "renderedLength": 16986
+    },
+    {
+      "id": "src/gen/living/caravan_exchange.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12026,
+      "renderedLength": 11011
+    },
+    {
+      "id": "src/gen/living/external_cell_neighbor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24360,
+      "renderedLength": 22439
+    },
+    {
+      "id": "src/gen/living/golos_za_dveryu.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20151,
+      "renderedLength": 18215
+    },
+    {
+      "id": "src/gen/living/govnyak_smoke_den.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21373,
+      "renderedLength": 19415
+    },
+    {
+      "id": "src/gen/living/white_compulsion_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16382,
+      "renderedLength": 14951
+    },
+    {
+      "id": "src/gen/living/belaya_prislushka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21585,
+      "renderedLength": 19480
+    },
+    {
+      "id": "src/gen/living/veretar_window_rescue.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14448,
+      "renderedLength": 13223
+    },
+    {
+      "id": "src/gen/living/scientist_escort_sample.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 21982,
+      "renderedLength": 20368
+    },
+    {
+      "id": "src/gen/living/apartment_raid.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18963,
+      "renderedLength": 17255
+    },
+    {
+      "id": "src/gen/living/plombirovshchik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19197,
+      "renderedLength": 16846
+    },
+    {
+      "id": "src/gen/living/lampoglaz_corridor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3999,
+      "renderedLength": 3145
+    },
+    {
+      "id": "src/gen/living/gnilushka_lost_cell.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5513,
+      "renderedLength": 4486
+    },
+    {
+      "id": "src/systems/blood_plant.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13830,
+      "renderedLength": 11621
+    },
+    {
+      "id": "src/gen/living/blood_plant_den.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10234,
+      "renderedLength": 8621
+    },
+    {
+      "id": "src/gen/living/spore_carpet_cache.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6067,
+      "renderedLength": 4942
+    },
+    {
+      "id": "src/gen/living/npcs.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10231,
+      "renderedLength": 8728
+    },
+    {
+      "id": "src/gen/living/viktor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2536,
+      "renderedLength": 1723
+    },
+    {
+      "id": "src/gen/living/veteran.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2589,
+      "renderedLength": 1914
+    },
+    {
+      "id": "src/gen/living/babka_zina.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2217,
+      "renderedLength": 1713
+    },
+    {
+      "id": "src/gen/living/stalker_mecheny.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2530,
+      "renderedLength": 2019
+    },
+    {
+      "id": "src/gen/living/olevia.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1766,
+      "renderedLength": 1557
+    },
+    {
+      "id": "src/gen/maintenance/mukhin.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2275,
+      "renderedLength": 1820
+    },
+    {
+      "id": "src/gen/living/side_quests.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1732,
+      "renderedLength": 310
+    },
+    {
+      "id": "src/gen/living/slides.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5805,
+      "renderedLength": 5545
+    },
+    {
+      "id": "src/render/hint_textures.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2606,
+      "renderedLength": 2430
+    },
+    {
+      "id": "src/gen/living/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7416,
+      "renderedLength": 3118
+    },
+    {
+      "id": "src/gen/maintenance/forpost.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6896,
+      "renderedLength": 5576
+    },
+    {
+      "id": "src/gen/maintenance/mancobus_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4119,
+      "renderedLength": 3223
+    },
+    {
+      "id": "src/gen/maintenance/makhno.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3570,
+      "renderedLength": 2741
+    },
+    {
+      "id": "src/gen/maintenance/sant_ivanych.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2618,
+      "renderedLength": 2112
+    },
+    {
+      "id": "src/gen/maintenance/radist_gleb.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2400,
+      "renderedLength": 1876
+    },
+    {
+      "id": "src/gen/maintenance/diver_kot.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3529,
+      "renderedLength": 3016
+    },
+    {
+      "id": "src/gen/maintenance/gordon.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2464,
+      "renderedLength": 1828
+    },
+    {
+      "id": "src/gen/maintenance/flooded_lab.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7950,
+      "renderedLength": 6492
+    },
+    {
+      "id": "src/gen/maintenance/content_helpers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9136,
+      "renderedLength": 6645
+    },
+    {
+      "id": "src/gen/maintenance/pressure_station.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4839,
+      "renderedLength": 4367
+    },
+    {
+      "id": "src/gen/maintenance/steam_valves.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2770,
+      "renderedLength": 2354
+    },
+    {
+      "id": "src/gen/maintenance/diver_cache.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2958,
+      "renderedLength": 2454
+    },
+    {
+      "id": "src/gen/maintenance/watermeter_post.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4524,
+      "renderedLength": 4153
+    },
+    {
+      "id": "src/gen/maintenance/overflow_sluice.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10307,
+      "renderedLength": 9629
+    },
+    {
+      "id": "src/gen/maintenance/heatline_zero.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8086,
+      "renderedLength": 7708
+    },
+    {
+      "id": "src/gen/maintenance/metro_error_line.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7856,
+      "renderedLength": 7362
+    },
+    {
+      "id": "src/gen/maintenance/concentrate_press.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11715,
+      "renderedLength": 10931
+    },
+    {
+      "id": "src/gen/maintenance/pressovik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15202,
+      "renderedLength": 13499
+    },
+    {
+      "id": "src/gen/maintenance/water_bridge.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6153,
+      "renderedLength": 5308
+    },
+    {
+      "id": "src/gen/maintenance/olgoy_meat_cache.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3007,
+      "renderedLength": 2416
+    },
+    {
+      "id": "src/gen/maintenance/vodyanoy_koshmar_line.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3571,
+      "renderedLength": 2890
+    },
+    {
+      "id": "src/gen/maintenance/trubnyy_avtomat_line.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2864,
+      "renderedLength": 2263
+    },
+    {
+      "id": "src/gen/maintenance/nasosnaya_matka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17683,
+      "renderedLength": 15743
+    },
+    {
+      "id": "src/gen/maintenance/lift_repair_shaft.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9583,
+      "renderedLength": 9003
+    },
+    {
+      "id": "src/gen/maintenance/remontnik_bez_smeny.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16631,
+      "renderedLength": 14532
+    },
+    {
+      "id": "src/gen/maintenance/charge_cage.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6805,
+      "renderedLength": 6159
+    },
+    {
+      "id": "src/gen/maintenance/automation_cage.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1960,
+      "renderedLength": 1612
+    },
+    {
+      "id": "src/gen/maintenance/hladonets.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12505,
+      "renderedLength": 10834
+    },
+    {
+      "id": "src/gen/maintenance/kabelnik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6005,
+      "renderedLength": 5234
+    },
+    {
+      "id": "src/gen/maintenance/collectors_pressure_reroute.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20698,
+      "renderedLength": 19121
+    },
+    {
+      "id": "src/gen/maintenance/defector_liquidator.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20003,
+      "renderedLength": 18647
+    },
+    {
+      "id": "src/gen/maintenance/paritel_steam_bridge.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18023,
+      "renderedLength": 15829
+    },
+    {
+      "id": "src/gen/maintenance/cult_held_workshop.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18283,
+      "renderedLength": 16553
+    },
+    {
+      "id": "src/gen/maintenance/slime_sample_post.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17472,
+      "renderedLength": 16627
+    },
+    {
+      "id": "src/gen/maintenance/liquidatorbase.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2324,
+      "renderedLength": 1763
+    },
+    {
+      "id": "src/gen/maintenance/blue_glow_sample.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9229,
+      "renderedLength": 8370
+    },
+    {
+      "id": "src/gen/maintenance/green_acid_room.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4400,
+      "renderedLength": 3773
+    },
+    {
+      "id": "src/gen/maintenance/brown_slime_cleanup.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5172,
+      "renderedLength": 4625
+    },
+    {
+      "id": "src/gen/maintenance/safe_slimevik_den.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5076,
+      "renderedLength": 4193
+    },
+    {
+      "id": "src/gen/maintenance/slime_woman_sump.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8106,
+      "renderedLength": 6792
+    },
+    {
+      "id": "src/gen/maintenance/slime_deactivation_furnace.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11432,
+      "renderedLength": 10638
+    },
+    {
+      "id": "src/gen/maintenance/slime_singing_vents.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5983,
+      "renderedLength": 5311
+    },
+    {
+      "id": "src/gen/maintenance/ventshun.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16833,
+      "renderedLength": 14473
+    },
+    {
+      "id": "src/gen/maintenance/red_adhesive_trap.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3783,
+      "renderedLength": 3184
+    },
+    {
+      "id": "src/gen/maintenance/black_slime_eyes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16086,
+      "renderedLength": 13943
+    },
+    {
+      "id": "src/gen/maintenance/chernaya_lichinka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23354,
+      "renderedLength": 20504
+    },
+    {
+      "id": "src/systems/seroburmaline.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11969,
+      "renderedLength": 9798
+    },
+    {
+      "id": "src/gen/maintenance/seroburmaline_no_look.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4482,
+      "renderedLength": 3735
+    },
+    {
+      "id": "src/gen/maintenance/pneumomail_station.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2569,
+      "renderedLength": 2126
+    },
+    {
+      "id": "src/gen/maintenance/betonoed_shortcut.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19794,
+      "renderedLength": 16499
+    },
+    {
+      "id": "src/gen/maintenance/kostorez_locker.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3045,
+      "renderedLength": 2490
+    },
+    {
+      "id": "src/gen/maintenance/slepoglaz_line.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3157,
+      "renderedLength": 2531
+    },
+    {
+      "id": "src/gen/maintenance/ostavshiysya_likvidator.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16251,
+      "renderedLength": 14807
+    },
+    {
+      "id": "src/gen/maintenance/filtronos.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16138,
+      "renderedLength": 13695
+    },
+    {
+      "id": "src/gen/maintenance/rzhavnik_shelf.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3139,
+      "renderedLength": 2442
+    },
+    {
+      "id": "src/systems/borshchevik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10093,
+      "renderedLength": 8489
+    },
+    {
+      "id": "src/gen/maintenance/borshchevik_blockade.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5134,
+      "renderedLength": 4224
+    },
+    {
+      "id": "src/systems/swarm_nests.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15567,
+      "renderedLength": 12154
+    },
+    {
+      "id": "src/gen/maintenance/swarm_nest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3968,
+      "renderedLength": 3099
+    },
+    {
+      "id": "src/gen/maintenance/content_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16332,
+      "renderedLength": 12539
+    },
+    {
+      "id": "src/gen/maintenance/geometry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 22734,
+      "renderedLength": 20909
+    },
+    {
+      "id": "src/gen/maintenance/territory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11425,
+      "renderedLength": 9725
+    },
+    {
+      "id": "src/gen/maintenance/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20477,
+      "renderedLength": 16015
+    },
+    {
+      "id": "src/gen/hell/plot_chain.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4126,
+      "renderedLength": 3345
+    },
+    {
+      "id": "src/gen/hell/psi_meat_cache.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24524,
+      "renderedLength": 21177
+    },
+    {
+      "id": "src/gen/hell/madoka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2778,
+      "renderedLength": 2221
+    },
+    {
+      "id": "src/gen/hell/thin_wall_chapel.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11238,
+      "renderedLength": 9541
+    },
+    {
+      "id": "src/gen/hell/altar_arena.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 26434,
+      "renderedLength": 22693
+    },
+    {
+      "id": "src/gen/hell/choir_tax.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 33198,
+      "renderedLength": 29384
+    },
+    {
+      "id": "src/gen/hell/myasomer.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23563,
+      "renderedLength": 20021
+    },
+    {
+      "id": "src/gen/hell/content_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1411,
+      "renderedLength": 768
+    },
+    {
+      "id": "src/gen/hell/geometry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 46883,
+      "renderedLength": 41961
+    },
+    {
+      "id": "src/gen/hell/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20419,
+      "renderedLength": 17421
+    },
+    {
+      "id": "src/data/void_protocols.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6606,
+      "renderedLength": 5837
+    },
+    {
+      "id": "src/systems/void_protocols.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 38421,
+      "renderedLength": 31447
+    },
+    {
+      "id": "src/gen/void/borrowed_light_rule.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4009,
+      "renderedLength": 3330
+    },
+    {
+      "id": "src/gen/void/ekrannik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18383,
+      "renderedLength": 15828
+    },
+    {
+      "id": "src/gen/void/maronary_signalshchik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16883,
+      "renderedLength": 14337
+    },
+    {
+      "id": "src/gen/void/perestanovshchik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13980,
+      "renderedLength": 12092
+    },
+    {
+      "id": "src/gen/void/plot_chain.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2836,
+      "renderedLength": 2099
+    },
+    {
+      "id": "src/gen/void/pristav_pustoty.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19223,
+      "renderedLength": 16543
+    },
+    {
+      "id": "src/gen/void/protocol_chamber.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4048,
+      "renderedLength": 3186
+    },
+    {
+      "id": "src/gen/void/seryy_smotritel.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 19535,
+      "renderedLength": 16916
+    },
+    {
+      "id": "src/gen/void/trace_seal_protocol.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18421,
+      "renderedLength": 15695
+    },
+    {
+      "id": "src/gen/void/content_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1591,
+      "renderedLength": 746
+    },
+    {
+      "id": "src/gen/void/geometry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 49692,
+      "renderedLength": 45012
+    },
+    {
+      "id": "src/gen/void/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6331,
+      "renderedLength": 4089
+    },
+    {
+      "id": "src/gen/floor_manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3777,
+      "renderedLength": 2222
+    },
+    {
+      "id": "src/gen/floor_instances/manifest.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4453,
+      "renderedLength": 2333
+    },
+    {
+      "id": "src/render/procedural_screen_textures.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9147,
+      "renderedLength": 8623
+    },
+    {
+      "id": "src/render/textures.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 45128,
+      "renderedLength": 39885
+    },
+    {
+      "id": "src/data/monster_visuals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7874,
+      "renderedLength": 6874
+    },
+    {
+      "id": "src/render/sprites.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32663,
+      "renderedLength": 29635
+    },
+    {
+      "id": "src/data/samosbor_variants.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 39215,
+      "renderedLength": 35277
+    },
+    {
+      "id": "src/systems/samosbor_variants_runtime.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2583,
+      "renderedLength": 1941
+    },
+    {
+      "id": "src/entities/procedural_visuals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 33231,
+      "renderedLength": 29418
+    },
+    {
+      "id": "src/render/item_sprites.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 707509,
+      "renderedLength": 610022
+    },
+    {
+      "id": "src/render/animations/generated_frames.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1079080,
+      "renderedLength": 2309350
+    },
+    {
+      "id": "src/render/animations/registry.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4757,
+      "renderedLength": 3562
+    },
+    {
+      "id": "src/render/animations/procedural.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7476,
+      "renderedLength": 5009
+    },
+    {
+      "id": "src/render/animations/types.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6218,
+      "renderedLength": 79
+    },
+    {
+      "id": "src/render/animations/defs/auto.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3430,
+      "renderedLength": 3006
+    },
+    {
+      "id": "src/render/animations/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 266,
+      "renderedLength": 58
+    },
+    {
+      "id": "src/render/animations/runtime.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1910,
+      "renderedLength": 1397
+    },
+    {
+      "id": "src/render/animations/resolver.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7924,
+      "renderedLength": 6279
+    },
+    {
+      "id": "src/render/animations/textures.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16471,
+      "renderedLength": 11054
+    },
+    {
+      "id": "src/data/visual_detail_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18168,
+      "renderedLength": 14839
+    },
+    {
+      "id": "src/data/visual_surface_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13520,
+      "renderedLength": 10495
+    },
+    {
+      "id": "src/data/visual_models.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 45881,
+      "renderedLength": 41779
+    },
+    {
+      "id": "src/render/mesh/materials.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2865,
+      "renderedLength": 2347
+    },
+    {
+      "id": "src/render/mesh/primitives.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12346,
+      "renderedLength": 9994
+    },
+    {
+      "id": "src/render/mesh/model_cache.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1078,
+      "renderedLength": 684
+    },
+    {
+      "id": "src/render/mesh/buffers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10429,
+      "renderedLength": 8528
+    },
+    {
+      "id": "src/render/shaders_common.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3044,
+      "renderedLength": 3044
+    },
+    {
+      "id": "src/render/mesh/shaders.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7232,
+      "renderedLength": 7026
+    },
+    {
+      "id": "src/render/mesh/scene_collect.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 89231,
+      "renderedLength": 72312
+    },
+    {
+      "id": "src/render/mesh/types.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2427,
+      "renderedLength": 423
+    },
+    {
+      "id": "src/render/mesh/voxel/types.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4119,
+      "renderedLength": 1903
+    },
+    {
+      "id": "src/render/mesh/voxel/greedy_mesh.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8388,
+      "renderedLength": 4527
+    },
+    {
+      "id": "src/render/mesh/voxel/field.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7717,
+      "renderedLength": 5967
+    },
+    {
+      "id": "src/render/mesh/pass.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15815,
+      "renderedLength": 12731
+    },
+    {
+      "id": "src/render/webgl.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 179778,
+      "renderedLength": 162834
+    },
+    {
+      "id": "src/render/hud_fx.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17202,
+      "renderedLength": 11038
+    },
+    {
+      "id": "src/render/arenaui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3194,
+      "renderedLength": 2716
+    },
+    {
+      "id": "src/systems/arena_betting.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2912,
+      "renderedLength": 1357
+    },
+    {
+      "id": "src/systems/arena.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5018,
+      "renderedLength": 3409
+    },
+    {
+      "id": "src/data/samosbor_director.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15911,
+      "renderedLength": 14740
+    },
+    {
+      "id": "src/systems/samosbor_director.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 28545,
+      "renderedLength": 22596
+    },
+    {
+      "id": "src/systems/pneumomail.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14373,
+      "renderedLength": 11868
+    },
+    {
+      "id": "src/systems/balance.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 936,
+      "renderedLength": 626
+    },
+    {
+      "id": "src/systems/urination.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4862,
+      "renderedLength": 3910
+    },
+    {
+      "id": "src/systems/debug_cheats.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 811,
+      "renderedLength": 663
+    },
+    {
+      "id": "src/data/tool_lights.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3058,
+      "renderedLength": 2333
+    },
+    {
+      "id": "src/systems/combat_stimulus.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10922,
+      "renderedLength": 8060
+    },
+    {
+      "id": "src/data/slime_defs.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11811,
+      "renderedLength": 8559
+    },
+    {
+      "id": "src/systems/slimevik.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15194,
+      "renderedLength": 13274
+    },
+    {
+      "id": "src/systems/gnilushka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13356,
+      "renderedLength": 11248
+    },
+    {
+      "id": "src/systems/ai/khorovaya_matka.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9544,
+      "renderedLength": 8113
+    },
+    {
+      "id": "src/systems/procedural_anomalies/zombie_apocalypse.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7588,
+      "renderedLength": 6267
+    },
+    {
+      "id": "src/systems/matka_source.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6460,
+      "renderedLength": 5408
+    },
+    {
+      "id": "src/systems/ai/monster_pack.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1247,
+      "renderedLength": 648
+    },
+    {
+      "id": "src/systems/ai/monster.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 345638,
+      "renderedLength": 314359
+    },
+    {
+      "id": "src/systems/ai/combat.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 28320,
+      "renderedLength": 21859
+    },
+    {
+      "id": "src/systems/ai/micro_goals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7253,
+      "renderedLength": 5545
+    },
+    {
+      "id": "src/data/room_affordances.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3940,
+      "renderedLength": 2878
+    },
+    {
+      "id": "src/systems/ai/npc_emergency.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24766,
+      "renderedLength": 19583
+    },
+    {
+      "id": "src/data/npc_special_routines.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1017,
+      "renderedLength": 501
+    },
+    {
+      "id": "src/systems/npc_special_routines.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1613,
+      "renderedLength": 1084
+    },
+    {
+      "id": "src/systems/surface_cleanup.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1723,
+      "renderedLength": 1450
+    },
+    {
+      "id": "src/systems/ai/npc_utility.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32116,
+      "renderedLength": 22666
+    },
+    {
+      "id": "src/systems/ai/npc_fsm.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 43072,
+      "renderedLength": 37147
+    },
+    {
+      "id": "src/systems/ai/npc_state_text.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1384,
+      "renderedLength": 1236
+    },
+    {
+      "id": "src/systems/ai/tactics.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 24106,
+      "renderedLength": 20237
+    },
+    {
+      "id": "src/systems/ai/index.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6627,
+      "renderedLength": 4693
+    },
+    {
+      "id": "src/systems/samosbor_hooks.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1605,
+      "renderedLength": 89
+    },
+    {
+      "id": "src/systems/wrong_door.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15020,
+      "renderedLength": 11258
+    },
+    {
+      "id": "src/systems/hermodoor_borer.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 25516,
+      "renderedLength": 21516
+    },
+    {
+      "id": "src/systems/samosbor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 185860,
+      "renderedLength": 156676
+    },
+    {
+      "id": "src/data/floor_catalog.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10378,
+      "renderedLength": 10241
+    },
+    {
+      "id": "src/systems/floor_catalog.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3734,
+      "renderedLength": 1987
+    },
+    {
+      "id": "src/systems/heatline.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16828,
+      "renderedLength": 15291
+    },
+    {
+      "id": "src/systems/carnivorous_fungus.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15091,
+      "renderedLength": 13135
+    },
+    {
+      "id": "src/systems/procedural_anomalies/cement_memory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7286,
+      "renderedLength": 6208
+    },
+    {
+      "id": "src/systems/procedural_anomalies/conveyor_sorter.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4685,
+      "renderedLength": 3971
+    },
+    {
+      "id": "src/systems/procedural_anomalies/conway_life.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17950,
+      "renderedLength": 16005
+    },
+    {
+      "id": "src/systems/procedural_anomalies/living_tunnels.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15603,
+      "renderedLength": 13192
+    },
+    {
+      "id": "src/systems/procedural_anomalies/radio_chess.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11247,
+      "renderedLength": 8532
+    },
+    {
+      "id": "src/systems/procedural_anomalies/sandpile_perekrytie.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16988,
+      "renderedLength": 14737
+    },
+    {
+      "id": "src/systems/procedural_anomalies/section_shift.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 15161,
+      "renderedLength": 13065
+    },
+    {
+      "id": "src/systems/procedural_anomalies/wall_snake.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14401,
+      "renderedLength": 12541
+    },
+    {
+      "id": "src/systems/procedural_anomalies.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 32699,
+      "renderedLength": 27967
+    },
+    {
+      "id": "src/systems/debug.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 92508,
+      "renderedLength": 78084
+    },
+    {
+      "id": "src/render/map_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 56035,
+      "renderedLength": 48701
+    },
+    {
+      "id": "src/render/economy_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17016,
+      "renderedLength": 10378
+    },
+    {
+      "id": "src/render/ui_layout.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13306,
+      "renderedLength": 8710
+    },
+    {
+      "id": "src/render/stats_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16109,
+      "renderedLength": 13758
+    },
+    {
+      "id": "src/render/quest_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 14074,
+      "renderedLength": 11879
+    },
+    {
+      "id": "src/render/log_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4095,
+      "renderedLength": 3213
+    },
+    {
+      "id": "src/render/factions_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11002,
+      "renderedLength": 9701
+    },
+    {
+      "id": "src/systems/demos.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 16467,
+      "renderedLength": 12390
+    },
+    {
+      "id": "src/systems/demos_profiles.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 30358,
+      "renderedLength": 23534
+    },
+    {
+      "id": "src/render/demos_feed_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3689,
+      "renderedLength": 3144
+    },
+    {
+      "id": "src/render/demos_profile_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7869,
+      "renderedLength": 6982
+    },
+    {
+      "id": "src/render/demos_social_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2237,
+      "renderedLength": 1865
+    },
+    {
+      "id": "src/render/demos_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17055,
+      "renderedLength": 14693
+    },
+    {
+      "id": "src/systems/game_menu.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 558,
+      "renderedLength": 472
+    },
+    {
+      "id": "src/render/menu_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2254,
+      "renderedLength": 1748
+    },
+    {
+      "id": "src/render/feedback_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3843,
+      "renderedLength": 3327
+    },
+    {
+      "id": "src/systems/mobile_actions.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4139,
+      "renderedLength": 3237
+    },
+    {
+      "id": "src/render/controls_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6016,
+      "renderedLength": 5316
+    },
+    {
+      "id": "src/render/help_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7866,
+      "renderedLength": 7033
+    },
+    {
+      "id": "src/render/ui_settings_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8537,
+      "renderedLength": 7785
+    },
+    {
+      "id": "src/systems/dice.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9018,
+      "renderedLength": 7093
+    },
+    {
+      "id": "src/systems/domino.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18924,
+      "renderedLength": 14665
+    },
+    {
+      "id": "src/systems/checkers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17750,
+      "renderedLength": 14986
+    },
+    {
+      "id": "src/systems/durak.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20562,
+      "renderedLength": 16754
+    },
+    {
+      "id": "src/systems/npc_interaction_options.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18127,
+      "renderedLength": 14431
+    },
+    {
+      "id": "src/render/durak_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 18056,
+      "renderedLength": 15955
+    },
+    {
+      "id": "src/render/dice_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5535,
+      "renderedLength": 4761
+    },
+    {
+      "id": "src/render/domino_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7650,
+      "renderedLength": 6666
+    },
+    {
+      "id": "src/render/checkers_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4127,
+      "renderedLength": 3580
+    },
+    {
+      "id": "src/systems/trade.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 23611,
+      "renderedLength": 13609
+    },
+    {
+      "id": "src/render/npc_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 20001,
+      "renderedLength": 17268
+    },
+    {
+      "id": "src/render/container_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9420,
+      "renderedLength": 8408
+    },
+    {
+      "id": "src/render/craft_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 13495,
+      "renderedLength": 10878
+    },
+    {
+      "id": "src/render/emergency_panel_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2850,
+      "renderedLength": 2361
+    },
+    {
+      "id": "src/render/computer_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2652,
+      "renderedLength": 2259
+    },
+    {
+      "id": "src/render/gambling_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2527,
+      "renderedLength": 2102
+    },
+    {
+      "id": "src/render/net_sphere_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10701,
+      "renderedLength": 10034
+    },
+    {
+      "id": "src/render/net_hack_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2312,
+      "renderedLength": 1947
+    },
+    {
+      "id": "src/render/fast_elevator_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4317,
+      "renderedLength": 3583
+    },
+    {
+      "id": "src/render/net_terminal_bank_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3763,
+      "renderedLength": 3247
+    },
+    {
+      "id": "src/render/net_terminal_gen_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3827,
+      "renderedLength": 2946
+    },
+    {
+      "id": "src/render/map_editor_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 35868,
+      "renderedLength": 29921
+    },
+    {
+      "id": "src/data/gambling.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 946,
+      "renderedLength": 543
+    },
+    {
+      "id": "src/systems/gambling.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9098,
+      "renderedLength": 7225
+    },
+    {
+      "id": "src/systems/fast_elevator.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2997,
+      "renderedLength": 2082
+    },
+    {
+      "id": "src/systems/metro.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5970,
+      "renderedLength": 4849
+    },
+    {
+      "id": "src/systems/interactions.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 31805,
+      "renderedLength": 24512
+    },
+    {
+      "id": "src/data/languages.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7522,
+      "renderedLength": 5700
+    },
+    {
+      "id": "src/render/hud.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 92213,
+      "renderedLength": 77983
+    },
+    {
+      "id": "src/systems/needs.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12102,
+      "renderedLength": 9603
+    },
+    {
+      "id": "src/systems/breach_charge.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7224,
+      "renderedLength": 5885
+    },
+    {
+      "id": "src/systems/monster_drops.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2191,
+      "renderedLength": 1554
+    },
+    {
+      "id": "src/systems/dialogue.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1977,
+      "renderedLength": 1139
+    },
+    {
+      "id": "music/ambientsong1small.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2152927,
+      "renderedLength": 2152937
+    },
+    {
+      "id": "music/ambientsong2.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2033787,
+      "renderedLength": 2033797
+    },
+    {
+      "id": "music/ambientsong3.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 592483,
+      "renderedLength": 592493
+    },
+    {
+      "id": "music/ambientsong4.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1034427,
+      "renderedLength": 1034437
+    },
+    {
+      "id": "music/fightsong1small.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 420439,
+      "renderedLength": 420449
+    },
+    {
+      "id": "music/fightsong2small.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 607467,
+      "renderedLength": 607477
+    },
+    {
+      "id": "music/fightsong3.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 578511,
+      "renderedLength": 578521
+    },
+    {
+      "id": "music/safezone1small.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 870107,
+      "renderedLength": 870117
+    },
+    {
+      "id": "music/safezonesong2.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 636803,
+      "renderedLength": 636813
+    },
+    {
+      "id": "music/safezonesong3.ogg",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 766759,
+      "renderedLength": 766769
+    },
+    {
+      "id": "src/systems/music.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4964,
+      "renderedLength": 4288
+    },
+    {
+      "id": "src/systems/fog_shark.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6282,
+      "renderedLength": 4984
+    },
+    {
+      "id": "src/systems/monster_counterplay.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2817,
+      "renderedLength": 1697
+    },
+    {
+      "id": "src/systems/monster_armor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9193,
+      "renderedLength": 7678
+    },
+    {
+      "id": "src/input.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10550,
+      "renderedLength": 9336
+    },
+    {
+      "id": "src/fullscreen.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4779,
+      "renderedLength": 3593
+    },
+    {
+      "id": "src/mobile.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 22081,
+      "renderedLength": 19132
+    },
+    {
+      "id": "src/systems/input_intent.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 6367,
+      "renderedLength": 3555
+    },
+    {
+      "id": "src/systems/gamepad_settings.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4817,
+      "renderedLength": 2670
+    },
+    {
+      "id": "src/input_gamepad.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 9778,
+      "renderedLength": 7426
+    },
+    {
+      "id": "src/systems/fps_monitor.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 597,
+      "renderedLength": 357
+    },
+    {
+      "id": "src/data/story_outcomes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3268,
+      "renderedLength": 1355
+    },
+    {
+      "id": "src/systems/story_outcomes.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8377,
+      "renderedLength": 6278
+    },
+    {
+      "id": "src/systems/liquidator_cleanup_items.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 807,
+      "renderedLength": 498
+    },
+    {
+      "id": "src/data/scripted_arrivals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2303,
+      "renderedLength": 1120
+    },
+    {
+      "id": "src/systems/scripted_arrivals.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 10247,
+      "renderedLength": 8304
+    },
+    {
+      "id": "src/systems/floor_memory.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 61967,
+      "renderedLength": 51260
+    },
+    {
+      "id": "src/systems/story_route_gates.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 1500,
+      "renderedLength": 972
+    },
+    {
+      "id": "src/systems/uv_spotlight.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 12669,
+      "renderedLength": 11403
+    },
+    {
+      "id": "src/systems/danger_field.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 4401,
+      "renderedLength": 3659
+    },
+    {
+      "id": "src/systems/floor_serialization.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 8473,
+      "renderedLength": 3878
+    },
+    {
+      "id": "src/systems/online_containers.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 5066,
+      "renderedLength": 2326
+    },
+    {
+      "id": "src/systems/weapon_beams.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 7252,
+      "renderedLength": 5890
+    },
+    {
+      "id": "src/systems/local_space.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 2873,
+      "renderedLength": 2229
+    },
+    {
+      "id": "src/systems/camera.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 17541,
+      "renderedLength": 11596
+    },
+    {
+      "id": "src/data/plot_events.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 3872,
+      "renderedLength": 2887
+    },
+    {
+      "id": "src/data/tips.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 71141,
+      "renderedLength": 70037
+    },
+    {
+      "id": "src/render/title_ui.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 11365,
+      "renderedLength": 9555
+    },
+    {
+      "id": "src/main.ts",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 387618,
+      "renderedLength": 334729
+    },
+    {
+      "id": "index.html",
+      "chunk": "index-Dx3lJAvz.js",
+      "originalLength": 882,
+      "renderedLength": 0
+    }
+  ]
+}
