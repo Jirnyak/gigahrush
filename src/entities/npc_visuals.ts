@@ -132,12 +132,14 @@ const GENERATED_ART_FAMILIES: NpcVisualFamily[] = Object.keys(manifestFamilies).
       procedural: false,
       generate: ctx => {
         const seed = mix32((ctx.seed || 1) ^ Math.imul((ctx.sprite ?? 0) + 1, 0x51ed270b));
-        const manifestId = manifestIds[seed % manifestIds.length];
+        const choice = seed % manifestIds.length;
+        const manifestId = manifestIds[choice < 0 ? choice + manifestIds.length : choice];
         return firstPartyNpcArt(manifestId) ?? new Uint32Array(0);
       },
       textureKey: ctx => {
         const seed = mix32((ctx.seed || 1) ^ Math.imul((ctx.sprite ?? 0) + 1, 0x51ed270b));
-        const manifestId = manifestIds[seed % manifestIds.length];
+        const choice = seed % manifestIds.length;
+        const manifestId = manifestIds[choice < 0 ? choice + manifestIds.length : choice];
         return `first_party_art:${manifestId}`;
       },
     });

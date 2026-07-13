@@ -240,6 +240,15 @@ function cleanNetGen(value: string): string {
   return /^NET-[A-Z0-9-]{4,28}$/.test(clean) ? clean : '';
 }
 
+export function hashNetGen(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= BigInt(value.charCodeAt(i));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(36);
+}
+
 function consumeNetSphereKeyboardEvent(e: KeyboardEvent): void {
   e.preventDefault();
   e.stopImmediatePropagation();

@@ -498,6 +498,7 @@ import {
   reportNetSphereEvent,
   setNetSphereChatHandler,
   tickNetSphere,
+  hashNetGen,
   _test_storage
 } from './systems/net_sphere';
 
@@ -2002,7 +2003,7 @@ setNetSphereChatHandler((nickname, text, chatNetGen, createdAt) => {
   const ageSec = createdAt ? Math.max(0, (Date.now() - createdAt) / 1000) : 0;
 
   const isPlayerMatch = chatNetGen 
-    ? player?.netGen === chatNetGen 
+    ? hashNetGen(player?.netGen || '') === chatNetGen 
     : player?.name === nickname;
 
   if (isPlayerMatch && player) {
@@ -2017,7 +2018,7 @@ setNetSphereChatHandler((nickname, text, chatNetGen, createdAt) => {
       if (e.id === player?.id) continue;
       
       const isEntityMatch = chatNetGen 
-        ? e.netGen === chatNetGen 
+        ? hashNetGen(e.netGen || '') === chatNetGen 
         : e.name === nickname;
       
       if ((e.peerSlot !== undefined || e.netGen) && isEntityMatch) {

@@ -543,7 +543,7 @@ export async function readChat(db: D1Database, sinceChatId: number): Promise<Rec
   `).bind(since, CHAT_LIMIT).all<Record<string, unknown>>();
   return (result.results ?? []).reverse().map(row => ({
     id: num(row.id, 0, 0, MAX_PUBLIC_ID),
-    netGen: row.net_gen ? String(row.net_gen) : undefined,
+    netGen: row.net_gen ? publicEventKeyHash(String(row.net_gen)) : undefined,
     nickname: publicNickname(row.nickname),
     body: cleanMessage(row.body),
     createdAt: num(row.created_at, 0, 0, 9_999_999_999_999),

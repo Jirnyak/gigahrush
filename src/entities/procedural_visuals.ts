@@ -688,6 +688,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
       occupation: e.occupation,
       isFemale: e.isFemale,
       age: e.age,
+      plotNpcId: e.plotNpcId,
     });
     const key = npcVisualTextureKey(visualId, {
       seed: h,
@@ -715,6 +716,7 @@ function npcEntityVisualId(e: Entity): string | undefined {
     occupation: e.occupation,
     isFemale: e.isFemale,
     age: e.age,
+    plotNpcId: e.plotNpcId,
   });
 }
 
