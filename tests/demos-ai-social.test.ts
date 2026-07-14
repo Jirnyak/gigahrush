@@ -19,7 +19,7 @@ import { makeGameState, makeTestNpc } from './helpers';
 function makeSocialState() {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
-  setAlifeState(state, { seed: 12345, total: 32 });
+  setAlifeState(state, { seed: 12345, total: 32 }, { populationPlan: 'empty_packages' });
   return state;
 }
 

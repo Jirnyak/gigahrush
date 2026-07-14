@@ -267,7 +267,7 @@ test('A-Life mobile runtime keeps the same baseline despite large memory hints',
 test('A-Life materializes ambient slots and leaves killed slots empty', () => {
   initFactionRelations();
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const world = new World();
   world.cells[world.idx(10, 10)] = Cell.FLOOR;
   world.cells[world.idx(11, 10)] = Cell.FLOOR;
@@ -564,7 +564,7 @@ test('A-Life population package foldback stores changed sparse state without liv
 
 test('event-created ordinary NPC receives persistent A-Life identity', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = ambientTemplate(50, 16.5, 16.5);
   npc.name = 'Новый жилец';
   npc.faction = Faction.SCIENTIST;
@@ -602,7 +602,7 @@ test('event-created ordinary NPC does not inherit an existing A-Life identity or
       kills: 17,
       npcKills: 9,
     }],
-  }) as {
+  }, { populationPlan: 'empty_packages' }) as {
     npcs: Array<{
       id: number;
       floorKey: string;
@@ -654,7 +654,7 @@ test('A-Life player relations are regenerated for a new death-continuation host'
       { id: 2, floorKey: 'story:living', faction: Faction.CULTIST, playerRelation: -80 },
       { id: 3, floorKey: 'story:living', faction: Faction.CITIZEN, playerRelation: 80 },
     ],
-  });
+  }, { populationPlan: 'empty_packages' });
   const guard = ambientTemplate(1, 10, 10);
   guard.alifeId = 1;
   guard.playerRelation = 80;
@@ -679,7 +679,7 @@ test('A-Life player relations are regenerated for a new death-continuation host'
 test('A-Life death-continuation relation reset stays a compact current-player baseline', () => {
   const state = minimalState();
   initFactionRelations();
-  setAlifeState(state, { seed: 12345, total: 20_000 });
+  setAlifeState(state, { seed: 12345, total: 20_000 }, { populationPlan: 'empty_packages' });
   const host = ambientTemplate(2, 11, 10);
   host.alifeId = 2;
   host.faction = Faction.CULTIST;
@@ -697,7 +697,7 @@ test('A-Life death-continuation relation reset stays a compact current-player ba
 test('A-Life caps sanitized and saved dead ids', () => {
   const state = minimalState();
   const deadIds = Array.from({ length: 70_000 }, (_, index) => index + 1);
-  setAlifeState(state, { seed: 12345, total: 100_000, deadIds });
+  setAlifeState(state, { seed: 12345, total: 100_000, deadIds }, { populationPlan: 'empty_packages' });
   const save = alifeForSave(state);
   assert.equal(save.deadIds.length, 65_536);
   assert.equal(save.deadIds[0], 1);
@@ -706,7 +706,7 @@ test('A-Life caps sanitized and saved dead ids', () => {
 
 test('A-Life quest candidates are bounded instead of every persistent NPC offering work', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   let candidates = 0;
   forEachAlifeNpcRecordSlice(state, 0, defaultAlifePopulation(), snapshot => {
     if (snapshot.canGiveQuest) candidates++;
@@ -718,7 +718,7 @@ test('A-Life quest candidates are bounded instead of every persistent NPC offeri
 
 test('A-Life design-floor records use Floor 69 social population mix', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const floor69: NonNullable<ReturnType<typeof getAlifeNpcRecordSnapshot>>[] = [];
   forEachAlifeNpcRecordSlice(state, 0, defaultAlifePopulation(), snapshot => {
     if (snapshot.floorKey === 'design:floor_69') floor69.push(snapshot);
@@ -747,7 +747,7 @@ test('A-Life current route plan replaces blocked Floor 69 in strict portal mode'
 
   try {
     const state = minimalState();
-    setAlifeState(state, { seed: 12345, total: 100_000 });
+    setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
     let blockedDesignRecords = 0;
     let replacementRecords = 0;
     forEachAlifeNpcRecordSlice(state, 0, defaultAlifePopulation(), snapshot => {
@@ -765,7 +765,7 @@ test('A-Life current route plan replaces blocked Floor 69 in strict portal mode'
 
 test('A-Life generation keeps broad level tail and splits wealth mostly into account balance', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   let lowLevel = 0;
   let maxLevel = 0;
   let millionaires = 0;
@@ -830,7 +830,7 @@ test('A-Life materialization preserves template sprite identity for special floo
 
 test('A-Life materializes cash and account wealth as separate NPC fields', () => {
   const state = minimalState();
-  const alife = setAlifeState(state, { seed: 12345, total: 100_000, overrides: [{ id: 1, money: 640, accountRubles: 999_360 }] }) as {
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000, overrides: [{ id: 1, money: 640, accountRubles: 999_360 }] }, { populationPlan: 'empty_packages' }) as {
     floorIndex: Record<string, number[]>;
   };
   alife.floorIndex['story:living'] = [0];
@@ -853,7 +853,7 @@ test('A-Life materializes cash and account wealth as separate NPC fields', () =>
 
 test('A-Life restored floor entities preserve account wealth on capture', () => {
   const state = minimalState();
-  const alife = setAlifeState(state, { seed: 12345, total: 100_000, overrides: [{ id: 1, money: 640, accountRubles: 999_360 }] }) as {
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000, overrides: [{ id: 1, money: 640, accountRubles: 999_360 }] }, { populationPlan: 'empty_packages' }) as {
     floorIndex: Record<string, number[]>;
   };
   alife.floorIndex['story:living'] = [0];
@@ -877,7 +877,7 @@ test('A-Life restored floor entities preserve account wealth on capture', () => 
 
 test('A-Life leaderboard includes the player as a ranked actor', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 1_000 });
+  setAlifeState(state, { seed: 12345, total: 1_000 }, { populationPlan: 'empty_packages' });
   const player: Entity = {
     id: 0,
     type: EntityType.NPC, persistentNpcId: 'player',
@@ -908,7 +908,7 @@ test('A-Life leaderboard includes the player as a ranked actor', () => {
 
 test('A-Life leaderboard cache respects requested limits', () => {
   const state = minimalState();
-  setAlifeState(state, { seed: 12345, total: 1_000 });
+  setAlifeState(state, { seed: 12345, total: 1_000 }, { populationPlan: 'empty_packages' });
   const player: Entity = {
     id: 0,
     type: EntityType.NPC, persistentNpcId: 'player',

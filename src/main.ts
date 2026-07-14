@@ -29,7 +29,7 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { safeParseJson } from './core/json';
-import { rng, hashSeed, randSeed, xorshift32 } from './core/rand';
+import { rng, hashSeed, randSeed, xorshift32, irand } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './gen/procedural_screens';
@@ -5045,6 +5045,9 @@ function captureCurrentAlifeFloor(): void {
 }
 
 function materializeCurrentAlifeFloor(floorKey = currentAlifeFloorKey(state)): void {
+  if (state) {
+    state.time += irand(100, 200);
+  }
   materializeAlifeFloorPopulation(state, world, entities, nextEntityId, floorKey);
   normalizeHumanoidBaseMoveSpeeds(entities);
 }

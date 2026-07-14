@@ -246,7 +246,7 @@ test('small caravan runs open near service cells without appending new people', 
     time: 600,
     worldEvents: createWorldEventState(),
   });
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = caravanNpc({ id: 2, alifeId: 1, persistentNpcId: 'alife:1' });
   const entities = [player, npc];
   const nextId = { v: 2 };
@@ -272,7 +272,7 @@ test('small caravan claims existing persistent A-Life members', () => {
     time: 700,
     worldEvents: createWorldEventState(),
   });
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = caravanNpc({ id: 2, alifeId: 1, persistentNpcId: 'alife:1' });
   const entities = [player, npc];
 
@@ -292,7 +292,7 @@ test('small caravan assigns identity only to eligible ordinary members', () => {
     time: 720,
     worldEvents: createWorldEventState(),
   });
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = caravanNpc({ id: 2 });
   const entities = [player, npc];
 
@@ -316,7 +316,7 @@ test('small caravan rejects player, plot, quest, and menu-target NPCs without cr
     npcMenuTarget: 5,
     worldEvents: createWorldEventState(),
   });
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const entities = [
     player,
     caravanNpc({ id: 3, plotNpcId: 'plot_guard' }),
@@ -339,7 +339,7 @@ test('small caravan arrival moves surviving member A-Life records to destination
     time: 760,
     worldEvents: createWorldEventState(),
   });
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = caravanNpc({ id: 2 });
   const entities = [player, npc];
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
@@ -366,7 +366,7 @@ test('caravan raids do not kill every persistent member by default', () => {
     time: 780,
     worldEvents: createWorldEventState(),
   });
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = caravanNpc({ id: 2 });
   const entities = [player, npc];
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
@@ -385,7 +385,7 @@ test('off-floor caravan lane migration moves a bounded prefilled A-Life record',
     time: 800,
     worldEvents: createWorldEventState(),
   });
-  const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as {
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' }) as {
     total: number;
     npcs: Array<{ id: number; floorKey: string; faction: Faction }>;
     floorIndex: Record<string, number[]>;

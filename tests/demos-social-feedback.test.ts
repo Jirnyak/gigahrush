@@ -44,7 +44,7 @@ import {
 function makeDemosSocialState(overrides: Partial<GameState> = {}): GameState {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING, ...overrides });
   setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
-  setAlifeState(state, { seed: 12345, total: 64, deadIds: overrides.gameOver ? [1] : [] });
+  setAlifeState(state, { seed: 12345, total: 64, deadIds: overrides.gameOver ? [1] : [] }, { populationPlan: 'empty_packages' });
   return state;
 }
 
@@ -147,7 +147,7 @@ test('Demos help and rescue feedback improves directed relation', () => {
 
 test('Demos social journey rejects dead, NPC-forbidden and player/native actors', () => {
   const deadState = makeDemosSocialState();
-  setAlifeState(deadState, { seed: 12345, total: 64, deadIds: [1] });
+  setAlifeState(deadState, { seed: 12345, total: 64, deadIds: [1] }, { populationPlan: 'empty_packages' });
   assert.equal(requestDemosSocialJourney(deadState, 1, 'story:living', 'social_visit'), false);
 
   const forbiddenState = makeDemosSocialState();

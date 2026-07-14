@@ -96,6 +96,9 @@ export interface VisualModelBoxPart extends VisualModelPartBase {
   kind: 'box';
   position: MeshVec3;
   size: MeshVec3;
+  yaw?: number;
+  pitch?: number;
+  roll?: number;
   bevel?: number;
 }
 
@@ -915,11 +918,14 @@ export const VISUAL_MODELS: readonly VisualModelDef[] = [
   {
     id: 'organic_meat_lump',
     tags: ['organic', 'meat', 'floor', 'clutter'],
-    bounds: { x: 0.2, y: 0.2, z: 0.15 },
+    bounds: { x: 0.3, y: 0.3, z: 0.15 },
     anchor: 'floor',
     variantSalt: 311,
     parts: [
-      { kind: 'box', position: [0, 0, 0.04], size: [0.16, 0.12, 0.08], material: 'cloth', color: [112, 32, 36] },
+      { kind: 'box', position: [0.03, -0.04, 0.04], size: [0.12, 0.08, 0.08], yaw: 0.4, pitch: 0.2, roll: 0.1, material: 'cloth', color: [112, 32, 36] },
+      { kind: 'box', position: [-0.05, 0.03, 0.03], size: [0.10, 0.14, 0.06], yaw: -0.6, pitch: -0.3, roll: 0.2, material: 'cloth', color: [100, 28, 30] },
+      { kind: 'box', position: [0.01, 0.06, 0.05], size: [0.14, 0.10, 0.10], yaw: 1.2, pitch: 0.1, roll: -0.4, material: 'cloth', color: [120, 36, 40] },
+      { kind: 'box', position: [-0.02, -0.02, 0.08], size: [0.08, 0.08, 0.06], yaw: 2.1, pitch: -0.1, roll: 0.8, material: 'cloth', color: [90, 20, 24] },
     ],
   },
   {

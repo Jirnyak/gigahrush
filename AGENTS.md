@@ -334,7 +334,7 @@ Rules:
 - Plot NPC identity uses stable `plotNpcId`; future ordinary quest sources should move toward persistent ids.
 - Personal relation to the player is separate from faction relation and must fold back through A-Life state when persistent.
 - The player participates in shared social math: karma, kill counters and rank.
-- Off-floor NPCs are frozen except bounded aggregate events, migrations or compact overrides.
+- Off-floor NPCs are frozen except for bounded aggregate events, background procedural looting simulations during world rebuilds (lifts/samosbor), migrations, or compact overrides.
 
 Allowed new actors must declare their reason: quest, faction event, caravan, samosbor, lift encounter, hack backlash, authored scene or debug.
 

@@ -75,7 +75,7 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
     worldEvents: createWorldEventState(),
   });
   setFloorRunState(state, { runSeed: 7, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
-  setAlifeState(state, { seed: 223344, total: 100_000 });
+  setAlifeState(state, { seed: 223344, total: 100_000 }, { populationPlan: 'empty_packages' });
   const world = patrolWorld();
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });
   const entities: Entity[] = [player];
@@ -109,7 +109,7 @@ test('samosbor extra patrol fails instead of spawning when no A-Life identities 
     worldEvents: createWorldEventState(),
   });
   setFloorRunState(state, { runSeed: 8, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
-  setAlifeState(state, { seed: 334455, total: ALIFE_POPULATION_CAPACITY });
+  setAlifeState(state, { seed: 334455, total: ALIFE_POPULATION_CAPACITY }, { populationPlan: 'empty_packages' });
   debugMarkAllAlifeNpcRecordsTouched(state);
   const world = patrolWorld();
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });

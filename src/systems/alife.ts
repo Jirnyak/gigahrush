@@ -158,7 +158,7 @@ export interface AlifePopulationPlan {
 }
 
 export interface CreateAlifeStateOptions {
-  populationPlan?: AlifePopulationPlan | AlifePopulationPlanDef;
+  populationPlan?: AlifePopulationPlan | AlifePopulationPlanDef | 'empty_packages';
 }
 
 export interface AlifeNpcSnapshot {
@@ -1265,7 +1265,7 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
   return { buckets };
 }
 
-function buildCurrentRunPopulationPlan(state: GameState, total?: number): AlifePopulationPlan {
+function buildCurrentRunPopulationPlan(state: GameState, total?: number, emptyPackages?: boolean): AlifePopulationPlan {
   const run = ensureFloorRunState(state);
   const routeKeySet = new Set<string>([
     floorKeyForStory(FloorLevel.MINISTRY),
@@ -1286,6 +1286,7 @@ function buildCurrentRunPopulationPlan(state: GameState, total?: number): AlifeP
     routeKeys: [...routeKeySet],
     proceduralSpecs,
     total,
+    npcPackages: emptyPackages ? [] : undefined,
   }));
 }
 
@@ -1462,6 +1463,11 @@ export function createPrefilledAlifeState(
 
 function createAlifeState(state: GameState, seed: number, requestedTotal: number, options: CreateAlifeStateOptions = {}): AlifeState {
   if (options.populationPlan) {
+    if (options.populationPlan === 'empty_packages') {
+      const plan = buildCurrentRunPopulationPlan(state, requestedTotal > 0 ? requestedTotal : undefined, true);
+      const total = requestedTotal > 0 ? requestedTotal : populationPlanTotal(plan);
+      return buildAlifeStateFromPopulationPlan(state, seed, total, plan);
+    }
     const plan = normalizePopulationPlan(options.populationPlan);
     const total = requestedTotal > 0 ? requestedTotal : populationPlanTotal(plan);
     return buildAlifeStateFromPopulationPlan(state, seed, total, plan);
@@ -2479,13 +2485,13 @@ function sanitizeRelationTargetAlifeId(alife: AlifeState, input: unknown): numbe
   return id > 0 && id <= alife.npcs.length ? id : undefined;
 }
 
-export function setAlifeState(state: GameState, input: unknown): AlifeState {
+export function setAlifeState(state: GameState, input: unknown, options?: CreateAlifeStateOptions): AlifeState {
   const save = isRecord(input) ? input : {};
   const seed = clampInt(save.seed, Math.floor(rng() * 0x7fffffff), 1, 0x7fffffff);
   const total = typeof save.total === 'number' && Number.isFinite(save.total) && save.total >= ALIFE_POPULATION_MIN_RANDOM
     ? clampAlifePopulationTotal(save.total, 0)
     : 0;
-  const alife = createAlifeState(state, seed, total);
+  const alife = createAlifeState(state, seed, total, options);
   alife.playerRelationTargetFaction = sanitizeRelationTargetFaction(save.playerRelationTargetFaction);
   alife.playerRelationTargetAlifeId = sanitizeRelationTargetAlifeId(alife, save.playerRelationTargetAlifeId);
   if (Array.isArray(save.deadIds)) {

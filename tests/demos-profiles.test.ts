@@ -293,7 +293,7 @@ test('Demos face-to-face helper rejects NPCs without stable A-Life identity', ()
 
 test('Demos one-profile view uses compact trait cache instead of profile-list allocation', () => {
   const state = makeGameState({ currentFloor: FloorLevel.LIVING });
-  setAlifeState(state, { seed: 13579, total: 100_000 });
+  setAlifeState(state, { seed: 13579, total: 100_000 }, { populationPlan: 'empty_packages' });
 
   const details = getDemosProfileDetails(state, 1);
   const cache = (state as typeof state & {

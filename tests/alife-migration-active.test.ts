@@ -37,7 +37,7 @@ function stateAtLiving(overrides: Partial<GameState> = {}): GameState {
     ...overrides,
   });
   setFloorRunState(state, { runSeed: 17, currentZ: 0 }, FloorLevel.LIVING);
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }
 
@@ -47,7 +47,7 @@ function stateAtVoid(): GameState {
     worldEvents: createWorldEventState(),
   });
   setFloorRunState(state, { runSeed: 17, currentZ: -50 }, FloorLevel.VOID);
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }
 
@@ -197,7 +197,7 @@ function putRecordOnLiving(state: GameState, alifeId: number): void {
 
 test('floor activation consumes only prefilled A-Life bucket records', () => {
   const state = stateAtLiving();
-  const alife = setAlifeState(state, { seed: 12345, total: 100_000 }) as TestAlifeState;
+  const alife = setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' }) as TestAlifeState;;
   assert.equal(moveAlifeNpcRecord(state, alife.npcs[0].id, 'story:living', { floor: FloorLevel.LIVING, markTouched: false }), true);
   alife.floorIndex['story:living'] = [0];
   const world = makeNoAnchorWorld();

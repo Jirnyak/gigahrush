@@ -19,11 +19,13 @@ import {
 } from '../core/types';
 import { type World } from '../core/world';
 import { ITEMS, freshNeeds, randomName } from '../data/catalog';
+import { getStack } from '../data/items';
 import { CONTAINER_DEFS } from '../data/container_defs';
 import { randomOccupation } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
 import { markEntityIndexDirty } from './entity_index';
+import { npcAutoEquipBestWeapon } from './ai/combat';
 import { irand } from '../core/rand';
 import { getMaxHp, randomRPG, calcZoneLevel, gaussianLevel } from './rpg';
 import { resolveNpcArtVisualId } from '../data/npc_art_visuals';
@@ -599,7 +601,7 @@ export function activateMapEditorMode(): MapEditorAction | null {
       const sorted = Object.values(ITEMS).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
       const item = sorted[runtime.menuIndex - 1];
       if (item) {
-        runtime.npcInventory[runtime.npcInvSlot] = { itemId: item.id, count: 1 };
+        runtime.npcInventory[runtime.npcInvSlot] = { itemId: item.id, count: getStack(item) };
       }
     }
     runtime.mode = 'npc_inv';
@@ -1029,6 +1031,8 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
       money: 20,
       rpg,
     });
+    const npc = entities[entities.length - 1];
+    if (npc && npc.type === EntityType.NPC) npcAutoEquipBestWeapon(npc);
     trackMapEditorChange({ entities: true }, [idx]);
   }
   pushDirty(idx);
@@ -1190,7 +1194,7 @@ export function createCurrentMapEditorOp(world: World, entities: Entity[]): MapE
       const entityId = nearestEntityId(world, entities, x, y);
       return entityId === null ? null : { kind: 'delete_entity', entityId };
     }
-    if (brush.kind === 'item') return { kind: 'spawn_entity', x, y, entityDef: { kind: 'item', itemId: brush.itemId, count: 1 } };
+    if (brush.kind === 'item') return { kind: 'spawn_entity', x, y, entityDef: { kind: 'item', itemId: brush.itemId, count: ITEMS[brush.itemId] ? getStack(ITEMS[brush.itemId]) : 1 } };
     if (brush.kind === 'monster') return { kind: 'spawn_entity', x, y, entityDef: { kind: 'monster', monsterKind: brush.monsterKind } };
     return { kind: 'spawn_entity', x, y, entityDef: { kind: 'npc', faction: brush.faction } };
   }
@@ -1202,7 +1206,7 @@ export function createCurrentMapEditorOp(world: World, entities: Entity[]): MapE
       return containerId === null ? null : { kind: 'delete_container', containerId };
     }
     const seedItem = 'water';
-    return { kind: 'spawn_container', x, y, def: { kind: brush.kind, itemId: seedItem, count: 1 } };
+    return { kind: 'spawn_container', x, y, def: { kind: brush.kind, itemId: seedItem, count: seedItem && ITEMS[seedItem] ? getStack(ITEMS[seedItem]) : 1 } };
   }
   return null;
 }

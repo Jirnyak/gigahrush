@@ -41,7 +41,7 @@ The short combat-step must not erase personal behavior:
 
 - every actor can keep `combatTargetId`, cooldowns, path/frustration, current intent/debug label and recent damage memory;
 - NPC role, faction, bravery, weapon, personal relation to the player, needs and utility pressure still decide whether they fight, flee, hide, patrol, work or recover;
-- routine utility can resume after danger passes;
+- routine utility can resume after danger passes. Micro-goals like noise investigation, looting, and friendly bartering can naturally interrupt routine travel without destroying the main intent;
 - player distance does not decide AI cadence or whether an actor exists;
 - actors do not scan noise or targets every frame; those expensive choices use local cooldowns and cached ids, while movement, cooldowns, attacks and current intents continue every frame.
 

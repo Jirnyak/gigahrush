@@ -37,7 +37,7 @@ function minimalState(): GameState {
     msgLog: [],
   } as unknown as GameState;
   setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
-  setAlifeState(state, { seed: 12345, total: 100_000 });
+  setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }
 
@@ -102,7 +102,7 @@ test('normal cold migration gives traveler occupations a bounded priority lane',
 
 test('cold A-Life migration skips dead records and records already in a journey', () => {
   const deadState = minimalState();
-  setAlifeState(deadState, { seed: 12345, total: 100_000, deadIds: [1] });
+  setAlifeState(deadState, { seed: 12345, total: 100_000, deadIds: [1] }, { populationPlan: 'empty_packages' });
   assert.equal(tickAlifeMigration(deadState, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
   assert.equal(Object.keys(ensureAlifeMobilityState(deadState).journeys).length, 0);
 

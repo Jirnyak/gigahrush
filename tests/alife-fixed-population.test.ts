@@ -95,7 +95,7 @@ test('A-Life new run population uses seed-sized total below technical capacity',
 });
 
 test('A-Life clamps oversized saved totals to the technical population capacity', () => {
-  const alife = setAlifeState(minimalState(), { seed: 12345, total: 1_000_000 }) as {
+  const alife = setAlifeState(minimalState(), { seed: 12345, total: 1_000_000 }, { populationPlan: 'empty_packages' }) as {
     total: number;
     npcs: unknown[];
   };
@@ -106,7 +106,7 @@ test('A-Life clamps oversized saved totals to the technical population capacity'
 
 test('A-Life rejects implausibly undersized saved totals back to the run-sized total', () => {
   const state = minimalState();
-  const alife = setAlifeState(state, { seed: 12345, total: 999 }) as {
+  const alife = setAlifeState(state, { seed: 12345, total: 999 }, { populationPlan: 'empty_packages' }) as {
     total: number;
     npcs: unknown[];
   };
@@ -119,7 +119,7 @@ test('A-Life rejects implausibly undersized saved totals back to the run-sized t
 
 test('A-Life event arrivals reserve fixed-pool identities without growing the pool', () => {
   const state = minimalState();
-  const alife = setAlifeState(state, { seed: 12345, total: 1_000_000 }) as {
+  const alife = setAlifeState(state, { seed: 12345, total: 1_000_000 }, { populationPlan: 'empty_packages' }) as {
     total: number;
     npcs: unknown[];
   };
