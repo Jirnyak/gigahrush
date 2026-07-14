@@ -413,13 +413,7 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
       }
     } catch (e) { console.error('GamePush SDK error:', e); }
 
-    // 4. Sounds (Test 8, 9)
-    try {
-      if (gp.sounds) {
-        if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
-        if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
-      }
-    } catch (e) { console.error('GamePush SDK error:', e); }
+
   };
 
   if (typeof document !== 'undefined') {
