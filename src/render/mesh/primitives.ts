@@ -348,8 +348,9 @@ function finishTemplate(modelId: VisualModelId, draft: MeshDraft): MeshTemplate 
 export function buildMeshTemplate(def: VisualModelDef, variantSeed = 0): MeshTemplate {
   const draft = emptyDraft();
   const seed = hashSeed(`${def.id}:${def.variantSalt ?? 0}`, variantSeed);
-  for (let i = 0; i < def.parts.length; i++) {
-    addVisualModelPart(draft, def.id, def.parts[i], i, seed);
+  const parts = typeof def.parts === 'function' ? def.parts(seed) : def.parts;
+  for (let i = 0; i < parts.length; i++) {
+    addVisualModelPart(draft, def.id, parts[i], i, seed);
   }
   const template = finishTemplate(def.id, draft);
   if (template.boundsRadius > 0) return template;

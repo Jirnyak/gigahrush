@@ -220,7 +220,15 @@ const FEATURE_MESH_DEFS: Partial<Record<Feature, FeatureMeshDef>> = {
 const MODEL_PRIORITY_CACHE = new Map<string, number>();
 
 for (const def of VISUAL_CELL_DEFS) {
-  if (!MODEL_PRIORITY_CACHE.has(def.modelId)) MODEL_PRIORITY_CACHE.set(def.modelId, def.priority);
+  if (def.modelId) {
+    if (typeof def.modelId === 'string') {
+      if (!MODEL_PRIORITY_CACHE.has(def.modelId)) MODEL_PRIORITY_CACHE.set(def.modelId, def.priority);
+    } else {
+      for (const id of def.modelId) {
+        if (!MODEL_PRIORITY_CACHE.has(id)) MODEL_PRIORITY_CACHE.set(id, def.priority);
+      }
+    }
+  }
   if (!MODEL_PRIORITY_CACHE.has(def.id)) MODEL_PRIORITY_CACHE.set(def.id, def.priority);
 }
 
@@ -666,7 +674,12 @@ function emitVisualInstance(
     sourceY?: number;
   } = {},
 ): void {
-  const modelId = contextualVisualModelId(context, def.modelId ?? def.id, Math.floor(options.sourceX ?? x), Math.floor(options.sourceY ?? y));
+  const h = mixHash(context.seed, x, y, slot, def.code);
+  let baseModelId = def.modelId ?? def.id;
+  if (typeof baseModelId !== 'string') {
+    baseModelId = baseModelId[(h >>> 15) % baseModelId.length];
+  }
+  const modelId = contextualVisualModelId(context, baseModelId, Math.floor(options.sourceX ?? x), Math.floor(options.sourceY ?? y));
   const face = options.face;
   const length = Math.max(1, options.length ?? 1);
   const axis = options.axis;
@@ -712,12 +725,10 @@ function emitVisualInstance(
     } else if (def.mount === 'floor') {
       z += 0.01 + slot * 0.002; // Micro Z-offset to avoid Z-fighting for floor items
     } else if (def.merge === 'cluster') {
-      const h = mixHash(context.seed, x, y, slot, def.code);
       scaleX = 0.45 + (h & 7) * 0.035;
       scaleY = 0.45 + ((h >>> 4) & 7) * 0.035;
       scaleZ = 0.18 + ((h >>> 8) & 3) * 0.04;
     } else if (def.family === 'clutter') {
-      const h = mixHash(context.seed, x, y, slot, def.code);
       const ox = (((h >>> 12) & 255) / 255 - 0.5) * 0.75;
       const oy = (((h >>> 20) & 255) / 255 - 0.5) * 0.75;
       ix += ox;
@@ -1034,7 +1045,11 @@ function collectFeatureAtCell(context: MeshPassContext, idx: number, x: number, 
   const cell = context.world.cells[idx];
   if (cell !== Cell.FLOOR && cell !== Cell.WATER) {
     if ((def.flags ?? 0) & MeshInstanceFlag.WallMount) {
-      const visualDef = VISUAL_CELL_DEFS.find(row => row.modelId === def.modelId && row.mount === 'wallFace');
+      const visualDef = VISUAL_CELL_DEFS.find(row => {
+        if (row.mount !== 'wallFace') return false;
+        if (typeof row.modelId !== 'string' && row.modelId !== undefined) return row.modelId.includes(def.modelId as any);
+        return row.modelId === def.modelId;
+      });
       const face = visualDef ? resolveWallFace(context.world, x, y, visualDef, 0, context.seed) : null;
       if (!face) return;
       emitInstance(out, {

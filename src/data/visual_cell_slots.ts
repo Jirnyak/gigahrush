@@ -30,13 +30,13 @@ export interface VisualCellDef {
   zBand?: VisualCellZBand;
   source: VisualCellSource;
   facePolicy?: VisualCellFacePolicy;
-  modelId?: VisualModelId;
+  modelId?: VisualModelId | readonly VisualModelId[];
   merge: VisualCellMerge;
   priority: number;
   densityCost: number;
 }
 
-export const VISUAL_CELL_DEFS = [
+export const VISUAL_CELL_DEFS: readonly VisualCellDef[] = [
   {
     code: 1,
     id: 'pipe_wall_small',
