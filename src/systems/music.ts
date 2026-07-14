@@ -16,6 +16,7 @@ class MusicSystem {
   private currentAudio: HTMLAudioElement | null = null;
   private fadeOutAudio: HTMLAudioElement | null = null;
   private fadeTimer: number = 0;
+  private playPending: boolean = false;
   private readonly fadeDuration = 2.0; // 2 seconds crossfade
 
   private tracks: Record<string, string> = {};
@@ -49,7 +50,8 @@ class MusicSystem {
     if (nextTrack && this.currentAudio) {
       this.currentTrackName = nextTrack;
       this.currentAudio.src = this.tracks[nextTrack];
-      this.currentAudio.play().catch(() => {});
+      this.playPending = true;
+      this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
     }
   };
 
@@ -94,6 +96,10 @@ class MusicSystem {
       const p = Math.max(0, this.fadeTimer / this.fadeDuration);
       if (this.currentAudio) {
         this.currentAudio.volume = Math.max(0, Math.min(1, (1 - p) * masterVolume));
+        if (this.currentAudio.paused && masterVolume > 0 && !this.playPending) {
+          this.playPending = true;
+          this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
+        }
       }
       if (this.fadeOutAudio) {
         this.fadeOutAudio.volume = Math.max(0, Math.min(1, p * masterVolume));
@@ -107,6 +113,10 @@ class MusicSystem {
     } else {
       if (this.currentAudio) {
         this.currentAudio.volume = Math.max(0, Math.min(1, masterVolume));
+        if (this.currentAudio.paused && masterVolume > 0 && !this.playPending) {
+          this.playPending = true;
+          this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
+        }
       }
     }
 
@@ -132,7 +142,8 @@ class MusicSystem {
         this.currentAudio.volume = 0;
         
         // Browsers block autoplay until interaction. The error is safely ignored.
-        this.currentAudio.play().catch(() => {
+        this.playPending = true;
+        this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {
           // Playback blocked, will try again naturally or just stay paused.
         });
         

@@ -195,7 +195,7 @@ import {
   playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
   playProjectileImpact, playEnergyImpact, playProjectileBodyHit,
   startAmbientDrone, setListenerPos, playSoundAt, playHudBarChange,
-  setAudioSuspendedForPage, setAudioSuspendedForPlatform, syncAudioSettings,
+  setAudioSuspendedForPage, setAudioSuspendedForPlatform, setAudioSuspendedForPlatformMute, syncAudioSettings,
   type HudBarAudioId,
 } from './systems/audio';
 import {
@@ -2006,7 +2006,7 @@ const PLAYER_BAR_AUDIO_SLEEP_COOLDOWN = 4.0;
 
 initPlatformBridge({
   onPauseChange: setPlatformPause,
-  onAudioMuteChange: setAudioSuspendedForPlatform,
+  onAudioMuteChange: setAudioSuspendedForPlatformMute,
   onLanguageDetected: (lang: string) => {
     const isRu = lang === 'ru' || lang === 'be' || lang === 'kk' || lang === 'uk' || lang === 'uz';
     const nextLang = isRu ? 'ru' : 'en';
