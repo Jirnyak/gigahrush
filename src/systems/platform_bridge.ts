@@ -416,10 +416,8 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
     // 4. Sounds (Test 8, 9)
     try {
       if (gp.sounds) {
-        const muted = gp.sounds.isMuted;
         if (typeof gp.sounds.mute === 'function') gp.sounds.mute();
         if (typeof gp.sounds.unmute === 'function') gp.sounds.unmute();
-        if (muted && typeof gp.sounds.mute === 'function') gp.sounds.mute();
       }
     } catch (e) { console.error('GamePush SDK error:', e); }
   };
