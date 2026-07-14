@@ -148,7 +148,7 @@ class NetSphereApiError extends Error {
   }
 }
 
-const API_ROOT = window.location.hostname === 'gigahrush.github.io' 
+const API_ROOT = (typeof window !== 'undefined' && window.location.hostname === 'gigahrush.github.io')
   ? 'https://gigahrush.bileter.workers.dev/api/net' 
   : '/api/net';
 const NET_GEN_KEY = 'gigahrush_net_gen';

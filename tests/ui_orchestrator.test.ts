@@ -87,6 +87,7 @@ test('UI orchestrator defaults to the novice-safe HUD enabled', () => {
     'screen_fx',
     'status_fx',
     'npc_barks',
+    'text_glitch',
   ]);
   assert.equal(DEFAULT_UI_PRESET_ID, 'novice');
   assert.equal(activeUiPresetId(), 'novice');

@@ -1396,6 +1396,6 @@ export interface InputState {
   controlEdit: boolean;         // reserved command slot for hotkey screens
   controlReset: boolean;        // selected-bind clear command from current controls
   controlClose: boolean;        // keyboard close/back command from current controls
-  mouse: { dx: number; dy: number; locked: boolean; };
+  mouse: { dx: number; dy: number; menuDx: number; menuDy: number; locked: boolean; };
   touch: { moveX: number; moveY: number; lookX: number; lookY: number; active: boolean; };
 }

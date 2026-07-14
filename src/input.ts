@@ -47,7 +47,7 @@ export function createInput(): InputState {
     controlEdit: false,
     controlReset: false,
     controlClose: false,
-    mouse: { dx: 0, dy: 0, locked: false },
+    mouse: { dx: 0, dy: 0, menuDx: 0, menuDy: 0, locked: false },
     touch: { moveX: 0, moveY: 0, lookX: 0, lookY: 0, active: false },
   };
 }
@@ -162,6 +162,16 @@ class InputBinder {
   private onMouse(e: MouseEvent) {
     if (document.pointerLockElement === this.canvas) {
       this.input.mouse.locked = true;
+      if (this.options.shouldHandleMenuPointer?.() === true) {
+        if (Math.sign(e.movementX) !== Math.sign(this.input.mouse.menuDx) && e.movementX !== 0) {
+          this.input.mouse.menuDx = 0;
+        }
+        if (Math.sign(e.movementY) !== Math.sign(this.input.mouse.menuDy) && e.movementY !== 0) {
+          this.input.mouse.menuDy = 0;
+        }
+        this.input.mouse.menuDx += e.movementX;
+        this.input.mouse.menuDy += e.movementY;
+      }
       if (this.options.shouldHandleGameplayPointer?.() === false) {
         clearMouseGameplayState(this.input);
         return;

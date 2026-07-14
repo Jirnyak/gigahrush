@@ -1,4 +1,5 @@
 import { type TitleLanguageId } from '../data/languages';
+import { uiElementEnabled } from './ui_orchestrator';
 
 type RuntimeLocaleCatalogData = readonly [
   readonly (readonly [string, string])[],
@@ -401,6 +402,7 @@ function canvasTextGlitchHash(text: string, index: number, x: number, y: number,
 
 function canvasTextGlitch(text: string, x: number, y: number): string {
   if (text.length < 4) return text;
+  if (!uiElementEnabled('text_glitch')) return text;
   const chars = Array.from(text);
   const maxChanges = Math.max(1, Math.min(4, Math.floor(chars.length / 16)));
   const tick = canvasTextGlitchTick();

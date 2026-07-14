@@ -599,6 +599,17 @@ import {
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const hudCanvas = document.getElementById('hud') as HTMLCanvasElement;
 const ctx = hudCanvas.getContext('2d')!;
+const loadingCanvas = document.getElementById('loadingCanvas') as HTMLCanvasElement | null;
+let loadingWorker: Worker | null = null;
+let loadingWorkerAck = false;
+if (loadingCanvas && typeof loadingCanvas.transferControlToOffscreen === 'function') {
+  const offscreen = loadingCanvas.transferControlToOffscreen();
+  loadingWorker = new Worker(new URL('./loading_worker.ts', import.meta.url), { type: 'module' });
+  loadingWorker.onmessage = (e) => {
+    if (e.data?.type === 'started') loadingWorkerAck = true;
+  };
+  loadingWorker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
+}
 registerPwaServiceWorker();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
 const PLAYER_AGE_KEY = 'gigahrush_player_age';
@@ -1903,7 +1914,8 @@ function resize() {
   const cssHeight = Math.max(1, Math.round(viewport?.height ?? window.innerHeight ?? document.documentElement.clientHeight));
   const cssLeft = Math.round(viewport?.offsetLeft ?? 0);
   const cssTop = Math.round(viewport?.offsetTop ?? 0);
-  for (const el of [canvas, hudCanvas]) {
+  for (const el of [canvas, hudCanvas, loadingCanvas]) {
+    if (!el) continue;
     el.style.width = `${cssWidth}px`;
     el.style.height = `${cssHeight}px`;
     el.style.left = `${cssLeft}px`;
@@ -1917,6 +1929,12 @@ function resize() {
   if (canvas.height !== height) canvas.height = height;
   if (hudCanvas.width !== width) hudCanvas.width = width;
   if (hudCanvas.height !== height) hudCanvas.height = height;
+  if (loadingWorker) {
+    loadingWorker.postMessage({ type: 'resize', width: cssWidth, height: cssHeight });
+  } else if (loadingCanvas) {
+    if (loadingCanvas.width !== width) loadingCanvas.width = width;
+    if (loadingCanvas.height !== height) loadingCanvas.height = height;
+  }
   mobileControls?.refresh();
 }
 
@@ -1966,7 +1984,9 @@ let prevPlayerActorHp = 100; // track current player actor HP changes for damage
 let lastProjectileHitMsgTick = -999;
 let runtimeCamera = createRuntimeCamera();
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
-let pendingLoadDrawn = false; // true = loading screen was painted, next frame runs the callback
+let pendingLoadStarted = false; // true = loading worker was started
+let pendingLoadWaitTime = 0;
+let pendingLoadAckYielded = false;
 let platformGameplayMarkedActive = false;
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
@@ -3129,7 +3149,10 @@ function drawLoading(): void {
 
 function scheduleLoading(fn: () => void): void {
   pendingLoad = fn;
-  pendingLoadDrawn = false;
+  pendingLoadStarted = false;
+  loadingWorkerAck = false;
+  pendingLoadWaitTime = 0;
+  pendingLoadAckYielded = false;
 }
 
 function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLevel.LIVING, isTutorial: boolean = false): void {
@@ -8224,6 +8247,39 @@ function handleMenuInput(): void {
     return;
   }
 
+  let simulatedUp = false;
+  let simulatedDn = false;
+  let simulatedLeft = false;
+  let simulatedRight = false;
+
+  if (input.mouse.locked) {
+    const MOUSE_NAV_THRESHOLD = 60;
+    const absX = Math.abs(input.mouse.menuDx);
+    const absY = Math.abs(input.mouse.menuDy);
+
+    if (absX > MOUSE_NAV_THRESHOLD || absY > MOUSE_NAV_THRESHOLD) {
+      if (absX > absY) {
+        if (input.mouse.menuDx > 0) simulatedRight = true;
+        else simulatedLeft = true;
+        input.mouse.menuDx = 0;
+        input.mouse.menuDy = 0;
+      } else {
+        if (input.mouse.menuDy > 0) simulatedDn = true;
+        else simulatedUp = true;
+        input.mouse.menuDy = 0;
+        input.mouse.menuDx = 0;
+      }
+    }
+  } else {
+    input.mouse.menuDx = 0;
+    input.mouse.menuDy = 0;
+  }
+
+  const invUp = input.invUp || simulatedUp;
+  const invDn = input.invDn || simulatedDn;
+  const invLeft = input.invLeft || simulatedLeft;
+  const invRight = input.invRight || simulatedRight;
+
   const pointerAcceptEdge = input.menuAccept;
   const pointerCloseEdge = input.menuClose;
   const pointerWheel = input.menuWheel;
@@ -8235,10 +8291,10 @@ function handleMenuInput(): void {
   const acceptEdge = (input.escape && !prevEsc) || pointerAcceptEdge;
   const closeEdge = (input.controlClose && !prevControlClose) || pointerCloseEdge;
   const resetEdge = input.controlReset && !prevControlReset;
-  const upEdge = input.invUp && !prevMenuUp;
-  const dnEdge = input.invDn && !prevMenuDn;
-  const leftEdge = input.invLeft && !prevMenuLeft;
-  const rightEdge = input.invRight && !prevMenuRight;
+  const upEdge = invUp && !prevMenuUp;
+  const dnEdge = invDn && !prevMenuDn;
+  const leftEdge = invLeft && !prevMenuLeft;
+  const rightEdge = invRight && !prevMenuRight;
   const dropEdge = input.drop && !prevDrop;
   const invEdge = input.inv && !prevInvMenu;
   const questEdge = input.questLog && !prevQuestMenu;
@@ -8248,8 +8304,8 @@ function handleMenuInput(): void {
   const controlsEdge = input.controls && !prevControlsMenu;
   const uiSettingsEdge = input.uiSettings && !prevUiSettingsMenu;
   const dbgEdge = input.debugScreen && !prevDebug;
-  const menuUpNav = () => menuRepeatStep('up', input.invUp, upEdge) || wheelUpEdge;
-  const menuDownNav = () => menuRepeatStep('down', input.invDn, dnEdge) || wheelDnEdge;
+  const menuUpNav = () => menuRepeatStep('up', invUp, upEdge) || wheelUpEdge;
+  const menuDownNav = () => menuRepeatStep('down', invDn, dnEdge) || wheelDnEdge;
 
   if (state.showDemos) {
     if (input.textInput) {
@@ -8273,8 +8329,8 @@ function handleMenuInput(): void {
     } else if (!state.demosSearchActive) {
       const upNav = menuUpNav();
       const dnNav = menuDownNav();
-      const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-      const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
+      const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+      const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge || dropEdge);
       if (leftNav) {
         shiftDemosTab(-1);
         clampDemosPanelState();
@@ -8340,14 +8396,14 @@ function handleMenuInput(): void {
     closeNetSphere();
     state.paused = true;
 
-    const leftEdge = input.invLeft && !prevMenuLeft;
-    const rightEdge = (input.invRight && !prevMenuRight) || (input.drop && !prevDrop);
+    const leftEdge = invLeft && !prevMenuLeft;
+    const rightEdge = (invRight && !prevMenuRight) || (input.drop && !prevDrop);
     const mapMode = isMapEditorMapMode();
     const wheelZoom = mapMode ? Math.max(-4, Math.min(4, -pointerWheel)) : 0;
-    const upNav = mapMode ? menuRepeatStep('up', input.invUp, upEdge) : menuUpNav();
-    const dnNav = mapMode ? menuRepeatStep('down', input.invDn, dnEdge) : menuDownNav();
-    const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-    const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge);
+    const upNav = mapMode ? menuRepeatStep('up', invUp, upEdge) : menuUpNav();
+    const dnNav = mapMode ? menuRepeatStep('down', invDn, dnEdge) : menuDownNav();
+    const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+    const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge);
 
     const closeEditor = () => {
       closeMapEditorAndRefreshWorld();
@@ -8397,12 +8453,12 @@ function handleMenuInput(): void {
     closeNetSphere();
     state.paused = true;
 
-    const leftEdge = input.invLeft && !prevMenuLeft;
-    const rightEdge = (input.invRight && !prevMenuRight) || (input.drop && !prevDrop);
+    const leftEdge = invLeft && !prevMenuLeft;
+    const rightEdge = (invRight && !prevMenuRight) || (input.drop && !prevDrop);
     const upNav = menuUpNav();
     const dnNav = menuDownNav();
-    const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-    const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge);
+    const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+    const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge);
     const result = handleInteractableOverlayInput({
       escEdge: closeEdge,
       interactEdge: acceptEdge,
@@ -8570,8 +8626,8 @@ function handleMenuInput(): void {
       if (dnNav) state.controlSel = Math.min(controlMenuItemCount() - 1, state.controlSel + 1);
       keepControlSelectionVisible();
       const mouseSensitivitySelected = controlMouseSensitivitySelected();
-      const leftNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('left', input.invLeft, leftEdge) : false;
-      const rightNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('right', input.invRight, rightEdge) : false;
+      const leftNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('left', invLeft, leftEdge) : false;
+      const rightNav = !fixedControlsCommand && mouseSensitivitySelected ? menuRepeatStep('right', invRight, rightEdge) : false;
       if (resetEdge && state.controlView === 'keys') {
         const action = selectedControlAction();
         if (action && clearControlBinding(action.id)) {
@@ -8618,8 +8674,8 @@ function handleMenuInput(): void {
     const fixedUiCommand = acceptEdge || closeEdge;
     const upNav = !fixedUiCommand && menuUpNav();
     const dnNav = !fixedUiCommand && menuDownNav();
-    const leftNav = !fixedUiCommand && menuRepeatStep('left', input.invLeft, leftEdge);
-    const rightNav = !fixedUiCommand && menuRepeatStep('right', input.invRight || input.drop, rightEdge);
+    const leftNav = !fixedUiCommand && menuRepeatStep('left', invLeft, leftEdge);
+    const rightNav = !fixedUiCommand && menuRepeatStep('right', invRight || input.drop, rightEdge);
 
     if (upNav) state.uiSettingsSel = Math.max(0, state.uiSettingsSel - 1);
     if (dnNav) state.uiSettingsSel = Math.min(uiSettingsRowCount(state.uiSettingsView) - 1, state.uiSettingsSel + 1);
@@ -8685,8 +8741,8 @@ function handleMenuInput(): void {
   else if (state.showInventory) {
     const upNav = menuUpNav();
     const dnNav = menuDownNav();
-    const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-    const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+    const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+    const rightNav = menuRepeatStep('right', invRight, rightEdge);
     if (upNav) {
       state.invSel = wrapMenuIndex(state.invSel - INVENTORY_GRID_COLS, MAX_INVENTORY_SLOTS);
     }
@@ -8758,8 +8814,8 @@ function handleMenuInput(): void {
     } else {
       const upNav = menuUpNav();
       const dnNav = menuDownNav();
-      const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-      const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
+      const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+      const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge || dropEdge);
       if (upNav) state.containerCursorY = Math.max(0, state.containerCursorY - 1);
       if (dnNav) state.containerCursorY = Math.min(INVENTORY_GRID_ROWS - 1, state.containerCursorY + 1);
       if (leftNav) {
@@ -8828,8 +8884,8 @@ function handleMenuInput(): void {
       }
       const upNav = menuUpNav();
       const dnNav = menuDownNav();
-      const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-      const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
+      const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+      const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge || dropEdge);
       if (upNav || leftNav) state.questPage = Math.max(0, state.questPage - 1);
       if (dnNav || rightNav) state.questPage = Math.min(Math.max(0, totalQ - 1), state.questPage + 1);
       if (acceptEdge || closeEdge) state.npcMenuTab = 'main';
@@ -8837,8 +8893,8 @@ function handleMenuInput(): void {
       if (npc) {
         const upNav = menuUpNav();
         const dnNav = menuDownNav();
-        const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', input.invRight || input.drop, rightEdge || dropEdge);
+        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+        const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge || dropEdge);
         const panels = ['player', 'player_offer', 'npc_offer', 'npc'] as const;
         if (state.tradeSide === 'deal') {
           if (upNav) {
@@ -8895,8 +8951,8 @@ function handleMenuInput(): void {
       }
     } else if (state.npcMenuTab === NPC_MENU_INTERFACE_TAB) {
       if (npc && isDurakGameOpen()) {
-        const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+        const rightNav = menuRepeatStep('right', invRight, rightEdge);
         const result = handleDurakInput({
           state,
           player,
@@ -8905,8 +8961,8 @@ function handleMenuInput(): void {
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (npc && isDiceGameOpen()) {
-        const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+        const rightNav = menuRepeatStep('right', invRight, rightEdge);
         const result = handleDiceInput({
           state,
           player,
@@ -8915,8 +8971,8 @@ function handleMenuInput(): void {
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (npc && isDominoGameOpen()) {
-        const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+        const rightNav = menuRepeatStep('right', invRight, rightEdge);
         const result = handleDominoInput({
           state,
           player,
@@ -8925,8 +8981,8 @@ function handleMenuInput(): void {
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (npc && isCheckersGameOpen()) {
-        const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+        const rightNav = menuRepeatStep('right', invRight, rightEdge);
         const upNav = menuUpNav();
         const downNav = menuDownNav();
         const result = handleCheckersInput({
@@ -8947,8 +9003,8 @@ function handleMenuInput(): void {
     else {
       const upNav = menuUpNav();
       const dnNav = menuDownNav();
-      const leftNav = menuRepeatStep('left', input.invLeft, leftEdge);
-      const rightNav = menuRepeatStep('right', input.invRight, rightEdge);
+      const leftNav = menuRepeatStep('left', invLeft, leftEdge);
+      const rightNav = menuRepeatStep('right', invRight, rightEdge);
       if (upNav) state.debugSel = Math.max(0, state.debugSel - 1);
       if (dnNav) state.debugSel = Math.min(DEBUG_COMMAND_COUNT - 1, state.debugSel + 1);
       if (leftNav) moveDebugInfoPage(-1);
@@ -9135,10 +9191,29 @@ function gameLoop(now: number): void {
   // Phase 1: pendingLoad exists but not drawn yet → draw loading screen, yield to browser
   // Phase 2: pendingLoad exists and was drawn → execute heavy generation
   if (pendingLoad) {
-    if (!pendingLoadDrawn) {
-      // Phase 1: paint "ЗАГРУЗКА..." and yield so the browser can composite it
-      drawLoading();
-      pendingLoadDrawn = true;
+    if (!pendingLoadStarted) {
+      if (loadingCanvas) loadingCanvas.style.display = 'block';
+      drawLoading(); // Always draw once synchronously to prevent initial white/black flash
+      if (loadingWorker) {
+        loadingWorker.postMessage({ type: 'start' });
+        loadingWorkerAck = false;
+      } else {
+        loadingWorkerAck = true;
+      }
+      pendingLoadStarted = true;
+      pendingLoadWaitTime = performance.now();
+      pendingLoadAckYielded = false;
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+    if (!loadingWorkerAck && performance.now() - pendingLoadWaitTime < 10000) {
+      // wait up to 10 seconds for worker to initialize and ack
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+    if (loadingWorkerAck && !pendingLoadAckYielded) {
+      // Yield one final frame so the browser compositor can present the worker's first frame!
+      pendingLoadAckYielded = true;
       requestAnimationFrame(gameLoop);
       return;
     }
@@ -9155,9 +9230,15 @@ function gameLoop(now: number): void {
     // Phase 2: loading screen is visible, now do the heavy work
     const fn = pendingLoad;
     pendingLoad = null;
-    pendingLoadDrawn = false;
+    pendingLoadStarted = false;
     fn();
     rebuildEntityIndex(entities, 'load');
+    if (loadingWorker) {
+      loadingWorker.postMessage({ type: 'stop' });
+    }
+    if (loadingCanvas) {
+      loadingCanvas.style.display = 'none';
+    }
     lastTime = performance.now(); // reset dt so we don't get a huge spike
     requestAnimationFrame(gameLoop);
     return;
@@ -9825,7 +9906,7 @@ function showTitle(): void {
 
 function returnToTitleScreen(): void {
   pendingLoad = null;
-  pendingLoadDrawn = false;
+  pendingLoadStarted = false;
   started = false;
   syncPlatformGameplayState();
   clearPointerCaptureGate();

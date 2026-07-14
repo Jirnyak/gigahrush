@@ -31,6 +31,7 @@ export const UI_ELEMENT_DEFS = [
   { id: 'screen_fx', group: 'Экран', label: 'Нейрошум и помехи', defaultEnabled: true, locked: false },
   { id: 'status_fx', group: 'Экран', label: 'Косметические эффекты', defaultEnabled: true, locked: false },
   { id: 'npc_barks', group: 'Экран', label: 'Реплики NPC (баблы)', defaultEnabled: true, locked: false },
+  { id: 'text_glitch', group: 'Экран', label: 'Глитч текста', defaultEnabled: true, locked: false },
   { id: 'samosbor_text', group: 'Системное', label: 'Текст самосбора', defaultEnabled: true, locked: true },
   { id: 'credits', group: 'Системное', label: 'Титры и финальные экраны', defaultEnabled: true, locked: true },
 ] as const satisfies readonly UiElementDef[];
@@ -168,6 +169,7 @@ export const UI_PRESETS = [
       'screen_fx',
       'status_fx',
       'npc_barks',
+      'text_glitch',
     ],
   },
   {
@@ -183,6 +185,7 @@ export const UI_PRESETS = [
       'screen_fx',
       'status_fx',
       'npc_barks',
+      'text_glitch',
     ],
   },
   {
@@ -201,6 +204,7 @@ export const UI_PRESETS = [
       'screen_fx',
       'status_fx',
       'npc_barks',
+      'text_glitch',
     ],
   },
   {
@@ -218,6 +222,7 @@ export const UI_PRESETS = [
       'screen_fx',
       'status_fx',
       'npc_barks',
+      'text_glitch',
     ],
   },
   {
@@ -241,6 +246,7 @@ export const UI_PRESETS = [
       'screen_fx',
       'status_fx',
       'npc_barks',
+      'text_glitch',
     ],
   },
 ] as const satisfies readonly UiPresetDef[];
