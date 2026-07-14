@@ -170,6 +170,16 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   
   if (isTutorial) {
     world.features[world.idx(cafeX + 1, cafeY + 1)] = Feature.SINK;
+    entities.push({
+      id: nextId.v++,
+      type: EntityType.ITEM_DROP,
+      x: cafeX + 1.5,
+      y: cafeY + 1.5,
+      angle: 0, pitch: 0,
+      alive: true, speed: 0,
+      sprite: Spr.ITEM_DROP, spriteScale: 1.0,
+      inventory: [{ defId: 'lighter', count: 1 }],
+    });
   }
 
   // Door to cafeteria starts locked. Move it to the side so it doesn't overlap the slide.

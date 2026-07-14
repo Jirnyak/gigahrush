@@ -2285,6 +2285,7 @@ export function updateSamosbor(
   scheduleLocalPatch?: (runPatch: () => void) => void,
 ): boolean {
   if (state.gameOver) return false;
+  if (state.tutorialMode) return false;
 
   knownSamosborTime = state.time;
   state.samosborTimer -= dt;

@@ -818,6 +818,7 @@ export const ITEMS: Record<string, ItemDef> = {
 
   // ── Инструменты и разное ──
   flashlight:{ id:'flashlight', name:'Фонарик',     type:ItemType.TOOL,      desc:'Узкий круг света для тёмных коридоров. Батарея: 10 игровых часов (5 минут)', spawnRooms:[RoomType.STORAGE,RoomType.LIVING,RoomType.PRODUCTION],  spawnW:1, value:150, durability:300 },
+  lighter:{ id:'lighter', name:'Зажигалка', type:ItemType.TOOL, desc:'Слабый огонек. Помогает осмотреться в полной темноте. Расходует бензин.', spawnRooms:[RoomType.STORAGE,RoomType.LIVING,RoomType.SMOKING,RoomType.BATHROOM], spawnW:1.5, value:40, durability:100 },
   liquidator_flashlamp:{ id:'liquidator_flashlamp', name:'Переносной прожектор', type:ItemType.TOOL, desc:'Тяжёлый ликвидаторский свет для тёмных залов. Светит шире фонарика, но замедляет шаг и быстрее ест батарею.', spawnRooms:[RoomType.HQ,RoomType.PRODUCTION], spawnW:0.28, value:620, durability:240 },
   uv_spotlight:{ id:'uv_spotlight', name:'УФ-прожектор ликвидатора', type:ItemType.TOOL, desc:'Штатный прожектор из шкафов зачистки. Слот инструмента, R: короткий направленный УФ-импульс по взгляду против глаз, духов и чёрных следов. Батарея: 36 импульсов', spawnRooms:[RoomType.HQ,RoomType.STORAGE], spawnW:0.12, value:950, durability:36 },
   jackhammer:{ id:'jackhammer', name:'Отбойный молоток', type:ItemType.TOOL, desc:'Сносит стены. Сильный износ: хватает на 10 блоков, выбирайте место заранее', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:1, value:1500, durability:10 },

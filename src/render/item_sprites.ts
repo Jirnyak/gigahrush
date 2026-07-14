@@ -9479,6 +9479,23 @@ function drawFlashlightSprite(t: Uint32Array, seed: number): void {
   drawNoiseDust(t, seed + 817, rust, 8);
 }
 
+function drawLighterSprite(t: Uint32Array, seed: number): void {
+  const metal: [number, number, number] = [90, 96, 100];
+  const metalLight: [number, number, number] = [170, 180, 190];
+  const plastic: [number, number, number] = [220, 50, 40];
+  const fireInner: [number, number, number] = [255, 240, 150];
+  const fireOuter: [number, number, number] = [255, 120, 20];
+
+  ellipse(t, 33, 52, 14, 4, [8, 10, 10], seed, 82);
+  rect(t, 24, 32, 40, 48, plastic, seed + 1, 250);
+  rect(t, 25, 26, 39, 32, metal, seed + 2, 240);
+  rect(t, 28, 28, 36, 31, metalLight, seed + 3, 200);
+  rect(t, 36, 25, 41, 30, metal, seed + 4, 250);
+  ellipse(t, 32, 22, 6, 8, fireOuter, seed + 5, 200);
+  ellipse(t, 32, 23, 3, 5, fireInner, seed + 6, 230);
+  drawNoiseDust(t, seed + 7, [50, 30, 20], 6);
+}
+
 function drawFogDetectorSprite(t: Uint32Array, seed: number): void {
   const caseDark: [number, number, number] = [14, 20, 22];
   const caseBody: [number, number, number] = [52, 68, 68];
@@ -10166,6 +10183,10 @@ function drawToolSprite(t: Uint32Array, seed: number, p: Palette, defId: string)
   }
   if (defId === 'flashlight') {
     drawFlashlightSprite(t, seed);
+    return;
+  }
+  if (defId === 'lighter') {
+    drawLighterSprite(t, seed);
     return;
   }
   if (defId === 'fog_detector') {

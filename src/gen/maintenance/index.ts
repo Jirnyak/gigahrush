@@ -482,7 +482,7 @@ function placeItems(entities: Entity[], rooms: Room[], nextIdStart: number): num
   for (const room of rooms) {
     const numItems = irand(0, 3);
     for (let n = 0; n < numItems; n++) {
-      const defs = ['pipe', 'wrench', 'flashlight', 'bandage', 'water', 'canned', 'bread', 'ammo_fuel', 'grenade'];
+      const defs = ['pipe', 'wrench', 'flashlight', 'lighter', 'bandage', 'water', 'canned', 'bread', 'ammo_fuel', 'grenade'];
       const defId = pick(defs);
       const ix = room.x + irand(0, Math.max(0, room.w - 1));
       const iy = room.y + irand(0, Math.max(0, room.h - 1));

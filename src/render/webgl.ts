@@ -1086,22 +1086,7 @@ vec3 applyWallMicroDetail(vec3 base, uint texId, ivec2 cell, int tx, int ty) {
   return color;
 }
 
-/* --- VOLUMETRIC INJECTION --- */
-vec3 computeVolumetricGodRays(float rayDist, vec3 baseColor, vec2 rayDir) {
-    if (uLightQuality < 3) return baseColor;
-    
-    // Фонарик светит вперед. Наш текущий луч: rayDir.
-    // Чем ближе луч к центру экрана и чем больше дистанция, тем больше "пыли" он просвечивает.
-    float centerDot = dot(normalize(rayDir), normalize(vec2(cos(uAngle), sin(uAngle))));
-    float shaft = max(0.0, centerDot);
-    shaft = pow(shaft, 12.0); // Узкий луч фонарика
-    
-    // Интегрируем по длине (чем дальше стена, тем больше пыли просвечено)
-    float volIntensity = shaft * rayDist * 0.05 * uFlashlight;
-    vec3 dustColor = vec3(0.9, 0.95, 1.0);
-    return baseColor + dustColor * volIntensity;
-}
-/* ---------------------------- */
+
 
 vec3 applyLightDust(vec3 base, vec2 fragCoord, float dist, float rayDX, float rayDY, float fogF) {
   float density = clamp(uDetailLightDust.y, 0.0, 1.0);
@@ -1522,7 +1507,7 @@ void main() {
   }
 
   // Точечное внедрение Volumetric God Rays
-  pixel = computeVolumetricGodRays(pixelDepth * MAX_DIST, pixel, vec2(rayDX, rayDY));
+
   pixel = applyLightDust(pixel, fragCoord, pixelDepth * MAX_DIST, rayDX, rayDY, distanceFog(pixelDepth * MAX_DIST));
 
   // ТОЧКА ВНЕДРЕНИЯ

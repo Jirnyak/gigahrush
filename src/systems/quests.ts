@@ -2009,7 +2009,7 @@ function pickFetchItem(occ: Occupation | undefined, npc: Entity, ctx: QuestConte
   if (ctx.roomType === RoomType.MEDICAL) pushUnique(pool, ['bandage', 'pills', 'antidep', 'water']);
   if (ctx.roomType === RoomType.PRODUCTION) pushUnique(pool, ['pipe', 'wrench', 'rebar', 'door_kit']);
   if (ctx.roomType === RoomType.OFFICE) pushUnique(pool, ['note', 'book', 'ballot']);
-  if (ctx.roomType === RoomType.STORAGE) pushUnique(pool, ['canned', 'pipe', 'ammo_9mm', 'flashlight']);
+  if (ctx.roomType === RoomType.STORAGE) pushUnique(pool, ['canned', 'pipe', 'ammo_9mm', 'flashlight', 'lighter']);
   if (npc.faction === Faction.CULTIST || occupationHasProfileTag(occ, 'cult')) {
     pushUnique(pool, ['idol_chernobog', 'strange_clot', 'cigs', 'govnyak_bad_batch']);
   }
@@ -2033,7 +2033,7 @@ function pickRewardItem(occ?: Occupation, ctx?: QuestContext): string {
   const pool: string[] = [];
   if (ctx?.samosborDanger) pushUnique(pool, ['bandage', 'ammo_9mm', 'water']);
   if (ctx?.roomType === RoomType.OFFICE) pushUnique(pool, ['note', 'book', 'tea']);
-  if (ctx?.roomType === RoomType.PRODUCTION) pushUnique(pool, ['wrench', 'pipe', 'flashlight']);
+  if (ctx?.roomType === RoomType.PRODUCTION) pushUnique(pool, ['wrench', 'pipe', 'flashlight', 'lighter']);
   pushUnique(pool, occupationQuestRewardItems(occ));
   pushUnique(pool, ['bread', 'water', 'bandage']);
   return pool[Math.floor(rng() * pool.length)];
