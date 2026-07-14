@@ -93,10 +93,10 @@ class MusicSystem {
       this.fadeTimer -= dt;
       const p = Math.max(0, this.fadeTimer / this.fadeDuration);
       if (this.currentAudio) {
-        this.currentAudio.volume = (1 - p) * masterVolume;
+        this.currentAudio.volume = Math.max(0, Math.min(1, (1 - p) * masterVolume));
       }
       if (this.fadeOutAudio) {
-        this.fadeOutAudio.volume = p * masterVolume;
+        this.fadeOutAudio.volume = Math.max(0, Math.min(1, p * masterVolume));
       }
       if (this.fadeTimer <= 0 && this.fadeOutAudio) {
         this.fadeOutAudio.pause();
@@ -106,7 +106,7 @@ class MusicSystem {
       }
     } else {
       if (this.currentAudio) {
-        this.currentAudio.volume = masterVolume;
+        this.currentAudio.volume = Math.max(0, Math.min(1, masterVolume));
       }
     }
 

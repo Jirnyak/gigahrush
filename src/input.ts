@@ -135,6 +135,7 @@ class InputBinder {
     this.onMouseUp = this.onMouseUp.bind(this);
     this.onContextMenu = this.onContextMenu.bind(this);
     this.onWheel = this.onWheel.bind(this);
+    this.onTouchMove = this.onTouchMove.bind(this);
     this.onLockChange = this.onLockChange.bind(this);
     this.onBlur = this.onBlur.bind(this);
     this.onVisibilityChange = this.onVisibilityChange.bind(this);
@@ -251,13 +252,18 @@ class InputBinder {
 
   private onWheel(e: WheelEvent) {
     const shouldHandle = this.options.shouldHandleMenuWheel ?? this.options.shouldHandleMenuPointer;
-    if (shouldHandle?.() !== true) return;
-    const dy = Number(e.deltaY);
-    if (Number.isFinite(dy) && dy !== 0) {
-      this.input.menuWheel += dy < 0 ? -1 : 1;
+    if (shouldHandle?.() === true) {
+      const dy = Number(e.deltaY);
+      if (Number.isFinite(dy) && dy !== 0) {
+        this.input.menuWheel += dy < 0 ? -1 : 1;
+      }
     }
     e.preventDefault();
     e.stopImmediatePropagation();
+  }
+
+  private onTouchMove(e: TouchEvent) {
+    e.preventDefault();
   }
 
   private onLockChange() {
@@ -293,6 +299,7 @@ class InputBinder {
     this.canvas.addEventListener('mousedown', this.onMouseDown);
     document.addEventListener('mouseup', this.onMouseUp);
     document.addEventListener('wheel', this.onWheel, { capture: true, passive: false });
+    document.addEventListener('touchmove', this.onTouchMove, { capture: true, passive: false });
     this.canvas.addEventListener('contextmenu', this.onContextMenu);
     document.addEventListener('pointerlockchange', this.onLockChange);
     window.addEventListener('blur', this.onBlur);
@@ -308,6 +315,7 @@ class InputBinder {
       this.canvas.removeEventListener('mousedown', this.onMouseDown);
       document.removeEventListener('mouseup', this.onMouseUp);
       document.removeEventListener('wheel', this.onWheel, { capture: true });
+      document.removeEventListener('touchmove', this.onTouchMove, { capture: true });
       this.canvas.removeEventListener('contextmenu', this.onContextMenu);
       document.removeEventListener('pointerlockchange', this.onLockChange);
       window.removeEventListener('blur', this.onBlur);

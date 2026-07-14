@@ -15,6 +15,11 @@ Role: track public media presence for GIGAH|RUSH across published pages, communi
 
 Как только A-Life, процедурные этажи и система событий (Samosbor hooks) начнут регулярно генерировать вот такие непредсказуемые ситуации, игроки сами начнут писать об этом посты на Reddit, снимать видео на YouTube и делать мемы. Именно это закрепляет проект в массовой культуре. Наш PR должен подсвечивать эти механики и стимулировать игроков делиться своими историями выживания.
 
+### Количественные цели кампании (Quantitative KPI Targets)
+*   **Суммарный охват ниши (Lifetime Unique Players):** порядка **100 000** уникальных игроков за все время (достигается после полноценного запуска в каталоге Pikabu Games, продвижения на ключевых инди-ресурсах и вирального эффекта).
+*   **Регулярная активная аудитория (Active Core):** порядка **1 000** регулярных игроков (ядро сообщества, проходящее новые версии, общающееся в Нет-Сфере и генерирующее истории/отзывы).
+*   **Текущая база отсчета (Baseline):** порядка **1 000** уникальных игроков за все время, накопленных на этапе мягкого запуска (Soft Launch / Sandbox) до публикации игры в публичных каталогах.
+
 **HOST BROWSER AUTOMATION RULE:** 
 The agent has the proven ability to interact with the owner's host Google Chrome / Chromium browser via AppleScript (`osascript`) and JavaScript injection. When the owner asks to "post it automatically", "do it yourself", or "действуй через хромиум апи", the agent MUST NOT refuse due to sandbox limitations. 
 - For sites with simple inputs (StopGame, PlayGround), the agent MUST write and execute an `osascript` to open the URL, inject JS to focus fields, and use `pbcopy` / `Cmd+V`.

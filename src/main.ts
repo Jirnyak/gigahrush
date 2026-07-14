@@ -9273,7 +9273,7 @@ function gameLoop(now: number): void {
 
   const rawDt = (now - lastTime) / 1000;
   lastTime = now;
-  const frameDt = Math.min(rawDt, 0.05); // cap delta
+  const frameDt = Math.max(0, Math.min(rawDt, 0.05)); // cap delta
   uiTime += frameDt;
   let dt = frameDt;
   tickNetSphere(state, player);

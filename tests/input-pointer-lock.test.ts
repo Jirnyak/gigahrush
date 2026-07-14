@@ -283,7 +283,7 @@ test('menu wheel can be latched independently from menu pointer buttons', () => 
     const ignored = wheelEvent(120);
     env.document.dispatch('wheel', ignored);
     assert.equal(input.menuWheel, 0);
-    assert.equal(ignored.defaultPrevented, false);
+    assert.equal(ignored.defaultPrevented, true);
     unbind();
   } finally {
     env.restore();
