@@ -64,7 +64,7 @@ function olgoy(overrides: Partial<Entity> = {}): Entity {
   };
 }
 
-function runOneTick(world: World, entities: Entity[], threat: Entity, playerId: number, state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() })): Msg[] {
+function runOneTick(world: World, entities: Entity[], threat: Entity, playerId: number, state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() })): Msg[] {
   setListenerPos(512, 512, world.dist2.bind(world));
   rebuildEntityIndex(entities);
   setEntityMap(new Map(entities.map(e => [e.id, e])));
@@ -123,7 +123,7 @@ test('olgoy terrain logic slows dry floor and powers local water or pipe ambushe
 test('raw meat bait takes priority over a non-contact target and emits olgoy fed event', () => {
   resetMonsterBaits();
   const world = openWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 12, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 12, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 1, x: 16, y: 10.5, hp: 100, maxHp: 100, inventory: [{ defId: 'rawmeat', count: 1 }] });
   const threat = olgoy();
   const entities = [player, threat];
@@ -143,7 +143,7 @@ test('raw meat bait takes priority over a non-contact target and emits olgoy fed
 test('olgoy eats nearby corpses when not locked in contact combat', () => {
   resetMonsterBaits();
   const world = openWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 15, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 15, worldEvents: createWorldEventState() });
   const threat = olgoy();
   const corpse = makeTestNpc({ id: 3, x: 11.1, y: 10.5, alive: false, hp: 0, maxHp: 40 });
   const entities = [threat, corpse];
@@ -159,7 +159,7 @@ test('water ambush bite drags the player toward the pipe mouth', () => {
   resetMonsterBaits();
   const world = openWorld();
   world.cells[world.idx(10, 10)] = Cell.WATER;
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 18, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 18, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 1, x: 11.3, y: 10.5, hp: 100, maxHp: 100 });
   const threat = olgoy({ x: 10.4, y: 10.5, attackCd: 0 });
   const entities = [player, threat];

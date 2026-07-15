@@ -106,7 +106,7 @@ test('floor memory saves and restores floor instance worlds by instance key', ()
 });
 
 test('active floor instance state round-trips a floor instance world key', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 12 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 12 });
   setFloorInstanceState(state, {
     current: {
       id: 'loop_404',
@@ -120,7 +120,7 @@ test('active floor instance state round-trips a floor instance world key', () =>
   const saved = floorInstanceStateForSave(state);
   assert.equal(saved.current?.worldKey, floorInstanceWorldKey('loop_404'));
 
-  const loaded = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const loaded = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorInstanceState(loaded, saved, FloorLevel.LIVING);
   assert.equal(floorInstanceStateForSave(loaded).current?.worldKey, floorInstanceWorldKey('loop_404'));
 });

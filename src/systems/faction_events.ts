@@ -242,8 +242,8 @@ function rememberResidueSite(
   pressureCells: number,
 ): void {
   activeFactionResidueSites.unshift({
-    key: `${state.currentFloor}:${eventId}:${def.id}`,
-    floor: state.currentFloor,
+    key: `${state.currentZ}:${eventId}:${def.id}`,
+    floor: state.currentZ,
     zoneId,
     x,
     y,
@@ -264,7 +264,7 @@ function pruneResidueSites(state: GameState): void {
   let writeIdx = 0;
   for (let i = 0; i < activeFactionResidueSites.length; i++) {
     const site = activeFactionResidueSites[i];
-    if (site.floor === state.currentFloor && state.time < site.expiresAt) {
+    if (site.floor === state.currentZ && state.time < site.expiresAt) {
       activeFactionResidueSites[writeIdx++] = site;
     }
   }
@@ -282,7 +282,7 @@ function nearestResidueSiteForChoice(
   let best: ActiveFactionResidueSite | null = null;
   let bestD2 = maxDist2;
   for (const site of activeFactionResidueSites) {
-    if (site.floor !== state.currentFloor || !residueAllowsChoice(site.def, choice)) continue;
+    if (site.floor !== state.currentZ || !residueAllowsChoice(site.def, choice)) continue;
     if (choice === 'cleanup' && site.cleaned) continue;
     if (choice === 'report' && site.reported) continue;
     const d2 = world.dist2(player.x, player.y, site.x, site.y);
@@ -484,7 +484,7 @@ export function summarizeFactionEvents(
     lines.push(`${Math.round(state.time - e.time)}s ago ${e.id} z${e.zoneId + 1} npc${e.npcs} drop${e.drops} mark${e.marks} cont${e.deposited} press${e.pressureCells}`);
   }
   for (const p of activeCultProcessions) {
-    if (p.floor !== state.currentFloor) continue;
+    if (p.floor !== state.currentZ) continue;
     const flags = [
       p.avoided ? 'avoid' : '',
       p.followed ? 'follow' : '',
@@ -495,7 +495,7 @@ export function summarizeFactionEvents(
     lines.push(`procession#${p.id} z${p.zoneId + 1} ${Math.max(0, Math.round(p.expiresAt - state.time))}s npc${aliveProcessionNpcs(p, entities)}/${p.npcIds.length} ${flags || 'open'}`);
   }
   for (const c of activeFactionClashes) {
-    if (c.floor !== state.currentFloor) continue;
+    if (c.floor !== state.currentZ) continue;
     const liq = countAliveIds(entities, c.liquidatorIds);
     const cult = countAliveIds(entities, c.cultistIds);
     lines.push(`clash z${c.zoneId + 1} L${liq}/${c.liquidatorIds.length} C${cult}/${c.cultistIds.length} ${c.choices.join(',') || 'open'}`);
@@ -508,7 +508,7 @@ export function getActiveCultProcessionSnapshots(state: GameState): readonly Cul
   const def = cultProcessionDef();
   if (!def?.procession) return cultProcessionSnapshots;
   for (const p of activeCultProcessions) {
-    if (p.floor !== state.currentFloor || p.expiresAt <= state.time) continue;
+    if (p.floor !== state.currentZ || p.expiresAt <= state.time) continue;
     cultProcessionSnapshots.push({
       id: p.id,
       floor: p.floor,
@@ -690,7 +690,7 @@ export function recordFactionClashPlayerHit(
   if (target.type !== EntityType.NPC || target.faction === undefined || damage <= 0) return;
   recordCultProcessionPlayerHit(state, target, damage);
   const clash = activeFactionClashes.find(c =>
-    c.floor === state.currentFloor
+    c.floor === state.currentZ
     && !c.aftermathDone
     && (c.liquidatorIds.includes(target.id) || c.cultistIds.includes(target.id))
   );
@@ -722,7 +722,7 @@ export function recordFactionEventLootTaken(
     if (pressureCleared > 0) state.msgs.push(msg('След события разобран: местный нажим немного спал.', state.time, '#9d9'));
   }
   const clash = activeFactionClashes.find(c =>
-    c.floor === state.currentFloor
+    c.floor === state.currentZ
     && !c.aftermathDone
     && world.dist2(drop.x, drop.y, c.x, c.y) <= CLASH_SEEN_DIST2
   );
@@ -742,7 +742,7 @@ export function tryReportLiquidatorCultClashAftermath(
   const hasEvidence = playerHasClashEvidence(player);
   const aftermath = factionClashAftermaths.find(a =>
     !a.reported
-    && a.floor === state.currentFloor
+    && a.floor === state.currentZ
     && state.time - a.time <= CLASH_REPORT_WINDOW_SEC
     && (hasEvidence || world.dist2(player.x, player.y, a.x, a.y) <= CLASH_REPORT_DIST2)
   );
@@ -852,7 +852,7 @@ function triggerFactionClash(
 
   activeFactionClashes.push({
     key,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     zoneId,
     x: center.x,
     y: center.y,
@@ -888,7 +888,7 @@ function updateActiveFactionClashes(
   let keepCount = 0;
   for (let i = 0; i < activeFactionClashes.length; i++) {
     const clash = activeFactionClashes[i];
-    if (clash.floor !== state.currentFloor) {
+    if (clash.floor !== state.currentZ) {
       continue;
     }
 
@@ -1138,7 +1138,7 @@ function seedClashOutcomeRumors(
       id: eventId,
       type: 'faction_event',
       severity: clash.def.severity,
-      floor: state.currentFloor,
+      floor: state.currentZ,
       zoneId: clash.zoneId,
       x: clash.x,
       y: clash.y,
@@ -1398,7 +1398,7 @@ function isDefEligibleForZone(world: World, zoneId: number, def: FactionEventDef
 }
 
 function cooldownKey(state: GameState, zoneId: number, def: FactionEventDef): string {
-  return `${state.currentFloor}:${zoneId}:${def.id}`;
+  return `${state.currentZ}:${zoneId}:${def.id}`;
 }
 
 function currentZoneId(world: World, actor: Entity): number {
@@ -1459,7 +1459,7 @@ function startCultProcession(
   const zf = factionToTerritoryOwner(faction);
   const p: ActiveCultProcession = {
     id: nextProcessionId++,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     samosborCount: state.samosborCount,
     zoneId,
     x,
@@ -1543,7 +1543,7 @@ function nearestCultProcession(world: World, state: GameState, player: Entity): 
   let best: ActiveCultProcession | null = null;
   let bestD2 = def.procession.fearRadius * def.procession.fearRadius;
   for (const p of activeCultProcessions) {
-    if (p.floor !== state.currentFloor || p.zoneId !== playerZone || p.expiresAt <= state.time || p.disrupted) continue;
+    if (p.floor !== state.currentZ || p.zoneId !== playerZone || p.expiresAt <= state.time || p.disrupted) continue;
     const d2 = world.dist2(player.x, player.y, p.x, p.y);
     if (d2 <= bestD2) {
       best = p;
@@ -1565,7 +1565,7 @@ function updateActiveCultProcessions(
   if (!def?.procession) return;
   for (let i = activeCultProcessions.length - 1; i >= 0; i--) {
     const p = activeCultProcessions[i];
-    if (p.floor !== state.currentFloor) {
+    if (p.floor !== state.currentZ) {
       dropCultProcession(p);
       continue;
     }
@@ -1600,7 +1600,7 @@ function processionDisrupted(p: ActiveCultProcession, entities: Entity[]): boole
 
 function recordCultProcessionPlayerHit(state: GameState, target: Entity, damage: number): void {
   for (const p of activeCultProcessions) {
-    if (p.floor !== state.currentFloor || p.disrupted || p.expiresAt <= state.time) continue;
+    if (p.floor !== state.currentZ || p.disrupted || p.expiresAt <= state.time) continue;
     if (!p.npcIds.includes(target.id)) continue;
     p.playerDamage += damage;
     return;
@@ -1883,7 +1883,7 @@ function applyConsequences(state: GameState, world: World, zoneId: number, def: 
     if (changeResourceStock(state, delta.resourceId, delta.count)) economyDeltas++;
   }
   if (!def.containerDrops || def.containerDrops.length === 0) return { deposited: 0, containersTouched: 0, economyDeltas };
-  ensureRoomContainers(world, state.currentFloor);
+  ensureRoomContainers(world, state.currentZ);
   let deposited = 0;
   let containersTouched = 0;
   const visibleContainer = findResidueContainer(world, zoneId, true);
@@ -2063,7 +2063,7 @@ function seedNearbyRumors(
       id: eventId,
       type: 'faction_event',
       severity: def.severity,
-      floor: state.currentFloor,
+      floor: state.currentZ,
       zoneId,
       x,
       y,

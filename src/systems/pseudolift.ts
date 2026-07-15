@@ -291,7 +291,7 @@ function makeSite(state: GameState, route: PseudoliftRouteCtx, candidate: Pseudo
     key,
     routeKey: route.routeKey,
     routeKind: route.routeKind,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     liftIdx: candidate.liftIdx,
     liftX: candidate.liftX,
     liftY: candidate.liftY,
@@ -352,7 +352,7 @@ export function preparePseudoliftForCurrentFloor(world: World, state: GameState)
 
 function targetSite(world: World, state: GameState, lookX: number, lookY: number): PseudoliftSite | null {
   const site = currentSite(state);
-  if (!site || site.floor !== state.currentFloor) return null;
+  if (!site || site.floor !== state.currentZ) return null;
   if (site.status !== 'dormant' && site.status !== 'suspected' && site.status !== 'revealed') return null;
   const x = Math.floor(lookX);
   const y = Math.floor(lookY);
@@ -511,7 +511,7 @@ function feedPseudolift(world: World, entities: Entity[], state: GameState, site
 function consumeNearbyBait(world: World, entities: Entity[], state: GameState, site: PseudoliftSite): boolean {
   if (site.status !== 'dormant' && site.status !== 'suspected') return false;
   for (const marker of getActiveMonsterBaits()) {
-    if (marker.floor !== state.currentFloor || marker.expiresAt <= state.time) continue;
+    if (marker.floor !== state.currentZ || marker.expiresAt <= state.time) continue;
     if (world.dist2(marker.x, marker.y, site.liftX + 0.5, site.liftY + 0.5) > BAIT_RADIUS_SQ) continue;
     feedPseudolift(world, entities, state, site, marker);
     return true;
@@ -555,7 +555,7 @@ export function clearPseudoliftActive(state: GameState, entities?: Entity[]): vo
 
 export function updatePseudolifts(world: World, entities: Entity[], player: Entity, state: GameState): void {
   const site = currentSite(state);
-  if (!site || site.floor !== state.currentFloor) return;
+  if (!site || site.floor !== state.currentZ) return;
   if (consumeNearbyBait(world, entities, state, site)) return;
   if (site.status !== 'revealed') return;
 

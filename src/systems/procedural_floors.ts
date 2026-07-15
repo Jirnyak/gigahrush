@@ -190,12 +190,12 @@ function createSpecDeck(runSeed: number): Record<string, ProceduralFloorSpec> {
   return specs;
 }
 
-function normalizeZ(value: unknown, fallbackFloor: FloorLevel): number {
+function normalizeZ(value: unknown, fallbackZ: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const z = Math.trunc(value);
     if ((z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z) || z === FLOOR_RUN_VOID_Z) return z;
   }
-  return zForStoryFloor(fallbackFloor);
+  return fallbackZ;
 }
 
 function normalizeSpec(input: unknown, runSeed: number, z: number): ProceduralFloorSpec {
@@ -329,9 +329,8 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
   };
 }
 
-export function createFloorRunState(currentFloor = FloorLevel.LIVING): FloorRunState {
+export function createFloorRunState(startZ = 2): FloorRunState {
   const runSeed = randomRunSeed();
-  const startZ = zForStoryFloor(currentFloor);
   const run: FloorRunState = {
     runSeed,
     currentZ: startZ,
@@ -345,16 +344,16 @@ export function createFloorRunState(currentFloor = FloorLevel.LIVING): FloorRunS
 
 export function normalizeFloorRunState(
   input: Partial<FloorRunState> | null | undefined,
-  currentFloor = FloorLevel.LIVING,
+  defaultZ = 2,
 ): FloorRunState {
   const runSeed = normalizeRunSeed(input?.runSeed);
-  const currentZ = normalizeZ(input?.currentZ, currentFloor);
+  const z = normalizeZ(input?.currentZ, defaultZ);
   const out: FloorRunState = {
     runSeed,
-    currentZ,
+    currentZ: z,
     specs: createSpecDeck(runSeed),
     visited: {},
-    unlockedZs: sanitizeUnlockedZs(input?.unlockedZs, currentZ),
+    unlockedZs: sanitizeUnlockedZs(input?.unlockedZs, z),
   };
   const savedSpecs = input?.specs ?? {};
   for (const z of PROCEDURAL_FLOOR_ZS) {
@@ -405,25 +404,25 @@ export function unlockedFloorZs(state: GameState): readonly number[] {
   return ensureFloorRunState(state).unlockedZs;
 }
 
-export function ensureFloorRunState(state: GameState, currentFloor = state.currentFloor): FloorRunState {
+export function ensureFloorRunState(state: GameState, currentZ = state.currentZ): FloorRunState {
   const host = state as FloorRunHost;
   if (host.floorRun && normalizedFloorRuns.has(host.floorRun)) return host.floorRun;
-  host.floorRun = normalizeFloorRunState(host.floorRun, currentFloor);
+  host.floorRun = normalizeFloorRunState(host.floorRun, currentZ);
   return host.floorRun;
 }
 
 export function setFloorRunState(
   state: GameState,
   input: Partial<FloorRunState> | null | undefined,
-  currentFloor = state.currentFloor,
+  currentZ = state.currentZ,
 ): FloorRunState {
-  const normalized = normalizeFloorRunState(input, currentFloor);
+  const normalized = normalizeFloorRunState(input, currentZ);
   (state as FloorRunHost).floorRun = normalized;
   return normalized;
 }
 
 export function floorRunStateForSave(state: GameState): FloorRunState {
-  return normalizeFloorRunState((state as FloorRunHost).floorRun, state.currentFloor);
+  return normalizeFloorRunState((state as FloorRunHost).floorRun, state.currentZ);
 }
 
 function entryForZ(state: GameState, z: number): FloorRunEntry | null {
@@ -494,11 +493,11 @@ export function floorRunEntryForFloorKey(state: GameState, floorKey: string): Fl
 export function currentFloorRunEntry(state: GameState): FloorRunEntry {
   const run = ensureFloorRunState(state);
   return entryForZ(state, run.currentZ) ?? {
-    z: zForStoryFloor(state.currentFloor),
-    baseFloor: state.currentFloor,
-    storyFloor: state.currentFloor,
+    z: run.currentZ,
+    baseFloor: FloorLevel.LIVING,
+    storyFloor: FloorLevel.LIVING,
     procedural: false,
-    label: STORY_NAMES[state.currentFloor],
+    label: STORY_NAMES[FloorLevel.LIVING],
     color: '#4af',
   };
 }

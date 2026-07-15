@@ -119,7 +119,7 @@ function makeShelterWorld(doorState: DoorState): {
 
 function resolveClassicSeal(ctx: ReturnType<typeof makeShelterWorld>): ReturnType<typeof makeGameState> {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 1,
     worldEvents: createWorldEventState(),
@@ -149,7 +149,7 @@ function forceWarningWindow(variantId: SamosborVariantId): {
     isFemale: true,
   });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborTimer: 12,
     worldEvents: createWorldEventState(),
   });
@@ -231,7 +231,7 @@ test('random samosbor transfer moves a random map entity and can pick player', (
     faction: Faction.CITIZEN,
   });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 1,
     worldEvents: createWorldEventState(),
@@ -283,7 +283,7 @@ test('active samosbor exposes a compact survival instruction', () => {
   resetSamosborRuntimeForTests();
   const ctx = makeShelterWorld(DoorState.CLOSED);
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborTimer: 0,
     worldEvents: createWorldEventState(),
   });
@@ -327,7 +327,7 @@ test('maronary green source glow damages player near marked source', () => {
   resetSamosborRuntimeForTests();
   const ctx = makeMaronaryGlowWorld();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborTimer: 1,
     worldEvents: createWorldEventState(),
   });
@@ -364,7 +364,7 @@ function makeFogEffectWorld(): { world: World; state: ReturnType<typeof makeGame
   const ci = world.idx(20, 20);
   world.fog[ci] = 180;
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 2,
     worldEvents: createWorldEventState(),
@@ -414,7 +414,7 @@ function makePlayerPressureWorld(): {
   world.roomMap[pressureIdx] = -1;
 
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 3,
     worldEvents: createWorldEventState(),
@@ -449,7 +449,7 @@ test('active samosbor spawns nearby pressure monster targeting unsheltered playe
 test('active samosbor pressure spawn is skipped for accepted shelter player', () => {
   const ctx = makeShelterWorld(DoorState.HERMETIC_CLOSED);
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 2,
     worldEvents: createWorldEventState(),
@@ -589,7 +589,7 @@ test('istotit fog effect heals actors in active fog', () => {
 test('captured samosbor zone is restored before post-cycle patch or fallback rebuild', () => {
   const ctx = makeShelterWorld(DoorState.CLOSED);
   const state = makeGameState({
-    currentFloor: FloorLevel.MINISTRY,
+    currentZ: FloorLevel.MINISTRY,
     samosborTimer: 0,
     worldEvents: createWorldEventState(),
   });
@@ -850,7 +850,7 @@ test('local samosbor patch can be deferred before replacement generation', () =>
     }
   }
   const state = makeGameState({
-    currentFloor: FloorLevel.MINISTRY,
+    currentZ: FloorLevel.MINISTRY,
     samosborTimer: 0,
     worldEvents: createWorldEventState(),
   });

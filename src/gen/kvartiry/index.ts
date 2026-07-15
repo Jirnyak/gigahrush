@@ -683,7 +683,7 @@ registerContentRuntimeHook({
   id: 'kvartiry_population_pressure',
   phases: ['floor_activity'],
   update(ctx) {
-    if (ctx.state.currentFloor !== FloorLevel.KVARTIRY) return;
+    if (ctx.state.currentZ !== 14) return;
     updateKvPopulation(ctx.world, ctx.entities, ctx.dt, ctx.state);
   },
 });

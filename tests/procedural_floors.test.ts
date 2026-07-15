@@ -15,7 +15,7 @@ import {
 
 function createMockGameState(): GameState {
   return {
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 0,
     player: {
       x: 0,
@@ -45,7 +45,7 @@ test('formatFloorZ formats negative numbers correctly', () => {
 });
 
 test('createFloorRunState initializes with random seed and currentZ based on FloorLevel', () => {
-  const state = createFloorRunState(FloorLevel.LIVING);
+  const state = createFloorRunState(0);
   assert.ok(typeof state.runSeed === 'number');
   assert.equal(state.currentZ, 0); // zForStoryFloor(FloorLevel.LIVING) is 0
   assert.deepEqual(state.unlockedZs, [0]);
@@ -53,13 +53,13 @@ test('createFloorRunState initializes with random seed and currentZ based on Flo
 });
 
 test('createFloorRunState uses provided FloorLevel', () => {
-  const state = createFloorRunState(FloorLevel.MINISTRY); // Ministry z is 30
+  const state = createFloorRunState(30); // Ministry z is 30
   assert.equal(state.currentZ, 30);
   assert.deepEqual(state.unlockedZs, [30]);
 });
 
 test('normalizeFloorRunState falls back correctly for missing or invalid values', () => {
-  const normalized = normalizeFloorRunState(null, FloorLevel.LIVING);
+  const normalized = normalizeFloorRunState(null, 0);
   assert.ok(typeof normalized.runSeed === 'number');
   assert.equal(normalized.currentZ, 0);
   assert.deepEqual(normalized.unlockedZs, [0]);
@@ -67,7 +67,7 @@ test('normalizeFloorRunState falls back correctly for missing or invalid values'
 
 test('unlockFloorZ and isFloorZUnlocked', () => {
   const gameState = createMockGameState();
-  const runState = createFloorRunState(FloorLevel.LIVING);
+  const runState = createFloorRunState(0);
   (gameState as any).floorRun = runState;
 
   // Initially only 0 is unlocked
@@ -86,7 +86,7 @@ test('unlockFloorZ and isFloorZUnlocked', () => {
 
 test('unlockFloorZ rejects invalid Z limits', () => {
   const gameState = createMockGameState();
-  const runState = createFloorRunState(FloorLevel.LIVING);
+  const runState = createFloorRunState(0);
   (gameState as any).floorRun = runState;
 
   // Try unlocking beyond limits (-49 to 49 usually, but let's test extreme)

@@ -92,7 +92,7 @@ function currentFloorKey(state: GameState): string {
   try {
     return floorRunEntryFloorKey(currentFloorRunEntry(state));
   } catch {
-    return floorKeyForStory(state.currentFloor);
+    return floorKeyForStory(state.currentZ);
   }
 }
 
@@ -118,7 +118,7 @@ function terminalRandom(def: NetHackTerminalDef, terminal: NetHackTerminal): num
 function floorDanger(world: World, state: GameState, terminal: NetHackTerminal): number {
   const zone = world.zones[world.zoneMap[terminal.idx]];
   const zoneDanger = zone?.level ?? 1;
-  return zoneDanger + state.currentFloor * 2 + (state.samosborActive ? 3 : 0);
+  return zoneDanger + state.currentZ * 2 + (state.samosborActive ? 3 : 0);
 }
 
 function currentTerminal(): NetHackTerminal | undefined {

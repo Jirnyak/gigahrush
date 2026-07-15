@@ -292,7 +292,7 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
   const recentEvents = getRecentEvents(state, { tags: ['faction_event'], limit: UI_RECENT_EVENT_LIMIT }).map(event => {
     const zoneId = event.zoneId ?? -1;
     const zone = zoneId >= 0 ? zoneById[zoneId] : undefined;
-    if (event.floor === state.currentFloor && zone) {
+    if (event.floor === state.currentZ && zone) {
       zone.recentEventCount++;
       if (event.severity > zone.lastEventSeverity) zone.lastEventSeverity = event.severity;
       if (event.time >= zone.lastEventTime) zone.lastEventTime = event.time;
@@ -316,7 +316,7 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
 
   factionUiSnapshot = {
     time: state.time,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     zones,
     zoneById,
     owners: ZONE_UI_FACTIONS.map(faction => ownerCounts.get(faction) ?? { faction, cells: 0, fronts: 0 }),
@@ -362,7 +362,7 @@ export function updateFactionActivity(
   tickCaravans(state, elapsed, false, MAX_CARAVAN_LANES_PER_TICK, world, entities, player, nextId);
   factionUiSnapshotAccum += elapsed;
   const uiRefreshSec = state.showFactions ? UI_OPEN_REFRESH_SEC : UI_IDLE_REFRESH_SEC;
-  if (!factionUiSnapshot || factionUiSnapshot.floor !== state.currentFloor || factionUiSnapshotAccum >= uiRefreshSec) {
+  if (!factionUiSnapshot || factionUiSnapshot.floor !== state.currentZ || factionUiSnapshotAccum >= uiRefreshSec) {
     factionUiSnapshotAccum = 0;
     refreshFactionUiSnapshot(world, state);
   }
@@ -383,7 +383,7 @@ function noiseZoneId(world: World, record: NoiseRecord): number {
 }
 
 function shouldRespondToNoise(state: GameState, zoneId: number, record: NoiseRecord): boolean {
-  const key = `${state.currentFloor}:${zoneId}:${record.source}`;
+  const key = `${state.currentZ}:${zoneId}:${record.source}`;
   const last = lastNoisePatrolResponseAt.get(key) ?? -Infinity;
   if (state.time - last < NOISE_PATROL_COOLDOWN_S) return false;
   lastNoisePatrolResponseAt.set(key, state.time);

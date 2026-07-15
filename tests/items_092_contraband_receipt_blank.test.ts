@@ -28,7 +28,7 @@ test('contraband receipt blank is reachable forgery paperwork', () => {
 
 test('contraband receipt blank can be sold as black-market document risk', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 92 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 92 });
 
   assert.equal(addItem(player, 'contraband_receipt_blank', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

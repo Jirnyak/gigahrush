@@ -23,7 +23,7 @@ import { makeGameState } from './helpers';
 test('room memory records public and local player deeds but ignores private events', () => {
   clearRoomMemory();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
 
@@ -59,7 +59,7 @@ test('room memory records public and local player deeds but ignores private even
 test('room memory decays on slow ticks and expires without a save shape', () => {
   clearRoomMemory();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   publishEvent(state, {
@@ -90,7 +90,7 @@ test('room memory decays on slow ticks and expires without a save shape', () => 
 test('room memory keeps only the bounded newest/highest records', () => {
   clearRoomMemory();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
 
@@ -116,7 +116,7 @@ test('room memory keeps only the bounded newest/highest records', () => {
 test('room memory accumulates bits, max severity and max ttl across multiple events', () => {
   clearRoomMemory();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
 

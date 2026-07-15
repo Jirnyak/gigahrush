@@ -32,7 +32,7 @@ test('decon completion stamp is official cleanup paperwork', () => {
 
 test('decon completion stamp can be sold as cleanup proof in the living block', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 97 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 97 });
 
   assert.equal(addItem(player, STAMP_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

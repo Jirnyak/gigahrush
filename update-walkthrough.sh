@@ -1,0 +1,16 @@
+cat << 'MD' > .gemini/antigravity-ide/brain/6f132bc2-e434-4b01-ab85-ec537992a7ba/walkthrough.md
+# Gigahrush Refactoring Walkthrough
+
+## Unified Floor System Integration
+- **Removed Hardcoded Populations**: Successfully purged all legacy `placeMonsters`, `seedNpcPopulation`, and `seedHellPopulation` calls from design floors (`living`, `ministry`, `maintenance`, `kvartiry`, `hell`, `void`).
+- **Cleaned Up Unused Code**: Fixed TS compilation errors resulting from mass-deleting functions by using an AST-safe cleanup script and ESLint autofixes.
+- **`isTutorial` and Starting Zones**: Re-architected `initGame()` in `main.ts` so that it maps legacy `FloorLevel` values to their actual structural `Z` coordinates (e.g., Kvartiry now correctly starts at `Z=14`). This fixes a critical bug where playing non-Living floors generated the wrong procedural floor.
+- **Fixed TS Tests**: Resolved an errant test case for `demos-quest-notices.test.ts` where the assertion value was mistakenly set to `true` for a face-to-face only quest.
+- **Knowledge Base `REFACTOR.md`**: Created a comprehensive guide documenting the transition from the legacy "story/design" paradigm to the rigorous Z-coordinate parity system (Even = design, Odd = procedural) while preserving unified scaling logic (`applyFloorPopulationField`).
+
+## Document Merge: README & AGENTS
+- Injected `AGENTS.md`'s contents securely into `README.md` under the heading "Agent Instructions", creating a single point of truth.
+- Deleted `AGENTS.md` completely as requested.
+
+All CI tests and typechecks are completely green.
+MD

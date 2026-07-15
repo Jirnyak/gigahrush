@@ -75,7 +75,7 @@ function currentFloorKey(state: GameState): string {
   try {
     return floorRunEntryFloorKey(currentFloorRunEntry(state));
   } catch {
-    return floorKeyForStory(state.currentFloor);
+    return floorKeyForStory(state.currentZ);
   }
 }
 
@@ -101,7 +101,7 @@ function floorFactLines(world: World, state: GameState, terminal: ComputerTermin
   const room = roomId >= 0 ? world.rooms[roomId] : undefined;
   const zone = zoneId >= 0 ? world.zones[zoneId] : undefined;
   return [
-    `Этаж: ${FloorLevel[state.currentFloor] ?? state.currentFloor}. Зона: ${zoneId >= 0 ? zoneId : 'нет'}.`,
+    `Этаж: ${FloorLevel[state.currentZ] ?? state.currentZ}. Зона: ${zoneId >= 0 ? zoneId : 'нет'}.`,
     `Комната: ${room?.name ?? 'не подписана'}. Опасность зоны: ${zone?.level ?? 0}.`,
     `Самосбор: ${state.samosborActive ? 'активен' : 'нет'}; таймер ${Math.max(0, Math.floor(state.samosborTimer))} сек.`,
   ];

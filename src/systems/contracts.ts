@@ -703,7 +703,7 @@ function inventoryCount(player: Entity, defId: string): number {
 }
 
 function isCleanupTargetRoom(world: World, state: GameState, def: ContractDef, x: number, y: number): boolean {
-  if (!def.tags.includes('cleanup') || def.target.floor !== state.currentFloor) return false;
+  if (!def.tags.includes('cleanup') || def.target.floor !== state.currentZ) return false;
   const room = world.roomAt(x, y);
   if (!room) return false;
   if (def.target.roomName && room.name !== def.target.roomName) return false;
@@ -761,7 +761,7 @@ function findContaminatedContractSample(player: Entity, contractId: string): Ite
 function currentFloorMatchesZhelemishTarget(state: GameState, target: ZhelemishNiiTarget): boolean {
   const entry = currentFloorRunEntry(state);
   if (target.kind === 'procedural_mushroom') return entry.spec?.key === target.targetKey;
-  return entry.storyFloor === FloorLevel.LIVING && state.currentFloor === FloorLevel.LIVING;
+  return entry.storyFloor === FloorLevel.LIVING && state.currentZ === FloorLevel.LIVING;
 }
 
 function currentFloorIsWrongZhelemishMycelium(state: GameState, target: ZhelemishNiiTarget): boolean {
@@ -1126,7 +1126,7 @@ export function spawnGovnyakCourierContract(
   for (const def of defs) {
     const quest = createContractQuest(def, state, giver, player);
     assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
-      crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+      crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
     });
     state.quests.push(quest);
     publishContractCreated(state, def, quest);
@@ -1168,20 +1168,20 @@ export function listAvailableContracts(state: GameState, limit = 6) {
   const sliceLimit = Number.isFinite(limit) ? Math.trunc(limit) : Number.POSITIVE_INFINITY;
   if (sliceLimit === 0) return [];
 
-  const currentFloor: ContractDef[] = [];
+  const currentZ: ContractDef[] = [];
   const otherFloors: ContractDef[] = [];
   for (const def of CONTRACTS) {
     if (isContractHiddenForAssignment(def) || assignedIds.has(def.id)) continue;
-    if (def.target.floor === state.currentFloor) {
-      currentFloor.push(def);
+    if (def.target.floor === state.currentZ) {
+      currentZ.push(def);
     } else {
       otherFloors.push(def);
     }
   }
 
   const floorRunSeed = (state as { floorRun?: { runSeed?: number } }).floorRun?.runSeed ?? 0;
-  const assignmentSeed = hashSeed(`contracts:${state.currentFloor}:${assignedIds.size}`, floorRunSeed);
-  const ordered = orderedContractsForAssignment(currentFloor, assignmentSeed)
+  const assignmentSeed = hashSeed(`contracts:${state.currentZ}:${assignedIds.size}`, floorRunSeed);
+  const ordered = orderedContractsForAssignment(currentZ, assignmentSeed)
     .concat(orderedContractsForAssignment(otherFloors, assignmentSeed ^ 0x9e3779b9));
   return sliceLimit > 0 ? ordered.slice(0, sliceLimit) : ordered;
 }
@@ -1204,7 +1204,7 @@ export function spawnContract(state: GameState): boolean {
   }
   const quest = createContractQuest(def, state);
   assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
-    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
   });
   state.quests.push(quest);
   state.msgs.push(msg(`[QUEST] ${def.title}`, state.time, '#6cf'));
@@ -1231,7 +1231,7 @@ export function spawnContractById(
   }
   const quest = createContractQuest(def, state);
   assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
-    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
   });
   state.quests.push(quest);
   state.msgs.push(msg(`[QUEST] ${def.title}`, state.time, '#6cf'));

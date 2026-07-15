@@ -482,7 +482,7 @@ export function ensureRoomContainers(world: World, floor: FloorLevel, maxContain
 }
 
 function containerMemory(container: WorldContainer, state?: GameState): RoomMemoryRecord | undefined {
-  if (state && container.floor !== state.currentFloor) return undefined;
+  if (state && container.floor !== state.currentZ) return undefined;
   return getRoomMemoryForContainer(container);
 }
 
@@ -1005,7 +1005,7 @@ export function tickContainerAudits(
   for (let scanned = 0; scanned < scanCount; scanned++) {
     const container = world.containers[theftAuditCursor];
     theftAuditCursor = (theftAuditCursor + 1) % total;
-    if (!container || container.floor !== state.currentFloor) continue;
+    if (!container || container.floor !== state.currentZ) continue;
     if (publishTheftAuditIfDue(container, actor, { state, world, entities })) published++;
   }
   return published;
@@ -1134,7 +1134,7 @@ export function takeFromContainer(
   if (purchaseQuote) {
     actor.money = (actor.money ?? 0) - purchaseQuote.totalPrice;
     if (state && purchaseQuote.quote?.resourceId) {
-      changeResourceStock(state, purchaseQuote.quote.resourceId, -moved, state.currentFloor);
+      changeResourceStock(state, purchaseQuote.quote.resourceId, -moved, state.currentZ);
     }
   }
   const stolen = access.theft;

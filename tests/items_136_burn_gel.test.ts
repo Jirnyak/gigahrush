@@ -31,7 +31,7 @@ test('burn gel is reachable burn medicine in medical and HQ stock', () => {
 
 test('burn gel is a small consumable treatment decision', () => {
   const player = makeTestPlayer({ id: 136, hp: 40, maxHp: 80 });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 136 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 136 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');

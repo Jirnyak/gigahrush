@@ -234,7 +234,7 @@ function drawVoidReturnPortalHint(
   state: GameState,
   world: World,
 ): void {
-  if (state.currentFloor !== FloorLevel.VOID || state.samosborActive) return;
+  if (state.currentZ !== FloorLevel.VOID || state.samosborActive) return;
   const portal = voidReturnPortalHudState(state);
   if (!portal || world.floorTex[portal.cell!] !== Tex.PORTAL) return;
 
@@ -1498,7 +1498,7 @@ export function drawHUD(
     ctx.fillText(fitHudText(ctx, zhelemishLine, panelW - 10 * sx), panelX + 5 * sx, panelY + 4 * sy);
   }
 
-  const routeCue = getActiveRouteCueHud(state.time, state.currentFloor);
+  const routeCue = getActiveRouteCueHud(state.time, state.currentZ);
   const routeHintsVisible = showCompactPanels && showRouteHints && !state.samosborActive;
   const objectiveRoute = routeHintsVisible ? getObjectiveRouteHud(state, world, player) : null;
   const currentObjective = routeHintsVisible ? getCurrentObjective(state, entities) : null;
@@ -1628,7 +1628,7 @@ export function drawHUD(
     const s = Math.max(1, Math.min(sx, sy));
     const mapSize = Math.max(48 * s, Math.min(HUD_MINIMAP_UNITS * s, slots.topRightNavigation.w, slots.topRightNavigation.h));
     const mapRect = allocateHudSlot(slots.topRightNavigation, mapSize, mapSize, 'right');
-    drawMinimap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time, mapRect);
+    drawMinimap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentZ, state, time, mapRect);
   }
   if (objectiveRoute) {
     const rect = allocateHudSlot(slots.topRightNavigation, 46 * sy, 188 * sx, 'right');
@@ -1816,7 +1816,7 @@ export function drawHUD(
 
   // ── Full map menu ────────────────────────────────────────
   if (state.mapMode === 2) {
-    drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentFloor, state, time);
+    drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentZ, state, time);
   }
 
   if (state.showMapLegend) {

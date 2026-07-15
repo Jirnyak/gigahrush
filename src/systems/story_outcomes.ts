@@ -79,7 +79,7 @@ function entityPackageId(entity: Entity): string | undefined {
 }
 
 function routeTags(state: GameState): string[] {
-  const tags: string[] = [`floor:${state.currentFloor}`];
+  const tags: string[] = [`floor:${state.currentZ}`];
   try {
     const entry = currentFloorRunEntry(state);
     tags.push(`route:${floorRunEntryRouteId(entry)}`);
@@ -101,7 +101,7 @@ function routeTags(state: GameState): string[] {
 
 function conditionMatches(condition: StoryOutcomeCondition | undefined, state: GameState, player?: Entity): boolean {
   if (!condition) return true;
-  if (condition.floorLevels?.length && !condition.floorLevels.includes(state.currentFloor)) return false;
+  if (condition.floorLevels?.length && !condition.floorLevels.includes(state.currentZ)) return false;
   if (condition.routeTags?.length) {
     const actual = routeTags(state);
     if (!condition.routeTags.every(tag => actual.includes(tag))) return false;

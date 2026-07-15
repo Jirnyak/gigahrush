@@ -27,7 +27,7 @@ test('normalizeGameEconomy loads saved economy and sets it on state', () => {
 });
 
 test('normalizeGameEconomy initializes current floor if missing from save', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
 
   const savedEconomy = {
     priceVersion: 1,
@@ -42,7 +42,7 @@ test('normalizeGameEconomy initializes current floor if missing from save', () =
 });
 
 test('normalizeGameEconomy clears price cache', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const savedEconomy = {
     priceVersion: 1,

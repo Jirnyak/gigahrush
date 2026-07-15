@@ -126,7 +126,7 @@ test('mukhozhuk command pulse is local, capped and does not draft ordinary civil
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   }));
   const entities = [player, host, civilian, strongGuard, ...guards];
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);
@@ -161,7 +161,7 @@ test('idle mukhozhuk spoils nearby food containers through local appetite', () =
   });
   world.addContainer(container);
   const entities = [player, host];
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);

@@ -35,7 +35,7 @@ test('scrubbed weapon tag is reachable through black-market stash pools', () => 
 
 test('scrubbed weapon tag can be sold as audit-risk contraband in the living block', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 84 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 84 });
 
   assert.equal(addItem(player, 'scrubbed_weapon_tag', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

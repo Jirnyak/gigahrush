@@ -27,27 +27,20 @@ export interface EconomyRouteState {
 }
 
 export interface EconomyState {
-  floors: Partial<Record<FloorLevel, EconomyFloorState>>;
+  floors: Record<number, EconomyFloorState | undefined>;
   routes: Record<string, EconomyRouteState>;
   priceVersion: number;
 }
 
 export const ECONOMY_ROUTE_STATE_CAP = 128;
 
-const ECONOMY_FLOORS = new Set<FloorLevel>([
-  FloorLevel.MINISTRY,
-  FloorLevel.KVARTIRY,
-  FloorLevel.LIVING,
-  FloorLevel.MAINTENANCE,
-  FloorLevel.HELL,
-  FloorLevel.VOID,
-]);
+
 
 export function createEconomyState(): EconomyState {
   return { floors: {}, routes: {}, priceVersion: 1 };
 }
 
-export function createEconomyFloorState(floor: FloorLevel): EconomyFloorState {
+export function createEconomyFloorState(floor: number): EconomyFloorState {
   const resources: Record<string, ResourceStock> = {};
   for (const r of RESOURCES) resources[r.id] = { stock: r.baseStock, target: r.baseStock, lastDelta: 0 };
   return { floor, resources, lastTickAt: 0 };
@@ -116,8 +109,8 @@ export function normalizeEconomyState(value: unknown): EconomyState {
   if (src.floors) {
     for (const k of Object.keys(src.floors)) {
       const floorNumber = Number(k);
-      if (!Number.isInteger(floorNumber) || !ECONOMY_FLOORS.has(floorNumber as FloorLevel)) continue;
-      const floor = floorNumber as FloorLevel;
+      if (!Number.isInteger(floorNumber) || floorNumber < -9999 || floorNumber > 9999) continue;
+      const floor = floorNumber;
       const existing = src.floors[floor];
       const normalized = createEconomyFloorState(floor);
       if (existing?.resources) {

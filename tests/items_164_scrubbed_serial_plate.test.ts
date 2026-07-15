@@ -46,7 +46,7 @@ test('scrubbed serial plate is reachable through black-market caches and serial 
 
 test('scrubbed serial plate can be sold as audit-risk black-market proof', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 164 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 164 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter сдать/сбыть');
@@ -64,7 +64,7 @@ test('scrubbed serial plate can be sold as audit-risk black-market proof', () =>
 
 test('scrubbed serial plate can be reported instead of sold', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 165 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 165 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state);

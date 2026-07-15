@@ -305,18 +305,18 @@ function isActiveKillQuestTarget(e: Entity): boolean {
   return false;
 }
 
-function questTargetVisibleOnMap(q: Quest, currentFloor: FloorLevel | undefined, state: GameState | undefined): boolean {
+function questTargetVisibleOnMap(q: Quest, currentZ: FloorLevel | undefined, state: GameState | undefined): boolean {
   if (state) return isQuestTargetOnCurrentFloor(q, state);
   const floor = routeFloor(q);
-  return floor === undefined || floor === currentFloor;
+  return floor === undefined || floor === currentZ;
 }
 
 function activeVisitLiftDirection(
   quests: Quest[] | undefined,
-  currentFloor: FloorLevel | undefined,
+  currentZ: FloorLevel | undefined,
   state: GameState | undefined,
 ): LiftDirection | undefined {
-  if (!quests || currentFloor === undefined) return undefined;
+  if (!quests || currentZ === undefined) return undefined;
   for (const q of quests) {
     const floor = routeFloor(q);
     if (q.done || floor === undefined) continue;
@@ -325,8 +325,8 @@ function activeVisitLiftDirection(
       if (dir !== undefined) return dir;
       continue;
     }
-    if (floor === currentFloor) continue;
-    return floor > currentFloor ? LiftDirection.DOWN : LiftDirection.UP;
+    if (floor === currentZ) continue;
+    return floor > currentZ ? LiftDirection.DOWN : LiftDirection.UP;
   }
   return undefined;
 }
@@ -1070,7 +1070,7 @@ function drawMap(
   mapX: number, mapY: number, mapW: number, mapH: number,
   radius: number, bgAlpha: number,
   quests?: Quest[],
-  currentFloor?: FloorLevel,
+  currentZ?: FloorLevel,
   state?: GameState,
   uiTime = state?.time ?? 0,
 ): void {
@@ -1089,7 +1089,7 @@ function drawMap(
   const showSurfaceMarks = mapLegendToggleEnabled('map_surface_marks');
 
   prepareMapExploredGrid(world, pxI, pyI, radius);
-  const questLiftDir = showQuests ? activeVisitLiftDirection(quests, currentFloor, state) : undefined;
+  const questLiftDir = showQuests ? activeVisitLiftDirection(quests, currentZ, state) : undefined;
   drawnTargetRooms.clear();
   if (quests && showQuests) {
     clearActiveQuestMarkers();
@@ -1100,9 +1100,9 @@ function drawMap(
       if (
         q.type === QuestType.FETCH &&
         q.targetItem &&
-        (q.targetFloor === undefined || q.targetFloor === currentFloor)
+        (q.targetFloor === undefined || q.targetFloor === currentZ)
       ) setMarkerKind(activeFetchItems, q.targetItem, kind);
-      if (!questTargetVisibleOnMap(q, currentFloor, state)) continue;
+      if (!questTargetVisibleOnMap(q, currentZ, state)) continue;
       if (q.type === QuestType.KILL) registerActiveKillTarget(q);
       const hasRoomTarget = q.targetRoom !== undefined || q.targetRoomType !== undefined || q.targetZoneTag !== undefined;
       if (hasRoomTarget && concreteRoomMarkers < MAX_CONCRETE_QUEST_ROOM_MARKERS) {
@@ -1530,21 +1530,21 @@ export function drawMapLegendMenu(
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
   rect?: UiRect,
 ): void {
   const mw = rect?.w ?? MAP_SIZE * sx;
   const mh = rect?.h ?? MAP_SIZE * sy;
   const mx = rect?.x ?? ctx.canvas.width - mw - 4 * sx;
   const my = rect?.y ?? 4 * sy;
-  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentFloor, state, _uiTime);
+  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentZ, state, _uiTime);
 }
 
 /* ── Full world map (fullscreen) ─────────────────────────────── */
 export function drawFullMap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentFloor?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
 ): void {
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
@@ -1556,6 +1556,6 @@ export function drawFullMap(
     FULL_MAP_RADIUS_MIN,
     Math.min(FULL_MAP_RADIUS_MAX, Math.round(typeof rawRadius === 'number' && Number.isFinite(rawRadius) ? rawRadius : FULL_MAP_RADIUS_DEFAULT)),
   );
-  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentFloor, state, _uiTime);
+  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentZ, state, _uiTime);
 
 }

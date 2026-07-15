@@ -25,7 +25,7 @@ function makeEditorFixture(): {
 } {
   const world = new World();
   addTestRoom(world, { id: 0, x: 8, y: 8, w: 8, h: 8, zoneId: 0 });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 10 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 10 });
   const player = makeTestPlayer({ id: 1, x: 9.5, y: 9.5 });
   return { world, state, player, entities: [player], nextEntityId: { v: 2 } };
 }
@@ -155,7 +155,7 @@ test('map editor patch replay sanitizes malformed ops and commits restored edits
 });
 
 test('ensureMapEditorPatchState initializes and returns valid patch state', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 10 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 10 });
   const patchState = ensureMapEditorPatchState(state);
   assert.ok(patchState);
   assert.ok(patchState.patches);

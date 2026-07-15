@@ -46,7 +46,7 @@ test('stolen terminal stamp is reachable through office theft and Black Market 8
 
 test('stolen terminal stamp can be sold as black market document risk', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 200 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 200 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

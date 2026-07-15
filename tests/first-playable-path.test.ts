@@ -160,7 +160,7 @@ test('Olga quest action accepts the first plot step instead of ambient no-op', (
 });
 
 test('route objective HUD prioritizes the active plot route and labels its lift', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   const systemQuest: Quest = {

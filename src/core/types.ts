@@ -1215,7 +1215,7 @@ export interface GameState {
   quests: Quest[];
   activeQuestId?: number;    // one player-selected quest for map guidance/current objective
   nextQuestId: number;
-  currentFloor: FloorLevel;
+  currentZ: number;
   fogSpreadTimer: number;     // ticks between fog spread steps
   // ── Game menu (Enter) ──
   showMenu: boolean;

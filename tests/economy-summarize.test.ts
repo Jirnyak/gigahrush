@@ -8,7 +8,7 @@ import { FloorLevel } from '../src/core/types';
 import { createEconomyFloorState } from '../src/data/economy';
 
 test('summarizeEconomy returns expected formatted strings', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const econ = ensureEconomyState(state);
   const floorState = createEconomyFloorState(FloorLevel.LIVING);
   econ.floors[FloorLevel.LIVING] = floorState;
@@ -25,7 +25,7 @@ test('summarizeEconomy returns expected formatted strings', () => {
 });
 
 test('summarizeEconomy respects the limit parameter', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const limit3 = summarizeEconomy(state, 3);
   assert.equal(limit3.length, 3);
@@ -35,7 +35,7 @@ test('summarizeEconomy respects the limit parameter', () => {
 });
 
 test('summarizeEconomy handles missing floor state', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   // Do not initialize econ.floors
 
   const summary = summarizeEconomy(state, 2);
@@ -45,7 +45,7 @@ test('summarizeEconomy handles missing floor state', () => {
 });
 
 test('summarizeEconomy correctly calculates multiplier (scarcity)', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const econ = ensureEconomyState(state);
   const floorState = createEconomyFloorState(FloorLevel.LIVING);
   econ.floors[FloorLevel.LIVING] = floorState;

@@ -162,7 +162,7 @@ test('spore carpet stays idle until close, then puffs on a capped cooldown', () 
   const target = player(40, 10);
   const threat = carpet(10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 1 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 1 });
   const msgs: Msg[] = [];
 
   prime(entities);
@@ -199,7 +199,7 @@ test('spore carpet stays idle until close, then puffs on a capped cooldown', () 
 test('ip4 gasmask counts as respiratory protection against spore haze', () => {
   const target = player(10, 10, [{ defId: 'ip4_gasmask', count: 1, data: { dur: 90 } }]);
   const threat = carpet(10.8, 10);
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 7 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 7 });
   const status = applySporeHaze(target, 7, [], state, threat);
 
   assert.ok(Math.abs(status.expiresAt - status.startedAt - SPORE_HAZE_PROTECTED_DURATION_SEC) < 0.001);
@@ -212,7 +212,7 @@ test('nearby container opening wakes spore carpet before proximity', () => {
   const target = player(30, 10);
   const threat = carpet(10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 4 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 4 });
   const msgs: Msg[] = [];
 
   publishEvent(state, {
@@ -256,7 +256,7 @@ test('fire projectile wakes spore carpet and delays the next puff', () => {
     ownerId: target.id,
   };
   const entities = [target, threat, flame];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 8 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 8 });
 
   prime(entities);
   assert.equal(tryMonsterProjectileStagger(world, state, threat, flame, target.id), true);

@@ -43,7 +43,7 @@ test('Maintenance concentrate press places owned output and quarantine container
 
 test('Concentrate press bad batch jams production until a gear repair is supplied', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.MAINTENANCE,
+    currentZ: FloorLevel.MAINTENANCE,
     time: 1000,
     worldEvents: createWorldEventState(),
   });

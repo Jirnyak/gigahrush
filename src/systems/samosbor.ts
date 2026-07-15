@@ -843,13 +843,13 @@ export function getSamosborRoomSirenSourcesForTests(world: World): readonly Samo
 function ensureSamosborRoomSirens(world: World, state: GameState): void {
   if (
     samosborRoomSirenWorld === world &&
-    samosborRoomSirenFloor === state.currentFloor &&
+    samosborRoomSirenFloor === state.currentZ &&
     samosborRoomSirenCycle === state.samosborCount
   ) {
     return;
   }
   samosborRoomSirenWorld = world;
-  samosborRoomSirenFloor = state.currentFloor;
+  samosborRoomSirenFloor = state.currentZ;
   samosborRoomSirenCycle = state.samosborCount;
   samosborRoomSirenAccum = SAMOSBOR_ROOM_SIREN_INTERVAL;
   samosborRoomSirenSources = buildSamosborRoomSirenSources(world);
@@ -903,7 +903,7 @@ function tickSamosborRoomSirens(world: World, entities: Entity[], state: GameSta
     publishNoise(state, {
       x: source.x,
       y: source.y,
-      floor: state.currentFloor,
+      floor: state.currentZ,
       radius: SAMOSBOR_ROOM_SIREN_RADIUS,
       ttl: SAMOSBOR_ROOM_SIREN_INTERVAL * 1.45,
       source: 'siren',
@@ -1187,7 +1187,7 @@ function samosborEventTags(
 function istotitSheltersMatch(state?: GameState): boolean {
   if (istotitShelterRoomIds.length === 0) return false;
   if (!state) return true;
-  if (state.currentFloor !== istotitShelterFloor) return false;
+  if (state.currentZ !== istotitShelterFloor) return false;
   if (state.samosborActive) return state.samosborCount === istotitShelterCycle;
   return state.samosborCount === istotitShelterCycle || state.samosborCount + 1 === istotitShelterCycle;
 }
@@ -1265,7 +1265,7 @@ export function getSamosborWarningSnapshot(state?: GameState): SamosborWarningSn
   if (!samosborWarning) return null;
   if (state) {
     if (state.samosborActive) return null;
-    if (state.currentFloor !== samosborWarning.floor) return null;
+    if (state.currentZ !== samosborWarning.floor) return null;
     if (state.samosborCount !== samosborWarning.cycle) return null;
     if (state.samosborTimer > SAMOSBOR_WARNING_WINDOW + 0.5) return null;
   }
@@ -1370,7 +1370,7 @@ function findRoomFloorCell(world: World, roomId: number): { x: number; y: number
 }
 
 function addIstotitSupplyContainer(world: World, state: GameState, roomId: number): number {
-  if (world.containers.some(c => c.roomId === roomId && c.floor === state.currentFloor && c.tags.includes(ISTOTIT_SUPPLY_TAG))) {
+  if (world.containers.some(c => c.roomId === roomId && c.floor === state.currentZ && c.tags.includes(ISTOTIT_SUPPLY_TAG))) {
     return 0;
   }
   const pos = findRoomFloorCell(world, roomId);
@@ -1385,7 +1385,7 @@ function addIstotitSupplyContainer(world: World, state: GameState, roomId: numbe
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     roomId,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind: ContainerKind.EMERGENCY_BOX,
@@ -1424,7 +1424,7 @@ function prepareIstotitShelters(world: World, state: GameState, variant: ActiveS
   const count = Math.max(1, Math.min(3, variant.shelterRoomCount + (rng() < 0.35 ? 1 : 0)));
   istotitShelterRoomIds = chooseIstotitShelterRooms(world, cx, cy, count);
   istotitShelterCycle = state.samosborCount + 1;
-  istotitShelterFloor = state.currentFloor;
+  istotitShelterFloor = state.currentZ;
   istotitDecisionCycle = -1;
   istotitDecision = '';
   for (const roomId of istotitShelterRoomIds) {
@@ -1581,7 +1581,7 @@ function istotitFollowBell(
   const pos = rng() < 0.45 ? findWalkableNear(world, x, y, 4, 9) : null;
   let spawned = 0;
   if (pos && canSpawnEntityType(entities, EntityType.MONSTER)) {
-    entities.push(createMonster(world, nextId, MonsterKind.EYE, pos.x + 0.5, pos.y + 0.5, state.currentFloor, true));
+    entities.push(createMonster(world, nextId, MonsterKind.EYE, pos.x + 0.5, pos.y + 0.5, state.currentZ, true));
     spawned = 1;
   }
   state.msgs.push(msg(
@@ -1613,7 +1613,7 @@ function istotitDisruptRite(
   const pos = findWalkableNear(world, x, y, 3, 7);
   let spawned = 0;
   if (pos && canSpawnEntityType(entities, EntityType.MONSTER)) {
-    entities.push(createMonster(world, nextId, MonsterKind.SBORKA, pos.x + 0.5, pos.y + 0.5, state.currentFloor, true));
+    entities.push(createMonster(world, nextId, MonsterKind.SBORKA, pos.x + 0.5, pos.y + 0.5, state.currentZ, true));
     spawned = 1;
   }
   addFactionRelMutual(Faction.CITIZEN, Faction.PLAYER, -2);
@@ -2146,7 +2146,7 @@ function pushWarningBarks(
     observeRumorEvent(e, {
       type: 'samosbor_warning',
       severity: 4,
-      floor: state.currentFloor,
+      floor: state.currentZ,
       zoneId: world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))],
       tags: ['samosbor', 'warning', 'bark', `samosbor_${variant.def.id}`],
     }, state.time);
@@ -2163,14 +2163,14 @@ function ensureSamosborWarning(
 ): SamosborWarningRuntime {
   if (
     samosborWarning &&
-    samosborWarning.floor === state.currentFloor &&
+    samosborWarning.floor === state.currentZ &&
     samosborWarning.cycle === state.samosborCount
   ) {
     return samosborWarning;
   }
   if (samosborWarning) clearSamosborWarning(true);
 
-  const variant = getActiveSamosborVariant() ?? chooseSamosborVariant(state.currentFloor);
+  const variant = getActiveSamosborVariant() ?? chooseSamosborVariant(state.currentZ);
   const zone = chooseWarningZone(world, entities);
   const seconds = Math.max(0, Math.ceil(state.samosborTimer));
   const istotitShelterRoomIds = prepareIstotitShelters(world, state, variant, zone.cx, zone.cy);
@@ -2200,7 +2200,7 @@ function ensureSamosborWarning(
   );
   const signalMsg = msg(signals.logLine, state.time, variant.def.tint);
   const signalListener = entities.find(e => e.alive && isPlayerEntity(e));
-  signalMsg.floor = state.currentFloor;
+  signalMsg.floor = state.currentZ;
   signalMsg.zoneId = zone.id >= 0 ? zone.id : undefined;
   signalMsg.x = zone.cx;
   signalMsg.y = zone.cy;
@@ -2226,7 +2226,7 @@ function ensureSamosborWarning(
 
   samosborWarning = {
     cycle: state.samosborCount,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     zoneId: zone.id,
     zoneX: zone.cx,
     zoneY: zone.cy,
@@ -2385,10 +2385,10 @@ export function updateSamosbor(
 
     // Spawn the first pressure pulse. These monsters are born from samosbor,
     // but are not leashed to the captured fog/light seed.
-    spawnMonsters(world, entities, nextId, state.samosborCount, variant, state.currentFloor);
+    spawnMonsters(world, entities, nextId, state.samosborCount, variant, state.currentZ);
 
     // Spawn extra map pressure; ongoing escalation is handled by active fog samples.
-    spawnRandomMapMonsters(world, entities, nextId, state.samosborCount, variant, state.currentFloor);
+    spawnRandomMapMonsters(world, entities, nextId, state.samosborCount, variant, state.currentZ);
 
     // Launch multi-front chaotic waves across the entire floor
     clearSamosborFronts();
@@ -2430,7 +2430,7 @@ export function updateSamosbor(
     while (samosborFrontTickAccum >= SAMOSBOR_FRONT_TICK_INTERVAL && catchup < SAMOSBOR_FRONT_MAX_CATCHUP_TICKS) {
       samosborFrontTickAccum -= SAMOSBOR_FRONT_TICK_INTERVAL;
       catchup++;
-      tickAllSamosborFronts(world, entities, nextId, activeVariant, state.currentFloor, state.samosborCount, shelterSet);
+      tickAllSamosborFronts(world, entities, nextId, activeVariant, state.currentZ, state.samosborCount, shelterSet);
     }
     // Drain excess accumulated time beyond cap
     if (samosborFrontTickAccum > SAMOSBOR_FRONT_TICK_INTERVAL * SAMOSBOR_FRONT_MAX_CATCHUP_TICKS) {
@@ -2469,12 +2469,12 @@ export function updateSamosbor(
     const fogSpawnInterval = Math.max(0.25, FOG_SPAWN_INTERVAL * (activeVariant?.fogSpawnIntervalMult ?? 1));
     if (fogSpawnAccum >= fogSpawnInterval) {
       fogSpawnAccum -= fogSpawnInterval;
-      if (activeVariant) tickSamosborFogEffects(world, entities, state, nextId, state.samosborCount, activeVariant, state.currentFloor);
+      if (activeVariant) tickSamosborFogEffects(world, entities, state, nextId, state.samosborCount, activeVariant, state.currentZ);
     }
     playerPressureSpawnAccum += dt;
     for (let i = 0; playerPressureSpawnAccum >= SAMOSBOR_PLAYER_PRESSURE_INTERVAL && i < 4; i++) {
       playerPressureSpawnAccum -= SAMOSBOR_PLAYER_PRESSURE_INTERVAL;
-      if (activeVariant) spawnSamosborPlayerPressureMonster(world, entities, state, nextId, activeVariant, state.currentFloor);
+      if (activeVariant) spawnSamosborPlayerPressureMonster(world, entities, state, nextId, activeVariant, state.currentZ);
     }
   }
 
@@ -2525,7 +2525,7 @@ export function updateSamosbor(
       pendingAftermath = {
         state,
         variant: endedVariant,
-        floor: state.currentFloor,
+        floor: state.currentZ,
         zoneId: activeSamosborZoneId,
         x: aftermathZone?.cx ?? Math.floor(findPlayer(entities)?.x ?? W / 2),
         y: aftermathZone?.cy ?? Math.floor(findPlayer(entities)?.y ?? W / 2),
@@ -2563,7 +2563,7 @@ export function updateSamosbor(
 
     // Full-scale fronts already mutated geometry in real-time.
     // Now stitch: generate a fresh floor and sew it into the world at touched cells.
-    const stitchFloor = state.currentFloor;
+    const stitchFloor = state.currentZ;
     const touched = new Set(frontTouchedCells);
     frontTouchedCells.clear();
     const doStitch = (): void => {
@@ -4716,7 +4716,7 @@ function captureZone(
   const fogSeedRects = squareDirtyRects(sourceX, sourceY, fogRadius);
   const fogRadiusSq = fogRadius * fogRadius;
   const fogStrength = Math.max(90, Math.min(230, Math.round(200 * variant.fogSeedMult)));
-  const markHellMeat = state.currentFloor === FloorLevel.HELL &&
+  const markHellMeat = state.currentZ === FloorLevel.HELL &&
     (hasSamosborSubsystem(variant, 'hell_meat_walls') || variant.modifiers.some(m => m.meatWallsOnHell));
   let veretarAreaLeaks = 0;
   for (let dy = -fogRadius; dy <= fogRadius; dy++) {
@@ -4800,7 +4800,7 @@ function captureZone(
       const ey = world.wrap(sourceY + irand(-8, 8));
       const ei = world.idx(ex, ey);
       if (world.cells[ei] !== Cell.FLOOR) continue;
-      entities.push(createMonster(world, nextId, MonsterKind.EYE, ex + 0.5, ey + 0.5, state.currentFloor, true));
+      entities.push(createMonster(world, nextId, MonsterKind.EYE, ex + 0.5, ey + 0.5, state.currentZ, true));
       break;
     }
   }

@@ -335,7 +335,7 @@ export function tryUseParitelSteamBridge(
 ): boolean {
   const room = valveRoomAtLook(world, lookX, lookY);
   if (!room) return false;
-  if (state.currentFloor !== FloorLevel.MAINTENANCE) return false;
+  if (state.currentZ !== FloorLevel.MAINTENANCE) return false;
   if (valveCooldownState !== state || nextValveUseAt > state.time + 10) {
     valveCooldownState = state;
     nextValveUseAt = 0;
@@ -372,7 +372,7 @@ export function updateParitelSteamBridge(
   state: GameState,
   dt: number,
 ): void {
-  if (dt <= 0 || state.currentFloor !== FloorLevel.MAINTENANCE) return;
+  if (dt <= 0 || state.currentZ !== FloorLevel.MAINTENANCE) return;
   if (steamTickState !== state || nextSteamTickAt > state.time + 10) {
     steamTickState = state;
     nextSteamTickAt = 0;

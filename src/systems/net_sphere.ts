@@ -1,7 +1,7 @@
-import { FloorLevel, type Entity, type GameState } from '../core/types';
+import { type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
 import { portalAllowsOptionalNetwork } from './platform_bridge';
-import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryRouteId } from './procedural_floors';
+import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryMapLabel, floorRunEntryRouteId } from './procedural_floors';
 import { startOnlineHost, joinOnlinePeer, isOnlineHost, getOnlineRoomId, isOnlineConnected, sendOnlineMessage } from './online_client';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
@@ -161,14 +161,7 @@ const NET_FETCH_TIMEOUT_MS = 10_000;
 const CHAT_LIMIT = 300;
 const DRAFT_LIMIT = 160;
 const MARKET_IMPULSE_LIMIT = 16;
-const FLOOR_NAMES: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Мясной низ',
-  [FloorLevel.VOID]: 'Пустота',
-};
+
 
 const runtime: NetSphereRuntime = {
   open: false,
@@ -441,9 +434,9 @@ function progressFromState(state: GameState, player: Entity): NetSphereProgress 
   let nicknameStr = '';
   try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
   return {
-    floorId: state.currentFloor,
+    floorId: state.currentZ,
     nickname: cleanNickname(nicknameStr) || 'Жилец',
-    floorName: FLOOR_NAMES[state.currentFloor] ?? `Этаж ${state.currentFloor}`,
+    floorName: floorRunEntryMapLabel(entry),
     runSeed: run.runSeed,
     routeId: floorRunEntryRouteId(entry),
     floorZ: entry.z,

@@ -56,7 +56,7 @@ test('Seryy Smotritel chamber teaches no-look route and punishes direct watching
   const player = makePlayer(world, watched.x + 0.5, watched.y + 0.5, generated.sourceX, generated.sourceY);
   entities.push(player);
   const state = makeGameState({
-    currentFloor: FloorLevel.VOID,
+    currentZ: FloorLevel.VOID,
     worldEvents: createWorldEventState(),
   });
 
@@ -77,7 +77,7 @@ test('Seryy Smotritel source can be disabled through the side interaction', () =
   const player = makePlayer(world, disable.x + 0.5, disable.y + 0.5, generated.sourceX, generated.sourceY);
   entities.push(player);
   const state = makeGameState({
-    currentFloor: FloorLevel.VOID,
+    currentZ: FloorLevel.VOID,
     worldEvents: createWorldEventState(),
   });
 

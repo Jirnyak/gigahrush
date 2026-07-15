@@ -55,7 +55,7 @@ test('ammo rifle coupon is an HQ/office document mapped to ammo scarcity', () =>
 
 test('using ammo rifle coupon spends the paper for a small 7.62 issue', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.MINISTRY,
+    currentZ: FloorLevel.MINISTRY,
     time: 30,
     worldEvents: createWorldEventState(),
   });

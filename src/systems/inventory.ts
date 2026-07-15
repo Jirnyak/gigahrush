@@ -1394,7 +1394,7 @@ function handleDirectDocumentActionUse(
   if (!DIRECT_DOCUMENT_ACTION_ITEMS.has(defId)) return false;
   const action = DOCUMENT_ACCESS_ACTIONS[defId];
   if (!action) return false;
-  if (action.floors && state && !action.floors.includes(state.currentFloor)) {
+  if (action.floors && state && !action.floors.includes(state.currentZ)) {
     msgs.push(msg(`${ITEMS[defId]?.name ?? defId}: здесь нет нужного окна выдачи.`, time, '#aa8'));
     return true;
   }
@@ -1410,7 +1410,7 @@ function handleDirectDocumentActionUse(
 
   if (state) {
     for (const delta of action.resourceDeltas ?? []) {
-      changeResourceStock(state, delta.resourceId, delta.delta, delta.floor ?? state.currentFloor);
+      changeResourceStock(state, delta.resourceId, delta.delta, delta.floor ?? state.currentZ);
     }
     for (const delta of action.relationDeltas ?? []) {
       addFactionRelMutual(Faction.PLAYER, delta.faction, delta.delta);
@@ -1434,7 +1434,7 @@ function handleDirectDocumentActionUse(
       resourceDeltas: action.resourceDeltas?.map(delta => ({
         resourceId: delta.resourceId,
         delta: delta.delta,
-        floor: delta.floor ?? state?.currentFloor,
+        floor: delta.floor ?? state?.currentZ,
       })),
     },
     zoneId,
@@ -1597,7 +1597,7 @@ function sellDocumentToBlackMarket(
   removeItem(e, defId, 1);
   e.money = (e.money ?? 0) + price;
   changeResourceStock(state, 'documents', -1, FloorLevel.MINISTRY);
-  changeResourceStock(state, 'contraband', 1, state.currentFloor);
+  changeResourceStock(state, 'contraband', 1, state.currentZ);
   addFactionRelMutual(Faction.PLAYER, Faction.WILD, 2);
   addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, -1);
   msgs.push(msg(`${ITEMS[defId]?.name ?? defId} продан на рынке за ${price}₽. Доступ потерян.`, time, '#ee4'));
@@ -1640,8 +1640,8 @@ function handleContaminatedSwabUse(
     return true;
   }
 
-  const report = state.currentFloor === FloorLevel.MINISTRY;
-  const market = state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY;
+  const report = state.currentZ === FloorLevel.MINISTRY;
+  const market = state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY;
   if (!report && !market) {
     msgs.push(msg('Мазок ждёт адресата: отчёт в Министерстве или скупщик в жилом блоке.', time, '#aa8'));
     return true;
@@ -1654,8 +1654,8 @@ function handleContaminatedSwabUse(
     changeResourceStock(state, 'slime_samples', 1, FloorLevel.MINISTRY, { reason: 'contaminated_swab_report', tags: ['sample', 'evidence', 'nii'] });
     addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, 1);
   } else {
-    changeResourceStock(state, 'slime_samples', -1, state.currentFloor, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
-    changeResourceStock(state, 'contraband', 1, state.currentFloor, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
+    changeResourceStock(state, 'slime_samples', -1, state.currentZ, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
+    changeResourceStock(state, 'contraband', 1, state.currentZ, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
     addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, -1);
   }
@@ -1717,8 +1717,8 @@ function handleAuditProofUse(
     return true;
   }
 
-  const report = state.currentFloor === FloorLevel.MINISTRY;
-  const market = state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY;
+  const report = state.currentZ === FloorLevel.MINISTRY;
+  const market = state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY;
   if (!report && !market) {
     msgs.push(msg('Номерную планку примут в Министерстве как улику или в жилом блоке как рыночный риск.', time, '#aa8'));
     return true;
@@ -1730,11 +1730,11 @@ function handleAuditProofUse(
   const def = ITEMS[defId];
 
   if (report) {
-    changeResourceStock(state, 'contraband', -1, state.currentFloor, { zoneId, roomId: world?.roomAt(e.x, e.y)?.id, reason: 'weapon_serial_plate_reported', tags: ['weapon', 'audit', 'evidence'] });
+    changeResourceStock(state, 'contraband', -1, state.currentZ, { zoneId, roomId: world?.roomAt(e.x, e.y)?.id, reason: 'weapon_serial_plate_reported', tags: ['weapon', 'audit', 'evidence'] });
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 1);
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, -1);
   } else {
-    changeResourceStock(state, 'contraband', 1, state.currentFloor, { zoneId, roomId: world?.roomAt(e.x, e.y)?.id, reason: 'weapon_serial_plate_sold', tags: ['weapon', 'black_market', 'audit_risk'] });
+    changeResourceStock(state, 'contraband', 1, state.currentZ, { zoneId, roomId: world?.roomAt(e.x, e.y)?.id, reason: 'weapon_serial_plate_sold', tags: ['weapon', 'black_market', 'audit_risk'] });
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, -1);
   }
@@ -1792,10 +1792,10 @@ function handleDocumentPaperUse(
     return true;
   }
 
-  if (state.currentFloor === FloorLevel.MINISTRY && DOCUMENT_GATE_ITEMS.has(defId)) {
+  if (state.currentZ === FloorLevel.MINISTRY && DOCUMENT_GATE_ITEMS.has(defId)) {
     return useDocumentAtMinistryGate(e, defId, msgs, time, state, zoneId, world);
   }
-  if ((state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
+  if ((state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
     return sellDocumentToBlackMarket(e, defId, msgs, time, state, zoneId, world);
   }
 
@@ -1820,7 +1820,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (state.currentFloor === FloorLevel.MINISTRY) {
+  if (state.currentZ === FloorLevel.MINISTRY) {
     removeItem(e, defId, 1);
     if (!forged) {
       e.money = (e.money ?? 0) + 45;
@@ -1833,7 +1833,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY) {
+  if (state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY) {
     removeItem(e, defId, 1);
     if (forged) {
       msgs.push(msg('Жильцы нашли лишние строки в липовом списке.', time, '#f84'));
@@ -1889,7 +1889,7 @@ function handleCraftRecipeItemSourceUse(
   if (
     state &&
     isPlayerEntity(e) &&
-    (state.currentFloor === FloorLevel.LIVING || state.currentFloor === FloorLevel.KVARTIRY) &&
+    (state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY) &&
     DOCUMENT_MARKET_VALUES[defId] !== undefined
   ) {
     return false;

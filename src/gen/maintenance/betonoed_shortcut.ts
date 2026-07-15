@@ -407,7 +407,7 @@ export function tryUseBetonoedShortcut(
   lookY: number,
 ): BetonoedRuntimeResult {
   const encounter = activeBetonoed;
-  if (!encounter || state.currentFloor !== FloorLevel.MAINTENANCE) return { handled: false, worldChanged: false };
+  if (!encounter || state.currentZ !== FloorLevel.MAINTENANCE) return { handled: false, worldChanged: false };
   if (!seesWeakWall(world, encounter, lookX, lookY)) return { handled: false, worldChanged: false };
 
   if (encounter.sealed) {
@@ -445,7 +445,7 @@ export function updateBetonoedShortcut(
   dt: number,
 ): boolean {
   const encounter = activeBetonoed;
-  if (!encounter || state.currentFloor !== FloorLevel.MAINTENANCE) return false;
+  if (!encounter || state.currentZ !== FloorLevel.MAINTENANCE) return false;
 
   const monster = findBetonoed(entities, encounter);
   if (!monster?.alive) {

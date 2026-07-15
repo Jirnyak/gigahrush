@@ -108,7 +108,7 @@ test('pomoyny roy detects exposed food farther away and chooses a flank slot', (
   const target = player(10, 10, [{ defId: 'rawmeat', count: 1 }]);
   const threat = swarm(2, 32, 10);
   const entities = [target, threat];
-  const state = makeGameState({ worldEvents: createWorldEventState(), currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ worldEvents: createWorldEventState(), currentZ: FloorLevel.LIVING });
   const msgs: Msg[] = [];
 
   prime(entities);
@@ -128,7 +128,7 @@ test('pomoyny roy follows dropped bait even while close to the player', () => {
   const target = player(10, 10);
   const threat = swarm(2, 12, 10);
   const entities = [target, threat];
-  const state = makeGameState({ worldEvents: createWorldEventState(), currentFloor: FloorLevel.LIVING, time: 1 });
+  const state = makeGameState({ worldEvents: createWorldEventState(), currentZ: FloorLevel.LIVING, time: 1 });
   const msgs: Msg[] = [];
 
   assert.equal(placeMonsterBait(state, world, target, 20, 15, 'rawmeat', 1, 'drop'), true);

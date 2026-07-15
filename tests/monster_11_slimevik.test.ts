@@ -70,7 +70,7 @@ test('Slimevik is standalone neutral scavenger content with route leads', () => 
 
 test('Slimevik stays neutral but close contact drains bounded water and PSI', () => {
   const world = openSlimeRoom();
-  const state = makeGameState({ time: 12, currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ time: 12, currentZ: FloorLevel.MAINTENANCE });
   const player = makeTestPlayer({
     id: 1,
     x: 10.8,
@@ -96,7 +96,7 @@ test('Slimevik stays neutral but close contact drains bounded water and PSI', ()
 
 test('Slimevik barter consumes food or medicine and marks a sample', () => {
   const world = openSlimeRoom();
-  const state = makeGameState({ time: 18, currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ time: 18, currentZ: FloorLevel.MAINTENANCE });
   const player = makeTestPlayer({
     id: 1,
     x: 10.5,
@@ -120,7 +120,7 @@ test('Slimevik barter consumes food or medicine and marks a sample', () => {
 
 test('Hurt Slimevik flees from nearby actors through bounded broadphase', () => {
   const world = openSlimeRoom();
-  const state = makeGameState({ time: 21, currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ time: 21, currentZ: FloorLevel.MAINTENANCE });
   const player = makeTestPlayer({ id: 1, x: 80, y: 80 });
   const neighbor = makeTestNpc({ id: 3, x: 12.8, y: 10.5, faction: Faction.CITIZEN });
   const threat = slimevik({ id: 2, hp: DEF.hp - 4 });
@@ -136,7 +136,7 @@ test('Hurt Slimevik flees from nearby actors through bounded broadphase', () => 
 });
 
 test('Slimevik kill events publish the standalone slimevik_killed fact', () => {
-  const state = makeGameState({ time: 24, currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ time: 24, currentZ: FloorLevel.MAINTENANCE });
 
   publishEvent(state, {
     type: 'player_kill_monster',

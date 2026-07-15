@@ -63,7 +63,7 @@ test('anchor container event disables only Перестановщик local tele
 
   const state = makeGameState({
     time: 42,
-    currentFloor: FloorLevel.VOID,
+    currentZ: FloorLevel.VOID,
     worldEvents: createWorldEventState(),
   });
 

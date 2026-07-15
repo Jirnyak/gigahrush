@@ -168,7 +168,7 @@ test('black slime authored encounter spawns Chernosliz directly', () => {
   assert.ok(sample, 'black slime POI should expose a lure sample container');
 
   const actor = makeTestPlayer({ id: 99, x: sample.x + 0.5, y: sample.y + 0.5, faction: Faction.PLAYER });
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
 
   assert.equal(takeFromContainer(sample, actor, 0, 1, state), true);
 

@@ -38,7 +38,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     quests: [],
     activeQuestId: undefined,
     nextQuestId: 1,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,

@@ -87,6 +87,12 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   darkness: shares(6, 8, 24, 8, 36, 18),
   liquidatorbase: [{ owner: ZoneFaction.LIQUIDATOR, share: 1.0 }],
   horrorfloor: shares(6, 8, 24, 8, 36, 18),
+  living: shares(64, 14, 6, 7, 9),
+  kvartiry: shares(66, 12, 6, 7, 9),
+  ministry: shares(48, 24, 8, 14, 6),
+  maintenance: shares(16, 58, 5, 7, 14),
+  hell: shares(6, 8, 40, 4, 28, 14),
+  void: shares(4, 8, 24, 6, 34, 24),
 };
 
 export function territorySharesForStoryFloor(floor: FloorLevel): readonly FloorTerritoryShare[] {

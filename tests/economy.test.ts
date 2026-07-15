@@ -40,5 +40,5 @@ test('normalizeGameEconomy sets up economy and deletes price caches', () => {
   normalizeGameEconomy(state, { priceVersion: 10 });
 
   assert.equal(state.economy.priceVersion, 10);
-  assert.ok(state.economy.floors[state.currentFloor]);
+  assert.ok(state.economy.floors[state.currentZ]);
 });

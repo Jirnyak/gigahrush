@@ -31,7 +31,7 @@ function setupBorerWorld() {
   room.doors.push(doorIdx);
 
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
     time: 1,
     samosborTimer: 20,
@@ -75,7 +75,7 @@ test('damages door when time passes damage threshold', () => {
 test('clears stale records on floor change', () => {
   const { world, state, entities, nextEntityId } = setupBorerWorld();
 
-  state.currentFloor = FloorLevel.HELL;
+  state.currentZ = FloorLevel.HELL;
   state.time = 20;
 
   updateHermodoorBorer(world, entities, state, 1, nextEntityId);

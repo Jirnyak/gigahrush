@@ -159,7 +159,7 @@ test('territory capture needs local faction pressure, not one idle traveler', ()
   const world = singleZoneWorld(ZoneFaction.CULTIST);
   world.factionControl.fill(ZoneFaction.CULTIST);
   const state = makeGameState({
-    currentFloor: FloorLevel.KVARTIRY,
+    currentZ: FloorLevel.KVARTIRY,
     time: 10,
     worldEvents: createWorldEventState(),
   });
@@ -185,7 +185,7 @@ test('territory capture does not overwrite samosbor-owned cells', () => {
   world.factionControl.fill(ZoneFaction.CULTIST);
   setTerritoryOwnerAt(world, 64, 64, ZoneFaction.SAMOSBOR);
   const state = makeGameState({
-    currentFloor: FloorLevel.KVARTIRY,
+    currentZ: FloorLevel.KVARTIRY,
     time: 20,
     worldEvents: createWorldEventState(),
   });

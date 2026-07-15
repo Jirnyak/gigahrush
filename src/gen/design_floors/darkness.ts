@@ -1929,7 +1929,7 @@ export function publishDarknessLateWarning(
   const warning = DARKNESS_LATE_WARNINGS.find(item => item.id === warningId);
   return publishEvent(state, {
     type: 'samosbor_warning',
-    floor: state.currentFloor,
+    floor: state.currentZ,
     zoneId: options.sourceZoneId,
     roomId: options.sourceRoomId,
     x: options.x,
@@ -1954,7 +1954,7 @@ export function publishDarknessReturnTrace(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    floor: state.currentFloor,
+    floor: state.currentZ,
     zoneId: options.sourceZoneId,
     roomId: options.sourceRoomId,
     x: options.x,

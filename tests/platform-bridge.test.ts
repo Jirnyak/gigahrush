@@ -109,7 +109,7 @@ test('portal compact save keeps a current-shape resume profile without heavy flo
         targetCount: 1,
       })),
       nextQuestId: 91,
-      currentFloor: FloorLevel.LIVING,
+      currentZ: FloorLevel.LIVING,
       floorRun: {
         runSeed: 123,
         currentZ: -4,

@@ -110,7 +110,7 @@ test('swarm source respects cooldown, source cap, and body ttl cleanup', () => {
   const target = player(12, 10);
   const queen = source(2, 10.5, 10.5);
   const entities = [target, queen];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 1 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 1 });
   const nextId = { v: 3 };
 
   registerSwarmNestSource(world, {
@@ -152,7 +152,7 @@ test('duct tape or sealant resolves the source without killing every body', () =
   const target = player(10, 10, [{ defId: 'duct_tape', count: 1 }]);
   const queen = source(2, 10.8, 10.5);
   const entities = [target, queen];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 2 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 2 });
   const msgs: Msg[] = [];
   const nextId = { v: 3 };
 
@@ -187,7 +187,7 @@ test('fire kills bodies outright and burns source records', () => {
   const actor = player(9, 10);
   const queen = source(2, 10.5, 10.5);
   const entities = [actor, queen];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 3 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 3 });
   const flame: Entity = {
     id: 99,
     type: EntityType.PROJECTILE,

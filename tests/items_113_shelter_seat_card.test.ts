@@ -30,7 +30,7 @@ test('shelter seat card is an official reachable shelter document', () => {
 
 test('shelter seat card can be handed to shelter seniors in the living block', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 113 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 113 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
@@ -50,7 +50,7 @@ test('shelter seat card can be handed to shelter seniors in the living block', (
 
 test('shelter seat card is not spent outside living shelter floors', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 114 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 114 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state);

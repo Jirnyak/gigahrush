@@ -133,7 +133,7 @@ test('black liquidator knocks while neutral and reveals on forbidden samples', (
   const threat = blackLiquidator(10.5, 10.5);
   threat.ai!.falsePatrolDoorIdx = doorIdx;
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);

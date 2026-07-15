@@ -12,7 +12,7 @@ function setResourceStock(state: GameState, floor: FloorLevel, resourceId: strin
 }
 
 test('getScarcityAdjustedReward scales linearly when multiplier is 1', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setResourceStock(state, FloorLevel.LIVING, 'drink_water', 100, 100);
 
   const reward = getScarcityAdjustedReward(state, 'drink_water', 10, FloorLevel.LIVING, 3);
@@ -20,7 +20,7 @@ test('getScarcityAdjustedReward scales linearly when multiplier is 1', () => {
 });
 
 test('getScarcityAdjustedReward boosts rewards when resource is scarce', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   // Extreme scarcity
   setResourceStock(state, FloorLevel.LIVING, 'drink_water', 0, 100);
 
@@ -31,7 +31,7 @@ test('getScarcityAdjustedReward boosts rewards when resource is scarce', () => {
 });
 
 test('getScarcityAdjustedReward uses cap properly', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setResourceStock(state, FloorLevel.LIVING, 'drink_water', 0, 100);
 
   const rewardWithLowerCap = getScarcityAdjustedReward(state, 'drink_water', 10, FloorLevel.LIVING, 1.5);
@@ -40,7 +40,7 @@ test('getScarcityAdjustedReward uses cap properly', () => {
 });
 
 test('getScarcityAdjustedReward applies RPG int multiplier', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setResourceStock(state, FloorLevel.LIVING, 'drink_water', 100, 100);
 
   const rpgStats: RPGStats = { str: 0, agi: 0, int: 5, level: 1, xp: 0 };
@@ -54,7 +54,7 @@ test('getScarcityAdjustedReward applies RPG int multiplier', () => {
 });
 
 test('getScarcityAdjustedReward does not go below baseReward when there is a surplus', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   // Extreme surplus
   setResourceStock(state, FloorLevel.LIVING, 'drink_water', 200, 100);
 
@@ -65,7 +65,7 @@ test('getScarcityAdjustedReward does not go below baseReward when there is a sur
 });
 
 test('getScarcityAdjustedReward handles invalid resourceId gracefully', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const reward = getScarcityAdjustedReward(state, 'invalid_resource_id_123', 10, FloorLevel.LIVING, 3);
 
@@ -74,7 +74,7 @@ test('getScarcityAdjustedReward handles invalid resourceId gracefully', () => {
 });
 
 test('getScarcityAdjustedReward rounds results properly', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setResourceStock(state, FloorLevel.LIVING, 'drink_water', 90, 100);
 
   // A small deviation should lead to a non-integer totalMultiplier before rounding.

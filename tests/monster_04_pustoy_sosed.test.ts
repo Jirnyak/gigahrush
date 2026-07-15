@@ -94,7 +94,7 @@ test('Pustoy Sosed room gives clues before NELYUD close reveal', () => {
 
 test('Pustoy Sosed quest completion publishes compact outcome event data', () => {
   initFactionRelations();
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY });
 
   publishEvent(state, {
     type: 'quest_completed',

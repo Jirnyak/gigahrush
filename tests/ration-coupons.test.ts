@@ -40,7 +40,7 @@ test('ration coupon ids resolve through items, resources, and tags', () => {
 });
 
 test('using a fair ration coupon spends stock and grants ration output', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const actor = makeTestPlayer({ id: 0, inventory: cloneItems([{ defId: 'water_coupon', count: 1 }]), money: 0 });
 
   useItem(actor, 0, state.msgs, state.time, state);
@@ -53,7 +53,7 @@ test('using a fair ration coupon spends stock and grants ration output', () => {
 });
 
 test('water trades for a queue place only inside a ration queue room', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
   const world = queueWorld();
   const actor = makeTestPlayer({ id: 0, x: 12.5, y: 14.5, inventory: cloneItems([{ defId: 'water', count: 1 }]), money: 0 });
 
@@ -71,7 +71,7 @@ test('water trades for a queue place only inside a ration queue room', () => {
 });
 
 test('bread can jump the ration queue at crowd risk', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
   const world = queueWorld('ocherednik');
   const actor = makeTestPlayer({ id: 0, x: 12.5, y: 14.5, inventory: cloneItems([{ defId: 'bread', count: 1 }]), money: 0 });
 
@@ -90,7 +90,7 @@ test('bread can jump the ration queue at crowd risk', () => {
 });
 
 test('ration queue item trades are capped per local room window', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
   const world = queueWorld();
   const actor = makeTestPlayer({ id: 0, x: 12.5, y: 14.5, inventory: cloneItems([{ defId: 'water', count: 4 }]), money: 0 });
 
@@ -106,7 +106,7 @@ test('ration queue item trades are capped per local room window', () => {
 });
 
 test('using a ration stamp pad forges a dangerous ration card', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
   const actor = makeTestPlayer({
     id: 0,
     inventory: cloneItems([{ defId: 'ration_stamp_pad', count: 1 }, { defId: 'blank_form', count: 1 }]),
@@ -122,7 +122,7 @@ test('using a ration stamp pad forges a dangerous ration card', () => {
 });
 
 test('reporting a forged ration card resolves the audit into Kvartiry stock', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
   const actor = makeTestPlayer({
     id: 0,
     inventory: cloneItems([{ defId: 'ration_registry_extract', count: 1 }, { defId: 'forged_ration_card', count: 1 }]),
@@ -141,7 +141,7 @@ test('reporting a forged ration card resolves the audit into Kvartiry stock', ()
 });
 
 test('stolen coupon events publish a ration-specific theft consequence', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
 
   publishEvent(state, {
     type: 'item_stolen',

@@ -618,7 +618,7 @@ function publishDocumentGateAccessEvent(
 
 function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
   if (!ctx.state || !ctx.world || !isPlayerEntity(ctx.actor)) return false;
-  if (ctx.state.currentFloor !== FloorLevel.MINISTRY) return false;
+  if (ctx.state.currentZ !== FloorLevel.MINISTRY) return false;
   const target = findDocumentGateTarget(ctx.world, ctx.actor);
   if (!target) return false;
 
@@ -668,7 +668,7 @@ function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
 }
 
 function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'item_stolen' || state.currentFloor !== FloorLevel.MINISTRY) return;
+  if (event.type !== 'item_stolen' || state.currentZ !== FloorLevel.MINISTRY) return;
   if (!event.itemId || !DOCUMENT_GATE_ACCESS_BY_ITEM.has(event.itemId)) return;
   const ctx = contextByContainer(event.containerId);
   if (!ctx || ctx.theftEventIds.includes(event.id)) return;
@@ -687,7 +687,7 @@ function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void
 }
 
 function handleDocumentGateGuardKill(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'player_kill_npc' || state.currentFloor !== FloorLevel.MINISTRY) return;
+  if (event.type !== 'player_kill_npc' || state.currentZ !== FloorLevel.MINISTRY) return;
   const ctx = contextByGuard(event.targetId);
   if (!ctx || ctx.violentHandled) return;
   const door = ctx.world.doors.get(ctx.gateDoorIdx);

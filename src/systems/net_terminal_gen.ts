@@ -256,7 +256,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
       z,
       key: floorKeyForProcedural(key),
       kind: 'procedural',
-      baseFloor: spec?.baseFloor ?? state.currentFloor,
+      baseFloor: spec?.baseFloor ?? state.currentZ,
       label: spec?.title ?? key,
     });
   }
@@ -268,10 +268,10 @@ export function deriveNetTerminalGenTarget(state: GameState): NetTerminalGenTarg
   const deck = buildRouteDeck(state);
   const fallback = deck[0] ?? {
     z: 0,
-    key: routeKeyForStory(state.currentFloor),
+    key: routeKeyForStory(state.currentZ),
     kind: 'story' as const,
-    baseFloor: state.currentFloor,
-    label: FloorLevel[state.currentFloor],
+    baseFloor: state.currentZ,
+    label: FloorLevel[state.currentZ],
   };
   const deckFingerprint = deck.map(entry => entry.key).join('|');
   const routeSeed = hashSeed(deckFingerprint, run.runSeed);

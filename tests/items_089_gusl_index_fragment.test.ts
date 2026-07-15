@@ -28,7 +28,7 @@ test('gusl index fragment is reachable office paperwork for odd weapon classific
 
 test('gusl index fragment can be sold as a black-market weapon hint', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 89 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 89 });
 
   assert.equal(addItem(player, 'gusl_index_fragment', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

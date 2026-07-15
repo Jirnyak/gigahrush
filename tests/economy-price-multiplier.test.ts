@@ -17,21 +17,21 @@ test('getAdjustedItemPrice returns 0 for unknown item', () => {
 });
 
 test('getItemPriceMultiplier returns valid multiplier for existing item', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const multiplier = getItemPriceMultiplier(state, 'water');
   // Water is a known item, should have a multiplier > 0
   assert.ok(multiplier > 0);
 });
 
 test('getAdjustedItemPrice returns valid price for existing item', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const price = getAdjustedItemPrice(state, 'water');
   // Water is a known item, should have a price > 0
   assert.ok(price > 0);
 });
 
 test('getItemPriceMultiplier uses cache and updates when stock changes', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const initialMultiplier = getItemPriceMultiplier(state, 'water');
   const initialPrice = getAdjustedItemPrice(state, 'water');
@@ -53,7 +53,7 @@ test('getItemPriceMultiplier uses cache and updates when stock changes', () => {
 });
 
 test('primeTradePriceCache pre-populates the cache for given inventories', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const inventory1 = [{ defId: 'water', count: 1 }];
   const inventory2 = [{ defId: 'ration', count: 1 }];
 

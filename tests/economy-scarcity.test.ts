@@ -6,13 +6,13 @@ import { getResourceScarcity, ensureEconomyState } from '../src/systems/economy'
 import { makeGameState } from './helpers';
 
 test('getResourceScarcity returns 1 for an unknown resource ID', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const scarcity = getResourceScarcity(state, 'unknown_resource_id');
   assert.equal(scarcity, 1);
 });
 
 test('getResourceScarcity returns 1 when stock equals target', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const econ = ensureEconomyState(state);
   const floorState = econ.floors[FloorLevel.LIVING]!;
 
@@ -25,7 +25,7 @@ test('getResourceScarcity returns 1 when stock equals target', () => {
 });
 
 test('getResourceScarcity returns less than 1 when stock is greater than target (surplus)', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const econ = ensureEconomyState(state);
   const floorState = econ.floors[FloorLevel.LIVING]!;
 
@@ -37,7 +37,7 @@ test('getResourceScarcity returns less than 1 when stock is greater than target 
 });
 
 test('getResourceScarcity returns greater than 1 when stock is less than target (deficit)', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const econ = ensureEconomyState(state);
   const floorState = econ.floors[FloorLevel.LIVING]!;
 
@@ -48,8 +48,8 @@ test('getResourceScarcity returns greater than 1 when stock is less than target 
   assert.ok(scarcity > 1, `Expected scarcity > 1, got ${scarcity}`);
 });
 
-test('getResourceScarcity defaults to currentFloor if floor parameter is not provided', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+test('getResourceScarcity defaults to currentZ if floor parameter is not provided', () => {
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const econ = ensureEconomyState(state);
 
   const resId = 'drink_water';

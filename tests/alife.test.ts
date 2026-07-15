@@ -41,7 +41,7 @@ import { freshRPG, RPG_LEVEL_CAP } from '../src/systems/rpg';
 import { NPC_VISUAL_FLOOR69_FEMALE, NPC_VISUAL_LIQUIDATOR_MALE } from '../src/entities/npc_visuals';
 
 function minimalState(): GameState {
-  const state = { currentFloor: FloorLevel.LIVING } as GameState;
+  const state = { currentZ: FloorLevel.LIVING } as GameState;
   setFloorRunState(state, { runSeed: 1 }, FloorLevel.LIVING);
   return state;
 }
@@ -231,7 +231,7 @@ test('A-Life arrival materializes one persistent record through the shared NPC c
   assert.equal(entity.ai?.goal, AIGoal.GOTO);
   assert.equal(entities.length, 1);
   assert.equal(materializeAlifeArrival(state, world, entities, nextId, 1, { x: 15.5, y: 15.5 }), null);
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:living');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:moebius_podezd');
 });
 
 test('A-Life mobile runtime keeps the same baseline despite large memory hints', () => {

@@ -60,6 +60,12 @@ import { alignUnderhellAmbientNpcTerritory, generateUnderhellDesignFloor } from 
 import { generateUpperBureauDesignFloor, reinforceUpperBureauAuthoredHqTerritory } from './upper_bureau';
 import { alignVoronoiQuarantineAmbientNpcTerritory, generateVoronoiQuarantineDesignFloor } from './voronoi_quarantine';
 import { expandDesignFloorGeneration, retuneDesignFloorAfterCellTerritory } from './full_floor';
+import { generateMinistry } from '../ministry';
+import { generateKvartiry } from '../kvartiry';
+import { generateWorld as generateLivingDesignFloor } from '../living';
+import { generateMaintenance } from '../maintenance';
+import { generateHell } from '../hell';
+import { generateVoid } from '../void';
 
 const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   liquidatorbase: generateLiquidatorBaseDesignFloor,
@@ -105,6 +111,12 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   cantor_pustoty: generateCantorPustotyDesignFloor,
   darkness: generateDarknessDesignFloor,
   horrorfloor: generateHorrorFloorDesignFloor,
+  living: generateLivingDesignFloor,
+  kvartiry: generateKvartiry,
+  ministry: generateMinistry,
+  maintenance: generateMaintenance,
+  hell: generateHell,
+  void: generateVoid,
 };
 
 const DEFAULT_DESIGN_FLOOR_SEED = 0x4453474e;
@@ -121,11 +133,16 @@ export function designFloorGeneratorIds(): readonly DesignFloorId[] {
   return Object.keys(DESIGN_FLOOR_GENERATORS) as DesignFloorId[];
 }
 
-export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_FLOOR_SEED): FloorGeneration {
+export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_FLOOR_SEED, isTutorial = false): FloorGeneration {
   const route = designFloorById(id);
   const seed = designFloorGenerationSeed(id, runSeed);
   return withSeededRandom(seed, () => {
-    const gen = DESIGN_FLOOR_GENERATORS[id]();
+    let gen: FloorGeneration;
+    if (id === 'living' && isTutorial) {
+      gen = (DESIGN_FLOOR_GENERATORS[id] as unknown as (s?: number, t?: boolean) => FloorGeneration)(seed, true);
+    } else {
+      gen = DESIGN_FLOOR_GENERATORS[id]();
+    }
     if (!route) return gen;
     gen.world.hasOpenSky = route.hasOpenSky;
     const expanded = expandDesignFloorGeneration(gen, route);

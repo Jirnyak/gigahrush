@@ -280,7 +280,7 @@ export function tryUseHeatlinePressure(
   const room = pressureTargetRoom(world, lookX, lookY);
   if (!room) return false;
 
-  if (state.currentFloor !== FloorLevel.MAINTENANCE) return false;
+  if (state.currentZ !== FloorLevel.MAINTENANCE) return false;
   if (!pressureCooldownReady(state)) {
     state.msgs.push(msg('Вентиль еще стучит после прошлого поворота.', state.time, '#888'));
     return true;

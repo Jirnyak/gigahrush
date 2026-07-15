@@ -1351,7 +1351,7 @@ function questDeadlineContext(q: Quest, player: Entity, world: World, state: Gam
   const targetFloor = q.visitFloor ?? q.targetFloor;
   const ctx: QuestDeadlineContext = {
     samosborDanger: state.samosborActive,
-    crossFloor: targetFloor !== undefined && targetFloor !== state.currentFloor,
+    crossFloor: targetFloor !== undefined && targetFloor !== state.currentZ,
   };
   if (q.targetRoom !== undefined) {
     const room = world.rooms[q.targetRoom];
@@ -1678,7 +1678,7 @@ function buildQuestContext(npc: Entity, world: World, entities: Entity[], state:
     if (d2 < bestD2) { bestD2 = d2; nearbyMonster = e; }
   }
   return {
-    floor: state.currentFloor,
+    floor: state.currentZ,
     roomName: room?.name ?? 'коридоре',
     roomType: room?.type,
     zoneId,
@@ -1810,7 +1810,7 @@ function pickSystemQuest(
     return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
       samosborDanger: ctx.samosborDanger,
       nearbyMonster: ctx.nearbyMonster !== undefined,
-      crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+      crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
     });
   }
 
@@ -1838,7 +1838,7 @@ function pickSystemQuest(
   return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
     samosborDanger: ctx.samosborDanger,
     nearbyMonster: ctx.nearbyMonster !== undefined,
-    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
   });
 }
 
@@ -1887,7 +1887,7 @@ function generateQuest(
             return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
               samosborDanger: ctx.samosborDanger,
               nearbyMonster: ctx.nearbyMonster !== undefined,
-              crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentFloor,
+              crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
             });
           }
         }

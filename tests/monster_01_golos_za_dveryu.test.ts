@@ -46,7 +46,7 @@ test('Golos Za Dveryu generates one marked sealed threshold with one bounded Nel
 
 test('Golos Za Dveryu quest outcomes publish door-lure rumor events', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
 

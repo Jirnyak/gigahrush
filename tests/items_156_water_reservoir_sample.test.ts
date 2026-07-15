@@ -48,7 +48,7 @@ test('water reservoir sample is a save, drop or trade decision', () => {
 });
 
 test('water reservoir sample sale feeds water economy evidence', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 156 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 156 });
   const player = makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }], money: 0 });
   const buyer = makeTestNpc({
     id: 2,

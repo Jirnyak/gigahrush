@@ -124,7 +124,7 @@ function normalizeProductionEntry(raw: unknown, fallbackFloor: FloorLevel): Prod
 export function setProductionState(
   state: GameState,
   input: unknown,
-  fallbackFloor = state.currentFloor,
+  fallbackFloor = state.currentZ,
 ): ProductionState[] {
   const normalized = normalizeProductionStateList(input, fallbackFloor);
   (state as ProductionGameState).production = normalized;
@@ -156,26 +156,26 @@ export function normalizeProductionStateList(
   const max = Math.max(0, Math.floor(cap));
   if (max <= 0) return [];
   if (out.length <= max) return out;
-  const currentFloor = out.filter(p => p.floor === fallbackFloor).slice(-max);
-  const slotsLeft = Math.max(0, max - currentFloor.length);
+  const currentZ = out.filter(p => p.floor === fallbackFloor).slice(-max);
+  const slotsLeft = Math.max(0, max - currentZ.length);
   const otherFloors = out.filter(p => p.floor !== fallbackFloor).slice(-slotsLeft);
-  return [...otherFloors, ...currentFloor];
+  return [...otherFloors, ...currentZ];
 }
 
 export function productionForSave(state: GameState): ProductionState[] {
-  return normalizeProductionStateList(productionList(state), state.currentFloor);
+  return normalizeProductionStateList(productionList(state), state.currentZ);
 }
 
 function productionFloor(state: GameState, p: ProductionState): FloorLevel {
   const saved = p as ProductionState & { floor?: FloorLevel };
-  if (saved.floor === undefined) saved.floor = state.currentFloor;
+  if (saved.floor === undefined) saved.floor = state.currentZ;
   return saved.floor;
 }
 
 function productionCountForCurrentFloor(state: GameState): number {
   let count = 0;
   for (const p of productionList(state)) {
-    if (productionFloor(state, p) === state.currentFloor) count++;
+    if (productionFloor(state, p) === state.currentZ) count++;
   }
   return count;
 }
@@ -183,7 +183,7 @@ function productionCountForCurrentFloor(state: GameState): number {
 function productionRoomCountForCurrentFloor(state: GameState): number {
   const rooms = new Set<string>();
   for (const p of productionList(state)) {
-    if (productionFloor(state, p) === state.currentFloor) rooms.add(`${p.roomId}:${p.factoryId}`);
+    if (productionFloor(state, p) === state.currentZ) rooms.add(`${p.roomId}:${p.factoryId}`);
   }
   return rooms.size;
 }
@@ -193,7 +193,7 @@ function outputContainer(world: World, id: number): WorldContainer | undefined {
 }
 
 function productionValidForWorld(state: GameState, world: World, p: ProductionState): boolean {
-  if (productionFloor(state, p) !== state.currentFloor) return true;
+  if (productionFloor(state, p) !== state.currentZ) return true;
   const room = world.rooms[p.roomId];
   if (!room) return false;
   const factory = FACTORIES.find(f => f.id === p.factoryId);
@@ -201,7 +201,7 @@ function productionValidForWorld(state: GameState, world: World, p: ProductionSt
   if (factoryForRoom(room.type, room.name)?.id !== factory.id) return false;
   if (p.outputContainerId <= 0) return true;
   const container = outputContainer(world, p.outputContainerId);
-  return !!container && container.floor === state.currentFloor && container.roomId === p.roomId;
+  return !!container && container.floor === state.currentZ && container.roomId === p.roomId;
 }
 
 export function pruneProductionForWorld(state: GameState, world: World): number {
@@ -380,7 +380,7 @@ function createOutputContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -442,7 +442,7 @@ function resolveOutputContainer(
   factory: FactoryDef,
   recipe: FactoryRecipeDef,
 ): WorldContainer | undefined {
-  const containers = world.containers.filter(c => c.floor === state.currentFloor && c.roomId === room.id);
+  const containers = world.containers.filter(c => c.floor === state.currentZ && c.roomId === room.id);
   const tags = recipeOutputTags(factory, recipe);
   const exact = bestContainer(containers, recipe, tags, c => sameFactoryOutput(c, factory) && c.tags.includes(recipe.id));
   if (exact) return exact;
@@ -544,11 +544,11 @@ function registerFactoryRoom(
   containerId: number,
 ): void {
   const list = productionList(state);
-  if (list.some(p => productionFloor(state, p) === state.currentFloor && p.roomId === roomId && p.factoryId === factory.id)) return;
+  if (list.some(p => productionFloor(state, p) === state.currentZ && p.roomId === roomId && p.factoryId === factory.id)) return;
   if (productionRoomCountForCurrentFloor(state) >= MAX_PRODUCTION_ROOMS) return;
   if (productionCountForCurrentFloor(state) >= MAX_PRODUCTION_STATES) return;
   list.push({
-    floor: state.currentFloor,
+    floor: state.currentZ,
     roomId,
     factoryId: factory.id,
     recipeId: recipe.id,
@@ -654,7 +654,7 @@ function publishProductionOutput(
 }
 
 export function ensureProductionRooms(state: GameState, world: World): number {
-  ensureRoomContainers(world, state.currentFloor);
+  ensureRoomContainers(world, state.currentZ);
   pruneProductionForWorld(state, world);
   let added = 0;
   for (const room of world.rooms) {
@@ -927,7 +927,7 @@ export function tickProduction(state: GameState, world: World, force = false, ob
   ensureProductionRooms(state, world);
   let made = 0;
   for (const p of productionList(state)) {
-    if (productionFloor(state, p) !== state.currentFloor) continue;
+    if (productionFloor(state, p) !== state.currentZ) continue;
     if (!force && state.time < p.nextTickAt) continue;
     const factory = FACTORIES.find(f => f.id === p.factoryId);
     const recipe = factory?.recipes.find(r => r.id === p.recipeId);
@@ -959,7 +959,7 @@ export function summarizeProduction(state: GameState, limit = 6): string[] {
   const result: string[] = [];
   for (let i = 0; i < list.length; i++) {
     const p = list[i];
-    if (productionFloor(state, p) === state.currentFloor) {
+    if (productionFloor(state, p) === state.currentZ) {
       const blocked = p.blockedReason ? ` ${p.blockedReason}` : '';
       const jammed = p.jammed ? ' jammed' : '';
       result.push(`room ${p.roomId}: ${p.factoryId}/${p.recipeId} next ${Math.max(0, Math.round(p.nextTickAt - state.time))}s${blocked}${jammed}`);

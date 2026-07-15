@@ -371,7 +371,7 @@ export function tryUsePneumomailTube(
   const target = targetAt(world, lookX, lookY);
   if (!target) return false;
 
-  if (state.currentFloor !== FloorLevel.MAINTENANCE) {
+  if (state.currentZ !== FloorLevel.MAINTENANCE) {
     state.msgs.push(msg('Пневмопочта здесь числится, но не дышит.', state.time, '#888'));
     return true;
   }

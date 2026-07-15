@@ -100,7 +100,7 @@ test('vodyanoy pressure ramps, drains PSI, and publishes dry-break cue', () => {
   const threat = monster();
   const target = player(18.5, 20.5);
   const msgs = [];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
 
   updateVodyanoyWaterPressureLine(world, threat, target, 0.4, 1, msgs, target.id, state);
   assert.ok((threat.ai?.waterPressure ?? 0) > 0, 'connected wet line should ramp pressure');

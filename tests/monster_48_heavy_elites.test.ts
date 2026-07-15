@@ -85,7 +85,7 @@ test('heavy ranged bosses use their own readable range, windup and counterplay d
   const target = player(27.5, 10.5);
   const threat = monster(MonsterKind.CREATOR, 10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prepare(entities);
@@ -108,7 +108,7 @@ test('heavy ranged boss windup is interrupted by cover and reports the boss line
   const target = player(24.5, 10.5);
   const threat = monster(MonsterKind.CREATOR, 10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prepare(entities);
@@ -132,7 +132,7 @@ test('heavy ranged boss phase cues are actor-local and progress one threshold at
   const threat = monster(MonsterKind.MANCOBUS, 10.5, 10.5);
   threat.hp = Math.floor(MANCOBUS_DEF.hp * 0.62);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prepare(entities);
@@ -199,7 +199,7 @@ test('kostorez windup misses if the target leaves range', () => {
   const target = player(12.4, 10.5);
   const threat = monster(MonsterKind.KOSTOREZ, 10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prepare(entities);
@@ -225,7 +225,7 @@ test('safeguard windup is shotgun-interruptible without any online dependency', 
   const target = player(12.1, 10.5);
   const threat = monster(MonsterKind.SAFEGUARD, 10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prepare(entities);

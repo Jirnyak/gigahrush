@@ -70,7 +70,7 @@ test('caravan lane definitions validate and cover required supply lanes', () => 
 
 test('forced caravan tick moves stock between two floors and publishes visible events', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 100,
     worldEvents: createWorldEventState(),
   });
@@ -94,7 +94,7 @@ test('forced caravan tick moves stock between two floors and publishes visible e
 
 test('caravan tariff getter reflects robbery pressure and paid stabilization', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 200,
     worldEvents: createWorldEventState(),
   });
@@ -111,7 +111,7 @@ test('caravan tariff getter reflects robbery pressure and paid stabilization', (
 
 test('caravan tariffs feed item economy quotes and invalidate cached prices', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 220,
     worldEvents: createWorldEventState(),
   });
@@ -146,7 +146,7 @@ test('caravan exchange registers route choices and quest events open or close la
   );
 
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 300,
     worldEvents: createWorldEventState(),
   });
@@ -177,7 +177,7 @@ test('caravan exchange registers route choices and quest events open or close la
 
 test('caravan contract completions apply escort, raid, reroute, report, and seat outcomes', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 420,
     worldEvents: createWorldEventState(),
   });
@@ -242,7 +242,7 @@ test('small caravan runs open near service cells without appending new people', 
 
   const player = makeTestPlayer({ id: 1, x: 26.5, y: 25.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 600,
     worldEvents: createWorldEventState(),
   });
@@ -268,7 +268,7 @@ test('small caravan claims existing persistent A-Life members', () => {
   addCaravanSpawnRoom(world);
   const player = makeTestPlayer({ id: 1, x: 26.5, y: 25.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 700,
     worldEvents: createWorldEventState(),
   });
@@ -288,7 +288,7 @@ test('small caravan assigns identity only to eligible ordinary members', () => {
   addCaravanSpawnRoom(world);
   const player = makeTestPlayer({ id: 1, x: 26.5, y: 25.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 720,
     worldEvents: createWorldEventState(),
   });
@@ -310,7 +310,7 @@ test('small caravan rejects player, plot, quest, and menu-target NPCs without cr
   addCaravanSpawnRoom(world);
   const player = makeTestPlayer({ id: 1, x: 26.5, y: 25.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 740,
     showNpcMenu: true,
     npcMenuTarget: 5,
@@ -335,7 +335,7 @@ test('small caravan arrival moves surviving member A-Life records to destination
   addCaravanSpawnRoom(world);
   const player = makeTestPlayer({ id: 1, x: 26.5, y: 25.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 760,
     worldEvents: createWorldEventState(),
   });
@@ -362,7 +362,7 @@ test('caravan raids do not kill every persistent member by default', () => {
   addCaravanSpawnRoom(world);
   const player = makeTestPlayer({ id: 1, x: 26.5, y: 25.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 780,
     worldEvents: createWorldEventState(),
   });
@@ -381,7 +381,7 @@ test('caravan raids do not kill every persistent member by default', () => {
 
 test('off-floor caravan lane migration moves a bounded prefilled A-Life record', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 800,
     worldEvents: createWorldEventState(),
   });

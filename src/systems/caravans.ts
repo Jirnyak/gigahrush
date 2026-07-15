@@ -556,17 +556,17 @@ function chooseSmallCaravanTemplate(state: GameState, requestedId?: string): Sma
     const requested = SMALL_CARAVAN_TEMPLATES.find(template => template.id === requestedId);
     const lane = requested ? ensureCaravanState(state).lanes[requested.laneId] : undefined;
     const def = requested ? CARAVAN_LANE_BY_ID[requested.laneId] : undefined;
-    return requested && lane?.open && def && floorMatchesLane(state.currentFloor, def) ? requested : undefined;
+    return requested && lane?.open && def && floorMatchesLane(state.currentZ, def) ? requested : undefined;
   }
 
   const caravanState = ensureCaravanState(state);
   const candidates = SMALL_CARAVAN_TEMPLATES.filter(template => {
     const def = CARAVAN_LANE_BY_ID[template.laneId];
     const lane = caravanState.lanes[template.laneId];
-    return !!def && lane?.open === true && floorMatchesLane(state.currentFloor, def);
+    return !!def && lane?.open === true && floorMatchesLane(state.currentZ, def);
   });
   if (candidates.length === 0) return undefined;
-  return candidates[(caravanState.nextRunSeq + state.currentFloor) % candidates.length];
+  return candidates[(caravanState.nextRunSeq + state.currentZ) % candidates.length];
 }
 
 function nearbyMemberPosition(world: World, x: number, y: number, index: number): { x: number; y: number } {
@@ -671,7 +671,7 @@ export function spawnSmallCaravanNear(
   templateId?: string,
 ): SmallCaravanRunState | undefined {
   const caravans = ensureCaravanState(state);
-  if (currentFloorActiveSmallCaravanCount(caravans, state.currentFloor, state.time) >= MAX_ACTIVE_SMALL_CARAVANS) return undefined;
+  if (currentFloorActiveSmallCaravanCount(caravans, state.currentZ, state.time) >= MAX_ACTIVE_SMALL_CARAVANS) return undefined;
   const template = chooseSmallCaravanTemplate(state, templateId);
   if (!template) return undefined;
   const pos = findSmallCaravanSpawn(world, player);
@@ -681,7 +681,7 @@ export function spawnSmallCaravanNear(
     id: `small_${caravans.nextRunSeq}`,
     templateId: template.id,
     laneId: template.laneId,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
     status: 'moving',
@@ -1010,7 +1010,7 @@ export function getCaravanLaneTariffMultiplier(state: GameState, laneId: string)
 export function getCaravanResourceTariffMultiplier(
   state: GameState,
   resourceId: string,
-  floor: FloorLevel = state.currentFloor,
+  floor: FloorLevel = state.currentZ,
 ): number {
   let multiplier = 1;
   for (const def of CARAVAN_LANES) {
@@ -1066,7 +1066,7 @@ export function getNearestSmallCaravan(
   let bestD2 = maxDist * maxDist;
   for (const id in caravans.active) {
     const run = caravans.active[id];
-    if (run.floor !== state.currentFloor || run.expiresAt <= state.time) continue;
+    if (run.floor !== state.currentZ || run.expiresAt <= state.time) continue;
     if (terminalStatus(run.status) && run.updatedAt + SMALL_CARAVAN_TERMINAL_SECONDS < state.time) continue;
     const d2 = world.dist2(player.x, player.y, run.x, run.y);
     if (d2 < bestD2) {

@@ -527,7 +527,7 @@ function activateMetro(ctx: InteractionContext): InteractionResult {
       ctx.state.msgs.push(msg('Метро дернулось, но карман не найден.', ctx.state.time, '#f84'));
     }
   } else {
-    const delta = metro.destination.floor - ctx.state.currentFloor;
+    const delta = metro.destination.floor - ctx.state.currentZ;
     if (delta === 1) ctx.switchFloor?.(LiftDirection.DOWN, metro.message, metro.color, false);
     else if (delta === -1) ctx.switchFloor?.(LiftDirection.UP, metro.message, metro.color, false);
     else ctx.state.msgs.push(msg('Эта линия пока берет только соседние этажи.', ctx.state.time, '#888'));
@@ -607,7 +607,7 @@ function activateNormalPriorityInteractionForLook(ctx: InteractionContext): Inte
     if (door.handled) return door;
   }
 
-  ensureRoomContainers(ctx.world, ctx.state.currentFloor);
+  ensureRoomContainers(ctx.world, ctx.state.currentZ);
   const container = findContainer(ctx, true);
   if (container) {
     ctx.openContainerMenu?.(container);
@@ -769,7 +769,7 @@ export function placeGeneratedInteractablesForCurrentFloor(world: World, state: 
   clearGamblingMachines();
   clearNetHackTerminals();
 
-  const seed = hashSeed(`interactables:${state.currentFloor}:${world.rooms.length}`, state.currentFloor * 4099 + world.rooms.length + 1777);
+  const seed = hashSeed(`interactables:${state.currentZ}:${world.rooms.length}`, state.currentZ * 4099 + world.rooms.length + 1777);
   const rng = seededRandom(seed);
   const used = new Set<number>();
   let placed = 0;

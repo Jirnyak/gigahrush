@@ -31,7 +31,7 @@ test('shelter seat forgery is a reachable forged shelter document', () => {
 
 test('shelter seat forgery can be presented at living-block shelter queues', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 114 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 114 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');

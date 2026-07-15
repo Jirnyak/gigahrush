@@ -47,7 +47,7 @@ test('blueprint t1 folder unlocks a reusable metal shop recipe', () => {
 
 test('blueprint t1 folder can be sold instead of saved for production', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 105 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 105 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

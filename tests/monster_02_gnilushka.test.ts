@@ -109,7 +109,7 @@ test('gnilushka interaction supports help and noncombat NII handoff', () => {
   });
   const target = gnilushka(2, 12.0, 10.5);
   const entities = [player, target];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const nextEntityId = { v: 3 };
 
   prime(entities);
@@ -138,7 +138,7 @@ test('gnilushka flees while calm and only turns dangerous after being hurt and c
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5, weapon: 'knife', hp: 80, maxHp: 80 });
   const calm = gnilushka(2, 12.2, 10.5);
   const entities = [player, calm];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   assert.equal(isHostile(player, calm), false);
@@ -155,7 +155,7 @@ test('gnilushka flees while calm and only turns dangerous after being hurt and c
   const hurt = gnilushka(11, 20.5, 20.5);
   hurt.hp = (hurt.maxHp ?? DEF.hp) - 5;
   const cornerEntities = [cornerPlayer, hurt];
-  const cornerState = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const cornerState = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   prime(cornerEntities);
   updateMonster(cornerWorld, cornerEntities, hurt, 0.2, 2, [], cornerPlayer.id, { v: 12 }, cornerState);
 

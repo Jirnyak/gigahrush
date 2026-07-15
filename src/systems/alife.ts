@@ -1946,8 +1946,8 @@ function arrivalRecordFromEntity(alife: AlifeState, id: number, state: GameState
     angle: entity.angle,
   };
   setRecordFloorKey(alife, record, floorKey);
-  setRecordFloor(alife, record, state.currentFloor);
-  setRecordDanger(alife, record, storyDanger(state.currentFloor));
+  setRecordFloor(alife, record, state.currentZ);
+  setRecordDanger(alife, record, storyDanger(state.currentZ));
   setRecordFaction(alife, record, faction);
   setRecordOccupation(alife, record, occupation);
   setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);

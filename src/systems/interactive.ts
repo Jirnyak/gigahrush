@@ -575,7 +575,7 @@ function runSearchFeature(ctx: ContentInteractionContext, resolved: ResolvedInte
   if (!ctx.openContainerMenu) return { handled: false };
   const world = ctx.world;
   const idx = resolved.instance.idx;
-  const container = resolveOrCreateFeatureLootContainer(world, ctx.state.currentFloor, idx, ctx);
+  const container = resolveOrCreateFeatureLootContainer(world, ctx.state.currentZ, idx, ctx);
   if (!container) return { handled: false };
 
   // Open the container

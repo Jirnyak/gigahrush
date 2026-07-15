@@ -47,7 +47,7 @@ test('Monster 18 Hladonets generates a local cold pocket and steam counter event
   assert.equal(drops.includes('valve_tag'), true, 'encounter should leave a valve tag trace');
 
   const state = makeGameState({
-    currentFloor: FloorLevel.MAINTENANCE,
+    currentZ: FloorLevel.MAINTENANCE,
     worldEvents: createWorldEventState(),
   });
   const beforeHp = threat.hp ?? 0;

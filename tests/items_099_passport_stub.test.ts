@@ -40,7 +40,7 @@ test('passport stub has reachable steal, reward, archive and black-market decisi
   assert.ok(CONTRACTS.some(contract => contract.rewardItem === ITEM_ID));
 
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 99 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 99 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state);

@@ -299,7 +299,7 @@ test('industrial monster kill and slime science events move matching corporation
 
 function makeMarketState(accountRubles: number): MarketTestState {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   }) as MarketTestState;
   state.banking = { accountRubles };

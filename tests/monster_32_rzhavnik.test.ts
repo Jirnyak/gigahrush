@@ -117,7 +117,7 @@ test('dormant rzhavnik idles as scrap, wakes close, leaps once, then becomes fra
   const threat = rzhavnik(14.5, 14.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   const startMax = threat.maxHp ?? 0;
 
   target.x = 22.5;
@@ -145,7 +145,7 @@ test('loud metal wakes dormant rzhavnik before close approach', () => {
   const target = player(21.5, 14.5);
   const threat = rzhavnik(14.5, 14.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
   state.time = 5;
 

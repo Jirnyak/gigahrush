@@ -205,7 +205,7 @@ function questMarkerTargetOnCurrentFloor(q: Quest, state: GameState): boolean {
     q.visitFloor === undefined &&
     q.targetRoute === undefined &&
     q.targetMarker?.floor !== undefined
-  ) return q.targetMarker.floor === state.currentFloor;
+  ) return q.targetMarker.floor === state.currentZ;
   return true;
 }
 
@@ -289,7 +289,7 @@ export function syncMapExplorationAfterSamosborWave(world: World, state: GameSta
   if (!snapshot || snapshot.active || !snapshot.finished || snapshot.fieldCells <= 0) return;
   const runtime = explorationByWorld.get(world);
   if (!runtime) return;
-  const key = `${state.currentFloor}:${state.samosborCount}:${snapshot.originIdx}:${snapshot.fieldCells}:${snapshot.regeneratedCells}`;
+  const key = `${state.currentZ}:${state.samosborCount}:${snapshot.originIdx}:${snapshot.fieldCells}:${snapshot.regeneratedCells}`;
   if (runtime.lastSamosborWaveFogKey === key) return;
   runtime.lastSamosborWaveFogKey = key;
   hideMapArea(world, snapshot.originIdx % W, (snapshot.originIdx / W) | 0, snapshot.fieldRadius + 2);

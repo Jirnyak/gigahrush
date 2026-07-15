@@ -46,7 +46,7 @@ test('screen signal rumor pools point to gameplay surfaces', () => {
 test('runtime event rumors keep floor zone and room context in leads', () => {
   const now = 9_500;
   const npc = { ...makeNpc(), id: 9301 };
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: now });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: now });
   const snapshot = buildContextSnapshot(npc, { state, player: makePlayer(), time: now });
   assert.equal(recordRumorEvent({
     id: 9_100_001,
@@ -99,7 +99,7 @@ function revealHasGameplaySurface(reveal: RumorReveal): boolean {
 function snapshotFor(type: WorldEvent['type'], overrides: Partial<WorldEvent> = {}) {
   const state = makeGameState({
     time: 120,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const buffer = state.worldEvents?.recentEvents;

@@ -507,7 +507,7 @@ export function publishAntennaCourtSignalEvent(
   const eventTags = result?.eventTags ?? [];
   return publishEvent(game, {
     type: 'rumor_observed',
-    floor: game.currentFloor,
+    floor: game.currentZ,
     severity: action === 'jam' || action === 'record' || action === 'expose' ? 4 : 3,
     privacy: action === 'jam' || action === 'expose' ? 'witnessed' : 'local',
     targetName: routeId ?? DESIGN_FLOOR_ID,

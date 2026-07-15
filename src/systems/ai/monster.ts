@@ -1370,7 +1370,7 @@ function validMukhozhukFoodContainer(
   state?: GameState,
 ): container is WorldContainer {
   if (!container) return false;
-  if (state && container.floor !== state.currentFloor) return false;
+  if (state && container.floor !== state.currentZ) return false;
   if (!containerHasMukhozhukFood(container)) return false;
   return world.dist2(e.x, e.y, container.x + 0.5, container.y + 0.5) <= MUKHOZHUK_FOOD_SCAN_RADIUS * MUKHOZHUK_FOOD_SCAN_RADIUS;
 }
@@ -1395,7 +1395,7 @@ function findMukhozhukFoodContainer(world: World, e: Entity, dt: number, state?:
   let bestD2 = MUKHOZHUK_FOOD_SCAN_RADIUS * MUKHOZHUK_FOOD_SCAN_RADIUS;
   for (let i = 0; i < limit; i++) {
     const container = world.containers[(start + i) % total];
-    if (state && container.floor !== state.currentFloor) continue;
+    if (state && container.floor !== state.currentZ) continue;
     if (!containerHasMukhozhukFood(container)) continue;
     const d2 = world.dist2(e.x, e.y, container.x + 0.5, container.y + 0.5);
     if (d2 >= bestD2) continue;
@@ -1825,7 +1825,7 @@ function processObzhivalshchikRoomMemory(
   state: GameState | undefined,
 ): void {
   const ai = e.ai!;
-  const memory = getRoomMemory(state?.currentFloor, ai.homeRoomId);
+  const memory = getRoomMemory(state?.currentZ, ai.homeRoomId);
   if (!memory || memory.lastEventId === ai.lastRoomMemoryEventId) return;
   ai.lastRoomMemoryEventId = memory.lastEventId;
 

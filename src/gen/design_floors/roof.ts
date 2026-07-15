@@ -266,7 +266,7 @@ export function publishRoofWeatherEvent(
 ): WorldEvent {
   return publishEvent(game, {
     type: 'rumor_observed',
-    floor: game.currentFloor,
+    floor: game.currentZ,
     roomId: room?.id,
     x: room ? room.x + (room.w >> 1) : undefined,
     y: room ? room.y + (room.h >> 1) : undefined,

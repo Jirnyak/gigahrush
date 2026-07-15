@@ -51,7 +51,7 @@ test('hermodoor journal is reachable from the hospital quarantine filing cabinet
 
 test('hermodoor journal can be sold as door audit evidence in the living block', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 111 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 111 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

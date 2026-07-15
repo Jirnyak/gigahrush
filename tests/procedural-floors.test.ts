@@ -607,7 +607,7 @@ test('normalizeFloorRunSeed returns deterministic valid run seeds', () => {
 });
 
 test('floor run reaches the next lower authored floor through procedural gaps', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   const first = resolveFloorRunRoute(state, LiftDirection.DOWN);
@@ -632,7 +632,7 @@ test('floor run reaches the next lower authored floor through procedural gaps', 
 });
 
 test('floor run UX labels avoid duplicate procedural z and keep return path', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 story:living Жилая зона/);
@@ -671,7 +671,7 @@ test('strict portal mode resolves blocked Floor 69 as procedural route entry', (
   });
 
   try {
-    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: FloorLevel.LIVING });
     setFloorRunState(state, { runSeed: 123, currentZ: -3, specs: {}, visited: {} }, FloorLevel.LIVING);
 
     const routeEntry = resolveFloorRunRoute(state, LiftDirection.DOWN);
@@ -691,7 +691,7 @@ test('strict portal mode resolves blocked Floor 69 as procedural route entry', (
 });
 
 test('floor run reads keep normalized state identity', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const run = setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
   const host = state as typeof state & { floorRun?: unknown };
 
@@ -704,7 +704,7 @@ test('floor run reads keep normalized state identity', () => {
 });
 
 test('objective route HUD and lift prompts point down to lower route targets', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   const startHud = getObjectiveRouteHud(state);
@@ -764,7 +764,7 @@ test('floor run keeps authored stops on expandable even route slots', () => {
 });
 
 test('floor run reaches the upper Ministry authored ladder through procedural gaps', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY });
   setFloorRunState(state, { runSeed: 789, currentZ: 30, specs: {}, visited: {} }, FloorLevel.MINISTRY);
 
   const z31 = resolveFloorRunRoute(state, LiftDirection.UP);
@@ -821,7 +821,7 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(26), false);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(38), false);
 
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 456, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   const firstGap = resolveFloorRunRoute(state, LiftDirection.UP);
@@ -966,7 +966,7 @@ test('procedural floor specs are deterministic from run seed and z', () => {
 });
 
 test('active numbered floor instances key editor and runtime state by anomaly id', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 12 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 12 });
   setFloorRunState(state, { runSeed: 404, currentZ: 1, specs: {}, visited: {} }, FloorLevel.LIVING);
 
   const intendedKey = currentMapEditorFloorKey(state);
@@ -989,7 +989,7 @@ test('active numbered floor instances key editor and runtime state by anomaly id
   assert.equal(currentNetTerminalGenFloorKey(state), anomalyKey);
   assert.equal(currentFloorRunEntry(state).z, 1);
 
-  const loaded = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const loaded = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(loaded, savedRun, FloorLevel.LIVING);
   setFloorInstanceState(loaded, floorInstanceStateForSave(state), FloorLevel.LIVING);
   assert.equal(currentMapEditorFloorKey(loaded), anomalyKey);
@@ -997,7 +997,7 @@ test('active numbered floor instances key editor and runtime state by anomaly id
 });
 
 test('active numbered floor editor replay does not leak patches to intended route floor', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 20 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 20 });
   setFloorRunState(state, { runSeed: 405, currentZ: 1, specs: {}, visited: {} }, FloorLevel.LIVING);
   const intendedKey = currentMapEditorFloorKey(state);
   const anomalyKey = floorInstanceWorldKey('loop_404');
@@ -6112,7 +6112,7 @@ test('smog anomaly spends gasmask filters under sustained exposure', () => {
     danger: Math.max(3, base.danger) as typeof base.danger,
     title: `говнячный смог: ${base.title}`,
   };
-  const state = makeGameState({ currentFloor: spec.baseFloor, time: 10 });
+  const state = makeGameState({ currentZ: spec.baseFloor, time: 10 });
   setFloorRunState(state, {
     runSeed: 606,
     currentZ: spec.z,
@@ -6154,7 +6154,7 @@ test('smog anomaly spends wet rag bundles as short wet-cloth mitigation', () => 
     danger: Math.max(3, base.danger) as typeof base.danger,
     title: `говнячный смог: ${base.title}`,
   };
-  const state = makeGameState({ currentFloor: spec.baseFloor, time: 10 });
+  const state = makeGameState({ currentZ: spec.baseFloor, time: 10 });
   setFloorRunState(state, {
     runSeed: 608,
     currentZ: spec.z,
@@ -6203,7 +6203,7 @@ test('smog anomaly runtime is scoped to the current procedural floor spec', () =
     danger: Math.max(3, baseB.danger) as typeof baseB.danger,
     title: `говнячный смог: ${baseB.title}`,
   };
-  const state = makeGameState({ currentFloor: specA.baseFloor, time: 10 });
+  const state = makeGameState({ currentZ: specA.baseFloor, time: 10 });
   const smogIdx = 40 + 40 * W;
   const worldA = new World();
   worldA.cells[smogIdx] = Cell.FLOOR;
@@ -6235,7 +6235,7 @@ test('smog anomaly runtime is scoped to the current procedural floor spec', () =
   worldB.anomalySmogSource = smogIdx;
   worldB.anomalySmogCells = [smogIdx];
   worldB.fog[smogIdx] = 255;
-  state.currentFloor = specB.baseFloor;
+  state.currentZ = specB.baseFloor;
   setFloorRunState(state, {
     runSeed: 611,
     currentZ: specB.z,
@@ -6270,7 +6270,7 @@ testGenerationMatrix('living tunnels anomaly seeds roots and mutates bounded cel
   }
   assert.equal(initialGutCells >= roots.length * 4, true);
 
-  const state = makeGameState({ currentFloor: spec.baseFloor });
+  const state = makeGameState({ currentZ: spec.baseFloor });
   const player = makeTestPlayer({ id: 999999, x: gen.spawnX, y: gen.spawnY, hp: 100, maxHp: 100 });
   const beforeVersion = gen.world.cellVersion;
   updateLivingTunnelsAnomaly(gen.world, player, state, 1.4);
@@ -6342,7 +6342,7 @@ testBadAppleExperiment('bad apple runtime advances the map rectangle into white 
   const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
   assert.equal(!!room, true);
 
-  const state = makeGameState({ currentFloor: spec.baseFloor });
+  const state = makeGameState({ currentZ: spec.baseFloor });
   const player = {
     id: 999999,
     type: EntityType.NPC, persistentNpcId: 'player',
@@ -6416,7 +6416,7 @@ testBadAppleExperiment('bad apple projector toggles animation without breaking r
   const projectorIdx = match ? Number(match[2]) : -1;
   assert.equal(projectorIdx >= 0, true);
 
-  const state = makeGameState({ currentFloor: spec.baseFloor });
+  const state = makeGameState({ currentZ: spec.baseFloor });
   const player = makeTestPlayer({
     id: 999999,
     x: projectorIdx % W + 0.5,
@@ -6504,7 +6504,7 @@ testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient 
   assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 
-  const state = makeGameState({ currentFloor: spec.baseFloor, time: 1 });
+  const state = makeGameState({ currentZ: spec.baseFloor, time: 1 });
   setFloorRunState(state, {
     runSeed: 779,
     currentZ: spec.z,

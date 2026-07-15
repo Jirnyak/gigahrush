@@ -414,7 +414,7 @@ function handleMyasomerEvent(state: GameState, event: WorldEvent): void {
   const site = activeSite;
   const world = activeWorld;
   const entities = activeEntities;
-  if (!site || !world || !entities || state.currentFloor !== site.floor || event.floor !== site.floor) return;
+  if (!site || !world || !entities || state.currentZ !== site.floor || event.floor !== site.floor) return;
 
   if (event.type === 'monster_bait_placed' && eventInsideSite(world, site, event)) {
     markBaited(state, site, event);

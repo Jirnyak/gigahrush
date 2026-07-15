@@ -54,7 +54,7 @@ function findFalseSafeFeature(world: World, feature: Feature): { x: number; y: n
 }
 
 function installCurrentProceduralSpec(spec: ProceduralFloorSpec) {
-  const state = makeGameState({ currentFloor: spec.baseFloor, samosborTimer: 120 });
+  const state = makeGameState({ currentZ: spec.baseFloor, samosborTimer: 120 });
   setFloorRunState(state, {
     runSeed: spec.seed,
     currentZ: spec.z,

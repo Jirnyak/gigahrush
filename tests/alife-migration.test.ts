@@ -28,7 +28,7 @@ import { makeTestPlayer } from './helpers';
 
 function minimalState(): GameState {
   const state = {
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: 0,
     tick: 0,
     clock: { hour: 8, minute: 0, totalMinutes: 8 * 60 },

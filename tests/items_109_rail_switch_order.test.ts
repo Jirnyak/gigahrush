@@ -49,7 +49,7 @@ test('rail switch order opens the Ministry N3 service passage without consuming 
     x: room.x + 8.5,
     y: room.y + Math.floor(room.h / 2) + 0.5,
   });
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 109 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 109 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state, undefined, world);
@@ -67,7 +67,7 @@ test('rail switch order opens the Ministry N3 service passage without consuming 
 
 test('rail switch order can be sold instead of saved for route access', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 110 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 110 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state);

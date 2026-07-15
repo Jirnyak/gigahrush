@@ -40,7 +40,7 @@ function setupPristav(): { world: World; entities: Entity[]; player: Entity } {
 
 test('Пристав Пустоты states the rule before violation pressure', () => {
   const { world, entities, player } = setupPristav();
-  const state = makeGameState({ currentFloor: FloorLevel.VOID });
+  const state = makeGameState({ currentZ: FloorLevel.VOID });
   const violate = world.containers.find(c => c.tags.includes('pristav_pustoty') && c.tags.includes('violate'));
   assert.ok(violate);
   assert.equal(routeCueCount(world), 1);
@@ -61,7 +61,7 @@ test('Пристав Пустоты states the rule before violation pressure', 
 
 test('Пристав Пустоты payment resolves without spawning pressure', () => {
   const { world, entities, player } = setupPristav();
-  const state = makeGameState({ currentFloor: FloorLevel.VOID });
+  const state = makeGameState({ currentZ: FloorLevel.VOID });
   const pay = world.containers.find(c => c.tags.includes('pristav_pustoty') && c.tags.includes('pay'));
   assert.ok(pay);
 
@@ -75,7 +75,7 @@ test('Пристав Пустоты payment resolves without spawning pressure',
 
 test('Пристав Пустоты anchor break is sabotage with bounded pressure', () => {
   const { world, entities, player } = setupPristav();
-  const state = makeGameState({ currentFloor: FloorLevel.VOID });
+  const state = makeGameState({ currentZ: FloorLevel.VOID });
   const anchor = world.containers.find(c => c.tags.includes('pristav_pustoty') && c.tags.includes('anchor'));
   assert.ok(anchor);
 

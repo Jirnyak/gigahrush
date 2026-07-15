@@ -99,7 +99,7 @@ export interface SavePayload {
     samosborTimer: number;
     quests: Quest[];
     nextQuestId: number;
-    currentFloor: GameState['currentFloor'];
+    currentZ: GameState['currentZ'];
     tutorialMode?: boolean;
     tutorialStep?: number;
     tutorialExitTimer?: number;
@@ -302,7 +302,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       samosborTimer: state.samosborTimer,
       quests: questsForSave(state.quests),
       nextQuestId: state.nextQuestId,
-      currentFloor: state.currentFloor,
+      currentZ: state.currentZ,
       tutorialMode: state.tutorialMode,
       tutorialStep: state.tutorialStep,
       tutorialExitTimer: state.tutorialExitTimer,
@@ -325,7 +325,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       economy: sections.economy,
       banking: sections.banking,
       stockMarket: sections.stockMarket,
-      production: normalizeProductionStateList(sections.production, state.currentFloor),
+      production: normalizeProductionStateList(sections.production, state.currentZ),
       containers: containersForSave(input.containers),
     },
   };

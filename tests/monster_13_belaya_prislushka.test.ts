@@ -43,7 +43,7 @@ test('Белая Прислушка registers one living-zone POI and the expect
 });
 
 test('Белая Прислушка publishes compact outcome events for quest completion and failure', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   publishEvent(state, {
     type: 'quest_completed',
     floor: FloorLevel.LIVING,

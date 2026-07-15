@@ -51,7 +51,7 @@ test('blueprint t3 folder is reachable from a deep Hladon frozen cache', () => {
 
 test('blueprint t3 folder can be spent as a black-market document choice', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'blueprint_t3_folder', count: 1 }], money: 0 });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 60 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 60 });
 
   useItem(player, 0, state.msgs, state.time, state);
 

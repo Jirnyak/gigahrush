@@ -40,7 +40,7 @@ test('failed Filtronos cache handling generates contaminated gloves', () => {
 
   const player = makeTestPlayer({ id: 9001, x: stash.x + 0.5, y: stash.y + 0.5 });
   const state = makeGameState({
-    currentFloor: FloorLevel.MAINTENANCE,
+    currentZ: FloorLevel.MAINTENANCE,
     worldEvents: createWorldEventState(),
   });
 

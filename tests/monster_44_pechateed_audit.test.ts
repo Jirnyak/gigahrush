@@ -93,7 +93,7 @@ test('pechateed document scent targets NPC carriers, not only the player', () =>
   const entities = [player, threat, courier];
 
   prime(entities);
-  updateMonster(world, entities, threat, 0.2, 6, [], player.id, { v: 100 }, makeGameState({ currentFloor: FloorLevel.MINISTRY }));
+  updateMonster(world, entities, threat, 0.2, 6, [], player.id, { v: 100 }, makeGameState({ currentZ: FloorLevel.MINISTRY }));
 
   assert.equal(threat.ai?.combatTargetId, courier.id);
 });

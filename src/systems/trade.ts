@@ -130,7 +130,7 @@ function quoteOptions(npc: Entity, opts: TradeOptions): EconomyQuoteOptions {
 
 function stockFloorForTrade(state: GameState, opts: TradeOptions): FloorLevel {
   if (opts.stockFloor !== undefined) return opts.stockFloor;
-  return typeof opts.floor === 'number' ? opts.floor : state.currentFloor;
+  return typeof opts.floor === 'number' ? opts.floor : state.currentZ;
 }
 
 function decrementSlot(inv: Entity['inventory'], slotIndex: number): void {

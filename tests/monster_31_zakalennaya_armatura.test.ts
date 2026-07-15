@@ -72,7 +72,7 @@ test('zakalennaya armatura is standalone maintenance and hell armor content', ()
 
 test('armor state resists weak hits and strips on heavy hits', () => {
   const world = new World();
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
   const target = monster();
   const actor = player();
 

@@ -204,7 +204,7 @@ test('spectral_chasovnya bell interaction publishes a bounded sound bait pulse',
   const gen = spectralGen();
   const node = gen.spectralState.bellNodes[0];
   const player = makeTestPlayer({ id: 9001, x: node.x + 1, y: node.y, angle: Math.PI });
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, time: 10 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, time: 10 });
   const target = findInteractionTarget({
     world: gen.world,
     state,

@@ -299,7 +299,7 @@ function removeBaitAt(index: number, state: GameState | undefined, time: number,
 }
 
 export function expireMonsterBaits(state: GameState | undefined, time: number): void {
-  const floor = state?.currentFloor;
+  const floor = state?.currentZ;
   const floorKey = monsterBaitFloorKey(state);
   for (let i = activeBaits.length - 1; i >= 0; i--) {
     const marker = activeBaits[i];
@@ -340,7 +340,7 @@ export function placeMonsterBait(
     id: nextBaitId++,
     x: bx,
     y: by,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     floorKey: monsterBaitFloorKey(state),
     itemId: defId,
     itemName: def.name,
@@ -436,11 +436,11 @@ export function findMonsterBaitTarget(
   dt: number,
   time: number,
   state?: GameState,
-  currentFloor?: FloorLevel,
+  currentZ?: FloorLevel,
   candidateOk?: (marker: MonsterBaitMarker) => boolean,
 ): MonsterBaitMarker | null {
   const ai = monster.ai;
-  const floor = currentFloor ?? state?.currentFloor;
+  const floor = currentZ ?? state?.currentZ;
   const floorKey = monsterBaitFloorKey(state);
   if (!ai || floor === undefined || !isBaitAttractedMonster(monster.monsterKind)) return null;
 

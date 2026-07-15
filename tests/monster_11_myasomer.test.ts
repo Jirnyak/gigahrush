@@ -83,7 +83,7 @@ test('myasomer generation creates local quiet and loud rewards', () => {
 
 test('quiet cache publishes myasomer quiet-clear without spawning threats', () => {
   const { entities, site } = myasomerFixture();
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, time: 20 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, time: 20 });
 
   publishEvent(state, {
     type: 'container_opened',
@@ -111,7 +111,7 @@ test('quiet cache publishes myasomer quiet-clear without spawning threats', () =
 
 test('siren shard noise escalates locally and caps spawned pressure', () => {
   const { entities, site } = myasomerFixture();
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, time: 40 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, time: 40 });
 
   for (let i = 0; i < 5; i++) {
     state.time += 1;
@@ -166,7 +166,7 @@ test('siren shard noise escalates locally and caps spawned pressure', () => {
 
 test('fire sears the listening vein and removes shadow pressure', () => {
   const { entities, site } = myasomerFixture();
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, time: 60 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, time: 60 });
 
   publishEvent(state, {
     type: 'burn_cleanup',

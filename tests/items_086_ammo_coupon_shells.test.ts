@@ -27,7 +27,7 @@ test('ammo coupon shells is reachable official shotgun ammo paperwork', () => {
 
 test('ammo coupon shells redeems into legal shotgun shells', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'ammo_coupon_shells', count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 86 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 86 });
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 

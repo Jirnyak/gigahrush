@@ -367,7 +367,7 @@ function branchForHell18Quest(sideQuestId: string): ChoirBranch | null {
 function handleHell18BranchEvent(state: GameState, event: WorldEvent): void {
   const site = activeSite;
   const world = activeWorld;
-  if (!site || !world || state.currentFloor !== site.floor || event.floor !== site.floor) return;
+  if (!site || !world || state.currentZ !== site.floor || event.floor !== site.floor) return;
 
   if (event.type === 'item_deposited' && event.containerId === site.cashboxId && event.itemId === 'rawmeat') {
     applyHell18Branch(state, event, 'pay');

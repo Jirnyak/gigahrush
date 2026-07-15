@@ -138,7 +138,7 @@ export function tryUseMetroRoute(
   const route = routeAtLookCell(world, lookX, lookY);
   if (!route) return null;
 
-  if (state.currentFloor !== FloorLevel.MAINTENANCE) {
+  if (state.currentZ !== FloorLevel.MAINTENANCE) {
     return {
       route,
       wrongStop: false,

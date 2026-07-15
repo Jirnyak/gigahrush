@@ -66,7 +66,7 @@ function tickOneAlifeFrame(gen: { world: World; entities: Entity[]; spawnX: numb
   const player = makeTestPlayer({ id: 900_000, x: gen.spawnX, y: gen.spawnY, hp: 100, maxHp: 100 });
   gen.entities.unshift(player);
   const state = makeGameState({
-    currentFloor: floor,
+    currentZ: floor,
     time: 0,
     clock: { hour: 9, minute: 0, totalMinutes: 9 * 60 },
   });

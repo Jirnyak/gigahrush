@@ -32,7 +32,7 @@ test('concentrate bonus coupon is premium ration paperwork', () => {
 
 test('concentrate bonus coupon redeems into better concentrate rations', () => {
   const player = makeTestPlayer({ inventory: [{ defId: COUPON_ID, count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 116 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 116 });
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 

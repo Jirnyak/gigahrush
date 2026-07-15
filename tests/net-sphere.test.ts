@@ -459,7 +459,7 @@ function installNetSphereBrowser(): { document: FakeBrowserDocument; restore: ()
 
 function minimalNetSphereState(): GameState {
   return {
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     clock: { totalMinutes: 8 * 60, hour: 8, minute: 0 },
     samosborCount: 0,
     time: 0,

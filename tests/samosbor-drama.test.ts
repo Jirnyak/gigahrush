@@ -8,7 +8,7 @@ import { makeGameState, makeTestContainer, makeTestPlayer } from './helpers';
 
 test('istotit shelter tally aftermath is visible in world log and HUD', () => {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const actor = makeTestPlayer({ id: 1, name: 'Вы', faction: Faction.PLAYER });

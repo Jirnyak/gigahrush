@@ -143,7 +143,7 @@ test('Tumannik arms a local fog offset and light collapses it', () => {
   const threat = tumannik(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.1, 1, msgs, target.id, { v: 100 }, state);
@@ -168,7 +168,7 @@ test('Tumannik can hit from the displaced fog origin before its real body reache
   const threat = tumannik(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.1, 2, msgs, target.id, { v: 100 }, state);
@@ -186,7 +186,7 @@ test('Tumannik fog offset collapses for a lit NPC target too', () => {
   const target = npcTarget(16.5, 10.5);
   const threat = tumannik(10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.1, 5, [], 1, { v: 100 }, state);

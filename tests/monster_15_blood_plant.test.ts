@@ -100,7 +100,7 @@ test('rootHive stays rooted and tendril strikes through a capped short floor lin
   const player = makeTestPlayer({ id: 1, x: 18.5, y: 10.5, hp: 100, maxHp: 100 });
   const plant = bloodPlant(2, 10.5, 10.5);
   const entities = [player, plant];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   const cells = traceBloodPlantTendrilCells(world, plant.x, plant.y, player.x, player.y);
   assert.ok(cells.length <= BLOOD_PLANT_TENDRIL_MAX_CELLS);
@@ -120,7 +120,7 @@ test('red mold containers heal the source until salt removes the nearby source',
   const world = openWorld();
   const plant = bloodPlant(2, 10.5, 10.5, 40);
   const actor = makeTestPlayer({ id: 1, x: 12.5, y: 10.5, inventory: [{ defId: 'rock_salt', count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   world.addContainer(makeTestContainer({
     id: 77,
     x: 12,
@@ -150,7 +150,7 @@ test('red mold containers heal the source until salt removes the nearby source',
 
 test('fire and cutting counterplay publish blood plant route events and open root cells', () => {
   const world = openWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 1, x: 9.5, y: 10.5, weapon: 'knife' });
   const plant = bloodPlant(2, 10.5, 10.5);
   const rootCell = world.idx(11, 10);
@@ -181,7 +181,7 @@ test('fire and cutting counterplay publish blood plant route events and open roo
   assert.ok(getRecentEvents(state, { type: 'blood_plant_root_cut', tags: ['tool'], limit: 1 })[0]);
 
   const fireWorld = openWorld();
-  const fireState = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const fireState = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const firePlant = bloodPlant(3, 10.5, 10.5);
   const fireRoot = fireWorld.idx(12, 10);
   fireWorld.cells[fireRoot] = Cell.WALL;
@@ -230,7 +230,7 @@ test('living blood plant den spawns a reachable source, red mold choice, witness
 
   const rootCell = world.idx(room!.x + 12, room!.y + 6);
   assert.equal(world.cells[rootCell], Cell.WALL);
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 99, x: plants[0].x - 1, y: plants[0].y, weapon: 'axe' });
   recordMonsterMeleeDeath(world, state, plants[0], 'axe', player);
   assert.equal(world.cells[rootCell], Cell.FLOOR);

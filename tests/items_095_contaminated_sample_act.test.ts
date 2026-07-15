@@ -46,7 +46,7 @@ test('contaminated sample act is reachable beside failed handling in slime NII',
 
 test('contaminated sample act can be sold as audit-risk sample evidence', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 95 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 95 });
 
   assert.equal(addItem(player, ACT_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

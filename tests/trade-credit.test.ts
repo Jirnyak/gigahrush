@@ -31,7 +31,7 @@ function resourceStock(state: GameState, floor: FloorLevel, resourceId: string):
 }
 
 test('NPC purchase consumes staged player offer as trade credit before cash', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'flashlight', count: 1 }], money: 100 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 0 });
@@ -62,7 +62,7 @@ test('NPC purchase consumes staged player offer as trade credit before cash', ()
 });
 
 test('symmetric trade stages NPC ask and player offer without mutating inventories', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'bread', count: 2 }], money: 100 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 2 }], money: 0 });
@@ -91,7 +91,7 @@ test('symmetric trade stages NPC ask and player offer without mutating inventori
 });
 
 test('symmetric trade commits baskets with only cash delta and no change', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'flashlight', count: 1 }], money: 100 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 0 });
@@ -127,7 +127,7 @@ test('symmetric trade commits baskets with only cash delta and no change', () =>
 });
 
 test('symmetric trade pays NPC change when the trader has cash', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'flashlight', count: 1 }], money: 100 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 200 });
@@ -154,7 +154,7 @@ test('symmetric trade pays NPC change when the trader has cash', () => {
 });
 
 test('NPC accepts a player-only profitable barter offer', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'bread', count: 1 }], money: 0 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [], money: 0 });
@@ -181,7 +181,7 @@ test('NPC accepts a player-only profitable barter offer', () => {
 });
 
 test('symmetric trade rejects missing cash delta without mutation and keeps baskets', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'bread', count: 1 }], money: 0 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'flashlight', count: 1 }], money: 10 });
@@ -204,7 +204,7 @@ test('symmetric trade rejects missing cash delta without mutation and keeps bask
 });
 
 test('trade credit can partially discount an NPC purchase with cash top-up', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'bread', count: 1 }], money: 1000 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'flashlight', count: 1 }], money: 10 });
@@ -228,7 +228,7 @@ test('trade credit can partially discount an NPC purchase with cash top-up', () 
 });
 
 test('trade credit purchase rejects missing cash top-up without mutation', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'bread', count: 1 }], money: 0 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'flashlight', count: 1 }], money: 10 });
@@ -249,7 +249,7 @@ test('trade credit purchase rejects missing cash top-up without mutation', () =>
 });
 
 test('trade credit offer caps distinct staged slots and can be cleared', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const player = makeTestPlayer({
     id: 1,
     inventory: Array.from({ length: MAX_INVENTORY_SLOTS + 1 }, (_, i) => ({ defId: 'bread', count: 1, data: { serial: i } })),

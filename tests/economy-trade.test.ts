@@ -19,8 +19,8 @@ function resourceStock(state: GameState, floor: FloorLevel, resourceId: string):
 }
 
 test('floor demand makes water dearer on KVARTIRY than LIVING at the same stock', () => {
-  const living = makeGameState({ currentFloor: FloorLevel.LIVING });
-  const kvartiry = makeGameState({ currentFloor: FloorLevel.KVARTIRY });
+  const living = makeGameState({ currentZ: FloorLevel.LIVING });
+  const kvartiry = makeGameState({ currentZ: FloorLevel.KVARTIRY });
   resetFloor(living, FloorLevel.LIVING);
   resetFloor(kvartiry, FloorLevel.KVARTIRY);
 
@@ -32,8 +32,8 @@ test('floor demand makes water dearer on KVARTIRY than LIVING at the same stock'
 });
 
 test('maintenance local tariffs keep metal and tools no dearer than LIVING at normal stock', () => {
-  const living = makeGameState({ currentFloor: FloorLevel.LIVING });
-  const maintenance = makeGameState({ currentFloor: FloorLevel.MAINTENANCE });
+  const living = makeGameState({ currentZ: FloorLevel.LIVING });
+  const maintenance = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
   resetFloor(living, FloorLevel.LIVING);
   resetFloor(maintenance, FloorLevel.MAINTENANCE);
 
@@ -42,7 +42,7 @@ test('maintenance local tariffs keep metal and tools no dearer than LIVING at no
 });
 
 test('buying water from an NPC moves one item, money, event data and floor supply', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, money: 10 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 2 }], money: 5 });
@@ -68,7 +68,7 @@ test('buying water from an NPC moves one item, money, event data and floor suppl
 });
 
 test('selling water to an NPC moves one item, money, event data and floor supply', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'water', count: 2 }], money: 1 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', money: 20 });
@@ -94,7 +94,7 @@ test('selling water to an NPC moves one item, money, event data and floor supply
 });
 
 test('failed trades do not mutate money, inventories or resource stock', () => {
-  const noMoneyState = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const noMoneyState = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(noMoneyState, FloorLevel.LIVING);
   const poorPlayer = makeTestPlayer({ id: 1, money: 0 });
   const waterSeller = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 7 });
@@ -110,7 +110,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   assert.equal(waterSeller.inventory?.[0]?.count, 1);
   assert.equal(resourceStock(noMoneyState, FloorLevel.LIVING, 'drink_water'), stockBeforeBuy);
 
-  const noSpaceState = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const noSpaceState = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(noSpaceState, FloorLevel.LIVING);
   const seller = makeTestPlayer({ id: 3, inventory: [{ defId: 'water', count: 1 }], money: 2 });
   const fullNpc = makeTestNpc({
@@ -133,7 +133,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
 });
 
 test('primeTradePriceCache handles empty and undefined inventories safely', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
 
   // Should not throw
@@ -145,7 +145,7 @@ test('primeTradePriceCache handles empty and undefined inventories safely', () =
 });
 
 test('primeTradePriceCache correctly caches prices for valid items', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
 
   const inv = [
@@ -171,7 +171,7 @@ test('primeTradePriceCache correctly caches prices for valid items', () => {
 });
 
 test('primeTradePriceCache enforces max cache limit without crashing', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
 
   const MAX_PRICE_CACHE_ITEMS = 256;

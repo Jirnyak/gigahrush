@@ -153,7 +153,7 @@ test('lampovy publishes one local powered cue when combat starts under a lamp', 
   const monster = threat(MonsterKind.LAMPOVY, 6.5, 10.5);
   const entities = [target, monster];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   world.features[world.idx(6, 10)] = Feature.LAMP;
   prepare(entities);

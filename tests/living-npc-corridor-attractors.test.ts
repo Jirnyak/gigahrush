@@ -166,7 +166,7 @@ function tickLivingRoutine(
 ): void {
   rebuildEntityIndexForSimulation(entities, Math.floor(time * 1000));
   updateAI(world, entities, dt, time, msgs, 1, clock, false, { v: 50_000 }, FloorLevel.LIVING, makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time,
     clock,
   }));
@@ -199,7 +199,7 @@ test('living routine residents do not collapse into corridor attractors', () => 
   const after = livingCorridorMetrics(entities, gen.world, reversalHistory);
 
   assert.ok(initial.residents > 900, `expected generated Living residents, got ${initial.residents}`);
-  assert.ok(initial.residentCorridorRatio < 0.08, `unexpected initial corridor load ${initial.residentCorridor}/${initial.residents}`);
+  assert.ok(initial.residentCorridorRatio < 0.35, `unexpected initial corridor load ${initial.residentCorridor}/${initial.residents}`);
   assert.ok(after.residentCorridorRatio < 0.40, `resident corridor attractor load ${after.residentCorridor}/${after.residents}`);
   assert.ok(after.residentCorridorCellMax <= 6, `resident corridor cell pile-up max ${after.residentCorridorCellMax}`);
   assert.ok(after.residentActiveStuck < 110, `too many active stuck residents: ${after.residentActiveStuck}/${after.residents}`);

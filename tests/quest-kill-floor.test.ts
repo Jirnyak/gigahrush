@@ -8,7 +8,7 @@ import { notifyKill, notifyNpcKill } from '../src/systems/quests';
 import { makeGameState } from './helpers';
 
 test('generic kill quests count matching monsters on any current floor', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY });
   state.quests = [{
     id: 1,
     type: QuestType.KILL,
@@ -27,7 +27,7 @@ test('generic kill quests count matching monsters on any current floor', () => {
 });
 
 test('floor-targeted kill quests do not count matching monsters on a wrong floor', () => {
-  const wrongFloor = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const wrongFloor = makeGameState({ currentZ: 0 });
   wrongFloor.quests = [{
     id: 2,
     type: QuestType.KILL,
@@ -45,7 +45,7 @@ test('floor-targeted kill quests do not count matching monsters on a wrong floor
 
   assert.equal(wrongFloor.quests[0].killCount, 0);
 
-  const rightFloor = makeGameState({ currentFloor: FloorLevel.MAINTENANCE });
+  const rightFloor = makeGameState({ currentZ: -26 });
   rightFloor.quests = [{ ...wrongFloor.quests[0], killCount: 0 }];
 
   notifyKill(MonsterKind.EYE, rightFloor);
@@ -54,7 +54,7 @@ test('floor-targeted kill quests do not count matching monsters on a wrong floor
 });
 
 test('plot NPC kill quests do not count ordinary monster kills', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY });
   state.quests = [{
     id: 4,
     type: QuestType.KILL,
@@ -83,7 +83,7 @@ test('risk-only contract route metadata does not bypass target floor checks', ()
   assert.equal(quest.targetFloor, FloorLevel.MINISTRY);
   assert.ok(questTargetRoute(quest), 'contract keeps route metadata for HUD/risk');
 
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   assert.equal(isQuestTargetOnCurrentFloor(quest, state), false);
 });

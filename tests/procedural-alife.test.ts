@@ -37,7 +37,7 @@ function socialProceduralSpec(): ProceduralFloorSpec {
 }
 
 function stateForSpec(spec: ProceduralFloorSpec): GameState {
-  const state = { currentFloor: spec.baseFloor } as GameState;
+  const state = { currentZ: spec.baseFloor } as GameState;
   const floorKey = `procedural:${spec.key}`;
   setFloorRunState(state, {
     runSeed: 17,
@@ -106,7 +106,7 @@ testGenerationMatrix('procedural route templates are suppressed when the active 
 });
 
 testGenerationMatrix('floor 69 adult sprite templates survive A-Life materialization', () => {
-  const state = { currentFloor: FloorLevel.MAINTENANCE } as GameState;
+  const state = { currentZ: FloorLevel.MAINTENANCE } as GameState;
   setFloorRunState(state, { runSeed: 17, currentZ: -4 }, FloorLevel.MAINTENANCE);
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const generated = generateDesignFloor('floor_69');

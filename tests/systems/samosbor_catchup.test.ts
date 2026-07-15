@@ -39,7 +39,7 @@ function createMockGameState(): GameState {
     samosborActive: true,
     samosborTimer: 100, // Make sure it's not going to end immediately
     samosborCount: 0,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     gameOver: false,
     zoneTags: {}
   } as unknown as GameState;

@@ -45,7 +45,7 @@ test('top-level save payload does not acquire path blocker storage', () => {
 
   const payload = buildSavePayload({
     player: makeTestPlayer({ x: 12.5, y: 13.5, angle: 0 }),
-    state: makeGameState({ currentFloor: FloorLevel.LIVING }),
+    state: makeGameState({ currentZ: FloorLevel.LIVING }),
     containers: [],
     sections: {
       floorRun: undefined,

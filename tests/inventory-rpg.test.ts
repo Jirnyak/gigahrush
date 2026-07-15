@@ -610,7 +610,7 @@ test('P14 gasmask receipt is an Office/HQ document with a black-market spend pat
   assert.equal(inventoryItemCategory(def.id), 'documents');
 
   const player = makePlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const msgs: Msg[] = [];
   assert.equal(addItem(player, def.id, 1), true);
 
@@ -640,7 +640,7 @@ test('cleanup order stub is a liquidator document with access and sale choices',
   assert.ok(permit.accessTags.includes('general_admin'));
 
   const player = makePlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const msgs: Msg[] = [];
   assert.equal(addItem(player, def.id, 1), true);
 

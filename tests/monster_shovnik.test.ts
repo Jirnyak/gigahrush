@@ -91,7 +91,7 @@ test('shovnik reacts to wall proximity', () => {
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 15.5, weapon: 'knife', hp: 80, maxHp: 80 });
   const s = shovnik(2, 10.5, 10.5); // near wall
   const entities = [player, s];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   prime(entities);
   const msgs: Msg[] = [];

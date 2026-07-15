@@ -663,7 +663,7 @@ export function debugTriggerRouteCue(world: World, player: Entity, state: GameSt
     playSoundAt(() => playRouteCueTone(75075, 1.15), player.x, player.y);
     activeHud = {
       id: 'debug_route_cue',
-      floor: state.currentFloor,
+      floor: state.currentZ,
       label: 'DEBUG route cue',
       hint: 'local audio/HUD smoke',
       targetName: 'debug marker',

@@ -36,7 +36,7 @@ test('water reservoir quota is reachable water ration paperwork', () => {
 
 test('water reservoir quota redeems into water and pressures water stock', () => {
   const player = makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 115 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 115 });
   const beforeStock = resourceStock(state, FloorLevel.LIVING, 'drink_water');
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');

@@ -142,7 +142,7 @@ test('sborka first sight is a cue, not a custom brain', () => {
   const target = player(16, 10);
   const threat = monster(MonsterKind.SBORKA, 10, 10);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const msgs: Msg[] = [];
 
   rebuildEntityIndex(entities);

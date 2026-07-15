@@ -100,7 +100,7 @@ test('zhornaya tvar overcommits to side-thrown bait and leaves recovery', () => 
   setListenerPos(512, 512, world.dist2.bind(world));
   const state = makeGameState({
     time: 10,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: 14.5, y: 10.5, hp: 100, maxHp: 100 });
@@ -128,7 +128,7 @@ test('zhornaya tvar ignores bait thrown directly on the player route', () => {
   setListenerPos(512, 512, world.dist2.bind(world));
   const state = makeGameState({
     time: 20,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: 14.5, y: 10.5, hp: 100, maxHp: 100 });
@@ -152,7 +152,7 @@ test('zhornaya tvar lunges at a food carrier when no better scent is off-route',
   setListenerPos(512, 512, world.dist2.bind(world));
   const state = makeGameState({
     time: 30,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({

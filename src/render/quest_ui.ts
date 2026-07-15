@@ -81,8 +81,8 @@ function questKind(q: Quest): QuestKind {
 function displayFloor(q: Quest, state: GameState): FloorLevel | undefined {
   const floor = routeFloor(q);
   if (floor !== undefined) return floor;
-  if (q.targetRoom !== undefined || q.targetNpcId !== undefined || q.targetMonsterKind !== undefined) return state.currentFloor;
-  if (q.plotStepIndex === undefined && q.sideQuestId === undefined) return state.currentFloor;
+  if (q.targetRoom !== undefined || q.targetNpcId !== undefined || q.targetMonsterKind !== undefined) return state.currentZ;
+  if (q.plotStepIndex === undefined && q.sideQuestId === undefined) return state.currentZ;
   return undefined;
 }
 

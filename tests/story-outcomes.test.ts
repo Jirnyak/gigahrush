@@ -46,14 +46,14 @@ function shadowMonster() {
 }
 
 test('story death drop appears only when its quest prerequisite is active', () => {
-  const noQuest = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const noQuest = makeGameState({ currentZ: FloorLevel.LIVING });
   const entities = [shadowMonster()];
   const nextId = { v: 200 };
 
   assert.equal(spawnStoryDeathDrops(entities[0], true, entities, nextId, noQuest, noQuest.msgs, () => 0.5), 0);
   assert.equal(entities.some(e => e.type === EntityType.ITEM_DROP), false);
 
-  const active = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const active = makeGameState({ currentZ: FloorLevel.LIVING });
   active.quests = [shadowQuest()];
   const activeEntities = [shadowMonster()];
 
@@ -78,7 +78,7 @@ test('default story outcome registry references existing items', () => {
 });
 
 test('picked story item can complete the same quest edge as a talk interaction', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const player = makeTestPlayer({ inventory: [{ defId: 'temp_pass', count: 1 }] });
   const quest: Quest = {
     id: 77,
@@ -116,7 +116,7 @@ test('picked story item can complete the same quest edge as a talk interaction',
 });
 
 test('story item use can consume evidence after completing an equivalent quest outcome', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const player = makeTestPlayer({ inventory: [{ defId: 'temp_pass', count: 1 }] });
   const quest: Quest = {
     id: 78,
@@ -156,7 +156,7 @@ test('story item use can consume evidence after completing an equivalent quest o
 });
 
 test('malformed and over-cap story drop data is sanitized', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const rules: unknown[] = [
     null,
     { id: 'bad_source', source: { kind: 'pickup' }, drops: [{ itemId: 'water' }] },

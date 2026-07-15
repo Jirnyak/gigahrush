@@ -32,7 +32,7 @@ test('gusl index page is an official lore and access clue document', () => {
 
 test('gusl index page can be sold as access intelligence in the living block', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 88 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 88 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

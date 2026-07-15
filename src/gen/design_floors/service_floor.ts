@@ -624,7 +624,7 @@ export function learnServiceMasterKey(game: GameState, world: World, service: Se
   const changed = applyServiceMasterKeyScope(world, service);
   return publishEvent(game, {
     type: 'door_opened',
-    floor: game.currentFloor,
+    floor: game.currentZ,
     severity: 3,
     privacy: 'local',
     tags: ['service_floor', 'master_key_scope', 'access_flag'],
@@ -643,7 +643,7 @@ export function repairServiceLiftMachine(game: GameState, service: ServiceFloorS
   service.rerouteFlags.productionBypassArmed = true;
   return publishEvent(game, {
     type: 'elevator_loop_exit',
-    floor: game.currentFloor,
+    floor: game.currentZ,
     severity: 4,
     privacy: 'local',
     tags: ['service_floor', 'lift_machine', 'repair', 'route_flag'],
@@ -670,7 +670,7 @@ export function restoreServicePowerZone(
   }
   return publishEvent(game, {
     type: 'room_produced_items',
-    floor: game.currentFloor,
+    floor: game.currentZ,
     severity: 3,
     privacy: 'local',
     tags: ['service_floor', 'power', 'light_route'],
@@ -689,7 +689,7 @@ export function rerouteServiceRaid(game: GameState, service: ServiceFloorState):
   service.rerouteFlags.marketRaidDiverted = true;
   return publishEvent(game, {
     type: 'faction_patrol_clash',
-    floor: game.currentFloor,
+    floor: game.currentZ,
     severity: 4,
     privacy: 'local',
     tags: ['service_floor', 'raid', 'reroute_flag'],

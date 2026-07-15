@@ -22,7 +22,7 @@ import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpe
 test('player consequence events leave room memory residue bits', () => {
   clearRoomMemory();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
 
@@ -73,7 +73,7 @@ test('witnessed theft becomes context fact, room memory, and rumor lead', () => 
   clearRoomMemory();
   const now = 4_000;
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     time: now,
     worldEvents: createWorldEventState(),
   });
@@ -131,7 +131,7 @@ test('witnessed theft becomes context fact, room memory, and rumor lead', () => 
 test('rare trade event becomes a concrete rumor lead', () => {
   const now = 6_000;
   const state = makeGameState({
-    currentFloor: FloorLevel.KVARTIRY,
+    currentZ: FloorLevel.KVARTIRY,
     time: now,
     worldEvents: createWorldEventState(),
   });

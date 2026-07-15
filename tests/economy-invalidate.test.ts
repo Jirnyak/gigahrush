@@ -11,7 +11,7 @@ function resetFloor(state: GameState, floor: FloorLevel): void {
 }
 
 test('invalidateEconomyPrices increments priceVersion', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const econ = ensureEconomyState(state);
 
@@ -22,7 +22,7 @@ test('invalidateEconomyPrices increments priceVersion', () => {
 });
 
 test('invalidateEconomyPrices forces getAdjustedItemPrice to recalculate', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
   const econ = ensureEconomyState(state);
 

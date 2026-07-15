@@ -134,7 +134,7 @@ test('Obzhivalshchik keeps its room leash until anger breaches it', () => {
   const entities = [target, threat];
   const msgs: Msg[] = [];
   const state = makeGameState({
-    currentFloor: FloorLevel.KVARTIRY,
+    currentZ: FloorLevel.KVARTIRY,
     worldEvents: createWorldEventState(),
     clock: { hour: 8, minute: 0, totalMinutes: 480 },
   });
@@ -163,7 +163,7 @@ test('Obzhivalshchik wall growth is capped and report memory calms anger', () =>
   const entities = [target, threat];
   const msgs: Msg[] = [];
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
     clock: { hour: 23, minute: 0, totalMinutes: 1380 },
   });

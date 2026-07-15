@@ -199,7 +199,7 @@ test('domino option opens a playable NPC interface without charging money until 
 });
 
 test('floor 69 entertainment option is route and worker gated', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
   (state as unknown as { floorRun: { runSeed: number; currentZ: number; specs: Record<string, never>; visited: Record<string, boolean> } }).floorRun = {
     runSeed: 69,
     currentZ: -4,

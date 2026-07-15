@@ -31,7 +31,7 @@ function scriptedArrivalStepIndex(def: ScriptedArrivalDef): number {
 function shouldSpawnScriptedArrival(def: ScriptedArrivalDef, state: GameState, entities: readonly Entity[]): boolean {
   const stepIndex = scriptedArrivalStepIndex(def);
   if (stepIndex < 0) return false;
-  if (state.currentFloor !== def.currentFloor) return false;
+  if (state.currentZ !== def.currentZ) return false;
   if (def.currentStoryFloor !== undefined && currentFloorRunEntry(state).storyFloor !== def.currentStoryFloor) return false;
   if (!state.quests.some(q => q.plotStepIndex === stepIndex && q.done && !q.failed)) return false;
   if (state.quests.some(q => q.plotStepIndex !== undefined && q.plotStepIndex > stepIndex)) return false;

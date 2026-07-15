@@ -104,7 +104,7 @@ test('floor unlock bits start with the start floor and grow on visit', () => {
   const run = createFloorRunState(FloorLevel.LIVING);
   assert.deepEqual(run.unlockedZs, [0]);
 
-  const state = { currentFloor: FloorLevel.LIVING, floorRun: run } as never;
+  const state = { currentZ: FloorLevel.LIVING, floorRun: run } as never;
   assert.equal(isFloorZUnlocked(state, 0), true);
   assert.equal(isFloorZUnlocked(state, 30), false);
 

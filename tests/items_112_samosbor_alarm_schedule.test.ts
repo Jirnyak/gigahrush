@@ -32,7 +32,7 @@ test('samosbor alarm schedule is reachable office and HQ alarm paperwork', () =>
 
 test('samosbor alarm schedule can be traded as false-alarm evidence', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 112 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 112 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

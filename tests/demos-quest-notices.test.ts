@@ -217,13 +217,13 @@ test('notice profile view requires a face-to-face visit and does not accept from
   const views = getDemosQuestNoticesForProfile(state, 1);
   assert.equal(views.length, 1);
   assert.equal(views[0].requiresVisit, true);
-  assert.equal(views[0].canAcceptHere, true);
+  assert.equal(views[0].canAcceptHere, false);
   assert.match(views[0].detail, /поговорить/);
   assert.equal(state.quests.length, 0);
 });
 
 test('Demos profile exposes a quest notice section view model', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: livingKey,

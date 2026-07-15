@@ -66,7 +66,7 @@ test('Pressovik generation places readable lanes, rewards, monsters, and a stopp
   const hy = (hazardCell / W) | 0;
   assert.ok(getCellHazardMoveMultiplier(world, playerAt(hx, hy)) < 1, 'hazard should slow before stop');
 
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 30 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 30 });
   publishEvent(state, {
     type: 'item_deposited',
     zoneId: stop.zoneId,

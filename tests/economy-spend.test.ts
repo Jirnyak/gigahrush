@@ -5,7 +5,7 @@ import { spendResources, ensureEconomyState, changeResourceStock } from '../src/
 import { makeGameState } from './helpers';
 
 test('spendResources successfully spends resources and returns true', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const econ = ensureEconomyState(state);
 
@@ -30,7 +30,7 @@ test('spendResources successfully spends resources and returns true', () => {
 });
 
 test('spendResources returns false and does not mutate stock if resources are insufficient', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const econ = ensureEconomyState(state);
   changeResourceStock(state, 'drink_water', 0, FloorLevel.LIVING);
@@ -54,7 +54,7 @@ test('spendResources returns false and does not mutate stock if resources are in
 });
 
 test('spendResources returns false if resource is missing entirely', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const econ = ensureEconomyState(state);
   changeResourceStock(state, 'drink_water', 0, FloorLevel.LIVING);
@@ -74,7 +74,7 @@ test('spendResources returns false if resource is missing entirely', () => {
 });
 
 test('spendResources respects the passed floor level argument', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
 
   const econ = ensureEconomyState(state);
   changeResourceStock(state, 'drink_water', 0, FloorLevel.LIVING);

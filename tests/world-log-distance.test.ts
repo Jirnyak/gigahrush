@@ -7,7 +7,7 @@ import { setWorldLogSpatialContext, worldLogDistanceForLocation } from '../src/s
 import { makeGameState } from './helpers';
 
 test('localized world log events carry distance from event coordinates', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({
     floor: FloorLevel.LIVING,
     playerX: 10,
@@ -33,7 +33,7 @@ test('localized world log events carry distance from event coordinates', () => {
 });
 
 test('localized world log events fall back to actor coordinates', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({
     floor: FloorLevel.LIVING,
     playerX: 10,
@@ -63,7 +63,7 @@ test('localized world log events fall back to actor coordinates', () => {
 });
 
 test('death world log facts dedupe by target id after unrelated events', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   publishEvent(state, {
     type: 'npc_kill_monster',
@@ -113,7 +113,7 @@ test('death world log facts dedupe by target id after unrelated events', () => {
 });
 
 test('localized world log events fall back to zone center distance', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({
     floor: FloorLevel.LIVING,
     playerX: 10,
@@ -141,7 +141,7 @@ test('localized world log events fall back to zone center distance', () => {
 });
 
 test('territory capture faction events stay out of HUD and full log', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({
     floor: FloorLevel.LIVING,
     playerX: 10,
@@ -170,7 +170,7 @@ test('territory capture faction events stay out of HUD and full log', () => {
 });
 
 test('localized world log events fall back to room center distance', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({
     floor: FloorLevel.LIVING,
     playerX: 10,
@@ -196,7 +196,7 @@ test('localized world log events fall back to room center distance', () => {
 });
 
 test('localized world log events beyond hearing radius stay out of HUD and log', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
   setWorldLogSpatialContext({
     floor: FloorLevel.LIVING,
     playerX: 10,

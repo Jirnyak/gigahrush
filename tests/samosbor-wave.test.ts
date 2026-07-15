@@ -49,7 +49,7 @@ function makeOpenWaveWorld(cx = 24, cy = 24, half = 8): { world: World; state: R
   }
   const player = makeTestPlayer({ x: cx + 0.5, y: cy + 0.5, speed: 1 });
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 2,
     worldEvents: createWorldEventState(),
@@ -182,7 +182,7 @@ test('samosbor scale can be local or full depending on roll', () => {
       FloorLevel.HELL,
       FloorLevel.VOID,
     ]) {
-      const state = makeGameState({ currentFloor: floor });
+      const state = makeGameState({ currentZ: floor });
       assert.equal(canRunSamosborWave(state), true);
       assert.notEqual(chooseSamosborScale(state), 'full');
     }
@@ -192,7 +192,7 @@ test('samosbor scale can be local or full depending on roll', () => {
   // Low roll (< 0.4) → full (global fronts only)
   _overrideRng(() => 0.1);
   try {
-    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: FloorLevel.LIVING });
     assert.equal(chooseSamosborScale(state), 'full');
   } finally {
     _restoreRng();
@@ -202,8 +202,8 @@ test('samosbor scale can be local or full depending on roll', () => {
 test('samosbor duration grows and cooldown shrinks by absolute route z', () => {
   _overrideRng(() => 0.5);
   try {
-    const living = makeGameState({ currentFloor: FloorLevel.LIVING });
-    const voidFloor = makeGameState({ currentFloor: FloorLevel.VOID });
+    const living = makeGameState({ currentZ: FloorLevel.LIVING });
+    const voidFloor = makeGameState({ currentZ: FloorLevel.VOID });
     const dLiving = nextFloorRunSamosborDuration(living);
     const dVoid = nextFloorRunSamosborDuration(voidFloor);
     assert.ok(dLiving >= 20, `living duration ${dLiving} >= 20`);

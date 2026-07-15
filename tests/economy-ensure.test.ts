@@ -5,7 +5,7 @@ import { ensureEconomyState } from '../src/systems/economy';
 import { makeGameState } from './helpers';
 
 test('ensureEconomyState initializes economy state when undefined', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   // Ensure economy is undefined
   delete (state as any).economy;
 
@@ -22,7 +22,7 @@ test('ensureEconomyState initializes economy state when undefined', () => {
 });
 
 test('ensureEconomyState normalizes invalid economy state', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   // Provide invalid economy
   (state as any).economy = { priceVersion: 'not-a-number' };
 
@@ -36,7 +36,7 @@ test('ensureEconomyState normalizes invalid economy state', () => {
 });
 
 test('ensureEconomyState adds current floor if missing', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY });
 
   // Set up a valid economy but missing KVARTIRY
   const initialEconomy = {
@@ -56,7 +56,7 @@ test('ensureEconomyState adds current floor if missing', () => {
 });
 
 test('ensureEconomyState returns existing state when valid and floor exists', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const initialEconomy = {
     priceVersion: 5,

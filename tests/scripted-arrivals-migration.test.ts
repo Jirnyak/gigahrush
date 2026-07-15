@@ -35,7 +35,7 @@ function holdoutStepIndex(): number {
 
 function makeHellState(overrides: Partial<GameState> = {}): GameState {
   const state = makeGameState({
-    currentFloor: FloorLevel.HELL,
+    currentZ: FloorLevel.HELL,
     worldEvents: createWorldEventState(),
     ...overrides,
   });

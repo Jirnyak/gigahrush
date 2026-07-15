@@ -43,7 +43,7 @@ interface DemosSocialGraphDebug {
 
 function stateWithPopulation(seed: number, total: number, reserved: readonly AlifePopulationReservedNpc[] = []): GameState {
   initFactionRelations();
-  const state = { currentFloor: FloorLevel.LIVING } as GameState;
+  const state = { currentZ: FloorLevel.LIVING } as GameState;
   createPrefilledAlifeState(state, seed, total, {
     buckets: [{
       floorKey: 'story:living',

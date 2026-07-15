@@ -116,7 +116,7 @@ test('glubinnaya ten second beat collapses when the player does not chase the af
   const threat = glubinnayaTen(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState() });
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.1, 1, msgs, target.id, { v: 100 }, state);
@@ -141,7 +141,7 @@ test('glubinnaya ten second beat hits when the player enters the dark afterimage
   const threat = glubinnayaTen(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.1, 5, msgs, target.id, { v: 100 }, state);

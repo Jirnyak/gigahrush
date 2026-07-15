@@ -92,7 +92,7 @@ function currentQuestTags(state: GameState): string[] {
 
 function currentRouteTags(state: GameState): string[] {
   const tags: string[] = [];
-  pushUnique(tags, enumTag('floor', FloorLevel, state.currentFloor));
+  pushUnique(tags, enumTag('floor', FloorLevel, state.currentZ));
   const entry = currentFloorRunEntry(state);
   pushUnique(tags, `route:${floorRunEntryRouteId(entry)}`);
   pushUnique(tags, `route_kind:${floorRunEntryKind(entry)}`);
@@ -130,7 +130,7 @@ function ruleMatches(rule: ItemOutcomeRule, npc: Entity, state: GameState): bool
   const routeTags = currentRouteTags(state);
   const questTags = currentQuestTags(state);
   if (!matchesAll(rule.match.itemTags, defTags)) return false;
-  if (rule.match.floorLevels && !rule.match.floorLevels.includes(state.currentFloor)) return false;
+  if (rule.match.floorLevels && !rule.match.floorLevels.includes(state.currentZ)) return false;
   if (!matchesAll(rule.match.routeTags, routeTags)) return false;
   if (!matchesAll(rule.match.questTags, questTags)) return false;
   return ruleMatchesBuyer(rule, npc, buyerRoleTags(npc));

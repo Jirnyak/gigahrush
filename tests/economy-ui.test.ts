@@ -14,7 +14,7 @@ import {
 function state(extra: Partial<GameState> & Record<string, unknown> = {}): GameState {
   return {
     time: 0,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     ...extra,
   } as GameState;
 }

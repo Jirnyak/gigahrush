@@ -47,7 +47,7 @@ test('ekrannik misinformation stays local and publishes reversible encounter eve
   const actor = player();
   entities.push(actor);
   const state = makeGameState({
-    currentFloor: FloorLevel.VOID,
+    currentZ: FloorLevel.VOID,
     worldEvents: createWorldEventState(),
   });
 

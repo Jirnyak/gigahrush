@@ -158,7 +158,7 @@ test('Chervie mind pulse is capped and cooldown-gated', () => {
     npc(8, 16.5, 11.5),
   ];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   rebuildEntityIndex(entities);
 
   updateChervieNetPossessor(world, entities, threat, 1, 1, msgs, target.id, state);
@@ -179,7 +179,7 @@ test('cutting the local server publishes a Chervie cut event', () => {
   const target = player(30.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   world.features[world.idx(11, 10)] = Feature.APPARATUS;
   rebuildEntityIndex(entities);
 

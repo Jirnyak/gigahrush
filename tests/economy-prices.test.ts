@@ -6,12 +6,12 @@ import { ensureEconomyState, getAdjustedItemPrice, getEconomyQuote } from '../sr
 import { makeGameState } from './helpers';
 
 test('getAdjustedItemPrice returns 0 for an unknown item', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   assert.equal(getAdjustedItemPrice(state, 'unknown_imaginary_item_123'), 0);
 });
 
 test('getAdjustedItemPrice calculates price and matches base getEconomyQuote', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   ensureEconomyState(state).floors[FloorLevel.LIVING] = createEconomyFloorState(FloorLevel.LIVING);
 
   const price = getAdjustedItemPrice(state, 'water');
@@ -23,7 +23,7 @@ test('getAdjustedItemPrice calculates price and matches base getEconomyQuote', (
 });
 
 test('getAdjustedItemPrice caches the calculated price', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   ensureEconomyState(state).floors[FloorLevel.LIVING] = createEconomyFloorState(FloorLevel.LIVING);
 
   const firstPrice = getAdjustedItemPrice(state, 'water');
@@ -39,13 +39,13 @@ test('getAdjustedItemPrice caches the calculated price', () => {
 });
 
 test('getAdjustedItemPrice invalidates cache on floor change or version change', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   ensureEconomyState(state).floors[FloorLevel.LIVING] = createEconomyFloorState(FloorLevel.LIVING);
 
   const firstPrice = getAdjustedItemPrice(state, 'water');
 
   // Change floor
-  state.currentFloor = FloorLevel.KVARTIRY;
+  state.currentZ = FloorLevel.KVARTIRY;
   ensureEconomyState(state).floors[FloorLevel.KVARTIRY] = createEconomyFloorState(FloorLevel.KVARTIRY);
 
   // Since floor changed, it recalculates (KVARTIRY usually has higher demand for water)
@@ -53,7 +53,7 @@ test('getAdjustedItemPrice invalidates cache on floor change or version change',
   assert.notEqual(firstPrice, differentFloorPrice);
 
   // Go back to LIVING and change version
-  state.currentFloor = FloorLevel.LIVING;
+  state.currentZ = FloorLevel.LIVING;
   const backToLivingFirstPrice = getAdjustedItemPrice(state, 'water');
 
   ensureEconomyState(state).floors[FloorLevel.LIVING]!.resources['drink_water']!.stock += 1000;

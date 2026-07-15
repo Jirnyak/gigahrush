@@ -42,7 +42,7 @@ function slimeWoman(overrides: Partial<Entity> = {}): Entity {
 }
 
 function tick(world: World, entities: Entity[], player: Entity, time: number, clock: GameClock): void {
-  const state = makeGameState({ time, clock, currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ time, clock, currentZ: FloorLevel.MAINTENANCE });
   rebuildEntityIndexForSimulation(entities, Math.floor(time * 1000));
   updateAI(world, entities, 0.12, time, state.msgs, player.id, clock, false, { v: 10_000 }, FloorLevel.MAINTENANCE, state);
 }
@@ -54,7 +54,7 @@ test('actor tactic profile lets slime woman drop bounded residue after combat st
   const player = makeTestPlayer({ id: 1, x: 19.5, y: 20.5, hp: 100, maxHp: 100 });
   const slime = slimeWoman();
   const entities = [player, slime];
-  const state = makeGameState({ time: 4, clock, currentFloor: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ time: 4, clock, currentZ: FloorLevel.MAINTENANCE });
 
   notifyActorDamaged(world, slime, player, 8, 'player_melee', 4, state);
   rebuildEntityIndexForSimulation(entities, 4_000);

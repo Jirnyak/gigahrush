@@ -33,7 +33,7 @@ export interface ScriptedArrivalEscortDef {
 export interface ScriptedArrivalDef {
   id: string;
   triggerPlotEventTag: string;
-  currentFloor: FloorLevel;
+  currentZ: FloorLevel;
   currentStoryFloor?: FloorLevel;
   leaderPlotNpcId: string;
   leaderWeapon?: string;
@@ -50,7 +50,7 @@ export const SCRIPTED_ARRIVALS: readonly ScriptedArrivalDef[] = [
   {
     id: 'hell_holdout_major_grom_group',
     triggerPlotEventTag: 'hell_holdout',
-    currentFloor: FloorLevel.HELL,
+    currentZ: FloorLevel.HELL,
     currentStoryFloor: FloorLevel.HELL,
     leaderPlotNpcId: 'major_grom',
     leaderWeapon: 'ak47',

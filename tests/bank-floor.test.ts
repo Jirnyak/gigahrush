@@ -78,7 +78,7 @@ test('bank_floor is registered as an authored Ministry-band route', () => {
 });
 
 test('normal lift route reaches bank_floor between Ministry and Raionsovet archive', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY });
   setFloorRunState(state, { runSeed: 2214, currentZ: 30, specs: {}, visited: {} }, FloorLevel.MINISTRY);
 
   const upperGap = resolveFloorRunRoute(state, LiftDirection.DOWN);
@@ -266,7 +266,7 @@ test('bank_floor marks vault risk SDF around high-value rooms and escape pressur
 
 test('bank_floor exposes legal deposit and risky vault interactions through existing systems', () => {
   const gen = generateDesignFloor(BANK_FLOOR_ROUTE_ID);
-  const state = makeGameState({ currentFloor: BANK_FLOOR_BASE_FLOOR, time: 12 });
+  const state = makeGameState({ currentZ: BANK_FLOOR_BASE_FLOOR, time: 12 });
   const player = makeTestPlayer({
     id: 9999,
     x: gen.spawnX,

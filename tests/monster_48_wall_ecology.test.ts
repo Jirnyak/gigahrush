@@ -70,7 +70,7 @@ function runWallHit(kind: MonsterKind, setup?: (world: World) => void): { hp: nu
   const target = player(11.1, 10.5);
   const threat = monster(kind, 10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   state.time = 10;
   sync(entities);
 

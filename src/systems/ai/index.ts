@@ -104,7 +104,7 @@ function fillProjectileOwners(entities: readonly Entity[]): void {
   }
 }
 
-export function updateAI(world: World, entities: Entity[], dt: number, time: number, msgs: Msg[], playerId: number, clock: GameClock, samosborActive: boolean, nextId: { v: number }, currentFloor?: FloorLevel, state?: GameState): void {
+export function updateAI(world: World, entities: Entity[], dt: number, time: number, msgs: Msg[], playerId: number, clock: GameClock, samosborActive: boolean, nextId: { v: number }, currentZ?: FloorLevel, state?: GameState): void {
   // Push per-frame refs into sub-modules
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
@@ -116,7 +116,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setEntityMap(entityIndex.byId);
   fillProjectileOwners(entityIndex.projectiles);
 
-  const isMinistry = currentFloor === FloorLevel.MINISTRY;
+  const isMinistry = currentZ === FloorLevel.MINISTRY;
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,
@@ -134,7 +134,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
     const ci = world.idx(Math.floor(actor.x), Math.floor(actor.y));
     const roomId = world.roomMap[ci];
     return {
-      floor: currentFloor,
+      floor: currentZ,
       x: actor.x,
       y: actor.y,
       actorId: actor.id,

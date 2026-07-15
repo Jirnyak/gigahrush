@@ -29,7 +29,7 @@ test('fuel issue stamp is official liquidator fuel paperwork', () => {
 
 test('fuel issue stamp redeems into one fuel canister', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'fuel_issue_stamp', count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 87 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 87 });
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 

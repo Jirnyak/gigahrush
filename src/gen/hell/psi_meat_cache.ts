@@ -194,7 +194,7 @@ function handlePsiMeatCacheEvent(state: GameState, event: WorldEvent): void {
   if (event.tags.includes(CACHE_EVENT_TAG)) return;
   const site = activeSite;
   const world = activeWorld;
-  if (!site || !world || state.currentFloor !== site.floor || event.floor !== site.floor) return;
+  if (!site || !world || state.currentZ !== site.floor || event.floor !== site.floor) return;
 
   if (event.type === 'quest_completed' && event.data?.sideQuestId === 'ag54_keeper_raw_meat_tithe') {
     applyPsiCacheBranch(state, event, 'pay');

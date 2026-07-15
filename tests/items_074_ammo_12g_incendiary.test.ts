@@ -70,7 +70,7 @@ test('incendiary 12g shells burn nearby cleanable slime or fungus hazards', () =
   });
 
   const player = makeTestPlayer({ id: 74, x: 12.5, y: 12.5, inventory: [{ defId: 'ammo_12g_incendiary', count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 74 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 74 });
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter выжечь');
   useItem(player, 0, state.msgs, state.time, state, 0, world);
@@ -100,7 +100,7 @@ test('incendiary 12g shells burn carnivorous fungus without generic ammo selecti
   });
   const entities: Entity[] = [];
   const player = makeTestPlayer({ id: 91, x: 12.5, y: 12.5, inventory: [{ defId: 'ammo_12g_incendiary', count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 20 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 20 });
 
   assert.equal(tryUseCarnivorousFungus(world, entities, { v: 1 }, player, state, player.x, player.y), true);
 

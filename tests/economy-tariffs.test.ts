@@ -6,7 +6,7 @@ import { makeGameState } from './helpers';
 import { FloorLevel } from '../src/core/types';
 
 test('registerEconomyTariffProvider adds a new provider and overrides existing if ID matches', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   ensureEconomyState(state);
 
   const initialQuote = getEconomyQuote(state, 'water');

@@ -30,7 +30,7 @@ function restoreGlobalProperty(name: 'navigator' | 'performance' | 'window', des
 }
 
 function minimalState(): GameState {
-  const state = { currentFloor: FloorLevel.LIVING } as GameState;
+  const state = { currentZ: FloorLevel.LIVING } as GameState;
   setFloorRunState(state, { runSeed: 1 }, FloorLevel.LIVING);
   return state;
 }

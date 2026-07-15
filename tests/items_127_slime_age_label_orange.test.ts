@@ -48,7 +48,7 @@ test('orange slime age label is stealable from a locked slime NII camera', () =>
 
 test('orange slime age label can be sold instead of saved as evidence', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 127 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 127 });
 
   assert.equal(addItem(player, LABEL_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

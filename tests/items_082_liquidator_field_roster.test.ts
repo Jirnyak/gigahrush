@@ -27,7 +27,7 @@ test('liquidator field roster is reachable evidence with a document economy role
 
 test('liquidator field roster can be sold as missing-squad evidence in the living block', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 82 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 82 });
 
   assert.equal(addItem(player, 'liquidator_field_roster', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

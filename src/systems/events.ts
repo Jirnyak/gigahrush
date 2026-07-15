@@ -539,7 +539,7 @@ export function publishEvent(state: GameState, draft: WorldEventDraft): WorldEve
     day: enriched.day ?? Math.floor(state.clock.totalMinutes / 1440),
     hour: enriched.hour ?? state.clock.hour,
     minute: enriched.minute ?? state.clock.minute,
-    floor: enriched.floor ?? state.currentFloor,
+    floor: enriched.floor ?? state.currentZ,
     truth: 'fact',
     severity: clampSeverity(enriched.severity),
     tags: cleanTags(enriched.tags),

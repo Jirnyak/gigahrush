@@ -54,7 +54,7 @@ test('weapon checkout tag is reachable from a liquidator issue stash as theft ev
 
 test('weapon checkout tag can be sold or spent to scrub stolen weapon serials', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 91 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 91 });
   assert.equal(addItem(player, 'weapon_checkout_tag', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 

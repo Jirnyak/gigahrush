@@ -55,7 +55,7 @@ function drawMinimapPathFills(quest: Quest, target: Entity, activeQuestId?: numb
   const player = makeTestPlayer({ id: 1, x: 12.5, y: 12.5 });
   for (const entity of [player, target]) world.cells[world.idx(Math.floor(entity.x), Math.floor(entity.y))] = Cell.FLOOR;
   const entities = [player, target];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, quests: [quest], activeQuestId });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, quests: [quest], activeQuestId });
   rebuildEntityIndex(entities);
   const ctx = new CanvasStubContext();
   drawMinimap(

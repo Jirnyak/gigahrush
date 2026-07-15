@@ -49,7 +49,7 @@ test('confiscation tag is reachable in the Ministry liquidator archive', () => {
 
 test('confiscation tag can be sold as black-market audit evidence', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 91 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 91 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

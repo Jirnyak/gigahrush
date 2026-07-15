@@ -140,7 +140,7 @@ test('Lishennyy follows a dropped light decoy instead of a dark player', () => {
   const decoy = lightDrop(3, 15.5, 10.5, 'flashlight');
   const entities = [target, threat, decoy];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.2, 1, msgs, target.id, { v: 20 }, state);
@@ -159,7 +159,7 @@ test('Lishennyy light search is bounded and ignores far lightmap cells', () => {
   const target = player(10.5, 10.5);
   const threat = lishennyy(18.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.2, 2, [], target.id, { v: 20 }, state);
@@ -177,7 +177,7 @@ test('Lishennyy contact applies decay while the player stands in light', () => {
   const threat = lishennyy(11.15, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.2, 3, msgs, target.id, { v: 20 }, state);
@@ -196,7 +196,7 @@ test('Lishennyy contact decay applies to lit NPC targets', () => {
   world.light[world.idx(10, 10)] = 0.72;
   const threat = lishennyy(11.15, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState() });
 
   sync(entities);
   updateMonster(world, entities, threat, 0.2, 6, [], 1, { v: 20 }, state);

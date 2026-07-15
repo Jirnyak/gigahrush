@@ -31,7 +31,7 @@ test('terminal order receipt is reachable office terminal paperwork', () => {
 
 test('terminal order receipt can be sold instead of saved for delivery proof', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 103 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 103 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

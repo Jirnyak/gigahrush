@@ -129,7 +129,7 @@ test('wall brace uses toroidal wall adjacency and bounded open-floor scan', () =
 
 test('wall brace reduces incoming damage and publishes a visible cue', () => {
   const world = openWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   const actor = player(12.5, 10.5);
   const threat = panelnik(10.5, 10.5);
   world.cells[world.idx(9, 10)] = Cell.WALL;
@@ -155,7 +155,7 @@ test('wall brace reduces incoming damage and publishes a visible cue', () => {
 
 test('braced panelnik reaches farther, then slows when pulled into open floor', () => {
   const world = openWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setListenerPos(512, 512, world.dist2.bind(world));
   const target = player(12.05, 10.5);
   const threat = panelnik(10.5, 10.5);

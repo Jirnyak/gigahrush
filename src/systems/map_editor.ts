@@ -869,7 +869,7 @@ function recordOp(state: GameState, op: MapEditorOp): boolean {
     if (keys.length >= PATCH_FLOOR_CAP) delete patches.patches[keys[0]];
     patch = {
       floorKey: key,
-      baseFloor: state.currentFloor,
+      baseFloor: state.currentZ,
       z: currentFloorZ(state),
       createdAt: state.time,
       opCount: 0,
@@ -982,7 +982,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
     const faction = def.faction ?? Faction.CITIZEN;
     const occupation = randomOccupation(faction);
     const name = randomName(faction);
-    const centerLevel = calcZoneLevel(op.x, op.y, state.currentFloor);
+    const centerLevel = calcZoneLevel(op.x, op.y, state.currentZ);
     const level = gaussianLevel(centerLevel, 2);
     const rpg = randomRPG(level);
     const maxHp = getMaxHp(rpg);
@@ -1054,7 +1054,7 @@ function spawnEditorContainer(world: World, state: GameState, op: Extract<MapEdi
     id: nextContainerId(world),
     x,
     y,
-    floor: state.currentFloor,
+    floor: state.currentZ,
     roomId,
     zoneId: world.zoneMap[idx],
     kind,

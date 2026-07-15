@@ -32,7 +32,7 @@ interface TestMigrationHost extends GameState {
 
 function stateAtLiving(overrides: Partial<GameState> = {}): GameState {
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
     ...overrides,
   });
@@ -43,7 +43,7 @@ function stateAtLiving(overrides: Partial<GameState> = {}): GameState {
 
 function stateAtVoid(): GameState {
   const state = makeGameState({
-    currentFloor: FloorLevel.VOID,
+    currentZ: FloorLevel.VOID,
     worldEvents: createWorldEventState(),
   });
   setFloorRunState(state, { runSeed: 17, currentZ: -50 }, FloorLevel.VOID);

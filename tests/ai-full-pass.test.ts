@@ -305,7 +305,7 @@ test('live AI pass reaches monster ecology source updates', () => {
   source.speed = 0.4;
   source.matkaTimer = 0.01;
   const entities = [p, source];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 1, clock });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 1, clock });
   const nextId = { v: 20 };
   const msgs: Msg[] = state.msgs;
 

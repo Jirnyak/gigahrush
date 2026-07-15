@@ -176,7 +176,7 @@ function buildSnapshot(
     time: state.time,
     cycle: state.samosborCount,
     phase: phaseForReason(reason),
-    floor: state.currentFloor,
+    floor: state.currentZ,
     zoneId,
     zoneLevel,
     playerX: player?.x ?? px + 0.5,
@@ -506,7 +506,7 @@ function seedRumor(world: World, entities: Entity[], state: GameState, snapshot:
     observeRumorEvent(e, {
       type: 'samosbor_warning',
       severity: 3,
-      floor: state.currentFloor,
+      floor: state.currentZ,
       zoneId: snapshot.zoneId,
       tags: ['samosbor', 'director', `samosbor_${snapshot.variantId}`],
     }, state.time);

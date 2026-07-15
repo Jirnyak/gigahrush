@@ -80,7 +80,7 @@ test('Matka source owns a capped child budget instead of nearby refill pressure'
   const player = makeTestPlayer({ id: 1, x: 240, y: 240 });
   const source = matka(2, 12.5, 12.5);
   const entities = [player, source];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 1 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 1 });
   const nextId = { v: 10 };
 
   for (let i = 0; i < MATKA_CHILD_CAP + 5; i++) {
@@ -103,7 +103,7 @@ test('killing Matka source leaves owned children alive but stops later source ti
   const player = makeTestPlayer({ id: 1, x: 13.5, y: 12.5 });
   const source = matka(2, 12.5, 12.5);
   const entities = [player, source];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 2 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 2 });
   const nextId = { v: 10 };
 
   for (let i = 0; i < 3; i++) {
@@ -133,7 +133,7 @@ test('Matka source sanitizes malformed saved child ids before accounting', () =>
     ...Array.from({ length: MATKA_CHILD_CAP + 8 }, (_, i) => 10 + i),
   ] as unknown as number[];
   const entities = [player, source];
-  const state = makeGameState({ currentFloor: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 4 });
+  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState(), time: 4 });
   const nextId = { v: 100 };
 
   forceMatkaSpawn(world, entities, source, state, nextId, 4);

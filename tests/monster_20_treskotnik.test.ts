@@ -135,7 +135,7 @@ test('treskotnik windup is cancelled by damage and emits an interrupt event', ()
   const threat = treskotnik(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.1, 1, msgs, target.id, { v: 100 }, state);
@@ -163,7 +163,7 @@ test('treskotnik straight sprint damages the target and itself', () => {
   const threat = treskotnik(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY, worldEvents: createWorldEventState() });
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.1, 3, msgs, target.id, { v: 100 }, state);
@@ -193,7 +193,7 @@ test('treskotnik fracture sprint works against a non-player target', () => {
   const threat = treskotnik(10.5, 10.5);
   const entities = [distantPlayer, target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.1, 5, msgs, distantPlayer.id, { v: 100 }, state);

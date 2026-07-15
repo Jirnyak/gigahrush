@@ -43,7 +43,13 @@ export type DesignFloorId =
   | 'cantor_pustoty'
   | 'darkness'
   | 'liquidatorbase'
-  | 'horrorfloor';
+  | 'horrorfloor'
+  | 'living'
+  | 'kvartiry'
+  | 'ministry'
+  | 'maintenance'
+  | 'hell'
+  | 'void';
 
 export interface DesignFloorRouteDef {
   id: DesignFloorId;
@@ -51,7 +57,7 @@ export interface DesignFloorRouteDef {
   displayName: string;
   /**
    * Low-level engine save/instance bucket: which of the 6 story `FloorLevel`
-   * classes this design floor occupies for `state.currentFloor`, save payload,
+   * classes this design floor occupies for `state.currentZ`, save payload,
    * floor-instance state and VOID endgame checks. This is an implementation
    * detail of the runtime, NOT the floor's content identity.
    *
@@ -127,6 +133,12 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'liquidatorbase', z: -16, displayName: 'База Ликвидаторов', baseFloor: FloorLevel.MAINTENANCE, color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
   { id: 'darkness', z: -48, displayName: 'Темный отсек', baseFloor: FloorLevel.VOID, color: '#88f', role: 'позднее давление', danger: 5 },
   { id: 'horrorfloor', z: -46, displayName: 'Хоррор-этаж', baseFloor: FloorLevel.VOID, color: '#222', role: 'лабиринт, прятки', danger: 5 },
+  { id: 'living', z: 0, displayName: 'Жилая зона', baseFloor: FloorLevel.LIVING, color: '#4af', role: 'основной этаж, начало пути', danger: 1 },
+  { id: 'kvartiry', z: 14, displayName: 'Квартиры', baseFloor: FloorLevel.KVARTIRY, color: '#fa4', role: 'плотная застройка, квартиры', danger: 2 },
+  { id: 'ministry', z: 30, displayName: 'Министерство', baseFloor: FloorLevel.MINISTRY, color: '#fc4', role: 'администрация, бюрократия', danger: 3 },
+  { id: 'maintenance', z: -26, displayName: 'Коллекторы', baseFloor: FloorLevel.MAINTENANCE, color: '#4af', role: 'техзона, трубы, вода', danger: 3 },
+  { id: 'hell', z: -36, displayName: 'Мясной низ', baseFloor: FloorLevel.HELL, color: '#f44', role: 'опасная зона, мясо, слизь', danger: 5 },
+  { id: 'void', z: -50, displayName: 'Пустота', baseFloor: FloorLevel.VOID, color: '#0f8', role: 'конец', danger: 5 },
 ];
 
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);

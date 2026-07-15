@@ -64,7 +64,7 @@ export interface ContextSnapshot {
 
 export interface ContextBuildOptions {
   world?: World;
-  state?: Pick<GameState, 'currentFloor' | 'samosborActive'> & Partial<Pick<GameState, 'quests' | 'time' | 'worldEvents'>>;
+  state?: Pick<GameState, 'currentZ' | 'samosborActive'> & Partial<Pick<GameState, 'quests' | 'time' | 'worldEvents'>>;
   player?: Entity;
   time?: number;
 }
@@ -99,7 +99,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     if (room) {
       roomType = room.type;
       roomName = room.name;
-      roomMemory = getRoomMemory(options.state?.currentFloor, room.id);
+      roomMemory = getRoomMemory(options.state?.currentZ, room.id);
     }
     nearbyContainer = hasNearbyContainer(world, x, y);
     nearbyScreenRumorIds = screenRumorsNear(world, x, y);
@@ -120,7 +120,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
   const playerId = options.player?.id;
 
   return {
-    floor: options.state?.currentFloor,
+    floor: options.state?.currentZ,
     zoneId,
     zoneFaction,
     zoneLevel,

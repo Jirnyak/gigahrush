@@ -181,7 +181,7 @@ export function normalizeFloorInstanceState(
   return out;
 }
 
-export function ensureFloorInstanceState(state: GameState, stableFloor = state.currentFloor): FloorInstanceState {
+export function ensureFloorInstanceState(state: GameState, stableFloor = state.currentZ): FloorInstanceState {
   const host = state as FloorInstanceHost;
   host.floorInstances = normalizeFloorInstanceState(host.floorInstances, stableFloor);
   restoreActiveIntendedRoute(state, host.floorInstances);
@@ -191,7 +191,7 @@ export function ensureFloorInstanceState(state: GameState, stableFloor = state.c
 export function setFloorInstanceState(
   state: GameState,
   input: Partial<FloorInstanceState> | null | undefined,
-  stableFloor = state.currentFloor,
+  stableFloor = state.currentZ,
 ): FloorInstanceState {
   const normalized = normalizeFloorInstanceState(input, stableFloor);
   (state as FloorInstanceHost).floorInstances = normalized;
@@ -200,7 +200,7 @@ export function setFloorInstanceState(
 }
 
 export function floorInstanceStateForSave(state: GameState): FloorInstanceState {
-  return normalizeFloorInstanceState((state as FloorInstanceHost).floorInstances, state.currentFloor);
+  return normalizeFloorInstanceState((state as FloorInstanceHost).floorInstances, state.currentZ);
 }
 
 export function getActiveFloorInstance(state: GameState): ActiveFloorInstance | null {

@@ -60,7 +60,7 @@ test('Shadow dark windup can hit an NPC target and light cancels the strike stat
   const threat = monster(MonsterKind.SHADOW, 8, 10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
 
   sync(world, entities);
   updateMonster(world, entities, threat, 0.1, 1, msgs, 1, { v: 20 }, state);
@@ -90,7 +90,7 @@ test('Spirit target scan and wall phase movement do not require the player targe
   const target = makeTestNpc({ id: 21, x: 14.5, y: 10.5, hp: 100, maxHp: 100, faction: Faction.CITIZEN });
   const threat = monster(MonsterKind.SPIRIT, 22, 8.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentFloor: FloorLevel.VOID, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.VOID, worldEvents: createWorldEventState() });
 
   sync(world, entities);
   updateMonster(world, entities, threat, 0.7, 5, [], 1, { v: 30 }, state);

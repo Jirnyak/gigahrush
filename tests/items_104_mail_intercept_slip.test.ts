@@ -32,7 +32,7 @@ test('mail intercept slip is office and black-market mail evidence', () => {
 
 test('mail intercept slip can be sold as stolen delivery intelligence', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 104 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 104 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

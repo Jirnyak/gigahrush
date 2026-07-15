@@ -184,7 +184,7 @@ function publishProtocolEvent(
   extraTags: string[] = [],
   extraData: Record<string, unknown> = {},
 ): void {
-  const targetKey = mark?.targetKey ?? `${state.currentFloor}:protocol:${def.id}`;
+  const targetKey = mark?.targetKey ?? `${state.currentZ}:protocol:${def.id}`;
   pushTrace(state, def.id, phase, line, targetKey);
   publishEvent(state, {
     type: protocolEventType(phase),
@@ -254,7 +254,7 @@ function currentTarget(world: World, player: Entity, state: GameState, def: Void
   const room = world.roomAt(player.x, player.y);
   const roomId = room?.id ?? -1;
   const zoneId = world.zoneMap[ci] ?? -1;
-  const targetKey = `${state.currentFloor}:${def.scope}:${roomId}:${x}:${y}`;
+  const targetKey = `${state.currentZ}:${def.scope}:${roomId}:${x}:${y}`;
   return {
     id: nextMarkId++,
     protocolId: def.id,
@@ -382,7 +382,7 @@ function markFromEvent(ctx: { world: World; roomId: number }, state: GameState, 
   const y = ctx.world.wrap(Math.floor(event.y ?? (room ? room.y + (room.h >> 1) : 0)));
   const roomId = room?.id ?? event.roomId ?? ctx.roomId;
   const zoneId = event.zoneId ?? ctx.world.zoneMap[ctx.world.idx(x, y)] ?? -1;
-  const targetKey = `${state.currentFloor}:void_rule:${def.id}:${roomId}:${event.containerId ?? 0}`;
+  const targetKey = `${state.currentZ}:void_rule:${def.id}:${roomId}:${event.containerId ?? 0}`;
   return {
     id: nextMarkId++,
     protocolId: def.id,
@@ -706,7 +706,7 @@ export function grantVoidProtocol(state: GameState, protocolId: string, source =
   const line = obtainedProtocolLine(def);
   publishProtocolEvent(state, def, 'obtained', line, null, 3, [], { source });
   pushHud(state, line, '#8ff');
-  pushTrace(state, def.id, 'obtained', source, `${state.currentFloor}:grant:${source}`);
+  pushTrace(state, def.id, 'obtained', source, `${state.currentZ}:grant:${source}`);
   return true;
 }
 

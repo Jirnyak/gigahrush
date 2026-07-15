@@ -1850,7 +1850,7 @@ function hash01(seed: number, a: number, b: number, c: number): number {
 registerContentInteractionHook({
   id: 'voronoi_quarantine_airlock_protocol',
   target(ctx: ContentInteractionContext) {
-    if (ctx.state.currentFloor !== VORONOI_QUARANTINE_BASE_FLOOR) return null;
+    if (ctx.state.currentZ !== VORONOI_QUARANTINE_BASE_FLOOR) return null;
     const lx = Math.floor(ctx.lookX);
     const ly = Math.floor(ctx.lookY);
     const idx = ctx.world.idx(lx, ly);
@@ -1880,7 +1880,7 @@ registerContentInteractionHook({
     };
   },
   use(ctx: ContentInteractionContext) {
-    if (ctx.state.currentFloor !== VORONOI_QUARANTINE_BASE_FLOOR) return { handled: false };
+    if (ctx.state.currentZ !== VORONOI_QUARANTINE_BASE_FLOOR) return { handled: false };
     const lx = Math.floor(ctx.lookX);
     const ly = Math.floor(ctx.lookY);
     const idx = ctx.world.idx(lx, ly);
@@ -1985,7 +1985,7 @@ registerContentRuntimeHook({
   id: 'voronoi_quarantine_patrol_ai',
   phases: ['floor_activity'],
   update(ctx: ContentRuntimeContext) {
-    if (ctx.state.currentFloor !== VORONOI_QUARANTINE_BASE_FLOOR) return false;
+    if (ctx.state.currentZ !== VORONOI_QUARANTINE_BASE_FLOOR) return false;
     quarantineCheckTimer += ctx.dt;
     if (quarantineCheckTimer < 5.0) return false;
     quarantineCheckTimer = 0;

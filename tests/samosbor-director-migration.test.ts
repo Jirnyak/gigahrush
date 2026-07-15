@@ -69,7 +69,7 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   initFactionRelations();
   const state = makeGameState({
     time: 100,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 7,
     worldEvents: createWorldEventState(),
@@ -103,7 +103,7 @@ test('samosbor extra patrol fails instead of spawning when no A-Life identities 
   initFactionRelations();
   const state = makeGameState({
     time: 100,
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     samosborActive: true,
     samosborCount: 8,
     worldEvents: createWorldEventState(),

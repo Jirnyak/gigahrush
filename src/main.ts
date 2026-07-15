@@ -654,9 +654,9 @@ let playerAge = loadPlayerAge();
 let playerSex = loadPlayerSex();
 let titlePlayerAgeText = String(playerAge);
 let titleRunSeedText = '';
-const TRAILER_FLOORS = [2, 1, 3, 4, 0, 5]; // LIVING, KVARTIRY, MAINTENANCE, HELL, MINISTRY, VOID
+const TRAILER_ZS = [0, 14, -26, -36, 30, -50]; // LIVING, KVARTIRY, MAINTENANCE, HELL, MINISTRY, VOID
 const TRAILER_FLOOR_NAMES = ['LIVING', 'KVARTIRY', 'MAINTENANCE', 'HELL', 'MINISTRY', 'VOID'];
-let titleTrailerFloorIdx = 0;
+let titleTrailerFloorIdx = Math.floor(Math.random() * TRAILER_ZS.length);
 let titleStartNeedsInit = true;
 let titleMode: TitleScreenMode = 'setup';
 let titleSetupSel = 0;
@@ -1050,7 +1050,7 @@ setOnlineMessageHandler((msgData: any) => {
     // fallback identity hint.
     const runSeed = ensureFloorRunState(state).runSeed;
     const snapshot = packFloorForNetwork(world, entities, {
-      floor: state.currentFloor,
+      floor: state.currentZ,
       runSeed,
       floorKey: currentFloorMemoryKey(),
       spawnX, spawnY,
@@ -1063,7 +1063,7 @@ setOnlineMessageHandler((msgData: any) => {
       type: 'floor_snapshot_begin',
       _targetSlot: peerSlot,
       total: chunks.length,
-      floor: state.currentFloor,
+      floor: state.currentZ,
       runSeed,
       peerSlot,
       spawnX, spawnY,
@@ -1188,9 +1188,9 @@ setOnlineMessageHandler((msgData: any) => {
           // Prefer the cell the peer faces (matches the local look-direction
           // targeting and lets "обыскать" generate loot on the faced feature),
           // then fall back to a nearby container.
-          const container = resolvePeerContainerAtCell(world, state.currentFloor, Math.floor(cx), Math.floor(cy))
+          const container = resolvePeerContainerAtCell(world, state.currentZ, Math.floor(cx), Math.floor(cy))
             ?? firstNearbyContainer(world, actor, state)
-            ?? resolvePeerContainerAtCell(world, state.currentFloor, Math.floor(actor.x), Math.floor(actor.y));
+            ?? resolvePeerContainerAtCell(world, state.currentZ, Math.floor(actor.x), Math.floor(actor.y));
           if (container) {
             container.lastOpenedBy = actor.id;
             container.lastOpenedAt = state.time;
@@ -1232,7 +1232,7 @@ setOnlineMessageHandler((msgData: any) => {
       if (msgData.container) {
         const op = msgData.container as { op: string; cx: number; cy: number; slot?: number };
         if (op.op !== 'close') {
-          const container = resolvePeerContainerAtCell(world, state.currentFloor, op.cx, op.cy);
+          const container = resolvePeerContainerAtCell(world, state.currentZ, op.cx, op.cy);
           if (container) {
             const slot = Math.max(0, Math.floor(op.slot ?? 0));
             let inventoryChanged = false;
@@ -1286,7 +1286,7 @@ setOnlineMessageHandler((msgData: any) => {
       injectFastElevators(unpacked.world);
       fillVisualSlotsForWorldFeatures(unpacked.world, unpacked.meta.runSeed);
       stampCeilingHeights(unpacked.world);
-      state.currentFloor = unpacked.meta.floor;
+      state.currentZ = unpacked.meta.floor;
       world = replaceWorldFromGeneration(world, { world: unpacked.world });
       entities = unpacked.entities;
       // Never mint a local id that collides with a host-authored entity.
@@ -2236,9 +2236,9 @@ function continueDeathAsAlifePopulationNpc(): boolean {
   captureCurrentAlifeFloor();
   captureCurrentFloorMemory();
   clearPseudoliftActive(state, entities);
-  const fromFloor = state.currentFloor;
+  const fromFloor = state.currentZ;
   commitFloorRunEntry(state, targetEntry);
-  state.currentFloor = targetEntry.baseFloor;
+  state.currentZ = targetEntry.baseFloor;
   if (targetEntry.baseFloor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
   const floorInstances = ensureFloorInstanceState(state, targetEntry.baseFloor);
@@ -2287,7 +2287,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     floorTeleportCd = 0;
     resetPsiState();
     clearLiftArachnaActive(state);
-    ensureRoomContainers(world, state.currentFloor);
+    ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
     prepareEditableFloor(undefined, false, !loaded.fromMemory);
     resetMapForLoadedFloor(loaded);
@@ -2398,7 +2398,7 @@ const ATTACK_FEEDBACK_MIN_INTERVAL = 0.18;
 setWorldLogSpatialContextProvider(() => {
   if (!started || typeof state === 'undefined' || typeof world === 'undefined' || typeof player === 'undefined') return undefined;
   return {
-    floor: state.currentFloor,
+    floor: state.currentZ,
     playerX: player.x,
     playerY: player.y,
     audibleRadiusMeters: hearingRadiusMetersForActor(player, state.npcLogRadiusMeters),
@@ -2513,7 +2513,7 @@ function creatorKillQuestSatisfied(): boolean {
 }
 
 function isVoidReturnPortalFloor(targetState: GameState = state): boolean {
-  if (targetState.currentFloor !== FloorLevel.VOID) return false;
+  if (targetState.currentZ !== FloorLevel.VOID) return false;
   const entry = currentFloorRunEntry(targetState);
   return !entry || (entry.storyFloor === FloorLevel.VOID && !entry.designFloorId && !entry.spec);
 }
@@ -2634,7 +2634,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   portal.voidSpikeCarried = hasVoidSpike();
   portal.voidSpikeResolved = voidSpikeResolved();
 
-  const fromFloor = state.currentFloor;
+  const fromFloor = state.currentZ;
   captureCurrentAlifeFloor();
   const savedInventory = player.inventory ? [...player.inventory] : [];
   const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
@@ -2656,7 +2656,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
   captureCurrentFloorMemory();
 
-  state.currentFloor = FloorLevel.LIVING;
+  state.currentZ = FloorLevel.LIVING;
   state.gameWon = false;
   state.gameOver = false;
   resetRuntimeCamera(runtimeCamera);
@@ -2753,7 +2753,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       },
     });
 
-    ensureRoomContainers(world, state.currentFloor);
+    ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
     resetMapForLoadedFloor(loaded);
@@ -2813,7 +2813,7 @@ interface SmokeDebugSnapshot {
   npcMenuTab: GameState['npcMenuTab'];
   mapMode: number;
   mobileControlsEnabled: boolean;
-  currentFloor: FloorLevel;
+  currentZ: FloorLevel;
   questCount: number;
   currentObjectiveLine: string;
   currentObjectiveSource: string;
@@ -2938,7 +2938,7 @@ function smokeSnapshot(): SmokeDebugSnapshot {
       npcMenuTab: state.npcMenuTab,
       mapMode: state.mapMode,
       mobileControlsEnabled: mobileControls?.isEnabled() === true,
-      currentFloor: state.currentFloor,
+      currentZ: state.currentZ,
       questCount: state.quests.length,
       currentObjectiveLine: objective?.line ?? '',
       currentObjectiveSource: objective?.source ?? '',
@@ -3157,12 +3157,12 @@ function scheduleLoading(fn: () => void): void {
   pendingLoadAckYielded = false;
 }
 
-function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLevel.LIVING, isTutorial: boolean = false): void {
+function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: boolean = false): void {
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   resetNoiseRecords();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
-  const gen = generateFloor(initialFloor, initialRunSeed, isTutorial);
+  const gen = generateFloor(initialZ, initialRunSeed, isTutorial);
   injectFastElevators(gen.world);
   stampCeilingHeights(gen.world);
   world = replaceWorldFromGeneration(null, gen);
@@ -3222,7 +3222,7 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
     quests: [],
     activeQuestId: undefined,
     nextQuestId: 1,
-    currentFloor: initialFloor,
+    currentZ: initialZ,
     fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,
@@ -3272,7 +3272,7 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
     mapLegendSel: 0,
     mapLegendScroll: 0,
     npcLogRadiusMeters: 100,
-    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0, floor: initialFloor, distanceMeters: 0 }],
+    msgLog: [{ text: 'Добро пожаловать в ГИГАХРУЩ. Закройте дверь.', color: '#aaa', day: 0, hour: 8, minute: 0, floor: initialZ, distanceMeters: 0 }],
     dmgFlash: 0,
     dmgSeed: 0,
     deathTimer: 0,
@@ -3298,17 +3298,17 @@ function initGame(runSeedOverride?: number, initialFloor: FloorLevel = FloorLeve
   resetComputerState();
   resetNetHackState();
   closeMapEditorAndRefreshWorld();
-  setFloorRunState(state, { runSeed: initialRunSeed }, initialFloor);
+  setFloorRunState(state, { runSeed: initialRunSeed }, initialZ);
   if (runSeedOverride !== undefined) {
     setAlifeState(state, { seed: runSeedOverride });
   }
   state.samosborTimer = nextFloorRunSamosborCooldown(state);
-  ensureFloorInstanceState(state, initialFloor);
+  ensureFloorInstanceState(state, initialZ);
   ensureLiftArachnaState(state);
   ensureNetTerminalGenState(state);
   ensureMapEditorPatchState(state);
   materializeCurrentAlifeFloor();
-  ensureRoomContainers(world, state.currentFloor);
+  ensureRoomContainers(world, state.currentZ);
   ensureProductionRooms(state, world);
   prepareEditableFloor();
   resetMapExploration(world);
@@ -3366,8 +3366,8 @@ const MSG_LOG_SYNC_DEDUPE_SCAN = 32;
 
 function bootInitialGameOrTitle(): void {
   scheduleLoading(() => {
-    const floor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
-    initGame(undefined, floor);
+    const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
+    initGame(undefined, floorZ);
     state.trailerMode = true;
     titleStartNeedsInit = true;
   });
@@ -3390,7 +3390,7 @@ function msgAlreadyLogged(m: (typeof state.msgs)[number], distanceMeters: number
     if (entry.text !== m.text || entry.color !== m.color) continue;
     if (entry.day !== m.day || entry.hour !== m.hour || entry.minute !== m.minute) continue;
     if (!sameOptionalNumber(entry.distanceMeters, distanceMeters)) continue;
-    const messageFloor = m.floor ?? state.currentFloor;
+    const messageFloor = m.floor ?? state.currentZ;
     if (entry.floor !== undefined && entry.floor !== messageFloor) continue;
     if (!sameOptionalNumber(entry.actorId, m.actorId)) continue;
     if (!sameOptionalNumber(entry.targetId, m.targetId)) continue;
@@ -3410,7 +3410,7 @@ function syncMsgLog(): void {
     for (let i = _prevMsgCount; i < msgs.length; i++) {
       const m = msgs[i];
       const location = {
-        floor: m.floor ?? state.currentFloor,
+        floor: m.floor ?? state.currentZ,
         x: m.x,
         y: m.y,
         actorId: m.actorId,
@@ -3466,7 +3466,7 @@ function roundPlayerDamage(amount: number): number {
 }
 
 function unattributedPlayerDamageSource(): { kind: PlayerDamageSourceKind; label: string } {
-  if (state.currentFloor === FloorLevel.VOID) return { kind: 'void', label: 'Правило Пустоты' };
+  if (state.currentZ === FloorLevel.VOID) return { kind: 'void', label: 'Правило Пустоты' };
   if (state.samosborActive) return { kind: 'samosbor', label: 'Самосбор' };
   return { kind: 'hazard', label: 'Неопознанная опасность' };
 }
@@ -4406,14 +4406,14 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
     }
     // Herald killed — check if the Podad lower route is now open.
-    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && state.currentFloor === FloorLevel.HELL) {
+    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && state.currentZ === FloorLevel.HELL) {
       if (onHeraldKilled(e, world, state)) {
         applyStoryRouteGates(world, player, state);
         updateWorldData(world);
       }
     }
     // Creator killed — spawn return portal
-    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && state.currentFloor === FloorLevel.VOID) {
+    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && state.currentZ === FloorLevel.VOID) {
       if (onCreatorKilled(e, world, state)) {
         checkQuests(player, world, entities, state, state.msgs);
         openVoidReturnPortalFromCreator(e);
@@ -5021,7 +5021,7 @@ function currentRouteLocalSamosborPatchGeneration(patchSeed: number): FloorGener
 
 function currentLocalSamosborPatchGeneration(): FloorGeneration {
   const patchSeed = currentSamosborPatchSeed();
-  return currentRouteLocalSamosborPatchGeneration(patchSeed) ?? generateFloor(state.currentFloor, patchSeed, state.tutorialMode);
+  return currentRouteLocalSamosborPatchGeneration(patchSeed) ?? generateFloor(state.currentZ, patchSeed, state.tutorialMode);
 }
 
 function scheduleLocalSamosborPatch(fn: () => void): void {
@@ -5039,7 +5039,7 @@ function floorTargetAllowsNpcPopulation(entry: ReturnType<typeof currentFloorRun
 function currentFloorAllowsNpcPopulation(): boolean {
   const activeInstance = getActiveFloorInstance(state);
   if (activeInstance) return floorInstanceAllowsNpcs(activeInstance.id);
-  return floorTargetAllowsNpcPopulation(currentFloorRunEntry(state), state.currentFloor);
+  return floorTargetAllowsNpcPopulation(currentFloorRunEntry(state), state.currentZ);
 }
 
 function captureCurrentAlifeFloor(): void {
@@ -5159,7 +5159,7 @@ function switchFloor(
 ): void {
   closeCraftMenu();
   restorePlayerBeforeWorldBoundary();
-  const fromFloor = state.currentFloor;
+  const fromFloor = state.currentZ;
   captureCurrentAlifeFloor();
   const departingMemoryKey = currentFloorMemoryKey();
   // Fast elevator: jump straight to an arbitrary route floor, bypassing the
@@ -5180,11 +5180,11 @@ function switchFloor(
   } else {
     // Non-lift routes such as metro keep the old authored-floor behavior.
     if (direction === LiftDirection.DOWN) {
-      if (state.currentFloor >= FloorLevel.HELL) return;
-      nextFloor = (state.currentFloor + 1) as FloorLevel;
+      if (state.currentZ >= FloorLevel.HELL) return;
+      nextFloor = (state.currentZ + 1) as FloorLevel;
     } else {
-      if (state.currentFloor <= FloorLevel.MINISTRY) return;
-      nextFloor = (state.currentFloor - 1) as FloorLevel;
+      if (state.currentZ <= FloorLevel.MINISTRY) return;
+      nextFloor = (state.currentZ - 1) as FloorLevel;
     }
   }
   resolveLiftArachnaDeparture(world, player, state);
@@ -5226,7 +5226,7 @@ function switchFloor(
   const savedMoney = player.money ?? 100;
   captureFloorMemoryByKey(departingMemoryKey);
 
-  state.currentFloor = nextFloor;
+  state.currentZ = nextFloor;
   if (nextFloor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
 
@@ -5369,7 +5369,7 @@ function switchFloor(
       ? generatedRunEntry.storyFloor === FloorLevel.VOID
       : nextFloor === FloorLevel.VOID && !allowElevatorAnomaly;
     if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
-    ensureRoomContainers(world, state.currentFloor);
+    ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
     prepareEditableFloor(routeLiftMirror, false, !loaded.fromMemory);
     resetMapForLoadedFloor(loaded);
@@ -5433,7 +5433,7 @@ function formatFloorZ(z: number): string {
 
 function debugTeleportTo(target: DebugTeleportTarget): void {
   restorePlayerBeforeWorldBoundary();
-  const fromFloor = state.currentFloor;
+  const fromFloor = state.currentZ;
   captureCurrentAlifeFloor();
   const savedInventory = player.inventory ? [...player.inventory] : [];
   const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
@@ -5448,7 +5448,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
   captureCurrentFloorMemory();
 
   state.showDebug = false;
-  state.currentFloor = target.floor;
+  state.currentZ = target.floor;
   clearPseudoliftActive(state, entities);
   if (target.floor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
@@ -5563,7 +5563,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
     }
     if (!target.spec && !target.designFloorId && target.floor === FloorLevel.VOID) onVoidEntry(state);
 
-    ensureRoomContainers(world, state.currentFloor);
+    ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
     prepareEditableFloor();
     resetMapForLoadedFloor(loaded);
@@ -6246,7 +6246,7 @@ function loadGame(): boolean {
     const data = isRecord(parsed) ? parsed : {};
     const dataPlayer = isRecord(data.player) ? data.player : {};
     const dataState = isRecord(data.state) ? data.state : {};
-    const savedFloor = isFloorLevel(dataState.currentFloor) ? dataState.currentFloor : FloorLevel.LIVING;
+    const savedFloor = isFloorLevel(dataState.currentZ) ? dataState.currentZ : FloorLevel.LIVING;
     const savedFloorRun = floorRunSaveHasRestorableRoute(dataState.floorRun)
       ? dataState.floorRun as Parameters<typeof setFloorRunState>[1]
       : undefined;
@@ -6356,7 +6356,7 @@ function loadGame(): boolean {
       state.tutorialMode = dataState.tutorialMode === true;
       state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
       state.tutorialExitTimer = typeof dataState.tutorialExitTimer === 'number' ? dataState.tutorialExitTimer : undefined;
-      state.currentFloor = floor;
+      state.currentZ = floor;
       setFloorRunState(state, savedFloorRun, floor);
       setFloorInstanceState(state, loadedFloorInstances, floor);
       setLiftArachnaState(state, dataState.liftArachna as Parameters<typeof setLiftArachnaState>[1]);
@@ -6400,8 +6400,8 @@ function loadGame(): boolean {
       setVoidReturnPortalState(state, dataState.voidReturnPortal);
       setVoidEntryFromFloor(state, dataState.voidEntryFromFloor);
       if (!loaded.fromMemory) replayMapEditorForCurrentFloor();
-      if (!loaded.fromMemory && Array.isArray(dataState.containers)) restoreValidContainers(world, state.currentFloor, dataState.containers);
-      ensureRoomContainers(world, state.currentFloor);
+      if (!loaded.fromMemory && Array.isArray(dataState.containers)) restoreValidContainers(world, state.currentZ, dataState.containers);
+      ensureRoomContainers(world, state.currentZ);
       ensureProductionRooms(state, world);
       placeNetTerminalGenContentForCurrentFloor();
       resetMapForLoadedFloor(loaded);
@@ -9530,7 +9530,7 @@ function gameLoop(now: number): void {
     updateRouteCues(world, listener, state);
     updateMapExploration(world, listener, state);
     const aiStart = performance.now();
-    updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
+    updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentZ, state);
     lastAiUpdateMs = performance.now() - aiStart;
     updateRailTrains(world, entities, player, state, dt);
     contentStart = performance.now();
@@ -9554,11 +9554,11 @@ function gameLoop(now: number): void {
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
         const replacement = currentRouteRebuildGeneration();
-        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement, state.tutorialMode);
+        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentZ, replacement, state.tutorialMode);
         initFactionControl(world);
         materializeCurrentAlifeFloor();
         ensureProceduralSpriteSeeds(entities);
-        ensureRoomContainers(world, state.currentFloor);
+        ensureRoomContainers(world, state.currentZ);
         ensureProductionRooms(state, world);
         prepareEditableFloor();
         resetMapExploration(world);
@@ -9638,7 +9638,7 @@ function gameLoop(now: number): void {
     }
 
     // Return portal in Void — only the Creator-opened portal can end the run.
-    if (state.currentFloor === FloorLevel.VOID && state.tick % 10 === 0) {
+    if (state.currentZ === FloorLevel.VOID && state.tick % 10 === 0) {
       const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
       if (tryUseVoidReturnPortal(pci)) {
         syncMsgLog();
@@ -9734,7 +9734,7 @@ function gameLoop(now: number): void {
     updateMapExploration(world, listener, state);
     updatePseudolifts(world, entities, player, state);
     const aiStart = performance.now();
-    updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentFloor, state);
+    updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentZ, state);
     lastAiUpdateMs = performance.now() - aiStart;
     tickCellHazards(world, entities, state, dt, player, false);
     if (!isOnlineConnected() && updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
@@ -9746,11 +9746,11 @@ function gameLoop(now: number): void {
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
         const replacement = currentRouteRebuildGeneration();
-        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentFloor, replacement, state.tutorialMode);
+        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentZ, replacement, state.tutorialMode);
         initFactionControl(world);
         materializeCurrentAlifeFloor();
         ensureProceduralSpriteSeeds(entities);
-        ensureRoomContainers(world, state.currentFloor);
+        ensureRoomContainers(world, state.currentZ);
         ensureProductionRooms(state, world);
         prepareEditableFloor();
         resetMapExploration(world);
@@ -9811,8 +9811,8 @@ function gameLoop(now: number): void {
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level
   let baseFog = 0.065;
-  if (state.currentFloor === FloorLevel.MAINTENANCE) baseFog = 0.08;
-  if (state.currentFloor === FloorLevel.HELL) baseFog = 0.05; // less fog, more horror visibility
+  if (state.currentZ === FloorLevel.MAINTENANCE) baseFog = 0.08;
+  if (state.currentZ === FloorLevel.HELL) baseFog = 0.05; // less fog, more horror visibility
   const smogFogBonus = !state.gameOver ? proceduralSmogFogDensityBonus(world, player, state) : 0;
   const samosborVariant = state.samosborActive ? getActiveSamosborVariant() : null;
   const samosborVisual = samosborVariant?.visual;
@@ -9990,7 +9990,7 @@ function startGameFromTitle(): void {
       titleStartNeedsInit = false;
       if (trailerSelected) {
         state.trailerMode = true;
-        state.currentFloor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
+        state.currentZ = TRAILER_ZS[titleTrailerFloorIdx];
       }
       if (isNewGame) {
         startTutorial(state, player);
@@ -10061,11 +10061,11 @@ function startHandler(e: KeyboardEvent): void {
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
     if (titleInputField === 'language') cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
     else if (titleInputField === 'trailer') {
-      titleTrailerFloorIdx = (titleTrailerFloorIdx + (e.code === 'ArrowRight' ? 1 : TRAILER_FLOORS.length - 1)) % TRAILER_FLOORS.length;
+      titleTrailerFloorIdx = (titleTrailerFloorIdx + (e.code === 'ArrowRight' ? 1 : TRAILER_ZS.length - 1)) % TRAILER_ZS.length;
       if (!started && typeof state !== 'undefined') {
         scheduleLoading(() => {
-          const floor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
-          initGame(undefined, floor);
+          const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
+          initGame(undefined, floorZ);
           state.trailerMode = true;
           titleStartNeedsInit = true;
         });
@@ -10180,11 +10180,11 @@ function handleTitleGamepadInput(frame: InputFrame): void {
     const dir = navRight ? 1 : -1;
     if (titleInputField === 'language') cycleTitleLanguage(dir);
     else if (titleInputField === 'trailer') {
-      titleTrailerFloorIdx = (titleTrailerFloorIdx + (dir > 0 ? 1 : TRAILER_FLOORS.length - 1)) % TRAILER_FLOORS.length;
+      titleTrailerFloorIdx = (titleTrailerFloorIdx + (dir > 0 ? 1 : TRAILER_ZS.length - 1)) % TRAILER_ZS.length;
       if (!started && typeof state !== 'undefined') {
         scheduleLoading(() => {
-          const floor = TRAILER_FLOORS[titleTrailerFloorIdx] as FloorLevel;
-          initGame(undefined, floor);
+          const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
+          initGame(undefined, floorZ);
           state.trailerMode = true;
           titleStartNeedsInit = true;
         });

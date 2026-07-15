@@ -42,7 +42,7 @@ import {
 } from './helpers';
 
 function makeDemosSocialState(overrides: Partial<GameState> = {}): GameState {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, ...overrides });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, ...overrides });
   setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
   setAlifeState(state, { seed: 12345, total: 64, deadIds: overrides.gameOver ? [1] : [] }, { populationPlan: 'empty_packages' });
   return state;

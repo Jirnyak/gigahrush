@@ -43,7 +43,7 @@ test('using smoke candle consumes one item and publishes a bounded vent check ev
     y: 23.5,
     inventory: [{ defId: 'smoke_candle_check', count: 1 }],
   });
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 42 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 42 });
 
   useItem(player, 0, state.msgs, state.time, state, 4, world);
 

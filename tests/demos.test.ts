@@ -15,7 +15,7 @@ import { makeGameState } from './helpers';
 import '../src/gen/maintenance/gordon';
 
 function makeDemosState() {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   createPrefilledAlifeState(state, 12345, 3, {
     buckets: [{
       floorKey: floorKeyForStory(FloorLevel.LIVING),
@@ -99,7 +99,7 @@ test('Demos snapshot does not run full search until the cursor is confirmed', ()
 });
 
 test('Demos resolves authored plot sprite and route floor number for reserved profiles', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: floorKeyForStory(FloorLevel.MAINTENANCE),
@@ -125,7 +125,7 @@ test('Demos resolves authored plot sprite and route floor number for reserved pr
 });
 
 test('Demos account line shows bank account rather than total pocket wealth', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: floorKeyForStory(FloorLevel.LIVING),

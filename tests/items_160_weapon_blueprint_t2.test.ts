@@ -74,7 +74,7 @@ test('weapon blueprint t2 is spent as the armory unlock for a stat-backed weapon
 
 test('weapon blueprint t2 can be sold instead of saved for armory production', () => {
   const player = makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }], money: 0 });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 160 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 160 });
 
   useItem(player, 0, state.msgs, state.time, state);
 

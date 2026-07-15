@@ -211,7 +211,7 @@ function publishSeroburmalineEvent(
 
 export function updateSeroburmalineExposure(world: World, player: Entity, state: GameState, dt: number): void {
   const rt = runtimeFor(state);
-  if (state.currentFloor !== FloorLevel.MAINTENANCE || !player.alive) {
+  if (state.currentZ !== FloorLevel.MAINTENANCE || !player.alive) {
     fadeRuntime(rt, dt);
     return;
   }
@@ -310,7 +310,7 @@ export function tryCoverSeroburmalineSource(
   lookY: number,
   toolId?: string,
 ): boolean {
-  if (state.currentFloor !== FloorLevel.MAINTENANCE || !isPlayerEntity(player)) return false;
+  if (state.currentZ !== FloorLevel.MAINTENANCE || !isPlayerEntity(player)) return false;
   const source = sourceAtCell(world, Math.floor(lookX), Math.floor(lookY), true);
   if (!source) return false;
 

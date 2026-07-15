@@ -38,7 +38,7 @@ test('paid route cue spends money without revealing hidden map cells', () => {
   const { world, hiddenIdx } = makePaidRouteAdviceWorld();
   resetMapExploration(world);
   const player = makeTestPlayer({ x: 12.5, y: 12.5, money: 150 });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   updateMapExploration(world, player, state);
   assert.equal(isMapCellExplored(world, hiddenIdx), false);
 
@@ -54,7 +54,7 @@ test('paid route cue does not charge without enough money', () => {
   const { world, hiddenIdx } = makePaidRouteAdviceWorld();
   resetMapExploration(world);
   const player = makeTestPlayer({ x: 12.5, y: 12.5, money: 10 });
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   updateMapExploration(world, player, state);
   registerPaidRouteAdviceCue(world);
 

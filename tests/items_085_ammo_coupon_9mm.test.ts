@@ -27,7 +27,7 @@ test('ammo coupon 9mm is reachable official ammo paperwork', () => {
 
 test('ammo coupon 9mm redeems into legal 9mm ammo', () => {
   const player = makeTestPlayer({ inventory: [{ defId: 'ammo_coupon_9mm', count: 1 }] });
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 85 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 85 });
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter погасить');
 

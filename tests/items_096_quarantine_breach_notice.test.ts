@@ -60,7 +60,7 @@ test('quarantine breach notice exposes a quarantine case at Ministry N3', () => 
     x: room.x + 8.5,
     y: room.y + Math.floor(room.h / 2) + 0.5,
   });
-  const state = makeGameState({ currentFloor: FloorLevel.MINISTRY, time: 96 });
+  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, time: 96 });
 
   assert.equal(addItem(player, NOTICE_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

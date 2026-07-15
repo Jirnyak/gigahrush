@@ -44,7 +44,7 @@ test('rubber door wedge repairs a damaged hermodoor through the E interaction pa
   room.doors.push(doorIdx);
 
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
     time: 1,
     samosborTimer: 20,

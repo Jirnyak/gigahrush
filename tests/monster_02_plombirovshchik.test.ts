@@ -38,7 +38,7 @@ test('Plombirovshchik uses Shovnik body and opens local seal when killed away fr
 
   const mainRoom = world.rooms[0];
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   publishEvent(state, {

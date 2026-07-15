@@ -49,7 +49,7 @@ test('sample chain form is reachable from the slime NII director archive', () =>
 
 test('sample chain form can be sold instead of saved for legal handoff', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING, time: 93 });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 93 });
 
   assert.equal(addItem(player, FORM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

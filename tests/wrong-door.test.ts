@@ -116,7 +116,7 @@ test('maronary wrong-door remap ignores protected hermetic source doors', () => 
   const world = makeWrongDoorWorld();
   const protectedSource = addDoor(world, 10, 10, 1, true);
   addDoor(world, 55, 10, 2);
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const cue = createWrongDoorRemap(world, state, 10.5, 10.5, 'test_protected_source', false, protectedSource);
 
@@ -128,7 +128,7 @@ test('maronary wrong-door remap can still use ordinary route doors', () => {
   const world = makeWrongDoorWorld();
   const source = addDoor(world, 10, 10, 1);
   addDoor(world, 55, 10, 2);
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const cue = createWrongDoorRemap(world, state, 10.5, 10.5, 'test_open_source', false, source);
 
@@ -140,7 +140,7 @@ test('maronary wrong-door remap can still use ordinary route doors', () => {
 test('maronary shaving can be sold to science or hidden as contraband evidence', () => {
   initFactionRelations();
   const state = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({
@@ -195,7 +195,7 @@ test('maronary shaving can be sold to science or hidden as contraband evidence',
 test('maronary shaving handoff uses ordered item outcome rules', () => {
   initFactionRelations();
   const state = makeGameState({
-    currentFloor: FloorLevel.MINISTRY,
+    currentZ: FloorLevel.MINISTRY,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({
@@ -234,7 +234,7 @@ test('maronary shaving handoff uses ordered item outcome rules', () => {
   assert.equal(cult.data?.reward, 320);
 
   const saleState = makeGameState({
-    currentFloor: FloorLevel.LIVING,
+    currentZ: FloorLevel.LIVING,
     worldEvents: createWorldEventState(),
   });
   const salePlayer = makeTestPlayer({

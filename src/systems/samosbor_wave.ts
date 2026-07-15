@@ -1363,7 +1363,7 @@ function applyGeneratedFieldPatch(
   );
   refreshPassiveFeatureLists(world, source, field.mask);
   clearFieldSideEffects(world, field.mask);
-  cleanupContainers(world, wave, fieldSet, state.currentFloor);
+  cleanupContainers(world, wave, fieldSet, state.currentZ);
   cleanupFinalEntities(world, wave, entities, fieldSet);
   rebuildPathBlockersFromWorldObjects(world, wave.seed, field.indices);
   wave.prunedRouteCues += pruneRouteCuesInCells(world, fieldSet);
@@ -1741,7 +1741,7 @@ function createInitialSamosborWave(
     patchRoomId: -1,
     protectedRooms,
     player: _entities.find((e) => isPlayerEntity(e) && e.alive),
-    floor: state.currentFloor,
+    floor: state.currentZ,
     startedAt: state.time,
     changedCells: 0,
     regeneratedCells: 0,
@@ -1816,7 +1816,7 @@ export function tickSamosborWave(
 ): SamosborWaveTickResult {
   const wave = activeWave;
   if (!wave?.active) return EMPTY_WAVE_RESULT;
-  if (wave.floor !== state.currentFloor) {
+  if (wave.floor !== state.currentZ) {
     cancelSamosborWave();
     return { active: false, processed: 0, changed: 0, finished: true };
   }
@@ -1884,7 +1884,7 @@ function completeWaveRuntime(
 ): void {
   if (wave.finished) return;
   const touchedSet = new Set(wave.touched);
-  cleanupContainers(world, wave, touchedSet, state.currentFloor);
+  cleanupContainers(world, wave, touchedSet, state.currentZ);
   cleanupFinalEntities(world, wave, entities, touchedSet);
   pruneScreenAndSlideCells(world, touchedSet);
   rebuildPathBlockersFromWorldObjects(world, wave.seed, wave.touched);

@@ -20,7 +20,7 @@ function setResourceStock(state: GameState, floor: FloorLevel, resourceId: strin
 }
 
 test('getResourceContractPressure calculates pressure correctly based on stock and targets', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   resetFloor(state, FloorLevel.LIVING);
 
   const waterDef = RESOURCES.find(r => r.id === 'drink_water')!;
@@ -49,7 +49,7 @@ test('getResourceContractPressure calculates pressure correctly based on stock a
 });
 
 test('getResourceContractPressure falls back to 1 for missing resource or stock', () => {
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
   // Don't set stock to test missing stock case
   const pressureMissing = getResourceContractPressure(state, 'missing_resource');
   assert.equal(pressureMissing, 1);

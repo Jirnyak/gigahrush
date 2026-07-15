@@ -53,7 +53,7 @@ test('darkness long-route stash carries ptrs liquidator with scarce harpoons', (
 
 test('ptrs liquidator strips hardened armor through the generic armor hook', () => {
   const world = new World();
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, time: 1 });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 1 });
   const target = makeTestEntity({
     type: EntityType.MONSTER,
     monsterKind: MonsterKind.ZAKALENNAYA_ARMATURA,

@@ -10,6 +10,7 @@ import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
 import { PSI_WEAPON_STATS } from '../data/psi';
+import { storyFloorAtZ } from "../data/procedural_floors";
 import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
@@ -666,7 +667,7 @@ function spawnDebugMonsterPack(
   state: GameState,
   nextEntityId: { v: number },
 ): string[] {
-  const kinds = DEBUG_MONSTER_PACKS[state.currentFloor];
+  const kinds = DEBUG_MONSTER_PACKS[(storyFloorAtZ(state.currentZ) ?? FloorLevel.LIVING) as FloorLevel];
   const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
   let spawned = 0;
   const names: string[] = [];
@@ -1011,11 +1012,11 @@ function adjacentContainerRouteSpot(world: World, container: WorldContainer): { 
 }
 
 function routePlayerToNearestContainer(world: World, player: Entity, state: GameState): string[] {
-  const created = ensureRoomContainers(world, state.currentFloor);
+  const created = ensureRoomContainers(world, state.currentZ);
   let best: WorldContainer | null = null;
   let bestScore = Infinity;
   for (const c of world.containers) {
-    if (c.floor !== state.currentFloor) continue;
+    if (c.floor !== state.currentZ) continue;
     const route = adjacentContainerRouteSpot(world, c);
     if (!route) continue;
     const theftBias = c.access === 'faction' || c.access === 'owner' ? -500 : 0;
@@ -1036,10 +1037,10 @@ function routePlayerToNearestContainer(world: World, player: Entity, state: Game
 }
 
 function armLocalFloorInstance(world: World, player: Entity, state: GameState): string[] {
-  const candidates = FLOOR_INSTANCES.filter(def => def.baseFloor === state.currentFloor);
-  if (candidates.length === 0) return [`no numbered loop uses ${FloorLevel[state.currentFloor]} as base; teleport to another story floor first`];
+  const candidates = FLOOR_INSTANCES.filter(def => def.baseFloor === state.currentZ);
+  if (candidates.length === 0) return [`no numbered loop uses ${FloorLevel[state.currentZ]} as base; teleport to another story floor first`];
   const def = candidates[debugFloorInstanceCursor++ % candidates.length];
-  const store = ensureFloorInstanceState(state, state.currentFloor);
+  const store = ensureFloorInstanceState(state, state.currentZ);
   const instance = {
     id: def.id,
     displayNumber: def.displayNumber,
@@ -1049,10 +1050,10 @@ function armLocalFloorInstance(world: World, player: Entity, state: GameState): 
     seedTag: def.seedTag,
     risk: def.risk,
     enteredAt: state.time,
-    fromFloor: state.currentFloor,
-    intendedFloor: state.currentFloor,
+    fromFloor: state.currentZ,
+    intendedFloor: state.currentZ,
     direction: LiftDirection.DOWN,
-    returnFloor: state.currentFloor,
+    returnFloor: state.currentZ,
   };
   store.current = instance;
   store.discovered[def.id] = true;
@@ -1141,7 +1142,7 @@ function debugPermitTagForFloor(floor: FloorLevel): PermitAccessTag {
 }
 
 function checkDebugPermitAccess(world: World, player: Entity, state: GameState): string[] {
-  const preferred = debugPermitTagForFloor(state.currentFloor);
+  const preferred = debugPermitTagForFloor(state.currentZ);
   const permit = findActorPermit(player, [preferred, 'general_admin', 'archive', 'bank_debt', 'bank_vault']);
   if (!permit) return ['нет пропуска с подходящим access tag'];
   const tag = permit.accessTags.includes(preferred) ? preferred : permit.accessTags[0];
@@ -1382,7 +1383,7 @@ export function execDebugCommand(
       break;
     }
     case 9: { // Containers near player
-      const made = ensureRoomContainers(world, state.currentFloor);
+      const made = ensureRoomContainers(world, state.currentZ);
       if (made > 0) state.msgs.push(msg(`[CONT] создано: ${made}`, state.time, '#ff0'));
       const list = nearbyContainers(world, player, 3);
       if (list.length === 0) {
@@ -1393,7 +1394,7 @@ export function execDebugCommand(
       break;
     }
     case 10: { // Take first item from nearest container
-      ensureRoomContainers(world, state.currentFloor);
+      ensureRoomContainers(world, state.currentZ);
       const c = firstNearbyContainer(world, player);
       if (!c) {
         state.msgs.push(msg('[CONT] рядом нет контейнера', state.time, '#888'));
@@ -1418,7 +1419,7 @@ export function execDebugCommand(
       const search = CATALOG_DEBUG_SEARCHES[catalogDebugSearchIndex++ % CATALOG_DEBUG_SEARCHES.length];
       const query = search
         ? { search, limit: 6 }
-        : { baseFloor: state.currentFloor, limit: 6 };
+        : { baseFloor: state.currentZ, limit: 6 };
       for (const line of floorCatalogDebugLines(query)) state.msgs.push(msg(`[CAT] ${line}`, state.time, '#ccf'));
       for (const line of summarizeHeatline(world)) state.msgs.push(msg(line, state.time, '#f84'));
       for (const line of summarizeCarnivorousFungus(world)) state.msgs.push(msg(line, state.time, '#bf8'));
@@ -2185,7 +2186,7 @@ export function drawDebugOverlay(
   row(`AI факт: plot ${ai.plot} boss ${ai.bosses} atk ${ai.activeAttackers} proj ${ai.projectileOwners}/${ai.projectiles}`, '#9cf');
   for (const line of summarizeFloorRun(state).slice(0, 2)) row(`Этажи: ${line}`, '#8cf');
   const playerEntity = entities.find(e => isPlayerEntity(e));
-  for (const line of summarizeRoomMemoryForRoom(state.currentFloor, playerEntity ? currentPlayerRoom(world, playerEntity) : undefined)) row(line, '#dc9');
+  for (const line of summarizeRoomMemoryForRoom(state.currentZ, playerEntity ? currentPlayerRoom(world, playerEntity) : undefined)) row(line, '#dc9');
   for (const line of summarizeProceduralSmog(world, state).slice(0, 2)) row(`Смог: ${line}`, '#b98');
   for (const line of summarizeBadAppleWorld(world).slice(0, 2)) row(`BadApple: ${line}`, '#eee');
   for (const line of summarizeFloorInstances(state).slice(0, 2)) row(`Лифт: ${line}`, '#f4a');

@@ -36,7 +36,7 @@ const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 test('normal net terminal placement puts at least sixteen usable terminals on a roomy floor', () => {
   clearNetTerminalGenTerminals();
   const world = makeTerminalWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
   const placed = placeNetTerminalGenTerminalsForCurrentFloor(world, state, { seed: 1234 });
   const terminals = getNetTerminalGenTerminals();
@@ -138,7 +138,7 @@ test('net terminal overlays never release pointer lock', () => {
 test('missing GEN terminal access spawns one cooldowned Safeguard backlash when live entities are provided', () => {
   clearNetTerminalGenTerminals();
   const world = makeTerminalWorld();
-  const state = makeGameState({ currentFloor: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 1, x: 100, y: 100, money: 100 });
   const entities = [player];
   const nextId = { v: 2 };

@@ -206,7 +206,7 @@ function currentRouteFloorKey(state: GameState): string {
   try {
     return floorRunEntryFloorKey(currentFloorRunEntry(state));
   } catch {
-    return floorKeyForStory(state.currentFloor);
+    return floorKeyForStory(state.currentZ);
   }
 }
 

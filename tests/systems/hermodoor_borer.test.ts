@@ -8,7 +8,7 @@ import { makeGameState, makeTestPlayer, addTestRoom } from '../helpers';
 test('blocksHermodoorBorerSeal handles untracked door', () => {
     const world = new World();
     const doorIdx = world.idx(5, 7);
-    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
     assert.equal(blocksHermodoorBorerSeal(world, state, doorIdx, 1), false);
 });
@@ -22,7 +22,7 @@ test('blocksHermodoorBorerSeal allows sealing during warning phase', () => {
     world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_CLOSED, roomA: 1, roomB: -1, keyId: '', timer: 0 });
 
     const player = makeTestPlayer({ id: 1, x: 15, y: 15 });
-    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
     debugForceHermodoorBorer(world, player, [player], state, { v: 10 });
 
@@ -38,13 +38,13 @@ test('blocksHermodoorBorerSeal handles wrong floor or room', () => {
     world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_CLOSED, roomA: 1, roomB: -1, keyId: '', timer: 0 });
 
     const player = makeTestPlayer({ id: 1, x: 15, y: 15 });
-    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
     debugForceHermodoorBorer(world, player, [player], state, { v: 10 });
 
     assert.equal(blocksHermodoorBorerSeal(world, state, doorIdx, 2), false);
 
-    state.currentFloor = FloorLevel.ROOF;
+    state.currentZ = FloorLevel.ROOF;
     assert.equal(blocksHermodoorBorerSeal(world, state, doorIdx, 1), false);
 });
 
@@ -59,7 +59,7 @@ test('blocksHermodoorBorerSeal blocks sealing and forces open when damaged', () 
 
     const player = makeTestPlayer({ id: 1, x: 15, y: 15 });
     const entities = [player];
-    const state = makeGameState({ currentFloor: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: FloorLevel.LIVING });
 
     debugForceHermodoorBorer(world, player, entities, state, { v: 10 });
 
