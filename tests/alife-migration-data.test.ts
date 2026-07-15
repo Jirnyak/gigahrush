@@ -31,12 +31,12 @@ import '../src/gen/ministry/npcs';
 
 function routeKeysForRun(runSeed: number): string[] {
   return [
-    'story:ministry',
-    'story:kvartiry',
-    'story:living',
-    'story:maintenance',
-    'story:hell',
-    'story:void',
+    'design:ministry',
+    'design:kvartiry',
+    'design:living',
+    'design:maintenance',
+    'design:hell',
+    'design:void',
     ...DESIGN_FLOOR_ROUTES.map(route => `design:${route.id}`),
     ...PROCEDURAL_FLOOR_ZS.map(z => `procedural:z${z}`),
   ];
@@ -53,7 +53,7 @@ function testNpcPackage(id: string, patch: Partial<NpcPackageDef> = {}): NpcPack
     rpg: { level: 7 },
     wealth: { cashRubles: 42, accountRubles: 1000 },
     visual: { sprite: Occupation.TRAVELER, npcVisualId: 'test_visual' },
-    placement: { homeFloorKey: 'story:living', presence: 'population' },
+    placement: { homeFloorKey: 'design:living', presence: 'population' },
     runtime: { hp: 123, maxHp: 150, canGiveQuest: true },
     tags: ['test_pkg'],
   };
@@ -122,8 +122,8 @@ test('A-Life population plan keeps authored floor taste and NPC-free route stops
   assert.ok(byKey.get('design:black_market_88')?.tags.includes('black_market_88'));
   assert.ok((byKey.get('design:slime_nii')?.targetCount ?? 0) > 0);
   assert.ok(byKey.get('design:slime_nii')?.tags.includes('slime_nii'));
-  assert.ok((byKey.get('story:ministry')?.targetCount ?? 0) > 0);
-  assert.equal(byKey.get('story:void')?.targetCount, 0);
+  assert.ok((byKey.get('design:ministry')?.targetCount ?? 0) > 0);
+  assert.equal(byKey.get('design:void')?.targetCount, 0);
   assert.equal(byKey.get('design:darkness')?.targetCount, 0);
 
   const lowerProcedural = [...byKey.values()].filter(bucket =>
@@ -147,7 +147,7 @@ test('A-Life population plan projects one runtime NPC package into one reserved 
   });
   const plan = buildAlifePopulationPlan({
     runSeed: 777,
-    routeKeys: ['story:living'],
+    routeKeys: ['design:living'],
     total: 16,
     npcPackages: [pack],
   });
@@ -157,7 +157,7 @@ test('A-Life population plan projects one runtime NPC package into one reserved 
   assert.equal(plan.reserved.length, 1);
   assert.equal(reserved.id, 'npc:reservation_package_fixture');
   assert.equal(reserved.kind, 'authored');
-  assert.equal(reserved.floorKey, 'story:living');
+  assert.equal(reserved.floorKey, 'design:living');
   assert.equal(reserved.name, 'Package Resident');
   assert.equal(reserved.sex, 'male');
   assert.equal(reserved.age, 41);
@@ -190,7 +190,7 @@ test('A-Life population plan dedupes package rows by plotNpcId', () => {
   });
   const plan = buildAlifePopulationPlan({
     runSeed: 778,
-    routeKeys: ['story:living'],
+    routeKeys: ['design:living'],
     total: 16,
     npcPackages: [source, duplicateRawCompat],
   });
@@ -205,7 +205,7 @@ test('A-Life population plan does not synthesize reservations without NPC packag
   const legacyId = 'package_less_alife_fixture';
   const plan = buildAlifePopulationPlan({
     runSeed: 779,
-    routeKeys: ['story:living'],
+    routeKeys: ['design:living'],
     total: 16,
   });
 
@@ -236,24 +236,24 @@ test('A-Life population plan reserves design packages on design route keys', () 
 test('A-Life population plan keeps event-only reservations on route-allowed NPC-free floors', () => {
   const pack = testNpcPackage('void_event_package', {
     kind: 'design',
-    placement: { homeFloorKey: 'story:void', presence: 'event_only' },
+    placement: { homeFloorKey: 'design:void', presence: 'event_only' },
     tags: ['void_event'],
   });
   const plan = buildAlifePopulationPlan({
     runSeed: 780,
-    routeKeys: ['story:void'],
+    routeKeys: ['design:void'],
     total: 1,
     npcPackages: [pack],
   });
   const blockedByRoute = buildAlifePopulationPlan({
     runSeed: 780,
-    routeKeys: ['story:living'],
+    routeKeys: ['design:living'],
     total: 4,
     npcPackages: [pack],
   });
 
   assert.deepEqual(validateAlifePopulationPlan(plan), []);
-  assert.equal(plan.buckets.find(bucket => bucket.floorKey === 'story:void')?.targetCount, 0);
+  assert.equal(plan.buckets.find(bucket => bucket.floorKey === 'design:void')?.targetCount, 0);
   assert.equal(plan.reserved.length, 1);
   assert.equal(plan.reserved[0].kind, 'event_reserved');
   assert.equal(plan.reserved[0].presence, 'event_only');
@@ -271,7 +271,7 @@ test('A-Life population plan skips non-runtime and unreviewed community packages
   });
   const plan = buildAlifePopulationPlan({
     runSeed: 781,
-    routeKeys: ['story:living'],
+    routeKeys: ['design:living'],
     total: 8,
     npcPackages: [nonRuntime, communityDraft],
   });
@@ -290,16 +290,16 @@ test('A-Life population plan resolves authored NPC floor keys from their content
   });
   const reserved = new Map(plan.reserved.map(identity => [identity.plotNpcId, identity]));
 
-  assert.equal(reserved.get('gordon_freeman')?.floorKey, 'story:maintenance');
+  assert.equal(reserved.get('gordon_freeman')?.floorKey, 'design:maintenance');
   assert.equal(reserved.get('gordon_freeman')?.age, 28);
   assert.equal(reserved.get('gordon_freeman')?.sex, 'male');
-  assert.equal(reserved.get('meduka_meguku')?.floorKey, 'story:hell');
+  assert.equal(reserved.get('meduka_meguku')?.floorKey, 'design:hell');
   assert.equal(reserved.get('meduka_meguku')?.age, 14);
   assert.equal(reserved.get('meduka_meguku')?.sex, 'female');
   assert.equal(reserved.get('f69_performer_ira')?.floorKey, 'design:floor_69');
   assert.equal(reserved.get('f69_performer_ira')?.age, 22);
   assert.equal(reserved.get('f69_performer_ira')?.sex, 'female');
-  assert.equal(reserved.get('rotenbergov')?.floorKey, 'story:ministry');
+  assert.equal(reserved.get('rotenbergov')?.floorKey, 'design:ministry');
   assert.equal(reserved.get('rotenbergov')?.age, 70);
   assert.equal(reserved.get('rotenbergov')?.sex, 'male');
   assert.equal(reserved.get('rotenbergov')?.money, 10_000);
@@ -318,10 +318,10 @@ test('A-Life migration profiles validate statically', () => {
 });
 
 test('shared floor key resolver covers story, design and procedural A-Life keys', () => {
-  assert.equal(floorKeyKnown('story:living'), true);
-  assert.equal(floorKeyZ('story:living'), 0);
-  assert.equal(floorKeyBaseFloor('story:living'), FloorLevel.LIVING);
-  assert.equal(floorKeyAllowsNpcs('story:void'), false);
+  assert.equal(floorKeyKnown('design:living'), true);
+  assert.equal(floorKeyZ('design:living'), 0);
+  assert.equal(floorKeyBaseFloor('design:living'), FloorLevel.LIVING);
+  assert.equal(floorKeyAllowsNpcs('design:void'), false);
 
   assert.equal(floorKeyKnown('design:floor_69'), true);
   assert.equal(floorKeyBaseFloor('design:floor_69'), FloorLevel.MAINTENANCE);
@@ -337,28 +337,28 @@ test('A-Life migration profiles validate bad intents', () => {
       id: '123_invalid_id', // Invalid ID (starts with number)
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['test'],
     },
     {
       id: 'duplicate_id',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['test'],
     },
     {
       id: 'duplicate_id', // Duplicate ID
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['test'],
     },
     {
       id: 'zero_weight',
       reason: 'work',
       weight: 0, // Zero weight
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['test'],
     },
     {
@@ -372,21 +372,21 @@ test('A-Life migration profiles validate bad intents', () => {
       id: 'too_many_tags',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], // Too many tags
     },
     {
       id: 'invalid_tag',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['InvalidTag!'], // Invalid tag format
     },
     {
       id: 'bad_faction_bias',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['test'],
       factionBias: [{ value: Faction.CITIZEN, weight: 0 }], // Zero weight bias
     },
@@ -394,7 +394,7 @@ test('A-Life migration profiles validate bad intents', () => {
       id: 'bad_occupation_bias',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:living'] },
+      destination: { floorKeys: ['design:living'] },
       eventTags: ['test'],
       occupationBias: [{ value: Occupation.DOCTOR, weight: 0 }], // Zero weight bias
     },
@@ -409,7 +409,7 @@ test('A-Life migration profiles validate bad intents', () => {
       id: 'npc_forbidden_destination',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:void'] }, // NPC forbidden (void)
+      destination: { floorKeys: ['design:void'] }, // NPC forbidden (void)
       eventTags: ['test'],
     },
     {
@@ -423,7 +423,7 @@ test('A-Life migration profiles validate bad intents', () => {
       id: 'allowed_npc_bypass',
       reason: 'work',
       weight: 1,
-      destination: { floorKeys: ['story:void'], allowsNpcOnly: false }, // Bypass allowsNpc check but fail on VOID ordinary
+      destination: { floorKeys: ['design:void'], allowsNpcOnly: false }, // Bypass allowsNpc check but fail on VOID ordinary
       eventTags: ['test'],
     }
   ];
@@ -439,10 +439,10 @@ test('A-Life migration profiles validate bad intents', () => {
   assert.ok(errors.some(e => e.includes('bad_faction_bias faction bias has non-positive weight')));
   assert.ok(errors.some(e => e.includes('bad_occupation_bias occupation bias has non-positive weight')));
   assert.ok(errors.some(e => e.includes('migration intent unknown_destination has unknown destination fake:floor')));
-  assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets NPC-forbidden destination story:void')));
-  assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets VOID ordinary destination story:void')));
+  assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets NPC-forbidden destination design:void')));
+  assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets VOID ordinary destination design:void')));
   assert.ok(errors.some(e => e.includes('migration intent void_base_floor targets VOID base floor')));
 
-  assert.ok(!errors.some(e => e.includes('migration intent allowed_npc_bypass targets NPC-forbidden destination story:void')));
-  assert.ok(errors.some(e => e.includes('migration intent allowed_npc_bypass targets VOID ordinary destination story:void')));
+  assert.ok(!errors.some(e => e.includes('migration intent allowed_npc_bypass targets NPC-forbidden destination design:void')));
+  assert.ok(errors.some(e => e.includes('migration intent allowed_npc_bypass targets VOID ordinary destination design:void')));
 });

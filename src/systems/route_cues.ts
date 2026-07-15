@@ -304,7 +304,7 @@ function fallbackObjectiveForCurrentRoute(state: GameState): ObjectiveRouteHud |
   const current = currentFloorRunEntry(state);
   const def = ROUTE_OBJECTIVE_FALLBACKS.find(hint =>
     (hint.z === undefined || hint.z === current.z) &&
-    (hint.storyFloor === undefined || hint.storyFloor === current.storyFloor));
+    (hint.storyFloor === undefined || hint.storyFloor === current.baseFloor));
   if (!def) return undefined;
   return {
     title: def.title,

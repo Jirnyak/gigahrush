@@ -560,10 +560,12 @@ import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, on
 import { randomTip } from './data/tips';
 import {
   PROCEDURAL_FLOOR_ZS,
+  FLOOR_RUN_VOID_Z,
   proceduralFloorKey,
   type FloorAnomalyId,
   type ProceduralFloorSpec,
 } from './data/procedural_floors';
+import { zForBaseFloor } from './data/floor_keys';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './data/design_floors';
 import {
   nextTitleLanguageId,
@@ -2085,7 +2087,7 @@ function playerBarAudioValues(actor = player): PlayerBarAudioValues {
 function floorThemeForRunEntry(entry: FloorRunEntry): FloorThemeProfile {
   if (entry.spec) return themeForProceduralSpec(entry.spec);
   if (entry.designFloorId) return themeForDesignFloor(entry.designFloorId);
-  return themeForStoryFloor(entry.storyFloor ?? entry.baseFloor);
+  return themeForStoryFloor(entry.baseFloor);
 }
 
 function currentVisualDetailProfile(entry: FloorRunEntry): ResolvedVisualDetailProfile {
@@ -2094,7 +2096,6 @@ function currentVisualDetailProfile(entry: FloorRunEntry): ResolvedVisualDetailP
   const key = [
     entry.z,
     entry.baseFloor,
-    entry.storyFloor ?? '',
     entry.designFloorId ?? '',
     entry.spec?.key ?? '',
     seed,
@@ -2520,9 +2521,9 @@ function creatorKillQuestSatisfied(): boolean {
 }
 
 function isVoidReturnPortalFloor(targetState: GameState = state): boolean {
-  if (targetState.currentZ !== FloorLevel.VOID) return false;
+  if (targetState.currentZ !== FLOOR_RUN_VOID_Z) return false;
   const entry = currentFloorRunEntry(targetState);
-  return !entry || (entry.storyFloor === FloorLevel.VOID && !entry.designFloorId && !entry.spec);
+  return !entry || (entry.baseFloor === FloorLevel.VOID && !entry.designFloorId && !entry.spec);
 }
 
 function removeCreatorFromResolvedVoid(): void {
@@ -2663,7 +2664,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
   captureCurrentFloorMemory();
 
-  state.currentZ = FloorLevel.LIVING;
+  state.currentZ = zForBaseFloor(FloorLevel.LIVING);
   state.gameWon = false;
   state.gameOver = false;
   resetRuntimeCamera(runtimeCamera);
@@ -2820,7 +2821,7 @@ interface SmokeDebugSnapshot {
   npcMenuTab: GameState['npcMenuTab'];
   mapMode: number;
   mobileControlsEnabled: boolean;
-  currentZ: FloorLevel;
+  currentZ: number;
   questCount: number;
   currentObjectiveLine: string;
   currentObjectiveSource: string;
@@ -5174,7 +5175,7 @@ function switchFloor(
   const directTargetEntry = targetZ !== undefined ? floorRunEntryForZ(state, targetZ) : null;
   if (targetZ !== undefined && !directTargetEntry) return;
   const fastTravel = directTargetEntry !== null;
-  let nextFloor: FloorLevel;
+  let nextFloor: number;
   const activeFloorInstance = (allowElevatorAnomaly && !fastTravel) ? getActiveFloorInstance(state) : null;
   let runEntry = fastTravel
     ? directTargetEntry
@@ -5183,15 +5184,15 @@ function switchFloor(
       : null;
 
   if (runEntry) {
-    nextFloor = runEntry.baseFloor;
+    nextFloor = runEntry.z;
   } else {
-    // Non-lift routes such as metro keep the old authored-floor behavior.
+    // Non-lift routes move sequentially by 2 through the Z coordinates
     if (direction === LiftDirection.DOWN) {
-      if (state.currentZ >= FloorLevel.HELL) return;
-      nextFloor = (state.currentZ + 1) as FloorLevel;
+      if (state.currentZ <= FLOOR_RUN_VOID_Z) return;
+      nextFloor = state.currentZ - 2;
     } else {
-      if (state.currentZ <= FloorLevel.MINISTRY) return;
-      nextFloor = (state.currentZ - 1) as FloorLevel;
+      if (state.currentZ >= 34) return; // 34 is Upper Bureau
+      nextFloor = state.currentZ + 2;
     }
   }
   resolveLiftArachnaDeparture(world, player, state);
@@ -5303,14 +5304,14 @@ function switchFloor(
     const arrivalText = overrideArrivalText ?? (route.activeInstance
       ? `Лифт ошибся: ${floorInstanceLabel(route.activeInstance)}`
       : route.exitedInstance
-        ? `Петля разомкнулась: ${generatedRunEntry?.label ?? FLOOR_NAMES[nextFloor]}`
+        ? `Петля разомкнулась: ${generatedRunEntry?.label ?? 'Неизвестно'}`
         : generatedRunEntry?.procedural || generatedRunEntry?.designFloorId
           ? `Лифт прибыл: ${generatedRunEntry.label}`
-          : `Лифт прибыл: ${FLOOR_NAMES[nextFloor]}`);
+          : `Лифт прибыл: Уровень ${formatFloorZ(nextFloor)}`);
     state.msgs.push(msg(
       arrivalText,
       state.time,
-      overrideArrivalColor ?? (route.activeInstance ? '#f4a' : route.exitedInstance ? '#8cf' : generatedRunEntry?.color ?? FLOOR_MESSAGE_COLORS[nextFloor]),
+      overrideArrivalColor ?? (route.activeInstance ? '#f4a' : route.exitedInstance ? '#8cf' : generatedRunEntry?.color ?? '#aaa'),
     ));
     const arrivalLead = route.activeInstance
       ? `Маршрут прерван: номерной лифт ${floorInstanceLabel(route.activeInstance)}. Возврат: следующий лифт ведет к ${intendedRunEntry ? floorRunEntryLiftLabel(intendedRunEntry) : 'плановому маршруту'}.`
@@ -5366,14 +5367,14 @@ function switchFloor(
 
     // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
     const enteredStoryHell = generatedRunEntry
-      ? generatedRunEntry.storyFloor === FloorLevel.HELL
+      ? generatedRunEntry.baseFloor === FloorLevel.HELL
       : nextFloor === FloorLevel.HELL && !allowElevatorAnomaly;
     if (!route.activeInstance && enteredStoryHell) {
       onHellArrival(player, state);
       tryCreateVoiceQuest(world, entities, state);
     }
     const enteredStoryVoid = generatedRunEntry
-      ? generatedRunEntry.storyFloor === FloorLevel.VOID
+      ? generatedRunEntry.baseFloor === FloorLevel.VOID
       : nextFloor === FloorLevel.VOID && !allowElevatorAnomaly;
     if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
     ensureRoomContainers(world, state.currentZ);
@@ -6253,7 +6254,7 @@ function loadGame(): boolean {
     const data = isRecord(parsed) ? parsed : {};
     const dataPlayer = isRecord(data.player) ? data.player : {};
     const dataState = isRecord(data.state) ? data.state : {};
-    const savedFloor = isFloorLevel(dataState.currentZ) ? dataState.currentZ : FloorLevel.LIVING;
+    const savedFloor = isFloorLevel(dataState.currentZ) ? zForBaseFloor(dataState.currentZ) : (typeof dataState.currentZ === 'number' ? dataState.currentZ : zForBaseFloor(FloorLevel.LIVING));
     const savedFloorRun = floorRunSaveHasRestorableRoute(dataState.floorRun)
       ? dataState.floorRun as Parameters<typeof setFloorRunState>[1]
       : undefined;

@@ -21,7 +21,7 @@ const NPC_DEF: PlotNpcDef = {
   faction: Faction.CITIZEN,
   occupation: Occupation.ALCOHOLIC,
   sprite: Occupation.ALCOHOLIC,
-  homeFloorKey: 'story:living',
+  homeFloorKey: 'design:living',
   hp: 40, maxHp: 40, money: 0, speed: 0.7,
   inventory: [
     { defId: 'cigs', count: 3 },

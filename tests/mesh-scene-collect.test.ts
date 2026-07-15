@@ -193,7 +193,7 @@ test('meat corridor profile renders ceiling lamps as organic light glands', () =
   setWorldVisualSlot(world, lamp, 0, VISUAL_CELL_CODES.CEILING_BULB);
 
   const instances = collectMeshScene(context(world, 10.5, 10.5, 123, {
-    floorKey: 'story:hell',
+    floorKey: 'design:hell',
     profile: {
       radius: 6,
       instanceCap: 64,
@@ -507,7 +507,7 @@ test('collector corridor wall volume uses pipe relief instead of service panels'
   const world = corridorWorld(RoomType.CORRIDOR, 80);
 
   const instances = collectMeshScene(context(world, 30.5, 10.5, 0x7788, {
-    floorKey: 'story:maintenance',
+    floorKey: 'design:maintenance',
     profile: {
       radius: 28,
       instanceCap: 260,
@@ -538,7 +538,7 @@ test('meat corridor wall volume uses organic relief instead of service panels', 
   const world = corridorWorld(RoomType.CORRIDOR, 80);
 
   const instances = collectMeshScene(context(world, 30.5, 10.5, 0x7799, {
-    floorKey: 'story:hell',
+    floorKey: 'design:hell',
     profile: {
       radius: 28,
       instanceCap: 260,
@@ -641,7 +641,7 @@ test('meat corridor volume profile adds smooth organic folds without visual slot
   const world = corridorWorld(RoomType.COMMON, 42);
 
   const instances = collectMeshScene(context(world, 18.5, 10.5, 0x7733, {
-    floorKey: 'story:hell',
+    floorKey: 'design:hell',
     profile: {
       radius: 18,
       instanceCap: 180,
@@ -767,7 +767,7 @@ test('collector ceiling service runs merge along procedural lanes', () => {
     return Math.abs(fy - 0.5) > 0.24;
   }), true);
   assert.notEqual(ceilingRunSignature(0x7756), ceilingRunSignature(0x7757));
-  assert.notEqual(ceilingRunSignature(0x7756), ceilingRunSignature(0x7756, 'story:maintenance'));
+  assert.notEqual(ceilingRunSignature(0x7756), ceilingRunSignature(0x7756, 'design:maintenance'));
 });
 
 test('collector ceiling visual slot bundles use topology lanes instead of cell centers', () => {
@@ -948,7 +948,7 @@ test('linoleum procedural floor scatter follows floor material without stored sl
   };
   const collectLinoleum = (seed: number) => collectMeshScene(context(world, 20.5, 20.5, seed, {
     mode: 'high',
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     profile,
   })).filter(instance =>
     instance.modelId === 'linoleum_peel' ||
@@ -998,7 +998,7 @@ test('linoleum procedural floor scatter stays enabled from current room material
   };
   const scatter = collectMeshScene(context(world, 20.5, 20.5, 0x7785, {
     mode: 'high',
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     profile,
   })).filter(instance =>
     instance.modelId === 'linoleum_peel' ||
@@ -1031,8 +1031,8 @@ test('procedural floor scatter follows compact resolved field budgets', () => {
   const livingWorld = openWorld();
   livingWorld.floorTex.fill(Tex.F_LINO);
   const linoIds = new Set(['linoleum_peel', 'linoleum_scrap', 'paper_sheet', 'newspaper_sheet', 'floor_crumb']);
-  const lowLivingProfile = resolveVisualGeometryProfile('low', 'story:living', ['living', 'residential']);
-  const mediumLivingProfile = resolveVisualGeometryProfile('medium', 'story:living', ['living', 'residential']);
+  const lowLivingProfile = resolveVisualGeometryProfile('low', 'design:living', ['living', 'residential']);
+  const mediumLivingProfile = resolveVisualGeometryProfile('medium', 'design:living', ['living', 'residential']);
   const lowLiving = collectMeshScene(context(livingWorld, 34.5, 34.5, 0x7781, {
     mode: 'low',
     floorKey: lowLivingProfile.key,
@@ -1073,7 +1073,7 @@ test('procedural floor scatter field does not depend on per-cell passability', (
 
   const scatter = collectMeshScene(context(world, 20.5, 20.5, 0x7784, {
     mode: 'high',
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     profile,
   })).filter(instance =>
     instance.modelId === 'linoleum_peel' ||

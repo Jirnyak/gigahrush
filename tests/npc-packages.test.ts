@@ -41,7 +41,7 @@ function minimalNpcPackage(id: string): NpcPackageDef {
     loadout: {},
     social: {},
     visual: {},
-    placement: { homeFloorKey: 'story:living', presence: 'population' },
+    placement: { homeFloorKey: 'design:living', presence: 'population' },
     speech: {},
   };
 }
@@ -198,7 +198,7 @@ test('full NPC package covers bio, speech, social, RPG, visual and loadout field
       portraitHint: 'ключи и рабочая куртка',
     },
     placement: {
-      homeFloorKey: 'story:living',
+      homeFloorKey: 'design:living',
       presence: 'anchor',
       mobility: 'fixed_home',
       roomId: 'locker_post',
@@ -426,7 +426,7 @@ test('editor document exposes validation state and registry-derived lookup hints
   assert.ok(doc.lookupHints.factions.includes('CITIZEN'));
   assert.ok(doc.lookupHints.occupations.includes('DOCTOR'));
   assert.ok(doc.lookupHints.itemIds.includes('bandage'));
-  assert.ok(doc.lookupHints.floorKeys.includes('story:living'));
+  assert.ok(doc.lookupHints.floorKeys.includes('design:living'));
   assert.ok(doc.lookupHints.visualIds.includes(NPC_VISUAL_FLOOR69_FEMALE));
   assert.ok(doc.lookupHints.perkIds.includes('tool_hands'));
   assert.ok(doc.lookupHints.demosRelationRoles.includes('FRIEND'));
@@ -578,7 +578,7 @@ test('npcPackageLookupHints provides expected arrays and merges context extras',
   assert.ok(defaultHints.factions.includes('CITIZEN'));
   assert.ok(defaultHints.occupations.includes('DOCTOR'));
   assert.ok(defaultHints.itemIds.includes('bandage'));
-  assert.ok(defaultHints.floorKeys.includes('story:living'));
+  assert.ok(defaultHints.floorKeys.includes('design:living'));
   assert.ok(defaultHints.visualIds.includes(NPC_VISUAL_FLOOR69_FEMALE));
   assert.ok(defaultHints.perkIds.includes('tool_hands'));
   assert.ok(defaultHints.demosRelationRoles.includes('FRIEND'));
@@ -590,7 +590,7 @@ test('npcPackageLookupHints provides expected arrays and merges context extras',
   assert.equal(new Set(defaultHints.perkIds).size, defaultHints.perkIds.length);
 
   const hintsWithContext = npcPackageLookupHints({
-    extraKnownKeys: ['extra_floor_1', 'extra_floor_2', 'story:living'], // includes duplicate
+    extraKnownKeys: ['extra_floor_1', 'extra_floor_2', 'design:living'], // includes duplicate
     extraVisualIds: ['custom_visual_1', NPC_VISUAL_FLOOR69_FEMALE], // includes duplicate
     extraPerkIds: ['custom_perk_1', 'tool_hands'], // includes duplicate
   });
@@ -601,7 +601,7 @@ test('npcPackageLookupHints provides expected arrays and merges context extras',
   assert.ok(hintsWithContext.perkIds.includes('custom_perk_1'));
 
   // Verify that uniqueness/deduplication works
-  assert.equal(hintsWithContext.floorKeys.filter(k => k === 'story:living').length, 1);
+  assert.equal(hintsWithContext.floorKeys.filter(k => k === 'design:living').length, 1);
   assert.equal(hintsWithContext.visualIds.filter(v => v === NPC_VISUAL_FLOOR69_FEMALE).length, 1);
   assert.equal(hintsWithContext.perkIds.filter(p => p === 'tool_hands').length, 1);
 

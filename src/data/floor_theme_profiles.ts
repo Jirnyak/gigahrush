@@ -12,9 +12,9 @@ import {
   floorRunZAllowsNpcs,
   majorityById,
   proceduralFloorMonsterBiasTags,
-  zForStoryFloor,
   type ProceduralFloorSpec,
 } from './procedural_floors';
+import { zForBaseFloor } from './floor_keys';
 import {
   proceduralPopulationProfileId,
 } from './population_profiles';
@@ -84,7 +84,7 @@ const STORY_SPECIAL_TAGS: Readonly<Record<FloorLevel, readonly string[]>> = {
 };
 
 function storyFloorKey(floor: FloorLevel): string {
-  return `story:${STORY_KEY_IDS[floor] ?? String(floor)}`;
+  return `design:${STORY_KEY_IDS[floor] ?? String(floor)}`;
 }
 
 function designFloorKey(id: DesignFloorId | string): string {
@@ -108,7 +108,7 @@ function nonEmptyTags(values: readonly string[] | undefined): readonly string[] 
 }
 
 export function themeForStoryFloor(floor: FloorLevel): FloorThemeProfile {
-  const z = zForStoryFloor(floor);
+  const z = zForBaseFloor(floor);
   const objectProfile = floorObjectProfileForStoryFloor(floor);
   const territoryShares = territorySharesForStoryFloor(floor);
   return {

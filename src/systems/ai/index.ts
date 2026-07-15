@@ -22,6 +22,7 @@ import { hearingRadiusMetersForActor } from '../hearing';
 import { unstuckActorFromBlockers } from '../movement_collision';
 import { isPlayerEntity } from '../player_actor';
 import { updateSwarmNests } from '../swarm_nests';
+import { designFloorAtZ, designFloorThemeClass } from '../../data/design_floors';
 
 export interface AiStats {
   frame: number;
@@ -116,7 +117,8 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setEntityMap(entityIndex.byId);
   fillProjectileOwners(entityIndex.projectiles);
 
-  const isMinistry = currentZ === FloorLevel.MINISTRY;
+  const designFloor = currentZ !== undefined ? designFloorAtZ(currentZ) : undefined;
+  const isMinistry = designFloor ? designFloorThemeClass(designFloor) === FloorLevel.MINISTRY : false;
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,

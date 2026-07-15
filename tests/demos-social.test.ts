@@ -46,7 +46,7 @@ function stateWithPopulation(seed: number, total: number, reserved: readonly Ali
   const state = { currentZ: FloorLevel.LIVING } as GameState;
   createPrefilledAlifeState(state, seed, total, {
     buckets: [{
-      floorKey: 'story:living',
+      floorKey: 'design:living',
       floor: FloorLevel.LIVING,
       targetCount: total,
       reserved,
@@ -74,7 +74,7 @@ function demosPackage(id: string, displayName: string, social: NpcPackageDef['so
     loadout: {},
     social,
     visual: {},
-    placement: { homeFloorKey: 'story:living', presence: 'population' },
+    placement: { homeFloorKey: 'design:living', presence: 'population' },
     speech: {},
   };
 }

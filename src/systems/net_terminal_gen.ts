@@ -13,14 +13,13 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { rng, hashSeed, seededRandom } from '../core/rand';
-import { designFloorAtZ } from '../data/design_floors';
 import {
   FLOOR_RUN_MAX_Z,
   FLOOR_RUN_MIN_Z,
   isProceduralFloorZ,
   proceduralFloorKey,
-  storyFloorAtZ,
 } from '../data/procedural_floors';
+import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
 import {
   NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS,
   NET_TERMINAL_GEN_DENIED_TEXT,
@@ -214,7 +213,8 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
   const run = ensureFloorRunState(state);
   const deck: NetTerminalGenRouteTarget[] = [];
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
-    const story = storyFloorAtZ(z);
+    const designFloor = designFloorAtZ(z);
+    const story = designFloor ? designFloorThemeClass(designFloor) : FloorLevel.LIVING;
     if (story !== undefined) {
       deck.push({
         z,

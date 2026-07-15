@@ -8,8 +8,6 @@ import {
   floorRunZAllowsNpcs,
   PROCEDURAL_FLOOR_ZS,
   proceduralFloorKey,
-  storyFloorAtZ,
-  zForStoryFloor,
 } from './procedural_floors';
 import {
   floorInstanceAllowsNpcs,
@@ -18,7 +16,7 @@ import {
 
 export type FloorKeyKind = 'story' | 'design' | 'procedural' | 'floor_instance' | 'unknown';
 
-const STORY_KEY_IDS: Record<FloorLevel, string> = {
+export const STORY_KEY_IDS: Record<FloorLevel, string> = {
   [FloorLevel.MINISTRY]: 'ministry',
   [FloorLevel.KVARTIRY]: 'kvartiry',
   [FloorLevel.LIVING]: 'living',
@@ -26,6 +24,10 @@ const STORY_KEY_IDS: Record<FloorLevel, string> = {
   [FloorLevel.HELL]: 'hell',
   [FloorLevel.VOID]: 'void',
 };
+
+export function zForBaseFloor(floor: FloorLevel): number {
+  return designFloorById(STORY_KEY_IDS[floor])?.z ?? 0;
+}
 
 const STORY_FLOOR_BY_KEY: Readonly<Record<string, FloorLevel>> = Object.fromEntries(
   Object.values(FloorLevel)
@@ -45,7 +47,7 @@ export function cleanFloorKey(input: unknown): string {
 }
 
 export function floorKeyForStory(floor: FloorLevel): string {
-  return `story:${STORY_KEY_IDS[floor] ?? String(floor)}`;
+  return `design:${STORY_KEY_IDS[floor] ?? String(floor)}`;
 }
 
 export function floorKeyForDesign(id: string): string {
@@ -76,8 +78,6 @@ export function floorKeyRouteId(keyInput: string): string {
 }
 
 export function floorKeyForZ(z: number): string {
-  const story = storyFloorAtZ(z);
-  if (story !== undefined) return floorKeyForStory(story);
   const design = designFloorAtZ(z);
   if (design) return floorKeyForDesign(design.id);
   return floorKeyForProcedural(proceduralFloorKey(z));
@@ -104,7 +104,7 @@ export function floorKeyZ(keyInput: string, context?: FloorKeyResolveContext): n
   const kind = floorKeyKind(key);
   if (kind === 'story') {
     const floor = STORY_FLOOR_BY_KEY[key];
-    return floor !== undefined ? zForStoryFloor(floor) : undefined;
+    return floor !== undefined ? zForBaseFloor(floor) : undefined;
   }
   if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.z;
   if (kind === 'procedural') return proceduralZForRouteId(floorKeyRouteId(key), context);

@@ -48,7 +48,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     weight: 9,
     destination: {
       floorKeys: [
-        'story:ministry',
+        'design:ministry',
         'design:upper_bureau',
         'design:cayley_byuro',
         'design:number_registry',
@@ -109,7 +109,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
         'design:black_market_88',
         'design:floor_69',
         'design:communal_ring',
-        'story:living',
+        'design:living',
       ],
       routeTags: ['market', 'trade', 'social', 'hub'],
     },
@@ -135,8 +135,8 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     weight: 8,
     destination: {
       floorKeys: [
-        'story:living',
-        'story:kvartiry',
+        'design:living',
+        'design:kvartiry',
         'design:obschezhitie_smeny',
         'design:communal_ring',
         'design:moebius_podezd',
@@ -149,7 +149,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     ],
     occupationBias: [
       { value: Occupation.HOUSEWIFE, weight: 6 },
-      { value: Occupation.CHILD, weight: 0 },
+
       { value: Occupation.TRAVELER, weight: 2 },
     ],
     maxRisk: 3,
@@ -163,7 +163,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     weight: 8,
     destination: {
       floorKeys: [
-        'story:maintenance',
+        'design:maintenance',
         'design:production_belt',
         'design:service_floor',
         'design:hyperbolic_switchyard',
@@ -248,7 +248,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     weight: 4,
     destination: {
       floorKeys: [
-        'story:living',
+        'design:living',
         'design:black_market_88',
         'design:service_floor',
         'design:production_belt',
@@ -277,8 +277,8 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     weight: 5,
     destination: {
       floorKeys: [
-        'story:living',
-        'story:kvartiry',
+        'design:living',
+        'design:kvartiry',
         'design:obschezhitie_smeny',
         'design:communal_ring',
         'design:pioneer_camp',
@@ -292,7 +292,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     ],
     occupationBias: [
       { value: Occupation.HOUSEWIFE, weight: 5 },
-      { value: Occupation.CHILD, weight: 0 },
+
       { value: Occupation.TRAVELER, weight: 3 },
       { value: Occupation.DOCTOR, weight: 1 },
     ],
@@ -307,8 +307,8 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     weight: 10,
     destination: {
       floorKeys: [
-        'story:living',
-        'story:kvartiry',
+        'design:living',
+        'design:kvartiry',
         'design:communal_ring',
         'design:moebius_podezd',
         'design:obschezhitie_smeny',
@@ -322,7 +322,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     ],
     occupationBias: [
       { value: Occupation.HOUSEWIFE, weight: 6 },
-      { value: Occupation.CHILD, weight: 0 },
+
       { value: Occupation.COOK, weight: 2 },
       { value: Occupation.TRAVELER, weight: 2 },
     ],

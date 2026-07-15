@@ -430,7 +430,7 @@ function spawnPatrol(
   rng: SeedRng,
 ): { spawned: number; alifeIds: number[]; toFloorKey: string; fromFloorKey: string } {
   const toFloorKey = currentAlifeFloorKey(state);
-  const fromFloorKey = 'story:ministry';
+  const fromFloorKey = 'design:ministry';
   const localSlots = 1100 - countAliveByType(entities, EntityType.NPC);
   if (localSlots <= 0) return { spawned: 0, alifeIds: [], toFloorKey, fromFloorKey };
   const slots = entitySpawnSlots(entities, EntityType.NPC, Math.min(2, localSlots));

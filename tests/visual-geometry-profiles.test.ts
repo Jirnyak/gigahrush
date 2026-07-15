@@ -120,9 +120,9 @@ test('visual geometry base modes resolve with safe caps', () => {
   assert.equal(normalizeVisualGeometryMode('bad'), 'high');
   assert.equal(normalizeVisualGeometryMode(undefined), 'high');
 
-  assertOffCaps(resolveVisualGeometryProfile('off', 'story:living', ['living', 'residential']));
+  assertOffCaps(resolveVisualGeometryProfile('off', 'design:living', ['living', 'residential']));
   for (const mode of ['low', 'medium', 'high'] as const satisfies readonly VisualGeometryMode[]) {
-    const profile = resolveVisualGeometryProfile(mode, 'story:living', ['living', 'residential']);
+    const profile = resolveVisualGeometryProfile(mode, 'design:living', ['living', 'residential']);
     assertEnabledCaps(profile, mode);
     assert.equal(profile.instanceCap, EXPECTED_INSTANCE_CAPS[mode], `${mode} instance cap`);
     assert.equal(profile.proceduralFieldRadius, EXPECTED_FIELD_RADII[mode], `${mode} procedural field radius`);
@@ -183,8 +183,8 @@ test('visual geometry theme modulation is data-only and deterministic', () => {
     for (const tag of [...(row.requiredTags ?? []), ...(row.blockedTags ?? [])]) assert.match(tag, ID_RE, `${row.id} tag ${tag} must stay snake_case`);
   }
 
-  const a = resolveVisualGeometryProfile('medium', 'story:maintenance', ['maintenance', 'industrial', 'collectors']);
-  const b = resolveVisualGeometryProfile('medium', 'story:maintenance', ['collectors', 'industrial', 'maintenance']);
+  const a = resolveVisualGeometryProfile('medium', 'design:maintenance', ['maintenance', 'industrial', 'collectors']);
+  const b = resolveVisualGeometryProfile('medium', 'design:maintenance', ['collectors', 'industrial', 'maintenance']);
   assert.deepEqual(a, b, 'same tags in different order must resolve identically');
   assert.equal(a.modulationIds.includes('maintenance_pipes_cables'), true);
   assert.equal(a.modulationIds.includes('industrial_hard_detail'), true);
@@ -192,7 +192,7 @@ test('visual geometry theme modulation is data-only and deterministic', () => {
   assert.equal(a.corridorCoveringId, 'collector');
   assert.equal(a.corridorVolumeDetail > resolveVisualGeometryProfile('medium', 'plain', []).corridorVolumeDetail, true);
 
-  const hell = resolveVisualGeometryProfile('medium', 'story:hell', ['hell', 'meat', 'cult']);
+  const hell = resolveVisualGeometryProfile('medium', 'design:hell', ['hell', 'meat', 'cult']);
   assert.equal(hell.corridorVolumeStyle, 'organic');
   assert.equal(hell.corridorCoveringId, 'meat');
   assert.equal(hell.organicVolumeDetail > a.organicVolumeDetail, true);

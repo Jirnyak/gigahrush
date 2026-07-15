@@ -15,7 +15,7 @@ const NPC_DEF: PlotNpcDef = {
   faction: Faction.LIQUIDATOR,
   occupation: Occupation.HUNTER,
   sprite: Occupation.HUNTER,
-  homeFloorKey: 'story:living',
+  homeFloorKey: 'design:living',
   level: 10,
   money: 300,
   inventory: [

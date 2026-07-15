@@ -10,7 +10,6 @@ import {
   ZoneFaction,
 } from '../core/types';
 import { hashSeed, seededRandom } from '../core/rand';
-import { designFloorAtZ } from './design_floors';
 import {
   ECONOMY_PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER,
   proceduralLootValueCap as economyProceduralLootValueCap,
@@ -190,19 +189,9 @@ export const FLOOR_RUN_MAX_Z = 50;
 export const FLOOR_RUN_VOID_Z = -50;
 export const FLOOR_RUN_NPC_FREE_Z = -48;
 
-const STORY_Z_BY_FLOOR: Readonly<Record<FloorLevel, number>> = {
-  [FloorLevel.MINISTRY]: 30,
-  [FloorLevel.KVARTIRY]: 14,
-  [FloorLevel.LIVING]: 0,
-  [FloorLevel.MAINTENANCE]: -26,
-  [FloorLevel.HELL]: -36,
-  [FloorLevel.VOID]: FLOOR_RUN_VOID_Z,
-};
-
-const STORY_FLOOR_BY_Z = new Map<number, FloorLevel>(
-  (Object.values(FloorLevel).filter(v => typeof v === 'number') as FloorLevel[])
-    .map(floor => [STORY_Z_BY_FLOOR[floor], floor])
-);
+export function isProceduralFloorZ(z: number): boolean {
+  return z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z && Math.abs(z % 2) === 1;
+}
 
 export function floorRunProfileZ(z: number): number {
   return Math.round(z >= 0 ? z * -44 / 50 : z * -40 / 50);
@@ -211,7 +200,7 @@ export function floorRunProfileZ(z: number): number {
 function makeProceduralFloorZs(): readonly number[] {
   const zs: number[] = [];
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
-    if (storyFloorAtZ(z) === undefined && designFloorAtZ(z) === undefined) zs.push(z);
+    if (Math.abs(z % 2) === 1) zs.push(z);
   }
   return zs;
 }
@@ -652,17 +641,7 @@ function collectTagged<T>(tags: readonly string[], table: Record<string, readonl
   return out;
 }
 
-export function storyFloorAtZ(z: number): FloorLevel | undefined {
-  return STORY_FLOOR_BY_Z.get(z);
-}
 
-export function zForStoryFloor(floor: FloorLevel): number {
-  return STORY_Z_BY_FLOOR[floor] ?? 0;
-}
-
-export function isProceduralFloorZ(z: number): boolean {
-  return z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z && storyFloorAtZ(z) === undefined && designFloorAtZ(z) === undefined;
-}
 
 export function floorRunZAllowsNpcs(z: number): boolean {
   return z > FLOOR_RUN_NPC_FREE_Z;

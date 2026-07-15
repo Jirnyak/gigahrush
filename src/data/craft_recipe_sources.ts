@@ -229,7 +229,7 @@ export const CRAFT_RECIPE_SOURCES: readonly CraftRecipeSourceDef[] = [
   {
     id: 'floor_recipe_billboard_basics',
     kind: 'floor',
-    floorId: 'story:living',
+    floorId: 'design:living',
     interactiveDefId: 'recipe_billboard',
     recipeIds: [r('duct_tape'), r('wire_coil'), r('fuse')],
     text: 'Доска верстака: изолента, провод и предохранитель идут первыми.',

@@ -81,7 +81,7 @@ test('main plot NPCs are registered as packages and expose package-derived plot 
 test('package-derived A-Life reserved identities keep package and plot identity linked', () => {
   const plan = buildAlifePopulationPlan({
     runSeed: 5,
-    routeKeys: ['story:living', 'story:maintenance', 'story:hell', 'story:void', 'design:podad', 'design:liquidatorbase'],
+    routeKeys: ['design:living', 'design:ministry', 'design:maintenance', 'design:hell', 'design:void', 'design:podad', 'design:liquidatorbase'],
     total: MAIN_PLOT_IDS.length,
   });
   const byPlotId = new Map(plan.reserved.map(identity => [identity.plotNpcId, identity]));

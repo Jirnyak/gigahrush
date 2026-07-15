@@ -24,7 +24,7 @@ const NEED_REQUEST: SpeechRouterRequest = {
   repeatIndex: 0,
   context: {
     actorId: 7,
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     needBand: 'urgent',
     tags: ['need', 'water'],
     requiredAnchors: ['need'],

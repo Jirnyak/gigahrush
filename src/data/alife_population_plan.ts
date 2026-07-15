@@ -104,12 +104,12 @@ const STORY_POPULATION_WEIGHT: Readonly<Record<FloorLevel, number>> = {
 };
 
 const STORY_POPULATION_PROFILE: Readonly<Record<FloorLevel, string>> = {
-  [FloorLevel.MINISTRY]: 'story:ministry_admin',
-  [FloorLevel.KVARTIRY]: 'story:kvartiry_lively',
-  [FloorLevel.LIVING]: 'story:living_hub',
-  [FloorLevel.MAINTENANCE]: 'story:maintenance_service',
-  [FloorLevel.HELL]: 'story:hell_lively',
-  [FloorLevel.VOID]: 'story:void_lively',
+  [FloorLevel.MINISTRY]: 'design:ministry_admin',
+  [FloorLevel.KVARTIRY]: 'design:kvartiry_lively',
+  [FloorLevel.LIVING]: 'design:living_hub',
+  [FloorLevel.MAINTENANCE]: 'design:maintenance_service',
+  [FloorLevel.HELL]: 'design:hell_lively',
+  [FloorLevel.VOID]: 'design:void_lively',
 };
 
 function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
@@ -378,17 +378,28 @@ export function buildAlifePopulationPlan(input: {
 }): AlifePopulationPlanDef {
   const allowed = input.routeKeys.length > 0 ? new Set(input.routeKeys) : undefined;
   const weighted: WeightedBucket[] = [];
+  const seenKeys = new Set<string>();
+  
   for (const floor of [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID]) {
     const bucket = storyBucket(floor);
-    if (routeAllowed(bucket.floorKey, allowed)) weighted.push(bucket);
+    if (!seenKeys.has(bucket.floorKey) && routeAllowed(bucket.floorKey, allowed)) {
+      seenKeys.add(bucket.floorKey);
+      weighted.push(bucket);
+    }
   }
   for (const route of DESIGN_FLOOR_ROUTES) {
     const bucket = designBucket(route);
-    if (routeAllowed(bucket.floorKey, allowed)) weighted.push(bucket);
+    if (!seenKeys.has(bucket.floorKey) && routeAllowed(bucket.floorKey, allowed)) {
+      seenKeys.add(bucket.floorKey);
+      weighted.push(bucket);
+    }
   }
   for (const spec of buildProceduralSpecs(input.runSeed, input.proceduralSpecs)) {
     const bucket = proceduralBucket(spec);
-    if (routeAllowed(bucket.floorKey, allowed)) weighted.push(bucket);
+    if (!seenKeys.has(bucket.floorKey) && routeAllowed(bucket.floorKey, allowed)) {
+      seenKeys.add(bucket.floorKey);
+      weighted.push(bucket);
+    }
   }
 
   const reserved = buildReservedIdentities(input.npcPackages).filter(identity => routeAllowed(identity.floorKey, allowed));

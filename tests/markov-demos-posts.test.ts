@@ -43,7 +43,7 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
 function snapshot(id: number, name = `Житель ${id}`, dead = false): AlifeNpcSnapshot {
   return {
     id,
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     floor: FloorLevel.LIVING,
     faction: Faction.CITIZEN,
     occupation: Occupation.SECRETARY,

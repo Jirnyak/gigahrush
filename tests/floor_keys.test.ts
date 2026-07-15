@@ -5,9 +5,9 @@ import { FloorLevel } from '../src/core/types';
 import { floorKeyForEntry } from '../src/systems/floor_keys';
 
 test('floorKeyForEntry returns story key when storyFloor is defined', () => {
-  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MAINTENANCE, storyFloor: FloorLevel.MINISTRY }), 'story:ministry');
-  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MAINTENANCE, storyFloor: FloorLevel.KVARTIRY }), 'story:kvartiry');
-  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MINISTRY, storyFloor: FloorLevel.VOID }), 'story:void');
+  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MAINTENANCE, storyFloor: FloorLevel.MINISTRY }), 'design:ministry');
+  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MAINTENANCE, storyFloor: FloorLevel.KVARTIRY }), 'design:kvartiry');
+  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MINISTRY, storyFloor: FloorLevel.VOID }), 'design:void');
 });
 
 test('floorKeyForEntry returns design key when designFloorId is defined', () => {
@@ -28,16 +28,16 @@ test('floorKeyForEntry returns correct key when z is defined and valid', () => {
 });
 
 test('floorKeyForEntry falls back to baseFloor when no better info is provided', () => {
-  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MAINTENANCE }), 'story:maintenance');
-  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.LIVING }), 'story:living');
-  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.HELL }), 'story:hell');
+  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.MAINTENANCE }), 'design:maintenance');
+  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.LIVING }), 'design:living');
+  assert.equal(floorKeyForEntry({ baseFloor: FloorLevel.HELL }), 'design:hell');
 });
 
 test('floorKeyForEntry priority check', () => {
   // Should pick storyFloor over designFloorId, spec, z, and baseFloor
   assert.equal(
     floorKeyForEntry({ baseFloor: FloorLevel.VOID, storyFloor: FloorLevel.MINISTRY, designFloorId: 'roof', spec: { key: 'test' }, z: 50 }),
-    'story:ministry'
+    'design:ministry'
   );
 
   // Should pick designFloorId over spec, z, and baseFloor

@@ -104,7 +104,7 @@ function snapshot(overrides: Partial<ContextSnapshot> = {}): ContextSnapshot {
 function alifeSnapshot(overrides: Partial<AlifeNpcSnapshot> = {}): AlifeNpcSnapshot {
   return {
     id: 1,
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     floor: FloorLevel.LIVING,
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,

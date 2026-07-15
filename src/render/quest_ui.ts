@@ -9,7 +9,7 @@ import {
   QuestType,
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
-import { zForStoryFloor } from '../data/procedural_floors';
+import { zForBaseFloor } from '../data/floor_keys';
 import { isQuestTargetOnCurrentFloor, questRouteFloor, questRouteTargetLabel, questTargetLiftDirection } from '../systems/contracts';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { getRecentEvents } from '../systems/events';
@@ -203,7 +203,7 @@ function questRouteHint(q: Quest, state: GameState): string {
     const dir = questTargetLiftDirection(q, state) === LiftDirection.DOWN ? '↓' : '↑';
     const currentZ = currentFloorRunEntry(state).z;
     const routeLabel = questRouteTargetLabel(q, state);
-    const targetZ = zForStoryFloor(floor);
+    const targetZ = zForBaseFloor(floor);
     const target = routeLabel || `${FLOOR_NAMES[floor]} Z${formatFloorZ(targetZ)}`;
     return detail
       ? `Цель: ${target}. Лифт ${dir} от Z${formatFloorZ(currentZ)}. ${detail}`

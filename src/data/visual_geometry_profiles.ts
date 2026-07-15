@@ -207,7 +207,7 @@ export interface VisualGeometryThemeModulation {
 export const VISUAL_GEOMETRY_THEME_MODULATIONS: readonly VisualGeometryThemeModulation[] = [
   {
     id: 'maintenance_pipes_cables',
-    floorKeys: ['story:maintenance'],
+    floorKeys: ['design:maintenance'],
     requiredTags: ['maintenance'],
     instanceMul: 1.1,
     triangleMul: 1.08,

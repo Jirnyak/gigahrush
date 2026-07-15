@@ -345,14 +345,14 @@ test('small caravan arrival moves surviving member A-Life records to destination
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
   assert.ok(run);
   assert.ok(npc.alifeId);
-  run.toFloorKey = 'story:kvartiry';
+  run.toFloorKey = 'design:kvartiry';
   run.progress = 0.99;
 
   tickCaravans(state, CARAVAN_TICK_SECONDS, true, 0, world, entities, player, { v: 3 });
 
   assert.equal(run.status, 'arrived');
   const moved = alifeForSave(state).overrides.find(item => item.id === npc.alifeId);
-  assert.equal(moved?.floorKey, 'story:kvartiry');
+  assert.equal(moved?.floorKey, 'design:kvartiry');
   assert.equal(moved?.floor, FloorLevel.KVARTIRY);
   assert.equal(alifeForSave(state).deadIds.includes(npc.alifeId), false);
 });
@@ -392,18 +392,18 @@ test('off-floor caravan lane migration moves a bounded prefilled A-Life record',
   };
   const caravans = ensureCaravanState(state);
   caravans.lanes[LANE_QUEUE].runs = 3;
-  const expectedSample = sampleAlifeFloorRecordIds(state, 'story:kvartiry', 1, 4 + LANE_QUEUE.length, {
+  const expectedSample = sampleAlifeFloorRecordIds(state, 'design:kvartiry', 1, 4 + LANE_QUEUE.length, {
     faction: Faction.CITIZEN,
     maxAttempts: 96,
   });
   assert.equal(expectedSample.length, 1);
-  const sourceBefore = alife.floorIndex['story:kvartiry'].length;
-  const targetBefore = alife.floorIndex['story:living'].length;
+  const sourceBefore = alife.floorIndex['design:kvartiry'].length;
+  const targetBefore = alife.floorIndex['design:living'].length;
 
   assert.equal(tickCaravans(state, CARAVAN_TICK_SECONDS, true, 1), 1);
 
   assert.equal(alife.total, 100_000);
-  assert.equal(alife.floorIndex['story:kvartiry'].length, sourceBefore - 1);
-  assert.equal(alife.floorIndex['story:living'].length, targetBefore + 1);
-  assert.equal(alifeForSave(state).overrides.some(item => item.id === expectedSample[0] && item.floorKey === 'story:living'), true);
+  assert.equal(alife.floorIndex['design:kvartiry'].length, sourceBefore - 1);
+  assert.equal(alife.floorIndex['design:living'].length, targetBefore + 1);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === expectedSample[0] && item.floorKey === 'design:living'), true);
 });

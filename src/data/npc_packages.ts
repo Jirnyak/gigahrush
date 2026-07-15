@@ -277,7 +277,7 @@ function normalizeNpcPackageInput(input: NpcPackageDef | NpcPackageRegistryInput
     visual: input.visual ?? {},
     placement: {
       ...placementInput,
-      homeFloorKey: placementInput.homeFloorKey ?? 'story:living',
+      homeFloorKey: placementInput.homeFloorKey ?? 'design:living',
       presence: placementInput.presence ?? 'anchor',
     },
     speech: input.speech ?? {},
@@ -484,7 +484,7 @@ function packageRuntimeSpeed(speed?: number): number | undefined {
 
 export function npcPackageFromPlotNpc(input: PlotNpcPackageInput): NpcPackageDef {
   const quests = input.quests ?? [];
-  const homeFloorKey = input.npc.homeFloorKey ?? 'story:living';
+  const homeFloorKey = input.npc.homeFloorKey ?? 'design:living';
   const tags = trimTags(['authored', input.id, ...(input.npc.authoredTags ?? []), ...(input.tags ?? [])]);
   const questIds = quests.map(quest => quest.id);
   const speed = packageRuntimeSpeed(input.npc.speed);

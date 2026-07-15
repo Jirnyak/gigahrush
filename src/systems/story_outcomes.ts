@@ -1,5 +1,6 @@
 import {
   EntityType,
+  FloorLevel,
   type Entity,
   type GameState,
   type Item,
@@ -19,6 +20,8 @@ import {
 } from '../data/story_outcomes';
 import { Spr } from '../render/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
+
+import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
 import { publishEvent } from './events';
 import {
   applyStoryQuestOutcome,
@@ -101,7 +104,9 @@ function routeTags(state: GameState): string[] {
 
 function conditionMatches(condition: StoryOutcomeCondition | undefined, state: GameState, player?: Entity): boolean {
   if (!condition) return true;
-  if (condition.floorLevels?.length && !condition.floorLevels.includes(state.currentZ)) return false;
+  const designFloor = designFloorAtZ(state.currentZ);
+  const currentTheme = designFloor ? designFloorThemeClass(designFloor) : FloorLevel.LIVING;
+  if (condition.floorLevels?.length && !condition.floorLevels.includes(currentTheme)) return false;
   if (condition.routeTags?.length) {
     const actual = routeTags(state);
     if (!condition.routeTags.every(tag => actual.includes(tag))) return false;

@@ -29,7 +29,8 @@ import {
 } from './floor_keys';
 import { getStack, ITEMS, itemEquipSlot } from './items';
 import { allNpcPerks, getNpcPerk } from './npc_perks';
-import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey, zForStoryFloor } from './procedural_floors';
+import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey } from './procedural_floors';
+import { zForBaseFloor } from './floor_keys';
 import { RPG_ATTRIBUTE_CAP } from './rpg_progression';
 import { NPC_VISUAL_FAMILIES } from '../entities/npc_visuals';
 import type {
@@ -595,7 +596,7 @@ function validateEditor(problems: ProblemList, editor: Record<string, unknown> |
 export function npcPackageLookupHints(context?: NpcPackageValidationContext): NpcPackageLookupHints {
   const storyKeyRows = [...numericEnumValues(FloorLevel)].map(floor => ({
     key: floorKeyForStory(floor as FloorLevel),
-    z: zForStoryFloor(floor as FloorLevel),
+    z: zForBaseFloor(floor as FloorLevel),
   }));
   const designKeyRows = DESIGN_FLOOR_ROUTES.map(route => ({
     key: floorKeyForDesign(route.id),

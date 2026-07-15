@@ -103,12 +103,12 @@ export interface PlotNpcDef {
 
 export function storyNpcFloorKey(floor: FloorLevel): string {
   switch (floor) {
-    case FloorLevel.MINISTRY: return 'story:ministry';
-    case FloorLevel.KVARTIRY: return 'story:kvartiry';
-    case FloorLevel.LIVING: return 'story:living';
-    case FloorLevel.MAINTENANCE: return 'story:maintenance';
-    case FloorLevel.HELL: return 'story:hell';
-    case FloorLevel.VOID: return 'story:void';
+    case FloorLevel.MINISTRY: return 'design:ministry';
+    case FloorLevel.KVARTIRY: return 'design:kvartiry';
+    case FloorLevel.LIVING: return 'design:living';
+    case FloorLevel.MAINTENANCE: return 'design:maintenance';
+    case FloorLevel.HELL: return 'design:hell';
+    case FloorLevel.VOID: return 'design:void';
   }
 }
 
@@ -326,7 +326,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     holdSpawnIntervalSeconds: 18,
     holdSpawnMaxAlive: 12,
     eventTags: ['hell_holdout', 'liquidator_anchor', 'story_route'],
-    eventData: { routeId: 'story:hell', floorZ: -36, holdSeconds: 300 },
+    eventData: { routeId: 'design:hell', floorZ: -36, holdSeconds: 300 },
     eventTargetName: 'Зона закрепления в Мясном низу удержана.',
   },
   // Step 11: Major Grom → go to Ministry for ammo
@@ -392,7 +392,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetHint: 'Спускайся на Z-50: Пустота.',
     visitFloor: FloorLevel.VOID,
     eventTags: ['below_and_below', 'void_contact', 'story_route'],
-    eventData: { routeId: 'story:void', floorZ: -50 },
+    eventData: { routeId: 'design:void', floorZ: -50 },
     eventTargetName: 'Путь ниже открыт до Z-50.',
   },
   // Step 15: Void warning → test the threshold voice

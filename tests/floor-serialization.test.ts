@@ -98,7 +98,7 @@ test('network snapshot round-trips host floor geometry and mutations to the peer
   const snapshot = packFloorForNetwork(world, entities, {
     floor: FloorLevel.LIVING,
     runSeed: 12345,
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     spawnX: 40.25,
     spawnY: 41.75,
     samosborCount: 2,

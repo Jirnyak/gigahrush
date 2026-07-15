@@ -1,4 +1,5 @@
 import { currentFloorRunEntry } from './procedural_floors';
+import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
 /* ── Bounded short-lived noise records for AI / HUD ───────────── */
 
 import {
@@ -518,7 +519,8 @@ function smokeCandleDraftResult(
   actor: Entity,
 ): { result: string; text: string; severity: WorldEventSeverity } {
   const room = world?.roomAt(actor.x, actor.y);
-  const maintenance = state?.currentZ === FloorLevel.MAINTENANCE;
+  const designFloor = state?.currentZ !== undefined ? designFloorAtZ(state.currentZ) : undefined;
+  const maintenance = designFloor ? designFloorThemeClass(designFloor) === FloorLevel.MAINTENANCE : false;
   if (maintenance && (room?.type === RoomType.CORRIDOR || room?.type === RoomType.PRODUCTION)) {
     return {
       result: 'pulling_draft',

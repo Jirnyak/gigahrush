@@ -148,10 +148,10 @@ test('Demos help and rescue feedback improves directed relation', () => {
 test('Demos social journey rejects dead, NPC-forbidden and player/native actors', () => {
   const deadState = makeDemosSocialState();
   setAlifeState(deadState, { seed: 12345, total: 64, deadIds: [1] }, { populationPlan: 'empty_packages' });
-  assert.equal(requestDemosSocialJourney(deadState, 1, 'story:living', 'social_visit'), false);
+  assert.equal(requestDemosSocialJourney(deadState, 1, 'design:living', 'social_visit'), false);
 
   const forbiddenState = makeDemosSocialState();
-  assert.equal(requestDemosSocialJourney(forbiddenState, 1, 'story:void', 'social_visit'), false);
+  assert.equal(requestDemosSocialJourney(forbiddenState, 1, 'design:void', 'social_visit'), false);
 
   const activeState = makeDemosSocialState();
   const world = makeLiftWorld();
@@ -166,35 +166,35 @@ test('Demos social journey rejects dead, NPC-forbidden and player/native actors'
   assert.equal(requestDemosSocialJourney(activeState, 1, 'design:black_market_88', 'social_visit', {
     world,
     entities: [playerLike],
-    activeFloorKey: 'story:living',
+    activeFloorKey: 'design:living',
   }), false);
 });
 
 test('Demos social journey blocks ordinary visits during active samosbor', () => {
   const state = makeDemosSocialState({ samosborActive: true });
-  moveAlifeNpcRecord(state, 1, 'story:ministry');
+  moveAlifeNpcRecord(state, 1, 'design:ministry');
 
-  assert.equal(requestDemosSocialJourney(state, 1, 'story:living', 'social_visit'), false);
-  assert.equal(requestDemosSocialJourney(state, 1, 'story:living', 'shelter_rejoin'), true);
+  assert.equal(requestDemosSocialJourney(state, 1, 'design:living', 'social_visit'), false);
+  assert.equal(requestDemosSocialJourney(state, 1, 'design:living', 'shelter_rejoin'), true);
 });
 
 test('Demos social journey delegates to migration state without direct floor mutation', () => {
   const state = makeDemosSocialState();
-  moveAlifeNpcRecord(state, 1, 'story:ministry');
+  moveAlifeNpcRecord(state, 1, 'design:ministry');
 
-  assert.equal(requestDemosSocialJourney(state, 1, 'story:living', 'family_visit', { travelSeconds: 30 }), true);
+  assert.equal(requestDemosSocialJourney(state, 1, 'design:living', 'family_visit', { travelSeconds: 30 }), true);
 
   const mobility = ensureAlifeMobilityState(state);
   const journeys = Object.values(mobility.journeys);
   assert.equal(journeys.length, 1);
   assert.equal(journeys[0].alifeId, 1);
-  assert.equal(journeys[0].toFloorKey, 'story:living');
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:ministry');
+  assert.equal(journeys[0].toFloorKey, 'design:living');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:ministry');
 });
 
 test('Demos active-floor social journey starts visible departure instead of teleporting', () => {
   const state = makeDemosSocialState();
-  moveAlifeNpcRecord(state, 1, 'story:living');
+  moveAlifeNpcRecord(state, 1, 'design:living');
   const world = makeLiftWorld();
   const npc = makeTestNpc({
     id: 11,
@@ -211,12 +211,12 @@ test('Demos active-floor social journey starts visible departure instead of tele
   requestDemosSocialJourney(state, 1, 'design:black_market_88', 'social_visit', {
     world,
     entities: [npc],
-    activeFloorKey: 'story:living',
+    activeFloorKey: 'design:living',
   });
 
   const mobility = ensureAlifeMobilityState(state);
   assert.equal(mobility.activeDepartures.length, 1);
   assert.equal(mobility.activeDepartures[0].alifeId, 1);
   assert.equal(Object.keys(mobility.journeys).length, 0);
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:living');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:living');
 });

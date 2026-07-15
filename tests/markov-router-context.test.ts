@@ -66,11 +66,11 @@ test('context lowering derives need, wound, samosbor, faction, relation and room
     hasRecentSamosborWarning: true,
   }), {
     actorId: 77,
-    floorKey: 'story:living',
+    floorKey: 'design:living',
     relationToPlayer: 70,
   });
 
-  assert.equal(ctx.floorKey, 'story:living');
+  assert.equal(ctx.floorKey, 'design:living');
   assert.equal(ctx.needBand, 'urgent');
   assert.equal(ctx.dangerBand, 'threat');
   assert.equal(ctx.relationBand, 'friend');

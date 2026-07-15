@@ -635,10 +635,10 @@ test('floor run UX labels avoid duplicate procedural z and keep return path', ()
   const state = makeGameState({ currentZ: FloorLevel.LIVING });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
 
-  assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 story:living Жилая зона/);
+  assert.match(currentFloorRunLabel(state) ?? '', /Z\+0 design:living Жилая зона/);
   assert.equal(floorRunEntryKind(currentFloorRunEntry(state)), 'story');
-  assert.equal(floorRunEntryFloorKey(currentFloorRunEntry(state)), 'story:living');
-  assert.match(floorRunEntryRouteCard(currentFloorRunEntry(state)), /СЮЖЕТНЫЙ ЯКОРЬ Z\+0 story:living: Жилая зона\. домашний hub, подготовка, возврат\./);
+  assert.equal(floorRunEntryFloorKey(currentFloorRunEntry(state)), 'design:living');
+  assert.match(floorRunEntryRouteCard(currentFloorRunEntry(state)), /СЮЖЕТНЫЙ ЯКОРЬ Z\+0 design:living: Жилая зона\. домашний hub, подготовка, возврат\./);
 
   const first = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(first?.procedural, true);

@@ -45,11 +45,11 @@ function journey(id: string, alifeId: number, toFloorKey: string, etaAt: number)
   return {
     id,
     alifeId,
-    fromFloorKey: 'story:ministry',
+    fromFloorKey: 'design:ministry',
     toFloorKey,
     intentId: 'market_trade',
     reason: 'market',
-    laneId: `story:ministry->${toFloorKey}`,
+    laneId: `design:ministry->${toFloorKey}`,
     risk: 3,
     startedAt: 0,
     etaAt,
@@ -62,12 +62,12 @@ test('cold A-Life migration respects cadence unless forced', () => {
 
   assert.equal(tickAlifeMigration(state, 1, { maxRecords: 8 }), 0);
   assert.equal(ensureAlifeMobilityState(state).tickAccum, 1);
-  assert.ok(tickAlifeMigration(state, 0, { force: true, maxRecords: 8, activeFloorKey: 'story:living' }) <= 8);
+  assert.ok(tickAlifeMigration(state, 0, { force: true, maxRecords: 8, activeFloorKey: 'design:living' }) <= 8);
 });
 
 test('cold A-Life migration starts bounded off-floor journeys without world or entity arrays', () => {
   const state = minimalState();
-  const processed = tickAlifeMigration(state, 0, { force: true, maxRecords: 32, activeFloorKey: 'story:living' });
+  const processed = tickAlifeMigration(state, 0, { force: true, maxRecords: 32, activeFloorKey: 'design:living' });
   const mobility = ensureAlifeMobilityState(state);
 
   assert.ok(processed <= 32);
@@ -85,7 +85,7 @@ test('normal cold migration gives traveler occupations a bounded priority lane',
   }));
   const plan: AlifePopulationPlan = {
     buckets: [{
-      floorKey: 'story:ministry',
+      floorKey: 'design:ministry',
       floor: FloorLevel.MINISTRY,
       targetCount: 64,
       reserved,
@@ -93,7 +93,7 @@ test('normal cold migration gives traveler occupations a bounded priority lane',
   };
   createPrefilledAlifeState(state, 12345, 64, plan);
 
-  const processed = tickAlifeMigration(state, ALIFE_MIGRATION_TICK_SECONDS, { maxRecords: 8, activeFloorKey: 'story:living' });
+  const processed = tickAlifeMigration(state, ALIFE_MIGRATION_TICK_SECONDS, { maxRecords: 8, activeFloorKey: 'design:living' });
   const journeyIds = Object.values(ensureAlifeMobilityState(state).journeys).map(journey => journey.alifeId);
 
   assert.ok(processed <= 8);
@@ -103,52 +103,52 @@ test('normal cold migration gives traveler occupations a bounded priority lane',
 test('cold A-Life migration skips dead records and records already in a journey', () => {
   const deadState = minimalState();
   setAlifeState(deadState, { seed: 12345, total: 100_000, deadIds: [1] }, { populationPlan: 'empty_packages' });
-  assert.equal(tickAlifeMigration(deadState, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(deadState, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(Object.keys(ensureAlifeMobilityState(deadState).journeys).length, 0);
 
   const journeyState = minimalState();
   const mobility = ensureAlifeMobilityState(journeyState);
   mobility.journeys.test = journey('test', 1, 'design:black_market_88', 9999);
-  assert.equal(tickAlifeMigration(journeyState, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(journeyState, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(Object.keys(mobility.journeys).length, 1);
 });
 
 test('due inactive-floor journey moves the A-Life record through the record API', () => {
   const state = minimalState();
-  assert.equal(moveAlifeNpcRecord(state, 1, 'story:ministry'), true);
+  assert.equal(moveAlifeNpcRecord(state, 1, 'design:ministry'), true);
   const mobility = ensureAlifeMobilityState(state);
   mobility.journeys.test = journey('test', 1, 'design:black_market_88', 10);
   state.time = 11;
 
-  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:black_market_88');
   assert.equal(Object.keys(mobility.journeys).length, 0);
 });
 
 test('due active-floor journey queues a pending arrival without materializing an entity', () => {
   const state = minimalState();
-  assert.equal(moveAlifeNpcRecord(state, 1, 'story:ministry'), true);
+  assert.equal(moveAlifeNpcRecord(state, 1, 'design:ministry'), true);
   const mobility = ensureAlifeMobilityState(state);
-  mobility.journeys.test = journey('test', 1, 'story:living', 10);
+  mobility.journeys.test = journey('test', 1, 'design:living', 10);
   state.time = 11;
 
-  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(mobility.pendingArrivals.length, 1);
   assert.equal(mobility.pendingArrivals[0].alifeId, 1);
-  assert.equal(mobility.pendingArrivals[0].toFloorKey, 'story:living');
+  assert.equal(mobility.pendingArrivals[0].toFloorKey, 'design:living');
 });
 
 test('due active-floor journey waits when pending arrival queue is full', () => {
   const state = minimalState();
-  assert.equal(moveAlifeNpcRecord(state, 1, 'story:ministry'), true);
+  assert.equal(moveAlifeNpcRecord(state, 1, 'design:ministry'), true);
   const mobility = ensureAlifeMobilityState(state);
-  mobility.journeys.test = journey('test', 1, 'story:living', 10);
+  mobility.journeys.test = journey('test', 1, 'design:living', 10);
   for (let i = 0; i < MAX_ALIFE_PENDING_ARRIVALS; i++) {
     mobility.pendingArrivals.push({
       journeyId: `queued_${i}`,
       alifeId: i + 2,
-      fromFloorKey: 'story:ministry',
-      toFloorKey: 'story:living',
+      fromFloorKey: 'design:ministry',
+      toFloorKey: 'design:living',
       intentId: 'queued',
       reason: 'routine',
       risk: 1,
@@ -158,31 +158,31 @@ test('due active-floor journey waits when pending arrival queue is full', () => 
   }
   state.time = 11;
 
-  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(mobility.journeys.test?.alifeId, 1);
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:ministry');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:ministry');
   assert.equal(mobility.pendingArrivals.length, MAX_ALIFE_PENDING_ARRIVALS);
 
   mobility.pendingArrivals.pop();
-  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(mobility.journeys.test, undefined);
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:living');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:living');
   assert.equal(mobility.pendingArrivals.at(-1)?.alifeId, 1);
 });
 
 test('full active-floor pending queue does not starve later due inactive-floor journeys', () => {
   const state = minimalState();
-  assert.equal(moveAlifeNpcRecord(state, 1, 'story:ministry'), true);
-  assert.equal(moveAlifeNpcRecord(state, 2, 'story:ministry'), true);
+  assert.equal(moveAlifeNpcRecord(state, 1, 'design:ministry'), true);
+  assert.equal(moveAlifeNpcRecord(state, 2, 'design:ministry'), true);
   const mobility = ensureAlifeMobilityState(state);
-  mobility.journeys.blocked = journey('blocked', 1, 'story:living', 10);
+  mobility.journeys.blocked = journey('blocked', 1, 'design:living', 10);
   mobility.journeys.inactive = journey('inactive', 2, 'design:black_market_88', 10);
   for (let i = 0; i < MAX_ALIFE_PENDING_ARRIVALS; i++) {
     mobility.pendingArrivals.push({
       journeyId: `queued_${i}`,
       alifeId: i + 3,
-      fromFloorKey: 'story:ministry',
-      toFloorKey: 'story:living',
+      fromFloorKey: 'design:ministry',
+      toFloorKey: 'design:living',
       intentId: 'queued',
       reason: 'routine',
       risk: 1,
@@ -192,10 +192,10 @@ test('full active-floor pending queue does not starve later due inactive-floor j
   }
   state.time = 11;
 
-  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'story:living' }), 1);
+  assert.equal(tickAlifeMigration(state, 0, { force: true, maxRecords: 1, activeFloorKey: 'design:living' }), 1);
   assert.equal(mobility.journeys.blocked?.alifeId, 1);
   assert.equal(mobility.journeys.inactive, undefined);
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'story:ministry');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:ministry');
   assert.equal(getAlifeNpcRecordSnapshot(state, 2)?.floorKey, 'design:black_market_88');
   assert.equal(mobility.pendingArrivals.length, MAX_ALIFE_PENDING_ARRIVALS);
 });
@@ -205,7 +205,7 @@ test('forced cold tick hard-caps processed records', () => {
   const processed = tickAlifeMigration(state, 0, {
     force: true,
     maxRecords: ALIFE_MIGRATION_FORCE_RECORD_CAP + 999,
-    activeFloorKey: 'story:living',
+    activeFloorKey: 'design:living',
   });
   assert.ok(processed <= ALIFE_MIGRATION_FORCE_RECORD_CAP);
 });
@@ -221,8 +221,8 @@ test('A-Life mobility sanitizer and save view cap journeys and pending arrivals'
     rawArrivals.push({
       journeyId: `a${i}`,
       alifeId: i + 1,
-      fromFloorKey: 'story:ministry',
-      toFloorKey: 'story:living',
+      fromFloorKey: 'design:ministry',
+      toFloorKey: 'design:living',
       intentId: 'refugee_shift',
       reason: 'refugee',
       risk: 2,

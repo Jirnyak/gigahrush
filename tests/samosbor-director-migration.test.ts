@@ -92,8 +92,8 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
 
   const event = getRecentEvents(state, { tags: ['samosbor', 'alife_migration'], limit: 1 })[0];
   assert.ok(event);
-  assert.equal(event.data?.fromFloorKey, 'story:ministry');
-  assert.equal(event.data?.toFloorKey, 'story:living');
+  assert.equal(event.data?.fromFloorKey, 'design:ministry');
+  assert.equal(event.data?.toFloorKey, 'design:living');
   assert.equal(event.data?.reason, 'samosbor');
   assert.equal(event.data?.intent, 'active_liquidator_patrol');
   assert.deepEqual(event.data?.alifeIds, patrol.map(e => e.alifeId));

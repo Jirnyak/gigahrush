@@ -55,10 +55,10 @@ import {
   FLOOR_RUN_MIN_Z,
   isProceduralFloorZ,
   proceduralFloorKey,
-  storyFloorAtZ,
-  zForStoryFloor,
   type ProceduralFloorSpec,
 } from '../data/procedural_floors';
+import { zForBaseFloor } from '../data/floor_keys';
+import { designFloorThemeClass } from '../data/design_floors';
 import { designFloorAtZ, designFloorById } from '../data/design_floors';
 import { assignProceduralQuestDeadline } from './quest_deadlines';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
@@ -215,8 +215,6 @@ function resolveProceduralRouteTarget(
 function routeBaseFloor(state: GameState, route: QuestRouteTarget, fallback?: FloorLevel): FloorLevel | undefined {
   const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
   if (z !== undefined) {
-    const storyFloor = storyFloorAtZ(z);
-    if (storyFloor !== undefined) return storyFloor;
     const designFloor = designFloorAtZ(z);
     if (designFloor) return designFloor.baseFloor;
     const spec = ensureFloorRunState(state).specs[proceduralFloorKey(z)];
@@ -252,7 +250,8 @@ function normalizeQuestRouteTarget(q: Quest, state: GameState): QuestRouteTarget
       if (spec) normalized = routeTargetFromSpec(normalized, spec);
       else normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     } else {
-      const storyFloor = storyFloorAtZ(z);
+      const designFloor = designFloorAtZ(z);
+      const storyFloor = designFloor ? designFloorThemeClass(designFloor) : FloorLevel.LIVING;
       normalized.label = route.label ?? (storyFloor !== undefined ? `Z${formatFloorZ(z)} ${CONTRACT_FLOOR_NAMES[storyFloor]}` : `Z${formatFloorZ(z)}`);
     }
   } else {
@@ -470,8 +469,8 @@ function questObjectiveKindForContract(def: ContractDef): QuestRewardObjectiveKi
 function contractTargetZ(def: ContractDef, q: Quest): number {
   const route = questTargetRoute(q);
   if (route?.z !== undefined) return route.z;
-  if (route?.designFloorId) return designFloorById(route.designFloorId)?.z ?? zForStoryFloor(def.target.floor);
-  return zForStoryFloor(def.target.floor);
+  if (route?.designFloorId) return designFloorById(route.designFloorId)?.z ?? zForBaseFloor(def.target.floor);
+  return zForBaseFloor(def.target.floor);
 }
 
 function contractTargetDanger(state: GameState, def: ContractDef, q: Quest): 1 | 2 | 3 | 4 | 5 {
@@ -552,7 +551,7 @@ export function questTargetLiftDirection(q: Quest, state: GameState): LiftDirect
   const positionalRoute = routeHasPositionalTarget(route) ? route : undefined;
   if ((floor === undefined && !positionalRoute) || isQuestTargetOnCurrentFloor(q, state)) return undefined;
   const currentZ = currentFloorRunEntry(state).z;
-  const targetZ = routeZ(positionalRoute?.z) ?? (positionalRoute?.designFloorId ? designFloorById(positionalRoute.designFloorId)?.z : undefined) ?? (floor !== undefined ? zForStoryFloor(floor) : undefined);
+  const targetZ = routeZ(positionalRoute?.z) ?? (positionalRoute?.designFloorId ? designFloorById(positionalRoute.designFloorId)?.z : undefined) ?? (floor !== undefined ? zForBaseFloor(floor) : undefined);
   if (targetZ === undefined) return undefined;
   if (currentZ === targetZ) return undefined;
   return targetZ < currentZ ? LiftDirection.DOWN : LiftDirection.UP;
@@ -761,7 +760,7 @@ function findContaminatedContractSample(player: Entity, contractId: string): Ite
 function currentFloorMatchesZhelemishTarget(state: GameState, target: ZhelemishNiiTarget): boolean {
   const entry = currentFloorRunEntry(state);
   if (target.kind === 'procedural_mushroom') return entry.spec?.key === target.targetKey;
-  return entry.storyFloor === FloorLevel.LIVING && currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING;
+  return entry.baseFloor === FloorLevel.LIVING && currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING;
 }
 
 function currentFloorIsWrongZhelemishMycelium(state: GameState, target: ZhelemishNiiTarget): boolean {

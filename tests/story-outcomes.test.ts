@@ -10,6 +10,7 @@ import {
   STORY_ITEM_OUTCOME_RULES,
   type StoryItemOutcomeRule,
 } from '../src/data/story_outcomes';
+import { zForBaseFloor } from '../src/data/floor_keys';
 import { getRecentEvents } from '../src/systems/events';
 import {
   applyStoryItemOutcomes,
@@ -21,13 +22,12 @@ import { countInventoryItem, makeGameState, makeTestEntity, makeTestPlayer } fro
 function shadowQuest(): Quest {
   return {
     id: 50,
-    type: QuestType.KILL,
+    type: QuestType.FETCH,
     giverId: 7,
     giverName: 'Ванька Банчиный',
-    desc: 'Убей теневика.',
-    targetMonsterKind: MonsterKind.SHADOW,
-    killCount: 0,
-    killNeeded: 1,
+    desc: 'Принеси сгусток.',
+    targetItem: 'strange_clot',
+    fetchCount: 1,
     plotStepIndex: 5,
     done: false,
   };
@@ -53,7 +53,7 @@ test('story death drop appears only when its quest prerequisite is active', () =
   assert.equal(spawnStoryDeathDrops(entities[0], true, entities, nextId, noQuest, noQuest.msgs, () => 0.5), 0);
   assert.equal(entities.some(e => e.type === EntityType.ITEM_DROP), false);
 
-  const active = makeGameState({ currentZ: FloorLevel.LIVING });
+  const active = makeGameState({ currentZ: zForBaseFloor(FloorLevel.LIVING) });
   active.quests = [shadowQuest()];
   const activeEntities = [shadowMonster()];
 

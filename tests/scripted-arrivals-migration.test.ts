@@ -104,7 +104,7 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
   initFactionRelations();
   const arrivalDef = SCRIPTED_ARRIVALS.find(def => def.triggerPlotEventTag === 'hell_holdout');
   assert.equal(arrivalDef?.leaderPlotNpcId, 'major_grom');
-  assert.equal(arrivalDef?.sourceFloorKey, 'story:ministry');
+  assert.equal(arrivalDef?.sourceFloorKey, 'design:ministry');
   const state = makeHellState();
   state.quests = [makeHoldoutQuest()];
   const world = makeHellWorld();
@@ -135,8 +135,8 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
   const event = getRecentEvents(state, { tags: ['scripted_arrival', 'alife_migration'], limit: 1 })[0];
   assert.ok(event);
   assert.equal(event.data?.arrivalId, arrivalDef?.id);
-  assert.equal(event.data?.fromFloorKey, 'story:ministry');
-  assert.equal(event.data?.toFloorKey, 'story:hell');
+  assert.equal(event.data?.fromFloorKey, 'design:ministry');
+  assert.equal(event.data?.toFloorKey, 'design:hell');
   assert.equal(event.data?.guardCount, guards.length);
 });
 

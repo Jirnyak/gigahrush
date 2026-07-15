@@ -10,7 +10,7 @@ import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
 import { PSI_WEAPON_STATS } from '../data/psi';
-import { storyFloorAtZ } from "../data/procedural_floors";
+import { designFloorAtZ, designFloorThemeClass } from "../data/design_floors";
 import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
@@ -488,7 +488,7 @@ function debugRouteFloorSummaryLines(world: World, player: Entity, entities: Ent
   const entry = currentFloorRunEntry(state);
   const metrics = debugRouteFloorMetrics(world, player, entities);
   const badPlacements = metrics.playerBad + metrics.entityBad + metrics.containerBad;
-  const story = entry.storyFloor !== undefined ? FloorLevel[entry.storyFloor] : 'none';
+  const story = FloorLevel[entry.baseFloor] ?? 'none';
   const design = entry.designFloorId ?? 'none';
   const procedural = entry.spec?.key ?? 'none';
   const anomaly = entry.spec?.anomalyId ?? 'none';
@@ -667,7 +667,9 @@ function spawnDebugMonsterPack(
   state: GameState,
   nextEntityId: { v: number },
 ): string[] {
-  const kinds = DEBUG_MONSTER_PACKS[(storyFloorAtZ(state.currentZ) ?? FloorLevel.LIVING) as FloorLevel];
+  const designFloor = designFloorAtZ(state.currentZ);
+  const themeClass = designFloor ? designFloorThemeClass(designFloor) : FloorLevel.LIVING;
+  const kinds = DEBUG_MONSTER_PACKS[themeClass as FloorLevel];
   const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
   let spawned = 0;
   const names: string[] = [];
