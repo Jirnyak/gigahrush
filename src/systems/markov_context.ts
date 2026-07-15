@@ -2,7 +2,6 @@
 
 import {
   Faction,
-  number,
   QuestType,
   RoomType,
   ZoneFaction,

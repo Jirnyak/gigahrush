@@ -1,7 +1,7 @@
 /* -- MONSTER_12: Черная Личинка, local black-slime cleanup pressure -- */
 
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number, W,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, W,
   MonsterKind, Occupation, RoomType, Tex, msg,
   type Entity, type GameState, type Item, type Room, type WorldContainer,
   type WorldEvent, type WorldEventSeverity, type WorldEventType,
@@ -110,7 +110,7 @@ function addLichinkaContainer(
     id,
     x: wx,
     y: wy,
-    z: number.MAINTENANCE,
+    z: z.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -162,7 +162,7 @@ function publishLichinkaEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `chernaya_lichinka_${phase}` as WorldEventType,
-    z: number.MAINTENANCE,
+    z: z.MAINTENANCE,
     zoneId: source.zoneId ?? zoneAt(ctx),
     roomId: ctx.roomId,
     x: source.x ?? ctx.centerX,

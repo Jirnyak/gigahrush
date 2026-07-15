@@ -6,7 +6,6 @@ import {
   ContainerKind,
   Faction,
   Feature,
-  number,
   MonsterKind,
   Occupation,
   QuestType,
@@ -331,12 +330,12 @@ function publishQuestOutcome(
 ): void {
   const resourceChanges: Record<string, number> = {};
   for (const [resourceId, delta] of outcome.resourceDeltas) {
-    if (changeResourceStock(state, resourceId, delta, number.MAINTENANCE)) resourceChanges[resourceId] = delta;
+    if (changeResourceStock(state, resourceId, delta, z.MAINTENANCE)) resourceChanges[resourceId] = delta;
   }
 
   publishEvent(state, {
     type: outcome.type,
-    z: number.MAINTENANCE,
+    z: z.MAINTENANCE,
     actorId: event.actorId,
     actorName: event.actorName,
     actorFaction: event.actorFaction,
@@ -516,7 +515,7 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: number.MAINTENANCE,
+    z: z.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

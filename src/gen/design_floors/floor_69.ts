@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  number, LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
+  LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
   W, type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -41,7 +41,7 @@ export const FLOOR_69_RAID_SHUTTER_GATES = [
 
 // Current core state still requires a number. Future route integration should
 // adapt this string-route floor instead of adding a casual enum here.
-const FLOOR_69_BASE_FLOOR = number.MAINTENANCE;
+const FLOOR_69_BASE_FLOOR = z.MAINTENANCE;
 const FLOOR_69_MAX_FLAGS = 8;
 const FLOOR_69_CHECKPOINT_CROWD_CAP = 12;
 const FLOOR_69_FEMALE_SPRITE_COUNT = Spr.F69_FEMALE_NPC_7 - Spr.F69_FEMALE_NPC_BASE + 1;

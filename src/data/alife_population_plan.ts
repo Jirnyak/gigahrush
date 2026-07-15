@@ -95,21 +95,21 @@ export const ALIFE_POPULATION_MIN_RANDOM = ALIFE_POPULATION_BASELINE - ALIFE_POP
 const SNAKE_ID_RE = /^[a-z0-9_]+$/;
 
 const STORY_POPULATION_WEIGHT: Readonly<Record<number, number>> = {
-  [number.MINISTRY]: 4_500,
-  [number.KVARTIRY]: 10_000,
-  [number.LIVING]: 7_000,
-  [number.MAINTENANCE]: 3_500,
-  [number.HELL]: 1_100,
-  [number.VOID]: 0,
+  [z.MINISTRY]: 4_500,
+  [z.KVARTIRY]: 10_000,
+  [z.LIVING]: 7_000,
+  [z.MAINTENANCE]: 3_500,
+  [z.HELL]: 1_100,
+  [z.VOID]: 0,
 };
 
 const STORY_POPULATION_PROFILE: Readonly<Record<number, string>> = {
-  [number.MINISTRY]: 'design:ministry_admin',
-  [number.KVARTIRY]: 'design:kvartiry_lively',
-  [number.LIVING]: 'design:living_hub',
-  [number.MAINTENANCE]: 'design:maintenance_service',
-  [number.HELL]: 'design:hell_lively',
-  [number.VOID]: 'design:void_lively',
+  [z.MINISTRY]: 'design:ministry_admin',
+  [z.KVARTIRY]: 'design:kvartiry_lively',
+  [z.LIVING]: 'design:living_hub',
+  [z.MAINTENANCE]: 'design:maintenance_service',
+  [z.HELL]: 'design:hell_lively',
+  [z.VOID]: 'design:void_lively',
 };
 
 function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
@@ -124,12 +124,12 @@ function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
 }
 
 function storyBucket(z: number): WeightedBucket {
-  const theme = themeForStoryFloor(floor);
+  const theme = themeForStoryFloor(z);
   return {
-    floorKey: floorKeyForStory(floor),
-    baseFloor: floor,
-    weight: floorRunZAllowsNpcs(theme.routeZ ?? 0) ? STORY_POPULATION_WEIGHT[floor] : 0,
-    populationProfileId: theme.populationProfileId ?? STORY_POPULATION_PROFILE[floor],
+    floorKey: floorKeyForStory(z),
+    baseFloor: z,
+    weight: floorRunZAllowsNpcs(theme.routeZ ?? 0) ? STORY_POPULATION_WEIGHT[z] : 0,
+    populationProfileId: theme.populationProfileId ?? STORY_POPULATION_PROFILE[z],
     tags: uniqueTags([
       'story',
       ...theme.specialContentTags,
@@ -380,7 +380,7 @@ export function buildAlifePopulationPlan(input: {
   const weighted: WeightedBucket[] = [];
   const seenKeys = new Set<string>();
   
-  for (const floor of [number.MINISTRY, number.KVARTIRY, number.LIVING, number.MAINTENANCE, number.HELL, number.VOID]) {
+  for (const floor of [z.MINISTRY, z.KVARTIRY, z.LIVING, z.MAINTENANCE, z.HELL, z.VOID]) {
     const bucket = storyBucket(floor);
     if (!seenKeys.has(bucket.floorKey) && routeAllowed(bucket.floorKey, allowed)) {
       seenKeys.add(bucket.floorKey);

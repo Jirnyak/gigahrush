@@ -9,7 +9,6 @@ import {
   ZoneFaction,
   EntityType,
   AIGoal,
-  number,
   type Entity,
   type Room,
   type TerritoryOwner,
@@ -173,7 +172,7 @@ export function initializeMaintenanceTerritory(world: World, generationSeed: num
   seedMaintenanceHqTerritory(world);
   initializeCellTerritory(world, {
     seed: generationSeed,
-    targetShares: territorySharesForStoryFloor(number.MAINTENANCE),
+    targetShares: territorySharesForStoryFloor(z.MAINTENANCE),
   });
 }
 

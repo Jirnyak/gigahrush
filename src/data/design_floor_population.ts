@@ -1,6 +1,5 @@
 import {
   Faction,
-  number,
   EntityType,
   MonsterKind,
   Occupation,
@@ -2032,22 +2031,22 @@ function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fall
 
 function designNpcMult(route: DesignFloorRouteDef): number {
   const cls = designFloorThemeClass(route);
-  return cls === number.KVARTIRY ? 1.22
-    : cls === number.LIVING ? 1.14
-      : cls === number.MINISTRY ? 0.86
-        : cls === number.MAINTENANCE ? 0.7
-          : cls === number.HELL ? 0.38
+  return cls === z.KVARTIRY ? 1.22
+    : cls === z.LIVING ? 1.14
+      : cls === z.MINISTRY ? 0.86
+        : cls === z.MAINTENANCE ? 0.7
+          : cls === z.HELL ? 0.38
             : 0;
 }
 
 function designMonsterMult(route: DesignFloorRouteDef): number {
   const cls = designFloorThemeClass(route);
-  return cls === number.HELL ? 1.28
-    : cls === number.VOID ? 1.36
-      : cls === number.MAINTENANCE ? 1.12
-        : cls === number.MINISTRY ? 1.0
-          : cls === number.KVARTIRY ? 0.86
-            : cls === number.LIVING ? 0.8
+  return cls === z.HELL ? 1.28
+    : cls === z.VOID ? 1.36
+      : cls === z.MAINTENANCE ? 1.12
+        : cls === z.MINISTRY ? 1.0
+          : cls === z.KVARTIRY ? 0.86
+            : cls === z.LIVING ? 0.8
               : 1;
 }
 
@@ -2065,34 +2064,34 @@ function baseMonsterTarget(route: DesignFloorRouteDef): number {
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
   const cls = designFloorThemeClass(route);
-  if (cls === number.MAINTENANCE) return INDUSTRIAL_MIX;
-  if (cls === number.HELL) return VETERAN_MIX;
-  if (cls === number.MINISTRY) return ADMIN_MIX;
+  if (cls === z.MAINTENANCE) return INDUSTRIAL_MIX;
+  if (cls === z.HELL) return VETERAN_MIX;
+  if (cls === z.MINISTRY) return ADMIN_MIX;
   return CITIZEN_MIX;
 }
 
 function defaultNpcOccupations(route: DesignFloorRouteDef): readonly WeightedDesignValue<Occupation>[] {
   const cls = designFloorThemeClass(route);
-  if (cls === number.MAINTENANCE) return INDUSTRIAL_OCCUPATIONS;
-  if (cls === number.HELL) return VETERAN_OCCUPATIONS;
-  if (cls === number.MINISTRY) return ADMIN_OCCUPATIONS;
+  if (cls === z.MAINTENANCE) return INDUSTRIAL_OCCUPATIONS;
+  if (cls === z.HELL) return VETERAN_OCCUPATIONS;
+  if (cls === z.MINISTRY) return ADMIN_OCCUPATIONS;
   return SOCIAL_OCCUPATIONS;
 }
 
 function defaultNpcNoun(route: DesignFloorRouteDef): string {
   const cls = designFloorThemeClass(route);
-  if (cls === number.MAINTENANCE) return 'работник';
-  if (cls === number.HELL) return 'паломник';
-  if (cls === number.MINISTRY) return 'служащий';
+  if (cls === z.MAINTENANCE) return 'работник';
+  if (cls === z.HELL) return 'паломник';
+  if (cls === z.MINISTRY) return 'служащий';
   return 'житель';
 }
 
 function defaultPlacementKind(route: DesignFloorRouteDef): PlacementKind {
   const cls = designFloorThemeClass(route);
-  if (cls === number.MAINTENANCE) return 'industrial';
-  if (cls === number.HELL) return 'hell';
-  if (cls === number.VOID) return 'void';
-  if (cls === number.MINISTRY) return 'admin';
+  if (cls === z.MAINTENANCE) return 'industrial';
+  if (cls === z.HELL) return 'hell';
+  if (cls === z.VOID) return 'void';
+  if (cls === z.MINISTRY) return 'admin';
   return 'social';
 }
 

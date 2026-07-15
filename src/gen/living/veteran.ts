@@ -5,8 +5,7 @@
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType, MonsterKind,
-  number,
-} from '../../core/types';
+  } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
@@ -43,7 +42,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(number.LIVING),
+  homeFloorKey: storyNpcFloorKey(z.LIVING),
   tags: ['living', 'liquidator'],
   quests: [
     {

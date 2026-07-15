@@ -2,8 +2,7 @@
 /*   Spawns on the maintenance floor. Target for Kantselev quest.  */
 
 import {
-  W, Cell, number,
-  type Entity, EntityType, AIGoal, Faction, Occupation,
+  W, Cell, type Entity, EntityType, AIGoal, Faction, Occupation,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, irand } from '../../core/rand';
@@ -44,7 +43,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(number.MAINTENANCE),
+  homeFloorKey: storyNpcFloorKey(z.MAINTENANCE),
   tags: ['maintenance', 'wild', 'leader'],
 });
 

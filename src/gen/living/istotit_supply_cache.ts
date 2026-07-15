@@ -1,8 +1,7 @@
 /* -- Istotit communal supply cache: share, steal, guard, report, barter -- */
 
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
-  MonsterKind, Occupation, QuestType, RoomType, Tex,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -183,7 +182,7 @@ registerWorldEventObserver((state, event) => {
     if (!outcome) return;
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: number.LIVING,
+      z: z.LIVING,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -205,7 +204,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type !== 'item_stolen' || !event.tags.includes(CONTENT_TAG)) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: number.LIVING,
+    z: z.LIVING,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -255,7 +254,7 @@ function addSupplyContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

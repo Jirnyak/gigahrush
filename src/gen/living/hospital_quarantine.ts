@@ -5,7 +5,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  number, MonsterKind, Occupation, QuestType, RoomType, Tex,
+  MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -200,7 +200,7 @@ registerSideQuest('ag17_mira_triage', NPC_DEFS.ag17_mira_triage, [
     targetNpcId: 'olga',
     rewardItem: 'clean_health_cert', rewardCount: 1,
     relationDelta: 10, xpReward: 35, moneyReward: 20,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: от карантинного блока вернитесь в актовый зал к Ольге Дмитриевне.',
@@ -218,7 +218,7 @@ registerSideQuest('ag17_mira_triage', NPC_DEFS.ag17_mira_triage, [
     extraRewards: [{ defId: 'bandage', count: 1 }],
     relationDelta: 16, xpReward: 55, moneyReward: 35,
     requiresSideQuestDone: QUEST_MIRA_MESSAGE,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: приемный стол больничного карантина.',
@@ -240,7 +240,7 @@ registerSideQuest('ag17_lida_patient', NPC_DEFS.ag17_lida_patient, [
     relationDelta: 14, xpReward: 45, moneyReward: 20,
     blockedBySideQuestIds: [QUEST_YURA_ANTIBIOTIC],
     abandonsSideQuestIds: [QUEST_YURA_ANTIBIOTIC],
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: правая карантинная койка больничного блока.',
@@ -261,7 +261,7 @@ registerSideQuest('ag17_yura_patient', NPC_DEFS.ag17_yura_patient, [
     relationDelta: 14, xpReward: 45, moneyReward: 20,
     blockedBySideQuestIds: [QUEST_LIDA_ANTIBIOTIC],
     abandonsSideQuestIds: [QUEST_LIDA_ANTIBIOTIC],
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: дальняя карантинная койка больничного блока.',
@@ -282,7 +282,7 @@ registerSideQuest('ag17_taras_sanitar', NPC_DEFS.ag17_taras_sanitar, [
     rewardItem: 'sanitary_kit', rewardCount: 1,
     extraRewards: [{ defId: 'bandage', count: 2 }],
     relationDelta: 18, xpReward: 65, moneyReward: 50,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: палата за гермодверью больничного карантина.',
@@ -300,7 +300,7 @@ registerSideQuest('ag17_taras_sanitar', NPC_DEFS.ag17_taras_sanitar, [
     extraRewards: [{ defId: 'iodine', count: 1 }],
     relationDelta: 12, xpReward: 50, moneyReward: 35,
     requiresSideQuestDone: QUEST_TARAS_OUTBREAK,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: гермодверь карантинной палаты после зачистки.',
@@ -345,7 +345,7 @@ registerWorldEventObserver((state, event) => {
     if (sideQuestId === QUEST_MIRA_MESSAGE) {
       publishEvent(state, {
         type: 'faction_relation_changed',
-        z: number.LIVING,
+        z: z.LIVING,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -363,7 +363,7 @@ registerWorldEventObserver((state, event) => {
     if (sideQuestId === QUEST_MIRA_SANITARY) {
       publishEvent(state, {
         type: 'hazard_cleaned',
-        z: number.LIVING,
+        z: z.LIVING,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -384,7 +384,7 @@ registerWorldEventObserver((state, event) => {
       const lida = sideQuestId === QUEST_LIDA_ANTIBIOTIC;
       publishEvent(state, {
         type: 'faction_relation_changed',
-        z: number.LIVING,
+        z: z.LIVING,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -413,7 +413,7 @@ registerWorldEventObserver((state, event) => {
     if (sideQuestId === QUEST_TARAS_SEAL_WARD) {
       publishEvent(state, {
         type: 'door_sealed',
-        z: number.LIVING,
+        z: z.LIVING,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -434,7 +434,7 @@ registerWorldEventObserver((state, event) => {
     if (event.tags.includes('medical_fraud') && sourceOutcome(event) === 'fraud_exposed') {
       publishEvent(state, {
         type: 'faction_relation_changed',
-        z: number.LIVING,
+        z: z.LIVING,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -457,7 +457,7 @@ registerWorldEventObserver((state, event) => {
   ) {
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: number.LIVING,
+      z: z.LIVING,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -563,7 +563,7 @@ function addHospitalContainer(
     id: world.containers.length + 1,
     x,
     y,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

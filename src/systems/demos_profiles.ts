@@ -1,7 +1,6 @@
 import {
   EntityType,
   Faction,
-  number,
   Occupation,
   type Entity,
   type GameState,
@@ -266,7 +265,7 @@ function questTraitId(snapshot: AlifeNpcSnapshot): string {
 function fourthTraitId(seed: number, snapshot: AlifeNpcSnapshot): string {
   if (snapshot.canGiveQuest) return questTraitId(snapshot);
   const h = hash32(seed, snapshot.id, snapshot.z + 7, 41) % 4;
-  if (h === 0) return snapshot.z === number.HELL || snapshot.z === number.VOID ? 'fear_monster' : 'fear_samosbor';
+  if (h === 0) return snapshot.z === z.HELL || snapshot.z === z.VOID ? 'fear_monster' : 'fear_samosbor';
   if (h === 1) return snapshot.accountRubles < 40 ? 'fear_debt' : 'fear_hunger';
   return tasteTraitId(snapshot);
 }

@@ -2,8 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature, number,
-  MonsterKind, Occupation, RoomType, Tex, msg,
+  Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature, MonsterKind, Occupation, RoomType, Tex, msg,
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -397,7 +396,7 @@ function addTraceContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: number.VOID,
+    z: z.VOID,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,

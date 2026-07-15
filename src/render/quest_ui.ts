@@ -1,7 +1,6 @@
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
 import {
-  number,
   LiftDirection,
   RoomType,
   type GameState,
@@ -21,21 +20,21 @@ import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
 
 const FLOOR_NAMES: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Мясной низ',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Мясной низ',
+  [z.VOID]: 'Пустота',
 };
 
 const FLOOR_SHORT_NAMES: Record<number, string> = {
-  [number.MINISTRY]: 'МИН',
-  [number.KVARTIRY]: 'КВ',
-  [number.LIVING]: 'ЖИЛ',
-  [number.MAINTENANCE]: 'КОЛ',
-  [number.HELL]: 'АД',
-  [number.VOID]: 'ПУСТ',
+  [z.MINISTRY]: 'МИН',
+  [z.KVARTIRY]: 'КВ',
+  [z.LIVING]: 'ЖИЛ',
+  [z.MAINTENANCE]: 'КОЛ',
+  [z.HELL]: 'АД',
+  [z.VOID]: 'ПУСТ',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {

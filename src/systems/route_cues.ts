@@ -5,7 +5,6 @@ import {
   msg,
   QuestType,
   type Entity,
-  type number,
   type GameState,
   type Quest,
   type WorldEventSeverity,
@@ -269,7 +268,7 @@ function targetLine(world: World | undefined, player: Entity | undefined, state:
   const label = questRouteTargetLabel(q, state);
   const z = questRouteFloor(q);
   if (label) return `Цель: ${label}`;
-  if (floor !== undefined) return `Цель: ${FLOOR_NAMES[floor]}`;
+  if (z !== undefined) return `Цель: ${FLOOR_NAMES[z]}`;
   return 'Цель: другой маршрут';
 }
 
@@ -386,7 +385,7 @@ export function pruneRouteCuesForVolatileRebuild(world: World, z: number): numbe
   const keptMarkers: RouteCueMarker[] = [];
   const removedMarkerIds = new Set<string>();
   for (const marker of state.markers) {
-    if (marker.z !== floor || protectedRouteCueMarker(world, marker)) {
+    if (marker.z !== z || protectedRouteCueMarker(world, marker)) {
       keptMarkers.push(marker);
     } else {
       removedMarkerIds.add(marker.id);
@@ -401,7 +400,7 @@ export function pruneRouteCuesForVolatileRebuild(world: World, z: number): numbe
     state.followed.delete(id);
     state.ignored.delete(id);
   }
-  if (activeHud?.z === floor && removedMarkerIds.has(activeHud.id)) activeHud = null;
+  if (activeHud?.z === z && removedMarkerIds.has(activeHud.id)) activeHud = null;
   return removed;
 }
 
@@ -701,6 +700,6 @@ export function debugTriggerRouteCue(world: World, player: Entity, state: GameSt
 }
 
 export function getActiveRouteCueHud(time: number, z: number): RouteCueHud | null {
-  if (!activeHud || activeHud.expiresAt < time || activeHud.z !== floor) return null;
+  if (!activeHud || activeHud.expiresAt < time || activeHud.z !== z) return null;
   return activeHud;
 }

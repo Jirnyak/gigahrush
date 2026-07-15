@@ -3,8 +3,7 @@
 import {
   type Entity, type Quest, type GameState, type Msg, type Room,
   QuestType, EntityType, Occupation, MonsterKind, Faction,
-  RoomType, Cell, AIGoal, W, ZoneFaction, number,
-  msg,
+  RoomType, Cell, AIGoal, W, ZoneFaction, msg,
 } from '../core/types';
 import { World } from '../core/world';
 import { rng, secureRandom } from '../core/rand';

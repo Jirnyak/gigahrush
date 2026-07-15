@@ -1,7 +1,6 @@
 import {
   EntityType,
   Faction,
-  number,
   Occupation,
   type Entity,
   type GameState,
@@ -44,12 +43,12 @@ const FACTION_LABELS: Record<Faction, string> = {
 };
 
 const FLOOR_LABELS: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Ад',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Ад',
+  [z.VOID]: 'Пустота',
 };
 
 interface DemosJourneyLike {

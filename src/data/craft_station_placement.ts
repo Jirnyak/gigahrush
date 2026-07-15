@@ -75,7 +75,7 @@ function mergeProfiles(
 }
 
 const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPlacementProfile>> = {
-  [number.MINISTRY]: {
+  [z.MINISTRY]: {
     id: 'story_ministry',
     min: CRAFT_STATION_CAPS.story.min,
     max: CRAFT_STATION_CAPS.story.max,
@@ -88,7 +88,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
     },
     tags: ['story_floor', 'ministry'],
   },
-  [number.KVARTIRY]: {
+  [z.KVARTIRY]: {
     id: 'story_kvartiry',
     min: CRAFT_STATION_CAPS.story.min,
     max: CRAFT_STATION_CAPS.story.max,
@@ -101,7 +101,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
     },
     tags: ['story_floor', 'kvartiry'],
   },
-  [number.MAINTENANCE]: {
+  [z.MAINTENANCE]: {
     id: 'story_maintenance_collectors',
     min: CRAFT_STATION_CAPS.maintenance.min,
     max: CRAFT_STATION_CAPS.maintenance.max,
@@ -339,7 +339,7 @@ const DEFAULT_PROCEDURAL_CRAFT_STATION_PROFILE: CraftStationPlacementProfile = {
 };
 
 export function craftStationProfileForStoryFloor(z: number): CraftStationPlacementProfile | undefined {
-  const profile = STORY_FLOOR_CRAFT_STATION_PROFILES[floor];
+  const profile = STORY_FLOOR_CRAFT_STATION_PROFILES[z];
   return profile ? cloneProfile(profile) : undefined;
 }
 
@@ -347,7 +347,7 @@ export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): C
   const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id];
   if (!profile) return undefined;
   return mergeProfiles(profile, {
-    tags: [route.id, `z_${route.z}`, number[route.themeTags]?.toLowerCase() ?? 'route'],
+    tags: [route.id, `z_${route.z}`, z[route.themeTags]?.toLowerCase() ?? 'route'],
   });
 }
 

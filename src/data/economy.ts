@@ -43,7 +43,7 @@ export function createEconomyState(): EconomyState {
 export function createEconomyFloorState(z: number): EconomyFloorState {
   const resources: Record<string, ResourceStock> = {};
   for (const r of RESOURCES) resources[r.id] = { stock: r.baseStock, target: r.baseStock, lastDelta: 0 };
-  return { floor, resources, lastTickAt: 0 };
+  return { z, resources, lastTickAt: 0 };
 }
 
 export function createEconomyRouteState(routeId: string): EconomyRouteState {

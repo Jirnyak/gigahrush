@@ -8,7 +8,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -36,7 +35,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('spetspriemnik');
 
 export const SPETSPRIEMNIK_ROUTE_ID = 'spetspriemnik' as const;
 export const SPETSPRIEMNIK_Z = 40 as const;
-export const SPETSPRIEMNIK_BASE_FLOOR = number.MINISTRY;
+export const SPETSPRIEMNIK_BASE_FLOOR = z.MINISTRY;
 export const SPETSPRIEMNIK_CELL_KEY = 'container_key_label';
 export const SPETSPRIEMNIK_PERMIT_KEY = 'official_permit_slip';
 export const SPETSPRIEMNIK_GUARD_KEY = 'liquidator_token';

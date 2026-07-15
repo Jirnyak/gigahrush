@@ -8,7 +8,6 @@ import {
   ContainerKind,
   DoorState,
   Feature,
-  number,
   LiftDirection,
   EntityType,
   AIGoal,
@@ -2381,10 +2380,10 @@ function measureTileCoverage(world: World, tileX: number, tileY: number): number
     for (let dx = 0; dx < VOID_TILE; dx++) {
       const ci = world.idx(x0 + dx, y0 + dy);
       const c = world.cells[ci];
-      if (c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER) floor++;
+      if (c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER) z++;
     }
   }
-  return floor / (VOID_TILE * VOID_TILE);
+  return z / (VOID_TILE * VOID_TILE);
 }
 
 function voidFillRoomSize(seed: number, industrial: boolean): { w: number; h: number; type: RoomType } {
@@ -14910,7 +14909,7 @@ function stampCultAltarNook(world: World, room: Room, spec: ProceduralFloorSpec)
     const y = world.wrap(bestY + dy);
     if (world.cells[world.idx(x, y)] === Cell.FLOOR) {
       if (placeCultRoomFeature(world, room, Feature.CANDLE, x, y)) {
-         world.floorTex[world.idx(x, y)] = spec.themeTags === number.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+         world.floorTex[world.idx(x, y)] = spec.themeTags === z.HELL ? Tex.F_MEAT : Tex.F_CARPET;
       }
     }
   }
@@ -15033,7 +15032,7 @@ function stampCultPhaseBoundary(
       if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
       stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.24, 118, spec.seed + marks * 193, 66, 18, 38, false);
       world.factionControl[ci] = ZoneFaction.CULTIST;
-      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags === number.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags === z.HELL ? Tex.F_MEAT : Tex.F_CARPET;
       marks++;
     }
   }
@@ -15055,7 +15054,7 @@ function stampCultPhaseBoundary(
       if (best > 210 * 210 || Math.abs(Math.sqrt(second) - Math.sqrt(best)) > 18) continue;
       stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 128, spec.seed + marks * 313, 66, 18, 38, false);
       world.factionControl[ci] = ZoneFaction.CULTIST;
-      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags === number.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags === z.HELL ? Tex.F_MEAT : Tex.F_CARPET;
       marks++;
     }
   }
@@ -15209,7 +15208,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Толпа осталась за стеной. Очаг ноль получил еще минуту.',
     };
   }
-  if (floor === number.MINISTRY) {
+  if (z === z.MINISTRY) {
     return {
       label: 'шорох папок',
       hint: 'бумаги ведут к живой канцелярии',
@@ -15220,7 +15219,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Папки шуршат дальше без вас. Бумажная угроза осталась в стороне.',
     };
   }
-  if (floor === number.MAINTENANCE) {
+  if (z === z.MAINTENANCE) {
     return {
       label: 'трубный стук',
       hint: 'трубы считают мокрый обход',
@@ -15231,7 +15230,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Трубный стук ушел в бетон. Засада осталась шуметь в стороне.',
     };
   }
-  if (floor === number.HELL) {
+  if (z === z.HELL) {
     return {
       label: 'мясной зов',
       hint: 'стены дышат в сторону плотного боя',
@@ -15242,7 +15241,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Мясной зов стих за спиной. Проход остался кормить тишину.',
     };
   }
-  if (floor === number.VOID) {
+  if (z === z.VOID) {
     return {
       label: 'пустой тон',
       hint: 'тишина показывает опасную прямую',
@@ -15281,7 +15280,7 @@ function choosePressureTargetRoom(world: World, rooms: Room[], spec: ProceduralF
     const pref = preferredTypes.indexOf(room.type);
     if (pref >= 0) score += 80 - pref * 12;
     if (room.type === RoomType.CORRIDOR) score += routePressureLevel(spec) * 8;
-    if (room.type === RoomType.PRODUCTION && proceduralMonsterFloor(spec) === number.MAINTENANCE) score += 20;
+    if (room.type === RoomType.PRODUCTION && proceduralMonsterFloor(spec) === z.MAINTENANCE) score += 20;
     if (score > bestScore) {
       bestScore = score;
       best = room;

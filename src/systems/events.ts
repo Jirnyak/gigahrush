@@ -1,7 +1,6 @@
 /* ── Structured world event store: fixed-size ring buffers ────── */
 
 import {
-  number,
   WORLD_EVENT_IMPORTANT_CAPACITY,
   WORLD_EVENT_RECENT_CAPACITY,
   WORLD_EVENT_ZONE_CAPACITY,
@@ -33,12 +32,12 @@ const CONTEXT_FACT_KINDS = new Set([
   'danger', 'shortage', 'theft', 'death', 'production', 'need', 'quest_hook', 'social', 'territory',
 ]);
 const BASE_FLOORS = [
-  number.MINISTRY,
-  number.KVARTIRY,
-  number.LIVING,
-  number.MAINTENANCE,
-  number.HELL,
-  number.VOID,
+  z.MINISTRY,
+  z.KVARTIRY,
+  z.LIVING,
+  z.MAINTENANCE,
+  z.HELL,
+  z.VOID,
 ] as const;
 const RESOURCE_SCARCITY_EVENT_COOLDOWN_S = 600;
 const MAX_RESOURCE_SCARCITY_RUMORS = 4;
@@ -237,7 +236,7 @@ function maxBufferEventId(buffer: WorldEventBuffer): number {
 function normalizeFloor(value: unknown): number {
   return typeof value === 'number' && BASE_FLOORS.includes(value)
     ? value
-    : number.LIVING;
+    : z.LIVING;
 }
 
 function normalizePrivacy(value: unknown): WorldEvent['privacy'] {

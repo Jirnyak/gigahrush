@@ -324,28 +324,28 @@ export const VISUAL_DETAIL_PROFILE_ROWS: readonly VisualDetailProfileRow[] = [
   { id: 'global_chipped_concrete', detailId: 'chipped_concrete', density: 3 },
   { id: 'global_light_dust', detailId: 'light_dust', density: 3 },
 
-  { id: 'story_living_papers', detailId: 'paper_scraps', density: 12, baseFloors: [number.LIVING] },
-  { id: 'story_living_crumbs', detailId: 'crumbs', density: 10, baseFloors: [number.LIVING] },
-  { id: 'story_living_cobweb', detailId: 'cobweb_corner', density: 5, baseFloors: [number.LIVING] },
+  { id: 'story_living_papers', detailId: 'paper_scraps', density: 12, baseFloors: [z.LIVING] },
+  { id: 'story_living_crumbs', detailId: 'crumbs', density: 10, baseFloors: [z.LIVING] },
+  { id: 'story_living_cobweb', detailId: 'cobweb_corner', density: 5, baseFloors: [z.LIVING] },
 
-  { id: 'story_kvartiry_papers', detailId: 'paper_scraps', density: 12, baseFloors: [number.KVARTIRY] },
-  { id: 'story_kvartiry_crumbs', detailId: 'crumbs', density: 11, baseFloors: [number.KVARTIRY] },
-  { id: 'story_kvartiry_cobweb', detailId: 'cobweb_corner', density: 6, baseFloors: [number.KVARTIRY] },
+  { id: 'story_kvartiry_papers', detailId: 'paper_scraps', density: 12, baseFloors: [z.KVARTIRY] },
+  { id: 'story_kvartiry_crumbs', detailId: 'crumbs', density: 11, baseFloors: [z.KVARTIRY] },
+  { id: 'story_kvartiry_cobweb', detailId: 'cobweb_corner', density: 6, baseFloors: [z.KVARTIRY] },
 
-  { id: 'story_ministry_papers', detailId: 'paper_scraps', density: 14, baseFloors: [number.MINISTRY] },
-  { id: 'story_ministry_newsprint', detailId: 'newspaper_bits', density: 10, baseFloors: [number.MINISTRY], requiredTags: ['documents'] },
-  { id: 'story_ministry_cracks', detailId: 'wall_cracks', density: 7, baseFloors: [number.MINISTRY] },
+  { id: 'story_ministry_papers', detailId: 'paper_scraps', density: 14, baseFloors: [z.MINISTRY] },
+  { id: 'story_ministry_newsprint', detailId: 'newspaper_bits', density: 10, baseFloors: [z.MINISTRY], requiredTags: ['documents'] },
+  { id: 'story_ministry_cracks', detailId: 'wall_cracks', density: 7, baseFloors: [z.MINISTRY] },
 
-  { id: 'story_maintenance_rust', detailId: 'rust_grit', density: 15, baseFloors: [number.MAINTENANCE], requiredTags: ['industrial'] },
-  { id: 'story_maintenance_wet', detailId: 'wet_dirt', density: 12, baseFloors: [number.MAINTENANCE], requiredTags: ['water'] },
-  { id: 'story_maintenance_light_dust', detailId: 'light_dust', density: 5, baseFloors: [number.MAINTENANCE] },
+  { id: 'story_maintenance_rust', detailId: 'rust_grit', density: 15, baseFloors: [z.MAINTENANCE], requiredTags: ['industrial'] },
+  { id: 'story_maintenance_wet', detailId: 'wet_dirt', density: 12, baseFloors: [z.MAINTENANCE], requiredTags: ['water'] },
+  { id: 'story_maintenance_light_dust', detailId: 'light_dust', density: 5, baseFloors: [z.MAINTENANCE] },
 
-  { id: 'story_hell_bone', detailId: 'bone_crumbs', density: 15, baseFloors: [number.HELL], requiredTags: ['meat'] },
-  { id: 'story_hell_gut', detailId: 'gut_threads', density: 12, baseFloors: [number.HELL], requiredTags: ['meat'] },
-  { id: 'story_hell_wet', detailId: 'wet_dirt', density: 5, baseFloors: [number.HELL], blockedTags: ['void'] },
+  { id: 'story_hell_bone', detailId: 'bone_crumbs', density: 15, baseFloors: [z.HELL], requiredTags: ['meat'] },
+  { id: 'story_hell_gut', detailId: 'gut_threads', density: 12, baseFloors: [z.HELL], requiredTags: ['meat'] },
+  { id: 'story_hell_wet', detailId: 'wet_dirt', density: 5, baseFloors: [z.HELL], blockedTags: ['void'] },
 
-  { id: 'story_void_proof', detailId: 'proof_specks', density: 17, baseFloors: [number.VOID], requiredTags: ['void'] },
-  { id: 'story_void_light_dust', detailId: 'light_dust', density: 6, baseFloors: [number.VOID] },
+  { id: 'story_void_proof', detailId: 'proof_specks', density: 17, baseFloors: [z.VOID], requiredTags: ['void'] },
+  { id: 'story_void_light_dust', detailId: 'light_dust', density: 6, baseFloors: [z.VOID] },
 
   { id: 'tag_residential_papers', detailId: 'paper_scraps', density: 6, requiredTags: ['residential'] },
   { id: 'tag_civil_crumbs', detailId: 'crumbs', density: 5, requiredTags: ['civil'] },
@@ -387,7 +387,7 @@ function clamp01(value: number): number {
 }
 
 function floorTag(z: number): string {
-  return (number[floor] ?? 'floor').toLowerCase();
+  return (z[z] ?? 'floor').toLowerCase();
 }
 
 function themeTags(theme: FloorThemeProfile): Set<string> {

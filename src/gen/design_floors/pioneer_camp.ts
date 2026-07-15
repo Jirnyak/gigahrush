@@ -12,7 +12,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -41,7 +40,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('pioneer_camp');
 
 export const PIONEER_CAMP_DESIGN_FLOOR_ID = 'pioneer_camp' as const;
 export const PIONEER_CAMP_ROUTE_Z = 38;
-export const PIONEER_CAMP_BASE_FLOOR = number.LIVING;
+export const PIONEER_CAMP_BASE_FLOOR = z.LIVING;
 export const PIONEER_CAMP_DISPLAY_NAME = 'Пионерлагерь';
 
 const CAMP_SEED = hashSeed(PIONEER_CAMP_DESIGN_FLOOR_ID);

@@ -3,7 +3,7 @@ import { currentFloorRunEntry } from '../../systems/procedural_floors';
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, EntityType, Feature, number, MonsterKind, RoomType, Tex, W,
+  AIGoal, Cell, EntityType, Feature, MonsterKind, RoomType, Tex, W,
   msg,
   type Entity, type GameState, type Room, type WorldEventSeverity,
 } from '../../core/types';
@@ -336,7 +336,7 @@ export function tryUseParitelSteamBridge(
 ): boolean {
   const room = valveRoomAtLook(world, lookX, lookY);
   if (!room) return false;
-  if (currentFloorRunEntry(state).themeTags !== number.MAINTENANCE) return false;
+  if (currentFloorRunEntry(state).themeTags !== z.MAINTENANCE) return false;
   if (valveCooldownState !== state || nextValveUseAt > state.time + 10) {
     valveCooldownState = state;
     nextValveUseAt = 0;
@@ -373,7 +373,7 @@ export function updateParitelSteamBridge(
   state: GameState,
   dt: number,
 ): void {
-  if (dt <= 0 || currentFloorRunEntry(state).themeTags !== number.MAINTENANCE) return;
+  if (dt <= 0 || currentFloorRunEntry(state).themeTags !== z.MAINTENANCE) return;
   if (steamTickState !== state || nextSteamTickAt > state.time + 10) {
     steamTickState = state;
     nextSteamTickAt = 0;

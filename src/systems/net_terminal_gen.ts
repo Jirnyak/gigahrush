@@ -4,7 +4,6 @@ import {
   Cell,
   EntityType,
   Feature,
-  number,
   W,
   msg,
   type Entity,
@@ -196,7 +195,7 @@ function cleanHackCooldowns(input: unknown, now: number): Record<string, number>
 }
 
 function routeKeyForStory(z: number): string {
-  return floorKeyForStory(floor);
+  return floorKeyForStory(z);
 }
 
 function routeKeyForEntry(entry: FloorRunEntry): string {
@@ -214,14 +213,14 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
   const deck: NetTerminalGenRouteTarget[] = [];
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
     const designFloor = designFloorAtZ(z);
-    const story = designFloor ? designFloorThemeClass(designFloor) : number.LIVING;
+    const story = designFloor ? designFloorThemeClass(designFloor) : z.LIVING;
     if (story !== undefined) {
       deck.push({
         z,
         key: routeKeyForStory(story),
         kind: 'story',
         baseFloor: story,
-        label: number[story],
+        label: z[story],
       });
       continue;
     }
@@ -271,7 +270,7 @@ export function deriveNetTerminalGenTarget(state: GameState): NetTerminalGenTarg
     key: routeKeyForStory(state.currentZ),
     kind: 'story' as const,
     baseFloor: state.currentZ,
-    label: number[state.currentZ],
+    label: z[state.currentZ],
   };
   const deckFingerprint = deck.map(entry => entry.key).join('|');
   const routeSeed = hashSeed(deckFingerprint, run.runSeed);

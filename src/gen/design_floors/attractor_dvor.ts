@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -35,7 +34,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const ATTRACTOR_DVOR_ROUTE_ID = 'attractor_dvor' as const;
 export const ATTRACTOR_DVOR_Z = -34;
-export const ATTRACTOR_DVOR_BASE_FLOOR = number.MAINTENANCE;
+export const ATTRACTOR_DVOR_BASE_FLOOR = z.MAINTENANCE;
 
 const CX = W >> 1;
 const CY = W >> 1;

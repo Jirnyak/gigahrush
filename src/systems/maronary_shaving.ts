@@ -1,6 +1,5 @@
 import {
   Faction,
-  number,
   Occupation,
   type Entity,
   type GameState,
@@ -92,12 +91,12 @@ function currentQuestTags(state: GameState): string[] {
 
 function currentRouteTags(state: GameState): string[] {
   const tags: string[] = [];
-  pushUnique(tags, enumTag('floor', number, state.currentZ));
+  pushUnique(tags, enumTag('floor', z, state.currentZ));
   const entry = currentFloorRunEntry(state);
   pushUnique(tags, `route:${floorRunEntryRouteId(entry)}`);
   pushUnique(tags, `route_kind:${floorRunEntryKind(entry)}`);
   pushUnique(tags, `z:${entry.z}`);
-  pushUnique(tags, enumTag('base_floor', number, entry.themeTags));
+  pushUnique(tags, enumTag('base_floor', z, entry.themeTags));
   return tags;
 }
 

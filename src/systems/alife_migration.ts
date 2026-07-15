@@ -3,7 +3,6 @@ import {
   Cell,
   EntityType,
   Feature,
-  number,
   W,
   type Entity,
   type GameState,
@@ -165,12 +164,12 @@ type MobilityHost = GameState & { alifeMobility?: AlifeMobilityState; alifeMigra
 const anchorCache = new WeakMap<World, AnchorCache>();
 
 const STORY_ROUTE_INFO: readonly RouteInfo[] = [
-  storyRouteInfo(number.MINISTRY),
-  storyRouteInfo(number.KVARTIRY),
-  storyRouteInfo(number.LIVING),
-  storyRouteInfo(number.MAINTENANCE),
-  storyRouteInfo(number.HELL),
-  storyRouteInfo(number.VOID),
+  storyRouteInfo(z.MINISTRY),
+  storyRouteInfo(z.KVARTIRY),
+  storyRouteInfo(z.LIVING),
+  storyRouteInfo(z.MAINTENANCE),
+  storyRouteInfo(z.HELL),
+  storyRouteInfo(z.VOID),
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,10 +207,10 @@ function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
 }
 
 function storyRouteInfo(z: number): RouteInfo {
-  const theme = themeForStoryFloor(floor);
+  const theme = themeForStoryFloor(z);
   return {
     floorKey: theme.floorKey,
-    baseFloor: floor,
+    baseFloor: z,
     z: theme.routeZ,
     danger: theme.danger,
     npcAllowed: theme.npcAllowed,
@@ -501,7 +500,7 @@ function resolveDestination(
   const source = resolveRoute(context, record.floorKey);
   const candidates = context.filter(route => {
     if (route.floorKey === record.floorKey) return false;
-    if (route.themeTags === number.VOID) return false;
+    if (route.themeTags === z.VOID) return false;
     if (!selectorMatches(route, intent.destination)) return false;
     if (intent.maxRisk !== undefined) {
       const sourceRisk = source?.danger ?? 3;

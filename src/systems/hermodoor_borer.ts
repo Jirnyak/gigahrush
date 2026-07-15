@@ -1,7 +1,7 @@
 /* ── Hermodoor borer: bounded shelter-risk encounter ─────────── */
 
 import {
-  W, Cell, DoorState, EntityType, AIGoal, MonsterKind, number, RoomType,
+  W, Cell, DoorState, EntityType, AIGoal, MonsterKind, RoomType,
   type Entity, type GameState, type Room,
   msg,
 } from '../core/types';
@@ -121,7 +121,7 @@ function doorY(idx: number): number {
 }
 
 function borerFloorsAllowThreat(z: number): boolean {
-  return floor !== number.HELL && floor !== number.VOID;
+  return z !== z.HELL && z !== z.VOID;
 }
 
 function occupiedApartmentIds(entities: readonly Entity[]): Set<number> {

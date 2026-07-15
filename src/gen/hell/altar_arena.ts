@@ -2,8 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  W, Cell, DoorState, EntityType, AIGoal, Faction, Feature, number,
-  MonsterKind, Occupation, RoomType, Tex,
+  W, Cell, DoorState, EntityType, AIGoal, Faction, Feature, MonsterKind, Occupation, RoomType, Tex,
   type Entity, type GameState, type Room, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -143,7 +142,7 @@ export function spawnHellAltarArena(world: World, entities: Entity[], nextId: { 
   const cy = room.y + (room.h >> 1);
   const ci = world.idx(cx, cy);
   activeSite = {
-    z: number.HELL,
+    z: z.HELL,
     roomId: room.id,
     roomX: room.x,
     roomY: room.y,
@@ -567,7 +566,7 @@ function registerAltarRouteCue(world: World, room: Room, entry: Route, escape: R
     y: cueY,
     targetX: cx,
     targetY: cy,
-    z: number.HELL,
+    z: z.HELL,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(Math.floor(cx), Math.floor(cy))],

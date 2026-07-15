@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, number, Occupation, QuestType,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, Occupation, QuestType,
   RoomType, Tex,
   type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
@@ -50,7 +50,7 @@ registerSideQuest(CARTOGRAPHER_ID, NPC_DEF, [
     giverNpcId: CARTOGRAPHER_ID,
     type: QuestType.VISIT,
     desc: 'Сева Картограф: «Спустись в Коллекторы и вернись с отметкой нижней зацепки. Если слышишь воду - держи фильтр или фонарь под рукой.»',
-    visitFloorZ: number.MAINTENANCE,
+    visitFloorZ: z.MAINTENANCE,
     rewardItem: 'caravan_route',
     rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],
@@ -239,7 +239,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,
@@ -285,7 +285,7 @@ function registerPaidRouteAdviceCue(world: World, room: Room): void {
     y: tableY,
     targetX: tableX,
     targetY: tableY,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[markerCell],

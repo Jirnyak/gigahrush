@@ -8,7 +8,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -39,7 +38,7 @@ export const ISTINNIY_LABIRINT_ROUTE_ID = 'istinniy_labirint' as const;
 export const ISTINNIY_LABIRINT_Z = 28;
 export const ISTINNIY_LABIRINT_CHORD_KEY = 'key';
 
-const BASE_FLOOR = number.MINISTRY;
+const BASE_FLOOR = z.MINISTRY;
 const GRID_W = 63;
 const GRID_H = 63;
 const GRID_N = GRID_W * GRID_H;

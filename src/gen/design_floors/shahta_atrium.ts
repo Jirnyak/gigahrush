@@ -7,7 +7,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -39,7 +38,7 @@ import { rng } from '../../core/rand';
 
 export const DESIGN_FLOOR_ID = 'shahta_atrium' as const;
 export const SHAHTA_ATRIUM_ROUTE_Z = -24 as const;
-export const SHAHTA_ATRIUM_BASE_FLOOR = number.MAINTENANCE;
+export const SHAHTA_ATRIUM_BASE_FLOOR = z.MAINTENANCE;
 
 const CX = W >> 1;
 const CY = W >> 1;

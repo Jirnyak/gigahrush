@@ -2,7 +2,6 @@
 
 import {
   Faction,
-  type number,
   type WorldContainer,
   type WorldEvent,
   type WorldEventSeverity,
@@ -45,7 +44,7 @@ const roomMemory = new Map<string, RoomMemoryRecord>();
 let tickAccum = 0;
 
 function memoryKey(z: number, roomId: number): string {
-  return `${floor}:${roomId}`;
+  return `${z}:${roomId}`;
 }
 
 function hasTag(event: WorldEvent, tag: string): boolean {
@@ -234,12 +233,12 @@ export function tickRoomMemory(_now: number, dt: number): number {
 }
 
 export function getRoomMemory(z: number | undefined, roomId: number | undefined): RoomMemoryRecord | undefined {
-  if (floor === undefined || roomId === undefined || roomId < 0) return undefined;
-  const record = roomMemory.get(memoryKey(floor, roomId));
+  if (z === undefined || roomId === undefined || roomId < 0) return undefined;
+  const record = roomMemory.get(memoryKey(z, roomId));
   return record && record.ttl > 0 ? record : undefined;
 }
 
-export function getRoomMemoryForContainer(container: Pick<WorldContainer, 'floor' | 'roomId'>): RoomMemoryRecord | undefined {
+export function getRoomMemoryForContainer(container: Pick<WorldContainer, 'z' | 'roomId'>): RoomMemoryRecord | undefined {
   return getRoomMemory(container.z, container.roomId);
 }
 
@@ -301,7 +300,7 @@ export function describeRoomMemory(record: RoomMemoryRecord): string {
 }
 
 export function summarizeRoomMemoryForRoom(z: number | undefined, roomId: number | undefined): string[] {
-  const record = getRoomMemory(floor, roomId);
+  const record = getRoomMemory(z, roomId);
   if (!record) return ['Коммунальная память: нет'];
   return [
     `Коммунальная память: ${roomMemoryLabels(record.bits).join(', ') || 'след'} sev${record.severity}`,

@@ -76,39 +76,39 @@ type FloorRunHost = GameState & { floorRun?: FloorRunState };
 const normalizedFloorRuns = new WeakSet<FloorRunState>();
 
 const STORY_NAMES: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Мясной низ',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Мясной низ',
+  [z.VOID]: 'Пустота',
 };
 
 const STORY_ROUTE_IDS: Record<number, string> = {
-  [number.MINISTRY]: floorKeyForStory(number.MINISTRY),
-  [number.KVARTIRY]: floorKeyForStory(number.KVARTIRY),
-  [number.LIVING]: floorKeyForStory(number.LIVING),
-  [number.MAINTENANCE]: floorKeyForStory(number.MAINTENANCE),
-  [number.HELL]: floorKeyForStory(number.HELL),
-  [number.VOID]: floorKeyForStory(number.VOID),
+  [z.MINISTRY]: floorKeyForStory(z.MINISTRY),
+  [z.KVARTIRY]: floorKeyForStory(z.KVARTIRY),
+  [z.LIVING]: floorKeyForStory(z.LIVING),
+  [z.MAINTENANCE]: floorKeyForStory(z.MAINTENANCE),
+  [z.HELL]: floorKeyForStory(z.HELL),
+  [z.VOID]: floorKeyForStory(z.VOID),
 };
 
 const STORY_ROLES: Record<number, string> = {
-  [number.MINISTRY]: 'документы, пропуска, бюрократия',
-  [number.KVARTIRY]: 'социальный riot-floor, вода, очереди',
-  [number.LIVING]: 'домашний hub, подготовка, возврат',
-  [number.MAINTENANCE]: 'ремонт, давление, тех-лут',
-  [number.HELL]: 'высокая угроза, мясо, ПСИ',
-  [number.VOID]: 'финальная аномалия и выход',
+  [z.MINISTRY]: 'документы, пропуска, бюрократия',
+  [z.KVARTIRY]: 'социальный riot-floor, вода, очереди',
+  [z.LIVING]: 'домашний hub, подготовка, возврат',
+  [z.MAINTENANCE]: 'ремонт, давление, тех-лут',
+  [z.HELL]: 'высокая угроза, мясо, ПСИ',
+  [z.VOID]: 'финальная аномалия и выход',
 };
 
 const STORY_DANGERS: Record<number, 1 | 2 | 3 | 4 | 5> = {
-  [number.MINISTRY]: 3,
-  [number.KVARTIRY]: 3,
-  [number.LIVING]: 1,
-  [number.MAINTENANCE]: 4,
-  [number.HELL]: 5,
-  [number.VOID]: 5,
+  [z.MINISTRY]: 3,
+  [z.KVARTIRY]: 3,
+  [z.LIVING]: 1,
+  [z.MAINTENANCE]: 4,
+  [z.HELL]: 5,
+  [z.VOID]: 5,
 };
 
 const MAX_RUN_SEED = 0x7fffffff;
@@ -464,9 +464,9 @@ export function currentFloorRunEntry(state: GameState): FloorRunEntry {
   const run = ensureFloorRunState(state);
   return entryForZ(state, run.currentZ) ?? {
     z: run.currentZ,
-    themeTags: number.LIVING,
+    themeTags: z.LIVING,
     procedural: true,
-    label: STORY_NAMES[number.LIVING],
+    label: STORY_NAMES[z.LIVING],
     color: '#4af',
   };
 }
@@ -505,8 +505,8 @@ export function commitFloorRunEntrySnapshot(state: GameState, input: unknown): F
 }
 
 export function forceFloorRunStory(state: GameState, z: number): void {
-  const run = ensureFloorRunState(state, floor);
-  run.currentZ = zForBaseFloor(floor);
+  const run = ensureFloorRunState(state, z);
+  run.currentZ = zForBaseFloor(z);
 }
 
 export function isCurrentProceduralFloor(state: GameState): boolean {
@@ -521,7 +521,7 @@ export function isCurrentStoryFloor(state: GameState, z: number): boolean {
   const entry = currentFloorRunEntry(state);
   if (entry.procedural || !entry.designFloorId) return false;
   const design = designFloorById(entry.designFloorId);
-  return design ? designFloorThemeClass(design) === floor : false;
+  return design ? designFloorThemeClass(design) === z : false;
 }
 
 export function currentFloorRunLabel(state: GameState): string | undefined {
@@ -710,7 +710,7 @@ export function summarizeFloorRun(state: GameState): string[] {
     anomalyLine += `${id}=${anomalyCounts[id]}`;
   }
   if (anomalyLine) out.push(`anomalies ${anomalyLine}`);
-  if (entry.designFloorId) out.push(`route=${entry.designFloorId} base=${number[entry.themeTags]}`);
+  if (entry.designFloorId) out.push(`route=${entry.designFloorId} base=${z[entry.themeTags]}`);
   return out;
 }
 

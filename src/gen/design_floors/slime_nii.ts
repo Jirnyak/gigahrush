@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -46,7 +45,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('slime_nii');
 
 export const DESIGN_FLOOR_ID = 'slime_nii' as const;
 export const SLIME_NII_Z = 12 as const;
-export const SLIME_NII_BASE_FLOOR = number.KVARTIRY;
+export const SLIME_NII_BASE_FLOOR = z.KVARTIRY;
 export const SLIME_NII_CAMERA_ROOM_PREFIX = 'Гермокамера НИИ слизи';
 
 const SEED = hashSeed(DESIGN_FLOOR_ID);

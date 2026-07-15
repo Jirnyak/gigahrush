@@ -8,7 +8,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Tex,
@@ -384,7 +383,7 @@ function normalizePatchState(input: Partial<MapEditorPatchState> | null | undefi
       const ops = src.ops.slice(0, PATCH_OP_CAP).map(normalizeMapEditorOp).filter((op): op is MapEditorOp => !!op);
       patches[key] = {
         floorKey: key,
-        baseFloor: typeof src.themeTags === 'number' ? src.themeTags : number.LIVING,
+        baseFloor: typeof src.themeTags === 'number' ? src.themeTags : z.LIVING,
         z: typeof src.z === 'number' ? src.z : undefined,
         createdAt: typeof src.createdAt === 'number' ? src.createdAt : 0,
         opCount: ops.length,

@@ -2,7 +2,6 @@
 
 import {
   EntityType,
-  number,
   LiftDirection,
   msg,
   type Entity,
@@ -68,12 +67,12 @@ export interface ElevatorRouteResolution {
 type FloorInstanceHost = GameState & { floorInstances?: FloorInstanceState };
 
 const BASE_FLOORS = [
-  number.MINISTRY,
-  number.KVARTIRY,
-  number.LIVING,
-  number.MAINTENANCE,
-  number.HELL,
-  number.VOID,
+  z.MINISTRY,
+  z.KVARTIRY,
+  z.LIVING,
+  z.MAINTENANCE,
+  z.HELL,
+  z.VOID,
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -114,7 +113,7 @@ function createDiscovered(): Record<string, boolean> {
   return discovered;
 }
 
-export function createFloorInstanceState(stableFloor = number.LIVING): FloorInstanceState {
+export function createFloorInstanceState(stableFloor = z.LIVING): FloorInstanceState {
   return {
     current: null,
     discovered: createDiscovered(),
@@ -163,7 +162,7 @@ function normalizeActive(input: Partial<ActiveFloorInstance> | null | undefined)
 
 export function normalizeFloorInstanceState(
   input: Partial<FloorInstanceState> | null | undefined,
-  stableFloor = number.LIVING,
+  stableFloor = z.LIVING,
 ): FloorInstanceState {
   const out = createFloorInstanceState(stableFloor);
   if (!input) return out;
@@ -219,7 +218,7 @@ export function floorInstanceLabel(instance: ActiveFloorInstance): string {
 export function floorInstanceIdentityLine(state: GameState): string {
   const active = getActiveFloorInstance(state);
   if (!active) return 'instance=none';
-  return `instance=${active.id} ${floorInstanceLabel(active)} base=${number[active.themeTags]} risk=${active.risk} seed=${active.seed} intended=${number[active.intendedFloor]} return=${number[active.returnFloor]}`;
+  return `instance=${active.id} ${floorInstanceLabel(active)} base=${z[active.themeTags]} risk=${active.risk} seed=${active.seed} intended=${z[active.intendedFloor]} return=${z[active.returnFloor]}`;
 }
 
 export function currentFloorInstanceLabel(state: GameState): string | undefined {
@@ -243,7 +242,7 @@ function pickInstance(fromFloor: number, intendedFloor: number): FloorInstanceDe
   const candidates: FloorInstanceDef[] = [];
   for (const def of FLOOR_INSTANCES) {
     if (def.weight <= 0) continue;
-    if (def.themeTags === number.VOID) continue;
+    if (def.themeTags === z.VOID) continue;
     const nearRoute = def.themeTags === fromFloor || def.themeTags === intendedFloor;
     const weight = nearRoute ? def.weight * 2 : def.weight;
     total += weight;
@@ -441,9 +440,9 @@ export function summarizeFloorInstances(state: GameState): string[] {
   const active = store.current;
   const out = [
     active
-      ? `active ${floorInstanceLabel(active)} key=${floorInstanceWorldKey(active)} base=${number[active.themeTags]} risk=${active.risk} seed=${active.seed}`
+      ? `active ${floorInstanceLabel(active)} key=${floorInstanceWorldKey(active)} base=${z[active.themeTags]} risk=${active.risk} seed=${active.seed}`
       : 'active none',
-    `anomalies=${store.anomalyCount} lastRoll=${store.lastRoll.toFixed(3)} lastStable=${number[store.lastStableFloor]}`,
+    `anomalies=${store.anomalyCount} lastRoll=${store.lastRoll.toFixed(3)} lastStable=${z[store.lastStableFloor]}`,
   ];
   if (store.routeGuardUntil > 0) out.push(`routeGuardUntil=${store.routeGuardUntil.toFixed(1)} lastFollowup=${store.lastFollowupId || 'none'}`);
   const discovered = FLOOR_INSTANCES.filter(def => store.discovered[def.id]).map(def => `№${def.displayNumber}`);

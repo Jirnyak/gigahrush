@@ -16,8 +16,7 @@ import {
   Faction,
   Occupation,
   MonsterKind,
-  number,
-} from '../core/types';
+  } from '../core/types';
 import type { QuestRouteTarget } from './contracts';
 import { designFloorAtZ, designFloorById } from './design_floors';
 import {
@@ -102,13 +101,13 @@ export interface PlotNpcDef {
 }
 
 export function storyNpcFloorKey(z: number): string {
-  switch (floor) {
-    case number.MINISTRY: return 'design:ministry';
-    case number.KVARTIRY: return 'design:kvartiry';
-    case number.LIVING: return 'design:living';
-    case number.MAINTENANCE: return 'design:maintenance';
-    case number.HELL: return 'design:hell';
-    case number.VOID: return 'design:void';
+  switch (z) {
+    case z.MINISTRY: return 'design:ministry';
+    case z.KVARTIRY: return 'design:kvartiry';
+    case z.LIVING: return 'design:living';
+    case z.MAINTENANCE: return 'design:maintenance';
+    case z.HELL: return 'design:hell';
+    case z.VOID: return 'design:void';
   }
 }
 
@@ -315,11 +314,11 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'bandage', rewardCount: 5,
     extraRewards: [{ defId: 'antidep', count: 2 }, { defId: 'ammo_762', count: 20 }],
     relationDelta: 25, xpReward: 180,
-    targetFloorZ: number.HELL,
+    targetFloorZ: z.HELL,
     targetRoute: { z: -36, label: 'Z-36 Мясной низ' },
     targetRoomName: 'Зона закрепления',
     targetHint: 'Удерживай позицию "Зона закрепления" в Мясном низу ровно 300 секунд. Выйдешь — таймер сбросится, и всё начнется заново.',
-    visitFloorZ: number.HELL,
+    visitFloorZ: z.HELL,
     holdSeconds: 300,
     holdResetOnExit: true,
     holdSpawnMonsters: 3,
@@ -334,7 +333,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     giverNpcId: 'major_grom',
     type: QuestType.VISIT,
     desc: 'Нужны патроны. Иди в Министерство, запроси снабжение.',
-    targetFloorZ: number.MINISTRY,
+    targetFloorZ: z.MINISTRY,
     rewardItem: 'ammo_762', rewardCount: 30,
     relationDelta: 20, xpReward: 100,
   },
@@ -346,10 +345,10 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'ammo_762', rewardCount: 24,
     extraRewards: [{ defId: 'bandage', count: 3 }],
     relationDelta: 18, xpReward: 120,
-    targetFloorZ: number.HELL,
+    targetFloorZ: z.HELL,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     targetHint: 'Спускайся лифтами на Z-40: Подад.',
-    visitFloorZ: number.HELL,
+    visitFloorZ: z.HELL,
     eventTags: ['podad', 'story_route', 'lower_route'],
     eventData: { routeId: 'podad', floorZ: -40 },
   },
@@ -361,7 +360,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetNpcId: 'herald_clue',
     rewardItem: 'psi_phase', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
-    targetFloorZ: number.HELL,
+    targetFloorZ: z.HELL,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     relationDelta: 8, xpReward: 70,
   },
@@ -373,7 +372,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetMonsterKind: MonsterKind.HERALD, killNeeded: 3,
     rewardItem: 'psi_void_needle', rewardCount: 1,
     extraRewards: [{ defId: 'antidep', count: 2 }],
-    targetFloorZ: number.HELL,
+    targetFloorZ: z.HELL,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     relationDelta: 10, xpReward: 220,
     eventTags: ['podad', 'herald_gate', 'lower_route_unlocked'],
@@ -387,10 +386,10 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'psi_stabilizer', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
     relationDelta: 6, xpReward: 180,
-    targetFloorZ: number.VOID,
+    targetFloorZ: z.VOID,
     targetRoute: { z: -50, label: 'Z-50 Пустота' },
     targetHint: 'Спускайся на Z-50: Пустота.',
-    visitFloorZ: number.VOID,
+    visitFloorZ: z.VOID,
     eventTags: ['below_and_below', 'void_contact', 'story_route'],
     eventData: { routeId: 'design:void', floorZ: -50 },
     eventTargetName: 'Путь ниже открыт до Z-50.',

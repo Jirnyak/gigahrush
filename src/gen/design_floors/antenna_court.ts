@@ -1,7 +1,7 @@
 /* ── Design z: antenna_court / Антенный двор ─────────────── */
 
 import {
-  W, Cell, ContainerKind, DoorState, Feature, number, LiftDirection,
+  W, Cell, ContainerKind, DoorState, Feature, LiftDirection,
   RoomType, Tex, ZoneFaction,
   type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
   type GameState, type Room, type WorldContainer, type WorldEvent,
@@ -28,7 +28,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('antenna_court');
 
 export const DESIGN_FLOOR_ID = 'antenna_court' as const;
 export const ANTENNA_COURT_ROUTE_Z = 42 as const;
-export const ANTENNA_COURT_BASE_FLOOR = number.MINISTRY;
+export const ANTENNA_COURT_BASE_FLOOR = z.MINISTRY;
 
 const SIGNAL_FLAG_TUNED = 1 << 0;
 const SIGNAL_FLAG_MARKET_JAMMED = 1 << 1;

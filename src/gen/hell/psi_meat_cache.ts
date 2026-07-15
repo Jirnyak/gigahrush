@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  W, Cell, ContainerKind, Feature, number, RoomType, Tex,
+  W, Cell, ContainerKind, Feature, RoomType, Tex,
   type Entity, EntityType, AIGoal, Faction, Occupation, MonsterKind, QuestType,
   msg,
   type GameState, type Room, type WorldContainer, type WorldEvent,
@@ -162,7 +162,7 @@ export function generatePsiMeatCache(
   const cx = world.wrap(room.x + (room.w >> 1));
   const cy = world.wrap(room.y + (room.h >> 1));
   activeSite = {
-    z: number.HELL,
+    z: z.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(cx, cy)],
     x: cx + 0.5,
@@ -583,7 +583,7 @@ function addCacheContainer(world: World, room: Room, ownerNpcId: number): number
     id,
     x,
     y,
-    z: number.HELL,
+    z: z.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SAFE,
@@ -609,7 +609,7 @@ function addRefusalTray(world: World, room: Room): number {
     id,
     x,
     y,
-    z: number.HELL,
+    z: z.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

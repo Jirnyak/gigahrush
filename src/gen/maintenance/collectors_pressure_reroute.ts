@@ -1,8 +1,7 @@
 /* -- FLOOR16 collectors pressure reroute: water choice and eel work -- */
 
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
-  MonsterKind, Occupation, QuestType, RoomType, Tex,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   msg,
   type Entity, type GameState, type Room, type WorldContainer,
 } from '../../core/types';
@@ -218,10 +217,10 @@ function drainEffect(sideQuestId: string): DrainEffect | undefined {
   if (sideQuestId === DRAIN_LIVING_QUEST) {
     return {
       choiceId: 'collectors_to_living',
-      benefitFloor: number.LIVING,
+      benefitFloor: z.LIVING,
       benefitFloorId: 'living',
       benefitName: 'Жилая зона',
-      shortageFloor: number.KVARTIRY,
+      shortageFloor: z.KVARTIRY,
       shortageFloorId: 'kvartiry',
       shortageName: 'Квартиры',
       benefitDelta: 28,
@@ -232,10 +231,10 @@ function drainEffect(sideQuestId: string): DrainEffect | undefined {
   if (sideQuestId === DRAIN_KVARTIRY_QUEST) {
     return {
       choiceId: 'collectors_to_kvartiry',
-      benefitFloor: number.KVARTIRY,
+      benefitFloor: z.KVARTIRY,
       benefitFloorId: 'kvartiry',
       benefitName: 'Квартиры',
-      shortageFloor: number.LIVING,
+      shortageFloor: z.LIVING,
       shortageFloorId: 'living',
       shortageName: 'Жилая зона',
       benefitDelta: 26,
@@ -321,7 +320,7 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: number.MAINTENANCE,
+    z: z.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

@@ -1,6 +1,5 @@
 import {
   Faction,
-  number,
   Occupation,
   type WorldEventPrivacy,
   type WorldEventSeverity,
@@ -108,7 +107,7 @@ export const ITEM_OUTCOME_RULES: readonly ItemOutcomeRule[] = [
     outcome: 'ministry',
     kind: 'handoff',
     match: {
-      floorLevels: [number.MINISTRY],
+      floorLevels: [z.MINISTRY],
       buyerPlotNpcIds: ['rotenbergov', 'kantselev'],
       buyerOccupations: [Occupation.DIRECTOR, Occupation.SECRETARY],
       buyerFactions: [Faction.CITIZEN],

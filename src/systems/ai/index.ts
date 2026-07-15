@@ -6,7 +6,7 @@ export { tryMonsterProjectileStagger } from './monster';
 
 import {
   type Entity, type GameState, type Msg, type GameClock,
-  EntityType, number, MonsterKind, AIGoal, NpcRole,
+  EntityType, MonsterKind, AIGoal, NpcRole,
   setMsgLocationProvider,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -118,7 +118,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   fillProjectileOwners(entityIndex.projectiles);
 
   const designFloor = currentZ !== undefined ? designFloorAtZ(currentZ) : undefined;
-  const isMinistry = designFloor ? designFloorThemeClass(designFloor) === number.MINISTRY : false;
+  const isMinistry = designFloor ? designFloorThemeClass(designFloor) === z.MINISTRY : false;
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,

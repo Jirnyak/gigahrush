@@ -3,7 +3,6 @@ import {
   ContainerKind,
   Faction,
   Feature,
-  number,
   type ContainerAccess,
   type Entity,
   type GameState,
@@ -74,7 +73,7 @@ const BLOCKED_REASONS = ['no_inputs', 'container_full', 'no_container'] as const
 type ProductionBlockedReason = typeof BLOCKED_REASONS[number];
 
 function isnumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && number[value] !== undefined;
+  return typeof value === 'number' && Number.isInteger(value) && z[value] !== undefined;
 }
 
 function cleanFinite(value: unknown, fallback: number, min = 0, max = MAX_SAVED_TIME): number {
@@ -472,7 +471,7 @@ function resolveOutputContainer(
 function missingResourceIds(state: GameState, recipe: FactoryRecipeDef, z: number): string[] {
   const missing: string[] = [];
   for (const input of recipe.inputs) {
-    if (!canSpendResources(state, [input], floor)) missing.push(input.id);
+    if (!canSpendResources(state, [input], z)) missing.push(input.id);
   }
   return missing;
 }

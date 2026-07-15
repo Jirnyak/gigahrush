@@ -1,7 +1,7 @@
 /* ── Пристав Пустоты — local VOID rule enforcer chamber ───────── */
 
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, number, ItemType,
+  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, ItemType,
   MonsterKind, RoomType, Tex, msg,
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
@@ -417,7 +417,7 @@ function addPristavContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: number.VOID,
+    z: z.VOID,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,
@@ -559,7 +559,7 @@ export function generatePristavPustoty(
     y: entranceY + 0.5,
     targetX: room.x + (room.w >> 1) + 0.5,
     targetY: room.y + 1.5,
-    z: number.VOID,
+    z: z.VOID,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(room.x + 1, entranceY)],

@@ -3,7 +3,7 @@
 /* a teacher NPC. Hand-crafted, protected with aptMask.            */
 
 import {
-  Cell, Tex, Feature, number, RoomType,
+  Cell, Tex, Feature, RoomType,
   type Room, type Entity,
   EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
@@ -106,7 +106,7 @@ for (const student of STUDENT_DEFS) {
   registerAuthoredNpc({
     id: student.id,
     npc: student.npc,
-    homeFloorKey: storyNpcFloorKey(number.KVARTIRY),
+    homeFloorKey: storyNpcFloorKey(z.KVARTIRY),
     tags: ['kvartiry', 'red_corner', 'student'],
   });
 }

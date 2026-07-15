@@ -6,7 +6,6 @@ import {
   DoorState,
   Faction,
   Feature,
-  number,
   Occupation,
   QuestType,
   RoomType,
@@ -33,7 +32,7 @@ const QUEST_EXPOSE = 'nii_audit_expose_chain';
 const QUEST_SELL = 'nii_audit_sell_sample';
 const QUEST_CONCEAL = 'nii_audit_conceal_forgery';
 const CONTENT_TAGS = ['nii', 'sample', 'contraband', 'ministry'] as const;
-const HOME_FLOOR_KEY = storyNpcFloorKey(number.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
 const INTERN_ID = 'nii_audit_intern_without_clearance';
 
 const RUNNER_DEF: PlotNpcDef = {
@@ -345,7 +344,7 @@ function addAuditContainer(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    z: number.MINISTRY,
+    z: z.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -175,12 +175,12 @@ export const VISUAL_SURFACE_PROFILES: readonly VisualSurfaceProfile[] = [
 
 export const VISUAL_SURFACE_PROFILE_ROWS: readonly VisualSurfaceProfileRow[] = [
   { id: 'global_plain_concrete', profileId: 'plain_concrete', priority: 0 },
-  { id: 'story_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [number.LIVING] },
-  { id: 'story_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [number.KVARTIRY] },
-  { id: 'story_ministry_checker', profileId: 'ministry_checker', priority: 22, baseFloors: [number.MINISTRY] },
-  { id: 'story_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [number.MAINTENANCE] },
-  { id: 'story_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [number.HELL] },
-  { id: 'story_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [number.VOID] },
+  { id: 'story_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [z.LIVING] },
+  { id: 'story_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [z.KVARTIRY] },
+  { id: 'story_ministry_checker', profileId: 'ministry_checker', priority: 22, baseFloors: [z.MINISTRY] },
+  { id: 'story_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [z.MAINTENANCE] },
+  { id: 'story_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [z.HELL] },
+  { id: 'story_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [z.VOID] },
 
   { id: 'room_bathroom_tile', profileId: 'residential_tile', priority: 40, roomTypes: [RoomType.BATHROOM], blockedTags: ['meat', 'void'] },
   { id: 'room_kitchen_tile', profileId: 'residential_tile', priority: 38, roomTypes: [RoomType.KITCHEN], blockedTags: ['meat', 'void'] },
@@ -222,7 +222,7 @@ function clamp01(value: number): number {
 }
 
 function floorTag(z: number): string {
-  return (number[floor] ?? 'floor').toLowerCase();
+  return (z[z] ?? 'floor').toLowerCase();
 }
 
 function themeTags(theme: FloorThemeProfile): Set<string> {

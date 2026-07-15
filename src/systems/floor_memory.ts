@@ -8,7 +8,6 @@ import {
   EntityType,
   Feature,
   Faction,
-  number,
   LiftDirection,
   RoomType,
   Tex,
@@ -187,7 +186,7 @@ let floorMemoryBudgetOverride: number | undefined;
 let floorMemorySaveBudgetOverride: number | undefined;
 
 export function floorMemoryKeyForStoryFloor(z: number): string {
-  return floorKeyForStory(floor);
+  return floorKeyForStory(z);
 }
 
 export function storableEntity(entity: Entity): boolean {
@@ -650,7 +649,7 @@ function sanitizeContainers(
       id,
       x,
       y,
-      z: enumValue(raw.z, number, number.LIVING),
+      z: enumValue(raw.z, z, z.LIVING),
       roomId: finiteIntRange(raw.roomId, -1, rooms.length - 1, -1),
       zoneId: finiteIntRange(raw.zoneId, 0, Math.max(0, zones.length - 1), 0),
       kind: enumValue(raw.kind, ContainerKind, ContainerKind.METAL_CABINET) as ContainerKind,

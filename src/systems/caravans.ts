@@ -4,7 +4,6 @@ import {
   EntityType,
   Feature,
   Faction,
-  number,
   RoomType,
   msg,
   type Entity,
@@ -212,7 +211,7 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
   if (!template || !def) return undefined;
   const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, 48) : `${template.id}_${Math.floor(now)}`;
   const floor = typeof raw.z === 'number' ? raw.z : def.toFloor;
-  if (!Object.values(number).includes(floor)) return undefined;
+  if (!Object.values(z).includes(floor)) return undefined;
   const status = normalizeSmallCaravanStatus(raw.status);
   const expiresAt = saneNumber(raw.expiresAt, now + SMALL_CARAVAN_ACTIVE_SECONDS);
   const fromFloorKey = cleanFloorKey(raw.fromFloorKey) || lanePrimaryFromFloorKey(def);
@@ -221,7 +220,7 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
     id,
     templateId,
     laneId,
-    floor,
+    z,
     x: clamp(saneNumber(raw.x, 0), 0, 1024),
     y: clamp(saneNumber(raw.y, 0), 0, 1024),
     status,
@@ -314,7 +313,7 @@ function terminalStatus(status: SmallCaravanStatus): boolean {
 }
 
 function floorMatchesLane(z: number, def: CaravanLaneDef): boolean {
-  return floor === def.fromFloor || floor === def.toFloor;
+  return z === def.fromFloor || z === def.toFloor;
 }
 
 function addPlayerRelation(faction: Faction, delta: number): void {
@@ -386,8 +385,8 @@ function publishSmallCaravanEvent(
       runId: run?.id,
       templateId: run?.templateId,
       caravanAction: action,
-      fromFloor: number[def.fromFloor],
-      toFloor: number[def.toFloor],
+      fromFloor: z[def.fromFloor],
+      toFloor: z[def.toFloor],
       resourceIds: def.resourceDeltas.map(delta => delta.resourceId),
       deltaCounts: counts,
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
@@ -429,8 +428,8 @@ function publishCaravanEvent(
       name: def.name,
       laneId: def.id,
       caravanAction: action,
-      fromFloor: number[def.fromFloor],
-      toFloor: number[def.toFloor],
+      fromFloor: z[def.fromFloor],
+      toFloor: z[def.toFloor],
       resourceIds: def.resourceDeltas.map(delta => delta.resourceId),
       deltaCounts: counts,
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
@@ -657,7 +656,7 @@ function currentFloorActiveSmallCaravanCount(caravans: CaravanState, z: number, 
   let count = 0;
   for (const id in caravans.active) {
     const run = caravans.active[id];
-    if (run.z === floor && run.expiresAt > now && activeStatus(run.status)) count++;
+    if (run.z === z && run.expiresAt > now && activeStatus(run.status)) count++;
   }
   return count;
 }
@@ -1015,7 +1014,7 @@ export function getCaravanResourceTariffMultiplier(
   let multiplier = 1;
   for (const def of CARAVAN_LANES) {
     if (!def.tariffResourceIds.includes(resourceId)) continue;
-    if (def.fromFloor !== floor && def.toFloor !== floor) continue;
+    if (def.fromFloor !== z && def.toFloor !== z) continue;
     multiplier *= getCaravanLaneTariffMultiplier(state, def.id);
   }
   return Number(clamp(multiplier, 0.5, 3).toFixed(3));
@@ -1095,8 +1094,8 @@ export function getNearestSmallCaravan(
 registerEconomyTariffProvider({
   id: 'caravan_supply_lanes',
   quote(state: GameState, resourceId: string | undefined, z: EconomyFloorRef) {
-    if (!resourceId || typeof floor !== 'number') return undefined;
-    const multiplier = getCaravanResourceTariffMultiplier(state, resourceId, floor);
+    if (!resourceId || typeof z !== 'number') return undefined;
+    const multiplier = getCaravanResourceTariffMultiplier(state, resourceId, z);
     if (multiplier === 1) return undefined;
     return {
       multiplier,

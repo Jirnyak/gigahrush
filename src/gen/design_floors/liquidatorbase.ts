@@ -1,10 +1,10 @@
-import { number, RoomType, Tex, Cell, DoorState, EntityType, Feature } from '../../core/types';
+import { RoomType, Tex, Cell, DoorState, EntityType, Feature } from '../../core/types';
 import { World as WorldClass } from '../../core/world';
 import type { FloorGeneration } from '../floor_manifest';
 import { stampRoom, protectRoom } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
-export const LIQUIDATOR_BASE_BASE_FLOOR = number.MAINTENANCE;
+export const LIQUIDATOR_BASE_BASE_FLOOR = z.MAINTENANCE;
 
 export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   const world = new WorldClass();

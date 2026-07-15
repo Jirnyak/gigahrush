@@ -66,7 +66,7 @@ export interface CompletedTradeContext extends TradeHookContext {
 }
 
 export interface TradeOptions {
-  floor?: EconomyFloorRef;
+  z?: EconomyFloorRef;
   stockFloor?: number;
   zoneId?: number;
   tariffMultiplier?: number;

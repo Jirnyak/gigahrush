@@ -5,8 +5,7 @@
 import {
   W, Cell, Tex, RoomType, Feature, LiftDirection,
   type Room, type Entity,
-  EntityType, AIGoal, MonsterKind, number,
-} from '../../core/types';
+  EntityType, AIGoal, MonsterKind, } from '../../core/types';
 import { World } from '../../core/world';
 import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
@@ -189,7 +188,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
      Phase 8: Zones + zone levels
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, number.MAINTENANCE);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, z.MAINTENANCE);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 9-11: Entities & Environment
@@ -215,7 +214,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
   /* ══════════════════════════════════════════════════════════════
      Phase 16: Rare procedural monitor/gauge walls
      ══════════════════════════════════════════════════════════════ */
-  placeProceduralScreens(world, number.MAINTENANCE);
+  placeProceduralScreens(world, z.MAINTENANCE);
   placeCollectorMacroPanels(world, centerX, centerY);
 
   /* ══════════════════════════════════════════════════════════════

@@ -94,7 +94,7 @@ export function resolvePeerContainerAtCell(
   if (visible) return visible;
   const secret = at.find(c => c.access === 'secret');
   if (secret) { secret.discovered = true; return secret; }
-  return resolveOrCreateFeatureLootContainer(world, floor, world.idx(x, y));
+  return resolveOrCreateFeatureLootContainer(world, z, world.idx(x, y));
 }
 
 /** Peer: build the transient menu-backing container copy from a host payload.

@@ -2,7 +2,6 @@
 
 import {
   Faction,
-  number,
   MonsterKind,
   RoomType,
   type Entity,
@@ -404,12 +403,12 @@ function renderRumor(
 }
 
 const FLOOR_NAMES: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Ад',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Ад',
+  [z.VOID]: 'Пустота',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {

@@ -4,7 +4,7 @@ import { isArenaOverlayOpen, getArenaOverlaySnapshot } from '../systems/arena';
 
 import { SCR_W, SCR_H } from './webgl';
 import {
-  W, type Entity, type GameState, EntityType, number, Tex,
+  W, type Entity, type GameState, EntityType, Tex,
   ZoneFaction,
 } from '../core/types';
 import { World } from '../core/world';
@@ -234,7 +234,7 @@ function drawVoidReturnPortalHint(
   state: GameState,
   world: World,
 ): void {
-  if (currentFloorRunEntry(state).themeTags !== number.VOID || state.samosborActive) return;
+  if (currentFloorRunEntry(state).themeTags !== z.VOID || state.samosborActive) return;
   const portal = voidReturnPortalHudState(state);
   if (!portal || world.floorTex[portal.cell!] !== Tex.PORTAL) return;
 

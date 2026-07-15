@@ -1,8 +1,7 @@
 /* -- Seryy Smotritel -- local VOID no-look encounter ------------ */
 
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, number,
-  MonsterKind, RoomType, Tex, msg,
+  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, MonsterKind, RoomType, Tex, msg,
   type Entity, type GameState, type Item, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -163,7 +162,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: number.VOID,
+    z: z.VOID,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.SECRET_STASH,
@@ -478,7 +477,7 @@ export function generateSeryySmotritel(
     y: entry.y + (entry.h >> 1) + 0.5,
     targetX: reward.x + 4.5,
     targetY: reward.y + 2.5,
-    z: number.VOID,
+    z: z.VOID,
     roomId: entry.id,
     targetRoomId: reward.id,
     zoneId: world.zoneMap[world.idx(entry.x + 2, entry.y + (entry.h >> 1))],

@@ -5,7 +5,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -108,12 +107,12 @@ export interface QuestTargetRoomResolution {
 }
 
 const CONTRACT_FLOOR_NAMES: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Мясной низ',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Мясной низ',
+  [z.VOID]: 'Пустота',
 };
 
 const GOVNYAK_COURIER_OUTCOMES: Record<string, {
@@ -251,7 +250,7 @@ function normalizeQuestRouteTarget(q: Quest, state: GameState): QuestRouteTarget
       else normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     } else {
       const designFloor = designFloorAtZ(z);
-      const storyFloor = designFloor ? designFloorThemeClass(designFloor) : number.LIVING;
+      const storyFloor = designFloor ? designFloorThemeClass(designFloor) : z.LIVING;
       normalized.label = route.label ?? (storyFloor !== undefined ? `Z${formatFloorZ(z)} ${CONTRACT_FLOOR_NAMES[storyFloor]}` : `Z${formatFloorZ(z)}`);
     }
   } else {
@@ -394,7 +393,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
   host.zhelemishNiiTarget = {
     kind: 'living_cellar',
     targetKey: 'living_mushroom_cellar',
-    z: number.LIVING,
+    z: z.LIVING,
     roomType: RoomType.PRODUCTION,
     roomName: 'Грибная прачечная первой смены',
     danger: 2,
@@ -760,7 +759,7 @@ function findContaminatedContractSample(player: Entity, contractId: string): Ite
 function currentFloorMatchesZhelemishTarget(state: GameState, target: ZhelemishNiiTarget): boolean {
   const entry = currentFloorRunEntry(state);
   if (target.kind === 'procedural_mushroom') return entry.spec?.key === target.targetKey;
-  return entry.themeTags === number.LIVING && currentFloorRunEntry(state).themeTags === number.LIVING;
+  return entry.themeTags === z.LIVING && currentFloorRunEntry(state).themeTags === z.LIVING;
 }
 
 function currentFloorIsWrongZhelemishMycelium(state: GameState, target: ZhelemishNiiTarget): boolean {

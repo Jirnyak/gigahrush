@@ -3,7 +3,6 @@ import { currentFloorRunEntry } from './procedural_floors';
 
 import {
   Feature,
-  number,
   type Entity,
   type GameState,
   type Room,
@@ -372,7 +371,7 @@ export function tryUsePneumomailTube(
   const target = targetAt(world, lookX, lookY);
   if (!target) return false;
 
-  if (currentFloorRunEntry(state).themeTags !== number.MAINTENANCE) {
+  if (currentFloorRunEntry(state).themeTags !== z.MAINTENANCE) {
     state.msgs.push(msg('Пневмопочта здесь числится, но не дышит.', state.time, '#888'));
     return true;
   }

@@ -5,7 +5,6 @@ import {
   Cell,
   EntityType,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   type Entity,
@@ -86,7 +85,7 @@ function normalizeActive(input: Partial<ActiveLiftArachna> | null | undefined): 
   if (!input || typeof input.key !== 'string') return null;
   return {
     key: input.key,
-    z: typeof input.z === 'number' ? input.z : number.LIVING,
+    z: typeof input.z === 'number' ? input.z : z.LIVING,
     zoneId: typeof input.zoneId === 'number' ? input.zoneId : -1,
     liftX: typeof input.liftX === 'number' ? input.liftX : 0,
     liftY: typeof input.liftY === 'number' ? input.liftY : 0,

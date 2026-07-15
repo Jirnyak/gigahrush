@@ -7,7 +7,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -36,7 +35,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('communal_ring');
 export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
 export const COMMUNAL_RING_ROUTE_Z = 4;
 
-const BASE_FLOOR = number.KVARTIRY;
+const BASE_FLOOR = z.KVARTIRY;
 const RING_SEED = hashSeed(COMMUNAL_RING_DESIGN_FLOOR_ID);
 const COMMUNAL_QUEUE_CROWD_CAP = 12;
 

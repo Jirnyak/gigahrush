@@ -8,7 +8,6 @@ import {
   Occupation,
   QuestType,
   MonsterKind,
-  number,
   type Entity,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -19,7 +18,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const HOME_FLOOR_KEY = storyNpcFloorKey(number.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
 const WITNESS_RIMMA_ID = 'interrogation_witness_rimma';
 
 const LIDIYA_DEF: PlotNpcDef = {

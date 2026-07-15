@@ -44,19 +44,19 @@ export const SAMOSBOR_DIRECTOR_MIN_INTERVAL: Record<SamosborBeatPhase, number> =
 export const SAMOSBOR_DIRECTOR_EFFECT_FAIL_COOLDOWN = 20;
 
 const ALL_FLOORS = [
-  number.MINISTRY,
-  number.KVARTIRY,
-  number.LIVING,
-  number.MAINTENANCE,
-  number.HELL,
-  number.VOID,
+  z.MINISTRY,
+  z.KVARTIRY,
+  z.LIVING,
+  z.MAINTENANCE,
+  z.HELL,
+  z.VOID,
 ] as const;
 
-const CIVIL_FLOORS = [number.MINISTRY, number.KVARTIRY, number.LIVING] as const;
-const SERVICE_FLOORS = [number.KVARTIRY, number.LIVING, number.MAINTENANCE] as const;
-const MAINTENANCE_FLOORS = [number.MAINTENANCE] as const;
-const HELL_FLOORS = [number.HELL] as const;
-const VOID_FLOORS = [number.VOID] as const;
+const CIVIL_FLOORS = [z.MINISTRY, z.KVARTIRY, z.LIVING] as const;
+const SERVICE_FLOORS = [z.KVARTIRY, z.LIVING, z.MAINTENANCE] as const;
+const MAINTENANCE_FLOORS = [z.MAINTENANCE] as const;
+const HELL_FLOORS = [z.HELL] as const;
+const VOID_FLOORS = [z.VOID] as const;
 const ALL_VARIANTS = ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'] as const;
 
 const registry: SamosborBeatDef[] = [];

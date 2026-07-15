@@ -219,7 +219,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     reason: 'routine',
     weight: 3,
     destination: {
-      baseFloors: [number.MAINTENANCE, number.HELL],
+      baseFloors: [z.MAINTENANCE, z.HELL],
       routeTags: ['route_pressure', 'industrial', 'cult', 'samosbor'],
       minAbsZ: 24,
       maxAbsZ: 47,
@@ -371,11 +371,11 @@ export function validateAlifeMigrationProfiles(intents: readonly AlifeMigrationI
       if (intent.destination.allowsNpcOnly !== false && allowsNpc === false) {
         errors.push(`migration intent ${intent.id} targets NPC-forbidden destination ${key}`);
       }
-      if (floorKeyBaseFloor(key) === number.VOID) {
+      if (floorKeyBaseFloor(key) === z.VOID) {
         errors.push(`migration intent ${intent.id} targets VOID ordinary destination ${key}`);
       }
     }
-    if (intent.destination.themeTagss?.includes(number.VOID)) {
+    if (intent.destination.themeTagss?.includes(z.VOID)) {
       errors.push(`migration intent ${intent.id} targets VOID base floor`);
     }
   }

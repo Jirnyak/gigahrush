@@ -5,7 +5,6 @@ import {
   ContainerKind,
   DoorState,
   Feature,
-  number,
   LiftDirection,
   RoomType,
   Tex,
@@ -23,7 +22,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const RADON_EXCHANGE_ROUTE_ID = 'radon_exchange' as const;
 export const RADON_EXCHANGE_Z = 44 as const;
-export const RADON_EXCHANGE_BASE_FLOOR = number.MINISTRY;
+export const RADON_EXCHANGE_BASE_FLOOR = z.MINISTRY;
 export const RADON_EXCHANGE_PROJECTION_KEY = 'key' as const;
 
 export const RADON_EXCHANGE_META = {

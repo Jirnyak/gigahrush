@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('service_floor');
 
 export const DESIGN_FLOOR_ID = 'service_floor' as const;
 export const SERVICE_FLOOR_Z = -18;
-export const SERVICE_FLOOR_BASE_FLOOR = number.MAINTENANCE;
+export const SERVICE_FLOOR_BASE_FLOOR = z.MAINTENANCE;
 
 const MASTER_SCOPE_TAG = 'service_master_scope';
 const LIFT_MACHINE_ROOM = 'Машинный зал лифтовой группы С-15';
@@ -588,7 +587,7 @@ export function summarizeServiceFloorFlags(service: ServiceFloorState): string[]
     .map(z => z.id)
     .join(',') || 'none';
   return [
-    `route=${service.routeId} z=${service.anchorZ} base=${number[service.themeTags]}`,
+    `route=${service.routeId} z=${service.anchorZ} base=${z[service.themeTags]}`,
     `liftMachine=${service.liftMachineState} masterKeyKnown=${service.masterKeyKnown}`,
     `power=${powered}`,
     `reroute lower=${service.rerouteFlags.lowerStaffRouteOpen} marketRaidDiverted=${service.rerouteFlags.marketRaidDiverted} productionBypass=${service.rerouteFlags.productionBypassArmed}`,

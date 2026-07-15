@@ -2,8 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
-  MonsterKind, Occupation, QuestType, RoomType, Tex, W,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex, W,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -213,7 +212,7 @@ function addBlackHandCache(world: World, room: Room): void {
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: number.HELL,
+    z: z.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,

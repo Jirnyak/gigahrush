@@ -1,7 +1,7 @@
 /* ── Bounded samosbor beat scheduler ──────────────────────────── */
 
 import {
-  Cell, DoorState, EntityType, Faction, number, Occupation, AIGoal, MonsterKind, W,
+  Cell, DoorState, EntityType, Faction, Occupation, AIGoal, MonsterKind, W,
   type Entity, type GameState, type WorldContainer, type WorldEventType,
   msg,
 } from '../core/types';

@@ -6,7 +6,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -32,7 +31,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const MOEBIUS_PODEZD_ROUTE_ID = 'moebius_podezd' as const;
 export const MOEBIUS_PODEZD_Z = 2;
-export const MOEBIUS_PODEZD_BASE_FLOOR = number.KVARTIRY;
+export const MOEBIUS_PODEZD_BASE_FLOOR = z.KVARTIRY;
 export const MOEBIUS_PODEZD_SEED = hashSeed(MOEBIUS_PODEZD_ROUTE_ID);
 
 export const MOEBIUS_PODEZD_ROOM_NAMES = {

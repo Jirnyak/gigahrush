@@ -12,7 +12,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -50,7 +49,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('oranzhereya_betona');
 
 export const ORANZHEREYA_BETONA_ROUTE_ID = 'oranzhereya_betona' as const;
 export const ORANZHEREYA_BETONA_Z = -2 as const;
-export const ORANZHEREYA_BETONA_BASE_FLOOR = number.LIVING;
+export const ORANZHEREYA_BETONA_BASE_FLOOR = z.LIVING;
 export const ORANZHEREYA_BETONA_DISPLAY_NAME = 'Оранжерея бетона';
 
 export const ORANZHEREYA_ROOM_NAMES = {

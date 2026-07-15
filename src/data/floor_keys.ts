@@ -17,16 +17,16 @@ import {
 export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown';
 
 export const STORY_KEY_IDS: Record<number, string> = {
-  [number.MINISTRY]: 'ministry',
-  [number.KVARTIRY]: 'kvartiry',
-  [number.LIVING]: 'living',
-  [number.MAINTENANCE]: 'maintenance',
-  [number.HELL]: 'hell',
-  [number.VOID]: 'void',
+  [z.MINISTRY]: 'ministry',
+  [z.KVARTIRY]: 'kvartiry',
+  [z.LIVING]: 'living',
+  [z.MAINTENANCE]: 'maintenance',
+  [z.HELL]: 'hell',
+  [z.VOID]: 'void',
 };
 
 export function zForBaseFloor(z: number): number {
-  return designFloorById(STORY_KEY_IDS[floor])?.z ?? 0;
+  return designFloorById(STORY_KEY_IDS[z])?.z ?? 0;
 }
 
 
@@ -43,7 +43,7 @@ export function cleanFloorKey(input: unknown): string {
 }
 
 export function floorKeyForStory(z: number): string {
-  return `design:${STORY_KEY_IDS[floor] ?? String(floor)}`;
+  return `design:${STORY_KEY_IDS[z] ?? String(z)}`;
 }
 
 export function floorKeyForDesign(id: string): string {

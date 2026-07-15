@@ -8,7 +8,6 @@ import {
   type ZoneFaction,
   type ContextFact,
   type WorldEventType,
-  number,
   RoomType,
   W,
 } from '../core/types';

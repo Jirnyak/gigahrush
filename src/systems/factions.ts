@@ -5,7 +5,7 @@
 import {
   type Entity, type GameState,
   EntityType, AIGoal, Faction, ZoneFaction,
-  type number, type WorldEventSeverity, type WorldEventType,
+  type WorldEventSeverity, type WorldEventType,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';

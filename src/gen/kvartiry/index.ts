@@ -9,7 +9,7 @@ import {
   W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
   Faction, Occupation,
   type Room, type Entity,
-  EntityType, AIGoal, number, type GameState,
+  EntityType, AIGoal, type GameState,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { placeLifts, generateZones, ensureConnectivity } from '../shared';
@@ -542,7 +542,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 6: Zones (64 macro-regions) ─────────────────────────
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, number.KVARTIRY);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, z.KVARTIRY);
 
   // ── Phase 6b: Ensure connectivity ─────────────────────────────
   const spawnCenterX = W / 2, spawnCenterY = W / 2;
@@ -585,7 +585,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   // ── Phase 8b: Cell territory before population placement ─────
   initializeCellTerritory(world, {
     seed: territorySeed,
-    targetShares: territorySharesForStoryFloor(number.KVARTIRY),
+    targetShares: territorySharesForStoryFloor(z.KVARTIRY),
   });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
@@ -646,7 +646,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   buildKvartirySocialMacroGraph(world, spawnX, spawnY);
 
   // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
-  placeProceduralScreens(world, number.KVARTIRY);
+  placeProceduralScreens(world, z.KVARTIRY);
 
   return { world, entities, spawnX, spawnY };
 }

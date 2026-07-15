@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -43,7 +42,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('turing_nursery');
 
 export const TURING_NURSERY_ROUTE_ID = 'turing_nursery' as const;
 export const TURING_NURSERY_Z = 10 as const;
-export const TURING_NURSERY_BASE_FLOOR = number.KVARTIRY;
+export const TURING_NURSERY_BASE_FLOOR = z.KVARTIRY;
 export const TURING_NURSERY_ROOM_PREFIX = 'Ясли Тьюринга';
 
 const SEED = hashSeed(TURING_NURSERY_ROUTE_ID);

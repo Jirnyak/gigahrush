@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, number, Occupation,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, Occupation,
   QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
   type WorldEventPrivacy, type WorldEventSeverity,
@@ -304,7 +304,7 @@ registerSideQuestSteps([
     id: TRADE_QUEST,
     giverNpcId: 'yakov',
     type: QuestType.VISIT,
-    visitFloorZ: number.MAINTENANCE,
+    visitFloorZ: z.MAINTENANCE,
     desc: 'Яков Давидович: "По модели Нины маршрут неполный. Спуститесь в Коллекторы и вернитесь с отметкой, что он вообще выводит вниз."',
     rewardItem: 'caravan_route',
     rewardCount: 1,
@@ -583,7 +583,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

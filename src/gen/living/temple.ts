@@ -5,7 +5,7 @@
 import {
   W, Cell, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
-  number, msg,
+  msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
@@ -50,7 +50,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: 'batushka',
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(number.KVARTIRY),
+  homeFloorKey: storyNpcFloorKey(z.KVARTIRY),
   tags: ['kvartiry', 'temple'],
   quests: [
     {

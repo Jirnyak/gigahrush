@@ -4,7 +4,6 @@ import {
   EntityType,
   ItemType,
   type Entity,
-  type number,
   type GameState,
   type ItemDef,
 } from '../core/types';
@@ -396,12 +395,12 @@ export function placeMonsterBait(
 }
 
 function baitMatchesFloor(marker: MonsterBaitMarker, z: number, floorKey: string | undefined): boolean {
-  return marker.z === floor && (floorKey === undefined || marker.floorKey === floorKey);
+  return marker.z === z && (floorKey === undefined || marker.floorKey === floorKey);
 }
 
 function activeBaitById(id: number, z: number, floorKey: string | undefined, time: number): MonsterBaitMarker | null {
   for (const marker of activeBaits) {
-    if (marker.id === id && baitMatchesFloor(marker, floor, floorKey) && marker.expiresAt > time) return marker;
+    if (marker.id === id && baitMatchesFloor(marker, z, floorKey) && marker.expiresAt > time) return marker;
   }
   return null;
 }
@@ -486,7 +485,7 @@ export function findMonsterBaitTarget(
     publishEvent(state, {
       type: 'monster_bait_attracted',
       time,
-      floor,
+      z,
       zoneId: best.zoneId,
       roomId: best.roomId,
       x: best.x,

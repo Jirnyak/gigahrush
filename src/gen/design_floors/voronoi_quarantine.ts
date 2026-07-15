@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('voronoi_quarantine');
 
 export const VORONOI_QUARANTINE_ROUTE_ID = 'voronoi_quarantine' as const;
 export const VORONOI_QUARANTINE_Z = 6 as const;
-export const VORONOI_QUARANTINE_BASE_FLOOR = number.KVARTIRY;
+export const VORONOI_QUARANTINE_BASE_FLOOR = z.KVARTIRY;
 
 export const VORONOI_QUARANTINE_ROOM_NAMES = {
   northCheckpoint: 'Северный пост карантинной диаграммы',

@@ -3,7 +3,6 @@
 import {
   ContainerKind,
   Faction,
-  number,
   MonsterKind,
   RoomType,
   Tex,

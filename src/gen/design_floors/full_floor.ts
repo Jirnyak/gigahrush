@@ -4,7 +4,6 @@ import {
   DoorState,
   EntityType,
   Feature,
-  number,
   MonsterKind,
   RoomType,
   Tex,
@@ -372,17 +371,17 @@ export function retuneDesignFloorAfterCellTerritory(world: World, routeId: Desig
 
 function style(route: DesignFloorRouteDef): FloorStyle {
   switch (route.themeTags) {
-    case number.MINISTRY:
+    case z.MINISTRY:
       return { wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, faction: ZoneFaction.CITIZEN, danger: 2 };
-    case number.KVARTIRY:
+    case z.KVARTIRY:
       return { wallTex: Tex.BRICK, floorTex: Tex.F_LINO, faction: ZoneFaction.CITIZEN, danger: 3 };
-    case number.MAINTENANCE:
+    case z.MAINTENANCE:
       return { wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, faction: ZoneFaction.LIQUIDATOR, danger: 4 };
-    case number.HELL:
+    case z.HELL:
       return { wallTex: Tex.MEAT, floorTex: Tex.F_MEAT, faction: ZoneFaction.CULTIST, danger: 5 };
-    case number.VOID:
+    case z.VOID:
       return { wallTex: Tex.VOID_WALL, floorTex: Tex.F_VOID, faction: ZoneFaction.SAMOSBOR, danger: 5 };
-    case number.LIVING:
+    case z.LIVING:
     default:
       return { wallTex: Tex.PANEL, floorTex: Tex.F_CARPET, faction: ZoneFaction.CITIZEN, danger: 3 };
   }

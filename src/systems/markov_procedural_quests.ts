@@ -360,13 +360,13 @@ function result(
 }
 
 function floorName(z: number): string {
-  switch (floor) {
-    case number.MINISTRY: return 'Министерство';
-    case number.KVARTIRY: return 'Квартиры';
-    case number.LIVING: return 'Жилая зона';
-    case number.MAINTENANCE: return 'Коллекторы';
-    case number.HELL: return 'Ад';
-    case number.VOID: return 'Пустота';
+  switch (z) {
+    case z.MINISTRY: return 'Министерство';
+    case z.KVARTIRY: return 'Квартиры';
+    case z.LIVING: return 'Жилая зона';
+    case z.MAINTENANCE: return 'Коллекторы';
+    case z.HELL: return 'Ад';
+    case z.VOID: return 'Пустота';
   }
 }
 

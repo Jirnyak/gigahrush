@@ -2,7 +2,7 @@
 
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  number, Occupation, QuestType, RoomType, Tex, W,
+  Occupation, QuestType, RoomType, Tex, W,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -89,7 +89,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     rewardCount: 1,
     relationDelta: -6,
     xpReward: 40,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetHint: 'Жилая зона: белый проход рядом с комнатой окна; песок лежит полосой у рамы, засвеченный кадр ждёт на пороге.',
     eventTargetName: 'Игрок выбрал белый обход Веретара: путь стал короче, свидетель после окна замолчал.',
     eventSeverity: 4,
@@ -128,7 +128,7 @@ function addContainer(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,

@@ -2,7 +2,7 @@
 
 import {
   type Entity, type GameState, type Quest, EntityType, Cell, Feature, RoomType, W, QuestType,
-  LiftDirection, MonsterKind, number, DoorState,
+  LiftDirection, MonsterKind, DoorState,
 } from '../core/types';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../core/world';
 import {

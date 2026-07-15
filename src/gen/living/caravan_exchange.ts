@@ -2,7 +2,7 @@
 
 import {
   Cell, ContainerKind, DoorState, Faction, Feature,
-  number, Occupation, QuestType, RoomType, Tex,
+  Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type Item, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -277,7 +277,7 @@ function addExchangeContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

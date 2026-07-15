@@ -3,7 +3,6 @@ import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
 /* ── Bounded short-lived noise records for AI / HUD ───────────── */
 
 import {
-  number,
   RoomType,
   W,
   type Entity,
@@ -520,7 +519,7 @@ function smokeCandleDraftResult(
 ): { result: string; text: string; severity: WorldEventSeverity } {
   const room = world?.roomAt(actor.x, actor.y);
   const designFloor = state?.currentZ !== undefined ? designFloorAtZ(state.currentZ) : undefined;
-  const maintenance = designFloor ? designFloorThemeClass(designFloor) === number.MAINTENANCE : false;
+  const maintenance = designFloor ? designFloorThemeClass(designFloor) === z.MAINTENANCE : false;
   if (maintenance && (room?.type === RoomType.CORRIDOR || room?.type === RoomType.PRODUCTION)) {
     return {
       result: 'pulling_draft',
@@ -576,7 +575,7 @@ function publishSmokeCandleCheckEvent(
       'inventory',
       'smoke',
       'vent_check',
-      currentFloorRunEntry(state).themeTags === number.MAINTENANCE ? 'maintenance' : 'off_floor',
+      currentFloorRunEntry(state).themeTags === z.MAINTENANCE ? 'maintenance' : 'off_floor',
       'counterplay',
     ],
     data: {

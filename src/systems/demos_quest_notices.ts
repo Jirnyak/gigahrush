@@ -2,7 +2,6 @@
 
 import {
   Faction,
-  number,
   type GameState,
   type Quest,
   type WorldEvent,
@@ -112,12 +111,12 @@ const MAX_NOTICE_DETAIL = 132;
 const MAX_FAILED_REASON = 48;
 
 const FLOOR_LABELS: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Ад',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Ад',
+  [z.VOID]: 'Пустота',
 };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

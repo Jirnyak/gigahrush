@@ -3,7 +3,6 @@
 import {
   ContainerKind,
   Feature,
-  number,
   MonsterKind,
   RoomType,
   Tex,
@@ -37,7 +36,7 @@ function addPaperCabinet(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    z: number.MINISTRY,
+    z: z.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.FILING_CABINET,

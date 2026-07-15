@@ -4,7 +4,6 @@ import {
   W,
   msg,
   type Faction,
-  type number,
   type GameState,
   type WorldContainer,
 } from '../core/types';
@@ -148,7 +147,7 @@ function isBareLootableFeature(world: World, idx: number, feature: Feature): boo
 }
 
 function featureLootSeed(idx: number, z: number): number {
-  let s = (((idx + 1) * 2654435761) ^ ((floor + 1) * 40503)) >>> 0;
+  let s = (((idx + 1) * 2654435761) ^ ((z + 1) * 40503)) >>> 0;
   s = (s ^ (s >>> 15)) >>> 0;
   return s;
 }
@@ -607,10 +606,10 @@ export function resolveOrCreateFeatureLootContainer(
   if (!container) {
     const x = idx % W;
     const y = (idx / W) | 0;
-    const level = calcZoneLevel(x, y, floor);
-    const seed = featureLootSeed(idx, floor);
+    const level = calcZoneLevel(x, y, z);
+    const seed = featureLootSeed(idx, z);
     const id = world.containers.reduce((mx, c) => Math.max(mx, c.id), 0) + 1;
-    container = makeFeatureLootContainer(id, world, x, y, floor, feature, level, seed);
+    container = makeFeatureLootContainer(id, world, x, y, z, feature, level, seed);
     if (container) {
       world.addContainer(container);
 

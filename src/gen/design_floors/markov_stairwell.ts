@@ -8,7 +8,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -38,7 +37,7 @@ export const MARKOV_STAIRWELL_ROUTE_ID = 'markov_stairwell' as const;
 export const MARKOV_STAIRWELL_Z = 20;
 export const MARKOV_STAIRWELL_BYPASS_KEY = 'container_key_label';
 
-const BASE_FLOOR = number.MINISTRY;
+const BASE_FLOOR = z.MINISTRY;
 const SPINE_X = 494;
 const SPINE_Y = 148;
 const SPINE_W = 36;

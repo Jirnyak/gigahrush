@@ -4,7 +4,6 @@ import {
   W,
   Cell,
   Feature,
-  number,
   RoomType,
   Tex,
   ZoneFaction,
@@ -32,12 +31,12 @@ const SCREEN_MAX_RATIO = 0.01;
 const SCREEN_CONTEXT_RADIUS = 10;
 
 const FLOOR_CAP: Record<number, number> = {
-  [number.MINISTRY]: 180,
-  [number.KVARTIRY]: 160,
-  [number.LIVING]: 120,
-  [number.MAINTENANCE]: 90,
-  [number.HELL]: 48,
-  [number.VOID]: 0,
+  [z.MINISTRY]: 180,
+  [z.KVARTIRY]: 160,
+  [z.LIVING]: 120,
+  [z.MAINTENANCE]: 90,
+  [z.HELL]: 48,
+  [z.VOID]: 0,
 };
 
 const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -60,14 +59,14 @@ function hash01(x: number, y: number, s: number): number {
 }
 
 function floorScreenCap(z: number): number {
-  return Math.min(FLOOR_CAP[floor], Math.floor(W * W * SCREEN_MAX_RATIO));
+  return Math.min(FLOOR_CAP[z], Math.floor(W * W * SCREEN_MAX_RATIO));
 }
 
 function baseWallTexFor(z: number): Tex {
-  switch (floor) {
-    case number.MINISTRY: return Tex.MARBLE;
-    case number.MAINTENANCE: return Tex.PIPE;
-    case number.HELL: return Tex.MEAT;
+  switch (z) {
+    case z.MINISTRY: return Tex.MARBLE;
+    case z.MAINTENANCE: return Tex.PIPE;
+    case z.HELL: return Tex.MEAT;
     default: return Tex.PANEL;
   }
 }
@@ -91,7 +90,7 @@ function restoreScreenWall(world: World, z: number, ci: number): void {
       break;
     }
   }
-  if (!restored) world.wallTex[ci] = baseWallTexFor(floor);
+  if (!restored) world.wallTex[ci] = baseWallTexFor(z);
   if (world.features[ci] === Feature.SCREEN) world.features[ci] = Feature.NONE;
 }
 
@@ -101,7 +100,7 @@ function restoreExistingScreens(world: World, z: number): void {
   const seen = new Set<number>();
   for (const ci of world.screenCells) {
     if (owned?.has(ci)) {
-      restoreScreenWall(world, floor, ci);
+      restoreScreenWall(world, z, ci);
       continue;
     }
     if (!isTrackedScreenStillPresent(world, ci) || seen.has(ci)) continue;
@@ -120,17 +119,17 @@ function isPlainWallTexture(tex: number): boolean {
 
 function isRoomEligible(z: number, room: Room): boolean {
   if (room.name === 'Актовый зал') return false;
-  switch (floor) {
-    case number.MINISTRY:
+  switch (z) {
+    case z.MINISTRY:
       return room.type === RoomType.OFFICE || room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR
         || room.type === RoomType.MEDICAL || room.type === RoomType.STORAGE;
-    case number.KVARTIRY:
+    case z.KVARTIRY:
       return room.type === RoomType.LIVING || room.type === RoomType.KITCHEN || room.type === RoomType.COMMON
         || room.type === RoomType.OFFICE || room.type === RoomType.SMOKING;
-    case number.LIVING:
+    case z.LIVING:
       return room.type === RoomType.LIVING || room.type === RoomType.COMMON || room.type === RoomType.PRODUCTION
         || room.type === RoomType.OFFICE || room.type === RoomType.MEDICAL;
-    case number.MAINTENANCE:
+    case z.MAINTENANCE:
       return room.type === RoomType.PRODUCTION || room.type === RoomType.OFFICE || room.type === RoomType.MEDICAL
         || room.type === RoomType.COMMON;
     default:
@@ -142,17 +141,17 @@ function roomChance(z: number, room: Room): number {
   const area = room.w * room.h;
   const scale = area >= 100 ? 1.45 : area >= 45 ? 1 : 0.55;
   let base = 0;
-  switch (floor) {
-    case number.MINISTRY:
+  switch (z) {
+    case z.MINISTRY:
       base = room.type === RoomType.COMMON ? 0.20 : room.type === RoomType.OFFICE ? 0.10 : 0.07;
       break;
-    case number.KVARTIRY:
+    case z.KVARTIRY:
       base = room.type === RoomType.LIVING ? 0.018 : room.type === RoomType.COMMON ? 0.032 : 0.014;
       break;
-    case number.LIVING:
+    case z.LIVING:
       base = room.type === RoomType.PRODUCTION || room.type === RoomType.MEDICAL ? 0.10 : 0.045;
       break;
-    case number.MAINTENANCE:
+    case z.MAINTENANCE:
       base = room.type === RoomType.PRODUCTION || room.type === RoomType.OFFICE ? 0.16 : 0.08;
       break;
   }
@@ -293,11 +292,11 @@ function signalWeight(
   room: Room | undefined,
   ctx: ScreenSignalContext,
 ): number {
-  if (!screenSignalEligible(def, floor, room?.type, ctx.zoneFaction)) return 0;
+  if (!screenSignalEligible(def, z, room?.type, ctx.zoneFaction)) return 0;
   let w = def.weight;
   switch (def.id) {
     case 'samosbor_warning':
-      w *= ctx.samosborZone ? 6 : floor === number.HELL ? 1.6 : room?.type === RoomType.CORRIDOR ? 1.1 : 0.75;
+      w *= ctx.samosborZone ? 6 : z === z.HELL ? 1.6 : room?.type === RoomType.CORRIDOR ? 1.1 : 0.75;
       break;
     case 'economy_shortage':
       if (room?.type === RoomType.KITCHEN || room?.type === RoomType.STORAGE) w *= 4;
@@ -333,7 +332,7 @@ function signalWeight(
       if (ctx.zoneLevel >= 5) w *= 1.35;
       break;
     case 'void_protocol':
-      w *= floor === number.VOID ? 5 : floor === number.HELL ? 4 : 1;
+      w *= z === z.VOID ? 5 : z === z.HELL ? 4 : 1;
       if (ctx.nearTeleport) w *= 2.4;
       break;
   }
@@ -345,11 +344,11 @@ function pickSignal(world: World, z: number, room: Room | undefined, ci: number)
   const y = (ci / W) | 0;
   const ctx = buildSignalContext(world, room, ci);
   let total = 0;
-  for (const def of SCREEN_SIGNAL_DEFS) total += signalWeight(def, floor, room, ctx);
+  for (const def of SCREEN_SIGNAL_DEFS) total += signalWeight(def, z, room, ctx);
   if (total <= 0) return SCREEN_SIGNAL_DEFS[0];
   let roll = hash01(x, y, 701) * total;
   for (const def of SCREEN_SIGNAL_DEFS) {
-    roll -= signalWeight(def, floor, room, ctx);
+    roll -= signalWeight(def, z, room, ctx);
     if (roll <= 0) return def;
   }
   return SCREEN_SIGNAL_DEFS[0];
@@ -363,15 +362,15 @@ function pickVariant(def: ScreenSignalDef, x: number, y: number): number {
 function placeRoomScreens(world: World, z: number, cap: number, owned: Set<number>): void {
   for (const room of world.rooms) {
     if (world.screenCells.length >= cap) break;
-    if (!room || !isRoomEligible(floor, room)) continue;
-    if (rng() > roomChance(floor, room)) continue;
+    if (!room || !isRoomEligible(z, room)) continue;
+    if (rng() > roomChance(z, room)) continue;
     const cells = collectRoomWallCells(world, room);
     if (cells.length === 0) continue;
     shuffleNumbers(cells);
     const count = room.w * room.h > 140 && rng() < 0.35 ? 2 : 1;
     for (let i = 0; i < count && i < cells.length && world.screenCells.length < cap; i++) {
       const ci = cells[i];
-      const signal = pickSignal(world, floor, room, ci);
+      const signal = pickSignal(world, z, room, ci);
       placeScreenAt(world, ci, pickVariant(signal, ci % W, (ci / W) | 0), owned);
     }
   }
@@ -391,20 +390,20 @@ function placeHellScreens(world: World, cap: number, owned: Set<number>): void {
     }
     if (!facesFloor) continue;
     if (rng() < 0.10) {
-      const signal = pickSignal(world, number.HELL, undefined, ci);
+      const signal = pickSignal(world, z.HELL, undefined, ci);
       placeScreenAt(world, ci, pickVariant(signal, x, y), owned);
     }
   }
 }
 
 export function placeProceduralScreens(world: World, z: number): void {
-  restoreExistingScreens(world, floor);
-  const cap = floorScreenCap(floor);
+  restoreExistingScreens(world, z);
+  const cap = floorScreenCap(z);
   if (cap <= 0) return;
   const owned = new Set<number>();
   proceduralScreenCells.set(world, owned);
-  if (floor === number.HELL) placeHellScreens(world, cap, owned);
-  else placeRoomScreens(world, floor, cap, owned);
+  if (z === z.HELL) placeHellScreens(world, cap, owned);
+  else placeRoomScreens(world, z, cap, owned);
 }
 
 export function flashSamosborWarningScreens(world: World, cx: number, cy: number, radius: number, maxScreens: number): number {

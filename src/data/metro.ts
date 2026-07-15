@@ -79,13 +79,13 @@ const TO_STATION: MetroDestination = {
 };
 const TO_LIVING: MetroDestination = {
   kind: 'floor',
-  z: number.LIVING,
+  z: z.LIVING,
   label: 'Жилая зона',
   returnHint: 'Обычный лифт на соседнем этаже вернет к коллекторам; проверь, теплая ли кнопка.',
 };
 const TO_HELL: MetroDestination = {
   kind: 'floor',
-  z: number.HELL,
+  z: z.HELL,
   label: 'Красная нижняя',
   returnHint: 'Не уходи от лифта: обратный подъем возвращает к коллекторам, пока кнопка не остыла.',
 };

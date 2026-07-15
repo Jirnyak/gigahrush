@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  number, NpcState, Occupation, QuestType, RoomType, Tex,
+  NpcState, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -143,7 +143,7 @@ registerSideQuest(VICTIM_ID, NPC_DEFS[VICTIM_ID], [
     type: QuestType.TALK,
     desc: 'Аня Прислушка: «У вас полчаса, пока я не дошла до двери. Встаньте между мной и белым следом, назовите меня по имени и уведите от порога.»',
     targetNpcId: VICTIM_ID,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: медико-общий угол Белой Прислушки; Аня медленно идет к слуховой кладовой.',
@@ -170,7 +170,7 @@ registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [
     desc: 'Степан Тихая Дверь: «Закрой белый источник герметиком. Не жги при Ане: сначала убери взгляд, потом закрывай пятно.»',
     targetItem: 'sealant_tube',
     targetCount: 1,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: Белая Прислушка, герметик лежит у инструментальной полки или приносится свой.',
@@ -196,7 +196,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
     desc: 'Ира Матовая Проба: «Возьмите белый соскоб из матового лотка и сразу верните мне. Лоток открывайте на вдохе, потом крышка и назад.»',
     targetItem: 'slime_sample_white',
     targetCount: 1,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: Белая Прислушка, матовый лоток стоит у белого следа за внутренней дверью.',
@@ -223,7 +223,7 @@ registerSideQuest(WITNESS_ID, NPC_DEFS[WITNESS_ID], [
     desc: 'Ефим Тихий Акт: «Принеси расписку со стола. Если бумага подписана, Аня считается ушедшей сама, а мы считаем только последствия.»',
     targetItem: 'voluntary_receipt',
     targetCount: 1,
-    targetFloorZ: number.LIVING,
+    targetFloorZ: z.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: Белая Прислушка, расписка лежит на столе у предупреждающего экрана.',
@@ -296,7 +296,7 @@ function handleBelayaPrislushkaOutcome(state: GameState, event: WorldEvent): voi
 
   publishEvent(state, {
     type: event.type,
-    z: number.LIVING,
+    z: z.LIVING,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -476,7 +476,7 @@ function addContainer(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -7,7 +7,6 @@ import {
   DoorState,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -38,7 +37,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('upper_bureau');
 export const UPPER_BUREAU_ROUTE_ID = 'upper_bureau' as const;
 export const UPPER_BUREAU_DISPLAY_NAME = 'Верхнее бюро' as const;
 export const UPPER_BUREAU_ANCHOR_Z = 34;
-export const UPPER_BUREAU_BASE_FLOOR = number.MINISTRY;
+export const UPPER_BUREAU_BASE_FLOOR = z.MINISTRY;
 export const UPPER_BUREAU_AUDIT_HEAT_MAX = 3;
 
 export const UPPER_BUREAU_FLAG_IDS = {

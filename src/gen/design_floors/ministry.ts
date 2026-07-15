@@ -1,8 +1,7 @@
 /* ── Expanded Ministry design-floor slice: route papers and clauses ─ */
 
 import {
-  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, number,
-  MonsterKind, Occupation, QuestType, RoomType, Tex,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -14,7 +13,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const STORY_MINISTRY_NPC_HOME_FLOOR_KEY = storyNpcFloorKey(number.MINISTRY);
+const STORY_MINISTRY_NPC_HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
 
 export const DESIGN_FLOOR_ID = 'ministry' as const;
 
@@ -213,7 +212,7 @@ function addRouteContainer(
     id,
     x,
     y,
-    z: number.MINISTRY,
+    z: z.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SAFE,

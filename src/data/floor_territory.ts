@@ -35,12 +35,12 @@ const PROCEDURAL_MAJORITIES: Readonly<Record<FloorMajorityId, readonly FloorTerr
 };
 
 const STORY_TERRITORY: Readonly<Record<number, readonly FloorTerritoryShare[]>> = {
-  [number.MINISTRY]: shares(48, 24, 8, 14, 6),
-  [number.KVARTIRY]: shares(66, 12, 6, 7, 9),
-  [number.LIVING]: shares(64, 14, 6, 7, 9),
-  [number.MAINTENANCE]: shares(16, 58, 5, 7, 14),
-  [number.HELL]: shares(6, 8, 40, 4, 28, 14),
-  [number.VOID]: shares(4, 8, 24, 6, 34, 24),
+  [z.MINISTRY]: shares(48, 24, 8, 14, 6),
+  [z.KVARTIRY]: shares(66, 12, 6, 7, 9),
+  [z.LIVING]: shares(64, 14, 6, 7, 9),
+  [z.MAINTENANCE]: shares(16, 58, 5, 7, 14),
+  [z.HELL]: shares(6, 8, 40, 4, 28, 14),
+  [z.VOID]: shares(4, 8, 24, 6, 34, 24),
 };
 
 const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritoryShare[]>> = {
@@ -96,7 +96,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
 };
 
 export function territorySharesForStoryFloor(z: number): readonly FloorTerritoryShare[] {
-  return STORY_TERRITORY[floor];
+  return STORY_TERRITORY[z];
 }
 
 export function territorySharesForDesignFloor(id: DesignFloorId): readonly FloorTerritoryShare[] {

@@ -20,11 +20,11 @@ function secureRandom(): number {
   throw new Error("Secure random number generation is not supported in this environment.");
 }
 
-export function chooseSamosborVariant(floorTags: readonly string[], z: number, z: number): ActiveSamosborVariant {
+export function chooseSamosborVariant(floorTags: readonly string[], z: number): ActiveSamosborVariant {
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;
-    if (forced && forced.tags.includes(floor)) {
+    if (forced && forced.tags.some(t => floorTags.includes(t))) {
       activeVariant = buildActiveSamosborVariant(forced);
       lastVariant = activeVariant.def.id;
       return activeVariant;
@@ -34,10 +34,10 @@ export function chooseSamosborVariant(floorTags: readonly string[], z: number, z
 
 
   let total = 0;
-  for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id, floor);
+  for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id, floorTags);
   let roll = secureRandom() * Math.max(1, total);
   for (const def of SAMOSBOR_VARIANTS) {
-    roll -= getSamosborVariantWeight(def.id, floor);
+    roll -= getSamosborVariantWeight(def.id, floorTags);
     if (roll <= 0) {
       activeVariant = buildActiveSamosborVariant(def);
       lastVariant = activeVariant.def.id;

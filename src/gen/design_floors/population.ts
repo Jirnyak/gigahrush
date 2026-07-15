@@ -2,7 +2,6 @@ import {
   AIGoal,
   EntityType,
   Faction,
-  number,
   MonsterKind,
   Occupation,
   RoomType,
@@ -65,10 +64,10 @@ function roomTypeAt(generation: FloorGeneration, cell: number): RoomType | undef
 }
 
 function designMonsterFloor(route: DesignFloorRouteDef): number {
-  if (route.z <= -48) return number.VOID;
-  if (route.z <= -34) return number.HELL;
-  if (route.z <= -14) return number.MAINTENANCE;
-  if (route.z >= 42) return number.MAINTENANCE;
+  if (route.z <= -48) return z.VOID;
+  if (route.z <= -34) return z.HELL;
+  if (route.z <= -14) return z.MAINTENANCE;
+  if (route.z >= 42) return z.MAINTENANCE;
   return route.themeTags;
 }
 
@@ -156,13 +155,13 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
     const y = (cell / W) | 0;
     let monsterRoll = 0;
     const kind = chooseFloorMonsterKind({
-      floor,
+      z,
       roomType: roomTypeAt(generation, cell),
       floorTags: [
         route.id,
         ...profile.monsterTags,
-        route.themeTags === number.MINISTRY ? 'documents' : '',
-        route.themeTags === number.MAINTENANCE ? 'industrial' : '',
+        route.themeTags === z.MINISTRY ? 'documents' : '',
+        route.themeTags === z.MAINTENANCE ? 'industrial' : '',
       ].filter(Boolean),
       samosborCount: Math.max(1, route.danger),
       allowRare: false,

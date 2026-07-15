@@ -1079,7 +1079,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
 ];
 
 function floorWeight(def: SamosborVariantDef, floorTags: readonly string[]): number {
-  if (!def.floors.includes(floor)) return 0;
+  if (!def.floors.includes(z)) return 0;
   if (floorTags.includes('ministry')) {
     if (def.id === 'electric') return def.weight * 1.8;
     if (def.id === 'istotit' || def.id === 'veretar') return def.weight * 2.2;
@@ -1113,7 +1113,7 @@ function floorWeight(def: SamosborVariantDef, floorTags: readonly string[]): num
 
 export function getSamosborVariantWeight(id: SamosborVariantId, floorTags: readonly string[]): number {
   const def = SAMOSBOR_VARIANTS.find(v => v.id === id);
-  return def ? floorWeight(def, floor) : 0;
+  return def ? floorWeight(def, z) : 0;
 }
 
 export function buildActiveSamosborVariant(def: SamosborVariantDef): ActiveSamosborVariant {
@@ -1173,5 +1173,5 @@ export function getSamosborAftermathBeats(
   variant: SamosborVariantId,
   floorTags: readonly string[],
 ): readonly SamosborAftermathBeatDef[] {
-  return SAMOSBOR_AFTERMATH_BEATS.filter(def => def.variants.includes(variant) && def.floors.includes(floor));
+  return SAMOSBOR_AFTERMATH_BEATS.filter(def => def.variants.includes(variant) && def.floors.includes(z));
 }

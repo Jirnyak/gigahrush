@@ -1,6 +1,5 @@
 import {
   Faction,
-  number,
   Occupation,
   type CharacterSex,
   type Item,
@@ -594,7 +593,7 @@ function validateEditor(problems: ProblemList, editor: Record<string, unknown> |
 }
 
 export function npcPackageLookupHints(context?: NpcPackageValidationContext): NpcPackageLookupHints {
-  const storyKeyRows = [...numericEnumValues(number)].map(floor => ({
+  const storyKeyRows = [...numericEnumValues(z)].map(floor => ({
     key: floorKeyForStory(floor),
     z: zForBaseFloor(floor),
   }));

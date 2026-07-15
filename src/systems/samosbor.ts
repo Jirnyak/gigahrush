@@ -5,7 +5,7 @@ import { rng, xorshift32, irand, mathRng } from '../core/rand';
 /*   Protected rooms, hermowalls and lifts are preserved.           */
 
 import {
-  W, Cell, DoorState, ZoneFaction, number, RoomType, Tex, Feature, ContainerKind, Faction,
+  W, Cell, DoorState, ZoneFaction, RoomType, Tex, Feature, ContainerKind, Faction,
   type Entity, type GameState, type Msg, type Room, type WorldContainer, type WorldEventType,
   EntityType, AIGoal, MonsterKind, Occupation,
   msg,
@@ -234,7 +234,7 @@ let activeSamosborScale: 'full' = 'full';
 
 let istotitShelterRoomIds: number[] = [];
 let istotitShelterCycle = -1;
-let istotitShelterFloor = number.LIVING;
+let istotitShelterFloor = z.LIVING;
 let istotitSupplyContainerIds: number[] = [];
 let istotitDecisionCycle = -1;
 let istotitDecision = '';
@@ -595,8 +595,8 @@ function tickSamosborFront(
       // Spawn monster every N processed cells, up to the front's cap
       if (front.processed % FRONT_MONSTER_CELL_INTERVAL === 0 && front.monstersSpawned < front.monsterCap) {
         if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci] && canSpawnEntityType(entities, EntityType.MONSTER)) {
-          const kind = pickMonsterKindForWave(floor, samosborCount);
-          entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, floor));
+          const kind = pickMonsterKindForWave(z, samosborCount);
+          entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, z));
           front.monstersSpawned++;
         }
       }
@@ -637,7 +637,7 @@ function tickAllSamosborFronts(
   let allFlags = FRONT_DIRTY_NONE;
   frontTickDirtyCells.length = 0;
   for (const front of activeSamosborFronts) {
-    const result = tickSamosborFront(world, entities, nextId, front, variant, floor, samosborCount, shelterSet);
+    const result = tickSamosborFront(world, entities, nextId, front, variant, z, samosborCount, shelterSet);
     allFlags |= result.batchFlags;
   }
   // Prune dead fronts
@@ -703,14 +703,14 @@ const aftermathRuntime = new Map<string, AftermathRuntime>();
 let pendingAftermath: PendingAftermath | null = null;
 let lastAftermathAt = -Infinity;
 let lastAftermathBeatIds: string[] = [];
-let lastAftermathFloor = number.LIVING;
+let lastAftermathFloor = z.LIVING;
 let lastVeretarAreaLeaks = 0;
 let lastVeretarAreaLeakAt = -Infinity;
 let lastSamosborFogEffectNoticeAt = -Infinity;
 let istotitBellFollowNoticeAt = -Infinity;
 let istotitBellResistNoticeAt = -Infinity;
 let samosborRoomSirenWorld: World | null = null;
-let samosborRoomSirenFloor = number.LIVING;
+let samosborRoomSirenFloor = z.LIVING;
 let samosborRoomSirenCycle = -1;
 let samosborRoomSirenAccum = 0;
 let samosborRoomSirenSources: SamosborRoomSirenSource[] = [];
@@ -930,7 +930,7 @@ export function resetSamosborRuntimeForTests(): void {
   pendingAftermath = null;
   lastAftermathAt = -Infinity;
   lastAftermathBeatIds = [];
-  lastAftermathFloor = number.LIVING;
+  lastAftermathFloor = z.LIVING;
   lastVeretarAreaLeaks = 0;
   lastVeretarAreaLeakAt = -Infinity;
   lastSamosborFogEffectNoticeAt = -Infinity;
@@ -2683,12 +2683,12 @@ function preserveSamosborFogAfterRebuild(world: World, previousFog: Uint8Array):
 
 export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
-  z: number = number.LIVING,
+  z: number = 3,
   replacement?: FloorGeneration,
   isTutorial?: boolean,
 ): void {
   clearHermodoorBorerForRebuild(world);
-  if (replacement || floor !== number.LIVING) {
+  if (replacement || z !== 3) {
     // Non-living floors fully regenerate; generated NPCs/monsters are replaced, player survives.
     const kept: Entity[] = [];
     for (const e of entities) {
@@ -2698,7 +2698,7 @@ export function rebuildWorld(
       }
     }
     entities.length = 0;
-    const gen = replacement ?? generateFloor(floor, undefined, isTutorial);
+    const gen = replacement ?? generateFloor(z, undefined, isTutorial);
     const previousFog = world.fog.slice();
     // Full-floor rebuilds use the fresh generator-owned masks exactly:
     // authored shelters may keep aptMask/hermoWall, while unmarked volatile cells lose stale protection.
@@ -2714,8 +2714,8 @@ export function rebuildWorld(
       entities.push(e);
     }
     relocateBlockedEntities(world, entities);
-    ensureRoomContainers(world, floor);
-    applyPendingSamosborAftermath(world, entities, nextId, floor);
+    ensureRoomContainers(world, z);
+    applyPendingSamosborAftermath(world, entities, nextId, z);
     refreshPathBlockersAfterSamosborRebuild(world, entities, _samosborCount);
     return;
   }
@@ -2775,8 +2775,8 @@ export function rebuildWorld(
       itemSlots--;
     }
   }
-  ensureRoomContainers(world, floor);
-  applyPendingSamosborAftermath(world, entities, nextId, floor);
+  ensureRoomContainers(world, z);
+  applyPendingSamosborAftermath(world, entities, nextId, z);
   refreshPathBlockersAfterSamosborRebuild(world, entities, _samosborCount);
 }
 
@@ -2863,7 +2863,7 @@ function applyPendingSamosborAftermath(
   z: number,
 ): void {
   const pending = pendingAftermath;
-  if (!pending || pending.z !== floor) return;
+  if (!pending || pending.z !== z) return;
   pendingAftermath = null;
 
   const state = pending.state;
@@ -2888,7 +2888,7 @@ function applyPendingSamosborAftermath(
 
       const x = (ci % W) + 0.5;
       const y = ((ci / W) | 0) + 0.5;
-      entities.push(createMonster(world, nextId, MonsterKind.SBORKA, x, y, floor));
+      entities.push(createMonster(world, nextId, MonsterKind.SBORKA, x, y, z));
     }
   }
 
@@ -2913,11 +2913,11 @@ function applyPendingSamosborAftermath(
 
       const x = (ci % W) + 0.5;
       const y = ((ci / W) | 0) + 0.5;
-      entities.push(createMonster(world, nextId, MonsterKind.NIGHTMARE, x, y, floor));
+      entities.push(createMonster(world, nextId, MonsterKind.NIGHTMARE, x, y, z));
     }
   }
   knownSamosborTime = state.time;
-  const defs = getSamosborAftermathBeats(pending.variant.def.id, floor);
+  const defs = getSamosborAftermathBeats(pending.variant.def.id, z);
   const target = 1;
   const used = new Set<string>();
   const applied: string[] = [];
@@ -2937,7 +2937,7 @@ function applyPendingSamosborAftermath(
   if (applied.length > 0) {
     lastAftermathAt = state.time;
     lastAftermathBeatIds = applied;
-    lastAftermathFloor = floor;
+    lastAftermathFloor = z;
   }
   tickSamosborDirector(world, entities, state, nextId, pending.variant, 'post_samosbor');
 }
@@ -2948,7 +2948,7 @@ export function applyPendingSamosborAftermathAfterWave(
   nextId: { v: number },
   z: number,
 ): void {
-  applyPendingSamosborAftermath(world, entities, nextId, floor);
+  applyPendingSamosborAftermath(world, entities, nextId, z);
 }
 
 function eventTypeForAftermath(def: SamosborAftermathBeatDef): WorldEventType {
@@ -3625,7 +3625,7 @@ export function getSamosborDebugLines(): string[] {
 /* ── Shared helpers for monster creation ───────────────────────── */
 function pickMonsterKindForWave(z: number, samosborCount: number): MonsterKind {
   return chooseFloorMonsterKind({
-    floor,
+    z,
     floorTags: ['samosbor', 'fog'],
     samosborCount,
     allowRare: samosborCount >= 4 && rng() < 0.08,
@@ -3682,7 +3682,7 @@ function randomEnumValue<T extends number>(values: readonly T[]): T {
 
 function randomMonsterKindWeighted(z: number, samosborCount: number): MonsterKind {
   return chooseFloorMonsterKind({
-    floor,
+    z,
     floorTags: ['samosbor', 'fog', 'rewrite'],
     samosborCount,
     allowRare: samosborCount >= 4 && rng() < 0.08,
@@ -3787,7 +3787,7 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
 }
 
 function rewriteMonsterAsRandom(world: World, entity: Entity, z: number, samosborCount: number): void {
-  const kind = randomMonsterKindWeighted(floor, samosborCount);
+  const kind = randomMonsterKindWeighted(z, samosborCount);
   const def = MONSTERS[kind];
   const level = randomNpcLevel();
   const rpg = randomRPG(level);
@@ -3924,7 +3924,7 @@ function applyMaronaryFogEffectAtCell(
       effect = isPlayerEntity(target) ? 'player_rewritten' : 'npc_rewritten';
       targetName = target.name;
     } else if (target.type === EntityType.MONSTER) {
-      rewriteMonsterAsRandom(world, target, floor, samosborCount);
+      rewriteMonsterAsRandom(world, target, z, samosborCount);
       effect = 'monster_rewritten';
       targetName = MONSTERS[target.monsterKind ?? MonsterKind.SBORKA]?.name;
     } else if (target.type === EntityType.ITEM_DROP) {
@@ -4091,8 +4091,8 @@ function createIstotitThingAtCell(
     return 'item_created';
   }
   if (roll < 0.58 && canSpawnEntityType(entities, EntityType.MONSTER)) {
-    const kind = randomMonsterKindWeighted(floor, samosborCount);
-    entities.push(createMonster(world, nextId, kind, x + 0.5, y + 0.5, floor, true));
+    const kind = randomMonsterKindWeighted(z, samosborCount);
+    entities.push(createMonster(world, nextId, kind, x + 0.5, y + 0.5, z, true));
     return 'monster_created';
   }
   if (roll < 0.76 && canSpawnEntityType(entities, EntityType.NPC)) {
@@ -4166,7 +4166,7 @@ function applyIstotitFogEffectAtCell(
     targetId = target.id;
     targetName = target.name ?? (target.monsterKind !== undefined ? MONSTERS[target.monsterKind]?.name : undefined);
   } else {
-    effect = createIstotitThingAtCell(world, entities, state, nextId, floor, samosborCount, ci);
+    effect = createIstotitThingAtCell(world, entities, state, nextId, z, samosborCount, ci);
   }
   if (!effect) return false;
   const x = ci % W;
@@ -4204,8 +4204,8 @@ function spawnOneFogMonsterAtCell(
   if (world.cells[ci] !== Cell.FLOOR || world.aptMask[ci]) return false;
   const kind = variant.extraEyes > 0 && rng() < 0.25
     ? MonsterKind.EYE
-    : pickMonsterKindForWave(floor, samosborCount);
-  entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, floor));
+    : pickMonsterKindForWave(z, samosborCount);
+  entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, z));
   return true;
 }
 
@@ -4243,10 +4243,10 @@ function applyWetFogEffectAtCell(
   } else if (variant.extraEyes > 0 && rand() < 0.25) {
     kind = MonsterKind.EYE;
   } else {
-    kind = pickMonsterKindForWave(floor, samosborCount);
+    kind = pickMonsterKindForWave(z, samosborCount);
   }
 
-  entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, floor));
+  entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, z));
   return true;
 }
 
@@ -4261,11 +4261,11 @@ function applySamosborFogEffectAtCell(
   ci: number,
 ): boolean {
   if (world.fog[ci] <= 100) return false;
-  if (hasSamosborSubsystem(variant, 'fog_rewrite')) return applyMaronaryFogEffectAtCell(world, entities, state, variant, floor, samosborCount, ci);
+  if (hasSamosborSubsystem(variant, 'fog_rewrite')) return applyMaronaryFogEffectAtCell(world, entities, state, variant, z, samosborCount, ci);
   if (hasSamosborSubsystem(variant, 'fog_delete')) return applyVeretarFogEffectAtCell(world, entities, state, variant, ci);
-  if (hasSamosborSubsystem(variant, 'fog_create')) return applyIstotitFogEffectAtCell(world, entities, state, nextId, variant, floor, samosborCount, ci);
-  if (hasSamosborSubsystem(variant, 'wet_spawn_shark')) return applyWetFogEffectAtCell(world, entities, nextId, samosborCount, variant, floor, ci);
-  return spawnOneFogMonsterAtCell(world, entities, nextId, samosborCount, variant, floor, ci);
+  if (hasSamosborSubsystem(variant, 'fog_create')) return applyIstotitFogEffectAtCell(world, entities, state, nextId, variant, z, samosborCount, ci);
+  if (hasSamosborSubsystem(variant, 'wet_spawn_shark')) return applyWetFogEffectAtCell(world, entities, nextId, samosborCount, variant, z, ci);
+  return spawnOneFogMonsterAtCell(world, entities, nextId, samosborCount, variant, z, ci);
 }
 
 export function applySamosborFogEffectAtCellForTests(
@@ -4278,7 +4278,7 @@ export function applySamosborFogEffectAtCellForTests(
   z: number,
   ci: number,
 ): boolean {
-  return applySamosborFogEffectAtCell(world, entities, state, nextId, samosborCount, variant, floor, ci);
+  return applySamosborFogEffectAtCell(world, entities, state, nextId, samosborCount, variant, z, ci);
 }
 
 function pushVeretarLeakCandidate(
@@ -4384,8 +4384,8 @@ function spawnMonsters(
   const slots = entitySpawnSlots(entities, EntityType.MONSTER, count);
   for (let i = 0; i < slots && corridorCells.length > 0; i++) {
     const ci = corridorCells.splice(Math.floor(rng() * corridorCells.length), 1)[0];
-    const kind = pickMonsterKindForWave(floor, samosborCount);
-    entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5, floor));
+    const kind = pickMonsterKindForWave(z, samosborCount);
+    entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, Math.floor(ci / W) + 0.5, z));
   }
 }
 
@@ -4412,8 +4412,8 @@ function spawnRandomMapMonsters(
     const rid = world.roomMap[ci];
     if (rid >= 0 && rid < world.apartmentRoomCount) continue;
 
-    const kind = pickMonsterKindForWave(floor, samosborCount);
-    entities.push(createMonster(world, nextId, kind, x + 0.5, y + 0.5, floor));
+    const kind = pickMonsterKindForWave(z, samosborCount);
+    entities.push(createMonster(world, nextId, kind, x + 0.5, y + 0.5, z));
     spawned++;
   }
 }
@@ -4551,10 +4551,10 @@ function spawnSamosborPlayerPressureMonster(
 
   const kind = variant.extraEyes > 0 && rng() < 0.25
     ? MonsterKind.EYE
-    : pickMonsterKindForWave(floor, state.samosborCount);
+    : pickMonsterKindForWave(z, state.samosborCount);
   const x = (ci % W) + 0.5;
   const y = ((ci / W) | 0) + 0.5;
-  const monster = createMonster(world, nextId, kind, x, y, floor);
+  const monster = createMonster(world, nextId, kind, x, y, z);
   const playerLevel = Math.max(1, Math.floor(player.rpg?.level ?? 1));
   const minMonsterLevel = playerLevel + 1;
   const raised = raiseMonsterToAtLeastLevel(monster, kind, minMonsterLevel);
@@ -4596,7 +4596,7 @@ export function spawnSamosborPlayerPressureMonsterForTests(
   variant: ActiveSamosborVariant,
   z: number,
 ): boolean {
-  return spawnSamosborPlayerPressureMonster(world, entities, state, nextId, variant, floor);
+  return spawnSamosborPlayerPressureMonster(world, entities, state, nextId, variant, z);
 }
 
 function stampVeretarAreaLeak(world: World, cx: number, cy: number, radius: number): number {
@@ -4717,7 +4717,7 @@ function captureZone(
   const fogSeedRects = squareDirtyRects(sourceX, sourceY, fogRadius);
   const fogRadiusSq = fogRadius * fogRadius;
   const fogStrength = Math.max(90, Math.min(230, Math.round(200 * variant.fogSeedMult)));
-  const markHellMeat = currentFloorRunEntry(state).themeTags === number.HELL &&
+  const markHellMeat = currentFloorRunEntry(state).themeTags === z.HELL &&
     (hasSamosborSubsystem(variant, 'hell_meat_walls') || variant.modifiers.some(m => m.meatWallsOnHell));
   let veretarAreaLeaks = 0;
   for (let dy = -fogRadius; dy <= fogRadius; dy++) {
@@ -5029,6 +5029,6 @@ function tickSamosborFogEffects(
     if (world.fog[ci] <= 100) continue;
     const cell = world.cells[ci];
     if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (applySamosborFogEffectAtCell(world, entities, state, nextId, samosborCount, variant, floor, ci)) return;
+    if (applySamosborFogEffectAtCell(world, entities, state, nextId, samosborCount, variant, z, ci)) return;
   }
 }

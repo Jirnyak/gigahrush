@@ -25,7 +25,7 @@ export interface MonsterPopulationProfile {
 
 export const KVARTIRY_POPULATION_PROFILE = {
   id: 'kvartiry_lively',
-  z: number.KVARTIRY,
+  z: z.KVARTIRY,
   densityMult: 2.2,
   citizens: {
     share: 0.6,
@@ -118,7 +118,7 @@ export const KVARTIRY_POPULATION_PROFILE = {
 
 export const HELL_POPULATION_PROFILE = {
   id: 'hell_lively',
-  z: number.HELL,
+  z: z.HELL,
   densityMult: 0.98,
   monsters: {
     share: 0.84,
@@ -172,7 +172,7 @@ export const HELL_POPULATION_PROFILE = {
 
 export const VOID_POPULATION_PROFILE = {
   id: 'void_lively',
-  z: number.VOID,
+  z: z.VOID,
   guardians: 1600,
   lootDrops: 160,
 } as const;

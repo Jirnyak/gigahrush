@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +43,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const HARMONIC_BATHHOUSE_ROUTE_ID = 'harmonic_bathhouse' as const;
 export const HARMONIC_BATHHOUSE_Z = -28 as const;
-export const HARMONIC_BATHHOUSE_BASE_FLOOR = number.MAINTENANCE;
+export const HARMONIC_BATHHOUSE_BASE_FLOOR = z.MAINTENANCE;
 
 export type BathhouseDecisionId =
   | 'turn_valve'

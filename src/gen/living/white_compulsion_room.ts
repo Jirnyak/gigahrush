@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  number, NpcState, Occupation, QuestType, RoomType, Tex,
+  NpcState, Occupation, QuestType, RoomType, Tex,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -248,7 +248,7 @@ function handleWhiteCompulsionOutcome(state: GameState, event: WorldEvent): void
 
   publishEvent(state, {
     type: 'quest_completed',
-    z: number.LIVING,
+    z: z.LIVING,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -393,7 +393,7 @@ function addSampleTray(world: World, room: Room): void {
     id: nextContainerId(world),
     x,
     y,
-    z: number.LIVING,
+    z: z.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

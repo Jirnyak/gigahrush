@@ -1016,7 +1016,7 @@ function cleanupContainers(
   let changed = false;
   for (let i = world.containers.length - 1; i >= 0; i--) {
     const container = world.containers[i];
-    if (container.z !== floor) continue;
+    if (container.z !== z) continue;
     const idx = world.idx(container.x, container.y);
     if (!touchedSet.has(idx)) continue;
     if (!walkableCell(world.cells[idx])) {

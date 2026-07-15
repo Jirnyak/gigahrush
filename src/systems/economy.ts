@@ -112,7 +112,7 @@ function pushTags(out: string[], tags: readonly string[] | undefined): void {
 }
 
 function floorMatches(ruleFloor: EconomyFloorRef | undefined, z: EconomyFloorRef): boolean {
-  return ruleFloor === undefined || ruleFloor === floor;
+  return ruleFloor === undefined || ruleFloor === z;
 }
 
 function clampRuleMultiplier(value: number): number {
@@ -202,7 +202,7 @@ function demandFor(resourceId: string | undefined, z: EconomyFloorRef): RuleSumm
   const out: RuleSummary = { multiplier: 1, tags: [], reasons: [] };
   if (!resourceId) return out;
   for (const rule of ECONOMY_DEMAND_RULES) {
-    if (rule.resourceId !== resourceId || !floorMatches(rule.z, floor)) continue;
+    if (rule.resourceId !== resourceId || !floorMatches(rule.z, z)) continue;
     out.multiplier *= clampRuleMultiplier(rule.multiplier);
     pushTags(out.tags, rule.tags);
     out.reasons.push(rule.reason);
@@ -214,13 +214,13 @@ function tariffFor(state: GameState, resourceId: string | undefined, z: EconomyF
   const out: RuleSummary = { multiplier: 1, tags: [], reasons: [] };
   for (const rule of ECONOMY_TARIFF_RULES) {
     if (resourceId && rule.resourceId !== undefined && rule.resourceId !== resourceId) continue;
-    if (!floorMatches(rule.z, floor)) continue;
+    if (!floorMatches(rule.z, z)) continue;
     out.multiplier *= clampRuleMultiplier(rule.multiplier);
     pushTags(out.tags, rule.tags);
     out.reasons.push(rule.reason);
   }
   for (const provider of tariffProviders ?? []) {
-    const dynamic = provider.quote(state, resourceId, floor);
+    const dynamic = provider.quote(state, resourceId, z);
     if (!dynamic) continue;
     out.multiplier *= clampRuleMultiplier(dynamic.multiplier);
     pushTags(out.tags, dynamic.tags);
@@ -337,8 +337,8 @@ export function invalidateEconomyPrices(state: GameState): void {
 
 export function getResourceScarcity(state: GameState, resourceId: string, z: number = state.currentZ): number {
   const econ = ensureEconomyState(state);
-  const floorState = econ.floors[floor] ?? createEconomyFloorState(floor);
-  econ.floors[floor] = floorState;
+  const floorState = econ.floors[z] ?? createEconomyFloorState(z);
+  econ.floors[z] = floorState;
   const res = RESOURCE_BY_ID[resourceId];
   const stock = floorState.resources[resourceId];
   if (!res || !stock) return 1;
@@ -352,7 +352,7 @@ export function getResourceContractPressure(
   maxMultiplier = DEFAULT_REWARD_PRESSURE_MAX,
 ): number {
   const rewardCap = resourceRewardPressureCap(RESOURCE_BY_ID[resourceId], maxMultiplier);
-  return Math.min(rewardCap, Math.max(1, getResourceScarcity(state, resourceId, floor)));
+  return Math.min(rewardCap, Math.max(1, getResourceScarcity(state, resourceId, z)));
 }
 
 function maybePublishScarcityThreshold(
@@ -363,7 +363,7 @@ function maybePublishScarcityThreshold(
   z: number,
   opts: ResourceStockChangeOptions,
 ): void {
-  const floorState = ensureEconomyState(state).floors[floor] ?? createEconomyFloorState(floor);
+  const floorState = ensureEconomyState(state).floors[z] ?? createEconomyFloorState(z);
   const stock = floorState.resources[res.id];
   if (!stock) return;
   const previousBand = scarcityBandFor(res, previousStock, stock.target);
@@ -378,7 +378,7 @@ function maybePublishScarcityThreshold(
   if (!trend) return;
 
   publishResourceScarcityEvent(state, {
-    floor,
+    z,
     zoneId: opts.zoneId,
     roomId: opts.roomId,
     resourceId: res.id,
@@ -390,8 +390,8 @@ function maybePublishScarcityThreshold(
     band,
     trend,
     severity: severityForBand(band, trend),
-    scarcityMultiplier: getResourceScarcity(state, res.id, floor),
-    contractPressureMultiplier: getResourceContractPressure(state, res.id, floor),
+    scarcityMultiplier: getResourceScarcity(state, res.id, z),
+    contractPressureMultiplier: getResourceContractPressure(state, res.id, z),
     tags: opts.tags,
     reason: opts.reason,
     rumorIds: scarcityRumorIds(res.id, trend),
@@ -406,8 +406,8 @@ export function changeResourceStock(
   opts: ResourceStockChangeOptions = {},
 ): boolean {
   const econ = ensureEconomyState(state);
-  const floorState = econ.floors[floor] ?? createEconomyFloorState(floor);
-  econ.floors[floor] = floorState;
+  const floorState = econ.floors[z] ?? createEconomyFloorState(z);
+  econ.floors[z] = floorState;
   const stock = floorState.resources[resourceId];
   if (!stock) return false;
   const previousStock = stock.stock;
@@ -417,7 +417,7 @@ export function changeResourceStock(
   if (stock.lastDelta !== 0) {
     econ.priceVersion++;
     const res = RESOURCE_BY_ID[resourceId];
-    if (res) maybePublishScarcityThreshold(state, res, previousStock, next, floor, opts);
+    if (res) maybePublishScarcityThreshold(state, res, previousStock, next, z, opts);
   }
   floorState.lastTickAt = state.time;
   return true;
@@ -425,8 +425,8 @@ export function changeResourceStock(
 
 export function canSpendResources(state: GameState, inputs: { id: string; count: number }[], z: number = state.currentZ): boolean {
   const econ = ensureEconomyState(state);
-  const floorState = econ.floors[floor] ?? createEconomyFloorState(floor);
-  econ.floors[floor] = floorState;
+  const floorState = econ.floors[z] ?? createEconomyFloorState(z);
+  econ.floors[z] = floorState;
   for (const i of inputs) {
     const stock = floorState.resources[i.id];
     if (!stock || stock.stock < i.count) return false;
@@ -435,8 +435,8 @@ export function canSpendResources(state: GameState, inputs: { id: string; count:
 }
 
 export function spendResources(state: GameState, inputs: { id: string; count: number }[], z: number = state.currentZ): boolean {
-  if (!canSpendResources(state, inputs, floor)) return false;
-  for (const i of inputs) changeResourceStock(state, i.id, -i.count, floor);
+  if (!canSpendResources(state, inputs, z)) return false;
+  for (const i of inputs) changeResourceStock(state, i.id, -i.count, z);
   return true;
 }
 
@@ -630,7 +630,7 @@ export function getScarcityAdjustedReward(
   rpg?: RPGStats,
 ): number {
   const rewardCap = resourceRewardPressureCap(RESOURCE_BY_ID[resourceId], maxMultiplier);
-  const multiplier = getResourceContractPressure(state, resourceId, floor, maxMultiplier);
+  const multiplier = getResourceContractPressure(state, resourceId, z, maxMultiplier);
   const intMultiplier = rpg ? intContractRewardMult(rpg) : 1;
   const totalMultiplier = Math.min(rewardCap + Math.max(0, intMultiplier - 1), multiplier * intMultiplier);
   return Math.max(1, Math.round(baseReward * totalMultiplier));

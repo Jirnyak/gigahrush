@@ -7,7 +7,6 @@ import {
   W,
   EntityType,
   MonsterKind,
-  number,
   msg,
 } from '../core/types';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
@@ -356,17 +355,10 @@ export function calcZoneLevel(zoneCx: number, zoneCy: number, z: number): number
   const distFromCenter = Math.sqrt(dx * dx + dy * dy);
   const baseLevel = Math.max(1, Math.round(1 + distFromCenter * 1.5));
 
-  // Floor bonus
-  const floorBonus: Record<number, number> = {
-    [number.MINISTRY]: 0,
-    [number.KVARTIRY]: 0,
-    [number.LIVING]: 0,
-    [number.MAINTENANCE]: 4,
-    [number.HELL]: 9,
-    [number.VOID]: 15,
-  };
+  // Difficulty increases with depth
+  const depthBonus = Math.max(0, Math.floor(z * 1.5));
 
-  return baseLevel + (floorBonus[floor] ?? 0);
+  return baseLevel + depthBonus;
 }
 
 // ── Scale monster stats by zone level ────────────────────────────

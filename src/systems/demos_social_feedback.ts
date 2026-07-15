@@ -1,7 +1,6 @@
 import {
   EntityType,
   type Entity,
-  type number,
   type GameState,
   type WorldEvent,
 } from '../core/types';

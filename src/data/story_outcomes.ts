@@ -1,7 +1,6 @@
 import {
   EntityType,
   Faction,
-  number,
   MonsterKind,
   QuestType,
   type WorldEventPrivacy,

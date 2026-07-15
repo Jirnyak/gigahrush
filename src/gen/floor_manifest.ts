@@ -18,25 +18,25 @@ export interface FloorGeneration {
 }
 
 export const FLOOR_NAMES: Record<number, string> = {
-  [number.MINISTRY]: 'Министерство',
-  [number.KVARTIRY]: 'Квартиры',
-  [number.LIVING]: 'Жилая зона',
-  [number.MAINTENANCE]: 'Коллекторы',
-  [number.HELL]: 'Мясной низ',
-  [number.VOID]: 'Пустота',
+  [z.MINISTRY]: 'Министерство',
+  [z.KVARTIRY]: 'Квартиры',
+  [z.LIVING]: 'Жилая зона',
+  [z.MAINTENANCE]: 'Коллекторы',
+  [z.HELL]: 'Мясной низ',
+  [z.VOID]: 'Пустота',
 };
 
 export function floorLevelDisplayName(z: number): string {
-  return FLOOR_NAMES[floor];
+  return FLOOR_NAMES[z];
 }
 
 export const FLOOR_MESSAGE_COLORS: Record<number, string> = {
-  [number.MINISTRY]: '#fc4',
-  [number.KVARTIRY]: '#fa4',
-  [number.LIVING]: '#4af',
-  [number.MAINTENANCE]: '#4af',
-  [number.HELL]: '#f44',
-  [number.VOID]: '#0f8',
+  [z.MINISTRY]: '#fc4',
+  [z.KVARTIRY]: '#fa4',
+  [z.LIVING]: '#4af',
+  [z.MAINTENANCE]: '#4af',
+  [z.HELL]: '#f44',
+  [z.VOID]: '#0f8',
 };
 
 export function resetGeneratedFloorPopulationState(): void {

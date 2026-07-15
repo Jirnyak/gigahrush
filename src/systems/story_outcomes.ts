@@ -1,6 +1,5 @@
 import {
   EntityType,
-  number,
   type Entity,
   type GameState,
   type Item,
@@ -105,7 +104,7 @@ function routeTags(state: GameState): string[] {
 function conditionMatches(condition: StoryOutcomeCondition | undefined, state: GameState, player?: Entity): boolean {
   if (!condition) return true;
   const designFloor = designFloorAtZ(state.currentZ);
-  const currentTheme = designFloor ? designFloorThemeClass(designFloor) : number.LIVING;
+  const currentTheme = designFloor ? designFloorThemeClass(designFloor) : z.LIVING;
   if (condition.floorLevels?.length && !condition.floorLevels.includes(currentTheme)) return false;
   if (condition.routeTags?.length) {
     const actual = routeTags(state);

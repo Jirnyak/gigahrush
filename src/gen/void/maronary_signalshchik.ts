@@ -1,7 +1,7 @@
 /* ── Maronary Signalshchik — local green source aftermath ─────── */
 
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, number, MonsterKind, RoomType, Tex, W, msg,
+  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, MonsterKind, RoomType, Tex, W, msg,
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -244,7 +244,7 @@ function addSignalContainer(
     id,
     x: wx,
     y: wy,
-    z: number.VOID,
+    z: z.VOID,
     roomId,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.SECRET_STASH,
@@ -453,7 +453,7 @@ export function generateMaronarySignalshchik(
     y: room.y + 3.5,
     targetX: avoidRoom.x + (avoidRoom.w >> 1) + 0.5,
     targetY: avoidRoom.y + (avoidRoom.h >> 1) + 0.5,
-    z: number.VOID,
+    z: z.VOID,
     roomId: room.id,
     targetRoomId: avoidRoom.id,
     zoneId: world.zoneMap[world.idx(room.x + 3, room.y + 3)],

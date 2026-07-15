@@ -8,7 +8,6 @@ import {
   Occupation,
   QuestType,
   ContainerKind,
-  number,
   type Entity,
   type WorldContainer,
 } from '../../core/types';
@@ -19,7 +18,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const HOME_FLOOR_KEY = storyNpcFloorKey(number.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
 const PERMIT_CHOICE_IDS = [
   'permit_wait_queue',
   'permit_pay_accelerator',
@@ -201,7 +200,7 @@ function addQueueAuditCabinet(
     id: nextContainerId(world),
     x,
     y,
-    z: number.MINISTRY,
+    z: z.MINISTRY,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

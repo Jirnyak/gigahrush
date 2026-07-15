@@ -9,7 +9,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -48,7 +47,7 @@ export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
 export const DARK_METRO_FUTURE_Z = -32;
 export const DARK_METRO_DEFAULT_SEED = 0x17da_4b0d;
 
-const DARK_METRO_BASE_FLOOR = number.MAINTENANCE;
+const DARK_METRO_BASE_FLOOR = z.MAINTENANCE;
 
 const enum PlatformLightState {
   OFF = 0,

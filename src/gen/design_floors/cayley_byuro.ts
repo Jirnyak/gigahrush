@@ -8,7 +8,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -39,7 +38,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('cayley_byuro');
 
 export const CAYLEY_BYURO_ROUTE_ID = 'cayley_byuro' as const;
 export const CAYLEY_BYURO_Z = 36;
-export const CAYLEY_BYURO_BASE_FLOOR = number.MINISTRY;
+export const CAYLEY_BYURO_BASE_FLOOR = z.MINISTRY;
 
 export type CayleyElement = 'e' | 'r' | 'rr' | 's' | 'sr' | 'srr';
 export type CayleyGenerator = 'r' | 's';
