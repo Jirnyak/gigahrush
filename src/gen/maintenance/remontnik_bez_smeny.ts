@@ -3,7 +3,7 @@ import { currentFloorRunEntry } from '../../systems/procedural_floors';
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
   type WorldEventType,
@@ -118,7 +118,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -318,7 +318,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
   ].filter(Boolean);
   publishEvent(state, {
     type: outcomeType(outcome),
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.shortcutX + 0.5,
@@ -354,7 +354,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
 
 function resolveOutcome(state: GameState, source: WorldEvent, outcome: RemontnikOutcome, itemId?: string): void {
   const site = activeRemontnik;
-  if (!site || currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE || site.outcome) return;
+  if (!site || currentFloorRunEntry(state).themeTags !== number.MAINTENANCE || site.outcome) return;
   site.outcome = outcome;
   setShortcutOpen(site, outcome !== 'welded');
   if (outcome === 'welded' || outcome === 'killed') wakeMachinery(site, state, outcome);

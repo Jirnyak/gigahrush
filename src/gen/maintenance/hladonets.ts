@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, EntityType, Feature, FloorLevel, MonsterKind, RoomType, Tex, msg,
+  AIGoal, Cell, EntityType, Feature, number, MonsterKind, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldEvent, type WorldEventSeverity,
 } from '../../core/types';
 import type { World } from '../../core/world';
@@ -86,7 +86,7 @@ function publishHladonetsEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: 'rumor_observed',
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x,

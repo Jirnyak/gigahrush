@@ -1,6 +1,6 @@
 /* ── Safeguard: NET/BLAME readable blade guard ───────────────── */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -12,7 +12,6 @@ export const DEF: MonsterDef = {
   dmg: 24,
   attackRate: 2.4,
   sprite: 0,
-  floors: [FloorLevel.MAINTENANCE, FloorLevel.VOID],
   counterplay: 'Белый замах короткий: ломайте линию стеной, дверью, аппаратом или машиной; дробь сбивает клинки до рывка.',
   lootHint: 'белая пластина, черный суставной штифт, редкая плата отказа',
 };

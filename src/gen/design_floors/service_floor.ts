@@ -1,4 +1,4 @@
-/* ── Design floor: service_floor — lift machines and staff routes ─ */
+/* ── Design z: service_floor — lift machines and staff routes ─ */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -9,7 +9,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +44,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('service_floor');
 
 export const DESIGN_FLOOR_ID = 'service_floor' as const;
 export const SERVICE_FLOOR_Z = -18;
-export const SERVICE_FLOOR_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const SERVICE_FLOOR_BASE_FLOOR = number.MAINTENANCE;
 
 const MASTER_SCOPE_TAG = 'service_master_scope';
 const LIFT_MACHINE_ROOM = 'Машинный зал лифтовой группы С-15';
@@ -236,7 +236,7 @@ export interface ServiceTransferRoute {
 export interface ServiceFloorState {
   routeId: typeof DESIGN_FLOOR_ID;
   anchorZ: number;
-  baseFloor: FloorLevel;
+  themeTags: readonly string[];
   liftMachineState: ServiceLiftMachineState;
   masterKeyKnown: boolean;
   powerZones: ServicePowerZoneFlag[];
@@ -588,7 +588,7 @@ export function summarizeServiceFloorFlags(service: ServiceFloorState): string[]
     .map(z => z.id)
     .join(',') || 'none';
   return [
-    `route=${service.routeId} z=${service.anchorZ} base=${FloorLevel[service.baseFloor]}`,
+    `route=${service.routeId} z=${service.anchorZ} base=${number[service.themeTags]}`,
     `liftMachine=${service.liftMachineState} masterKeyKnown=${service.masterKeyKnown}`,
     `power=${powered}`,
     `reroute lower=${service.rerouteFlags.lowerStaffRouteOpen} marketRaidDiverted=${service.rerouteFlags.marketRaidDiverted} productionBypass=${service.rerouteFlags.productionBypassArmed}`,
@@ -624,7 +624,7 @@ export function learnServiceMasterKey(game: GameState, world: World, service: Se
   const changed = applyServiceMasterKeyScope(world, service);
   return publishEvent(game, {
     type: 'door_opened',
-    floor: game.currentZ,
+    z: game.currentZ,
     severity: 3,
     privacy: 'local',
     tags: ['service_floor', 'master_key_scope', 'access_flag'],
@@ -643,7 +643,7 @@ export function repairServiceLiftMachine(game: GameState, service: ServiceFloorS
   service.rerouteFlags.productionBypassArmed = true;
   return publishEvent(game, {
     type: 'elevator_loop_exit',
-    floor: game.currentZ,
+    z: game.currentZ,
     severity: 4,
     privacy: 'local',
     tags: ['service_floor', 'lift_machine', 'repair', 'route_flag'],
@@ -670,7 +670,7 @@ export function restoreServicePowerZone(
   }
   return publishEvent(game, {
     type: 'room_produced_items',
-    floor: game.currentZ,
+    z: game.currentZ,
     severity: 3,
     privacy: 'local',
     tags: ['service_floor', 'power', 'light_route'],
@@ -689,7 +689,7 @@ export function rerouteServiceRaid(game: GameState, service: ServiceFloorState):
   service.rerouteFlags.marketRaidDiverted = true;
   return publishEvent(game, {
     type: 'faction_patrol_clash',
-    floor: game.currentZ,
+    z: game.currentZ,
     severity: 4,
     privacy: 'local',
     tags: ['service_floor', 'raid', 'reroute_flag'],
@@ -846,7 +846,7 @@ function registerServiceRouteCues(
       y: markerY,
       targetX,
       targetY,
-      floor: SERVICE_FLOOR_BASE_FLOOR,
+      z: SERVICE_FLOOR_BASE_FLOOR,
       roomId: machine.id,
       targetRoomId: eastLift.id,
       zoneId: world.zoneMap[markerCell],
@@ -878,7 +878,7 @@ function registerServiceRouteCues(
       y: markerY,
       targetX,
       targetY,
-      floor: SERVICE_FLOOR_BASE_FLOOR,
+      z: SERVICE_FLOOR_BASE_FLOOR,
       roomId: vent.id,
       targetRoomId: vent.id,
       zoneId: world.zoneMap[markerCell],
@@ -910,7 +910,7 @@ function registerServiceRouteCues(
       y: markerY,
       targetX,
       targetY,
-      floor: SERVICE_FLOOR_BASE_FLOOR,
+      z: SERVICE_FLOOR_BASE_FLOOR,
       roomId: breaker.id,
       targetRoomId: breaker.id,
       zoneId: world.zoneMap[markerCell],
@@ -2229,7 +2229,7 @@ function addServiceContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: SERVICE_FLOOR_BASE_FLOOR,
+    z: SERVICE_FLOOR_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

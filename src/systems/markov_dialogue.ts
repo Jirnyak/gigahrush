@@ -1,6 +1,6 @@
 /* ── Markov dialogue adapter: ordinary NPC talk only ──────────── */
 
-import { type Entity, FloorLevel, RoomType, Faction, Occupation, QuestType } from '../core/types';
+import { type Entity, RoomType, Faction, Occupation, QuestType } from '../core/types';
 import { type ContextSnapshot } from './context';
 import { type NpcMemory } from './npc_memory';
 import {
@@ -24,7 +24,7 @@ export interface MarkovAdapterTextContext {
   actorAlifeId?: number;
   targetId?: number;
   targetAlifeId?: number;
-  floor?: FloorLevel;
+  z?: number;
   roomType?: RoomType;
   roomName?: string;
   zoneId?: number;
@@ -155,7 +155,7 @@ function dialogueContext(
   return {
     actorId: npc.id,
     actorAlifeId: npc.alifeId,
-    floor: snapshot.floor,
+    z: snapshot.z,
     roomType: snapshot.roomType,
     roomName: snapshot.roomName,
     zoneId: snapshot.zoneId,
@@ -180,7 +180,7 @@ export function cleanLine(text: string | undefined): string | undefined {
 }
 
 export function hasContextAnchor(snapshot: ContextSnapshot): boolean {
-  return snapshot.roomName !== undefined || snapshot.zoneId !== undefined || snapshot.floor !== undefined;
+  return snapshot.roomName !== undefined || snapshot.zoneId !== undefined || snapshot.z !== undefined;
 }
 
 export function minimalMemory(npc: Entity, now: number): NpcMemory {

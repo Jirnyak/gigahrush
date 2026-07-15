@@ -135,7 +135,7 @@ export function lowerNpcPackageSpeechContext(
     actorId: entity?.id,
     actorAlifeId: entity?.alifeId ?? snapshot?.id,
     floorKey: snapshot?.floorKey,
-    floor: snapshot?.floor,
+    z: snapshot?.z,
     faction: entity?.faction ?? snapshot?.faction,
     occupation: entity?.occupation ?? snapshot?.occupation,
     wealthBand: undefined,

@@ -1,7 +1,7 @@
 /* -- Счетная 88: hidden debt counter for the living black market ---- */
 
 import {
-  Cell, ContainerKind, DoorState, Feature, FloorLevel, RoomType, Tex,
+  Cell, ContainerKind, DoorState, Feature, number, RoomType, Tex,
   type ContainerAccess, type Entity, Faction, Occupation, QuestType,
   type Room, type WorldContainer,
 } from '../../core/types';
@@ -329,7 +329,7 @@ function addMarketContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

@@ -1,4 +1,4 @@
-import { Feature, FloorLevel, RoomType, Tex } from '../core/types';
+import { Feature, RoomType, Tex } from '../core/types';
 import type { DesignFloorRouteDef } from './design_floors';
 import type { ProceduralFloorSpec } from './procedural_floors';
 import {
@@ -206,11 +206,11 @@ function publicFurnitureRules(prefix: string, min: number, max: number): readonl
 }
 
 function routeTags(route: DesignFloorRouteDef): readonly string[] {
-  return [route.id, `z_${route.z}`, FloorLevel[route.baseFloor]?.toLowerCase() ?? 'route'];
+  return [route.id, `z_${route.z}`, number[route.themeTags]?.toLowerCase() ?? 'route'];
 }
 
-const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<FloorLevel, Partial<FloorObjectPlacementProfile>> = {
-  [FloorLevel.MINISTRY]: {
+const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<number, Partial<FloorObjectPlacementProfile>> = {
+  [number.MINISTRY]: {
     tags: ['base_floor', 'ministry', 'bureaucratic'],
     density: { features: 46, brokenFixtures: 6, wallDecor: 34, screens: 6, maxPerRoom: 2 },
     roomTextureRules: [
@@ -231,7 +231,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<FloorLevel, Partial<FloorObjectPl
     ],
     brokenFixtures: [sanitaryBrokenFixtures('ministry_sanitary_decay', 0.03, 6)],
   },
-  [FloorLevel.KVARTIRY]: {
+  [number.KVARTIRY]: {
     tags: ['base_floor', 'kvartiry', 'residential'],
     density: { features: 52, brokenFixtures: 14, wallDecor: 28, screens: 4, maxPerRoom: 2 },
     roomTextureRules: [
@@ -252,7 +252,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<FloorLevel, Partial<FloorObjectPl
     ],
     brokenFixtures: [sanitaryBrokenFixtures('kvartiry_sanitary_decay', 0.055, 14)],
   },
-  [FloorLevel.LIVING]: {
+  [number.LIVING]: {
     tags: ['base_floor', 'living', 'residential', 'public'],
     density: { features: 42, brokenFixtures: 8, wallDecor: 24, screens: 6, maxPerRoom: 2 },
     roomTextureRules: [
@@ -267,7 +267,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<FloorLevel, Partial<FloorObjectPl
       wallDecorRule('living_public_screens', 'screen', Tex.SCREEN_BASE, 1, 6, 12, { [RoomType.COMMON]: 1.0, [RoomType.MEDICAL]: 0.8, [RoomType.PRODUCTION]: 0.7 }, ['living', 'screen', 'warning'], { variantCount: 8 }),
     ],
   },
-  [FloorLevel.MAINTENANCE]: {
+  [number.MAINTENANCE]: {
     tags: ['base_floor', 'maintenance', 'collectors'],
     density: { features: 54, brokenFixtures: 5, wallDecor: 22, screens: 10, maxPerRoom: 2 },
     roomTextureRules: [
@@ -288,7 +288,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<FloorLevel, Partial<FloorObjectPl
     ],
     brokenFixtures: [sanitaryBrokenFixtures('collectors_sanitary_decay', 0.045, 5)],
   },
-  [FloorLevel.HELL]: {
+  [number.HELL]: {
     tags: ['base_floor', 'hell', 'meat_low'],
     density: { features: 28, brokenFixtures: 2, wallDecor: 14, screens: 2, maxPerRoom: 1 },
     roomTextureRules: [
@@ -307,7 +307,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<FloorLevel, Partial<FloorObjectPl
       wallDecorRule('hell_ritual_posters', 'poster', Tex.POSTER_BASE, 2, 10, 11, { [RoomType.HQ]: 1.0, [RoomType.PRODUCTION]: 0.8, [RoomType.MEDICAL]: 0.55 }, ['hell', 'ritual', 'poster'], { variantCount: 16, variantOffset: 32 }),
     ],
   },
-  [FloorLevel.VOID]: {
+  [number.VOID]: {
     tags: ['base_floor', 'void', 'protocol'],
     density: { features: 16, brokenFixtures: 0, wallDecor: 12, screens: 6, maxPerRoom: 1 },
     roomTextureRules: [
@@ -435,7 +435,7 @@ const DESIGN_OBJECT_PROFILE_OVERRIDES: Partial<Record<string, Partial<FloorObjec
       wallDecorRule('production_belt_shift_signs', 'sign', Tex.POSTER_BASE, 2, 8, 10, productionWeights(0.7), ['production_belt', 'shift', 'sign'], { variantCount: 16, variantOffset: 16 }),
     ],
   },
-  service_floor: {
+  service_z: {
     tags: ['design_floor', 'service_floor', 'repair'],
     density: { features: 20, wallDecor: 10, screens: 5, maxPerRoom: 2 },
     featureRules: pumpMachineryRules('service_floor', 6, 18),
@@ -745,10 +745,10 @@ export function floorObjectProfileDuplicateRuleIds(profile: FloorObjectPlacement
   return [...duplicates].sort();
 }
 
-export function floorObjectProfileForStoryFloor(floor: FloorLevel): FloorObjectPlacementProfile | undefined {
+export function floorObjectProfileForStoryFloor(z: number): FloorObjectPlacementProfile | undefined {
   return composeProfile(
-    `story_${FloorLevel[floor]?.toLowerCase() ?? floor}_objects`,
-    ['story_floor', FloorLevel[floor]?.toLowerCase() ?? 'story'],
+    `story_${number[floor]?.toLowerCase() ?? floor}_objects`,
+    ['story_floor', number[floor]?.toLowerCase() ?? 'story'],
     craftStationProfileForStoryFloor(floor),
     [BASE_FLOOR_OBJECT_PROFILE_LAYERS[floor]],
   );
@@ -760,7 +760,7 @@ export function floorObjectProfileForDesignFloor(route: DesignFloorRouteDef): Fl
     ['design_floor', ...routeTags(route)],
     craftStationProfileForDesignFloor(route),
     [
-      BASE_FLOOR_OBJECT_PROFILE_LAYERS[route.baseFloor],
+      BASE_FLOOR_OBJECT_PROFILE_LAYERS[route.themeTags],
       DESIGN_OBJECT_PROFILE_OVERRIDES[route.id],
     ],
   );
@@ -772,7 +772,7 @@ export function floorObjectProfileForProceduralFloor(spec: ProceduralFloorSpec):
     ['procedural_floor', spec.geometryId, spec.majorityId, spec.anomalyId],
     craftStationProfileForProceduralFloor(spec),
     [
-      BASE_FLOOR_OBJECT_PROFILE_LAYERS[spec.baseFloor],
+      BASE_FLOOR_OBJECT_PROFILE_LAYERS[spec.themeTags],
       PROCEDURAL_GEOMETRY_OBJECT_PROFILE_OVERRIDES[spec.geometryId],
       PROCEDURAL_MAJORITY_OBJECT_PROFILE_OVERRIDES[spec.majorityId],
       PROCEDURAL_ANOMALY_OBJECT_PROFILE_OVERRIDES[spec.anomalyId],

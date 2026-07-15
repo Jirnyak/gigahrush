@@ -3,7 +3,7 @@ import {
   Cell,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   W,
   type Entity,
   type GameState,
@@ -140,7 +140,7 @@ export interface AlifeMobilitySaveState {
 
 interface RouteInfo {
   floorKey: string;
-  baseFloor: FloorLevel;
+  themeTags: readonly string[];
   z?: number;
   danger: 1 | 2 | 3 | 4 | 5;
   npcAllowed: boolean;
@@ -165,12 +165,12 @@ type MobilityHost = GameState & { alifeMobility?: AlifeMobilityState; alifeMigra
 const anchorCache = new WeakMap<World, AnchorCache>();
 
 const STORY_ROUTE_INFO: readonly RouteInfo[] = [
-  storyRouteInfo(FloorLevel.MINISTRY),
-  storyRouteInfo(FloorLevel.KVARTIRY),
-  storyRouteInfo(FloorLevel.LIVING),
-  storyRouteInfo(FloorLevel.MAINTENANCE),
-  storyRouteInfo(FloorLevel.HELL),
-  storyRouteInfo(FloorLevel.VOID),
+  storyRouteInfo(number.MINISTRY),
+  storyRouteInfo(number.KVARTIRY),
+  storyRouteInfo(number.LIVING),
+  storyRouteInfo(number.MAINTENANCE),
+  storyRouteInfo(number.HELL),
+  storyRouteInfo(number.VOID),
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -207,7 +207,7 @@ function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
   return out;
 }
 
-function storyRouteInfo(floor: FloorLevel): RouteInfo {
+function storyRouteInfo(z: number): RouteInfo {
   const theme = themeForStoryFloor(floor);
   return {
     floorKey: theme.floorKey,
@@ -224,7 +224,7 @@ function designRouteInfo(): RouteInfo[] {
     const theme = themeForDesignRoute(route);
     return {
       floorKey: theme.floorKey,
-      baseFloor: route.baseFloor,
+      baseFloor: route.themeTags,
       z: route.z,
       danger: route.danger,
       npcAllowed: theme.npcAllowed,
@@ -240,7 +240,7 @@ function proceduralRouteInfo(specs: Record<string, ProceduralFloorSpec>): RouteI
     const anomaly = anomalyById(spec.anomalyId);
     return {
       floorKey: theme.floorKey,
-      baseFloor: spec.baseFloor,
+      baseFloor: spec.themeTags,
       z: spec.z,
       danger: spec.danger,
       npcAllowed: theme.npcAllowed,
@@ -466,7 +466,7 @@ function pickIntent(seed: number, time: number, record: AlifeNpcSnapshot, cursor
 function selectorMatches(route: RouteInfo, selector: AlifeDestinationSelector): boolean {
   if (selector.allowsNpcOnly !== false && !route.npcAllowed) return false;
   if (selector.floorKeys?.includes(route.floorKey)) return true;
-  if (selector.baseFloors?.includes(route.baseFloor)) {
+  if (selector.themeTagss?.includes(route.themeTags)) {
     const absZ = Math.abs(route.z ?? 0);
     if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
@@ -478,7 +478,7 @@ function selectorMatches(route: RouteInfo, selector: AlifeDestinationSelector): 
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
     return true;
   }
-  if (!selector.floorKeys?.length && !selector.baseFloors?.length && !selector.routeTags?.length) {
+  if (!selector.floorKeys?.length && !selector.themeTagss?.length && !selector.routeTags?.length) {
     const absZ = Math.abs(route.z ?? 0);
     if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
@@ -501,7 +501,7 @@ function resolveDestination(
   const source = resolveRoute(context, record.floorKey);
   const candidates = context.filter(route => {
     if (route.floorKey === record.floorKey) return false;
-    if (route.baseFloor === FloorLevel.VOID) return false;
+    if (route.themeTags === number.VOID) return false;
     if (!selectorMatches(route, intent.destination)) return false;
     if (intent.maxRisk !== undefined) {
       const sourceRisk = source?.danger ?? 3;

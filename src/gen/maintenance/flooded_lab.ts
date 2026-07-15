@@ -3,7 +3,7 @@
 /* NPC: Профессор Тесла — gives FETCH quest for energy cells.      */
 
 import {
-  Cell, Tex, Feature, FloorLevel, RoomType,
+  Cell, Tex, Feature, number, RoomType,
   type Room, type Entity,
   EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
@@ -100,7 +100,7 @@ for (const assistant of ASSISTANT_DEFS) {
   registerAuthoredNpc({
     id: assistant.id,
     npc: assistant.npc,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
+    homeFloorKey: storyNpcFloorKey(number.MAINTENANCE),
     tags: ['maintenance', 'flooded_lab', 'assistant'],
   });
 }

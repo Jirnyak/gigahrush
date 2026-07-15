@@ -6,7 +6,7 @@
 import {
   W, Cell, Feature,
   type Entity,
-  EntityType, AIGoal, MonsterKind, FloorLevel,
+  EntityType, AIGoal, MonsterKind, number,
 } from '../../core/types';
 import { World } from '../../core/world';
 
@@ -39,7 +39,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
      Phase 2: Zones
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.VOID) + 5;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, number.VOID) + 5;
 
   nextId = runVoidContent(world, entities, nextId, spawnX, spawnY);
   paintVoidDefaults(world);

@@ -30,7 +30,7 @@ const PROCEDURAL_ANOMALY_GENERATION_REGISTRY: Record<FloorAnomalyId, ProceduralA
   mirror_run: { mode: 'module', apply: applyMirrorRun },
   radio_chess: { mode: 'module', apply: applyRadioChess },
   conveyor_sorter: { mode: 'module', apply: applyConveyorSorter },
-  fractal_floor: { mode: 'module', apply: applyFractalFloor },
+  fractal_z: { mode: 'module', apply: applyFractalFloor },
   cement_memory: { mode: 'module', apply: applyCementMemory },
   wall_snake: { mode: 'module', apply: applyWallSnake },
   living_tunnels: { mode: 'module', apply: applyLivingTunnels },

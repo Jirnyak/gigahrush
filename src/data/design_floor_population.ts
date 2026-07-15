@@ -1,6 +1,6 @@
 import {
   Faction,
-  FloorLevel,
+  number,
   EntityType,
   MonsterKind,
   Occupation,
@@ -740,7 +740,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
       ],
     },
   },
-  bank_floor: {
+  bank_z: {
     npcFactions: [{ value: Faction.CITIZEN, weight: 62 }, { value: Faction.LIQUIDATOR, weight: 24 }, { value: Faction.WILD, weight: 11 }, { value: Faction.SCIENTIST, weight: 3 }],
     npcOccupations: [{ value: Occupation.SECRETARY, weight: 30 }, { value: Occupation.TRAVELER, weight: 24 }, { value: Occupation.STOREKEEPER, weight: 14 }, { value: Occupation.HUNTER, weight: 14 }, { value: Occupation.ALCOHOLIC, weight: 8 }, { value: Occupation.DIRECTOR, weight: 5 }, { value: Occupation.LOCKSMITH, weight: 5 }],
     monsterBiasKinds: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.KONTORSHCHIK, MonsterKind.PROTOKOLNIK, MonsterKind.SLEPOGLAZ],
@@ -1320,7 +1320,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     npcPlacementKind: 'industrial',
     monsterPlacementKind: 'industrial',
   },
-  service_floor: {
+  service_z: {
     npcNoun: 'ремонтник',
     npcFactions: [
       { value: Faction.LIQUIDATOR, weight: 52 },
@@ -1939,7 +1939,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
       maxPerBucket: 5,
     },
   },
-  horrorfloor: {
+  horrorz: {
     monsterBiasKinds: [MonsterKind.GLUBINNAYA_TEN],
     monsterTags: ['dark', 'void'],
     monsterPlacementKind: 'void',
@@ -2032,22 +2032,22 @@ function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fall
 
 function designNpcMult(route: DesignFloorRouteDef): number {
   const cls = designFloorThemeClass(route);
-  return cls === FloorLevel.KVARTIRY ? 1.22
-    : cls === FloorLevel.LIVING ? 1.14
-      : cls === FloorLevel.MINISTRY ? 0.86
-        : cls === FloorLevel.MAINTENANCE ? 0.7
-          : cls === FloorLevel.HELL ? 0.38
+  return cls === number.KVARTIRY ? 1.22
+    : cls === number.LIVING ? 1.14
+      : cls === number.MINISTRY ? 0.86
+        : cls === number.MAINTENANCE ? 0.7
+          : cls === number.HELL ? 0.38
             : 0;
 }
 
 function designMonsterMult(route: DesignFloorRouteDef): number {
   const cls = designFloorThemeClass(route);
-  return cls === FloorLevel.HELL ? 1.28
-    : cls === FloorLevel.VOID ? 1.36
-      : cls === FloorLevel.MAINTENANCE ? 1.12
-        : cls === FloorLevel.MINISTRY ? 1.0
-          : cls === FloorLevel.KVARTIRY ? 0.86
-            : cls === FloorLevel.LIVING ? 0.8
+  return cls === number.HELL ? 1.28
+    : cls === number.VOID ? 1.36
+      : cls === number.MAINTENANCE ? 1.12
+        : cls === number.MINISTRY ? 1.0
+          : cls === number.KVARTIRY ? 0.86
+            : cls === number.LIVING ? 0.8
               : 1;
 }
 
@@ -2065,34 +2065,34 @@ function baseMonsterTarget(route: DesignFloorRouteDef): number {
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
   const cls = designFloorThemeClass(route);
-  if (cls === FloorLevel.MAINTENANCE) return INDUSTRIAL_MIX;
-  if (cls === FloorLevel.HELL) return VETERAN_MIX;
-  if (cls === FloorLevel.MINISTRY) return ADMIN_MIX;
+  if (cls === number.MAINTENANCE) return INDUSTRIAL_MIX;
+  if (cls === number.HELL) return VETERAN_MIX;
+  if (cls === number.MINISTRY) return ADMIN_MIX;
   return CITIZEN_MIX;
 }
 
 function defaultNpcOccupations(route: DesignFloorRouteDef): readonly WeightedDesignValue<Occupation>[] {
   const cls = designFloorThemeClass(route);
-  if (cls === FloorLevel.MAINTENANCE) return INDUSTRIAL_OCCUPATIONS;
-  if (cls === FloorLevel.HELL) return VETERAN_OCCUPATIONS;
-  if (cls === FloorLevel.MINISTRY) return ADMIN_OCCUPATIONS;
+  if (cls === number.MAINTENANCE) return INDUSTRIAL_OCCUPATIONS;
+  if (cls === number.HELL) return VETERAN_OCCUPATIONS;
+  if (cls === number.MINISTRY) return ADMIN_OCCUPATIONS;
   return SOCIAL_OCCUPATIONS;
 }
 
 function defaultNpcNoun(route: DesignFloorRouteDef): string {
   const cls = designFloorThemeClass(route);
-  if (cls === FloorLevel.MAINTENANCE) return 'работник';
-  if (cls === FloorLevel.HELL) return 'паломник';
-  if (cls === FloorLevel.MINISTRY) return 'служащий';
+  if (cls === number.MAINTENANCE) return 'работник';
+  if (cls === number.HELL) return 'паломник';
+  if (cls === number.MINISTRY) return 'служащий';
   return 'житель';
 }
 
 function defaultPlacementKind(route: DesignFloorRouteDef): PlacementKind {
   const cls = designFloorThemeClass(route);
-  if (cls === FloorLevel.MAINTENANCE) return 'industrial';
-  if (cls === FloorLevel.HELL) return 'hell';
-  if (cls === FloorLevel.VOID) return 'void';
-  if (cls === FloorLevel.MINISTRY) return 'admin';
+  if (cls === number.MAINTENANCE) return 'industrial';
+  if (cls === number.HELL) return 'hell';
+  if (cls === number.VOID) return 'void';
+  if (cls === number.MINISTRY) return 'admin';
   return 'social';
 }
 

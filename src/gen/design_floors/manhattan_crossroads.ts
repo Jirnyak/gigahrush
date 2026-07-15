@@ -1,4 +1,4 @@
-/* -- Design floor: Manhattan-like indoor crossroads ------------- */
+/* -- Design z: Manhattan-like indoor crossroads ------------- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -840,20 +840,20 @@ function canStampShellRoom(world: World, x: number, y: number, w: number, h: num
 }
 
 function stampShellStorefronts(world: World, sidewalkRoomId: number, rng: () => number): void {
-  const specs: readonly { name: string; type: RoomType; x: number; y: number; w: number; h: number; wall: Tex; floor: Tex }[] = [
-    { name: 'Северная закрытая витрина', type: RoomType.STORAGE, x: 92, y: 118, w: 50, h: 28, wall: Tex.PANEL, floor: Tex.F_TILE },
-    { name: 'Двор над западным тоннелем', type: RoomType.COMMON, x: 92, y: 404, w: 64, h: 42, wall: Tex.BRICK, floor: Tex.F_CONCRETE },
-    { name: 'Лавка дорожных знаков', type: RoomType.STORAGE, x: 874, y: 302, w: 54, h: 30, wall: Tex.METAL, floor: Tex.F_TILE },
-    { name: 'Пустая касса восточного блока', type: RoomType.OFFICE, x: 878, y: 548, w: 46, h: 26, wall: Tex.PANEL, floor: Tex.F_LINO },
-    { name: 'Ночной продуктовый на объезде', type: RoomType.STORAGE, x: 718, y: 878, w: 62, h: 34, wall: Tex.PANEL, floor: Tex.F_TILE },
-    { name: 'Южный гаражный карман', type: RoomType.STORAGE, x: 394, y: 884, w: 70, h: 36, wall: Tex.METAL, floor: Tex.F_CONCRETE },
-    { name: 'Подсобка под ложной авеню', type: RoomType.PRODUCTION, x: 108, y: 748, w: 50, h: 30, wall: Tex.PIPE, floor: Tex.F_CONCRETE },
-    { name: 'Офис дорожного старшего', type: RoomType.OFFICE, x: 846, y: 126, w: 52, h: 30, wall: Tex.CONCRETE, floor: Tex.F_LINO },
+  const specs: readonly { name: string; type: RoomType; x: number; y: number; w: number; h: number; wall: Tex; z: Tex }[] = [
+    { name: 'Северная закрытая витрина', type: RoomType.STORAGE, x: 92, y: 118, w: 50, h: 28, wall: Tex.PANEL, z: Tex.F_TILE },
+    { name: 'Двор над западным тоннелем', type: RoomType.COMMON, x: 92, y: 404, w: 64, h: 42, wall: Tex.BRICK, z: Tex.F_CONCRETE },
+    { name: 'Лавка дорожных знаков', type: RoomType.STORAGE, x: 874, y: 302, w: 54, h: 30, wall: Tex.METAL, z: Tex.F_TILE },
+    { name: 'Пустая касса восточного блока', type: RoomType.OFFICE, x: 878, y: 548, w: 46, h: 26, wall: Tex.PANEL, z: Tex.F_LINO },
+    { name: 'Ночной продуктовый на объезде', type: RoomType.STORAGE, x: 718, y: 878, w: 62, h: 34, wall: Tex.PANEL, z: Tex.F_TILE },
+    { name: 'Южный гаражный карман', type: RoomType.STORAGE, x: 394, y: 884, w: 70, h: 36, wall: Tex.METAL, z: Tex.F_CONCRETE },
+    { name: 'Подсобка под ложной авеню', type: RoomType.PRODUCTION, x: 108, y: 748, w: 50, h: 30, wall: Tex.PIPE, z: Tex.F_CONCRETE },
+    { name: 'Офис дорожного старшего', type: RoomType.OFFICE, x: 846, y: 126, w: 52, h: 30, wall: Tex.CONCRETE, z: Tex.F_LINO },
   ];
 
   for (const spec of specs) {
     if (!canStampShellRoom(world, spec.x, spec.y, spec.w, spec.h)) continue;
-    const room = stampNamedRoom(world, spec.name, spec.type, spec.x, spec.y, spec.w, spec.h, spec.wall, spec.floor);
+    const room = stampNamedRoom(world, spec.name, spec.type, spec.x, spec.y, spec.w, spec.h, spec.wall, spec.z);
     connectRoomToStreet(world, room, sidewalkRoomId);
     const featureCount = 2 + Math.floor(rng() * 4);
     for (let i = 0; i < featureCount; i++) {
@@ -876,12 +876,12 @@ function blockRoomType(serial: number): RoomType {
   return types[serial % types.length];
 }
 
-function blockRoomTex(type: RoomType): { wall: Tex; floor: Tex } {
-  if (type === RoomType.BATHROOM) return { wall: Tex.TILE_W, floor: Tex.F_TILE };
-  if (type === RoomType.KITCHEN) return { wall: Tex.PANEL, floor: Tex.F_TILE };
-  if (type === RoomType.STORAGE) return { wall: Tex.METAL, floor: Tex.F_CONCRETE };
-  if (type === RoomType.OFFICE) return { wall: Tex.CONCRETE, floor: Tex.F_LINO };
-  return { wall: Tex.PANEL, floor: Tex.F_LINO };
+function blockRoomTex(type: RoomType): { wall: Tex; z: Tex } {
+  if (type === RoomType.BATHROOM) return { wall: Tex.TILE_W, z: Tex.F_TILE };
+  if (type === RoomType.KITCHEN) return { wall: Tex.PANEL, z: Tex.F_TILE };
+  if (type === RoomType.STORAGE) return { wall: Tex.METAL, z: Tex.F_CONCRETE };
+  if (type === RoomType.OFFICE) return { wall: Tex.CONCRETE, z: Tex.F_LINO };
+  return { wall: Tex.PANEL, z: Tex.F_LINO };
 }
 
 function decorateBlockInteriorRoom(world: World, room: Room, type: RoomType, rng: () => number): void {
@@ -1066,7 +1066,7 @@ function stampHorizontalFloorplanRow(
       segments[i].size,
       depth,
       wallTex,
-      tex.floor,
+      tex.z,
     );
     carveFloorplanRoom(world, room);
     const doorY = y < corridor.y ? corridor.y - 1 : corridor.y + corridor.h;
@@ -1109,7 +1109,7 @@ function stampVerticalFloorplanRow(
       depth,
       segments[i].size,
       wallTex,
-      tex.floor,
+      tex.z,
     );
     carveFloorplanRoom(world, room);
     const doorX = x < corridor.x ? corridor.x - 1 : corridor.x + corridor.w;
@@ -1288,7 +1288,7 @@ function maybeStampFrontageRoom(
   if (x < 3 || y < 3 || x + w >= W - 3 || y + h >= W - 3) return false;
   if (!canStampShellRoom(world, x, y, w, h)) return false;
 
-  const room = stampNamedRoom(world, frontageRoomName(type, serial), type, x, y, w, h, tex.wall, tex.floor);
+  const room = stampNamedRoom(world, frontageRoomName(type, serial), type, x, y, w, h, tex.wall, tex.z);
   connectRoomToStreet(world, room, sidewalkRoomId);
   decorateBlockInteriorRoom(world, room, type, rng);
   return room.doors.length > 0;
@@ -1396,17 +1396,17 @@ function hardenAuthoredHqCore(world: World, room: Room, owner: TerritoryOwner, n
 
 function retuneSupportRoom(world: World, room: Room, owner: TerritoryOwner, label: string, index: number): void {
   const pattern = [
-    { type: RoomType.KITCHEN, name: `Кухня штаба ${label}`, wall: Tex.PANEL, floor: Tex.F_TILE },
-    { type: RoomType.BATHROOM, name: `Санузел штаба ${label}`, wall: Tex.TILE_W, floor: Tex.F_TILE },
-    { type: RoomType.STORAGE, name: `Склад штаба ${label}`, wall: Tex.METAL, floor: Tex.F_CONCRETE },
-    { type: RoomType.MEDICAL, name: `Медпункт штаба ${label}`, wall: Tex.PANEL, floor: Tex.F_TILE },
-    { type: RoomType.OFFICE, name: `Канцелярия штаба ${label}`, wall: Tex.CONCRETE, floor: Tex.F_LINO },
+    { type: RoomType.KITCHEN, name: `Кухня штаба ${label}`, wall: Tex.PANEL, z: Tex.F_TILE },
+    { type: RoomType.BATHROOM, name: `Санузел штаба ${label}`, wall: Tex.TILE_W, z: Tex.F_TILE },
+    { type: RoomType.STORAGE, name: `Склад штаба ${label}`, wall: Tex.METAL, z: Tex.F_CONCRETE },
+    { type: RoomType.MEDICAL, name: `Медпункт штаба ${label}`, wall: Tex.PANEL, z: Tex.F_TILE },
+    { type: RoomType.OFFICE, name: `Канцелярия штаба ${label}`, wall: Tex.CONCRETE, z: Tex.F_LINO },
   ] as const;
   const spec = pattern[index % pattern.length];
   room.type = spec.type;
   room.name = spec.name;
   room.sealed = false;
-  retintRoom(world, room, spec.wall, spec.floor);
+  retintRoom(world, room, spec.wall, spec.z);
   paintRoomOwnerCells(world, room, owner);
   decorateBlockInteriorRoom(world, room, spec.type, () => 0.5);
 }
@@ -1635,7 +1635,7 @@ function applyZones(world: World): void {
   generateZones(world);
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, CENTER, CENTER);
-    zone.level = Math.max(2, Math.min(5, calcZoneLevel(zone.cx, zone.cy, FloorLevel.KVARTIRY) + (d < 150 ? 2 : 1)));
+    zone.level = Math.max(2, Math.min(5, calcZoneLevel(zone.cx, zone.cy, number.KVARTIRY) + (d < 150 ? 2 : 1)));
     if (d < 130) zone.faction = ZoneFaction.LIQUIDATOR;
     else if (zone.cx > CENTER + 120) zone.faction = ZoneFaction.WILD;
     else zone.faction = ZoneFaction.CITIZEN;
@@ -1927,7 +1927,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -1,4 +1,4 @@
-import { Cell, Feature, FloorLevel, RoomType, W, type Room } from '../core/types';
+import { Cell, Feature, RoomType, W, type Room } from '../core/types';
 import { World } from '../core/world';
 import type { DesignFloorRouteDef } from '../data/design_floors';
 import {
@@ -473,7 +473,7 @@ export function placeCraftStationsForStoryFloor(
   world: World,
   spawnX: number,
   spawnY: number,
-  floor: FloorLevel,
+  z: number,
   options: { seed?: number } = {},
 ): CraftStationPlacementSummary {
   const profile = craftStationProfileForStoryFloor(floor);
@@ -488,9 +488,9 @@ export function placeMaintenanceCraftStations(
   spawnX: number,
   spawnY: number,
 ): CraftStationPlacementSummary {
-  const profile = craftStationProfileForStoryFloor(FloorLevel.MAINTENANCE);
+  const profile = craftStationProfileForStoryFloor(number.MAINTENANCE);
   return placeCraftStationsWithProfile(world, rooms, spawnX, spawnY, profile, {
-    seed: hash32(FloorLevel.MAINTENANCE, rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
+    seed: hash32(number.MAINTENANCE, rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
   });
 }
 

@@ -5,7 +5,7 @@ import {
   Cell,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   type Entity,
@@ -32,7 +32,7 @@ export interface LiftArachnaWarningSnapshot {
 
 interface ActiveLiftArachna {
   key: string;
-  floor: FloorLevel;
+  z: number;
   zoneId: number;
   liftX: number;
   liftY: number;
@@ -86,7 +86,7 @@ function normalizeActive(input: Partial<ActiveLiftArachna> | null | undefined): 
   if (!input || typeof input.key !== 'string') return null;
   return {
     key: input.key,
-    floor: typeof input.floor === 'number' ? input.floor : FloorLevel.LIVING,
+    z: typeof input.z === 'number' ? input.z : number.LIVING,
     zoneId: typeof input.zoneId === 'number' ? input.zoneId : -1,
     liftX: typeof input.liftX === 'number' ? input.liftX : 0,
     liftY: typeof input.liftY === 'number' ? input.liftY : 0,
@@ -261,7 +261,7 @@ export function tryStartLiftArachnaEncounter(
   const threatLevel = liftArachnaThreat(ctx);
   const active: ActiveLiftArachna = {
     key,
-    floor: state.currentZ,
+    z: state.currentZ,
     zoneId: lift.zoneId,
     liftX: lift.x,
     liftY: lift.y,
@@ -451,7 +451,7 @@ export function notifyLiftArachnaNoise(
   weaponId: string,
 ): void {
   const active = ensureLiftArachnaState(state).active;
-  if (!active || active.sprung || active.floor !== state.currentZ) return;
+  if (!active || active.sprung || active.z !== state.currentZ) return;
   if (!loudWeapon(weaponId)) return;
   if (world.dist2(player.x, player.y, active.liftX + 0.5, active.liftY + 0.5) > RETREAT_DIST2) return;
 
@@ -486,7 +486,7 @@ export function updateLiftArachnaEncounter(
 ): void {
   const active = ensureLiftArachnaState(state).active;
   if (!active) return;
-  if (active.floor !== state.currentZ) {
+  if (active.z !== state.currentZ) {
     ensureLiftArachnaState(state).active = null;
     return;
   }
@@ -544,7 +544,7 @@ export function updateLiftArachnaEncounter(
 
 export function getLiftArachnaWarningSnapshot(state: GameState): LiftArachnaWarningSnapshot | null {
   const active = ensureLiftArachnaState(state).active;
-  if (!active || active.sprung || active.floor !== state.currentZ) return null;
+  if (!active || active.sprung || active.z !== state.currentZ) return null;
   return {
     secondsLeft: Math.max(0, Math.ceil(active.dropAt - state.time)),
     zoneId: active.zoneId,

@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
@@ -387,7 +387,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

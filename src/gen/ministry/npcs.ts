@@ -4,7 +4,7 @@
 
 import {
   W, Cell,
-  type Entity, EntityType, AIGoal, Faction, FloorLevel, Occupation, QuestType, RoomType,
+  type Entity, EntityType, AIGoal, Faction, number, Occupation, QuestType, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
@@ -93,7 +93,7 @@ const ROTENBERGOV_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: 'kantselev',
   npc: KANTSELEV_DEF,
-  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(number.MINISTRY),
   tags: ['ministry', 'leader'],
   quests: [
     {
@@ -113,7 +113,7 @@ registerAuthoredNpc({
 registerAuthoredNpc({
   id: 'rotenbergov',
   npc: ROTENBERGOV_DEF,
-  homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(number.MINISTRY),
   tags: ['ministry', 'economy'],
   quests: [
     {

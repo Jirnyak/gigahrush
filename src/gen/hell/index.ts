@@ -3,7 +3,7 @@
 import {
   W, Cell, Tex, Feature, Faction, Occupation, LiftDirection,
   type Entity,
-  EntityType, AIGoal, MonsterKind, FloorLevel, ZoneFaction,
+  EntityType, AIGoal, MonsterKind, number, ZoneFaction,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
@@ -56,10 +56,10 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   paintMissingOrganicTextures(world);
   generateZones(world);
   retuneHellZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.HELL) + 2;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, number.HELL) + 2;
   initializeCellTerritory(world, {
     seed: generationSeed,
-    targetShares: territorySharesForStoryFloor(FloorLevel.HELL),
+    targetShares: territorySharesForStoryFloor(number.HELL),
   });
 
   for (let i = 0; i < W * W; i++) {
@@ -87,7 +87,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   // Manifest-owned side content
   nextId = runHellContent(world, entities, nextId);
 
-  placeProceduralScreens(world, FloorLevel.HELL);
+  placeProceduralScreens(world, number.HELL);
 
   return { world, entities, spawnX, spawnY };
 }
@@ -586,7 +586,7 @@ function createHellLiquidator(world: World, nextId: { v: number }, cell: number)
 
 function pickHellMonsterKind(samosborCount: number): MonsterKind {
   return chooseFloorMonsterKind({
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     floorTags: ['hell', 'meat', 'deep', 'cult'],
     samosborCount: Math.max(4, samosborCount),
     allowRare: true,

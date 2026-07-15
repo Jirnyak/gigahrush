@@ -2,7 +2,7 @@
 
 import {
   Cell, ContainerKind, DoorState, Faction, Feature,
-  FloorLevel, Occupation, QuestType, RoomType, Tex,
+  number, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -223,7 +223,7 @@ function addAmmoContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

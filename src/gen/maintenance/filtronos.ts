@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel, MonsterKind, Occupation,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number, MonsterKind, Occupation,
   RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
@@ -49,7 +49,7 @@ const KEEPER_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: KEEPER_ID,
   npc: KEEPER_DEF,
-  homeFloorKey: storyNpcFloorKey(FloorLevel.MAINTENANCE),
+  homeFloorKey: storyNpcFloorKey(number.MAINTENANCE),
   tags: ['maintenance', 'filtronos', 'keeper'],
 });
 
@@ -124,7 +124,7 @@ function publishFiltronosEvent(
   const container = contextContainer(ctx);
   publishEvent(state, {
     type: eventType(phase),
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     zoneId: source.zoneId ?? container?.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? container?.x,
@@ -364,7 +364,7 @@ function addFilterContainer(ctx: MaintContentCtx, room: Room, owner: Entity): nu
     id: nextContainerId(ctx),
     x,
     y,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

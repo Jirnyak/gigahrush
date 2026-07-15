@@ -150,7 +150,7 @@ export function proceduralAnomalyEventData(spec: ProceduralFloorSpec | undefined
 
 function smogRuntimeKey(state: GameState): string {
   const spec = currentProceduralFloorSpec(state);
-  if (!spec) return `floor:${state.currentZ}`;
+  if (!spec) return `z: ${state.currentZ}`;
   return `${spec.key}:${spec.z}:${spec.seed}:${spec.anomalyId}`;
 }
 

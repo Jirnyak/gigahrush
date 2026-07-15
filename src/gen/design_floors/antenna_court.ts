@@ -1,7 +1,7 @@
-/* ── Design floor: antenna_court / Антенный двор ─────────────── */
+/* ── Design z: antenna_court / Антенный двор ─────────────── */
 
 import {
-  W, Cell, ContainerKind, DoorState, Feature, FloorLevel, LiftDirection,
+  W, Cell, ContainerKind, DoorState, Feature, number, LiftDirection,
   RoomType, Tex, ZoneFaction,
   type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
   type GameState, type Room, type WorldContainer, type WorldEvent,
@@ -28,7 +28,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('antenna_court');
 
 export const DESIGN_FLOOR_ID = 'antenna_court' as const;
 export const ANTENNA_COURT_ROUTE_Z = 42 as const;
-export const ANTENNA_COURT_BASE_FLOOR = FloorLevel.MINISTRY;
+export const ANTENNA_COURT_BASE_FLOOR = number.MINISTRY;
 
 const SIGNAL_FLAG_TUNED = 1 << 0;
 const SIGNAL_FLAG_MARKET_JAMMED = 1 << 1;
@@ -507,7 +507,7 @@ export function publishAntennaCourtSignalEvent(
   const eventTags = result?.eventTags ?? [];
   return publishEvent(game, {
     type: 'rumor_observed',
-    floor: game.currentZ,
+    z: game.currentZ,
     severity: action === 'jam' || action === 'record' || action === 'expose' ? 4 : 3,
     privacy: action === 'jam' || action === 'expose' ? 'witnessed' : 'local',
     targetName: routeId ?? DESIGN_FLOOR_ID,
@@ -1854,7 +1854,7 @@ function addContainer(
     id,
     x,
     y,
-    floor: ANTENNA_COURT_BASE_FLOOR,
+    z: ANTENNA_COURT_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

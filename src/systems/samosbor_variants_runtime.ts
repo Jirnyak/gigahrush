@@ -1,4 +1,4 @@
-import { FloorLevel } from '../core/types';
+import { } from '../core/types';
 import {
   SAMOSBOR_VARIANTS,
   buildActiveSamosborVariant,
@@ -20,11 +20,11 @@ function secureRandom(): number {
   throw new Error("Secure random number generation is not supported in this environment.");
 }
 
-export function chooseSamosborVariant(floor: FloorLevel): ActiveSamosborVariant {
+export function chooseSamosborVariant(floorTags: readonly string[], z: number, z: number): ActiveSamosborVariant {
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;
-    if (forced && forced.floors.includes(floor)) {
+    if (forced && forced.tags.includes(floor)) {
       activeVariant = buildActiveSamosborVariant(forced);
       lastVariant = activeVariant.def.id;
       return activeVariant;

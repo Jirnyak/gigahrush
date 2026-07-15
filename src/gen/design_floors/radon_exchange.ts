@@ -1,11 +1,11 @@
-/* -- Design floor: radon_exchange - scan-line transfer through concrete -- */
+/* -- Design z: radon_exchange - scan-line transfer through concrete -- */
 
 import {
   Cell,
   ContainerKind,
   DoorState,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   RoomType,
   Tex,
@@ -23,7 +23,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const RADON_EXCHANGE_ROUTE_ID = 'radon_exchange' as const;
 export const RADON_EXCHANGE_Z = 44 as const;
-export const RADON_EXCHANGE_BASE_FLOOR = FloorLevel.MINISTRY;
+export const RADON_EXCHANGE_BASE_FLOOR = number.MINISTRY;
 export const RADON_EXCHANGE_PROJECTION_KEY = 'key' as const;
 
 export const RADON_EXCHANGE_META = {
@@ -553,7 +553,7 @@ function addContainer(
     id: nextContainerId.v++,
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,
@@ -805,7 +805,7 @@ function registerRadonRouteCues(world: World, rooms: RadonRooms, keyContainer: W
     y: rooms.exchangeHall.y + 18.5,
     targetX: rooms.shutterEast.x + 12.5,
     targetY: rooms.shutterEast.y + 7.5,
-    floor: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_BASE_FLOOR,
     roomId: rooms.exchangeHall.id,
     targetRoomId: rooms.shutterEast.id,
     zoneId: world.zoneMap[world.idx(rooms.exchangeHall.x + 8, rooms.exchangeHall.y + 18)],
@@ -838,7 +838,7 @@ function registerRadonRouteCues(world: World, rooms: RadonRooms, keyContainer: W
     y: rooms.downLift.y + 8.5,
     targetX: rooms.serviceChord.x + 14.5,
     targetY: rooms.serviceChord.y + 7.5,
-    floor: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_BASE_FLOOR,
     roomId: rooms.downLift.id,
     targetRoomId: rooms.serviceChord.id,
     zoneId: world.zoneMap[world.idx(rooms.downLift.x + 8, rooms.downLift.y + 8)],
@@ -871,7 +871,7 @@ function registerRadonRouteCues(world: World, rooms: RadonRooms, keyContainer: W
     y: rooms.projectionKey.y + 5.5,
     targetX: keyContainer.x + 0.5,
     targetY: keyContainer.y + 0.5,
-    floor: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_BASE_FLOOR,
     roomId: rooms.projectionKey.id,
     targetRoomId: rooms.projectionKey.id,
     zoneId: world.zoneMap[world.idx(rooms.projectionKey.x + 6, rooms.projectionKey.y + 5)],

@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  W, Cell, DoorState, EntityType, AIGoal, Faction, Feature, FloorLevel,
+  W, Cell, DoorState, EntityType, AIGoal, Faction, Feature, number,
   MonsterKind, Occupation, RoomType, Tex,
   type Entity, type GameState, type Room, type WorldEvent,
 } from '../../core/types';
@@ -61,7 +61,7 @@ interface Route {
 }
 
 interface AltarArenaSite {
-  floor: FloorLevel;
+  z: number;
   roomId: number;
   roomX: number;
   roomY: number;
@@ -143,7 +143,7 @@ export function spawnHellAltarArena(world: World, entities: Entity[], nextId: { 
   const cy = room.y + (room.h >> 1);
   const ci = world.idx(cx, cy);
   activeSite = {
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     roomX: room.x,
     roomY: room.y,
@@ -567,7 +567,7 @@ function registerAltarRouteCue(world: World, room: Room, entry: Route, escape: R
     y: cueY,
     targetX: cx,
     targetY: cy,
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(Math.floor(cx), Math.floor(cy))],
@@ -592,7 +592,7 @@ function handleAltarArenaEvent(state: GameState, event: WorldEvent): void {
   const site = activeSite;
   const world = activeWorld;
   const entities = activeEntities;
-  if (!site || !world || !entities || state.currentZ !== site.floor || event.floor !== site.floor) return;
+  if (!site || !world || !entities || state.currentZ !== site.z || event.z !== site.z) return;
 
   if (event.type === 'rumor_observed' && event.data?.cueId === site.cueId) {
     handleCueEvent(state, site, event);
@@ -740,7 +740,7 @@ function publishArenaEvent(
   playArenaTone(site, severity);
   publishEvent(state, {
     type: 'samosbor_warning',
-    floor: site.floor,
+    z: site.z,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.x,

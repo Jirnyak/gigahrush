@@ -1,7 +1,7 @@
 /* ── World log consumer: structured events → HUD/log strings ──── */
 
 import {
-  FloorLevel,
+  number,
   type GameState,
   type LogEntry,
   type Msg,
@@ -27,7 +27,7 @@ export interface WorldLogPoint {
 }
 
 export interface WorldLogSpatialContext {
-  floor: FloorLevel;
+  z: number;
   playerX: number;
   playerY: number;
   audibleRadiusMeters?: number;
@@ -105,8 +105,8 @@ export function worldLogDistanceForLocation(
 ): number | undefined {
   const context = currentSpatialContext();
   if (!context) return undefined;
-  const locationFloor = location.floor ?? context.floor;
-  if (locationFloor !== context.floor) return undefined;
+  const locationFloor = location.z ?? context.z;
+  if (locationFloor !== context.z) return undefined;
   const point = locationPoint(location, context);
   if (!point) return undefined;
   const d2 = context.dist2(context.playerX, context.playerY, point.x, point.y);
@@ -845,7 +845,7 @@ function deathFactAlreadyLogged(
     const entry = state.msgLog[i];
     if (entry.text !== text || entry.color !== color) continue;
     if (entry.targetId !== event.targetId) continue;
-    if (entry.floor !== undefined && entry.floor !== event.floor) continue;
+    if (entry.z !== undefined && entry.z !== event.z) continue;
     return true;
   }
   return false;
@@ -866,7 +866,7 @@ export function recordWorldLogEvent(state: GameState, event: WorldEvent): void {
   const text = eventText(event);
   const color = colorFor(event);
   const location: MsgLocation = {
-    floor: event.floor,
+    z: event.z,
     x: event.x,
     y: event.y,
     actorId: event.actorId,

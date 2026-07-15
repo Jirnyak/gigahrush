@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Tex,
@@ -76,7 +76,7 @@ export type MapEditorOp =
 
 export interface MapEditorPatch {
   floorKey: string;
-  baseFloor: FloorLevel;
+  themeTags: readonly string[];
   z?: number;
   createdAt: number;
   opCount: number;
@@ -384,7 +384,7 @@ function normalizePatchState(input: Partial<MapEditorPatchState> | null | undefi
       const ops = src.ops.slice(0, PATCH_OP_CAP).map(normalizeMapEditorOp).filter((op): op is MapEditorOp => !!op);
       patches[key] = {
         floorKey: key,
-        baseFloor: typeof src.baseFloor === 'number' ? src.baseFloor : FloorLevel.LIVING,
+        baseFloor: typeof src.themeTags === 'number' ? src.themeTags : number.LIVING,
         z: typeof src.z === 'number' ? src.z : undefined,
         createdAt: typeof src.createdAt === 'number' ? src.createdAt : 0,
         opCount: ops.length,
@@ -1054,7 +1054,7 @@ function spawnEditorContainer(world: World, state: GameState, op: Extract<MapEdi
     id: nextContainerId(world),
     x,
     y,
-    floor: state.currentZ,
+    z: state.currentZ,
     roomId,
     zoneId: world.zoneMap[idx],
     kind,

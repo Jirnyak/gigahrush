@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  FloorLevel, Occupation, QuestType, RoomType, Tex,
+  number, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -396,7 +396,7 @@ function addPrepContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

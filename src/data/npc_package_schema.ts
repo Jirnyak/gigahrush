@@ -1,6 +1,6 @@
 import {
   Faction,
-  FloorLevel,
+  number,
   Occupation,
   type CharacterSex,
   type Item,
@@ -49,7 +49,7 @@ const PACKAGE_ID_RE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const TAG_RE = /^[a-z0-9][a-z0-9_:.-]{0,47}$/;
 const SIMPLE_ID_RE = /^[a-z][a-z0-9]*(?:[_:.-][a-z0-9]+)*$/;
 const URL_RE = /\bhttps?:\/\//i;
-const GEOMETRY_LEAK_RE = /\b(1024\s*x\s*1024|1024x1024|toroid(?:al)?|W\s*=|world\.idx|world\.wrap|FloorLevel|route\s*z\s*=|z\s*=\s*[-+]?\d+)\b|тороид|1024 на 1024/i;
+const GEOMETRY_LEAK_RE = /\b(1024\s*x\s*1024|1024x1024|toroid(?:al)?|W\s*=|world\.idx|world\.wrap|number|route\s*z\s*=|z\s*=\s*[-+]?\d+)\b|тороид|1024 на 1024/i;
 const MONEY_MAX = 2_147_483_647;
 const SPRITE_MAX = 8191;
 const UINT32_MAX = 0xffff_ffff;
@@ -594,9 +594,9 @@ function validateEditor(problems: ProblemList, editor: Record<string, unknown> |
 }
 
 export function npcPackageLookupHints(context?: NpcPackageValidationContext): NpcPackageLookupHints {
-  const storyKeyRows = [...numericEnumValues(FloorLevel)].map(floor => ({
-    key: floorKeyForStory(floor as FloorLevel),
-    z: zForBaseFloor(floor as FloorLevel),
+  const storyKeyRows = [...numericEnumValues(number)].map(floor => ({
+    key: floorKeyForStory(floor),
+    z: zForBaseFloor(floor),
   }));
   const designKeyRows = DESIGN_FLOOR_ROUTES.map(route => ({
     key: floorKeyForDesign(route.id),

@@ -1,9 +1,9 @@
-/* ── Future design floor: Хтонический чердак ─────────────────── */
+/* ── Future design z: Хтонический чердак ─────────────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, DoorState, LiftDirection,
-  FloorLevel, RoomType, EntityType, AIGoal, Faction, Occupation,
+  number, RoomType, EntityType, AIGoal, Faction, Occupation,
   QuestType, ContainerKind, MonsterKind, ZoneFaction,
   type Entity, type GameState, type Room, type TerritoryOwner, type WorldContainer,
 } from '../../core/types';
@@ -1165,7 +1165,7 @@ function seedAtticShaftCaches(world: World, rooms: readonly Room[], rng: () => n
       id: world.containers.length + 1,
       x,
       y,
-      floor: FloorLevel.MINISTRY,
+      z: number.MINISTRY,
       roomId: room.id,
       zoneId: world.zoneMap[cell],
       kind: placed % 3 === 0 ? ContainerKind.SECRET_STASH : ContainerKind.TOOL_LOCKER,
@@ -1409,7 +1409,7 @@ function seedAtticIslandCache(world: World, room: Room, owner: TerritoryOwner, r
     id: world.containers.length + 1,
     x,
     y,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[idx],
     kind: owner === ZoneFaction.WILD ? ContainerKind.SECRET_STASH : ContainerKind.TOOL_LOCKER,
@@ -2137,7 +2137,7 @@ function addContainer(
     id: world.containers.length + 1,
     x,
     y,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

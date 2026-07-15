@@ -9,7 +9,7 @@ import {
   W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
   Faction, Occupation,
   type Room, type Entity,
-  EntityType, AIGoal, FloorLevel, type GameState,
+  EntityType, AIGoal, number, type GameState,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { placeLifts, generateZones, ensureConnectivity } from '../shared';
@@ -89,17 +89,17 @@ function pickKvRoomType(): { type: RoomType; name: string } {
 }
 
 /* ── Room wall/floor textures by type ─────────────────────────── */
-function roomTextures(type: RoomType): { wall: Tex; floor: Tex } {
+function roomTextures(type: RoomType): { wall: Tex; z: Tex } {
   switch (type) {
-    case RoomType.LIVING:     return { wall: Tex.PANEL,    floor: Tex.F_WOOD };
-    case RoomType.KITCHEN:    return { wall: Tex.TILE_W,   floor: Tex.F_LINO };
-    case RoomType.BATHROOM:   return { wall: Tex.TILE_W,   floor: Tex.F_TILE };
-    case RoomType.STORAGE:    return { wall: Tex.CONCRETE, floor: Tex.F_CONCRETE };
-    case RoomType.COMMON:     return { wall: Tex.PANEL,    floor: Tex.F_CARPET };
-    case RoomType.SMOKING:    return { wall: Tex.CONCRETE, floor: Tex.F_CONCRETE };
-    case RoomType.CORRIDOR:   return { wall: Tex.CONCRETE, floor: Tex.F_LINO };
-    case RoomType.OFFICE:     return { wall: Tex.PANEL,    floor: Tex.F_LINO };
-    default:                  return { wall: Tex.PANEL,    floor: Tex.F_WOOD };
+    case RoomType.LIVING:     return { wall: Tex.PANEL,    z: Tex.F_WOOD };
+    case RoomType.KITCHEN:    return { wall: Tex.TILE_W,   z: Tex.F_LINO };
+    case RoomType.BATHROOM:   return { wall: Tex.TILE_W,   z: Tex.F_TILE };
+    case RoomType.STORAGE:    return { wall: Tex.CONCRETE, z: Tex.F_CONCRETE };
+    case RoomType.COMMON:     return { wall: Tex.PANEL,    z: Tex.F_CARPET };
+    case RoomType.SMOKING:    return { wall: Tex.CONCRETE, z: Tex.F_CONCRETE };
+    case RoomType.CORRIDOR:   return { wall: Tex.CONCRETE, z: Tex.F_LINO };
+    case RoomType.OFFICE:     return { wall: Tex.PANEL,    z: Tex.F_LINO };
+    default:                  return { wall: Tex.PANEL,    z: Tex.F_WOOD };
   }
 }
 
@@ -513,14 +513,14 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
       name: rt.name,
       apartmentId: -1,
       wallTex: tex.wall,
-      floorTex: tex.floor,
+      floorTex: tex.z,
     };
     world.rooms.push(room);
 
     // Apply textures
     for (const ci of roomCells) {
       world.roomMap[ci] = room.id;
-      world.floorTex[ci] = tex.floor;
+      world.floorTex[ci] = tex.z;
     }
     // Set wall textures around room cells
     for (const ci of roomCells) {
@@ -542,7 +542,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 6: Zones (64 macro-regions) ─────────────────────────
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.KVARTIRY);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, number.KVARTIRY);
 
   // ── Phase 6b: Ensure connectivity ─────────────────────────────
   const spawnCenterX = W / 2, spawnCenterY = W / 2;
@@ -585,7 +585,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   // ── Phase 8b: Cell territory before population placement ─────
   initializeCellTerritory(world, {
     seed: territorySeed,
-    targetShares: territorySharesForStoryFloor(FloorLevel.KVARTIRY),
+    targetShares: territorySharesForStoryFloor(number.KVARTIRY),
   });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
@@ -646,7 +646,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   buildKvartirySocialMacroGraph(world, spawnX, spawnY);
 
   // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
-  placeProceduralScreens(world, FloorLevel.KVARTIRY);
+  placeProceduralScreens(world, number.KVARTIRY);
 
   return { world, entities, spawnX, spawnY };
 }

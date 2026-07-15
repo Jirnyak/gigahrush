@@ -1,6 +1,6 @@
 /* ── Numbered elevator floor metadata ─────────────────────────── */
 
-import { FloorLevel } from '../core/types';
+import { } from '../core/types';
 
 export type FloorInstanceGeneratorId = 'story_pocket';
 export type FloorInstanceExitRuleId = 'next_lift_returns';
@@ -20,7 +20,7 @@ export interface FloorInstanceDef {
   id: string;
   displayNumber: string;
   title: string;
-  baseFloor: FloorLevel;
+  themeTags: readonly string[];
   seedTag: string;
   generatorId: FloorInstanceGeneratorId;
   exitRule: FloorInstanceExitRuleId;
@@ -42,7 +42,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_404',
     displayNumber: '404',
     title: 'Не найден',
-    baseFloor: FloorLevel.LIVING,
+    baseFloor: number.LIVING,
     seedTag: 'not_found',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -61,7 +61,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_556',
     displayNumber: '556',
     title: 'П-46',
-    baseFloor: FloorLevel.KVARTIRY,
+    baseFloor: number.KVARTIRY,
     seedTag: 'p46_protocol',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -80,7 +80,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_777',
     displayNumber: '777',
     title: 'Счастливый',
-    baseFloor: FloorLevel.LIVING,
+    baseFloor: number.LIVING,
     seedTag: 'lucky_shelter',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -99,7 +99,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_1337',
     displayNumber: '1337',
     title: 'Элитный',
-    baseFloor: FloorLevel.MAINTENANCE,
+    baseFloor: number.MAINTENANCE,
     seedTag: 'radio_code',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -118,7 +118,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_013',
     displayNumber: '013',
     title: 'Служебный',
-    baseFloor: FloorLevel.MINISTRY,
+    baseFloor: number.MINISTRY,
     seedTag: 'service_order',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -137,7 +137,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_089',
     displayNumber: '089',
     title: 'Теплый лифт',
-    baseFloor: FloorLevel.MAINTENANCE,
+    baseFloor: number.MAINTENANCE,
     seedTag: 'warm_shaft',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -163,7 +163,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_000',
     displayNumber: '000',
     title: 'Нулевой список',
-    baseFloor: FloorLevel.VOID,
+    baseFloor: number.VOID,
     seedTag: 'zero_register',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',
@@ -182,7 +182,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_912',
     displayNumber: '912',
     title: 'Чужая очередь',
-    baseFloor: FloorLevel.KVARTIRY,
+    baseFloor: number.KVARTIRY,
     seedTag: 'wrong_queue',
     generatorId: 'story_pocket',
     exitRule: 'next_lift_returns',

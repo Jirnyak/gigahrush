@@ -1,4 +1,4 @@
-import { FloorLevel, RoomType } from '../core/types';
+import { RoomType } from '../core/types';
 import type { DesignFloorRouteDef } from './design_floors';
 import type { ProceduralFloorSpec } from './procedural_floors';
 
@@ -74,8 +74,8 @@ function mergeProfiles(
   };
 }
 
-const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<FloorLevel, CraftStationPlacementProfile>> = {
-  [FloorLevel.MINISTRY]: {
+const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPlacementProfile>> = {
+  [number.MINISTRY]: {
     id: 'story_ministry',
     min: CRAFT_STATION_CAPS.story.min,
     max: CRAFT_STATION_CAPS.story.max,
@@ -88,7 +88,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<FloorLevel, CraftStatio
     },
     tags: ['story_floor', 'ministry'],
   },
-  [FloorLevel.KVARTIRY]: {
+  [number.KVARTIRY]: {
     id: 'story_kvartiry',
     min: CRAFT_STATION_CAPS.story.min,
     max: CRAFT_STATION_CAPS.story.max,
@@ -101,7 +101,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<FloorLevel, CraftStatio
     },
     tags: ['story_floor', 'kvartiry'],
   },
-  [FloorLevel.MAINTENANCE]: {
+  [number.MAINTENANCE]: {
     id: 'story_maintenance_collectors',
     min: CRAFT_STATION_CAPS.maintenance.min,
     max: CRAFT_STATION_CAPS.maintenance.max,
@@ -211,7 +211,7 @@ const DESIGN_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<string, CraftStationPl
     },
     tags: ['design_floor', 'production_belt', 'industrial'],
   },
-  service_floor: {
+  service_z: {
     id: 'design_service_floor',
     min: 2,
     max: 4,
@@ -338,7 +338,7 @@ const DEFAULT_PROCEDURAL_CRAFT_STATION_PROFILE: CraftStationPlacementProfile = {
   tags: ['procedural_floor', 'default'],
 };
 
-export function craftStationProfileForStoryFloor(floor: FloorLevel): CraftStationPlacementProfile | undefined {
+export function craftStationProfileForStoryFloor(z: number): CraftStationPlacementProfile | undefined {
   const profile = STORY_FLOOR_CRAFT_STATION_PROFILES[floor];
   return profile ? cloneProfile(profile) : undefined;
 }
@@ -347,7 +347,7 @@ export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): C
   const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id];
   if (!profile) return undefined;
   return mergeProfiles(profile, {
-    tags: [route.id, `z_${route.z}`, FloorLevel[route.baseFloor]?.toLowerCase() ?? 'route'],
+    tags: [route.id, `z_${route.z}`, number[route.themeTags]?.toLowerCase() ?? 'route'],
   });
 }
 

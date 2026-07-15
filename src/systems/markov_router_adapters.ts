@@ -44,7 +44,7 @@ export function routeBarkSpeech(request: MarkovSpeechRouterRequest): MarkovSpeec
     context: finalizeMarkovContext({
       actorId: context.actorId,
       targetId: context.targetId,
-      floor: context.floor,
+      z: context.z,
       roomType: context.roomType,
       roomName: context.roomName,
       zoneId: context.zoneId,

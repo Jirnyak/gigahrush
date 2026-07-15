@@ -1,7 +1,7 @@
 /* ── Баррикадированный лестничный пролёт — four-route POI ───── */
 
 import {
-  AIGoal, Cell, DoorState, EntityType, Feature, FloorLevel, Faction, MonsterKind, Occupation, QuestType, RoomType, Tex,
+  AIGoal, Cell, DoorState, EntityType, Feature, number, Faction, MonsterKind, Occupation, QuestType, RoomType, Tex,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity } from '../../core/types';
@@ -99,7 +99,7 @@ registerSideQuest('kv_karpov_barricade', KARPOV, [{
   rewardItem: 'door_kit', rewardCount: 1,
   extraRewards: [{ defId: GATE_KEY_ID, count: 1 }, { defId: 'wrench', count: 1 }, { defId: 'bandage', count: 2 }],
   relationDelta: 16, xpReward: 50, moneyReward: 30,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.CORRIDOR,
   targetHint: 'трубы лежат прямо в баррикадированном пролёте; ключ открывает короткую ремонтную створку',
   eventSeverity: 4,
@@ -118,7 +118,7 @@ registerSideQuest(RAYA_ID, RAYA, [{
   rewardItem: GATE_KEY_ID, rewardCount: 1,
   extraRewards: [{ defId: 'cigs', count: 1 }],
   relationDelta: 4, xpReward: 25, moneyReward: 0,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.CORRIDOR,
   targetHint: 'платная створка отмечена на карте рядом с Раей; взятка дешевле драки, но это услышат соседи',
   eventSeverity: 4,
@@ -138,7 +138,7 @@ registerSideQuest(LYUBA_ID, LYUBA, [{
   rewardItem: 'ammo_9mm', rewardCount: 8,
   extraRewards: [{ defId: 'bandage', count: 1 }, { defId: 'bread', count: 1 }],
   relationDelta: 8, xpReward: 55, moneyReward: 12,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.CORRIDOR,
   targetHint: 'две арматуры стоят у боевой щели баррикады; их видно красными ромбами активного KILL задания',
   eventSeverity: 4,
@@ -339,7 +339,7 @@ export function generateBarricade(
     y: westEntry.y,
     targetX,
     targetY,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     targetRoomId: poi.room.id,
     zoneId: world.zoneMap[markerCell],

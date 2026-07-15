@@ -4,7 +4,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  FloorLevel, Occupation, QuestType, RoomType, Tex,
+  number, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type Room, type WorldContainer,
   type WorldEvent, type WorldEventPrivacy, type WorldEventSeverity,
 } from '../../core/types';
@@ -234,7 +234,7 @@ registerWorldEventObserver((state, event) => {
 
   publishEvent(state, {
     type: outcome.eventType,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     actorId: event.actorId,
     actorName: event.actorName,
     actorFaction: event.actorFaction,
@@ -387,7 +387,7 @@ function addFakeMedContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

@@ -1,6 +1,6 @@
 /* ── Protokolnik: document-pressure Ministry horror ─────────── */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -13,7 +13,6 @@ export const DEF: MonsterDef = {
   attackRate: 2.4,
   sprite: 0,
   aiFlags: ['protocolPressure'],
-  floors: [FloorLevel.MINISTRY],
   counterplay: 'Протокольник закрывает бой протоколом: сбросьте или спрячьте официальные бумаги, бейте коротким уроном или уходите из комнаты до роста давления.',
   lootHint: 'испорченный протокол, сургучная крошка и бумага с пустым местом для вашей фамилии',
 };

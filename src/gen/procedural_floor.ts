@@ -8,7 +8,7 @@ import {
   ContainerKind,
   DoorState,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   EntityType,
   AIGoal,
@@ -810,7 +810,7 @@ function applyProceduralMacroNetwork(world: World, rooms: Room[], spec: Procedur
       y: firstCenter.y + 0.5,
       targetX: lastCenter.x + 0.5,
       targetY: lastCenter.y + 0.5,
-      floor: spec.baseFloor,
+      z: spec.themeTags,
       roomId: first.id,
       targetRoomId: last.id,
       zoneId: world.zoneMap[world.idx(firstCenter.x, firstCenter.y)],
@@ -1420,7 +1420,7 @@ function buildConwayLifeFieldRooms(world: World, spec: ProceduralFloorSpec): { r
     y: spawn.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: spawnRoom?.id,
     targetRoomId: rooms[rooms.length - 1]?.id,
     zoneId: world.zoneMap[world.idx(spawn.x, spawn.y)],
@@ -1592,7 +1592,7 @@ function registerWallSnakeFieldCue(
     y: head.y + 0.5,
     targetX: loop.bait.x + 0.5,
     targetY: loop.bait.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: loop.roomId,
     targetRoomId: loop.roomId,
     zoneId: world.zoneMap[headIdx],
@@ -2376,7 +2376,7 @@ const VOID_FILL_ATTEMPTS_PER_TILE = 120;
 function measureTileCoverage(world: World, tileX: number, tileY: number): number {
   const x0 = tileX * VOID_TILE;
   const y0 = tileY * VOID_TILE;
-  let floor = 0;
+  let z = 0;
   for (let dy = 0; dy < VOID_TILE; dy++) {
     for (let dx = 0; dx < VOID_TILE; dx++) {
       const ci = world.idx(x0 + dx, y0 + dy);
@@ -2983,7 +2983,7 @@ function registerCollectorMirrorInfillCue(world: World, spec: ProceduralFloorSpe
     y: a.y + 0.5,
     targetX: b.x + 0.5,
     targetY: b.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: first.id,
     targetRoomId: target.id,
     zoneId: world.zoneMap[ci],
@@ -3099,12 +3099,12 @@ function proceduralHqSupportType(owner: ZoneFaction, index: number): RoomType {
   return [RoomType.KITCHEN, RoomType.COMMON, RoomType.STORAGE, RoomType.MEDICAL][index] ?? RoomType.COMMON;
 }
 
-function proceduralHqTextures(owner: ZoneFaction): { wall: Tex; floor: Tex } {
-  if (owner === ZoneFaction.SCIENTIST) return { wall: Tex.MARBLE, floor: Tex.F_TILE };
-  if (owner === ZoneFaction.LIQUIDATOR) return { wall: Tex.METAL, floor: Tex.F_CONCRETE };
-  if (owner === ZoneFaction.CULTIST) return { wall: Tex.BRICK, floor: Tex.F_GUT };
-  if (owner === ZoneFaction.WILD) return { wall: Tex.BRICK, floor: Tex.F_CONCRETE };
-  return { wall: Tex.PANEL, floor: Tex.F_LINO };
+function proceduralHqTextures(owner: ZoneFaction): { wall: Tex; z: Tex } {
+  if (owner === ZoneFaction.SCIENTIST) return { wall: Tex.MARBLE, z: Tex.F_TILE };
+  if (owner === ZoneFaction.LIQUIDATOR) return { wall: Tex.METAL, z: Tex.F_CONCRETE };
+  if (owner === ZoneFaction.CULTIST) return { wall: Tex.BRICK, z: Tex.F_GUT };
+  if (owner === ZoneFaction.WILD) return { wall: Tex.BRICK, z: Tex.F_CONCRETE };
+  return { wall: Tex.PANEL, z: Tex.F_LINO };
 }
 
 function proceduralHqRoomName(owner: ZoneFaction, type: RoomType, index: number, dominant: boolean): string {
@@ -3325,7 +3325,7 @@ function stampProceduralHqCluster(
     clearProceduralHqFootprint(world, x, y, item.w, item.h);
     const room = stampRoom(world, world.rooms.length, item.type, x, y, item.w, item.h, -1);
     room.name = proceduralHqRoomName(owner, item.type, i, dominant);
-    applyRoomTexture(world, room, item.type === RoomType.HQ ? Tex.HERMO_WALL : textures.wall, textures.floor);
+    applyRoomTexture(world, room, item.type === RoomType.HQ ? Tex.HERMO_WALL : textures.wall, textures.z);
     decorateRoom(world, room);
     decorateProceduralRoom(world, room, spec);
     paintProceduralRoomTerritory(world, room, owner);
@@ -3582,7 +3582,7 @@ function addProceduralLootContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
@@ -4275,7 +4275,7 @@ function spawnMonster(
   const pos = randomFloorCell(world, sx, sy, 90 * 90);
   if (!pos) return null;
   const kind = chooseFloorMonsterKind({
-    floor: proceduralMonsterFloor(spec),
+    z: proceduralMonsterFloor(spec),
     roomType: roomTypeAt(world, pos.x, pos.y),
     floorTags: spec.monsterBiasTags,
     samosborCount: spec.danger,
@@ -6351,7 +6351,7 @@ function registerAtticWindCue(world: World, spec: ProceduralFloorSpec, lane: Att
     y: startY + 0.5,
     targetX: endX + 0.5,
     targetY: endY + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     label: 'ветровой ход',
     hint: 'открытая чердачная прямая: быстрее, но слышно дальше',
     targetName: 'дальний шум вентиляции',
@@ -6483,7 +6483,7 @@ function registerAtticDecisionCue(
     y: repair.y + 0.5,
     targetX: cache.x + 0.5,
     targetY: cache.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: repair.room.id,
     targetRoomId: cache.room.id,
     zoneId: world.zoneMap[world.idx(repair.x, repair.y)],
@@ -7338,7 +7338,7 @@ function addCitizenMajorityContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
@@ -7382,7 +7382,7 @@ function registerCitizenEscortCue(world: World, spec: ProceduralFloorSpec, marke
     y: marker.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: markerRoom.id,
     targetRoomId: targetRoom.id,
     zoneId: world.zoneMap[markerCell],
@@ -8105,7 +8105,7 @@ function registerLivingCue(
     y: marker.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: targetRoom?.id,
     targetRoomId: targetRoom?.id,
     label,
@@ -8771,7 +8771,7 @@ function placeFallbackAdminMicroRooms(
       y: spawnCueY(anchors[0]),
       targetX: spawnCueX(anchors[anchors.length - 1]),
       targetY: spawnCueY(anchors[anchors.length - 1]),
-      floor: spec.baseFloor,
+      z: spec.themeTags,
       roomId: anchors[0]?.id,
       targetRoomId: anchors[anchors.length - 1]?.id,
       zoneId: world.zoneMap[world.idx(roomCenter(anchors[0]).x, roomCenter(anchors[0]).y)],
@@ -9246,7 +9246,7 @@ function addLiquidatorControlContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: pos.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
@@ -9363,7 +9363,7 @@ function registerLiquidatorControlCues(world: World, spec: ProceduralFloorSpec, 
       y: checkpoint.y + 0.5,
       targetX: (targetCell % W) + 0.5,
       targetY: ((targetCell / W) | 0) + 0.5,
-      floor: spec.baseFloor,
+      z: spec.themeTags,
       roomId: checkpoint.room.id,
       targetRoomId,
       zoneId: checkpoint.zoneId,
@@ -10078,7 +10078,7 @@ function registerSumpLifeRaftCue(world: World, spec: ProceduralFloorSpec, room: 
     y: c.y + 0.5,
     targetX: c.x + 0.5,
     targetY: c.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(c.x, c.y)],
@@ -11907,7 +11907,7 @@ function registerSamosborSeedRetreatCue(
     y: breachPos.y + 0.5,
     targetX: shelterPos.x + 0.5,
     targetY: shelterPos.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: breach.id,
     targetRoomId: shelter.id,
     zoneId: world.zoneMap[world.idx(breachPos.x, breachPos.y)],
@@ -12735,7 +12735,7 @@ function registerRailPlatformCue(
     y: marker.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     label: 'свет платформы',
     hint: 'стойте за лампами: рельсовая вода принадлежит составу',
     targetName: track.label,
@@ -12874,7 +12874,7 @@ function registerRailTransferCue(world: World, spec: ProceduralFloorSpec, center
     y: marker.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     label: 'пересадочный свет',
     hint: 'рельсовый крест: переходить по светлой кромке или ждать',
     targetName: 'пересечение линий',
@@ -14197,7 +14197,7 @@ function registerApartmentPressureCue(
     y: from.accessY,
     targetX: to.accessX,
     targetY: to.accessY,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: from.roomId,
     targetRoomId: to.roomId,
     zoneId: from.zoneId,
@@ -14350,7 +14350,7 @@ function applyCollectorZombieResidentialInfill(
       y: from.y + 0.5,
       targetX: to.x + 0.5,
       targetY: to.y + 0.5,
-      floor: spec.baseFloor,
+      z: spec.themeTags,
       roomId: nearest.id,
       targetRoomId: farthest.id,
       zoneId: world.zoneMap[world.idx(from.x, from.y)],
@@ -14531,7 +14531,7 @@ function registerWildShortcutCue(world: World, spec: ProceduralFloorSpec, chord:
     y: chord.markerY + 0.5,
     targetX: chord.targetX + 0.5,
     targetY: chord.targetY + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: chord.fromRoom.id,
     targetRoomId: chord.toRoom.id,
     zoneId: world.zoneMap[world.idx(chord.markerX, chord.markerY)],
@@ -14797,7 +14797,7 @@ function registerWildMajorityRewardCues(world: World, spec: ProceduralFloorSpec,
       y: site.markerY + 0.5,
       targetX: container.x + 0.5,
       targetY: container.y + 0.5,
-      floor: spec.baseFloor,
+      z: spec.themeTags,
       roomId: site.sourceRoom.id,
       targetRoomId: container.roomId,
       zoneId: container.zoneId,
@@ -14910,7 +14910,7 @@ function stampCultAltarNook(world: World, room: Room, spec: ProceduralFloorSpec)
     const y = world.wrap(bestY + dy);
     if (world.cells[world.idx(x, y)] === Cell.FLOOR) {
       if (placeCultRoomFeature(world, room, Feature.CANDLE, x, y)) {
-         world.floorTex[world.idx(x, y)] = spec.baseFloor === FloorLevel.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+         world.floorTex[world.idx(x, y)] = spec.themeTags === number.HELL ? Tex.F_MEAT : Tex.F_CARPET;
       }
     }
   }
@@ -14940,7 +14940,7 @@ function addCultMajorityContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
@@ -15033,7 +15033,7 @@ function stampCultPhaseBoundary(
       if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
       stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.24, 118, spec.seed + marks * 193, 66, 18, 38, false);
       world.factionControl[ci] = ZoneFaction.CULTIST;
-      if ((marks & 3) === 0) world.floorTex[ci] = spec.baseFloor === FloorLevel.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags === number.HELL ? Tex.F_MEAT : Tex.F_CARPET;
       marks++;
     }
   }
@@ -15055,7 +15055,7 @@ function stampCultPhaseBoundary(
       if (best > 210 * 210 || Math.abs(Math.sqrt(second) - Math.sqrt(best)) > 18) continue;
       stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 128, spec.seed + marks * 313, 66, 18, 38, false);
       world.factionControl[ci] = ZoneFaction.CULTIST;
-      if ((marks & 3) === 0) world.floorTex[ci] = spec.baseFloor === FloorLevel.HELL ? Tex.F_MEAT : Tex.F_CARPET;
+      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags === number.HELL ? Tex.F_MEAT : Tex.F_CARPET;
       marks++;
     }
   }
@@ -15075,7 +15075,7 @@ function registerCultTributeCue(
     y: markerPos.y + 0.5,
     targetX: targetPos.x + 0.5,
     targetY: targetPos.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: markerRoom.id,
     targetRoomId: targetRoom.id,
     zoneId: world.zoneMap[world.idx(markerPos.x, markerPos.y)],
@@ -15156,7 +15156,7 @@ function applyCultistMajorityProfile(
   }
 }
 
-function pressureCueProfile(floor: FloorLevel, spec: ProceduralFloorSpec): {
+function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
   label: string;
   hint: string;
   targetName: string;
@@ -15209,7 +15209,7 @@ function pressureCueProfile(floor: FloorLevel, spec: ProceduralFloorSpec): {
       ignoredText: 'Толпа осталась за стеной. Очаг ноль получил еще минуту.',
     };
   }
-  if (floor === FloorLevel.MINISTRY) {
+  if (floor === number.MINISTRY) {
     return {
       label: 'шорох папок',
       hint: 'бумаги ведут к живой канцелярии',
@@ -15220,7 +15220,7 @@ function pressureCueProfile(floor: FloorLevel, spec: ProceduralFloorSpec): {
       ignoredText: 'Папки шуршат дальше без вас. Бумажная угроза осталась в стороне.',
     };
   }
-  if (floor === FloorLevel.MAINTENANCE) {
+  if (floor === number.MAINTENANCE) {
     return {
       label: 'трубный стук',
       hint: 'трубы считают мокрый обход',
@@ -15231,7 +15231,7 @@ function pressureCueProfile(floor: FloorLevel, spec: ProceduralFloorSpec): {
       ignoredText: 'Трубный стук ушел в бетон. Засада осталась шуметь в стороне.',
     };
   }
-  if (floor === FloorLevel.HELL) {
+  if (floor === number.HELL) {
     return {
       label: 'мясной зов',
       hint: 'стены дышат в сторону плотного боя',
@@ -15242,7 +15242,7 @@ function pressureCueProfile(floor: FloorLevel, spec: ProceduralFloorSpec): {
       ignoredText: 'Мясной зов стих за спиной. Проход остался кормить тишину.',
     };
   }
-  if (floor === FloorLevel.VOID) {
+  if (floor === number.VOID) {
     return {
       label: 'пустой тон',
       hint: 'тишина показывает опасную прямую',
@@ -15281,7 +15281,7 @@ function choosePressureTargetRoom(world: World, rooms: Room[], spec: ProceduralF
     const pref = preferredTypes.indexOf(room.type);
     if (pref >= 0) score += 80 - pref * 12;
     if (room.type === RoomType.CORRIDOR) score += routePressureLevel(spec) * 8;
-    if (room.type === RoomType.PRODUCTION && proceduralMonsterFloor(spec) === FloorLevel.MAINTENANCE) score += 20;
+    if (room.type === RoomType.PRODUCTION && proceduralMonsterFloor(spec) === number.MAINTENANCE) score += 20;
     if (score > bestScore) {
       bestScore = score;
       best = room;
@@ -15328,7 +15328,7 @@ function registerProceduralMonsterPressureCue(world: World, rooms: Room[], spec:
     y: marker.y + 0.5,
     targetX: targetPos.x + 0.5,
     targetY: targetPos.y + 0.5,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: markerRoom.id,
     targetRoomId: target.id,
     zoneId: world.zoneMap[markerCell],
@@ -15385,7 +15385,7 @@ function addFalseSafeContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: spec.baseFloor,
+    z: spec.themeTags,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

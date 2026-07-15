@@ -1,4 +1,4 @@
-import { FloorLevel, RoomType, ZoneFaction } from '../core/types';
+import { RoomType, ZoneFaction } from '../core/types';
 import { activeActorCountAtDefaultSoftLimit, activeActorSoftLimit, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT, fitActiveActorCounts } from './entity_limits';
 
 export interface NpcPopulationProfile {
@@ -25,7 +25,7 @@ export interface MonsterPopulationProfile {
 
 export const KVARTIRY_POPULATION_PROFILE = {
   id: 'kvartiry_lively',
-  floor: FloorLevel.KVARTIRY,
+  z: number.KVARTIRY,
   densityMult: 2.2,
   citizens: {
     share: 0.6,
@@ -118,7 +118,7 @@ export const KVARTIRY_POPULATION_PROFILE = {
 
 export const HELL_POPULATION_PROFILE = {
   id: 'hell_lively',
-  floor: FloorLevel.HELL,
+  z: number.HELL,
   densityMult: 0.98,
   monsters: {
     share: 0.84,
@@ -172,7 +172,7 @@ export const HELL_POPULATION_PROFILE = {
 
 export const VOID_POPULATION_PROFILE = {
   id: 'void_lively',
-  floor: FloorLevel.VOID,
+  z: number.VOID,
   guardians: 1600,
   lootDrops: 160,
 } as const;

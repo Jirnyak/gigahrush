@@ -4,7 +4,7 @@ import {
   EntityType,
   Feature,
   Faction,
-  FloorLevel,
+  number,
   RoomType,
   msg,
   type Entity,
@@ -67,7 +67,7 @@ export interface SmallCaravanRunState {
   id: string;
   templateId: string;
   laneId: string;
-  floor: FloorLevel;
+  z: number;
   x: number;
   y: number;
   status: SmallCaravanStatus;
@@ -211,8 +211,8 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
   const def = CARAVAN_LANE_BY_ID[laneId];
   if (!template || !def) return undefined;
   const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, 48) : `${template.id}_${Math.floor(now)}`;
-  const floor = typeof raw.floor === 'number' ? raw.floor as FloorLevel : def.toFloor;
-  if (!Object.values(FloorLevel).includes(floor)) return undefined;
+  const floor = typeof raw.z === 'number' ? raw.z : def.toFloor;
+  if (!Object.values(number).includes(floor)) return undefined;
   const status = normalizeSmallCaravanStatus(raw.status);
   const expiresAt = saneNumber(raw.expiresAt, now + SMALL_CARAVAN_ACTIVE_SECONDS);
   const fromFloorKey = cleanFloorKey(raw.fromFloorKey) || lanePrimaryFromFloorKey(def);
@@ -313,7 +313,7 @@ function terminalStatus(status: SmallCaravanStatus): boolean {
   return !activeStatus(status);
 }
 
-function floorMatchesLane(floor: FloorLevel, def: CaravanLaneDef): boolean {
+function floorMatchesLane(z: number, def: CaravanLaneDef): boolean {
   return floor === def.fromFloor || floor === def.toFloor;
 }
 
@@ -366,7 +366,7 @@ function publishSmallCaravanEvent(
 ): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: run?.floor ?? def.toFloor,
+    z: run?.z ?? def.toFloor,
     zoneId: source?.zoneId,
     roomId: source?.roomId,
     x: run?.x ?? source?.x,
@@ -386,8 +386,8 @@ function publishSmallCaravanEvent(
       runId: run?.id,
       templateId: run?.templateId,
       caravanAction: action,
-      fromFloor: FloorLevel[def.fromFloor],
-      toFloor: FloorLevel[def.toFloor],
+      fromFloor: number[def.fromFloor],
+      toFloor: number[def.toFloor],
       resourceIds: def.resourceDeltas.map(delta => delta.resourceId),
       deltaCounts: counts,
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
@@ -411,7 +411,7 @@ function publishCaravanEvent(
 ): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: def.toFloor,
+    z: def.toFloor,
     zoneId: source?.zoneId,
     roomId: source?.roomId,
     x: source?.x,
@@ -429,8 +429,8 @@ function publishCaravanEvent(
       name: def.name,
       laneId: def.id,
       caravanAction: action,
-      fromFloor: FloorLevel[def.fromFloor],
-      toFloor: FloorLevel[def.toFloor],
+      fromFloor: number[def.fromFloor],
+      toFloor: number[def.toFloor],
       resourceIds: def.resourceDeltas.map(delta => delta.resourceId),
       deltaCounts: counts,
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
@@ -454,7 +454,7 @@ function migrateLaneAlifeRecords(state: GameState, def: CaravanLaneDef, lane: Ca
   });
   let moved = 0;
   for (const id of ids) {
-    if (moveAlifeNpcRecord(state, id, toFloorKey, { floor: def.toFloor, preservePosition: false })) moved++;
+    if (moveAlifeNpcRecord(state, id, toFloorKey, { z: def.toFloor, preservePosition: false })) moved++;
   }
   return moved;
 }
@@ -653,11 +653,11 @@ function spawnSmallCaravanMembers(
   return run.memberIds.length;
 }
 
-function currentFloorActiveSmallCaravanCount(caravans: CaravanState, floor: FloorLevel, now: number): number {
+function currentFloorActiveSmallCaravanCount(caravans: CaravanState, z: number, now: number): number {
   let count = 0;
   for (const id in caravans.active) {
     const run = caravans.active[id];
-    if (run.floor === floor && run.expiresAt > now && activeStatus(run.status)) count++;
+    if (run.z === floor && run.expiresAt > now && activeStatus(run.status)) count++;
   }
   return count;
 }
@@ -681,7 +681,7 @@ export function spawnSmallCaravanNear(
     id: `small_${caravans.nextRunSeq}`,
     templateId: template.id,
     laneId: template.laneId,
-    floor: state.currentZ,
+    z: state.currentZ,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
     status: 'moving',
@@ -740,7 +740,7 @@ function moveSmallCaravanAlifeMembers(
       continue;
     }
     if (live) captureAlifeFloorState(state, [live]);
-    if (moveAlifeNpcRecord(state, id, toFloorKey, { floor: def.toFloor, preservePosition: false })) moved++;
+    if (moveAlifeNpcRecord(state, id, toFloorKey, { z: def.toFloor, preservePosition: false })) moved++;
   }
   return moved;
 }
@@ -1010,7 +1010,7 @@ export function getCaravanLaneTariffMultiplier(state: GameState, laneId: string)
 export function getCaravanResourceTariffMultiplier(
   state: GameState,
   resourceId: string,
-  floor: FloorLevel = state.currentZ,
+  z: number = state.currentZ,
 ): number {
   let multiplier = 1;
   for (const def of CARAVAN_LANES) {
@@ -1066,7 +1066,7 @@ export function getNearestSmallCaravan(
   let bestD2 = maxDist * maxDist;
   for (const id in caravans.active) {
     const run = caravans.active[id];
-    if (run.floor !== state.currentZ || run.expiresAt <= state.time) continue;
+    if (run.z !== state.currentZ || run.expiresAt <= state.time) continue;
     if (terminalStatus(run.status) && run.updatedAt + SMALL_CARAVAN_TERMINAL_SECONDS < state.time) continue;
     const d2 = world.dist2(player.x, player.y, run.x, run.y);
     if (d2 < bestD2) {
@@ -1094,7 +1094,7 @@ export function getNearestSmallCaravan(
 
 registerEconomyTariffProvider({
   id: 'caravan_supply_lanes',
-  quote(state: GameState, resourceId: string | undefined, floor: EconomyFloorRef) {
+  quote(state: GameState, resourceId: string | undefined, z: EconomyFloorRef) {
     if (!resourceId || typeof floor !== 'number') return undefined;
     const multiplier = getCaravanResourceTariffMultiplier(state, resourceId, floor);
     if (multiplier === 1) return undefined;

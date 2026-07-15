@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel,
+  Cell, ContainerKind, Faction, Feature, number,
   Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
@@ -260,7 +260,7 @@ function addCellarContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -1,4 +1,4 @@
-/* -- Design floor: turing_nursery - reaction diffusion nursery routes -- */
+/* -- Design z: turing_nursery - reaction diffusion nursery routes -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -9,7 +9,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -43,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('turing_nursery');
 
 export const TURING_NURSERY_ROUTE_ID = 'turing_nursery' as const;
 export const TURING_NURSERY_Z = 10 as const;
-export const TURING_NURSERY_BASE_FLOOR = FloorLevel.KVARTIRY;
+export const TURING_NURSERY_BASE_FLOOR = number.KVARTIRY;
 export const TURING_NURSERY_ROOM_PREFIX = 'Ясли Тьюринга';
 
 const SEED = hashSeed(TURING_NURSERY_ROUTE_ID);
@@ -1008,7 +1008,7 @@ function registerNurseryRouteCues(world: World, rooms: NurseryRooms, containers:
     y: rooms.entry.y + 11.5,
     targetX: containers.basinKit.x + 0.5,
     targetY: containers.basinKit.y + 0.5,
-    floor: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_BASE_FLOOR,
     roomId: rooms.entry.id,
     targetRoomId: rooms.basin.id,
     zoneId: world.zoneMap[world.idx(rooms.entry.x + 22, rooms.entry.y + 11)],
@@ -1029,7 +1029,7 @@ function registerNurseryRouteCues(world: World, rooms: NurseryRooms, containers:
     y: rooms.burn.y + 13.5,
     targetX: roomCx(rooms.bridge) + 0.5,
     targetY: roomCy(rooms.bridge) + 0.5,
-    floor: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_BASE_FLOOR,
     roomId: rooms.burn.id,
     targetRoomId: rooms.bridge.id,
     zoneId: world.zoneMap[world.idx(rooms.burn.x + 12, rooms.burn.y + 13)],
@@ -1050,7 +1050,7 @@ function registerNurseryRouteCues(world: World, rooms: NurseryRooms, containers:
     y: rooms.ward.y + 18.5,
     targetX: containers.exposureFile.x + 0.5,
     targetY: containers.exposureFile.y + 0.5,
-    floor: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_BASE_FLOOR,
     roomId: rooms.ward.id,
     targetRoomId: rooms.exposure.id,
     zoneId: world.zoneMap[world.idx(rooms.ward.x + 18, rooms.ward.y + 18)],
@@ -1773,7 +1773,7 @@ function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

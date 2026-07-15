@@ -2,7 +2,7 @@
 
 import {
   Cell, ContainerKind, DoorState, Faction, Feature,
-  FloorLevel, Occupation, QuestType, RoomType, Tex,
+  number, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -235,7 +235,7 @@ registerSideQuest(LIQUIDATOR_ID, TAMARA, [{
 function publishRaidOutcome(state: GameState, event: WorldEvent, outcome: RaidOutcome): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -447,7 +447,7 @@ function addRaidContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

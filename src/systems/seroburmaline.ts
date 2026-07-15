@@ -6,7 +6,7 @@ import { currentFloorRunEntry } from './procedural_floors';
 import {
   Cell,
   Feature,
-  FloorLevel,
+  number,
   type Entity,
   type GameState,
   type Room,
@@ -212,7 +212,7 @@ function publishSeroburmalineEvent(
 
 export function updateSeroburmalineExposure(world: World, player: Entity, state: GameState, dt: number): void {
   const rt = runtimeFor(state);
-  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE || !player.alive) {
+  if (currentFloorRunEntry(state).themeTags !== number.MAINTENANCE || !player.alive) {
     fadeRuntime(rt, dt);
     return;
   }
@@ -311,7 +311,7 @@ export function tryCoverSeroburmalineSource(
   lookY: number,
   toolId?: string,
 ): boolean {
-  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE || !isPlayerEntity(player)) return false;
+  if (currentFloorRunEntry(state).themeTags !== number.MAINTENANCE || !isPlayerEntity(player)) return false;
   const source = sourceAtCell(world, Math.floor(lookX), Math.floor(lookY), true);
   if (!source) return false;
 

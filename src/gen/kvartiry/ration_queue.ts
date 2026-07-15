@@ -8,7 +8,7 @@ import {
   Occupation,
   QuestType,
   ContainerKind,
-  FloorLevel,
+  number,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity, type WorldContainer } from '../../core/types';
@@ -66,7 +66,7 @@ registerSideQuest('kv_galina_talonnitsa', GALINA, [{
   rewardItem: 'bread', rewardCount: 4,
   extraRewards: [{ defId: 'canned', count: 1 }, { defId: 'ballot', count: 6 }],
   relationDelta: 12, xpReward: 35, moneyReward: 25,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.OFFICE,
   targetZoneTag: RATION_QUEUE_TAG,
   targetHint: 'Квартиры: Пункт выдачи талонов, очередь Галины и касса пайкового реестра.',
@@ -88,7 +88,7 @@ registerSideQuest('kv_galina_talonnitsa', GALINA, [{
   rewardItem: 'concentrate_coupon', rewardCount: 2,
   extraRewards: [{ defId: 'water_coupon', count: 2 }, { defId: 'bread', count: 2 }],
   relationDelta: 14, xpReward: 55, moneyReward: 35,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.OFFICE,
   targetZoneTag: 'ration_coupon_audit',
   targetHint: 'Квартиры: касса Галины у пайковой очереди хранит выписку, талоны и поддельную карточку.',
@@ -127,7 +127,7 @@ function addRationLedgerBox(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind: ContainerKind.CASHBOX,

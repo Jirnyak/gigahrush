@@ -8,7 +8,7 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   MonsterKind,
   RoomType,
   Tex,
@@ -120,7 +120,7 @@ function findContextForContainer(event: WorldEvent): EkrannikContext | undefined
 }
 
 function findContextForMonster(event: WorldEvent): EkrannikContext | undefined {
-  if (event.targetId === undefined || event.floor !== FloorLevel.VOID) return undefined;
+  if (event.targetId === undefined || event.z !== number.VOID) return undefined;
   for (let i = contexts.length - 1; i >= 0; i--) {
     const ctx = contexts[i];
     if (ctx.pressureMonsterIds.includes(event.targetId)) return ctx;
@@ -333,7 +333,7 @@ function addEkrannikContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: FloorLevel.VOID,
+    z: number.VOID,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
@@ -518,7 +518,7 @@ export function generateEkrannik(
     y: room.y + 5.5,
     targetX: room.x + room.w - 3.5,
     targetY: room.y + 5.5,
-    floor: FloorLevel.VOID,
+    z: number.VOID,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(room.x + 5, room.y + 5)],

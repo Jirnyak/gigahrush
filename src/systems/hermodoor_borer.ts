@@ -1,7 +1,7 @@
 /* ── Hermodoor borer: bounded shelter-risk encounter ─────────── */
 
 import {
-  W, Cell, DoorState, EntityType, AIGoal, MonsterKind, FloorLevel, RoomType,
+  W, Cell, DoorState, EntityType, AIGoal, MonsterKind, number, RoomType,
   type Entity, type GameState, type Room,
   msg,
 } from '../core/types';
@@ -36,7 +36,7 @@ interface BorerDoorRecord {
   roomId: number;
   roomName: string;
   zoneId: number;
-  floor: FloorLevel;
+  z: number;
   cycle: number;
   phase: DoorDamagePhase;
   detectedAt: number;
@@ -46,7 +46,7 @@ interface BorerDoorRecord {
 
 interface BorerRuntime {
   id: number;
-  floor: FloorLevel;
+  z: number;
   cycle: number;
   source: BorerSource;
   targetDoorIdx: number;
@@ -120,8 +120,8 @@ function doorY(idx: number): number {
   return (idx / W) | 0;
 }
 
-function borerFloorsAllowThreat(floor: FloorLevel): boolean {
-  return floor !== FloorLevel.HELL && floor !== FloorLevel.VOID;
+function borerFloorsAllowThreat(z: number): boolean {
+  return floor !== number.HELL && floor !== number.VOID;
 }
 
 function occupiedApartmentIds(entities: readonly Entity[]): Set<number> {
@@ -320,7 +320,7 @@ function startBorer(
   const monsterId = spawnBorerMonster(world, entities, nextEntityId, target);
   const runtime: BorerRuntime = {
     id: store.nextId++,
-    floor: state.currentZ,
+    z: state.currentZ,
     cycle: state.samosborCount,
     source,
     targetDoorIdx: target.doorIdx,
@@ -341,7 +341,7 @@ function startBorer(
     roomId: target.roomId,
     roomName: target.roomName,
     zoneId: target.zoneId,
-    floor: state.currentZ,
+    z: state.currentZ,
     cycle: state.samosborCount,
     phase: 'warning',
     detectedAt: state.time,
@@ -449,12 +449,12 @@ function pulseWarning(world: World, state: GameState, runtime: BorerRuntime): vo
 function clearStaleRecords(world: World, state: GameState): void {
   const store = storeFor(world);
   for (const [idx, rec] of store.doorRecords) {
-    if (rec.floor !== state.currentZ || !world.doors.has(idx) || world.cells[idx] !== Cell.DOOR) {
+    if (rec.z !== state.currentZ || !world.doors.has(idx) || world.cells[idx] !== Cell.DOOR) {
       store.doorRecords.delete(idx);
     }
   }
   const runtime = store.active;
-  if (runtime && (runtime.floor !== state.currentZ || !world.doors.has(runtime.targetDoorIdx))) {
+  if (runtime && (runtime.z !== state.currentZ || !world.doors.has(runtime.targetDoorIdx))) {
     resolveActive(store, runtime, 'resolved');
   }
 }
@@ -550,7 +550,7 @@ function seedCompromiseLeak(world: World, rec: BorerDoorRecord): void {
 export function blocksHermodoorBorerSeal(world: World, state: GameState, doorIdx: number, roomId: number): boolean {
   const store = storeFor(world);
   const rec = store.doorRecords.get(doorIdx);
-  if (!rec || rec.floor !== state.currentZ || rec.roomId !== roomId) return false;
+  if (!rec || rec.z !== state.currentZ || rec.roomId !== roomId) return false;
   if (rec.phase === 'warning') return false;
   const door = world.doors.get(doorIdx);
   if (!door) return false;
@@ -605,7 +605,7 @@ export function tryRepairHermodoorBorerDamage(
   const doorIdx = world.idx(Math.floor(lookX), Math.floor(lookY));
   const store = storeFor(world);
   const rec = store.doorRecords.get(doorIdx);
-  if (!rec || rec.floor !== state.currentZ) return false;
+  if (!rec || rec.z !== state.currentZ) return false;
   const supply = repairSupply(player);
   if (!supply) {
     if (rec.phase === 'warning') return false;

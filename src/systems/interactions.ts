@@ -527,7 +527,7 @@ function activateMetro(ctx: InteractionContext): InteractionResult {
       ctx.state.msgs.push(msg('Метро дернулось, но карман не найден.', ctx.state.time, '#f84'));
     }
   } else {
-    const delta = metro.destination.floor - ctx.state.currentZ;
+    const delta = metro.destination.z - ctx.state.currentZ;
     if (delta === 1) ctx.switchFloor?.(LiftDirection.DOWN, metro.message, metro.color, false);
     else if (delta === -1) ctx.switchFloor?.(LiftDirection.UP, metro.message, metro.color, false);
     else ctx.state.msgs.push(msg('Эта линия пока берет только соседние этажи.', ctx.state.time, '#888'));

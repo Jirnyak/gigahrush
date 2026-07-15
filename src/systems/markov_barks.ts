@@ -1,6 +1,6 @@
 import type {
   Faction,
-  FloorLevel,
+  number,
   Occupation,
   RoomType,
   WorldEventType,
@@ -65,7 +65,7 @@ export interface MarkovNpcSpeechContext {
   itemCount?: number;
   eventId?: number;
   eventType?: WorldEventType | string;
-  floor?: FloorLevel;
+  z?: number;
   roomType?: RoomType;
   roomName?: string;
   roomId?: number;
@@ -197,7 +197,7 @@ export function buildMarkovBarkContext(request: MarkovBarkRequest): MarkovNpcSpe
     itemCount: finitePositive(event?.itemCount),
     eventId: finiteId(event?.id),
     eventType: event?.type,
-    floor: context?.floor,
+    z: context?.z,
     roomType: context?.roomType,
     roomName,
     roomId: finiteId(event?.roomId),

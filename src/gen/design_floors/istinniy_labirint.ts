@@ -1,4 +1,4 @@
-/* -- Design floor: istinniy_labirint / Истинный лабиринт -------- */
+/* -- Design z: istinniy_labirint / Истинный лабиринт -------- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -39,7 +39,7 @@ export const ISTINNIY_LABIRINT_ROUTE_ID = 'istinniy_labirint' as const;
 export const ISTINNIY_LABIRINT_Z = 28;
 export const ISTINNIY_LABIRINT_CHORD_KEY = 'key';
 
-const BASE_FLOOR = FloorLevel.MINISTRY;
+const BASE_FLOOR = number.MINISTRY;
 const GRID_W = 63;
 const GRID_H = 63;
 const GRID_N = GRID_W * GRID_H;
@@ -221,7 +221,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.ariadna, ARIADNA_DEF, 
   desc: 'Зина Ариадна: «Принеси мелок на белую стену. Обновим нить, пока лабиринт не выучил старые стрелки.»',
   targetItem: 'chalk',
   targetCount: 1,
-  targetFloor: BASE_FLOOR,
+  targetFloorZ: BASE_FLOOR,
   targetRoute: { designFloorId: ISTINNIY_LABIRINT_ROUTE_ID },
   targetRoomName: SAFE_WALL_ROOM,
   targetHint: 'Истинный лабиринт z=+28: держаться белой стены и искать свежие желтые метки.',
@@ -240,7 +240,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lostPavel, LOST_PAVEL_
   type: QuestType.TALK,
   desc: 'Паша Без Нити: «Доведи меня до Зины Ариадны. Только не красной хордой: там коротко, потому что там ждут.»',
   targetNpcId: NPC_IDS.ariadna,
-  targetFloor: BASE_FLOOR,
+  targetFloorZ: BASE_FLOOR,
   targetRoute: { designFloorId: ISTINNIY_LABIRINT_ROUTE_ID },
   targetRoomName: SAFE_WALL_ROOM,
   targetHint: 'Истинный лабиринт: вернуться к белой стене и поговорить с Зиной Ариадной.',
@@ -1108,7 +1108,7 @@ function addContainer(world: World, nextContainerId: { v: number }, x: number, y
     id: nextContainerId.v++,
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: BASE_FLOOR,
+    z: BASE_FLOOR,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,

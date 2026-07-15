@@ -1,4 +1,4 @@
-import { type CharacterSex, Faction, FloorLevel, Occupation, type Item, type RPGStats } from '../core/types';
+import { type CharacterSex, Faction, Occupation, type Item, type RPGStats } from '../core/types';
 import type { WeightedValue } from './alife_generation';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorRouteDef } from './design_floors';
 import { designFloorPopulationProfile } from './design_floor_population';
@@ -33,7 +33,7 @@ import { floorKeyAllowsNpcs, floorKeyForDesign, floorKeyForProcedural, floorKeyF
 
 export interface AlifePopulationBucketDef {
   floorKey: string;
-  baseFloor: FloorLevel;
+  themeTags: readonly string[];
   targetCount: number;
   populationProfileId: string;
   factionWeights?: readonly WeightedValue<Faction>[];
@@ -94,22 +94,22 @@ export const ALIFE_POPULATION_JITTER = 8_192 as const;
 export const ALIFE_POPULATION_MIN_RANDOM = ALIFE_POPULATION_BASELINE - ALIFE_POPULATION_JITTER;
 const SNAKE_ID_RE = /^[a-z0-9_]+$/;
 
-const STORY_POPULATION_WEIGHT: Readonly<Record<FloorLevel, number>> = {
-  [FloorLevel.MINISTRY]: 4_500,
-  [FloorLevel.KVARTIRY]: 10_000,
-  [FloorLevel.LIVING]: 7_000,
-  [FloorLevel.MAINTENANCE]: 3_500,
-  [FloorLevel.HELL]: 1_100,
-  [FloorLevel.VOID]: 0,
+const STORY_POPULATION_WEIGHT: Readonly<Record<number, number>> = {
+  [number.MINISTRY]: 4_500,
+  [number.KVARTIRY]: 10_000,
+  [number.LIVING]: 7_000,
+  [number.MAINTENANCE]: 3_500,
+  [number.HELL]: 1_100,
+  [number.VOID]: 0,
 };
 
-const STORY_POPULATION_PROFILE: Readonly<Record<FloorLevel, string>> = {
-  [FloorLevel.MINISTRY]: 'design:ministry_admin',
-  [FloorLevel.KVARTIRY]: 'design:kvartiry_lively',
-  [FloorLevel.LIVING]: 'design:living_hub',
-  [FloorLevel.MAINTENANCE]: 'design:maintenance_service',
-  [FloorLevel.HELL]: 'design:hell_lively',
-  [FloorLevel.VOID]: 'design:void_lively',
+const STORY_POPULATION_PROFILE: Readonly<Record<number, string>> = {
+  [number.MINISTRY]: 'design:ministry_admin',
+  [number.KVARTIRY]: 'design:kvartiry_lively',
+  [number.LIVING]: 'design:living_hub',
+  [number.MAINTENANCE]: 'design:maintenance_service',
+  [number.HELL]: 'design:hell_lively',
+  [number.VOID]: 'design:void_lively',
 };
 
 function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
@@ -123,7 +123,7 @@ function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
   return out;
 }
 
-function storyBucket(floor: FloorLevel): WeightedBucket {
+function storyBucket(z: number): WeightedBucket {
   const theme = themeForStoryFloor(floor);
   return {
     floorKey: floorKeyForStory(floor),
@@ -146,7 +146,7 @@ function designBucket(route: DesignFloorRouteDef): WeightedBucket {
   const population = designFloorPopulationProfile(route);
   return {
     floorKey: floorKeyForDesign(route.id),
-    baseFloor: route.baseFloor,
+    baseFloor: route.themeTags,
     weight: theme.npcAllowed ? population.npcTarget : 0,
     populationProfileId: theme.populationProfileId ?? `design:${route.id}`,
     factionWeights: population.npcFactions,
@@ -187,7 +187,7 @@ function proceduralBucket(spec: ProceduralFloorSpec): WeightedBucket {
   });
   return {
     floorKey: floorKeyForProcedural(spec.key),
-    baseFloor: spec.baseFloor,
+    baseFloor: spec.themeTags,
     weight: theme.npcAllowed ? budget.npcs : 0,
     populationProfileId: `procedural:${budget.profileId}`,
     factionWeights: [{ value: majority.npcFaction, weight: 4 }],
@@ -380,7 +380,7 @@ export function buildAlifePopulationPlan(input: {
   const weighted: WeightedBucket[] = [];
   const seenKeys = new Set<string>();
   
-  for (const floor of [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID]) {
+  for (const floor of [number.MINISTRY, number.KVARTIRY, number.LIVING, number.MAINTENANCE, number.HELL, number.VOID]) {
     const bucket = storyBucket(floor);
     if (!seenKeys.has(bucket.floorKey) && routeAllowed(bucket.floorKey, allowed)) {
       seenKeys.add(bucket.floorKey);
@@ -409,7 +409,7 @@ export function buildAlifePopulationPlan(input: {
   const counts = allocateCounts(weighted, ordinaryTotal);
   const buckets = weighted.map((bucket, index) => ({
     floorKey: bucket.floorKey,
-    baseFloor: bucket.baseFloor,
+    baseFloor: bucket.themeTags,
     targetCount: counts[index],
     populationProfileId: bucket.populationProfileId,
     factionWeights: bucket.factionWeights,

@@ -91,16 +91,6 @@ export const enum Tex {
   COUNT           = 231,
 }
 
-// ── Floor levels (Z-axis) ────────────────────────────────────────
-export enum FloorLevel {
-  MINISTRY     = 0,   // министерство (-2) — сталинский ампир, чиновники, ковры
-  KVARTIRY     = 1,   // квартиры (-1) — плотная жилая зона, 5к гражданских, протесты
-  LIVING       = 2,   // жилая зона (0) — квартиры, цеха, залы
-  MAINTENANCE  = 3,   // коллекторы — трубы, туннели, каналы с водой
-  HELL         = 4,   // ад — мясо, постоянный самосбор, культисты
-  VOID         = 5,   // пустота — абстрактный фрактальный уровень, финальный босс
-}
-
 // ── Lift direction ───────────────────────────────────────────────
 export const enum LiftDirection {
   DOWN = 0,   // ведёт на этаж ниже
@@ -749,7 +739,7 @@ export interface WorldContainer extends InventoryHolder {
   id: number;
   x: number;
   y: number;
-  floor: FloorLevel;
+  z: number;
   roomId: number;
   zoneId: number;
   kind: ContainerKind;
@@ -808,7 +798,7 @@ export interface RailTrain {
 export enum QuestType { FETCH, VISIT, KILL, TALK }
 
 export interface QuestTargetMarker {
-  floor?: FloorLevel;
+  z?: number;
   roomType?: RoomType;
   roomName?: string;
   zoneTag?: string;
@@ -830,8 +820,8 @@ export interface Quest {
   targetCount?: number;
   // VISIT: targetRoom
   targetRoom?: number;        // room id
-  // Generic route target metadata; unlike visitFloor, targetFloor is only a hint.
-  targetFloor?: FloorLevel;
+  // Generic route target metadata; unlike visitFloorZ, targetFloorZ is only a hint.
+  targetFloorZ?: number;
   targetRoomType?: RoomType;
   targetRoomName?: string;
   targetZoneTag?: string;
@@ -867,7 +857,7 @@ export interface Quest {
   contractId?: string;        // AG10 contract wrapper id
   contractFaction?: Faction;  // issuer faction for generated contracts
   contractRank?: number;      // license/difficulty tier
-  visitFloor?: FloorLevel;    // auto-complete VISIT quest when entering this floor
+  visitFloorZ?: number;    // auto-complete VISIT quest when entering this z
   holdSeconds?: number;       // VISIT: remain at target this many real seconds
   holdProgressSeconds?: number;
   holdLastTime?: number;
@@ -1100,7 +1090,7 @@ export interface WorldEvent {
   day: number;
   hour: number;
   minute: number;
-  floor: FloorLevel;
+  z: number;
   zoneId?: number;
   roomId?: number;
   x?: number;
@@ -1126,12 +1116,12 @@ export interface WorldEvent {
   data?: Record<string, unknown>;
 }
 
-export type WorldEventDraft = Omit<WorldEvent, 'id' | 'time' | 'day' | 'hour' | 'minute' | 'floor' | 'truth'> & {
+export type WorldEventDraft = Omit<WorldEvent, 'id' | 'time' | 'day' | 'hour' | 'minute' | 'z' | 'truth'> & {
   time?: number;
   day?: number;
   hour?: number;
   minute?: number;
-  floor?: FloorLevel;
+  z?: number;
   truth?: 'fact';
 };
 
@@ -1153,7 +1143,7 @@ export interface ContextFact {
 export interface EventFilter {
   type?: WorldEventType;
   zoneId?: number;
-  floor?: FloorLevel;
+  z?: number;
   minSeverity?: WorldEventSeverity;
   privacy?: WorldEventPrivacy;
   actorId?: number;
@@ -1288,7 +1278,7 @@ export interface GameState {
 }
 
 export interface MsgLocation {
-  floor?: FloorLevel;
+  z?: number;
   x?: number;
   y?: number;
   actorId?: number;
@@ -1356,7 +1346,7 @@ export function msgAt(text: string, time: number, color: string, location: MsgLo
   const zoneId = Number.isFinite(location.zoneId) ? Math.floor(location.zoneId!) : undefined;
   return {
     ...base,
-    floor: location.floor,
+    z: location.z,
     x,
     y,
     actorId,

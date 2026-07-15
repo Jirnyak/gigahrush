@@ -5,7 +5,7 @@ import {
   EntityType,
   AIGoal,
   Faction,
-  FloorLevel,
+  number,
   Occupation,
   type Entity,
   type GameState,
@@ -100,7 +100,7 @@ const ALIFE_NPC_SPEED_MAX = 8;
 
 interface AlifeFloorPlan {
   key: string;
-  floor: FloorLevel;
+  z: number;
   danger: 1 | 2 | 3 | 4 | 5;
   weight: number;
   majorityFaction?: Faction;
@@ -143,7 +143,7 @@ export interface AlifePopulationReservedNpc {
 
 export interface AlifePopulationBucket {
   floorKey: string;
-  floor: FloorLevel;
+  z: number;
   danger?: 1 | 2 | 3 | 4 | 5;
   targetCount?: number;
   weight?: number;
@@ -164,7 +164,7 @@ export interface CreateAlifeStateOptions {
 export interface AlifeNpcSnapshot {
   id: number;
   floorKey: string;
-  floor: FloorLevel;
+  z: number;
   faction: Faction;
   occupation: Occupation;
   role?: NpcRole;
@@ -198,7 +198,7 @@ export interface AlifeNpcSnapshot {
 }
 
 export interface MoveAlifeNpcOptions {
-  floor?: FloorLevel;
+  z?: number;
   markTouched?: boolean;
   preservePosition?: boolean;
   x?: number;
@@ -240,7 +240,7 @@ interface AlifeNpcRecord {
 export interface AlifeNpcOverride {
   id: number;
   floorKey?: string;
-  floor?: FloorLevel;
+  z?: number;
   role?: NpcRole;
   cinematicState?: CinematicState;
   name?: string;
@@ -286,7 +286,7 @@ export interface AlifeSaveState {
 
 interface AlifeNumericColumns {
   floorKeyIndex: Uint16Array;
-  floor: Uint8Array;
+  z: Uint8Array;
   danger: Uint8Array;
   faction: Uint8Array;
   occupation: Uint8Array;
@@ -368,7 +368,7 @@ function createAlifeNumericColumns(total: number): AlifeNumericColumns {
   const bounded = Math.max(0, Math.floor(total));
   const columns: AlifeNumericColumns = {
     floorKeyIndex: new Uint16Array(bounded),
-    floor: new Uint8Array(bounded),
+    z: new Uint8Array(bounded),
     danger: new Uint8Array(bounded),
     faction: new Uint8Array(bounded),
     occupation: new Uint8Array(bounded),
@@ -433,7 +433,7 @@ function ensureAlifeColumnCapacity(alife: AlifeState, requiredId: number): void 
   if (alife.columns.level.length >= required) return;
   const next = Math.max(required, alife.columns.level.length * 2, 32);
   alife.columns.floorKeyIndex = growUint16Array(alife.columns.floorKeyIndex, next);
-  alife.columns.floor = growUint8Array(alife.columns.floor, next);
+  alife.columns.z = growUint8Array(alife.columns.z, next);
   alife.columns.danger = growUint8Array(alife.columns.danger, next);
   alife.columns.faction = growUint8Array(alife.columns.faction, next);
   alife.columns.occupation = growUint8Array(alife.columns.occupation, next);
@@ -465,7 +465,7 @@ function recordColumnIndex(record: AlifeNpcRecord): number {
 }
 
 function internAlifeFloorKey(alife: AlifeState, floorKeyInput: string): number {
-  const floorKey = cleanFloorKey(floorKeyInput) || floorKeyForStory(FloorLevel.LIVING);
+  const floorKey = cleanFloorKey(floorKeyInput) || floorKeyForStory(number.LIVING);
   const existing = alife.floorKeyLookup[floorKey];
   if (existing !== undefined) return existing;
   const next = alife.floorKeys.length;
@@ -484,13 +484,13 @@ function setRecordFloorKey(alife: AlifeState, record: AlifeNpcRecord, floorKey: 
   alife.columns.floorKeyIndex[recordColumnIndex(record)] = internAlifeFloorKey(alife, floorKey);
 }
 
-function recordFloor(alife: AlifeState, record: AlifeNpcRecord): FloorLevel {
-  return (alife.columns.floor[recordColumnIndex(record)] ?? FloorLevel.LIVING) as FloorLevel;
+function recordFloor(alife: AlifeState, record: AlifeNpcRecord): number {
+  return (alife.columns.z[recordColumnIndex(record)] ?? number.LIVING);
 }
 
-function setRecordFloor(alife: AlifeState, record: AlifeNpcRecord, value: FloorLevel): void {
+function setRecordFloor(alife: AlifeState, record: AlifeNpcRecord, value: number): void {
   ensureAlifeColumnCapacity(alife, record.id);
-  alife.columns.floor[recordColumnIndex(record)] = sanitizeFloor(value, FloorLevel.LIVING);
+  alife.columns.z[recordColumnIndex(record)] = sanitizeFloor(value, number.LIVING);
 }
 
 function recordDanger(alife: AlifeState, record: AlifeNpcRecord): 1 | 2 | 3 | 4 | 5 {
@@ -848,14 +848,14 @@ function recordCanMaterializeAsOrdinaryPopulation(record: AlifeNpcRecord): boole
   return record.reservedPresence === 'population' && recordPackageId(record) !== undefined;
 }
 
-function storyDanger(floor: FloorLevel): 1 | 2 | 3 | 4 | 5 {
+function storyDanger(z: number): 1 | 2 | 3 | 4 | 5 {
   switch (floor) {
-    case FloorLevel.LIVING: return 1;
-    case FloorLevel.KVARTIRY:
-    case FloorLevel.MINISTRY: return 3;
-    case FloorLevel.MAINTENANCE: return 4;
-    case FloorLevel.HELL:
-    case FloorLevel.VOID: return 5;
+    case number.LIVING: return 1;
+    case number.KVARTIRY:
+    case number.MINISTRY: return 3;
+    case number.MAINTENANCE: return 4;
+    case number.HELL:
+    case number.VOID: return 5;
   }
 }
 
@@ -888,7 +888,7 @@ function profileForFaction(faction: Faction): AlifeFactionProfile {
 }
 
 function factionProfileWeight(profile: AlifeFactionProfile, plan: AlifeFloorPlan): number {
-  const floorMult = profile.floorWeights[plan.floor] ?? 1;
+  const floorMult = profile.floorWeights[plan.z] ?? 1;
   const dangerMult = Math.max(0.05, 1 + (plan.danger - 3) * profile.dangerBias);
   const majorityMult = plan.majorityFaction === profile.faction ? 4.5 : 1;
   const designFloorMult = designFloorFactionWeightMultiplier(plan.key, profile.faction);
@@ -906,10 +906,10 @@ function factionForPlan(plan: AlifeFloorPlan, seed: number, index: number): Fact
 
 function occupationForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, seed: number, index: number): Occupation {
   if (plan.occupationWeights && plan.occupationWeights.length > 0) return pickWeighted(plan.occupationWeights, seed, index, 24);
-  if (profile.faction === Faction.CITIZEN && plan.floor === FloorLevel.MAINTENANCE) {
+  if (profile.faction === Faction.CITIZEN && plan.z === number.MAINTENANCE) {
     return unit(seed, index, 22) < 0.55 ? Occupation.MECHANIC : Occupation.ELECTRICIAN;
   }
-  if (profile.faction === Faction.CITIZEN && plan.floor === FloorLevel.MINISTRY) {
+  if (profile.faction === Faction.CITIZEN && plan.z === number.MINISTRY) {
     return unit(seed, index, 23) < 0.58 ? Occupation.SECRETARY : Occupation.DIRECTOR;
   }
   return pickWeighted(profile.occupations, seed, index, 24);
@@ -1039,10 +1039,10 @@ function levelForRecord(plan: AlifeFloorPlan, faction: Faction, seed: number, in
 }
 
 function wealthForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, level: number, seed: number, index: number): number {
-  const floorMult = plan.floor === FloorLevel.MINISTRY ? 2.4
+  const floorMult = plan.z === number.MINISTRY ? 2.4
     : plan.key === floorKeyForDesign('bank_floor') ? 6.5
-      : plan.floor === FloorLevel.MAINTENANCE ? 1.25
-        : plan.floor === FloorLevel.HELL ? 0.45
+      : plan.z === number.MAINTENANCE ? 1.25
+        : plan.z === number.HELL ? 0.45
           : 1;
   const base = (8 + plan.danger * 3 + level * 0.8) * profile.wealthMult * floorMult;
   const u = Math.max(0.000001, 1 - unit(seed, index, 42));
@@ -1157,7 +1157,7 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
     lastName: named.lastName,
   };
   setRecordFloorKey(alife, record, plan.key);
-  setRecordFloor(alife, record, plan.floor);
+  setRecordFloor(alife, record, plan.z);
   setRecordDanger(alife, record, plan.danger);
   setRecordFaction(alife, record, faction);
   setRecordOccupation(alife, record, occupation);
@@ -1175,7 +1175,7 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
 function populationBucketToFloorPlan(bucket: AlifePopulationBucket): AlifeFloorPlan | null {
   const key = cleanFloorKey(bucket.floorKey);
   if (!key) return null;
-  const floor = sanitizeFloor(bucket.floor, FloorLevel.LIVING);
+  const floor = sanitizeFloor(bucket.z, number.LIVING);
   return {
     key,
     floor,
@@ -1243,7 +1243,7 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
     usedFloors.add(bucket.floorKey);
     return {
       floorKey: bucket.floorKey,
-      floor: bucket.baseFloor,
+      z: bucket.themeTags,
       targetCount: Math.max(0, Math.floor(bucket.targetCount)) + reserved.length,
       factionWeights: bucket.factionWeights,
       occupationWeights: bucket.occupationWeights,
@@ -1256,7 +1256,7 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
     const first = plan.reserved.find(def => def.floorKey === floorKey);
     buckets.push({
       floorKey,
-      floor: first?.faction === Faction.LIQUIDATOR ? FloorLevel.MINISTRY : FloorLevel.LIVING,
+      z: first?.faction === Faction.LIQUIDATOR ? number.MINISTRY : number.LIVING,
       targetCount: reserved.length,
       reserved,
     });
@@ -1268,12 +1268,12 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
 function buildCurrentRunPopulationPlan(state: GameState, total?: number, emptyPackages?: boolean): AlifePopulationPlan {
   const run = ensureFloorRunState(state);
   const routeKeySet = new Set<string>([
-    floorKeyForStory(FloorLevel.MINISTRY),
-    floorKeyForStory(FloorLevel.KVARTIRY),
-    floorKeyForStory(FloorLevel.LIVING),
-    floorKeyForStory(FloorLevel.MAINTENANCE),
-    floorKeyForStory(FloorLevel.HELL),
-    floorKeyForStory(FloorLevel.VOID),
+    floorKeyForStory(number.MINISTRY),
+    floorKeyForStory(number.KVARTIRY),
+    floorKeyForStory(number.LIVING),
+    floorKeyForStory(number.MAINTENANCE),
+    floorKeyForStory(number.HELL),
+    floorKeyForStory(number.VOID),
   ]);
   for (const route of DESIGN_FLOOR_ROUTES) {
     const entry = floorRunEntryForDesignFloor(state, route.id);
@@ -1543,9 +1543,9 @@ function rpgFromRecord(alife: AlifeState, record: AlifeNpcRecord): RPGStats {
   return { ...shell, psi: maxPsi, maxPsi };
 }
 
-function sanitizeFloor(value: unknown, fallback: FloorLevel): FloorLevel {
-  return typeof value === 'number' && Number.isFinite(value) && value >= FloorLevel.MINISTRY && value <= FloorLevel.VOID
-    ? Math.trunc(value) as FloorLevel
+function sanitizeFloor(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= number.MINISTRY && value <= number.VOID
+    ? Math.trunc(value)
     : fallback;
 }
 
@@ -1664,17 +1664,17 @@ function attachRecordToFloor(alife: AlifeState, recordIndex: number, floorKey: s
   alife.floorIndex[floorKey] = bucket;
 }
 
-function resolvedFloorForAlifeKey(state: GameState, floorKey: string): FloorLevel | undefined {
-  for (const floor of [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID]) {
+function resolvedFloorForAlifeKey(state: GameState, floorKey: string): number | undefined {
+  for (const floor of [number.MINISTRY, number.KVARTIRY, number.LIVING, number.MAINTENANCE, number.HELL, number.VOID]) {
     if (floorKeyForStory(floor) === floorKey) return floor;
   }
   const design = DESIGN_FLOOR_ROUTES.find(def => floorKeyForDesign(def.id) === floorKey);
-  if (design) return design.baseFloor;
+  if (design) return design.themeTags;
   if (floorKey.startsWith('procedural:')) {
     const routeId = floorKey.slice('procedural:'.length);
     const run = ensureFloorRunState(state);
     const spec = run.specs[routeId] ?? Object.values(run.specs).find(candidate => floorKeyForProcedural(candidate.key) === floorKey);
-    if (spec) return spec.baseFloor;
+    if (spec) return spec.themeTags;
   }
   return undefined;
 }
@@ -1711,7 +1711,7 @@ export function moveAlifeNpcRecord(
     alife,
     record,
     resolvedFloorForAlifeKey(state, floorKey)
-      ?? (opts.floor !== undefined ? sanitizeFloor(opts.floor, recordFloor(alife, record)) : recordFloor(alife, record)),
+      ?? (opts.z !== undefined ? sanitizeFloor(opts.z, recordFloor(alife, record)) : recordFloor(alife, record)),
   );
 
   const x = opts.x;
@@ -1739,7 +1739,7 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
   return {
     id: record.id,
     floorKey: recordFloorKey(alife, record),
-    floor: recordFloor(alife, record),
+    z: recordFloor(alife, record),
     faction: recordFaction(alife, record),
     occupation: recordOccupation(alife, record),
     role: record.role,
@@ -2415,7 +2415,7 @@ function applyOverride(alife: AlifeState, input: unknown): void {
       setRecordFloorKey(alife, record, floorKey);
     }
   }
-  setRecordFloor(alife, record, sanitizeFloor(input.floor, recordFloor(alife, record)));
+  setRecordFloor(alife, record, sanitizeFloor(input.z, recordFloor(alife, record)));
   if (input.role !== undefined) record.role = input.role as NpcRole;
   if (input.cinematicState !== undefined) record.cinematicState = input.cinematicState ? { ...(input.cinematicState as CinematicState) } : undefined;
   if (typeof input.name === 'string' && input.name.length > 0) record.name = input.name.slice(0, 80);
@@ -2536,7 +2536,7 @@ export function alifeForSave(state: GameState): AlifeSaveState {
     overrides.push({
       id: record.id,
       floorKey: recordFloorKey(alife, record),
-      floor: recordFloor(alife, record),
+      z: recordFloor(alife, record),
       name: record.name,
       firstName: record.firstName,
       lastName: record.lastName,

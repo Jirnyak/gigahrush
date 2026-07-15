@@ -1,4 +1,4 @@
-import { Faction, FloorLevel, Occupation, type Item } from '../core/types';
+import { Faction, Occupation, type Item } from '../core/types';
 
 export interface WeightedValue<T> {
   value: T;
@@ -11,7 +11,7 @@ export interface AlifeFactionProfile {
   baseWeight: number;
   dangerBias: number;
   wealthMult: number;
-  floorWeights: Partial<Record<FloorLevel, number>>;
+  floorWeights: Partial<Record<number, number>>;
   occupations: readonly WeightedValue<Occupation>[];
 }
 
@@ -33,11 +33,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: -0.06,
     wealthMult: 1,
     floorWeights: {
-      [FloorLevel.LIVING]: 1.25,
-      [FloorLevel.KVARTIRY]: 1.15,
-      [FloorLevel.MINISTRY]: 0.75,
-      [FloorLevel.MAINTENANCE]: 0.62,
-      [FloorLevel.HELL]: 0.04,
+      [number.LIVING]: 1.25,
+      [number.KVARTIRY]: 1.15,
+      [number.MINISTRY]: 0.75,
+      [number.MAINTENANCE]: 0.62,
+      [number.HELL]: 0.04,
     },
     occupations: [
       { value: Occupation.HOUSEWIFE, weight: 18 },
@@ -59,11 +59,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.18,
     wealthMult: 1.8,
     floorWeights: {
-      [FloorLevel.LIVING]: 0.6,
-      [FloorLevel.KVARTIRY]: 0.95,
-      [FloorLevel.MINISTRY]: 1.75,
-      [FloorLevel.MAINTENANCE]: 1.55,
-      [FloorLevel.HELL]: 2.1,
+      [number.LIVING]: 0.6,
+      [number.KVARTIRY]: 0.95,
+      [number.MINISTRY]: 1.75,
+      [number.MAINTENANCE]: 1.55,
+      [number.HELL]: 2.1,
     },
     occupations: [
       { value: Occupation.HUNTER, weight: 30 },
@@ -78,11 +78,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.12,
     wealthMult: 0.65,
     floorWeights: {
-      [FloorLevel.LIVING]: 0.5,
-      [FloorLevel.KVARTIRY]: 1.8,
-      [FloorLevel.MINISTRY]: 0.45,
-      [FloorLevel.MAINTENANCE]: 1.15,
-      [FloorLevel.HELL]: 0.28,
+      [number.LIVING]: 0.5,
+      [number.KVARTIRY]: 1.8,
+      [number.MINISTRY]: 0.45,
+      [number.MAINTENANCE]: 1.15,
+      [number.HELL]: 0.28,
     },
     occupations: [
       { value: Occupation.TRAVELER, weight: 16 },
@@ -98,11 +98,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.04,
     wealthMult: 2.4,
     floorWeights: {
-      [FloorLevel.LIVING]: 0.2,
-      [FloorLevel.KVARTIRY]: 0.18,
-      [FloorLevel.MINISTRY]: 1.85,
-      [FloorLevel.MAINTENANCE]: 1.35,
-      [FloorLevel.HELL]: 0.2,
+      [number.LIVING]: 0.2,
+      [number.KVARTIRY]: 0.18,
+      [number.MINISTRY]: 1.85,
+      [number.MAINTENANCE]: 1.35,
+      [number.HELL]: 0.2,
     },
     occupations: [
       { value: Occupation.SCIENTIST, weight: 20 },
@@ -118,11 +118,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.28,
     wealthMult: 0.9,
     floorWeights: {
-      [FloorLevel.LIVING]: 0.08,
-      [FloorLevel.KVARTIRY]: 0.18,
-      [FloorLevel.MINISTRY]: 0.55,
-      [FloorLevel.MAINTENANCE]: 0.85,
-      [FloorLevel.HELL]: 9.5,
+      [number.LIVING]: 0.08,
+      [number.KVARTIRY]: 0.18,
+      [number.MINISTRY]: 0.55,
+      [number.MAINTENANCE]: 0.85,
+      [number.HELL]: 9.5,
     },
     occupations: [
       { value: Occupation.PILGRIM, weight: 20 },

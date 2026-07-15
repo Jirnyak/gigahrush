@@ -1,7 +1,7 @@
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
 import {
-  FloorLevel,
+  number,
   LiftDirection,
   RoomType,
   type GameState,
@@ -20,22 +20,22 @@ import { getActiveQuest, isQuestSelectableAsActive, type CurrentObjective } from
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
 
-const FLOOR_NAMES: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Мясной низ',
-  [FloorLevel.VOID]: 'Пустота',
+const FLOOR_NAMES: Record<number, string> = {
+  [number.MINISTRY]: 'Министерство',
+  [number.KVARTIRY]: 'Квартиры',
+  [number.LIVING]: 'Жилая зона',
+  [number.MAINTENANCE]: 'Коллекторы',
+  [number.HELL]: 'Мясной низ',
+  [number.VOID]: 'Пустота',
 };
 
-const FLOOR_SHORT_NAMES: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'МИН',
-  [FloorLevel.KVARTIRY]: 'КВ',
-  [FloorLevel.LIVING]: 'ЖИЛ',
-  [FloorLevel.MAINTENANCE]: 'КОЛ',
-  [FloorLevel.HELL]: 'АД',
-  [FloorLevel.VOID]: 'ПУСТ',
+const FLOOR_SHORT_NAMES: Record<number, string> = {
+  [number.MINISTRY]: 'МИН',
+  [number.KVARTIRY]: 'КВ',
+  [number.LIVING]: 'ЖИЛ',
+  [number.MAINTENANCE]: 'КОЛ',
+  [number.HELL]: 'АД',
+  [number.VOID]: 'ПУСТ',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {
@@ -68,7 +68,7 @@ const QUEST_KIND_META: Record<QuestKind, { label: string; stroke: string; fill: 
   system: { label: 'СИСТ', stroke: '#76631a', fill: '#2a2309', text: '#ffd35f' },
 };
 
-function routeFloor(q: Quest): FloorLevel | undefined {
+function routeFloor(q: Quest): number | undefined {
   return questRouteFloor(q);
 }
 
@@ -78,7 +78,7 @@ function questKind(q: Quest): QuestKind {
   return 'system';
 }
 
-function displayFloor(q: Quest, state: GameState): FloorLevel | undefined {
+function displayFloor(q: Quest, state: GameState): number | undefined {
   const floor = routeFloor(q);
   if (floor !== undefined) return floor;
   if (q.targetRoom !== undefined || q.targetNpcId !== undefined || q.targetMonsterKind !== undefined) return state.currentZ;

@@ -1,4 +1,4 @@
-import { FloorLevel } from '../core/types';
+import { } from '../core/types';
 import {
   designFloorAtZ,
   designFloorById,
@@ -14,29 +14,25 @@ import {
   floorInstanceById,
 } from './floor_instances';
 
-export type FloorKeyKind = 'story' | 'design' | 'procedural' | 'floor_instance' | 'unknown';
+export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown';
 
-export const STORY_KEY_IDS: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'ministry',
-  [FloorLevel.KVARTIRY]: 'kvartiry',
-  [FloorLevel.LIVING]: 'living',
-  [FloorLevel.MAINTENANCE]: 'maintenance',
-  [FloorLevel.HELL]: 'hell',
-  [FloorLevel.VOID]: 'void',
+export const STORY_KEY_IDS: Record<number, string> = {
+  [number.MINISTRY]: 'ministry',
+  [number.KVARTIRY]: 'kvartiry',
+  [number.LIVING]: 'living',
+  [number.MAINTENANCE]: 'maintenance',
+  [number.HELL]: 'hell',
+  [number.VOID]: 'void',
 };
 
-export function zForBaseFloor(floor: FloorLevel): number {
+export function zForBaseFloor(z: number): number {
   return designFloorById(STORY_KEY_IDS[floor])?.z ?? 0;
 }
 
-const STORY_FLOOR_BY_KEY: Readonly<Record<string, FloorLevel>> = Object.fromEntries(
-  Object.values(FloorLevel)
-    .filter((value): value is FloorLevel => typeof value === 'number')
-    .map(floor => [`story:${STORY_KEY_IDS[floor]}`, floor]),
-) as Record<string, FloorLevel>;
+
 
 export interface FloorKeyResolveContext {
-  proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: FloorLevel }>>;
+  proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: number }>>;
   extraKnownKeys?: readonly string[] | ReadonlySet<string>;
 }
 
@@ -46,7 +42,7 @@ export function cleanFloorKey(input: unknown): string {
     : '';
 }
 
-export function floorKeyForStory(floor: FloorLevel): string {
+export function floorKeyForStory(z: number): string {
   return `design:${STORY_KEY_IDS[floor] ?? String(floor)}`;
 }
 
@@ -64,7 +60,6 @@ export function floorKeyForFloorInstance(id: string): string {
 
 export function floorKeyKind(keyInput: string): FloorKeyKind {
   const key = cleanFloorKey(keyInput);
-  if (key.startsWith('story:')) return 'story';
   if (key.startsWith('design:')) return 'design';
   if (key.startsWith('procedural:')) return 'procedural';
   if (key.startsWith('floor_instance:')) return 'floor_instance';
@@ -102,29 +97,23 @@ function extraKeyKnown(key: string, extraKnownKeys: FloorKeyResolveContext['extr
 export function floorKeyZ(keyInput: string, context?: FloorKeyResolveContext): number | undefined {
   const key = cleanFloorKey(keyInput);
   const kind = floorKeyKind(key);
-  if (kind === 'story') {
-    const floor = STORY_FLOOR_BY_KEY[key];
-    return floor !== undefined ? zForBaseFloor(floor) : undefined;
-  }
   if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.z;
   if (kind === 'procedural') return proceduralZForRouteId(floorKeyRouteId(key), context);
   return undefined;
 }
 
-export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveContext): FloorLevel | undefined {
+export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveContext): number | undefined {
   const key = cleanFloorKey(keyInput);
   const kind = floorKeyKind(key);
-  if (kind === 'story') return STORY_FLOOR_BY_KEY[key];
-  if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.baseFloor;
-  if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.baseFloor;
-  if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.baseFloor;
+  if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.themeTags;
+  if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.themeTags;
+  if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.themeTags;
   return undefined;
 }
 
 export function floorKeyKnown(keyInput: string, context?: FloorKeyResolveContext): boolean {
   const key = cleanFloorKey(keyInput);
   const kind = floorKeyKind(key);
-  if (kind === 'story') return STORY_FLOOR_BY_KEY[key] !== undefined;
   if (kind === 'design') return designFloorById(floorKeyRouteId(key)) !== undefined;
   if (kind === 'procedural') return proceduralZForRouteId(floorKeyRouteId(key), context) !== undefined || extraKeyKnown(key, context?.extraKnownKeys);
   if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key)) !== undefined || extraKeyKnown(key, context?.extraKnownKeys);

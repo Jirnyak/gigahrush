@@ -11,7 +11,7 @@
 /*   call it from the living/index.ts orchestrator.                */
 
 import {
-  W, Cell, ContainerKind, DoorState, FloorLevel, Tex, RoomType, Feature,
+  W, Cell, ContainerKind, DoorState, number, Tex, RoomType, Feature,
   type Room, type Entity,
   type Item, type WorldContainer,
   EntityType,
@@ -55,7 +55,7 @@ function addStarterLocker(world: World, room: Room, x: number, y: number): World
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[idx],
     kind: ContainerKind.EMERGENCY_BOX,

@@ -1,4 +1,4 @@
-/* ── Design floor: hyperbolic_switchyard / Гиперболическая стрелочная ─ */
+/* ── Design z: hyperbolic_switchyard / Гиперболическая стрелочная ─ */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -40,7 +40,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('hyperbolic_switchyard');
 
 export const HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID = 'hyperbolic_switchyard' as const;
 export const HYPERBOLIC_SWITCHYARD_ROUTE_Z = -20;
-export const HYPERBOLIC_SWITCHYARD_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const HYPERBOLIC_SWITCHYARD_BASE_FLOOR = number.MAINTENANCE;
 export const HYPERBOLIC_SWITCHYARD_ROOM_NAMES = {
   shortcut: 'Геодезическая служебная кишка',
 } as const;
@@ -1053,7 +1053,7 @@ function addContainer(
     id: nextId.v++,
     x,
     y,
-    floor: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
+    z: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -1177,7 +1177,7 @@ function registerSwitchyardCue(
     y,
     targetX,
     targetY,
-    floor: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
+    z: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
     label: opts.label,
     hint: opts.hint,
     targetName: opts.target.name,

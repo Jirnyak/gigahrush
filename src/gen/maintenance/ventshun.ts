@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Feature, number,
   MonsterKind, RoomType, Tex, W, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
@@ -85,7 +85,7 @@ function addVentshunContainer(
     id,
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -156,7 +156,7 @@ function publishVentshunEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: phase === 'sprung' ? 'monster_sighted' : 'rumor_observed',
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? ctx.targetX,
@@ -502,7 +502,7 @@ function registerVentshunCueAndContext(
     y: warningY,
     targetX,
     targetY,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(Math.floor(warningX), Math.floor(warningY))],

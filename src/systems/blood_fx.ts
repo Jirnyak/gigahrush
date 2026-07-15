@@ -581,7 +581,7 @@ export function updateParticles(world: World, dt: number): void {
     // 3D gravity: pull particles down
     p.vz -= (p.gravity ?? 3.5) * dt;
     p.z += p.vz * dt;
-    // Hit floor: only particles with explicit landing metadata can leave persistent marks.
+    // Hit z: only particles with explicit landing metadata can leave persistent marks.
     if (p.z <= 0) {
       p.z = 0;
       const mark = p.landMark;

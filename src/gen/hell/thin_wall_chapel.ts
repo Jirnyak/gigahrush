@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex, W,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
@@ -74,7 +74,7 @@ function handleBlackHandReport(state: GameState, event: WorldEvent): void {
   if (event.data?.sideQuestId !== BLACK_HAND_REPORT_QUEST_ID) return;
   publishEvent(state, {
     type: 'quest_completed',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -213,7 +213,7 @@ function addBlackHandCache(world: World, room: Room): void {
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,

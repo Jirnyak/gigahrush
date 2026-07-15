@@ -1,4 +1,4 @@
-/* ── Design floor: Кремниевый НЕТ-колодец ─────────────────────── */
+/* ── Design z: Кремниевый НЕТ-колодец ─────────────────────── */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -43,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('silicon_net_well');
 
 export const DESIGN_FLOOR_ID = 'silicon_net_well' as const;
 export const SILICON_NET_WELL_Z = -22;
-export const SILICON_NET_WELL_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const SILICON_NET_WELL_BASE_FLOOR = number.MAINTENANCE;
 
 const SEED = hashSeed(DESIGN_FLOOR_ID);
 const CX = W >> 1;
@@ -1584,7 +1584,7 @@ function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: SILICON_NET_WELL_BASE_FLOOR,
+    z: SILICON_NET_WELL_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

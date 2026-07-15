@@ -1,7 +1,7 @@
 /* ── Bounded samosbor beat scheduler ──────────────────────────── */
 
 import {
-  Cell, DoorState, EntityType, Faction, FloorLevel, Occupation, AIGoal, MonsterKind, W,
+  Cell, DoorState, EntityType, Faction, number, Occupation, AIGoal, MonsterKind, W,
   type Entity, type GameState, type WorldContainer, type WorldEventType,
   msg,
 } from '../core/types';
@@ -39,7 +39,7 @@ export interface SamosborDirectorSnapshot {
   time: number;
   cycle: number;
   phase: SamosborBeatPhase;
-  floor: FloorLevel;
+  z: number;
   zoneId: number;
   zoneLevel: number;
   playerX: number;
@@ -176,7 +176,7 @@ function buildSnapshot(
     time: state.time,
     cycle: state.samosborCount,
     phase: phaseForReason(reason),
-    floor: state.currentZ,
+    z: state.currentZ,
     zoneId,
     zoneLevel,
     playerX: player?.x ?? px + 0.5,
@@ -196,7 +196,7 @@ function rejectBeat(
   director: SamosborDirectorState,
 ): string | null {
   if (beat.phase !== snapshot.phase) return 'phase_mismatch';
-  if (!beat.floors.includes(snapshot.floor)) return 'floor_mismatch';
+  if (!beat.floors.includes(snapshot.z)) return 'floor_mismatch';
   if (!beat.variants.includes(snapshot.variantId)) return 'samosbor_mismatch';
   if ((director.cooldowns[beat.id] ?? 0) > snapshot.time) return 'cooldown';
   if ((director.runCounts[beat.id] ?? 0) >= beat.maxPerCycle) return 'max_per_cycle';
@@ -506,7 +506,7 @@ function seedRumor(world: World, entities: Entity[], state: GameState, snapshot:
     observeRumorEvent(e, {
       type: 'samosbor_warning',
       severity: 3,
-      floor: state.currentZ,
+      z: state.currentZ,
       zoneId: snapshot.zoneId,
       tags: ['samosbor', 'director', `samosbor_${snapshot.variantId}`],
     }, state.time);
@@ -674,7 +674,7 @@ export function tickSamosborDirector(
   const director = ensureSamosborDirectorState(state);
   resetCycleIfNeeded(director, state.samosborCount);
   const snapshot = buildSnapshot(world, entities, state, variant, reason);
-  const rngSeed = hashSeed(`${snapshot.cycle}:${snapshot.time}:${snapshot.floor}:samosbor`);
+  const rngSeed = hashSeed(`${snapshot.cycle}:${snapshot.time}:${snapshot.z}:samosbor`);
   const rng = new SeedRng(rngSeed);
   const tickReject = rejectDirectorTick(snapshot, director);
   if (tickReject) {
@@ -728,13 +728,13 @@ export function forceNextSamosborDirectorBeat(
   const director = ensureSamosborDirectorState(state);
   resetCycleIfNeeded(director, state.samosborCount);
   const snapshot = buildSnapshot(world, entities, state, variant, 'debug_force');
-  const rngSeed = hashSeed(`${snapshot.cycle}:${snapshot.time}:${snapshot.floor}:samosbor_force`);
+  const rngSeed = hashSeed(`${snapshot.cycle}:${snapshot.time}:${snapshot.z}:samosbor_force`);
   const rng = new SeedRng(rngSeed);
   const beats = getSamosborBeatDefs();
   for (let i = 0; i < beats.length; i++) {
     const idx = (director.forceCursor + i) % beats.length;
     const beat = beats[idx];
-    if (beat.phase !== snapshot.phase || !beat.floors.includes(snapshot.floor) || !beat.variants.includes(snapshot.variantId)) continue;
+    if (beat.phase !== snapshot.phase || !beat.floors.includes(snapshot.z) || !beat.variants.includes(snapshot.variantId)) continue;
     const effect = applyBeat(beat, world, entities, state, nextId, snapshot, rng);
     director.forceCursor = (idx + 1) % beats.length;
     if (!effect.ok) {

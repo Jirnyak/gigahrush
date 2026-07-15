@@ -1,6 +1,6 @@
 /* -- Mukhozhuk: exposed parasite authority host ---------------- */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -13,7 +13,6 @@ export const DEF: MonsterDef = {
   attackRate: 1.28,
   sprite: 0,
   aiFlags: ['parasiteLeader', 'foodBait'],
-  floors: [FloorLevel.MINISTRY, FloorLevel.MAINTENANCE],
   counterplay: 'Не давайте носителю добежать до охраны: вскрывайте болезнь при свидетелях, карантиньте, бейте до командного крика или уводите его от складов еды.',
   lootHint: 'жирный хитин, испорченный приказ, редкая карантинная карточка из воротника',
 };

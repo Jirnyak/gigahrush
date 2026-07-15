@@ -4,7 +4,7 @@ import {
   EntityType,
   ItemType,
   type Entity,
-  type FloorLevel,
+  type number,
   type GameState,
   type ItemDef,
 } from '../core/types';
@@ -23,7 +23,7 @@ export interface MonsterBaitMarker {
   id: number;
   x: number;
   y: number;
-  floor: FloorLevel;
+  z: number;
   floorKey?: string;
   itemId: string;
   itemName: string;
@@ -259,7 +259,7 @@ function publishBaitEnd(
   publishEvent(state, {
     type,
     time,
-    floor: marker.floor,
+    z: marker.z,
     zoneId: marker.zoneId,
     roomId: marker.roomId,
     x: marker.x,
@@ -305,7 +305,7 @@ export function expireMonsterBaits(state: GameState | undefined, time: number): 
     const marker = activeBaits[i];
     if (marker.expiresAt <= time) {
       removeBaitAt(i, state, time, 'timeout');
-    } else if (floor !== undefined && (marker.floor !== floor || (floorKey !== undefined && marker.floorKey !== floorKey))) {
+    } else if (floor !== undefined && (marker.z !== floor || (floorKey !== undefined && marker.floorKey !== floorKey))) {
       removeBaitAt(i, state, time, 'floor_changed');
     }
   }
@@ -340,7 +340,7 @@ export function placeMonsterBait(
     id: nextBaitId++,
     x: bx,
     y: by,
-    floor: state.currentZ,
+    z: state.currentZ,
     floorKey: monsterBaitFloorKey(state),
     itemId: defId,
     itemName: def.name,
@@ -395,11 +395,11 @@ export function placeMonsterBait(
   return true;
 }
 
-function baitMatchesFloor(marker: MonsterBaitMarker, floor: FloorLevel, floorKey: string | undefined): boolean {
-  return marker.floor === floor && (floorKey === undefined || marker.floorKey === floorKey);
+function baitMatchesFloor(marker: MonsterBaitMarker, z: number, floorKey: string | undefined): boolean {
+  return marker.z === floor && (floorKey === undefined || marker.floorKey === floorKey);
 }
 
-function activeBaitById(id: number, floor: FloorLevel, floorKey: string | undefined, time: number): MonsterBaitMarker | null {
+function activeBaitById(id: number, z: number, floorKey: string | undefined, time: number): MonsterBaitMarker | null {
   for (const marker of activeBaits) {
     if (marker.id === id && baitMatchesFloor(marker, floor, floorKey) && marker.expiresAt > time) return marker;
   }
@@ -436,7 +436,7 @@ export function findMonsterBaitTarget(
   dt: number,
   time: number,
   state?: GameState,
-  currentZ?: FloorLevel,
+  currentZ?: number,
   candidateOk?: (marker: MonsterBaitMarker) => boolean,
 ): MonsterBaitMarker | null {
   const ai = monster.ai;

@@ -1,6 +1,6 @@
 /* ── Blood Plant: rooted red-mold hive source ───────────────── */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -13,7 +13,6 @@ export const DEF: MonsterDef = {
   attackRate: 2.85,
   sprite: 0,
   aiFlags: ['rootHive'],
-  floors: [FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL],
   counterplay: 'Не входите в красный центр без соли, огня или режущего инструмента: корни бьют только в коротком радиусе, красная плесень рядом медленно лечит источник.',
   lootHint: 'красная плесень, влажная кора, редкий живой корень для НИИ или культа',
 };

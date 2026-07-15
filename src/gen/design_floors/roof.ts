@@ -1,4 +1,4 @@
-/* -- Design floor: Крыша ---------------------------------------
+/* -- Design z: Крыша ---------------------------------------
  * Route id roof, z=+50. Self-contained authored generator with a
  * dynamic sky provider consumed through the generic WebGL ceiling slot.
  */
@@ -12,7 +12,7 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -46,7 +46,7 @@ import { rng } from '../../core/rand';
 export const DESIGN_FLOOR_ID = 'roof' as const;
 export const ROOF_ROUTE_ID = DESIGN_FLOOR_ID;
 export const ROOF_FUTURE_Z = 50 as const;
-export const ROOF_BASE_FLOOR = FloorLevel.MINISTRY;
+export const ROOF_BASE_FLOOR = number.MINISTRY;
 export const ROOF_SKY_WIDTH = 1024 as const;
 export const ROOF_SKY_HEIGHT = 1024 as const;
 
@@ -266,7 +266,7 @@ export function publishRoofWeatherEvent(
 ): WorldEvent {
   return publishEvent(game, {
     type: 'rumor_observed',
-    floor: game.currentZ,
+    z: game.currentZ,
     roomId: room?.id,
     x: room ? room.x + (room.w >> 1) : undefined,
     y: room ? room.y + (room.h >> 1) : undefined,
@@ -295,7 +295,7 @@ export function roofDebugLines(state: RoofWeatherState): string[] {
   return [
     `route=${ROOF_ROUTE_ID}`,
     `z=${ROOF_FUTURE_Z}`,
-    `baseFloor=${FloorLevel[ROOF_BASE_FLOOR]}`,
+    `baseFloor=${number[ROOF_BASE_FLOOR]}`,
     `signal=${state.signalQuality}/5`,
     `skyTime=${state.skyTimeOfDay.toFixed(2)}`,
     `antenna=${state.antennaRepaired ? 'repaired' : 'broken'}`,
@@ -1471,17 +1471,17 @@ function placeRoofOpenDeckLayer(world: World, keep: Uint8Array, rng: () => numbe
       if (voidCourt) placeRoofSkylightPit(world, keep, x - 15, y - 10, 30, 20);
 
       const rooms = [
-        { dx: -42, dy: -30, w: 18, h: 12, type: RoomType.STORAGE, name: 'будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-        { dx: -16, dy: -34, w: 22, h: 14, type: RoomType.COMMON, name: 'открытая плита', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-        { dx: 22, dy: -28, w: 20, h: 12, type: RoomType.PRODUCTION, name: 'антенный шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-        { dx: -38, dy: 18, w: 16, h: 10, type: RoomType.KITCHEN, name: 'чайная будка', wall: Tex.TILE_W, floor: Tex.F_TILE },
-        { dx: -10, dy: 18, w: 18, h: 10, type: RoomType.BATHROOM, name: 'туалетная будка', wall: Tex.TILE_W, floor: Tex.F_TILE },
-        { dx: 18, dy: 16, w: 24, h: 14, type: RoomType.OFFICE, name: 'вахта', wall: Tex.PANEL, floor: Tex.F_LINO },
-        { dx: -58, dy: -5, w: 12, h: 9, type: RoomType.STORAGE, name: 'краевая кладовка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-        { dx: 48, dy: -7, w: 13, h: 9, type: RoomType.STORAGE, name: 'краевой шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-        { dx: -7, dy: -8, w: 13, h: 10, type: RoomType.COMMON, name: 'переходная будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-        { dx: 34, dy: 34, w: 14, h: 9, type: RoomType.PRODUCTION, name: 'кабельный пост', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-        { dx: -54, dy: 33, w: 12, h: 8, type: RoomType.OFFICE, name: 'наблюдательная ниша', wall: Tex.PANEL, floor: Tex.F_LINO },
+        { dx: -42, dy: -30, w: 18, h: 12, type: RoomType.STORAGE, name: 'будка', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+        { dx: -16, dy: -34, w: 22, h: 14, type: RoomType.COMMON, name: 'открытая плита', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+        { dx: 22, dy: -28, w: 20, h: 12, type: RoomType.PRODUCTION, name: 'антенный шкаф', wall: Tex.METAL, z: Tex.F_CONCRETE },
+        { dx: -38, dy: 18, w: 16, h: 10, type: RoomType.KITCHEN, name: 'чайная будка', wall: Tex.TILE_W, z: Tex.F_TILE },
+        { dx: -10, dy: 18, w: 18, h: 10, type: RoomType.BATHROOM, name: 'туалетная будка', wall: Tex.TILE_W, z: Tex.F_TILE },
+        { dx: 18, dy: 16, w: 24, h: 14, type: RoomType.OFFICE, name: 'вахта', wall: Tex.PANEL, z: Tex.F_LINO },
+        { dx: -58, dy: -5, w: 12, h: 9, type: RoomType.STORAGE, name: 'краевая кладовка', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+        { dx: 48, dy: -7, w: 13, h: 9, type: RoomType.STORAGE, name: 'краевой шкаф', wall: Tex.METAL, z: Tex.F_CONCRETE },
+        { dx: -7, dy: -8, w: 13, h: 10, type: RoomType.COMMON, name: 'переходная будка', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+        { dx: 34, dy: 34, w: 14, h: 9, type: RoomType.PRODUCTION, name: 'кабельный пост', wall: Tex.METAL, z: Tex.F_CONCRETE },
+        { dx: -54, dy: 33, w: 12, h: 8, type: RoomType.OFFICE, name: 'наблюдательная ниша', wall: Tex.PANEL, z: Tex.F_LINO },
       ] as const;
 
       for (let i = 0; i < rooms.length; i++) {
@@ -1499,7 +1499,7 @@ function placeRoofOpenDeckLayer(world: World, keep: Uint8Array, rng: () => numbe
           spec.h,
           `Крыша: ${spec.name} ${serial}.${i + 1}`,
           spec.wall,
-          spec.floor,
+          spec.z,
         );
         if (room) {
           decorateRoofOpenDeck(world, room, rng);
@@ -1546,21 +1546,21 @@ function placeRoofBayInfillRooms(
   out: Room[],
 ): void {
   const rooms = [
-    { dx: -61, dy: -38, w: 11, h: 7, type: RoomType.STORAGE, name: 'угловая будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-    { dx: -36, dy: -48, w: 12, h: 8, type: RoomType.OFFICE, name: 'смотровая щель', wall: Tex.PANEL, floor: Tex.F_LINO },
-    { dx: 5, dy: -47, w: 11, h: 8, type: RoomType.STORAGE, name: 'верхний шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-    { dx: 45, dy: -42, w: 10, h: 8, type: RoomType.PRODUCTION, name: 'верхний пост', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-    { dx: -56, dy: -22, w: 12, h: 7, type: RoomType.COMMON, name: 'левая келья', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-    { dx: -33, dy: -14, w: 11, h: 8, type: RoomType.STORAGE, name: 'левая кладовая', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-    { dx: 12, dy: -12, w: 11, h: 8, type: RoomType.STORAGE, name: 'средний шкаф', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-    { dx: 43, dy: 6, w: 12, h: 8, type: RoomType.KITCHEN, name: 'правая чайная', wall: Tex.TILE_W, floor: Tex.F_TILE },
-    { dx: -60, dy: 8, w: 10, h: 8, type: RoomType.BATHROOM, name: 'левый санузел', wall: Tex.TILE_W, floor: Tex.F_TILE },
-    { dx: -32, dy: 6, w: 12, h: 8, type: RoomType.OFFICE, name: 'малый пост', wall: Tex.PANEL, floor: Tex.F_LINO },
-    { dx: 4, dy: 5, w: 10, h: 8, type: RoomType.COMMON, name: 'средняя будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-    { dx: 48, dy: 24, w: 10, h: 8, type: RoomType.STORAGE, name: 'правая ниша', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-    { dx: -36, dy: 34, w: 11, h: 8, type: RoomType.PRODUCTION, name: 'нижний кабель', wall: Tex.METAL, floor: Tex.F_CONCRETE },
-    { dx: -4, dy: 35, w: 10, h: 8, type: RoomType.STORAGE, name: 'нижняя кладовая', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
-    { dx: 22, dy: 36, w: 10, h: 8, type: RoomType.COMMON, name: 'нижняя будка', wall: Tex.CONCRETE, floor: Tex.F_CONCRETE },
+    { dx: -61, dy: -38, w: 11, h: 7, type: RoomType.STORAGE, name: 'угловая будка', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+    { dx: -36, dy: -48, w: 12, h: 8, type: RoomType.OFFICE, name: 'смотровая щель', wall: Tex.PANEL, z: Tex.F_LINO },
+    { dx: 5, dy: -47, w: 11, h: 8, type: RoomType.STORAGE, name: 'верхний шкаф', wall: Tex.METAL, z: Tex.F_CONCRETE },
+    { dx: 45, dy: -42, w: 10, h: 8, type: RoomType.PRODUCTION, name: 'верхний пост', wall: Tex.METAL, z: Tex.F_CONCRETE },
+    { dx: -56, dy: -22, w: 12, h: 7, type: RoomType.COMMON, name: 'левая келья', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+    { dx: -33, dy: -14, w: 11, h: 8, type: RoomType.STORAGE, name: 'левая кладовая', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+    { dx: 12, dy: -12, w: 11, h: 8, type: RoomType.STORAGE, name: 'средний шкаф', wall: Tex.METAL, z: Tex.F_CONCRETE },
+    { dx: 43, dy: 6, w: 12, h: 8, type: RoomType.KITCHEN, name: 'правая чайная', wall: Tex.TILE_W, z: Tex.F_TILE },
+    { dx: -60, dy: 8, w: 10, h: 8, type: RoomType.BATHROOM, name: 'левый санузел', wall: Tex.TILE_W, z: Tex.F_TILE },
+    { dx: -32, dy: 6, w: 12, h: 8, type: RoomType.OFFICE, name: 'малый пост', wall: Tex.PANEL, z: Tex.F_LINO },
+    { dx: 4, dy: 5, w: 10, h: 8, type: RoomType.COMMON, name: 'средняя будка', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+    { dx: 48, dy: 24, w: 10, h: 8, type: RoomType.STORAGE, name: 'правая ниша', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+    { dx: -36, dy: 34, w: 11, h: 8, type: RoomType.PRODUCTION, name: 'нижний кабель', wall: Tex.METAL, z: Tex.F_CONCRETE },
+    { dx: -4, dy: 35, w: 10, h: 8, type: RoomType.STORAGE, name: 'нижняя кладовая', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
+    { dx: 22, dy: 36, w: 10, h: 8, type: RoomType.COMMON, name: 'нижняя будка', wall: Tex.CONCRETE, z: Tex.F_CONCRETE },
   ] as const;
 
   for (let i = 0; i < rooms.length; i++) {
@@ -1576,7 +1576,7 @@ function placeRoofBayInfillRooms(
       spec.h,
       `Крыша: ${spec.name} ${serial}.${i + 1}`,
       spec.wall,
-      spec.floor,
+      spec.z,
     );
     if (!room) continue;
     decorateRoofServiceRoom(world, room, rng);
@@ -2015,7 +2015,7 @@ function registerRoofWindShelterCue(world: World, rooms: Record<string, Room>): 
     y: cueY,
     targetX: shelterX,
     targetY: shelterY,
-    floor: ROOF_BASE_FLOOR,
+    z: ROOF_BASE_FLOOR,
     label: 'Ветер крыши',
     hint: 'ветер режет открытую плиту; вентиляционное укрытие ниже по проходу',
     targetName: 'Вентиляционное укрытие',
@@ -2144,7 +2144,7 @@ function addRoofContainer(
     id,
     x,
     y,
-    floor: ROOF_BASE_FLOOR,
+    z: ROOF_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

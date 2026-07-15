@@ -1,9 +1,9 @@
-/* ── Underhell design floor: ritual thresholds below Hell ─────── */
+/* ── Underhell design z: ritual thresholds below Hell ─────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  FloorLevel, LiftDirection, MonsterKind, Occupation, QuestType, RoomType,
+  number, LiftDirection, MonsterKind, Occupation, QuestType, RoomType,
   Tex, W, ZoneFaction,
   type Entity, type GameState, type Item, type Room, type WorldContainer,
   type WorldEvent, type WorldEventSeverity,
@@ -28,7 +28,7 @@ export const UNDERHELL_ROUTE_ID = DESIGN_FLOOR_ID;
 export const UNDERHELL_Z = -38;
 export const UNDERHELL_DEFAULT_SEED = 19032;
 
-const UNDERHELL_FLOOR = FloorLevel.HELL;
+const UNDERHELL_FLOOR = number.HELL;
 const SPAWN_X = W >> 1;
 const SPAWN_Y = W >> 1;
 const THRESHOLD_MASK = 0b0000_0000_0000_0111;
@@ -456,7 +456,7 @@ export function payUnderhellThreshold(
   ritual.flags = (ritual.flags & ~THRESHOLD_MASK) | cost.flag;
   publishEvent(state, {
     type: 'quest_completed',
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     zoneId: world && player ? zoneFor(world, player) : undefined,
     actorId: player.id,
     actorName: player.name,
@@ -505,7 +505,7 @@ export function resolveUnderhellWitness(
 
   publishEvent(state, {
     type: outcome === 'rescued' ? 'quest_completed' : 'death_seen',
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     zoneId: world && actor ? zoneFor(world, actor) : undefined,
     actorId: actor?.id,
     actorName: actor?.name,
@@ -543,7 +543,7 @@ export function burnUnderhellDebt(
   });
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     zoneId: world ? zoneFor(world, player) : undefined,
     actorId: player.id,
     actorName: player.name,
@@ -571,7 +571,7 @@ export function breakUnderhellVoidAnchor(
   const opened = world ? tryOpenUnderhellVoidGate(world, ritual) : false;
   publishEvent(state, {
     type: 'quest_completed',
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     zoneId: world && actor ? zoneFor(world, actor) : undefined,
     actorId: actor?.id,
     actorName: actor?.name,
@@ -684,7 +684,7 @@ export function publishUnderhellBacklash(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     actorId: actor?.id,
     actorName: actor?.name,
     actorFaction: actor?.faction,
@@ -711,7 +711,7 @@ export function publishUnderhellLateWarning(
   const warning = UNDERHELL_LATE_WARNINGS.find(item => item.id === warningId);
   return publishEvent(state, {
     type: 'samosbor_warning',
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     zoneId: world && actor ? zoneFor(world, actor) : undefined,
     actorId: actor?.id,
     actorName: actor?.name,
@@ -885,7 +885,7 @@ function registerUnderhellRouteCues(
     y: entryMarkerY,
     targetX: fallbackTargetX,
     targetY: fallbackTargetY,
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     roomId: entry.id,
     targetRoomId: fallback.id,
     zoneId: world.zoneMap[entryCell],
@@ -914,7 +914,7 @@ function registerUnderhellRouteCues(
     y: thresholdMarkerY,
     targetX: witnessTargetX,
     targetY: witnessTargetY,
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     roomId: threshold.id,
     targetRoomId: witness.id,
     zoneId: world.zoneMap[thresholdCell],
@@ -943,7 +943,7 @@ function registerUnderhellRouteCues(
     y: lowerMarkerY,
     targetX: lowerTargetX,
     targetY: lowerTargetY,
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     roomId: toll.id,
     targetRoomId: lowerFallback.id,
     zoneId: world.zoneMap[lowerCell],
@@ -972,7 +972,7 @@ function registerUnderhellRouteCues(
     y: gateMarkerY,
     targetX: gateTargetX,
     targetY: gateTargetY,
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     roomId: sacrifice.id,
     targetRoomId: gate.id,
     zoneId: world.zoneMap[gateCell],
@@ -1411,7 +1411,7 @@ function setFeature(world: World, x: number, y: number, feature: Feature): void 
 
 function retuneUnderhellZones(world: World): void {
   for (const zone of world.zones) {
-    zone.level = calcZoneLevel(zone.cx, zone.cy, FloorLevel.HELL) + 5;
+    zone.level = calcZoneLevel(zone.cx, zone.cy, number.HELL) + 5;
     const roll = Math.abs(Math.sin((zone.cx * 12.9898 + zone.cy * 78.233 + 19) * 0.01));
     zone.faction = roll < 0.62 ? ZoneFaction.CULTIST : roll < 0.84 ? ZoneFaction.WILD : ZoneFaction.LIQUIDATOR;
     zone.hqRoomId = -1;
@@ -1495,7 +1495,7 @@ function addUnderhellContainer(
     id,
     x,
     y,
-    floor: UNDERHELL_FLOOR,
+    z: UNDERHELL_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SAFE,

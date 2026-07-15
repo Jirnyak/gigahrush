@@ -61,7 +61,7 @@ function storyPocketFloorInstance(
   instanceSeed: number,
 ): FloorGeneration {
   const generationSeed = floorInstanceGenerationSeed(def, runSeed, instanceSeed);
-  const generation = generateFloor(def.baseFloor, generationSeed);
+  const generation = generateFloor(def.themeTags, generationSeed);
   return floorInstanceAllowsNpcs(def) ? generation : withoutNpcEntities(generation);
 }
 

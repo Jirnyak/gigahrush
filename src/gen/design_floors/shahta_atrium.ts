@@ -1,4 +1,4 @@
-/* -- Design floor: shahta_atrium / Шахта-атриум ---------------- */
+/* -- Design z: shahta_atrium / Шахта-атриум ---------------- */
 
 import {
   AIGoal,
@@ -7,7 +7,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -39,7 +39,7 @@ import { rng } from '../../core/rand';
 
 export const DESIGN_FLOOR_ID = 'shahta_atrium' as const;
 export const SHAHTA_ATRIUM_ROUTE_Z = -24 as const;
-export const SHAHTA_ATRIUM_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const SHAHTA_ATRIUM_BASE_FLOOR = number.MAINTENANCE;
 
 const CX = W >> 1;
 const CY = W >> 1;
@@ -852,7 +852,7 @@ function addContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -929,7 +929,7 @@ function registerCues(world: World, rooms: ReturnType<typeof buildServiceRooms>,
     y: CY,
     targetX: CX + OUTER_R - 16,
     targetY: CY,
-    floor: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_BASE_FLOOR,
     label: 'Открытый мост',
     hint: 'Быстро, шумно, почти без укрытий. Монстров удобно выманивать на прямую.',
     targetName: 'восточная галерея шахты',
@@ -951,7 +951,7 @@ function registerCues(world: World, rooms: ReturnType<typeof buildServiceRooms>,
     y: CY,
     targetX: 936,
     targetY: CY,
-    floor: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_BASE_FLOOR,
     label: 'Сервисный обод',
     hint: 'Длинный обход с укрытиями, шкафами и аварийным щитком.',
     targetName: 'восточный ремонтный пост',
@@ -967,7 +967,7 @@ function registerCues(world: World, rooms: ReturnType<typeof buildServiceRooms>,
     y: rooms.repair.y + 7,
     targetX: CX + 214,
     targetY: CY - 216,
-    floor: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_BASE_FLOOR,
     label: 'Ремонт перемычки',
     hint: 'Перемычка оборвана над провалом. Щиток и листы дают короткий путь, но это не главный маршрут.',
     targetName: 'оборванная перемычка',
@@ -983,7 +983,7 @@ function registerCues(world: World, rooms: ReturnType<typeof buildServiceRooms>,
     y: CY - MID_R,
     targetX: CX,
     targetY: CY + MID_R,
-    floor: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_BASE_FLOOR,
     label: 'Острова укрытий',
     hint: `Укрытия на мостах: ${state.coverIslands}, оценка LOS/cover ${state.losCoverScore}.`,
     targetName: 'южная дуга атриума',

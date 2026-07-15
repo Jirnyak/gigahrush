@@ -5,7 +5,7 @@ import {
   ContainerKind,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   Occupation,
   QuestType,
   RoomType,
@@ -62,7 +62,7 @@ registerWorldEventObserver((state, event) => {
   if (!outcome) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -214,7 +214,7 @@ function addRouteContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

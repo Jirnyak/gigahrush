@@ -1,7 +1,7 @@
 /* ── Очередник: мутировавшая очередь как социальный монстр ───── */
 
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Item, type WorldContainer,
 } from '../../core/types';
@@ -162,7 +162,7 @@ function addQueueContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

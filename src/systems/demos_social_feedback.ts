@@ -1,7 +1,7 @@
 import {
   EntityType,
   type Entity,
-  type FloorLevel,
+  type number,
   type GameState,
   type WorldEvent,
 } from '../core/types';
@@ -77,7 +77,7 @@ interface DemosSocialFeedbackState {
 
 type DemosSocialFeedbackHost = GameState & {
   demosSocialFeedback?: DemosSocialFeedbackState;
-  floorRun?: { specs?: Record<string, { z?: number; baseFloor?: FloorLevel }> };
+  floorRun?: { specs?: Record<string, { z?: number; baseFloor?: number }> };
 };
 
 const DEFAULT_EVENT_LIMIT = 24;
@@ -315,9 +315,9 @@ export function processDemosSocialFeedbackEvents(
   return feedback.lastSummary;
 }
 
-function proceduralSpecsContext(state: GameState): { proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: FloorLevel }>> } {
+function proceduralSpecsContext(state: GameState): { proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: number }>> } {
   const specs = (state as DemosSocialFeedbackHost).floorRun?.specs;
-  return { proceduralSpecs: specs as Readonly<Record<string, { z?: number; baseFloor?: FloorLevel }>> | undefined };
+  return { proceduralSpecs: specs as Readonly<Record<string, { z?: number; baseFloor?: number }>> | undefined };
 }
 
 function activeEntityForAlifeId(entities: readonly Entity[] | undefined, alifeId: number): Entity | undefined {

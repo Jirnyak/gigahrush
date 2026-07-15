@@ -6,7 +6,7 @@ import {
   ContainerKind,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   MonsterKind,
   Occupation,
   QuestType,
@@ -295,7 +295,7 @@ function handleCultWorkshopEvents(state: GameState, event: WorldEvent): void {
   if (event.type !== 'item_stolen' || !event.tags.includes(AG83_TAG)) return;
   publishEvent(state, {
     type: 'container_looted',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -331,12 +331,12 @@ function publishQuestOutcome(
 ): void {
   const resourceChanges: Record<string, number> = {};
   for (const [resourceId, delta] of outcome.resourceDeltas) {
-    if (changeResourceStock(state, resourceId, delta, FloorLevel.MAINTENANCE)) resourceChanges[resourceId] = delta;
+    if (changeResourceStock(state, resourceId, delta, number.MAINTENANCE)) resourceChanges[resourceId] = delta;
   }
 
   publishEvent(state, {
     type: outcome.type,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     actorId: event.actorId,
     actorName: event.actorName,
     actorFaction: event.actorFaction,
@@ -516,7 +516,7 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

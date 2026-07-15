@@ -2,7 +2,7 @@ import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* -- Пломбировщик: local hermodoor route-denial encounter ------- */
 
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, number,
   MonsterKind, RoomType, Tex, W, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
@@ -98,7 +98,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.TOOL_LOCKER,
@@ -308,7 +308,7 @@ function publishPlombEvent(
 ): void {
   publishEvent(state, {
     type,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     zoneId: ctx.world.zoneMap[ctx.sealedDoorIdx],
     roomId: ctx.roomId,
     x: doorX(ctx.sealedDoorIdx) + 0.5,
@@ -455,7 +455,7 @@ function handleKillEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handleShotEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'ammo_consumed' || currentFloorRunEntry(state).baseFloor !== FloorLevel.LIVING) return;
+  if (event.type !== 'ammo_consumed' || currentFloorRunEntry(state).themeTags !== number.LIVING) return;
   const ctx = nearestActiveContextToPlayer();
   if (!ctx) return;
   ctx.shotHandled = true;
@@ -469,7 +469,7 @@ function handleShotEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handlePlombirovshchikEvents(state: GameState, event: WorldEvent): void {
-  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.LIVING) return;
+  if (currentFloorRunEntry(state).themeTags !== number.LIVING) return;
   handleSealContainerEvent(state, event);
   handleKillEvent(state, event);
   handleShotEvent(state, event);

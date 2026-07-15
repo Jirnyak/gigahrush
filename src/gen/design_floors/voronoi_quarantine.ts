@@ -1,4 +1,4 @@
-/* -- Design floor: voronoi_quarantine - Laguerre quarantine cells -- */
+/* -- Design z: voronoi_quarantine - Laguerre quarantine cells -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -9,7 +9,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +44,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('voronoi_quarantine');
 
 export const VORONOI_QUARANTINE_ROUTE_ID = 'voronoi_quarantine' as const;
 export const VORONOI_QUARANTINE_Z = 6 as const;
-export const VORONOI_QUARANTINE_BASE_FLOOR = FloorLevel.KVARTIRY;
+export const VORONOI_QUARANTINE_BASE_FLOOR = number.KVARTIRY;
 
 export const VORONOI_QUARANTINE_ROOM_NAMES = {
   northCheckpoint: 'Северный пост карантинной диаграммы',
@@ -1685,7 +1685,7 @@ function addContainer(
     id: nextContainerId(world),
     x: world.wrap(point.x),
     y: world.wrap(point.y),
-    floor: VORONOI_QUARANTINE_BASE_FLOOR,
+    z: VORONOI_QUARANTINE_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(point.x, point.y)],
     kind,
@@ -1906,7 +1906,7 @@ registerContentInteractionHook({
       }
       publishEvent(ctx.state, {
         type: 'permit_forged',
-        floor: VORONOI_QUARANTINE_BASE_FLOOR,
+        z: VORONOI_QUARANTINE_BASE_FLOOR,
         privacy: 'public',
         severity: 2,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'permit', 'forgery', 'checkpoint'],
@@ -1930,7 +1930,7 @@ registerContentInteractionHook({
       ctx.state.msgs.push(msg(`Аварийный протокол гермошлюзов: переключено дверей (${toggled}).`, ctx.state.time, '#f84'));
       publishEvent(ctx.state, {
         type: 'emergency_panel_used',
-        floor: VORONOI_QUARANTINE_BASE_FLOOR,
+        z: VORONOI_QUARANTINE_BASE_FLOOR,
         privacy: 'public',
         severity: 3,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'safeguard', 'hermetic_seal', 'quarantine'],
@@ -1966,7 +1966,7 @@ registerContentInteractionHook({
       ctx.state.msgs.push(msg(`Включена УФ-очистка: рассеян туман (${purged}), ослаблены угрозы (${monstersHurt}). Выдан деактиватор.`, ctx.state.time, '#9ed'));
       publishEvent(ctx.state, {
         type: 'emergency_panel_used',
-        floor: VORONOI_QUARANTINE_BASE_FLOOR,
+        z: VORONOI_QUARANTINE_BASE_FLOOR,
         privacy: 'public',
         severity: 3,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'decon', 'purge', 'sanitation'],

@@ -1,4 +1,4 @@
-/* -- Design floor: Бюро Кэли, paperwork as a Cayley graph -- */
+/* -- Design z: Бюро Кэли, paperwork as a Cayley graph -- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -39,7 +39,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('cayley_byuro');
 
 export const CAYLEY_BYURO_ROUTE_ID = 'cayley_byuro' as const;
 export const CAYLEY_BYURO_Z = 36;
-export const CAYLEY_BYURO_BASE_FLOOR = FloorLevel.MINISTRY;
+export const CAYLEY_BYURO_BASE_FLOOR = number.MINISTRY;
 
 export type CayleyElement = 'e' | 'r' | 'rr' | 's' | 'sr' | 'srr';
 export type CayleyGenerator = 'r' | 's';
@@ -1050,7 +1050,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: CAYLEY_BYURO_BASE_FLOOR,
+    z: CAYLEY_BYURO_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: opts.kind,
@@ -1236,7 +1236,7 @@ function registerCayleyRouteCue(world: World, rooms: ReturnType<typeof createRoo
     y: lobby.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    floor: CAYLEY_BYURO_BASE_FLOOR,
+    z: CAYLEY_BYURO_BASE_FLOOR,
     label: 'Порядок форм',
     hint: 'R потом S ведет в SR2. Обратный порядок приведет в другую очередь.',
     targetName: CAYLEY_BYURO_ROOM_NAMES.srr,

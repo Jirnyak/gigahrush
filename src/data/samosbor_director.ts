@@ -1,4 +1,4 @@
-import { FloorLevel, type WorldEventSeverity } from '../core/types';
+import { type WorldEventSeverity } from '../core/types';
 import { type SamosborVariantId } from './samosbor_variants';
 
 export type SamosborBeatPhase = 'warning' | 'active' | 'aftermath';
@@ -16,7 +16,7 @@ export type SamosborBeatEffectId =
 export interface SamosborBeatDef {
   id: string;
   phase: SamosborBeatPhase;
-  floors: readonly FloorLevel[];
+  floors: readonly number[];
   variants: readonly SamosborVariantId[];
   weight: number;
   cooldown: number;
@@ -44,19 +44,19 @@ export const SAMOSBOR_DIRECTOR_MIN_INTERVAL: Record<SamosborBeatPhase, number> =
 export const SAMOSBOR_DIRECTOR_EFFECT_FAIL_COOLDOWN = 20;
 
 const ALL_FLOORS = [
-  FloorLevel.MINISTRY,
-  FloorLevel.KVARTIRY,
-  FloorLevel.LIVING,
-  FloorLevel.MAINTENANCE,
-  FloorLevel.HELL,
-  FloorLevel.VOID,
+  number.MINISTRY,
+  number.KVARTIRY,
+  number.LIVING,
+  number.MAINTENANCE,
+  number.HELL,
+  number.VOID,
 ] as const;
 
-const CIVIL_FLOORS = [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING] as const;
-const SERVICE_FLOORS = [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE] as const;
-const MAINTENANCE_FLOORS = [FloorLevel.MAINTENANCE] as const;
-const HELL_FLOORS = [FloorLevel.HELL] as const;
-const VOID_FLOORS = [FloorLevel.VOID] as const;
+const CIVIL_FLOORS = [number.MINISTRY, number.KVARTIRY, number.LIVING] as const;
+const SERVICE_FLOORS = [number.KVARTIRY, number.LIVING, number.MAINTENANCE] as const;
+const MAINTENANCE_FLOORS = [number.MAINTENANCE] as const;
+const HELL_FLOORS = [number.HELL] as const;
+const VOID_FLOORS = [number.VOID] as const;
 const ALL_VARIANTS = ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'] as const;
 
 const registry: SamosborBeatDef[] = [];

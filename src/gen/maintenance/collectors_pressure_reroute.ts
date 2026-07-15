@@ -1,7 +1,7 @@
 /* -- FLOOR16 collectors pressure reroute: water choice and eel work -- */
 
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex,
   msg,
   type Entity, type GameState, type Room, type WorldContainer,
@@ -203,10 +203,10 @@ registerSideQuest('collectors_water_debtor', DEBTOR_DEF, [
 
 interface DrainEffect {
   choiceId: string;
-  benefitFloor: FloorLevel;
+  benefitFloor: number;
   benefitFloorId: string;
   benefitName: string;
-  shortageFloor: FloorLevel;
+  shortageFloor: number;
   shortageFloorId: string;
   shortageName: string;
   benefitDelta: number;
@@ -218,10 +218,10 @@ function drainEffect(sideQuestId: string): DrainEffect | undefined {
   if (sideQuestId === DRAIN_LIVING_QUEST) {
     return {
       choiceId: 'collectors_to_living',
-      benefitFloor: FloorLevel.LIVING,
+      benefitFloor: number.LIVING,
       benefitFloorId: 'living',
       benefitName: 'Жилая зона',
-      shortageFloor: FloorLevel.KVARTIRY,
+      shortageFloor: number.KVARTIRY,
       shortageFloorId: 'kvartiry',
       shortageName: 'Квартиры',
       benefitDelta: 28,
@@ -232,10 +232,10 @@ function drainEffect(sideQuestId: string): DrainEffect | undefined {
   if (sideQuestId === DRAIN_KVARTIRY_QUEST) {
     return {
       choiceId: 'collectors_to_kvartiry',
-      benefitFloor: FloorLevel.KVARTIRY,
+      benefitFloor: number.KVARTIRY,
       benefitFloorId: 'kvartiry',
       benefitName: 'Квартиры',
-      shortageFloor: FloorLevel.LIVING,
+      shortageFloor: number.LIVING,
       shortageFloorId: 'living',
       shortageName: 'Жилая зона',
       benefitDelta: 26,
@@ -263,7 +263,7 @@ function applyDrainChoice(state: GameState, sideQuestId: string): void {
 
   publishEvent(state, {
     type: 'room_lacked_resources',
-    floor: effect.shortageFloor,
+    z: effect.shortageFloor,
     targetName: effect.shortageName,
     itemId: 'water',
     itemName: 'питьевая вода',
@@ -271,7 +271,7 @@ function applyDrainChoice(state: GameState, sideQuestId: string): void {
     privacy: 'local',
     tags: [
       'collectors', 'water', 'pressure', 'scarcity', 'access', CHOICE_TAG,
-      effect.choiceId, `target_floor:${effect.benefitFloorId}`, `scarcity_floor:${effect.shortageFloorId}`,
+      effect.choiceId, `target_z: ${effect.benefitFloorId}`, `scarcity_z: ${effect.shortageFloorId}`,
     ],
     data: {
       sideQuestId,
@@ -321,7 +321,7 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

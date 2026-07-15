@@ -2,7 +2,7 @@
 
 import {
   Faction,
-  FloorLevel,
+  number,
   QuestType,
   RoomType,
   ZoneFaction,
@@ -29,7 +29,7 @@ export interface MarkovTextContext {
   targetId?: number;
   targetAlifeId?: number;
   floorKey?: string;
-  floor?: FloorLevel;
+  z?: number;
   routeZBand?: MarkovRouteZBand;
   roomId?: number;
   roomType?: RoomType;
@@ -62,7 +62,7 @@ export interface MarkovContextLoweringOptions {
   targetId?: number;
   targetAlifeId?: number;
   floorKey?: string;
-  floor?: FloorLevel;
+  z?: number;
   routeZ?: number;
   routeZBand?: MarkovRouteZBand;
   roomId?: number;
@@ -198,7 +198,7 @@ export function lowerContextSnapshot(
     targetId: options.targetId,
     targetAlifeId: options.targetAlifeId,
     floorKey: options.floorKey,
-    floor: snapshot.floor ?? options.floor,
+    z: snapshot.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(options.routeZ),
     roomId: options.roomId,
     roomType: snapshot.roomType,
@@ -240,7 +240,7 @@ export function lowerWorldEventContext(
     targetId: options.targetId ?? event.targetId,
     targetAlifeId: options.targetAlifeId,
     floorKey: options.floorKey,
-    floor: event.floor ?? options.floor,
+    z: event.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(options.routeZ),
     roomId: event.roomId ?? options.roomId,
     zoneId: event.zoneId,
@@ -286,7 +286,7 @@ export function lowerQuestContext(
     targetId: options.targetId ?? quest.targetNpcId,
     targetAlifeId: options.targetAlifeId,
     floorKey: options.floorKey,
-    floor: quest.targetFloor ?? quest.targetMarker?.floor ?? quest.visitFloor ?? options.floor,
+    z: quest.targetFloorZ ?? quest.targetMarker?.z ?? quest.visitFloorZ ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(routeZ),
     roomId: options.roomId ?? quest.targetRoom,
     roomType: quest.targetRoomType ?? quest.targetMarker?.roomType,
@@ -329,7 +329,7 @@ export function lowerContractContext(
     targetId: options.targetId,
     targetAlifeId: options.targetAlifeId,
     floorKey: options.floorKey,
-    floor: contract.target.floor ?? options.floor,
+    z: contract.target.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(contract.target.route?.z ?? options.routeZ),
     roomType: contract.target.roomType,
     roomName: contract.target.roomName,
@@ -367,7 +367,7 @@ export function lowerDemosCandidateContext(candidate: MarkovDemosCandidate): Mar
     targetId: candidate.targetId ?? base?.targetId,
     targetAlifeId: candidate.targetAlifeId ?? base?.targetAlifeId,
     floorKey: candidate.floorKey ?? base?.floorKey,
-    floor: candidate.floor ?? base?.floor,
+    z: candidate.z ?? base?.z,
     routeZBand: candidate.routeZBand ?? routeZBandForZ(candidate.routeZ) ?? base?.routeZBand,
     zoneId: candidate.zoneId ?? base?.zoneId,
     zoneFaction: candidate.zoneFaction ?? base?.zoneFaction,
@@ -393,7 +393,7 @@ export function finalizeMarkovContext(input: Partial<MarkovTextContext> & { tags
     targetId: finiteInt(input.targetId),
     targetAlifeId: finiteInt(input.targetAlifeId),
     floorKey: cleanId(input.floorKey),
-    floor: input.floor,
+    z: input.z,
     routeZBand: input.routeZBand,
     roomId: finiteInt(input.roomId),
     roomType: input.roomType,
@@ -431,7 +431,7 @@ export function buildMarkovContextHash(context: Omit<MarkovTextContext, 'context
   addHashPart(parts, 'targetId', context.targetId);
   addHashPart(parts, 'targetAlifeId', context.targetAlifeId);
   addHashPart(parts, 'floorKey', context.floorKey);
-  addHashPart(parts, 'floor', context.floor);
+  addHashPart(parts, 'floor', context.z);
   addHashPart(parts, 'routeZBand', context.routeZBand);
   addHashPart(parts, 'roomId', context.roomId);
   addHashPart(parts, 'roomType', context.roomType);

@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Feature, number,
   MonsterKind, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
   type WorldEventType,
@@ -85,7 +85,7 @@ function addBlackSlimeContainer(
     id,
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -141,7 +141,7 @@ function publishBlackSlimeEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `black_slime_${phase}` as WorldEventType,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x,

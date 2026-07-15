@@ -1,5 +1,5 @@
 import {
-  Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel, ItemType, RoomType,
+  Cell, ContainerKind, EntityType, Faction, Feature, number, ItemType, RoomType,
   type ContainerAccess, type Entity, type GameState, type Item, type Room, type WorldContainer,
 } from '../core/types';
 import { World } from '../core/world';
@@ -200,7 +200,7 @@ export function makeFeatureLootContainer(
   world: World,
   x: number,
   y: number,
-  floor: FloorLevel,
+  z: number,
   feature: Feature,
   level: number,
   seed: number,
@@ -229,27 +229,27 @@ export function makeFeatureLootContainer(
   };
 }
 
-function tallyFloorAllowsStaticSeed(floor: FloorLevel): boolean {
-  return floor === FloorLevel.LIVING || floor === FloorLevel.KVARTIRY || floor === FloorLevel.MINISTRY;
+function tallyFloorAllowsStaticSeed(z: number): boolean {
+  return floor === number.LIVING || floor === number.KVARTIRY || floor === number.MINISTRY;
 }
 
-function hasShelterTallyStaticPath(world: World, floor: FloorLevel): boolean {
+function hasShelterTallyStaticPath(world: World, z: number): boolean {
   for (const container of world.containers) {
-    if (container.floor !== floor) continue;
+    if (container.z !== floor) continue;
     if (!container.tags.includes('istotit_tally_source')) continue;
     if (container.inventory.some(item => isShelterTallyItem(item.defId))) return true;
   }
   return false;
 }
 
-function ensureShelterTallyStaticPath(world: World, floor: FloorLevel): void {
+function ensureShelterTallyStaticPath(world: World, z: number): void {
   if (!tallyFloorAllowsStaticSeed(floor) || !ITEMS[SHELTER_TALLY_ID]) return;
   if (hasShelterTallyStaticPath(world, floor)) return;
-  const target = world.containers.find(c => c.floor === floor
+  const target = world.containers.find(c => c.z === floor
     && c.inventory.length < MAX_INVENTORY_SLOTS
     && (c.tags.includes('samosbor') || c.tags.includes('paper'))
     && c.access !== 'locked')
-    ?? world.containers.find(c => c.floor === floor && c.inventory.length < MAX_INVENTORY_SLOTS && c.access !== 'locked');
+    ?? world.containers.find(c => c.z === floor && c.inventory.length < MAX_INVENTORY_SLOTS && c.access !== 'locked');
   if (!target) return;
   if (!target.inventory.some(item => isShelterTallyItem(item.defId))) target.inventory.push({ defId: SHELTER_TALLY_ID, count: 1 });
   if (!target.tags.includes('istotit_tally_source')) target.tags.push('istotit_tally_source');
@@ -291,8 +291,8 @@ function validProductionBlockedReason(input: unknown): WorldContainer['productio
     : undefined;
 }
 
-function containerCellValid(world: World, floor: FloorLevel, container: WorldContainer): boolean {
-  if (container.floor !== floor) return false;
+function containerCellValid(world: World, z: number, container: WorldContainer): boolean {
+  if (container.z !== floor) return false;
   if (!Number.isFinite(container.x) || !Number.isFinite(container.y)) return false;
   const x = world.wrap(Math.floor(container.x));
   const y = world.wrap(Math.floor(container.y));
@@ -306,7 +306,7 @@ function containerCellValid(world: World, floor: FloorLevel, container: WorldCon
 
 function normalizeSavedContainer(
   world: World,
-  floor: FloorLevel,
+  z: number,
   raw: unknown,
   usedIds: Set<number>,
 ): WorldContainer | null {
@@ -360,7 +360,7 @@ function normalizeSavedContainer(
   return container;
 }
 
-export function pruneContainersForWorld(world: World, floor: FloorLevel): number {
+export function pruneContainersForWorld(world: World, z: number): number {
   const usedIds = new Set<number>();
   const kept: WorldContainer[] = [];
   const changedCells: number[] = [];
@@ -384,11 +384,11 @@ export function pruneContainersForWorld(world: World, floor: FloorLevel): number
   return removed;
 }
 
-export function pruneVolatileContainersForRebuild(world: World, floor: FloorLevel): number {
+export function pruneVolatileContainersForRebuild(world: World, z: number): number {
   const kept: WorldContainer[] = [];
   const changedCells: number[] = [];
   for (const container of world.containers) {
-    if (container.floor === floor && Number.isFinite(container.x) && Number.isFinite(container.y)) {
+    if (container.z === floor && Number.isFinite(container.x) && Number.isFinite(container.y)) {
       const x = world.wrap(Math.floor(container.x));
       const y = world.wrap(Math.floor(container.y));
       const idx = world.idx(x, y);
@@ -408,7 +408,7 @@ export function pruneVolatileContainersForRebuild(world: World, floor: FloorLeve
   return removed;
 }
 
-export function restoreValidContainers(world: World, floor: FloorLevel, saved: unknown, maxContainers = 128): number {
+export function restoreValidContainers(world: World, z: number, saved: unknown, maxContainers = 128): number {
   world.containers = [];
   world.rebuildContainerMap();
   if (!Array.isArray(saved)) return 0;
@@ -434,7 +434,7 @@ function factionForRoom(world: World, room: Room): Faction | undefined {
   return territoryOwnerToFaction(territoryRoomOwner(world, room.id)) ?? undefined;
 }
 
-export function ensureRoomContainers(world: World, floor: FloorLevel, maxContainers = 128): number {
+export function ensureRoomContainers(world: World, z: number, maxContainers = 128): number {
   pruneContainersForWorld(world, floor);
   if (world.containers.length >= maxContainers) {
     ensureShelterTallyStaticPath(world, floor);
@@ -445,7 +445,7 @@ export function ensureRoomContainers(world: World, floor: FloorLevel, maxContain
   for (const room of world.rooms) {
     if (world.containers.length >= maxContainers) break;
     if (!room || room.type === RoomType.CORRIDOR || room.w < 3 || room.h < 3) continue;
-    if (world.containers.some(c => c.floor === floor && c.roomId === room.id)) continue;
+    if (world.containers.some(c => c.z === floor && c.roomId === room.id)) continue;
     const kinds = containerKindsForRoom(room.type);
     const count = room.type === RoomType.STORAGE ? Math.min(3, kinds.length) : room.type === RoomType.PRODUCTION ? 2 : 1;
     for (let n = 0; n < count; n++) {
@@ -482,7 +482,7 @@ export function ensureRoomContainers(world: World, floor: FloorLevel, maxContain
 }
 
 function containerMemory(container: WorldContainer, state?: GameState): RoomMemoryRecord | undefined {
-  if (state && container.floor !== state.currentZ) return undefined;
+  if (state && container.z !== state.currentZ) return undefined;
   return getRoomMemoryForContainer(container);
 }
 
@@ -1005,7 +1005,7 @@ export function tickContainerAudits(
   for (let scanned = 0; scanned < scanCount; scanned++) {
     const container = world.containers[theftAuditCursor];
     theftAuditCursor = (theftAuditCursor + 1) % total;
-    if (!container || container.floor !== state.currentZ) continue;
+    if (!container || container.z !== state.currentZ) continue;
     if (publishTheftAuditIfDue(container, actor, { state, world, entities })) published++;
   }
   return published;

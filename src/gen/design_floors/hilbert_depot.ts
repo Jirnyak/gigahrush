@@ -1,4 +1,4 @@
-/* -- Design floor: hilbert_depot - indexed cargo curve and locked chords -- */
+/* -- Design z: hilbert_depot - indexed cargo curve and locked chords -- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -38,7 +38,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const DESIGN_FLOOR_ID = 'hilbert_depot' as const;
 export const HILBERT_DEPOT_ROUTE_Z = -30;
-export const HILBERT_DEPOT_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const HILBERT_DEPOT_BASE_FLOOR = number.MAINTENANCE;
 export const HILBERT_DEPOT_CARGO_TAG = 'hilbert_depot_indexed_cargo';
 export const HILBERT_DEPOT_CHORD_TAG = 'hilbert_depot_locked_chord';
 
@@ -600,7 +600,7 @@ function registerHilbertDepotRouteCues(
     y: entry.y + 7.5,
     targetX: firstCargo.x + 0.5,
     targetY: firstCargo.y + 0.5,
-    floor: HILBERT_DEPOT_BASE_FLOOR,
+    z: HILBERT_DEPOT_BASE_FLOOR,
     roomId: entry.id,
     targetRoomId: world.roomMap[world.idx(firstCargo.x, firstCargo.y)],
     zoneId: world.zoneMap[world.idx(entry.x + entry.w - 3, entry.y + 7)],
@@ -628,7 +628,7 @@ function registerHilbertDepotRouteCues(
       y: from.y + 0.5,
       targetX: to.x + 0.5,
       targetY: to.y + 0.5,
-      floor: HILBERT_DEPOT_BASE_FLOOR,
+      z: HILBERT_DEPOT_BASE_FLOOR,
       zoneId: world.zoneMap[world.idx(from.x, from.y)],
       label: 'запертая хорда',
       hint: 'решетка режет десятки индексов, но открывает чужой учет и охрану',
@@ -651,7 +651,7 @@ function registerHilbertDepotRouteCues(
     y: points[points.length - 9].y + 0.5,
     targetX: exit.x + 2.5,
     targetY: exit.y + 7.5,
-    floor: HILBERT_DEPOT_BASE_FLOOR,
+    z: HILBERT_DEPOT_BASE_FLOOR,
     roomId: exit.id,
     targetRoomId: exit.id,
     zoneId: world.zoneMap[world.idx(exit.x + 2, exit.y + 7)],
@@ -768,7 +768,7 @@ function addContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: HILBERT_DEPOT_BASE_FLOOR,
+    z: HILBERT_DEPOT_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

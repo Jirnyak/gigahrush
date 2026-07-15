@@ -7,7 +7,7 @@ import { stampSurfaceSplat } from './surface_marks';
 import {
   Cell,
   Feature,
-  FloorLevel,
+  number,
   RoomType,
   type Entity,
   type GameState,
@@ -281,7 +281,7 @@ export function tryUseHeatlinePressure(
   const room = pressureTargetRoom(world, lookX, lookY);
   if (!room) return false;
 
-  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE) return false;
+  if (currentFloorRunEntry(state).themeTags !== number.MAINTENANCE) return false;
   if (!pressureCooldownReady(state)) {
     state.msgs.push(msg('Вентиль еще стучит после прошлого поворота.', state.time, '#888'));
     return true;

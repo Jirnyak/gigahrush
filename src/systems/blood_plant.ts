@@ -326,7 +326,7 @@ export function neutralizeRedMoldSourceNear(
   if (!container || !removeOneRedMold(container.inventory)) return false;
   publishEvent(state, {
     type: 'red_mold_exposed',
-    floor: container.floor,
+    z: container.z,
     zoneId: container.zoneId,
     roomId: container.roomId,
     x: container.x + 0.5,
@@ -397,7 +397,7 @@ function handleRedMoldExposure(state: GameState, event: WorldEvent): void {
   const privacy = redMoldExposurePrivacy(event);
   publishEvent(state, {
     type: 'red_mold_exposed',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,

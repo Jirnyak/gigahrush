@@ -1,4 +1,4 @@
-/* -- Design floor: markov_stairwell / Марковская лестница -------- */
+/* -- Design z: markov_stairwell / Марковская лестница -------- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -38,7 +38,7 @@ export const MARKOV_STAIRWELL_ROUTE_ID = 'markov_stairwell' as const;
 export const MARKOV_STAIRWELL_Z = 20;
 export const MARKOV_STAIRWELL_BYPASS_KEY = 'container_key_label';
 
-const BASE_FLOOR = FloorLevel.MINISTRY;
+const BASE_FLOOR = number.MINISTRY;
 const SPINE_X = 494;
 const SPINE_Y = 148;
 const SPINE_W = 36;
@@ -283,7 +283,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.watcher, WATCHER_DEF, 
   desc: 'Павел Марков: «Найди шкаф после связки кухня-мокрая-кладовая и принеси схему лифтов. Если последовательность сорвалась, режь через служебную дверь по бирке.»',
   targetItem: 'lift_scheme',
   targetCount: 1,
-  targetFloor: BASE_FLOOR,
+  targetFloorZ: BASE_FLOOR,
   targetRoute: { designFloorId: MARKOV_STAIRWELL_ROUTE_ID },
   targetRoomName: 'Марковская лестница: редкое состояние М',
   targetHint: 'Марковская лестница z=+20: считать повторы комнат, открыть служебный срез биркой и проверить редкое звено.',
@@ -634,7 +634,7 @@ function addContainer(
     id,
     x,
     y,
-    floor: BASE_FLOOR,
+    z: BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,

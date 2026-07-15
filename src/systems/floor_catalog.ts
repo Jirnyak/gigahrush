@@ -1,4 +1,4 @@
-import { FloorLevel } from '../core/types';
+import { } from '../core/types';
 import {
   FLOOR_CATALOG,
   type FloorCatalogDef,
@@ -8,7 +8,7 @@ import {
 import { floorLevelDisplayName } from '../gen/floor_manifest';
 
 export interface FloorCatalogQuery {
-  readonly baseFloor?: FloorLevel;
+  readonly themeTags: readonly string[];
   readonly tag?: string;
   readonly tags?: readonly string[];
   readonly rarity?: FloorCatalogRarity | readonly FloorCatalogRarity[];
@@ -56,7 +56,7 @@ export function queryFloorCatalog(query: FloorCatalogQuery = {}): FloorCatalogDe
   if (limit === 0) return out;
 
   for (const def of FLOOR_CATALOG) {
-    if (query.baseFloor !== undefined && def.baseFloor !== query.baseFloor) continue;
+    if (query.themeTags !== undefined && def.themeTags !== query.themeTags) continue;
     if (query.minDepth !== undefined && def.minDepth > query.minDepth) continue;
     if (!matchesFilter(def.rarity, query.rarity)) continue;
     if (!matchesFilter(def.contentStatus, query.contentStatus)) continue;
@@ -70,7 +70,7 @@ export function queryFloorCatalog(query: FloorCatalogQuery = {}): FloorCatalogDe
 }
 
 export function eligibleFloorPockets(
-  baseFloor: FloorLevel,
+  baseFloor: number,
   depth: number,
   query: Omit<FloorCatalogQuery, 'baseFloor' | 'minDepth'> = {},
 ): FloorCatalogDef[] {
@@ -78,7 +78,7 @@ export function eligibleFloorPockets(
 }
 
 export function eligibleFloorPocketsByTag(
-  baseFloor: FloorLevel,
+  baseFloor: number,
   tag: string,
   depth: number,
   rarity?: FloorCatalogRarity | readonly FloorCatalogRarity[],
@@ -91,15 +91,15 @@ export function searchFloorCatalog(search: string, query: Omit<FloorCatalogQuery
 }
 
 export function formatFloorCatalogLine(def: FloorCatalogDef): string {
-  return `${def.id} | ${def.displayName} | ${floorLevelDisplayName(def.baseFloor)} | ${def.rarity} d${def.minDepth} | ${def.contentStatus}`;
+  return `${def.id} | ${def.displayName} | ${floorLevelDisplayName(def.themeTags)} | ${def.rarity} d${def.minDepth} | ${def.contentStatus}`;
 }
 
 export function floorCatalogDebugLines(query: FloorCatalogQuery = {}): string[] {
   const rows = queryFloorCatalog(query);
   const scope = query.search?.trim()
     ? `search="${query.search.trim()}"`
-    : query.baseFloor !== undefined
-      ? floorLevelDisplayName(query.baseFloor)
+    : query.themeTags !== undefined
+      ? floorLevelDisplayName(query.themeTags)
       : 'all';
   const lines = [`catalog ${scope}: ${rows.length}/${FLOOR_CATALOG.length}`];
   for (const def of rows) lines.push(formatFloorCatalogLine(def));

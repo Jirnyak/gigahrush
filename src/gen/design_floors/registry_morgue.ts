@@ -1,4 +1,4 @@
-/* -- Design floor: Морг регистраций ----------------------------
+/* -- Design z: Морг регистраций ----------------------------
  * Authored route floor registry_morgue, z=+18.
  */
 
@@ -12,7 +12,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -46,7 +46,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('registry_morgue');
 
 export const REGISTRY_MORGUE_ROUTE_ID = 'registry_morgue' as const;
 export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
-export const REGISTRY_MORGUE_BASE_FLOOR = FloorLevel.MINISTRY;
+export const REGISTRY_MORGUE_BASE_FLOOR = number.MINISTRY;
 export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
 const CORPSE_NUMBER_TAG_ITEM = 'corpse_number_tag' as const;
 
@@ -316,7 +316,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_
     type: QuestType.FETCH,
     desc: 'Фаина Реестровая: «Верните номерок из холодной камеры. Без него живого человека можно закрыть бумагой, а потом искать уже по форме.»',
     targetItem: CORPSE_NUMBER_TAG_ITEM, targetCount: 1,
-    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Холодная камера-укрытие',
     targetHint: 'номерок лежит в холодной картотеке; взять его без сдачи можно как кражу из моргового хранения',
@@ -334,7 +334,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_
     type: QuestType.FETCH,
     desc: 'Фаина Реестровая: «Принесите акт о пропавшей записи. Я оформлю смерть так, что Райсовет выдаст допуск человеку у окна. Пустую строку не трогайте.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
-    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Кабинет книги умерших',
     rewardItem: 'archive_access_permit', rewardCount: 1,
@@ -355,7 +355,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_orderly_stepan', NPC_D
     desc: 'Степан Носильный: «В зараженной камере ходит человек с чужой биркой. Проверьте дистанцией и уберите подмену.»',
     targetMonsterKind: MonsterKind.NELYUD,
     killNeeded: 1,
-    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Зараженная камера сверки',
     rewardItem: 'personal_file_copy', rewardCount: 1,
@@ -375,7 +375,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_relative_ira', NPC_DEF
     type: QuestType.FETCH,
     desc: 'Ира Заименованная: «Найдите пропавшее личное дело. Мне нужен не ящик, а имя, пока графа не стала чужой.»',
     targetItem: 'missing_record_file', targetCount: 1,
-    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Холодная камера-укрытие',
     rewardItem: 'sealed_complaint', rewardCount: 1,
@@ -391,7 +391,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_relative_ira', NPC_DEF
     giverNpcId: 'morgue_relative_ira',
     type: QuestType.VISIT,
     desc: 'Ира Заименованная: «Проведите меня до книги умерших. Одной мне выдадут тишину, а при свидетеле должны назвать строку.»',
-    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Кабинет книги умерших',
     targetHint: 'доведите Иру от окна приема через бирочную к книге умерших; не оставляйте ее среди холодных ящиков',
@@ -414,7 +414,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_quarantine_sanitar', N
     type: QuestType.FETCH,
     desc: 'Санитар Крутов: «Принесите чистую карантинную справку. Открою медшкаф законно. Иначе это будет кража.»',
     targetItem: 'official_quarantine_clearance', targetCount: 1,
-    targetFloor: REGISTRY_MORGUE_BASE_FLOOR,
+    targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
     targetRoomName: 'Зараженная камера сверки',
     rewardItem: 'sanitary_kit', rewardCount: 1,
@@ -1049,7 +1049,7 @@ function addHilbertDrawerRegistry(world: World, drawerSlots: readonly MorgueDraw
       id: nextMorgueContainerId(world),
       x: slot.x,
       y: slot.y,
-      floor: REGISTRY_MORGUE_BASE_FLOOR,
+      z: REGISTRY_MORGUE_BASE_FLOOR,
       roomId: slot.roomId,
       zoneId: world.zoneMap[world.idx(slot.x, slot.y)],
       kind: ContainerKind.FILING_CABINET,
@@ -1238,7 +1238,7 @@ function addMorgueContainer(
     id: world.containers.length + 1,
     x,
     y,
-    floor: REGISTRY_MORGUE_BASE_FLOOR,
+    z: REGISTRY_MORGUE_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

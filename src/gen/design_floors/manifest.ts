@@ -78,7 +78,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   upper_bureau: generateUpperBureauDesignFloor,
   number_registry: generateNumberRegistryDesignFloor,
   istinniy_labirint: generateIstinniyLabirintDesignFloor,
-  bank_floor: generateBankFloorDesignFloor,
+  bank_z: generateBankFloorDesignFloor,
   critical_leak_archive: generateCriticalLeakArchiveDesignFloor,
   raionsovet_archive: generateRaionsovetArchiveDesignFloor,
   markov_stairwell: generateMarkovStairwellDesignFloor,
@@ -97,7 +97,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   penrose_laundry: generatePenroseLaundryDesignFloor,
   black_market_88: generateBlackMarket88DesignFloor,
   production_belt: generateProductionBeltDesignFloor,
-  service_floor: generateServiceFloorDesignFloor,
+  service_z: generateServiceFloorDesignFloor,
   silicon_net_well: generateSiliconNetWellDesignFloor,
   shahta_atrium: generateShahtaAtriumDesignFloor,
   hyperbolic_switchyard: generateHyperbolicSwitchyardDesignFloor,
@@ -110,7 +110,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   spectral_chasovnya: generateSpectralChasovnyaDesignFloor,
   cantor_pustoty: generateCantorPustotyDesignFloor,
   darkness: generateDarknessDesignFloor,
-  horrorfloor: generateHorrorFloorDesignFloor,
+  horrorz: generateHorrorFloorDesignFloor,
   living: generateLivingDesignFloor,
   kvartiry: generateKvartiry,
   ministry: generateMinistry,
@@ -122,7 +122,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
 const DEFAULT_DESIGN_FLOOR_SEED = 0x4453474e;
 
 export function designFloorGenerationSeed(id: DesignFloorId, runSeed = DEFAULT_DESIGN_FLOOR_SEED): number {
-  return hashSeed(`design-floor:${id}`, runSeed);
+  return hashSeed(`design-z: ${id}`, runSeed);
 }
 
 export function isDesignFloorId(id: string): id is DesignFloorId {

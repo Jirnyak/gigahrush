@@ -4,7 +4,7 @@ import {
   W,
   Cell,
   Feature,
-  FloorLevel,
+  number,
   RoomType,
   Tex,
   type Room,
@@ -60,11 +60,11 @@ export function ensureRouteWideFootprint(world: World, route: DesignFloorRouteDe
       expandSocialShell(world, mask, rng, stats, marketStyle(route));
       break;
     default:
-      if (route.baseFloor === FloorLevel.MAINTENANCE) {
+      if (route.themeTags === number.MAINTENANCE) {
         expandIndustrialShell(world, mask, rng, stats, industrialStyle(route));
-      } else if (route.baseFloor === FloorLevel.HELL || route.baseFloor === FloorLevel.VOID) {
+      } else if (route.themeTags === number.HELL || route.themeTags === number.VOID) {
         expandOrganicShell(world, mask, rng, stats, hellStyle(route));
-      } else if (route.baseFloor === FloorLevel.KVARTIRY || route.baseFloor === FloorLevel.LIVING) {
+      } else if (route.themeTags === number.KVARTIRY || route.themeTags === number.LIVING) {
         expandSocialShell(world, mask, rng, stats, socialStyle(route));
       } else {
         expandAdministrativeShell(world, mask, rng, stats, administrativeStyle(route));
@@ -189,7 +189,7 @@ function industrialStyle(route: DesignFloorRouteDef): ShellStyle {
 }
 
 function hellStyle(route: DesignFloorRouteDef): ShellStyle {
-  const darkness = route.baseFloor === FloorLevel.VOID;
+  const darkness = route.themeTags === number.VOID;
   return {
     floorTex: darkness ? Tex.F_VOID : Tex.F_GUT,
     wallTex: darkness ? Tex.DARK : Tex.GUT,

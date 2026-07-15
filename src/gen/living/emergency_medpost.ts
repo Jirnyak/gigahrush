@@ -3,7 +3,7 @@
 
 import {
   Cell, ContainerKind, DoorState, Faction, Feature,
-  FloorLevel, Occupation, QuestType, RoomType, Tex,
+  number, Occupation, QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -140,7 +140,7 @@ registerSideQuest('ag44_dr_kruglov', NPC_DEFS.ag44_dr_kruglov, [
     rewardItem: 'pills', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
     relationDelta: 12, xpReward: 45, moneyReward: 55,
-    targetFloor: FloorLevel.LIVING,
+    targetFloorZ: number.LIVING,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: аварийный медпост Круглова и его опечатанный шкаф.',
@@ -168,7 +168,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type === 'quest_completed' && sideQuestId(event) === 'ag44_medpost_restock_bandages') {
     publishEvent(state, {
       type: 'faction_relation_changed',
-      floor: FloorLevel.LIVING,
+      z: number.LIVING,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -186,7 +186,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type !== 'item_stolen' || !event.tags.includes(CONTENT_TAG) || !isMedpostMedicine(event.itemId)) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -343,7 +343,7 @@ function addMedContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

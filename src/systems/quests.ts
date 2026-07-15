@@ -3,7 +3,7 @@
 import {
   type Entity, type Quest, type GameState, type Msg, type Room,
   QuestType, EntityType, Occupation, MonsterKind, Faction,
-  RoomType, Cell, AIGoal, W, ZoneFaction, FloorLevel,
+  RoomType, Cell, AIGoal, W, ZoneFaction, number,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
@@ -170,7 +170,7 @@ export interface NpcQuestMarkerState {
 }
 
 interface AuthoredQuestMeta {
-  targetFloor?: FloorLevel;
+  targetFloorZ?: number;
   targetRoute?: QuestRouteTarget;
   targetRoomType?: number;
   targetRoomName?: string;
@@ -193,7 +193,7 @@ interface AuthoredQuestMeta {
 
 function authoredQuestMeta(step: AuthoredQuestMeta, state: GameState): Partial<Quest> {
   const meta: Partial<Quest> = {};
-  if (step.targetFloor !== undefined) meta.targetFloor = step.targetFloor;
+  if (step.targetFloorZ !== undefined) meta.targetFloorZ = step.targetFloorZ;
   if (step.targetRoute) meta.targetRoute = { ...step.targetRoute };
   if (step.targetRoomType !== undefined) meta.targetRoomType = step.targetRoomType as RoomType;
   if (step.targetRoomName) meta.targetRoomName = step.targetRoomName;
@@ -269,7 +269,7 @@ function checkVisitQuestAtPlayer(q: Quest, player: Entity, world: World, state: 
     return !!room && resolved !== undefined && room.id === resolved.room.id;
   }
 
-  if (q.visitFloor !== undefined) return isQuestTargetOnCurrentFloor(q, state);
+  if (q.visitFloorZ !== undefined) return isQuestTargetOnCurrentFloor(q, state);
   if (q.targetRoom !== undefined) {
     const room = world.roomAt(player.x, player.y);
     return !!room && room.id === q.targetRoom;
@@ -1394,10 +1394,10 @@ function expireQuestIfNeeded(q: Quest, player: Entity, entities: Entity[], state
 }
 
 function questDeadlineContext(q: Quest, player: Entity, world: World, state: GameState): QuestDeadlineContext {
-  const targetFloor = q.visitFloor ?? q.targetFloor;
+  const targetFloorZ = q.visitFloorZ ?? q.targetFloorZ;
   const ctx: QuestDeadlineContext = {
     samosborDanger: state.samosborActive,
-    crossFloor: targetFloor !== undefined && targetFloor !== state.currentZ,
+    crossFloor: targetFloorZ !== undefined && targetFloorZ !== state.currentZ,
   };
   if (q.targetRoom !== undefined) {
     const room = world.rooms[q.targetRoom];
@@ -1568,12 +1568,12 @@ function generatePlotQuest(
       };
     }
 
-    if (step.type === QuestType.VISIT && (step as { visitFloor?: number }).visitFloor !== undefined) {
+    if (step.type === QuestType.VISIT && (step as { visitFloorZ?: number }).visitFloorZ !== undefined) {
       return {
         id, type: step.type,
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
-        visitFloor: (step as { visitFloor: number }).visitFloor,
+        visitFloorZ: (step as { visitFloorZ: number }).visitFloorZ,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
         extraRewards: step.extraRewards,
         relationDelta: step.relationDelta, xpReward: step.xpReward,
@@ -1653,13 +1653,13 @@ function generatePlotQuest(
         done: false,
       };
     }
-    if (sq.type === QuestType.VISIT && sq.visitFloor !== undefined) {
+    if (sq.type === QuestType.VISIT && sq.visitFloorZ !== undefined) {
       const id = state.nextQuestId++;
       return {
         id, type: sq.type,
         giverId: npc.id, giverName: npc.name ?? '???',
         desc: sq.desc,
-        visitFloor: sq.visitFloor,
+        visitFloorZ: sq.visitFloorZ,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
         extraRewards: sq.extraRewards,
         relationDelta: sq.relationDelta, xpReward: sq.xpReward,
@@ -1699,7 +1699,7 @@ function generatePlotQuest(
 }
 
 interface QuestContext {
-  floor: FloorLevel;
+  z: number;
   roomName: string;
   roomType?: RoomType;
   zoneId: number;
@@ -1726,7 +1726,7 @@ function buildQuestContext(npc: Entity, world: World, entities: Entity[], state:
     if (d2 < bestD2) { bestD2 = d2; nearbyMonster = e; }
   }
   return {
-    floor: state.currentZ,
+    z: state.currentZ,
     roomName: room?.name ?? 'коридоре',
     roomType: room?.type,
     zoneId,
@@ -1774,7 +1774,7 @@ function pickQuestChoice(npc: Entity, ctx: QuestContext): QuestChoice {
 
 function contractScore(def: ContractDef, npc: Entity, ctx: QuestContext): number {
   let score = 0;
-  if (def.target.floor === ctx.floor) score += 4;
+  if (def.target.z === ctx.z) score += 4;
   if (def.target.roomType !== undefined && def.target.roomType === ctx.roomType) score += 3;
   if (npc.faction === def.faction) score += 7;
   if (def.faction === Faction.CITIZEN && (npc.faction === Faction.CITIZEN || npc.faction === undefined)) score += 3;
@@ -1858,7 +1858,7 @@ function pickSystemQuest(
     return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
       samosborDanger: ctx.samosborDanger,
       nearbyMonster: ctx.nearbyMonster !== undefined,
-      crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
+      crossFloor: quest.targetFloorZ !== undefined && quest.targetFloorZ !== state.currentZ,
     });
   }
 
@@ -1886,7 +1886,7 @@ function pickSystemQuest(
   return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
     samosborDanger: ctx.samosborDanger,
     nearbyMonster: ctx.nearbyMonster !== undefined,
-    crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
+    crossFloor: quest.targetFloorZ !== undefined && quest.targetFloorZ !== state.currentZ,
   });
 }
 
@@ -1935,7 +1935,7 @@ function generateQuest(
             return assignProceduralQuestDeadline(quest, state.clock.totalMinutes, {
               samosborDanger: ctx.samosborDanger,
               nearbyMonster: ctx.nearbyMonster !== undefined,
-              crossFloor: quest.targetFloor !== undefined && quest.targetFloor !== state.currentZ,
+              crossFloor: quest.targetFloorZ !== undefined && quest.targetFloorZ !== state.currentZ,
             });
           }
         }

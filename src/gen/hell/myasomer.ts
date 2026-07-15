@@ -7,7 +7,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   MonsterKind,
   RoomType,
   Tex,
@@ -45,7 +45,7 @@ const COUNTERPLAY_THREATS = 2;
 const FULL_COUNTERPLAY_THREATS = 1;
 
 interface MyasomerSite {
-  floor: FloorLevel;
+  z: number;
   roomId: number;
   zoneId: number;
   x: number;
@@ -105,7 +105,7 @@ export function generateMyasomer(world: World, entities: Entity[], nextId: { v: 
   const cy = world.wrap(room.y + (room.h >> 1));
   const ci = world.idx(cx, cy);
   activeSite = {
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     x: cx + 0.5,
@@ -342,7 +342,7 @@ function addQuietCache(world: World, room: Room): number {
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.TRASH_BIN,
@@ -370,7 +370,7 @@ function addShardCache(world: World, room: Room): number {
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
@@ -414,7 +414,7 @@ function handleMyasomerEvent(state: GameState, event: WorldEvent): void {
   const site = activeSite;
   const world = activeWorld;
   const entities = activeEntities;
-  if (!site || !world || !entities || state.currentZ !== site.floor || event.floor !== site.floor) return;
+  if (!site || !world || !entities || state.currentZ !== site.z || event.z !== site.z) return;
 
   if (event.type === 'monster_bait_placed' && eventInsideSite(world, site, event)) {
     markBaited(state, site, event);

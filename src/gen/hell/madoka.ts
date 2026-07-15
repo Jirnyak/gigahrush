@@ -3,7 +3,7 @@
 
 import {
   W, Cell,
-  type Entity, Faction, FloorLevel, Occupation,
+  type Entity, Faction, number, Occupation,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
@@ -50,7 +50,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(FloorLevel.HELL),
+  homeFloorKey: storyNpcFloorKey(number.HELL),
   tags: ['hell', 'psi'],
 });
 

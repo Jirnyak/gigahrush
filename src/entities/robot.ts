@@ -3,7 +3,7 @@
 /*   of armored blocks, sensor clusters, welded plates, treads.   */
 /*   Shoots plasma bolts. Each robot is procedurally unique.      */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -18,7 +18,6 @@ export const DEF: MonsterDef = {
   isRanged: true,
   projSpeed: 9,
   projSprite: 0,        // auto-assigned
-  floors: [FloorLevel.MINISTRY, FloorLevel.MAINTENANCE],
   counterplay: 'Сойдите с прямой линии плазмы, дождитесь залпа и заходите в паузу перезарядки. Стена, дверь или аппарат срывают наведение.',
   lootHint: 'электронный лом, плата, проводка, редкая энергоячейка',
 };

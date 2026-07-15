@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer,
   type WorldEvent, type WorldEventSeverity,
@@ -122,7 +122,7 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -344,7 +344,7 @@ function publishValveChange(
   const pressure = Math.max(0, 3 - closed);
   publishEvent(state, {
     type: 'player_use_item',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -373,11 +373,11 @@ function publishCoreOutcome(state: GameState, event: WorldEvent): void {
   const closed = valvesClosed(state);
   const drained = closed >= 3;
   if (drained) {
-    const stockChanged = changeResourceStock(state, 'drink_water', 6, event.floor);
+    const stockChanged = changeResourceStock(state, 'drink_water', 6, event.z);
     state.msgs.push(msg('Насосная Матка захлебнулась. Шкаф на сухом острове можно разобрать спокойно.', state.time, '#6cf'));
     publishEvent(state, {
       type: 'room_produced_items',
-      floor: event.floor,
+      z: event.z,
       zoneId: event.zoneId,
       roomId: event.roomId,
       x: event.x,
@@ -409,7 +409,7 @@ function publishCoreOutcome(state: GameState, event: WorldEvent): void {
   state.msgs.push(msg('Матка умерла, но давление не сброшено: вода в лотках осталась злой.', state.time, '#f84'));
   publishEvent(state, {
     type: 'room_lacked_resources',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,

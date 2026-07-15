@@ -1,4 +1,4 @@
-import { Faction, FloorLevel, Occupation } from '../core/types';
+import { Faction, Occupation } from '../core/types';
 import type { WeightedValue } from './alife_generation';
 import {
   floorKeyAllowsNpcs,
@@ -21,7 +21,7 @@ export type AlifeMigrationReason =
 export interface AlifeDestinationSelector {
   floorKeys?: readonly string[];
   routeTags?: readonly string[];
-  baseFloors?: readonly FloorLevel[];
+  baseFloors?: readonly number[];
   minAbsZ?: number;
   maxAbsZ?: number;
   allowsNpcOnly?: boolean;
@@ -219,7 +219,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     reason: 'routine',
     weight: 3,
     destination: {
-      baseFloors: [FloorLevel.MAINTENANCE, FloorLevel.HELL],
+      baseFloors: [number.MAINTENANCE, number.HELL],
       routeTags: ['route_pressure', 'industrial', 'cult', 'samosbor'],
       minAbsZ: 24,
       maxAbsZ: 47,
@@ -338,7 +338,7 @@ const INTENT_ID_RE = /^[a-z][a-z0-9_]*$/;
 function selectorEmpty(selector: AlifeDestinationSelector): boolean {
   return !selector.floorKeys?.length &&
     !selector.routeTags?.length &&
-    !selector.baseFloors?.length &&
+    !selector.themeTagss?.length &&
     selector.minAbsZ === undefined &&
     selector.maxAbsZ === undefined;
 }
@@ -371,11 +371,11 @@ export function validateAlifeMigrationProfiles(intents: readonly AlifeMigrationI
       if (intent.destination.allowsNpcOnly !== false && allowsNpc === false) {
         errors.push(`migration intent ${intent.id} targets NPC-forbidden destination ${key}`);
       }
-      if (floorKeyBaseFloor(key) === FloorLevel.VOID) {
+      if (floorKeyBaseFloor(key) === number.VOID) {
         errors.push(`migration intent ${intent.id} targets VOID ordinary destination ${key}`);
       }
     }
-    if (intent.destination.baseFloors?.includes(FloorLevel.VOID)) {
+    if (intent.destination.themeTagss?.includes(number.VOID)) {
       errors.push(`migration intent ${intent.id} targets VOID base floor`);
     }
   }

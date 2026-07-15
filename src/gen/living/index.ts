@@ -22,7 +22,7 @@
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
 
-import { type Entity, FloorLevel, Cell, Tex, EntityType, AIGoal, W, MonsterKind, RoomType, ZoneFaction } from '../../core/types';
+import { type Entity, number, Cell, Tex, EntityType, AIGoal, W, MonsterKind, RoomType, ZoneFaction } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { MONSTERS } from '../../entities/monster';
@@ -76,7 +76,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
 
   /* ── A2: Permanent zones (64 macro-regions) ─────── */
   generateZones(world);  // Assign zone levels for living floor
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.LIVING);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, number.LIVING);
 
   /* Update apartmentRoomCount to include all permanent rooms */
   world.apartmentRoomCount = world.rooms.length;
@@ -152,7 +152,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
     const monsterCount = Math.floor(activeActorCountAtDefaultSoftLimit(baseMonsterPopulationAtDefaultSoftLimit(0)));
     const monsterCells = sampleNaturalPopulationCells(world, monsterCount, livingMonsterProfile, 0x1234);
     for (const cell of monsterCells) {
-      const kind = chooseFloorMonsterKind({ floor: FloorLevel.LIVING, rng });
+      const kind = chooseFloorMonsterKind({ z: number.LIVING, rng });
       const m = MONSTERS[kind];
       if (!m) continue;
       const hp = scaleMonsterHp(m.hp, 5); // Base level 5
@@ -174,7 +174,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   }
 
   /* ── B4: Rare procedural TV/monitor walls in suitable rooms ─── */
-  placeProceduralScreens(world, FloorLevel.LIVING);
+  placeProceduralScreens(world, number.LIVING);
 
   /* ── C: Items in all rooms ─────────────────────────── */
   nextId = spawnRoomItems(world, entities, nextId);
@@ -196,6 +196,6 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
 export function regrowMaze(world: World): void {
   wipeVolatile(world);
   generateVolatileMaze(world);
-  placeProceduralScreens(world, FloorLevel.LIVING);
+  placeProceduralScreens(world, number.LIVING);
   buildLivingHubGeometry(world);
 }

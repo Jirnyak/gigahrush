@@ -1,4 +1,4 @@
-/* ── Design floor: Райсовет и Живой архив ───────────────────────
+/* ── Design z: Райсовет и Живой архив ───────────────────────
  * Routed authored-floor package. Route data lives in data/design_floors.ts;
  * generation is mounted through the design-floor manifest.
  */
@@ -6,7 +6,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, RoomType, LiftDirection, ContainerKind, DoorState,
-  EntityType, AIGoal, Faction, Occupation, FloorLevel, QuestType, MonsterKind, ZoneFaction,
+  EntityType, AIGoal, Faction, Occupation, number, QuestType, MonsterKind, ZoneFaction,
   type Entity, type GameState, type Room, type TerritoryOwner, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -35,7 +35,7 @@ export const RAIONSOVET_ARCHIVE_META = {
   routeId: RAIONSOVET_ARCHIVE_ROUTE_ID,
   displayName: 'Райсовет и архив картотек',
   z: RAIONSOVET_ARCHIVE_Z,
-  baseFloor: FloorLevel.MINISTRY,
+  baseFloor: number.MINISTRY,
   debugEntry: 'generateRaionsovetArchiveDesignFloor()',
 } as const;
 
@@ -213,7 +213,7 @@ export function publishRaionsovetArchiveEvent(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId,
     zoneId,
     targetName: targetId,
@@ -1668,7 +1668,7 @@ function addArchiveContainer(
     id: nextContainerId.v++,
     x,
     y,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -1796,7 +1796,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   generateZones(world);
   for (const zone of world.zones) {
     zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
-    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, FloorLevel.MINISTRY));
+    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, number.MINISTRY));
   }
 
   addArchiveContainer(

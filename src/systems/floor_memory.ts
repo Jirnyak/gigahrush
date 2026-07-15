@@ -8,7 +8,7 @@ import {
   EntityType,
   Feature,
   Faction,
-  FloorLevel,
+  number,
   LiftDirection,
   RoomType,
   Tex,
@@ -186,7 +186,7 @@ let packedFloorMemoryBytes = 0;
 let floorMemoryBudgetOverride: number | undefined;
 let floorMemorySaveBudgetOverride: number | undefined;
 
-export function floorMemoryKeyForStoryFloor(floor: FloorLevel): string {
+export function floorMemoryKeyForStoryFloor(z: number): string {
   return floorKeyForStory(floor);
 }
 
@@ -650,7 +650,7 @@ function sanitizeContainers(
       id,
       x,
       y,
-      floor: enumValue(raw.floor, FloorLevel, FloorLevel.LIVING) as FloorLevel,
+      z: enumValue(raw.z, number, number.LIVING),
       roomId: finiteIntRange(raw.roomId, -1, rooms.length - 1, -1),
       zoneId: finiteIntRange(raw.zoneId, 0, Math.max(0, zones.length - 1), 0),
       kind: enumValue(raw.kind, ContainerKind, ContainerKind.METAL_CABINET) as ContainerKind,

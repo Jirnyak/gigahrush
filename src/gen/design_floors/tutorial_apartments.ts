@@ -1,4 +1,4 @@
-import { Cell, ContainerKind, DoorState, FloorLevel, Tex, type WorldContainer } from '../../core/types';
+import { Cell, ContainerKind, DoorState, number, Tex, type WorldContainer } from '../../core/types';
 import type { World } from '../../core/world';
 
 export function spawnTutorialExitDoor(world: World, cellX: number, cellY: number): void {
@@ -25,7 +25,7 @@ export function spawnTutorialKey(world: World, nextId: {v: number}, x: number, y
     id: containerId,
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: -1,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind: ContainerKind.FILING_CABINET,

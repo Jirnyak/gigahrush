@@ -4,7 +4,7 @@ import {
   W,
   msg,
   type Faction,
-  type FloorLevel,
+  type number,
   type GameState,
   type WorldContainer,
 } from '../core/types';
@@ -147,7 +147,7 @@ function isBareLootableFeature(world: World, idx: number, feature: Feature): boo
   return true;
 }
 
-function featureLootSeed(idx: number, floor: FloorLevel): number {
+function featureLootSeed(idx: number, z: number): number {
   let s = (((idx + 1) * 2654435761) ^ ((floor + 1) * 40503)) >>> 0;
   s = (s ^ (s >>> 15)) >>> 0;
   return s;
@@ -594,7 +594,7 @@ function runSearchFeature(ctx: ContentInteractionContext, resolved: ResolvedInte
  *  which is a render/interaction convenience, is skipped. */
 export function resolveOrCreateFeatureLootContainer(
   world: World,
-  floor: FloorLevel,
+  z: number,
   idx: number,
   ctx?: ContentInteractionContext,
 ): WorldContainer | null {

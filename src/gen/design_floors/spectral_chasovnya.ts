@@ -1,4 +1,4 @@
-/* -- Design floor: spectral_chasovnya - sound, cult and hearing geometry -- */
+/* -- Design z: spectral_chasovnya - sound, cult and hearing geometry -- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +44,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('spectral_chasovnya');
 
 export const SPECTRAL_CHASOVNYA_ROUTE_ID = 'spectral_chasovnya' as const;
 export const SPECTRAL_CHASOVNYA_Z = -42 as const;
-export const SPECTRAL_CHASOVNYA_BASE_FLOOR = FloorLevel.HELL;
+export const SPECTRAL_CHASOVNYA_BASE_FLOOR = number.HELL;
 
 export const SPECTRAL_CHASOVNYA_ROOM_NAMES = {
   entry: 'Преддверие спектральной часовни',
@@ -246,7 +246,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_ID, MIRON_DEF, [{
   desc: 'Мирон Звонарь: «Принеси звукоизлучатель в радиоризницу. Настроим тишину так, чтобы слепые ушли к колоколу, а не к тебе.»',
   targetItem: 'sound_emitter',
   targetCount: 1,
-  targetFloor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+  targetFloorZ: SPECTRAL_CHASOVNYA_BASE_FLOOR,
   targetRoute: { designFloorId: SPECTRAL_CHASOVNYA_ROUTE_ID },
   targetRoomName: SPECTRAL_CHASOVNYA_ROOM_NAMES.radioSacristy,
   targetHint: 'Спектральная часовня z=-42: радиоризница стоит за боковой акустической тенью.',
@@ -1038,7 +1038,7 @@ function addSpectralContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -1159,7 +1159,7 @@ function registerQuietShadowRouteCue(world: World, rooms: SpectralRooms): void {
     y: entry.y,
     targetX: quiet.x,
     targetY: quiet.y,
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     label: 'Тихая тень',
     hint: 'Боковая зона гасит шаги. Хороший путь, если не стрелять.',
     targetName: rooms.quietSouth.name,
@@ -1191,7 +1191,7 @@ function registerMainBellRouteCue(world: World, rooms: SpectralRooms, state: Spe
     y: rooms.nave.y + 4,
     targetX: bell.x,
     targetY: bell.y,
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     label: 'Колокол',
     hint: 'Звон собирает слуховых тварей к клетке. Это не защита, а отвлечение.',
     targetName: rooms.bellCage.name,
@@ -1223,7 +1223,7 @@ function registerFocusWarningRouteCue(world: World, rooms: SpectralRooms): void 
     y: rooms.nave.y + (rooms.nave.h >> 1),
     targetX: focus.x,
     targetY: focus.y,
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     label: 'Слуховой фокус',
     hint: 'Выстрел здесь раскрывает линию слепым. Приманка или тихий обход лучше прямого боя.',
     targetName: rooms.focusArch.name,
@@ -1247,7 +1247,7 @@ function registerRadioSacristyRouteCue(world: World, rooms: SpectralRooms): void
     y: rooms.quietNorth.y + 4,
     targetX: radio.x,
     targetY: radio.y,
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     label: 'Радиоризница',
     hint: 'Радиоузел дает предметы для слуха и глушения, но шкаф заперт.',
     targetName: rooms.radioSacristy.name,
@@ -1310,7 +1310,7 @@ export function ringSpectralChasovnyaBell(
   const noise = publishNoise(state, {
     x: node.x,
     y: node.y,
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     radius: node.radius,
     ttl: 4.0,
     source: 'siren',
@@ -1346,7 +1346,7 @@ export function ringSpectralChasovnyaBell(
     : 'Колокол ударил низко. Эхо ушло в боковые тени.', state.time, '#d6a64b'));
   publishEvent(state, {
     type: 'monster_bait_placed',
-    floor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     roomId: node.roomId,
     x: node.x,
     y: node.y,

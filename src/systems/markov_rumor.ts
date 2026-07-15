@@ -1,6 +1,6 @@
 /* ── Markov rumor adapter: flavor around selected rumor facts ─── */
 
-import { Faction, FloorLevel, MonsterKind, RoomType, type ZoneFaction } from '../core/types';
+import { Faction, MonsterKind, RoomType, type ZoneFaction } from '../core/types';
 import { ITEMS } from '../data/items';
 import { RUMORS, type RumorDef, type RumorLead, type RumorReveal } from '../data/rumors';
 import { monsterTypeName } from '../entities/monster';
@@ -75,7 +75,7 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
   const leadItemId = rumor.lead?.itemId ?? options.event?.itemId;
   const leadMonsterKind = rumor.lead?.monsterKind ?? options.event?.monsterKind;
   const context = {
-    floor: options.snapshot.floor,
+    z: options.snapshot.z,
     roomName: options.snapshot.roomName,
     roomType: options.snapshot.roomType,
     zoneId: options.snapshot.zoneId,
@@ -172,7 +172,7 @@ function allowedRumorFactTexts(rumor: RumorDef, options: MarkovRumorFlavorOption
   const reveals = rumor.reveals ? Array.isArray(rumor.reveals) ? rumor.reveals : [rumor.reveals] : [];
   for (const reveal of reveals) addRevealFacts(allowed, reveal);
   if (options.snapshot.roomName) allowed.add(options.snapshot.roomName.toLowerCase());
-  if (options.snapshot.floor !== undefined) allowed.add(floorName(options.snapshot.floor).toLowerCase());
+  if (options.snapshot.z !== undefined) allowed.add(floorName(options.snapshot.z).toLowerCase());
   return allowed;
 }
 
@@ -216,7 +216,7 @@ function mentionsAnyFact(text: string, facts: Set<string>): boolean {
 
 function addRumorLeadFacts(out: Set<string>, lead: RumorLead | undefined): void {
   if (!lead) return;
-  if (lead.floor !== undefined) out.add(floorName(lead.floor).toLowerCase());
+  if (lead.z !== undefined) out.add(floorName(lead.z).toLowerCase());
   if (lead.roomName) out.add(lead.roomName.toLowerCase());
   if (lead.roomType !== undefined) out.add(roomTypeName(lead.roomType).toLowerCase());
   if (lead.itemId) {
@@ -233,7 +233,7 @@ function addRevealFacts(out: Set<string>, reveal: RumorReveal): void {
 
 function addEventFacts(out: Set<string>, event: RumorEventLike | undefined): void {
   if (!event) return;
-  if (event.floor !== undefined) out.add(floorName(event.floor).toLowerCase());
+  if (event.z !== undefined) out.add(floorName(event.z).toLowerCase());
   if (event.roomName) out.add(event.roomName.toLowerCase());
   if (event.itemId) {
     const itemName = ITEMS[event.itemId]?.name.toLowerCase();
@@ -249,7 +249,7 @@ function formatLeadLine(lead: RumorLead | undefined, event?: RumorEventLike): st
 
 function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
-  if (lead.floor !== undefined) parts.push(floorName(lead.floor));
+  if (lead.z !== undefined) parts.push(floorName(lead.z));
   if (lead.zoneHint) parts.push(lead.zoneHint);
   if (lead.roomName) parts.push(lead.roomName);
   else if (lead.roomType !== undefined) parts.push(roomTypeName(lead.roomType));
@@ -264,7 +264,7 @@ function formatStaticLead(lead: RumorLead): string {
 
 function formatEventLead(event: RumorEventLike): string {
   const parts: string[] = [];
-  if (event.floor !== undefined) parts.push(floorName(event.floor));
+  if (event.z !== undefined) parts.push(floorName(event.z));
   if (event.zoneName) parts.push(event.zoneName);
   else if (event.zoneId !== undefined) parts.push(`зона ${event.zoneId + 1}`);
   if (event.roomName) parts.push(event.roomName);
@@ -308,7 +308,7 @@ function revealIsActionable(reveal: RumorReveal): boolean {
 function formatReveal(reveal: RumorReveal): string {
   switch (reveal.kind) {
     case 'floor':
-      return floorName(reveal.floor);
+      return floorName(reveal.z);
     case 'zone':
       if (reveal.zoneId !== undefined) return `зона ${reveal.zoneId + 1}`;
       if (reveal.faction !== undefined) return `зона: ${zoneFactionName(reveal.faction)}`;
@@ -341,16 +341,16 @@ function findRumor(id: string): RumorDef | undefined {
   return RUMORS.find(rumor => rumor.id === id);
 }
 
-const FLOOR_NAMES: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Ад',
-  [FloorLevel.VOID]: 'Пустота',
+const FLOOR_NAMES: Record<number, string> = {
+  [number.MINISTRY]: 'Министерство',
+  [number.KVARTIRY]: 'Квартиры',
+  [number.LIVING]: 'Жилая зона',
+  [number.MAINTENANCE]: 'Коллекторы',
+  [number.HELL]: 'Ад',
+  [number.VOID]: 'Пустота',
 };
 
-function floorName(floor: FloorLevel): string {
+function floorName(z: number): string {
   return FLOOR_NAMES[floor];
 }
 

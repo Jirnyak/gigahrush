@@ -5,7 +5,7 @@
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType, MonsterKind,
-  FloorLevel,
+  number,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
@@ -43,7 +43,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(FloorLevel.LIVING),
+  homeFloorKey: storyNpcFloorKey(number.LIVING),
   tags: ['living', 'liquidator'],
   quests: [
     {

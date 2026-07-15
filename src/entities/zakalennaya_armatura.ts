@@ -1,6 +1,6 @@
 /* ── Zakalyonnaya Armatura: slow armored rebar elite ──────────── */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -12,7 +12,6 @@ export const DEF: MonsterDef = {
   dmg: 31,
   attackRate: 2.9,
   sprite: 0,
-  floors: [FloorLevel.MAINTENANCE, FloorLevel.HELL],
   counterplay: 'Броня держит ножи и панические пули: ведите вокруг станков, срывайте темп дробью, кувалдой, гранатой или тяжелым оружием.',
   lootHint: 'закаленный прут, бетонная окалина, обломок бронеплиты',
 };

@@ -15,7 +15,7 @@
  * already restored. This module only adds the network envelope, entity packing
  * and transport-level chunking. Zero runtime dependencies. */
 
-import { EntityType, W, type Entity, type FloorLevel } from '../core/types';
+import { EntityType, W, type Entity, type } from '../core/types';
 import { World } from '../core/world';
 import { safeParseJson } from '../core/json';
 import { worldForSave, worldFromSave } from './floor_memory';
@@ -27,7 +27,7 @@ export const FLOOR_SNAPSHOT_VERSION = 1 as const;
 type PackedWorld = ReturnType<typeof worldForSave>;
 
 export interface FloorSnapshotMeta {
-  floor: FloorLevel;
+  z: number;
   runSeed: number;
   floorKey?: string;
   spawnX: number;
@@ -79,7 +79,7 @@ export function packFloorForNetwork(
   }
   return {
     v: FLOOR_SNAPSHOT_VERSION,
-    floor: meta.floor,
+    z: meta.z,
     runSeed: meta.runSeed,
     floorKey: meta.floorKey,
     spawnX: meta.spawnX,
@@ -175,7 +175,7 @@ export function unpackFloorFromNetwork(snapshot: FloorSnapshot): UnpackedFloor |
     world,
     entities: restoreSnapshotEntities(snapshot.entities),
     meta: {
-      floor: snapshot.floor,
+      z: snapshot.z,
       runSeed: finiteNumber(snapshot.runSeed, 0),
       floorKey: typeof snapshot.floorKey === 'string' ? snapshot.floorKey : undefined,
       spawnX: finiteNumber(snapshot.spawnX, W / 2),

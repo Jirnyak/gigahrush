@@ -6,7 +6,7 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   RoomType,
   Tex,
   msg,
@@ -127,7 +127,7 @@ interface SamosborWave {
   patchRoomId: number;
   protectedRooms: Set<number>;
   player?: Entity;
-  floor: FloorLevel;
+  z: number;
   startedAt: number;
   changedCells: number;
   regeneratedCells: number;
@@ -1011,12 +1011,12 @@ function cleanupContainers(
   world: World,
   wave: SamosborWave,
   touchedSet: Set<number>,
-  floor: FloorLevel,
+  z: number,
 ): void {
   let changed = false;
   for (let i = world.containers.length - 1; i >= 0; i--) {
     const container = world.containers[i];
-    if (container.floor !== floor) continue;
+    if (container.z !== floor) continue;
     const idx = world.idx(container.x, container.y);
     if (!touchedSet.has(idx)) continue;
     if (!walkableCell(world.cells[idx])) {
@@ -1741,7 +1741,7 @@ function createInitialSamosborWave(
     patchRoomId: -1,
     protectedRooms,
     player: _entities.find((e) => isPlayerEntity(e) && e.alive),
-    floor: state.currentZ,
+    z: state.currentZ,
     startedAt: state.time,
     changedCells: 0,
     regeneratedCells: 0,
@@ -1816,7 +1816,7 @@ export function tickSamosborWave(
 ): SamosborWaveTickResult {
   const wave = activeWave;
   if (!wave?.active) return EMPTY_WAVE_RESULT;
-  if (wave.floor !== state.currentZ) {
+  if (wave.z !== state.currentZ) {
     cancelSamosborWave();
     return { active: false, processed: 0, changed: 0, finished: true };
   }

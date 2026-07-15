@@ -20,7 +20,7 @@ import {
   type DemosReactionKind,
   type DemosReactionTemplateDef,
 } from '../data/demos_posts';
-import { Faction, FloorLevel, type WorldEvent, type WorldEventType } from '../core/types';
+import { Faction, type WorldEvent, type WorldEventType } from '../core/types';
 import type { AlifeNpcSnapshot } from './alife';
 import {
   npcPackageSpeechContextTags,
@@ -34,7 +34,7 @@ export interface DemosMarkovTextContext {
   actorAlifeId?: number;
   targetAlifeId?: number;
   floorKey?: string;
-  floor?: FloorLevel;
+  z?: number;
   faction?: Faction;
   relationBand?: 'hostile' | 'cold' | 'neutral' | 'warm' | 'friend';
   socialEdgeFlags?: number;
@@ -157,13 +157,13 @@ export interface DemosFeedView {
   emptyLabel: string;
 }
 
-const FLOOR_LABELS: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Нижний этаж',
-  [FloorLevel.VOID]: '[ДАННЫЕ УДАЛЕНЫ]',
+const FLOOR_LABELS: Record<number, string> = {
+  [number.MINISTRY]: 'Министерство',
+  [number.KVARTIRY]: 'Квартиры',
+  [number.LIVING]: 'Жилая зона',
+  [number.MAINTENANCE]: 'Коллекторы',
+  [number.HELL]: 'Нижний этаж',
+  [number.VOID]: '[ДАННЫЕ УДАЛЕНЫ]',
 };
 
 const EVENT_DETAIL_LABELS: Partial<Record<WorldEventType, string>> = {
@@ -355,7 +355,7 @@ function eventPlace(event: WorldEvent): string {
   if (event.roomId !== undefined) return `комната ${Math.floor(event.roomId)}`;
   if (event.zoneId !== undefined) return `зона ${Math.floor(event.zoneId)}`;
   if (dataFloorKey) return dataFloorKey;
-  return FLOOR_LABELS[event.floor] ?? 'этот этаж';
+  return FLOOR_LABELS[event.z] ?? 'этот этаж';
 }
 
 function dataString(event: WorldEvent, key: string): string {

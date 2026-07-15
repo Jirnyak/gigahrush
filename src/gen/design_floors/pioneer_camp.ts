@@ -1,4 +1,4 @@
-/* -- Design floor: Пионерлагерь ---------------------------------
+/* -- Design z: Пионерлагерь ---------------------------------
  * A Soviet summer-camp pocket inside the concrete route. The floor
  * uses generic camp grammar, not copied Everlasting Summer names.
  */
@@ -12,7 +12,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -41,7 +41,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('pioneer_camp');
 
 export const PIONEER_CAMP_DESIGN_FLOOR_ID = 'pioneer_camp' as const;
 export const PIONEER_CAMP_ROUTE_Z = 38;
-export const PIONEER_CAMP_BASE_FLOOR = FloorLevel.LIVING;
+export const PIONEER_CAMP_BASE_FLOOR = number.LIVING;
 export const PIONEER_CAMP_DISPLAY_NAME = 'Пионерлагерь';
 
 const CAMP_SEED = hashSeed(PIONEER_CAMP_DESIGN_FLOOR_ID);
@@ -1324,7 +1324,7 @@ function addCampContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: PIONEER_CAMP_BASE_FLOOR,
+    z: PIONEER_CAMP_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

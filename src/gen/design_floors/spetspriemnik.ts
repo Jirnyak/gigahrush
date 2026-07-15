@@ -1,4 +1,4 @@
-/* -- Design floor: spetspriemnik - detention, keys and bounded riot pressure -- */
+/* -- Design z: spetspriemnik - detention, keys and bounded riot pressure -- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -36,7 +36,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('spetspriemnik');
 
 export const SPETSPRIEMNIK_ROUTE_ID = 'spetspriemnik' as const;
 export const SPETSPRIEMNIK_Z = 40 as const;
-export const SPETSPRIEMNIK_BASE_FLOOR = FloorLevel.MINISTRY;
+export const SPETSPRIEMNIK_BASE_FLOOR = number.MINISTRY;
 export const SPETSPRIEMNIK_CELL_KEY = 'container_key_label';
 export const SPETSPRIEMNIK_PERMIT_KEY = 'official_permit_slip';
 export const SPETSPRIEMNIK_GUARD_KEY = 'liquidator_token';
@@ -316,7 +316,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_nachalnik_krivd
     giverNpcId: 'spetspriemnik_nachalnik_krivda',
     type: QuestType.VISIT,
     desc: 'Проверь гермокамеру спецприёмника. Кривда даст корешок, если дверь держит сирену, а люди внутри не шумят.',
-    targetFloor: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomName: 'Камера спецприёмника 05: гермоукрытие',
     holdSeconds: 25,
@@ -339,7 +339,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_guard_savva', N
     desc: 'Отдай Савве пачку сигарет у решётки. Он не продаст ключ, но бирка может упасть не туда.',
     targetItem: 'cigs',
     targetCount: 1,
-    targetFloor: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     rewardItem: SPETSPRIEMNIK_CELL_KEY,
     rewardCount: 1,
@@ -360,7 +360,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
     desc: 'Принеси Мире бирку от ключа. Она выведет ряд камер тихо, пока караул спорит с журналом обхода.',
     targetItem: SPETSPRIEMNIK_CELL_KEY,
     targetCount: 1,
-    targetFloor: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomName: 'Клетка свиданий и обмена фамилий',
     rewardItem: 'personal_file_copy',
@@ -379,7 +379,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
     giverNpcId: 'spetspriemnik_prisoner_mira',
     type: QuestType.VISIT,
     desc: 'Удержи двор переклички, пока Мира срывает список. Шум поднимет охрану, но волна ограничена двором.',
-    targetFloor: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomName: SPETSPRIEMNIK_ROOM_NAMES.riotYard,
     holdSeconds: 35,
@@ -406,7 +406,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_informant_tolya
     desc: 'Принеси Толе копию личного дела из сейфа начальника. Он обменяет фамилии на пропуск и чужой донос.',
     targetItem: 'personal_file_copy',
     targetCount: 1,
-    targetFloor: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomName: SPETSPRIEMNIK_ROOM_NAMES.command,
     rewardItem: SPETSPRIEMNIK_PERMIT_KEY,
@@ -429,7 +429,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_clerk_alla', NP
     desc: 'Принеси Алле украденную печать терминала. Она поставит выпускной штамп, если окно приёма ещё целое.',
     targetItem: 'stolen_terminal_stamp',
     targetCount: 1,
-    targetFloor: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     rewardItem: 'forged_permit_slip',
     rewardCount: 1,
@@ -1047,7 +1047,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: SPETSPRIEMNIK_BASE_FLOOR,
+    z: SPETSPRIEMNIK_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,

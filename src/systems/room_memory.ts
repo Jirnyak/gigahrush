@@ -2,7 +2,7 @@
 
 import {
   Faction,
-  type FloorLevel,
+  type number,
   type WorldContainer,
   type WorldEvent,
   type WorldEventSeverity,
@@ -22,7 +22,7 @@ export const ROOM_MEMORY_ACTOR_PLAYER = 1 << 0;
 export const ROOM_MEMORY_CAP = 96;
 
 export interface RoomMemoryRecord {
-  floor: FloorLevel;
+  z: number;
   roomId: number;
   zoneId?: number;
   bits: number;
@@ -44,7 +44,7 @@ const REMEMBERED_PRIVACIES = new Set(['public', 'local', 'witnessed']);
 const roomMemory = new Map<string, RoomMemoryRecord>();
 let tickAccum = 0;
 
-function memoryKey(floor: FloorLevel, roomId: number): string {
+function memoryKey(z: number, roomId: number): string {
   return `${floor}:${roomId}`;
 }
 
@@ -173,7 +173,7 @@ export function recordRoomMemoryEvent(event: WorldEvent): RoomMemoryRecord | und
   if (bits === 0) return undefined;
 
   const severity = clampSeverity(Math.max(event.severity, minSeverityForBits(bits)));
-  const key = memoryKey(event.floor, event.roomId);
+  const key = memoryKey(event.z, event.roomId);
   const existing = roomMemory.get(key);
   const ttl = ttlForBits(bits, severity);
   if (existing) {
@@ -190,7 +190,7 @@ export function recordRoomMemoryEvent(event: WorldEvent): RoomMemoryRecord | und
   }
 
   const record: RoomMemoryRecord = {
-    floor: event.floor,
+    z: event.z,
     roomId: event.roomId,
     zoneId: event.zoneId,
     bits,
@@ -233,14 +233,14 @@ export function tickRoomMemory(_now: number, dt: number): number {
   return changed;
 }
 
-export function getRoomMemory(floor: FloorLevel | undefined, roomId: number | undefined): RoomMemoryRecord | undefined {
+export function getRoomMemory(z: number | undefined, roomId: number | undefined): RoomMemoryRecord | undefined {
   if (floor === undefined || roomId === undefined || roomId < 0) return undefined;
   const record = roomMemory.get(memoryKey(floor, roomId));
   return record && record.ttl > 0 ? record : undefined;
 }
 
 export function getRoomMemoryForContainer(container: Pick<WorldContainer, 'floor' | 'roomId'>): RoomMemoryRecord | undefined {
-  return getRoomMemory(container.floor, container.roomId);
+  return getRoomMemory(container.z, container.roomId);
 }
 
 export function roomMemoryHas(record: RoomMemoryRecord | undefined, bits: number): boolean {
@@ -300,7 +300,7 @@ export function describeRoomMemory(record: RoomMemoryRecord): string {
   return `room #${record.roomId}: ${labels}; sev${record.severity}; ttl ${Math.ceil(record.ttl)}s; event ${record.lastEventType}#${record.lastEventId}`;
 }
 
-export function summarizeRoomMemoryForRoom(floor: FloorLevel | undefined, roomId: number | undefined): string[] {
+export function summarizeRoomMemoryForRoom(z: number | undefined, roomId: number | undefined): string[] {
   const record = getRoomMemory(floor, roomId);
   if (!record) return ['Коммунальная память: нет'];
   return [

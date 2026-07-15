@@ -8,7 +8,7 @@ import {
   type ZoneFaction,
   type ContextFact,
   type WorldEventType,
-  FloorLevel,
+  number,
   RoomType,
   W,
 } from '../core/types';
@@ -19,7 +19,7 @@ import { factionToTerritoryOwner } from '../data/factions';
 import { territoryOwnerAtIndex } from './territory';
 
 export interface ContextSnapshot {
-  floor?: FloorLevel;
+  z?: number;
   zoneId?: number;
   zoneFaction?: ZoneFaction;
   zoneLevel?: number;
@@ -120,7 +120,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
   const playerId = options.player?.id;
 
   return {
-    floor: options.state?.currentZ,
+    z: options.state?.currentZ,
     zoneId,
     zoneFaction,
     zoneLevel,

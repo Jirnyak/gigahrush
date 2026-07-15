@@ -7,7 +7,7 @@ import {
   W,
   EntityType,
   MonsterKind,
-  FloorLevel,
+  number,
   msg,
 } from '../core/types';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
@@ -347,7 +347,7 @@ export function xpForNpcKill(npcLevel: number): number {
 // ── Zone level calculation ───────────────────────────────────────
 // Level depends on distance from center of the zone grid + floor bonus.
 const ZONE_CELL = Math.floor(W / 8); // ~128; must match shared.ts ZONE_CELL
-export function calcZoneLevel(zoneCx: number, zoneCy: number, floor: FloorLevel): number {
+export function calcZoneLevel(zoneCx: number, zoneCy: number, z: number): number {
   // Convert world-space center to grid coordinates (0-7)
   const zx = zoneCx / ZONE_CELL;
   const zy = zoneCy / ZONE_CELL;
@@ -357,13 +357,13 @@ export function calcZoneLevel(zoneCx: number, zoneCy: number, floor: FloorLevel)
   const baseLevel = Math.max(1, Math.round(1 + distFromCenter * 1.5));
 
   // Floor bonus
-  const floorBonus: Record<FloorLevel, number> = {
-    [FloorLevel.MINISTRY]: 0,
-    [FloorLevel.KVARTIRY]: 0,
-    [FloorLevel.LIVING]: 0,
-    [FloorLevel.MAINTENANCE]: 4,
-    [FloorLevel.HELL]: 9,
-    [FloorLevel.VOID]: 15,
+  const floorBonus: Record<number, number> = {
+    [number.MINISTRY]: 0,
+    [number.KVARTIRY]: 0,
+    [number.LIVING]: 0,
+    [number.MAINTENANCE]: 4,
+    [number.HELL]: 9,
+    [number.VOID]: 15,
   };
 
   return baseLevel + (floorBonus[floor] ?? 0);

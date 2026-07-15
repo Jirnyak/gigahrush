@@ -1,6 +1,6 @@
 /* ── Markov procedural quest speech adapter ───────────────────── */
 
-import { FloorLevel, MonsterKind, QuestType, RoomType, type Quest } from '../core/types';
+import { MonsterKind, QuestType, RoomType, type Quest } from '../core/types';
 import { ITEMS } from '../data/items';
 import type { ContractDef } from '../data/contracts';
 import { monsterTypeName } from '../entities/monster';
@@ -86,7 +86,7 @@ export function renderProceduralQuestSpeech(options: ProceduralQuestSpeechOption
     context: {
       ...snapshotContext,
       targetId: q.targetNpcId,
-      floor: q.targetFloor ?? q.visitFloor ?? options.contractDef?.target.floor ?? snapshotContext?.floor,
+      z: q.targetFloorZ ?? q.visitFloorZ ?? options.contractDef?.target.z ?? snapshotContext?.z,
       roomName: q.targetRoomName ?? options.contractDef?.target.roomName ?? snapshotContext?.roomName,
       roomType: q.targetRoomType ?? options.contractDef?.target.roomType ?? snapshotContext?.roomType,
       itemId: q.targetItem,
@@ -299,9 +299,9 @@ function roomOrRouteText(q: Quest, contractDef?: ContractDef): string | undefine
   if (contractDef?.target.roomType !== undefined) return roomTypeName(contractDef.target.roomType);
   if (q.targetHint) return q.targetHint;
   if (contractDef?.target.hint) return contractDef.target.hint;
-  if (q.targetFloor !== undefined) return floorName(q.targetFloor);
-  if (q.visitFloor !== undefined) return floorName(q.visitFloor);
-  if (contractDef?.target.floor !== undefined) return floorName(contractDef.target.floor);
+  if (q.targetFloorZ !== undefined) return floorName(q.targetFloorZ);
+  if (q.visitFloorZ !== undefined) return floorName(q.visitFloorZ);
+  if (contractDef?.target.z !== undefined) return floorName(contractDef.target.z);
   return undefined;
 }
 
@@ -359,14 +359,14 @@ function result(
   };
 }
 
-function floorName(floor: FloorLevel): string {
+function floorName(z: number): string {
   switch (floor) {
-    case FloorLevel.MINISTRY: return 'Министерство';
-    case FloorLevel.KVARTIRY: return 'Квартиры';
-    case FloorLevel.LIVING: return 'Жилая зона';
-    case FloorLevel.MAINTENANCE: return 'Коллекторы';
-    case FloorLevel.HELL: return 'Ад';
-    case FloorLevel.VOID: return 'Пустота';
+    case number.MINISTRY: return 'Министерство';
+    case number.KVARTIRY: return 'Квартиры';
+    case number.LIVING: return 'Жилая зона';
+    case number.MAINTENANCE: return 'Коллекторы';
+    case number.HELL: return 'Ад';
+    case number.VOID: return 'Пустота';
   }
 }
 

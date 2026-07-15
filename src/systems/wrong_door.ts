@@ -7,7 +7,7 @@ import { publishEvent } from './events';
 import { getCurrentPlayerEntity } from './player_actor';
 import { territoryOwnerAtIndex } from './territory';
 
-export { ContainerKind, Faction, FloorLevel, Occupation } from '../core/types';
+export { ContainerKind, Faction, number, Occupation } from '../core/types';
 
 export const WRONG_DOOR_MIN_DIST2 = 18 * 18;
 export const WRONG_DOOR_MAX_DIST2 = 96 * 96;

@@ -1,6 +1,6 @@
 /* ── Bounded module-level NPC memory store ────────────────────── */
 
-import { Faction, MonsterKind, type Entity, type FloorLevel } from '../core/types';
+import { Faction, MonsterKind, type Entity, type } from '../core/types';
 
 export type NpcObservedFactKind =
   | 'theft'
@@ -25,7 +25,7 @@ export type NpcWitnessResidue = 'mark' | 'moved_loot' | 'scared_npc' | 'price' |
 export interface NpcObservedFact {
   eventId: number;
   kind: NpcObservedFactKind;
-  floor?: FloorLevel;
+  z?: number;
   zoneId?: number;
   roomId?: number;
   actorId?: number;
@@ -49,7 +49,7 @@ export interface NpcMemoryEventLike {
   id?: number;
   type?: string;
   time?: number;
-  floor?: FloorLevel;
+  z?: number;
   zoneId?: number;
   roomId?: number;
   severity?: number;
@@ -94,7 +94,7 @@ export interface RecentRumorLead {
   text: string;
   heardAt: number;
   expiresAt: number;
-  floor?: FloorLevel;
+  z?: number;
   roomName?: string;
   itemId?: string;
   monsterKind?: MonsterKind;
@@ -196,7 +196,7 @@ export function noteObservedEventFact(npc: Entity, event: NpcMemoryEventLike, no
   memory.observedFacts.push({
     eventId,
     kind,
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -492,7 +492,7 @@ const FLOOR_NAMES: Record<number, string> = {
 
 function witnessPlace(fact: NpcObservedFact): string {
   const parts: string[] = [];
-  if (fact.floor !== undefined) parts.push(FLOOR_NAMES[fact.floor] ?? `этаж ${fact.floor}`);
+  if (fact.z !== undefined) parts.push(FLOOR_NAMES[fact.z] ?? `этаж ${fact.z}`);
   if (fact.zoneId !== undefined) parts.push(`зона ${fact.zoneId + 1}`);
   if (fact.roomId !== undefined) parts.push(`комната ${fact.roomId}`);
   return parts.length > 0 ? parts.join(' / ') : 'место рядом';

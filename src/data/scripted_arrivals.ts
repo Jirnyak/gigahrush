@@ -2,7 +2,7 @@
 
 import {
   Faction,
-  FloorLevel,
+  number,
   LiftDirection,
   Occupation,
   type Item,
@@ -33,8 +33,8 @@ export interface ScriptedArrivalEscortDef {
 export interface ScriptedArrivalDef {
   id: string;
   triggerPlotEventTag: string;
-  currentZ: FloorLevel;
-  currentStoryFloor?: FloorLevel;
+  currentZ: number;
+  currentStoryFloor?: number;
   leaderPlotNpcId: string;
   leaderWeapon?: string;
   leaderTraveler?: boolean;
@@ -50,12 +50,12 @@ export const SCRIPTED_ARRIVALS: readonly ScriptedArrivalDef[] = [
   {
     id: 'hell_holdout_major_grom_group',
     triggerPlotEventTag: 'hell_holdout',
-    currentZ: FloorLevel.HELL,
-    currentStoryFloor: FloorLevel.HELL,
+    currentZ: number.HELL,
+    currentStoryFloor: number.HELL,
     leaderPlotNpcId: 'major_grom',
     leaderWeapon: 'ak47',
     leaderTraveler: true,
-    sourceFloorKey: floorKeyForStory(FloorLevel.MINISTRY),
+    sourceFloorKey: floorKeyForStory(number.MINISTRY),
     preferredLiftDirection: LiftDirection.UP,
     escort: {
       count: 5,

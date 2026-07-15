@@ -1,6 +1,6 @@
-/* -- Design floor: Черный рынок 88 --------------------------------
+/* -- Design z: Черный рынок 88 --------------------------------
  * Standalone future-floor slice. It deliberately does not add a new
- * FloorLevel; route integration belongs to the floor manifest owner.
+ * number; route integration belongs to the floor manifest owner.
  */
 
 import { clamp } from '../../render/ui_utils';
@@ -13,7 +13,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   Occupation,
   QuestType,
@@ -43,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('black_market_88');
 export const BLACK_MARKET_88_ROUTE_ID = 'black_market_88' as const;
 export const BLACK_MARKET_88_DISPLAY_NAME = 'Черный рынок 88';
 export const BLACK_MARKET_88_FUTURE_Z = -10;
-export const BLACK_MARKET_88_CONTAINER_FLOOR = FloorLevel.LIVING;
+export const BLACK_MARKET_88_CONTAINER_FLOOR = number.LIVING;
 
 export type Market88LaneId = 'survival' | 'weapons' | 'medicine' | 'documents' | 'access';
 export type Market88AccessKind = 'password' | 'maintenance_hatch' | 'ministry_document';
@@ -2400,7 +2400,7 @@ function addContainer(
     id: world.containers.length + 1,
     x,
     y,
-    floor: BLACK_MARKET_88_CONTAINER_FLOOR,
+    z: BLACK_MARKET_88_CONTAINER_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

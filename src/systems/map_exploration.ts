@@ -201,11 +201,11 @@ function questWithMarkerFallback(q: Quest): Quest {
 function questMarkerTargetOnCurrentFloor(q: Quest, state: GameState): boolean {
   if (!isQuestTargetOnCurrentFloor(q, state)) return false;
   if (
-    q.targetFloor === undefined &&
-    q.visitFloor === undefined &&
+    q.targetFloorZ === undefined &&
+    q.visitFloorZ === undefined &&
     q.targetRoute === undefined &&
-    q.targetMarker?.floor !== undefined
-  ) return q.targetMarker.floor === state.currentZ;
+    q.targetMarker?.z !== undefined
+  ) return q.targetMarker.z === state.currentZ;
   return true;
 }
 

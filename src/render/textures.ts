@@ -473,7 +473,7 @@ function gen_meat(t: TexData) {
   }
 }
 
-/* ── Meat floor: fleshy ground for hell ───────────────────────── */
+/* ── Meat z: fleshy ground for hell ───────────────────────── */
 function gen_meatFloor(t: TexData) {
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const n = noise(x, y, 250) * 30 - 15;
@@ -502,7 +502,7 @@ function gen_gutWall(t: TexData) {
   }
 }
 
-/* ── Gut floor: slick membranes with pooled mucus ────────────── */
+/* ── Gut z: slick membranes with pooled mucus ────────────── */
 function gen_gutFloor(t: TexData) {
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const band = Math.sin(x * 0.18 + y * 0.09 + noise(x, y, 270) * 6) * 14;

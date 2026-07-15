@@ -1,4 +1,4 @@
-/* ── Design floor: dark_metro / Темная пересадка ─────────────── */
+/* ── Design z: dark_metro / Темная пересадка ─────────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -9,7 +9,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -48,7 +48,7 @@ export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
 export const DARK_METRO_FUTURE_Z = -32;
 export const DARK_METRO_DEFAULT_SEED = 0x17da_4b0d;
 
-const DARK_METRO_BASE_FLOOR = FloorLevel.MAINTENANCE;
+const DARK_METRO_BASE_FLOOR = number.MAINTENANCE;
 
 const enum PlatformLightState {
   OFF = 0,
@@ -452,7 +452,7 @@ export function publishDarkMetroAmbushWarning(
   const zoneId = world.zoneMap[world.idx(px, py)];
   publishEvent(state, {
     type: 'monster_sighted',
-    floor: DARK_METRO_BASE_FLOOR,
+    z: DARK_METRO_BASE_FLOOR,
     zoneId: zoneId >= 0 ? zoneId : undefined,
     x: actor.x,
     y: actor.y,
@@ -1470,7 +1470,7 @@ function addDarkMetroTransitCache(world: World, room: Room, x: number, y: number
     id: nextDarkMetroContainerId(world),
     x,
     y,
-    floor: DARK_METRO_BASE_FLOOR,
+    z: DARK_METRO_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: slot === 0 ? ContainerKind.TOOL_LOCKER : ContainerKind.EMERGENCY_BOX,
@@ -1956,7 +1956,7 @@ function addContainer(
     id: ctx.nextContainerId.v++,
     x,
     y,
-    floor: DARK_METRO_BASE_FLOOR,
+    z: DARK_METRO_BASE_FLOOR,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     kind,
@@ -2038,7 +2038,7 @@ function registerDarkMetroRouteCues(ctx: BuildCtx, layout: DarkMetroLayout): voi
     y: ambushMarkerY,
     targetX: ambushTargetX,
     targetY: ambushTargetY,
-    floor: DARK_METRO_BASE_FLOOR,
+    z: DARK_METRO_BASE_FLOOR,
     roomId: layout.underpass.id,
     targetRoomId: layout.blindTunnel.id,
     zoneId: ctx.world.zoneMap[ambushCell],
@@ -2067,7 +2067,7 @@ function registerDarkMetroRouteCues(ctx: BuildCtx, layout: DarkMetroLayout): voi
     y: shortcutMarkerY,
     targetX: shortcutTargetX,
     targetY: shortcutTargetY,
-    floor: DARK_METRO_BASE_FLOOR,
+    z: DARK_METRO_BASE_FLOOR,
     roomId: layout.platform.id,
     targetRoomId: layout.exit.id,
     zoneId: ctx.world.zoneMap[shortcutCell],

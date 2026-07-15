@@ -1,6 +1,6 @@
 /* -- Trubnyy Avtomat: wet-corridor line machine ---------------- */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 
@@ -16,7 +16,6 @@ export const DEF: MonsterDef = {
   projSpeed: 13,
   projSprite: 0,
   aiFlags: ['wetLineShot'],
-  floors: [FloorLevel.MAINTENANCE],
   counterplay: 'Сойдите с мокрой прямой до окончания заряда: автомат бьет только по водной линии, долго остывает после залпа и плохо держит фланг в упоре.',
   lootHint: 'мокрая плата, синие трубные кольца, обожженный манометр, редкая энергоячейка',
 };

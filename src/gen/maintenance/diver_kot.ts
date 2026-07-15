@@ -2,7 +2,7 @@
 /* Дикий ныряльщик из водяных каналов. Жрёт сырое мясо.           */
 
 import {
-  W, Cell, FloorLevel, RoomType,
+  W, Cell, number, RoomType,
   type Entity, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -55,7 +55,7 @@ registerSideQuest('diver_kot', NPC_DEF, [
     type: QuestType.FETCH,
     desc: 'Кот: «На сухом мосту есть бирка водолазного маршрута. Принесёшь — скажу, где угорь воздух не любит.»',
     targetItem: 'diver_route_tag', targetCount: 1,
-    targetFloor: FloorLevel.MAINTENANCE,
+    targetFloorZ: number.MAINTENANCE,
     targetRoomType: RoomType.CORRIDOR,
     targetZoneTag: 'water_bridge',
     targetHint: 'Коллекторы: сухой мост над угревым лотком; дальний маршрутный ящик стоит на сухой кромке за водой.',

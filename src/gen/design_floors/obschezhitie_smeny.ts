@@ -6,7 +6,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   NpcState,
   Occupation,
@@ -32,7 +32,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('obschezhitie_smeny');
 export const OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID = 'obschezhitie_smeny' as const;
 export const OBSCHEZHITIE_SMENY_ROUTE_Z = -6;
 
-const BASE_FLOOR = FloorLevel.LIVING;
+const BASE_FLOOR = number.LIVING;
 const DORM_SEED = hashSeed(OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID);
 const SLEEPER_TEMPLATE_COUNT = 36;
 const PATROL_TEMPLATE_COUNT = 8;
@@ -918,7 +918,7 @@ function addContainer(
     id: containerId.v++,
     x,
     y,
-    floor: BASE_FLOOR,
+    z: BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

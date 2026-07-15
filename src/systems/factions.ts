@@ -5,7 +5,7 @@
 import {
   type Entity, type GameState,
   EntityType, AIGoal, Faction, ZoneFaction,
-  type FloorLevel, type WorldEventSeverity, type WorldEventType,
+  type number, type WorldEventSeverity, type WorldEventType,
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
@@ -144,7 +144,7 @@ export interface FactionOwnerUiSnapshot {
 export interface FactionRecentEventUiSnapshot {
   id: number;
   time: number;
-  floor: FloorLevel;
+  z: number;
   zoneId: number;
   x: number;
   y: number;
@@ -159,7 +159,7 @@ export interface FactionRecentEventUiSnapshot {
 
 export interface FactionUiSnapshot {
   time: number;
-  floor: FloorLevel;
+  z: number;
   zones: FactionZoneUiSnapshot[];
   zoneById: (FactionZoneUiSnapshot | undefined)[];
   owners: FactionOwnerUiSnapshot[];
@@ -292,7 +292,7 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
   const recentEvents = getRecentEvents(state, { tags: ['faction_event'], limit: UI_RECENT_EVENT_LIMIT }).map(event => {
     const zoneId = event.zoneId ?? -1;
     const zone = zoneId >= 0 ? zoneById[zoneId] : undefined;
-    if (event.floor === state.currentZ && zone) {
+    if (event.z === state.currentZ && zone) {
       zone.recentEventCount++;
       if (event.severity > zone.lastEventSeverity) zone.lastEventSeverity = event.severity;
       if (event.time >= zone.lastEventTime) zone.lastEventTime = event.time;
@@ -300,7 +300,7 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
     return {
       id: event.id,
       time: event.time,
-      floor: event.floor,
+      z: event.z,
       zoneId,
       x: event.x ?? zone?.x ?? 0,
       y: event.y ?? zone?.y ?? 0,
@@ -316,7 +316,7 @@ function refreshFactionUiSnapshot(world: World, state: GameState): void {
 
   factionUiSnapshot = {
     time: state.time,
-    floor: state.currentZ,
+    z: state.currentZ,
     zones,
     zoneById,
     owners: ZONE_UI_FACTIONS.map(faction => ownerCounts.get(faction) ?? { faction, cells: 0, fronts: 0 }),
@@ -362,7 +362,7 @@ export function updateFactionActivity(
   tickCaravans(state, elapsed, false, MAX_CARAVAN_LANES_PER_TICK, world, entities, player, nextId);
   factionUiSnapshotAccum += elapsed;
   const uiRefreshSec = state.showFactions ? UI_OPEN_REFRESH_SEC : UI_IDLE_REFRESH_SEC;
-  if (!factionUiSnapshot || factionUiSnapshot.floor !== state.currentZ || factionUiSnapshotAccum >= uiRefreshSec) {
+  if (!factionUiSnapshot || factionUiSnapshot.z !== state.currentZ || factionUiSnapshotAccum >= uiRefreshSec) {
     factionUiSnapshotAccum = 0;
     refreshFactionUiSnapshot(world, state);
   }

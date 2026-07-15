@@ -229,7 +229,7 @@ function restoreBaseCell(world: World, section: ShiftSection, lx: number, ly: nu
   let changed = 0;
   const cell = section.baseCells[li] as Cell;
   const wallTex = section.baseWallTex[li] as Tex;
-  const floorTex = section.baseFloorTex[li] as Tex;
+  const floorTex = section.themeTagsTex[li] as Tex;
   if (world.cells[ci] !== cell) {
     world.cells[ci] = cell;
     changed++;

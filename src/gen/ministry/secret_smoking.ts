@@ -3,7 +3,7 @@
 /* gives FETCH quest for compromising notes about samosbor cover-up. */
 
 import {
-  Cell, Tex, Feature, FloorLevel, RoomType,
+  Cell, Tex, Feature, number, RoomType,
   type Room, type Entity,
   EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
@@ -102,7 +102,7 @@ for (const friend of FRIEND_DEFS) {
   registerAuthoredNpc({
     id: friend.id,
     npc: friend.npc,
-    homeFloorKey: storyNpcFloorKey(FloorLevel.MINISTRY),
+    homeFloorKey: storyNpcFloorKey(number.MINISTRY),
     tags: ['ministry', 'secret_smoking', 'witness'],
   });
 }

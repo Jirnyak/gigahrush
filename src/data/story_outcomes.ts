@@ -1,7 +1,7 @@
 import {
   EntityType,
   Faction,
-  FloorLevel,
+  number,
   MonsterKind,
   QuestType,
   type WorldEventPrivacy,
@@ -28,7 +28,7 @@ export interface StoryOutcomeCondition {
   activeQuest?: StoryQuestSelector;
   completedQuest?: StoryQuestSelector;
   ownedItemId?: string;
-  floorLevels?: readonly FloorLevel[];
+  floorLevels?: readonly number[];
   routeTags?: readonly string[];
 }
 

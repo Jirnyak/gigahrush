@@ -3,7 +3,7 @@ import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
 /* ── Bounded short-lived noise records for AI / HUD ───────────── */
 
 import {
-  FloorLevel,
+  number,
   RoomType,
   W,
   type Entity,
@@ -34,7 +34,7 @@ export interface NoiseRecord {
   id: number;
   time: number;
   expiresAt: number;
-  floor: FloorLevel;
+  z: number;
   x: number;
   y: number;
   radius: number;
@@ -53,7 +53,7 @@ export interface NoiseRecord {
 export interface NoiseDraft {
   x: number;
   y: number;
-  floor?: FloorLevel;
+  z?: number;
   radius: number;
   ttl: number;
   source: NoiseSource;
@@ -67,7 +67,7 @@ export interface NoiseDraft {
 }
 
 export interface NoiseQuery {
-  floor?: FloorLevel;
+  z?: number;
   minSeverity?: number;
   source?: NoiseSource;
   limit?: number;
@@ -214,7 +214,7 @@ export function publishNoise(state: GameState, draft: NoiseDraft): NoiseRecord |
     id: nextNoiseId++,
     time,
     expiresAt: time + draft.ttl,
-    floor: draft.floor ?? state.currentZ,
+    z: draft.z ?? state.currentZ,
     x: draft.x,
     y: draft.y,
     radius,
@@ -237,13 +237,13 @@ export function publishNoise(state: GameState, draft: NoiseDraft): NoiseRecord |
 export function getRecentNoiseRecords(state: GameState, query: NoiseQuery = {}, now = state.time): NoiseRecord[] {
   maybeResetForTime(now);
   pruneNoiseRecords(now);
-  const floor = query.floor ?? state.currentZ;
+  const floor = query.z ?? state.currentZ;
   const minSeverity = query.minSeverity ?? 0;
   const limit = query.limit ?? noiseRecords.length;
   const out: NoiseRecord[] = [];
   for (let i = noiseRecords.length - 1; i >= 0; i--) {
     const record = noiseRecords[i];
-    if (record.floor !== floor) continue;
+    if (record.z !== floor) continue;
     if (record.severity < minSeverity) continue;
     if (query.source !== undefined && record.source !== query.source) continue;
     if (query.sinceId !== undefined && record.id <= query.sinceId) continue;
@@ -375,7 +375,7 @@ function activeMemoryRecord(memory: ActorNoiseMemory, state: GameState, time: nu
   if (memory.hotUntil <= time) return undefined;
   pruneNoiseRecords(time);
   const record = noiseRecords.find(r => r.id === memory.recordId);
-  if (!record || record.expiresAt <= time || record.floor !== state.currentZ) return undefined;
+  if (!record || record.expiresAt <= time || record.z !== state.currentZ) return undefined;
   return record;
 }
 
@@ -406,7 +406,7 @@ export function findNoiseForActor(
   for (let i = noiseRecords.length - 1; i >= 0 && checked < NOISE_SCAN_LIMIT; i--) {
     const record = noiseRecords[i];
     checked++;
-    if (record.floor !== state.currentZ) continue;
+    if (record.z !== state.currentZ) continue;
     if (record.severity < minSeverity) continue;
     if (record.actorId === actor.id) continue;
     const effectiveRadius = record.radius * hearingMult;
@@ -461,7 +461,7 @@ export function getNoiseHudCue(world: World, state: GameState, player: Entity, t
   let bestScore = -Infinity;
   for (let i = noiseRecords.length - 1; i >= 0; i--) {
     const record = noiseRecords[i];
-    if (record.floor !== state.currentZ || record.severity < 2) continue;
+    if (record.z !== state.currentZ || record.severity < 2) continue;
     const own = record.actorId === player.id;
     const d2 = world.dist2(player.x, player.y, record.x, record.y);
     if (!own && d2 > record.radiusSq) continue;
@@ -520,7 +520,7 @@ function smokeCandleDraftResult(
 ): { result: string; text: string; severity: WorldEventSeverity } {
   const room = world?.roomAt(actor.x, actor.y);
   const designFloor = state?.currentZ !== undefined ? designFloorAtZ(state.currentZ) : undefined;
-  const maintenance = designFloor ? designFloorThemeClass(designFloor) === FloorLevel.MAINTENANCE : false;
+  const maintenance = designFloor ? designFloorThemeClass(designFloor) === number.MAINTENANCE : false;
   if (maintenance && (room?.type === RoomType.CORRIDOR || room?.type === RoomType.PRODUCTION)) {
     return {
       result: 'pulling_draft',
@@ -557,7 +557,7 @@ function publishSmokeCandleCheckEvent(
   const room = world?.roomAt(x, y);
   publishEvent(state, {
     type: 'player_use_item',
-    floor: state.currentZ,
+    z: state.currentZ,
     zoneId: ctx.zoneId ?? (ci !== undefined ? world?.zoneMap[ci] : undefined),
     roomId: room?.id,
     x,
@@ -576,7 +576,7 @@ function publishSmokeCandleCheckEvent(
       'inventory',
       'smoke',
       'vent_check',
-      currentFloorRunEntry(state).baseFloor === FloorLevel.MAINTENANCE ? 'maintenance' : 'off_floor',
+      currentFloorRunEntry(state).themeTags === number.MAINTENANCE ? 'maintenance' : 'off_floor',
       'counterplay',
     ],
     data: {
@@ -651,7 +651,7 @@ function handleNoiseSourceEvent(state: GameState, event: WorldEvent): void {
     publishNoise(state, {
       x: event.x ?? 0,
       y: event.y ?? 0,
-      floor: event.floor,
+      z: event.z,
       radius: eventType === 'samosbor_started' ? 42 : 30,
       ttl: eventType === 'samosbor_started' ? 6 : 5,
       source: 'siren',
@@ -666,7 +666,7 @@ function handleNoiseSourceEvent(state: GameState, event: WorldEvent): void {
     publishNoise(state, {
       x: event.x ?? 0,
       y: event.y ?? 0,
-      floor: event.floor,
+      z: event.z,
       radius: event.severity >= 4 || event.tags.includes('hermetic') ? 13 : 8,
       ttl: 3,
       source: 'door',
@@ -683,7 +683,7 @@ function handleNoiseSourceEvent(state: GameState, event: WorldEvent): void {
     publishNoise(state, {
       x: event.x ?? 0,
       y: event.y ?? 0,
-      floor: event.floor,
+      z: event.z,
       radius: 14,
       ttl: 4.5,
       source: 'decoy',
@@ -700,7 +700,7 @@ function handleNoiseSourceEvent(state: GameState, event: WorldEvent): void {
     publishNoise(state, {
       x: event.x ?? 0,
       y: event.y ?? 0,
-      floor: event.floor,
+      z: event.z,
       radius: 14,
       ttl: 4,
       source: 'hack_fail',

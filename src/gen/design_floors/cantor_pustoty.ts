@@ -1,4 +1,4 @@
-/* -- Design floor: cantor_pustoty / Кантор пустоты ---------------- */
+/* -- Design z: cantor_pustoty / Кантор пустоты ---------------- */
 
 import {
   AIGoal,
@@ -7,7 +7,7 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -30,7 +30,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const CANTOR_PUSTOTY_ROUTE_ID = 'cantor_pustoty' as const;
 export const CANTOR_PUSTOTY_Z = -44 as const;
-export const CANTOR_PUSTOTY_BASE_FLOOR = FloorLevel.VOID;
+export const CANTOR_PUSTOTY_BASE_FLOOR = number.VOID;
 
 export const CANTOR_PUSTOTY_ROOM_NAMES = {
   entry: 'Кантор пустоты: входной остров досок',
@@ -734,7 +734,7 @@ function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: FloorLevel.VOID,
+    z: number.VOID,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -838,7 +838,7 @@ function registerCantorRouteCues(world: World, rooms: CantorRooms): void {
     y: rooms.entry.y + 4,
     targetX: rooms.repair.x + 6,
     targetY: rooms.repair.y + 7,
-    floor: FloorLevel.VOID,
+    z: number.VOID,
     label: 'Канторов мост',
     hint: 'рискнуть узкой бетонной связкой или идти длинной компонентой',
     targetName: CANTOR_PUSTOTY_ROOM_NAMES.repair,
@@ -858,7 +858,7 @@ function registerCantorRouteCues(world: World, rooms: CantorRooms): void {
     y: rooms.repair.y + 6,
     targetX: rooms.dust.x + 7,
     targetY: rooms.dust.y + 6,
-    floor: FloorLevel.VOID,
+    z: number.VOID,
     label: 'Пыльный остров',
     hint: 'тайник за рекурсивной прорезью, путь назад уже',
     targetName: CANTOR_PUSTOTY_ROOM_NAMES.dust,

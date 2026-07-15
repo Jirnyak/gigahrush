@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex, ZoneFaction, msg,
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent,
   type WorldEventPrivacy, type WorldEventType,
@@ -203,7 +203,7 @@ registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
     relationDelta: 12,
     xpReward: 80,
     moneyReward: 45,
-    targetFloor: FloorLevel.KVARTIRY,
+    targetFloorZ: number.KVARTIRY,
     targetRoomType: RoomType.COMMON,
     targetHint: 'Квартиры: тихий культовый блок с черными ладонями и аварийным экраном.',
     eventTags: [...CORE_TAGS, 'exposed'],
@@ -223,7 +223,7 @@ registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
     relationDelta: 10,
     xpReward: 70,
     moneyReward: 40,
-    targetFloor: FloorLevel.KVARTIRY,
+    targetFloorZ: number.KVARTIRY,
     targetRoomType: RoomType.COMMON,
     targetHint: 'Квартиры: отметь и сотри черную ладонь в тихом блоке.',
     eventTags: [...CORE_TAGS, 'sealed'],
@@ -243,7 +243,7 @@ registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
     relationDelta: 14,
     xpReward: 110,
     moneyReward: 70,
-    targetFloor: FloorLevel.KVARTIRY,
+    targetFloorZ: number.KVARTIRY,
     targetRoomType: RoomType.COMMON,
     targetHint: 'Квартиры: идол стоит внутри отмеченного тихого блока.',
     eventTags: [...CORE_TAGS, 'destroyed'],
@@ -265,7 +265,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [{
   relationDelta: 14,
   xpReward: 65,
   moneyReward: 22,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.COMMON,
   targetHint: 'Квартиры: организованный культовый запас рядом с черными ладонями.',
   eventTags: [...CORE_TAGS, 'sabotaged'],
@@ -289,7 +289,7 @@ function handleSvodEvents(state: GameState, event: WorldEvent): void {
   addFactionRelMutual(Faction.PLAYER, Faction.CULTIST, -6);
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -328,7 +328,7 @@ function publishQuestOutcome(
   for (const [faction, delta] of outcome.relationDeltas) addFactionRelMutual(Faction.PLAYER, faction, delta);
   publishEvent(state, {
     type: outcome.type,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -390,7 +390,7 @@ function addSvodContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
@@ -99,7 +99,7 @@ registerSideQuest('kartotechnik_lidia_alphabetnaya', LIDIA_DEF, [
     rewardItem: 'key', rewardCount: 1,
     extraRewards: [{ defId: 'ink_bottle', count: 1 }],
     relationDelta: 8, xpReward: 45, moneyReward: 25,
-    targetFloor: FloorLevel.MINISTRY,
+    targetFloorZ: number.MINISTRY,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'archive',
     targetHint: `${ROOM_NAME}: пустой бланк лежит у переднего стола или в жертвенном ящике.`,
@@ -126,7 +126,7 @@ registerSideQuest('kartotechnik_pavel_nedoopisanny', PAVEL_DEF, [
     rewardItem: 'archive_access_permit', rewardCount: 1,
     extraRewards: [{ defId: 'blank_form', count: 1 }, { defId: 'ink_bottle', count: 1 }],
     relationDelta: 14, xpReward: 90, moneyReward: 100,
-    targetFloor: FloorLevel.MINISTRY,
+    targetFloorZ: number.MINISTRY,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'archive',
     targetHint: `${ROOM_NAME}: дело переставлено в дальнюю картотеку рядом с Параграфом.`,
@@ -155,7 +155,7 @@ registerSideQuest('kartotechnik_semyon_pepelny', SEMYON_DEF, [
     rewardItem: 'ink_bottle', rewardCount: 2,
     extraRewards: [{ defId: 'blank_form', count: 1 }],
     relationDelta: 6, xpReward: 55, moneyReward: 45,
-    targetFloor: FloorLevel.MINISTRY,
+    targetFloorZ: number.MINISTRY,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'archive',
     targetHint: `${ROOM_NAME}: акт лежит в пепельнице неправильного индекса.`,
@@ -206,7 +206,7 @@ function publishKartotechnikOutcome(
   const severity = outcome === 'delayed' || outcome === 'relocated' ? 4 : 3;
   publishEvent(state, {
     type: 'rumor_observed',
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     actorName: 'Картотечник',
     targetName: OUTCOME_TEXT[outcome],
     itemId: 'missing_record_file',
@@ -308,7 +308,7 @@ function addKartotechnikContainer(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind,

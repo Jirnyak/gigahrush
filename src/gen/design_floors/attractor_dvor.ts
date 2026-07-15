@@ -1,4 +1,4 @@
-/* -- Design floor: attractor_dvor / flow-driven service yard -------- */
+/* -- Design z: attractor_dvor / flow-driven service yard -------- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -9,7 +9,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -35,7 +35,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const ATTRACTOR_DVOR_ROUTE_ID = 'attractor_dvor' as const;
 export const ATTRACTOR_DVOR_Z = -34;
-export const ATTRACTOR_DVOR_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const ATTRACTOR_DVOR_BASE_FLOOR = number.MAINTENANCE;
 
 const CX = W >> 1;
 const CY = W >> 1;
@@ -1023,7 +1023,7 @@ function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {
     y: rooms.entry.y + 14,
     targetX: rooms.northSpine.x + 226,
     targetY: rooms.northSpine.y + 14,
-    floor: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_BASE_FLOOR,
     label: 'Синяя струя',
     hint: 'Поток ведет вокруг двора быстрее прямой линии.',
     targetName: ATTRACTOR_DVOR_ROOM_NAMES.northSpine,
@@ -1040,7 +1040,7 @@ function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {
     y: rooms.southSpine.y + 14,
     targetX: rooms.deadZone.x + 58,
     targetY: rooms.deadZone.y + 30,
-    floor: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_BASE_FLOOR,
     label: 'Мертвая зона',
     hint: 'Короткий срез проходит через воду, гермодвери и плохой звук.',
     targetName: ATTRACTOR_DVOR_ROOM_NAMES.deadZone,
@@ -1057,7 +1057,7 @@ function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {
     y: rooms.guardLoop.y + 20,
     targetX: rooms.westSwitch.x + 8,
     targetY: rooms.westSwitch.y + 10,
-    floor: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_BASE_FLOOR,
     label: 'Петля патруля',
     hint: 'Патруль ходит по внешнему циклу; параметрический щиток дает окно.',
     targetName: ATTRACTOR_DVOR_ROOM_NAMES.westSwitch,
@@ -1232,7 +1232,7 @@ function addContainer(
     id: world.containers.length + 1,
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,

@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel, Occupation,
+  Cell, ContainerKind, DoorState, EntityType, Faction, Feature, number, Occupation,
   QuestType, RoomType, Tex,
   type ContainerAccess, type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
   type WorldEventPrivacy, type WorldEventSeverity,
@@ -304,7 +304,7 @@ registerSideQuestSteps([
     id: TRADE_QUEST,
     giverNpcId: 'yakov',
     type: QuestType.VISIT,
-    visitFloor: FloorLevel.MAINTENANCE,
+    visitFloorZ: number.MAINTENANCE,
     desc: 'Яков Давидович: "По модели Нины маршрут неполный. Спуститесь в Коллекторы и вернитесь с отметкой, что он вообще выводит вниз."',
     rewardItem: 'caravan_route',
     rewardCount: 1,
@@ -360,7 +360,7 @@ function handleAg77Outcome(state: GameState, event: WorldEvent): void {
     addFactionRelMutual(Faction.PLAYER, Faction.CULTIST, -3);
     publishEvent(state, {
       type: 'faction_relation_changed',
-      floor: event.floor,
+      z: event.z,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -395,7 +395,7 @@ function handleAg77Outcome(state: GameState, event: WorldEvent): void {
 
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: event.floor,
+    z: event.z,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -583,7 +583,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

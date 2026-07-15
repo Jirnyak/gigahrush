@@ -1,4 +1,4 @@
-/* -- Design floor: bank_floor - cash desks, debt and vault risk -- */
+/* -- Design z: bank_floor - cash desks, debt and vault risk -- */
 
 import {
   Cell,
@@ -6,7 +6,7 @@ import {
   DoorState,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   Occupation,
   QuestType,
@@ -34,7 +34,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bank_floor');
 
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
 export const BANK_FLOOR_Z = 26;
-export const BANK_FLOOR_BASE_FLOOR = FloorLevel.MINISTRY;
+export const BANK_FLOOR_BASE_FLOOR = number.MINISTRY;
 
 export const BANK_ROOM_NAMES = {
   liftLobby: 'Лифтовый вестибюль банка Б-22',
@@ -467,7 +467,7 @@ export function createBankFloorState(): BankFloorState {
 
 export function summarizeBankFloorState(bank: BankFloorState): string[] {
   return [
-    `route=${bank.routeId} z=${bank.anchorZ} base=${FloorLevel[bank.baseFloor]}`,
+    `route=${bank.routeId} z=${bank.anchorZ} base=${number[bank.themeTags]}`,
     `legalRooms=${bank.legalRooms.length} riskRooms=${bank.riskRooms.length}`,
     `debtCircuit=${bank.debtCircuitRooms.join(' -> ')}`,
     `vaultRiskRadius=${bank.vaultRiskRadius}`,
@@ -486,7 +486,7 @@ export function publishBankFloorEvent(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    floor: BANK_FLOOR_BASE_FLOOR,
+    z: BANK_FLOOR_BASE_FLOOR,
     roomId,
     zoneId,
     targetName,
@@ -1270,7 +1270,7 @@ function addBankContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: BANK_FLOOR_BASE_FLOOR,
+    z: BANK_FLOOR_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: opts.kind,

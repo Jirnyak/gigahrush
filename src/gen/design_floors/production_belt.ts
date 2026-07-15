@@ -6,7 +6,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -47,7 +47,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('production_belt');
 
 export const DESIGN_FLOOR_ID = 'production_belt' as const;
 export const PRODUCTION_BELT_ROUTE_Z = -14;
-export const PRODUCTION_BELT_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const PRODUCTION_BELT_BASE_FLOOR = number.MAINTENANCE;
 
 const CONTENT_TAG = 'floor14_production_belt';
 
@@ -1306,7 +1306,7 @@ function addContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -1509,7 +1509,7 @@ export function publishProductionBeltDecision(
   const badBatch = decisionId === 'expose_bad_batch' || decisionId === 'steal_bad_batch';
   return publishEvent(game, {
     type: badBatch ? 'room_blocked_production' : 'room_produced_items',
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     zoneId: zoneId >= 0 ? zoneId : undefined,
     roomId: line?.roomId,
     containerId: line?.outputContainerId,
@@ -1546,7 +1546,7 @@ function registerProductionBeltRouteCues(
     y: repairMarkerY,
     targetX: repairTargetX,
     targetY: repairTargetY,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: rooms.metalLine.id,
     targetRoomId: rooms.metalLine.id,
     zoneId: world.zoneMap[repairCell],
@@ -1575,7 +1575,7 @@ function registerProductionBeltRouteCues(
     y: serviceMarkerY,
     targetX: serviceTargetX,
     targetY: serviceTargetY,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: rooms.chargeLine.id,
     targetRoomId: rooms.chargeLine.id,
     zoneId: world.zoneMap[serviceCell],
@@ -1604,7 +1604,7 @@ function registerProductionBeltRouteCues(
     y: warningMarkerY,
     targetX: warningTargetX,
     targetY: warningTargetY,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: rooms.auditOffice.id,
     targetRoomId: rooms.quarantine.id,
     zoneId: world.zoneMap[warningCell],
@@ -1633,7 +1633,7 @@ function registerProductionBeltRouteCues(
     y: zhernovMarkerY,
     targetX: zhernovTargetX,
     targetY: zhernovTargetY,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: rooms.metalLine.id,
     targetRoomId: rooms.metalLine.id,
     zoneId: world.zoneMap[zhernovCell],
@@ -1662,7 +1662,7 @@ function registerProductionBeltRouteCues(
     y: spineMarkerY,
     targetX: spineTargetX,
     targetY: spineTargetY,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: rooms.corridor.id,
     targetRoomId: rooms.exitDock.id,
     zoneId: world.zoneMap[spineCell],
@@ -1691,7 +1691,7 @@ function registerProductionBeltRouteCues(
     y: hazardMarkerY,
     targetX: shelterTargetX,
     targetY: shelterTargetY,
-    floor: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_BASE_FLOOR,
     roomId: rooms.chargeLine.id,
     targetRoomId: rooms.shelter.id,
     zoneId: world.zoneMap[hazardCell],

@@ -1,6 +1,6 @@
 /* ── SCULPTURE — weeping angel mechanic ───────────────────────────── */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
 import { mathRng as rng } from '../core/rand';
@@ -14,7 +14,6 @@ export const DEF: MonsterDef = {
   attackRate: 0.25,
   sprite: 0,   // auto-assigned by generateSprites()
   aiFlags: ['weepingAngel' as any], // We will add 'weepingAngel' to MonsterAIFlag in monster.ts
-  floors: [FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID],
   counterplay: 'Двигается только когда на неё никто не смотрит. Смертельно быстрая.',
   lootHint: 'редкая арматура, изолента, странные бетонные фрагменты',
 };

@@ -3,7 +3,7 @@
 import {
   ContainerKind,
   Feature,
-  FloorLevel,
+  number,
   Faction,
   Occupation,
   QuestType,
@@ -19,7 +19,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const HOME_FLOOR_KEY = storyNpcFloorKey(FloorLevel.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(number.MINISTRY);
 const POSTOVOY_FORMULYAR_ID = 'raionsovet_archive_postovoy_formulyar';
 
 const MARFA_DEF: PlotNpcDef = {
@@ -225,7 +225,7 @@ function addArchiveContainer(
     id: world.containers.length + 1,
     x,
     y,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId,
     zoneId,
     kind,

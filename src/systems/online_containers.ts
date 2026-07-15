@@ -20,7 +20,7 @@
 import { W, type Item, type WorldContainer } from '../core/types';
 import { World } from '../core/world';
 import { resolveOrCreateFeatureLootContainer } from './interactive';
-import type { ContainerAccess, ContainerKind, FloorLevel } from '../core/types';
+import type { ContainerAccess, ContainerKind, number } from '../core/types';
 
 export interface ContainerSyncPayload {
   cx: number;
@@ -83,7 +83,7 @@ export function containerSyncPayload(container: WorldContainer): ContainerSyncPa
  *  only side that ever generates, so floor-seed determinism is irrelevant. */
 export function resolvePeerContainerAtCell(
   world: World,
-  floor: FloorLevel,
+  z: number,
   cx: number,
   cy: number,
 ): WorldContainer | null {
@@ -107,7 +107,7 @@ export function buildRemoteContainer(world: World, payload: ContainerSyncPayload
   return {
     id: syntheticId,
     x, y,
-    floor: world.containers[0]?.floor ?? (0 as FloorLevel),
+    z: world.containers[0]?.z ?? (0),
     roomId: -1,
     zoneId: 0,
     kind: payload.kind as ContainerKind,

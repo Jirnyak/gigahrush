@@ -1,4 +1,4 @@
-/* -- Design floor: critical_leak_archive - wet percolation archive -- */
+/* -- Design z: critical_leak_archive - wet percolation archive -- */
 
 import {
   AIGoal,
@@ -7,7 +7,7 @@ import {
   DoorState,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   Occupation,
   QuestType,
@@ -32,7 +32,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('critical_leak_archive');
 
 export const CRITICAL_LEAK_ARCHIVE_ROUTE_ID = 'critical_leak_archive' as const;
 export const CRITICAL_LEAK_ARCHIVE_Z = 24;
-export const CRITICAL_LEAK_ARCHIVE_BASE_FLOOR = FloorLevel.MINISTRY;
+export const CRITICAL_LEAK_ARCHIVE_BASE_FLOOR = number.MINISTRY;
 
 export const CRITICAL_LEAK_ARCHIVE_ROOM_NAMES = {
   lobby: 'Сухой лифтовый тамбур критической протечки',
@@ -218,7 +218,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_archivist_varva
     type: QuestType.FETCH,
     desc: 'Варвара Сухопись: «Найдете сухую жалобу под сургучом - донесите, не заходя лишний раз в воду. Мокрая причина становится слухом.»',
     targetItem: 'sealed_complaint', targetCount: 1,
-    targetFloor: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     targetRoute: TARGET_ROUTE,
     targetRoomName: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.dryIndex,
     targetHint: 'сухой пакет лежит на архивном острове; водяной короткий ход быстрее, но заражает маршрут',
@@ -238,7 +238,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor
     giverNpcId: 'critical_leak_liquidator_egor',
     type: QuestType.VISIT,
     desc: 'Егор Отсечка: «Дойдите до пульта водоотсечки. Шлюз не спасет архив, но даст сухой край для отхода.»',
-    targetFloor: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     targetRoute: TARGET_ROUTE,
     targetRoomName: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.floodgate,
     targetHint: 'пульт стоит за зараженным водяным коротким ходом и сухой обходной перемычкой',
@@ -255,7 +255,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor
     type: QuestType.FETCH,
     desc: 'Егор Отсечка: «Если полезете коротким ходом, принесите мазок воды. Без пробы все скажут, что вы просто намочили сапоги.»',
     targetItem: 'contaminated_swab', targetCount: 1,
-    targetFloor: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     targetRoute: TARGET_ROUTE,
     targetRoomName: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.shortcut,
     rewardItem: 'wet_rag_bundle', rewardCount: 1,
@@ -892,7 +892,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    z: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -1091,7 +1091,7 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
   const world = new World();
   const entities: Entity[] = [];
   const nextId: NextId = { v: 1 };
-  const seed = hashSeed('design-floor:critical-leak-archive:percolation', CRITICAL_LEAK_ARCHIVE_Z);
+  const seed = hashSeed('design-z: critical-leak-archive:percolation', CRITICAL_LEAK_ARCHIVE_Z);
   const state: CriticalLeakArchiveState = {
     routeId: CRITICAL_LEAK_ARCHIVE_ROUTE_ID,
     anchorZ: CRITICAL_LEAK_ARCHIVE_Z,

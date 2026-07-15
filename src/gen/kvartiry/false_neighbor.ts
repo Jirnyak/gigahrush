@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, FloorLevel, MonsterKind, Occupation, QuestType,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, number, MonsterKind, Occupation, QuestType,
   RoomType, Tex, Feature, type Entity, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -51,7 +51,7 @@ registerSideQuest('kv_raya_podozritelnaya', RAYA, [{
   rewardCount: 1,
   extraRewards: [{ defId: 'fake_pass', count: 1 }],
   relationDelta: 14, xpReward: 85, moneyReward: 45,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.LIVING,
   targetZoneTag: FALSE_NEIGHBOR_TAG,
   targetRoomName: FALSE_NEIGHBOR_ROOM_NAME,
@@ -134,7 +134,7 @@ function addFalseNeighborEvidenceBox(world: World, poi: SocialPoiRoom, ownerId: 
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind: ContainerKind.FILING_CABINET,

@@ -1,6 +1,6 @@
 /* ── Procedural screen signal definitions ─────────────────────── */
 
-import { FloorLevel, RoomType, Tex, ZoneFaction, type WorldEventType } from '../core/types';
+import { RoomType, Tex, ZoneFaction, type WorldEventType } from '../core/types';
 
 export type ScreenSignalId =
   | 'samosbor_warning'
@@ -16,7 +16,7 @@ export interface ScreenSignalDef {
   label: string;
   textureVariants: readonly number[];
   weight: number;
-  floors: readonly FloorLevel[];
+  floors: readonly number[];
   roomTypes?: readonly RoomType[];
   zoneFactions?: readonly ZoneFaction[];
   eventTypes: readonly WorldEventType[];
@@ -24,16 +24,16 @@ export interface ScreenSignalDef {
   tags: readonly string[];
 }
 
-const CIVIL_FLOORS = [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING] as const;
+const CIVIL_FLOORS = [number.MINISTRY, number.KVARTIRY, number.LIVING] as const;
 export const SCREEN_SIGNAL_VARIANTS = 8;
 export const SCREEN_SIGNAL_FRAMES = 4;
 const ALL_SIGNAL_FLOORS = [
-  FloorLevel.MINISTRY,
-  FloorLevel.KVARTIRY,
-  FloorLevel.LIVING,
-  FloorLevel.MAINTENANCE,
-  FloorLevel.HELL,
-  FloorLevel.VOID,
+  number.MINISTRY,
+  number.KVARTIRY,
+  number.LIVING,
+  number.MAINTENANCE,
+  number.HELL,
+  number.VOID,
 ] as const;
 
 export const SCREEN_SIGNAL_DEFS: readonly ScreenSignalDef[] = [
@@ -87,7 +87,7 @@ export const SCREEN_SIGNAL_DEFS: readonly ScreenSignalDef[] = [
     label: 'ОЧЕРЕДЬ',
     textureVariants: [4],
     weight: 7,
-    floors: [FloorLevel.MINISTRY],
+    floors: [number.MINISTRY],
     roomTypes: [RoomType.CORRIDOR, RoomType.COMMON, RoomType.OFFICE],
     eventTypes: ['quest_created', 'quest_completed', 'rumor_observed'],
     rumorIds: ['faction_ministry_papers', 'floor_ministry_paper', 'rare_key_office', 'ecology_pechateed_docs', 'ecology_paragraph_clause'],
@@ -98,7 +98,7 @@ export const SCREEN_SIGNAL_DEFS: readonly ScreenSignalDef[] = [
     label: 'ДАВЛЕНИЕ',
     textureVariants: [6],
     weight: 7,
-    floors: [FloorLevel.MAINTENANCE],
+    floors: [number.MAINTENANCE],
     roomTypes: [RoomType.PRODUCTION, RoomType.OFFICE, RoomType.MEDICAL, RoomType.COMMON],
     eventTypes: ['room_blocked_production', 'room_lacked_resources', 'rumor_observed'],
     rumorIds: ['floor_maintenance_water', 'samosbor_wet_variant', 'samosbor_electric_variant', 'ecology_eel_water', 'ecology_lampovy_light', 'ecology_robot_plasma', 'ecology_eye_line'],
@@ -109,7 +109,7 @@ export const SCREEN_SIGNAL_DEFS: readonly ScreenSignalDef[] = [
     label: 'ПРОТОКОЛ',
     textureVariants: [7],
     weight: 7,
-    floors: [FloorLevel.HELL, FloorLevel.VOID],
+    floors: [number.HELL, number.VOID],
     eventTypes: ['fog_boss_spawned', 'fog_boss_killed', 'rumor_observed'],
     rumorIds: ['floor_void_listens', 'floor_hell_meat', 'samosbor_meat_variant', 'monster_matka_spawn', 'ecology_shadow_afterimage', 'ecology_herald_ceiling', 'ecology_creator_white', 'ecology_paragraph_clause'],
     tags: ['screen_signal', 'void', 'hell', 'protocol'],
@@ -138,7 +138,7 @@ export function screenSignalById(id: ScreenSignalId): ScreenSignalDef {
 
 export function screenSignalEligible(
   def: ScreenSignalDef,
-  floor: FloorLevel,
+  z: number,
   roomType: RoomType | undefined,
   zoneFaction: ZoneFaction | undefined,
 ): boolean {

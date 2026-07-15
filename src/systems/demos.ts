@@ -1,7 +1,7 @@
 import {
   EntityType,
   Faction,
-  FloorLevel,
+  number,
   Occupation,
   type Entity,
   type GameState,
@@ -43,13 +43,13 @@ const FACTION_LABELS: Record<Faction, string> = {
   [Faction.PLAYER]: 'Игрок',
 };
 
-const FLOOR_LABELS: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Ад',
-  [FloorLevel.VOID]: 'Пустота',
+const FLOOR_LABELS: Record<number, string> = {
+  [number.MINISTRY]: 'Министерство',
+  [number.KVARTIRY]: 'Квартиры',
+  [number.LIVING]: 'Жилая зона',
+  [number.MAINTENANCE]: 'Коллекторы',
+  [number.HELL]: 'Ад',
+  [number.VOID]: 'Пустота',
 };
 
 interface DemosJourneyLike {
@@ -233,9 +233,9 @@ function demosFloorNumberLabel(z: number | undefined): string {
   return typeof z === 'number' && Number.isFinite(z) ? `Этаж ${Math.trunc(z)}` : '';
 }
 
-function demosFloorKeyZ(state: GameState, floorKeyInput: unknown, fallbackFloor?: FloorLevel): number | undefined {
+function demosFloorKeyZ(state: GameState, floorKeyInput: unknown, fallbackFloor?: number): number | undefined {
   const key = cleanFloorKey(floorKeyInput);
-  const host = state as GameState & { floorRun?: { specs?: Record<string, { z?: number; baseFloor?: FloorLevel }> } };
+  const host = state as GameState & { floorRun?: { specs?: Record<string, { z?: number; baseFloor?: number }> } };
   return floorKeyZ(key, { proceduralSpecs: host.floorRun?.specs })
     ?? (fallbackFloor !== undefined ? floorKeyZ(floorKeyForStory(fallbackFloor)) : undefined);
 }
@@ -245,7 +245,7 @@ function demosCurrentRouteZ(state: GameState): number | undefined {
   return typeof z === 'number' && Number.isFinite(z) ? Math.trunc(z) : undefined;
 }
 
-function demosFloorKeyLabel(state: GameState, floorKeyInput: unknown, fallbackFloor?: FloorLevel): string {
+function demosFloorKeyLabel(state: GameState, floorKeyInput: unknown, fallbackFloor?: number): string {
   const key = cleanLabel(floorKeyInput);
   const z = demosFloorKeyZ(state, key, fallbackFloor);
   const floorNumber = demosFloorNumberLabel(z);
@@ -296,8 +296,8 @@ function locationLabel(state: GameState, entities: readonly Entity[], snapshot: 
   const mobility = findMobilityLabel(state, snapshot.id);
   if (mobility) return mobility;
   
-  const baseFloorLabel = FLOOR_LABELS[snapshot.floor] ?? `этаж ${snapshot.floor}`;
-  const z = demosFloorKeyZ(state, snapshot.floorKey, snapshot.floor);
+  const baseFloorLabel = FLOOR_LABELS[snapshot.z] ?? `этаж ${snapshot.z}`;
+  const z = demosFloorKeyZ(state, snapshot.floorKey, snapshot.z);
   const floorNumber = demosFloorNumberLabel(z);
   
   let keyLabel = snapshot.floorKey;

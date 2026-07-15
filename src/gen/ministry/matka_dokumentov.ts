@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
   type WorldEventType,
@@ -69,7 +69,7 @@ registerSideQuest(CLERK_ID, CLERK_DEF, [
     desc: 'Нина Отменная: «Найдите стол Матки Документов {dir}. Бумагу там надо гасить формой, а не очередью.»',
     targetRoomName: MATKA_DOKUMENTOV_ROOM,
     targetRoomType: RoomType.OFFICE,
-    targetFloor: FloorLevel.MINISTRY,
+    targetFloorZ: number.MINISTRY,
     targetZoneTag: 'documents',
     targetHint: 'Министерство: архивный кабинет со шкафами, бланками и центральным столом.',
     rewardItem: 'blank_form', rewardCount: 1,
@@ -155,7 +155,7 @@ function addMatkaContainer(
     id,
     x: wx,
     y: wy,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -230,7 +230,7 @@ function publishMatkaEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `matka_dokumentov_${phase}` as WorldEventType,
-    floor: FloorLevel.MINISTRY,
+    z: number.MINISTRY,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? (room ? room.x + room.w / 2 : undefined),
@@ -371,7 +371,7 @@ function neutralizeOneThreat(ctx: MatkaDokumentovContext): number {
 function publishDocumentDelay(state: GameState, ctx: MatkaDokumentovContext, event: WorldEvent): void {
   if (ctx.delayPublished) return;
   ctx.delayPublished = true;
-  const changed = changeResourceStock(state, 'documents', -2, FloorLevel.MINISTRY);
+  const changed = changeResourceStock(state, 'documents', -2, number.MINISTRY);
   publishMatkaEvent(
     state,
     ctx,

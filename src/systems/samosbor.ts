@@ -5,7 +5,7 @@ import { rng, xorshift32, irand, mathRng } from '../core/rand';
 /*   Protected rooms, hermowalls and lifts are preserved.           */
 
 import {
-  W, Cell, DoorState, ZoneFaction, FloorLevel, RoomType, Tex, Feature, ContainerKind, Faction,
+  W, Cell, DoorState, ZoneFaction, number, RoomType, Tex, Feature, ContainerKind, Faction,
   type Entity, type GameState, type Msg, type Room, type WorldContainer, type WorldEventType,
   EntityType, AIGoal, MonsterKind, Occupation,
   msg,
@@ -234,7 +234,7 @@ let activeSamosborScale: 'full' = 'full';
 
 let istotitShelterRoomIds: number[] = [];
 let istotitShelterCycle = -1;
-let istotitShelterFloor = FloorLevel.LIVING;
+let istotitShelterFloor = number.LIVING;
 let istotitSupplyContainerIds: number[] = [];
 let istotitDecisionCycle = -1;
 let istotitDecision = '';
@@ -550,7 +550,7 @@ function tickSamosborFront(
   nextId: { v: number },
   front: SamosborFront,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   samosborCount: number,
   shelterSet: ReadonlySet<number>,
 ): { processed: number; changed: number; batchFlags: number } {
@@ -630,7 +630,7 @@ function tickAllSamosborFronts(
   entities: Entity[],
   nextId: { v: number },
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   samosborCount: number,
   shelterSet: ReadonlySet<number>,
 ): void {
@@ -685,7 +685,7 @@ export interface SamosborRoomSirenSource {
 interface PendingAftermath {
   state: GameState;
   variant: ActiveSamosborVariant;
-  floor: FloorLevel;
+  z: number;
   zoneId: number;
   x: number;
   y: number;
@@ -703,20 +703,20 @@ const aftermathRuntime = new Map<string, AftermathRuntime>();
 let pendingAftermath: PendingAftermath | null = null;
 let lastAftermathAt = -Infinity;
 let lastAftermathBeatIds: string[] = [];
-let lastAftermathFloor = FloorLevel.LIVING;
+let lastAftermathFloor = number.LIVING;
 let lastVeretarAreaLeaks = 0;
 let lastVeretarAreaLeakAt = -Infinity;
 let lastSamosborFogEffectNoticeAt = -Infinity;
 let istotitBellFollowNoticeAt = -Infinity;
 let istotitBellResistNoticeAt = -Infinity;
 let samosborRoomSirenWorld: World | null = null;
-let samosborRoomSirenFloor = FloorLevel.LIVING;
+let samosborRoomSirenFloor = number.LIVING;
 let samosborRoomSirenCycle = -1;
 let samosborRoomSirenAccum = 0;
 let samosborRoomSirenSources: SamosborRoomSirenSource[] = [];
 
 export interface SamosborWarningSnapshot {
-  floor: FloorLevel;
+  z: number;
   floorName: string;
   zoneId: number;
   zoneX: number;
@@ -769,7 +769,7 @@ export interface SamosborActiveInstructionSnapshot {
 
 interface SamosborWarningRuntime {
   cycle: number;
-  floor: FloorLevel;
+  z: number;
   zoneId: number;
   zoneX: number;
   zoneY: number;
@@ -904,7 +904,7 @@ function tickSamosborRoomSirens(world: World, entities: Entity[], state: GameSta
     publishNoise(state, {
       x: source.x,
       y: source.y,
-      floor: state.currentZ,
+      z: state.currentZ,
       radius: SAMOSBOR_ROOM_SIREN_RADIUS,
       ttl: SAMOSBOR_ROOM_SIREN_INTERVAL * 1.45,
       source: 'siren',
@@ -930,7 +930,7 @@ export function resetSamosborRuntimeForTests(): void {
   pendingAftermath = null;
   lastAftermathAt = -Infinity;
   lastAftermathBeatIds = [];
-  lastAftermathFloor = FloorLevel.LIVING;
+  lastAftermathFloor = number.LIVING;
   lastVeretarAreaLeaks = 0;
   lastVeretarAreaLeakAt = -Infinity;
   lastSamosborFogEffectNoticeAt = -Infinity;
@@ -1266,7 +1266,7 @@ export function getSamosborWarningSnapshot(state?: GameState): SamosborWarningSn
   if (!samosborWarning) return null;
   if (state) {
     if (state.samosborActive) return null;
-    if (state.currentZ !== samosborWarning.floor) return null;
+    if (state.currentZ !== samosborWarning.z) return null;
     if (state.samosborCount !== samosborWarning.cycle) return null;
     if (state.samosborTimer > SAMOSBOR_WARNING_WINDOW + 0.5) return null;
   }
@@ -1274,8 +1274,8 @@ export function getSamosborWarningSnapshot(state?: GameState): SamosborWarningSn
     ? Math.max(0, Math.ceil(state.samosborTimer))
     : Math.max(0, Math.ceil(SAMOSBOR_WARNING_WINDOW - (knownSamosborTime - samosborWarning.startedAt)));
   return {
-    floor: samosborWarning.floor,
-    floorName: floorLevelDisplayName(samosborWarning.floor),
+    z: samosborWarning.z,
+    floorName: floorLevelDisplayName(samosborWarning.z),
     zoneId: samosborWarning.zoneId,
     zoneX: samosborWarning.zoneX,
     zoneY: samosborWarning.zoneY,
@@ -1371,7 +1371,7 @@ function findRoomFloorCell(world: World, roomId: number): { x: number; y: number
 }
 
 function addIstotitSupplyContainer(world: World, state: GameState, roomId: number): number {
-  if (world.containers.some(c => c.roomId === roomId && c.floor === state.currentZ && c.tags.includes(ISTOTIT_SUPPLY_TAG))) {
+  if (world.containers.some(c => c.roomId === roomId && c.z === state.currentZ && c.tags.includes(ISTOTIT_SUPPLY_TAG))) {
     return 0;
   }
   const pos = findRoomFloorCell(world, roomId);
@@ -1386,7 +1386,7 @@ function addIstotitSupplyContainer(world: World, state: GameState, roomId: numbe
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: state.currentZ,
+    z: state.currentZ,
     roomId,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind: ContainerKind.EMERGENCY_BOX,
@@ -2147,7 +2147,7 @@ function pushWarningBarks(
     observeRumorEvent(e, {
       type: 'samosbor_warning',
       severity: 4,
-      floor: state.currentZ,
+      z: state.currentZ,
       zoneId: world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))],
       tags: ['samosbor', 'warning', 'bark', `samosbor_${variant.def.id}`],
     }, state.time);
@@ -2164,7 +2164,7 @@ function ensureSamosborWarning(
 ): SamosborWarningRuntime {
   if (
     samosborWarning &&
-    samosborWarning.floor === state.currentZ &&
+    samosborWarning.z === state.currentZ &&
     samosborWarning.cycle === state.samosborCount
   ) {
     return samosborWarning;
@@ -2201,7 +2201,7 @@ function ensureSamosborWarning(
   );
   const signalMsg = msg(signals.logLine, state.time, variant.def.tint);
   const signalListener = entities.find(e => e.alive && isPlayerEntity(e));
-  signalMsg.floor = state.currentZ;
+  signalMsg.z = state.currentZ;
   signalMsg.zoneId = zone.id >= 0 ? zone.id : undefined;
   signalMsg.x = zone.cx;
   signalMsg.y = zone.cy;
@@ -2217,7 +2217,7 @@ function ensureSamosborWarning(
     day: signalMsg.day,
     hour: signalMsg.hour,
     minute: signalMsg.minute,
-    floor: signalMsg.floor,
+    z: signalMsg.z,
     zoneId: signalMsg.zoneId,
     x: signalMsg.x,
     y: signalMsg.y,
@@ -2227,7 +2227,7 @@ function ensureSamosborWarning(
 
   samosborWarning = {
     cycle: state.samosborCount,
-    floor: state.currentZ,
+    z: state.currentZ,
     zoneId: zone.id,
     zoneX: zone.cx,
     zoneY: zone.cy,
@@ -2526,7 +2526,7 @@ export function updateSamosbor(
       pendingAftermath = {
         state,
         variant: endedVariant,
-        floor: state.currentZ,
+        z: state.currentZ,
         zoneId: activeSamosborZoneId,
         x: aftermathZone?.cx ?? Math.floor(findPlayer(entities)?.x ?? W / 2),
         y: aftermathZone?.cy ?? Math.floor(findPlayer(entities)?.y ?? W / 2),
@@ -2683,12 +2683,12 @@ function preserveSamosborFogAfterRebuild(world: World, previousFog: Uint8Array):
 
 export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
-  floor: FloorLevel = FloorLevel.LIVING,
+  z: number = number.LIVING,
   replacement?: FloorGeneration,
   isTutorial?: boolean,
 ): void {
   clearHermodoorBorerForRebuild(world);
-  if (replacement || floor !== FloorLevel.LIVING) {
+  if (replacement || floor !== number.LIVING) {
     // Non-living floors fully regenerate; generated NPCs/monsters are replaced, player survives.
     const kept: Entity[] = [];
     for (const e of entities) {
@@ -2720,7 +2720,7 @@ export function rebuildWorld(
     return;
   }
 
-  // Living floor: only rebuild volatile maze, keep apartments
+  // Living z: only rebuild volatile maze, keep apartments
   const aptCount = world.apartmentRoomCount;
 
   // Kill projectiles and remove loose visible props outside apartments
@@ -2860,10 +2860,10 @@ function applyPendingSamosborAftermath(
   world: World,
   entities: Entity[],
   nextId: { v: number },
-  floor: FloorLevel,
+  z: number,
 ): void {
   const pending = pendingAftermath;
-  if (!pending || pending.floor !== floor) return;
+  if (!pending || pending.z !== floor) return;
   pendingAftermath = null;
 
   const state = pending.state;
@@ -2946,7 +2946,7 @@ export function applyPendingSamosborAftermathAfterWave(
   world: World,
   entities: Entity[],
   nextId: { v: number },
-  floor: FloorLevel,
+  z: number,
 ): void {
   applyPendingSamosborAftermath(world, entities, nextId, floor);
 }
@@ -3243,7 +3243,7 @@ function applyMonsterAftershock(
   for (let i = 0; i < slots; i++) {
     const pos = findWalkableNear(world, c.x, c.y, 5 + i, Math.max(7 + i, def.radius + i * 2));
     if (!pos) continue;
-    const monster = createMonster(world, nextId, kind, pos.x + 0.5, pos.y + 0.5, pending.floor, true);
+    const monster = createMonster(world, nextId, kind, pos.x + 0.5, pos.y + 0.5, pending.z, true);
     entities.push(monster);
     spawnedIds.push(monster.id);
     if (!firstPos) firstPos = pos;
@@ -3325,7 +3325,7 @@ function applyRumorSeed(
     observeRumorEvent(npc, {
       type: 'samosbor_warning',
       severity: def.severity,
-      floor: pending.floor,
+      z: pending.z,
       zoneId: pending.zoneId >= 0 ? pending.zoneId : undefined,
       tags: ['samosbor', 'aftermath', ...def.tags],
       itemId: def.itemId,
@@ -3344,7 +3344,7 @@ function applyProductionShortage(
 ): boolean {
   const resourceId = def.resourceId ?? 'labor';
   const delta = -Math.max(4, 6 + pending.samosborCount * 2);
-  if (!changeResourceStock(pending.state, resourceId, delta, pending.floor)) return false;
+  if (!changeResourceStock(pending.state, resourceId, delta, pending.z)) return false;
   const c = aftermathCenter(world, entities, pending, false);
   const room = world.roomAt(c.x, c.y);
   publishAftermath(def, pending, c.x, c.y, { resourceId, delta, roomId: room?.id });
@@ -3489,7 +3489,7 @@ function findLootReceiver(
   let best: WorldContainer | null = null;
   let bestScore = Infinity;
   for (const container of world.containers) {
-    if (container.id === source.id || container.floor !== pending.floor) continue;
+    if (container.id === source.id || container.z !== pending.z) continue;
     if (!canReceiveContainerItem(container, itemId)) continue;
     const d2 = world.dist2(source.x + 0.5, source.y + 0.5, container.x + 0.5, container.y + 0.5);
     if (d2 > r2 && container.zoneId !== source.zoneId && container.zoneId !== pending.zoneId) continue;
@@ -3542,21 +3542,21 @@ function applyContainerTheft(
   world: World,
   entities: Entity[],
 ): boolean {
-  ensureRoomContainers(world, pending.floor);
+  ensureRoomContainers(world, pending.z);
   const c = aftermathCenter(world, entities, pending, true);
   let best = world.containers.find(container =>
     container.access !== 'public' &&
-    container.floor === pending.floor && world.dist2(c.x + 0.5, c.y + 0.5, container.x + 0.5, container.y + 0.5) <= def.radius * def.radius);
+    container.z === pending.z && world.dist2(c.x + 0.5, c.y + 0.5, container.x + 0.5, container.y + 0.5) <= def.radius * def.radius);
   best ??= world.containers.find(container =>
-    container.floor === pending.floor && world.dist2(c.x + 0.5, c.y + 0.5, container.x + 0.5, container.y + 0.5) <= def.radius * def.radius);
+    container.z === pending.z && world.dist2(c.x + 0.5, c.y + 0.5, container.x + 0.5, container.y + 0.5) <= def.radius * def.radius);
   if (!best) {
     const zc = aftermathCenter(world, entities, pending, false);
     best = world.containers.find(container =>
       container.access !== 'public' &&
-      container.floor === pending.floor && container.zoneId === pending.zoneId &&
+      container.z === pending.z && container.zoneId === pending.zoneId &&
       world.dist2(zc.x + 0.5, zc.y + 0.5, container.x + 0.5, container.y + 0.5) <= def.radius * def.radius);
     best ??= world.containers.find(container =>
-      container.floor === pending.floor && container.zoneId === pending.zoneId &&
+      container.z === pending.z && container.zoneId === pending.zoneId &&
       world.dist2(zc.x + 0.5, zc.y + 0.5, container.x + 0.5, container.y + 0.5) <= def.radius * def.radius);
   }
   if (!best) return false;
@@ -3623,7 +3623,7 @@ export function getSamosborDebugLines(): string[] {
 }
 
 /* ── Shared helpers for monster creation ───────────────────────── */
-function pickMonsterKindForWave(floor: FloorLevel, samosborCount: number): MonsterKind {
+function pickMonsterKindForWave(z: number, samosborCount: number): MonsterKind {
   return chooseFloorMonsterKind({
     floor,
     floorTags: ['samosbor', 'fog'],
@@ -3632,7 +3632,7 @@ function pickMonsterKindForWave(floor: FloorLevel, samosborCount: number): Monst
   });
 }
 
-function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x: number, y: number, _floor: FloorLevel, _forceVariant = false): Entity {
+function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x: number, y: number, _z: number, _forceVariant = false): Entity {
   const def = MONSTERS[kind];
   const ci = world.idx(Math.floor(x), Math.floor(y));
   const zid = world.zoneMap[ci];
@@ -3680,7 +3680,7 @@ function randomEnumValue<T extends number>(values: readonly T[]): T {
   return values[Math.floor(rng() * values.length)];
 }
 
-function randomMonsterKindWeighted(floor: FloorLevel, samosborCount: number): MonsterKind {
+function randomMonsterKindWeighted(z: number, samosborCount: number): MonsterKind {
   return chooseFloorMonsterKind({
     floor,
     floorTags: ['samosbor', 'fog', 'rewrite'],
@@ -3786,7 +3786,7 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   });
 }
 
-function rewriteMonsterAsRandom(world: World, entity: Entity, floor: FloorLevel, samosborCount: number): void {
+function rewriteMonsterAsRandom(world: World, entity: Entity, z: number, samosborCount: number): void {
   const kind = randomMonsterKindWeighted(floor, samosborCount);
   const def = MONSTERS[kind];
   const level = randomNpcLevel();
@@ -3908,7 +3908,7 @@ function applyMaronaryFogEffectAtCell(
   entities: Entity[],
   state: GameState,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   samosborCount: number,
   ci: number,
 ): boolean {
@@ -4066,7 +4066,7 @@ function createIstotitThingAtCell(
   entities: Entity[],
   state: GameState,
   nextId: { v: number },
-  floor: FloorLevel,
+  z: number,
   samosborCount: number,
   ci: number,
 ): string {
@@ -4152,7 +4152,7 @@ function applyIstotitFogEffectAtCell(
   state: GameState,
   nextId: { v: number },
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   samosborCount: number,
   ci: number,
 ): boolean {
@@ -4197,7 +4197,7 @@ function spawnOneFogMonsterAtCell(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   ci: number,
 ): boolean {
   if (!canSpawnEntityType(entities, EntityType.MONSTER)) return false;
@@ -4215,7 +4215,7 @@ function applyWetFogEffectAtCell(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   ci: number,
 ): boolean {
   if (world.aptMask[ci]) return false;
@@ -4257,7 +4257,7 @@ function applySamosborFogEffectAtCell(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   ci: number,
 ): boolean {
   if (world.fog[ci] <= 100) return false;
@@ -4275,7 +4275,7 @@ export function applySamosborFogEffectAtCellForTests(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
   ci: number,
 ): boolean {
   return applySamosborFogEffectAtCell(world, entities, state, nextId, samosborCount, variant, floor, ci);
@@ -4370,7 +4370,7 @@ function spawnMonsters(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
 ): void {
   const corridorCells: number[] = [];
   for (let i = 0; i < 5000; i++) {
@@ -4396,7 +4396,7 @@ function spawnRandomMapMonsters(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
 ): void {
   const target = Math.max(1, Math.round(RANDOM_MAP_MONSTERS_PER_SAMOSBOR * variant.spawnMult));
   const slots = entitySpawnSlots(entities, EntityType.MONSTER, target);
@@ -4540,7 +4540,7 @@ function spawnSamosborPlayerPressureMonster(
   state: GameState,
   nextId: { v: number },
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
 ): boolean {
   if (!state.samosborActive || !canSpawnEntityType(entities, EntityType.MONSTER)) return false;
   const player = findPlayer(entities);
@@ -4594,7 +4594,7 @@ export function spawnSamosborPlayerPressureMonsterForTests(
   state: GameState,
   nextId: { v: number },
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
 ): boolean {
   return spawnSamosborPlayerPressureMonster(world, entities, state, nextId, variant, floor);
 }
@@ -4717,7 +4717,7 @@ function captureZone(
   const fogSeedRects = squareDirtyRects(sourceX, sourceY, fogRadius);
   const fogRadiusSq = fogRadius * fogRadius;
   const fogStrength = Math.max(90, Math.min(230, Math.round(200 * variant.fogSeedMult)));
-  const markHellMeat = currentFloorRunEntry(state).baseFloor === FloorLevel.HELL &&
+  const markHellMeat = currentFloorRunEntry(state).themeTags === number.HELL &&
     (hasSamosborSubsystem(variant, 'hell_meat_walls') || variant.modifiers.some(m => m.meatWallsOnHell));
   let veretarAreaLeaks = 0;
   for (let dy = -fogRadius; dy <= fogRadius; dy++) {
@@ -5022,7 +5022,7 @@ function tickSamosborFogEffects(
   nextId: { v: number },
   samosborCount: number,
   variant: ActiveSamosborVariant,
-  floor: FloorLevel,
+  z: number,
 ): void {
   for (let attempt = 0; attempt < SAMOSBOR_FOG_EFFECT_SEARCH_ATTEMPTS; attempt++) {
     const ci = Math.floor(rng() * W * W);

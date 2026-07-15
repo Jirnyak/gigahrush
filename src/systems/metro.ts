@@ -1,7 +1,7 @@
 import { currentFloorRunEntry } from './procedural_floors';
 /* ── Metro Error Line interaction-time routing ───────────────── */
 
-import { W, Feature, FloorLevel, type Entity, type GameState } from '../core/types';
+import { W, Feature, type Entity, type GameState } from '../core/types';
 import { type World } from '../core/world';
 import {
   metroRouteForPanel,
@@ -64,7 +64,7 @@ function adjustedWrongChance(route: MetroRouteDef, player: Entity, state: GameSt
 
 function destinationData(destination: MetroDestination): Record<string, unknown> {
   const data = destination.kind === 'floor'
-    ? { destinationKind: 'floor', destinationFloor: destination.floor, destinationLabel: destination.label }
+    ? { destinationKind: 'floor', destinationFloor: destination.z, destinationLabel: destination.label }
     : { destinationKind: 'local', destinationRoomName: destination.roomName, destinationLabel: destination.label };
   return {
     ...data,
@@ -139,7 +139,7 @@ export function tryUseMetroRoute(
   const route = routeAtLookCell(world, lookX, lookY);
   if (!route) return null;
 
-  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE) {
+  if (currentFloorRunEntry(state).themeTags !== number.MAINTENANCE) {
     return {
       route,
       wrongStop: false,

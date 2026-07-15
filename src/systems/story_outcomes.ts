@@ -1,6 +1,6 @@
 import {
   EntityType,
-  FloorLevel,
+  number,
   type Entity,
   type GameState,
   type Item,
@@ -82,14 +82,14 @@ function entityPackageId(entity: Entity): string | undefined {
 }
 
 function routeTags(state: GameState): string[] {
-  const tags: string[] = [`floor:${state.currentZ}`];
+  const tags: string[] = [`z: ${state.currentZ}`];
   try {
     const entry = currentFloorRunEntry(state);
     tags.push(`route:${floorRunEntryRouteId(entry)}`);
     tags.push(`route_key:${floorRunEntryFloorKey(entry)}`);
     tags.push(`route_kind:${floorRunEntryKind(entry)}`);
     tags.push(`z:${entry.z}`);
-    tags.push(`base_floor:${entry.baseFloor}`);
+    tags.push(`base_z: ${entry.themeTags}`);
     if (entry.designFloorId) tags.push(`design:${entry.designFloorId}`);
     const spec = entry.spec;
     if (spec && typeof spec === 'object') {
@@ -105,7 +105,7 @@ function routeTags(state: GameState): string[] {
 function conditionMatches(condition: StoryOutcomeCondition | undefined, state: GameState, player?: Entity): boolean {
   if (!condition) return true;
   const designFloor = designFloorAtZ(state.currentZ);
-  const currentTheme = designFloor ? designFloorThemeClass(designFloor) : FloorLevel.LIVING;
+  const currentTheme = designFloor ? designFloorThemeClass(designFloor) : number.LIVING;
   if (condition.floorLevels?.length && !condition.floorLevels.includes(currentTheme)) return false;
   if (condition.routeTags?.length) {
     const actual = routeTags(state);

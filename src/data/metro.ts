@@ -1,13 +1,13 @@
 /* ── Metro Error Line route definitions ──────────────────────── */
 
-import { FloorLevel } from '../core/types';
+import { } from '../core/types';
 
 export const METRO_STATION_ROOM_NAME = 'Станция ошибочной линии: платформа 19';
 export const METRO_DEPOT_ROOM_NAME = 'Депо без рельсов: карман маршрута';
 export const METRO_ERROR_ROOM_NAME = 'Слепая пересадка: чужой вестибюль';
 
 export type MetroDestination =
-  | { kind: 'floor'; floor: FloorLevel; label: string; returnRouteId?: string; returnHint?: string }
+  | { kind: 'floor'; z: number; label: string; returnRouteId?: string; returnHint?: string }
   | { kind: 'local'; roomName: string; label: string; returnRouteId?: string; returnHint?: string };
 
 export interface MetroRouteDef {
@@ -79,13 +79,13 @@ const TO_STATION: MetroDestination = {
 };
 const TO_LIVING: MetroDestination = {
   kind: 'floor',
-  floor: FloorLevel.LIVING,
+  z: number.LIVING,
   label: 'Жилая зона',
   returnHint: 'Обычный лифт на соседнем этаже вернет к коллекторам; проверь, теплая ли кнопка.',
 };
 const TO_HELL: MetroDestination = {
   kind: 'floor',
-  floor: FloorLevel.HELL,
+  z: number.HELL,
   label: 'Красная нижняя',
   returnHint: 'Не уходи от лифта: обратный подъем возвращает к коллекторам, пока кнопка не остыла.',
 };

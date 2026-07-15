@@ -6,7 +6,7 @@
 import {
   W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
   type Room, type Entity,
-  EntityType, AIGoal, FloorLevel,
+  EntityType, AIGoal, number,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
@@ -432,7 +432,7 @@ function findMinistrySpawnPoint(world: World): { spawnX: number; spawnY: number 
 function placeMinistryZones(world: World): void {
   generateZones(world);
   for (const z of world.zones) {
-    z.level = calcZoneLevel(z.cx, z.cy, FloorLevel.MINISTRY);
+    z.level = calcZoneLevel(z.cx, z.cy, number.MINISTRY);
     const roll = rng();
     if (roll < 0.45) z.faction = 0;       // CITIZEN
     else if (roll < 0.75) z.faction = 1;  // LIQUIDATOR
@@ -616,7 +616,7 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
   ensureConnectivity(world, spawnX, spawnY);
 
   // Phase 15: Rare procedural ministry monitors
-  placeProceduralScreens(world, FloorLevel.MINISTRY);
+  placeProceduralScreens(world, number.MINISTRY);
 
   return { world, entities, spawnX, spawnY };
 }

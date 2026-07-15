@@ -40,7 +40,7 @@ export function runMinistryContent(
   const idRef = { v: nextId };
   const permit = withPoiGenerationMetadata(world, entities, {
     id: 'ministry_permit_office',
-    floor: 'ministry',
+    z: 'ministry',
     debugLabel: 'Министерство: Пропускное бюро',
     decisionHooks: [
       { kind: 'quest', id: 'permit_ballot_blanks', label: 'получить пропуск через бюллетени' },
@@ -73,7 +73,7 @@ export function runMinistryContent(
 
   const nii = withPoiGenerationMetadata(world, entities, {
     id: 'ministry_nii_contraband_audit',
-    floor: 'ministry',
+    z: 'ministry',
     debugLabel: 'Министерство: ревизионная НИИ',
     decisionHooks: [
       { kind: 'quest', id: 'nii_audit_find_room', label: 'найти ревизионную НИИ' },

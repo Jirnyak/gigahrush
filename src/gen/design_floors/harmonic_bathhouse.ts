@@ -1,4 +1,4 @@
-/* -- Design floor: harmonic_bathhouse - heat, steam and pressure routes -- */
+/* -- Design z: harmonic_bathhouse - heat, steam and pressure routes -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -9,7 +9,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -44,7 +44,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const HARMONIC_BATHHOUSE_ROUTE_ID = 'harmonic_bathhouse' as const;
 export const HARMONIC_BATHHOUSE_Z = -28 as const;
-export const HARMONIC_BATHHOUSE_BASE_FLOOR = FloorLevel.MAINTENANCE;
+export const HARMONIC_BATHHOUSE_BASE_FLOOR = number.MAINTENANCE;
 
 export type BathhouseDecisionId =
   | 'turn_valve'
@@ -219,7 +219,7 @@ function initWorld(world: World): void {
   world.factionControl.fill(ZoneFaction.LIQUIDATOR);
 }
 
-/* The candidate asks for a harmonic floor: fixed hot/cold sources are relaxed
+/* The candidate asks for a harmonic z: fixed hot/cold sources are relaxed
  * into a scalar potential, then corridor bands follow its level sets. */
 function solveHarmonicBathhouseField(seed: number): HarmonicField {
   const values = new Float32Array(FIELD_W * FIELD_H);
@@ -1195,7 +1195,7 @@ function registerCues(world: World, rooms: BathhouseRooms): string[] {
       y: cue.room.y + cue.room.h / 2,
       targetX: cue.target.x + cue.target.w / 2,
       targetY: cue.target.y + cue.target.h / 2,
-      floor: HARMONIC_BATHHOUSE_BASE_FLOOR,
+      z: HARMONIC_BATHHOUSE_BASE_FLOOR,
       label: cue.label,
       hint: cue.hint,
       targetName: cue.target.name,
@@ -1255,7 +1255,7 @@ function addContainer(
     id: world.containers.length,
     x,
     y,
-    floor: HARMONIC_BATHHOUSE_BASE_FLOOR,
+    z: HARMONIC_BATHHOUSE_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

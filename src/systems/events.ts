@@ -1,7 +1,7 @@
 /* ── Structured world event store: fixed-size ring buffers ────── */
 
 import {
-  FloorLevel,
+  number,
   WORLD_EVENT_IMPORTANT_CAPACITY,
   WORLD_EVENT_RECENT_CAPACITY,
   WORLD_EVENT_ZONE_CAPACITY,
@@ -33,19 +33,19 @@ const CONTEXT_FACT_KINDS = new Set([
   'danger', 'shortage', 'theft', 'death', 'production', 'need', 'quest_hook', 'social', 'territory',
 ]);
 const BASE_FLOORS = [
-  FloorLevel.MINISTRY,
-  FloorLevel.KVARTIRY,
-  FloorLevel.LIVING,
-  FloorLevel.MAINTENANCE,
-  FloorLevel.HELL,
-  FloorLevel.VOID,
+  number.MINISTRY,
+  number.KVARTIRY,
+  number.LIVING,
+  number.MAINTENANCE,
+  number.HELL,
+  number.VOID,
 ] as const;
 const RESOURCE_SCARCITY_EVENT_COOLDOWN_S = 600;
 const MAX_RESOURCE_SCARCITY_RUMORS = 4;
 const MAX_OBSERVER_ERROR_LOGS = 8;
 
 export interface EventZoneSummary {
-  floor: FloorLevel;
+  z: number;
   zoneId: number;
   count: number;
   maxSeverity: WorldEventSeverity;
@@ -71,7 +71,7 @@ export type ResourceScarcityBand = 'normal' | 'strained' | 'shortage' | 'critica
 export type ResourceScarcityTrend = 'worsened' | 'recovered';
 
 export interface ResourceScarcityEventDraft {
-  floor: FloorLevel;
+  z: number;
   zoneId?: number;
   roomId?: number;
   resourceId: string;
@@ -234,10 +234,10 @@ function maxBufferEventId(buffer: WorldEventBuffer): number {
   return maxId;
 }
 
-function normalizeFloor(value: unknown): FloorLevel {
-  return typeof value === 'number' && BASE_FLOORS.includes(value as FloorLevel)
-    ? value as FloorLevel
-    : FloorLevel.LIVING;
+function normalizeFloor(value: unknown): number {
+  return typeof value === 'number' && BASE_FLOORS.includes(value)
+    ? value
+    : number.LIVING;
 }
 
 function normalizePrivacy(value: unknown): WorldEvent['privacy'] {
@@ -261,7 +261,7 @@ function normalizeEvent(raw: unknown, fallbackId: number): WorldEvent | null {
     day: finiteNumber(event.day, 0),
     hour: finiteNumber(event.hour, 0),
     minute: finiteNumber(event.minute, 0),
-    floor: normalizeFloor(event.floor),
+    z: normalizeFloor(event.z),
     truth: 'fact',
     severity: clampSeverity(event.severity),
     privacy: normalizePrivacy(event.privacy),
@@ -539,7 +539,7 @@ export function publishEvent(state: GameState, draft: WorldEventDraft): WorldEve
     day: enriched.day ?? Math.floor(state.clock.totalMinutes / 1440),
     hour: enriched.hour ?? state.clock.hour,
     minute: enriched.minute ?? state.clock.minute,
-    floor: enriched.floor ?? state.currentZ,
+    z: enriched.z ?? state.currentZ,
     truth: 'fact',
     severity: clampSeverity(enriched.severity),
     tags: cleanTags(enriched.tags),
@@ -573,7 +573,7 @@ function recentResourceScarcityEventExists(state: GameState, draft: ResourceScar
     const age = state.time - event.time;
     if (age < 0) continue;
     if (age > RESOURCE_SCARCITY_EVENT_COOLDOWN_S) break;
-    if (event.floor !== draft.floor) continue;
+    if (event.z !== draft.z) continue;
     if ((event.zoneId ?? -1) !== (draft.zoneId ?? -1)) continue;
     if (event.data?.resourceId !== draft.resourceId) continue;
     if (event.data?.band !== draft.band) continue;
@@ -589,7 +589,7 @@ export function publishResourceScarcityEvent(state: GameState, draft: ResourceSc
   const recovered = draft.trend === 'recovered';
   return publishEvent(state, {
     type: recovered ? 'room_produced_items' : 'room_lacked_resources',
-    floor: draft.floor,
+    z: draft.z,
     zoneId: draft.zoneId,
     roomId: draft.roomId,
     targetName: draft.resourceName,
@@ -630,7 +630,7 @@ export function getRecentEvents(state: GameState, filter: EventFilter = {}): Wor
 
   const filterType = filter.type;
   const filterZoneId = filter.zoneId;
-  const filterFloor = filter.floor;
+  const filterFloor = filter.z;
   const filterMinSeverity = filter.minSeverity;
   const filterPrivacy = filter.privacy;
   const filterActorId = filter.actorId;
@@ -652,7 +652,7 @@ export function getRecentEvents(state: GameState, filter: EventFilter = {}): Wor
     if (filterSinceId !== undefined && event.id <= filterSinceId) break;
     if (filterType !== undefined && event.type !== filterType) continue;
     if (filterZoneId !== undefined && event.zoneId !== filterZoneId) continue;
-    if (filterFloor !== undefined && event.floor !== filterFloor) continue;
+    if (filterFloor !== undefined && event.z !== filterFloor) continue;
     if (filterMinSeverity !== undefined && event.severity < filterMinSeverity) continue;
     if (filterPrivacy !== undefined && event.privacy !== filterPrivacy) continue;
     if (filterActorId !== undefined && event.actorId !== filterActorId) continue;
@@ -683,7 +683,7 @@ export function getZoneEvents(state: GameState, zoneId: number, filter: EventFil
   if (limit <= 0 || buffer.count === 0) return out;
 
   const filterType = filter.type;
-  const filterFloor = filter.floor;
+  const filterFloor = filter.z;
   const filterMinSeverity = filter.minSeverity;
   const filterPrivacy = filter.privacy;
   const filterActorId = filter.actorId;
@@ -705,7 +705,7 @@ export function getZoneEvents(state: GameState, zoneId: number, filter: EventFil
     if (filterSinceId !== undefined && event.id <= filterSinceId) break;
     if (event.zoneId !== zoneId) continue;
     if (filterType !== undefined && event.type !== filterType) continue;
-    if (filterFloor !== undefined && event.floor !== filterFloor) continue;
+    if (filterFloor !== undefined && event.z !== filterFloor) continue;
     if (filterMinSeverity !== undefined && event.severity < filterMinSeverity) continue;
     if (filterPrivacy !== undefined && event.privacy !== filterPrivacy) continue;
     if (filterActorId !== undefined && event.actorId !== filterActorId) continue;
@@ -755,11 +755,11 @@ export function summarizeImportantEventsByFloorZone(state: GameState, limit = 12
   const byZone = new Map<string, EventZoneSummary>();
   for (const event of readBuffer(store.importantEvents)) {
     const zoneId = event.zoneId ?? -1;
-    const key = `${event.floor}:${zoneId}`;
+    const key = `${event.z}:${zoneId}`;
     let row = byZone.get(key);
     if (!row) {
       row = {
-        floor: event.floor,
+        z: event.z,
         zoneId,
         count: 0,
         maxSeverity: 0,

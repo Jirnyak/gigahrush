@@ -1,7 +1,7 @@
-/* ── Podad design floor: living hell geometry with anomaly hooks ─ */
+/* ── Podad design z: living hell geometry with anomaly hooks ─ */
 
 import {
-  AIGoal, Cell, EntityType, Feature, FloorLevel, LiftDirection,
+  AIGoal, Cell, EntityType, Feature, number, LiftDirection,
   MonsterKind, RoomType, Tex, W, ZoneFaction,
   type Entity, type Item, type Room, type TerritoryOwner,
 } from '../../core/types';
@@ -775,7 +775,7 @@ function tunePodadZones(world: World): void {
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, SPAWN_X, SPAWN_Y);
     zone.faction = d < 120 ? ZoneFaction.CULTIST : d < 260 ? ZoneFaction.SAMOSBOR : ZoneFaction.WILD;
-    zone.level = calcZoneLevel(zone.cx, zone.cy, FloorLevel.HELL) + (d > 220 ? 5 : 3);
+    zone.level = calcZoneLevel(zone.cx, zone.cy, number.HELL) + (d > 220 ? 5 : 3);
     zone.fogged = d > 180;
   }
   for (let i = 0; i < W * W; i++) {
@@ -1002,7 +1002,7 @@ function registerPodadCue(
     y: from.y + 0.5,
     targetX: to.x + 0.5,
     targetY: to.y + 0.5,
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: source.id,
     targetRoomId: target.id,
     zoneId: world.zoneMap[cell],

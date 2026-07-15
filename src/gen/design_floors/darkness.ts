@@ -1,8 +1,8 @@
-/* ── Design floor: Darkness — post-Void light-resource pocket ─── */
+/* ── Design z: Darkness — post-Void light-resource pocket ─── */
 
 import {
   W, Cell, Tex, Feature, RoomType, DoorState, LiftDirection,
-  FloorLevel, ZoneFaction, EntityType, AIGoal,
+  number, ZoneFaction, EntityType, AIGoal,
   MonsterKind, ContainerKind,
   type Entity, type Room, type Item, type WorldContainer,
   type GameState, type WorldEvent, type TerritoryOwner,
@@ -1249,7 +1249,7 @@ function addContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    floor: FloorLevel.VOID,
+    z: number.VOID,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
@@ -1929,7 +1929,7 @@ export function publishDarknessLateWarning(
   const warning = DARKNESS_LATE_WARNINGS.find(item => item.id === warningId);
   return publishEvent(state, {
     type: 'samosbor_warning',
-    floor: state.currentZ,
+    z: state.currentZ,
     zoneId: options.sourceZoneId,
     roomId: options.sourceRoomId,
     x: options.x,
@@ -1954,7 +1954,7 @@ export function publishDarknessReturnTrace(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    floor: state.currentZ,
+    z: state.currentZ,
     zoneId: options.sourceZoneId,
     roomId: options.sourceRoomId,
     x: options.x,
@@ -1991,7 +1991,7 @@ function registerDarknessRouteCues(world: World, roomsByKey: Map<string, Room>):
       y: markerY,
       targetX,
       targetY,
-      floor: FloorLevel.VOID,
+      z: number.VOID,
       roomId: toll.id,
       targetRoomId: tollGate.id,
       zoneId: world.zoneMap[markerCell],
@@ -2022,7 +2022,7 @@ function registerDarknessRouteCues(world: World, roomsByKey: Map<string, Room>):
       y: markerY,
       targetX,
       targetY,
-      floor: FloorLevel.VOID,
+      z: number.VOID,
       roomId: control.id,
       targetRoomId: trace.id,
       zoneId: world.zoneMap[markerCell],
@@ -2053,7 +2053,7 @@ function registerDarknessRouteCues(world: World, roomsByKey: Map<string, Room>):
       y: markerY,
       targetX,
       targetY,
-      floor: FloorLevel.VOID,
+      z: number.VOID,
       roomId: emergency.id,
       targetRoomId: trace.id,
       zoneId: world.zoneMap[markerCell],

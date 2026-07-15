@@ -4,7 +4,7 @@ import {
   Cell,
   EntityType,
   Feature,
-  FloorLevel,
+  number,
   W,
   msg,
   type Entity,
@@ -81,7 +81,7 @@ export interface NetTerminalGenRouteTarget {
   z: number;
   key: string;
   kind: 'story' | 'design' | 'procedural';
-  baseFloor: FloorLevel;
+  themeTags: readonly string[];
   label: string;
 }
 
@@ -195,7 +195,7 @@ function cleanHackCooldowns(input: unknown, now: number): Record<string, number>
   return out;
 }
 
-function routeKeyForStory(floor: FloorLevel): string {
+function routeKeyForStory(z: number): string {
   return floorKeyForStory(floor);
 }
 
@@ -214,14 +214,14 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
   const deck: NetTerminalGenRouteTarget[] = [];
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
     const designFloor = designFloorAtZ(z);
-    const story = designFloor ? designFloorThemeClass(designFloor) : FloorLevel.LIVING;
+    const story = designFloor ? designFloorThemeClass(designFloor) : number.LIVING;
     if (story !== undefined) {
       deck.push({
         z,
         key: routeKeyForStory(story),
         kind: 'story',
         baseFloor: story,
-        label: FloorLevel[story],
+        label: number[story],
       });
       continue;
     }
@@ -234,7 +234,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
           z,
           key: routeKeyForEntry(entry),
           kind: 'procedural',
-          baseFloor: entry.baseFloor,
+          baseFloor: entry.themeTags,
           label: entry.spec.title,
         });
         continue;
@@ -243,7 +243,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
         z,
         key: entry ? routeKeyForEntry(entry) : floorKeyForDesign(design.id),
         kind: 'design',
-        baseFloor: design.baseFloor,
+        baseFloor: design.themeTags,
         label: design.displayName,
       });
       continue;
@@ -256,7 +256,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
       z,
       key: floorKeyForProcedural(key),
       kind: 'procedural',
-      baseFloor: spec?.baseFloor ?? state.currentZ,
+      baseFloor: spec?.themeTags ?? state.currentZ,
       label: spec?.title ?? key,
     });
   }
@@ -271,7 +271,7 @@ export function deriveNetTerminalGenTarget(state: GameState): NetTerminalGenTarg
     key: routeKeyForStory(state.currentZ),
     kind: 'story' as const,
     baseFloor: state.currentZ,
-    label: FloorLevel[state.currentZ],
+    label: number[state.currentZ],
   };
   const deckFingerprint = deck.map(entry => entry.key).join('|');
   const routeSeed = hashSeed(deckFingerprint, run.runSeed);
@@ -933,7 +933,7 @@ export function summarizeNetTerminalGen(state: GameState, player?: Entity): stri
   const resolved = ntg.resolvedX !== undefined && ntg.resolvedY !== undefined ? `${ntg.resolvedX},${ntg.resolvedY}` : 'none';
   return [
     `seed=${ntg.runSeed} target=${ntg.targetKey} z=${ntg.targetZ} raw=${ntg.rawX},${ntg.rawY} resolved=${resolved}`,
-    `current=${currentKey} z=${active ? 'instance' : entry.z} ${active ? floorInstanceLabel(active) : entry.label} targetFloor=${isCurrentNetTerminalGenTargetFloor(state) ? 'yes' : 'no'}`,
+    `current=${currentKey} z=${active ? 'instance' : entry.z} ${active ? floorInstanceLabel(active) : entry.label} targetFloorZ=${isCurrentNetTerminalGenTargetFloor(state) ? 'yes' : 'no'}`,
     `found=${ntg.found ? 'yes' : 'no'} claimed=${ntg.pickupClaimed ? 'yes' : 'no'} access=${hasNetTerminalGen(state, player) ? 'yes' : 'no'} denied=${ntg.firstTerminalDenied ? 'yes' : 'no'}`,
     `terminals=${terminalRegistry.size} overlay=${runtime.mode}${runtime.terminalIdx >= 0 ? ` idx=${runtime.terminalIdx}` : ''}`,
   ];

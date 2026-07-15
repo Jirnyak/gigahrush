@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  FloorLevel, LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
+  number, LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
   W, type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -39,9 +39,9 @@ export const FLOOR_69_RAID_SHUTTER_GATES = [
   { x: 760, y1: 505, y2: 519, doorY: 512, bypass: { ax: 736, ay: 552, bx: 904, by: 552 } },
 ] as const;
 
-// Current core state still requires a FloorLevel. Future route integration should
+// Current core state still requires a number. Future route integration should
 // adapt this string-route floor instead of adding a casual enum here.
-const FLOOR_69_BASE_FLOOR = FloorLevel.MAINTENANCE;
+const FLOOR_69_BASE_FLOOR = number.MAINTENANCE;
 const FLOOR_69_MAX_FLAGS = 8;
 const FLOOR_69_CHECKPOINT_CROWD_CAP = 12;
 const FLOOR_69_FEMALE_SPRITE_COUNT = Spr.F69_FEMALE_NPC_7 - Spr.F69_FEMALE_NPC_BASE + 1;
@@ -547,7 +547,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_madam_roza', NPC_DEFS.f69_madam_roza
     rewardItem: 'fake_pass', rewardCount: 1,
     extraRewards: [{ defId: 'cigs', count: 3 }],
     relationDelta: -3, xpReward: 65, moneyReward: 190,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'blackmail',
     targetHint: 'Этаж 69: сейф компромата за постом. Риск: охрана и рейдовая строка. Награда: фальшивый пропуск, деньги или рычаг защиты.',
@@ -569,7 +569,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_guard_venya', NPC_DEFS.f69_guard_ven
     rewardItem: 'key', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_9mm', count: 10 }],
     relationDelta: 8, xpReward: 60, moneyReward: 55,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.HQ,
     targetZoneTag: 'raid',
     targetHint: 'Этаж 69: ящик поста досмотра. Риск: ликвидаторы узнают, кто держал список. Награда: ключ и время для тихих комнат.',
@@ -588,7 +588,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_guard_venya', NPC_DEFS.f69_guard_ven
     rewardItem: 'ammo_9mm', rewardCount: 8,
     extraRewards: [{ defId: 'water_coupon', count: 1 }],
     relationDelta: 6, xpReward: 45, moneyReward: 45,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.HQ,
     targetZoneTag: 'toll',
     targetHint: 'Этаж 69: тарелка входных расписок у поста. Риск: кража у очереди. Награда: черный вход, патроны и водный талон.',
@@ -610,7 +610,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_performer_ira', NPC_DEFS.f69_perform
     rewardItem: 'clean_health_cert', rewardCount: 1,
     extraRewards: [{ defId: 'bandage', count: 2 }],
     relationDelta: 16, xpReward: 75, moneyReward: 35,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'blackmail',
     targetHint: 'Этаж 69: сейф компромата в долговой конторе. Риск: охрана и чиновничий хвост. Награда: доверие Иры, справка и меньше власти у сейфа.',
@@ -629,7 +629,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_performer_ira', NPC_DEFS.f69_perform
     rewardItem: 'pills', rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],
     relationDelta: 12, xpReward: 50, moneyReward: 40,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: 'clinic',
     targetHint: 'Этаж 69: клиника Сима и тихая комната рядом. Риск: рейд придет по списку. Награда: убежище, таблетки и доверие.',
@@ -651,7 +651,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_doctor_sima', NPC_DEFS.f69_doctor_si
     rewardItem: 'sanitary_kit', rewardCount: 1,
     extraRewards: [{ defId: 'gasmask_filter', count: 1 }],
     relationDelta: 14, xpReward: 70, moneyReward: 45,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: 'clinic',
     targetHint: 'Этаж 69: тихая клиника Симы. Риск: лекарство считают долгом. Награда: санитарный набор, фильтр и медицинское доверие.',
@@ -673,7 +673,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
     rewardItem: 'official_permit_slip', rewardCount: 1,
     extraRewards: [{ defId: 'blank_form', count: 1 }],
     relationDelta: 6, xpReward: 65, moneyReward: 80,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'ledger',
     targetHint: 'Этаж 69: картотека долгов. Риск: пустая строка зовет охрану. Награда: официальный корешок, бланк и снятый поводок.',
@@ -692,7 +692,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
     rewardItem: 'voluntary_receipt', rewardCount: 1,
     extraRewards: [{ defId: 'fake_pass', count: 1 }],
     relationDelta: 3, xpReward: 55, moneyReward: 70,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'ledger',
     targetHint: 'Этаж 69: картотека и стол Нила. Риск: проверка бумаги у поста. Награда: расписка, фальшивый пропуск и проход через долг.',
@@ -711,7 +711,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
     rewardItem: 'blank_form', rewardCount: 2,
     extraRewards: [{ defId: 'ink_bottle', count: 1 }],
     relationDelta: 4, xpReward: 70, moneyReward: 60,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'evidence',
     targetHint: 'Этаж 69: сейф компромата. Риск: акт потянет свидетелей наверх. Награда: бланки, чернила и меньше шантажа у охраны.',
@@ -733,7 +733,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_asya_pryanikova', NPC_DEFS.f69_asya_
     rewardItem: 'pills', rewardCount: 2,
     extraRewards: [{ defId: 'tea', count: 3 }],
     relationDelta: 10, xpReward: 80, moneyReward: 50,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.SMOKING,
     targetZoneTag: 'weed',
     targetHint: 'Этаж 69: маргинальная квартира Аси. Риск: послушать лекцию про искусство распада. Награда: таблетки и спокойный эфир.',
@@ -755,7 +755,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_borya_pryanikov', NPC_DEFS.f69_borya
     rewardItem: 'cigs', rewardCount: 5,
     extraRewards: [],
     relationDelta: 15, xpReward: 100, moneyReward: 80,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'contraband',
     targetHint: 'Этаж 69: Боря ищет фотик для пленок.',
@@ -777,7 +777,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_venya_pryanikov', NPC_DEFS.f69_venya
     rewardItem: 'antifungal_ointment', rewardCount: 3,
     extraRewards: [],
     relationDelta: 10, xpReward: 90, moneyReward: 60,
-    targetFloor: FLOOR_69_BASE_FLOOR,
+    targetFloorZ: FLOOR_69_BASE_FLOOR,
     targetRoomType: RoomType.LIVING,
     targetZoneTag: 'weapon',
     targetHint: 'Этаж 69: Веня просит кастет для разборок.',
@@ -1667,7 +1667,7 @@ function registerFloor69RouteCues(world: World, rooms: Floor69Rooms): void {
     y: refugeCueY,
     targetX: roomMidX(rooms.refuge),
     targetY: roomMidY(rooms.refuge),
-    floor: FLOOR_69_BASE_FLOOR,
+    z: FLOOR_69_BASE_FLOOR,
     label: '69: долг/убежище',
     hint: 'пост, ключ и расписка дают риск рейда; тихая комната дает воду, бинт и жалобу',
     targetName: rooms.refuge.name,
@@ -1692,7 +1692,7 @@ function registerFloor69RouteCues(world: World, rooms: Floor69Rooms): void {
     y: blackmailCueY,
     targetX: roomMidX(rooms.staffLift),
     targetY: roomMidY(rooms.staffLift),
-    floor: FLOOR_69_BASE_FLOOR,
+    z: FLOOR_69_BASE_FLOOR,
     label: '69: сейф/черный ход',
     hint: 'сейф компромата опасен охраной; награда - пропуск, рычаг или служебный выход',
     targetName: rooms.staffLift.name,
@@ -2224,7 +2224,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FLOOR_69_BASE_FLOOR,
+    z: FLOOR_69_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

@@ -2,7 +2,7 @@
 
 import {
   type Entity, type GameState, type Quest, EntityType, Cell, Feature, RoomType, W, QuestType,
-  LiftDirection, MonsterKind, FloorLevel, DoorState,
+  LiftDirection, MonsterKind, number, DoorState,
 } from '../core/types';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../core/world';
 import {
@@ -142,7 +142,7 @@ interface FloorOverviewCache {
 
 const floorOverviewCache = new WeakMap<World, FloorOverviewCache>();
 
-function routeFloor(q: Quest): FloorLevel | undefined {
+function routeFloor(q: Quest): number | undefined {
   return questRouteFloor(q);
 }
 
@@ -303,7 +303,7 @@ function isActiveKillQuestTarget(e: Entity): boolean {
   return false;
 }
 
-function questTargetVisibleOnMap(q: Quest, currentZ: FloorLevel | undefined, state: GameState | undefined): boolean {
+function questTargetVisibleOnMap(q: Quest, currentZ: number | undefined, state: GameState | undefined): boolean {
   if (state) return isQuestTargetOnCurrentFloor(q, state);
   const floor = routeFloor(q);
   return floor === undefined || floor === currentZ;
@@ -311,7 +311,7 @@ function questTargetVisibleOnMap(q: Quest, currentZ: FloorLevel | undefined, sta
 
 function activeVisitLiftDirection(
   quests: Quest[] | undefined,
-  currentZ: FloorLevel | undefined,
+  currentZ: number | undefined,
   state: GameState | undefined,
 ): LiftDirection | undefined {
   if (!quests || currentZ === undefined) return undefined;
@@ -1081,7 +1081,7 @@ function drawMap(
   mapX: number, mapY: number, mapW: number, mapH: number,
   radius: number, bgAlpha: number,
   quests?: Quest[],
-  currentZ?: FloorLevel,
+  currentZ?: number,
   state?: GameState,
   uiTime = state?.time ?? 0,
 ): void {
@@ -1111,7 +1111,7 @@ function drawMap(
       if (
         q.type === QuestType.FETCH &&
         q.targetItem &&
-        (q.targetFloor === undefined || q.targetFloor === currentZ)
+        (q.targetFloorZ === undefined || q.targetFloorZ === currentZ)
       ) setMarkerKind(activeFetchItems, q.targetItem, kind);
       if (!questTargetVisibleOnMap(q, currentZ, state)) continue;
       if (q.type === QuestType.KILL) registerActiveKillTarget(q);
@@ -1541,7 +1541,7 @@ export function drawMapLegendMenu(
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: number, state?: GameState, _uiTime = state?.time ?? 0,
   rect?: UiRect,
 ): void {
   const mw = rect?.w ?? MAP_SIZE * sx;
@@ -1555,7 +1555,7 @@ export function drawMinimap(
 export function drawFullMap(
   ctx: CanvasRenderingContext2D,
   world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: FloorLevel, state?: GameState, _uiTime = state?.time ?? 0,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: number, state?: GameState, _uiTime = state?.time ?? 0,
 ): void {
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;

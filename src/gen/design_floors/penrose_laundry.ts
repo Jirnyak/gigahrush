@@ -1,4 +1,4 @@
-/* -- Design floor: penrose_laundry - aperiodic laundry and boiler service -- */
+/* -- Design z: penrose_laundry - aperiodic laundry and boiler service -- */
 
 import {
   AIGoal,
@@ -8,7 +8,7 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -35,7 +35,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('penrose_laundry');
 
 export const PENROSE_LAUNDRY_ROUTE_ID = 'penrose_laundry' as const;
 export const PENROSE_LAUNDRY_Z = -8;
-export const PENROSE_LAUNDRY_BASE_FLOOR = FloorLevel.LIVING;
+export const PENROSE_LAUNDRY_BASE_FLOOR = number.LIVING;
 
 export const PENROSE_LAUNDRY_ROOM_NAMES = {
   liftLobby: 'Лифтовая бирка прачечной П-81',
@@ -1280,7 +1280,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: PENROSE_LAUNDRY_BASE_FLOOR,
+    z: PENROSE_LAUNDRY_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -1328,7 +1328,7 @@ function registerPenroseRouteCues(world: World, roomsById: Map<string, Room>): v
     y: first.y + first.h / 2,
     targetX: hidden.x + hidden.w / 2,
     targetY: hidden.y + hidden.h / 2,
-    floor: PENROSE_LAUNDRY_BASE_FLOOR,
+    z: PENROSE_LAUNDRY_BASE_FLOOR,
     roomId: first.id,
     targetRoomId: hidden.id,
     zoneId: world.zoneMap[world.idx(first.x + Math.floor(first.w / 2), first.y + Math.floor(first.h / 2))],

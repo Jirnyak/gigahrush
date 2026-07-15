@@ -1,4 +1,4 @@
-import { Cell, Feature, FloorLevel, RoomType, Tex, W, type Room } from '../core/types';
+import { Cell, Feature, RoomType, Tex, W, type Room } from '../core/types';
 import { World } from '../core/world';
 import type { DesignFloorRouteDef } from '../data/design_floors';
 import {
@@ -635,7 +635,7 @@ export function applyFloorObjectPlacementProfile(
   return summary;
 }
 
-export function applyStoryFloorObjectProfile(world: World, spawnX: number, spawnY: number, floor: FloorLevel): FloorObjectPlacementSummary | undefined {
+export function applyStoryFloorObjectProfile(world: World, spawnX: number, spawnY: number, z: number): FloorObjectPlacementSummary | undefined {
   return applyFloorObjectPlacementProfile(world, world.rooms, spawnX, spawnY, floorObjectProfileForStoryFloor(floor), {
     seed: hash32(floor, world.rooms.length),
   });

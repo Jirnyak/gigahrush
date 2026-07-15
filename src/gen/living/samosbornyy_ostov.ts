@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, FloorLevel,
+  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, number,
   MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
@@ -20,7 +20,7 @@ export const SAMOSBORNYY_OSTOV_ROOM_PREFIX = 'Самосборный Остов'
 export const SAMOSBORNYY_OSTOV_ZONE = 64 as const;
 export const SAMOSBORNYY_OSTOV_METADATA = {
   id: SAMOSBORNYY_OSTOV_ID,
-  floor: 'living',
+  z: 'living',
   zoneHudId: SAMOSBORNYY_OSTOV_ZONE,
   zoneTitle: SAMOSBORNYY_OSTOV_ROOM_PREFIX,
   reachability: 'living_content_manifest_zone_64',
@@ -260,7 +260,7 @@ function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

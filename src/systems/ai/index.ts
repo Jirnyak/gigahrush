@@ -6,7 +6,7 @@ export { tryMonsterProjectileStagger } from './monster';
 
 import {
   type Entity, type GameState, type Msg, type GameClock,
-  EntityType, FloorLevel, MonsterKind, AIGoal, NpcRole,
+  EntityType, number, MonsterKind, AIGoal, NpcRole,
   setMsgLocationProvider,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -105,7 +105,7 @@ function fillProjectileOwners(entities: readonly Entity[]): void {
   }
 }
 
-export function updateAI(world: World, entities: Entity[], dt: number, time: number, msgs: Msg[], playerId: number, clock: GameClock, samosborActive: boolean, nextId: { v: number }, currentZ?: FloorLevel, state?: GameState): void {
+export function updateAI(world: World, entities: Entity[], dt: number, time: number, msgs: Msg[], playerId: number, clock: GameClock, samosborActive: boolean, nextId: { v: number }, currentZ?: number, state?: GameState): void {
   // Push per-frame refs into sub-modules
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
@@ -118,7 +118,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   fillProjectileOwners(entityIndex.projectiles);
 
   const designFloor = currentZ !== undefined ? designFloorAtZ(currentZ) : undefined;
-  const isMinistry = designFloor ? designFloorThemeClass(designFloor) === FloorLevel.MINISTRY : false;
+  const isMinistry = designFloor ? designFloorThemeClass(designFloor) === number.MINISTRY : false;
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,
@@ -136,7 +136,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
     const ci = world.idx(Math.floor(actor.x), Math.floor(actor.y));
     const roomId = world.roomMap[ci];
     return {
-      floor: currentZ,
+      z: currentZ,
       x: actor.x,
       y: actor.y,
       actorId: actor.id,

@@ -1,7 +1,7 @@
 /* ── Сухой мост над водой — shooter/eel counterplay set piece ── */
 
 import {
-  Cell, ContainerKind, Faction, Feature, FloorLevel, MonsterKind, RoomType, Tex,
+  Cell, ContainerKind, Faction, Feature, number, MonsterKind, RoomType, Tex,
   EntityType, AIGoal,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
@@ -37,7 +37,7 @@ function addBridgeContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

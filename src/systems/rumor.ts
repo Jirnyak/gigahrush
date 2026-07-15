@@ -2,7 +2,7 @@
 
 import {
   Faction,
-  FloorLevel,
+  number,
   MonsterKind,
   RoomType,
   type Entity,
@@ -33,7 +33,7 @@ export interface RumorEventLike {
   type?: string;
   time?: number;
   severity?: number;
-  floor?: FloorLevel;
+  z?: number;
   zoneId?: number;
   zoneName?: string;
   roomId?: number;
@@ -228,7 +228,7 @@ function rumorEventDedupeKey(event: RumorEventLike, rumorId: string): string {
   return [
     rumorId,
     event.type ?? '',
-    event.floor ?? '',
+    event.z ?? '',
     event.zoneId ?? '',
     event.roomId ?? '',
     event.itemId ?? '',
@@ -284,7 +284,7 @@ function selectScreenRumor(snapshot: ContextSnapshot, memory: NpcMemory): RumorD
 
 function rumorAllowed(rumor: RumorDef, snapshot: ContextSnapshot, memory: NpcMemory): boolean {
   if (memory.trustPlayer < rumor.minTrust) return false;
-  if (snapshot.floor !== undefined && !rumor.floors.includes(snapshot.floor)) return false;
+  if (snapshot.z !== undefined && !rumor.floors.includes(snapshot.z)) return false;
   if (isEventOnlyRumor(rumor) && memory.lastEventRumorId !== rumor.id) return false;
   return true;
 }
@@ -403,13 +403,13 @@ function renderRumor(
   }).text;
 }
 
-const FLOOR_NAMES: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Ад',
-  [FloorLevel.VOID]: 'Пустота',
+const FLOOR_NAMES: Record<number, string> = {
+  [number.MINISTRY]: 'Министерство',
+  [number.KVARTIRY]: 'Квартиры',
+  [number.LIVING]: 'Жилая зона',
+  [number.MAINTENANCE]: 'Коллекторы',
+  [number.HELL]: 'Ад',
+  [number.VOID]: 'Пустота',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {
@@ -469,7 +469,7 @@ function formatLeadLine(rumor: RumorDef, event?: RumorEventRecord): string {
 
 function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
-  if (lead.floor !== undefined) parts.push(FLOOR_NAMES[lead.floor]);
+  if (lead.z !== undefined) parts.push(FLOOR_NAMES[lead.z]);
   if (lead.zoneHint) parts.push(lead.zoneHint);
   if (lead.roomName) parts.push(lead.roomName);
   else if (lead.roomType !== undefined) parts.push(ROOM_TYPE_NAMES[lead.roomType]);
@@ -507,7 +507,7 @@ function eventRoomName(event: RumorEventRecord): string {
 
 function formatEventLead(event: RumorEventRecord): string {
   const parts: string[] = [];
-  if (event.floor !== undefined) pushLeadPart(parts, FLOOR_NAMES[event.floor]);
+  if (event.z !== undefined) pushLeadPart(parts, FLOOR_NAMES[event.z]);
   const zoneName = eventZoneName(event);
   if (zoneName) pushLeadPart(parts, zoneName);
   else if (event.zoneId !== undefined) pushLeadPart(parts, `зона ${event.zoneId + 1}`);
@@ -561,7 +561,7 @@ function rememberRecentLead(rumor: RumorDef, text: string, now: number, event?: 
     rumorId: rumor.id,
     text,
     heardAt: now,
-    floor: rumor.lead?.floor ?? event?.floor,
+    z: rumor.lead?.z ?? event?.z,
     roomName: rumor.lead?.roomName ?? (event ? eventRoomName(event) : undefined),
     itemId: rumor.lead?.itemId ?? event?.itemId,
     monsterKind: rumor.lead?.monsterKind ?? event?.monsterKind,
@@ -575,7 +575,7 @@ export function describeRumorReveal(reveal: RumorReveal): string {
 function formatReveal(reveal: RumorReveal): string {
   switch (reveal.kind) {
     case 'floor':
-      return FLOOR_NAMES[reveal.floor];
+      return FLOOR_NAMES[reveal.z];
     case 'zone':
       if (reveal.zoneId !== undefined) return `зона ${reveal.zoneId + 1}`;
       if (reveal.faction !== undefined) return `зона: ${ZONE_FACTION_NAMES[reveal.faction] ?? 'чужая'}`;
@@ -995,7 +995,7 @@ function isRareMonsterKind(kind: MonsterKind | undefined): boolean {
 
 function eventRelevantToNpc(event: RumorEventRecord, snapshot: ContextSnapshot): boolean {
   if (event.privacy === 'secret' || event.privacy === 'private') return false;
-  if (snapshot.floor !== undefined && event.floor !== undefined && snapshot.floor !== event.floor) return false;
+  if (snapshot.z !== undefined && event.z !== undefined && snapshot.z !== event.z) return false;
   if (event.zoneId !== undefined && snapshot.zoneId !== undefined) {
     if (event.zoneId === snapshot.zoneId) return true;
     return (event.severity ?? 0) >= 5 && event.privacy === 'public';

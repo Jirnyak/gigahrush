@@ -3,7 +3,7 @@
 /* Self-contained: NPC + FETCH quest + room generator.             */
 
 import {
-  Cell, Tex, Feature, RoomType, ContainerKind, FloorLevel,
+  Cell, Tex, Feature, RoomType, ContainerKind, number,
   type Room, type Entity, EntityType, Faction, Occupation, QuestType,
   type Item, type WorldContainer,
 } from '../../core/types';
@@ -87,7 +87,7 @@ function addRumorIndexContainer(world: World, room: Room, owner: Entity): void {
     id: nextContainerId(world),
     x,
     y,
-    floor: FloorLevel.LIVING,
+    z: number.LIVING,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

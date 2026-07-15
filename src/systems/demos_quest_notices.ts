@@ -2,7 +2,7 @@
 
 import {
   Faction,
-  FloorLevel,
+  number,
   type GameState,
   type Quest,
   type WorldEvent,
@@ -46,7 +46,7 @@ export interface DemosQuestNoticeContext {
   nowMinutes?: number;
   seed?: number | string;
   floorKey?: string;
-  floor?: FloorLevel;
+  z?: number;
   routeZ?: number;
   sourcePostId?: number;
   sourceEventId?: number;
@@ -111,13 +111,13 @@ const MAX_NOTICE_TAG_LEN = 32;
 const MAX_NOTICE_DETAIL = 132;
 const MAX_FAILED_REASON = 48;
 
-const FLOOR_LABELS: Record<FloorLevel, string> = {
-  [FloorLevel.MINISTRY]: 'Министерство',
-  [FloorLevel.KVARTIRY]: 'Квартиры',
-  [FloorLevel.LIVING]: 'Жилая зона',
-  [FloorLevel.MAINTENANCE]: 'Коллекторы',
-  [FloorLevel.HELL]: 'Ад',
-  [FloorLevel.VOID]: 'Пустота',
+const FLOOR_LABELS: Record<number, string> = {
+  [number.MINISTRY]: 'Министерство',
+  [number.KVARTIRY]: 'Квартиры',
+  [number.LIVING]: 'Жилая зона',
+  [number.MAINTENANCE]: 'Коллекторы',
+  [number.HELL]: 'Ад',
+  [number.VOID]: 'Пустота',
 };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -214,7 +214,7 @@ function contextFloorKey(snapshot: AlifeNpcSnapshot, context: DemosQuestNoticeCo
   const explicit = cleanFloorKey(context.floorKey);
   if (explicit) return explicit;
   const source = cleanFloorKey(snapshot.floorKey);
-  return source || floorKeyForStory(context.floor ?? snapshot.floor);
+  return source || floorKeyForStory(context.z ?? snapshot.z);
 }
 
 function floorLabel(state: GameState, floorKey: string): string {
@@ -261,7 +261,7 @@ function contractContextScore(def: ContractDef, snapshot: AlifeNpcSnapshot, cont
   let score = 1;
   if (def.faction === snapshot.faction) score += 8;
   else if (def.faction === Faction.CITIZEN || snapshot.faction === Faction.CITIZEN) score += 1;
-  if (def.target.floor === snapshot.floor) score += 2;
+  if (def.target.z === snapshot.z) score += 2;
   score += contractOccupationScore(def, snapshot);
   const rankBand = Math.max(1, Math.ceil(snapshot.level / 10));
   if (def.rank <= rankBand + 1) score += 2;
@@ -563,7 +563,7 @@ export function renderDemosQuestNoticeSpeech(options: DemosQuestNoticeSpeechOpti
   const context = lowerDemosCandidateContext({
     actorAlifeId: notice.giverAlifeId,
     floorKey: notice.floorKey,
-    floor: options.giverSnapshot?.floor ?? def?.target.floor,
+    z: options.giverSnapshot?.z ?? def?.target.z,
     routeZ: notice.targetRoute?.z,
     faction: options.giverSnapshot?.faction ?? def?.faction,
     relationToPlayer: options.relationToPlayer ?? options.giverSnapshot?.playerRelation,

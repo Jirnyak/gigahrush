@@ -1,6 +1,6 @@
 /* ── Tvar — hunched shadow creature ───────────────────────────── */
 
-import { FloorLevel, MonsterKind } from '../core/types';
+import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { rgba, noise, clamp, CLEAR, outline } from '../render/pixutil';
 const S = 128;
@@ -14,7 +14,6 @@ export const DEF: MonsterDef = {
   attackRate: 1.15,
   sprite: 0,   // auto-assigned by generateSprites()
   aiFlags: ['foodBait', 'wallBias'],
-  floors: [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL],
   counterplay: 'Не жмитесь к панели: держите полторы клетки и центр комнаты, а еду или говняк бросайте вбок, чтобы разорвать контакт.',
   lootHint: 'сырая органика, бетонная крошка у лап, редкий кусок мяса',
 };

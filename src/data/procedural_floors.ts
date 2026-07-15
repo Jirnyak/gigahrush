@@ -3,7 +3,7 @@
 import {
   ContainerKind,
   Faction,
-  FloorLevel,
+  number,
   MonsterKind,
   RoomType,
   Tex,
@@ -65,7 +65,7 @@ export const FALSE_SAFE_BLOCK_RESOLVED = 'маркер сорван';
 export interface FloorGeometryDef {
   id: FloorGeometryId;
   title: string;
-  baseFloor: FloorLevel;
+  themeTags: string[];
   weight: number;
   roomCount: number;
   dangerBias: number;
@@ -105,7 +105,7 @@ export interface ProceduralFloorSpec {
   depth: number;
   danger: 1 | 2 | 3 | 4 | 5;
   geometryId: FloorGeometryId;
-  baseFloor: FloorLevel;
+  themeTags: string[];
   majorityId: FloorMajorityId;
   anomalyId: FloorAnomalyId;
   title: string;
@@ -134,7 +134,7 @@ export const PROCEDURAL_LOOT_ANOMALY_TAGS: Readonly<Record<FloorAnomalyId, reado
   mushroom_mycelium: ['mushroom', 'contaminated'],
   hladon: ['hladon', 'cold_cache'],
   false_safe_block: [FALSE_SAFE_BLOCK_TAG, 'audit_risk'],
-  fractal_floor: ['fractal', 'document_cache'],
+  fractal_z: ['fractal', 'document_cache'],
   mirror_run: ['mirror', 'audit_risk'],
   radio_chess: ['radio', 'timing_cache'],
   cement_memory: ['cement_memory', 'route_pressure'],
@@ -165,7 +165,7 @@ export const PROCEDURAL_LOOT_ANOMALY_KIND_BIAS: Readonly<Record<FloorAnomalyId, 
   mushroom_mycelium: [ContainerKind.FRIDGE, ContainerKind.TRASH_BIN, ContainerKind.SECRET_STASH],
   hladon: [ContainerKind.EMERGENCY_BOX, ContainerKind.TOOL_LOCKER, ContainerKind.MEDICAL_CABINET],
   false_safe_block: [ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH, ContainerKind.SAFE],
-  fractal_floor: [ContainerKind.FILING_CABINET, ContainerKind.SAFE, ContainerKind.SECRET_STASH],
+  fractal_z: [ContainerKind.FILING_CABINET, ContainerKind.SAFE, ContainerKind.SECRET_STASH],
   mirror_run: [ContainerKind.SECRET_STASH, ContainerKind.SAFE, ContainerKind.FILING_CABINET],
   radio_chess: [ContainerKind.FILING_CABINET, ContainerKind.METAL_CABINET, ContainerKind.TOOL_LOCKER],
   cement_memory: [ContainerKind.FILING_CABINET, ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH],
@@ -212,7 +212,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'living_blocks',
     title: 'типовой жилой блок (класс Г)',
-    baseFloor: FloorLevel.LIVING,
+    themeTags: ['living'],
     weight: 42,
     roomCount: 86,
     dangerBias: 0,
@@ -227,7 +227,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'apartment_pressure',
     title: 'уплотненный сектор Квартир',
-    baseFloor: FloorLevel.KVARTIRY,
+    themeTags: ['kvartiry'],
     weight: 30,
     roomCount: 104,
     dangerBias: 1,
@@ -242,7 +242,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'communal_knots',
     title: 'коммунально-бытовые узлы',
-    baseFloor: FloorLevel.KVARTIRY,
+    themeTags: ['kvartiry'],
     weight: 26,
     roomCount: 112,
     dangerBias: 0,
@@ -257,7 +257,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'attic_weatherworks',
     title: 'камеры воздухозабора и вентиляции',
-    baseFloor: FloorLevel.MINISTRY,
+    themeTags: ['ministry'],
     weight: 30,
     roomCount: 360,
     dangerBias: 1,
@@ -272,7 +272,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'archive_warrens',
     title: 'архивы забытых нормативов',
-    baseFloor: FloorLevel.MINISTRY,
+    themeTags: ['ministry'],
     weight: 28,
     roomCount: 92,
     dangerBias: 0,
@@ -287,7 +287,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'collectors',
     title: 'технические коллекторы',
-    baseFloor: FloorLevel.MAINTENANCE,
+    themeTags: ['maintenance'],
     weight: 32,
     roomCount: 72,
     dangerBias: 1,
@@ -302,7 +302,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'workshops',
     title: 'уровень производственных цехов',
-    baseFloor: FloorLevel.MAINTENANCE,
+    themeTags: ['maintenance'],
     weight: 26,
     roomCount: 64,
     dangerBias: 1,
@@ -317,7 +317,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'service_spines',
     title: 'магистральные сервисные штреки',
-    baseFloor: FloorLevel.MAINTENANCE,
+    themeTags: ['maintenance'],
     weight: 24,
     roomCount: 176,
     dangerBias: 0,
@@ -332,7 +332,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'sump_causeways',
     title: 'нижние затопленные эстакады',
-    baseFloor: FloorLevel.MAINTENANCE,
+    themeTags: ['maintenance'],
     weight: 34,
     roomCount: 56,
     dangerBias: 2,
@@ -347,7 +347,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'admin_pockets',
     title: 'канцелярские лабиринты',
-    baseFloor: FloorLevel.MINISTRY,
+    themeTags: ['ministry'],
     weight: 16,
     roomCount: 240,
     dangerBias: 0,
@@ -668,15 +668,7 @@ export function proceduralFloorMonsterBiasTags(spec: Pick<ProceduralFloorSpec, '
   return proceduralFloorSourceTags(spec).filter(tag => MONSTERS_BY_TAG[tag]?.length);
 }
 
-export function proceduralMonsterFloor(spec: Pick<ProceduralFloorSpec, 'z' | 'baseFloor'>): FloorLevel {
-  const profileZ = floorRunProfileZ(spec.z);
-  if (spec.z <= FLOOR_RUN_NPC_FREE_Z) return FloorLevel.VOID;
-  if (profileZ >= 25) return FloorLevel.HELL;
-  if (profileZ >= 13) return FloorLevel.MAINTENANCE;
-  if (profileZ <= -17) return FloorLevel.MINISTRY;
-  if (profileZ <= -5) return FloorLevel.KVARTIRY;
-  return spec.baseFloor;
-}
+
 
 export function proceduralFloorAnomalyRoutePressure(spec: Pick<ProceduralFloorSpec, 'anomalyId'>): number {
   if (spec.anomalyId === 'samosbor_seed' || spec.anomalyId === 'wall_snake' || spec.anomalyId === 'living_tunnels' || spec.anomalyId === 'section_shift' || spec.anomalyId === 'zombie_apocalypse' || spec.anomalyId === 'sandpile_perekrytie') return 2;
@@ -700,7 +692,7 @@ export function proceduralFloorRoutePressureLevel(spec: Pick<ProceduralFloorSpec
 }
 
 export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralFloorSpec {
-  const seed = hashSeed(`floor:${runSeed}:${z}`, runSeed);
+  const seed = hashSeed(`z: ${runSeed}:${z}`, runSeed);
   const rng = seededRandom(seed);
   const depth = Math.abs(z);
   const profileZ = floorRunProfileZ(z);
@@ -709,8 +701,8 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     rng,
     def => {
       let w = def.weight;
-      if (profileZ < 0 && def.baseFloor === FloorLevel.MINISTRY) w *= 1.8;
-      if (profileZ > 0 && def.baseFloor === FloorLevel.MAINTENANCE) w *= 1.6;
+      if (profileZ < 0 && def.themeTags.includes('ministry')) w *= 1.8;
+      if (profileZ > 0 && def.themeTags.includes('maintenance')) w *= 1.6;
       return w;
     },
   );
@@ -745,7 +737,7 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     depth,
     danger,
     geometryId: geometry.id,
-    baseFloor: geometry.baseFloor,
+    themeTags: [...geometry.themeTags],
     majorityId: majority.id,
     anomalyId: anomaly.id,
     title: `${anomalyPrefix}${geometry.title}, ${majority.title}`,

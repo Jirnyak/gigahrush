@@ -5,7 +5,7 @@ import {
   ContainerKind,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   Occupation,
   QuestType,
   RoomType,
@@ -206,7 +206,7 @@ registerSideQuest('kv_zoya_stoyak', ZOYA, [{
   rewardItem: 'water_coupon', rewardCount: 3,
   extraRewards: [{ defId: 'bread', count: 2 }, { defId: 'tea', count: 1 }],
   relationDelta: 8, xpReward: 45, moneyReward: 18,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.BATHROOM,
   targetZoneTag: WATER_RIOT_TAG,
   targetHint: 'Квартиры: водораздача у стояка, общая бочка и ведомственный ящик.',
@@ -228,7 +228,7 @@ registerSideQuest('kv_sergin_vodouchet', SERGIN, [{
   rewardItem: 'ammo_9mm', rewardCount: 12,
   extraRewards: [{ defId: 'liquidator_token', count: 1 }],
   relationDelta: 8, xpReward: 50, moneyReward: 45,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.BATHROOM,
   targetZoneTag: WATER_RIOT_TAG,
   targetHint: 'Квартиры: ведомственный ящик воды и учет Серыгина у стояка.',
@@ -250,7 +250,7 @@ registerSideQuest('kv_kostyl_kanistrovy', KOSTYL, [{
   rewardItem: 'crowbar', rewardCount: 1,
   extraRewards: [{ defId: 'cigs', count: 3 }, { defId: 'metal_water', count: 2 }],
   relationDelta: 8, xpReward: 45, moneyReward: 12,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.BATHROOM,
   targetZoneTag: WATER_RIOT_TAG,
   targetHint: 'Квартиры: мокрая очередь и талоны, которые можно унести диким.',
@@ -292,7 +292,7 @@ registerSideQuest(SURVIVAL_ID, SURVIVALIST, [{
   rewardItem: 'filtered_water', rewardCount: 2,
   extraRewards: [{ defId: 'borrowed_kitchen_key', count: 1 }, { defId: 'bandage', count: 1 }],
   relationDelta: 0, xpReward: 35, moneyReward: 0,
-  targetFloor: FloorLevel.KVARTIRY,
+  targetFloorZ: number.KVARTIRY,
   targetRoomType: RoomType.BATHROOM,
   targetZoneTag: WATER_RIOT_TAG,
   targetHint: 'Квартиры: сухой перекупщик стоит у водяного бунта и продает личный выход.',
@@ -333,14 +333,14 @@ function publishWaterRiotOutcome(
   outcome: WaterRiotOutcome,
 ): void {
   const resourceChanges: Record<string, number> = {};
-  if (changeResourceStock(state, 'drink_water', outcome.waterDelta, FloorLevel.KVARTIRY)) {
+  if (changeResourceStock(state, 'drink_water', outcome.waterDelta, number.KVARTIRY)) {
     resourceChanges.drink_water = outcome.waterDelta;
   }
   const relationDeltas = applyFactionRelationDeltas(outcome.relationDeltas);
 
   publishEvent(state, {
     type: 'faction_relation_changed',
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -408,7 +408,7 @@ function addSupplyContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    floor: FloorLevel.KVARTIRY,
+    z: number.KVARTIRY,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

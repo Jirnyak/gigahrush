@@ -1,4 +1,4 @@
-import { FloorLevel, ZoneFaction, type TerritoryOwner } from '../core/types';
+import { ZoneFaction, type TerritoryOwner } from '../core/types';
 import type { DesignFloorId } from './design_floors';
 import type { FloorMajorityId, ProceduralFloorSpec } from './procedural_floors';
 
@@ -34,13 +34,13 @@ const PROCEDURAL_MAJORITIES: Readonly<Record<FloorMajorityId, readonly FloorTerr
   wild: shares(17, 13, 12, 8, 50),
 };
 
-const STORY_TERRITORY: Readonly<Record<FloorLevel, readonly FloorTerritoryShare[]>> = {
-  [FloorLevel.MINISTRY]: shares(48, 24, 8, 14, 6),
-  [FloorLevel.KVARTIRY]: shares(66, 12, 6, 7, 9),
-  [FloorLevel.LIVING]: shares(64, 14, 6, 7, 9),
-  [FloorLevel.MAINTENANCE]: shares(16, 58, 5, 7, 14),
-  [FloorLevel.HELL]: shares(6, 8, 40, 4, 28, 14),
-  [FloorLevel.VOID]: shares(4, 8, 24, 6, 34, 24),
+const STORY_TERRITORY: Readonly<Record<number, readonly FloorTerritoryShare[]>> = {
+  [number.MINISTRY]: shares(48, 24, 8, 14, 6),
+  [number.KVARTIRY]: shares(66, 12, 6, 7, 9),
+  [number.LIVING]: shares(64, 14, 6, 7, 9),
+  [number.MAINTENANCE]: shares(16, 58, 5, 7, 14),
+  [number.HELL]: shares(6, 8, 40, 4, 28, 14),
+  [number.VOID]: shares(4, 8, 24, 6, 34, 24),
 };
 
 const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritoryShare[]>> = {
@@ -54,7 +54,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   upper_bureau: shares(42, 26, 8, 16, 8),
   number_registry: shares(30, 18, 10, 34, 8),
   istinniy_labirint: shares(24, 16, 16, 10, 34),
-  bank_floor: shares(42, 28, 8, 10, 12),
+  bank_z: shares(42, 28, 8, 10, 12),
   critical_leak_archive: shares(28, 34, 8, 18, 12),
   raionsovet_archive: shares(44, 22, 8, 14, 12),
   markov_stairwell: shares(34, 24, 10, 14, 18),
@@ -72,7 +72,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   penrose_laundry: shares(56, 17, 7, 8, 12),
   black_market_88: shares(16, 9, 8, 7, 60),
   production_belt: shares(14, 50, 6, 18, 12),
-  service_floor: shares(16, 52, 6, 12, 14),
+  service_z: shares(16, 52, 6, 12, 14),
   hyperbolic_switchyard: shares(12, 44, 8, 16, 20),
   silicon_net_well: shares(12, 18, 8, 48, 14),
   shahta_atrium: shares(14, 44, 10, 10, 22),
@@ -86,7 +86,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   cantor_pustoty: shares(6, 8, 24, 8, 34, 20),
   darkness: shares(6, 8, 24, 8, 36, 18),
   liquidatorbase: [{ owner: ZoneFaction.LIQUIDATOR, share: 1.0 }],
-  horrorfloor: shares(6, 8, 24, 8, 36, 18),
+  horrorz: shares(6, 8, 24, 8, 36, 18),
   living: shares(64, 14, 6, 7, 9),
   kvartiry: shares(66, 12, 6, 7, 9),
   ministry: shares(48, 24, 8, 14, 6),
@@ -95,7 +95,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   void: shares(4, 8, 24, 6, 34, 24),
 };
 
-export function territorySharesForStoryFloor(floor: FloorLevel): readonly FloorTerritoryShare[] {
+export function territorySharesForStoryFloor(z: number): readonly FloorTerritoryShare[] {
   return STORY_TERRITORY[floor];
 }
 

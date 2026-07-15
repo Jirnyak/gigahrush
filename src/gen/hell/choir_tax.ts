@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature,
-  FloorLevel, MonsterKind, Occupation, QuestType, RoomType, Tex,
+  number, MonsterKind, Occupation, QuestType, RoomType, Tex,
   msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
@@ -50,7 +50,7 @@ interface ChoirBranchSpec {
 }
 
 interface ChoirSite {
-  floor: FloorLevel;
+  z: number;
   roomId: number;
   zoneId: number;
   x: number;
@@ -294,7 +294,7 @@ export function generateHell18ChoirTax(world: World, entities: Entity[], nextId:
   const cx = world.wrap(room.x + (room.w >> 1));
   const cy = world.wrap(room.y + (room.h >> 1));
   activeSite = {
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(cx, cy)],
     x: cx + 0.5,
@@ -333,7 +333,7 @@ function handleHell18QuestOutcome(state: GameState, event: WorldEvent): void {
       if (outcome) {
         publishEvent(state, {
           type: 'quest_completed',
-          floor: event.floor,
+          z: event.z,
           actorId: event.actorId,
           actorName: event.actorName,
           actorFaction: event.actorFaction,
@@ -367,7 +367,7 @@ function branchForHell18Quest(sideQuestId: string): ChoirBranch | null {
 function handleHell18BranchEvent(state: GameState, event: WorldEvent): void {
   const site = activeSite;
   const world = activeWorld;
-  if (!site || !world || state.currentZ !== site.floor || event.floor !== site.floor) return;
+  if (!site || !world || state.currentZ !== site.z || event.z !== site.z) return;
 
   if (event.type === 'item_deposited' && event.containerId === site.cashboxId && event.itemId === 'rawmeat') {
     applyHell18Branch(state, event, 'pay');
@@ -863,7 +863,7 @@ function addChoirCache(world: World, room: Room, ownerNpcId: number): number {
     id,
     x,
     y,
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.CASHBOX,
@@ -889,7 +889,7 @@ function addChoirRefusalLedger(world: World, room: Room): number {
     id,
     x,
     y,
-    floor: FloorLevel.HELL,
+    z: number.HELL,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

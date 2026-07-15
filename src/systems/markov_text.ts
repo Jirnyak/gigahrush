@@ -40,7 +40,7 @@ export interface MarkovTextContext {
   readonly targetId?: number;
   readonly targetAlifeId?: number;
   readonly floorKey?: string;
-  readonly floor?: number;
+  readonly z?: number;
   readonly routeZBand?: 'center' | 'upper' | 'lower' | 'deep';
   readonly roomType?: number;
   readonly roomName?: string;
@@ -686,7 +686,7 @@ function requestSeed(request: SpeechRouterRequest, salt: string): number {
     request.repeatIndex ?? 0,
     context?.actorAlifeId ?? context?.actorId ?? 0,
     context?.targetAlifeId ?? context?.targetId ?? 0,
-    context?.floorKey ?? context?.floor ?? '',
+    context?.floorKey ?? context?.z ?? '',
     context?.roomType ?? '',
     context?.zoneId ?? '',
     context?.faction ?? '',

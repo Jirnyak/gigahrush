@@ -1,4 +1,4 @@
-/* ── Design floor: Верхнее бюро ──────────────────────────────── */
+/* ── Design z: Верхнее бюро ──────────────────────────────── */
 
 import {
   W,
@@ -7,7 +7,7 @@ import {
   DoorState,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -38,7 +38,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('upper_bureau');
 export const UPPER_BUREAU_ROUTE_ID = 'upper_bureau' as const;
 export const UPPER_BUREAU_DISPLAY_NAME = 'Верхнее бюро' as const;
 export const UPPER_BUREAU_ANCHOR_Z = 34;
-export const UPPER_BUREAU_BASE_FLOOR = FloorLevel.MINISTRY;
+export const UPPER_BUREAU_BASE_FLOOR = number.MINISTRY;
 export const UPPER_BUREAU_AUDIT_HEAT_MAX = 3;
 
 export const UPPER_BUREAU_FLAG_IDS = {
@@ -773,7 +773,7 @@ export function applyUpperBureauFlagChange(
     const severity = next.auditHeat >= 3 ? 5 : recordChanged ? 4 : 3;
     publishEvent(state, {
       type: 'faction_relation_changed',
-      floor: UPPER_BUREAU_BASE_FLOOR,
+      z: UPPER_BUREAU_BASE_FLOOR,
       zoneId: change.zoneId,
       roomId: change.roomId,
       x: change.x,
@@ -932,7 +932,7 @@ function addBureauContainer(
     id: nextContainerId(world),
     x,
     y,
-    floor: UPPER_BUREAU_BASE_FLOOR,
+    z: UPPER_BUREAU_BASE_FLOOR,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

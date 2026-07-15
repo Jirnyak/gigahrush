@@ -2,7 +2,7 @@ import {
   AIGoal,
   EntityType,
   Faction,
-  FloorLevel,
+  number,
   MonsterKind,
   Occupation,
   RoomType,
@@ -64,12 +64,12 @@ function roomTypeAt(generation: FloorGeneration, cell: number): RoomType | undef
   return rid >= 0 ? generation.world.rooms[rid]?.type : RoomType.CORRIDOR;
 }
 
-function designMonsterFloor(route: DesignFloorRouteDef): FloorLevel {
-  if (route.z <= -48) return FloorLevel.VOID;
-  if (route.z <= -34) return FloorLevel.HELL;
-  if (route.z <= -14) return FloorLevel.MAINTENANCE;
-  if (route.z >= 42) return FloorLevel.MAINTENANCE;
-  return route.baseFloor;
+function designMonsterFloor(route: DesignFloorRouteDef): number {
+  if (route.z <= -48) return number.VOID;
+  if (route.z <= -34) return number.HELL;
+  if (route.z <= -14) return number.MAINTENANCE;
+  if (route.z >= 42) return number.MAINTENANCE;
+  return route.themeTags;
 }
 
 function makeAmbientNpcTemplate(
@@ -161,8 +161,8 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
       floorTags: [
         route.id,
         ...profile.monsterTags,
-        route.baseFloor === FloorLevel.MINISTRY ? 'documents' : '',
-        route.baseFloor === FloorLevel.MAINTENANCE ? 'industrial' : '',
+        route.themeTags === number.MINISTRY ? 'documents' : '',
+        route.themeTags === number.MAINTENANCE ? 'industrial' : '',
       ].filter(Boolean),
       samosborCount: Math.max(1, route.danger),
       allowRare: false,

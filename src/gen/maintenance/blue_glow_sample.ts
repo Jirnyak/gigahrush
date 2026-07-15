@@ -4,7 +4,7 @@ import {
   ContainerKind,
   Faction,
   Feature,
-  FloorLevel,
+  number,
   Occupation,
   QuestType,
   RoomType,
@@ -120,7 +120,7 @@ registerWorldEventObserver((state, event) => {
       tags: [CONTENT_TAG, 'sample', 'blue_glow', 'opened'],
       data: { action: 'sample_opened', sourceItem: BLUE_GLOW_SAMPLE_SEALED },
     });
-    const stockChanged = changeResourceStock(state, 'medicine', -2, event.floor);
+    const stockChanged = changeResourceStock(state, 'medicine', -2, event.z);
     publishEvent(state, {
       type: 'player_use_item',
       actorId: event.actorId,
@@ -141,7 +141,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type !== 'quest_completed') return;
   const sideQuestId = eventDataString(event, 'sideQuestId');
   if (sideQuestId === SELL_QUEST_ID) {
-    changeResourceStock(state, 'psi', 4, event.floor);
+    changeResourceStock(state, 'psi', 4, event.z);
     publishEvent(state, {
       type: 'quest_completed',
       actorId: event.actorId,
@@ -184,7 +184,7 @@ function addSampleContainer(ctx: MaintContentCtx, room: Room, x: number, y: numb
     id: nextContainerId(ctx),
     x,
     y,
-    floor: FloorLevel.MAINTENANCE,
+    z: number.MAINTENANCE,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     kind: ContainerKind.MEDICAL_CABINET,

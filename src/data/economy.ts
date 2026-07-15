@@ -1,4 +1,4 @@
-import { FloorLevel } from '../core/types';
+import { } from '../core/types';
 import { RESOURCES } from './resources';
 
 export interface ResourceStock {
@@ -8,7 +8,7 @@ export interface ResourceStock {
 }
 
 export interface EconomyFloorState {
-  floor: FloorLevel;
+  z: number;
   resources: Record<string, ResourceStock>;
   lastTickAt: number;
 }
@@ -40,7 +40,7 @@ export function createEconomyState(): EconomyState {
   return { floors: {}, routes: {}, priceVersion: 1 };
 }
 
-export function createEconomyFloorState(floor: number): EconomyFloorState {
+export function createEconomyFloorState(z: number): EconomyFloorState {
   const resources: Record<string, ResourceStock> = {};
   for (const r of RESOURCES) resources[r.id] = { stock: r.baseStock, target: r.baseStock, lastDelta: 0 };
   return { floor, resources, lastTickAt: 0 };

@@ -1,4 +1,4 @@
-import { Faction, FloorLevel, type WorldEventPrivacy, type WorldEventSeverity } from '../core/types';
+import { Faction, type WorldEventPrivacy, type WorldEventSeverity } from '../core/types';
 
 export type PermitMethod = 'legal' | 'forged' | 'stolen' | 'debt' | 'expose';
 
@@ -25,7 +25,6 @@ export interface PermitDef {
   method: PermitMethod;
   official: boolean;
   accessTags: readonly PermitAccessTag[];
-  floors: readonly FloorLevel[];
   severity: WorldEventSeverity;
   privacy: WorldEventPrivacy;
   factionCost: readonly PermitFactionCost[];
@@ -51,7 +50,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['ministry_n3', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.CITIZEN, delta: 1 }],
@@ -65,7 +63,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'forged',
     official: false,
     accessTags: ['ministry_n3', 'general_admin'],
-    floors: [FloorLevel.MINISTRY, FloorLevel.LIVING, FloorLevel.KVARTIRY],
     severity: 4,
     privacy: 'local',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: -2 }, { faction: Faction.WILD, delta: 1 }],
@@ -80,7 +77,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'forged',
     official: false,
     accessTags: ['ministry_n3', 'general_admin'],
-    floors: [FloorLevel.MINISTRY, FloorLevel.LIVING, FloorLevel.KVARTIRY],
     severity: 4,
     privacy: 'local',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: -1 }, { faction: Faction.WILD, delta: 1 }],
@@ -95,7 +91,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['archive', 'raionsovet', 'ministry_n3'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.CITIZEN, delta: 1 }],
@@ -109,7 +104,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'stolen',
     official: false,
     accessTags: ['archive', 'raionsovet', 'ministry_n3'],
-    floors: [FloorLevel.MINISTRY],
     severity: 4,
     privacy: 'witnessed',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: 1 }, { faction: Faction.WILD, delta: -1 }],
@@ -124,7 +118,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['raionsovet', 'archive', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.CITIZEN, delta: 1 }],
@@ -138,7 +131,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'forged',
     official: false,
     accessTags: ['raionsovet', 'archive', 'general_admin'],
-    floors: [FloorLevel.MINISTRY, FloorLevel.LIVING],
     severity: 4,
     privacy: 'local',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: -2 }, { faction: Faction.WILD, delta: 1 }],
@@ -153,7 +145,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'debt',
     official: true,
     accessTags: ['bank_debt', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.CITIZEN, delta: 1 }, { faction: Faction.WILD, delta: -1 }],
@@ -167,7 +158,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'forged',
     official: false,
     accessTags: ['bank_debt', 'general_admin'],
-    floors: [FloorLevel.MINISTRY, FloorLevel.LIVING],
     severity: 5,
     privacy: 'witnessed',
     factionCost: [{ faction: Faction.CITIZEN, delta: -2 }, { faction: Faction.WILD, delta: 2 }],
@@ -182,7 +172,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['bank_debt', 'bank_vault', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.CITIZEN, delta: 2 }],
@@ -196,7 +185,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'expose',
     official: true,
     accessTags: ['bank_vault', 'archive', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 4,
     privacy: 'witnessed',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: 2 }, { faction: Faction.WILD, delta: -2 }],
@@ -211,7 +199,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'expose',
     official: true,
     accessTags: ['archive', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 4,
     privacy: 'witnessed',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: 1 }, { faction: Faction.WILD, delta: -1 }],
@@ -226,7 +213,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['weapon_window', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: 1 }],
@@ -240,7 +226,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'forged',
     official: false,
     accessTags: ['weapon_window', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 4,
     privacy: 'local',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: -2 }, { faction: Faction.WILD, delta: 1 }],
@@ -255,7 +240,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['elevator', 'ministry_n3', 'general_admin'],
-    floors: [FloorLevel.MINISTRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.CITIZEN, delta: 1 }],
@@ -269,7 +253,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'legal',
     official: true,
     accessTags: ['quarantine', 'general_admin'],
-    floors: [FloorLevel.MINISTRY, FloorLevel.KVARTIRY],
     severity: 3,
     privacy: 'private',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: 1 }],
@@ -283,7 +266,6 @@ export const PERMIT_DEFS: readonly PermitDef[] = [
     method: 'forged',
     official: false,
     accessTags: ['quarantine', 'general_admin'],
-    floors: [FloorLevel.MINISTRY, FloorLevel.KVARTIRY],
     severity: 4,
     privacy: 'local',
     factionCost: [{ faction: Faction.LIQUIDATOR, delta: -2 }, { faction: Faction.WILD, delta: 1 }],
