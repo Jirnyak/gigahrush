@@ -7,7 +7,7 @@ import { ITEMS } from '../src/data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, dropItem, pickupDrop, pickupNearby } from '../src/systems/inventory';
-import { checkQuests } from '../src/systems/quests';
+import { checkQuests, checkTalkQuest, generateLootPool, pickItemFromPool } from '../src/systems/quests';
 import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 function pipeSlots(count: number): Item[] {
@@ -167,7 +167,7 @@ test('full inventory blocks item quest rewards without marking the quest done', 
   };
   const state = makeGameState({ quests: [quest], time: 3 });
 
-  checkQuests(player, world, [player, giver], state, state.msgs);
+  checkTalkQuest(giver, player, world, [player, giver], state, state.msgs);
 
   assert.equal(quest.done, false);
   assert.equal(countInventoryItem(player, 'bread'), 0);

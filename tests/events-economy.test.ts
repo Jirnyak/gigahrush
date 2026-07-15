@@ -60,7 +60,7 @@ import '../src/systems/caravans';
 import { getNpcMemory } from '../src/systems/npc_memory';
 import { ensureProductionRooms, tickProduction, type ProductionState } from '../src/systems/production';
 import { questRemainingMinutes } from '../src/systems/quest_deadlines';
-import { checkQuests, offerQuest } from '../src/systems/quests';
+import { checkQuests, checkTalkQuest, offerQuest } from '../src/systems/quests';
 import { getSamosborDirectorTrace, tickSamosborDirector } from '../src/systems/samosbor_director';
 import { addTestRoom, makeGameState, makeTestContainer, makeTestEntity } from './helpers';
 
@@ -363,7 +363,7 @@ test('AG82 idol branch completion returns the idol and publishes branch context'
     done: false,
   });
 
-  checkQuests(player, new World(), [player, giver], state, state.msgs);
+  checkTalkQuest(giver, player, new World(), [player, giver], state, state.msgs);
 
   assert.equal(state.quests[0].done, true);
   assert.equal(player.inventory?.find(i => i.defId === 'idol_chernobog')?.count, 1);

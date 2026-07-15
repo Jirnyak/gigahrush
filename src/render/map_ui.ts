@@ -49,11 +49,9 @@ const drawnTargetRooms = new Set<number>();
 let activeKillAnyMonster = false;
 const MAX_CONCRETE_QUEST_ROOM_MARKERS = 8;
 const mapEntityQuery: Entity[] = [];
-const activeQuestItemQuery: Entity[] = [];
 const MAP_MINIMAP_ENTITY_DOT_BUDGET = 220;
 const MAP_FULL_ENTITY_DOT_BUDGET = 900;
 const MAP_ENTITY_QUERY_BUDGET_MULT = 3;
-const MAP_ACTIVE_QUEST_ITEM_QUERY_CAP = 96;
 const MAP_CROWD_BIN_HASH_CAP = 2048;
 const MAP_CROWD_EMPTY_KEY = -1;
 const MAP_CROWD_GROUP_FRIENDLY_NPC = 0;
@@ -414,13 +412,14 @@ function liveQuestKillPoint(q: Quest, world: World, player: Entity): QuestMapTar
 
 function liveQuestFetchItemPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
   if (!q.targetItem) return undefined;
+  const activeQuestItemQuery: Entity[] = [];
   getEntityIndex().queryRadiusCapped(
     player.x,
     player.y,
     W,
     activeQuestItemQuery,
     ENTITY_MASK_ITEM_DROP,
-    MAP_ACTIVE_QUEST_ITEM_QUERY_CAP,
+    128,
   );
   let best: Entity | undefined;
   let bestD2 = Infinity;
@@ -444,15 +443,27 @@ function activeQuestMapTargetPoint(world: World, player: Entity, state: GameStat
     const talkPoint = liveQuestNpcPoint(q, world, player);
     if (talkPoint) return talkPoint;
   }
-  if (q.type === QuestType.KILL) {
-    const killPoint = liveQuestKillPoint(q, world, player);
-    if (killPoint) return killPoint;
-  }
 
   const roomTarget = resolveQuestTargetRoom(world, q, player);
   if (roomTarget) return roomCenterPoint(roomTarget.room);
 
-  if (q.type === QuestType.FETCH) return liveQuestFetchItemPoint(q, world, player);
+  if (q.type === QuestType.FETCH || q.type === QuestType.KILL) {
+    // If it requires manual turn-in (no contractId), point to the giver
+    if (q.contractId === undefined) {
+      const index = getEntityIndex();
+      const giver = index.byId.get(q.giverId);
+      if (giver) return entityPoint(giver);
+      if (q.giverPlotNpcId) {
+        return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.plotNpcId === q.giverPlotNpcId);
+      }
+      return undefined;
+    }
+    
+    // If it auto-completes, the item/enemy is what leads to completion
+    if (q.type === QuestType.KILL) return liveQuestKillPoint(q, world, player);
+    if (q.type === QuestType.FETCH) return liveQuestFetchItemPoint(q, world, player);
+  }
+
   return undefined;
 }
 

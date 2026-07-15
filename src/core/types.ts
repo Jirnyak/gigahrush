@@ -823,6 +823,7 @@ export interface Quest {
   type: QuestType;
   giverId: number;            // NPC entity id
   giverName: string;
+  giverPlotNpcId?: string;    // Plot NPC key for the giver (for cross-floor turn-ins)
   desc: string;
   // FETCH: targetItem + targetCount
   targetItem?: string;        // item def id

@@ -893,6 +893,7 @@ export function checkQuests(
 
     switch (q.type) {
       case QuestType.FETCH:
+        if (q.contractId === undefined) break; // manual turn-in required for NPC quests
         if (q.targetItem === 'money') {
           if ((player.money ?? 0) >= (q.targetCount ?? 1)) complete = true;
         } else if (q.targetItem) {
@@ -911,6 +912,7 @@ export function checkQuests(
         break;
 
       case QuestType.KILL:
+        if (q.contractId === undefined) break; // manual turn-in required for NPC quests
         if (q.killCount !== undefined && q.killNeeded !== undefined) {
           if (q.killCount >= q.killNeeded) complete = true;
         }
@@ -1048,18 +1050,62 @@ export function checkTalkQuest(
   state: GameState, msgs: Msg[],
 ): void {
   for (const q of state.quests) {
-    if (q.done || q.type !== QuestType.TALK) continue;
-    // Match by entity id OR by plot NPC id (cross-floor quests)
-    const matchById = q.targetNpcId === targetNpc.id;
-    const matchByPlotId = q.targetPlotNpcId && targetNpc.plotNpcId === q.targetPlotNpcId;
-    if (!matchById && !matchByPlotId) continue;
-    const pack = resolveNpcPackageForEntity(targetNpc);
-    const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
-    if (completeQuest(q, player, entities, state, msgs)) {
-      if (talkQuestResponse) {
-        pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${talkQuestResponse.text}»`, '#aaf');
-      } else {
-        pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Передам, спасибо.»`, '#aaf');
+    if (q.done) continue;
+
+    if (q.type === QuestType.TALK) {
+      // Match by entity id OR by plot NPC id (cross-floor quests)
+      const matchById = q.targetNpcId === targetNpc.id;
+      const matchByPlotId = q.targetPlotNpcId && targetNpc.plotNpcId === q.targetPlotNpcId;
+      if (!matchById && !matchByPlotId) continue;
+      const pack = resolveNpcPackageForEntity(targetNpc);
+      const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
+      if (completeQuest(q, player, entities, state, msgs)) {
+        if (talkQuestResponse) {
+          pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${talkQuestResponse.text}»`, '#aaf');
+        } else {
+          pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Передам, спасибо.»`, '#aaf');
+        }
+      }
+    } else if (q.type === QuestType.FETCH && q.contractId === undefined) {
+      // FETCH quests from NPCs require manual turn in
+      const matchById = q.giverId === targetNpc.id;
+      const matchByPlotId = q.giverPlotNpcId && targetNpc.plotNpcId === q.giverPlotNpcId;
+      if (!matchById && !matchByPlotId) continue;
+      
+      let complete = false;
+      if (q.targetItem === 'money') {
+         if ((player.money ?? 0) >= (q.targetCount ?? 1)) complete = true;
+      } else if (q.targetItem) {
+         const needed = q.targetCount ?? 1;
+         const have = (player.inventory ?? []).reduce((sum, s) => s.defId === q.targetItem ? sum + s.count : sum, 0);
+         if (have >= needed) complete = true;
+      }
+      
+      if (complete && completeQuest(q, player, entities, state, msgs)) {
+        const pack = resolveNpcPackageForEntity(targetNpc);
+        const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
+        if (talkQuestResponse) {
+          pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${talkQuestResponse.text}»`, '#aaf');
+        } else {
+          pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Отличная работа. То, что нужно.»`, '#aaf');
+        }
+      }
+    } else if (q.type === QuestType.KILL && q.contractId === undefined) {
+      // KILL quests from NPCs require manual turn in
+      const matchById = q.giverId === targetNpc.id;
+      const matchByPlotId = q.giverPlotNpcId && targetNpc.plotNpcId === q.giverPlotNpcId;
+      if (!matchById && !matchByPlotId) continue;
+
+      if (q.killCount !== undefined && q.killNeeded !== undefined && q.killCount >= q.killNeeded) {
+        if (completeQuest(q, player, entities, state, msgs)) {
+          const pack = resolveNpcPackageForEntity(targetNpc);
+          const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
+          if (talkQuestResponse) {
+            pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «${talkQuestResponse.text}»`, '#aaf');
+          } else {
+            pushNpcQuestMessage(targetNpc, player, world, state, msgs, `${targetNpc.name}: «Меньше тварей — легче дышать.»`, '#aaf');
+          }
+        }
       }
     }
   }
@@ -1448,6 +1494,7 @@ function generatePlotQuest(
       return {
         id, type: step.type,
         giverId: npc.id, giverName: npc.name ?? '???',
+        giverPlotNpcId: npc.plotNpcId,
         desc,
         targetNpcId: target?.id, targetNpcName: target?.name ?? targetName,
         targetPlotNpcId: step.targetNpcId,
@@ -1465,6 +1512,7 @@ function generatePlotQuest(
       return {
         id, type: step.type,
         giverId: npc.id, giverName: npc.name ?? '???',
+        giverPlotNpcId: npc.plotNpcId,
         desc,
         targetItem: step.targetItem, targetCount: step.targetCount,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
