@@ -2246,7 +2246,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
   clearPseudoliftActive(state, entities);
   const fromFloor = state.currentZ;
   commitFloorRunEntry(state, targetEntry);
-  state.currentZ = targetEntry.baseFloor;
+  state.currentZ = targetEntry.z;
   if (targetEntry.baseFloor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
   const floorInstances = ensureFloorInstanceState(state, targetEntry.baseFloor);
@@ -5456,16 +5456,17 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
   captureCurrentFloorMemory();
 
   state.showDebug = false;
-  state.currentZ = target.floor;
+  const targetZ = target.spec ? target.spec.z : (target.designFloorId && target.z !== undefined ? target.z : zForBaseFloor(target.floor));
+  state.currentZ = targetZ;
   clearPseudoliftActive(state, entities);
   if (target.floor === FloorLevel.VOID) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
   if (target.spec) {
-    const run = ensureFloorRunState(state, target.floor);
+    const run = ensureFloorRunState(state, targetZ);
     run.currentZ = target.spec.z;
     run.visited[floorRunEntryFloorKey(currentFloorRunEntry(state))] = true;
   } else if (target.designFloorId && target.z !== undefined) {
-    const run = ensureFloorRunState(state, target.floor);
+    const run = ensureFloorRunState(state, targetZ);
     run.currentZ = target.z;
   } else {
     forceFloorRunStory(state, target.floor);
