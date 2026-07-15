@@ -36,7 +36,7 @@ function addPaperCabinet(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    z: z.MINISTRY,
+    z: 30,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.FILING_CABINET,

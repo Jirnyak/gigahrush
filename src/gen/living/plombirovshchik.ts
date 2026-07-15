@@ -97,7 +97,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.TOOL_LOCKER,
@@ -307,7 +307,7 @@ function publishPlombEvent(
 ): void {
   publishEvent(state, {
     type,
-    z: z.LIVING,
+    z: 100,
     zoneId: ctx.world.zoneMap[ctx.sealedDoorIdx],
     roomId: ctx.roomId,
     x: doorX(ctx.sealedDoorIdx) + 0.5,
@@ -454,7 +454,7 @@ function handleKillEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handleShotEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'ammo_consumed' || currentFloorRunEntry(state).themeTags !== z.LIVING) return;
+  if (event.type !== 'ammo_consumed' || currentFloorRunEntry(state)!.themeTags.includes('living')) return;
   const ctx = nearestActiveContextToPlayer();
   if (!ctx) return;
   ctx.shotHandled = true;
@@ -468,7 +468,7 @@ function handleShotEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handlePlombirovshchikEvents(state: GameState, event: WorldEvent): void {
-  if (currentFloorRunEntry(state).themeTags !== z.LIVING) return;
+  if (currentFloorRunEntry(state)!.themeTags.includes('living')) return;
   handleSealContainerEvent(state, event);
   handleKillEvent(state, event);
   handleShotEvent(state, event);

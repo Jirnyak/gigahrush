@@ -403,12 +403,12 @@ function renderRumor(
 }
 
 const FLOOR_NAMES: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Ад',
-  [z.VOID]: 'Пустота',
+  [30]: 'Министерство',
+  [60]: 'Квартиры',
+  [100]: 'Жилая зона',
+  [140]: 'Коллекторы',
+  [180]: 'Ад',
+  [200]: 'Пустота',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {

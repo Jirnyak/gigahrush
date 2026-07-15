@@ -8,7 +8,7 @@ import {
 import { floorLevelDisplayName } from '../gen/floor_manifest';
 
 export interface FloorCatalogQuery {
-  readonly themeTags: readonly string[];
+  readonly themeTags?: readonly string[];
   readonly tag?: string;
   readonly tags?: readonly string[];
   readonly rarity?: FloorCatalogRarity | readonly FloorCatalogRarity[];
@@ -56,7 +56,7 @@ export function queryFloorCatalog(query: FloorCatalogQuery = {}): FloorCatalogDe
   if (limit === 0) return out;
 
   for (const def of FLOOR_CATALOG) {
-    if (query.themeTags !== undefined && def.themeTags !== query.themeTags) continue;
+    if (query.themeTags !== undefined && !query.themeTags.every(t => def.themeTags.includes(t))) continue;
     if (query.minDepth !== undefined && def.minDepth > query.minDepth) continue;
     if (!matchesFilter(def.rarity, query.rarity)) continue;
     if (!matchesFilter(def.contentStatus, query.contentStatus)) continue;
@@ -70,20 +70,20 @@ export function queryFloorCatalog(query: FloorCatalogQuery = {}): FloorCatalogDe
 }
 
 export function eligibleFloorPockets(
-  baseFloor: number,
+  themeTags: readonly string[],
   depth: number,
-  query: Omit<FloorCatalogQuery, 'baseFloor' | 'minDepth'> = {},
+  query: Omit<FloorCatalogQuery, 'themeTags' | 'minDepth'> = {},
 ): FloorCatalogDef[] {
-  return queryFloorCatalog({ ...query, baseFloor, minDepth: depth });
+  return queryFloorCatalog({ ...query, themeTags, minDepth: depth });
 }
 
 export function eligibleFloorPocketsByTag(
-  baseFloor: number,
+  themeTags: readonly string[],
   tag: string,
   depth: number,
   rarity?: FloorCatalogRarity | readonly FloorCatalogRarity[],
 ): FloorCatalogDef[] {
-  return eligibleFloorPockets(baseFloor, depth, { tag, rarity });
+  return eligibleFloorPockets(themeTags, depth, { tag, rarity });
 }
 
 export function searchFloorCatalog(search: string, query: Omit<FloorCatalogQuery, 'search'> = {}): FloorCatalogDef[] {

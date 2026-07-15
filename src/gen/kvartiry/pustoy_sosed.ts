@@ -191,7 +191,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     moneyReward: 18,
     blockedBySideQuestIds: EXPOSE_BLOCKERS,
     abandonsSideQuestIds: EXPOSE_BLOCKERS,
-    targetFloorZ: z.KVARTIRY,
+    targetFloorZ: 60,
     targetRoomType: RoomType.LIVING,
     targetRoomName: PUSTOY_SOSED_ROOM_NAME,
     targetHint: 'заберите фальшивый пропуск с ближнего стола и держите дистанцию от дальнего жильца',
@@ -251,7 +251,7 @@ registerSideQuest(COMPLAINANT_ID, COMPLAINANT, [{
   moneyReward: 10,
   blockedBySideQuestIds: FLEE_BLOCKERS,
   abandonsSideQuestIds: FLEE_BLOCKERS,
-  targetFloorZ: z.KVARTIRY,
+  targetFloorZ: 60,
   targetRoomType: RoomType.LIVING,
   targetRoomName: PUSTOY_SOSED_ROOM_NAME,
   targetHint: 'возьмите жалобу у входа и уходите, если не готовы к близкому раскрытию',
@@ -308,7 +308,7 @@ function handlePustoySosedOutcome(state: GameState, event: WorldEvent): void {
 
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: z.KVARTIRY,
+    z: 60,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,

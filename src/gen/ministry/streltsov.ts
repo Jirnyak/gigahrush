@@ -41,7 +41,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(30),
   tags: ['ministry', 'liquidator'],
   quests: [
     {

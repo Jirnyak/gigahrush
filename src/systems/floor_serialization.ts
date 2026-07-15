@@ -15,7 +15,7 @@
  * already restored. This module only adds the network envelope, entity packing
  * and transport-level chunking. Zero runtime dependencies. */
 
-import { EntityType, W, type Entity, type } from '../core/types';
+import { EntityType, W, type Entity } from '../core/types';
 import { World } from '../core/world';
 import { safeParseJson } from '../core/json';
 import { worldForSave, worldFromSave } from './floor_memory';

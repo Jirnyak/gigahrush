@@ -474,7 +474,7 @@ export const DOCUMENT_ACCESS_ACTIONS: Record<string, DocumentAccessAction> = {
   },
   shelter_seat_card: {
     itemId: 'shelter_seat_card',
-    floors: [z.LIVING, z.KVARTIRY],
+    floors: [100, 60],
     eventType: 'player_handoff_item',
     severity: 4,
     privacy: 'witnessed',
@@ -486,7 +486,7 @@ export const DOCUMENT_ACCESS_ACTIONS: Record<string, DocumentAccessAction> = {
   },
   shelter_seat_forgery: {
     itemId: 'shelter_seat_forgery',
-    floors: [z.LIVING, z.KVARTIRY],
+    floors: [100, 60],
     eventType: 'player_handoff_item',
     severity: 5,
     privacy: 'public',

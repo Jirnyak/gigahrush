@@ -20,7 +20,7 @@ function secureRandom(): number {
   throw new Error("Secure random number generation is not supported in this environment.");
 }
 
-export function chooseSamosborVariant(floorTags: readonly string[], z: number): ActiveSamosborVariant {
+export function chooseSamosborVariant(floorTags: readonly string[], _zNum: number): ActiveSamosborVariant {
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;

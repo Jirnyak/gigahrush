@@ -31,7 +31,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('critical_leak_archive');
 
 export const CRITICAL_LEAK_ARCHIVE_ROUTE_ID = 'critical_leak_archive' as const;
 export const CRITICAL_LEAK_ARCHIVE_Z = 24;
-export const CRITICAL_LEAK_ARCHIVE_BASE_FLOOR = z.MINISTRY;
+export const CRITICAL_LEAK_ARCHIVE_BASE_FLOOR = 30;
 
 export const CRITICAL_LEAK_ARCHIVE_ROOM_NAMES = {
   lobby: 'Сухой лифтовый тамбур критической протечки',

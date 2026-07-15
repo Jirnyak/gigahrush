@@ -18,7 +18,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(30);
 const POSTOVOY_FORMULYAR_ID = 'raionsovet_archive_postovoy_formulyar';
 
 const MARFA_DEF: PlotNpcDef = {
@@ -224,7 +224,7 @@ function addArchiveContainer(
     id: world.containers.length + 1,
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId,
     kind,

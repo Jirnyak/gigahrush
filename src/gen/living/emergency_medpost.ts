@@ -140,7 +140,7 @@ registerSideQuest('ag44_dr_kruglov', NPC_DEFS.ag44_dr_kruglov, [
     rewardItem: 'pills', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
     relationDelta: 12, xpReward: 45, moneyReward: 55,
-    targetFloorZ: z.LIVING,
+    targetFloorZ: 100,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: аварийный медпост Круглова и его опечатанный шкаф.',
@@ -168,7 +168,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type === 'quest_completed' && sideQuestId(event) === 'ag44_medpost_restock_bandages') {
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: z.LIVING,
+      z: 100,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -186,7 +186,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type !== 'item_stolen' || !event.tags.includes(CONTENT_TAG) || !isMedpostMedicine(event.itemId)) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: z.LIVING,
+    z: 100,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -343,7 +343,7 @@ function addMedContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

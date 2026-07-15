@@ -31,11 +31,10 @@ import {
 import {
   floorKeyForDesign,
   floorKeyForProcedural,
-  floorKeyForStory,
   floorKeyZ,
   zForBaseFloor,
 } from '../data/floor_keys';
-import { designFloorThemeClass } from '../data/design_floors';
+import {  } from '../data/design_floors';
 import {
   routeDirectionBlockedByClosedGate,
   routeGateDirectionIsClosed,
@@ -55,7 +54,7 @@ export interface FloorRunState {
 
 export interface FloorRunEntry {
   z: number;
-  themeTags: number;
+  themeTags: readonly string[];
   designFloorId?: DesignFloorId;
   spec?: ProceduralFloorSpec;
   procedural: boolean;
@@ -66,7 +65,7 @@ export interface FloorRunEntry {
 export interface FloorRunEntrySnapshot {
   key: string;
   z: number;
-  themeTags: number;
+  themeTags: readonly string[];
   designFloorId?: DesignFloorId;
   spec?: ProceduralFloorSpec;
   procedural: boolean;
@@ -75,41 +74,9 @@ export interface FloorRunEntrySnapshot {
 type FloorRunHost = GameState & { floorRun?: FloorRunState };
 const normalizedFloorRuns = new WeakSet<FloorRunState>();
 
-const STORY_NAMES: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Мясной низ',
-  [z.VOID]: 'Пустота',
-};
 
-const STORY_ROUTE_IDS: Record<number, string> = {
-  [z.MINISTRY]: floorKeyForStory(z.MINISTRY),
-  [z.KVARTIRY]: floorKeyForStory(z.KVARTIRY),
-  [z.LIVING]: floorKeyForStory(z.LIVING),
-  [z.MAINTENANCE]: floorKeyForStory(z.MAINTENANCE),
-  [z.HELL]: floorKeyForStory(z.HELL),
-  [z.VOID]: floorKeyForStory(z.VOID),
-};
 
-const STORY_ROLES: Record<number, string> = {
-  [z.MINISTRY]: 'документы, пропуска, бюрократия',
-  [z.KVARTIRY]: 'социальный riot-floor, вода, очереди',
-  [z.LIVING]: 'домашний hub, подготовка, возврат',
-  [z.MAINTENANCE]: 'ремонт, давление, тех-лут',
-  [z.HELL]: 'высокая угроза, мясо, ПСИ',
-  [z.VOID]: 'финальная аномалия и выход',
-};
 
-const STORY_DANGERS: Record<number, 1 | 2 | 3 | 4 | 5> = {
-  [z.MINISTRY]: 3,
-  [z.KVARTIRY]: 3,
-  [z.LIVING]: 1,
-  [z.MAINTENANCE]: 4,
-  [z.HELL]: 5,
-  [z.VOID]: 5,
-};
 
 const MAX_RUN_SEED = 0x7fffffff;
 const MAX_SAVED_TITLE = 96;
@@ -235,7 +202,7 @@ function cloneSpec(spec: ProceduralFloorSpec): ProceduralFloorSpec {
 }
 
 function validVisitedKeys(runSeed: number): Set<string> {
-  const keys = new Set<string>(Object.values(STORY_ROUTE_IDS));
+  const keys = new Set<string>();
   for (const route of DESIGN_FLOOR_ROUTES) {
     if (portalBlocksDesignFloor(route.id)) {
       keys.add(floorKeyForProcedural(proceduralFloorKey(route.z)));
@@ -248,10 +215,10 @@ function validVisitedKeys(runSeed: number): Set<string> {
   return keys;
 }
 
-function floorRunEntryKey(entry: Pick<FloorRunEntry, 'z' | 'baseFloor' | 'designFloorId' | 'spec'>): string {
+function floorRunEntryKey(entry: Pick<FloorRunEntry, 'z' | 'themeTags' | 'designFloorId' | 'spec'>): string {
   if (entry.spec) return floorKeyForProcedural(entry.spec.key);
   if (entry.designFloorId) return floorKeyForDesign(entry.designFloorId);
-  return floorKeyForStory(entry.themeTags);
+  return floorKeyForDesign(entry.themeTags[0] ?? String(entry.z));
 }
 
 export function snapshotFloorRunEntry(entry: FloorRunEntry): FloorRunEntrySnapshot {
@@ -291,7 +258,7 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
     return {
       key: floorKeyForDesign(designFloor.id),
       z,
-      themeTags: designFloor.themeTags,
+      themeTags: designFloor.themeTags ?? [],
       designFloorId: designFloor.id,
       procedural: false,
     };
@@ -424,7 +391,7 @@ function entryForZ(state: GameState, z: number): FloorRunEntry | null {
     }
     return {
       z,
-      themeTags: designFloor.themeTags,
+      themeTags: designFloor.themeTags ?? [],
       designFloorId: designFloor.id,
       procedural: false,
       label: `Этаж ${formatFloorZ(z)}: ${designFloor.displayName}`,
@@ -464,9 +431,9 @@ export function currentFloorRunEntry(state: GameState): FloorRunEntry {
   const run = ensureFloorRunState(state);
   return entryForZ(state, run.currentZ) ?? {
     z: run.currentZ,
-    themeTags: z.LIVING,
+    themeTags: ['living'],
     procedural: true,
-    label: STORY_NAMES[z.LIVING],
+    label: 'Жилая зона',
     color: '#4af',
   };
 }
@@ -491,7 +458,7 @@ export function floorRunEntryFromSnapshot(state: GameState, input: unknown): Flo
   const snapshot = normalizeFloorRunEntrySnapshot(input);
   if (!snapshot) return null;
   if (snapshot.spec) {
-    const run = ensureFloorRunState(state, snapshot.themeTags);
+    const run = ensureFloorRunState(state, snapshot.z);
     run.specs[snapshot.spec.key] = cloneSpec(snapshot.spec);
   }
   return entryForZ(state, snapshot.z);
@@ -521,7 +488,7 @@ export function isCurrentStoryFloor(state: GameState, z: number): boolean {
   const entry = currentFloorRunEntry(state);
   if (entry.procedural || !entry.designFloorId) return false;
   const design = designFloorById(entry.designFloorId);
-  return design ? designFloorThemeClass(design) === z : false;
+  return design ? design.z === z : false;
 }
 
 export function currentFloorRunLabel(state: GameState): string | undefined {
@@ -537,7 +504,7 @@ export function floorRunEntryKindLabel(entry: FloorRunEntry): string {
 export function floorRunEntryRouteId(entry: FloorRunEntry): string {
   if (entry.designFloorId) return entry.designFloorId;
   if (entry.spec) return entry.spec.key;
-  return STORY_ROUTE_IDS[entry.themeTags];
+  return entry.themeTags.join('-') || 'unknown';
 }
 
 export function floorRunEntryFloorKey(entry: FloorRunEntry): string {
@@ -546,8 +513,8 @@ export function floorRunEntryFloorKey(entry: FloorRunEntry): string {
 
 export function floorRunEntryDanger(entry: FloorRunEntry): 1 | 2 | 3 | 4 | 5 {
   if (entry.spec) return entry.spec.danger;
-  if (entry.designFloorId) return designFloorById(entry.designFloorId)?.danger ?? STORY_DANGERS[entry.themeTags];
-  return STORY_DANGERS[entry.themeTags];
+  if (entry.designFloorId) return designFloorById(entry.designFloorId)?.danger ?? 3;
+  return 3;
 }
 
 export function floorRunEntryRole(entry: FloorRunEntry): string {
@@ -557,8 +524,8 @@ export function floorRunEntryRole(entry: FloorRunEntry): string {
     const anomaly = anomalyById(entry.spec.anomalyId);
     return `${geometry.title}, ${majority.title}, ${anomaly.title}`;
   }
-  if (entry.designFloorId) return designFloorById(entry.designFloorId)?.role ?? STORY_ROLES[entry.themeTags];
-  return STORY_ROLES[entry.themeTags];
+  if (entry.designFloorId) return designFloorById(entry.designFloorId)?.role ?? 'неизвестно';
+  return 'неизвестно';
 }
 
 export function floorRunEntryMapLabel(entry: FloorRunEntry): string {
@@ -570,8 +537,7 @@ export function floorRunEntryMapLabel(entry: FloorRunEntry): string {
     const design = designFloorById(entry.designFloorId);
     return `Z${z} ${entry.designFloorId} ${design?.displayName ?? entry.label}`;
   }
-  const story = entry.themeTags;
-  return `Z${z} ${STORY_ROUTE_IDS[story]} ${STORY_NAMES[story]}`;
+  return `Z${z} ${entry.themeTags.join('-')} ${entry.label}`;
 }
 
 export function floorRunEntryLiftLabel(entry: FloorRunEntry): string {
@@ -710,7 +676,7 @@ export function summarizeFloorRun(state: GameState): string[] {
     anomalyLine += `${id}=${anomalyCounts[id]}`;
   }
   if (anomalyLine) out.push(`anomalies ${anomalyLine}`);
-  if (entry.designFloorId) out.push(`route=${entry.designFloorId} base=${z[entry.themeTags]}`);
+  if (entry.designFloorId) out.push(`route=${entry.designFloorId} tags=${entry.themeTags.join(',')}`);
   return out;
 }
 

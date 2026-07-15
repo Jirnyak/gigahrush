@@ -25,7 +25,7 @@ export function spawnTutorialKey(world: World, nextId: {v: number}, x: number, y
     id: containerId,
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: -1,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind: ContainerKind.FILING_CABINET,

@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Feature,
-  number,
   RoomType,
   Tex,
   msg,

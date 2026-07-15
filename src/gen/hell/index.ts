@@ -56,10 +56,10 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   paintMissingOrganicTextures(world);
   generateZones(world);
   retuneHellZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, z.HELL) + 2;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 180) + 2;
   initializeCellTerritory(world, {
     seed: generationSeed,
-    targetShares: territorySharesForStoryFloor(z.HELL),
+    targetShares: territorySharesForStoryFloor(180),
   });
 
   for (let i = 0; i < W * W; i++) {
@@ -87,7 +87,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   // Manifest-owned side content
   nextId = runHellContent(world, entities, nextId);
 
-  placeProceduralScreens(world, z.HELL);
+  placeProceduralScreens(world, 180);
 
   return { world, entities, spawnX, spawnY };
 }
@@ -586,7 +586,7 @@ function createHellLiquidator(world: World, nextId: { v: number }, cell: number)
 
 function pickHellMonsterKind(samosborCount: number): MonsterKind {
   return chooseFloorMonsterKind({
-    z: z.HELL,
+    z: 180,
     floorTags: ['hell', 'meat', 'deep', 'cult'],
     samosborCount: Math.max(4, samosborCount),
     allowRare: true,

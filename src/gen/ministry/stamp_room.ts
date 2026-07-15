@@ -26,7 +26,7 @@ import { genLog } from '../log';
 const QUEST_WITNESSED_FORGERY = 'stamp_room_witnessed_forgery';
 const STAMP_ROOM_FORGERY_TAG = 'stamp_room_forgery';
 const FORGED_STAMP_SHEET = 'forged_stamp_sheet';
-const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(30);
 const GUARD_MATVEY_ID = 'stamp_room_guard_matvey';
 const WITNESS_RAISA_ID = 'stamp_room_witness_raisa';
 const FORGERY_USE_PATHS = [
@@ -190,7 +190,7 @@ function addStampAuditContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

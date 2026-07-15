@@ -19,7 +19,7 @@ import {
 import { genLog } from '../log';
 
 const CONTENT_TAG = 'weapon_permit_bureau';
-const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(30);
 const WITNESS_LIDIYA_ID = 'weapon_permit_witness_lidiya';
 
 const GALINA_DEF: PlotNpcDef = {
@@ -231,7 +231,7 @@ function addPermitContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.WEAPON_CRATE,

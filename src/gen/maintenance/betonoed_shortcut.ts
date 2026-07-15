@@ -407,7 +407,7 @@ export function tryUseBetonoedShortcut(
   lookY: number,
 ): BetonoedRuntimeResult {
   const encounter = activeBetonoed;
-  if (!encounter || currentFloorRunEntry(state).themeTags !== z.MAINTENANCE) return { handled: false, worldChanged: false };
+  if (!encounter || currentFloorRunEntry(state)!.themeTags.includes('maintenance')) return { handled: false, worldChanged: false };
   if (!seesWeakWall(world, encounter, lookX, lookY)) return { handled: false, worldChanged: false };
 
   if (encounter.sealed) {
@@ -445,7 +445,7 @@ export function updateBetonoedShortcut(
   dt: number,
 ): boolean {
   const encounter = activeBetonoed;
-  if (!encounter || currentFloorRunEntry(state).themeTags !== z.MAINTENANCE) return false;
+  if (!encounter || currentFloorRunEntry(state)!.themeTags.includes('maintenance')) return false;
 
   const monster = findBetonoed(entities, encounter);
   if (!monster?.alive) {

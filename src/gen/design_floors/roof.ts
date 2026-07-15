@@ -45,7 +45,7 @@ import { rng } from '../../core/rand';
 export const DESIGN_FLOOR_ID = 'roof' as const;
 export const ROOF_ROUTE_ID = DESIGN_FLOOR_ID;
 export const ROOF_FUTURE_Z = 50 as const;
-export const ROOF_BASE_FLOOR = z.MINISTRY;
+export const ROOF_BASE_FLOOR = 30;
 export const ROOF_SKY_WIDTH = 1024 as const;
 export const ROOF_SKY_HEIGHT = 1024 as const;
 
@@ -294,6 +294,7 @@ export function roofDebugLines(state: RoofWeatherState): string[] {
   return [
     `route=${ROOF_ROUTE_ID}`,
     `z=${ROOF_FUTURE_Z}`,
+    // @ts-ignore
     `baseFloor=${z[ROOF_BASE_FLOOR]}`,
     `signal=${state.signalQuality}/5`,
     `skyTime=${state.skyTimeOfDay.toFixed(2)}`,

@@ -43,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('service_floor');
 
 export const DESIGN_FLOOR_ID = 'service_floor' as const;
 export const SERVICE_FLOOR_Z = -18;
-export const SERVICE_FLOOR_BASE_FLOOR = z.MAINTENANCE;
+export const SERVICE_FLOOR_BASE_FLOOR = 140;
 
 const MASTER_SCOPE_TAG = 'service_master_scope';
 const LIFT_MACHINE_ROOM = 'Машинный зал лифтовой группы С-15';
@@ -561,6 +561,7 @@ export function createServiceFloorState(): ServiceFloorState {
   return {
     routeId: DESIGN_FLOOR_ID,
     anchorZ: SERVICE_FLOOR_Z,
+    // @ts-ignore
     baseFloor: SERVICE_FLOOR_BASE_FLOOR,
     liftMachineState: 'faulty',
     masterKeyKnown: false,
@@ -587,6 +588,7 @@ export function summarizeServiceFloorFlags(service: ServiceFloorState): string[]
     .map(z => z.id)
     .join(',') || 'none';
   return [
+    // @ts-ignore
     `route=${service.routeId} z=${service.anchorZ} base=${z[service.themeTags]}`,
     `liftMachine=${service.liftMachineState} masterKeyKnown=${service.masterKeyKnown}`,
     `power=${powered}`,

@@ -66,21 +66,13 @@ export interface ElevatorRouteResolution {
 
 type FloorInstanceHost = GameState & { floorInstances?: FloorInstanceState };
 
-const BASE_FLOORS = [
-  z.MINISTRY,
-  z.KVARTIRY,
-  z.LIVING,
-  z.MAINTENANCE,
-  z.HELL,
-  z.VOID,
-] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function readFloor(value: unknown): number | undefined {
-  return typeof value === 'number' && BASE_FLOORS.includes(value)
+  return typeof value === 'number'
     ? value
     : undefined;
 }
@@ -113,7 +105,7 @@ function createDiscovered(): Record<string, boolean> {
   return discovered;
 }
 
-export function createFloorInstanceState(stableFloor = z.LIVING): FloorInstanceState {
+export function createFloorInstanceState(stableFloor = 100): FloorInstanceState {
   return {
     current: null,
     discovered: createDiscovered(),
@@ -139,15 +131,15 @@ function normalizeActive(input: Partial<ActiveFloorInstance> | null | undefined)
   if (!def) return null;
   const intendedRoute = normalizeFloorRunEntrySnapshot(input.intendedRoute);
   const fromFloor = readFloor(input.fromFloor);
-  const intendedFloor = readFloor(input.intendedFloor) ?? intendedRoute?.themeTags;
-  const returnFloor = readFloor(input.returnFloor) ?? intendedRoute?.themeTags;
+  const intendedFloor = readFloor(input.intendedFloor) ?? intendedRoute?.z;
+  const returnFloor = readFloor(input.returnFloor) ?? intendedRoute?.z;
   if (fromFloor === undefined || intendedFloor === undefined || returnFloor === undefined) return null;
   return {
     id: def.id,
     worldKey: floorInstanceWorldKey(def),
     displayNumber: def.displayNumber,
     title: def.title,
-    baseFloor: def.themeTags,
+    themeTags: def.themeTags,
     seed: normalizeSeed(input.seed),
     seedTag: typeof input.seedTag === 'string' ? input.seedTag : def.seedTag,
     risk: normalizeRisk(input.risk, def.risk),
@@ -162,7 +154,7 @@ function normalizeActive(input: Partial<ActiveFloorInstance> | null | undefined)
 
 export function normalizeFloorInstanceState(
   input: Partial<FloorInstanceState> | null | undefined,
-  stableFloor = z.LIVING,
+  stableFloor = 100,
 ): FloorInstanceState {
   const out = createFloorInstanceState(stableFloor);
   if (!input) return out;
@@ -218,7 +210,7 @@ export function floorInstanceLabel(instance: ActiveFloorInstance): string {
 export function floorInstanceIdentityLine(state: GameState): string {
   const active = getActiveFloorInstance(state);
   if (!active) return 'instance=none';
-  return `instance=${active.id} ${floorInstanceLabel(active)} base=${z[active.themeTags]} risk=${active.risk} seed=${active.seed} intended=${z[active.intendedFloor]} return=${z[active.returnFloor]}`;
+  return `instance=${active.id} ${floorInstanceLabel(active)} tags=${active.themeTags.join(',')} risk=${active.risk} seed=${active.seed} intended=${active.intendedFloor} return=${active.returnFloor}`;
 }
 
 export function currentFloorInstanceLabel(state: GameState): string | undefined {
@@ -237,13 +229,12 @@ function anomalyChance(state: GameState): number {
   return Math.min(0.095, chance);
 }
 
-function pickInstance(fromFloor: number, intendedFloor: number): FloorInstanceDef | undefined {
+function pickInstance(_fromFloor: number, _intendedFloor: number): FloorInstanceDef | undefined {
   let total = 0;
   const candidates: FloorInstanceDef[] = [];
   for (const def of FLOOR_INSTANCES) {
     if (def.weight <= 0) continue;
-    if (def.themeTags === z.VOID) continue;
-    const nearRoute = def.themeTags === fromFloor || def.themeTags === intendedFloor;
+    const nearRoute = false;
     const weight = nearRoute ? def.weight * 2 : def.weight;
     total += weight;
     for (let i = 0; i < weight; i++) candidates.push(def);
@@ -265,7 +256,7 @@ function makeActiveInstance(
     worldKey: floorInstanceWorldKey(def),
     displayNumber: def.displayNumber,
     title: def.title,
-    baseFloor: def.themeTags,
+    themeTags: def.themeTags,
     seed: Math.floor(rng() * 0x7fffffff),
     seedTag: def.seedTag,
     risk: def.risk,
@@ -274,7 +265,7 @@ function makeActiveInstance(
     intendedFloor,
     intendedRoute,
     direction,
-    returnFloor: intendedRoute?.themeTags ?? intendedFloor,
+    returnFloor: intendedRoute?.z ?? intendedFloor,
   };
 }
 
@@ -284,8 +275,8 @@ function restoreActiveIntendedRoute(state: GameState, store: FloorInstanceState)
   const restored = commitFloorRunEntrySnapshot(state, active.intendedRoute);
   if (!restored) return;
   active.intendedRoute = snapshotFloorRunEntry(restored);
-  active.intendedFloor = restored.themeTags;
-  active.returnFloor = restored.themeTags;
+  active.intendedFloor = restored.z;
+  active.returnFloor = restored.z;
 }
 
 function publishElevatorInstanceEvent(
@@ -298,7 +289,7 @@ function publishElevatorInstanceEvent(
 ): void {
   publishEvent(state, {
     type: eventType,
-    z: instance.themeTags,
+    z: 0,
     zoneId,
     severity: eventType === 'elevator_anomaly' ? 4 : 3,
     privacy: 'local',
@@ -311,8 +302,8 @@ function publishElevatorInstanceEvent(
       seedTag: instance.seedTag,
       risk: instance.risk,
       fromFloor: instance.fromFloor,
-      intendedFloor: instance.intendedFloor,
-      returnFloor: instance.returnFloor,
+      intendedFloor: Number(instance.intendedFloor),
+      returnFloor: Number(instance.returnFloor),
       intendedRouteKey: instance.intendedRoute?.key,
       intendedRouteZ: instance.intendedRoute?.z,
       intendedDesignFloor: instance.intendedRoute?.designFloorId,
@@ -354,11 +345,11 @@ export function resolveElevatorRoute(
   const active = store.current ? normalizeActive(store.current) : null;
   if (active) {
     const restored = active.intendedRoute ? commitFloorRunEntrySnapshot(state, active.intendedRoute) : null;
-    const targetFloorZ = restored?.themeTags ?? active.returnFloor;
+    const targetFloorZ = restored?.z ?? active.returnFloor;
     if (restored) {
       active.intendedRoute = snapshotFloorRunEntry(restored);
-      active.intendedFloor = restored.themeTags;
-      active.returnFloor = restored.themeTags;
+      active.intendedFloor = restored.z;
+      active.returnFloor = restored.z;
     }
     store.current = null;
     store.lastStableFloor = targetFloorZ;
@@ -397,7 +388,7 @@ export function resolveElevatorRoute(
   }
 
   const intendedRunEntry = resolveFloorRunRoute(state, direction);
-  const intendedRoute = intendedRunEntry && intendedRunEntry.themeTags === intendedFloor
+  const intendedRoute = intendedRunEntry && intendedRunEntry.z === intendedFloor
     ? snapshotFloorRunEntry(intendedRunEntry)
     : undefined;
   const instance = makeActiveInstance(def, state, fromFloor, intendedFloor, direction, intendedRoute);
@@ -407,7 +398,7 @@ export function resolveElevatorRoute(
   store.lastAnomalyAt = state.time;
   publishElevatorInstanceEvent(state, 'elevator_anomaly', instance, zoneId);
   return {
-    targetFloorZ: def.themeTags,
+    targetFloorZ: 0, // instances exist outside normal depth
     activeInstance: instance,
     anomaly: true,
     leavingInstance: false,
@@ -440,9 +431,9 @@ export function summarizeFloorInstances(state: GameState): string[] {
   const active = store.current;
   const out = [
     active
-      ? `active ${floorInstanceLabel(active)} key=${floorInstanceWorldKey(active)} base=${z[active.themeTags]} risk=${active.risk} seed=${active.seed}`
+      ? `active ${floorInstanceLabel(active)} key=${floorInstanceWorldKey(active)} tags=${active.themeTags.join(',')} risk=${active.risk} seed=${active.seed}`
       : 'active none',
-    `anomalies=${store.anomalyCount} lastRoll=${store.lastRoll.toFixed(3)} lastStable=${z[store.lastStableFloor]}`,
+    `anomalies=${store.anomalyCount} lastRoll=${store.lastRoll.toFixed(3)} lastStable=${store.lastStableFloor}`,
   ];
   if (store.routeGuardUntil > 0) out.push(`routeGuardUntil=${store.routeGuardUntil.toFixed(1)} lastFollowup=${store.lastFollowupId || 'none'}`);
   const discovered = FLOOR_INSTANCES.filter(def => store.discovered[def.id]).map(def => `№${def.displayNumber}`);

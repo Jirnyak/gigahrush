@@ -49,7 +49,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MAINTENANCE),
+  homeFloorKey: storyNpcFloorKey(140),
   tags: ['maintenance', 'silent'],
 });
 

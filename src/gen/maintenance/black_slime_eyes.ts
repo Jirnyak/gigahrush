@@ -84,7 +84,7 @@ function addBlackSlimeContainer(
     id,
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -140,7 +140,7 @@ function publishBlackSlimeEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `black_slime_${phase}` as WorldEventType,
-    z: z.MAINTENANCE,
+    z: 140,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x,

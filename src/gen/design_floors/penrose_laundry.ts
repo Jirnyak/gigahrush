@@ -34,7 +34,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('penrose_laundry');
 
 export const PENROSE_LAUNDRY_ROUTE_ID = 'penrose_laundry' as const;
 export const PENROSE_LAUNDRY_Z = -8;
-export const PENROSE_LAUNDRY_BASE_FLOOR = z.LIVING;
+export const PENROSE_LAUNDRY_BASE_FLOOR = 100;
 
 export const PENROSE_LAUNDRY_ROOM_NAMES = {
   liftLobby: 'Лифтовая бирка прачечной П-81',

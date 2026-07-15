@@ -109,7 +109,7 @@ function addFungusContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,

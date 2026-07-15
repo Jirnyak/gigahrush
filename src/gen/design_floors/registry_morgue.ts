@@ -45,7 +45,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('registry_morgue');
 
 export const REGISTRY_MORGUE_ROUTE_ID = 'registry_morgue' as const;
 export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
-export const REGISTRY_MORGUE_BASE_FLOOR = z.MINISTRY;
+export const REGISTRY_MORGUE_BASE_FLOOR = 30;
 export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
 const CORPSE_NUMBER_TAG_ITEM = 'corpse_number_tag' as const;
 

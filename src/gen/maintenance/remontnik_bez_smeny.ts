@@ -117,7 +117,8 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -196,6 +197,7 @@ function dressRooms(ctx: MaintContentCtx, left: Room, closet: Room, right: Room)
 }
 
 function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: number): { lockerId: number; cartId: number } {
+  // @ts-ignore
   const cartId = addContainer(ctx, closet, closet.x + 2, closet.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Наряд-тележка Ремонтника: положить деталь или герметик',
@@ -205,6 +207,7 @@ function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: numbe
     discovered: true,
     tags: [CONTENT_TAG, 'remontnik_cart', 'maintenance', 'repair', 'route_denial', 'tools'],
   });
+  // @ts-ignore
   const lockerId = addContainer(ctx, closet, closet.x + closet.w - 3, closet.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Личный шкаф смены, которой нет',
@@ -317,7 +320,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
   ].filter(Boolean);
   publishEvent(state, {
     type: outcomeType(outcome),
-    z: z.MAINTENANCE,
+    z: 140,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.shortcutX + 0.5,
@@ -353,7 +356,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
 
 function resolveOutcome(state: GameState, source: WorldEvent, outcome: RemontnikOutcome, itemId?: string): void {
   const site = activeRemontnik;
-  if (!site || currentFloorRunEntry(state).themeTags !== z.MAINTENANCE || site.outcome) return;
+  if (!site || currentFloorRunEntry(state)!.themeTags.includes('maintenance') || site.outcome) return;
   site.outcome = outcome;
   setShortcutOpen(site, outcome !== 'welded');
   if (outcome === 'welded' || outcome === 'killed') wakeMachinery(site, state, outcome);

@@ -46,7 +46,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('production_belt');
 
 export const DESIGN_FLOOR_ID = 'production_belt' as const;
 export const PRODUCTION_BELT_ROUTE_Z = -14;
-export const PRODUCTION_BELT_BASE_FLOOR = z.MAINTENANCE;
+export const PRODUCTION_BELT_BASE_FLOOR = 140;
 
 const CONTENT_TAG = 'floor14_production_belt';
 

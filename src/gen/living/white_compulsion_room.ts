@@ -248,7 +248,7 @@ function handleWhiteCompulsionOutcome(state: GameState, event: WorldEvent): void
 
   publishEvent(state, {
     type: 'quest_completed',
-    z: z.LIVING,
+    z: 100,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -393,7 +393,7 @@ function addSampleTray(world: World, room: Room): void {
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

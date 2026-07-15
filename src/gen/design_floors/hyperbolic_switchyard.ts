@@ -39,7 +39,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('hyperbolic_switchyard');
 
 export const HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID = 'hyperbolic_switchyard' as const;
 export const HYPERBOLIC_SWITCHYARD_ROUTE_Z = -20;
-export const HYPERBOLIC_SWITCHYARD_BASE_FLOOR = z.MAINTENANCE;
+export const HYPERBOLIC_SWITCHYARD_BASE_FLOOR = 140;
 export const HYPERBOLIC_SWITCHYARD_ROOM_NAMES = {
   shortcut: 'Геодезическая служебная кишка',
 } as const;

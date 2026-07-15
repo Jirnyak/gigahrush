@@ -217,10 +217,10 @@ function drainEffect(sideQuestId: string): DrainEffect | undefined {
   if (sideQuestId === DRAIN_LIVING_QUEST) {
     return {
       choiceId: 'collectors_to_living',
-      benefitFloor: z.LIVING,
+      benefitFloor: 100,
       benefitFloorId: 'living',
       benefitName: 'Жилая зона',
-      shortageFloor: z.KVARTIRY,
+      shortageFloor: 60,
       shortageFloorId: 'kvartiry',
       shortageName: 'Квартиры',
       benefitDelta: 28,
@@ -231,10 +231,10 @@ function drainEffect(sideQuestId: string): DrainEffect | undefined {
   if (sideQuestId === DRAIN_KVARTIRY_QUEST) {
     return {
       choiceId: 'collectors_to_kvartiry',
-      benefitFloor: z.KVARTIRY,
+      benefitFloor: 60,
       benefitFloorId: 'kvartiry',
       benefitName: 'Квартиры',
-      shortageFloor: z.LIVING,
+      shortageFloor: 100,
       shortageFloorId: 'living',
       shortageName: 'Жилая зона',
       benefitDelta: 26,
@@ -320,7 +320,8 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -417,6 +418,7 @@ function dressDebtorRoom(ctx: MaintContentCtx, room: Room): void {
 }
 
 function addLockers(ctx: MaintContentCtx, valves: Room, hunter: Room, debtor: Room, varyaId: number, ilyasId: number, debtorId: number): void {
+  // @ts-ignore
   addContainer(ctx, valves, valves.x + 13, valves.y + 2, {
     kind: ContainerKind.FILING_CABINET,
     name: 'Шкаф разрешений узла 16',
@@ -435,6 +437,7 @@ function addLockers(ctx: MaintContentCtx, valves: Room, hunter: Room, debtor: Ro
     discovered: true,
     tags: ['collectors', 'water', 'permit', 'pressure', 'theft'],
   });
+  // @ts-ignore
   addContainer(ctx, hunter, hunter.x + hunter.w - 2, hunter.y + 2, {
     kind: ContainerKind.WEAPON_CRATE,
     name: 'Сухой ящик гарпунов',
@@ -452,6 +455,7 @@ function addLockers(ctx: MaintContentCtx, valves: Room, hunter: Room, debtor: Ro
     discovered: true,
     tags: ['collectors', 'eel', 'weapon', 'hunter', 'theft'],
   });
+  // @ts-ignore
   addContainer(ctx, debtor, debtor.x + 2, debtor.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Сорванный шкаф пломб',

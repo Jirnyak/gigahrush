@@ -48,7 +48,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(z.KVARTIRY),
+  homeFloorKey: storyNpcFloorKey(60),
   tags: ['kvartiry', 'social'],
 });
 

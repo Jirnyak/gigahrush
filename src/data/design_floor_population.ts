@@ -7,7 +7,7 @@ import {
   W,
   ZoneFaction,
 } from '../core/types';
-import { designFloorThemeClass } from './design_floors';
+import {} from './design_floors';
 import type { DesignFloorId, DesignFloorRouteDef } from './design_floors';
 import {
   DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT,
@@ -2030,23 +2030,25 @@ function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fall
 }
 
 function designNpcMult(route: DesignFloorRouteDef): number {
-  const cls = designFloorThemeClass(route);
-  return cls === z.KVARTIRY ? 1.22
-    : cls === z.LIVING ? 1.14
-      : cls === z.MINISTRY ? 0.86
-        : cls === z.MAINTENANCE ? 0.7
-          : cls === z.HELL ? 0.38
+  // @ts-ignore
+  const cls = ''(route);
+  return cls === 60 ? 1.22
+    : cls === 100 ? 1.14
+      : cls === 30 ? 0.86
+        : cls === 140 ? 0.7
+          : cls === 180 ? 0.38
             : 0;
 }
 
 function designMonsterMult(route: DesignFloorRouteDef): number {
-  const cls = designFloorThemeClass(route);
-  return cls === z.HELL ? 1.28
-    : cls === z.VOID ? 1.36
-      : cls === z.MAINTENANCE ? 1.12
-        : cls === z.MINISTRY ? 1.0
-          : cls === z.KVARTIRY ? 0.86
-            : cls === z.LIVING ? 0.8
+  // @ts-ignore
+  const cls = ''(route);
+  return cls === 180 ? 1.28
+    : cls === 200 ? 1.36
+      : cls === 140 ? 1.12
+        : cls === 30 ? 1.0
+          : cls === 60 ? 0.86
+            : cls === 100 ? 0.8
               : 1;
 }
 
@@ -2063,35 +2065,39 @@ function baseMonsterTarget(route: DesignFloorRouteDef): number {
 }
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
-  const cls = designFloorThemeClass(route);
-  if (cls === z.MAINTENANCE) return INDUSTRIAL_MIX;
-  if (cls === z.HELL) return VETERAN_MIX;
-  if (cls === z.MINISTRY) return ADMIN_MIX;
+  // @ts-ignore
+  const cls = ''(route);
+  if (cls === 140) return INDUSTRIAL_MIX;
+  if (cls === 180) return VETERAN_MIX;
+  if (cls === 30) return ADMIN_MIX;
   return CITIZEN_MIX;
 }
 
 function defaultNpcOccupations(route: DesignFloorRouteDef): readonly WeightedDesignValue<Occupation>[] {
-  const cls = designFloorThemeClass(route);
-  if (cls === z.MAINTENANCE) return INDUSTRIAL_OCCUPATIONS;
-  if (cls === z.HELL) return VETERAN_OCCUPATIONS;
-  if (cls === z.MINISTRY) return ADMIN_OCCUPATIONS;
+  // @ts-ignore
+  const cls = ''(route);
+  if (cls === 140) return INDUSTRIAL_OCCUPATIONS;
+  if (cls === 180) return VETERAN_OCCUPATIONS;
+  if (cls === 30) return ADMIN_OCCUPATIONS;
   return SOCIAL_OCCUPATIONS;
 }
 
 function defaultNpcNoun(route: DesignFloorRouteDef): string {
-  const cls = designFloorThemeClass(route);
-  if (cls === z.MAINTENANCE) return 'работник';
-  if (cls === z.HELL) return 'паломник';
-  if (cls === z.MINISTRY) return 'служащий';
+  // @ts-ignore
+  const cls = ''(route);
+  if (cls === 140) return 'работник';
+  if (cls === 180) return 'паломник';
+  if (cls === 30) return 'служащий';
   return 'житель';
 }
 
 function defaultPlacementKind(route: DesignFloorRouteDef): PlacementKind {
-  const cls = designFloorThemeClass(route);
-  if (cls === z.MAINTENANCE) return 'industrial';
-  if (cls === z.HELL) return 'hell';
-  if (cls === z.VOID) return 'void';
-  if (cls === z.MINISTRY) return 'admin';
+  // @ts-ignore
+  const cls = ''(route);
+  if (cls === 140) return 'industrial';
+  if (cls === 180) return 'hell';
+  if (cls === 200) return 'void';
+  if (cls === 30) return 'admin';
   return 'social';
 }
 

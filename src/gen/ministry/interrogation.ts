@@ -18,7 +18,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(30);
 const WITNESS_RIMMA_ID = 'interrogation_witness_rimma';
 
 const LIDIYA_DEF: PlotNpcDef = {

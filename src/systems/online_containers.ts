@@ -20,7 +20,7 @@
 import { W, type Item, type WorldContainer } from '../core/types';
 import { World } from '../core/world';
 import { resolveOrCreateFeatureLootContainer } from './interactive';
-import type { ContainerAccess, ContainerKind, number } from '../core/types';
+import type { ContainerAccess, ContainerKind } from '../core/types';
 
 export interface ContainerSyncPayload {
   cx: number;

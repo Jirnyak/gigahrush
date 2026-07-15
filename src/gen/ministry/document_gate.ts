@@ -396,14 +396,14 @@ registerSideQuest('boris_bezchekovy', BORIS_DEF, [
 registerAuthoredNpc({
   id: GATE_GUARD_ID,
   npc: GATE_GUARD_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(30),
   tags: ['ministry', 'document_gate', 'guard'],
 });
 
 registerAuthoredNpc({
   id: GATE_WITNESS_ID,
   npc: GATE_WITNESS_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(30),
   tags: ['ministry', 'document_gate', 'witness'],
 });
 
@@ -578,7 +578,7 @@ function publishDocumentGateAccessEvent(
   const auditRisk = data.auditRisk ?? auditRiskForMethod(method);
   publishEvent(state, {
     type: `document_gate_access_${outcome}` as WorldEventType,
-    z: z.MINISTRY,
+    z: 30,
     zoneId: target.world.zoneMap[target.doorIdx],
     roomId: target.room.id,
     x: doorX(target.doorIdx) + 0.5,
@@ -618,7 +618,7 @@ function publishDocumentGateAccessEvent(
 
 function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
   if (!ctx.state || !ctx.world || !isPlayerEntity(ctx.actor)) return false;
-  if (currentFloorRunEntry(ctx.state).themeTags !== z.MINISTRY) return false;
+  if (currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) return false;
   const target = findDocumentGateTarget(ctx.world, ctx.actor);
   if (!target) return false;
 
@@ -668,7 +668,7 @@ function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
 }
 
 function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'item_stolen' || currentFloorRunEntry(state).themeTags !== z.MINISTRY) return;
+  if (event.type !== 'item_stolen' || currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
   if (!event.itemId || !DOCUMENT_GATE_ACCESS_BY_ITEM.has(event.itemId)) return;
   const ctx = contextByContainer(event.containerId);
   if (!ctx || ctx.theftEventIds.includes(event.id)) return;
@@ -687,7 +687,7 @@ function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void
 }
 
 function handleDocumentGateGuardKill(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'player_kill_npc' || currentFloorRunEntry(state).themeTags !== z.MINISTRY) return;
+  if (event.type !== 'player_kill_npc' || currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
   const ctx = contextByGuard(event.targetId);
   if (!ctx || ctx.violentHandled) return;
   const door = ctx.world.doors.get(ctx.gateDoorIdx);
@@ -826,7 +826,7 @@ function addGateContainer(
     id,
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.CASHBOX,

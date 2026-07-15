@@ -32,12 +32,12 @@ const CONTEXT_FACT_KINDS = new Set([
   'danger', 'shortage', 'theft', 'death', 'production', 'need', 'quest_hook', 'social', 'territory',
 ]);
 const BASE_FLOORS = [
-  z.MINISTRY,
-  z.KVARTIRY,
-  z.LIVING,
-  z.MAINTENANCE,
-  z.HELL,
-  z.VOID,
+  30,
+  60,
+  100,
+  140,
+  180,
+  200,
 ] as const;
 const RESOURCE_SCARCITY_EVENT_COOLDOWN_S = 600;
 const MAX_RESOURCE_SCARCITY_RUMORS = 4;
@@ -234,9 +234,9 @@ function maxBufferEventId(buffer: WorldEventBuffer): number {
 }
 
 function normalizeFloor(value: unknown): number {
-  return typeof value === 'number' && BASE_FLOORS.includes(value)
+  return typeof value === 'number' && BASE_FLOORS.includes(value as any)
     ? value
-    : z.LIVING;
+    : 100;
 }
 
 function normalizePrivacy(value: unknown): WorldEvent['privacy'] {

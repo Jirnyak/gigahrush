@@ -139,7 +139,7 @@ export function tryUseMetroRoute(
   const route = routeAtLookCell(world, lookX, lookY);
   if (!route) return null;
 
-  if (currentFloorRunEntry(state).themeTags !== z.MAINTENANCE) {
+  if (currentFloorRunEntry(state)!.themeTags.includes('maintenance')) {
     return {
       route,
       wrongStop: false,

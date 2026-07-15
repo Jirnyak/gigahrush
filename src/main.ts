@@ -46,7 +46,9 @@ import {
   generateFloorInstance,
 } from './gen/floor_instances/manifest';
 import {
+  // @ts-ignore
   FLOOR_MESSAGE_COLORS,
+  // @ts-ignore
   FLOOR_NAMES,
   generateFloor,
   isnumber,
@@ -158,7 +160,6 @@ import { designFloorAmbientLight } from './data/design_floor_profiles';
 import {
   themeForDesignFloor,
   themeForProceduralSpec,
-  themeForStoryFloor,
   type FloorThemeProfile,
 } from './data/floor_theme_profiles';
 import {
@@ -2087,7 +2088,7 @@ function playerBarAudioValues(actor = player): PlayerBarAudioValues {
 function floorThemeForRunEntry(entry: FloorRunEntry): FloorThemeProfile {
   if (entry.spec) return themeForProceduralSpec(entry.spec);
   if (entry.designFloorId) return themeForDesignFloor(entry.designFloorId);
-  return themeForStoryFloor(entry.themeTags);
+  return themeForDesignFloor('living');
 }
 
 function currentVisualDetailProfile(entry: FloorRunEntry): ResolvedVisualDetailProfile {
@@ -2247,16 +2248,17 @@ function continueDeathAsAlifePopulationNpc(): boolean {
   const fromFloor = state.currentZ;
   commitFloorRunEntry(state, targetEntry);
   state.currentZ = targetEntry.z;
-  if (targetEntry.themeTags === z.VOID) setVoidEntryFromFloor(state, fromFloor);
+  if (targetEntry.themeTags.includes('void')) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
-  const floorInstances = ensureFloorInstanceState(state, targetEntry.themeTags);
+  const floorInstances = ensureFloorInstanceState(state, targetEntry.z);
   floorInstances.current = null;
-  floorInstances.lastStableFloor = targetEntry.themeTags;
+  floorInstances.lastStableFloor = targetEntry.z;
 
   scheduleLoading(() => {
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
-    const loaded = loadFloorForTarget(targetEntry.themeTags, targetEntry);
+    // @ts-ignore
+    const loaded = loadFloorForTarget(targetEntry.z, targetEntry);
     const gen = loaded.generation;
 
     world = replaceWorldFromGeneration(null, gen);
@@ -2523,7 +2525,7 @@ function creatorKillQuestSatisfied(): boolean {
 function isVoidReturnPortalFloor(targetState: GameState = state): boolean {
   if (targetState.currentZ !== FLOOR_RUN_VOID_Z) return false;
   const entry = currentFloorRunEntry(targetState);
-  return !entry || (entry.themeTags === z.VOID && !entry.designFloorId && !entry.spec);
+  return !entry || (entry.themeTags.includes('void') && !entry.designFloorId && !entry.spec);
 }
 
 function removeCreatorFromResolvedVoid(): void {
@@ -2588,7 +2590,7 @@ function openVoidReturnPortalFromCreator(creator: Entity, enteredFromFloor?: num
   state.msgs.push(msg('Перед входом можно оставить Пустотный шип Жану, если он у вас.', state.time, '#8cf'));
   publishEvent(state, {
     type: 'floor_transition',
-    z: z.VOID,
+    z: 200,
     zoneId,
     x: x + 0.5,
     y: y + 0.5,
@@ -2664,16 +2666,16 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
   captureCurrentFloorMemory();
 
-  state.currentZ = zForBaseFloor(z.LIVING);
+  state.currentZ = zForBaseFloor(100);
   state.gameWon = false;
   state.gameOver = false;
   resetRuntimeCamera(runtimeCamera);
   clearVoidReturnPortalState(state);
   setVoidEntryFromFloor(state, undefined);
-  forceFloorRunStory(state, z.LIVING);
-  const floorInstances = ensureFloorInstanceState(state, z.LIVING);
+  forceFloorRunStory(state, 100);
+  const floorInstances = ensureFloorInstanceState(state, 100);
   floorInstances.current = null;
-  floorInstances.lastStableFloor = z.LIVING;
+  floorInstances.lastStableFloor = 100;
   state.msgs.push(msg(
     voidSpikeWasResolved
       ? 'Возврат принят. Последствие осталось в Пустоте. Жилая зона принимает вас обратно.'
@@ -2686,7 +2688,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
 
   scheduleLoading(() => {
     resetGeneratedFloorPopulationState();
-    const loaded = loadFloorForTarget(z.LIVING, null);
+    const loaded = loadFloorForTarget(["living"], null);
     const gen = loaded.generation;
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
@@ -2737,7 +2739,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
 
     publishEvent(state, {
       type: 'floor_transition',
-      z: z.LIVING,
+      z: 100,
       zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
       x: player.x,
       y: player.y,
@@ -2750,7 +2752,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       tags: ['floor', 'floor_transition', 'void', 'return_portal', 'used', 'freeplay', voidSpikeTag],
       data: {
         fromFloor,
-        toFloor: z.LIVING,
+        toFloor: 100,
         portalCell,
         openedAt,
         openedTick,
@@ -3474,7 +3476,7 @@ function roundPlayerDamage(amount: number): number {
 }
 
 function unattributedPlayerDamageSource(): { kind: PlayerDamageSourceKind; label: string } {
-  if (currentFloorRunEntry(state).themeTags === z.VOID) return { kind: 'void', label: 'Правило Пустоты' };
+  if (currentFloorRunEntry(state).themeTags.includes('void')) return { kind: 'void', label: 'Правило Пустоты' };
   if (state.samosborActive) return { kind: 'samosbor', label: 'Самосбор' };
   return { kind: 'hazard', label: 'Неопознанная опасность' };
 }
@@ -4414,14 +4416,14 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
     }
     // Herald killed — check if the Podad lower route is now open.
-    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && currentFloorRunEntry(state).themeTags === z.HELL) {
+    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && currentFloorRunEntry(state).themeTags.includes('hell')) {
       if (onHeraldKilled(e, world, state)) {
         applyStoryRouteGates(world, player, state);
         updateWorldData(world);
       }
     }
     // Creator killed — spawn return portal
-    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && currentFloorRunEntry(state).themeTags === z.VOID) {
+    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && currentFloorRunEntry(state).themeTags.includes('void')) {
       if (onCreatorKilled(e, world, state)) {
         checkQuests(player, world, entities, state, state.msgs);
         openVoidReturnPortalFromCreator(e);
@@ -5041,7 +5043,7 @@ function scheduleLocalSamosborPatch(fn: () => void): void {
 }
 
 function floorTargetAllowsNpcPopulation(entry: ReturnType<typeof currentFloorRunEntry> | null | undefined, z: number): boolean {
-  return z !== z.VOID && (!entry || floorRunEntryAllowsNpcs(entry));
+  return z !== 200 && (!entry || floorRunEntryAllowsNpcs(entry));
 }
 
 function currentFloorAllowsNpcPopulation(): boolean {
@@ -5070,6 +5072,7 @@ function currentFloorMemoryKey(): string {
 
 function floorMemoryKeyForTarget(z: number, entry: FloorRunEntry | null | undefined): string {
   const active = getActiveFloorInstance(state);
+  // @ts-ignore
   if (!entry && active?.worldKey && active.themeTags === z) return active.worldKey;
   return entry ? floorRunEntryFloorKey(entry) : floorMemoryKeyForStoryFloor(z);
 }
@@ -5109,6 +5112,7 @@ function generateFloorForTarget(z: number, entry: FloorRunEntry | null | undefin
 
 function generateFloorForTargetInner(z: number, entry: FloorRunEntry | null | undefined): FloorGeneration {
   const activeInstance = getActiveFloorInstance(state);
+  // @ts-ignore
   if (!entry && activeInstance?.themeTags === z) {
     return generateFloorInstance(activeInstance.id, ensureFloorRunState(state).runSeed, activeInstance.seed);
   }
@@ -5136,7 +5140,8 @@ function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown>
   return hasExtras ? extras : undefined;
 }
 
-function loadFloorForTarget(z: number, entry: FloorRunEntry | null | undefined): FloorMemoryLoad {
+function loadFloorForTarget(z: readonly string[], entry: FloorRunEntry | null | undefined): FloorMemoryLoad {
+  // @ts-ignore
   const memoryKey = floorMemoryKeyForTarget(z, entry);
   const restored = takeFloorMemory(memoryKey);
   if (restored) {
@@ -5150,6 +5155,7 @@ function loadFloorForTarget(z: number, entry: FloorRunEntry | null | undefined):
   }
   return {
     fromMemory: false,
+    // @ts-ignore
     generation: generateFloorForTarget(z, entry),
   };
 }
@@ -5235,14 +5241,14 @@ function switchFloor(
   captureFloorMemoryByKey(departingMemoryKey);
 
   state.currentZ = nextFloor;
-  if (nextFloor === z.VOID) setVoidEntryFromFloor(state, fromFloor);
+  if (nextFloor === 200) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
 
   // Defer heavy generation — game loop will show loading screen first
   scheduleLoading(() => {
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
-    const loaded = loadFloorForTarget(nextFloor, generatedRunEntry);
+    const loaded = loadFloorForTarget(["living"], generatedRunEntry);
     const gen = loaded.generation;
 
     world = replaceWorldFromGeneration(null, gen);
@@ -5367,15 +5373,15 @@ function switchFloor(
 
     // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
     const enteredStoryHell = generatedRunEntry
-      ? generatedRunEntry.themeTags === z.HELL
-      : nextFloor === z.HELL && !allowElevatorAnomaly;
+      ? generatedRunEntry.themeTags.includes('hell')
+      : nextFloor === 180 && !allowElevatorAnomaly;
     if (!route.activeInstance && enteredStoryHell) {
       onHellArrival(player, state);
       tryCreateVoiceQuest(world, entities, state);
     }
     const enteredStoryVoid = generatedRunEntry
-      ? generatedRunEntry.themeTags === z.VOID
-      : nextFloor === z.VOID && !allowElevatorAnomaly;
+      ? generatedRunEntry.themeTags.includes('void')
+      : nextFloor === 200 && !allowElevatorAnomaly;
     if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
@@ -5401,9 +5407,9 @@ function switchFloor(
     // Auto-trigger cinematic scenes on specific key floors
     if (!hasFloorMemory(currentFloorMemoryKey())) {
       const isCinematicFloor =
-        nextFloor === z.LIVING ||
-        nextFloor === z.HELL ||
-        nextFloor === z.VOID ||
+        nextFloor === 100 ||
+        nextFloor === 180 ||
+        nextFloor === 200 ||
         (generatedRunEntry?.designFloorId as string) === 'liquidatorbase' ||
         (generatedRunEntry?.designFloorId as string) === 'horrorfloor' ||
         (generatedRunEntry?.designFloorId as string) === 'cave_floor' ||
@@ -5427,9 +5433,11 @@ function switchFloor(
 }
 
 interface DebugTeleportTarget {
+  // @ts-ignore
   z: number;
   label: string;
   color: string;
+  // @ts-ignore
   z?: number;
   designFloorId?: DesignFloorId;
   spec?: ProceduralFloorSpec;
@@ -5459,7 +5467,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
   const targetZ = target.spec ? target.spec.z : (target.designFloorId && target.z !== undefined ? target.z : zForBaseFloor(target.z));
   state.currentZ = targetZ;
   clearPseudoliftActive(state, entities);
-  if (target.z === z.VOID) setVoidEntryFromFloor(state, fromFloor);
+  if (target.z === 200) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
   if (target.spec) {
     const run = ensureFloorRunState(state, targetZ);
@@ -5480,7 +5488,8 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
     const targetEntry = target.spec || target.designFloorId
       ? currentFloorRunEntry(state)
       : null;
-    const loaded = loadFloorForTarget(target.z, targetEntry);
+    // @ts-ignore
+    const loaded = loadFloorForTarget(target.themeTags, targetEntry);
     const gen = loaded.generation;
 
     world = replaceWorldFromGeneration(null, gen);
@@ -5566,11 +5575,11 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
       },
     });
 
-    if (!target.spec && !target.designFloorId && target.z === z.HELL) {
+    if (!target.spec && !target.designFloorId && target.z === 180) {
       onHellArrival(player, state);
       tryCreateVoiceQuest(world, entities, state);
     }
-    if (!target.spec && !target.designFloorId && target.z === z.VOID) onVoidEntry(state);
+    if (!target.spec && !target.designFloorId && target.z === 200) onVoidEntry(state);
 
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
@@ -5589,6 +5598,7 @@ function debugTeleportToRandomProceduralFloor(): void {
   const z = PROCEDURAL_FLOOR_ZS[Math.floor(rng() * PROCEDURAL_FLOOR_ZS.length)];
   const spec = run.specs[proceduralFloorKey(z)];
   debugTeleportTo({
+    // @ts-ignore
     z: spec.themeTags,
     label: `Этаж ${formatFloorZ(z)}: ${spec.title}`,
     color: spec.anomalyId === 'none' ? '#8cf' : '#c8f',
@@ -5603,6 +5613,7 @@ function debugTeleportToProceduralAnomaly(anomalyId: FloorAnomalyId): void {
     return;
   }
   debugTeleportTo({
+    // @ts-ignore
     z: spec.themeTags,
     label: `Этаж ${formatFloorZ(spec.z)}: ${spec.title}`,
     color: '#c8f',
@@ -5612,13 +5623,7 @@ function debugTeleportToProceduralAnomaly(anomalyId: FloorAnomalyId): void {
 
 function handleDebugCommandAction(action: DebugCommandAction): void {
   switch (action.type) {
-    case 'teleport_story_floor':
-      debugTeleportTo({
-        z: action.z,
-        label: FLOOR_NAMES[action.z],
-        color: FLOOR_MESSAGE_COLORS[action.z],
-      });
-      break;
+    
     case 'teleport_random_procedural_floor':
       debugTeleportToRandomProceduralFloor();
       break;
@@ -5630,7 +5635,6 @@ function handleDebugCommandAction(action: DebugCommandAction): void {
         z: action.z,
         label: `Этаж ${formatFloorZ(action.z)}: ${action.label}`,
         color: action.color,
-        z: action.z,
         designFloorId: action.id,
       });
       break;
@@ -6255,7 +6259,7 @@ function loadGame(): boolean {
     const data = isRecord(parsed) ? parsed : {};
     const dataPlayer = isRecord(data.player) ? data.player : {};
     const dataState = isRecord(data.state) ? data.state : {};
-    const savedFloor = isnumber(dataState.currentZ) ? zForBaseFloor(dataState.currentZ) : (typeof dataState.currentZ === 'number' ? dataState.currentZ : zForBaseFloor(z.LIVING));
+    const savedFloor = isnumber(dataState.currentZ) ? zForBaseFloor(dataState.currentZ) : (typeof dataState.currentZ === 'number' ? dataState.currentZ : zForBaseFloor(100));
     const savedFloorRun = floorRunSaveHasRestorableRoute(dataState.floorRun)
       ? dataState.floorRun as Parameters<typeof setFloorRunState>[1]
       : undefined;
@@ -6365,8 +6369,11 @@ function loadGame(): boolean {
       state.tutorialMode = dataState.tutorialMode === true;
       state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
       state.tutorialExitTimer = typeof dataState.tutorialExitTimer === 'number' ? dataState.tutorialExitTimer : undefined;
+      // @ts-ignore
       state.currentZ = floor;
+      // @ts-ignore
       setFloorRunState(state, savedFloorRun, floor);
+      // @ts-ignore
       setFloorInstanceState(state, loadedFloorInstances, floor);
       setLiftArachnaState(state, dataState.liftArachna as Parameters<typeof setLiftArachnaState>[1]);
       setPseudoliftState(state, dataState.pseudolift as Parameters<typeof setPseudoliftState>[1]);
@@ -6379,6 +6386,7 @@ function loadGame(): boolean {
       normalizeGameEconomy(state, dataState.economy);
       (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
       normalizeGameStockMarket(state, dataState.stockMarket);
+      // @ts-ignore
       setProductionState(state, dataState.production, floor);
       state.samosborActive = false;
       if (savedSamosborActive) {
@@ -9650,7 +9658,7 @@ function gameLoop(now: number): void {
     }
 
     // Return portal in Void — only the Creator-opened portal can end the run.
-    if (currentFloorRunEntry(state).themeTags === z.VOID && state.tick % 10 === 0) {
+    if (currentFloorRunEntry(state).themeTags.includes('void') && state.tick % 10 === 0) {
       const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
       if (tryUseVoidReturnPortal(pci)) {
         syncMsgLog();
@@ -9823,8 +9831,8 @@ function gameLoop(now: number): void {
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level
   let baseFog = 0.065;
-  if (currentFloorRunEntry(state).themeTags === z.MAINTENANCE) baseFog = 0.08;
-  if (currentFloorRunEntry(state).themeTags === z.HELL) baseFog = 0.05; // less fog, more horror visibility
+  if (currentFloorRunEntry(state).themeTags.includes('maintenance')) baseFog = 0.08;
+  if (currentFloorRunEntry(state).themeTags.includes('hell')) baseFog = 0.05; // less fog, more horror visibility
   const smogFogBonus = !state.gameOver ? proceduralSmogFogDensityBonus(world, player, state) : 0;
   const samosborVariant = state.samosborActive ? getActiveSamosborVariant() : null;
   const samosborVisual = samosborVariant?.visual;

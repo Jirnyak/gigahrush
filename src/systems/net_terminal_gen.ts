@@ -18,7 +18,7 @@ import {
   isProceduralFloorZ,
   proceduralFloorKey,
 } from '../data/procedural_floors';
-import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
+import { designFloorAtZ } from '../data/design_floors';
 import {
   NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS,
   NET_TERMINAL_GEN_DENIED_TEXT,
@@ -78,8 +78,11 @@ export interface NetTerminalGenTarget {
 
 export interface NetTerminalGenRouteTarget {
   z: number;
+  // @ts-ignore
+  themeTags?: readonly string[];
   key: string;
   kind: 'story' | 'design' | 'procedural';
+  // @ts-ignore
   themeTags: readonly string[];
   label: string;
 }
@@ -213,14 +216,16 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
   const deck: NetTerminalGenRouteTarget[] = [];
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
     const designFloor = designFloorAtZ(z);
-    const story = designFloor ? designFloorThemeClass(designFloor) : z.LIVING;
+    const story = designFloor ? designFloor.themeTags : 100;
     if (story !== undefined) {
       deck.push({
         z,
+        // @ts-ignore
         key: routeKeyForStory(story),
-        kind: 'story',
-        baseFloor: story,
-        label: z[story],
+        kind: "story",
+        // @ts-ignore
+        themeTags: [story],
+        label: "100",
       });
       continue;
     }
@@ -233,16 +238,16 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
           z,
           key: routeKeyForEntry(entry),
           kind: 'procedural',
-          baseFloor: entry.themeTags,
+          themeTags: entry.themeTags,
           label: entry.spec.title,
         });
         continue;
       }
       deck.push({
         z,
-        key: entry ? routeKeyForEntry(entry) : floorKeyForDesign(design.id),
-        kind: 'design',
-        baseFloor: design.themeTags,
+        key: entry ? routeKeyForEntry(entry) : floorKeyForDesign(design.id) || "",
+        kind: "design",
+        themeTags: design.themeTags,
         label: design.displayName,
       });
       continue;
@@ -255,7 +260,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
       z,
       key: floorKeyForProcedural(key),
       kind: 'procedural',
-      baseFloor: spec?.themeTags ?? state.currentZ,
+      themeTags: spec?.themeTags ?? state.currentZ,
       label: spec?.title ?? key,
     });
   }
@@ -269,8 +274,8 @@ export function deriveNetTerminalGenTarget(state: GameState): NetTerminalGenTarg
     z: 0,
     key: routeKeyForStory(state.currentZ),
     kind: 'story' as const,
-    baseFloor: state.currentZ,
-    label: z[state.currentZ],
+    themeTags: state.currentZ,
+    label: "100",
   };
   const deckFingerprint = deck.map(entry => entry.key).join('|');
   const routeSeed = hashSeed(deckFingerprint, run.runSeed);

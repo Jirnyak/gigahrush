@@ -142,7 +142,7 @@ export function spawnHellAltarArena(world: World, entities: Entity[], nextId: { 
   const cy = room.y + (room.h >> 1);
   const ci = world.idx(cx, cy);
   activeSite = {
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     roomX: room.x,
     roomY: room.y,
@@ -566,7 +566,7 @@ function registerAltarRouteCue(world: World, room: Room, entry: Route, escape: R
     y: cueY,
     targetX: cx,
     targetY: cy,
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(Math.floor(cx), Math.floor(cy))],

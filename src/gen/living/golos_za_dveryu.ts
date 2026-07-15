@@ -262,7 +262,7 @@ function handleGolosOutcome(state: GameState, event: WorldEvent): void {
 
   publishEvent(state, {
     type: outcome.type,
-    z: z.LIVING,
+    z: 100,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -446,7 +446,7 @@ function addVoiceTraceContainer(world: World, room: Room): void {
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,

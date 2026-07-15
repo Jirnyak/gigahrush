@@ -258,7 +258,6 @@ function publishBaitEnd(
   publishEvent(state, {
     type,
     time,
-    z: marker.z,
     zoneId: marker.zoneId,
     roomId: marker.roomId,
     x: marker.x,
@@ -485,7 +484,6 @@ export function findMonsterBaitTarget(
     publishEvent(state, {
       type: 'monster_bait_attracted',
       time,
-      z,
       zoneId: best.zoneId,
       roomId: best.roomId,
       x: best.x,

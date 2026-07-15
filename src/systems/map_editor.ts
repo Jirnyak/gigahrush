@@ -383,8 +383,8 @@ function normalizePatchState(input: Partial<MapEditorPatchState> | null | undefi
       const ops = src.ops.slice(0, PATCH_OP_CAP).map(normalizeMapEditorOp).filter((op): op is MapEditorOp => !!op);
       patches[key] = {
         floorKey: key,
-        baseFloor: typeof src.themeTags === 'number' ? src.themeTags : z.LIVING,
-        z: typeof src.z === 'number' ? src.z : undefined,
+        themeTags: Array.isArray(src.themeTags) ? src.themeTags : ['living'],
+        z: typeof src.z === "number" ? src.z : undefined,
         createdAt: typeof src.createdAt === 'number' ? src.createdAt : 0,
         opCount: ops.length,
         ops,
@@ -868,7 +868,7 @@ function recordOp(state: GameState, op: MapEditorOp): boolean {
     if (keys.length >= PATCH_FLOOR_CAP) delete patches.patches[keys[0]];
     patch = {
       floorKey: key,
-      baseFloor: state.currentZ,
+      themeTags: currentFloorRunEntry(state).themeTags,
       z: currentFloorZ(state),
       createdAt: state.time,
       opCount: 0,

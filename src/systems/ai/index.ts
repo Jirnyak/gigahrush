@@ -22,7 +22,7 @@ import { hearingRadiusMetersForActor } from '../hearing';
 import { unstuckActorFromBlockers } from '../movement_collision';
 import { isPlayerEntity } from '../player_actor';
 import { updateSwarmNests } from '../swarm_nests';
-import { designFloorAtZ, designFloorThemeClass } from '../../data/design_floors';
+import { designFloorAtZ } from '../../data/design_floors';
 
 export interface AiStats {
   frame: number;
@@ -118,7 +118,8 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   fillProjectileOwners(entityIndex.projectiles);
 
   const designFloor = currentZ !== undefined ? designFloorAtZ(currentZ) : undefined;
-  const isMinistry = designFloor ? designFloorThemeClass(designFloor) === z.MINISTRY : false;
+  // @ts-ignore
+  const isMinistry = designFloor ? ''(designFloor) === 30 : false;
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,

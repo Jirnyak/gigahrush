@@ -43,7 +43,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('spectral_chasovnya');
 
 export const SPECTRAL_CHASOVNYA_ROUTE_ID = 'spectral_chasovnya' as const;
 export const SPECTRAL_CHASOVNYA_Z = -42 as const;
-export const SPECTRAL_CHASOVNYA_BASE_FLOOR = z.HELL;
+export const SPECTRAL_CHASOVNYA_BASE_FLOOR = 180;
 
 export const SPECTRAL_CHASOVNYA_ROOM_NAMES = {
   entry: 'Преддверие спектральной часовни',

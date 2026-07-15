@@ -158,12 +158,12 @@ export interface DemosFeedView {
 }
 
 const FLOOR_LABELS: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Нижний этаж',
-  [z.VOID]: '[ДАННЫЕ УДАЛЕНЫ]',
+  [30]: 'Министерство',
+  [60]: 'Квартиры',
+  [100]: 'Жилая зона',
+  [140]: 'Коллекторы',
+  [180]: 'Нижний этаж',
+  [200]: '[ДАННЫЕ УДАЛЕНЫ]',
 };
 
 const EVENT_DETAIL_LABELS: Partial<Record<WorldEventType, string>> = {

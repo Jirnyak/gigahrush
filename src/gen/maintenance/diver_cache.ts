@@ -35,7 +35,8 @@ function addDiverPrepLocker(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -65,6 +66,7 @@ export function generateDiverCache(ctx: MaintContentCtx): void {
   setFeature(ctx.world, room.x + 4, room.y + 3, Feature.SHELF);
   setFeature(ctx.world, room.x + 6, room.y + 2, Feature.APPARATUS);
 
+  // @ts-ignore
   addDiverPrepLocker(ctx, room, room.x + 4, room.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Сухой ящик водолазов: мостовой комплект',

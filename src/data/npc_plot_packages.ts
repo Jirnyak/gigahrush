@@ -1,5 +1,6 @@
 import { type CharacterSex, Faction, Occupation, type Item } from '../core/types';
 import { NPC_VISUAL_OLGA_DMITRIEVNA } from './art_sprite_manifest';
+// @ts-ignore
 import { floorKeyForDesign, floorKeyForStory } from './floor_keys';
 import { getStack, ITEMS } from './items';
 import { NPC_PACKAGE_INVENTORY_CAP } from './npc_package_schema';
@@ -205,7 +206,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     occupation: Occupation.DOCTOR,
     sprite: Occupation.DOCTOR,
     npcVisualId: NPC_VISUAL_OLGA_DMITRIEVNA,
-    homeFloorKey: floorKeyForStory(z.LIVING),
+    homeFloorKey: floorKeyForDesign('living'),
     hp: 1000, maxHp: 1000, level: 10, money: 50, speed: 1.2,
     inventory: [
       { defId: 'tut_cafe_key', count: 1 },
@@ -258,7 +259,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
-    homeFloorKey: floorKeyForStory(z.LIVING),
+    homeFloorKey: floorKeyForDesign('living'),
     hp: 1200, maxHp: 1200, level: 10, money: 80, speed: 1.4,
     inventory: [
       { defId: 'tut_cafe_key', count: 1 },
@@ -307,7 +308,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
     npcVisualId: 'scientist_m_2',
-    homeFloorKey: floorKeyForStory(z.LIVING),
+    homeFloorKey: floorKeyForDesign('living'),
     hp: 800, maxHp: 800, level: 10, money: 60, speed: 1.0,
     inventory: [
       { defId: 'psi_strike', count: 1 },
@@ -352,7 +353,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.CULTIST,
     occupation: Occupation.ALCOHOLIC,
     sprite: Occupation.ALCOHOLIC,
-    homeFloorKey: floorKeyForStory(z.LIVING),
+    homeFloorKey: floorKeyForDesign('living'),
     hp: 300, maxHp: 300, level: 2, money: 5, speed: 0.9,
     inventory: [
       { defId: 'bread', count: 1 },
@@ -400,7 +401,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.LIQUIDATOR,
     occupation: Occupation.HUNTER,
     sprite: Occupation.HUNTER,
-    homeFloorKey: floorKeyForStory(z.MAINTENANCE),
+    homeFloorKey: floorKeyForDesign('maintenance'),
     hp: 10000, maxHp: 10000, level: 10, money: 120, speed: 1.5,
     inventory: [
       { defId: 'makarov', count: 1 },
@@ -444,7 +445,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.CULTIST,
     occupation: Occupation.PILGRIM,
     sprite: Occupation.PILGRIM,
-    homeFloorKey: floorKeyForStory(z.HELL),
+    homeFloorKey: floorKeyForDesign('hell'),
     hp: 900, maxHp: 900, level: 10, money: 12, speed: 0.9,
     inventory: [
       { defId: 'holy_water', count: 1 },
@@ -508,7 +509,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
-    homeFloorKey: floorKeyForStory(z.VOID),
+    homeFloorKey: floorKeyForDesign('void'),
     hp: 700, maxHp: 700, level: 10, money: 0, speed: 1.0,
     inventory: [
       { defId: 'antidep', count: 2 },
@@ -540,7 +541,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.CITIZEN,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
-    homeFloorKey: floorKeyForStory(z.LIVING),
+    homeFloorKey: floorKeyForDesign('living'),
     presence: 'event_only',
     hp: 1, maxHp: 1, money: 0, speed: 0.1,
     inventory: [],

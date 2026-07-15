@@ -1,6 +1,6 @@
 /* ── Markov procedural quest speech adapter ───────────────────── */
 
-import { MonsterKind, QuestType, RoomType, type Quest } from '../core/types';
+import { MonsterKind, QuestType, RoomType, Quest } from '../core/types';
 import { ITEMS } from '../data/items';
 import type { ContractDef } from '../data/contracts';
 import { monsterTypeName } from '../entities/monster';
@@ -360,14 +360,12 @@ function result(
 }
 
 function floorName(z: number): string {
-  switch (z) {
-    case z.MINISTRY: return 'Министерство';
-    case z.KVARTIRY: return 'Квартиры';
-    case z.LIVING: return 'Жилая зона';
-    case z.MAINTENANCE: return 'Коллекторы';
-    case z.HELL: return 'Ад';
-    case z.VOID: return 'Пустота';
-  }
+  if (z < 0) return 'Министерство';
+  if (z < 100) return 'Квартиры';
+  if (z < 200) return 'Жилая зона';
+  if (z < 300) return 'Коллекторы';
+  if (z < 400) return 'Ад';
+  return 'Пустота';
 }
 
 function roomTypeName(roomType: RoomType): string {

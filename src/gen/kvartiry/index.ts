@@ -542,7 +542,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 6: Zones (64 macro-regions) ─────────────────────────
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, z.KVARTIRY);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 60);
 
   // ── Phase 6b: Ensure connectivity ─────────────────────────────
   const spawnCenterX = W / 2, spawnCenterY = W / 2;
@@ -585,7 +585,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   // ── Phase 8b: Cell territory before population placement ─────
   initializeCellTerritory(world, {
     seed: territorySeed,
-    targetShares: territorySharesForStoryFloor(z.KVARTIRY),
+    targetShares: territorySharesForStoryFloor(60),
   });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
@@ -646,7 +646,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   buildKvartirySocialMacroGraph(world, spawnX, spawnY);
 
   // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
-  placeProceduralScreens(world, z.KVARTIRY);
+  placeProceduralScreens(world, 60);
 
   return { world, entities, spawnX, spawnY };
 }

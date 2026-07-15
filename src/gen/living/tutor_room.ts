@@ -55,7 +55,7 @@ function addStarterLocker(world: World, room: Room, x: number, y: number): World
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[idx],
     kind: ContainerKind.EMERGENCY_BOX,

@@ -1482,16 +1482,16 @@ function useDocumentAtMinistryGate(
   const method = accessDef?.method ?? permit?.method ?? (official ? 'legal' : stolen ? 'stolen' : 'forged');
   const roomName = documentRoomName(e, world) ?? (outputId === 'key' ? 'Проверочный коридор N3' : 'архивное окно');
   if (official) {
-    changeResourceStock(state, 'documents', 1, z.MINISTRY);
+    changeResourceStock(state, 'documents', 1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
     msgs.push(msg(accessDef?.line ?? 'Официальная бумага принята. Доступ выдан.', time, '#8f8'));
   } else if (stolen) {
-    changeResourceStock(state, 'documents', 1, z.MINISTRY);
+    changeResourceStock(state, 'documents', 1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 2);
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, -1);
     msgs.push(msg('Краденая архивная карточка сдана как улика. Выдан архивный допуск.', time, '#8cf'));
   } else {
-    changeResourceStock(state, 'documents', -1, z.MINISTRY);
+    changeResourceStock(state, 'documents', -1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, -2);
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
     msgs.push(msg(`${ITEMS[defId]?.name ?? defId} принят. Доступ выдан. Риск проверки.`, time, '#fa6'));
@@ -1555,7 +1555,7 @@ function forgePermitFromStampSheet(
   if (!consumeDocumentItems(e, inputs)) return true;
   addItem(e, 'forged_permit_slip', 1);
   if (state) {
-    changeResourceStock(state, 'documents', -1, z.MINISTRY);
+    changeResourceStock(state, 'documents', -1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, -1);
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
   }
@@ -1596,7 +1596,7 @@ function sellDocumentToBlackMarket(
   if (!price) return false;
   removeItem(e, defId, 1);
   e.money = (e.money ?? 0) + price;
-  changeResourceStock(state, 'documents', -1, z.MINISTRY);
+  changeResourceStock(state, 'documents', -1, 30);
   changeResourceStock(state, 'contraband', 1, state.currentZ);
   addFactionRelMutual(Faction.PLAYER, Faction.WILD, 2);
   addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, -1);
@@ -1640,8 +1640,8 @@ function handleContaminatedSwabUse(
     return true;
   }
 
-  const report = currentFloorRunEntry(state).themeTags === z.MINISTRY;
-  const market = currentFloorRunEntry(state).themeTags === z.LIVING || currentFloorRunEntry(state).themeTags === z.KVARTIRY;
+  const report = currentFloorRunEntry(state).themeTags.includes('ministry');
+  const market = currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry');
   if (!report && !market) {
     msgs.push(msg('Мазок ждёт адресата: отчёт в Министерстве или скупщик в жилом блоке.', time, '#aa8'));
     return true;
@@ -1651,7 +1651,7 @@ function handleContaminatedSwabUse(
   decrementInventorySlot(e.inventory ?? [], slotIdx);
   e.money = (e.money ?? 0) + reward;
   if (report) {
-    changeResourceStock(state, 'slime_samples', 1, z.MINISTRY, { reason: 'contaminated_swab_report', tags: ['sample', 'evidence', 'nii'] });
+    changeResourceStock(state, 'slime_samples', 1, 30, { reason: 'contaminated_swab_report', tags: ['sample', 'evidence', 'nii'] });
     addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, 1);
   } else {
     changeResourceStock(state, 'slime_samples', -1, state.currentZ, { reason: 'contaminated_swab_black_market', tags: ['sample', 'black_market'] });
@@ -1717,8 +1717,8 @@ function handleAuditProofUse(
     return true;
   }
 
-  const report = currentFloorRunEntry(state).themeTags === z.MINISTRY;
-  const market = currentFloorRunEntry(state).themeTags === z.LIVING || currentFloorRunEntry(state).themeTags === z.KVARTIRY;
+  const report = currentFloorRunEntry(state).themeTags.includes('ministry');
+  const market = currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry');
   if (!report && !market) {
     msgs.push(msg('Номерную планку примут в Министерстве как улику или в жилом блоке как рыночный риск.', time, '#aa8'));
     return true;
@@ -1792,10 +1792,10 @@ function handleDocumentPaperUse(
     return true;
   }
 
-  if (currentFloorRunEntry(state).themeTags === z.MINISTRY && DOCUMENT_GATE_ITEMS.has(defId)) {
+  if (currentFloorRunEntry(state).themeTags.includes('ministry') && DOCUMENT_GATE_ITEMS.has(defId)) {
     return useDocumentAtMinistryGate(e, defId, msgs, time, state, zoneId, world);
   }
-  if ((currentFloorRunEntry(state).themeTags === z.LIVING || currentFloorRunEntry(state).themeTags === z.KVARTIRY) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
+  if ((currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry')) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
     return sellDocumentToBlackMarket(e, defId, msgs, time, state, zoneId, world);
   }
 
@@ -1820,7 +1820,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (currentFloorRunEntry(state).themeTags === z.MINISTRY) {
+  if (currentFloorRunEntry(state).themeTags.includes('ministry')) {
     removeItem(e, defId, 1);
     if (!forged) {
       e.money = (e.money ?? 0) + 45;
@@ -1833,7 +1833,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (currentFloorRunEntry(state).themeTags === z.LIVING || currentFloorRunEntry(state).themeTags === z.KVARTIRY) {
+  if (currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry')) {
     removeItem(e, defId, 1);
     if (forged) {
       msgs.push(msg('Жильцы нашли лишние строки в липовом списке.', time, '#f84'));
@@ -1889,7 +1889,7 @@ function handleCraftRecipeItemSourceUse(
   if (
     state &&
     isPlayerEntity(e) &&
-    (currentFloorRunEntry(state).themeTags === z.LIVING || currentFloorRunEntry(state).themeTags === z.KVARTIRY) &&
+    (currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry')) &&
     DOCUMENT_MARKET_VALUES[defId] !== undefined
   ) {
     return false;

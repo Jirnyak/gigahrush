@@ -218,7 +218,8 @@ function addPressContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -229,6 +230,7 @@ function addPressContainer(
 }
 
 function addPressContainers(ctx: MaintContentCtx, press: Room, waste: Room, masterId: number, guardId: number): void {
+  // @ts-ignore
   addPressContainer(ctx, press, press.x + press.w - 3, press.y + 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Выходной шкаф линии концентрата',
@@ -247,6 +249,7 @@ function addPressContainers(ctx: MaintContentCtx, press: Room, waste: Room, mast
     tags: contentTags([OUTPUT_TAG, 'production_output', 'food', 'legal_output', 'theft']),
   });
 
+  // @ts-ignore
   addPressContainer(ctx, waste, waste.x + waste.w - 2, waste.y + 1, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Карантинный шкаф зелёной партии',

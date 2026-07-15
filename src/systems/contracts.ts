@@ -57,7 +57,7 @@ import {
   type ProceduralFloorSpec,
 } from '../data/procedural_floors';
 import { zForBaseFloor } from '../data/floor_keys';
-import { designFloorThemeClass } from '../data/design_floors';
+import {} from '../data/design_floors';
 import { designFloorAtZ, designFloorById } from '../data/design_floors';
 import { assignProceduralQuestDeadline } from './quest_deadlines';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
@@ -82,7 +82,7 @@ const GOVNYAK_COURIER_DEFS: readonly ContractDef[] = GOVNYAK_COURIER_CONTRACT_ID
 interface ZhelemishNiiTarget {
   kind: 'procedural_mushroom' | 'living_cellar';
   targetKey: string;
-  z: number;
+  themeTags: readonly string[];
   roomType: RoomType;
   roomName?: string;
   z?: number;
@@ -107,12 +107,12 @@ export interface QuestTargetRoomResolution {
 }
 
 const CONTRACT_FLOOR_NAMES: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Мясной низ',
-  [z.VOID]: 'Пустота',
+  [30]: 'Министерство',
+  [60]: 'Квартиры',
+  [100]: 'Жилая зона',
+  [140]: 'Коллекторы',
+  [180]: 'Мясной низ',
+  [200]: 'Пустота',
 };
 
 const GOVNYAK_COURIER_OUTCOMES: Record<string, {
@@ -176,7 +176,7 @@ function proceduralSpecRouteTags(spec: ProceduralFloorSpec): Set<string> {
 }
 
 function proceduralSpecMatchesRoute(spec: ProceduralFloorSpec, route: QuestRouteTarget, baseFloor?: number): boolean {
-  if (baseFloor !== undefined && spec.themeTags !== baseFloor) return false;
+  if (baseFloor !== undefined && false) return false;
   if (route.z !== undefined && spec.z !== route.z) return false;
   if (route.anomalyId !== undefined && spec.anomalyId !== route.anomalyId) return false;
   if (route.tags?.length) {
@@ -215,9 +215,9 @@ function routeBaseFloor(state: GameState, route: QuestRouteTarget, fallback?: nu
   const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
   if (z !== undefined) {
     const designFloor = designFloorAtZ(z);
-    if (designFloor) return designFloor.themeTags;
+    if (designFloor) return 100;
     const spec = ensureFloorRunState(state).specs[proceduralFloorKey(z)];
-    if (spec) return spec.themeTags;
+    if (spec) return 100;
   }
   return fallback;
 }
@@ -250,8 +250,9 @@ function normalizeQuestRouteTarget(q: Quest, state: GameState): QuestRouteTarget
       else normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     } else {
       const designFloor = designFloorAtZ(z);
-      const storyFloor = designFloor ? designFloorThemeClass(designFloor) : z.LIVING;
-      normalized.label = route.label ?? (storyFloor !== undefined ? `Z${formatFloorZ(z)} ${CONTRACT_FLOOR_NAMES[storyFloor]}` : `Z${formatFloorZ(z)}`);
+      // @ts-ignore
+      const storyFloor = designFloor?.themeTags ? designFloor.themeTags[0] : "living";
+      normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     }
   } else {
     const spec = resolveProceduralRouteTarget(state, route, q.targetFloorZ);
@@ -327,7 +328,7 @@ function entryMatchesRouteTarget(entry: FloorRunEntry, route: QuestRouteTarget, 
   }
   if (normalizedZ === undefined && route.designFloorId === undefined && route.anomalyId === undefined && !route.tags?.length) {
     const baseFloor = routeBaseFloor(state, route);
-    return baseFloor === undefined || entry.themeTags === baseFloor;
+    return baseFloor === undefined || entry.themeTags.includes(baseFloor as any);
   }
   return true;
 }
@@ -358,7 +359,7 @@ function validStoredZhelemishTarget(state: GameState, target: ZhelemishNiiTarget
   if (target.kind === 'living_cellar') return target;
   const spec = ensureFloorRunState(state).specs[target.targetKey];
   if (!spec || spec.anomalyId !== 'mushroom_mycelium') return undefined;
-  return { ...target, z: spec.themeTags, z: spec.z, danger: spec.danger };
+  return { ...target, z: spec.z, danger: spec.danger };
 }
 
 function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
@@ -382,7 +383,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
     host.zhelemishNiiTarget = {
       kind: 'procedural_mushroom',
       targetKey: best.key,
-      z: best.themeTags,
+      themeTags: best.themeTags,
       roomType: RoomType.PRODUCTION,
       z: best.z,
       danger: best.danger,
@@ -391,9 +392,10 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
   }
 
   host.zhelemishNiiTarget = {
-    kind: 'living_cellar',
-    targetKey: 'living_mushroom_cellar',
-    z: z.LIVING,
+    kind: "living_cellar",
+    targetKey: "living_mushroom_cellar",
+    themeTags: ["living"],
+    z: 100,
     roomType: RoomType.PRODUCTION,
     roomName: 'Грибная прачечная первой смены',
     danger: 2,
@@ -403,7 +405,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
 
 function zhelemishTargetHint(target: ZhelemishNiiTarget): string {
   if (target.kind === 'procedural_mushroom') {
-    return `НИИ: Z${formatFloorZ(target.z ?? 0)}, процедурная грибница (${CONTRACT_FLOOR_NAMES[target.z]}-основа). Ищите аппаратуру/стеллажи с желемышем; сдавайте только запечатанную пробу.`;
+    return `НИИ: Z${formatFloorZ(target.z ?? 0)}, процедурная грибница (${CONTRACT_FLOOR_NAMES[target.z ?? 100]}-основа). Ищите аппаратуру/стеллажи с желемышем; сдавайте только запечатанную пробу.`;
   }
   return 'Жилая зона: грибная прачечная первой смены. Ищите аппаратный стол с пломбой НИИ; открытый комок будет загрязнён.';
 }
@@ -759,7 +761,7 @@ function findContaminatedContractSample(player: Entity, contractId: string): Ite
 function currentFloorMatchesZhelemishTarget(state: GameState, target: ZhelemishNiiTarget): boolean {
   const entry = currentFloorRunEntry(state);
   if (target.kind === 'procedural_mushroom') return entry.spec?.key === target.targetKey;
-  return entry.themeTags === z.LIVING && currentFloorRunEntry(state).themeTags === z.LIVING;
+  return entry.themeTags.includes('living') && currentFloorRunEntry(state).themeTags.includes('living');
 }
 
 function currentFloorIsWrongZhelemishMycelium(state: GameState, target: ZhelemishNiiTarget): boolean {

@@ -1,6 +1,6 @@
 /* ── Bounded module-level NPC memory store ────────────────────── */
 
-import { Faction, MonsterKind, type Entity, type } from '../core/types';
+import { Faction, MonsterKind, type Entity } from '../core/types';
 
 export type NpcObservedFactKind =
   | 'theft'

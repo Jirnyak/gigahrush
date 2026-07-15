@@ -28,7 +28,7 @@ export const UNDERHELL_ROUTE_ID = DESIGN_FLOOR_ID;
 export const UNDERHELL_Z = -38;
 export const UNDERHELL_DEFAULT_SEED = 19032;
 
-const UNDERHELL_FLOOR = z.HELL;
+const UNDERHELL_FLOOR = 180;
 const SPAWN_X = W >> 1;
 const SPAWN_Y = W >> 1;
 const THRESHOLD_MASK = 0b0000_0000_0000_0111;
@@ -1411,7 +1411,7 @@ function setFeature(world: World, x: number, y: number, feature: Feature): void 
 
 function retuneUnderhellZones(world: World): void {
   for (const zone of world.zones) {
-    zone.level = calcZoneLevel(zone.cx, zone.cy, z.HELL) + 5;
+    zone.level = calcZoneLevel(zone.cx, zone.cy, 180) + 5;
     const roll = Math.abs(Math.sin((zone.cx * 12.9898 + zone.cy * 78.233 + 19) * 0.01));
     zone.faction = roll < 0.62 ? ZoneFaction.CULTIST : roll < 0.84 ? ZoneFaction.WILD : ZoneFaction.LIQUIDATOR;
     zone.hqRoomId = -1;

@@ -649,7 +649,7 @@ function sanitizeContainers(
       id,
       x,
       y,
-      z: enumValue(raw.z, z, z.LIVING),
+      z: typeof raw.z === "number" ? raw.z : 100,
       roomId: finiteIntRange(raw.roomId, -1, rooms.length - 1, -1),
       zoneId: finiteIntRange(raw.zoneId, 0, Math.max(0, zones.length - 1), 0),
       kind: enumValue(raw.kind, ContainerKind, ContainerKind.METAL_CABINET) as ContainerKind,

@@ -188,7 +188,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
      Phase 8: Zones + zone levels
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, z.MAINTENANCE);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 140);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 9-11: Entities & Environment
@@ -214,7 +214,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
   /* ══════════════════════════════════════════════════════════════
      Phase 16: Rare procedural monitor/gauge walls
      ══════════════════════════════════════════════════════════════ */
-  placeProceduralScreens(world, z.MAINTENANCE);
+  placeProceduralScreens(world, 140);
   placeCollectorMacroPanels(world, centerX, centerY);
 
   /* ══════════════════════════════════════════════════════════════

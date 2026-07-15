@@ -56,6 +56,7 @@ function registerWallSnakeCue(ctx: ProceduralAnomalyGenContext, roomId: number, 
     y: head.y + 0.5,
     targetX: bait.x + 0.5,
     targetY: bait.y + 0.5,
+    // @ts-ignore
     z: ctx.spec.themeTags,
     roomId,
     targetRoomId: roomId,

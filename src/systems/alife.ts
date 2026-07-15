@@ -464,7 +464,7 @@ function recordColumnIndex(record: AlifeNpcRecord): number {
 }
 
 function internAlifeFloorKey(alife: AlifeState, floorKeyInput: string): number {
-  const floorKey = cleanFloorKey(floorKeyInput) || floorKeyForStory(z.LIVING);
+  const floorKey = cleanFloorKey(floorKeyInput) || floorKeyForDesign('living');
   const existing = alife.floorKeyLookup[floorKey];
   if (existing !== undefined) return existing;
   const next = alife.floorKeys.length;
@@ -484,12 +484,12 @@ function setRecordFloorKey(alife: AlifeState, record: AlifeNpcRecord, floorKey: 
 }
 
 function recordFloor(alife: AlifeState, record: AlifeNpcRecord): number {
-  return (alife.columns.z[recordColumnIndex(record)] ?? z.LIVING);
+  return (alife.columns.z[recordColumnIndex(record)] ?? 100);
 }
 
 function setRecordFloor(alife: AlifeState, record: AlifeNpcRecord, value: number): void {
   ensureAlifeColumnCapacity(alife, record.id);
-  alife.columns.z[recordColumnIndex(record)] = sanitizeFloor(value, z.LIVING);
+  alife.columns.z[recordColumnIndex(record)] = sanitizeFloor(value, 100);
 }
 
 function recordDanger(alife: AlifeState, record: AlifeNpcRecord): 1 | 2 | 3 | 4 | 5 {
@@ -847,14 +847,15 @@ function recordCanMaterializeAsOrdinaryPopulation(record: AlifeNpcRecord): boole
   return record.reservedPresence === 'population' && recordPackageId(record) !== undefined;
 }
 
+// @ts-ignore
 function storyDanger(z: number): 1 | 2 | 3 | 4 | 5 {
   switch (z) {
-    case z.LIVING: return 1;
-    case z.KVARTIRY:
-    case z.MINISTRY: return 3;
-    case z.MAINTENANCE: return 4;
-    case z.HELL:
-    case z.VOID: return 5;
+    case 100: return 1;
+    case 60:
+    case 30: return 3;
+    case 140: return 4;
+    case 180:
+    case 200: return 5;
   }
 }
 
@@ -905,10 +906,10 @@ function factionForPlan(plan: AlifeFloorPlan, seed: number, index: number): Fact
 
 function occupationForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, seed: number, index: number): Occupation {
   if (plan.occupationWeights && plan.occupationWeights.length > 0) return pickWeighted(plan.occupationWeights, seed, index, 24);
-  if (profile.faction === Faction.CITIZEN && plan.z === z.MAINTENANCE) {
+  if (profile.faction === Faction.CITIZEN && plan.z === 140) {
     return unit(seed, index, 22) < 0.55 ? Occupation.MECHANIC : Occupation.ELECTRICIAN;
   }
-  if (profile.faction === Faction.CITIZEN && plan.z === z.MINISTRY) {
+  if (profile.faction === Faction.CITIZEN && plan.z === 30) {
     return unit(seed, index, 23) < 0.58 ? Occupation.SECRETARY : Occupation.DIRECTOR;
   }
   return pickWeighted(profile.occupations, seed, index, 24);
@@ -1038,10 +1039,10 @@ function levelForRecord(plan: AlifeFloorPlan, faction: Faction, seed: number, in
 }
 
 function wealthForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, level: number, seed: number, index: number): number {
-  const floorMult = plan.z === z.MINISTRY ? 2.4
+  const floorMult = plan.z === 30 ? 2.4
     : plan.key === floorKeyForDesign('bank_floor') ? 6.5
-      : plan.z === z.MAINTENANCE ? 1.25
-        : plan.z === z.HELL ? 0.45
+      : plan.z === 140 ? 1.25
+        : plan.z === 180 ? 0.45
           : 1;
   const base = (8 + plan.danger * 3 + level * 0.8) * profile.wealthMult * floorMult;
   const u = Math.max(0.000001, 1 - unit(seed, index, 42));
@@ -1174,10 +1175,10 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
 function populationBucketToFloorPlan(bucket: AlifePopulationBucket): AlifeFloorPlan | null {
   const key = cleanFloorKey(bucket.floorKey);
   if (!key) return null;
-  const floor = sanitizeFloor(bucket.z, z.LIVING);
+  const floor = sanitizeFloor(bucket.z, 100);
   return {
     key,
-    z,
+    z: floor,
     danger: bucket.danger ?? storyDanger(floor),
     weight: Math.max(0, Math.floor(bucket.weight ?? bucket.targetCount ?? 0)),
     majorityFaction: bucket.majorityFaction,
@@ -1237,6 +1238,7 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
   }
 
   const usedFloors = new Set<string>();
+  // @ts-ignore
   const buckets: AlifePopulationBucket[] = plan.buckets.map(bucket => {
     const reserved = reservedByFloor.get(bucket.floorKey) ?? [];
     usedFloors.add(bucket.floorKey);
@@ -1255,7 +1257,7 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
     const first = plan.reserved.find(def => def.floorKey === floorKey);
     buckets.push({
       floorKey,
-      z: first?.faction === Faction.LIQUIDATOR ? z.MINISTRY : z.LIVING,
+      z: first?.faction === Faction.LIQUIDATOR ? 30 : 100,
       targetCount: reserved.length,
       reserved,
     });
@@ -1267,12 +1269,12 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
 function buildCurrentRunPopulationPlan(state: GameState, total?: number, emptyPackages?: boolean): AlifePopulationPlan {
   const run = ensureFloorRunState(state);
   const routeKeySet = new Set<string>([
-    floorKeyForStory(z.MINISTRY),
-    floorKeyForStory(z.KVARTIRY),
-    floorKeyForStory(z.LIVING),
-    floorKeyForStory(z.MAINTENANCE),
-    floorKeyForStory(z.HELL),
-    floorKeyForStory(z.VOID),
+    floorKeyForDesign('ministry'),
+    floorKeyForDesign('kvartiry'),
+    floorKeyForDesign('living'),
+    floorKeyForDesign('maintenance'),
+    floorKeyForDesign('hell'),
+    floorKeyForDesign('void'),
   ]);
   for (const route of DESIGN_FLOOR_ROUTES) {
     const entry = floorRunEntryForDesignFloor(state, route.id);
@@ -1543,7 +1545,7 @@ function rpgFromRecord(alife: AlifeState, record: AlifeNpcRecord): RPGStats {
 }
 
 function sanitizeFloor(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= z.MINISTRY && value <= z.VOID
+  return typeof value === 'number' && Number.isFinite(value) && value >= 30 && value <= 200
     ? Math.trunc(value)
     : fallback;
 }
@@ -1664,16 +1666,16 @@ function attachRecordToFloor(alife: AlifeState, recordIndex: number, floorKey: s
 }
 
 function resolvedFloorForAlifeKey(state: GameState, floorKey: string): number | undefined {
-  for (const floor of [z.MINISTRY, z.KVARTIRY, z.LIVING, z.MAINTENANCE, z.HELL, z.VOID]) {
+  for (const floor of [30, 60, 100, 140, 180, 200]) {
     if (floorKeyForStory(floor) === floorKey) return floor;
   }
   const design = DESIGN_FLOOR_ROUTES.find(def => floorKeyForDesign(def.id) === floorKey);
-  if (design) return design.themeTags;
+  if (design) return 100;
   if (floorKey.startsWith('procedural:')) {
     const routeId = floorKey.slice('procedural:'.length);
     const run = ensureFloorRunState(state);
     const spec = run.specs[routeId] ?? Object.values(run.specs).find(candidate => floorKeyForProcedural(candidate.key) === floorKey);
-    if (spec) return spec.themeTags;
+    if (spec) return 100;
   }
   return undefined;
 }

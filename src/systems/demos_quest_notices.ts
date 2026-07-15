@@ -111,12 +111,12 @@ const MAX_NOTICE_DETAIL = 132;
 const MAX_FAILED_REASON = 48;
 
 const FLOOR_LABELS: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Ад',
-  [z.VOID]: 'Пустота',
+  [30]: 'Министерство',
+  [60]: 'Квартиры',
+  [100]: 'Жилая зона',
+  [140]: 'Коллекторы',
+  [180]: 'Ад',
+  [200]: 'Пустота',
 };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

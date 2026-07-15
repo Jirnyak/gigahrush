@@ -244,7 +244,7 @@ function addInspectionEvidenceContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.FILING_CABINET,

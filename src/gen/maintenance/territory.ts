@@ -172,7 +172,7 @@ export function initializeMaintenanceTerritory(world: World, generationSeed: num
   seedMaintenanceHqTerritory(world);
   initializeCellTerritory(world, {
     seed: generationSeed,
-    targetShares: territorySharesForStoryFloor(z.MAINTENANCE),
+    targetShares: territorySharesForStoryFloor(140),
   });
 }
 

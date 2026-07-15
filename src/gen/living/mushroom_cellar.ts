@@ -132,7 +132,7 @@ registerSideQuest('ag12_olga_sanpropusk', NPC_DEFS.ag12_olga_sanpropusk, [
     type: QuestType.FETCH,
     desc: 'Ольга Санпропуск: «После чистки нужен коричневый соскоб с живой петли: Маврин поддон, сырой погреб Желемышника, костяная сушилка. Соль к краю, огонь к плотоядной, пробу - мне.»',
     targetItem: 'slime_sample_brown', targetCount: 1,
-    targetFloorZ: z.LIVING,
+    targetFloorZ: 100,
     targetRoomType: RoomType.STORAGE,
     targetZoneTag: 'living_fungal_loop',
     targetHint: 'Жилая зона: начните в грибной прачечной, проверьте желемышный погреб, затем берите коричневую пробу из сырого ядра Погреба Желемышника; плотоядную сушилку проходите с солью или топливом.',

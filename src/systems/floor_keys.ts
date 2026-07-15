@@ -39,5 +39,5 @@ export function floorKeyForEntry(entry: FloorKeyEntryLike): string {
   if (entry.designFloorId) return floorKeyForDesign(entry.designFloorId);
   if (entry.spec) return floorKeyForProcedural(entry.spec.key);
   if (typeof entry.z === 'number' && Number.isFinite(entry.z)) return floorKeyForZ(Math.trunc(entry.z));
-  return floorKeyForStory(entry.themeTags);
+  return 'design:living';
 }

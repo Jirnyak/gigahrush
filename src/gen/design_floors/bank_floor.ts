@@ -33,7 +33,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bank_floor');
 
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
 export const BANK_FLOOR_Z = 26;
-export const BANK_FLOOR_BASE_FLOOR = z.MINISTRY;
+export const BANK_FLOOR_BASE_FLOOR = 30;
 
 export const BANK_ROOM_NAMES = {
   liftLobby: 'Лифтовый вестибюль банка Б-22',
@@ -466,6 +466,7 @@ export function createBankFloorState(): BankFloorState {
 
 export function summarizeBankFloorState(bank: BankFloorState): string[] {
   return [
+    // @ts-ignore
     `route=${bank.routeId} z=${bank.anchorZ} base=${z[bank.themeTags]}`,
     `legalRooms=${bank.legalRooms.length} riskRooms=${bank.riskRooms.length}`,
     `debtCircuit=${bank.debtCircuitRooms.join(' -> ')}`,

@@ -31,12 +31,12 @@ const SCREEN_MAX_RATIO = 0.01;
 const SCREEN_CONTEXT_RADIUS = 10;
 
 const FLOOR_CAP: Record<number, number> = {
-  [z.MINISTRY]: 180,
-  [z.KVARTIRY]: 160,
-  [z.LIVING]: 120,
-  [z.MAINTENANCE]: 90,
-  [z.HELL]: 48,
-  [z.VOID]: 0,
+  [30]: 180,
+  [60]: 160,
+  [100]: 120,
+  [140]: 90,
+  [180]: 48,
+  [200]: 0,
 };
 
 const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -64,9 +64,9 @@ function floorScreenCap(z: number): number {
 
 function baseWallTexFor(z: number): Tex {
   switch (z) {
-    case z.MINISTRY: return Tex.MARBLE;
-    case z.MAINTENANCE: return Tex.PIPE;
-    case z.HELL: return Tex.MEAT;
+    case 30: return Tex.MARBLE;
+    case 140: return Tex.PIPE;
+    case 180: return Tex.MEAT;
     default: return Tex.PANEL;
   }
 }
@@ -120,16 +120,16 @@ function isPlainWallTexture(tex: number): boolean {
 function isRoomEligible(z: number, room: Room): boolean {
   if (room.name === 'Актовый зал') return false;
   switch (z) {
-    case z.MINISTRY:
+    case 30:
       return room.type === RoomType.OFFICE || room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR
         || room.type === RoomType.MEDICAL || room.type === RoomType.STORAGE;
-    case z.KVARTIRY:
+    case 60:
       return room.type === RoomType.LIVING || room.type === RoomType.KITCHEN || room.type === RoomType.COMMON
         || room.type === RoomType.OFFICE || room.type === RoomType.SMOKING;
-    case z.LIVING:
+    case 100:
       return room.type === RoomType.LIVING || room.type === RoomType.COMMON || room.type === RoomType.PRODUCTION
         || room.type === RoomType.OFFICE || room.type === RoomType.MEDICAL;
-    case z.MAINTENANCE:
+    case 140:
       return room.type === RoomType.PRODUCTION || room.type === RoomType.OFFICE || room.type === RoomType.MEDICAL
         || room.type === RoomType.COMMON;
     default:
@@ -142,16 +142,16 @@ function roomChance(z: number, room: Room): number {
   const scale = area >= 100 ? 1.45 : area >= 45 ? 1 : 0.55;
   let base = 0;
   switch (z) {
-    case z.MINISTRY:
+    case 30:
       base = room.type === RoomType.COMMON ? 0.20 : room.type === RoomType.OFFICE ? 0.10 : 0.07;
       break;
-    case z.KVARTIRY:
+    case 60:
       base = room.type === RoomType.LIVING ? 0.018 : room.type === RoomType.COMMON ? 0.032 : 0.014;
       break;
-    case z.LIVING:
+    case 100:
       base = room.type === RoomType.PRODUCTION || room.type === RoomType.MEDICAL ? 0.10 : 0.045;
       break;
-    case z.MAINTENANCE:
+    case 140:
       base = room.type === RoomType.PRODUCTION || room.type === RoomType.OFFICE ? 0.16 : 0.08;
       break;
   }
@@ -296,7 +296,7 @@ function signalWeight(
   let w = def.weight;
   switch (def.id) {
     case 'samosbor_warning':
-      w *= ctx.samosborZone ? 6 : z === z.HELL ? 1.6 : room?.type === RoomType.CORRIDOR ? 1.1 : 0.75;
+      w *= ctx.samosborZone ? 6 : z === 180 ? 1.6 : room?.type === RoomType.CORRIDOR ? 1.1 : 0.75;
       break;
     case 'economy_shortage':
       if (room?.type === RoomType.KITCHEN || room?.type === RoomType.STORAGE) w *= 4;
@@ -332,7 +332,7 @@ function signalWeight(
       if (ctx.zoneLevel >= 5) w *= 1.35;
       break;
     case 'void_protocol':
-      w *= z === z.VOID ? 5 : z === z.HELL ? 4 : 1;
+      w *= z === 200 ? 5 : z === 180 ? 4 : 1;
       if (ctx.nearTeleport) w *= 2.4;
       break;
   }
@@ -390,7 +390,7 @@ function placeHellScreens(world: World, cap: number, owned: Set<number>): void {
     }
     if (!facesFloor) continue;
     if (rng() < 0.10) {
-      const signal = pickSignal(world, z.HELL, undefined, ci);
+      const signal = pickSignal(world, 180, undefined, ci);
       placeScreenAt(world, ci, pickVariant(signal, x, y), owned);
     }
   }
@@ -402,7 +402,7 @@ export function placeProceduralScreens(world: World, z: number): void {
   if (cap <= 0) return;
   const owned = new Set<number>();
   proceduralScreenCells.set(world, owned);
-  if (z === z.HELL) placeHellScreens(world, cap, owned);
+  if (z === 180) placeHellScreens(world, cap, owned);
   else placeRoomScreens(world, z, cap, owned);
 }
 

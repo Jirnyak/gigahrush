@@ -6,7 +6,7 @@ import {
   type GameState,
 } from '../core/types';
 import { occupationProfile } from '../data/occupation_profiles';
-import { cleanFloorKey, floorKeyForStory, floorKeyZ, floorKeyKind, floorKeyRouteId, floorKeyBaseFloor } from './floor_keys';
+import { cleanFloorKey, floorKeyForStory, floorKeyZ, floorKeyKind, floorKeyRouteId,  } from './floor_keys';
 import { designFloorById } from '../data/design_floors';
 import {
   alifeNpcRecordCount,
@@ -43,12 +43,12 @@ const FACTION_LABELS: Record<Faction, string> = {
 };
 
 const FLOOR_LABELS: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Ад',
-  [z.VOID]: 'Пустота',
+  [30]: 'Министерство',
+  [60]: 'Квартиры',
+  [100]: 'Жилая зона',
+  [140]: 'Коллекторы',
+  [180]: 'Ад',
+  [200]: 'Пустота',
 };
 
 interface DemosJourneyLike {
@@ -254,9 +254,8 @@ function demosFloorKeyLabel(state: GameState, floorKeyInput: unknown, fallbackFl
   if (kind === 'design') {
     const designDef = designFloorById(floorKeyRouteId(key));
     if (designDef) keyLabel = designDef.displayName;
-  } else if (kind === 'story') {
-    const baseFloor = floorKeyBaseFloor(key);
-    if (baseFloor !== undefined) keyLabel = FLOOR_LABELS[baseFloor] ?? key;
+  } else {
+    // Redundant with baseFloorLabel or unknown
   }
   
   return floorNumber ? `${floorNumber}, ${keyLabel || '?'}` : (keyLabel || '?');
@@ -304,7 +303,7 @@ function locationLabel(state: GameState, entities: readonly Entity[], snapshot: 
   if (kind === 'design') {
     const designDef = designFloorById(floorKeyRouteId(snapshot.floorKey));
     if (designDef) keyLabel = designDef.displayName;
-  } else if (kind === 'story') {
+  } else {
     keyLabel = ''; // Redundant with baseFloorLabel
   }
 

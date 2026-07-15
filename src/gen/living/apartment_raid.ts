@@ -235,7 +235,7 @@ registerSideQuest(LIQUIDATOR_ID, TAMARA, [{
 function publishRaidOutcome(state: GameState, event: WorldEvent, outcome: RaidOutcome): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: z.LIVING,
+    z: 100,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -447,7 +447,7 @@ function addRaidContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

@@ -67,7 +67,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,

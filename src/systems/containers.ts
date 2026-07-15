@@ -230,7 +230,7 @@ export function makeFeatureLootContainer(
 }
 
 function tallyFloorAllowsStaticSeed(z: number): boolean {
-  return z === z.LIVING || z === z.KVARTIRY || z === z.MINISTRY;
+  return z === 100 || z === 60 || z === 30;
 }
 
 function hasShelterTallyStaticPath(world: World, z: number): boolean {

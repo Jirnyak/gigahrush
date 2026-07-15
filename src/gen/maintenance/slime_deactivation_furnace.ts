@@ -78,7 +78,7 @@ registerSideQuest('ag71_furnace_operator', OPERATOR_DEF, [
     type: QuestType.FETCH,
     desc: 'Вера: «Коричневую пробу из сухого обхода в бункер. Я верну гашёный остаток: хуже товара, лучше живого запаха.»',
     targetItem: BROWN_SAMPLE_ITEM, targetCount: 1,
-    targetFloorZ: z.MAINTENANCE,
+    targetFloorZ: 140,
     targetRoomType: RoomType.PRODUCTION,
     targetZoneTag: 'deactivation_furnace',
     targetHint: 'Коллекторы: сухой обход даёт коричневую пробу и щёлочную присыпку; печь деактивации гасит пробу в сухой остаток, а фильтр выдают по акту.',
@@ -110,7 +110,7 @@ registerSideQuest('ag71_furnace_claimant', CLAIMANT_DEF, [{
   type: QuestType.FETCH,
   desc: 'Сенька: «Не жги коричневую пробу. Принеси её мне целой — рынок любит то, что официально должно исчезнуть.»',
   targetItem: BROWN_SAMPLE_ITEM, targetCount: 1,
-  targetFloorZ: z.MAINTENANCE,
+  targetFloorZ: 140,
   targetRoomType: RoomType.PRODUCTION,
   targetZoneTag: 'deactivation_furnace',
   targetHint: 'Коллекторы: после сухого обхода Сенька у печи перекупает коричневую пробу до прожига.',
@@ -141,7 +141,8 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -178,6 +179,7 @@ function scorchFurnace(ctx: MaintContentCtx, room: Room): void {
 }
 
 function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room, fuel: Room, operatorId: number): void {
+  // @ts-ignore
   addContainer(ctx, furnace, furnace.x + furnace.w - 3, furnace.y + 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Приёмный бункер печи гашения',
@@ -197,6 +199,7 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     factoryId: FACTORY_ID,
     tags: [CONTENT_TAG, 'production_output', 'cleanup', 'slime', 'sample', 'deactivation_furnace'],
   });
+  // @ts-ignore
   addContainer(ctx, fuel, fuel.x + fuel.w - 2, fuel.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Опломбированный шкаф топлива печи',
@@ -215,6 +218,7 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     discovered: true,
     tags: [CONTENT_TAG, 'fuel', 'locked', 'liquidator', 'theft', 'slime'],
   });
+  // @ts-ignore
   addContainer(ctx, intake, intake.x + 2, intake.y + intake.h - 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Мокрая тара до гашения',

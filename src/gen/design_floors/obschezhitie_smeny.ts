@@ -31,7 +31,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('obschezhitie_smeny');
 export const OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID = 'obschezhitie_smeny' as const;
 export const OBSCHEZHITIE_SMENY_ROUTE_Z = -6;
 
-const BASE_FLOOR = z.LIVING;
+const BASE_FLOOR = 100;
 const DORM_SEED = hashSeed(OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID);
 const SLEEPER_TEMPLATE_COUNT = 36;
 const PATROL_TEMPLATE_COUNT = 8;

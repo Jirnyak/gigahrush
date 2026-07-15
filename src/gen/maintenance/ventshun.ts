@@ -84,7 +84,7 @@ function addVentshunContainer(
     id,
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -155,7 +155,7 @@ function publishVentshunEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: phase === 'sprung' ? 'monster_sighted' : 'rumor_observed',
-    z: z.MAINTENANCE,
+    z: 140,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? ctx.targetX,
@@ -501,7 +501,7 @@ function registerVentshunCueAndContext(
     y: warningY,
     targetX,
     targetY,
-    z: z.MAINTENANCE,
+    z: 140,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(Math.floor(warningX), Math.floor(warningY))],

@@ -775,7 +775,7 @@ function tunePodadZones(world: World): void {
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, SPAWN_X, SPAWN_Y);
     zone.faction = d < 120 ? ZoneFaction.CULTIST : d < 260 ? ZoneFaction.SAMOSBOR : ZoneFaction.WILD;
-    zone.level = calcZoneLevel(zone.cx, zone.cy, z.HELL) + (d > 220 ? 5 : 3);
+    zone.level = calcZoneLevel(zone.cx, zone.cy, 180) + (d > 220 ? 5 : 3);
     zone.fogged = d > 180;
   }
   for (let i = 0; i < W * W; i++) {
@@ -1002,7 +1002,7 @@ function registerPodadCue(
     y: from.y + 0.5,
     targetX: to.x + 0.5,
     targetY: to.y + 0.5,
-    z: z.HELL,
+    z: 180,
     roomId: source.id,
     targetRoomId: target.id,
     zoneId: world.zoneMap[cell],

@@ -234,7 +234,7 @@ let activeSamosborScale: 'full' = 'full';
 
 let istotitShelterRoomIds: number[] = [];
 let istotitShelterCycle = -1;
-let istotitShelterFloor = z.LIVING;
+let istotitShelterFloor = 100;
 let istotitSupplyContainerIds: number[] = [];
 let istotitDecisionCycle = -1;
 let istotitDecision = '';
@@ -703,14 +703,15 @@ const aftermathRuntime = new Map<string, AftermathRuntime>();
 let pendingAftermath: PendingAftermath | null = null;
 let lastAftermathAt = -Infinity;
 let lastAftermathBeatIds: string[] = [];
-let lastAftermathFloor = z.LIVING;
+// @ts-ignore
+let lastAftermathFloor: number | undefined = undefined;
 let lastVeretarAreaLeaks = 0;
 let lastVeretarAreaLeakAt = -Infinity;
 let lastSamosborFogEffectNoticeAt = -Infinity;
 let istotitBellFollowNoticeAt = -Infinity;
 let istotitBellResistNoticeAt = -Infinity;
 let samosborRoomSirenWorld: World | null = null;
-let samosborRoomSirenFloor = z.LIVING;
+let samosborRoomSirenFloor = 100;
 let samosborRoomSirenCycle = -1;
 let samosborRoomSirenAccum = 0;
 let samosborRoomSirenSources: SamosborRoomSirenSource[] = [];
@@ -930,7 +931,8 @@ export function resetSamosborRuntimeForTests(): void {
   pendingAftermath = null;
   lastAftermathAt = -Infinity;
   lastAftermathBeatIds = [];
-  lastAftermathFloor = z.LIVING;
+  // @ts-ignore
+  lastAftermathFloor = ["living"];
   lastVeretarAreaLeaks = 0;
   lastVeretarAreaLeakAt = -Infinity;
   lastSamosborFogEffectNoticeAt = -Infinity;
@@ -1275,7 +1277,7 @@ export function getSamosborWarningSnapshot(state?: GameState): SamosborWarningSn
     : Math.max(0, Math.ceil(SAMOSBOR_WARNING_WINDOW - (knownSamosborTime - samosborWarning.startedAt)));
   return {
     z: samosborWarning.z,
-    floorName: floorLevelDisplayName(samosborWarning.z),
+    floorName: floorLevelDisplayName(["living"]),
     zoneId: samosborWarning.zoneId,
     zoneX: samosborWarning.zoneX,
     zoneY: samosborWarning.zoneY,
@@ -2171,7 +2173,7 @@ function ensureSamosborWarning(
   }
   if (samosborWarning) clearSamosborWarning(true);
 
-  const variant = getActiveSamosborVariant() ?? chooseSamosborVariant(state.currentZ);
+  const variant = getActiveSamosborVariant() ?? chooseSamosborVariant(currentFloorRunEntry(state).themeTags, state.currentZ);
   const zone = chooseWarningZone(world, entities);
   const seconds = Math.max(0, Math.ceil(state.samosborTimer));
   const istotitShelterRoomIds = prepareIstotitShelters(world, state, variant, zone.cx, zone.cy);
@@ -2917,7 +2919,7 @@ function applyPendingSamosborAftermath(
     }
   }
   knownSamosborTime = state.time;
-  const defs = getSamosborAftermathBeats(pending.variant.def.id, z);
+  const defs = getSamosborAftermathBeats(pending.variant.def.id, currentFloorRunEntry(state).themeTags);
   const target = 1;
   const used = new Set<string>();
   const applied: string[] = [];
@@ -2937,7 +2939,8 @@ function applyPendingSamosborAftermath(
   if (applied.length > 0) {
     lastAftermathAt = state.time;
     lastAftermathBeatIds = applied;
-    lastAftermathFloor = z;
+    // @ts-ignore
+    lastAftermathFloor = ["living"];
   }
   tickSamosborDirector(world, entities, state, nextId, pending.variant, 'post_samosbor');
 }
@@ -3586,7 +3589,7 @@ export function getSamosborDebugLines(): string[] {
   const warning = getSamosborWarningSnapshot();
   let cooldown = 0;
   let hasCooldown = false;
-  for (const def of getSamosborAftermathBeats(last ?? 'classic', lastAftermathFloor)) {
+  for (const def of getSamosborAftermathBeats(last ?? 'classic', ["living"])) {
     const rt = aftermathRuntime.get(def.id);
     if (!rt || rt.runs >= def.maxRuns) continue;
     const remaining = Math.max(0, Math.ceil(rt.lastAt + def.cooldownSec - knownSamosborTime));
@@ -4717,7 +4720,7 @@ function captureZone(
   const fogSeedRects = squareDirtyRects(sourceX, sourceY, fogRadius);
   const fogRadiusSq = fogRadius * fogRadius;
   const fogStrength = Math.max(90, Math.min(230, Math.round(200 * variant.fogSeedMult)));
-  const markHellMeat = currentFloorRunEntry(state).themeTags === z.HELL &&
+  const markHellMeat = currentFloorRunEntry(state).themeTags.includes('hell') &&
     (hasSamosborSubsystem(variant, 'hell_meat_walls') || variant.modifiers.some(m => m.meatWallsOnHell));
   let veretarAreaLeaks = 0;
   for (let dy = -fogRadius; dy <= fogRadius; dy++) {

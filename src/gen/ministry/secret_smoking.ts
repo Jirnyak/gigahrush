@@ -102,7 +102,7 @@ for (const friend of FRIEND_DEFS) {
   registerAuthoredNpc({
     id: friend.id,
     npc: friend.npc,
-    homeFloorKey: storyNpcFloorKey(z.MINISTRY),
+    homeFloorKey: storyNpcFloorKey(30),
     tags: ['ministry', 'secret_smoking', 'witness'],
   });
 }

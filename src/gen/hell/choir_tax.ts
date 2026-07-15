@@ -294,7 +294,7 @@ export function generateHell18ChoirTax(world: World, entities: Entity[], nextId:
   const cx = world.wrap(room.x + (room.w >> 1));
   const cy = world.wrap(room.y + (room.h >> 1));
   activeSite = {
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(cx, cy)],
     x: cx + 0.5,
@@ -863,7 +863,7 @@ function addChoirCache(world: World, room: Room, ownerNpcId: number): number {
     id,
     x,
     y,
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.CASHBOX,
@@ -889,7 +889,7 @@ function addChoirRefusalLedger(world: World, room: Room): number {
     id,
     x,
     y,
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

@@ -13,7 +13,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const STORY_MINISTRY_NPC_HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const STORY_MINISTRY_NPC_HOME_FLOOR_KEY = storyNpcFloorKey(30);
 
 export const DESIGN_FLOOR_ID = 'ministry' as const;
 
@@ -212,7 +212,7 @@ function addRouteContainer(
     id,
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SAFE,

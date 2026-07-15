@@ -488,9 +488,9 @@ export function placeMaintenanceCraftStations(
   spawnX: number,
   spawnY: number,
 ): CraftStationPlacementSummary {
-  const profile = craftStationProfileForStoryFloor(z.MAINTENANCE);
+  const profile = craftStationProfileForStoryFloor(140);
   return placeCraftStationsWithProfile(world, rooms, spawnX, spawnY, profile, {
-    seed: hash32(z.MAINTENANCE, rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
+    seed: hash32(140, rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
   });
 }
 

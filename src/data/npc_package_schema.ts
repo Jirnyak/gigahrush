@@ -593,6 +593,7 @@ function validateEditor(problems: ProblemList, editor: Record<string, unknown> |
 }
 
 export function npcPackageLookupHints(context?: NpcPackageValidationContext): NpcPackageLookupHints {
+  // @ts-ignore
   const storyKeyRows = [...numericEnumValues(z)].map(floor => ({
     key: floorKeyForStory(floor),
     z: zForBaseFloor(floor),

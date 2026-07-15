@@ -20,7 +20,7 @@ import {
 import { Spr } from '../render/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
 
-import { designFloorAtZ, designFloorThemeClass } from '../data/design_floors';
+import { designFloorAtZ } from '../data/design_floors';
 import { publishEvent } from './events';
 import {
   applyStoryQuestOutcome,
@@ -104,8 +104,8 @@ function routeTags(state: GameState): string[] {
 function conditionMatches(condition: StoryOutcomeCondition | undefined, state: GameState, player?: Entity): boolean {
   if (!condition) return true;
   const designFloor = designFloorAtZ(state.currentZ);
-  const currentTheme = designFloor ? designFloorThemeClass(designFloor) : z.LIVING;
-  if (condition.floorLevels?.length && !condition.floorLevels.includes(currentTheme)) return false;
+  const currentTheme = designFloor?.themeTags ? designFloor.themeTags[0] : "living";
+  if (condition.floorLevels?.length && !condition.floorLevels.includes(currentTheme as any)) return false;
   if (condition.routeTags?.length) {
     const actual = routeTags(state);
     if (!condition.routeTags.every(tag => actual.includes(tag))) return false;

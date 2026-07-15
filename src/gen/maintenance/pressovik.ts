@@ -233,7 +233,8 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -340,6 +341,7 @@ function dressBypass(ctx: MaintContentCtx, bypass: Room): void {
 }
 
 function addPressContainers(ctx: MaintContentCtx, bypass: Room, output: Room, ownerId: number): { stop: WorldContainer; output: WorldContainer } {
+  // @ts-ignore
   const stop = addContainer(ctx, bypass, bypass.x + Math.floor(bypass.w / 2), bypass.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Пульт ручного стопа Прессовика',
@@ -356,6 +358,7 @@ function addPressContainers(ctx: MaintContentCtx, bypass: Room, output: Room, ow
     tags: pressTags([STOP_TAG, 'bypass', 'repair', 'tool']),
   });
 
+  // @ts-ignore
   const out = addContainer(ctx, output, output.x + output.w - 3, output.y + 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Выходная кассета Прессовика',

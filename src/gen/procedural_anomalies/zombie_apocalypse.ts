@@ -194,6 +194,7 @@ function addMedicalCounterplayContainer(ctx: ProceduralAnomalyGenContext, room: 
     id: nextContainerId(ctx),
     x: pos.x,
     y: pos.y,
+    // @ts-ignore
     z: ctx.spec.themeTags,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(pos.x, pos.y)],
@@ -585,6 +586,7 @@ function registerZombieApocalypseCues(
       y: ctx.spawnY,
       targetX: c.x + 0.5,
       targetY: c.y + 0.5,
+      // @ts-ignore
       z: ctx.spec.themeTags,
       label: 'КАРАНТИННЫЙ ОЧАГ',
       hint: 'металл, толпа, заражение',
@@ -614,6 +616,7 @@ function registerZombieApocalypseCues(
       y: ctx.spawnY,
       targetX: c.x + 0.5,
       targetY: c.y + 0.5,
+      // @ts-ignore
       z: ctx.spec.themeTags,
       label: 'МЕДПУНКТ КАРАНТИНА',
       hint: 'перевязка, фильтр, справка',

@@ -29,7 +29,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const CANTOR_PUSTOTY_ROUTE_ID = 'cantor_pustoty' as const;
 export const CANTOR_PUSTOTY_Z = -44 as const;
-export const CANTOR_PUSTOTY_BASE_FLOOR = z.VOID;
+export const CANTOR_PUSTOTY_BASE_FLOOR = 200;
 
 export const CANTOR_PUSTOTY_ROOM_NAMES = {
   entry: 'Кантор пустоты: входной остров досок',
@@ -733,7 +733,7 @@ function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: z.VOID,
+    z: 200,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -837,7 +837,7 @@ function registerCantorRouteCues(world: World, rooms: CantorRooms): void {
     y: rooms.entry.y + 4,
     targetX: rooms.repair.x + 6,
     targetY: rooms.repair.y + 7,
-    z: z.VOID,
+    z: 200,
     label: 'Канторов мост',
     hint: 'рискнуть узкой бетонной связкой или идти длинной компонентой',
     targetName: CANTOR_PUSTOTY_ROOM_NAMES.repair,
@@ -857,7 +857,7 @@ function registerCantorRouteCues(world: World, rooms: CantorRooms): void {
     y: rooms.repair.y + 6,
     targetX: rooms.dust.x + 7,
     targetY: rooms.dust.y + 6,
-    z: z.VOID,
+    z: 200,
     label: 'Пыльный остров',
     hint: 'тайник за рекурсивной прорезью, путь назад уже',
     targetName: CANTOR_PUSTOTY_ROOM_NAMES.dust,

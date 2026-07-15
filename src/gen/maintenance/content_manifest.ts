@@ -94,6 +94,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_pressure_station',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: станция давления',
     decisionHooks: [
@@ -121,6 +122,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_olgoy_meat_cache',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: мясной сборник Олгой-Хорхоя',
     decisionHooks: [
@@ -133,6 +135,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_vodyanoy_koshmar_line',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: насосная водяного кошмара',
     decisionHooks: [
@@ -144,6 +147,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_trubnyy_avtomat_line',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: мокрая линия трубного автомата',
     decisionHooks: [
@@ -213,6 +217,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_swarm_nest',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: вентиляционная матка роя',
     decisionHooks: [
@@ -228,6 +233,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'safe_slimevik_den',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: кормовая ванна слизневика',
     decisionHooks: [
@@ -240,6 +246,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'slime_woman_sump',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: жижевой отстойник НИИ',
     decisionHooks: [
@@ -276,6 +283,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_betonoed_shortcut',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: слабая стена Бетоноеда',
     decisionHooks: [
@@ -289,6 +297,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_borshchevik_blockade',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: борщевик на сервисном обходе',
     decisionHooks: [
@@ -304,6 +313,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_rzhavnik_shelf',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: стеллаж ровного металла',
     decisionHooks: [
@@ -316,6 +326,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_slepoglaz_line',
+    // @ts-ignore
     z: 'maintenance',
     debugLabel: 'Коллекторы: коридор слепого прострела',
     decisionHooks: [

@@ -42,7 +42,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('silicon_net_well');
 
 export const DESIGN_FLOOR_ID = 'silicon_net_well' as const;
 export const SILICON_NET_WELL_Z = -22;
-export const SILICON_NET_WELL_BASE_FLOOR = z.MAINTENANCE;
+export const SILICON_NET_WELL_BASE_FLOOR = 140;
 
 const SEED = hashSeed(DESIGN_FLOOR_ID);
 const CX = W >> 1;

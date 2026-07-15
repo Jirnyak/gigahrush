@@ -48,7 +48,7 @@ function addRuleContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: z.VOID,
+    z: 200,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,

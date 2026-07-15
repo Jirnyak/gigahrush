@@ -116,7 +116,7 @@ registerSideQuest(LOST_ID, LOST_DEF, [{
   rewardItem: 'gasmask_filter', rewardCount: 1,
   extraRewards: [{ defId: 'liquidator_ration', count: 1 }],
   relationDelta: 4, xpReward: 55, moneyReward: 20,
-  targetFloorZ: z.MAINTENANCE,
+  targetFloorZ: 140,
   targetRoomName: CHECKPOINT_ROOM,
   targetHint: 'Коллекторы: сломанный пост зачистки с неверным кодом и дробовиком за бетонной стойкой.',
   blockedBySideQuestIds: BRANCH_QUEST_IDS,
@@ -142,7 +142,7 @@ registerSideQuest(REPORTER_ID, REPORTER_DEF, [{
   rewardItem: 'ammo_9mm', rewardCount: 12,
   extraRewards: [{ defId: 'liquidator_ration', count: 1 }],
   relationDelta: 8, xpReward: 65, moneyReward: 70,
-  targetFloorZ: z.MAINTENANCE,
+  targetFloorZ: 140,
   targetRoomName: CHECKPOINT_ROOM,
   targetHint: 'Коллекторы: ведомость лежит у проваленного поста зачистки рядом с экраном неверного кода.',
   blockedBySideQuestIds: BRANCH_QUEST_IDS,
@@ -168,7 +168,7 @@ registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [{
   rewardItem: 'liquidator_token', rewardCount: 1,
   extraRewards: [{ defId: 'ammo_shells', count: 2 }],
   relationDelta: 6, xpReward: 60, moneyReward: 25,
-  targetFloorZ: z.MAINTENANCE,
+  targetFloorZ: 140,
   targetRoomName: CHECKPOINT_ROOM,
   targetHint: 'Коллекторы: жетон смены спрятан в ящике проваленного поста; бетонные стойки дают паузу после выстрела.',
   blockedBySideQuestIds: BRANCH_QUEST_IDS,
@@ -321,7 +321,8 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -418,6 +419,7 @@ export function generateOstavshiysyaLikvidator(ctx: MaintContentCtx): void {
   });
   spawnPlotNpc(ctx, MECHANIC_ID, MECHANIC_DEF, witness.x + 4, witness.y + 3, 0);
 
+  // @ts-ignore
   addContainer(ctx, stash, stash.x + 5, stash.y + 3, {
     kind: ContainerKind.WEAPON_CRATE,
     name: 'Ящик смены оставшегося ликвидатора',

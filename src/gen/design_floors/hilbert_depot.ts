@@ -37,7 +37,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const DESIGN_FLOOR_ID = 'hilbert_depot' as const;
 export const HILBERT_DEPOT_ROUTE_Z = -30;
-export const HILBERT_DEPOT_BASE_FLOOR = z.MAINTENANCE;
+export const HILBERT_DEPOT_BASE_FLOOR = 140;
 export const HILBERT_DEPOT_CARGO_TAG = 'hilbert_depot_indexed_cargo';
 export const HILBERT_DEPOT_CHORD_TAG = 'hilbert_depot_locked_chord';
 

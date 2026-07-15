@@ -85,7 +85,7 @@ function normalizeActive(input: Partial<ActiveLiftArachna> | null | undefined): 
   if (!input || typeof input.key !== 'string') return null;
   return {
     key: input.key,
-    z: typeof input.z === 'number' ? input.z : z.LIVING,
+    z: typeof input.z === 'number' ? input.z : 100,
     zoneId: typeof input.zoneId === 'number' ? input.zoneId : -1,
     liftX: typeof input.liftX === 'number' ? input.liftX : 0,
     liftY: typeof input.liftY === 'number' ? input.liftY : 0,

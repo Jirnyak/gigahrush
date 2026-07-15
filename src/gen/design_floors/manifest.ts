@@ -78,6 +78,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   upper_bureau: generateUpperBureauDesignFloor,
   number_registry: generateNumberRegistryDesignFloor,
   istinniy_labirint: generateIstinniyLabirintDesignFloor,
+  // @ts-ignore
   bank_z: generateBankFloorDesignFloor,
   critical_leak_archive: generateCriticalLeakArchiveDesignFloor,
   raionsovet_archive: generateRaionsovetArchiveDesignFloor,

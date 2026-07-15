@@ -93,7 +93,7 @@ const ROTENBERGOV_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: 'kantselev',
   npc: KANTSELEV_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(30),
   tags: ['ministry', 'leader'],
   quests: [
     {
@@ -113,7 +113,7 @@ registerAuthoredNpc({
 registerAuthoredNpc({
   id: 'rotenbergov',
   npc: ROTENBERGOV_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MINISTRY),
+  homeFloorKey: storyNpcFloorKey(30),
   tags: ['ministry', 'economy'],
   quests: [
     {

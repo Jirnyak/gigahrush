@@ -38,7 +38,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
      Phase 2: Zones
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, z.VOID) + 5;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 200) + 5;
 
   nextId = runVoidContent(world, entities, nextId, spawnX, spawnY);
   paintVoidDefaults(world);

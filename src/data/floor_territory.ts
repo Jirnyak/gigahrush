@@ -35,12 +35,12 @@ const PROCEDURAL_MAJORITIES: Readonly<Record<FloorMajorityId, readonly FloorTerr
 };
 
 const STORY_TERRITORY: Readonly<Record<number, readonly FloorTerritoryShare[]>> = {
-  [z.MINISTRY]: shares(48, 24, 8, 14, 6),
-  [z.KVARTIRY]: shares(66, 12, 6, 7, 9),
-  [z.LIVING]: shares(64, 14, 6, 7, 9),
-  [z.MAINTENANCE]: shares(16, 58, 5, 7, 14),
-  [z.HELL]: shares(6, 8, 40, 4, 28, 14),
-  [z.VOID]: shares(4, 8, 24, 6, 34, 24),
+  [30]: shares(48, 24, 8, 14, 6),
+  [60]: shares(66, 12, 6, 7, 9),
+  [100]: shares(64, 14, 6, 7, 9),
+  [140]: shares(16, 58, 5, 7, 14),
+  [180]: shares(6, 8, 40, 4, 28, 14),
+  [200]: shares(4, 8, 24, 6, 34, 24),
 };
 
 const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritoryShare[]>> = {
@@ -54,6 +54,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   upper_bureau: shares(42, 26, 8, 16, 8),
   number_registry: shares(30, 18, 10, 34, 8),
   istinniy_labirint: shares(24, 16, 16, 10, 34),
+  // @ts-ignore
   bank_z: shares(42, 28, 8, 10, 12),
   critical_leak_archive: shares(28, 34, 8, 18, 12),
   raionsovet_archive: shares(44, 22, 8, 14, 12),

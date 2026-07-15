@@ -49,7 +49,7 @@ const KEEPER_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: KEEPER_ID,
   npc: KEEPER_DEF,
-  homeFloorKey: storyNpcFloorKey(z.MAINTENANCE),
+  homeFloorKey: storyNpcFloorKey(140),
   tags: ['maintenance', 'filtronos', 'keeper'],
 });
 
@@ -124,7 +124,7 @@ function publishFiltronosEvent(
   const container = contextContainer(ctx);
   publishEvent(state, {
     type: eventType(phase),
-    z: z.MAINTENANCE,
+    z: 140,
     zoneId: source.zoneId ?? container?.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? container?.x,
@@ -364,7 +364,7 @@ function addFilterContainer(ctx: MaintContentCtx, room: Room, owner: Entity): nu
     id: nextContainerId(ctx),
     x,
     y,
-    z: z.MAINTENANCE,
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

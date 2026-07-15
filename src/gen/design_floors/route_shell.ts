@@ -59,11 +59,14 @@ export function ensureRouteWideFootprint(world: World, route: DesignFloorRouteDe
       expandSocialShell(world, mask, rng, stats, marketStyle(route));
       break;
     default:
-      if (route.themeTags === z.MAINTENANCE) {
+      // @ts-ignore
+      if (route.themeTags.includes('maintenance')) {
         expandIndustrialShell(world, mask, rng, stats, industrialStyle(route));
-      } else if (route.themeTags === z.HELL || route.themeTags === z.VOID) {
+      // @ts-ignore
+      } else if (route.themeTags.includes('hell') || route.themeTags.includes('void')) {
         expandOrganicShell(world, mask, rng, stats, hellStyle(route));
-      } else if (route.themeTags === z.KVARTIRY || route.themeTags === z.LIVING) {
+      // @ts-ignore
+      } else if (route.themeTags.includes('kvartiry') || route.themeTags.includes('living')) {
         expandSocialShell(world, mask, rng, stats, socialStyle(route));
       } else {
         expandAdministrativeShell(world, mask, rng, stats, administrativeStyle(route));
@@ -188,7 +191,8 @@ function industrialStyle(route: DesignFloorRouteDef): ShellStyle {
 }
 
 function hellStyle(route: DesignFloorRouteDef): ShellStyle {
-  const darkness = route.themeTags === z.VOID;
+  // @ts-ignore
+  const darkness = route.themeTags.includes('void');
   return {
     floorTex: darkness ? Tex.F_VOID : Tex.F_GUT,
     wallTex: darkness ? Tex.DARK : Tex.GUT,

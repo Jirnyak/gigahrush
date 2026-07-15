@@ -18,7 +18,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(30);
 const PERMIT_CHOICE_IDS = [
   'permit_wait_queue',
   'permit_pay_accelerator',
@@ -200,7 +200,7 @@ function addQueueAuditCabinet(
     id: nextContainerId(world),
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

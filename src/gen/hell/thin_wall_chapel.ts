@@ -212,7 +212,7 @@ function addBlackHandCache(world: World, room: Room): void {
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,

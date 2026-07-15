@@ -40,6 +40,7 @@ export function runMinistryContent(
   const idRef = { v: nextId };
   const permit = withPoiGenerationMetadata(world, entities, {
     id: 'ministry_permit_office',
+    // @ts-ignore
     z: 'ministry',
     debugLabel: 'Министерство: Пропускное бюро',
     decisionHooks: [
@@ -73,6 +74,7 @@ export function runMinistryContent(
 
   const nii = withPoiGenerationMetadata(world, entities, {
     id: 'ministry_nii_contraband_audit',
+    // @ts-ignore
     z: 'ministry',
     debugLabel: 'Министерство: ревизионная НИИ',
     decisionHooks: [

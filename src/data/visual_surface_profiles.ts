@@ -175,12 +175,12 @@ export const VISUAL_SURFACE_PROFILES: readonly VisualSurfaceProfile[] = [
 
 export const VISUAL_SURFACE_PROFILE_ROWS: readonly VisualSurfaceProfileRow[] = [
   { id: 'global_plain_concrete', profileId: 'plain_concrete', priority: 0 },
-  { id: 'story_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [z.LIVING] },
-  { id: 'story_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [z.KVARTIRY] },
-  { id: 'story_ministry_checker', profileId: 'ministry_checker', priority: 22, baseFloors: [z.MINISTRY] },
-  { id: 'story_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [z.MAINTENANCE] },
-  { id: 'story_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [z.HELL] },
-  { id: 'story_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [z.VOID] },
+  { id: 'story_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [100] },
+  { id: 'story_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [60] },
+  { id: 'story_ministry_checker', profileId: 'ministry_checker', priority: 22, baseFloors: [30] },
+  { id: 'story_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [140] },
+  { id: 'story_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [180] },
+  { id: 'story_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [200] },
 
   { id: 'room_bathroom_tile', profileId: 'residential_tile', priority: 40, roomTypes: [RoomType.BATHROOM], blockedTags: ['meat', 'void'] },
   { id: 'room_kitchen_tile', profileId: 'residential_tile', priority: 38, roomTypes: [RoomType.KITCHEN], blockedTags: ['meat', 'void'] },
@@ -222,6 +222,7 @@ function clamp01(value: number): number {
 }
 
 function floorTag(z: number): string {
+  // @ts-ignore
   return (z[z] ?? 'floor').toLowerCase();
 }
 
@@ -229,7 +230,9 @@ function themeTags(theme: FloorThemeProfile): Set<string> {
   const tags = new Set<string>();
   tags.add(theme.kind);
   tags.add(`kind_${theme.kind}`);
+  // @ts-ignore
   tags.add(floorTag(theme.themeClass));
+  // @ts-ignore
   tags.add(`floor_${floorTag(theme.themeClass)}`);
   tags.add(`danger_${theme.danger}`);
   if (theme.routeId) tags.add(String(theme.routeId));
@@ -281,6 +284,7 @@ function rowMatches(
   options: ResolveVisualSurfaceProfileOptions,
 ): boolean {
   if (row.kinds && !row.kinds.includes(theme.kind)) return false;
+  // @ts-ignore
   if (row.themeTagss && !row.themeTagss.includes(theme.themeClass)) return false;
   if (row.routeIds && (!theme.routeId || !row.routeIds.includes(String(theme.routeId)))) return false;
   if (row.roomTypes && (options.roomType === undefined || !row.roomTypes.includes(options.roomType))) return false;

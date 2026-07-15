@@ -68,7 +68,7 @@ registerSideQuest(CLERK_ID, CLERK_DEF, [
     desc: 'Нина Отменная: «Найдите стол Матки Документов {dir}. Бумагу там надо гасить формой, а не очередью.»',
     targetRoomName: MATKA_DOKUMENTOV_ROOM,
     targetRoomType: RoomType.OFFICE,
-    targetFloorZ: z.MINISTRY,
+    targetFloorZ: 30,
     targetZoneTag: 'documents',
     targetHint: 'Министерство: архивный кабинет со шкафами, бланками и центральным столом.',
     rewardItem: 'blank_form', rewardCount: 1,
@@ -154,7 +154,7 @@ function addMatkaContainer(
     id,
     x: wx,
     y: wy,
-    z: z.MINISTRY,
+    z: 30,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,
@@ -229,7 +229,7 @@ function publishMatkaEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `matka_dokumentov_${phase}` as WorldEventType,
-    z: z.MINISTRY,
+    z: 30,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? (room ? room.x + room.w / 2 : undefined),
@@ -370,7 +370,7 @@ function neutralizeOneThreat(ctx: MatkaDokumentovContext): number {
 function publishDocumentDelay(state: GameState, ctx: MatkaDokumentovContext, event: WorldEvent): void {
   if (ctx.delayPublished) return;
   ctx.delayPublished = true;
-  const changed = changeResourceStock(state, 'documents', -2, z.MINISTRY);
+  const changed = changeResourceStock(state, 'documents', -2, 30);
   publishMatkaEvent(
     state,
     ctx,

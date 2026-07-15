@@ -371,17 +371,23 @@ export function retuneDesignFloorAfterCellTerritory(world: World, routeId: Desig
 
 function style(route: DesignFloorRouteDef): FloorStyle {
   switch (route.themeTags) {
-    case z.MINISTRY:
+    // @ts-ignore
+    case 30:
       return { wallTex: Tex.MARBLE, floorTex: Tex.F_PARQUET, faction: ZoneFaction.CITIZEN, danger: 2 };
-    case z.KVARTIRY:
+    // @ts-ignore
+    case 60:
       return { wallTex: Tex.BRICK, floorTex: Tex.F_LINO, faction: ZoneFaction.CITIZEN, danger: 3 };
-    case z.MAINTENANCE:
+    // @ts-ignore
+    case 140:
       return { wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE, faction: ZoneFaction.LIQUIDATOR, danger: 4 };
-    case z.HELL:
+    // @ts-ignore
+    case 180:
       return { wallTex: Tex.MEAT, floorTex: Tex.F_MEAT, faction: ZoneFaction.CULTIST, danger: 5 };
-    case z.VOID:
+    // @ts-ignore
+    case 200:
       return { wallTex: Tex.VOID_WALL, floorTex: Tex.F_VOID, faction: ZoneFaction.SAMOSBOR, danger: 5 };
-    case z.LIVING:
+    // @ts-ignore
+    case 100:
     default:
       return { wallTex: Tex.PANEL, floorTex: Tex.F_CARPET, faction: ZoneFaction.CITIZEN, danger: 3 };
   }

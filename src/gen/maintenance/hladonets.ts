@@ -86,7 +86,7 @@ function publishHladonetsEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: 'rumor_observed',
-    z: z.MAINTENANCE,
+    z: 140,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x,

@@ -1,6 +1,5 @@
 import type {
   Faction,
-  number,
   Occupation,
   RoomType,
   WorldEventType,

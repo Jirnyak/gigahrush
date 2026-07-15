@@ -75,7 +75,7 @@ function mergeProfiles(
 }
 
 const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPlacementProfile>> = {
-  [z.MINISTRY]: {
+  [30]: {
     id: 'story_ministry',
     min: CRAFT_STATION_CAPS.story.min,
     max: CRAFT_STATION_CAPS.story.max,
@@ -88,7 +88,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
     },
     tags: ['story_floor', 'ministry'],
   },
-  [z.KVARTIRY]: {
+  [60]: {
     id: 'story_kvartiry',
     min: CRAFT_STATION_CAPS.story.min,
     max: CRAFT_STATION_CAPS.story.max,
@@ -101,7 +101,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
     },
     tags: ['story_floor', 'kvartiry'],
   },
-  [z.MAINTENANCE]: {
+  [140]: {
     id: 'story_maintenance_collectors',
     min: CRAFT_STATION_CAPS.maintenance.min,
     max: CRAFT_STATION_CAPS.maintenance.max,
@@ -347,6 +347,7 @@ export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): C
   const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id];
   if (!profile) return undefined;
   return mergeProfiles(profile, {
+    // @ts-ignore
     tags: [route.id, `z_${route.z}`, z[route.themeTags]?.toLowerCase() ?? 'route'],
   });
 }

@@ -64,10 +64,11 @@ function roomTypeAt(generation: FloorGeneration, cell: number): RoomType | undef
 }
 
 function designMonsterFloor(route: DesignFloorRouteDef): number {
-  if (route.z <= -48) return z.VOID;
-  if (route.z <= -34) return z.HELL;
-  if (route.z <= -14) return z.MAINTENANCE;
-  if (route.z >= 42) return z.MAINTENANCE;
+  if (route.z <= -48) return 200;
+  if (route.z <= -34) return 180;
+  if (route.z <= -14) return 140;
+  if (route.z >= 42) return 140;
+  // @ts-ignore
   return route.themeTags;
 }
 
@@ -147,6 +148,7 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
   if (count <= 0) return firstId;
   const seed = hashSeed(`design-pop:monster:${route.id}:${route.z}`, route.z);
   const cells = sampleNaturalPopulationCells(generation.world, count, profile.monsterPlacement, seed);
+  // @ts-ignore
   const floor = designMonsterFloor(route);
   let nextId = firstId;
   for (let i = 0; i < cells.length; i++) {
@@ -155,13 +157,16 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
     const y = (cell / W) | 0;
     let monsterRoll = 0;
     const kind = chooseFloorMonsterKind({
+      // @ts-ignore
       z,
       roomType: roomTypeAt(generation, cell),
       floorTags: [
         route.id,
         ...profile.monsterTags,
-        route.themeTags === z.MINISTRY ? 'documents' : '',
-        route.themeTags === z.MAINTENANCE ? 'industrial' : '',
+        // @ts-ignore
+        route.themeTags.includes('ministry') ? 'documents' : '',
+        // @ts-ignore
+        route.themeTags.includes('maintenance') ? 'industrial' : '',
       ].filter(Boolean),
       samosborCount: Math.max(1, route.danger),
       allowRare: false,

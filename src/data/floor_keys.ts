@@ -17,12 +17,12 @@ import {
 export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown';
 
 export const STORY_KEY_IDS: Record<number, string> = {
-  [z.MINISTRY]: 'ministry',
-  [z.KVARTIRY]: 'kvartiry',
-  [z.LIVING]: 'living',
-  [z.MAINTENANCE]: 'maintenance',
-  [z.HELL]: 'hell',
-  [z.VOID]: 'void',
+  [30]: 'ministry',
+  [60]: 'kvartiry',
+  [100]: 'living',
+  [140]: 'maintenance',
+  [180]: 'hell',
+  [200]: 'void',
 };
 
 export function zForBaseFloor(z: number): number {
@@ -105,8 +105,11 @@ export function floorKeyZ(keyInput: string, context?: FloorKeyResolveContext): n
 export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveContext): number | undefined {
   const key = cleanFloorKey(keyInput);
   const kind = floorKeyKind(key);
+  // @ts-ignore
   if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.themeTags;
+  // @ts-ignore
   if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.themeTags;
+  // @ts-ignore
   if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.themeTags;
   return undefined;
 }

@@ -51,7 +51,7 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     privacy: 'local',
     itemId: 'govnyak_roll',
     itemCount: 3,
-    economyDeltas: [{ resourceId: 'contraband', count: -3, z: z.LIVING }],
+    economyDeltas: [{ resourceId: 'contraband', count: -3, z: 100 }],
   },
   ag97_settle_debt: {
     targetName: 'Чужой долг в дымной комнате закрыт деньгами',
@@ -64,8 +64,8 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     itemId: 'voluntary_receipt',
     itemCount: 1,
     economyDeltas: [
-      { resourceId: 'contraband', count: -1, z: z.LIVING },
-      { resourceId: 'documents', count: 1, z: z.LIVING },
+      { resourceId: 'contraband', count: -1, z: 100 },
+      { resourceId: 'documents', count: 1, z: 100 },
     ],
   },
   ag97_refuse_credit: {
@@ -76,7 +76,7 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     rumorIds: ['event_govnyak_den_refusal'],
     severity: 4,
     privacy: 'local',
-    economyDeltas: [{ resourceId: 'contraband', count: -1, z: z.LIVING }],
+    economyDeltas: [{ resourceId: 'contraband', count: -1, z: 100 }],
   },
   ag97_report_den: {
     targetName: 'Дымная комната сдана по ведомости ликвидаторам',
@@ -89,8 +89,8 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     itemId: 'denunciation',
     itemCount: 1,
     economyDeltas: [
-      { resourceId: 'contraband', count: -5, z: z.LIVING },
-      { resourceId: 'documents', count: 1, z: z.MINISTRY },
+      { resourceId: 'contraband', count: -5, z: 100 },
+      { resourceId: 'documents', count: 1, z: 30 },
     ],
   },
   ag97_turn_dealer_science: {
@@ -104,8 +104,8 @@ const QUEST_OUTCOMES: Record<string, DenOutcome> = {
     itemId: 'voluntary_receipt',
     itemCount: 1,
     economyDeltas: [
-      { resourceId: 'contraband', count: -4, z: z.LIVING },
-      { resourceId: 'slime_samples', count: 1, z: z.LIVING },
+      { resourceId: 'contraband', count: -4, z: 100 },
+      { resourceId: 'slime_samples', count: 1, z: 100 },
     ],
   },
 };
@@ -138,7 +138,7 @@ function publishDenOutcome(state: GameState, event: WorldEvent, sideQuestId: str
   const itemDef = itemId ? ITEMS[itemId] : undefined;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: z.LIVING,
+    z: 100,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -175,15 +175,15 @@ function handleGovnyakOutcome(state: GameState, event: WorldEvent): void {
   }
   if (event.type !== 'item_stolen' || !event.tags.includes(MODULE_TAG)) return;
   const witnessed = event.tags.includes('witnessed');
-  const economyDeltas = changeResourceStock(state, 'contraband', -1, z.LIVING, {
+  const economyDeltas = changeResourceStock(state, 'contraband', -1, 100, {
     zoneId: event.zoneId,
     roomId: event.roomId,
     reason: 'govnyak_den_theft',
     tags: [MODULE_TAG, 'govnyak', 'contraband', 'theft'],
-  }) ? [`${z.LIVING}:contraband-1`] : [];
+  }) ? [`${100}:contraband-1`] : [];
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: z.LIVING,
+    z: 100,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -504,7 +504,7 @@ function addDenContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: z.LIVING,
+    z: 100,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

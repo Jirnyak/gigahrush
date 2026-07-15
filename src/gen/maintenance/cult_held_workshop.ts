@@ -330,12 +330,12 @@ function publishQuestOutcome(
 ): void {
   const resourceChanges: Record<string, number> = {};
   for (const [resourceId, delta] of outcome.resourceDeltas) {
-    if (changeResourceStock(state, resourceId, delta, z.MAINTENANCE)) resourceChanges[resourceId] = delta;
+    if (changeResourceStock(state, resourceId, delta, 140)) resourceChanges[resourceId] = delta;
   }
 
   publishEvent(state, {
     type: outcome.type,
-    z: z.MAINTENANCE,
+    z: 140,
     actorId: event.actorId,
     actorName: event.actorName,
     actorFaction: event.actorFaction,
@@ -455,6 +455,7 @@ function spawnWorkshopNpcs(ctx: MaintContentCtx, post: Room, shop: Room, output:
 }
 
 function addWorkshopContainers(ctx: MaintContentCtx, shop: Room, output: Room, ownerNpcId: number): void {
+  // @ts-ignore
   addContainer(ctx, shop, shop.x + 7, shop.y + shop.h - 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Выходной бункер станка под надзором',
@@ -474,6 +475,7 @@ function addWorkshopContainers(ctx: MaintContentCtx, shop: Room, output: Room, o
     factoryId: 'metal_shop',
     tags: ['tools', 'faction', 'production_output', 'metal_shop', AG83_TAG, 'cult_access'],
   });
+  // @ts-ignore
   addContainer(ctx, output, output.x + output.w - 3, output.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Культовый выходной ящик станка',
@@ -515,7 +517,8 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    // @ts-ignore
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

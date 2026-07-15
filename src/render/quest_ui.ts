@@ -20,21 +20,21 @@ import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
 
 const FLOOR_NAMES: Record<number, string> = {
-  [z.MINISTRY]: 'Министерство',
-  [z.KVARTIRY]: 'Квартиры',
-  [z.LIVING]: 'Жилая зона',
-  [z.MAINTENANCE]: 'Коллекторы',
-  [z.HELL]: 'Мясной низ',
-  [z.VOID]: 'Пустота',
+  [30]: 'Министерство',
+  [60]: 'Квартиры',
+  [100]: 'Жилая зона',
+  [140]: 'Коллекторы',
+  [180]: 'Мясной низ',
+  [200]: 'Пустота',
 };
 
 const FLOOR_SHORT_NAMES: Record<number, string> = {
-  [z.MINISTRY]: 'МИН',
-  [z.KVARTIRY]: 'КВ',
-  [z.LIVING]: 'ЖИЛ',
-  [z.MAINTENANCE]: 'КОЛ',
-  [z.HELL]: 'АД',
-  [z.VOID]: 'ПУСТ',
+  [30]: 'МИН',
+  [60]: 'КВ',
+  [100]: 'ЖИЛ',
+  [140]: 'КОЛ',
+  [180]: 'АД',
+  [200]: 'ПУСТ',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {

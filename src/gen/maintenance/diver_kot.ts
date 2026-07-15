@@ -55,7 +55,7 @@ registerSideQuest('diver_kot', NPC_DEF, [
     type: QuestType.FETCH,
     desc: 'Кот: «На сухом мосту есть бирка водолазного маршрута. Принесёшь — скажу, где угорь воздух не любит.»',
     targetItem: 'diver_route_tag', targetCount: 1,
-    targetFloorZ: z.MAINTENANCE,
+    targetFloorZ: 140,
     targetRoomType: RoomType.CORRIDOR,
     targetZoneTag: 'water_bridge',
     targetHint: 'Коллекторы: сухой мост над угревым лотком; дальний маршрутный ящик стоит на сухой кромке за водой.',

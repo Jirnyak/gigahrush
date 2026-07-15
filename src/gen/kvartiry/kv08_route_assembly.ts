@@ -61,7 +61,7 @@ registerWorldEventObserver((state, event) => {
   if (!outcome) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: z.KVARTIRY,
+    z: 60,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -213,7 +213,7 @@ function addRouteContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    z: z.KVARTIRY,
+    z: 60,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

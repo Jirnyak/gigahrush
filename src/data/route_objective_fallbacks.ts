@@ -15,7 +15,7 @@ export const ROUTE_OBJECTIVE_FALLBACKS: readonly RouteObjectiveFallbackDef[] = [
   {
     id: 'living_tutorial_intro',
     z: 0,
-    storyFloor: z.LIVING,
+    storyFloor: 100,
     title: 'ЦЕЛЬ: Ольга → сержант Баринов → Яков',
     target: 'Жилая зона: вводная, оружейная, лаборатория',
     lift: 'Лифт: после цели, не вслепую',

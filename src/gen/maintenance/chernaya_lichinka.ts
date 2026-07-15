@@ -110,7 +110,7 @@ function addLichinkaContainer(
     id,
     x: wx,
     y: wy,
-    z: z.MAINTENANCE,
+    z: 140,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -162,7 +162,7 @@ function publishLichinkaEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `chernaya_lichinka_${phase}` as WorldEventType,
-    z: z.MAINTENANCE,
+    z: 140,
     zoneId: source.zoneId ?? zoneAt(ctx),
     roomId: ctx.roomId,
     x: source.x ?? ctx.centerX,

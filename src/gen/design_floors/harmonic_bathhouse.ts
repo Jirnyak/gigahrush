@@ -43,7 +43,7 @@ import type { FloorGeneration } from '../floor_manifest';
 
 export const HARMONIC_BATHHOUSE_ROUTE_ID = 'harmonic_bathhouse' as const;
 export const HARMONIC_BATHHOUSE_Z = -28 as const;
-export const HARMONIC_BATHHOUSE_BASE_FLOOR = z.MAINTENANCE;
+export const HARMONIC_BATHHOUSE_BASE_FLOOR = 140;
 
 export type BathhouseDecisionId =
   | 'turn_valve'

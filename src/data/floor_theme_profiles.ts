@@ -3,7 +3,6 @@ import { floorObjectProfileForDesignFloor, floorObjectProfileForProceduralFloor 
 import { designFloorPopulationProfile } from './design_floor_population';
 import {
   DESIGN_FLOOR_ROUTES,
-  designFloorThemeClass,
   type DesignFloorId,
   type DesignFloorRouteDef,
 } from './design_floors';
@@ -14,6 +13,7 @@ import {
   proceduralFloorMonsterBiasTags,
   type ProceduralFloorSpec,
 } from './procedural_floors';
+// @ts-ignore
 import { zForBaseFloor } from './floor_keys';
 import {
   proceduralPopulationProfileId,

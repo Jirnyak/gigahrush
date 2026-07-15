@@ -32,7 +32,7 @@ function shouldSpawnScriptedArrival(def: ScriptedArrivalDef, state: GameState, e
   const stepIndex = scriptedArrivalStepIndex(def);
   if (stepIndex < 0) return false;
   if (state.currentZ !== def.currentZ) return false;
-  if (def.currentStoryFloor !== undefined && currentFloorRunEntry(state).themeTags !== def.currentStoryFloor) return false;
+  if (def.currentStoryFloor !== undefined && !currentFloorRunEntry(state).themeTags.includes(String(def.currentStoryFloor))) return false;
   if (!state.quests.some(q => q.plotStepIndex === stepIndex && q.done && !q.failed)) return false;
   if (state.quests.some(q => q.plotStepIndex !== undefined && q.plotStepIndex > stepIndex)) return false;
   if (entities.some(e => e.type === EntityType.NPC && e.alive && e.plotNpcId === def.leaderPlotNpcId)) return false;

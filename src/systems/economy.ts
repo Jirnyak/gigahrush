@@ -195,14 +195,14 @@ function scarcityRumorIds(resourceId: string, trend: ResourceScarcityTrend): str
 
 function stockFloorFor(state: GameState, opts: EconomyQuoteOptions): number {
   if (opts.stockFloor !== undefined) return opts.stockFloor;
-  return typeof opts.z === 'number' ? opts.z : state.currentZ;
+  return typeof opts.floor === 'number' ? opts.floor : state.currentZ;
 }
 
 function demandFor(resourceId: string | undefined, z: EconomyFloorRef): RuleSummary {
   const out: RuleSummary = { multiplier: 1, tags: [], reasons: [] };
   if (!resourceId) return out;
   for (const rule of ECONOMY_DEMAND_RULES) {
-    if (rule.resourceId !== resourceId || !floorMatches(rule.z, z)) continue;
+    if (rule.resourceId !== resourceId || !floorMatches(rule.floor, z)) continue;
     out.multiplier *= clampRuleMultiplier(rule.multiplier);
     pushTags(out.tags, rule.tags);
     out.reasons.push(rule.reason);
@@ -214,7 +214,7 @@ function tariffFor(state: GameState, resourceId: string | undefined, z: EconomyF
   const out: RuleSummary = { multiplier: 1, tags: [], reasons: [] };
   for (const rule of ECONOMY_TARIFF_RULES) {
     if (resourceId && rule.resourceId !== undefined && rule.resourceId !== resourceId) continue;
-    if (!floorMatches(rule.z, z)) continue;
+    if (!floorMatches(rule.floor, z)) continue;
     out.multiplier *= clampRuleMultiplier(rule.multiplier);
     pushTags(out.tags, rule.tags);
     out.reasons.push(rule.reason);
@@ -498,7 +498,7 @@ export function getEconomyQuote(state: GameState, defId: string, opts: EconomyQu
     };
   }
 
-  const floor = opts.z ?? state.currentZ;
+  const floor = opts.floor ?? state.currentZ;
   const resource = resourceForItem(defId) ?? resourceForItemType(def.type);
   const resourceId = resource?.id;
   const scarcityMultiplier = resourceId ? getResourceScarcity(state, resourceId, stockFloorFor(state, opts)) : 1;

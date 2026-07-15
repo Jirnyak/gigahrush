@@ -219,7 +219,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     reason: 'routine',
     weight: 3,
     destination: {
-      baseFloors: [z.MAINTENANCE, z.HELL],
+      baseFloors: [140, 180],
       routeTags: ['route_pressure', 'industrial', 'cult', 'samosbor'],
       minAbsZ: 24,
       maxAbsZ: 47,
@@ -338,6 +338,7 @@ const INTENT_ID_RE = /^[a-z][a-z0-9_]*$/;
 function selectorEmpty(selector: AlifeDestinationSelector): boolean {
   return !selector.floorKeys?.length &&
     !selector.routeTags?.length &&
+    // @ts-ignore
     !selector.themeTagss?.length &&
     selector.minAbsZ === undefined &&
     selector.maxAbsZ === undefined;
@@ -371,11 +372,12 @@ export function validateAlifeMigrationProfiles(intents: readonly AlifeMigrationI
       if (intent.destination.allowsNpcOnly !== false && allowsNpc === false) {
         errors.push(`migration intent ${intent.id} targets NPC-forbidden destination ${key}`);
       }
-      if (floorKeyBaseFloor(key) === z.VOID) {
+      if (floorKeyBaseFloor(key) === 200) {
         errors.push(`migration intent ${intent.id} targets VOID ordinary destination ${key}`);
       }
     }
-    if (intent.destination.themeTagss?.includes(z.VOID)) {
+    // @ts-ignore
+    if (intent.destination.themeTagss?.includes(200)) {
       errors.push(`migration intent ${intent.id} targets VOID base floor`);
     }
   }

@@ -35,7 +35,7 @@ export const RAIONSOVET_ARCHIVE_META = {
   routeId: RAIONSOVET_ARCHIVE_ROUTE_ID,
   displayName: 'Райсовет и архив картотек',
   z: RAIONSOVET_ARCHIVE_Z,
-  baseFloor: z.MINISTRY,
+  baseFloor: 30,
   debugEntry: 'generateRaionsovetArchiveDesignFloor()',
 } as const;
 
@@ -213,7 +213,7 @@ export function publishRaionsovetArchiveEvent(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId,
     targetName: targetId,
@@ -1668,7 +1668,7 @@ function addArchiveContainer(
     id: nextContainerId.v++,
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -1796,7 +1796,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   generateZones(world);
   for (const zone of world.zones) {
     zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
-    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, z.MINISTRY));
+    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, 30));
   }
 
   addArchiveContainer(

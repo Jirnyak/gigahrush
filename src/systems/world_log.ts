@@ -1,7 +1,6 @@
 /* ── World log consumer: structured events → HUD/log strings ──── */
 
 import {
-  number,
   type GameState,
   type LogEntry,
   type Msg,

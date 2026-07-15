@@ -217,7 +217,7 @@ export function tryKvSocialPressureUprising(
 export function publishKvSocialPressureUprising(state: GameState, result: KvSocialPressureUprisingResult): void {
   publishEvent(state, {
     type: 'faction_patrol_clash',
-    z: z.KVARTIRY,
+    z: 60,
     zoneId: result.zoneId,
     roomId: result.roomId >= 0 ? result.roomId : undefined,
     x: result.x,

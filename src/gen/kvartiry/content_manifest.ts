@@ -88,6 +88,7 @@ export function runKvartiryPermanentContent(
   socialRoomId = Math.max(socialRoomId + 1, redCorner.nextRoomId);
   socialRoomId = runTaggedPressurePoi('ration_queue', () => withPoiGenerationMetadata(world, entities, {
     id: 'kvartiry_ration_queue',
+    // @ts-ignore
     z: 'kvartiry',
     debugLabel: 'Квартиры: пункт выдачи талонов',
     decisionHooks: [

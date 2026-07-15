@@ -28,7 +28,7 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('antenna_court');
 
 export const DESIGN_FLOOR_ID = 'antenna_court' as const;
 export const ANTENNA_COURT_ROUTE_Z = 42 as const;
-export const ANTENNA_COURT_BASE_FLOOR = z.MINISTRY;
+export const ANTENNA_COURT_BASE_FLOOR = 30;
 
 const SIGNAL_FLAG_TUNED = 1 << 0;
 const SIGNAL_FLAG_MARKET_JAMMED = 1 << 1;

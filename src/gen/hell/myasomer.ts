@@ -104,7 +104,7 @@ export function generateMyasomer(world: World, entities: Entity[], nextId: { v: 
   const cy = world.wrap(room.y + (room.h >> 1));
   const ci = world.idx(cx, cy);
   activeSite = {
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     x: cx + 0.5,
@@ -341,7 +341,7 @@ function addQuietCache(world: World, room: Room): number {
     id: nextContainerId(world),
     x,
     y,
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.TRASH_BIN,
@@ -369,7 +369,7 @@ function addShardCache(world: World, room: Room): number {
     id: nextContainerId(world),
     x,
     y,
-    z: z.HELL,
+    z: 180,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,

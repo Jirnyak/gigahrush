@@ -26,7 +26,7 @@ const PERMIT_CHOICE_IDS = [
   'permit_threaten_window',
   'queue_water',
 ] as const;
-const HOME_FLOOR_KEY = storyNpcFloorKey(z.MINISTRY);
+const HOME_FLOOR_KEY = storyNpcFloorKey(30);
 const WITNESS_DUSYA_ID = 'permit_office_witness_dusya';
 const WITNESS_ARKADY_ID = 'permit_office_witness_arkady';
 
@@ -226,7 +226,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_wait_registrar', WAIT_REGISTRAR_D
     type: QuestType.VISIT,
     desc: 'Назар Секундомеров: «Законный путь простой: стойте в Зале невозможной очереди {dir}. Когда табель дойдет до вашей фамилии, получите корешок.»',
     targetRoomName: 'Зал невозможной очереди',
-    targetFloorZ: z.MINISTRY,
+    targetFloorZ: 30,
     targetHint: 'Министерство: Зал невозможной очереди с рядами стульев и картотекой Осипа.',
     rewardItem: 'official_permit_slip', rewardCount: 1,
     relationDelta: 3, xpReward: 30, moneyReward: 0,
@@ -349,7 +349,7 @@ function addPermitIssueTray(
     id: nextContainerId(world),
     x,
     y,
-    z: z.MINISTRY,
+    z: 30,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,
