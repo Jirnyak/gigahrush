@@ -16,7 +16,11 @@ for (const row of ART_SPRITE_MANIFEST) {
     .map(m => (m.type === 'monster_kind' ? (m as any).monsterKind : null))
     .filter((id): id is string => id !== null);
 
-  if (visualIds.length === 0 && monsterKinds.length === 0) continue;
+  const fallbackPlotNpcIds = row.intendedMappings
+    .map(m => (m.type === 'npc_exact' ? (m as any).plotNpcId : null))
+    .filter((id): id is string => id !== null);
+
+  if (visualIds.length === 0 && monsterKinds.length === 0 && fallbackPlotNpcIds.length === 0) continue;
 
   const baseId = row.id;
 
@@ -54,6 +58,7 @@ for (const row of ART_SPRITE_MANIFEST) {
     const selector: any = {};
     if (visualIds.length > 0) selector.npcVisualId = visualIds;
     if (monsterKinds.length > 0) selector.monsterKind = monsterKinds;
+    if (fallbackPlotNpcIds.length > 0) selector.fallbackPlotNpcId = fallbackPlotNpcIds;
     if (row.kind === 'npc') selector.entityType = EntityType.NPC;
     if (row.kind === 'monster') selector.entityType = EntityType.MONSTER;
 

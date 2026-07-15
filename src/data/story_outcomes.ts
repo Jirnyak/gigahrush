@@ -91,8 +91,8 @@ export const STORY_DROP_RULES: readonly StoryDropRule[] = [
     condition: {
       activeQuest: {
         plotStepIndex: 5,
-        type: QuestType.KILL,
-        targetMonsterKind: MonsterKind.SHADOW,
+        type: QuestType.FETCH,
+        targetItem: 'strange_clot',
       },
     },
     drops: [{ itemId: 'strange_clot', count: 1 }],

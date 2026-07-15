@@ -143,6 +143,9 @@ Minimum verification:
 
 If a check fails, inspect the real error and fix it. If a check is skipped, report the exact reason.
 
+**Developer Mode UI/State Verification**:
+When trying to debug state, logic, or visual bugs (like a missing or incorrect sprite), actively invent and provide one-liner JavaScript snippets for the user to paste into the browser's Developer Mode console. For example, `world.entities.find(e => e.plotNpcId === 'yakov').npcVisualId`. This significantly accelerates debugging.
+
 ## Repository Shape
 
 Current active source layers:
@@ -534,3 +537,12 @@ If you or another agent accidentally wiped out uncommitted changes (e.g. via `gi
 3. Search through `transcript_full.jsonl` for the previous conversation session where the code was written. Look for `multi_replace_file_content` or `replace_file_content` tool call blocks.
 4. Extract the exact JSON payload (specifically `ReplacementContent` or `CodeContent` fields) from the logs.
 5. Manually reconstruct the lost file by carefully applying the extracted chunks back to the source tree. This is the official rehabilitation method for uncommitted regressions.
+
+
+## Developer Mode Console Snippets
+
+When debugging complex state issues (like entity property bugs, missing visual IDs, or broken relations) that are difficult to reproduce or inspect from the codebase alone, actively generate and suggest one-liners for the user to run in their browser DevTools Console. Assume the user is playing the game and can run these to dump live state. The variables `world`, `state`, `entities`, and `player` are exposed globally on `window`.
+
+Example:
+"Please run this in your browser console and paste the output: `console.log(entities.find(e => e.plotNpcId === 'yakov').npcVisualId)`"
+

@@ -306,6 +306,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
     sprite: Occupation.SCIENTIST,
+    npcVisualId: 'scientist_m_2',
     homeFloorKey: floorKeyForStory(FloorLevel.LIVING),
     hp: 800, maxHp: 800, level: 10, money: 60, speed: 1.0,
     inventory: [

@@ -1980,6 +1980,13 @@ let world: World;
 let entities: Entity[];
 let player: Entity;
 let state: GameState;
+
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'world', { get: () => world });
+  Object.defineProperty(window, 'state', { get: () => state });
+  Object.defineProperty(window, 'entities', { get: () => entities });
+  Object.defineProperty(window, 'player', { get: () => player });
+}
 let nextEntityId = { v: 1 };
 let prevPlayerActorId = -1;
 let prevPlayerActorHp = 100; // track current player actor HP changes for damage flash

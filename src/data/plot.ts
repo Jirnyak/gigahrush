@@ -246,10 +246,11 @@ export const PLOT_CHAIN: PlotStep[] = [
   // Step 5: Vanka → kill a Shadow monster (Теневик)
   {
     giverNpcId: 'vanka',
-    type: QuestType.KILL,
+    type: QuestType.FETCH,
     desc: 'Ванька боится теней больше, чем комендатуры. Найди и ликвидируй теневика по кличке Петля. Ищи широкое место — в узком коридоре тень оформляет удушье раньше, чем ты достанешь ствол.',
-    targetMonsterKind: MonsterKind.SHADOW, killNeeded: 1,
-    rewardItem: 'psi_recall', rewardCount: 1,
+    targetItem: 'strange_clot', targetCount: 1,
+    rewardItem: 'strange_clot', rewardCount: 1,
+    extraRewards: [{ defId: 'psi_recall', count: 1 }],
     relationDelta: 20, xpReward: 60,
   },
   // Step 6: Vanka kill done → bring strange clot to Yakov
