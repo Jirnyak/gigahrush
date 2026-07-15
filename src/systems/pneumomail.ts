@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from './procedural_floors';
 /* ── Pneumomail interaction: capsules become rumors/contracts ─── */
 
 import {
@@ -371,7 +372,7 @@ export function tryUsePneumomailTube(
   const target = targetAt(world, lookX, lookY);
   if (!target) return false;
 
-  if (state.currentZ !== FloorLevel.MAINTENANCE) {
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE) {
     state.msgs.push(msg('Пневмопочта здесь числится, но не дышит.', state.time, '#888'));
     return true;
   }

@@ -17,10 +17,11 @@ import {
 } from '../src/core/types';
 import type { World } from '../src/core/world';
 import { createCraftingState } from '../src/systems/crafting';
+import { setFloorRunState } from '../src/systems/procedural_floors';
 
 export function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const clock = overrides.clock ?? { hour: 8, minute: 0, totalMinutes: 0 };
-  return {
+  const state: GameState = {
     tick: 0,
     time: 0,
     clock,
@@ -98,6 +99,43 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     crafting: createCraftingState(),
     ...overrides,
   };
+  
+  // Backfill floorRunState if not provided, ensuring test state is consistent
+  if (!overrides.floorRunState) {
+    const fallbackZ = state.currentZ;
+    const geometryIds: Record<number, string> = {
+      0: 'living_blocks',
+      1: 'admin_pockets',
+      2: 'apartment_pressure',
+      3: 'collectors',
+      4: 'meat_halls', // HELL fallback if any
+      5: 'void_expanse', // VOID fallback if any
+    };
+    const geometryId = geometryIds[fallbackZ] ?? 'living_blocks';
+
+    setFloorRunState(state, { 
+      runSeed: 1234, 
+      currentZ: fallbackZ, 
+      specs: {
+        [`z${fallbackZ}`]: {
+          key: `z${fallbackZ}`,
+          z: fallbackZ,
+          ordinal: 1,
+          seed: 1,
+          depth: 1,
+          danger: 1,
+          geometryId,
+          majorityId: 'citizens',
+          anomalyId: 'none',
+          title: 'test',
+          baseFloor: fallbackZ,
+        }
+      }, 
+      visited: {} 
+    }, fallbackZ);
+  }
+
+  return state;
 }
 
 export function makeTestEntity(overrides: Partial<Entity> = {}): Entity {

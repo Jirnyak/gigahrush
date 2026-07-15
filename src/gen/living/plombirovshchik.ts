@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* -- Пломбировщик: local hermodoor route-denial encounter ------- */
 
 import {
@@ -454,7 +455,7 @@ function handleKillEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handleShotEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'ammo_consumed' || state.currentZ !== FloorLevel.LIVING) return;
+  if (event.type !== 'ammo_consumed' || currentFloorRunEntry(state).baseFloor !== FloorLevel.LIVING) return;
   const ctx = nearestActiveContextToPlayer();
   if (!ctx) return;
   ctx.shotHandled = true;
@@ -468,7 +469,7 @@ function handleShotEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handlePlombirovshchikEvents(state: GameState, event: WorldEvent): void {
-  if (state.currentZ !== FloorLevel.LIVING) return;
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.LIVING) return;
   handleSealContainerEvent(state, event);
   handleKillEvent(state, event);
   handleShotEvent(state, event);

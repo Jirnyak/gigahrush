@@ -363,13 +363,21 @@ export const ART_SPRITE_MANIFEST: readonly ArtSpriteManifestRow[] = [
     author: 'first_party',
     sourceNote: 'manual pixel art',
     consent: 'project_owned',
-    intendedMappings: [{
-      type: 'npc_family',
-      visualId: NPC_VISUAL_SCIENTIST_MALE,
-      faction: 'SCIENTIST',
-      sex: 'male',
-      variant: '3',
-    }],
+    intendedMappings: [
+      {
+        type: 'npc_exact',
+        visualId: NPC_VISUAL_SCIENTIST_MALE,
+        plotNpcId: 'yakov',
+        packageId: 'yakov',
+      },
+      {
+        type: 'npc_family',
+        visualId: NPC_VISUAL_SCIENTIST_MALE,
+        faction: 'SCIENTIST',
+        sex: 'male',
+        variant: '3',
+      }
+    ],
   },
   {
     id: 'scientist_f_1',

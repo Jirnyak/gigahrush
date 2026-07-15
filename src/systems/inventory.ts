@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from './procedural_floors';
 /* ── Inventory system: items, pickup, use ─────────────────────── */
 
 import { calculateReloadTime } from './combat';
@@ -1640,8 +1641,8 @@ function handleContaminatedSwabUse(
     return true;
   }
 
-  const report = state.currentZ === FloorLevel.MINISTRY;
-  const market = state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY;
+  const report = currentFloorRunEntry(state).baseFloor === FloorLevel.MINISTRY;
+  const market = currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING || currentFloorRunEntry(state).baseFloor === FloorLevel.KVARTIRY;
   if (!report && !market) {
     msgs.push(msg('Мазок ждёт адресата: отчёт в Министерстве или скупщик в жилом блоке.', time, '#aa8'));
     return true;
@@ -1717,8 +1718,8 @@ function handleAuditProofUse(
     return true;
   }
 
-  const report = state.currentZ === FloorLevel.MINISTRY;
-  const market = state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY;
+  const report = currentFloorRunEntry(state).baseFloor === FloorLevel.MINISTRY;
+  const market = currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING || currentFloorRunEntry(state).baseFloor === FloorLevel.KVARTIRY;
   if (!report && !market) {
     msgs.push(msg('Номерную планку примут в Министерстве как улику или в жилом блоке как рыночный риск.', time, '#aa8'));
     return true;
@@ -1792,10 +1793,10 @@ function handleDocumentPaperUse(
     return true;
   }
 
-  if (state.currentZ === FloorLevel.MINISTRY && DOCUMENT_GATE_ITEMS.has(defId)) {
+  if (currentFloorRunEntry(state).baseFloor === FloorLevel.MINISTRY && DOCUMENT_GATE_ITEMS.has(defId)) {
     return useDocumentAtMinistryGate(e, defId, msgs, time, state, zoneId, world);
   }
-  if ((state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
+  if ((currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING || currentFloorRunEntry(state).baseFloor === FloorLevel.KVARTIRY) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
     return sellDocumentToBlackMarket(e, defId, msgs, time, state, zoneId, world);
   }
 
@@ -1820,7 +1821,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (state.currentZ === FloorLevel.MINISTRY) {
+  if (currentFloorRunEntry(state).baseFloor === FloorLevel.MINISTRY) {
     removeItem(e, defId, 1);
     if (!forged) {
       e.money = (e.money ?? 0) + 45;
@@ -1833,7 +1834,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY) {
+  if (currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING || currentFloorRunEntry(state).baseFloor === FloorLevel.KVARTIRY) {
     removeItem(e, defId, 1);
     if (forged) {
       msgs.push(msg('Жильцы нашли лишние строки в липовом списке.', time, '#f84'));
@@ -1889,7 +1890,7 @@ function handleCraftRecipeItemSourceUse(
   if (
     state &&
     isPlayerEntity(e) &&
-    (state.currentZ === FloorLevel.LIVING || state.currentZ === FloorLevel.KVARTIRY) &&
+    (currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING || currentFloorRunEntry(state).baseFloor === FloorLevel.KVARTIRY) &&
     DOCUMENT_MARKET_VALUES[defId] !== undefined
   ) {
     return false;

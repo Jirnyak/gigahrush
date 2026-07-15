@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* -- AG110 Paritel steam bridge: valve-count visibility combat -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -335,7 +336,7 @@ export function tryUseParitelSteamBridge(
 ): boolean {
   const room = valveRoomAtLook(world, lookX, lookY);
   if (!room) return false;
-  if (state.currentZ !== FloorLevel.MAINTENANCE) return false;
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE) return false;
   if (valveCooldownState !== state || nextValveUseAt > state.time + 10) {
     valveCooldownState = state;
     nextValveUseAt = 0;
@@ -372,7 +373,7 @@ export function updateParitelSteamBridge(
   state: GameState,
   dt: number,
 ): void {
-  if (dt <= 0 || state.currentZ !== FloorLevel.MAINTENANCE) return;
+  if (dt <= 0 || currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE) return;
   if (steamTickState !== state || nextSteamTickAt > state.time + 10) {
     steamTickState = state;
     nextSteamTickAt = 0;

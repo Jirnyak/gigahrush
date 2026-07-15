@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* ── Ремонтник Без Смены: local shortcut/tool route encounter ─── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -353,7 +354,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
 
 function resolveOutcome(state: GameState, source: WorldEvent, outcome: RemontnikOutcome, itemId?: string): void {
   const site = activeRemontnik;
-  if (!site || state.currentZ !== FloorLevel.MAINTENANCE || site.outcome) return;
+  if (!site || currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE || site.outcome) return;
   site.outcome = outcome;
   setShortcutOpen(site, outcome !== 'welded');
   if (outcome === 'welded' || outcome === 'killed') wakeMachinery(site, state, outcome);

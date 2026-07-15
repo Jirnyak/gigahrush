@@ -234,7 +234,7 @@ function drawVoidReturnPortalHint(
   state: GameState,
   world: World,
 ): void {
-  if (state.currentZ !== FloorLevel.VOID || state.samosborActive) return;
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.VOID || state.samosborActive) return;
   const portal = voidReturnPortalHudState(state);
   if (!portal || world.floorTex[portal.cell!] !== Tex.PORTAL) return;
 

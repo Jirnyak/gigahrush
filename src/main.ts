@@ -3466,7 +3466,7 @@ function roundPlayerDamage(amount: number): number {
 }
 
 function unattributedPlayerDamageSource(): { kind: PlayerDamageSourceKind; label: string } {
-  if (state.currentZ === FloorLevel.VOID) return { kind: 'void', label: 'Правило Пустоты' };
+  if (currentFloorRunEntry(state).baseFloor === FloorLevel.VOID) return { kind: 'void', label: 'Правило Пустоты' };
   if (state.samosborActive) return { kind: 'samosbor', label: 'Самосбор' };
   return { kind: 'hazard', label: 'Неопознанная опасность' };
 }
@@ -4406,14 +4406,14 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
     }
     // Herald killed — check if the Podad lower route is now open.
-    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && state.currentZ === FloorLevel.HELL) {
+    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && currentFloorRunEntry(state).baseFloor === FloorLevel.HELL) {
       if (onHeraldKilled(e, world, state)) {
         applyStoryRouteGates(world, player, state);
         updateWorldData(world);
       }
     }
     // Creator killed — spawn return portal
-    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && state.currentZ === FloorLevel.VOID) {
+    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && currentFloorRunEntry(state).baseFloor === FloorLevel.VOID) {
       if (onCreatorKilled(e, world, state)) {
         checkQuests(player, world, entities, state, state.msgs);
         openVoidReturnPortalFromCreator(e);
@@ -9638,7 +9638,7 @@ function gameLoop(now: number): void {
     }
 
     // Return portal in Void — only the Creator-opened portal can end the run.
-    if (state.currentZ === FloorLevel.VOID && state.tick % 10 === 0) {
+    if (currentFloorRunEntry(state).baseFloor === FloorLevel.VOID && state.tick % 10 === 0) {
       const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
       if (tryUseVoidReturnPortal(pci)) {
         syncMsgLog();
@@ -9811,8 +9811,8 @@ function gameLoop(now: number): void {
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level
   let baseFog = 0.065;
-  if (state.currentZ === FloorLevel.MAINTENANCE) baseFog = 0.08;
-  if (state.currentZ === FloorLevel.HELL) baseFog = 0.05; // less fog, more horror visibility
+  if (currentFloorRunEntry(state).baseFloor === FloorLevel.MAINTENANCE) baseFog = 0.08;
+  if (currentFloorRunEntry(state).baseFloor === FloorLevel.HELL) baseFog = 0.05; // less fog, more horror visibility
   const smogFogBonus = !state.gameOver ? proceduralSmogFogDensityBonus(world, player, state) : 0;
   const samosborVariant = state.samosborActive ? getActiveSamosborVariant() : null;
   const samosborVisual = samosborVariant?.visual;

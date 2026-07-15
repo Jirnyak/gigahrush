@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from './procedural_floors';
 /* ── Metro Error Line interaction-time routing ───────────────── */
 
 import { W, Feature, FloorLevel, type Entity, type GameState } from '../core/types';
@@ -138,7 +139,7 @@ export function tryUseMetroRoute(
   const route = routeAtLookCell(world, lookX, lookY);
   if (!route) return null;
 
-  if (state.currentZ !== FloorLevel.MAINTENANCE) {
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE) {
     return {
       route,
       wrongStop: false,

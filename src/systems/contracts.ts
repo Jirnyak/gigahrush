@@ -761,7 +761,7 @@ function findContaminatedContractSample(player: Entity, contractId: string): Ite
 function currentFloorMatchesZhelemishTarget(state: GameState, target: ZhelemishNiiTarget): boolean {
   const entry = currentFloorRunEntry(state);
   if (target.kind === 'procedural_mushroom') return entry.spec?.key === target.targetKey;
-  return entry.storyFloor === FloorLevel.LIVING && state.currentZ === FloorLevel.LIVING;
+  return entry.storyFloor === FloorLevel.LIVING && currentFloorRunEntry(state).baseFloor === FloorLevel.LIVING;
 }
 
 function currentFloorIsWrongZhelemishMycelium(state: GameState, target: ZhelemishNiiTarget): boolean {

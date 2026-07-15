@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from './procedural_floors';
 /* ── Bounded short-lived noise records for AI / HUD ───────────── */
 
 import {
@@ -573,7 +574,7 @@ function publishSmokeCandleCheckEvent(
       'inventory',
       'smoke',
       'vent_check',
-      state.currentZ === FloorLevel.MAINTENANCE ? 'maintenance' : 'off_floor',
+      currentFloorRunEntry(state).baseFloor === FloorLevel.MAINTENANCE ? 'maintenance' : 'off_floor',
       'counterplay',
     ],
     data: {

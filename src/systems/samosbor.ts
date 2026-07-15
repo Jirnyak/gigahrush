@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from './procedural_floors';
 import { rng, xorshift32, irand, mathRng } from '../core/rand';
 /* ── САМОСБОР — the maze restructures itself ─────────────────── */
 /*   Every floor runs a local wave from a random mutable map point. */
@@ -4716,7 +4717,7 @@ function captureZone(
   const fogSeedRects = squareDirtyRects(sourceX, sourceY, fogRadius);
   const fogRadiusSq = fogRadius * fogRadius;
   const fogStrength = Math.max(90, Math.min(230, Math.round(200 * variant.fogSeedMult)));
-  const markHellMeat = state.currentZ === FloorLevel.HELL &&
+  const markHellMeat = currentFloorRunEntry(state).baseFloor === FloorLevel.HELL &&
     (hasSamosborSubsystem(variant, 'hell_meat_walls') || variant.modifiers.some(m => m.meatWallsOnHell));
   let veretarAreaLeaks = 0;
   for (let dy = -fogRadius; dy <= fogRadius; dy++) {

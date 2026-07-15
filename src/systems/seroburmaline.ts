@@ -1,3 +1,4 @@
+import { currentFloorRunEntry } from './procedural_floors';
 /* ── Seroburmaline visual-risk residue ──────────────────────────
  * Runtime state stays here; render reads only the HUD snapshot.
  */
@@ -211,7 +212,7 @@ function publishSeroburmalineEvent(
 
 export function updateSeroburmalineExposure(world: World, player: Entity, state: GameState, dt: number): void {
   const rt = runtimeFor(state);
-  if (state.currentZ !== FloorLevel.MAINTENANCE || !player.alive) {
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE || !player.alive) {
     fadeRuntime(rt, dt);
     return;
   }
@@ -310,7 +311,7 @@ export function tryCoverSeroburmalineSource(
   lookY: number,
   toolId?: string,
 ): boolean {
-  if (state.currentZ !== FloorLevel.MAINTENANCE || !isPlayerEntity(player)) return false;
+  if (currentFloorRunEntry(state).baseFloor !== FloorLevel.MAINTENANCE || !isPlayerEntity(player)) return false;
   const source = sourceAtCell(world, Math.floor(lookX), Math.floor(lookY), true);
   if (!source) return false;
 

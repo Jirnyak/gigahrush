@@ -743,6 +743,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       occupation: e.occupation,
       isFemale: e.isFemale,
       age: e.age,
+      plotNpcId: e.plotNpcId,
     });
     const visualSeed = npcVisualTextureKey(visualId, {
       seed: deriveEntitySpriteSeed(e),
@@ -750,6 +751,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       faction: e.faction,
       isFemale: e.isFemale,
       age: e.age,
+      plotNpcId: e.plotNpcId,
       sprite: e.sprite,
     })
       ? deriveEntitySpriteSeed(e)
@@ -760,6 +762,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       faction: e.faction,
       isFemale: e.isFemale,
       age: e.age,
+      plotNpcId: e.plotNpcId,
       sprite: e.sprite,
     });
     if (special) return special;
