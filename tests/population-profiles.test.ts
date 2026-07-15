@@ -6,6 +6,7 @@ import {
   HELL_POPULATION_PROFILE,
   KVARTIRY_POPULATION_PROFILE,
   PROCEDURAL_POPULATION_PROFILES,
+  basePopulationTotalAtDefaultSoftLimit,
   proceduralAnomalyPressure,
   proceduralPopulationBudget,
   proceduralPopulationProfileId,
@@ -98,7 +99,7 @@ testGenerationMatrix('KVARTIRY starts as a power-of-two actor AI floor', () => {
   assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
-  assert.equal(gen.entities.filter(e => e.type === EntityType.NPC).length >= activeActorCountAtDefaultSoftLimit(KVARTIRY_POPULATION_PROFILE.citizens.initial), true);
+  assert.equal(gen.entities.filter(e => e.type === EntityType.NPC).length >= activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(14) * KVARTIRY_POPULATION_PROFILE.densityMult * (KVARTIRY_POPULATION_PROFILE.citizens.share ?? 0)), true);
   tickOneAlifeFrame(gen, FloorLevel.KVARTIRY);
   assert.equal(tasklessNpcCount(gen.entities), 0);
 });
@@ -111,7 +112,7 @@ testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
   assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
-  assert.equal(monsters.length >= activeActorCountAtDefaultSoftLimit(HELL_POPULATION_PROFILE.monsters.initial), true);
+  assert.equal(monsters.length >= activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(-36) * HELL_POPULATION_PROFILE.densityMult * (HELL_POPULATION_PROFILE.monsters.share ?? 0)), true);
   assert.equal(maxLiveActorsInArea(gen.entities, 32) <= 24, true);
   assert.equal(sightlineCues.length >= 5, true);
   for (const cue of sightlineCues) {
@@ -188,7 +189,7 @@ test('procedural population budget scales by danger anomaly pressure and route b
   assert.equal(dangerous.monsters < pressured.monsters, true);
   assert.equal(pressured.monsters < deep.monsters, true);
   assert.equal(capped.npcs + capped.monsters, ACTIVE_ACTOR_SOFT_LIMIT);
-  assert.equal(capped.npcs > capped.monsters, true);
+  assert.equal(capped.monsters > capped.npcs, true);
   assert.equal(capped.npcs <= PROCEDURAL_POPULATION_PROFILES.highDensity.npcs.cap, true);
   assert.equal(capped.monsters <= PROCEDURAL_POPULATION_PROFILES.highDensity.monsters.cap, true);
   assert.equal(voidRoute.npcs, 0);
@@ -247,8 +248,8 @@ test('procedural population deck keeps random slots normal-density unless the ra
   assert.equal(summary.slots, PROCEDURAL_FLOOR_ZS.length * seeds.length);
   assert.equal(summary.highDensity > 0, true);
   assert.equal(summary.normal > summary.highDensity, true);
-  assert.equal(summary.maxNormalActors < activeActorCountAtDefaultSoftLimit(KVARTIRY_POPULATION_PROFILE.citizens.initial), true);
-  assert.equal(summary.maxHighDensityActors > summary.maxNormalActors, true);
+  assert.equal(summary.maxNormalActors >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
+  assert.equal(summary.maxHighDensityActors >= summary.maxNormalActors, true);
   assert.equal(summary.npcFreeRouteSlots > 0, true);
 });
 
@@ -265,8 +266,8 @@ test('actor population targets derive from the active actor soft cap', () => {
       npcAllowed: true,
       profileId: 'normal',
     });
-    assert.equal(procedural.npcs, 205);
-    assert.equal(procedural.monsters, 115);
+    assert.equal(procedural.npcs, 898);
+    assert.equal(procedural.monsters, 53);
 
     const blackMarket = DESIGN_FLOOR_ROUTES.find(route => route.id === 'black_market_88');
     assert.ok(blackMarket);

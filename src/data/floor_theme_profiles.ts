@@ -29,7 +29,7 @@ export interface FloorThemeProfile {
   floorKey: string;
   baseFloor: FloorLevel;
   /**
-   * Content/visual/population class. Equals `baseFloor` for story/procedural
+   * Content/visual/population class. Equals `baseFloor` for base/procedural
    * floors and for design floors that do not override it, but a design floor
    * can declare a different `themeClass` to own its look and population mix
    * independently of the engine save bucket (`baseFloor`).
@@ -37,7 +37,7 @@ export interface FloorThemeProfile {
   themeClass: FloorLevel;
   routeId?: DesignFloorId | string;
   routeZ?: number;
-  kind: 'story' | 'design' | 'procedural' | 'floor_instance';
+  kind: 'design' | 'procedural' | 'floor_instance';
   danger: 1 | 2 | 3 | 4 | 5;
   npcAllowed: boolean;
   territoryShares: readonly FloorTerritoryShare[];
@@ -71,15 +71,16 @@ const STORY_POPULATION_PROFILE_IDS: Partial<Record<FloorLevel, string>> = {
   [FloorLevel.KVARTIRY]: 'kvartiry_lively',
   [FloorLevel.HELL]: 'hell_lively',
   [FloorLevel.VOID]: 'void_lively',
+  [FloorLevel.LIVING]: 'living_hub',
 };
 
 const STORY_SPECIAL_TAGS: Readonly<Record<FloorLevel, readonly string[]>> = {
-  [FloorLevel.MINISTRY]: ['story_floor', 'bureaucracy', 'permits'],
-  [FloorLevel.KVARTIRY]: ['story_floor', 'residential', 'uprising'],
-  [FloorLevel.LIVING]: ['story_floor', 'hub', 'expedition_prep'],
-  [FloorLevel.MAINTENANCE]: ['story_floor', 'repair', 'collectors'],
-  [FloorLevel.HELL]: ['story_floor', 'samosbor', 'cult'],
-  [FloorLevel.VOID]: ['story_floor', 'finale', 'void'],
+  [FloorLevel.MINISTRY]: ['design_floor', 'bureaucracy', 'permits'],
+  [FloorLevel.KVARTIRY]: ['design_floor', 'residential', 'uprising'],
+  [FloorLevel.LIVING]: ['design_floor', 'hub', 'expedition_prep'],
+  [FloorLevel.MAINTENANCE]: ['design_floor', 'repair', 'collectors'],
+  [FloorLevel.HELL]: ['design_floor', 'samosbor', 'cult'],
+  [FloorLevel.VOID]: ['design_floor', 'finale', 'void'],
 };
 
 function storyFloorKey(floor: FloorLevel): string {
@@ -115,7 +116,7 @@ export function themeForStoryFloor(floor: FloorLevel): FloorThemeProfile {
     baseFloor: floor,
     themeClass: floor,
     routeZ: z,
-    kind: 'story',
+    kind: 'design',
     danger: STORY_DANGER[floor],
     npcAllowed: floorRunZAllowsNpcs(z),
     territoryShares,

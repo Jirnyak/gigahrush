@@ -15,7 +15,7 @@ import { World } from '../../core/world';
 import { placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
-import { KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
+import { basePopulationTotalAtDefaultSoftLimit, KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { territorySharesForStoryFloor } from '../../data/floor_territory';
 import { sampleNaturalPopulationCells } from '../population_placement';
@@ -248,9 +248,10 @@ function seedNpcPopulation(
   nextId: { v: number },
   faction: Faction,
   profile: NpcPopulationProfile,
+  totalCount: number,
   fixedOccupation?: Occupation,
 ): void {
-  spawnNpcPopulationBatch(world, entities, nextId, faction, profile, activeActorCountAtDefaultSoftLimit(profile.initial), fixedOccupation);
+  spawnNpcPopulationBatch(world, entities, nextId, faction, profile, Math.round(totalCount * (profile.share ?? 0)), fixedOccupation);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -589,9 +590,14 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
   const nid = { v: nextId };
-  seedNpcPopulation(world, entities, nid, Faction.CITIZEN, CITIZEN_PROFILE);
-  seedNpcPopulation(world, entities, nid, Faction.WILD, WILD_PROFILE);
-  seedNpcPopulation(world, entities, nid, Faction.LIQUIDATOR, LIQUIDATOR_PROFILE, Occupation.HUNTER);
+  const populationTotal = entitySpawnSlots(
+    entities,
+    EntityType.NPC,
+    activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(14) * KV_POPULATION.densityMult),
+  );
+  seedNpcPopulation(world, entities, nid, Faction.CITIZEN, CITIZEN_PROFILE, populationTotal);
+  seedNpcPopulation(world, entities, nid, Faction.WILD, WILD_PROFILE, populationTotal);
+  seedNpcPopulation(world, entities, nid, Faction.LIQUIDATOR, LIQUIDATOR_PROFILE, populationTotal, Occupation.HUNTER);
   nextId = nid.v;
 
   // ── Phase 10: Spawn items (ballots scattered everywhere) ─────

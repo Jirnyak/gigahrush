@@ -9,7 +9,7 @@ import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { HELL_POPULATION_PROFILE } from '../../data/population_profiles';
+import { basePopulationTotalAtDefaultSoftLimit, HELL_POPULATION_PROFILE } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { territorySharesForStoryFloor } from '../../data/floor_territory';
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
@@ -69,13 +69,14 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   }
   world.bakeLights();
 
+  const populationTotal = activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(-36) * HELL_POPULATION.densityMult);
   seedHellPopulation(
     world,
     entities,
     { v: nextId },
-    activeActorCountAtDefaultSoftLimit(HELL_MONSTER_PROFILE.initial),
-    activeActorCountAtDefaultSoftLimit(HELL_CULTIST_PROFILE.initial),
-    activeActorCountAtDefaultSoftLimit(HELL_LIQUIDATOR_PROFILE.initial),
+    Math.round(populationTotal * (HELL_MONSTER_PROFILE.share ?? 0)),
+    Math.round(populationTotal * (HELL_CULTIST_PROFILE.share ?? 0)),
+    Math.round(populationTotal * (HELL_LIQUIDATOR_PROFILE.share ?? 0)),
     0,
     hellGeometry,
   );

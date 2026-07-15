@@ -29,7 +29,7 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
   {
     id: 'citizens',
     faction: Faction.CITIZEN,
-    baseWeight: 100,
+    baseWeight: 45,
     dangerBias: -0.06,
     wealthMult: 1,
     floorWeights: {
@@ -55,7 +55,7 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
   {
     id: 'liquidators',
     faction: Faction.LIQUIDATOR,
-    baseWeight: 14,
+    baseWeight: 20,
     dangerBias: 0.18,
     wealthMult: 1.8,
     floorWeights: {
@@ -74,7 +74,7 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
   {
     id: 'wild',
     faction: Faction.WILD,
-    baseWeight: 16,
+    baseWeight: 20,
     dangerBias: 0.12,
     wealthMult: 0.65,
     floorWeights: {
@@ -94,7 +94,7 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
   {
     id: 'scientists',
     faction: Faction.SCIENTIST,
-    baseWeight: 7,
+    baseWeight: 10,
     dangerBias: 0.04,
     wealthMult: 2.4,
     floorWeights: {
@@ -114,7 +114,7 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
   {
     id: 'cultists',
     faction: Faction.CULTIST,
-    baseWeight: 4,
+    baseWeight: 8,
     dangerBias: 0.28,
     wealthMult: 0.9,
     floorWeights: {

@@ -551,6 +551,8 @@ import {
   markPlatformGameplayStop,
   markPlatformReady,
   savePlatformRawGameSave,
+  showPlatformFullscreenAd,
+  isGamePushPortalTarget,
 } from './systems/platform_bridge';
 import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
 import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera, startCinematicCamera } from './systems/camera';
@@ -9234,6 +9236,23 @@ function gameLoop(now: number): void {
     const fn = pendingLoad;
     pendingLoad = null;
     pendingLoadStarted = false;
+
+    if (isGamePushPortalTarget()) {
+      showPlatformFullscreenAd().then(() => {
+        fn();
+        rebuildEntityIndex(entities, 'load');
+        if (loadingWorker) {
+          loadingWorker.postMessage({ type: 'stop' });
+        }
+        if (loadingCanvas) {
+          loadingCanvas.style.display = 'none';
+        }
+        lastTime = performance.now(); // reset dt so we don't get a huge spike
+        requestAnimationFrame(gameLoop);
+      });
+      return;
+    }
+
     fn();
     rebuildEntityIndex(entities, 'load');
     if (loadingWorker) {

@@ -33,10 +33,10 @@ function totalShare(shares: readonly { share: number }[]): number {
   return shares.reduce((sum, row) => sum + row.share, 0);
 }
 
-test('story floor themes compose current story territory and route facts', () => {
+test('base floor themes compose current design territory and route facts', () => {
   for (const floor of ALL_STORY_FLOORS) {
     const theme = themeForStoryFloor(floor);
-    assert.equal(theme.kind, 'story');
+    assert.equal(theme.kind, 'design');
     assert.equal(theme.baseFloor, floor);
     assert.equal(theme.floorKey, floorKeyForStory(floor));
     assert.deepEqual(theme.territoryShares, territorySharesForStoryFloor(floor));

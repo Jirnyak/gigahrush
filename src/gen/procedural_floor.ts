@@ -37,6 +37,7 @@ import { emergencyPanelDefsForGeometry, type EmergencyPanelDef } from '../data/e
 import { factionToTerritoryOwner, territoryOwnerName, territoryOwnerToFaction } from '../data/factions';
 import { chooseFloorMonsterKind, getMonsterEcology } from '../data/monster_ecology';
 import {
+  populationLevelForRouteZ,
   proceduralPopulationBudget,
   proceduralPopulationProfileId,
 } from '../data/population_profiles';
@@ -3984,7 +3985,7 @@ function spawnNpcs(world: World, rooms: Room[], entities: Entity[], nextId: { v:
       ? ownerFaction
       : chance(0.78) ? majority.npcFaction : pick([Faction.CITIZEN, Faction.LIQUIDATOR, Faction.WILD, Faction.CULTIST, Faction.SCIENTIST]);
     const occupation = occupationForFaction(faction, roomType);
-    const zoneLevel = world.zones[world.zoneMap[cell]]?.level ?? spec.danger;
+    const zoneLevel = Math.max(world.zones[world.zoneMap[cell]]?.level ?? spec.danger, populationLevelForRouteZ(spec.z, spec.danger) - 1);
     const rpg = randomRPG(gaussianLevel(zoneLevel, 2));
     const maxHp = getMaxHp(rpg);
     const nm = randomName(faction);
@@ -4290,7 +4291,7 @@ function spawnMonster(
       ? tumannikFogSpawn(world, pos)
       : pos;
   if (!spawnPos) return null;
-  const zoneLevel = world.zones[world.zoneMap[world.idx(spawnPos.x, spawnPos.y)]]?.level ?? spec.danger;
+  const zoneLevel = Math.max(world.zones[world.zoneMap[world.idx(spawnPos.x, spawnPos.y)]]?.level ?? spec.danger, populationLevelForRouteZ(spec.z, spec.danger));
   const hp = Math.round(def.hp * (0.75 + zoneLevel * 0.18));
   const monster: Entity = {
     id: nextId.v++,

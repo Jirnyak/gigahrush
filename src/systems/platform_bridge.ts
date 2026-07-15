@@ -69,11 +69,17 @@ interface GamePushSounds {
   on?(event: 'mute' | 'unmute', handler: () => void): void;
 }
 
+interface GamePushAds {
+  showFullscreen?(): void | Promise<void>;
+  on?(event: 'fullscreen:start' | 'fullscreen:close', handler: (success?: boolean) => void): void;
+}
+
 interface GamePushSdk {
   ready?: Promise<void>;
   player?: GamePushPlayer;
   language?: string;
   sounds?: GamePushSounds;
+  ads?: GamePushAds;
   gameStart?(): void | Promise<void>;
   gameReady?(): void;
   changeLanguage?(lang: string): void;
@@ -363,6 +369,9 @@ function gamePushSdkAsync(): Promise<GamePushSdk | null> {
   return gamePushSdkPromise;
 }
 
+let activeFullscreenAdResolve: ((success: boolean) => void) | null = null;
+let activeFullscreenAdTimeout: ReturnType<typeof setTimeout> | undefined;
+
 function bindGamePushEvents(gp = gamePushSdk()): void {
   if (!gp || gamePushEventsBound || !gp.on) return;
   gp.on('pause', () => bridgeOptions.onPauseChange?.(true));
@@ -373,6 +382,26 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
   }
   if (gp.language) {
     bridgeOptions.onLanguageDetected?.(gp.language);
+  }
+  if (gp.ads && typeof gp.ads.on === 'function') {
+    gp.ads.on('fullscreen:start', () => {
+      if (activeFullscreenAdTimeout !== undefined) {
+        clearTimeout(activeFullscreenAdTimeout);
+        activeFullscreenAdTimeout = undefined;
+      }
+      bridgeOptions.onPauseChange?.(true);
+    });
+    gp.ads.on('fullscreen:close', (success?: boolean) => {
+      if (activeFullscreenAdTimeout !== undefined) {
+        clearTimeout(activeFullscreenAdTimeout);
+        activeFullscreenAdTimeout = undefined;
+      }
+      bridgeOptions.onPauseChange?.(false);
+      if (activeFullscreenAdResolve) {
+        activeFullscreenAdResolve(success ?? false);
+        activeFullscreenAdResolve = null;
+      }
+    });
   }
   gamePushEventsBound = true;
 
@@ -711,6 +740,33 @@ export async function hydratePlatformSaveFromCloud(): Promise<PlatformLoadResult
   }
 }
 
+export function showPlatformFullscreenAd(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const gp = gamePushSdk();
+    if (gp && gp.ads && typeof gp.ads.showFullscreen === 'function') {
+      activeFullscreenAdResolve = resolve;
+      try {
+        gp.ads.showFullscreen();
+      } catch (e) {
+        console.error('GamePush showFullscreen error:', e);
+        activeFullscreenAdResolve = null;
+        resolve(false);
+        return;
+      }
+      // Timeout fallback: if the ad does not start within 800ms, assume it was skipped or failed.
+      activeFullscreenAdTimeout = setTimeout(() => {
+        activeFullscreenAdTimeout = undefined;
+        if (activeFullscreenAdResolve === resolve) {
+          activeFullscreenAdResolve = null;
+          resolve(false);
+        }
+      }, 800);
+    } else {
+      resolve(false);
+    }
+  });
+}
+
 export function resetPlatformBridgeForTests(): void {
   bridgeOptions = {};
   yandexSdkPromise = null;
@@ -722,4 +778,9 @@ export function resetPlatformBridgeForTests(): void {
   gamePushReadySent = false;
   gamePushGameStartSent = false;
   gamePushGameplayActive = false;
+  activeFullscreenAdResolve = null;
+  if (activeFullscreenAdTimeout !== undefined) {
+    clearTimeout(activeFullscreenAdTimeout);
+    activeFullscreenAdTimeout = undefined;
+  }
 }

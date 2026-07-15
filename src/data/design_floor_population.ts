@@ -17,6 +17,11 @@ import {
   ENTITY_SOFT_LIMITS,
   fitActiveActorCounts,
 } from './entity_limits';
+import {
+  basePopulationTotalAtDefaultSoftLimit,
+  monsterShareForRouteZ,
+  populationLevelForRouteZ,
+} from './population_profiles';
 
 export interface DesignPlacementFieldProfile {
   noiseScale: number;
@@ -2060,36 +2065,41 @@ function clampInt(value: number, min: number, max: number): number {
 
 function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fallback: number): number {
   if (value === 'active_actor_cap') return activeActorSoftLimit();
+  if (value === 0) return 0;
   return activeActorCountAtDefaultSoftLimit(value ?? fallback);
 }
 
-function depth01(z: number): number {
-  return Math.max(0, Math.min(1, Math.abs(z) / 50));
+function designNpcMult(route: DesignFloorRouteDef): number {
+  const cls = designFloorThemeClass(route);
+  return cls === FloorLevel.KVARTIRY ? 1.22
+    : cls === FloorLevel.LIVING ? 1.14
+      : cls === FloorLevel.MINISTRY ? 0.86
+        : cls === FloorLevel.MAINTENANCE ? 0.7
+          : cls === FloorLevel.HELL ? 0.38
+            : 0;
+}
+
+function designMonsterMult(route: DesignFloorRouteDef): number {
+  const cls = designFloorThemeClass(route);
+  return cls === FloorLevel.HELL ? 1.28
+    : cls === FloorLevel.VOID ? 1.36
+      : cls === FloorLevel.MAINTENANCE ? 1.12
+        : cls === FloorLevel.MINISTRY ? 1.0
+          : cls === FloorLevel.KVARTIRY ? 0.86
+            : cls === FloorLevel.LIVING ? 0.8
+              : 1;
 }
 
 function baseNpcTarget(route: DesignFloorRouteDef): number {
   if (route.z <= -48 || Math.abs(route.z) >= 44) return 0;
-  const cls = designFloorThemeClass(route);
-  const habitation = Math.pow(Math.max(0, 1 - Math.abs(route.z) / 44), 1.7);
-  const baseFloorMult = cls === FloorLevel.KVARTIRY ? 1.18
-    : cls === FloorLevel.LIVING ? 1.08
-      : cls === FloorLevel.MINISTRY ? 0.74
-        : cls === FloorLevel.MAINTENANCE ? 0.54
-          : cls === FloorLevel.HELL ? 0.16
-            : 0;
-  return clampInt((260 + habitation * 4200) * baseFloorMult, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
+  const total = basePopulationTotalAtDefaultSoftLimit(route.z);
+  return clampInt(total * (1 - monsterShareForRouteZ(route.z)) * designNpcMult(route), 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
 function baseMonsterTarget(route: DesignFloorRouteDef): number {
-  const cls = designFloorThemeClass(route);
-  const edgePressure = Math.pow(depth01(route.z), 2.2);
-  const baseFloorBonus = cls === FloorLevel.HELL ? 1600
-    : cls === FloorLevel.VOID ? 1900
-      : cls === FloorLevel.MAINTENANCE ? 420
-        : cls === FloorLevel.KVARTIRY ? -180
-          : cls === FloorLevel.LIVING ? -120
-            : 0;
-  return clampInt(220 + route.danger * 120 + edgePressure * 7200 + baseFloorBonus, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
+  const total = basePopulationTotalAtDefaultSoftLimit(route.z);
+  const dangerMult = 0.92 + Math.max(1, Math.min(5, route.danger)) * 0.045;
+  return clampInt(total * monsterShareForRouteZ(route.z) * designMonsterMult(route) * dangerMult, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
@@ -2582,12 +2592,14 @@ export function designFloorPopulationProfile(route: DesignFloorRouteDef): Design
   const override = DESIGN_FLOOR_POPULATION_OVERRIDES[route.id] ?? {};
   const npcBase = baseNpcTarget(route);
   const monsterBase = baseMonsterTarget(route);
-  const rawNpcTarget = clampInt(resolveActorTarget(override.npcTarget, npcBase * (override.npcMult ?? 1)), 0, entityNpcCap());
-  const rawMonsterTarget = clampInt(resolveActorTarget(override.monsterTarget, monsterBase * (override.monsterMult ?? 1)), 0, entityMonsterCap());
+  const tinyAuthoredNpc = typeof override.npcTarget === 'number' && override.npcTarget > 0 && override.npcTarget <= 16;
+  const tinyAuthoredMonster = typeof override.monsterTarget === 'number' && override.monsterTarget > 0 && override.monsterTarget <= 16;
+  const rawNpcTarget = clampInt((tinyAuthoredNpc ? activeActorCountAtDefaultSoftLimit(override.npcTarget as number) : resolveActorTarget(override.npcTarget, npcBase)) * (override.npcMult ?? 1), 0, entityNpcCap());
+  const rawMonsterTarget = clampInt((tinyAuthoredMonster ? activeActorCountAtDefaultSoftLimit(override.monsterTarget as number) : resolveActorTarget(override.monsterTarget, monsterBase)) * (override.monsterMult ?? 1), 0, entityMonsterCap());
   const fitted = fitActiveActorCounts(rawNpcTarget, rawMonsterTarget);
   const npcTarget = fitted.npcs;
   const monsterTarget = fitted.monsters;
-  const depthLevel = 1 + Math.round(depth01(route.z) * 8);
+  const baseLevel = populationLevelForRouteZ(route.z, route.danger);
   const npcPlacementKind = override.npcPlacementKind ?? defaultPlacementKind(route);
   const monsterPlacementKind = override.monsterPlacementKind ?? defaultPlacementKind(route);
   const npcPlacement = mergePlacementProfile(placementProfile(npcPlacementKind, 'npc', npcTarget), override.npcPlacement);
@@ -2597,8 +2609,8 @@ export function designFloorPopulationProfile(route: DesignFloorRouteDef): Design
     z: route.z,
     npcTarget,
     monsterTarget,
-    npcLevel: Math.max(1, depthLevel - 1),
-    monsterLevel: Math.max(route.danger, depthLevel),
+    npcLevel: Math.max(1, baseLevel - 1),
+    monsterLevel: Math.max(route.danger, baseLevel),
     npcNoun: override.npcNoun ?? defaultNpcNoun(route),
     npcFactions: override.npcFactions ?? defaultNpcFactions(route),
     npcOccupations: override.npcOccupations ?? defaultNpcOccupations(route),
