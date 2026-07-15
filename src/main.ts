@@ -7453,7 +7453,10 @@ function activateNpcMainSelection(npc: Entity | undefined): void {
       syncPauseState();
       break;
     default:
-      activateNpcCustomMenuOption({ state, player, npc, entities }, option.id);
+      activateNpcCustomMenuOption({
+        state, player, npc, entities,
+        roomNameResolver: (x, y) => world.roomAt(x, y)?.name
+      }, option.id);
       break;
   }
 }

@@ -1,5 +1,5 @@
 import { openArena } from './arena';
-import { EntityType, msg, type Entity, type GameState } from '../core/types';
+import { EntityType, msg, type Entity, type GameState, AIGoal, NpcState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
 import {
   allDesignFloorProfiles,
@@ -28,6 +28,7 @@ export interface NpcInteractionContext {
   player: Entity;
   npc: Entity;
   entities?: readonly Entity[];
+  roomNameResolver?: (x: number, y: number) => string | undefined;
 }
 
 export interface NpcMenuOption {
@@ -527,5 +528,51 @@ registerNpcInteractionOption({
   visible: ctx => ctx.npc.name === 'Мастер Арены' || ctx.npc.name === 'Марко Лоло',
   activate: ctx => {
     openArena(ctx);
+  },
+});
+
+function getNpcOccupationStateText(ctx: NpcInteractionContext): string {
+  const npc = ctx.npc;
+  if (!npc.ai) return 'Стою на месте, дышу бетоном.';
+
+  const goal = npc.ai.goal;
+  const state = npc.ai.npcState;
+
+  if (state === NpcState.SLEEPING || goal === AIGoal.SLEEP) return 'Сплю. Глаза бы мои этот бетон не видели.';
+  if (goal === AIGoal.EAT || state === NpcState.LUNCH) return 'Жую сухпаек. Слизь на вкус как слизь.';
+  if (goal === AIGoal.DRINK) return 'Пью воду из-под фильтра. Ржавая, но жить можно.';
+  if (state === NpcState.MORNING || goal === AIGoal.TOILET) return 'Иду по нужде. Главное, чтоб в трубах ничего не сцапало.';
+  if (state === NpcState.WORKING || goal === AIGoal.WORK) return 'Выполняю норму. Сборка, переборка, рутина.';
+  if (goal === AIGoal.HUNT) return 'Ищу цель. Тут кто-то ходит.';
+  if (state === NpcState.HIDING || goal === AIGoal.HIDE || goal === AIGoal.FLEE) return 'Прячусь. Жизнь дороже геройства.';
+  if (state === NpcState.PATROL) return 'Патрулирую сектор. Слежу за порядком на этаже.';
+  
+  if (state === NpcState.TRAVELING || goal === AIGoal.GOTO) {
+    const targetRoom = ctx.roomNameResolver?.(npc.ai.tx, npc.ai.ty);
+    if (targetRoom) return `Иду в блок «${targetRoom}». Дела не ждут.`;
+    return 'Иду в другой блок. Дела не ждут.';
+  }
+  
+  if (state === NpcState.MEETING) return 'Общаюсь. Местные новости обсуждаем.';
+  if (state === NpcState.FREE_TIME || goal === AIGoal.WANDER) return 'Слоняюсь без дела. Дышу.';
+
+  return 'Стою. Думаю о вечном.';
+}
+
+registerNpcInteractionOption({
+  id: 'current_activity',
+  order: 15,
+  label: () => 'Занятие',
+  visible: ctx => ctx.npc.type === EntityType.NPC && ctx.npc.alive,
+  activate: ctx => {
+    const text = getNpcOccupationStateText(ctx);
+    openNpcInteractionInterface(ctx, {
+      id: 'current_activity',
+      title: 'ТЕКУЩЕЕ ЗАНЯТИЕ',
+      lines: [
+        `${ctx.npc.name ?? 'NPC'}: «${text}»`
+      ],
+      message: 'Текущий статус ИИ',
+    });
   },
 });
