@@ -125,9 +125,13 @@ export function createPlacementField(world: World, profile: PlacementFieldProfil
 }
 
 export function isPopulationPlacementCandidateCell(world: World, cell: number): boolean {
-  return world.cells[cell] === Cell.FLOOR &&
-    world.features[cell] === Feature.NONE &&
-    !world.containerMap.has(cell);
+  if (world.cells[cell] !== Cell.FLOOR || world.features[cell] !== Feature.NONE || world.containerMap.has(cell)) return false;
+  const roomId = world.roomMap[cell];
+  if (roomId >= 0) {
+    const room = world.rooms[roomId];
+    if (room && room.tags?.includes('tutorial')) return false;
+  }
+  return true;
 }
 
 function populationCellCache(world: World): PopulationCellCache {

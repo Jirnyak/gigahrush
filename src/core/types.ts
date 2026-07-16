@@ -121,6 +121,7 @@ export interface Room {
   sealed: boolean;          // hermetically sealed during samosbor
   name: string;
   defId?: string;           // persistent quest/event target id
+  tags?: string[];          // optional semantic tags (e.g. 'tutorial')
   apartmentId: number;      // -1 = not apartment
   wallTex: Tex;
   floorTex: Tex;

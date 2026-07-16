@@ -59,7 +59,7 @@ export function spawnRoomItems(
 ): number {
   let nextId = nextIdStart;
   for (const room of world.rooms) {
-    if (!room || room.w < 3 || room.h < 3) continue;
+    if (!room || room.w < 3 || room.h < 3 || room.tags?.includes('tutorial')) continue;
     // Get zone level for this room
     const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
     const zid = world.zoneMap[ci];
@@ -86,6 +86,7 @@ export function spawnRoomItems(
 
   // ── Story items: 128 idol_chernobog scattered across the world ──
   const eligibleRooms = world.rooms.filter(r => r && r.w >= 3 && r.h >= 3 &&
+    !r.tags?.includes('tutorial') &&
     [RoomType.COMMON, RoomType.STORAGE, RoomType.OFFICE, RoomType.SMOKING].includes(r.type));
   for (let i = 0; i < 128 && eligibleRooms.length > 0; i++) {
     const room = eligibleRooms[Math.floor(rng() * eligibleRooms.length)];
@@ -169,7 +170,11 @@ export function spawnTravelers(
   const corridorSpawns: number[] = [];
   for (let i = 0; i < 10000; i++) {
     const ci = Math.floor(rng() * W * W);
-    if (world.cells[ci] === Cell.FLOOR) corridorSpawns.push(ci);
+    if (world.cells[ci] === Cell.FLOOR) {
+      const roomId = world.roomMap[ci];
+      if (roomId >= 0 && world.rooms[roomId]?.tags?.includes('tutorial')) continue;
+      corridorSpawns.push(ci);
+    }
     if (corridorSpawns.length >= 500) break;
   }
 

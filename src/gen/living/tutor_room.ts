@@ -106,6 +106,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
 
   const room = stampRoom(world, nextRoomId++, RoomType.COMMON, hallX, hallY, hallW, hallH, -1);
   room.name = 'Актовый зал';
+  room.tags = ['tutorial'];
   room.wallTex = Tex.TILE_W;
   room.floorTex = Tex.F_TILE;
   room.sealed = false; // Must be false so ensureConnectivity punches an exit to the maze!
@@ -162,6 +163,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   const cafeY = hallY - cafeH - 1;
   const cafeteria = stampRoom(world, nextRoomId++, RoomType.COMMON, cafeX, cafeY, cafeW, cafeH, -1);
   cafeteria.name = 'Столовая';
+  cafeteria.tags = ['tutorial'];
   cafeteria.wallTex = Tex.TILE_W;
   cafeteria.floorTex = Tex.F_LINO;
   cafeteria.sealed = true;
@@ -206,6 +208,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   const bathY = cafeY;
   const bathroom = stampRoom(world, nextRoomId++, RoomType.BATHROOM, bathX, bathY, bathW, bathH, -1);
   bathroom.name = 'Уборная';
+  bathroom.tags = ['tutorial'];
   bathroom.wallTex = Tex.TILE_W;
   bathroom.floorTex = Tex.F_TILE;
   bathroom.sealed = true;
@@ -253,6 +256,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
 
   const armory = stampRoom(world, nextRoomId++, RoomType.PRODUCTION, armX, armY, armW, armH, -1);
   armory.name = 'Оружейная';
+  armory.tags = ['tutorial'];
   armory.wallTex = Tex.METAL;
   armory.floorTex = Tex.F_CONCRETE;
   armory.sealed = true;
