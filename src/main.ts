@@ -1991,7 +1991,7 @@ if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'entities', { get: () => entities });
   Object.defineProperty(window, 'player', { get: () => player });
 }
-let nextEntityId = { v: 1 };
+let nextEntityId = { v: 1000000 };
 let prevPlayerActorId = -1;
 let prevPlayerActorHp = 100; // track current player actor HP changes for damage flash
 let lastProjectileHitMsgTick = -999;

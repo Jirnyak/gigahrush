@@ -23,6 +23,7 @@ import {
   type AlifeNpcSnapshot,
   currentAlifeFloorKey,
 } from './alife';
+import { isPlotNpc } from '../data/plot';
 import {
   ensureAlifeMobilityState,
   startActiveAlifeDeparture,
@@ -331,14 +332,14 @@ function routeAllowsNpcDestination(state: GameState, floorKey: string): boolean 
 
 function ordinaryRecordAllowed(record: AlifeNpcSnapshot, allowPlotOrReserved: boolean): boolean {
   if (record.dead) return false;
-  if (!allowPlotOrReserved && (record.id || record.reservedKind || record.reservedIdentityId === 'player')) return false;
+  if (!allowPlotOrReserved && (record.plotNpcId !== undefined || record.reservedKind || record.reservedIdentityId === 'player')) return false;
   return true;
 }
 
 function activeEntityAllowed(state: GameState, entity: Entity | undefined): boolean {
   if (!entity) return true;
   if (isPlayerEntity(entity) || isNativePlayerBodyEntity(entity) || entity.persistentNpcId === 'player') return false;
-  if (entity.id) return false;
+  if (isPlotNpc(entity)) return false;
   if (entity.questId !== undefined && entity.questId !== -1) return false;
   if (entity.canGiveQuest === true) return false;
   if (state.showNpcMenu && state.npcMenuTarget === entity.id) return false;

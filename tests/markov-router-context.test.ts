@@ -196,7 +196,8 @@ test('context hash does not include long raw room text', () => {
     roomName: 'Другой кабинет с другой длинной табличкой и тем же игровым смыслом комнаты',
   }));
 
-  assert.notEqual(a.roomName, b.roomName);
+  assert.equal('roomName' in a, false);
+  assert.equal('roomName' in b, false);
   assert.equal(a.contextHash, b.contextHash);
 });
 

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
+
 import { Cell, EntityType, Faction, MonsterKind, QuestType, RoomType, Tex, ZoneFaction, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { createWorldEventState } from '../src/systems/events';
@@ -317,7 +319,7 @@ test('accepting a quest from an NPC reveals the target room once', () => {
   resetMapExploration(world);
   const player = makeMapPlayer(12, 12);
   const olga: Entity = {
-    id: 10,
+    id: getPlotNpcNumericId('olga')!,
     type: EntityType.NPC,
     x: 12.5,
     y: 13.5,
@@ -328,11 +330,10 @@ test('accepting a quest from an NPC reveals the target room once', () => {
     sprite: 0,
     name: plotNpcName('olga'),
     faction: Faction.CITIZEN,
-    plotNpcId: 'olga',
     canGiveQuest: true,
   };
   const barni: Entity = {
-    id: 11,
+    id: getPlotNpcNumericId('barni')!,
     type: EntityType.NPC,
     x: 80.5,
     y: 80.5,
@@ -343,7 +344,6 @@ test('accepting a quest from an NPC reveals the target room once', () => {
     sprite: 0,
     name: plotNpcName('barni'),
     faction: Faction.CITIZEN,
-    plotNpcId: 'barni',
     canGiveQuest: true,
   };
   const state = makeGameState({

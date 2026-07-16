@@ -172,7 +172,7 @@ function npcWeapon(faction: Faction, occupation: Occupation): { weapon: string; 
 
 /* ── Spawn a single NPC on an exact floor cell ───────────────── */
 function spawnNpcAtCell(
-  world: World, entities: Entity[], nextId: { v: number },
+  world: World, entities: Entity[], _nextId: { v: number },
   faction: Faction, occupation: Occupation,
   x: number, y: number,
 ): boolean {
@@ -186,7 +186,7 @@ function spawnNpcAtCell(
   const nm = randomName(faction);
   const loadout = npcWeapon(faction, occupation);
   entities.push({
-    id: nextId.v++, type: EntityType.NPC,
+    id: -1, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
     angle: rng() * Math.PI * 2, pitch: 0,
     alive: true,

@@ -85,7 +85,7 @@ test('metro wrong stop sends the player to a local transfer with a return clue',
     assert.ok(result);
     assert.equal(result.wrongStop, true);
     assert.equal(result.destination?.kind, 'local');
-    if (result.destination?.kind === 'local') assert.equal(result.destination.roomName, METRO_ERROR_ROOM_DEF_ID);
+    if (result.destination?.kind === 'local') assert.equal((result.destination as any).roomDefId, METRO_ERROR_ROOM_DEF_ID);
     assert.match(result.message, /белый экран/i);
     assert.equal(player.inventory?.find(i => i.defId === 'metro_ticket')?.count, 1);
   });
@@ -107,7 +107,7 @@ test('metro blind transfer has a ticket-free safe return route', () => {
   assert.equal(result.route.safeReturn, true);
   assert.equal(result.wrongStop, false);
   assert.equal(result.destination?.kind, 'local');
-  if (result.destination?.kind === 'local') assert.equal(result.destination.roomName, METRO_STATION_ROOM_DEF_ID);
+  if (result.destination?.kind === 'local') assert.equal((result.destination as any).roomDefId, METRO_STATION_ROOM_DEF_ID);
   assert.equal(player.inventory?.length, 0);
 
   const event = getRecentEvents(state, { type: 'metro_route_taken', limit: 1 })[0];

@@ -1,3 +1,4 @@
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import test from 'node:test';
 import assert from 'node:assert/strict';

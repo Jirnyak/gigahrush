@@ -241,9 +241,8 @@ test('plot safety-critical lines remain exact and ordinary NPC talk works withou
   const barniCanonicalPack = getNpcPackageByPlotNpcId(getPlotNpcNumericId('barni')!);
   assert.ok(barniCanonicalPack, 'missing package for barni');
   const barni = makeTestNpc({
-    id: 77,
+    id: getPlotNpcNumericId('barni'),
     name: barniCanonicalPack.identity.displayName,
-    plotNpcId: 'barni',
   });
   const barniPack = resolveNpcPackageForEntity(barni);
   assert.ok(barniPack);
@@ -282,7 +281,7 @@ test('plot safety-critical lines remain exact and ordinary NPC talk works withou
 
 test('unknown plot NPC ids do not synthesize speech packages', () => {
   const legacyId = 'package_less_speech_fixture';
-  const npc = makeTestNpc({ id: 78, name: 'Голос без пакета', plotNpcId: legacyId });
+  const npc = makeTestNpc({ id: 99999, name: 'Голос без пакета', plotNpcId: legacyId });
   const pack = resolveNpcPackageForEntity(npc);
 
   assert.equal(pack, undefined);

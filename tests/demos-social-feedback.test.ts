@@ -193,11 +193,11 @@ test('Demos social journey delegates to migration state without direct floor mut
 
 test('Demos active-floor social journey starts visible departure instead of teleporting', () => {
   const state = makeDemosSocialState();
-  moveAlifeNpcRecord(state, 1, 'design:living');
+  moveAlifeNpcRecord(state, 900, 'design:living');
   const world = makeLiftWorld();
   const npc = makeTestNpc({
-    id: 11,
-    alifeId: 1,
+    id: 1000011,
+    alifeId: 900,
     type: EntityType.NPC,
     x: 24,
     y: 24,
@@ -207,7 +207,7 @@ test('Demos active-floor social journey starts visible departure instead of tele
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   });
 
-  requestDemosSocialJourney(state, 1, 'design:black_market_88', 'social_visit', {
+  requestDemosSocialJourney(state, 900, 'design:black_market_88', 'social_visit', {
     world,
     entities: [npc],
     activeFloorKey: 'design:living',
@@ -215,7 +215,7 @@ test('Demos active-floor social journey starts visible departure instead of tele
 
   const mobility = ensureAlifeMobilityState(state);
   assert.equal(mobility.activeDepartures.length, 1);
-  assert.equal(mobility.activeDepartures[0].alifeId, 1);
+  assert.equal(mobility.activeDepartures[0].alifeId, 900);
   assert.equal(Object.keys(mobility.journeys).length, 0);
-  assert.equal(getAlifeNpcRecordSnapshot(state, 1)?.floorKey, 'design:living');
+  assert.equal(getAlifeNpcRecordSnapshot(state, 900)?.floorKey, 'design:living');
 });

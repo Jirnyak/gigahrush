@@ -17,7 +17,7 @@ import {
   DEMOS_SOCIAL_INITIAL_NPC_SLOTS,
   DemosSocialRoleId,
 } from '../src/data/demos_social';
-import { registerNpcPackages, type NpcPackageDef } from '../src/data/npc_packages';
+import { getPlotNpcNumericId, registerNpcPackages, type NpcPackageDef } from '../src/data/npc_packages';
 import { initFactionRelations } from '../src/data/relations';
 import { createEmptyDemosSocialSaveState } from '../src/systems/demos_save';
 import {
@@ -249,13 +249,13 @@ test('Demos dead family targets remain returnable as visible history edges', () 
 
 test('Demos social graph applies optional authored plot relations', () => {
   const state = stateWithPopulation(909, 7, [
-    { kind: 'plot', plotNpcId: 'olga', name: 'Ольга Дмитриевна', faction: Faction.SCIENTIST, occupation: Occupation.DOCTOR },
-    { kind: 'plot', plotNpcId: 'yakov', name: 'Яков Давидович', faction: Faction.SCIENTIST, occupation: Occupation.SCIENTIST },
-    { kind: 'plot', plotNpcId: 'barni', name: 'Сержант Баринов', faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
-    { kind: 'plot', plotNpcId: 'vanka', name: 'Ванька Банчиный', faction: Faction.CULTIST, occupation: Occupation.ALCOHOLIC },
-    { kind: 'plot', plotNpcId: 'major_grom', name: 'Майор Громный', faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
-    { kind: 'plot', plotNpcId: 'rotenbergov', name: 'Министр Ротенбергов', faction: Faction.CITIZEN, occupation: Occupation.DIRECTOR },
-    { kind: 'plot', plotNpcId: 'f69_accountant_nil', name: 'Нил Расписочный', faction: Faction.CITIZEN, occupation: Occupation.STOREKEEPER },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('olga')!, name: 'Ольга Дмитриевна', faction: Faction.SCIENTIST, occupation: Occupation.DOCTOR },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('yakov')!, name: 'Яков Давидович', faction: Faction.SCIENTIST, occupation: Occupation.SCIENTIST },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('barni')!, name: 'Сержант Баринов', faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('vanka')!, name: 'Ванька Банчиный', faction: Faction.CULTIST, occupation: Occupation.ALCOHOLIC },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('major_grom')!, name: 'Майор Громный', faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('rotenbergov')!, name: 'Министр Ротенбергов', faction: Faction.CITIZEN, occupation: Occupation.DIRECTOR },
+    { kind: 'plot', plotNpcId: getPlotNpcNumericId('f69_accountant_nil')!, name: 'Нил Расписочный', faction: Faction.CITIZEN, occupation: Occupation.STOREKEEPER },
   ]);
 
   const olgaToYakov = getDemosNpcOnlySocialEdges(state, 1).find(edge => edge.targetAlifeId === 2);

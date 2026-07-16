@@ -239,7 +239,7 @@ export function spawnSocialNpc(
 
 export function spawnAmbientNpc(
   entities: Entity[],
-  nextId: { v: number },
+  _nextId: { v: number },
   name: string,
   faction: Faction,
   occupation: Occupation,
@@ -249,7 +249,7 @@ export function spawnAmbientNpc(
   weapon?: string,
 ): void {
   entities.push({
-    id: nextId.v++, type: EntityType.NPC,
+    id: -1, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
     angle: rng() * Math.PI * 2, pitch: 0,
     alive: true, speed: occupation === Occupation.CHILD ? 0.8 : 1.0,

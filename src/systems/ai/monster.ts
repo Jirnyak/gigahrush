@@ -16,6 +16,7 @@ import { ITEMS, ITEM_TAGS, getStack } from '../../data/items';
 import { MAX_INVENTORY_SLOTS } from '../../data/inventory_limits';
 import { occupationHasProfileTag } from '../../data/occupation_profiles';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
+import { isPlotNpc } from '../../data/plot';
 import {
   playGrowl,
   playFogSharkBite,
@@ -1257,7 +1258,7 @@ function ensureMukhozhukExposed(
 function mukhozhukCommandableNpc(npc: Entity, target: Entity): boolean {
   if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai || npc.id === target.id) return false;
   if ((npc.maxHp ?? npc.hp ?? 60) > 130 || (npc.rpg?.level ?? 1) > 6) return false;
-  if (npc.id !== undefined) return false;
+  if (isPlotNpc(npc)) return false;
   const guard = npc.faction === Faction.LIQUIDATOR ||
     npc.faction === Faction.WILD ||
     occupationHasProfileTag(npc.occupation, 'combat');

@@ -9,6 +9,7 @@ import {
   type MarkovSpeechRouterResult,
 } from '../src/systems/markov_barks';
 import { generateMarkovLogSpeech } from '../src/systems/markov_log_speech';
+import { RoomType } from '../src/core/types';
 
 function routedText(request: MarkovSpeechRouterRequest, text: string): MarkovSpeechRouterResult {
   return {
@@ -62,14 +63,14 @@ test('generated bark receives actor context and event anchors', () => {
     actor: { id: 9, name: 'Дежурная' },
     exactFallback: 'Очередь ждёт.',
     event: { type: 'container_opened', itemName: 'пайковая карточка', tags: ['supply'] },
-    context: { roomName: 'Кладовая' },
+    context: { roomType: RoomType.WAREHOUSE },
     seed: 12,
     routeSpeech: request => routedText(request, request.context.anchors.join('|')),
   });
 
   assert.equal(result?.source, 'generated_markov');
   assert.match(result?.text ?? '', /Дежурная/);
-  assert.match(result?.text ?? '', /Кладовая/);
+  assert.match(result?.text ?? '', /room\.warehouse/);
   assert.match(result?.text ?? '', /пайковая карточка|container_opened/);
 });
 

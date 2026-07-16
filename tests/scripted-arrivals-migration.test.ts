@@ -1,4 +1,5 @@
 import { getPlotNpcCount } from '../src/data/npc_packages';
+import '../src/data/plot';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -21,7 +22,7 @@ import { getPlotNpcNumericId, getPlotNpcStringId,  getNpcPackageByPlotNpcId, npc
 import { PLOT_CHAIN } from '../src/data/plot';
 import { SCRIPTED_ARRIVALS } from '../src/data/scripted_arrivals';
 import { initFactionRelations } from '../src/data/relations';
-import { recordAlifeNpcDeath, setAlifeState, alifeForSave } from '../src/systems/alife';
+import { recordAlifeNpcDeath, setAlifeState, alifeForSave, isPlotNpcDead } from '../src/systems/alife';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import { updateScriptedArrivals } from '../src/systems/scripted_arrivals';
@@ -111,6 +112,22 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
   const player = makeTestPlayer({ id: 1, x: 24.5, y: 24.5 });
   const entities: Entity[] = [player];
   const nextId = { v: getPlotNpcCount() + 1000 };
+  
+  const numericId = getPlotNpcNumericId(arrivalDef!.leaderPlotNpcId)!;
+  const pack = getNpcPackageByPlotNpcId(numericId);
+  console.log({
+    stepIndex: PLOT_CHAIN.findIndex(step => step.eventTags?.includes(arrivalDef!.triggerPlotEventTag)),
+    stateCurrentZ: state.currentZ,
+    defCurrentZ: arrivalDef!.currentZ,
+    quest: state.quests[0],
+    entitiesAlive: entities.some(e => e.type === EntityType.NPC && e.alive && e.id === numericId),
+    dead: isPlotNpcDead(state, numericId),
+    numericId,
+    packId: pack?.id,
+    packPlotNpcId: pack?.content?.plotNpcId,
+    packPlotNumericId: pack?.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined,
+    alifeRecords: state.alife?.npcs.filter(r => r.reservedKind === 'plot').map(r => ({ id: r.id, plotNpcId: r.plotNpcId, reservedKind: r.reservedKind }))
+  });
 
   assert.equal(updateScriptedArrivals(world, entities, player, state, nextId), true);
 

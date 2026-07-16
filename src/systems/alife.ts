@@ -1199,7 +1199,7 @@ function reservedNpcFromData(def: AlifeReservedIdentityDef): AlifePopulationRese
     id: getPlotNpcNumericId(def.id),
     kind: def.kind,
     presence: def.presence,
-//     id: getPlotNpcNumericId(def.id),
+    plotNpcId: def.plotNpcId,
     name: def.name,
     female: def.female,
     age: def.age,
@@ -1341,7 +1341,7 @@ function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, res
   if (reserved.id) record.reservedIdentityId = cleanFloorKey(reserved.id);
   if (reserved.kind) record.reservedKind = reserved.kind;
   if (reserved.presence === 'population' || reserved.presence === 'event_only') record.reservedPresence = reserved.presence;
-  if (reserved.plotNpcId) record.plotNpcId = reserved.plotNpcId;
+  if (reserved.plotNpcId !== undefined) record.plotNpcId = reserved.plotNpcId;
   if (reserved.name) {
     record.name = reserved.name.slice(0, 80);
     const parts = reserved.name.split(' ');
@@ -1786,7 +1786,7 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     reservedKind: record.reservedKind,
     reservedIdentityId: record.reservedIdentityId,
     reservedPresence: record.reservedPresence,
-//     id: record.id,
+    plotNpcId: record.plotNpcId,
     x: record.x,
     y: record.y,
     angle: record.angle,
@@ -1952,11 +1952,13 @@ function arrivalRecordFromEntity(alife: AlifeState, id: number, state: GameState
   const int = clampInt(rpg?.int, 1, 0, RPG_ATTRIBUTE_CAP);
   const rpgShell = { level, xp: 0, attrPoints: 0, str, agi, int, psi: 0, maxPsi: 0 };
   const maxHp = Math.max(1, Math.floor(entity.maxHp ?? getMaxHp(rpgShell)));
+  const dummyPlan: AlifeFloorPlan = { key: floorKey, z: state.currentZ, danger: 1, weight: 1 };
+  const generated = nameForRecord(dummyPlan, faction, occupation, alife.seed, id);
   const record: AlifeNpcRecord = {
     id,
-    name: (entity.name ?? `Житель ${id}`).slice(0, 80),
-    firstName: (entity.firstName ?? (entity.name ?? `Житель`).split(' ')[0]).slice(0, 40),
-    lastName: (entity.lastName ?? ((entity.name ?? `${id}`).split(' ').slice(1).join(' ') || `${id}`)).slice(0, 40),
+    name: (entity.name ?? generated.name).slice(0, 80),
+    firstName: (entity.firstName ?? (entity.name ? entity.name.split(' ')[0] : generated.firstName)).slice(0, 40),
+    lastName: (entity.lastName ?? (entity.name ? entity.name.split(' ').slice(1).join(' ') || generated.lastName : generated.lastName)).slice(0, 40),
     npcVisualId: sanitizeNpcVisualId(entity.npcVisualId),
     weapon: entity.weapon,
     tool: entity.tool,

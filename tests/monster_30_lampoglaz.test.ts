@@ -1,5 +1,6 @@
 import { MONSTERS, MONSTER_SPRITES } from '../src/entities/monster';
 import { test } from 'node:test';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import * as assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

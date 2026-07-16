@@ -329,7 +329,7 @@ function plotIdMapFromSnapshots(
   const out = new Map<number, number>();
   for (let id = 1; id <= total; id++) {
     const plotNpcId = snapshots[id]?.plotNpcId;
-    if (plotNpcId && !out.has(plotNpcId)) out.set(plotNpcId, id);
+    if (plotNpcId !== undefined && !out.has(plotNpcId)) out.set(plotNpcId, id);
   }
   return out;
 }
@@ -489,8 +489,8 @@ function applyAllAuthoredRelations(
   if (DEMOS_AUTHORED_RELATIONS.length === 0) return;
   const byPlotId = plotIdMapFromSnapshots(snapshots, graph.total);
   for (const def of DEMOS_AUTHORED_RELATIONS) {
-    const fromId = byPlotId.get(getPlotNpcNumericId(def.fromPlotNpcId) || -1);
-    const toId = byPlotId.get(getPlotNpcNumericId(def.toPlotNpcId) || -1);
+    const fromId = byPlotId.get(getPlotNpcNumericId(def.fromPlotNpcId) ?? -1);
+    const toId = byPlotId.get(getPlotNpcNumericId(def.toPlotNpcId) ?? -1);
     applyAuthoredDirection(graph, fromId, toId, def);
     if (def.bidirectional) applyAuthoredDirection(graph, toId, fromId, def, true);
   }

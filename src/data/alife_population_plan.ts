@@ -47,7 +47,7 @@ export interface AlifeReservedIdentityDef {
   kind: 'plot' | 'authored' | 'event_reserved';
   presence?: 'population' | 'event_only';
   floorKey: string;
-  plotNpcId?: string;
+  plotNpcId?: number;
   name?: string;
   female?: boolean;
   age?: number;
@@ -92,7 +92,7 @@ export const ALIFE_POPULATION_CAPACITY = 131_072 as const;
 export const ALIFE_POPULATION_BASELINE = 100_000 as const;
 export const ALIFE_POPULATION_JITTER = 8_192 as const;
 export const ALIFE_POPULATION_MIN_RANDOM = ALIFE_POPULATION_BASELINE - ALIFE_POPULATION_JITTER;
-const SNAKE_ID_RE = /^[a-z0-9_]+$/;
+
 
 const STORY_POPULATION_WEIGHT: Readonly<Record<string, number>> = {
   'ministry': 4_500,
@@ -307,14 +307,14 @@ function buildReservedIdentities(packages?: readonly NpcPackageDef[]): AlifeRese
   const sourcePackages = packages ?? defaultReservedPackageSource();
   const out: AlifeReservedIdentityDef[] = [];
   const reservedIds = new Set<string>();
-  const plotNpcIds = new Set<string>();
+  const plotNpcIds = new Set<number>();
   for (const pack of sourcePackages) {
     const identity = alifeReservedIdentityFromNpcPackage(pack);
     if (!identity) continue;
     if (reservedIds.has(identity.id)) continue;
-    if (identity.plotNpcId && plotNpcIds.has(identity.plotNpcId)) continue;
+    if (identity.plotNpcId !== undefined && plotNpcIds.has(identity.plotNpcId)) continue;
     reservedIds.add(identity.id);
-    if (identity.plotNpcId) plotNpcIds.add(identity.plotNpcId);
+    if (identity.plotNpcId !== undefined) plotNpcIds.add(identity.plotNpcId);
     out.push(identity);
   }
   return out;
@@ -463,16 +463,15 @@ export function validateAlifePopulationPlan(plan?: AlifePopulationPlanDef): stri
   }
 
   const reservedIds = new Set<string>();
-  const plotIds = new Set<string>();
+  const plotIds = new Set<number>();
   for (const reserved of checked.reserved) {
     if (reservedIds.has(reserved.id)) errors.push(`duplicate reserved identity ${reserved.id}`);
     reservedIds.add(reserved.id);
-    if (reserved.kind === 'plot' && !reserved.plotNpcId) errors.push(`plot reserved identity ${reserved.id} must carry plotNpcId`);
+    if (reserved.kind === 'plot' && reserved.plotNpcId === undefined) errors.push(`plot reserved identity ${reserved.id} must carry plotNpcId`);
     if (!floorKeyKnown(reserved.floorKey, knownContext)) errors.push(`unknown reserved floor key ${reserved.floorKey}`);
-    if (reserved.plotNpcId) {
+    if (reserved.plotNpcId !== undefined) {
       if (plotIds.has(reserved.plotNpcId)) errors.push(`duplicate reserved plot NPC ${reserved.plotNpcId}`);
       plotIds.add(reserved.plotNpcId);
-      if (!SNAKE_ID_RE.test(reserved.plotNpcId)) errors.push(`reserved plot NPC id is not snake_case: ${reserved.plotNpcId}`);
     }
     if (!tagsValid(reserved.tags)) errors.push(`invalid reserved tags for ${reserved.id}`);
   }

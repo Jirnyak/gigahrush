@@ -49,6 +49,7 @@ function mukhozhuk(overrides: Partial<Entity> = {}): Entity {
     hp: DEF.hp,
     maxHp: DEF.hp,
     monsterKind: MonsterKind.MUKHOZHUK_HOST,
+    aiFlags: DEF.aiFlags ? [...DEF.aiFlags] : undefined,
     attackCd: 0,
     currentMag: 1,
     ai: { goal: AIGoal.WANDER, tx: 12, ty: 12, path: [], pi: 0, stuck: 0, timer: 0 },
@@ -98,14 +99,14 @@ test('mukhozhuk command pulse is local, capped and does not draft ordinary civil
   const player = makeTestPlayer({ id: 1, x: 13, y: 12, hp: 100, maxHp: 100 });
   const host = mukhozhuk();
   const civilian = makeTestNpc({
-    id: 3,
+    id: 1000003,
     x: 12.5,
     y: 12.2,
     faction: Faction.CITIZEN,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   });
   const strongGuard = makeTestNpc({
-    id: 4,
+    id: 1000004,
     x: 12.8,
     y: 11.8,
     faction: Faction.LIQUIDATOR,
@@ -115,7 +116,7 @@ test('mukhozhuk command pulse is local, capped and does not draft ordinary civil
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   });
   const guards = Array.from({ length: 24 }, (_, i) => makeTestNpc({
-    id: 10 + i,
+    id: 1000010 + i,
     x: 11.2 + (i % 6) * 0.45,
     y: 11.2 + Math.floor(i / 6) * 0.45,
     faction: i % 5 === 0 ? Faction.CULTIST : Faction.LIQUIDATOR,

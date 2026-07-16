@@ -342,7 +342,7 @@ function npcCanShowProceduralQuestOffer(npc: Entity, state: Pick<GameState, 'que
   return npc.type === EntityType.NPC &&
     npc.alive &&
     npc.canGiveQuest === true &&
-    npc.id === undefined &&
+    !isPlotNpc(npc) &&
     !npcHasAcceptedProceduralQuest(npc, state);
 }
 
@@ -405,7 +405,7 @@ export function npcHasImportantQuestAction(npc: Entity, state: Pick<GameState, '
 export function npcCanGiveQuestNow(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive) return false;
   if (npc.canGiveQuest !== true) return false;
-  if (npc.id) return hasAvailableQuest(npc.id, state.quests);
+  if (isPlotNpc(npc)) return hasAvailableQuest(npc.id, state.quests);
   return !state.quests.some(q => !q.done && q.giverId === npc.id);
 }
 
@@ -420,7 +420,7 @@ export function npcQuestMarkerState(npc: Entity, state: Pick<GameState, 'quests'
   if (activeTalkQuestForNpcByTone(npc, state, 'authored')) {
     return { tone: 'authored', active: true, showExclamation: true };
   }
-  if (npc.id && npcCanGiveQuestNow(npc, state)) {
+  if (isPlotNpc(npc) && npcCanGiveQuestNow(npc, state)) {
     return { tone: 'authored', active: true, showExclamation: true };
   }
   if (npcCanShowProceduralQuestOffer(npc, state)) {
@@ -429,7 +429,7 @@ export function npcQuestMarkerState(npc: Entity, state: Pick<GameState, 'quests'
   if (activeTalkQuestForNpcByTone(npc, state, 'procedural')) {
     return { tone: 'procedural', active: true, showExclamation: false };
   }
-  if (npc.id) return { tone: 'authored', active: false, showExclamation: false };
+  if (isPlotNpc(npc)) return { tone: 'authored', active: false, showExclamation: false };
   return null;
 }
 

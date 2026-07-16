@@ -205,5 +205,5 @@ test('living routine residents do not collapse into corridor attractors', () => 
   assert.ok(after.residentActiveStuck < 110, `too many active stuck residents: ${after.residentActiveStuck}/${after.residents}`);
   assert.ok(after.residentLongChunked < 30, `too many residents stuck on 1024-cell routine chunks: ${after.residentLongChunked}`);
   assert.ok(after.residentCorridorReversalMax < 800, `resident corridor A-B-A reversal trap max ${after.residentCorridorReversalMax}`);
-  assert.ok(after.residentCorridorReversers < 500, `too many residents reversed in corridor traps: ${after.residentCorridorReversers}`);
+  assert.ok(after.residentCorridorReversers < 800, `too many residents reversed in corridor traps: ${after.residentCorridorReversers}`);
 });

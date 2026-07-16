@@ -59,6 +59,7 @@ export function plotNpcEntityFromPackage(
     ?? (pack.affiliation.occupation === Occupation.CHILD ? 0.6 : undefined);
   return {
     id: getPlotNpcNumericId(plotNpcId)!,
+    alifeId: getPlotNpcNumericId(plotNpcId)!,
     type: EntityType.NPC,
     x,
     y,

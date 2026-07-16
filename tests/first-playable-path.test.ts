@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { LiftDirection, QuestType, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
-import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
+import { getPlotNpcNumericId, getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
 import { PLOT_CHAIN } from '../src/data/plot';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import {
@@ -30,8 +30,8 @@ function plotNpcName(plotNpcId: string): string {
 
 test('fresh run exposes Olga as the first soft objective', () => {
   const state = makeGameState();
-  const olga = makeTestNpc({ id: 10, name: plotNpcName('olga'), plotNpcId: 'olga', canGiveQuest: true });
-  const barni = makeTestNpc({ id: 11, name: plotNpcName('barni'), plotNpcId: 'barni', canGiveQuest: true });
+  const olga = makeTestNpc({ id: getPlotNpcNumericId('olga')!, name: plotNpcName('olga'), canGiveQuest: true });
+  const barni = makeTestNpc({ id: getPlotNpcNumericId('barni')!, name: plotNpcName('barni'), canGiveQuest: true });
 
   const objective = getCurrentObjective(state, [olga, barni]);
 
@@ -48,8 +48,8 @@ test('fresh run exposes Olga as the first soft objective', () => {
 });
 
 test('accepted first plot step points to Sergeant Barinov and the armory range', () => {
-  const olga = makeTestNpc({ id: 10, name: plotNpcName('olga'), plotNpcId: 'olga', canGiveQuest: true });
-  const barni = makeTestNpc({ id: 11, name: plotNpcName('barni'), plotNpcId: 'barni', canGiveQuest: true });
+  const olga = makeTestNpc({ id: getPlotNpcNumericId('olga')!, name: plotNpcName('olga'), canGiveQuest: true });
+  const barni = makeTestNpc({ id: getPlotNpcNumericId('barni')!, name: plotNpcName('barni'), canGiveQuest: true });
   const quest: Quest = {
     id: 1,
     type: QuestType.TALK,
@@ -83,10 +83,10 @@ test('player-selected active quest overrides the automatic objective and toggles
   const plotQuest: Quest = {
     id: 1,
     type: QuestType.TALK,
-    giverId: 10,
+    giverId: getPlotNpcNumericId('olga')!,
     giverName: plotNpcName('olga'),
     desc: PLOT_CHAIN[0].desc,
-    targetPlotNpcId: 'barni',
+    targetNpcId: getPlotNpcNumericId('barni')!,
     plotStepIndex: 0,
     done: false,
   };
@@ -114,8 +114,8 @@ test('player-selected active quest overrides the automatic objective and toggles
 
 test('quest marker state separates authored and procedural NPC map roles', () => {
   const state = makeGameState();
-  const giver = makeTestNpc({ id: 20, name: 'Диспетчер', canGiveQuest: true });
-  const target = makeTestNpc({ id: 21, name: 'Адресат', canGiveQuest: false });
+  const giver = makeTestNpc({ id: 1000020, name: 'Диспетчер', canGiveQuest: true });
+  const target = makeTestNpc({ id: 1000021, name: 'Адресат', canGiveQuest: false });
 
   assert.deepEqual(npcQuestMarkerState(giver, state), { tone: 'procedural', active: true, showExclamation: true });
 
@@ -141,9 +141,8 @@ test('Olga quest action accepts the first plot step instead of ambient no-op', (
   const world = new World();
   const player = makeTestPlayer({ id: 1, x: 10, y: 10 });
   const olga = makeTestNpc({
-    id: 10,
+    id: getPlotNpcNumericId('olga')!,
     name: plotNpcName('olga'),
-    plotNpcId: 'olga',
     canGiveQuest: true,
     x: 11,
     y: 10,
@@ -154,7 +153,7 @@ test('Olga quest action accepts the first plot step instead of ambient no-op', (
 
   assert.equal(state.quests.length, 1);
   assert.equal(state.quests[0].plotStepIndex, 0);
-  assert.equal(state.quests[0].targetPlotNpcId, 'barni');
+  assert.equal(state.quests[0].targetNpcId, getPlotNpcNumericId('barni')!);
   assert.equal(olga.questId, state.quests[0].id);
   assert.match(state.msgs.at(-1)?.text ?? '', /Принято задание|Новое поручение/);
   assert.equal(state.msgs.some(m => /Пока ничего|нечего тебе поручить/.test(m.text)), false);

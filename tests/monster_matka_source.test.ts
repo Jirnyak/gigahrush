@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import * as assert from 'node:assert/strict';
 
 import { AIGoal, Cell, EntityType, Faction, MonsterKind, ZoneFaction, type Entity, type Msg } from '../src/core/types';

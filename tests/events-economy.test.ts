@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
+
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { SeedRng, _overrideRng, _restoreRng } from '../src/core/rand';
 
 import {
@@ -1042,7 +1044,7 @@ test('NPC assignment offer can use contract templates as timed contract quests',
     name: 'Тестовая контора',
   });
   const npc = makeTestEntity({
-    id: 42,
+    id: 1000042,
     type: EntityType.NPC,
     x: 10,
     y: 10,
@@ -1087,7 +1089,7 @@ test('procedural quest offers have no global active quest cap', () => {
     name: 'Тестовая контора',
   });
   const npc = makeTestEntity({
-    id: 42,
+    id: 1000042,
     type: EntityType.NPC,
     x: 10,
     y: 10,
@@ -1113,7 +1115,7 @@ test('procedural fetch quests do not target story-critical main plot items', () 
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const world = new World();
   const npc = makeTestEntity({
-    id: 42,
+    id: 1000042,
     type: EntityType.NPC,
     x: 10,
     y: 10,

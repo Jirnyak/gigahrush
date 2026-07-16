@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import * as assert from 'node:assert/strict';
 
 import {
@@ -140,7 +141,8 @@ test('missing GEN terminal access spawns one cooldowned Safeguard backlash when 
   const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 1, x: 100, y: 100, money: 100 });
   const entities = [player];
-  const nextId = { v: getPlotNpcCount() + 2 }
+  const startNextId = getPlotNpcCount() + 2;
+  const nextId = { v: startNextId };
   const terminal = placeNetTerminalGenTerminal(world, 96, 100, SILICON_NET_WELL_TERMINAL_DEF);
   assert.ok(terminal);
   let result: ReturnType<typeof tryUseNetTerminalGen>;
@@ -154,11 +156,11 @@ test('missing GEN terminal access spawns one cooldowned Safeguard backlash when 
   assert.equal(result.handled, true);
   assert.equal(result.mode, 'closed');
   assert.equal(entities.filter(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.SAFEGUARD).length, 1);
-  assert.equal(nextId.v, 3);
+  assert.equal(nextId.v, startNextId + 1);
 
   tryUseNetTerminalGen(world, player, state, terminal.x, terminal.y, entities, nextId);
   assert.equal(entities.filter(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.SAFEGUARD).length, 1);
-  assert.equal(nextId.v, 3);
+  assert.equal(nextId.v, startNextId + 1);
 
   const events = getRecentEvents(state, { type: 'net_terminal_hack_failed', tags: ['safeguard'], limit: 2 });
   assert.equal(events.length, 1);

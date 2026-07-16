@@ -3995,7 +3995,7 @@ function spawnNpcs(world: World, rooms: Room[], entities: Entity[], nextId: { v:
     const nm = randomName(faction);
     const loadout = npcLoadout(faction, spec.danger);
     entities.push({
-      id: nextId.v++,
+      id: -1,
       type: EntityType.NPC,
       x: (cell % W) + 0.5,
       y: ((cell / W) | 0) + 0.5,
@@ -4634,7 +4634,7 @@ function placeSmogFilterPockets(
   }
 }
 
-function spawnSmogLooter(world: World, room: Room, entities: Entity[], nextId: { v: number }, spec: ProceduralFloorSpec): void {
+function spawnSmogLooter(world: World, room: Room, entities: Entity[], _nextId: { v: number }, spec: ProceduralFloorSpec): void {
   if (!canSpawnEntityType(entities, EntityType.NPC)) return;
   const pos = randomRoomCell(room);
   const ci = world.idx(pos.x, pos.y);
@@ -4644,7 +4644,7 @@ function spawnSmogLooter(world: World, room: Room, entities: Entity[], nextId: {
   const nm = randomName(Faction.WILD);
   const weapon = chance(0.55) ? 'pipe' : 'knife';
   entities.push({
-    id: nextId.v++,
+    id: -1,
     type: EntityType.NPC,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
@@ -9462,7 +9462,7 @@ function findLiquidatorGuardCell(world: World, entities: readonly Entity[], chec
 function spawnLiquidatorCheckpointGuards(
   world: World,
   entities: Entity[],
-  nextId: { v: number },
+  _nextId: { v: number },
   spec: ProceduralFloorSpec,
   profile: LiquidatorControlProfile,
 ): void {
@@ -9480,7 +9480,7 @@ function spawnLiquidatorCheckpointGuards(
     const maxHp = getMaxHp(rpg);
     const loadout = npcLoadout(Faction.LIQUIDATOR, spec.danger);
     entities.push({
-      id: nextId.v++,
+      id: -1,
       type: EntityType.NPC,
       x: x + 0.5,
       y: y + 0.5,
@@ -14733,7 +14733,7 @@ function spawnWildMajorityAmbusher(
   const nm = randomName(Faction.WILD);
   const weapon = chance(0.35 + spec.danger * 0.05) ? 'knife' : 'pipe';
   entities.push({
-    id: nextId.v++,
+    id: -1,
     type: EntityType.NPC,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
@@ -15469,7 +15469,7 @@ function spawnFalseSafeCaretaker(
   const nm = randomName(Faction.CULTIST);
   const loadout = npcLoadout(Faction.CULTIST, spec.danger);
   entities.push({
-    id: nextId.v++,
+    id: -1,
     type: EntityType.NPC,
     x: pos.x + 0.5,
     y: pos.y + 0.5,

@@ -76,7 +76,6 @@ function makeAmbientNpcTemplate(
   id: number,
   cell: number,
   route: DesignFloorRouteDef,
-  noun: string,
   npcLevel: number,
   serial: number,
   seed: number,
@@ -98,7 +97,6 @@ function makeAmbientNpcTemplate(
     speed: child ? 0.78 : 0.95 + rand32(seed, serial, 79) * 0.42,
     sprite: occupation,
     spriteScale: child ? 0.6 : undefined,
-    name: `${route.displayName}: ${noun} ${serial + 1}`,
     hp,
     maxHp: hp,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
@@ -134,7 +132,7 @@ function spawnAmbientNpcTemplates(generation: FloorGeneration, route: DesignFloo
   for (let i = 0; i < cells.length; i++) {
     const faction = pickWeighted(profile.npcFactions, seed, i, 101);
     const occupation = pickWeighted(profile.npcOccupations, seed, i, 301);
-    generation.entities.push(makeAmbientNpcTemplate(nextId++, cells[i], route, profile.npcNoun, profile.npcLevel, i, seed, faction, occupation));
+    generation.entities.push(makeAmbientNpcTemplate(nextId++, cells[i], route, profile.npcLevel, i, seed, faction, occupation));
   }
   return nextId;
 }

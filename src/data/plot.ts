@@ -156,10 +156,10 @@ export function plotNpcDefFromPackage(pack: NpcPackageDef): PlotNpcDef {
   };
 }
 
-function plotNpcEntriesFromPackages(packs: readonly NpcPackageDef[]): [string, PlotNpcDef][] {
+function plotNpcEntriesFromPackages(packs: readonly NpcPackageDef[]): [number, PlotNpcDef][] {
   return packs.flatMap(pack => {
     const plotNpcId = plotNpcIdFromPackage(pack);
-    return plotNpcId ? [[plotNpcId, plotNpcDefFromPackage(pack)] as [string, PlotNpcDef]] : [];
+    return plotNpcId !== undefined ? [[plotNpcId, plotNpcDefFromPackage(pack)] as [number, PlotNpcDef]] : [];
   });
 }
 
@@ -174,11 +174,11 @@ export function hasPlotNpc(plotNpcId: string): boolean {
   return numId !== undefined ? getNpcPackageByPlotNpcId(numId) !== undefined : false;
 }
 
-export function allPlotNpcEntries(): readonly [string, PlotNpcDef][] {
+export function allPlotNpcEntries(): readonly [number, PlotNpcDef][] {
   return plotNpcEntriesFromPackages(allNpcPackages());
 }
 
-export function allPlotNpcIds(): readonly string[] {
+export function allPlotNpcIds(): readonly number[] {
   return allPlotNpcEntries().map(([id]) => id);
 }
 
@@ -813,7 +813,7 @@ import { getPlotNpcCount } from './npc_packages';
 
 /** Check if an entity is a plot NPC */
 export function isPlotNpc(e: Entity): boolean {
-  return e.id >= 0 && e.id < getPlotNpcCount();
+  return e.alifeId !== undefined && e.alifeId >= 1 && e.alifeId <= getPlotNpcCount();
 }
 
 /** Check if a plot NPC has an available quest to give (not yet offered) */

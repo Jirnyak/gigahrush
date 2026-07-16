@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import * as assert from 'node:assert/strict';
 
 import { EntityType, QuestType, type Entity, type Item, type Quest } from '../src/core/types';

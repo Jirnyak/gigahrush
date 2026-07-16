@@ -429,8 +429,8 @@ export function npcPackageDisplayName(pack: NpcPackageDef): string {
   return pack.identity.nickname ?? pack.id;
 }
 
-export function plotNpcIdFromPackage(pack: NpcPackageDef): string | undefined {
-  return pack.content?.plotNpcId;
+export function plotNpcIdFromPackage(pack: NpcPackageDef): number | undefined {
+  return pack.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined;
 }
 
 export function npcReservedIdentityId(packageId: string): string {

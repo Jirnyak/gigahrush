@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import '../src/data/plot';
 import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import * as assert from 'node:assert/strict';
 

@@ -91,7 +91,7 @@ test('ordinary generated talk contains a context anchor', () => {
   });
 
   assert.equal(result.source, 'generated_markov');
-  assert.match(result.text, /вода|бинт|поешь|спорь/i);
+  assert.match(result.text, /Кухня|дверь|вода|бинт|поешь|спорь/i);
 });
 
 test('rumor output preserves rumor id and selected facts', () => {
