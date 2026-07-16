@@ -178,6 +178,7 @@ export function buildMarkovBarkContext(request: MarkovBarkRequest): MarkovNpcSpe
   const anchors = uniqueAnchors([
     cleanText(actor.name),
     roomDefId,
+    context?.roomType !== undefined ? `room.${context.roomType}` : undefined,
     targetName,
     itemName,
     cleanText(event?.type),

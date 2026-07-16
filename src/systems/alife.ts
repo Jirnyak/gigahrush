@@ -1,4 +1,4 @@
-import { getPlotNpcNumericId, getPlotNpcStringId } from '../data/npc_packages';
+import { getPlotNpcCount, getPlotNpcNumericId } from '../data/npc_packages';
 import {
   W,
   Cell,
@@ -69,7 +69,8 @@ import {
   currentFloorRunEntry,
   floorRunEntryForDesignFloor,
 } from './procedural_floors';
-import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural  } from './floor_keys';
+import { floorRunZAllowsNpcs } from '../data/procedural_floors';
+import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyZ } from './floor_keys';
 import { generateNpcLoadout, generateMerchantStock } from './procedural_loot';
 import { ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
@@ -324,6 +325,7 @@ interface AlifeState {
   floorKeys: string[];
   floorKeyLookup: Record<string, number>;
   floorIndex: Record<string, number[]>;
+  floorCap?: Record<string, number>;
   deadPlotNpcIds: Set<number>;
   leaderboardVersion: number;
   leaderboardCache?: AlifeLeaderboardSnapshot & { signature: string; limit: number };
@@ -1418,6 +1420,7 @@ export function buildAlifeStateFromPopulationPlan(
   const boundedTotal = clampInt(total, ALIFE_POPULATION, 0, ALIFE_POPULATION);
   const npcs: AlifeNpcRecord[] = [];
   const floorIndex: Record<string, number[]> = {};
+  const floorCap: Record<string, number> = {};
   const alife: AlifeState = {
     version: ALIFE_VERSION,
     seed,
@@ -1427,6 +1430,7 @@ export function buildAlifeStateFromPopulationPlan(
     floorKeys: [],
     floorKeyLookup: {},
     floorIndex,
+    floorCap,
     deadPlotNpcIds: new Set(),
     leaderboardVersion: 0,
   };
@@ -1464,6 +1468,14 @@ export function buildAlifeStateFromPopulationPlan(
       bucket.push(npcs.length);
       npcs.push(record);
     }
+  }
+
+  for (let i = 0; i < plan.buckets.length; i++) {
+    const source = plan.buckets[i];
+    const floorPlan = populationBucketToFloorPlan(source);
+    if (!floorPlan) continue;
+    const count = counts[i] ?? 0;
+    floorCap[floorPlan.key] = count;
   }
 
   if (npcs.length !== boundedTotal) throw new RangeError('A-Life population plan did not assign every record to a floor bucket');
@@ -2039,7 +2051,7 @@ export function assignPersistentAlifeNpcFromEntity(
   entities: readonly Entity[],
   floorKey = currentAlifeFloorKey(state),
 ): boolean {
-  if (entity.type !== EntityType.NPC || getPlotNpcStringId(entity.id) !== undefined || entity.persistentNpcId) return false;
+  if (entity.type !== EntityType.NPC || ('plotNpcId' in entity && (entity as any).plotNpcId !== undefined) || (entity.alifeId !== undefined && entity.alifeId >= 1 && entity.alifeId <= getPlotNpcCount()) || entity.persistentNpcId) return false;
   if (entity.alifeId !== undefined) {
     rewriteAlifeNpcIdentityFromEntity(state, entity);
     return true;
@@ -2342,6 +2354,16 @@ function extractAmbientNpcTemplates(entities: Entity[]): Entity[] {
   return templates;
 }
 
+function ensureAlifeFloorCaps(alife: AlifeState): Record<string, number> {
+  if (!alife.floorCap) alife.floorCap = {};
+  for (const key of Object.keys(alife.floorIndex)) {
+    if (typeof alife.floorCap[key] !== 'number') {
+      alife.floorCap[key] = alife.floorIndex[key]?.length ?? 30;
+    }
+  }
+  return alife.floorCap;
+}
+
 export function materializeAlifeFloorPopulation(
   state: GameState,
   world: World,
@@ -2355,7 +2377,12 @@ export function materializeAlifeFloorPopulation(
   const templates = extractAmbientNpcTemplates(entities);
   if (templates.length === 0) return;
   const floorIds = alife.floorIndex[floorKey] ?? [];
-  if (floorIds.length === 0) return;
+  if (floorIds.length === 0 && Object.keys(alife.floorIndex).length === 0) return;
+
+  const floorCaps = ensureAlifeFloorCaps(alife);
+  if (typeof floorCaps[floorKey] !== 'number' || floorCaps[floorKey]! > templates.length) {
+    floorCaps[floorKey] = templates.length;
+  }
 
   let slot = 0;
   for (const recordIndex of floorIds) {
@@ -2368,6 +2395,40 @@ export function materializeAlifeFloorPopulation(
     const entity = materializeEntity(record, template, world, alife, nextId);
     if (!entity) continue;
     entities.push(entity);
+  }
+
+  if (slot < templates.length) {
+    const currentZ = floorKeyZ(floorKey) ?? state.currentZ ?? 100;
+    const surplusFloors = Object.keys(alife.floorIndex)
+      .filter(key => key !== floorKey && (alife.floorIndex[key]?.length ?? 0) > (floorCaps[key] ?? Math.min(alife.floorIndex[key]!.length, 30)))
+      .map(key => ({ key, z: floorKeyZ(key) }))
+      .filter((item): item is { key: string; z: number } => item.z !== undefined && floorRunZAllowsNpcs(item.z) !== false)
+      .sort((a, b) => {
+        const distA = Math.abs(a.z - currentZ);
+        const distB = Math.abs(b.z - currentZ);
+        if (distA !== distB) return distA - distB;
+        return b.z - a.z;
+      });
+
+    for (const { key: candidateKey } of surplusFloors) {
+      if (slot >= templates.length) break;
+      const candidateBucket = alife.floorIndex[candidateKey];
+      if (!candidateBucket || candidateBucket.length === 0) continue;
+      const cap = floorCaps[candidateKey] ?? Math.min(candidateBucket.length, 30);
+      if (candidateBucket.length <= cap) continue;
+
+      for (let i = candidateBucket.length - 1; i >= cap && slot < templates.length; i--) {
+        const recordIndex = candidateBucket[i];
+        const record = alife.npcs[recordIndex];
+        if (!record || recordDead(alife, record) || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
+        const template = templates[slot];
+        slot++;
+        moveAlifeNpcRecord(state, record.id, floorKey, { z: currentZ });
+        const entity = materializeEntity(record, template, world, alife, nextId);
+        if (!entity) continue;
+        entities.push(entity);
+      }
+    }
   }
 
   // Dynamic Event: Lost Child

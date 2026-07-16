@@ -160,7 +160,7 @@ test('plot TALK quest response remains exact locked authored text', () => {
 test('killing a package-backed plot NPC still records durable plot death', () => {
   const state = makeGameState();
   const olga = makeTestNpc({ id: getPlotNpcNumericId('olga'), name: plotNpcName('olga') });
-  recordAlifeNpcDeath(state, { id: olga.id, type: 0, x: 0, y: 0, alive: false, speed: 1, sprite: 0 } as any);
+  recordAlifeNpcDeath(state, olga);
 
   assert.equal(isPlotNpcDead(state, olga.id!), true);
 });

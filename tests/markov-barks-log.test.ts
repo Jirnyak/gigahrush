@@ -63,14 +63,14 @@ test('generated bark receives actor context and event anchors', () => {
     actor: { id: 9, name: 'Дежурная' },
     exactFallback: 'Очередь ждёт.',
     event: { type: 'container_opened', itemName: 'пайковая карточка', tags: ['supply'] },
-    context: { roomType: RoomType.WAREHOUSE },
+    context: { roomType: RoomType.STORAGE },
     seed: 12,
     routeSpeech: request => routedText(request, request.context.anchors.join('|')),
   });
 
   assert.equal(result?.source, 'generated_markov');
   assert.match(result?.text ?? '', /Дежурная/);
-  assert.match(result?.text ?? '', /room\.warehouse/);
+  assert.match(result?.text ?? '', /room\.3/);
   assert.match(result?.text ?? '', /пайковая карточка|container_opened/);
 });
 

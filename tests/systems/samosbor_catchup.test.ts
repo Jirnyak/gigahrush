@@ -11,6 +11,7 @@ import {
 } from '../../src/systems/samosbor.js';
 import { setActiveSamosborVariantForTests } from '../../src/systems/samosbor_variants_runtime.js';
 import { World, GameState, Entity } from '../../src/core/types.js';
+import { getPlotNpcCount } from '../../src/data/plot.js';
 
 function createMockWorld(): World {
   return {

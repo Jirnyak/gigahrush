@@ -283,7 +283,7 @@ test('Demos dead profiles keep traits and outgoing social summary', () => {
 
 test('Demos face-to-face helper rejects NPCs without stable A-Life identity', () => {
   const state = makeProfileState();
-  const transient = makeTestNpc({ id: 12, persistentNpcId: undefined });
+  const transient = makeTestNpc({ id: 12, persistentNpcId: undefined, alifeId: undefined });
   const monsterLike = { ...transient, type: EntityType.MONSTER };
 
   assert.equal(canOpenDemosProfileForNpc(transient), false);

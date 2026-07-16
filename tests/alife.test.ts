@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { World } from '../src/core/world';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import {
   AIGoal,
   Cell,

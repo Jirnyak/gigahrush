@@ -320,6 +320,7 @@ test('accepting a quest from an NPC reveals the target room once', () => {
   const player = makeMapPlayer(12, 12);
   const olga: Entity = {
     id: getPlotNpcNumericId('olga')!,
+    alifeId: getPlotNpcNumericId('olga')!,
     type: EntityType.NPC,
     x: 12.5,
     y: 13.5,
@@ -334,6 +335,7 @@ test('accepting a quest from an NPC reveals the target room once', () => {
   };
   const barni: Entity = {
     id: getPlotNpcNumericId('barni')!,
+    alifeId: getPlotNpcNumericId('barni')!,
     type: EntityType.NPC,
     x: 80.5,
     y: 80.5,

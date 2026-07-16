@@ -83,6 +83,7 @@ function makeHellWorld(): World {
 function plotNpc(id: number): Entity {
   return {
     id,
+    alifeId: id,
     type: EntityType.NPC,
     x: 24.5,
     y: 24.5,

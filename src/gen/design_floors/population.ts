@@ -9,6 +9,8 @@ import {
   type Entity,
 } from '../../core/types';
 import { hashSeed } from '../../core/rand';
+import { territoryOwnerToFaction } from '../../data/factions';
+import { territoryOwnerAtIndex } from '../../systems/territory';
 import type { DesignFloorRouteDef } from '../../data/design_floors';
 import {
   designFloorPopulationProfile,
@@ -46,7 +48,7 @@ function pickWeighted<T>(items: readonly WeightedDesignValue<T>[], seed: number,
 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.id &&
+    (entity as Entity & { npcPackageId?: string }).npcPackageId === undefined &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1;
@@ -130,7 +132,10 @@ function spawnAmbientNpcTemplates(generation: FloorGeneration, route: DesignFloo
   const cells = sampleNaturalPopulationCells(generation.world, count, profile.npcPlacement, seed);
   let nextId = firstId;
   for (let i = 0; i < cells.length; i++) {
-    const faction = pickWeighted(profile.npcFactions, seed, i, 101);
+    const ownerFaction = territoryOwnerToFaction(territoryOwnerAtIndex(generation.world, cells[i]));
+    const faction = ownerFaction !== null && rand32(seed, i, 909) < 0.96
+      ? ownerFaction
+      : pickWeighted(profile.npcFactions, seed, i, 101);
     const occupation = pickWeighted(profile.npcOccupations, seed, i, 301);
     generation.entities.push(makeAmbientNpcTemplate(nextId++, cells[i], route, profile.npcLevel, i, seed, faction, occupation));
   }

@@ -16,6 +16,7 @@ import {
 } from '../src/systems/combat_stimulus';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 
 function makeOpenWorld(): World {
   const world = new World();

@@ -23,6 +23,7 @@ import { unstuckActorFromBlockers } from '../movement_collision';
 import { isPlayerEntity } from '../player_actor';
 import { updateSwarmNests } from '../swarm_nests';
 import { designFloorAtZ } from '../../data/design_floors';
+import { isPlotNpc } from '../../data/plot';
 
 export interface AiStats {
   frame: number;
@@ -167,7 +168,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       } else if (e.type === EntityType.MONSTER && e.ai.goal === AIGoal.IDLE && e.ai.combatTargetId === undefined && e.speed > 0) {
         e.ai.goal = AIGoal.WANDER;
       }
-      if (e.id !== undefined) aiStats.plot++;
+      if (('plotNpcId' in e && e.plotNpcId !== undefined) || isPlotNpc(e)) aiStats.plot++;
       if (isBossActor(e)) aiStats.bosses++;
       if (isActiveAttacker(e, entityIndex.byId)) aiStats.activeAttackers++;
       if (projectileOwnerIds.has(e.id)) aiStats.projectileOwners++;

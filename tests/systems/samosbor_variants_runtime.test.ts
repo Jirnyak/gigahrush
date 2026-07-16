@@ -134,6 +134,7 @@ test('forceNextSamosborVariant falls back to random if forced variant is not val
     // Find a floor that is NOT in def.floors
     const allFloors = [0, -36, -50, 14, -26, 30];
     for (const floor of allFloors) {
+      if (!def.floors?.includes(floor)) {
         restrictedDef = def;
         invalidFloor = floor;
         break;

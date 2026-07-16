@@ -839,7 +839,7 @@ function decorateMicroRoom(world: World, room: Room, serial: number): void {
 
 function isSlimeNiiAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.id &&
+    (entity as Entity & { npcPackageId?: string }).npcPackageId === undefined &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

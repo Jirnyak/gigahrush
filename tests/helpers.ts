@@ -178,6 +178,7 @@ export function makeTestNpc(overrides: Partial<Entity> = {}): Entity {
     name: overrides.name ?? 'Тестовый NPC',
     faction: overrides.faction ?? Faction.CITIZEN,
     inventory: overrides.inventory ?? [],
+    alifeId: 'alifeId' in overrides ? overrides.alifeId : (overrides.id !== undefined && overrides.id > 0 ? overrides.id : undefined),
     money: overrides.money ?? 100,
     persistentNpcId: overrides.persistentNpcId,
   });

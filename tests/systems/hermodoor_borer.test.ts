@@ -44,7 +44,7 @@ test('blocksHermodoorBorerSeal handles wrong floor or room', () => {
 
     assert.equal(blocksHermodoorBorerSeal(world, state, doorIdx, 2), false);
 
-    state.currentZ = number.ROOF;
+    state.currentZ = 999;
     assert.equal(blocksHermodoorBorerSeal(world, state, doorIdx, 1), false);
 });
 

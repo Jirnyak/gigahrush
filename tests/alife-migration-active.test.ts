@@ -355,8 +355,8 @@ test('departure does not start for player, plot NPC, quest NPC or dead NPC', () 
 test('departure reaching a lift removes live entity and moves the record to target key', () => {
   const state = stateAtLiving();
   const world = makeLiftWorld();
-  putRecordOnLiving(state, 8);
-  const npc = persistentNpc(8, 8, 22.5, 22.5);
+  putRecordOnLiving(state, 508);
+  const npc = persistentNpc(508, 508, 22.5, 22.5);
   const entities = [npc];
 
   assert.equal(startActiveAlifeDeparture(state, world, npc, 'design:kvartiry', 'leave_to_queue', 'routine'), true);
@@ -364,41 +364,41 @@ test('departure reaching a lift removes live entity and moves the record to targ
 
   assert.equal(entities.length, 0);
   assert.equal(migrationState(state)?.activeDepartures.length, 0);
-  assert.equal(alifeForSave(state).overrides.some(item => item.id === 8 && item.floorKey === 'design:kvartiry'), true);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 508 && item.floorKey === 'design:kvartiry'), true);
 });
 
 test('unfinished departure captured before reaching lift does not teleport the record', () => {
   const state = stateAtLiving();
   const world = makeLiftWorld();
-  putRecordOnLiving(state, 9);
-  const npc = persistentNpc(9, 9, 25.5, 25.5);
+  putRecordOnLiving(state, 509);
+  const npc = persistentNpc(509, 509, 25.5, 25.5);
   const entities = [npc];
 
   assert.equal(startActiveAlifeDeparture(state, world, npc, 'design:kvartiry', 'not_reached', 'routine'), true);
   captureAlifeFloorState(state, entities);
 
   assert.equal(entities.length, 1);
-  assert.equal(alifeForSave(state).overrides.some(item => item.id === 9 && item.floorKey === 'design:living'), true);
-  assert.equal(alifeForSave(state).overrides.some(item => item.id === 9 && item.floorKey === 'design:kvartiry'), false);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 509 && item.floorKey === 'design:living'), true);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 509 && item.floorKey === 'design:kvartiry'), false);
 });
 
 test('active departure updates rotate unfinished prefix entries behind deferred departures', () => {
   const state = stateAtLiving();
   const world = makeLiftWorld();
   const entities: Entity[] = [];
-  for (let id = 20; id <= 28; id++) {
+  for (let id = 520; id <= 528; id++) {
     putRecordOnLiving(state, id);
-    const nearLift = id === 28;
+    const nearLift = id === 528;
     const npc = persistentNpc(id, id, nearLift ? 22.5 : 25.5, nearLift ? 22.5 : 25.5);
     entities.push(npc);
     assert.equal(startActiveAlifeDeparture(state, world, npc, 'design:kvartiry', `rotate_${id}`, 'routine'), true);
   }
 
   assert.equal(updateActiveAlifeDepartures(state, world, entities, 1 / 60), 0);
-  assert.equal(migrationState(state)?.activeDepartures[0]?.alifeId, 28);
+  assert.equal(migrationState(state)?.activeDepartures[0]?.alifeId, 528);
   assert.equal(updateActiveAlifeDepartures(state, world, entities, 1 / 60), 1);
 
-  assert.equal(entities.some(entity => entity.alifeId === 28), false);
-  assert.equal(migrationState(state)?.activeDepartures.some(item => item.alifeId === 28), false);
-  assert.equal(alifeForSave(state).overrides.some(item => item.id === 28 && item.floorKey === 'design:kvartiry'), true);
+  assert.equal(entities.some(entity => entity.alifeId === 528), false);
+  assert.equal(migrationState(state)?.activeDepartures.some(item => item.alifeId === 528), false);
+  assert.equal(alifeForSave(state).overrides.some(item => item.id === 528 && item.floorKey === 'design:kvartiry'), true);
 });

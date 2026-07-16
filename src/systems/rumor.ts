@@ -505,7 +505,7 @@ function eventZoneName(event: RumorEventRecord): string {
 }
 
 function eventRoomName(event: RumorEventRecord): string {
-  return event.roomDefId ?? eventDataString(event, ['roomDefId', 'destinationRoomName', 'targetRoomDefId', 'sourceRoomName']);
+  return event.roomDefId ?? eventDataString(event, ['roomDefId', 'roomName', 'destinationRoomName', 'targetRoomDefId', 'sourceRoomName']);
 }
 
 function formatEventLead(event: RumorEventRecord): string {
@@ -570,6 +570,7 @@ function rememberRecentLead(rumor: RumorDef, text: string, now: number, event?: 
     heardAt: now,
     z: rumor.lead?.z ?? event?.z,
     roomDefId: rumor.lead?.roomDefId ?? (event ? eventRoomName(event) : undefined),
+    roomName: (event ? eventRoomName(event) : undefined) ?? (typeof (rumor.lead as any)?.roomName === 'string' ? (rumor.lead as any).roomName : undefined),
     itemId: rumor.lead?.itemId ?? event?.itemId,
     monsterKind: rumor.lead?.monsterKind ?? event?.monsterKind,
   });
