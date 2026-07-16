@@ -249,7 +249,7 @@ test('small caravan runs open near service cells without appending new people', 
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const npc = caravanNpc({ id: 2, alifeId: 1, persistentNpcId: 'alife:1' });
   const entities = [player, npc];
-  const nextId = { v: 2 };
+  const nextId = { v: getPlotNpcCount() + 2 }
 
   const run = spawnSmallCaravanNear(state, world, entities, nextId, player, 'queue_lift_porters');
   assert.ok(run);

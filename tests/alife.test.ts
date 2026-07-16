@@ -207,7 +207,7 @@ test('A-Life arrival materializes one persistent record through the shared NPC c
   const world = new World();
   world.cells[world.idx(15, 15)] = Cell.FLOOR;
   const entities: Entity[] = [];
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   const entity = materializeAlifeArrival(state, world, entities, nextId, 1, {
     x: 15.5,
@@ -270,7 +270,7 @@ test('A-Life materializes ambient slots and leaves killed slots empty', () => {
   world.cells[world.idx(10, 10)] = Cell.FLOOR;
   world.cells[world.idx(11, 10)] = Cell.FLOOR;
   const entities = [ambientTemplate(1, 10.5, 10.5), ambientTemplate(2, 11.5, 10.5)];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   materializeAlifeFloorPopulation(state, world, entities, nextId, 'design:living');
 

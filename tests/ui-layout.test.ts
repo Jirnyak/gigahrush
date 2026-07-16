@@ -216,10 +216,9 @@ test('minimap renders the selected active quest direction arrow', () => {
 
 test('map renders NPC kill quest targets with red diamonds', () => {
   const target = makeTestNpc({
-    id: 31,
+    id: getPlotNpcNumericId('barni') ?? 31,
     x: 14.5,
     y: 12.5,
-    plotNpcId: getPlotNpcNumericId('plot_pechateed'),
     canGiveQuest: false,
   });
   const fills = drawMinimapPathFills({
@@ -227,8 +226,8 @@ test('map renders NPC kill quest targets with red diamonds', () => {
     type: QuestType.KILL,
     giverId: 12,
     giverName: 'Секретарь',
-    desc: 'Убери печатееда.',
-    targetPlotNpcId: 'plot_pechateed',
+    desc: 'Убери Баринова.',
+    targetNpcId: getPlotNpcNumericId('barni'),
     killCount: 0,
     killNeeded: 1,
     done: false,

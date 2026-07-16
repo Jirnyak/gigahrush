@@ -106,7 +106,7 @@ test('common line shooters wind up on hostile NPCs and lose shots to cover', () 
     const monster = threat(kind);
     const entities = [target, monster];
     const msgs: Msg[] = [];
-    const nextId = { v: 10 };
+    const nextId = { v: getPlotNpcCount() + 10 }
 
     prepare(entities);
     updateMonster(world, entities, monster, 0.1, 1, msgs, 999, nextId);
@@ -129,7 +129,7 @@ test('robot plasma has only local wet-risk amplification', () => {
     const target = player(14.5, 10.5);
     const monster = threat(MonsterKind.ROBOT);
     const entities = [target, monster];
-    const nextId = { v: 10 };
+    const nextId = { v: getPlotNpcCount() + 10 }
     prepare(entities);
 
     updateMonster(world, entities, monster, 0.1, 1, [], target.id, nextId);

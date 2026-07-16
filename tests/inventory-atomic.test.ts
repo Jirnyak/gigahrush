@@ -94,7 +94,7 @@ test('tool drops preserve durability data through pickup', () => {
     inventory: [{ defId: 'flashlight', count: 1, data: { dur: 123 } }],
   });
   const entities: Entity[] = [player];
-  const nextId = { v: 2 };
+  const nextId = { v: getPlotNpcCount() + 2 }
 
   dropItem(player, 0, entities, state.msgs, state.time, nextId, state, world);
 

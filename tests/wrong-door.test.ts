@@ -205,11 +205,10 @@ test('maronary shaving handoff uses ordered item outcome rules', () => {
     money: 0,
   });
   const ministryBuyer = makeTestNpc({
-    id: 2,
+    id: getPlotNpcNumericId('rotenbergov') ?? 2,
     name: 'Ротенбергов',
     faction: Faction.WILD,
     occupation: Occupation.HUNTER,
-    plotNpcId: getPlotNpcNumericId('rotenbergov'),
     inventory: [],
   });
 
@@ -217,7 +216,7 @@ test('maronary shaving handoff uses ordered item outcome rules', () => {
   assert.equal(player.money, 240);
   const ministry = getRecentEvents(state, { type: 'player_handoff_item', tags: ['maronary', 'ministry'], limit: 1 })[0];
   assert.equal(ministry.data?.outcome, 'ministry');
-  assert.equal(ministry.data?.buyerPlotNpcId, 'rotenbergov');
+  assert.equal(ministry.data?.buyerPlotNpcId, getPlotNpcNumericId('rotenbergov'));
 
   player.inventory = [{ defId: 'maronary_shaving', count: 1 }];
   const cultBuyer = makeTestNpc({

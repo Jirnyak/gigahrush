@@ -138,7 +138,7 @@ test('spore carpet is standalone domestic trap content with reachable cache', ()
     hqRoomId: -1,
   };
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
   generateSporeCarpetCache(world, 0, entities, nextId, 100, 100);
 
   assert.ok(world.rooms.some(room => room?.name === SPORE_CARPET_CACHE_ROOM_NAME));

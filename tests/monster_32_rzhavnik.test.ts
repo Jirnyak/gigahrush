@@ -168,7 +168,7 @@ test('loud metal wakes dormant rzhavnik before close approach', () => {
 test('maintenance rzhavnik shelf creates one dormant shelf ambusher beside real scrap', () => {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   generateRzhavnikShelf({ world, entities, nextId, spawnX: 64, spawnY: 64 });
 

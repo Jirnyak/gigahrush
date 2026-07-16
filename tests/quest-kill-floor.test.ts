@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import assert from 'node:assert/strict';
 
 import { MonsterKind, QuestType } from '../src/core/types';
@@ -60,8 +61,8 @@ test('plot NPC kill quests do not count ordinary monster kills', () => {
     type: QuestType.KILL,
     giverId: 12,
     giverName: 'Секретарь',
-    desc: 'Убери печатееда с личным делом.',
-    targetPlotNpcId: 'plot_pechateed',
+    desc: 'Убери Баринова с личным делом.',
+    targetNpcId: getPlotNpcNumericId('barni'),
     killCount: 0,
     killNeeded: 1,
     done: false,
@@ -71,7 +72,7 @@ test('plot NPC kill quests do not count ordinary monster kills', () => {
 
   assert.equal(state.quests[0].killCount, 0);
 
-  notifyNpcKill('plot_pechateed', state);
+  notifyNpcKill(getPlotNpcNumericId('barni')!, state);
 
   assert.equal(state.quests[0].killCount, 1);
 });

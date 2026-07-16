@@ -117,7 +117,7 @@ test('vodyanoy pressure ramps, drains PSI, and publishes dry-break cue', () => {
 test('vodyanoy pump room spawns reachable connected and disconnected wet paths', () => {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   generateVodyanoyKoshmarLine({ world, entities, nextId, spawnX: 512, spawnY: 512 });
 

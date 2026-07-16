@@ -50,7 +50,7 @@ test('Samosbor catchup logic caps catchup to prevent multi-tick bursts', async (
   const world = createMockWorld();
   const state = createMockGameState();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   // Set up an active front so the block runs
   setActiveSamosborFrontsForTests([{

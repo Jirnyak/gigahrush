@@ -110,7 +110,7 @@ test('Lampoglaz winds up on lit targets and drops lock in darkness', () => {
   const threat = lampoglaz(6.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   world.features[world.idx(14, 10)] = Feature.LAMP;
   prepare(entities);

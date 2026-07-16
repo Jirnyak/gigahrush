@@ -24,7 +24,7 @@ test('Plombirovshchik uses Shovnik body and opens local seal when killed away fr
     sprite: 0,
     name: 'Вы',
   }];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   generatePlombirovshchik(world, 0, entities, nextId, 100, 100);
 

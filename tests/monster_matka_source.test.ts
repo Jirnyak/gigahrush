@@ -81,7 +81,7 @@ test('Matka source owns a capped child budget instead of nearby refill pressure'
   const source = matka(2, 12.5, 12.5);
   const entities = [player, source];
   const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState(), time: 1 });
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   for (let i = 0; i < MATKA_CHILD_CAP + 5; i++) {
     forceMatkaSpawn(world, entities, source, state, nextId, 1 + i * 0.1);
@@ -104,7 +104,7 @@ test('killing Matka source leaves owned children alive but stops later source ti
   const source = matka(2, 12.5, 12.5);
   const entities = [player, source];
   const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState(), time: 2 });
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   for (let i = 0; i < 3; i++) {
     forceMatkaSpawn(world, entities, source, state, nextId, 2 + i * 0.1);
@@ -134,7 +134,7 @@ test('Matka source sanitizes malformed saved child ids before accounting', () =>
   ] as unknown as number[];
   const entities = [player, source];
   const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState(), time: 4 });
-  const nextId = { v: 100 };
+  const nextId = { v: getPlotNpcCount() + 100 }
 
   forceMatkaSpawn(world, entities, source, state, nextId, 4);
 

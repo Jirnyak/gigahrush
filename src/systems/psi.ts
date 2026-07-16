@@ -5,6 +5,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
+import { getPlotNpcStringId } from '../data/npc_packages';
 import { randSeed } from '../core/rand';
 import { stampMark, MarkType } from './surface_marks';
 import { WEAPON_STATS } from '../data/catalog';
@@ -325,7 +326,7 @@ function actorIntelligence(e: Entity): number {
 function canPossessTarget(target: Entity): boolean {
   if (!target.alive) return false;
   if (target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) return false;
-  if (target.id) return false;
+  if (target.id !== undefined && getPlotNpcStringId(target.id) !== undefined) return false;
   if (target.monsterKind !== undefined && MONSTERS[target.monsterKind]?.boss) return false;
   return true;
 }

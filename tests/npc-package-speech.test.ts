@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { EntityType, Faction, Occupation, RoomType, type Entity } from '../src/core/types';
-import { getNpcPackageByPlotNpcId } from '../src/data/npc_packages';
+import { getPlotNpcNumericId, getNpcPackageByPlotNpcId } from '../src/data/npc_packages';
 import type { ContextSnapshot } from '../src/systems/context';
 import type { AlifeNpcSnapshot } from '../src/systems/alife';
 import {
@@ -238,7 +238,7 @@ test('Demos posts and reactions can receive package bio tags from supplied facts
 });
 
 test('plot safety-critical lines remain exact and ordinary NPC talk works without package', () => {
-  const barniCanonicalPack = getNpcPackageByPlotNpcId('barni');
+  const barniCanonicalPack = getNpcPackageByPlotNpcId(getPlotNpcNumericId('barni')!);
   assert.ok(barniCanonicalPack, 'missing package for barni');
   const barni = makeTestNpc({
     id: 77,

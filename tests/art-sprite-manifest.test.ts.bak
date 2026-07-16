@@ -17,7 +17,7 @@ import {
   NPC_VISUAL_SCIENTIST_MALE,
   NPC_VISUAL_WILD_MALE,
 } from '../src/data/art_sprite_manifest';
-import { getNpcPackage, getPlotNpcCount } from '../src/data/npc_packages';
+import { getNpcPackage } from '../src/data/npc_packages';
 import '../src/data/npc_plot_packages';
 import {
   generateNpcProfileSprite,
@@ -177,9 +177,8 @@ test('first-party NPC art resolves through visual ids while unknown ids fall bac
 });
 
 test('fixed art visual families reuse texture keys by visual id and variant', () => {
-  let dummyId = getPlotNpcCount() + 1000;
-  const olgaA = makeNpc(dummyId++, NPC_VISUAL_OLGA_DMITRIEVNA, 101);
-  const olgaB = makeNpc(dummyId++, NPC_VISUAL_OLGA_DMITRIEVNA, 202);
+  const olgaA = makeNpc(1, NPC_VISUAL_OLGA_DMITRIEVNA, 101);
+  const olgaB = makeNpc(2, NPC_VISUAL_OLGA_DMITRIEVNA, 202);
   assert.equal(proceduralEntitySpriteKey(olgaA), proceduralEntitySpriteKey(olgaB));
   assert.equal(spriteHash(generateProceduralEntitySprite(olgaA)!), spriteHash(getGeneratedArtSprite('olga_dmitrievna')!));
 
@@ -196,7 +195,7 @@ test('fixed art visual families reuse texture keys by visual id and variant', ()
     'first_party_art:liquidator_m_6',
   ]);
 
-  const liquidator = makeNpc(dummyId++, NPC_VISUAL_LIQUIDATOR_MALE, 303);
+  const liquidator = makeNpc(3, NPC_VISUAL_LIQUIDATOR_MALE, 303);
   liquidator.faction = Faction.LIQUIDATOR;
   const liquidatorSprite = generateProceduralEntitySprite(liquidator);
   assert.ok(liquidatorSprite);
@@ -213,8 +212,7 @@ test('fixed art visual families reuse texture keys by visual id and variant', ()
 });
 
 test('ordinary NPC art auto-selects occupation before faction and preserves sexed scientist art', () => {
-  let dummyId = getPlotNpcCount() + 2000;
-  const citizen = makeNpc(dummyId++, '', 404);
+  const citizen = makeNpc(4, '', 404);
   citizen.npcVisualId = undefined;
   citizen.faction = Faction.CITIZEN;
   citizen.occupation = Occupation.TURNER;
@@ -225,7 +223,7 @@ test('ordinary NPC art auto-selects occupation before faction and preserves sexe
   citizen.spriteScale = 1;
   assert.equal(entityWorldSpriteScale(citizen), FIRST_PARTY_NPC_ART_WORLD_SPRITE_SCALE);
 
-  const scientist = makeNpc(dummyId++, '', 505);
+  const scientist = makeNpc(5, '', 505);
   scientist.npcVisualId = undefined;
   scientist.faction = Faction.SCIENTIST;
   scientist.occupation = Occupation.SCIENTIST;

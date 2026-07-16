@@ -60,7 +60,7 @@ test('mutant tissue sample is reachable through monster ecology drops', () => {
   }
 
   const entities: Entity[] = [];
-  const nextId = { v: 100 };
+  const nextId = { v: getPlotNpcCount() + 100 }
   const rolls = [0.99, 0.0, 0.5, 0.5];
   const dropped = dropMonsterRareLoot(testMonster(MonsterKind.KRYSNOZHKA), entities, nextId, () => rolls.shift() ?? 0.5);
 

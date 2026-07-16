@@ -1,4 +1,4 @@
-import { getPlotNpcNumericId } from '../src/data/npc_packages';
+import { getPlotNpcCount, getPlotNpcNumericId } from '../src/data/npc_packages';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -24,14 +24,14 @@ function quest(overrides: Partial<Quest>): Quest {
 
 test('death continuation resets non-story quests and keeps plot quests', () => {
   const plot = quest({ id: 1, plotStepIndex: 0 });
-  const procedural = quest({ id: 2, giverId: 20 });
-  const side = quest({ id: 3, giverId: 21, sideQuestId: 'side_test' });
-  const contract = quest({ id: 4, giverId: 22, contractId: 'contract_test' });
+  const procedural = quest({ id: 2, giverId: getPlotNpcCount() + 20 });
+  const side = quest({ id: 3, giverId: getPlotNpcCount() + 21, sideQuestId: 'side_test' });
+  const contract = quest({ id: 4, giverId: getPlotNpcCount() + 22, contractId: 'contract_test' });
   const state = makeGameState({
     quests: [plot, procedural, side, contract],
     activeQuestId: 2,
   });
-  const giver = makeTestNpc({ id: 20, questId: 2, canGiveQuest: false });
+  const giver = makeTestNpc({ id: getPlotNpcCount() + 20, questId: 2, canGiveQuest: false });
 
   assert.equal(resetNonStoryQuestsForNewPlayer(state, [giver]), 3);
 
@@ -44,11 +44,10 @@ test('death continuation resets non-story quests and keeps plot quests', () => {
 test('dead plot talk target auto-completes the active story talk quest', () => {
   const player = makeTestPlayer({ id: 1 });
   const target = makeTestEntity({
-    id: 42,
+    id: getPlotNpcNumericId('barni') ?? 42,
     type: EntityType.NPC,
     name: 'Баринов',
     faction: Faction.CITIZEN,
-    plotNpcId: getPlotNpcNumericId('barni'),
     alive: false,
   });
   const state = makeGameState({
@@ -60,7 +59,7 @@ test('dead plot talk target auto-completes the active story talk quest', () => {
       desc: 'Поговорить с Бариновым.',
       targetItem: undefined,
       targetCount: undefined,
-      targetPlotNpcId: 'barni',
+      targetNpcId: getPlotNpcNumericId('barni'),
       targetNpcName: 'Баринов',
       plotStepIndex: 0,
     })],

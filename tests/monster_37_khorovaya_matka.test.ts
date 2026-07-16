@@ -83,7 +83,7 @@ test('Khorovaya Matka choir countdown spawns capped children', () => {
   const source = khorovayaMatka();
   const entities = [player(), source];
   const msgs: Msg[] = [];
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   for (let i = 0; i < 5; i++) {
     source.ai!.choirCountdown = 0.01;
@@ -101,7 +101,7 @@ test('clearing Khorovaya Matka children opens a vulnerability window and changes
   setListenerPos(20, 18, world.dist2.bind(world));
   const source = khorovayaMatka();
   const entities = [player(), source];
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   source.ai!.choirCountdown = 0.01;
   prepare(entities);

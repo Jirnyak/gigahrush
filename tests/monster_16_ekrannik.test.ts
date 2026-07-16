@@ -40,7 +40,7 @@ function player(): Entity {
 test('ekrannik misinformation stays local and publishes reversible encounter events', () => {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
   generateEkrannik(world, entities, nextId, 512, 512);
 
   const actor = player();

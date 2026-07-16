@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import * as assert from 'node:assert/strict';
 
 import { EntityType, Faction, Occupation, type Entity } from '../src/core/types';
@@ -12,7 +13,7 @@ import {
 
 function makeOlga(overrides: Partial<Entity> = {}): Entity {
   return {
-    id: 1,
+    id: getPlotNpcNumericId('olga') ?? 1,
     type: EntityType.NPC,
     x: 10,
     y: 12,
@@ -22,7 +23,6 @@ function makeOlga(overrides: Partial<Entity> = {}): Entity {
     speed: 1.2,
     sprite: Occupation.DOCTOR,
     npcVisualId: NPC_VISUAL_OLGA_DMITRIEVNA,
-    plotNpcId: 'olga',
     occupation: Occupation.DOCTOR,
     faction: Faction.SCIENTIST,
     isFemale: true,

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { AIGoal, Faction, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import {
@@ -53,7 +54,7 @@ test('PSI possession requires higher player intelligence and expires into backla
     rpg: { level: 3, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 4, psi: 30, maxPsi: 30 },
   });
   const target = makeTestNpc({
-    id: 2,
+    id: getPlotNpcCount() + 1000,
     x: 16,
     y: 10,
     faction: Faction.WILD,
@@ -90,7 +91,7 @@ test('PSI possession fails closed when target intelligence is not lower', () => 
     rpg: { level: 2, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 1, psi: 30, maxPsi: 30 },
   });
   const target = makeTestNpc({
-    id: 2,
+    id: getPlotNpcCount() + 1001,
     x: 16,
     y: 10,
     rpg: { level: 2, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 1, psi: 0, maxPsi: 0 },
@@ -116,7 +117,7 @@ test('PSI shield can protect whichever entity is the current player', () => {
     rpg: { level: 3, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 4, psi: 30, maxPsi: 30 },
   });
   const target = makeTestNpc({
-    id: 2,
+    id: getPlotNpcCount() + 1002,
     x: 16,
     y: 10,
     hp: 20,

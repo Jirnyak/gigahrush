@@ -214,7 +214,7 @@ test('fire and cutting counterplay publish blood plant route events and open roo
 test('living blood plant den spawns a reachable source, red mold choice, witnesses, and root path', () => {
   const world = openWorld();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   const result = generateBloodPlantDen(world, 1, entities, nextId, 80, 80);
   const room = world.rooms.find(candidate => candidate?.name === 'Красный притон плесени');

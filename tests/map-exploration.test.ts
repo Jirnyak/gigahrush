@@ -25,7 +25,7 @@ import { makeGameState } from './helpers';
 import '../src/data/npc_plot_packages';
 
 function plotNpcName(plotNpcId: string): string {
-  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  const pack = getNpcPackageByPlotNpcId(getPlotNpcNumericId(plotNpcId)!);
   assert.ok(pack, `missing NPC package for plot NPC ${plotNpcId}`);
   return npcPackageDisplayName(pack);
 }

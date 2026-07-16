@@ -104,7 +104,7 @@ test('Slimevik barter consumes food or medicine and marks a sample', () => {
   });
   const target = slimevik();
   const entities = [player, target];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   rebuildEntityIndex(entities);
   assert.equal(tryUseSlimevikInteraction(world, player, state, entities, nextId), true);

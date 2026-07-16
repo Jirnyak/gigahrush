@@ -392,7 +392,7 @@ export function resetNonStoryQuestsForNewPlayer(state: ActiveQuestState, entitie
   for (const entity of entities) {
     if (entity.type !== EntityType.NPC || !removedGiverIds.has(entity.id)) continue;
     if (removedQuestIds.has(entity.questId ?? -1)) entity.questId = -1;
-    if (!entity.id) entity.canGiveQuest = true;
+    if (!isPlotNpc(entity)) entity.canGiveQuest = true;
   }
   return removedQuestIds.size;
 }

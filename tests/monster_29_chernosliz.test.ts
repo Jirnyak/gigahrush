@@ -132,7 +132,7 @@ test('Chernosliz telegraphs first ranged shot only after being revealed', () => 
   const threat = chernosliz(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   world.cells[world.idx(10, 10)] = Cell.WATER;
   prepare(entities);
@@ -155,7 +155,7 @@ test('Chernosliz telegraphs first ranged shot only after being revealed', () => 
 test('black slime authored encounter spawns Chernosliz directly', () => {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   generateBlackSlimeEyes({ world, entities, nextId, spawnX: 512, spawnY: 512 });
 

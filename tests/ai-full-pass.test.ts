@@ -306,7 +306,7 @@ test('live AI pass reaches monster ecology source updates', () => {
   source.matkaTimer = 0.01;
   const entities = [p, source];
   const state = makeGameState({ currentZ: -36, worldEvents: createWorldEventState(), time: 1, clock });
-  const nextId = { v: 20 };
+  const nextId = { v: getPlotNpcCount() + 20 }
   const msgs: Msg[] = state.msgs;
 
   rebuildEntityIndexForSimulation(entities, 1000);

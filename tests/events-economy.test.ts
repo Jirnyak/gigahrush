@@ -527,7 +527,7 @@ test('samosbor director cadence, beat cooldowns, and events stay bounded', () =>
   const world = testDirectorWorld();
   const player = makeTestEntity({ id: 0, x: 10.5, y: 10.5 });
   const entities = [player];
-  const nextId = { v: 100 };
+  const nextId = { v: getPlotNpcCount() + 100 }
   const variant = testClassicSamosborVariant();
   const originalRandom = SeedRng.prototype.random;
 
@@ -579,7 +579,7 @@ test('active maronary door malfunction ignores protected hermetic doors', () => 
   world.hermoWall[doorIdx] = 1;
   world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_OPEN, roomA: 0, roomB: -1, keyId: '', timer: 0 });
   const player = makeTestEntity({ id: 0, x: 10.5, y: 10.5 });
-  const nextId = { v: 100 };
+  const nextId = { v: getPlotNpcCount() + 100 }
 
   try {
     _overrideRng(() => 0);

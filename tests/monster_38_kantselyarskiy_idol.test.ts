@@ -143,7 +143,7 @@ test('Kantselyarskiy Idol fires only after windup and then enters recovery', () 
   const threat = idol(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   prepare(entities);
   updateMonster(world, entities, threat, 0.1, 5, msgs, target.id, nextId);

@@ -159,7 +159,7 @@ test('borshchevik root damage removes door records from opened door cells', () =
 test('maintenance borshchevik blockade spawns plants, sap hazard, bypass tools, and root site', () => {
   const world = openWorld();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   generateBorshchevikBlockade({ world, entities, nextId, spawnX: 512, spawnY: 512 });
 

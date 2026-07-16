@@ -109,7 +109,7 @@ test('swarm source respects cooldown, source cap, and body ttl cleanup', () => {
   const queen = source(2, 10.5, 10.5);
   const entities = [target, queen];
   const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState(), time: 1 });
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   registerSwarmNestSource(world, {
     id: 'test_swarm_cap',
@@ -152,7 +152,7 @@ test('duct tape or sealant resolves the source without killing every body', () =
   const entities = [target, queen];
   const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState(), time: 2 });
   const msgs: Msg[] = [];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   registerSwarmNestSource(world, {
     id: 'test_swarm_seal',
@@ -222,7 +222,7 @@ test('fire kills bodies outright and burns source records', () => {
 test('maintenance swarm nest generator registers a reachable source marker', () => {
   const world = openWorld();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   generateSwarmNest({ world, entities, nextId, spawnX: 16, spawnY: 16 });
 

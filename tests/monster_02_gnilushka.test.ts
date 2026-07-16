@@ -179,7 +179,7 @@ test('living lost cell spawns reachable gnilushka content and handoff supplies',
   };
   world.cells[world.idx(90, 55)] = Cell.FLOOR;
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
   _overrideRng(() => 0);
   try {
     const result = generateGnilushkaLostCell(world, 0, entities, nextId, 50, 50);

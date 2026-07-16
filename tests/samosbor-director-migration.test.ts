@@ -1,3 +1,4 @@
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SeedRng, _overrideRng, _restoreRng } from '../src/core/rand';
@@ -78,7 +79,7 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   const world = patrolWorld();
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });
   const entities: Entity[] = [player];
-  const nextId = { v: 30 };
+  const nextId = { v: getPlotNpcCount() + 1000 };
   const result = withRandom(0.99, () => 
     tickSamosborDirector(world, entities, state, nextId, classicVariant(), 'active_cadence')
   );

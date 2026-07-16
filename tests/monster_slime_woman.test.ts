@@ -92,7 +92,7 @@ test('uv spotlight dries and staggers slime woman', () => {
 test('slime woman sump is reachable content with sample and dry counterplay kit', () => {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   generateSlimeWomanSump({ world, entities, nextId, spawnX: 512, spawnY: 512 });
 

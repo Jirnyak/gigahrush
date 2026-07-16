@@ -100,7 +100,7 @@ test('trubnyy wet-line shot charges visibly and locks out during recovery', () =
   const target = player(20.5, 20.5);
   const entities = [m, target];
   const msgs: Msg[] = [];
-  const nextId = { v: 3 };
+  const nextId = { v: getPlotNpcCount() + 3 }
 
   assert.equal(updateTrubnyyWetLineShot(world, entities, m, target, DEF, 0.1, 1, msgs, target.id, nextId), true);
   assert.ok((m.ai?.windupTimer ?? 0) > 0, 'first valid line starts a charge');

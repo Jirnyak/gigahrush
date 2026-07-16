@@ -14,7 +14,7 @@ import {
 test('Самосборный Остов scene has warning, safe options, and a bounded local ambush', () => {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
 
   const result = generateSamosbornyyOstov(world, 0, entities, nextId, 160, 160);
   assert.equal(result.nextRoomId, 1);

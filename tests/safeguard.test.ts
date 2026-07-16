@@ -1,3 +1,4 @@
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
@@ -22,7 +23,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
     const entities = [
       makeTestPlayer({ id: 1, x: 50.5, y: 50.5 })
     ];
-    const nextId = { v: 2 };
+    const nextId = { v: getPlotNpcCount() + 2 }
 
     const safeguard = spawnSafeguardHackBacklash(
       world,
@@ -52,7 +53,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
       makeTestPlayer({ id: 1, x: 50.5, y: 50.5 }),
       makeTestEntity({ id: 2, type: EntityType.MONSTER, monsterKind: MonsterKind.SAFEGUARD, x: 51, y: 51, alive: true })
     ];
-    const nextId = { v: 3 };
+    const nextId = { v: getPlotNpcCount() + 3 }
 
     const safeguard = spawnSafeguardHackBacklash(
       world,
@@ -74,7 +75,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
     const entities = [
       makeTestPlayer({ id: 1, x: 50.5, y: 50.5 })
     ];
-    const nextId = { v: 2 };
+    const nextId = { v: getPlotNpcCount() + 2 }
 
     // Trigger initial failure to set cooldown
     spawnSafeguardHackBacklash(world, entities, nextId, state, 50, 50, 'First failure', { terminalIdx: 0, floorKey: 'test' });
@@ -92,7 +93,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
     const entities = [
       makeTestPlayer({ id: 1, x: 50.5, y: 50.5 })
     ];
-    const nextId = { v: 2 };
+    const nextId = { v: getPlotNpcCount() + 2 }
 
     const safeguard = spawnSafeguardHackBacklash(
       world,
@@ -119,7 +120,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
     for (let i = 0; i < 4096; i++) {
       entities.push(makeTestEntity({ id: 2 + i, type: EntityType.MONSTER, monsterKind: MonsterKind.BLADE, x: 1, y: 1, alive: true }));
     }
-    const nextId = { v: 4098 };
+    const nextId = { v: getPlotNpcCount() + 4098 }
 
     const safeguard = spawnSafeguardHackBacklash(
       world,
@@ -141,7 +142,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
     const entities = [
       makeTestPlayer({ id: 1, x: 50.5, y: 50.5 })
     ];
-    const nextId = { v: 2 };
+    const nextId = { v: getPlotNpcCount() + 2 }
 
     // Trigger initial failure to set cooldown specifically for a floor key
     spawnSafeguardHackBacklash(world, entities, nextId, state, 50, 50, 'First failure', { floorKey: 'design:test' });
@@ -163,7 +164,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
     const entities = [
       makeTestPlayer({ id: 1, x: 50.5, y: 50.5 })
     ];
-    const nextId = { v: 2 };
+    const nextId = { v: getPlotNpcCount() + 2 }
 
     // Trigger initial failure at time 1000
     spawnSafeguardHackBacklash(world, entities, nextId, state, 50, 50, 'First failure', { terminalIdx: 0 });

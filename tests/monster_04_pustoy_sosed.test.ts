@@ -71,7 +71,7 @@ test('Pustoy Sosed registers verification, avoidance, and reveal quests', () => 
 test('Pustoy Sosed room gives clues before NELYUD close reveal', () => {
   const world = new World();
   const entities = [];
-  const nextId = { v: 1 };
+  const nextId = { v: getPlotNpcCount() + 1 }
   const nextRoomId = generatePustoySosedRoom(world, 0, entities, nextId, 512, 512);
 
   assert.equal(nextRoomId, 1);

@@ -140,7 +140,7 @@ test('missing GEN terminal access spawns one cooldowned Safeguard backlash when 
   const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState() });
   const player = makeTestPlayer({ id: 1, x: 100, y: 100, money: 100 });
   const entities = [player];
-  const nextId = { v: 2 };
+  const nextId = { v: getPlotNpcCount() + 2 }
   const terminal = placeNetTerminalGenTerminal(world, 96, 100, SILICON_NET_WELL_TERMINAL_DEF);
   assert.ok(terminal);
   let result: ReturnType<typeof tryUseNetTerminalGen>;

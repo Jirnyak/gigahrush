@@ -123,7 +123,7 @@ test('does not spawn faction events during tutorial', () => {
   const entities: Entity[] = [];
   const player = { id: 1, type: EntityType.PLAYER, alive: true, x: 50, y: 50 } as Entity;
   entities.push(player);
-  const nextId = { v: 2 };
+  const nextId = { v: getPlotNpcCount() + 2 }
 
   updateFactionEvents(state, world, player, entities, nextId, 10, true);
 
@@ -140,7 +140,7 @@ test('cult procession exposes follow, report, disguise, avoid and violent disrup
   const state = makeGameState({ currentZ: -36, worldEvents: createWorldEventState() });
   const actor = player();
   const entities: Entity[] = [actor];
-  const nextId = { v: 10 };
+  const nextId = { v: getPlotNpcCount() + 10 }
 
   const result = forceFactionEvent(state, world, actor, entities, nextId, 'cult_procession');
   assert.match(result, /Культовая процессия/);
@@ -205,7 +205,7 @@ test('active cult procession publishes aftermath and clears when samosbor cycle 
   const state = makeGameState({ currentZ: -36, worldEvents: createWorldEventState() });
   const actor = player();
   const entities: Entity[] = [actor];
-  const nextId = { v: 50 };
+  const nextId = { v: getPlotNpcCount() + 50 }
 
   assert.match(forceFactionEvent(state, world, actor, entities, nextId, 'cult_procession'), /Культовая процессия/);
   assert.equal(getActiveCultProcessionSnapshots(state).length, 1);

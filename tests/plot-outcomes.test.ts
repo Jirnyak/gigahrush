@@ -47,7 +47,7 @@ function shadowMonster() {
 test('story death drop appears only when its quest prerequisite is active', () => {
   const noQuest = makeGameState({ currentZ: 0 });
   const entities = [shadowMonster()];
-  const nextId = { v: 200 };
+  const nextId = { v: getPlotNpcCount() + 200 }
 
   assert.equal(spawnStoryDeathDrops(entities[0], true, entities, nextId, noQuest, noQuest.msgs, () => 0.5), 0);
   assert.equal(entities.some(e => e.type === EntityType.ITEM_DROP), false);
