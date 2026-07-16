@@ -42,7 +42,7 @@ import {
   territoryOwnerAt,
   territoryOwnerAtIndex,
 } from './territory';
-import { rng, mathRng } from '../core/rand';
+import { rng, mathRng, shuffleWith } from '../core/rand';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -1469,7 +1469,7 @@ function startCultProcession(
     nextFearAt: state.time + PROCESSION_FEAR_TICK_SEC,
     coverUntil: 0,
     eventId: 0,
-    npcIds: npcIds.slice(0, MAX_PROCESSION_PILGRIMS),
+    npcIds: shuffleWith(rng, [...npcIds]).slice(0, MAX_PROCESSION_PILGRIMS),
     tempCells: [],
     avoided: false,
     followed: false,

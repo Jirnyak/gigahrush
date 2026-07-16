@@ -16,9 +16,9 @@ test('generateMonsterLoot respects deterministic chances and counts', () => {
   const dropHigh = generateMonsterLoot(MonsterKind.ZOMBIE, highRand);
 
   assert.equal(dropHigh.length, 2, 'Should drop two items');
-  assert.equal(dropHigh[0].itemDefId, 'wet_rag_bundle');
+  assert.strictEqual(dropHigh[0]?.itemDefId, 'rawmeat');
   assert.equal(dropHigh[0].amount, 1);
-  assert.equal(dropHigh[1].itemDefId, 'rawmeat');
+  assert.equal(dropHigh[1].itemDefId, 'wet_rag_bundle');
   assert.equal(dropHigh[1].amount, 1);
 
   // Test 2: Low chance (fail both)

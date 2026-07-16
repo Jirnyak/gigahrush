@@ -2,6 +2,7 @@ import { Faction, type ItemDef, ItemType, type Item, MonsterKind } from '../core
 import { getMonsterEcology } from '../data/monster_ecology';
 import { ITEMS, itemEquipSlot, itemDefHasTag } from '../data/items';
 import { WEAPON_STATS } from '../data/catalog';
+import { shuffleWith } from '../core/rand';
 
 export interface LootProfile {
   weaponMult?: number;
@@ -211,5 +212,6 @@ export function generateMonsterLoot(kind: MonsterKind, rand: () => number): Gene
     }
 
     // Hard cap at 3 items to avoid clutter
+    shuffleWith(rand, results);
     return results.slice(0, 3);
 }

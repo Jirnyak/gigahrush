@@ -1,6 +1,6 @@
 /* ── Bounded deterministic Markov NPC text core ───────────────── */
 
-import { SeedRng, hashSeed } from '../core/rand';
+import { SeedRng, hashSeed, shuffleWith } from '../core/rand';
 import {
   MARKOV_TEXT_DEFINITIONS,
   type MarkovAtomClass,
@@ -178,9 +178,9 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
 
   const contextMask = maskForTags(pack.tagIds, baseTags);
   const requiredAnchorMask = maskForTags(pack.anchorIds, request.context?.requiredAnchors ?? []);
-  const templates = rankTemplates(pack, request, baseTags, contextMask, requiredAnchorMask, source);
   const seed = requestSeed(request, 'template');
   const rng = new SeedRng(seed);
+  const templates = rankTemplates(pack, request, baseTags, contextMask, requiredAnchorMask, source, rng);
 
   for (let attempt = 0; attempt < MARKOV_TEMPLATE_ATTEMPTS; attempt++) {
     const template = pickWeighted(rng, templates, item => item.score);
@@ -450,9 +450,10 @@ function generateSlot(
   const candidates: SlotCandidate[] = [];
   for (const path of slot.allowedClassPaths) {
     if (path.length < slot.minAtoms || path.length > slot.maxAtoms) continue;
-    candidates.push(...generatePathCandidates(domain, path, contextMask, requiredAnchorMask));
+    candidates.push(...generatePathCandidates(domain, path, contextMask, requiredAnchorMask, rng));
     if (candidates.length >= MARKOV_SLOT_CANDIDATE_CAP * 2) break;
   }
+  shuffleWith(() => rng.random(), candidates);
   candidates.sort((a, b) => b.score - a.score);
   const bounded = candidates.slice(0, MARKOV_SLOT_CANDIDATE_CAP);
   const picked = pickWeighted(rng, bounded, candidate => candidate.score);
@@ -470,12 +471,13 @@ function generatePathCandidates(
   path: readonly MarkovAtomClass[],
   contextMask: number,
   requiredAnchorMask: number,
+  rng: SeedRng,
 ): readonly SlotCandidate[] {
   let beams: SlotCandidate[] = [{ text: '', atomIds: [], anchorMask: 0, terminalOk: false, score: 1 }];
   for (const atomClass of path) {
     const classId = MARKOV_CLASSES.indexOf(atomClass);
     if (classId < 0) return [];
-    const atoms = rankAtomsForClass(domain, classId, contextMask, requiredAnchorMask);
+    const atoms = rankAtomsForClass(domain, classId, contextMask, requiredAnchorMask, rng);
     if (atoms.length === 0) return [];
     const next: SlotCandidate[] = [];
     for (const beam of beams) {
@@ -493,6 +495,7 @@ function generatePathCandidates(
         });
       }
     }
+    shuffleWith(() => rng.random(), next);
     next.sort((a, b) => b.score - a.score);
     beams = next.slice(0, MARKOV_SLOT_BEAM_WIDTH);
   }
@@ -504,8 +507,11 @@ function rankAtomsForClass(
   classId: number,
   contextMask: number,
   requiredAnchorMask: number,
+  rng: SeedRng,
 ): readonly number[] {
-  return [...(domain.atomsByClass[classId] ?? [])]
+  const atoms = [...(domain.atomsByClass[classId] ?? [])];
+  shuffleWith(() => rng.random(), atoms);
+  return atoms
     .sort((a, b) => atomContextScore(domain, b, contextMask, requiredAnchorMask) - atomContextScore(domain, a, contextMask, requiredAnchorMask))
     .slice(0, MARKOV_SLOT_ATOM_CAP);
 }
@@ -548,6 +554,7 @@ function rankTemplates(
   contextMask: number,
   requiredAnchorMask: number,
   source: MarkovSource,
+  rng: SeedRng,
 ): readonly { readonly template: MarkovTemplate; readonly score: number }[] {
   const ranked: { template: MarkovTemplate; score: number }[] = [];
   for (const template of pack.templates) {
@@ -568,6 +575,7 @@ function rankTemplates(
       score: Math.max(1, template.weight + (template.scoreBias ?? 0) + domainScore * 2 + anchorScore),
     });
   }
+  shuffleWith(() => rng.random(), ranked);
   ranked.sort((a, b) => b.score - a.score);
   return ranked.slice(0, MARKOV_SLOT_BEAM_WIDTH);
 }
@@ -588,6 +596,7 @@ function pickCuratedLine(
     }
   }
   const rng = new SeedRng(requestSeed(request, 'curated'));
+  shuffleWith(() => rng.random(), candidates);
   const picked = pickWeighted(rng, candidates.sort((a, b) => b.score - a.score).slice(0, MARKOV_SLOT_CANDIDATE_CAP), item => item.score);
   if (!picked) return undefined;
   return {

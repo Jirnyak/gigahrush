@@ -43,6 +43,7 @@ import {
 } from './alife';
 import { createEmptyDemosSocialSaveState, type DemosRelationOverride, type DemosSocialSaveState } from './demos_save';
 import { getFactionPlayerRelation } from './npc_relations';
+import { shuffleWith, xorshift32 } from '../core/rand';
 
 export interface DemosSocialEdgeView {
   slot: number;
@@ -427,7 +428,9 @@ function applyPackageRelationsForSource(
 ): void {
   const links = pack?.social?.links;
   if (!links || links.length === 0) return;
-  for (const link of links.slice(0, DEMOS_SOCIAL_NPC_SLOTS)) {
+  const rand = xorshift32(source.id);
+  const shuffledLinks = shuffleWith(rand, [...links]);
+  for (const link of shuffledLinks.slice(0, DEMOS_SOCIAL_NPC_SLOTS)) {
     const targetId = resolveTarget(link.targetNpcId);
     if (link.bidirectional) applyPackageBidirectionalLink(graph, source.id, targetId, link);
     else applyPackageLink(graph, source.id, targetId, link);

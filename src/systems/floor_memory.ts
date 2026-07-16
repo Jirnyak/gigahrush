@@ -26,6 +26,7 @@ import { rebuildGeneratedFloorPathBlockers, rebuildPathBlockersFromWorldObjects 
 import { cleanFloorKey, floorKeyForDesign, floorKeyKnown, type FloorKeyResolveContext  } from './floor_keys';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { isNativePlayerBodyEntity } from './player_actor';
+import { rng, shuffleWith } from '../core/rand';
 
 export interface FloorMemoryEntry {
   key: string;
@@ -1383,7 +1384,7 @@ export function ensureFloorRouteLiftLayout(
       }
     }
     let reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
-    for (const anchor of mirror.anchors.slice(0, targetCount)) {
+    for (const anchor of shuffleWith(rng, [...mirror.anchors]).slice(0, targetCount)) {
       if (placeMirroredRouteLift(world, anchor, mirror.direction, reachable, floorTex)) {
         placed++;
         mirrored++;
