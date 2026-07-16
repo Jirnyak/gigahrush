@@ -46,10 +46,9 @@ test('roof is registered as the top authored route floor', () => {
   const route = designFloorById(ROOF_ROUTE_ID);
 
   assert.equal(route?.z, ROOF_FUTURE_Z);
-  assert.equal(route?.baseFloor, ROOF_BASE_FLOOR);
-  assert.equal(route?.displayName, 'Крыша');
+    assert.equal(route?.displayName, 'Крыша');
   assert.equal(route?.hasOpenSky, true);
-  assert.equal(route?.baseFloor.MINISTRY);
+  assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(designFloorAtZ(ROOF_FUTURE_Z)?.id, ROOF_ROUTE_ID);
 });
 

@@ -19,7 +19,7 @@ function queueWorld(tag = 'ration_queue'): World {
     id: 1,
     x: 12,
     y: 14,
-    z: 100,
+    z: 2,
     roomId: room.id,
     zoneId: 7,
     name: 'Тестовая касса',
@@ -106,7 +106,7 @@ test('ration queue item trades are capped per local room window', () => {
 });
 
 test('using a ration stamp pad forges a dangerous ration card', () => {
-  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
   const actor = makeTestPlayer({
     id: 0,
     inventory: cloneItems([{ defId: 'ration_stamp_pad', count: 1 }, { defId: 'blank_form', count: 1 }]),
@@ -122,7 +122,7 @@ test('using a ration stamp pad forges a dangerous ration card', () => {
 });
 
 test('reporting a forged ration card resolves the audit into Kvartiry stock', () => {
-  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
   const actor = makeTestPlayer({
     id: 0,
     inventory: cloneItems([{ defId: 'ration_registry_extract', count: 1 }, { defId: 'forged_ration_card', count: 1 }]),

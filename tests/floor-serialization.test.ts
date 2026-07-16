@@ -70,7 +70,7 @@ function buildHostWorld(): World {
     id: 7,
     x: 21,
     y: 21,
-    z: 60,
+    z: -6,
     roomId: 0,
     zoneId: 0,
     kind: ContainerKind.METAL_CABINET,
@@ -95,7 +95,7 @@ test('network snapshot round-trips host floor geometry and mutations to the peer
   ];
 
   const snapshot = packFloorForNetwork(world, entities, {
-    z: 60,
+    z: -6,
     runSeed: 12345,
     floorKey: 'design:living',
     spawnX: 40.25,
@@ -130,7 +130,7 @@ test('network snapshot round-trips host floor geometry and mutations to the peer
   assert.equal(unpacked!.world.containers[0].inventory[0].defId, 'medkit');
 
   // Metadata + entities preserved.
-  assert.equal(unpacked!.meta.floor.LIVING);
+  assert.equal(unpacked!.meta.floorKey, 'design:living');
   assert.equal(unpacked!.meta.nextEntityId, 6);
   assert.equal(unpacked!.meta.spawnX, 40.25);
   assert.deepEqual(unpacked!.entities.map(e => e.id).sort(), [1, 2, 3]);
@@ -139,7 +139,7 @@ test('network snapshot round-trips host floor geometry and mutations to the peer
 test('incomplete chunk stream never reassembles', () => {
   const world = new World();
   const snapshot = packFloorForNetwork(world, [], {
-    z: 60,
+    z: -6,
     runSeed: 1,
     spawnX: W / 2,
     spawnY: W / 2,

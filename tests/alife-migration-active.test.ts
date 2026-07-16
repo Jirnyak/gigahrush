@@ -192,13 +192,13 @@ function persistentNpc(id: number, alifeId: number, x: number, y: number): Entit
 }
 
 function putRecordOnLiving(state: GameState, alifeId: number): void {
-  assert.equal(moveAlifeNpcRecord(state, alifeId, 'design:living', { z: 60 }), true);
+  assert.equal(moveAlifeNpcRecord(state, alifeId, 'design:living', { z: -6 }), true);
 }
 
 test('floor activation consumes only prefilled A-Life bucket records', () => {
   const state = stateAtLiving();
   const alife = setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' }) as TestAlifeState;;
-  assert.equal(moveAlifeNpcRecord(state, alife.npcs[0].id, 'design:living', { z: 60, markTouched: false }), true);
+  assert.equal(moveAlifeNpcRecord(state, alife.npcs[0].id, 'design:living', { z: -6, markTouched: false }), true);
   alife.floorIndex['design:living'] = [0];
   const world = makeNoAnchorWorld();
   world.cells[world.idx(41, 41)] = Cell.FLOOR;

@@ -119,7 +119,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
 
   const designFloor = currentZ !== undefined ? designFloorAtZ(currentZ) : undefined;
   // @ts-ignore
-  const isMinistry = designFloor ? ''(designFloor) === 30 : false;
+  const isMinistry = designFloor ? designFloor.themeTags?.includes('ministry') : false;
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,

@@ -55,7 +55,7 @@ function contextSnapshot(overrides: Partial<ContextSnapshot> = {}): ContextSnaps
 
 test('context lowering derives need, wound, samosbor, faction, relation and room tags', () => {
   const ctx = lowerContextSnapshot(contextSnapshot({
-    z: 60,
+    z: -6,
     roomType: RoomType.KITCHEN,
     roomName: 'Кухня с мокрым щитком',
     npcFaction: Faction.LIQUIDATOR,
@@ -208,7 +208,7 @@ test('event context preserves ids but does not invent item, NPC or route names',
     day: 0,
     hour: 12,
     minute: 0,
-    z: 60,
+    z: -6,
     actorId: 9,
     targetId: 10,
     itemId: 'stolen_filter_pack',

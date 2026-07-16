@@ -2,15 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { economyForSave, ensureEconomyState, invalidateEconomyPrices, normalizeGameEconomy } from '../src/systems/economy';
+import { createEconomyFloorState } from '../src/data/economy';
 import { makeGameState } from './helpers';
 
 test('economyForSave ensures economy state and returns it', () => {
-  const state = makeGameState();
+  const state = makeGameState({ currentZ: 0 });
+  const economy = ensureEconomyState(state);
+  economy.floors[0] = createEconomyFloorState(0);
   const econ = economyForSave(state);
 
   // ensureEconomyState side effects
   assert.equal(state.economy, econ);
-  assert.ok(econ.floors['living']);
+  assert.ok(econ.floors[0]);
 
   // Has required shape
   assert.equal(typeof econ.priceVersion, 'number');
@@ -19,7 +22,9 @@ test('economyForSave ensures economy state and returns it', () => {
 });
 
 test('invalidateEconomyPrices increments price version', () => {
-  const state = makeGameState();
+  const state = makeGameState({ currentZ: 0 });
+  const economy = ensureEconomyState(state);
+  economy.floors[0] = createEconomyFloorState(0);
   const econ = ensureEconomyState(state);
 
   const oldVersion = econ.priceVersion;
@@ -29,7 +34,9 @@ test('invalidateEconomyPrices increments price version', () => {
 });
 
 test('normalizeGameEconomy sets up economy and deletes price caches', () => {
-  const state = makeGameState();
+  const state = makeGameState({ currentZ: 0 });
+  const economy = ensureEconomyState(state);
+  economy.floors[0] = createEconomyFloorState(0);
   ensureEconomyState(state); // initialize
 
   // modify to a non-default version

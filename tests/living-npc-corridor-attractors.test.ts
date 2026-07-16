@@ -165,7 +165,7 @@ function tickLivingRoutine(
   msgs: Msg[],
 ): void {
   rebuildEntityIndexForSimulation(entities, Math.floor(time * 1000));
-  updateAI(world, entities, dt, time, msgs, 1, clock, false, { v: 50_000 }, makeGameState({
+  updateAI(world, entities, dt, time, msgs, 1, clock, false, { v: 50_000 }, undefined, makeGameState({
     currentZ: 0,
     time,
     clock,
@@ -174,7 +174,7 @@ function tickLivingRoutine(
 
 test('living routine residents do not collapse into corridor attractors', () => {
   initFactionRelations();
-  const gen = generateFloor('living', LIVING_ATTRACTOR_SEED);
+  const gen = generateFloor(0, LIVING_ATTRACTOR_SEED);
   const player = makePlayer(49_999, gen.spawnX + 0.5, gen.spawnY + 0.5);
   const entities = [player, ...gen.entities];
   normalizeNonCombatRoutine(entities);

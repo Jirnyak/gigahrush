@@ -581,7 +581,7 @@ test('istotit fog effect heals actors in active fog', () => {
 test('captured samosbor zone is restored before post-cycle patch or fallback rebuild', () => {
   const ctx = makeShelterWorld(DoorState.CLOSED);
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     samosborTimer: 0,
     worldEvents: createWorldEventState(),
   });
@@ -842,7 +842,7 @@ test('local samosbor patch can be deferred before replacement generation', () =>
     }
   }
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     samosborTimer: 0,
     worldEvents: createWorldEventState(),
   });

@@ -266,7 +266,7 @@ test('maintenance object profile wraps craft stations and collector machinery ru
 });
 
 testGenerationMatrix('maintenance object profile places reachable craft stations', () => {
-  const gen = generateFloor('maintenance', 0x51002);
+  const gen = generateFloor(-26, 0x51002);
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
   const stations = [...craftStationCells(gen.world, 'craft_lathe'), ...craftStationCells(gen.world, 'disassembly_workbench')];
 

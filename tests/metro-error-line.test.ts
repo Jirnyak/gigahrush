@@ -77,7 +77,7 @@ function withRandom(value: number, fn: () => void): void {
 test('metro wrong stop sends the player to a local transfer with a return clue', () => {
   const world = makeMetroRoom(METRO_STATION_ROOM_NAME, Feature.SCREEN, 0);
   const player = testPlayer([{ defId: 'metro_ticket', count: 2 }]);
-  const state = makeGameState({ currentZ: -26, time: 10_000 });
+  const state = makeGameState({ currentZ: 2, time: 10_000 });
 
   withRandom(0, () => {
     const result = tryUseMetroRoute(world, player, state, 12, 12);

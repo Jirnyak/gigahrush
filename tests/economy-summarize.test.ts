@@ -9,8 +9,8 @@ import { createEconomyFloorState } from '../src/data/economy';
 test('summarizeEconomy returns expected formatted strings', () => {
   const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = createEconomyFloorState('living');
-  econ.floors['living'] = floorState;
+  const floorState = createEconomyFloorState(0);
+  econ.floors[0] = floorState;
 
   // Set specific stock values for determinism
   floorState.resources['drink_water'].stock = 50.4;
@@ -46,8 +46,8 @@ test('summarizeEconomy handles missing floor state', () => {
 test('summarizeEconomy correctly calculates multiplier (scarcity)', () => {
   const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = createEconomyFloorState('living');
-  econ.floors['living'] = floorState;
+  const floorState = createEconomyFloorState(0);
+  econ.floors[0] = floorState;
 
   // Set low stock to increase scarcity
   const res = RESOURCES[0];

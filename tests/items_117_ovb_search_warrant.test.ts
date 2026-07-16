@@ -61,7 +61,7 @@ test('ovb search warrant exposes legal force at Ministry N3', () => {
     x: room.x + 8.5,
     y: room.y + Math.floor(room.h / 2) + 0.5,
   });
-  const state = makeGameState({ currentZ: 30, time: 117 });
+  const state = makeGameState({ currentZ: 34, time: 117 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state, undefined, world);

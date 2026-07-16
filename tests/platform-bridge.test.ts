@@ -135,7 +135,7 @@ test('portal compact save keeps a current-shape resume profile without heavy flo
       banking: { accountRubles: 50, recentLedger: Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })) },
       stockMarket: { portfolio: {}, quotes: {}, recentTrades: Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })) },
       production: Array.from({ length: 40 }, (_, i) => ({
-        z: 60,
+        z: -6,
         roomId: i,
         factoryId: 'unknown',
         recipeId: 'unknown',
@@ -147,7 +147,7 @@ test('portal compact save keeps a current-shape resume profile without heavy flo
         id: i + 1,
         x: i,
         y: i,
-        z: 60,
+        z: -6,
         roomId: 1,
         zoneId: 1,
         kind: 0,

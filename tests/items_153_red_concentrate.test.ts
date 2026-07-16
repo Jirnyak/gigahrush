@@ -38,7 +38,7 @@ test('using red concentrate spends the bribe ration as food', () => {
     inventory: [{ defId: ITEM_ID, count: 1 }],
     needs: { food: 30, water: 60, sleep: 70, pee: 0, poo: 0 },
   });
-  const state = makeGameState({ currentZ: 30, time: 153 });
+  const state = makeGameState({ currentZ: 34, time: 153 });
 
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter применить');
 

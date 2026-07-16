@@ -61,7 +61,7 @@ test('Concentrate press bad batch jams production until a gear repair is supplie
     id: 1,
     x: 12,
     y: 12,
-    z: 140,
+    z: -14,
     roomId: room.id,
     zoneId: 0,
     kind: ContainerKind.METAL_CABINET,

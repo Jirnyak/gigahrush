@@ -34,7 +34,6 @@ import {
 } from '../../data/visual_corridor_coverings';
 import { VISUAL_GEOMETRY_MODE_BUDGETS } from '../../data/visual_geometry_profiles';
 import type { CameraView } from '../../systems/camera';
-import { ENTITY_MASK_BILLBOARD, type EntityIndex } from '../../systems/entity_index';
 
 export type VisualModelId = string;
 export type MeshGraphicsMode = 'off' | 'low' | 'medium' | 'high';
@@ -126,7 +125,7 @@ export interface MeshPassContext {
   mode?: MeshGraphicsMode;
   profile?: MeshSceneProfile | null;
   fogDensity?: number;
-  entityIndex?: Pick<EntityIndex, 'queryRadiusCapped'>;
+  entities?: readonly Entity[];
 }
 
 export interface MeshSceneCollectStats {
@@ -242,7 +241,6 @@ export const MESH_FEATURE_MODEL_IDS: Readonly<Partial<Record<Feature, string>>> 
   Object.fromEntries(Object.entries(FEATURE_MESH_DEFS).map(([feature, def]) => [feature, def?.modelId])),
 );
 
-const ENTITY_QUERY_SCRATCH: Entity[] = [];
 const MAX_MERGE_RUN = 16;
 const MAX_CLUSTER_CELLS = 16;
 const MAX_CORRIDOR_CEILING_RUN = 14;
@@ -2205,18 +2203,14 @@ export function collectMeshChunk(
 
 export function collectStaticEntityMeshes(context: MeshPassContext, out: MeshInstance[]): void {
   const profile = resolveMeshSceneProfile(context);
-  if (!profile.enabled || !profile.includeEntities || !context.entityIndex) return;
-  ENTITY_QUERY_SCRATCH.length = 0;
-  context.entityIndex.queryRadiusCapped(
-    context.camera.x,
-    context.camera.y,
-    profile.radius,
-    ENTITY_QUERY_SCRATCH,
-    ENTITY_MASK_BILLBOARD,
-    Math.min(profile.instanceCap, 128),
-  );
-  for (const e of ENTITY_QUERY_SCRATCH) {
+  if (!profile.enabled || !profile.includeEntities) return;
+  const rad2 = profile.radius * profile.radius;
+  let added = 0;
+  const maxAdded = Math.min(profile.instanceCap, 128);
+  if (!context.entities) return;
+  for (const e of context.entities) {
     if (!e.alive || e.type !== EntityType.BILLBOARD) continue;
+    if (context.world.dist2(context.camera.x, context.camera.y, e.x, e.y) > rad2) continue;
     emitInstance(out, {
       modelId: 'billboard_prop',
       x: e.x,
@@ -2229,6 +2223,8 @@ export function collectStaticEntityMeshes(context: MeshPassContext, out: MeshIns
       seed: meshInstanceSeed(context.seed, e.x, e.y, e.id + 3000, 'billboard_prop'),
       flags: MeshInstanceFlag.Entity,
     });
+    added++;
+    if (added >= maxAdded) break;
   }
 }
 

@@ -31,7 +31,7 @@ import { testGenerationMatrix } from './generator_helpers';
 let cachedLivingCraftStations: ReturnType<typeof generateFloor> | undefined;
 
 function livingCraftStationsForRead(): ReturnType<typeof generateFloor> {
-  cachedLivingCraftStations ??= generateFloor('living', 0x5a7103);
+  cachedLivingCraftStations ??= generateFloor(0, 0x5a7103);
   return cachedLivingCraftStations;
 }
 
@@ -215,7 +215,7 @@ testGenerationMatrix('Yakov lab exposes a guaranteed reachable lathe and disasse
 });
 
 testGenerationMatrix('ordinary story floor craft station placement stays reachable and capped', () => {
-  const gen = generateFloor('ministry', 0x51a7103);
+  const gen = generateFloor(30, 0x51a7103);
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
   const stations = craftStationCells(gen.world);
 
@@ -226,7 +226,7 @@ testGenerationMatrix('ordinary story floor craft station placement stays reachab
 });
 
 testGenerationMatrix('maintenance collectors use the story-floor craft station profile', () => {
-  const gen = generateFloor('maintenance', 0x51001);
+  const gen = generateFloor(-26, 0x51001);
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
   const profile = craftStationProfileForStoryFloor('maintenance');
   const stations = craftStationCells(gen.world);

@@ -55,7 +55,7 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
     day: 0,
     hour: 8,
     minute: 10,
-    z: 60,
+    z: -6,
     severity: 3,
     privacy: 'public',
     truth: 'fact',

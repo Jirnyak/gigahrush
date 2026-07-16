@@ -49,7 +49,7 @@ test('rail switch order opens the Ministry N3 service passage without consuming 
     x: room.x + 8.5,
     y: room.y + Math.floor(room.h / 2) + 0.5,
   });
-  const state = makeGameState({ currentZ: 30, time: 109 });
+  const state = makeGameState({ currentZ: 34, time: 109 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state, undefined, world);

@@ -320,11 +320,11 @@ test('A-Life migration profiles validate statically', () => {
 test('shared floor key resolver covers story, design and procedural A-Life keys', () => {
   assert.equal(floorKeyKnown('design:living'), true);
   assert.equal(floorKeyZ('design:living'), 0);
-  assert.equal(floorKeyBaseFloor('design:living').LIVING);
+  assert.equal(floorKeyBaseFloor('design:living')?.includes('living'), true);
   assert.equal(floorKeyAllowsNpcs('design:void'), false);
 
   assert.equal(floorKeyKnown('design:floor_69'), true);
-  assert.equal(floorKeyBaseFloor('design:floor_69').MAINTENANCE);
+  assert.equal(floorKeyBaseFloor('design:floor_69')?.includes('maintenance'), true);
 
   const proceduralZ = PROCEDURAL_FLOOR_ZS[0];
   assert.equal(floorKeyKnown(`procedural:z${proceduralZ}`), true);
@@ -416,7 +416,7 @@ test('A-Life migration profiles validate bad intents', () => {
       id: 'void_base_floor',
       reason: 'work',
       weight: 1,
-      destination: { baseFloors: ['void'] }, // VOID base floor
+      destination: { themeTags: ['void'] }, // VOID base floor
       eventTags: ['test'],
     },
     {

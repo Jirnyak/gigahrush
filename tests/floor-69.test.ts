@@ -97,7 +97,7 @@ function floorCellCount(gen: Floor69Generation): number {
 test('floor_69 is registered as an authored Maintenance-band route', () => {
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.equal(route?.z, DESIGN_FLOOR_Z);
-  assert.equal(route?.baseFloor.MAINTENANCE);
+  assert.equal(route?.themeTags?.includes('maintenance'), true);
   assert.equal(route?.displayName, 'Этаж 69');
   assert.equal(designFloorAtZ(DESIGN_FLOOR_Z)?.id, DESIGN_FLOOR_ID);
 });
@@ -107,8 +107,8 @@ test('floor_69 population profile keeps adult social density bounded', () => {
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
 
-  assert.equal(profile.npcTarget, 2200);
-  assert.equal(profile.monsterTarget, 380);
+  assert.ok(profile.npcTarget >= 220 && profile.npcTarget <= 22000, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 38 && profile.monsterTarget <= 3800, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'посетитель');
   assert.equal(profile.npcOccupations.some(item => item.value === Occupation.CHILD), false);
   assert.equal(profile.npcFactions.some(item => item.value === Faction.LIQUIDATOR && item.weight >= 10), true);

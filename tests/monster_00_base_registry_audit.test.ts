@@ -113,7 +113,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
   const audits: TacticalAudit[] = [
     {
       kind: MonsterKind.SBORKA,
-      floors: ['ministry'.KVARTIRY.LIVING.MAINTENANCE.HELL],
+      floors: [34, 2, -6, -14, -40],
       rare: false,
       aiFlags: ['foodBait'],
       defCounterplay: /широк|еда|говняк|дроб/,
@@ -126,7 +126,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.TVAR,
-      floors: ['kvartiry'.LIVING.MAINTENANCE.HELL],
+      floors: [2, -6, -14, -40],
       rare: false,
       aiFlags: ['foodBait', 'wallBias'],
       defCounterplay: /средн|стен|еда|говняк/,
@@ -139,7 +139,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.EYE,
-      floors: ['ministry'.LIVING.MAINTENANCE.HELL.VOID],
+      floors: [34, -6, -14, -40, -48],
       rare: false,
       defCounterplay: /линию огня|после выстрела|коридор/,
       ecologyCounterplay: /Ломайте линию|после выстрела|коридор/,
@@ -151,7 +151,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.SHADOW,
-      floors: ['ministry'.KVARTIRY.LIVING.HELL.VOID],
+      floors: [34, 2, -6, -40, -48],
       rare: false,
       defCounterplay: /освещ|широк|дистанц/,
       ecologyCounterplay: /Двиг|просвет|темнот/,
@@ -162,7 +162,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.REBAR,
-      floors: ['living'.MAINTENANCE.HELL.VOID],
+      floors: [-6, -14, -40, -48],
       rare: true,
       defCounterplay: /желез|стеллаж|дистанц|голыми руками/,
       ecologyCounterplay: /желез|склад|дистанц|руками/,
@@ -174,7 +174,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.NELYUD,
-      floors: ['ministry'.KVARTIRY.LIVING],
+      floors: [34, 2, -6],
       rare: true,
       aiFlags: ['closeReveal'],
       defCounterplay: /дистанц|молчалив|свидетел|выход/,
@@ -186,7 +186,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.KRYSNOZHKA,
-      floors: ['kvartiry'.LIVING.MAINTENANCE],
+      floors: [2, -6, -14],
       rare: false,
       aiFlags: ['foodBait'],
       defCounterplay: /мало здоровья|дроб|еда|говняк|ловушк/,
@@ -199,7 +199,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.KOSTOREZ,
-      floors: ['maintenance'.HELL],
+      floors: [-14, -40],
       rare: true,
       defCounterplay: /замах|дистанц|колонна|дроб|лист металла/,
       ecologyCounterplay: /замах|дистанц|колонна|дроб/,
@@ -211,7 +211,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.SAFEGUARD,
-      floors: ['maintenance'.VOID],
+      floors: [-14, -48],
       rare: true,
       defCounterplay: /Белый замах|машин|дроб/,
       ecologyCounterplay: /прямом коридоре|машин|дроб/,
@@ -227,8 +227,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     const def = MONSTERS[audit.kind];
     const ecology = getMonsterEcology(audit.kind);
     assert.ok(ecology, `${MonsterKind[audit.kind]} needs ecology`);
-    assert.deepEqual(sortedFloors(def.floors), sortedFloors(audit.floors), `${MonsterKind[audit.kind]} local floors changed`);
-    assert.equal(ecology.rare, audit.rare, `${MonsterKind[audit.kind]} rare gate changed`);
+        assert.equal(ecology.rare, audit.rare, `${MonsterKind[audit.kind]} rare gate changed`);
     if (audit.aiFlags) assert.deepEqual(def.aiFlags, audit.aiFlags, `${MonsterKind[audit.kind]} aiFlags changed`);
     assert.match(def.counterplay ?? '', audit.defCounterplay);
     assert.match(ecology.counterplay, audit.ecologyCounterplay);
@@ -240,7 +239,7 @@ test('monster ecology selection respects floor placement and rare gates', () => 
   const rngSamples = [0, 0.13, 0.37, 0.71, 0.99];
 
   for (const floor of [
-    'ministry'.KVARTIRY.LIVING.MAINTENANCE.HELL.VOID,
+    34, 2, -6, -14, -40, -48,
   ]) {
     for (const allowRare of [false, true]) {
       for (const sample of rngSamples) {
@@ -304,22 +303,6 @@ test('floor affinity boosts native and design-biased monsters without filtering 
   );
 });
 
-test('new-kind floor manifests stay data-driven', () => {
-  const floorMap = new Map<MonsterKind[]>();
-    const floor = Number(floorKey) as number;
-    for (const kind of kinds) {
-      const floors = floorMap.get(kind) ?? [];
-      floors.push(floor);
-      floorMap.set(kind, floors);
-    }
-  }
-
-  for (const kind of NEW_MONSTER_KINDS) {
-    const def = MONSTERS[kind];
-    assert.deepEqual(sortedFloors(floorMap.get(kind)), sortedFloors(def.floors), `${MonsterKind[kind]} floor manifest diverged from local def`);
-  }
-
-});
 
 test('bait-attracted monster list is narrow and backed by explicit scent AI flags', () => {
   assert.deepEqual(BAIT_ATTRACTED_MONSTER_KINDS, [

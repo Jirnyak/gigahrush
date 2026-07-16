@@ -12,7 +12,7 @@ function resetFloor(state: GameState, floor: number): void {
 
 test('invalidateEconomyPrices increments priceVersion', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, 0);
   const econ = ensureEconomyState(state);
 
   const prevVersion = econ.priceVersion;
@@ -23,11 +23,11 @@ test('invalidateEconomyPrices increments priceVersion', () => {
 
 test('invalidateEconomyPrices forces getAdjustedItemPrice to recalculate', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, 0);
   const econ = ensureEconomyState(state);
 
   // Set initial stock
-  const floorState = econ.floors['living']!;
+  const floorState = econ.floors[0]!;
   floorState.resources['drink_water'] = { stock: 10, target: 10, lastDelta: 0 };
 
   // Cache the price

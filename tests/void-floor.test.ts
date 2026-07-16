@@ -14,7 +14,7 @@ const VOID_TEST_SEED = 0x140014;
 let cachedVoidGeneration: FloorGeneration | undefined;
 
 function voidFloorForRead(): FloorGeneration {
-  cachedVoidGeneration ??= generateFloor('void', VOID_TEST_SEED);
+  cachedVoidGeneration ??= generateFloor(-50, VOID_TEST_SEED);
   return cachedVoidGeneration;
 }
 

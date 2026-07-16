@@ -114,7 +114,7 @@ test('office field extends the shot through desks and carried papers, then cover
   const threat = idol(10.5, 10.5);
   const entities = [target, threat];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
 
   prepare(entities);
   updateMonster(world, entities, threat, 0.1, 1, msgs, target.id, { v: 3 }, state);

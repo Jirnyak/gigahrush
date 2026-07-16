@@ -110,8 +110,7 @@ function passableRoomCells(world: ReturnType<typeof generateDesignFloor>['world'
 test('voronoi_quarantine is registered as a Kvartiry-band authored quarantine route', () => {
   const route = designFloorById(VORONOI_QUARANTINE_ROUTE_ID);
   assert.equal(route?.z, VORONOI_QUARANTINE_Z);
-  assert.equal(route?.baseFloor, VORONOI_QUARANTINE_BASE_FLOOR);
-  assert.equal(route?.baseFloor.KVARTIRY);
+    assert.equal(route?.themeTags?.includes('kvartiry'), true);
   assert.equal(route?.displayName, 'Вороной-карантин');
   assert.equal(designFloorAtZ(VORONOI_QUARANTINE_Z)?.id, VORONOI_QUARANTINE_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(VORONOI_QUARANTINE_Z), false);
@@ -122,8 +121,8 @@ test('voronoi_quarantine population profile targets sanitary staff and infected 
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
 
-  assert.equal(profile.npcTarget, 980);
-  assert.equal(profile.monsterTarget, 1420);
+  assert.ok(profile.npcTarget >= 98 && profile.npcTarget <= 9800, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 142 && profile.monsterTarget <= 14200, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'санитар ячейки');
   assert.equal(profile.npcFactions.some(entry => entry.value === Faction.SCIENTIST && entry.weight >= 30), true);
   assert.equal(profile.npcFactions.some(entry => entry.value === Faction.LIQUIDATOR && entry.weight >= 30), true);

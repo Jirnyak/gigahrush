@@ -45,7 +45,7 @@ test('stamp room registers a witnessed forged stamp sheet route', () => {
 test('stealing stamp room forged output publishes witness and audit risk', () => {
   initFactionRelations();
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     time: 345,
     worldEvents: createWorldEventState(),
   });
@@ -74,7 +74,7 @@ test('stealing stamp room forged output publishes witness and audit risk', () =>
     id: 22,
     x: 12,
     y: 12,
-    z: 30,
+    z: 34,
     roomId: 0,
     zoneId: 0,
     kind: ContainerKind.FILING_CABINET,
@@ -114,7 +114,7 @@ test('stealing stamp room forged output publishes witness and audit risk', () =>
 test('container theft witnesses are chosen by distance instead of entity array order', () => {
   initFactionRelations();
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     time: 440,
     worldEvents: createWorldEventState(),
   });
@@ -152,7 +152,7 @@ test('container theft witnesses are chosen by distance instead of entity array o
     id: 23,
     x: 12,
     y: 12,
-    z: 30,
+    z: 34,
     roomId: 0,
     zoneId: 0,
     kind: ContainerKind.FILING_CABINET,

@@ -76,7 +76,7 @@ test('food drops and govnyak use are explicit bait inputs', () => {
 test('dropped documents are bounded bait for document predators', () => {
   resetMonsterBaits();
   const world = openWorld();
-  const state = makeGameState({ time: 8, currentZ: 30 });
+  const state = makeGameState({ time: 8, currentZ: 34 });
 
   assert.equal(isMonsterBaitItem('blank_form'), true);
   assert.equal(placeMonsterBait(state, world, actor(), 12, 10, 'blank_form', 1, 'drop', 301), true);
@@ -174,11 +174,11 @@ test('small monsters claim nearby bait through a capped marker scan', () => {
 test('bait markers are scoped to the current route floor key, not only number', () => {
   resetMonsterBaits();
   const world = openWorld();
-  const state = makeGameState({ time: 10, currentZ: 14 });
-  setFloorRunState(state, { runSeed: 17, currentZ: 12 }.KVARTIRY);
+  const state = makeGameState({ time: 10, currentZ: 2 });
+  setFloorRunState(state, { runSeed: 17, currentZ: 2 });
 
   assert.equal(placeMonsterBait(state, world, actor(), 10, 10, 'bread', 1, 'drop', 99), true);
-  setFloorRunState(state, { runSeed: 17, currentZ: 8 }.KVARTIRY);
+  setFloorRunState(state, { runSeed: 17, currentZ: -6 });
 
   const sborka = monster(MonsterKind.SBORKA, 13, 10);
   assert.equal(findMonsterBaitTarget(world, sborka, 0.2, state.time, state), null);

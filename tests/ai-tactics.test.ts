@@ -44,7 +44,7 @@ function slimeWoman(overrides: Partial<Entity> = {}): Entity {
 function tick(world: World, entities: Entity[], player: Entity, time: number, clock: GameClock): void {
   const state = makeGameState({ time, clock, currentZ: -26 });
   rebuildEntityIndexForSimulation(entities, Math.floor(time * 1000));
-  updateAI(world, entities, 0.12, time, state.msgs, player.id, clock, false, { v: 10_000 }, state);
+  updateAI(world, entities, 0.12, time, state.msgs, player.id, clock, false, { v: 10_000 }, state.currentZ, state);
 }
 
 test('actor tactic profile lets slime woman drop bounded residue after combat stimulus', () => {
@@ -58,7 +58,7 @@ test('actor tactic profile lets slime woman drop bounded residue after combat st
 
   notifyActorDamaged(world, slime, player, 8, 'player_melee', 4, state);
   rebuildEntityIndexForSimulation(entities, 4_000);
-  updateAI(world, entities, 0.12, 4, state.msgs, player.id, clock, false, { v: 10_000 }, state);
+  updateAI(world, entities, 0.12, 4, state.msgs, player.id, clock, false, { v: 10_000 }, state.currentZ, state);
 
   const probe = makeTestPlayer({ id: 99, x: 20.5, y: 20.5 });
   assert.equal(getCellHazardMoveMultiplier(world, probe) < 1, true);

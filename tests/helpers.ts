@@ -196,7 +196,7 @@ export function makeTestContainer(overrides: Partial<WorldContainer> = {}): Worl
     id: 1,
     x: 0,
     y: 0,
-    z: 60,
+    z: -6,
     roomId: 1,
     zoneId: 1,
     kind: ContainerKind.EMERGENCY_BOX,

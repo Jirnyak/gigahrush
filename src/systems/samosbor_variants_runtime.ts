@@ -24,7 +24,7 @@ export function chooseSamosborVariant(floorTags: readonly string[], _zNum: numbe
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;
-    if (forced && forced.tags.some(t => floorTags.includes(t))) {
+    if (forced && (!forced.tags || forced.tags.some(t => floorTags.includes(t)))) {
       activeVariant = buildActiveSamosborVariant(forced);
       lastVariant = activeVariant.def.id;
       return activeVariant;

@@ -13,8 +13,8 @@ test('ensureEconomyState initializes economy state when undefined', () => {
   assert.ok(economy);
   assert.equal(typeof economy.priceVersion, 'number');
   assert.ok(economy.floors);
-  assert.ok(economy.floors['living']);
-  assert.equal(economy.floors['living'].floor.LIVING);
+  assert.ok(economy.floors[0]);
+  assert.equal(economy.floors[0].z, 0);
 
   // Also check it mutated the state
   assert.equal((state as any).economy, economy);
@@ -31,7 +31,7 @@ test('ensureEconomyState normalizes invalid economy state', () => {
   assert.equal(typeof economy.priceVersion, 'number');
   assert.equal(economy.priceVersion, 1);
   assert.ok(economy.floors);
-  assert.ok(economy.floors['living']);
+  assert.ok(economy.floors[0]);
 });
 
 test('ensureEconomyState adds current floor if missing', () => {
@@ -41,7 +41,7 @@ test('ensureEconomyState adds current floor if missing', () => {
   const initialEconomy = {
     priceVersion: 1,
     floors: {
-      ['living']: { z: 60, resources: {}, lastTickAt: 0 }
+      [0]: { z: 0, resources: {}, lastTickAt: 0 }
     },
     routes: {}
   };
@@ -50,8 +50,8 @@ test('ensureEconomyState adds current floor if missing', () => {
   const economy = ensureEconomyState(state);
 
   assert.equal(economy, initialEconomy);
-  assert.ok(economy.floors['kvartiry']);
-  assert.equal(economy.floors['kvartiry'].floor.KVARTIRY);
+  assert.ok(economy.floors[14]);
+  assert.equal(economy.floors[14].z, 14);
 });
 
 test('ensureEconomyState returns existing state when valid and floor exists', () => {
@@ -60,7 +60,7 @@ test('ensureEconomyState returns existing state when valid and floor exists', ()
   const initialEconomy = {
     priceVersion: 5,
     floors: {
-      ['living']: { z: 60, resources: {}, lastTickAt: 100 }
+      [0]: { z: -6, resources: {}, lastTickAt: 100 }
     },
     routes: {}
   };
@@ -70,5 +70,5 @@ test('ensureEconomyState returns existing state when valid and floor exists', ()
 
   assert.equal(economy, initialEconomy);
   assert.equal(economy.priceVersion, 5);
-  assert.equal(economy.floors['living'].lastTickAt, 100);
+  assert.equal(economy.floors[0].lastTickAt, 100);
 });

@@ -45,13 +45,13 @@ test('screen signal rumor pools point to gameplay surfaces', () => {
 test('runtime event rumors keep floor zone and room context in leads', () => {
   const now = 9_500;
   const npc = { ...makeNpc(), id: 9301 };
-  const state = makeGameState({ currentZ: -26, time: now });
+  const state = makeGameState({ currentZ: -14, time: now });
   const snapshot = buildContextSnapshot(npc, { state, player: makePlayer(), time: now });
   assert.equal(recordRumorEvent({
     id: 9_100_001,
     type: 'room_produced_items',
     time: now - 5,
-    z: 140,
+    z: -14,
     zoneId: 12,
     roomId: 44,
     severity: 4,
@@ -72,7 +72,7 @@ test('runtime event rumors keep floor zone and room context in leads', () => {
   assert.match(line, /концентрат/i);
 
   const lead = getRecentRumorLead(now);
-  assert.equal(lead?.floor.MAINTENANCE);
+  assert.equal(lead?.z, -14);
   assert.equal(lead?.roomName, 'Брикетный цех: линия концентрата');
 });
 
@@ -110,7 +110,7 @@ function snapshotFor(type: WorldEvent['type'], overrides: Partial<WorldEvent> = 
     day: 0,
     hour: 8,
     minute: 0,
-    z: 60,
+    z: -6,
     actorId: undefined,
     actorFaction: undefined,
     monsterKind: undefined,

@@ -64,7 +64,7 @@ test('scrubbed serial plate can be sold as audit-risk black-market proof', () =>
 
 test('scrubbed serial plate can be reported instead of sold', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentZ: 30, time: 165 });
+  const state = makeGameState({ currentZ: 34, time: 165 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state);

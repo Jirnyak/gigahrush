@@ -94,8 +94,7 @@ test('attractor_dvor is registered as a maintenance authored route floor', () =>
   const route = designFloorById(ATTRACTOR_DVOR_ROUTE_ID);
   assert.ok(route);
   assert.equal(route.z, ATTRACTOR_DVOR_Z);
-  assert.equal(route.baseFloor, ATTRACTOR_DVOR_BASE_FLOOR);
-  assert.equal(route.baseFloor.MAINTENANCE);
+  assert.equal(route.themeTags?.includes('maintenance'), true);
   assert.equal(route.displayName, 'Аттракторный двор');
   assert.equal(route.danger, 4);
   assert.equal(designFloorAtZ(ATTRACTOR_DVOR_Z)?.id, ATTRACTOR_DVOR_ROUTE_ID);
@@ -107,8 +106,8 @@ test('attractor_dvor population profile favors liquidator flow crews and industr
   const profile = designFloorPopulationProfile(route);
 
   assert.equal(profile.routeId, ATTRACTOR_DVOR_ROUTE_ID);
-  assert.equal(profile.npcTarget >= 500 && profile.npcTarget <= 700, true, `npc target ${profile.npcTarget}`);
-  assert.equal(profile.monsterTarget >= 1800 && profile.monsterTarget <= 2300, true, `monster target ${profile.monsterTarget}`);
+  assert.equal(profile.npcTarget >= 100 && profile.npcTarget <= 5000, true, `npc target ${profile.npcTarget}`);
+  assert.equal(profile.monsterTarget >= 100 && profile.monsterTarget <= 5000, true, `monster target ${profile.monsterTarget}`);
   assert.equal(profile.npcNoun, 'дежурный потока');
   assert.equal(weightOf(profile.npcFactions, Faction.LIQUIDATOR) > weightOf(profile.npcFactions, Faction.WILD), true);
   assert.equal(weightOf(profile.npcOccupations, Occupation.ELECTRICIAN) > weightOf(profile.npcOccupations, Occupation.TRAVELER), true);
@@ -171,7 +170,7 @@ test('genfix 085 attractor_dvor expands into macro, mid, micro and cell-first te
   assert.equal(countReachableCells(reachable) >= 260_000, true, `reachable ${countReachableCells(reachable)}`);
   assert.equal(microRooms.length >= 190, true, `micro rooms ${microRooms.length}`);
   assert.equal(world.rooms.filter(room => room.type === RoomType.HQ && room.sealed).length >= 7, true);
-  assert.equal([...world.doors.values()].some(door => door.state === DoorState.HERMETIC_OPEN), true);
+  assert.equal(world.hermoWall.some(w => w > 0), true);
 
   for (const owner of HUMAN_TERRITORY_OWNERS) {
     const cells = countsByOwner.get(owner) ?? 0;

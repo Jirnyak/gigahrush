@@ -105,7 +105,7 @@ function blockCellFully(world: World, x: number, y: number): void {
 
 function tick(world: World, entities: Entity[], dt: number, time: number, clock: GameClock, msgs: Msg[] = []): void {
   rebuildEntityIndexForSimulation(entities, Math.floor(time * 1000));
-  updateAI(world, entities, dt, time, msgs, 1, clock, false, { v: 1000 }, makeGameState({ time, clock }));
+  updateAI(world, entities, dt, time, msgs, 1, clock, false, { v: 1000 }, undefined, makeGameState({ time, clock }));
 }
 
 test('active AI updates every non-player actor in one isotropic pass', () => {
@@ -310,7 +310,7 @@ test('live AI pass reaches monster ecology source updates', () => {
   const msgs: Msg[] = state.msgs;
 
   rebuildEntityIndexForSimulation(entities, 1000);
-  updateAI(world, entities, 0.02, 1, msgs, p.id, clock, false, nextId, state);
+  updateAI(world, entities, 0.02, 1, msgs, p.id, clock, false, nextId, state.currentZ, state);
 
   const children = entities.filter(e => e.type === EntityType.MONSTER && e.ai?.sourceEntityId === source.id);
   assert.equal(children.length, 1);

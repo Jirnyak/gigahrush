@@ -50,7 +50,7 @@ test('shelter seat card can be handed to shelter seniors in the living block', (
 
 test('shelter seat card is not spent outside living shelter floors', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentZ: 30, time: 114 });
+  const state = makeGameState({ currentZ: 34, time: 114 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state);

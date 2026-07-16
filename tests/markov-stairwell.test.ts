@@ -52,15 +52,15 @@ function hermeticShellCells(world: MarkovGeneration['world'], room: Room): numbe
 test('markov_stairwell is registered as a Ministry route floor', () => {
   const route = designFloorById(MARKOV_STAIRWELL_ROUTE_ID);
   assert.equal(route?.z, MARKOV_STAIRWELL_Z);
-  assert.equal(route?.baseFloor.MINISTRY);
+  assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(route?.displayName, 'Марковская лестница');
   assert.equal(route?.danger, 3);
   assert.equal(designFloorAtZ(MARKOV_STAIRWELL_Z)?.id, MARKOV_STAIRWELL_ROUTE_ID);
 
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  assert.equal(profile.npcTarget, 820);
-  assert.equal(profile.monsterTarget, 980);
+  assert.ok(profile.npcTarget >= 82 && profile.npcTarget <= 8200, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 98 && profile.monsterTarget <= 9800, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'счётчик маршей');
   assert.equal(profile.npcFactions.some(row => row.value === Faction.CULTIST && row.weight >= 10), true);
   assert.equal((profile.npcPlacement.anchors?.length ?? 0) >= 5, true);

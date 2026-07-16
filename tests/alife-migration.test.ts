@@ -86,7 +86,7 @@ test('normal cold migration gives traveler occupations a bounded priority lane',
   const plan: AlifePopulationPlan = {
     buckets: [{
       floorKey: 'design:ministry',
-      z: 30,
+      z: 34,
       targetCount: 64,
       reserved,
     }],

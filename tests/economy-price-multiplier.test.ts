@@ -40,7 +40,7 @@ test('getItemPriceMultiplier uses cache and updates when stock changes', () => {
   assert.equal(getAdjustedItemPrice(state, 'water'), initialPrice);
 
   // Change stock to affect scarcity
-  changeResourceStock(state, 'drink_water', -100, 'living');
+  changeResourceStock(state, 'drink_water', -100, 0);
 
   // Cache should be invalidated because priceVersion incremented
   const newMultiplier = getItemPriceMultiplier(state, 'water');

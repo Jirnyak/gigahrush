@@ -107,7 +107,7 @@ export const ITEM_OUTCOME_RULES: readonly ItemOutcomeRule[] = [
     outcome: 'ministry',
     kind: 'handoff',
     match: {
-      floorLevels: [30],
+      floorLevels: [34],
       buyerPlotNpcIds: ['rotenbergov', 'kantselev'],
       buyerOccupations: [Occupation.DIRECTOR, Occupation.SECRETARY],
       buyerFactions: [Faction.CITIZEN],

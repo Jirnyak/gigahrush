@@ -19,7 +19,7 @@ function makeDemosState() {
   createPrefilledAlifeState(state, 12345, 3, {
     buckets: [{
       floorKey: floorKeyForDesign('living'),
-      z: 60,
+      z: -6,
       targetCount: 3,
       reserved: [
         {
@@ -103,7 +103,7 @@ test('Demos resolves authored plot sprite and route floor number for reserved pr
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: floorKeyForDesign('maintenance'),
-      z: 140,
+      z: -14,
       targetCount: 1,
       reserved: [{
         kind: 'plot',
@@ -129,7 +129,7 @@ test('Demos account line shows bank account rather than total pocket wealth', ()
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: floorKeyForDesign('living'),
-      z: 60,
+      z: -6,
       targetCount: 1,
       reserved: [{
         name: 'Богатый Счетов',

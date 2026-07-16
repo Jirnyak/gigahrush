@@ -80,8 +80,7 @@ function nearbySupportRooms(world: CantorGeneration['world'], hq: Room): number 
 test('cantor_pustoty is registered as a late Void route floor', () => {
   const route = designFloorById(CANTOR_PUSTOTY_ROUTE_ID);
   assert.equal(route?.z, CANTOR_PUSTOTY_Z);
-  assert.equal(route?.baseFloor, CANTOR_PUSTOTY_BASE_FLOOR);
-  assert.equal(route?.baseFloor.VOID);
+    assert.equal(route?.themeTags?.includes('void'), true);
   assert.equal(route?.displayName, 'Кантор пустоты');
   assert.equal(route?.danger, 5);
   assert.equal(designFloorAtZ(CANTOR_PUSTOTY_Z)?.id, CANTOR_PUSTOTY_ROUTE_ID);

@@ -68,7 +68,7 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   initFactionRelations();
   const state = makeGameState({
     time: 100,
-    currentZ: 0,
+    currentZ: 2,
     samosborActive: true,
     samosborCount: 7,
     worldEvents: createWorldEventState(),
@@ -92,7 +92,7 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   const event = getRecentEvents(state, { tags: ['samosbor', 'alife_migration'], limit: 1 })[0];
   assert.ok(event);
   assert.equal(event.data?.fromFloorKey, 'design:ministry');
-  assert.equal(event.data?.toFloorKey, 'design:living');
+  assert.equal(event.data?.toFloorKey, 'design:moebius_podezd');
   assert.equal(event.data?.reason, 'samosbor');
   assert.equal(event.data?.intent, 'active_liquidator_patrol');
   assert.deepEqual(event.data?.alifeIds, patrol.map(e => e.alifeId));
@@ -102,7 +102,7 @@ test('samosbor extra patrol fails instead of spawning when no A-Life identities 
   initFactionRelations();
   const state = makeGameState({
     time: 100,
-    currentZ: 0,
+    currentZ: 2,
     samosborActive: true,
     samosborCount: 8,
     worldEvents: createWorldEventState(),

@@ -105,7 +105,7 @@ function alifeSnapshot(overrides: Partial<AlifeNpcSnapshot> = {}): AlifeNpcSnaps
   return {
     id: 1,
     floorKey: 'design:living',
-    z: 60,
+    z: -6,
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     name: 'Пакетная Нина',
@@ -179,7 +179,7 @@ test('Demos posts and reactions can receive package bio tags from supplied facts
     day: 0,
     hour: 8,
     minute: 10,
-    z: 60,
+    z: -6,
     severity: 3,
     privacy: 'public',
     truth: 'fact',
@@ -266,7 +266,7 @@ test('plot safety-critical lines remain exact and ordinary NPC talk works withou
       occupation: Occupation.HOUSEWIFE,
     },
     snapshot({
-      z: 60,
+      z: -6,
       roomType: RoomType.KITCHEN,
       roomName: 'Кухня у гермы',
       npcFaction: Faction.CITIZEN,

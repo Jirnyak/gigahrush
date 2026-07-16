@@ -31,7 +31,7 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
     day: 0,
     hour: 8,
     minute: 10,
-    z: 60,
+    z: -6,
     severity: 3,
     privacy: 'public',
     truth: 'fact',
@@ -44,7 +44,7 @@ function snapshot(id: number, name = `Житель ${id}`, dead = false): AlifeN
   return {
     id,
     floorKey: 'design:living',
-    z: 60,
+    z: -6,
     faction: Faction.CITIZEN,
     occupation: Occupation.SECRETARY,
     name,

@@ -48,7 +48,7 @@ function hermeticShellCells(world: World, room: Room): number {
 }
 
 test('genfix 087 hell keeps arena macro while adding faction compounds and micro rooms', () => {
-  const gen = generateFloor('hell', 61_061);
+  const gen = generateFloor(-36, 61_061);
   const world = gen.world;
   const counts = new Map(countTerritoryCells(world).map(row => [row.owner, row.cells]));
   const shares = new Map([...counts].map(([owner, cells]) => [owner, cells / (W * W)]));

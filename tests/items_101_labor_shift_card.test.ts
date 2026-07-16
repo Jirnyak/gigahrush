@@ -61,7 +61,7 @@ test('labor shift card opens the Ministry N3 gate without consuming the card', (
     x: room.x + 8.5,
     y: room.y + Math.floor(room.h / 2) + 0.5,
   });
-  const state = makeGameState({ currentZ: 30, time: 101 });
+  const state = makeGameState({ currentZ: 34, time: 101 });
 
   assert.equal(addItem(player, CARD_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state, undefined, world);

@@ -21,28 +21,28 @@ function setResourceStock(state: GameState, floor: string, resourceId: string, s
 
 test('getResourceContractPressure calculates pressure correctly based on stock and targets', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(state, 'living');
+  resetFloor(state, 0);
 
   const waterDef = RESOURCES.find(r => r.id === 'drink_water')!;
 
   // Test 1: Normal state (stock == target) -> pressure should be close to 1
-  setResourceStock(state, 'living', 'drink_water', 100, 100);
+  setResourceStock(state, 0, 'drink_water', 100, 100);
   const pressureNormal = getResourceContractPressure(state, 'drink_water');
   assert.ok(pressureNormal >= 1 && pressureNormal <= 1.1, `Expected normal pressure ~1, got ${pressureNormal}`);
 
   // Test 2: High scarcity (stock much less than lowStock) -> pressure should be high
-  setResourceStock(state, 'living', 'drink_water', 0, 100);
+  setResourceStock(state, 0, 'drink_water', 0, 100);
   const pressureHigh = getResourceContractPressure(state, 'drink_water');
   assert.ok(pressureHigh > pressureNormal, `Expected high scarcity pressure to be greater than normal`);
   assert.ok(pressureHigh <= (waterDef.rewardPressureMax ?? 3), `Expected pressure to not exceed reward pressure max`);
 
   // Test 3: Surplus (stock much higher than target) -> pressure should be very low (close to or at 1)
-  setResourceStock(state, 'living', 'drink_water', 300, 100);
+  setResourceStock(state, 0, 'drink_water', 300, 100);
   const pressureSurplus = getResourceContractPressure(state, 'drink_water');
   assert.ok(pressureSurplus <= pressureNormal, `Expected surplus pressure to be less than or equal to normal`);
 
   // Test 4: Custom max multiplier
-  setResourceStock(state, 'living', 'drink_water', 0, 100);
+  setResourceStock(state, 0, 'drink_water', 0, 100);
   const customMax = 1.5;
   const pressureCustomMax = getResourceContractPressure(state, 'drink_water', customMax);
   assert.ok(pressureCustomMax <= customMax, `Expected pressure ${pressureCustomMax} to be capped at custom max ${customMax}`);

@@ -38,7 +38,7 @@ function generatedCommunalRing(): ReturnType<typeof generateDesignFloor> {
 test('communal_ring is the authored коммуналка route floor', () => {
   const route = designFloorById(COMMUNAL_RING_DESIGN_FLOOR_ID);
   assert.equal(route?.z, COMMUNAL_RING_ROUTE_Z);
-  assert.equal(route?.baseFloor.KVARTIRY);
+  assert.equal(route?.themeTags?.includes('kvartiry'), true);
   assert.equal(route?.displayName, 'Коммунальное кольцо');
   assert.equal(designFloorAtZ(COMMUNAL_RING_ROUTE_Z)?.id, COMMUNAL_RING_DESIGN_FLOOR_ID);
 });

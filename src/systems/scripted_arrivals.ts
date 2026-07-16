@@ -19,7 +19,6 @@ import { SCRIPTED_ARRIVALS, type ScriptedArrivalDef, type ScriptedArrivalEscortD
 import { entitySpawnSlots } from './entity_limits';
 import { assignPersistentAlifeNpcFromEntity, bindReservedPlotNpcAlifeRecord, currentAlifeFloorKey, isPlotNpcDead } from './alife';
 import { publishEvent } from './events';
-import { currentFloorRunEntry } from './procedural_floors';
 import { freshRPG, randomRPG, getMaxHp } from './rpg';
 import { tryAssignPathToCell } from './ai/pathfinding';
 import { rng } from '../core/rand';

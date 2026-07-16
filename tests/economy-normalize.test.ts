@@ -9,8 +9,8 @@ test('normalizeGameEconomy loads saved economy and sets it on state', () => {
   const savedEconomy = {
     priceVersion: 2,
     floors: {
-      ['living']: {
-        z: 60,
+      [0]: {
+        z: 0,
         resources: {},
         lastTickAt: 100,
       }
@@ -22,7 +22,7 @@ test('normalizeGameEconomy loads saved economy and sets it on state', () => {
 
   const economy = economyForSave(state);
   assert.equal(economy.priceVersion, 2);
-  assert.equal(economy.floors['living']?.lastTickAt, 100);
+  assert.equal(economy.floors[0]?.lastTickAt, 100);
 });
 
 test('normalizeGameEconomy initializes current floor if missing from save', () => {
@@ -37,7 +37,7 @@ test('normalizeGameEconomy initializes current floor if missing from save', () =
   normalizeGameEconomy(state, savedEconomy);
 
   const economy = economyForSave(state);
-  assert.equal(economy.floors['maintenance']?.floor.MAINTENANCE);
+  assert.equal(economy.floors[-26]?.z, -26);
 });
 
 test('normalizeGameEconomy clears price cache', () => {

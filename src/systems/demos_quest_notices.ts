@@ -110,13 +110,13 @@ const MAX_NOTICE_TAG_LEN = 32;
 const MAX_NOTICE_DETAIL = 132;
 const MAX_FAILED_REASON = 48;
 
-const FLOOR_LABELS: Record<number, string> = {
-  [30]: 'Министерство',
-  [60]: 'Квартиры',
-  [100]: 'Жилая зона',
-  [140]: 'Коллекторы',
-  [180]: 'Ад',
-  [200]: 'Пустота',
+const FLOOR_LABELS_BY_TAG: Record<string, string> = {
+  'ministry': 'Министерство',
+  'kvartiry': 'Квартиры',
+  'living': 'Жилая зона',
+  'maintenance': 'Коллекторы',
+  'hell': 'Ад',
+  'void': 'Пустота',
 };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -220,8 +220,16 @@ function floorLabel(state: GameState, floorKey: string): string {
   const host = state as DemosQuestNoticeHost;
   const context = { proceduralSpecs: host.floorRun?.specs as Record<string, never> | undefined };
   const z = floorKeyZ(floorKey, context);
-  const base = floorKeyBaseFloor(floorKey, context);
-  const baseLabel = base !== undefined ? FLOOR_LABELS[base] : undefined;
+  const baseTags = floorKeyBaseFloor(floorKey, context);
+  let baseLabel: string | undefined;
+  if (baseTags) {
+    for (const tag of baseTags) {
+      if (FLOOR_LABELS_BY_TAG[tag]) {
+        baseLabel = FLOOR_LABELS_BY_TAG[tag];
+        break;
+      }
+    }
+  }
   if (z !== undefined && baseLabel) return `Этаж ${Math.trunc(z)}, ${baseLabel}`;
   if (z !== undefined) return `Этаж ${Math.trunc(z)}`;
   if (baseLabel) return `${baseLabel}, маршрут без номера`;
@@ -432,12 +440,11 @@ export function getDemosQuestNoticesForProfile(
   alifeId: number,
 ): readonly DemosQuestNoticeView[] {
   const now = nowMinutes(state, {});
-  const acceptFloorKey = currentRouteFloorKey(state);
   return noticeStore(state)
     .filter(notice => notice.giverAlifeId === alifeId && activeNotice(notice, now))
     .sort(sortNotices)
     .slice(0, DEMOS_QUEST_NOTICES_PER_PROFILE)
-    .map(notice => noticeView(state, notice, acceptFloorKey));
+    .map(notice => noticeView(state, notice, '')); // Demos profiles don't allow direct acceptance
 }
 
 export function getDemosQuestBoardView(

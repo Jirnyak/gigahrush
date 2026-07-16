@@ -15,7 +15,7 @@ import { rebuildPathBlockersFromWorldObjects } from '../src/gen/path_blockers';
 let cachedMaintenance: FloorGeneration | undefined;
 
 function maintenanceGeneration(): FloorGeneration {
-  cachedMaintenance ??= generateFloor('maintenance', 0x51002);
+  cachedMaintenance ??= generateFloor(-26, 0x51002);
   return cachedMaintenance;
 }
 

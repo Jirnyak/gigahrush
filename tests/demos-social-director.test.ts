@@ -18,7 +18,7 @@ function event(id: number, overrides: Partial<WorldEvent> = {}): WorldEvent {
     day: 0,
     hour: 8,
     minute: id,
-    z: 60,
+    z: -6,
     severity: 3,
     privacy: 'public',
     truth: 'fact',

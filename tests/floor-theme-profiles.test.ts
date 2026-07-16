@@ -18,30 +18,30 @@ import {
 import {
   territorySharesForDesignFloor,
   territorySharesForProceduralSpec,
-  territorySharesForStoryFloor,
+  territorySharesForDesignFloor,
 } from '../src/data/floor_territory';
 import {
   floorKeyForDesign,
   floorKeyForProcedural,
-  floorKeyForDesign,
 } from '../src/systems/floor_keys';
 
-const ALL_STORY_FLOORS = DESIGN_FLOOR_ROUTES.map(r => r.z);
-const STORY_THEMES = ALL_STORY_FLOORS.map(floor => themeForDesignFloor(floor));
+const ALL_STORY_FLOORS = DESIGN_FLOOR_ROUTES.map(r => r.id);
+const STORY_THEMES = ALL_STORY_FLOORS.map(id => themeForDesignFloor(id));
 
 function totalShare(shares: readonly { share: number }[]): number {
   return shares.reduce((sum, row) => sum + row.share, 0);
 }
 
 test('base floor themes compose current design territory and route facts', () => {
-  for (const floor of ALL_STORY_FLOORS) {
-    const theme = themeForDesignFloor(floor);
+  for (const id of ALL_STORY_FLOORS) {
+    const route = DESIGN_FLOOR_ROUTES.find(r => r.id === id)!;
+    const theme = themeForDesignFloor(id);
     assert.equal(theme.kind, 'design');
-    assert.equal(theme.baseFloor, floor);
-    assert.equal(theme.floorKey, floorKeyForDesign(floor));
-    assert.deepEqual(theme.territoryShares, territorySharesForStoryFloor(floor));
+    assert.equal(theme.routeZ, route.z);
+    assert.equal(theme.floorKey, floorKeyForDesign(id));
+    assert.deepEqual(theme.territoryShares, territorySharesForDesignFloor(id));
     assert.equal(theme.majorityOwner, dominantTerritoryShareOwner(theme.territoryShares));
-    assert.ok(totalShare(theme.territoryShares) > 0, `${number[floor]} should have territory shares`);
+    assert.ok(totalShare(theme.territoryShares) > 0, `${id} should have territory shares`);
   }
 });
 
@@ -120,7 +120,7 @@ test('theme territory shares include a human or samosbor owner without new numbe
     ...DESIGN_FLOOR_ROUTES.map(route => themeForDesignRoute(route)),
     themeForProceduralSpec(makeProceduralFloorSpec(2468, 13)),
   ]) {
-    assert.equal(allowedFloors.has(theme.baseFloor), true, `${theme.floorKey} should use known number ${theme.baseFloor}`);
+    if (theme.kind !== 'procedural') assert.equal(allowedFloors.has(theme.routeId), true, `${theme.floorKey} should use known number ${theme.routeId}`);
     assert.ok(theme.territoryShares.length > 0, `${theme.floorKey} should have territory shares`);
     for (const share of theme.territoryShares) {
       assert.equal(allowedOwners.has(share.owner), true, `${theme.floorKey} should use known territory owner ${share.owner}`);

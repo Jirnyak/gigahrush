@@ -49,12 +49,12 @@ test('canSpendResources respects the specified floor vs current floor', () => {
   const state = makeGameState({ currentZ: 0 });
 
   // Deplete food on the current floor (LIVING)
-  changeResourceStock(state, 'food', -10000, 'living');
+  changeResourceStock(state, 'food', -10000, 0);
 
   // Should fail since LIVING has no food
   assert.equal(canSpendResources(state, [{ id: 'food', count: 10 }]), false);
-  assert.equal(canSpendResources(state, [{ id: 'food', count: 10 }].LIVING), false);
+  assert.equal(canSpendResources(state, [{ id: 'food', count: 10 }], 0), false);
 
   // Should succeed for another floor like MINISTRY which hasn't been depleted
-  assert.equal(canSpendResources(state, [{ id: 'food', count: 10 }].MINISTRY), true);
+  assert.equal(canSpendResources(state, [{ id: 'food', count: 10 }], 34), true);
 });

@@ -142,7 +142,7 @@ test('containers are discoverable through the interactive adapter', () => {
     y: 12,
     roomId: 0,
     zoneId: 0,
-    z: 60,
+    z: -6,
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Шкаф проверки',
     capacitySlots: 3,

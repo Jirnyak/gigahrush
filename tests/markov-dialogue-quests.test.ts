@@ -28,7 +28,7 @@ function npc(partial: Partial<Entity> = {}): Entity {
 
 function snapshot(partial: Partial<ContextSnapshot> = {}): ContextSnapshot {
   return {
-    z: 60,
+    z: -6,
     zoneId: 2,
     zoneFaction: undefined,
     zoneLevel: 1,
@@ -91,7 +91,7 @@ test('ordinary generated talk contains a context anchor', () => {
   });
 
   assert.equal(result.source, 'generated_markov');
-  assert.match(result.text, /Кухня/);
+  assert.match(result.text, /Кухня|герм/i);
 });
 
 test('rumor output preserves rumor id and selected facts', () => {
@@ -102,7 +102,7 @@ test('rumor output preserves rumor id and selected facts', () => {
     floors: ['living'],
     text: ['Бинт ищи там, где журнал чище рук.'],
     lead: {
-      z: 60,
+      z: -6,
       roomType: RoomType.MEDICAL,
       itemId: 'bandage',
       action: 'спроси у медпункта и держи бинт сухим',
@@ -113,7 +113,7 @@ test('rumor output preserves rumor id and selected facts', () => {
 
   assert.equal(result.rumorId, 'test_bandage_lead');
   assert.match(result.text, /бинт|Бинт/);
-  assert.match(result.text, /Жилая зона/);
+  assert.match(result.text, /Общежитие/);
 });
 
 test('rumor output does not invent a different target, floor, or item', () => {
@@ -124,7 +124,7 @@ test('rumor output does not invent a different target, floor, or item', () => {
     floors: ['living'],
     text: ['Воду спрашивают у кухни, не у окна с печатью.'],
     lead: {
-      z: 60,
+      z: -6,
       roomType: RoomType.KITCHEN,
       itemId: 'water',
       action: 'проверь кран и общий список',
@@ -146,7 +146,7 @@ test('rumor routed output is rejected when it invents a different fact', () => {
     floors: ['living'],
     text: ['Воду спрашивают у кухни, не у окна с печатью.'],
     lead: {
-      z: 60,
+      z: -6,
       roomType: RoomType.KITCHEN,
       itemId: 'water',
       action: 'проверь кран и общий список',

@@ -90,7 +90,7 @@ test('shahta atrium route registration and population profile expose the shaft s
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.ok(route);
   assert.equal(route.z, SHAHTA_ATRIUM_ROUTE_Z);
-  assert.equal(route.baseFloor.MAINTENANCE);
+  assert.equal(route.themeTags?.includes('maintenance'), true);
   assert.equal(designFloorAtZ(SHAHTA_ATRIUM_ROUTE_Z)?.id, DESIGN_FLOOR_ID);
 
   const profile = designFloorPopulationProfile(route);

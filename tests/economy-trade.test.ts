@@ -8,12 +8,13 @@ import { buyFromNpc, sellToNpc } from '../src/systems/trade';
 import { getRecentEvents } from '../src/systems/events';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
-function resetFloor(state: GameState, floor: number): void {
+function resetFloor(state: GameState, floor?: number): void {
+  const f = floor ?? state.currentZ;
   const economy = ensureEconomyState(state);
-  economy.floors[floor] = createEconomyFloorState(floor);
+  economy.floors[f] = createEconomyFloorState(f);
 }
 
-function resourceStock(state: GameState, floor: resourceId: string): number {
+function resourceStock(state: GameState, floor: number, resourceId: string): number {
   const economy = ensureEconomyState(state);
   return economy.floors[floor]?.resources[resourceId]?.stock ?? 0;
 }
@@ -43,10 +44,10 @@ test('maintenance local tariffs keep metal and tools no dearer than LIVING at no
 
 test('buying water from an NPC moves one item, money, event data and floor supply', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, -6);
   const player = makeTestPlayer({ id: 1, money: 10 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 2 }], money: 5 });
-  const beforeStock = resourceStock(0, 'drink_water');
+  const beforeStock = resourceStock(state, state.currentZ, 'drink_water');
   const quote = getEconomyQuote(state, 'water', { trader: npc });
 
   const result = buyFromNpc(state, player, npc, 0, { zoneId: 3 });
@@ -58,7 +59,7 @@ test('buying water from an NPC moves one item, money, event data and floor suppl
   assert.equal(player.inventory?.[0]?.defId, 'water');
   assert.equal(player.inventory?.[0]?.count, 1);
   assert.equal(npc.inventory?.[0]?.count, 1);
-  assert.equal(resourceStock(0, 'drink_water'), beforeStock - 1);
+  assert.equal(resourceStock(state, state.currentZ, 'drink_water'), beforeStock - 1);
 
   const event = getRecentEvents(state, { limit: 1 })[0];
   assert.equal(event.itemId, 'water');
@@ -69,10 +70,10 @@ test('buying water from an NPC moves one item, money, event data and floor suppl
 
 test('selling water to an NPC moves one item, money, event data and floor supply', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, -6);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'water', count: 2 }], money: 1 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', money: 20 });
-  const beforeStock = resourceStock(0, 'drink_water');
+  const beforeStock = resourceStock(state, state.currentZ, 'drink_water');
   const quote = getEconomyQuote(state, 'water', { trader: npc });
 
   const result = sellToNpc(state, player, npc, 0, { zoneId: 4 });
@@ -84,7 +85,7 @@ test('selling water to an NPC moves one item, money, event data and floor supply
   assert.equal(player.inventory?.[0]?.count, 1);
   assert.equal(npc.inventory?.[0]?.defId, 'water');
   assert.equal(npc.inventory?.[0]?.count, 1);
-  assert.equal(resourceStock(0, 'drink_water'), beforeStock + 1);
+  assert.equal(resourceStock(state, state.currentZ, 'drink_water'), beforeStock + 1);
 
   const event = getRecentEvents(state, { limit: 1 })[0];
   assert.equal(event.itemId, 'water');
@@ -134,7 +135,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
 
 test('primeTradePriceCache handles empty and undefined inventories safely', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, -6);
 
   // Should not throw
   assert.doesNotThrow(() => {
@@ -146,7 +147,7 @@ test('primeTradePriceCache handles empty and undefined inventories safely', () =
 
 test('primeTradePriceCache correctly caches prices for valid items', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, -6);
 
   const inv = [
     { defId: 'water', count: 1 },
@@ -172,7 +173,7 @@ test('primeTradePriceCache correctly caches prices for valid items', () => {
 
 test('primeTradePriceCache enforces max cache limit without crashing', () => {
   const state = makeGameState({ currentZ: 0 });
-  resetFloor(0);
+  resetFloor(state, -6);
 
   const MAX_PRICE_CACHE_ITEMS = 256;
   const largeInv = Array.from({ length: MAX_PRICE_CACHE_ITEMS + 50 }, (_, i) => ({

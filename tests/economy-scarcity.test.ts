@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { getResourceScarcity, ensureEconomyState } from '../src/systems/economy';
+import { createEconomyFloorState } from '../src/data/economy';
 import { makeGameState } from './helpers';
 
 test('getResourceScarcity returns 1 for an unknown resource ID', () => {
@@ -13,7 +14,7 @@ test('getResourceScarcity returns 1 for an unknown resource ID', () => {
 test('getResourceScarcity returns 1 when stock equals target', () => {
   const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = econ.floors['living']!;
+  const floorState = (econ.floors[0] || (econ.floors[0] = createEconomyFloorState(0)));
 
   // Choose a known resource, e.g., 'drink_water'
   const resId = 'drink_water';
@@ -26,7 +27,7 @@ test('getResourceScarcity returns 1 when stock equals target', () => {
 test('getResourceScarcity returns less than 1 when stock is greater than target (surplus)', () => {
   const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = econ.floors['living']!;
+  const floorState = (econ.floors[0] || (econ.floors[0] = createEconomyFloorState(0)));
 
   const resId = 'drink_water';
   floorState.resources[resId] = { stock: 200, target: 100, lastDelta: 0 };
@@ -38,7 +39,7 @@ test('getResourceScarcity returns less than 1 when stock is greater than target 
 test('getResourceScarcity returns greater than 1 when stock is less than target (deficit)', () => {
   const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = econ.floors['living']!;
+  const floorState = (econ.floors[0] || (econ.floors[0] = createEconomyFloorState(0)));
 
   const resId = 'drink_water';
   floorState.resources[resId] = { stock: 10, target: 100, lastDelta: 0 };
@@ -54,16 +55,20 @@ test('getResourceScarcity defaults to currentZ if floor parameter is not provide
   const resId = 'drink_water';
 
   // Set distinct stocks for two different floors
-  econ.floors['living']!.resources[resId] = { stock: 10, target: 100, lastDelta: 0 }; // Deficit
-  econ.floors['ministry'] = {
-    z: 30,
+  econ.floors[0] = {
+    z: 0,
+    resources: { [resId]: { stock: 10, target: 100, lastDelta: 0 } },
+    lastTickAt: 0,
+  }; // Deficit
+  econ.floors[34] = {
+    z: 34,
     resources: { [resId]: { stock: 200, target: 100, lastDelta: 0 } },
     lastTickAt: 0,
   }; // Surplus
 
   const scarcityImplicit = getResourceScarcity(state, resId);
-  const scarcityExplicitLiving = getResourceScarcity(state, 0);
-  const scarcityExplicitMinistry = getResourceScarcity(state, 30);
+  const scarcityExplicitLiving = getResourceScarcity(state, resId, 0);
+  const scarcityExplicitMinistry = getResourceScarcity(state, resId, 34);
 
   assert.equal(scarcityImplicit, scarcityExplicitLiving);
   assert.notEqual(scarcityImplicit, scarcityExplicitMinistry);

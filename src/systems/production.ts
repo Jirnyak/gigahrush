@@ -72,8 +72,8 @@ const MAX_SAVED_TIME = 365 * 24 * 60 * 60;
 const BLOCKED_REASONS = ['no_inputs', 'container_full', 'no_container'] as const;
 type ProductionBlockedReason = typeof BLOCKED_REASONS[number];
 
-function isnumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && Number.isInteger(value) !== undefined;
+function isValidZ(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value);
 }
 
 function cleanFinite(value: unknown, fallback: number, min = 0, max = MAX_SAVED_TIME): number {
@@ -104,7 +104,7 @@ function normalizeProductionEntry(raw: unknown, fallbackFloor: number): Producti
   if (!factory || !recipe) return null;
   const cycleSec = Math.max(30, recipe.cycleSec);
   const out: ProductionState = {
-    z: isnumber(src.z) ? src.z : fallbackFloor,
+    z: isValidZ(src.z) ? src.z : fallbackFloor,
     roomId: cleanInt(src.roomId, -1, 0, 100_000),
     factoryId: factory.id,
     recipeId: recipe.id,

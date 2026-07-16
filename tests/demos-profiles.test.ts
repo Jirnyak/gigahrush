@@ -40,7 +40,7 @@ function makeProfileState() {
   createPrefilledAlifeState(state, 2468, 4, {
     buckets: [{
       floorKey: floorKeyForDesign('living'),
-      z: 60,
+      z: -6,
       targetCount: 4,
       reserved: [
         {
@@ -177,7 +177,7 @@ test('Demos profile details expose package bio capital and perk tags', () => {
   createPrefilledAlifeState(state, 9753, 2, {
     buckets: [{
       floorKey: floorKeyForDesign('living'),
-      z: 60,
+      z: -6,
       targetCount: 2,
       reserved: [{
         id: 'npc:demos_profile_pack',

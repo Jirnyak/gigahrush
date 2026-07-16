@@ -75,70 +75,41 @@ export const BLACK_MARKET_88_ROUTE_RESOURCE_IDS = [
 ] as const;
 
 export const ECONOMY_DEMAND_RULES: readonly EconomyDemandRule[] = [
-  // @ts-ignore
-  { floor: 'ministry', resourceId: 'documents', multiplier: 1.36, reason: 'ministry_document_demand', tags: ['ministry', 'documents'] },
-  // @ts-ignore
-  { floor: 'ministry', resourceId: 'paper', multiplier: 1.28, reason: 'ministry_paper_queue', tags: ['ministry', 'paper'] },
-  // @ts-ignore
-  { floor: 'ministry', resourceId: 'medicine', multiplier: 1.12, reason: 'ministry_clinic_queue', tags: ['ministry', 'medicine'] },
-  // @ts-ignore
-  { floor: 'ministry', resourceId: 'food', multiplier: 1.10, reason: 'ministry_canteen_queue', tags: ['ministry', 'food'] },
+  { floor: 30, resourceId: 'documents', multiplier: 1.36, reason: 'ministry_document_demand', tags: ['ministry', 'documents'] },
+  { floor: 30, resourceId: 'paper', multiplier: 1.28, reason: 'ministry_paper_queue', tags: ['ministry', 'paper'] },
+  { floor: 30, resourceId: 'medicine', multiplier: 1.12, reason: 'ministry_clinic_queue', tags: ['ministry', 'medicine'] },
+  { floor: 30, resourceId: 'food', multiplier: 1.10, reason: 'ministry_canteen_queue', tags: ['ministry', 'food'] },
 
-  // @ts-ignore
-  { floor: 'kvartiry', resourceId: 'drink_water', multiplier: 1.34, reason: 'kvartiry_water_queue', tags: ['kvartiry', 'water'] },
-  // @ts-ignore
-  { floor: 'kvartiry', resourceId: 'food', multiplier: 1.24, reason: 'kvartiry_food_queue', tags: ['kvartiry', 'food'] },
-  // @ts-ignore
-  { floor: 'kvartiry', resourceId: 'medicine', multiplier: 1.18, reason: 'kvartiry_medicine_queue', tags: ['kvartiry', 'medicine'] },
+  { floor: 14, resourceId: 'drink_water', multiplier: 1.34, reason: 'kvartiry_water_queue', tags: ['kvartiry', 'water'] },
+  { floor: 14, resourceId: 'food', multiplier: 1.24, reason: 'kvartiry_food_queue', tags: ['kvartiry', 'food'] },
+  { floor: 14, resourceId: 'medicine', multiplier: 1.18, reason: 'kvartiry_medicine_queue', tags: ['kvartiry', 'medicine'] },
 
-  // @ts-ignore
-  { floor: 'living', resourceId: 'food', multiplier: 1.08, reason: 'living_food_baseline', tags: ['living', 'food'] },
-  // @ts-ignore
-  { floor: 'living', resourceId: 'contraband', multiplier: 1.12, reason: 'living_contraband_appetite', tags: ['living', 'contraband'] },
+  { floor: 0, resourceId: 'food', multiplier: 1.08, reason: 'living_food_baseline', tags: ['living', 'food'] },
+  { floor: 0, resourceId: 'contraband', multiplier: 1.12, reason: 'living_contraband_appetite', tags: ['living', 'contraband'] },
 
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'slime_samples', multiplier: 1.42, reason: 'market88_sample_buyer', tags: ['market88', 'sample', 'black_market'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'contraband', multiplier: 1.34, reason: 'market88_contraband_layer', tags: ['market88', 'contraband', 'govnyak'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'zhelemish', multiplier: 1.24, reason: 'market88_zhelemish_counter', tags: ['market88', 'zhelemish', 'reagent'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'documents', multiplier: 1.22, reason: 'market88_document_booth', tags: ['market88', 'documents', 'forgery'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'paper', multiplier: 1.14, reason: 'market88_blank_forms', tags: ['market88', 'paper', 'forms'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'ammo', multiplier: 1.18, reason: 'market88_quiet_ammo', tags: ['market88', 'ammo', 'weapons'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'medicine', multiplier: 1.16, reason: 'market88_under_counter_medicine', tags: ['market88', 'medicine'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'tools', multiplier: 1.12, reason: 'market88_filter_hatch', tags: ['market88', 'production', 'filters'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'electronics', multiplier: 1.10, reason: 'market88_floor69_parts', tags: ['market88', 'production', 'floor_69'] },
-  // @ts-ignore
-  { z: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'industrial_slurry', multiplier: 1.08, reason: 'market88_production_scrap', tags: ['market88', 'production'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'slime_samples', multiplier: 1.42, reason: 'market88_sample_buyer', tags: ['market88', 'sample', 'black_market'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'contraband', multiplier: 1.34, reason: 'market88_contraband_layer', tags: ['market88', 'contraband', 'govnyak'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'zhelemish', multiplier: 1.24, reason: 'market88_zhelemish_counter', tags: ['market88', 'zhelemish', 'reagent'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'documents', multiplier: 1.22, reason: 'market88_document_booth', tags: ['market88', 'documents', 'forgery'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'paper', multiplier: 1.14, reason: 'market88_blank_forms', tags: ['market88', 'paper', 'forms'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'ammo', multiplier: 1.18, reason: 'market88_quiet_ammo', tags: ['market88', 'ammo', 'weapons'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'medicine', multiplier: 1.16, reason: 'market88_under_counter_medicine', tags: ['market88', 'medicine'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'tools', multiplier: 1.12, reason: 'market88_filter_hatch', tags: ['market88', 'production', 'filters'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'electronics', multiplier: 1.10, reason: 'market88_floor69_parts', tags: ['market88', 'production', 'floor_69'] },
+  { floor: ECONOMY_ROUTE_BLACK_MARKET_88, resourceId: 'industrial_slurry', multiplier: 1.08, reason: 'market88_production_scrap', tags: ['market88', 'production'] },
 
-  // @ts-ignore
-  { floor: 'maintenance', resourceId: 'metal', multiplier: 1.12, reason: 'maintenance_repair_demand', tags: ['maintenance', 'metal'] },
-  // @ts-ignore
-  { floor: 'maintenance', resourceId: 'tools', multiplier: 1.10, reason: 'maintenance_tool_demand', tags: ['maintenance', 'tools'] },
-  // @ts-ignore
-  { floor: 'maintenance', resourceId: 'fuel', multiplier: 1.22, reason: 'maintenance_fuel_demand', tags: ['maintenance', 'fuel'] },
-  // @ts-ignore
-  { floor: 'maintenance', resourceId: 'electronics', multiplier: 1.18, reason: 'maintenance_electronics_demand', tags: ['maintenance', 'electronics'] },
+  { floor: -26, resourceId: 'metal', multiplier: 1.12, reason: 'maintenance_repair_demand', tags: ['maintenance', 'metal'] },
+  { floor: -26, resourceId: 'tools', multiplier: 1.10, reason: 'maintenance_tool_demand', tags: ['maintenance', 'tools'] },
+  { floor: -26, resourceId: 'fuel', multiplier: 1.22, reason: 'maintenance_fuel_demand', tags: ['maintenance', 'fuel'] },
+  { floor: -26, resourceId: 'electronics', multiplier: 1.18, reason: 'maintenance_electronics_demand', tags: ['maintenance', 'electronics'] },
 
-  // @ts-ignore
-  { floor: 'hell', resourceId: 'medicine', multiplier: 1.34, reason: 'hell_trauma_demand', tags: ['hell', 'medicine'] },
-  // @ts-ignore
-  { floor: 'hell', resourceId: 'psi', multiplier: 1.30, reason: 'hell_psi_demand', tags: ['hell', 'psi'] },
-  // @ts-ignore
-  { floor: 'hell', resourceId: 'fuel', multiplier: 1.18, reason: 'hell_burn_demand', tags: ['hell', 'fuel'] },
+  { floor: -36, resourceId: 'medicine', multiplier: 1.34, reason: 'hell_trauma_demand', tags: ['hell', 'medicine'] },
+  { floor: -36, resourceId: 'psi', multiplier: 1.30, reason: 'hell_psi_demand', tags: ['hell', 'psi'] },
+  { floor: -36, resourceId: 'fuel', multiplier: 1.18, reason: 'hell_burn_demand', tags: ['hell', 'fuel'] },
 
-  // @ts-ignore
-  { floor: 'void', resourceId: 'psi', multiplier: 1.42, reason: 'void_psi_demand', tags: ['void', 'psi'] },
-  // @ts-ignore
-  { floor: 'void', resourceId: 'electronics', multiplier: 1.22, reason: 'void_signal_demand', tags: ['void', 'electronics'] },
-  // @ts-ignore
-  { floor: 'void', resourceId: 'documents', multiplier: 1.18, reason: 'void_record_demand', tags: ['void', 'documents'] },
+  { floor: -50, resourceId: 'psi', multiplier: 1.42, reason: 'void_psi_demand', tags: ['void', 'psi'] },
+  { floor: -50, resourceId: 'electronics', multiplier: 1.22, reason: 'void_signal_demand', tags: ['void', 'electronics'] },
+  { floor: -50, resourceId: 'documents', multiplier: 1.18, reason: 'void_record_demand', tags: ['void', 'documents'] },
 ];
 
 export const ECONOMY_ROUTE_DECISION_RULES: readonly EconomyRouteDecisionRule[] = [
@@ -249,22 +220,14 @@ export const ECONOMY_ROUTE_SAMOSBOR_DEMAND_RULES: readonly EconomyRouteSamosborD
 ];
 
 export const ECONOMY_TARIFF_RULES: readonly EconomyTariffRule[] = [
-  // @ts-ignore
-  { floor: 'ministry', resourceId: 'documents', multiplier: 1.08, reason: 'ministry_stamp_tariff', tags: ['tariff', 'stamp'] },
-  // @ts-ignore
-  { floor: 'ministry', resourceId: 'paper', multiplier: 1.05, reason: 'ministry_form_tariff', tags: ['tariff', 'forms'] },
-  // @ts-ignore
-  { floor: 'kvartiry', resourceId: 'drink_water', multiplier: 1.05, reason: 'kvartiry_queue_tariff', tags: ['tariff', 'ration'] },
-  // @ts-ignore
-  { floor: 'kvartiry', resourceId: 'food', multiplier: 1.03, reason: 'kvartiry_ration_tariff', tags: ['tariff', 'ration'] },
-  // @ts-ignore
-  { floor: 'maintenance', resourceId: 'metal', multiplier: 0.84, reason: 'maintenance_local_scrap', tags: ['tariff', 'local_supply'] },
-  // @ts-ignore
-  { floor: 'maintenance', resourceId: 'tools', multiplier: 0.88, reason: 'maintenance_tool_exchange', tags: ['tariff', 'local_supply'] },
-  // @ts-ignore
-  { floor: 'hell', multiplier: 1.08, reason: 'hell_hazard_tariff', tags: ['tariff', 'hazard'] },
-  // @ts-ignore
-  { floor: 'void', multiplier: 1.10, reason: 'void_anomaly_tariff', tags: ['tariff', 'anomaly'] },
+  { floor: 30, resourceId: 'documents', multiplier: 1.08, reason: 'ministry_stamp_tariff', tags: ['tariff', 'stamp'] },
+  { floor: 30, resourceId: 'paper', multiplier: 1.05, reason: 'ministry_form_tariff', tags: ['tariff', 'forms'] },
+  { floor: 14, resourceId: 'drink_water', multiplier: 1.05, reason: 'kvartiry_queue_tariff', tags: ['tariff', 'ration'] },
+  { floor: 14, resourceId: 'food', multiplier: 1.03, reason: 'kvartiry_ration_tariff', tags: ['tariff', 'ration'] },
+  { floor: -26, resourceId: 'metal', multiplier: 0.84, reason: 'maintenance_local_scrap', tags: ['tariff', 'local_supply'] },
+  { floor: -26, resourceId: 'tools', multiplier: 0.88, reason: 'maintenance_tool_exchange', tags: ['tariff', 'local_supply'] },
+  { floor: -36, multiplier: 1.08, reason: 'hell_hazard_tariff', tags: ['tariff', 'hazard'] },
+  { floor: -50, multiplier: 1.10, reason: 'void_anomaly_tariff', tags: ['tariff', 'anomaly'] },
 ];
 
 export const DEFAULT_TRADE_SPREAD: EconomyTradeSpreadRule = {

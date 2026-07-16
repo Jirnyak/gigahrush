@@ -46,7 +46,7 @@ test('contaminated swab is reachable beside failed handling in slime NII', () =>
 
 test('contaminated swab can be reported or sold from inventory', () => {
   const reporter = makeTestPlayer();
-  const ministry = makeGameState({ currentZ: 30, time: 122 });
+  const ministry = makeGameState({ currentZ: 34, time: 122 });
 
   assert.equal(addItem(reporter, SWAB_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(reporter, 0)?.useLabel, 'Enter сдать/сбыть');

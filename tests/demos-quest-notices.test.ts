@@ -35,7 +35,7 @@ const supplyContract: ContractDef = {
   targetItem: 'water',
   targetCount: 2,
   target: {
-    z: 60,
+    z: -6,
     roomType: RoomType.KITCHEN,
     zoneTag: 'ration_queue',
     hint: 'Жилая зона: кухня у общего списка.',
@@ -55,7 +55,7 @@ const repairContract: ContractDef = {
   type: QuestType.VISIT,
   desc: 'Нужно проверить трубу у гермы до обхода.',
   target: {
-    z: 140,
+    z: -14,
     route: { z: -12, label: 'служебный стояк', risk: 3, tags: ['maintenance'] },
     roomType: RoomType.PRODUCTION,
     zoneTag: 'pipe',
@@ -71,7 +71,7 @@ function snapshot(overrides: Partial<AlifeNpcSnapshot> = {}): AlifeNpcSnapshot {
   return {
     id: 1,
     floorKey: livingKey,
-    z: 60,
+    z: -6,
     faction: Faction.CITIZEN,
     occupation: Occupation.COOK,
     name: 'Анна Заявкина',
@@ -97,7 +97,7 @@ function event(overrides: Partial<WorldEvent> = {}): WorldEvent {
     day: 0,
     hour: 8,
     minute: 10,
-    z: 60,
+    z: -6,
     severity: 3,
     privacy: 'local',
     truth: 'fact',
@@ -227,7 +227,7 @@ test('Demos profile exposes a quest notice section view model', () => {
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: livingKey,
-      z: 60,
+      z: -6,
       targetCount: 1,
       reserved: [{
         name: 'Анна Демосова',

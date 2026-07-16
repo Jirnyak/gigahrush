@@ -96,7 +96,7 @@ function nearbySupportRooms(world: World, hq: Room): number {
 }
 
 test('ministry macro landmarks are navigable without authority keys', () => {
-  const gen = generateFloor('ministry', 20_260_530);
+  const gen = generateFloor(30, 20_260_530);
   const world = gen.world;
   const reachable = unlockedReachability(world, gen.spawnX, gen.spawnY);
   const crossBooths = world.rooms.filter(room => room.name.startsWith('Окно центрального креста'));

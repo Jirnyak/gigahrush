@@ -52,7 +52,7 @@ import {
   // @ts-ignore
   FLOOR_NAMES,
   generateFloor,
-  isnumber,
+  isValidZ,
   resetGeneratedFloorPopulationState,
   type FloorGeneration,
 } from './gen/floor_manifest';
@@ -2456,7 +2456,7 @@ function normalizeVoidReturnPortalState(input: unknown): VoidReturnPortalState |
   const src = input as Partial<VoidReturnPortalState>;
   const cell = Math.floor(finiteNumber(src.cell, -1));
   if (cell < 0 || cell >= W * W) return undefined;
-  const enteredFromFloor = isnumber(src.enteredFromFloor) ? src.enteredFromFloor : undefined;
+  const enteredFromFloor = isValidZ(src.enteredFromFloor) ? src.enteredFromFloor : undefined;
   return {
     active: src.active === true,
     used: src.used === true,
@@ -2494,7 +2494,7 @@ function clearVoidReturnPortalState(targetState: GameState = state): void {
 
 function setVoidEntryFromFloor(targetState: GameState, value: unknown): void {
   const host = targetState as VoidReturnPortalHost;
-  if (isnumber(value)) host.voidEntryFromFloor = value;
+  if (isValidZ(value)) host.voidEntryFromFloor = value;
   else delete host.voidEntryFromFloor;
 }
 
@@ -6071,7 +6071,7 @@ function normalizeQuestTargets(q: Quest, raw: Record<string, unknown>): void {
   if (typeof raw.targetRoom === 'number' && Number.isFinite(raw.targetRoom)) {
     q.targetRoom = clampInt(raw.targetRoom, -1, -1, 100_000);
   }
-  if (isnumber(raw.targetFloorZ)) q.targetFloorZ = raw.targetFloorZ;
+  if (isValidZ(raw.targetFloorZ)) q.targetFloorZ = raw.targetFloorZ;
   const targetRoomType = normalizeRoomType(raw.targetRoomType);
   if (targetRoomType !== undefined) q.targetRoomType = targetRoomType;
   const targetRoomName = cleanSaveText(raw.targetRoomName, '', 96);
@@ -6116,7 +6116,7 @@ function normalizeQuestMeta(q: Quest, raw: Record<string, unknown>): void {
   const contractFaction = normalizeFaction(raw.contractFaction);
   if (contractFaction !== undefined) q.contractFaction = contractFaction;
   if (raw.contractRank !== undefined) q.contractRank = clampInt(raw.contractRank, 0, 0, 10);
-  if (isnumber(raw.visitFloorZ)) q.visitFloorZ = raw.visitFloorZ;
+  if (isValidZ(raw.visitFloorZ)) q.visitFloorZ = raw.visitFloorZ;
 }
 
 function normalizeQuestHold(q: Quest, raw: Record<string, unknown>): void {
@@ -6259,7 +6259,7 @@ function loadGame(): boolean {
     const data = isRecord(parsed) ? parsed : {};
     const dataPlayer = isRecord(data.player) ? data.player : {};
     const dataState = isRecord(data.state) ? data.state : {};
-    const savedFloor = isnumber(dataState.currentZ) ? zForBaseFloor(dataState.currentZ) : (typeof dataState.currentZ === 'number' ? dataState.currentZ : zForBaseFloor(100));
+    const savedFloor = isValidZ(dataState.currentZ) ? zForBaseFloor(dataState.currentZ) : (typeof dataState.currentZ === 'number' ? dataState.currentZ : zForBaseFloor(100));
     const savedFloorRun = floorRunSaveHasRestorableRoute(dataState.floorRun)
       ? dataState.floorRun as Parameters<typeof setFloorRunState>[1]
       : undefined;

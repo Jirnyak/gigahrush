@@ -70,9 +70,9 @@ function generationFingerprint(gen: FloorGeneration): number {
 }
 
 test('story floor generation is reproducible from run seed', () => {
-  const a = generationFingerprint(generateFloor('void', 12_345));
-  const b = generationFingerprint(generateFloor('void', 12_345));
-  const c = generationFingerprint(generateFloor('void', 12_346));
+  const a = generationFingerprint(generateFloor(-50, 12_345));
+  const b = generationFingerprint(generateFloor(-50, 12_345));
+  const c = generationFingerprint(generateFloor(-50, 12_346));
 
   assert.equal(a, b);
   assert.notEqual(a, c);

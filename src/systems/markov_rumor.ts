@@ -1,6 +1,7 @@
 /* ── Markov rumor adapter: flavor around selected rumor facts ─── */
 
 import { Faction, MonsterKind, RoomType, type ZoneFaction } from '../core/types';
+import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
 import { ITEMS } from '../data/items';
 import { RUMORS, type RumorDef, type RumorLead, type RumorReveal } from '../data/rumors';
 import { monsterTypeName } from '../entities/monster';
@@ -188,7 +189,7 @@ function observedForbiddenFact(text: string, allowed: Set<string>): string | und
     if (name.length >= 4 && lower.includes(name) && !allowed.has(name)) return name;
   }
 
-  if (!FORBIDDEN_FLOOR_NAMES) FORBIDDEN_FLOOR_NAMES = Object.values(FLOOR_NAMES).map(value => value.toLowerCase());
+  if (!FORBIDDEN_FLOOR_NAMES) FORBIDDEN_FLOOR_NAMES = DESIGN_FLOOR_ROUTES.map(value => value.displayName.toLowerCase());
   for (const name of FORBIDDEN_FLOOR_NAMES) {
     if (lower.includes(name) && !allowed.has(name)) return name;
   }
@@ -341,17 +342,9 @@ function findRumor(id: string): RumorDef | undefined {
   return RUMORS.find(rumor => rumor.id === id);
 }
 
-const FLOOR_NAMES: Record<number, string> = {
-  [30]: 'Министерство',
-  [60]: 'Квартиры',
-  [100]: 'Жилая зона',
-  [140]: 'Коллекторы',
-  [180]: 'Ад',
-  [200]: 'Пустота',
-};
-
 function floorName(z: number): string {
-  return FLOOR_NAMES[z];
+  const route = DESIGN_FLOOR_ROUTES.find(r => r.z === z);
+  return route ? route.displayName : `Этаж ${z}`;
 }
 
 function roomTypeName(roomType: RoomType): string {

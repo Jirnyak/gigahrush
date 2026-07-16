@@ -6,7 +6,7 @@ import { auditReachability } from '../src/core/world';
 import { entityUsesProceduralSprite, generateNpcProfileSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import { generateFloor, isnumber } from '../src/gen/floor_manifest';
+import { generateFloor, isValidZ } from '../src/gen/floor_manifest';
 import { measureLivingShelterShells } from '../src/gen/living/geometry';
 import { S } from '../src/render/pixutil';
 import {
@@ -28,7 +28,7 @@ import { testGenerationMatrix } from './generator_helpers';
 const cachedFloors = new Map<string, ReturnType<typeof generateFloor>>();
 let cachedFloor69: ReturnType<typeof generateDesignFloor> | undefined;
 
-function floorForRead(floor: seed?: number): ReturnType<typeof generateFloor> {
+function floorForRead(floor: number, seed?: number): ReturnType<typeof generateFloor> {
   const key = `${floor}:${seed ?? 'default'}`;
   let generated = cachedFloors.get(key);
   if (!generated) {
@@ -243,6 +243,7 @@ test('special NPC visual family overrides occupation procedural fallback when pr
     ...f69Npc,
     id: 6902,
     sprite: Occupation.TRAVELER,
+    npcVisualId: undefined,
   };
   const authoredNpc: Entity = {
     ...f69Npc,
@@ -258,7 +259,7 @@ test('special NPC visual family overrides occupation procedural fallback when pr
 
   assert.equal(isFloor69FemaleSprite(f69Npc.sprite), true);
   assert.equal(entityUsesProceduralSprite(f69Npc), true);
-  assert.equal(generateProceduralEntitySprite(f69Npc)?.length, S * S);
+  assert.equal(generateProceduralEntitySprite(f69Npc)?.length, 128 * 128);
   assert.notEqual(spriteHash(generateProceduralEntitySprite(f69Npc)!), spriteHash(generateSprites()[Spr.F69_FEMALE_NPC_0]));
   assert.equal(entityUsesProceduralSprite(f69AtlasFallback), false);
   assert.equal(generateProceduralEntitySprite(f69AtlasFallback), null);
@@ -284,7 +285,6 @@ test('ordinary procedural NPC sprites keep legacy humanoid silhouettes with seed
       occupation: Occupation.DOCTOR,
       faction: undefined,
       isFemale: true,
-      plotNpcId: 'olga',
       spriteSeed: 11,
     },
     {
@@ -300,7 +300,6 @@ test('ordinary procedural NPC sprites keep legacy humanoid silhouettes with seed
       occupation: Occupation.HUNTER,
       faction: undefined,
       isFemale: false,
-      plotNpcId: 'barni',
       spriteSeed: 12,
     },
     {
@@ -316,31 +315,30 @@ test('ordinary procedural NPC sprites keep legacy humanoid silhouettes with seed
       occupation: Occupation.SCIENTIST,
       faction: undefined,
       isFemale: false,
-      plotNpcId: 'yakov',
       spriteSeed: 13,
     },
   ];
-  const generatedByPlotNpcId = new Map<string, Uint32Array>();
+  const generatedByOccupation = new Map<number, Uint32Array>();
 
   for (const entity of cases) {
     const generated = generateProceduralEntitySprite(entity);
-    assert.ok(generated, `${entity.plotNpcId} should still get a seeded procedural NPC texture`);
-    generatedByPlotNpcId.set(entity.plotNpcId ?? '', generated);
+    assert.ok(generated, `${entity.occupation} should still get a seeded procedural NPC texture`);
+    generatedByOccupation.set(entity.occupation ?? 0, generated);
     const atlas = sprites[entity.sprite];
-    assert.equal(alphaMaskHash(generated), alphaMaskHash(atlas), `${entity.plotNpcId} should keep the legacy atlas silhouette`);
-    assert.equal(opaquePixels(generated), opaquePixels(atlas), `${entity.plotNpcId} should not grow needle limbs outside the old mask`);
-    assert.notEqual(spriteHash(generated), spriteHash(atlas), `${entity.plotNpcId} should keep per-entity color/detail variation`);
+    assert.equal(alphaMaskHash(generated), alphaMaskHash(atlas), `${entity.occupation} should keep the legacy atlas silhouette`);
+    assert.equal(opaquePixels(generated), opaquePixels(atlas), `${entity.occupation} should not grow needle limbs outside the old mask`);
+    assert.notEqual(spriteHash(generated), spriteHash(atlas), `${entity.occupation} should keep per-entity color/detail variation`);
   }
 
-  const olga = generatedByPlotNpcId.get('olga')!;
-  assert.equal(spritePixel(olga, 30, 15), spritePixel(sprites[Occupation.DOCTOR], 30, 15), 'Olga should keep the old left eye pixel');
-  assert.equal(spritePixel(olga, 34, 15), spritePixel(sprites[Occupation.DOCTOR], 34, 15), 'Olga should keep the old right eye pixel');
+  const doctor = generatedByOccupation.get(Occupation.DOCTOR)!;
+  assert.equal(spritePixel(doctor, 30, 15), spritePixel(sprites[Occupation.DOCTOR], 30, 15), 'Doctor should keep the old left eye pixel');
+  assert.equal(spritePixel(doctor, 34, 15), spritePixel(sprites[Occupation.DOCTOR], 34, 15), 'Doctor should keep the old right eye pixel');
 
-  const yakov = generatedByPlotNpcId.get('yakov')!;
-  assert.equal(spritePixel(yakov, 29, 15), spritePixel(sprites[Occupation.SCIENTIST], 29, 15), 'Yakov should keep the old left glasses pixel');
-  assert.equal(spritePixel(yakov, 30, 15), spritePixel(sprites[Occupation.SCIENTIST], 30, 15), 'Yakov should keep the old left pupil pixel');
-  assert.equal(spritePixel(yakov, 34, 15), spritePixel(sprites[Occupation.SCIENTIST], 34, 15), 'Yakov should keep the old right pupil pixel');
-  assert.equal(spritePixel(yakov, 35, 15), spritePixel(sprites[Occupation.SCIENTIST], 35, 15), 'Yakov should keep the old right glasses pixel');
+  const scientist = generatedByOccupation.get(Occupation.SCIENTIST)!;
+  assert.equal(spritePixel(scientist, 29, 15), spritePixel(sprites[Occupation.SCIENTIST], 29, 15), 'Scientist should keep the old left glasses pixel');
+  assert.equal(spritePixel(scientist, 30, 15), spritePixel(sprites[Occupation.SCIENTIST], 30, 15), 'Scientist should keep the old left pupil pixel');
+  assert.equal(spritePixel(scientist, 34, 15), spritePixel(sprites[Occupation.SCIENTIST], 34, 15), 'Scientist should keep the old right pupil pixel');
+  assert.equal(spritePixel(scientist, 35, 15), spritePixel(sprites[Occupation.SCIENTIST], 35, 15), 'Scientist should keep the old right glasses pixel');
 
   const barniA = generateProceduralEntitySprite(cases[1]);
   const barniB = generateProceduralEntitySprite({ ...cases[1], id: 7105, spriteSeed: 15 });
@@ -370,17 +368,22 @@ test('cult visual NPCs keep the newer procedural hood treatment', () => {
   assert.notEqual(alphaMaskHash(generated), alphaMaskHash(sprites[Occupation.PILGRIM]));
 });
 
-test('floor manifest validates known floors and rejects invalid ids', () => {
-  assert.equal(isnumber('ministry'), true);
-  assert.equal(isnumber('void'), true);
-  assert.equal(isnumber(-1), false);
-  assert.equal(isnumber(999), false);
-  assert.equal(isnumber('2'), false);
+test('floor manifest validates z coordinates', () => {
+  assert.equal(isValidZ(10), true);
+  assert.equal(isValidZ(-10), true);
+  assert.equal(isValidZ(0), true);
+  assert.equal(isValidZ('void'), false);
+  assert.equal(isValidZ(10.5), false);
 });
 
 testGenerationMatrix('all floor generators return playable spawn cells and live actors', () => {
   const floors = [
-    'ministry'.KVARTIRY.LIVING.MAINTENANCE.HELL.VOID,
+    0, // living
+    2, // kvartiry
+    -2, // ministry
+    -4, // maintenance
+    -16, // hell
+    -20, // void
   ];
 
   for (const floor of floors) {
@@ -401,7 +404,7 @@ testGenerationMatrix('all floor generators return playable spawn cells and live 
 });
 
 testGenerationMatrix('living generation places AG89 Istotit supply cache quest content', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   const plotNpcIds = new Set(generated.entities
     .filter(e => e.type === EntityType.NPC && e.plotNpcId)
     .map(e => e.plotNpcId));
@@ -413,7 +416,7 @@ testGenerationMatrix('living generation places AG89 Istotit supply cache quest c
 });
 
 testGenerationMatrix('living plot NPCs spawn with authored survivability and levels', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   const byPlotNpcId = new Map(generated.entities
     .filter(e => e.type === EntityType.NPC && e.plotNpcId)
     .map(e => [e.plotNpcId, e]));
@@ -431,7 +434,7 @@ testGenerationMatrix('living plot NPCs spawn with authored survivability and lev
 });
 
 testGenerationMatrix('living start tutorial rooms keep samosbor-proof hermowalls', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   for (const name of ['Актовый зал', 'Оружейная']) {
     const room = generated.world.rooms.find(r => r?.name === name);
     assert.ok(room, `${name} should be generated`);
@@ -456,7 +459,7 @@ testGenerationMatrix('living start tutorial rooms keep samosbor-proof hermowalls
 });
 
 testGenerationMatrix('living start tutorial hall exposes a public low-level loot locker', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   const hall = generated.world.rooms.find(room => room?.name === 'Актовый зал');
   assert.ok(hall, 'act hall should be generated');
   const locker = generated.world.containers.find(container => container.name === 'Учебный шкафчик вылазки');
@@ -477,7 +480,7 @@ testGenerationMatrix('living start tutorial hall exposes a public low-level loot
 });
 
 testGenerationMatrix('living macro routes keep landmarks, lifts and apartment shelters reachable', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   const { world } = generated;
   const audit = auditReachability(world, world.idx(Math.floor(generated.spawnX), Math.floor(generated.spawnY)));
 
@@ -549,7 +552,7 @@ testGenerationMatrix('living macro routes keep landmarks, lifts and apartment sh
 });
 
 testGenerationMatrix('living start tutorial desks are feature props, not billboard entities', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   const tutorialRoomIds = new Set(
     generated.world.rooms
       .filter(room => room?.name === 'Актовый зал' || room?.name === 'Оружейная')
@@ -575,7 +578,7 @@ testGenerationMatrix('living start tutorial desks are feature props, not billboa
 });
 
 testGenerationMatrix('living art study sprites are billboards, not empty item drops', () => {
-  const generated = floorForRead('living');
+  const generated = floorForRead(0);
   const artProps = generated.entities.filter(e =>
     e.type === EntityType.BILLBOARD &&
     e.sprite >= Spr.ART_NUDE_BASE &&
@@ -599,7 +602,7 @@ testGenerationMatrix('floor 69 floor screens are registered as signal screen cel
 });
 
 testGenerationMatrix('non-living samosbor rebuild replaces stale generated actors but keeps player', () => {
-  const generated = generateFloor('maintenance');
+  const generated = generateFloor(-26);
   const entities = [...generated.entities];
   entities.push(
     {

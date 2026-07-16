@@ -139,7 +139,7 @@ test('protocol pressure grows from carried documents, caps, and eases after pape
   const target = player(22.5, 10.5, true);
   const threat = protokolnik(10.5, 10.5);
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
   syncEntities([target, threat]);
 
   const documentPressure = protokolnikDocumentPressure(target);
@@ -165,7 +165,7 @@ test('breaking protocol line publishes a protokolnik escape event', () => {
   const target = player(20.5, 10.5, true);
   const threat = protokolnik(10.5, 10.5);
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
   syncEntities([target, threat]);
 
   updateProtokolnikProtocolPressure(world, threat, target, 5, 5, msgs, target.id, state);

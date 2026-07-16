@@ -19,11 +19,12 @@ export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown
 
 
 export interface FloorKeyResolveContext {
-  proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: number }>>;
+  proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: number; themeTags?: readonly string[] }>>;
   extraKnownKeys?: readonly string[] | ReadonlySet<string>;
 }
 
 export function cleanFloorKey(input: unknown): string {
+  if (typeof input === 'number') return String(input);
   return typeof input === 'string'
     ? input.trim().replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 96)
     : '';
@@ -86,14 +87,11 @@ export function floorKeyZ(keyInput: string, context?: FloorKeyResolveContext): n
   return undefined;
 }
 
-export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveContext): number | undefined {
+export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveContext): readonly string[] | undefined {
   const key = cleanFloorKey(keyInput);
   const kind = floorKeyKind(key);
-  // @ts-ignore
   if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.themeTags;
-  // @ts-ignore
   if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.themeTags;
-  // @ts-ignore
   if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.themeTags;
   return undefined;
 }

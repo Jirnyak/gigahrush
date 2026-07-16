@@ -444,6 +444,7 @@ function pickIntent(seed: number, time: number, record: AlifeNpcSnapshot, cursor
 
 function selectorMatches(route: RouteInfo, selector: AlifeDestinationSelector): boolean {
   if (selector.allowsNpcOnly !== false && !route.npcAllowed) return false;
+  const absZ = Math.abs(route.z ?? 0);
   if (selector.floorKeys?.includes(route.floorKey)) return true;
   // @ts-ignore
   if (selector.themeTags?.some(t => route.themeTags?.includes(t))) {

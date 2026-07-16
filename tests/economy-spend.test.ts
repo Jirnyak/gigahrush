@@ -8,19 +8,19 @@ test('spendResources successfully spends resources and returns true', () => {
 
   const econ = ensureEconomyState(state);
 
-  const floorState = econ.floors['living'] || { resources: {} };
+  const floorState = econ.floors[0] || { resources: {} };
 
-  changeResourceStock(state, 'drink_water', 10, 'living');
-  changeResourceStock(state, 'metal', 5, 'living');
+  changeResourceStock(state, 'drink_water', 10, 0);
+  changeResourceStock(state, 'metal', 5, 0);
 
-  const updatedFloorState = econ.floors['living']!;
+  const updatedFloorState = econ.floors[0]!;
   const newWater = updatedFloorState.resources['drink_water'].stock;
   const newMetal = updatedFloorState.resources['metal'].stock;
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 },
     { id: 'metal', count: 2 }
-  ]);
+  ], 0);
 
   assert.equal(result, true);
 
@@ -32,19 +32,19 @@ test('spendResources returns false and does not mutate stock if resources are in
   const state = makeGameState({ currentZ: 0 });
 
   const econ = ensureEconomyState(state);
-  changeResourceStock(state, 'drink_water', 0, 'living');
-  const updatedFloorState = econ.floors['living']!;
+  changeResourceStock(state, 'drink_water', 0, 0);
+  const updatedFloorState = econ.floors[0]!;
 
   const startWater = updatedFloorState.resources['drink_water'].stock;
-  changeResourceStock(state, 'drink_water', -startWater + 2, 'living');
+  changeResourceStock(state, 'drink_water', -startWater + 2, 0);
 
   const startMetal = updatedFloorState.resources['metal'].stock;
-  changeResourceStock(state, 'metal', -startMetal + 5, 'living');
+  changeResourceStock(state, 'metal', -startMetal + 5, 0);
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 },
     { id: 'metal', count: 2 }
-  ]);
+  ], 0);
 
   assert.equal(result, false);
 
@@ -56,16 +56,16 @@ test('spendResources returns false if resource is missing entirely', () => {
   const state = makeGameState({ currentZ: 0 });
 
   const econ = ensureEconomyState(state);
-  changeResourceStock(state, 'drink_water', 0, 'living');
-  const updatedFloorState = econ.floors['living']!;
+  changeResourceStock(state, 'drink_water', 0, 0);
+  const updatedFloorState = econ.floors[0]!;
 
   const startWater = updatedFloorState.resources['drink_water'].stock;
-  changeResourceStock(state, 'drink_water', -startWater + 5, 'living');
+  changeResourceStock(state, 'drink_water', -startWater + 5, 0);
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 },
-    { id: 'missing_resource', count: 1 }
-  ]);
+    { id: 'exotic_matter', count: 1 }
+  ], 0);
 
   assert.equal(result, false);
 
@@ -76,15 +76,15 @@ test('spendResources respects the passed floor level argument', () => {
   const state = makeGameState({ currentZ: -26 });
 
   const econ = ensureEconomyState(state);
-  changeResourceStock(state, 'drink_water', 0, 'living');
-  const livingFloorState = econ.floors['living']!;
+  changeResourceStock(state, 'drink_water', 0, 0);
+  const livingFloorState = econ.floors[0]!;
 
   const startWater = livingFloorState.resources['drink_water'].stock;
-  changeResourceStock(state, 'drink_water', -startWater + 5, 'living');
+  changeResourceStock(state, 'drink_water', -startWater + 5, 0);
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 }
-  ]);
+  ], 0);
 
   assert.equal(result, true);
 

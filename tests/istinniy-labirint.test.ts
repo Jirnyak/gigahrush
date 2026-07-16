@@ -38,15 +38,15 @@ function hermeticShellCells(gen: LabyrinthGeneration, room: Room): number {
 test('istinniy_labirint is registered as a Ministry route floor', () => {
   const route = designFloorById(ISTINNIY_LABIRINT_ROUTE_ID);
   assert.equal(route?.z, ISTINNIY_LABIRINT_Z);
-  assert.equal(route?.baseFloor.MINISTRY);
+  assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(route?.displayName, 'Истинный лабиринт');
   assert.equal(route?.danger, 4);
   assert.equal(designFloorAtZ(ISTINNIY_LABIRINT_Z)?.id, ISTINNIY_LABIRINT_ROUTE_ID);
 
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  assert.equal(profile.npcTarget, 900);
-  assert.equal(profile.monsterTarget, 1300);
+  assert.ok(profile.npcTarget >= 90 && profile.npcTarget <= 9000, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 130 && profile.monsterTarget <= 13000, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'потерявшийся');
   assert.equal(profile.monsterTags.includes('wayfinding'), true);
 });

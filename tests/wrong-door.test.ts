@@ -194,7 +194,7 @@ test('maronary shaving can be sold to science or hidden as contraband evidence',
 test('maronary shaving handoff uses ordered item outcome rules', () => {
   initFactionRelations();
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({

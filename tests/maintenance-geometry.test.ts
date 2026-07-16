@@ -98,7 +98,7 @@ function isAmbientNpcTemplate(entity: Entity): boolean {
 }
 
 test('maintenance macro geometry exposes wet, dry, duct, panel and repair route choices', () => {
-  const gen = generateFloor('maintenance', 61_061);
+  const gen = generateFloor(-26, 61_061);
   const reachable = assertReachableRouteLifts(gen, 'maintenance story floor');
 
   assert.equal(gen.world.rooms.length >= 4_400 && gen.world.rooms.length <= 4_800, true, `maintenance reference room count: ${gen.world.rooms.length}`);
@@ -146,7 +146,7 @@ test('maintenance macro geometry exposes wet, dry, duct, panel and repair route 
 });
 
 test('genfix 077 maintenance has cell-first territory HQs and owned faction squad placement', () => {
-  const gen = generateFloor('maintenance', 61_061);
+  const gen = generateFloor(-26, 61_061);
   const world = gen.world;
   const anchors = territoryHqAnchors(world);
   const hqByOwner = new Map(anchors.map(anchor => [anchor.owner, anchor]));

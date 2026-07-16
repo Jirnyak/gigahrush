@@ -21,12 +21,12 @@ test('queryFloorCatalog returns all items when no query is provided', () => {
   assert.equal(result.length, FLOOR_CATALOG.length);
 });
 
-test('queryFloorCatalog filters by baseFloor', () => {
-  const query = { baseFloor: 'maintenance' };
+test('queryFloorCatalog filters by themeTags', () => {
+  const query = { themeTags: ['maintenance'] };
   const result = queryFloorCatalog(query);
-  const expected = FLOOR_CATALOG.filter(def => def.baseFloor === 'maintenance');
+  const expected = FLOOR_CATALOG.filter(def => def.themeTags && def.themeTags.includes('maintenance'));
   assert.equal(result.length, expected.length);
-  assert.ok(result.every(def => def.baseFloor === 'maintenance'));
+  assert.ok(result.every(def => def.themeTags && def.themeTags.includes('maintenance')));
 });
 
 test('queryFloorCatalog filters by tag', () => {

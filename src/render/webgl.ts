@@ -2299,6 +2299,7 @@ function meshPassContext(
   ambient: number,
   state: GLState,
   samosborActive: boolean,
+  entities: readonly Entity[],
 ): MeshPassContext {
   return {
     world,
@@ -2320,6 +2321,7 @@ function meshPassContext(
     dynamicLightsRadius: state.dynamicLightsRadius,
     mode: profile.mode,
     profile,
+    entities,
   };
 }
 
@@ -2333,9 +2335,10 @@ function updateAndRenderMeshPass(
   profile: ResolvedVisualGeometryProfile,
   ambient: number,
   samosborActive: boolean,
+  entities: readonly Entity[],
 ): void {
   if (!state.meshPass) return;
-  const context = meshPassContext(world, camera, time, fogDensity, fogColor, profile, ambient, state, samosborActive);
+  const context = meshPassContext(world, camera, time, fogDensity, fogColor, profile, ambient, state, samosborActive, entities);
   const stats = state.meshPass.update(context);
   lastRenderSceneDebugStats.meshEnabled = stats.enabled;
   lastRenderSceneDebugStats.meshInstances = stats.visibleInstances;
@@ -3539,7 +3542,7 @@ export function renderSceneGL(
 
   // ── Render sprites into FBO (with depth test against raycaster) ──
   gl.depthFunc(gl.LESS);
-  updateAndRenderMeshPass(glState, world, camera, time, fogDensity, meshFogRgb, visualGeometryProfile, ambientLight, samosborActive);
+  updateAndRenderMeshPass(glState, world, camera, time, fogDensity, meshFogRgb, visualGeometryProfile, ambientLight, samosborActive, entities);
   renderSpritesGL(
     world,
     sprites,

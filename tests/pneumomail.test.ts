@@ -65,7 +65,7 @@ function makePneumomailWorld(): {
 test('pneumomail intake covers required capsule outcomes with bounded history', () => {
   const { world, intake } = makePneumomailWorld();
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: 9, y: 10, inventory: [] });
@@ -95,7 +95,7 @@ test('pneumomail intake covers required capsule outcomes with bounded history', 
 test('pneumomail intercept, jam, and report publish explicit events', () => {
   const { world, intercept, jam, report } = makePneumomailWorld();
   const state = makeGameState({
-    currentZ: 30,
+    currentZ: 34,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({

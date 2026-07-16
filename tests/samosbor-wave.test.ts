@@ -220,7 +220,7 @@ test('samosbor wave leaves doors, containers, route cues, and entity cells consi
   world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
   world.containers = [];
   world.rebuildContainerMap();
-  world.addContainer(makeTestContainer({ id: 42, x: 24, y: 24, z: 60, roomId: -1, zoneId: 0, capacitySlots: 2 }));
+  world.addContainer(makeTestContainer({ id: 42, x: 24, y: 24, z: -6, roomId: -1, zoneId: 0, capacitySlots: 2 }));
   entities.push({
     id: 99,
     type: EntityType.PROJECTILE,
@@ -240,7 +240,7 @@ test('samosbor wave leaves doors, containers, route cues, and entity cells consi
     y: 24,
     targetX: 24,
     targetY: 24,
-    z: 60,
+    z: -6,
     label: 'test',
     hint: 'test',
     targetName: 'test',

@@ -81,8 +81,7 @@ function hermeticShellCells(gen: ReturnType<typeof generateDesignFloor>, roomId:
 test('bolnichny_korpus is registered as a Kvartiry-band authored hospital route', () => {
   const route = designFloorById(BOLNICHNY_KORPUS_ROUTE_ID);
   assert.equal(route?.z, BOLNICHNY_KORPUS_Z);
-  assert.equal(route?.baseFloor, BOLNICHNY_KORPUS_BASE_FLOOR);
-  assert.equal(route?.baseFloor === 14);
+  assert.equal(route?.themeTags?.includes('kvartiry'), true);
   assert.equal(route?.displayName, 'Больничный корпус');
   assert.equal(designFloorAtZ(BOLNICHNY_KORPUS_Z)?.id, BOLNICHNY_KORPUS_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(BOLNICHNY_KORPUS_Z), false);

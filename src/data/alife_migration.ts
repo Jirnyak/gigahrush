@@ -21,7 +21,7 @@ export type AlifeMigrationReason =
 export interface AlifeDestinationSelector {
   floorKeys?: readonly string[];
   routeTags?: readonly string[];
-  baseFloors?: readonly number[];
+  themeTags?: readonly string[];
   minAbsZ?: number;
   maxAbsZ?: number;
   allowsNpcOnly?: boolean;
@@ -219,7 +219,7 @@ export const ALIFE_MIGRATION_INTENTS: readonly AlifeMigrationIntentDef[] = [
     reason: 'routine',
     weight: 3,
     destination: {
-      baseFloors: [140, 180],
+      floorKeys: ['design:maintenance', 'design:hell'],
       routeTags: ['route_pressure', 'industrial', 'cult', 'samosbor'],
       minAbsZ: 24,
       maxAbsZ: 47,
@@ -372,12 +372,11 @@ export function validateAlifeMigrationProfiles(intents: readonly AlifeMigrationI
       if (intent.destination.allowsNpcOnly !== false && allowsNpc === false) {
         errors.push(`migration intent ${intent.id} targets NPC-forbidden destination ${key}`);
       }
-      if (floorKeyBaseFloor(key) === 200) {
+      if (floorKeyBaseFloor(key)?.includes('void')) {
         errors.push(`migration intent ${intent.id} targets VOID ordinary destination ${key}`);
       }
     }
-    // @ts-ignore
-    if (intent.destination.themeTagss?.includes(200)) {
+    if (intent.destination.themeTags?.includes('void')) {
       errors.push(`migration intent ${intent.id} targets VOID base floor`);
     }
   }

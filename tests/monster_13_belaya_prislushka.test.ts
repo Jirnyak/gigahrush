@@ -46,7 +46,7 @@ test('Белая Прислушка publishes compact outcome events for quest c
   const state = makeGameState({ currentZ: 0 });
   publishEvent(state, {
     type: 'quest_completed',
-    z: 60,
+    z: -6,
     targetName: 'rescue source event',
     severity: 4,
     privacy: 'local',
@@ -55,7 +55,7 @@ test('Белая Прислушка publishes compact outcome events for quest c
   });
   publishEvent(state, {
     type: 'quest_failed',
-    z: 60,
+    z: -6,
     targetName: 'failed rescue source event',
     severity: 3,
     privacy: 'local',

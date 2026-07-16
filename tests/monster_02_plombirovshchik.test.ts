@@ -43,7 +43,7 @@ test('Plombirovshchik uses Shovnik body and opens local seal when killed away fr
   });
   publishEvent(state, {
     type: 'player_kill_monster',
-    z: 60,
+    z: -6,
     x: mainRoom.x + 4.5,
     y: mainRoom.y + 5.5,
     actorId: 0,

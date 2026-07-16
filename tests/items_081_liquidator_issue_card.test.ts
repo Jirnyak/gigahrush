@@ -52,7 +52,7 @@ test('liquidator issue card is reachable in the Ministry archive and redeems one
     x: stash.x + 0.5,
     y: stash.y + 0.5,
   });
-  const state = makeGameState({ currentZ: 30, time: 44 });
+  const state = makeGameState({ currentZ: 34, time: 44 });
   assert.equal(addItem(player, CARD_ID, 1), true);
 
   useItem(player, 0, state.msgs, state.time, state, stash.zoneId, world);
@@ -70,7 +70,7 @@ test('liquidator issue card is reachable in the Ministry archive and redeems one
 test('liquidator issue card is not consumed away from the Ministry issue stash', () => {
   const world = new World();
   const player = makeTestPlayer({ x: 10.5, y: 10.5 });
-  const state = makeGameState({ currentZ: 30, time: 50 });
+  const state = makeGameState({ currentZ: 34, time: 50 });
   assert.equal(addItem(player, CARD_ID, 1), true);
 
   useItem(player, 0, state.msgs, state.time, state, undefined, world);

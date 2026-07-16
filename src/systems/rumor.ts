@@ -403,12 +403,12 @@ function renderRumor(
 }
 
 const FLOOR_NAMES: Record<number, string> = {
-  [30]: 'Министерство',
-  [60]: 'Квартиры',
-  [100]: 'Жилая зона',
-  [140]: 'Коллекторы',
-  [180]: 'Ад',
-  [200]: 'Пустота',
+  [34]: 'Министерство',
+  [2]: 'Квартиры',
+  [-6]: 'Жилая зона',
+  [-14]: 'Коллекторы',
+  [-40]: 'Ад',
+  [-48]: 'Пустота',
 };
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {
@@ -468,7 +468,11 @@ function formatLeadLine(rumor: RumorDef, event?: RumorEventRecord): string {
 
 function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
-  if (lead.z !== undefined) parts.push(FLOOR_NAMES[lead.z]);
+  if (lead.z !== undefined) {
+    const floorName = FLOOR_NAMES[lead.z];
+    if (floorName) parts.push(floorName);
+    else parts.push(`этаж ${lead.z}`);
+  }
   if (lead.zoneHint) parts.push(lead.zoneHint);
   if (lead.roomName) parts.push(lead.roomName);
   else if (lead.roomType !== undefined) parts.push(ROOM_TYPE_NAMES[lead.roomType]);
@@ -506,7 +510,11 @@ function eventRoomName(event: RumorEventRecord): string {
 
 function formatEventLead(event: RumorEventRecord): string {
   const parts: string[] = [];
-  if (event.z !== undefined) pushLeadPart(parts, FLOOR_NAMES[event.z]);
+  if (event.z !== undefined) {
+    const floorName = FLOOR_NAMES[event.z];
+    if (floorName) pushLeadPart(parts, floorName);
+    else pushLeadPart(parts, `этаж ${event.z}`);
+  }
   const zoneName = eventZoneName(event);
   if (zoneName) pushLeadPart(parts, zoneName);
   else if (event.zoneId !== undefined) pushLeadPart(parts, `зона ${event.zoneId + 1}`);

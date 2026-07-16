@@ -90,7 +90,7 @@ function nearbySupportRooms(world: World, hq: Room): number {
 }
 
 test('genfix 051 living floor preserves reference geometry and cell-first territory HQs', () => {
-  const gen = generateFloor('living', 61_061);
+  const gen = generateFloor(0, 61_061);
   const world = gen.world;
 
   assert.equal(world.rooms.length >= 9_500 && world.rooms.length <= 12_500, true, `living reference room count: ${world.rooms.length}`);

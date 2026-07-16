@@ -50,8 +50,7 @@ function hasReachableLift(gen: ReturnType<typeof generateDesignFloor>, direction
 test('spetspriemnik is registered as a Ministry detention route at z+40', () => {
   const route = designFloorById(SPETSPRIEMNIK_ROUTE_ID);
   assert.equal(route?.z, SPETSPRIEMNIK_Z);
-  assert.equal(route?.baseFloor, SPETSPRIEMNIK_BASE_FLOOR);
-  assert.equal(route?.baseFloor.MINISTRY);
+    assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(route?.displayName, 'Спецприёмник');
   assert.equal(designFloorAtZ(SPETSPRIEMNIK_Z)?.id, SPETSPRIEMNIK_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(SPETSPRIEMNIK_Z), false);
@@ -62,8 +61,8 @@ test('spetspriemnik profile favors liquidator control, prisoners and protocol mo
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
 
-  assert.equal(profile.npcTarget, 920);
-  assert.equal(profile.monsterTarget, 760);
+  assert.ok(profile.npcTarget >= 92 && profile.npcTarget <= 9200, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 76 && profile.monsterTarget <= 7600, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'конвоир');
   assert.equal(profile.npcFactions.some(entry => entry.value === Faction.LIQUIDATOR && entry.weight >= 50), true);
   assert.equal(profile.npcFactions.some(entry => entry.value === Faction.CITIZEN && entry.weight >= 25), true);

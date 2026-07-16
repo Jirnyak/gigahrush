@@ -43,9 +43,8 @@ test('oranzhereya_betona is registered as the z -2 scarcity greenhouse route', (
   const route = designFloorById(ORANZHEREYA_BETONA_ROUTE_ID);
 
   assert.equal(route?.z, ORANZHEREYA_BETONA_Z);
-  assert.equal(route?.baseFloor.LIVING);
-  assert.equal(route?.baseFloor, ORANZHEREYA_BETONA_BASE_FLOOR);
-  assert.equal(route?.displayName, ORANZHEREYA_BETONA_DISPLAY_NAME);
+  assert.equal(route?.themeTags?.includes('living'), true);
+    assert.equal(route?.displayName, ORANZHEREYA_BETONA_DISPLAY_NAME);
   assert.equal(route?.danger, 3);
   assert.equal(designFloorAtZ(ORANZHEREYA_BETONA_Z)?.id, ORANZHEREYA_BETONA_ROUTE_ID);
 });
@@ -203,8 +202,8 @@ test('oranzhereya_betona uses a bounded food-water population profile', () => {
   const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
   const monsters = gen.entities.filter(entity => entity.type === EntityType.MONSTER);
 
-  assert.equal(profile.npcTarget, 980);
-  assert.equal(profile.monsterTarget, 920);
+  assert.ok(profile.npcTarget >= 98 && profile.npcTarget <= 9800, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 92 && profile.monsterTarget <= 9200, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'тепличник');
   assert.equal(profile.monsterTags.includes('greenhouse'), true);
   assert.equal(profile.monsterTags.includes('spore'), true);

@@ -20,7 +20,7 @@ function registerPaidRouteAdviceCue(world: World): void {
     y: 12.5,
     targetX: 12.5,
     targetY: 12.5,
-    z: 60,
+    z: -6,
     roomId: 0,
     targetRoomId: 0,
     label: 'живая карта',

@@ -47,7 +47,7 @@ function stateWithPopulation(seed: number, total: number, reserved: readonly Ali
   createPrefilledAlifeState(state, seed, total, {
     buckets: [{
       floorKey: 'design:living',
-      z: 60,
+      z: -6,
       targetCount: total,
       reserved,
     }],

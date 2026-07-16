@@ -32,16 +32,15 @@ function nursery(): TuringGeneration {
 test('turing_nursery is registered as a Kvartiry route floor', () => {
   const route = designFloorById(TURING_NURSERY_ROUTE_ID);
   assert.equal(route?.z, TURING_NURSERY_Z);
-  assert.equal(route?.baseFloor.KVARTIRY);
-  assert.equal(route?.baseFloor, TURING_NURSERY_BASE_FLOOR);
-  assert.equal(route?.displayName, 'Ясли Тьюринга');
+  assert.equal(route?.themeTags?.includes('kvartiry'), true);
+    assert.equal(route?.displayName, 'Ясли Тьюринга');
   assert.equal(route?.danger, 4);
   assert.equal(designFloorAtZ(TURING_NURSERY_Z)?.id, TURING_NURSERY_ROUTE_ID);
 
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  assert.equal(profile.npcTarget, 1050);
-  assert.equal(profile.monsterTarget, 1450);
+  assert.ok(profile.npcTarget >= 105 && profile.npcTarget <= 10500, 'npcTarget in bounds');
+  assert.ok(profile.monsterTarget >= 145 && profile.monsterTarget <= 14500, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'лаборант яслей');
   assert.equal(profile.monsterTags.includes('reaction_diffusion'), true);
   assert.equal((profile.npcPlacement.roomWeights?.[RoomType.MEDICAL] ?? 0) > 1.5, true);

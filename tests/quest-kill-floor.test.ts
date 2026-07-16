@@ -54,7 +54,7 @@ test('floor-targeted kill quests do not count matching monsters on a wrong floor
 });
 
 test('plot NPC kill quests do not count ordinary monster kills', () => {
-  const state = makeGameState({ currentZ: 30 });
+  const state = makeGameState({ currentZ: 34 });
   state.quests = [{
     id: 4,
     type: QuestType.KILL,

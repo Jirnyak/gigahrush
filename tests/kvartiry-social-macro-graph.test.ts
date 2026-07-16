@@ -19,7 +19,7 @@ import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
 let generated: ReturnType<typeof generateFloor> | null = null;
 
 function kvartiry(): ReturnType<typeof generateFloor> {
-  generated ??= generateFloor('kvartiry', 20_260_530);
+  generated ??= generateFloor(14, 20_260_530);
   return generated;
 }
 

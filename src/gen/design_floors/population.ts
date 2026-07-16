@@ -158,7 +158,7 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
     let monsterRoll = 0;
     const kind = chooseFloorMonsterKind({
       // @ts-ignore
-      z,
+      z: route.z,
       roomType: roomTypeAt(generation, cell),
       floorTags: [
         route.id,
