@@ -9,13 +9,13 @@ import {
   STORY_DROP_RULES,
   STORY_ITEM_OUTCOME_RULES,
   type StoryItemOutcomeRule,
-} from '../src/data/story_outcomes';
+} from '../src/data/plot_outcomes';
 import { getRecentEvents } from '../src/systems/events';
 import {
   applyStoryItemOutcomes,
   spawnStoryDeathDrops,
   storyDeathDropCandidates,
-} from '../src/systems/story_outcomes';
+} from '../src/systems/plot_outcomes';
 import { countInventoryItem, makeGameState, makeTestEntity, makeTestPlayer } from './helpers';
 
 function shadowQuest(): Quest {
@@ -151,7 +151,7 @@ test('story item use can consume evidence after completing an equivalent quest o
 
   assert.equal(quest.done, true);
   assert.equal(countInventoryItem(player, 'temp_pass'), 0);
-  assert.equal(getRecentEvents(state, { type: 'player_use_item', tags: ['story_outcome', 'use'], limit: 1 })[0]?.data?.ruleId, 'test_pass_use_counts_as_talk');
+  assert.equal(getRecentEvents(state, { type: 'player_use_item', tags: ['plot_outcome', 'use'], limit: 1 })[0]?.data?.ruleId, 'test_pass_use_counts_as_talk');
 });
 
 test('malformed and over-cap story drop data is sanitized', () => {

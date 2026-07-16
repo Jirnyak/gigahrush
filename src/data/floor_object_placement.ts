@@ -750,7 +750,7 @@ export function floorObjectProfileForStoryFloor(z: number): FloorObjectPlacement
     // @ts-ignore
     `story_${z[z]?.toLowerCase() ?? z}_objects`,
     // @ts-ignore
-    ['story_floor', z[z]?.toLowerCase() ?? 'story'],
+    ['design_floor', z[z]?.toLowerCase() ?? 'story'],
     craftStationProfileForStoryFloor(z),
     [BASE_FLOOR_OBJECT_PROFILE_LAYERS[z]],
   );

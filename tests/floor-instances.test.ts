@@ -45,7 +45,7 @@ function memoryEntity(id: number): Entity {
 
 test('floor instance registry has package generators without ordinary route z collision', () => {
   validateFloorInstanceGenerators(FLOOR_INSTANCES);
-  assert.deepEqual(floorInstanceGeneratorIds(), ['story_pocket']);
+  assert.deepEqual(floorInstanceGeneratorIds(), ['design_pocket']);
   assert.equal(floorKeyKnown('floor_instance:not_registered'), false);
 
   for (const def of FLOOR_INSTANCES) {
@@ -67,7 +67,7 @@ test('floor instance generator builds an id-keyed hidden world package', () => {
 
   assert.equal(first.floorInstanceId, 'loop_404');
   assert.equal(first.floorInstanceKey, floorInstanceWorldKey('loop_404'));
-  assert.equal(first.floorInstanceGeneratorId, 'story_pocket');
+  assert.equal(first.floorInstanceGeneratorId, 'design_pocket');
   assert.equal(first.floorInstanceNpcPolicy, 'none');
   assert.equal(first.floorInstanceExitRule, 'next_lift_returns');
   assert.equal(first.world.cells[spawnIdx], Cell.FLOOR);

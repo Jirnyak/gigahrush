@@ -2,7 +2,7 @@
 
 import { } from '../core/types';
 
-export type FloorInstanceGeneratorId = 'story_pocket';
+export type FloorInstanceGeneratorId = 'design_pocket';
 export type FloorInstanceExitRuleId = 'next_lift_returns';
 export type FloorInstanceNpcPolicyId = 'none' | 'generator';
 export type FloorInstanceMonsterPolicyId = 'generator' | 'none';
@@ -45,7 +45,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 100,
     seedTag: 'not_found',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -65,7 +65,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 60,
     seedTag: 'p46_protocol',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -85,7 +85,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 100,
     seedTag: 'lucky_shelter',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -105,7 +105,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 140,
     seedTag: 'radio_code',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -125,7 +125,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 30,
     seedTag: 'service_order',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -145,7 +145,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 140,
     seedTag: 'warm_shaft',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -172,7 +172,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 200,
     seedTag: 'zero_register',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',
@@ -192,7 +192,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     // @ts-ignore
     baseFloor: 60,
     seedTag: 'wrong_queue',
-    generatorId: 'story_pocket',
+    generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
     npcPolicy: 'none',
     monsterPolicy: 'generator',

@@ -55,7 +55,7 @@ export function floorInstanceGenerationSeed(
   );
 }
 
-function storyPocketFloorInstance(
+function designPocketFloorInstance(
   def: FloorInstanceDef,
   runSeed: number,
   instanceSeed: number,
@@ -67,7 +67,7 @@ function storyPocketFloorInstance(
 }
 
 const FLOOR_INSTANCE_GENERATORS: Record<FloorInstanceGeneratorId, FloorInstanceGenerator> = {
-  story_pocket: storyPocketFloorInstance,
+  design_pocket: designPocketFloorInstance,
 };
 
 export function floorInstanceGeneratorIds(): readonly FloorInstanceGeneratorId[] {

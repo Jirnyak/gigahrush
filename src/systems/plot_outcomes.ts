@@ -16,7 +16,7 @@ import {
   type StoryItemOutcomeRule,
   type StoryOutcomeCondition,
   type StoryOutcomeTrigger,
-} from '../data/story_outcomes';
+} from '../data/plot_outcomes';
 import { Spr } from '../render/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
 
@@ -208,7 +208,7 @@ export function applyStoryItemOutcomes(
         itemValue: def?.value ?? 0,
         severity: rule.severity ?? 3,
         privacy: rule.privacy ?? 'local',
-        tags: ['player', 'story_outcome', ctx.trigger, ...(rule.eventTags ?? [])],
+        tags: ['player', 'plot_outcome', ctx.trigger, ...(rule.eventTags ?? [])],
         data: { ruleId: rule.id, outcome: rule.outcome.kind },
       });
     }

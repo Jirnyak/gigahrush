@@ -75,7 +75,7 @@ function mergeProfiles(
 
 const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPlacementProfile>> = {
   [30]: {
-    id: 'story_ministry',
+    id: 'design_ministry',
     min: CRAFT_STATION_CAPS.design.min,
     max: CRAFT_STATION_CAPS.design.max,
     roomDivisor: 12,
@@ -85,10 +85,10 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
       [CRAFT_LAB_BENCH_ID]: 0.75,
       [RECIPE_BILLBOARD_ID]: 1.25,
     },
-    tags: ['story_floor', 'ministry'],
+    tags: ['design_floor', 'ministry'],
   },
   [60]: {
-    id: 'story_kvartiry',
+    id: 'design_kvartiry',
     min: CRAFT_STATION_CAPS.design.min,
     max: CRAFT_STATION_CAPS.design.max,
     roomDivisor: 12,
@@ -98,10 +98,10 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
       [CRAFT_LAB_BENCH_ID]: 0.45,
       [RECIPE_BILLBOARD_ID]: 0.8,
     },
-    tags: ['story_floor', 'kvartiry'],
+    tags: ['design_floor', 'kvartiry'],
   },
   [140]: {
-    id: 'story_maintenance_collectors',
+    id: 'design_maintenance_collectors',
     min: CRAFT_STATION_CAPS.maintenance.min,
     max: CRAFT_STATION_CAPS.maintenance.max,
     roomDivisor: 7,
@@ -119,7 +119,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
       [RoomType.STORAGE]: 1.15,
       [RoomType.HQ]: 0.85,
     },
-    tags: ['story_floor', 'maintenance', 'collectors'],
+    tags: ['design_floor', 'maintenance', 'collectors'],
   },
 };
 

@@ -18,7 +18,7 @@ function hasUsableLift(world: World, direction: LiftDirection): boolean {
   return false;
 }
 
-export function applyStoryRouteGates(world: World, player: Entity, state: GameState): boolean {
+export function applyDesignRouteGates(world: World, player: Entity, state: GameState): boolean {
   const entry = currentFloorRunEntry(state);
   const floorKey = floorRunEntryFloorKey(entry);
   const openGates = openRouteGatesForFloor(floorKey, state);

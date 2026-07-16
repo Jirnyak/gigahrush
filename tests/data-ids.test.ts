@@ -893,7 +893,7 @@ test('monster ecology and floor catalog ids are unique and valid', () => {
     if (!ID_RE.test(f.id)) invalid.push(dataRef('floorInstance', f.id, 'idFormat', f.id));
     if (!isValidZ(f.baseFloor)) invalid.push(dataRef('floorInstance', f.id, 'baseFloor', f.baseFloor));
     if (!rumorIds.has(f.rumorId)) invalid.push(dataRef('floorInstance', f.id, 'rumorId', f.rumorId));
-    if (f.generatorId !== 'story_pocket') invalid.push(dataRef('floorInstance', f.id, 'generatorId', f.generatorId));
+    if (f.generatorId !== 'design_pocket') invalid.push(dataRef('floorInstance', f.id, 'generatorId', f.generatorId));
     if (f.exitRule !== 'next_lift_returns') invalid.push(dataRef('floorInstance', f.id, 'exitRule', f.exitRule));
     if (f.npcPolicy !== 'none' && f.npcPolicy !== 'generator') invalid.push(dataRef('floorInstance', f.id, 'npcPolicy', f.npcPolicy));
     if (f.monsterPolicy !== 'none' && f.monsterPolicy !== 'generator') invalid.push(dataRef('floorInstance', f.id, 'monsterPolicy', f.monsterPolicy));

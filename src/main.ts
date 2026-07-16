@@ -214,7 +214,7 @@ import {
   toggleActiveQuest,
   updateKillQuestPressure,
 } from './systems/quests';
-import { applyPickedStoryItemOutcomes, applyStoryItemOutcomes, spawnStoryDeathDrops } from './systems/story_outcomes';
+import { applyPickedStoryItemOutcomes, applyStoryItemOutcomes, spawnStoryDeathDrops } from './systems/plot_outcomes';
 import { handleDiceInput, isDiceGameOpen } from './systems/dice';
 import { handleDominoInput, isDominoGameOpen } from './systems/domino';
 import { handleCheckersInput, isCheckersGameOpen } from './systems/checkers';
@@ -232,7 +232,7 @@ import { applyContractFloorHooks, notifyCleanupToolUse } from './systems/contrac
 import { cleanupToolProfile } from './systems/liquidator_cleanup_items';
 import { cleanSurfaceArea as cleanWorldSurfaceArea } from './systems/surface_cleanup';
 import { updateScriptedArrivals } from './systems/scripted_arrivals';
-import { applyStoryRouteGates } from './systems/story_route_gates';
+import { applyDesignRouteGates } from './systems/design_route_gates';
 import { setDoorState, damageDoor } from './systems/door_state';
 import {
   freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
@@ -2303,7 +2303,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     restoreVoidReturnPortalForCurrentWorld();
-    applyStoryRouteGates(world, player, state);
+    applyDesignRouteGates(world, player, state);
     publishEvent(state, {
       type: 'floor_transition',
       zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
@@ -4418,7 +4418,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     // Herald killed — check if the Podad lower route is now open.
     if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && currentFloorRunEntry(state).themeTags.includes('hell')) {
       if (onHeraldKilled(e, world, state)) {
-        applyStoryRouteGates(world, player, state);
+        applyDesignRouteGates(world, player, state);
         updateWorldData(world);
       }
     }
@@ -5390,7 +5390,7 @@ function switchFloor(
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
-    applyStoryRouteGates(world, player, state);
+    applyDesignRouteGates(world, player, state);
     if (allowElevatorAnomaly) {
       tryStartLiftArachnaEncounter(world, player, state, {
         direction,
@@ -5539,7 +5539,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
     clearLiftArachnaActive(state);
 
     state.msgs.push(msg(`[DEBUG] Телепорт: ${target.label}`, state.time, target.color));
-    const transitionTags = ['floor', 'floor_transition', 'debug', target.spec ? 'procedural' : target.designFloorId ? 'design_floor' : 'story'];
+    const transitionTags = ['floor', 'floor_transition', 'debug', target.spec ? 'procedural' : target.designFloorId ? 'design_floor' : 'design'];
     const tagsToAdd = proceduralAnomalyEventTags(target.spec);
     if (tagsToAdd.length > 0) {
       const tagSet = new Set(transitionTags);
@@ -5588,7 +5588,7 @@ function debugTeleportTo(target: DebugTeleportTarget): void {
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     restoreVoidReturnPortalForCurrentWorld();
-    applyStoryRouteGates(world, player, state);
+    applyDesignRouteGates(world, player, state);
     finishLoadedFloorVisuals(gen);
   });
 }
@@ -6425,7 +6425,7 @@ function loadGame(): boolean {
       updateMapExploration(world, player, state);
       ensureProceduralSpriteSeeds(entities);
       restoreVoidReturnPortalForCurrentWorld();
-      applyStoryRouteGates(world, player, state);
+      applyDesignRouteGates(world, player, state);
 
       state.msgs.push(msg('Игра загружена', state.time, '#4af'));
 
@@ -9586,7 +9586,7 @@ function gameLoop(now: number): void {
         ensureProceduralSpriteSeeds(entities);
         clearLiftArachnaActive(state);
         restoreVoidReturnPortalForCurrentWorld();
-        applyStoryRouteGates(world, player, state);
+        applyDesignRouteGates(world, player, state);
         finishLoadedFloorVisuals(replacement);
       });
       requestAnimationFrame(gameLoop);

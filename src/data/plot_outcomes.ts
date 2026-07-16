@@ -99,7 +99,7 @@ export const STORY_DROP_RULES: readonly StoryDropRule[] = [
     messageColor: '#c8f',
     severity: 3,
     privacy: 'local',
-    eventTags: ['story_drop', 'shadow', 'strange_clot'],
+    eventTags: ['plot_drop', 'shadow', 'strange_clot'],
   },
 ];
 
@@ -127,6 +127,6 @@ export const STORY_ITEM_OUTCOME_RULES: readonly StoryItemOutcomeRule[] = [
     messageColor: '#c8f',
     severity: 3,
     privacy: 'local',
-    eventTags: ['story_outcome', 'shadow', 'strange_clot'],
+    eventTags: ['plot_outcome', 'shadow', 'strange_clot'],
   },
 ];

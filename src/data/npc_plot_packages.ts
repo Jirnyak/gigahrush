@@ -547,7 +547,7 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     inventory: [],
     talkLines: [],
     talkLinesPost: [],
-    voiceTags: ['story_voice'],
+    voiceTags: ['plot_voice'],
   }),
 ] as const satisfies readonly NpcPackageDef[];
 

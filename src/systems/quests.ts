@@ -29,7 +29,7 @@ import {
   type KillPressureDef,
   type PlotStep,
 } from '../data/plot';
-import type { StoryQuestOutcomeDef, StoryQuestSelector } from '../data/story_outcomes';
+import type { StoryQuestOutcomeDef, StoryQuestSelector } from '../data/plot_outcomes';
 import {
   CONTRACTS,
   GOVNYAK_COURIER_PACKAGE_ITEM,

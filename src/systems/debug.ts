@@ -339,7 +339,7 @@ function routeEntryLine(prefix: string, entry: ReturnType<typeof currentFloorRun
     ? `proc ${entry.spec.anomalyId} d${entry.spec.danger}`
     : entry.designFloorId
       ? `design ${entry.designFloorId}`
-      : `story ${entry.themeTags.join(",")}`;
+      : `design ${entry.themeTags.join(",")}`;
   return `${prefix}: Z${formatDebugZ(entry.z)} ${kind} ${entry.label}`;
 }
 

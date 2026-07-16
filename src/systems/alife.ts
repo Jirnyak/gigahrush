@@ -848,7 +848,7 @@ function recordCanMaterializeAsOrdinaryPopulation(record: AlifeNpcRecord): boole
 }
 
 // @ts-ignore
-function storyDanger(z: number): 1 | 2 | 3 | 4 | 5 {
+function floorDanger(z: number): 1 | 2 | 3 | 4 | 5 {
   switch (z) {
     case 100: return 1;
     case 60:
@@ -1179,7 +1179,7 @@ function populationBucketToFloorPlan(bucket: AlifePopulationBucket): AlifeFloorP
   return {
     key,
     z: floor,
-    danger: bucket.danger ?? storyDanger(floor),
+    danger: bucket.danger ?? floorDanger(floor),
     weight: Math.max(0, Math.floor(bucket.weight ?? bucket.targetCount ?? 0)),
     majorityFaction: bucket.majorityFaction,
     factionWeights: bucket.factionWeights,
@@ -1948,7 +1948,7 @@ function arrivalRecordFromEntity(alife: AlifeState, id: number, state: GameState
   };
   setRecordFloorKey(alife, record, floorKey);
   setRecordFloor(alife, record, state.currentZ);
-  setRecordDanger(alife, record, storyDanger(state.currentZ));
+  setRecordDanger(alife, record, floorDanger(state.currentZ));
   setRecordFaction(alife, record, faction);
   setRecordOccupation(alife, record, occupation);
   setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);

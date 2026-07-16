@@ -39,7 +39,7 @@ function plotNpc(entities: readonly Entity[], plotNpcId: string): Entity & { npc
 
 test('strict package NPC spawn rejects missing packages', () => {
   assert.throws(
-    () => requireSpawnedPlotNpcFromPackage([], { v: 1 }, 'missing_story_floor_package', 1.5, 1.5),
+    () => requireSpawnedPlotNpcFromPackage([], { v: 1 }, 'missing_design_floor_package', 1.5, 1.5),
     /missing NPC package/,
   );
 });
