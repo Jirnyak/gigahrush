@@ -2433,13 +2433,6 @@ export function materializeAlifeFloorPopulation(
     }
   }
 
-  while (slot < templates.length) {
-    const template = templates[slot++];
-    if (template.name || template.alifeId !== undefined) {
-      entities.push(template);
-    }
-  }
-
   // Ensure any other ordinary live NPCs on the floor (travelers, spawned patrols) have persistent A-Life records
   for (const entity of entities) {
     if (entity.type === EntityType.NPC && entity.alive && entity.alifeId === undefined && !('plotNpcId' in entity && (entity as any).plotNpcId !== undefined) && !(entity as any).npcPackageId && !entity.persistentNpcId && entity.questId === -1) {

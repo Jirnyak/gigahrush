@@ -4458,8 +4458,8 @@ function applyFlameBackdraft(x: number, y: number, actor: Entity | undefined): v
   state.dmgFlash = Math.max(state.dmgFlash, 0.12);
   state.dmgSeed = 3;
   if (actor?.id !== player.id || world.dist2(player.x, player.y, x, y) > 1.6 * 1.6) return;
-  if (isDebugOnePunchManEnabled()) {
-    keepDebugOnePunchManAlive(player);
+  if (isDebugOnePunchManEnabled(state)) {
+    keepDebugOnePunchManAlive(player, state);
     return;
   }
   player.hp = Math.max(1, (player.hp ?? 1) - 1);
@@ -4768,9 +4768,9 @@ function processProjectileEntityCollision(
       projectileType: pt,
     });
     const dmg = armor.damage;
-    const debugImmortalPlayerHit = isPlayerEntity(e) && isDebugOnePunchManEnabled();
+    const debugImmortalPlayerHit = isPlayerEntity(e) && isDebugOnePunchManEnabled(state);
     if (debugImmortalPlayerHit) {
-      keepDebugOnePunchManAlive(e);
+      keepDebugOnePunchManAlive(e, state);
     } else {
       e.hp -= dmg;
       if (p.x !== undefined && p.y !== undefined) {
@@ -4858,8 +4858,8 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
         aoe: true,
       });
       const finalDmg = armor.damage;
-      if (isPlayerEntity(e) && isDebugOnePunchManEnabled()) {
-        keepDebugOnePunchManAlive(e);
+      if (isPlayerEntity(e) && isDebugOnePunchManEnabled(state)) {
+        keepDebugOnePunchManAlive(e, state);
         hits++;
         continue;
       }
@@ -9697,12 +9697,7 @@ function gameLoop(now: number): void {
       tickStockMarket(state);
     }
 
-    keepDebugOnePunchManAlive(player);
-    if (state.trailerMode) {
-      player.alive = true;
-      player.maxHp = Math.max(1, player.maxHp ?? 100);
-      player.hp = player.maxHp;
-    }
+    keepDebugOnePunchManAlive(player, state);
 
     // Detect player damage for vignette flash
     const damageActor = syncPlayerActorSwitchBaseline();
