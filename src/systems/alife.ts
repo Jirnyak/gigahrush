@@ -1583,10 +1583,12 @@ function sanitizeFloor(value: unknown, fallback: number): number {
 
 function isAmbientNpcCandidate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    (!entity.id || entity.id <= 0) &&
+    (!entity.id || entity.id <= 0 || entity.name === undefined) &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
-    entity.questId === -1;
+    entity.questId === -1 &&
+    !(entity as Entity & { npcPackageId?: string }).npcPackageId &&
+    !('plotNpcId' in entity && (entity as any).plotNpcId !== undefined);
 }
 
 function captureEntityToRecord(alife: AlifeState, record: AlifeNpcRecord, entity: Entity): void {
@@ -2428,6 +2430,22 @@ export function materializeAlifeFloorPopulation(
         if (!entity) continue;
         entities.push(entity);
       }
+    }
+  }
+
+  while (slot < templates.length) {
+    const template = templates[slot++];
+    if (assignPersistentAlifeNpcFromEntity(state, template, entities, floorKey)) {
+      entities.push(template);
+    } else if (template.name || template.alifeId !== undefined) {
+      entities.push(template);
+    }
+  }
+
+  // Ensure any other ordinary live NPCs on the floor (travelers, spawned patrols) have persistent A-Life records
+  for (const entity of entities) {
+    if (entity.type === EntityType.NPC && entity.alive && entity.alifeId === undefined && !('plotNpcId' in entity && (entity as any).plotNpcId !== undefined) && !(entity as any).npcPackageId && !entity.persistentNpcId && entity.questId === -1) {
+      assignPersistentAlifeNpcFromEntity(state, entity, entities, floorKey);
     }
   }
 

@@ -48,7 +48,7 @@ export {
   type CraftRecipeTier,
   type CraftStationKind,
 } from './craft_recipes';
-export { randomName, type NameResult, freshNeeds } from './names';
+export { randomName, adjustLastNameForGender, type NameResult, freshNeeds } from './names';
 export { NOTES } from './notes';
 export {
   PLOT_CHAIN,

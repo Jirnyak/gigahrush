@@ -6,7 +6,7 @@ import {
   EntityType, AIGoal, Faction, Occupation, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { ITEMS, randomName, freshNeeds, NOTES } from '../../data/catalog';
+import { ITEMS, randomName, adjustLastNameForGender, freshNeeds, NOTES } from '../../data/catalog';
 import { spawnCount } from '../../data/items';
 import { randomFaction, randomOccupation } from '../../data/relations';
 import { pick, weightedPick } from '../shared';
@@ -124,7 +124,8 @@ export function spawnFamilies(
       const rpg = randomRPG(npcLevel);
       const maxHp = getMaxHp(rpg);
       const nm = randomName(faction);
-      const lastName = f === 0 ? (familyLastName = nm.lastName, nm.lastName) : familyLastName;
+      const baseLastName = f === 0 ? (familyLastName = nm.lastName, nm.lastName) : familyLastName;
+      const lastName = adjustLastNameForGender(baseLastName, nm.female);
       const name = f === 0 ? nm.name : `${nm.firstName} ${lastName}`;
       entities.push({
         id: nextId++, type: EntityType.NPC,

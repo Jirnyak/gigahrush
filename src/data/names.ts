@@ -295,7 +295,25 @@ export function randomName(faction?: Faction): NameResult {
   }
 }
 
+// ── Helper: склонение фамилий по полу ──────────────────────────────
+export function adjustLastNameForGender(lastName: string, female: boolean): string {
+  if (!lastName) return lastName;
+  if (!female) {
+    if (lastName.endsWith('ская')) return lastName.slice(0, -4) + 'ский';
+    if (lastName.endsWith('ова') || lastName.endsWith('ева') || lastName.endsWith('ина')) {
+      return lastName.slice(0, -1);
+    }
+    return lastName;
+  }
+  if (lastName.endsWith('ский')) return lastName.slice(0, -4) + 'ская';
+  if (lastName.endsWith('ов') || lastName.endsWith('ев') || lastName.endsWith('ин')) {
+    return lastName + 'а';
+  }
+  return lastName;
+}
+
 // ── Helper: свежие потребности для NPC ───────────────────────────
 export function freshNeeds(): Needs {
   return { food: 70 + rng() * 30, water: 70 + rng() * 30, sleep: 60 + rng() * 40, pee: rng() * 30, poo: rng() * 20 };
 }
+

@@ -72,6 +72,7 @@ export interface SamosborVariantDef {
   id: SamosborVariantId;
   displayName: string;
   tags: readonly string[];
+  floors?: readonly string[];
   weight: number;
   subsystems: readonly SamosborSubsystemId[];
   visual: SamosborVisualProfile;
@@ -127,8 +128,7 @@ export interface SamosborAftermathBeatDef {
   id: string;
   title: string;
   variants: readonly SamosborVariantId[];
-  // @ts-ignore
-  tags: readonly string[];
+  floors?: readonly string[];
   weight: number;
   cooldownSec: number;
   maxRuns: number;
@@ -136,7 +136,6 @@ export interface SamosborAftermathBeatDef {
   severity: 2 | 3 | 4;
   effect: SamosborAftermathEffectId;
   message: string;
-  // @ts-ignore
   tags: readonly string[];
   monsterKind?: MonsterKind;
   monsterCount?: number;
@@ -271,7 +270,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
   {
     id: 'classic',
     displayName: 'Типовой (ГОСТ-С)',
-    // @ts-ignore
+    tags: ['classic'],
     floors: ALL_FLOORS,
     weight: 60,
     subsystems: [],
@@ -348,7 +347,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
   {
     id: 'maronary',
     displayName: 'Маронарий',
-    // @ts-ignore
+    tags: ['maronary'],
     floors: ALL_FLOORS,
     weight: 4,
     subsystems: ['maronary_sources', 'wrong_door', 'source_glow', 'fog_rewrite'],
@@ -379,7 +378,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
   {
     id: 'istotit',
     displayName: 'Истотит',
-    // @ts-ignore
+    tags: ['istotit'],
     floors: CIVIL_FLOORS,
     weight: 3,
     subsystems: ['istotit_shelters', 'bell_compulsion', 'fog_create'],
@@ -403,7 +402,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
   {
     id: 'veretar',
     displayName: 'Веретар',
-    // @ts-ignore
+    tags: ['veretar'],
     floors: ALL_FLOORS,
     weight: 4,
     subsystems: ['veretar_area_leak', 'fog_delete'],
@@ -437,7 +436,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_fog_residue',
     title: 'Осадок тумана',
     variants: ['classic', 'wet', 'meat'],
-    // @ts-ignore
     floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 12,
     cooldownSec: 240,
@@ -453,7 +451,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_door_fault',
     title: 'Дверь заело',
     variants: ['wet', 'electric'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 10,
     cooldownSec: 360,
@@ -468,7 +465,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_shortcut_slab_shift',
     title: 'Плита села в проход',
     variants: ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 11,
     cooldownSec: 480,
@@ -483,7 +479,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_route_entry_residue',
     title: 'Маршрут пережил отбой',
     variants: ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 18,
     cooldownSec: 180,
@@ -499,7 +494,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_aftershock_tvar',
     title: 'Поздняя тварь',
     variants: ['wet', 'meat'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 9,
     cooldownSec: 300,
@@ -515,7 +509,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_electric_eye',
     title: 'Глаз после озона',
     variants: ['electric'],
-    tags: ['ministry', 'kvartiry', 'living', 'maintenance'],
+    floors: ['ministry', 'kvartiry', 'living', 'maintenance'],
     weight: 14,
     cooldownSec: 300,
     maxRuns: 8,
@@ -523,7 +517,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 4,
     effect: 'monster_aftershock',
     message: 'Лампы щёлкнули после отбоя. В коридоре открылся глаз; свет больше не укрытие.',
-    // @ts-ignore
     tags: ['monster', 'electric'],
     monsterKind: MonsterKind.EYE,
   },
@@ -531,7 +524,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_rumor_seed',
     title: 'Слух об отбойном протоколе',
     variants: ['wet', 'electric', 'meat'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 14,
     cooldownSec: 420,
@@ -546,7 +538,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_supply_shortage',
     title: 'Срыв снабжения',
     variants: ['wet', 'electric', 'meat'],
-    tags: ['ministry', 'kvartiry', 'living', 'maintenance'],
+    floors: ['ministry', 'kvartiry', 'living', 'maintenance'],
     weight: 8,
     cooldownSec: 600,
     maxRuns: 5,
@@ -554,7 +546,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'production_shortage',
     message: 'Местный цех потерял ящик расходников. Производство кашляет, цены уже встали в очередь.',
-    // @ts-ignore
     tags: ['shortage', 'production'],
     resourceId: 'labor',
   },
@@ -562,7 +553,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_faction_panic',
     title: 'Фракционная паника',
     variants: ['electric', 'meat'],
-    tags: ['ministry', 'kvartiry', 'living', 'maintenance'],
+    floors: ['ministry', 'kvartiry', 'living', 'maintenance'],
     weight: 9,
     cooldownSec: 360,
     maxRuns: 7,
@@ -570,14 +561,12 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'faction_panic',
     message: 'Люди рядом сорвались с мест. Толпа открывает дорогу, уводит охрану и оставляет виноватых у двери.',
-    // @ts-ignore
     tags: ['faction', 'panic'],
   },
   {
     id: 'aftermath_container_theft',
     title: 'Открытый запас',
     variants: ['wet', 'electric', 'meat'],
-    // @ts-ignore
     floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 10,
     cooldownSec: 480,
@@ -593,7 +582,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_false_all_clear',
     title: 'Ложный отбой',
     variants: ['meat'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 8,
     cooldownSec: 540,
@@ -609,7 +597,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_civil_ration_queue_split',
     title: 'Разорванная очередь пайков',
     variants: ['classic', 'electric'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 16,
     cooldownSec: 720,
@@ -625,7 +612,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_ministry_forms_eaten',
     title: 'Съеденные бланки',
     variants: ['electric', 'meat'],
-    tags: ['ministry', 'kvartiry'],
+    floors: ['ministry', 'kvartiry'],
     weight: 14,
     cooldownSec: 780,
     maxRuns: 3,
@@ -633,7 +620,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'production_shortage',
     message: 'В канцелярии недосчитались бланков. Документы подорожали; подделка, кража или услуга стали реальным выбором.',
-    // @ts-ignore
     tags: ['civil', 'documents', 'shortage'],
     resourceId: 'documents',
   },
@@ -641,7 +627,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_open_fridge_line',
     title: 'Открытый общий холодильник',
     variants: ['wet', 'meat'],
-    tags: ['kvartiry', 'living'],
+    floors: ['kvartiry', 'living'],
     weight: 15,
     cooldownSec: 660,
     maxRuns: 4,
@@ -649,7 +635,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'container_theft',
     message: 'Общий холодильник остался раскрытым. Взять воду легко, объяснить потом труднее, особенно при соседях.',
-    // @ts-ignore
     tags: ['civil', 'container', 'water'],
     itemId: 'water',
   },
@@ -657,7 +642,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_stairwell_denunciation',
     title: 'Подъездный донос',
     variants: ['electric', 'meat'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 14,
     cooldownSec: 600,
@@ -672,7 +656,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_liquidator_sweep_pressure',
     title: 'Ликвидаторский обход',
     variants: ['classic', 'electric', 'wet'],
-    // @ts-ignore
     floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 10,
     cooldownSec: 720,
@@ -687,7 +670,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_black_liquidator_patrol',
     title: 'Черный обход',
     variants: ['classic', 'wet', 'electric'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 5,
     cooldownSec: 960,
@@ -705,7 +687,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_pressure_station_drop',
     title: 'Провал давления',
     variants: ['wet', 'electric'],
-    tags: ['maintenance'],
+    floors: ['maintenance'],
     weight: 20,
     cooldownSec: 720,
     maxRuns: 4,
@@ -713,7 +695,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'production_shortage',
     message: 'В коллекторе просело давление. Вода стала предметом торга: манометр лучше проверить до следующей сирены.',
-    // @ts-ignore
     tags: ['maintenance', 'water', 'pressure'],
     resourceId: 'drink_water',
   },
@@ -721,7 +702,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_burnt_tool_locker',
     title: 'Сгоревший инструментальный шкаф',
     variants: ['electric', 'wet'],
-    tags: ['maintenance'],
+    floors: ['maintenance'],
     weight: 16,
     cooldownSec: 780,
     maxRuns: 3,
@@ -729,7 +710,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'container_theft',
     message: 'Инструментальный шкаф заклинило открытым. Предохранитель можно забрать, но без него следующий щиток не простит.',
-    // @ts-ignore
     tags: ['maintenance', 'container', 'electric'],
     itemId: 'fuse',
   },
@@ -737,7 +717,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_service_airlock_fault',
     title: 'Сервисный шлюз не держит',
     variants: ['wet', 'electric', 'classic'],
-    tags: ['maintenance'],
+    floors: ['maintenance'],
     weight: 16,
     cooldownSec: 540,
     maxRuns: 4,
@@ -745,14 +725,13 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'door_fault',
     message: 'Сервисный шлюз после отбоя не держит защёлку. Путь открыт, но как укрытие он теперь обман.',
-    // @ts-ignore
     tags: ['maintenance', 'door', 'route'],
   },
   {
     id: 'aftermath_zinc_slime_bucket',
     title: 'Ведро зачистки забыто',
     variants: ['wet', 'classic'],
-    tags: ['maintenance'],
+    floors: ['maintenance'],
     weight: 9,
     cooldownSec: 840,
     maxRuns: 3,
@@ -760,7 +739,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'container_theft',
     message: 'После отбоя в шкафу зачистки осталось цинковое ведро с пломбой. Забрать можно; акт потом спросят у последнего владельца.',
-    // @ts-ignore
     tags: ['maintenance', 'container', 'slime', 'liquidator', 'cleanup'],
     itemId: 'zinc_slime_bucket',
   },
@@ -768,7 +746,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_slime_sense_node',
     title: 'Узел слышит после отбоя',
     variants: ['wet', 'classic'],
-    tags: ['maintenance'],
+    floors: ['maintenance'],
     weight: 5,
     cooldownSec: 1260,
     maxRuns: 2,
@@ -776,7 +754,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'item_residue',
     message: 'В мокрой трещине остался чувствительный узел слизи. Забери как редкую пробу, сдай НИИ, продай рынку или оставь ликвидаторам на прожиг.',
-    // @ts-ignore
     tags: ['maintenance', 'slime', 'sample', 'sense', 'nii', 'aftermath'],
     itemId: 'slime_sense_node',
   },
@@ -784,7 +761,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_late_tube_eel',
     title: 'Поздний угорь',
     variants: ['wet'],
-    tags: ['maintenance', 'hell'],
+    floors: ['maintenance', 'hell'],
     weight: 13,
     cooldownSec: 900,
     maxRuns: 3,
@@ -792,7 +769,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 4,
     effect: 'monster_aftershock',
     message: 'В трубе осталось движение после отбоя. Поздний угорь слышен по воде: сухой обход стоит времени.',
-    // @ts-ignore
     tags: ['maintenance', 'monster', 'water'],
     monsterKind: MonsterKind.TUBE_EEL,
   },
@@ -800,7 +776,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_cult_cache_unsealed',
     title: 'Культовый схрон раскрылся',
     variants: ['meat'],
-    tags: ['hell'],
+    floors: ['hell'],
     weight: 15,
     cooldownSec: 900,
     maxRuns: 3,
@@ -808,7 +784,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'container_theft',
     message: 'Мясной шов раздвинул чужой схрон. Метку можно забрать, но культовый сторож уже считает, кого спросить за пустое место.',
-    // @ts-ignore
     tags: ['hell', 'container', 'cult'],
     itemId: 'meat_rune',
   },
@@ -816,7 +791,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_herald_afterimage',
     title: 'Послеслед вестника',
     variants: ['meat', 'classic'],
-    tags: ['hell'],
+    floors: ['hell'],
     weight: 14,
     cooldownSec: 1080,
     maxRuns: 2,
@@ -824,7 +799,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 4,
     effect: 'monster_aftershock',
     message: 'В проходе остался мокрый след Вестника. Держи дверь между собой и силуэтом.',
-    // @ts-ignore
     tags: ['hell', 'monster', 'aftershock'],
     monsterKind: MonsterKind.HERALD,
   },
@@ -832,7 +806,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_hell_meat_supply_rot',
     title: 'Гнилая мясная выдача',
     variants: ['meat', 'wet'],
-    tags: ['hell'],
+    floors: ['hell'],
     weight: 16,
     cooldownSec: 840,
     maxRuns: 3,
@@ -840,7 +814,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'production_shortage',
     message: 'Мясная выдача испортилась после отбоя. Плоть стала валютой, а у порога её считают ведром, списком и охраной.',
-    // @ts-ignore
     tags: ['hell', 'shortage', 'meat'],
     resourceId: 'industrial_slurry',
   },
@@ -848,7 +821,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_fibrous_capsule_cut',
     title: 'Фиброзная капсула',
     variants: ['meat'],
-    tags: ['hell'],
+    floors: ['hell'],
     weight: 6,
     cooldownSec: 1260,
     maxRuns: 2,
@@ -856,7 +829,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'item_residue',
     message: 'Мясной блок после отбоя оставил плотную капсулу. Срежь пробу: НИИ примет как угрозу укрытию, мастерская считает из неё Т2.',
-    // @ts-ignore
     tags: ['hell', 'meat', 'sample', 'samosbor', 'aftermath', 'factory_input'],
     itemId: 'fibrous_capsule_cut',
   },
@@ -864,7 +836,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_void_psi_cache',
     title: 'ПСИ-схрон без владельца',
     variants: ['classic', 'maronary', 'veretar'],
-    tags: ['void'],
+    floors: ['void'],
     weight: 16,
     cooldownSec: 960,
     maxRuns: 3,
@@ -872,7 +844,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 3,
     effect: 'container_theft',
     message: 'В белом коридоре на миг проявился чужой схрон. ПСИ-пыль можно забрать сейчас, пока не пришёл владелец.',
-    // @ts-ignore
     tags: ['void', 'container', 'psi'],
     itemId: 'psi_dust',
   },
@@ -880,7 +851,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_void_spirit_echo',
     title: 'Эхо без жильца',
     variants: ['classic', 'maronary', 'veretar'],
-    tags: ['void'],
+    floors: ['void'],
     weight: 15,
     cooldownSec: 1080,
     maxRuns: 2,
@@ -888,7 +859,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 4,
     effect: 'monster_aftershock',
     message: 'Отбой повторился голосом из соседней квартиры. Рядом появился дух; держи стену за спиной.',
-    // @ts-ignore
     tags: ['void', 'monster', 'psi'],
     monsterKind: MonsterKind.SPIRIT,
   },
@@ -896,7 +866,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_void_false_map',
     title: 'Ложная белая карта',
     variants: ['classic', 'maronary', 'veretar'],
-    tags: ['void'],
+    floors: ['void'],
     weight: 14,
     cooldownSec: 900,
     maxRuns: 3,
@@ -904,7 +874,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     severity: 4,
     effect: 'false_all_clear',
     message: 'Карта показала чистый белый путь. Туман остался ровно там: проверь ногами только край.',
-    // @ts-ignore
     tags: ['void', 'false_clear', 'fog'],
     fogStrength: 165,
   },
@@ -912,7 +881,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_maronary_shaving',
     title: 'Зелёная стружка',
     variants: ['maronary'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 18,
     cooldownSec: 720,
@@ -928,7 +896,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_maronary_wrong_door',
     title: 'Неправильная дверь',
     variants: ['maronary'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 16,
     cooldownSec: 540,
@@ -943,7 +910,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_maronary_green_rumor',
     title: 'Свидетели зелёного',
     variants: ['maronary'],
-    // @ts-ignore
     floors: VOID_AND_CIVIL_SERVICE_FLOORS,
     weight: 12,
     cooldownSec: 660,
@@ -958,7 +924,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_istotit_witness_roster',
     title: 'Ведомость укрытых',
     variants: ['istotit'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 22,
     cooldownSec: 720,
@@ -974,7 +939,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_istotit_church_cache',
     title: 'Открытый церковный запас',
     variants: ['istotit'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 13,
     cooldownSec: 780,
@@ -990,7 +954,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_istotit_social_debt',
     title: 'Долг у батареи',
     variants: ['istotit'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 16,
     cooldownSec: 840,
@@ -1005,7 +968,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_istotit_golden_false_clear',
     title: 'Ложный церковный отбой',
     variants: ['istotit'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 10,
     cooldownSec: 840,
@@ -1021,7 +983,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_istotit_gilded_sborka',
     title: 'Позолоченная сборка',
     variants: ['istotit'],
-    // @ts-ignore
     floors: CIVIL_FLOORS,
     weight: 9,
     cooldownSec: 900,
@@ -1037,7 +998,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_veretar_white_sand',
     title: 'Белый песок',
     variants: ['veretar'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 18,
     cooldownSec: 720,
@@ -1053,7 +1013,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_veretar_overexposed_photo',
     title: 'Засвеченный кадр',
     variants: ['veretar'],
-    // @ts-ignore
     floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 8,
     cooldownSec: 840,
@@ -1069,7 +1028,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_veretar_area_door',
     title: 'Дверь с белой щелью',
     variants: ['veretar'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 15,
     cooldownSec: 540,
@@ -1084,7 +1042,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_veretar_shortcut_cost',
     title: 'Цена белого обхода',
     variants: ['veretar'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 10,
     cooldownSec: 900,
@@ -1099,7 +1056,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_veretar_pale_eye',
     title: 'Глаз у белого окна',
     variants: ['veretar'],
-    // @ts-ignore
     floors: ALL_FLOORS,
     weight: 9,
     cooldownSec: 900,
@@ -1115,7 +1071,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_veretar_outside_rumor',
     title: 'Свидетели области',
     variants: ['veretar'],
-    // @ts-ignore
     floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 12,
     cooldownSec: 660,
