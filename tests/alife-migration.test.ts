@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Faction, FloorLevel, Occupation, type GameState } from '../src/core/types';
+import { Faction, Occupation, type GameState } from '../src/core/types';
 import {
   createPrefilledAlifeState,
   getAlifeNpcRecordSnapshot,
@@ -28,7 +28,7 @@ import { makeTestPlayer } from './helpers';
 
 function minimalState(): GameState {
   const state = {
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     time: 0,
     tick: 0,
     clock: { hour: 8, minute: 0, totalMinutes: 8 * 60 },
@@ -36,7 +36,7 @@ function minimalState(): GameState {
     msgs: [],
     msgLog: [],
   } as unknown as GameState;
-  setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
+  setFloorRunState(state, { runSeed: 123, currentZ: 0 }.LIVING);
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }
@@ -86,7 +86,7 @@ test('normal cold migration gives traveler occupations a bounded priority lane',
   const plan: AlifePopulationPlan = {
     buckets: [{
       floorKey: 'design:ministry',
-      floor: FloorLevel.MINISTRY,
+      z: 30,
       targetCount: 64,
       reserved,
     }],

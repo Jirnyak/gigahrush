@@ -211,7 +211,7 @@ function publishSeroburmalineEvent(
 
 export function updateSeroburmalineExposure(world: World, player: Entity, state: GameState, dt: number): void {
   const rt = runtimeFor(state);
-  if (currentFloorRunEntry(state)!.themeTags.includes('maintenance') || !player.alive) {
+  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance') || !player.alive) {
     fadeRuntime(rt, dt);
     return;
   }

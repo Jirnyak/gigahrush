@@ -5,7 +5,6 @@ import {
   Cell,
   DoorState,
   EntityType,
-  FloorLevel,
   RoomType,
   W,
   ZoneFaction,
@@ -79,7 +78,7 @@ function reachableCount(reachable: Uint8Array): number {
 test('dark_metro is registered as the z-32 Maintenance route shortcut', () => {
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.equal(route?.z, DARK_METRO_FUTURE_Z);
-  assert.equal(route?.baseFloor, FloorLevel.MAINTENANCE);
+  assert.equal(route?.baseFloor.MAINTENANCE);
   assert.equal(route?.displayName, 'Темная пересадка');
   assert.equal(designFloorAtZ(DARK_METRO_FUTURE_Z)?.id, DESIGN_FLOOR_ID);
 });

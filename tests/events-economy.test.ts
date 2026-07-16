@@ -8,7 +8,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   Occupation,
   QuestType,
   RoomType,
@@ -329,7 +328,7 @@ test('AG82 idol branch completion returns the idol and publishes branch context'
   assert.ok(branch);
 
   const state = makeGameState({
-    currentZ: FloorLevel.MINISTRY,
+    currentZ: 30,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestEntity({ inventory: [{ defId: 'idol_chernobog', count: 1 }] });
@@ -378,8 +377,8 @@ test('economy state normalizes invalid resources and preserves valid saved value
   const normalized = normalizeEconomyState({
     priceVersion: 3,
     floors: {
-      [FloorLevel.LIVING]: {
-        floor: FloorLevel.LIVING,
+      ['living']: {
+        z: 60,
         resources: {
           drink_water: { stock: Number.NaN, target: 50, lastDelta: Number.POSITIVE_INFINITY },
         },
@@ -388,7 +387,7 @@ test('economy state normalizes invalid resources and preserves valid saved value
     },
   });
 
-  const floor = normalized.floors[FloorLevel.LIVING]!;
+  const floor = normalized.floors['living']!;
   const base = RESOURCES.find(r => r.id === 'drink_water')!.baseStock;
   const target = 50;
   assert.equal(normalized.priceVersion, 3);
@@ -401,9 +400,9 @@ test('economy state normalizes invalid resources and preserves valid saved value
 test('economy state restore drops invalid floor keys and caps route maps', () => {
   const normalized = normalizeEconomyState({
     floors: {
-      [FloorLevel.LIVING]: { floor: FloorLevel.LIVING, resources: {}, lastTickAt: 12 },
+      ['living']: { z: 60, resources: {}, lastTickAt: 12 },
       99999: { floor: 99999, resources: {}, lastTickAt: 99 },
-      bad: { floor: FloorLevel.HELL, resources: {}, lastTickAt: 77 },
+      bad: { z: -36, resources: {}, lastTickAt: 77 },
     },
     routes: Object.fromEntries(Array.from({ length: ECONOMY_ROUTE_STATE_CAP + 5 }, (_, i) => [
       `route_${i}`,
@@ -411,7 +410,7 @@ test('economy state restore drops invalid floor keys and caps route maps', () =>
     ])),
   });
 
-  assert.equal(normalized.floors[FloorLevel.LIVING]?.lastTickAt, 12);
+  assert.equal(normalized.floors['living']?.lastTickAt, 12);
   assert.equal((normalized.floors as Record<string, unknown>)['99999'], undefined);
   assert.equal((normalized.floors as Record<string, unknown>).bad, undefined);
   assert.equal(Object.keys(normalized.routes).length, ECONOMY_ROUTE_STATE_CAP);
@@ -422,13 +421,13 @@ test('economy state restore drops invalid floor keys and caps route maps', () =>
 });
 
 test('economy save normalization fills missing floors and drops unknown resources', () => {
-  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY });
+  const state = makeGameState({ currentZ: 14 });
 
   normalizeGameEconomy(state, {
     priceVersion: 9,
     floors: {
-      [FloorLevel.LIVING]: {
-        floor: FloorLevel.LIVING,
+      ['living']: {
+        z: 60,
         resources: {
           unknown_resource: { stock: 999, target: 999, lastDelta: 0 },
           food: { stock: 20, target: 140, lastDelta: -4 },
@@ -439,20 +438,20 @@ test('economy save normalization fills missing floors and drops unknown resource
   });
 
   const saved = economyForSave(state);
-  const living = saved.floors[FloorLevel.LIVING]!;
-  const current = saved.floors[FloorLevel.KVARTIRY]!;
+  const living = saved.floors['living']!;
+  const current = saved.floors['kvartiry']!;
   assert.equal(saved.priceVersion, 9);
   assert.ok(living, 'saved living economy should exist');
   assert.ok(current, 'current floor economy should be created lazily');
   assert.equal('unknown_resource' in living.resources, false);
   assert.equal(living.resources.food.stock, 20);
-  assert.equal(current.floor, FloorLevel.KVARTIRY);
+  assert.equal(current.floor.KVARTIRY);
 });
 
 test('economy resource spending clamps stock and affects item prices', () => {
-  const state = makeGameState({ time: 100, currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ time: 100, currentZ: 0 });
   const economy = ensureEconomyState(state);
-  economy.floors[FloorLevel.LIVING] = createEconomyFloorState(FloorLevel.LIVING);
+  economy.floors['living'] = createEconomyFloorState('living');
 
   assert.equal(changeResourceStock(state, 'drink_water', -119), true);
   assert.equal(getResourceScarcity(state, 'drink_water'), 2.7);
@@ -463,9 +462,9 @@ test('economy resource spending clamps stock and affects item prices', () => {
 });
 
 test('critical survival scarcity caps price pressure and contract rewards', () => {
-  const state = makeGameState({ time: 300, currentZ: FloorLevel.KVARTIRY });
+  const state = makeGameState({ time: 300, currentZ: 14 });
   const economy = ensureEconomyState(state);
-  economy.floors[FloorLevel.KVARTIRY] = createEconomyFloorState(FloorLevel.KVARTIRY);
+  economy.floors['kvartiry'] = createEconomyFloorState('kvartiry');
 
   assert.equal(changeResourceStock(state, 'drink_water', -119), true);
   const quote = getEconomyQuote(state, 'water', { tariffMultiplier: 6, reason: 'test_tariff_spike' });
@@ -478,16 +477,16 @@ test('critical survival scarcity caps price pressure and contract rewards', () =
     state,
     'drink_water',
     100,
-    FloorLevel.KVARTIRY,
+    'kvartiry',
     3,
     { level: 1, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 99, psi: 0, maxPsi: 0 },
   ), 280);
 });
 
 test('economy price cache invalidates when stock changes and debug summary stays bounded', () => {
-  const state = makeGameState({ time: 200, currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ time: 200, currentZ: 0 });
   const economy = ensureEconomyState(state);
-  economy.floors[FloorLevel.LIVING] = createEconomyFloorState(FloorLevel.LIVING);
+  economy.floors['living'] = createEconomyFloorState('living');
 
   const baseWaterPrice = getAdjustedItemPrice(state, 'water');
   assert.equal(changeResourceStock(state, 'drink_water', -60), true);
@@ -520,7 +519,7 @@ test('samosbor director registry ignores duplicate beat ids', () => {
 test('samosbor director cadence, beat cooldowns, and events stay bounded', () => {
   const state = makeGameState({
     time: 100,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     samosborActive: true,
     samosborCount: 2,
     worldEvents: createWorldEventState(),
@@ -568,7 +567,7 @@ test('samosbor director cadence, beat cooldowns, and events stay bounded', () =>
 test('active maronary door malfunction ignores protected hermetic doors', () => {
   const state = makeGameState({
     time: 100,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     samosborActive: true,
     samosborCount: 3,
     worldEvents: createWorldEventState(),
@@ -629,7 +628,7 @@ test('witnessed container theft marks audit, memory, event context, and faction 
   initFactionRelations();
   const state = makeGameState({
     time: 345,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const world = new World();
@@ -682,7 +681,7 @@ test('unseen container theft stays private until a nearby owner faction audit', 
   initFactionRelations();
   const state = makeGameState({
     time: 10,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const world = new World();
@@ -753,7 +752,7 @@ test('container audit tick surfaces unseen owner theft without reopening the box
   initFactionRelations();
   const state = makeGameState({
     time: 20,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const world = new World();
@@ -816,7 +815,7 @@ test('saved containers outside regenerated topology are dropped on restore', () 
     name: 'Тестовый склад',
   });
 
-  const restored = restoreValidContainers(world, FloorLevel.LIVING, [
+  const restored = restoreValidContainers(world.LIVING, [
     {
       ...makeTestContainer({ id: 11, x: 11, y: 11, roomId: 0, zoneId: 0, inventory: [{ defId: 'water', count: 2 }] }),
       access: 'invalid',
@@ -834,12 +833,12 @@ test('saved containers outside regenerated topology are dropped on restore', () 
 
 test('production state cannot write output into another floor container id', () => {
   const state = makeGameState({
-    currentZ: FloorLevel.KVARTIRY,
+    currentZ: 14,
     time: 1000,
     worldEvents: createWorldEventState(),
   });
   (state as typeof state & { production: ProductionState[] }).production = [{
-    floor: FloorLevel.LIVING,
+    z: 60,
     roomId: 7,
     factoryId: 'metal_shop',
     recipeId: 'cut_pipe',
@@ -857,7 +856,7 @@ test('production state cannot write output into another floor container id', () 
   });
   const box = makeTestContainer({
     id: 1,
-    floor: FloorLevel.KVARTIRY,
+    z: 100,
     roomId: 7,
     zoneId: 0,
     inventory: [],
@@ -872,12 +871,12 @@ test('production state cannot write output into another floor container id', () 
 
 test('production room registration replaces stale current-floor output containers', () => {
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     time: 1000,
     worldEvents: createWorldEventState(),
   });
   (state as typeof state & { production: ProductionState[] }).production = [{
-    floor: FloorLevel.LIVING,
+    z: 60,
     roomId: 0,
     factoryId: 'metal_shop',
     recipeId: 'cut_pipe',
@@ -905,7 +904,7 @@ test('production room registration replaces stale current-floor output container
 
 test('nearby production output marks container and reaches world log', () => {
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     time: 1000,
     worldEvents: createWorldEventState(),
   });
@@ -929,7 +928,7 @@ test('nearby production output marks container and reaches world log', () => {
 
 test('slime furnace consumes a sample and alkali before producing cleanup output', () => {
   const state = makeGameState({
-    currentZ: FloorLevel.MAINTENANCE,
+    currentZ: -26,
     time: 1000,
     worldEvents: createWorldEventState(),
   });
@@ -945,7 +944,7 @@ test('slime furnace consumes a sample and alkali before producing cleanup output
     id: 1,
     x: 12,
     y: 12,
-    floor: FloorLevel.MAINTENANCE,
+    z: 140,
     roomId: 0,
     zoneId: 0,
     inventory: [{ defId: 'slime_sample_brown', count: 1 }, { defId: 'alkali_powder', count: 1 }],
@@ -971,7 +970,7 @@ test('slime furnace consumes a sample and alkali before producing cleanup output
 
 test('illegal ammo smelter consumes contested metal input before producing 9mm', () => {
   const state = makeGameState({
-    currentZ: FloorLevel.KVARTIRY,
+    currentZ: 14,
     time: 1000,
     worldEvents: createWorldEventState(),
   });
@@ -987,7 +986,7 @@ test('illegal ammo smelter consumes contested metal input before producing 9mm',
     id: 1,
     x: 12,
     y: 12,
-    floor: FloorLevel.KVARTIRY,
+    z: 100,
     roomId: 0,
     zoneId: 0,
     kind: ContainerKind.WEAPON_CRATE,

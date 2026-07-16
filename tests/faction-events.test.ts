@@ -5,7 +5,6 @@ import {
   Cell,
   EntityType,
   Faction,
-  FloorLevel,
   Occupation,
   ZoneFaction,
   type Entity,
@@ -138,7 +137,7 @@ test('cult procession exposes follow, report, disguise, avoid and violent disrup
   resetFactionEventsForTests();
   initFactionRelations();
   const world = cultWorld();
-  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -36, worldEvents: createWorldEventState() });
   const actor = player();
   const entities: Entity[] = [actor];
   const nextId = { v: 10 };
@@ -203,7 +202,7 @@ test('active cult procession publishes aftermath and clears when samosbor cycle 
   resetFactionEventsForTests();
   initFactionRelations();
   const world = cultWorld();
-  const state = makeGameState({ currentZ: FloorLevel.HELL, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -36, worldEvents: createWorldEventState() });
   const actor = player();
   const entities: Entity[] = [actor];
   const nextId = { v: 50 };

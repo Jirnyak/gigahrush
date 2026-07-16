@@ -1,5 +1,6 @@
 import { RoomType, Tex } from '../core/types';
 import { hashSeed } from '../core/rand';
+import { DESIGN_FLOOR_ROUTES } from './design_floors';
 import type { FloorThemeProfile } from './floor_theme_profiles';
 
 export type VisualSurfaceFloorPattern = 'plain' | 'checker' | 'smallTile' | 'lino' | 'wetConcrete' | 'metalGrid';
@@ -175,12 +176,12 @@ export const VISUAL_SURFACE_PROFILES: readonly VisualSurfaceProfile[] = [
 
 export const VISUAL_SURFACE_PROFILE_ROWS: readonly VisualSurfaceProfileRow[] = [
   { id: 'global_plain_concrete', profileId: 'plain_concrete', priority: 0 },
-  { id: 'story_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [100] },
-  { id: 'story_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [60] },
+  { id: 'story_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [0] },
+  { id: 'story_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [14] },
   { id: 'story_ministry_checker', profileId: 'ministry_checker', priority: 22, baseFloors: [30] },
-  { id: 'story_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [140] },
-  { id: 'story_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [180] },
-  { id: 'story_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [200] },
+  { id: 'story_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [-26] },
+  { id: 'story_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [-36] },
+  { id: 'story_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [-50] },
 
   { id: 'room_bathroom_tile', profileId: 'residential_tile', priority: 40, roomTypes: [RoomType.BATHROOM], blockedTags: ['meat', 'void'] },
   { id: 'room_kitchen_tile', profileId: 'residential_tile', priority: 38, roomTypes: [RoomType.KITCHEN], blockedTags: ['meat', 'void'] },
@@ -222,8 +223,8 @@ function clamp01(value: number): number {
 }
 
 function floorTag(z: number): string {
-  // @ts-ignore
-  return (z[z] ?? 'floor').toLowerCase();
+  const floor = DESIGN_FLOOR_ROUTES.find(r => r.z === z);
+  return (floor ? floor.id : 'floor').toLowerCase();
 }
 
 function themeTags(theme: FloorThemeProfile): Set<string> {

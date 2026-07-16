@@ -3,7 +3,6 @@ import * as assert from 'node:assert/strict';
 
 import {
   EntityType,
-  FloorLevel,
   MonsterKind,
   QuestType,
   Tex,
@@ -94,7 +93,7 @@ test('Pustoy Sosed room gives clues before NELYUD close reveal', () => {
 
 test('Pustoy Sosed quest completion publishes compact outcome event data', () => {
   initFactionRelations();
-  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY });
+  const state = makeGameState({ currentZ: 14 });
 
   publishEvent(state, {
     type: 'quest_completed',
@@ -106,7 +105,7 @@ test('Pustoy Sosed quest completion publishes compact outcome event data', () =>
   });
 
   const outcome = getRecentEvents(state, { type: 'faction_relation_changed', tags: ['pustoy_sosed_outcome'], limit: 1 })[0];
-  assert.equal(outcome?.floor, FloorLevel.KVARTIRY);
+  assert.equal(outcome?.floor.KVARTIRY);
   assert.equal(outcome?.data?.outcome, 'exposed');
   assert.equal(outcome?.tags.includes('false_neighbor'), true);
   assert.equal(outcome?.tags.includes('infected'), true);

@@ -7,7 +7,6 @@ import {
   Cell,
   EntityType,
   Faction,
-  FloorLevel,
   Occupation,
   type Entity,
 } from '../src/core/types';
@@ -69,12 +68,12 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   initFactionRelations();
   const state = makeGameState({
     time: 100,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     samosborActive: true,
     samosborCount: 7,
     worldEvents: createWorldEventState(),
   });
-  setFloorRunState(state, { runSeed: 7, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
+  state.floorRun!.runSeed = 7;
   setAlifeState(state, { seed: 223344, total: 100_000 }, { populationPlan: 'empty_packages' });
   const world = patrolWorld();
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });
@@ -103,12 +102,12 @@ test('samosbor extra patrol fails instead of spawning when no A-Life identities 
   initFactionRelations();
   const state = makeGameState({
     time: 100,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     samosborActive: true,
     samosborCount: 8,
     worldEvents: createWorldEventState(),
   });
-  setFloorRunState(state, { runSeed: 8, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
+  state.floorRun!.runSeed = 8;
   setAlifeState(state, { seed: 334455, total: ALIFE_POPULATION_CAPACITY }, { populationPlan: 'empty_packages' });
   debugMarkAllAlifeNpcRecordsTouched(state);
   const world = patrolWorld();

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, FloorLevel, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, MonsterKind, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { DEF, generateSprite, generateNightmareSprite } from '../src/entities/nightmare';
 import { getMonsterEcology } from '../src/data/monster_ecology';
@@ -78,7 +78,6 @@ test('nightmare definition, ecology, and sprite generation', () => {
 
   assert.equal(DEF.kind, MonsterKind.NIGHTMARE);
   assert.equal(DEF.hp, 260);
-  assert.deepEqual(DEF.floors, [FloorLevel.MINISTRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE, FloorLevel.HELL, FloorLevel.VOID]);
   assert.equal(ecology?.rare, true);
 
   const sprite1 = generateNightmareSprite(123);

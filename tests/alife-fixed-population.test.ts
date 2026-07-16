@@ -5,7 +5,6 @@ import {
   AIGoal,
   EntityType,
   Faction,
-  FloorLevel,
   Occupation,
   type Entity,
   type GameState,
@@ -30,8 +29,8 @@ function restoreGlobalProperty(name: 'navigator' | 'performance' | 'window', des
 }
 
 function minimalState(): GameState {
-  const state = { currentZ: FloorLevel.LIVING } as GameState;
-  setFloorRunState(state, { runSeed: 1 }, FloorLevel.LIVING);
+  const state = { currentZ: 0 } as GameState;
+  setFloorRunState(state, { runSeed: 1 }.LIVING);
   return state;
 }
 

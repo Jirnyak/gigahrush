@@ -7,7 +7,6 @@ import {
   Cell,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   Occupation,
   QuestType,
@@ -35,11 +34,11 @@ function holdoutStepIndex(): number {
 
 function makeHellState(overrides: Partial<GameState> = {}): GameState {
   const state = makeGameState({
-    currentZ: FloorLevel.HELL,
+    currentZ: -36,
     worldEvents: createWorldEventState(),
     ...overrides,
   });
-  setFloorRunState(state, { runSeed: 5, currentZ: -36, specs: {}, visited: {} }, FloorLevel.HELL);
+  state.floorRun!.runSeed = 5;
   setAlifeState(state, { seed: 12345, total: 100_000 });
   return state;
 }

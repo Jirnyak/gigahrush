@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { FloorLevel, MonsterKind, type GameState } from '../src/core/types';
+import { MonsterKind, type GameState } from '../src/core/types';
 import { createWorldEventState, getRecentEvents, publishEvent } from '../src/systems/events';
 import {
   buyShares,
@@ -299,7 +299,7 @@ test('industrial monster kill and slime science events move matching corporation
 
 function makeMarketState(accountRubles: number): MarketTestState {
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   }) as MarketTestState;
   state.banking = { accountRubles };

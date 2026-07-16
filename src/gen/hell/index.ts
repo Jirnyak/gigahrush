@@ -11,7 +11,7 @@ import { pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { basePopulationTotalAtDefaultSoftLimit, HELL_POPULATION_PROFILE } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
-import { territorySharesForStoryFloor } from '../../data/floor_territory';
+import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { sampleNaturalPopulationCells, type NaturalPopulationProfile, type PlacementFieldAnchor } from '../population_placement';
 import { MONSTERS } from '../../entities/monster';
@@ -59,7 +59,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 180) + 2;
   initializeCellTerritory(world, {
     seed: generationSeed,
-    targetShares: territorySharesForStoryFloor(180),
+    targetShares: territorySharesForDesignFloor('hell'),
   });
 
   for (let i = 0; i < W * W; i++) {

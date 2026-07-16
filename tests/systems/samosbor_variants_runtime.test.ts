@@ -1,6 +1,6 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { FloorLevel } from '../../src/core/types.js';
+import { number } from '../../src/core/types.js';
 import {
   chooseSamosborVariant,
   getActiveSamosborVariant,
@@ -53,7 +53,7 @@ afterEach(() => {
 test('chooseSamosborVariant selects variant based on random weight roll (low roll)', () => {
   mockRandomValue = 0.0; // Should pick the very first valid variant
 
-  const variant = chooseSamosborVariant(FloorLevel.LIVING);
+  const variant = chooseSamosborVariant('living');
   const active = getActiveSamosborVariant();
 
   assert.ok(variant);
@@ -63,7 +63,7 @@ test('chooseSamosborVariant selects variant based on random weight roll (low rol
   // With roll 0, we expect the first variant that has weight > 0 on LIVING
   let firstValidId = null;
   for (const def of SAMOSBOR_VARIANTS) {
-    if (getSamosborVariantWeight(def.id, FloorLevel.LIVING) > 0) {
+    if (getSamosborVariantWeight(def.id, 0) > 0) {
       firstValidId = def.id;
       break;
     }
@@ -76,17 +76,17 @@ test('chooseSamosborVariant selects variant based on random weight roll (low rol
 test('chooseSamosborVariant selects variant based on random weight roll (high roll)', () => {
   mockRandomValue = 0.9999999; // Should pick the last valid variant
 
-  const variant = chooseSamosborVariant(FloorLevel.LIVING);
+  const variant = chooseSamosborVariant('living');
 
   let total = 0;
   for (const def of SAMOSBOR_VARIANTS) {
-    total += getSamosborVariantWeight(def.id, FloorLevel.LIVING);
+    total += getSamosborVariantWeight(def.id, 0);
   }
 
   let roll = mockRandomValue * total;
   let expectedId = null;
   for (const def of SAMOSBOR_VARIANTS) {
-    roll -= getSamosborVariantWeight(def.id, FloorLevel.LIVING);
+    roll -= getSamosborVariantWeight(def.id, 0);
     if (roll <= 0) {
       expectedId = def.id;
       break;
@@ -132,9 +132,8 @@ test('forceNextSamosborVariant falls back to random if forced variant is not val
 
   for (const def of SAMOSBOR_VARIANTS) {
     // Find a floor that is NOT in def.floors
-    const allFloors = [FloorLevel.LIVING, FloorLevel.HELL, FloorLevel.VOID, FloorLevel.KVARTIRY, FloorLevel.MAINTENANCE, FloorLevel.MINISTRY];
+    const allFloors = [0, -36, -50, 14, -26, 30];
     for (const floor of allFloors) {
-      if (!def.floors.includes(floor)) {
         restrictedDef = def;
         invalidFloor = floor;
         break;
@@ -166,7 +165,7 @@ test('forceNextSamosborVariant returns false for unknown variants', () => {
 
 test('clearActiveSamosborVariant clears the active variant', () => {
   mockRandomValue = 0.5;
-  chooseSamosborVariant(FloorLevel.LIVING);
+  chooseSamosborVariant('living');
 
   assert.ok(getActiveSamosborVariant());
 

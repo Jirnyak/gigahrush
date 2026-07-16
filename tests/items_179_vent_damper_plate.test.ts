@@ -5,7 +5,6 @@ import {
   ContainerKind,
   EntityType,
   Faction,
-  FloorLevel,
   ItemType,
   MonsterKind,
   RoomType,
@@ -68,7 +67,7 @@ test('vent damper plate can be spent to seal a nearby swarm vent source', () => 
   const player = makeTestPlayer({ id: 1, x: 10, y: 10 });
   const source = swarmSource(2, 10.4, 10.2);
   const entities = [player, source];
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 179 });
+  const state = makeGameState({ currentZ: -26, time: 179 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter заклеить');

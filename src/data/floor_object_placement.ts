@@ -206,8 +206,7 @@ function publicFurnitureRules(prefix: string, min: number, max: number): readonl
 }
 
 function routeTags(route: DesignFloorRouteDef): readonly string[] {
-  // @ts-ignore
-  return [route.id, `z_${route.z}`, z[route.themeTags]?.toLowerCase() ?? 'route'];
+  return [route.id, `z_${route.z}`, route.themeTags?.[0] ?? 'route'];
 }
 
 const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<number, Partial<FloorObjectPlacementProfile>> = {

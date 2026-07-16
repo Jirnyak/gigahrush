@@ -66,7 +66,7 @@ import {
   currentFloorRunEntry,
   floorRunEntryForDesignFloor,
 } from './procedural_floors';
-import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyForStory } from './floor_keys';
+import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural  } from './floor_keys';
 import { generateNpcLoadout, generateMerchantStock } from './procedural_loot';
 import { ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
@@ -475,7 +475,7 @@ function internAlifeFloorKey(alife: AlifeState, floorKeyInput: string): number {
 }
 
 function recordFloorKey(alife: AlifeState, record: AlifeNpcRecord): string {
-  return alife.floorKeys[alife.columns.floorKeyIndex[recordColumnIndex(record)]] ?? floorKeyForStory(recordFloor(alife, record));
+  return alife.floorKeys[alife.columns.floorKeyIndex[recordColumnIndex(record)]] ?? floorKeyForDesign(String(recordFloor(alife, record)));
 }
 
 function setRecordFloorKey(alife: AlifeState, record: AlifeNpcRecord, floorKey: string): void {
@@ -1667,7 +1667,7 @@ function attachRecordToFloor(alife: AlifeState, recordIndex: number, floorKey: s
 
 function resolvedFloorForAlifeKey(state: GameState, floorKey: string): number | undefined {
   for (const floor of [30, 60, 100, 140, 180, 200]) {
-    if (floorKeyForStory(floor) === floorKey) return floor;
+    if (floorKeyForDesign(String(floor)) === floorKey) return floor;
   }
   const design = DESIGN_FLOOR_ROUTES.find(def => floorKeyForDesign(def.id) === floorKey);
   if (design) return 100;

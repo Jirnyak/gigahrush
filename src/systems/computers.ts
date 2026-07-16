@@ -15,7 +15,7 @@ import {
   type CraftRecipeLearnResult,
 } from './crafting';
 import { publishEvent } from './events';
-import { floorKeyForStory } from './floor_keys';
+import { floorKeyForDesign  } from './floor_keys';
 import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
 
 export interface ComputerTerminal {
@@ -74,7 +74,7 @@ function currentFloorKey(state: GameState): string {
   try {
     return floorRunEntryFloorKey(currentFloorRunEntry(state));
   } catch {
-    return floorKeyForStory(state.currentZ);
+    return floorKeyForDesign(String(state.currentZ));
   }
 }
 

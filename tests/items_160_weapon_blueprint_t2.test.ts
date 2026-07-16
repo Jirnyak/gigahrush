@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { ContainerKind, FloorLevel, ItemType, RoomType } from '../src/core/types';
+import { ContainerKind, ItemType, RoomType } from '../src/core/types';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { DOCUMENT_ACCESS_MARKET_VALUES } from '../src/data/documents_access';
 import { FACTORY_BY_ID, productionRouteGoals } from '../src/data/factories';
@@ -74,7 +74,7 @@ test('weapon blueprint t2 is spent as the armory unlock for a stat-backed weapon
 
 test('weapon blueprint t2 can be sold instead of saved for armory production', () => {
   const player = makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }], money: 0 });
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 160 });
+  const state = makeGameState({ currentZ: 0, time: 160 });
 
   useItem(player, 0, state.msgs, state.time, state);
 

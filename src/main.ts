@@ -1,3 +1,4 @@
+import { zForBaseFloor } from './data/design_floors';
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
 import './index.css';
 import './systems/demos_runtime';
@@ -566,7 +567,6 @@ import {
   type FloorAnomalyId,
   type ProceduralFloorSpec,
 } from './data/procedural_floors';
-import { zForBaseFloor } from './data/floor_keys';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './data/design_floors';
 import {
   nextTitleLanguageId,

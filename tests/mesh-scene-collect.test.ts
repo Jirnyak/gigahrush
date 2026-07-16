@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Cell, Feature, FloorLevel, RoomType, Tex, W } from '../src/core/types';
+import { Cell, Feature, RoomType, Tex, W } from '../src/core/types';
 import { World, setVisualSlot as setWorldVisualSlot } from '../src/core/world';
 import { fillVisualSlotsForRoomDecor } from '../src/gen/visual_cell_slots';
 import type { CameraView } from '../src/systems/camera';

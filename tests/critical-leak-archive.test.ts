@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, FloorLevel, LiftDirection, RoomType, W, ZoneFaction } from '../src/core/types';
+import { Cell, EntityType, LiftDirection, RoomType, W, ZoneFaction } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';

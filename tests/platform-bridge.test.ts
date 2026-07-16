@@ -27,7 +27,7 @@ import {
 } from '../src/systems/platform_bridge';
 import { SAVE_SHAPE_VERSION } from '../src/systems/save_runtime';
 import { createPortalCompactSavePayload, summarizeSavePayload, type SavePayload } from '../src/systems/save_payload';
-import { FloorLevel, QuestType } from '../src/core/types';
+import { QuestType } from '../src/core/types';
 import { designFloorAmbientLight, designFloorProfile, designFloorPseudoliftChance } from '../src/data/design_floor_profiles';
 
 test('platform bridge detects explicit portal query safely', () => {
@@ -109,7 +109,7 @@ test('portal compact save keeps a current-shape resume profile without heavy flo
         targetCount: 1,
       })),
       nextQuestId: 91,
-      currentZ: FloorLevel.LIVING,
+      currentZ: 0,
       floorRun: {
         runSeed: 123,
         currentZ: -4,
@@ -135,7 +135,7 @@ test('portal compact save keeps a current-shape resume profile without heavy flo
       banking: { accountRubles: 50, recentLedger: Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })) },
       stockMarket: { portfolio: {}, quotes: {}, recentTrades: Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })) },
       production: Array.from({ length: 40 }, (_, i) => ({
-        floor: FloorLevel.LIVING,
+        z: 60,
         roomId: i,
         factoryId: 'unknown',
         recipeId: 'unknown',
@@ -147,7 +147,7 @@ test('portal compact save keeps a current-shape resume profile without heavy flo
         id: i + 1,
         x: i,
         y: i,
-        floor: FloorLevel.LIVING,
+        z: 60,
         roomId: 1,
         zoneId: 1,
         kind: 0,

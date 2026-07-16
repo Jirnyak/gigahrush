@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   Occupation,
   RoomType,
@@ -98,7 +97,7 @@ function floorCellCount(gen: Floor69Generation): number {
 test('floor_69 is registered as an authored Maintenance-band route', () => {
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.equal(route?.z, DESIGN_FLOOR_Z);
-  assert.equal(route?.baseFloor, FloorLevel.MAINTENANCE);
+  assert.equal(route?.baseFloor.MAINTENANCE);
   assert.equal(route?.displayName, 'Этаж 69');
   assert.equal(designFloorAtZ(DESIGN_FLOOR_Z)?.id, DESIGN_FLOOR_ID);
 });

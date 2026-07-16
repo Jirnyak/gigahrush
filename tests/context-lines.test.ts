@@ -4,7 +4,6 @@ import * as assert from 'node:assert/strict';
 import {
   EntityType,
   Faction,
-  FloorLevel,
   MonsterKind,
   Occupation,
   type Entity,
@@ -46,13 +45,13 @@ test('screen signal rumor pools point to gameplay surfaces', () => {
 test('runtime event rumors keep floor zone and room context in leads', () => {
   const now = 9_500;
   const npc = { ...makeNpc(), id: 9301 };
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: now });
+  const state = makeGameState({ currentZ: -26, time: now });
   const snapshot = buildContextSnapshot(npc, { state, player: makePlayer(), time: now });
   assert.equal(recordRumorEvent({
     id: 9_100_001,
     type: 'room_produced_items',
     time: now - 5,
-    floor: FloorLevel.MAINTENANCE,
+    z: 140,
     zoneId: 12,
     roomId: 44,
     severity: 4,
@@ -73,7 +72,7 @@ test('runtime event rumors keep floor zone and room context in leads', () => {
   assert.match(line, /концентрат/i);
 
   const lead = getRecentRumorLead(now);
-  assert.equal(lead?.floor, FloorLevel.MAINTENANCE);
+  assert.equal(lead?.floor.MAINTENANCE);
   assert.equal(lead?.roomName, 'Брикетный цех: линия концентрата');
 });
 
@@ -99,7 +98,7 @@ function revealHasGameplaySurface(reveal: RumorReveal): boolean {
 function snapshotFor(type: WorldEvent['type'], overrides: Partial<WorldEvent> = {}) {
   const state = makeGameState({
     time: 120,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const buffer = state.worldEvents?.recentEvents;
@@ -111,7 +110,7 @@ function snapshotFor(type: WorldEvent['type'], overrides: Partial<WorldEvent> = 
     day: 0,
     hour: 8,
     minute: 0,
-    floor: FloorLevel.LIVING,
+    z: 60,
     actorId: undefined,
     actorFaction: undefined,
     monsterKind: undefined,

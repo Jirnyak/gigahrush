@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EntityType, Faction, FloorLevel, Occupation } from '../src/core/types';
+import { EntityType, Faction, Occupation } from '../src/core/types';
 import { registerNpcPackage } from '../src/data/npc_packages';
 import {
   createPrefilledAlifeState,
@@ -29,18 +29,18 @@ import {
 } from '../src/data/demos_social';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { createWorldEventState, publishEvent } from '../src/systems/events';
-import { floorKeyForStory } from '../src/systems/floor_keys';
+import { floorKeyForDesign } from '../src/systems/floor_keys';
 import { makeGameState, makeTestNpc } from './helpers';
 
 function makeProfileState() {
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   createPrefilledAlifeState(state, 2468, 4, {
     buckets: [{
-      floorKey: floorKeyForStory(FloorLevel.LIVING),
-      floor: FloorLevel.LIVING,
+      floorKey: floorKeyForDesign('living'),
+      z: 60,
       targetCount: 4,
       reserved: [
         {
@@ -154,7 +154,7 @@ test('Demos profile details expose package bio capital and perk tags', () => {
     },
     demographics: { sex: 'male', age: 44 },
     affiliation: { faction: Faction.CITIZEN, occupation: Occupation.SECRETARY },
-    placement: { homeFloorKey: floorKeyForStory(FloorLevel.LIVING), presence: 'population' },
+    placement: { homeFloorKey: floorKeyForDesign('living'), presence: 'population' },
     rpg: {
       level: 6,
       perks: [{ id: 'tool_hands', tags: ['paper_memory'] }],
@@ -173,11 +173,11 @@ test('Demos profile details expose package bio capital and perk tags', () => {
     speech: {},
     tags: ['package_profile'],
   });
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
   createPrefilledAlifeState(state, 9753, 2, {
     buckets: [{
-      floorKey: floorKeyForStory(FloorLevel.LIVING),
-      floor: FloorLevel.LIVING,
+      floorKey: floorKeyForDesign('living'),
+      z: 60,
       targetCount: 2,
       reserved: [{
         id: 'npc:demos_profile_pack',
@@ -292,7 +292,7 @@ test('Demos face-to-face helper rejects NPCs without stable A-Life identity', ()
 });
 
 test('Demos one-profile view uses compact trait cache instead of profile-list allocation', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
   setAlifeState(state, { seed: 13579, total: 100_000 }, { populationPlan: 'empty_packages' });
 
   const details = getDemosProfileDetails(state, 1);

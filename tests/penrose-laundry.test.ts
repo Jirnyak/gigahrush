@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -104,8 +103,8 @@ test('penrose_laundry is registered as a routed Living-band design floor', () =>
 });
 
 test('normal lift route reaches penrose_laundry before black_market_88', () => {
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
-  setFloorRunState(state, { runSeed: 81081, currentZ: -7, specs: {}, visited: {} }, FloorLevel.MAINTENANCE);
+  const state = makeGameState({ currentZ: -26 });
+  setFloorRunState(state, { runSeed: 81081, currentZ: -7, specs: {}, visited: {} }.MAINTENANCE);
 
   const laundry = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(laundry?.z, PENROSE_LAUNDRY_Z);

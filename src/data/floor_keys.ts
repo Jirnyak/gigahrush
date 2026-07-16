@@ -16,19 +16,6 @@ import {
 
 export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown';
 
-export const STORY_KEY_IDS: Record<number, string> = {
-  [30]: 'ministry',
-  [60]: 'kvartiry',
-  [100]: 'living',
-  [140]: 'maintenance',
-  [180]: 'hell',
-  [200]: 'void',
-};
-
-export function zForBaseFloor(z: number): number {
-  return designFloorById(STORY_KEY_IDS[z])?.z ?? 0;
-}
-
 
 
 export interface FloorKeyResolveContext {
@@ -42,9 +29,6 @@ export function cleanFloorKey(input: unknown): string {
     : '';
 }
 
-export function floorKeyForStory(z: number): string {
-  return `design:${STORY_KEY_IDS[z] ?? String(z)}`;
-}
 
 export function floorKeyForDesign(id: string): string {
   return `design:${cleanFloorKey(id)}`;

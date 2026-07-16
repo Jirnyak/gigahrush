@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { EntityType, FloorLevel, type GameState } from '../src/core/types';
+import { EntityType, type GameState } from '../src/core/types';
 import {
   floorRunZAllowsNpcs,
   makeProceduralFloorSpec,
@@ -26,7 +26,7 @@ function socialProceduralSpec(): ProceduralFloorSpec {
     key: 'z1',
     danger: 2,
     geometryId: 'communal_knots',
-    baseFloor: FloorLevel.KVARTIRY,
+    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId: 'none',
     title: 'тестовый коммунальный процедурный этаж',
@@ -106,8 +106,8 @@ testGenerationMatrix('procedural route templates are suppressed when the active 
 });
 
 testGenerationMatrix('floor 69 adult sprite templates survive A-Life materialization', () => {
-  const state = { currentZ: FloorLevel.MAINTENANCE } as GameState;
-  setFloorRunState(state, { runSeed: 17, currentZ: -4 }, FloorLevel.MAINTENANCE);
+  const state = { currentZ: -26 } as GameState;
+  setFloorRunState(state, { runSeed: 17, currentZ: -4 });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   const generated = generateDesignFloor('floor_69');
   const templateSprites = generated.entities.filter(entity =>

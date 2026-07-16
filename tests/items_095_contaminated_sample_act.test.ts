@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { FloorLevel, ItemType, RoomType } from '../src/core/types';
+import { ItemType, RoomType } from '../src/core/types';
 import { ITEM_TAGS, ITEMS, getStack } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { generateSlimeNiiDesignFloor } from '../src/gen/design_floors/slime_nii';
@@ -46,7 +46,7 @@ test('contaminated sample act is reachable beside failed handling in slime NII',
 
 test('contaminated sample act can be sold as audit-risk sample evidence', () => {
   const player = makeTestPlayer();
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 95 });
+  const state = makeGameState({ currentZ: 0, time: 95 });
 
   assert.equal(addItem(player, ACT_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');

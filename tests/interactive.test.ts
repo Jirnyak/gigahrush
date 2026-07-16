@@ -4,7 +4,6 @@ import * as assert from 'node:assert/strict';
 import {
   ContainerKind,
   Feature,
-  FloorLevel,
 } from '../src/core/types';
 import { World } from '../src/core/world';
 import { placeInteractiveAt } from '../src/gen/interactive_placement';
@@ -133,7 +132,7 @@ test('containers are discoverable through the interactive adapter', () => {
   const world = new World();
   addTestRoom(world);
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: 11.5, y: 12 });
@@ -143,7 +142,7 @@ test('containers are discoverable through the interactive adapter', () => {
     y: 12,
     roomId: 0,
     zoneId: 0,
-    floor: FloorLevel.LIVING,
+    z: 60,
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Шкаф проверки',
     capacitySlots: 3,
@@ -209,7 +208,7 @@ test('bare decorative features become lazy loot containers on interaction', () =
   world.features[idx] = Feature.SHELF;
 
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: fx - 0.5, y: fy });
@@ -251,7 +250,7 @@ test('features that already carry an interaction do not get a loot container', (
   assert.ok(placeInteractiveAt(world, room.x + 2, room.y + 2, 'workbench_basic'));
 
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: room.x + 1.5, y: room.y + 2 });

@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FloorLevel, MonsterKind, QuestType } from '../src/core/types';
+import { MonsterKind, QuestType } from '../src/core/types';
 import { CONTRACTS, contractToQuest, questTargetRoute } from '../src/data/contracts';
 import { isQuestTargetOnCurrentFloor } from '../src/systems/contracts';
 import { notifyKill, notifyNpcKill } from '../src/systems/quests';
 import { makeGameState } from './helpers';
 
 test('generic kill quests count matching monsters on any current floor', () => {
-  const state = makeGameState({ currentZ: FloorLevel.KVARTIRY });
+  const state = makeGameState({ currentZ: 14 });
   state.quests = [{
     id: 1,
     type: QuestType.KILL,
@@ -34,7 +34,7 @@ test('floor-targeted kill quests do not count matching monsters on a wrong floor
     giverId: 11,
     giverName: 'Ликвидатор',
     desc: 'Убей глаз в коллекторах.',
-    targetFloor: FloorLevel.MAINTENANCE,
+    targetFloorZ: -26,
     targetMonsterKind: MonsterKind.EYE,
     killCount: 0,
     killNeeded: 1,
@@ -54,7 +54,7 @@ test('floor-targeted kill quests do not count matching monsters on a wrong floor
 });
 
 test('plot NPC kill quests do not count ordinary monster kills', () => {
-  const state = makeGameState({ currentZ: FloorLevel.MINISTRY });
+  const state = makeGameState({ currentZ: 30 });
   state.quests = [{
     id: 4,
     type: QuestType.KILL,
@@ -80,10 +80,10 @@ test('risk-only contract route metadata does not bypass target floor checks', ()
   const def = CONTRACTS.find(contract => contract.id === 'compact_ministry_pechateed_kill');
   assert.ok(def);
   const quest = contractToQuest(def, 3);
-  assert.equal(quest.targetFloor, FloorLevel.MINISTRY);
+  assert.equal(quest.targetFloorZ, 30);
   assert.ok(questTargetRoute(quest), 'contract keeps route metadata for HUD/risk');
 
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
 
   assert.equal(isQuestTargetOnCurrentFloor(quest, state), false);
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, FloorLevel, LiftDirection, MonsterKind, RoomType, W, ZoneFaction, type Room, type TerritoryOwner } from '../src/core/types';
+import { Cell, EntityType, LiftDirection, MonsterKind, RoomType, W, ZoneFaction, type Room, type TerritoryOwner } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -81,7 +81,7 @@ test('cantor_pustoty is registered as a late Void route floor', () => {
   const route = designFloorById(CANTOR_PUSTOTY_ROUTE_ID);
   assert.equal(route?.z, CANTOR_PUSTOTY_Z);
   assert.equal(route?.baseFloor, CANTOR_PUSTOTY_BASE_FLOOR);
-  assert.equal(route?.baseFloor, FloorLevel.VOID);
+  assert.equal(route?.baseFloor.VOID);
   assert.equal(route?.displayName, 'Кантор пустоты');
   assert.equal(route?.danger, 5);
   assert.equal(designFloorAtZ(CANTOR_PUSTOTY_Z)?.id, CANTOR_PUSTOTY_ROUTE_ID);

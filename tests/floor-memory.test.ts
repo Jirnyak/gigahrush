@@ -7,7 +7,6 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
   LiftDirection,
   RoomType,
   Tex,
@@ -19,7 +18,7 @@ import {
 } from '../src/core/types';
 import { pathBlockedAt } from '../src/core/path_blockers';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../src/core/world';
-import { floorKeyForFloorInstance, floorKeyForProcedural, floorKeyForStory } from '../src/data/floor_keys';
+import { floorKeyForFloorInstance, floorKeyForProcedural, floorKeyForDesign } from '../src/data/floor_keys';
 import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey } from '../src/data/procedural_floors';
 import {
   collectFloorLiftAnchors,
@@ -198,7 +197,7 @@ test('floor memory save restores full world snapshot without regenerating baseli
 
 test('floor memory packed restore rebuilds fine blockers from saved features and containers', () => {
   clearFloorMemory();
-  const key = floorKeyForStory(FloorLevel.LIVING);
+  const key = floorKeyForDesign('living');
   const world = new World();
   for (let y = 41; y <= 45; y++) {
     for (let x = 40; x <= 47; x++) {
@@ -296,7 +295,7 @@ test('floor memory restore keeps saved entries packed and capped until take', ()
 
 test('floor memory restore skips unknown keys before applying restored entry cap', () => {
   clearFloorMemory();
-  const validKey = floorKeyForStory(FloorLevel.LIVING);
+  const validKey = floorKeyForDesign('living');
   const staleInstanceKey = floorKeyForFloorInstance('not_registered');
   assert.equal(captureFloorMemory(validKey, new World(), [entity(60, EntityType.NPC)], 5, 6, 2, 0), true);
   const template = floorMemoryStateForSave().entries[0];
@@ -330,7 +329,7 @@ test('floor memory restore skips unknown keys before applying restored entry cap
 
 test('floor memory restore resolves generation extras lazily when packed memory is taken', () => {
   clearFloorMemory();
-  const key = floorKeyForStory(FloorLevel.LIVING);
+  const key = floorKeyForDesign('living');
   assert.equal(captureFloorMemory(key, new World(), [], 3, 4, 1, 0), true);
   const saved = floorMemoryStateForSave();
   clearFloorMemory();
@@ -374,7 +373,7 @@ test('floor memory save byte cap skips oversized entries', () => {
 
 test('floor memory restore sanitizes billboard props as non-item entities', () => {
   clearFloorMemory();
-  const key = floorKeyForStory(FloorLevel.LIVING);
+  const key = floorKeyForDesign('living');
   const world = new World();
   const billboard = entity(55, EntityType.BILLBOARD);
   billboard.inventory = [{ defId: 'bread', count: 1 }];
@@ -401,8 +400,8 @@ test('floor memory restore sanitizes billboard props as non-item entities', () =
 
 test('floor memory restore skips corrupt snapshots and malformed nested entries', () => {
   clearFloorMemory();
-  const goodKey = floorKeyForStory(FloorLevel.LIVING);
-  const badKey = floorKeyForStory(FloorLevel.MINISTRY);
+  const goodKey = floorKeyForDesign('living');
+  const badKey = floorKeyForDesign('ministry');
   const world = new World();
   const idx = world.idx(21, 22);
   world.cells[idx] = Cell.FLOOR;
@@ -436,7 +435,7 @@ test('floor memory restore skips corrupt snapshots and malformed nested entries'
 
 test('floor memory restore sanitizes invalid doors and malformed containers before hydration', () => {
   clearFloorMemory();
-  const key = floorKeyForStory(FloorLevel.LIVING);
+  const key = floorKeyForDesign('living');
   const world = new World();
   const doorIdx = world.idx(30, 30);
   world.cells[doorIdx] = Cell.DOOR;

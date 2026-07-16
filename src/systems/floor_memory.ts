@@ -23,7 +23,7 @@ import {
 import { World } from '../core/world';
 import { type FloorGeneration } from '../gen/floor_manifest';
 import { rebuildGeneratedFloorPathBlockers, rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
-import { cleanFloorKey, floorKeyForStory, floorKeyKnown, type FloorKeyResolveContext } from './floor_keys';
+import { cleanFloorKey, floorKeyForDesign, floorKeyKnown, type FloorKeyResolveContext  } from './floor_keys';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { isNativePlayerBodyEntity } from './player_actor';
 
@@ -186,7 +186,7 @@ let floorMemoryBudgetOverride: number | undefined;
 let floorMemorySaveBudgetOverride: number | undefined;
 
 export function floorMemoryKeyForStoryFloor(z: number): string {
-  return floorKeyForStory(z);
+  return floorKeyForDesign(String(z));
 }
 
 export function storableEntity(entity: Entity): boolean {
@@ -1553,7 +1553,7 @@ interface FloorMemorySaveCandidate {
 
 function floorMemorySaveImportance(save: FloorMemorySaveEntry): number {
   let score = 0;
-  if (save.key.startsWith('story:')) score += 10_000;
+  if (save.key.startsWith('design:')) score += 10_000;
   if (save.key.startsWith('design:')) score += 5_000;
   score += Math.min(4_000, save.samosborCount * 64);
   score += Math.min(8_000, save.entities.length * 32);

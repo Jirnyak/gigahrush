@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, DoorState, EntityType, Faction, FloorLevel, MonsterKind, Occupation, RoomType, W, ZoneFaction } from '../src/core/types';
+import { Cell, DoorState, EntityType, Faction, MonsterKind, Occupation, RoomType, W, ZoneFaction } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
@@ -30,7 +30,7 @@ test('radon_exchange is registered as a high Ministry route floor', () => {
   const route = designFloorById(RADON_EXCHANGE_ROUTE_ID);
   assert.equal(route?.z, RADON_EXCHANGE_Z);
   assert.equal(route?.baseFloor, RADON_EXCHANGE_BASE_FLOOR);
-  assert.equal(route?.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(route?.baseFloor === 30);
   assert.equal(route?.displayName, 'Радоновый обменник');
   assert.equal(route?.danger, 4);
   assert.equal(designFloorAtZ(RADON_EXCHANGE_Z)?.id, RADON_EXCHANGE_ROUTE_ID);

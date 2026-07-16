@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Faction, FloorLevel, Occupation } from '../src/core/types';
+import { Faction, Occupation } from '../src/core/types';
 import { setAlifeState } from '../src/systems/alife';
 import { buildDemosAiSocialContext } from '../src/systems/demos_ai_social';
 import {
@@ -17,8 +17,8 @@ import { setFloorRunState } from '../src/systems/procedural_floors';
 import { makeGameState, makeTestNpc } from './helpers';
 
 function makeSocialState() {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
-  setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
+  const state = makeGameState({ currentZ: 0 });
+  setFloorRunState(state, { runSeed: 123, currentZ: 0 }.LIVING);
   setAlifeState(state, { seed: 12345, total: 32 }, { populationPlan: 'empty_packages' });
   return state;
 }

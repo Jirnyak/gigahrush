@@ -149,7 +149,7 @@ function liftArachnaKey(state: GameState, ctx: LiftArachnaArrivalCtx): string {
   if (ctx.activeInstance) return `instance:${ctx.activeInstance.id}:${ctx.activeInstance.seed}:${dir}`;
   if (ctx.runEntry?.spec) return `proc:${ctx.runEntry.spec.key}:${dir}`;
   if (ctx.runEntry?.designFloorId) return `design:${ctx.runEntry.designFloorId}:${dir}`;
-  return `story:${state.currentZ}:${dir}`;
+  return `design:${state.currentZ}:${dir}`;
 }
 
 function liftArachnaThreat(ctx: LiftArachnaArrivalCtx): number {

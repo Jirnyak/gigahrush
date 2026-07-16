@@ -17,7 +17,7 @@ import { placeProceduralScreens } from '../procedural_screens';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { basePopulationTotalAtDefaultSoftLimit, KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
-import { territorySharesForStoryFloor } from '../../data/floor_territory';
+import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { sampleNaturalPopulationCells } from '../population_placement';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { initializeCellTerritory } from '../../systems/territory';
@@ -585,7 +585,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   // ── Phase 8b: Cell territory before population placement ─────
   initializeCellTerritory(world, {
     seed: territorySeed,
-    targetShares: territorySharesForStoryFloor(60),
+    targetShares: territorySharesForDesignFloor('kvartiry'),
   });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)

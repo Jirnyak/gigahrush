@@ -6,7 +6,7 @@ import {
   type GameState,
 } from '../core/types';
 import { occupationProfile } from '../data/occupation_profiles';
-import { cleanFloorKey, floorKeyForStory, floorKeyZ, floorKeyKind, floorKeyRouteId,  } from './floor_keys';
+import { cleanFloorKey, floorKeyForDesign, floorKeyZ, floorKeyKind, floorKeyRouteId } from './floor_keys';
 import { designFloorById } from '../data/design_floors';
 import {
   alifeNpcRecordCount,
@@ -236,7 +236,7 @@ function demosFloorKeyZ(state: GameState, floorKeyInput: unknown, fallbackFloor?
   const key = cleanFloorKey(floorKeyInput);
   const host = state as GameState & { floorRun?: { specs?: Record<string, { z?: number; baseFloor?: number }> } };
   return floorKeyZ(key, { proceduralSpecs: host.floorRun?.specs })
-    ?? (fallbackFloor !== undefined ? floorKeyZ(floorKeyForStory(fallbackFloor)) : undefined);
+    ?? (fallbackFloor !== undefined ? floorKeyZ(floorKeyForDesign(String(fallbackFloor))) : undefined);
 }
 
 function demosCurrentRouteZ(state: GameState): number | undefined {

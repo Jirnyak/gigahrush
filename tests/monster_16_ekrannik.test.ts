@@ -5,7 +5,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
   type Entity,
 } from '../src/core/types';
 import { World } from '../src/core/world';
@@ -47,7 +46,7 @@ test('ekrannik misinformation stays local and publishes reversible encounter eve
   const actor = player();
   entities.push(actor);
   const state = makeGameState({
-    currentZ: FloorLevel.VOID,
+    currentZ: -36,
     worldEvents: createWorldEventState(),
   });
 

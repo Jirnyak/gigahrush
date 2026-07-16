@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FloorLevel, LiftDirection, QuestType, type Quest } from '../src/core/types';
+import { LiftDirection, QuestType, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
 import { PLOT_CHAIN } from '../src/data/plot';
@@ -160,8 +160,8 @@ test('Olga quest action accepts the first plot step instead of ambient no-op', (
 });
 
 test('route objective HUD prioritizes the active plot route and labels its lift', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
-  setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }, FloorLevel.LIVING);
+  const state = makeGameState({ currentZ: 0 });
+  setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} }.LIVING);
 
   const systemQuest: Quest = {
     id: 20,
@@ -171,7 +171,7 @@ test('route objective HUD prioritizes the active plot route and labels its lift'
     desc: 'Принеси манометр с нижнего маршрута.',
     targetItem: 'manometer',
     targetCount: 1,
-    targetFloor: FloorLevel.MAINTENANCE,
+    targetFloor: 'maintenance',
     targetRoute: { z: -20, label: 'Z-20 Коллекторы', risk: 2 },
     moneyReward: 2000,
     done: false,
@@ -183,7 +183,7 @@ test('route objective HUD prioritizes the active plot route and labels its lift'
     giverName: plotNpcName('olga'),
     desc: 'Проверить верхний ручной маршрут до отчета Якову.',
     plotStepIndex: 3,
-    targetFloor: FloorLevel.KVARTIRY,
+    targetFloor: 'kvartiry',
     targetRoute: { z: 12, label: 'Z+12 НИИ слизевой пробы', risk: 4 },
     targetHint: 'Верхний маршрут важнее оплаченной рутины.',
     done: false,

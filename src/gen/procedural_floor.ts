@@ -60,7 +60,6 @@ import {
   proceduralFloorAnomalyRoutePressure,
   proceduralFloorRoutePressureLevel,
   // @ts-ignore
-  proceduralMonsterFloor,
   proceduralLootValueCap,
   type ProceduralFloorSpec,
   type FloorGeometryDef,
@@ -4280,7 +4279,7 @@ function spawnMonster(
   const pos = randomFloorCell(world, sx, sy, 90 * 90);
   if (!pos) return null;
   const kind = chooseFloorMonsterKind({
-    z: proceduralMonsterFloor(spec),
+    z: spec.z,
     roomType: roomTypeAt(world, pos.x, pos.y),
     floorTags: spec.monsterBiasTags,
     samosborCount: spec.danger,
@@ -15304,7 +15303,7 @@ function choosePressureTargetRoom(world: World, rooms: Room[], spec: ProceduralF
     const pref = preferredTypes.indexOf(room.type);
     if (pref >= 0) score += 80 - pref * 12;
     if (room.type === RoomType.CORRIDOR) score += routePressureLevel(spec) * 8;
-    if (room.type === RoomType.PRODUCTION && proceduralMonsterFloor(spec) === 140) score += 20;
+    if (room.type === RoomType.PRODUCTION && spec.z === 140) score += 20;
     if (score > bestScore) {
       bestScore = score;
       best = room;
@@ -15344,7 +15343,7 @@ function registerProceduralMonsterPressureCue(world: World, rooms: Room[], spec:
   const markerCell = world.idx(marker.x, marker.y);
   if (world.features[markerCell] === Feature.NONE) world.features[markerCell] = Feature.SCREEN;
   stampSurfaceSplat(world, marker.x, marker.y, 0.5, 0.5, 0.34, 0.72, spec.seed ^ 0x5111, 84, 124, 116, true);
-  const profile = pressureCueProfile(proceduralMonsterFloor(spec), spec);
+  const profile = pressureCueProfile(spec.z, spec);
   registerRouteCue(world, {
     id: `procedural_${spec.key}_monster_pressure`,
     x: marker.x + 0.5,

@@ -26,7 +26,7 @@ export interface WorldLogPoint {
 }
 
 export interface WorldLogSpatialContext {
-  z: number;
+  z: string | number;
   playerX: number;
   playerY: number;
   audibleRadiusMeters?: number;

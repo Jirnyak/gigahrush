@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import { Cell, EntityType, Faction, FloorLevel, Occupation, RoomType, Tex, ZoneFaction, type Entity, type Room } from '../src/core/types';
+import { Cell, EntityType, Faction, Occupation, RoomType, Tex, ZoneFaction, type Entity, type Room } from '../src/core/types';
 import { World } from '../src/core/world';
 import { factionToTerritoryOwner } from '../src/data/factions';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
@@ -159,7 +159,7 @@ test('territory capture needs local faction pressure, not one idle traveler', ()
   const world = singleZoneWorld(ZoneFaction.CULTIST);
   world.factionControl.fill(ZoneFaction.CULTIST);
   const state = makeGameState({
-    currentZ: FloorLevel.KVARTIRY,
+    currentZ: 14,
     time: 10,
     worldEvents: createWorldEventState(),
   });
@@ -185,7 +185,7 @@ test('territory capture does not overwrite samosbor-owned cells', () => {
   world.factionControl.fill(ZoneFaction.CULTIST);
   setTerritoryOwnerAt(world, 64, 64, ZoneFaction.SAMOSBOR);
   const state = makeGameState({
-    currentZ: FloorLevel.KVARTIRY,
+    currentZ: 14,
     time: 20,
     worldEvents: createWorldEventState(),
   });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Feature, FloorLevel, MonsterKind, Tex, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Feature, MonsterKind, Tex, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { MONSTERS } from '../src/entities/monster';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
@@ -119,7 +119,7 @@ test('noise probe reveals Chernosliz without a full water scan', () => {
   const target = makeTestPlayer({ id: 1, x: 20.5, y: 10.5, hp: 100, maxHp: 100 });
   const threat = monster(MonsterKind.CHERNOSLIZ, 10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState(), time: 1 });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState(), time: 1 });
   const msgs: Msg[] = [];
 
   world.cells[world.idx(10, 10)] = Cell.WATER;

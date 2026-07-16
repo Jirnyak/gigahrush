@@ -27,12 +27,12 @@ import {
   designFloorAtZ,
   designFloorById,
   type DesignFloorId,
+  zForBaseFloor,
 } from '../data/design_floors';
 import {
   floorKeyForDesign,
   floorKeyForProcedural,
   floorKeyZ,
-  zForBaseFloor,
 } from '../data/floor_keys';
 import {  } from '../data/design_floors';
 import {
@@ -591,8 +591,13 @@ export function currentFloorRunAllowsNpcs(state: GameState): boolean {
 }
 
 export function floorRunSamosborDepth01(state: GameState): number {
-  const z = currentFloorRunEntry(state).z;
-  return Math.max(0, Math.min(1, Math.abs(z) / FLOOR_RUN_MAX_Z));
+  const entry = currentFloorRunEntry(state);
+  let z = entry.z;
+  if (typeof z === 'string') {
+    const df = designFloorById(z as any);
+    z = df ? df.z : 0;
+  }
+  return Math.max(0, Math.min(1, Math.abs(z as number) / FLOOR_RUN_MAX_Z));
 }
 
 export function nextFloorRunSamosborDuration(state: GameState): number {

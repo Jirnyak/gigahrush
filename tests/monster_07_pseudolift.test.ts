@@ -5,7 +5,6 @@ import {
   AIGoal,
   Cell,
   EntityType,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   WORLD_EVENT_TYPES,
@@ -86,7 +85,7 @@ test('pseudolift candidate selection refuses the only lift on a route', () => {
 test('inspecting a pseudolift warns before the second use reveals the monster', () => {
   resetMonsterBaits();
   const world = worldWithLifts([{ x: 10, y: 10 }, { x: 20, y: 20 }]);
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 12 });
+  const state = makeGameState({ currentZ: 0, time: 12 });
   const player = makeTestPlayer({ id: 1, x: 9.5, y: 10.5, angle: 0 });
   const entities: Entity[] = [player];
   const nextEntityId = { v: 2 };
@@ -112,7 +111,7 @@ test('inspecting a pseudolift warns before the second use reveals the monster', 
 test('nearby bait feeds the dormant pseudolift without spawning a roaming monster', () => {
   resetMonsterBaits();
   const world = worldWithLifts([{ x: 10, y: 10 }, { x: 20, y: 20 }]);
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 20 });
+  const state = makeGameState({ currentZ: 0, time: 20 });
   const player = makeTestPlayer({ id: 1, x: 9.5, y: 10.5, angle: 0 });
   const drop = itemDrop(2, 10.5, 10.5);
   const entities: Entity[] = [player, drop];
@@ -136,7 +135,7 @@ test('nearby bait feeds the dormant pseudolift without spawning a roaming monste
 test('clearing an active revealed pseudolift kills its live monster when entities are provided', () => {
   resetMonsterBaits();
   const world = worldWithLifts([{ x: 10, y: 10 }, { x: 20, y: 20 }]);
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 32 });
+  const state = makeGameState({ currentZ: 0, time: 32 });
   const player = makeTestPlayer({ id: 1, x: 9.5, y: 10.5, angle: 0 });
   const entities: Entity[] = [player];
   const nextEntityId = { v: 2 };

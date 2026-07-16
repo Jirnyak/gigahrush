@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Feature, FloorLevel, W, type Room, type World } from '../src/core/types';
+import { Feature, W, type Room, type World } from '../src/core/types';
 import {
   FALSE_SAFE_BLOCK_DISCOVERED,
   FALSE_SAFE_BLOCK_RESOLVED,
@@ -27,7 +27,7 @@ function forcedFalseSafeSpec(seed = 55_028, anomalyId: FloorAnomalyId = 'false_s
     ...base,
     seed,
     geometryId: 'communal_knots',
-    baseFloor: FloorLevel.KVARTIRY,
+    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId,
     danger: 4,

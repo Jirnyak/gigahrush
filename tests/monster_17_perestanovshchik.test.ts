@@ -4,7 +4,6 @@ import * as assert from 'node:assert/strict';
 import {
   Cell,
   EntityType,
-  FloorLevel,
   type Entity,
 } from '../src/core/types';
 import { World } from '../src/core/world';
@@ -63,7 +62,7 @@ test('anchor container event disables only Перестановщик local tele
 
   const state = makeGameState({
     time: 42,
-    currentZ: FloorLevel.VOID,
+    currentZ: -36,
     worldEvents: createWorldEventState(),
   });
 

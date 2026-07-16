@@ -22,14 +22,12 @@ import {
   cleanFloorKey,
   floorKeyForDesign,
   floorKeyForProcedural,
-  floorKeyForStory,
   floorKeyKnown,
   type FloorKeyResolveContext,
 } from './floor_keys';
 import { getStack, ITEMS, itemEquipSlot } from './items';
 import { allNpcPerks, getNpcPerk } from './npc_perks';
 import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey } from './procedural_floors';
-import { zForBaseFloor } from './floor_keys';
 import { RPG_ATTRIBUTE_CAP } from './rpg_progression';
 import { NPC_VISUAL_FAMILIES } from '../entities/npc_visuals';
 import type {
@@ -593,16 +591,11 @@ function validateEditor(problems: ProblemList, editor: Record<string, unknown> |
 }
 
 export function npcPackageLookupHints(context?: NpcPackageValidationContext): NpcPackageLookupHints {
-  // @ts-ignore
-  const storyKeyRows = [...numericEnumValues(z)].map(floor => ({
-    key: floorKeyForStory(floor),
-    z: zForBaseFloor(floor),
-  }));
   const designKeyRows = DESIGN_FLOOR_ROUTES.map(route => ({
     key: floorKeyForDesign(route.id),
     z: route.z,
   }));
-  const fixedKeys = [...storyKeyRows, ...designKeyRows]
+  const fixedKeys = [...designKeyRows]
     .sort((a, b) => b.z - a.z || a.key.localeCompare(b.key))
     .map(entry => entry.key);
   const proceduralKeys = [...PROCEDURAL_FLOOR_ZS]

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { AIGoal, Cell, Faction, Feature, FloorLevel, Occupation, RoomType, type Entity, type GameState } from '../src/core/types';
+import { AIGoal, Cell, Faction, Feature, Occupation, RoomType, type Entity, type GameState } from '../src/core/types';
 import { World } from '../src/core/world';
 import { alifeForSave, captureAlifeFloorState, materializeAlifeFloorPopulation, moveAlifeNpcRecord, setAlifeState } from '../src/systems/alife';
 import {
@@ -32,21 +32,21 @@ interface TestMigrationHost extends GameState {
 
 function stateAtLiving(overrides: Partial<GameState> = {}): GameState {
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     worldEvents: createWorldEventState(),
     ...overrides,
   });
-  setFloorRunState(state, { runSeed: 17, currentZ: 0 }, FloorLevel.LIVING);
+  setFloorRunState(state, { runSeed: 17, currentZ: 0 });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }
 
 function stateAtVoid(): GameState {
   const state = makeGameState({
-    currentZ: FloorLevel.VOID,
+    currentZ: -50,
     worldEvents: createWorldEventState(),
   });
-  setFloorRunState(state, { runSeed: 17, currentZ: -50 }, FloorLevel.VOID);
+  setFloorRunState(state, { runSeed: 17, currentZ: -50 });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }
@@ -192,13 +192,13 @@ function persistentNpc(id: number, alifeId: number, x: number, y: number): Entit
 }
 
 function putRecordOnLiving(state: GameState, alifeId: number): void {
-  assert.equal(moveAlifeNpcRecord(state, alifeId, 'design:living', { floor: FloorLevel.LIVING }), true);
+  assert.equal(moveAlifeNpcRecord(state, alifeId, 'design:living', { z: 60 }), true);
 }
 
 test('floor activation consumes only prefilled A-Life bucket records', () => {
   const state = stateAtLiving();
   const alife = setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' }) as TestAlifeState;;
-  assert.equal(moveAlifeNpcRecord(state, alife.npcs[0].id, 'design:living', { floor: FloorLevel.LIVING, markTouched: false }), true);
+  assert.equal(moveAlifeNpcRecord(state, alife.npcs[0].id, 'design:living', { z: 60, markTouched: false }), true);
   alife.floorIndex['design:living'] = [0];
   const world = makeNoAnchorWorld();
   world.cells[world.idx(41, 41)] = Cell.FLOOR;

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
-import { FloorLevel, type Entity, type GameState } from '../src/core/types';
+import { type Entity, type GameState } from '../src/core/types';
 import worker from '../functions/worker';
 import { onRequestPost as postChat } from '../functions/api/net/chat';
 import {
@@ -459,7 +459,7 @@ function installNetSphereBrowser(): { document: FakeBrowserDocument; restore: ()
 
 function minimalNetSphereState(): GameState {
   return {
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     clock: { totalMinutes: 8 * 60, hour: 8, minute: 0 },
     samosborCount: 0,
     time: 0,

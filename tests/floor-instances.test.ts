@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, FloorLevel, LiftDirection, type Entity } from '../src/core/types';
+import { Cell, EntityType, LiftDirection, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { FLOOR_INSTANCES, floorInstanceAllowsNpcs } from '../src/data/floor_instances';
 import {
@@ -106,21 +106,21 @@ test('floor memory saves and restores floor instance worlds by instance key', ()
 });
 
 test('active floor instance state round-trips a floor instance world key', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, time: 12 });
+  const state = makeGameState({ currentZ: 0, time: 12 });
   setFloorInstanceState(state, {
     current: {
       id: 'loop_404',
-      fromFloor: FloorLevel.LIVING,
-      intendedFloor: FloorLevel.MAINTENANCE,
-      returnFloor: FloorLevel.MAINTENANCE,
+      fromFloor: 'living',
+      intendedFloor: 'maintenance',
+      returnFloor: 'maintenance',
       direction: LiftDirection.DOWN,
     },
-  }, FloorLevel.LIVING);
+  }.LIVING);
 
   const saved = floorInstanceStateForSave(state);
   assert.equal(saved.current?.worldKey, floorInstanceWorldKey('loop_404'));
 
-  const loaded = makeGameState({ currentZ: FloorLevel.LIVING });
-  setFloorInstanceState(loaded, saved, FloorLevel.LIVING);
+  const loaded = makeGameState({ currentZ: 0 });
+  setFloorInstanceState(loaded, saved.LIVING);
   assert.equal(floorInstanceStateForSave(loaded).current?.worldKey, floorInstanceWorldKey('loop_404'));
 });

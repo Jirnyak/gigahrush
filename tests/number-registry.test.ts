@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, Feature, FloorLevel, RoomType, W, ZoneFaction, type Entity } from '../src/core/types';
+import { Cell, EntityType, Feature, RoomType, W, ZoneFaction, type Entity } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -44,7 +44,7 @@ test('number_registry is a Ministry authored route with residue population press
   const route = designFloorById(NUMBER_REGISTRY_ROUTE_ID);
   assert.ok(route);
   assert.equal(route.z, 32);
-  assert.equal(route.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(route.baseFloor.MINISTRY);
   assert.equal(route.role.includes('модули'), true);
 
   const profile = designFloorPopulationProfile(route);

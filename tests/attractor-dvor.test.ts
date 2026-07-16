@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   MonsterKind,
   Occupation,
   RoomType,
@@ -96,7 +95,7 @@ test('attractor_dvor is registered as a maintenance authored route floor', () =>
   assert.ok(route);
   assert.equal(route.z, ATTRACTOR_DVOR_Z);
   assert.equal(route.baseFloor, ATTRACTOR_DVOR_BASE_FLOOR);
-  assert.equal(route.baseFloor, FloorLevel.MAINTENANCE);
+  assert.equal(route.baseFloor.MAINTENANCE);
   assert.equal(route.displayName, 'Аттракторный двор');
   assert.equal(route.danger, 4);
   assert.equal(designFloorAtZ(ATTRACTOR_DVOR_Z)?.id, ATTRACTOR_DVOR_ROUTE_ID);

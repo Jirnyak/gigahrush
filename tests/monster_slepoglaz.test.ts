@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, FloorLevel, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, MonsterKind, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { DEF, generateSprite } from '../src/entities/slepoglaz';
 import { getMonsterEcology } from '../src/data/monster_ecology';
@@ -92,7 +92,6 @@ test('Slepoglaz definition, ecology, and sprite verify attributes and generation
 
   assert.equal(DEF.kind, MonsterKind.SLEPOGLAZ);
   assert.deepEqual(DEF.aiFlags, ['lastSoundBeam']);
-  assert.deepEqual(DEF.floors, [FloorLevel.MAINTENANCE, FloorLevel.HELL]);
   assert.equal(ecology?.rare, false);
   assert.match(DEF.counterplay ?? '', /шум|сторон|после|упор/i);
   assert.equal(sprite.length, S * S);

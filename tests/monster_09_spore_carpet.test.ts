@@ -1,3 +1,4 @@
+import { MONSTERS, MONSTER_SPRITES } from '../src/entities/monster';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
@@ -6,7 +7,6 @@ import {
   Cell,
   EntityType,
   Faction,
-  FloorLevel,
   MonsterKind,
   ProjType,
   RoomType,
@@ -18,7 +18,6 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/spore_carpet';
-import { MONSTERS, NEW_MONSTERS_BY_FLOOR } from '../src/entities/monster';
 import {
   generateSporeCarpetCache,
   SPORE_CARPET_CACHE_ROOM_NAME,
@@ -118,10 +117,7 @@ test('spore carpet is standalone domestic trap content with reachable cache', ()
   assert.equal(DEF.kind, MonsterKind.SPORE_CARPET);
   assert.equal(DEF.name, 'Ковер');
   assert.deepEqual(DEF.aiFlags, ['lurkingFurniture']);
-  assert.deepEqual(DEF.floors, [FloorLevel.MINISTRY, FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE]);
   assert.equal(MONSTERS[MonsterKind.SPORE_CARPET], DEF);
-  assert.equal(NEW_MONSTERS_BY_FLOOR[FloorLevel.LIVING].includes(MonsterKind.SPORE_CARPET), true);
-  assert.equal(NEW_MONSTERS_BY_FLOOR[FloorLevel.MINISTRY].includes(MonsterKind.SPORE_CARPET), true);
   assert.deepEqual(ecology?.rumorIds, ['monster_spore_carpet_lifted_corner', 'ecology_spore_carpet_fire_salt', 'lead_living_spore_carpet_cache']);
   assert.equal(RUMORS.some(r => r.id === 'lead_living_spore_carpet_cache'), true);
   assert.equal(sprite.length, S * S);
@@ -162,7 +158,7 @@ test('spore carpet stays idle until close, then puffs on a capped cooldown', () 
   const target = player(40, 10);
   const threat = carpet(10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 1 });
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 1 });
   const msgs: Msg[] = [];
 
   prime(entities);
@@ -199,7 +195,7 @@ test('spore carpet stays idle until close, then puffs on a capped cooldown', () 
 test('ip4 gasmask counts as respiratory protection against spore haze', () => {
   const target = player(10, 10, [{ defId: 'ip4_gasmask', count: 1, data: { dur: 90 } }]);
   const threat = carpet(10.8, 10);
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 7 });
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 7 });
   const status = applySporeHaze(target, 7, [], state, threat);
 
   assert.ok(Math.abs(status.expiresAt - status.startedAt - SPORE_HAZE_PROTECTED_DURATION_SEC) < 0.001);
@@ -212,7 +208,7 @@ test('nearby container opening wakes spore carpet before proximity', () => {
   const target = player(30, 10);
   const threat = carpet(10.5, 10.5);
   const entities = [target, threat];
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 4 });
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 4 });
   const msgs: Msg[] = [];
 
   publishEvent(state, {
@@ -256,7 +252,7 @@ test('fire projectile wakes spore carpet and delays the next puff', () => {
     ownerId: target.id,
   };
   const entities = [target, threat, flame];
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState(), time: 8 });
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 8 });
 
   prime(entities);
   assert.equal(tryMonsterProjectileStagger(world, state, threat, flame, target.id), true);

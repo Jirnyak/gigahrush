@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { EntityType, Faction, FloorLevel, Occupation, RoomType, type Entity } from '../src/core/types';
+import { EntityType, Faction, Occupation, RoomType, type Entity } from '../src/core/types';
 import { getNpcPackageByPlotNpcId } from '../src/data/npc_packages';
 import type { ContextSnapshot } from '../src/systems/context';
 import type { AlifeNpcSnapshot } from '../src/systems/alife';
@@ -105,7 +105,7 @@ function alifeSnapshot(overrides: Partial<AlifeNpcSnapshot> = {}): AlifeNpcSnaps
   return {
     id: 1,
     floorKey: 'design:living',
-    floor: FloorLevel.LIVING,
+    z: 60,
     faction: Faction.SCIENTIST,
     occupation: Occupation.DOCTOR,
     name: 'Пакетная Нина',
@@ -179,7 +179,7 @@ test('Demos posts and reactions can receive package bio tags from supplied facts
     day: 0,
     hour: 8,
     minute: 10,
-    floor: FloorLevel.LIVING,
+    z: 60,
     severity: 3,
     privacy: 'public',
     truth: 'fact',
@@ -266,7 +266,7 @@ test('plot safety-critical lines remain exact and ordinary NPC talk works withou
       occupation: Occupation.HOUSEWIFE,
     },
     snapshot({
-      floor: FloorLevel.LIVING,
+      z: 60,
       roomType: RoomType.KITCHEN,
       roomName: 'Кухня у гермы',
       npcFaction: Faction.CITIZEN,

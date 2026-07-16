@@ -28,7 +28,7 @@ import { publishEvent } from './events';
 import {
   cleanFloorKey,
   floorKeyBaseFloor,
-  floorKeyForStory,
+  floorKeyForDesign,
   floorKeyKind,
   floorKeyZ,
 } from './floor_keys';
@@ -205,7 +205,7 @@ function currentRouteFloorKey(state: GameState): string {
   try {
     return floorRunEntryFloorKey(currentFloorRunEntry(state));
   } catch {
-    return floorKeyForStory(state.currentZ);
+    return floorKeyForDesign(String(state.currentZ));
   }
 }
 
@@ -213,7 +213,7 @@ function contextFloorKey(snapshot: AlifeNpcSnapshot, context: DemosQuestNoticeCo
   const explicit = cleanFloorKey(context.floorKey);
   if (explicit) return explicit;
   const source = cleanFloorKey(snapshot.floorKey);
-  return source || floorKeyForStory(context.z ?? snapshot.z);
+  return source || floorKeyForDesign(String(context.z ?? snapshot.z));
 }
 
 function floorLabel(state: GameState, floorKey: string): string {

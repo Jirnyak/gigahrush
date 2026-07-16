@@ -1,7 +1,7 @@
 import { type CharacterSex, Faction, Occupation, type Item } from '../core/types';
 import { NPC_VISUAL_OLGA_DMITRIEVNA } from './art_sprite_manifest';
 // @ts-ignore
-import { floorKeyForDesign, floorKeyForStory } from './floor_keys';
+import { floorKeyForDesign, floorKeyForDesign } from './floor_keys';
 import { getStack, ITEMS } from './items';
 import { NPC_PACKAGE_INVENTORY_CAP } from './npc_package_schema';
 import type { NpcPackageDef, NpcPackagePresence } from './npc_packages';

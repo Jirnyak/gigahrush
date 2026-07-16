@@ -24,7 +24,7 @@ export interface ScreenSignalDef {
   tags: readonly string[];
 }
 
-const CIVIL_FLOORS = [30, 60, 100] as const;
+const CIVIL_FLOORS = [30, 14, 0] as const;
 export const SCREEN_SIGNAL_VARIANTS = 8;
 export const SCREEN_SIGNAL_FRAMES = 4;
 const ALL_SIGNAL_FLOORS = [

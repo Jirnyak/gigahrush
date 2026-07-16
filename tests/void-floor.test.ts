@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, Feature, FloorLevel, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
+import { Cell, Feature, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell, type ReachabilityAudit } from '../src/core/world';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { territorySharesForStoryFloor } from '../src/data/floor_territory';
@@ -14,7 +14,7 @@ const VOID_TEST_SEED = 0x140014;
 let cachedVoidGeneration: FloorGeneration | undefined;
 
 function voidFloorForRead(): FloorGeneration {
-  cachedVoidGeneration ??= generateFloor(FloorLevel.VOID, VOID_TEST_SEED);
+  cachedVoidGeneration ??= generateFloor('void', VOID_TEST_SEED);
   return cachedVoidGeneration;
 }
 
@@ -183,7 +183,7 @@ test('VOID story floor has cell-first faction shares and human mini-HQ anchors',
   const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
   const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
   const totalCells = W * W;
-  const targets = territorySharesForStoryFloor(FloorLevel.VOID);
+  const targets = territorySharesForStoryFloor('void');
   const targetTotal = targets.reduce((sum, row) => sum + row.share, 0);
   let dominantOwner = ZoneFaction.CITIZEN;
 

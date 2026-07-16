@@ -3,7 +3,6 @@ import {
   ContainerKind,
   EntityType,
   Faction,
-  FloorLevel,
   type GameState,
   type Entity,
   type Item,
@@ -39,7 +38,7 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     quests: [],
     activeQuestId: undefined,
     nextQuestId: 1,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,
@@ -105,11 +104,11 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     const fallbackZ = state.currentZ;
     const geometryIds: Record<number, string> = {
       0: 'living_blocks',
-      1: 'admin_pockets',
-      2: 'apartment_pressure',
-      3: 'collectors',
-      4: 'meat_halls', // HELL fallback if any
-      5: 'void_expanse', // VOID fallback if any
+      40: 'admin_pockets',
+      [-2]: 'apartment_pressure',
+      [-26]: 'collectors',
+      [-50]: 'meat_halls', // HELL fallback if any
+      [-60]: 'void_expanse', // VOID fallback if any
     };
     const geometryId = geometryIds[fallbackZ] ?? 'living_blocks';
 
@@ -197,7 +196,7 @@ export function makeTestContainer(overrides: Partial<WorldContainer> = {}): Worl
     id: 1,
     x: 0,
     y: 0,
-    floor: FloorLevel.LIVING,
+    z: 60,
     roomId: 1,
     zoneId: 1,
     kind: ContainerKind.EMERGENCY_BOX,

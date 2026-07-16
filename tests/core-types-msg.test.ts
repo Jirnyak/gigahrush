@@ -27,7 +27,7 @@ describe('msgAt', () => {
   });
 
   test('merges location properties', () => {
-    const loc: MsgLocation = { x: 5, y: 10, actorId: 99, targetId: 44, roomId: 12, zoneId: 3, floor: 'living' };
+    const loc: MsgLocation = { x: 5, y: 10, actorId: 99, targetId: 44, roomId: 12, zoneId: 3, z: 60 };
     const m = msgAt('test text', 500, '#abc', loc);
 
     assert.equal(m.x, 5);

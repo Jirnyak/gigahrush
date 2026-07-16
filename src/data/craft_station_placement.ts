@@ -18,13 +18,12 @@ export type CraftStationDefId = typeof CRAFT_STATION_IDS[number];
 
 export const CRAFT_STATION_CAPS = {
   livingFixed: 2,
-  storyMin: 1,
-  storyMax: 4,
+  designMin: 1,
+  designMax: 4,
   maintenanceMin: 2,
   maintenanceMax: 6,
   proceduralMin: 0,
   proceduralMax: 4,
-  story: { min: 1, max: 4 },
   maintenance: { min: 2, max: 6 },
   procedural: { min: 0, max: 4 },
   design: { min: 0, max: 7 },
@@ -77,8 +76,8 @@ function mergeProfiles(
 const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPlacementProfile>> = {
   [30]: {
     id: 'story_ministry',
-    min: CRAFT_STATION_CAPS.story.min,
-    max: CRAFT_STATION_CAPS.story.max,
+    min: CRAFT_STATION_CAPS.design.min,
+    max: CRAFT_STATION_CAPS.design.max,
     roomDivisor: 12,
     stationWeights: {
       [DISASSEMBLY_WORKBENCH_ID]: 1.1,
@@ -90,8 +89,8 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
   },
   [60]: {
     id: 'story_kvartiry',
-    min: CRAFT_STATION_CAPS.story.min,
-    max: CRAFT_STATION_CAPS.story.max,
+    min: CRAFT_STATION_CAPS.design.min,
+    max: CRAFT_STATION_CAPS.design.max,
     roomDivisor: 12,
     stationWeights: {
       [DISASSEMBLY_WORKBENCH_ID]: 1.25,
@@ -348,7 +347,7 @@ export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): C
   if (!profile) return undefined;
   return mergeProfiles(profile, {
     // @ts-ignore
-    tags: [route.id, `z_${route.z}`, z[route.themeTags]?.toLowerCase() ?? 'route'],
+    tags: [route.id, `z_${route.z}`, route.themeTags[0]?.toLowerCase() ?? 'route'],
   });
 }
 

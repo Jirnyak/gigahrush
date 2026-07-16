@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, FloorLevel, MonsterKind, W, type Entity, type WorldContainer } from '../src/core/types';
+import { AIGoal, Cell, EntityType, MonsterKind, W, type Entity, type WorldContainer } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/slime_woman';
@@ -58,7 +58,6 @@ test('slime woman definition, ecology, and sprite read as a rare toxic humanoid'
 
   assert.equal(DEF.kind, MonsterKind.SLIME_WOMAN);
   assert.deepEqual(DEF.aiFlags, ['slimeStrider']);
-  assert.deepEqual(DEF.floors, [FloorLevel.MAINTENANCE, FloorLevel.LIVING]);
   assert.equal(ecology?.rare, true);
   assert.match(DEF.counterplay ?? '', /сух|УФ|огонь|чистящ/);
   assert.match(ecology?.counterplay ?? '', /вод|сух|УФ|тар/);
@@ -77,7 +76,7 @@ test('uv spotlight dries and staggers slime woman', () => {
     inventory: [{ defId: 'uv_spotlight', count: 1, data: { dur: 4 } }],
   });
   const threat = slimeWoman(2, 14.5, 10.5);
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
 
   const hpBefore = threat.hp ?? 0;
   const result = useUvSpotlight(world, [player, threat], player, state);
@@ -124,7 +123,7 @@ test('slime woman sump is reachable content with sample and dry counterplay kit'
   assert.notEqual(hazardCell, -1, 'sump water should register as a local toxic route hazard');
 
   const player = makeTestPlayer({ id: 7, x: sampleContainer.x + 0.5, y: sampleContainer.y + 0.5 });
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
   assert.equal(takeFromContainer(sampleContainer, player, 0, 1, state), true);
   const sampled = getRecentEvents(state, { type: 'slime_humanoid_sampled', tags: ['slime_woman'], limit: 1 })[0];
   assert.ok(sampled, 'taking the sample should publish the humanoid slime sample event');

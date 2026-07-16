@@ -17,7 +17,7 @@ import { World } from '../../core/world';
 import { randomName, freshNeeds } from '../../data/catalog';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { territorySharesForStoryFloor } from '../../data/floor_territory';
+import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { gaussianLevel, getMaxHp, randomRPG } from '../../systems/rpg';
 import { initializeCellTerritory, territoryHqAnchors, territoryOwnerAtIndex } from '../../systems/territory';
@@ -172,7 +172,7 @@ export function initializeMaintenanceTerritory(world: World, generationSeed: num
   seedMaintenanceHqTerritory(world);
   initializeCellTerritory(world, {
     seed: generationSeed,
-    targetShares: territorySharesForStoryFloor(140),
+    targetShares: territorySharesForDesignFloor('maintenance'),
   });
 }
 

@@ -2030,25 +2030,23 @@ function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fall
 }
 
 function designNpcMult(route: DesignFloorRouteDef): number {
-  // @ts-ignore
-  const cls = ''(route);
-  return cls === 60 ? 1.22
-    : cls === 100 ? 1.14
-      : cls === 30 ? 0.86
-        : cls === 140 ? 0.7
-          : cls === 180 ? 0.38
+  const cls = route.themeTags?.[0] ?? 'ministry';
+  return cls === 'kvartiry' ? 1.22
+    : cls === 'living' ? 1.14
+      : cls === 'ministry' ? 0.86
+        : cls === 'maintenance' ? 0.7
+          : cls === 'hell' ? 0.38
             : 0;
 }
 
 function designMonsterMult(route: DesignFloorRouteDef): number {
-  // @ts-ignore
-  const cls = ''(route);
-  return cls === 180 ? 1.28
-    : cls === 200 ? 1.36
-      : cls === 140 ? 1.12
-        : cls === 30 ? 1.0
-          : cls === 60 ? 0.86
-            : cls === 100 ? 0.8
+  const cls = route.themeTags?.[0] ?? 'ministry';
+  return cls === 'hell' ? 1.28
+    : cls === 'void' ? 1.36
+      : cls === 'maintenance' ? 1.12
+        : cls === 'ministry' ? 1.0
+          : cls === 'kvartiry' ? 0.86
+            : cls === 'living' ? 0.8
               : 1;
 }
 
@@ -2065,39 +2063,35 @@ function baseMonsterTarget(route: DesignFloorRouteDef): number {
 }
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
-  // @ts-ignore
-  const cls = ''(route);
-  if (cls === 140) return INDUSTRIAL_MIX;
-  if (cls === 180) return VETERAN_MIX;
-  if (cls === 30) return ADMIN_MIX;
+  const cls = route.themeTags?.[0] ?? 'ministry';
+  if (cls === 'maintenance') return INDUSTRIAL_MIX;
+  if (cls === 'hell') return VETERAN_MIX;
+  if (cls === 'ministry') return ADMIN_MIX;
   return CITIZEN_MIX;
 }
 
 function defaultNpcOccupations(route: DesignFloorRouteDef): readonly WeightedDesignValue<Occupation>[] {
-  // @ts-ignore
-  const cls = ''(route);
-  if (cls === 140) return INDUSTRIAL_OCCUPATIONS;
-  if (cls === 180) return VETERAN_OCCUPATIONS;
-  if (cls === 30) return ADMIN_OCCUPATIONS;
+  const cls = route.themeTags?.[0] ?? 'ministry';
+  if (cls === 'maintenance') return INDUSTRIAL_OCCUPATIONS;
+  if (cls === 'hell') return VETERAN_OCCUPATIONS;
+  if (cls === 'ministry') return ADMIN_OCCUPATIONS;
   return SOCIAL_OCCUPATIONS;
 }
 
 function defaultNpcNoun(route: DesignFloorRouteDef): string {
-  // @ts-ignore
-  const cls = ''(route);
-  if (cls === 140) return 'работник';
-  if (cls === 180) return 'паломник';
-  if (cls === 30) return 'служащий';
+  const cls = route.themeTags?.[0] ?? 'ministry';
+  if (cls === 'maintenance') return 'работник';
+  if (cls === 'hell') return 'паломник';
+  if (cls === 'ministry') return 'служащий';
   return 'житель';
 }
 
 function defaultPlacementKind(route: DesignFloorRouteDef): PlacementKind {
-  // @ts-ignore
-  const cls = ''(route);
-  if (cls === 140) return 'industrial';
-  if (cls === 180) return 'hell';
-  if (cls === 200) return 'void';
-  if (cls === 30) return 'admin';
+  const cls = route.themeTags?.[0] ?? 'ministry';
+  if (cls === 'maintenance') return 'industrial';
+  if (cls === 'hell') return 'hell';
+  if (cls === 'void') return 'void';
+  if (cls === 'ministry') return 'admin';
   return 'social';
 }
 

@@ -52,7 +52,7 @@ import {
 import { floorInstanceLabel, floorInstanceWorldKey, getActiveFloorInstance } from './floor_instances';
 import { spawnSafeguardHackBacklash } from './safeguard';
 import { canSpawnEntityType } from './entity_limits';
-import { floorKeyForDesign, floorKeyForProcedural, floorKeyForStory } from './floor_keys';
+import { floorKeyForDesign, floorKeyForProcedural  } from './floor_keys';
 
 export interface NetTerminalGenState {
   runSeed: number;
@@ -198,7 +198,7 @@ function cleanHackCooldowns(input: unknown, now: number): Record<string, number>
 }
 
 function routeKeyForStory(z: number): string {
-  return floorKeyForStory(z);
+  return floorKeyForDesign(String(z));
 }
 
 function routeKeyForEntry(entry: FloorRunEntry): string {

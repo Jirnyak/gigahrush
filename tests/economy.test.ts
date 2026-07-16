@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import { economyForSave, ensureEconomyState, invalidateEconomyPrices, normalizeGameEconomy } from '../src/systems/economy';
 import { makeGameState } from './helpers';
-import { FloorLevel } from '../src/core/types';
 
 test('economyForSave ensures economy state and returns it', () => {
   const state = makeGameState();
@@ -11,7 +10,7 @@ test('economyForSave ensures economy state and returns it', () => {
 
   // ensureEconomyState side effects
   assert.equal(state.economy, econ);
-  assert.ok(econ.floors[FloorLevel.LIVING]);
+  assert.ok(econ.floors['living']);
 
   // Has required shape
   assert.equal(typeof econ.priceVersion, 'number');

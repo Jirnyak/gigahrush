@@ -3,7 +3,6 @@ import * as assert from 'node:assert/strict';
 
 import {
   Cell,
-  FloorLevel,
   RoomType,
 } from '../src/core/types';
 import { World } from '../src/core/world';

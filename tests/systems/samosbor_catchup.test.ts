@@ -10,7 +10,7 @@ import {
   SAMOSBOR_FRONT_MAX_CATCHUP_TICKS
 } from '../../src/systems/samosbor.js';
 import { setActiveSamosborVariantForTests } from '../../src/systems/samosbor_variants_runtime.js';
-import { World, GameState, FloorLevel, Entity } from '../../src/core/types.js';
+import { World, GameState, Entity } from '../../src/core/types.js';
 
 function createMockWorld(): World {
   return {
@@ -39,7 +39,7 @@ function createMockGameState(): GameState {
     samosborActive: true,
     samosborTimer: 100, // Make sure it's not going to end immediately
     samosborCount: 0,
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     gameOver: false,
     zoneTags: {}
   } as unknown as GameState;

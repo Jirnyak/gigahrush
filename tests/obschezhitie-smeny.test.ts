@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
   LiftDirection,
   NpcState,
   RoomType,
@@ -38,7 +37,7 @@ function generatedObschezhitieSmeny(): ReturnType<typeof generateDesignFloor> {
 test('obschezhitie_smeny is the authored shift dormitory route floor', () => {
   const route = designFloorById(OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID);
   assert.equal(route?.z, OBSCHEZHITIE_SMENY_ROUTE_Z);
-  assert.equal(route?.baseFloor, FloorLevel.LIVING);
+  assert.equal(route?.baseFloor === 0);
   assert.equal(route?.displayName, 'Общежитие смены');
   assert.equal(designFloorAtZ(OBSCHEZHITIE_SMENY_ROUTE_Z)?.id, OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID);
 });

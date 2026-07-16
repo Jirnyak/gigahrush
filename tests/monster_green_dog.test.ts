@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, FloorLevel, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, MonsterKind, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { DEF, generateSprite } from '../src/entities/green_dog';
 import { getMonsterEcology } from '../src/data/monster_ecology';
@@ -91,7 +91,6 @@ test('green dog definition, ecology, and sprite read as a mossy pack predator', 
 
   assert.equal(DEF.kind, MonsterKind.GREEN_DOG);
   assert.deepEqual(DEF.aiFlags, ['packHowl', 'noiseFear', 'foodBait']);
-  assert.deepEqual(DEF.floors, [FloorLevel.KVARTIRY, FloorLevel.LIVING, FloorLevel.MAINTENANCE]);
   assert.equal(ecology?.rare, false);
   assert.match(DEF.counterplay ?? '', /металл|дроб|шум/i);
   assert.equal(sprite.length, S * S);

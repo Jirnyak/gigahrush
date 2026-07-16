@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, DoorState, EntityType, Faction, FloorLevel, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
+import { Cell, DoorState, EntityType, Faction, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -52,7 +52,7 @@ function hermeticShellCells(world: MarkovGeneration['world'], room: Room): numbe
 test('markov_stairwell is registered as a Ministry route floor', () => {
   const route = designFloorById(MARKOV_STAIRWELL_ROUTE_ID);
   assert.equal(route?.z, MARKOV_STAIRWELL_Z);
-  assert.equal(route?.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(route?.baseFloor.MINISTRY);
   assert.equal(route?.displayName, 'Марковская лестница');
   assert.equal(route?.danger, 3);
   assert.equal(designFloorAtZ(MARKOV_STAIRWELL_Z)?.id, MARKOV_STAIRWELL_ROUTE_ID);

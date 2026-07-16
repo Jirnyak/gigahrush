@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { DoorState, EntityType, FloorLevel, MonsterKind, Occupation, W, ZoneFaction } from '../src/core/types';
+import { DoorState, EntityType, MonsterKind, Occupation, W, ZoneFaction } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { DESIGN_FLOOR_ROUTES, designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';

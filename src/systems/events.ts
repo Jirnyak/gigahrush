@@ -31,14 +31,7 @@ const EVENT_PRIVACIES = new Set(['public', 'local', 'witnessed', 'private', 'sec
 const CONTEXT_FACT_KINDS = new Set([
   'danger', 'shortage', 'theft', 'death', 'production', 'need', 'quest_hook', 'social', 'territory',
 ]);
-const BASE_FLOORS = [
-  30,
-  60,
-  100,
-  140,
-  180,
-  200,
-] as const;
+
 const RESOURCE_SCARCITY_EVENT_COOLDOWN_S = 600;
 const MAX_RESOURCE_SCARCITY_RUMORS = 4;
 const MAX_OBSERVER_ERROR_LOGS = 8;
@@ -234,9 +227,7 @@ function maxBufferEventId(buffer: WorldEventBuffer): number {
 }
 
 function normalizeFloor(value: unknown): number {
-  return typeof value === 'number' && BASE_FLOORS.includes(value as any)
-    ? value
-    : 100;
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function normalizePrivacy(value: unknown): WorldEvent['privacy'] {

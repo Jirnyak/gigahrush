@@ -4,7 +4,6 @@ import * as assert from 'node:assert/strict';
 import {
   Cell,
   Feature,
-  FloorLevel,
   RoomType,
   Tex,
   type Room,
@@ -66,7 +65,7 @@ function makePneumomailWorld(): {
 test('pneumomail intake covers required capsule outcomes with bounded history', () => {
   const { world, intake } = makePneumomailWorld();
   const state = makeGameState({
-    currentZ: FloorLevel.MAINTENANCE,
+    currentZ: 30,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: 9, y: 10, inventory: [] });
@@ -96,7 +95,7 @@ test('pneumomail intake covers required capsule outcomes with bounded history', 
 test('pneumomail intercept, jam, and report publish explicit events', () => {
   const { world, intercept, jam, report } = makePneumomailWorld();
   const state = makeGameState({
-    currentZ: FloorLevel.MAINTENANCE,
+    currentZ: 30,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({

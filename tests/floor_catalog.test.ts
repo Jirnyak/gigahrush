@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FloorLevel } from '../src/core/types';
 import { FLOOR_CATALOG } from '../src/data/floor_catalog';
 import { queryFloorCatalog, getFloorCatalogDef } from '../src/systems/floor_catalog';
 
@@ -23,11 +22,11 @@ test('queryFloorCatalog returns all items when no query is provided', () => {
 });
 
 test('queryFloorCatalog filters by baseFloor', () => {
-  const query = { baseFloor: FloorLevel.MAINTENANCE };
+  const query = { baseFloor: 'maintenance' };
   const result = queryFloorCatalog(query);
-  const expected = FLOOR_CATALOG.filter(def => def.baseFloor === FloorLevel.MAINTENANCE);
+  const expected = FLOOR_CATALOG.filter(def => def.baseFloor === 'maintenance');
   assert.equal(result.length, expected.length);
-  assert.ok(result.every(def => def.baseFloor === FloorLevel.MAINTENANCE));
+  assert.ok(result.every(def => def.baseFloor === 'maintenance'));
 });
 
 test('queryFloorCatalog filters by tag', () => {

@@ -1,12 +1,12 @@
+import { MONSTERS, MONSTER_SPRITES } from '../src/entities/monster';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, FloorLevel, MonsterKind, type Entity, type Msg, type WorldContainer } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, MonsterKind, type Entity, type Msg, type WorldContainer } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology, MONSTER_ECOLOGY } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/chernosliz';
-import { MONSTERS, NEW_MONSTERS_BY_FLOOR } from '../src/entities/monster';
 import { generateBlackSlimeEyes } from '../src/gen/maintenance/black_slime_eyes';
 import { S } from '../src/render/pixutil';
 import { setListenerPos } from '../src/systems/audio';
@@ -82,11 +82,9 @@ test('Chernosliz is a standalone maintenance black-water monster', () => {
   assert.equal(DEF.name, 'Чернослиз');
   assert.equal(MONSTERS[MonsterKind.CHERNOSLIZ], DEF);
   assert.deepEqual(DEF.aiFlags, ['blackWaterWake']);
-  assert.deepEqual(DEF.floors, [FloorLevel.MAINTENANCE]);
   assert.equal(DEF.isRanged, true);
   assert.equal(DEF.hp <= 22, true, 'Chernosliz should stay fragile once exposed');
   assert.equal(DEF.speed <= 0.55, true, 'Chernosliz should stay slow and turret-like');
-  assert.equal(NEW_MONSTERS_BY_FLOOR[FloorLevel.MAINTENANCE]?.includes(MonsterKind.CHERNOSLIZ), true);
   assert.deepEqual(ecology?.rumorIds, ['ecology_chernosliz_wake']);
   assert.equal(sprite.length, S * S);
   assert.equal(opaque > 600, true, 'sprite should read as a half-submerged black eye mass');
@@ -168,7 +166,7 @@ test('black slime authored encounter spawns Chernosliz directly', () => {
   assert.ok(sample, 'black slime POI should expose a lure sample container');
 
   const actor = makeTestPlayer({ id: 99, x: sample.x + 0.5, y: sample.y + 0.5, faction: Faction.PLAYER });
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
 
   assert.equal(takeFromContainer(sample, actor, 0, 1, state), true);
 

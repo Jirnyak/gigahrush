@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, Faction, FloorLevel, LiftDirection, MonsterKind, Occupation, RoomType, W, ZoneFaction, type Entity, type Room } from '../src/core/types';
+import { Cell, EntityType, Faction, LiftDirection, MonsterKind, Occupation, RoomType, W, ZoneFaction, type Entity, type Room } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -32,7 +32,7 @@ function nursery(): TuringGeneration {
 test('turing_nursery is registered as a Kvartiry route floor', () => {
   const route = designFloorById(TURING_NURSERY_ROUTE_ID);
   assert.equal(route?.z, TURING_NURSERY_Z);
-  assert.equal(route?.baseFloor, FloorLevel.KVARTIRY);
+  assert.equal(route?.baseFloor.KVARTIRY);
   assert.equal(route?.baseFloor, TURING_NURSERY_BASE_FLOOR);
   assert.equal(route?.displayName, 'Ясли Тьюринга');
   assert.equal(route?.danger, 4);

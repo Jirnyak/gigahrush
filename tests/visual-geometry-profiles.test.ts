@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FloorLevel } from '../src/core/types';
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 import {
   themeForDesignRoute,
   themeForProceduralSpec,
-  themeForStoryFloor,
+  themeForDesignFloor,
 } from '../src/data/floor_theme_profiles';
 import {
   PROCEDURAL_FLOOR_ZS,
@@ -30,7 +29,7 @@ import {
 } from '../src/data/visual_corridor_coverings';
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
-const VALID_FLOORS = Object.values(FloorLevel).filter((value): value is FloorLevel => typeof value === 'number');
+const VALID_FLOORS = DESIGN_FLOOR_ROUTES.map(r => r.z);
 const EXPECTED_RADII: Record<Exclude<VisualGeometryMode, 'off'>, number> = { low: 4, medium: 8, high: 16 };
 const EXPECTED_INSTANCE_CAPS: Record<Exclude<VisualGeometryMode, 'off'>, number> = { low: 128, medium: 256, high: 512 };
 const EXPECTED_FIELD_RADII: Record<Exclude<VisualGeometryMode, 'off'>, number> = { low: 2, medium: 4, high: 8 };
@@ -217,13 +216,13 @@ test('visual geometry resolves generator corridor coverings from floor tags', ()
 });
 
 test('all current floor themes provide finite visual geometry profiles', () => {
-  for (const floor of VALID_FLOORS) {
-    const theme = themeForStoryFloor(floor);
+  for (const route of DESIGN_FLOOR_ROUTES) {
+    const theme = themeForDesignFloor(route.id);
     const profile = resolveVisualGeometryProfile('low', theme.floorKey, visualGeometryThemeTags(theme));
-    assertEnabledCaps(profile, `story:${FloorLevel[floor]}`);
-    assert.equal(profile.instanceCap, EXPECTED_INSTANCE_CAPS.low, `story:${FloorLevel[floor]} low instance cap`);
-    assert.equal(profile.proceduralFieldRadius, EXPECTED_FIELD_RADII.low, `story:${FloorLevel[floor]} low field radius`);
-    assert.equal(profile.proceduralFieldInstanceCap, EXPECTED_FIELD_CAPS.low, `story:${FloorLevel[floor]} low field cap`);
+    assertEnabledCaps(profile, `story:${route.id}`);
+    assert.equal(profile.instanceCap, EXPECTED_INSTANCE_CAPS.low, `story:${route.id} low instance cap`);
+    assert.equal(profile.proceduralFieldRadius, EXPECTED_FIELD_RADII.low, `story:${route.id} low field radius`);
+    assert.equal(profile.proceduralFieldInstanceCap, EXPECTED_FIELD_CAPS.low, `story:${route.id} low field cap`);
   }
   for (const route of DESIGN_FLOOR_ROUTES) {
     const theme = themeForDesignRoute(route);

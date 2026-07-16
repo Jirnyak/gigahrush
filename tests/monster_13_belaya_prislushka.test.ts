@@ -6,7 +6,7 @@ import {
   BELAYA_PRISLUSHKA_QUEST_IDS,
   BELAYA_PRISLUSHKA_ZONE_HUD,
 } from '../src/gen/living/belaya_prislushka';
-import { FloorLevel, QuestType } from '../src/core/types';
+import { QuestType } from '../src/core/types';
 import { getNpcPackageByPlotNpcId } from '../src/data/npc_packages';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { getZoneContentRegistrySnapshot } from '../src/gen/living/zone_content';
@@ -25,7 +25,7 @@ test('Белая Прислушка registers one living-zone POI and the expect
   const rescue = SIDE_QUESTS.find(q => q.id === BELAYA_PRISLUSHKA_QUEST_IDS.rescue);
   assert.equal(rescue?.type, QuestType.TALK);
   assert.equal(rescue?.timeLimitMinutes, 30);
-  assert.equal(rescue?.targetFloor, FloorLevel.LIVING);
+  assert.equal(rescue?.targetFloor.LIVING);
   assert.equal(rescue?.eventTags?.includes('compulsion'), true);
 
   const clear = SIDE_QUESTS.find(q => q.id === BELAYA_PRISLUSHKA_QUEST_IDS.sourceCleared);
@@ -43,10 +43,10 @@ test('Белая Прислушка registers one living-zone POI and the expect
 });
 
 test('Белая Прислушка publishes compact outcome events for quest completion and failure', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
   publishEvent(state, {
     type: 'quest_completed',
-    floor: FloorLevel.LIVING,
+    z: 60,
     targetName: 'rescue source event',
     severity: 4,
     privacy: 'local',
@@ -55,7 +55,7 @@ test('Белая Прислушка publishes compact outcome events for quest c
   });
   publishEvent(state, {
     type: 'quest_failed',
-    floor: FloorLevel.LIVING,
+    z: 60,
     targetName: 'failed rescue source event',
     severity: 3,
     privacy: 'local',

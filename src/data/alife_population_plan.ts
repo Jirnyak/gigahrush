@@ -1,3 +1,4 @@
+import { themeForDesignFloor } from './floor_theme_profiles';
 import { type CharacterSex, Faction, Occupation, type Item, type RPGStats } from '../core/types';
 import type { WeightedValue } from './alife_generation';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorRouteDef } from './design_floors';
@@ -28,9 +29,8 @@ import {
   themeForDesignRoute,
   themeForProceduralSpec,
   // @ts-ignore
-  themeForStoryFloor,
-} from './floor_theme_profiles';
-import { floorKeyAllowsNpcs, floorKeyForDesign, floorKeyForProcedural, floorKeyForStory, floorKeyKnown } from './floor_keys';
+  } from './floor_theme_profiles';
+import { floorKeyAllowsNpcs, floorKeyForDesign, floorKeyForProcedural, floorKeyKnown  } from './floor_keys';
 
 export interface AlifePopulationBucketDef {
   floorKey: string;
@@ -95,22 +95,22 @@ export const ALIFE_POPULATION_JITTER = 8_192 as const;
 export const ALIFE_POPULATION_MIN_RANDOM = ALIFE_POPULATION_BASELINE - ALIFE_POPULATION_JITTER;
 const SNAKE_ID_RE = /^[a-z0-9_]+$/;
 
-const STORY_POPULATION_WEIGHT: Readonly<Record<number, number>> = {
-  [30]: 4_500,
-  [60]: 10_000,
-  [100]: 7_000,
-  [140]: 3_500,
-  [180]: 1_100,
-  [200]: 0,
+const STORY_POPULATION_WEIGHT: Readonly<Record<string, number>> = {
+  'ministry': 4_500,
+  'kvartiry': 10_000,
+  'living': 7_000,
+  'maintenance': 3_500,
+  'hell': 1_100,
+  'void': 0,
 };
 
-const STORY_POPULATION_PROFILE: Readonly<Record<number, string>> = {
-  [30]: 'design:ministry_admin',
-  [60]: 'design:kvartiry_lively',
-  [100]: 'design:living_hub',
-  [140]: 'design:maintenance_service',
-  [180]: 'design:hell_lively',
-  [200]: 'design:void_lively',
+const STORY_POPULATION_PROFILE: Readonly<Record<string, string>> = {
+  'ministry': 'design:ministry_admin',
+  'kvartiry': 'design:kvartiry_lively',
+  'living': 'design:living_hub',
+  'maintenance': 'design:maintenance_service',
+  'hell': 'design:hell_lively',
+  'void': 'design:void_lively',
 };
 
 function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
@@ -124,12 +124,12 @@ function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
   return out;
 }
 
-function storyBucket(z: number): WeightedBucket {
-  const theme = themeForStoryFloor(z);
+function storyBucket(z: string): WeightedBucket {
+  const theme = themeForDesignFloor(String(z) as any);
   return {
-    floorKey: floorKeyForStory(z),
+    floorKey: floorKeyForDesign(String(z)),
     // @ts-ignore
-    baseFloor: z,
+    baseFloor: 'base_floor', // removed
     weight: floorRunZAllowsNpcs(theme.routeZ ?? 0) ? STORY_POPULATION_WEIGHT[z] : 0,
     populationProfileId: theme.populationProfileId ?? STORY_POPULATION_PROFILE[z],
     tags: uniqueTags([
@@ -384,7 +384,7 @@ export function buildAlifePopulationPlan(input: {
   const weighted: WeightedBucket[] = [];
   const seenKeys = new Set<string>();
   
-  for (const floor of [30, 60, 100, 140, 180, 200]) {
+  for (const floor of ['ministry', 'kvartiry', 'living', 'maintenance', 'hell', 'void']) {
     const bucket = storyBucket(floor);
     if (!seenKeys.has(bucket.floorKey) && routeAllowed(bucket.floorKey, allowed)) {
       seenKeys.add(bucket.floorKey);

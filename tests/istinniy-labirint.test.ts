@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, DoorState, EntityType, FloorLevel, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
+import { Cell, DoorState, EntityType, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -38,7 +38,7 @@ function hermeticShellCells(gen: LabyrinthGeneration, room: Room): number {
 test('istinniy_labirint is registered as a Ministry route floor', () => {
   const route = designFloorById(ISTINNIY_LABIRINT_ROUTE_ID);
   assert.equal(route?.z, ISTINNIY_LABIRINT_Z);
-  assert.equal(route?.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(route?.baseFloor.MINISTRY);
   assert.equal(route?.displayName, 'Истинный лабиринт');
   assert.equal(route?.danger, 4);
   assert.equal(designFloorAtZ(ISTINNIY_LABIRINT_Z)?.id, ISTINNIY_LABIRINT_ROUTE_ID);

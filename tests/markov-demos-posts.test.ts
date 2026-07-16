@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Faction, FloorLevel, Occupation, type WorldEvent } from '../src/core/types';
+import { Faction, Occupation, type WorldEvent } from '../src/core/types';
 import { DEMOS_AUTHOR_FALLBACK_CAP } from '../src/data/demos_posts';
 import {
   buildDemosFeedView,
@@ -31,7 +31,7 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
     day: 0,
     hour: 8,
     minute: 10,
-    floor: FloorLevel.LIVING,
+    z: 60,
     severity: 3,
     privacy: 'public',
     truth: 'fact',
@@ -44,7 +44,7 @@ function snapshot(id: number, name = `Житель ${id}`, dead = false): AlifeN
   return {
     id,
     floorKey: 'design:living',
-    floor: FloorLevel.LIVING,
+    z: 60,
     faction: Faction.CITIZEN,
     occupation: Occupation.SECRETARY,
     name,

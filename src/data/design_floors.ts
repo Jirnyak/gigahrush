@@ -1,5 +1,4 @@
 
-import { STORY_KEY_IDS } from './floor_keys';
 
 export type DesignFloorId =
   | 'roof'
@@ -120,7 +119,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);
 
 export function zForBaseFloor(z: number): number {
-  return designFloorById(STORY_KEY_IDS[z])?.z ?? 0;
+  return designFloorAtZ(z)?.z ?? 0;
 }
 
 export function designFloorById(id: string): DesignFloorRouteDef | undefined {

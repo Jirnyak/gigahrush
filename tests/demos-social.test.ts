@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { EntityType, Faction, FloorLevel, Occupation, type Entity, type GameState } from '../src/core/types';
+import { EntityType, Faction, Occupation, type Entity, type GameState } from '../src/core/types';
 import {
   DEMOS_EDGE_DEBT,
   DEMOS_EDGE_ENEMY,
@@ -43,11 +43,11 @@ interface DemosSocialGraphDebug {
 
 function stateWithPopulation(seed: number, total: number, reserved: readonly AlifePopulationReservedNpc[] = []): GameState {
   initFactionRelations();
-  const state = { currentZ: FloorLevel.LIVING } as GameState;
+  const state = { currentZ: 0 } as GameState;
   createPrefilledAlifeState(state, seed, total, {
     buckets: [{
       floorKey: 'design:living',
-      floor: FloorLevel.LIVING,
+      z: 60,
       targetCount: total,
       reserved,
     }],

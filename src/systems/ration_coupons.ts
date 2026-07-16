@@ -249,12 +249,12 @@ function tradeQueuePlace(
 
   if (state) {
     if (slot.defId === 'water') {
-      changeResourceStock(state, 'drink_water', 1, 60);
-      changeResourceStock(state, 'food', -1, 60);
+      changeResourceStock(state, 'drink_water', 1, 14);
+      changeResourceStock(state, 'food', -1, 14);
       addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
     } else {
-      changeResourceStock(state, 'food', 1, 60);
-      changeResourceStock(state, 'drink_water', -1, 60);
+      changeResourceStock(state, 'food', 1, 14);
+      changeResourceStock(state, 'drink_water', -1, 14);
       addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -1);
       addFactionRelMutual(Faction.PLAYER, Faction.WILD, 1);
     }
@@ -332,8 +332,8 @@ function reportCouponFraud(actor: Entity, slotIdx: number, msgs: Msg[], time: nu
   if (!consumeSlot(actor, slotIdx, 1) || !consumeItem(actor, 'forged_ration_card', 1)) return { handled: true };
   actor.money = (actor.money ?? 0) + 18;
   if (state) {
-    changeResourceStock(state, 'food', 4, 60);
-    changeResourceStock(state, 'drink_water', 2, 60);
+    changeResourceStock(state, 'food', 4, 14);
+    changeResourceStock(state, 'drink_water', 2, 14);
     changeResourceStock(state, 'documents', 1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 3);
     addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 2);
@@ -359,7 +359,7 @@ function sellForgedCard(actor: Entity, slotIdx: number, msgs: Msg[], time: numbe
   if (!consumeSlot(actor, slotIdx, 1)) return { handled: true };
   actor.money = (actor.money ?? 0) + 32;
   if (state) {
-    changeResourceStock(state, 'food', -3, 60);
+    changeResourceStock(state, 'food', -3, 14);
     changeResourceStock(state, 'documents', -1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.WILD, 3);
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -2);
@@ -402,8 +402,8 @@ function publishAuditResolutionFromQuest(state: GameState, event: WorldEvent, si
   const source = sideQuestId === 'min_coupon_forgery_report' ? 'ministry_queue_hall' : 'kvartiry_ration_queue';
   const foodDelta = sideQuestId === 'min_coupon_forgery_report' ? 3 : 2;
   const waterDelta = sideQuestId === 'min_coupon_forgery_report' ? 1 : 2;
-  changeResourceStock(state, 'food', foodDelta, 60);
-  changeResourceStock(state, 'drink_water', waterDelta, 60);
+  changeResourceStock(state, 'food', foodDelta, 14);
+  changeResourceStock(state, 'drink_water', waterDelta, 14);
   changeResourceStock(state, 'documents', 1, 30);
   addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 2);
   addFactionRelMutual(Faction.PLAYER, Faction.LIQUIDATOR, 1);
@@ -449,8 +449,8 @@ function publishAuditResolutionFromQuest(state: GameState, event: WorldEvent, si
 function publishCouponStolen(state: GameState, event: WorldEvent): void {
   const itemId = event.itemId ?? '';
   const count = Math.max(1, event.itemCount ?? 1);
-  if (itemId === 'water_coupon') changeResourceStock(state, 'drink_water', -count, 60);
-  else changeResourceStock(state, 'food', -count, 60);
+  if (itemId === 'water_coupon') changeResourceStock(state, 'drink_water', -count, 14);
+  else changeResourceStock(state, 'food', -count, 14);
   addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -1);
   publishEvent(state, {
     type: 'ration_coupon_stolen',

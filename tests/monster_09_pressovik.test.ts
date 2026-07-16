@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { EntityType, FloorLevel, W, type Entity } from '../src/core/types';
+import { EntityType, W, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { generatePressovik } from '../src/gen/maintenance/pressovik';
@@ -66,7 +66,7 @@ test('Pressovik generation places readable lanes, rewards, monsters, and a stopp
   const hy = (hazardCell / W) | 0;
   assert.ok(getCellHazardMoveMultiplier(world, playerAt(hx, hy)) < 1, 'hazard should slow before stop');
 
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 30 });
+  const state = makeGameState({ currentZ: -14, time: 30 });
   publishEvent(state, {
     type: 'item_deposited',
     zoneId: stop.zoneId,

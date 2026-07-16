@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FloorLevel, ZoneFaction } from '../src/core/types';
+import { ZoneFaction } from '../src/core/types';
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 import {
   FLOOR_RUN_NPC_FREE_Z,
@@ -13,7 +13,7 @@ import {
   dominantTerritoryShareOwner,
   themeForDesignRoute,
   themeForProceduralSpec,
-  themeForStoryFloor,
+  themeForDesignFloor,
 } from '../src/data/floor_theme_profiles';
 import {
   territorySharesForDesignFloor,
@@ -23,11 +23,11 @@ import {
 import {
   floorKeyForDesign,
   floorKeyForProcedural,
-  floorKeyForStory,
+  floorKeyForDesign,
 } from '../src/systems/floor_keys';
 
-const ALL_STORY_FLOORS = Object.values(FloorLevel).filter(value => typeof value === 'number') as FloorLevel[];
-const STORY_THEMES = ALL_STORY_FLOORS.map(floor => themeForStoryFloor(floor));
+const ALL_STORY_FLOORS = DESIGN_FLOOR_ROUTES.map(r => r.z);
+const STORY_THEMES = ALL_STORY_FLOORS.map(floor => themeForDesignFloor(floor));
 
 function totalShare(shares: readonly { share: number }[]): number {
   return shares.reduce((sum, row) => sum + row.share, 0);
@@ -35,13 +35,13 @@ function totalShare(shares: readonly { share: number }[]): number {
 
 test('base floor themes compose current design territory and route facts', () => {
   for (const floor of ALL_STORY_FLOORS) {
-    const theme = themeForStoryFloor(floor);
+    const theme = themeForDesignFloor(floor);
     assert.equal(theme.kind, 'design');
     assert.equal(theme.baseFloor, floor);
-    assert.equal(theme.floorKey, floorKeyForStory(floor));
+    assert.equal(theme.floorKey, floorKeyForDesign(floor));
     assert.deepEqual(theme.territoryShares, territorySharesForStoryFloor(floor));
     assert.equal(theme.majorityOwner, dominantTerritoryShareOwner(theme.territoryShares));
-    assert.ok(totalShare(theme.territoryShares) > 0, `${FloorLevel[floor]} should have territory shares`);
+    assert.ok(totalShare(theme.territoryShares) > 0, `${number[floor]} should have territory shares`);
   }
 });
 
@@ -112,7 +112,7 @@ test('story, design and procedural route themes preserve current NPC-free bounda
   }
 });
 
-test('theme territory shares include a human or samosbor owner without new FloorLevel values', () => {
+test('theme territory shares include a human or samosbor owner without new number values', () => {
   const allowedOwners = new Set(Object.values(ZoneFaction).filter(value => typeof value === 'number'));
   const allowedFloors = new Set(ALL_STORY_FLOORS);
   for (const theme of [
@@ -120,7 +120,7 @@ test('theme territory shares include a human or samosbor owner without new Floor
     ...DESIGN_FLOOR_ROUTES.map(route => themeForDesignRoute(route)),
     themeForProceduralSpec(makeProceduralFloorSpec(2468, 13)),
   ]) {
-    assert.equal(allowedFloors.has(theme.baseFloor), true, `${theme.floorKey} should use known FloorLevel ${theme.baseFloor}`);
+    assert.equal(allowedFloors.has(theme.baseFloor), true, `${theme.floorKey} should use known number ${theme.baseFloor}`);
     assert.ok(theme.territoryShares.length > 0, `${theme.floorKey} should have territory shares`);
     for (const share of theme.territoryShares) {
       assert.equal(allowedOwners.has(share.owner), true, `${theme.floorKey} should use known territory owner ${share.owner}`);

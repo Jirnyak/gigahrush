@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, ContainerKind, DoorState, EntityType, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, Tex, W, type Entity } from '../src/core/types';
+import { Cell, ContainerKind, DoorState, EntityType, Feature, LiftDirection, MonsterKind, Occupation, Tex, W, type Entity } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { entityUsesProceduralSprite, generateNpcProfileSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import { generateFloor, isFloorLevel } from '../src/gen/floor_manifest';
+import { generateFloor, isnumber } from '../src/gen/floor_manifest';
 import { measureLivingShelterShells } from '../src/gen/living/geometry';
 import { S } from '../src/render/pixutil';
 import {
@@ -28,7 +28,7 @@ import { testGenerationMatrix } from './generator_helpers';
 const cachedFloors = new Map<string, ReturnType<typeof generateFloor>>();
 let cachedFloor69: ReturnType<typeof generateDesignFloor> | undefined;
 
-function floorForRead(floor: FloorLevel, seed?: number): ReturnType<typeof generateFloor> {
+function floorForRead(floor: seed?: number): ReturnType<typeof generateFloor> {
   const key = `${floor}:${seed ?? 'default'}`;
   let generated = cachedFloors.get(key);
   if (!generated) {
@@ -371,21 +371,16 @@ test('cult visual NPCs keep the newer procedural hood treatment', () => {
 });
 
 test('floor manifest validates known floors and rejects invalid ids', () => {
-  assert.equal(isFloorLevel(FloorLevel.MINISTRY), true);
-  assert.equal(isFloorLevel(FloorLevel.VOID), true);
-  assert.equal(isFloorLevel(-1), false);
-  assert.equal(isFloorLevel(999), false);
-  assert.equal(isFloorLevel('2'), false);
+  assert.equal(isnumber('ministry'), true);
+  assert.equal(isnumber('void'), true);
+  assert.equal(isnumber(-1), false);
+  assert.equal(isnumber(999), false);
+  assert.equal(isnumber('2'), false);
 });
 
 testGenerationMatrix('all floor generators return playable spawn cells and live actors', () => {
   const floors = [
-    FloorLevel.MINISTRY,
-    FloorLevel.KVARTIRY,
-    FloorLevel.LIVING,
-    FloorLevel.MAINTENANCE,
-    FloorLevel.HELL,
-    FloorLevel.VOID,
+    'ministry'.KVARTIRY.LIVING.MAINTENANCE.HELL.VOID,
   ];
 
   for (const floor of floors) {
@@ -406,7 +401,7 @@ testGenerationMatrix('all floor generators return playable spawn cells and live 
 });
 
 testGenerationMatrix('living generation places AG89 Istotit supply cache quest content', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   const plotNpcIds = new Set(generated.entities
     .filter(e => e.type === EntityType.NPC && e.plotNpcId)
     .map(e => e.plotNpcId));
@@ -418,7 +413,7 @@ testGenerationMatrix('living generation places AG89 Istotit supply cache quest c
 });
 
 testGenerationMatrix('living plot NPCs spawn with authored survivability and levels', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   const byPlotNpcId = new Map(generated.entities
     .filter(e => e.type === EntityType.NPC && e.plotNpcId)
     .map(e => [e.plotNpcId, e]));
@@ -436,7 +431,7 @@ testGenerationMatrix('living plot NPCs spawn with authored survivability and lev
 });
 
 testGenerationMatrix('living start tutorial rooms keep samosbor-proof hermowalls', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   for (const name of ['Актовый зал', 'Оружейная']) {
     const room = generated.world.rooms.find(r => r?.name === name);
     assert.ok(room, `${name} should be generated`);
@@ -461,7 +456,7 @@ testGenerationMatrix('living start tutorial rooms keep samosbor-proof hermowalls
 });
 
 testGenerationMatrix('living start tutorial hall exposes a public low-level loot locker', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   const hall = generated.world.rooms.find(room => room?.name === 'Актовый зал');
   assert.ok(hall, 'act hall should be generated');
   const locker = generated.world.containers.find(container => container.name === 'Учебный шкафчик вылазки');
@@ -482,7 +477,7 @@ testGenerationMatrix('living start tutorial hall exposes a public low-level loot
 });
 
 testGenerationMatrix('living macro routes keep landmarks, lifts and apartment shelters reachable', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   const { world } = generated;
   const audit = auditReachability(world, world.idx(Math.floor(generated.spawnX), Math.floor(generated.spawnY)));
 
@@ -554,7 +549,7 @@ testGenerationMatrix('living macro routes keep landmarks, lifts and apartment sh
 });
 
 testGenerationMatrix('living start tutorial desks are feature props, not billboard entities', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   const tutorialRoomIds = new Set(
     generated.world.rooms
       .filter(room => room?.name === 'Актовый зал' || room?.name === 'Оружейная')
@@ -580,7 +575,7 @@ testGenerationMatrix('living start tutorial desks are feature props, not billboa
 });
 
 testGenerationMatrix('living art study sprites are billboards, not empty item drops', () => {
-  const generated = floorForRead(FloorLevel.LIVING);
+  const generated = floorForRead('living');
   const artProps = generated.entities.filter(e =>
     e.type === EntityType.BILLBOARD &&
     e.sprite >= Spr.ART_NUDE_BASE &&
@@ -604,7 +599,7 @@ testGenerationMatrix('floor 69 floor screens are registered as signal screen cel
 });
 
 testGenerationMatrix('non-living samosbor rebuild replaces stale generated actors but keeps player', () => {
-  const generated = generateFloor(FloorLevel.MAINTENANCE);
+  const generated = generateFloor('maintenance');
   const entities = [...generated.entities];
   entities.push(
     {
@@ -642,7 +637,7 @@ testGenerationMatrix('non-living samosbor rebuild replaces stale generated actor
     },
   );
 
-  rebuildWorld(generated.world, entities, { v: 10000 }, 1, FloorLevel.MAINTENANCE);
+  rebuildWorld(generated.world, entities, { v: 10000 }, 1, 'maintenance');
 
   const player = entities.find(e => e.id === 9001);
   assert.ok(player);

@@ -8,7 +8,7 @@ import {
   type WorldEventSeverity,
 } from '../core/types';
 // @ts-ignore
-import { floorKeyForDesign, floorKeyForStory } from './floor_keys';
+import { floorKeyForDesign, floorKeyForDesign } from './floor_keys';
 
 export interface ScriptedArrivalAmmoDef {
   defId: string;
@@ -50,7 +50,7 @@ export const SCRIPTED_ARRIVALS: readonly ScriptedArrivalDef[] = [
   {
     id: 'hell_holdout_major_grom_group',
     triggerPlotEventTag: 'hell_holdout',
-    currentZ: 180,
+    currentZ: -36,
     currentStoryFloor: 180,
     leaderPlotNpcId: 'major_grom',
     leaderWeapon: 'ak47',

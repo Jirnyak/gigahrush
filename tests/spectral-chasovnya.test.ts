@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { auditReachability } from '../src/core/world';
-import { Cell, EntityType, Feature, FloorLevel, LiftDirection, MonsterKind, Occupation, RoomType, W, ZoneFaction } from '../src/core/types';
+import { Cell, EntityType, Feature, LiftDirection, MonsterKind, Occupation, RoomType, W, ZoneFaction } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../src/data/factions';
@@ -74,7 +74,7 @@ test('spectral_chasovnya is registered as a Hell-band authored sound route', () 
 
   assert.equal(route?.z, SPECTRAL_CHASOVNYA_Z);
   assert.equal(route?.baseFloor, SPECTRAL_CHASOVNYA_BASE_FLOOR);
-  assert.equal(route?.baseFloor, FloorLevel.HELL);
+  assert.equal(route?.baseFloor === -36);
   assert.equal(route?.displayName, 'Спектральная часовня');
   assert.equal(designFloorAtZ(SPECTRAL_CHASOVNYA_Z)?.id, SPECTRAL_CHASOVNYA_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(SPECTRAL_CHASOVNYA_Z), false);
@@ -204,7 +204,7 @@ test('spectral_chasovnya bell interaction publishes a bounded sound bait pulse',
   const gen = spectralGen();
   const node = gen.spectralState.bellNodes[0];
   const player = makeTestPlayer({ id: 9001, x: node.x + 1, y: node.y, angle: Math.PI });
-  const state = makeGameState({ currentZ: FloorLevel.HELL, time: 10 });
+  const state = makeGameState({ currentZ: -36, time: 10 });
   const target = findInteractionTarget({
     world: gen.world,
     state,
@@ -229,7 +229,7 @@ test('spectral_chasovnya bell interaction publishes a bounded sound bait pulse',
   assert.equal(result.handled, true);
   assert.equal(ringSpectralChasovnyaBell(gen.world, state, player, gen.entities, 'missing_node'), false);
   assert.equal(gen.spectralState.rungBellNodeIds.includes(node.id), true);
-  const noise = getRecentNoiseRecords(state, { floor: FloorLevel.HELL, source: 'siren', minSeverity: 4, limit: 1 })[0];
+  const noise = getRecentNoiseRecords(state, { z: -36, source: 'siren', minSeverity: 4, limit: 1 })[0];
   assert.ok(noise);
   assert.equal(noise.tags.includes('spectral_chasovnya'), true);
   assert.equal(noise.radius <= 48, true);

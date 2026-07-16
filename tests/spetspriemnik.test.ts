@@ -7,7 +7,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -52,7 +51,7 @@ test('spetspriemnik is registered as a Ministry detention route at z+40', () => 
   const route = designFloorById(SPETSPRIEMNIK_ROUTE_ID);
   assert.equal(route?.z, SPETSPRIEMNIK_Z);
   assert.equal(route?.baseFloor, SPETSPRIEMNIK_BASE_FLOOR);
-  assert.equal(route?.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(route?.baseFloor.MINISTRY);
   assert.equal(route?.displayName, 'Спецприёмник');
   assert.equal(designFloorAtZ(SPETSPRIEMNIK_Z)?.id, SPETSPRIEMNIK_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(SPETSPRIEMNIK_Z), false);

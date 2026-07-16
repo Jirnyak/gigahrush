@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AIGoal, Cell, EntityType, Feature, FloorLevel, W, type Entity } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Feature, W, type Entity } from '../src/core/types';
 import type { World } from '../src/core/world';
 import {
   HELL_POPULATION_PROFILE,
@@ -62,7 +62,7 @@ function proceduralIndustrial(geometryId: string): boolean {
   return geometryId === 'collectors' || geometryId === 'workshops' || geometryId === 'service_spines';
 }
 
-function tickOneAlifeFrame(gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number }, floor: FloorLevel): void {
+function tickOneAlifeFrame(gen: { world: World; entities: Entity[]; spawnX: number; spawnY: number }, floor: number): void {
   const player = makeTestPlayer({ id: 900_000, x: gen.spawnX, y: gen.spawnY, hp: 100, maxHp: 100 });
   gen.entities.unshift(player);
   const state = makeGameState({
@@ -100,7 +100,7 @@ testGenerationMatrix('KVARTIRY starts as a power-of-two actor AI floor', () => {
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
   assert.equal(gen.entities.filter(e => e.type === EntityType.NPC).length >= activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(14) * KVARTIRY_POPULATION_PROFILE.densityMult * (KVARTIRY_POPULATION_PROFILE.citizens.share ?? 0)), true);
-  tickOneAlifeFrame(gen, FloorLevel.KVARTIRY);
+  tickOneAlifeFrame(gen.KVARTIRY);
   assert.equal(tasklessNpcCount(gen.entities), 0);
 });
 
@@ -121,18 +121,18 @@ testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
     assert.equal(gen.world.floorTex[cell] !== 0, true);
   }
   assert.equal(sightlineCues.some(cue => gen.world.features[gen.world.idx(Math.floor(cue.targetX), Math.floor(cue.targetY))] === Feature.SCREEN), true);
-  tickOneAlifeFrame(gen, FloorLevel.HELL);
+  tickOneAlifeFrame(gen.HELL);
   assert.equal(idleMovingMonsterCount(gen.entities) <= 5, true);
 });
 
 testGenerationMatrix('VOID keeps NPC-free endgame density through monsters', () => {
-  const gen = generateFloor(FloorLevel.VOID);
+  const gen = generateFloor('void');
   const actors = liveActors(gen.entities);
   assert.equal(gen.entities.some(e => e.type === EntityType.NPC), false);
   assert.equal(actors.length >= 1000, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
   assert.equal(gen.entities.filter(e => e.type === EntityType.MONSTER).length >= activeActorCountAtDefaultSoftLimit(VOID_POPULATION_PROFILE.guardians), true);
-  assert.equal(VOID_POPULATION_PROFILE.floor, FloorLevel.VOID);
+  assert.equal(VOID_POPULATION_PROFILE.floor.VOID);
 });
 
 test('procedural population budget scales by danger anomaly pressure and route band', () => {

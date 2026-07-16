@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, FloorLevel, LiftDirection, RoomType, W, ZoneFaction } from '../src/core/types';
+import { Cell, LiftDirection, RoomType, W, ZoneFaction } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
@@ -49,7 +49,7 @@ test('roof is registered as the top authored route floor', () => {
   assert.equal(route?.baseFloor, ROOF_BASE_FLOOR);
   assert.equal(route?.displayName, 'Крыша');
   assert.equal(route?.hasOpenSky, true);
-  assert.equal(route?.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(route?.baseFloor.MINISTRY);
   assert.equal(designFloorAtZ(ROOF_FUTURE_Z)?.id, ROOF_ROUTE_ID);
 });
 

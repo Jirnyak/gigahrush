@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { FloorLevel, ItemType, RoomType, type Entity } from '../src/core/types';
+import { ItemType, RoomType, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { FACTORIES } from '../src/data/factories';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
@@ -40,7 +40,7 @@ test('using experimental concentrate spends a deterministic risky ration', () =>
     maxHp: 100,
     needs: { food: 25, water: 50, sleep: 50, pee: 0, poo: 0 },
   });
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, time: 154 });
+  const state = makeGameState({ currentZ: -26, time: 154 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
   useItem(player, 0, state.msgs, state.time, state, 7);

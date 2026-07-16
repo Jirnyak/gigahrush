@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Cell, EntityType, FloorLevel, RoomType, W, ZoneFaction, type Room, type TerritoryOwner } from '../src/core/types';
+import { Cell, EntityType, RoomType, W, ZoneFaction, type Room, type TerritoryOwner } from '../src/core/types';
 import { auditReachability, type World } from '../src/core/world';
 import { HUMAN_TERRITORY_OWNERS, territoryOwnerName } from '../src/data/factions';
 import { generateFloor } from '../src/gen/floor_manifest';
@@ -90,7 +90,7 @@ function nearbySupportRooms(world: World, hq: Room): number {
 }
 
 test('genfix 051 living floor preserves reference geometry and cell-first territory HQs', () => {
-  const gen = generateFloor(FloorLevel.LIVING, 61_061);
+  const gen = generateFloor('living', 61_061);
   const world = gen.world;
 
   assert.equal(world.rooms.length >= 9_500 && world.rooms.length <= 12_500, true, `living reference room count: ${world.rooms.length}`);

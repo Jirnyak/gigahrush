@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, FloorLevel, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, MonsterKind, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { MONSTERS } from '../src/entities/monster';
@@ -74,7 +74,6 @@ test('Khorovaya Matka is a standalone monster, not the old choir variant', () =>
 
   const ecology = getMonsterEcology(MonsterKind.KHOROVAYA_MATKA);
   assert.ok(ecology);
-  assert.deepEqual(ecology.floors, [FloorLevel.HELL]);
   assert.match(ecology.counterplay, /припев|детей|окна/);
 });
 

@@ -1,3 +1,4 @@
+import { zForBaseFloor } from '../data/design_floors';
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
 import {
@@ -8,7 +9,6 @@ import {
   QuestType,
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
-import { zForBaseFloor } from '../data/floor_keys';
 import { isQuestTargetOnCurrentFloor, questRouteFloor, questRouteTargetLabel, questTargetLiftDirection } from '../systems/contracts';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { getRecentEvents } from '../systems/events';

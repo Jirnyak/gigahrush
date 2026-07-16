@@ -4,14 +4,13 @@ import * as assert from 'node:assert/strict';
 import { summarizeEconomy, ensureEconomyState } from '../src/systems/economy';
 import { makeGameState } from './helpers';
 import { RESOURCES } from '../src/data/resources';
-import { FloorLevel } from '../src/core/types';
 import { createEconomyFloorState } from '../src/data/economy';
 
 test('summarizeEconomy returns expected formatted strings', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = createEconomyFloorState(FloorLevel.LIVING);
-  econ.floors[FloorLevel.LIVING] = floorState;
+  const floorState = createEconomyFloorState('living');
+  econ.floors['living'] = floorState;
 
   // Set specific stock values for determinism
   floorState.resources['drink_water'].stock = 50.4;
@@ -25,7 +24,7 @@ test('summarizeEconomy returns expected formatted strings', () => {
 });
 
 test('summarizeEconomy respects the limit parameter', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
 
   const limit3 = summarizeEconomy(state, 3);
   assert.equal(limit3.length, 3);
@@ -35,7 +34,7 @@ test('summarizeEconomy respects the limit parameter', () => {
 });
 
 test('summarizeEconomy handles missing floor state', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
   // Do not initialize econ.floors
 
   const summary = summarizeEconomy(state, 2);
@@ -45,10 +44,10 @@ test('summarizeEconomy handles missing floor state', () => {
 });
 
 test('summarizeEconomy correctly calculates multiplier (scarcity)', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
   const econ = ensureEconomyState(state);
-  const floorState = createEconomyFloorState(FloorLevel.LIVING);
-  econ.floors[FloorLevel.LIVING] = floorState;
+  const floorState = createEconomyFloorState('living');
+  econ.floors['living'] = floorState;
 
   // Set low stock to increase scarcity
   const res = RESOURCES[0];

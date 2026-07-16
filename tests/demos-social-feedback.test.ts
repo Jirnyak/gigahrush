@@ -7,7 +7,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  FloorLevel,
   Occupation,
   RoomType,
   type GameState,
@@ -42,8 +41,8 @@ import {
 } from './helpers';
 
 function makeDemosSocialState(overrides: Partial<GameState> = {}): GameState {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, ...overrides });
-  setFloorRunState(state, { runSeed: 123, currentZ: 0 }, FloorLevel.LIVING);
+  const state = makeGameState({ currentZ: 0, ...overrides });
+  setFloorRunState(state, { runSeed: 123, currentZ: 0 });
   setAlifeState(state, { seed: 12345, total: 64, deadIds: overrides.gameOver ? [1] : [] }, { populationPlan: 'empty_packages' });
   return state;
 }
@@ -56,7 +55,7 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
     day: 0,
     hour: 8,
     minute: 10,
-    floor: FloorLevel.LIVING,
+    z: 60,
     severity: 3,
     privacy: 'public',
     truth: 'fact',

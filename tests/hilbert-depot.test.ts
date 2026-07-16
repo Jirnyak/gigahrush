@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -102,7 +101,7 @@ test('hilbert_depot is a maintenance authored route floor with indexed industria
   assert.ok(route);
   assert.equal(route.z, HILBERT_DEPOT_ROUTE_Z);
   assert.equal(route.baseFloor, HILBERT_DEPOT_BASE_FLOOR);
-  assert.equal(route.baseFloor, FloorLevel.MAINTENANCE);
+  assert.equal(route.baseFloor.MAINTENANCE);
   assert.equal(route.displayName, 'Склад Гильберта');
   assert.equal(route.danger, 4);
   assert.equal(designFloorAtZ(HILBERT_DEPOT_ROUTE_Z)?.id, DESIGN_FLOOR_ID);

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { FloorLevel, GameState, LiftDirection } from '../src/core/types';
+import { GameState, LiftDirection } from '../src/core/types';
 import {
   formatFloorZ,
   createFloorRunState,
@@ -15,7 +15,7 @@ import {
 
 function createMockGameState(): GameState {
   return {
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     time: 0,
     player: {
       x: 0,
@@ -44,15 +44,15 @@ test('formatFloorZ formats negative numbers correctly', () => {
   assert.equal(formatFloorZ(-12), '-12');
 });
 
-test('createFloorRunState initializes with random seed and currentZ based on FloorLevel', () => {
+test('createFloorRunState initializes with random seed and currentZ based on number', () => {
   const state = createFloorRunState(0);
   assert.ok(typeof state.runSeed === 'number');
-  assert.equal(state.currentZ, 0); // zForStoryFloor(FloorLevel.LIVING) is 0
+  assert.equal(state.currentZ, 0); // zForStoryFloor('living') is 0
   assert.deepEqual(state.unlockedZs, [0]);
   assert.deepEqual(state.visited, {});
 });
 
-test('createFloorRunState uses provided FloorLevel', () => {
+test('createFloorRunState uses provided number', () => {
   const state = createFloorRunState(30); // Ministry z is 30
   assert.equal(state.currentZ, 30);
   assert.deepEqual(state.unlockedZs, [30]);
@@ -104,7 +104,7 @@ test('setFloorRunState and floorRunStateForSave', () => {
     runSeed: 1234,
     currentZ: 5,
     unlockedZs: [0, 5]
-  }, FloorLevel.LIVING);
+  });
 
   assert.equal(state.runSeed, 1234);
   assert.equal(state.currentZ, 5);

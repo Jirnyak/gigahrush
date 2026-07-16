@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { Cell, EntityType, FloorLevel, MonsterKind, QuestType, type Entity, type Quest } from '../src/core/types';
+import { Cell, EntityType, MonsterKind, QuestType, type Entity, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { drawControlsMenu } from '../src/render/controls_ui';
@@ -55,7 +55,7 @@ function drawMinimapPathFills(quest: Quest, target: Entity, activeQuestId?: numb
   const player = makeTestPlayer({ id: 1, x: 12.5, y: 12.5 });
   for (const entity of [player, target]) world.cells[world.idx(Math.floor(entity.x), Math.floor(entity.y))] = Cell.FLOOR;
   const entities = [player, target];
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, quests: [quest], activeQuestId });
+  const state = makeGameState({ currentZ: 0, quests: [quest], activeQuestId });
   rebuildEntityIndex(entities);
   const ctx = new CanvasStubContext();
   drawMinimap(
@@ -67,7 +67,7 @@ function drawMinimapPathFills(quest: Quest, target: Entity, activeQuestId?: numb
     1,
     state.quests,
     undefined,
-    FloorLevel.LIVING,
+    0,
     state,
     0,
     { x: 0, y: 0, w: 120, h: 120 },

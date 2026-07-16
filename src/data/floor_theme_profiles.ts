@@ -14,7 +14,6 @@ import {
   type ProceduralFloorSpec,
 } from './procedural_floors';
 // @ts-ignore
-import { zForBaseFloor } from './floor_keys';
 import {
   proceduralPopulationProfileId,
 } from './population_profiles';

@@ -4,7 +4,6 @@ import * as assert from 'node:assert/strict';
 import {
   Cell,
   EntityType,
-  FloorLevel,
   LiftDirection,
   RoomType,
   W,
@@ -39,7 +38,7 @@ function generatedCommunalRing(): ReturnType<typeof generateDesignFloor> {
 test('communal_ring is the authored коммуналка route floor', () => {
   const route = designFloorById(COMMUNAL_RING_DESIGN_FLOOR_ID);
   assert.equal(route?.z, COMMUNAL_RING_ROUTE_Z);
-  assert.equal(route?.baseFloor, FloorLevel.KVARTIRY);
+  assert.equal(route?.baseFloor.KVARTIRY);
   assert.equal(route?.displayName, 'Коммунальное кольцо');
   assert.equal(designFloorAtZ(COMMUNAL_RING_ROUTE_Z)?.id, COMMUNAL_RING_DESIGN_FLOOR_ID);
 });

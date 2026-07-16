@@ -5,7 +5,6 @@ import { auditReachability } from '../src/core/world';
 import {
   Cell,
   EntityType,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -51,7 +50,7 @@ test('hyperbolic_switchyard is a maintenance authored route floor', () => {
   assert.ok(route);
   assert.equal(route.z, HYPERBOLIC_SWITCHYARD_ROUTE_Z);
   assert.equal(route.baseFloor, HYPERBOLIC_SWITCHYARD_BASE_FLOOR);
-  assert.equal(route.baseFloor, FloorLevel.MAINTENANCE);
+  assert.equal(route.baseFloor.MAINTENANCE);
   assert.equal(route.displayName, 'Гиперболическая стрелочная');
   assert.equal(designFloorAtZ(HYPERBOLIC_SWITCHYARD_ROUTE_Z)?.id, HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID);
 });

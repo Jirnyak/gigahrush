@@ -9,7 +9,7 @@ import {
 import { World } from '../core/world';
 import { getNetHackTerminalDef, NET_HACK_TERMINALS, type NetHackTerminalDef, type NetHackTerminalDefId } from '../data/net_hack';
 import { publishEvent } from './events';
-import { floorKeyForStory } from './floor_keys';
+import { floorKeyForDesign  } from './floor_keys';
 import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
 import { rng } from '../core/rand';
 
@@ -92,7 +92,7 @@ function currentFloorKey(state: GameState): string {
   try {
     return floorRunEntryFloorKey(currentFloorRunEntry(state));
   } catch {
-    return floorKeyForStory(state.currentZ);
+    return floorKeyForDesign(String(state.currentZ));
   }
 }
 

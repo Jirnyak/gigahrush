@@ -6,7 +6,6 @@ import {
   Cell,
   DoorState,
   EntityType,
-  FloorLevel,
   RoomType,
   Tex,
   ZoneFaction,
@@ -49,7 +48,7 @@ function makeOpenWaveWorld(cx = 24, cy = 24, half = 8): { world: World; state: R
   }
   const player = makeTestPlayer({ x: cx + 0.5, y: cy + 0.5, speed: 1 });
   const state = makeGameState({
-    currentZ: FloorLevel.LIVING,
+    currentZ: 0,
     samosborActive: true,
     samosborCount: 2,
     worldEvents: createWorldEventState(),
@@ -175,12 +174,7 @@ test('samosbor scale can be local or full depending on roll', () => {
   _overrideRng(() => 0.999999);
   try {
     for (const floor of [
-      FloorLevel.MINISTRY,
-      FloorLevel.KVARTIRY,
-      FloorLevel.LIVING,
-      FloorLevel.MAINTENANCE,
-      FloorLevel.HELL,
-      FloorLevel.VOID,
+      'ministry', 'kvartiry', 'living', 'maintenance', 'hell', 'void',
     ]) {
       const state = makeGameState({ currentZ: floor });
       assert.equal(canRunSamosborWave(state), true);
@@ -192,7 +186,7 @@ test('samosbor scale can be local or full depending on roll', () => {
   // Low roll (< 0.4) → full (global fronts only)
   _overrideRng(() => 0.1);
   try {
-    const state = makeGameState({ currentZ: FloorLevel.LIVING });
+    const state = makeGameState({ currentZ: 0 });
     assert.equal(chooseSamosborScale(state), 'full');
   } finally {
     _restoreRng();
@@ -202,8 +196,8 @@ test('samosbor scale can be local or full depending on roll', () => {
 test('samosbor duration grows and cooldown shrinks by absolute route z', () => {
   _overrideRng(() => 0.5);
   try {
-    const living = makeGameState({ currentZ: FloorLevel.LIVING });
-    const voidFloor = makeGameState({ currentZ: FloorLevel.VOID });
+    const living = makeGameState({ currentZ: 0 });
+    const voidFloor = makeGameState({ currentZ: -50 });
     const dLiving = nextFloorRunSamosborDuration(living);
     const dVoid = nextFloorRunSamosborDuration(voidFloor);
     assert.ok(dLiving >= 20, `living duration ${dLiving} >= 20`);
@@ -226,7 +220,7 @@ test('samosbor wave leaves doors, containers, route cues, and entity cells consi
   world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0 });
   world.containers = [];
   world.rebuildContainerMap();
-  world.addContainer(makeTestContainer({ id: 42, x: 24, y: 24, floor: FloorLevel.LIVING, roomId: -1, zoneId: 0, capacitySlots: 2 }));
+  world.addContainer(makeTestContainer({ id: 42, x: 24, y: 24, z: 60, roomId: -1, zoneId: 0, capacitySlots: 2 }));
   entities.push({
     id: 99,
     type: EntityType.PROJECTILE,
@@ -246,7 +240,7 @@ test('samosbor wave leaves doors, containers, route cues, and entity cells consi
     y: 24,
     targetX: 24,
     targetY: 24,
-    floor: FloorLevel.LIVING,
+    z: 60,
     label: 'test',
     hint: 'test',
     targetName: 'test',

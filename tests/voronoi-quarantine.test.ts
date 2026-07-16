@@ -7,7 +7,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -112,7 +111,7 @@ test('voronoi_quarantine is registered as a Kvartiry-band authored quarantine ro
   const route = designFloorById(VORONOI_QUARANTINE_ROUTE_ID);
   assert.equal(route?.z, VORONOI_QUARANTINE_Z);
   assert.equal(route?.baseFloor, VORONOI_QUARANTINE_BASE_FLOOR);
-  assert.equal(route?.baseFloor, FloorLevel.KVARTIRY);
+  assert.equal(route?.baseFloor.KVARTIRY);
   assert.equal(route?.displayName, 'Вороной-карантин');
   assert.equal(designFloorAtZ(VORONOI_QUARANTINE_Z)?.id, VORONOI_QUARANTINE_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(VORONOI_QUARANTINE_Z), false);

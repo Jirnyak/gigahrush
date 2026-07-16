@@ -24,7 +24,7 @@ import {
 } from './alife';
 import { changeResourceStock, invalidateEconomyPrices, registerEconomyTariffProvider } from './economy';
 import { publishEvent, registerWorldEventObserver } from './events';
-import { cleanFloorKey, floorKeyForStory } from './floor_keys';
+import { cleanFloorKey, floorKeyForDesign  } from './floor_keys';
 
 export const CARAVAN_TICK_SECONDS = 30;
 export const MAX_CARAVAN_LANES_PER_TICK = 2;
@@ -195,11 +195,11 @@ function normalizeMemberAlifeIds(value: unknown, limit: number): number[] {
 }
 
 function lanePrimaryFromFloorKey(def: CaravanLaneDef): string {
-  return cleanFloorKey(def.fromFloorKeys?.[0] ?? floorKeyForStory(def.fromFloor));
+  return cleanFloorKey(def.fromFloorKeys?.[0] ?? floorKeyForDesign(String(def.fromFloor)));
 }
 
 function lanePrimaryToFloorKey(def: CaravanLaneDef): string {
-  return cleanFloorKey(def.toFloorKeys?.[0] ?? floorKeyForStory(def.toFloor));
+  return cleanFloorKey(def.toFloorKeys?.[0] ?? floorKeyForDesign(String(def.toFloor)));
 }
 
 function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunState | undefined {

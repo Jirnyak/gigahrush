@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, DoorState, EntityType, FloorLevel, MonsterKind, RoomType, Tex, type Entity } from '../src/core/types';
+import { AIGoal, Cell, DoorState, EntityType, MonsterKind, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/borshchevik';
@@ -64,7 +64,6 @@ test('borshchevik definition, ecology, and sprite read as a tall route plant', (
 
   assert.equal(DEF.kind, MonsterKind.BORSHCHEVIK);
   assert.deepEqual(DEF.aiFlags, ['rootedPlant']);
-  assert.deepEqual(DEF.floors, [FloorLevel.LIVING, FloorLevel.MAINTENANCE]);
   assert.equal(ecology?.rare, false);
   assert.match(ecology?.counterplay ?? '', /реж|огонь|обход|семен/);
   assert.equal(sprite.length, S * S);
@@ -76,7 +75,7 @@ test('borshchevik stays rooted and uses bounded seed/root effects', () => {
   const player = makeTestPlayer({ id: 1, x: 13.5, y: 10.5, hp: 100, maxHp: 100 });
   const plant = borshchevik(2, 10.5, 10.5);
   const entities = [player, plant];
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
 
   const weakCell = world.idx(11, 11);
   world.cells[weakCell] = Cell.WALL;
@@ -104,7 +103,7 @@ test('burning borshchevik smoke burst respects the cell cap', () => {
   const world = openWorld();
   const player = makeTestPlayer({ id: 1, x: 11.5, y: 10.5, inventory: [] });
   const plant = borshchevik(2, 10.5, 10.5);
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
 
   const fogCells = releaseBorshchevikSeedPuff(world, state, plant, player, 'fire');
 
@@ -117,7 +116,7 @@ test('burning borshchevik smoke burst respects the cell cap', () => {
 test('borshchevik root damage removes door records from opened door cells', () => {
   const world = openWorld();
   const plant = borshchevik(2, 10.5, 10.5);
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
   const doorIdx = world.idx(12, 10);
 
   world.cells[doorIdx] = Cell.DOOR;
@@ -184,6 +183,6 @@ test('maintenance borshchevik blockade spawns plants, sap hazard, bypass tools, 
   assert.ok(items.includes('flamethrower'));
   assert.ok(items.includes('gasmask_filter'));
 
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
   assert.equal(damageBorshchevikRootSite(world, state, plants[0]), true, 'registered root site should be reachable from the spawned plant id');
 });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Faction, FloorLevel, Occupation } from '../src/core/types';
+import { Faction, Occupation } from '../src/core/types';
 import {
   ALIFE_POPULATION_BASELINE,
   ALIFE_POPULATION_CAPACITY,
@@ -128,7 +128,7 @@ test('A-Life population plan keeps authored floor taste and NPC-free route stops
 
   const lowerProcedural = [...byKey.values()].filter(bucket =>
     bucket.floorKey.startsWith('procedural:') &&
-    bucket.baseFloor !== FloorLevel.VOID &&
+    bucket.baseFloor !== 'void' &&
     bucket.tags.some(tag => tag === 'route_pressure' || tag === 'industrial' || tag === 'samosbor' || tag === 'cult')
   );
   assert.ok(lowerProcedural.length > 0, 'lower procedural route groups should be represented by tagged buckets');
@@ -320,11 +320,11 @@ test('A-Life migration profiles validate statically', () => {
 test('shared floor key resolver covers story, design and procedural A-Life keys', () => {
   assert.equal(floorKeyKnown('design:living'), true);
   assert.equal(floorKeyZ('design:living'), 0);
-  assert.equal(floorKeyBaseFloor('design:living'), FloorLevel.LIVING);
+  assert.equal(floorKeyBaseFloor('design:living').LIVING);
   assert.equal(floorKeyAllowsNpcs('design:void'), false);
 
   assert.equal(floorKeyKnown('design:floor_69'), true);
-  assert.equal(floorKeyBaseFloor('design:floor_69'), FloorLevel.MAINTENANCE);
+  assert.equal(floorKeyBaseFloor('design:floor_69').MAINTENANCE);
 
   const proceduralZ = PROCEDURAL_FLOOR_ZS[0];
   assert.equal(floorKeyKnown(`procedural:z${proceduralZ}`), true);
@@ -416,7 +416,7 @@ test('A-Life migration profiles validate bad intents', () => {
       id: 'void_base_floor',
       reason: 'work',
       weight: 1,
-      destination: { baseFloors: [FloorLevel.VOID] }, // VOID base floor
+      destination: { baseFloors: ['void'] }, // VOID base floor
       eventTags: ['test'],
     },
     {

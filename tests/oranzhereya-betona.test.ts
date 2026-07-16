@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Feature,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   RoomType,
@@ -44,7 +43,7 @@ test('oranzhereya_betona is registered as the z -2 scarcity greenhouse route', (
   const route = designFloorById(ORANZHEREYA_BETONA_ROUTE_ID);
 
   assert.equal(route?.z, ORANZHEREYA_BETONA_Z);
-  assert.equal(route?.baseFloor, FloorLevel.LIVING);
+  assert.equal(route?.baseFloor.LIVING);
   assert.equal(route?.baseFloor, ORANZHEREYA_BETONA_BASE_FLOOR);
   assert.equal(route?.displayName, ORANZHEREYA_BETONA_DISPLAY_NAME);
   assert.equal(route?.danger, 3);

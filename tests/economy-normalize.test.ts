@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { FloorLevel } from '../src/core/types';
 import { makeGameState } from './helpers';
 import { normalizeGameEconomy, economyForSave, getAdjustedItemPrice } from '../src/systems/economy';
 
@@ -10,8 +9,8 @@ test('normalizeGameEconomy loads saved economy and sets it on state', () => {
   const savedEconomy = {
     priceVersion: 2,
     floors: {
-      [FloorLevel.LIVING]: {
-        floor: FloorLevel.LIVING,
+      ['living']: {
+        z: 60,
         resources: {},
         lastTickAt: 100,
       }
@@ -23,11 +22,11 @@ test('normalizeGameEconomy loads saved economy and sets it on state', () => {
 
   const economy = economyForSave(state);
   assert.equal(economy.priceVersion, 2);
-  assert.equal(economy.floors[FloorLevel.LIVING]?.lastTickAt, 100);
+  assert.equal(economy.floors['living']?.lastTickAt, 100);
 });
 
 test('normalizeGameEconomy initializes current floor if missing from save', () => {
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ currentZ: -26 });
 
   const savedEconomy = {
     priceVersion: 1,
@@ -38,11 +37,11 @@ test('normalizeGameEconomy initializes current floor if missing from save', () =
   normalizeGameEconomy(state, savedEconomy);
 
   const economy = economyForSave(state);
-  assert.equal(economy.floors[FloorLevel.MAINTENANCE]?.floor, FloorLevel.MAINTENANCE);
+  assert.equal(economy.floors['maintenance']?.floor.MAINTENANCE);
 });
 
 test('normalizeGameEconomy clears price cache', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
 
   const savedEconomy = {
     priceVersion: 1,

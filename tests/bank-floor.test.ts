@@ -5,7 +5,6 @@ import {
   Cell,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -78,8 +77,8 @@ test('bank_floor is registered as an authored Ministry-band route', () => {
 });
 
 test('normal lift route reaches bank_floor between Ministry and Raionsovet archive', () => {
-  const state = makeGameState({ currentZ: FloorLevel.MINISTRY });
-  setFloorRunState(state, { runSeed: 2214, currentZ: 30, specs: {}, visited: {} }, FloorLevel.MINISTRY);
+  const state = makeGameState({ currentZ: 30 });
+  setFloorRunState(state, { runSeed: 2214, currentZ: 30, specs: {}, visited: {} }.MINISTRY);
 
   const upperGap = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(upperGap?.z, 29);
@@ -112,7 +111,7 @@ test('normal lift route reaches bank_floor between Ministry and Raionsovet archi
   const leakArchive = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(leakArchive?.z, 24);
   assert.equal(leakArchive?.designFloorId, 'critical_leak_archive');
-  assert.equal(leakArchive?.baseFloor, FloorLevel.MINISTRY);
+  assert.equal(leakArchive?.baseFloor.MINISTRY);
   commitFloorRunEntry(state, leakArchive!);
 
   for (const expectedZ of [23]) {

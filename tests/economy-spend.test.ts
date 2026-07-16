@@ -1,20 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FloorLevel } from '../src/core/types';
 import { spendResources, ensureEconomyState, changeResourceStock } from '../src/systems/economy';
 import { makeGameState } from './helpers';
 
 test('spendResources successfully spends resources and returns true', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
 
   const econ = ensureEconomyState(state);
 
-  const floorState = econ.floors[FloorLevel.LIVING] || { resources: {} };
+  const floorState = econ.floors['living'] || { resources: {} };
 
-  changeResourceStock(state, 'drink_water', 10, FloorLevel.LIVING);
-  changeResourceStock(state, 'metal', 5, FloorLevel.LIVING);
+  changeResourceStock(state, 'drink_water', 10, 'living');
+  changeResourceStock(state, 'metal', 5, 'living');
 
-  const updatedFloorState = econ.floors[FloorLevel.LIVING]!;
+  const updatedFloorState = econ.floors['living']!;
   const newWater = updatedFloorState.resources['drink_water'].stock;
   const newMetal = updatedFloorState.resources['metal'].stock;
 
@@ -30,17 +29,17 @@ test('spendResources successfully spends resources and returns true', () => {
 });
 
 test('spendResources returns false and does not mutate stock if resources are insufficient', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
 
   const econ = ensureEconomyState(state);
-  changeResourceStock(state, 'drink_water', 0, FloorLevel.LIVING);
-  const updatedFloorState = econ.floors[FloorLevel.LIVING]!;
+  changeResourceStock(state, 'drink_water', 0, 'living');
+  const updatedFloorState = econ.floors['living']!;
 
   const startWater = updatedFloorState.resources['drink_water'].stock;
-  changeResourceStock(state, 'drink_water', -startWater + 2, FloorLevel.LIVING);
+  changeResourceStock(state, 'drink_water', -startWater + 2, 'living');
 
   const startMetal = updatedFloorState.resources['metal'].stock;
-  changeResourceStock(state, 'metal', -startMetal + 5, FloorLevel.LIVING);
+  changeResourceStock(state, 'metal', -startMetal + 5, 'living');
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 },
@@ -54,14 +53,14 @@ test('spendResources returns false and does not mutate stock if resources are in
 });
 
 test('spendResources returns false if resource is missing entirely', () => {
-  const state = makeGameState({ currentZ: FloorLevel.LIVING });
+  const state = makeGameState({ currentZ: 0 });
 
   const econ = ensureEconomyState(state);
-  changeResourceStock(state, 'drink_water', 0, FloorLevel.LIVING);
-  const updatedFloorState = econ.floors[FloorLevel.LIVING]!;
+  changeResourceStock(state, 'drink_water', 0, 'living');
+  const updatedFloorState = econ.floors['living']!;
 
   const startWater = updatedFloorState.resources['drink_water'].stock;
-  changeResourceStock(state, 'drink_water', -startWater + 5, FloorLevel.LIVING);
+  changeResourceStock(state, 'drink_water', -startWater + 5, 'living');
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 },
@@ -74,18 +73,18 @@ test('spendResources returns false if resource is missing entirely', () => {
 });
 
 test('spendResources respects the passed floor level argument', () => {
-  const state = makeGameState({ currentZ: FloorLevel.MAINTENANCE });
+  const state = makeGameState({ currentZ: -26 });
 
   const econ = ensureEconomyState(state);
-  changeResourceStock(state, 'drink_water', 0, FloorLevel.LIVING);
-  const livingFloorState = econ.floors[FloorLevel.LIVING]!;
+  changeResourceStock(state, 'drink_water', 0, 'living');
+  const livingFloorState = econ.floors['living']!;
 
   const startWater = livingFloorState.resources['drink_water'].stock;
-  changeResourceStock(state, 'drink_water', -startWater + 5, FloorLevel.LIVING);
+  changeResourceStock(state, 'drink_water', -startWater + 5, 'living');
 
   const result = spendResources(state, [
     { id: 'drink_water', count: 3 }
-  ], FloorLevel.LIVING);
+  ]);
 
   assert.equal(result, true);
 

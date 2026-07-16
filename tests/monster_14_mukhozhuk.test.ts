@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, FloorLevel, MonsterKind, Occupation, RoomType, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, MonsterKind, Occupation, RoomType, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
@@ -81,7 +81,6 @@ test('mukhozhuk host keeps standalone parasite registry, ecology, rumors and spr
   assert.equal(DEF.kind, MonsterKind.MUKHOZHUK_HOST);
   assert.equal(MONSTERS[MonsterKind.MUKHOZHUK_HOST], DEF);
   assert.deepEqual(DEF.aiFlags, ['parasiteLeader', 'foodBait']);
-  assert.deepEqual(DEF.floors, [FloorLevel.MINISTRY, FloorLevel.MAINTENANCE]);
   assert.match(DEF.counterplay ?? '', /свидетел|карантин|крика/i);
   assert.match(DEF.lootHint ?? '', /хитин|приказ|карточка/i);
   assert.equal(ecology?.rare, true);
@@ -126,7 +125,7 @@ test('mukhozhuk command pulse is local, capped and does not draft ordinary civil
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
   }));
   const entities = [player, host, civilian, strongGuard, ...guards];
-  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);
@@ -151,7 +150,7 @@ test('idle mukhozhuk spoils nearby food containers through local appetite', () =
     id: 44,
     x: 12,
     y: 12,
-    floor: FloorLevel.MINISTRY,
+    z: 30,
     roomId: 0,
     zoneId: 0,
     name: 'Запас ревизии',
@@ -161,7 +160,7 @@ test('idle mukhozhuk spoils nearby food containers through local appetite', () =
   });
   world.addContainer(container);
   const entities = [player, host];
-  const state = makeGameState({ currentZ: FloorLevel.MINISTRY, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 30, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);

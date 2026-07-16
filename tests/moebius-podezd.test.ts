@@ -6,7 +6,6 @@ import {
   DoorState,
   EntityType,
   Faction,
-  FloorLevel,
   LiftDirection,
   MonsterKind,
   Occupation,
@@ -137,7 +136,7 @@ test('moebius_podezd is registered as the z +2 residential orientation route', (
   const route = designFloorById(MOEBIUS_PODEZD_ROUTE_ID);
   assert.equal(route?.z, MOEBIUS_PODEZD_Z);
   assert.equal(route?.baseFloor, MOEBIUS_PODEZD_BASE_FLOOR);
-  assert.equal(route?.baseFloor, FloorLevel.KVARTIRY);
+  assert.equal(route?.baseFloor.KVARTIRY);
   assert.equal(route?.displayName, 'Мёбиус-подъезд');
   assert.equal(designFloorAtZ(MOEBIUS_PODEZD_Z)?.id, MOEBIUS_PODEZD_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(MOEBIUS_PODEZD_Z), false);

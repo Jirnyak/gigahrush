@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { EntityType, Faction, FloorLevel, MonsterKind, Occupation, QuestType, RoomType, type Entity } from '../src/core/types';
+import { EntityType, Faction, MonsterKind, Occupation, QuestType, RoomType, type Entity } from '../src/core/types';
 import { type RumorDef } from '../src/data/rumors';
 import { renderMarkovDialogueTalk, type MarkovAdapterSpeechRequest } from '../src/systems/markov_dialogue';
 import { renderProceduralQuestSpeech } from '../src/systems/markov_procedural_quests';
@@ -28,7 +28,7 @@ function npc(partial: Partial<Entity> = {}): Entity {
 
 function snapshot(partial: Partial<ContextSnapshot> = {}): ContextSnapshot {
   return {
-    floor: FloorLevel.LIVING,
+    z: 60,
     zoneId: 2,
     zoneFaction: undefined,
     zoneLevel: 1,
@@ -99,10 +99,10 @@ test('rumor output preserves rumor id and selected facts', () => {
     id: 'test_bandage_lead',
     topic: 'rare_item',
     minTrust: 0,
-    floors: [FloorLevel.LIVING],
+    floors: ['living'],
     text: ['Бинт ищи там, где журнал чище рук.'],
     lead: {
-      floor: FloorLevel.LIVING,
+      z: 60,
       roomType: RoomType.MEDICAL,
       itemId: 'bandage',
       action: 'спроси у медпункта и держи бинт сухим',
@@ -121,10 +121,10 @@ test('rumor output does not invent a different target, floor, or item', () => {
     id: 'test_water_living',
     topic: 'rare_item',
     minTrust: 0,
-    floors: [FloorLevel.LIVING],
+    floors: ['living'],
     text: ['Воду спрашивают у кухни, не у окна с печатью.'],
     lead: {
-      floor: FloorLevel.LIVING,
+      z: 60,
       roomType: RoomType.KITCHEN,
       itemId: 'water',
       action: 'проверь кран и общий список',
@@ -143,10 +143,10 @@ test('rumor routed output is rejected when it invents a different fact', () => {
     id: 'test_water_living_routed',
     topic: 'rare_item',
     minTrust: 0,
-    floors: [FloorLevel.LIVING],
+    floors: ['living'],
     text: ['Воду спрашивают у кухни, не у окна с печатью.'],
     lead: {
-      floor: FloorLevel.LIVING,
+      z: 60,
       roomType: RoomType.KITCHEN,
       itemId: 'water',
       action: 'проверь кран и общий список',

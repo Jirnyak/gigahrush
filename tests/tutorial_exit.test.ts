@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { World } from '../src/core/world';
 import { makeGameState } from './helpers';
-import { DoorState, FloorLevel, EntityType, type Entity } from '../src/core/types';
+import { DoorState, EntityType, type Entity } from '../src/core/types';
 import { activateDoor_FOR_TESTING } from '../src/systems/interactions';
 import { TutorialStep } from '../src/systems/tutorial';
 

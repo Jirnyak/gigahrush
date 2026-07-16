@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, EntityType, Faction, Feature, FloorLevel, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction, Feature, MonsterKind, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { MONSTERS } from '../src/entities/monster';
 import { setListenerPos } from '../src/systems/audio';
@@ -153,7 +153,7 @@ test('lampovy publishes one local powered cue when combat starts under a lamp', 
   const monster = threat(MonsterKind.LAMPOVY, 6.5, 10.5);
   const entities = [target, monster];
   const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: FloorLevel.LIVING, worldEvents: createWorldEventState() });
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
 
   world.features[world.idx(6, 10)] = Feature.LAMP;
   prepare(entities);
