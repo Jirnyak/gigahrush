@@ -2435,9 +2435,7 @@ export function materializeAlifeFloorPopulation(
 
   while (slot < templates.length) {
     const template = templates[slot++];
-    if (assignPersistentAlifeNpcFromEntity(state, template, entities, floorKey)) {
-      entities.push(template);
-    } else if (template.name || template.alifeId !== undefined) {
+    if (template.name || template.alifeId !== undefined) {
       entities.push(template);
     }
   }
