@@ -18,6 +18,9 @@ import { ALIFE_POPULATION_CAPACITY } from '../data/alife_population_plan';
 import { occupationHasRoutineTag } from '../data/occupation_profiles';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
 import {
+  getPlotNpcStringId,
+} from '../data/npc_packages';
+import {
   anomalyById,
   majorityById,
   type ProceduralFloorSpec,
@@ -1058,7 +1061,7 @@ export function processAlifePendingArrivals(
 function canStartDeparture(state: GameState, entity: Entity, reason: AlifeMigrationReason): boolean {
   if (!entity.alive || entity.type !== EntityType.NPC || entity.alifeId === undefined) return false;
   if (isPlayerEntity(entity) || isNativePlayerBodyEntity(entity) || entity.persistentNpcId === 'player') return false;
-  if (entity.plotNpcId !== undefined) return false;
+  if (getPlotNpcStringId(entity.id) !== undefined) return false;
   if (entity.questId !== undefined && entity.questId !== -1) return false;
   if (entity.canGiveQuest === true) return false;
   if (state.showNpcMenu && state.npcMenuTarget === entity.id) return false;

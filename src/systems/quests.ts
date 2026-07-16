@@ -1049,10 +1049,10 @@ export function checkTalkQuest(
     if (q.done) continue;
 
     if (q.type === QuestType.TALK) {
-      // Match by entity id OR by plot NPC id (cross-floor quests)
+      // Match by entity id OR by persistent alife id
       const matchById = q.targetNpcId === targetNpc.id;
-      const matchByPlotId = q.targetNpcId && targetNpc.id === q.targetNpcId;
-      if (!matchById && !matchByPlotId) continue;
+      const matchByPersistentId = q.targetNpcId !== undefined && targetNpc.persistentNpcId === `alife:${q.targetNpcId}`;
+      if (!matchById && !matchByPersistentId) continue;
       const pack = resolveNpcPackageForEntity(targetNpc);
       const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
       if (completeQuest(q, player, entities, state, msgs)) {
@@ -1065,8 +1065,8 @@ export function checkTalkQuest(
     } else if (q.type === QuestType.FETCH && q.contractId === undefined) {
       // FETCH quests from NPCs require manual turn in
       const matchById = q.giverId === targetNpc.id;
-      const matchByPlotId = q.giverId && targetNpc.id === q.giverId;
-      if (!matchById && !matchByPlotId) continue;
+      const matchByPersistentId = q.giverId !== undefined && targetNpc.persistentNpcId === `alife:${q.giverId}`;
+      if (!matchById && !matchByPersistentId) continue;
       
       let complete = false;
       if (q.targetItem === 'money') {
@@ -1089,8 +1089,8 @@ export function checkTalkQuest(
     } else if (q.type === QuestType.KILL && q.contractId === undefined) {
       // KILL quests from NPCs require manual turn in
       const matchById = q.giverId === targetNpc.id;
-      const matchByPlotId = q.giverId && targetNpc.id === q.giverId;
-      if (!matchById && !matchByPlotId) continue;
+      const matchByPersistentId = q.giverId !== undefined && targetNpc.persistentNpcId === `alife:${q.giverId}`;
+      if (!matchById && !matchByPersistentId) continue;
 
       if (q.killCount !== undefined && q.killNeeded !== undefined && q.killCount >= q.killNeeded) {
         if (completeQuest(q, player, entities, state, msgs)) {

@@ -1,4 +1,4 @@
-import { getPlotNpcNumericId } from '../data/npc_packages';
+import { getPlotNpcNumericId, getPlotNpcStringId } from '../data/npc_packages';
 import {
   W,
   Cell,
@@ -2037,7 +2037,7 @@ export function assignPersistentAlifeNpcFromEntity(
   entities: readonly Entity[],
   floorKey = currentAlifeFloorKey(state),
 ): boolean {
-  if (entity.type !== EntityType.NPC || entity.plotNpcId !== undefined || entity.persistentNpcId) return false;
+  if (entity.type !== EntityType.NPC || getPlotNpcStringId(entity.id) !== undefined || entity.persistentNpcId) return false;
   if (entity.alifeId !== undefined) {
     rewriteAlifeNpcIdentityFromEntity(state, entity);
     return true;

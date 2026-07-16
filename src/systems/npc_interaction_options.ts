@@ -1,4 +1,4 @@
-import { getPlotNpcStringId } from '../data/npc_packages';
+import { getPlotNpcNumericId, getPlotNpcStringId } from '../data/npc_packages';
 import { openArena } from './arena';
 import { EntityType, msg, type Entity, type GameState, AIGoal, NpcState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
@@ -526,7 +526,7 @@ registerNpcInteractionOption({
   id: 'arena',
   order: 5,
   label: () => 'Арена',
-  visible: ctx => ctx.npc.name === 'Мастер Арены' || ctx.npc.name === 'Марко Лоло',
+  visible: ctx => ctx.npc.id === getPlotNpcNumericId('arena_master') || ctx.npc.id === getPlotNpcNumericId('marco_lolo'),
   activate: ctx => {
     openArena(ctx);
   },

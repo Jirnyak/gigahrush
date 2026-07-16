@@ -2131,6 +2131,7 @@ function scanCell(
   collectOptionalColumnAtCell(context, idx, x, y, out);
   collectOptionalCeilingAtCell(context, idx, x, y, out);
   collectCorridorVolumeAtCell(context, idx, x, y, profile, out);
+  collectBillboardsAtCell(context, idx, out);
 }
 
 function scanLocalRadiusCells(
@@ -2201,16 +2202,43 @@ export function collectMeshChunk(
   return out;
 }
 
-export function collectStaticEntityMeshes(context: MeshPassContext, out: MeshInstance[]): void {
+interface BillboardCacheEntry {
+  entityCount: number;
+  map: Map<number, Entity[]>;
+}
+const billboardCache = new WeakMap<World, BillboardCacheEntry>();
+
+function getBillboardMap(world: World, entities?: readonly Entity[]): Map<number, Entity[]> | undefined {
+  if (!entities) return undefined;
+  const count = entities.length;
+  let entry = billboardCache.get(world);
+  if (!entry || entry.entityCount !== count) {
+    const map = new Map<number, Entity[]>();
+    for (const e of entities) {
+      if (e.alive && e.type === EntityType.BILLBOARD) {
+        const idx = world.idx(e.x, e.y);
+        let list = map.get(idx);
+        if (!list) {
+          list = [];
+          map.set(idx, list);
+        }
+        list.push(e);
+      }
+    }
+    entry = { entityCount: count, map };
+    billboardCache.set(world, entry);
+  }
+  return entry.map;
+}
+
+export function collectBillboardsAtCell(context: MeshPassContext, idx: number, out: MeshInstance[]): void {
   const profile = resolveMeshSceneProfile(context);
   if (!profile.enabled || !profile.includeEntities) return;
-  const rad2 = profile.radius * profile.radius;
-  let added = 0;
-  const maxAdded = Math.min(profile.instanceCap, 128);
-  if (!context.entities) return;
-  for (const e of context.entities) {
-    if (!e.alive || e.type !== EntityType.BILLBOARD) continue;
-    if (context.world.dist2(context.camera.x, context.camera.y, e.x, e.y) > rad2) continue;
+  const map = getBillboardMap(context.world, context.entities);
+  if (!map) return;
+  const list = map.get(idx);
+  if (!list) return;
+  for (const e of list) {
     emitInstance(out, {
       modelId: 'billboard_prop',
       x: e.x,
@@ -2223,8 +2251,6 @@ export function collectStaticEntityMeshes(context: MeshPassContext, out: MeshIns
       seed: meshInstanceSeed(context.seed, e.x, e.y, e.id + 3000, 'billboard_prop'),
       flags: MeshInstanceFlag.Entity,
     });
-    added++;
-    if (added >= maxAdded) break;
   }
 }
 
@@ -2348,12 +2374,6 @@ export const containerSourceAdapter: MeshSourceAdapter = {
   },
 };
 
-export const staticEntitySourceAdapter: MeshSourceAdapter = {
-  collect(context, out) {
-    collectStaticEntityMeshes(context, out);
-  },
-};
-
 export function collectMeshSceneWithStats(context: MeshPassContext, out: MeshInstance[] = []): MeshSceneCollectResult {
   out.length = 0;
   const profile = resolveMeshSceneProfile(context);
@@ -2364,7 +2384,6 @@ export function collectMeshSceneWithStats(context: MeshPassContext, out: MeshIns
   scanLocalRadiusCells(resolvedContext, profile, raw, stats);
   collectProceduralCeilingPipeNetwork(resolvedContext, profile, raw);
   collectProceduralFloorScatter(resolvedContext, profile, raw);
-  collectStaticEntityMeshes(resolvedContext, raw);
   stats.instancesBeforeCap = raw.length;
   capMeshInstances(resolvedContext, raw, out, profile);
   stats.instancesAfterCap = out.length;
