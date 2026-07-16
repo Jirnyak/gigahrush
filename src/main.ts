@@ -658,8 +658,7 @@ let playerAge = loadPlayerAge();
 let playerSex = loadPlayerSex();
 let titlePlayerAgeText = String(playerAge);
 let titleRunSeedText = '';
-const TRAILER_ZS = [0, 14, -26, -36, 30, -50]; // LIVING, KVARTIRY, MAINTENANCE, HELL, MINISTRY, VOID
-const TRAILER_FLOOR_NAMES = ['LIVING', 'KVARTIRY', 'MAINTENANCE', 'HELL', 'MINISTRY', 'VOID'];
+const TRAILER_ZS = Array.from({ length: 101 }, (_, i) => i - 50);
 let titleTrailerFloorIdx = Math.floor(Math.random() * TRAILER_ZS.length);
 let titleStartNeedsInit = true;
 let titleMode: TitleScreenMode = 'setup';
@@ -1774,7 +1773,7 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
     });
   }
   rows.push(
-    { field: 'trailer', label: 'РЕЖИМ ТРЕЙЛЕРА', value: TRAILER_FLOOR_NAMES[titleTrailerFloorIdx], hint: 'Технический демо-режим. Enter: запуск, Влево/Вправо: карта', selected: selected('trailer') },
+    { field: 'trailer', label: 'РЕЖИМ ТРЕЙЛЕРА', value: 'ЭТАЖ ' + TRAILER_ZS[titleTrailerFloorIdx], hint: 'Технический демо-режим. Enter: запуск, Влево/Вправо: карта', selected: selected('trailer') },
     { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
     { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
     { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
@@ -1999,7 +1998,7 @@ let runtimeCamera = createRuntimeCamera();
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
 let pendingLoadStarted = false; // true = loading worker was started
 let pendingLoadWaitTime = 0;
-let pendingLoadAckYielded = false;
+let pendingLoadAckYielded = 0;
 let platformGameplayMarkedActive = false;
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
@@ -3165,7 +3164,7 @@ function scheduleLoading(fn: () => void): void {
   pendingLoadStarted = false;
   loadingWorkerAck = false;
   pendingLoadWaitTime = 0;
-  pendingLoadAckYielded = false;
+  pendingLoadAckYielded = 0;
 }
 
 function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: boolean = false): void {
@@ -9243,7 +9242,7 @@ function gameLoop(now: number): void {
       }
       pendingLoadStarted = true;
       pendingLoadWaitTime = performance.now();
-      pendingLoadAckYielded = false;
+      pendingLoadAckYielded = 0;
       requestAnimationFrame(gameLoop);
       return;
     }
@@ -9252,9 +9251,9 @@ function gameLoop(now: number): void {
       requestAnimationFrame(gameLoop);
       return;
     }
-    if (loadingWorkerAck && !pendingLoadAckYielded) {
-      // Yield one final frame so the browser compositor can present the worker's first frame!
-      pendingLoadAckYielded = true;
+    if (loadingWorkerAck && pendingLoadAckYielded < 2) {
+      // Yield multiple frames so the browser compositor can present the worker's first frame!
+      pendingLoadAckYielded++;
       requestAnimationFrame(gameLoop);
       return;
     }

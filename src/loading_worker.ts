@@ -67,7 +67,9 @@ self.onmessage = (e: MessageEvent) => {
       lastTime = tipTime;
       dots = 0;
       loop(tipTime);
-      self.postMessage({ type: 'started' });
+      requestAnimationFrame(() => {
+        self.postMessage({ type: 'started' });
+      });
     }
   } else if (msg.type === 'stop') {
     active = false;
