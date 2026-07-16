@@ -9698,6 +9698,11 @@ function gameLoop(now: number): void {
     }
 
     keepDebugOnePunchManAlive(player);
+    if (state.trailerMode) {
+      player.alive = true;
+      player.maxHp = Math.max(1, player.maxHp ?? 100);
+      player.hp = player.maxHp;
+    }
 
     // Detect player damage for vignette flash
     const damageActor = syncPlayerActorSwitchBaseline();
