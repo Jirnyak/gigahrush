@@ -1941,12 +1941,7 @@ const BASE_CMD_VISUAL_BEFORE_DESIGN = [
   'debug_false_cleanup_patrol',
   'debug_mukhozhuk_host',
   'debug_chervie_site',
-  'teleport_living',
-  'teleport_ministry',
-  'teleport_kvartiry',
-  'teleport_maintenance',
-  'teleport_hell',
-  'teleport_void',
+
   'teleport_random_procedural',
   'teleport_smog',
   'teleport_false_safe_block',
