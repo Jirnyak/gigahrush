@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Сталкер Меченый — side quest content module ──────────────── */
 /* Артефактоискатель скупает идолов Чернобога за пси-сгустки.      */
 
@@ -47,7 +48,7 @@ registerAuthoredNpc({
   quests: [
     {
       id: 'mecheny_idols',
-      giverNpcId: NPC_ID,
+      giverId: getPlotNpcNumericId(NPC_ID)!,
       type: QuestType.FETCH,
       desc: 'Меченый: «Три идола Чернобога. Цена — пси-сгусток и патроны. Без вопросов.»',
       targetItem: 'idol_chernobog', targetCount: 3,

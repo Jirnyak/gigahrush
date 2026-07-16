@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Hell choir tax: capped PSI combat/trade/extraction POI ───── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -178,7 +179,7 @@ const LIQUIDATOR_DEF: PlotNpcDef = {
 registerSideQuest(GUIDE_ID, GUIDE_DEF, [
   {
     id: 'hell18_break_altar_signal',
-    giverNpcId: GUIDE_ID,
+    giverId: getPlotNpcNumericId(GUIDE_ID)!,
     type: QuestType.KILL,
     desc: 'Арсений Обгорелый: «Сломай сигнальный идол мясного хора. Один идол, один выход, без второй волны.»',
     targetMonsterKind: MonsterKind.IDOL,
@@ -195,7 +196,7 @@ registerSideQuest(GUIDE_ID, GUIDE_DEF, [
 registerSideQuest(TAXMAN_ID, TAXMAN_DEF, [
   {
     id: 'hell18_pay_cult_tax',
-    giverNpcId: TAXMAN_ID,
+    giverId: getPlotNpcNumericId(TAXMAN_ID)!,
     type: QuestType.FETCH,
     desc: 'Пахом Мясной Налог: «Три куска сырого мяса в кассу хора. Заплатишь мясом - сбережёшь патроны.»',
     targetItem: 'rawmeat',
@@ -209,7 +210,7 @@ registerSideQuest(TAXMAN_ID, TAXMAN_DEF, [
   },
   {
     id: 'hell18_take_psi_cache',
-    giverNpcId: TAXMAN_ID,
+    giverId: getPlotNpcNumericId(TAXMAN_ID)!,
     type: QuestType.FETCH,
     desc: 'Пахом Мясной Налог: «Принеси голос в банке из кассы. Себе оставишь - будет награда без меня, отдашь - стабилизатор.»',
     targetItem: 'bottled_voice',
@@ -226,10 +227,10 @@ registerSideQuest(TAXMAN_ID, TAXMAN_DEF, [
 registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR_DEF, [
   {
     id: 'hell18_extract_last_liquidator',
-    giverNpcId: LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
     type: QuestType.TALK,
     desc: 'Капрал Шрамко: «Дай Арсению знак на выход. Он {dir}. Не задерживайся: это эвакуация, не зачистка.»',
-    targetNpcId: GUIDE_ID,
+    targetNpcId: getPlotNpcNumericId(GUIDE_ID)!,
     rewardItem: 'liquidator_ration',
     rewardCount: 1,
     extraRewards: [{ defId: 'ammo_762', count: 10 }],

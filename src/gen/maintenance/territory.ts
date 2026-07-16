@@ -50,12 +50,12 @@ const MAINTENANCE_FACTION_SQUADS: readonly MaintenanceFactionDef[] = [
   { faction: Faction.SCIENTIST, owner: factionToTerritoryOwner(Faction.SCIENTIST), occupation: Occupation.SCIENTIST },
 ];
 
-const MAINTENANCE_HQ_SEEDS: readonly { owner: TerritoryOwner; roomName: string; fallbackX: number; fallbackY: number }[] = [
-  { owner: ZoneFaction.LIQUIDATOR, roomName: 'Пост обходчиков: устье коллекторов', fallbackX: 346, fallbackY: 392 },
-  { owner: ZoneFaction.CITIZEN, roomName: 'Водомерный пост: давление спорное', fallbackX: 510, fallbackY: 644 },
-  { owner: ZoneFaction.CULTIST, roomName: 'Пост Черной ладони у мастерской', fallbackX: 278, fallbackY: 470 },
-  { owner: ZoneFaction.SCIENTIST, roomName: 'НИИ Слизи: зелёная кислотная проба', fallbackX: 717, fallbackY: 488 },
-  { owner: ZoneFaction.WILD, roomName: 'Логово Манкобуса', fallbackX: 588, fallbackY: 588 },
+const MAINTENANCE_HQ_SEEDS: readonly { owner: TerritoryOwner; roomDefId: string; fallbackX: number; fallbackY: number }[] = [
+  { owner: ZoneFaction.LIQUIDATOR, roomDefId: 'Пост обходчиков: устье коллекторов', fallbackX: 346, fallbackY: 392 },
+  { owner: ZoneFaction.CITIZEN, roomDefId: 'Водомерный пост: давление спорное', fallbackX: 510, fallbackY: 644 },
+  { owner: ZoneFaction.CULTIST, roomDefId: 'Пост Черной ладони у мастерской', fallbackX: 278, fallbackY: 470 },
+  { owner: ZoneFaction.SCIENTIST, roomDefId: 'НИИ Слизи: зелёная кислотная проба', fallbackX: 717, fallbackY: 488 },
+  { owner: ZoneFaction.WILD, roomDefId: 'Логово Манкобуса', fallbackX: 588, fallbackY: 588 },
 ];
 
 function pickPsi(): string {
@@ -136,7 +136,7 @@ const SECONDARY_HQ_NAMES = [
 ];
 
 const HQ_TARGET_NAMES = [
-  ...MAINTENANCE_HQ_SEEDS.map(s => s.roomName),
+  ...MAINTENANCE_HQ_SEEDS.map(s => s.roomDefId),
   ...SECONDARY_HQ_NAMES,
 ];
 
@@ -152,7 +152,7 @@ function seedMaintenanceHqTerritory(world: World): void {
   }
 
   for (const seed of MAINTENANCE_HQ_SEEDS) {
-    const room = roomsByName.get(seed.roomName);
+    const room = roomsByName.get(seed.roomDefId);
     const picked = room && mappedRoomCells(world, room).length > 0
       ? room
       : chooseMaintenanceHqFallbackRoom(world, seed.fallbackX, seed.fallbackY, usedRooms);

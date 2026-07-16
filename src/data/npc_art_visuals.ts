@@ -1,5 +1,6 @@
 import { Faction, Occupation } from '../core/types';
 import { ART_SPRITE_MANIFEST } from './art_sprite_manifest';
+import { getPlotNpcNumericId } from './npc_packages';
 
 export type NpcAgeCategory = 'child' | 'young' | 'adult' | 'old';
 
@@ -16,14 +17,14 @@ export interface NpcArtVisualContext {
   occupation?: Occupation;
   isFemale?: boolean;
   age?: number;
-  plotNpcId?: string;
+  plotNpcId?: number;
 }
 
 export function resolveNpcArtVisualId(ctx: NpcArtVisualContext): string | undefined {
   if (ctx.plotNpcId) {
     for (const row of ART_SPRITE_MANIFEST) {
       for (const mapping of row.intendedMappings) {
-        if (mapping.type === 'npc_exact' && mapping.plotNpcId === ctx.plotNpcId) {
+        if (mapping.type === 'npc_exact' && mapping.plotNpcId && getPlotNpcNumericId(mapping.plotNpcId) === ctx.plotNpcId) {
           return mapping.visualId;
         }
       }

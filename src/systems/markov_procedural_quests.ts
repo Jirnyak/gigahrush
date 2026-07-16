@@ -87,7 +87,7 @@ export function renderProceduralQuestSpeech(options: ProceduralQuestSpeechOption
       ...snapshotContext,
       targetId: q.targetNpcId,
       z: q.targetFloorZ ?? q.visitFloorZ ?? options.contractDef?.target.z ?? snapshotContext?.z,
-      roomName: q.targetRoomName ?? options.contractDef?.target.roomName ?? snapshotContext?.roomName,
+      roomDefId: q.targetRoomDefId ?? options.contractDef?.target.roomDefId ?? snapshotContext?.roomDefId,
       roomType: q.targetRoomType ?? options.contractDef?.target.roomType ?? snapshotContext?.roomType,
       itemId: q.targetItem,
       itemName: q.targetItem ? itemName(q.targetItem) : undefined,
@@ -293,8 +293,8 @@ function questTargetText(q: Quest, contractDef: ContractDef | undefined, questCl
 function roomOrRouteText(q: Quest, contractDef?: ContractDef): string | undefined {
   const route = routeText(q.targetRoute ?? contractDef?.target.route);
   if (route) return route;
-  if (q.targetRoomName) return q.targetRoomName;
-  if (contractDef?.target.roomName) return contractDef.target.roomName;
+  if (q.targetRoomDefId) return q.targetRoomDefId;
+  if (contractDef?.target.roomDefId) return contractDef.target.roomDefId;
   if (q.targetRoomType !== undefined) return roomTypeName(q.targetRoomType);
   if (contractDef?.target.roomType !== undefined) return roomTypeName(contractDef.target.roomType);
   if (q.targetHint) return q.targetHint;

@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Комната Ваньки Банчиного — испуганный сосед в культовой зоне ─ */
 /*   Комната 6×5, облезлые стены, бетонный пол.                   */
 /*   Генерируется в ближайшей зоне культистов (100–200 клеток)   */
@@ -95,7 +96,7 @@ export function spawnVankaShadows(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
   // Find Vanka's room by plotNpcId
-  const vanka = entities.find(e => e.plotNpcId === 'vanka');
+  const vanka = entities.find(e => e.id === getPlotNpcNumericId('vanka'));
   if (!vanka) return;
   const denCx = Math.floor(vanka.x);
   const denCy = Math.floor(vanka.y);

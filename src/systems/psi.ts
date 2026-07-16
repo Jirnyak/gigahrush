@@ -325,7 +325,7 @@ function actorIntelligence(e: Entity): number {
 function canPossessTarget(target: Entity): boolean {
   if (!target.alive) return false;
   if (target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) return false;
-  if (target.plotNpcId) return false;
+  if (target.id) return false;
   if (target.monsterKind !== undefined && MONSTERS[target.monsterKind]?.boss) return false;
   return true;
 }

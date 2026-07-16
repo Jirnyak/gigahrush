@@ -1,5 +1,6 @@
 /* ── Водомерный пост — radio/water bureaucracy quest hub ─────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -42,7 +43,7 @@ const SAVA_DEF: PlotNpcDef = {
 registerSideQuest('ag04_watermeter_sava', SAVA_DEF, [
   {
     id: 'ag04_watermeter_tools',
-    giverNpcId: 'ag04_watermeter_sava',
+    giverId: getPlotNpcNumericId('ag04_watermeter_sava')!,
     type: QuestType.FETCH,
     desc: 'Сава: «Два ключа для поверки. Один крутит гайку, второй убеждает комиссию.»',
     targetItem: 'wrench', targetCount: 2,
@@ -52,16 +53,16 @@ registerSideQuest('ag04_watermeter_sava', SAVA_DEF, [
   },
   {
     id: 'ag04_watermeter_relay_talk',
-    giverNpcId: 'ag04_watermeter_sava',
+    giverId: getPlotNpcNumericId('ag04_watermeter_sava')!,
     type: QuestType.TALK,
     desc: 'Сава: «Передай Борису: водомер крутится без воды. Пусть подпишет, что это норма.»',
-    targetNpcId: 'ag04_pressure_boris',
+    targetNpcId: getPlotNpcNumericId('ag04_pressure_boris')!,
     rewardItem: 'note', rewardCount: 1,
     relationDelta: 10, xpReward: 35, moneyReward: 25,
   },
   {
     id: 'ag04_watermeter_visit_flooded',
-    giverNpcId: 'ag04_watermeter_sava',
+    giverId: getPlotNpcNumericId('ag04_watermeter_sava')!,
     type: QuestType.VISIT,
     desc: 'Сава: «Зайди в затопленную комнату и вернись сухим хотя бы в отчете.»',
     targetRoomType: RoomType.STORAGE,
@@ -70,7 +71,7 @@ registerSideQuest('ag04_watermeter_sava', SAVA_DEF, [
   },
   {
     id: 'ag04_watermeter_eye',
-    giverNpcId: 'ag04_watermeter_sava',
+    giverId: getPlotNpcNumericId('ag04_watermeter_sava')!,
     type: QuestType.KILL,
     desc: 'Сава: «Один глаз смотрит на счетчик. Убей его, пока он не стал ревизором.»',
     targetMonsterKind: MonsterKind.EYE,
@@ -81,7 +82,7 @@ registerSideQuest('ag04_watermeter_sava', SAVA_DEF, [
   },
   {
     id: 'ag04_watermeter_medicine',
-    giverNpcId: 'ag04_watermeter_sava',
+    giverId: getPlotNpcNumericId('ag04_watermeter_sava')!,
     type: QuestType.FETCH,
     desc: 'Сава: «Таблетки нужны для радиосмены. Помехи кусают прямо в затылок.»',
     targetItem: 'pills', targetCount: 2,

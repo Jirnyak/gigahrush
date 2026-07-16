@@ -2,6 +2,7 @@
 /*   Directors, officials in suits, scientists, liquidators.        */
 /*   Special NPCs: Chairman Kantselev, Minister Rotenbergov.       */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, RoomType,
@@ -98,10 +99,10 @@ registerAuthoredNpc({
   quests: [
     {
       id: 'kantselev_kill_makhno',
-      giverNpcId: 'kantselev',
+      giverId: getPlotNpcNumericId('kantselev')!,
       type: QuestType.KILL,
       desc: 'Председатель Канцелев: «Махно режет кабель и срывает пломбы в коллекторах. Убери атамана, пока ремонтники не ходят туда только с охраной.»',
-      targetPlotNpcId: 'makhno',
+      targetNpcId: getPlotNpcNumericId('makhno')!,
       killNeeded: 1,
       rewardItem: 'psi_brainburn', rewardCount: 1,
       extraRewards: [{ defId: 'bandage', count: 5 }, { defId: 'ammo_9mm', count: 20 }],
@@ -118,7 +119,7 @@ registerAuthoredNpc({
   quests: [
     {
       id: 'rotenbergov_taxes',
-      giverNpcId: 'rotenbergov',
+      giverId: getPlotNpcNumericId('rotenbergov')!,
       type: QuestType.FETCH,
       desc: 'Министр Ротенбергов: «Налог чрезвычайный. Принеси 1 000 000 рублей: нужны пломбы, вода и тишина в архиве.»',
       targetItem: 'money', targetCount: 1000000,

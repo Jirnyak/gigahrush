@@ -1,5 +1,6 @@
 /* -- Design z: Бюро Кэли, paperwork as a Cayley graph -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -293,7 +294,7 @@ const INSPECTOR_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_clerk', CLERK_DEF, [
   {
     id: 'cayley_byuro_bribe_generator_r',
-    giverNpcId: 'cayley_byuro_clerk',
+    giverId: getPlotNpcNumericId('cayley_byuro_clerk')!,
     type: QuestType.FETCH,
     desc: 'Отдай Григорию Кэли сорок рублей за ключ генератора R. Двери R откроются, но запись о платном обходе останется в журнале.',
     targetItem: 'money',
@@ -313,10 +314,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_clerk', CLERK_DE
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_coset_masha', COSET_DEF, [
   {
     id: 'cayley_byuro_apply_forms_rs',
-    giverNpcId: 'cayley_byuro_coset_masha',
+    giverId: getPlotNpcNumericId('cayley_byuro_coset_masha')!,
     type: QuestType.VISIT,
     desc: 'Пройди порядок R потом S до окна SR2. S потом R ведет в другое окно, поэтому не меняй порядок у двери.',
-    targetRoomName: CAYLEY_BYURO_ROOM_NAMES.srr,
+    targetRoomDefId: CAYLEY_BYURO_ROOM_NAMES.srr,
     rewardItem: 'archive_access_permit',
     rewardCount: 1,
     relationDelta: 7,
@@ -331,7 +332,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_coset_masha', CO
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_inspector', INSPECTOR_DEF, [
   {
     id: 'cayley_byuro_expose_forged_identity',
-    giverNpcId: 'cayley_byuro_inspector',
+    giverId: getPlotNpcNumericId('cayley_byuro_inspector')!,
     type: QuestType.FETCH,
     desc: 'Принеси Инспектору Смежности поддельный пропуск из факторного хода. Он платит за улику, не за мораль.',
     targetItem: 'forged_permit_slip',
@@ -1092,7 +1093,7 @@ function populateAuthoredContent(
   rooms: ReturnType<typeof createRooms>,
   state: CayleyByuroState,
 ): void {
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const clerkId = spawnNpc(entities, nextId, 'cayley_byuro_clerk', CLERK_DEF, rooms.bribe, 10, 12);
   spawnNpc(entities, nextId, 'cayley_byuro_coset_masha', COSET_DEF, rooms.quotient, 16, 9);
   const inspectorId = spawnNpc(entities, nextId, 'cayley_byuro_inspector', INSPECTOR_DEF, rooms.audit, 10, 10, 'makarov');

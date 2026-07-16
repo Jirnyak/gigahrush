@@ -1,5 +1,6 @@
 /* ── AG71 slime deactivation furnace — dirty cleanup production ─ */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   ContainerKind,
@@ -74,7 +75,7 @@ const CLAIMANT_DEF: PlotNpcDef = {
 registerSideQuest('ag71_furnace_operator', OPERATOR_DEF, [
   {
     id: 'ag84_furnace_burn_brown_sample',
-    giverNpcId: 'ag71_furnace_operator',
+    giverId: getPlotNpcNumericId('ag71_furnace_operator')!,
     type: QuestType.FETCH,
     desc: 'Вера: «Коричневую пробу из сухого обхода в бункер. Я верну гашёный остаток: хуже товара, лучше живого запаха.»',
     targetItem: BROWN_SAMPLE_ITEM, targetCount: 1,
@@ -94,7 +95,7 @@ registerSideQuest('ag71_furnace_operator', OPERATOR_DEF, [
   },
   {
     id: 'ag71_furnace_fuel_account',
-    giverNpcId: 'ag71_furnace_operator',
+    giverId: getPlotNpcNumericId('ag71_furnace_operator')!,
     type: QuestType.FETCH,
     desc: 'Вера: «Канистру бензина в расход печи. За топливо выдам сухой остаток и фильтр, без красивых слов про чистоту.»',
     targetItem: 'ammo_fuel', targetCount: 1,
@@ -106,7 +107,7 @@ registerSideQuest('ag71_furnace_operator', OPERATOR_DEF, [
 
 registerSideQuest('ag71_furnace_claimant', CLAIMANT_DEF, [{
   id: 'ag71_sell_hot_clot',
-  giverNpcId: 'ag71_furnace_claimant',
+  giverId: getPlotNpcNumericId('ag71_furnace_claimant')!,
   type: QuestType.FETCH,
   desc: 'Сенька: «Не жги коричневую пробу. Принеси её мне целой — рынок любит то, что официально должно исчезнуть.»',
   targetItem: BROWN_SAMPLE_ITEM, targetCount: 1,

@@ -1,5 +1,6 @@
 /* ── Кухня снабжения ячейки: бытовая культовая логистика ─────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -75,7 +76,7 @@ const NYURA: PlotNpcDef = {
 
 registerSideQuest('kv_zina_kladovaya', ZINA, [{
   id: 'kv_cult_supply_negotiate',
-  giverNpcId: 'kv_zina_kladovaya',
+  giverId: getPlotNpcNumericId('kv_zina_kladovaya')!,
   type: QuestType.FETCH,
   desc: 'Зина Кладовая: «Липовую пайковую карточку, и я внесу тебя в кухонную ведомость без драки.»',
   targetItem: 'forged_ration_card', targetCount: 1,
@@ -86,7 +87,7 @@ registerSideQuest('kv_zina_kladovaya', ZINA, [{
 
 registerSideQuest('kv_nyura_vdveryah', NYURA, [{
   id: 'kv_cult_supply_expose',
-  giverNpcId: 'kv_nyura_vdveryah',
+  giverId: getPlotNpcNumericId('kv_nyura_vdveryah')!,
   type: QuestType.FETCH,
   desc: 'Нюра Вдверях: «Кухонный список ячейки на стол. Пусть хлеб считают при людях.»',
   targetItem: 'cult_supply_list', targetCount: 1,

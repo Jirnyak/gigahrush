@@ -1,5 +1,6 @@
 /* -- Design z: voronoi_quarantine - Laguerre quarantine cells -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -45,7 +46,7 @@ export const VORONOI_QUARANTINE_ROUTE_ID = 'voronoi_quarantine' as const;
 export const VORONOI_QUARANTINE_Z = 6 as const;
 export const VORONOI_QUARANTINE_BASE_FLOOR = 60;
 
-export const VORONOI_QUARANTINE_ROOM_NAMES = {
+export const VORONOI_QUARANTINE_ROOM_DEF_IDS = {
   northCheckpoint: 'Северный пост карантинной диаграммы',
   cleanClinic: 'Чистая клиника ячейки Ллойда',
   forgeOffice: 'Канцелярия липких пропусков',
@@ -76,7 +77,7 @@ type NpcId =
   | 'voronoi_quarantine_quartermaster_marta';
 
 interface SiteSeed {
-  key?: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES;
+  key?: keyof typeof VORONOI_QUARANTINE_ROOM_DEF_IDS;
   name?: string;
   role: SiteRole;
   x: number;
@@ -132,7 +133,7 @@ interface HqSupportSpec {
 
 interface FactionHqSpec {
   owner: TerritoryOwner;
-  key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES;
+  key: keyof typeof VORONOI_QUARANTINE_ROOM_DEF_IDS;
   name: string;
   dx: number;
   dy: number;
@@ -347,7 +348,7 @@ const NPC_DEFS: Record<NpcId, PlotNpcDef> = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_doctor_pavel', NPC_DEFS.voronoi_quarantine_doctor_pavel, [
   {
     id: 'voronoi_quarantine_decon_border',
-    giverNpcId: 'voronoi_quarantine_doctor_pavel',
+    giverId: getPlotNpcNumericId('voronoi_quarantine_doctor_pavel')!,
     type: QuestType.FETCH,
     desc: 'Павел Диаграммный: «Принесите обеззараживающую жидкость к чистой клинике. Тогда грязное ребро станет медицинским, а не мясным.»',
     targetItem: 'decon_fluid',
@@ -366,7 +367,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_doctor_pav
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_clerk_zoya', NPC_DEFS.voronoi_quarantine_clerk_zoya, [
   {
     id: 'voronoi_quarantine_forge_pass',
-    giverNpcId: 'voronoi_quarantine_clerk_zoya',
+    giverId: getPlotNpcNumericId('voronoi_quarantine_clerk_zoya')!,
     type: QuestType.FETCH,
     desc: 'Зоя Рёберная: «Дайте пустой бланк. Я сделаю пропуск, который выдержит одно ребро и не выдержит совесть.»',
     targetItem: 'blank_form',
@@ -386,10 +387,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_clerk_zoya
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_infected_lev', NPC_DEFS.voronoi_quarantine_infected_lev, [
   {
     id: 'voronoi_quarantine_escort_infected',
-    giverNpcId: 'voronoi_quarantine_infected_lev',
+    giverId: getPlotNpcNumericId('voronoi_quarantine_infected_lev')!,
     type: QuestType.TALK,
     desc: 'Лев Жёлтый: «Доведите меня до Павла. Пусть врач скажет посту, что я ещё пациент, а не соседняя яма.»',
-    targetPlotNpcId: 'voronoi_quarantine_doctor_pavel',
+    targetNpcId: getPlotNpcNumericId('voronoi_quarantine_doctor_pavel')!,
     rewardItem: 'clean_health_cert',
     rewardCount: 1,
     extraRewards: [{ defId: 'quarantine_medcard', count: 1 }],
@@ -398,14 +399,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_infected_l
     moneyReward: 12,
     eventTags: [VORONOI_QUARANTINE_ROUTE_ID, 'escort', 'infected_npc', 'triage'],
     eventPrivacy: 'local',
-    failOnNpcDeathPlotId: 'voronoi_quarantine_infected_lev',
+    failOnNpcDeathId: getPlotNpcNumericId('voronoi_quarantine_infected_lev')!,
   },
 ]);
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'voronoi_quarantine_quartermaster_marta', NPC_DEFS.voronoi_quarantine_quartermaster_marta, [
   {
     id: 'voronoi_quarantine_open_supply_connector',
-    giverNpcId: 'voronoi_quarantine_quartermaster_marta',
+    giverId: getPlotNpcNumericId('voronoi_quarantine_quartermaster_marta')!,
     type: QuestType.FETCH,
     desc: 'Марта Соединитель: «Канистру обеззараживания принесёте - сухой складовой соединитель откроется без крика кухни.»',
     targetItem: 'decon_fluid',
@@ -438,7 +439,7 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initWorld(world);
     const sites = buildSites(world, seed);
@@ -563,7 +564,7 @@ function buildSites(world: World, seed: number): Site[] {
     return {
       ...src,
       id,
-      name: src.key ? VORONOI_QUARANTINE_ROOM_NAMES[src.key] : (src.name ?? `Вороной-ячейка ${id}`),
+      name: src.key ? VORONOI_QUARANTINE_ROOM_DEF_IDS[src.key] : (src.name ?? `Вороной-ячейка ${id}`),
       originX: src.x,
       originY: src.y,
       x: world.wrap(src.x + jx),
@@ -1352,7 +1353,7 @@ function spawnThreats(world: World, entities: Entity[], nextId: { v: number }, s
 
 function isVoronoiAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -1604,7 +1605,7 @@ function placePanelNearSite(
   world: World,
   sites: readonly Site[],
   owner: Int16Array,
-  key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES,
+  key: keyof typeof VORONOI_QUARANTINE_ROOM_DEF_IDS,
   panelId: 'panel_doors' | 'panel_power' | 'panel_vent' | 'panel_water',
   seed: number,
 ): void {
@@ -1731,7 +1732,7 @@ function sitePoint(
   world: World,
   owner: Int16Array,
   sites: readonly Site[],
-  key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES,
+  key: keyof typeof VORONOI_QUARANTINE_ROOM_DEF_IDS,
   ox: number,
   oy: number,
 ): { x: number; y: number } {
@@ -1761,11 +1762,11 @@ function findSiteCell(world: World, owner: Int16Array, sites: readonly Site[], i
   return { x: sx, y: sy };
 }
 
-function roomForSite(world: World, sites: readonly Site[], key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES): Room {
+function roomForSite(world: World, sites: readonly Site[], key: keyof typeof VORONOI_QUARANTINE_ROOM_DEF_IDS): Room {
   return world.rooms[siteId(sites, key)]!;
 }
 
-function siteId(sites: readonly Site[], key: keyof typeof VORONOI_QUARANTINE_ROOM_NAMES): number {
+function siteId(sites: readonly Site[], key: keyof typeof VORONOI_QUARANTINE_ROOM_DEF_IDS): number {
   const site = sites.find(item => item.key === key);
   return site?.id ?? 0;
 }
@@ -1785,7 +1786,7 @@ function countSiteCells(owner: Int16Array, siteCount: number): number[] {
 }
 
 function siteRoleByRoomName(name: string): SiteRole | undefined {
-  const seed = SITE_SEEDS.find(item => item.key && VORONOI_QUARANTINE_ROOM_NAMES[item.key] === name);
+  const seed = SITE_SEEDS.find(item => item.key && VORONOI_QUARANTINE_ROOM_DEF_IDS[item.key] === name);
   return seed?.role;
 }
 
@@ -1909,7 +1910,7 @@ registerContentInteractionHook({
         privacy: 'public',
         severity: 2,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'permit', 'forgery', 'checkpoint'],
-        data: { roomName: room.name, action: 'dispense_clearance' },
+        data: { roomDefId: room.name, action: 'dispense_clearance' },
       });
       worldChanged = true;
     } else if (room.name.includes('палата') || room.name.includes('трупная')) {
@@ -1933,7 +1934,7 @@ registerContentInteractionHook({
         privacy: 'public',
         severity: 3,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'safeguard', 'hermetic_seal', 'quarantine'],
-        data: { roomName: room.name, toggledDoors: toggled },
+        data: { roomDefId: room.name, toggledDoors: toggled },
       });
       worldChanged = true;
     } else {
@@ -1969,7 +1970,7 @@ registerContentInteractionHook({
         privacy: 'public',
         severity: 3,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'decon', 'purge', 'sanitation'],
-        data: { roomName: room.name, purgedFog: purged, monstersHurt },
+        data: { roomDefId: room.name, purgedFog: purged, monstersHurt },
       });
       worldChanged = true;
     }

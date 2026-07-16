@@ -1,5 +1,6 @@
 /* ── Expanded Ministry design-floor slice: route papers and clauses ─ */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
@@ -114,7 +115,7 @@ const LIFT_NOTARY_DEF: PlotNpcDef = {
 registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_route_clerk', ROUTE_CLERK_DEF, [
   {
     id: 'ministry_floor_pass',
-    giverNpcId: 'ministry_route_clerk',
+    giverId: getPlotNpcNumericId('ministry_route_clerk')!,
     type: QuestType.FETCH,
     desc: 'Семен Маршрутный: «Официальный корешок пропуска - и я выдам маршрутную бумагу. Она не отменит опасный этаж, но на посту будет что показать.»',
     targetItem: 'official_permit_slip', targetCount: 1,
@@ -127,10 +128,10 @@ registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_route_clerk'
 registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_anti_market_inspector', MARKET_INSPECTOR_DEF, [
   {
     id: 'ministry_market_case',
-    giverNpcId: 'ministry_anti_market_inspector',
+    giverId: getPlotNpcNumericId('ministry_anti_market_inspector')!,
     type: QuestType.TALK,
     desc: 'Инспектор Контррынок: «Отнесите постановление Марте Восьмой на рынок 88. Предупредите ее или прижмите - бумага все равно изменит маршрут торговли.»',
-    targetNpcId: 'ag15_marta_broker',
+    targetNpcId: getPlotNpcNumericId('ag15_marta_broker')!,
     rewardItem: 'forged_permit_slip', rewardCount: 1,
     extraRewards: [{ defId: 'denunciation', count: 1 }],
     relationDelta: 8, xpReward: 85, moneyReward: 120,
@@ -140,7 +141,7 @@ registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_anti_market_
 registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_shelter_commissar', SHELTER_COMMISSAR_DEF, [
   {
     id: 'ministry_shelter_list',
-    giverNpcId: 'ministry_shelter_commissar',
+    giverId: getPlotNpcNumericId('ministry_shelter_commissar')!,
     type: QuestType.FETCH,
     desc: 'Клавдия Укрытная: «Принесите список укрытия. Легально, украденный или переписанный - до сирены важнее место, чем почерк.»',
     targetItem: 'emergency_roster', targetCount: 1,
@@ -153,7 +154,7 @@ registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_shelter_comm
 registerFloorSideQuest(STORY_MINISTRY_NPC_HOME_FLOOR_KEY, 'ministry_lift_notary', LIFT_NOTARY_DEF, [
   {
     id: 'ministry_monster_clause',
-    giverNpcId: 'ministry_lift_notary',
+    giverId: getPlotNpcNumericId('ministry_lift_notary')!,
     type: QuestType.KILL,
     desc: 'Нотарий Кабинный: «Зачистите один Параграф или Печатееда у задней строки. Параграф стреляет прямо, Печатеед идет на документы - пользуйтесь углами.»',
     targetMonsterKind: MonsterKind.PARAGRAPH,

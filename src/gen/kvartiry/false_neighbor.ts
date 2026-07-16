@@ -1,5 +1,6 @@
 /* ── Комната чужой очереди — Kvartiry close-reveal encounter ─── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, MonsterKind, Occupation, QuestType,
@@ -42,7 +43,7 @@ const RAYA: PlotNpcDef = {
 
 registerSideQuest('kv_raya_podozritelnaya', RAYA, [{
   id: FALSE_NEIGHBOR_QUEST_ID,
-  giverNpcId: 'kv_raya_podozritelnaya',
+  giverId: getPlotNpcNumericId('kv_raya_podozritelnaya')!,
   type: QuestType.KILL,
   desc: 'Рая Подозрительная: «Убейте тихого соседа в комнате чужой очереди. Близко не подходите, пока не готовы бежать.»',
   targetMonsterKind: MonsterKind.NELYUD,
@@ -54,7 +55,7 @@ registerSideQuest('kv_raya_podozritelnaya', RAYA, [{
   targetFloorZ: 60,
   targetRoomType: RoomType.LIVING,
   targetZoneTag: FALSE_NEIGHBOR_TAG,
-  targetRoomName: FALSE_NEIGHBOR_ROOM_NAME,
+  targetRoomDefId: FALSE_NEIGHBOR_ROOM_NAME,
   targetHint: 'Квартиры: комната чужой очереди, экран без отражения и коробка доноса у входа; держите выход свободным.',
   eventSeverity: 4,
   eventPrivacy: 'witnessed',

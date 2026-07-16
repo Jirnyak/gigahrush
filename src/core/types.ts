@@ -120,6 +120,7 @@ export interface Room {
   doors: number[];          // door cell indices
   sealed: boolean;          // hermetically sealed during samosbor
   name: string;
+  defId?: string;           // persistent quest/event target id
   apartmentId: number;      // -1 = not apartment
   wallTex: Tex;
   floorTex: Tex;
@@ -649,7 +650,6 @@ export interface Entity extends InventoryHolder {
   radius?: number;            // physical collision boundary radius override
   spriteScale?: number;       // sprite size multiplier (child = 0.6)
   spriteZ?: number;           // vertical offset: 0=ground, 0.5=eye level (projectiles)
-  plotNpcId?: string;         // story NPC key (e.g. 'olga', 'barni', 'yakov') — see data/plot.ts
   plotDone?: boolean;         // story phase ended, NPC switches to post-plot dialogue
   _plotTalkIdx?: number;      // internal: sequential dialogue line counter
   // projectile fields
@@ -800,7 +800,7 @@ export enum QuestType { FETCH, VISIT, KILL, TALK }
 export interface QuestTargetMarker {
   z?: number;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   zoneTag?: string;
   designFloorId?: string;
   proceduralTag?: string;
@@ -813,7 +813,6 @@ export interface Quest {
   type: QuestType;
   giverId: number;            // NPC entity id
   giverName: string;
-  giverPlotNpcId?: string;    // Plot NPC key for the giver (for cross-floor turn-ins)
   desc: string;
   // FETCH: targetItem + targetCount
   targetItem?: string;        // item def id
@@ -823,7 +822,7 @@ export interface Quest {
   // Generic route target metadata; unlike visitFloorZ, targetFloorZ is only a hint.
   targetFloorZ?: number;
   targetRoomType?: RoomType;
-  targetRoomName?: string;
+  targetRoomDefId?: string;
   targetZoneTag?: string;
   targetMarker?: QuestTargetMarker;
   targetRoute?: {
@@ -843,7 +842,6 @@ export interface Quest {
   // TALK: targetNpcId
   targetNpcId?: number;
   targetNpcName?: string;
-  targetPlotNpcId?: string;  // plot NPC key for cross-floor TALK quests
   // reward
   rewardItem?: string;
   rewardCount?: number;
@@ -871,10 +869,10 @@ export interface Quest {
   eventPrivacy?: WorldEventPrivacy; // privacy override for authored quest events
   eventSeverity?: WorldEventSeverity; // severity override for authored quest events
   eventTargetName?: string;   // completed event summary override
-  failOnNpcDeathPlotId?: string; // fail when this plot NPC dies
   abandonsSideQuestIds?: string[]; // completing this quest fails these active side quests
   timeLimitMinutes?: number;  // procedural quests, or authored quests that explicitly opt into a deadline
   expiresAtMinutes?: number;  // absolute GameClock.totalMinutes deadline
+  failOnNpcDeathId?: number;
   failed?: boolean;           // true when a timed procedural quest expired
   done: boolean;
 }

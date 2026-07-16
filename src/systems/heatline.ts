@@ -172,7 +172,7 @@ function publishHeatlineEvent(
     data: {
       system: 'heatline_zero',
       outcome,
-      roomName: room.name,
+      roomDefId: room.name,
       rumorIds: ['maint_heatline_manual_reroute'],
       ...data,
     },

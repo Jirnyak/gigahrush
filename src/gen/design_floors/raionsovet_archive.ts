@@ -3,6 +3,7 @@
  * generation is mounted through the design-floor manifest.
  */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, RoomType, LiftDirection, ContainerKind, DoorState,
@@ -136,7 +137,7 @@ export const RAIONSOVET_ARCHIVE_DOCUMENTS: readonly RaionsovetArchiveDocument[] 
 export interface RaionsovetArchiveAccessCheck {
   id: string;
   targetId: string;
-  roomName: string;
+  roomDefId: string;
   legalItemId: string;
   illegalItemId: string;
   legalFlag: string;
@@ -148,7 +149,7 @@ export const RAIONSOVET_ARCHIVE_ACCESS_CHECKS: readonly RaionsovetArchiveAccessC
   {
     id: 'access_living_shelf_legal',
     targetId: 'door_living_rights_front',
-    roomName: 'Закрытые жилые полки',
+    roomDefId: 'Закрытые жилые полки',
     legalItemId: 'archive_access_permit',
     illegalItemId: 'forged_stamp_sheet',
     legalFlag: 'archive.permit.raionsovet_archive',
@@ -158,7 +159,7 @@ export const RAIONSOVET_ARCHIVE_ACCESS_CHECKS: readonly RaionsovetArchiveAccessC
   {
     id: 'access_market_license_safe',
     targetId: 'container_market_88_license_safe',
-    roomName: 'Лицензионная ниша рынка 88',
+    roomDefId: 'Лицензионная ниша рынка 88',
     legalItemId: 'official_permit_slip',
     illegalItemId: 'fake_pass',
     legalFlag: 'archive.market_license_state.licensed',
@@ -168,7 +169,7 @@ export const RAIONSOVET_ARCHIVE_ACCESS_CHECKS: readonly RaionsovetArchiveAccessC
   {
     id: 'access_apartment_card_swap',
     targetId: 'container_living_rights_shelf',
-    roomName: 'Полка квартирных прав',
+    roomDefId: 'Полка квартирных прав',
     legalItemId: 'personal_file_copy',
     illegalItemId: 'stolen_archive_card',
     legalFlag: 'archive.card_swapped.living_shelf_17',
@@ -322,7 +323,7 @@ const FALSE_HEIR_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_lida_index', LIDA_DEF, [
   {
     id: 'archive_get_floor_permit',
-    giverNpcId: 'archive_lida_index',
+    giverId: getPlotNpcNumericId('archive_lida_index')!,
     type: QuestType.FETCH,
     desc: 'Лида Индексная: «Два пустых бланка - и дам допуск к закрытой картотеке и маршрутный ордер. Подписывать их будете не здесь.»',
     targetItem: 'blank_form',
@@ -339,7 +340,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_lida_index', LIDA_DEF
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_paper_grandfather', GRANDFATHER_DEF, [
   {
     id: 'archive_swap_card',
-    giverNpcId: 'archive_paper_grandfather',
+    giverId: getPlotNpcNumericId('archive_paper_grandfather')!,
     type: QuestType.FETCH,
     desc: 'Дед Бумажный: «Принесите краденую карточку. Я покажу, кому теперь числится комната, и кто останется без строки.»',
     targetItem: 'stolen_archive_card',
@@ -356,7 +357,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_paper_grandfather', G
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_fire_liquidator', FIRE_LIQUIDATOR_DEF, [
   {
     id: 'archive_save_or_burn',
-    giverNpcId: 'archive_fire_liquidator',
+    giverId: getPlotNpcNumericId('archive_fire_liquidator')!,
     type: QuestType.FETCH,
     desc: 'Инна Огневая: «Принесите пропавшее дело. Сохраним запись или сожжем зараженную полку по акту. Оба варианта вредят разным людям.»',
     targetItem: 'missing_record_file',
@@ -373,7 +374,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_fire_liquidator', FIR
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'archive_false_heir', FALSE_HEIR_DEF, [
   {
     id: 'archive_market_license',
-    giverNpcId: 'archive_false_heir',
+    giverId: getPlotNpcNumericId('archive_false_heir')!,
     type: QuestType.FETCH,
     desc: 'Гера Наследник: «Лист с поддельной печатью превратим в лицензию для рынка 88. Почти чистую.»',
     targetItem: 'forged_stamp_sheet',
@@ -1751,7 +1752,7 @@ function paintNonRoomCells(world: World): void {
 export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const nextContainerId = { v: 1 };
 
   for (let i = 0; i < W * W; i++) {

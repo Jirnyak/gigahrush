@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Затопленная лаборатория — permanent room (maintenance) ───── */
 /* Hand-crafted scientific lab built into the maintenance maze.    */
 /* NPC: Профессор Тесла — gives FETCH quest for energy cells.      */
@@ -49,7 +50,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest(PROFESSOR_ID, NPC_DEF, [
   {
     id: 'tesla_energy',
-    giverNpcId: PROFESSOR_ID,
+    giverId: getPlotNpcNumericId(PROFESSOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Тесла: «Пять энергоячеек. Без них ПСИ-излучатель останется мокрой кучей проводов.»',
     targetItem: 'ammo_energy', targetCount: 5,

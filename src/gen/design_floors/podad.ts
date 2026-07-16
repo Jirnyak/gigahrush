@@ -51,7 +51,7 @@ export type PodadTopologyNodeId =
 export interface PodadTopologyNode {
   id: PodadTopologyNodeId;
   roomId: number;
-  roomName: string;
+  roomDefId: string;
   x: number;
   y: number;
   tags: readonly string[];
@@ -149,7 +149,7 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     const field = buildPodadField(seed);
     paintPodadTerrain(world, field);
@@ -828,7 +828,7 @@ function podadTopologyNodes(world: World): PodadTopologyNode[] {
       const room = world.rooms[j];
       if (room.name.includes(marker)) {
         const c = roomCenter(room);
-        out.push({ id: spec[0], roomId: room.id, roomName: room.name, x: c.x + 0.5, y: c.y + 0.5, tags: spec[2] });
+        out.push({ id: spec[0], roomId: room.id, roomDefId: room.name, x: c.x + 0.5, y: c.y + 0.5, tags: spec[2] });
         break;
       }
     }

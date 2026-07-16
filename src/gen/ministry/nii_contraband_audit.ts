@@ -1,5 +1,6 @@
 /* ── Ревизия НИИ: пробы уходят на рынок ─────────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -150,10 +151,10 @@ const INTERN_DEF: PlotNpcDef = {
 registerSideQuest('nii_audit_runner', RUNNER_DEF, [
   {
     id: QUEST_FIND_ROOM,
-    giverNpcId: 'nii_audit_runner',
+    giverId: getPlotNpcNumericId('nii_audit_runner')!,
     type: QuestType.VISIT,
     desc: 'Курьер с нулевой накладной: «Найдите ревизионную НИИ {dir}. Там пробирки исчезают только на бумаге.»',
-    targetRoomName: ROOM_NAME,
+    targetRoomDefId: ROOM_NAME,
     rewardItem: 'nii_sample_container', rewardCount: 1,
     relationDelta: 4, xpReward: 30, moneyReward: 20,
   },
@@ -162,7 +163,7 @@ registerSideQuest('nii_audit_runner', RUNNER_DEF, [
 registerSideQuest('nii_auditor_irina', IRINA_DEF, [
   {
     id: QUEST_CONCEAL,
-    giverNpcId: 'nii_auditor_irina',
+    giverId: getPlotNpcNumericId('nii_auditor_irina')!,
     type: QuestType.FETCH,
     desc: 'Ирина Нулевая: «Принесите подложный акт НИИ. Утечка станет ошибкой учёта, а не преступлением.»',
     targetItem: 'nii_forged_audit', targetCount: 1,
@@ -175,7 +176,7 @@ registerSideQuest('nii_auditor_irina', IRINA_DEF, [
 registerSideQuest('nii_liquidator_maxim', MAXIM_DEF, [
   {
     id: QUEST_EXPOSE,
-    giverNpcId: 'nii_liquidator_maxim',
+    giverId: getPlotNpcNumericId('nii_liquidator_maxim')!,
     type: QuestType.FETCH,
     desc: 'Максим Опечаткин: «Ведомость утечки НИИ. С ней я закрою цепочку проб от шкафа до рынка.»',
     targetItem: 'nii_contraband_manifest', targetCount: 1,
@@ -188,7 +189,7 @@ registerSideQuest('nii_liquidator_maxim', MAXIM_DEF, [
 registerSideQuest('nii_market_senya', SENYA_DEF, [
   {
     id: QUEST_SELL,
-    giverNpcId: 'nii_market_senya',
+    giverId: getPlotNpcNumericId('nii_market_senya')!,
     type: QuestType.FETCH,
     desc: 'Сеня Безнакладной: «Серебристую пробу НИИ - мне. Остальное пусть спорит в протоколах.»',
     targetItem: 'slime_sample_silver', targetCount: 1,

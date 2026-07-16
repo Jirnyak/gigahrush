@@ -1,5 +1,6 @@
 /* ── Аптечный разменник — household medicine crisis POI ─────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -265,7 +266,7 @@ const SERAFIMA: PlotNpcDef = {
 
 registerSideQuest('kv_nina_tabletkina', NINA, [{
   id: MEDICINE_CHILDREN_QUEST_ID,
-  giverNpcId: 'kv_nina_tabletkina',
+  giverId: getPlotNpcNumericId('kv_nina_tabletkina')!,
   type: QuestType.FETCH,
   desc: 'Нина Таблеткина: «Четыре упаковки таблеток детям. Иначе этот коридор будет слушать их жар всю ночь.»',
   targetItem: 'pills', targetCount: 4,
@@ -277,7 +278,7 @@ registerSideQuest('kv_nina_tabletkina', NINA, [{
   abandonsSideQuestIds: branchBlockers(MEDICINE_CHILDREN_QUEST_ID),
 	  targetFloorZ: 60,
 	  targetRoomType: RoomType.MEDICAL,
-	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetRoomDefId: MEDICINE_SWAP_ROOM_NAME,
 	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Нина доверяет детский запрос только после воды у Веры и личной передачи.',
   eventPrivacy: 'witnessed',
@@ -293,7 +294,7 @@ registerSideQuest('kv_nina_tabletkina', NINA, [{
 
 registerSideQuest('kv_rudnev_perevyazochny', RUDNEV, [{
   id: LIQUIDATOR_BANDAGES_QUEST_ID,
-  giverNpcId: 'kv_rudnev_perevyazochny',
+  giverId: getPlotNpcNumericId('kv_rudnev_perevyazochny')!,
   type: QuestType.FETCH,
   desc: 'Руднев Перевязочный: «Четыре бинта обратно в пост. Без перевязки зачистка станет расстрелом.»',
   targetItem: 'bandage', targetCount: 4,
@@ -304,7 +305,7 @@ registerSideQuest('kv_rudnev_perevyazochny', RUDNEV, [{
   abandonsSideQuestIds: [...branchBlockers(LIQUIDATOR_BANDAGES_QUEST_ID), LOST_CHILD_MEDICINE_TRUST_QUEST_ID],
 	  targetFloorZ: 60,
 	  targetRoomType: RoomType.MEDICAL,
-	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetRoomDefId: MEDICINE_SWAP_ROOM_NAME,
 	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Руднев у аптечного шкафа принимает бинты в обмен на патроны и учет.',
   eventPrivacy: 'local',
@@ -320,7 +321,7 @@ registerSideQuest('kv_rudnev_perevyazochny', RUDNEV, [{
 
 registerSideQuest('kv_lekha_menyala', LEKHA, [{
   id: WILD_ANTIDEP_QUEST_ID,
-  giverNpcId: 'kv_lekha_menyala',
+  giverId: getPlotNpcNumericId('kv_lekha_menyala')!,
   type: QuestType.FETCH,
     desc: 'Лёха Меняла: «Два антидепрессанта - и я не буду мешать тебе у двери.»',
   targetItem: 'antidep', targetCount: 2,
@@ -331,7 +332,7 @@ registerSideQuest('kv_lekha_menyala', LEKHA, [{
   abandonsSideQuestIds: [...branchBlockers(WILD_ANTIDEP_QUEST_ID), LOST_CHILD_MEDICINE_TRUST_QUEST_ID],
 	  targetFloorZ: 60,
 	  targetRoomType: RoomType.MEDICAL,
-	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetRoomDefId: MEDICINE_SWAP_ROOM_NAME,
 	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Лёха держит черный обмен у двери Аптечного разменника.',
   eventPrivacy: 'local',
@@ -347,7 +348,7 @@ registerSideQuest('kv_lekha_menyala', LEKHA, [{
 
 registerSideQuest('kv_serafima_sheptunya', SERAFIMA, [{
   id: CULTIST_PILLS_QUEST_ID,
-  giverNpcId: 'kv_serafima_sheptunya',
+  giverId: getPlotNpcNumericId('kv_serafima_sheptunya')!,
   type: QuestType.FETCH,
   desc: 'Серафима Шептунья: «Три упаковки таблеток для тех, кто слышит стену слишком громко.»',
   targetItem: 'pills', targetCount: 3,
@@ -358,7 +359,7 @@ registerSideQuest('kv_serafima_sheptunya', SERAFIMA, [{
   abandonsSideQuestIds: [...branchBlockers(CULTIST_PILLS_QUEST_ID), LOST_CHILD_MEDICINE_TRUST_QUEST_ID],
 	  targetFloorZ: 60,
 	  targetRoomType: RoomType.MEDICAL,
-	  targetRoomName: MEDICINE_SWAP_ROOM_NAME,
+	  targetRoomDefId: MEDICINE_SWAP_ROOM_NAME,
 	  targetZoneTag: MEDICINE_ROUTE_TAG,
   targetHint: 'Квартиры: Серафима просит таблетки в стороне от Нины и ликвидаторского учета.',
   eventPrivacy: 'secret',

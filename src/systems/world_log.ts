@@ -370,16 +370,16 @@ const EVENT_TEXT_HANDLERS: Partial<
     return shelterTallyText(e);
   },
   hermodoor_borer_detected: (e) => {
-    return `Гермоточильщик у двери: ${String(e.data?.roomName ?? "укрытие")}. Есть время среагировать.`;
+    return `Гермоточильщик у двери: ${String(e.data?.roomDefId ?? "укрытие")}. Есть время среагировать.`;
   },
   hermodoor_borer_damage: (e) => {
-    return `Гермодверь повреждена: ${String(e.data?.roomName ?? "укрытие")}.`;
+    return `Гермодверь повреждена: ${String(e.data?.roomDefId ?? "укрытие")}.`;
   },
   hermodoor_borer_repaired: (e) => {
-    return `Гермодверь отремонтирована: ${String(e.data?.roomName ?? "укрытие")}.`;
+    return `Гермодверь отремонтирована: ${String(e.data?.roomDefId ?? "укрытие")}.`;
   },
   hermodoor_borer_compromised: (e) => {
-    return `Укрытие скомпрометировано: ${String(e.data?.roomName ?? "укрытие")}.`;
+    return `Укрытие скомпрометировано: ${String(e.data?.roomDefId ?? "укрытие")}.`;
   },
   fog_boss_spawned: (e) => {
     return `Босс тумана появился${e.zoneId !== undefined ? ` в зоне ${e.zoneId + 1}` : ""}.`;

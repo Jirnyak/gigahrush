@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Design z: spectral_chasovnya - sound, cult and hearing geometry -- */
 
 import {
@@ -45,7 +46,7 @@ export const SPECTRAL_CHASOVNYA_ROUTE_ID = 'spectral_chasovnya' as const;
 export const SPECTRAL_CHASOVNYA_Z = -42 as const;
 export const SPECTRAL_CHASOVNYA_BASE_FLOOR = 180;
 
-export const SPECTRAL_CHASOVNYA_ROOM_NAMES = {
+export const SPECTRAL_CHASOVNYA_ROOM_DEF_IDS = {
   entry: 'Преддверие спектральной часовни',
   nave: 'Неф стоячей волны',
   bellCage: 'Колокольная клетка спектрального звона',
@@ -58,18 +59,18 @@ export const SPECTRAL_CHASOVNYA_ROOM_NAMES = {
 } as const;
 
 type NextId = { v: number };
-type SpectralRoomKey = keyof typeof SPECTRAL_CHASOVNYA_ROOM_NAMES;
+type SpectralRoomKey = keyof typeof SPECTRAL_CHASOVNYA_ROOM_DEF_IDS;
 type SpectralRooms = Record<SpectralRoomKey, Room>;
 
-const ROOM_NAME_TO_KEY = new Map<string, SpectralRoomKey>(
-  Object.entries(SPECTRAL_CHASOVNYA_ROOM_NAMES).map(([key, name]) => [name, key as SpectralRoomKey])
+const ROOM_DEF_ID_TO_KEY = new Map<string, SpectralRoomKey>(
+  Object.entries(SPECTRAL_CHASOVNYA_ROOM_DEF_IDS).map(([key, name]) => [name, key as SpectralRoomKey])
 );
 
 type SpectralDecision = 'fire_loudly' | 'move_silently' | 'ring_bell' | 'avoid_focus' | 'listen_radio' | 'flee';
 
 export interface SpectralStandingWaveRoom {
   id: string;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   x: number;
   y: number;
@@ -81,7 +82,7 @@ export interface SpectralStandingWaveRoom {
 
 export interface SpectralShadowZone {
   id: string;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   x: number;
   y: number;
@@ -93,7 +94,7 @@ export interface SpectralShadowZone {
 
 export interface SpectralBellNode {
   id: string;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   x: number;
   y: number;
@@ -240,14 +241,14 @@ const MIRON_DEF: PlotNpcDef = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_ID, MIRON_DEF, [{
   id: 'spectral_tune_radio_sacristy',
-  giverNpcId: NPC_ID,
+  giverId: getPlotNpcNumericId(NPC_ID)!,
   type: QuestType.FETCH,
   desc: 'Мирон Звонарь: «Принеси звукоизлучатель в радиоризницу. Настроим тишину так, чтобы слепые ушли к колоколу, а не к тебе.»',
   targetItem: 'sound_emitter',
   targetCount: 1,
   targetFloorZ: SPECTRAL_CHASOVNYA_BASE_FLOOR,
   targetRoute: { designFloorId: SPECTRAL_CHASOVNYA_ROUTE_ID },
-  targetRoomName: SPECTRAL_CHASOVNYA_ROOM_NAMES.radioSacristy,
+  targetRoomDefId: SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.radioSacristy,
   targetHint: 'Спектральная часовня z=-42: радиоризница стоит за боковой акустической тенью.',
   rewardItem: 'bottled_voice',
   rewardCount: 1,
@@ -271,13 +272,13 @@ function roomCenter(room: Room): { x: number; y: number } {
 function findSpectralRooms(world: World): SpectralRooms | undefined {
   const rooms: Partial<SpectralRooms> = {};
   let foundCount = 0;
-  const targetCount = ROOM_NAME_TO_KEY.size;
+  const targetCount = ROOM_DEF_ID_TO_KEY.size;
 
   for (let i = 0; i < world.rooms.length; i++) {
     const candidate = world.rooms[i];
     if (!candidate || !candidate.name) continue;
 
-    const key = ROOM_NAME_TO_KEY.get(candidate.name);
+    const key = ROOM_DEF_ID_TO_KEY.get(candidate.name);
     if (key !== undefined && !rooms[key]) {
       rooms[key] = candidate;
       foundCount++;
@@ -816,15 +817,15 @@ function buildRooms(world: World): SpectralRooms {
   const cx = W >> 1;
   const cy = W >> 1;
   const rooms = {
-    entry: stampSpectralRoom(world, RoomType.CORRIDOR, cx - 70, cy - 7, 20, 14, SPECTRAL_CHASOVNYA_ROOM_NAMES.entry, Tex.GUT, Tex.F_CONCRETE, 8),
-    nave: stampSpectralRoom(world, RoomType.HQ, cx - 35, cy - 16, 42, 32, SPECTRAL_CHASOVNYA_ROOM_NAMES.nave, Tex.CROSS, Tex.F_MEAT, 18),
-    bellCage: stampSpectralRoom(world, RoomType.PRODUCTION, cx - 7, cy - 58, 18, 24, SPECTRAL_CHASOVNYA_ROOM_NAMES.bellCage, Tex.METAL, Tex.F_GUT, 22),
-    radioSacristy: stampSpectralRoom(world, RoomType.OFFICE, cx + 23, cy - 38, 26, 18, SPECTRAL_CHASOVNYA_ROOM_NAMES.radioSacristy, Tex.SCREEN_BASE, Tex.F_TILE, 12),
-    quietNorth: stampSpectralRoom(world, RoomType.STORAGE, cx - 62, cy - 42, 24, 18, SPECTRAL_CHASOVNYA_ROOM_NAMES.quietNorth, Tex.DARK, Tex.F_VOID, 52),
-    quietSouth: stampSpectralRoom(world, RoomType.STORAGE, cx - 62, cy + 25, 24, 18, SPECTRAL_CHASOVNYA_ROOM_NAMES.quietSouth, Tex.DARK, Tex.F_VOID, 52),
-    focusArch: stampSpectralRoom(world, RoomType.COMMON, cx + 31, cy - 3, 32, 14, SPECTRAL_CHASOVNYA_ROOM_NAMES.focusArch, Tex.MEAT, Tex.F_GUT, 30),
-    crypt: stampSpectralRoom(world, RoomType.MEDICAL, cx + 16, cy + 29, 30, 20, SPECTRAL_CHASOVNYA_ROOM_NAMES.crypt, Tex.MEAT, Tex.F_GUT, 28),
-    exit: stampSpectralRoom(world, RoomType.CORRIDOR, cx + 72, cy - 6, 20, 14, SPECTRAL_CHASOVNYA_ROOM_NAMES.exit, Tex.GUT, Tex.F_CONCRETE, 16),
+    entry: stampSpectralRoom(world, RoomType.CORRIDOR, cx - 70, cy - 7, 20, 14, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.entry, Tex.GUT, Tex.F_CONCRETE, 8),
+    nave: stampSpectralRoom(world, RoomType.HQ, cx - 35, cy - 16, 42, 32, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.nave, Tex.CROSS, Tex.F_MEAT, 18),
+    bellCage: stampSpectralRoom(world, RoomType.PRODUCTION, cx - 7, cy - 58, 18, 24, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.bellCage, Tex.METAL, Tex.F_GUT, 22),
+    radioSacristy: stampSpectralRoom(world, RoomType.OFFICE, cx + 23, cy - 38, 26, 18, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.radioSacristy, Tex.SCREEN_BASE, Tex.F_TILE, 12),
+    quietNorth: stampSpectralRoom(world, RoomType.STORAGE, cx - 62, cy - 42, 24, 18, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.quietNorth, Tex.DARK, Tex.F_VOID, 52),
+    quietSouth: stampSpectralRoom(world, RoomType.STORAGE, cx - 62, cy + 25, 24, 18, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.quietSouth, Tex.DARK, Tex.F_VOID, 52),
+    focusArch: stampSpectralRoom(world, RoomType.COMMON, cx + 31, cy - 3, 32, 14, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.focusArch, Tex.MEAT, Tex.F_GUT, 30),
+    crypt: stampSpectralRoom(world, RoomType.MEDICAL, cx + 16, cy + 29, 30, 20, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.crypt, Tex.MEAT, Tex.F_GUT, 28),
+    exit: stampSpectralRoom(world, RoomType.CORRIDOR, cx + 72, cy - 6, 20, 14, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.exit, Tex.GUT, Tex.F_CONCRETE, 16),
   };
 
   connectCenters(world, rooms.entry, rooms.nave);
@@ -875,7 +876,7 @@ function makeStandingWaveRoom(id: string, room: Room, wavelengthCells: number, p
   const c = roomCenter(room);
   return {
     id,
-    roomName: room.name,
+    roomDefId: room.name,
     roomId: room.id,
     x: c.x,
     y: c.y,
@@ -890,7 +891,7 @@ function makeShadowZone(world: World, id: string, room: Room, radius: number, de
   const c = roomCenter(room);
   return {
     id,
-    roomName: room.name,
+    roomDefId: room.name,
     roomId: room.id,
     x: c.x,
     y: c.y,
@@ -904,7 +905,7 @@ function makeShadowZone(world: World, id: string, room: Room, radius: number, de
 function makeBellNode(id: string, room: Room, x: number, y: number, radius: number, tags: string[]): SpectralBellNode {
   return {
     id,
-    roomName: room.name,
+    roomDefId: room.name,
     roomId: room.id,
     x: x + 0.5,
     y: y + 0.5,
@@ -1102,7 +1103,7 @@ export function reinforceSpectralChasovnyaAuthoredHqTerritory(world: World): voi
 
 function ambientSpectralNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     entity.name?.startsWith(SPECTRAL_AMBIENT_NPC_PREFIX) === true &&
     entity.faction !== undefined;
 }
@@ -1389,7 +1390,7 @@ registerContentInteractionHook({
 export function generateSpectralChasovnyaDesignFloor(): SpectralChasovnyaGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 1 };
+  const nextId: NextId = { v: 10000 };
 
   world.wallTex.fill(Tex.GUT);
   world.floorTex.fill(Tex.F_GUT);

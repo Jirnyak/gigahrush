@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Домкомовский патронный шкаф: low-count Living ammo loop ---- */
 
 import {
@@ -78,7 +79,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest(KEEPER_ID, NPC_DEFS[KEEPER_ID], [
   {
     id: 'ag42_zoya_magazine_part',
-    giverNpcId: KEEPER_ID,
+    giverId: getPlotNpcNumericId(KEEPER_ID)!,
     type: QuestType.FETCH,
     desc: 'Зоя Патронная: «Принеси пустой магазин. За учетную мелочь отдам немного 9мм и одну дробь.»',
     targetItem: 'magazine_part',
@@ -251,7 +252,7 @@ function spawnNpc(
   canGiveQuest: boolean,
   weapon?: string,
 ): number {
-  const existing = entities.find(e => e.alive && e.plotNpcId === plotNpcId);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing.id;
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);

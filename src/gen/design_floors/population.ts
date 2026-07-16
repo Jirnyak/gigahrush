@@ -46,7 +46,7 @@ function pickWeighted<T>(items: readonly WeightedDesignValue<T>[], seed: number,
 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1;

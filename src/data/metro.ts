@@ -2,13 +2,13 @@
 
 import { } from '../core/types';
 
-export const METRO_STATION_ROOM_NAME = 'Станция ошибочной линии: платформа 19';
-export const METRO_DEPOT_ROOM_NAME = 'Депо без рельсов: карман маршрута';
-export const METRO_ERROR_ROOM_NAME = 'Слепая пересадка: чужой вестибюль';
+export const METRO_STATION_ROOM_DEF_ID = 'Станция ошибочной линии: платформа 19';
+export const METRO_DEPOT_ROOM_DEF_ID = 'Депо без рельсов: карман маршрута';
+export const METRO_ERROR_ROOM_DEF_ID = 'Слепая пересадка: чужой вестибюль';
 
 export type MetroDestination =
   | { kind: 'floor'; z: number; label: string; returnRouteId?: string; returnHint?: string }
-  | { kind: 'local'; roomName: string; label: string; returnRouteId?: string; returnHint?: string };
+  | { kind: 'local'; roomDefId: string; label: string; returnRouteId?: string; returnHint?: string };
 
 export interface MetroRouteDef {
   id: string;
@@ -73,7 +73,7 @@ export const METRO_ROUTE_CUE_LINES: readonly string[] = [
 
 const TO_STATION: MetroDestination = {
   kind: 'local',
-  roomName: METRO_STATION_ROOM_NAME,
+  roomDefId: METRO_STATION_ROOM_DEF_ID,
   label: 'Платформа 19',
   returnHint: METRO_ROUTE_CUE_LINES[4],
 };
@@ -91,14 +91,14 @@ const TO_HELL: MetroDestination = {
 };
 const TO_DEPOT: MetroDestination = {
   kind: 'local',
-  roomName: METRO_DEPOT_ROOM_NAME,
+  roomDefId: METRO_DEPOT_ROOM_DEF_ID,
   label: 'Депо без рельсов',
   returnRouteId: 'metro_depot_return',
   returnHint: METRO_ROUTE_CUE_LINES[2],
 };
 const TO_ERROR: MetroDestination = {
   kind: 'local',
-  roomName: METRO_ERROR_ROOM_NAME,
+  roomDefId: METRO_ERROR_ROOM_DEF_ID,
   label: 'Слепая пересадка',
   returnRouteId: 'metro_error_safe_return',
   returnHint: METRO_ROUTE_CUE_LINES[3],
@@ -107,7 +107,7 @@ const TO_ERROR: MetroDestination = {
 export const METRO_ROUTES: readonly MetroRouteDef[] = [
   {
     id: 'metro_living_loop',
-    stationRoomName: METRO_STATION_ROOM_NAME,
+    stationRoomName: METRO_STATION_ROOM_DEF_ID,
     panelSlot: 0,
     label: 'Жилая петля',
     clue: METRO_ROUTE_CUE_LINES[0],
@@ -125,7 +125,7 @@ export const METRO_ROUTES: readonly MetroRouteDef[] = [
   },
   {
     id: 'metro_red_lower',
-    stationRoomName: METRO_STATION_ROOM_NAME,
+    stationRoomName: METRO_STATION_ROOM_DEF_ID,
     panelSlot: 1,
     label: 'Красная нижняя',
     clue: METRO_ROUTE_CUE_LINES[1],
@@ -143,7 +143,7 @@ export const METRO_ROUTES: readonly MetroRouteDef[] = [
   },
   {
     id: 'metro_railess_depot',
-    stationRoomName: METRO_STATION_ROOM_NAME,
+    stationRoomName: METRO_STATION_ROOM_DEF_ID,
     panelSlot: 2,
     label: 'Депо без рельсов',
     clue: METRO_ROUTE_CUE_LINES[2],
@@ -161,7 +161,7 @@ export const METRO_ROUTES: readonly MetroRouteDef[] = [
   },
   {
     id: 'metro_blind_transfer',
-    stationRoomName: METRO_STATION_ROOM_NAME,
+    stationRoomName: METRO_STATION_ROOM_DEF_ID,
     panelSlot: 3,
     label: 'Слепая пересадка',
     clue: METRO_ROUTE_CUE_LINES[3],
@@ -179,7 +179,7 @@ export const METRO_ROUTES: readonly MetroRouteDef[] = [
   },
   {
     id: 'metro_depot_return',
-    stationRoomName: METRO_DEPOT_ROOM_NAME,
+    stationRoomName: METRO_DEPOT_ROOM_DEF_ID,
     panelSlot: 0,
     label: 'Белая служебная петля',
     clue: METRO_ROUTE_CUE_LINES[4],
@@ -195,7 +195,7 @@ export const METRO_ROUTES: readonly MetroRouteDef[] = [
   },
   {
     id: 'metro_error_safe_return',
-    stationRoomName: METRO_ERROR_ROOM_NAME,
+    stationRoomName: METRO_ERROR_ROOM_DEF_ID,
     panelSlot: 0,
     label: 'Белый экран обратной станции',
     clue: 'Не слушай объявление: смотри на белый экран и возвращайся на платформу.',

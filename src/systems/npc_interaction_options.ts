@@ -1,3 +1,4 @@
+import { getPlotNpcStringId } from '../data/npc_packages';
 import { openArena } from './arena';
 import { EntityType, msg, type Entity, type GameState, AIGoal, NpcState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
@@ -28,7 +29,7 @@ export interface NpcInteractionContext {
   player: Entity;
   npc: Entity;
   entities?: readonly Entity[];
-  roomNameResolver?: (x: number, y: number) => string | undefined;
+  roomDefIdResolver?: (x: number, y: number) => string | undefined;
 }
 
 export interface NpcMenuOption {
@@ -144,7 +145,7 @@ function currentDesignRouteId(state: GameState): string {
 function npcMatchesProfilePredicate(npc: Entity, predicate: DesignFloorNpcPredicateProfile): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive) return false;
   const name = npc.name ?? '';
-  if (npc.plotNpcId && predicate.plotNpcIds?.includes(npc.plotNpcId)) return true;
+  if (npc.id && predicate.plotNpcIds?.includes(getPlotNpcStringId(npc.id)!)) return true;
   if (predicate.exactNames?.includes(name)) return true;
   if (predicate.namePrefixes?.some(prefix => name.startsWith(prefix))) return true;
   if (npc.npcVisualId && predicate.npcVisualIds?.includes(npc.npcVisualId)) return true;
@@ -202,7 +203,7 @@ function hashString32(value: string): number {
 function npcRecipeLessonKey(npc: Entity): string {
   return [
     npc.persistentNpcId ?? '',
-    npc.plotNpcId ?? '',
+    npc.id ?? '',
     Number.isFinite(npc.alifeId) ? String(npc.alifeId) : '',
     String(npc.id),
     npc.name ?? '',
@@ -548,7 +549,7 @@ function getNpcOccupationStateText(ctx: NpcInteractionContext): string {
   if (state === NpcState.PATROL) return 'Патрулирую сектор. Слежу за порядком на этаже.';
   
   if (state === NpcState.TRAVELING || goal === AIGoal.GOTO) {
-    const targetRoom = ctx.roomNameResolver?.(npc.ai.tx, npc.ai.ty);
+    const targetRoom = ctx.roomDefIdResolver?.(npc.ai.tx, npc.ai.ty);
     if (targetRoom) return `Иду в блок «${targetRoom}». Дела не ждут.`;
     return 'Иду в другой блок. Дела не ждут.';
   }

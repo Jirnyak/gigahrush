@@ -1,6 +1,7 @@
 /* ── Буфетчица Глафира — side quest (ministry floor) ──────────── */
 /* Работает в министерском буфете. Вечно не хватает компота.       */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -40,7 +41,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('bufetchitsa_glafira', NPC_DEF, [
   {
     id: 'glafira_kompot',
-    giverNpcId: 'bufetchitsa_glafira',
+    giverId: getPlotNpcNumericId('bufetchitsa_glafira')!,
     type: QuestType.FETCH,
     desc: 'Глафира: «Шесть компотов в буфет. Министр без компота — зверь.»',
     targetItem: 'kompot', targetCount: 6,

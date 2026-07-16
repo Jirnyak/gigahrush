@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Ветеран Степаныч — side quest content module ─────────────── */
 /* Wandering hunter who lost his squad. Wants the player to clean   */
 /* zombies. Self-contained: NPC + KILL quest + spawn.               */
@@ -47,7 +48,7 @@ registerAuthoredNpc({
   quests: [
     {
       id: 'stepanych_zombies',
-      giverNpcId: NPC_ID,
+      giverId: getPlotNpcNumericId(NPC_ID)!,
       type: QuestType.KILL,
       desc: 'Степаныч: «Прибей пятерых мертвяков. За мой взвод. Для счёта.»',
       targetMonsterKind: MonsterKind.ZOMBIE,

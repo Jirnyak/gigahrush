@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* ── Ремонтник Без Смены: local shortcut/tool route encounter ─── */
 
@@ -76,7 +77,7 @@ const REMONTNIK_DEF: PlotNpcDef = {
 registerSideQuest(NPC_ID, REMONTNIK_DEF, [
   {
     id: WORK_ORDER_QUEST,
-    giverNpcId: NPC_ID,
+    giverId: getPlotNpcNumericId(NPC_ID)!,
     type: QuestType.FETCH,
     desc: 'Ремонтник Без Смены: «Бланк обхода лифта на стол. Без бумаги короткий ход опять станет стеной, а ты держи дверь.»',
     targetItem: 'elevator_override_form',
@@ -346,7 +347,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
       sourceType: source.type,
       shortcutCells: site.shortcutCells,
       mainRouteOpen: true,
-      roomName: CLOSET_ROOM,
+      roomDefId: CLOSET_ROOM,
       lockerId: site.lockerId,
       cartId: site.cartId,
       rumorTags: ['repair', 'maintenance', 'route_denial'],

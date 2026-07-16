@@ -1,5 +1,6 @@
 /* ── Design z: dark_metro / Темная пересадка ─────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -296,7 +297,7 @@ export function registerDarkMetroContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_dispatcher_nora', NORA_DEF, [
     {
       id: 'dark_metro_wrong_train',
-      giverNpcId: 'dark_metro_dispatcher_nora',
+      giverId: getPlotNpcNumericId('dark_metro_dispatcher_nora')!,
       type: QuestType.FETCH,
       desc: 'Нора: «Принеси билет метро и выбери табло с подсказкой. Неверная посадка должна стоить жетон, а не жизнь.»',
       targetItem: 'metro_ticket', targetCount: 1,
@@ -306,7 +307,7 @@ export function registerDarkMetroContent(): void {
     },
     {
       id: 'dark_metro_signal_box',
-      giverNpcId: 'dark_metro_dispatcher_nora',
+      giverId: getPlotNpcNumericId('dark_metro_dispatcher_nora')!,
       type: QuestType.FETCH,
       desc: 'Нора: «Два предохранителя в сигнальный ящик - и стрелка хотя бы начнет врать одинаково.»',
       targetItem: 'fuse', targetCount: 2,
@@ -319,7 +320,7 @@ export function registerDarkMetroContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_lamp_vendor', VENDOR_DEF, [
     {
       id: 'dark_metro_light_platform',
-      giverNpcId: 'dark_metro_lamp_vendor',
+      giverId: getPlotNpcNumericId('dark_metro_lamp_vendor')!,
       type: QuestType.FETCH,
       desc: 'Гена: «Три целые лампы - и на платформе будет видно край. Не принесешь - людей снова будут считать по крику.»',
       targetItem: 'lamp_bulb', targetCount: 3,
@@ -332,10 +333,10 @@ export function registerDarkMetroContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'dark_metro_stranded_liquidator', STRANDED_DEF, [
     {
       id: 'dark_metro_rescue_stranded',
-      giverNpcId: 'dark_metro_stranded_liquidator',
+      giverId: getPlotNpcNumericId('dark_metro_stranded_liquidator')!,
       type: QuestType.TALK,
       desc: 'Барсуков: «Проведи меня до Норы {dir}. Если белые лампы кончатся, идем назад, не героим.»',
-      targetNpcId: 'dark_metro_dispatcher_nora',
+      targetNpcId: getPlotNpcNumericId('dark_metro_dispatcher_nora')!,
       rewardItem: 'gasmask_filter', rewardCount: 1,
       extraRewards: [{ defId: 'ammo_9mm', count: 12 }, { defId: 'bandage', count: 1 }],
       relationDelta: 12, xpReward: 75, moneyReward: 40,
@@ -2105,7 +2106,7 @@ export function reinforceDarkMetroAuthoredHqTerritory(world: World): void {
 
 function isDarkMetroAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

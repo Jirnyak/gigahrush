@@ -1,5 +1,6 @@
 /* -- Design floor 69: adult vice, debt, blackmail and refuge ---- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
@@ -147,7 +148,7 @@ function floor69FemaleSprite(entity: Entity): number {
 function isFloor69GeneratedVisitor(entity: Entity): boolean {
   if (!FLOOR_69_WORKER_ROLE?.sourceNamePrefix) return false;
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -540,7 +541,7 @@ function floor69RouteEventData(choice: string, risk: string, reward: string): Re
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_madam_roza', NPC_DEFS.f69_madam_roza, [
   {
     id: 'f69_blackmail_profit',
-    giverNpcId: 'f69_madam_roza',
+    giverId: getPlotNpcNumericId('f69_madam_roza')!,
     type: QuestType.FETCH,
     desc: 'Роза: «В сейфе лежит донос на чиновника. Принесешь мне - риск поста станет твоей премией, а не чужим поводком.»',
     targetItem: 'denunciation', targetCount: 1,
@@ -562,7 +563,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_madam_roza', NPC_DEFS.f69_madam_roza
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_guard_venya', NPC_DEFS.f69_guard_venya, [
   {
     id: 'f69_raid_choice',
-    giverNpcId: 'f69_guard_venya',
+    giverId: getPlotNpcNumericId('f69_guard_venya')!,
     type: QuestType.FETCH,
     desc: 'Веня: «В посту лежит список рейда. Заберешь его - предупредим тихие комнаты. Продашь или сдашь инспекторам - это уже твой риск и твоя награда.»',
     targetItem: 'emergency_roster', targetCount: 1,
@@ -581,7 +582,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_guard_venya', NPC_DEFS.f69_guard_ven
   },
   {
     id: 'f69_guard_key_deposit',
-    giverNpcId: 'f69_guard_venya',
+    giverId: getPlotNpcNumericId('f69_guard_venya')!,
     type: QuestType.FETCH,
     desc: 'Веня: «Нужен ключ из тарелки расписок. Вернешь на пост - черный вход откроется по делу, но долг запомнит руку.»',
     targetItem: 'key', targetCount: 1,
@@ -603,7 +604,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_guard_venya', NPC_DEFS.f69_guard_ven
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_performer_ira', NPC_DEFS.f69_performer_ira, [
   {
     id: 'f69_blackmail_protect',
-    giverNpcId: 'f69_performer_ira',
+    giverId: getPlotNpcNumericId('f69_performer_ira')!,
     type: QuestType.FETCH,
     desc: 'Ира: «Найди донос из сейфа и отдай мне. Риск - охрана и чиновник. Награда - одна дверь перестанет держать человека строкой.»',
     targetItem: 'denunciation', targetCount: 1,
@@ -622,10 +623,10 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_performer_ira', NPC_DEFS.f69_perform
   },
   {
     id: 'f69_hide_worker',
-    giverNpcId: 'f69_performer_ira',
+    giverId: getPlotNpcNumericId('f69_performer_ira')!,
     type: QuestType.TALK,
     desc: 'Ира: «Договорись с доктором Симой о тихой комнате. Риск - рейдовый список. Награда - безопасный вход через служебный ход.»',
-    targetPlotNpcId: 'f69_doctor_sima',
+    targetNpcId: getPlotNpcNumericId('f69_doctor_sima')!,
     rewardItem: 'pills', rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],
     relationDelta: 12, xpReward: 50, moneyReward: 40,
@@ -644,7 +645,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_performer_ira', NPC_DEFS.f69_perform
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_doctor_sima', NPC_DEFS.f69_doctor_sima, [
   {
     id: 'f69_clinic_supply',
-    giverNpcId: 'f69_doctor_sima',
+    giverId: getPlotNpcNumericId('f69_doctor_sima')!,
     type: QuestType.FETCH,
     desc: 'Доктор Сима: «Нужен антибиотик. Не спрашиваю, купишь, выкрадешь или выменяешь. Риск - дефицит, награда - дверь, где сначала лечат.»',
     targetItem: 'antibiotic', targetCount: 1,
@@ -666,7 +667,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_doctor_sima', NPC_DEFS.f69_doctor_si
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accountant_nil, [
   {
     id: 'f69_debt_ledger',
-    giverNpcId: 'f69_accountant_nil',
+    giverId: getPlotNpcNumericId('f69_accountant_nil')!,
     type: QuestType.FETCH,
     desc: 'Нил: «Две добровольные расписки из долговой картотеки. Риск - книга заметит пустую клетку. Награда - строку можно оплатить, переписать или потерять.»',
     targetItem: 'voluntary_receipt', targetCount: 2,
@@ -685,7 +686,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
   },
   {
     id: 'f69_debt_forgery_kit',
-    giverNpcId: 'f69_accountant_nil',
+    giverId: getPlotNpcNumericId('f69_accountant_nil')!,
     type: QuestType.FETCH,
     desc: 'Нил: «Принеси пустой бланк и чернила. Риск - подделка держится до первой проверки. Награда - одна строка станет похожей на погашенную.»',
     targetItem: 'blank_form', targetCount: 1,
@@ -704,7 +705,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
   },
   {
     id: 'f69_blackmail_expose',
-    giverNpcId: 'f69_accountant_nil',
+    giverId: getPlotNpcNumericId('f69_accountant_nil')!,
     type: QuestType.FETCH,
     desc: 'Нил: «Принеси акт о пропавшей записи. Риск - наверху спросят свидетеля. Награда - компромат перестанет быть товаром.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
@@ -726,7 +727,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_accountant_nil', NPC_DEFS.f69_accoun
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_asya_pryanikova', NPC_DEFS.f69_asya_pryanikova, [
   {
     id: 'f69_asya_weed',
-    giverNpcId: 'f69_asya_pryanikova',
+    giverId: getPlotNpcNumericId('f69_asya_pryanikova')!,
     type: QuestType.FETCH,
     desc: 'Ася: «Мои абоненты скидывают талоны медленно, а вещать в Инфосеть без говняка я не могу. Принеси 10 самокруток, а то у меня творческий кризис. И без подстав, я раскидываю перфокарты судьбы и всё вижу.»',
     targetItem: 'govnyak_roll', targetCount: 10,
@@ -748,7 +749,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_asya_pryanikova', NPC_DEFS.f69_asya_
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_borya_pryanikov', NPC_DEFS.f69_borya_pryanikov, [
   {
     id: 'f69_borya_camera',
-    giverNpcId: 'f69_borya_pryanikov',
+    giverId: getPlotNpcNumericId('f69_borya_pryanikov')!,
     type: QuestType.FETCH,
     desc: 'Боря: «Слышь, мне тут шепнули, что в Инфосети можно задвинуть пару пленок. Найди фотик, а я отсыплю талонов. Только не тащи мусор, мне нужны хорошие кадры.»',
     targetItem: 'camera', targetCount: 1,
@@ -770,7 +771,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_borya_pryanikov', NPC_DEFS.f69_borya
 registerFloorSideQuest(HOME_FLOOR_KEY, 'f69_venya_pryanikov', NPC_DEFS.f69_venya_pryanikov, [
   {
     id: 'f69_venya_knuckles',
-    giverNpcId: 'f69_venya_pryanikov',
+    giverId: getPlotNpcNumericId('f69_venya_pryanikov')!,
     type: QuestType.FETCH,
     desc: 'Веня: «Братуха, накинь кастет, а то тут такие фраера пошли, что кулаки уже сбиты. Я тебе отсыплю мазей, чтоб шрамы не ныли.»',
     targetItem: 'brass_knuckles', targetCount: 1,
@@ -2495,7 +2496,7 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const state = createFloor69State();
 
     const rooms = buildLayout(world);

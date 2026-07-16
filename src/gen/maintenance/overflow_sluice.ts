@@ -1,5 +1,6 @@
 /* ── Аварийный сброс — repair/steal/flee pressure loop ───────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal, Cell, EntityType, Tex, Feature, RoomType, Faction, Occupation, QuestType,
   MonsterKind,
@@ -93,7 +94,7 @@ const TOMA_DEF: PlotNpcDef = {
 registerSideQuest('ag04_sluice_marfa', MARFA_DEF, [
   {
     id: 'ag04_sluice_repair_pump',
-    giverNpcId: 'ag04_sluice_marfa',
+    giverId: getPlotNpcNumericId('ag04_sluice_marfa')!,
     type: QuestType.FETCH,
     desc: 'Марфа: «Принеси дверь-комплект для обратного клапана. Починим помпу, держи дверь и не стой в луже.»',
     targetItem: 'door_kit', targetCount: 1,
@@ -103,7 +104,7 @@ registerSideQuest('ag04_sluice_marfa', MARFA_DEF, [
   },
   {
     id: 'ag04_sluice_eels',
-    giverNpcId: 'ag04_sluice_marfa',
+    giverId: getPlotNpcNumericId('ag04_sluice_marfa')!,
     type: QuestType.KILL,
     desc: 'Марфа: «Два трубных угря грызут обратку. Убери их или беги, когда вода пойдет вверх.»',
     targetMonsterKind: MonsterKind.TUBE_EEL,
@@ -117,7 +118,7 @@ registerSideQuest('ag04_sluice_marfa', MARFA_DEF, [
 registerSideQuest('ag04_sluice_egor', EGOR_DEF, [
   {
     id: 'ag04_sluice_loot_clamps',
-    giverNpcId: 'ag04_sluice_egor',
+    giverId: getPlotNpcNumericId('ag04_sluice_egor')!,
     type: QuestType.FETCH,
     desc: 'Егор: «Два гаечных ключа с аварийного шкафа. Формально это кража, практически — перераспределение сухости.»',
     targetItem: 'wrench', targetCount: 2,
@@ -127,7 +128,7 @@ registerSideQuest('ag04_sluice_egor', EGOR_DEF, [
   },
   {
     id: 'ag04_sluice_lampovy',
-    giverNpcId: 'ag04_sluice_egor',
+    giverId: getPlotNpcNumericId('ag04_sluice_egor')!,
     type: QuestType.KILL,
     desc: 'Егор: «Убей лампового у мокрого рубильника. Он свет ест, а нам свет нужен для отчета.»',
     targetMonsterKind: MonsterKind.LAMPOVY,
@@ -141,7 +142,7 @@ registerSideQuest('ag04_sluice_egor', EGOR_DEF, [
 registerSideQuest('ag04_sluice_toma', TOMA_DEF, [
   {
     id: 'ag04_sluice_power_panel',
-    giverNpcId: 'ag04_sluice_toma',
+    giverId: getPlotNpcNumericId('ag04_sluice_toma')!,
     type: QuestType.FETCH,
     desc: 'Тома: «Неси энергоячейку в щиток. Лампы покажут, где обводной лаз еще не съел пол.»',
     targetItem: 'ammo_energy', targetCount: 1,

@@ -1,5 +1,6 @@
 /* -- Design z: number_registry / Числовой реестр ----------- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -53,7 +54,7 @@ interface ResidueLane {
 
 export interface NumberRegistryDecision {
   id: string;
-  roomName: string;
+  roomDefId: string;
   route: 'decode' | 'bribe' | 'prime_risk' | 'composite_public';
   itemId: string;
   eventTag: string;
@@ -135,7 +136,7 @@ export const NUMBER_REGISTRY_CRT_INTERSECTIONS: readonly NumberRegistryCrtInters
 export const NUMBER_REGISTRY_DECISIONS: readonly NumberRegistryDecision[] = [
   {
     id: 'decode_residue_route',
-    roomName: 'Зал сверки остатков',
+    roomDefId: 'Зал сверки остатков',
     route: 'decode',
     itemId: 'blank_form',
     eventTag: 'residue_decode',
@@ -143,7 +144,7 @@ export const NUMBER_REGISTRY_DECISIONS: readonly NumberRegistryDecision[] = [
   },
   {
     id: 'bribe_modulus_clerk',
-    roomName: 'Касса модуля 7',
+    roomDefId: 'Касса модуля 7',
     route: 'bribe',
     itemId: 'elevator_access_order',
     eventTag: 'modulus_bribe',
@@ -151,7 +152,7 @@ export const NUMBER_REGISTRY_DECISIONS: readonly NumberRegistryDecision[] = [
   },
   {
     id: 'prime_risky_corridor',
-    roomName: 'Простой рискованный коридор',
+    roomDefId: 'Простой рискованный коридор',
     route: 'prime_risk',
     itemId: 'forged_stamp_sheet',
     eventTag: 'prime_corridor',
@@ -159,7 +160,7 @@ export const NUMBER_REGISTRY_DECISIONS: readonly NumberRegistryDecision[] = [
   },
   {
     id: 'composite_public_path',
-    roomName: 'Составной публичный обход',
+    roomDefId: 'Составной публичный обход',
     route: 'composite_public',
     itemId: 'official_permit_slip',
     eventTag: 'composite_path',
@@ -272,14 +273,14 @@ const COMPOSITE_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus', REGISTRAR_DEF, [
   {
     id: 'number_registry_buy_modulus',
-    giverNpcId: 'number_registry_vera_modulus',
+    giverId: getPlotNpcNumericId('number_registry_vera_modulus')!,
     type: QuestType.FETCH,
     desc: 'Вера Модульная: «Заплати 97 рублей в кассу модуля. Я дам ордер и скажу, по какому остатку идти.»',
     targetItem: 'money',
     targetCount: 97,
     targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
     targetRoute: ROUTE_TARGET,
-    targetRoomName: 'Касса модуля 7',
+    targetRoomDefId: 'Касса модуля 7',
     targetHint: 'Числовой реестр z=+32: касса рядом с залом сверки остатков.',
     rewardItem: 'elevator_access_order',
     rewardCount: 1,
@@ -295,14 +296,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus'
   },
   {
     id: 'number_registry_decode_residue',
-    giverNpcId: 'number_registry_vera_modulus',
+    giverId: getPlotNpcNumericId('number_registry_vera_modulus')!,
     type: QuestType.FETCH,
     desc: 'Вера Модульная: «Принеси чистый бланк. По нему сверим остаток и откроем пересечную картотеку без лишней очереди.»',
     targetItem: 'blank_form',
     targetCount: 1,
     targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
     targetRoute: ROUTE_TARGET,
-    targetRoomName: 'Зал сверки остатков',
+    targetRoomDefId: 'Зал сверки остатков',
     targetHint: 'Числовой реестр: искать столы с экранами остатков у центрального зала.',
     rewardItem: 'archive_access_permit',
     rewardCount: 1,
@@ -321,14 +322,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus'
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_prime_guard', PRIME_GUARD_DEF, [
   {
     id: 'number_registry_clear_prime_corridor',
-    giverNpcId: 'number_registry_prime_guard',
+    giverId: getPlotNpcNumericId('number_registry_prime_guard')!,
     type: QuestType.KILL,
     desc: 'Федор Простой: «Убей параграф в простом коридоре. Потом бери короткий ход, пока бумага не начала шевелиться.»',
     targetMonsterKind: MonsterKind.PARAGRAPH,
     killNeeded: 1,
     targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
     targetRoute: ROUTE_TARGET,
-    targetRoomName: 'Простой рискованный коридор',
+    targetRoomDefId: 'Простой рискованный коридор',
     targetHint: 'Числовой реестр: короткий верхний коридор с красными отметками и печатеедами.',
     rewardItem: 'forged_stamp_sheet',
     rewardCount: 1,
@@ -347,14 +348,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_prime_guard',
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_composite_witness', COMPOSITE_DEF, [
   {
     id: 'number_registry_file_composite_path',
-    giverNpcId: 'number_registry_composite_witness',
+    giverId: getPlotNpcNumericId('number_registry_composite_witness')!,
     type: QuestType.FETCH,
     desc: 'Семен Составной: «Принеси бланк в публичный обход. Очередь длинная, зато с печатью и без простого коридора.»',
     targetItem: 'blank_form',
     targetCount: 1,
     targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
     targetRoute: ROUTE_TARGET,
-    targetRoomName: 'Составной публичный обход',
+    targetRoomDefId: 'Составной публичный обход',
     targetHint: 'Числовой реестр: нижний коридор с лавками и свидетелями.',
     rewardItem: 'official_permit_slip',
     rewardCount: 1,
@@ -967,7 +968,7 @@ export function retuneNumberRegistryZones(world: World): void {
 
 function isNumberRegistryAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -1012,7 +1013,7 @@ export function alignNumberRegistryAmbientNpcTerritory(world: World, entities: E
   }
 }
 
-function roomNameOwnerHint(room: Room): TerritoryOwner | undefined {
+function roomDefIdOwnerHint(room: Room): TerritoryOwner | undefined {
   for (const target of NUMBER_REGISTRY_TERRITORY_TARGETS) {
     if (room.name.startsWith(`${target.label}:`)) return target.owner;
   }
@@ -1075,7 +1076,7 @@ function territoryScore(world: World, x: number, y: number, target: RegistryTerr
   const roomId = world.roomMap[idx];
   if (roomId >= 0) {
     const room = world.rooms[roomId];
-    const hinted = room ? roomNameOwnerHint(room) : undefined;
+    const hinted = room ? roomDefIdOwnerHint(room) : undefined;
     if (hinted === target.owner) best += 0.9;
   }
   return best + bias + chunkyTerritoryNoise(x, y, salt) * 0.09;
@@ -1115,7 +1116,7 @@ function paintRoomTerritory(world: World, room: Room, owner: TerritoryOwner): vo
 function reinforceNamedRoomTerritory(world: World): void {
   for (const room of world.rooms) {
     if (!room) continue;
-    const hinted = roomNameOwnerHint(room);
+    const hinted = roomDefIdOwnerHint(room);
     if (hinted !== undefined) paintRoomTerritory(world, room, hinted);
   }
 }
@@ -1461,7 +1462,7 @@ function populateNumberRegistry(world: World, entities: Entity[], nextId: NextId
 export function generateNumberRegistryDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 1 };
+  const nextId: NextId = { v: 10000 };
   let nextRoomId = 0;
   fillDefaultTextures(world);
 

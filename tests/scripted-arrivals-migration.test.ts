@@ -16,7 +16,7 @@ import {
   type Quest,
 } from '../src/core/types';
 import { ALIFE_POPULATION_CAPACITY } from '../src/data/alife_population_plan';
-import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
+import { getPlotNpcNumericId,  getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
 import { PLOT_CHAIN } from '../src/data/plot';
 import { SCRIPTED_ARRIVALS } from '../src/data/scripted_arrivals';
 import { initFactionRelations } from '../src/data/relations';
@@ -25,6 +25,7 @@ import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import { updateScriptedArrivals } from '../src/systems/scripted_arrivals';
 import { addTestRoom, makeGameState, makeTestPlayer } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function holdoutStepIndex(): number {
   const stepIndex = PLOT_CHAIN.findIndex(step => step.eventTags?.includes('hell_holdout'));
@@ -77,7 +78,7 @@ function makeHellWorld(): World {
   return world;
 }
 
-function plotNpc(id: string): Entity {
+function plotNpc(id: number): Entity {
   return {
     id: 77,
     type: EntityType.NPC,
@@ -113,7 +114,7 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
 
   assert.equal(updateScriptedArrivals(world, entities, player, state, nextId), true);
 
-  const major = entities.find(e => e.plotNpcId === 'major_grom');
+  const major = entities.find(e => e.plotNpcId === getPlotNpcNumericId('major_grom'));
   const majorPackage = getNpcPackageByPlotNpcId('major_grom');
   assert.ok(major, 'Major Grom should arrive once as a plot NPC');
   assert.ok(majorPackage);
@@ -152,5 +153,5 @@ test('Hell holdout arrivals do not duplicate or replace dead Major Grom', () => 
   recordAlifeNpcDeath(state, existing);
   const entities: Entity[] = [player];
   assert.equal(updateScriptedArrivals(world, entities, player, state, { v: 200 }), false);
-  assert.equal(entities.some(e => e.plotNpcId === 'major_grom'), false);
+  assert.equal(entities.some(e => e.plotNpcId === getPlotNpcNumericId('major_grom')), false);
 });

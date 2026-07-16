@@ -743,7 +743,7 @@ function isMoebiusAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Мёбиус-подъезд:') === true &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

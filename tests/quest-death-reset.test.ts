@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -5,6 +6,7 @@ import { EntityType, Faction, QuestType, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
 import { checkQuests, resetNonStoryQuestsForNewPlayer } from '../src/systems/quests';
 import { makeGameState, makeTestEntity, makeTestNpc, makeTestPlayer } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function quest(overrides: Partial<Quest>): Quest {
   return {
@@ -46,7 +48,7 @@ test('dead plot talk target auto-completes the active story talk quest', () => {
     type: EntityType.NPC,
     name: 'Баринов',
     faction: Faction.CITIZEN,
-    plotNpcId: 'barni',
+    plotNpcId: getPlotNpcNumericId('barni'),
     alive: false,
   });
   const state = makeGameState({

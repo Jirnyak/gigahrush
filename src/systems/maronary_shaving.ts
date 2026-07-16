@@ -9,6 +9,7 @@ import {
 import { ITEMS } from '../data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { ITEM_OUTCOME_RULES, type ItemOutcomeRule } from '../data/item_outcomes';
+import { getPlotNpcStringId } from '../data/npc_packages';
 import { getStack } from '../data/items';
 import { addFactionRelMutual } from '../data/relations';
 import { publishEvent } from './events';
@@ -67,7 +68,7 @@ function buyerRoleTags(npc: Entity): string[] {
   const roleSource = npc as Entity & { roleId?: string; roleTags?: readonly string[] };
   pushUnique(tags, roleSource.roleId ? `role:${roleSource.roleId}` : undefined);
   for (const tag of roleSource.roleTags ?? []) pushUnique(tags, tag);
-  pushUnique(tags, npc.plotNpcId ? `plot:${npc.plotNpcId}` : undefined);
+  pushUnique(tags, npc.id ? `plot:${npc.id}` : undefined);
   pushUnique(tags, npc.persistentNpcId ? `persistent:${npc.persistentNpcId}` : undefined);
   pushUnique(tags, npc.npcVisualId ? `visual:${npc.npcVisualId}` : undefined);
   pushUnique(tags, enumTag('faction', Faction, npc.faction));
@@ -117,7 +118,7 @@ function ruleMatchesBuyer(rule: ItemOutcomeRule, npc: Entity, roleTags: readonly
     || match.buyerRoleTags?.length
   );
   if (!hasBuyerRule) return true;
-  if (match.buyerPlotNpcIds?.includes(npc.plotNpcId ?? '')) return true;
+  if (match.buyerPlotNpcIds?.includes(getPlotNpcStringId(npc.id!) ?? '')) return true;
   if (hasAny(match.buyerFactions, npc.faction)) return true;
   if (hasAny(match.buyerOccupations, npc.occupation)) return true;
   return Boolean(match.buyerRoleTags?.some(tag => roleTags.includes(tag)));
@@ -252,7 +253,7 @@ export function tryHandleMaronaryShavingHandoff(
     tags: eventTags(...rule.eventTags),
     data: {
       outcome,
-      buyerPlotNpcId: npc.plotNpcId,
+      buyerPlotNpcId: npc.id,
       reward,
       rumorIds: [...rule.rumorIds],
     },

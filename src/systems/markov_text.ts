@@ -43,7 +43,7 @@ export interface MarkovTextContext {
   readonly z?: number;
   readonly routeZBand?: 'center' | 'upper' | 'lower' | 'deep';
   readonly roomType?: number;
-  readonly roomName?: string;
+  readonly roomDefId?: string;
   readonly zoneId?: number;
   readonly zoneFaction?: number;
   readonly faction?: number;
@@ -660,7 +660,7 @@ function contextTags(context: MarkovTextContext | undefined): ReadonlySet<string
     const dot = tag.indexOf('.');
     if (dot > 0) tags.add(tag.slice(0, dot));
   }
-  if (context?.roomName !== undefined || context?.roomType !== undefined) tags.add('room');
+  if (context?.roomDefId !== undefined || context?.roomType !== undefined) tags.add('room');
   if (context?.itemId || context?.itemName) tags.add('item');
   if (context?.eventId !== undefined || context?.eventType) tags.add('event');
   if (context?.faction !== undefined || context?.zoneFaction !== undefined) tags.add('faction');
@@ -730,7 +730,7 @@ function resolveArg(part: Extract<MarkovTemplatePart, { kind: 'arg' }>, context:
   const fromArgs = context?.args?.[part.key];
   if (fromArgs !== undefined) return String(fromArgs).slice(0, 64);
   switch (part.key) {
-    case 'roomName': return context?.roomName ?? part.fallback;
+    case 'roomDefId': return context?.roomDefId ?? part.fallback;
     case 'itemName': return context?.itemName ?? part.fallback;
     case 'eventType': return context?.eventType ?? part.fallback;
     case 'floorKey': return context?.floorKey ?? part.fallback;

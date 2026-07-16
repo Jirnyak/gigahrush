@@ -201,7 +201,7 @@ export interface HilbertDepotGeneration extends FloorGeneration {
 export function generateHilbertDepotDesignFloor(): HilbertDepotGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const points = hilbertTracePoints(CURVE_ORDER, CURVE_X, CURVE_Y, CURVE_STEP);
   const state: HilbertDepotState = {
     routeId: DESIGN_FLOOR_ID,
@@ -1181,7 +1181,7 @@ function isHilbertDepotAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Склад Гильберта:') === true &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Design z: markov_stairwell / Марковская лестница -------- */
 
 import {
@@ -277,14 +278,14 @@ const WATCHER_DEF: PlotNpcDef = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.watcher, WATCHER_DEF, [{
   id: 'markov_stairwell_pattern_stash',
-  giverNpcId: NPC_IDS.watcher,
+  giverId: getPlotNpcNumericId(NPC_IDS.watcher)!,
   type: QuestType.FETCH,
   desc: 'Павел Марков: «Найди шкаф после связки кухня-мокрая-кладовая и принеси схему лифтов. Если последовательность сорвалась, режь через служебную дверь по бирке.»',
   targetItem: 'lift_scheme',
   targetCount: 1,
   targetFloorZ: BASE_FLOOR,
   targetRoute: { designFloorId: MARKOV_STAIRWELL_ROUTE_ID },
-  targetRoomName: 'Марковская лестница: редкое состояние М',
+  targetRoomDefId: 'Марковская лестница: редкое состояние М',
   targetHint: 'Марковская лестница z=+20: считать повторы комнат, открыть служебный срез биркой и проверить редкое звено.',
   rewardItem: 'elevator_access_order',
   rewardCount: 1,
@@ -1171,7 +1172,7 @@ export function measureMarkovStairwellMetrics(generation: FloorGeneration): Mark
 export function generateMarkovStairwellDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const { chain, watcherRoom, patternRoom, rareRoom, tellCells, serviceCells, lockedDoors } = buildGeometry(world);
 
   spawnPlotNpc(entities, nextId, NPC_IDS.watcher, WATCHER_DEF, watcherRoom.x + 18, watcherRoom.y + 13, 0);

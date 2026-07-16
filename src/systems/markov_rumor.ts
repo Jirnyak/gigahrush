@@ -77,7 +77,7 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
   const leadMonsterKind = rumor.lead?.monsterKind ?? options.event?.monsterKind;
   const context = {
     z: options.snapshot.z,
-    roomName: options.snapshot.roomName,
+    roomDefId: options.snapshot.roomDefId,
     roomType: options.snapshot.roomType,
     zoneId: options.snapshot.zoneId,
     itemId: leadItemId,
@@ -172,7 +172,7 @@ function allowedRumorFactTexts(rumor: RumorDef, options: MarkovRumorFlavorOption
   addEventFacts(allowed, options.event);
   const reveals = rumor.reveals ? Array.isArray(rumor.reveals) ? rumor.reveals : [rumor.reveals] : [];
   for (const reveal of reveals) addRevealFacts(allowed, reveal);
-  if (options.snapshot.roomName) allowed.add(options.snapshot.roomName.toLowerCase());
+  if (options.snapshot.roomDefId) allowed.add(options.snapshot.roomDefId.toLowerCase());
   if (options.snapshot.z !== undefined) allowed.add(floorName(options.snapshot.z).toLowerCase());
   return allowed;
 }
@@ -218,7 +218,7 @@ function mentionsAnyFact(text: string, facts: Set<string>): boolean {
 function addRumorLeadFacts(out: Set<string>, lead: RumorLead | undefined): void {
   if (!lead) return;
   if (lead.z !== undefined) out.add(floorName(lead.z).toLowerCase());
-  if (lead.roomName) out.add(lead.roomName.toLowerCase());
+  if (lead.roomDefId) out.add(lead.roomDefId.toLowerCase());
   if (lead.roomType !== undefined) out.add(roomTypeName(lead.roomType).toLowerCase());
   if (lead.itemId) {
     const itemName = ITEMS[lead.itemId]?.name.toLowerCase();
@@ -235,7 +235,7 @@ function addRevealFacts(out: Set<string>, reveal: RumorReveal): void {
 function addEventFacts(out: Set<string>, event: RumorEventLike | undefined): void {
   if (!event) return;
   if (event.z !== undefined) out.add(floorName(event.z).toLowerCase());
-  if (event.roomName) out.add(event.roomName.toLowerCase());
+  if (event.roomDefId) out.add(event.roomDefId.toLowerCase());
   if (event.itemId) {
     const itemName = ITEMS[event.itemId]?.name.toLowerCase();
     if (itemName) out.add(itemName);
@@ -252,7 +252,7 @@ function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
   if (lead.z !== undefined) parts.push(floorName(lead.z));
   if (lead.zoneHint) parts.push(lead.zoneHint);
-  if (lead.roomName) parts.push(lead.roomName);
+  if (lead.roomDefId) parts.push(lead.roomDefId);
   else if (lead.roomType !== undefined) parts.push(roomTypeName(lead.roomType));
   if (lead.itemId) {
     const itemName = ITEMS[lead.itemId]?.name.toLowerCase();
@@ -268,7 +268,7 @@ function formatEventLead(event: RumorEventLike): string {
   if (event.z !== undefined) parts.push(floorName(event.z));
   if (event.zoneName) parts.push(event.zoneName);
   else if (event.zoneId !== undefined) parts.push(`зона ${event.zoneId + 1}`);
-  if (event.roomName) parts.push(event.roomName);
+  if (event.roomDefId) parts.push(event.roomDefId);
   else if (event.roomType !== undefined) parts.push(roomTypeName(event.roomType));
   if (event.itemId) {
     const itemName = ITEMS[event.itemId]?.name.toLowerCase();
@@ -315,7 +315,7 @@ function formatReveal(reveal: RumorReveal): string {
       if (reveal.faction !== undefined) return `зона: ${zoneFactionName(reveal.faction)}`;
       return '';
     case 'room':
-      return reveal.roomName ?? (reveal.roomType !== undefined ? roomTypeName(reveal.roomType) : '');
+      return reveal.roomDefId ?? (reveal.roomType !== undefined ? roomTypeName(reveal.roomType) : '');
     case 'danger':
       return 'опасность';
     case 'monster':
@@ -334,7 +334,7 @@ function formatReveal(reveal: RumorReveal): string {
 function fillSlots(text: string, snapshot: ContextSnapshot): string {
   let out = text;
   if (out.includes('{zone}')) out = out.split('{zone}').join(snapshot.zoneId === undefined ? 'этой зоне' : `зоне ${snapshot.zoneId + 1}`);
-  if (out.includes('{room}')) out = out.split('{room}').join(snapshot.roomName ?? 'этой комнате');
+  if (out.includes('{room}')) out = out.split('{room}').join(snapshot.roomDefId ?? 'этой комнате');
   return out;
 }
 

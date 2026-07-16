@@ -19,7 +19,7 @@ export interface StoryQuestSelector {
   contractId?: string;
   type?: QuestType;
   targetItem?: string;
-  targetPlotNpcId?: string;
+  targetNpcId?: string;
   targetMonsterKind?: MonsterKind;
 }
 

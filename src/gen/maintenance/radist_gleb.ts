@@ -1,6 +1,7 @@
 /* ── Радист Глеб — side quest (maintenance floor) ─────────────── */
 /* Учёный с радиостанцией охотится за арматурными тварями.         */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType, MonsterKind,
@@ -39,7 +40,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('radist_gleb', NPC_DEF, [
   {
     id: 'gleb_rebars',
-    giverNpcId: 'radist_gleb',
+    giverId: getPlotNpcNumericId('radist_gleb')!,
     type: QuestType.KILL,
     desc: 'Глеб: «Убей трёх арматурных тварей. Они глушат эфир.»',
     targetMonsterKind: MonsterKind.REBAR,

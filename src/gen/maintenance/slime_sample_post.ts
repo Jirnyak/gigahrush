@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── AG62 NII slime sample post: field containers and liability ─ */
 
 import {
@@ -129,7 +130,7 @@ const SENYA_DEF: PlotNpcDef = {
 registerSideQuest(BOKOVA_ID, BOKOVA_DEF, [
   {
     id: BROWN_CLEANUP_LEAD_QUEST,
-    giverNpcId: BOKOVA_ID,
+    giverId: getPlotNpcNumericId(BOKOVA_ID)!,
     type: QuestType.FETCH,
     desc: 'Бокова: «Начни с сухого обхода: принеси акт зачистки токсичной коричневой слизи. Там же возьми пломбированную пробу, если решишь спорить с наукой, печью или рынком.»',
     targetItem: CLEANUP_ACT_ITEM, targetCount: 1,
@@ -152,7 +153,7 @@ registerSideQuest(BOKOVA_ID, BOKOVA_DEF, [
   },
   {
     id: SCIENCE_QUEST,
-    giverNpcId: BOKOVA_ID,
+    giverId: getPlotNpcNumericId(BOKOVA_ID)!,
     type: QuestType.FETCH,
     desc: 'Бокова: «Теперь принеси коричневую пробу в пломбе и не вскрывай банку в жилой зоне. НИИ запишет её как факт, а тебя как ответственного за факт.»',
     targetItem: SAMPLE_ITEM, targetCount: 1,
@@ -171,7 +172,7 @@ registerSideQuest(BOKOVA_ID, BOKOVA_DEF, [
   },
   {
     id: REPORT_QUEST,
-    giverNpcId: BOKOVA_ID,
+    giverId: getPlotNpcNumericId(BOKOVA_ID)!,
     type: QuestType.FETCH,
     desc: 'Бокова: «Если пломба уже кривая, несите заражённую пробу как нарушение хранения. Награда меньше, зато НИИ пишет рапорт, а не розыск банки.»',
     targetItem: CONTAMINATED_SAMPLE_ITEM, targetCount: 1,
@@ -192,7 +193,7 @@ registerSideQuest(BOKOVA_ID, BOKOVA_DEF, [
 
 registerSideQuest(LIQUIDATOR_ID, SEREDA_DEF, [{
   id: LIQUIDATOR_QUEST,
-  giverNpcId: LIQUIDATOR_ID,
+  giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
   type: QuestType.FETCH,
   desc: 'Середа: «Ту же коричневую пробу отдашь мне. Запишем как опасный остаток и сожжём без научной гордости.»',
   targetItem: SAMPLE_ITEM, targetCount: 1,
@@ -213,7 +214,7 @@ registerSideQuest(LIQUIDATOR_ID, SEREDA_DEF, [{
 registerSideQuest(MARKET_ID, SENYA_DEF, [
   {
     id: MARKET_QUEST,
-    giverNpcId: MARKET_ID,
+    giverId: getPlotNpcNumericId(MARKET_ID)!,
     type: QuestType.FETCH,
     desc: 'Сеня: «Пробу мне, пломбу целой. В журнале будет недостача, у тебя — деньги и лишний повод не задерживаться.»',
     targetItem: SAMPLE_ITEM, targetCount: 1,
@@ -232,7 +233,7 @@ registerSideQuest(MARKET_ID, SENYA_DEF, [
   },
   {
     id: HIDE_QUEST,
-    giverNpcId: MARKET_ID,
+    giverId: getPlotNpcNumericId(MARKET_ID)!,
     type: QuestType.FETCH,
     desc: 'Сеня: «Кривую пробу можно не продавать, а спрятать под липовым актом. Денег меньше, зато НИИ ищет бумагу, а не тебя.»',
     targetItem: CONTAMINATED_SAMPLE_ITEM, targetCount: 1,

@@ -1,5 +1,6 @@
 /* ── Очередь за пайком — Kvartiry social pressure POI ────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -58,7 +59,7 @@ const GALINA: PlotNpcDef = {
 
 registerSideQuest('kv_galina_talonnitsa', GALINA, [{
   id: RATION_QUEUE_QUEST_IDS.water,
-  giverNpcId: 'kv_galina_talonnitsa',
+  giverId: getPlotNpcNumericId('kv_galina_talonnitsa')!,
   type: QuestType.FETCH,
   desc: 'Галина Талонница: «Принесите пять бутылок воды, пока очередь не стала бунтом.»',
   targetItem: 'water', targetCount: 5,
@@ -80,7 +81,7 @@ registerSideQuest('kv_galina_talonnitsa', GALINA, [{
   },
 }, {
   id: RATION_QUEUE_QUEST_IDS.audit,
-  giverNpcId: 'kv_galina_talonnitsa',
+  giverId: getPlotNpcNumericId('kv_galina_talonnitsa')!,
   type: QuestType.FETCH,
   desc: 'Галина Талонница: «Принесите выписку из пайкового реестра. Если список врёт, очередь начнёт есть друг друга.»',
   targetItem: 'ration_registry_extract', targetCount: 1,

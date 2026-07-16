@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
@@ -22,6 +23,7 @@ import {
   type WrongDoorRouteOption,
 } from '../src/systems/wrong_door';
 import { addTestRoom, makeGameState, makeTestContainer, makeTestNpc, makeTestPlayer } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function option(overrides: Partial<WrongDoorRouteOption>): WrongDoorRouteOption {
   return {
@@ -152,7 +154,7 @@ test('maronary shaving can be sold to science or hidden as contraband evidence',
     name: 'Яков Давидович',
     faction: Faction.SCIENTIST,
     occupation: Occupation.SCIENTIST,
-    plotNpcId: 'yakov',
+    plotNpcId: getPlotNpcNumericId('yakov'),
     inventory: [],
   });
 
@@ -207,7 +209,7 @@ test('maronary shaving handoff uses ordered item outcome rules', () => {
     name: 'Ротенбергов',
     faction: Faction.WILD,
     occupation: Occupation.HUNTER,
-    plotNpcId: 'rotenbergov',
+    plotNpcId: getPlotNpcNumericId('rotenbergov'),
     inventory: [],
   });
 

@@ -1,6 +1,7 @@
 /* -- Аварийный медпост (AG44) ----------------------------------- */
 /* Small finite medical POI: trade, restock, steal, expose, leave.  */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell, ContainerKind, DoorState, Faction, Feature,
   Occupation, QuestType, RoomType, Tex,
@@ -133,7 +134,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest('ag44_dr_kruglov', NPC_DEFS.ag44_dr_kruglov, [
   {
     id: 'ag44_medpost_restock_bandages',
-    giverNpcId: 'ag44_dr_kruglov',
+    giverId: getPlotNpcNumericId('ag44_dr_kruglov')!,
     type: QuestType.FETCH,
     desc: 'Доктор Круглов: «Принесите три бинта в аварийный медпост. За это выдам таблетки и справку без очереди.»',
     targetItem: 'bandage', targetCount: 3,

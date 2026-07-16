@@ -1,5 +1,6 @@
 /* ── AG68 blue glow sample — sealed science trade with risk ───── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   ContainerKind,
   Faction,
@@ -76,7 +77,7 @@ const CLEANER_DEF: PlotNpcDef = {
 
 registerSideQuest('ag68_blue_sample_buyer', BUYER_DEF, [{
   id: SELL_QUEST_ID,
-  giverNpcId: 'ag68_blue_sample_buyer',
+  giverId: getPlotNpcNumericId('ag68_blue_sample_buyer')!,
   type: QuestType.FETCH,
   desc: 'Люминова: «Запечатанный синий образец нужен НИИ. Не вскрывайте: целая герма стоит дороже любого рассказа.»',
   targetItem: BLUE_GLOW_SAMPLE_SEALED, targetCount: 1,
@@ -87,7 +88,7 @@ registerSideQuest('ag68_blue_sample_buyer', BUYER_DEF, [{
 
 registerSideQuest('ag68_blue_sample_cleaner', CLEANER_DEF, [{
   id: DESTROY_QUEST_ID,
-  giverNpcId: 'ag68_blue_sample_cleaner',
+  giverId: getPlotNpcNumericId('ag68_blue_sample_cleaner')!,
   type: QuestType.FETCH,
   desc: 'Глушитель: «Принеси синий образец в герме. Уничтожим по акту, без светящихся карманов и лишних свидетелей.»',
   targetItem: BLUE_GLOW_SAMPLE_SEALED, targetCount: 1,

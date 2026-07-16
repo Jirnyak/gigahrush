@@ -313,6 +313,34 @@ export function registerNpcPackage(input: NpcPackageDef | NpcPackageRegistryInpu
   NPC_PACKAGES_BY_ID.set(pack.id, pack);
 }
 
+let nextPlotNpcId = 0;
+const PLOT_NPC_PACKAGES_BY_NUMERIC_ID: NpcPackageDef[] = [];
+
+export function registerPlotNpc(input: NpcPackageDef | NpcPackageRegistryInput): number {
+  const id = nextPlotNpcId++;
+  const pack = normalizeNpcPackageInput(input);
+  registerNpcPackage(pack);
+  PLOT_NPC_PACKAGES_BY_NUMERIC_ID[id] = pack;
+  return id;
+}
+
+export function getPlotNpcCount(): number {
+  return nextPlotNpcId;
+}
+
+export function getPlotNpcPackageByNumericId(id: number): NpcPackageDef | undefined {
+  return PLOT_NPC_PACKAGES_BY_NUMERIC_ID[id];
+}
+
+export function getPlotNpcNumericId(stringId: string): number | undefined {
+  const idx = PLOT_NPC_PACKAGES_BY_NUMERIC_ID.findIndex(pack => pack.id === stringId);
+  return idx >= 0 ? idx : undefined;
+}
+
+export function getPlotNpcStringId(id: number): string | undefined {
+  return PLOT_NPC_PACKAGES_BY_NUMERIC_ID[id]?.id;
+}
+
 export function registerNpcPackages(inputs: readonly (NpcPackageDef | NpcPackageRegistryInput)[]): void {
   const packs = inputs.map(normalizeNpcPackageInput);
   const batchIds = new Set<string>();
@@ -334,10 +362,12 @@ export function getNpcPackage(id: string): NpcPackageDef | undefined {
   return NPC_PACKAGES_BY_ID.get(id);
 }
 
-export function getNpcPackageByPlotNpcId(plotNpcId: string): NpcPackageDef | undefined {
-  const direct = NPC_PACKAGES_BY_ID.get(plotNpcId);
-  if (direct?.content?.plotNpcId === plotNpcId) return direct;
-  return NPC_PACKAGES.find(pack => pack.content?.plotNpcId === plotNpcId);
+export function getNpcPackageByPlotNpcId(plotNpcId: number): NpcPackageDef | undefined {
+  const strId = getPlotNpcStringId(plotNpcId);
+  if (!strId) return undefined;
+  const direct = NPC_PACKAGES_BY_ID.get(strId);
+  if (direct?.content?.plotNpcId === strId) return direct;
+  return NPC_PACKAGES.find(pack => pack.content?.plotNpcId === strId);
 }
 
 export function allNpcPackages(): readonly NpcPackageDef[] {
@@ -552,6 +582,6 @@ export function npcPackageFromPlotNpc(input: PlotNpcPackageInput): NpcPackageDef
 
 export function registerNpcPackageFromPlotNpc(input: PlotNpcPackageInput): NpcPackageDef {
   const pack = npcPackageFromPlotNpc(input);
-  registerNpcPackage(pack);
+  registerPlotNpc(pack);
   return pack;
 }

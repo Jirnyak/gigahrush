@@ -1,5 +1,6 @@
 /* ── Design z: antenna_court / Антенный двор ─────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell, ContainerKind, DoorState, Feature, LiftDirection,
   RoomType, Tex, ZoneFaction,
@@ -68,21 +69,21 @@ export interface AntennaSignalResult {
 export const ANTENNA_COURT_ROUTE_DECISIONS = [
   {
     id: 'signal_repair',
-    roomName: 'Релейная будка',
+    roomDefId: 'Релейная будка',
     itemId: 'circuit_board',
     eventAction: 'repair',
     outcome: 'Паша чинит реле: сигнал дает маршрутную зацепку, не полную карту.',
   },
   {
     id: 'signal_exposure',
-    roomName: 'Пост сигнал-инспекции',
+    roomDefId: 'Пост сигнал-инспекции',
     itemId: 'record_exposure_notice',
     eventAction: 'expose',
     outcome: 'Круг принимает акт о незаконной записи: подсказка становится министерским следом и слухом.',
   },
   {
     id: 'market_jam',
-    roomName: 'Кабина глушения',
+    roomDefId: 'Кабина глушения',
     itemId: 'fuse',
     eventAction: 'jam',
     outcome: 'Мирра дает короткую тишину для рынка 88, но оставляет заметную подпись в эфире.',
@@ -348,17 +349,17 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_pasha_grown', NPC_DEFS.antenna_pasha_grown, [
   {
     id: 'antenna_tune_floor',
-    giverNpcId: 'antenna_pasha_grown',
+    giverId: getPlotNpcNumericId('antenna_pasha_grown')!,
     type: QuestType.VISIT,
     desc: 'Паша Выросший: «Дойди до Релейной будки и настрой школьную частоту. Награда - зацепка, не карта.»',
-    targetRoomName: 'Релейная будка',
+    targetRoomDefId: 'Релейная будка',
     rewardItem: 'relay_diagram', rewardCount: 1,
     extraRewards: [{ defId: 'caravan_route', count: 1 }],
     relationDelta: 12, xpReward: 45, moneyReward: 30,
   },
   {
     id: 'antenna_repair_signal',
-    giverNpcId: 'antenna_pasha_grown',
+    giverId: getPlotNpcNumericId('antenna_pasha_grown')!,
     type: QuestType.FETCH,
     desc: 'Паша Выросший: «Нужна целая плата реле. Починим мачту - частота даст маршрутную зацепку без министерского акта.»',
     targetItem: 'circuit_board', targetCount: 1,
@@ -368,10 +369,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_pasha_grown', NPC_DEF
   },
   {
     id: 'antenna_tell_echo',
-    giverNpcId: 'antenna_pasha_grown',
+    giverId: getPlotNpcNumericId('antenna_pasha_grown')!,
     type: QuestType.TALK,
     desc: 'Паша Выросший: «Сверься с Эхо Женей. Он повторяет этажи, когда приборы начинают льстить.»',
-    targetNpcId: 'antenna_echo_zhenya',
+    targetNpcId: getPlotNpcNumericId('antenna_echo_zhenya')!,
     rewardItem: 'radio', rewardCount: 1,
     relationDelta: 8, xpReward: 30, moneyReward: 20,
   },
@@ -380,7 +381,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_pasha_grown', NPC_DEF
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_mirra_jammer', NPC_DEFS.antenna_mirra_jammer, [
   {
     id: 'antenna_jam_raid',
-    giverNpcId: 'antenna_mirra_jammer',
+    giverId: getPlotNpcNumericId('antenna_mirra_jammer')!,
     type: QuestType.FETCH,
     desc: 'Мирра Глушилка: «Принеси два предохранителя. Я дам короткую заглушку для рейда 88, но инспектор потом услышит пустое место.»',
     targetItem: 'fuse', targetCount: 2,
@@ -393,7 +394,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_mirra_jammer', NPC_DE
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_captain_krug', NPC_DEFS.antenna_captain_krug, [
   {
     id: 'antenna_battery_theft',
-    giverNpcId: 'antenna_captain_krug',
+    giverId: getPlotNpcNumericId('antenna_captain_krug')!,
     type: QuestType.FETCH,
     desc: 'Капитан Круг: «Нужны две энергоячейки из батарейного шкафа. Получишь разрешение, если не заставишь меня писать слово "кража".»',
     targetItem: 'ammo_energy', targetCount: 2,
@@ -403,7 +404,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_captain_krug', NPC_DE
   },
   {
     id: 'antenna_expose_signal_log',
-    giverNpcId: 'antenna_captain_krug',
+    giverId: getPlotNpcNumericId('antenna_captain_krug')!,
     type: QuestType.FETCH,
     desc: 'Капитан Круг: «Акт о пропавшей записи превратит закрытый шёпот в министерский след. За бумагу дам законный корешок.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
@@ -419,7 +420,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_guard_hz_watch', NPC_
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'antenna_echo_zhenya', NPC_DEFS.antenna_echo_zhenya, [
   {
     id: 'antenna_record_void',
-    giverNpcId: 'antenna_echo_zhenya',
+    giverId: getPlotNpcNumericId('antenna_echo_zhenya')!,
     type: QuestType.FETCH,
     desc: 'Эхо Женя: «Запиши голосовую аномалию в банку и реши: продать ее рынку или отдать тому, кто умеет читать записи.»',
     targetItem: 'bottled_voice', targetCount: 1,
@@ -623,7 +624,7 @@ function antennaRoomOwnerOverride(room: Room): ZoneFaction | undefined {
 export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   let nextContainerId = CONTAINER_ID_BASE;
 
   world.wallTex.fill(Tex.CONCRETE);

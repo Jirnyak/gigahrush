@@ -177,13 +177,13 @@ function hideMapArea(world: World, x: number, y: number, radius: number): void {
 function questHasMapRevealTarget(q: Quest): boolean {
   return q.targetRoom !== undefined ||
     q.targetRoomType !== undefined ||
-    q.targetRoomName !== undefined ||
+    q.targetRoomDefId !== undefined ||
     q.targetZoneTag !== undefined ||
     q.targetMarker?.roomType !== undefined ||
-    q.targetMarker?.roomName !== undefined ||
+    q.targetMarker?.roomDefId !== undefined ||
     q.targetMarker?.zoneTag !== undefined ||
     q.targetNpcId !== undefined ||
-    q.targetPlotNpcId !== undefined ||
+    q.targetNpcId !== undefined ||
     q.targetMonsterKind !== undefined;
 }
 
@@ -193,7 +193,7 @@ function questWithMarkerFallback(q: Quest): Quest {
   return {
     ...q,
     targetRoomType: q.targetRoomType ?? marker.roomType,
-    targetRoomName: q.targetRoomName ?? marker.roomName,
+    targetRoomDefId: q.targetRoomDefId ?? marker.roomDefId,
     targetZoneTag: q.targetZoneTag ?? marker.zoneTag,
   };
 }
@@ -257,7 +257,7 @@ export function revealQuestTargetOnMap(
     e.alive &&
     (
       (q.targetNpcId !== undefined && e.id === q.targetNpcId) ||
-      (q.targetPlotNpcId !== undefined && e.plotNpcId === q.targetPlotNpcId)
+      (q.targetNpcId !== undefined && e.id === q.targetNpcId)
     ),
   );
   if (targetEntity) {

@@ -1,5 +1,6 @@
 /* ── Листовой — side quest NPC for Квартиры floor ─────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -42,7 +43,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('listovoy', NPC_DEF, [
   {
     id: 'dry_ballot_roster',
-    giverNpcId: 'listovoy',
+    giverId: getPlotNpcNumericId('listovoy')!,
     type: QuestType.FETCH,
     desc: 'Листовой: «Собери 100 бюллетеней. Пусть очередь у стояка сама посчитает живых, пока это не сделали ликвидаторы.»',
     targetItem: 'ballot', targetCount: 100,

@@ -2,6 +2,7 @@
 /* Finite quarantine slice: triage desk, sealed ward, med archive, */
 /* locked/secret medical containers, triage choices and outcomes.  */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
@@ -194,10 +195,10 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest('ag17_mira_triage', NPC_DEFS.ag17_mira_triage, [
   {
     id: QUEST_MIRA_MESSAGE,
-    giverNpcId: 'ag17_mira_triage',
+    giverId: getPlotNpcNumericId('ag17_mira_triage')!,
     type: QuestType.TALK,
     desc: 'Мира Сортировочная: «Передайте Ольге Дмитриевне: в карантине одна доза, одна справка и плохая гермодверь. Пусть медпункт решит порядок, пока мы не начали спорить у койки.»',
-    targetNpcId: 'olga',
+    targetNpcId: getPlotNpcNumericId('olga')!,
     rewardItem: 'clean_health_cert', rewardCount: 1,
     relationDelta: 10, xpReward: 35, moneyReward: 20,
     targetFloorZ: 100,
@@ -210,7 +211,7 @@ registerSideQuest('ag17_mira_triage', NPC_DEFS.ag17_mira_triage, [
   },
   {
     id: QUEST_MIRA_SANITARY,
-    giverNpcId: 'ag17_mira_triage',
+    giverId: getPlotNpcNumericId('ag17_mira_triage')!,
     type: QuestType.FETCH,
     desc: 'Мира Сортировочная: «Потратьте санитарный набор на сортировку: обработаем ширму, койку и руки. Себе он уже не вернется.»',
     targetItem: 'sanitary_kit', targetCount: 1,
@@ -232,7 +233,7 @@ registerSideQuest('ag17_klava_nurse', NPC_DEFS.ag17_klava_nurse, []);
 registerSideQuest('ag17_lida_patient', NPC_DEFS.ag17_lida_patient, [
   {
     id: QUEST_LIDA_ANTIBIOTIC,
-    giverNpcId: 'ag17_lida_patient',
+    giverId: getPlotNpcNumericId('ag17_lida_patient')!,
     type: QuestType.FETCH,
     desc: 'Лида Температурная: «Принесите антибиотик. Если я первая получу дозу, отдам направление к психиатру.»',
     targetItem: 'antibiotic', targetCount: 1,
@@ -253,7 +254,7 @@ registerSideQuest('ag17_lida_patient', NPC_DEFS.ag17_lida_patient, [
 registerSideQuest('ag17_yura_patient', NPC_DEFS.ag17_yura_patient, [
   {
     id: QUEST_YURA_ANTIBIOTIC,
-    giverNpcId: 'ag17_yura_patient',
+    giverId: getPlotNpcNumericId('ag17_yura_patient')!,
     type: QuestType.FETCH,
     desc: 'Юра Плесневой: «Принеси антибиотик. Медкарту отдам тебе - мне она уже хуже бинта.»',
     targetItem: 'antibiotic', targetCount: 1,
@@ -274,7 +275,7 @@ registerSideQuest('ag17_yura_patient', NPC_DEFS.ag17_yura_patient, [
 registerSideQuest('ag17_taras_sanitar', NPC_DEFS.ag17_taras_sanitar, [
   {
     id: QUEST_TARAS_OUTBREAK,
-    giverNpcId: 'ag17_taras_sanitar',
+    giverId: getPlotNpcNumericId('ag17_taras_sanitar')!,
     type: QuestType.KILL,
     desc: 'Тарас Санпропуск: «В карантинной палате ходит мертвяк. Уберите его, пока он не дошел до журнала.»',
     targetMonsterKind: MonsterKind.ZOMBIE,
@@ -292,7 +293,7 @@ registerSideQuest('ag17_taras_sanitar', NPC_DEFS.ag17_taras_sanitar, [
   },
   {
     id: QUEST_TARAS_SEAL_WARD,
-    giverNpcId: 'ag17_taras_sanitar',
+    giverId: getPlotNpcNumericId('ag17_taras_sanitar')!,
     type: QuestType.FETCH,
     desc: 'Тарас Санпропуск: «Есть тюбик герметика? Закроем палату как карантин, а не как просьбу. Потом туда только по журналу.»',
     targetItem: 'sealant_tube', targetCount: 1,
@@ -313,7 +314,7 @@ registerSideQuest('ag17_taras_sanitar', NPC_DEFS.ag17_taras_sanitar, [
 registerSideQuest('ag17_varvara_morgue', NPC_DEFS.ag17_varvara_morgue, [
   {
     id: 'ag17_varvara_medcard',
-    giverNpcId: 'ag17_varvara_morgue',
+    giverId: getPlotNpcNumericId('ag17_varvara_morgue')!,
     type: QuestType.FETCH,
     desc: 'Варвара Морговая: «Достаньте карантинную медкарту из картотеки. Без нее пациент числится дважды.»',
     targetItem: 'quarantine_medcard', targetCount: 1,

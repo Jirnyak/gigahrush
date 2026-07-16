@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- AG102 Zhelemish cellar: harvest / steal / burn ethics loop -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -79,7 +80,7 @@ const WITNESS_DEF: PlotNpcDef = {
 registerSideQuest(OWNER_ID, OWNER_DEF, [
   {
     id: 'ag102_buy_share_zhelemish',
-    giverNpcId: OWNER_ID,
+    giverId: getPlotNpcNumericId(OWNER_ID)!,
     type: QuestType.FETCH,
     desc: 'Баба Мавра: «Дай двадцать пять рублей в очередь, и я отдам варёный желемыш без воровского запаха.»',
     targetItem: 'money',
@@ -93,10 +94,10 @@ registerSideQuest(OWNER_ID, OWNER_DEF, [
   },
   {
     id: 'ag102_owner_resolution',
-    giverNpcId: OWNER_ID,
+    giverId: getPlotNpcNumericId(OWNER_ID)!,
     type: QuestType.TALK,
     desc: 'Баба Мавра: «Скажи Никите {dir}, что общий поддон я делю, а запертый ящик он сторожит свидетелями.»',
-    targetNpcId: WITNESS_ID,
+    targetNpcId: getPlotNpcNumericId(WITNESS_ID)!,
     rewardItem: 'zhelemish_dried',
     rewardCount: 1,
     extraRewards: [{ defId: 'bread', count: 1 }],
@@ -109,7 +110,7 @@ registerSideQuest(OWNER_ID, OWNER_DEF, [
 registerSideQuest(WITNESS_ID, WITNESS_DEF, [
   {
     id: 'ag102_report_zhelemish_sample',
-    giverNpcId: WITNESS_ID,
+    giverId: getPlotNpcNumericId(WITNESS_ID)!,
     type: QuestType.FETCH,
     desc: 'Никита Саннадзор: «Сдай сырой желемыш как образец. Не съесть, не продать - сдать, пока он свежий и без чужих рук.»',
     targetItem: 'zhelemish_raw',
@@ -124,7 +125,7 @@ registerSideQuest(WITNESS_ID, WITNESS_DEF, [
   },
   {
     id: 'ag102_burn_zhelemish_growth',
-    giverNpcId: WITNESS_ID,
+    giverId: getPlotNpcNumericId(WITNESS_ID)!,
     type: QuestType.FETCH,
     desc: 'Никита Саннадзор: «Принеси канистру бензина. Сожжём мокрый угол, оставим еду без плесневой корки.»',
     targetItem: 'ammo_fuel',
@@ -138,7 +139,7 @@ registerSideQuest(WITNESS_ID, WITNESS_DEF, [
   },
   {
     id: 'ag102_seal_zhelemish_cellar',
-    giverNpcId: WITNESS_ID,
+    giverId: getPlotNpcNumericId(WITNESS_ID)!,
     type: QuestType.FETCH,
     desc: 'Никита Саннадзор: «Герметик к нижней щели. Не лечит погреб, зато не даёт ему стать коридором.»',
     targetItem: 'sealant_tube',
@@ -285,7 +286,7 @@ function spawnNpc(
   angle: number,
   weapon?: string,
 ): number {
-  const existing = entities.find(e => e.alive && e.plotNpcId === plotNpcId);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing.id;
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,

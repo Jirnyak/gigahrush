@@ -1,5 +1,6 @@
 /* ── Зал невозможной очереди — Ministry admin POI ─────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -129,7 +130,7 @@ const KLAVDIYA_DEF: PlotNpcDef = {
 registerSideQuest('osip_kartochny', OSIP_DEF, [
   {
     id: 'archive_card_books',
-    giverNpcId: 'osip_kartochny',
+    giverId: getPlotNpcNumericId('osip_kartochny')!,
     type: QuestType.FETCH,
     desc: 'Осип Карточный: «Четыре книги для картотеки. Обложки держат архивный укус.»',
     targetItem: 'book', targetCount: 4,
@@ -139,7 +140,7 @@ registerSideQuest('osip_kartochny', OSIP_DEF, [
   },
   {
     id: 'min_coupon_forgery_report',
-    giverNpcId: 'osip_kartochny',
+    giverId: getPlotNpcNumericId('osip_kartochny')!,
     type: QuestType.FETCH,
     desc: 'Осип Карточный: «Принесите поддельную пайковую карточку. Не продавайте её: чужой ужин потом ищет свидетеля.»',
     targetItem: 'forged_ration_card', targetCount: 1,
@@ -152,7 +153,7 @@ registerSideQuest('osip_kartochny', OSIP_DEF, [
 registerSideQuest('klavdiya_ocherednaya', KLAVDIYA_DEF, [
   {
     id: 'queue_water',
-    giverNpcId: 'klavdiya_ocherednaya',
+    giverId: getPlotNpcNumericId('klavdiya_ocherednaya')!,
     type: QuestType.FETCH,
     desc: 'Клавдия Очередная: «Две бутылки воды. Я уступлю место у пропускного окна, пока очередь не заметила милосердие.»',
     targetItem: 'water', targetCount: 2,

@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../data/npc_packages';
 import {
   AIGoal,
   EntityType,
@@ -44,19 +45,20 @@ function packageSpeed(pack: NpcPackageDef): number {
 }
 
 export function plotNpcEntityFromPackage(
-  id: number,
   plotNpcId: string,
   x: number,
   y: number,
   options: PlotNpcSpawnOptions = {},
 ): (Entity & { npcPackageId: string }) | undefined {
-  const pack = getNpcPackageByPlotNpcId(plotNpcId);
-  if (!pack || pack.content?.plotNpcId !== plotNpcId) return undefined;
+  const numericId = getPlotNpcNumericId(plotNpcId)!;
+  const pack = getNpcPackageByPlotNpcId(numericId);
+  const packPlotId = pack?.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined;
+  if (!pack || packPlotId !== numericId) return undefined;
   const target = options.aiTarget ?? { x: 0, y: 0 };
   const visualSpriteScale = pack.visual.spriteScale
     ?? (pack.affiliation.occupation === Occupation.CHILD ? 0.6 : undefined);
   return {
-    id,
+    id: getPlotNpcNumericId(plotNpcId)!,
     type: EntityType.NPC,
     x,
     y,
@@ -84,7 +86,6 @@ export function plotNpcEntityFromPackage(
     tool: options.tool ?? pack.loadout.tool,
     faction: pack.affiliation.faction,
     occupation: pack.affiliation.occupation,
-    plotNpcId,
     npcPackageId: pack.id,
     canGiveQuest: options.canGiveQuest ?? pack.runtime?.canGiveQuest ?? true,
     questId: -1,
@@ -101,7 +102,8 @@ export function spawnPlotNpcFromPackage(
   y: number,
   options: PlotNpcSpawnOptions = {},
 ): Entity | undefined {
-  const entity = plotNpcEntityFromPackage(nextId.v, plotNpcId, x, y, options);
+  nextId.v++;
+  const entity = plotNpcEntityFromPackage(plotNpcId, x, y, options);
   if (!entity) return undefined;
   nextId.v++;
   entities.push(entity);
@@ -133,7 +135,7 @@ export function spawnPendingPlotNpcsForFloor(
     if (pack.content?.plotNpcId == null) continue;
 
     // Check if already alive to avoid duplicates (just in case, though A-Life usually handles this)
-    if (entities.some(e => e.plotNpcId === pack.content?.plotNpcId && e.alive)) continue;
+    if (entities.some(e => e.id === getPlotNpcNumericId(pack.content?.plotNpcId!) && e.alive)) continue;
 
     let x = 0, y = 0;
     if (pack.placement.roomId && namedRooms?.[pack.placement.roomId]) {

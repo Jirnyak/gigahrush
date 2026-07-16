@@ -1,5 +1,6 @@
 /* ── Underhell design z: ritual thresholds below Hell ─────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
@@ -58,7 +59,7 @@ export interface UnderhellLateWarning {
   id: UnderhellLateWarningId;
   label: string;
   sourceRoomName: string;
-  targetRoomName: string;
+  targetRoomDefId: string;
   warning: string;
   tags: readonly string[];
 }
@@ -115,7 +116,7 @@ export type UnderhellThresholdChainRole = 'entry' | 'threat' | 'fallback' | 'rew
 export interface UnderhellThresholdChainNode {
   role: UnderhellThresholdChainRole;
   roomId: number;
-  roomName: string;
+  roomDefId: string;
   x: number;
   y: number;
   reachable: boolean;
@@ -177,7 +178,7 @@ export const UNDERHELL_LATE_WARNINGS: readonly UnderhellLateWarning[] = [
     id: 'underhell_threshold_price_echo',
     label: 'Цена пропуска возвращается слухом',
     sourceRoomName: 'Пост трех оплат',
-    targetRoomName: 'Свидетельские клетки',
+    targetRoomDefId: 'Свидетельские клетки',
     warning: 'Пост берет одну плату сейчас, но свидетельская клетка решает, кто потом расскажет о цене.',
     tags: ['underhell', 'threshold', 'witness', 'warning'],
   },
@@ -185,7 +186,7 @@ export const UNDERHELL_LATE_WARNINGS: readonly UnderhellLateWarning[] = [
     id: 'underhell_void_cut_darkness_trace',
     label: 'Разрез к Пустоте оставляет след',
     sourceRoomName: 'Списочная створка',
-    targetRoomName: 'Разрез к Пустоте',
+    targetRoomDefId: 'Разрез к Пустоте',
     warning: 'Открытый разрез ведет к Пустоте, а позже может оставить мокрый след в темном отсеке.',
     tags: ['underhell', 'void_gate', 'darkness', 'warning'],
   },
@@ -193,7 +194,7 @@ export const UNDERHELL_LATE_WARNINGS: readonly UnderhellLateWarning[] = [
     id: 'underhell_root_retreat_ledge',
     label: 'Верхний обратный уступ виден до платы',
     sourceRoomName: 'Корневой вход',
-    targetRoomName: 'Обратный уступ',
+    targetRoomDefId: 'Обратный уступ',
     warning: 'Обратный уступ и корневая лестница остаются открытыми: если пост слишком громкий, уходи к лифту тем же светом.',
     tags: ['underhell', 'retreat', 'threshold', 'warning'],
   },
@@ -201,7 +202,7 @@ export const UNDERHELL_LATE_WARNINGS: readonly UnderhellLateWarning[] = [
     id: 'underhell_lower_retreat_ledge',
     label: 'Нижний уступ не запирает разрез',
     sourceRoomName: 'Культовая пошлинная палата',
-    targetRoomName: 'Нижний обратный уступ',
+    targetRoomDefId: 'Нижний обратный уступ',
     warning: 'Нижний обратный уступ связывает долг, якорь и разрез: награду можно взять и уйти без прямого боя у створки.',
     tags: ['underhell', 'retreat', 'reward', 'warning'],
   },
@@ -318,7 +319,7 @@ const FALSE_YAKOV_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_threshold_marfusha', THRESHOLD_MARFUSHA_DEF, [
   {
     id: 'underhell_pay_threshold',
-    giverNpcId: 'underhell_threshold_marfusha',
+    giverId: getPlotNpcNumericId('underhell_threshold_marfusha')!,
     type: QuestType.FETCH,
     desc: 'Марфуша Постовая: «Пост примет одну из трех плат: флягу с церковной печатью, паспортный корешок или 35 HP кровью. Для журнала принеси флягу, остальные цены отмечены в табличке.»',
     targetItem: 'holy_water', targetCount: 1,
@@ -330,7 +331,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_threshold_marfusha'
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_debt_cultist', DEBT_CULTIST_DEF, [
   {
     id: 'underhell_burn_debt',
-    giverNpcId: 'underhell_debt_cultist',
+    giverId: getPlotNpcNumericId('underhell_debt_cultist')!,
     type: QuestType.FETCH,
     desc: 'Иона Долгожог: «Принеси лист с поддельной печатью. Сожжем рыночный долг, но Market 88 и этаж 69 получат слух с плохим хвостом.»',
     targetItem: 'forged_stamp_sheet', targetCount: 1,
@@ -343,10 +344,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_debt_cultist', DEBT
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_wordless_liquidator', WORDLESS_LIQUIDATOR_DEF, [
   {
     id: 'underhell_free_witness',
-    giverNpcId: 'underhell_wordless_liquidator',
+    giverId: getPlotNpcNumericId('underhell_wordless_liquidator')!,
     type: QuestType.TALK,
     desc: 'Безмолвный ликвидатор просит открыть свидетельскую клетку. Можно вывести свидетеля или замолчать клетку, но оба исхода пишутся событием.',
-    targetNpcId: 'underhell_wordless_liquidator',
+    targetNpcId: getPlotNpcNumericId('underhell_wordless_liquidator')!,
     rewardItem: 'ammo_9mm', rewardCount: 12,
     extraRewards: [{ defId: 'bandage', count: 2 }],
     relationDelta: 12, xpReward: 80,
@@ -356,7 +357,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_wordless_liquidator
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'underhell_false_yakov_echo', FALSE_YAKOV_DEF, [
   {
     id: 'underhell_open_void_cut',
-    giverNpcId: 'underhell_false_yakov_echo',
+    giverId: getPlotNpcNumericId('underhell_false_yakov_echo')!,
     type: QuestType.KILL,
     desc: 'Ложный Яков-эхо: «Разбей идол-якорь в палате якоря. Если пост уже оплачен, разрез к Пустоте откроется сразу.»',
     targetMonsterKind: MonsterKind.IDOL,
@@ -654,7 +655,7 @@ export function alignUnderhellAmbientNpcTerritory(world: World, entities: Entity
 function isUnderhellAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -731,7 +732,7 @@ export function publishUnderhellLateWarning(
 function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGate: boolean): UnderhellDesignGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
 
   paintBaseUnderhell(world);
 
@@ -1040,13 +1041,13 @@ function underhellChainNode(
 ): UnderhellThresholdChainNode {
   const room = world.rooms[roomId];
   if (!room) {
-    return { role, roomId, roomName: '', x: -1, y: -1, reachable: false };
+    return { role, roomId, roomDefId: '', x: -1, y: -1, reachable: false };
   }
   const center = roomCenter(room);
   return {
     role,
     roomId,
-    roomName: room.name,
+    roomDefId: room.name,
     x: center.x + 0.5,
     y: center.y + 0.5,
     reachable: reachableRooms.has(roomId),

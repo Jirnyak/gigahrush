@@ -5,6 +5,7 @@ import { floorKeyForDesign, floorKeyForDesign } from './floor_keys';
 import { getStack, ITEMS } from './items';
 import { NPC_PACKAGE_INVENTORY_CAP } from './npc_package_schema';
 import type { NpcPackageDef, NpcPackagePresence } from './npc_packages';
+import { registerPlotNpc } from './npc_packages';
 
 interface MainPlotNpcPackageInput {
   id: string;
@@ -114,9 +115,8 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
   };
 }
 
-export const MAIN_PLOT_NPC_PACKAGES = [
 
-  plotNpcPackage({
+  export const MARKO_LOLO_ID = registerPlotNpc(plotNpcPackage({
     id: 'marko_lolo',
     displayName: 'Марко Лоло',
     publicLine: 'Второй мастер арены, принимающий ставки и координирующий телепортацию бойцов.',
@@ -134,9 +134,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkLinesPost: [],
     voiceTags: ['liquidator', 'technical'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const LIQUIDATOR_ARMORER_ID = registerPlotNpc(plotNpcPackage({
     id: 'liquidator_armorer',
     displayName: 'Оружейник форпоста',
     publicLine: 'Ликвидатор, ответственный за учет и выдачу стволов и патронов.',
@@ -154,9 +154,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkLinesPost: [],
     voiceTags: ['liquidator', 'terse'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const LIQUIDATOR_MEDIC_ID = registerPlotNpc(plotNpcPackage({
     id: 'liquidator_medic',
     displayName: 'Медик ликвидаторов',
     publicLine: 'Врач, выдающий аптечки, бинты и антидепрессанты перед и после рейдов.',
@@ -174,9 +174,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkLinesPost: [],
     voiceTags: ['medical', 'liquidator'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const LIQUIDATOR_QUARTERMASTER_ID = registerPlotNpc(plotNpcPackage({
     id: 'liquidator_quartermaster',
     displayName: 'Квартирмейстер',
     publicLine: 'Инженер-снабженец, у которого можно выменять броню, снаряжение и взрывчатку.',
@@ -194,9 +194,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkLinesPost: [],
     voiceTags: ['liquidator', 'technical'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const OLGA_ID = registerPlotNpc(plotNpcPackage({
     id: 'olga',
     displayName: 'Ольга Дмитриевна',
     publicLine: 'Врач жилой зоны, подписывающая новичкам допуск на вылазки и списывающая бинты.',
@@ -248,9 +248,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     talkQuestResponse: 'Стрельбу видел, Баринов жив, значит, вводная закончилась. Держи бинты, воду и хлеб. Теперь реальная работа: сходи к моему коллеге Якову Давидовичу. Он изучает природу Самосбора, и ему нужны не лишние руки в лаборатории, а человек для поля.',
     voiceTags: ['medical', 'practical'],
     specialRoutineId: 'tutorial_lock_one_hour',
-  }),
+  }));
 
-  plotNpcPackage({
+  export const BARNI_ID = registerPlotNpc(plotNpcPackage({
     id: 'barni',
     displayName: 'Сержант Баринов',
     publicLine: 'Ликвидатор-инструктор жилой зоны, выдающий новичку Макаров и короткие боевые правила.',
@@ -296,9 +296,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     talkQuestResponse: 'Пиши расписку: табельный Макаров и восемь патронов. Стреляй по мишени. Потом к Ольге: без талона на воду и бинта в коридор не лезь.',
     voiceTags: ['liquidator', 'terse'],
     specialRoutineId: 'tutorial_lock_one_hour',
-  }),
+  }));
 
-  plotNpcPackage({
+  export const YAKOV_ID = registerPlotNpc(plotNpcPackage({
     id: 'yakov',
     displayName: 'Яков Давидович',
     publicLine: 'НИИ-исследователь Самосбора, переводящий бытовую вводную в полевую работу с образцами.',
@@ -342,9 +342,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkQuestResponse: 'Ольга Дмитриевна прислала? Хорошо, я оформлю временный допуск. Мне нужен лаборант для полевой работы: следы культа Чернобога дают фон рядом с Самосбором. Бери этот ПСИ-сгусток в подотчет, научись с ним работать и принеси мне их идол для опытов.',
     voiceTags: ['scientist', 'bureaucratic'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const VANKA_ID = registerPlotNpc(plotNpcPackage({
     id: 'vanka',
     displayName: 'Ванька Банчиный',
     publicLine: 'Испуганный бывший студент Якова, который связывает теневиков, Петлю и самосборные следы.',
@@ -390,9 +390,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkQuestResponse: 'Яков послал? Иваном Захаровым назвал? Значит, всё ещё сердится за топологию. Слушай быстро: Петля был жильцом, потом тень пошла впереди. Теневики рядом с Самосбором ходят, Ванька это видел. Убей Петлю в широком коридоре, держи свет, после рывка отходи, а холодный сгусток неси Якову закрытым. Крышку не трогай.',
     voiceTags: ['nervous', 'cult'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const MAJOR_GROM_ID = registerPlotNpc(plotNpcPackage({
     id: 'major_grom',
     displayName: 'Майор Громный',
     publicLine: 'Командир нижнего ликвидаторского форпоста, переводящий сюжет к коллекторам и Мясному низу.',
@@ -434,9 +434,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkQuestResponse: 'Яков прислал? Принял. Значит, он закончил с банками и отправил тебя туда, где от полевого человека есть польза. Чем ниже, тем ближе к Самосбору и тем меньше красивых версий. Отбей сектор, убери тварей, не лезь один за рапортом. Вернешься живым - получишь бумагу про теневиков и патроны.',
     voiceTags: ['liquidator', 'command'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const HELL_CONTACT_ID = registerPlotNpc(plotNpcPackage({
     id: 'hell_contact',
     displayName: 'Никанор Обожжённый',
     publicLine: 'Нижний культовый проводник, объясняющий Вестников, Подад и фазовый сгусток.',
@@ -467,9 +467,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkQuestResponse: 'Живой после лифта? Тише. Марфа у порога считает сторожей и свечи. Возьми фазовый сгусток: без него один Вестник останется за стеной.',
     voiceTags: ['cult', 'lower_route'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const HERALD_CLUE_ID = registerPlotNpc(plotNpcPackage({
     id: 'herald_clue',
     displayName: 'Марфа Пороговая',
     publicLine: 'Пороговая свидетельница Подада, считающая Вестников и условия нижнего прохода.',
@@ -498,9 +498,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkQuestResponse: 'Никанор ещё дышит? Тогда слушай и не спорь. Три Вестника держат местную заглушку: двое ходят, третий вписан за стеной. Убей троих, и порог провалится.',
     voiceTags: ['cult', 'threshold'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const VOID_WARNING_ID = registerPlotNpc(plotNpcPackage({
     id: 'void_warning',
     displayName: 'Жан Пустотник',
     publicLine: 'Пустотный ученый на нижнем пороге, предупреждающий о голосе, ловушке и Творце.',
@@ -530,9 +530,9 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     ],
     talkQuestResponse: 'Ты прошёл порог. Хорошо. Плохая новость: голос в банке не выводит. Он повторяет маршрут чужим голосом, а лишний шаг закрывает дверь за спиной.',
     voiceTags: ['scientist', 'void'],
-  }),
+  }));
 
-  plotNpcPackage({
+  export const VOICE_ID = registerPlotNpc(plotNpcPackage({
     id: 'voice',
     displayName: 'Глухой голос',
     publicLine: 'Нематериализованный сюжетный голос, сохраняемый как plot identity for compatibility.',
@@ -548,8 +548,8 @@ export const MAIN_PLOT_NPC_PACKAGES = [
     talkLines: [],
     talkLinesPost: [],
     voiceTags: ['plot_voice'],
-  }),
-] as const satisfies readonly NpcPackageDef[];
+  }));
+
 
 
 

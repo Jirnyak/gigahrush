@@ -2,6 +2,7 @@
  * Authored route floor registry_morgue, z=+18.
  */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W,
@@ -311,13 +312,13 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
   {
     id: 'morgue_find_tag',
-    giverNpcId: 'morgue_registrar_faina',
+    giverId: getPlotNpcNumericId('morgue_registrar_faina')!,
     type: QuestType.FETCH,
     desc: 'Фаина Реестровая: «Верните номерок из холодной камеры. Без него живого человека можно закрыть бумагой, а потом искать уже по форме.»',
     targetItem: CORPSE_NUMBER_TAG_ITEM, targetCount: 1,
     targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
-    targetRoomName: 'Холодная камера-укрытие',
+    targetRoomDefId: 'Холодная камера-укрытие',
     targetHint: 'номерок лежит в холодной картотеке; взять его без сдачи можно как кражу из моргового хранения',
     rewardItem: 'official_quarantine_clearance', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
@@ -329,13 +330,13 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_
   },
   {
     id: 'morgue_swap_certificate',
-    giverNpcId: 'morgue_registrar_faina',
+    giverId: getPlotNpcNumericId('morgue_registrar_faina')!,
     type: QuestType.FETCH,
     desc: 'Фаина Реестровая: «Принесите акт о пропавшей записи. Я оформлю смерть так, что Райсовет выдаст допуск человеку у окна. Пустую строку не трогайте.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
     targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
-    targetRoomName: 'Кабинет книги умерших',
+    targetRoomDefId: 'Кабинет книги умерших',
     rewardItem: 'archive_access_permit', rewardCount: 1,
     extraRewards: [{ defId: 'passport_stub', count: 1 }],
     relationDelta: -4, xpReward: 80, moneyReward: 95,
@@ -349,14 +350,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_orderly_stepan', NPC_DEFS.morgue_orderly_stepan, [
   {
     id: 'morgue_missing_body',
-    giverNpcId: 'morgue_orderly_stepan',
+    giverId: getPlotNpcNumericId('morgue_orderly_stepan')!,
     type: QuestType.KILL,
     desc: 'Степан Носильный: «В зараженной камере ходит человек с чужой биркой. Проверьте дистанцией и уберите подмену.»',
     targetMonsterKind: MonsterKind.NELYUD,
     killNeeded: 1,
     targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
-    targetRoomName: 'Зараженная камера сверки',
+    targetRoomDefId: 'Зараженная камера сверки',
     rewardItem: 'personal_file_copy', rewardCount: 1,
     extraRewards: [{ defId: 'filter_receipt', count: 1 }],
     relationDelta: 16, xpReward: 95, moneyReward: 90,
@@ -370,13 +371,13 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_orderly_stepan', NPC_D
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_relative_ira', NPC_DEFS.morgue_relative_ira, [
   {
     id: 'morgue_name_return',
-    giverNpcId: 'morgue_relative_ira',
+    giverId: getPlotNpcNumericId('morgue_relative_ira')!,
     type: QuestType.FETCH,
     desc: 'Ира Заименованная: «Найдите пропавшее личное дело. Мне нужен не ящик, а имя, пока графа не стала чужой.»',
     targetItem: 'missing_record_file', targetCount: 1,
     targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
-    targetRoomName: 'Холодная камера-укрытие',
+    targetRoomDefId: 'Холодная камера-укрытие',
     rewardItem: 'sealed_complaint', rewardCount: 1,
     extraRewards: [{ defId: 'tea', count: 1 }],
     relationDelta: 18, xpReward: 70, moneyReward: 35,
@@ -387,18 +388,18 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_relative_ira', NPC_DEF
   },
   {
     id: 'morgue_relative_escort',
-    giverNpcId: 'morgue_relative_ira',
+    giverId: getPlotNpcNumericId('morgue_relative_ira')!,
     type: QuestType.VISIT,
     desc: 'Ира Заименованная: «Проведите меня до книги умерших. Одной мне выдадут тишину, а при свидетеле должны назвать строку.»',
     targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
-    targetRoomName: 'Кабинет книги умерших',
+    targetRoomDefId: 'Кабинет книги умерших',
     targetHint: 'доведите Иру от окна приема через бирочную к книге умерших; не оставляйте ее среди холодных ящиков',
     rewardItem: 'personal_file_copy', rewardCount: 1,
     extraRewards: [{ defId: 'water_coupon', count: 1 }],
     relationDelta: 14, xpReward: 65, moneyReward: 25,
     requiresSideQuestDone: 'morgue_name_return',
-    failOnNpcDeathPlotId: 'morgue_relative_ira',
+    failOnNpcDeathId: getPlotNpcNumericId('morgue_relative_ira')!,
     eventTags: ['registry_morgue', 'escort', 'relative', 'identity', 'death_record'],
     eventData: { outcome: 'relative_escorted_to_ledger', routeId: REGISTRY_MORGUE_ROUTE_ID },
     eventTargetName: 'Иру довели до книги умерших как живого свидетеля записи.',
@@ -409,13 +410,13 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_relative_ira', NPC_DEF
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_quarantine_sanitar', NPC_DEFS.morgue_quarantine_sanitar, [
   {
     id: 'morgue_medicine_lock',
-    giverNpcId: 'morgue_quarantine_sanitar',
+    giverId: getPlotNpcNumericId('morgue_quarantine_sanitar')!,
     type: QuestType.FETCH,
     desc: 'Санитар Крутов: «Принесите чистую карантинную справку. Открою медшкаф законно. Иначе это будет кража.»',
     targetItem: 'official_quarantine_clearance', targetCount: 1,
     targetFloorZ: REGISTRY_MORGUE_BASE_FLOOR,
     targetRoute: REGISTRY_MORGUE_TARGET_ROUTE,
-    targetRoomName: 'Зараженная камера сверки',
+    targetRoomDefId: 'Зараженная камера сверки',
     rewardItem: 'sanitary_kit', rewardCount: 1,
     extraRewards: [{ defId: 'antibiotic', count: 1 }],
     relationDelta: 12, xpReward: 75, moneyReward: 60,
@@ -1463,7 +1464,7 @@ function seedRegistryMorgueReadables(world: World, entities: Entity[], nextId: N
 export function generateRegistryMorgueDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 1 };
+  const nextId: NextId = { v: 10000 };
   let nextRoomId = 0;
 
   for (let i = 0; i < W * W; i++) {

@@ -1731,7 +1731,7 @@ function claimFactionEventNpc(
   for (const npc of entities) {
     if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) continue;
     if (claimedIds.has(npc.id)) continue;
-    if (npc.plotNpcId || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) continue;
+    if (npc.id || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) continue;
     if (npc.faction !== faction) continue;
     if (world.zoneMap[world.idx(Math.floor(npc.x), Math.floor(npc.y))] !== zoneId) continue;
     const score = world.dist2(x, y, npc.x, npc.y) + ((npc.id * 137) % 100) * 0.001;

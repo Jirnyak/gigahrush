@@ -159,7 +159,7 @@ function makeUnreachableLiftWorld(): World {
 
 function templateNpc(id: number, x: number, y: number): Entity {
   return makeTestNpc({
-    id,
+    id: -1,
     x,
     y,
     angle: 0,

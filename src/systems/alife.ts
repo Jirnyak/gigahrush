@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../data/npc_packages';
 import {
   W,
   Cell,
@@ -24,6 +25,8 @@ import {
   type AlifeReservedIdentityDef,
 } from '../data/alife_population_plan';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
+import { isPlotNpc } from '../data/plot';
+// import { getPlotNpcNumericId, id } from '../data/npc_packages';
 import {
   ALIFE_FACTION_PROFILES,
   ALIFE_MAX_LEVEL,
@@ -108,10 +111,10 @@ interface AlifeFloorPlan {
 }
 
 export interface AlifePopulationReservedNpc {
-  id?: string;
+  id?: number;
   kind?: 'plot' | 'authored' | 'event_reserved';
   presence?: 'population' | 'event_only';
-  plotNpcId?: string;
+  plotNpcId?: number;
   name?: string;
   female?: boolean;
   age?: number;
@@ -190,7 +193,7 @@ export interface AlifeNpcSnapshot {
   reservedKind?: 'plot' | 'authored' | 'event_reserved';
   reservedIdentityId?: string;
   reservedPresence?: 'population' | 'event_only';
-  plotNpcId?: string;
+  plotNpcId?: number;
   x?: number;
   y?: number;
   angle?: number;
@@ -230,7 +233,7 @@ interface AlifeNpcRecord {
   reservedPresence?: 'population' | 'event_only';
   speed?: number;
   isTraveler?: boolean;
-  plotNpcId?: string;
+  plotNpcId?: number;
   x?: number;
   y?: number;
   angle?: number;
@@ -279,7 +282,7 @@ export interface AlifeSaveState {
   playerRelationTargetFaction?: Faction;
   playerRelationTargetAlifeId?: number;
   deadIds: number[];
-  deadPlotNpcIds: string[];
+  deadPlotNpcIds: number[];
   overrides: AlifeNpcOverride[];
 }
 
@@ -321,7 +324,7 @@ interface AlifeState {
   floorKeys: string[];
   floorKeyLookup: Record<string, number>;
   floorIndex: Record<string, number[]>;
-  deadPlotNpcIds: Set<string>;
+  deadPlotNpcIds: Set<number>;
   leaderboardVersion: number;
   leaderboardCache?: AlifeLeaderboardSnapshot & { signature: string; limit: number };
 }
@@ -1193,10 +1196,10 @@ function isDataPopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlanDef
 
 function reservedNpcFromData(def: AlifeReservedIdentityDef): AlifePopulationReservedNpc {
   return {
-    id: def.id,
+    id: getPlotNpcNumericId(def.id),
     kind: def.kind,
     presence: def.presence,
-    plotNpcId: def.plotNpcId,
+//     id: getPlotNpcNumericId(def.id),
     name: def.name,
     female: def.female,
     age: def.age,
@@ -1338,7 +1341,7 @@ function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, res
   if (reserved.id) record.reservedIdentityId = cleanFloorKey(reserved.id);
   if (reserved.kind) record.reservedKind = reserved.kind;
   if (reserved.presence === 'population' || reserved.presence === 'event_only') record.reservedPresence = reserved.presence;
-  if (reserved.plotNpcId) record.plotNpcId = reserved.plotNpcId.slice(0, 96);
+  if (reserved.plotNpcId) record.plotNpcId = reserved.plotNpcId;
   if (reserved.name) {
     record.name = reserved.name.slice(0, 80);
     const parts = reserved.name.split(' ');
@@ -1430,6 +1433,7 @@ export function buildAlifeStateFromPopulationPlan(
   const counts = populationPlanCounts(plan, boundedTotal);
   let id = 1;
 
+  // Pass 1: Allocate reserved (plot) NPCs so they strictly occupy IDs 1..N
   for (let i = 0; i < plan.buckets.length; i++) {
     const source = plan.buckets[i];
     const floorPlan = populationBucketToFloorPlan(source);
@@ -1439,9 +1443,24 @@ export function buildAlifeStateFromPopulationPlan(
     if (reserved.length > count) throw new RangeError(`A-Life population bucket ${floorPlan.key} has more reserved identities than records`);
     const bucket = floorIndex[floorPlan.key] ?? [];
     floorIndex[floorPlan.key] = bucket;
-    for (let n = 0; n < count; n++) {
+    for (let n = 0; n < reserved.length; n++) {
       const record = createRecord(alife, id++, floorPlan, seed);
-      if (n < reserved.length) applyReservedNpcToRecord(alife, record, reserved[n]);
+      applyReservedNpcToRecord(alife, record, reserved[n]);
+      bucket.push(npcs.length);
+      npcs.push(record);
+    }
+  }
+
+  // Pass 2: Allocate the rest as procedural NPCs occupying the remaining IDs
+  for (let i = 0; i < plan.buckets.length; i++) {
+    const source = plan.buckets[i];
+    const floorPlan = populationBucketToFloorPlan(source);
+    if (!floorPlan) continue;
+    const count = counts[i] ?? 0;
+    const reserved = source.reserved ?? [];
+    const bucket = floorIndex[floorPlan.key]!;
+    for (let n = reserved.length; n < count; n++) {
+      const record = createRecord(alife, id++, floorPlan, seed);
       bucket.push(npcs.length);
       npcs.push(record);
     }
@@ -1552,7 +1571,7 @@ function sanitizeFloor(value: unknown, fallback: number): number {
 
 function isAmbientNpcCandidate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    (!entity.id || entity.id <= 0) &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1;
@@ -1632,7 +1651,7 @@ export function recordAlifeNpcDeath(state: GameState, entity: Entity): void {
       alife.leaderboardVersion++;
     }
   }
-  if (entity.plotNpcId) alife.deadPlotNpcIds.add(entity.plotNpcId);
+  if (isPlotNpc(entity)) alife.deadPlotNpcIds.add(entity.id);
 }
 
 export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Entity): void {
@@ -1767,7 +1786,7 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     reservedKind: record.reservedKind,
     reservedIdentityId: record.reservedIdentityId,
     reservedPresence: record.reservedPresence,
-    plotNpcId: record.plotNpcId,
+//     id: record.id,
     x: record.x,
     y: record.y,
     angle: record.angle,
@@ -2018,7 +2037,7 @@ export function assignPersistentAlifeNpcFromEntity(
   entities: readonly Entity[],
   floorKey = currentAlifeFloorKey(state),
 ): boolean {
-  if (entity.type !== EntityType.NPC || entity.plotNpcId || entity.persistentNpcId) return false;
+  if (entity.type !== EntityType.NPC || entity.plotNpcId !== undefined || entity.persistentNpcId) return false;
   if (entity.alifeId !== undefined) {
     rewriteAlifeNpcIdentityFromEntity(state, entity);
     return true;
@@ -2047,16 +2066,16 @@ export function assignPersistentAlifeNpcFromEntity(
 export function bindReservedPlotNpcAlifeRecord(
   state: GameState,
   entity: Entity,
-  plotNpcId = entity.plotNpcId,
+  id = entity.id,
   floorKey = currentAlifeFloorKey(state),
 ): boolean {
-  if (entity.type !== EntityType.NPC || !plotNpcId) return false;
-  const cleanPlotNpcId = plotNpcId.slice(0, 96);
+  if (entity.type !== EntityType.NPC || !id) return false;
+  
   const cleanTargetFloorKey = cleanFloorKey(floorKey);
   if (!cleanTargetFloorKey) return false;
   const alife = ensureAlifeState(state);
   const recordIndex = alife.npcs.findIndex(record =>
-    record.plotNpcId === cleanPlotNpcId &&
+    record.plotNpcId === id &&
     record.reservedKind === 'plot'
   );
   if (recordIndex < 0) return false;
@@ -2073,13 +2092,13 @@ export function bindReservedPlotNpcAlifeRecord(
   return true;
 }
 
-export function isPlotNpcDead(state: GameState, plotNpcId: string): boolean {
-  return ensureAlifeState(state).deadPlotNpcIds.has(plotNpcId);
+export function isPlotNpcDead(state: GameState, id: number): boolean {
+  return ensureAlifeState(state).deadPlotNpcIds.has(id);
 }
 
-export function isPlotNpcDeadKnown(state: GameState, plotNpcId: string): boolean {
+export function isPlotNpcDeadKnown(state: GameState, id: number): boolean {
   const alife = (state as AlifeHost).alife;
-  return alife?.deadPlotNpcIds.has(plotNpcId) ?? false;
+  return alife?.deadPlotNpcIds.has(id) ?? false;
 }
 
 export function getAlifeNpcTotalMoney(state: GameState, npc: Entity | undefined): number | undefined {
@@ -2300,7 +2319,7 @@ function filterDeadPlotNpcs(alife: AlifeState, entities: Entity[]): void {
   let write = 0;
   for (let read = 0; read < entities.length; read++) {
     const entity = entities[read];
-    if (entity.type === EntityType.NPC && entity.plotNpcId && alife.deadPlotNpcIds.has(entity.plotNpcId)) continue;
+    if (entity.type === EntityType.NPC && entity.id && alife.deadPlotNpcIds.has(entity.id)) continue;
     entities[write++] = entity;
   }
   entities.length = write;
@@ -2512,7 +2531,12 @@ export function setAlifeState(state: GameState, input: unknown, options?: Create
   }
   if (Array.isArray(save.deadPlotNpcIds)) {
     for (const rawId of save.deadPlotNpcIds) {
-      if (typeof rawId === 'string' && rawId.length > 0) alife.deadPlotNpcIds.add(rawId.slice(0, 96));
+      if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
+        alife.deadPlotNpcIds.add(rawId);
+      } else if (typeof rawId === 'string' && rawId.length > 0) {
+        const numericId = getPlotNpcNumericId(rawId)!;
+        if (numericId !== undefined) alife.deadPlotNpcIds.add(numericId);
+      }
     }
   }
   if (Array.isArray(save.overrides)) {

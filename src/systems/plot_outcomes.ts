@@ -6,6 +6,7 @@ import {
   type Msg,
   msg,
 } from '../core/types';
+import { getPlotNpcStringId } from '../data/npc_packages';
 import { ITEMS } from '../data/catalog';
 import {
   MAX_STORY_DROPS_PER_FACT,
@@ -123,7 +124,7 @@ function dropRuleMatches(raw: unknown, ctx: StoryDeathContext): raw is StoryDrop
   if (source.killer === 'player' && !ctx.killerIsPlayer) return false;
   if (Array.isArray(source.entityTypes) && !source.entityTypes.includes(ctx.killed.type)) return false;
   if (Array.isArray(source.monsterKinds) && !numericArrayIncludes(source.monsterKinds, ctx.killed.monsterKind)) return false;
-  if (Array.isArray(source.plotNpcIds) && !stringArrayIncludes(source.plotNpcIds, ctx.killed.plotNpcId)) return false;
+  if (Array.isArray(source.ids) && !stringArrayIncludes(source.ids, getPlotNpcStringId(ctx.killed.id!) ?? '')) return false;
   if (Array.isArray(source.actorPackageIds) && !stringArrayIncludes(source.actorPackageIds, entityPackageId(ctx.killed))) return false;
   if (Array.isArray(source.factions) && !numericArrayIncludes(source.factions, ctx.killed.faction)) return false;
   return conditionMatches(raw.condition as StoryOutcomeCondition | undefined, ctx.state);

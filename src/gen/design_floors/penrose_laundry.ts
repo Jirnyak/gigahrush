@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Design z: penrose_laundry - aperiodic laundry and boiler service -- */
 
 import {
@@ -36,7 +37,7 @@ export const PENROSE_LAUNDRY_ROUTE_ID = 'penrose_laundry' as const;
 export const PENROSE_LAUNDRY_Z = -8;
 export const PENROSE_LAUNDRY_BASE_FLOOR = 100;
 
-export const PENROSE_LAUNDRY_ROOM_NAMES = {
+export const PENROSE_LAUNDRY_ROOM_DEF_IDS = {
   liftLobby: 'Лифтовая бирка прачечной П-81',
   firstSun: 'Прачечная метка Солнце П-81',
   secondSun: 'Сушильная метка Солнце П-81',
@@ -56,7 +57,7 @@ type PenroseLaundryMotif = 'route' | 'water' | 'heat' | 'deflation' | 'lock' | '
 
 interface PenroseTileSpec {
   id: string;
-  roomName: string;
+  roomDefId: string;
   symbol: PenroseLaundrySymbol;
   motif: PenroseLaundryMotif;
   type: RoomType;
@@ -70,7 +71,7 @@ interface PenroseTileSpec {
 
 export interface PenroseLaundryTileRecord {
   id: string;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   symbol: PenroseLaundrySymbol;
   motif: PenroseLaundryMotif;
@@ -130,19 +131,19 @@ const GOLDEN_TURN = Math.PI * (3 - Math.sqrt(5));
 const LOCK_KEY_ID = 'container_key_label';
 
 const TILE_SPECS: readonly PenroseTileSpec[] = [
-  { id: 'lift_lobby', roomName: PENROSE_LAUNDRY_ROOM_NAMES.liftLobby, symbol: 'coil', motif: 'route', type: RoomType.CORRIDOR, x: C - 34, y: C - 20, w: 22, h: 20, wallTex: Tex.LIFT_DOOR, floorTex: Tex.F_CONCRETE },
-  { id: 'first_sun', roomName: PENROSE_LAUNDRY_ROOM_NAMES.firstSun, symbol: 'sun', motif: 'water', type: RoomType.PRODUCTION, x: C, y: C - 32, w: 36, h: 18, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
-  { id: 'west_drop', roomName: 'Мокрая метка Капля П-81', symbol: 'drop', motif: 'water', type: RoomType.BATHROOM, x: C - 71, y: C - 23, w: 26, h: 18, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
-  { id: 'deflation_a', roomName: PENROSE_LAUNDRY_ROOM_NAMES.deflationA, symbol: 'dart', motif: 'deflation', type: RoomType.STORAGE, x: C - 22, y: C - 52, w: 16, h: 12, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
-  { id: 'kite_boiler', roomName: PENROSE_LAUNDRY_ROOM_NAMES.kiteBoiler, symbol: 'kite', motif: 'heat', type: RoomType.PRODUCTION, x: C + 40, y: C - 7, w: 28, h: 22, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-  { id: 'deflation_b', roomName: PENROSE_LAUNDRY_ROOM_NAMES.deflationB, symbol: 'sun', motif: 'deflation', type: RoomType.STORAGE, x: C + 48, y: C - 38, w: 14, h: 14, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
-  { id: 'rinse_line', roomName: PENROSE_LAUNDRY_ROOM_NAMES.rinseLine, symbol: 'drop', motif: 'water', type: RoomType.BATHROOM, x: C + 103, y: C - 12, w: 28, h: 16, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
-  { id: 'drain_tail', roomName: PENROSE_LAUNDRY_ROOM_NAMES.drainTail, symbol: 'dart', motif: 'water', type: RoomType.STORAGE, x: C + 78, y: C - 50, w: 22, h: 14, wallTex: Tex.DARK, floorTex: Tex.F_WATER },
-  { id: 'steam_valve', roomName: PENROSE_LAUNDRY_ROOM_NAMES.steamValve, symbol: 'kite', motif: 'heat', type: RoomType.PRODUCTION, x: C + 11, y: C + 23, w: 32, h: 22, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-  { id: 'second_sun', roomName: PENROSE_LAUNDRY_ROOM_NAMES.secondSun, symbol: 'sun', motif: 'water', type: RoomType.PRODUCTION, x: C - 32, y: C + 44, w: 28, h: 18, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
-  { id: 'laundry_lock', roomName: PENROSE_LAUNDRY_ROOM_NAMES.lock, symbol: 'coil', motif: 'lock', type: RoomType.STORAGE, x: C - 67, y: C + 23, w: 26, h: 16, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
-  { id: 'hidden_cache', roomName: PENROSE_LAUNDRY_ROOM_NAMES.hiddenCache, symbol: 'sun', motif: 'cache', type: RoomType.BATHROOM, x: C - 98, y: C + 46, w: 20, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
-  { id: 'dry_cache', roomName: PENROSE_LAUNDRY_ROOM_NAMES.dryCache, symbol: 'dart', motif: 'cache', type: RoomType.STORAGE, x: C + 78, y: C + 23, w: 18, h: 14, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { id: 'lift_lobby', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.liftLobby, symbol: 'coil', motif: 'route', type: RoomType.CORRIDOR, x: C - 34, y: C - 20, w: 22, h: 20, wallTex: Tex.LIFT_DOOR, floorTex: Tex.F_CONCRETE },
+  { id: 'first_sun', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.firstSun, symbol: 'sun', motif: 'water', type: RoomType.PRODUCTION, x: C, y: C - 32, w: 36, h: 18, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { id: 'west_drop', roomDefId: 'Мокрая метка Капля П-81', symbol: 'drop', motif: 'water', type: RoomType.BATHROOM, x: C - 71, y: C - 23, w: 26, h: 18, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+  { id: 'deflation_a', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.deflationA, symbol: 'dart', motif: 'deflation', type: RoomType.STORAGE, x: C - 22, y: C - 52, w: 16, h: 12, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { id: 'kite_boiler', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.kiteBoiler, symbol: 'kite', motif: 'heat', type: RoomType.PRODUCTION, x: C + 40, y: C - 7, w: 28, h: 22, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { id: 'deflation_b', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.deflationB, symbol: 'sun', motif: 'deflation', type: RoomType.STORAGE, x: C + 48, y: C - 38, w: 14, h: 14, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
+  { id: 'rinse_line', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.rinseLine, symbol: 'drop', motif: 'water', type: RoomType.BATHROOM, x: C + 103, y: C - 12, w: 28, h: 16, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+  { id: 'drain_tail', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.drainTail, symbol: 'dart', motif: 'water', type: RoomType.STORAGE, x: C + 78, y: C - 50, w: 22, h: 14, wallTex: Tex.DARK, floorTex: Tex.F_WATER },
+  { id: 'steam_valve', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.steamValve, symbol: 'kite', motif: 'heat', type: RoomType.PRODUCTION, x: C + 11, y: C + 23, w: 32, h: 22, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { id: 'second_sun', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.secondSun, symbol: 'sun', motif: 'water', type: RoomType.PRODUCTION, x: C - 32, y: C + 44, w: 28, h: 18, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { id: 'laundry_lock', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.lock, symbol: 'coil', motif: 'lock', type: RoomType.STORAGE, x: C - 67, y: C + 23, w: 26, h: 16, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { id: 'hidden_cache', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.hiddenCache, symbol: 'sun', motif: 'cache', type: RoomType.BATHROOM, x: C - 98, y: C + 46, w: 20, h: 14, wallTex: Tex.TILE_W, floorTex: Tex.F_WATER },
+  { id: 'dry_cache', roomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.dryCache, symbol: 'dart', motif: 'cache', type: RoomType.STORAGE, x: C + 78, y: C + 23, w: 18, h: 14, wallTex: Tex.PANEL, floorTex: Tex.F_LINO },
 ] as const;
 
 const SYMBOL_CHAIN_IDS = ['first_sun', 'deflation_b', 'second_sun', 'hidden_cache'] as const;
@@ -245,10 +246,10 @@ const TONYA_DEF: PlotNpcDef = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.marfa, MARFA_DEF, [{
   id: 'penrose_laundry_follow_matching_symbols',
-  giverNpcId: NPC_IDS.marfa,
+  giverId: getPlotNpcNumericId(NPC_IDS.marfa)!,
   type: QuestType.VISIT,
   desc: 'Марфа Меточная: «На П-81 прямой путь врет. Идите по одинаковым Солнцам: первое у машин, второе у сушки, третье у скрытой умывальной.»',
-  targetRoomName: PENROSE_LAUNDRY_ROOM_NAMES.hiddenCache,
+  targetRoomDefId: PENROSE_LAUNDRY_ROOM_DEF_IDS.hiddenCache,
   rewardItem: 'chalk',
   rewardCount: 1,
   extraRewards: [{ defId: 'cloth_roll', count: 2 }],
@@ -261,7 +262,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.marfa, MARFA_DEF, [{
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.igor, IGOR_DEF, [{
   id: 'penrose_laundry_break_lock',
-  giverNpcId: NPC_IDS.igor,
+  giverId: getPlotNpcNumericId(NPC_IDS.igor)!,
   type: QuestType.FETCH,
   desc: 'Игорь Прищеп: «Гаечный ключ принесете - дам бирку. Прачечный замок любит, когда его сначала уважают железом.»',
   targetItem: 'wrench',
@@ -278,7 +279,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.igor, IGOR_DEF, [{
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lidia, LIDIA_DEF, [{
   id: 'penrose_laundry_divert_steam',
-  giverNpcId: NPC_IDS.lidia,
+  giverId: getPlotNpcNumericId(NPC_IDS.lidia)!,
   type: QuestType.FETCH,
   desc: 'Лидия Пароотвод: «Бирку вентиля сюда. Пар уйдет в сушильный карман, и П-81 перестанет варить людей у котла.»',
   targetItem: 'valve_tag',
@@ -295,7 +296,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lidia, LIDIA_DEF, [{
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.tonya, TONYA_DEF, [{
   id: 'penrose_laundry_hidden_washroom_cache',
-  giverNpcId: NPC_IDS.tonya,
+  giverId: getPlotNpcNumericId(NPC_IDS.tonya)!,
   type: QuestType.FETCH,
   desc: 'Тоня Тайник: «Из скрытой умывальной достаньте журнал давления. Кэш любит сухую руку и ненавидит прямые маршруты.»',
   targetItem: 'pressure_logbook',
@@ -329,7 +330,7 @@ export function getPenroseLaundryState(world: World): PenroseLaundryState | unde
 export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
 
   for (let i = 0; i < W * W; i++) {
     world.wallTex[i] = Tex.PANEL;
@@ -344,7 +345,7 @@ export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
     roomsById.set(spec.id, room);
     tileRecords.push({
       id: spec.id,
-      roomName: room.name,
+      roomDefId: room.name,
       roomId: room.id,
       symbol: spec.symbol,
       motif: spec.motif,
@@ -954,7 +955,7 @@ function roomAngle(room: Room): number {
 
 function stampLaundryRoom(world: World, spec: PenroseTileSpec): Room {
   const room = stampRoom(world, world.rooms.length, spec.type, spec.x, spec.y, spec.w, spec.h, -1);
-  room.name = spec.roomName;
+  room.name = spec.roomDefId;
   room.wallTex = spec.wallTex;
   room.floorTex = spec.floorTex;
   for (let dy = -1; dy <= room.h; dy++) {
@@ -1333,7 +1334,7 @@ function registerPenroseRouteCues(world: World, roomsById: Map<string, Room>): v
     zoneId: world.zoneMap[world.idx(first.x + Math.floor(first.w / 2), first.y + Math.floor(first.h / 2))],
     label: 'одинаковые Солнца',
     hint: 'повторяющийся символ ведет к скрытой умывальной',
-    targetName: PENROSE_LAUNDRY_ROOM_NAMES.hiddenCache,
+    targetName: PENROSE_LAUNDRY_ROOM_DEF_IDS.hiddenCache,
     color: '#9ef',
     tags: ['penrose_laundry', 'symbol_chain', 'hidden_washroom_cache'],
     toneSeed: 81081,

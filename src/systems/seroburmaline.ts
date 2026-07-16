@@ -40,7 +40,7 @@ interface SeroburmalineSource {
   x: number;
   y: number;
   roomId: number;
-  roomName: string;
+  roomDefId: string;
   covered: boolean;
 }
 
@@ -115,7 +115,7 @@ function sourceAtCell(world: World, x: number, y: number, includeCovered: boolea
 
   const active = world.features[ci] === SEROBURMALINE_ACTIVE_FEATURE;
   if (!active && !includeCovered) return null;
-  return { x: wx, y: wy, roomId, roomName: room.name, covered: !active };
+  return { x: wx, y: wy, roomId, roomDefId: room.name, covered: !active };
 }
 
 export function seroburmalineSourceCellState(world: World, x: number, y: number): 'active' | 'covered' | '' {
@@ -203,7 +203,7 @@ function publishSeroburmalineEvent(
       outcome,
       sourceX: source.x,
       sourceY: source.y,
-      roomName: source.roomName,
+      roomDefId: source.roomDefId,
       psi: player.rpg?.psi,
     },
   });

@@ -3,7 +3,7 @@
 import type { Entity } from '../core/types';
 import { hashSeed } from '../core/rand';
 import { PLOT_CHAIN } from '../data/plot';
-import { allNpcPackages, getNpcPackage, type NpcPackageDef } from '../data/npc_packages';
+import { allNpcPackages, getNpcPackage, getPlotNpcNumericId, getPlotNpcStringId, type NpcPackageDef } from '../data/npc_packages';
 import type { AlifeNpcSnapshot } from './alife';
 import { finalizeMarkovContext, type MarkovTextContext } from './markov_context';
 import type { MarkovIntent, MarkovSource } from './speech_router';
@@ -52,6 +52,7 @@ export interface NpcSpeechPackageView {
   content?: {
     plotNpcId?: string;
   };
+  plotNpcId?: number;
 }
 
 export interface NpcLockedTalkLine {
@@ -65,7 +66,7 @@ type NpcSpeechSubject = Entity | AlifeNpcSnapshot | Record<string, unknown>;
 type NpcPostTalkCursor = Entity & { _plotPostTalkIdx?: number };
 
 const registry = new Map<string, NpcSpeechPackageView>();
-const registryByPlotId = new Map<string, string>();
+const registryByPlotId = new Map<number, string>();
 
 const INTERNAL_TEXT_BLACKLIST = [
   '1024x1024',
@@ -77,11 +78,11 @@ const INTERNAL_TEXT_BLACKLIST = [
 ] as const;
 
 export function registerNpcSpeechPackage(pack: NpcSpeechPackageView): void {
-  const id = cleanId(pack.id);
-  if (!id) return;
-  registry.set(id, { ...pack, id });
-  const plotNpcId = cleanId(pack.content?.plotNpcId);
-  if (plotNpcId) registryByPlotId.set(plotNpcId, id);
+  const defId = cleanId(pack.id);
+  if (!defId) return;
+  const plotNpcId = pack.plotNpcId;
+  registry.set(defId, pack);
+  if (plotNpcId) registryByPlotId.set(plotNpcId, defId);
 }
 
 export function registerNpcSpeechPackages(packs: readonly NpcSpeechPackageView[]): void {
@@ -103,7 +104,7 @@ export function resolveNpcPackageForEntity(entity: Entity): NpcSpeechPackageView
     if (pack) return pack;
   }
 
-  if (entity.plotNpcId) return resolvePackageForPlotNpcId(entity.plotNpcId);
+  if (entity.id) return resolvePackageForPlotNpcId(entity.id);
   if (entity.persistentNpcId) {
     const pack = speechPackageById(cleanId(entity.persistentNpcId) ?? '');
     if (pack) return pack;
@@ -120,7 +121,7 @@ export function resolveNpcPackageForAlifeSnapshot(snapshot: AlifeNpcSnapshot): N
       if (pack) return pack;
     }
   }
-  if (snapshot.plotNpcId) return resolvePackageForPlotNpcId(snapshot.plotNpcId);
+  if (snapshot.id) return resolvePackageForPlotNpcId(snapshot.id);
   return registry.get(`alife:${snapshot.id}`);
 }
 
@@ -240,18 +241,18 @@ export function selectNpcCuratedFallback(
   return pool[hashSeed(`${pack.id}:${intent}:${seed}`) % pool.length];
 }
 
-function resolvePackageForPlotNpcId(plotNpcId: string): NpcSpeechPackageView | undefined {
-  const cleanPlotId = cleanId(plotNpcId);
-  if (!cleanPlotId) return undefined;
-  const registeredId = registryByPlotId.get(cleanPlotId);
+function resolvePackageForPlotNpcId(id: number): NpcSpeechPackageView | undefined {
+  const registeredId = registryByPlotId.get(id);
   if (registeredId) {
     const pack = speechPackageById(registeredId);
     if (pack) return pack;
   }
-  const canonical = canonicalPackageForPlotNpcId(cleanPlotId);
+  const stringId = getPlotNpcStringId(id);
+  if (!stringId) return undefined;
+  const canonical = canonicalPackageForPlotNpcId(stringId);
   if (canonical) return canonical;
-  for (const id of [`plot:${cleanPlotId}`, cleanPlotId]) {
-    const pack = speechPackageById(id);
+  for (const strId of [`plot:${stringId}`, stringId]) {
+    const pack = speechPackageById(strId);
     if (pack) return pack;
   }
   return undefined;
@@ -266,13 +267,13 @@ function canonicalSpeechPackage(id: string): NpcSpeechPackageView | undefined {
   return pack ? packageFromNpcPackageDef(pack) : undefined;
 }
 
-function canonicalPackageForPlotNpcId(plotNpcId: string): NpcSpeechPackageView | undefined {
-  const direct = getNpcPackage(plotNpcId);
-  if (direct && (!direct.content?.plotNpcId || direct.content.plotNpcId === plotNpcId)) {
+function canonicalPackageForPlotNpcId(id: string): NpcSpeechPackageView | undefined {
+  const direct = getNpcPackage(id);
+  if (direct && (!direct.content?.plotNpcId || direct.content.plotNpcId === id)) {
     return packageFromNpcPackageDef(direct);
   }
   for (const pack of allNpcPackages()) {
-    if (pack.content?.plotNpcId === plotNpcId) return packageFromNpcPackageDef(pack);
+    if (pack.content?.plotNpcId === id) return packageFromNpcPackageDef(pack);
   }
   return undefined;
 }
@@ -307,6 +308,7 @@ function packageFromNpcPackageDef(pack: NpcPackageDef): NpcSpeechPackageView {
     content: {
       plotNpcId: pack.content?.plotNpcId,
     },
+    plotNpcId: pack.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined,
   };
 }
 
@@ -316,11 +318,11 @@ function isPostTalkUnlocked(
   quests: QuestProgressView | undefined,
 ): boolean {
   if (entity.plotDone) return true;
-  const plotNpcId = entity.plotNpcId ?? pack.content?.plotNpcId;
-  if (!plotNpcId || !quests) return false;
+  const id = entity.id ?? (pack.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined);
+  if (!id || !quests) return false;
   let hasStep = false;
   for (let i = 0; i < PLOT_CHAIN.length; i++) {
-    if (PLOT_CHAIN[i].giverNpcId !== plotNpcId) continue;
+    if (PLOT_CHAIN[i].giverId !== id) continue;
     hasStep = true;
     if (!quests.some(q => q.plotStepIndex === i && q.done)) return false;
   }

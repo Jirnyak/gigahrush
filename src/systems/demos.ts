@@ -16,7 +16,6 @@ import {
 } from './alife';
 import {
   getNpcPackage,
-  getNpcPackageByPlotNpcId,
   npcPackageDisplayName,
   type NpcPackageDef,
 } from '../data/npc_packages';
@@ -183,10 +182,10 @@ export function demosSnapshotMatchesQuery(snapshot: AlifeNpcSnapshot, queryInput
   const alifeId = parseDemosAlifeId(query);
   if (alifeId !== undefined) return snapshot.id === alifeId;
   const lower = safeLower(query);
-  if (lower.startsWith('plot:')) return safeLower(snapshot.plotNpcId ?? '').includes(lower.slice(5));
+  if (lower.startsWith('plot:')) return safeLower(snapshot.reservedIdentityId ?? String(snapshot.id ?? '')).includes(lower.slice(5));
   if (safeLower(snapshot.name).includes(lower)) return true;
   if (safeLower(snapshot.reservedIdentityId ?? '').includes(lower)) return true;
-  return snapshot.plotNpcId !== undefined && safeLower(snapshot.plotNpcId).includes(lower);
+  return snapshot.id !== undefined && safeLower(String(snapshot.id)).includes(lower);
 }
 
 export function findDemosCursor(state: GameState, queryInput: string, preferredCursor = 0, direction = 1): number {
@@ -341,7 +340,7 @@ function packageForSnapshot(snapshot: AlifeNpcSnapshot): NpcPackageDef | undefin
     const pack = getNpcPackage(packageId);
     if (pack) return pack;
   }
-  return snapshot.plotNpcId ? getNpcPackageByPlotNpcId(snapshot.plotNpcId) : undefined;
+  return undefined;
 }
 
 function demosProfileSprite(live: Entity | undefined, snapshot: AlifeNpcSnapshot, pack: NpcPackageDef | undefined): number {
@@ -392,7 +391,7 @@ function buildDemosProfile(
     cursor,
     total,
     idLabel: `alife:${snapshot.id}`,
-    plotIdLabel: snapshot.plotNpcId ? `plot:${snapshot.plotNpcId}` : undefined,
+    plotIdLabel: snapshot.id ? `plot:${snapshot.id}` : undefined,
     packageIdLabel: packageId ? `npc:${packageId}` : undefined,
     name: live?.name ?? (pack ? npcPackageDisplayName(pack) : undefined) ?? snapshot.name,
     faction,

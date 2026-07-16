@@ -32,7 +32,7 @@ export interface MarkovTextContext {
   routeZBand?: MarkovRouteZBand;
   roomId?: number;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   zoneId?: number;
   zoneFaction?: ZoneFaction;
   faction?: Faction;
@@ -201,7 +201,7 @@ export function lowerContextSnapshot(
     routeZBand: options.routeZBand ?? routeZBandForZ(options.routeZ),
     roomId: options.roomId,
     roomType: snapshot.roomType,
-    roomName: snapshot.roomName,
+    roomDefId: snapshot.roomDefId,
     zoneId: snapshot.zoneId,
     zoneFaction: snapshot.zoneFaction,
     faction,
@@ -289,7 +289,7 @@ export function lowerQuestContext(
     routeZBand: options.routeZBand ?? routeZBandForZ(routeZ),
     roomId: options.roomId ?? quest.targetRoom,
     roomType: quest.targetRoomType ?? quest.targetMarker?.roomType,
-    roomName: quest.targetRoomName ?? quest.targetMarker?.roomName,
+    roomDefId: quest.targetRoomDefId ?? quest.targetMarker?.roomDefId,
     zoneId: undefined,
     faction: quest.contractFaction,
     relationBand,
@@ -331,7 +331,7 @@ export function lowerContractContext(
     z: contract.target.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(contract.target.route?.z ?? options.routeZ),
     roomType: contract.target.roomType,
-    roomName: contract.target.roomName,
+    roomDefId: contract.target.roomDefId,
     faction: contract.faction,
     relationBand,
     socialEdgeFlags: options.socialEdgeFlags,
@@ -396,7 +396,7 @@ export function finalizeMarkovContext(input: Partial<MarkovTextContext> & { tags
     routeZBand: input.routeZBand,
     roomId: finiteInt(input.roomId),
     roomType: input.roomType,
-    roomName: cleanText(input.roomName, 96),
+    roomDefId: cleanText(input.roomDefId, 96),
     zoneId: finiteInt(input.zoneId),
     zoneFaction: input.zoneFaction,
     faction: input.faction,

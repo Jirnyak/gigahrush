@@ -1,5 +1,6 @@
 /* ── Design z: service_floor — lift machines and staff routes ─ */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -169,7 +170,7 @@ export interface ServiceUtilityNode {
   id: string;
   domain: ServiceUtilityDomain;
   front: ServiceUtilityFront;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   x: number;
   y: number;
@@ -186,7 +187,7 @@ export interface ServiceUtilityEdge {
 
 export interface ServiceDrainageBasin {
   id: string;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   x: number;
   y: number;
@@ -331,7 +332,7 @@ function registerUtilityNode(
     id,
     domain,
     front,
-    roomName: room.name,
+    roomDefId: room.name,
     roomId: room.id,
     x: room.x + room.w / 2,
     y: room.y + room.h / 2,
@@ -369,7 +370,7 @@ function registerDrainageBasin(
   }
   graph.drainageBasins.push({
     id,
-    roomName: room.name,
+    roomDefId: room.name,
     roomId: room.id,
     x: room.x + room.w / 2,
     y: room.y + room.h / 2,
@@ -495,7 +496,7 @@ const MITKA_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_liftmaster_boris', BORIS_DEF, [
   {
     id: 'service_fix_lift_machine',
-    giverNpcId: 'service_liftmaster_boris',
+    giverId: getPlotNpcNumericId('service_liftmaster_boris')!,
     type: QuestType.FETCH,
     desc: 'Борис: «Три предохранителя в машинный зал С-15. Починим не весь лифт, а маленькое право доехать по кнопке.»',
     targetItem: 'fuse', targetCount: 3,
@@ -508,10 +509,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_liftmaster_boris', BO
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_janitor_nadya', NADYA_DEF, [
   {
     id: 'service_steal_master_key',
-    giverNpcId: 'service_janitor_nadya',
+    giverId: getPlotNpcNumericId('service_janitor_nadya')!,
     type: QuestType.VISIT,
     desc: 'Надя: «Зайди в кладовую С-15 и посмотри ведомость малого круга. Мастер-ключ тут означает ровно две двери.»',
-    targetRoomName: JANITOR_DEPOT,
+    targetRoomDefId: JANITOR_DEPOT,
     rewardItem: 'door_kit', rewardCount: 1,
     extraRewards: [{ defId: 'inspection_mirror', count: 1 }],
     relationDelta: 10, xpReward: 60, moneyReward: 45,
@@ -521,7 +522,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_janitor_nadya', NADYA
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_electrician_roma', ROMA_DEF, [
   {
     id: 'service_restore_lights',
-    giverNpcId: 'service_electrician_roma',
+    giverId: getPlotNpcNumericId('service_electrician_roma')!,
     type: QuestType.FETCH,
     desc: 'Рома: «Неси релейную схему. Поднимем свет на одном маршруте, а не устроим ламповым столовую.»',
     targetItem: 'relay_diagram', targetCount: 1,
@@ -534,7 +535,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_electrician_roma', RO
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_locked_out_clerk', CLERK_DEF, [
   {
     id: 'service_reroute_raid',
-    giverNpcId: 'service_locked_out_clerk',
+    giverId: getPlotNpcNumericId('service_locked_out_clerk')!,
     type: QuestType.FETCH,
     desc: 'Павел: «Бланк обхода в диспетчерскую С-15. Рейдовую очередь отправят в пустой коридор, если печать пройдет у диспетчера.»',
     targetItem: 'elevator_override_form', targetCount: 1,
@@ -547,10 +548,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_locked_out_clerk', CL
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_trapped_pump_worker', MITKA_DEF, [
   {
     id: 'service_rescue_pump_worker',
-    giverNpcId: 'service_trapped_pump_worker',
+    giverId: getPlotNpcNumericId('service_trapped_pump_worker')!,
     type: QuestType.VISIT,
     desc: 'Митя: «Западная насосная ниша С-15 захлопнулась. Вытащи меня из стояка, пока обратный напор не позвал трубных.»',
-    targetRoomName: PUMP_RESCUE_ROOM,
+    targetRoomDefId: PUMP_RESCUE_ROOM,
     rewardItem: 'valve_tag', rewardCount: 1,
     extraRewards: [{ defId: 'sealant_tube', count: 1 }, { defId: 'gasmask_filter', count: 1 }],
     relationDelta: 9, xpReward: 85, moneyReward: 60,
@@ -704,7 +705,7 @@ export function rerouteServiceRaid(game: GameState, service: ServiceFloorState):
 export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const serviceState = createServiceFloorState();
 
   for (let i = 0; i < W * W; i++) {
@@ -1134,22 +1135,22 @@ function registerExpandedServiceUtilityGraph(
 
 export function placeServiceFloorEmergencyPanels(world: World): number {
   const placements: readonly {
-    roomName: string;
+    roomDefId: string;
     dx: number;
     dy: number;
     panelId: 'panel_power' | 'panel_water' | 'panel_doors' | 'panel_vent';
     seed: number;
   }[] = [
-    { roomName: LIFT_MACHINE_ROOM, dx: 5, dy: 5, panelId: 'panel_doors', seed: 0x5151 },
-    { roomName: BREAKER_ROOM, dx: 16, dy: 4, panelId: 'panel_power', seed: 0x5152 },
-    { roomName: VENT_JUNCTION, dx: 19, dy: 3, panelId: 'panel_vent', seed: 0x5153 },
-    { roomName: PUMP_RESCUE_ROOM, dx: 5, dy: 4, panelId: 'panel_water', seed: 0x5154 },
-    { roomName: 'Насосная ниша восточного стояка С-15', dx: 5, dy: 4, panelId: 'panel_water', seed: 0x5155 },
-    { roomName: 'Пост учета кабельных потерь С-15', dx: 14, dy: 4, panelId: 'panel_power', seed: 0x5156 },
+    { roomDefId: LIFT_MACHINE_ROOM, dx: 5, dy: 5, panelId: 'panel_doors', seed: 0x5151 },
+    { roomDefId: BREAKER_ROOM, dx: 16, dy: 4, panelId: 'panel_power', seed: 0x5152 },
+    { roomDefId: VENT_JUNCTION, dx: 19, dy: 3, panelId: 'panel_vent', seed: 0x5153 },
+    { roomDefId: PUMP_RESCUE_ROOM, dx: 5, dy: 4, panelId: 'panel_water', seed: 0x5154 },
+    { roomDefId: 'Насосная ниша восточного стояка С-15', dx: 5, dy: 4, panelId: 'panel_water', seed: 0x5155 },
+    { roomDefId: 'Пост учета кабельных потерь С-15', dx: 14, dy: 4, panelId: 'panel_power', seed: 0x5156 },
   ];
   let placed = 0;
   for (const item of placements) {
-    const room = findServiceRoom(world, item.roomName);
+    const room = findServiceRoom(world, item.roomDefId);
     if (!room) continue;
     const x = world.wrap(room.x + Math.min(room.w - 2, Math.max(1, item.dx)));
     const y = world.wrap(room.y + Math.min(room.h - 2, Math.max(1, item.dy)));
@@ -1161,7 +1162,7 @@ export function placeServiceFloorEmergencyPanels(world: World): number {
 }
 
 function spawnServicePumpRescue(world: World, entities: Entity[], room: Room): void {
-  if (entities.some(entity => entity.plotNpcId === 'service_trapped_pump_worker')) return;
+  if (entities.some(entity => entity.id === getPlotNpcNumericId('service_trapped_pump_worker'))) return;
   const nextId = { v: nextServiceEntityId(entities) };
   const mitkaId = spawnPlotNpc(
     entities,
@@ -1790,7 +1791,7 @@ export function reinforceServiceFloorAuthoredHqTerritory(world: World): void {
 
 function isServiceAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

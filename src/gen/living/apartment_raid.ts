@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Living apartment raid: steal, fight, flee, or bargain ------- */
 
 import {
@@ -161,7 +162,7 @@ const TAMARA: PlotNpcDef = {
 
 registerSideQuest(RESIDENT_ID, MIRA, [{
   id: QUEST_STEAL,
-  giverNpcId: RESIDENT_ID,
+  giverId: getPlotNpcNumericId(RESIDENT_ID)!,
   type: QuestType.FETCH,
   desc: 'Мира Под Столом: «Укради из сумки налетчиков жалобу со списком квартир. Без списка они не поймут, куда идти дальше.»',
   targetItem: 'neighbor_complaint', targetCount: 1,
@@ -170,7 +171,7 @@ registerSideQuest(RESIDENT_ID, MIRA, [{
   relationDelta: 7, xpReward: 35, moneyReward: 12,
   blockedBySideQuestIds: otherChoices(QUEST_STEAL),
   abandonsSideQuestIds: otherChoices(QUEST_STEAL),
-  failOnNpcDeathPlotId: RESIDENT_ID,
+  failOnNpcDeathId: getPlotNpcNumericId(RESIDENT_ID)!,
   eventTags: [MODULE_TAG, 'raid_choice', 'steal'],
   eventData: { raidChoice: 'steal', rumorIds: ['container_theft_seen'] },
   eventTargetName: 'Список квартир вынесли из сумки налетчиков.',
@@ -180,10 +181,10 @@ registerSideQuest(RESIDENT_ID, MIRA, [{
 
 registerSideQuest(RUNNER_ID, VIKA, [{
   id: QUEST_FLEE,
-  giverNpcId: RUNNER_ID,
+  giverId: getPlotNpcNumericId(RUNNER_ID)!,
   type: QuestType.VISIT,
   desc: 'Вика У Выхода: «Проверь запасной коридорный выход {dir}. Если путь живой, можно уйти без драки.»',
-  targetRoomName: EXIT_ROOM_NAME,
+  targetRoomDefId: EXIT_ROOM_NAME,
   rewardItem: 'bread', rewardCount: 1,
   extraRewards: [{ defId: 'water', count: 1 }],
   relationDelta: 5, xpReward: 25,
@@ -198,14 +199,14 @@ registerSideQuest(RUNNER_ID, VIKA, [{
 
 registerSideQuest(RAIDER_ID, STEPAN, [{
   id: QUEST_NEGOTIATE,
-  giverNpcId: RAIDER_ID,
+  giverId: getPlotNpcNumericId(RAIDER_ID)!,
   type: QuestType.FETCH,
   desc: 'Степан Налет: «Двадцать два рубля за тишину. Платишь - мы уходим позже и не с этой двери.»',
   targetItem: 'money', targetCount: 22,
   relationDelta: 3, xpReward: 20,
   blockedBySideQuestIds: otherChoices(QUEST_NEGOTIATE),
   abandonsSideQuestIds: otherChoices(QUEST_NEGOTIATE),
-  failOnNpcDeathPlotId: RAIDER_ID,
+  failOnNpcDeathId: getPlotNpcNumericId(RAIDER_ID)!,
   eventTags: [MODULE_TAG, 'raid_choice', 'negotiate'],
   eventData: { raidChoice: 'negotiate', rumorIds: ['player_quest_chain'] },
   eventTargetName: 'Квартирный рейд отложили за отступные.',
@@ -215,10 +216,10 @@ registerSideQuest(RAIDER_ID, STEPAN, [{
 
 registerSideQuest(LIQUIDATOR_ID, TAMARA, [{
   id: QUEST_FIGHT,
-  giverNpcId: LIQUIDATOR_ID,
+  giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
   type: QuestType.KILL,
   desc: 'Тамара Рейдовая: «Убей Степана Налета. Без главаря его люди побегут по коридору, а не по квартирам.»',
-  targetPlotNpcId: RAIDER_ID,
+  targetNpcId: getPlotNpcNumericId(RAIDER_ID)!,
   killNeeded: 1,
   rewardItem: 'ammo_9mm', rewardCount: 8,
   extraRewards: [{ defId: 'liquidator_token', count: 1 }],

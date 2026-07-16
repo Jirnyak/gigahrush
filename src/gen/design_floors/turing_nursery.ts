@@ -1,5 +1,6 @@
 /* -- Design z: turing_nursery - reaction diffusion nursery routes -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -318,7 +319,7 @@ const NPC_DEFS: Record<TuringNpcId, PlotNpcDef> = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_mother_agafya', NPC_DEFS.turing_nursery_mother_agafya, [
   {
     id: 'turing_nursery_inoculate_basin',
-    giverNpcId: 'turing_nursery_mother_agafya',
+    giverId: getPlotNpcNumericId('turing_nursery_mother_agafya')!,
     type: QuestType.FETCH,
     desc: 'Агафья Мать-Алгоритм: «Принесите герметичный синий образец из вычислительной чаши. Если сначала обеззаразить налёт, образец не проснётся в руках.»',
     targetItem: 'blue_glow_sample_sealed',
@@ -339,7 +340,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_mother_agafya'
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_liquidator_bryzga', NPC_DEFS.turing_nursery_liquidator_bryzga, [
   {
     id: 'turing_nursery_burn_bridge',
-    giverNpcId: 'turing_nursery_liquidator_bryzga',
+    giverId: getPlotNpcNumericId('turing_nursery_liquidator_bryzga')!,
     type: QuestType.KILL,
     desc: 'Брызга Л-10: «Слизевой мост держит чёрную пробу. Сожгите или отстрелите глаз у перехода, пока мост не стал новым коридором.»',
     targetMonsterKind: MonsterKind.CHERNOSLIZ,
@@ -360,10 +361,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_liquidator_bry
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_child_sava', NPC_DEFS.turing_nursery_child_sava, [
   {
     id: 'turing_nursery_expose_growth_child',
-    giverNpcId: 'turing_nursery_child_sava',
+    giverId: getPlotNpcNumericId('turing_nursery_child_sava')!,
     type: QuestType.TALK,
     desc: 'Сава Нулевой: «Поговорите с Миленой. Пусть она скажет, что меня считали ребёнком до того, как узор решил иначе.»',
-    targetPlotNpcId: 'turing_nursery_registrar_milena',
+    targetNpcId: getPlotNpcNumericId('turing_nursery_registrar_milena')!,
     rewardItem: 'clean_health_cert',
     rewardCount: 1,
     relationDelta: 16,
@@ -378,7 +379,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_child_sava', N
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'turing_nursery_registrar_milena', NPC_DEFS.turing_nursery_registrar_milena, [
   {
     id: 'turing_nursery_growth_audit',
-    giverNpcId: 'turing_nursery_registrar_milena',
+    giverId: getPlotNpcNumericId('turing_nursery_registrar_milena')!,
     type: QuestType.FETCH,
     desc: 'Милена Регистр: «Верните подложный акт НИИ из комнаты экспозиции. Оставите его мне — рост останется учебным. Сдадите Агафье — ясли получат проверку.»',
     targetItem: 'nii_forged_audit',
@@ -400,7 +401,7 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const field = reactionField(seed);
 
     initWorld(world);
@@ -1673,7 +1674,7 @@ function spawnAmbientNpc(
 function isTuringAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

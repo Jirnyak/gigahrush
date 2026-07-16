@@ -1,5 +1,6 @@
 /* -- Govnyak smoke den: finite stock, debt pressure, witnesses ---- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell, ContainerKind, DoorState, Faction, Feature,
   Occupation, QuestType, RoomType, Tex,
@@ -316,7 +317,7 @@ const RITA: PlotNpcDef = {
 
 registerSideQuest('ag97_trofim_dymar', TROFIM, [{
   id: 'ag97_buy_cash',
-  giverNpcId: 'ag97_trofim_dymar',
+  giverId: getPlotNpcNumericId('ag97_trofim_dymar')!,
   type: QuestType.FETCH,
   desc: 'Трофим Дымарь: «Двадцать четыре рубля сразу - три самокрута без записи в тетрадь. Не куришь - просто уйди.»',
   targetItem: 'money', targetCount: 24,
@@ -326,7 +327,7 @@ registerSideQuest('ag97_trofim_dymar', TROFIM, [{
 
 registerSideQuest('ag97_pavel_podzalog', PAVEL, [{
   id: 'ag97_settle_debt',
-  giverNpcId: 'ag97_pavel_podzalog',
+  giverId: getPlotNpcNumericId('ag97_pavel_podzalog')!,
   type: QuestType.FETCH,
   desc: 'Павел Подзалог: «Закрой мои тридцать шесть рублей. Я уйду отсюда без новой записи.»',
   targetItem: 'money', targetCount: 36,
@@ -337,10 +338,10 @@ registerSideQuest('ag97_pavel_podzalog', PAVEL, [{
 
 registerSideQuest('ag97_klava_witness', KLAVA, [{
   id: 'ag97_refuse_credit',
-  giverNpcId: 'ag97_klava_witness',
+  giverId: getPlotNpcNumericId('ag97_klava_witness')!,
   type: QuestType.TALK,
   desc: 'Клава Свидетельница: «Скажи Павлу при людях: не бери в долг, выходи сейчас. Он {dir}.»',
-  targetPlotNpcId: 'ag97_pavel_podzalog',
+  targetNpcId: getPlotNpcNumericId('ag97_pavel_podzalog')!,
   rewardItem: 'neighbor_complaint', rewardCount: 1,
   extraRewards: [{ defId: 'water', count: 1 }],
   relationDelta: 9, xpReward: 25,
@@ -348,7 +349,7 @@ registerSideQuest('ag97_klava_witness', KLAVA, [{
 
 registerSideQuest('ag97_markov_report', MARKOV, [{
   id: 'ag97_report_den',
-  giverNpcId: 'ag97_markov_report',
+  giverId: getPlotNpcNumericId('ag97_markov_report')!,
   type: QuestType.FETCH,
   desc: 'Маркелов из рейда: «Нужен донос из долговой кассы. С бумагой закроем без стрельбы.»',
   targetItem: 'denunciation', targetCount: 1,
@@ -359,7 +360,7 @@ registerSideQuest('ag97_markov_report', MARKOV, [{
 
 registerSideQuest('ag97_rita_lab', RITA, [{
   id: 'ag97_turn_dealer_science',
-  giverNpcId: 'ag97_rita_lab',
+  giverId: getPlotNpcNumericId('ag97_rita_lab')!,
   type: QuestType.FETCH,
   desc: 'Рита Лаборантка: «Принеси расписку из тетради. Мы заберем Трофима под учет и уведем должников без рейда.»',
   targetItem: 'voluntary_receipt', targetCount: 1,

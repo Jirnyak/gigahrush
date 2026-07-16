@@ -3,6 +3,7 @@
  * number; route integration belongs to the floor manifest owner.
  */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { clamp } from '../../render/ui_utils';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
@@ -567,7 +568,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_deliver_night_stock',
-    giverNpcId: 'market88_marta_broker',
+    giverId: getPlotNpcNumericId('market88_marta_broker')!,
     type: QuestType.FETCH,
     desc: 'Марта Восьмая: «Принеси антибиотик в ночной запас. Деньги будут, но главный товар - доверие.»',
     targetItem: 'antibiotic',
@@ -586,10 +587,10 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
   },
   {
     id: 'market88_hide_courier',
-    giverNpcId: 'market88_zlata_silence',
+    giverId: getPlotNpcNumericId('market88_zlata_silence')!,
     type: QuestType.TALK,
     desc: 'Злата Тишина: «Найди Сашу Люка и скажи, что люк сегодня спит. Не геройствуй, просто доведи слова.»',
-    targetNpcId: 'market88_courier_sasha',
+    targetNpcId: getPlotNpcNumericId('market88_courier_sasha')!,
     rewardItem: 'blank_form',
     rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],
@@ -605,7 +606,7 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
   },
   {
     id: 'market88_steal_stamp',
-    giverNpcId: 'market88_zlata_silence',
+    giverId: getPlotNpcNumericId('market88_zlata_silence')!,
     type: QuestType.FETCH,
     desc: 'Злата Тишина: «Нужна печать ЖЭК. Купить нельзя: продавца сдадут вместе с тобой, и печать сгорит до первого окна.»',
     targetItem: 'zhek_seal',
@@ -623,7 +624,7 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
   },
   {
     id: 'market88_settle_bad_debt',
-    giverNpcId: 'market88_mikhail_debt',
+    giverId: getPlotNpcNumericId('market88_mikhail_debt')!,
     type: QuestType.FETCH,
     desc: 'Михаил Долговой: «Восемьдесят восемь рублей - и я вычеркиваю твою строку до вечерней проверки.»',
     targetItem: 'money',
@@ -641,7 +642,7 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
   },
   {
     id: 'market88_return_ammo_crate',
-    giverNpcId: 'market88_zhoka_knife',
+    giverId: getPlotNpcNumericId('market88_zhoka_knife')!,
     type: QuestType.FETCH,
     desc: 'Жока Нож: «Верни двадцать четыре девятки в ряд. За полный ряд дам дробь и скажу, какой шкаф сегодня без охраны.»',
     targetItem: 'ammo_9mm',
@@ -660,10 +661,10 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
   },
   {
     id: 'market88_betray_supplier',
-    giverNpcId: 'market88_zhoka_knife',
+    giverId: getPlotNpcNumericId('market88_zhoka_knife')!,
     type: QuestType.TALK,
     desc: 'Жока Нож: «Саша ведет поставщика мимо моей задвижки. Скажи ему, что маршрут продан, и не стой между мной и люком.»',
-    targetNpcId: 'market88_courier_sasha',
+    targetNpcId: getPlotNpcNumericId('market88_courier_sasha')!,
     rewardItem: 'ammo_9mm',
     rewardCount: 12,
     extraRewards: [{ defId: 'liquidator_token', count: 1 }],
@@ -686,8 +687,8 @@ export function registerBlackMarket88DesignFloorContent(): void {
   if (contentRegistered) return;
   const questsByNpcId: Record<string, typeof SIDE_QUESTS[number][]> = {};
   for (const q of SIDE_QUESTS) {
-    if (!questsByNpcId[q.giverNpcId]) questsByNpcId[q.giverNpcId] = [];
-    questsByNpcId[q.giverNpcId].push(q);
+    if (!questsByNpcId[q.giverId]) questsByNpcId[q.giverId] = [];
+    questsByNpcId[q.giverId].push(q);
   }
   for (const npcId of Object.keys(NPC_DEFS)) {
     const quests = questsByNpcId[npcId] || [];
@@ -893,7 +894,7 @@ export function generateBlackMarket88DesignFloor(): FloorGeneration {
 
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
 
   generateZones(world);
   tuneMarketZones(world);
@@ -1015,7 +1016,7 @@ const MARKET88_STALL_NAMES = [
   'Склад без вывески 88',
 ] as const;
 
-export const MARKET88_HQ_ROOM_NAMES = {
+export const MARKET88_HQ_ROOM_DEF_IDS = {
   citizen: 'Гермокасса гражданского обмена 88',
   liquidator: 'Гермопост рейдового досмотра 88',
   cultist: 'Гермосвечная долгового шепота 88',
@@ -1026,7 +1027,7 @@ export const MARKET88_HQ_ROOM_NAMES = {
 const MARKET88_HQ_CLUSTERS: readonly Market88HqClusterSpec[] = [
   {
     owner: ZoneFaction.CITIZEN,
-    hqName: MARKET88_HQ_ROOM_NAMES.citizen,
+    hqName: MARKET88_HQ_ROOM_DEF_IDS.citizen,
     x: 224, y: 214, w: 24, h: 14,
     side: 'south', targetX: 236, targetY: 280,
     wallTex: Tex.HERMO_WALL, floorTex: Tex.F_LINO,
@@ -1039,7 +1040,7 @@ const MARKET88_HQ_CLUSTERS: readonly Market88HqClusterSpec[] = [
   },
   {
     owner: ZoneFaction.LIQUIDATOR,
-    hqName: MARKET88_HQ_ROOM_NAMES.liquidator,
+    hqName: MARKET88_HQ_ROOM_DEF_IDS.liquidator,
     x: 764, y: 214, w: 26, h: 14,
     side: 'south', targetX: 778, targetY: 280,
     wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE,
@@ -1052,7 +1053,7 @@ const MARKET88_HQ_CLUSTERS: readonly Market88HqClusterSpec[] = [
   },
   {
     owner: ZoneFaction.CULTIST,
-    hqName: MARKET88_HQ_ROOM_NAMES.cultist,
+    hqName: MARKET88_HQ_ROOM_DEF_IDS.cultist,
     x: 196, y: 798, w: 24, h: 14,
     side: 'north', targetX: 208, targetY: 760,
     wallTex: Tex.HERMO_WALL, floorTex: Tex.F_RED_CARPET,
@@ -1065,7 +1066,7 @@ const MARKET88_HQ_CLUSTERS: readonly Market88HqClusterSpec[] = [
   },
   {
     owner: ZoneFaction.SCIENTIST,
-    hqName: MARKET88_HQ_ROOM_NAMES.scientist,
+    hqName: MARKET88_HQ_ROOM_DEF_IDS.scientist,
     x: 764, y: 798, w: 26, h: 14,
     side: 'north', targetX: 778, targetY: 760,
     wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE,
@@ -1078,7 +1079,7 @@ const MARKET88_HQ_CLUSTERS: readonly Market88HqClusterSpec[] = [
   },
   {
     owner: ZoneFaction.WILD,
-    hqName: MARKET88_HQ_ROOM_NAMES.wild,
+    hqName: MARKET88_HQ_ROOM_DEF_IDS.wild,
     x: 486, y: 802, w: 34, h: 18,
     side: 'north', targetX: 504, targetY: 760,
     wallTex: Tex.HERMO_WALL, floorTex: Tex.F_CONCRETE,
@@ -1704,7 +1705,7 @@ function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, serviceGuts:
 
 function seedBazaarExpansionCaches(world: World): void {
   const cacheDefs: readonly {
-    roomName: string;
+    roomDefId: string;
     name: string;
     kind: ContainerKind;
     access: ContainerAccess;
@@ -1715,7 +1716,7 @@ function seedBazaarExpansionCaches(world: World): void {
     discovered?: boolean;
   }[] = [
     {
-      roomName: 'Склад честных талонов 88',
+      roomDefId: 'Склад честных талонов 88',
       name: 'Ящик гражданских талонов 88',
       kind: ContainerKind.METAL_CABINET,
       access: 'faction',
@@ -1725,7 +1726,7 @@ function seedBazaarExpansionCaches(world: World): void {
       lockDifficulty: 3,
     },
     {
-      roomName: 'Оружейная рейдового досмотра 88',
+      roomDefId: 'Оружейная рейдового досмотра 88',
       name: 'Шкаф рейдового досмотра 88',
       kind: ContainerKind.TOOL_LOCKER,
       access: 'faction',
@@ -1735,7 +1736,7 @@ function seedBazaarExpansionCaches(world: World): void {
       lockDifficulty: 5,
     },
     {
-      roomName: 'Склад копченых расписок 88',
+      roomDefId: 'Склад копченых расписок 88',
       name: 'Коптилка долговых расписок 88',
       kind: ContainerKind.SECRET_STASH,
       access: 'secret',
@@ -1746,7 +1747,7 @@ function seedBazaarExpansionCaches(world: World): void {
       discovered: false,
     },
     {
-      roomName: 'Склад мерных фильтров 88',
+      roomDefId: 'Склад мерных фильтров 88',
       name: 'Холодный ящик мерных фильтров 88',
       kind: ContainerKind.MEDICAL_CABINET,
       access: 'faction',
@@ -1756,7 +1757,7 @@ function seedBazaarExpansionCaches(world: World): void {
       lockDifficulty: 5,
     },
     {
-      roomName: 'Склад грязной партии 88',
+      roomDefId: 'Склад грязной партии 88',
       name: 'Тюк грязной партии 88',
       kind: ContainerKind.SECRET_STASH,
       access: 'secret',
@@ -1767,7 +1768,7 @@ function seedBazaarExpansionCaches(world: World): void {
       discovered: false,
     },
     {
-      roomName: 'Южный архив без накладных 88',
+      roomDefId: 'Южный архив без накладных 88',
       name: 'Архивный сейф без накладных 88',
       kind: ContainerKind.SAFE,
       access: 'locked',
@@ -1778,7 +1779,7 @@ function seedBazaarExpansionCaches(world: World): void {
     },
   ];
   for (const def of cacheDefs) {
-    const room = world.rooms.find(candidate => candidate.name === def.roomName);
+    const room = world.rooms.find(candidate => candidate.name === def.roomDefId);
     if (!room) continue;
     addContainer(
       world,
@@ -1862,11 +1863,11 @@ export function reinforceBlackMarket88AuthoredHqTerritory(world: World): void {
     if (!room) continue;
     const owner = market88AuthoredRoomOwner(room);
     if (owner === undefined) continue;
-    const isCore = room.name === MARKET88_HQ_ROOM_NAMES.citizen ||
-      room.name === MARKET88_HQ_ROOM_NAMES.liquidator ||
-      room.name === MARKET88_HQ_ROOM_NAMES.cultist ||
-      room.name === MARKET88_HQ_ROOM_NAMES.scientist ||
-      room.name === MARKET88_HQ_ROOM_NAMES.wild ||
+    const isCore = room.name === MARKET88_HQ_ROOM_DEF_IDS.citizen ||
+      room.name === MARKET88_HQ_ROOM_DEF_IDS.liquidator ||
+      room.name === MARKET88_HQ_ROOM_DEF_IDS.cultist ||
+      room.name === MARKET88_HQ_ROOM_DEF_IDS.scientist ||
+      room.name === MARKET88_HQ_ROOM_DEF_IDS.wild ||
       room.name === 'Западный герморазвал диких 88' ||
       room.name === 'Восточный герморазвал диких 88';
     if (isCore) {
@@ -2429,7 +2430,7 @@ function tuneMarketZones(world: World): void {
 function isBlackMarket88AmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

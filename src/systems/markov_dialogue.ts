@@ -26,7 +26,7 @@ export interface MarkovAdapterTextContext {
   targetAlifeId?: number;
   z?: number;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   zoneId?: number;
   faction?: Faction;
   occupation?: Occupation;
@@ -140,7 +140,7 @@ function dialogueContext(
 ): MarkovAdapterTextContext {
   const tags: string[] = ['dialogue', 'ordinary_npc'];
   if (pack) tags.push(...npcPackageSpeechContextTags(pack, npc, 'dialogue'));
-  if (snapshot.roomName) tags.push('room');
+  if (snapshot.roomDefId) tags.push('room');
   if (snapshot.isHungry) tags.push('need.food');
   if (snapshot.isThirsty) tags.push('need.water');
   if (snapshot.isWounded || snapshot.isCritical) tags.push('need.medical');
@@ -157,7 +157,7 @@ function dialogueContext(
     actorAlifeId: npc.alifeId,
     z: snapshot.z,
     roomType: snapshot.roomType,
-    roomName: snapshot.roomName,
+    roomDefId: snapshot.roomDefId,
     zoneId: snapshot.zoneId,
     faction: snapshot.npcFaction ?? npc.faction,
     occupation: snapshot.npcOccupation as Occupation | undefined,
@@ -169,7 +169,7 @@ function dialogueContext(
 
 function validDialogueText(text: string, context: MarkovAdapterTextContext, maxChars: number): boolean {
   if (text.length > maxChars) return false;
-  if (context.roomName && text.includes('__ANCHOR__')) return false;
+  if (context.roomDefId && text.includes('__ANCHOR__')) return false;
   return true;
 }
 
@@ -180,7 +180,7 @@ export function cleanLine(text: string | undefined): string | undefined {
 }
 
 export function hasContextAnchor(snapshot: ContextSnapshot): boolean {
-  return snapshot.roomName !== undefined || snapshot.zoneId !== undefined || snapshot.z !== undefined;
+  return snapshot.roomDefId !== undefined || snapshot.zoneId !== undefined || snapshot.z !== undefined;
 }
 
 export function minimalMemory(npc: Entity, now: number): NpcMemory {

@@ -1,5 +1,6 @@
 /* ── AG41 charge cage — production output with container conflict ─ */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   ContainerKind,
   Faction,
@@ -70,7 +71,7 @@ const ADA_DEF: PlotNpcDef = {
 
 registerSideQuest('ag41_charge_nazar', NAZAR_DEF, [{
   id: 'ag41_charge_robot_audit',
-  giverNpcId: 'ag41_charge_nazar',
+  giverId: getPlotNpcNumericId('ag41_charge_nazar')!,
   type: QuestType.KILL,
   desc: 'Назар: «Убей робота у зарядной линии. Тогда одну энергоячейку можно будет списать без кражи.»',
   targetMonsterKind: MonsterKind.ROBOT,
@@ -82,7 +83,7 @@ registerSideQuest('ag41_charge_nazar', NAZAR_DEF, [{
 
 registerSideQuest('ag41_charge_ada', ADA_DEF, [{
   id: 'ag41_charge_circuit_waiver',
-  giverNpcId: 'ag41_charge_ada',
+  giverId: getPlotNpcNumericId('ag41_charge_ada')!,
   type: QuestType.FETCH,
   desc: 'Ада: «Две микросхемы в диспетчерскую. Сухими руками. Одна ячейка уйдет тебе как ремонтный расход.»',
   targetItem: 'circuit_board', targetCount: 2,

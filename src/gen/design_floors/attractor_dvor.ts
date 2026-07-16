@@ -41,7 +41,7 @@ const CY = W >> 1;
 const FLOW_FLOOR = Tex.F_CONCRETE;
 const DEAD_FLOOR = Tex.F_WATER;
 
-export const ATTRACTOR_DVOR_ROOM_NAMES = {
+export const ATTRACTOR_DVOR_ROOM_DEF_IDS = {
   entry: 'Аттракторный двор: приемка потока',
   northSpine: 'Аттракторный двор: северная тензорная спина',
   eastSpine: 'Аттракторный двор: восточная тензорная спина',
@@ -129,7 +129,7 @@ export interface AttractorStreamline {
 
 export interface AttractorSwitchPanel {
   id: string;
-  roomName: string;
+  roomDefId: string;
   panelDefId: 'panel_doors' | 'panel_vent' | 'panel_power';
   x: number;
   y: number;
@@ -138,7 +138,7 @@ export interface AttractorSwitchPanel {
 
 export interface AttractorPatrolLoop {
   id: string;
-  roomNames: readonly string[];
+  roomDefIds: readonly string[];
   guardCount: number;
   predictionHint: string;
 }
@@ -170,7 +170,7 @@ export function getAttractorDvorState(world: World): AttractorDvorState | undefi
       points: flow.points.map(point => ({ ...point })),
     })),
     switchPanels: state.switchPanels.map(panel => ({ ...panel })),
-    patrolLoops: state.patrolLoops.map(loop => ({ ...loop, roomNames: [...loop.roomNames] })),
+    patrolLoops: state.patrolLoops.map(loop => ({ ...loop, roomDefIds: [...loop.roomDefIds] })),
     debugEntry: { ...state.debugEntry },
   };
 }
@@ -354,7 +354,7 @@ const ATTRACTOR_STATIONS: readonly AttractorStationSpec[] = [
 export function generateAttractorDvorDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
 
   initWorld(world);
   const rooms = buildRooms(world);
@@ -383,17 +383,17 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
     patrolLoops: [
       {
         id: 'limit_cycle_guard_ring',
-        roomNames: [
-          ATTRACTOR_DVOR_ROOM_NAMES.southSpine,
-          ATTRACTOR_DVOR_ROOM_NAMES.westSpine,
-          ATTRACTOR_DVOR_ROOM_NAMES.northSpine,
-          ATTRACTOR_DVOR_ROOM_NAMES.eastSpine,
+        roomDefIds: [
+          ATTRACTOR_DVOR_ROOM_DEF_IDS.southSpine,
+          ATTRACTOR_DVOR_ROOM_DEF_IDS.westSpine,
+          ATTRACTOR_DVOR_ROOM_DEF_IDS.northSpine,
+          ATTRACTOR_DVOR_ROOM_DEF_IDS.eastSpine,
         ],
         guardCount: 4,
         predictionHint: 'Патруль держится внешней петли; срез через мертвую зону короче, но шумнее.',
       },
     ],
-    deadZoneRoomName: ATTRACTOR_DVOR_ROOM_NAMES.deadZone,
+    deadZoneRoomName: ATTRACTOR_DVOR_ROOM_DEF_IDS.deadZone,
     debugEntry: {
       spawnX: rooms.entry.x + 82.5,
       spawnY: rooms.entry.y + 17.5,
@@ -477,20 +477,20 @@ export function tuneAttractorDvorRouteZones(world: World, syncCellField = true):
 
 export function placeAttractorDvorEmergencyPanels(world: World): AttractorSwitchPanel[] {
   const panels: AttractorSwitchPanel[] = [];
-  const west = roomByName(world, ATTRACTOR_DVOR_ROOM_NAMES.westSwitch);
-  const east = roomByName(world, ATTRACTOR_DVOR_ROOM_NAMES.eastSwitch);
-  const north = roomByName(world, ATTRACTOR_DVOR_ROOM_NAMES.northSwitch);
+  const west = roomByName(world, ATTRACTOR_DVOR_ROOM_DEF_IDS.westSwitch);
+  const east = roomByName(world, ATTRACTOR_DVOR_ROOM_DEF_IDS.eastSwitch);
+  const north = roomByName(world, ATTRACTOR_DVOR_ROOM_DEF_IDS.northSwitch);
   if (west) {
     placeEmergencyPanel(world, west.x + 8, west.y + 10, 'panel_doors', 0x88a1);
-    panels.push({ id: 'attractor_west_curl', roomName: west.name, panelDefId: 'panel_doors', x: west.x + 8, y: west.y + 10, parameter: 'curl' });
+    panels.push({ id: 'attractor_west_curl', roomDefId: west.name, panelDefId: 'panel_doors', x: west.x + 8, y: west.y + 10, parameter: 'curl' });
   }
   if (east) {
     placeEmergencyPanel(world, east.x + east.w - 9, east.y + 10, 'panel_vent', 0x88a2);
-    panels.push({ id: 'attractor_east_damping', roomName: east.name, panelDefId: 'panel_vent', x: east.x + east.w - 9, y: east.y + 10, parameter: 'damping' });
+    panels.push({ id: 'attractor_east_damping', roomDefId: east.name, panelDefId: 'panel_vent', x: east.x + east.w - 9, y: east.y + 10, parameter: 'damping' });
   }
   if (north) {
     placeEmergencyPanel(world, north.x + (north.w >> 1), north.y + 10, 'panel_power', 0x88a3);
-    panels.push({ id: 'attractor_north_phase', roomName: north.name, panelDefId: 'panel_power', x: north.x + (north.w >> 1), y: north.y + 10, parameter: 'phase' });
+    panels.push({ id: 'attractor_north_phase', roomDefId: north.name, panelDefId: 'panel_power', x: north.x + (north.w >> 1), y: north.y + 10, parameter: 'phase' });
   }
   return panels;
 }
@@ -506,18 +506,18 @@ function initWorld(world: World): void {
 
 function buildRooms(world: World): AttractorRooms {
   return {
-    entry: addRoom(world, RoomType.CORRIDOR, CX - 82, CY + 236, 164, 34, ATTRACTOR_DVOR_ROOM_NAMES.entry, Tex.METAL, FLOW_FLOOR),
-    northSpine: addRoom(world, RoomType.CORRIDOR, CX - 174, CY - 164, 348, 28, ATTRACTOR_DVOR_ROOM_NAMES.northSpine, Tex.PIPE, FLOW_FLOOR),
-    eastSpine: addRoom(world, RoomType.CORRIDOR, CX + 136, CY - 136, 30, 274, ATTRACTOR_DVOR_ROOM_NAMES.eastSpine, Tex.PIPE, FLOW_FLOOR),
-    southSpine: addRoom(world, RoomType.CORRIDOR, CX - 174, CY + 136, 348, 30, ATTRACTOR_DVOR_ROOM_NAMES.southSpine, Tex.PIPE, FLOW_FLOOR),
-    westSpine: addRoom(world, RoomType.CORRIDOR, CX - 166, CY - 136, 30, 274, ATTRACTOR_DVOR_ROOM_NAMES.westSpine, Tex.PIPE, FLOW_FLOOR),
-    pumpCore: addRoom(world, RoomType.PRODUCTION, CX - 42, CY - 38, 84, 70, ATTRACTOR_DVOR_ROOM_NAMES.pumpCore, Tex.METAL, FLOW_FLOOR),
-    deadZone: addRoom(world, RoomType.STORAGE, CX - 58, CY + 46, 116, 62, ATTRACTOR_DVOR_ROOM_NAMES.deadZone, Tex.HERMO_WALL, DEAD_FLOOR, true),
-    guardLoop: addRoom(world, RoomType.OFFICE, CX - 44, CY - 108, 88, 40, ATTRACTOR_DVOR_ROOM_NAMES.guardLoop, Tex.METAL, FLOW_FLOOR),
-    westSwitch: addRoom(world, RoomType.OFFICE, CX - 232, CY - 34, 58, 44, ATTRACTOR_DVOR_ROOM_NAMES.westSwitch, Tex.METAL, FLOW_FLOOR),
-    eastSwitch: addRoom(world, RoomType.OFFICE, CX + 174, CY - 34, 58, 44, ATTRACTOR_DVOR_ROOM_NAMES.eastSwitch, Tex.METAL, FLOW_FLOOR),
-    northSwitch: addRoom(world, RoomType.PRODUCTION, CX - 40, CY - 226, 80, 44, ATTRACTOR_DVOR_ROOM_NAMES.northSwitch, Tex.PIPE, FLOW_FLOOR),
-    transitCache: addRoom(world, RoomType.STORAGE, CX + 86, CY + 54, 56, 50, ATTRACTOR_DVOR_ROOM_NAMES.transitCache, Tex.METAL, FLOW_FLOOR),
+    entry: addRoom(world, RoomType.CORRIDOR, CX - 82, CY + 236, 164, 34, ATTRACTOR_DVOR_ROOM_DEF_IDS.entry, Tex.METAL, FLOW_FLOOR),
+    northSpine: addRoom(world, RoomType.CORRIDOR, CX - 174, CY - 164, 348, 28, ATTRACTOR_DVOR_ROOM_DEF_IDS.northSpine, Tex.PIPE, FLOW_FLOOR),
+    eastSpine: addRoom(world, RoomType.CORRIDOR, CX + 136, CY - 136, 30, 274, ATTRACTOR_DVOR_ROOM_DEF_IDS.eastSpine, Tex.PIPE, FLOW_FLOOR),
+    southSpine: addRoom(world, RoomType.CORRIDOR, CX - 174, CY + 136, 348, 30, ATTRACTOR_DVOR_ROOM_DEF_IDS.southSpine, Tex.PIPE, FLOW_FLOOR),
+    westSpine: addRoom(world, RoomType.CORRIDOR, CX - 166, CY - 136, 30, 274, ATTRACTOR_DVOR_ROOM_DEF_IDS.westSpine, Tex.PIPE, FLOW_FLOOR),
+    pumpCore: addRoom(world, RoomType.PRODUCTION, CX - 42, CY - 38, 84, 70, ATTRACTOR_DVOR_ROOM_DEF_IDS.pumpCore, Tex.METAL, FLOW_FLOOR),
+    deadZone: addRoom(world, RoomType.STORAGE, CX - 58, CY + 46, 116, 62, ATTRACTOR_DVOR_ROOM_DEF_IDS.deadZone, Tex.HERMO_WALL, DEAD_FLOOR, true),
+    guardLoop: addRoom(world, RoomType.OFFICE, CX - 44, CY - 108, 88, 40, ATTRACTOR_DVOR_ROOM_DEF_IDS.guardLoop, Tex.METAL, FLOW_FLOOR),
+    westSwitch: addRoom(world, RoomType.OFFICE, CX - 232, CY - 34, 58, 44, ATTRACTOR_DVOR_ROOM_DEF_IDS.westSwitch, Tex.METAL, FLOW_FLOOR),
+    eastSwitch: addRoom(world, RoomType.OFFICE, CX + 174, CY - 34, 58, 44, ATTRACTOR_DVOR_ROOM_DEF_IDS.eastSwitch, Tex.METAL, FLOW_FLOOR),
+    northSwitch: addRoom(world, RoomType.PRODUCTION, CX - 40, CY - 226, 80, 44, ATTRACTOR_DVOR_ROOM_DEF_IDS.northSwitch, Tex.PIPE, FLOW_FLOOR),
+    transitCache: addRoom(world, RoomType.STORAGE, CX + 86, CY + 54, 56, 50, ATTRACTOR_DVOR_ROOM_DEF_IDS.transitCache, Tex.METAL, FLOW_FLOOR),
   };
 }
 
@@ -972,7 +972,7 @@ function spawnActors(world: World, entities: Entity[], nextId: { v: number }, ro
 function isAttractorAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -1025,7 +1025,7 @@ function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {
     z: ATTRACTOR_DVOR_BASE_FLOOR,
     label: 'Синяя струя',
     hint: 'Поток ведет вокруг двора быстрее прямой линии.',
-    targetName: ATTRACTOR_DVOR_ROOM_NAMES.northSpine,
+    targetName: ATTRACTOR_DVOR_ROOM_DEF_IDS.northSpine,
     color: '#65b7ff',
     tags: ['attractor_dvor', 'flow', 'main_stream', 'safe_route'],
     toneSeed: 0x88f101,
@@ -1042,7 +1042,7 @@ function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {
     z: ATTRACTOR_DVOR_BASE_FLOOR,
     label: 'Мертвая зона',
     hint: 'Короткий срез проходит через воду, гермодвери и плохой звук.',
-    targetName: ATTRACTOR_DVOR_ROOM_NAMES.deadZone,
+    targetName: ATTRACTOR_DVOR_ROOM_DEF_IDS.deadZone,
     color: '#9da3ac',
     tags: ['attractor_dvor', 'dead_zone', 'shortcut', 'risk'],
     toneSeed: 0x88f102,
@@ -1059,7 +1059,7 @@ function registerAttractorRouteCues(world: World, rooms: AttractorRooms): void {
     z: ATTRACTOR_DVOR_BASE_FLOOR,
     label: 'Петля патруля',
     hint: 'Патруль ходит по внешнему циклу; параметрический щиток дает окно.',
-    targetName: ATTRACTOR_DVOR_ROOM_NAMES.westSwitch,
+    targetName: ATTRACTOR_DVOR_ROOM_DEF_IDS.westSwitch,
     color: '#ffd36f',
     tags: ['attractor_dvor', 'patrol_loop', 'switch', 'prediction'],
     toneSeed: 0x88f103,

@@ -132,7 +132,7 @@ const registeredAnimationResolveContext: RenderAnimationResolveContext = {
 function proceduralVisualKey(entity: Entity, spriteIndex: number, spriteSource: number | string): string {
   return [
     entity.npcVisualId ?? '',
-    entity.plotNpcId ?? '',
+    entity.id ?? '',
     entity.monsterKind ?? '',
     entity.sprite ?? spriteIndex,
     entity.spriteSeed ?? 0,

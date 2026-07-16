@@ -106,7 +106,7 @@ function publishHladonetsEvent(
       system: SITE_TAG,
       sourceEventId: source.id,
       phase,
-      roomName: room?.name,
+      roomDefId: room?.name,
       ...data,
     },
   });

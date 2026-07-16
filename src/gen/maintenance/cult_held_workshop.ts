@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── AG83 cult-held workshop: repair, bargain, clear, sabotage ── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -119,7 +120,7 @@ const SABOTEUR_DEF: PlotNpcDef = {
 registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [
   {
     id: REPAIR_QUEST,
-    giverNpcId: MECHANIC_ID,
+    giverId: getPlotNpcNumericId(MECHANIC_ID)!,
     type: QuestType.FETCH,
     desc: 'Клава Реверс: «Две шестерни в подачу. Запустим станок как цех, а не как кормушку черноременных.»',
     targetItem: 'gear',
@@ -133,10 +134,10 @@ registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [
   },
   {
     id: CAPTURE_QUEST,
-    giverNpcId: MECHANIC_ID,
+    giverId: getPlotNpcNumericId(MECHANIC_ID)!,
     type: QuestType.KILL,
     desc: 'Клава Реверс: «Омилян держит выходной ящик и людей. Убери его - смена заберет станок обратно.»',
-    targetPlotNpcId: FOREMAN_ID,
+    targetNpcId: getPlotNpcNumericId(FOREMAN_ID)!,
     killNeeded: 1,
     rewardItem: 'pump_passport',
     rewardCount: 1,
@@ -150,7 +151,7 @@ registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [
 registerSideQuest(FOREMAN_ID, FOREMAN_DEF, [
   {
     id: TRIBUTE_QUEST,
-    giverNpcId: FOREMAN_ID,
+    giverId: getPlotNpcNumericId(FOREMAN_ID)!,
     type: QuestType.FETCH,
     desc: 'Омилян Черноремень: «Три серых брикета как сбор за станок. Получишь дверной комплект и проход без очереди к ремню.»',
     targetItem: 'grey_briquette',
@@ -167,7 +168,7 @@ registerSideQuest(FOREMAN_ID, FOREMAN_DEF, [
 registerSideQuest(SABOTEUR_ID, SABOTEUR_DEF, [
   {
     id: SABOTAGE_QUEST,
-    giverNpcId: SABOTEUR_ID,
+    giverId: getPlotNpcNumericId(SABOTEUR_ID)!,
     type: QuestType.FETCH,
     desc: 'Петя Нулевая Фаза: «Два предохранителя в обратную цепь. Станок встанет, охрана останется у пустого ремня.»',
     targetItem: 'fuse',
@@ -350,7 +351,7 @@ function publishQuestOutcome(
     data: {
       sideQuestId,
       sourceEventId: event.id,
-      roomName: WORKSHOP_ROOM,
+      roomDefId: WORKSHOP_ROOM,
       factoryId: 'metal_shop',
       blockedReason: outcome.kind === 'sabotaged' ? 'sabotage' : undefined,
       resourceChanges,

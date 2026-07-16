@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Monster 15: Самосборный Остов corpse/loot-risk scene ------- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -64,7 +65,7 @@ const LIQUIDATOR_DEF: PlotNpcDef = {
 registerSideQuest(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID, LIQUIDATOR_DEF, [
   {
     id: 'samosbornyy_ostov_report',
-    giverNpcId: SAMOSBORNYY_OSTOV_LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Павел Сухой Обход: «Сними записку с двери и сдай мне. Не каждую добычу надо проверять руками.»',
     targetItem: 'note',
@@ -84,7 +85,7 @@ registerSideQuest(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID, LIQUIDATOR_DEF, [
   },
   {
     id: 'samosbornyy_ostov_burn',
-    giverNpcId: SAMOSBORNYY_OSTOV_LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Павел Сухой Обход: «Принеси канистру бензина. Остов лучше сжечь по акту, чем будить по жадности.»',
     targetItem: 'ammo_fuel',
@@ -296,7 +297,7 @@ function spawnLiquidator(
   x: number,
   y: number,
 ): number {
-  const existing = entities.find(e => e.alive && e.plotNpcId === SAMOSBORNYY_OSTOV_LIQUIDATOR_ID);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID)!);
   if (existing) return existing.id;
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, SAMOSBORNYY_OSTOV_LIQUIDATOR_ID, x + 0.5, y + 0.5, {
     angle: 0,

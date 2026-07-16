@@ -219,7 +219,7 @@ function publishParitelEvent(
     data: {
       system: 'paritel_steam_bridge',
       pressure: pressureFromRoom(room),
-      roomName: room.name,
+      roomDefId: room.name,
       ...data,
     },
   });

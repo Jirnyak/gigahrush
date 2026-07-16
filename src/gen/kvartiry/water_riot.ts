@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Водяной бунт у стояка — Kvartiry scarcity POI ───────────── */
 
 import {
@@ -198,7 +199,7 @@ const KOSTYL: PlotNpcDef = {
 
 registerSideQuest('kv_zoya_stoyak', ZOYA, [{
   id: WATER_RIOT_QUEST_IDS.residents,
-  giverNpcId: ZOYA_ID,
+  giverId: getPlotNpcNumericId(ZOYA_ID)!,
   type: QuestType.FETCH,
   desc: 'Зоя у стояка: «Четыре бутылки воды в очередь, пока люди не пошли на ящик ликвидаторов.»',
   targetItem: 'water', targetCount: 4,
@@ -220,7 +221,7 @@ registerSideQuest('kv_zoya_stoyak', ZOYA, [{
 
 registerSideQuest('kv_sergin_vodouchet', SERGIN, [{
   id: WATER_RIOT_QUEST_IDS.liquidators,
-  giverNpcId: SERGIN_ID,
+  giverId: getPlotNpcNumericId(SERGIN_ID)!,
   type: QuestType.FETCH,
   desc: 'Серыгин Водоучёт: «Шесть водных талонов обратно в ведомость. Без учёта стояк станет фронтом.»',
   targetItem: 'water_coupon', targetCount: 6,
@@ -242,7 +243,7 @@ registerSideQuest('kv_sergin_vodouchet', SERGIN, [{
 
 registerSideQuest('kv_kostyl_kanistrovy', KOSTYL, [{
   id: WATER_RIOT_QUEST_IDS.wild,
-  giverNpcId: KOSTYL_ID,
+  giverId: getPlotNpcNumericId(KOSTYL_ID)!,
   type: QuestType.FETCH,
   desc: 'Костыль Канистровый: «Четыре водных талона — и я не разнесу стояк ради одной канистры.»',
   targetItem: 'water_coupon', targetCount: 4,
@@ -284,7 +285,7 @@ const SURVIVALIST: PlotNpcDef = {
 
 registerSideQuest(SURVIVAL_ID, SURVIVALIST, [{
   id: WATER_RIOT_QUEST_IDS.survival,
-  giverNpcId: SURVIVAL_ID,
+  giverId: getPlotNpcNumericId(SURVIVAL_ID)!,
   type: QuestType.FETCH,
   desc: 'Сухой Карман: «Два водных талона в личный запас. Очередь, ликвидатор и дикие пусть ищут виноватых друг у друга.»',
   targetItem: 'water_coupon', targetCount: 2,

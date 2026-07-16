@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- MONSTER_14: Желемышник, local zhelemish guardian ---------- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -84,7 +85,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
   {
     id: QUEST_SAFE_PROCESS,
-    giverNpcId: SCIENTIST_ID,
+    giverId: getPlotNpcNumericId(SCIENTIST_ID)!,
     type: QuestType.FETCH,
     desc: 'Варвара Стекольная: «Принесите каменную соль. Обведём внешний край, сварим безопасную долю и не полезем в сырое ядро.»',
     targetItem: 'rock_salt',
@@ -103,7 +104,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
   },
   {
     id: QUEST_SURRENDER_SAMPLE,
-    giverNpcId: SCIENTIST_ID,
+    giverId: getPlotNpcNumericId(SCIENTIST_ID)!,
     type: QuestType.FETCH,
     desc: 'Варвара Стекольная: «Сдайте сырой желемыш в банку. Не ешьте и не продавайте: свежесть нужна до первой чужой кожи.»',
     targetItem: 'zhelemish_raw',
@@ -125,7 +126,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
 registerSideQuest(BUYER_ID, NPC_DEFS[BUYER_ID], [
   {
     id: QUEST_RISKY_SALE,
-    giverNpcId: BUYER_ID,
+    giverId: getPlotNpcNumericId(BUYER_ID)!,
     type: QuestType.FETCH,
     desc: 'Егор Крайпятак: «Сырой желемыш мне. Я продам как мазь, а вам дам деньги и сухой кусок без вопросов.»',
     targetItem: 'zhelemish_raw',
@@ -412,7 +413,7 @@ function spawnNpc(
   angle: number,
   weapon?: string,
 ): Entity {
-  const existing = entities.find(e => e.alive && e.plotNpcId === plotNpcId);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing;
   return requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,

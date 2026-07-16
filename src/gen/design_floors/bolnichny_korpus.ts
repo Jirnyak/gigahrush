@@ -1,5 +1,6 @@
 /* -- Design z: bolnichny_korpus - triage, quarantine and ward choices -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -281,7 +282,7 @@ const NPC_DEFS: Record<BolnichnyNpcId, PlotNpcDef> = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_doctor_galina', NPC_DEFS.bolnichny_doctor_galina, [
   {
     id: 'bolnichny_treat_clean_ward',
-    giverNpcId: 'bolnichny_doctor_galina',
+    giverId: getPlotNpcNumericId('bolnichny_doctor_galina')!,
     type: QuestType.FETCH,
     desc: 'Галина Сортировочная: «Принесите санитарный набор в чистую палату. Тогда аптека отдаст настоящий допуск, а корпус сохранит лицо.»',
     targetItem: 'sanitary_kit',
@@ -302,7 +303,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_doctor_galina', NPC
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_pharmacist_ira', NPC_DEFS.bolnichny_pharmacist_ira, [
   {
     id: 'bolnichny_steal_morphine',
-    giverNpcId: 'bolnichny_pharmacist_ira',
+    giverId: getPlotNpcNumericId('bolnichny_pharmacist_ira')!,
     type: QuestType.FETCH,
     desc: 'Ира Аптечная: «Если ампула морфина уйдёт из шкафа без записи, я дам липовый карантинный допуск. Это не лечение, это маршрут.»',
     targetItem: 'morphine_ampoule',
@@ -323,7 +324,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_pharmacist_ira', NP
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_liquidator_sazan', NPC_DEFS.bolnichny_liquidator_sazan, [
   {
     id: 'bolnichny_kill_black_ward',
-    giverNpcId: 'bolnichny_liquidator_sazan',
+    giverId: getPlotNpcNumericId('bolnichny_liquidator_sazan')!,
     type: QuestType.KILL,
     desc: 'Сазан Санпропуск: «В чёрной палате уже не пациент, а причина. Уберите чернослиз, пока он не научился нажимать кнопку лифта.»',
     targetMonsterKind: MonsterKind.CHERNOSLIZ,
@@ -343,7 +344,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_liquidator_sazan', 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_patient_grisha', NPC_DEFS.bolnichny_patient_grisha, [
   {
     id: 'bolnichny_treat_infected_ward',
-    giverNpcId: 'bolnichny_patient_grisha',
+    giverId: getPlotNpcNumericId('bolnichny_patient_grisha')!,
     type: QuestType.FETCH,
     desc: 'Гриша Температурный: «Отнесите санитарный набор в красную палату. Чистые уже в очереди, а мы пока ещё говорим.»',
     targetItem: 'sanitary_kit',
@@ -361,10 +362,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_patient_grisha', NP
   },
   {
     id: 'bolnichny_escort_infected_patient',
-    giverNpcId: 'bolnichny_patient_grisha',
+    giverId: getPlotNpcNumericId('bolnichny_patient_grisha')!,
     type: QuestType.TALK,
     desc: 'Гриша Температурный: «Доведите меня словом до Галины. Пусть врач скажет, что я пациент, а не запасной мешок.»',
-    targetPlotNpcId: 'bolnichny_doctor_galina',
+    targetNpcId: getPlotNpcNumericId('bolnichny_doctor_galina')!,
     rewardItem: 'sterile_bandage',
     rewardCount: 1,
     relationDelta: 14,
@@ -372,14 +373,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_patient_grisha', NP
     moneyReward: 15,
     eventTags: [BOLNICHNY_KORPUS_ROUTE_ID, 'escort', 'infected_patient', 'triage'],
     eventPrivacy: 'local',
-    failOnNpcDeathPlotId: 'bolnichny_patient_grisha',
+    failOnNpcDeathId: getPlotNpcNumericId('bolnichny_patient_grisha')!,
   },
 ]);
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_clerk_nina', NPC_DEFS.bolnichny_clerk_nina, [
   {
     id: 'bolnichny_forge_clearance',
-    giverNpcId: 'bolnichny_clerk_nina',
+    giverId: getPlotNpcNumericId('bolnichny_clerk_nina')!,
     type: QuestType.FETCH,
     desc: 'Нина Бумажная: «Принесите пустой бланк. Я сделаю карантинную справку, которая выдержит один пост и два чужих взгляда.»',
     targetItem: 'blank_form',
@@ -395,7 +396,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_clerk_nina', NPC_DE
   },
   {
     id: 'bolnichny_expose_contaminated_papers',
-    giverNpcId: 'bolnichny_clerk_nina',
+    giverId: getPlotNpcNumericId('bolnichny_clerk_nina')!,
     type: QuestType.FETCH,
     desc: 'Нина Бумажная: «Достаньте акт испорченной пробы из кабинета заражённых бумаг. Пусть корпус узнает, какая палата стала грязной на бумаге.»',
     targetItem: 'contaminated_sample_act',
@@ -417,7 +418,7 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initWorld(world);
     const rooms = buildRooms(world);

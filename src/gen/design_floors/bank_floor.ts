@@ -1,5 +1,6 @@
 /* -- Design z: bank_floor - cash desks, debt and vault risk -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -332,7 +333,7 @@ const DEBTOR_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_director_zinaida', DIRECTOR_DEF, [
   {
     id: 'bank_report_forged_debt_paper',
-    giverNpcId: 'bank_director_zinaida',
+    giverId: getPlotNpcNumericId('bank_director_zinaida')!,
     type: QuestType.FETCH,
     desc: 'Зинаида Балансовна: «Найдете липовую долговую бумагу - сдайте в окно управляющей. Лучше пусть банк злится на бумагу, а не на вас.»',
     targetItem: 'forged_bank_debt_paper', targetCount: 1,
@@ -349,10 +350,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_director_zinaida', DIREC
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_cashier_lyuba', CASHIER_DEF, [
   {
     id: 'bank_wait_teller_lane',
-    giverNpcId: 'bank_cashier_lyuba',
+    giverId: getPlotNpcNumericId('bank_cashier_lyuba')!,
     type: QuestType.VISIT,
     desc: 'Люба Кассир: «Встаньте в кассовую змейку Б-22. Кто дождался окна, тот уже почти внес деньги: банк любит людей, которые умеют стоять.»',
-    targetRoomName: BANK_ROOM_NAMES.tellerLane,
+    targetRoomDefId: BANK_ROOM_NAMES.tellerLane,
     rewardItem: 'voluntary_receipt', rewardCount: 1,
     relationDelta: 4, xpReward: 18, moneyReward: 0,
     eventTargetName: 'Очередь кассовой змейки банка Б-22 выстояна до окна.',
@@ -361,7 +362,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_cashier_lyuba', CASHIER_
   },
   {
     id: 'bank_cash_deposit_50',
-    giverNpcId: 'bank_cashier_lyuba',
+    giverId: getPlotNpcNumericId('bank_cashier_lyuba')!,
     type: QuestType.FETCH,
     desc: 'Люба Кассир: «Пятьдесят рублей в кассу Б-22. На руки дам квитанцию: деньги станут строкой, строка станет спокойнее наличных.»',
     targetItem: 'money', targetCount: 50,
@@ -377,10 +378,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_cashier_lyuba', CASHIER_
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_credit_prokhor', CREDIT_DEF, [
   {
     id: 'bank_take_corridor_loan',
-    giverNpcId: 'bank_credit_prokhor',
+    giverId: getPlotNpcNumericId('bank_credit_prokhor')!,
     type: QuestType.VISIT,
     desc: 'Прохор Кредитный: «Встаньте к кредитному окну. Банк выдаст сто двадцать рублей и оставит долг в журнале: вернуть придется больше.»',
-    targetRoomName: BANK_ROOM_NAMES.credit,
+    targetRoomDefId: BANK_ROOM_NAMES.credit,
     rewardItem: 'voluntary_receipt', rewardCount: 1,
     relationDelta: -2, xpReward: 30, moneyReward: 120,
     eventTargetName: 'В банке Б-22 открыт кредитный долг.',
@@ -390,7 +391,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_credit_prokhor', CREDIT_
   },
   {
     id: 'bank_repay_corridor_loan',
-    giverNpcId: 'bank_credit_prokhor',
+    giverId: getPlotNpcNumericId('bank_credit_prokhor')!,
     type: QuestType.FETCH,
     desc: 'Прохор Кредитный: «Верните сто сорок рублей по кредитной строке Б-22. Проценты не любят героев, они любят календарь.»',
     targetItem: 'money', targetCount: 140,
@@ -408,7 +409,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_guard_semyon', GUARD_DEF
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_debtor_mitya', DEBTOR_DEF, [
   {
     id: 'bank_cash_forged_debt_paper',
-    giverNpcId: 'bank_debtor_mitya',
+    giverId: getPlotNpcNumericId('bank_debtor_mitya')!,
     type: QuestType.FETCH,
     desc: 'Митя Просрочка: «Отдай мне липовую долговую бумагу. Я подсуну ее в хвост очереди, а ты получишь деньги раньше, чем касса проснется.»',
     targetItem: 'forged_bank_debt_paper', targetCount: 1,
@@ -500,7 +501,7 @@ export function publishBankFloorEvent(
 export function generateBankFloorDesignFloor(): BankFloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const bankState = createBankFloorState();
 
   for (let i = 0; i < W * W; i++) {

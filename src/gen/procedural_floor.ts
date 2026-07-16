@@ -16182,7 +16182,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
   return withSeededRandom(spec.seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const allowNpcs = floorRunZAllowsNpcs(spec.z);
     const { rooms, spawnX, spawnY } = buildRooms(world, spec);
 

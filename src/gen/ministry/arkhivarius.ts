@@ -1,6 +1,7 @@
 /* ── Архивариус Кафкин — side quest (ministry floor) ──────────── */
 /* Старый архивариус. Ищет потерянные дела (записки).              */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -39,7 +40,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('arkhivarius_kafkin', NPC_DEF, [
   {
     id: 'kafkin_notes',
-    giverNpcId: 'arkhivarius_kafkin',
+    giverId: getPlotNpcNumericId('arkhivarius_kafkin')!,
     type: QuestType.FETCH,
     desc: 'Кафкин: «Десять записок. Подошью в дело. Иначе формуляр не закроется.»',
     targetItem: 'note', targetCount: 10,

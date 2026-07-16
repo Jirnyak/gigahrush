@@ -26,6 +26,7 @@ import {
   type NpcSpriteRlePayload,
 } from '../src/data/npc_package_schema';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
+import '../src/data/npc_plot_packages';
 
 function minimalNpcPackage(id: string): NpcPackageDef {
   return {

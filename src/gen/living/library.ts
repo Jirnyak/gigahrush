@@ -2,6 +2,7 @@
 /* Большая читальня с полками, лампой и библиотекаршей.            */
 /* Self-contained: NPC + FETCH quest + room generator.             */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell, Tex, Feature, RoomType, ContainerKind, type Room, type Entity, EntityType, Faction, Occupation, QuestType,
   type Item, type WorldContainer,
@@ -41,7 +42,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('margarita_librarian', NPC_DEF, [
   {
     id: 'margarita_books',
-    giverNpcId: 'margarita_librarian',
+    giverId: getPlotNpcNumericId('margarita_librarian')!,
     type: QuestType.FETCH,
     desc: 'Маргарита Павловна: «Принесите мне пять книг. Любых. Полки пустые, а людям нужны карты, рецепты и хоть что-то читать в очереди.»',
     targetItem: 'book', targetCount: 5,

@@ -1480,7 +1480,7 @@ function useDocumentAtMinistryGate(
   const forged = permit?.method === 'forged' || itemHasTag(defId, 'forged') || itemHasTag(defId, 'forgery');
   const official = accessDef?.legal ?? permit?.official ?? (itemHasTag(defId, 'official') && !stolen && !forged);
   const method = accessDef?.method ?? permit?.method ?? (official ? 'legal' : stolen ? 'stolen' : 'forged');
-  const roomName = documentRoomName(e, world) ?? (outputId === 'key' ? 'Проверочный коридор N3' : 'архивное окно');
+  const roomDefId = documentRoomName(e, world) ?? (outputId === 'key' ? 'Проверочный коридор N3' : 'архивное окно');
   if (official) {
     changeResourceStock(state, 'documents', 1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
@@ -1516,19 +1516,19 @@ function useDocumentAtMinistryGate(
       outcome: outputId === 'key' ? 'gate_key_granted' : 'archive_access_granted',
       outputItemId: outputId,
       outputItemName: ITEMS[outputId]?.name ?? outputId,
-      roomName,
+      roomDefId,
       ministryDocumentDelta: official || stolen ? 1 : -1,
       line: accessDef?.line ?? permit?.successLine,
       rumorIds: forged ? ['player_forged_stamp_risk', 'rare_forged_permit_slip'] : ['lead_ministry_permit_office_slip'],
     },
     zoneId,
     world,
-    roomName,
+    roomDefId,
   );
   if (permit) {
     const tag = outputId === 'archive_access_permit' ? 'archive' : 'ministry_n3';
-    recordPermitAccess(state, e, world, permit, roomName, tag, zoneId);
-    if (stolen) recordPermitExposure(state, e, world, permit, roomName, 'stolen_card_reported', zoneId);
+    recordPermitAccess(state, e, world, permit, roomDefId, tag, zoneId);
+    if (stolen) recordPermitExposure(state, e, world, permit, roomDefId, 'stolen_card_reported', zoneId);
   }
   return true;
 }

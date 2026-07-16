@@ -1,5 +1,6 @@
 /* -- Design z: spetspriemnik - detention, keys and bounded riot pressure -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -312,12 +313,12 @@ const NPC_DEFS: Record<NpcId, PlotNpcDef> = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_nachalnik_krivda', NPC_DEFS.spetspriemnik_nachalnik_krivda, [
   {
     id: 'spetspriemnik_shelter_cell_check',
-    giverNpcId: 'spetspriemnik_nachalnik_krivda',
+    giverId: getPlotNpcNumericId('spetspriemnik_nachalnik_krivda')!,
     type: QuestType.VISIT,
     desc: 'Проверь гермокамеру спецприёмника. Кривда даст корешок, если дверь держит сирену, а люди внутри не шумят.',
     targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
-    targetRoomName: 'Камера спецприёмника 05: гермоукрытие',
+    targetRoomDefId: 'Камера спецприёмника 05: гермоукрытие',
     holdSeconds: 25,
     holdResetOnExit: true,
     rewardItem: SPETSPRIEMNIK_PERMIT_KEY,
@@ -333,7 +334,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_nachalnik_krivd
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_guard_savva', NPC_DEFS.spetspriemnik_guard_savva, [
   {
     id: 'spetspriemnik_bribe_guard',
-    giverNpcId: 'spetspriemnik_guard_savva',
+    giverId: getPlotNpcNumericId('spetspriemnik_guard_savva')!,
     type: QuestType.FETCH,
     desc: 'Отдай Савве пачку сигарет у решётки. Он не продаст ключ, но бирка может упасть не туда.',
     targetItem: 'cigs',
@@ -354,14 +355,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_guard_savva', N
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira', NPC_DEFS.spetspriemnik_prisoner_mira, [
   {
     id: 'spetspriemnik_release_cell_row',
-    giverNpcId: 'spetspriemnik_prisoner_mira',
+    giverId: getPlotNpcNumericId('spetspriemnik_prisoner_mira')!,
     type: QuestType.FETCH,
     desc: 'Принеси Мире бирку от ключа. Она выведет ряд камер тихо, пока караул спорит с журналом обхода.',
     targetItem: SPETSPRIEMNIK_CELL_KEY,
     targetCount: 1,
     targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
-    targetRoomName: 'Клетка свиданий и обмена фамилий',
+    targetRoomDefId: 'Клетка свиданий и обмена фамилий',
     rewardItem: 'personal_file_copy',
     rewardCount: 1,
     extraRewards: [{ defId: 'bread', count: 2 }],
@@ -375,12 +376,12 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
   },
   {
     id: 'spetspriemnik_trigger_riot',
-    giverNpcId: 'spetspriemnik_prisoner_mira',
+    giverId: getPlotNpcNumericId('spetspriemnik_prisoner_mira')!,
     type: QuestType.VISIT,
     desc: 'Удержи двор переклички, пока Мира срывает список. Шум поднимет охрану, но волна ограничена двором.',
     targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
-    targetRoomName: SPETSPRIEMNIK_ROOM_NAMES.riotYard,
+    targetRoomDefId: SPETSPRIEMNIK_ROOM_NAMES.riotYard,
     holdSeconds: 35,
     holdResetOnExit: true,
     holdSpawnMonsters: 3,
@@ -400,14 +401,14 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_informant_tolya', NPC_DEFS.spetspriemnik_informant_tolya, [
   {
     id: 'spetspriemnik_trade_names',
-    giverNpcId: 'spetspriemnik_informant_tolya',
+    giverId: getPlotNpcNumericId('spetspriemnik_informant_tolya')!,
     type: QuestType.FETCH,
     desc: 'Принеси Толе копию личного дела из сейфа начальника. Он обменяет фамилии на пропуск и чужой донос.',
     targetItem: 'personal_file_copy',
     targetCount: 1,
     targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
-    targetRoomName: SPETSPRIEMNIK_ROOM_NAMES.command,
+    targetRoomDefId: SPETSPRIEMNIK_ROOM_NAMES.command,
     rewardItem: SPETSPRIEMNIK_PERMIT_KEY,
     rewardCount: 1,
     extraRewards: [{ defId: 'denunciation', count: 1 }],
@@ -423,7 +424,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_informant_tolya
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_clerk_alla', NPC_DEFS.spetspriemnik_clerk_alla, [
   {
     id: 'spetspriemnik_stamp_release_form',
-    giverNpcId: 'spetspriemnik_clerk_alla',
+    giverId: getPlotNpcNumericId('spetspriemnik_clerk_alla')!,
     type: QuestType.FETCH,
     desc: 'Принеси Алле украденную печать терминала. Она поставит выпускной штамп, если окно приёма ещё целое.',
     targetItem: 'stolen_terminal_stamp',
@@ -1312,7 +1313,7 @@ export function measureSpetspriemnikMetrics(generation: FloorGeneration): Spetsp
 export function generateSpetspriemnikDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const built = buildCore(world);
 
   placeContainers(world, built);

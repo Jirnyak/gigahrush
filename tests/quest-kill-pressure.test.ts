@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -6,6 +7,7 @@ import { World } from '../src/core/world';
 import { PLOT_CHAIN } from '../src/data/plot';
 import { updateKillQuestPressure } from '../src/systems/quests';
 import { makeGameState } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function pressureStepIndex(): number {
   const index = PLOT_CHAIN.findIndex(step => step.killPressure?.anchor.plotNpcId === 'major_grom');
@@ -40,7 +42,7 @@ function major(): Entity {
     hp: 100,
     maxHp: 100,
     ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    plotNpcId: 'major_grom',
+    plotNpcId: getPlotNpcNumericId('major_grom'),
   };
 }
 

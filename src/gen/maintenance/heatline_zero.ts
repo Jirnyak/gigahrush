@@ -1,5 +1,6 @@
 /* ── Теплотрасса Ноль — local static heat hazard slice ───────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Tex,
@@ -70,7 +71,7 @@ const MIRA_DEF: PlotNpcDef = {
 registerSideQuest('ag14_zakhar_nulevoy', ZAKHAR_DEF, [
   {
     id: 'ag14_heatline_cool_valve',
-    giverNpcId: 'ag14_zakhar_nulevoy',
+    giverId: getPlotNpcNumericId('ag14_zakhar_nulevoy')!,
     type: QuestType.FETCH,
     desc: 'Захар: «Принеси два асбестовых шнура. Обмотаем нулевой вентиль и дадим коридору остыть хотя бы на бумаге.»',
     targetItem: 'asbestos_cord', targetCount: 2,
@@ -80,7 +81,7 @@ registerSideQuest('ag14_zakhar_nulevoy', ZAKHAR_DEF, [
   },
   {
     id: 'ag14_heatline_fetch_tool',
-    giverNpcId: 'ag14_zakhar_nulevoy',
+    giverId: getPlotNpcNumericId('ag14_zakhar_nulevoy')!,
     type: QuestType.FETCH,
     desc: 'Захар: «Нужен манометр. Без стрелки мы не знаем, это ремонт, последняя экскурсия или труба зовет по фамилии.»',
     targetItem: 'manometer', targetCount: 1,
@@ -93,7 +94,7 @@ registerSideQuest('ag14_zakhar_nulevoy', ZAKHAR_DEF, [
 registerSideQuest('ag14_mira_obvodnaya', MIRA_DEF, [
   {
     id: 'ag14_heatline_safe_bypass',
-    giverNpcId: 'ag14_mira_obvodnaya',
+    giverId: getPlotNpcNumericId('ag14_mira_obvodnaya')!,
     type: QuestType.VISIT,
     desc: 'Мира: «Проверь безопасный душевой обход {dir}. Если вода еще есть, в обваренный коридор можно не лезть.»',
     targetRoomType: RoomType.BATHROOM,
@@ -103,7 +104,7 @@ registerSideQuest('ag14_mira_obvodnaya', MIRA_DEF, [
   },
   {
     id: 'ag14_heatline_sabotage',
-    giverNpcId: 'ag14_mira_obvodnaya',
+    giverId: getPlotNpcNumericId('ag14_mira_obvodnaya')!,
     type: QuestType.FETCH,
     desc: 'Мира: «Если хочешь сорвать смену, принеси канистру бензина. Запишем как перегрев, а не как саботаж.»',
     targetItem: 'ammo_fuel', targetCount: 1,

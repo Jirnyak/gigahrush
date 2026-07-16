@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Голос За Дверью: bounded Living threshold encounter -------- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -126,7 +127,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 
 registerSideQuest(MARKER_ID, NPC_DEFS[MARKER_ID], [{
   id: GOLOS_MARK_QUEST,
-  giverNpcId: MARKER_ID,
+  giverId: getPlotNpcNumericId(MARKER_ID)!,
   type: QuestType.FETCH,
   desc: 'Лёня Меточный: «Дай изоленту. Пометим дверь, чтобы следующий не открывал на родной голос и сырой запах.»',
   targetItem: 'duct_tape',
@@ -145,7 +146,7 @@ registerSideQuest(MARKER_ID, NPC_DEFS[MARKER_ID], [{
 
 registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [{
   id: GOLOS_REPAIR_QUEST,
-  giverNpcId: LIQUIDATOR_ID,
+  giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
   type: QuestType.FETCH,
   desc: 'Юрий Пломба: «Один тюбик герметика - и я дожму петлю. Открывать не надо, если можно зафиксировать ручку и сдать дверь обходу.»',
   targetItem: 'sealant_tube',
@@ -164,9 +165,9 @@ registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [{
 
 registerSideQuest(REPORTER_ID, NPC_DEFS[REPORTER_ID], [{
   id: GOLOS_REPORT_QUEST,
-  giverNpcId: REPORTER_ID,
+  giverId: getPlotNpcNumericId(REPORTER_ID)!,
   type: QuestType.TALK,
-  targetPlotNpcId: LIQUIDATOR_ID,
+  targetNpcId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
   desc: 'Зоя Соседка: «Скажите Юрию Пломбе, что голос за дверью зовет моим братом. Пусть это останется работой ликвидаторов, а не нашей ошибкой.»',
   rewardItem: 'water_coupon',
   rewardCount: 1,
@@ -182,7 +183,7 @@ registerSideQuest(REPORTER_ID, NPC_DEFS[REPORTER_ID], [{
 
 registerSideQuest(HUNTER_ID, NPC_DEFS[HUNTER_ID], [{
   id: GOLOS_CLEAR_QUEST,
-  giverNpcId: HUNTER_ID,
+  giverId: getPlotNpcNumericId(HUNTER_ID)!,
   type: QuestType.KILL,
   desc: 'Клава Слухачка: «Если откроете, делайте это нарочно. Убейте нелюдь за дверью и заберите банку, пока она не заговорила вашим голосом.»',
   targetMonsterKind: MonsterKind.NELYUD,

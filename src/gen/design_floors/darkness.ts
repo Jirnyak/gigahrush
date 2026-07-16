@@ -2076,7 +2076,7 @@ function registerDarknessRouteCues(world: World, roomsByKey: Map<string, Room>):
 export function generateDarknessDesignFloor(): DarknessDesignGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
 
   world.wallTex.fill(Tex.DARK);
   world.floorTex.fill(Tex.F_CONCRETE);

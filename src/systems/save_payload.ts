@@ -17,7 +17,7 @@ import {
 import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from '../data/inventory_limits';
 import { ITEMS, getStack } from '../data/items';
 import { clampCharacterAge, DEFAULT_PLAYER_AGE, DEFAULT_PLAYER_SEX, sanitizeCharacterSex } from '../data/demographics';
-
+import { getPlotNpcNumericId } from '../data/npc_packages';
 export const SAVE_PLAYER_INVENTORY_CAP = MAX_INVENTORY_SLOTS;
 export const SAVE_CONTAINER_CAP = 2048;
 export const SAVE_CONTAINER_TAG_CAP = 12;
@@ -446,7 +446,7 @@ function compactAlifeForPortal(input: unknown): unknown {
     playerRelationTargetAlifeId: input.playerRelationTargetAlifeId,
     deadIds: Array.isArray(input.deadIds) ? input.deadIds.slice(0, PORTAL_COMPACT_ALIFE_DEAD_ID_CAP) : [],
     deadPlotNpcIds: Array.isArray(input.deadPlotNpcIds)
-      ? input.deadPlotNpcIds.slice(0, PORTAL_COMPACT_ALIFE_PLOT_DEATH_CAP)
+      ? input.deadPlotNpcIds.map(x => typeof x === 'string' ? (getPlotNpcNumericId(x)! ?? NaN) : Number(x)).filter(n => !Number.isNaN(n)).slice(0, PORTAL_COMPACT_ALIFE_PLOT_DEATH_CAP)
       : [],
     overrides: Array.isArray(input.overrides) ? input.overrides.slice(0, PORTAL_COMPACT_ALIFE_OVERRIDE_CAP) : [],
   };

@@ -1,5 +1,6 @@
 /* -- Design z: Manhattan-like indoor crossroads ------------- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -55,12 +56,12 @@ const MARK_TEX = Tex.F_TILE;
 const ROAD_WALL_TEX = Tex.CONCRETE;
 const OVERPASS_TEX = Tex.F_TILE;
 const UNDERPASS_TEX = Tex.F_CONCRETE;
-const CROSSWALK_ROOM_NAME = 'Белая дорожная разметка';
-const CONTROL_ROOM_NAME = 'Пост управления перекрестком';
-const CARGO_ROOM_NAME = 'Гараж украденного груза';
-const WRONG_TURN_ROOM_NAME = 'Съезд Неправильный поворот';
-const SAFE_CURB_ROOM_NAME = 'Безопасный бордюр у зебры';
-const TOLL_GATE_ROOM_NAME = 'Платная перемычка центральной зебры';
+const CROSSWALK_ROOM_DEF_ID = 'Белая дорожная разметка';
+const CONTROL_ROOM_DEF_ID = 'Пост управления перекрестком';
+const CARGO_ROOM_DEF_ID = 'Гараж украденного груза';
+const WRONG_TURN_ROOM_DEF_ID = 'Съезд Неправильный поворот';
+const SAFE_CURB_ROOM_DEF_ID = 'Безопасный бордюр у зебры';
+const TOLL_GATE_ROOM_DEF_ID = 'Платная перемычка центральной зебры';
 const AVENUE_CENTERS = [232, 344, 512, 680, 792] as const;
 const STREET_CENTERS = [232, 344, 512, 680, 792] as const;
 const SHELL_AVENUE_CENTERS = [104, ...AVENUE_CENTERS, 920] as const;
@@ -149,7 +150,7 @@ export const MANHATTAN_CROSSROADS_DEBUG: ManhattanCrossroadsDebugInfo = {
     'Central zebra has a locked toll gate; the player can steal a key under witnesses or use the overpass/underpass bypass.',
     'Traffic bands seed visible wild clusters, convoy bodies and liquidator posts before the A-Life population field fills the road grid.',
   ],
-  questRooms: [CONTROL_ROOM_NAME, CARGO_ROOM_NAME, WRONG_TURN_ROOM_NAME, SAFE_CURB_ROOM_NAME, TOLL_GATE_ROOM_NAME],
+  questRooms: [CONTROL_ROOM_DEF_ID, CARGO_ROOM_DEF_ID, WRONG_TURN_ROOM_DEF_ID, SAFE_CURB_ROOM_DEF_ID, TOLL_GATE_ROOM_DEF_ID],
   smokePath: 'Spawn on the south curb, choose the locked central toll gate or the east overpass bypass, cross two zebra markings, then reach the wrong-turn spur at 512,600.',
 };
 
@@ -292,7 +293,7 @@ const ROAD_STALKER_KSU: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_traffic_militsiya', TRAFFIC_MILITSIYA, [
   {
     id: 'crossroads_open_junction',
-    giverNpcId: 'crossroads_traffic_militsiya',
+    giverId: getPlotNpcNumericId('crossroads_traffic_militsiya')!,
     type: QuestType.FETCH,
     desc: 'Оськин: «Два предохранителя на пост. Починим светофор — центр станет проходом, а не мясорубкой.»',
     targetItem: 'fuse',
@@ -309,10 +310,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_traffic_militsiya'
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_zebra_granny', ZEBRA_GRANNY, [
   {
     id: 'crossroads_zebra_escort',
-    giverNpcId: 'crossroads_zebra_granny',
+    giverId: getPlotNpcNumericId('crossroads_zebra_granny')!,
     type: QuestType.TALK,
     desc: 'Зебрина: «Проведи меня через две зебры к Диме {dir}. Если остановишься на черном, дорога решит, что ты знак.»',
-    targetNpcId: 'crossroads_courier_dima',
+    targetNpcId: getPlotNpcNumericId('crossroads_courier_dima')!,
     rewardItem: 'bread',
     rewardCount: 1,
     extraRewards: [{ defId: 'water_coupon', count: 1 }],
@@ -325,7 +326,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_zebra_granny', ZEB
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_courier_dima', COURIER_DIMA, [
   {
     id: 'crossroads_stolen_cargo',
-    giverNpcId: 'crossroads_courier_dima',
+    giverId: getPlotNpcNumericId('crossroads_courier_dima')!,
     type: QuestType.FETCH,
     desc: 'Дима: «Из гаража украли два листа металла. Верни груз или продай совесть дешевле дороги.»',
     targetItem: 'metal_sheet',
@@ -342,10 +343,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_courier_dima', COU
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'crossroads_road_stalker_ksu', ROAD_STALKER_KSU, [
   {
     id: 'crossroads_wrong_turn',
-    giverNpcId: 'crossroads_road_stalker_ksu',
+    giverId: getPlotNpcNumericId('crossroads_road_stalker_ksu')!,
     type: QuestType.VISIT,
     desc: 'Ксю: «Найди съезд с неправильной стрелкой {dir}. Не заходи глубоко, просто докажи, что дорога там есть.»',
-    targetRoomName: WRONG_TURN_ROOM_NAME,
+    targetRoomDefId: WRONG_TURN_ROOM_DEF_ID,
     rewardItem: 'lift_scheme',
     rewardCount: 1,
     extraRewards: [{ defId: 'cigs', count: 2 }],
@@ -412,7 +413,7 @@ function isRoadLikeRoom(world: World, roomId: number): boolean {
   const room = world.rooms[roomId];
   return room?.name === 'Асфальтовая сетка авеню'
     || room?.name === 'Бордюры и служебные края'
-    || room?.name === CROSSWALK_ROOM_NAME;
+    || room?.name === CROSSWALK_ROOM_DEF_ID;
 }
 
 function canRetuneStreetCell(world: World, ci: number): boolean {
@@ -1484,7 +1485,7 @@ export function reinforceManhattanCrossroadsAuthoredHqTerritory(world: World): v
 export function expandManhattanCrossroadsRouteShell(world: World, rng: () => number): void {
   const roadRoom = logicalRoomByName(world, 'Асфальтовая сетка авеню', RoomType.CORRIDOR, ROAD_TEX);
   const sidewalkRoom = logicalRoomByName(world, 'Бордюры и служебные края', RoomType.COMMON, SIDEWALK_TEX);
-  const markRoom = logicalRoomByName(world, CROSSWALK_ROOM_NAME, RoomType.MEDICAL, MARK_TEX);
+  const markRoom = logicalRoomByName(world, CROSSWALK_ROOM_DEF_ID, RoomType.MEDICAL, MARK_TEX);
   const shellSpans: readonly RoadSpan[] = [
     { axis: 'vertical', center: 104, from: 0, to: W - 1, width: 9, name: 'Ложная западная авеню' },
     { axis: 'vertical', center: 232, from: 0, to: W - 1, width: 9, name: 'Западная окраинная авеню' },
@@ -1529,13 +1530,13 @@ function stampDistrictRooms(world: World, sidewalkRoomId: number): KeyRooms {
     stampNamedRoom(world, 'Витринный блок западного квартала', RoomType.STORAGE, 250, 402, 58, 28, Tex.PANEL, Tex.F_TILE),
     stampNamedRoom(world, 'Аптека у северной зебры', RoomType.MEDICAL, 548, 390, 44, 24, Tex.PANEL, Tex.F_TILE),
     stampNamedRoom(world, 'Киоск у белой зебры', RoomType.STORAGE, 384, 540, 42, 22, Tex.METAL, Tex.F_TILE),
-    stampNamedRoom(world, CONTROL_ROOM_NAME, RoomType.OFFICE, 474, 462, 28, 18, Tex.METAL, Tex.F_CONCRETE),
-    stampNamedRoom(world, SAFE_CURB_ROOM_NAME, RoomType.COMMON, 604, 464, 38, 20, Tex.PANEL, Tex.F_TILE),
-    stampNamedRoom(world, TOLL_GATE_ROOM_NAME, RoomType.OFFICE, 528, 526, 20, 12, Tex.METAL, Tex.F_CONCRETE),
-    stampNamedRoom(world, CARGO_ROOM_NAME, RoomType.STORAGE, 548, 548, 50, 32, Tex.METAL, Tex.F_CONCRETE),
+    stampNamedRoom(world, CONTROL_ROOM_DEF_ID, RoomType.OFFICE, 474, 462, 28, 18, Tex.METAL, Tex.F_CONCRETE),
+    stampNamedRoom(world, SAFE_CURB_ROOM_DEF_ID, RoomType.COMMON, 604, 464, 38, 20, Tex.PANEL, Tex.F_TILE),
+    stampNamedRoom(world, TOLL_GATE_ROOM_DEF_ID, RoomType.OFFICE, 528, 526, 20, 12, Tex.METAL, Tex.F_CONCRETE),
+    stampNamedRoom(world, CARGO_ROOM_DEF_ID, RoomType.STORAGE, 548, 548, 50, 32, Tex.METAL, Tex.F_CONCRETE),
     stampNamedRoom(world, 'Сервисная светофора', RoomType.PRODUCTION, 622, 548, 34, 28, Tex.PIPE, Tex.F_CONCRETE),
     stampNamedRoom(world, 'Низкий тоннель под Восточной авеню', RoomType.CORRIDOR, 650, 626, 84, 14, Tex.PIPE, Tex.F_CONCRETE),
-    stampNamedRoom(world, WRONG_TURN_ROOM_NAME, RoomType.CORRIDOR, 744, 614, 82, 16, Tex.CONCRETE, Tex.F_CONCRETE),
+    stampNamedRoom(world, WRONG_TURN_ROOM_DEF_ID, RoomType.CORRIDOR, 744, 614, 82, 16, Tex.CONCRETE, Tex.F_CONCRETE),
     stampNamedRoom(world, 'Дворовая кладовая дорожников', RoomType.STORAGE, 724, 708, 48, 36, Tex.PANEL, Tex.F_CONCRETE),
     stampNamedRoom(world, 'Магазин под эстакадой', RoomType.STORAGE, 676, 452, 48, 26, Tex.METAL, Tex.F_TILE),
     stampNamedRoom(world, 'Южный лифтовой вестибюль', RoomType.COMMON, 498, 782, 36, 24, Tex.CONCRETE, Tex.F_TILE),
@@ -1544,12 +1545,12 @@ function stampDistrictRooms(world: World, sidewalkRoomId: number): KeyRooms {
 
   for (const room of rooms) connectRoomToStreet(world, room, sidewalkRoomId);
 
-  const control = rooms.find(r => r.name === CONTROL_ROOM_NAME)!;
-  const cargo = rooms.find(r => r.name === CARGO_ROOM_NAME)!;
-  const wrongTurn = rooms.find(r => r.name === WRONG_TURN_ROOM_NAME)!;
-  const safeCurb = rooms.find(r => r.name === SAFE_CURB_ROOM_NAME)!;
+  const control = rooms.find(r => r.name === CONTROL_ROOM_DEF_ID)!;
+  const cargo = rooms.find(r => r.name === CARGO_ROOM_DEF_ID)!;
+  const wrongTurn = rooms.find(r => r.name === WRONG_TURN_ROOM_DEF_ID)!;
+  const safeCurb = rooms.find(r => r.name === SAFE_CURB_ROOM_DEF_ID)!;
   const kiosk = rooms.find(r => r.name === 'Киоск у белой зебры')!;
-  const tollGate = rooms.find(r => r.name === TOLL_GATE_ROOM_NAME)!;
+  const tollGate = rooms.find(r => r.name === TOLL_GATE_ROOM_DEF_ID)!;
   const underpass = rooms.find(r => r.name === 'Низкий тоннель под Восточной авеню')!;
   connectRoomExit(world, underpass, underpass.x - 1, underpass.y + Math.floor(underpass.h / 2), -1, 0, sidewalkRoomId);
   connectRoomExit(world, underpass, underpass.x + underpass.w, underpass.y + Math.floor(underpass.h / 2), 1, 0, sidewalkRoomId);
@@ -2070,8 +2071,8 @@ function countUngatedRectCells(gen: FloorGeneration, rects: readonly AuditRect[]
   return count;
 }
 
-function roomReachableCellCount(gen: FloorGeneration, roomName: string, ungatedOnly = false): number {
-  const roomIds = new Set(gen.world.rooms.filter(room => room.name === roomName).map(room => room.id));
+function roomReachableCellCount(gen: FloorGeneration, roomDefId: string, ungatedOnly = false): number {
+  const roomIds = new Set(gen.world.rooms.filter(room => room.name === roomDefId).map(room => room.id));
   if (roomIds.size === 0) return 0;
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
   let count = 0;
@@ -2113,8 +2114,8 @@ function countNpcsNear(generation: FloorGeneration, x: number, y: number, radius
   return count;
 }
 
-function countMonstersInRoom(generation: FloorGeneration, roomName: string): number {
-  const roomIds = new Set(generation.world.rooms.filter(room => room.name === roomName).map(room => room.id));
+function countMonstersInRoom(generation: FloorGeneration, roomDefId: string): number {
+  const roomIds = new Set(generation.world.rooms.filter(room => room.name === roomDefId).map(room => room.id));
   let count = 0;
   for (const entity of generation.entities) {
     if (!entity.alive || entity.type !== EntityType.MONSTER) continue;
@@ -2157,8 +2158,8 @@ export function measureManhattanCrossroadsDecisionMetrics(generation: FloorGener
     crosswalkStripeCells,
     blockInteriorRooms: blockRoomIds.size,
     blockInteriorReachableCells,
-    escortNpcPresent: generation.entities.some(entity => entity.plotNpcId === 'crossroads_zebra_granny')
-      && generation.entities.some(entity => entity.plotNpcId === 'crossroads_courier_dima'),
+    escortNpcPresent: generation.entities.some(entity => entity.id === getPlotNpcNumericId('crossroads_zebra_granny'))
+      && generation.entities.some(entity => entity.id === getPlotNpcNumericId('crossroads_courier_dima')),
     tollDoorLocked: tollDoor?.state === DoorState.LOCKED,
     tollDoorRequiresKey: !!tollDoor && audit.reachable[tollDoorIdx] === 1 && audit.gateMask[tollDoorIdx] === REACH_GATE_KEY,
     tollKeyContainers: generation.world.containers.filter(container =>
@@ -2166,12 +2167,12 @@ export function measureManhattanCrossroadsDecisionMetrics(generation: FloorGener
     tollQueueNpcs: countNpcsNear(generation, 516.5, 540.5, 34),
     overpassUngatedCells: countUngatedRectCells(generation, OVERPASS_AUDIT_RECTS, OVERPASS_TEX),
     underpassUngatedCells: countUngatedRectCells(generation, UNDERPASS_AUDIT_RECTS, UNDERPASS_TEX),
-    controlRoomReachableCells: roomReachableCellCount(generation, CONTROL_ROOM_NAME),
+    controlRoomReachableCells: roomReachableCellCount(generation, CONTROL_ROOM_DEF_ID),
     repairFuseCount: countInventoryItem(generation, 'fuse'),
-    cargoRoomReachableCells: roomReachableCellCount(generation, CARGO_ROOM_NAME),
+    cargoRoomReachableCells: roomReachableCellCount(generation, CARGO_ROOM_DEF_ID),
     cargoMetalSheets: countInventoryItem(generation, 'metal_sheet', 'cargo'),
-    wrongExitUngatedCells: roomReachableCellCount(generation, WRONG_TURN_ROOM_NAME, true),
-    wrongExitMonsters: countMonstersInRoom(generation, WRONG_TURN_ROOM_NAME),
+    wrongExitUngatedCells: roomReachableCellCount(generation, WRONG_TURN_ROOM_DEF_ID, true),
+    wrongExitMonsters: countMonstersInRoom(generation, WRONG_TURN_ROOM_DEF_ID),
   };
 }
 
@@ -2180,10 +2181,10 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
     const rng = new SeedRng(seed);
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const roadRoom = addLogicalRoom(world, 'Асфальтовая сетка авеню', RoomType.CORRIDOR, DISTRICT_MIN, DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, ROAD_TEX);
     const sidewalkRoom = addLogicalRoom(world, 'Бордюры и служебные края', RoomType.COMMON, DISTRICT_MIN, DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, SIDEWALK_TEX);
-    const markRoom = addLogicalRoom(world, CROSSWALK_ROOM_NAME, RoomType.MEDICAL, DISTRICT_MIN, DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, MARK_TEX);
+    const markRoom = addLogicalRoom(world, CROSSWALK_ROOM_DEF_ID, RoomType.MEDICAL, DISTRICT_MIN, DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, DISTRICT_MAX - DISTRICT_MIN, MARK_TEX);
 
     roadRoom.ceilingTier = 198;
     sidewalkRoom.ceilingTier = 198;

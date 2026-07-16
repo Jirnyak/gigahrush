@@ -1,3 +1,4 @@
+import { getPlotNpcStringId } from '../../data/npc_packages';
 import type { Entity } from '../../core/types';
 import type { RenderAnimationClipDef, RenderAnimationMatchValue, RenderAnimationSource } from './types';
 
@@ -76,11 +77,11 @@ function matchesVisualOrPlotFallback(def: RenderAnimationClipDef, entity: Entity
   const selector = def.selector;
   const fallbackPlotNpcId = selector.fallbackPlotNpcId ?? selector.plotNpcId;
   if (selector.npcVisualId === undefined) {
-    return matchesValue(fallbackPlotNpcId, entity.plotNpcId);
+    return matchesValue(fallbackPlotNpcId, getPlotNpcStringId(entity.id!));
   }
   if (matchesValue(selector.npcVisualId, entity.npcVisualId)) return true;
   if (entity.npcVisualId === undefined && fallbackPlotNpcId !== undefined) {
-    return matchesValue(fallbackPlotNpcId, entity.plotNpcId);
+    return matchesValue(fallbackPlotNpcId, getPlotNpcStringId(entity.id!));
   }
   return false;
 }

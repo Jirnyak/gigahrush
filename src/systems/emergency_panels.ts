@@ -520,7 +520,7 @@ function spawnPanelInspector(
   const ty = panel.y + 0.5;
   for (const npc of entities) {
     if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai || npc.faction !== owner) continue;
-    if (npc.plotNpcId || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) continue;
+    if (npc.id || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) continue;
     if (world.zoneMap[world.idx(Math.floor(npc.x), Math.floor(npc.y))] !== panel.zoneId) continue;
     const d2 = world.dist2(tx, ty, npc.x, npc.y);
     if (d2 >= bestD2) continue;

@@ -22,6 +22,7 @@ import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc
 import { offerQuest } from '../src/systems/quests';
 import { cancelSamosborWave, finishSamosborWave, startSamosborWave } from '../src/systems/samosbor_wave';
 import { makeGameState } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function plotNpcName(plotNpcId: string): string {
   const pack = getNpcPackageByPlotNpcId(plotNpcId);

@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -121,7 +122,7 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.rita, NPC_DEFS.obschezhitie_rita_starshaya, [{
   id: 'obschezhitie_shelter_rollcall',
-  giverNpcId: NPC_IDS.rita,
+  giverId: getPlotNpcNumericId(NPC_IDS.rita)!,
   type: QuestType.FETCH,
   desc: 'Рита Старшая Смены: «Принеси ведомость укрытых. Во сне смена не досчитается сама, а сирена любит пустые строки.»',
   targetItem: 'shelter_tally',
@@ -138,7 +139,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.rita, NPC_DEFS.obschez
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.gleb, NPC_DEFS.obschezhitie_gleb_obhod, [{
   id: 'obschezhitie_patrol_silence',
-  giverNpcId: NPC_IDS.gleb,
+  giverId: getPlotNpcNumericId(NPC_IDS.gleb)!,
   type: QuestType.FETCH,
   desc: 'Глеб Ночной Обход: «Пачку сигарет на пост. Обход пройдёт тише, и никто не будет сверять каждый чужой шкаф до отбоя.»',
   targetItem: 'cigs',
@@ -155,7 +156,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.gleb, NPC_DEFS.obschez
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.senya, NPC_DEFS.obschezhitie_senya_tikhiy, [{
   id: 'obschezhitie_quiet_lockers',
-  giverNpcId: NPC_IDS.senya,
+  giverId: getPlotNpcNumericId(NPC_IDS.senya)!,
   type: QuestType.FETCH,
   desc: 'Сеня Тихий: «Один блистер снотворного - и скажу, какой шкаф не скрипит. Робко берёшь или честно уходишь - это уже твой шум.»',
   targetItem: 'sleeping_pills',
@@ -201,7 +202,7 @@ export function generateObschezhitieSmenyDesignFloor(seed = DORM_SEED): FloorGen
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const containerId = { v: 1 };
 
     const layout = carveDormSlabs(world);

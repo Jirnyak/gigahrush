@@ -1,5 +1,6 @@
 /* -- Картотечник: bounded Ministry document-objective harassment -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex, msg,
@@ -14,7 +15,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 
-const ROOM_NAME = 'Картотека невозможного алфавита';
+const ROOM_DEF_ID = 'Картотека невозможного алфавита';
 const DECOY_QUEST = 'kartotechnik_blank_decoy';
 const RECOVER_QUEST = 'kartotechnik_relocated_record';
 const BURN_QUEST = 'kartotechnik_burn_wrong_index';
@@ -91,7 +92,7 @@ const SEMYON_DEF: PlotNpcDef = {
 registerSideQuest('kartotechnik_lidia_alphabetnaya', LIDIA_DEF, [
   {
     id: DECOY_QUEST,
-    giverNpcId: 'kartotechnik_lidia_alphabetnaya',
+    giverId: getPlotNpcNumericId('kartotechnik_lidia_alphabetnaya')!,
     type: QuestType.FETCH,
     desc: 'Лидия Алфавитная: «Подсуньте пустой бланк вместо живого дела. Дам ключ от среднего банка ящиков, пока Картотечник занят пустышкой.»',
     targetItem: 'blank_form', targetCount: 1,
@@ -101,7 +102,7 @@ registerSideQuest('kartotechnik_lidia_alphabetnaya', LIDIA_DEF, [
     targetFloorZ: 30,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'archive',
-    targetHint: `${ROOM_NAME}: пустой бланк лежит у переднего стола или в жертвенном ящике.`,
+    targetHint: `${ROOM_DEF_ID}: пустой бланк лежит у переднего стола или в жертвенном ящике.`,
     eventSeverity: 4,
     eventTags: [...BASE_TAGS, 'protected'],
     eventData: {
@@ -109,7 +110,7 @@ registerSideQuest('kartotechnik_lidia_alphabetnaya', LIDIA_DEF, [
       outcome: 'protected',
       counterplay: 'blank_form_decoy',
       objectiveItem: 'missing_record_file',
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       rumorIds: RUMOR_IDS,
     },
   },
@@ -118,7 +119,7 @@ registerSideQuest('kartotechnik_lidia_alphabetnaya', LIDIA_DEF, [
 registerSideQuest('kartotechnik_pavel_nedoopisanny', PAVEL_DEF, [
   {
     id: RECOVER_QUEST,
-    giverNpcId: 'kartotechnik_pavel_nedoopisanny',
+    giverId: getPlotNpcNumericId('kartotechnik_pavel_nedoopisanny')!,
     type: QuestType.FETCH,
     desc: 'Павел Недоописанный: «Верните пропавшее личное дело из дальнего шкафа невозможной буквы. Если затянете, маршрут станет на один ящик длиннее.»',
     targetItem: 'missing_record_file', targetCount: 1,
@@ -128,7 +129,7 @@ registerSideQuest('kartotechnik_pavel_nedoopisanny', PAVEL_DEF, [
     targetFloorZ: 30,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'archive',
-    targetHint: `${ROOM_NAME}: дело переставлено в дальнюю картотеку рядом с Параграфом.`,
+    targetHint: `${ROOM_DEF_ID}: дело переставлено в дальнюю картотеку рядом с Параграфом.`,
     timeLimitMinutes: 4 * 60,
     eventSeverity: 4,
     eventTags: [...BASE_TAGS, 'recovered'],
@@ -138,7 +139,7 @@ registerSideQuest('kartotechnik_pavel_nedoopisanny', PAVEL_DEF, [
       objectiveItem: 'missing_record_file',
       localOnly: true,
       softlockGuard: 'objective remains in reachable container after deadline',
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       rumorIds: RUMOR_IDS,
     },
   },
@@ -147,7 +148,7 @@ registerSideQuest('kartotechnik_pavel_nedoopisanny', PAVEL_DEF, [
 registerSideQuest('kartotechnik_semyon_pepelny', SEMYON_DEF, [
   {
     id: BURN_QUEST,
-    giverNpcId: 'kartotechnik_semyon_pepelny',
+    giverId: getPlotNpcNumericId('kartotechnik_semyon_pepelny')!,
     type: QuestType.FETCH,
     desc: 'Семен Пепельный: «Принесите акт о пропавшей записи из пепельницы. Неправильный индекс уже сожжен; теперь нужен след, а не пожар.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
@@ -157,7 +158,7 @@ registerSideQuest('kartotechnik_semyon_pepelny', SEMYON_DEF, [
     targetFloorZ: 30,
     targetRoomType: RoomType.OFFICE,
     targetZoneTag: 'archive',
-    targetHint: `${ROOM_NAME}: акт лежит в пепельнице неправильного индекса.`,
+    targetHint: `${ROOM_DEF_ID}: акт лежит в пепельнице неправильного индекса.`,
     eventSeverity: 3,
     eventTags: [...BASE_TAGS, 'burned'],
     eventData: {
@@ -165,7 +166,7 @@ registerSideQuest('kartotechnik_semyon_pepelny', SEMYON_DEF, [
       outcome: 'burned_wrong_index',
       counterplay: 'burn_wrong_index',
       objectiveItem: 'missing_record_file',
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       rumorIds: RUMOR_IDS,
     },
   },
@@ -218,7 +219,7 @@ function publishKartotechnikOutcome(
       outcome,
       sourceEventId,
       objectiveItem: 'missing_record_file',
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       localOnly: true,
       rumorIds: RUMOR_IDS,
     },
@@ -351,7 +352,7 @@ export function generateKartotechnikArchive(
 ): { nextRoomId: number } {
   const room = createAdminRoom(world, nextRoomId, spawnX, spawnY, {
     type: RoomType.OFFICE,
-    name: ROOM_NAME,
+    name: ROOM_DEF_ID,
     w: 21, h: 13,
     minDist: 75, maxDist: 190,
     wallTex: Tex.MARBLE,
@@ -417,6 +418,6 @@ export function generateKartotechnikArchive(
   spawnAdminMonster(world, entities, nextId, gateX + 3, centerY, MonsterKind.PARAGRAPH);
   spawnAdminMonster(world, entities, nextId, gateX + 6, centerY + 3, MonsterKind.PECHATEED);
 
-  genLog(`[MONSTER_05_KARTOTECHNIK] ${ROOM_NAME} at (${room.x}, ${room.y}) room #${room.id}`);
+  genLog(`[MONSTER_05_KARTOTECHNIK] ${ROOM_DEF_ID} at (${room.x}, ${room.y}) room #${room.id}`);
   return { nextRoomId: room.id + 1 };
 }

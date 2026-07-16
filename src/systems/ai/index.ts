@@ -167,7 +167,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       } else if (e.type === EntityType.MONSTER && e.ai.goal === AIGoal.IDLE && e.ai.combatTargetId === undefined && e.speed > 0) {
         e.ai.goal = AIGoal.WANDER;
       }
-      if (e.plotNpcId !== undefined) aiStats.plot++;
+      if (e.id !== undefined) aiStats.plot++;
       if (isBossActor(e)) aiStats.bosses++;
       if (isActiveAttacker(e, entityIndex.byId)) aiStats.activeAttackers++;
       if (projectileOwnerIds.has(e.id)) aiStats.projectileOwners++;

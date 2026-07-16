@@ -652,7 +652,7 @@ function publishFalseSafeRumor(
     data: {
       anomalyId: 'false_safe_block',
       outcome,
-      roomName: room.name,
+      roomDefId: room.name,
       rumorIds: FALSE_SAFE_RUMOR_IDS,
       ...extra,
     },
@@ -714,7 +714,7 @@ function resolveFalseSafeMarker(
     tags: ['player', 'procedural', 'anomaly', FALSE_SAFE_BLOCK_TAG, 'cult', 'marker_resolved'],
     data: {
       anomalyId: 'false_safe_block',
-      roomName: room.name,
+      roomDefId: room.name,
       timerCost: 18 + spec.danger * 6,
       rumorIds: FALSE_SAFE_RUMOR_IDS,
     },

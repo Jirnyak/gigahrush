@@ -1,5 +1,6 @@
 /* ── AG19 Metro Error Line — platform pocket in maintenance ───── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W,
   Cell,
@@ -13,9 +14,9 @@ import {
 } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import {
-  METRO_DEPOT_ROOM_NAME,
-  METRO_ERROR_ROOM_NAME,
-  METRO_STATION_ROOM_NAME,
+  METRO_DEPOT_ROOM_DEF_ID,
+  METRO_ERROR_ROOM_DEF_ID,
+  METRO_STATION_ROOM_DEF_ID,
   metroRoutesForRoom,
 } from '../../data/metro';
 import {
@@ -95,7 +96,7 @@ const LOST_DEF: PlotNpcDef = {
 registerSideQuest('ag19_zhanna_ticket', ZHANNA_DEF, [
   {
     id: 'ag19_ticket_proof',
-    giverNpcId: 'ag19_zhanna_ticket',
+    giverId: getPlotNpcNumericId('ag19_zhanna_ticket')!,
     type: QuestType.FETCH,
     desc: 'Жанна: «Два билета метро принеси. Один примет турникет, второй докажет, что первый был не сном.»',
     targetItem: 'metro_ticket', targetCount: 2,
@@ -108,7 +109,7 @@ registerSideQuest('ag19_zhanna_ticket', ZHANNA_DEF, [
 registerSideQuest('ag19_borya_conductor', BORYA_DEF, [
   {
     id: 'ag19_switch_handle',
-    giverNpcId: 'ag19_borya_conductor',
+    giverId: getPlotNpcNumericId('ag19_borya_conductor')!,
     type: QuestType.FETCH,
     desc: 'Боря: «Рукоять стрелочного перевода принеси. Предохранитель найдём, а без рукояти поезд сам выбирает, кого наказать.»',
     targetItem: 'rail_switch_handle', targetCount: 1,
@@ -118,7 +119,7 @@ registerSideQuest('ag19_borya_conductor', BORYA_DEF, [
   },
   {
     id: 'ag19_signal_lamp',
-    giverNpcId: 'ag19_borya_conductor',
+    giverId: getPlotNpcNumericId('ag19_borya_conductor')!,
     type: QuestType.FETCH,
     desc: 'Боря: «Сигнальную лампу депо принеси. Белый обратный огонь без неё моргает как чужой глаз.»',
     targetItem: 'rail_signal_lamp', targetCount: 1,
@@ -134,10 +135,10 @@ registerSideQuest('ag19_borya_conductor', BORYA_DEF, [
 registerSideQuest('ag19_lost_passenger', LOST_DEF, [
   {
     id: 'ag19_lost_passenger_to_conductor',
-    giverNpcId: 'ag19_lost_passenger',
+    giverId: getPlotNpcNumericId('ag19_lost_passenger')!,
     type: QuestType.TALK,
     desc: 'Лида: «Проведите меня к Боре Сцепщику. Я больше не хочу быть остановкой.»',
-    targetNpcId: 'ag19_borya_conductor',
+    targetNpcId: getPlotNpcNumericId('ag19_borya_conductor')!,
     rewardItem: 'metro_ticket', rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],
     relationDelta: 10, xpReward: 40, moneyReward: 20,
@@ -153,26 +154,26 @@ export function generateMetroErrorLine(ctx: MaintContentCtx): void {
   const platform = stampMaintRoom(
     ctx.world, ctx.world.rooms.length, RoomType.CORRIDOR,
     pos.x, pos.y, 17, 9,
-    METRO_STATION_ROOM_NAME,
+    METRO_STATION_ROOM_DEF_ID,
     Tex.METAL, Tex.F_CONCRETE,
   );
   const depot = stampMaintRoom(
     ctx.world, ctx.world.rooms.length, RoomType.PRODUCTION,
     pos.x + 21, pos.y + 1, 12, 7,
-    METRO_DEPOT_ROOM_NAME,
+    METRO_DEPOT_ROOM_DEF_ID,
     Tex.PIPE, Tex.F_CONCRETE,
   );
   const errorPocket = stampMaintRoom(
     ctx.world, ctx.world.rooms.length, RoomType.COMMON,
     pos.x + 3, pos.y + 12, 13, 5,
-    METRO_ERROR_ROOM_NAME,
+    METRO_ERROR_ROOM_DEF_ID,
     Tex.DARK, Tex.F_CONCRETE,
   );
 
   for (let x = platform.x + platform.w; x <= depot.x; x++) openTile(ctx.world, x, platform.y + 4);
   for (let y = platform.y + platform.h; y <= errorPocket.y; y++) openTile(ctx.world, platform.x + 8, y);
 
-  for (const route of metroRoutesForRoom(METRO_STATION_ROOM_NAME)) {
+  for (const route of metroRoutesForRoom(METRO_STATION_ROOM_DEF_ID)) {
     const slot = route.panelSlot;
     const x = platform.x + 2 + slot * 3;
     setFeature(ctx.world, x, platform.y + 2, Feature.SCREEN);

@@ -1,6 +1,7 @@
 /* -- Липовый медугол желемыша (AG104) -------------------------- */
 /* Counterfeit treatment POI: warn, report, buy in, profit, steal. */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
@@ -130,7 +131,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest(DOCTOR_ID, NPC_DEFS[DOCTOR_ID], [
   {
     id: QUEST_BUY_TREATMENT,
-    giverNpcId: DOCTOR_ID,
+    giverId: getPlotNpcNumericId(DOCTOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Левин Мазник: «Тридцать пять рублей за курс желемышной мази. Не лечение, но очередь до утра вы не выдержите.»',
     targetItem: 'money', targetCount: 35,
@@ -143,7 +144,7 @@ registerSideQuest(DOCTOR_ID, NPC_DEFS[DOCTOR_ID], [
 registerSideQuest(RUNNER_ID, NPC_DEFS[RUNNER_ID], [
   {
     id: QUEST_TAKE_CUT,
-    giverNpcId: RUNNER_ID,
+    giverId: getPlotNpcNumericId(RUNNER_ID)!,
     type: QuestType.FETCH,
     desc: 'Клим Заготовщик: «Принесите зараженный гриб. Левин пустит его в мазь, а я отдам вашу долю без лишних фамилий.»',
     targetItem: 'infected_mushroom', targetCount: 1,
@@ -155,10 +156,10 @@ registerSideQuest(RUNNER_ID, NPC_DEFS[RUNNER_ID], [
 registerSideQuest(RELATIVE_ID, NPC_DEFS[RELATIVE_ID], [
   {
     id: QUEST_WARN_PATIENT,
-    giverNpcId: RELATIVE_ID,
+    giverId: getPlotNpcNumericId(RELATIVE_ID)!,
     type: QuestType.TALK,
     desc: 'Лина Подмарлевая: «Скажите Даше, что мазь желемышная. От меня она слышит только панику.»',
-    targetNpcId: PATIENT_ID,
+    targetNpcId: getPlotNpcNumericId(PATIENT_ID)!,
     rewardItem: 'bandage', rewardCount: 1,
     relationDelta: 12, xpReward: 45, moneyReward: 20,
   },
@@ -167,10 +168,10 @@ registerSideQuest(RELATIVE_ID, NPC_DEFS[RELATIVE_ID], [
 registerSideQuest(PATIENT_ID, NPC_DEFS[PATIENT_ID], [
   {
     id: QUEST_REPORT_MINISTRY,
-    giverNpcId: PATIENT_ID,
+    giverId: getPlotNpcNumericId(PATIENT_ID)!,
     type: QuestType.TALK,
     desc: 'Даша Подмарлевая: «Если справка липовая, отнесите жалобу Вере Пропусковой. Пусть окно хотя бы спросит состав.»',
-    targetNpcId: 'vera_propuskova',
+    targetNpcId: getPlotNpcNumericId('vera_propuskova')!,
     rewardItem: 'official_quarantine_clearance', rewardCount: 1,
     extraRewards: [{ defId: 'bandage', count: 2 }],
     relationDelta: 18, xpReward: 70, moneyReward: 35,

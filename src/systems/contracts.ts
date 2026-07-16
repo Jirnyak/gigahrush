@@ -82,7 +82,7 @@ interface ZhelemishNiiTarget {
   targetKey: string;
   themeTags: readonly string[];
   roomType: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   z?: number;
   danger: number;
 }
@@ -395,7 +395,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
     themeTags: ["living"],
     z: 100,
     roomType: RoomType.PRODUCTION,
-    roomName: 'Грибная прачечная первой смены',
+    roomDefId: 'Грибная прачечная первой смены',
     danger: 2,
   };
   return host.zhelemishNiiTarget;
@@ -573,7 +573,7 @@ function worldHasTaggedContainer(world: World, tag: string): boolean {
 }
 
 function roomStillMatchesQuest(world: World, q: Quest, room: Room): boolean {
-  if (q.targetRoomName !== undefined && room.name !== q.targetRoomName) return false;
+  if (q.targetRoomDefId !== undefined && room.defId !== q.targetRoomDefId && (room.defId || room.name !== q.targetRoomDefId)) return false;
   if (!roomMatchesQuestType(q, room)) return false;
   return !q.targetZoneTag
     || !worldHasTaggedContainer(world, q.targetZoneTag)
@@ -634,11 +634,11 @@ function resolveByRoomName(
   q: Quest,
   origin?: Pick<Entity, 'x' | 'y'>,
 ): QuestTargetRoomResolution | undefined {
-  if (!q.targetRoomName) return undefined;
+  if (!q.targetRoomDefId) return undefined;
   let best: Room | undefined;
   let bestScore = -Infinity;
   for (const room of world.rooms) {
-    if (!room || room.name !== q.targetRoomName || !roomMatchesQuestType(q, room)) continue;
+    if (!room || (room.defId !== q.targetRoomDefId && (room.defId || room.name !== q.targetRoomDefId)) || !roomMatchesQuestType(q, room)) continue;
     const score = roomDistanceScore(world, room, origin);
     if (score > bestScore) {
       best = room;
@@ -688,7 +688,7 @@ function publishContractCreated(
       rank: def.rank,
       targetItem: quest.targetItem,
       targetMonsterKind: quest.targetMonsterKind,
-      targetPlotNpcId: quest.targetPlotNpcId,
+      targetNpcId: quest.targetNpcId,
       rewardResourceId: def.rewardResourceId,
       rumorIds,
       ...questTargetEventData(quest),
@@ -704,7 +704,7 @@ function isCleanupTargetRoom(world: World, state: GameState, def: ContractDef, x
   if (!def.tags.includes('cleanup') || def.target.z !== state.currentZ) return false;
   const room = world.roomAt(x, y);
   if (!room) return false;
-  if (def.target.roomName && room.name !== def.target.roomName) return false;
+  if (def.target.roomDefId && room.name !== def.target.roomDefId) return false;
   if (def.target.roomType !== undefined && room.type !== def.target.roomType) return false;
   return true;
 }
@@ -784,7 +784,7 @@ function chooseZhelemishRoom(world: World, player: Entity, target: ZhelemishNiiT
 
   for (const room of world.rooms) {
     if (!room || room.w < 4 || room.h < 4) continue;
-    if (target.roomName && room.name !== target.roomName && target.kind === 'living_cellar') continue;
+    if (target.roomDefId && room.name !== target.roomDefId && target.kind === 'living_cellar') continue;
     const biologicalRoom = room.type === RoomType.PRODUCTION
       || room.type === RoomType.STORAGE
       || room.type === RoomType.BATHROOM
@@ -796,7 +796,8 @@ function chooseZhelemishRoom(world: World, player: Entity, target: ZhelemishNiiT
     const cy = room.y + room.h / 2;
     const distScore = Math.min(90000, world.dist2(player.x, player.y, cx, cy));
     const typeScore = room.type === target.roomType ? 30000 : room.type === RoomType.STORAGE ? 12000 : 0;
-    const nameScore = target.roomName && room.name === target.roomName ? 100000 : 0;
+    const isNameMatch = target.roomDefId && (room.defId === target.roomDefId || (!room.defId && room.name === target.roomDefId));
+    const nameScore = isNameMatch ? 100000 : 0;
     const score = nameScore + typeScore + distScore + room.w * room.h;
     if (score > bestScore) {
       best = room;
@@ -1035,13 +1036,13 @@ export function canCompleteGovnyakCourierEndpoint(
   if (!q.contractId || q.type !== QuestType.VISIT) return undefined;
   const def = contractById(q.contractId);
   if (!def || def.type !== QuestType.VISIT) return undefined;
-  if (q.targetRoomType === undefined && !def.target.roomName) return undefined;
+  if (q.targetRoomType === undefined && !def.target.roomDefId) return undefined;
   if (!isQuestTargetOnCurrentFloor(q, state)) return false;
 
   const room = world.roomAt(player.x, player.y);
   if (!room) return false;
   if (q.targetRoomType !== undefined && room.type !== q.targetRoomType) return false;
-  if (def.target.roomName && room.name !== def.target.roomName) return false;
+  if (def.target.roomDefId && room.name !== def.target.roomDefId) return false;
   return true;
 }
 

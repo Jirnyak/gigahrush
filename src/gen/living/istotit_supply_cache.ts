@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Istotit communal supply cache: share, steal, guard, report, barter -- */
 
 import {
@@ -108,7 +109,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 
 registerSideQuest(AGAFA_ID, NPC_DEFS[AGAFA_ID], [{
   id: 'ag89_share_water_with_neighbors',
-  giverNpcId: AGAFA_ID,
+  giverId: getPlotNpcNumericId(AGAFA_ID)!,
   type: QuestType.FETCH,
   desc: 'Агафья Свечная: «Принеси две бутылки воды в общий свечной запас. Раздадим у двери тем, кого сирена застала без фляги.»',
   targetItem: 'water', targetCount: 2,
@@ -119,7 +120,7 @@ registerSideQuest(AGAFA_ID, NPC_DEFS[AGAFA_ID], [{
 
 registerSideQuest(SAVVA_ID, NPC_DEFS[SAVVA_ID], [{
   id: 'ag89_guard_supply_door',
-  giverNpcId: SAVVA_ID,
+  giverId: getPlotNpcNumericId(SAVVA_ID)!,
   type: QuestType.KILL,
   desc: 'Савва Дверной: «Сборка трется у запасной двери. Убей одну, пока свечи не стали приманкой.»',
   targetMonsterKind: MonsterKind.SBORKA,
@@ -130,7 +131,7 @@ registerSideQuest(SAVVA_ID, NPC_DEFS[SAVVA_ID], [{
 
 registerSideQuest(MARKEL_ID, NPC_DEFS[MARKEL_ID], [{
   id: 'ag89_report_supply_hoarding',
-  giverNpcId: MARKEL_ID,
+  giverId: getPlotNpcNumericId(MARKEL_ID)!,
   type: QuestType.FETCH,
   desc: 'Маркел Обходной: «Неси список укрытия. Если запас прячут за свечами, будет акт о сокрытии припасов.»',
   targetItem: 'emergency_roster', targetCount: 1,
@@ -141,7 +142,7 @@ registerSideQuest(MARKEL_ID, NPC_DEFS[MARKEL_ID], [{
 
 registerSideQuest(LIDA_ID, NPC_DEFS[LIDA_ID], [{
   id: 'ag89_barter_wax_for_candle',
-  giverNpcId: LIDA_ID,
+  giverId: getPlotNpcNumericId(LIDA_ID)!,
   type: QuestType.FETCH,
   desc: 'Лида Восковая: «Один сургуч - одна истотитная свеча и кружка чая. Без обряда, по обмену.»',
   targetItem: 'seal_wax', targetCount: 1,

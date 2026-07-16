@@ -2,6 +2,7 @@
 /* Self-contained: NPC definition + quest + spawn + death curse.   */
 /* Registered automatically via registerSideQuest() at import.     */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
@@ -55,7 +56,7 @@ registerAuthoredNpc({
   quests: [
     {
       id: 'batushka_eggs',
-      giverNpcId: 'batushka',
+      giverId: getPlotNpcNumericId('batushka')!,
       type: QuestType.FETCH,
       desc: 'Батюшка: «Принеси три пасхальных яйца, чадо. Одним похристосуемся, второе отдадим детям, третье оставим дежурному у гермы.»',
       targetItem: 'easter_egg', targetCount: 3,
@@ -320,7 +321,7 @@ export function priestDeathCurse(
 registerContentEntityDeathHook({
   id: 'living_temple_priest_death_curse',
   onDeath(ctx) {
-    if (!ctx.killerIsPlayer || ctx.killed.plotNpcId !== 'batushka') return;
+    if (!ctx.killerIsPlayer || ctx.killed.id !== getPlotNpcNumericId('batushka')) return;
     priestDeathCurse(ctx.world, ctx.entities, ctx.nextEntityId, ctx.killed.x, ctx.killed.y);
     ctx.state.msgs.push(msg('☠ ПРОКЛЯТИЕ БАТЮШКИ! 666 тварей вырвались из ада!', ctx.state.time, '#f00'));
     ctx.state.msgs.push(msg('На миникарте проступает пентаграмма...', ctx.state.time, '#a00'));

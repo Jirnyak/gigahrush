@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Monster 13: Белая Прислушка, local white-slime escort risk -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -20,8 +21,8 @@ export const BELAYA_PRISLUSHKA_ZONE_HUD = 63;
 
 const CONTENT_TAG = BELAYA_PRISLUSHKA_ID;
 const OUTCOME_EVENT_TAG = 'belaya_prislushka_outcome';
-const ROOM_NAME = 'Белая Прислушка';
-const SOURCE_ROOM_NAME = 'Слуховая кладовая Прислушки';
+const ROOM_DEF_ID = 'Белая Прислушка';
+const SOURCE_ROOM_DEF_ID = 'Слуховая кладовая Прислушки';
 const MAIN_W = 17;
 const ROOM_H = 13;
 const SOURCE_W = 7;
@@ -139,10 +140,10 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest(VICTIM_ID, NPC_DEFS[VICTIM_ID], [
   {
     id: RESCUE_QUEST,
-    giverNpcId: VICTIM_ID,
+    giverId: getPlotNpcNumericId(VICTIM_ID)!,
     type: QuestType.TALK,
     desc: 'Аня Прислушка: «У вас полчаса, пока я не дошла до двери. Встаньте между мной и белым следом, назовите меня по имени и уведите от порога.»',
-    targetNpcId: VICTIM_ID,
+    targetNpcId: getPlotNpcNumericId(VICTIM_ID)!,
     targetFloorZ: 100,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
@@ -165,7 +166,7 @@ registerSideQuest(VICTIM_ID, NPC_DEFS[VICTIM_ID], [
 registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [
   {
     id: CLEAR_QUEST,
-    giverNpcId: LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Степан Тихая Дверь: «Закрой белый источник герметиком. Не жги при Ане: сначала убери взгляд, потом закрывай пятно.»',
     targetItem: 'sealant_tube',
@@ -191,7 +192,7 @@ registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [
 registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
   {
     id: SAMPLE_QUEST,
-    giverNpcId: SCIENTIST_ID,
+    giverId: getPlotNpcNumericId(SCIENTIST_ID)!,
     type: QuestType.FETCH,
     desc: 'Ира Матовая Проба: «Возьмите белый соскоб из матового лотка и сразу верните мне. Лоток открывайте на вдохе, потом крышка и назад.»',
     targetItem: 'slime_sample_white',
@@ -218,7 +219,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
 registerSideQuest(WITNESS_ID, NPC_DEFS[WITNESS_ID], [
   {
     id: LOST_QUEST,
-    giverNpcId: WITNESS_ID,
+    giverId: getPlotNpcNumericId(WITNESS_ID)!,
     type: QuestType.FETCH,
     desc: 'Ефим Тихий Акт: «Принеси расписку со стола. Если бумага подписана, Аня считается ушедшей сама, а мы считаем только последствия.»',
     targetItem: 'voluntary_receipt',
@@ -312,7 +313,7 @@ function handleBelayaPrislushkaOutcome(state: GameState, event: WorldEvent): voi
       sourceEventId: event.id,
       sideQuestId,
       outcome: outcome.outcome,
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       rumorIds: ['slime_white_look_away'],
     },
   });
@@ -615,8 +616,8 @@ function generateBelayaPrislushka(
 ): { nextRoomId: number } {
   const pos = findOrigin(world, zcx, zcy);
   carveShell(world, pos.x, pos.y);
-  const main = carveRoom(world, nextRoomId++, pos.x, pos.y, MAIN_W, ROOM_NAME, RoomType.MEDICAL);
-  const source = carveRoom(world, nextRoomId++, pos.x + MAIN_W + 1, pos.y, SOURCE_W, SOURCE_ROOM_NAME, RoomType.STORAGE);
+  const main = carveRoom(world, nextRoomId++, pos.x, pos.y, MAIN_W, ROOM_DEF_ID, RoomType.MEDICAL);
+  const source = carveRoom(world, nextRoomId++, pos.x + MAIN_W + 1, pos.y, SOURCE_W, SOURCE_ROOM_DEF_ID, RoomType.STORAGE);
   addDoor(world, pos.x + MAIN_W, pos.y + Math.floor(ROOM_H / 2), main, source, DoorState.CLOSED);
   connectSouth(world, main);
   decorate(world, main, source, entities, nextId);
@@ -630,8 +631,8 @@ function generateBelayaPrislushka(
   spawnNpc(world, entities, nextId, WITNESS_ID, main.x + 3, main.y + 2, Math.PI / 2, true);
   seedContainers(world, main, source, scientist, liquidator);
 
-  genLog(`[M13] ${ROOM_NAME} at (${main.x}, ${main.y}) room #${main.id}, source #${source.id}`);
+  genLog(`[M13] ${ROOM_DEF_ID} at (${main.x}, ${main.y}) room #${main.id}, source #${source.id}`);
   return { nextRoomId };
 }
 
-registerZoneContent(BELAYA_PRISLUSHKA_ZONE_HUD, ROOM_NAME, generateBelayaPrislushka);
+registerZoneContent(BELAYA_PRISLUSHKA_ZONE_HUD, ROOM_DEF_ID, generateBelayaPrislushka);

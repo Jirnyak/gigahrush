@@ -1,4 +1,5 @@
 /* ── Олевия Кибер — side quest content module ──────────────── */
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { Faction, Occupation, QuestType } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 
@@ -34,7 +35,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('olevia_kiber', NPC_DEF, [
   {
     id: 'olevia_batteries',
-    giverNpcId: 'olevia_kiber',
+    giverId: getPlotNpcNumericId('olevia_kiber')!,
     type: QuestType.FETCH,
     desc: 'Олевия Кибер: «Для завершения испытаний внешнего нейроинтерфейса нужны источники питания. Принеси 3 батарейки «Крона».»',
     targetItem: 'krona_battery', targetCount: 3,

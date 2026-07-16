@@ -1,5 +1,6 @@
 /* ── Design z: НИИ слизи ─────────────────────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -294,7 +295,7 @@ const SLIME_NII_CABINET_STRIPS: readonly SlimeNiiCabinetStripSpec[] = [
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_director_larisa', NPC_DEFS.slime_nii_director_larisa, [
   {
     id: 'slime_nii_live_green_sample',
-    giverNpcId: 'slime_nii_director_larisa',
+    giverId: getPlotNpcNumericId('slime_nii_director_larisa')!,
     type: QuestType.FETCH,
     desc: 'Лариса Гладкая: «Принесите зелёную пробу из гермокамеры. Пломба важнее героизма: открытая банка уже спорит с протоколом.»',
     targetItem: 'slime_sample_green',
@@ -314,7 +315,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_director_larisa', N
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_liquidator_voron', NPC_DEFS.slime_nii_liquidator_voron, [
   {
     id: 'slime_nii_black_camera_cleanup',
-    giverNpcId: 'slime_nii_liquidator_voron',
+    giverId: getPlotNpcNumericId('slime_nii_liquidator_voron')!,
     type: QuestType.KILL,
     desc: 'Ворон Чистый: «В чёрной камере шевелится ошибка. Откройте отсек, уберите её и не дайте учёным назвать это наблюдением.»',
     targetMonsterKind: MonsterKind.CHERNOSLIZ,
@@ -334,10 +335,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_liquidator_voron', 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_volunteer_mitya', NPC_DEFS.slime_nii_volunteer_mitya, [
   {
     id: 'slime_nii_volunteer_witness',
-    giverNpcId: 'slime_nii_volunteer_mitya',
+    giverId: getPlotNpcNumericId('slime_nii_volunteer_mitya')!,
     type: QuestType.TALK,
     desc: 'Митя Испытуемый: «Поговорите с Ларисой. Пусть она скажет вслух, что я человек, а не тара с пульсом.»',
-    targetPlotNpcId: 'slime_nii_director_larisa',
+    targetNpcId: getPlotNpcNumericId('slime_nii_director_larisa')!,
     rewardItem: 'clean_health_cert',
     rewardCount: 1,
     relationDelta: 18,
@@ -351,7 +352,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_volunteer_mitya', N
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'slime_nii_secretary_ada', NPC_DEFS.slime_nii_secretary_ada, [
   {
     id: 'slime_nii_manifest_choice',
-    giverNpcId: 'slime_nii_secretary_ada',
+    giverId: getPlotNpcNumericId('slime_nii_secretary_ada')!,
     type: QuestType.FETCH,
     desc: 'Ада Журнальная: «Верните ведомость утечки НИИ из холодного шкафа. Я дам обходной талон, а рынок потеряет одну красивую ложь.»',
     targetItem: 'nii_contraband_manifest',
@@ -372,7 +373,7 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initWorld(world);
     const rooms = buildRooms(world);
@@ -838,7 +839,7 @@ function decorateMicroRoom(world: World, room: Room, serial: number): void {
 
 function isSlimeNiiAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

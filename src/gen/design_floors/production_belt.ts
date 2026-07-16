@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -53,7 +54,7 @@ const CONTENT_TAG = 'floor14_production_belt';
 export interface ProductionBeltLineDef {
   id: string;
   factoryId: string;
-  roomName: string;
+  roomDefId: string;
   outputTags: readonly string[];
   state: 'repairable' | 'audited' | 'bad_batch';
 }
@@ -100,21 +101,21 @@ export const PRODUCTION_BELT_FACTORY_LINES: readonly ProductionBeltLineDef[] = [
   {
     id: 'prod_restore_line',
     factoryId: 'metal_shop',
-    roomName: 'Цех металла: линия восстановления',
+    roomDefId: 'Цех металла: линия восстановления',
     outputTags: ['tools', 'faction'],
     state: 'repairable',
   },
   {
     id: 'prod_charge_line',
     factoryId: 'utility_room',
-    roomName: 'Диспетчерская зарядки: линия ячеек',
+    roomDefId: 'Диспетчерская зарядки: линия ячеек',
     outputTags: ['utility', 'room'],
     state: 'audited',
   },
   {
     id: 'prod_illegal_ammo',
     factoryId: 'illegal_ammo_smelter',
-    roomName: 'Патронная плавильня: нелегальная смена',
+    roomDefId: 'Патронная плавильня: нелегальная смена',
     outputTags: ['ammo', 'weapon', 'illegal'],
     state: 'bad_batch',
   },
@@ -286,10 +287,10 @@ export function registerProductionBeltContent(): void {
 
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_foreman_galina', FOREMAN_DEF, [{
     id: 'prod_worker_escort',
-    giverNpcId: 'prod_foreman_galina',
+    giverId: getPlotNpcNumericId('prod_foreman_galina')!,
     type: QuestType.TALK,
     desc: 'Галина: «Найди Егора {dir} и доведи до проходной хотя бы словами. Если он пропадет, смену закроют вместе с людьми.»',
-    targetNpcId: 'prod_worker_egor',
+    targetNpcId: getPlotNpcNumericId('prod_worker_egor')!,
     rewardItem: 'water',
     rewardCount: 2,
     extraRewards: [{ defId: 'bread', count: 2 }],
@@ -300,7 +301,7 @@ export function registerProductionBeltContent(): void {
 
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_mechanic_rustam', MECHANIC_DEF, [{
     id: 'prod_restore_line',
-    giverNpcId: 'prod_mechanic_rustam',
+    giverId: getPlotNpcNumericId('prod_mechanic_rustam')!,
     type: QuestType.FETCH,
     desc: 'Рустам: «Две шестерни в восстановительный вал. Линия снова даст комплект, а не искры.»',
     targetItem: 'gear',
@@ -315,7 +316,7 @@ export function registerProductionBeltContent(): void {
 
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_worker_egor', WORKER_DEF, [{
     id: 'prod_steal_crate',
-    giverNpcId: 'prod_worker_egor',
+    giverId: getPlotNpcNumericId('prod_worker_egor')!,
     type: QuestType.FETCH,
     desc: 'Егор: «Вытащи энергоячейку из выходного шкафа зарядки. Без нее опасную смену остановит ревизия, а не похороны.»',
     targetItem: 'ammo_energy',
@@ -330,7 +331,7 @@ export function registerProductionBeltContent(): void {
 
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'prod_auditor_bot', AUDITOR_DEF, [{
     id: 'prod_bad_batch',
-    giverNpcId: 'prod_auditor_bot',
+    giverId: getPlotNpcNumericId('prod_auditor_bot')!,
     type: QuestType.FETCH,
     desc: 'Аудитор-БОТ 14: «Две зеленые единицы из карантина. Выдать наверх или списать - решит акт, не желудок.»',
     targetItem: 'green_briquette',
@@ -411,11 +412,11 @@ function buildRooms(world: World): ProductionBeltRooms {
   const gate = namedRoom(world, RoomType.COMMON, 414, 508, 15, 7, 'Проходная смены 14', Tex.PANEL, Tex.F_LINO);
   const foreman = namedRoom(world, RoomType.OFFICE, 442, 496, 17, 11, 'Контора нормировщика', Tex.PANEL, Tex.F_LINO);
   const lockers = namedRoom(world, RoomType.STORAGE, 462, 496, 15, 11, 'Шкафчики ремонтной смены', Tex.METAL, Tex.F_CONCRETE);
-  const metalLine = namedRoom(world, RoomType.PRODUCTION, 480, 490, 30, 17, PRODUCTION_BELT_FACTORY_LINES[0].roomName, Tex.PIPE, Tex.F_CONCRETE);
+  const metalLine = namedRoom(world, RoomType.PRODUCTION, 480, 490, 30, 17, PRODUCTION_BELT_FACTORY_LINES[0].roomDefId, Tex.PIPE, Tex.F_CONCRETE);
   const loadingDock = namedRoom(world, RoomType.STORAGE, 514, 496, 22, 11, 'Погрузочная рампа выхода', Tex.METAL, Tex.F_CONCRETE);
   const shelter = namedRoom(world, RoomType.COMMON, 540, 496, 19, 11, 'Комната ожидания смены', Tex.CONCRETE, Tex.F_LINO);
-  const chargeLine = namedRoom(world, RoomType.PRODUCTION, 442, 516, 28, 14, PRODUCTION_BELT_FACTORY_LINES[1].roomName, Tex.PIPE, Tex.F_CONCRETE);
-  const ammoLine = namedRoom(world, RoomType.PRODUCTION, 474, 516, 26, 14, PRODUCTION_BELT_FACTORY_LINES[2].roomName, Tex.METAL, Tex.F_CONCRETE);
+  const chargeLine = namedRoom(world, RoomType.PRODUCTION, 442, 516, 28, 14, PRODUCTION_BELT_FACTORY_LINES[1].roomDefId, Tex.PIPE, Tex.F_CONCRETE);
+  const ammoLine = namedRoom(world, RoomType.PRODUCTION, 474, 516, 26, 14, PRODUCTION_BELT_FACTORY_LINES[2].roomDefId, Tex.METAL, Tex.F_CONCRETE);
   const quarantine = namedRoom(world, RoomType.STORAGE, 504, 516, 23, 12, 'Карантин брака: зеленая партия', Tex.ROTTEN, Tex.F_WATER);
   const auditOffice = namedRoom(world, RoomType.OFFICE, 531, 516, 18, 12, 'Пост аудита БОТ-14', Tex.MARBLE, Tex.F_TILE);
   const exitDock = namedRoom(world, RoomType.STORAGE, 569, 508, 17, 7, 'Выходной док подъемников', Tex.METAL, Tex.F_CONCRETE);
@@ -881,12 +882,12 @@ function addProductionBayCell(world: World, mask: Uint8Array, spec: ProductionBe
   }
 }
 
-function productionBeltAuthoredOwner(roomName: string): TerritoryOwner | undefined {
-  if (roomName.startsWith('Гражданский миништаб смены 14:')) return ZoneFaction.CITIZEN;
-  if (roomName.startsWith('Ликвидаторский штаб ленты 14:')) return ZoneFaction.LIQUIDATOR;
-  if (roomName.startsWith('Скрытый культовый миништаб:')) return ZoneFaction.CULTIST;
-  if (roomName.startsWith('Научный миништаб контроля брака:')) return ZoneFaction.SCIENTIST;
-  if (roomName.startsWith('Дикий миништаб ночной тары:')) return ZoneFaction.WILD;
+function productionBeltAuthoredOwner(roomDefId: string): TerritoryOwner | undefined {
+  if (roomDefId.startsWith('Гражданский миништаб смены 14:')) return ZoneFaction.CITIZEN;
+  if (roomDefId.startsWith('Ликвидаторский штаб ленты 14:')) return ZoneFaction.LIQUIDATOR;
+  if (roomDefId.startsWith('Скрытый культовый миништаб:')) return ZoneFaction.CULTIST;
+  if (roomDefId.startsWith('Научный миништаб контроля брака:')) return ZoneFaction.SCIENTIST;
+  if (roomDefId.startsWith('Дикий миништаб ночной тары:')) return ZoneFaction.WILD;
   return undefined;
 }
 
@@ -943,7 +944,7 @@ function isProductionBeltAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Производственный пояс: работник') === true &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -1820,7 +1821,7 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   decorateLineRooms(world, rooms);
 
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   const containers = populateRooms(world, entities, nextId, rooms);
   const productionState = createProductionBeltState(rooms, containers);
   registerProductionBeltRouteCues(world, rooms, containers);

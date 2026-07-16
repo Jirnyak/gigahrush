@@ -184,7 +184,7 @@ function publishLichinkaEvent(
     tags: [TAG_SITE, 'monster', TAG_SLIME, TAG_UV, TAG_CLEANUP, phase, phase === 'witness_removed' ? TAG_WITNESS : 'maintenance', 'slime'],
     data: {
       sourceEventId: source.id,
-      roomName: room?.name,
+      roomDefId: room?.name,
       hazardId: ctx.hazardId,
       sealed: ctx.sealed,
       burned: ctx.burned,

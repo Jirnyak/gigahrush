@@ -12,9 +12,8 @@ export interface NpcSpecialRoutineTick {
 }
 
 function routineForEntity(e: Entity): NpcSpecialRoutineDef | undefined {
-  const plotNpcId = e.plotNpcId;
-  if (!plotNpcId) return undefined;
-  return getNpcSpecialRoutine(getNpcPackageByPlotNpcId(plotNpcId)?.runtime?.specialRoutineId);
+  if (e.id === undefined) return undefined;
+  return getNpcSpecialRoutine(getNpcPackageByPlotNpcId(e.id)?.runtime?.specialRoutineId);
 }
 
 export function tickNpcSpecialRoutine(e: Entity, clock: GameClock): NpcSpecialRoutineTick {

@@ -59,7 +59,7 @@ export interface BathhouseThermalBands {
 
 export interface BathhouseRouteNode {
   id: BathhouseDecisionId;
-  roomName: string;
+  roomDefId: string;
   roomId: number;
   x: number;
   y: number;
@@ -163,7 +163,7 @@ export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathh
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initWorld(world);
     const field = solveHarmonicBathhouseField(seed);
@@ -996,7 +996,7 @@ function isHarmonicBathhouseAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Гармоническая баня:') === true &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -1363,7 +1363,7 @@ function spawnMonster(
 function decisionNode(id: BathhouseDecisionId, room: Room, tags: readonly string[]): BathhouseRouteNode {
   return {
     id,
-    roomName: room.name,
+    roomDefId: room.name,
     roomId: room.id,
     x: room.x + room.w / 2,
     y: room.y + room.h / 2,

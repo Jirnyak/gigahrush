@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Матка Документов: capped Ministry paper-boss room puzzle --- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -63,10 +64,10 @@ const CLERK_DEF: PlotNpcDef = {
 registerSideQuest(CLERK_ID, CLERK_DEF, [
   {
     id: QUEST_FIND_ROOM,
-    giverNpcId: CLERK_ID,
+    giverId: getPlotNpcNumericId(CLERK_ID)!,
     type: QuestType.VISIT,
     desc: 'Нина Отменная: «Найдите стол Матки Документов {dir}. Бумагу там надо гасить формой, а не очередью.»',
-    targetRoomName: MATKA_DOKUMENTOV_ROOM,
+    targetRoomDefId: MATKA_DOKUMENTOV_ROOM,
     targetRoomType: RoomType.OFFICE,
     targetFloorZ: 30,
     targetZoneTag: 'documents',
@@ -78,7 +79,7 @@ registerSideQuest(CLERK_ID, CLERK_DEF, [
   },
   {
     id: QUEST_BRING_ORDER,
-    giverNpcId: CLERK_ID,
+    giverId: getPlotNpcNumericId(CLERK_ID)!,
     type: QuestType.FETCH,
     desc: 'Нина Отменная: «Принесите приказ без подписи из маточного стола. Если сможете, сначала погасите форму отмены.»',
     targetItem: 'unsigned_order', targetCount: 1,
@@ -247,7 +248,7 @@ function publishMatkaEvent(
     tags: [...BASE_TAGS, phase, ...source.tags].slice(0, 8),
     data: {
       sourceEventId: source.id,
-      roomName: room?.name,
+      roomDefId: room?.name,
       activeThreats: getActiveThreats(ctx).length,
       totalSpawned: ctx.totalSpawned,
       cap: MATKA_DOKUMENTOV_THREAT_CAP,

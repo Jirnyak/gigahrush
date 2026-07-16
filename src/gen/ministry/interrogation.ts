@@ -1,5 +1,6 @@
 /* ── Допросная — Ministry admin POI with ambush ───────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -70,7 +71,7 @@ const WITNESS_RIMMA_DEF: PlotNpcDef = {
 registerSideQuest('lidiya_protokolnaya', LIDIYA_DEF, [
   {
     id: 'interrogation_bandages',
-    giverNpcId: 'lidiya_protokolnaya',
+    giverId: getPlotNpcNumericId('lidiya_protokolnaya')!,
     type: QuestType.FETCH,
     desc: 'Лидия Протокольная: «Три бинта в допросную. Бумага сегодня режет свидетелей.»',
     targetItem: 'bandage', targetCount: 3,
@@ -80,7 +81,7 @@ registerSideQuest('lidiya_protokolnaya', LIDIYA_DEF, [
   },
   {
     id: 'interrogation_shadow_protocol',
-    giverNpcId: 'lidiya_protokolnaya',
+    giverId: getPlotNpcNumericId('lidiya_protokolnaya')!,
     type: QuestType.KILL,
     desc: 'Лидия Протокольная: «В допросной сорвался теневик. Убейте его, пока он не подписал нас.»',
     targetMonsterKind: MonsterKind.SHADOW,

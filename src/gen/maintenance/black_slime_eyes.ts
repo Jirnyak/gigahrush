@@ -158,7 +158,7 @@ function publishBlackSlimeEvent(
     tags: [TAG_SITE, TAG_SLIME, 'slime', phase, 'maintenance', ...source.tags].slice(0, 8),
     data: {
       sourceEventId: source.id,
-      roomName: room?.name,
+      roomDefId: room?.name,
       spawnedEyes: ctx.eyeIds.length,
       sealed: ctx.sealed,
       sampleRecovered: ctx.sampleRecovered,

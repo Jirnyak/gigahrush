@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from './data/npc_packages';
 import { zForBaseFloor } from './data/design_floors';
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
 import './index.css';
@@ -2827,7 +2828,7 @@ interface SmokeDebugSnapshot {
   questCount: number;
   currentObjectiveLine: string;
   currentObjectiveSource: string;
-  currentObjectiveTargetPlotNpcId: string;
+  currentObjectiveTargetPlotNpcId: number | undefined;
   canInteractAhead: boolean;
   interactionPrompt: string;
   interactionPromptEnabled: boolean;
@@ -2952,7 +2953,7 @@ function smokeSnapshot(): SmokeDebugSnapshot {
       questCount: state.quests.length,
       currentObjectiveLine: objective?.line ?? '',
       currentObjectiveSource: objective?.source ?? '',
-      currentObjectiveTargetPlotNpcId: objective?.targetPlotNpcId ?? '',
+      currentObjectiveTargetPlotNpcId: objective?.targetNpcId,
       canInteractAhead: interaction !== null,
       interactionPrompt: interaction?.prompt.trim() ?? '',
       interactionPromptEnabled: uiElementEnabled('interaction_prompt'),
@@ -4337,10 +4338,10 @@ function isActiveKillQuestTarget(e: Entity): boolean {
     if (q.done || q.type !== QuestType.KILL) continue;
     if (e.type === EntityType.MONSTER) {
       if (q.targetMonsterKind === e.monsterKind) return true;
-      if (q.targetMonsterKind === undefined && q.targetNpcId === undefined && q.targetPlotNpcId === undefined) return true;
+      if (q.targetMonsterKind === undefined && q.targetNpcId === undefined && q.targetNpcId === undefined) return true;
     } else if (e.type === EntityType.NPC) {
       if (q.targetNpcId === e.id) return true;
-      if (q.targetPlotNpcId && e.plotNpcId === q.targetPlotNpcId) return true;
+      if (q.targetNpcId && e.id === q.targetNpcId) return true;
     }
   }
   return false;
@@ -4432,7 +4433,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
-    if (e.plotNpcId) notifyNpcKill(e.plotNpcId, state);
+    if (e.id) notifyNpcKill(e.id, state);
   }
   const contentDeath = runContentEntityDeathHooks({ world, entities, player, state, nextEntityId, killed: e, killerIsPlayer });
   if (contentDeath.worldChanged) updateWorldData(world);
@@ -4946,8 +4947,8 @@ function checkRestart(): void {
   }
 }
 
-function movePlayerToMetroRoom(roomName: string): boolean {
-  const room = world.getRoomByName(roomName);
+function movePlayerToMetroRoom(roomDefId: string): boolean {
+  const room = world.getRoomByName(roomDefId);
   if (!room) return false;
 
   for (let y = room.y + 1; y < room.y + room.h - 1; y++) {
@@ -6074,8 +6075,8 @@ function normalizeQuestTargets(q: Quest, raw: Record<string, unknown>): void {
   if (isValidZ(raw.targetFloorZ)) q.targetFloorZ = raw.targetFloorZ;
   const targetRoomType = normalizeRoomType(raw.targetRoomType);
   if (targetRoomType !== undefined) q.targetRoomType = targetRoomType;
-  const targetRoomName = cleanSaveText(raw.targetRoomName, '', 96);
-  if (targetRoomName) q.targetRoomName = targetRoomName;
+  const targetRoomDefId = cleanSaveText(raw.targetRoomDefId, '', 96);
+  if (targetRoomDefId) q.targetRoomDefId = targetRoomDefId;
   const targetZoneTag = cleanSaveText(raw.targetZoneTag, '', 48);
   if (targetZoneTag) q.targetZoneTag = targetZoneTag;
   q.targetRoute = normalizeQuestTargetRoute(raw.targetRoute);
@@ -6090,8 +6091,12 @@ function normalizeQuestTargets(q: Quest, raw: Record<string, unknown>): void {
   }
   const targetNpcName = cleanSaveText(raw.targetNpcName, '', 96);
   if (targetNpcName) q.targetNpcName = targetNpcName;
-  const targetPlotNpcId = cleanSaveText(raw.targetPlotNpcId, '', 64);
-  if (targetPlotNpcId) q.targetPlotNpcId = targetPlotNpcId;
+  if (typeof raw.targetNpcId === 'number' && !Number.isNaN(raw.targetNpcId)) {
+    q.targetNpcId = clampInt(raw.targetNpcId, 0, 0, 1_000_000);
+  } else if (typeof raw.targetNpcId === 'string' && raw.targetNpcId.length > 0) {
+    const numId = getPlotNpcNumericId(raw.targetNpcId)!;
+    if (numId !== undefined) q.targetNpcId = numId;
+  }
 }
 
 function normalizeQuestRewards(q: Quest, raw: Record<string, unknown>): void {
@@ -6138,8 +6143,12 @@ function normalizeQuestEvents(q: Quest, raw: Record<string, unknown>): void {
   q.eventSeverity = normalizeEventSeverity(raw.eventSeverity);
   const eventTargetName = cleanSaveText(raw.eventTargetName);
   if (eventTargetName) q.eventTargetName = eventTargetName;
-  const failOnNpcDeathPlotId = cleanSaveText(raw.failOnNpcDeathPlotId, '', 64);
-  if (failOnNpcDeathPlotId) q.failOnNpcDeathPlotId = failOnNpcDeathPlotId;
+  if (typeof raw.failOnNpcDeathId === 'number' && !Number.isNaN(raw.failOnNpcDeathId)) {
+    q.failOnNpcDeathId = clampInt(raw.failOnNpcDeathId, 0, 0, 1_000_000);
+  } else if (typeof raw.failOnNpcDeathId === 'string' && raw.failOnNpcDeathId.length > 0) {
+    const numId = getPlotNpcNumericId(raw.failOnNpcDeathId);
+    if (numId !== undefined) q.failOnNpcDeathId = numId;
+  }
   q.abandonsSideQuestIds = normalizeStringArray(raw.abandonsSideQuestIds, 12, 96);
 }
 
@@ -6161,9 +6170,9 @@ function normalizeQuestTimeLimit(q: Quest, raw: Record<string, unknown>, nowMinu
 function isQuestValid(q: Quest): boolean {
   if (!q.done) {
     if (q.type === QuestType.FETCH && !q.targetItem) return false;
-    if (q.type === QuestType.VISIT && q.targetRoom === undefined && q.targetRoomName === undefined && q.targetRoute === undefined && q.visitFloorZ === undefined) return false;
-    if (q.type === QuestType.KILL && q.targetMonsterKind === undefined && !q.targetPlotNpcId && q.killNeeded === undefined) return false;
-    if (q.type === QuestType.TALK && q.targetNpcId === undefined && !q.targetPlotNpcId) return false;
+    if (q.type === QuestType.VISIT && q.targetRoom === undefined && q.targetRoomDefId === undefined && q.targetRoute === undefined && q.visitFloorZ === undefined) return false;
+    if (q.type === QuestType.KILL && q.targetMonsterKind === undefined && !q.targetNpcId && q.killNeeded === undefined) return false;
+    if (q.type === QuestType.TALK && q.targetNpcId === undefined && !q.targetNpcId) return false;
   }
   return true;
 }
@@ -6184,6 +6193,13 @@ function normalizeQuest(raw: unknown, nowMinutes: number): Quest | null {
     desc,
     done,
   };
+  
+  if (typeof raw.giverPlotNpcId === 'number' && !Number.isNaN(raw.giverPlotNpcId)) {
+    q.giverId = clampInt(raw.giverPlotNpcId, 0, 0, 1_000_000);
+  } else if (typeof raw.giverPlotNpcId === 'string' && raw.giverPlotNpcId.length > 0) {
+    const numId = getPlotNpcNumericId(raw.giverPlotNpcId)!;
+    if (numId !== undefined) q.giverId = numId;
+  }
 
   normalizeQuestTargets(q, raw);
   normalizeQuestRewards(q, raw);
@@ -7463,7 +7479,7 @@ function activateNpcMainSelection(npc: Entity | undefined): void {
     default:
       activateNpcCustomMenuOption({
         state, player, npc, entities,
-        roomNameResolver: (x, y) => world.roomAt(x, y)?.name
+        roomDefIdResolver: (x, y) => world.roomAt(x, y)?.name
       }, option.id);
       break;
   }

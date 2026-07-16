@@ -52,7 +52,7 @@ function restoreGlobalProperty(name: 'navigator' | 'performance' | 'window', des
 
 function ambientTemplate(id: number, x: number, y: number): Entity {
   return {
-    id,
+    id: -1,
     type: EntityType.NPC,
     x,
     y,

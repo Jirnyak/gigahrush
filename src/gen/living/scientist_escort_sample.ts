@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── AG72: scientist sample route, escort-like side quest ─────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -151,10 +152,10 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
   {
     id: CHECKPOINT_QUEST,
-    giverNpcId: SCIENTIST_ID,
+    giverId: getPlotNpcNumericId(SCIENTIST_ID)!,
     type: QuestType.TALK,
     desc: 'Ира Пробиркина: «Доведите меня до Павла у пробной. Сначала его допуск и зачистка коридора, потом ключ и пробирки.»',
-    targetNpcId: CHECKPOINT_ID,
+    targetNpcId: getPlotNpcNumericId(CHECKPOINT_ID)!,
     targetFloorZ: 100,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: 'ag72_sample_checkpoint',
@@ -166,12 +167,12 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
     xpReward: 45,
     moneyReward: 30,
     spawnMonstersOnAccept: 3,
-    failOnNpcDeathPlotId: SCIENTIST_ID,
+    failOnNpcDeathId: getPlotNpcNumericId(SCIENTIST_ID)!,
     eventTags: EVENT_TAGS,
   },
   {
     id: DELIVER_QUEST,
-    giverNpcId: SCIENTIST_ID,
+    giverId: getPlotNpcNumericId(SCIENTIST_ID)!,
     type: QuestType.FETCH,
     desc: 'Ира Пробиркина: «Теперь ключ есть. Вынесите белую пробу из запертой комнаты и верните мне запечатанной. Грязную или липовую можно сдать, но доверие не вернётся.»',
     targetItem: 'slime_sample_white',
@@ -189,7 +190,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
     requiresSideQuestDone: CHECKPOINT_QUEST,
     blockedBySideQuestIds: branchBlockers(DELIVER_QUEST),
     abandonsSideQuestIds: branchBlockers(DELIVER_QUEST),
-    failOnNpcDeathPlotId: SCIENTIST_ID,
+    failOnNpcDeathId: getPlotNpcNumericId(SCIENTIST_ID)!,
     eventTags: EVENT_TAGS,
     eventData: { branch: 'deliver_white_to_nii', sealed: true, witnessRequired: true, rumorIds: ['lead_living_white_sample_shift'] },
   },
@@ -198,7 +199,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
 registerSideQuest(CHECKPOINT_ID, NPC_DEFS[CHECKPOINT_ID], [
   {
     id: REPORT_QUEST,
-    giverNpcId: CHECKPOINT_ID,
+    giverId: getPlotNpcNumericId(CHECKPOINT_ID)!,
     type: QuestType.FETCH,
     desc: 'Павел Пропускной: «Кривая белая проба не товар. Несите её мне, я закрою доступ рапортом о нарушении хранения, пока коридор не начал спорить голосами.»',
     targetItem: 'slime_sample_contaminated',
@@ -224,7 +225,7 @@ registerSideQuest(CHECKPOINT_ID, NPC_DEFS[CHECKPOINT_ID], [
 registerSideQuest(BROKER_ID, NPC_DEFS[BROKER_ID], [
   {
     id: SELL_QUEST,
-    giverNpcId: BROKER_ID,
+    giverId: getPlotNpcNumericId(BROKER_ID)!,
     type: QuestType.FETCH,
     desc: 'Лера Тихая Проба: «Принесёшь белую пробу мне, а не Ире, получишь деньги и расписку. НИИ потом назовёт это пропажей.»',
     targetItem: 'slime_sample_white',
@@ -250,7 +251,7 @@ registerSideQuest(BROKER_ID, NPC_DEFS[BROKER_ID], [
 registerSideQuest(FORGER_ID, NPC_DEFS[FORGER_ID], [
   {
     id: FAKE_QUEST,
-    giverNpcId: FORGER_ID,
+    giverId: getPlotNpcNumericId(FORGER_ID)!,
     type: QuestType.FETCH,
     desc: 'Егор Бирочник: «Принеси липовую пробу с правильной биркой. Я закрою акт так, будто риск был научным.»',
     targetItem: 'slime_sample_fake',
@@ -272,7 +273,7 @@ registerSideQuest(FORGER_ID, NPC_DEFS[FORGER_ID], [
   },
   {
     id: HIDE_QUEST,
-    giverNpcId: FORGER_ID,
+    giverId: getPlotNpcNumericId(FORGER_ID)!,
     type: QuestType.FETCH,
     desc: 'Егор Бирочник: «Кривую белую пробу можно спрятать под аудитом. НИИ увидит бумагу, рынок увидит тишину, а вы увидите, как быстро кончается доверие.»',
     targetItem: 'slime_sample_contaminated',
@@ -482,7 +483,7 @@ function spawnNpc(
   angle: number,
   weapon?: string,
 ): Entity {
-  const existing = entities.find(e => e.alive && e.plotNpcId === plotNpcId);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing;
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);

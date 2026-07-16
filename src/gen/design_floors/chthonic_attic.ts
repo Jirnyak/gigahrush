@@ -1,5 +1,6 @@
 /* ── Future design z: Хтонический чердак ─────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, DoorState, LiftDirection,
@@ -610,7 +611,7 @@ export function registerChthonicAtticContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_agrafena_rootkeeper', ATTIC_NPCS.attic_agrafena_rootkeeper, [
     {
       id: 'attic_cut_or_feed_root',
-      giverNpcId: 'attic_agrafena_rootkeeper',
+      giverId: getPlotNpcNumericId('attic_agrafena_rootkeeper')!,
       type: QuestType.FETCH,
       desc: 'Аграфена Корневая: «Две шестерни. Срежем несущий корень аккуратно; детали уйдут на сервисный этаж, реликвия останется за бетоном.»',
       targetItem: 'gear', targetCount: 2,
@@ -623,7 +624,7 @@ export function registerChthonicAtticContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_deacon_ostap', ATTIC_NPCS.attic_deacon_ostap, [
     {
       id: 'attic_black_hand_report',
-      giverNpcId: 'attic_deacon_ostap',
+      giverId: getPlotNpcNumericId('attic_deacon_ostap')!,
       type: QuestType.FETCH,
       desc: 'Дьякон Остап: «Принесите донос или акт о черной ладони. Министерство назовет это уликой, мы - платой за укрытие.»',
       targetItem: 'denunciation', targetCount: 1,
@@ -636,11 +637,11 @@ export function registerChthonicAtticContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_cable_boy_yura', ATTIC_NPCS.attic_cable_boy_yura, [
     {
       id: 'attic_crawl_escort',
-      giverNpcId: 'attic_cable_boy_yura',
+      giverId: getPlotNpcNumericId('attic_cable_boy_yura')!,
       type: QuestType.VISIT,
       desc: 'Юра Кабельный: «Проведите меня через низкий кабельный лаз во время предупреждения. Большой коридор пусть шумит без нас.»',
       targetRoomType: RoomType.CORRIDOR,
-      targetRoomName: 'Низкий кабельный лаз',
+      targetRoomDefId: 'Низкий кабельный лаз',
       rewardItem: 'fuse', rewardCount: 1,
       extraRewards: [{ defId: 'siren_instruction', count: 1 }],
       relationDelta: 12, xpReward: 75, moneyReward: 35,
@@ -650,7 +651,7 @@ export function registerChthonicAtticContent(): void {
   registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'attic_liquidator_masha', ATTIC_NPCS.attic_liquidator_masha, [
     {
       id: 'attic_burn_niche',
-      giverNpcId: 'attic_liquidator_masha',
+      giverId: getPlotNpcNumericId('attic_liquidator_masha')!,
       type: QuestType.FETCH,
       desc: 'Маша Прожиг: «Канистру топлива. Сожжем нишу по контуру: дым, вражда культистов, зато проход не затянет.»',
       targetItem: 'ammo_fuel', targetCount: 1,

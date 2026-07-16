@@ -3,6 +3,7 @@
  * make scarcity visible without a runtime growth simulation.
  */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -342,7 +343,7 @@ const NPC_DEFS: Record<GreenhouseNpcId, PlotNpcDef> = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_agronom_nadya', NPC_DEFS.oranzhereya_agronom_nadya, [{
   id: 'oranzhereya_save_clean_crop',
-  giverNpcId: 'oranzhereya_agronom_nadya',
+  giverId: getPlotNpcNumericId('oranzhereya_agronom_nadya')!,
   type: QuestType.FETCH,
   desc: 'Надя Агроном: «Принеси каменную соль. Споры надо остановить у грядки, пока рынок не назвал их деликатесом.»',
   targetItem: 'rock_salt',
@@ -360,7 +361,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_agronom_nadya', N
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_irrigator_gleb', NPC_DEFS.oranzhereya_irrigator_gleb, [{
   id: 'oranzhereya_reroute_water',
-  giverNpcId: 'oranzhereya_irrigator_gleb',
+  giverId: getPlotNpcNumericId('oranzhereya_irrigator_gleb')!,
   type: QuestType.FETCH,
   desc: 'Глеб Капельник: «Найди бирку вентиля. Без неё вода течёт в компост, а люди считают друг друга ведрами.»',
   targetItem: 'valve_tag',
@@ -378,7 +379,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_irrigator_gleb', 
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_guard_arsen', NPC_DEFS.oranzhereya_guard_arsen, [{
   id: 'oranzhereya_burn_infestation',
-  giverNpcId: 'oranzhereya_guard_arsen',
+  giverId: getPlotNpcNumericId('oranzhereya_guard_arsen')!,
   type: QuestType.KILL,
   desc: 'Арсен Водомер: «В прожиговой канаве проснулся борщевик. Сожги или пристрели корень, пока он не научил пайку кусаться.»',
   targetMonsterKind: MonsterKind.BORSHCHEVIK,
@@ -396,7 +397,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_guard_arsen', NPC
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_market_sonya', NPC_DEFS.oranzhereya_market_sonya, [{
   id: 'oranzhereya_poison_market_crop',
-  giverNpcId: 'oranzhereya_market_sonya',
+  giverId: getPlotNpcNumericId('oranzhereya_market_sonya')!,
   type: QuestType.FETCH,
   desc: 'Соня Форточка: «Кислоту в питательный басейн. Чистая пайка кормит соседей, испорченная платит сразу.»',
   targetItem: 'acid_bottle',
@@ -416,7 +417,7 @@ export function generateOranzhereyaBetonaDesignFloor(seed = SEED): FloorGenerati
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initWorld(world);
     const rooms = buildRooms(world);
@@ -1017,7 +1018,7 @@ function hqSupportName(spec: HqSpec, support: HqSupportSpec): string {
 
 function isOranzhereyaAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

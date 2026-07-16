@@ -1,6 +1,7 @@
 /* ── Сантехник Иваныч — side quest (maintenance floor) ────────── */
 /* Старый сантехник коллектора — собирает ключи и трубы.            */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -41,7 +42,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('sant_ivanych', NPC_DEF, [
   {
     id: 'ivanych_wrenches',
-    giverNpcId: 'sant_ivanych',
+    giverId: getPlotNpcNumericId('sant_ivanych')!,
     type: QuestType.FETCH,
     desc: 'Иваныч: «Принеси пять гаечных ключей. Без них я ни одну течь не заварю, а ты в луже не стой.»',
     targetItem: 'wrench', targetCount: 5,

@@ -66,7 +66,7 @@ export interface NpcVisualContext {
   faction?: Faction;
   isFemale?: boolean;
   age?: number;
-  plotNpcId?: string;
+  plotNpcId?: number;
 }
 
 export type NpcVisualSource = 'procedural' | 'first_party_art' | 'community_art';

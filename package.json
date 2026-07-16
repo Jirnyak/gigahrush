@@ -43,5 +43,8 @@
     "vite": "^7.3.3",
     "vite-plugin-singlefile": "2.3.0",
     "wrangler": "^4.92.0"
+  },
+  "dependencies": {
+    "glob": "^13.0.6"
   }
 }

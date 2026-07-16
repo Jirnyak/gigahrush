@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Коммунальная кухня: фракционная бытовая драка ───────────── */
 
 import {
@@ -151,7 +152,7 @@ const LIQUIDATOR: PlotNpcDef = {
 
 registerSideQuest(RAYA_ID, RAYA, [{
   id: COMMUNAL_KITCHEN_FEUD_QUEST_IDS.mediateFood,
-  giverNpcId: RAYA_ID,
+  giverId: getPlotNpcNumericId(RAYA_ID)!,
   type: QuestType.FETCH,
   desc: 'Рая Сковородкина: «Пять пачек каши на общий стол. Пока люди жуют, они хуже делят власть.»',
   targetItem: 'kasha', targetCount: 5,
@@ -175,7 +176,7 @@ registerSideQuest(RAYA_ID, RAYA, [{
 
 registerSideQuest(SANEK_ID, SANEK, [{
   id: COMMUNAL_KITCHEN_FEUD_QUEST_IDS.sideSanek,
-  giverNpcId: SANEK_ID,
+  giverId: getPlotNpcNumericId(SANEK_ID)!,
   type: QuestType.FETCH,
   desc: 'Санёк Конфорка: «Восемь пачек сигарет, и я держу газ против Райиной кастрюльной власти.»',
   targetItem: 'cigs', targetCount: 8,
@@ -199,7 +200,7 @@ registerSideQuest(SANEK_ID, SANEK, [{
 
 registerSideQuest(FEOFAN_ID, FEOFAN, [{
   id: COMMUNAL_KITCHEN_FEUD_QUEST_IDS.stealKey,
-  giverNpcId: FEOFAN_ID,
+  giverId: getPlotNpcNumericId(FEOFAN_ID)!,
   type: QuestType.FETCH,
     desc: 'Феофан у кастрюли: «Укради заёмный кухонный ключ из Райиной тумбы. Без ключа Рая держит кухню на крике.»',
   targetItem: 'borrowed_kitchen_key', targetCount: 1,
@@ -223,7 +224,7 @@ registerSideQuest(FEOFAN_ID, FEOFAN, [{
 
 registerSideQuest(WITNESS_ID, WITNESS, [{
   id: COMMUNAL_KITCHEN_FEUD_QUEST_IDS.exposeCard,
-  giverNpcId: WITNESS_ID,
+  giverId: getPlotNpcNumericId(WITNESS_ID)!,
   type: QuestType.FETCH,
   desc: 'Лида Ситечко: «Достаньте поддельную пайковую карточку из газового ящика. С предметом я свидетель, без него - шум.»',
   targetItem: 'forged_ration_card', targetCount: 1,
@@ -247,7 +248,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [{
 
 registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [{
   id: COMMUNAL_KITCHEN_FEUD_QUEST_IDS.callLiquidators,
-  giverNpcId: LIQUIDATOR_ID,
+  giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
   type: QuestType.FETCH,
   desc: 'Кипятков из обхода: «Принеси жалобу под сургучом. Вызову наряд и опечатаю плиту до первой крови.»',
   targetItem: 'sealed_complaint', targetCount: 1,

@@ -1,5 +1,6 @@
 /* -- Design z: critical_leak_archive - wet percolation archive -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -213,13 +214,13 @@ const LIQUIDATOR_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_archivist_varvara', ARCHIVIST_DEF, [
   {
     id: 'critical_leak_carry_dry_packet',
-    giverNpcId: 'critical_leak_archivist_varvara',
+    giverId: getPlotNpcNumericId('critical_leak_archivist_varvara')!,
     type: QuestType.FETCH,
     desc: 'Варвара Сухопись: «Найдете сухую жалобу под сургучом - донесите, не заходя лишний раз в воду. Мокрая причина становится слухом.»',
     targetItem: 'sealed_complaint', targetCount: 1,
     targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     targetRoute: TARGET_ROUTE,
-    targetRoomName: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.dryIndex,
+    targetRoomDefId: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.dryIndex,
     targetHint: 'сухой пакет лежит на архивном острове; водяной короткий ход быстрее, но заражает маршрут',
     rewardItem: 'filter_receipt', rewardCount: 1,
     extraRewards: [{ defId: 'blank_form', count: 2 }],
@@ -234,12 +235,12 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_archivist_varva
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor', LIQUIDATOR_DEF, [
   {
     id: 'critical_leak_raise_floodgate',
-    giverNpcId: 'critical_leak_liquidator_egor',
+    giverId: getPlotNpcNumericId('critical_leak_liquidator_egor')!,
     type: QuestType.VISIT,
     desc: 'Егор Отсечка: «Дойдите до пульта водоотсечки. Шлюз не спасет архив, но даст сухой край для отхода.»',
     targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     targetRoute: TARGET_ROUTE,
-    targetRoomName: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.floodgate,
+    targetRoomDefId: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.floodgate,
     targetHint: 'пульт стоит за зараженным водяным коротким ходом и сухой обходной перемычкой',
     rewardItem: 'decon_fluid', rewardCount: 1,
     relationDelta: 8, xpReward: 45, moneyReward: 24,
@@ -250,13 +251,13 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor
   },
   {
     id: 'critical_leak_trade_contaminated_proof',
-    giverNpcId: 'critical_leak_liquidator_egor',
+    giverId: getPlotNpcNumericId('critical_leak_liquidator_egor')!,
     type: QuestType.FETCH,
     desc: 'Егор Отсечка: «Если полезете коротким ходом, принесите мазок воды. Без пробы все скажут, что вы просто намочили сапоги.»',
     targetItem: 'contaminated_swab', targetCount: 1,
     targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     targetRoute: TARGET_ROUTE,
-    targetRoomName: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.shortcut,
+    targetRoomDefId: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.shortcut,
     rewardItem: 'wet_rag_bundle', rewardCount: 1,
     extraRewards: [{ defId: 'decon_fluid', count: 1 }],
     relationDelta: 6, xpReward: 48, moneyReward: 28,
@@ -1089,7 +1090,7 @@ function tuneInitialZones(world: World): void {
 export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 1 };
+  const nextId: NextId = { v: 10000 };
   const seed = hashSeed('design-z: critical-leak-archive:percolation', CRITICAL_LEAK_ARCHIVE_Z);
   const state: CriticalLeakArchiveState = {
     routeId: CRITICAL_LEAK_ARCHIVE_ROUTE_ID,

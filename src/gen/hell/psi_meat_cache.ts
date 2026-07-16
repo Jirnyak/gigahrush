@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Hell PSI meat cache: finite cult trade/theft/fight POI ───── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -125,7 +126,7 @@ const KEEPER_DEF: PlotNpcDef = {
 registerSideQuest(KEEPER_ID, KEEPER_DEF, [
   {
     id: 'ag54_keeper_raw_meat_tithe',
-    giverNpcId: KEEPER_ID,
+    giverId: getPlotNpcNumericId(KEEPER_ID)!,
     type: QuestType.FETCH,
     desc: 'Федот Мясопев: «Принеси четыре куска сырого мяса. За честный вклад дам стабилизатор, но не запас на новую жизнь.»',
     targetItem: 'rawmeat', targetCount: 4,

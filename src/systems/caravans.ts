@@ -582,7 +582,7 @@ function nearbyMemberPosition(world: World, x: number, y: number, index: number)
 function smallCaravanMemberEligible(state: GameState, npc: Entity, template: SmallCaravanTemplateDef, usedIds: ReadonlySet<number>): boolean {
   if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) return false;
   if (usedIds.has(npc.id) || npc.faction !== template.faction) return false;
-  if (npc.plotNpcId || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) return false;
+  if (npc.id || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) return false;
   if (npc.persistentNpcId === 'player' || npc.faction === Faction.PLAYER) return false;
   if (state.showNpcMenu && state.npcMenuTarget === npc.id) return false;
   if (npc.alifeId === undefined && npc.persistentNpcId) return false;

@@ -286,7 +286,7 @@ function publishSeryyEvent(
       sourceY: ctx.sourceY,
       sourceDisabled: ctx.disabled,
       sourceAvoided: ctx.avoided,
-      roomName: ctx.world.rooms[ctx.roomId]?.name,
+      roomDefId: ctx.world.rooms[ctx.roomId]?.name,
     },
   });
 }

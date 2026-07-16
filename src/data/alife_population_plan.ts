@@ -24,7 +24,6 @@ import {
   type NpcPackageDef,
   type NpcPackagePresence,
 } from './npc_packages';
-import { MAIN_PLOT_NPC_PACKAGES } from './npc_plot_packages';
 import {
   themeForDesignRoute,
   themeForProceduralSpec,
@@ -296,7 +295,7 @@ export function alifeReservedIdentityFromNpcPackage(pack: NpcPackageDef): AlifeR
 function defaultReservedPackageSource(): readonly NpcPackageDef[] {
   const out: NpcPackageDef[] = [];
   const seen = new Set<string>();
-  for (const pack of [...MAIN_PLOT_NPC_PACKAGES, ...allNpcPackages()]) {
+  for (const pack of allNpcPackages()) {
     if (seen.has(pack.id)) continue;
     seen.add(pack.id);
     out.push(pack);

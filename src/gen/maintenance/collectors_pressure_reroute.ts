@@ -1,5 +1,6 @@
 /* -- FLOOR16 collectors pressure reroute: water choice and eel work -- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   msg,
@@ -120,7 +121,7 @@ const DEBTOR_DEF: PlotNpcDef = {
 registerSideQuest('collectors_pressure_boss_varya', VARYA_DEF, [
   {
     id: DRAIN_LIVING_QUEST,
-    giverNpcId: 'collectors_pressure_boss_varya',
+    giverId: getPlotNpcNumericId('collectors_pressure_boss_varya')!,
     type: QuestType.FETCH,
     desc: 'Варя: «Две бирки вентиля - и я открываю Жилую магистраль. Жилая зона получит воду, Квартиры потеряют напор.»',
     targetItem: 'valve_tag', targetCount: 2,
@@ -130,7 +131,7 @@ registerSideQuest('collectors_pressure_boss_varya', VARYA_DEF, [
   },
   {
     id: 'floor16_collectors_pressure_bridge',
-    giverNpcId: 'collectors_pressure_boss_varya',
+    giverId: getPlotNpcNumericId('collectors_pressure_boss_varya')!,
     type: QuestType.FETCH,
     desc: 'Варя: «Манометр на мост давления. Без стрелки сухая перемычка считается мокрой легендой.»',
     targetItem: 'manometer', targetCount: 1,
@@ -143,17 +144,17 @@ registerSideQuest('collectors_pressure_boss_varya', VARYA_DEF, [
 registerSideQuest('collectors_drowned_cartographer', CARTOGRAPHER_DEF, [
   {
     id: 'floor16_collectors_flooded_map',
-    giverNpcId: 'collectors_drowned_cartographer',
+    giverId: getPlotNpcNumericId('collectors_drowned_cartographer')!,
     type: QuestType.VISIT,
     desc: 'Картограф: «Проверь мокрую картотеку {dir}. Там маршрут всплыл, пока его не съели угри.»',
-    targetRoomName: MAP_ROOM,
+    targetRoomDefId: MAP_ROOM,
     rewardItem: 'caravan_route', rewardCount: 1,
     extraRewards: [{ defId: 'water_coupon', count: 1 }],
     relationDelta: 8, xpReward: 35, moneyReward: 20,
   },
   {
     id: 'floor16_collectors_filter_run',
-    giverNpcId: 'collectors_drowned_cartographer',
+    giverId: getPlotNpcNumericId('collectors_drowned_cartographer')!,
     type: QuestType.FETCH,
     desc: 'Картограф: «Два фильтра в учет. Наверх отнесём чистую выдачу, а не мокрое объяснение.»',
     targetItem: 'gasmask_filter', targetCount: 2,
@@ -166,7 +167,7 @@ registerSideQuest('collectors_drowned_cartographer', CARTOGRAPHER_DEF, [
 registerSideQuest('collectors_tube_hunter_ilyas', ILYAS_DEF, [
   {
     id: 'floor16_collectors_hunt_tube_eel',
-    giverNpcId: 'collectors_tube_hunter_ilyas',
+    giverId: getPlotNpcNumericId('collectors_tube_hunter_ilyas')!,
     type: QuestType.KILL,
     desc: 'Ильяс: «Три трубных угря в лотке. Стреляй с сухого края, жабры из себя не строй.»',
     targetMonsterKind: MonsterKind.TUBE_EEL,
@@ -180,7 +181,7 @@ registerSideQuest('collectors_tube_hunter_ilyas', ILYAS_DEF, [
 registerSideQuest('collectors_water_debtor', DEBTOR_DEF, [
   {
     id: DRAIN_KVARTIRY_QUEST,
-    giverNpcId: 'collectors_water_debtor',
+    giverId: getPlotNpcNumericId('collectors_water_debtor')!,
     type: QuestType.FETCH,
     desc: 'Федя: «Два водных талона - и я перекину напор в Квартиры. Квартиры напьются, Жилая зона потеряет давление.»',
     targetItem: 'water_coupon', targetCount: 2,
@@ -190,7 +191,7 @@ registerSideQuest('collectors_water_debtor', DEBTOR_DEF, [
   },
   {
     id: 'floor16_collectors_stolen_parts',
-    giverNpcId: 'collectors_water_debtor',
+    giverId: getPlotNpcNumericId('collectors_water_debtor')!,
     type: QuestType.FETCH,
     desc: 'Федя: «Два герметика за украденную пломбу. Назовем это ремонтом, пока Варя не открыла шкаф.»',
     targetItem: 'sealant_tube', targetCount: 2,

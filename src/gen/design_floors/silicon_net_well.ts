@@ -1,5 +1,6 @@
 /* ── Design z: Кремниевый НЕТ-колодец ─────────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal,
   Cell,
@@ -230,7 +231,7 @@ const NPC_DEFS: Record<SiliconNpcId, PlotNpcDef> = {
 const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'silicon_cibo_net_contact',
-    giverNpcId: 'silicon_cibo',
+    giverId: getPlotNpcNumericId('silicon_cibo')!,
     type: QuestType.FETCH,
     desc: 'Сибо: «Две энергоячейки к терминальному залу. Я открою НЕТ-обход и отдам излучатель, если он не заберёт нас первым.»',
     targetItem: 'ammo_energy',
@@ -242,14 +243,14 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
     eventTags: [DESIGN_FLOOR_ID, 'net', 'cibo', 'gravity_beam'],
     eventSeverity: 4,
     eventPrivacy: 'secret',
-    failOnNpcDeathPlotId: 'silicon_cibo',
+    failOnNpcDeathId: getPlotNpcNumericId('silicon_cibo')!,
   },
   {
     id: 'silicon_scientist_warning',
-    giverNpcId: 'silicon_cyborg_scientist',
+    giverId: getPlotNpcNumericId('silicon_cyborg_scientist')!,
     type: QuestType.TALK,
     desc: 'Выслушай киборга-учёного о GBE и риске НЕТ-взлома до работы с терминалами.',
-    targetPlotNpcId: 'silicon_cibo',
+    targetNpcId: getPlotNpcNumericId('silicon_cibo')!,
     rewardItem: 'ammo_energy',
     rewardCount: 1,
     relationDelta: 6,
@@ -259,10 +260,10 @@ const SIDE_QUESTS: readonly SideQuestStep[] = [
   },
   {
     id: 'silicon_admin_turn_in_scientist',
-    giverNpcId: 'silicon_admin_checker',
+    giverId: getPlotNpcNumericId('silicon_admin_checker')!,
     type: QuestType.KILL,
     desc: 'Администратор: «Киборг объяснил слишком много. Уберите его или уведите от терминалов.»',
-    targetPlotNpcId: 'silicon_cyborg_scientist',
+    targetNpcId: getPlotNpcNumericId('silicon_cyborg_scientist')!,
     rewardItem: 'official_permit_slip',
     rewardCount: 1,
     moneyReward: 120,
@@ -282,11 +283,11 @@ export function registerSiliconNetWellContent(): void {
 
   const questsByGiver: Record<string, SideQuestStep[]> = {};
   for (const q of SIDE_QUESTS) {
-    if (!q.giverNpcId) continue;
-    if (!questsByGiver[q.giverNpcId]) {
-      questsByGiver[q.giverNpcId] = [];
+    if (!q.giverId) continue;
+    if (!questsByGiver[q.giverId]) {
+      questsByGiver[q.giverId] = [];
     }
-    questsByGiver[q.giverNpcId].push(q);
+    questsByGiver[q.giverId].push(q);
   }
 
   for (const npcId of Object.keys(NPC_DEFS) as SiliconNpcId[]) {
@@ -300,7 +301,7 @@ export function generateSiliconNetWellDesignFloor(seed = SEED): FloorGeneration 
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initWorld(world);
     const rooms = buildRooms(world);
@@ -425,7 +426,7 @@ function tuneZones(world: World): void {
 function isSiliconAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.plotNpcId === undefined &&
+    entity.id === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

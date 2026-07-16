@@ -1,5 +1,6 @@
 /* ── Станция давления — pumps, valves, pressure bureaucracy ───── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   Tex,
@@ -45,7 +46,7 @@ const BORIS_DEF: PlotNpcDef = {
 registerSideQuest('ag04_pressure_boris', BORIS_DEF, [
   {
     id: 'ag04_pressure_wrenches',
-    giverNpcId: 'ag04_pressure_boris',
+    giverId: getPlotNpcNumericId('ag04_pressure_boris')!,
     type: QuestType.FETCH,
     desc: 'Борис: «Три гаечных ключа. Один на работу, второй дверь держать, третий на комиссию после аварии.»',
     targetItem: 'wrench', targetCount: 3,
@@ -55,7 +56,7 @@ registerSideQuest('ag04_pressure_boris', BORIS_DEF, [
   },
   {
     id: 'ag04_pressure_rebar',
-    giverNpcId: 'ag04_pressure_boris',
+    giverId: getPlotNpcNumericId('ag04_pressure_boris')!,
     type: QuestType.KILL,
     desc: 'Борис: «Арматура скребет по насосам. Две штуки убери, пока они не стали частью схемы.»',
     targetMonsterKind: MonsterKind.REBAR,

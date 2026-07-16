@@ -349,5 +349,5 @@ function triggerPoiUprising(
 }
 
 function isConvertibleCitizen(e: Entity): boolean {
-  return e.type === EntityType.NPC && e.alive && e.faction === Faction.CITIZEN && !e.plotNpcId;
+  return e.type === EntityType.NPC && e.alive && e.faction === Faction.CITIZEN && !e.id;
 }

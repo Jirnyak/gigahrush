@@ -2,6 +2,7 @@
 /* Открытый зал-цех со столами-прилавками. Барыга торгует оружием  */
 /* в обмен на патроны. Self-contained: NPC + FETCH quest + room.   */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell, DoorState, Tex, Feature, RoomType,
   type Room, type Entity, EntityType, Faction, Occupation, QuestType,
@@ -45,7 +46,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('shurik_baryga', NPC_DEF, [
   {
     id: 'shurik_ammo',
-    giverNpcId: 'shurik_baryga',
+    giverId: getPlotNpcNumericId('shurik_baryga')!,
     type: QuestType.FETCH,
     desc: 'Шурик: «Занеси десять патронов 9мм. Получишь обрез, шесть дробовых и две сигареты на отходняк. У прилавка не задерживайся: сосед считает сделки.»',
     targetItem: 'ammo_9mm', targetCount: 10,

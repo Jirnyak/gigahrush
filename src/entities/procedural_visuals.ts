@@ -664,7 +664,7 @@ function deriveEntitySpriteSeed(e: Entity): number {
   if (h === 0) {
     h = mix32(e.id ^ Math.imul(Math.floor(e.x * 16), 0x45d9f3b) ^ Math.imul(Math.floor(e.y * 16), 0x119de1f3));
     if (e.name) h = hashText(e.name, h);
-    if (e.plotNpcId) h = hashText(e.plotNpcId, h);
+    if (e.id) h = hashText(String(e.id), h);
   }
   return h || 1;
 }
@@ -688,7 +688,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
       occupation: e.occupation,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.plotNpcId,
+      plotNpcId: e.id,
     });
     const key = npcVisualTextureKey(visualId, {
       seed: h,
@@ -716,7 +716,7 @@ function npcEntityVisualId(e: Entity): string | undefined {
     occupation: e.occupation,
     isFemale: e.isFemale,
     age: e.age,
-    plotNpcId: e.plotNpcId,
+    plotNpcId: e.id,
   });
 }
 
@@ -743,7 +743,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       occupation: e.occupation,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.plotNpcId,
+      plotNpcId: e.id,
     });
     const visualSeed = npcVisualTextureKey(visualId, {
       seed: deriveEntitySpriteSeed(e),
@@ -751,7 +751,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       faction: e.faction,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.plotNpcId,
+      plotNpcId: e.id,
       sprite: e.sprite,
     })
       ? deriveEntitySpriteSeed(e)
@@ -762,7 +762,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       faction: e.faction,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.plotNpcId,
+      plotNpcId: e.id,
       sprite: e.sprite,
     });
     if (special) return special;

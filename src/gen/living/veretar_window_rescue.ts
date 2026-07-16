@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Белое окно Веретара: witness rescue POI ─────────────────── */
 
 import {
@@ -60,10 +61,10 @@ const WITNESS: PlotNpcDef = {
 registerSideQuest(WITNESS_ID, WITNESS, [
   {
     id: 'ag95_pull_witness_from_window',
-    giverNpcId: WITNESS_ID,
+    giverId: getPlotNpcNumericId(WITNESS_ID)!,
     type: QuestType.TALK,
     desc: 'Лида Белооконная: «Оттащи меня от белого окна. Если я скажу, что там двор, веди к двери и не спорь.»',
-    targetNpcId: WITNESS_ID,
+    targetNpcId: getPlotNpcNumericId(WITNESS_ID)!,
     rewardItem: 'water_coupon',
     rewardCount: 2,
     relationDelta: 12,
@@ -81,10 +82,10 @@ registerSideQuest(WITNESS_ID, WITNESS, [
   },
   {
     id: 'ag95_mark_white_shortcut',
-    giverNpcId: WITNESS_ID,
+    giverId: getPlotNpcNumericId(WITNESS_ID)!,
     type: QuestType.VISIT,
     desc: 'Лида Белооконная: «Белый обход справа от окна короче обычного коридора. Если выберешь его, фото заберёшь, а свидетель замолчит.»',
-    targetRoomName: SHORTCUT_NAME,
+    targetRoomDefId: SHORTCUT_NAME,
     rewardItem: 'overexposed_photo',
     rewardCount: 1,
     relationDelta: -6,
@@ -315,7 +316,7 @@ function decorate(world: World, main: Room, shortcut: Room): void {
 }
 
 function spawnWitness(world: World, entities: Entity[], nextId: { v: number }, room: Room): number {
-  const existing = entities.find(e => e.alive && e.plotNpcId === WITNESS_ID);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(WITNESS_ID)!);
   if (existing) return existing.id;
   const x = world.wrap(room.x + Math.floor(room.w / 2));
   const y = world.wrap(room.y + 2);

@@ -26,7 +26,7 @@ type DoorDamagePhase = 'warning' | 'damaged' | 'compromised';
 interface BorerTarget {
   doorIdx: number;
   roomId: number;
-  roomName: string;
+  roomDefId: string;
   zoneId: number;
   d2: number;
 }
@@ -34,7 +34,7 @@ interface BorerTarget {
 interface BorerDoorRecord {
   doorIdx: number;
   roomId: number;
-  roomName: string;
+  roomDefId: string;
   zoneId: number;
   z: number;
   cycle: number;
@@ -51,7 +51,7 @@ interface BorerRuntime {
   source: BorerSource;
   targetDoorIdx: number;
   targetRoomId: number;
-  targetRoomName: string;
+  targetRoomDefId: string;
   zoneId: number;
   monsterId: number;
   spawnedAt: number;
@@ -165,7 +165,7 @@ function considerTarget(
   return {
     doorIdx,
     roomId: room.id,
-    roomName: room.name || 'укрытие',
+    roomDefId: room.name || 'укрытие',
     zoneId: world.zoneMap[doorIdx],
     d2,
   };
@@ -293,7 +293,7 @@ function publishBorerEvent(
     tags: ['hermodoor', 'borer', 'shelter_risk', ...tags].slice(0, 8),
     data: {
       doorIdx: rec.doorIdx,
-      roomName: rec.roomName,
+      roomDefId: rec.roomDefId,
       samosborCount: rec.cycle,
       damageAt: rec.damageAt,
       ...data,
@@ -325,7 +325,7 @@ function startBorer(
     source,
     targetDoorIdx: target.doorIdx,
     targetRoomId: target.roomId,
-    targetRoomName: target.roomName,
+    targetRoomDefId: target.roomDefId,
     zoneId: target.zoneId,
     monsterId,
     spawnedAt: state.time,
@@ -339,7 +339,7 @@ function startBorer(
   const rec: BorerDoorRecord = {
     doorIdx: target.doorIdx,
     roomId: target.roomId,
-    roomName: target.roomName,
+    roomDefId: target.roomDefId,
     zoneId: target.zoneId,
     z: state.currentZ,
     cycle: state.samosborCount,
@@ -353,7 +353,7 @@ function startBorer(
   markBorerDoor(world, target.doorIdx, runtime.id * 1031, false);
   playSoundAt(playBreak, doorX(target.doorIdx) + 0.5, doorY(target.doorIdx) + 0.5);
   state.msgs.push(msg(
-    `Гермоточильщик скребёт ${target.roomName}: дверь ещё держит ${Math.ceil(delay)}с.`,
+    `Гермоточильщик скребёт ${target.roomDefId}: дверь ещё держит ${Math.ceil(delay)}с.`,
     state.time,
     '#fb6',
   ));
@@ -430,7 +430,7 @@ function damageDoor(world: World, state: GameState, runtime: BorerRuntime, rec: 
   door.timer = 0;
   markBorerDoor(world, runtime.targetDoorIdx, runtime.id * 2053, true);
   playSoundAt(playBreak, doorX(runtime.targetDoorIdx) + 0.5, doorY(runtime.targetDoorIdx) + 0.5);
-  state.msgs.push(msg(`Гермоточильщик испортил ${runtime.targetRoomName}. До закрытия ещё можно чинить.`, state.time, '#f86'));
+  state.msgs.push(msg(`Гермоточильщик испортил ${runtime.targetRoomDefId}. До закрытия ещё можно чинить.`, state.time, '#f86'));
   publishBorerEvent(state, rec, 'hermodoor_borer_damage', 4, 'local', [runtime.source, 'damaged'], {
     monsterId: runtime.monsterId,
   });
@@ -562,7 +562,7 @@ export function blocksHermodoorBorerSeal(world: World, state: GameState, doorIdx
     const active = store.active;
     if (active?.targetDoorIdx === doorIdx) active.phase = 'compromised';
     seedCompromiseLeak(world, rec);
-    state.msgs.push(msg(`Укрытие скомпрометировано: ${rec.roomName}. Ищите другой вход или чините сейчас.`, state.time, '#f44'));
+    state.msgs.push(msg(`Укрытие скомпрометировано: ${rec.roomDefId}. Ищите другой вход или чините сейчас.`, state.time, '#f44'));
     publishBorerEvent(state, rec, 'hermodoor_borer_compromised', 5, 'public', ['compromised', 'samosbor_seal'], {
       compromisedAt: state.time,
     });
@@ -680,7 +680,7 @@ export function debugForceHermodoorBorer(
   state.samosborTimer = Math.min(state.samosborTimer, 12);
   const moved = movePlayerToDoor(world, player, runtime);
   return [
-    `target=${runtime.targetRoomName} door=(${doorX(runtime.targetDoorIdx)},${doorY(runtime.targetDoorIdx)}) moved=${moved ? 1 : 0}`,
+    `target=${runtime.targetRoomDefId} door=(${doorX(runtime.targetDoorIdx)},${doorY(runtime.targetDoorIdx)}) moved=${moved ? 1 : 0}`,
     'kit=flashlight, uv_spotlight, sealant_tube, hermo_gasket, rubber_door_wedge, wrench; E repairs, closed door traps, killing prevents damage',
   ];
 }

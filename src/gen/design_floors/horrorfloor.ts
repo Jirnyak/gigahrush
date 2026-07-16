@@ -24,7 +24,7 @@ function blackoutHorrorLights(world: World): void {
 export function generateHorrorFloorDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   let nextRoomId = 1;
 
   world.wallTex.fill(Tex.DARK);

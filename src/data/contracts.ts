@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from './npc_packages';
 import {
   Faction,
   MonsterKind,
@@ -8,7 +9,7 @@ import {
 } from '../core/types';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './design_floors';
 import type { FloorAnomalyId } from './procedural_floors';
-import { METRO_DEPOT_ROOM_NAME, METRO_STATION_ROOM_NAME } from './metro';
+import { METRO_DEPOT_ROOM_DEF_ID, METRO_STATION_ROOM_DEF_ID } from './metro';
 import { PNEUMOMAIL_CONTRACT_ID, PNEUMOMAIL_SORTER_ROOM_NAME } from './pneumomail';
 import { SILVER_SLIME_SEALED_ID } from './items';
 
@@ -26,7 +27,7 @@ export interface ContractTarget {
   z: number;
   route?: QuestRouteTarget;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   zoneTag?: string;
   hint: string;
 }
@@ -43,7 +44,7 @@ export interface ContractDef {
   targetCount?: number;
   targetMonsterKind?: MonsterKind;
   killNeeded?: number;
-  targetPlotNpcId?: string;
+  targetNpcId?: number;
   targetNpcName?: string;
   target: ContractTarget;
   rewardItem?: string;
@@ -142,7 +143,7 @@ export function contractTargetMarker(def: ContractDef): QuestTargetMarker {
   return {
     z: def.target.z,
     roomType: def.target.roomType,
-    roomName: def.target.roomName,
+    roomDefId: def.target.roomDefId,
     zoneTag: def.target.zoneTag,
     designFloorId: route?.designFloorId,
     proceduralTag: route?.proceduralTag,
@@ -157,7 +158,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
     desc: 'Окно проб НИИ ждёт живой желемыш в пломбе без пыли и чужой кожи. Банку не вскрывать; чистый комок оплатят тарой и стабилизатором.',
     target: {
-      z: 2, route: { anomalyId: 'mushroom_mycelium', tags: ['mushroom'] }, roomType: RoomType.PRODUCTION, roomName: 'Грибная прачечная первой смены',
+      z: 2, route: { anomalyId: 'mushroom_mycelium', tags: ['mushroom'] }, roomType: RoomType.PRODUCTION, roomDefId: 'Грибная прачечная первой смены',
       zoneTag: 'zhelemish_sample_site', hint: 'Маркер НИИ уточнит цель после выдачи: грибница, мокрый погреб или процедурный этаж с мицелием.',
     },
     targetItem: 'zhelemish_sample_sealed', targetCount: 1,
@@ -200,7 +201,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.TALK,
     desc: 'Передай сводку Майору Громному и не застрянь на мокрой развилке. Платят патронами, если бумага придёт раньше патруля.',
     target: { z: -14, roomType: RoomType.HQ, zoneTag: 'forpost', hint: 'Коллекторы: форпост Майора Громного; сухие переходы, трубы связи, патрульные метки.' },
-    targetPlotNpcId: 'major_grom', targetNpcName: 'Майор Громный',
+    targetNpcId: getPlotNpcNumericId('major_grom')!, targetNpcName: 'Майор Громный',
     rewardItem: 'ammo_762', rewardCount: 10, extraRewards: [{ defId: 'liquidator_ration', count: 1 }],
     moneyReward: 125, rewardResourceId: 'ammo', rewardScarcityMax: 2.2,
     xpReward: 70, relationDelta: 12, tags: ['compact_expedition', 'talk', 'deliver', 'floor_maintenance', 'room_hq', 'forpost', 'liquidator', 'ammo'],
@@ -311,7 +312,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 1, type: QuestType.TALK,
     desc: 'Санитарный стол просит довести Ольге сообщение о вскрытом карантинном шкафе. Плата санитарным набором; дойдите, пока это ещё записка, а не эпидемия.',
     target: { z: 2, roomType: RoomType.MEDICAL, zoneTag: 'hospital_quarantine', hint: 'Жилая зона: актовый зал и медпункт Ольги.' },
-    targetPlotNpcId: 'olga', targetNpcName: 'Ольга Дмитриевна',
+    targetNpcId: getPlotNpcNumericId('olga')!, targetNpcName: 'Ольга Дмитриевна',
     rewardItem: 'sanitary_kit', rewardCount: 1,
     moneyReward: 90, rewardResourceId: 'medicine', rewardScarcityMax: 2.4,
     xpReward: 50, relationDelta: 9, tags: ['expedition', 'floor_living', 'room_medical', 'talk', 'escort', 'medicine', 'quarantine'],
@@ -330,7 +331,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     id: 'exp_living_obzh_gap_repair', title: 'Комплект двери в ОБЖ', issuer: 'Школьный журнал эвакуации',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
     desc: 'Принеси комплект двери к сорванному проёму ОБЖ. Плата - прокладка и бинт; Нина занесёт в журнал, поставил ты дверь на спортзал или унёс комплект домой.',
-    target: { z: 2, roomType: RoomType.COMMON, roomName: 'Кабинет ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: кабинет ОБЖ и спортзал-убежище; ищите сорванный проем, где Нина считает головы.' },
+    target: { z: 2, roomType: RoomType.COMMON, roomDefId: 'Кабинет ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: кабинет ОБЖ и спортзал-убежище; ищите сорванный проем, где Нина считает головы.' },
     targetItem: 'door_kit', targetCount: 1,
     rewardItem: 'hermo_gasket', rewardCount: 1, extraRewards: [{ defId: 'bandage', count: 1 }],
     moneyReward: 95, rewardResourceId: 'tools', rewardScarcityMax: 2.1,
@@ -340,8 +341,8 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     id: 'exp_living_obzh_group_escort', title: 'Головы до спортзала', issuer: 'Родком у двери',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.TALK,
     desc: 'Родком у двери просит довести группу ОБЖ до спортзала и Вадима Монитора. За карту и воду ведите шагом: потерянный шаг потом ищут всем журналом.',
-    target: { z: 2, roomType: RoomType.COMMON, roomName: 'Спортзал-убежище ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: спортзал-убежище ОБЖ рядом с кабинетом; Вадим Монитор держит журнал эвакуации.' },
-    targetPlotNpcId: 'ag16_vadim_monitor', targetNpcName: 'Вадим Монитор',
+    target: { z: 2, roomType: RoomType.COMMON, roomDefId: 'Спортзал-убежище ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: спортзал-убежище ОБЖ рядом с кабинетом; Вадим Монитор держит журнал эвакуации.' },
+    targetNpcId: getPlotNpcNumericId('ag16_vadim_monitor')!, targetNpcName: 'Вадим Монитор',
     rewardItem: 'child_map', rewardCount: 1, extraRewards: [{ defId: 'water', count: 2 }],
     moneyReward: 80, rewardResourceId: 'documents', rewardScarcityMax: 2.0,
     xpReward: 50, relationDelta: 9, tags: ['expedition', 'floor_living', 'room_common', 'obzh_school', 'escort', 'children', 'shelter'],
@@ -350,7 +351,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     id: 'exp_living_obzh_door_protect', title: 'Отвести голос от двери', issuer: 'Дежурный ОБЖ',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.KILL,
     desc: 'Дежурный ОБЖ велит отвести тварь от школьного проёма и убить в коридоре. Плата 9мм и герметиком; дети считают до ста и не отвечают двери.',
-    target: { z: 2, roomType: RoomType.CORRIDOR, roomName: 'Кабинет ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: коридор у кабинета ОБЖ; не стойте у глазка и уводите шум от спортзала.' },
+    target: { z: 2, roomType: RoomType.CORRIDOR, roomDefId: 'Кабинет ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: коридор у кабинета ОБЖ; не стойте у глазка и уводите шум от спортзала.' },
     targetMonsterKind: MonsterKind.TVAR, killNeeded: 1,
     rewardItem: 'ammo_9mm', rewardCount: 18, extraRewards: [{ defId: 'sealant_tube', count: 1 }],
     moneyReward: 125, rewardResourceId: 'ammo', rewardScarcityMax: 2.1,
@@ -390,7 +391,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
     desc: 'Верни прозрачную пробу НИИ в целой пломбе. Платят стабилизатором и справкой; легальная цепочка беднее рынка.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Ревизионная НИИ: утечка проб',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Ревизионная НИИ: утечка проб',
       zoneTag: 'nii_contraband_audit', hint: 'Министерство: ревизионная НИИ, клетка прозрачных проб за запертой перегородкой. Не вскрывать: ценность держится на пломбе и допуске.',
     },
     targetItem: SILVER_SLIME_SEALED_ID, targetCount: 1,
@@ -403,7 +404,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 3, type: QuestType.FETCH,
     desc: 'Вынеси ведомость утечки из ревизионной НИИ. Плата - пропуск и 9мм; бумага должна выйти до того, как шкафы спрячут адрес.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Ревизионная НИИ: утечка проб',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Ревизионная НИИ: утечка проб',
       zoneTag: 'nii_contraband_audit', hint: 'Министерство: ревизионная НИИ, сейф проб и картотека списаний.',
     },
     targetItem: 'nii_contraband_manifest', targetCount: 1,
@@ -416,7 +417,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.WILD, rank: 3, type: QuestType.FETCH,
     desc: 'Унеси прозрачную пробу НИИ на рынок с целой пломбой. Деньги выше, а вопросы о пустой банке пойдут уже не продавцу.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Ревизионная НИИ: утечка проб',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Ревизионная НИИ: утечка проб',
       zoneTag: 'nii_contraband_audit', hint: 'Министерство: ревизионная НИИ, запертая клетка прозрачных проб и конверт без накладной.',
     },
     targetItem: SILVER_SLIME_SEALED_ID, targetCount: 1,
@@ -458,7 +459,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.WILD, rank: 2, type: QuestType.FETCH,
     desc: 'Достань липовое предписание у Димы в типографии. Заплати, купи готовое или вынеси тихо; шум станет проверкой лиц.',
     target: {
-      z: -6, roomType: RoomType.OFFICE, roomName: 'Нелегальная типография',
+      z: -6, roomType: RoomType.OFFICE, roomDefId: 'Нелегальная типография',
       zoneTag: 'kvartiry_print_room', hint: 'Квартиры: нелегальная типография Димы Печатника. Нужны чистые бланки, деньги на готовый лист или тихие руки без свидетелей.',
     },
     targetItem: 'ministry_audit_forgery', targetCount: 1,
@@ -471,7 +472,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
     desc: 'Счисти коричневую слизь в сухом обходе и принеси акт. Платят талонами, фильтром и топливом; присыпку можно сберечь для печи или продать.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'Сухой обход: коричневая слизь',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'Сухой обход: коричневая слизь',
       zoneTag: 'brown_slime_cleanup', hint: 'Коллекторы: сухой обход с токсичным коричневым налётом. Акт, проба и щёлочная присыпка лежат в комнате; скребок дешёвый, чистящий комплект тише, огнемёт быстрее, но жжёт бензин.',
     },
     targetItem: 'brown_slime_cleanup_act', targetCount: 1,
@@ -484,7 +485,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
     desc: 'Возьми зелёную пробу ОВС и держи банку отдельно от еды и ткани. Плата - тара и фильтр; повторная попытка дороже слоя.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'НИИ Слизи: зелёная кислотная проба',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'НИИ Слизи: зелёная кислотная проба',
       zoneTag: 'green_acid_sample', hint: 'Коллекторы: зелёная кислотная комната ОВС. Возьми фильтрующий слой у стола, пробу держи отдельно от еды и ткани.',
     },
     targetItem: 'slime_sample_green', targetCount: 1,
@@ -497,7 +498,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 2, type: QuestType.VISIT,
     desc: 'Найди кормовую ванну, где слизневик берёт еду вместо крови. Подойди с фильтром и запасом еды или лекарств; задача - отметить пробу, а не устроить охоту.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'Кормовая ванна слизневика',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'Кормовая ванна слизневика',
       zoneTag: 'safe_slimevik_den', hint: 'Коллекторы: кормовая ванна слизневика. Слизневик нейтрален, но долгий контакт без фильтра садит дыхание и ПСИ; бартер едой или лекарством отмечает пробу.',
     },
     targetMonsterKind: MonsterKind.SLIMEVIK,
@@ -510,7 +511,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 2, type: QuestType.FETCH,
     desc: 'Вынеси белую пробу из запертой пробной и не разглядывай её при людях. Пломба целая - платят; голос дрожит - отход.',
     target: {
-      z: 2, roomType: RoomType.MEDICAL, roomName: 'Запертая пробная белого остатка',
+      z: 2, roomType: RoomType.MEDICAL, roomDefId: 'Запертая пробная белого остатка',
       zoneTag: 'sample_site', hint: 'Жилая зона: маршрутный пост НИИ Слизи и запертая пробная белого остатка. Нужен доступ к боксу, пробу не вскрывать и не держать под лампой.',
     },
     targetItem: 'slime_sample_white', targetCount: 1,
@@ -523,7 +524,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
     desc: 'Лаборантская просит герметичный синий образец из коллектора. Ампулу не вскрывать: открытый свет оформляют как ожог, а не как результат.',
     target: {
-      z: -14, roomType: RoomType.MEDICAL, roomName: 'Кэш голубого свечения',
+      z: -14, roomType: RoomType.MEDICAL, roomDefId: 'Кэш голубого свечения',
       zoneTag: 'ag68_blue_glow_sample', hint: 'Коллекторы: кэш голубого свечения, гермобокс и лампы вокруг образца. Брать только целую ампулу.',
     },
     targetItem: 'blue_glow_sample_sealed', targetCount: 1,
@@ -536,7 +537,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.FETCH,
     desc: 'Техник УФ-бокса требует черную пробу из ложной банки НИИ. Сначала свет и герметик, потом банка; если остаток моргнул, это уже не штатный отбор.',
     target: {
-      z: -14, roomType: RoomType.STORAGE, roomName: 'Черная слизь: остаток смотрит назад',
+      z: -14, roomType: RoomType.STORAGE, roomDefId: 'Черная слизь: остаток смотрит назад',
       zoneTag: 'ag67_black_slime', hint: 'Коллекторы: предбанник черной слизи и ложная банка НИИ. Подготовь УФ/свет или пломбу, прежде чем брать образец.',
     },
     targetItem: 'slime_sample_black', targetCount: 1,
@@ -549,7 +550,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 2, type: QuestType.VISIT,
     desc: 'Завлаб просит дойти до затопленной лаборатории и отметить, почему журнал влажный изнутри. Нужен осмотр, не смелая гипотеза.',
     target: {
-      z: -14, roomType: RoomType.MEDICAL, roomName: 'Затопленная лаборатория',
+      z: -14, roomType: RoomType.MEDICAL, roomDefId: 'Затопленная лаборатория',
       hint: 'Коллекторы: затопленная лаборатория профессора Теслы. Проверь приборы, лужи и журнал у рабочего стола.',
     },
     rewardItem: 'filter_layer', rewardCount: 2, extraRewards: [{ defId: 'iodine', count: 1 }],
@@ -561,7 +562,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 2, type: QuestType.FETCH,
     desc: 'Стол допуска просит смотровое зеркальце с полевого поста НИИ. Комиссия проверяет шкаф боком: если ручка дернется, зеркальце разобьется раньше лица.',
     target: {
-      z: -14, roomType: RoomType.MEDICAL, roomName: 'Полевой пост НИИ: тара и ответственность',
+      z: -14, roomType: RoomType.MEDICAL, roomDefId: 'Полевой пост НИИ: тара и ответственность',
       zoneTag: 'nii_sample_post', hint: 'Коллекторы: полевой пост НИИ, шкаф тары и стол Боковой. Зеркальце лежит у поста, не в пробной банке.',
     },
     targetItem: 'inspection_mirror', targetCount: 1,
@@ -587,7 +588,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Доведи коричневую пробу до печи и верни гашёный остаток. Платят топливом; рынок не трогать, доклад после огня короче.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'Печь деактивации слизи: шумный пуск',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'Печь деактивации слизи: шумный пуск',
       zoneTag: 'deactivation_furnace', hint: 'Коллекторы: сухой обход даёт коричневую пробу; печь деактивации выдаёт гашёный остаток, если не продать пробу Сеньке.',
     },
     targetItem: 'deactivated_residue', targetCount: 1,
@@ -620,7 +621,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.TALK,
     desc: 'Лифтовой диспетчер даёт пакет Майору Громному: маршрут патруля, отметка, возврат живым. Платят рационом и 7.62, если бумага придёт раньше похоронки.',
     target: { z: -14, roomType: RoomType.HQ, zoneTag: 'forpost', hint: 'Коллекторы: форпост Майора Громного, мокрые трубы связи и сухой край патруля.' },
-    targetPlotNpcId: 'major_grom', targetNpcName: 'Майор Громный',
+    targetNpcId: getPlotNpcNumericId('major_grom')!, targetNpcName: 'Майор Громный',
     rewardItem: 'liquidator_ration', rewardCount: 2, extraRewards: [{ defId: 'ammo_762', count: 12 }],
     moneyReward: 140, rewardResourceId: 'ammo', rewardScarcityMax: 2.0,
     xpReward: 75, relationDelta: 12, tags: ['expedition', 'floor_maintenance', 'room_hq', 'talk', 'escort', 'deliver', 'ammo'],
@@ -630,7 +631,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 2, type: QuestType.FETCH,
     desc: 'Полевой стол НИИ принимает коричневую пробу только запечатанной. Плата тарой и водой; банку откроют при комиссии, ответственность начнётся сразу.',
     target: {
-      z: -14, roomType: RoomType.MEDICAL, roomName: 'Полевой пост НИИ: тара и ответственность',
+      z: -14, roomType: RoomType.MEDICAL, roomDefId: 'Полевой пост НИИ: тара и ответственность',
       zoneTag: 'nii_sample_post', hint: 'Коллекторы: полевой пост НИИ, выдачный ящик тары и опломбированный шкаф проб.',
     },
     targetItem: 'slime_sample_brown', targetCount: 1,
@@ -643,7 +644,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Забери коричневую пробу до спора НИИ. Плата - топливо и фильтр; пломбу не вскрывай, банку не ставь на пол.',
     target: {
-      z: -14, roomType: RoomType.MEDICAL, roomName: 'Полевой пост НИИ: тара и ответственность',
+      z: -14, roomType: RoomType.MEDICAL, roomDefId: 'Полевой пост НИИ: тара и ответственность',
       zoneTag: 'nii_sample_post', hint: 'Коллекторы: пост НИИ с журналом отбора; ликвидатор смотрит на пломбу, а не на гипотезу.',
     },
     targetItem: 'slime_sample_brown', targetCount: 1,
@@ -656,7 +657,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.WILD, rank: 2, type: QuestType.FETCH,
     desc: 'Тихая скупка тары покупает коричневую пробу мимо журнала. Платят поддельным корешком и сигаретами; риск рынок берёт, свидетелей нет.',
     target: {
-      z: -14, roomType: RoomType.MEDICAL, roomName: 'Полевой пост НИИ: тара и ответственность',
+      z: -14, roomType: RoomType.MEDICAL, roomDefId: 'Полевой пост НИИ: тара и ответственность',
       zoneTag: 'nii_sample_post', hint: 'Коллекторы: полевой пост НИИ, где лишняя проба быстро становится чужой выручкой.',
     },
     targetItem: 'slime_sample_brown', targetCount: 1,
@@ -669,10 +670,10 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 3, type: QuestType.TALK,
     desc: 'Донеси Якову маршрут Бетонова после Z+22. Плата - ПСИ-пыль и фильтр; нужны схема лифта и ответ, вскрывали ли тару.',
     target: {
-      z: 2, roomType: RoomType.MEDICAL, roomName: 'Лаборатория Якова Давидовича',
+      z: 2, roomType: RoomType.MEDICAL, roomDefId: 'Лаборатория Якова Давидовича',
       zoneTag: 'psi_lab', hint: 'Жилая зона: лаборатория Якова. Вернитесь с маршрутом Бетонова, не вскрывайте подозрительную тару в лифте.',
     },
-    targetPlotNpcId: 'yakov', targetNpcName: 'Яков Давидович',
+    targetNpcId: getPlotNpcNumericId('yakov')!, targetNpcName: 'Яков Давидович',
     rewardItem: 'psi_dust', rewardCount: 1, extraRewards: [{ defId: 'gasmask_filter', count: 1 }],
     moneyReward: 145, rewardResourceId: 'psi', rewardScarcityMax: 2.4,
     xpReward: 90, relationDelta: 11, tags: ['expedition', 'floor_living', 'room_medical', 'talk', 'yakov', 'nii', 'betonov', 'route', 'report'],
@@ -682,7 +683,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.CITIZEN, rank: 3, type: QuestType.FETCH,
     desc: 'Министерский приём НИИ требует карту Бетонова с отметкой Z+22. Плата пропуском и квитанцией; карта станет уликой, сменщик у шкафа строкой в деле.',
     target: {
-      z: -14, roomType: RoomType.STORAGE, roomName: PNEUMOMAIL_SORTER_ROOM_NAME,
+      z: -14, roomType: RoomType.STORAGE, roomDefId: PNEUMOMAIL_SORTER_ROOM_NAME,
       zoneTag: 'pneumomail', hint: 'Коллекторы: пневмопочтовая сортировка и мокрые шкафы после лифта Z+22. Ищите записку-карту, не образец.',
     },
     targetItem: 'note', targetCount: 1,
@@ -695,7 +696,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 3, type: QuestType.FETCH,
     desc: 'Отнеси чёрную пробу Бетонова на прожиг. Платят топливом и фильтром; НИИ спорит о ценности, пост - о расстоянии до огня.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'Черная Личинка: мокрый щелчок в образце',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'Черная Личинка: мокрый щелчок в образце',
       zoneTag: 'chernaya_lichinka', hint: 'Коллекторы: камера Черной Личинки. Берите УФ, пломбу или огонь; сырую банку не несите через курилку.',
     },
     targetItem: 'slime_sample_black', targetCount: 1,
@@ -747,7 +748,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.SCIENTIST, rank: 4, type: QuestType.TALK,
     desc: 'Зелёный экран просит дойти до Жана Пустотника и сверить подпись в пустом ордере. Платят стабилизатором; не стойте в зелёной линии под экраном.',
     target: { z: 200, roomType: RoomType.COMMON, zoneTag: 'void_warning_cell', hint: 'Пустота: камера Жана Пустотника у зеленых стен.' },
-    targetPlotNpcId: 'void_warning', targetNpcName: 'Жан Пустотник',
+    targetNpcId: getPlotNpcNumericId('void_warning')!, targetNpcName: 'Жан Пустотник',
     rewardItem: 'psi_stabilizer', rewardCount: 1, extraRewards: [{ defId: 'antidep', count: 2 }],
     moneyReward: 210, rewardResourceId: 'medicine', rewardScarcityMax: 2.4,
     xpReward: 135, relationDelta: 11, tags: ['expedition', 'floor_void', 'room_anomaly', 'talk', 'escort', 'medicine', 'void_contract'],
@@ -1177,7 +1178,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 1, type: QuestType.FETCH,
     desc: 'Принеси акт обработки из сухого обхода. Чёрное к ведру, зелёное не трогать, белое без старшего не называть.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'Сухой обход: коричневая слизь',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'Сухой обход: коричневая слизь',
       zoneTag: 'brown_slime_cleanup', hint: 'Коллекторы: сухой обход с коричневым налетом. Скребок или комплект дают акт обработки; рассказ о храбрости не дают.',
     },
     targetItem: 'brown_slime_cleanup_act', targetCount: 1,
@@ -1209,7 +1210,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Принеси журнал поражения из насосной: сектор, перепад, кто зашел, кто вышел. Бумага нужна до доклада труб.',
     target: {
-      z: -14, roomType: RoomType.PRODUCTION, roomName: 'Насосная давления: зеленый режим',
+      z: -14, roomType: RoomType.PRODUCTION, roomDefId: 'Насосная давления: зеленый режим',
       zoneTag: 'pressure_station', hint: 'Коллекторы: насосная, пост давления или шкаф рядом с зеленым режимом.',
     },
     targetItem: 'pressure_logbook', targetCount: 1,
@@ -1343,7 +1344,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'ministry_registry_tag_return', title: 'Номерок к живому ящику', issuer: 'Морг регистраций',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.FETCH,
     desc: 'Морг регистраций: вернуть номерок из холодной камеры. Без номера живого закрывают бумагой быстрее, чем тележкой.',
-    target: { z: 30, roomType: RoomType.MEDICAL, roomName: 'Морг регистраций', zoneTag: 'morgue', hint: 'Министерство: холодная камера, бирочная и зараженная камера сверки; не подходите к тому, кто сам знает номер ящика.' },
+    target: { z: 30, roomType: RoomType.MEDICAL, roomDefId: 'Морг регистраций', zoneTag: 'morgue', hint: 'Министерство: холодная камера, бирочная и зараженная камера сверки; не подходите к тому, кто сам знает номер ящика.' },
     targetItem: 'corpse_number_tag', targetCount: 1, rewardItem: 'official_quarantine_clearance', rewardCount: 1,
     moneyReward: 125, rewardResourceId: 'medicine', rewardScarcityMax: 2.2,
     xpReward: 75, relationDelta: 10, tags: ['ministry', 'registry_morgue', 'fetch', 'identity', 'documents', 'harm'],
@@ -1436,7 +1437,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.VISIT,
     desc: 'Архив ликвидаторских дел просит осмотреть Л-47 и сверить маршрут выезда до новой зачистки. Плата 7.62ТТ; Параграф там стреляет раньше охраны.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: архив ликвидаторских дел, запертая картотека Л-47.',
     },
     rewardItem: 'ammo_762tt', rewardCount: 8,
@@ -1448,7 +1449,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Интендант Л-47 просит жетон из картотеки выездов. Плата патронами; чужие руки журнал сочтёт кражей, даже если дело было забыто.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: картотека Л-47 за запертой архивной дверью.',
     },
     targetItem: 'liquidator_token', targetCount: 1, rewardItem: 'ammo_762tt', rewardCount: 16,
@@ -1460,7 +1461,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 3, type: QuestType.KILL,
     desc: 'Архивная охрана ставит Параграф Л-47 под зачистку в запертой картотеке. Награда фильтром и деньгами; цель стреляет по прямой через стеллажи.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: задняя картотека архива Л-47, держите укрытие между стеллажами.',
     },
     targetMonsterKind: MonsterKind.PARAGRAPH, killNeeded: 1, rewardItem: 'gasmask_filter', rewardCount: 1,
@@ -1472,7 +1473,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Скрытая опись Л-47 просит рапорт под сургучом с запечатанной полки. Плата санитарным набором; охрана смотрит на руки и сургуч.',
     target: {
-      z: 30, roomType: RoomType.OFFICE, roomName: 'Архив ликвидаторских дел',
+      z: 30, roomType: RoomType.OFFICE, roomDefId: 'Архив ликвидаторских дел',
       zoneTag: 'liquidator_archive', hint: 'Министерство: запечатанная полка рапортов в архиве Л-47.',
     },
     targetItem: 'sealed_complaint', targetCount: 1, rewardItem: 'sanitary_kit', rewardCount: 1,
@@ -1601,7 +1602,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.CITIZEN, rank: 1, type: QuestType.TALK,
     desc: 'Старшая просит довести старика до Ольги Дмитриевны: он держит письмо, старый ключ и кашель. Главное - не спорить с ним про двор по дороге.',
     target: { z: 2, roomType: RoomType.MEDICAL, zoneTag: 'hospital_quarantine', hint: 'Жилая зона: медпункт Ольги Дмитриевны.' },
-    targetPlotNpcId: 'olga', targetNpcName: 'Ольга Дмитриевна',
+    targetNpcId: getPlotNpcNumericId('olga')!, targetNpcName: 'Ольга Дмитриевна',
     rewardItem: 'bandage', rewardCount: 2, extraRewards: [{ defId: 'water', count: 2 }],
     moneyReward: 70, rewardResourceId: 'medicine', rewardScarcityMax: 2.1,
     xpReward: 45, relationDelta: 10, tags: ['citizen', 'old_world', 'escort', 'medicine', 'elder', 'talk'],
@@ -1651,7 +1652,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'transport_platform_19_watch', title: 'Дежурство на платформе 19', issuer: 'Дежурная платформы',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.VISIT,
     desc: 'Проверить платформу 19: белые лампы, край пути, четыре табло. Решить на месте - ехать, ждать, спрятаться за киоск или выйти к лифтам.',
-    target: { z: -14, roomType: RoomType.CORRIDOR, roomName: METRO_STATION_ROOM_NAME, zoneTag: 'metro_error_line', hint: 'Коллекторы: платформа 19 ошибочной линии; держитесь стены, не стойте на рельсах, белые лампы ведут назад.' },
+    target: { z: -14, roomType: RoomType.CORRIDOR, roomDefId: METRO_STATION_ROOM_DEF_ID, zoneTag: 'metro_error_line', hint: 'Коллекторы: платформа 19 ошибочной линии; держитесь стены, не стойте на рельсах, белые лампы ведут назад.' },
     rewardItem: 'metro_ticket', rewardCount: 1,
     moneyReward: 110, rewardResourceId: 'documents', rewardScarcityMax: 2.0,
     xpReward: 65, relationDelta: 9, tags: ['transport', 'metro', 'inspect', 'route_cue', 'maintenance'],
@@ -1660,7 +1661,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'transport_stranded_ticket_delivery', title: 'Билеты для застрявших', issuer: 'Лифтер у теплой кабины',
     faction: Faction.CITIZEN, rank: 1, type: QuestType.FETCH,
     desc: 'Передай запас билетов людям у платформы. Их можно купить, украсть или принести коротким путем без лишнего света.',
-    target: { z: -14, roomType: RoomType.CORRIDOR, roomName: METRO_STATION_ROOM_NAME, zoneTag: 'metro_error_line', hint: 'Коллекторы: платформа 19, киоск и пассажиры у белых ламп.' },
+    target: { z: -14, roomType: RoomType.CORRIDOR, roomDefId: METRO_STATION_ROOM_DEF_ID, zoneTag: 'metro_error_line', hint: 'Коллекторы: платформа 19, киоск и пассажиры у белых ламп.' },
     targetItem: 'metro_ticket', targetCount: 2, rewardItem: 'lift_scheme', rewardCount: 1,
     moneyReward: 95, rewardResourceId: 'documents', rewardScarcityMax: 1.8,
     xpReward: 55, relationDelta: 8, tags: ['transport', 'metro', 'deliver', 'ticket', 'choice_route'],
@@ -1669,7 +1670,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'transport_depot_white_lamp', title: 'Белая лампа депо', issuer: 'Машинист обратной петли',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.VISIT,
     desc: 'Осмотреть депо без рельсов и подтвердить, что белая лампа еще ведет назад. Если стрелка желтая, не трать предохранитель до отхода.',
-    target: { z: -14, roomType: RoomType.CORRIDOR, roomName: METRO_DEPOT_ROOM_NAME, zoneTag: 'metro_depot', hint: 'Коллекторы: депо без рельсов, белая служебная петля и шкаф предохранителей.' },
+    target: { z: -14, roomType: RoomType.CORRIDOR, roomDefId: METRO_DEPOT_ROOM_DEF_ID, zoneTag: 'metro_depot', hint: 'Коллекторы: депо без рельсов, белая служебная петля и шкаф предохранителей.' },
     rewardItem: 'fuse', rewardCount: 1, extraRewards: [{ defId: 'metro_ticket', count: 1 }],
     moneyReward: 130, rewardResourceId: 'tools', rewardScarcityMax: 2.2,
     xpReward: 70, relationDelta: 10, tags: ['transport', 'metro', 'inspect', 'safe_return', 'depot'],
@@ -1731,7 +1732,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'sanitary_white_slime_no_open', title: 'Белую слизь не вскрывать', issuer: 'Санитарный прожиг',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.VISIT,
     desc: 'Санитары: осмотреть комнату белого остатка, подтвердить пломбу и уйти без пробы. Белую слизь в ведро не класть; ведро потом приходится ловить.',
-    target: { z: 2, roomType: RoomType.LIVING, roomName: 'Комната белого остатка', zoneTag: 'ag65_white_compulsion', hint: 'Жилая зона: белая комната с холодной пломбой. Проверить дверь, не смотреть долго на налет, не вскрывать тару.' },
+    target: { z: 2, roomType: RoomType.LIVING, roomDefId: 'Комната белого остатка', zoneTag: 'ag65_white_compulsion', hint: 'Жилая зона: белая комната с холодной пломбой. Проверить дверь, не смотреть долго на налет, не вскрывать тару.' },
     rewardItem: 'sanitary_kit', rewardCount: 1,
     moneyReward: 120, rewardResourceId: 'medicine', rewardScarcityMax: 2.4,
     xpReward: 70, relationDelta: 11, tags: ['liquidator', 'sanitary', 'technical_cleanup', 'inspect', 'seal', 'white_slime', 'do_not_open'],
@@ -1827,7 +1828,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Принеси журнал давления с пневмопочтовым талоном. Три коротких стука значит отход с журналом, не проверка фамилии.',
     target: {
-      z: -14, roomType: RoomType.STORAGE, roomName: PNEUMOMAIL_SORTER_ROOM_NAME,
+      z: -14, roomType: RoomType.STORAGE, roomDefId: PNEUMOMAIL_SORTER_ROOM_NAME,
       zoneTag: 'pneumomail', hint: 'Коллекторы: пневмопочтовый узел, сортировка чужих капсул. Журнал давления лежит в приемной или в сортировке.',
     },
     targetItem: 'pressure_logbook', targetCount: 1,
@@ -2023,7 +2024,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'external_cell_route_report', title: 'Квитанция для сержанта Баринова', issuer: 'Оружейная стойка',
     faction: Faction.LIQUIDATOR, rank: 1, type: QuestType.FETCH,
     desc: 'Сержант Баринов просит маршрутную квитанцию из квартиры тихой соседки. Нужна не проповедь, а бумага: адрес, долг, черная ладонь.',
-    target: { z: 2, roomType: RoomType.LIVING, roomName: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: квартира Нины Павловны, тумба с маршрутными квитанциями или ее личный маршрут.' },
+    target: { z: 2, roomType: RoomType.LIVING, roomDefId: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: квартира Нины Павловны, тумба с маршрутными квитанциями или ее личный маршрут.' },
     targetItem: 'caravan_route', targetCount: 1,
     rewardItem: 'ammo_9mm', rewardCount: 10, extraRewards: [{ defId: 'liquidator_ration', count: 1 }],
     moneyReward: 45, rewardResourceId: 'ammo', rewardScarcityMax: 2.0,
@@ -2033,7 +2034,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'external_cell_smoke_trust', title: 'Дым без вопросов', issuer: 'Тихая дверь',
     faction: Faction.CULTIST, rank: 1, type: QuestType.FETCH,
     desc: 'Внешняя ячейка просит две пачки дыма на общий стол. Кто приносит без вопросов, тому показывают дверь без очереди.',
-    target: { z: 2, roomType: RoomType.SMOKING, roomName: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: курилка, рынок или квартира Нины; сигареты не светить при общей кухне.' },
+    target: { z: 2, roomType: RoomType.SMOKING, roomDefId: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: курилка, рынок или квартира Нины; сигареты не светить при общей кухне.' },
     targetItem: 'cigs', targetCount: 2,
     rewardItem: 'temp_pass', rewardCount: 1, extraRewards: [{ defId: 'caravan_route', count: 1 }],
     moneyReward: 25, rewardResourceId: 'contraband', rewardScarcityMax: 1.8,
@@ -2043,7 +2044,7 @@ export const CONTRACTS: ContractDef[] = [
     id: 'external_cell_calendar_betrayal', title: 'Бирка за календарем', issuer: 'Ванька Банчиный',
     faction: Faction.WILD, rank: 1, type: QuestType.FETCH,
     desc: 'Ванька покупает бирку из коробки за календарем. Он не спрашивает, чья ладонь на стене: ему нужен ключевой номер и слух погромче.',
-    target: { z: 2, roomType: RoomType.LIVING, roomName: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: тайник Нины за календарем; бирку лучше вынести до разговоров с сержантом Бариновым.' },
+    target: { z: 2, roomType: RoomType.LIVING, roomDefId: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: тайник Нины за календарем; бирку лучше вынести до разговоров с сержантом Бариновым.' },
     targetItem: 'container_key_label', targetCount: 1,
     rewardItem: 'holy_water', rewardCount: 1, extraRewards: [{ defId: 'cigs', count: 3 }],
     moneyReward: 20, rewardResourceId: 'contraband', rewardScarcityMax: 1.6,
@@ -2053,8 +2054,8 @@ export const CONTRACTS: ContractDef[] = [
     id: 'external_cell_keep_quiet', title: 'Маршрут без свидетелей', issuer: 'Соседская очередь',
     faction: Faction.CITIZEN, rank: 0, type: QuestType.TALK,
     desc: 'Соседи просят не нести маршрутную квитанцию ни сержанту Баринову, ни Ваньке. Вернуться к Нине и сказать коротко: бумагу не видели.',
-    target: { z: 2, roomType: RoomType.LIVING, roomName: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: поговорить с Ниной Павловной в ее квартире без общей кухни и лишних свидетелей.' },
-    targetPlotNpcId: 'ag77_nina_neighbor', targetNpcName: 'Нина Павловна',
+    target: { z: 2, roomType: RoomType.LIVING, roomDefId: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: поговорить с Ниной Павловной в ее квартире без общей кухни и лишних свидетелей.' },
+    targetNpcId: getPlotNpcNumericId('ag77_nina_neighbor')!, targetNpcName: 'Нина Павловна',
     rewardItem: 'bread', rewardCount: 1, extraRewards: [{ defId: 'note', count: 1 }],
     moneyReward: 0, rewardResourceId: 'documents', rewardScarcityMax: 1.4,
     xpReward: 30, relationDelta: 4, tags: ['external_cell', 'chernobog', 'silence', 'concealment', 'citizen', 'social'],
@@ -2108,7 +2109,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.WILD, rank: 1, type: QuestType.TALK,
     desc: 'Найди Дайвера Кота и договорись о тихом проходе через мокрый обход. Не спрашивай имя, в мешок не смотри, пустым не приходи.',
     target: { z: -14, roomType: RoomType.CORRIDOR, zoneTag: 'water_bridge', hint: 'Коллекторы: сухой мост и водолазные метки. Поговорите с Дайвером Котом, пока обход не стал засадой.' },
-    targetPlotNpcId: 'diver_kot', targetNpcName: 'Дайвер Кот',
+    targetNpcId: getPlotNpcNumericId('diver_kot')!, targetNpcName: 'Дайвер Кот',
     rewardItem: 'ammo_harpoon', rewardCount: 3, extraRewards: [{ defId: 'rawmeat', count: 2 }],
     moneyReward: 75, rewardResourceId: 'ammo', rewardScarcityMax: 2.0,
     xpReward: 55, relationDelta: 8, tags: ['wild', 'negotiate', 'passage', 'maintenance', 'water_bridge', 'talk'],
@@ -2162,7 +2163,7 @@ export function contractToQuest(def: ContractDef, questId: number, giver?: { id:
     targetMonsterKind: def.targetMonsterKind,
     killCount: def.type === QuestType.KILL ? 0 : undefined,
     killNeeded: def.killNeeded,
-    targetPlotNpcId: def.targetPlotNpcId,
+    targetNpcId: def.targetNpcId,
     targetNpcName: def.targetNpcName,
     rewardItem: def.rewardItem,
     rewardCount: def.rewardCount,
@@ -2189,7 +2190,7 @@ export function questTargetEventData(q: Quest): Record<string, unknown> {
   if (q.targetHint) data.targetHint = q.targetHint;
   if (q.targetMarker) {
     data.targetMarker = { ...q.targetMarker };
-    if (q.targetMarker.roomName) data.targetRoomName = q.targetMarker.roomName;
+    if (q.targetMarker.roomDefId) data.targetRoomDefId = q.targetMarker.roomDefId;
     if (q.targetMarker.designFloorId) data.targetDesignFloorId = q.targetMarker.designFloorId;
     if (q.targetMarker.proceduralTag) data.targetProceduralTag = q.targetMarker.proceduralTag;
     if (q.targetMarker.routeZ !== undefined) data.targetZ = q.targetMarker.routeZ;

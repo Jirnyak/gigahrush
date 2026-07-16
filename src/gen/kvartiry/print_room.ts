@@ -1,5 +1,6 @@
 /* ── Нелегальная типография — Kvartiry social pressure POI ───── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -37,7 +38,7 @@ const DIMA: PlotNpcDef = {
 
 registerSideQuest('kv_dima_pechatnik', DIMA, [{
   id: 'kv_print_notes',
-  giverNpcId: 'kv_dima_pechatnik',
+  giverId: getPlotNpcNumericId('kv_dima_pechatnik')!,
   type: QuestType.FETCH,
     desc: 'Дима Печатник: «Неси десять чужих записок. Сделаем бумагу, после которой охрана задает меньше вопросов.»',
   targetItem: 'note', targetCount: 10,
@@ -46,7 +47,7 @@ registerSideQuest('kv_dima_pechatnik', DIMA, [{
   relationDelta: 14, xpReward: 45, moneyReward: 40,
 }, {
   id: 'kv_print_ministry_audit_forgery',
-  giverNpcId: 'kv_dima_pechatnik',
+  giverId: getPlotNpcNumericId('kv_dima_pechatnik')!,
   type: QuestType.FETCH,
   desc: 'Дима Печатник: «Два пустых бланка - и напечатаю аудиторское предписание. Работает тихо, пока печать не сравнили с настоящей.»',
   targetItem: 'blank_form', targetCount: 2,

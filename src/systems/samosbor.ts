@@ -1123,7 +1123,7 @@ function resolvePlayerShelterAtSeal(
       tags: ['samosbor', 'shelter', 'success', 'prepared', `samosbor_${variant.def.id}`],
       data: {
         outcome: 'prepared_shelter',
-        roomName: room.name,
+        roomDefId: room.name,
         roomId: room.id,
         doorCount: Math.min(room.doors.length, PLAYER_SHELTER_DOOR_CAP),
         samosborCount: state.samosborCount,
@@ -1151,7 +1151,7 @@ function resolvePlayerShelterAtSeal(
     data: {
       outcome: 'unprepared_shelter',
       warning: 'Укрытие сорвано: игрок остался вне рабочей гермы.',
-      roomName: room?.name,
+      roomDefId: room?.name,
       roomId: room?.id,
       nearestDoorIdx: nearestDoorIdx >= 0 ? nearestDoorIdx : undefined,
       nearestDoorState: nearestDoorIdx >= 0 ? world.doors.get(nearestDoorIdx)?.state : undefined,
@@ -3736,9 +3736,9 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   const maxHp = getMaxHp(rpg);
   const loadout = randomNpcInventory(faction, rpg.level);
   const wasPlayer = isPlayerEntity(entity);
-  if (entity.type === EntityType.NPC && entity.plotNpcId && entity.alifeId === undefined) {
+  if (entity.type === EntityType.NPC && entity.id && entity.alifeId === undefined) {
     recordAlifeNpcDeath(state, entity);
-    delete entity.plotNpcId;
+    delete (entity as Partial<Entity>).id;
   }
   entity.name = wasPlayer ? `${named.name} (вы)` : named.name;
   entity.firstName = named.firstName;

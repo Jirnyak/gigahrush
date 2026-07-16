@@ -10,7 +10,7 @@ export interface CraftRecipeSourceDef {
   itemId?: string;
   questId?: string;
   terminalId?: string;
-  npcId?: string;
+  npcId?: number;
   floorId?: string;
   interactiveDefId?: string;
   text: string;
@@ -274,10 +274,10 @@ export function craftRecipeSourcesForFloor(floorId: string): CraftRecipeSourceDe
   return CRAFT_RECIPE_SOURCES.filter(source => source.kind === 'floor' && source.floorId === floorId);
 }
 
-export function craftRecipeSourcesForNpc(npc: Pick<Entity, 'plotNpcId' | 'occupation' | 'faction'>): CraftRecipeSourceDef[] {
+export function craftRecipeSourcesForNpc(npc: Pick<Entity, 'id' | 'occupation' | 'faction'>): CraftRecipeSourceDef[] {
   return CRAFT_RECIPE_SOURCES.filter(source => {
     if (source.kind !== 'npc') return false;
-    if (source.npcId !== undefined && source.npcId !== npc.plotNpcId) return false;
+    if (source.npcId !== undefined && source.npcId !== npc.id) return false;
     if (source.npcOccupations !== undefined && (npc.occupation === undefined || !source.npcOccupations.includes(npc.occupation))) return false;
     if (source.npcFactions !== undefined && (npc.faction === undefined || !source.npcFactions.includes(npc.faction))) return false;
     return source.npcId !== undefined || source.npcOccupations !== undefined || source.npcFactions !== undefined;

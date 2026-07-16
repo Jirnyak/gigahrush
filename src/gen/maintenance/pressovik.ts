@@ -1,5 +1,6 @@
 /* ── Monster_09 Pressovik — production-line timing room ──────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   ContainerKind,
   Faction,
@@ -59,7 +60,7 @@ const MASTER_DEF: PlotNpcDef = {
 
 registerSideQuest('pressovik_stop_master', MASTER_DEF, [{
   id: STOP_QUEST_ID,
-  giverNpcId: 'pressovik_stop_master',
+  giverId: getPlotNpcNumericId('pressovik_stop_master')!,
   type: QuestType.FETCH,
   desc: 'Нина: «Одна шестерня в стопор Прессовика. Переждёшь удар, подойдёшь к пульту и линия встанет без похорон.»',
   targetItem: 'gear',

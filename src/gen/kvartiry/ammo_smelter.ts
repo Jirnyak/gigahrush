@@ -1,5 +1,6 @@
 /* -- Podpolnaya ammo smelter: contested Kvartiry ammo route ------- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -69,7 +70,7 @@ const POLINA: PlotNpcDef = {
 
 registerSideQuest('kv_gesha_gilza', GESHA, [{
   id: 'kv_smelter_metal_help',
-  giverNpcId: 'kv_gesha_gilza',
+  giverId: getPlotNpcNumericId('kv_gesha_gilza')!,
   type: QuestType.FETCH,
   desc: 'Геша Гильза: «Лист металла в горячий ящик. Патроны будут, но тихо.»',
   targetItem: 'metal_sheet', targetCount: 1,
@@ -80,7 +81,7 @@ registerSideQuest('kv_gesha_gilza', GESHA, [{
 
 registerSideQuest('kv_polina_obhodnaya', POLINA, [{
   id: 'kv_smelter_report',
-  giverNpcId: 'kv_polina_obhodnaya',
+  giverId: getPlotNpcNumericId('kv_polina_obhodnaya')!,
   type: QuestType.FETCH,
   desc: 'Полина Обходная: «Нужен донос на гильзоплавку. Без бумаги я слышу только ремонт.»',
   targetItem: 'denunciation', targetCount: 1,

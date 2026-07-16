@@ -1,5 +1,6 @@
 /* ── Очередник: мутировавшая очередь как социальный монстр ───── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Item, type WorldContainer,
@@ -79,7 +80,7 @@ const YASHA: PlotNpcDef = {
 
 registerSideQuest('kv_ocherednik_lyuba', LYUBA, [{
   id: 'kv_ocherednik_show_coupon',
-  giverNpcId: 'kv_ocherednik_lyuba',
+  giverId: getPlotNpcNumericId('kv_ocherednik_lyuba')!,
   type: QuestType.FETCH,
   desc: 'Люба Номерная: «Покажите талон на воду, и я проведу вас через боковой проход без драки.»',
   targetItem: 'water_coupon', targetCount: 1,
@@ -94,7 +95,7 @@ registerSideQuest('kv_ocherednik_lyuba', LYUBA, [{
 
 registerSideQuest('kv_ocherednik_efim', EFIM, [{
   id: 'kv_ocherednik_expose_leader',
-  giverNpcId: 'kv_ocherednik_efim',
+  giverId: getPlotNpcNumericId('kv_ocherednik_efim')!,
   type: QuestType.FETCH,
   desc: 'Ефим Сверщик: «Найдите поддельную пайковую карточку первого номера. Бумагой его из очереди вынесет сама толпа.»',
   targetItem: 'forged_ration_card', targetCount: 1,
@@ -109,7 +110,7 @@ registerSideQuest('kv_ocherednik_efim', EFIM, [{
 
 registerSideQuest('kv_ocherednik_yasha', YASHA, [{
   id: 'kv_ocherednik_fight_through',
-  giverNpcId: 'kv_ocherednik_yasha',
+  giverId: getPlotNpcNumericId('kv_ocherednik_yasha')!,
   type: QuestType.KILL,
   desc: 'Яша Пролом: «Сбейте первого номера и проход откроется. Только очередь увидит, как именно.»',
   targetMonsterKind: MonsterKind.NELYUD,

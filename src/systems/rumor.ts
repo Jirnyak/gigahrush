@@ -37,7 +37,7 @@ export interface RumorEventLike {
   zoneName?: string;
   roomId?: number;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   x?: number;
   y?: number;
   itemId?: string;
@@ -313,7 +313,7 @@ function selectRoomMemoryRumor(npc: Entity, snapshot: ContextSnapshot, memory: N
   const rumorId = roomMemoryRumorId(snapshot);
   if (!rumorId || memory.knownRumorIds.includes(rumorId)) return undefined;
   rememberRumor(npc, rumorId, now);
-  const room = snapshot.roomName ?? 'эта комната';
+  const room = snapshot.roomDefId ?? 'эта комната';
   const zone = snapshot.zoneId === undefined ? '' : `, зона ${snapshot.zoneId + 1}`;
   if (snapshot.hasRoomMemoryTheft) return `${room}${zone}: тут помнят кражу. Зацепка: чужие контейнеры теперь ведут к ревизии.`;
   if (snapshot.hasRoomMemoryCombat) return `${room}${zone}: после боя жильцы слушают шаги. Зацепка: разговоры и цены стали жестче.`;
@@ -474,7 +474,7 @@ function formatStaticLead(lead: RumorLead): string {
     else parts.push(`этаж ${lead.z}`);
   }
   if (lead.zoneHint) parts.push(lead.zoneHint);
-  if (lead.roomName) parts.push(lead.roomName);
+  if (lead.roomDefId) parts.push(lead.roomDefId);
   else if (lead.roomType !== undefined) parts.push(ROOM_TYPE_NAMES[lead.roomType]);
   if (lead.itemId) {
     const itemName = ITEMS[lead.itemId]?.name.toLowerCase();
@@ -505,7 +505,7 @@ function eventZoneName(event: RumorEventRecord): string {
 }
 
 function eventRoomName(event: RumorEventRecord): string {
-  return event.roomName ?? eventDataString(event, ['roomName', 'destinationRoomName', 'targetRoomName', 'sourceRoomName']);
+  return event.roomDefId ?? eventDataString(event, ['roomDefId', 'destinationRoomName', 'targetRoomDefId', 'sourceRoomName']);
 }
 
 function formatEventLead(event: RumorEventRecord): string {
@@ -518,8 +518,8 @@ function formatEventLead(event: RumorEventRecord): string {
   const zoneName = eventZoneName(event);
   if (zoneName) pushLeadPart(parts, zoneName);
   else if (event.zoneId !== undefined) pushLeadPart(parts, `зона ${event.zoneId + 1}`);
-  const roomName = eventRoomName(event);
-  if (roomName) pushLeadPart(parts, roomName);
+  const roomDefId = eventRoomName(event);
+  if (roomDefId) pushLeadPart(parts, roomDefId);
   else if (event.roomType !== undefined) pushLeadPart(parts, ROOM_TYPE_NAMES[event.roomType]);
   else if (event.roomId !== undefined) pushLeadPart(parts, `комната ${event.roomId}`);
   const resourceName = typeof event.data?.resourceName === 'string' ? event.data.resourceName : '';
@@ -569,7 +569,7 @@ function rememberRecentLead(rumor: RumorDef, text: string, now: number, event?: 
     text,
     heardAt: now,
     z: rumor.lead?.z ?? event?.z,
-    roomName: rumor.lead?.roomName ?? (event ? eventRoomName(event) : undefined),
+    roomDefId: rumor.lead?.roomDefId ?? (event ? eventRoomName(event) : undefined),
     itemId: rumor.lead?.itemId ?? event?.itemId,
     monsterKind: rumor.lead?.monsterKind ?? event?.monsterKind,
   });
@@ -588,7 +588,7 @@ function formatReveal(reveal: RumorReveal): string {
       if (reveal.faction !== undefined) return `зона: ${ZONE_FACTION_NAMES[reveal.faction] ?? 'чужая'}`;
       return '';
     case 'room':
-      return reveal.roomName ?? (reveal.roomType !== undefined ? ROOM_TYPE_NAMES[reveal.roomType] : '');
+      return reveal.roomDefId ?? (reveal.roomType !== undefined ? ROOM_TYPE_NAMES[reveal.roomType] : '');
     case 'danger':
       return 'опасность';
     case 'monster':
@@ -749,7 +749,7 @@ function warningTagName(tag: string): string {
 function fillSlots(text: string, snapshot: ContextSnapshot): string {
   let out = text;
   if (out.includes('{zone}')) out = out.split('{zone}').join(snapshot.zoneId === undefined ? 'этой зоне' : `зоне ${snapshot.zoneId + 1}`);
-  if (out.includes('{room}')) out = out.split('{room}').join(snapshot.roomName ?? 'этой комнате');
+  if (out.includes('{room}')) out = out.split('{room}').join(snapshot.roomDefId ?? 'этой комнате');
   return out;
 }
 

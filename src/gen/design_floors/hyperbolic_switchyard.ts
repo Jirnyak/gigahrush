@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Design z: hyperbolic_switchyard / Гиперболическая стрелочная ─ */
 
 import {
@@ -208,7 +209,7 @@ const GUIDE_DEF: PlotNpcDef = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, GUIDE_NPC_ID, GUIDE_DEF, [{
   id: 'hyperbolic_switchyard_pay_guide',
-  giverNpcId: GUIDE_NPC_ID,
+  giverId: getPlotNpcNumericId(GUIDE_NPC_ID)!,
   type: QuestType.FETCH,
   desc: 'Зинаида Кривых Стрелок: «Билет метро и я отмечу мелом, какая дуга сегодня не кусается. Без билета тут все платформы одинаково честные.»',
   targetItem: 'metro_ticket',
@@ -227,7 +228,7 @@ export function generateHyperbolicSwitchyardDesignFloor(seed = SEED): Hyperbolic
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const containerId = { v: 1 };
     const center = { x: W >> 1, y: W >> 1 };
 
@@ -1070,7 +1071,7 @@ function addContainer(
 
 function isHyperbolicSwitchyardAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !entity.id &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1;

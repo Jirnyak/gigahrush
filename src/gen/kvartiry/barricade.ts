@@ -1,5 +1,6 @@
 /* ── Баррикадированный лестничный пролёт — four-route POI ───── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   AIGoal, Cell, DoorState, EntityType, Feature, Faction, MonsterKind, Occupation, QuestType, RoomType, Tex,
 } from '../../core/types';
@@ -92,7 +93,7 @@ const LYUBA: PlotNpcDef = {
 
 registerSideQuest('kv_karpov_barricade', KARPOV, [{
   id: REPAIR_QUEST_ID,
-  giverNpcId: 'kv_karpov_barricade',
+  giverId: getPlotNpcNumericId('kv_karpov_barricade')!,
   type: QuestType.FETCH,
   desc: 'Карпов Баррикадный: «Три трубы на распорки. Починим среднюю створку, и пролёт перестанет быть горлом.»',
   targetItem: 'pipe', targetCount: 3,
@@ -111,7 +112,7 @@ registerSideQuest('kv_karpov_barricade', KARPOV, [{
 
 registerSideQuest(RAYA_ID, RAYA, [{
   id: BRIBE_QUEST_ID,
-  giverNpcId: RAYA_ID,
+  giverId: getPlotNpcNumericId(RAYA_ID)!,
   type: QuestType.FETCH,
   desc: 'Рая Проходная: «Тридцать пять рублей — и платная створка сделает вид, что вы свой.»',
   targetItem: 'money', targetCount: 35,
@@ -130,7 +131,7 @@ registerSideQuest(RAYA_ID, RAYA, [{
 
 registerSideQuest(LYUBA_ID, LYUBA, [{
   id: FIGHT_QUEST_ID,
-  giverNpcId: LYUBA_ID,
+  giverId: getPlotNpcNumericId(LYUBA_ID)!,
   type: QuestType.KILL,
   desc: 'Люба с табуретом: «В нижней щели две арматуры шевелятся. Разбейте их или идите в обход по одному.»',
   targetMonsterKind: MonsterKind.REBAR,

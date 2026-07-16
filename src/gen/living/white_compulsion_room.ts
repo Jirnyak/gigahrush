@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- AG65 white compulsion room: quiet NPC decision POI --------- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -136,10 +137,10 @@ registerSideQuest(VICTIM_ID, NPC_DEFS[VICTIM_ID], []);
 registerSideQuest(NEIGHBOR_ID, NPC_DEFS[NEIGHBOR_ID], [
   {
     id: RESCUE_QUEST,
-    giverNpcId: NEIGHBOR_ID,
+    giverId: getPlotNpcNumericId(NEIGHBOR_ID)!,
     type: QuestType.TALK,
     desc: 'Даша У Порога: «Подойди к Тоне и выведи её от белого остатка. Говори по имени, смотри на неё, не на стену.»',
-    targetNpcId: VICTIM_ID,
+    targetNpcId: getPlotNpcNumericId(VICTIM_ID)!,
     rewardItem: 'water',
     rewardCount: 2,
     extraRewards: [{ defId: 'bread', count: 1 }],
@@ -152,7 +153,7 @@ registerSideQuest(NEIGHBOR_ID, NPC_DEFS[NEIGHBOR_ID], [
 registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [
   {
     id: SEAL_QUEST,
-    giverNpcId: LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Клим Пломба: «Один тюбик герметика - и я закрою белую комнату по шву. Без герметика это просто створка на честном слове.»',
     targetItem: 'sealant_tube',
@@ -169,7 +170,7 @@ registerSideQuest(LIQUIDATOR_ID, NPC_DEFS[LIQUIDATOR_ID], [
 registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
   {
     id: SAMPLE_QUEST,
-    giverNpcId: SCIENTIST_ID,
+    giverId: getPlotNpcNumericId(SCIENTIST_ID)!,
     type: QuestType.FETCH,
     desc: 'Марк Пробник: «Возьми из лотка белый соскоб и сразу принеси мне. Не клади к еде, документам и своим оправданиям.»',
     targetItem: 'psi_dust',
@@ -186,7 +187,7 @@ registerSideQuest(SCIENTIST_ID, NPC_DEFS[SCIENTIST_ID], [
 registerSideQuest(WATCHER_ID, NPC_DEFS[WATCHER_ID], [
   {
     id: LOST_QUEST,
-    giverNpcId: WATCHER_ID,
+    giverId: getPlotNpcNumericId(WATCHER_ID)!,
     type: QuestType.FETCH,
     desc: 'Ефим Актовый: «Принеси расписку со стола. Если подпись есть, комната считается оставленной. Иногда это тоже выбор.»',
     targetItem: 'voluntary_receipt',

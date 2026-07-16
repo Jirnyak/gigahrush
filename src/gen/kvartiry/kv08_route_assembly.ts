@@ -1,5 +1,6 @@
 /* ── Маршрутный сход: три спорных выхода с этажа Квартир ─────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -145,7 +146,7 @@ const SONYA: PlotNpcDef = {
 
 registerSideQuest('kv08_borya_prorez', BORYA, [{
   id: 'kv08_open_manhattan_crossroads',
-  giverNpcId: 'kv08_borya_prorez',
+  giverId: getPlotNpcNumericId('kv08_borya_prorez')!,
   type: QuestType.FETCH,
   desc: 'Исход: открыть шумный прорез к Манхэттенским перекрёсткам. Боря Прорез просит три трубы на распорки.',
   targetItem: 'pipe', targetCount: 3,
@@ -156,7 +157,7 @@ registerSideQuest('kv08_borya_prorez', BORYA, [{
 
 registerSideQuest('kv08_marina_ring', MARINA, [{
   id: 'kv08_hold_communal_ring',
-  giverNpcId: 'kv08_marina_ring',
+  giverId: getPlotNpcNumericId('kv08_marina_ring')!,
   type: QuestType.FETCH,
   desc: 'Исход: удержать тихую цепочку к Коммунальному кольцу. Марина Кольцевая просит четыре буханки для соседей у дверей.',
   targetItem: 'bread', targetCount: 4,
@@ -167,7 +168,7 @@ registerSideQuest('kv08_marina_ring', MARINA, [{
 
 registerSideQuest('kv08_sonya_88', SONYA, [{
   id: 'kv08_sell_market_88_lane',
-  giverNpcId: 'kv08_sonya_88',
+  giverId: getPlotNpcNumericId('kv08_sonya_88')!,
   type: QuestType.FETCH,
   desc: 'Исход: продать обход рынку 88. Соня Восьмая просит двенадцать бюллетеней для караванной очереди.',
   targetItem: 'ballot', targetCount: 12,

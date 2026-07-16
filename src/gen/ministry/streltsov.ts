@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Полковник Стрельцов — side quest (ministry floor) ────────── */
 /* Заместитель министра по безопасности. Спецоперации по духам.    */
 
@@ -46,7 +47,7 @@ registerAuthoredNpc({
   quests: [
     {
       id: 'streltsov_spirits',
-      giverNpcId: NPC_ID,
+      giverId: getPlotNpcNumericId(NPC_ID)!,
       type: QuestType.KILL,
       desc: 'Стрельцов: «Четыре духа. Где встретите - там и уничтожить.»',
       targetMonsterKind: MonsterKind.SPIRIT,

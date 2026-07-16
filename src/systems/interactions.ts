@@ -121,7 +121,7 @@ export interface InteractionContext {
   lookY: number;
   readOnly?: boolean;
   switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean, targetZ?: number) => void;
-  movePlayerToMetroRoom?: (roomName: string) => boolean;
+  movePlayerToMetroRoom?: (roomDefId: string) => boolean;
   openNpcMenu?: (npc: Entity) => void;
   openContainerMenu?: (container: WorldContainer) => void;
   openCraftMenu?: (request: ContentCraftMenuRequest) => void;
@@ -521,7 +521,7 @@ function activateMetro(ctx: InteractionContext): InteractionResult {
   if (!metro.destination) {
     ctx.state.msgs.push(msg(metro.message, ctx.state.time, metro.color));
   } else if (metro.destination.kind === 'local') {
-    if (ctx.movePlayerToMetroRoom?.(metro.destination.roomName)) {
+    if (ctx.movePlayerToMetroRoom?.(metro.destination.roomDefId)) {
       ctx.state.msgs.push(msg(metro.message, ctx.state.time, metro.color));
     } else {
       ctx.state.msgs.push(msg('Метро дернулось, но карман не найден.', ctx.state.time, '#f84'));

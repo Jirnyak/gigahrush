@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Тонкая стена — Hell phasing encounter ───────────────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -53,10 +54,10 @@ const SCOUT_DEF: PlotNpcDef = {
 registerSideQuest(BLACK_HAND_SCOUT_ID, SCOUT_DEF, [
   {
     id: BLACK_HAND_REPORT_QUEST_ID,
-    giverNpcId: BLACK_HAND_SCOUT_ID,
+    giverId: getPlotNpcNumericId(BLACK_HAND_SCOUT_ID)!,
     type: QuestType.VISIT,
     desc: 'Коптев: «Черная ладонь ведет к тонкой стене {dir}. Дойди до конца следа, отметь место и реши сам: обходить, чистить или брать тайник.»',
-    targetRoomName: CHAPEL_NAME,
+    targetRoomDefId: CHAPEL_NAME,
     rewardItem: 'cleaning_kit',
     rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],

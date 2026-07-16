@@ -1,5 +1,6 @@
 /* ── Живой архив райсовета — Ministry archive/access POI ─────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   ContainerKind,
   Feature,
@@ -142,7 +143,7 @@ const TIMUR_DEF: PlotNpcDef = {
 registerSideQuest('marfa_pasportnaya', MARFA_DEF, [
   {
     id: 'archive_obtain_permit',
-    giverNpcId: 'marfa_pasportnaya',
+    giverId: getPlotNpcNumericId('marfa_pasportnaya')!,
     type: QuestType.FETCH,
     desc: 'Марфа Паспортная: «Два пустых бланка. Выдам допуск к архивной карточке без ночной очереди. Пустое не подписывать.»',
     targetItem: 'blank_form', targetCount: 2,
@@ -155,7 +156,7 @@ registerSideQuest('marfa_pasportnaya', MARFA_DEF, [
 registerSideQuest('ippolit_podshtampov', IPPOLIT_DEF, [
   {
     id: 'archive_forge_stamp',
-    giverNpcId: 'ippolit_podshtampov',
+    giverId: getPlotNpcNumericId('ippolit_podshtampov')!,
     type: QuestType.FETCH,
     desc: 'Ипполит Подштампов: «Две чернильницы. Сделаю лист с печатью, который почти не дрожит.»',
     targetItem: 'ink_bottle', targetCount: 2,
@@ -168,7 +169,7 @@ registerSideQuest('ippolit_podshtampov', IPPOLIT_DEF, [
 registerSideQuest('kira_kartotechnaya', KIRA_DEF, [
   {
     id: 'archive_steal_card',
-    giverNpcId: 'kira_kartotechnaya',
+    giverId: getPlotNpcNumericId('kira_kartotechnaya')!,
     type: QuestType.FETCH,
     desc: 'Кира Картотечная: «Принесите краденую архивную карточку из служебной картотеки. Журнал заметит, зато полка перестанет выбирать владельца сама.»',
     targetItem: 'stolen_archive_card', targetCount: 1,
@@ -181,7 +182,7 @@ registerSideQuest('kira_kartotechnaya', KIRA_DEF, [
 registerSideQuest('timur_nedostacha', TIMUR_DEF, [
   {
     id: 'archive_return_file',
-    giverNpcId: 'timur_nedostacha',
+    giverId: getPlotNpcNumericId('timur_nedostacha')!,
     type: QuestType.FETCH,
     desc: 'Тимур Недостача: «Верните пропавшее личное дело. Пока оно пропало, виноват я, а шкаф ищет следующего.»',
     targetItem: 'missing_record_file', targetCount: 1,
@@ -191,7 +192,7 @@ registerSideQuest('timur_nedostacha', TIMUR_DEF, [
   },
   {
     id: 'archive_expose_missing_record',
-    giverNpcId: 'timur_nedostacha',
+    giverId: getPlotNpcNumericId('timur_nedostacha')!,
     type: QuestType.FETCH,
     desc: 'Тимур Недостача: «Найдите акт о пропавшей записи. Пусть шкаф отвечает публично.»',
     targetItem: 'record_exposure_notice', targetCount: 1,

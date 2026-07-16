@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Caravan exchange: tariffs, route handoff, and cargo theft ── */
 
 import {
@@ -83,7 +84,7 @@ const POTAP: PlotNpcDef = {
 
 registerSideQuest(DISPATCHER_ID, NINA, [{
   id: 'ag108_pay_queue_tariff',
-  giverNpcId: DISPATCHER_ID,
+  giverId: getPlotNpcNumericId(DISPATCHER_ID)!,
   type: QuestType.FETCH,
   desc: 'Нина Тарифная: «Оплати 18 рублей за квартальную водно-хлебную линию. Очередь станет стабильнее, цена - тише.»',
   targetItem: 'money', targetCount: 18,
@@ -98,7 +99,7 @@ registerSideQuest(DISPATCHER_ID, NINA, [{
 
 registerSideQuest(BROKER_ID, IRA, [{
   id: 'ag108_open_net_lane',
-  giverNpcId: BROKER_ID,
+  giverId: getPlotNpcNumericId(BROKER_ID)!,
   type: QuestType.FETCH,
   desc: 'Ира НЕТ-маршрут: «Отдай маршрут каравана. Откроем линию обменных данных между терминалом и жилой очередью.»',
   targetItem: 'caravan_route', targetCount: 1,
@@ -114,7 +115,7 @@ registerSideQuest(BROKER_ID, IRA, [{
 
 registerSideQuest(INSPECTOR_ID, POTAP, [{
   id: 'ag108_close_market_lane',
-  giverNpcId: INSPECTOR_ID,
+  giverId: getPlotNpcNumericId(INSPECTOR_ID)!,
   type: QuestType.FETCH,
   desc: 'Потап Ревизор: «Сдай маршрут каравана на рынок 88. Линию закроем, контрабандный тариф перестанет кормить рынок.»',
   targetItem: 'caravan_route', targetCount: 1,

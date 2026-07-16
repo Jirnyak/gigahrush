@@ -1,5 +1,6 @@
 /* -- Счетная 88: hidden debt counter for the living black market ---- */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell, ContainerKind, DoorState, Feature, RoomType, Tex,
   type ContainerAccess, type Entity, Faction, Occupation, QuestType,
@@ -140,7 +141,7 @@ const NPC_DEFS: Record<string, PlotNpcDef> = {
 registerSideQuest('ag15_marta_broker', NPC_DEFS.ag15_marta_broker, [
   {
     id: 'ag15_marta_medicine_bid',
-    giverNpcId: 'ag15_marta_broker',
+    giverId: getPlotNpcNumericId('ag15_marta_broker')!,
     type: QuestType.FETCH,
     desc: 'Марта Восьмая: «Нужен антибиотик. Выкупи, выкради, вымоли — дефицит сам решит цену.»',
     targetItem: 'antibiotic', targetCount: 1,
@@ -150,7 +151,7 @@ registerSideQuest('ag15_marta_broker', NPC_DEFS.ag15_marta_broker, [
   },
   {
     id: 'ag15_marta_fake_permit',
-    giverNpcId: 'ag15_marta_broker',
+    giverId: getPlotNpcNumericId('ag15_marta_broker')!,
     type: QuestType.FETCH,
     desc: 'Марта Восьмая: «Принеси фальшивый пропуск. Я передам его тому, кто не должен выйти официально.»',
     targetItem: 'fake_pass', targetCount: 1,
@@ -163,7 +164,7 @@ registerSideQuest('ag15_marta_broker', NPC_DEFS.ag15_marta_broker, [
 registerSideQuest('ag15_ilya_debtor', NPC_DEFS.ag15_ilya_debtor, [
   {
     id: 'ag15_ilya_pay_debt',
-    giverNpcId: 'ag15_ilya_debtor',
+    giverId: getPlotNpcNumericId('ag15_ilya_debtor')!,
     type: QuestType.FETCH,
     desc: 'Илья Долговой: «Закрой за меня восемьдесят восемь рублей. Иначе Рыжий запишет меня в расход.»',
     targetItem: 'money', targetCount: 88,
@@ -176,7 +177,7 @@ registerSideQuest('ag15_ilya_debtor', NPC_DEFS.ag15_ilya_debtor, [
 registerSideQuest('ag15_lena_supplier', NPC_DEFS.ag15_lena_supplier, [
   {
     id: 'ag15_lena_stolen_token',
-    giverNpcId: 'ag15_lena_supplier',
+    giverId: getPlotNpcNumericId('ag15_lena_supplier')!,
     type: QuestType.FETCH,
     desc: 'Лена Подвал: «В долговом ящике лежит жетон ликвидатора. Принесешь — получишь энергоячейку. Услышат — беги.»',
     targetItem: 'liquidator_token', targetCount: 1,
@@ -189,7 +190,7 @@ registerSideQuest('ag15_lena_supplier', NPC_DEFS.ag15_lena_supplier, [
 registerSideQuest('ag15_nina_informer', NPC_DEFS.ag15_nina_informer, [
   {
     id: 'ag15_nina_expose_snitch',
-    giverNpcId: 'ag15_nina_informer',
+    giverId: getPlotNpcNumericId('ag15_nina_informer')!,
     type: QuestType.FETCH,
     desc: 'Нина Шептунья: «Найди донос из сейфа. Стукача не надо убивать, его надо прочитать вслух.»',
     targetItem: 'denunciation', targetCount: 1,
@@ -395,7 +396,7 @@ function spawnNpc(
   canGiveQuest: boolean,
   weapon?: string,
 ): void {
-  if (entities.some(e => e.alive && e.plotNpcId === plotNpcId)) return;
+  if (entities.some(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!)) return;
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
   requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {

@@ -95,7 +95,7 @@ export interface RecentRumorLead {
   heardAt: number;
   expiresAt: number;
   z?: number;
-  roomName?: string;
+  roomDefId?: string;
   itemId?: string;
   monsterKind?: MonsterKind;
 }

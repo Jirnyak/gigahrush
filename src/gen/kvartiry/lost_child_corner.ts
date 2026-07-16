@@ -1,5 +1,6 @@
 /* ── Угол потерянного ребёнка — Kvartiry social pressure POI ─── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -55,7 +56,7 @@ const VERA: PlotNpcDef = {
 
 registerSideQuest('kv_vera_poteryashkina', VERA, [{
   id: LOST_CHILD_RATIONS_QUEST_ID,
-  giverNpcId: 'kv_vera_poteryashkina',
+  giverId: getPlotNpcNumericId('kv_vera_poteryashkina')!,
   type: QuestType.FETCH,
   desc: 'Вера Потеряшкина: «Две бутылки воды для детей, пока коридор их не забрал.»',
   targetItem: 'water', targetCount: 2,
@@ -74,12 +75,12 @@ registerSideQuest('kv_vera_poteryashkina', VERA, [{
   },
 }, {
   id: LOST_CHILD_MEDICINE_TRUST_QUEST_ID,
-  giverNpcId: 'kv_vera_poteryashkina',
+  giverId: getPlotNpcNumericId('kv_vera_poteryashkina')!,
   type: QuestType.TALK,
   desc: 'Вера Потеряшкина: «Скажите Нине {dir}: Женя пьёт и может дойти. Без этого она не откроет детский аптечный запас.»',
-  targetNpcId: 'kv_nina_tabletkina',
+  targetNpcId: getPlotNpcNumericId('kv_nina_tabletkina')!,
   targetFloorZ: 60,
-  targetRoomName: 'Аптечный разменник',
+  targetRoomDefId: 'Аптечный разменник',
   targetZoneTag: KV_MEDICINE_TRUST_TAG,
   targetHint: 'Квартиры: от угла потерянного ребёнка дойдите до Аптечного разменника и поговорите с Ниной.',
   rewardItem: 'bandage', rewardCount: 1,

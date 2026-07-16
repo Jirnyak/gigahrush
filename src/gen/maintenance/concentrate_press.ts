@@ -1,5 +1,6 @@
 /* ── AG18 concentrate press — factory loop without factory sim ── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
@@ -122,7 +123,7 @@ function contentTags(extra: readonly string[] = []): string[] {
 
 registerSideQuest('ag18_press_master', MASTER_DEF, [{
   id: 'ag18_repair_concentrate_line',
-  giverNpcId: 'ag18_press_master',
+  giverId: getPlotNpcNumericId('ag18_press_master')!,
   type: QuestType.FETCH,
   desc: 'Инна: «Две шестерни на главный вал. Починим линию, пока ее не закрыли как опасный объект.»',
   targetItem: 'gear', targetCount: 2,
@@ -133,7 +134,7 @@ registerSideQuest('ag18_press_master', MASTER_DEF, [{
 
 registerSideQuest('ag18_press_input', INPUT_DEF, [{
   id: 'ag18_deliver_filter_input',
-  giverNpcId: 'ag18_press_input',
+  giverId: getPlotNpcNumericId('ag18_press_input')!,
   type: QuestType.FETCH,
   desc: 'Роман: «Четыре фильтрующих слоя в дозатор. Без них масса расползается как протокол без подписи.»',
   targetItem: 'filter_layer', targetCount: 4,
@@ -144,7 +145,7 @@ registerSideQuest('ag18_press_input', INPUT_DEF, [{
 
 registerSideQuest('ag18_press_guard', GUARD_DEF, [{
   id: 'ag18_defend_press_rebar',
-  giverNpcId: 'ag18_press_guard',
+  giverId: getPlotNpcNumericId('ag18_press_guard')!,
   type: QuestType.KILL,
   desc: 'Клин: «Арматура идет к валам. Одну убери, пока она не стала деталью пресса.»',
   targetMonsterKind: MonsterKind.REBAR,
@@ -156,7 +157,7 @@ registerSideQuest('ag18_press_guard', GUARD_DEF, [{
 
 registerSideQuest('ag18_press_thief', THIEF_DEF, [{
   id: 'ag18_steal_press_output',
-  giverNpcId: 'ag18_press_thief',
+  giverId: getPlotNpcNumericId('ag18_press_thief')!,
   type: QuestType.FETCH,
   desc: 'Лёва: «Четыре серых брикета со склада выхода. Назовем это перераспределением шума.»',
   targetItem: 'grey_briquette', targetCount: 4,

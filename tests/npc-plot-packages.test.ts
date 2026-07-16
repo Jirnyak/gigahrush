@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { QuestType } from '../src/core/types';
 import { World } from '../src/core/world';
 import { buildAlifePopulationPlan } from '../src/data/alife_population_plan';
-import { MAIN_PLOT_NPC_PACKAGES } from '../src/data/npc_plot_packages';
+
 import {
   allNpcPackages,
   getNpcPackage,
@@ -20,6 +20,7 @@ import { isPlotNpcDead, recordAlifeNpcDeath } from '../src/systems/alife';
 import { checkTalkQuest } from '../src/systems/quests';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 import { _overrideRng, _restoreRng } from '../src/core/rand';
+import '../src/data/npc_plot_packages';
 
 const MAIN_PLOT_IDS = [
   'marko_lolo',
@@ -48,7 +49,8 @@ function plotNpcName(plotNpcId: string): string {
 }
 
 test('main plot NPCs are registered as packages and expose package-derived plot defs', () => {
-  assert.deepEqual(MAIN_PLOT_NPC_PACKAGES.map(pack => pack.id), [...MAIN_PLOT_IDS]);
+  const mainPlotPackages = allNpcPackages().filter(pack => pack.kind === 'plot' && MAIN_PLOT_IDS.includes(pack.id as any));
+  assert.deepEqual(mainPlotPackages.map(pack => pack.id).sort(), [...MAIN_PLOT_IDS].sort());
   assert.deepEqual(validateNpcPackages(), []);
 
   const registeredIds = new Set(allNpcPackages().map(pack => pack.id));
@@ -86,7 +88,7 @@ test('package-derived A-Life reserved identities keep package and plot identity 
   });
   const byPlotId = new Map(plan.reserved.map(identity => [identity.plotNpcId, identity]));
 
-  for (const pack of MAIN_PLOT_NPC_PACKAGES) {
+  for (const pack of allNpcPackages().filter(p => MAIN_PLOT_IDS.includes(p.id as any))) {
     const plotNpcId = plotNpcIdFromPackage(pack);
     assert.ok(plotNpcId);
     const reserved = byPlotId.get(plotNpcId);

@@ -148,7 +148,7 @@ function publishPneumomail(
     data: {
       system: 'pneumomail',
       capsuleEvent: `capsule_${eventType}`,
-      roomName: target?.room.name,
+      roomDefId: target?.room.name,
       rumorIds: rumorId ? [rumorId] : undefined,
       ...data,
     },

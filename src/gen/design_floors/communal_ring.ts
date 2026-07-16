@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -207,7 +208,7 @@ const NPC_DEFS: Record<(typeof NPC_IDS)[keyof typeof NPC_IDS], PlotNpcDef> = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.luba, NPC_DEFS.communal_laundry_luba, [{
   id: 'communal_clean_bandages',
-  giverNpcId: NPC_IDS.luba,
+  giverId: getPlotNpcNumericId(NPC_IDS.luba)!,
   type: QuestType.FETCH,
   desc: 'Люба Прачечная: «Два рулона ткани - и я отстираю из них бинты до вечерней очереди. Потом машинку опять займут простыни с поста.»',
   targetItem: 'cloth_roll',
@@ -222,7 +223,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.luba, NPC_DEFS.communa
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.viktor, NPC_DEFS.communal_shower_viktor, [{
   id: 'communal_shower_pressure',
-  giverNpcId: NPC_IDS.viktor,
+  giverId: getPlotNpcNumericId(NPC_IDS.viktor)!,
   type: QuestType.FETCH,
   desc: 'Виктор Напорный: «Две бирки вентиля. Починим душ или спустим воду коллекторам. Выбирай, кто сегодня останется сухим.»',
   targetItem: 'valve_tag',
@@ -237,7 +238,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.viktor, NPC_DEFS.commu
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.tamara, NPC_DEFS.communal_notice_tamara, [{
   id: 'communal_notice_dispute',
-  giverNpcId: NPC_IDS.tamara,
+  giverId: getPlotNpcNumericId(NPC_IDS.tamara)!,
   type: QuestType.FETCH,
   desc: 'Тамара Объявление: «Запечатанная жалоба решит, чьё объявление станет официальным: кухня, душ или кладовая.»',
   targetItem: 'sealed_complaint',
@@ -252,7 +253,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.tamara, NPC_DEFS.commu
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.sasha, NPC_DEFS.communal_panhandler_sasha, [{
   id: 'communal_pantry_theft',
-  giverNpcId: NPC_IDS.sasha,
+  giverId: getPlotNpcNumericId(NPC_IDS.sasha)!,
   type: QuestType.FETCH,
   desc: 'Саша У Очереди: «Бирку от ключа принеси. Тогда кладовая откроется как услуга, а не как кража при свидетелях.»',
   targetItem: 'container_key_label',
@@ -267,7 +268,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.sasha, NPC_DEFS.commun
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.nina, NPC_DEFS.communal_through_nina, [{
   id: 'communal_through_chain_bread',
-  giverNpcId: NPC_IDS.nina,
+  giverId: getPlotNpcNumericId(NPC_IDS.nina)!,
   type: QuestType.FETCH,
   desc: 'Нина Сквозная: «Две буханки пустим через проходные комнаты. Накормленные соседи чаще держат дверь открытой и реже зовут домкома.»',
   targetItem: 'bread',
@@ -284,7 +285,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.nina, NPC_DEFS.communa
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.yegor, NPC_DEFS.communal_primus_yegor, [{
   id: 'communal_primus_valve',
-  giverNpcId: NPC_IDS.yegor,
+  giverId: getPlotNpcNumericId(NPC_IDS.yegor)!,
   type: QuestType.FETCH,
   desc: 'Егор Примус: «Бирку вентиля дай. Починим кипяток в сквозной коммуналке или хотя бы сделаем вид, что очередь управляема.»',
   targetItem: 'valve_tag',
@@ -301,7 +302,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.yegor, NPC_DEFS.commun
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.arkhip, NPC_DEFS.communal_syndicate_arkhip, [{
   id: 'communal_syndicate_scarcity',
-  giverNpcId: NPC_IDS.arkhip,
+  giverId: getPlotNpcNumericId(NPC_IDS.arkhip)!,
   type: QuestType.FETCH,
   desc: 'Архип Завхозный: «Принеси мне самосборную сводку (samosbor_tally). С этим списком в руках я смогу прижать официальных распределителей пайка и взять склад под полный контроль.»',
   targetItem: 'samosbor_tally',
@@ -318,7 +319,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.arkhip, NPC_DEFS.commu
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.zoya, NPC_DEFS.communal_inspector_zoya, [{
   id: 'communal_inspector_audit',
-  giverNpcId: NPC_IDS.zoya,
+  giverId: getPlotNpcNumericId(NPC_IDS.zoya)!,
   type: QuestType.FETCH,
   desc: 'Зоя Управдомша: «Мне нужна подлинная выписка из реестра пайков (ration_registry_extract). Прекратим эту вакханалию с подпольной торговлей дефицитом.»',
   targetItem: 'ration_registry_extract',
@@ -371,7 +372,7 @@ export function generateCommunalRingDesignFloor(seed = RING_SEED): FloorGenerati
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
     const containerId = { v: 1 };
 
     const ring = carveRing(world);

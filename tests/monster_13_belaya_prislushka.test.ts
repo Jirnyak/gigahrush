@@ -12,6 +12,7 @@ import { SIDE_QUESTS } from '../src/data/plot';
 import { getZoneContentRegistrySnapshot } from '../src/gen/living/zone_content';
 import { publishEvent, getRecentEvents } from '../src/systems/events';
 import { makeGameState } from './helpers';
+import '../src/data/npc_plot_packages';
 
 test('Белая Прислушка registers one living-zone POI and the expected side quests', () => {
   const content = getZoneContentRegistrySnapshot().filter(entry => entry.label === 'Белая Прислушка');

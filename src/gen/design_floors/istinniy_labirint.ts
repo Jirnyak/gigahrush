@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Design z: istinniy_labirint / Истинный лабиринт -------- */
 
 import {
@@ -215,14 +216,14 @@ const LOST_PAVEL_DEF: PlotNpcDef = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.ariadna, ARIADNA_DEF, [{
   id: 'labyrinth_rechalk_safe_wall',
-  giverNpcId: NPC_IDS.ariadna,
+  giverId: getPlotNpcNumericId(NPC_IDS.ariadna)!,
   type: QuestType.FETCH,
   desc: 'Зина Ариадна: «Принеси мелок на белую стену. Обновим нить, пока лабиринт не выучил старые стрелки.»',
   targetItem: 'chalk',
   targetCount: 1,
   targetFloorZ: BASE_FLOOR,
   targetRoute: { designFloorId: ISTINNIY_LABIRINT_ROUTE_ID },
-  targetRoomName: SAFE_WALL_ROOM,
+  targetRoomDefId: SAFE_WALL_ROOM,
   targetHint: 'Истинный лабиринт z=+28: держаться белой стены и искать свежие желтые метки.',
   rewardItem: 'key',
   rewardCount: 1,
@@ -235,13 +236,13 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.ariadna, ARIADNA_DEF, 
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lostPavel, LOST_PAVEL_DEF, [{
   id: 'labyrinth_rescue_lost_pavel',
-  giverNpcId: NPC_IDS.lostPavel,
+  giverId: getPlotNpcNumericId(NPC_IDS.lostPavel)!,
   type: QuestType.TALK,
   desc: 'Паша Без Нити: «Доведи меня до Зины Ариадны. Только не красной хордой: там коротко, потому что там ждут.»',
-  targetNpcId: NPC_IDS.ariadna,
+  targetNpcId: getPlotNpcNumericId(NPC_IDS.ariadna)!,
   targetFloorZ: BASE_FLOOR,
   targetRoute: { designFloorId: ISTINNIY_LABIRINT_ROUTE_ID },
-  targetRoomName: SAFE_WALL_ROOM,
+  targetRoomDefId: SAFE_WALL_ROOM,
   targetHint: 'Истинный лабиринт: вернуться к белой стене и поговорить с Зиной Ариадной.',
   rewardItem: 'lift_scheme',
   rewardCount: 1,
@@ -250,7 +251,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.lostPavel, LOST_PAVEL_
   xpReward: 55,
   moneyReward: 36,
   eventTags: ['istinniy_labirint', 'rescue', 'lost_npc'],
-  failOnNpcDeathPlotId: NPC_IDS.lostPavel,
+  failOnNpcDeathId: getPlotNpcNumericId(NPC_IDS.lostPavel)!,
 }]);
 
 function gridIdx(gx: number, gy: number): number {
@@ -1415,7 +1416,7 @@ export function generateIstinniyLabirintDesignFloor(): FloorGeneration {
   world.bakeLights();
 
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   placeActors(world, graph, roomsByName, entities, nextId, chords);
 
   return {

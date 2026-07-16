@@ -24,7 +24,7 @@ const BYPASS_W = 5;
 const ROOM_H = 11;
 const DIVIDER_W = 1;
 const TOTAL_W = MAIN_W + DIVIDER_W + BYPASS_W;
-const ROOM_NAME = 'Пломбировщик: шовная ремонтная';
+const ROOM_DEF_ID = 'Пломбировщик: шовная ремонтная';
 const BYPASS_NAME = 'Пломбировщик: обход пломбы';
 const KILL_AWAY_RADIUS2 = 3.4 * 3.4;
 const SHOT_INTERRUPT_RADIUS2 = 8 * 8;
@@ -180,7 +180,7 @@ function carveRooms(world: World, nextRoomId: number, rx: number, ry: number): {
     h: ROOM_H,
     doors: [],
     sealed: false,
-    name: ROOM_NAME,
+    name: ROOM_DEF_ID,
     apartmentId: -1,
     wallTex: Tex.HERMO_WALL,
     floorTex: Tex.F_CONCRETE,
@@ -322,7 +322,7 @@ function publishPlombEvent(
     tags: ['monster', 'plombirovshchik', 'seal', 'hermodoor', 'route_denial', ...tags].slice(0, 8),
     data: {
       contentId: CONTENT_TAG,
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       bypassRoomName: BYPASS_NAME,
       sealedDoorIdx: ctx.sealedDoorIdx,
       alternateDoorIdx: ctx.alternateDoorIdx,
@@ -531,7 +531,7 @@ export function generatePlombirovshchik(
   });
   world.bakeLights();
 
-  genLog(`[MONSTER_02] ${ROOM_NAME} at (${main.x}, ${main.y}) room #${main.id}, bypass #${bypass.id}, sealed door (${doorX(sealedDoorIdx)}, ${doorY(sealedDoorIdx)})`);
+  genLog(`[MONSTER_02] ${ROOM_DEF_ID} at (${main.x}, ${main.y}) room #${main.id}, bypass #${bypass.id}, sealed door (${doorX(sealedDoorIdx)}, ${doorY(sealedDoorIdx)})`);
   return { nextRoomId: bypass.id + 1 };
 }
 

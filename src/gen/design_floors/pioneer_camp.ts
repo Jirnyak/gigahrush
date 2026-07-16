@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Design z: Пионерлагерь ---------------------------------
  * A Soviet summer-camp pocket inside the concrete route. The floor
  * uses generic camp grammar, not copied Everlasting Summer names.
@@ -261,7 +262,7 @@ const NPC_DEFS: Record<CampNpcId, PlotNpcDef> = {
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.shift, NPC_DEFS.camp_shift_tamara, [{
   id: 'camp_verify_roster',
-  giverNpcId: NPC_IDS.shift,
+  giverId: getPlotNpcNumericId(NPC_IDS.shift)!,
   type: QuestType.FETCH,
   desc: 'Тамара Сменная: «Найди список укрытия у старого корпуса. Решим, кого прятать, а кого уже только числить.»',
   targetItem: 'emergency_roster',
@@ -276,7 +277,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.shift, NPC_DEFS.camp_s
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.radio, NPC_DEFS.camp_radio_egor, [{
   id: 'camp_repair_loudspeaker',
-  giverNpcId: NPC_IDS.radio,
+  giverId: getPlotNpcNumericId(NPC_IDS.radio)!,
   type: QuestType.FETCH,
   desc: 'Егор Радиокружок: «Два мотка проволоки - и громкоговоритель будет предупреждать лагерь, а не только повторять лес.»',
   targetItem: 'wire_coil',
@@ -291,7 +292,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.radio, NPC_DEFS.camp_r
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.medic, NPC_DEFS.camp_medic_ira, [{
   id: 'camp_medpost_choice',
-  giverNpcId: NPC_IDS.medic,
+  giverId: getPlotNpcNumericId(NPC_IDS.medic)!,
   type: QuestType.FETCH,
   desc: 'Ира Медпункт: «Санитарный набор в медпункт. Потом выберем: перевязать беглеца из леса или оставить запас на сирену.»',
   targetItem: 'sanitary_kit',
@@ -306,7 +307,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.medic, NPC_DEFS.camp_m
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.cook, NPC_DEFS.camp_canteen_zoya, [{
   id: 'camp_canteen_compote',
-  giverNpcId: NPC_IDS.cook,
+  giverId: getPlotNpcNumericId(NPC_IDS.cook)!,
   type: QuestType.FETCH,
   desc: 'Зоя Столовая: «Принеси прессованный сахар. Сварю компот: можно накормить отряд, можно купить тишину у очереди.»',
   targetItem: 'pressed_sugar',
@@ -323,7 +324,7 @@ export function generatePioneerCampDesignFloor(seed = CAMP_SEED): FloorGeneratio
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 1 };
+    const nextId = { v: 10000 };
 
     initCampWorld(world);
     const rooms = buildCampCore(world);

@@ -6,6 +6,7 @@ import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc
 import { tickNpcSpecialRoutine } from '../src/systems/npc_special_routines';
 import { getNpcSpecialRoutine } from '../src/data/npc_special_routines';
 import { makeTestNpc } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function plotNpcName(plotNpcId: string): string {
   const pack = getNpcPackageByPlotNpcId(plotNpcId);

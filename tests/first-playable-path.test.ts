@@ -20,6 +20,7 @@ import {
 } from '../src/systems/quests';
 import { getObjectiveRouteHud, routeObjectiveLiftPromptSuffix } from '../src/systems/route_cues';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
+import '../src/data/npc_plot_packages';
 
 function plotNpcName(plotNpcId: string): string {
   const pack = getNpcPackageByPlotNpcId(plotNpcId);

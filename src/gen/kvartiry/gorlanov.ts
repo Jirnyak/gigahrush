@@ -1,6 +1,7 @@
 /* ── Горланов — side quest (kvartiry floor) ───────────────────── */
 /* Шумный провокатор с обрезом. Контрбаланс Листовому.             */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType, MonsterKind,
@@ -43,7 +44,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('gorlanov', NPC_DEF, [
   {
     id: 'gorlanov_shadows',
-    giverNpcId: 'gorlanov',
+    giverId: getPlotNpcNumericId('gorlanov')!,
     type: QuestType.KILL,
     desc: 'Горланов: «ОДНОЗНАЧНО! Пять теневиков списать. Без чистого прохода очередь до кухни не доживёт.»',
     targetMonsterKind: MonsterKind.SHADOW,

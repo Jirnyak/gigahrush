@@ -1,3 +1,4 @@
+import { getPlotNpcStringId } from '../../data/npc_packages';
 /* ── NPC utility selector core: deterministic live-intent scoring ─ */
 
 import {
@@ -182,13 +183,13 @@ export function createNpcUtilityScoreBuffer(): Float32Array {
 }
 
 export function npcUtilityIdentityFromEntity(
-  entity: Pick<Entity, "id" | "alifeId" | "persistentNpcId" | "plotNpcId">,
+  entity: Pick<Entity, "id" | "alifeId" | "persistentNpcId">,
 ): NpcUtilityIdentity {
   return {
     entityId: entity.id,
     alifeId: entity.alifeId,
     persistentNpcId: entity.persistentNpcId,
-    plotNpcId: entity.plotNpcId,
+    plotNpcId: getPlotNpcStringId(entity.id),
   };
 }
 

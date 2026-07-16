@@ -1,6 +1,7 @@
 /* ── Серый Гопник — side quest (kvartiry floor) ───────────────── */
 /* Дикий с района. «Слышь, есть закурить?»                        */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -41,7 +42,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('sery_gopnik', NPC_DEF, [
   {
     id: 'sery_cigs',
-    giverNpcId: 'sery_gopnik',
+    giverId: getPlotNpcNumericId('sery_gopnik')!,
     type: QuestType.FETCH,
     desc: 'Серый: «Десять пачек сигарет. Заплачу проходом у лифта и тишиной у водораздачи.»',
     targetItem: 'cigs', targetCount: 10,

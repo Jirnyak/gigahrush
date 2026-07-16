@@ -694,7 +694,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   let citizenCount = 0;
   let leader: Entity | null = null;
   for (const e of entities) {
-    if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN || e.plotNpcId) continue;
+    if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN || e.id) continue;
     citizenCount++;
     if (rng() < 1 / citizenCount) leader = e;
   }
@@ -706,7 +706,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   const rallyR2 = UPRISING_RADIUS * UPRISING_RADIUS;
   for (const e of entities) {
     if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN) continue;
-    if (e.plotNpcId) continue; // don't convert plot NPCs
+    if (e.id) continue; // don't convert plot NPCs
     if (world.dist2(e.x, e.y, rallyX, rallyY) <= rallyR2) ralliedCount++;
   }
 
@@ -717,7 +717,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   for (const e of entities) {
     if (converted >= AMBIENT_UPRISING_MAX_CONVERTED) break;
     if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN) continue;
-    if (e.plotNpcId) continue;
+    if (e.id) continue;
     if (world.dist2(e.x, e.y, rallyX, rallyY) > rallyR2) continue;
     e.faction = Faction.WILD;
     if (e.ai) {

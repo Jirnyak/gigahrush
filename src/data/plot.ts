@@ -5,6 +5,7 @@
 /*   3. Create room generator in gen/living/ (optional)            */
 /*   4. Add room spec to plot_rooms.ts (optional)                  */
 
+import { getPlotNpcNumericId } from './npc_packages';
 import {
   type CharacterSex,
   type Entity,
@@ -25,7 +26,6 @@ import {
   npcPackageDisplayName,
   plotNpcIdFromPackage,
   registerNpcPackageFromPlotNpc,
-  registerNpcPackages,
   type NpcPackageDef,
 } from './npc_packages';
 
@@ -164,12 +164,14 @@ function plotNpcEntriesFromPackages(packs: readonly NpcPackageDef[]): [string, P
 }
 
 export function getPlotNpcDef(plotNpcId: string): PlotNpcDef | undefined {
-  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  const numId = getPlotNpcNumericId(plotNpcId);
+  const pack = numId !== undefined ? getNpcPackageByPlotNpcId(numId) : undefined;
   return pack ? plotNpcDefFromPackage(pack) : undefined;
 }
 
 export function hasPlotNpc(plotNpcId: string): boolean {
-  return getNpcPackageByPlotNpcId(plotNpcId) !== undefined;
+  const numId = getPlotNpcNumericId(plotNpcId);
+  return numId !== undefined ? getNpcPackageByPlotNpcId(numId) !== undefined : false;
 }
 
 export function allPlotNpcEntries(): readonly [string, PlotNpcDef][] {
@@ -182,29 +184,29 @@ export function allPlotNpcIds(): readonly string[] {
 
 /* ── Linear quest chain ──────────────────────────────────────── */
 /* Step N is available when all steps 0..N-1 are done AND         */
-/* giverNpcId matches the NPC the player is talking to.           */
+/* giverId matches the NPC the player is talking to.           */
 /* {dir} in desc is auto-replaced with toroidal direction.        */
 
 export const PLOT_CHAIN: PlotStep[] = [
   // Step 0: Olga → talk to Sergeant Barinov
   {
-    giverNpcId: 'olga',
+    giverId: getPlotNpcNumericId('olga')!,
     type: QuestType.TALK,
     desc: 'Ольга вычеркнула тебя из мёртвых, теперь иди к сержанту Баринову в оружейную. Он спишет на тебя пистолет и восемь патронов: здесь без железа живут только в сводках потерь.',
     offerObjective: 'Вводная Ольги',
     activeObjective: 'Найти сержанта Баринова в оружейной и получить табельное.',
-    targetNpcId: 'barni',
+    targetNpcId: getPlotNpcNumericId('barni')!,
     rewardItem: 'makarov', rewardCount: 1,
     extraRewards: [{ defId: 'ammo_9mm', count: 8 }, { defId: 'flashlight', count: 1 }],
     relationDelta: 10, xpReward: 10,
   },
   // Step 1: Sergeant Barinov → report to Olga
   {
-    giverNpcId: 'barni',
+    giverId: getPlotNpcNumericId('barni')!,
     type: QuestType.TALK,
     desc: 'Возвращайся к Ольге. Оружие на руках, руки пока целы — пора отрабатывать пайку. Она выдаст бинты с водой и найдет место, где ты закроешь норму.',
     activeObjective: 'Доложить Ольге Дмитриевне об успешном получении оружия.',
-    targetNpcId: 'olga',
+    targetNpcId: getPlotNpcNumericId('olga')!,
     rewardItem: 'bandage', rewardCount: 2,
     extraRewards: [{ defId: 'water', count: 2 }, { defId: 'bread', count: 2 }],
     relationDelta: 12, xpReward: 10,
@@ -216,17 +218,17 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 2: Olga → visit Yakov
   {
-    giverNpcId: 'olga',
+    giverId: getPlotNpcNumericId('olga')!,
     type: QuestType.TALK,
     desc: 'Ольге нужен курьер до лаборатории Якова Давидовича. Иди {dir}. Старик оформляет слизь после сборов, и ему вечно не хватает людей, чтобы донести банки без трещин.',
     activeObjective: 'Найти лабораторию Якова Давидовича {dir}.',
-    targetNpcId: 'yakov',
+    targetNpcId: getPlotNpcNumericId('yakov')!,
     rewardItem: 'psi_strike', rewardCount: 1,
     relationDelta: 10, xpReward: 20,
   },
   // Step 3: Yakov → fetch idol
   {
-    giverNpcId: 'yakov',
+    giverId: getPlotNpcNumericId('yakov')!,
     type: QuestType.FETCH,
     desc: 'Яков просит принести идол Чернобога с этажа: сектанты опять лезут к гермодверям до отбоя. Сдай деревяшку старику, но не вздумай слушать её в лифте.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -236,16 +238,16 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 4: Yakov → talk to Vanka Banchiny
   {
-    giverNpcId: 'yakov',
+    giverId: getPlotNpcNumericId('yakov')!,
     type: QuestType.TALK,
     desc: 'Идол подтвердил: сажа пахнет не только химией. Яков поднял архивы на бывшего студента Захарова, ныне Ваньку Банчиного. Найди этого сумасшедшего {dir}.',
-    targetNpcId: 'vanka',
+    targetNpcId: getPlotNpcNumericId('vanka')!,
     rewardItem: 'antidep', rewardCount: 1,
     relationDelta: 15, xpReward: 30,
   },
   // Step 5: Vanka → kill a Shadow monster (Теневик)
   {
-    giverNpcId: 'vanka',
+    giverId: getPlotNpcNumericId('vanka')!,
     type: QuestType.FETCH,
     desc: 'Ванька боится теней больше, чем комендатуры. Найди и ликвидируй теневика по кличке Петля. Ищи широкое место — в узком коридоре тень оформляет удушье раньше, чем ты достанешь ствол.',
     targetItem: 'strange_clot', targetCount: 1,
@@ -255,7 +257,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 6: Vanka kill done → bring strange clot to Yakov
   {
-    giverNpcId: 'vanka',
+    giverId: getPlotNpcNumericId('vanka')!,
     type: QuestType.FETCH,
     desc: 'Собери останки Петли и тащи Якову в лабораторию. Главное — не открывай банку: если сгусток почует воздух, к Якову придет не улика, а новый теневик.',
     targetItem: 'strange_clot', targetCount: 1,
@@ -265,10 +267,10 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 7: Yakov → go to maintenance floor, meet Major Grom
   {
-    giverNpcId: 'yakov',
+    giverId: getPlotNpcNumericId('yakov')!,
     type: QuestType.TALK,
     desc: 'Яков закрыл акт, и лишние руки ему больше не нужны. Неси рапорт вниз, к майору Громному в коллекторы. На глубине всегда недобор смены.',
-    targetNpcId: 'major_grom',
+    targetNpcId: getPlotNpcNumericId('major_grom')!,
     rewardItem: 'psi_rupture', rewardCount: 1,
     relationDelta: 20, xpReward: 60, moneyReward: 80,
     eventTags: ['craft_recipe_reward'],
@@ -279,7 +281,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 8: Major Grom → kill monsters (defend outpost)
   {
-    giverNpcId: 'major_grom',
+    giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.KILL,
     desc: 'Форпост Громного сдает позиции. Доведи счет зачистки до десяти, пока они не прорвали периметр. Майор списывает патроны только под трупы.',
     killNeeded: 10,
@@ -299,7 +301,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 9: Major Grom → storm — kill the Mancobus
   {
-    giverNpcId: 'major_grom',
+    giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.KILL,
     desc: 'Осада. Твари прут не просто так — массу гонит Манкобус. Найди его {dir} и устрани, иначе они продавят гермы форпоста трупами.',
     targetMonsterKind: MonsterKind.MANCOBUS, killNeeded: 1,
@@ -309,7 +311,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 10: Major Grom → anchor a Hell foothold
   {
-    giverNpcId: 'major_grom',
+    giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
     desc: 'Громный переводит тебя в Мясной низ. Найди зону закрепления и удержи её пять минут. Не выходи за створки: твари реагируют на шум быстрее, чем подпишут акт о помощи.',
     rewardItem: 'bandage', rewardCount: 5,
@@ -317,7 +319,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     relationDelta: 25, xpReward: 180,
     targetFloorZ: 180,
     targetRoute: { z: -36, label: 'Z-36 Мясной низ' },
-    targetRoomName: 'Зона закрепления',
+    targetRoomDefId: 'Зона закрепления',
     targetHint: 'Удерживай позицию "Зона закрепления" в Мясном низу ровно 300 секунд. Выйдешь — таймер сбросится, и всё начнется заново.',
     visitFloorZ: 180,
     holdSeconds: 300,
@@ -331,7 +333,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 11: Major Grom → go to Ministry for ammo
   {
-    giverNpcId: 'major_grom',
+    giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
     desc: 'Нужны патроны. Иди в Министерство, запроси снабжение.',
     targetFloorZ: 30,
@@ -340,7 +342,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 12: Major Grom → go to Podad
   {
-    giverNpcId: 'major_grom',
+    giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
     desc: 'Зона зачищена, но смена продолжается. Спускайся на Z-40, в Подад. Там стены шевелятся, а лифт вниз заблокирован. Выясни, что держит шахту.',
     rewardItem: 'ammo_762', rewardCount: 24,
@@ -355,10 +357,10 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 12: Hell contact → talk to Herald watcher in Podad
   {
-    giverNpcId: 'hell_contact',
+    giverId: getPlotNpcNumericId('hell_contact')!,
     type: QuestType.TALK,
     desc: 'Подад дышит. Найди Марфу Пороговую {dir}. Она слушает Вестников и знает, почему лифты на нижние уровни глушат вызов.',
-    targetNpcId: 'herald_clue',
+    targetNpcId: getPlotNpcNumericId('herald_clue')!,
     rewardItem: 'psi_phase', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
     targetFloorZ: 180,
@@ -367,7 +369,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 13: Herald clue → kill three Heralds in Podad
   {
-    giverNpcId: 'herald_clue',
+    giverId: getPlotNpcNumericId('herald_clue')!,
     type: QuestType.KILL,
     desc: 'Три Вестника держат шахту. Найди их в Подаде и спиши. Пока они дышат, лифты стоят, а тоннели зарастают биомассой прямо по регламенту.',
     targetMonsterKind: MonsterKind.HERALD, killNeeded: 3,
@@ -381,7 +383,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 14: Herald clue → descend to the bottom route
   {
-    giverNpcId: 'herald_clue',
+    giverId: getPlotNpcNumericId('herald_clue')!,
     type: QuestType.VISIT,
     desc: 'Вестники устранены, шахта свободна. Спускайся до Z-50. В Пустоте голоса больше не обязаны притворяться людьми.',
     rewardItem: 'psi_stabilizer', rewardCount: 1,
@@ -397,7 +399,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 15: Void warning → test the threshold voice
   {
-    giverNpcId: 'void_warning',
+    giverId: getPlotNpcNumericId('void_warning')!,
     type: QuestType.FETCH,
     desc: 'Творец вышел на связь чужим голосом. Жан просит проверить ловушку: забери голос в банке из его камеры и верни обратно. Крышку не открывать, даже если банка начнет торговаться.',
     targetItem: 'bottled_voice', targetCount: 1,
@@ -407,7 +409,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 16: Void warning → kill the Creator
   {
-    giverNpcId: 'void_warning',
+    giverId: getPlotNpcNumericId('void_warning')!,
     type: QuestType.KILL,
     desc: 'Пора списывать Творца. Спускайся в Пустоту. [ДАННЫЕ УДАЛЕНЫ]. Держись укрытий между зелёными залпами: этот акт ты подписываешь сам.',
     targetMonsterKind: MonsterKind.CREATOR, killNeeded: 1,
@@ -417,7 +419,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   },
   // Step 17: Void warning → leave the return consequence behind
   {
-    giverNpcId: 'void_warning',
+    giverId: getPlotNpcNumericId('void_warning')!,
     type: QuestType.FETCH,
     desc: 'Забери пустотный шип и отдай Жану перед возвращением. Не тащи в жилые блоки то, что не проходит по инвентарной описи.',
     targetItem: 'void_spike', targetCount: 1,
@@ -444,19 +446,18 @@ export interface KillPressureDef {
 
 /* ── A single step in the linear story quest chain ───────────── */
 export interface PlotStep {
-  giverNpcId: string;
+  giverId: number;
   type: QuestType;
   desc: string;
   /** HUD text before this step is accepted, when the player should find the giver. */
   offerObjective?: string;
   /** HUD text after this step is accepted; falls back to desc. */
   activeObjective?: string;
-  targetNpcId?: string;
-  targetPlotNpcId?: string;   // plot NPC key for cross-floor KILL quests targeting NPCs
+  targetNpcId?: number;
   targetItem?: string;
   targetCount?: number;
   targetRoomType?: number;
-  targetRoomName?: string;
+  targetRoomDefId?: string;
   targetFloorZ?: number;
   targetRoute?: QuestRouteTarget;
   targetZoneTag?: string;
@@ -474,7 +475,7 @@ export interface PlotStep {
   eventPrivacy?: WorldEventPrivacy;
   eventSeverity?: WorldEventSeverity;
   eventTargetName?: string;
-  failOnNpcDeathPlotId?: string;
+  failOnNpcDeathId?: number;
   abandonsSideQuestIds?: string[];
   /** Spawn N hostile monsters around the quest giver when quest is accepted */
   spawnMonstersOnAccept?: number;
@@ -506,7 +507,7 @@ export interface SideQuestStep extends PlotStep {
 export const SIDE_QUESTS: SideQuestStep[] = [
   {
     id: 'idol_ministry_registration',
-    giverNpcId: 'vera_propuskova',
+    giverId: getPlotNpcNumericId('vera_propuskova')!,
     type: QuestType.FETCH,
     desc: 'Принеси идол Чернобога Вере у окна. Она вернёт идол с корешком; без отметки это улика.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -529,7 +530,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   },
   {
     id: 'idol_liquidator_field_report',
-    giverNpcId: 'polkovnik_streltsov',
+    giverId: getPlotNpcNumericId('polkovnik_streltsov')!,
     type: QuestType.FETCH,
     desc: 'Покажи идол Стрельцову. Ликвидаторы вернут вещь с жетоном и патронами; лицо попадет в список.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -552,7 +553,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   },
   {
     id: 'idol_candle_concealment',
-    giverNpcId: 'batushka',
+    giverId: getPlotNpcNumericId('batushka')!,
     type: QuestType.FETCH,
     desc: 'Положи идол под свечу Батюшке. Он вернет вещь и святую воду; долг Якова останется.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -573,7 +574,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   },
   {
     id: 'idol_counterfeit_decoy',
-    giverNpcId: 'stalker_mecheny',
+    giverId: getPlotNpcNumericId('stalker_mecheny')!,
     type: QuestType.FETCH,
     desc: 'Принеси Меченому лист с поддельной печатью. Он сделает приманку; настоящий идол останется Якову.',
     targetItem: 'forged_stamp_sheet', targetCount: 1,
@@ -594,7 +595,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   },
   {
     id: 'idol_hell_contact_handoff',
-    giverNpcId: 'hell_contact',
+    giverId: getPlotNpcNumericId('hell_contact')!,
     type: QuestType.FETCH,
     desc: 'Дай идол Никанору на проверку. Он вернет вещь с руной и водой; голос станет понятнее культу.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -748,8 +749,8 @@ export function plotNpcHomeFloorKey(plotNpcId: string, defInput?: PlotNpcDef): s
   const explicit = checkedHomeFloorKey(def?.homeFloorKey);
   if (explicit) return explicit;
   return inferredQuestHomeFloorKey([
-    ...PLOT_CHAIN.filter(q => q.giverNpcId === plotNpcId),
-    ...SIDE_QUESTS.filter(q => q.giverNpcId === plotNpcId),
+    ...PLOT_CHAIN.filter(q => q.giverId === getPlotNpcNumericId(plotNpcId)),
+    ...SIDE_QUESTS.filter(q => q.giverId === getPlotNpcNumericId(plotNpcId)),
   ]);
 }
 
@@ -792,7 +793,7 @@ export function registerAuthoredNpc(pack: AuthoredNpcPack): void {
 
 export interface SideQuestRegistrySnapshot {
   readonly id: string;
-  readonly giverNpcId: string;
+  readonly giverId: number;
   readonly type: QuestType;
   readonly desc: string;
 }
@@ -800,7 +801,7 @@ export interface SideQuestRegistrySnapshot {
 export function getSideQuestRegistrySnapshot(): readonly SideQuestRegistrySnapshot[] {
   return SIDE_QUESTS.map(q => ({
     id: q.id,
-    giverNpcId: q.giverNpcId,
+    giverId: q.giverId,
     type: q.type,
     desc: q.desc,
   }));
@@ -808,22 +809,19 @@ export function getSideQuestRegistrySnapshot(): readonly SideQuestRegistrySnapsh
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
+import { getPlotNpcCount } from './npc_packages';
+
 /** Check if an entity is a plot NPC */
 export function isPlotNpc(e: Entity): boolean {
-  return !!e.plotNpcId;
-}
-
-/** Get the PlotNpcDef for an entity (or undefined) */
-export function getPlotDef(e: Entity): PlotNpcDef | undefined {
-  return e.plotNpcId ? getPlotNpcDef(e.plotNpcId) : undefined;
+  return e.id >= 0 && e.id < getPlotNpcCount();
 }
 
 /** Check if a plot NPC has an available quest to give (not yet offered) */
-export function hasAvailableQuest(plotNpcId: string, quests: Quest[]): boolean {
+export function hasAvailableQuest(plotNpcId: number, quests: Quest[]): boolean {
   // Check PLOT_CHAIN
   for (let i = 0; i < PLOT_CHAIN.length; i++) {
     const step = PLOT_CHAIN[i];
-    if (step.giverNpcId !== plotNpcId) continue;
+    if (step.giverId !== plotNpcId) continue;
     if (quests.some(q => q.plotStepIndex === i)) continue;
     let allPrevDone = true;
     for (let j = 0; j < i; j++) {
@@ -834,7 +832,7 @@ export function hasAvailableQuest(plotNpcId: string, quests: Quest[]): boolean {
   }
   // Check SIDE_QUESTS
   for (const sq of SIDE_QUESTS) {
-    if (sq.giverNpcId !== plotNpcId) continue;
+    if (sq.giverId !== plotNpcId) continue;
     if (quests.some(q => q.sideQuestId === sq.id)) continue;
     if (!sideQuestPrereqsMet(sq, quests)) continue;
     return true;
@@ -856,8 +854,7 @@ registerSideQuest('arena_master', {
   talkLinesPost: []
 }, [], { tags: ['arena'] });
 
-import { MAIN_PLOT_NPC_PACKAGES } from './npc_plot_packages';
-registerNpcPackages(MAIN_PLOT_NPC_PACKAGES);
+import './npc_plot_packages';
 
 import { registerFactionTraders } from './npc_plot_packages';
 registerFactionTraders(PLOT_NPCS);

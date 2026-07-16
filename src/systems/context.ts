@@ -23,7 +23,7 @@ export interface ContextSnapshot {
   zoneFaction?: ZoneFaction;
   zoneLevel?: number;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   npcFaction?: Faction;
   npcOccupation?: number;
   npcNeeds?: Needs;
@@ -77,7 +77,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
   let zoneFaction: ZoneFaction | undefined;
   let zoneLevel: number | undefined;
   let roomType: RoomType | undefined;
-  let roomName: string | undefined;
+  let roomDefId: string | undefined;
   let roomMemory: RoomMemoryRecord | undefined;
   let playerDistance: number | undefined;
   let nearbyContainer = false;
@@ -97,7 +97,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     const room = world.roomAt(npc.x, npc.y);
     if (room) {
       roomType = room.type;
-      roomName = room.name;
+      roomDefId = room.name;
       roomMemory = getRoomMemory(options.state?.currentZ, room.id);
     }
     nearbyContainer = hasNearbyContainer(world, x, y);
@@ -124,7 +124,7 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     zoneFaction,
     zoneLevel,
     roomType,
-    roomName,
+    roomDefId,
     npcFaction: npc.faction,
     npcOccupation: npc.occupation,
     npcNeeds: n,

@@ -146,7 +146,7 @@ function publishFiltronosEvent(
     data: {
       sourceEventId: source.id,
       containerName: container?.name,
-      roomName: ctx.world.rooms[ctx.roomId]?.name,
+      roomDefId: ctx.world.rooms[ctx.roomId]?.name,
       protected: ctx.protected,
       distracted: ctx.distracted,
       recovered: ctx.recovered,

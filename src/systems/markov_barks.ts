@@ -66,7 +66,7 @@ export interface MarkovNpcSpeechContext {
   eventType?: WorldEventType | string;
   z?: number;
   roomType?: RoomType;
-  roomName?: string;
+  roomDefId?: string;
   roomId?: number;
   zoneId?: number;
   x?: number;
@@ -173,11 +173,11 @@ export function buildMarkovBarkContext(request: MarkovBarkRequest): MarkovNpcSpe
   const targetId = target?.id ?? event?.targetId;
   const targetName = cleanText(target?.name) ?? cleanText(event?.targetName);
   const targetFaction = target?.faction ?? event?.targetFaction;
-  const roomName = cleanText(context?.roomName);
+  const roomDefId = cleanText(context?.roomDefId);
   const itemName = cleanText(event?.itemName);
   const anchors = uniqueAnchors([
     cleanText(actor.name),
-    roomName,
+    roomDefId,
     targetName,
     itemName,
     cleanText(event?.type),
@@ -198,7 +198,7 @@ export function buildMarkovBarkContext(request: MarkovBarkRequest): MarkovNpcSpe
     eventType: event?.type,
     z: context?.z,
     roomType: context?.roomType,
-    roomName,
+    roomDefId,
     roomId: finiteId(event?.roomId),
     zoneId: finiteId(event?.zoneId ?? context?.zoneId),
     x: finiteCoord(event?.x),

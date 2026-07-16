@@ -139,7 +139,7 @@ function handleSlimeWomanSumpEvent(state: GameState, event: WorldEvent): void {
     tags: ['monster', 'slime_woman', 'slime', 'sample', womanAlive ? 'risked' : 'secured'],
     data: {
       sourceEventId: event.id,
-      roomName: ctx.world.rooms[ctx.roomId]?.name,
+      roomDefId: ctx.world.rooms[ctx.roomId]?.name,
       womanAlive,
       counterplay: 'dry_edge_uv_cleaning_kit_then_sample_container',
       rumorIds: ['lead_maint_slime_woman_sump', 'ecology_slime_woman_dry_edge'],

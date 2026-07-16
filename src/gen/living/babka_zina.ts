@@ -1,6 +1,7 @@
 /* ── Бабка Зина — side quest content module ───────────────────── */
 /* Старушка раздаёт пирожки в обмен на бинты для соседей.          */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -38,7 +39,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('babka_zina', NPC_DEF, [
   {
     id: 'zina_bandages',
-    giverNpcId: 'babka_zina',
+    giverId: getPlotNpcNumericId('babka_zina')!,
     type: QuestType.FETCH,
     desc: 'Бабка Зина: «Принеси три бинтика, голубчик. Соседушкам надо.»',
     targetItem: 'bandage', targetCount: 3,

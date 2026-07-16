@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Красный уголок — permanent room (kvartiry floor) ─────────── */
 /* Bolshie Stalin'ist common room with portraits, lamps, desk and  */
 /* a teacher NPC. Hand-crafted, protected with aptMask.            */
@@ -53,7 +54,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest(ZOYA_ID, NPC_DEF, [
   {
     id: 'zoya_ballots',
-    giverNpcId: ZOYA_ID,
+    giverId: getPlotNpcNumericId(ZOYA_ID)!,
     type: QuestType.FETCH,
     desc: 'Зоя Аркадьевна: «Принесите 25 бюллетеней. Дети будут учиться считать людей, а не только талоны.»',
     targetItem: 'ballot', targetCount: 25,

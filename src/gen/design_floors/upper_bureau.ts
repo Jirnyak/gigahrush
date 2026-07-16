@@ -1,5 +1,6 @@
 /* ── Design z: Верхнее бюро ──────────────────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W,
   Cell,
@@ -98,7 +99,7 @@ export const UPPER_BUREAU_GATE_OUTCOMES = [
 export const UPPER_BUREAU_ROUTE_DECISIONS = [
   {
     id: 'permit_ambush',
-    roomName: 'Засада поддельных корешков',
+    roomDefId: 'Засада поддельных корешков',
     legalItemId: UPPER_BUREAU_DOCUMENTS.appointmentToken,
     illegalItemId: UPPER_BUREAU_DOCUMENTS.forgedAppointment,
     eventTag: 'permit_ambush',
@@ -106,7 +107,7 @@ export const UPPER_BUREAU_ROUTE_DECISIONS = [
   },
   {
     id: 'archive_toll',
-    roomName: 'Платный архивный проход',
+    roomDefId: 'Платный архивный проход',
     legalItemId: 'money',
     illegalItemId: UPPER_BUREAU_DOCUMENTS.auditPacket,
     eventTag: 'archive_toll',
@@ -506,7 +507,7 @@ const AMBUSH_DEF: PlotNpcDef = {
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_madam_iskra', ISKRA_DEF, [
   {
     id: 'bureau_preapproval_legal',
-    giverNpcId: 'bureau_madam_iskra',
+    giverId: getPlotNpcNumericId('bureau_madam_iskra')!,
     type: QuestType.FETCH,
     desc: 'Мадам Искра: «Официальный корешок пропуска - и главный пост признает ваше назначение без шума.»',
     targetItem: 'official_permit_slip', targetCount: 1,
@@ -525,7 +526,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_madam_iskra', ISKRA_DE
   },
   {
     id: 'bureau_preapproval_fee',
-    giverNpcId: 'bureau_madam_iskra',
+    giverId: getPlotNpcNumericId('bureau_madam_iskra')!,
     type: QuestType.FETCH,
     desc: 'Мадам Искра: «Сто восемьдесят рублей ускорительного сбора. Я поставлю назначение задним числом.»',
     targetItem: 'money', targetCount: 180,
@@ -547,7 +548,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_madam_iskra', ISKRA_DE
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_cleaner_tolik', TOLIK_DEF, [
   {
     id: 'bureau_cleaner_keys_help',
-    giverNpcId: 'bureau_cleaner_tolik',
+    giverId: getPlotNpcNumericId('bureau_cleaner_tolik')!,
     type: QuestType.FETCH,
     desc: 'Толик Чистый: «Верните чистящий комплект. Покажу служебный ход, где охрана смотрит на ковёр, а не на вас.»',
     targetItem: 'cleaning_kit', targetCount: 1,
@@ -566,10 +567,10 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_cleaner_tolik', TOLIK_
   },
   {
     id: 'bureau_market88_warning',
-    giverNpcId: 'bureau_cleaner_tolik',
+    giverId: getPlotNpcNumericId('bureau_cleaner_tolik')!,
     type: QuestType.TALK,
     desc: 'Толик Чистый: «Если дойдете до Счетной 88, скажите Марте: Лев уже считает их расписки.»',
-    targetNpcId: 'ag15_marta_broker',
+    targetNpcId: getPlotNpcNumericId('ag15_marta_broker')!,
     rewardItem: 'forged_permit_slip', rewardCount: 1,
     relationDelta: -6, xpReward: 90, moneyReward: 88,
     eventTargetName: 'Предупреждение о проверке Льва ушло к рынку 88.',
@@ -588,7 +589,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_cleaner_tolik', TOLIK_
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_auditor_lev', LEV_DEF, [
   {
     id: 'bureau_audit_market88_help',
-    giverNpcId: 'bureau_auditor_lev',
+    giverId: getPlotNpcNumericId('bureau_auditor_lev')!,
     type: QuestType.FETCH,
     desc: 'Аудитор Лев: «Два доноса и папка по рынку 88 станут делом. Дело станет жаром аудита.»',
     targetItem: 'denunciation', targetCount: 2,
@@ -611,7 +612,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_auditor_lev', LEV_DEF,
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_archive_toll_keeper', TOLL_KEEPER_DEF, [
   {
     id: 'bureau_archive_toll_pay',
-    giverNpcId: 'bureau_archive_toll_keeper',
+    giverId: getPlotNpcNumericId('bureau_archive_toll_keeper')!,
     type: QuestType.FETCH,
     desc: 'Кассир Архивной Пошлины: «Восемьдесят восемь рублей - и архивный проход признает вас читателем, а не нарушителем.»',
     targetItem: 'money', targetCount: 88,
@@ -630,7 +631,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_archive_toll_keeper', 
   },
   {
     id: 'bureau_archive_toll_expose',
-    giverNpcId: 'bureau_archive_toll_keeper',
+    giverId: getPlotNpcNumericId('bureau_archive_toll_keeper')!,
     type: QuestType.FETCH,
     desc: 'Кассир Архивной Пошлины: «Акт о пропавшей записи можно приложить к кассе. Тогда проход откроется, но Лев услышит скрип.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
@@ -652,7 +653,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_archive_toll_keeper', 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_permit_ambush_guard', AMBUSH_DEF, [
   {
     id: 'bureau_permit_ambush_expose',
-    giverNpcId: 'bureau_permit_ambush_guard',
+    giverId: getPlotNpcNumericId('bureau_permit_ambush_guard')!,
     type: QuestType.FETCH,
     desc: 'Старший Корешков: «Принесите поддельный корешок как приманку. Чистый проход оставим чистым, а засада получит акт.»',
     targetItem: 'forged_permit_slip', targetCount: 1,
@@ -674,7 +675,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_permit_ambush_guard', 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_visitor_anna', ANNA_DEF, [
   {
     id: 'bureau_erase_name_file',
-    giverNpcId: 'bureau_visitor_anna',
+    giverId: getPlotNpcNumericId('bureau_visitor_anna')!,
     type: QuestType.FETCH,
     desc: 'Анна Безымянная: «Принесите пропавшее личное дело. Я сотру смерть с той страницы, где она выглядит законной.»',
     targetItem: 'missing_record_file', targetCount: 1,
@@ -693,7 +694,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bureau_visitor_anna', ANNA_DE
   },
   {
     id: 'bureau_expose_erased_record',
-    giverNpcId: 'bureau_visitor_anna',
+    giverId: getPlotNpcNumericId('bureau_visitor_anna')!,
     type: QuestType.FETCH,
     desc: 'Анна Безымянная: «Можно не стирать. Вынесите акт о пропавшей записи - пусть Райсовет отвечает вслух.»',
     targetItem: 'record_exposure_notice', targetCount: 1,
@@ -1924,7 +1925,7 @@ function finalizeUpperBureauFloor(world: World, salon: Room): void {
 export function generateUpperBureauDesignFloor(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 1 };
+  const nextId: NextId = { v: 10000 };
 
   fillDefaultTextures(world);
 

@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Оставшийся Ликвидатор: armed post-cleanup non-kill encounter ── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -109,7 +110,7 @@ function branchBlockers(id: string): string[] {
 
 registerSideQuest(LOST_ID, LOST_DEF, [{
   id: AID_QUEST,
-  giverNpcId: LOST_ID,
+  giverId: getPlotNpcNumericId(LOST_ID)!,
   type: QuestType.FETCH,
   desc: 'Оставшийся Ликвидатор: «Бинт. Не к рукам - к маске. Подойдёшь медленно, я отведу ствол и отдам запасной фильтр.»',
   targetItem: 'bandage', targetCount: 1,
@@ -117,11 +118,11 @@ registerSideQuest(LOST_ID, LOST_DEF, [{
   extraRewards: [{ defId: 'liquidator_ration', count: 1 }],
   relationDelta: 4, xpReward: 55, moneyReward: 20,
   targetFloorZ: 140,
-  targetRoomName: CHECKPOINT_ROOM,
+  targetRoomDefId: CHECKPOINT_ROOM,
   targetHint: 'Коллекторы: сломанный пост зачистки с неверным кодом и дробовиком за бетонной стойкой.',
   blockedBySideQuestIds: BRANCH_QUEST_IDS,
   abandonsSideQuestIds: branchBlockers(AID_QUEST),
-  failOnNpcDeathPlotId: LOST_ID,
+  failOnNpcDeathId: getPlotNpcNumericId(LOST_ID)!,
   timeLimitMinutes: 12 * 60,
   eventTargetName: 'Оставшемуся Ликвидатору помогли бинтом и фильтром после проваленной зачистки.',
   eventSeverity: 4,
@@ -135,7 +136,7 @@ registerSideQuest(LOST_ID, LOST_DEF, [{
 
 registerSideQuest(REPORTER_ID, REPORTER_DEF, [{
   id: REPORT_QUEST,
-  giverNpcId: REPORTER_ID,
+  giverId: getPlotNpcNumericId(REPORTER_ID)!,
   type: QuestType.FETCH,
   desc: 'Вьюга: «На столе должна быть ведомость самосборов. Принесёшь её - я сниму с него маршрут и запишу не как тварь, а как срыв поста.»',
   targetItem: 'samosbor_tally', targetCount: 1,
@@ -143,11 +144,11 @@ registerSideQuest(REPORTER_ID, REPORTER_DEF, [{
   extraRewards: [{ defId: 'liquidator_ration', count: 1 }],
   relationDelta: 8, xpReward: 65, moneyReward: 70,
   targetFloorZ: 140,
-  targetRoomName: CHECKPOINT_ROOM,
+  targetRoomDefId: CHECKPOINT_ROOM,
   targetHint: 'Коллекторы: ведомость лежит у проваленного поста зачистки рядом с экраном неверного кода.',
   blockedBySideQuestIds: BRANCH_QUEST_IDS,
   abandonsSideQuestIds: branchBlockers(REPORT_QUEST),
-  failOnNpcDeathPlotId: LOST_ID,
+  failOnNpcDeathId: getPlotNpcNumericId(LOST_ID)!,
   timeLimitMinutes: 12 * 60,
   eventTargetName: 'Неверный код зачистки доложен Вьюге; пост снят без расстрела.',
   eventSeverity: 4,
@@ -161,7 +162,7 @@ registerSideQuest(REPORTER_ID, REPORTER_DEF, [{
 
 registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [{
   id: DISARM_QUEST,
-  giverNpcId: MECHANIC_ID,
+  giverId: getPlotNpcNumericId(MECHANIC_ID)!,
   type: QuestType.FETCH,
   desc: 'Титов: «Принеси жетон смены из ящика. Не украсть - показать. Когда он назовёт свой номер, дробовик станет тяжелее приказа.»',
   targetItem: 'liquidator_token', targetCount: 1,
@@ -169,11 +170,11 @@ registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [{
   extraRewards: [{ defId: 'ammo_shells', count: 2 }],
   relationDelta: 6, xpReward: 60, moneyReward: 25,
   targetFloorZ: 140,
-  targetRoomName: CHECKPOINT_ROOM,
+  targetRoomDefId: CHECKPOINT_ROOM,
   targetHint: 'Коллекторы: жетон смены спрятан в ящике проваленного поста; бетонные стойки дают паузу после выстрела.',
   blockedBySideQuestIds: BRANCH_QUEST_IDS,
   abandonsSideQuestIds: branchBlockers(DISARM_QUEST),
-  failOnNpcDeathPlotId: LOST_ID,
+  failOnNpcDeathId: getPlotNpcNumericId(LOST_ID)!,
   timeLimitMinutes: 12 * 60,
   eventTargetName: 'Оставшегося Ликвидатора разоружили через жетон смены и свидетеля.',
   eventSeverity: 4,

@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Monster_10: Насосная Матка — local water-pressure boss room ─ */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -58,7 +59,7 @@ const KIRA_DEF: PlotNpcDef = {
 registerSideQuest(WATCHER_ID, KIRA_DEF, [
   {
     id: VALVE_QUEST_ID,
-    giverNpcId: WATCHER_ID,
+    giverId: getPlotNpcNumericId(WATCHER_ID)!,
     type: QuestType.FETCH,
     desc: 'Кира Манометр: «Сними три бирки с вентилей по сухому периметру. Давление уйдет в лотки, а не в тебя.»',
     targetItem: 'valve_tag',
@@ -75,7 +76,7 @@ registerSideQuest(WATCHER_ID, KIRA_DEF, [
   },
   {
     id: CORE_QUEST_ID,
-    giverNpcId: WATCHER_ID,
+    giverId: getPlotNpcNumericId(WATCHER_ID)!,
     type: QuestType.KILL,
     desc: 'Кира Манометр: «После трех вентилей добей Насосную Матку. До этого она только учит воду кусаться.»',
     targetMonsterKind: MonsterKind.MATKA,

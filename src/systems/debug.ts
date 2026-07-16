@@ -819,7 +819,7 @@ function nearestDebugMukhozhukNpc(world: World, player: Entity, entities: Entity
   let best: Entity | null = null;
   let bestD2 = 9 * 9;
   for (const e of entities) {
-    if (!e.alive || e.type !== EntityType.NPC || !e.ai || e.plotNpcId !== undefined) continue;
+    if (!e.alive || e.type !== EntityType.NPC || !e.ai || e.id !== undefined) continue;
     const d2 = world.dist2(player.x, player.y, e.x, e.y);
     if (d2 >= bestD2) continue;
     best = e;

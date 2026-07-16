@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Тайная курилка — permanent room (ministry) ───────────────── */
 /* Hidden smoking room used by dissident clerks. Журналистка Аврора */
 /* gives FETCH quest for compromising notes about samosbor cover-up. */
@@ -51,7 +52,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest(AVRORA_ID, NPC_DEF, [
   {
     id: 'avrora_compromat',
-    giverNpcId: AVRORA_ID,
+    giverId: getPlotNpcNumericId(AVRORA_ID)!,
     type: QuestType.FETCH,
     desc: 'Аврора: «Восемь записок. Любых. Я найду в них коды и сошлю в самиздат.»',
     targetItem: 'note', targetCount: 8,

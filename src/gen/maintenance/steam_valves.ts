@@ -1,5 +1,6 @@
 /* ── Паровые вентили — static steam fake, no simulation ───────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -41,7 +42,7 @@ const LIDIA_DEF: PlotNpcDef = {
 registerSideQuest('ag04_steam_lidia', LIDIA_DEF, [
   {
     id: 'ag04_steam_eyes',
-    giverNpcId: 'ag04_steam_lidia',
+    giverId: getPlotNpcNumericId('ag04_steam_lidia')!,
     type: QuestType.KILL,
     desc: 'Лидия: «Убей два летающих глаза в паровых проходах. Они греются на лампах.»',
     targetMonsterKind: MonsterKind.EYE,

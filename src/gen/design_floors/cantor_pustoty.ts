@@ -949,7 +949,7 @@ export function measureCantorPustotyMetrics(gen: FloorGeneration): CantorPustoty
 export function generateCantorPustotyDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
 
   paintVoidBase(world);
   const cantor = buildCantorProxy();

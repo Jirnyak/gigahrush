@@ -65,7 +65,7 @@ function adjustedWrongChance(route: MetroRouteDef, player: Entity, state: GameSt
 function destinationData(destination: MetroDestination): Record<string, unknown> {
   const data = destination.kind === 'floor'
     ? { destinationKind: 'floor', destinationFloor: destination.z, destinationLabel: destination.label }
-    : { destinationKind: 'local', destinationRoomName: destination.roomName, destinationLabel: destination.label };
+    : { destinationKind: 'local', destinationRoomName: destination.roomDefId, destinationLabel: destination.label };
   return {
     ...data,
     returnRouteId: destination.returnRouteId,

@@ -1,6 +1,7 @@
 /* ── Тётя Клава — side quest (kvartiry floor) ─────────────────── */
 /* Хозяйка-самогонщица. Скупает сахар, варит самогон.              */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
@@ -43,7 +44,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('tyotya_klava', NPC_DEF, [
   {
     id: 'klava_bread',
-    giverNpcId: 'tyotya_klava',
+    giverId: getPlotNpcNumericId('tyotya_klava')!,
     type: QuestType.FETCH,
     desc: 'Тётя Клава: «Восемь буханок хлеба в бочку. За это налью компота и не спрошу, откуда хлеб.»',
     targetItem: 'bread', targetCount: 8,

@@ -367,7 +367,7 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   world.globalCeilingTier = 14; // Force fixed high ceiling (tier 14 -> height 8) to act as sky over the abyss
 
   const entities: Entity[] = [];
-  const nextId = { v: 1 };
+  const nextId = { v: 10000 };
   let nextContainerId = CONTAINER_ID_BASE;
 
   world.wallTex.fill(Tex.CONCRETE);

@@ -1,5 +1,6 @@
 /* ── Комната печатей — Ministry admin POI ─────────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   ContainerKind,
   Tex,
@@ -110,7 +111,7 @@ const WITNESS_RAISA_DEF: PlotNpcDef = {
 registerSideQuest('zoya_surguchnaya', ZOYA_DEF, [
   {
     id: 'stamp_room_padding',
-    giverNpcId: 'zoya_surguchnaya',
+    giverId: getPlotNpcNumericId('zoya_surguchnaya')!,
     type: QuestType.FETCH,
     desc: 'Зоя Сургучная: «Пять записок. Подложим под печать, чтобы она не прожгла стол.»',
     targetItem: 'note', targetCount: 5,
@@ -120,16 +121,16 @@ registerSideQuest('zoya_surguchnaya', ZOYA_DEF, [
   },
   {
     id: 'stamp_archive_route',
-    giverNpcId: 'zoya_surguchnaya',
+    giverId: getPlotNpcNumericId('zoya_surguchnaya')!,
     type: QuestType.TALK,
     desc: 'Зоя Сургучная: «Передайте Осипу Карточному, что печать признала его ящик существующим.»',
-    targetNpcId: 'osip_kartochny',
+    targetNpcId: getPlotNpcNumericId('osip_kartochny')!,
     rewardItem: 'book', rewardCount: 1,
     relationDelta: 10, xpReward: 35, moneyReward: 30,
   },
   {
     id: QUEST_WITNESSED_FORGERY,
-    giverNpcId: 'zoya_surguchnaya',
+    giverId: getPlotNpcNumericId('zoya_surguchnaya')!,
     type: QuestType.FETCH,
     desc: 'Зоя Сургучная: «Два куска сургуча. Поставим поддельную печать при понятой: лист пройдет в архив, но журнал тоже проснется.»',
     targetItem: 'seal_wax', targetCount: 2,

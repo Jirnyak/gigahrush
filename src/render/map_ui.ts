@@ -41,7 +41,7 @@ type MapMarkerStyle = { stroke: string; fill: string };
 
 const activeKillKinds = new Set<MonsterKind>();
 const activeKillNpcIds = new Set<number>();
-const activeKillPlotNpcIds = new Set<string>();
+
 const activeTargetRoomTypes = new Map<RoomType, QuestKind>();
 const activeTargetRooms = new Map<number, QuestKind>();
 const activeFetchItems = new Map<string, QuestKind>();
@@ -275,7 +275,7 @@ function setMarkerKind<K>(map: Map<K, QuestKind>, key: K, kind: QuestKind): void
 function clearActiveQuestMarkers(): void {
   activeKillKinds.clear();
   activeKillNpcIds.clear();
-  activeKillPlotNpcIds.clear();
+  
   activeTargetRoomTypes.clear();
   activeTargetRooms.clear();
   activeFetchItems.clear();
@@ -284,13 +284,13 @@ function clearActiveQuestMarkers(): void {
 
 function registerActiveKillTarget(q: Quest): void {
   if (q.targetMonsterKind !== undefined) activeKillKinds.add(q.targetMonsterKind);
-  else if (q.targetNpcId === undefined && q.targetPlotNpcId === undefined) activeKillAnyMonster = true;
+  else if (q.targetNpcId === undefined && q.targetNpcId === undefined) activeKillAnyMonster = true;
   if (q.targetNpcId !== undefined) activeKillNpcIds.add(q.targetNpcId);
-  if (q.targetPlotNpcId !== undefined) activeKillPlotNpcIds.add(q.targetPlotNpcId);
+  
 }
 
 function hasActiveKillTargets(): boolean {
-  return activeKillAnyMonster || activeKillKinds.size > 0 || activeKillNpcIds.size > 0 || activeKillPlotNpcIds.size > 0;
+  return activeKillAnyMonster || activeKillKinds.size > 0 || activeKillNpcIds.size > 0;
 }
 
 function isActiveKillQuestTarget(e: Entity): boolean {
@@ -298,7 +298,7 @@ function isActiveKillQuestTarget(e: Entity): boolean {
     return activeKillAnyMonster || (e.monsterKind !== undefined && activeKillKinds.has(e.monsterKind));
   }
   if (e.type === EntityType.NPC) {
-    return activeKillNpcIds.has(e.id) || (e.plotNpcId !== undefined && activeKillPlotNpcIds.has(e.plotNpcId));
+    return activeKillNpcIds.has(e.id!);
   }
   return false;
 }
@@ -397,8 +397,8 @@ function liveQuestNpcPoint(q: Quest, world: World, player: Entity): QuestMapTarg
     const byId = entityPoint(index.byId.get(q.targetNpcId));
     if (byId) return byId;
   }
-  if (!q.targetPlotNpcId) return undefined;
-  return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.plotNpcId === q.targetPlotNpcId);
+  if (!q.targetNpcId) return undefined;
+  return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.id === q.targetNpcId);
 }
 
 function liveQuestKillPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
@@ -453,8 +453,8 @@ function activeQuestMapTargetPoint(world: World, player: Entity, state: GameStat
       const index = getEntityIndex();
       const giver = index.byId.get(q.giverId);
       if (giver) return entityPoint(giver);
-      if (q.giverPlotNpcId) {
-        return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.plotNpcId === q.giverPlotNpcId);
+      if (q.giverId) {
+        return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.id === q.giverId);
       }
       return undefined;
     }

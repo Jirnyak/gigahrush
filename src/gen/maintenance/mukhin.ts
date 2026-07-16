@@ -1,4 +1,5 @@
 /* ── Валерий Мухин — side quest content module ──────────────── */
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { Faction, Occupation, QuestType, type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
@@ -38,7 +39,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('valeriy_mukhin', NPC_DEF, [
   {
     id: 'mukhin_filters',
-    giverNpcId: 'valeriy_mukhin',
+    giverId: getPlotNpcNumericId('valeriy_mukhin')!,
     type: QuestType.FETCH,
     desc: 'Валерий Мухин: «Мне нужны материалы для новых "чистых" фильтров. Принеси 5 отработанных фильтров, я знаю, как их восстановить.»',
     targetItem: 'used_gasmask_filter', targetCount: 5,

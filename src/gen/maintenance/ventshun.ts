@@ -170,7 +170,7 @@ function publishVentshunEvent(
     tags: eventTags(phase, source),
     data: {
       sourceEventId: source.id,
-      roomName: room?.name,
+      roomDefId: room?.name,
       cueId: CUE_ID,
       spawnedThreats: ctx.threatIds.length,
       cap: MAX_THREATS,

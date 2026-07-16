@@ -53,7 +53,6 @@ export { NOTES } from './notes';
 export {
   PLOT_CHAIN,
   designNpcFloorKey,
-  getPlotDef,
   isPlotNpc,
   plotNpcHomeFloorKey,
   registerAuthoredNpc,

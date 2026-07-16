@@ -46,7 +46,7 @@ export function routeBarkSpeech(request: MarkovSpeechRouterRequest): MarkovSpeec
       targetId: context.targetId,
       z: context.z,
       roomType: context.roomType,
-      roomName: context.roomName,
+      roomDefId: context.roomDefId,
       zoneId: context.zoneId,
       faction: context.actorFaction,
       occupation: context.actorOccupation,

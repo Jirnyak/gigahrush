@@ -2,6 +2,7 @@
 /* Self-contained: NPC definition + quest + spawn.                 */
 /* Registered automatically via registerSideQuest() at import.     */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   type Entity, Faction, Occupation, QuestType,
 } from '../../core/types';
@@ -44,7 +45,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest('viktor_argonov', NPC_DEF, [
   {
     id: 'viktor_pills',
-    giverNpcId: 'viktor_argonov',
+    giverId: getPlotNpcNumericId('viktor_argonov')!,
     type: QuestType.FETCH,
     desc: 'Виктор Аргонов: «Принеси десять таблеток. Я переживу ночь, а ты получишь запись с маршрутом у лифта.»',
     targetItem: 'pills', targetCount: 10,

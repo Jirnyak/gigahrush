@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* -- Living cartographer: route clues without full-map omniscience ---- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -47,7 +48,7 @@ const NPC_DEF: PlotNpcDef = {
 registerSideQuest(CARTOGRAPHER_ID, NPC_DEF, [
   {
     id: 'ag43_cartographer_maintenance_lead',
-    giverNpcId: CARTOGRAPHER_ID,
+    giverId: getPlotNpcNumericId(CARTOGRAPHER_ID)!,
     type: QuestType.VISIT,
     desc: 'Сева Картограф: «Спустись в Коллекторы и вернись с отметкой нижней зацепки. Если слышишь воду - держи фильтр или фонарь под рукой.»',
     visitFloorZ: 140,
@@ -60,7 +61,7 @@ registerSideQuest(CARTOGRAPHER_ID, NPC_DEF, [
   },
   {
     id: 'ag43_cartographer_crosscheck_notes',
-    giverNpcId: CARTOGRAPHER_ID,
+    giverId: getPlotNpcNumericId(CARTOGRAPHER_ID)!,
     type: QuestType.FETCH,
     desc: 'Сева Картограф: «Принеси две чужие записки. Я сверю их с картой и отдам рабочую схему лифтов, без обещаний безопасного маршрута.»',
     targetItem: 'note',
@@ -205,7 +206,7 @@ function dropItem(entities: Entity[], nextId: { v: number }, x: number, y: numbe
 }
 
 function spawnCartographer(world: World, entities: Entity[], nextId: { v: number }, room: Room): Entity {
-  const existing = entities.find(e => e.alive && e.plotNpcId === CARTOGRAPHER_ID);
+  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(CARTOGRAPHER_ID)!);
   if (existing) return existing;
   const x = world.wrap(room.x + Math.floor(ROOM_W / 2));
   const y = world.wrap(room.y + 3);

@@ -14,6 +14,7 @@ import { MEDICINE_SWAP_QUEST_IDS, MEDICINE_SWAP_TAG } from '../src/gen/kvartiry/
 import { PUSTOY_SOSED_QUEST_IDS } from '../src/gen/kvartiry/pustoy_sosed';
 import { RATION_QUEUE_QUEST_IDS, RATION_QUEUE_TAG } from '../src/gen/kvartiry/ration_queue';
 import { WATER_RIOT_QUEST_IDS, WATER_RIOT_TAG } from '../src/gen/kvartiry/water_riot';
+import '../src/data/npc_plot_packages';
 
 type RegisteredSideQuest = typeof SIDE_QUESTS[number];
 

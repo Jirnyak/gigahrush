@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
@@ -18,6 +19,7 @@ import {
 import { CONTROL_ACTIONS } from '../src/systems/controls';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
+import '../src/data/npc_plot_packages';
 
 class CanvasStubContext {
   readonly canvas: { width: number; height: number };
@@ -217,7 +219,7 @@ test('map renders NPC kill quest targets with red diamonds', () => {
     id: 31,
     x: 14.5,
     y: 12.5,
-    plotNpcId: 'plot_pechateed',
+    plotNpcId: getPlotNpcNumericId('plot_pechateed'),
     canGiveQuest: false,
   });
   const fills = drawMinimapPathFills({

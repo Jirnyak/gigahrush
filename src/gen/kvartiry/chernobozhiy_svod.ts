@@ -1,3 +1,4 @@
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── Чернобожий Свод: cult false-shelter room anchor ─────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -28,7 +29,7 @@ import { rng } from '../../core/rand';
 export const CHERNOBOZHIY_SVOD_TAG = 'chernobozhiy_svod';
 
 const OUTCOME_TAG = 'chernobozhiy_svod_outcome';
-const ROOM_NAME = `${FALSE_SAFE_BLOCK_ROOM_PREFIX}: Чернобожий Свод`;
+const ROOM_DEF_ID = `${FALSE_SAFE_BLOCK_ROOM_PREFIX}: Чернобожий Свод`;
 const LIQUIDATOR_ID = 'svod_liquidator_belik';
 const WITNESS_ID = 'svod_witness_anya';
 const CUSTODIAN_ID = 'svod_custodian_efrem';
@@ -191,7 +192,7 @@ const CUSTODIAN: PlotNpcDef = {
 registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
   {
     id: EXPOSE_QUEST,
-    giverNpcId: LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Белик Сухой Акт: «Принеси акт черной ладони из Свода. Комната должна стать адресом, а не чудом.»',
     targetItem: 'chernobog_confiscation_act',
@@ -211,7 +212,7 @@ registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
   },
   {
     id: SEAL_QUEST,
-    giverNpcId: LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
     type: QuestType.FETCH,
     desc: 'Белик Сухой Акт: «Дай чистящий комплект. Ладонь надо замазать так, чтобы укрытие снова слышало сирену.»',
     targetItem: 'cleaning_kit',
@@ -231,7 +232,7 @@ registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
   },
   {
     id: DESTROY_QUEST,
-    giverNpcId: LIQUIDATOR_ID,
+    giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
     type: QuestType.KILL,
     desc: 'Белик Сухой Акт: «Когда поймешь, где ладонь держит комнату, разбей идол Свода. Не раньше.»',
     targetMonsterKind: MonsterKind.IDOL,
@@ -253,7 +254,7 @@ registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [
 
 registerSideQuest(WITNESS_ID, WITNESS, [{
   id: SABOTAGE_QUEST,
-  giverNpcId: WITNESS_ID,
+  giverId: getPlotNpcNumericId(WITNESS_ID)!,
   type: QuestType.FETCH,
   desc: 'Аня Из Списка: «Укради кухонный список Свода. Хлеб надо вернуть в соседей, а не в ладонь.»',
   targetItem: 'cult_supply_list',
@@ -309,7 +310,7 @@ function handleSvodEvents(state: GameState, event: WorldEvent): void {
     data: {
       sourceEventId: event.id,
       outcome: 'robbed',
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       containerName: event.data?.containerName,
       witnessCount: event.data?.witnessCount,
       rumorIds: RUMOR_IDS,
@@ -344,7 +345,7 @@ function publishQuestOutcome(
       sourceEventId: event.id,
       sideQuestId,
       outcome: outcome.kind,
-      roomName: ROOM_NAME,
+      roomDefId: ROOM_DEF_ID,
       outcomeTags: outcome.tags,
       rumorIds: RUMOR_IDS,
     },
@@ -596,7 +597,7 @@ export function generateChernobozhiySvod(
     nextRoomId,
     spawnX,
     spawnY,
-    ROOM_NAME,
+    ROOM_DEF_ID,
     RoomType.COMMON,
     17,
     11,

@@ -17,7 +17,8 @@ import {
   NPC_VISUAL_SCIENTIST_MALE,
   NPC_VISUAL_WILD_MALE,
 } from '../src/data/art_sprite_manifest';
-import { MAIN_PLOT_NPC_PACKAGES } from '../src/data/npc_plot_packages';
+import { getNpcPackage } from '../src/data/npc_packages';
+import '../src/data/npc_plot_packages';
 import {
   generateNpcProfileSprite,
   entityWorldSpriteScale,
@@ -148,7 +149,7 @@ test('first-party NPC art resolves through visual ids while unknown ids fall bac
   }
   assert.equal(npcVisualFamily('ulyana'), undefined, 'ambiguous Ulyana art stays manifest-only until bound');
 
-  const olgaPackage = MAIN_PLOT_NPC_PACKAGES.find(pack => pack.id === 'olga');
+  const olgaPackage = getNpcPackage('olga');
   assert.equal(olgaPackage?.visual.npcVisualId, NPC_VISUAL_OLGA_DMITRIEVNA);
   assert.equal(olgaPackage?.visual.spriteScale, undefined);
 

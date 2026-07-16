@@ -1,5 +1,6 @@
 /* ── Пропускное бюро — Ministry admin POI ─────────────────────── */
 
+import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Tex,
   Feature,
@@ -200,7 +201,7 @@ const WITNESS_ARKADY_DEF: PlotNpcDef = {
 registerFloorSideQuest(HOME_FLOOR_KEY, 'vera_propuskova', VERA_DEF, [
   {
     id: 'permit_ballot_blanks',
-    giverNpcId: 'vera_propuskova',
+    giverId: getPlotNpcNumericId('vera_propuskova')!,
     type: QuestType.FETCH,
     desc: 'Вера Пропускова: «Принесите три бюллетеня. Выдам контрольный ключ для первого поста.»',
     targetItem: 'ballot', targetCount: 3,
@@ -210,10 +211,10 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'vera_propuskova', VERA_DEF, [
   },
   {
     id: 'permit_stamp_route',
-    giverNpcId: 'vera_propuskova',
+    giverId: getPlotNpcNumericId('vera_propuskova')!,
     type: QuestType.TALK,
     desc: 'Вера Пропускова: «Передайте Зое Сургучной в комнату печатей, что корешок без ее отметки охрана завернет у первого поста.»',
-    targetNpcId: 'zoya_surguchnaya',
+    targetNpcId: getPlotNpcNumericId('zoya_surguchnaya')!,
     rewardItem: 'note', rewardCount: 2,
     relationDelta: 10, xpReward: 35, moneyReward: 40,
   },
@@ -222,10 +223,10 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'vera_propuskova', VERA_DEF, [
 registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_wait_registrar', WAIT_REGISTRAR_DEF, [
   {
     id: 'permit_wait_queue',
-    giverNpcId: 'permit_wait_registrar',
+    giverId: getPlotNpcNumericId('permit_wait_registrar')!,
     type: QuestType.VISIT,
     desc: 'Назар Секундомеров: «Законный путь простой: стойте в Зале невозможной очереди {dir}. Когда табель дойдет до вашей фамилии, получите корешок.»',
-    targetRoomName: 'Зал невозможной очереди',
+    targetRoomDefId: 'Зал невозможной очереди',
     targetFloorZ: 30,
     targetHint: 'Министерство: Зал невозможной очереди с рядами стульев и картотекой Осипа.',
     rewardItem: 'official_permit_slip', rewardCount: 1,
@@ -241,7 +242,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_wait_registrar', WAIT_REGISTRAR_D
 registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_pay_clerk', PAY_CLERK_DEF, [
   {
     id: 'permit_pay_accelerator',
-    giverNpcId: 'permit_pay_clerk',
+    giverId: getPlotNpcNumericId('permit_pay_clerk')!,
     type: QuestType.FETCH,
     desc: 'Римма Ускорительная: «Девяносто рублей ускорительного сбора. Окно выдаст корешок, а расписка пройдет N3 как тихая взятка с ревизионным хвостом.»',
     targetItem: 'money', targetCount: 90,
@@ -268,7 +269,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_pay_clerk', PAY_CLERK_DEF, [
 registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_forger_fedya', FORGER_DEF, [
   {
     id: 'permit_forge_slip',
-    giverNpcId: 'permit_forger_fedya',
+    giverId: getPlotNpcNumericId('permit_forger_fedya')!,
     type: QuestType.FETCH,
     desc: 'Федя Кальковый: «Лист с поддельной печатью сюда. Сделаю поддельный корешок: охрана пропустит, а аудит потом будет искать чужой почерк.»',
     targetItem: 'forged_stamp_sheet', targetCount: 1,
@@ -294,7 +295,7 @@ registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_forger_fedya', FORGER_DEF, [
 registerFloorSideQuest(HOME_FLOOR_KEY, 'permit_threat_gleb', THREAT_CLERK_DEF, [
   {
     id: 'permit_threaten_window',
-    giverNpcId: 'permit_threat_gleb',
+    giverId: getPlotNpcNumericId('permit_threat_gleb')!,
     type: QuestType.FETCH,
     desc: 'Глеб Прижимной: «Нужен приказ без подписи. Положим его на окно, и дежурный выдаст корешок, пока не понял, кому звонить.»',
     targetItem: 'unsigned_order', targetCount: 1,

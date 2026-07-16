@@ -26,6 +26,7 @@ import {
   type NpcSpeechPackageView,
 } from '../src/systems/npc_package_speech';
 import { makeTestNpc } from './helpers';
+import '../src/data/npc_plot_packages';
 
 const TEST_PACK: NpcSpeechPackageView = {
   id: 'npc_speech_test',

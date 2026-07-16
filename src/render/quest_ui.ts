@@ -208,7 +208,7 @@ function questRouteHint(q: Quest, state: GameState): string {
       ? `Цель: ${target}. Лифт ${dir} от Z${formatFloorZ(currentZ)}. ${detail}`
       : `Цель: ${target}. Лифт ${dir} от Z${formatFloorZ(currentZ)}.`;
   }
-  if (q.type === QuestType.TALK && q.targetPlotNpcId && q.targetNpcId === undefined) {
+  if (q.type === QuestType.TALK && q.targetNpcId && q.targetNpcId === undefined) {
     return 'Собеседник на другом уровне. Нужен лифт.';
   }
   if (q.type === QuestType.VISIT && q.targetRoom === undefined) {
