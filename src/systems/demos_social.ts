@@ -311,28 +311,16 @@ function reverseAuthoredRole(role: DemosSocialRoleId): DemosSocialRoleId {
 
 function findPlotNpcAlifeId(
   state: GameState,
-  graph: DemosSocialGraph,
   plotNpcId: number | string,
 ): number | undefined {
   const numericId = typeof plotNpcId === 'string' ? getPlotNpcNumericId(String(plotNpcId)) : plotNpcId;
-  for (let id = 1; id <= graph.total; id++) {
-    const snapshot = getAlifeNpcRecordSnapshot(state, id);
-    if (snapshot?.plotNpcId === numericId) return id;
+  if (numericId !== undefined) {
+    const snapshot = getAlifeNpcRecordSnapshot(state, numericId);
+    if (snapshot) return numericId;
   }
   return undefined;
 }
 
-function plotIdMapFromSnapshots(
-  snapshots: readonly (AlifeNpcSnapshot | undefined)[],
-  total: number,
-): Map<number, number> {
-  const out = new Map<number, number>();
-  for (let id = 1; id <= total; id++) {
-    const plotNpcId = snapshots[id]?.plotNpcId;
-    if (plotNpcId !== undefined && !out.has(plotNpcId)) out.set(plotNpcId, id);
-  }
-  return out;
-}
 
 function packageIdForSnapshot(snapshot: AlifeNpcSnapshot): string | undefined {
   return packageIdFromReservedIdentityId(snapshot.reservedIdentityId);
@@ -487,10 +475,14 @@ function applyAllAuthoredRelations(
   snapshots: readonly (AlifeNpcSnapshot | undefined)[],
 ): void {
   if (DEMOS_AUTHORED_RELATIONS.length === 0) return;
-  const byPlotId = plotIdMapFromSnapshots(snapshots, graph.total);
   for (const def of DEMOS_AUTHORED_RELATIONS) {
-    const fromId = byPlotId.get(getPlotNpcNumericId(def.fromPlotNpcId) ?? -1);
-    const toId = byPlotId.get(getPlotNpcNumericId(def.toPlotNpcId) ?? -1);
+    const fromNumericId = getPlotNpcNumericId(def.fromPlotNpcId);
+    const toNumericId = getPlotNpcNumericId(def.toPlotNpcId);
+    if (fromNumericId === undefined || toNumericId === undefined) continue;
+
+    const fromId = snapshots[fromNumericId] ? fromNumericId : undefined;
+    const toId = snapshots[toNumericId] ? toNumericId : undefined;
+
     applyAuthoredDirection(graph, fromId, toId, def);
     if (def.bidirectional) applyAuthoredDirection(graph, toId, fromId, def, true);
   }
@@ -503,10 +495,10 @@ function applyAuthoredRelationsForSource(
 ): void {
   if (!source.id || DEMOS_AUTHORED_RELATIONS.length === 0) return;
   for (const def of DEMOS_AUTHORED_RELATIONS) {
-    if (getPlotNpcNumericId(def.fromPlotNpcId) === source.plotNpcId) {
-      applyAuthoredDirection(graph, source.id, findPlotNpcAlifeId(state, graph, def.toPlotNpcId), def);
-    } else if (def.bidirectional && getPlotNpcNumericId(def.toPlotNpcId) === source.plotNpcId) {
-      applyAuthoredDirection(graph, source.id, findPlotNpcAlifeId(state, graph, def.fromPlotNpcId), def, true);
+    if (getPlotNpcNumericId(def.fromPlotNpcId) === source.id) {
+      applyAuthoredDirection(graph, source.id, findPlotNpcAlifeId(state, def.toPlotNpcId), def);
+    } else if (def.bidirectional && getPlotNpcNumericId(def.toPlotNpcId) === source.id) {
+      applyAuthoredDirection(graph, source.id, findPlotNpcAlifeId(state, def.fromPlotNpcId), def, true);
     }
   }
 }

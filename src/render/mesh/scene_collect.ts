@@ -1163,10 +1163,21 @@ function localRoomCoord(room: { x: number; y: number; w: number; h: number }, x:
 }
 
 function doorNear(world: World, x: number, y: number): boolean {
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const idx = world.idx(x + dx, y + dy);
-      if (world.cells[idx] === Cell.DOOR || world.doors.has(idx)) return true;
+  if (world.doors.size === 0) return false;
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) return true;
+  
+  const DIRS_X = [1, -1, 0, 0];
+  const DIRS_Y = [0, 0, 1, -1];
+  for (let dir = 0; dir < 4; dir++) {
+    const ni = world.idx(x + DIRS_X[dir], y + DIRS_Y[dir]);
+    if (world.cells[ni] === Cell.DOOR || world.doors.has(ni)) return true;
+  }
+  
+  for (let dy = -1; dy <= 1; dy += 2) {
+    for (let dx = -1; dx <= 1; dx += 2) {
+      const ni = world.idx(x + dx, y + dy);
+      if (world.cells[ni] === Cell.DOOR || world.doors.has(ni)) return true;
     }
   }
   return false;

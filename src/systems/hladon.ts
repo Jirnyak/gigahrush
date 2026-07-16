@@ -143,12 +143,17 @@ function buildHladonCache(world: World, roomSignature = hladonRoomSignature(worl
 }
 
 function getHladonCache(world: World): HladonCache {
-  const roomSignature = hladonRoomSignature(world);
   let cache = hladonCaches.get(world);
-  if (!cache || cache.cellVersion !== world.cellVersion || cache.roomSignature !== roomSignature) {
-    cache = buildHladonCache(world, roomSignature);
-    hladonCaches.set(world, cache);
+  if (cache && cache.cellVersion === world.cellVersion) return cache;
+  
+  const roomSignature = hladonRoomSignature(world);
+  if (cache && cache.roomSignature === roomSignature) {
+    cache.cellVersion = world.cellVersion;
+    return cache;
   }
+  
+  cache = buildHladonCache(world, roomSignature);
+  hladonCaches.set(world, cache);
   return cache;
 }
 

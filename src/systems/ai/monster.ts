@@ -92,6 +92,7 @@ import { selectMeleeTarget } from '../melee_targeting';
 import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
 import { isCarnivoreMonster } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
+import { tryCombatOrbitStep } from './combat_orbit';
 
 /* ── Shared combat target finder ──────────────────────────────── */
 const MONSTER_DETECT = 20;
@@ -7376,6 +7377,10 @@ function updateReadableMonsterRanged(
     }
   } else if (tryPaupsinaRangeStep(world, e, target, bestDist, dt)) {
     return true;
+  } else if ((def?.speed ?? 0) > 0) {
+    // Generic ranged monsters strafe between shots
+    const idealR = (shotRange + minRange) * 0.5;
+    tryCombatOrbitStep(world, e, target, idealR, (shotRange - minRange) * 0.35, dt);
   }
   return true;
 }
@@ -8858,6 +8863,10 @@ export function tryPerformMonsterMeleeAttack(
         e.attackCd = def?.attackRate ?? 1;
       }
     }
+    // Orbit around target while in melee range (circle-strafe between attacks)
+    if (!e.phasing && (def?.speed ?? 0) > 0) {
+      tryCombatOrbitStep(world, e, target, mRange * 0.85, 0.4, dt);
+    }
     return true;
   }
   return false;
@@ -9097,6 +9106,13 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   // Melee attack if close enough
   if (tryPerformMonsterMeleeAttack(world, entities, e, target, def, dt, time, msgs, playerId, nextId, bestDist, state)) {
+    return;
+  }
+
+  // Close approach: if nearly in melee range, orbit instead of pathfinding for smooth transition
+  const _meleeOrbitR = monsterMeleeRange(world, e);
+  if (!e.phasing && bestDist < _meleeOrbitR + 2.0 && bestDist > _meleeOrbitR) {
+    tryCombatOrbitStep(world, e, target, _meleeOrbitR * 0.85, 0.6, dt);
     return;
   }
 

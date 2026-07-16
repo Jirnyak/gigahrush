@@ -111,8 +111,8 @@ const DEBUG_ECONOMY_PULSES = [
 ] as const;
 export const SMOKE_STRESS_HOOK_ID = 'stress_spawn' as const;
 export const SMOKE_DEBUG_COMMAND_IDS = {
-  teleportLiving: 'teleport_living',
-  teleportMaintenance: 'teleport_maintenance',
+  teleportLiving: 'teleport_design_z: living',
+  teleportMaintenance: 'teleport_design_z: maintenance',
   forceFactionEvent: 'force_faction_event',
   rareSamosbor: 'rare_samosbor',
   expeditionSetup: 'smoke_expedition_setup',

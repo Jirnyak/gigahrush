@@ -345,8 +345,11 @@ export class World {
   /* toroidal helpers */
   wrap(v: number): number { return ((v % W) + W) % W; }
 
+  /** Integer-only wrap: faster than wrap() for cell coordinates. W must be power of 2. */
+  wrapI(v: number): number { return (v & 0x3ff) | 0; } // 0x3ff = 1023 = W-1
+
   idx(x: number, y: number): number {
-    return this.wrap(y | 0) * W + this.wrap(x | 0);
+    return ((y | 0) & 0x3ff) * W + ((x | 0) & 0x3ff);
   }
 
   get(x: number, y: number): number {
@@ -558,7 +561,7 @@ export class World {
   }
 
   solid(x: number, y: number): boolean {
-    const i = this.idx(x, y);
+    const i = ((y | 0) & 0x3ff) * W + ((x | 0) & 0x3ff);
     const c = this.cells[i];
     if (c === Cell.FLOOR || c === Cell.WATER) return false;
     if (c === Cell.LIFT) return true;  // lift wall — interact to use
@@ -575,8 +578,8 @@ export class World {
   /* toroidal shortest displacement from a→b */
   delta(a: number, b: number): number {
     let d = b - a;
-    if (d >  W / 2) d -= W;
-    if (d < -W / 2) d += W;
+    if (d >  512) d -= W;
+    if (d < -512) d += W;
     return d;
   }
 

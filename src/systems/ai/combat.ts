@@ -42,6 +42,7 @@ import {
 import { selectMeleeTarget } from '../melee_targeting';
 import { publishEvent } from '../events';
 import { rng } from '../../core/rand';
+import { tryCombatOrbitStep } from './combat_orbit';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
 let _barkMsgs: Msg[] = [];
@@ -110,7 +111,7 @@ export function tryFleeFromMonster(
   const isCombatant = npcIsBrave(e);
   if (isCombatant) return false;
 
-  const ws = getWeaponStats(e, npcCombatItemId(e));
+  const ws = npcCombatItemId(e).ws;
   if (ws && (ws.dmg > 3 || ws.isRanged)) return false;
 
   const ai = e.ai!;
@@ -235,36 +236,40 @@ function npcIsBrave(e: Entity): boolean {
   return npcCombatProfile(e).brave;
 }
 
-function npcCombatItemScore(e: Entity, itemId: string | undefined): number {
+function npcCombatItemScore(e: Entity, itemId: string | undefined, precomputedWs?: import('../../data/catalog').WeaponStats): number {
   const id = itemId ?? '';
   if (!id) return 0;
-  const ws = getWeaponStats(e, id);
+  const ws = precomputedWs ?? getWeaponStats(e, id);
   if (!ws) return 0;
   if (ws.psiCost && (!e.rpg || e.rpg.psi < ws.psiCost)) return 0;
   // NPC infinite ammo — don't gate combat score on inventory ammo
   return ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 + (ws.aoeRadius ? 30 : 0) : ws.dmg;
 }
 
-function npcCombatItemId(e: Entity): string {
+function npcCombatItemId(e: Entity): { id: string; ws: import('../../data/catalog').WeaponStats } {
   const weaponId = e.weapon ?? '';
   const toolId = e.tool ?? '';
-  const toolWs = getWeaponStats(e, toolId);
-  const toolScore = toolWs?.psiCost ? npcCombatItemScore(e, toolId) : 0;
-  const weaponScore = npcCombatItemScore(e, weaponId);
-  return toolScore > weaponScore ? toolId : weaponId;
+  
+  const toolWs = toolId ? getWeaponStats(e, toolId) : WEAPON_STATS[''];
+  const toolScore = toolWs?.psiCost ? npcCombatItemScore(e, toolId, toolWs) : 0;
+  
+  const weaponWs = weaponId ? getWeaponStats(e, weaponId) : WEAPON_STATS[''];
+  const weaponScore = npcCombatItemScore(e, weaponId, weaponWs);
+  
+  return toolScore > weaponScore ? { id: toolId, ws: toolWs } : { id: weaponId, ws: weaponWs };
 }
 
-function npcThreatScore(e: Entity): number {
-  const ws = getWeaponStats(e, npcCombatItemId(e));
+function npcThreatScore(e: Entity, precomputedWs?: import('../../data/catalog').WeaponStats): number {
+  const ws = precomputedWs ?? npcCombatItemId(e).ws;
   const weapon = ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg;
   const hp = Math.max(0, e.hp ?? 20) * 0.22;
   const level = Math.max(1, e.rpg?.level ?? 1) * 3;
   return hp + weapon + level;
 }
 
-function npcShouldFleeTarget(e: Entity, target: Entity): boolean {
+function npcShouldFleeTarget(e: Entity, target: Entity, eWs?: import('../../data/catalog').WeaponStats): boolean {
   if (npcIsBrave(e)) return false;
-  return npcThreatScore(e) < npcThreatScore(target) * NPC_FLEE_THREAT_RATIO;
+  return npcThreatScore(e, eWs) < npcThreatScore(target) * NPC_FLEE_THREAT_RATIO;
 }
 
 function livePlayerTarget(entities: readonly Entity[]): Entity | undefined {
@@ -275,8 +280,9 @@ export function tryFactionCombat(
   world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, player?: Entity | null, options?: FactionCombatOptions,
 ): boolean {
   tryCombatLootGrab(world, e, dt);
-  const weaponId = npcCombatItemId(e);
-  const ws = getWeaponStats(e, weaponId);
+  const combatItem = npcCombatItemId(e);
+  const weaponId = combatItem.id;
+  const ws = combatItem.ws;
   const rangedProfile = ws.isRanged ? npcRangedProfile(ws) : undefined;
   const isArmed = ws.dmg > 3 || ws.isRanged;
   const visualProjectiles = options?.visualProjectiles ?? true;
@@ -321,7 +327,7 @@ export function tryFactionCombat(
     }
     return false;
   }
-  if (damageThreat?.reaction === 'flee' || (damageThreat?.reaction !== 'fight' && npcShouldFleeTarget(e, target))) {
+  if (damageThreat?.reaction === 'flee' || (damageThreat?.reaction !== 'fight' && npcShouldFleeTarget(e, target, ws))) {
     ai.combatTargetId = target.id;
     return startFleeFromThreat(world, e, target, dt);
   }
@@ -415,6 +421,9 @@ export function tryFactionCombat(
         }
         npcAutoEquipBestWeapon(e);
       } else {
+        // Ranged NPC: orbit while waiting for attack cooldown
+        const idealR = (rangedProfile!.maxRange + rangedProfile!.minRange) * 0.5;
+        tryCombatOrbitStep(world, e, target, idealR, (rangedProfile!.maxRange - rangedProfile!.minRange) * 0.3, dt);
         return true;
       }
     }
@@ -488,6 +497,8 @@ export function tryFactionCombat(
     publishWeaponNoise(state, e, weaponId, meleeWs);
     e.attackCd = (meleeWs.speed || NPC_COMBAT_CD) * atkSpeedMod;
   }
+  // Orbit around target while in melee range (circle-strafe between attacks)
+  tryCombatOrbitStep(world, e, target, effectiveReach * 0.85, 0.4, dt);
   return true;
 }
 

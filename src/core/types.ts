@@ -583,6 +583,9 @@ export interface AIState {
   microTimer?: number;             // remaining seconds; when ≤ 0, micro-goal is cleared
   microSourceId?: number;          // optional: entity id that triggered the micro-goal
   microCooldowns?: Record<string, number>; // remaining seconds before a micro-goal type can trigger again
+  // ── Combat orbit (transient, not saved) ────────────────────────
+  orbitDir?: number;             // current orbital strafe direction: +1 CW, -1 CCW
+  orbitPulseCd?: number;         // cooldown for random radius-delta variation
 }
 
 export interface InventoryHolder {

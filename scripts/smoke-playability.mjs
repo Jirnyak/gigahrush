@@ -53,8 +53,8 @@ const KEY = {
 };
 
 const SMOKE_HOOK_ID = {
-  teleportLiving: 'teleport_living',
-  teleportMaintenance: 'teleport_maintenance',
+  teleportLiving: 'teleport_design_z: living',
+  teleportMaintenance: 'teleport_design_z: maintenance',
   forceFactionEvent: 'force_faction_event',
   rareSamosbor: 'rare_samosbor',
   expeditionSetup: 'smoke_expedition_setup',
