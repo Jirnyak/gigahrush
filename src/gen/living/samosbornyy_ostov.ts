@@ -19,7 +19,7 @@ export const SAMOSBORNYY_OSTOV_ROOM_PREFIX = 'Самосборный Остов'
 export const SAMOSBORNYY_OSTOV_ZONE = 64 as const;
 export const SAMOSBORNYY_OSTOV_METADATA = {
   id: SAMOSBORNYY_OSTOV_ID,
-  z: 'living',
+  floor: 'living',
   zoneHudId: SAMOSBORNYY_OSTOV_ZONE,
   zoneTitle: SAMOSBORNYY_OSTOV_ROOM_PREFIX,
   reachability: 'living_content_manifest_zone_64',
