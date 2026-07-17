@@ -199,7 +199,7 @@ import {
   playGauss, playPlasma, playBFG, playFlame, playPsiBeam,
   playProjectileImpact, playEnergyImpact, playProjectileBodyHit,
   startAmbientDrone, setListenerPos, playSoundAt, playHudBarChange,
-  setAudioSuspendedForPage, setAudioSuspendedForPlatform, setAudioSuspendedForPlatformMute, syncAudioSettings,
+  setAudioSuspendedForPage, setAudioSuspendedForPlatform, setAudioSuspendedForPlatformMute, syncAudioSettings, setAudioSuspendedForTitle,
   type HudBarAudioId,
 } from './systems/audio';
 import {
@@ -3175,6 +3175,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   resetNoiseRecords();
+  musicSystem.reset();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
   const _t1 = performance.now();
   loadingProgress('Рисуем лабиринт этажа', 5);
@@ -3414,6 +3415,7 @@ let netDeathReported = false;
 const MSG_LOG_SYNC_DEDUPE_SCAN = 32;
 
 function bootInitialGameOrTitle(): void {
+  setAudioSuspendedForTitle(true);
   scheduleLoading(() => {
     const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
     initGame(undefined, floorZ);
@@ -9920,6 +9922,7 @@ function showTitle(): void {
 }
 
 function returnToTitleScreen(): void {
+  setAudioSuspendedForTitle(true);
   pendingLoad = null;
   pendingLoadStarted = false;
   started = false;
@@ -9949,6 +9952,7 @@ function returnToTitleScreen(): void {
 }
 
 function finishStartGameFromTitle(): void {
+  setAudioSuspendedForTitle(false);
   player.name = playerDisplayName();
   player.age = playerAge;
   player.sex = playerSex;

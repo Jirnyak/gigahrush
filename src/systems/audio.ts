@@ -4,7 +4,7 @@ import { masterAudioEnabled, sfxVolume } from './ui_orchestrator.js';
 let ctx: AudioContext | null = null;
 let mainGain: GainNode | null = null;
 let scopedGain: GainNode | null = null;
-type AudioSuspendReason = 'page' | 'platform' | 'platformMute';
+type AudioSuspendReason = 'page' | 'platform' | 'platformMute' | 'title';
 const audioSuspendReasons = new Set<AudioSuspendReason>();
 
 export type AudioCueBudgetId =
@@ -223,6 +223,10 @@ export function setAudioSuspendedForPlatform(paused: boolean): void {
 
 export function setAudioSuspendedForPlatformMute(muted: boolean): void {
   setAudioSuspended('platformMute', muted);
+}
+
+export function setAudioSuspendedForTitle(title: boolean): void {
+  setAudioSuspended('title', title);
 }
 
 export function resetAudioSuspensionForTests(): void {

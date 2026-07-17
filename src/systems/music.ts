@@ -34,6 +34,25 @@ class MusicSystem {
     }
   }
 
+  public reset(): void {
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.removeAttribute('src');
+      this.currentAudio.load();
+      this.currentAudio = null;
+    }
+    if (this.fadeOutAudio) {
+      this.fadeOutAudio.pause();
+      this.fadeOutAudio.removeAttribute('src');
+      this.fadeOutAudio.load();
+      this.fadeOutAudio = null;
+    }
+    this.currentContext = 'ambient';
+    this.currentTrackName = null;
+    this.fadeTimer = 0;
+    this.playPending = false;
+  }
+
   /** Resolve a track URL lazily. Returns null if not yet loaded. */
   private resolveTrack(name: string): string | null {
     if (this.tracks[name]) return this.tracks[name];
