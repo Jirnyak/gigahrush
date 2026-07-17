@@ -180,7 +180,6 @@ export interface HilbertDepotChordState {
 export interface HilbertDepotState {
   routeId: typeof DESIGN_FLOOR_ID;
   anchorZ: typeof HILBERT_DEPOT_ROUTE_Z;
-  baseFloor: typeof HILBERT_DEPOT_BASE_FLOOR;
   curveOrder: typeof CURVE_ORDER;
   curvePointCount: number;
   cargoContainerIds: number[];
@@ -206,7 +205,6 @@ export function generateHilbertDepotDesignFloor(): HilbertDepotGeneration {
   const state: HilbertDepotState = {
     routeId: DESIGN_FLOOR_ID,
     anchorZ: HILBERT_DEPOT_ROUTE_Z,
-    baseFloor: HILBERT_DEPOT_BASE_FLOOR,
     curveOrder: CURVE_ORDER,
     curvePointCount: points.length,
     cargoContainerIds: [],

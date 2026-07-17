@@ -102,7 +102,6 @@ interface PenroseHqSpec {
 export interface PenroseLaundryState {
   routeId: typeof PENROSE_LAUNDRY_ROUTE_ID;
   anchorZ: typeof PENROSE_LAUNDRY_Z;
-  baseFloor: typeof PENROSE_LAUNDRY_BASE_FLOOR;
   tiles: PenroseLaundryTileRecord[];
   symbolChainRoomNames: string[];
   deflationPocketRoomNames: string[];
@@ -389,7 +388,6 @@ export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
   const state: PenroseLaundryState = {
     routeId: PENROSE_LAUNDRY_ROUTE_ID,
     anchorZ: PENROSE_LAUNDRY_Z,
-    baseFloor: PENROSE_LAUNDRY_BASE_FLOOR,
     tiles: tileRecords,
     symbolChainRoomNames: SYMBOL_CHAIN_IDS.map(id => roomById(roomsById, id).name),
     deflationPocketRoomNames: DEFLATION_IDS.map(id => roomById(roomsById, id).name),

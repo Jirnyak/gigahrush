@@ -26,7 +26,6 @@ export interface VisualSurfaceProfileRow {
   profileId: string;
   priority: number;
   kinds?: readonly FloorThemeProfile['kind'][];
-  baseFloors?: readonly number[];
   routeIds?: readonly string[];
   roomTypes?: readonly RoomType[];
   wallTex?: readonly Tex[];
@@ -176,12 +175,12 @@ export const VISUAL_SURFACE_PROFILES: readonly VisualSurfaceProfile[] = [
 
 export const VISUAL_SURFACE_PROFILE_ROWS: readonly VisualSurfaceProfileRow[] = [
   { id: 'global_plain_concrete', profileId: 'plain_concrete', priority: 0 },
-  { id: 'design_living_residential', profileId: 'residential_lino', priority: 20, baseFloors: [0] },
-  { id: 'design_kvartiry_residential', profileId: 'residential_lino', priority: 20, baseFloors: [14] },
-  { id: 'design_ministry_checker', profileId: 'ministry_checker', priority: 22, baseFloors: [30] },
-  { id: 'design_maintenance_service', profileId: 'maintenance_service', priority: 22, baseFloors: [-26] },
-  { id: 'design_hell_organic', profileId: 'hell_organic_surface', priority: 24, baseFloors: [-36] },
-  { id: 'design_void_proof', profileId: 'void_proof_surface', priority: 24, baseFloors: [-50] },
+  { id: 'design_living_residential', profileId: 'residential_lino', priority: 20 },
+  { id: 'design_kvartiry_residential', profileId: 'residential_lino', priority: 20 },
+  { id: 'design_ministry_checker', profileId: 'ministry_checker', priority: 22 },
+  { id: 'design_maintenance_service', profileId: 'maintenance_service', priority: 22 },
+  { id: 'design_hell_organic', profileId: 'hell_organic_surface', priority: 24 },
+  { id: 'design_void_proof', profileId: 'void_proof_surface', priority: 24 },
 
   { id: 'room_bathroom_tile', profileId: 'residential_tile', priority: 40, roomTypes: [RoomType.BATHROOM], blockedTags: ['meat', 'void'] },
   { id: 'room_kitchen_tile', profileId: 'residential_tile', priority: 38, roomTypes: [RoomType.KITCHEN], blockedTags: ['meat', 'void'] },

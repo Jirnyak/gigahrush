@@ -147,8 +147,8 @@ function designBucket(route: DesignFloorRouteDef): WeightedBucket {
   const population = designFloorPopulationProfile(route);
   return {
     floorKey: floorKeyForDesign(route.id),
-    // @ts-ignore
-    baseFloor: route.themeTags,
+    themeTags: route.themeTags ?? [],
+
     weight: theme.npcAllowed ? population.npcTarget : 0,
     populationProfileId: theme.populationProfileId ?? `design:${route.id}`,
     factionWeights: population.npcFactions,
@@ -189,8 +189,8 @@ function proceduralBucket(spec: ProceduralFloorSpec): WeightedBucket {
   });
   return {
     floorKey: floorKeyForProcedural(spec.key),
-    // @ts-ignore
-    baseFloor: spec.themeTags,
+    themeTags: spec.themeTags ?? [],
+
     weight: theme.npcAllowed ? budget.npcs : 0,
     populationProfileId: `procedural:${budget.profileId}`,
     factionWeights: [{ value: majority.npcFaction, weight: 4 }],
@@ -412,7 +412,6 @@ export function buildAlifePopulationPlan(input: {
   const counts = allocateCounts(weighted, ordinaryTotal);
   const buckets = weighted.map((bucket, index) => ({
     floorKey: bucket.floorKey,
-    baseFloor: bucket.themeTags,
     targetCount: counts[index],
     populationProfileId: bucket.populationProfileId,
     factionWeights: bucket.factionWeights,

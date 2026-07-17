@@ -87,7 +87,6 @@ export interface ProductionBeltLineState {
 export interface ProductionBeltRouteState {
   routeId: typeof DESIGN_FLOOR_ID;
   anchorZ: typeof PRODUCTION_BELT_ROUTE_Z;
-  baseFloor: typeof PRODUCTION_BELT_BASE_FLOOR;
   lines: ProductionBeltLineState[];
   dependencies: ProductionBeltPipelineDependency[];
   cueIds: string[];
@@ -163,7 +162,6 @@ export const PRODUCTION_BELT_PIPELINE_DEPENDENCIES: readonly ProductionBeltPipel
 export const PRODUCTION_BELT_DEBUG_ENTRY = {
   routeId: DESIGN_FLOOR_ID,
   z: PRODUCTION_BELT_ROUTE_Z,
-  baseFloor: PRODUCTION_BELT_BASE_FLOOR,
   spawnHint: 'Проходная смены 14',
 } as const;
 
@@ -1347,7 +1345,6 @@ function createProductionBeltState(
   return {
     routeId: DESIGN_FLOOR_ID,
     anchorZ: PRODUCTION_BELT_ROUTE_Z,
-    baseFloor: PRODUCTION_BELT_BASE_FLOOR,
     lines: [
       {
         id: 'prod_restore_line',

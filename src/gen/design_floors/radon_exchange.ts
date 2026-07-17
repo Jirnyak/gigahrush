@@ -29,7 +29,6 @@ export const RADON_EXCHANGE_META = {
   routeId: RADON_EXCHANGE_ROUTE_ID,
   displayName: 'Радоновый обменник',
   z: RADON_EXCHANGE_Z,
-  baseFloor: RADON_EXCHANGE_BASE_FLOOR,
   debugEntry: 'generateRadonExchangeDesignFloor()',
 } as const;
 

@@ -562,8 +562,8 @@ export function createServiceFloorState(): ServiceFloorState {
   return {
     routeId: DESIGN_FLOOR_ID,
     anchorZ: SERVICE_FLOOR_Z,
-    // @ts-ignore
-    baseFloor: SERVICE_FLOOR_BASE_FLOOR,
+    themeTags: ['maintenance_service', 'engineering'],
+
     liftMachineState: 'faulty',
     masterKeyKnown: false,
     powerZones: [],
@@ -589,8 +589,7 @@ export function summarizeServiceFloorFlags(service: ServiceFloorState): string[]
     .map(z => z.id)
     .join(',') || 'none';
   return [
-    // @ts-ignore
-    `route=${service.routeId} z=${service.anchorZ} base=${z[service.themeTags]}`,
+    `route=${service.routeId} z=${service.anchorZ} base=${service.themeTags[0] ?? 'none'}`,
     `liftMachine=${service.liftMachineState} masterKeyKnown=${service.masterKeyKnown}`,
     `power=${powered}`,
     `reroute lower=${service.rerouteFlags.lowerStaffRouteOpen} marketRaidDiverted=${service.rerouteFlags.marketRaidDiverted} productionBypass=${service.rerouteFlags.productionBypassArmed}`,

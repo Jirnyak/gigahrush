@@ -19,7 +19,7 @@ export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown
 
 
 export interface FloorKeyResolveContext {
-  proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: number; themeTags?: readonly string[] }>>;
+  proceduralSpecs?: Readonly<Record<string, { z?: number; themeTags?: readonly string[] }>>;
   extraKnownKeys?: readonly string[] | ReadonlySet<string>;
 }
 

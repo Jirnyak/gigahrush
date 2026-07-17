@@ -73,7 +73,6 @@ export const BANK_FLOOR_META = {
   routeId: BANK_FLOOR_ROUTE_ID,
   displayName: 'Банковский этаж',
   z: BANK_FLOOR_Z,
-  baseFloor: BANK_FLOOR_BASE_FLOOR,
   // Bank B-22 lives in the Ministry band because money here is paperwork first:
   // accounts, stamped debt, audits and liquidator-backed vault rules.
   baseReason: 'ministry_bureaucratic_finance',
@@ -83,7 +82,6 @@ export const BANK_FLOOR_META = {
 export interface BankFloorState {
   routeId: typeof BANK_FLOOR_ROUTE_ID;
   anchorZ: typeof BANK_FLOOR_Z;
-  baseFloor: typeof BANK_FLOOR_BASE_FLOOR;
   legalRooms: string[];
   riskRooms: string[];
   debtCircuitRooms: string[];
@@ -429,7 +427,6 @@ export function createBankFloorState(): BankFloorState {
   return {
     routeId: BANK_FLOOR_ROUTE_ID,
     anchorZ: BANK_FLOOR_Z,
-    baseFloor: BANK_FLOOR_BASE_FLOOR,
     legalRooms: [
       BANK_ROOM_NAMES.hall,
       BANK_ROOM_NAMES.teller,
@@ -467,8 +464,7 @@ export function createBankFloorState(): BankFloorState {
 
 export function summarizeBankFloorState(bank: BankFloorState): string[] {
   return [
-    // @ts-ignore
-    `route=${bank.routeId} z=${bank.anchorZ} base=${z[bank.themeTags]}`,
+    `route=${bank.routeId} z=${bank.anchorZ}`,
     `legalRooms=${bank.legalRooms.length} riskRooms=${bank.riskRooms.length}`,
     `debtCircuit=${bank.debtCircuitRooms.join(' -> ')}`,
     `vaultRiskRadius=${bank.vaultRiskRadius}`,

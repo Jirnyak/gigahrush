@@ -119,7 +119,6 @@ export const UPPER_BUREAU_DEBUG_ENTRY = {
   routeId: UPPER_BUREAU_ROUTE_ID,
   displayName: UPPER_BUREAU_DISPLAY_NAME,
   anchorZ: UPPER_BUREAU_ANCHOR_Z,
-  baseFloor: UPPER_BUREAU_BASE_FLOOR,
   generator: 'generateUpperBureauDesignFloor',
   smokePath: 'spawn -> salon appointment gate OR cleaner closet -> staff route -> zero file room -> service lift',
 } as const;
@@ -355,7 +354,6 @@ function upperBureauQuestData(action: string, extra?: Record<string, unknown>): 
   return {
     routeId: UPPER_BUREAU_ROUTE_ID,
     floorZ: UPPER_BUREAU_ANCHOR_Z,
-    baseFloor: UPPER_BUREAU_BASE_FLOOR,
     upperBureauAction: action,
     ...extra,
   };

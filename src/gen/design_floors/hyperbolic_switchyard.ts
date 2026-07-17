@@ -71,7 +71,6 @@ export interface SwitchyardPlatformSummary {
 export interface HyperbolicSwitchyardState {
   routeId: typeof HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID;
   z: typeof HYPERBOLIC_SWITCHYARD_ROUTE_Z;
-  baseFloor: typeof HYPERBOLIC_SWITCHYARD_BASE_FLOOR;
   arcs: SwitchyardArcSummary[];
   platforms: SwitchyardPlatformSummary[];
   decisionIds: SwitchyardDecisionId[];
@@ -261,7 +260,6 @@ export function generateHyperbolicSwitchyardDesignFloor(seed = SEED): Hyperbolic
       switchyardState: {
         routeId: HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID,
         z: HYPERBOLIC_SWITCHYARD_ROUTE_Z,
-        baseFloor: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
         arcs: summarizeArcs(arcCells.arcMap, rooms),
         platforms: summarizePlatforms(rooms),
         decisionIds: ['pay_guide', 'switch_family', 'geodesic_shortcut', 'sabotage_false_platform'],

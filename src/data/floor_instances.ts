@@ -42,8 +42,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_404',
     displayNumber: '404',
     title: 'Не найден',
-    // @ts-ignore
-    baseFloor: 100,
+    themeTags: ['design'],
+
     seedTag: 'not_found',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -62,8 +62,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_556',
     displayNumber: '556',
     title: 'П-46',
-    // @ts-ignore
-    baseFloor: 60,
+    themeTags: ['design'],
+
     seedTag: 'p46_protocol',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -82,8 +82,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_777',
     displayNumber: '777',
     title: 'Счастливый',
-    // @ts-ignore
-    baseFloor: 100,
+    themeTags: ['design'],
+
     seedTag: 'lucky_shelter',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -102,8 +102,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_1337',
     displayNumber: '1337',
     title: 'Элитный',
-    // @ts-ignore
-    baseFloor: 140,
+    themeTags: ['design'],
+
     seedTag: 'radio_code',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -122,8 +122,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_013',
     displayNumber: '013',
     title: 'Служебный',
-    // @ts-ignore
-    baseFloor: 30,
+    themeTags: ['design'],
+
     seedTag: 'service_order',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -142,8 +142,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_089',
     displayNumber: '089',
     title: 'Теплый лифт',
-    // @ts-ignore
-    baseFloor: 140,
+    themeTags: ['design'],
+
     seedTag: 'warm_shaft',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -169,8 +169,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_000',
     displayNumber: '000',
     title: 'Нулевой список',
-    // @ts-ignore
-    baseFloor: 200,
+    themeTags: ['design'],
+
     seedTag: 'zero_register',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',
@@ -189,8 +189,8 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_912',
     displayNumber: '912',
     title: 'Чужая очередь',
-    // @ts-ignore
-    baseFloor: 60,
+    themeTags: ['design'],
+
     seedTag: 'wrong_queue',
     generatorId: 'design_pocket',
     exitRule: 'next_lift_returns',

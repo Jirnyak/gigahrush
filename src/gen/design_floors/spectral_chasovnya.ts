@@ -117,7 +117,6 @@ export interface SpectralAcousticBand {
 export interface SpectralChasovnyaState {
   routeId: typeof SPECTRAL_CHASOVNYA_ROUTE_ID;
   z: typeof SPECTRAL_CHASOVNYA_Z;
-  baseFloor: typeof SPECTRAL_CHASOVNYA_BASE_FLOOR;
   standingWaveRooms: SpectralStandingWaveRoom[];
   shadowZones: SpectralShadowZone[];
   bellNodes: SpectralBellNode[];
@@ -935,7 +934,6 @@ function buildSpectralState(world: World, rooms: SpectralRooms): SpectralChasovn
   return {
     routeId: SPECTRAL_CHASOVNYA_ROUTE_ID,
     z: SPECTRAL_CHASOVNYA_Z,
-    baseFloor: SPECTRAL_CHASOVNYA_BASE_FLOOR,
     standingWaveRooms,
     shadowZones,
     bellNodes,

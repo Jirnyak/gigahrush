@@ -46,7 +46,6 @@ export const BOLNICHNY_KORPUS_META = {
   routeId: BOLNICHNY_KORPUS_ROUTE_ID,
   displayName: 'Больничный корпус',
   z: BOLNICHNY_KORPUS_Z,
-  baseFloor: BOLNICHNY_KORPUS_BASE_FLOOR,
   // The corpus is a converted apartment/ward band: beds, queues and patient
   // bypasses drive the route, while Ministry-style control appears as papers.
   baseReason: 'kvartiry_converted_residential_hospital',

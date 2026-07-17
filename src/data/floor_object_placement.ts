@@ -747,10 +747,8 @@ export function floorObjectProfileDuplicateRuleIds(profile: FloorObjectPlacement
 
 export function floorObjectProfileForStoryFloor(z: number): FloorObjectPlacementProfile | undefined {
   return composeProfile(
-    // @ts-ignore
-    `story_${z[z]?.toLowerCase() ?? z}_objects`,
-    // @ts-ignore
-    ['design_floor', z[z]?.toLowerCase() ?? 'story'],
+    `story_${z}_objects`,
+    ['design_floor', `z_${z}`],
     craftStationProfileForStoryFloor(z),
     [BASE_FLOOR_OBJECT_PROFILE_LAYERS[z]],
   );

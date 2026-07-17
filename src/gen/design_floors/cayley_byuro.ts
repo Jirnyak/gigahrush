@@ -87,7 +87,6 @@ export const CAYLEY_BYURO_DECISIONS = [
 export interface CayleyByuroState {
   routeId: typeof CAYLEY_BYURO_ROUTE_ID;
   anchorZ: typeof CAYLEY_BYURO_Z;
-  baseFloor: typeof CAYLEY_BYURO_BASE_FLOOR;
   groupRooms: Record<CayleyElement, number>;
   generatorDoorIds: number[];
   quotientShortcutDoorIds: number[];
@@ -363,7 +362,6 @@ function createState(spawnX: number, spawnY: number): CayleyByuroState {
   return {
     routeId: CAYLEY_BYURO_ROUTE_ID,
     anchorZ: CAYLEY_BYURO_Z,
-    baseFloor: CAYLEY_BYURO_BASE_FLOOR,
     groupRooms: { e: -1, r: -1, rr: -1, s: -1, sr: -1, srr: -1 },
     generatorDoorIds: [],
     quotientShortcutDoorIds: [],

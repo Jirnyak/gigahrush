@@ -36,7 +36,6 @@ export const RAIONSOVET_ARCHIVE_META = {
   routeId: RAIONSOVET_ARCHIVE_ROUTE_ID,
   displayName: 'Райсовет и архив картотек',
   z: RAIONSOVET_ARCHIVE_Z,
-  baseFloor: 30,
   debugEntry: 'generateRaionsovetArchiveDesignFloor()',
 } as const;
 

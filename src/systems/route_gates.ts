@@ -6,7 +6,6 @@ import { floorKeyForEntry } from './floor_keys';
 
 interface RouteGateEntryLike {
   z?: number;
-  baseFloor: number;
   storyFloor?: number;
   designFloorId?: string;
   spec?: { key: string };

@@ -48,7 +48,6 @@ export const CRITICAL_LEAK_ARCHIVE_ROOM_NAMES = {
 export interface CriticalLeakArchiveState {
   routeId: typeof CRITICAL_LEAK_ARCHIVE_ROUTE_ID;
   anchorZ: typeof CRITICAL_LEAK_ARCHIVE_Z;
-  baseFloor: typeof CRITICAL_LEAK_ARCHIVE_BASE_FLOOR;
   largestComponentCells: number;
   wetCausewayCells: number;
   dryCausewayCells: number;
@@ -1095,7 +1094,6 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
   const state: CriticalLeakArchiveState = {
     routeId: CRITICAL_LEAK_ARCHIVE_ROUTE_ID,
     anchorZ: CRITICAL_LEAK_ARCHIVE_Z,
-    baseFloor: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
     largestComponentCells: 0,
     wetCausewayCells: 0,
     dryCausewayCells: 0,

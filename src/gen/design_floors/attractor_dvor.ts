@@ -146,7 +146,6 @@ export interface AttractorPatrolLoop {
 export interface AttractorDvorState {
   routeId: typeof ATTRACTOR_DVOR_ROUTE_ID;
   z: typeof ATTRACTOR_DVOR_Z;
-  baseFloor: typeof ATTRACTOR_DVOR_BASE_FLOOR;
   streamlines: readonly AttractorStreamline[];
   switchPanels: readonly AttractorSwitchPanel[];
   patrolLoops: readonly AttractorPatrolLoop[];
@@ -377,7 +376,6 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
   const state: AttractorDvorState = {
     routeId: ATTRACTOR_DVOR_ROUTE_ID,
     z: ATTRACTOR_DVOR_Z,
-    baseFloor: ATTRACTOR_DVOR_BASE_FLOOR,
     streamlines,
     switchPanels,
     patrolLoops: [

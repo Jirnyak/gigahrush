@@ -69,7 +69,6 @@ export interface BathhouseRouteNode {
 export interface HarmonicBathhouseState {
   routeId: typeof HARMONIC_BATHHOUSE_ROUTE_ID;
   anchorZ: typeof HARMONIC_BATHHOUSE_Z;
-  baseFloor: typeof HARMONIC_BATHHOUSE_BASE_FLOOR;
   bands: BathhouseThermalBands;
   decisions: BathhouseRouteNode[];
   cueIds: string[];
@@ -196,7 +195,6 @@ export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathh
       bathhouseState: {
         routeId: HARMONIC_BATHHOUSE_ROUTE_ID,
         anchorZ: HARMONIC_BATHHOUSE_Z,
-        baseFloor: HARMONIC_BATHHOUSE_BASE_FLOOR,
         bands,
         decisions: [
           decisionNode('turn_valve', rooms.boiler, ['valve', 'steam', 'pressure']),

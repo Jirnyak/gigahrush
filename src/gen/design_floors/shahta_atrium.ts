@@ -187,7 +187,6 @@ export interface ShahtaAtriumBridgeState {
 export interface ShahtaAtriumState {
   routeId: typeof DESIGN_FLOOR_ID;
   z: typeof SHAHTA_ATRIUM_ROUTE_Z;
-  baseFloor: typeof SHAHTA_ATRIUM_BASE_FLOOR;
   voidCells: number;
   ringCells: number;
   bridgeCount: number;
@@ -1029,7 +1028,6 @@ function buildState(
   return {
     routeId: DESIGN_FLOOR_ID,
     z: SHAHTA_ATRIUM_ROUTE_Z,
-    baseFloor: SHAHTA_ATRIUM_BASE_FLOOR,
     voidCells,
     ringCells,
     bridgeCount: bridgeStates.filter(bridge => !bridge.repairable).length,

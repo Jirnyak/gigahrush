@@ -111,7 +111,6 @@ export interface DarkMetroAmbushCueDef {
 export interface DarkMetroFloorState {
   routeId: typeof DESIGN_FLOOR_ID;
   z: typeof DARK_METRO_FUTURE_Z;
-  baseFloor: typeof DARK_METRO_BASE_FLOOR;
   packedState: DarkMetroPackedState;
   ambushCueIds: DarkMetroAmbushCueId[];
   shortcutRouteIds: DarkMetroRouteId[];
@@ -391,7 +390,6 @@ export function createDarkMetroFloorState(packedState = initialDarkMetroState())
   return {
     routeId: DESIGN_FLOOR_ID,
     z: DARK_METRO_FUTURE_Z,
-    baseFloor: DARK_METRO_BASE_FLOOR,
     packedState,
     ambushCueIds: DARK_METRO_AMBUSH_CUES.map(cue => cue.id),
     shortcutRouteIds: DARK_METRO_ROUTES

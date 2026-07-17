@@ -52,7 +52,6 @@ export const ROOF_SKY_HEIGHT = 1024 as const;
 export const ROOF_DEBUG_ENTRY = {
   routeId: ROOF_ROUTE_ID,
   z: ROOF_FUTURE_Z,
-  baseFloor: ROOF_BASE_FLOOR,
   generator: 'generateRoofDesignFloor',
   skyProvider: 'createRoofSkyTextureProvider',
   smokePath: 'spawn -> vent shelter -> central slab -> antenna field/sniper lane -> lower bridge loop -> hatch/lift exit',
@@ -294,8 +293,7 @@ export function roofDebugLines(state: RoofWeatherState): string[] {
   return [
     `route=${ROOF_ROUTE_ID}`,
     `z=${ROOF_FUTURE_Z}`,
-    // @ts-ignore
-    `baseFloor=${z[ROOF_BASE_FLOOR]}`,
+    `baseFloor=${ROOF_BASE_FLOOR}`,
     `signal=${state.signalQuality}/5`,
     `skyTime=${state.skyTimeOfDay.toFixed(2)}`,
     `antenna=${state.antennaRepaired ? 'repaired' : 'broken'}`,
