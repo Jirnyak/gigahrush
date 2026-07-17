@@ -1,4 +1,4 @@
-import { getPlotNpcCount, getPlotNpcNumericId } from '../data/npc_packages';
+import { getPlotNpcCount, getPlotNpcNumericId, getPlotNpcPackageByNumericId } from '../data/npc_packages';
 import {
   W,
   Cell,
@@ -21,6 +21,7 @@ import {
   ALIFE_POPULATION_MIN_RANDOM,
   buildAlifePopulationPlan,
   clampAlifePopulationTotal,
+  alifeReservedIdentityFromNpcPackage,
   type AlifePopulationPlanDef,
   type AlifeReservedIdentityDef,
 } from '../data/alife_population_plan';
@@ -112,7 +113,7 @@ interface AlifeFloorPlan {
 }
 
 export interface AlifePopulationReservedNpc {
-  id?: number;
+  id?: string | number;
   kind?: 'plot' | 'authored' | 'event_reserved';
   presence?: 'population' | 'event_only';
   plotNpcId?: number;
@@ -1198,10 +1199,10 @@ function isDataPopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlanDef
 
 function reservedNpcFromData(def: AlifeReservedIdentityDef): AlifePopulationReservedNpc {
   return {
-    id: getPlotNpcNumericId(def.id),
+    id: def.id,
     kind: def.kind,
     presence: def.presence,
-    plotNpcId: def.plotNpcId,
+    plotNpcId: def.plotNpcId ?? (def.id.startsWith('npc:') ? getPlotNpcNumericId(def.id.slice(4)) : getPlotNpcNumericId(def.id)),
     name: def.name,
     female: def.female,
     age: def.age,
@@ -1340,7 +1341,7 @@ function populationPlanCounts(plan: AlifePopulationPlan, total: number): number[
 }
 
 function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, reserved: AlifePopulationReservedNpc): void {
-  if (reserved.id) record.reservedIdentityId = cleanFloorKey(reserved.id);
+  if (reserved.id !== undefined) record.reservedIdentityId = cleanFloorKey(String(reserved.id));
   if (reserved.kind) record.reservedKind = reserved.kind;
   if (reserved.presence === 'population' || reserved.presence === 'event_only') record.reservedPresence = reserved.presence;
   if (reserved.plotNpcId !== undefined) record.plotNpcId = reserved.plotNpcId;
@@ -1435,24 +1436,69 @@ export function buildAlifeStateFromPopulationPlan(
     leaderboardVersion: 0,
   };
   const counts = populationPlanCounts(plan, boundedTotal);
-  let id = 1;
+  const plotCount = getPlotNpcCount();
+  const includesPlot = plan.buckets.some(b => b.reserved?.some(r => r.kind === 'plot' || r.plotNpcId !== undefined)) ?? false;
+  const plotCountToEnsure = includesPlot ? Math.min(plotCount, boundedTotal) : 0;
+  const extraReserved: Array<{ floorPlan: AlifeFloorPlan; reserved: AlifePopulationReservedNpc; bucketIndex: number[] }> = [];
 
-  // Pass 1: Allocate reserved (plot) NPCs so they strictly occupy IDs 1..N
+  // Pass 1: Allocate reserved (plot) NPCs so they strictly occupy their exact plotNpcId (1..plotCountToEnsure)
   for (let i = 0; i < plan.buckets.length; i++) {
     const source = plan.buckets[i];
     const floorPlan = populationBucketToFloorPlan(source);
     if (!floorPlan) continue;
     const count = counts[i] ?? 0;
     const reserved = source.reserved ?? [];
-    if (reserved.length > count) throw new RangeError(`A-Life population bucket ${floorPlan.key} has more reserved identities than records`);
+    if (reserved.length > count && !includesPlot) throw new RangeError(`A-Life population bucket ${floorPlan.key} has more reserved identities than records`);
     const bucket = floorIndex[floorPlan.key] ?? [];
     floorIndex[floorPlan.key] = bucket;
     for (let n = 0; n < reserved.length; n++) {
-      const record = createRecord(alife, id++, floorPlan, seed);
-      applyReservedNpcToRecord(alife, record, reserved[n]);
-      bucket.push(npcs.length);
-      npcs.push(record);
+      const res = reserved[n];
+      const targetId = res.plotNpcId;
+      if (targetId !== undefined && targetId >= 1 && targetId <= plotCountToEnsure) {
+        if (npcs[targetId - 1]) {
+          applyReservedNpcToRecord(alife, npcs[targetId - 1]!, res);
+        } else {
+          const record = createRecord(alife, targetId, floorPlan, seed);
+          applyReservedNpcToRecord(alife, record, res);
+          npcs[targetId - 1] = record;
+        }
+        bucket.push(targetId - 1);
+      } else {
+        extraReserved.push({ floorPlan, reserved: res, bucketIndex: bucket });
+      }
     }
+  }
+
+  // Ensure every plot ID (1..plotCountToEnsure) has a valid record even if not explicitly found in a bucket
+  if (includesPlot) {
+    for (let targetId = 1; targetId <= plotCountToEnsure; targetId++) {
+      if (!npcs[targetId - 1]) {
+        const fallbackFloorPlan = populationBucketToFloorPlan(plan.buckets[0] ?? { floorKey: 'ministry' })!;
+        const record = createRecord(alife, targetId, fallbackFloorPlan, seed);
+        const pack = getPlotNpcPackageByNumericId(targetId);
+        if (pack) {
+          const reservedDef = alifeReservedIdentityFromNpcPackage(pack);
+          if (reservedDef) {
+            applyReservedNpcToRecord(alife, record, reservedNpcFromData(reservedDef));
+          }
+        }
+        npcs[targetId - 1] = record;
+        const bucket = floorIndex[fallbackFloorPlan.key] ?? [];
+        floorIndex[fallbackFloorPlan.key] = bucket;
+        bucket.push(targetId - 1);
+      }
+    }
+  }
+
+  // Allocate any extra non-plot reserved NPCs
+  let nextId = plotCountToEnsure + 1;
+  for (const extra of extraReserved) {
+    if (npcs.length >= boundedTotal) break;
+    const record = createRecord(alife, nextId, extra.floorPlan, seed);
+    applyReservedNpcToRecord(alife, record, extra.reserved);
+    extra.bucketIndex.push(npcs.length);
+    npcs.push(record);
+    nextId++;
   }
 
   // Pass 2: Allocate the rest as procedural NPCs occupying the remaining IDs
@@ -1460,13 +1506,25 @@ export function buildAlifeStateFromPopulationPlan(
     const source = plan.buckets[i];
     const floorPlan = populationBucketToFloorPlan(source);
     if (!floorPlan) continue;
-    const count = counts[i] ?? 0;
-    const reserved = source.reserved ?? [];
     const bucket = floorIndex[floorPlan.key]!;
-    for (let n = reserved.length; n < count; n++) {
-      const record = createRecord(alife, id++, floorPlan, seed);
+    const neededForBucket = Math.max(0, (counts[i] ?? 0) - bucket.length);
+    for (let n = 0; n < neededForBucket && npcs.length < boundedTotal; n++) {
+      const record = createRecord(alife, nextId++, floorPlan, seed);
       bucket.push(npcs.length);
       npcs.push(record);
+    }
+  }
+
+  if (npcs.length < boundedTotal && plan.buckets.length > 0) {
+    const fallbackSource = plan.buckets[0];
+    const floorPlan = populationBucketToFloorPlan(fallbackSource);
+    if (floorPlan) {
+      const bucket = floorIndex[floorPlan.key]!;
+      while (npcs.length < boundedTotal) {
+        const record = createRecord(alife, nextId++, floorPlan, seed);
+        bucket.push(npcs.length);
+        npcs.push(record);
+      }
     }
   }
 

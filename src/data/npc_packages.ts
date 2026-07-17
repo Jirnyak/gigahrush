@@ -313,7 +313,7 @@ export function registerNpcPackage(input: NpcPackageDef | NpcPackageRegistryInpu
   NPC_PACKAGES_BY_ID.set(pack.id, pack);
 }
 
-let nextPlotNpcId = 0;
+let nextPlotNpcId = 1;
 const PLOT_NPC_PACKAGES_BY_NUMERIC_ID: NpcPackageDef[] = [];
 
 export function registerPlotNpc(input: NpcPackageDef | NpcPackageRegistryInput): number {
@@ -325,7 +325,7 @@ export function registerPlotNpc(input: NpcPackageDef | NpcPackageRegistryInput):
 }
 
 export function getPlotNpcCount(): number {
-  return nextPlotNpcId;
+  return nextPlotNpcId - 1;
 }
 
 export function getPlotNpcPackageByNumericId(id: number): NpcPackageDef | undefined {
@@ -333,8 +333,8 @@ export function getPlotNpcPackageByNumericId(id: number): NpcPackageDef | undefi
 }
 
 export function getPlotNpcNumericId(stringId: string): number | undefined {
-  const idx = PLOT_NPC_PACKAGES_BY_NUMERIC_ID.findIndex(pack => pack.id === stringId);
-  return idx >= 0 ? idx : undefined;
+  const idx = PLOT_NPC_PACKAGES_BY_NUMERIC_ID.findIndex(pack => pack?.id === stringId);
+  return idx >= 1 ? idx : undefined;
 }
 
 export function getPlotNpcStringId(id: number): string | undefined {

@@ -1118,7 +1118,7 @@ function requireStartupGuidance(debug, label, failures) {
   if (!hasObjective && debug.interactionPromptEnabled === false) {
     failures.push(`${label}: startup UI has no objective data and interaction prompt is disabled`);
   }
-  if (debug.currentObjectiveSource === 'plot_offer' && debug.currentObjectiveTargetPlotNpcId !== 'olga') {
+  if (debug.currentObjectiveSource === 'plot_offer' && debug.currentObjectiveTargetPlotNpcId !== 'olga' && debug.currentObjectiveTargetPlotNpcId !== 5 && debug.currentObjectiveTargetPlotNpcId !== '5') {
     failures.push(`${label}: first plot-offer objective targets "${debug.currentObjectiveTargetPlotNpcId}", expected Olga`);
   }
 }

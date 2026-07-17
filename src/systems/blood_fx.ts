@@ -432,16 +432,6 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
     for (let i = 0; i < chunkCount; i++) {
       addVisualSlotByPriority(world, world.idx(cx, cy), 34, seed + i);
     }
-    
-    // Add scattered chunks at random adjacent open cells
-    const scx = world.wrap(cx + Math.round(sRng.random() * 2 - 1));
-    const scy = world.wrap(cy + Math.round(sRng.random() * 2 - 1));
-    if (!world.solid(scx, scy) && (scx !== cx || scy !== cy)) {
-      const outerCount = 1 + Math.floor(sRng.random() * 2); // 1 to 2 chunks adjacent
-      for (let i = 0; i < outerCount; i++) {
-        addVisualSlotByPriority(world, world.idx(scx, scy), 34, seed + 10 + i);
-      }
-    }
   }
 
   // Gore spray particles for messy deaths (shotgun / explosion) - transient, uses rng

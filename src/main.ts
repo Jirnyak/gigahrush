@@ -2875,8 +2875,22 @@ declare global {
 }
 
 function installSmokeDebugHook(): void {
-  if (!smokeDebug) return;
   if (typeof window === 'undefined') return;
+  Object.defineProperty(window, '__debugState', {
+    get: () => (typeof state !== 'undefined' ? state : undefined),
+    configurable: true,
+  });
+  Object.defineProperty(window, '__alife', {
+    get: () => (typeof state !== 'undefined' ? (state as any).alife : undefined),
+    configurable: true,
+  });
+  Object.defineProperty(window, '__world', {
+    get: () => (typeof world !== 'undefined' ? world : undefined),
+    configurable: true,
+  });
+  (window as any).__gigahrushState = () => (typeof state !== 'undefined' ? state : null);
+  (window as any).__gigahrushWorld = () => (typeof world !== 'undefined' ? world : null);
+  if (!smokeDebug) return;
   window.__gigahrushSmokeState = () => {
     if (!started || pendingLoad || typeof state === 'undefined') return null;
     return smokeSnapshot();
