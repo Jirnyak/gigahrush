@@ -1983,19 +1983,26 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
   },
   living: {
     npcMult: 0.5,
-    npcFactions: [{ value: Faction.CITIZEN, weight: 80 }, { value: Faction.LIQUIDATOR, weight: 15 }, { value: Faction.SCIENTIST, weight: 5 }],
+    npcFactions: [
+      { value: Faction.CITIZEN, weight: 50 },
+      { value: Faction.WILD, weight: 12 },
+      { value: Faction.CULTIST, weight: 12 },
+      { value: Faction.LIQUIDATOR, weight: 13 },
+      { value: Faction.SCIENTIST, weight: 13 },
+    ],
   },
   kvartiry: {
-    npcMult: 0.8,
-    npcFactions: [{ value: Faction.CITIZEN, weight: 60 }, { value: Faction.WILD, weight: 30 }, { value: Faction.LIQUIDATOR, weight: 10 }],
+    npcMult: 1.0,
+    npcFactions: [{ value: Faction.CITIZEN, weight: 80 }, { value: Faction.WILD, weight: 10 }, { value: Faction.LIQUIDATOR, weight: 10 }],
   },
   ministry: {
     npcMult: 0.4,
+    monsterMult: 0.01,
     npcFactions: [{ value: Faction.CITIZEN, weight: 50 }, { value: Faction.LIQUIDATOR, weight: 30 }, { value: Faction.SCIENTIST, weight: 20 }],
   },
   maintenance: {
     npcMult: 1.0,
-    monsterMult: 2.5,
+    monsterMult: 0.1,
     npcFactions: [
       { value: Faction.LIQUIDATOR, weight: 20 },
       { value: Faction.CULTIST, weight: 20 },

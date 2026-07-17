@@ -6,20 +6,18 @@
 import {
   W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
   type Room, type Entity,
-  EntityType, AIGoal, } from '../../core/types';
+  EntityType,
+} from '../../core/types';
 import { World } from '../../core/world';
 import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import { Spr, monsterSpr } from '../../render/sprite_index';
-import { MonsterKind } from '../../core/types';
+import { calcZoneLevel } from '../../systems/rpg';
+import { Spr } from '../../render/sprite_index';
 import { runMinistryContent } from './content_manifest';
 import { applyMinistryMacroGeometry } from './geometry';
-import { entitySpawnSlots } from '../../systems/entity_limits';
-import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
+import { applyDesignFloorPopulationField } from '../design_floors/population';
 import { rng, irand } from '../../core/rand';
 
-const MINISTRY_MONSTER_TARGET_AT_DEFAULT_CAP = 30;
 
 /* ── Portrait picker — coordinate-hash like posters ───────────── */
 const PORTRAIT_COUNT = 64;
@@ -512,31 +510,6 @@ function placeMinistryItems(rooms: Room[], entities: Entity[], nextId: number): 
   return nextId;
 }
 
-function spawnMinistryMonsters(world: World, entities: Entity[], nextId: number): number {
-  let monsterCount = 0;
-  const monsterTarget = entitySpawnSlots(entities, EntityType.MONSTER, activeActorCountAtDefaultSoftLimit(MINISTRY_MONSTER_TARGET_AT_DEFAULT_CAP));
-  for (let attempt = 0; attempt < 10_000 && monsterCount < monsterTarget; attempt++) {
-    const ci = irand(0, W * W - 1);
-    if (world.cells[ci] !== Cell.FLOOR) continue;
-    if (world.roomMap[ci] >= 0) continue;
-    const mx = (ci % W) + 0.5, my = ((ci / W) | 0) + 0.5;
-    const kind = MonsterKind.SBORKA;
-    const zid = world.zoneMap[ci];
-    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
-    const rpg = randomRPG(zoneLevel);
-    entities.push({
-      id: nextId++, type: EntityType.MONSTER,
-      x: mx, y: my, angle: rng() * Math.PI * 2, pitch: 0,
-      alive: true, speed: scaleMonsterSpeed(2.8, zoneLevel), sprite: monsterSpr(MonsterKind.SBORKA),
-      hp: scaleMonsterHp(5, zoneLevel), maxHp: scaleMonsterHp(5, zoneLevel),
-      monsterKind: kind, attackCd: 0,
-      ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      rpg,
-    });
-    monsterCount++;
-  }
-  return nextId;
-}
 
 /* ── Main generator ───────────────────────────────────────────── */
 
@@ -599,8 +572,8 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
   // Phase 11: Items
   nextId = placeMinistryItems(rooms, entities, nextId);
 
-  // Phase 12: Monsters
-  nextId = spawnMinistryMonsters(world, entities, nextId);
+  // Phase 12: Monsters removed, now handled by population field
+
 
   setupMinistryRooms(world);
 
@@ -616,6 +589,8 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
 
   // Phase 15: Rare procedural ministry monitors
   placeProceduralScreens(world, 30);
+
+  applyDesignFloorPopulationField({ world, entities } as any, { id: 'ministry', z: 24 } as any);
 
   return { world, entities, spawnX, spawnY };
 }

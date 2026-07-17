@@ -524,7 +524,8 @@ test('veretar fog effect deletes actor in active fog', () => {
     ctx.state,
     ctx.nextId,
     ctx.state.samosborCount,
-    testVariant('veretar').LIVING,
+    testVariant('veretar'),
+    ctx.state.currentZ ?? 0,
     ctx.ci,
   );
 
@@ -545,7 +546,8 @@ test('veretar fog cell deletion records local grid dirty rects', () => {
     ctx.state,
     ctx.nextId,
     ctx.state.samosborCount,
-    testVariant('veretar').LIVING,
+    testVariant('veretar'),
+    ctx.state.currentZ ?? 0,
     ctx.ci,
   );
 
@@ -568,7 +570,8 @@ test('istotit fog effect heals actors in active fog', () => {
     ctx.state,
     ctx.nextId,
     ctx.state.samosborCount,
-    testVariant('istotit').LIVING,
+    testVariant('istotit'),
+    ctx.state.currentZ ?? 0,
     ctx.ci,
   );
 

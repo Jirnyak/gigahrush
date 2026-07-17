@@ -238,7 +238,8 @@ If a task needs a red file, make the smallest generic hook/API change, then keep
 
 
 **Floor Generation System:**
-- **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
+- **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes. 
+  **Modular Decentralization**: It is actively encouraged to build each design floor as a separate "mini-game" with its own rules, starting from custom 2D geometry algorithms to unique dynamics, events, and population profiles.
 - **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
 
 Normal lift travel uses the per-run vertical route in `src/systems/procedural_floors.ts` and route definitions in `src/data/design_floors.ts` / `src/data/procedural_floors.ts`. Authored design floors are string-id route stops generated through `src/gen/design_floors/manifest.ts` and expanded through `src/gen/design_floors/full_floor.ts`.

@@ -102,16 +102,28 @@ export function spawnRoomItems(
   return nextId;
 }
 
+function pickFaction(factions: readonly { value: Faction; weight: number }[]): Faction {
+  if (!factions.length) return Faction.CITIZEN;
+  const totalWeight = factions.reduce((sum, f) => sum + f.weight, 0);
+  let roll = rng() * totalWeight;
+  for (const f of factions) {
+    if (roll < f.weight) return f.value;
+    roll -= f.weight;
+  }
+  return factions[0].value;
+}
+
 /* ── Spawn NPC families — one per apartment ──────────────────── */
 export function spawnFamilies(
   world: World, apartments: AptPlan[], entities: Entity[], nextIdStart: number,
+  residentQuota: number, npcFactions: readonly { value: Faction; weight: number }[]
 ): number {
   let nextId = nextIdStart;
+  const familySize = Math.max(1, Math.round(residentQuota / Math.max(1, apartments.length)));
 
   for (let a = 0; a < apartments.length; a++) {
     const apt = apartments[a];
-    const familySize = 8;
-    const familyFaction = randomFaction();
+    const familyFaction = pickFaction(npcFactions);
     let familyLastName = '';
     for (let f = 0; f < familySize; f++) {
       const room = apt.living;
@@ -158,28 +170,24 @@ function _pickPsi(): string { return _PSI_IDS[Math.floor(rng() * _PSI_IDS.length
 /* ── Spawn traveler NPCs — путники, паломники, охотники ──────── */
 export function spawnTravelers(
   world: World, entities: Entity[], nextIdStart: number,
+  travelerQuota: number, npcFactions: readonly { value: Faction; weight: number }[]
 ): number {
   let nextId = nextIdStart;
 
-  const TRAVELER_DEFS: { faction: Faction; occupation: Occupation; count: number }[] = [
-    { faction: Faction.CITIZEN,    occupation: Occupation.TRAVELER, count: 128 },
-    { faction: Faction.CULTIST,    occupation: Occupation.PILGRIM,  count: 64 },
-    { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER,   count: 32 },
-  ];
-
   const corridorSpawns: number[] = [];
-  for (let i = 0; i < 10000; i++) {
+  for (let i = 0; i < Math.max(10000, travelerQuota * 20); i++) {
     const ci = Math.floor(rng() * W * W);
     if (world.cells[ci] === Cell.FLOOR) {
       const roomId = world.roomMap[ci];
       if (roomId >= 0 && world.rooms[roomId]?.tags?.includes('tutorial')) continue;
       corridorSpawns.push(ci);
     }
-    if (corridorSpawns.length >= 500) break;
+    if (corridorSpawns.length >= Math.max(500, travelerQuota * 2)) break;
   }
 
-  for (const def of TRAVELER_DEFS) {
-    for (let i = 0; i < def.count && corridorSpawns.length > 0; i++) {
+  for (let i = 0; i < travelerQuota && corridorSpawns.length > 0; i++) {
+    const faction = pickFaction(npcFactions);
+    const occupation = randomOccupation(faction);
       const randIdx = Math.floor(rng() * corridorSpawns.length);
       const ci = corridorSpawns[randIdx];
       corridorSpawns[randIdx] = corridorSpawns[corridorSpawns.length - 1];
@@ -191,31 +199,30 @@ export function spawnTravelers(
       const npcLevel = gaussianLevel(zoneLevel, 2);
       const rpg = randomRPG(npcLevel);
       const maxHp = Math.round(getMaxHp(rpg) * 1.2);
-      const nm = randomName(def.faction);
+      const nm = randomName(faction);
       entities.push({
         id: nextId++, type: EntityType.NPC,
         x: sx, y: sy,
         angle: rng() * Math.PI * 2,
         pitch: 0,
-        alive: true, speed: 1.4, sprite: def.occupation,
+        alive: true, speed: 1.4, sprite: occupation,
         name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female, needs: freshNeeds(),
         hp: maxHp, maxHp,
         money: irand(10, 80),
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         ...(() => {
-          if (def.faction === Faction.CULTIST && rng() < 0.3) {
+          if (faction === Faction.CULTIST && rng() < 0.3) {
             const psi = _pickPsi();
             return { inventory: [{ defId: 'knife', count: 1 }, { defId: psi, count: 1 }], weapon: 'knife', tool: psi };
           }
-          const l = npcWeaponLoadout(def.faction, def.occupation);
+          const l = npcWeaponLoadout(faction, occupation);
           return { inventory: l.inv, weapon: l.weapon || undefined };
         })(),
-        faction: def.faction, occupation: def.occupation,
+        faction, occupation,
         isTraveler: true, questId: -1,
         rpg,
       });
     }
-  }
 
   return nextId;
 }

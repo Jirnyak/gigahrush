@@ -35,6 +35,9 @@ import { reassignQuestGivers } from '../../systems/quests';
 import { calcZoneLevel, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { generateZones, stampHQRooms } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
+import { designFloorPopulationProfile } from '../../data/design_floor_population';
+import { DESIGN_FLOOR_ROUTES } from '../../data/design_floors';
+import { Faction } from '../../core/types';
 import { generateApartments } from './apartments';
 import { generateVolatileMaze, wipeVolatile } from './volatile';
 import { generateTutorRoom } from './tutor_room';
@@ -118,60 +121,56 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   }
 
   /* ── B0: Zone content modules (after maze — bulldoze & stamp over corridors) ── */
-  if (!isTutorial) {
-    const nid = { v: nextId };
-    runZoneContentModules(world, entities, nid);
-    nextId = nid.v;
-  }
+  const nid = { v: nextId };
+  runZoneContentModules(world, entities, nid);
+  nextId = nid.v;
 
   /* ── B1: Readable hub routes and district motifs ─────────────── */
   buildLivingHubGeometry(world);
 
-  if (!isTutorial) {
-    /* ── B2: Shadows near Vanka (needs corridors to exist) */
-    spawnVankaShadows(world, entities, { v: nextId });
-    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  /* ── B2: Shadows near Vanka (needs corridors to exist) */
+  spawnVankaShadows(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
-    /* ── B2.5: Ambient Monsters ───────────────────────── */
-    const livingMonsterProfile = {
-      noiseScale: 96,
-      noiseStrength: 0.2,
-      openWeight: 1.0,
-      roomWeights: {
-        [RoomType.STORAGE]: 1.5,
-        [RoomType.CORRIDOR]: 1.2,
-        [RoomType.BATHROOM]: 1.1,
-        [RoomType.SMOKING]: 1.1,
-      },
-      zoneWeights: {
-        [ZoneFaction.WILD]: 1.8,
-        [ZoneFaction.CULTIST]: 1.2,
-        [ZoneFaction.CITIZEN]: 0.2,
-      },
-    };
-    const monsterCount = Math.floor(activeActorCountAtDefaultSoftLimit(baseMonsterPopulationAtDefaultSoftLimit(0)));
-    const monsterCells = sampleNaturalPopulationCells(world, monsterCount, livingMonsterProfile, 0x1234);
-    for (const cell of monsterCells) {
-      const kind = chooseFloorMonsterKind({ z: 0, rng });
-      const m = MONSTERS[kind];
-      if (!m) continue;
-      const hp = scaleMonsterHp(m.hp, 5); // Base level 5
-      const speed = scaleMonsterSpeed(m.speed, 5);
-      entities.push({
-        id: nextId++, type: EntityType.MONSTER, monsterKind: kind,
-        x: (cell % W) + 0.5, y: Math.floor(cell / W) + 0.5,
-        angle: rng() * Math.PI * 2, pitch: 0, alive: true,
-        hp, maxHp: hp, speed, sprite: monsterSpr(kind),
-        attackCd: 0,
-        ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        phasing: kind === MonsterKind.SPIRIT,
-      });
-    }
-
-    /* ── B3: Side quest NPCs (random encounters, need FLOOR cells) */
-    spawnSideQuestNpcs(world, entities, { v: nextId });
-    nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
+  /* ── B2.5: Ambient Monsters ───────────────────────── */
+  const livingMonsterProfile = {
+    noiseScale: 96,
+    noiseStrength: 0.2,
+    openWeight: 1.0,
+    roomWeights: {
+      [RoomType.STORAGE]: 1.5,
+      [RoomType.CORRIDOR]: 1.2,
+      [RoomType.BATHROOM]: 1.1,
+      [RoomType.SMOKING]: 1.1,
+    },
+    zoneWeights: {
+      [ZoneFaction.WILD]: 1.8,
+      [ZoneFaction.CULTIST]: 1.2,
+      [ZoneFaction.CITIZEN]: 0.2,
+    },
+  };
+  const monsterCount = Math.floor(activeActorCountAtDefaultSoftLimit(baseMonsterPopulationAtDefaultSoftLimit(0)));
+  const monsterCells = sampleNaturalPopulationCells(world, monsterCount, livingMonsterProfile, 0x1234);
+  for (const cell of monsterCells) {
+    const kind = chooseFloorMonsterKind({ z: 0, rng });
+    const m = MONSTERS[kind];
+    if (!m) continue;
+    const hp = scaleMonsterHp(m.hp, 5); // Base level 5
+    const speed = scaleMonsterSpeed(m.speed, 5);
+    entities.push({
+      id: nextId++, type: EntityType.MONSTER, monsterKind: kind,
+      x: (cell % W) + 0.5, y: Math.floor(cell / W) + 0.5,
+      angle: rng() * Math.PI * 2, pitch: 0, alive: true,
+      hp, maxHp: hp, speed, sprite: monsterSpr(kind),
+      attackCd: 0,
+      ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      phasing: kind === MonsterKind.SPIRIT,
+    });
   }
+
+  /* ── B3: Side quest NPCs (random encounters, need FLOOR cells) */
+  spawnSideQuestNpcs(world, entities, { v: nextId });
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── B4: Rare procedural TV/monitor walls in suitable rooms ─── */
   placeProceduralScreens(world, 100);
@@ -180,8 +179,16 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   nextId = spawnRoomItems(world, entities, nextId);
 
   /* ── D: NPCs — families + travelers ────────────────── */
-  nextId = spawnFamilies(world, apartments, entities, nextId);
-  nextId = spawnTravelers(world, entities, nextId);
+  const livingRoute = DESIGN_FLOOR_ROUTES.find(r => r.id === 'living');
+  const popProfile = livingRoute ? designFloorPopulationProfile(livingRoute) : null;
+  const npcTarget = popProfile?.npcTarget ?? 2048;
+  const npcFactions: readonly { value: Faction; weight: number }[] = popProfile?.npcFactions ?? [{ value: Faction.CITIZEN, weight: 100 }];
+
+  const residentQuota = Math.floor(npcTarget * 0.8);
+  const travelerQuota = Math.max(0, npcTarget - residentQuota);
+
+  nextId = spawnFamilies(world, apartments, entities, nextId, residentQuota, npcFactions);
+  nextId = spawnTravelers(world, entities, nextId, travelerQuota, npcFactions);
 
   /* ── E: Quest givers + spawn ───────────────────────── */
   reassignQuestGivers(entities);

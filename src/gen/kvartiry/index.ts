@@ -7,24 +7,21 @@
 
 import {
   W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
-  Faction, Occupation,
+  Faction,
   type Room, type Entity,
   EntityType, AIGoal, type GameState,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { randomName, freshNeeds } from '../../data/catalog';
-import { basePopulationTotalAtDefaultSoftLimit, KVARTIRY_POPULATION_PROFILE, type NpcPopulationProfile } from '../../data/population_profiles';
-import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
+
+import { KVARTIRY_POPULATION_PROFILE } from '../../data/population_profiles';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
-import { sampleNaturalPopulationCells } from '../population_placement';
+import { applyDesignFloorPopulationField } from '../design_floors/population';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { initializeCellTerritory } from '../../systems/territory';
-import { calcZoneLevel, randomRPG, gaussianLevel, getMaxHp } from '../../systems/rpg';
-import { entitySpawnSlots } from '../../systems/entity_limits';
+import { calcZoneLevel } from '../../systems/rpg';
 import { Spr } from '../../render/sprite_index';
-import { randomOccupation } from '../../data/relations';
 import { buildKvartirySocialMacroGraph } from './social_macro_graph';
 import {
   resetKvartiryContentState,
@@ -38,9 +35,6 @@ import { rng, irand } from '../../core/rand';
 /* ── Constants ────────────────────────────────────────────────── */
 const WALL_L = 4;  // grid spacing for wall sources
 const KV_POPULATION = KVARTIRY_POPULATION_PROFILE;
-const CITIZEN_PROFILE = KV_POPULATION.citizens;
-const WILD_PROFILE = KV_POPULATION.wild;
-const LIQUIDATOR_PROFILE = KV_POPULATION.liquidators;
 const UPRISING_CHECK_INTERVAL = KV_POPULATION.uprising.intervalSec;
 const UPRISING_RADIUS = KV_POPULATION.uprising.radius;
 const LIQUIDATOR_RESPONSE_RADIUS = KV_POPULATION.uprising.responseRadius;
@@ -147,112 +141,8 @@ function linkKvartiryDoorsToRooms(world: World): void {
   }
 }
 
-/* ── Weapon loadout ───────────────────────────────────────────── */
-function npcWeapon(faction: Faction, occupation: Occupation): { weapon: string; inv: { defId: string; count: number }[] } {
-  if (faction === Faction.LIQUIDATOR || occupation === Occupation.HUNTER) {
-    const roll = rng();
-    if (roll < 0.20) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: irand(6, 16) }] };
-    if (roll < 0.32) return { weapon: 'shotgun', inv: [{ defId: 'shotgun', count: 1 }, { defId: 'ammo_shells', count: irand(4, 8) }] };
-    if (roll < 0.40) return { weapon: 'ppsh', inv: [{ defId: 'ppsh', count: 1 }, { defId: 'ammo_9mm', count: irand(20, 40) }] };
-    if (roll < 0.55) return { weapon: 'axe', inv: [{ defId: 'axe', count: 1 }] };
-    if (roll < 0.75) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
-    return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
-  }
-  if (faction === Faction.WILD) {
-    const roll = rng();
-    if (roll < 0.15) return { weapon: 'makarov', inv: [{ defId: 'makarov', count: 1 }, { defId: 'ammo_9mm', count: irand(4, 10) }] };
-    if (roll < 0.35) return { weapon: 'rebar', inv: [{ defId: 'rebar', count: 1 }] };
-    if (roll < 0.55) return { weapon: 'pipe', inv: [{ defId: 'pipe', count: 1 }] };
-    if (roll < 0.75) return { weapon: 'wrench', inv: [{ defId: 'wrench', count: 1 }] };
-    return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
-  }
-  if (rng() < 0.15) return { weapon: 'knife', inv: [{ defId: 'knife', count: 1 }] };
-  return { weapon: '', inv: [] };
-}
 
-/* ── Spawn a single NPC on an exact floor cell ───────────────── */
-function spawnNpcAtCell(
-  world: World, entities: Entity[], _nextId: { v: number },
-  faction: Faction, occupation: Occupation,
-  x: number, y: number,
-): boolean {
-  const ci = world.idx(x, y);
-  if (world.cells[ci] !== Cell.FLOOR) return false;
-  const zoneId = world.zoneMap[ci];
-  const zoneLevel = world.zones[zoneId]?.level ?? 1;
-  const npcLevel = gaussianLevel(zoneLevel, 2);
-  const rpg = randomRPG(npcLevel);
-  const maxHp = getMaxHp(rpg);
-  const nm = randomName(faction);
-  const loadout = npcWeapon(faction, occupation);
-  entities.push({
-    id: -1, type: EntityType.NPC,
-    x: x + 0.5, y: y + 0.5,
-    angle: rng() * Math.PI * 2, pitch: 0,
-    alive: true,
-    speed: occupation === Occupation.CHILD ? 0.8 : 1.2,
-    sprite: occupation,
-    spriteScale: occupation === Occupation.CHILD ? 0.6 : 1.0,
-    name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
-    needs: freshNeeds(), hp: maxHp, maxHp,
-    money: irand(5, 60),
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: loadout.inv.map(i => ({ ...i })),
-    weapon: loadout.weapon || undefined,
-    faction, occupation,
-    questId: -1, isTraveler: false,
-    rpg,
-  });
-  return true;
-}
 
-function npcPopulationSeed(faction: Faction, nextId: number): number {
-  return 1009 + faction * 10007 + nextId * 13;
-}
-
-function spawnNaturalNpcBatch(
-  world: World,
-  entities: Entity[],
-  nextId: { v: number },
-  faction: Faction,
-  profile: NpcPopulationProfile,
-  count: number,
-  fixedOccupation?: Occupation,
-): number {
-  const cells = sampleNaturalPopulationCells(world, count, profile, npcPopulationSeed(faction, nextId.v));
-  let spawned = 0;
-  for (const cell of cells) {
-    const occ = fixedOccupation ?? randomOccupation(faction);
-    if (spawnNpcAtCell(world, entities, nextId, faction, occ, cell % W, (cell / W) | 0)) spawned++;
-  }
-  return spawned;
-}
-
-function spawnNpcPopulationBatch(
-  world: World,
-  entities: Entity[],
-  nextId: { v: number },
-  faction: Faction,
-  profile: NpcPopulationProfile,
-  count: number,
-  fixedOccupation?: Occupation,
-): number {
-  const slots = entitySpawnSlots(entities, EntityType.NPC, count);
-  if (slots <= 0) return 0;
-  return spawnNaturalNpcBatch(world, entities, nextId, faction, profile, slots, fixedOccupation);
-}
-
-function seedNpcPopulation(
-  world: World,
-  entities: Entity[],
-  nextId: { v: number },
-  faction: Faction,
-  profile: NpcPopulationProfile,
-  totalCount: number,
-  fixedOccupation?: Occupation,
-): void {
-  spawnNpcPopulationBatch(world, entities, nextId, faction, profile, Math.round(totalCount * (profile.share ?? 0)), fixedOccupation);
-}
 
 /* ══════════════════════════════════════════════════════════════════
    Main generator — kvartiry dense residential maze
@@ -589,16 +479,8 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
-  const nid = { v: nextId };
-  const populationTotal = entitySpawnSlots(
-    entities,
-    EntityType.NPC,
-    activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(14) * KV_POPULATION.densityMult),
-  );
-  seedNpcPopulation(world, entities, nid, Faction.CITIZEN, CITIZEN_PROFILE, populationTotal);
-  seedNpcPopulation(world, entities, nid, Faction.WILD, WILD_PROFILE, populationTotal);
-  seedNpcPopulation(world, entities, nid, Faction.LIQUIDATOR, LIQUIDATOR_PROFILE, populationTotal, Occupation.HUNTER);
-  nextId = nid.v;
+  applyDesignFloorPopulationField({ world, entities } as any, { id: 'kvartiry', z: 6 } as any);
+  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   // ── Phase 10: Spawn items (ballots scattered everywhere) ─────
   for (let i = 0; i < 500; i++) {
