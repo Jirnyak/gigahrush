@@ -10,6 +10,7 @@ import {
   type WorldEventType,
   msgAt,
 } from "../core/types";
+import { getCurrentPlayerId } from "./player_actor";
 
 const LOG_MAX = 500;
 const DEDUPE_SECONDS = 4;
@@ -851,6 +852,13 @@ function deathFactAlreadyLogged(
 }
 
 export function recordWorldLogEvent(state: GameState, event: WorldEvent): void {
+  // Filter out non-player item pickups from stenosvodka until NPC Markov pickup barks are ready
+  if (event.type === 'player_pick_item') {
+    const pid = getCurrentPlayerId() ?? 0;
+    if (event.actorId !== undefined && event.actorId !== 0 && event.actorId !== pid) {
+      return;
+    }
+  }
   if (state.tutorialMode && event.type !== 'player_pick_item') return;
   if (!state.worldEvents || !shouldLog(event)) return;
   const key = eventKey(event);

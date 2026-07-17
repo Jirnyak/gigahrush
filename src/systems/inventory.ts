@@ -2200,7 +2200,12 @@ function pickupDropItems(
         msgs.push(msg('Взята проба зелёной кислотной слизи.', time, '#9f4'));
         publishGreenAcidItemEvent(state, player, 'sample', item.defId, moved, zoneId, drop.x, drop.y);
       }
-      msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
+      if (isPlayerEntity(player)) {
+        msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
+      } else {
+        // Filter out non-player item pickup messages from entering msgs/stenosvodka until NPC Markov pickup barks are ready
+        // msgs.push(msg(`Подобрано: ${def?.name ?? item.defId}`, time, '#dd4'));
+      }
       publishPlayerItemEvent(state, player, 'player_pick_item', item.defId, moved, 2, zoneId);
 
       if (state && state.tutorialMode && item.defId === 'tut_cafe_key' && state.tutorialStep === TutorialStep.TOILET) {

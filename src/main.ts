@@ -3482,6 +3482,30 @@ function syncMsgLog(): void {
     let writeIdx = _prevMsgCount;
     for (let i = _prevMsgCount; i < msgs.length; i++) {
       const m = msgs[i];
+      if (state.tutorialMode) {
+        const pid = getCurrentPlayerId() ?? player?.id ?? 0;
+        const isForPlayerOrSystem =
+          m.actorId === undefined ||
+          m.actorId === 0 ||
+          m.actorId === pid ||
+          m.targetId === 0 ||
+          m.targetId === pid ||
+          m.text.includes('Вы') ||
+          m.text.includes('вас') ||
+          m.text.includes('вам') ||
+          m.text.includes('Вам') ||
+          m.text.includes('Вас');
+        if (!isForPlayerOrSystem) continue;
+      }
+      // Filter out non-player item pickups from stenosvodka until NPC Markov pickup barks are ready
+      if (m.text.startsWith('Подобрано:')) {
+        const pid = getCurrentPlayerId() ?? player?.id ?? 0;
+        const isFromPlayer =
+          m.actorId === undefined ||
+          m.actorId === 0 ||
+          m.actorId === pid;
+        if (!isFromPlayer) continue;
+      }
       const location = {
         z: m.z ?? state.currentZ,
         x: m.x,
