@@ -8268,7 +8268,9 @@ function handleTitleCanvasPointerUp(e: PointerEvent): void {
   if (started || mobileControls?.isEnabled()) return;
   if (pointerCaptureGateVisible()) return;
   if (titleMode === 'feedback') {
-    window.open('https://t.me/gigah_rush', '_blank');
+    if (e.button !== 2) {
+      window.open('https://t.me/gigah_rush', '_blank');
+    }
     titleMode = 'setup';
     showTitle();
     suppressNextTitleClick = true;

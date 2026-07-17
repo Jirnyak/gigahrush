@@ -234,6 +234,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   world.aptMask[world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2) - 1)] = 1;
   world.aptMask[world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2) + 1)] = 1;
 
+  world.features[world.idx(bathX + Math.floor(bathW / 2), bathY + 1)] = Feature.LAMP;
   world.features[world.idx(bathX + Math.floor(bathW / 2), bathY + bathH - 2)] = Feature.TOILET;
   if (isTutorial) {
     entities.push({
