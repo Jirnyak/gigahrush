@@ -2310,3 +2310,147 @@ export function validateFloorGeometry(world: World): void {
     }
   }
 }
+
+export function scatterAmbientLights(world: World, rng: () => number, count: number): void {
+  for (let attempt = 0, placed = 0; attempt < count * 20 && placed < count; attempt++) {
+    const x = Math.floor(rng() * 1024);
+    const y = Math.floor(rng() * 1024);
+    const ci = world.idx(x, y);
+    if (world.cells[ci] !== 1 /* Cell.FLOOR */ || world.features[ci] !== 0 /* Feature.NONE */) continue;
+    if (rng() < 0.7) world.features[ci] = 1 /* Feature.LAMP */;
+    else world.features[ci] = 5 /* Feature.CANDLE */;
+    placed++;
+  }
+}
+export function restoreAuthoredRoomShell(world: World, name: string, type: RoomType, wallTex: Tex, floorTex: Tex): Room | undefined {
+  const room = world.rooms.find(candidate => candidate.name === name);
+  if (!room) return undefined;
+  room.type = type;
+  room.sealed = false;
+  room.wallTex = wallTex;
+  room.floorTex = floorTex;
+  for (let dy = -1; dy <= room.h; dy++) {
+    for (let dx = -1; dx <= room.w; dx++) {
+      const idx = world.idx(room.x + dx, room.y + dy);
+      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
+      if (interior) {
+        if (world.roomMap[idx] === room.id) world.floorTex[idx] = floorTex;
+        continue;
+      }
+      if (world.cells[idx] !== Cell.WALL) continue;
+      world.hermoWall[idx] = 0;
+      world.wallTex[idx] = wallTex;
+    }
+  }
+  world.markWallTexDirty();
+  world.markFloorTexDirty();
+  return room;
+}
+
+export function finalizeExpandedFloor(generation: any, _route: any, _rng: () => number): void {
+  generateZones(generation.world);
+  sanitizeDoors(generation.world);
+  generation.world.rebuildContainerMap();
+  generation.world.bakeLights();
+}
+
+export interface FloorStyle {
+  floorTex: Tex;
+  wallTex: Tex;
+  radius?: number;
+  fog?: number;
+  featureA?: Feature;
+  featureB?: Feature;
+  roomPrefix?: string;
+}
+
+export function setFeature(world: World, x: number, y: number, feature: Feature): void {
+  const ci = world.idx(x, y);
+  if (world.cells[ci] === Cell.FLOOR) world.features[ci] = feature;
+}
+
+export function addRoom(
+  world: World,
+  type: RoomType,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  name: string,
+  wallTex: Tex,
+  floorTex: Tex,
+): Room {
+  const room: Room = {
+    id: world.rooms.length,
+    type,
+    x,
+    y,
+    w,
+    h,
+    name,
+    wallTex,
+    floorTex,
+    doors: [],
+    sealed: false,
+    apartmentId: -1,
+  };
+  world.rooms.push(room);
+  for (let ry = y; ry < y + h; ry++) {
+    for (let rx = x; rx < x + w; rx++) {
+      const idx = world.idx(rx, ry);
+      world.cells[idx] = Cell.FLOOR;
+      world.roomMap[idx] = room.id;
+      world.wallTex[idx] = wallTex;
+      world.floorTex[idx] = floorTex;
+    }
+  }
+  return room;
+}
+
+export function carveLine(world: World, x1: number, y1: number, x2: number, y2: number, width: number, tex: Tex): void {
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+  const sx = x1 < x2 ? 1 : -1;
+  const sy = y1 < y2 ? 1 : -1;
+  let err = (dx > dy ? dx : -dy) / 2;
+  let currX = x1;
+  let currY = y1;
+
+  while (true) {
+    for (let wy = currY - width; wy <= currY + width; wy++) {
+      for (let wx = currX - width; wx <= currX + width; wx++) {
+        const i = world.idx(wx, wy);
+        if (!world.aptMask[i] && !world.hermoWall[i]) {
+          world.cells[i] = Cell.FLOOR;
+          world.floorTex[i] = tex;
+        }
+      }
+    }
+    if (currX === x2 && currY === y2) break;
+    const e2 = err;
+    if (e2 > -dx) {
+      err -= dy;
+      currX += sx;
+    }
+    if (e2 < dy) {
+      err += dx;
+      currY += sy;
+    }
+  }
+}
+
+export function protectedMask(world: World): Uint8Array {
+  const mask = new Uint8Array(W * W);
+  for (const room of world.rooms) {
+    if (!room) continue;
+    for (let y = room.y - 1; y <= room.y + room.h; y++) {
+      for (let x = room.x - 1; x <= room.x + room.w; x++) mask[world.idx(x, y)] = 1;
+    }
+  }
+  for (const idx of world.doors.keys()) mask[idx] = 1;
+  for (const container of world.containers) mask[world.idx(container.x, container.y)] = 1;
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] === Cell.LIFT || world.features[i] === Feature.LIFT_BUTTON) mask[i] = 1;
+  }
+  return mask;
+}

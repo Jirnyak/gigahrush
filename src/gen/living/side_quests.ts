@@ -18,7 +18,6 @@ import { spawnBabkaZina } from './babka_zina';
 import { spawnStalkerMecheny } from './stalker_mecheny';
 import { spawnSovietHousingPackNpcs } from './soviet_housing_pack';
 import { spawnDomkomLaundryPackNpcs } from './domkom_laundry_pack';
-import './olevia';
 import { spawnMukhin } from '../maintenance/mukhin';
 
 type SideQuestSpawner = (world: World, entities: Entity[], nextId: { v: number }) => void;

@@ -37,8 +37,12 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { setTerritoryOwnerAtIndex } from '../../systems/territory';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { stampRoom } from '../shared';
+import { placeLifts, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { finalizeExpandedFloor} from '../shared';
+import { designFloorById } from '../../data/design_floors';
+import { hashSeed, seededRandom } from '../../core/rand';
+import { applyDesignFloorPopulationField } from './population';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('service_floor');
 
@@ -736,8 +740,8 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   const clerkDoor = connectRoomDown(world, clerk, 595, 512, DoorState.LOCKED);
   serviceState.scopedDoorIds.push(janitorDoor, clerkDoor);
 
-  placeLift(world, westLift.x + 4, westLift.y + 6, LiftDirection.UP);
-  placeLift(world, eastLift.x + eastLift.w - 5, eastLift.y + 6, LiftDirection.DOWN);
+  placeLifts(world, 16, LiftDirection.UP);
+  placeLifts(world, 16, LiftDirection.DOWN);
 
   dressCorridors(world);
   dressLiftMachine(world, machine);
@@ -816,14 +820,32 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   registerServiceRouteCues(world, serviceState, machine, breaker, vent, eastLift);
   placeServiceFloorEmergencyPanels(world);
 
-  world.bakeLights();
-  return {
+  const route = designFloorById(DESIGN_FLOOR_ID)!;
+  const rng = seededRandom(hashSeed(`design-full:${route.id}:${route.z}`, route.z));
+
+  expandServiceFloorMachineMaze(world, rng, {
+    floorTex: Tex.F_CONCRETE,
+    wallTex: Tex.METAL,
+  }, entities);
+
+  const generation = {
     world,
     entities,
     spawnX: serviceState.debugEntry.spawnX,
     spawnY: serviceState.debugEntry.spawnY,
     serviceState,
+    isDecentralized: true,
   };
+  
+  finalizeExpandedFloor(generation, route, rng);
+  placeServiceFloorEmergencyPanels(world);
+  applyDesignFloorPopulationField(generation, route);
+
+  reinforceServiceFloorAuthoredHqTerritory(world);
+  alignServiceFloorAmbientNpcTerritory(world, entities);
+
+  world.bakeLights();
+  return generation;
 }
 
 function registerServiceRouteCues(
@@ -1951,14 +1973,6 @@ function connectRoomRight(world: World, room: Room, targetX: number, y: number, 
   return doorId;
 }
 
-function placeLift(world: World, x: number, y: number, direction: LiftDirection): void {
-  const ci = world.idx(x, y);
-  world.cells[ci] = Cell.LIFT;
-  world.wallTex[ci] = Tex.LIFT_DOOR;
-  world.liftDir[ci] = direction;
-  setFeature(world, x + 1, y, Feature.LIFT_BUTTON);
-  world.liftDir[world.idx(x + 1, y)] = direction;
-}
 
 function dressCorridors(world: World): void {
   for (let x = 438; x < 612; x += 12) {

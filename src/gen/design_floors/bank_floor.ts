@@ -26,10 +26,12 @@ import { World } from '../../core/world';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { publishEvent } from '../../systems/events';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { canPlaceRoom, stampRoom } from '../shared';
+import { canPlaceRoom, stampRoom, placeLifts } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-
+import { finalizeExpandedFloor} from '../shared';
+import { designFloorById } from '../../data/design_floors';
+import { hashSeed, seededRandom } from '../../core/rand';
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bank_floor');
 
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
@@ -507,7 +509,8 @@ export function generateBankFloorDesignFloor(): BankFloorGeneration {
 
   const rooms = createBankRooms(world);
   dressBankRooms(world, rooms);
-  placeBankLifts(world, rooms.liftLobby);
+  placeLifts(world, 16, LiftDirection.UP);
+  placeLifts(world, 16, LiftDirection.DOWN);
   generateBankZones(world);
 
   const directorId = spawnBankNpc(entities, nextId, 'bank_director_zinaida', DIRECTOR_DEF, rooms.deposit, 7, 7, Math.PI / 2);
@@ -517,16 +520,26 @@ export function generateBankFloorDesignFloor(): BankFloorGeneration {
   spawnBankNpc(entities, nextId, 'bank_debtor_mitya', DEBTOR_DEF, rooms.queue, 7, 5, 0);
 
   addBankContainers(world, bankState, rooms, directorId, cashierId, creditId, guardId);
-  applyBankVaultRiskSdf(world);
-  world.bakeLights();
 
-  return {
+  const route = designFloorById(BANK_FLOOR_ROUTE_ID)!;
+  const rng = seededRandom(hashSeed(`design-full:${route.id}:${route.z}`, route.z));
+
+  expandBankFloorRouteGeometry(world, rng);
+  
+  const generation = {
     world,
     entities,
     spawnX: bankState.debugEntry.spawnX,
     spawnY: bankState.debugEntry.spawnY,
     bankState,
+    isDecentralized: true,
   };
+  finalizeExpandedFloor(generation, route, rng);
+  applyBankFloorTerritorySeeds(world);
+  
+  world.bakeLights();
+
+  return generation;
 }
 
 export function expandBankFloorRouteGeometry(world: World, rng: () => number): void {
@@ -1070,20 +1083,7 @@ function dressBankRooms(
   }
 }
 
-function placeBankLifts(world: World, lobby: Room): void {
-  placeLift(world, lobby.x + 3, lobby.y + 9, lobby.x + 6, lobby.y + 9, LiftDirection.UP);
-  placeLift(world, lobby.x + lobby.w - 4, lobby.y + 9, lobby.x + lobby.w - 7, lobby.y + 9, LiftDirection.DOWN);
-}
 
-function placeLift(world: World, x: number, y: number, buttonX: number, buttonY: number, direction: LiftDirection): void {
-  const li = world.idx(x, y);
-  world.cells[li] = Cell.LIFT;
-  world.wallTex[li] = Tex.LIFT_DOOR;
-  world.liftDir[li] = direction;
-  const bi = world.idx(buttonX, buttonY);
-  if (world.cells[bi] === Cell.FLOOR) world.features[bi] = Feature.LIFT_BUTTON;
-  world.liftDir[bi] = direction;
-}
 
 function generateBankZones(world: World): void {
   const zoneSize = W / 8;

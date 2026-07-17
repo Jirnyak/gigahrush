@@ -15,6 +15,8 @@ export interface FloorGeneration {
   entities: Entity[];
   spawnX: number;
   spawnY: number;
+  isDecentralized?: boolean;
+  onAfterTerritory?: (world: World, entities: Entity[]) => void;
 }
 
 export const FLOOR_NAMES: Record<string, string> = {

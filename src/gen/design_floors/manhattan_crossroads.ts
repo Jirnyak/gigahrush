@@ -19,6 +19,7 @@ import {
   ZoneFaction,
   type Entity,
   type Room,
+  type Zone,
   type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
@@ -35,8 +36,11 @@ import {
   scaleMonsterSpeed,
 } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
+import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom, placeLifts } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { finalizeExpandedFloor} from '../shared';
+import { designFloorById } from '../../data/design_floors';
+import { applyDesignFloorPopulationField } from './population';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('manhattan_crossroads');
 
@@ -2204,12 +2208,50 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
     seedContainersAndDrops(world, entities, nextId, rooms, npcIds);
     spawnRoadHazards(rng, world, entities, nextId, rooms);
 
+    placeLifts(world, 16, LiftDirection.UP);
+    placeLifts(world, 16, LiftDirection.DOWN);
+
     world.bakeLights();
+
+    const route = designFloorById(DESIGN_FLOOR_ID)!;
+    const generation = { world, entities, spawnX, spawnY, isDecentralized: true };
+
+    expandManhattanCrossroadsRouteShell(world, () => rng.random());
+    finalizeExpandedFloor(generation, route, () => rng.random());
+    applyDesignFloorPopulationField(generation, route);
 
     for (const room of world.rooms) {
       if (room) room.ceilingTier = 198;
     }
-
-    return { world, entities, spawnX, spawnY };
+    
+    return generation;
   });
+}
+
+export function tuneManhattanCrossroadsZone(world: World, zone: Zone, baseDanger: number): void {
+  const d = world.dist(zone.cx, zone.cy, W / 2, W / 2);
+  const centralControl = d < 158 || (zone.cx >= 448 && zone.cx <= 608 && zone.cy >= 432 && zone.cy <= 592);
+  const wrongExit = zone.cx >= 640 && zone.cy >= 512 && zone.cy <= 760;
+  const falseRoad = zone.cx <= 176 || zone.cx >= 848 || zone.cy <= 176 || zone.cy >= 848;
+  const gangRoad = wrongExit || falseRoad || (zone.cx >= 610 && zone.cy >= 610) || (zone.cx <= 304 && zone.cy >= 610);
+  const marketQueue = zone.cx >= 320 && zone.cx <= 560 && zone.cy >= 480 && zone.cy <= 620;
+
+  if (gangRoad) {
+    zone.faction = ZoneFaction.WILD;
+    zone.level = Math.max(zone.level, wrongExit ? 4 : 3);
+  } else if (centralControl) {
+    zone.faction = ZoneFaction.LIQUIDATOR;
+    zone.level = Math.max(zone.level, baseDanger);
+  } else if (marketQueue) {
+    zone.faction = zone.cx > 500 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
+    zone.level = Math.max(zone.level, baseDanger);
+  } else {
+    zone.faction = ZoneFaction.CITIZEN;
+    zone.level = Math.max(2, Math.min(5, zone.level));
+  }
+
+  if (falseRoad && (zone.cx <= 176 || zone.cx >= 848) && (zone.cy <= 176 || zone.cy >= 848)) {
+    zone.level = Math.max(zone.level, 5);
+  }
+  zone.hasLift = zone.hasLift || d < 330 || wrongExit;
 }

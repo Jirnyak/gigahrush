@@ -1,9 +1,14 @@
 import { World } from '../../core/world';
 import { Entity, EntityType, Tex, Feature, Cell, DoorState, W, MonsterKind, RoomType } from '../../core/types';
 import { seededRandom } from '../../core/rand';
-import { carveCorridor, ensureConnectivity, generateZones, placeDoorAt, stampRoom, sanitizeDoors } from '../shared';
+import { carveCorridor, ensureConnectivity, generateZones, placeDoorAt, stampRoom, sanitizeDoors, placeLifts } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { finalizeExpandedFloor} from '../shared';
 
+import { designFloorById } from '../../data/design_floors';
+import { LiftDirection, AIGoal } from '../../core/types';
+import { randomRPG } from '../../systems/rpg';
+import { monsterSpr } from '../../render/sprite_index';
 const MACRO_SIZE = 16;
 const MACRO_GRID = 25; // 25 * 16 = 400
 const OFFSET_MACRO = 20; // Starts at 320
@@ -90,7 +95,7 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
 
   // Carve safe rooms at dead ends
   let numSafeRooms = 5;
-  let numMonsters = 3;
+  let numMonsters = 25;
 
   // Randomize dead ends a bit
   deadEnds.sort(() => rng() - 0.5);
@@ -125,19 +130,26 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
       }
     } else if (numMonsters > 0) {
       numMonsters--;
+      
+      const horrorKinds = [MonsterKind.GLUBINNAYA_TEN, MonsterKind.SCULPTURE, MonsterKind.NIGHTMARE];
+      const kind = horrorKinds[Math.floor(rng() * horrorKinds.length)];
+      
       entities.push({
         id: nextId.v++,
         type: EntityType.MONSTER,
-        monsterKind: MonsterKind.GLUBINNAYA_TEN,
+        monsterKind: kind,
         x: cx + 0.5,
         y: cy + 0.5,
-        hp: 99999,
-        maxHp: 99999,
+        hp: kind === MonsterKind.GLUBINNAYA_TEN ? 99999 : (kind === MonsterKind.SCULPTURE ? 250 : 260),
+        maxHp: kind === MonsterKind.GLUBINNAYA_TEN ? 99999 : (kind === MonsterKind.SCULPTURE ? 250 : 260),
         angle: 0,
         pitch: 0,
         alive: true,
-        speed: 1,
-        sprite: 0,
+        speed: kind === MonsterKind.SCULPTURE ? 8.5 : 1.5,
+        sprite: monsterSpr(kind),
+        phasing: kind === MonsterKind.GLUBINNAYA_TEN,
+        ai: { goal: AIGoal.WANDER, tx: cx, ty: cy, path: [], pi: 0, stuck: 0, timer: 0 },
+        rpg: randomRPG(10),
       });
     }
   }
@@ -147,5 +159,13 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
   ensureConnectivity(world, spawnX, spawnY);
   blackoutHorrorLights(world);
 
-  return { world, entities, spawnX, spawnY };
+  placeLifts(world, 16, LiftDirection.UP);
+  placeLifts(world, 16, LiftDirection.DOWN);
+
+  const route = designFloorById('horrorfloor')!;
+  const generation = { world, entities, spawnX, spawnY, isDecentralized: true };
+  
+  finalizeExpandedFloor(generation, route, rng);
+  
+  return generation;
 }
