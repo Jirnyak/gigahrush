@@ -14,7 +14,7 @@ import { generateInterrogationCloset } from './interrogation';
 import { generateQueueHall } from './queue_hall';
 import { generateInspectionArchive } from './inspection_archive';
 import { generateLiquidatorArchive } from './liquidator_archive';
-import { generateRaionsovetArchive } from './raionsovet_archive';
+import { generateRaionsovetArchive } from '../raionsovet_archive/archive_poi';
 import { generateRefusalClauseOffice } from './refusal_clause';
 import { generateDocumentGate } from './document_gate';
 import { generateLampoglazLine } from './lampoglaz_line';

@@ -6,7 +6,7 @@
 import './temple';
 import './istotit_supply_cache';
 import './library';
-import './market';
+import '../black_market_88/market';
 import './mushroom_cellar';
 import './zhelemish_cellar';
 import './zhelemishnik';
@@ -15,7 +15,7 @@ import './art_studies';
 import './soviet_housing_pack';
 import './domkom_laundry_pack';
 import './obzh_school';
-import './hospital_quarantine';
+import '../bolnichny_korpus/hospital_quarantine';
 import './samosbornyy_ostov';
 import './cartographer_zone_map';
 import './domkom_ammo_locker';

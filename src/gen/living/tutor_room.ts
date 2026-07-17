@@ -20,7 +20,7 @@ import { World } from '../../core/world';
 import { stampRoom, protectRoom } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../render/sprite_index';
-import { spawnTutorialKey } from '../tutorial_apartments';
+import { spawnTutorialKey } from './tutorial_apartments';
 
 function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: number, h: number): void {
   for (let dy = -1; dy <= h; dy++) {
