@@ -61,9 +61,10 @@ for (const stmt of indexFile.getStatements()) {
   if (stmt.getKind() === SyntaxKind.ImportDeclaration) continue;
 
   const names = getStmtNames(stmt);
-  const firstName = names[0] || '';
+  const firstName = names[0];
+  if (!firstName) continue;
 
-  if (names.length > 0 && typeof stmt.setIsExported === 'function') {
+  if (typeof stmt.hasExportKeyword === 'function' && !stmt.hasExportKeyword() && typeof stmt.setIsExported === 'function') {
     stmt.setIsExported(true);
   }
   const text = stmt.getText();
@@ -74,7 +75,7 @@ for (const stmt of indexFile.getStatements()) {
     continue;
   }
 
-  if (keepNames.has(firstName) || metaRegex.test(firstName)) {
+  if (keepNames.has(firstName) || metaRegex.test(firstName) || stmt.getKind() === SyntaxKind.InterfaceDeclaration || stmt.getKind() === SyntaxKind.TypeAliasDeclaration) {
     nodesToMoveToMeta.push(stmt);
     metaCode += `${text}\n\n`;
   } else if (npcRegex.test(firstName) || npcRegex.test(text.slice(0, 150))) {
@@ -126,18 +127,13 @@ function addCrossImports(targetFile, names, modulePath) {
   }
 }
 
-// metaFile imports types from geometry / npcs if needed
-addCrossImports(metaFile, geoNames, './geometry');
-addCrossImports(metaFile, npcNames, './npcs');
-
-// geoFile can import from meta, index, npcs
+// metaFile should be pure leaf
+// geoFile can import from meta, npcs
 addCrossImports(geoFile, metaNames, './meta');
-addCrossImports(geoFile, idxNames, './index');
 addCrossImports(geoFile, npcNames, './npcs');
 
-// npcsFile can import from meta, index, geometry
+// npcsFile can import from meta, geometry
 addCrossImports(npcsFile, metaNames, './meta');
-addCrossImports(npcsFile, idxNames, './index');
 addCrossImports(npcsFile, geoNames, './geometry');
 
 // indexFile imports from meta, geometry, npcs

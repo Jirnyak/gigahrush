@@ -1,5 +1,5 @@
 import { World } from '../../core/world';
-import { Entity, EntityType, Tex, Feature, Cell, DoorState, W, MonsterKind, RoomType } from '../../core/types';
+import { Entity, EntityType, Tex, Cell, DoorState, W, MonsterKind, RoomType } from '../../core/types';
 import { seededRandom } from '../../core/rand';
 import { carveCorridor, ensureConnectivity, generateZones, placeDoorAt, stampRoom, sanitizeDoors, placeLifts } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
@@ -9,22 +9,8 @@ import { designFloorById } from '../../data/design_floors';
 import { LiftDirection, AIGoal } from '../../core/types';
 import { randomRPG } from '../../systems/rpg';
 import { monsterSpr } from '../../render/sprite_index';
-const MACRO_SIZE = 16;
-const MACRO_GRID = 25; // 25 * 16 = 400
-const OFFSET_MACRO = 20; // Starts at 320
-
-function blackoutHorrorLights(world: World): void {
-  let removed = false;
-  for (let i = 0; i < W * W; i++) {
-    const feature = world.features[i];
-    if (feature === Feature.LAMP || feature === Feature.CANDLE) {
-      world.features[i] = Feature.NONE;
-      removed = true;
-    }
-  }
-  world.light.fill(0);
-  if (removed) world.markFeaturesDirty(false);
-}
+import { MACRO_SIZE, MACRO_GRID, OFFSET_MACRO } from "./meta";
+import { blackoutHorrorLights } from "./geometry";
 
 export function generateHorrorFloorDesignFloor(): FloorGeneration {
   const world = new World();
@@ -169,3 +155,7 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
   
   return generation;
 }
+
+export * from "./meta";
+export * from "./geometry";
+export * from "./npcs";
