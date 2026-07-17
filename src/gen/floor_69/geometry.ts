@@ -1,43 +1,14 @@
-import { rng, withSeededRandom } from '../../core/rand';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
 /* -- Design floor 69: adult vice, debt, blackmail and refuge ---- */
 
-import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
-import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
-  W, type ContainerAccess, type Entity, type Room, type WorldContainer,
-} from '../../core/types';
+import { Cell, DoorState, EntityType, Feature, LiftDirection, Occupation, RoomType, Tex, ZoneFaction, type Entity, type Room } from '../../core/types';
 import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { designFloorProfile, FLOOR_69_WORKER_ROLE_ID } from '../../data/design_floor_profiles';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
 import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
-import {
-  carveCorridor,
-  ensureConnectivity,
-  generateZones,
-  placeDoor,
-  protectRoom,
-  sanitizeDoors,
-  stampRoom,
-} from '../shared';
-import { genLog } from '../log';
-import type { FloorGeneration } from '../floor_manifest';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-
-
-import { NPC_DEFS, registerFloorSideQuest, addItemDrop, nextContainerId, addContainer, seedContainers, spawnNpc, spawnAmbientAdult, spawnFloor69Npcs, spawnCheckpointCrowd, seedLooseItems, applyFloor69OwnershipVisibilityHeatmap, applyFloor69AmbientSpriteTemplates } from './npcs';
-import { expandFloor69FullFloor, buildFloor69NorthShadowDistrict, buildFloor69WestWaitingQuarter, buildFloor69DeepMidWestLabyrinth, buildFloor69EastDebtSector, buildFloor69SouthRefugeSector, buildFloor69FarOuterPockets, buildFloor69GlobalPerimeterRing, buildFloor69NorthDeepSector, buildFloor69SouthDeepSector, buildFloor69WestEastDeepSectors, buildFloor69InnerMonolithGrid, buildFloor69BeyondPerimeterTunnels, buildFloor69ExperimentalHydroponics, buildFloor69UndergroundMarketAndCinema, buildFloor69SubMonolithLotto, buildFloor69TrueInterconnectedGridAndAlleys } from './districts';
-import { buildFloor69PublicRoutes, buildFloor69HotelWings, buildFloor69BackstageLoop, buildFloor69DebtBlock, buildFloor69RefugeClosets, buildFloor69SecurityChokes } from './routes';
-import { DESIGN_FLOOR_ID, DESIGN_FLOOR_Z, FLOOR_69_DEFAULT_SEED, HOME_FLOOR_KEY, FLOOR_69_RAID_SHUTTER_KEY, FLOOR_69_RAID_SHUTTER_GATES, FLOOR_69_BASE_FLOOR, FLOOR_69_MAX_FLAGS, FLOOR_69_CHECKPOINT_CROWD_CAP, FLOOR_69_FEMALE_SPRITE_COUNT, FLOOR_69_PROFILE, FLOOR_69_WORKER_ROLE, FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS, FLOOR_69_CONTROL_ANCHORS, IRA_WORKER_LINES, IRA_WORKER_POST_LINES, Floor69State, Floor69Generation, createFloor69State, floor69DebugLines, floor69EventTags, floor69RouteEventData, generateFloor69DesignFloor } from './index';
-export function bounded(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}
+import { carveCorridor, generateZones, placeDoor, protectRoom, stampRoom } from '../shared';
+import { FLOOR_69_BASE_FLOOR, FLOOR_69_WORKER_ROLE, FLOOR_69_CONTROL_ANCHORS, floor69EventTags, FLOOR_69_DEFAULT_SEED, FLOOR_69_FEMALE_SPRITE_COUNT, FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS } from './meta';
 
 export function hashFloor69Entity(entity: Entity, salt = 0): number {
   let h = (entity.id ^ Math.imul(Math.floor(entity.x * 16), 0x45d9f3b) ^ Math.imul(Math.floor(entity.y * 16), 0x119de1f3) ^ salt) >>> 0;

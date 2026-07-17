@@ -9,8 +9,7 @@ import { World } from '../../core/world';
 
 
 import { setFeature, Floor69MacroCounts, carveRouteLine, addRouteGate, addRouteRoom, addHorizontalRooms, decorateRouteLine } from './geometry';
-import { registerFloorSideQuest } from './npcs';
-import { FLOOR_69_RAID_SHUTTER_KEY, FLOOR_69_RAID_SHUTTER_GATES } from './index';
+import { FLOOR_69_RAID_SHUTTER_KEY, FLOOR_69_RAID_SHUTTER_GATES } from './meta';
 export function buildFloor69PublicRoutes(world: World, counts: Floor69MacroCounts): void {
   carveRouteLine(world, 64, 512, 948, 512, 3, Tex.F_CARPET, Tex.CURTAIN);
   carveRouteLine(world, 112, 384, 912, 384, 2, Tex.F_CARPET, Tex.CURTAIN);

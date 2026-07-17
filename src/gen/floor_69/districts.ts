@@ -1,40 +1,9 @@
-import { rng, withSeededRandom } from '../../core/rand';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
-/* -- Design floor 69: adult vice, debt, blackmail and refuge ---- */
-
-import { getPlotNpcNumericId } from '../../data/npc_packages';
-import { stampSurfaceSplat } from '../../systems/surface_marks';
-import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  LiftDirection, Occupation, QuestType, RoomType, Tex, ZoneFaction,
-  W, type ContainerAccess, type Entity, type Room, type WorldContainer,
-} from '../../core/types';
-import { World } from '../../core/world';
-import { freshNeeds } from '../../data/catalog';
-import { designFloorProfile, FLOOR_69_WORKER_ROLE_ID } from '../../data/design_floor_profiles';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
-import { Spr } from '../../render/sprite_index';
-import { registerRouteCue } from '../../systems/route_cues';
-import { calcZoneLevel } from '../../systems/rpg';
-import {
-  carveCorridor,
-  ensureConnectivity,
-  generateZones,
-  placeDoor,
-  protectRoom,
-  sanitizeDoors,
-  stampRoom,
-} from '../shared';
+import { Cell, DoorState, Tex, ZoneFaction } from '../../core/types';
+import { type World } from '../../core/world';
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-
-
-import { bounded, hashFloor69Entity, floor69FemaleSprite, isFloor69GeneratedVisitor, shouldPromoteFloor69Worker, isFloor69Worker, promoteFloor69Worker, floor69RoomFaction, floor69ControlAt, Floor69Rooms, applyRoomTextures, addRoom, connect, setFeature, addScreenWall, addPosterWall, addLift, Floor69MacroCounts, canCarveFloor69Route, carveRouteCell, carveRouteDisc, carveRouteLine, doorWalkable, doorHasStableJamb, placeRoomDoor, openRoomToNearestRoute, addRouteGate, pickRouteRoomType, decorateRouteRoom, addRouteRoom, canPlaceFloor69Room, floor69OwnerWallTex, floor69OwnerFloorTex, assignFloor69RoomOwner, decorateOwnedSupportRoom, tryAddOwnedRoom, tryAddRouteRoom, addHorizontalRooms, addHorizontalOwnedRooms, addVerticalOwnedRooms, supportRoomType, buildFloor69MiniHq, buildFloor69DenseBlock, buildFloor69MidMicroLayer, decorateRouteLine, buildLayout, decorateRooms, placeNonExplicitRouteSignals, roomMidX, roomMidY, registerFloor69RouteCues, applyZones } from './geometry';
-import { NPC_DEFS, registerFloorSideQuest, addItemDrop, nextContainerId, addContainer, seedContainers, spawnNpc, spawnAmbientAdult, spawnFloor69Npcs, spawnCheckpointCrowd, seedLooseItems, applyFloor69OwnershipVisibilityHeatmap, applyFloor69AmbientSpriteTemplates } from './npcs';
+import { Floor69MacroCounts, buildFloor69DenseBlock, buildFloor69MidMicroLayer, buildFloor69MiniHq, tryAddRouteRoom, carveRouteLine, addHorizontalOwnedRooms, addVerticalOwnedRooms } from './geometry';
 import { buildFloor69PublicRoutes, buildFloor69HotelWings, buildFloor69BackstageLoop, buildFloor69DebtBlock, buildFloor69RefugeClosets, buildFloor69SecurityChokes } from './routes';
-import { DESIGN_FLOOR_ID, DESIGN_FLOOR_Z, FLOOR_69_DEFAULT_SEED, HOME_FLOOR_KEY, FLOOR_69_RAID_SHUTTER_KEY, FLOOR_69_RAID_SHUTTER_GATES, FLOOR_69_BASE_FLOOR, FLOOR_69_MAX_FLAGS, FLOOR_69_CHECKPOINT_CROWD_CAP, FLOOR_69_FEMALE_SPRITE_COUNT, FLOOR_69_PROFILE, FLOOR_69_WORKER_ROLE, FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS, FLOOR_69_CONTROL_ANCHORS, IRA_WORKER_LINES, IRA_WORKER_POST_LINES, Floor69State, Floor69Generation, createFloor69State, floor69DebugLines, floor69EventTags, floor69RouteEventData, generateFloor69DesignFloor } from './index';
 export function expandFloor69FullFloor(generation: FloorGeneration, rng: () => number): void {
   const world = generation.world;
   const counts: Floor69MacroCounts = {

@@ -1,4 +1,6 @@
-import { ServiceFloorExpansionStyle, PUMP_RESCUE_ROOM, spawnServicePumpRescue, DRAINAGE_BASIN_NW, DRAINAGE_BASIN_NE, DRAINAGE_BASIN_SW, DRAINAGE_BASIN_SE, seedServiceBasinLoot, registerExpandedServiceUtilityGraph, LIFT_MACHINE_ROOM, BREAKER_ROOM, VENT_JUNCTION, ServiceRoomDoorSpec, SERVICE_HQ_COMPOUNDS, SERVICE_LIQUIDATOR_OUTPOST_NAMES, ServiceDoorSide, SERVICE_BAY_ROWS } from './index';
+import { ServiceFloorExpansionStyle, PUMP_RESCUE_ROOM, DRAINAGE_BASIN_NW, DRAINAGE_BASIN_NE, DRAINAGE_BASIN_SW, DRAINAGE_BASIN_SE, LIFT_MACHINE_ROOM, BREAKER_ROOM, VENT_JUNCTION, ServiceRoomDoorSpec, SERVICE_HQ_COMPOUNDS, SERVICE_LIQUIDATOR_OUTPOST_NAMES, ServiceDoorSide, SERVICE_BAY_ROWS } from './meta';
+import { spawnServicePumpRescue, seedServiceBasinLoot } from './npcs';
+import { registerExpandedServiceUtilityGraph } from './utility_graph';
 /* ── Design z: service_floor — lift machines and staff routes ─ */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';

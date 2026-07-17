@@ -34,7 +34,7 @@ import {
   ROOF_LOS_RAY_MAX,
   ROOF_LOS_SHELTER_MIN_SPACING,
   ROOF_TERRITORY_TARGETS,
-  RoofHqSpec} from './index';
+  RoofHqSpec} from './meta';
 import {
   roofRoomPressureFaction,
   paintRoofPressureRoom} from './npcs';

@@ -32,7 +32,7 @@ import './living_zone';
 
 
 import { MarketRooms, Market88ServiceGutPlacement, Market88BazaarRooms, market88OwnerFaction } from './geometry';
-import { DESIGN_NPC_HOME_FLOOR_KEY, BLACK_MARKET_88_ROUTE_ID, BLACK_MARKET_88_CONTAINER_FLOOR } from './index';
+import { DESIGN_NPC_HOME_FLOOR_KEY, BLACK_MARKET_88_ROUTE_ID, BLACK_MARKET_88_CONTAINER_FLOOR } from './meta';
 export const MARKET88_QUEUE_CROWD_CAP = 16;
 
 export const NPC_DEFS: Record<string, PlotNpcDef> = {

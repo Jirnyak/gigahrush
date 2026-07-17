@@ -1,99 +1,28 @@
-import { applyDesignFloorPopulationField } from '../design_floors/population';
-import { seededRandom, hashSeed } from '../../core/rand';
-/* ── Future design z: Хтонический чердак ─────────────────── */
+/* ── Future design z: Хтонический чердак — index ─────────────────── */
 
-import { getPlotNpcNumericId } from '../../data/npc_packages';
-import { stampSurfaceSplat } from '../../systems/surface_marks';
+import { seededRandom, hashSeed } from '../../core/rand';
 import {
-  W, Cell, Tex, Feature, DoorState, LiftDirection,
-  RoomType, EntityType, AIGoal, Faction, Occupation,
-  QuestType, ContainerKind, MonsterKind, ZoneFaction,
-  type Entity, type GameState, type Room, type TerritoryOwner, type WorldContainer,
+  Tex, DoorState, LiftDirection, RoomType, MonsterKind,
+  type Entity, type GameState,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { monsterSpr, Spr } from '../../render/sprite_index';
-import { publishEvent } from '../../systems/events';
-import { generateZones } from '../shared';
 import { genLog } from '../log';
-import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { syncZoneMetadataFromTerritory } from '../../systems/territory';
+import { generateZones } from '../shared';
+import { publishEvent } from '../../systems/events';
+import { applyDesignFloorPopulationField } from '../design_floors/population';
 
+import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, ATTIC_CHAMBERS, ATTIC_SPINE, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, retuneAtticZones, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticRootStubs, stampAtticChokepoints, stampAtticLowCeilingShells, stampAtticCapillaryCracks, stampAtticExitCues, carveChthonicLabyrinth, nearestAtticAnchorPressure, traceChthonicAtticExitPaths, setDoorState, scorchRoom } from './geometry';
+import { ATTIC_NPCS, addAtticContainers, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticShaftCaches } from './npcs';
+import { stampAtticServiceIslands } from './islands';
+import { applyChthonicAtticTerritory } from './territory';
+import { type ChthonicAtticRootChoice, type ChthonicAtticGeneration, type ChthonicAtticLayout, type ChthonicAtticRootState, type ChthonicAtticExit, type ChthonicAtticShelterCost, DESIGN_FLOOR_ID, DESIGN_FLOOR_Z } from './meta';
 
-import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, DIRS, AtticPoint, AtticChamberPlan, ATTIC_SPINE, ATTIC_CHAMBERS, ATTIC_ECOLOGY_ANCHORS, AtticCrawlNichePlan, AtticCapillarySeed, RoomSide, ATTIC_STEALTH_CRAWL_GRAPH, ATTIC_CRAWL_NICHES, ATTIC_CAPILLARY_SEEDS, traceChthonicAtticExitPaths, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, carveAtticDisc, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, atticDoorPoint, atticHash01, nearestAtticAnchorPressure, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticCrawlNiche, stampAtticRootStubs, stampAtticChokepoints, placeAtticRootPillar, stampAtticLowCeilingShells, atticRoomReadsLow, nearestAtticSolidDistance, stampAtticCapillaryCracks, walkAtticCapillary, stampAtticExitCues, setAtticFeature, randomAtticRootCell, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, carveLine, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, stampBlackHand, stampVerticalServiceHoles, retuneAtticZones, setDoorState, scorchRoom, shortestPathDistance, isTracePassable, connectChthonicRoomsOrganic, carveChthonicLabyrinth } from './geometry';
-import { ATTIC_NPCS, registerChthonicAtticContent, addAtticContainers, addContainer, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticIslandCache, seedAtticShaftCaches, atticIslandCacheLoot, atticCacheCell } from './npcs';
-import { AtticServiceIslandPlan, AtticMicroBlockPlan, ATTIC_SERVICE_ISLANDS, ATTIC_WILD_OUTPOSTS, ATTIC_MICRO_BLOCKS, stampAtticServiceIslands, stampAtticFactionIsland, stampAtticWildOutpost, stampAtticMicroBlock, stampAtticServiceRoom, connectAtticRoomToHub, decorateAtticFactionRoom } from './islands';
-import { AtticTerritoryTarget, ATTIC_TERRITORY_TARGETS, applyChthonicAtticTerritory, atticTerritoryTileQuotas, atticTerritoryScore, paintAtticRoomTerritory, atticAuthoredRoomOwner, atticOwnerWorkName } from './territory';
-export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('chthonic_attic');
-
-export const DESIGN_FLOOR_ID = 'chthonic_attic' as const;
-export const DESIGN_FLOOR_Z = 46;
-
-export type ChthonicAtticRootChoice = 'cut' | 'feed' | 'burn';
-
-export interface ChthonicAtticShelterCost {
-  kind: 'item' | 'hp' | 'reputation' | 'delay';
-  itemId?: string;
-  count?: number;
-  amount?: number;
-  seconds?: number;
-}
-
-export interface ChthonicAtticRootState {
-  choice: ChthonicAtticRootChoice;
-  shelterCost: ChthonicAtticShelterCost;
-  shelterRoomIds: number[];
-  sealedRoomIds: number[];
-  burntRoomIds: number[];
-  blockedDoorIdxs: number[];
-  oneWayDoorIdxs: number[];
-  crossFloorFlag: string;
-}
-
-export interface ChthonicAtticExit {
-  id: 'ministry_return' | 'roof_service' | 'crawl_hatch';
-  idx: number;
-}
-
-export interface ChthonicAtticRouteCheck {
-  choice: ChthonicAtticRootChoice;
-  exitId: ChthonicAtticExit['id'];
-  reachable: boolean;
-  distance: number;
-}
-
-export interface ChthonicAtticLayout {
-  routeId: typeof DESIGN_FLOOR_ID;
-  z: typeof DESIGN_FLOOR_Z;
-  spawnRoomId: number;
-  combatLaneCells: number[];
-  crawlRouteCells: number[];
-  exitCells: ChthonicAtticExit[];
-  npcRoomIds: Record<'rootkeeper' | 'deacon' | 'yura' | 'masha', number>;
-  rootRoomId: number;
-  shrineRoomId: number;
-  shelterRoomId: number;
-  evidenceRoomId: number;
-  rootDoorIdx: number;
-  shrineDoorIdx: number;
-  shelterDoorIdx: number;
-  crawlDoorIdxs: number[];
-}
-
-export interface ChthonicAtticGeneration {
-  world: World;
-  entities: Entity[];
-  spawnX: number;
-  spawnY: number;
-  layout: ChthonicAtticLayout;
-  rootState: ChthonicAtticRootState;
-  routeChecks: ChthonicAtticRouteCheck[];
-  debug: {
-    routeId: typeof DESIGN_FLOOR_ID;
-    z: typeof DESIGN_FLOOR_Z;
-    entry: string;
-  };
-}
+export * from './meta';
+export * from './geometry';
+export * from './npcs';
+export * from './islands';
+export * from './territory';
 
 export function generateChthonicAtticDesignFloor(
   rootChoice: ChthonicAtticRootChoice = 'cut',

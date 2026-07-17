@@ -24,7 +24,7 @@ import {
   ROOF_ROUTE_ID,
   ROOF_BASE_FLOOR,
   CX,
-  CY} from './index';
+  CY} from './meta';
 
 export function roofRoomPressureFaction(room: Room): ZoneFaction {
   const name = room.name.toLowerCase();

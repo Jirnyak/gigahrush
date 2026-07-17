@@ -1,4 +1,5 @@
-import { DESIGN_NPC_HOME_FLOOR_KEY, JANITOR_DEPOT, PUMP_RESCUE_ROOM, nextServiceEntityId, SERVICE_FLOOR_BASE_FLOOR, setFeature } from './index';
+import { DESIGN_NPC_HOME_FLOOR_KEY, JANITOR_DEPOT, PUMP_RESCUE_ROOM, SERVICE_FLOOR_BASE_FLOOR } from './meta';
+import { nextServiceEntityId, setFeature } from './geometry';
 /* ── Design z: service_floor — lift machines and staff routes ─ */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';

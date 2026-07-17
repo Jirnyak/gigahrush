@@ -36,7 +36,7 @@ import {
   UPPER_BUREAU_DISPLAY_NAME,
   UPPER_BUREAU_ANCHOR_Z,
   UPPER_BUREAU_BASE_FLOOR,
-  UPPER_BUREAU_AUDIT_HEAT_MAX} from './index';
+  UPPER_BUREAU_AUDIT_HEAT_MAX} from './meta';
 import {
   nextContainerId} from './npcs';
 

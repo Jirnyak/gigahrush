@@ -1,29 +1,12 @@
-import { applyDesignFloorPopulationField } from '../design_floors/population';
-import { seededRandom, hashSeed } from '../../core/rand';
-/* ── Future design z: Хтонический чердак ─────────────────── */
+/* ── Future design z: Хтонический чердак — geometry ─────────────────── */
 
-import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   W, Cell, Tex, Feature, DoorState, LiftDirection,
-  RoomType, EntityType, AIGoal, Faction, Occupation,
-  QuestType, ContainerKind, MonsterKind, ZoneFaction,
-  type Entity, type GameState, type Room, type TerritoryOwner, type WorldContainer,
+  RoomType, ZoneFaction, type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { monsterSpr, Spr } from '../../render/sprite_index';
-import { publishEvent } from '../../systems/events';
-import { generateZones } from '../shared';
-import { genLog } from '../log';
-import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-
-
-import { ATTIC_NPCS, registerChthonicAtticContent, addAtticContainers, addContainer, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticIslandCache, seedAtticShaftCaches, atticIslandCacheLoot, atticCacheCell } from './npcs';
-import { AtticServiceIslandPlan, AtticMicroBlockPlan, ATTIC_SERVICE_ISLANDS, ATTIC_WILD_OUTPOSTS, ATTIC_MICRO_BLOCKS, stampAtticServiceIslands, stampAtticFactionIsland, stampAtticWildOutpost, stampAtticMicroBlock, stampAtticServiceRoom, connectAtticRoomToHub, decorateAtticFactionRoom } from './islands';
-import { AtticTerritoryTarget, ATTIC_TERRITORY_TARGETS, applyChthonicAtticTerritory, atticTerritoryTileQuotas, atticTerritoryScore, paintAtticRoomTerritory, atticAuthoredRoomOwner, atticOwnerWorkName } from './territory';
-import { DESIGN_NPC_HOME_FLOOR_KEY, DESIGN_FLOOR_ID, DESIGN_FLOOR_Z, ChthonicAtticShelterCost, ChthonicAtticRootState, ChthonicAtticExit, ChthonicAtticRouteCheck, ChthonicAtticLayout, ChthonicAtticGeneration, generateChthonicAtticDesignFloor, applyChthonicAtticRootChoice, publishChthonicAtticRootChoice, expandChthonicAtticRootNetwork, retuneExpandedChthonicAtticEcology } from './index';
+import { type ChthonicAtticLayout, type ChthonicAtticRouteCheck, type ChthonicAtticRootChoice } from './meta';
 export const ATTIC_BASE_X = (W >> 1) - 104;
 export const ATTIC_BASE_Y = (W >> 1) - 64;
 export const MAIN_Y = ATTIC_BASE_Y + 58;

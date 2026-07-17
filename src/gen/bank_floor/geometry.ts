@@ -1,64 +1,20 @@
 /* -- Design z: bank_floor - cash desks, debt and vault risk -- */
 
-import { BankHqClusterSpec, BANK_HQ_CLUSTERS, DIRECTOR_DEF, CASHIER_DEF, CREDIT_DEF, GUARD_DEF, DEBTOR_DEF, addExpandedBankContainers, applyBankFloorTerritorySeeds, paintBankRoomTerritory, paintBankOwnerPatch, spawnBankNpc, addBankContainers, addBankContainer, nextContainerId } from './npcs';
-import { DESIGN_NPC_HOME_FLOOR_KEY, BANK_FLOOR_ROUTE_ID, BANK_FLOOR_Z, BANK_FLOOR_BASE_FLOOR, BANK_FLOOR_META, BankFloorState, BankFloorGeneration, BankActionKind, BANK_TAGS, createBankFloorState, summarizeBankFloorState, publishBankFloorEvent, generateBankFloorDesignFloor } from './index';
-
-import { getPlotNpcNumericId } from '../../data/npc_packages';
+import { BANK_HQ_CLUSTERS, addExpandedBankContainers } from './npcs';
 import {
   Cell,
-  ContainerKind,
   DoorState,
-  Faction,
   Feature,
-  LiftDirection,
-  Occupation,
-  QuestType,
   RoomType,
   Tex,
   W,
   ZoneFaction,
-  type TerritoryOwner,
-  type Entity,
-  type GameState,
-  type Item,
   type Room,
   type WorldContainer,
-  type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { publishEvent } from '../../systems/events';
-import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { canPlaceRoom, stampRoom, placeLifts } from '../shared';
-import type { FloorGeneration } from '../floor_manifest';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { finalizeExpandedFloor} from '../shared';
-import { designFloorById } from '../../data/design_floors';
-import { hashSeed, seededRandom } from '../../core/rand';
-
-export const BANK_ROOM_NAMES = {
-  liftLobby: 'Лифтовый вестибюль банка Б-22',
-  hall: 'Главный кассовый зал банка Б-22',
-  teller: 'Кассовая линия банка Б-22',
-  deposit: 'Депозитный ряд банка Б-22',
-  credit: 'Кредитное окно банка Б-22',
-  queue: 'Очередь должников банка Б-22',
-  vault: 'Хранилище кассовых ячеек Б-22',
-  bypass: 'Черный служебный обход банка Б-22',
-  tellerLane: 'Кассовая змейка ожидания Б-22',
-  debtorCircuit: 'Долговая петля Б-22',
-  bribeQueue: 'Нулевая очередь подкупщиков Б-22',
-  vaultShell: 'Наружная оболочка хранилища Б-22',
-  bypassGate: 'Черный пост служебного обхода Б-22',
-} as const;
-
-export const BANK_HQ_ROOM_NAMES = {
-  citizen: 'Герметическая комната гражданского баланса Б-22',
-  liquidator: 'Герметический пост инкассаторов Б-22',
-  cultist: 'Герметическая свечная долгового культа Б-22',
-  scientist: 'Герметическая лаборатория счетчиков НИИ Б-22',
-  wild: 'Герметическая ночная касса диких Б-22',
-} as const;
+import { canPlaceRoom, stampRoom } from '../shared';
+import { BANK_ROOM_NAMES } from './meta';
 
 export const BANK_VAULT_RISK_RADIUS = 96;
 export const BANK_VAULT_RISK_INNER_RADIUS = 10;

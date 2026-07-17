@@ -24,7 +24,7 @@ import { seededRandom, hashSeed } from '../../core/rand';
 
 import {
   DARKNESS_DESIGN_FLOOR_ID,
-  DARKNESS_FUTURE_Z} from './index';
+  DARKNESS_FUTURE_Z} from './meta';
 import {
   DARKNESS_PRESERVED_NAME_ID,
   dropItem} from './npcs';

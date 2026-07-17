@@ -3,11 +3,11 @@
  * number; route integration belongs to the floor manifest owner.
  */
 
+export * from './meta';
 import {
   type Entity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey } from '../../data/plot';
 import { generateZones, sanitizeDoors } from '../shared';
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
@@ -16,19 +16,8 @@ import { applyDesignFloorPopulationField } from '../design_floors/population';
 import { rng } from '../../core/rand';
 import './living_zone';
 
-
 import { expandBlackMarket88Bazaar, buildMarketRooms, linkMarketRooms, decorateMarketRooms, addAccessLifts, tuneMarketZones } from './geometry';
 import { registerBlackMarket88DesignFloorContent, spawnMarketNpcs, spawnMarketQueueCrowd, seedMarketContainers } from './npcs';
-export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('black_market_88');
-
-export const BLACK_MARKET_88_ROUTE_ID = 'black_market_88' as const;
-export const BLACK_MARKET_88_DISPLAY_NAME = 'Черный рынок 88';
-export const BLACK_MARKET_88_FUTURE_Z = -10;
-export const BLACK_MARKET_88_CONTAINER_FLOOR = 100;
-
-export type Market88LaneId = 'survival' | 'weapons' | 'medicine' | 'documents' | 'access';
-export type Market88AccessKind = 'password' | 'maintenance_hatch' | 'ministry_document';
-export type Market88Settlement = 'rubles' | 'item' | 'contract' | 'document' | 'faction';
 
 export function generateBlackMarket88DesignFloor(): FloorGeneration {
   registerBlackMarket88DesignFloorContent();

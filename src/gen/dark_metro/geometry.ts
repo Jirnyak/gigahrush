@@ -28,7 +28,7 @@ import {
   DARK_METRO_FULL_LINE_YS,
   DARK_METRO_SAFETY_SHELL_RADIUS,
   DARK_METRO_HQ_COMPOUNDS,
-  DARK_METRO_TRANSFER_NODES} from './index';
+  DARK_METRO_TRANSFER_NODES} from './meta';
 import {
   addDarkMetroTransitCache} from './npcs';
 

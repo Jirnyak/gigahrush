@@ -1,40 +1,28 @@
 /* -- Design z: bank_floor - cash desks, debt and vault risk -- */
 
-import { BANK_ROOM_NAMES, BANK_HQ_ROOM_NAMES, BANK_VAULT_RISK_RADIUS, BANK_VAULT_RISK_INNER_RADIUS, BankVaultRiskSource, bankVaultRiskSources, bankVaultRiskSignedDistance, bankVaultRiskTierAt, BankMicroBlockSpec, expandBankFloorRouteGeometry, decorateExpandedBankDecisionRooms, buildDebtCircuitLoop, buildBankMicroLayer, carveBankWingCorridors, stampOptionalBankRoom, decorateBankMicroRoom, applyBankVaultRiskSdf, addBankTag, createBankRooms, stampBankRoom, placeBankDoor, dressBankRooms, generateBankZones, setFeature, carveRun, carveRect, openRoomToNearestCorridor, scatterRoomFurniture } from './geometry';
-import { DESIGN_NPC_HOME_FLOOR_KEY, BANK_FLOOR_ROUTE_ID, BANK_FLOOR_Z, BANK_FLOOR_BASE_FLOOR, BANK_FLOOR_META, BankFloorState, BankFloorGeneration, BankActionKind, BANK_TAGS, createBankFloorState, summarizeBankFloorState, publishBankFloorEvent, generateBankFloorDesignFloor } from './index';
-
+import { BANK_HQ_ROOM_NAMES, BANK_ROOM_NAMES, DESIGN_NPC_HOME_FLOOR_KEY, BANK_FLOOR_BASE_FLOOR, type BankFloorState, BANK_TAGS } from './meta';
+import { BankMicroBlockSpec, createBankRooms, setFeature } from './geometry';
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   Cell,
   ContainerKind,
-  DoorState,
   Faction,
   Feature,
-  LiftDirection,
   Occupation,
   QuestType,
   RoomType,
   Tex,
-  W,
   ZoneFaction,
   type TerritoryOwner,
   type Entity,
-  type GameState,
   type Item,
   type Room,
   type WorldContainer,
-  type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { publishEvent } from '../../systems/events';
+import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { canPlaceRoom, stampRoom, placeLifts } from '../shared';
-import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { finalizeExpandedFloor} from '../shared';
-import { designFloorById } from '../../data/design_floors';
-import { hashSeed, seededRandom } from '../../core/rand';
 
 export interface BankHqClusterSpec {
   owner: TerritoryOwner;

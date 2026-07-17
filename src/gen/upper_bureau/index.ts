@@ -5,7 +5,6 @@ import {
   type Entity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey } from '../../data/plot';
 import { genLog } from '../log';
 import {
   type NextId, spawnAdminMonster,
@@ -30,15 +29,12 @@ import {
   spawnUpperBureauNpcs
 } from './npcs';
 
-export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('upper_bureau');
-
-export const UPPER_BUREAU_ROUTE_ID = 'upper_bureau' as const;
-export const UPPER_BUREAU_DISPLAY_NAME = 'Верхнее бюро' as const;
-export const UPPER_BUREAU_ANCHOR_Z = 34;
-export const UPPER_BUREAU_BASE_FLOOR = 30;
-export const UPPER_BUREAU_AUDIT_HEAT_MAX = 3;
-
-
+export * from './meta';
+import {
+  UPPER_BUREAU_ANCHOR_Z,
+  UPPER_BUREAU_DISPLAY_NAME,
+  UPPER_BUREAU_ROUTE_ID,
+} from './meta';
 
 export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
   const world = new World();

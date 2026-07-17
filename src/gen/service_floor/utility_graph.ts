@@ -1,4 +1,4 @@
-import { ServiceUtilityDomain, ServiceUtilityFront, ServiceUtilityEdgeKind, DESIGN_FLOOR_ID } from './index';
+import { ServiceUtilityDomain, ServiceUtilityFront, ServiceUtilityEdgeKind, DESIGN_FLOOR_ID } from './meta';
 import { Cell, type Room } from '../../core/types';
 import { World } from '../../core/world';
 

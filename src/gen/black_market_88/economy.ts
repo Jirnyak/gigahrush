@@ -3,49 +3,9 @@
  * number; route integration belongs to the floor manifest owner.
  */
 
-import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { clamp } from '../../render/ui_utils';
-import { stampSurfaceSplat } from '../../systems/surface_marks';
-import {
-  AIGoal,
-  Cell,
-  ContainerKind,
-  DoorState,
-  EntityType,
-  Faction,
-  Feature,
-  LiftDirection,
-  Occupation,
-  QuestType,
-  RoomType,
-  Tex,
-  W,
-  ZoneFaction,
-  type ContainerAccess,
-  type Entity,
-  type Item,
-  type Room,
-  type TerritoryOwner,
-  type WorldContainer,
-} from '../../core/types';
-import { World } from '../../core/world';
-import { ITEMS, freshNeeds } from '../../data/catalog';
-import { factionToTerritoryOwner } from '../../data/factions';
-import { designNpcFloorKey, type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
-import { syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { generateZones, sanitizeDoors, stampRoom } from '../shared';
-import { type FloorGeneration } from '../floor_manifest';
-import { designFloorById } from '../../data/design_floors';
-import { finalizeExpandedFloor} from '../shared';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { rng } from '../../core/rand';
-import './living_zone';
-
-
-import { MarketRooms, Market88RoomSide, Market88StallPlacement, Market88ServiceGutPlacement, Market88BazaarRooms, Market88RoomPlacement, Market88HqClusterSpec, Market88MidBlockSpec, MARKET88_WEST, MARKET88_EAST, MARKET88_NORTH, MARKET88_SOUTH, MARKET88_LANE_Y, MARKET88_LANE_X, MARKET88_STALL_NAMES, MARKET88_HQ_ROOM_DEF_IDS, MARKET88_HQ_CLUSTERS, MARKET88_MID_BLOCKS, MARKET88_HUB_DEGREE_CAP, MARKET88_GEOMETRY_HUBS, MARKET88_SMALL_WORLD_CHORDS, MARKET88_RAID_SHUTTER_GATES, expandBlackMarket88Bazaar, addBazaarLandmarks, addBazaarServiceGuts, addBazaarHqCompounds, addBazaarMidBlocks, addBazaarMicroRooms, addBazaarStallRooms, carveBazaarAlleys, carveBazaarOuterRings, carveBazaarHubChords, decorateBazaarHubChords, market88Hub, connectBazaarLandmarks, connectBazaarServiceGuts, connectBazaarRoomPlacements, connectStallsToAlleys, addRaidShutters, addShutterBypass, decorateBazaarLandmarks, decorateBazaarServiceGuts, decorateBazaarOwnedRoom, decorateSmugglingTunnels, market88OwnerFaction, market88AuthoredRoomOwner, market88AuthoredConnection, restoreBlackMarket88FallbackRoomType, hasHermeticOpenDoor, reinforceBlackMarket88AuthoredHqTerritory, markBlackMarket88ServiceGutZonesHostile, tryBazaarRoom, paintBazaarRoomOwner, paintBazaarOwnerPatch, canFitBazaarRoom, rectsOverlap, inMarket88CoreKeepout, connectRoomToPoint, addRoomDoor, addShutterGate, addDoorCell, carveMarketLine, carveMarketDisc, carveMarketCell, setMarketWall, setMarketFeature, decorateStallRoom, buildMarketRooms, makeRoom, linkMarketRooms, placeSharedDoor, decorateMarketRooms, addAccessLifts, addLiftGate, tuneMarketZones } from './geometry';
-import { MARKET88_QUEUE_CROWD_CAP, NPC_DEFS, SIDE_QUESTS, registerBlackMarket88DesignFloorContent, spawnMarketNpcs, spawnNpc, spawnMarketQueueCrowd, seedMarketContainers, addContainer, seedBazaarCaches, seedBazaarExpansionCaches, isBlackMarket88AmbientNpc, blackMarket88TerritorySpawnCells, alignBlackMarket88AmbientNpcTerritory } from './npcs';
-import { DESIGN_NPC_HOME_FLOOR_KEY, BLACK_MARKET_88_ROUTE_ID, BLACK_MARKET_88_DISPLAY_NAME, BLACK_MARKET_88_FUTURE_Z, BLACK_MARKET_88_CONTAINER_FLOOR, generateBlackMarket88DesignFloor, generateBlackMarket88DebugFloor } from './index';
+import { ITEMS } from '../../data/catalog';
+import { type Market88LaneId, type Market88AccessKind, type Market88Settlement } from './meta';
 export interface Market88StockRow {
   id: string;
   traderId: string;

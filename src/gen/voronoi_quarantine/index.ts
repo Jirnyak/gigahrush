@@ -5,7 +5,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
-import { designNpcFloorKey } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import {
@@ -36,11 +35,10 @@ import {
   siteId,
   countSiteCells} from './geometry';
 
-export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('voronoi_quarantine');
-
-export const VORONOI_QUARANTINE_ROUTE_ID = 'voronoi_quarantine' as const;
-export const VORONOI_QUARANTINE_Z = 6 as const;
-export const VORONOI_QUARANTINE_BASE_FLOOR = 60;
+export * from './meta';
+import {
+  VORONOI_QUARANTINE_ROUTE_ID,
+} from './meta';
 
 
 

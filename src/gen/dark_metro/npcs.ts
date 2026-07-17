@@ -38,7 +38,7 @@ import {
   MISHA_DEF,
   unpackDarkMetroState,
   BuildCtx,
-  DARK_METRO_FULL_LINE_YS} from './index';
+  DARK_METRO_FULL_LINE_YS} from './meta';
 import {
   DarkMetroLayout,
   setFeature} from './geometry';

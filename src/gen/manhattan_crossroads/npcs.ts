@@ -30,7 +30,7 @@ export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('manhattan_crossroads
 
 export const DESIGN_FLOOR_ID = 'manhattan_crossroads' as const;
 export const MANHATTAN_CROSSROADS_Z = 8;
-import { CENTER, CROSSROADS_TOLL_CROWD_CAP, CROSSROADS_TRAFFIC_BAND_CAP, KeyRooms, CrossroadsNpcIds, TRAFFIC_MILITSIYA, ZEBRA_GRANNY, COURIER_DIMA, ROAD_STALKER_KSU } from './index';
+import { CENTER, CROSSROADS_TOLL_CROWD_CAP, CROSSROADS_TRAFFIC_BAND_CAP, KeyRooms, CrossroadsNpcIds, TRAFFIC_MILITSIYA, ZEBRA_GRANNY, COURIER_DIMA, ROAD_STALKER_KSU } from './meta';
 import { setFeatureIfFloor } from './geometry';
 
 export function spawnPlotNpc(

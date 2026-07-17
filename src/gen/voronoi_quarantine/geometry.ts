@@ -39,7 +39,7 @@ import { publishEvent } from '../../systems/events';
 import {
   DESIGN_NPC_HOME_FLOOR_KEY,
   VORONOI_QUARANTINE_ROUTE_ID,
-  VORONOI_QUARANTINE_BASE_FLOOR} from './index';
+  VORONOI_QUARANTINE_BASE_FLOOR} from './meta';
 import {
   spawnPlotNpc,
   nextContainerId,

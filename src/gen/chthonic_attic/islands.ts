@@ -1,29 +1,13 @@
-import { applyDesignFloorPopulationField } from '../design_floors/population';
-import { seededRandom, hashSeed } from '../../core/rand';
-/* ── Future design z: Хтонический чердак ─────────────────── */
+/* ── Future design z: Хтонический чердак — islands ─────────────────── */
 
-import { getPlotNpcNumericId } from '../../data/npc_packages';
-import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
-  W, Cell, Tex, Feature, DoorState, LiftDirection,
-  RoomType, EntityType, AIGoal, Faction, Occupation,
-  QuestType, ContainerKind, MonsterKind, ZoneFaction,
-  type Entity, type GameState, type Room, type TerritoryOwner, type WorldContainer,
+  W, Cell, Tex, Feature, DoorState, RoomType, ZoneFaction,
+  type Room, type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { monsterSpr, Spr } from '../../render/sprite_index';
-import { publishEvent } from '../../systems/events';
-import { generateZones } from '../shared';
-import { genLog } from '../log';
-import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-
-
-import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, DIRS, AtticPoint, AtticChamberPlan, ATTIC_SPINE, ATTIC_CHAMBERS, ATTIC_ECOLOGY_ANCHORS, AtticCrawlNichePlan, AtticCapillarySeed, RoomSide, ATTIC_STEALTH_CRAWL_GRAPH, ATTIC_CRAWL_NICHES, ATTIC_CAPILLARY_SEEDS, traceChthonicAtticExitPaths, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, carveAtticDisc, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, atticDoorPoint, atticHash01, nearestAtticAnchorPressure, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticCrawlNiche, stampAtticRootStubs, stampAtticChokepoints, placeAtticRootPillar, stampAtticLowCeilingShells, atticRoomReadsLow, nearestAtticSolidDistance, stampAtticCapillaryCracks, walkAtticCapillary, stampAtticExitCues, setAtticFeature, randomAtticRootCell, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, carveLine, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, stampBlackHand, stampVerticalServiceHoles, retuneAtticZones, setDoorState, scorchRoom, shortestPathDistance, isTracePassable, connectChthonicRoomsOrganic, carveChthonicLabyrinth } from './geometry';
-import { ATTIC_NPCS, registerChthonicAtticContent, addAtticContainers, addContainer, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticIslandCache, seedAtticShaftCaches, atticIslandCacheLoot, atticCacheCell } from './npcs';
-import { AtticTerritoryTarget, ATTIC_TERRITORY_TARGETS, applyChthonicAtticTerritory, atticTerritoryTileQuotas, atticTerritoryScore, paintAtticRoomTerritory, atticAuthoredRoomOwner, atticOwnerWorkName } from './territory';
-import { DESIGN_NPC_HOME_FLOOR_KEY, DESIGN_FLOOR_ID, DESIGN_FLOOR_Z, ChthonicAtticShelterCost, ChthonicAtticRootState, ChthonicAtticExit, ChthonicAtticRouteCheck, ChthonicAtticLayout, ChthonicAtticGeneration, generateChthonicAtticDesignFloor, applyChthonicAtticRootChoice, publishChthonicAtticRootChoice, expandChthonicAtticRootNetwork, retuneExpandedChthonicAtticEcology } from './index';
+import { ATTIC_BASE_X, MAIN_Y, atticDoorPoint, carveLine, placeDoor, AtticPoint, carveAtticPathChain, carveAtticRootPath, carveAtticDisc, RoomSide, setAtticFeature } from './geometry';
+import { seedAtticIslandCache } from './npcs';
+import { atticOwnerWorkName } from './territory';
 export interface AtticServiceIslandPlan {
   owner: TerritoryOwner;
   prefix: string;
