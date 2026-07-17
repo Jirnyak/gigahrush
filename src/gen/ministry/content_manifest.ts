@@ -23,7 +23,7 @@ import { generateMukhozhukAudit } from './mukhozhuk_audit';
 import { generateNiiContrabandAudit } from './nii_contraband_audit';
 import { generateKartotechnikArchive } from './kartotechnik';
 import { generateMatkaDokumentovRoom } from './matka_dokumentov';
-import { runMinistryDesignFloorContent } from '../design_floors/ministry';
+import { runMinistryDesignFloorContent } from './route_papers_slice';
 
 export function runMinistryContent(
   world: World,
