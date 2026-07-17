@@ -2159,6 +2159,11 @@ interface ProceduralSpriteCacheEntry {
 }
 
 let glState: GLState | null = null;
+/** True while WebGL context is lost (iOS Safari memory pressure, tab backgrounding, etc.) */
+export let webglContextLost = false;
+/** Set when context is restored and main.ts should reinitialize WebGL */
+export let webglNeedsReinit = false;
+export function clearWebGLReinitFlag(): void { webglNeedsReinit = false; }
 let activeDynamicSky: DynamicSkyTexture | null = null;
 const visibleEntities: (Entity | null)[] = [];
 const visibleDx: number[] = [];
@@ -3021,6 +3026,22 @@ export function initWebGL(
     console.error('WebGL context creation failed', e);
   }
   if (!gl) throw new Error('WebGL2 not supported');
+
+  // Handle WebGL context loss (iOS Safari memory pressure, GPU reclaim)
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault(); // Allow context restoration
+    console.warn('[WebGL] Context lost — pausing render');
+    webglContextLost = true;
+    glState = null;
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('[WebGL] Context restored — will reinitialize');
+    webglContextLost = false;
+    webglNeedsReinit = true;
+  });
+
+  webglContextLost = false;
+  webglNeedsReinit = false;
 
   // Enable float textures
   const floatExt = gl.getExtension('EXT_color_buffer_float');

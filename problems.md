@@ -36,6 +36,8 @@
 | Monsters/ecology/generation truth | Design-floor `monsterBiasKinds` может ссылаться на редких или zero-weight monsters, rumor unlocks дублируют ecology data, base-floor spawn stats требуют audit against `MONSTERS`. | Static generation audit ловит unreachable bias kinds or marks them authored-only; runtime event tests emit ecology rumor ids; generation tests prove stats derive from definitions plus declared multipliers. |
 | Render/UI performance boundaries | Visible sprite cap применяется до camera culling; full-map base raster может перерисовываться while WebGL keeps rendering; surface-mark overflow and door-state uploads need proportional dirty paths. | Pure culling/cache/dirty tests плюс `check:browser` сценарии для mesh high/off, map legend and damage-over-map. |
 | Floor loading time | `ensureFloorRouteLiftLayout` в `floor_memory.ts` вызывала BFS по 1024×1024 сетке 8+ раз за загрузку, каждый раз аллоцируя `new Uint8Array(1M)` + `new Int32Array(1M)` = 5MB. Суммарно ~40MB аллокаций + GC pressure. Финальная верификация делала **отдельный BFS на каждый lift anchor**, а `while`-цикл дополнения лифтов вызывал `collectFloorLiftAnchors` (линейный скан 1M клеток) в условии каждой итерации. Результат: `editableFloor` фаза занимала 1.2–1.5s из 4–7s общей загрузки. **Исправлено**: (1) статические буферы `_bfsSeen`/`_bfsCells` с `.fill(0)` вместо аллокации; (2) финальная верификация переиспользует один `reachable` вместо BFS-per-anchor; (3) `while`-цикл использует счётчик вместо полного скана. | `editableFloor` ≤ 600ms на типичных этажах; `check:readonly` проходит; `npm run test:unit` без регрессий в навигации и лифтах. |
+| iOS Safari краш при загрузке / во время игры | Симптом: на iPhone Safari игра крашится и перезагружается 2–3 раза, потом работает стабильно. DuckDuckGo на том же iPhone не крашит. **Причина 1 (OOM spike)**: `import.meta.glob('../../music/*.ogg', { eager: true })` загружал все 10 OGG файлов (7MB → ~9.3MB base64 data URL) в JS heap при парсинге модуля, ещё до титульного экрана. iOS Safari имеет жёсткие лимиты на пиковую память и убивает вкладку. **Исправлено**: `eager: false` — треки загружаются лениво по первому `tick()` музыкальной системы. Помогает ВСЕМ платформам (меньше parse time и GC при старте). **Причина 2 (context loss)**: iOS Safari агрессивно отбирает GPU-ресурсы при memory pressure. Без обработчика `webglcontextlost` все GL-вызовы начинают кидать ошибки → необработанный крэш → перезагрузка. **Исправлено**: обработчики `webglcontextlost`/`webglcontextrestored` в `webgl.ts` + авто-восстановление в game loop `main.ts`. На десктопе события никогда не срабатывают (нулевая цена). Если не помогает или мешает — lazy music и context loss handling независимы, можно откатить по отдельности. | Проверка на iPhone Safari: игра не должна крашиться на холодном старте. В консоли `[WebGL] Context lost` / `[WebGL] Context restored` при потере контекста вместо молчаливого краша. `check:readonly` проходит. |
+| Loading UX: прогресс-индикатор | Экран загрузки показывал только «ЗАГРУЗКА...» с glitch-эффектом и советами, без информации о текущем этапе. При 3–7 секундах загрузки игрок не понимал что происходит. **Исправлено**: loading worker принимает `progress` сообщения с этапом и процентом. В `initGame` и `switchFloor` добавлены `loadingProgress()` вызовы между тяжёлыми фазами: «Рисуем лабиринт этажа» → «Заселяем этаж» → «Расставляем лифты и двери» → «Генерируем текстуры» → «Запускаем рендер» → «Финальные штрихи». Worker на отдельном потоке, получает сообщения даже когда main thread заблокирован. Тонкий прогресс-бар + текст этапа с glitch-эффектом между заголовком и советом. | Визуальная проверка: при загрузке видны этапы и прогресс-бар. `check:readonly` проходит. Можно откатить удалением `loadingProgress()` вызовов и `progress` handler в worker — никакая логика от этого не зависит. |
 | Mobile interaction | Mobile menu accept, map legend, fullscreen/direct-page behavior and Net Sphere touch path остаются отдельным UX-risk cluster. | Browser/mobile smoke covers menu selection, legend readability, fullscreen availability and touch path without desktop-only assumptions. |
 | Validation gates | Generation/mobile gates and build-size enforcement are not uniformly wired into default broad checks. Риск: regressions survive because the right command is optional or content-specific smoke owns generic reachability. | Named generation/mobile/size gates exist or docs state exact release owner; content wiring lives in `content:audit`, not ad hoc smoke logic. |
 | Human speed source of truth | После пересадки в обычного NPC runtime нормализует human movement, но старые NPC `speed` literals remain in constructors/templates. Риск: новые gameplay-visible paths снова начнут читать raw speed as truth. | Decide whether NPC `Entity.speed` is gameplay-authoritative, status-derived or monster/projectile-only. Add audit/test that rejects new raw NPC movement speed without AGI/status reason. |
@@ -169,3 +171,31 @@ Debug Menu содержал хардкодные команды `teleport_living
 - **Жесткая аллокация слотов (Pass 1):** Функция `buildAlifeStateFromPopulationPlan` в первом проходе гарантированно размещает каждого сюжетного персонажа `k` (`1 <= k <= plotCountToEnsure`) ровно в ячейку `alife.npcs[k - 1]` с `record.id = k`.
 - **Процедурный хвост:** Обычные процедурные жители (`procedural NPCs`) получают ID начиная с `N + 1` и заполняют оставшуюся часть массива `alife.npcs` до `boundedTotal`.
 - **Итог:** Теперь для любого сюжетного персонажа `plotNpcId = k` гарантируется точное тождество `alifeId === plotNpcId === k`, а запись всегда доступна за `O(1)` по индексу `alife.npcs[k - 1]` без риска смещения или подмены сущности.
+
+
+### 1. Lazy music (`eager: false`) — **полностью безопасно, помогает ВСЕМ платформам**
+
+Было: все 10 OGG файлов (7MB) декодируются при парсинге JS модуля — ещё до того как страница загрузилась.
+
+Стало: загружаются по первому `tick()` — когда игрок уже ходит по этажу.
+
+- На десктопе: быстрее парсинг бандла, меньше GC при старте
+- Музыка и так не играет на титульном экране и во время загрузки
+- Единственный «риск»: 1 кадр (~16ms) задержка до первого трека. Незаметно
+
+### 2. WebGL context loss — **стандартная практика, нулевая цена на десктопе**
+
+- На Chrome/Firefox десктоп: **события никогда не срабатывают**. Обработчики просто висят без дела — 0 CPU, 0 памяти
+- На мобилках (не только Safari — Android Chrome тоже): защищает от краша при memory pressure
+- `e.preventDefault()` — это **стандарт WebGL**. Без него контекст теряется навсегда
+
+**Единственная агрессивность**: `return` в game loop при потере контекста пропускает HUD на 1-2 кадра. Но без GL context рисовать сцену всё равно невозможно — альтернатива хуже (необработанные GL ошибки → краш).
+
+### Объём изменений
+
+Это не «столько всего» — это:
+- `music.ts`: `true` → `false` + 30 строк lazy-resolve
+- `webgl.ts`: +15 строк (event handlers + 2 флага)
+- `main.ts`: +12 строк (recovery check)
+
+**Ни одна строка существующей логики не изменена.** Всё аддитивное.

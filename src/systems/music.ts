@@ -5,8 +5,9 @@ import { audioSuspended } from './audio.js';
 import { masterAudioEnabled, musicVolume } from './ui_orchestrator.js';
 import { mathRng } from '../core/rand.js';
 
-// Import all .ogg files from the music folder. Vite will bundle them (as base64 via viteSingleFile or as static assets).
-const musicFiles = import.meta.glob('../../music/*.ogg', { eager: true, as: 'url' });
+// Import all .ogg files from the music folder lazily — avoids ~9MB base64 memory spike at startup
+// that crashes iOS Safari tabs. Tracks are resolved on first use (when music actually plays).
+const musicFiles = import.meta.glob('../../music/*.ogg', { eager: false, query: '?url', import: 'default' });
 
 export type MusicContext = 'safezone' | 'fight' | 'ambient';
 
@@ -20,13 +21,45 @@ class MusicSystem {
   private readonly fadeDuration = 2.0; // 2 seconds crossfade
 
   private tracks: Record<string, string> = {};
+  private trackLoaders: Record<string, () => Promise<unknown>> = {};
+  private tracksLoaded = false;
 
   constructor() {
-    for (const [path, url] of Object.entries(musicFiles)) {
+    // Register lazy loaders — no data loaded yet
+    for (const [path, loader] of Object.entries(musicFiles)) {
       const name = path.split('/').pop()?.replace('.ogg', '');
       if (name) {
-        this.tracks[name] = url as string;
+        this.trackLoaders[name] = loader as () => Promise<unknown>;
       }
+    }
+  }
+
+  /** Resolve a track URL lazily. Returns null if not yet loaded. */
+  private resolveTrack(name: string): string | null {
+    if (this.tracks[name]) return this.tracks[name];
+    if (!this.trackLoaders[name]) return null;
+    // Start loading in background — will be available next tick
+    const loader = this.trackLoaders[name];
+    loader().then((result: unknown) => {
+      // Vite `as: 'url'` returns either a bare string or { default: string }
+      const url = typeof result === 'string' ? result : (result as { default: string })?.default;
+      if (url) this.tracks[name] = url;
+    }).catch(() => {});
+    return null;
+  }
+
+  /** Ensure all tracks for a context are pre-resolved */
+  private ensureTracksForContext(context: MusicContext): void {
+    if (this.tracksLoaded) return;
+    const prefix = context === 'fight' ? 'fightsong' : context === 'ambient' ? 'ambientsong' : 'safezone';
+    for (const name of Object.keys(this.trackLoaders)) {
+      if (name.startsWith(prefix) && !this.tracks[name]) {
+        this.resolveTrack(name);
+      }
+    }
+    // Mark loaded once all loaders have been triggered at least once
+    if (Object.keys(this.tracks).length >= Object.keys(this.trackLoaders).length) {
+      this.tracksLoaded = true;
     }
   }
 
@@ -87,6 +120,10 @@ class MusicSystem {
         newContext = 'fight';
       }
     }
+
+    // Pre-resolve tracks for current and fight context (fight can start suddenly)
+    this.ensureTracksForContext(newContext);
+    if (newContext !== 'fight') this.ensureTracksForContext('fight');
 
     // Crossfade logic
     const masterVolume = (audioSuspended() || state.trailerMode || !masterAudioEnabled()) ? 0 : 0.4 * musicVolume();

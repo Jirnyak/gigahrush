@@ -63,6 +63,7 @@ import { Spr, monsterSpr } from './render/sprite_index';
 import {
   SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData,
   disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
+  webglContextLost, webglNeedsReinit, clearWebGLReinitFlag,
 } from './render/webgl';
 import { drawHUD, drawPointerCaptureGate } from './render/hud';
 import { drawFeedbackMenu } from './render/feedback_ui';
@@ -9968,6 +9969,24 @@ function gameLoop(now: number): void {
   updateGeneratedDynamicSky(dt);
   musicSystem.tick(world, entities, renderActor, state, dt);
   updateDynamicData(world, camX, camY);
+
+  // Auto-recover from WebGL context loss (iOS Safari memory pressure)
+  if (webglContextLost) {
+    // Context still lost — skip render, game logic continues
+    return;
+  }
+  if (webglNeedsReinit) {
+    // Context was restored by the browser — reinitialize everything
+    try {
+      initWebGL(canvas, textures, sprites, world);
+      finishLoadedFloorVisuals();
+      clearWebGLReinitFlag();
+      console.warn('[WebGL] Successfully reinitialized after context loss');
+    } catch (e) {
+      console.error('[WebGL] Reinit failed, will retry next frame', e);
+      return;
+    }
+  }
 
   // WebGL raycaster + sprites
   const floorRunEntry = currentFloorRunEntry(state);
