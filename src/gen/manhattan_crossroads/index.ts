@@ -40,7 +40,7 @@ import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom, placeLifts
 import type { FloorGeneration } from '../floor_manifest';
 import { finalizeExpandedFloor} from '../shared';
 import { designFloorById } from '../../data/design_floors';
-import { applyDesignFloorPopulationField } from './population';
+import { applyDesignFloorPopulationField } from '../design_floors/population';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('manhattan_crossroads');
 
