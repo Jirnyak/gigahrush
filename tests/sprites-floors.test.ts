@@ -23,7 +23,12 @@ import {
 import { generateSprites } from '../src/render/sprites';
 import { generateTextures } from '../src/render/textures';
 import { rebuildWorld } from '../src/systems/samosbor';
+import { getPlotNpcStringId } from '../src/data/npc_packages';
 import { testGenerationMatrix } from './generator_helpers';
+
+function getEntityPlotId(e: Entity): string | undefined {
+  return e.alifeId !== undefined ? getPlotNpcStringId(e.alifeId) : (e as any).plotNpcId;
+}
 
 const cachedFloors = new Map<string, ReturnType<typeof generateFloor>>();
 let cachedFloor69: ReturnType<typeof generateDesignFloor> | undefined;
@@ -406,8 +411,8 @@ testGenerationMatrix('all floor generators return playable spawn cells and live 
 testGenerationMatrix('living generation places AG89 Istotit supply cache quest content', () => {
   const generated = floorForRead(0);
   const plotNpcIds = new Set(generated.entities
-    .filter(e => e.type === EntityType.NPC && e.plotNpcId)
-    .map(e => e.plotNpcId));
+    .filter(e => e.type === EntityType.NPC && getEntityPlotId(e))
+    .map(e => getEntityPlotId(e)!));
 
   assert.equal(generated.world.rooms.some(room => room?.name === 'Общий свечной запас'), true);
   for (const id of ['ag89_agafa_svechnaya', 'ag89_savva_guard', 'ag89_markel_report', 'ag89_lida_barter']) {
@@ -418,8 +423,8 @@ testGenerationMatrix('living generation places AG89 Istotit supply cache quest c
 testGenerationMatrix('living plot NPCs spawn with authored survivability and levels', () => {
   const generated = floorForRead(0);
   const byPlotNpcId = new Map(generated.entities
-    .filter(e => e.type === EntityType.NPC && e.plotNpcId)
-    .map(e => [e.plotNpcId, e]));
+    .filter(e => e.type === EntityType.NPC && getEntityPlotId(e))
+    .map(e => [getEntityPlotId(e)!, e]));
   const yakov = byPlotNpcId.get('yakov');
   const vanka = byPlotNpcId.get('vanka');
 
@@ -640,7 +645,7 @@ testGenerationMatrix('non-living samosbor rebuild replaces stale generated actor
     },
   );
 
-  rebuildWorld(generated.world, entities, { v: 10000 }, 1, 'maintenance');
+  rebuildWorld(generated.world, entities, { v: 10000 }, 1, -26);
 
   const player = entities.find(e => e.id === 9001);
   assert.ok(player);

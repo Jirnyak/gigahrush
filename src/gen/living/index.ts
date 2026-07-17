@@ -152,7 +152,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
     const monsterCount = Math.floor(activeActorCountAtDefaultSoftLimit(baseMonsterPopulationAtDefaultSoftLimit(0)));
     const monsterCells = sampleNaturalPopulationCells(world, monsterCount, livingMonsterProfile, 0x1234);
     for (const cell of monsterCells) {
-      const kind = chooseFloorMonsterKind({ z: 100, rng });
+      const kind = chooseFloorMonsterKind({ z: 0, rng });
       const m = MONSTERS[kind];
       if (!m) continue;
       const hp = scaleMonsterHp(m.hp, 5); // Base level 5

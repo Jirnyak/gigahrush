@@ -2685,12 +2685,12 @@ function preserveSamosborFogAfterRebuild(world: World, previousFog: Uint8Array):
 
 export function rebuildWorld(
   world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
-  z: number = 3,
+  z: number = 0,
   replacement?: FloorGeneration,
   isTutorial?: boolean,
 ): void {
   clearHermodoorBorerForRebuild(world);
-  if (replacement || z !== 3) {
+  if (replacement || z !== 0) {
     // Non-living floors fully regenerate; generated NPCs/monsters are replaced, player survives.
     const kept: Entity[] = [];
     for (const e of entities) {

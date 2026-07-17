@@ -589,15 +589,18 @@ function pickWeighted<T>(
   defs: readonly T[],
   rng: () => number,
   weightOf: (def: T) => number,
+  fallback?: T,
 ): T {
+  if (defs.length === 0) return fallback ?? ({} as T);
   let total = 0;
   for (const def of defs) total += Math.max(0, weightOf(def));
+  if (total <= 0) return defs[0] ?? fallback ?? ({} as T);
   let roll = rng() * total;
   for (const def of defs) {
     roll -= Math.max(0, weightOf(def));
     if (roll <= 0) return def;
   }
-  return defs[defs.length - 1];
+  return defs[defs.length - 1] ?? fallback ?? ({} as T);
 }
 
 function uniquePicks<T>(pool: readonly T[], rng: () => number, count: number): T[] {
@@ -704,18 +707,21 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
       if (profileZ > 0 && def.themeTags.includes('maintenance')) w *= 1.6;
       return w;
     },
+    FLOOR_GEOMETRIES[0],
   );
-  const baseDangerScore = routeDangerScore(profileZ) + geometry.dangerBias * 0.55 + rng() - 0.5;
+  const baseDangerScore = routeDangerScore(profileZ) + (geometry?.dangerBias ?? 0) * 0.55 + rng() - 0.5;
   const earlyDanger = clampDanger(baseDangerScore);
   const majority = pickWeighted(
     FLOOR_MAJORITY_FACTIONS.filter(def => (def.minDanger ?? 1) <= earlyDanger),
     rng,
     def => def.weight * (earlyDanger >= 4 && def.id === 'cultists' ? 2.2 : 1),
+    FLOOR_MAJORITY_FACTIONS[0],
   );
   const anomaly = pickWeighted(
     FLOOR_ANOMALIES.filter(def => def.minDanger <= earlyDanger),
     rng,
     def => def.weight * (earlyDanger >= 4 && def.id !== 'none' ? 1.35 : 1),
+    FLOOR_ANOMALIES[0],
   );
   const danger = clampDanger(baseDangerScore + anomalyDangerPressure(anomaly));
   const tags = [...geometry.tags, ...majority.tags, ...anomaly.tags];

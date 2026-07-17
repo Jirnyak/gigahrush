@@ -15,8 +15,6 @@ import {
   floorRunZAllowsNpcs,
   makeProceduralFloorSpec,
   type ProceduralFloorSpec,
-  storyFloorAtZ,
-  zForStoryFloor,
 } from '../src/data/procedural_floors';
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
@@ -744,22 +742,14 @@ test('objective route HUD and lift prompts point down to lower route targets', (
 });
 
 test('floor run keeps authored stops on expandable even route slots', () => {
-  const anchors = [
-    zForStoryFloor('ministry'),
-    zForStoryFloor('kvartiry'),
-    zForStoryFloor('living'),
-    zForStoryFloor('maintenance'),
-    zForStoryFloor('hell'),
-    zForStoryFloor('void'),
-    ...DESIGN_FLOOR_ROUTES.map(def => def.z),
-  ].sort((a, b) => a - b);
+  const anchors = [...new Set(DESIGN_FLOOR_ROUTES.map(def => def.z))].sort((a, b) => a - b);
 
   assert.equal(anchors[0], FLOOR_RUN_MIN_Z);
   assert.equal(anchors.at(-1), FLOOR_RUN_MAX_Z);
   assert.equal(new Set(anchors).size, anchors.length);
   assert.equal(anchors.every(z => z % 2 === 0), true);
   assert.equal(PROCEDURAL_FLOOR_ZS.every(z => !anchors.includes(z)), true);
-  assert.equal(PROCEDURAL_FLOOR_ZS.some(z => z % 2 === 0), true);
+  assert.equal(PROCEDURAL_FLOOR_ZS.some(z => z % 2 === 0), false);
   assert.equal(PROCEDURAL_FLOOR_ZS.length >= 50 && PROCEDURAL_FLOOR_ZS.length <= 60, true);
 });
 
@@ -900,14 +890,9 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
 
 function expectedProceduralFloorCount(): number {
   const occupied = new Set(DESIGN_FLOOR_ROUTES.map(route => route.z));
-  for (const floor of [
-    'ministry'.KVARTIRY.LIVING.MAINTENANCE.HELL.VOID,
-  ]) {
-    occupied.add(zForStoryFloor(floor));
-  }
   let count = 0;
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
-    if (!occupied.has(z)) count++;
+    if (!occupied.has(z) && Math.abs(z % 2) === 1) count++;
   }
   return count;
 }
@@ -6528,21 +6513,6 @@ testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient 
   assert.equal(getRecentEvents(state, { tags: ['infection_cap'] }).length, 1);
 });
 
-test('storyFloorAtZ returns correct number or undefined', () => {
-  // Known story floors
-  assert.equal(storyFloorAtZ(30));
-  assert.equal(storyFloorAtZ(14));
-  assert.equal(storyFloorAtZ(0));
-  assert.equal(storyFloorAtZ(-26));
-  assert.equal(storyFloorAtZ(-36));
-  assert.equal(storyFloorAtZ(FLOOR_RUN_VOID_Z));
-
-  // Z values that are not story floors
-  assert.equal(storyFloorAtZ(100), undefined);
-  assert.equal(storyFloorAtZ(1), undefined);
-  assert.equal(storyFloorAtZ(-1), undefined);
-  assert.equal(storyFloorAtZ(-51), undefined);
-});
 
 test('Floor density should be greater than 40% after refactoring', () => {
   const spec = makeProceduralFloorSpec(12345, 0); // floor 0

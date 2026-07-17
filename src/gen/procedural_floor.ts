@@ -1014,7 +1014,8 @@ function applyWorkshopClusterRooms(world: World, rooms: Room[], spec: Procedural
     const localTarget = 5 + (seed % 5);
     let localPlaced = 0;
     for (let i = 0; i < supportTypes.length && localPlaced < localTarget && microRooms < WORKSHOP_MICRO_ROOM_TARGET; i++) {
-      const type = supportTypes[(i + clusters + spec.danger) % supportTypes.length];
+      const idx = ((i + clusters + spec.danger) % supportTypes.length + supportTypes.length) % supportTypes.length;
+      const type = supportTypes[idx];
       const size = workshopMicroRoomSize(type, seed + i * 97);
       const room = tryPlaceWorkshopSupportRoom(world, rooms, spec, nextRoomId, hub, type, size, clusters + 1, i, seed);
       if (!room) continue;
