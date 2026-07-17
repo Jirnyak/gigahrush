@@ -362,6 +362,7 @@ import {
   ensureFloorRunState,
   floorRunArrivalLead,
   floorRunEntryDanger,
+  floorRunEntryForDesignFloor,
   floorRunEntryForFloorKey,
   floorRunEntryForZ,
   floorRunSaveHasRestorableRoute,
@@ -562,9 +563,11 @@ import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data
 import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera, startCinematicCamera } from './systems/camera';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
 import { randomTip } from './data/tips';
+import { drawLoadingScreen } from './render/loading_screen';
 import {
   PROCEDURAL_FLOOR_ZS,
   FLOOR_RUN_VOID_Z,
+  makeProceduralFloorSpec,
   proceduralFloorKey,
   type FloorAnomalyId,
   type ProceduralFloorSpec,
@@ -609,6 +612,7 @@ const ctx = hudCanvas.getContext('2d')!;
 const loadingCanvas = document.getElementById('loadingCanvas') as HTMLCanvasElement | null;
 let loadingWorker: Worker | null = null;
 let loadingWorkerAck = false;
+let isFirstBootLoading = true;
 if (loadingCanvas && typeof loadingCanvas.transferControlToOffscreen === 'function') {
   const offscreen = loadingCanvas.transferControlToOffscreen();
   loadingWorker = new Worker(new URL('./loading_worker.ts', import.meta.url), { type: 'module' });
@@ -3151,35 +3155,7 @@ function prepareEditableFloor(mirror?: FloorRouteLiftMirror, normalizeRouteLifts
 function drawLoading(): void {
   setCanvasTextGlitchPressure();
   currentTip = randomTip();
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-  ctx.fillStyle = '#aaa';
-  ctx.font = `${Math.round(hudCanvas.height / 20)}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.fillText('ЗАГРУЗКА...', hudCanvas.width / 2, hudCanvas.height / 2);
-  const tipSize = Math.max(14, Math.round(hudCanvas.height / 40));
-  ctx.font = `${tipSize}px monospace`;
-  ctx.fillStyle = '#777';
-  const maxW = hudCanvas.width * 0.85;
-  const words = currentTip.split(' ');
-  const lines: string[] = [];
-  let line = words[0];
-  for (let i = 1; i < words.length; i++) {
-    const test = line + ' ' + words[i];
-    if (ctx.measureText(test).width > maxW) {
-      lines.push(line);
-      line = words[i];
-    } else {
-      line = test;
-    }
-  }
-  lines.push(line);
-  const lineH = tipSize * 1.3;
-  const startY = hudCanvas.height / 2 + Math.round(hudCanvas.height / 12);
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], hudCanvas.width / 2, startY + i * lineH);
-  }
-  ctx.textAlign = 'left';
+  drawLoadingScreen(ctx, hudCanvas.width, hudCanvas.height, performance.now(), isFirstBootLoading, '', 0, 0, currentTip);
 }
 
 function scheduleLoading(fn: () => void): void {
@@ -5157,11 +5133,10 @@ function currentFloorMemoryKey(): string {
   return floorRunEntryFloorKey(currentFloorRunEntry(state));
 }
 
-function floorMemoryKeyForTarget(z: number, entry: FloorRunEntry | null | undefined): string {
+function floorMemoryKeyForTarget(z: number | readonly string[], entry: FloorRunEntry | null | undefined): string {
   const active = getActiveFloorInstance(state);
-  // @ts-ignore
   if (!entry && active?.worldKey && active.themeTags === z) return active.worldKey;
-  return entry ? floorRunEntryFloorKey(entry) : floorMemoryKeyForStoryFloor(z);
+  return entry ? floorRunEntryFloorKey(entry) : floorMemoryKeyForStoryFloor(typeof z === 'number' ? z : 0);
 }
 
 function captureCurrentFloorMemory(): void {
@@ -5190,23 +5165,23 @@ function captureFloorMemoryByKey(key: string): void {
   );
 }
 
-function generateFloorForTarget(z: number, entry: FloorRunEntry | null | undefined): FloorGeneration {
+function generateFloorForTarget(z: number | readonly string[], entry: FloorRunEntry | null | undefined): FloorGeneration {
   const gen = generateFloorForTargetInner(z, entry);
   injectFastElevators(gen.world);
   stampCeilingHeights(gen.world);
   return gen;
 }
 
-function generateFloorForTargetInner(z: number, entry: FloorRunEntry | null | undefined): FloorGeneration {
+function generateFloorForTargetInner(z: number | readonly string[], entry: FloorRunEntry | null | undefined): FloorGeneration {
   const activeInstance = getActiveFloorInstance(state);
-  // @ts-ignore
   if (!entry && activeInstance?.themeTags === z) {
     return generateFloorInstance(activeInstance.id, ensureFloorRunState(state).runSeed, activeInstance.seed);
   }
   if (entry?.spec) return generateProceduralFloor(entry.spec);
   const runSeed = ensureFloorRunState(state).runSeed;
   if (entry?.designFloorId) return generateDesignFloor(entry.designFloorId, runSeed);
-  return generateFloor(z, runSeed, state.tutorialMode);
+  const targetZ = typeof z === 'number' ? z : (entry?.z ?? 0);
+  return generateFloor(targetZ, runSeed, state.tutorialMode);
 }
 
 function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown> | undefined {
@@ -5227,8 +5202,7 @@ function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown>
   return hasExtras ? extras : undefined;
 }
 
-function loadFloorForTarget(z: readonly string[], entry: FloorRunEntry | null | undefined): FloorMemoryLoad {
-  // @ts-ignore
+function loadFloorForTarget(z: number | readonly string[], entry: FloorRunEntry | null | undefined): FloorMemoryLoad {
   const memoryKey = floorMemoryKeyForTarget(z, entry);
   const restored = takeFloorMemory(memoryKey);
   if (restored) {
@@ -5242,7 +5216,6 @@ function loadFloorForTarget(z: readonly string[], entry: FloorRunEntry | null | 
   }
   return {
     fromMemory: false,
-    // @ts-ignore
     generation: generateFloorForTarget(z, entry),
   };
 }
@@ -5257,16 +5230,18 @@ function switchFloor(
   overrideArrivalColor?: string,
   allowElevatorAnomaly = true,
   targetZ?: number,
+  targetEntry?: FloorRunEntry | null,
+  spawnAtDefault = false,
 ): void {
   closeCraftMenu();
   restorePlayerBeforeWorldBoundary();
   const fromFloor = state.currentZ;
   captureCurrentAlifeFloor();
   const departingMemoryKey = currentFloorMemoryKey();
-  // Fast elevator: jump straight to an arbitrary route floor, bypassing the
-  // single-step route resolution and elevator anomaly machinery.
-  const directTargetEntry = targetZ !== undefined ? floorRunEntryForZ(state, targetZ) : null;
-  if (targetZ !== undefined && !directTargetEntry) return;
+  // Fast elevator / debug teleport: jump straight to an arbitrary route floor,
+  // bypassing single-step route resolution and elevator anomaly machinery.
+  const directTargetEntry = targetEntry ?? (targetZ !== undefined ? floorRunEntryForZ(state, targetZ) : null);
+  if ((targetZ !== undefined || targetEntry !== undefined) && !directTargetEntry) return;
   const fastTravel = directTargetEntry !== null;
   let nextFloor: number;
   const activeFloorInstance = (allowElevatorAnomaly && !fastTravel) ? getActiveFloorInstance(state) : null;
@@ -5336,7 +5311,7 @@ function switchFloor(
     loadingProgress('Рисуем лабиринт этажа', 5);
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
-    const loaded = loadFloorForTarget(["living"], generatedRunEntry);
+    const loaded = loadFloorForTarget(nextFloor, generatedRunEntry);
     const gen = loaded.generation;
 
     world = replaceWorldFromGeneration(null, gen);
@@ -5359,7 +5334,12 @@ function switchFloor(
         mirror: routeLiftMirror,
       });
     }
-    const spawn = safeSpawnNear(savedX, savedY, gen.spawnX, gen.spawnY);
+    const spawn = safeSpawnNear(
+      spawnAtDefault ? gen.spawnX : savedX,
+      spawnAtDefault ? gen.spawnY : savedY,
+      gen.spawnX,
+      gen.spawnY,
+    );
     player = {
       id: nextEntityId.v++,
       type: EntityType.NPC,
@@ -5523,178 +5503,36 @@ function switchFloor(
   });
 }
 
-interface DebugTeleportTarget {
-  // @ts-ignore
-  z: number;
-  label: string;
-  color: string;
-  // @ts-ignore
-  z?: number;
-  designFloorId?: DesignFloorId;
-  spec?: ProceduralFloorSpec;
-}
-
 function formatFloorZ(z: number): string {
   return z > 0 ? `+${z}` : `${z}`;
 }
 
-function debugTeleportTo(target: DebugTeleportTarget): void {
-  restorePlayerBeforeWorldBoundary();
-  const fromFloor = state.currentZ;
-  captureCurrentAlifeFloor();
-  const savedInventory = player.inventory ? [...player.inventory] : [];
-  const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
-  const savedHp = player.hp ?? 100;
-  const savedMaxHp = player.maxHp ?? 100;
-  const savedWeapon = player.weapon ?? '';
-  const savedTool = player.tool ?? '';
-  const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
-  const savedStatuses = player.statuses ? [...player.statuses] : undefined;
-  const savedMoney = player.money ?? 100;
-  const savedAngle = player.angle;
-  captureCurrentFloorMemory();
-
+function debugTeleportTo(
+  targetEntry: FloorRunEntry,
+  overrideArrivalText?: string,
+  overrideArrivalColor?: string,
+): void {
   state.showDebug = false;
-  const targetZ = target.spec ? target.spec.z : (target.designFloorId && target.z !== undefined ? target.z : zForBaseFloor(target.z));
-  state.currentZ = targetZ;
-  clearPseudoliftActive(state, entities);
-  if (target.z === 200) setVoidEntryFromFloor(state, fromFloor);
-  else setVoidEntryFromFloor(state, undefined);
-  if (target.spec) {
-    const run = ensureFloorRunState(state, targetZ);
-    run.currentZ = target.spec.z;
-    run.visited[floorRunEntryFloorKey(currentFloorRunEntry(state))] = true;
-  } else if (target.designFloorId && target.z !== undefined) {
-    const run = ensureFloorRunState(state, targetZ);
-    run.currentZ = target.z;
-  } else {
-    forceFloorRunStory(state, target.z);
-  }
-  const floorInstances = ensureFloorInstanceState(state, target.z);
-  floorInstances.current = null;
-  floorInstances.lastStableFloor = target.z;
-
-  scheduleLoading(() => {
-    resetGeneratedFloorPopulationState();
-    const targetEntry = target.spec || target.designFloorId
-      ? currentFloorRunEntry(state)
-      : null;
-    // @ts-ignore
-    const loaded = loadFloorForTarget(target.themeTags, targetEntry);
-    const gen = loaded.generation;
-
-    world = replaceWorldFromGeneration(null, gen);
-    entities = gen.entities;
-    let __maxId = 0;
-    for (let i = 0; i < entities.length; i++) {
-      const id = entities[i].id;
-      if (id > __maxId) __maxId = id;
-    }
-    nextEntityId.v = __maxId + 1;
-    materializeCurrentAlifeFloor();
-
-    player = {
-      id: nextEntityId.v++,
-      type: EntityType.NPC,
-      x: gen.spawnX,
-      y: gen.spawnY,
-      angle: savedAngle,
-      pitch: 0,
-      alive: true,
-      speed: HUMANOID_BASE_MOVE_SPEED,
-      sprite: 0,
-      needs: savedNeeds,
-      hp: savedHp,
-      maxHp: savedMaxHp,
-      inventory: savedInventory,
-      weapon: savedWeapon,
-      tool: savedTool,
-      money: savedMoney,
-      rpg: savedRpg,
-      statuses: savedStatuses,
-      name: playerDisplayName(),
-      faction: Faction.PLAYER,
-      ...playerAlifeFields(player),
-    };
-    entities.push(player);
-    applyContractFloorHooks(state, world, entities, nextEntityId, player);
-    syncPlayerRuntimeBaselines();
-
-    initFactionRelations();
-    initFactionControl(world);
-    ensureProceduralSpriteSeeds(entities);
-    state.samosborTimer = nextFloorRunSamosborCooldown(state);
-    state.samosborActive = false;
-    floorTeleportCd = 0;
-    resetPsiState();
-    clearLiftArachnaActive(state);
-
-    state.msgs.push(msg(`[DEBUG] Телепорт: ${target.label}`, state.time, target.color));
-    const transitionTags = ['floor', 'floor_transition', 'debug', target.spec ? 'procedural' : target.designFloorId ? 'design_floor' : 'design'];
-    const tagsToAdd = proceduralAnomalyEventTags(target.spec);
-    if (tagsToAdd.length > 0) {
-      const tagSet = new Set(transitionTags);
-      for (const tag of tagsToAdd) {
-        if (!tagSet.has(tag)) {
-          tagSet.add(tag);
-          transitionTags.push(tag);
-        }
-      }
-    }
-    const anomalyData = proceduralAnomalyEventData(target.spec);
-    publishEvent(state, {
-      type: 'floor_transition',
-      zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
-      x: player.x,
-      y: player.y,
-      actorId: player.id,
-      actorName: player.name,
-      actorFaction: player.faction,
-      severity: 3,
-      privacy: 'local',
-      tags: transitionTags,
-      data: {
-        fromFloor,
-        toFloor: target.z,
-        debugTeleport: true,
-        floorZ: target.spec?.z ?? target.z,
-        designFloor: target.designFloorId,
-        proceduralFloor: target.spec?.key,
-        proceduralSeed: target.spec?.seed,
-        proceduralDanger: target.spec?.danger,
-        ...anomalyData,
-      },
-    });
-
-    if (!target.spec && !target.designFloorId && target.z === 180) {
-      onHellArrival(player, state);
-      tryCreateVoiceQuest(world, entities, state);
-    }
-    if (!target.spec && !target.designFloorId && target.z === 200) onVoidEntry(state);
-
-    ensureRoomContainers(world, state.currentZ);
-    ensureProductionRooms(state, world);
-    prepareEditableFloor();
-    resetMapForLoadedFloor(loaded);
-    updateMapExploration(world, player, state);
-    ensureProceduralSpriteSeeds(entities);
-    restoreVoidReturnPortalForCurrentWorld();
-    applyDesignRouteGates(world, player, state);
-    finishLoadedFloorVisuals(gen);
-  });
+  const direction = targetEntry.z < state.currentZ ? LiftDirection.DOWN : LiftDirection.UP;
+  const text = overrideArrivalText ?? `[DEBUG] Телепорт: ${targetEntry.label}`;
+  const color = overrideArrivalColor ?? targetEntry.color;
+  switchFloor(direction, text, color, false, targetEntry.z, targetEntry, true);
 }
 
 function debugTeleportToRandomProceduralFloor(): void {
   const run = ensureFloorRunState(state);
   const z = PROCEDURAL_FLOOR_ZS[Math.floor(rng() * PROCEDURAL_FLOOR_ZS.length)];
-  const spec = run.specs[proceduralFloorKey(z)];
-  debugTeleportTo({
-    // @ts-ignore
-    z: spec.themeTags,
+  const spec: ProceduralFloorSpec = run.specs[proceduralFloorKey(z)] ?? makeProceduralFloorSpec(run.runSeed, z);
+  run.specs[spec.key] = spec;
+  const entry: FloorRunEntry = {
+    z,
+    themeTags: spec.themeTags,
+    spec,
+    procedural: true,
     label: `Этаж ${formatFloorZ(z)}: ${spec.title}`,
     color: spec.anomalyId === 'none' ? '#8cf' : '#c8f',
-    spec,
-  });
+  };
+  debugTeleportTo(entry);
 }
 
 function debugTeleportToProceduralAnomaly(anomalyId: FloorAnomalyId): void {
@@ -5703,13 +5541,15 @@ function debugTeleportToProceduralAnomaly(anomalyId: FloorAnomalyId): void {
     state.msgs.push(msg(`[DEBUG] Нет процедурного этажа для аномалии ${anomalyId}`, state.time, '#f84'));
     return;
   }
-  debugTeleportTo({
-    // @ts-ignore
-    z: spec.themeTags,
+  const entry: FloorRunEntry = {
+    z: spec.z,
+    themeTags: spec.themeTags,
+    spec,
+    procedural: true,
     label: `Этаж ${formatFloorZ(spec.z)}: ${spec.title}`,
     color: '#c8f',
-    spec,
-  });
+  };
+  debugTeleportTo(entry);
 }
 
 function handleDebugCommandAction(action: DebugCommandAction): void {
@@ -5721,14 +5561,19 @@ function handleDebugCommandAction(action: DebugCommandAction): void {
     case 'teleport_procedural_anomaly':
       debugTeleportToProceduralAnomaly(action.anomalyId);
       break;
-    case 'teleport_design_floor':
-      debugTeleportTo({
+    case 'teleport_design_floor': {
+      const designFloorId: DesignFloorId = action.id;
+      const entry = floorRunEntryForDesignFloor(state, designFloorId) ?? {
         z: action.z,
+        themeTags: action.themeTags,
+        designFloorId,
+        procedural: false,
         label: `Этаж ${formatFloorZ(action.z)}: ${action.label}`,
         color: action.color,
-        designFloorId: action.id,
-      });
+      };
+      debugTeleportTo(entry, `[DEBUG] Телепорт: Этаж ${formatFloorZ(action.z)}: ${action.label}`, action.color);
       break;
+    }
     case 'refresh_world_data':
       updateWorldData(world);
       break;
@@ -9328,7 +9173,7 @@ function gameLoop(now: number): void {
       if (loadingCanvas) loadingCanvas.style.display = 'block';
       drawLoading(); // Always draw once synchronously to prevent initial white/black flash
       if (loadingWorker) {
-        loadingWorker.postMessage({ type: 'start' });
+        loadingWorker.postMessage({ type: 'start', isFirstLoad: isFirstBootLoading });
         loadingWorkerAck = false;
       } else {
         loadingWorkerAck = true;
@@ -9375,6 +9220,7 @@ function gameLoop(now: number): void {
         if (loadingCanvas) {
           loadingCanvas.style.display = 'none';
         }
+        isFirstBootLoading = false;
         lastTime = performance.now(); // reset dt so we don't get a huge spike
         requestAnimationFrame(gameLoop);
       });
@@ -9389,6 +9235,7 @@ function gameLoop(now: number): void {
     if (loadingCanvas) {
       loadingCanvas.style.display = 'none';
     }
+    isFirstBootLoading = false;
     lastTime = performance.now(); // reset dt so we don't get a huge spike
     requestAnimationFrame(gameLoop);
     return;
