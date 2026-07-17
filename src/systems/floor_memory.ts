@@ -879,9 +879,17 @@ function routeLiftWalkable(world: World, idx: number): boolean {
   return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
 }
 
+// Static buffers for BFS reachability — avoids allocating 5MB per call (8+ calls during lift layout)
+let _bfsSeen: Uint8Array | null = null;
+let _bfsCells: Int32Array | null = null;
+
 function collectReachableRouteCells(world: World, startIdx: number): { cells: Int32Array; count: number; seen: Uint8Array } {
-  const seen = new Uint8Array(W * W);
-  const cells = new Int32Array(W * W);
+  const n = W * W;
+  if (!_bfsSeen || _bfsSeen.length !== n) _bfsSeen = new Uint8Array(n);
+  if (!_bfsCells || _bfsCells.length !== n) _bfsCells = new Int32Array(n);
+  const seen = _bfsSeen;
+  const cells = _bfsCells;
+  seen.fill(0);
   if (startIdx < 0 || !routeLiftWalkable(world, startIdx)) return { cells, count: 0, seen };
 
   let head = 0;
@@ -1434,16 +1442,22 @@ export function ensureFloorRouteLiftLayout(
     }
 
     reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
-    while (collectFloorLiftAnchors(world, direction).length < targetCount) {
+    let currentAnchorCount = collectFloorLiftAnchors(world, direction).length;
+    while (currentAnchorCount < targetCount) {
       if (!fillRouteLift(world, reachable, direction, floorTex, spawnX, spawnY, blockedIdx)) break;
       placed++;
       changed = true;
+      currentAnchorCount++;
       reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
     }
 
+    reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
     for (const anchor of collectFloorLiftAnchors(world, direction)) {
-      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachableRouteCellsFromPoint(world, spawnX, spawnY), floorTex);
-      if (usable.changed) changed = true;
+      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachable, floorTex);
+      if (usable.changed) {
+        changed = true;
+        reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+      }
     }
   }
 

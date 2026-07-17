@@ -10,6 +10,8 @@ let currentTip = '';
 let tipTime = 0;
 let dots = 0;
 let lastTime = 0;
+let progressStage = '';
+let progressPct = 0;
 
 const CANVAS_TEXT_GLITCH_CHARS = '#%&*+=?/\\<>[]{}';
 const CANVAS_TEXT_GLITCH_RE = /[A-Za-zА-Яа-яЁё]/;
@@ -66,6 +68,8 @@ self.onmessage = (e: MessageEvent) => {
       tipTime = performance.now();
       lastTime = tipTime;
       dots = 0;
+      progressStage = '';
+      progressPct = 0;
       loop(tipTime);
       requestAnimationFrame(() => {
         self.postMessage({ type: 'started' });
@@ -73,10 +77,15 @@ self.onmessage = (e: MessageEvent) => {
     }
   } else if (msg.type === 'stop') {
     active = false;
+    progressStage = '';
+    progressPct = 0;
     cancelAnimationFrame(animId);
     if (ctx && width && height) {
       ctx.clearRect(0, 0, width, height);
     }
+  } else if (msg.type === 'progress') {
+    progressStage = msg.stage ?? '';
+    progressPct = Math.max(0, Math.min(100, msg.pct ?? 0));
   }
 };
 
@@ -107,7 +116,7 @@ function loop(now: number) {
     const dotsStr = '.'.repeat(dots);
     
     const centerX = width / 2;
-    const centerY = height / 2;
+    const centerY = height / 2 - Math.round(height / 16);
     
     const glitchedBase = canvasTextGlitch(baseText, centerX, centerY);
     const baseWidth = ctx.measureText(glitchedBase).width;
@@ -119,6 +128,32 @@ function loop(now: number) {
     const glitchedDots = canvasTextGlitch(dotsStr, centerX + baseWidth / 2, centerY);
     ctx.fillText(glitchedDots, centerX + baseWidth / 2, centerY);
 
+    // ── Progress bar + stage text ──
+    if (progressStage) {
+      const barW = width * 0.5;
+      const barH = Math.max(2, Math.round(height / 200));
+      const barX = (width - barW) / 2;
+      const barY = centerY + Math.round(height / 28);
+      
+      // Bar background
+      ctx.fillStyle = '#222';
+      ctx.fillRect(barX, barY, barW, barH);
+      
+      // Bar fill
+      ctx.fillStyle = '#555';
+      ctx.fillRect(barX, barY, barW * (progressPct / 100), barH);
+      
+      // Stage text
+      const stageSize = Math.max(12, Math.round(height / 50));
+      ctx.font = `${stageSize}px monospace`;
+      ctx.fillStyle = '#555';
+      ctx.textAlign = 'center';
+      const stageText = `${progressStage}`;
+      const glitchedStage = canvasTextGlitch(stageText, centerX, barY + barH + stageSize + 4);
+      ctx.fillText(glitchedStage, centerX, barY + barH + stageSize + 4);
+    }
+
+    // ── Tip ──
     const tipSize = Math.max(14, Math.round(height / 40));
     ctx.font = `${tipSize}px monospace`;
     ctx.fillStyle = '#777';
@@ -140,7 +175,7 @@ function loop(now: number) {
     lines.push(line);
     
     const lineH = tipSize * 1.3;
-    const startY = height / 2 + Math.round(height / 12);
+    const startY = centerY + Math.round(height / 7);
     for (let i = 0; i < lines.length; i++) {
       const lineX = width / 2;
       const lineY = startY + i * lineH;

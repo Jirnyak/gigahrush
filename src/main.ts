@@ -1974,9 +1974,17 @@ if (typeof ResizeObserver === 'function') {
 }
 scheduleResize();
 
-/* ── Generate assets ──────────────────────────────────────────── */
-const textures = generateTextures();
-const sprites  = generateSprites();
+/* ── Generate assets (lazy — deferred until first initGame) ───── */
+let textures: ReturnType<typeof generateTextures> = [];
+let sprites:  ReturnType<typeof generateSprites>  = [];
+let assetsReady = false;
+
+function ensureAssets(): void {
+  if (assetsReady) return;
+  textures = generateTextures();
+  sprites  = generateSprites();
+  assetsReady = true;
+}
 
 /* ── Game initialization ──────────────────────────────────────── */
 let world: World;
@@ -3181,12 +3189,21 @@ function scheduleLoading(fn: () => void): void {
   pendingLoadAckYielded = 0;
 }
 
+function loadingProgress(stage: string, pct: number): void {
+  loadingWorker?.postMessage({ type: 'progress', stage, pct });
+}
+
 function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: boolean = false): void {
+  const _t0 = performance.now();
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   resetNoiseRecords();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
+  const _t1 = performance.now();
+  loadingProgress('Рисуем лабиринт этажа', 5);
   const gen = generateFloor(initialZ, initialRunSeed, isTutorial);
+  const _t2 = performance.now();
+  loadingProgress('Подготовка мира', 50);
   injectFastElevators(gen.world);
   stampCeilingHeights(gen.world);
   world = replaceWorldFromGeneration(null, gen);
@@ -3331,20 +3348,51 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   ensureLiftArachnaState(state);
   ensureNetTerminalGenState(state);
   ensureMapEditorPatchState(state);
+  const _t3 = performance.now();
+  loadingProgress('Заселяем этаж', 55);
   materializeCurrentAlifeFloor();
+  const _t3a = performance.now();
   ensureRoomContainers(world, state.currentZ);
+  const _t3b = performance.now();
   ensureProductionRooms(state, world);
+  const _t3c = performance.now();
+  loadingProgress('Расставляем лифты и двери', 70);
   prepareEditableFloor();
+  const _t3d = performance.now();
   resetMapExploration(world);
   updateMapExploration(world, player, state);
   ensureProceduralSpriteSeeds(entities);
   resetPsiState();
+  const _t4 = performance.now();
 
+  // Generate assets on first load (runs behind loading screen)
+  loadingProgress('Генерируем текстуры', 82);
+  ensureAssets();
+  const _t5 = performance.now();
   // Initialize / reinitialize WebGL with current world data
+  loadingProgress('Запускаем рендер', 90);
   disposeWebGL();
   initWebGL(canvas, textures, sprites, world);
+  const _t6 = performance.now();
+  loadingProgress('Финальные штрихи', 96);
   finishLoadedFloorVisuals(gen);
   rebuildEntityIndex(entities, 'load');
+  loadingProgress('Готово', 100);
+  const _t7 = performance.now();
+
+  console.log(
+    `[initGame timing] total=${(_t7-_t0)|0}ms | ` +
+    `generateFloor=${(_t2-_t1)|0}ms | ` +
+    `stateSetup=${(_t3-_t2)|0}ms | ` +
+    `alife=${(_t3a-_t3)|0}ms | ` +
+    `roomContainers=${(_t3b-_t3a)|0}ms | ` +
+    `productionRooms=${(_t3c-_t3b)|0}ms | ` +
+    `editableFloor=${(_t3d-_t3c)|0}ms | ` +
+    `mapExploration+rest=${(_t4-_t3d)|0}ms | ` +
+    `ensureAssets=${(_t5-_t4)|0}ms | ` +
+    `initWebGL=${(_t6-_t5)|0}ms | ` +
+    `finishVisuals=${(_t7-_t6)|0}ms`
+  );
 }
 
 /* ── Input ────────────────────────────────────────────────────── */
@@ -5260,6 +5308,7 @@ function switchFloor(
 
   // Defer heavy generation — game loop will show loading screen first
   scheduleLoading(() => {
+    loadingProgress('Рисуем лабиринт этажа', 5);
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
     const loaded = loadFloorForTarget(["living"], generatedRunEntry);
@@ -5273,6 +5322,7 @@ function switchFloor(
       if (id > __maxId) __maxId = id;
     }
     nextEntityId.v = __maxId + 1;
+    loadingProgress('Заселяем этаж', 55);
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
 
     const routeLiftMirror = !activeFloorInstance && !route.activeInstance && generatedRunEntry && departureLiftAnchors.length > 0
@@ -5397,6 +5447,7 @@ function switchFloor(
       ? generatedRunEntry.themeTags.includes('void')
       : nextFloor === 200 && !allowElevatorAnomaly;
     if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
+    loadingProgress('Расставляем лифты и двери', 70);
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
     prepareEditableFloor(routeLiftMirror, false, !loaded.fromMemory);
@@ -5416,6 +5467,7 @@ function switchFloor(
     }
 
     // Update WebGL world data after floor change
+    loadingProgress('Финальные штрихи', 90);
     finishLoadedFloorVisuals(gen);
 
     // Auto-trigger cinematic scenes on specific key floors
