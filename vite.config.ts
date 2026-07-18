@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -67,6 +68,25 @@ function buildSizeManifest(): Plugin {
       const outDir = options.dir ? (path.isAbsolute(options.dir) ? options.dir : path.resolve(root, options.dir)) : path.resolve(root, "dist");
       await mkdir(outDir, { recursive: true });
       await writeFile(path.join(outDir, "build-size-manifest.json"), manifest);
+    },
+  };
+}
+
+function pwaServiceWorkerVersionPlugin(): Plugin {
+  return {
+    name: "gigahrush-pwa-sw-version",
+    apply: "build",
+    enforce: "post",
+    async writeBundle(options) {
+      const outDir = options.dir ? (path.isAbsolute(options.dir) ? options.dir : path.resolve(root, options.dir)) : path.resolve(root, "dist");
+      const swPath = path.join(outDir, "sw.js");
+      const indexPath = path.join(outDir, "index.html");
+      if (!existsSync(swPath) || !existsSync(indexPath)) return;
+      const indexContent = readFileSync(indexPath);
+      const shortHash = createHash("sha256").update(indexContent).digest("hex").slice(0, 16);
+      let swContent = readFileSync(swPath, "utf8");
+      swContent = swContent.replace(/const CACHE_NAME = 'gigahrush-shell-[^']+';/, `const CACHE_NAME = 'gigahrush-shell-${shortHash}';`);
+      await writeFile(swPath, swContent, "utf8");
     },
   };
 }
@@ -191,6 +211,7 @@ export default defineConfig((env) => {
       buildSizeManifest(),
       ...(includeNpcIntake ? [npcIntakeSubproject()] : []),
       viteSingleFile(),
+      pwaServiceWorkerVersionPlugin(),
     ],
     define: {
       "globalThis.__GIGAHRUSH_EN_LOCALE__": JSON.stringify(runtimeEnglishLocale()),

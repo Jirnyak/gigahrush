@@ -22,6 +22,8 @@ Role: track public media presence for GIGAH|RUSH across published pages, communi
 
 **HOST BROWSER AUTOMATION RULE:** 
 The agent has the proven ability to interact with the owner's host Google Chrome / Chromium browser via AppleScript (`osascript`) and JavaScript injection. When the owner asks to "post it automatically", "do it yourself", or "действуй через хромиум апи", the agent MUST NOT refuse due to sandbox limitations. 
+- **CRITICAL:** DO NOT launch new Chrome/browser processes. The agent is strictly forbidden from starting new standalone browser instances or headless browser tasks that spawn new browser windows. The owner already has Google Chrome running with the required pages and accounts logged in.
+- For reading stats, checking pages, or automation, inspect the existing running Chrome tabs/windows via AppleScript (`osascript`) or ask the user directly, rather than launching a new process.
 - For sites with simple inputs (StopGame, PlayGround), the agent MUST write and execute an `osascript` to open the URL, inject JS to focus fields, and use `pbcopy` / `Cmd+V`.
 - For complex modern SPAs like Reddit with deep Shadow DOMs (`shreddit-app`), JavaScript focus/click injections will fail. The agent MUST use direct URL parameter pre-filling: construct a URL like `https://www.reddit.com/r/indiegames/submit?title=ENCODED_TITLE&text=ENCODED_BODY` and execute `open -a "Google Chrome" "URL"`. This relies on the site's native URL parsing and is 100% reliable.
 

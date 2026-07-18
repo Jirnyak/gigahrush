@@ -14,7 +14,23 @@ export function registerPwaServiceWorker(): void {
   if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
   window.addEventListener('load', () => {
     try {
-      void navigator.serviceWorker.register('./sw.js').catch((err) => {
+      void navigator.serviceWorker.register('./sw.js').then((registration) => {
+        if (!registration) return;
+        if (typeof registration.update === 'function') {
+          void registration.update().catch(() => undefined);
+        }
+        if (typeof registration.addEventListener === 'function') {
+          registration.addEventListener('updatefound', () => {
+            const installing = registration.installing;
+            if (!installing || typeof installing.addEventListener !== 'function') return;
+            installing.addEventListener('statechange', () => {
+              if (installing.state === 'activated') {
+                console.log('ServiceWorker updated and activated.');
+              }
+            });
+          });
+        }
+      }, (err) => {
         console.error('ServiceWorker registration failed: ', err);
       });
     } catch (err) {
