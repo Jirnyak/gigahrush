@@ -1,6 +1,6 @@
 /* ── Monster behavior: hunt player + hostile NPCs ─────────────── */
 
-import { calculateReloadTime } from '../combat';
+
 import {
   W,
   type Entity, type GameState, type MonsterBaitLineState, type Msg, type Room, type WorldContainer,
@@ -8793,19 +8793,6 @@ export function tryPerformMonsterMeleeAttack(
   bestDist: number,
   state?: GameState
 ): boolean {
-  if (e.reloading) {
-    e.reloadTimer = Math.max(0, (e.reloadTimer ?? 0) - dt);
-    if (e.reloadTimer <= 0) {
-      e.currentMag = 1; // Melee attacks are treated as mag=1
-      e.reloading = false;
-    }
-    return true; // Block attack while reloading
-  }
-  if ((e.currentMag ?? 0) <= 0) {
-    e.reloading = true;
-    e.reloadTimer = calculateReloadTime(def?.attackRate ?? 1, e.rpg?.agi ?? 0); // fallback if reloadTime not available directly here
-    return true;
-  }
   const mRange = monsterMeleeRange(world, e);
   if (bestDist < mRange) {
     e.attackCd = (e.attackCd ?? 0) - dt;
@@ -8828,8 +8815,7 @@ export function tryPerformMonsterMeleeAttack(
           const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
           spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, Math.max(2, Math.round(dmg * 0.35)), false);
           playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
-          e.currentMag = 0;
-          e.attackCd = def?.attackRate ?? 1;
+          e.attackCd = (def?.attackRate ?? 1) * 1.5;
           return true;
         }
         if (hitTarget.hp !== undefined) {
@@ -8870,7 +8856,7 @@ export function tryPerformMonsterMeleeAttack(
     }
     // Orbit around target while in melee range (circle-strafe between attacks)
     if (!e.phasing && (def?.speed ?? 0) > 0) {
-      tryCombatOrbitStep(world, e, target, mRange * 0.65, 0.3, dt);
+      tryCombatOrbitStep(world, e, target, mRange * 0.5, 0.3, dt);
     }
     return true;
   }
@@ -9114,11 +9100,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
 
-  // Close approach: if nearly in melee range, orbit to close distance smoothly
-  const _meleeOrbitR = monsterMeleeRange(world, e);
-  if (!e.phasing && bestDist < _meleeOrbitR + 1.0 && bestDist > _meleeOrbitR * 0.8) {
-    if (tryCombatOrbitStep(world, e, target, _meleeOrbitR * 0.65, 0.35, dt)) return;
-  }
+
 
   // Hunt: pathfind to target
   ai.timer -= dt;

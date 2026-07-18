@@ -8,7 +8,7 @@
 
 This repository rewards precise integration work, not speculative architecture. Use extra reasoning budget to read the actual code, map ownership, and check side effects before editing. Keep patches small, shipped, and verifiable.
 
-ГИГАХРУЩ is in active development. No legacy, no backward save compatibility, no hardcoding, no crutches. Do not preserve legacy paths by default, and do not add migration scaffolding unless the task explicitly requires it. Prefer one working, reachable gameplay path over broad unfinished systems.
+ГИГАХРУЩ is in active development. No legacy, no backward save compatibility, no hardcoding, no crutches. Do not preserve legacy paths by default, and do not add migration scaffolding unless the task explicitly requires it. Never add code to handle stale save state, old field values, or cross-version compatibility — old saves are disposable. Prefer one working, reachable gameplay path over broad unfinished systems.
 
 ## Project Identity
 
@@ -345,7 +345,7 @@ Allowed new actors must declare their reason: quest, faction event, caravan, sam
 
 The browser save lives in `localStorage` under `gigahrush_save`. The authoritative save shape constant is `SAVE_SHAPE_VERSION` in `src/systems/save_runtime.ts`.
 
-Only the current save shape is supported. If a change breaks shape compatibility, bump `SAVE_SHAPE_VERSION` and reject stale saves explicitly. Do not add cross-version migration code by default.
+Only the current save shape is supported. If a change breaks shape compatibility, bump `SAVE_SHAPE_VERSION` and reject stale saves explicitly. Do not add cross-version migration code. Do not add runtime code that checks for or handles stale field values from old saves — old saves are disposable and will be rejected outright.
 
 If adding persistent state:
 
