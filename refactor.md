@@ -153,3 +153,98 @@
 - В интерфейс `Room` (`src/core/types.ts`) добавлено поле `tags?: string[]`.
 - Комнатам стартового блока в `src/gen/living/tutor_room.ts` присвоен тег `['tutorial']`.
 - В функции выбора ячеек для процедурного заселения (`isPopulationPlacementCandidateCell` в `src/gen/population_placement.ts`) и в функции спавна случайных путников и лута (`spawnTravelers`, `spawnRoomItems` в `src/gen/living/npcs.ts`) добавлена жесткая проверка: если клетка/комната принадлежит комнате с тегом `'tutorial'`, то она полностью исключается из выборки. Теперь обучающий сегмент гарантированно защищен от непредсказуемого процедурного вмешательства.
+
+## 6. Глубокий системный аудит кодовой базы (Баги, Легаси, Хардкод, Костыли, Дубликаты и Расхождения с документацией)
+
+Проведен полный статический и архитектурный аудит всех слоев проекта (`core/`, `data/`, `gen/`, `systems/`, `render/`, `tests/`). Ниже зафиксирован исчерпывающий перечень всех выявленных нарушений архитектурных контрактов, опасных конструкций и технического долга.
+
+### 6.1 100% Баги и критические нарушения базовой безопасности (Runtime Bugs & Crash Risks)
+
+В `AGENTS.md` и `problems.md` закреплен жесткий архитектурный контракт: **мир — это тор 1024×1024 (`W = 1024`)**, и любое прямое умножение координат (`cy * W + cx` или `y * 1024 + x`) без обращения к `world.idx(cx, cy)` или предварительной нормализации через `world.wrap()` строго запрещено. При выходе float или физических координат за границы это вызывает `RangeError: visual cell index out of range` или `undefined` / `NaN` в логике.
+
+| Файл и строка | Нарушение | Чем грозит (100% баг / риск) |
+| :--- | :--- | :--- |
+| [npc_fsm.ts:L1049](file:///Users/jirnyak/Mirror/gigahrush/src/systems/ai/npc_fsm.ts#L1049) | `danger: world.dangerField[Math.floor(room.y + room.h/2) * 1024 + Math.floor(room.x + room.w/2)] / 255` | 1. Прямой хардкод `* 1024` вместо `world.idx`.<br>2. Если центр комнаты оказывается у края карты или float-координаты дают выход за `[0, 1023]`, обращение к `dangerField[...]` возвращает `undefined` (или ошибочную ячейку). Вычисление `undefined / 255` даёт **`NaN`**, что приводит к `NaN` в расчете полезности (`scoreNpcUtilityTargetPreference`), поломке FSM и зависанию AI. |
+| [main.ts:L1153](file:///Users/jirnyak/Mirror/gigahrush/src/main.ts#L1153) | `const idx = cy * W + cx;` при проверке интеракта с дверью | Прямое умножение вопреки запрету из `problems.md`. Даже если `cx, cy` обернуты выше через `world.wrap()`, ручной пересчет нарушает инкапсуляцию централизованной функции `world.idx(cx, cy)`. |
+| [danger_field.ts:L39, L59, L101, L141](file:///Users/jirnyak/Mirror/gigahrush/src/systems/danger_field.ts#L39) | `const row = cy * W;`, `const rowBase = cy * W;`, `const ni = ny * W + nx;` | Системный расчет поля опасности в цикле обходит `world.idx` при переборе соседей. |
+| [surface_marks.ts:L490](file:///Users/jirnyak/Mirror/gigahrush/src/systems/surface_marks.ts#L490) | `const ci = ncy * W + ncx;` | При генерации пятен (кровь/слизь) идет прямой пересчет индекса ячейки. |
+| [blood_fx.ts:L319](file:///Users/jirnyak/Mirror/gigahrush/src/systems/blood_fx.ts#L319) | `if (world.cells[wy * W + wx] !== Cell.WALL)` | Если разлет частиц крови уходит за край (например, `wy < 0` из-за float-толчка), индекс становится отрицательным (`-125`), что приводит к `undefined !== Cell.WALL` и тихой ошибке позиционирования декалей или падению в строгих проверках. |
+| [breach_charge.ts:L127](file:///Users/jirnyak/Mirror/gigahrush/src/systems/breach_charge.ts#L127) | `const idx = ty * W + tx;` | Взрыв пробивающего заряда использует ручное умножение при проверке целевых клеток. |
+| [dialogue.ts:L51-L54](file:///Users/jirnyak/Mirror/gigahrush/src/systems/dialogue.ts#L51-L54) | `performance.now() / 1000` / `Date.now() / 1000` в `performanceNowSeconds()` | Диалоговая система и марковские тайм-ауты используют реальное время стенных часов в JS-хипе вместо симуляционного `world.time`. При паузе вкладки (когда `world.time` стоит на месте) диалоги продолжают истекать по реальным секундам, вызывая рассинхрон состояния. |
+
+### 6.2 Легаси, Хардкод и Костыли (Legacy, Hardcode & Type Safety Crutches)
+
+#### A. Массовый обход типизации (`as any`) в генераторах дизайн-этажей
+Во всех модулях децентрализованных дизайн-этажей типизация интерфейса генератора сломана и маскируется костылем `as any`.
+- **Список файлов, где используется `applyDesignFloorPopulationField(generation as any, ...)` и `return { ...generation, isDecentralized: true } as any;`:**
+  - [antenna_court/index.ts:L124-L125](file:///Users/jirnyak/Mirror/gigahrush/src/gen/antenna_court/index.ts#L124-L125)
+  - [registry_morgue/index.ts:L268](file:///Users/jirnyak/Mirror/gigahrush/src/gen/registry_morgue/index.ts#L268)
+  - [kvartiry/index.ts:L482](file:///Users/jirnyak/Mirror/gigahrush/src/gen/kvartiry/index.ts#L482)
+  - [chthonic_attic/index.ts:L158](file:///Users/jirnyak/Mirror/gigahrush/src/gen/chthonic_attic/index.ts#L158)
+  - [ministry/index.ts:L593](file:///Users/jirnyak/Mirror/gigahrush/src/gen/ministry/index.ts#L593)
+  - [oranzhereya_betona/index.ts:L58](file:///Users/jirnyak/Mirror/gigahrush/src/gen/oranzhereya_betona/index.ts#L58)
+  - [raionsovet_archive/index.ts:L166](file:///Users/jirnyak/Mirror/gigahrush/src/gen/raionsovet_archive/index.ts#L166)
+  - [attractor_dvor/index.ts:L84](file:///Users/jirnyak/Mirror/gigahrush/src/gen/attractor_dvor/index.ts#L84)
+  - [hell/index.ts:L56](file:///Users/jirnyak/Mirror/gigahrush/src/gen/hell/index.ts#L56)
+  - [pioneer_camp/index.ts:L116](file:///Users/jirnyak/Mirror/gigahrush/src/gen/pioneer_camp/index.ts#L116)
+- **Причина костыля:** Интерфейс `DesignFloorGeneration` и ожидания `applyDesignFloorPopulationField` не согласованы между собой (отсутствуют или требуют необязательные поля, в частности `isDecentralized`), из-за чего проверка типов `tsc` была отключена через `as any` для 100% авторских этажей.
+
+#### B. Костыли `as any` в определениях монстров и сущностей
+- [sculpture.ts:L16](file:///Users/jirnyak/Mirror/gigahrush/src/entities/sculpture.ts#L16): `aiFlags: ['weepingAngel' as any], // We will add 'weepingAngel' to MonsterAIFlag in monster.ts`
+- [gnome.ts:L15](file:///Users/jirnyak/Mirror/gigahrush/src/entities/gnome.ts#L15): `aiFlags: ['melee' as any], // We use 'as any' since 'melee' is not in MonsterAIFlag type yet`
+- **Причина костыля:** Флаги `weepingAngel` и `melee` не были добавлены в строгий union-тип `MonsterAIFlag` в `src/entities/monster.ts`.
+
+#### C. Костыли `as any` в анимациях
+- [auto.ts:L16, L20, L29](file:///Users/jirnyak/Mirror/gigahrush/src/render/animations/defs/auto.ts#L16): `.map(m => (m.type === 'monster_kind' ? (m as any).monsterKind : null))` и `getGeneratedAnimationFramePack(packId as any)` — приведение `as any` вместо корректного использования discriminated union.
+
+#### D. Нарушение детерминизма в `net_sphere.ts`
+- [net_sphere.ts:L697](file:///Users/jirnyak/Mirror/gigahrush/src/systems/net_sphere.ts#L697): `id: Date.now() + Math.random()`. Использование некриптографического `Math.random()` без документирующего комментария (вопреки правилам `AGENTS.md`).
+
+#### E. Файлы-заглушки (`STUB = true`)
+В проекте присутствуют пустые файлы-призраки, оставленные после параллельных генераций агентов (`export const STUB = true; // Stub file created for parallel Jules agents`), которые загромождают структуру и обманывают при поиске модулей:
+- [stalker_hunter.ts](file:///Users/jirnyak/Mirror/gigahrush/src/entities/stalker_hunter.ts)
+- [barks.ts](file:///Users/jirnyak/Mirror/gigahrush/src/data/barks.ts)
+- [outskirts/index.ts](file:///Users/jirnyak/Mirror/gigahrush/src/gen/outskirts/index.ts)
+- [factions_war.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/factions_war.ts)
+- [companion.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/companion.ts)
+- [sound_propagation.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/sound_propagation.ts)
+- [achievements.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/achievements.ts)
+
+#### F. Костыль фолбэк-позиций в `shared.ts`
+- [shared.ts:L141-L344](file:///Users/jirnyak/Mirror/gigahrush/src/gen/shared.ts#L141-L344): Сосредоточено огромное количество переплетений проверок и фолбэк-стратегий (`fallback_any_lift`, `fallback_same_xy`, `fallback_near_generator_spawn` и т.д.) для спавна, если геометрия этажа оказалась заблокирована.
+
+### 6.3 Дубликаты систем и механик (System Duplications)
+
+1. **Два параллельных способа позиционирования в A-Life (`floorKey` vs `z`):**
+   В коде параллельно сосуществуют строковые ключи этажей (`floorKey`, например `story:living` / `design:ministry`) и точные числовые координаты `Z`. Это зафиксировано в `problems.md` как *NPC Location / floorKey Spaghetti*. Разные системы пытаются парсить префиксы или синхронизировать строковый ключ с числом `Z`, что усложняет Demos UI и планы миграции.
+2. **Дублирование логики поиска ближайшей комнаты (`nearestRoomByName` / `nearestRoomOfType`):**
+   - [quests.ts:L1548-L1551, L1668-L1671](file:///Users/jirnyak/Mirror/gigahrush/src/systems/quests.ts#L1548): Дублируются блоки проверок `(step as any).targetRoomType !== undefined` и ручного ветвления поиска комнаты вместо вызова единого хелпера из `shared.ts`.
+3. **Разрозненная очистка чисел в `banking.ts` vs глобальная нормализация:**
+   - [banking.ts:L31-L41](file:///Users/jirnyak/Mirror/gigahrush/src/systems/banking.ts#L31-L41): Написаны локальные велосипеды `cleanNumber`, `cleanMoney`, `cleanTime`, дублирующие общие утилиты безопасного парсинга и валидации из `core/`.
+
+### 6.4 Расхождение кода и документации (Code vs Docs Discrepancies)
+
+В ходе сверки реального состояния кода с центральным документом проблем (`problems.md`) выявлено **критическое расхождение — документация отстает от уже исправленного кода (и при этом не фиксирует активные баги)**:
+
+1. **Устаревший пункт про `Math.random()` в генераторах (`problems.md` L47):**
+   В таблице активных проблем `problems.md` утверждается, что `generateFloor()` и подмодули внутри генераторов (`procedural_screens.ts`, living content, hell content, maintenance content, `admin_common.ts`) используют прямой `Math.random()` вместо seeded RNG.
+   **Фактическое состояние в коде:** Поиск по директории `src/gen/` на предмет `Math.random()` вернул **0 результатов**. Все генераторы успешно переведены на детерминированный `seededRandom` / `rng()`. Пункт в `problems.md` устарел и должен быть закрыт.
+2. **Устаревший пункт про регрессии Z-координат (`problems.md` L48):**
+   В `problems.md` указано, что при замене `floor` на `z` в параметры передаются строки, из-за чего возникает `z = NaN` и краш `dangerBias` на `undefined`.
+   **Фактическое состояние в коде:** Запуск `npm run check:readonly` (1800 юнит-тестов и полный аудит контента) проходит без единого `NaN` или `TypeError`. Все тесты и вызовы передают строгие числа `z`. Пункт в `problems.md` устарел.
+3. **Неуказанная проблема сырых индексов (`* W`) в активных системах:**
+   В `problems.md` (раздел «Запрещенные классы ошибок -> Raw Coordinate Array Indexing») строго написано, что `cy * W + cx` запрещено. Но документ не указывает, что прямо сейчас в `main.ts`, `danger_field.ts`, `surface_marks.ts` и `npc_fsm.ts` висят активные нарушения этого правила.
+
+### 6.5 Что точно можно 100% улучшить (Чеклист для последующего рефакторинга)
+
+1. **Искоренить сырые пересчеты индексов (`* W`, `* 1024`) в горячих путях:**
+   - Заменить `cy * W + cx` на `world.idx(cx, cy)` в [main.ts:L1153](file:///Users/jirnyak/Mirror/gigahrush/src/main.ts#L1153), [danger_field.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/danger_field.ts) и [surface_marks.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/surface_marks.ts).
+   - Исправить критический баг/потенциальный `NaN` в [npc_fsm.ts:L1049](file:///Users/jirnyak/Mirror/gigahrush/src/systems/ai/npc_fsm.ts#L1049) (`world.dangerField[...] / 255`), завернув координаты центра комнаты в безопасный `world.idx()`.
+2. **Очистить костыли `as any` в типизации генераторов:**
+   - Выровнять интерфейс `DesignFloorGeneration` с тем, что возвращают генераторы (`isDecentralized: true`), и с требованиями `applyDesignFloorPopulationField`. Это позволит удалить десятки конструкций `as any` из всех файлов `src/gen/*/index.ts`.
+   - Добавить недостающие флаги `'weepingAngel'` и `'melee'` в enum/тип `MonsterAIFlag` в `src/entities/monster.ts`, убрав `as any` из `sculpture.ts` и `gnome.ts`.
+3. **Удалить пустые файлы-заглушки (`STUB = true`):**
+   - Удалить или превратить в полноценные модули файлы-призраки (`stalker_hunter.ts`, `barks.ts`, `factions_war.ts`, `companion.ts`, `sound_propagation.ts`, `achievements.ts`, `outskirts/index.ts`).
+4. **Актуализировать документацию (`problems.md`):**
+   - Перенести решенные пункты (*Generation non-determinism (`Math.random`)* и *Blind Z-coordinate refactoring regressions*) из таблицы активных проблем в закрытые, и добавить в активные задачи устранение оставшихся сырых индексов в `systems/`.
+
