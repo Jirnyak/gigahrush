@@ -23,7 +23,7 @@ Core taste:
 - Elegant, universal, modular, minimal, expandable and natural.
 - Data-oriented, procedural, context-driven, physmath-friendly systems.
 - Plain functions, plain objects, typed arrays, ids and small registries.
-- Cinematic fakes are better than expensive simulation when they produce the same player decision.
+- **Player == NPC.** The player is an NPC that the user controls. Same entity type, same combat math, same social systems, same rules. Never branch on "is player" for game mechanics — only for input source, camera, and HUD. When code says "NPC or player", it means the same thing; when it needs to exclude something, it excludes monsters (`EntityType.MONSTER`), not the player.
 
 Do not add frontend frameworks, imported UI kits, physics engines, ECS libraries, asset pipelines, runtime dependencies, or linters outside `package.json` unless there is a measured reason and explicit owner.
 

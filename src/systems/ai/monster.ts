@@ -8761,6 +8761,8 @@ function isWeepingAngelFrozen(world: World, e: Entity): boolean {
   for (let i = 0; i < out.length; i++) {
     const actor = out[i];
     if (actor.id === e.id || !actor.alive) continue;
+    // Only players and NPCs count as observers — other monsters can't freeze sculptures
+    if (actor.type === EntityType.MONSTER) continue;
     if (!hasClearLine(world, actor, e, radius)) continue;
 
     const dx = e.x - actor.x;
