@@ -64,3 +64,5 @@ export function drawGameMenu(
 
   ctx.textAlign = 'left';
 }
+
+

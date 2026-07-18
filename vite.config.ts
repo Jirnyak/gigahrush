@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type ConfigEnv, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = __dirname;
@@ -206,8 +207,22 @@ function cloudflareBuildMode(env: ConfigEnv): boolean {
 
 export default defineConfig((env) => {
   const includeNpcIntake = cloudflareBuildMode(env);
+  let gitHash = "dev";
+  try {
+    const head = readFileSync(path.join(root, ".git", "HEAD"), "utf8").trim();
+    if (head.startsWith("ref: ")) {
+      const refFile = path.join(root, ".git", head.slice(5));
+      if (existsSync(refFile)) gitHash = readFileSync(refFile, "utf8").trim().slice(0, 8);
+    } else {
+      gitHash = head.slice(0, 8);
+    }
+  } catch {}
+  const buildVersionText = `[ v${gitHash} ]`;
+
+
   return {
     plugins: [
+
       buildSizeManifest(),
       ...(includeNpcIntake ? [npcIntakeSubproject()] : []),
       viteSingleFile(),
@@ -216,6 +231,7 @@ export default defineConfig((env) => {
     define: {
       "globalThis.__GIGAHRUSH_EN_LOCALE__": JSON.stringify(runtimeEnglishLocale()),
       "globalThis.__GIGAHRUSH_NPC_INTAKE_ENABLED__": JSON.stringify(includeNpcIntake),
+      "__BUILD_VERSION__": JSON.stringify(buildVersionText),
     },
     resolve: {
       alias: {
@@ -224,3 +240,4 @@ export default defineConfig((env) => {
     },
   };
 });
+

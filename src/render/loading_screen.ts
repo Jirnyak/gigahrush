@@ -7,6 +7,8 @@
  */
 
 const CANVAS_TEXT_GLITCH_CHARS = '#%&*+=?/\\<>[]{}';
+
+
 const CANVAS_TEXT_GLITCH_RE = /[A-Za-zА-Яа-яЁё]/;
 
 function canvasTextGlitchTick(): number {
@@ -405,6 +407,7 @@ function drawFirstLoadTutorial(
 
   ctx.textAlign = 'left';
 }
+
 
 /**
  * Draws a topic bullet point and description, automatically wrapping the text across multiple lines if needed.
