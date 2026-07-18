@@ -829,7 +829,7 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
     : false;
   const entityIndex = getEntityIndex();
   const meleeQuery: Entity[] = [];
-  entityIndex.queryRadius(ax, ay, 1.2, meleeQuery, ENTITY_MASK_ACTOR);
+  entityIndex.queryRadius(actor.x, actor.y, range + (ws.hitRadius ?? 0.6) + 0.5, meleeQuery, ENTITY_MASK_ACTOR);
   const target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
   if (target && target.hp !== undefined) {
     const armor = applyMonsterArmorHit(world, state, target, { damage: normalDmg, attacker: actor, weaponId });
@@ -4077,7 +4077,7 @@ function handlePlayerAttack(_dt: number): void {
         ? reducePaupsinaWeb(player, state.time, state.msgs, state, player, 'cut')
         : false;
       const entityIndex = getEntityIndex();
-      entityIndex.queryRadius(ax, ay, 1.2, meleeHitQuery, ENTITY_MASK_ACTOR);
+      entityIndex.queryRadius(player.x, player.y, range + (ws.hitRadius ?? 0.6) + 0.5, meleeHitQuery, ENTITY_MASK_ACTOR);
       const meleeTarget = selectMeleeTarget(world, player, meleeHitQuery, range, weaponId);
       if (meleeTarget) {
         const e = meleeTarget;
@@ -4173,7 +4173,7 @@ function peerLocalMeleeWouldHit(weaponId: string, ws: WeaponStats): boolean {
   const ax = player.x + Math.cos(player.angle) * range;
   const ay = player.y + Math.sin(player.angle) * range;
   const entityIndex = getEntityIndex();
-  entityIndex.queryRadius(ax, ay, 1.2, meleeHitQuery, ENTITY_MASK_ACTOR);
+  entityIndex.queryRadius(player.x, player.y, range + (ws.hitRadius ?? 0.6) + 0.5, meleeHitQuery, ENTITY_MASK_ACTOR);
   if (selectMeleeTarget(world, player, meleeHitQuery, range, weaponId)) return true;
   const attackIdx = world.idx(Math.floor(ax), Math.floor(ay));
   return world.cells[attackIdx] === Cell.DOOR && world.doors.has(attackIdx);

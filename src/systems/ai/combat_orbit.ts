@@ -124,9 +124,21 @@ export function tryCombatOrbitStep(
     moved = true;
   }
 
-  // If completely stuck — flip orbit direction to try the other way next frame
+  // If completely stuck — flip orbit direction and nudge along intended radial correction
   if (!moved) {
     ai.orbitDir = -ai.orbitDir;
+    // Fallback: nudge in the direction the orbit was already correcting
+    // radialErr > 0 = too far → nudge inward; radialErr < 0 = too close → nudge outward
+    const nudgeDir = radialErr > 0.1 ? -1 : radialErr < -0.1 ? 1 : 0;
+    if (nudgeDir !== 0) {
+      const inX = world.wrap(e.x + rx * nudgeDir * step * 0.5);
+      const inY = world.wrap(e.y + ry * nudgeDir * step * 0.5);
+      if (canActorOccupy(world, inX, inY, ORBIT_BODY_R, { ignoreFineBlockers: ignoreFine })) {
+        e.x = inX;
+        e.y = inY;
+        moved = true;
+      }
+    }
   }
 
   return moved;

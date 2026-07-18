@@ -449,7 +449,7 @@ export function tryFactionCombat(
     const dy = world.delta(e.y, target.y);
     e.angle = Math.atan2(dy, dx); // ensure we face target before swinging
     
-    getEntityIndex().queryRadius(e.x, e.y, effectiveReach, npcMeleeHitQuery, ENTITY_MASK_ACTOR);
+    getEntityIndex().queryRadius(e.x, e.y, effectiveReach + 0.5, npcMeleeHitQuery, ENTITY_MASK_ACTOR);
     const hitTarget = selectMeleeTarget(world, e, npcMeleeHitQuery, meleeRange, weaponId);
     
     if (hitTarget) {
@@ -699,6 +699,12 @@ function npcFireProjectile(
   const pellets = ws.pellets ?? 1;
   const spread = ws.spread ?? 0;
   const spd = ws.projSpeed ?? 15;
+  // Compensate gravity so projectile arrives at target height instead of hitting the floor
+  const pt = ws.projType ?? ProjType.NORMAL;
+  const gravity = pt === ProjType.FLAME ? 1.8 : pt === ProjType.GRENADE ? 2.5 : pt === ProjType.BFG ? 0.3 : 1.2;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const flightTime = dist / Math.max(1, spd);
+  const aimVz = 0.5 * gravity * flightTime;
   for (let p = 0; p < pellets; p++) {
     const a = ang + (rng() - 0.5) * spread;
     const cos = Math.cos(a);
@@ -715,11 +721,12 @@ function npcFireProjectile(
       sprite: hostileProjectileSprite(ws.projSprite ?? Spr.BULLET),
       vx: cos * spd,
       vy: sin * spd,
+      vz: aimVz,
       projDmg: ws.dmg,
-      projLife: ws.projType === ProjType.FLAME ? 0.7 : 3.0,
+      projLife: pt === ProjType.FLAME ? 0.7 : 3.0,
       ownerId: e.id,
       weapon: weaponId,
-      spriteScale: ws.projType === ProjType.FLAME ? 0.55 : 0.25,
+      spriteScale: pt === ProjType.FLAME ? 0.55 : 0.25,
       spriteZ: 0.5,
       projType: ws.projType,
     };

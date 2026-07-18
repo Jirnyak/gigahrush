@@ -6683,6 +6683,12 @@ function fireMonsterProjectile(
   const cos = Math.cos(ang);
   const sin = Math.sin(ang);
   const sprite = def.projSprite || Spr.EYE_BOLT;
+  // Compensate gravity so projectile arrives at target height instead of hitting the floor
+  const pt = def.projType;
+  const gravity = pt === ProjType.FLAME ? 1.8 : pt === ProjType.GRENADE ? 2.5 : pt === ProjType.BFG ? 0.3 : 1.2;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const flightTime = dist / Math.max(1, spd);
+  const vz = 0.5 * gravity * flightTime;
   entities.push({
     id: nextId.v++,
     type: EntityType.PROJECTILE,
@@ -6695,13 +6701,14 @@ function fireMonsterProjectile(
     sprite,
     vx: cos * spd,
     vy: sin * spd,
+    vz,
     projDmg: dmg,
-    projLife: def.projType === ProjType.WEB ? 1.45 : 3.0,
+    projLife: pt === ProjType.WEB ? 1.45 : 3.0,
     ownerId: e.id,
     spriteScale: monsterProjectileScale(e.monsterKind, sprite),
     spriteZ: 0.5,
-    projType: def.projType,
-    projGore: def.projType === ProjType.WEB || sprite === Spr.PARAGRAPH_BOLT ? 1 : 2,
+    projType: pt,
+    projGore: pt === ProjType.WEB || sprite === Spr.PARAGRAPH_BOLT ? 1 : 2,
   });
   playSoundAt(monsterProjectileSound(e.monsterKind, sprite), e.x, e.y);
   e.attackCd = def.attackRate ?? 2;
@@ -8807,9 +8814,7 @@ export function tryPerformMonsterMeleeAttack(
       const dy = world.delta(e.y, target.y);
       e.angle = Math.atan2(dy, dx);
 
-      const ax = e.x + Math.cos(e.angle) * mRange;
-      const ay = e.y + Math.sin(e.angle) * mRange;
-      getEntityIndex().queryRadius(ax, ay, 1.2, monsterMeleeHitQuery, ENTITY_MASK_ACTOR);
+      getEntityIndex().queryRadius(e.x, e.y, mRange + 0.5, monsterMeleeHitQuery, ENTITY_MASK_ACTOR);
       const hitTarget = selectMeleeTarget(world, e, monsterMeleeHitQuery, mRange);
 
       if (hitTarget) {
@@ -8865,7 +8870,7 @@ export function tryPerformMonsterMeleeAttack(
     }
     // Orbit around target while in melee range (circle-strafe between attacks)
     if (!e.phasing && (def?.speed ?? 0) > 0) {
-      tryCombatOrbitStep(world, e, target, mRange * 0.85, 0.4, dt);
+      tryCombatOrbitStep(world, e, target, mRange * 0.65, 0.3, dt);
     }
     return true;
   }
@@ -9109,11 +9114,10 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
 
-  // Close approach: if nearly in melee range, orbit instead of pathfinding for smooth transition
+  // Close approach: if nearly in melee range, orbit to close distance smoothly
   const _meleeOrbitR = monsterMeleeRange(world, e);
-  if (!e.phasing && bestDist < _meleeOrbitR + 2.0 && bestDist > _meleeOrbitR) {
-    tryCombatOrbitStep(world, e, target, _meleeOrbitR * 0.85, 0.6, dt);
-    return;
+  if (!e.phasing && bestDist < _meleeOrbitR + 1.0 && bestDist > _meleeOrbitR * 0.8) {
+    if (tryCombatOrbitStep(world, e, target, _meleeOrbitR * 0.65, 0.35, dt)) return;
   }
 
   // Hunt: pathfind to target
