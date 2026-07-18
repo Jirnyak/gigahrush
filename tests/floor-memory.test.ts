@@ -677,3 +677,30 @@ test('tryBase64ToBytes handles invalid base64 by returning null', () => {
     globalThis.Buffer = originalBuffer;
   }
 });
+
+test('ensureFloorRouteLiftLayout fills sparse fixed lifts up to 16 for roof and void boundary directions', () => {
+  const world = new World();
+  for (let y = 100; y < 356; y++) {
+    for (let x = 100; x < 356; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
+  for (let i = 0; i < 2; i++) {
+    const liftIdx = world.idx(150 + i * 20, 150);
+    world.cells[liftIdx] = Cell.LIFT;
+    world.wallTex[liftIdx] = Tex.LIFT_DOOR;
+    world.liftDir[liftIdx] = LiftDirection.DOWN;
+  }
+
+  const result = ensureFloorRouteLiftLayout(world, 228.5, 228.5, [LiftDirection.DOWN], {
+    countPerDirection: 16,
+  });
+
+  assert.equal(result.down, 16);
+  assert.equal(result.placed >= 14 && result.placed <= 16, true);
+  let totalDown = 0;
+  for (let i = 0; i < world.cells.length; i++) {
+    if (world.cells[i] === Cell.LIFT && world.liftDir[i] === LiftDirection.DOWN) totalDown++;
+  }
+  assert.equal(totalDown, 16);
+});

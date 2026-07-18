@@ -5282,7 +5282,7 @@ function switchFloor(
     spreadElevatorInstanceRumor(world, entities, player, state, route.activeInstance);
   }
   let departureLiftAnchors: FloorLiftAnchor[] = [];
-  if (allowElevatorAnomaly && !activeFloorInstance && runEntry) {
+  if (!activeFloorInstance && runEntry) {
     ensureCurrentRouteLiftLayout();
     departureLiftAnchors = collectFloorLiftAnchors(world, direction, ROUTE_LIFTS_PER_DIRECTION);
   }
@@ -5330,7 +5330,7 @@ function switchFloor(
     const routeLiftMirror = !activeFloorInstance && !route.activeInstance && generatedRunEntry && departureLiftAnchors.length > 0
       ? { direction: returnDirection, anchors: departureLiftAnchors }
       : undefined;
-    if (!route.activeInstance && allowElevatorAnomaly) {
+    if (!route.activeInstance && !getActiveFloorInstance(state)) {
       ensureFloorRouteLiftLayout(world, savedX, savedY, currentRouteLiftDirections(), {
         countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
         mirror: routeLiftMirror,
