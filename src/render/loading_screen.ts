@@ -307,7 +307,7 @@ function drawFirstLoadTutorial(
     ctx.font = `bold ${titleSize}px monospace`;
     ctx.fillStyle = '#e56a20';
     ctx.textAlign = 'center';
-    const titleText = canvasTextGlitch('[ СИСТЕМНАЯ СВОДКА ]', centerX, topTitleY);
+    const titleText = canvasTextGlitch('[ СИСТЕМНАЯ СВОДКА ОТ ПАРТИИ ]', centerX, topTitleY);
     ctx.fillText(titleText, centerX, topTitleY);
 
     const subSize = Math.max(11, Math.min(16, Math.round(width / 32)));
