@@ -40,7 +40,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   paintMissingOrganicTextures(world);
   generateZones(world);
   retuneHellZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 180) + 2;
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, -36) + 2;
   initializeCellTerritory(world, {
     seed: generationSeed,
     targetShares: territorySharesForDesignFloor('hell'),

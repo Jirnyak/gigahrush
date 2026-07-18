@@ -1304,7 +1304,7 @@ export function applyZones(world: World): void {
   generateZones(world);
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, CENTER, CENTER);
-    zone.level = Math.max(2, Math.min(5, calcZoneLevel(zone.cx, zone.cy, 60) + (d < 150 ? 2 : 1)));
+    zone.level = Math.max(2, Math.min(5, calcZoneLevel(zone.cx, zone.cy, 8) + (d < 150 ? 2 : 1)));
     if (d < 130) zone.faction = ZoneFaction.LIQUIDATOR;
     else if (zone.cx > CENTER + 120) zone.faction = ZoneFaction.WILD;
     else zone.faction = ZoneFaction.CITIZEN;

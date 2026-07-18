@@ -355,8 +355,8 @@ export function calcZoneLevel(zoneCx: number, zoneCy: number, z: number): number
   const distFromCenter = Math.sqrt(dx * dx + dy * dy);
   const baseLevel = Math.max(1, Math.round(1 + distFromCenter * 1.5));
 
-  // Difficulty increases with depth
-  const depthBonus = Math.max(0, Math.floor(z * 1.5));
+  // Difficulty increases with depth (distance from z=0)
+  const depthBonus = Math.floor(Math.abs(z) * 1.5);
 
   return baseLevel + depthBonus;
 }

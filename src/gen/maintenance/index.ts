@@ -186,7 +186,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
      Phase 8: Zones + zone levels
      ══════════════════════════════════════════════════════════════ */
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 140);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, -26);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 9-11: Entities & Environment

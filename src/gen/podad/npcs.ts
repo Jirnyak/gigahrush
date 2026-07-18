@@ -173,7 +173,7 @@ export function tunePodadZones(world: World): void {
   for (const zone of world.zones) {
     const d = world.dist(zone.cx, zone.cy, SPAWN_X, SPAWN_Y);
     zone.faction = d < 120 ? ZoneFaction.CULTIST : d < 260 ? ZoneFaction.SAMOSBOR : ZoneFaction.WILD;
-    zone.level = calcZoneLevel(zone.cx, zone.cy, 180) + (d > 220 ? 5 : 3);
+    zone.level = calcZoneLevel(zone.cx, zone.cy, -40) + (d > 220 ? 5 : 3);
     zone.fogged = d > 180;
   }
   for (let i = 0; i < W * W; i++) {

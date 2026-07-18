@@ -837,7 +837,7 @@ export function setFeature(world: World, x: number, y: number, feature: Feature)
 
 export function retuneUnderhellZones(world: World): void {
   for (const zone of world.zones) {
-    zone.level = calcZoneLevel(zone.cx, zone.cy, 180) + 5;
+    zone.level = calcZoneLevel(zone.cx, zone.cy, -38) + 5;
     const roll = Math.abs(Math.sin((zone.cx * 12.9898 + zone.cy * 78.233 + 19) * 0.01));
     zone.faction = roll < 0.62 ? ZoneFaction.CULTIST : roll < 0.84 ? ZoneFaction.WILD : ZoneFaction.LIQUIDATOR;
     zone.hqRoomId = -1;

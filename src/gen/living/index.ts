@@ -79,7 +79,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
 
   /* ── A2: Permanent zones (64 macro-regions) ─────── */
   generateZones(world);  // Assign zone levels for living floor
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 100);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 0);
 
   /* Update apartmentRoomCount to include all permanent rooms */
   world.apartmentRoomCount = world.rooms.length;

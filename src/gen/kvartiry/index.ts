@@ -432,7 +432,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 6: Zones (64 macro-regions) ─────────────────────────
   generateZones(world);
-  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 60);
+  for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, 14);
 
   // ── Phase 6b: Ensure connectivity ─────────────────────────────
   const spawnCenterX = W / 2, spawnCenterY = W / 2;

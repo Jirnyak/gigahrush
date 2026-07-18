@@ -69,7 +69,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   generateZones(world);
   for (const zone of world.zones) {
     zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
-    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, 30));
+    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, 22));
   }
 
   addArchiveContainer(
