@@ -102,8 +102,15 @@ class MusicSystem {
     if (nextTrack && this.currentAudio) {
       this.currentTrackName = nextTrack;
       this.currentAudio.src = this.tracks[nextTrack];
-      this.playPending = true;
-      this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
+      const masterVolume = (audioSuspended() || !masterAudioEnabled()) ? 0 : 0.4 * musicVolume();
+      this.currentAudio.volume = Math.max(0, Math.min(1, masterVolume));
+      this.currentAudio.muted = masterVolume <= 0;
+      if (masterVolume > 0 && !this.playPending) {
+        this.playPending = true;
+        this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
+      } else if (masterVolume <= 0 && !this.currentAudio.paused) {
+        this.currentAudio.pause();
+      }
     }
   };
 
@@ -151,14 +158,23 @@ class MusicSystem {
       this.fadeTimer -= dt;
       const p = Math.max(0, this.fadeTimer / this.fadeDuration);
       if (this.currentAudio) {
-        this.currentAudio.volume = Math.max(0, Math.min(1, (1 - p) * masterVolume));
-        if (this.currentAudio.paused && masterVolume > 0 && !this.playPending) {
+        const targetVol = Math.max(0, Math.min(1, (1 - p) * masterVolume));
+        this.currentAudio.volume = targetVol;
+        this.currentAudio.muted = targetVol <= 0;
+        if (this.currentAudio.paused && targetVol > 0 && !this.playPending) {
           this.playPending = true;
           this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
+        } else if (!this.currentAudio.paused && targetVol <= 0) {
+          this.currentAudio.pause();
         }
       }
       if (this.fadeOutAudio) {
-        this.fadeOutAudio.volume = Math.max(0, Math.min(1, p * masterVolume));
+        const fadeVol = Math.max(0, Math.min(1, p * masterVolume));
+        this.fadeOutAudio.volume = fadeVol;
+        this.fadeOutAudio.muted = fadeVol <= 0;
+        if (!this.fadeOutAudio.paused && fadeVol <= 0) {
+          this.fadeOutAudio.pause();
+        }
       }
       if (this.fadeTimer <= 0 && this.fadeOutAudio) {
         this.fadeOutAudio.pause();
@@ -168,10 +184,14 @@ class MusicSystem {
       }
     } else {
       if (this.currentAudio) {
-        this.currentAudio.volume = Math.max(0, Math.min(1, masterVolume));
-        if (this.currentAudio.paused && masterVolume > 0 && !this.playPending) {
+        const targetVol = Math.max(0, Math.min(1, masterVolume));
+        this.currentAudio.volume = targetVol;
+        this.currentAudio.muted = targetVol <= 0;
+        if (this.currentAudio.paused && targetVol > 0 && !this.playPending) {
           this.playPending = true;
           this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {});
+        } else if (!this.currentAudio.paused && targetVol <= 0) {
+          this.currentAudio.pause();
         }
       }
     }
@@ -196,12 +216,14 @@ class MusicSystem {
         this.currentAudio = new Audio(this.tracks[nextTrack]);
         this.currentAudio.addEventListener('ended', this.onTrackEnded);
         this.currentAudio.volume = 0;
+        this.currentAudio.muted = masterVolume <= 0;
         
-        // Browsers block autoplay until interaction. The error is safely ignored.
-        this.playPending = true;
-        this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {
-          // Playback blocked, will try again naturally or just stay paused.
-        });
+        if (masterVolume > 0) {
+          this.playPending = true;
+          this.currentAudio.play().finally(() => { this.playPending = false; }).catch(() => {
+            // Playback blocked, will try again naturally or just stay paused.
+          });
+        }
         
         this.fadeTimer = this.fadeDuration;
       }
