@@ -539,6 +539,408 @@ export const COMPILED_CATEGORIES: Readonly<Record<string, readonly CompiledCateg
         "repair"
       ]
     }
+  ],
+  "STATE_FACT": [
+    {
+      "text": "дверь набухла снизу",
+      "weight": 60,
+      "tags": [
+        "door",
+        "water"
+      ]
+    },
+    {
+      "text": "этаж сегодня врёт номером",
+      "weight": 40,
+      "tags": [
+        "lift",
+        "route",
+        "danger"
+      ]
+    },
+    {
+      "text": "кухня стала за шкафом",
+      "weight": 50,
+      "tags": [
+        "room",
+        "food"
+      ]
+    },
+    {
+      "text": "дверь слушает громче людей",
+      "weight": 60,
+      "tags": [
+        "room",
+        "danger"
+      ]
+    },
+    {
+      "text": "завтра говорит кладовщик",
+      "weight": 50,
+      "tags": [
+        "trade",
+        "production"
+      ]
+    },
+    {
+      "text": "стены сырые",
+      "weight": 45,
+      "tags": [
+        "water",
+        "room"
+      ]
+    },
+    {
+      "text": "воздух плохой",
+      "weight": 55,
+      "tags": [
+        "air",
+        "danger"
+      ]
+    },
+    {
+      "text": "руки держи на виду",
+      "weight": 60,
+      "tags": [
+        "relation",
+        "theft"
+      ]
+    },
+    {
+      "text": "цену назовут мягче",
+      "weight": 50,
+      "tags": [
+        "trade",
+        "help"
+      ]
+    },
+    {
+      "text": "список укрытых опять не сошёлся",
+      "weight": 70,
+      "tags": [
+        "shelter",
+        "event"
+      ]
+    },
+    {
+      "text": "цены не стоят",
+      "weight": 60,
+      "tags": [
+        "trade",
+        "shortage"
+      ]
+    },
+    {
+      "text": "дверь держится лучше",
+      "weight": 40,
+      "tags": [
+        "repair",
+        "door"
+      ]
+    },
+    {
+      "text": "сначала считают своих",
+      "weight": 70,
+      "tags": [
+        "faction",
+        "order"
+      ]
+    },
+    {
+      "text": "держат сектор, пока есть патроны",
+      "weight": 70,
+      "tags": [
+        "faction",
+        "danger",
+        "combat"
+      ]
+    },
+    {
+      "text": "имя запоминают",
+      "weight": 55,
+      "tags": [
+        "relation",
+        "help"
+      ]
+    },
+    {
+      "text": "свидетель уже у двери",
+      "weight": 60,
+      "tags": [
+        "relation",
+        "theft"
+      ]
+    }
+  ],
+  "NEED": [
+    {
+      "text": "Воды мало",
+      "weight": 90,
+      "tags": [
+        "need",
+        "water"
+      ]
+    },
+    {
+      "text": "Хлеб кончается",
+      "weight": 80,
+      "tags": [
+        "need",
+        "food"
+      ]
+    },
+    {
+      "text": "Кровь пошла сильнее",
+      "weight": 70,
+      "tags": [
+        "need",
+        "wound",
+        "medical"
+      ]
+    },
+    {
+      "text": "горло пересохло",
+      "weight": 85,
+      "tags": [
+        "need",
+        "water"
+      ]
+    },
+    {
+      "text": "ноги тяжелеют",
+      "weight": 50,
+      "tags": [
+        "need",
+        "wound"
+      ]
+    },
+    {
+      "text": "в глазах рябит",
+      "weight": 60,
+      "tags": [
+        "need",
+        "wound",
+        "danger"
+      ]
+    }
+  ],
+  "SEVERITY": [
+    {
+      "text": "это уже срочно",
+      "weight": 70,
+      "tags": [
+        "urgent"
+      ]
+    },
+    {
+      "text": "терпит недолго",
+      "weight": 50,
+      "tags": [
+        "low"
+      ]
+    },
+    {
+      "text": "паника ближе драки",
+      "weight": 40,
+      "tags": [
+        "panic",
+        "danger"
+      ]
+    },
+    {
+      "text": "хуже не бывает",
+      "weight": 80,
+      "tags": [
+        "urgent",
+        "danger"
+      ]
+    },
+    {
+      "text": "пока держится",
+      "weight": 30,
+      "tags": [
+        "low"
+      ]
+    }
+  ],
+  "TRADE_RULE": [
+    {
+      "text": "плати водой или маршрутом",
+      "weight": 70,
+      "tags": [
+        "trade",
+        "water"
+      ]
+    },
+    {
+      "text": "торгуйся при свидетеле",
+      "weight": 50,
+      "tags": [
+        "trade",
+        "queue"
+      ]
+    },
+    {
+      "text": "платить будут претензиями",
+      "weight": 40,
+      "tags": [
+        "contract"
+      ]
+    },
+    {
+      "text": "без свидетелей не берут",
+      "weight": 60,
+      "tags": [
+        "trade",
+        "theft"
+      ]
+    },
+    {
+      "text": "цена по карточке и ни литра сверху",
+      "weight": 55,
+      "tags": [
+        "trade",
+        "water",
+        "bureaucracy"
+      ]
+    }
+  ],
+  "BAN": [
+    {
+      "text": "не шагай первым",
+      "weight": 50,
+      "tags": [
+        "danger"
+      ]
+    },
+    {
+      "text": "не открывай на знакомый голос",
+      "weight": 80,
+      "tags": [
+        "door",
+        "samosbor",
+        "danger"
+      ]
+    },
+    {
+      "text": "не показывай пайку очереди",
+      "weight": 50,
+      "tags": [
+        "food",
+        "queue"
+      ]
+    },
+    {
+      "text": "не выноси молча",
+      "weight": 70,
+      "tags": [
+        "theft"
+      ]
+    },
+    {
+      "text": "не спорь у чужой гермы",
+      "weight": 50,
+      "tags": [
+        "faction",
+        "shelter"
+      ]
+    },
+    {
+      "text": "не верь голосу за стеной",
+      "weight": 60,
+      "tags": [
+        "danger",
+        "samosbor"
+      ]
+    },
+    {
+      "text": "не лезь без фонаря",
+      "weight": 40,
+      "tags": [
+        "danger",
+        "survival"
+      ]
+    }
+  ],
+  "FACTION_NAME": [
+    {
+      "text": "Гражданские",
+      "weight": 60,
+      "tags": [
+        "faction",
+        "citizen"
+      ]
+    },
+    {
+      "text": "Ликвидаторы",
+      "weight": 80,
+      "tags": [
+        "faction",
+        "liquidator",
+        "combat"
+      ]
+    },
+    {
+      "text": "Культисты",
+      "weight": 50,
+      "tags": [
+        "faction",
+        "cult",
+        "mystic"
+      ]
+    },
+    {
+      "text": "Дикие",
+      "weight": 60,
+      "tags": [
+        "faction",
+        "wild"
+      ]
+    },
+    {
+      "text": "Администрация",
+      "weight": 65,
+      "tags": [
+        "faction",
+        "bureaucracy"
+      ]
+    }
+  ],
+  "TERMINAL": [
+    {
+      "text": "верят на одну карту больше",
+      "weight": 40,
+      "tags": [
+        "relation"
+      ]
+    },
+    {
+      "text": "и точка",
+      "weight": 20,
+      "tags": []
+    },
+    {
+      "text": "так и живём",
+      "weight": 30,
+      "tags": [
+        "survival"
+      ]
+    },
+    {
+      "text": "без вариантов",
+      "weight": 35,
+      "tags": [
+        "danger"
+      ]
+    },
+    {
+      "text": "пока не забыли",
+      "weight": 25,
+      "tags": [
+        "relation",
+        "event"
+      ]
+    }
   ]
 } as const;
 
