@@ -22,6 +22,7 @@ export type MarkovAdapterSource = 'generated_markov' | 'curated_pool' | 'locked_
 export interface MarkovAdapterTextContext {
   actorId?: number;
   actorAlifeId?: number;
+  actorName?: string;
   targetId?: number;
   targetAlifeId?: number;
   z?: number;
