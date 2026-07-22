@@ -139,6 +139,64 @@ test('core generation path does not use ambient random source', () => {
   assert.equal(source.includes('Math.random'), false);
 });
 
+test('document_flavor and lore_note intents generate valid grounded text', () => {
+  const docResult = generateMarkovText({
+    intent: 'document_flavor',
+    seed: 555,
+    repeatIndex: 0,
+    context: { actorId: 1, tags: ['item', 'wealth'] },
+  });
+  assert.equal(docResult.intent, 'document_flavor');
+  assert.ok(docResult.text.length > 0);
+  assert.doesNotMatch(docResult.text, /\{[^}]+}/);
+
+  const loreResult = generateMarkovText({
+    intent: 'lore_note',
+    seed: 777,
+    repeatIndex: 0,
+    context: { actorId: 2, tags: ['event', 'danger'] },
+  });
+  assert.equal(loreResult.intent, 'lore_note');
+  assert.ok(loreResult.text.length > 0);
+  assert.doesNotMatch(loreResult.text, /\{[^}]+}/);
+});
+
+test('stress testing 1000 iterations of generateMarkovText across all intents', () => {
+  const intents = [
+    'talk_ambient',
+    'talk_context',
+    'log_speech',
+    'bark_ambient',
+    'procedural_quest',
+    'rumor_flavor',
+    'demos_post',
+    'demos_reaction',
+    'document_flavor',
+    'lore_note',
+  ] as const;
+
+  for (let i = 0; i < 1000; i++) {
+    const intent = intents[i % intents.length];
+    const result = generateMarkovText({
+      intent,
+      seed: i * 123 + 456,
+      repeatIndex: i % 5,
+      context: {
+        actorId: (i % 20) + 1,
+        z: i % 10,
+        needBand: i % 3 === 0 ? 'urgent' : 'ok',
+        dangerBand: i % 4 === 0 ? 'panic' : 'quiet',
+        wealthBand: i % 2 === 0 ? 'fat' : 'broke',
+        tags: ['room', 'need', 'danger', 'trade', 'item', 'event', 'faction', 'relation'].slice(0, (i % 4) + 1),
+      },
+    });
+
+    assert.ok(result.text.length > 0, `Empty text at iteration ${i} for intent ${intent}`);
+    assert.doesNotMatch(result.text, /\{[^}]+}/, `Unresolved slot at iteration ${i} for intent ${intent}`);
+    assertNoRepeatLoops(result.text);
+  }
+});
+
 function assertNoRepeatLoops(text: string): void {
   const tokens = text
     .toLocaleLowerCase('ru-RU')

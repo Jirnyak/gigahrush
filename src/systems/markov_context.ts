@@ -53,6 +53,12 @@ export interface MarkovTextContext {
   contractId?: string;
   tags: readonly string[];
   contextHash: string;
+  dangerLevel?: number;
+  thirst?: number;
+  hunger?: number;
+  foundItemValue?: number;
+  recentTrauma?: boolean;
+  isSamosborActive?: boolean;
 }
 
 export interface MarkovContextLoweringOptions {
@@ -73,6 +79,12 @@ export interface MarkovContextLoweringOptions {
   timeMinutes?: number;
   timeBand?: MarkovTimeBand;
   extraTags?: readonly string[];
+  dangerLevel?: number;
+  thirst?: number;
+  hunger?: number;
+  foundItemValue?: number;
+  recentTrauma?: boolean;
+  isSamosborActive?: boolean;
 }
 
 export interface MarkovDemosCandidate extends MarkovContextLoweringOptions {
@@ -212,6 +224,12 @@ export function lowerContextSnapshot(
     dangerBand,
     wealthBand: options.wealthBand ?? wealthBandForValue(options.wealth),
     timeBand: options.timeBand ?? timeBandForMinutes(options.timeMinutes),
+    dangerLevel: options.dangerLevel ?? (snapshot.isDangerousZone ? 0.7 : snapshot.roomMemorySeverity > 0 ? Math.min(1.0, snapshot.roomMemorySeverity / 3) : 0),
+    thirst: options.thirst ?? (snapshot.npcNeeds ? Math.max(0, Math.min(1.0, (100 - snapshot.npcNeeds.water) / 100)) : 0),
+    hunger: options.hunger ?? (snapshot.npcNeeds ? Math.max(0, Math.min(1.0, (100 - snapshot.npcNeeds.food) / 100)) : 0),
+    foundItemValue: options.foundItemValue,
+    recentTrauma: options.recentTrauma ?? (snapshot.hasRecentMonsterKill || snapshot.hasRoomMemoryCombat),
+    isSamosborActive: options.isSamosborActive ?? snapshot.samosborActive,
     tags: tags.values(),
   });
 }
@@ -249,6 +267,12 @@ export function lowerWorldEventContext(
     dangerBand: dangerBandFromEvent(event),
     wealthBand: options.wealthBand ?? wealthBandForValue(options.wealth),
     timeBand: options.timeBand ?? timeBandForMinutes(options.timeMinutes),
+    dangerLevel: options.dangerLevel,
+    thirst: options.thirst,
+    hunger: options.hunger,
+    foundItemValue: options.foundItemValue,
+    recentTrauma: options.recentTrauma,
+    isSamosborActive: options.isSamosborActive,
     itemId: event.itemId,
     itemName: event.itemName,
     monsterKind: event.monsterKind,
@@ -297,6 +321,12 @@ export function lowerQuestContext(
     dangerBand: dangerBandForRisk(risk),
     wealthBand: options.wealthBand ?? wealthBandForValue(options.wealth ?? quest.moneyReward),
     timeBand: options.timeBand ?? timeBandForMinutes(options.timeMinutes),
+    dangerLevel: options.dangerLevel,
+    thirst: options.thirst,
+    hunger: options.hunger,
+    foundItemValue: options.foundItemValue,
+    recentTrauma: options.recentTrauma,
+    isSamosborActive: options.isSamosborActive,
     itemId: quest.targetItem,
     monsterKind: quest.targetMonsterKind,
     questId: quest.id,
@@ -338,6 +368,12 @@ export function lowerContractContext(
     dangerBand: dangerBandForRisk(contract.target.route?.risk ?? contract.rank),
     wealthBand: options.wealthBand ?? wealthBandForValue(options.wealth ?? contract.moneyReward),
     timeBand: options.timeBand ?? timeBandForMinutes(options.timeMinutes),
+    dangerLevel: options.dangerLevel,
+    thirst: options.thirst,
+    hunger: options.hunger,
+    foundItemValue: options.foundItemValue,
+    recentTrauma: options.recentTrauma,
+    isSamosborActive: options.isSamosborActive,
     itemId: contract.targetItem,
     monsterKind: contract.targetMonsterKind,
     questType: contract.type,
@@ -375,6 +411,12 @@ export function lowerDemosCandidateContext(candidate: MarkovDemosCandidate): Mar
     socialEdgeFlags: candidate.socialEdgeFlags ?? base?.socialEdgeFlags,
     wealthBand: candidate.wealthBand ?? wealthBandForValue(candidate.wealth) ?? base?.wealthBand,
     timeBand: candidate.timeBand ?? timeBandForMinutes(candidate.timeMinutes) ?? base?.timeBand,
+    dangerLevel: candidate.dangerLevel ?? base?.dangerLevel,
+    thirst: candidate.thirst ?? base?.thirst,
+    hunger: candidate.hunger ?? base?.hunger,
+    foundItemValue: candidate.foundItemValue ?? base?.foundItemValue,
+    recentTrauma: candidate.recentTrauma ?? base?.recentTrauma,
+    isSamosborActive: candidate.isSamosborActive ?? base?.isSamosborActive,
     itemId: candidate.itemId ?? base?.itemId,
     itemName: candidate.itemName ?? base?.itemName,
     monsterKind: candidate.monsterKind ?? base?.monsterKind,
@@ -415,6 +457,12 @@ export function finalizeMarkovContext(input: Partial<MarkovTextContext> & { tags
     questId: finiteInt(input.questId),
     questType: input.questType,
     contractId: cleanId(input.contractId),
+    dangerLevel: input.dangerLevel,
+    thirst: input.thirst,
+    hunger: input.hunger,
+    foundItemValue: input.foundItemValue,
+    recentTrauma: input.recentTrauma,
+    isSamosborActive: input.isSamosborActive,
     tags,
   };
   return {

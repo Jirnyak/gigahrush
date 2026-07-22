@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Простой список стоп-слов для русского языка
+// Расширенный список стоп-слов для русского языка
 const STOP_WORDS = new Set([
   'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 
   'все', 'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 
@@ -23,28 +23,35 @@ function tokenize(text: string): string[] {
   return text.toLowerCase().replace(/[^а-яё\- \n]/g, ' ').split(/\s+/).filter(w => w.length > 0);
 }
 
-// Наивный стеммер для русского, чтобы "сталкер" и "сталкера" склеились
+// Стеммер для русского языка
 function stem(word: string): string {
   if (word.length <= 4) return word;
   return word.replace(/(о|а|у|е|ом|ам|ах|и|ы|ой|ей|ов|ев|ям|ях|ью|ию|ия|ие|ии)$/, '');
 }
 
 async function run() {
-  const corpusPath = path.join(process.cwd(), 'src/data/training_corpus/piknik.txt');
-  if (!fs.existsSync(corpusPath)) {
-    console.error('Корпус не найден:', corpusPath);
+  const corpusDir = path.join(process.cwd(), 'src/data/training_corpus');
+  if (!fs.existsSync(corpusDir)) {
+    console.error('Директория корпусов не найдена:', corpusDir);
     return;
   }
+
+  const files = fs.readdirSync(corpusDir).filter(f => f.endsWith('.txt') || f.endsWith('.jsonl'));
+  console.log(`[Category Discovery] Найдено файлов корпусов: ${files.length} (${files.join(', ')})`);
   
-  const text = fs.readFileSync(corpusPath, 'utf8');
-  // Разобьем на предложения грубо
-  const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
+  let fullText = '';
+  for (const file of files) {
+    const filePath = path.join(corpusDir, file);
+    const content = fs.readFileSync(filePath, 'utf8');
+    fullText += content + '\n\n';
+  }
+  
+  const sentences = fullText.match(/[^\.!\?]+[\.!\?]+/g) || [];
   
   const contexts = new Map<string, Map<string, number>>();
   const wordFreq = new Map<string, number>();
-  const origWords = new Map<string, Set<string>>(); // stem -> original words
+  const origWords = new Map<string, Set<string>>();
 
-  // Сбор контекстов
   for (const sentence of sentences) {
     const tokens = tokenize(sentence);
     for (let i = 0; i < tokens.length; i++) {
@@ -63,11 +70,9 @@ async function run() {
       }
       const ctxMap = contexts.get(target)!;
 
-      // Окно контекста: +-2 слова
       for (let j = Math.max(0, i - 2); j <= Math.min(tokens.length - 1, i + 2); j++) {
         if (i === j) continue;
         const ctxWord = tokens[j];
-        // стоп-слова в контексте ВАЖНЫ! "в [существительное]" - отличный маркер
         const ctxStem = STOP_WORDS.has(ctxWord) ? ctxWord : stem(ctxWord);
         const prefix = j < i ? 'L_' : 'R_';
         const feature = `${prefix}${ctxStem}`;
@@ -76,14 +81,12 @@ async function run() {
     }
   }
 
-  // Фильтруем редкие слова
   const MIN_FREQ = 10;
   const vocab = Array.from(wordFreq.keys()).filter(w => wordFreq.get(w)! >= MIN_FREQ);
   
-  console.log(`Всего предложений: ${sentences.length}`);
+  console.log(`Всего предложений по всем корпусам: ${sentences.length}`);
   console.log(`Всего уникальных основ: ${wordFreq.size}, частых (>=${MIN_FREQ}): ${vocab.length}`);
 
-  // Нормализуем вектора (L2) для косинусного сходства
   const vectors = new Map<string, Map<string, number>>();
   for (const w of vocab) {
     const ctxMap = contexts.get(w)!;
@@ -114,7 +117,6 @@ async function run() {
     return dot;
   }
 
-  // Сортируем vocab по частоте, чтобы центрами кластеров были частые слова
   vocab.sort((a, b) => wordFreq.get(b)! - wordFreq.get(a)!);
 
   const clustered = new Set<string>();
@@ -122,9 +124,6 @@ async function run() {
 
   for (const w of vocab) {
     if (clustered.has(w)) continue;
-    
-    // Ищем соседей с косинусным сходством > порог
-    // Порог 0.3-0.4 обычно ок для таких коротких векторов, поиграемся
     const THRESHOLD = 0.35; 
     const neighbors: Array<{word: string, sim: number}> = [];
     
@@ -138,11 +137,10 @@ async function run() {
     
     neighbors.sort((a, b) => b.sim - a.sim);
     
-    // Создаем кластер, если есть хотя бы 2 похожих слова
     if (neighbors.length >= 2) {
       clustered.add(w);
       const members = [w];
-      for (const n of neighbors.slice(0, 15)) { // топ-15 соседей
+      for (const n of neighbors.slice(0, 15)) {
         clustered.add(n.word);
         members.push(n.word);
       }
@@ -225,7 +223,7 @@ async function run() {
     const weights = calculatePCA1D(c.members);
     
     const scoredMembers = c.members.map((m, idx) => ({
-      word: Array.from(origWords.get(m)!).slice(0, 2).join('/'),
+      word: Array.from(origWords.get(m) || [m]).slice(0, 2).join('/'),
       weight: weights[idx]
     })).sort((a, b) => a.weight - b.weight);
 

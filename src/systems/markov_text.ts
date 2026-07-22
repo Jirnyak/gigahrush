@@ -2,6 +2,7 @@
 
 import { SeedRng, hashSeed, shuffleWith } from '../core/rand';
 import {
+  MARKOV_SLOT_ATOM_CAP,
   MARKOV_TEXT_DEFINITIONS,
   type MarkovAtomClass,
   type MarkovAtomDef,
@@ -13,7 +14,7 @@ import {
   type MarkovTextDefinitions,
 } from '../data/markov_text';
 
-export { MARKOV_TEXT_DEFINITIONS } from '../data/markov_text';
+export { MARKOV_SLOT_ATOM_CAP, MARKOV_TEXT_DEFINITIONS };
 export type {
   MarkovAtomClass,
   MarkovAtomDef,
@@ -28,7 +29,6 @@ export type {
 export const MARKOV_MAX_OUTPUT_CHARS_TALK = 140;
 export const MARKOV_MAX_OUTPUT_CHARS_BARK = 96;
 export const MARKOV_MAX_OUTPUT_CHARS_DEMOS = 180;
-export const MARKOV_SLOT_ATOM_CAP = 8;
 export const MARKOV_SLOT_BEAM_WIDTH = 6;
 export const MARKOV_SLOT_CANDIDATE_CAP = 8;
 export const MARKOV_TEMPLATE_ATTEMPTS = 3;
@@ -63,6 +63,13 @@ export interface MarkovTextContext {
   readonly requiredAnchors?: readonly string[];
   readonly args?: Readonly<Record<string, string | number | undefined>>;
   readonly seed?: number;
+  // PCA numerical metrics for continuous vector scoring
+  readonly dangerLevel?: number;
+  readonly thirst?: number;
+  readonly hunger?: number;
+  readonly foundItemValue?: number;
+  readonly recentTrauma?: boolean;
+  readonly isSamosborActive?: boolean;
 }
 
 export interface SpeechRouterRequest {
@@ -122,6 +129,9 @@ interface CompiledDomain {
   readonly atomTagMask: Uint32Array;
   readonly atomAnchorMask: Uint32Array;
   readonly atomWeight: Uint16Array;
+  readonly atomPcaDanger: Float32Array;
+  readonly atomPcaWealth: Float32Array;
+  readonly atomPcaNeed: Float32Array;
   readonly starts: Uint16Array;
   readonly terminalMask: Uint8Array;
   readonly transFrom: Uint32Array;
@@ -153,6 +163,47 @@ interface SlotCandidate {
   readonly score: number;
 }
 
+export interface PcaContext {
+  readonly pcaDanger: number;
+  readonly pcaWealth: number;
+  readonly pcaNeed: number;
+}
+
+function clampFloat(val: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, val));
+}
+
+export function computePcaContext(context: MarkovTextContext | undefined): PcaContext {
+  if (!context) {
+    return { pcaDanger: 0.1, pcaWealth: 0.1, pcaNeed: 0.1 };
+  }
+  const danger = context.dangerLevel ?? (
+    context.dangerBand === 'panic' ? 1.0 :
+    context.dangerBand === 'combat' ? 0.8 :
+    context.dangerBand === 'threat' ? 0.6 :
+    context.dangerBand === 'uneasy' ? 0.3 :
+    context.isSamosborActive ? 0.9 :
+    context.recentTrauma ? 0.7 : 0.1
+  );
+  const wealth = context.foundItemValue !== undefined ? Math.min(1.0, context.foundItemValue / 100) : (
+    context.wealthBand === 'fat' ? 0.9 :
+    context.wealthBand === 'payday' ? 0.7 :
+    context.wealthBand === 'small' ? 0.3 :
+    context.wealthBand === 'broke' ? -0.5 : 0.1
+  );
+  const need = Math.max(
+    context.thirst ?? 0,
+    context.hunger ?? 0,
+    context.needBand === 'urgent' ? 0.9 :
+    context.needBand === 'low' ? 0.5 : 0.1
+  );
+  return {
+    pcaDanger: clampFloat(danger, -1, 1),
+    pcaWealth: clampFloat(wealth, -1, 1),
+    pcaNeed: clampFloat(need, -1, 1),
+  };
+}
+
 let compiledCache: CompiledPack | undefined;
 
 export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterResult {
@@ -180,12 +231,13 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   const requiredAnchorMask = maskForTags(pack.anchorIds, request.context?.requiredAnchors ?? []);
   const seed = requestSeed(request, 'template');
   const rng = new SeedRng(seed);
-  const templates = rankTemplates(pack, request, baseTags, contextMask, requiredAnchorMask, source, rng);
+  const pcaCtx = computePcaContext(request.context);
+  const templates = rankTemplates(pack, request, baseTags, contextMask, requiredAnchorMask, source, rng, pcaCtx);
 
   for (let attempt = 0; attempt < MARKOV_TEMPLATE_ATTEMPTS; attempt++) {
     const template = pickWeighted(rng, templates, item => item.score);
     if (!template) break;
-    const rendered = renderTemplate(pack, template.template, request, rng, contextMask, requiredAnchorMask);
+    const rendered = renderTemplate(pack, template.template, request, rng, contextMask, requiredAnchorMask, pcaCtx);
     const validation = validateRuntimeText(rendered.text, maxChars, rendered.atomIds, rendered.anchorMask, requiredAnchorMask, rendered.terminalOk, pack);
     if (validation.length === 0) {
       return {
@@ -227,6 +279,8 @@ export function validateMarkovTextData(definitions: MarkovTextDefinitions = MARK
     'demos_post',
     'demos_reaction',
     'locked_author_text',
+    'document_flavor',
+    'lore_note',
   ] as const satisfies readonly MarkovIntent[]) {
     if (!fallbackIntents.has(intent) || !definitions.intentFallbacks[intent]) {
       errors.push(`missing fallback for intent ${intent}`);
@@ -335,6 +389,9 @@ function compileDomain(
   const atomTagMask = new Uint32Array(atoms.length);
   const atomAnchorMask = new Uint32Array(atoms.length);
   const atomWeight = new Uint16Array(atoms.length);
+  const atomPcaDanger = new Float32Array(atoms.length);
+  const atomPcaWealth = new Float32Array(atoms.length);
+  const atomPcaNeed = new Float32Array(atoms.length);
   const atomsByClass: number[][] = Array.from({ length: MARKOV_CLASSES.length }, () => []);
   const starts = new Set<number>();
   const bigram = new Map<number, Map<number, number>>();
@@ -349,6 +406,20 @@ function compileDomain(
     atomTagMask[i] = maskForTags(tagIds, atom.tags ?? []);
     atomAnchorMask[i] = atom.anchorKind ? maskForTags(anchorIds, [atom.anchorKind]) : 0;
     atomWeight[i] = clampWeight(atom.weight ?? 1);
+    const d = atom.pcaDanger !== undefined ? atom.pcaDanger : (
+      (atom.tags ?? []).some(t => ['danger', 'samosbor', 'monster', 'fear', 'combat', 'threat', 'panic'].includes(t)) ? 0.8 :
+      (atom.tags ?? []).some(t => ['uneasy', 'warning'].includes(t)) ? 0.4 : 0.1
+    );
+    const w = atom.pcaWealth !== undefined ? atom.pcaWealth : (
+      (atom.tags ?? []).some(t => ['trade', 'wealth', 'payday', 'fat', 'item', 'valuable', 'contract', 'production'].includes(t)) ? 0.8 :
+      (atom.tags ?? []).some(t => ['shortage', 'broke', 'theft'].includes(t)) ? -0.5 : 0.1
+    );
+    const n = atom.pcaNeed !== undefined ? atom.pcaNeed : (
+      (atom.tags ?? []).some(t => ['need', 'hunger', 'thirst', 'food', 'water', 'medical', 'wound'].includes(t)) ? 0.8 : 0.1
+    );
+    atomPcaDanger[i] = clampFloat(d, -1, 1);
+    atomPcaWealth[i] = clampFloat(w, -1, 1);
+    atomPcaNeed[i] = clampFloat(n, -1, 1);
     atomsByClass[classId].push(i);
   }
 
@@ -375,6 +446,9 @@ function compileDomain(
     atomTagMask,
     atomAnchorMask,
     atomWeight,
+    atomPcaDanger,
+    atomPcaWealth,
+    atomPcaNeed,
     starts: Uint16Array.from([...starts].slice(0, 1024)),
     terminalMask,
     transFrom: transitionArrays.from,
@@ -398,6 +472,7 @@ function renderTemplate(
   rng: SeedRng,
   contextMask: number,
   requiredAnchorMask: number,
+  pcaCtx?: PcaContext,
 ): RenderedTemplate {
   let out = '';
   let anchorMask = 0;
@@ -423,7 +498,7 @@ function renderTemplate(
       continue;
     }
     const slotRequired = requiredAnchorMask | maskForTags(pack.anchorIds, part.requiredAnchors ?? []);
-    const slot = generateSlot(domain, part, rng, contextMask, slotRequired);
+    const slot = generateSlot(domain, part, rng, contextMask, slotRequired, pcaCtx);
     out += slot.text;
     anchorMask |= slot.anchorMask;
     terminalOk = terminalOk && slot.terminalOk;
@@ -446,11 +521,12 @@ function generateSlot(
   rng: SeedRng,
   contextMask: number,
   requiredAnchorMask: number,
+  pcaCtx?: PcaContext,
 ): SlotCandidate {
   const candidates: SlotCandidate[] = [];
   for (const path of slot.allowedClassPaths) {
     if (path.length < slot.minAtoms || path.length > slot.maxAtoms) continue;
-    candidates.push(...generatePathCandidates(domain, path, contextMask, requiredAnchorMask, rng));
+    candidates.push(...generatePathCandidates(domain, path, contextMask, requiredAnchorMask, rng, pcaCtx));
     if (candidates.length >= MARKOV_SLOT_CANDIDATE_CAP * 2) break;
   }
   shuffleWith(() => rng.random(), candidates);
@@ -472,12 +548,13 @@ function generatePathCandidates(
   contextMask: number,
   requiredAnchorMask: number,
   rng: SeedRng,
+  pcaCtx?: PcaContext,
 ): readonly SlotCandidate[] {
   let beams: SlotCandidate[] = [{ text: '', atomIds: [], anchorMask: 0, terminalOk: false, score: 1 }];
   for (const atomClass of path) {
     const classId = MARKOV_CLASSES.indexOf(atomClass);
     if (classId < 0) return [];
-    const atoms = rankAtomsForClass(domain, classId, contextMask, requiredAnchorMask, rng);
+    const atoms = rankAtomsForClass(domain, classId, contextMask, requiredAnchorMask, rng, pcaCtx);
     if (atoms.length === 0) return [];
     const next: SlotCandidate[] = [];
     for (const beam of beams) {
@@ -485,7 +562,7 @@ function generatePathCandidates(
         if (beam.atomIds[beam.atomIds.length - 1] === atomId) continue;
         const expandedIds = [...beam.atomIds, atomId];
         if (hasRepeatedBigram(expandedIds)) continue;
-        const score = beam.score + transitionScore(domain, beam.atomIds, atomId, contextMask, requiredAnchorMask);
+        const score = beam.score + transitionScore(domain, beam.atomIds, atomId, contextMask, requiredAnchorMask, pcaCtx);
         next.push({
           text: joinAtoms(domain, expandedIds),
           atomIds: expandedIds,
@@ -508,19 +585,27 @@ function rankAtomsForClass(
   contextMask: number,
   requiredAnchorMask: number,
   rng: SeedRng,
+  pcaCtx?: PcaContext,
 ): readonly number[] {
   const atoms = [...(domain.atomsByClass[classId] ?? [])];
   shuffleWith(() => rng.random(), atoms);
   return atoms
-    .sort((a, b) => atomContextScore(domain, b, contextMask, requiredAnchorMask) - atomContextScore(domain, a, contextMask, requiredAnchorMask))
+    .sort((a, b) => atomContextScore(domain, b, contextMask, requiredAnchorMask, pcaCtx) - atomContextScore(domain, a, contextMask, requiredAnchorMask, pcaCtx))
     .slice(0, MARKOV_SLOT_ATOM_CAP);
 }
 
-function atomContextScore(domain: CompiledDomain, atomId: number, contextMask: number, requiredAnchorMask: number): number {
+function atomContextScore(domain: CompiledDomain, atomId: number, contextMask: number, requiredAnchorMask: number, pcaCtx?: PcaContext): number {
   let score = domain.atomWeight[atomId] || 1;
   score += bitCount(domain.atomTagMask[atomId] & contextMask) * 3;
   const anchor = domain.atomAnchorMask[atomId];
   if (anchor && (requiredAnchorMask === 0 || (anchor & requiredAnchorMask) !== 0)) score += 5;
+  if (pcaCtx) {
+    const dDiff = domain.atomPcaDanger[atomId] - pcaCtx.pcaDanger;
+    const wDiff = domain.atomPcaWealth[atomId] - pcaCtx.pcaWealth;
+    const nDiff = domain.atomPcaNeed[atomId] - pcaCtx.pcaNeed;
+    const dist2 = dDiff * dDiff + wDiff * wDiff + nDiff * nDiff;
+    score += Math.max(0, 10 - dist2 * 4);
+  }
   return score;
 }
 
@@ -530,21 +615,22 @@ function transitionScore(
   nextAtom: number,
   contextMask: number,
   requiredAnchorMask: number,
+  pcaCtx?: PcaContext,
 ): number {
   const prev1 = path[path.length - 1];
   const prev2 = path[path.length - 2];
   if (prev2 !== undefined && prev1 !== undefined) {
     const weight = domain.trigram.get(encodePair(prev2, prev1))?.get(nextAtom);
-    if (weight !== undefined) return 18 + weight + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask);
+    if (weight !== undefined) return 18 + weight + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask, pcaCtx);
   }
   if (prev1 !== undefined) {
     const weight = domain.bigram.get(prev1)?.get(nextAtom);
-    if (weight !== undefined) return 12 + weight + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask);
+    if (weight !== undefined) return 12 + weight + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask, pcaCtx);
     const classWeight = domain.classTransitions.get(domain.atomClass[prev1])?.get(domain.atomClass[nextAtom]);
-    if (classWeight !== undefined) return 7 + classWeight + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask);
+    if (classWeight !== undefined) return 7 + classWeight + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask, pcaCtx);
   }
   const total = Math.max(1, domain.unigramTotal);
-  return 1 + (domain.atomWeight[nextAtom] / total) * 6 + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask);
+  return 1 + (domain.atomWeight[nextAtom] / total) * 6 + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask, pcaCtx);
 }
 
 function rankTemplates(
@@ -555,6 +641,7 @@ function rankTemplates(
   requiredAnchorMask: number,
   source: MarkovSource,
   rng: SeedRng,
+  pcaCtx?: PcaContext,
 ): readonly { readonly template: MarkovTemplate; readonly score: number }[] {
   const ranked: { template: MarkovTemplate; score: number }[] = [];
   for (const template of pack.templates) {
@@ -570,9 +657,15 @@ function rankTemplates(
     const anchorScore = requiredAnchorMask && template.requiredAnchors
       ? bitCount(maskForTags(pack.anchorIds, template.requiredAnchors) & requiredAnchorMask) * 5
       : 0;
+    let pcaScore = 0;
+    if (pcaCtx) {
+      if (pcaCtx.pcaDanger > 0.5 && template.requiredTags?.includes('danger')) pcaScore += 3;
+      if (pcaCtx.pcaWealth > 0.5 && template.requiredTags?.includes('wealth')) pcaScore += 3;
+      if (pcaCtx.pcaNeed > 0.5 && template.requiredTags?.includes('need')) pcaScore += 3;
+    }
     ranked.push({
       template,
-      score: Math.max(1, template.weight + (template.scoreBias ?? 0) + domainScore * 2 + anchorScore),
+      score: Math.max(1, template.weight + (template.scoreBias ?? 0) + domainScore * 2 + anchorScore + pcaScore),
     });
   }
   shuffleWith(() => rng.random(), ranked);
