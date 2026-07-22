@@ -583,7 +583,9 @@ function generatePathCandidates(
         if (beam.atomIds[beam.atomIds.length - 1] === atomId) continue;
         const expandedIds = [...beam.atomIds, atomId];
         if (hasRepeatedBigram(expandedIds)) continue;
-        const score = beam.score + transitionScore(domain, beam.atomIds, atomId, contextMask, requiredAnchorMask, pcaCtx);
+        const baseTScore = transitionScore(domain, beam.atomIds, atomId, contextMask, requiredAnchorMask, pcaCtx);
+        const noise = rng.random() * 15;
+        const score = beam.score + baseTScore + noise;
         next.push({
           text: joinAtoms(domain, expandedIds, rng),
           atomIds: expandedIds,
@@ -609,10 +611,19 @@ function rankAtomsForClass(
   pcaCtx?: PcaContext,
 ): readonly number[] {
   const atoms = [...(domain.atomsByClass[classId] ?? [])];
-  shuffleWith(() => rng.random(), atoms);
-  return atoms
-    .sort((a, b) => atomContextScore(domain, b, contextMask, requiredAnchorMask, pcaCtx) - atomContextScore(domain, a, contextMask, requiredAnchorMask, pcaCtx))
-    .slice(0, MARKOV_SLOT_ATOM_CAP);
+  
+  const scored = atoms.map(atomId => {
+    const base = atomContextScore(domain, atomId, contextMask, requiredAnchorMask, pcaCtx);
+    const noise = rng.random() * 20; 
+    return { atomId, score: base + noise };
+  });
+
+  shuffleWith(() => rng.random(), scored);
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MARKOV_SLOT_ATOM_CAP)
+    .map(x => x.atomId);
 }
 
 function atomContextScore(domain: CompiledDomain, atomId: number, contextMask: number, requiredAnchorMask: number, pcaCtx?: PcaContext): number {

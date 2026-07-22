@@ -13,6 +13,8 @@ import { markNpcSpokenTo } from './npc_memory';
 import { observeRecentRumorEventsForNpc } from './rumor';
 import { routeSpeech } from './speech_router';
 
+let _dialogueInteractionCounter = 0;
+
 /* ── Talk text (called from NPC menu "Talk" tab) ─────────────── */
 export function generateTalkText(npc: Entity, options: ContextBuildOptions = {}): string {
   const now = options.time ?? performanceNowSeconds();
@@ -31,10 +33,12 @@ export function generateTalkText(npc: Entity, options: ContextBuildOptions = {})
   const memory = markNpcSpokenTo(npc, now);
   observeRecentRumorEventsForNpc(npc, snapshot, now);
 
+  _dialogueInteractionCounter++;
+
   return renderMarkovDialogueTalk(npc, snapshot, {
     memory,
     time: now,
-    repeatIndex: Math.max(0, Math.floor(now)),
+    repeatIndex: Math.max(0, Math.floor(now)) + _dialogueInteractionCounter,
     routeSpeech: routeAdapterSpeech,
   }).text;
 }

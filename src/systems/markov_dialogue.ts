@@ -77,6 +77,7 @@ export interface MarkovDialogueOptions {
   time?: number;
   maxChars?: number;
   routeSpeech?: MarkovRouteSpeech;
+  extraTags?: readonly string[];
 }
 
 const DEFAULT_MAX_TALK_CHARS = 140;
@@ -105,7 +106,7 @@ export function renderMarkovDialogueTalk(
   const pack = resolveNpcPackageForEntity(npc);
   const packageFallback = pack ? selectNpcCuratedFallback(pack, intent, seed) : undefined;
   const exactFallback = cleanLine(options.exactFallback) ?? packageFallback;
-  const context = dialogueContext(npc, snapshot, memory, pack);
+  const context = dialogueContext(npc, snapshot, memory, pack, options.extraTags);
   const maxChars = options.maxChars ?? DEFAULT_MAX_TALK_CHARS;
   const router = options.routeSpeech ?? routeAdapterSpeech;
   
@@ -139,9 +140,11 @@ function dialogueContext(
   snapshot: ContextSnapshot,
   memory: NpcMemory,
   pack: NpcSpeechPackageView | undefined,
+  extraTags?: readonly string[],
 ): MarkovAdapterTextContext {
   const tags: string[] = ['dialogue', 'ordinary_npc'];
   if (npc.ai?.npcState !== undefined) tags.push(`state.${npc.ai.npcState}`);
+  if (extraTags) for (const t of extraTags) if (t && !tags.includes(t)) tags.push(t);
   if (pack) tags.push(...npcPackageSpeechContextTags(pack, npc, 'dialogue'));
   if (snapshot.roomDefId) tags.push('room');
   if (snapshot.isHungry) tags.push('need.food');

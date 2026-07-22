@@ -102,11 +102,15 @@ export function routeSpeech(request: SpeechRouterRequest): SpeechRouterResult {
     return lockedTextResult(request);
   }
 
-  if (hasText(request.exactFallback)) return fallbackResult(request, 'curated_pool');
-
   if (request.source === 'curated_pool') return curatedPoolResult(request);
 
-  return generateMarkovText(request);
+  // Try Markov generation first; use exactFallback only as safety net on failure
+  const generated = generateMarkovText(request);
+  if (!generated.fallbackUsed) return generated;
+
+  if (hasText(request.exactFallback)) return fallbackResult(request, 'curated_pool');
+
+  return generated;
 }
 
 export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterResult {

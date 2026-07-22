@@ -1,6 +1,6 @@
 import { getPlotNpcNumericId, getPlotNpcStringId } from '../data/npc_packages';
 import { openArena } from './arena';
-import { EntityType, msg, type Entity, type GameState } from '../core/types';
+import { EntityType, NpcState, AIGoal, msg, type Entity, type GameState, type AIState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
 import {
   allDesignFloorProfiles,
@@ -79,7 +79,7 @@ interface NpcRecipeLesson {
 
 const customOptions: NpcInteractionOptionDef[] = [];
 const BUILTIN_MENU_OPTIONS = [
-  { id: 'talk', label: 'Говорить', order: 0 },
+  { id: 'talk', label: 'Разговор', order: 0 },
   { id: 'quest', label: 'Задание', questMarkerLabel: 'Задание !', order: 10 },
   { id: 'trade', label: 'Торг', order: 20 },
   { id: 'leave', label: 'Уйти', order: 9000 },
@@ -535,38 +535,108 @@ registerNpcInteractionOption({
 });
 
 function getNpcOccupationStateText(ctx: NpcInteractionContext): string {
-  const snapshot = buildContextSnapshot(ctx.npc, {
+  const npc = ctx.npc;
+  const ai = npc.ai;
+
+  // Build AI-state context tags for Markov core
+  const extraTags: string[] = ['activity_query'];
+  if (ai) {
+    if (ai.npcState !== undefined) extraTags.push(`ai_state.${ai.npcState}`);
+    if (ai.goal !== undefined) extraTags.push(`ai_goal.${ai.goal}`);
+  }
+
+  // Resolve target room name if NPC is traveling
+  let targetRoomName: string | undefined;
+  if (ai && Number.isFinite(ai.tx) && Number.isFinite(ai.ty)) {
+    targetRoomName = ctx.roomDefIdResolver?.(ai.tx, ai.ty);
+    if (targetRoomName) extraTags.push(`target_room`);
+  }
+
+  const snapshot = buildContextSnapshot(npc, {
     player: ctx.player,
     state: ctx.state,
     time: ctx.state.time,
   });
-  
-  // We use repeatIndex based on time or random to ensure variety if the player keeps asking.
-  // We can pass repeatIndex as a hash of the current time in seconds so it changes frequently.
+
   const repeatIndex = Math.floor((ctx.state.time ?? 0) / 60);
-  
-  const result = renderMarkovDialogueTalk(ctx.npc, snapshot, {
+
+  const result = renderMarkovDialogueTalk(npc, snapshot, {
     time: ctx.state.time,
     repeatIndex,
+    extraTags,
   });
-  
+
+  // Build a concrete factual prefix about the NPC's current activity
+  const prefix = npcActivityPrefix(ai, targetRoomName);
+  if (prefix) {
+    return `${prefix} ${result.text}`;
+  }
   return result.text;
+}
+
+/**
+ * Returns a short factual prefix describing what the NPC is actually doing.
+ * This provides concrete A-Life info (room name, goal) that Markov core
+ * can't fabricate on its own.
+ */
+function npcActivityPrefix(
+  ai: AIState | undefined,
+  targetRoomName: string | undefined,
+): string | undefined {
+  if (!ai) return undefined;
+
+  switch (ai.npcState) {
+    case NpcState.SLEEPING: return 'Сейчас отдыхаю.';
+    case NpcState.MORNING: return 'Занят делами.';
+    case NpcState.WORKING: return 'Работаю.';
+    case NpcState.LUNCH: return 'Ищу, где поесть.';
+    case NpcState.HIDING: return 'Прячусь!';
+    case NpcState.PATROL: return 'На обходе.';
+    case NpcState.MEETING: return 'Общаюсь по делу.';
+    case NpcState.BREAK: return 'Отдыхаю.';
+    case NpcState.TRAVELING:
+      if (targetRoomName) return `Иду в «${targetRoomName}».`;
+      return 'В пути.';
+    case NpcState.FREE_TIME:
+      if (ai.goal === AIGoal.WANDER) return 'Слоняюсь.';
+      return 'Без срочных дел.';
+    default:
+      break;
+  }
+
+  // Fallback by AI goal if npcState is not set
+  switch (ai.goal) {
+    case AIGoal.EAT: return 'Ищу еду.';
+    case AIGoal.DRINK: return 'Ищу воду.';
+    case AIGoal.SLEEP: return 'Ложусь спать.';
+    case AIGoal.TOILET: return 'Занят.';
+    case AIGoal.HIDE:
+    case AIGoal.FLEE: return 'Прячусь!';
+    case AIGoal.HUNT: return 'Ищу цель.';
+    case AIGoal.WORK: return 'Работаю.';
+    case AIGoal.GOTO:
+      if (targetRoomName) return `Иду в «${targetRoomName}».`;
+      return 'Иду по делам.';
+    default:
+      return undefined;
+  }
 }
 
 registerNpcInteractionOption({
   id: 'current_activity',
   order: 15,
-  label: () => 'Разговор',
+  label: () => 'Моё занятие',
   visible: ctx => ctx.npc.type === EntityType.NPC && ctx.npc.alive,
   activate: ctx => {
     const text = getNpcOccupationStateText(ctx);
     openNpcInteractionInterface(ctx, {
       id: 'current_activity',
-      title: 'РАЗГОВОР',
+      title: 'ТЕКУЩЕЕ ЗАНЯТИЕ',
       lines: [
         `${ctx.npc.name ?? 'NPC'}: «${text}»`
       ],
-      message: '...',
+      message: 'Текущий статус',
     });
   },
 });
+

@@ -144,21 +144,28 @@ test('blocked tags prevent generated template usage', () => {
   }
 });
 
-test('exact fallback takes priority over generated and curated sources', () => {
+test('generated text takes priority over exact fallback', () => {
   const context = finalizeMarkovContext({ tags: ['room.kitchen'] });
 
-  for (const source of ['generated_markov', 'curated_pool'] as const) {
-    const result = routeSpeech({
-      intent: 'talk_context',
-      source,
-      context,
-      exactFallback: 'Точный игровой fallback.',
-    });
+  // generated_markov source: Markov core generates text, exactFallback is not used
+  const generatedResult = routeSpeech({
+    intent: 'talk_context',
+    source: 'generated_markov',
+    context,
+    exactFallback: 'Точный игровой fallback.',
+  });
+  assert.ok(generatedResult.text.length > 0);
+  assert.notEqual(generatedResult.text, 'Точный игровой fallback.');
 
-    assert.equal(result.text, 'Точный игровой fallback.');
-    assert.equal(result.source, 'curated_pool');
-    assert.equal(result.fallbackUsed, true);
-  }
+  // curated_pool source: curated pool generates text directly
+  const curatedResult = routeSpeech({
+    intent: 'talk_context',
+    source: 'curated_pool',
+    context,
+    exactFallback: 'Точный игровой fallback.',
+  });
+  assert.ok(curatedResult.text.length > 0);
+  assert.equal(curatedResult.source, 'curated_pool');
 });
 
 test('missing optional world data does not crash context lowering', () => {
@@ -228,7 +235,7 @@ test('event context preserves ids but does not invent item, NPC or route names',
   assert.ok(ctx.tags.includes('item.stolen_filter_pack'));
 });
 
-test('router returns exact fallback when generation is unavailable', () => {
+test('router prefers generated text over exact fallback when generation succeeds', () => {
   setSpeechRouterGenerator(undefined);
   const context = finalizeMarkovContext({ tags: ['room.common'] });
 
@@ -239,9 +246,25 @@ test('router returns exact fallback when generation is unavailable', () => {
     exactFallback: 'Пока скажу так, без украшений.',
   });
 
-  assert.equal(result.text, 'Пока скажу так, без украшений.');
+  // Markov core generates text, so exactFallback is NOT used
+  assert.ok(result.text.length > 0);
+  assert.equal(result.fallbackUsed, false);
+});
+
+test('router routes to curated pool when generation is blocked', () => {
+  setSpeechRouterGenerator(undefined);
+  const context = finalizeMarkovContext({ tags: ['blocked.markov'] });
+
+  const result = routeSpeech({
+    intent: 'talk_context',
+    source: 'generated_markov',
+    context,
+    exactFallback: 'Пока скажу так, без украшений.',
+  });
+
+  // Markov generation is blocked, but curated pool succeeds
+  assert.ok(result.text.length > 0);
   assert.equal(result.source, 'curated_pool');
-  assert.equal(result.fallbackUsed, true);
 });
 
 test('curated_pool source routes to curated pool result directly', () => {
