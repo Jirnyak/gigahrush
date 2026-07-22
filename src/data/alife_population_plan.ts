@@ -20,7 +20,6 @@ import {
   allNpcPackages,
   npcPackageDisplayName,
   npcPackageRuntimeEligible,
-  plotNpcIdFromPackage,
   type NpcPackageDef,
   type NpcPackagePresence,
 } from './npc_packages';
@@ -258,7 +257,6 @@ function packageCanReserveOnFloor(pack: NpcPackageDef): boolean {
 export function alifeReservedIdentityFromNpcPackage(pack: NpcPackageDef): AlifeReservedIdentityDef | null {
   if (!packageCanReserveOnFloor(pack)) return null;
   const kind = reservedKindForPackage(pack);
-  const plotNpcId = plotNpcIdFromPackage(pack);
   const maxHp = pack.runtime?.maxHp ?? pack.runtime?.hp;
   return {
     id: `npc:${pack.id}`,
@@ -307,14 +305,14 @@ function buildReservedIdentities(packages?: readonly NpcPackageDef[]): AlifeRese
   const sourcePackages = packages ?? defaultReservedPackageSource();
   const out: AlifeReservedIdentityDef[] = [];
   const reservedIds = new Set<string>();
-  const plotNpcIds = new Set<number>();
+  const npcPackageIds = new Set<string>();
   for (const pack of sourcePackages) {
     const identity = alifeReservedIdentityFromNpcPackage(pack);
     if (!identity) continue;
     if (reservedIds.has(identity.id)) continue;
-    if (identity.plotNpcId !== undefined && plotNpcIds.has(identity.plotNpcId)) continue;
+    if (identity.npcPackageId !== undefined && npcPackageIds.has(identity.npcPackageId)) continue;
     reservedIds.add(identity.id);
-    if (identity.plotNpcId !== undefined) plotNpcIds.add(identity.plotNpcId);
+    if (identity.npcPackageId !== undefined) npcPackageIds.add(identity.npcPackageId);
     out.push(identity);
   }
   return out;
@@ -462,15 +460,15 @@ export function validateAlifePopulationPlan(plan?: AlifePopulationPlanDef): stri
   }
 
   const reservedIds = new Set<string>();
-  const plotIds = new Set<number>();
+  const npcPackageIds = new Set<string>();
   for (const reserved of checked.reserved) {
     if (reservedIds.has(reserved.id)) errors.push(`duplicate reserved identity ${reserved.id}`);
     reservedIds.add(reserved.id);
-    if (reserved.kind === 'plot' && reserved.plotNpcId === undefined) errors.push(`plot reserved identity ${reserved.id} must carry plotNpcId`);
+    if (reserved.kind === 'plot' && reserved.npcPackageId === undefined) errors.push(`plot reserved identity ${reserved.id} must carry npcPackageId`);
     if (!floorKeyKnown(reserved.floorKey, knownContext)) errors.push(`unknown reserved floor key ${reserved.floorKey}`);
-    if (reserved.plotNpcId !== undefined) {
-      if (plotIds.has(reserved.plotNpcId)) errors.push(`duplicate reserved plot NPC ${reserved.plotNpcId}`);
-      plotIds.add(reserved.plotNpcId);
+    if (reserved.npcPackageId !== undefined) {
+      if (npcPackageIds.has(reserved.npcPackageId)) errors.push(`duplicate reserved plot NPC ${reserved.npcPackageId}`);
+      npcPackageIds.add(reserved.npcPackageId);
     }
     if (!tagsValid(reserved.tags)) errors.push(`invalid reserved tags for ${reserved.id}`);
   }

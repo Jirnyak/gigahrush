@@ -1202,7 +1202,7 @@ function reservedNpcFromData(def: AlifeReservedIdentityDef): AlifePopulationRese
     id: def.id,
     kind: def.kind,
     presence: def.presence,
-    plotNpcId: def.plotNpcId ?? (def.id.startsWith('npc:') ? getPlotNpcNumericId(def.id.slice(4)) : getPlotNpcNumericId(def.id)),
+    plotNpcId: def.npcPackageId ? getPlotNpcNumericId(def.npcPackageId) : (def.id.startsWith('npc:') ? getPlotNpcNumericId(def.id.slice(4)) : getPlotNpcNumericId(def.id)),
     name: def.name,
     female: def.female,
     age: def.age,
