@@ -138,7 +138,7 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   if (generated && generated.source === 'generated_markov' && hasText(generated.text) && !generated.fallbackUsed) {
     return {
       ...generated,
-      text: request.maxChars !== undefined ? capText(generated.text, maxCharsForRequest(request)) : generated.text.replace(/\s+/g, ' ').trim(),
+      text: generated.text.replace(/\s+/g, ' ').trim(),
       tags: normalizeResultTags(request, generated.tags),
       fallbackUsed: false,
     };

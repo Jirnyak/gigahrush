@@ -1283,7 +1283,7 @@ export const MARKOV_SPOILER_BLACKLIST = [
 ] as const;
 
 export const MARKOV_INTENT_FALLBACKS: Readonly<Record<MarkovIntent, string>> = {
-  talk_ambient: 'Кушайте вовремя.',
+  talk_ambient: 'Сначала дело, потом разговоры.',
   talk_context: 'Сначала дело, потом разговоры.',
   log_speech: 'В коридоре кто-то говорит коротко и по делу.',
   bark_ambient: 'Дверь держит. Пока тихо.',
@@ -1518,7 +1518,7 @@ const RUMOR_SKELETON_TEMPLATES = COMPILED_SKELETONS
 
 export const MARKOV_TEMPLATES = [
   template('space_move.talk', 'talk_context', ['space_move'], ['room'], ['room'], SPACE_PATHS, 'У гермы тихо. Иди по сухой стене.'),
-  template('needs.talk', 'talk_context', ['needs'], ['need'], ['need'], NEED_PATHS, 'Кушайте вовремя.'),
+  template('needs.talk', 'talk_context', ['needs'], ['need'], ['need'], NEED_PATHS, 'Мне нужно работать.'),
   template('danger.talk', 'talk_context', ['danger'], ['danger'], ['event'], DANGER_PATHS, 'Не стой в коридоре, ищи герму.'),
   template('wealth.talk', 'talk_context', ['wealth'], ['trade'], ['item'], WEALTH_PATHS, 'Вода за хлеб, хлеб за тишину.'),
   template('items_use.talk', 'talk_context', ['items_use'], ['item'], ['item'], ITEM_PATHS, 'Фильтр держи сухим.'),

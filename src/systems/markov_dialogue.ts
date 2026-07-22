@@ -172,6 +172,7 @@ function dialogueContext(
   return {
     actorId: npc.id,
     actorAlifeId: npc.alifeId,
+    actorName: npc.name,
     z: snapshot.z,
     roomType: snapshot.roomType,
     roomDefId: snapshot.roomDefId,

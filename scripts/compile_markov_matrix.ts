@@ -167,6 +167,10 @@ const CANONICAL_CATEGORIES: Record<string, CategoryItem[]> = {
     { text: 'Дикие', weight: 60, tags: ['faction', 'wild'] },
     { text: 'Администрация', weight: 65, tags: ['faction', 'bureaucracy'] }
   ],
+  NPC_NAME: [
+    { text: 'один знакомый', weight: 50, tags: ['neutral'] },
+    { text: 'тот парень', weight: 50, tags: ['neutral'] }
+  ],
   TERMINAL: [
     { text: 'верят на одну карту больше', weight: 40, tags: ['relation'] },
     { text: 'и точка', weight: 20, tags: [] },
@@ -243,7 +247,7 @@ class MarkovModel {
     return matches.map(w => {
       if (w.startsWith('<') && w.includes('>')) return w;
       if (/^[.,!?]$/.test(w)) return w;
-      return w.toLowerCase();
+      return w;
     }).filter(w => w.length > 0);
   }
 
@@ -352,6 +356,9 @@ try {
           .replace(/\bсидорович[а-я]*\b/gi, '<SUBJ>')
           .replace(/\bконтролер[а-я]*\b/gi, '<THREAT>')
           .replace(/\bснорк[а-я]*\b/gi, '<THREAT>');
+
+        clean = clean.replace(/(?<=[а-яё,"]\s+)[А-ЯЁ][а-яё]+/g, '<NPC_NAME>');
+        clean = clean.replace(/^[А-ЯЁ][а-яё]+\b(?!\s+(?:это|был|в|на|с|от|из|к|по|за|для|о|у|и|а|но|или))\b/g, '<NPC_NAME>');
 
         const wordsCount = clean.split(' ').length;
         if (wordsCount >= 3 && wordsCount <= 35) {

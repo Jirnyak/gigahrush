@@ -1,14 +1,17 @@
 /* ── Bounded deterministic Markov NPC text core ───────────────── */
 
 import { rng } from '../core/rand';
+import { randomName } from '../data/catalog';
 import { MARKOV_TEXT_DEFINITIONS, MarkovIntent, MarkovSource } from '../data/markov_text';
 import { COMPILED_SKELETONS, COMPILED_CATEGORIES, COMPILED_MARKOV_GRAPH, COMPILED_PATTERN_DISTANCES } from '../data/markov_compiled_matrix';
 
 export interface MarkovTextContext {
   readonly actorId?: number;
   readonly actorAlifeId?: number;
+  readonly actorName?: string;
   readonly targetId?: number;
   readonly targetAlifeId?: number;
+  readonly targetName?: string;
   readonly floorKey?: string;
   readonly z?: number;
   readonly roomType?: number;
@@ -92,6 +95,13 @@ export function computePcaContext(context: MarkovTextContext | undefined) {
 
 function resolveCategory(tag: string, ctx: MarkovTextContext | undefined): string {
   const categoryName = tag.replace(/[<>]/g, '');
+  if (categoryName === 'NPC_NAME') {
+    const r = rng();
+    if (r < 0.1 && ctx?.targetName) return ctx.targetName;
+    if (r < 0.2 && ctx?.actorName) return ctx.actorName;
+    return randomName(ctx?.faction).firstName;
+  }
+
   const items = COMPILED_CATEGORIES[categoryName];
   if (!items || items.length === 0) return tag;
 
@@ -166,13 +176,16 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   const START_TOKEN = "<s>";
   const END_TOKEN = "</s>";
   const order = 2;
-  const maxWords = 35;
+  const maxWords = 100;
   
   let currentSequence = Array(order).fill(START_TOKEN);
   const result: string[] = [];
 
   const activeTags = new Set<string>();
   const ctx = request.context || {};
+  if (ctx.tags) {
+    for (const tag of ctx.tags) activeTags.add(tag);
+  }
   if (ctx.occupation === 2 || ctx.occupation === 1) activeTags.add('guard'); // just examples based on occupation ID mapping
   if (ctx.occupation === 3) activeTags.add('repair');
   if ((ctx.thirst || 0) > 60 || ctx.needBand === 'urgent') activeTags.add('thirst');

@@ -25,8 +25,10 @@ export type MarkovTimeBand = 'night' | 'morning' | 'work' | 'evening' | 'late';
 export interface MarkovTextContext {
   actorId?: number;
   actorAlifeId?: number;
+  actorName?: string;
   targetId?: number;
   targetAlifeId?: number;
+  targetName?: string;
   floorKey?: string;
   z?: number;
   routeZBand?: MarkovRouteZBand;
@@ -66,8 +68,10 @@ export interface MarkovTextContext {
 export interface MarkovContextLoweringOptions {
   actorId?: number;
   actorAlifeId?: number;
+  actorName?: string;
   targetId?: number;
   targetAlifeId?: number;
+  targetName?: string;
   floorKey?: string;
   z?: number;
   routeZ?: number;
@@ -208,8 +212,10 @@ export function lowerContextSnapshot(
   return finalizeMarkovContext({
     actorId: options.actorId,
     actorAlifeId: options.actorAlifeId,
+    actorName: options.actorName,
     targetId: options.targetId,
     targetAlifeId: options.targetAlifeId,
+    targetName: options.targetName,
     floorKey: options.floorKey,
     z: snapshot.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(options.routeZ),
@@ -256,8 +262,10 @@ export function lowerWorldEventContext(
   return finalizeMarkovContext({
     actorId: options.actorId ?? event.actorId,
     actorAlifeId: options.actorAlifeId,
+    actorName: options.actorName ?? event.actorName,
     targetId: options.targetId ?? event.targetId,
     targetAlifeId: options.targetAlifeId,
+    targetName: options.targetName ?? event.targetName,
     floorKey: options.floorKey,
     z: event.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(options.routeZ),
@@ -308,8 +316,10 @@ export function lowerQuestContext(
   return finalizeMarkovContext({
     actorId: options.actorId ?? quest.giverId,
     actorAlifeId: options.actorAlifeId,
+    actorName: options.actorName,
     targetId: options.targetId ?? quest.targetNpcId,
     targetAlifeId: options.targetAlifeId,
+    targetName: options.targetName,
     floorKey: options.floorKey,
     z: quest.targetFloorZ ?? quest.targetMarker?.z ?? quest.visitFloorZ ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(routeZ),
@@ -357,8 +367,10 @@ export function lowerContractContext(
   return finalizeMarkovContext({
     actorId: options.actorId,
     actorAlifeId: options.actorAlifeId,
+    actorName: options.actorName,
     targetId: options.targetId,
     targetAlifeId: options.targetAlifeId,
+    targetName: options.targetName,
     floorKey: options.floorKey,
     z: contract.target.z ?? options.z,
     routeZBand: options.routeZBand ?? routeZBandForZ(contract.target.route?.z ?? options.routeZ),
@@ -401,8 +413,10 @@ export function lowerDemosCandidateContext(candidate: MarkovDemosCandidate): Mar
     ...base,
     actorId: candidate.actorId ?? base?.actorId,
     actorAlifeId: candidate.actorAlifeId ?? base?.actorAlifeId,
+    actorName: candidate.actorName ?? base?.actorName,
     targetId: candidate.targetId ?? base?.targetId,
     targetAlifeId: candidate.targetAlifeId ?? base?.targetAlifeId,
+    targetName: candidate.targetName ?? base?.targetName,
     floorKey: candidate.floorKey ?? base?.floorKey,
     z: candidate.z ?? base?.z,
     routeZBand: candidate.routeZBand ?? routeZBandForZ(candidate.routeZ) ?? base?.routeZBand,
@@ -433,8 +447,10 @@ export function finalizeMarkovContext(input: Partial<MarkovTextContext> & { tags
   const context: Omit<MarkovTextContext, 'contextHash'> = {
     actorId: finiteInt(input.actorId),
     actorAlifeId: finiteInt(input.actorAlifeId),
+    actorName: cleanText(input.actorName, 96),
     targetId: finiteInt(input.targetId),
     targetAlifeId: finiteInt(input.targetAlifeId),
+    targetName: cleanText(input.targetName, 96),
     floorKey: cleanId(input.floorKey),
     z: input.z,
     routeZBand: input.routeZBand,
@@ -479,8 +495,10 @@ export function buildMarkovContextHash(context: Omit<MarkovTextContext, 'context
   const parts: string[] = [];
   addHashPart(parts, 'actorId', context.actorId);
   addHashPart(parts, 'actorAlifeId', context.actorAlifeId);
+  addHashPart(parts, 'actorName', context.actorName);
   addHashPart(parts, 'targetId', context.targetId);
   addHashPart(parts, 'targetAlifeId', context.targetAlifeId);
+  addHashPart(parts, 'targetName', context.targetName);
   addHashPart(parts, 'floorKey', context.floorKey);
   addHashPart(parts, 'floor', context.z);
   addHashPart(parts, 'routeZBand', context.routeZBand);

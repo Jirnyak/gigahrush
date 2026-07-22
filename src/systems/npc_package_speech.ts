@@ -135,6 +135,7 @@ export function lowerNpcPackageSpeechContext(
   return finalizeMarkovContext({
     actorId: entity?.id,
     actorAlifeId: entity?.alifeId ?? snapshot?.id,
+    actorName: entity?.name ?? snapshot?.name,
     floorKey: snapshot?.floorKey,
     z: snapshot?.z,
     faction: entity?.faction ?? snapshot?.faction,
