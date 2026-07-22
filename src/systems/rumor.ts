@@ -315,12 +315,12 @@ function selectRoomMemoryRumor(npc: Entity, snapshot: ContextSnapshot, memory: N
   rememberRumor(npc, rumorId, now);
   const room = snapshot.roomDefId ?? 'эта комната';
   const zone = snapshot.zoneId === undefined ? '' : `, зона ${snapshot.zoneId + 1}`;
-  if (snapshot.hasRoomMemoryTheft) return `${room}${zone}: тут помнят кражу. Зацепка: чужие контейнеры теперь ведут к ревизии.`;
-  if (snapshot.hasRoomMemoryCombat) return `${room}${zone}: после боя жильцы слушают шаги. Зацепка: разговоры и цены стали жестче.`;
-  if (snapshot.hasRoomMemoryRepair) return `${room}${zone}: ремонт записали в добрую строку. Зацепка: спроси про тайник или скидку.`;
-  if (snapshot.hasRoomMemoryHelp) return `${room}${zone}: помощь не забыли. Зацепка: общий запас отвечает мягче.`;
-  if (snapshot.hasRoomMemoryInform) return `${room}${zone}: кто-то сдал бумагу дальше. Зацепка: фракции будут сверять имена.`;
-  if (snapshot.hasRoomMemorySamosbor) return `${room}${zone}: после гермы считают, кто выжил. Зацепка: тайники и долги рядом.`;
+  if (snapshot.hasRoomMemoryTheft) return `${room}${zone}: тут помнят кражу. Чужие контейнеры теперь ведут к ревизии.`;
+  if (snapshot.hasRoomMemoryCombat) return `${room}${zone}: после боя жильцы слушают шаги. Разговоры и цены стали жестче.`;
+  if (snapshot.hasRoomMemoryRepair) return `${room}${zone}: ремонт записали в добрую строку. Спроси про тайник или скидку.`;
+  if (snapshot.hasRoomMemoryHelp) return `${room}${zone}: помощь не забыли. Общий запас отвечает мягче.`;
+  if (snapshot.hasRoomMemoryInform) return `${room}${zone}: кто-то сдал бумагу дальше. Фракции будут сверять имена.`;
+  if (snapshot.hasRoomMemorySamosbor) return `${room}${zone}: после гермы считают, кто выжил. Тайники и долги рядом.`;
   return undefined;
 }
 
@@ -383,10 +383,10 @@ function renderRumor(
   let fallback: string;
   if (lead) {
     rememberRecentLead(rumor, lead, now, event);
-    fallback = `${text} Зацепка: ${lead}.`;
+    fallback = `${text} (${lead}).`;
   } else {
     const reveal = formatRevealLine(rumor.reveals);
-    if (reveal) rememberRecentLead(rumor, reveal.slice('Зацепка: '.length).replace(/\.$/, ''), now, event);
+    if (reveal) rememberRecentLead(rumor, reveal.replace(/\.$/, ''), now, event);
     fallback = reveal ? `${text} ${reveal}` : text;
   }
   return renderMarkovRumorFlavor({
@@ -452,7 +452,7 @@ function formatRevealLine(input: RumorDef['reveals']): string {
     const part = formatReveal(reveal);
     if (part && !parts.includes(part)) parts.push(part);
   }
-  return parts.length > 0 ? `Зацепка: ${parts.join(', ')}.` : '';
+  return parts.length > 0 ? `${parts.join(', ')}.` : '';
 }
 
 function revealIsActionable(reveal: RumorReveal): boolean {

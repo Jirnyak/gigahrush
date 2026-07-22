@@ -235,7 +235,12 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   const templates = rankTemplates(pack, request, baseTags, contextMask, requiredAnchorMask, source, rng, pcaCtx);
 
   for (let attempt = 0; attempt < MARKOV_TEMPLATE_ATTEMPTS; attempt++) {
-    const template = pickWeighted(rng, templates, item => item.score);
+    const template = pickWeighted(rng, templates, item => {
+      const base = Math.max(1, item.score);
+      const smoothed = Math.pow(base, 0.85);
+      const fluctuation = 0.5 + rng.random() * 1.0;
+      return smoothed * fluctuation;
+    });
     if (!template) break;
     const rendered = renderTemplate(pack, template.template, request, rng, contextMask, requiredAnchorMask, pcaCtx);
     const validation = validateRuntimeText(rendered.text, maxChars, rendered.atomIds, rendered.anchorMask, requiredAnchorMask, rendered.terminalOk, pack);
@@ -532,7 +537,12 @@ function generateSlot(
   shuffleWith(() => rng.random(), candidates);
   candidates.sort((a, b) => b.score - a.score);
   const bounded = candidates.slice(0, MARKOV_SLOT_CANDIDATE_CAP);
-  const picked = pickWeighted(rng, bounded, candidate => candidate.score);
+  const picked = pickWeighted(rng, bounded, candidate => {
+    const base = Math.max(1, candidate.score);
+    const smoothed = Math.pow(base, 0.75);
+    const fluctuation = 0.5 + rng.random() * 1.0;
+    return smoothed * fluctuation;
+  });
   return picked ?? {
     text: domain.source.fallback,
     atomIds: [],
@@ -564,7 +574,7 @@ function generatePathCandidates(
         if (hasRepeatedBigram(expandedIds)) continue;
         const score = beam.score + transitionScore(domain, beam.atomIds, atomId, contextMask, requiredAnchorMask, pcaCtx);
         next.push({
-          text: joinAtoms(domain, expandedIds),
+          text: joinAtoms(domain, expandedIds, rng),
           atomIds: expandedIds,
           anchorMask: beam.anchorMask | domain.atomAnchorMask[atomId],
           terminalOk: domain.terminalMask[atomId] === 1,
@@ -947,7 +957,7 @@ function compileClassTransitionArrays(
   return { from: Uint16Array.from(from), to: Uint8Array.from(to), weight: Uint16Array.from(weight) };
 }
 
-function joinAtoms(domain: CompiledDomain, atomIds: readonly number[]): string {
+function joinAtoms(domain: CompiledDomain, atomIds: readonly number[], rng?: SeedRng): string {
   let out = '';
   for (let i = 0; i < atomIds.length; i++) {
     const text = domain.atomText[atomIds[i]];
@@ -957,13 +967,13 @@ function joinAtoms(domain: CompiledDomain, atomIds: readonly number[]): string {
       continue;
     }
     const atomClass = MARKOV_CLASSES[domain.atomClass[atomIds[i]]];
-    const sep = atomClass === 'action_advice'
-      || atomClass === 'action_ban'
-      || atomClass === 'trade_rule'
-      || atomClass === 'terminal'
-      || atomClass === 'relation_fact'
-      ? '. '
-      : ', ';
+    let sep = ', ';
+    const roll = rng ? rng.random() : ((atomIds[i] * 31 + i) % 10) / 10;
+    if (atomClass === 'action_advice' || atomClass === 'action_ban' || atomClass === 'trade_rule' || atomClass === 'terminal' || atomClass === 'relation_fact') {
+      sep = roll < 0.25 ? ' — ' : roll < 0.45 ? '; ' : '. ';
+    } else {
+      sep = roll < 0.2 ? ' — ' : roll < 0.35 ? ': ' : ', ';
+    }
     out += sep + text;
   }
   return normalizeText(out);

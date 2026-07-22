@@ -235,8 +235,8 @@ export function formatRecentWitnessFactLine(memory: NpcMemory, now: number): str
   const place = witnessPlace(fact);
   const residue = witnessResidueText(fact.residue);
   return residue
-    ? `Я видел: ${witnessActionText(fact)}. Зацепка: ${place}; след: ${residue}.`
-    : `Я видел: ${witnessActionText(fact)}. Зацепка: ${place}.`;
+    ? `Я видел: ${witnessActionText(fact)}. Место: ${place}; след: ${residue}.`
+    : `Я видел: ${witnessActionText(fact)}. Место: ${place}.`;
 }
 
 export function rememberRumor(npc: Entity, rumorId: string, now: number): boolean {

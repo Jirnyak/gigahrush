@@ -136,7 +136,7 @@ function renderRumorFallback(rumor: RumorDef, options: MarkovRumorFlavorOptions)
     : hashSpeechSeed(options.seed ?? rumor.id, options.repeatIndex ?? 0, 'rumor-text');
   const text = fillSlots(rumor.text[idxSeed % rumor.text.length] ?? rumor.text[0] ?? '', options.snapshot);
   const lead = formatLeadLine(rumor.lead, options.event);
-  if (lead) return `${text} Зацепка: ${lead}.`;
+  if (lead) return `${text} (${lead}).`;
   const reveal = formatRevealLine(rumor.reveals);
   return reveal ? `${text} ${reveal}` : text;
 }
@@ -297,7 +297,7 @@ function formatRevealLine(input: RumorDef['reveals']): string {
     const part = formatReveal(reveal);
     if (part && !parts.includes(part)) parts.push(part);
   }
-  return parts.length > 0 ? `Зацепка: ${parts.join(', ')}.` : '';
+  return parts.length > 0 ? `${parts.join(', ')}.` : '';
 }
 
 function revealIsActionable(reveal: RumorReveal): boolean {

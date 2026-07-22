@@ -573,7 +573,7 @@ export function floorRunLiftPrompt(state: GameState, direction: LiftDirection): 
 
 export function floorRunArrivalLead(entry: FloorRunEntry, returnDirection: LiftDirection): string {
   const back = returnDirection === LiftDirection.DOWN ? '↓' : '↑';
-  return `Зацепка: ${floorRunEntryRouteCard(entry)} Возврат: лифт ${back} к предыдущему Z.`;
+  return `Маршрут: ${floorRunEntryRouteCard(entry)} Возврат: лифт ${back} к предыдущему Z.`;
 }
 
 export function floorRunEntryKind(entry: FloorRunEntry): 'story' | 'design' | 'procedural' {

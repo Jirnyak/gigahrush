@@ -1299,53 +1299,73 @@ export const MARKOV_INTENT_FALLBACKS: Readonly<Record<MarkovIntent, string>> = {
 const SPACE_PATHS = [
   ['place_ref', 'state_fact', 'action_advice'],
   ['place_ref', 'state_fact', 'action_ban'],
+  ['place_ref', 'state_fact', 'action_advice', 'terminal'],
+  ['place_ref', 'event_ref', 'state_fact', 'action_advice'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const NEED_PATHS = [
   ['need_ref', 'severity_ref', 'action_advice'],
   ['need_ref', 'item_ref', 'action_advice'],
   ['item_ref', 'state_fact', 'action_ban'],
+  ['need_ref', 'severity_ref', 'item_ref', 'action_advice'],
+  ['item_ref', 'state_fact', 'action_advice', 'terminal'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const DANGER_PATHS = [
   ['event_ref', 'state_fact', 'action_ban'],
   ['place_ref', 'state_fact', 'action_advice'],
   ['event_ref', 'severity_ref', 'action_advice'],
+  ['place_ref', 'event_ref', 'state_fact', 'action_advice'],
+  ['event_ref', 'severity_ref', 'state_fact', 'action_ban'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const WEALTH_PATHS = [
   ['item_ref', 'state_fact', 'trade_rule'],
   ['event_ref', 'state_fact', 'trade_rule'],
+  ['item_ref', 'state_fact', 'trade_rule', 'terminal'],
+  ['event_ref', 'item_ref', 'state_fact', 'trade_rule'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const ITEM_PATHS = [
   ['item_ref', 'state_fact', 'action_advice'],
   ['item_ref', 'action_ban', 'action_advice'],
+  ['item_ref', 'state_fact', 'action_advice', 'terminal'],
+  ['item_ref', 'action_ban', 'state_fact', 'action_advice'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const TIME_PATHS = [
   ['event_ref', 'state_fact', 'action_advice'],
   ['event_ref', 'severity_ref', 'action_ban'],
+  ['event_ref', 'state_fact', 'action_advice', 'terminal'],
+  ['event_ref', 'severity_ref', 'state_fact', 'action_ban'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const RELATION_PATHS = [
   ['relation_fact', 'state_fact', 'action_advice'],
   ['event_ref', 'relation_fact', 'terminal'],
+  ['relation_fact', 'state_fact', 'action_advice', 'terminal'],
+  ['event_ref', 'relation_fact', 'state_fact', 'action_advice'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const FACTION_PATHS = [
   ['faction_ref', 'state_fact', 'action_advice'],
   ['place_ref', 'faction_ref', 'action_ban'],
+  ['place_ref', 'faction_ref', 'state_fact', 'action_advice'],
+  ['faction_ref', 'state_fact', 'action_ban', 'terminal'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const EVENT_PATHS = [
   ['event_ref', 'state_fact', 'action_advice'],
   ['event_ref', 'state_fact', 'trade_rule'],
+  ['event_ref', 'state_fact', 'action_advice', 'terminal'],
+  ['event_ref', 'state_fact', 'trade_rule', 'terminal'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const INTERACTION_PATHS = [
   ['event_ref', 'relation_fact', 'action_advice'],
   ['item_ref', 'state_fact', 'action_ban'],
+  ['event_ref', 'relation_fact', 'state_fact', 'action_advice'],
+  ['item_ref', 'state_fact', 'action_ban', 'terminal'],
 ] as const satisfies readonly (readonly MarkovAtomClass[])[];
 
 const SPACE_ATOMS = [
@@ -1499,6 +1519,22 @@ function skeletonToClassPath(pattern: readonly string[]): MarkovAtomClass[] {
   return out;
 }
 
+const SKELETON_EXPANDED_PATHS: MarkovAtomClass[][] = [
+  ['address', 'action_advice', 'terminal'],
+  ['place_ref', 'state_fact', 'action_advice'],
+  ['place_ref', 'event_ref', 'action_advice'],
+  ['address', 'item_ref', 'action_advice'],
+  ['relation_fact', 'action_advice', 'terminal'],
+  ['event_ref', 'action_advice', 'terminal'],
+  ['address', 'place_ref', 'action_advice'],
+  ['address', 'event_ref', 'action_advice', 'terminal'],
+  ['place_ref', 'event_ref', 'action_advice', 'terminal'],
+  ['address', 'item_ref', 'action_advice', 'terminal'],
+  ['address', 'state_fact', 'action_advice', 'terminal'],
+  ['place_ref', 'state_fact', 'event_ref', 'action_advice'],
+  ['event_ref', 'state_fact', 'action_advice', 'terminal'],
+];
+
 const SKELETON_TEMPLATES = COMPILED_SKELETONS.map(sk => {
   const intentKey = sk.intent in MARKOV_INTENT_FALLBACKS ? sk.intent : 'talk_context';
   const intent = intentKey as MarkovIntent;
@@ -1506,6 +1542,10 @@ const SKELETON_TEMPLATES = COMPILED_SKELETONS.map(sk => {
   const pathLen = Math.min(MARKOV_SLOT_ATOM_CAP, Math.max(1, classPath.length));
   const domains = ['procedural_skeletons'];
   const requiredTags = intent === 'lore_note' ? ['event'] : intent === 'document_flavor' ? ['item'] : [];
+  const allowedPaths: MarkovAtomClass[][] = [
+    classPath,
+    ...SKELETON_EXPANDED_PATHS.filter(p => p[0] === classPath[0] && p.length >= pathLen),
+  ];
   return {
     id: `sk.${sk.id}`,
     intent,
@@ -1518,9 +1558,9 @@ const SKELETON_TEMPLATES = COMPILED_SKELETONS.map(sk => {
     parts: [{
       kind: 'slot' as const,
       domain: 'procedural_skeletons',
-      minAtoms: pathLen,
-      maxAtoms: pathLen,
-      allowedClassPaths: [classPath],
+      minAtoms: Math.max(2, pathLen),
+      maxAtoms: Math.min(MARKOV_SLOT_ATOM_CAP, Math.max(4, pathLen + 1)),
+      allowedClassPaths: allowedPaths,
       requiredAnchors: [] as readonly string[],
     }],
     fallback: MARKOV_INTENT_FALLBACKS[intent],
@@ -1556,7 +1596,7 @@ export const MARKOV_TEMPLATES = [
     domains: ['space_move'],
     weight: 1,
     maxChars: 140,
-    parts: [{ kind: 'slot', domain: 'space_move', minAtoms: 2, maxAtoms: 3, allowedClassPaths: SPACE_PATHS }],
+    parts: [{ kind: 'slot', domain: 'space_move', minAtoms: 2, maxAtoms: 4, allowedClassPaths: [...SPACE_PATHS, ...SKELETON_EXPANDED_PATHS.filter(p => p[0] === 'place_ref' || p[0] === 'address')] }],
     fallback: MARKOV_INTENT_FALLBACKS.talk_ambient,
   },
 ] as const satisfies readonly MarkovTemplate[];
@@ -1676,6 +1716,10 @@ function template(
   paths: readonly (readonly MarkovAtomClass[])[],
   fallback: string,
 ): MarkovTemplate {
+  const expandedPaths = [
+    ...paths,
+    ...SKELETON_EXPANDED_PATHS.filter(p => paths.some(base => base[0] === p[0])),
+  ];
   return {
     id,
     intent,
@@ -1685,7 +1729,7 @@ function template(
     requiredAnchors,
     weight: 4 + requiredTags.length,
     maxChars: intent === 'bark_ambient' ? 96 : intent === 'demos_post' || intent === 'demos_reaction' ? 180 : 140,
-    parts: [{ kind: 'slot', domain: domains[0] ?? 'space_move', minAtoms: 2, maxAtoms: 3, allowedClassPaths: paths, requiredAnchors }],
+    parts: [{ kind: 'slot', domain: domains[0] ?? 'space_move', minAtoms: 2, maxAtoms: 4, allowedClassPaths: expandedPaths, requiredAnchors }],
     fallback,
   };
 }
