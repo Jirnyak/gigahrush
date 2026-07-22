@@ -339,7 +339,7 @@ test('departure does not start for player, plot NPC, quest NPC or dead NPC', () 
   for (const alifeId of [1, 2, 3, 4]) putRecordOnLiving(state, alifeId);
   const player = makeTestPlayer({ id: 1, x: 21.5, y: 22.5, alifeId: 1 });
   const plotNpc = persistentNpc(2, 2, 21.5, 22.5);
-  plotNpc.plotNpcId = 'olga';
+  (plotNpc as any).npcPackageId = 'olga';
   const questNpc = persistentNpc(3, 3, 21.5, 22.5);
   questNpc.questId = 99;
   const deadNpc = persistentNpc(4, 4, 21.5, 22.5);

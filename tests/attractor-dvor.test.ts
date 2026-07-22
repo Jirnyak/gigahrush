@@ -24,7 +24,7 @@ import {
   ATTRACTOR_DVOR_ROUTE_ID,
   ATTRACTOR_DVOR_Z,
   getAttractorDvorState,
-} from '../src/gen/design_floors/attractor_dvor';
+} from '../src/gen/attractor_dvor';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
@@ -81,7 +81,7 @@ function nearbySupportRooms(world: ReturnType<typeof generateDesignFloor>['world
 function isAmbientNpcTemplate(entity: ReturnType<typeof generateDesignFloor>['entities'][number]): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.plotNpcId === undefined &&
+    (entity as any).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

@@ -20,7 +20,7 @@ import {
   cayleyCosetOf,
   generateCayleyByuroDesignFloor,
   type CayleyByuroGeneration,
-} from '../src/gen/design_floors/cayley_byuro';
+} from '../src/gen/cayley_byuro';
 
 test('cayley_byuro is registered as a Ministry-band authored route', () => {
   const route = designFloorById(CAYLEY_BYURO_ROUTE_ID);

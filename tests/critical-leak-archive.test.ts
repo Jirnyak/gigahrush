@@ -13,7 +13,7 @@ import {
   CRITICAL_LEAK_ARCHIVE_ROUTE_ID,
   CRITICAL_LEAK_ARCHIVE_Z,
   type CriticalLeakArchiveGeneration,
-} from '../src/gen/design_floors/critical_leak_archive';
+} from '../src/gen/critical_leak_archive';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   countTerritoryCells,
@@ -148,7 +148,7 @@ test('critical_leak_archive exposes dry packet, contaminated shortcut and floodg
   assert.equal(reachableTagged('contaminated_shortcut') >= 1, true, 'contaminated shortcut sample should be reachable');
   assert.equal(reachableTagged('raise_floodgate') >= 1, true, 'floodgate control should be reachable');
 
-  const plotIds = new Set(gen.entities.map(entity => entity.plotNpcId).filter(Boolean));
+  const plotIds = new Set(gen.entities.map(entity => (entity as any).npcPackageId).filter(Boolean));
   assert.equal(plotIds.has('critical_leak_archivist_varvara'), true);
   assert.equal(plotIds.has('critical_leak_liquidator_egor'), true);
   assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC), true);

@@ -15,7 +15,7 @@ import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   DESIGN_FLOOR_ID,
   SERVICE_FLOOR_Z,
-} from '../src/gen/design_floors/service_floor';
+} from '../src/gen/service_floor';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -122,7 +122,7 @@ test('service_floor ambient repair NPCs spawn on their own territory', () => {
   for (const entity of gen.entities) {
     if (
       entity.type !== EntityType.NPC ||
-      entity.plotNpcId ||
+      (entity as any).npcPackageId ||
       entity.persistentNpcId ||
       entity.alifeId !== undefined ||
       entity.questId !== -1 ||

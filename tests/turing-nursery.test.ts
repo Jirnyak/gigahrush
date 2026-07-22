@@ -15,7 +15,7 @@ import {
   TURING_NURSERY_ROUTE_ID,
   TURING_NURSERY_Z,
   measureTuringNurseryMetrics,
-} from '../src/gen/design_floors/turing_nursery';
+} from '../src/gen/turing_nursery';
 import { entityInActiveCellHazard } from '../src/systems/cell_hazards';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
@@ -70,7 +70,7 @@ test('turing_nursery generates reaction lanes, static hazards, route cues, and l
 test('turing_nursery exposes inoculate, harvest, burn, and exposure decisions', () => {
   const gen = nursery();
   const quests = new Set(getSideQuestRegistrySnapshot().map(quest => quest.id));
-  const plotIds = new Set(gen.entities.filter(e => e.type === EntityType.NPC).map(e => e.plotNpcId));
+  const plotIds = new Set(gen.entities.filter(e => e.type === EntityType.NPC).map(e => (e as any).npcPackageId));
   const monsterKinds = new Set(gen.entities.filter(e => e.type === EntityType.MONSTER).map(e => e.monsterKind));
 
   for (const id of [
@@ -221,7 +221,7 @@ function nearbySupportRooms(world: TuringGeneration['world'], hq: Room): number 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.plotNpcId === undefined &&
+    (entity as any).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

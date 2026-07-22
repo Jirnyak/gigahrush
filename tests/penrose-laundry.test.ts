@@ -37,7 +37,7 @@ import {
   PENROSE_LAUNDRY_ROUTE_ID,
   PENROSE_LAUNDRY_Z,
   getPenroseLaundryState,
-} from '../src/gen/design_floors/penrose_laundry';
+} from '../src/gen/penrose_laundry';
 import { makeGameState } from './helpers';
 
 type PenroseGeneration = ReturnType<typeof generateDesignFloor>;
@@ -160,10 +160,10 @@ test('penrose_laundry generator builds a connected finite symbol patch with deci
   assert.equal(hiddenCache.tags.includes('hidden_washroom_cache'), true);
   assert.equal(hiddenCache.inventory.some(item => item.defId === 'pressure_logbook'), true);
   assert.equal(cue?.tags.includes('symbol_chain'), true);
-  assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_marfa_symbols'), true);
-  assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_igor_lock'), true);
-  assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_lidia_steam'), true);
-  assert.equal(npcs.some(entity => entity.plotNpcId === 'penrose_laundry_tonya_cache'), true);
+  assert.equal(npcs.some(entity => (entity as any).npcPackageId === 'penrose_laundry_marfa_symbols'), true);
+  assert.equal(npcs.some(entity => (entity as any).npcPackageId === 'penrose_laundry_igor_lock'), true);
+  assert.equal(npcs.some(entity => (entity as any).npcPackageId === 'penrose_laundry_lidia_steam'), true);
+  assert.equal(npcs.some(entity => (entity as any).npcPackageId === 'penrose_laundry_tonya_cache'), true);
 });
 
 test('penrose_laundry full route has Penrose macro, stations, micro rooms and no generic shell', () => {

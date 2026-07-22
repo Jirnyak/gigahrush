@@ -13,7 +13,7 @@ import {
   RADON_EXCHANGE_ROUTE_ID,
   RADON_EXCHANGE_Z,
   measureRadonExchangeMetrics,
-} from '../src/gen/design_floors/radon_exchange';
+} from '../src/gen/radon_exchange';
 import { getRouteCueMarkers, routeCueCount } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 

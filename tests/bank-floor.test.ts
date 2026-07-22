@@ -36,7 +36,7 @@ import {
   BANK_VAULT_RISK_RADIUS,
   bankVaultRiskSources,
   bankVaultRiskTierAt,
-} from '../src/gen/design_floors/bank_floor';
+} from '../src/gen/bank_floor';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -180,8 +180,8 @@ test('bank_floor generator creates named banking rooms, NPCs, containers and pas
   assert.equal(gen.world.rooms.length >= 96, true);
   assert.equal(gen.world.doors.size >= 96, true);
   assert.equal(npcs.length >= 5, true);
-  assert.equal(npcs.some(e => e.plotNpcId === 'bank_cashier_lyuba'), true);
-  assert.equal(npcs.some(e => e.plotNpcId === 'bank_credit_prokhor'), true);
+  assert.equal(npcs.some(e => (e as any).npcPackageId === 'bank_cashier_lyuba'), true);
+  assert.equal(npcs.some(e => (e as any).npcPackageId === 'bank_credit_prokhor'), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('deposit')), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('vault')), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('banking') && c.tags.includes('bribe') && c.tags.includes('buyable')), true);

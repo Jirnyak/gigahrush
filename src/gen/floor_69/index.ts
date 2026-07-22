@@ -1,5 +1,6 @@
-import { withSeededRandom } from '../../core/rand';
+import { withSeededRandom, rng } from '../../core/rand';
 import { applyDesignFloorPopulationField } from '../design_floors/population';
+import { expandFloor69FullFloor } from './districts';
 /* -- Design floor 69: adult vice, debt, blackmail and refuge ---- */
 
 import { type Entity } from '../../core/types';
@@ -43,6 +44,7 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
 
     const route = { id: DESIGN_FLOOR_ID, z: DESIGN_FLOOR_Z };
     const generation = { world, entities };
+    expandFloor69FullFloor(generation as any, rng);
     applyDesignFloorPopulationField(generation as any, route as any);
 
     genLog(`[F69] design floor seed=${seed} rooms=${world.rooms.length} spawn=(${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);

@@ -24,7 +24,7 @@ import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID,
   OBSCHEZHITIE_SMENY_ROUTE_Z,
-} from '../src/gen/design_floors/obschezhitie_smeny';
+} from '../src/gen/obschezhitie_smeny';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
@@ -58,9 +58,9 @@ test('obschezhitie_smeny generator creates bunks, witnesses, patrol and shelter 
   assert.equal(shelter?.sealed, true);
   assert.equal(shelter?.doors.some(idx => gen.world.doors.get(idx)?.state === DoorState.HERMETIC_OPEN), true);
   assert.equal(sleepingTemplates.length >= 24, true);
-  assert.equal(gen.entities.some(entity => entity.plotNpcId === 'obschezhitie_rita_starshaya'), true);
-  assert.equal(gen.entities.some(entity => entity.plotNpcId === 'obschezhitie_gleb_obhod'), true);
-  assert.equal(gen.entities.some(entity => entity.plotNpcId === 'obschezhitie_senya_tikhiy'), true);
+  assert.equal(gen.entities.some(entity => (entity as any).npcPackageId === 'obschezhitie_rita_starshaya'), true);
+  assert.equal(gen.entities.some(entity => (entity as any).npcPackageId === 'obschezhitie_gleb_obhod'), true);
+  assert.equal(gen.entities.some(entity => (entity as any).npcPackageId === 'obschezhitie_senya_tikhiy'), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('quiet_loot') && container.tags.includes('theft')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('resident_relief') && container.tags.includes('shelter')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('patrol') && container.tags.includes('witness')), true);

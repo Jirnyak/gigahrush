@@ -28,7 +28,7 @@ import {
   HILBERT_DEPOT_ROUTE_Z,
   generateHilbertDepotDesignFloor,
   type HilbertDepotGeneration,
-} from '../src/gen/design_floors/hilbert_depot';
+} from '../src/gen/hilbert_depot';
 import { getRouteCueMarkers, routeCueCount } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 import { assertFullFootprint, assertReachableRouteLifts, reachableCells } from './generator_helpers';
@@ -88,7 +88,7 @@ function isAmbientHilbertNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Склад Гильберта:') === true &&
-    entity.plotNpcId === undefined &&
+    (entity as any).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

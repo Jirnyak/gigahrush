@@ -30,7 +30,7 @@ import {
   MOEBIUS_PODEZD_ROUTE_ID,
   MOEBIUS_PODEZD_Z,
   moebiusPodezdDecisionMetrics,
-} from '../src/gen/design_floors/moebius_podezd';
+} from '../src/gen/moebius_podezd';
 import type { FloorGeneration } from '../src/gen/floor_manifest';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 
@@ -77,7 +77,7 @@ function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Мёбиус-подъезд:') === true &&
-    entity.plotNpcId === undefined &&
+    (entity as any).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

@@ -16,7 +16,7 @@ import {
   DARK_METRO_FUTURE_Z,
   DARK_METRO_HQ_ROOM_NAMES,
   DESIGN_FLOOR_ID,
-} from '../src/gen/design_floors/dark_metro';
+} from '../src/gen/dark_metro';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -152,7 +152,7 @@ test('dark_metro ambient veterans prefer their own cell territory after territor
   const gen = darkMetro();
   const ambientNpcs = gen.entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

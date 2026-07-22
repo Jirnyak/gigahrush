@@ -77,10 +77,10 @@ import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { openRouteGateIds } from '../src/systems/route_gates';
 import { generateProceduralFloor, measureCollectorDecisionMetrics } from '../src/gen/procedural_floor';
 import { getGeometryMetrics, measureAndRecordGeometryMetrics, measureGeometryMetrics } from '../src/gen/geometry_metrics';
-import { generateDarknessDesignFloor } from '../src/gen/design_floors/darkness';
-import { extractPodadTopologyDescriptor } from '../src/gen/design_floors/podad';
-import { measureManhattanCrossroadsDecisionMetrics } from '../src/gen/design_floors/manhattan_crossroads';
-import { UPPER_BUREAU_DOCUMENTS } from '../src/gen/design_floors/upper_bureau';
+import { generateDarknessDesignFloor } from '../src/gen/darkness';
+import { extractPodadTopologyDescriptor } from '../src/gen/podad';
+import { measureManhattanCrossroadsDecisionMetrics } from '../src/gen/manhattan_crossroads';
+import { UPPER_BUREAU_DOCUMENTS } from '../src/gen/upper_bureau';
 import { designFloorGeneratorIds, generateDesignFloor, validateDesignFloorGenerators } from '../src/gen/design_floors/manifest';
 import { validateProceduralAnomalyGenerationRegistry } from '../src/gen/procedural_anomalies';
 import { proceduralStructureFamilyForSpec } from '../src/gen/procedural_structure_library';
@@ -5334,7 +5334,7 @@ testGenerationMatrix('podad ships as a denser-than-Hell monster floor with gated
   const profile = designFloorPopulationProfile(route);
   const gen = timedDesignFloor('podad', 'design podad population');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
-  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = npcs.filter(e => !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const heralds = monsters.filter(e => e.monsterKind === MonsterKind.HERALD);
   const nonHeraldRareMonsters = monsters.filter(e => e.monsterKind !== MonsterKind.HERALD && getMonsterEcology(e.monsterKind)?.rare);
@@ -5456,7 +5456,7 @@ testGenerationMatrix('slime NII route ships containment cameras, samples, and sl
   assert.equal(panelDefs.has('panel_vent'), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('slime_nii') && c.inventory.some(i => i.defId === 'slime_sample_green')), true);
   assert.equal(gen.world.containers.some(c => c.tags.includes('inoculation') && c.inventory.some(i => i.defId === 'anti_spore_inhaler')), true);
-  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'slime_nii_volunteer_mitya'), true);
+  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && (e as any).npcPackageId === 'slime_nii_volunteer_mitya'), true);
   assert.equal(monsters.some(e => e.monsterKind !== undefined && slimeKinds.has(e.monsterKind)), true);
   assert.equal(gen.world.cells.some((cell, idx) => cell === Cell.LIFT && gen.world.liftDir[idx] === LiftDirection.UP), true);
   assert.equal(gen.world.cells.some((cell, idx) => cell === Cell.LIFT && gen.world.liftDir[idx] === LiftDirection.DOWN), true);
@@ -5515,7 +5515,7 @@ testGenerationMatrix('manhattan crossroads keeps its core route decisions reacha
 testGenerationMatrix('underhell ships as a monster-owned veteran threshold', () => {
   const gen = timedDesignFloor('underhell', 'design underhell population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
-  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = npcs.filter(e => !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const samosborZones = gen.world.zones.filter(zone => zone.faction === ZoneFaction.SAMOSBOR);
   const legalNpcFactions = new Set([Faction.LIQUIDATOR, Faction.CULTIST]);
@@ -5536,7 +5536,7 @@ testGenerationMatrix('dark metro ships as sparse defended bands inside monster-h
   const profile = designFloorPopulationProfile(route);
   const gen = timedDesignFloor('dark_metro', 'design dark metro population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
-  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = npcs.filter(e => !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const legalNpcFactions = new Set([Faction.LIQUIDATOR, Faction.CULTIST, Faction.WILD, Faction.SCIENTIST]);
   const lineYs = [118, 260, 402, 642, 786, 920];
@@ -5647,7 +5647,7 @@ testGenerationMatrix('upper bureau preserves legal, forged, stolen-key and staff
 
 testGenerationMatrix('antenna court keeps signal macrostructure with mid micro faction territories', () => {
   const gen = timedDesignFloor('antenna_court', 'design antenna_court population field');
-  const ambientNpcs = gen.entities.filter(e => e.type === EntityType.NPC && !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = gen.entities.filter(e => e.type === EntityType.NPC && !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const legalNpcFactions = new Set([Faction.SCIENTIST, Faction.LIQUIDATOR]);
   const routeChoices = reachableRoomCount(gen, ['Релейная будка', 'Пост сигнал-инспекции', 'Кабина глушения', 'Архив мониторинга']);
@@ -5700,7 +5700,7 @@ testGenerationMatrix('antenna court keeps signal macrostructure with mid micro f
 testGenerationMatrix('silicon net well creates protected science pockets and silicon monster pressure', () => {
   const gen = timedDesignFloor('silicon_net_well', 'design silicon_net_well population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
-  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = npcs.filter(e => !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const genericSpecialists = ambientNpcs.filter(e => e.name?.startsWith('Кремниевый НЕТ-колодец:'));
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const specialists = npcs.filter(e =>
@@ -5744,7 +5744,7 @@ testGenerationMatrix('silicon net well creates protected science pockets and sil
 testGenerationMatrix('floor 69 uses the shared field as an adult social-debt route', () => {
   const gen = timedDesignFloor('floor_69', 'design floor_69 population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
-  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = npcs.filter(e => !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const liquidatorNpcs = npcs.filter(e => e.faction === Faction.LIQUIDATOR);
   const socialStaffNpcs = npcs.filter(e =>
@@ -5756,7 +5756,7 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   const generatedWorkers = ambientNpcs.filter(e => e.name?.startsWith('Этаж 69: работница '));
   const generatedVisitors = ambientNpcs.filter(e => e.name?.startsWith('Этаж 69: посетитель '));
   const floor69FemaleSprites = ambientNpcs.filter(e => isFloor69FemaleSprite(e.sprite));
-  const femaleQuestNpcs = npcs.filter(e => e.plotNpcId?.startsWith('f69_') && e.isFemale === true);
+  const femaleQuestNpcs = npcs.filter(e => (e as any).npcPackageId?.startsWith('f69_') && e.isFemale === true);
 
   assert.equal(npcs.length >= 1700 && npcs.length <= 3200, true);
   assert.equal(ambientNpcs.length >= 1700, true);
@@ -5772,10 +5772,10 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   ), true);
   assert.equal(generatedWorkers.every(e => isFloor69FemaleSprite(e.sprite)), true);
   assert.equal(generatedVisitors.every(e => !isFloor69FemaleSprite(e.sprite)), true);
-  assert.deepEqual(femaleQuestNpcs.map(e => e.plotNpcId).sort(), ['f69_asya_pryanikova', 'f69_doctor_sima', 'f69_madam_roza', 'f69_performer_ira']);
-  const f69VisualFemales = femaleQuestNpcs.filter(e => e.plotNpcId !== 'f69_asya_pryanikova');
+  assert.deepEqual(femaleQuestNpcs.map(e => (e as any).npcPackageId).sort(), ['f69_asya_pryanikova', 'f69_doctor_sima', 'f69_madam_roza', 'f69_performer_ira']);
+  const f69VisualFemales = femaleQuestNpcs.filter(e => (e as any).npcPackageId !== 'f69_asya_pryanikova');
   assert.equal(f69VisualFemales.every(e => isFloor69FemaleSprite(e.sprite) && e.npcVisualId === NPC_VISUAL_FLOOR69_FEMALE), true);
-  const asya = femaleQuestNpcs.find(e => e.plotNpcId === 'f69_asya_pryanikova');
+  const asya = femaleQuestNpcs.find(e => (e as any).npcPackageId === 'f69_asya_pryanikova');
   assert.equal(asya?.sprite === Occupation.PERFORMER, true);
   assert.equal(maxEntitiesInArea(gen.entities, EntityType.NPC, 32) <= 26, true);
 });
@@ -5864,7 +5864,7 @@ testGenerationMatrix('pioneer camp keeps a populated protected center and danger
 testGenerationMatrix('chthonic attic keeps a zero-ordinary-NPC monster service maze', () => {
   const gen = timedDesignFloor('chthonic_attic', 'design chthonic attic population field');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
-  const ambientNpcs = npcs.filter(e => !e.plotNpcId && !e.persistentNpcId && e.alifeId === undefined);
+  const ambientNpcs = npcs.filter(e => !(e as any).npcPackageId && !e.persistentNpcId && e.alifeId === undefined);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
   const cacheCount = gen.world.containers.filter(container => container.tags.includes('attic') && container.tags.includes('cache')).length;
   const serviceRooms = gen.world.rooms.filter(room => {
@@ -6016,7 +6016,7 @@ testGenerationMatrix('service floor rework keeps sparse crews, pressure panels a
   const gen = timedDesignFloor('service_floor', 'design service_floor rework');
   const npcs = gen.entities.filter(e => e.type === EntityType.NPC);
   const monsters = gen.entities.filter(e => e.type === EntityType.MONSTER);
-  const rescueWorker = gen.entities.find(e => e.plotNpcId === 'service_trapped_pump_worker');
+  const rescueWorker = gen.entities.find(e => (e as any).npcPackageId === 'service_trapped_pump_worker');
   const panels = getEmergencyPanels(gen.world);
   const panelDefs = new Set(panels.map(panel => panel.defId));
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));

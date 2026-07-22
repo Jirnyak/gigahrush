@@ -13,7 +13,7 @@ import {
   MARKOV_STAIRWELL_ROUTE_ID,
   MARKOV_STAIRWELL_Z,
   measureMarkovStairwellMetrics,
-} from '../src/gen/design_floors/markov_stairwell';
+} from '../src/gen/markov_stairwell';
 
 type MarkovGeneration = ReturnType<typeof generateDesignFloor>;
 
@@ -98,7 +98,7 @@ test('markov_stairwell exposes pattern-stash and rare-state decisions', () => {
 
   assert.equal(metrics.patternStashes, 1);
   assert.equal(metrics.rareStateStashes, 1);
-  assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC && entity.plotNpcId === 'markov_stairwell_watcher'), true);
+  assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC && (entity as any).npcPackageId === 'markov_stairwell_watcher'), true);
   assert.equal(quests.has('markov_stairwell_pattern_stash'), true);
   assert.equal(gen.world.containers.some(container =>
     container.tags.includes('pattern_stash') &&

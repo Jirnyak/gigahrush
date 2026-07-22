@@ -41,7 +41,7 @@ test('Pressovik generation places readable lanes, rewards, monsters, and a stopp
   const line = world.rooms.find(room => room.name.includes('Прессовик: брикетная линия'));
   assert.ok(line, 'missing pressovik line room');
   assert.ok(world.rooms.some(room => room.name.includes('сервисный обход')), 'missing service bypass');
-  assert.ok(entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'pressovik_stop_master'), 'missing stop NPC');
+  assert.ok(entities.some(e => e.type === EntityType.NPC && (e as any).npcPackageId === 'pressovik_stop_master'), 'missing stop NPC');
   assert.ok(entities.some(e => e.type === EntityType.MONSTER), 'missing pressure monsters');
 
   const stop = world.containers.find(c => c.tags.includes('pressovik_stop'));

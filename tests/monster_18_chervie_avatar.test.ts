@@ -16,7 +16,7 @@ import {
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { CHERVIE_NET_SOURCE_RADIUS, chervieNetPowered, findChervieNetSource } from '../src/systems/monster_traits';
-import { generateSiliconNetWellDesignFloor } from '../src/gen/design_floors/silicon_net_well';
+import { generateSiliconNetWellDesignFloor } from '../src/gen/silicon_net_well';
 import { addTestRoom, makeGameState } from './helpers';
 
 function openWorld(): World {

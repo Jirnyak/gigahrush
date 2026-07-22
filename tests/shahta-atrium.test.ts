@@ -13,7 +13,7 @@ import {
   DESIGN_FLOOR_ID,
   SHAHTA_ATRIUM_ROUTE_Z,
   type ShahtaAtriumGeneration,
-} from '../src/gen/design_floors/shahta_atrium';
+} from '../src/gen/shahta_atrium';
 
 const CX = W >> 1;
 const CY = W >> 1;

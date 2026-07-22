@@ -17,7 +17,7 @@ import {
   getSpectralChasovnyaState,
   ringSpectralChasovnyaBell,
   type SpectralChasovnyaGeneration,
-} from '../src/gen/design_floors/spectral_chasovnya';
+} from '../src/gen/spectral_chasovnya';
 import { getRecentNoiseRecords } from '../src/systems/noise';
 import { getRecentEvents } from '../src/systems/events';
 import { findInteractionTarget, activateInteraction } from '../src/systems/interactions';
@@ -122,7 +122,7 @@ test('spectral_chasovnya exposes standing waves, shadows, bells and reachable ex
 
   const mainBell = gen.spectralState.bellNodes[0];
   assert.equal(gen.world.features[gen.world.idx(Math.floor(mainBell.x), Math.floor(mainBell.y))], Feature.APPARATUS);
-  assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC && entity.plotNpcId === 'spectral_bellwarden_miron'), true);
+  assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC && (entity as any).npcPackageId === 'spectral_bellwarden_miron'), true);
   assert.equal(gen.entities.some(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.SLEPOGLAZ), true);
   assert.equal(gen.entities.some(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.TUMANNIK), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('spectral_chasovnya') && container.tags.includes('hearing_boost')), true);

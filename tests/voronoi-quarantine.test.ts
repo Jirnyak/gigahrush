@@ -29,7 +29,7 @@ import {
   VORONOI_QUARANTINE_ROOM_NAMES,
   VORONOI_QUARANTINE_ROUTE_ID,
   VORONOI_QUARANTINE_Z,
-} from '../src/gen/design_floors/voronoi_quarantine';
+} from '../src/gen/voronoi_quarantine';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -88,7 +88,7 @@ function nearbySupportRooms(world: ReturnType<typeof generateDesignFloor>['world
 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -228,7 +228,7 @@ test('voronoi_quarantine exposes pass, border, escort and supply decisions', () 
     'voronoi_quarantine_infected_lev',
     'voronoi_quarantine_quartermaster_marta',
   ]) {
-    assert.equal(npcs.some(entity => entity.plotNpcId === plotNpcId), true, plotNpcId);
+    assert.equal(npcs.some(entity => (entity as any).npcPackageId === plotNpcId), true, plotNpcId);
   }
 
   assert.equal(lockedDoors.some(door => door.keyId === 'official_quarantine_clearance'), true);

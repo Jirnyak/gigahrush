@@ -15,7 +15,7 @@ import {
   ROOF_SKY_WIDTH,
   summarizeRoofLosExposure,
   type RoofGeneration,
-} from '../src/gen/design_floors/roof';
+} from '../src/gen/roof';
 import { routeCueCount } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 

@@ -27,7 +27,7 @@ import {
   BOLNICHNY_KORPUS_ROUTE_ID,
   BOLNICHNY_KORPUS_Z,
   BOLNICHNY_ROOM_NAMES,
-} from '../src/gen/design_floors/bolnichny_korpus';
+} from '../src/gen/bolnichny_korpus';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
@@ -209,7 +209,7 @@ test('bolnichny_korpus exposes authored NPCs and treatment, forgery, escort and 
     'bolnichny_patient_grisha',
     'bolnichny_clerk_nina',
   ]) {
-    assert.equal(npcs.some(entity => entity.plotNpcId === plotNpcId), true, plotNpcId);
+    assert.equal(npcs.some(entity => (entity as any).npcPackageId === plotNpcId), true, plotNpcId);
   }
   assert.equal(monsters.some(entity => entity.monsterKind === MonsterKind.CHERNOSLIZ), true);
   assert.equal(questIds.has('bolnichny_treat_clean_ward'), true);

@@ -89,13 +89,13 @@ test('package-derived A-Life reserved identities keep package and plot identity 
     routeKeys: ['design:living', 'design:ministry', 'design:maintenance', 'design:hell', 'design:void', 'design:podad', 'design:liquidatorbase'],
     total: MAIN_PLOT_IDS.length,
   });
-  const byPlotId = new Map(plan.reserved.map(identity => [identity.plotNpcId, identity]));
+  const byPlotId = new Map(plan.reserved.map(identity => [(identity as any).npcPackageId, identity]));
 
   for (const pack of allNpcPackages().filter(p => MAIN_PLOT_IDS.includes(p.id as any))) {
     const plotNpcId = plotNpcIdFromPackage(pack);
     assert.notEqual(plotNpcId, undefined);
-    const reserved = byPlotId.get(plotNpcId);
-    assert.ok(reserved, `${plotNpcId} must have a reserved identity`);
+    const reserved = byPlotId.get(pack.id);
+    assert.ok(reserved, `${pack.id} must have a reserved identity`);
     assert.equal(reserved.id, `npc:${pack.id}`);
     assert.equal(reserved.kind, 'plot');
     assert.equal(reserved.floorKey, pack.placement.homeFloorKey);

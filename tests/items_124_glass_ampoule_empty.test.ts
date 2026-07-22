@@ -5,7 +5,7 @@ import { ItemType, Occupation, RoomType } from '../src/core/types';
 import { generateNpcTradeItems } from '../src/data/occupation_profiles';
 import { ITEM_TAGS, ITEMS, getStack } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateSlimeNiiDesignFloor } from '../src/gen/design_floors/slime_nii';
+import { generateSlimeNiiDesignFloor } from '../src/gen/slime_nii';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
 import { makeTestNpc, makeTestPlayer } from './helpers';
 import { _overrideRng, _restoreRng } from '../src/core/rand';

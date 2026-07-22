@@ -13,7 +13,7 @@ import {
   ISTINNIY_LABIRINT_ROUTE_ID,
   ISTINNIY_LABIRINT_Z,
   measureIstinniyLabirintMetrics,
-} from '../src/gen/design_floors/istinniy_labirint';
+} from '../src/gen/istinniy_labirint';
 
 type LabyrinthGeneration = ReturnType<typeof generateDesignFloor>;
 
@@ -90,8 +90,8 @@ test('istinniy_labirint exposes rescue and document-stash decisions', () => {
   const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
   const quests = new Set(getSideQuestRegistrySnapshot().map(quest => quest.id));
 
-  assert.equal(npcs.some(entity => entity.plotNpcId === 'labyrinth_ariadna_zina'), true);
-  assert.equal(npcs.some(entity => entity.plotNpcId === 'labyrinth_lost_pavel'), true);
+  assert.equal(npcs.some(entity => (entity as any).npcPackageId === 'labyrinth_ariadna_zina'), true);
+  assert.equal(npcs.some(entity => (entity as any).npcPackageId === 'labyrinth_lost_pavel'), true);
   assert.equal(quests.has('labyrinth_rechalk_safe_wall'), true);
   assert.equal(quests.has('labyrinth_rescue_lost_pavel'), true);
   assert.equal(gen.world.rooms.some(room => room.type === RoomType.STORAGE && room.name === 'Лабиринт: тупик документного ящика'), true);

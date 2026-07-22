@@ -20,7 +20,7 @@ import { designFloorPopulationProfile } from '../src/data/design_floor_populatio
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner, territoryOwnerName } from '../src/data/factions';
 import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import type { HarmonicBathhouseGeneration } from '../src/gen/design_floors/harmonic_bathhouse';
+import type { HarmonicBathhouseGeneration } from '../src/gen/harmonic_bathhouse';
 import { getCellHazardMoveMultiplier } from '../src/systems/cell_hazards';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
@@ -85,7 +85,7 @@ function isAmbientBathhouseNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
     entity.name?.startsWith('Гармоническая баня:') === true &&
-    entity.plotNpcId === undefined &&
+    (entity as any).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

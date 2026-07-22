@@ -75,7 +75,7 @@ test('Pustoy Sosed room gives clues before NELYUD close reveal', () => {
   const nextRoomId = generatePustoySosedRoom(world, 0, entities, nextId, 512, 512);
 
   assert.equal(nextRoomId, 1);
-  const witness = entities.find(e => e.plotNpcId === 'pustoy_sosed_liza_sverka');
+  const witness = entities.find(e => (e as any).npcPackageId === 'pustoy_sosed_liza_sverka');
   const suspect = entities.find(e => e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.NELYUD && e.name === 'Пустой Сосед');
   assert.ok(witness);
   assert.ok(suspect);

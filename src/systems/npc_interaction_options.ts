@@ -1,6 +1,6 @@
 import { getPlotNpcNumericId, getPlotNpcStringId } from '../data/npc_packages';
 import { openArena } from './arena';
-import { EntityType, msg, type Entity, type GameState, AIGoal, NpcState } from '../core/types';
+import { EntityType, msg, type Entity, type GameState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
 import {
   allDesignFloorProfiles,
@@ -17,6 +17,8 @@ import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { currentFloorRunEntry } from './procedural_floors';
 import { npcHasQuestMarker } from './quests';
 import { controlBindingLabel } from './controls';
+import { buildContextSnapshot } from './context';
+import { renderMarkovDialogueTalk } from './markov_dialogue';
 
 export const CARD_DECK_ITEM_ID = 'card_deck';
 export const DICE_BONE_ITEM_ID = 'dice_bone';
@@ -533,47 +535,38 @@ registerNpcInteractionOption({
 });
 
 function getNpcOccupationStateText(ctx: NpcInteractionContext): string {
-  const npc = ctx.npc;
-  if (!npc.ai) return 'Стою на месте, дышу бетоном.';
-
-  const goal = npc.ai.goal;
-  const state = npc.ai.npcState;
-
-  if (state === NpcState.SLEEPING || goal === AIGoal.SLEEP) return 'Сплю. Глаза бы мои этот бетон не видели.';
-  if (goal === AIGoal.EAT || state === NpcState.LUNCH) return 'Жую сухпаек. Слизь на вкус как слизь.';
-  if (goal === AIGoal.DRINK) return 'Пью воду из-под фильтра. Ржавая, но жить можно.';
-  if (state === NpcState.MORNING || goal === AIGoal.TOILET) return 'Иду по нужде. Главное, чтоб в трубах ничего не сцапало.';
-  if (state === NpcState.WORKING || goal === AIGoal.WORK) return 'Выполняю норму. Сборка, переборка, рутина.';
-  if (goal === AIGoal.HUNT) return 'Ищу цель. Тут кто-то ходит.';
-  if (state === NpcState.HIDING || goal === AIGoal.HIDE || goal === AIGoal.FLEE) return 'Прячусь. Жизнь дороже геройства.';
-  if (state === NpcState.PATROL) return 'Патрулирую сектор. Слежу за порядком на этаже.';
+  const snapshot = buildContextSnapshot(ctx.npc, {
+    player: ctx.player,
+    state: ctx.state,
+    time: ctx.state.time,
+  });
   
-  if (state === NpcState.TRAVELING || goal === AIGoal.GOTO) {
-    const targetRoom = ctx.roomDefIdResolver?.(npc.ai.tx, npc.ai.ty);
-    if (targetRoom) return `Иду в блок «${targetRoom}». Дела не ждут.`;
-    return 'Иду в другой блок. Дела не ждут.';
-  }
+  // We use repeatIndex based on time or random to ensure variety if the player keeps asking.
+  // We can pass repeatIndex as a hash of the current time in seconds so it changes frequently.
+  const repeatIndex = Math.floor((ctx.state.time ?? 0) / 60);
   
-  if (state === NpcState.MEETING) return 'Общаюсь. Местные новости обсуждаем.';
-  if (state === NpcState.FREE_TIME || goal === AIGoal.WANDER) return 'Слоняюсь без дела. Дышу.';
-
-  return 'Стою. Думаю о вечном.';
+  const result = renderMarkovDialogueTalk(ctx.npc, snapshot, {
+    time: ctx.state.time,
+    repeatIndex,
+  });
+  
+  return result.text;
 }
 
 registerNpcInteractionOption({
   id: 'current_activity',
   order: 15,
-  label: () => 'Занятие',
+  label: () => 'Разговор',
   visible: ctx => ctx.npc.type === EntityType.NPC && ctx.npc.alive,
   activate: ctx => {
     const text = getNpcOccupationStateText(ctx);
     openNpcInteractionInterface(ctx, {
       id: 'current_activity',
-      title: 'ТЕКУЩЕЕ ЗАНЯТИЕ',
+      title: 'РАЗГОВОР',
       lines: [
         `${ctx.npc.name ?? 'NPC'}: «${text}»`
       ],
-      message: 'Текущий статус ИИ',
+      message: '...',
     });
   },
 });

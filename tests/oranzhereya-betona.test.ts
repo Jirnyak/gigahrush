@@ -28,7 +28,7 @@ import {
   ORANZHEREYA_MICRO_ROOM_PREFIXES,
   ORANZHEREYA_ROOM_NAMES,
   measureOranzhereyaBetonaGeometry,
-} from '../src/gen/design_floors/oranzhereya_betona';
+} from '../src/gen/oranzhereya_betona';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 import type { FloorGeneration } from '../src/gen/floor_manifest';
 
@@ -78,7 +78,7 @@ test('oranzhereya_betona generates reachable crop rooms, water graph, and lifts'
 test('oranzhereya_betona exposes harvest, poison, burn, reroute, and guard choices', () => {
   const gen = oranzhereya();
   const quests = new Set(getSideQuestRegistrySnapshot().map(quest => quest.id));
-  const plotIds = new Set(gen.entities.filter(e => e.type === EntityType.NPC).map(e => e.plotNpcId));
+  const plotIds = new Set(gen.entities.filter(e => e.type === EntityType.NPC).map(e => (e as any).npcPackageId));
   const monsterKinds = new Set(gen.entities.filter(e => e.type === EntityType.MONSTER).map(e => e.monsterKind));
 
   for (const id of [
@@ -217,7 +217,7 @@ test('oranzhereya_betona uses a bounded food-water population profile', () => {
 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1;

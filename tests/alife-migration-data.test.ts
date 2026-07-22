@@ -24,7 +24,7 @@ import {
   makeProceduralFloorSpec,
 } from '../src/data/procedural_floors';
 import type { NpcPackageDef } from '../src/data/npc_packages';
-import '../src/gen/design_floors/floor_69';
+import '../src/gen/floor_69';
 import '../src/gen/hell/madoka';
 import '../src/gen/maintenance/gordon';
 import '../src/gen/ministry/npcs';
@@ -89,7 +89,7 @@ test('A-Life population plan validates and allocates the run-sized budget', () =
   const ordinary = plan.buckets.reduce((sum, bucket) => sum + bucket.targetCount, 0);
   assert.equal(ordinary + plan.reserved.length, plan.total);
   assert.equal(new Set(plan.buckets.map(bucket => bucket.floorKey)).size, plan.buckets.length);
-  assert.equal(new Set(plan.reserved.map(identity => identity.plotNpcId).filter(Boolean)).size, plan.reserved.filter(identity => identity.plotNpcId).length);
+  assert.equal(new Set(plan.reserved.map(identity => (identity as any).npcPackageId).filter(Boolean)).size, plan.reserved.filter(identity => (identity as any).npcPackageId).length);
 });
 
 test('A-Life population plan uses seed-sized totals below technical capacity', () => {
@@ -194,7 +194,7 @@ test('A-Life population plan dedupes package rows by plotNpcId', () => {
     total: 16,
     npcPackages: [source, duplicateRawCompat],
   });
-  const olgaRows = plan.reserved.filter(identity => identity.plotNpcId === 'olga');
+  const olgaRows = plan.reserved.filter(identity => (identity as any).npcPackageId === 'olga');
 
   assert.deepEqual(validateAlifePopulationPlan(plan), []);
   assert.equal(olgaRows.length, 1);
@@ -209,7 +209,7 @@ test('A-Life population plan does not synthesize reservations without NPC packag
     total: 16,
   });
 
-  assert.equal(plan.reserved.some(identity => identity.plotNpcId === legacyId), false);
+  assert.equal(plan.reserved.some(identity => (identity as any).npcPackageId === legacyId), false);
 });
 
 test('A-Life population plan reserves design packages on design route keys', () => {
@@ -288,7 +288,7 @@ test('A-Life population plan resolves authored NPC floor keys from their content
     routeKeys: routeKeysForRun(runSeed),
     proceduralSpecs: PROCEDURAL_FLOOR_ZS.map(z => makeProceduralFloorSpec(runSeed, z)),
   });
-  const reserved = new Map(plan.reserved.map(identity => [identity.plotNpcId, identity]));
+  const reserved = new Map(plan.reserved.map(identity => [(identity as any).npcPackageId, identity]));
 
   assert.equal(reserved.get('gordon_freeman')?.floorKey, 'design:maintenance');
   assert.equal(reserved.get('gordon_freeman')?.age, 28);

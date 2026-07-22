@@ -22,7 +22,7 @@ import {
   DESIGN_FLOOR_Z,
   FLOOR_69_RAID_SHUTTER_GATES,
   FLOOR_69_RAID_SHUTTER_KEY,
-} from '../src/gen/design_floors/floor_69';
+} from '../src/gen/floor_69';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -158,7 +158,7 @@ test('floor_69 exposes public, backstage, debt and refuge loops with decision ac
     'f69_doctor_sima',
     'f69_accountant_nil',
   ]) {
-    assert.equal(npcs.some(entity => entity.plotNpcId === npcId), true, npcId);
+    assert.equal(npcs.some(entity => (entity as any).npcPackageId === npcId), true, npcId);
   }
 
   assert.equal(gen.world.containers.some(container => container.tags.includes('blackmail')), true);

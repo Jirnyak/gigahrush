@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import { Cell, EntityType, Feature, RoomType, W, ZoneFaction } from '../src/core/types';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import { generateDarknessDesignFloor, getDarknessState } from '../src/gen/design_floors/darkness';
+import { generateDarknessDesignFloor, getDarknessState } from '../src/gen/darkness';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 function countReachableCells(gen: ReturnType<typeof generateDesignFloor>): number {

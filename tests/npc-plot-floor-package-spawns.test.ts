@@ -31,7 +31,7 @@ function withFixedRandom<T>(value: number, run: () => T): T {
 function plotNpc(entities: readonly Entity[], plotNpcId: string): Entity & { npcPackageId?: string } {
   const entity = entities.find(candidate => (
     candidate.type === EntityType.NPC &&
-    candidate.plotNpcId === plotNpcId
+    (candidate as any).npcPackageId === plotNpcId
   ));
   assert.ok(entity, `${plotNpcId} should spawn`);
   return entity;

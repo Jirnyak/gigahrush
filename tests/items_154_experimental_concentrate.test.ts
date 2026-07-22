@@ -6,7 +6,7 @@ import { World } from '../src/core/world';
 import { FACTORIES } from '../src/data/factories';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateSlimeNiiDesignFloor } from '../src/gen/design_floors/slime_nii';
+import { generateSlimeNiiDesignFloor } from '../src/gen/slime_nii';
 import { generateConcentratePress } from '../src/gen/maintenance/concentrate_press';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, inventoryItemCategory, useItem } from '../src/systems/inventory';

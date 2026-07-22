@@ -27,7 +27,7 @@ import { getPlotNpcStringId } from '../src/data/npc_packages';
 import { testGenerationMatrix } from './generator_helpers';
 
 function getEntityPlotId(e: Entity): string | undefined {
-  return e.alifeId !== undefined ? getPlotNpcStringId(e.alifeId) : (e as any).plotNpcId;
+  return e.alifeId !== undefined ? getPlotNpcStringId(e.alifeId) : (e as any)( as any).npcPackageId;
 }
 
 const cachedFloors = new Map<string, ReturnType<typeof generateFloor>>();

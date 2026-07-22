@@ -21,7 +21,7 @@ import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   COMMUNAL_RING_DESIGN_FLOOR_ID,
   COMMUNAL_RING_ROUTE_Z,
-} from '../src/gen/design_floors/communal_ring';
+} from '../src/gen/communal_ring';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -87,8 +87,8 @@ test('communal_ring generator creates through communal flats with quest NPCs', (
   assert.equal(gen.world.containers.some(container => container.tags.includes('secret') && container.tags.includes('hide')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('resident_relief')), true);
   assert.equal(gen.world.containers.some(container => container.inventory.some(item => item.defId === 'shelter_tally')), true);
-  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'communal_through_nina'), true);
-  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && e.plotNpcId === 'communal_primus_yegor'), true);
+  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && (e as any).npcPackageId === 'communal_through_nina'), true);
+  assert.equal(gen.entities.some(e => e.type === EntityType.NPC && (e as any).npcPackageId === 'communal_primus_yegor'), true);
 });
 
 test('communal_ring uses the design population field as a dense social floor', () => {

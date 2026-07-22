@@ -28,7 +28,7 @@ import {
   SPETSPRIEMNIK_ROOM_NAMES,
   SPETSPRIEMNIK_ROUTE_ID,
   SPETSPRIEMNIK_Z,
-} from '../src/gen/design_floors/spetspriemnik';
+} from '../src/gen/spetspriemnik';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 let cachedGeneration: ReturnType<typeof generateDesignFloor> | undefined;
@@ -169,7 +169,7 @@ test('spetspriemnik exposes release, names, bribe, riot and shelter decisions', 
     'spetspriemnik_informant_tolya',
     'spetspriemnik_clerk_alla',
   ]) {
-    assert.equal(npcs.some(entity => entity.plotNpcId === plotNpcId), true, plotNpcId);
+    assert.equal(npcs.some(entity => (entity as any).npcPackageId === plotNpcId), true, plotNpcId);
   }
 
   assert.equal(gen.world.containers.some(container => container.tags.includes('release_prisoners') && container.tags.includes('key_gate')), true);

@@ -48,7 +48,7 @@ test('Самосборный Остов scene has warning, safe options, and a b
   );
   assert.ok(warningNote, 'warning note should be reachable before risky looting');
 
-  const liquidator = entities.find(e => e.plotNpcId === SAMOSBORNYY_OSTOV_LIQUIDATOR_ID);
+  const liquidator = entities.find(e => (e as any).npcPackageId === SAMOSBORNYY_OSTOV_LIQUIDATOR_ID);
   assert.ok(liquidator, 'liquidator report/burn path NPC should be present');
 
   const questIds = new Set(SIDE_QUESTS

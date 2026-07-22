@@ -116,7 +116,7 @@ test('genfix 051 living floor preserves reference geometry and cell-first territ
     'ag43_seva_cartographer',
     'batushka',
   ]) {
-    const npc = gen.entities.find(entity => entity.type === EntityType.NPC && entity.plotNpcId === plotNpcId);
+    const npc = gen.entities.find(entity => entity.type === EntityType.NPC && (entity as any).npcPackageId === plotNpcId);
     assert.ok(npc, `${plotNpcId} should spawn on the Living floor`);
     assert.equal(npc.npcPackageId, plotNpcId, `${plotNpcId} should be package-backed`);
   }

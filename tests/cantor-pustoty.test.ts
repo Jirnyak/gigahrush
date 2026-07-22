@@ -16,7 +16,7 @@ import {
   CANTOR_PUSTOTY_ROUTE_ID,
   CANTOR_PUSTOTY_Z,
   measureCantorPustotyMetrics,
-} from '../src/gen/design_floors/cantor_pustoty';
+} from '../src/gen/cantor_pustoty';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 

@@ -47,7 +47,7 @@ export interface AlifeReservedIdentityDef {
   kind: 'plot' | 'authored' | 'event_reserved';
   presence?: 'population' | 'event_only';
   floorKey: string;
-  plotNpcId?: number;
+  npcPackageId?: string;
   name?: string;
   female?: boolean;
   age?: number;
@@ -265,7 +265,7 @@ export function alifeReservedIdentityFromNpcPackage(pack: NpcPackageDef): AlifeR
     kind,
     presence: reservedPresenceForPackage(pack.placement.presence),
     floorKey: pack.placement.homeFloorKey,
-    plotNpcId,
+    npcPackageId: pack.id,
     name: npcPackageDisplayName(pack),
     female: pack.demographics.sex === 'female',
     age: pack.demographics.age,

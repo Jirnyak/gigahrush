@@ -20,7 +20,7 @@ import {
   HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID,
   HYPERBOLIC_SWITCHYARD_ROUTE_Z,
   type HyperbolicSwitchyardGeneration,
-} from '../src/gen/design_floors/hyperbolic_switchyard';
+} from '../src/gen/hyperbolic_switchyard';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
@@ -84,7 +84,7 @@ test('hyperbolic_switchyard exposes guide, switch family, shortcut and false-pla
   assert.equal(gen.world.containers.some(container => container.tags.includes('switch_family') && container.tags.includes('repair')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('geodesic_shortcut') && container.tags.includes('monster_heavy')), true);
   assert.equal(gen.world.containers.some(container => container.tags.includes('false_platform') && container.tags.includes('sabotage')), true);
-  assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC && entity.plotNpcId === 'hyperbolic_switchyard_guide_zinaida'), true);
+  assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC && (entity as any).npcPackageId === 'hyperbolic_switchyard_guide_zinaida'), true);
   assert.equal(gen.entities.some(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.PSEUDOLIFT), true);
 });
 

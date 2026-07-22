@@ -35,7 +35,7 @@ import {
   createBlackMarket88DesignState,
   matureBlackMarket88Debts,
   quoteBlackMarket88Purchase,
-} from '../src/gen/design_floors/black_market_88';
+} from '../src/gen/black_market_88';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -176,7 +176,7 @@ test('black_market_88 generator exposes bazaar, auction, service guts, container
     'market88_zhoka_knife',
     'market88_courier_sasha',
   ]) {
-    assert.equal(npcs.some(entity => entity.plotNpcId === npcId), true, npcId);
+    assert.equal(npcs.some(entity => (entity as any).npcPackageId === npcId), true, npcId);
   }
 
   assert.equal(gen.world.containers.some(container => container.tags.includes('entry_toll')), true);
@@ -241,7 +241,7 @@ test('black_market_88 uses wild-dominant cell territory with authored mini HQ co
 
   const ambientNpcs = gen.entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&

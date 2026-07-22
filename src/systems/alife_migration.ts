@@ -1062,7 +1062,7 @@ function canStartDeparture(state: GameState, entity: Entity, reason: AlifeMigrat
   if (!entity.alive || entity.type !== EntityType.NPC || entity.alifeId === undefined) return false;
   if (isPlayerEntity(entity) || isNativePlayerBodyEntity(entity) || entity.persistentNpcId === 'player') return false;
   if (
-    ('plotNpcId' in entity && (entity as any).plotNpcId !== undefined) ||
+    ('npcPackageId' in entity && (entity as any).npcPackageId !== undefined) ||
     (typeof entity.persistentNpcId === 'string' && entity.persistentNpcId !== 'player' && !entity.persistentNpcId.startsWith('alife:')) ||
     (entity.id !== undefined && getPlotNpcStringId(entity.id) !== undefined && entity.alifeId === undefined && !entity.persistentNpcId?.startsWith('alife:'))
   ) {

@@ -52,7 +52,7 @@ function stateForSpec(spec: ProceduralFloorSpec): GameState {
 function ordinaryNpcCount(entities: readonly { type: EntityType; plotNpcId?: string; persistentNpcId?: string; alifeId?: number; questId?: number }[]): number {
   return entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1
@@ -112,19 +112,19 @@ testGenerationMatrix('floor 69 adult sprite templates survive A-Life materializa
   const generated = generateDesignFloor('floor_69');
   const templateSprites = generated.entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     entity.alifeId === undefined &&
     isFloor69FemaleSprite(entity.sprite)
   );
   const templateWorkers = generated.entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     entity.alifeId === undefined &&
     entity.name?.startsWith('Этаж 69: работница ')
   );
   const templateVisitors = generated.entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     entity.alifeId === undefined &&
     entity.name?.startsWith('Этаж 69: посетитель ')
   );

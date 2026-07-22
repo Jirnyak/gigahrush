@@ -125,9 +125,9 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
     dead: isPlotNpcDead(state, numericId),
     numericId,
     packId: pack?.id,
-    packPlotNpcId: pack?.content?.plotNpcId,
-    packPlotNumericId: pack?.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined,
-    alifeRecords: state.alife?.npcs.filter(r => r.reservedKind === 'plot').map(r => ({ id: r.id, plotNpcId: r.plotNpcId, reservedKind: r.reservedKind }))
+    packPlotNpcId: (pack as any)?.npcPackageId,
+    packPlotNumericId: (pack as any)?.npcPackageId ? getPlotNpcNumericId((pack as any).npcPackageId) : undefined,
+    alifeRecords: state.alife?.npcs.filter(r => r.reservedKind === 'plot').map(r => ({ id: r.id, plotNpcId: (r as any).npcPackageId, reservedKind: r.reservedKind }))
   });
 
   assert.equal(updateScriptedArrivals(world, entities, player, state, nextId), true);

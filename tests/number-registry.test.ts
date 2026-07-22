@@ -7,7 +7,7 @@ import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../src/data/factions';
 import { SIDE_QUESTS } from '../src/data/plot';
-import { expandDesignFloorGeneration } from '../src/gen/design_floors/full_floor';
+import { expandDesignFloorGeneration } from '../src/gen/full_floor';
 import {
   NUMBER_REGISTRY_CRT_INTERSECTIONS,
   NUMBER_REGISTRY_DECISIONS,
@@ -15,7 +15,7 @@ import {
   NUMBER_REGISTRY_ROUTE_ID,
   NUMBER_REGISTRY_TERRITORY_TARGETS,
   generateNumberRegistryDesignFloor,
-} from '../src/gen/design_floors/number_registry';
+} from '../src/gen/number_registry';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt } from '../src/systems/territory';
 
@@ -34,7 +34,7 @@ function numberRegistryForRead(): ReturnType<typeof generateNumberRegistry> {
 
 function isAmbientNpcTemplate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    !entity.plotNpcId &&
+    !(entity as any).npcPackageId &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1;
@@ -93,7 +93,7 @@ test('number_registry population field keeps authored actors and exact ambient t
   const profile = designFloorPopulationProfile(route);
   const gen = numberRegistryForRead();
 
-  const plotIds = new Set(gen.entities.map(entity => entity.plotNpcId).filter(Boolean));
+  const plotIds = new Set(gen.entities.map(entity => (entity as any).npcPackageId).filter(Boolean));
   assert.equal(plotIds.has('number_registry_vera_modulus'), true);
   assert.equal(plotIds.has('number_registry_prime_guard'), true);
   assert.equal(plotIds.has('number_registry_composite_witness'), true);

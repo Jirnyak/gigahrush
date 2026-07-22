@@ -51,7 +51,7 @@ import { SCREEN_SIGNAL_DEFS } from '../src/data/screen_signals';
 import { SLIME_DEFS, SLIME_SAMPLE_IDS, slimeRoomAttractionWeight, slimeSampleIdForRoomName, validateSlimeDefs } from '../src/data/slime_defs';
 import { ZHELEMISH_DEFS, ZHELEMISH_ITEM_IDS, validateZhelemishDefs } from '../src/data/zhelemish_defs';
 import { MONSTERS } from '../src/entities/monster';
-import { BLACK_MARKET_88_CONTRACT_ROWS } from '../src/gen/design_floors/black_market_88';
+import { BLACK_MARKET_88_CONTRACT_ROWS } from '../src/gen/black_market_88';
 import '../src/gen/design_floors/manifest';
 import { isValidZ } from '../src/gen/floor_manifest';
 
