@@ -191,6 +191,10 @@ const CANONICAL_SKELETONS: SyntaxSkeleton[] = [
   { id: 'sk.talk.3', pattern: ['SUBJ', 'THREAT'], intent: 'talk_context', weight: 15 },
   { id: 'sk.talk.4', pattern: ['PLACE', 'ITEM'], intent: 'talk_context', weight: 14 },
   { id: 'sk.talk.5', pattern: ['FACTION', 'ACTION', 'PLACE'], intent: 'talk_context', weight: 11 },
+  // talk_ambient
+  { id: 'sk.ambient.1', pattern: ['SUBJ', 'ACTION'], intent: 'talk_ambient', weight: 10 },
+  { id: 'sk.ambient.2', pattern: ['PLACE', 'THREAT'], intent: 'talk_ambient', weight: 8 },
+  { id: 'sk.ambient.3', pattern: ['SUBJ', 'ITEM'], intent: 'talk_ambient', weight: 10 },
   // bark_ambient
   { id: 'sk.bark.1', pattern: ['THREAT', 'SUBJ'], intent: 'bark_ambient', weight: 10 },
   { id: 'sk.bark.2', pattern: ['PLACE', 'THREAT'], intent: 'bark_ambient', weight: 12 },
@@ -233,12 +237,13 @@ class MarkovModel {
 
   private tokenize(text: string): string[] {
     const cleaned = text.trim();
-    return cleaned.split(/\s+/).map(w => {
-      if (w.startsWith('<') && w.includes('>')) {
-        const tagMatch = w.match(/(<[^>]+>)/);
-        return tagMatch ? tagMatch[1] : w.toLowerCase();
-      }
-      return w.toLowerCase().replace(/[^а-яё\-<>\w]/gi, '');
+    // Split keeping punctuation as separate tokens, and tags as single tokens
+    const matches = cleaned.match(/(?:<[^>]+>)|(?:[a-zа-яё\-]+)|(?:[.,!?])/gi);
+    if (!matches) return [];
+    return matches.map(w => {
+      if (w.startsWith('<') && w.includes('>')) return w;
+      if (/^[.,!?]$/.test(w)) return w;
+      return w.toLowerCase();
     }).filter(w => w.length > 0);
   }
 

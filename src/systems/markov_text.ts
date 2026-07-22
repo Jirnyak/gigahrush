@@ -263,12 +263,28 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
     return word;
   });
 
-  let finalSentence = resolvedResult.join(' ');
-  if (finalSentence.length > 0) {
-    finalSentence = finalSentence.charAt(0).toUpperCase() + finalSentence.slice(1);
+  let finalSentence = '';
+  for (let i = 0; i < resolvedResult.length; i++) {
+    const w = resolvedResult[i];
+    if (/^[.,!?]$/.test(w)) {
+      finalSentence += w;
+    } else {
+      if (finalSentence.length > 0) finalSentence += ' ';
+      finalSentence += w;
+    }
   }
 
-  if (finalSentence.length === 0 || patternIndex < pattern.length) {
+  if (finalSentence.length > 0) {
+    finalSentence = finalSentence.charAt(0).toUpperCase() + finalSentence.slice(1);
+    if (!/[.,!?]$/.test(finalSentence)) finalSentence += '.';
+    
+    // Capitalize after end of sentence marks
+    finalSentence = finalSentence.replace(/([.!?])\s+([a-zа-яё])/gi, (_, p1, p2) => {
+      return p1 + ' ' + p2.toUpperCase();
+    });
+  }
+
+  if (finalSentence.length === 0) {
     return {
       text: request.exactFallback || MARKOV_TEXT_DEFINITIONS.intentFallbacks[request.intent] || '...',
       source: 'generated_markov',

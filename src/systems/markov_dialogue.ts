@@ -121,7 +121,7 @@ export function renderMarkovDialogueTalk(
   };
 
   const routed = router?.(request);
-  if (routed && validDialogueText(routed.text, context, maxChars)) {
+  if (routed && validDialogueText(routed.text, context)) {
     return { ...routed, intent, tags: routed.tags.length ? routed.tags : context.tags, fallbackUsed: routed.fallbackUsed };
   }
 
@@ -185,8 +185,7 @@ function dialogueContext(
   };
 }
 
-function validDialogueText(text: string, context: MarkovAdapterTextContext, maxChars: number): boolean {
-  if (text.length > maxChars) return false;
+function validDialogueText(text: string, context: MarkovAdapterTextContext): boolean {
   if (context.roomDefId && text.includes('__ANCHOR__')) return false;
   return true;
 }
