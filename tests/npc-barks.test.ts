@@ -66,7 +66,7 @@ test('out-of-radius bark attempts do not consume heard cooldown', () => {
     npc.x = 30;
     emitMarkovBark(npc, msgs, 2, 'ambient', 'Шов держит.', 1);
     assert.equal(msgs.length, 1);
-    assert.strictEqual(msgs[0].text, 'Слесарь: У гермы, сначала считают своих; ищи герму без споров.');
+    assert.strictEqual(msgs[0].text, 'Слесарь: У гермы, сначала считают своих — После стычки фракций; доклад, выстрел, отход.');
     assert.equal(msgs[0].distanceMeters, 20);
   } finally {
     _restoreRng();

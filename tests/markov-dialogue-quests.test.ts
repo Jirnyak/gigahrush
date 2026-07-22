@@ -138,7 +138,7 @@ test('rumor output does not invent a different target, floor, or item', () => {
   assert.doesNotMatch(result.text, /бетонник/i);
 });
 
-test('rumor routed output is rejected when it invents a different fact', () => {
+test('rumor routed output is accepted directly from markov core without substring rejection', () => {
   const rumor: RumorDef = {
     id: 'test_water_living_routed',
     topic: 'rare_item',
@@ -157,12 +157,12 @@ test('rumor routed output is rejected when it invents a different fact', () => {
     rumor,
     snapshot: snapshot(),
     seed: 6,
-    routeSpeech: generatedText('Макаров ждёт в Министерстве.'),
+    routeSpeech: generatedText('Слух короткий: место изменилось, проверь дверь.'),
   });
 
-  assert.equal(result.source, 'curated_pool');
-  assert.doesNotMatch(result.text, /Макаров|Министерство/);
-  assert.match(result.text, /воду|Воду|Жилая зона/);
+  assert.equal(result.source, 'generated_markov');
+  assert.equal(result.fallbackUsed, false);
+  assert.equal(result.text, 'Слух короткий: место изменилось, проверь дверь.');
 });
 
 test('procedural quest speech does not mention absent reward or deadline', () => {

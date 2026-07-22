@@ -348,7 +348,7 @@ export function validateMarkovTextData(definitions: MarkovTextDefinitions = MARK
   return errors;
 }
 
-function getCompiledPack(): CompiledPack {
+export function getCompiledPack(): CompiledPack {
   if (!compiledCache) compiledCache = compileMarkovText(MARKOV_TEXT_DEFINITIONS);
   return compiledCache;
 }
@@ -470,7 +470,7 @@ function compileDomain(
   };
 }
 
-function renderTemplate(
+export function renderTemplate(
   pack: CompiledPack,
   template: MarkovTemplate,
   request: SpeechRouterRequest,
@@ -529,14 +529,25 @@ function generateSlot(
   pcaCtx?: PcaContext,
 ): SlotCandidate {
   const candidates: SlotCandidate[] = [];
-  for (const path of slot.allowedClassPaths) {
+  const paths = [...slot.allowedClassPaths].sort((a, b) => b.length - a.length);
+  const anchorClasses = requiredAnchorMask !== 0
+    ? MARKOV_CLASSES.filter((_, idx) => (domain.atomsByClass[idx] ?? []).some(atomId => (domain.atomAnchorMask[atomId] & requiredAnchorMask) !== 0))
+    : [];
+  for (const path of paths) {
     if (path.length < slot.minAtoms || path.length > slot.maxAtoms) continue;
+    if (requiredAnchorMask !== 0 && anchorClasses.length > 0 && !path.some(c => anchorClasses.includes(c))) {
+      continue;
+    }
     candidates.push(...generatePathCandidates(domain, path, contextMask, requiredAnchorMask, rng, pcaCtx));
-    if (candidates.length >= MARKOV_SLOT_CANDIDATE_CAP * 2) break;
+    if (candidates.length >= MARKOV_SLOT_CANDIDATE_CAP * 4) break;
   }
-  shuffleWith(() => rng.random(), candidates);
-  candidates.sort((a, b) => b.score - a.score);
-  const bounded = candidates.slice(0, MARKOV_SLOT_CANDIDATE_CAP);
+  let validCandidates = requiredAnchorMask !== 0
+    ? candidates.filter(c => (c.anchorMask & requiredAnchorMask) !== 0)
+    : candidates;
+  if (validCandidates.length === 0) validCandidates = candidates;
+  shuffleWith(() => rng.random(), validCandidates);
+  validCandidates.sort((a, b) => b.score - a.score);
+  const bounded = validCandidates.slice(0, MARKOV_SLOT_CANDIDATE_CAP);
   const picked = pickWeighted(rng, bounded, candidate => {
     const base = Math.max(1, candidate.score);
     const smoothed = Math.pow(base, 0.75);
@@ -643,7 +654,22 @@ function transitionScore(
   return 1 + (domain.atomWeight[nextAtom] / total) * 6 + atomContextScore(domain, nextAtom, contextMask, requiredAnchorMask, pcaCtx);
 }
 
-function rankTemplates(
+function templateCanSatisfyAnchors(pack: CompiledPack, template: MarkovTemplate, requiredAnchorMask: number): boolean {
+  if (requiredAnchorMask === 0) return true;
+  if (template.requiredAnchors && (maskForTags(pack.anchorIds, template.requiredAnchors) & requiredAnchorMask) !== 0) return true;
+  for (const part of template.parts) {
+    if (part.kind === 'arg' && part.anchor && (maskForTags(pack.anchorIds, [part.anchor]) & requiredAnchorMask) !== 0) return true;
+    if (part.kind === 'slot') {
+      const domain = pack.domains.get(part.domain);
+      if (domain && domain.atomsByClass.some(ids => ids.some(id => (domain.atomAnchorMask[id] & requiredAnchorMask) !== 0))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function rankTemplates(
   pack: CompiledPack,
   request: SpeechRouterRequest,
   tags: ReadonlySet<string>,
@@ -654,12 +680,15 @@ function rankTemplates(
   pcaCtx?: PcaContext,
 ): readonly { readonly template: MarkovTemplate; readonly score: number }[] {
   const ranked: { template: MarkovTemplate; score: number }[] = [];
+  const isTalkRequest = request.intent === 'talk_context' || request.intent === 'talk_ambient';
   for (const template of pack.templates) {
-    if (template.intent !== request.intent) continue;
+    const intentMatch = template.intent === request.intent || (isTalkRequest && (template.intent === 'talk_context' || template.intent === 'talk_ambient'));
+    if (!intentMatch) continue;
     if (source !== 'generated_markov' && template.source !== source) continue;
     if (template.source !== 'generated_markov') continue;
     if (!allTagsPresent(tags, template.requiredTags ?? [])) continue;
     if (anyTagsPresent(tags, template.blockedTags ?? [])) continue;
+    if (!templateCanSatisfyAnchors(pack, template, requiredAnchorMask)) continue;
     const domainScore = template.domains.reduce((sum, domainId) => {
       const domain = pack.domains.get(domainId);
       return sum + (domain ? bitCount(maskForTags(pack.tagIds, domain.source.tags) & contextMask) : 0);
@@ -673,6 +702,7 @@ function rankTemplates(
       if (pcaCtx.pcaWealth > 0.5 && template.requiredTags?.includes('wealth')) pcaScore += 3;
       if (pcaCtx.pcaNeed > 0.5 && template.requiredTags?.includes('need')) pcaScore += 3;
     }
+    if (isTalkRequest && template.intent === request.intent) pcaScore += 2;
     ranked.push({
       template,
       score: Math.max(1, template.weight + (template.scoreBias ?? 0) + domainScore * 2 + anchorScore + pcaScore),
@@ -690,9 +720,11 @@ function pickCuratedLine(
   maxChars: number,
 ): SpeechRouterResult | undefined {
   const candidates: { text: string; domainId: string; score: number }[] = [];
+  const isTalkRequest = request.intent === 'talk_context' || request.intent === 'talk_ambient';
   for (const domain of pack.domains.values()) {
     for (const line of domain.source.corpus) {
-      if (line.intent !== request.intent) continue;
+      const intentMatch = line.intent === request.intent || (isTalkRequest && (line.intent === 'talk_context' || line.intent === 'talk_ambient'));
+      if (!intentMatch) continue;
       if (line.text.length > maxChars) continue;
       const score = 1 + countMatchingTags(tags, line.contextTags ?? []);
       candidates.push({ text: line.text, domainId: domain.id, score });
@@ -712,7 +744,7 @@ function pickCuratedLine(
   };
 }
 
-function validateRuntimeText(
+export function validateRuntimeText(
   text: string,
   maxChars: number,
   atomIds: readonly number[],
@@ -788,7 +820,7 @@ function contextTags(context: MarkovTextContext | undefined): ReadonlySet<string
   return tags;
 }
 
-function requestSeed(request: SpeechRouterRequest, salt: string): number {
+export function requestSeed(request: SpeechRouterRequest, salt: string): number {
   const context = request.context;
   const parts = [
     salt,
@@ -1050,7 +1082,7 @@ function countMatchingTags(tags: ReadonlySet<string>, values: readonly string[])
   return count;
 }
 
-function maskForTags(ids: ReadonlyMap<string, number>, tags: readonly string[] | ReadonlySet<string>): number {
+export function maskForTags(ids: ReadonlyMap<string, number>, tags: readonly string[] | ReadonlySet<string>): number {
   let mask = 0;
   for (const tag of tags) {
     const id = ids.get(tag);
@@ -1082,7 +1114,7 @@ function clampWeight(weight: number): number {
   return Math.max(1, Math.min(65535, Math.round(weight)));
 }
 
-function pickWeighted<T>(rng: SeedRng, items: readonly T[], weightOf: (item: T) => number): T | undefined {
+export function pickWeighted<T>(rng: SeedRng, items: readonly T[], weightOf: (item: T) => number): T | undefined {
   if (items.length === 0) return undefined;
   let total = 0;
   for (const item of items) total += Math.max(0, weightOf(item));

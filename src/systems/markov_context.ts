@@ -51,6 +51,8 @@ export interface MarkovTextContext {
   questId?: number;
   questType?: QuestType;
   contractId?: string;
+  requiredAnchors?: readonly string[];
+  args?: Readonly<Record<string, string | number | undefined>>;
   tags: readonly string[];
   contextHash: string;
   dangerLevel?: number;
@@ -463,6 +465,8 @@ export function finalizeMarkovContext(input: Partial<MarkovTextContext> & { tags
     foundItemValue: input.foundItemValue,
     recentTrauma: input.recentTrauma,
     isSamosborActive: input.isSamosborActive,
+    requiredAnchors: input.requiredAnchors ? [...input.requiredAnchors] : undefined,
+    args: input.args ? { ...input.args } : undefined,
     tags,
   };
   return {

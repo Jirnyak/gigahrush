@@ -1542,9 +1542,10 @@ const SKELETON_TEMPLATES = COMPILED_SKELETONS.map(sk => {
   const pathLen = Math.min(MARKOV_SLOT_ATOM_CAP, Math.max(1, classPath.length));
   const domains = ['procedural_skeletons'];
   const requiredTags = intent === 'lore_note' ? ['event'] : intent === 'document_flavor' ? ['item'] : [];
+  const expandedMatches = SKELETON_EXPANDED_PATHS.filter(p => p[0] === classPath[0] || (intentKey.startsWith('talk_') && p.length >= 3));
   const allowedPaths: MarkovAtomClass[][] = [
     classPath,
-    ...SKELETON_EXPANDED_PATHS.filter(p => p[0] === classPath[0] && p.length >= pathLen),
+    ...expandedMatches,
   ];
   return {
     id: `sk.${sk.id}`,
@@ -1558,7 +1559,7 @@ const SKELETON_TEMPLATES = COMPILED_SKELETONS.map(sk => {
     parts: [{
       kind: 'slot' as const,
       domain: 'procedural_skeletons',
-      minAtoms: Math.max(2, pathLen),
+      minAtoms: Math.max(2, Math.min(3, pathLen)),
       maxAtoms: Math.min(MARKOV_SLOT_ATOM_CAP, Math.max(4, pathLen + 1)),
       allowedClassPaths: allowedPaths,
       requiredAnchors: [] as readonly string[],
@@ -1627,7 +1628,7 @@ export const MARKOV_DOMAINS = [
     ...corpus('space_move', 'talk_context', 'context.safe', CONTEXT_SAFE_OWN_ZONE_LINES, ['room', 'safe'], ['room']),
     ...corpus('space_move', 'talk_context', 'context.lift', CONTEXT_LIFT_ANOMALY_LINES, ['lift', 'route', 'danger'], ['event', 'route']),
   ], 'У гермы тихо. Иди по сухой стене.'),
-  domain('needs', ['need', 'food', 'water', 'medical'], ['talk_context', 'log_speech', 'bark_ambient', 'lore_note'], NEED_ATOMS, [
+  domain('needs', ['need', 'food', 'water', 'medical'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'lore_note'], NEED_ATOMS, [
     ...corpus('needs', 'talk_context', 'context.hunger', CONTEXT_HUNGER_LINES, ['need', 'food'], ['need']),
     ...corpus('needs', 'talk_context', 'context.thirst', CONTEXT_THIRST_LINES, ['need', 'water'], ['need']),
     ...corpus('needs', 'talk_context', 'context.wound', CONTEXT_WOUND_LINES, ['need', 'medical'], ['need']),
@@ -1635,21 +1636,21 @@ export const MARKOV_DOMAINS = [
     ...corpus('needs', 'bark_ambient', 'bark.thirst', CONTEXT_BARK_THIRST, ['need', 'water'], ['need']),
     ...corpus('needs', 'bark_ambient', 'bark.wounded', CONTEXT_BARK_WOUNDED, ['need', 'medical'], ['need']),
   ], 'Кушайте вовремя.'),
-  domain('danger', ['danger', 'samosbor', 'monster', 'door'], ['talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'lore_note'], [...DANGER_ATOMS, ...COMPILED_THREAT_ATOMS], [
+  domain('danger', ['danger', 'samosbor', 'monster', 'door'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'lore_note'], [...DANGER_ATOMS, ...COMPILED_THREAT_ATOMS], [
     ...corpus('danger', 'talk_context', 'context.danger', CONTEXT_DANGEROUS_ZONE_LINES, ['danger'], ['event']),
     ...corpus('danger', 'talk_context', 'context.samosbor_warning', CONTEXT_SAMOSBOR_WARNING_LINES, ['danger', 'samosbor'], ['event']),
     ...corpus('danger', 'talk_context', 'context.monster', CONTEXT_MONSTER_KILL_LINES, ['danger', 'monster'], ['event']),
     ...corpus('danger', 'bark_ambient', 'bark.fear', CONTEXT_BARK_FEAR, ['danger'], ['event']),
     ...corpus('danger', 'bark_ambient', 'bark.samosbor_hide', CONTEXT_BARK_SAMOSBOR_HIDE, ['danger', 'samosbor'], ['event']),
   ], 'Не стой в коридоре, ищи герму.'),
-  domain('wealth', ['trade', 'shortage', 'production'], ['talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'demos_post', 'document_flavor', 'lore_note'], [...WEALTH_ATOMS, ...COMPILED_ITEM_ATOMS_WEALTH], [
+  domain('wealth', ['trade', 'shortage', 'production'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'demos_post', 'document_flavor', 'lore_note'], [...WEALTH_ATOMS, ...COMPILED_ITEM_ATOMS_WEALTH], [
     ...corpus('wealth', 'talk_context', 'context.contract', CONTEXT_ACTIVE_CONTRACT_LINES, ['trade', 'contract'], ['event']),
     ...corpus('wealth', 'talk_context', 'context.production', CONTEXT_PRODUCTION_LINES, ['trade', 'production'], ['event']),
     ...corpus('wealth', 'talk_context', 'context.production.output', CONTEXT_PRODUCTION_OUTPUT_LINES, ['trade', 'production'], ['event']),
     ...corpus('wealth', 'talk_context', 'context.shortage', CONTEXT_PRODUCTION_SHORTAGE_LINES, ['trade', 'shortage'], ['event']),
     ...corpus('wealth', 'bark_ambient', 'bark.shortage', CONTEXT_BARK_SHORTAGE, ['trade', 'shortage'], ['event']),
   ], 'Вода за хлеб, хлеб за тишину.'),
-  domain('items_use', ['item', 'container', 'repair'], ['talk_context', 'bark_ambient', 'procedural_quest', 'document_flavor'], [...ITEM_ATOMS, ...COMPILED_ITEM_ATOMS_USE], [
+  domain('items_use', ['item', 'container', 'repair'], ['talk_ambient', 'talk_context', 'bark_ambient', 'procedural_quest', 'document_flavor'], [...ITEM_ATOMS, ...COMPILED_ITEM_ATOMS_USE], [
     ...corpus('items_use', 'talk_context', 'context.container', CONTEXT_NEAR_CONTAINER_LINES, ['item', 'container'], ['item']),
     ...corpus('items_use', 'talk_context', 'context.stolen', CONTEXT_STOLEN_GOODS_LINES, ['item', 'theft'], ['item']),
   ], 'Фильтр держи сухим.'),
@@ -1669,7 +1670,7 @@ export const MARKOV_DOMAINS = [
     ...corpusRecord('factions', 'talk_ambient', 'faction', FACTION_LINES, ['faction'], ['faction']),
     ...corpusRecord('factions', 'bark_ambient', 'bark.faction.ambient', CONTEXT_BARK_FACTION_AMBIENT, ['faction'], ['faction']),
   ], 'В чужом секторе сначала спрашивают пароль.'),
-  domain('world_events', ['event', 'rumor', 'production', 'faction'], ['talk_context', 'log_speech', 'rumor_flavor', 'demos_post', 'demos_reaction', 'document_flavor', 'lore_note'], WORLD_EVENT_ATOMS, [
+  domain('world_events', ['event', 'rumor', 'production', 'faction'], ['talk_ambient', 'talk_context', 'log_speech', 'rumor_flavor', 'demos_post', 'demos_reaction', 'document_flavor', 'lore_note'], WORLD_EVENT_ATOMS, [
     ...corpus('world_events', 'talk_context', 'context.faction_event', CONTEXT_FACTION_EVENT_LINES, ['event', 'faction'], ['event']),
     ...corpus('world_events', 'talk_context', 'room.combat', ROOM_MEMORY_COMBAT_LINES, ['event', 'combat'], ['event']),
     ...corpus('world_events', 'talk_context', 'room.samosbor', ROOM_MEMORY_SAMOSBOR_LINES, ['event', 'samosbor'], ['event']),

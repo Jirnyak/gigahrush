@@ -1,7 +1,6 @@
 /* ── Runtime NPC dialogue dispatch ───────────────────────────── */
 
 import { type Entity } from '../core/types';
-import { getNpcStateText } from './ai';
 import { buildContextSnapshot, type ContextBuildOptions } from './context';
 import { renderMarkovDialogueTalk } from './markov_dialogue';
 import { routeAdapterSpeech } from './markov_router_adapters';
@@ -13,7 +12,6 @@ import {
 import { markNpcSpokenTo } from './npc_memory';
 import { observeRecentRumorEventsForNpc, selectRumorForNpc } from './rumor';
 import { routeSpeech } from './speech_router';
-import { mathRng as rng } from '../core/rand';
 
 /* ── Talk text (called from NPC menu "Talk" tab) ─────────────── */
 export function generateTalkText(npc: Entity, options: ContextBuildOptions = {}): string {
@@ -35,10 +33,6 @@ export function generateTalkText(npc: Entity, options: ContextBuildOptions = {})
 
   const rumorLine = selectRumorForNpc(npc, snapshot, now);
   if (rumorLine) return rumorLine;
-
-  if (npc.ai?.npcState !== undefined && rng() < 0.4) {
-    return getNpcStateText(npc.ai.npcState);
-  }
 
   return renderMarkovDialogueTalk(npc, snapshot, {
     memory,

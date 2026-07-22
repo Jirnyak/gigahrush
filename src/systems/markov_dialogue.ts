@@ -40,6 +40,8 @@ export interface MarkovAdapterTextContext {
   questId?: number;
   questType?: QuestType;
   contractId?: string;
+  requiredAnchors?: readonly string[];
+  args?: Readonly<Record<string, string | number | undefined>>;
   tags: readonly string[];
 }
 
@@ -139,6 +141,7 @@ function dialogueContext(
   pack: NpcSpeechPackageView | undefined,
 ): MarkovAdapterTextContext {
   const tags: string[] = ['dialogue', 'ordinary_npc'];
+  if (npc.ai?.npcState !== undefined) tags.push(`state.${npc.ai.npcState}`);
   if (pack) tags.push(...npcPackageSpeechContextTags(pack, npc, 'dialogue'));
   if (snapshot.roomDefId) tags.push('room');
   if (snapshot.isHungry) tags.push('need.food');
@@ -152,6 +155,17 @@ function dialogueContext(
   if (memory.trustPlayer > 35) tags.push('relation.warm');
   if (memory.trustPlayer < -20 || memory.fear > 45) tags.push('relation.cold');
 
+  const requiredAnchors: string[] = [];
+  if (snapshot.isHungry || snapshot.isThirsty || snapshot.isWounded || snapshot.isCritical) {
+    requiredAnchors.push('need');
+  } else if (snapshot.samosborActive || snapshot.hasRecentSamosborWarning || snapshot.isDangerousZone) {
+    requiredAnchors.push('event');
+  } else if (snapshot.roomDefId || snapshot.roomType || snapshot.zoneId !== undefined) {
+    requiredAnchors.push('room');
+  } else if (snapshot.nearbyContainer || snapshot.nearbyProduction) {
+    requiredAnchors.push('item');
+  }
+
   return {
     actorId: npc.id,
     actorAlifeId: npc.alifeId,
@@ -163,6 +177,7 @@ function dialogueContext(
     occupation: snapshot.npcOccupation as Occupation | undefined,
     needBand: snapshot.isCritical || snapshot.isHungry || snapshot.isThirsty ? 'urgent' : snapshot.isWounded ? 'low' : 'ok',
     dangerBand: snapshot.samosborActive ? 'panic' : snapshot.isDangerousZone ? 'threat' : snapshot.hasRecentSamosborWarning ? 'uneasy' : 'quiet',
+    requiredAnchors: requiredAnchors.length > 0 ? requiredAnchors : undefined,
     tags,
   };
 }
@@ -180,7 +195,7 @@ export function cleanLine(text: string | undefined): string | undefined {
 }
 
 export function hasContextAnchor(snapshot: ContextSnapshot): boolean {
-  return snapshot.roomDefId !== undefined || snapshot.zoneId !== undefined || snapshot.z !== undefined;
+  return snapshot.roomDefId !== undefined || snapshot.zoneId !== undefined || snapshot.isDangerousZone || snapshot.samosborActive || snapshot.nearbyContainer || snapshot.nearbyProduction;
 }
 
 export function minimalMemory(npc: Entity, now: number): NpcMemory {
