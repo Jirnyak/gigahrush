@@ -1288,7 +1288,7 @@ export const MARKOV_INTENT_FALLBACKS: Readonly<Record<MarkovIntent, string>> = {
   log_speech: 'В коридоре кто-то говорит коротко и по делу.',
   bark_ambient: 'Дверь держит. Пока тихо.',
   procedural_quest: 'Нужна работа с понятным адресом и платой.',
-  rumor_flavor: 'Слух короткий: проверь место, потом верь.',
+  rumor_flavor: 'Говорят разное, но в блоках надо смотреть самому.',
   demos_post: 'В Инфосети пишут: факт есть, подробности позже.',
   demos_reaction: 'Записал. Проверю по списку.',
   locked_author_text: 'Слова оставлены как есть.',
@@ -1568,6 +1568,36 @@ const SKELETON_TEMPLATES = COMPILED_SKELETONS.map(sk => {
   } satisfies MarkovTemplate;
 });
 
+const RUMOR_SKELETON_TEMPLATES = COMPILED_SKELETONS
+  .filter(sk => sk.intent === 'talk_context' || sk.intent === 'lore_note')
+  .map(sk => {
+    const classPath = skeletonToClassPath(sk.pattern);
+    const pathLen = Math.min(MARKOV_SLOT_ATOM_CAP, Math.max(1, classPath.length));
+    const allowedPaths: MarkovAtomClass[][] = [
+      classPath,
+      ...SKELETON_EXPANDED_PATHS.filter(p => p[0] === classPath[0] || p.length >= 3),
+    ];
+    return {
+      id: `sk.rumor.${sk.id}`,
+      intent: 'rumor_flavor' as const,
+      source: 'generated_markov' as const,
+      domains: ['procedural_skeletons'],
+      requiredTags: [],
+      requiredAnchors: [] as readonly string[],
+      weight: 6,
+      maxChars: 140,
+      parts: [{
+        kind: 'slot' as const,
+        domain: 'procedural_skeletons',
+        minAtoms: Math.max(2, Math.min(3, pathLen)),
+        maxAtoms: Math.min(MARKOV_SLOT_ATOM_CAP, Math.max(4, pathLen + 1)),
+        allowedClassPaths: allowedPaths,
+        requiredAnchors: [] as readonly string[],
+      }],
+      fallback: MARKOV_INTENT_FALLBACKS.rumor_flavor,
+    } satisfies MarkovTemplate;
+  });
+
 export const MARKOV_TEMPLATES = [
   template('space_move.talk', 'talk_context', ['space_move'], ['room'], ['room'], SPACE_PATHS, 'У гермы тихо. Иди по сухой стене.'),
   template('needs.talk', 'talk_context', ['needs'], ['need'], ['need'], NEED_PATHS, 'Кушайте вовремя.'),
@@ -1577,7 +1607,12 @@ export const MARKOV_TEMPLATES = [
   template('time_change.log', 'log_speech', ['time_change'], ['event'], ['event'], TIME_PATHS, 'После отбоя сначала проверь дверь.'),
   template('relationships.talk', 'talk_ambient', ['relationships'], ['relation'], ['relation'], RELATION_PATHS, 'Руки покажи, потом поговорим.'),
   template('factions.talk', 'talk_ambient', ['factions'], ['faction'], ['faction'], FACTION_PATHS, 'В чужом секторе сначала спрашивают пароль.'),
-  template('world_events.rumor', 'rumor_flavor', ['world_events'], ['event'], ['event'], EVENT_PATHS, 'Слух короткий: место изменилось, проверь дверь.'),
+  template('space_move.rumor', 'rumor_flavor', ['space_move'], ['room'], ['room'], SPACE_PATHS, 'Говорят, у гермы тихо, но стены сырые.'),
+  template('danger.rumor', 'rumor_flavor', ['danger'], ['danger'], ['event'], DANGER_PATHS, 'Слухами сыт не будешь, но про туманник говорят часто.'),
+  template('wealth.rumor', 'rumor_flavor', ['wealth'], ['trade'], ['item'], WEALTH_PATHS, 'Общий запас пустеет, пайков дают меньше.'),
+  template('items_use.rumor', 'rumor_flavor', ['items_use'], ['item'], ['item'], ITEM_PATHS, 'Кто-то нашел тайник у сухой трубы.'),
+  template('factions.rumor', 'rumor_flavor', ['factions'], ['faction'], ['faction'], FACTION_PATHS, 'Смена на посту сменилась, требуют новые пропуска.'),
+  template('world_events.rumor', 'rumor_flavor', ['world_events'], ['event'], ['event'], EVENT_PATHS, 'В Инфосети писали про шум у гермы, детали проверяют.'),
   template('interactions.talk', 'talk_context', ['interactions'], ['interaction'], ['action'], INTERACTION_PATHS, 'Общий ящик открывают при людях.'),
   template('bark.needs', 'bark_ambient', ['needs'], ['need'], ['need'], NEED_PATHS, 'Хлеб спрячь. Очередь слышит.'),
   template('bark.danger', 'bark_ambient', ['danger'], ['danger'], ['event'], DANGER_PATHS, 'К герме. Без споров.'),
@@ -1590,6 +1625,7 @@ export const MARKOV_TEMPLATES = [
   template('doc.flavor', 'document_flavor', ['items_use', 'wealth'], ['item'], ['item'], ITEM_PATHS, MARKOV_INTENT_FALLBACKS.document_flavor),
   template('lore.note', 'lore_note', ['world_events', 'danger'], ['event'], ['event'], EVENT_PATHS, MARKOV_INTENT_FALLBACKS.lore_note),
   ...SKELETON_TEMPLATES,
+  ...RUMOR_SKELETON_TEMPLATES,
   {
     id: 'generic.talk',
     intent: 'talk_ambient',
@@ -1623,7 +1659,7 @@ const PROCEDURAL_SKELETON_ATOMS = [
 ].map(a => atom(`ps.${a.id}`, a.text, a.class, a.tags ?? [], a.anchorKind ?? '', a.weight ?? 1, a.pcaDanger, a.pcaWealth, a.pcaNeed));
 
 export const MARKOV_DOMAINS = [
-  domain('space_move', ['room', 'route', 'door'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'lore_note'], [...SPACE_ATOMS, ...COMPILED_PLACE_ATOMS], [
+  domain('space_move', ['room', 'route', 'door'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'rumor_flavor', 'lore_note'], [...SPACE_ATOMS, ...COMPILED_PLACE_ATOMS], [
     ...corpus('space_move', 'talk_context', 'dialogue.general', GENERAL_LINES, ['room'], ['room']),
     ...corpus('space_move', 'talk_context', 'context.safe', CONTEXT_SAFE_OWN_ZONE_LINES, ['room', 'safe'], ['room']),
     ...corpus('space_move', 'talk_context', 'context.lift', CONTEXT_LIFT_ANOMALY_LINES, ['lift', 'route', 'danger'], ['event', 'route']),
@@ -1636,21 +1672,21 @@ export const MARKOV_DOMAINS = [
     ...corpus('needs', 'bark_ambient', 'bark.thirst', CONTEXT_BARK_THIRST, ['need', 'water'], ['need']),
     ...corpus('needs', 'bark_ambient', 'bark.wounded', CONTEXT_BARK_WOUNDED, ['need', 'medical'], ['need']),
   ], 'Кушайте вовремя.'),
-  domain('danger', ['danger', 'samosbor', 'monster', 'door'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'lore_note'], [...DANGER_ATOMS, ...COMPILED_THREAT_ATOMS], [
+  domain('danger', ['danger', 'samosbor', 'monster', 'door'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'rumor_flavor', 'lore_note'], [...DANGER_ATOMS, ...COMPILED_THREAT_ATOMS], [
     ...corpus('danger', 'talk_context', 'context.danger', CONTEXT_DANGEROUS_ZONE_LINES, ['danger'], ['event']),
     ...corpus('danger', 'talk_context', 'context.samosbor_warning', CONTEXT_SAMOSBOR_WARNING_LINES, ['danger', 'samosbor'], ['event']),
     ...corpus('danger', 'talk_context', 'context.monster', CONTEXT_MONSTER_KILL_LINES, ['danger', 'monster'], ['event']),
     ...corpus('danger', 'bark_ambient', 'bark.fear', CONTEXT_BARK_FEAR, ['danger'], ['event']),
     ...corpus('danger', 'bark_ambient', 'bark.samosbor_hide', CONTEXT_BARK_SAMOSBOR_HIDE, ['danger', 'samosbor'], ['event']),
   ], 'Не стой в коридоре, ищи герму.'),
-  domain('wealth', ['trade', 'shortage', 'production'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'demos_post', 'document_flavor', 'lore_note'], [...WEALTH_ATOMS, ...COMPILED_ITEM_ATOMS_WEALTH], [
+  domain('wealth', ['trade', 'shortage', 'production'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'rumor_flavor', 'demos_post', 'document_flavor', 'lore_note'], [...WEALTH_ATOMS, ...COMPILED_ITEM_ATOMS_WEALTH], [
     ...corpus('wealth', 'talk_context', 'context.contract', CONTEXT_ACTIVE_CONTRACT_LINES, ['trade', 'contract'], ['event']),
     ...corpus('wealth', 'talk_context', 'context.production', CONTEXT_PRODUCTION_LINES, ['trade', 'production'], ['event']),
     ...corpus('wealth', 'talk_context', 'context.production.output', CONTEXT_PRODUCTION_OUTPUT_LINES, ['trade', 'production'], ['event']),
     ...corpus('wealth', 'talk_context', 'context.shortage', CONTEXT_PRODUCTION_SHORTAGE_LINES, ['trade', 'shortage'], ['event']),
     ...corpus('wealth', 'bark_ambient', 'bark.shortage', CONTEXT_BARK_SHORTAGE, ['trade', 'shortage'], ['event']),
   ], 'Вода за хлеб, хлеб за тишину.'),
-  domain('items_use', ['item', 'container', 'repair'], ['talk_ambient', 'talk_context', 'bark_ambient', 'procedural_quest', 'document_flavor'], [...ITEM_ATOMS, ...COMPILED_ITEM_ATOMS_USE], [
+  domain('items_use', ['item', 'container', 'repair'], ['talk_ambient', 'talk_context', 'bark_ambient', 'procedural_quest', 'rumor_flavor', 'document_flavor'], [...ITEM_ATOMS, ...COMPILED_ITEM_ATOMS_USE], [
     ...corpus('items_use', 'talk_context', 'context.container', CONTEXT_NEAR_CONTAINER_LINES, ['item', 'container'], ['item']),
     ...corpus('items_use', 'talk_context', 'context.stolen', CONTEXT_STOLEN_GOODS_LINES, ['item', 'theft'], ['item']),
   ], 'Фильтр держи сухим.'),
@@ -1658,7 +1694,7 @@ export const MARKOV_DOMAINS = [
     ...corpus('time_change', 'talk_context', 'context.samosbor_after', CONTEXT_SAMOSBOR_AFTER_LINES, ['event', 'samosbor'], ['event']),
     ...corpus('time_change', 'talk_ambient', 'dialogue.old_world', OLD_WORLD_MEMORY_LINES, ['time'], ['event']),
   ], 'После отбоя сначала проверь дверь.'),
-  domain('relationships', ['relation', 'help', 'theft', 'trust'], ['talk_ambient', 'talk_context', 'log_speech', 'demos_reaction'], [...RELATION_ATOMS, ...COMPILED_SUBJ_ATOMS], [
+  domain('relationships', ['relation', 'help', 'theft', 'trust'], ['talk_ambient', 'talk_context', 'log_speech', 'rumor_flavor', 'demos_reaction'], [...RELATION_ATOMS, ...COMPILED_SUBJ_ATOMS], [
     ...corpus('relationships', 'talk_context', 'context.low_trust', CONTEXT_LOW_TRUST_LINES, ['relation', 'cold'], ['relation']),
     ...corpus('relationships', 'talk_context', 'context.high_trust', CONTEXT_HIGH_TRUST_LINES, ['relation', 'warm'], ['relation']),
     ...corpus('relationships', 'talk_context', 'context.helped', CONTEXT_REPEATED_HELP_LINES, ['relation', 'help'], ['relation']),
@@ -1666,7 +1702,7 @@ export const MARKOV_DOMAINS = [
     ...corpus('relationships', 'talk_context', 'room.help', ROOM_MEMORY_HELP_LINES, ['relation', 'help'], ['relation']),
     ...corpus('relationships', 'talk_context', 'room.theft', ROOM_MEMORY_THEFT_LINES, ['relation', 'theft'], ['relation']),
   ], 'Руки покажи, потом поговорим.'),
-  domain('factions', ['faction', 'sector', 'territory'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'demos_post', 'procedural_quest'], [...FACTION_ATOMS, ...COMPILED_FACTION_ATOMS], [
+  domain('factions', ['faction', 'sector', 'territory'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'demos_post', 'procedural_quest', 'rumor_flavor'], [...FACTION_ATOMS, ...COMPILED_FACTION_ATOMS], [
     ...corpusRecord('factions', 'talk_ambient', 'faction', FACTION_LINES, ['faction'], ['faction']),
     ...corpusRecord('factions', 'bark_ambient', 'bark.faction.ambient', CONTEXT_BARK_FACTION_AMBIENT, ['faction'], ['faction']),
   ], 'В чужом секторе сначала спрашивают пароль.'),
@@ -1675,7 +1711,7 @@ export const MARKOV_DOMAINS = [
     ...corpus('world_events', 'talk_context', 'room.combat', ROOM_MEMORY_COMBAT_LINES, ['event', 'combat'], ['event']),
     ...corpus('world_events', 'talk_context', 'room.samosbor', ROOM_MEMORY_SAMOSBOR_LINES, ['event', 'samosbor'], ['event']),
     ...corpus('world_events', 'talk_context', 'room.repair', ROOM_MEMORY_REPAIR_LINES, ['event', 'repair'], ['event']),
-  ], 'Слух короткий: место изменилось, проверь дверь.'),
+  ], 'В Инфосети писали про шум у гермы, детали проверяют.'),
   domain('interactions', ['interaction', 'container', 'repair', 'theft'], ['talk_context', 'log_speech', 'demos_reaction', 'document_flavor'], [...INTERACTION_ATOMS, ...COMPILED_ACTION_ATOMS], [
     ...corpus('interactions', 'talk_context', 'context.stolen', CONTEXT_STOLEN_GOODS_LINES, ['interaction', 'theft'], ['item', 'action']),
     ...corpus('interactions', 'talk_context', 'room.help', ROOM_MEMORY_HELP_LINES, ['interaction', 'help'], ['action']),

@@ -10,7 +10,7 @@ import {
   selectNpcLockedTalkLine,
 } from './npc_package_speech';
 import { markNpcSpokenTo } from './npc_memory';
-import { observeRecentRumorEventsForNpc, selectRumorForNpc } from './rumor';
+import { observeRecentRumorEventsForNpc } from './rumor';
 import { routeSpeech } from './speech_router';
 
 /* ── Talk text (called from NPC menu "Talk" tab) ─────────────── */
@@ -30,9 +30,6 @@ export function generateTalkText(npc: Entity, options: ContextBuildOptions = {})
   const snapshot = buildContextSnapshot(npc, options);
   const memory = markNpcSpokenTo(npc, now);
   observeRecentRumorEventsForNpc(npc, snapshot, now);
-
-  const rumorLine = selectRumorForNpc(npc, snapshot, now);
-  if (rumorLine) return rumorLine;
 
   return renderMarkovDialogueTalk(npc, snapshot, {
     memory,

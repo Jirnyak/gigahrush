@@ -75,7 +75,7 @@ const CURATED_FALLBACKS: Record<MarkovIntent, string> = {
   log_speech: 'Слышали разговор, но слов не разобрали.',
   bark_ambient: 'Не стой на проходе.',
   procedural_quest: 'Работа есть, но детали скажу у места.',
-  rumor_flavor: 'Слух есть, подробности лучше проверить самому.',
+  rumor_flavor: 'Слухи ходят по этажу, но правду знают у дверей.',
   demos_post: 'Короткая запись без лишних подробностей.',
   demos_reaction: 'Принято к сведению.',
   locked_author_text: '',

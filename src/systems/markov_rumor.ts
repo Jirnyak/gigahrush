@@ -74,7 +74,21 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
   const leadText = formatLeadLine(rumor.lead, options.event);
   const revealText = formatRevealLine(rumor.reveals);
   const leadItemId = rumor.lead?.itemId ?? options.event?.itemId;
-  const leadMonsterKind = rumor.lead?.monsterKind ?? options.event?.monsterKind;
+  const leadMonsterKind = rumor.lead?.monsterKind;
+  const requiredAnchors: string[] = [];
+  if (options.event?.type) requiredAnchors.push('event');
+  else if (rumor.topic === 'room' || rumor.topic === 'floor' || options.snapshot.roomDefId) requiredAnchors.push('room');
+  else if (rumor.topic === 'monster' || rumor.topic === 'samosbor') requiredAnchors.push('danger');
+  else if (rumor.topic === 'economy' || rumor.topic === 'rare_item' || rumor.topic === 'contract') requiredAnchors.push('item');
+  else if (rumor.topic === 'faction') requiredAnchors.push('faction');
+
+  const tags = ['rumor', `rumor.${rumor.topic}`, rumor.id];
+  if (options.snapshot.roomDefId) tags.push('room');
+  if (leadItemId) tags.push('item');
+  if (leadMonsterKind || rumor.topic === 'monster' || rumor.topic === 'samosbor') tags.push('danger');
+  if (rumor.topic === 'faction' || options.snapshot.npcFaction) tags.push('faction');
+  if (options.event?.type) tags.push('event');
+
   const context = {
     z: options.snapshot.z,
     roomDefId: options.snapshot.roomDefId,
@@ -85,7 +99,8 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
     monsterKind: leadMonsterKind,
     eventType: options.event?.type,
     eventId: options.event?.id,
-    tags: ['rumor', `rumor.${rumor.topic}`, rumor.id],
+    requiredAnchors: requiredAnchors.length > 0 ? requiredAnchors : undefined,
+    tags,
   };
   const request: MarkovAdapterSpeechRequest = {
     intent: 'rumor_flavor',
@@ -103,7 +118,7 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
       ...routed,
       intent: 'rumor_flavor',
       tags: routed.tags.length ? routed.tags : context.tags,
-      fallbackUsed: false,
+      fallbackUsed: routed.fallbackUsed,
       rumorId: rumor.id,
       topic: rumor.topic,
       leadText,
