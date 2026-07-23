@@ -29,17 +29,15 @@
 ```bash
 git status --short
 npm run check
-npm run itch:build
-unzip -l itch/gigahrush-itch.zip | sed -n '1,40p'
-npm run pikabu:build
-unzip -l pikabu/gigahrush-pikabu.zip | sed -n '1,40p'
-npx wrangler whoami
 git add -A
-git status --short
 git commit -m "<краткое описание>"
 git push origin HEAD
 git rev-parse HEAD
 git ls-remote origin HEAD
+npm run itch:build
+unzip -l itch/gigahrush-itch.zip | sed -n '1,40p'
+npm run pikabu:build
+unzip -l pikabu/gigahrush-pikabu.zip | sed -n '1,40p'
 npm run cf:deploy
 npm run gh-pages:deploy
 curl -fsSI "https://gigahrush.bileter.workers.dev/?v=$(git rev-parse --short HEAD)"
