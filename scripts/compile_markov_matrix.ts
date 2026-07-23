@@ -524,7 +524,7 @@ function compileAndVerify(): void {
   }
 
   console.log('[Compile Markov Matrix] Training Markov Model...');
-  const model = new MarkovModel(2);
+  const model = new MarkovModel(1);
   model.train(RAW_CORPUS);
 
   console.log('[Compile Markov Matrix] Building heuristics...');

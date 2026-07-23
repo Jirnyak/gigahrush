@@ -236,6 +236,10 @@ export default defineConfig((env) => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "src"),
+        ...(includeNpcIntake ? {
+          "../data/markov_compiled_matrix": path.resolve(__dirname, "src/data/markov_compiled_matrix_stub.ts"),
+          "./markov_compiled_matrix": path.resolve(__dirname, "src/data/markov_compiled_matrix_stub.ts")
+        } : {})
       },
     },
   };

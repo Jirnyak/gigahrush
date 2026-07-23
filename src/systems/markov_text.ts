@@ -171,6 +171,18 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
     };
   }
 
+  if (Object.keys(COMPILED_MARKOV_GRAPH).length === 0) {
+    if (request.intent === 'talk_context' || request.intent === 'talk_ambient' || request.intent === 'bark_ambient' || request.intent === 'rumor_flavor') {
+      return {
+        text: 'в онлайн версии общайся в чате нет сферы через N и играй с друзьями через /host /join',
+        source: 'generated_markov',
+        intent: request.intent,
+        tags: [],
+        fallbackUsed: true
+      };
+    }
+  }
+
   const skeletons = COMPILED_SKELETONS.filter(s => s.intent === request.intent);
   if (skeletons.length === 0) {
     return {
