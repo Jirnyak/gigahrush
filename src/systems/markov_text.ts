@@ -4,6 +4,7 @@ import { rng } from '../core/rand';
 import { randomName } from '../data/catalog';
 import { MARKOV_TEXT_DEFINITIONS, MarkovIntent, MarkovSource } from '../data/markov_text';
 import { COMPILED_SKELETONS, COMPILED_CATEGORIES, COMPILED_MARKOV_GRAPH, COMPILED_PATTERN_DISTANCES } from '../data/markov_compiled_matrix';
+import { getFactionRelation } from './factions';
 
 export interface MarkovTextContext {
   readonly actorId?: number;
@@ -105,6 +106,26 @@ function resolveCategory(tag: string, ctx: MarkovTextContext | undefined): strin
   const items = COMPILED_CATEGORIES[categoryName];
   if (!items || items.length === 0) return tag;
 
+  if (categoryName === 'FACTION_NAME' && ctx?.faction !== undefined) {
+    const factions = items.map(item => {
+      const match = item.tags.find(t => t.startsWith('faction_id_'));
+      const fId = match ? parseInt(match.replace('faction_id_', '')) : -1;
+      let relation = 0;
+      if (fId !== -1) {
+        relation = getFactionRelation(ctx.faction!, fId);
+      }
+      const weight = Math.max(10, Math.abs(relation) + 10);
+      return { item, weight };
+    });
+    const totalWeight = factions.reduce((sum, f) => sum + f.weight, 0);
+    let r = rng() * totalWeight;
+    for (const f of factions) {
+      r -= f.weight;
+      if (r <= 0) return f.item.text;
+    }
+    return items[Math.floor(rng() * items.length)].text;
+  }
+
   const pcaCtx = computePcaContext(ctx);
   const targetDanger = pcaCtx.pcaDanger;
   const targetWealth = pcaCtx.pcaWealth;
@@ -204,6 +225,15 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   for (let step = 0; step < maxWords; step++) {
     let history = currentSequence.slice(-order).join(' ');
     let transitions = COMPILED_MARKOV_GRAPH[history];
+
+    if (transitions && Object.keys(transitions).length === 1 && rng() < 0.25) {
+      const fallbackHistory = currentSequence.slice(-1).join(' ');
+      const fallbackTransitions = COMPILED_MARKOV_GRAPH[fallbackHistory];
+      if (fallbackTransitions && Object.keys(fallbackTransitions).length > 1) {
+        history = fallbackHistory;
+        transitions = fallbackTransitions;
+      }
+    }
 
     if (!transitions || Object.keys(transitions).length === 0) {
       history = currentSequence.slice(-1).join(' ');

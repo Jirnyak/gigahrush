@@ -57,8 +57,6 @@ export interface ContextFactFilter {
 
 export type WorldEventObserver = (state: GameState, event: WorldEvent) => void;
 
-const eventObservers: WorldEventObserver[] = [];
-
 export type ResourceScarcityBand = 'normal' | 'strained' | 'shortage' | 'critical';
 export type ResourceScarcityTrend = 'worsened' | 'recovered';
 
@@ -82,19 +80,24 @@ export interface ResourceScarcityEventDraft {
   rumorIds?: readonly string[];
 }
 
+var _eventObservers: WorldEventObserver[];
+
 export function registerWorldEventObserver(observer: WorldEventObserver): void {
-  if (!eventObservers.includes(observer)) eventObservers.push(observer);
+  if (!_eventObservers) _eventObservers = [];
+  if (!_eventObservers.includes(observer)) _eventObservers.push(observer);
 }
 
 export function unregisterWorldEventObserver(observer: WorldEventObserver): boolean {
-  const idx = eventObservers.indexOf(observer);
+  if (!_eventObservers) return false;
+  const idx = _eventObservers.indexOf(observer);
   if (idx < 0) return false;
-  eventObservers.splice(idx, 1);
+  _eventObservers.splice(idx, 1);
   return true;
 }
 
 function dispatchEventObservers(state: GameState, event: WorldEvent): void {
-  const snapshot = eventObservers.slice();
+  if (!_eventObservers) return;
+  const snapshot = _eventObservers.slice();
   let errorLogs = 0;
   for (const observer of snapshot) {
     try {

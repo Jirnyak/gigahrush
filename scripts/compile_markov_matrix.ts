@@ -5,6 +5,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ITEMS } from '../src/data/items';
+import { ItemType, Faction, RoomType, MonsterKind, Occupation } from '../src/core/types';
+import { ROOM_DEFS } from '../src/data/rooms';
+import { MONSTERS } from '../src/entities/monster';
+import { OCCUPATION_PROFILES } from '../src/data/occupation_profiles';
+import { DOCUMENT_ACCESS_ITEMS } from '../src/data/documents_access';
+import { PERMIT_DEFS } from '../src/data/permits';
+import { FLOOR_ANOMALIES } from '../src/data/procedural_floors';
+import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,8 +23,10 @@ const ALIEN_FRANCHISE_BLACKLIST = new Set([
   'чаэс', 'припять', 'чернобыль', 'сидорович', 'контролер', 'контролёр',
   'снорк', 'меченый', 'стрелок', 'вднх', 'полис', 'ганза', 'орден',
   'монолит', 'долг', 'свобода', 'артем', 'артём', 'родрик', 'шухарт',
-  'сталкер', 'сталкеры', 'кордон', 'радар', 'саркофаг', 'янтарь'
+  'сталкер', 'сталкеры', 'кордон', 'радар', 'саркофаг', 'янтарь',
+  'снаут', 'перец', 'хартмонт'
 ]);
+
 
 function isSanitizedWord(word: string): boolean {
   const lower = word.toLocaleLowerCase('ru-RU');
@@ -32,69 +43,179 @@ interface CategoryItem {
   tags: string[];
 }
 
+function buildItemCategories(): Record<string, CategoryItem[]> {
+  const categories: Record<string, CategoryItem[]> = {
+    ITEM: [],
+    WEAPON: [],
+    FOOD: [],
+    MEDICINE: [],
+    INSTRUMENT: [],
+    DOCUMENT: [],
+    RESOURCE: []
+  };
+  
+  for (const def of Object.values(ITEMS)) {
+    if (!isSanitizedWord(def.name)) continue;
+    
+    const weight = Math.max(10, def.value || 10);
+    const tags = def.tags ? [...def.tags] : [];
+    
+    const catItem: CategoryItem = {
+      text: def.name.toLowerCase(),
+      weight,
+      tags
+    };
+    
+    categories.ITEM.push(catItem);
+    
+    switch (def.type) {
+      case ItemType.WEAPON:
+      case ItemType.AMMO:
+        categories.WEAPON.push(catItem);
+        break;
+      case ItemType.FOOD:
+      case ItemType.DRINK:
+        categories.FOOD.push(catItem);
+        break;
+      case ItemType.MEDICINE:
+        categories.MEDICINE.push(catItem);
+        break;
+      case ItemType.TOOL:
+        categories.INSTRUMENT.push(catItem);
+        break;
+      case ItemType.NOTE:
+        categories.DOCUMENT.push(catItem);
+        break;
+      case ItemType.MISC:
+        if (catItem.tags.includes('resource') || catItem.tags.includes('currency') || catItem.tags.includes('valuable')) {
+          categories.RESOURCE.push(catItem);
+        }
+        break;
+    }
+  }
+  
+  return categories;
+}
+
+function buildFactionCategories(): CategoryItem[] {
+  const mapping: Partial<Record<Faction, { text: string; extraTags: string[] }>> = {
+    [Faction.CITIZEN]: { text: 'гражданские', extraTags: ['citizen'] },
+    [Faction.LIQUIDATOR]: { text: 'ликвидаторы', extraTags: ['liquidator', 'combat'] },
+    [Faction.CULTIST]: { text: 'культисты', extraTags: ['cult', 'mystic'] },
+    [Faction.WILD]: { text: 'дикие', extraTags: ['wild'] },
+    [Faction.SCIENTIST]: { text: 'учёные', extraTags: ['science', 'bureaucracy'] },
+  };
+
+  const items: CategoryItem[] = [];
+  for (const f of [Faction.CITIZEN, Faction.LIQUIDATOR, Faction.CULTIST, Faction.WILD, Faction.SCIENTIST]) {
+    const meta = mapping[f]!;
+    items.push({
+      text: meta.text,
+      weight: 50,
+      tags: ['faction', `faction_id_${f}`, ...meta.extraTags]
+    });
+  }
+  return items;
+}
+
+function buildThreatCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  for (const key of Object.keys(MONSTERS)) {
+    const def = MONSTERS[Number(key) as MonsterKind];
+    if (def && def.name) {
+      items.push({ text: def.name.toLowerCase(), weight: 50, tags: ['danger', 'monster'] });
+    }
+  }
+  items.push({ text: 'самосбор', weight: 100, tags: ['samosbor', 'danger'] });
+  items.push({ text: 'аномалия', weight: 50, tags: ['mystic', 'danger'] });
+  return items;
+}
+
+function buildPlaceCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  for (const key of Object.keys(ROOM_DEFS)) {
+    const def = ROOM_DEFS[Number(key) as RoomType];
+    if (def && def.name) {
+      items.push({ text: def.name.toLowerCase(), weight: 20, tags: ['room'] });
+    }
+  }
+  items.push({ text: 'гермодверь', weight: 10, tags: ['door', 'safe'] });
+  items.push({ text: 'вентиляционная шахта', weight: 45, tags: ['danger', 'repair'] });
+  return items;
+}
+
+function buildSubjCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  for (const prof of Object.values(OCCUPATION_PROFILES)) {
+    items.push({ text: prof.demosLabel.toLowerCase(), weight: prof.defaultGenerationWeight * 5, tags: ['person', ...prof.routineTags || []] });
+  }
+  return items;
+}
+
+function buildOrganizationCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  const added = new Set<string>();
+  
+  const add = (text: string, tags: string[]) => {
+    const txt = text.toLowerCase();
+    if (!added.has(txt)) {
+      items.push({ text: txt, weight: 60, tags });
+      added.add(txt);
+    }
+  };
+
+  add('Служба ликвидации', ['guard', 'combat', 'liquidator']);
+  add('Гражданская оборона', ['guard', 'combat', 'security']);
+  add('Районсовет', ['bureaucracy']);
+  add('Комендатура', ['guard', 'bureaucracy']);
+  add('НИИ "Щит"', ['science', 'bureaucracy']);
+  add('Служба герметизации', ['door', 'repair']);
+
+  return items;
+}
+
+function buildDocumentCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  for (const def of Object.values(DOCUMENT_ACCESS_ITEMS)) {
+    if (def.type === ItemType.MISC || def.type === ItemType.NOTE) {
+      items.push({ text: def.name.toLowerCase(), weight: def.value || 30, tags: ['document'] });
+    }
+  }
+  for (const def of PERMIT_DEFS) {
+    items.push({ text: def.title.toLowerCase(), weight: 60, tags: ['document', 'permit'] });
+  }
+  return items;
+}
+
+function buildAnomalyCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  for (const def of FLOOR_ANOMALIES) {
+    if (def.id !== 'none') {
+      items.push({ text: def.title.toLowerCase(), weight: def.weight * 5, tags: ['danger', 'anomaly', ...def.tags] });
+    }
+  }
+  return items;
+}
+
+function buildZoneCategories(): CategoryItem[] {
+  const items: CategoryItem[] = [];
+  for (const route of DESIGN_FLOOR_ROUTES) {
+    items.push({ text: route.displayName.toLowerCase(), weight: 30, tags: ['zone', ...(route.themeTags || [])] });
+  }
+  return items;
+}
+
 // Canonical Gigahrush & Samosbor dictionary categories with PCA-like weights
 const CANONICAL_CATEGORIES: Record<string, CategoryItem[]> = {
-  SUBJ: [
-    { text: 'ликвидатор', weight: 80, tags: ['guard', 'combat', 'danger'] },
-    { text: 'слесарь-параноик', weight: 40, tags: ['repair', 'stalker'] },
-    { text: 'бригадир смены', weight: 60, tags: ['guard', 'work'] },
-    { text: 'обыватель', weight: 10, tags: ['neutral', 'survival'] },
-    { text: 'мясник', weight: 90, tags: ['blood', 'mystic', 'combat'] },
-    { text: 'проходчик', weight: 50, tags: ['stalker', 'survival', 'work'] },
-    { text: 'домком', weight: 70, tags: ['guard', 'bureaucracy'] },
-    { text: 'дежурный электрик', weight: 35, tags: ['repair', 'survival'] },
-    { text: 'дежурный по гермозатвору', weight: 65, tags: ['guard', 'door'] },
-    { text: 'лаборант НИИ', weight: 30, tags: ['neutral', 'science'] },
-    { text: 'санитар секции', weight: 45, tags: ['medical', 'clean'] },
-    { text: 'инспектор по герметичности', weight: 75, tags: ['guard', 'door', 'bureaucracy'] }
-  ],
-  ITEM: [
-    { text: 'гаусс-пушка', weight: 5000, tags: ['combat', 'expensive'] },
-    { text: 'артефакт "Пустышка"', weight: 1500, tags: ['mystic', 'expensive'] },
-    { text: 'чистый фильтр АФУ-300', weight: 100, tags: ['survival', 'repair'] },
-    { text: 'банка тушенки', weight: 50, tags: ['survival', 'food'] },
-    { text: 'грязный бинт', weight: 5, tags: ['blood', 'survival', 'medical'] },
-    { text: 'патроны 5.45', weight: 200, tags: ['combat', 'expensive'] },
-    { text: 'дозиметр ДП-5В', weight: 450, tags: ['survival', 'repair', 'science'] },
-    { text: 'малахитовый артефакт', weight: 1200, tags: ['mystic', 'expensive'] },
-    { text: 'герметизирующая мастика', weight: 80, tags: ['repair'] },
-    { text: 'пайковый концентрат', weight: 40, tags: ['food', 'survival'] },
-    { text: 'талон на воду', weight: 15, tags: ['survival', 'trade'] },
-    { text: 'обрывок журнала ГО', weight: 25, tags: ['document', 'lore'] },
-    { text: 'инструкция по герметизации', weight: 35, tags: ['document', 'repair', 'lore'] }
-  ],
-  PLACE: [
-    { text: 'гермодверь', weight: 10, tags: ['door', 'safe'] },
-    { text: 'распределитель', weight: 20, tags: ['repair', 'work'] },
-    { text: 'влажный сектор', weight: 40, tags: ['water', 'danger'] },
-    { text: 'сборочный цех', weight: 30, tags: ['neutral', 'work'] },
-    { text: 'кровавый тупик', weight: 100, tags: ['blood', 'mystic', 'danger'] },
-    { text: 'защитный шлюз', weight: 15, tags: ['door', 'guard', 'safe'] },
-    { text: 'бункер Гражданской Обороны', weight: 5, tags: ['safe', 'door'] },
-    { text: 'вентиляционная шахта', weight: 45, tags: ['danger', 'repair'] },
-    { text: 'трансформаторная ячейка', weight: 55, tags: ['danger', 'repair'] },
-    { text: 'жилая ячейка', weight: 12, tags: ['safe', 'neutral'] },
-    { text: 'продувочная прачечная', weight: 25, tags: ['water', 'neutral'] },
-    { text: 'архив комендатуры', weight: 20, tags: ['document', 'bureaucracy', 'safe'] }
-  ],
-  THREAT: [
-    { text: 'Самосбор', weight: 100, tags: ['samosbor', 'danger'] },
-    { text: 'процедурная аномалия', weight: 50, tags: ['mystic', 'danger'] },
-    { text: 'бетонник', weight: 80, tags: ['combat', 'danger'] },
-    { text: 'истощение и голод', weight: 20, tags: ['survival'] },
-    { text: 'пси-излучение', weight: 90, tags: ['mystic', 'fear', 'danger'] },
-    { text: 'черная слизь', weight: 75, tags: ['samosbor', 'danger'] },
-    { text: 'удушливый газ', weight: 40, tags: ['survival', 'danger', 'air'] },
-    { text: 'радиационная капель', weight: 35, tags: ['survival', 'danger'] },
-    { text: 'гидроудар в трубах', weight: 30, tags: ['repair', 'danger'] }
-  ],
-  FACTION: [
-    { text: 'Служба ликвидации', weight: 80, tags: ['guard', 'combat'] },
-    { text: 'Служба герметизации', weight: 70, tags: ['guard', 'door'] },
-    { text: 'Независимая гильдия слесарей', weight: 40, tags: ['repair'] },
-    { text: 'Администрация корпуса', weight: 65, tags: ['bureaucracy'] },
-    { text: 'НИИ "Щит"', weight: 85, tags: ['science'] }
-  ],
+  ...buildItemCategories(),
+  FACTION_NAME: buildFactionCategories(),
+  THREAT: buildThreatCategories(),
+  PLACE: buildPlaceCategories(),
+  SUBJ: buildSubjCategories(),
+  FACTION: buildOrganizationCategories(),
+  DOCUMENT: buildDocumentCategories(),
+  ANOMALY: buildAnomalyCategories(),
+  ZONE_TYPE: buildZoneCategories(),
   ACTION: [
     { text: 'смазывали поворотные механизмы', weight: 30, tags: ['repair', 'door'] },
     { text: 'задраили шлюз', weight: 70, tags: ['guard', 'door', 'samosbor'] },
@@ -103,13 +224,6 @@ const CANONICAL_CATEGORIES: Record<string, CategoryItem[]> = {
     { text: 'проверили герметик', weight: 50, tags: ['repair', 'door'] },
     { text: 'опечатали сектор', weight: 85, tags: ['guard', 'danger'] },
     { text: 'оставили заметку на стене', weight: 15, tags: ['document', 'lore'] }
-  ],
-  INSTRUMENT: [
-    { text: 'дозиметр', weight: 100, tags: ['survival', 'science'] },
-    { text: 'гаечный ключ', weight: 50, tags: ['repair'] },
-    { text: 'противогаз ГП-7', weight: 150, tags: ['survival', 'air'] },
-    { text: 'переносной фонарь', weight: 30, tags: ['survival'] },
-    { text: 'прижимной клин', weight: 40, tags: ['door', 'repair'] }
   ],
   STATE_FACT: [
     { text: 'дверь набухла снизу', weight: 60, tags: ['door', 'water'] },
@@ -137,6 +251,24 @@ const CANONICAL_CATEGORIES: Record<string, CategoryItem[]> = {
     { text: 'ноги тяжелеют', weight: 50, tags: ['need', 'wound'] },
     { text: 'в глазах рябит', weight: 60, tags: ['need', 'wound', 'danger'] }
   ],
+  ACTION_VERB: [
+    { text: 'перехватил лом', weight: 40, tags: ['combat', 'action'] },
+    { text: 'шагнул в темноту', weight: 50, tags: ['danger', 'action'] },
+    { text: 'замер у гермы', weight: 60, tags: ['door', 'danger'] },
+    { text: 'выругался', weight: 30, tags: ['neutral', 'emotion'] },
+    { text: 'проверил дозиметр', weight: 70, tags: ['science', 'survival'] },
+    { text: 'закашлялся', weight: 45, tags: ['wound', 'danger'] },
+    { text: 'перезарядил', weight: 80, tags: ['combat'] },
+    { text: 'схватился за голову', weight: 65, tags: ['fear', 'panic'] }
+  ],
+  EMOTION: [
+    { text: 'глухой страх', weight: 80, tags: ['fear', 'danger'] },
+    { text: 'холодная паника', weight: 90, tags: ['panic', 'danger'] },
+    { text: 'нервная дрожь', weight: 60, tags: ['fear'] },
+    { text: 'бетонная тоска', weight: 50, tags: ['sadness', 'survival'] },
+    { text: 'вспышка ярости', weight: 70, tags: ['anger', 'combat'] },
+    { text: 'тяжелое облегчение', weight: 40, tags: ['relief', 'safe'] }
+  ],
   SEVERITY: [
     { text: 'это уже срочно', weight: 70, tags: ['urgent'] },
     { text: 'терпит недолго', weight: 50, tags: ['low'] },
@@ -159,13 +291,6 @@ const CANONICAL_CATEGORIES: Record<string, CategoryItem[]> = {
     { text: 'не спорь у чужой гермы', weight: 50, tags: ['faction', 'shelter'] },
     { text: 'не верь голосу за стеной', weight: 60, tags: ['danger', 'samosbor'] },
     { text: 'не лезь без фонаря', weight: 40, tags: ['danger', 'survival'] }
-  ],
-  FACTION_NAME: [
-    { text: 'Гражданские', weight: 60, tags: ['faction', 'citizen'] },
-    { text: 'Ликвидаторы', weight: 80, tags: ['faction', 'liquidator', 'combat'] },
-    { text: 'Культисты', weight: 50, tags: ['faction', 'cult', 'mystic'] },
-    { text: 'Дикие', weight: 60, tags: ['faction', 'wild'] },
-    { text: 'Администрация', weight: 65, tags: ['faction', 'bureaucracy'] }
   ],
   NPC_NAME: [
     { text: 'один знакомый', weight: 50, tags: ['neutral'] },
@@ -195,28 +320,38 @@ const CANONICAL_SKELETONS: SyntaxSkeleton[] = [
   { id: 'sk.talk.3', pattern: ['SUBJ', 'THREAT'], intent: 'talk_context', weight: 15 },
   { id: 'sk.talk.4', pattern: ['PLACE', 'ITEM'], intent: 'talk_context', weight: 14 },
   { id: 'sk.talk.5', pattern: ['FACTION', 'ACTION', 'PLACE'], intent: 'talk_context', weight: 11 },
+  { id: 'sk.talk.6', pattern: ['SUBJ', 'ZONE_TYPE', 'ANOMALY'], intent: 'talk_context', weight: 13 },
+  { id: 'sk.talk.7', pattern: ['RESOURCE', 'TRADE_RULE'], intent: 'talk_context', weight: 12 },
   // talk_ambient
   { id: 'sk.ambient.1', pattern: ['SUBJ', 'ACTION'], intent: 'talk_ambient', weight: 10 },
   { id: 'sk.ambient.2', pattern: ['PLACE', 'THREAT'], intent: 'talk_ambient', weight: 8 },
   { id: 'sk.ambient.3', pattern: ['SUBJ', 'ITEM'], intent: 'talk_ambient', weight: 10 },
+  { id: 'sk.ambient.4', pattern: ['ZONE_TYPE', 'ANOMALY'], intent: 'talk_ambient', weight: 9 },
   // bark_ambient
   { id: 'sk.bark.1', pattern: ['THREAT', 'SUBJ'], intent: 'bark_ambient', weight: 10 },
   { id: 'sk.bark.2', pattern: ['PLACE', 'THREAT'], intent: 'bark_ambient', weight: 12 },
   { id: 'sk.bark.3', pattern: ['SUBJ', 'INSTRUMENT'], intent: 'bark_ambient', weight: 8 },
+  { id: 'sk.bark.4', pattern: ['DOCUMENT', 'FACTION'], intent: 'bark_ambient', weight: 11 },
   // procedural_quest
   { id: 'sk.quest.1', pattern: ['PLACE', 'THREAT', 'ITEM'], intent: 'procedural_quest', weight: 15 },
   { id: 'sk.quest.2', pattern: ['FACTION', 'THREAT', 'PLACE'], intent: 'procedural_quest', weight: 12 },
+  { id: 'sk.quest.3', pattern: ['SUBJ', 'DOCUMENT', 'ZONE_TYPE'], intent: 'procedural_quest', weight: 13 },
+  { id: 'sk.quest.4', pattern: ['RESOURCE', 'PLACE'], intent: 'procedural_quest', weight: 11 },
   // document_flavor (записки, дневники, документы)
   { id: 'sk.doc.1', pattern: ['SUBJ', 'ACTION', 'PLACE'], intent: 'document_flavor', weight: 14 },
   { id: 'sk.doc.2', pattern: ['PLACE', 'THREAT', 'ACTION'], intent: 'document_flavor', weight: 16 },
   { id: 'sk.doc.3', pattern: ['FACTION', 'THREAT'], intent: 'document_flavor', weight: 12 },
   { id: 'sk.doc.4', pattern: ['SUBJ', 'ITEM', 'PLACE'], intent: 'document_flavor', weight: 13 },
+  { id: 'sk.doc.5', pattern: ['ZONE_TYPE', 'ANOMALY'], intent: 'document_flavor', weight: 15 },
   // lore_note
   { id: 'sk.lore.1', pattern: ['PLACE', 'THREAT', 'SUBJ'], intent: 'lore_note', weight: 15 },
   { id: 'sk.lore.2', pattern: ['FACTION', 'PLACE', 'ACTION'], intent: 'lore_note', weight: 14 },
-  // demos_post
-  { id: 'sk.demos.1', pattern: ['PLACE', 'THREAT'], intent: 'demos_post', weight: 12 },
-  { id: 'sk.demos.2', pattern: ['SUBJ', 'ITEM', 'PLACE'], intent: 'demos_post', weight: 14 }
+  { id: 'sk.lore.3', pattern: ['ANOMALY', 'ZONE_TYPE', 'THREAT'], intent: 'lore_note', weight: 16 },
+  // rumor_flavor
+  { id: 'sk.rumor.1', pattern: ['PLACE', 'THREAT'], intent: 'rumor_flavor', weight: 15 },
+  { id: 'sk.rumor.2', pattern: ['THREAT', 'PLACE'], intent: 'rumor_flavor', weight: 12 },
+  { id: 'sk.rumor.3', pattern: ['ZONE_TYPE', 'ANOMALY'], intent: 'rumor_flavor', weight: 14 },
+  { id: 'sk.rumor.4', pattern: ['SUBJ', 'DOCUMENT', 'FACTION'], intent: 'rumor_flavor', weight: 13 }
 ];
 
 
@@ -258,23 +393,26 @@ class MarkovModel {
       const sequence = Array(this.order).fill(START_TOKEN).concat(tokens).concat([END_TOKEN]);
 
       for (let i = 0; i < sequence.length - this.order; i++) {
-        const history = sequence.slice(i, i + this.order).join(' ');
         const nextToken = sequence[i + this.order];
 
-        if (!this.graph.has(history)) {
-          this.graph.set(history, new Map());
-        }
+        for (let o = 1; o <= this.order; o++) {
+          const history = sequence.slice(i + this.order - o, i + this.order).join(' ');
 
-        const transitions = this.graph.get(history)!;
-        if (!transitions.has(nextToken)) {
-          transitions.set(nextToken, { count: 0, tags: {} });
-        }
+          if (!this.graph.has(history)) {
+            this.graph.set(history, new Map());
+          }
 
-        const transInfo = transitions.get(nextToken)!;
-        transInfo.count += 1;
-        
-        for (const tag of item.tags) {
-          transInfo.tags[tag] = (transInfo.tags[tag] || 0) + 1;
+          const transitions = this.graph.get(history)!;
+          if (!transitions.has(nextToken)) {
+            transitions.set(nextToken, { count: 0, tags: {} });
+          }
+
+          const transInfo = transitions.get(nextToken)!;
+          transInfo.count += 1;
+          
+          for (const tag of item.tags) {
+            transInfo.tags[tag] = (transInfo.tags[tag] || 0) + 1;
+          }
         }
       }
     }
@@ -338,6 +476,8 @@ try {
       [/(снорк[а-я]*|контролер[а-я]*|полтергейст[а-я]*|бюрер[а-я]*|слепые псы|слепой пес|псевдогигант[а-я]*|кровосос[а-я]*|кикимор[а-я]*|Чёрны[хеим]*|Самосбор[а-я]*|радиаци[яиюей]*|аномали[яиюей]*|слизь|бетонник[а-я]*|выброс[а-я]*|пси-излучени[яе]*|удушь[яе]*|голод[а-я]*)/gi, '<THREAT>'],
       [/(хабар[а-я]*|деньг[иами]*|пустышк[аиуей]*|фильтр[а-я]*|тушенк[аиуей]*|бинт[а-я]*|гаусс-пушк[аиуей]*|гаусс[а-я]*|дозиметр[а-я]*|патрон[а-я]*|артефакт[а-я]*|медуз[аыуей]*|ломоть мяса|мамина бусы|контейнер[а-я]*)/gi, '<ITEM>'],
       [/(Долг[а-я]*|Свобод[аыеу]|Монолит[а-я]*|Чистое Небо|Наемники|Ганз[аыеу]|Орден[а-я]*|Спарта)/gi, '<FACTION>'],
+      [/(схватил[а-я]*|побежал[а-я]*|ударил[а-я]*|закричал[а-я]*|упал[а-я]*|убил[а-я]*|стрелял[а-я]*|открыл[а-я]*|закрыл[а-я]*|спрятал[а-я]*|нашел|нашёл|увидел[а-я]*|услышал[а-я]*|вспомнил[а-я]*|забыл[а-я]*|подумал[а-я]*|решил[а-я]*|спросил[а-я]*|ответил[а-я]*|сказал[а-я]*|прошептал[а-я]*|пробормотал[а-я]*|бросил[а-я]*|поднял[а-я]*)/gi, '<ACTION_VERB>'],
+      [/(страх[ауеом]*|ужас[ауеом]*|паник[аиуей]*|отчаяни[яеюм]*|гнев[ауеом]*|ярость|ярост[иью]*|радост[иью]*|счасть[яеюм]*|горем*|печаль[ю]*|груст[иью]*|удивления*|шок[ауеом]*|спокойстви[яеюм]*|надежд[аыуей]*)/gi, '<EMOTION>'],
     ];
 
     for (const file of files) {
@@ -361,7 +501,7 @@ try {
         clean = clean.replace(/^[А-ЯЁ][а-яё]+\b(?!\s+(?:это|был|в|на|с|от|из|к|по|за|для|о|у|и|а|но|или))\b/g, '<NPC_NAME>');
 
         const wordsCount = clean.split(' ').length;
-        if (wordsCount >= 3 && wordsCount <= 35) {
+        if (wordsCount >= 3 && wordsCount <= 50) {
           RAW_CORPUS.push({ text: clean, tags: ['lore', 'neutral'] });
           added++;
         }
@@ -426,8 +566,8 @@ export interface CompiledSyntaxSkeleton {
 export const COMPILED_CATEGORIES: Readonly<Record<string, readonly CompiledCategoryItem[]>> = ${JSON.stringify(CANONICAL_CATEGORIES, null, 2)} as const;
 export const COMPILED_SKELETONS: readonly CompiledSyntaxSkeleton[] = ${JSON.stringify(CANONICAL_SKELETONS, null, 2)} as const;
 
-export const COMPILED_MARKOV_GRAPH: Record<string, Record<string, { count: number, tags: Record<string, number> }>> = ${JSON.stringify(objGraph)};
-export const COMPILED_PATTERN_DISTANCES: Record<string, Record<string, number>> = ${JSON.stringify(objDistances)};
+export const COMPILED_MARKOV_GRAPH: Record<string, Record<string, { count: number, tags: Record<string, number> }>> = JSON.parse(${JSON.stringify(JSON.stringify(objGraph))});
+export const COMPILED_PATTERN_DISTANCES: Record<string, Record<string, number>> = JSON.parse(${JSON.stringify(JSON.stringify(objDistances))});
 `;
 
   fs.writeFileSync(outPath, fileContent, 'utf-8');

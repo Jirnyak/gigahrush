@@ -597,7 +597,7 @@ test('samosbor floor families expose warning and aftermath identities', () => {
     const familyWeight = family.variants.reduce((sum, id) => sum + getSamosborVariantWeight(id, family.floor), 0);
     assert.ok(familyWeight > classicWeight, `${family.label} variants should outweigh classic on their floor family`);
     assert.ok(
-      directorBeats.some(beat =>
+      directorBeats.some(beat => beat.tags.includes(family.tag)),
       `${family.label} needs a warning/counterplay director beat`,
     );
     assert.ok(
