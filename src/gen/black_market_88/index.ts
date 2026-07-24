@@ -12,7 +12,7 @@ import { generateZones, sanitizeDoors } from '../shared';
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { rng } from '../../core/rand';
 import './living_zone';
 
@@ -49,13 +49,13 @@ export function generateBlackMarket88DesignFloor(): FloorGeneration {
     entities,
     spawnX: rooms.publicGate.x + 3.5,
     spawnY: rooms.publicGate.y + Math.floor(rooms.publicGate.h / 2) + 0.5,
-    isDecentralized: true,
+    isDecentralized: true as const,
   };
 
   finalizeExpandedFloor(generation, route, rngGen);
   applyDesignFloorPopulationField(generation, route);
 
-  return generation;
+  return { ...generation, isDecentralized: true as const };
 }
 
 export function generateBlackMarket88DebugFloor(): FloorGeneration {

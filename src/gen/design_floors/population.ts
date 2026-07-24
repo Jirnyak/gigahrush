@@ -21,7 +21,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
-import type { FloorGeneration } from '../floor_manifest';
+import type { DesignFloorGeneration, FloorGeneration } from '../floor_manifest';
 import { sampleNaturalPopulationCells } from '../population_placement';
 
 function rand32(seed: number, serial: number, salt: number): number {
@@ -60,12 +60,12 @@ function nextEntityId(entities: readonly Entity[]): number {
   return next;
 }
 
-function roomTypeAt(generation: FloorGeneration, cell: number): RoomType | undefined {
+function roomTypeAt(generation: Pick<FloorGeneration, 'world'>, cell: number): RoomType | undefined {
   const rid = generation.world.roomMap[cell];
   return rid >= 0 ? generation.world.rooms[rid]?.type : RoomType.CORRIDOR;
 }
 
-function designMonsterFloor(route: DesignFloorRouteDef): number {
+function designMonsterFloor(route: DesignFloorPopulationRoute): number {
   if (route.z <= -48) return 200;
   if (route.z <= -34) return 180;
   if (route.z <= -14) return 140;
@@ -77,7 +77,7 @@ function designMonsterFloor(route: DesignFloorRouteDef): number {
 function makeAmbientNpcTemplate(
   id: number,
   cell: number,
-  route: DesignFloorRouteDef,
+  route: DesignFloorPopulationRoute,
   npcLevel: number,
   serial: number,
   seed: number,
@@ -112,8 +112,8 @@ function makeAmbientNpcTemplate(
   };
 }
 
-function spawnAmbientNpcTemplates(generation: FloorGeneration, route: DesignFloorRouteDef, firstId: number): number {
-  const profile = designFloorPopulationProfile(route);
+function spawnAmbientNpcTemplates(generation: Omit<DesignFloorGeneration, 'spawnX' | 'spawnY'>, route: DesignFloorPopulationRoute, firstId: number): number {
+  const profile = designFloorPopulationProfile(route as DesignFloorRouteDef);
   if (profile.npcTarget <= 0) {
     let write = 0;
     for (let read = 0; read < generation.entities.length; read++) {
@@ -142,8 +142,8 @@ function spawnAmbientNpcTemplates(generation: FloorGeneration, route: DesignFloo
   return nextId;
 }
 
-function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRouteDef, firstId: number): number {
-  const profile = designFloorPopulationProfile(route);
+function spawnDesignMonsters(generation: Omit<DesignFloorGeneration, 'spawnX' | 'spawnY'>, route: DesignFloorPopulationRoute, firstId: number): number {
+  const profile = designFloorPopulationProfile(route as DesignFloorRouteDef);
   if (profile.monsterTarget <= 0) return firstId;
   const existing = generation.entities.filter(entity => entity.alive && entity.type === EntityType.MONSTER).length;
   const requested = Math.max(0, profile.monsterTarget - existing);
@@ -171,7 +171,7 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
         // @ts-ignore
         route.themeTags.includes('maintenance') ? 'industrial' : '',
       ].filter(Boolean),
-      samosborCount: Math.max(1, route.danger),
+      samosborCount: Math.max(1, route.danger ?? 1),
       allowRare: false,
       allowOffFloor: true,
       biasKinds: profile.monsterBiasKinds,
@@ -205,7 +205,9 @@ function spawnDesignMonsters(generation: FloorGeneration, route: DesignFloorRout
   return nextId;
 }
 
-export function applyDesignFloorPopulationField(generation: FloorGeneration, route: DesignFloorRouteDef): void {
+export type DesignFloorPopulationRoute = { id: string; z: number; danger?: number; themeTags?: readonly string[] };
+
+export function applyDesignFloorPopulationField(generation: Omit<DesignFloorGeneration, 'spawnX' | 'spawnY'>, route: DesignFloorPopulationRoute): void {
   let nextId = nextEntityId(generation.entities);
   nextId = spawnAmbientNpcTemplates(generation, route, nextId);
   spawnDesignMonsters(generation, route, nextId);

@@ -1,4 +1,4 @@
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { seededRandom, hashSeed } from '../../core/rand';
 /* ── Design z: antenna_court / Антенный двор ─────────────── */
 
@@ -106,7 +106,7 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   world.bakeLights();
 
   const signalState = createAntennaCourtSignalState(seed);
-    const generation = {
+    const generation = { isDecentralized: true as const,
     world,
     entities,
     spawnX,
@@ -121,8 +121,8 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   expandAntennaCourtRouteGeometry(world, rngFn);
   retuneAntennaCourtRouteZones(world);
 
-  applyDesignFloorPopulationField(generation as any, { id: 'antenna_court', z: 42 } as any);
-  return { ...generation, isDecentralized: true } as any;
+  applyDesignFloorPopulationField(generation, { id: 'antenna_court', z: 42 });
+  return { ...generation, isDecentralized: true as const };
 }
 
 export * from "./meta";

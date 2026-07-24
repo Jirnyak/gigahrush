@@ -20,7 +20,7 @@ import {
   spawnMaintenanceFactionNpcSquads,
 } from './territory';
 import { rng, irand } from '../../core/rand';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
@@ -220,7 +220,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
   initializeMaintenanceTerritory(world, generationSeed);
   relocateMaintenanceFactionNpcSquads(world, entities, factionNpcIdStart, factionNpcIdEnd);
 
-  applyDesignFloorPopulationField({ world, entities } as any, { id: 'maintenance', z: 12 } as any);
+  applyDesignFloorPopulationField({ world, entities, isDecentralized: true as const }, { id: 'maintenance', z: 12 });
 
   return { world, entities, spawnX, spawnY };
 }

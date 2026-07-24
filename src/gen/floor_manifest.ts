@@ -19,6 +19,10 @@ export interface FloorGeneration {
   onAfterTerritory?: (world: World, entities: Entity[]) => void;
 }
 
+export interface DesignFloorGeneration extends FloorGeneration {
+  isDecentralized: true;
+}
+
 export const FLOOR_NAMES: Record<string, string> = {
   'ministry': 'Министерство',
   'kvartiry': 'Квартиры',

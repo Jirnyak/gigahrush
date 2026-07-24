@@ -60,7 +60,9 @@ export interface ChthonicAtticLayout {
   crawlDoorIdxs: number[];
 }
 
-export interface ChthonicAtticGeneration {
+import type { DesignFloorGeneration } from "../floor_manifest";
+
+export interface ChthonicAtticGeneration extends DesignFloorGeneration {
   world: World;
   entities: Entity[];
   spawnX: number;

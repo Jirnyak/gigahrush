@@ -37,7 +37,7 @@ import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bolnichny_korpus');
 
@@ -452,13 +452,13 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
       entities,
       spawnX: rooms.triageEntrance.x + 58.5,
       spawnY: rooms.triageEntrance.y + 17.5,
-      isDecentralized: true,
+      isDecentralized: true as const,
     };
 
     finalizeExpandedFloor(generation, route, rngGen);
     applyDesignFloorPopulationField(generation, route);
 
-    return generation;
+    return { ...generation, isDecentralized: true as const };
   });
 }
 

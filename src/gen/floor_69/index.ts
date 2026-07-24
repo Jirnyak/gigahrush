@@ -1,5 +1,5 @@
 import { withSeededRandom, rng } from '../../core/rand';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { expandFloor69FullFloor } from './districts';
 /* -- Design floor 69: adult vice, debt, blackmail and refuge ---- */
 
@@ -43,9 +43,9 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
     world.bakeLights();
 
     const route = { id: DESIGN_FLOOR_ID, z: DESIGN_FLOOR_Z };
-    const generation = { world, entities };
+    const generation = { isDecentralized: true as const, world, entities };
     expandFloor69FullFloor(generation as any, rng);
-    applyDesignFloorPopulationField(generation as any, route as any);
+    applyDesignFloorPopulationField(generation, route);
 
     genLog(`[F69] design floor seed=${seed} rooms=${world.rooms.length} spawn=(${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
     return {
@@ -58,7 +58,7 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
       seed,
       state,
       debugLines: floor69DebugLines(state, seed),
-      isDecentralized: true,
+      isDecentralized: true as const,
     };
   });
 }

@@ -5,7 +5,7 @@ import { World } from '../../core/world';
 import { hashSeed, withSeededRandom, seededRandom } from '../../core/rand';
 import { factionToTerritoryOwner } from '../../data/factions';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 
 import {
@@ -190,9 +190,9 @@ export function generateDarkMetroDesignFloor(seed = DARK_METRO_DEFAULT_SEED): Da
     applyDarkMetroAmbientLight(world, layout, ctx.packedState);
     world.markFogDirty();
 
-    const generation = { world, entities, spawnX, spawnY, metroState: createDarkMetroFloorState(ctx.packedState) };
-      applyDesignFloorPopulationField(generation as any, { id: 'dark_metro', z: -32 } as any);
-      return { ...generation, isDecentralized: true } as any;
+    const generation = { isDecentralized: true as const, world, entities, spawnX, spawnY, metroState: createDarkMetroFloorState(ctx.packedState) };
+      applyDesignFloorPopulationField(generation, { id: 'dark_metro', z: -32 });
+      return { ...generation, isDecentralized: true as const };
     });
 }
 

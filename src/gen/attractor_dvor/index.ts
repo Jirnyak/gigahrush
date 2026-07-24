@@ -7,7 +7,8 @@ import { World } from '../../core/world';
 import { ensureConnectivity, generateZones, sanitizeDoors, scatterAmbientLights } from '../shared';
 import { seededRandom, hashSeed } from '../../core/rand';
 import type { FloorGeneration } from '../floor_manifest';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
+import type { DesignFloorGeneration } from '../floor_manifest';
 import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, ATTRACTOR_DVOR_ROOM_DEF_IDS, AttractorDvorState } from "./meta";
 import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, placeLifts, registerAttractorRouteCues } from "./geometry";
 import { placeContainers, spawnActors } from "./npcs";
@@ -74,15 +75,15 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
     // ensureConnectivity was NOT called here previously, actually wait!
     // generateAttractorDvorDesignFloor previously just returned the layout, but let's check!
     
-    const generation = { world, entities, spawnX: state.debugEntry.spawnX, spawnY: state.debugEntry.spawnY };
+    const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: state.debugEntry.spawnX, spawnY: state.debugEntry.spawnY };
     ensureConnectivity(world, generation.spawnX, generation.spawnY);
     
     placeAttractorDvorEmergencyPanels(world);
     scatterAmbientLights(world, rngFn, 260);
     world.rebuildContainerMap();
     world.bakeLights();
-    applyDesignFloorPopulationField(generation as any, { id: 'attractor_dvor', z: -34 } as any);
-    return { ...generation, isDecentralized: true } as any;
+    applyDesignFloorPopulationField(generation, { id: 'attractor_dvor', z: -34 });
+    return generation;
 }
 
 export * from "./meta";

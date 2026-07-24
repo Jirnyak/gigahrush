@@ -1,4 +1,5 @@
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
+import type { DesignFloorGeneration } from '../floor_manifest';
 import { seededRandom, hashSeed } from '../../core/rand';
 /* -- Design z: Морг регистраций ----------------------------
  * Authored route floor registry_morgue, z=+18.
@@ -258,15 +259,15 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
   const spawnX = reception.x + 6.5;
   const spawnY = reception.y + 5.5;
   genLog(`[DESIGN_FLOOR] ${REGISTRY_MORGUE_ROUTE_ID} z=${REGISTRY_MORGUE_FUTURE_Z} at (${ox}, ${oy}) rooms=${nextRoomId}`);
-    const generation = { world, entities, spawnX, spawnY };
+    const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX, spawnY };
 
   const rngFn = seededRandom(hashSeed('design-full:registry_morgue:18', 18));
   expandRegistryMorgueGeometry(world, rngFn);
   reinforceRegistryMorgueAuthoredTerritory(world);
   retuneRegistryMorgueZones(world);
 
-  applyDesignFloorPopulationField(generation as any, { id: 'registry_morgue', z: 18 } as any);
-  return { ...generation, isDecentralized: true } as any;
+  applyDesignFloorPopulationField(generation, { id: 'registry_morgue', z: 18 });
+  return generation;
 }
 
 export * from "./meta";

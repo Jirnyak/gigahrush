@@ -9,7 +9,7 @@ import { World } from '../../core/world';
 import { pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { calcZoneLevel } from '../../systems/rpg';
 import { initializeCellTerritory } from '../../systems/territory';
 import { buildHellGeometry, imprintHellArenaValleys } from './geometry';
@@ -53,7 +53,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   }
   world.bakeLights();
 
-  applyDesignFloorPopulationField({ world, entities } as any, { id: 'hell', z: -36, danger: 5 } as any);
+  applyDesignFloorPopulationField({ world, entities, isDecentralized: true as const }, { id: 'hell', z: -36, danger: 5 });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   seedLoot(world, entities, { v: nextId });

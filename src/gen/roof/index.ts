@@ -27,7 +27,7 @@ import {
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
 import { hashSeed, seededRandom } from '../../core/rand';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 
@@ -556,7 +556,7 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
     weatherState,
     skyProvider,
     debug: roofDebugLines(weatherState),
-    isDecentralized: true,
+    isDecentralized: true as const,
   };
 
   const route = designFloorById(ROOF_ROUTE_ID)!;
@@ -567,6 +567,6 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   finalizeExpandedFloor(generation, route, rngFn);
   applyDesignFloorPopulationField(generation, route);
 
-  return generation;
+  return { ...generation, isDecentralized: true as const };
 }
 

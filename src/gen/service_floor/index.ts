@@ -17,7 +17,7 @@ import { placeLifts } from '../shared';
 import { finalizeExpandedFloor} from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { hashSeed, seededRandom } from '../../core/rand';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 
 
 import { expandServiceFloorMachineMaze, placeServiceFloorEmergencyPanels, stampServiceRoom, carveStaffRoute, reinforceServiceFloorAuthoredHqTerritory, connectRoomDown, connectRoomUp, connectRoomLeft, connectRoomRight, dressCorridors, dressLiftMachine, dressBreakerRoom, dressJanitorDepot, dressVentJunction, dressCanteen, dressClerkOffice, generateServiceZones } from './geometry';
@@ -173,7 +173,7 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
     spawnX: serviceState.debugEntry.spawnX,
     spawnY: serviceState.debugEntry.spawnY,
     serviceState,
-    isDecentralized: true,
+    isDecentralized: true as const,
   };
   
   finalizeExpandedFloor(generation, route, rng);
@@ -184,7 +184,7 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   alignServiceFloorAmbientNpcTerritory(world, entities);
 
   world.bakeLights();
-  return generation;
+  return { ...generation, isDecentralized: true as const };
 }
 
 export function registerServiceRouteCues(

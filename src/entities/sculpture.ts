@@ -13,7 +13,7 @@ export const DEF: MonsterDef = {
   dmg: 1000,
   attackRate: 0.25,
   sprite: 0,   // auto-assigned by generateSprites()
-  aiFlags: ['weepingAngel' as any], // We will add 'weepingAngel' to MonsterAIFlag in monster.ts
+  aiFlags: ['weepingAngel'],
   counterplay: 'Двигается только когда на неё никто не смотрит. Смертельно быстрая.',
   lootHint: 'редкая арматура, изолента, странные бетонные фрагменты',
 };

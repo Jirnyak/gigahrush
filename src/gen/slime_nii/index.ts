@@ -43,7 +43,7 @@ import {
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import './olevia';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('slime_nii');
@@ -415,13 +415,13 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
       entities,
       spawnX: rooms.entry.x + 18.5,
       spawnY: rooms.entry.y + 12.5,
-      isDecentralized: true,
+      isDecentralized: true as const,
     };
 
     finalizeExpandedFloor(generation, route, rngGen);
     applyDesignFloorPopulationField(generation, route);
 
-    return generation;
+    return { ...generation, isDecentralized: true as const };
   });
 }
 

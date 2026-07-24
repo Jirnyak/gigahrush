@@ -23,6 +23,8 @@ export type MonsterAIFlag =
   | 'sourceSwarm'
   | 'slimeScavenger'
   | 'slimeStrider'
+  | 'weepingAngel'
+  | 'melee'
   | 'meatGrowth'
   | 'blackWaterWake'
   | 'rootedPlant'

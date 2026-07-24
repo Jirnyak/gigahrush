@@ -6,7 +6,7 @@ import { withSeededRandom, SeedRng } from '../../core/rand';
 import { ensureConnectivity, sanitizeDoors, placeLifts, finalizeExpandedFloor } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 
 export * from './meta';
 import {
@@ -67,7 +67,7 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
     world.bakeLights();
 
     const route = designFloorById(DESIGN_FLOOR_ID)!;
-    const generation = { world, entities, spawnX, spawnY, isDecentralized: true };
+    const generation = { world, entities, spawnX, spawnY, isDecentralized: true as const };
 
     expandManhattanCrossroadsRouteShell(world, () => rng.random());
     finalizeExpandedFloor(generation, route, () => rng.random());
@@ -77,7 +77,7 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
       if (room) room.ceilingTier = 198;
     }
     
-    return generation;
+    return { ...generation, isDecentralized: true as const };
   });
 }
 

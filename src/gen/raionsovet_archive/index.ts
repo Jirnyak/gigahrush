@@ -1,4 +1,5 @@
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
+import type { DesignFloorGeneration } from '../floor_manifest';
 import { seededRandom, hashSeed } from '../../core/rand';
 /* ── Design z: Райсовет и Живой архив ───────────────────────
  * Routed authored-floor package. Route data lives in data/design_floors.ts;
@@ -156,15 +157,15 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   spawnArchiveMonster(world, entities, nextId, fire.x + 8, fire.y + 4, MonsterKind.PECHATEED);
 
   world.bakeLights();
-    const generation = { world, entities, spawnX: 512.5, spawnY: 507.5 };
+    const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: 512.5, spawnY: 507.5 };
 
   const rngFn = seededRandom(hashSeed('design-full:raionsovet_archive:22', 22));
   expandRaionsovetArchiveGeometry(world, rngFn);
   retuneRaionsovetArchiveZones(world);
   reinforceRaionsovetArchiveAuthoredHqTerritory(world);
 
-  applyDesignFloorPopulationField(generation as any, { id: 'raionsovet_archive', z: 22 } as any);
-  return { ...generation, isDecentralized: true } as any;
+  applyDesignFloorPopulationField(generation, { id: 'raionsovet_archive', z: 22 });
+  return generation;
 }
 
 export * from "./meta";

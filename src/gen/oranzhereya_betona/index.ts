@@ -15,7 +15,8 @@ import {
   scatterAmbientLights
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
-import { applyDesignFloorPopulationField } from '../design_floors/population';
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
+import type { DesignFloorGeneration } from '../floor_manifest';
 import { SEED } from "./meta";
 import { tuneOranzhereyaBetonaRouteZones, expandOranzhereyaBetonaRouteGeometry, reinforceOranzhereyaBetonaAuthoredTerritory, initWorld, buildRooms, connectRooms, decorateRooms, placeLifts, placeDrops } from "./geometry";
 import { spawnNpcs, placeContainers, spawnThreats } from "./npcs";
@@ -54,9 +55,9 @@ export function generateOranzhereyaBetonaDesignFloor(seed = SEED): FloorGenerati
     scatterAmbientLights(world, rngFn, 260);
     world.bakeLights();
 
-    const generation = { world, entities, spawnX: rooms.entry.x + 10.5, spawnY: rooms.entry.y + 14.5 };
-      applyDesignFloorPopulationField(generation as any, { id: 'oranzhereya_betona', z: -2 } as any);
-      return { ...generation, isDecentralized: true } as any;
+    const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: rooms.entry.x + 10.5, spawnY: rooms.entry.y + 14.5 };
+      applyDesignFloorPopulationField(generation, { id: 'oranzhereya_betona', z: -2 });
+      return generation;
     });
 }
 

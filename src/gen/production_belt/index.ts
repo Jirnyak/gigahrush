@@ -1,4 +1,4 @@
-import { applyDesignFloorPopulationField } from "../design_floors/population";
+import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import {
   LiftDirection,
   Tex,
@@ -57,9 +57,9 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   registerProductionMachineHazards(world, [rooms.metalLine, rooms.chargeLine, rooms.ammoLine, rooms.quarantine], 4);
 
   world.bakeLights();
-  const generation = { world, entities, spawnX, spawnY, productionState };
-    applyDesignFloorPopulationField(generation as any, { id: 'production_belt', z: -20 } as any);
-    return { ...generation, isDecentralized: true } as any;
+  const generation = { isDecentralized: true as const, world, entities, spawnX, spawnY, productionState };
+    applyDesignFloorPopulationField(generation, { id: 'production_belt', z: -20 });
+    return { ...generation, isDecentralized: true as const };
 }
 
 export * from "./meta";
