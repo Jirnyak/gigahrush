@@ -39,6 +39,8 @@ const ITEMS_ARRAY = Object.freeze(Object.values(ITEMS));
 
 export function buildLootPool(profile: LootProfile, maxAllowedValue: number): { item: ItemDef, weight: number }[] {
   const pool: { item: ItemDef, weight: number }[] = [];
+  const tagEntries = profile.tagWeights ? Object.entries(profile.tagWeights) : undefined;
+
   for (const item of ITEMS_ARRAY) {
     let baseWeight = item.spawnW || 0;
     if (baseWeight <= 0) continue;
@@ -56,8 +58,8 @@ export function buildLootPool(profile: LootProfile, maxAllowedValue: number): { 
     if (profile.drinkMult && item.type === ItemType.DRINK) baseWeight *= profile.drinkMult;
     if (profile.miscMult && item.type === ItemType.MISC) baseWeight *= profile.miscMult;
 
-    if (profile.tagWeights) {
-      for (const [tag, weight] of Object.entries(profile.tagWeights)) {
+    if (tagEntries) {
+      for (const [tag, weight] of tagEntries) {
         if (itemDefHasTag(item, tag)) {
           baseWeight *= weight;
         }

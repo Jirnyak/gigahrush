@@ -108,6 +108,8 @@ export interface ResolvedMeshSceneProfile {
   includeContainers: boolean;
   includeEntities: boolean;
   includeCorridorVolumes: boolean;
+  ceilingDetail: number;
+  furnitureDetail: number;
   corridorVolumeDetail: number;
   organicVolumeDetail: number;
   corridorVolumeStyle: VisualCorridorVolumeStyle;
@@ -551,6 +553,8 @@ export function resolveMeshSceneProfile(context: MeshPassContext): ResolvedMeshS
     includeContainers: source.includeContainers !== false,
     includeEntities: source.includeEntities !== false,
     includeCorridorVolumes: source.includeCorridorVolumes !== false,
+    ceilingDetail: Math.max(0, Math.min(1, source.ceilingDetail ?? 0)),
+    furnitureDetail: Math.max(0, Math.min(1, source.furnitureDetail ?? 0)),
     corridorVolumeDetail: Math.max(0, Math.min(1, source.corridorVolumeDetail ?? 0)),
     organicVolumeDetail: Math.max(0, Math.min(1, source.organicVolumeDetail ?? 0)),
     corridorVolumeStyle: sourceStyle,
@@ -1121,28 +1125,12 @@ function collectContainersAtCell(context: MeshPassContext, idx: number, x: numbe
   }
 }
 
-function numericProfileDetail(
-  context: MeshPassContext,
-  key: 'ceilingDetail' | 'furnitureDetail' | 'corridorVolumeDetail' | 'organicVolumeDetail',
-): number {
-  const value = (context.profile as {
-    ceilingDetail?: number;
-    furnitureDetail?: number;
-    corridorVolumeDetail?: number;
-    organicVolumeDetail?: number;
-  } | null | undefined)?.[key];
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
-}
 
-function corridorVolumeStyle(context: MeshPassContext): VisualCorridorVolumeStyle {
-  const value = (context.profile as { corridorVolumeStyle?: unknown } | null | undefined)?.corridorVolumeStyle;
-  return value === 'service' || value === 'organic' || value === 'void' ? value : 'concrete';
-}
 
 function corridorCovering(context: MeshPassContext, profile?: ResolvedMeshSceneProfile): VisualCorridorCoveringDef {
   const explicit = profile?.corridorCoveringId ?? context.profile?.corridorCoveringId;
   if (explicit) return visualCorridorCoveringById(explicit);
-  const style = profile?.corridorVolumeStyle ?? corridorVolumeStyle(context);
+  const style = profile?.corridorVolumeStyle ?? (context.profile?.corridorVolumeStyle === 'service' || context.profile?.corridorVolumeStyle === 'organic' || context.profile?.corridorVolumeStyle === 'void' ? context.profile.corridorVolumeStyle : 'concrete');
   if (style === 'organic') return visualCorridorCoveringById('meat');
   if (style === 'service') return visualCorridorCoveringById('technical');
   if (style === 'void') return visualCorridorCoveringById('void');
@@ -1306,7 +1294,7 @@ function corridorVolumeCellEligible(context: MeshPassContext, idx: number, x: nu
   const counts = localTopologyCounts(world, x, y);
   if (counts.wallLike <= 0) return false;
   const room = roomForCell(world, idx);
-  const style = corridorVolumeStyle(context);
+  const style = context.profile?.corridorVolumeStyle === 'service' || context.profile?.corridorVolumeStyle === 'organic' || context.profile?.corridorVolumeStyle === 'void' ? context.profile.corridorVolumeStyle : 'concrete';
   if (room?.type === RoomType.CORRIDOR) return true;
   if (style === 'organic') return true;
   if (!room) return counts.wallLike >= 2 && counts.passable <= 2;
@@ -2043,7 +2031,7 @@ function optionalColumnModelId(floorKey: string): string {
   return 'column_concrete_square';
 }
 
-function collectOptionalColumnAtCell(context: MeshPassContext, idx: number, x: number, y: number, out: MeshInstance[]): void {
+function collectOptionalColumnAtCell(context: MeshPassContext, idx: number, x: number, y: number, profile: ResolvedMeshSceneProfile, out: MeshInstance[]): void {
   const world = context.world;
   if (!isPassableVisualCell(world, idx) || world.features[idx] !== Feature.NONE || world.containerMap.has(idx) || doorNear(world, x, y)) return;
   const slots = visualSlotsForWorld(world);
@@ -2057,7 +2045,7 @@ function collectOptionalColumnAtCell(context: MeshPassContext, idx: number, x: n
   const local = localRoomCoord(room, x, y);
   if (!local || local.lx < 2 || local.ly < 2 || local.lx >= room.w - 2 || local.ly >= room.h - 2) return;
 
-  const detail = numericProfileDetail(context, 'furnitureDetail');
+  const detail = profile.furnitureDetail;
   if (detail <= 0) return;
   const h = mixHash(context.seed, x, y, room.id, 0x6c6f6e);
   const spacing = context.mode === 'high' ? 5 : 6;
@@ -2081,7 +2069,7 @@ function collectOptionalColumnAtCell(context: MeshPassContext, idx: number, x: n
   });
 }
 
-function collectOptionalCeilingAtCell(context: MeshPassContext, idx: number, x: number, y: number, out: MeshInstance[]): void {
+function collectOptionalCeilingAtCell(context: MeshPassContext, idx: number, x: number, y: number, profile: ResolvedMeshSceneProfile, out: MeshInstance[]): void {
   const world = context.world;
   if (!isPassableVisualCell(world, idx) || doorNear(world, x, y)) return;
   if (world.features[idx] !== Feature.NONE || world.containerMap.has(idx)) return;
@@ -2089,7 +2077,7 @@ function collectOptionalCeilingAtCell(context: MeshPassContext, idx: number, x: 
   if (slots && cellHasAnyVisualSlot(slots, idx)) return;
   const room = roomForCell(world, idx);
   if (!room) return;
-  const detail = numericProfileDetail(context, 'ceilingDetail');
+  const detail = profile.ceilingDetail;
   if (detail <= 0) return;
   const local = localRoomCoord(room, x, y);
   if (!local) return;
@@ -2139,8 +2127,8 @@ function scanCell(
   collectVisualSlotsAtCell(context, slots, idx, x, y, scope, profile, out, stats);
   if (profile.includeFeatures) collectFeatureAtCell(context, idx, x, y, out);
   if (profile.includeContainers) collectContainersAtCell(context, idx, x, y, out);
-  collectOptionalColumnAtCell(context, idx, x, y, out);
-  collectOptionalCeilingAtCell(context, idx, x, y, out);
+  collectOptionalColumnAtCell(context, idx, x, y, profile, out);
+  collectOptionalCeilingAtCell(context, idx, x, y, profile, out);
   collectCorridorVolumeAtCell(context, idx, x, y, profile, out);
   collectBillboardsAtCell(context, idx, out);
 }
