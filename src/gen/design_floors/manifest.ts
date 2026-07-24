@@ -1,4 +1,5 @@
 import { generateLiquidatorBaseDesignFloor } from '../liquidatorbase';
+import { generateOuterDistrictDesignFloor } from '../outer_district';
 import {
   DESIGN_FLOOR_ROUTES,
   designFloorById,
@@ -68,6 +69,7 @@ import { generateVoid } from '../void';
 
 const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, () => FloorGeneration> = {
   liquidatorbase: generateLiquidatorBaseDesignFloor,
+  outer_district: generateOuterDistrictDesignFloor,
   roof: generateRoofDesignFloor,
   chthonic_attic: generateChthonicAtticDesignFloor,
   radon_exchange: generateRadonExchangeDesignFloor,

@@ -49,6 +49,7 @@ export type DesignFloorId =
   | 'ministry'
   | 'maintenance'
   | 'hell'
+  | 'outer_district'
   | 'void';
 
 export interface DesignFloorRouteDef {
@@ -65,6 +66,7 @@ export interface DesignFloorRouteDef {
 
 export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'roof', z: 50, displayName: 'Крыша', themeTags: ['ministry'], color: '#9cf', role: 'воздух, антенны, видимость', danger: 2, hasOpenSky: true },
+  { id: 'outer_district', z: 48, displayName: 'Наружний микрорайон', themeTags: ['living'], color: '#aef', role: 'улицы, домики, тишина', danger: 2, hasOpenSky: true },
   { id: 'chthonic_attic', z: 46, displayName: 'Чердак техслужб', themeTags: ['ministry'], color: '#c8f', role: 'техчердак, тайники, старые шахты', danger: 3 },
   { id: 'radon_exchange', z: 44, displayName: 'Радоновый обменник', themeTags: ['ministry'], color: '#bdf', role: 'скан-линии, заслонки, проекционный ключ', danger: 4 },
   { id: 'antenna_court', z: 42, displayName: 'Антенный двор', themeTags: ['ministry'], color: '#8ff', role: 'связь, наружный ветер, обзор', danger: 2 },

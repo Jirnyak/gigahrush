@@ -13,6 +13,7 @@ export type MeshMaterialId =
   | 'bone';
 
 export type VisualModelId =
+  | 'organic_tree'
   | 'pipe_wall_small'
   | 'pipe_wall_large'
   | 'button_panel'
@@ -1046,6 +1047,20 @@ export const VISUAL_MODELS: readonly VisualModelDef[] = [
       { kind: 'cylinder', position: [0, 0, 0.9], radius: 0.24, height: 0.2, axis: 'z', segments: 8, material: 'meat' },
       { kind: 'box', position: [0.12, 0.12, 0.5], size: [0.08, 0.08, 0.8], material: 'meat' },
       { kind: 'box', position: [-0.12, -0.12, 0.5], size: [0.08, 0.08, 0.8], material: 'meat' },
+    ],
+  },
+  {
+    id: 'organic_tree',
+    tags: ['tree', 'organic', 'nature', 'floor'],
+    bounds: { x: 0.8, y: 0.8, z: 2.0 },
+    anchor: 'floor',
+    variantSalt: 777,
+    parts: [
+      // Trunk
+      { kind: 'cylinder', position: [0, 0, 0.5], radius: 0.15, height: 1.0, axis: 'z', segments: 6, material: 'wood' },
+      // Leaves/Canopy
+      { kind: 'crossPlane', position: [0, 0, 1.2], size: [1.2, 1.0], material: 'cloth' },
+      { kind: 'crossPlane', position: [0, 0, 1.6], size: [0.8, 0.8], material: 'cloth' },
     ],
   },
 ] as const;

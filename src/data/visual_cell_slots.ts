@@ -509,6 +509,19 @@ export const VISUAL_CELL_DEFS: readonly VisualCellDef[] = [
     priority: 45,
     densityCost: 1,
   },
+  {
+    code: 36,
+    id: 'organic_tree',
+    family: 'organic',
+    anchor: 'floor',
+    mount: 'volume',
+    zBand: 'fullHeight',
+    source: 'floorCell',
+    modelId: 'organic_tree',
+    merge: 'none',
+    priority: 90,
+    densityCost: 4,
+  },
 ] as const satisfies readonly VisualCellDef[];
 
 function buildVisualCellDefMap<K extends 'id' | 'code'>(

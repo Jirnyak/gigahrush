@@ -55,6 +55,7 @@ export function territorySharesForProceduralSpec(spec: ProceduralFloorSpec): rea
 }
 const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritoryShare[]>> = {
   roof: shares(28, 38, 8, 14, 12),
+  outer_district: shares(50, 10, 10, 10, 20),
   chthonic_attic: shares(18, 24, 14, 10, 34),
   radon_exchange: shares(16, 36, 10, 26, 12),
   antenna_court: shares(18, 36, 8, 24, 14),

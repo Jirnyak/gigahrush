@@ -88,7 +88,8 @@ export const enum Tex {
   // wall-snake larva body block
   LARVA_BODY      = 229,
   DOOR_HERMETIC   = 230,
-  COUNT           = 231,
+  F_GRASS         = 231,
+  COUNT           = 232,
 }
 
 // ── Lift direction ───────────────────────────────────────────────
@@ -146,6 +147,7 @@ export const enum Feature {
   SLIDE        = 13,
   CANDLE       = 14,
   SCREEN       = 15,
+  TREE         = 16,
 }
 
 // ── Doors ────────────────────────────────────────────────────────

@@ -94,6 +94,12 @@ export interface DesignFloorProfile {
 
 export const DESIGN_FLOOR_PROFILES: readonly DesignFloorProfile[] = [
   {
+    routeId: 'outer_district',
+    render: {
+      ambientLight: 0.85,
+    },
+  },
+  {
     routeId: 'dark_metro',
     pseudolift: {
       chance: 0.18,

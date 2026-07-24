@@ -99,6 +99,7 @@ export function generateTextures(): TexData[] {
   generateProceduralScreenTextures(textures);
   gen_larvaBody(textures[Tex.LARVA_BODY]);
   gen_doorHermetic(textures[Tex.DOOR_HERMETIC]);
+  gen_grass(textures[Tex.F_GRASS]);
 
   return textures;
 }
@@ -1095,6 +1096,17 @@ function gen_carpetEdgeVariants(textures: TexData[]) {
         const weave = ((x + y) % 4 < 2) ? 5 : -5;
         t[y * S + x] = rgba(clamp(130 + n + weave), clamp(20 + n / 3), clamp(25 + n / 3));
       }
+    }
+  }
+}
+
+function gen_grass(t: TexData) {
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const n = noise(x, y, 999) * 20;
+      const streak = noise(x * 0.5, y * 3, 1000) * 15;
+      const g = 60 + n + streak;
+      t[y * S + x] = rgba(clamp(g * 0.5), clamp(g), clamp(g * 0.3));
     }
   }
 }
