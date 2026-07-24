@@ -13,8 +13,7 @@ import {
   ROAD_TEX,
 } from './meta';
 import {
-  carveOuterDistrictGrid,
-  stampOuterDistrictHouses,
+  generateOuterDistrictCity,
 } from './geometry';
 import {
   spawnOuterDistrictNpcs,
@@ -48,8 +47,7 @@ export function generateOuterDistrictDesignFloor(seed = OUTER_DISTRICT_SEED): Fl
     };
     world.rooms.push(baseRoom);
 
-    carveOuterDistrictGrid(world, rng, baseRoom.id);
-    const rooms = stampOuterDistrictHouses(world, rng, nextId);
+    const rooms = generateOuterDistrictCity(world, rng, nextId, baseRoom.id);
 
     const spawnX = DISTRICT_MIN + Math.floor((DISTRICT_MAX - DISTRICT_MIN) / 2);
     const spawnY = DISTRICT_MIN + Math.floor((DISTRICT_MAX - DISTRICT_MIN) / 2);
