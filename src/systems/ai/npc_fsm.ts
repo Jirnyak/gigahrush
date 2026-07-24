@@ -1046,7 +1046,7 @@ function routineRoomTargetCandidate(
     utility: assignedBonus + preferredBonus + territoryUtility,
     distance,
     factionPenalty: friendly ? 0 : 18,
-    danger: world.dangerField[Math.floor(room.y + room.h/2) * 1024 + Math.floor(room.x + room.w/2)] / 255,
+    danger: world.dangerField[world.idx(Math.floor(room.x + room.w/2), Math.floor(room.y + room.h/2))] / 255,
   }, {
     identity: npcUtilityIdentityFromEntity(e),
     intent,

@@ -36,9 +36,8 @@ export function updateDangerField(world: World, dt: number): void {
       nextField.fill(0);
     } else {
       for (let cy = activeMinY; cy <= activeMaxY; cy++) {
-        const row = cy * W;
         for (let cx = activeMinX; cx <= activeMaxX; cx++) {
-          nextField[row + cx] = 0;
+          nextField[world.idx(cx, cy)] = 0;
         }
       }
     }
@@ -56,9 +55,8 @@ export function updateDangerField(world: World, dt: number): void {
   const endX = isFullScan ? W - 1 : activeMaxX;
 
   for (let cy = startY; cy <= endY; cy++) {
-    const rowBase = cy * W;
     for (let cx = startX; cx <= endX; cx++) {
-      const i = rowBase + cx;
+      const i = world.idx(cx, cy);
       const val = field[i];
       if (val === 0) continue;
 
@@ -98,7 +96,7 @@ export function updateDangerField(world: World, dt: number): void {
         for (const dir of DIRS) {
           const nx = world.wrap(cx + dir.dx);
           const ny = world.wrap(cy + dir.dy);
-          const ni = ny * W + nx;
+          const ni = world.idx(nx, ny);
           nextField[ni] = Math.min(255, nextField[ni] + spreadAmount);
           // Expand new bounding box for spread
           if (nx < nextMinX) nextMinX = nx;
@@ -138,9 +136,9 @@ export function updateDangerField(world: World, dt: number): void {
   } else if (activeCells > 0) {
     // Only copy the active bounding box
     for (let cy = activeMinY; cy <= activeMaxY; cy++) {
-      const row = cy * W;
       for (let cx = activeMinX; cx <= activeMaxX; cx++) {
-        field[row + cx] = nextField[row + cx];
+        const i = world.idx(cx, cy);
+        field[i] = nextField[i];
       }
     }
   }

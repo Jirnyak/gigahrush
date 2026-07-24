@@ -1150,7 +1150,7 @@ setOnlineMessageHandler((msgData: any) => {
         const ly = actor.y + Math.sin(actor.angle) * 1.5;
         const cx = Math.floor(world.wrap(lx));
         const cy = Math.floor(world.wrap(ly));
-        const idx = cy * W + cx;
+        const idx = world.idx(cx, cy);
         if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
           const door = world.doors.get(idx)!;
           if (door.state === DoorState.CLOSED) {
