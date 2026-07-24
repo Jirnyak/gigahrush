@@ -2830,6 +2830,7 @@ export function findCombatTarget(
       const d2 = world.dist2(e.x, e.y, other.x, other.y);
       if (d2 >= newBest) continue;
       if (!isHostile(e, other)) continue;
+      if (!hasAIFlag(e, 'falsePhase') && !hasAIFlag(e, 'noclip') && !e.phasing && !hasClearLine(world, e, other, Math.sqrt(rangeSq))) continue;
       newBest = d2;
       newTarget = other;
     }
@@ -2861,6 +2862,7 @@ function findImmediateCombatTarget(
     if (!isHostile(e, other)) continue;
     const d2 = world.dist2(e.x, e.y, other.x, other.y);
     if (d2 >= best) continue;
+    if (!hasAIFlag(e, 'falsePhase') && !hasAIFlag(e, 'noclip') && !e.phasing && !hasClearLine(world, e, other, Math.sqrt(rangeSq))) continue;
     best = d2;
     target = other;
   }

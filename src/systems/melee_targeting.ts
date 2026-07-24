@@ -5,6 +5,21 @@ import { WEAPON_STATS } from '../data/catalog';
 
 const MELEE_TARGET_EPSILON = 1e-9;
 
+function meleeTraceClearLine(world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number): boolean {
+  const dx = world.delta(x1, x2);
+  const dy = world.delta(y1, y2);
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > maxDist) return false;
+  const steps = Math.max(2, Math.ceil(dist * 2));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = Math.floor(world.wrap(x1 + dx * t));
+    const y = Math.floor(world.wrap(y1 + dy * t));
+    if (world.solid(x, y)) return false;
+  }
+  return true;
+}
+
 /**
  * Pure radius-based melee target selection.
  *
@@ -41,6 +56,8 @@ export function selectMeleeTarget(
     const targetRadius = candidate.type === EntityType.MONSTER ? 0.18 : 0.16;
     const maxR = reach + hitRadius + targetRadius;
     if (dist2 > maxR * maxR) continue;
+
+    if (!meleeTraceClearLine(world, attacker.x, attacker.y, candidate.x, candidate.y, maxR)) continue;
 
     // Angular alignment: dot product, normalised by distance
     const dist = Math.sqrt(dist2);

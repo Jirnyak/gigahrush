@@ -433,7 +433,7 @@ export function tryFactionCombat(
   const meleeWs = ws;
   const meleeRange = meleeWs.range || NPC_ATTACK_RANGE;
   const effectiveReach = meleeRange + (meleeWs.hitRadius ?? 0.6);
-  if (bestDist > effectiveReach) {
+  if (bestDist > effectiveReach || !hasClearLineOfFire(world, e, target, effectiveReach + 0.5)) {
     if (ai.path.length === 0 || ai.timer <= 0) {
       tryAssignPathToCell(world, e, target.x, target.y);
       ai.timer = 2;

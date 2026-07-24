@@ -1,51 +1,27 @@
-import { ITEMS } from './src/data/items';
-import { ItemType } from './src/core/types';
+import { World } from './src/core/world';
 
-function buildItemCategories() {
-  const categories: Record<string, any[]> = {
-    ITEM: [],
-    WEAPON: [],
-    FOOD: [],
-    MEDICINE: [],
-    TOOL: [],
-    DOCUMENT: []
-  };
-  
-  for (const def of Object.values(ITEMS)) {
-    const weight = Math.max(10, def.value || 10);
-    const tags = def.tags ? [...def.tags] : [];
-    
-    const catItem = {
-      text: def.name.toLowerCase(),
-      weight,
-      tags
-    };
-    
-    categories.ITEM.push(catItem);
-    
-    switch (def.type) {
-      case ItemType.WEAPON:
-      case ItemType.AMMO:
-        categories.WEAPON.push(catItem);
-        break;
-      case ItemType.FOOD:
-      case ItemType.DRINK:
-        categories.FOOD.push(catItem);
-        break;
-      case ItemType.MEDICINE:
-        categories.MEDICINE.push(catItem);
-        break;
-      case ItemType.TOOL:
-        categories.TOOL.push(catItem);
-        break;
-      case ItemType.NOTE:
-        categories.DOCUMENT.push(catItem);
-        break;
-    }
+const world = new World();
+console.log('world cells 0:', world.cells[0]);
+console.log('solid at 10,10:', world.solid(10,10));
+
+function meleeTraceClearLine(world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number): boolean {
+  const dx = world.delta(x1, x2);
+  const dy = world.delta(y1, y2);
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  console.log('dist', dist, 'maxDist', maxDist);
+  if (dist > maxDist) return false;
+  const steps = Math.max(2, Math.ceil(dist * 2));
+  console.log('steps', steps);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = Math.floor(world.wrap(x1 + dx * t));
+    const y = Math.floor(world.wrap(y1 + dy * t));
+    console.log('checking', x, y, 'solid', world.solid(x, y));
+    if (world.solid(x, y)) return false;
   }
-  
-  return categories;
+  return true;
 }
 
-const cats = buildItemCategories();
-console.log(`ITEM: ${cats.ITEM.length}, WEAPON: ${cats.WEAPON.length}, FOOD: ${cats.FOOD.length}, MEDICINE: ${cats.MEDICINE.length}`);
+const reach = 2;
+const maxR = reach + 0.6 + 0.18;
+console.log('result:', meleeTraceClearLine(world, 10, 10, 11.9, 10.05, maxR));
