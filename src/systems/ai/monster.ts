@@ -2805,7 +2805,9 @@ export function findCombatTarget(
     if (!target) ai.combatTargetId = undefined;
   }
 
-  if (!target && ai.combatScanCd! > 0) {
+  ai.immediateScanCd = (ai.immediateScanCd ?? 0) - dt;
+  if (!target && ai.combatScanCd! > 0 && ai.immediateScanCd <= 0) {
+    ai.immediateScanCd = 0.1; // Check for immediate threats 10 times a second, not every frame
     target = findImmediateCombatTarget(world, e, Math.min(rangeSq, IMMEDIATE_THREAT_RADIUS_SQ), typeFilter);
     if (target) {
       ai.combatTargetId = target.id;

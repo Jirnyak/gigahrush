@@ -235,32 +235,40 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   let patternIndex = 0;
 
   for (let step = 0; step < maxWords; step++) {
-    let history = currentSequence.slice(-order).join(' ');
+    const len = currentSequence.length;
+    let history = currentSequence[len - 2] + ' ' + currentSequence[len - 1];
     let transitions = COMPILED_MARKOV_GRAPH[history];
+    let entries = transitions ? Object.entries(transitions) : null;
 
-    if (transitions && Object.keys(transitions).length === 1 && rng() < 0.25) {
-      const fallbackHistory = currentSequence.slice(-1).join(' ');
+    if (entries && entries.length === 1 && rng() < 0.25) {
+      const fallbackHistory = currentSequence[len - 1];
       const fallbackTransitions = COMPILED_MARKOV_GRAPH[fallbackHistory];
-      if (fallbackTransitions && Object.keys(fallbackTransitions).length > 1) {
-        history = fallbackHistory;
-        transitions = fallbackTransitions;
+      if (fallbackTransitions) {
+        const fallbackEntries = Object.entries(fallbackTransitions);
+        if (fallbackEntries.length > 1) {
+          history = fallbackHistory;
+          transitions = fallbackTransitions;
+          entries = fallbackEntries;
+        }
       }
     }
 
-    if (!transitions || Object.keys(transitions).length === 0) {
-      history = currentSequence.slice(-1).join(' ');
+    if (!entries || entries.length === 0) {
+      history = currentSequence[len - 1];
       transitions = COMPILED_MARKOV_GRAPH[history];
+      entries = transitions ? Object.entries(transitions) : null;
     }
 
-    if (!transitions || Object.keys(transitions).length === 0) break;
+    if (!entries || entries.length === 0) break;
 
     const candidates: { word: string, weight: number }[] = [];
     let tw = 0;
 
     const currentTarget = patternIndex < pattern.length ? pattern[patternIndex] : null;
     const targetDistMap = currentTarget ? COMPILED_PATTERN_DISTANCES[currentTarget] : null;
+    const lastSequenceWord = currentSequence[currentSequence.length - 1];
 
-    for (const [nextWord, info] of Object.entries(transitions)) {
+    for (const [nextWord, info] of entries) {
       let weight = info.count;
 
       let matchBoost = 1;
@@ -272,7 +280,7 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
       weight *= matchBoost;
 
       if (currentTarget && targetDistMap) {
-        const nextHistory = history.split(' ').slice(1).concat(nextWord).join(' ');
+        const nextHistory = lastSequenceWord + ' ' + nextWord;
         const dist = targetDistMap[nextHistory];
         
         if (dist !== undefined) {

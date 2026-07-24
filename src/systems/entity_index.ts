@@ -105,8 +105,13 @@ function emptyDebugStats(): EntityIndexDebugStats {
   };
 }
 
+const HALF_W = W / 2;
+
 function wrappedDelta(from: number, to: number): number {
-  return ((to - from + W / 2) % W + W) % W - W / 2;
+  let d = to - from;
+  while (d > HALF_W) d -= W;
+  while (d < -HALF_W) d += W;
+  return d;
 }
 
 function wrappedBucketCoord(v: number): number {
