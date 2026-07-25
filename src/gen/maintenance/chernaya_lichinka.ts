@@ -13,9 +13,24 @@ import { Spr, monsterSpr } from '../../render/sprite_index';
 import { cleanCellHazardsNear, registerCellHazardSite } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
+import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Безглазый свидетель',
+  isFemale: true,
+  faction: Faction.CULTIST,
+  occupation: Occupation.PILGRIM,
+  sprite: Occupation.PILGRIM,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'psi_dust', count: 1 }, { defId: 'meat_rune', count: 1 }],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'maintenance_ambient_0_fyogg', npc: AMBIENT_NPC_0 });
 import {
   type MaintContentCtx, findMaintArea, openTile, setFeature,
-  spawnAmbientNpc, stampMaintRoom,
+  stampMaintRoom,
 } from './content_helpers';
 
 const TAG_SITE = 'chernaya_lichinka';
@@ -626,15 +641,7 @@ export function generateChernayaLichinka(ctx: MaintContentCtx): void {
   );
 
   const witnessId = ctx.nextId.v;
-  spawnAmbientNpc(
-    ctx,
-    'Безглазый свидетель',
-    Faction.CULTIST,
-    Occupation.PILGRIM,
-    chamber.x + chamber.w - 6,
-    chamber.y + chamber.h - 3,
-    [{ defId: 'psi_dust', count: 1 }, { defId: 'meat_rune', count: 1 }],
-  );
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, 'maintenance_ambient_0_fyogg', chamber.x + chamber.w - 6 + 0.5, chamber.y + chamber.h - 3 + 0.5, { angle: 0});
 
   dropAt(ctx, entry.x + 4, entry.y + entry.h - 2, 'note', 1,
     'Памятка ликвидатора: Черная Личинка не обязана нападать. УФ сушит глазки, огонь оставляет ПСИ-пыль, пломба делает пробу безопасной. Если культовый свидетель поет рядом, сырая банка просыпается.');

@@ -26,8 +26,55 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, hashSeed, withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Санитар чистой петли',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.DOCTOR,
+  sprite: Occupation.DOCTOR,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'bandage', count: 2 },
+    { defId: 'sterile_bandage', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_0_0tp43', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Вентиляционный фельдшер',
+  isFemale: false,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.ELECTRICIAN,
+  sprite: Occupation.ELECTRICIAN,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'gasmask_filter', count: 1 },
+    { defId: 'wire_coil', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_1_0zpgs', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Ликвидатор у чёрной палаты',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'ammo_9mm', count: 12 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_2_2h1k6', npc: AMBIENT_NPC_2 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
@@ -432,7 +479,6 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
     placeBolnichnyEmergencyPanels(world, rooms);
 
     const owners = spawnNpcs(entities, nextId, rooms);
-    spawnAmbientNpcs(entities, nextId, rooms);
     placeContainers(world, rooms, owners);
     placeDrops(world, entities, nextId, rooms);
     spawnThreats(world, entities, nextId, rooms);
@@ -1015,19 +1061,6 @@ function spawnNpcs(entities: Entity[], nextId: NextId, rooms: BolnichnyRooms): R
   };
 }
 
-function spawnAmbientNpcs(entities: Entity[], nextId: NextId, rooms: BolnichnyRooms): void {
-  spawnAmbientNpc(entities, nextId, 'Санитар чистой петли', Faction.CITIZEN, Occupation.DOCTOR, rooms.cleanWard.x + 20, rooms.cleanWard.y + 24, [
-    { defId: 'bandage', count: 2 },
-    { defId: 'sterile_bandage', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Вентиляционный фельдшер', Faction.SCIENTIST, Occupation.ELECTRICIAN, rooms.ventilationOutlet.x + 30, rooms.ventilationOutlet.y + 12, [
-    { defId: 'gasmask_filter', count: 1 },
-    { defId: 'wire_coil', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Ликвидатор у чёрной палаты', Faction.LIQUIDATOR, Occupation.HUNTER, rooms.blackWard.x + 18, rooms.blackWard.y + 22, [
-    { defId: 'ammo_9mm', count: 12 },
-  ], 'makarov');
-}
 
 function placeContainers(world: World, rooms: BolnichnyRooms, owners: Record<BolnichnyNpcId, number>): void {
   addContainer(world, rooms.triageEntrance, rooms.triageEntrance.x + 15, rooms.triageEntrance.y + 11, ContainerKind.MEDICAL_CABINET, 'Открытая тележка сортировки', 'public', [
@@ -1386,40 +1419,6 @@ function spawnPlotNpc(
   return npc.id;
 }
 
-function spawnAmbientNpc(
-  entities: Entity[],
-  nextId: NextId,
-  name: string,
-  faction: Faction,
-  occupation: Occupation,
-  x: number,
-  y: number,
-  inventory: Item[],
-  weapon?: string,
-): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
-    angle: rng() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: faction === Faction.LIQUIDATOR ? 0.94 : 0.72 + rng() * 0.16,
-    sprite: occupation,
-    name,
-    needs: freshNeeds(),
-    hp: faction === Faction.LIQUIDATOR ? 145 : 86,
-    maxHp: faction === Faction.LIQUIDATOR ? 145 : 86,
-    money: 10 + Math.floor(rng() * 42),
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: inventory.map(item => ({ ...item })),
-    weapon,
-    faction,
-    occupation,
-    questId: -1,
-  });
-}
 
 function spawnMonster(
   world: World,

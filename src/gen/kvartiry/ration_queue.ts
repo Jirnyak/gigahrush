@@ -12,14 +12,66 @@ import {
   } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity, type WorldContainer } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Витя Нормировщик',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'ammo_9mm', count: 6 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_0_qzhf4', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Молчун с бидоном',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.LOCKSMITH,
+  sprite: Occupation.LOCKSMITH,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'water', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_1_pcmfd', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Бабка без номера',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.HOUSEWIFE,
+  sprite: Occupation.HOUSEWIFE,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'bread', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_2_ix63s', npc: AMBIENT_NPC_2 });
+
+const AMBIENT_NPC_3: PlotNpcDef = {
+  name: 'Очередник с арматурой',
+  isFemale: true,
+  faction: Faction.WILD,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'rebar', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_3_qprnk', npc: AMBIENT_NPC_3 });
+
 import {
   type SocialPoiRoom,
   createSocialPoiRoom,
   placeDropNear,
   roomCell,
   setFeatureIfFloor,
-  spawnAmbientNpc,
   spawnSocialNpc,
 } from './social_helpers';
 
@@ -155,10 +207,10 @@ export function generateRationQueue(
 
   const galinaId = nextId.v;
   spawnSocialNpc(entities, nextId, GALINA, 'kv_galina_talonnitsa', poi.x + 2, poi.y + 2);
-  spawnAmbientNpc(entities, nextId, 'Витя Нормировщик', Faction.LIQUIDATOR, Occupation.HUNTER, poi.x + poi.w - 3, poi.y + 2, [{ defId: 'ammo_9mm', count: 6 }], 'makarov');
-  spawnAmbientNpc(entities, nextId, 'Молчун с бидоном', Faction.CITIZEN, Occupation.LOCKSMITH, poi.x + 5, poi.y + 4, [{ defId: 'water', count: 1 }]);
-  spawnAmbientNpc(entities, nextId, 'Бабка без номера', Faction.CITIZEN, Occupation.HOUSEWIFE, poi.x + 7, poi.y + 4, [{ defId: 'bread', count: 1 }]);
-  spawnAmbientNpc(entities, nextId, 'Очередник с арматурой', Faction.WILD, Occupation.TRAVELER, poi.x + 9, poi.y + 4, [{ defId: 'rebar', count: 1 }], 'rebar');
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_0, 'kv_ambient_0_qzhf4', poi.x + poi.w - 3, poi.y + 2, { weapon: 'makarov' });
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_1, 'kv_ambient_1_pcmfd', poi.x + 5, poi.y + 4);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_2, 'kv_ambient_2_ix63s', poi.x + 7, poi.y + 4);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_3, 'kv_ambient_3_qprnk', poi.x + 9, poi.y + 4, { weapon: 'rebar' });
   addRationLedgerBox(world, poi, poi.w - 2, 1, galinaId);
 
   for (const defId of ['bread', 'bread', 'bread', 'water', 'water', 'canned', 'water_coupon', 'concentrate_coupon', 'ballot', 'note']) {

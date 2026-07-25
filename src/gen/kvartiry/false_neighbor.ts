@@ -7,12 +7,26 @@ import {
   RoomType, Tex, Feature, type Entity, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Леня Очередной',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.LOCKSMITH,
+  sprite: Occupation.LOCKSMITH,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'bread', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_0_6omcn', npc: AMBIENT_NPC_0 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
-  createSocialPoiRoom, placeDropNear, roomCell, setFeatureIfFloor, spawnAmbientNpc, spawnSocialNpc,
+  createSocialPoiRoom, placeDropNear, roomCell, setFeatureIfFloor, spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
 
@@ -177,7 +191,7 @@ export function generateFalseNeighborRoom(
 
   const rayaId = nextId.v;
   spawnSocialNpc(entities, nextId, RAYA, 'kv_raya_podozritelnaya', poi.x + 2, poi.y + 2);
-  spawnAmbientNpc(entities, nextId, 'Леня Очередной', Faction.CITIZEN, Occupation.LOCKSMITH, poi.x + 4, poi.y + 5, [{ defId: 'bread', count: 1 }]);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_0, 'kv_ambient_0_6omcn', poi.x + 4, poi.y + 5);
   spawnNelyud(world, entities, nextId, poi.x + poi.w - 3, poi.y + poi.h - 3);
   addFalseNeighborEvidenceBox(world, poi, rayaId);
 

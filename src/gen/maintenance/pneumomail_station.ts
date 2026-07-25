@@ -1,6 +1,25 @@
 /* ── AG114 Pneumomail station: rumor capsules through old tubes ─ */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
+import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Инга Трубная',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'water_coupon', count: 3 },
+    { defId: 'duct_tape', count: 1 },
+    { defId: 'pneumomail_capsule', count: 1 },
+  ],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'maintenance_ambient_0_70wpc', npc: AMBIENT_NPC_0 });
 import {
   Cell,
   Feature,
@@ -12,7 +31,7 @@ import {
 import { PNEUMOMAIL_ROOM_NAME, PNEUMOMAIL_SORTER_ROOM_NAME } from '../../data/pneumomail';
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
-  spawnAmbientNpc, stampMaintRoom,
+  stampMaintRoom,
 } from './content_helpers';
 
 export function generatePneumomailStation(ctx: MaintContentCtx): void {
@@ -51,11 +70,7 @@ export function generatePneumomailStation(ctx: MaintContentCtx): void {
     if (ctx.world.cells[ci] !== Cell.LIFT) stampSurfaceSplat(ctx.world, station.x + dx, station.y + station.h - 2, 0.45, 0.35, 0.22, 90, 9100 + dx, 120, 96, 48);
   }
 
-  spawnAmbientNpc(ctx, 'Инга Трубная', Faction.CITIZEN, Occupation.STOREKEEPER, station.x + 12, station.y + 5, [
-    { defId: 'water_coupon', count: 3 },
-    { defId: 'duct_tape', count: 1 },
-    { defId: 'pneumomail_capsule', count: 1 },
-  ]);
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, 'maintenance_ambient_0_70wpc', station.x + 12 + 0.5, station.y + 5 + 0.5, { angle: 0});
 
   dropItems(ctx, station, ['note', 'wire_coil', 'duct_tape', 'pressure_logbook']);
   dropItems(ctx, sorter, ['pneumomail_capsule', 'pressure_logbook', 'forged_permit_slip']);

@@ -20,7 +20,47 @@ import {
   type WorldEventSeverity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Мать с пустой канистрой',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.HOUSEWIFE,
+  sprite: Occupation.HOUSEWIFE,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'water_coupon', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_0_arz5m', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Слесарь у сухого вентиля',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.LOCKSMITH,
+  sprite: Occupation.LOCKSMITH,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'wrench', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_1_q7zog', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Очередник без талона',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'note', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_2_c64hj', npc: AMBIENT_NPC_2 });
+
 import { changeResourceStock } from '../../systems/economy';
 import { getRecentEvents, publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { applyFactionRelationDeltas, type FactionRelationDelta } from '../../systems/factions';
@@ -29,7 +69,6 @@ import {
   placeDropNear,
   roomCell,
   setFeatureIfFloor,
-  spawnAmbientNpc,
   spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
@@ -453,9 +492,9 @@ export function generateWaterRiot(
   spawnSocialNpc(entities, nextId, SERGIN, SERGIN_ID, poi.x + poi.w - 4, poi.y + 3, { weapon: 'makarov' });
   spawnSocialNpc(entities, nextId, KOSTYL, KOSTYL_ID, poi.x + 10, poi.y + 6, { weapon: 'crowbar' });
   spawnSocialNpc(entities, nextId, SURVIVALIST, SURVIVAL_ID, poi.x + 12, poi.y + 6);
-  spawnAmbientNpc(entities, nextId, 'Мать с пустой канистрой', Faction.CITIZEN, Occupation.HOUSEWIFE, poi.x + 5, poi.y + 6, [{ defId: 'water_coupon', count: 1 }]);
-  spawnAmbientNpc(entities, nextId, 'Слесарь у сухого вентиля', Faction.CITIZEN, Occupation.LOCKSMITH, poi.x + 3, poi.y + 3, [{ defId: 'wrench', count: 1 }], 'wrench');
-  spawnAmbientNpc(entities, nextId, 'Очередник без талона', Faction.CITIZEN, Occupation.TRAVELER, poi.x + 7, poi.y + 5, [{ defId: 'note', count: 1 }]);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_0, 'kv_ambient_0_arz5m', poi.x + 5, poi.y + 6);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_1, 'kv_ambient_1_q7zog', poi.x + 3, poi.y + 3, { weapon: 'wrench' });
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_2, 'kv_ambient_2_c64hj', poi.x + 7, poi.y + 5);
 
   addSupplyContainer(world, poi, poi.w - 3, 2, 'Ведомственный ящик воды', ContainerKind.CASHBOX, 'owner', [
     { defId: 'water', count: 5 },

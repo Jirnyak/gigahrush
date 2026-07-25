@@ -32,7 +32,73 @@ import {
 import { World } from '../../core/world';
 import { rng, hashSeed, withSeededRandom, seededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Дежурная у кладовой',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'note', count: 1 }],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_0_yxmpv', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Очередник с тазом',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'cloth_roll', count: 1 }],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_1_avqes', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Повар у второй плиты',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.COOK,
+  sprite: Occupation.COOK,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'kasha', count: 2 }],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_2_2guhe', npc: AMBIENT_NPC_2 });
+
+const AMBIENT_NPC_3: PlotNpcDef = {
+  name: 'Слесарь душевой очереди',
+  isFemale: true,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.MECHANIC,
+  sprite: Occupation.MECHANIC,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'valve_tag', count: 1 }],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_3_yxahc', npc: AMBIENT_NPC_3 });
+
+const AMBIENT_NPC_4: PlotNpcDef = {
+  name: 'Курящий свидетель',
+  isFemale: true,
+  faction: Faction.WILD,
+  occupation: Occupation.ALCOHOLIC,
+  sprite: Occupation.ALCOHOLIC,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'cigs', count: 2 }, { defId: 'neighbor_complaint', count: 1 }],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_4_3k24r', npc: AMBIENT_NPC_4 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
@@ -919,11 +985,11 @@ function spawnNpc(
 }
 
 function spawnWitnesses(entities: Entity[], nextId: { v: number }, rooms: CommunalRooms): void {
-  spawnAmbientNpc(entities, nextId, 'Дежурная у кладовой', Faction.CITIZEN, Occupation.STOREKEEPER, rooms.pantry.x + 2, rooms.pantry.y - 3, [{ defId: 'note', count: 1 }]);
-  spawnAmbientNpc(entities, nextId, 'Очередник с тазом', Faction.CITIZEN, Occupation.TRAVELER, rooms.laundry.x + rooms.laundry.w + 3, rooms.laundry.y + 6, [{ defId: 'cloth_roll', count: 1 }]);
-  spawnAmbientNpc(entities, nextId, 'Повар у второй плиты', Faction.CITIZEN, Occupation.COOK, rooms.kitchen.x + 15, rooms.kitchen.y + 5, [{ defId: 'kasha', count: 2 }], 'knife');
-  spawnAmbientNpc(entities, nextId, 'Слесарь душевой очереди', Faction.LIQUIDATOR, Occupation.MECHANIC, rooms.shower.x - 3, rooms.shower.y + 7, [{ defId: 'valve_tag', count: 1 }], 'wrench');
-  spawnAmbientNpc(entities, nextId, 'Курящий свидетель', Faction.WILD, Occupation.ALCOHOLIC, rooms.smoking.x + 8, rooms.smoking.y + 4, [{ defId: 'cigs', count: 2 }, { defId: 'neighbor_complaint', count: 1 }]);
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_0_yxmpv', rooms.pantry.x + 2 + 0.5, rooms.pantry.y - 3 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_1_avqes', rooms.laundry.x + rooms.laundry.w + 3 + 0.5, rooms.laundry.y + 6 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_2_2guhe', rooms.kitchen.x + 15 + 0.5, rooms.kitchen.y + 5 + 0.5, { angle: 0, weapon: 'knife'});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_3_yxahc', rooms.shower.x - 3 + 0.5, rooms.shower.y + 7 + 0.5, { angle: 0, weapon: 'wrench'});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_4_3k24r', rooms.smoking.x + 8 + 0.5, rooms.smoking.y + 4 + 0.5, { angle: 0});
 }
 
 function spawnThroughFlatResidents(entities: Entity[], nextId: { v: number }, flats: readonly ThroughFlat[]): void {

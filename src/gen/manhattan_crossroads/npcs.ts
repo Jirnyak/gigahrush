@@ -16,7 +16,69 @@ import {
 import { World } from '../../core/world';
 import { SeedRng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { designNpcFloorKey, type PlotNpcDef } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Патрульный у делителя',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'ammo_9mm', count: 5 },
+  ],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'manhattan_ambient_0_v2yd8', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Патрульная у южной зебры',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'bandage', count: 1 },
+  ],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'manhattan_ambient_1_mwalm', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Торговец с бордюра',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.STOREKEEPER,
+  sprite: Occupation.STOREKEEPER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'water', count: 1 },
+    { defId: 'bread', count: 2 },
+  ],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'manhattan_ambient_2_vjxv5', npc: AMBIENT_NPC_2 });
+
+const AMBIENT_NPC_3: PlotNpcDef = {
+  name: 'Дорожный бродяга',
+  isFemale: true,
+  faction: Faction.WILD,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'pipe', count: 1 },
+  ],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'manhattan_ambient_3_0flfn', npc: AMBIENT_NPC_3 });
+
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../render/sprite_index';
 import {
@@ -129,19 +191,10 @@ export function spawnCrossroadsNpcs(rng: SeedRng, world: World, entities: Entity
     { weapon: 'knife' },
   );
 
-  spawnAmbientNpc(rng, entities, nextId, 'Патрульный у делителя', 512, 486, Faction.LIQUIDATOR, Occupation.HUNTER, [
-    { defId: 'ammo_9mm', count: 5 },
-  ]);
-  spawnAmbientNpc(rng, entities, nextId, 'Патрульная у южной зебры', 528, 538, Faction.LIQUIDATOR, Occupation.HUNTER, [
-    { defId: 'bandage', count: 1 },
-  ]);
-  spawnAmbientNpc(rng, entities, nextId, 'Торговец с бордюра', 398, 520, Faction.CITIZEN, Occupation.STOREKEEPER, [
-    { defId: 'water', count: 1 },
-    { defId: 'bread', count: 2 },
-  ]);
-  spawnAmbientNpc(rng, entities, nextId, 'Дорожный бродяга', 690, 600, Faction.WILD, Occupation.TRAVELER, [
-    { defId: 'pipe', count: 1 },
-  ]);
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'manhattan_ambient_0_v2yd8', 512 + 0.5, 486 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'manhattan_ambient_1_mwalm', 528 + 0.5, 538 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'manhattan_ambient_2_vjxv5', 398 + 0.5, 520 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'manhattan_ambient_3_0flfn', 690 + 0.5, 600 + 0.5, { angle: 0});
   spawnTollCrowd(rng, entities, nextId);
   spawnTrafficBands(rng, world, entities, nextId);
 

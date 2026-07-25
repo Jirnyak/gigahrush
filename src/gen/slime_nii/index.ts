@@ -1,4 +1,4 @@
-/* ── Design z: НИИ слизи ─────────────────────────────────── */
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';/* ── Design z: НИИ слизи ─────────────────────────────────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -26,14 +26,75 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, hashSeed, withSeededRandom } from '../../core/rand';
-import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
+import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Врач промывочной смены',
+  isFemale: false,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.DOCTOR,
+  sprite: Occupation.DOCTOR,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'bandage', count: 2 },
+    { defId: 'filter_layer', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_0_uoyax', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Техник гермодверей НИИ',
+  isFemale: false,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.ELECTRICIAN,
+  sprite: Occupation.ELECTRICIAN,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'wire_coil', count: 1 },
+    { defId: 'sealant_tube', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_1_h5zc9', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Секретарь санитарной очереди',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'official_quarantine_clearance', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_2_kjqqx', npc: AMBIENT_NPC_2 });
+
+const AMBIENT_NPC_3: PlotNpcDef = {
+  name: 'Ликвидатор у нижней кабины',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'ammo_9mm', count: 10 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_3_lbia6', npc: AMBIENT_NPC_3 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../render/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
-import { requireSpawnedPlotNpcFromPackage, spawnPendingPlotNpcsForFloor } from '../plot_npc_spawn';
 import {
   ensureConnectivity,
   generateZones,
@@ -389,7 +450,6 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
     placeSlimeNiiEmergencyPanels(world, rooms);
 
     const owners = spawnNpcs(entities, nextId, rooms);
-    spawnAmbientNpcs(world, entities, nextId, rooms);
     placeContainers(world, rooms, owners);
     placeDrops(world, entities, nextId, rooms);
     spawnThreats(world, entities, nextId, rooms);
@@ -1069,24 +1129,6 @@ function spawnNpcs(entities: Entity[], nextId: NextId, rooms: SlimeNiiRooms): Re
   };
 }
 
-function spawnAmbientNpcs(world: World, entities: Entity[], nextId: NextId, rooms: SlimeNiiRooms): void {
-  spawnPendingPlotNpcsForFloor(world, entities, nextId, DESIGN_NPC_HOME_FLOOR_KEY, { ...rooms as unknown as Record<string, Room>, clean_lab: rooms.cleanLab });
-
-  spawnAmbientNpc(entities, nextId, 'Врач промывочной смены', Faction.SCIENTIST, Occupation.DOCTOR, rooms.cleanLab.x + 24, rooms.cleanLab.y + 24, [
-    { defId: 'bandage', count: 2 },
-    { defId: 'filter_layer', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Техник гермодверей НИИ', Faction.SCIENTIST, Occupation.ELECTRICIAN, rooms.drainWard.x + 48, rooms.drainWard.y + 20, [
-    { defId: 'wire_coil', count: 1 },
-    { defId: 'sealant_tube', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Секретарь санитарной очереди', Faction.CITIZEN, Occupation.SECRETARY, rooms.checkpoint.x + 44, rooms.checkpoint.y + 18, [
-    { defId: 'official_quarantine_clearance', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Ликвидатор у нижней кабины', Faction.LIQUIDATOR, Occupation.HUNTER, rooms.lowerLift.x + 16, rooms.lowerLift.y + 12, [
-    { defId: 'ammo_9mm', count: 10 },
-  ], 'makarov');
-}
 
 function placeContainers(world: World, rooms: SlimeNiiRooms, owners: Record<SlimeNiiNpcId, number>): void {
   addContainer(world, rooms.cleanLab, rooms.cleanLab.x + 10, rooms.cleanLab.y + 8, ContainerKind.MEDICAL_CABINET, 'Лоток инокуляции перед гермокамерами', 'public', [
@@ -1507,40 +1549,6 @@ function spawnPlotNpc(
   return npc.id;
 }
 
-function spawnAmbientNpc(
-  entities: Entity[],
-  nextId: NextId,
-  name: string,
-  faction: Faction,
-  occupation: Occupation,
-  x: number,
-  y: number,
-  inventory: Item[],
-  weapon?: string,
-): void {
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.NPC,
-    x: x + 0.5,
-    y: y + 0.5,
-    angle: rng() * Math.PI * 2,
-    pitch: 0,
-    alive: true,
-    speed: faction === Faction.LIQUIDATOR ? 0.95 : 0.76 + rng() * 0.18,
-    sprite: occupation,
-    name,
-    needs: freshNeeds(),
-    hp: faction === Faction.LIQUIDATOR ? 150 : 90,
-    maxHp: faction === Faction.LIQUIDATOR ? 150 : 90,
-    money: 12 + Math.floor(rng() * 45),
-    ai: { goal: AIGoal.IDLE, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
-    inventory: inventory.map(item => ({ ...item })),
-    weapon,
-    faction,
-    occupation,
-    questId: -1,
-  });
-}
 
 function spawnMonster(
   world: World,

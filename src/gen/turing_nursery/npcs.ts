@@ -23,7 +23,56 @@ import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Лаборант чаши Тьюринга',
+  isFemale: false,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.SCIENTIST,
+  sprite: Occupation.SCIENTIST,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'sterile_swab', count: 2 },
+    { defId: 'nii_sample_label', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_0_n7pr8', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Санитар сухих клеток',
+  isFemale: false,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.DOCTOR,
+  sprite: Occupation.DOCTOR,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'anti_spore_inhaler', count: 1 },
+    { defId: 'burn_gel', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_1_8543r', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Ликвидатор у мокрой диагонали',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'ammo_9mm', count: 12 },
+    { defId: 'gasmask_filter', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_2_2os1r', npc: AMBIENT_NPC_2 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
@@ -145,18 +194,9 @@ export function spawnNpcs(entities: Entity[], nextId: NextId, rooms: NurseryRoom
 }
 
 export function spawnAmbientNpcs(entities: Entity[], nextId: NextId, rooms: NurseryRooms): void {
-  spawnAmbientNpc(entities, nextId, 'Лаборант чаши Тьюринга', Faction.SCIENTIST, Occupation.SCIENTIST, rooms.basin.x + 106, rooms.basin.y + 42, [
-    { defId: 'sterile_swab', count: 2 },
-    { defId: 'nii_sample_label', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Санитар сухих клеток', Faction.SCIENTIST, Occupation.DOCTOR, rooms.sample.x + 22, rooms.sample.y + 24, [
-    { defId: 'anti_spore_inhaler', count: 1 },
-    { defId: 'burn_gel', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Ликвидатор у мокрой диагонали', Faction.LIQUIDATOR, Occupation.HUNTER, rooms.bridge.x + 18, rooms.bridge.y + 16, [
-    { defId: 'ammo_9mm', count: 12 },
-    { defId: 'gasmask_filter', count: 1 },
-  ], 'makarov');
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_0_n7pr8', rooms.basin.x + 106 + 0.5, rooms.basin.y + 42 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_1_8543r', rooms.sample.x + 22 + 0.5, rooms.sample.y + 24 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_2_2os1r', rooms.bridge.x + 18 + 0.5, rooms.bridge.y + 16 + 0.5, { angle: 0, weapon: 'makarov'});
 }
 
 export function placeContainers(world: World, rooms: NurseryRooms, owners: Record<TuringNpcId, number>): Record<string, WorldContainer> {

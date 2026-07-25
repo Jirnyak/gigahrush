@@ -6,7 +6,21 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Пацан на стрёме',
+  isFemale: false,
+  faction: Faction.WILD,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'pipe', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_0_es06t', npc: AMBIENT_NPC_0 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
@@ -16,7 +30,6 @@ import {
   createSocialPoiRoom,
   placeDropNear,
   setFeatureIfFloor,
-  spawnAmbientNpc,
   spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
@@ -320,7 +333,7 @@ export function generateBarricade(
   spawnSocialNpc(entities, nextId, KARPOV, 'kv_karpov_barricade', poi.x + 3, poi.y + 2, { weapon: 'wrench' });
   spawnSocialNpc(entities, nextId, RAYA, RAYA_ID, gateX - 4, bribeY, { weapon: 'knife' });
   spawnSocialNpc(entities, nextId, LYUBA, LYUBA_ID, poi.x + 5, detourY - 1, { weapon: 'knife' });
-  spawnAmbientNpc(entities, nextId, 'Пацан на стрёме', Faction.WILD, Occupation.TRAVELER, gateX + 5, fightY, [{ defId: 'pipe', count: 1 }], 'pipe');
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_0, 'kv_ambient_0_es06t', gateX + 5, fightY, { weapon: 'pipe' });
   spawnBarricadeMonster(world, entities, nextId, MonsterKind.REBAR, gateX + 2, fightY, 'Арматура баррикады');
   spawnBarricadeMonster(world, entities, nextId, MonsterKind.REBAR, gateX + 4, fightY + 1, 'Арматура нижней щели');
   spawnBarricadeMonster(world, entities, nextId, MonsterKind.SBORKA, gateX + 3, detourY - 2, 'Сборка у нижнего обхода');

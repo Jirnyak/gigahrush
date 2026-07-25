@@ -9,7 +9,34 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { FALSE_SAFE_BLOCK_ROOM_PREFIX, FALSE_SAFE_BLOCK_TAG } from '../../data/procedural_floors';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Черноременный у койки',
+  isFemale: true,
+  faction: Faction.CULTIST,
+  occupation: Occupation.PILGRIM,
+  sprite: Occupation.PILGRIM,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'bread', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_0_6c1ht', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Сосед без места',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.LOCKSMITH,
+  sprite: Occupation.LOCKSMITH,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'siren_instruction', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_1_ie4ia', npc: AMBIENT_NPC_1 });
+
 import { addFactionRelMutual } from '../../data/relations';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -20,7 +47,6 @@ import {
   placeDropNear,
   roomCell,
   setFeatureIfFloor,
-  spawnAmbientNpc,
   spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
@@ -616,8 +642,8 @@ export function generateChernobozhiySvod(
   spawnSocialNpc(entities, nextId, WITNESS, WITNESS_ID, poi.x + 5, poi.y + poi.h - 3);
   const custodianId = nextId.v;
   spawnSocialNpc(entities, nextId, CUSTODIAN, CUSTODIAN_ID, poi.x + poi.w - 4, poi.y + 4, { weapon: 'knife' });
-  spawnAmbientNpc(entities, nextId, 'Черноременный у койки', Faction.CULTIST, Occupation.PILGRIM, poi.x + 3, poi.y + 7, [{ defId: 'bread', count: 1 }], 'pipe');
-  spawnAmbientNpc(entities, nextId, 'Сосед без места', Faction.CITIZEN, Occupation.LOCKSMITH, poi.x + 6, poi.y + 2, [{ defId: 'siren_instruction', count: 1 }]);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_0, 'kv_ambient_0_6c1ht', poi.x + 3, poi.y + 7, { weapon: 'pipe' });
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_1, 'kv_ambient_1_ie4ia', poi.x + 6, poi.y + 2);
 
   seedSvodContainers(world, poi, custodianId);
   spawnSvodMonster(world, entities, nextId, poi, MonsterKind.IDOL, Math.floor(poi.w / 2), Math.floor(poi.h / 2) + 1, 1, 'Идол-якорь Свода');

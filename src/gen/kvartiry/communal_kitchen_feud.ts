@@ -14,13 +14,39 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Соседка с солью',
+  isFemale: false,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.HOUSEWIFE,
+  sprite: Occupation.HOUSEWIFE,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'rock_salt', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_0_y7u0r', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Пустой бидонщик',
+  isFemale: false,
+  faction: Faction.WILD,
+  occupation: Occupation.TRAVELER,
+  sprite: Occupation.TRAVELER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'water', count: 1 }],
+talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
+talkLinesPost: ['...'],
+};
+registerAuthoredNpc({ id: 'kv_ambient_1_53ikx', npc: AMBIENT_NPC_1 });
+
 import {
   createSocialPoiRoom,
   placeDropNear,
   roomCell,
   setFeatureIfFloor,
-  spawnAmbientNpc,
   spawnSocialNpc,
   type SocialPoiRoom,
 } from './social_helpers';
@@ -349,8 +375,8 @@ export function generateCommunalKitchenFeud(
   spawnSocialNpc(entities, nextId, FEOFAN, FEOFAN_ID, poi.x + 7, poi.y + 3);
   spawnSocialNpc(entities, nextId, WITNESS, WITNESS_ID, poi.x + 4, poi.y + 7);
   spawnSocialNpc(entities, nextId, LIQUIDATOR, LIQUIDATOR_ID, poi.x + 10, poi.y + 7, { weapon: 'makarov' });
-  spawnAmbientNpc(entities, nextId, 'Соседка с солью', Faction.CITIZEN, Occupation.HOUSEWIFE, poi.x + 6, poi.y + 5, [{ defId: 'rock_salt', count: 1 }]);
-  spawnAmbientNpc(entities, nextId, 'Пустой бидонщик', Faction.WILD, Occupation.TRAVELER, poi.x + 11, poi.y + 5, [{ defId: 'water', count: 1 }]);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_0, 'kv_ambient_0_y7u0r', poi.x + 6, poi.y + 5);
+  spawnSocialNpc(entities, nextId, AMBIENT_NPC_1, 'kv_ambient_1_53ikx', poi.x + 11, poi.y + 5);
 
   addKitchenContainer(world, poi, 2, 1, {
     kind: ContainerKind.FRIDGE,

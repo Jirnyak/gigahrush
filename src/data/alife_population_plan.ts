@@ -18,6 +18,7 @@ import {
 } from './population_profiles';
 import {
   allNpcPackages,
+  getPlotNpcNumericId,
   npcPackageDisplayName,
   npcPackageRuntimeEligible,
   type NpcPackageDef,
@@ -42,6 +43,7 @@ export interface AlifePopulationBucketDef {
 }
 
 export interface AlifeReservedIdentityDef {
+  plotNpcId?: number;
   id: string;
   kind: 'plot' | 'authored' | 'event_reserved';
   presence?: 'population' | 'event_only';
@@ -264,6 +266,7 @@ export function alifeReservedIdentityFromNpcPackage(pack: NpcPackageDef): AlifeR
     presence: reservedPresenceForPackage(pack.placement.presence),
     floorKey: pack.placement.homeFloorKey,
     npcPackageId: pack.id,
+    plotNpcId: pack.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined,
     name: npcPackageDisplayName(pack),
     female: pack.demographics.sex === 'female',
     age: pack.demographics.age,

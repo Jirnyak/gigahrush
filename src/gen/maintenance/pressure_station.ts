@@ -1,6 +1,7 @@
 /* ── Станция давления — pumps, valves, pressure bureaucracy ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   Cell,
   Tex,
@@ -11,10 +12,24 @@ import {
   QuestType,
   MonsterKind,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Раиса Клапанная',
+  isFemale: true,
+  faction: Faction.CITIZEN,
+  occupation: Occupation.ELECTRICIAN,
+  sprite: Occupation.ELECTRICIAN,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'flashlight', count: 1 }, { defId: 'note', count: 1 }],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'maintenance_ambient_0_k9pr9', npc: AMBIENT_NPC_0 });
+
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
-  setWater, spawnAmbientNpc, spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
+  setWater, spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
 } from './content_helpers';
 
 const BORIS_DEF: PlotNpcDef = {
@@ -109,11 +124,7 @@ export function generatePressureStation(ctx: MaintContentCtx): void {
   for (let dx = 1; dx < pump.w - 1; dx += 4) setWater(ctx.world, pump.x + dx, pump.y + pump.h - 2);
 
   spawnPlotNpc(ctx, 'ag04_pressure_boris', BORIS_DEF, pump.x + 5, pump.y + 5, Math.PI);
-  spawnAmbientNpc(
-    ctx, 'Раиса Клапанная', Faction.CITIZEN, Occupation.ELECTRICIAN,
-    valves.x + 2, valves.y + 2,
-    [{ defId: 'flashlight', count: 1 }, { defId: 'note', count: 1 }],
-  );
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, 'maintenance_ambient_0_k9pr9', valves.x + 2 + 0.5, valves.y + 2 + 0.5, { angle: 0});
 
   dropItems(ctx, pump, ['wrench', 'pipe', 'ammo_fuel', 'water', 'bandage', 'note']);
   dropItems(ctx, valves, ['wrench', 'ammo_nails', 'flashlight', 'water']);

@@ -18,7 +18,55 @@ import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
-import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
+import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Администратор у экрана допуска',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.SECRETARY,
+  sprite: Occupation.SECRETARY,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'official_permit_slip', count: 1 },
+    { defId: 'ammo_762tt', count: 6 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_0_nfd13', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Техник кремниевого лаза',
+  isFemale: false,
+  faction: Faction.SCIENTIST,
+  occupation: Occupation.MECHANIC,
+  sprite: Occupation.MECHANIC,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'wire_coil', count: 1 },
+    { defId: 'circuit_board', count: 1 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_1_a100o', npc: AMBIENT_NPC_1 });
+
+const AMBIENT_NPC_2: PlotNpcDef = {
+  name: 'Проверяющий нижней кабины',
+  isFemale: false,
+  faction: Faction.LIQUIDATOR,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [
+    { defId: 'ammo_9mm', count: 8 },
+  ],
+  talkLines: ['Проходи.', 'Не мешай.'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'ambient_2_f2vff', npc: AMBIENT_NPC_2 });
+
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
@@ -104,17 +152,9 @@ export function spawnNpcs(
 }
 
 export function spawnAmbientNpcs(entities: Entity[], nextId: { v: number }, rooms: SiliconRooms): void {
-  spawnAmbientNpc(entities, nextId, 'Администратор у экрана допуска', Faction.LIQUIDATOR, Occupation.SECRETARY, rooms.terminal.x + 18, rooms.terminal.y + 30, [
-    { defId: 'official_permit_slip', count: 1 },
-    { defId: 'ammo_762tt', count: 6 },
-  ], 'tt_pistol');
-  spawnAmbientNpc(entities, nextId, 'Техник кремниевого лаза', Faction.SCIENTIST, Occupation.MECHANIC, rooms.well.x + 22, rooms.well.y + 20, [
-    { defId: 'wire_coil', count: 1 },
-    { defId: 'circuit_board', count: 1 },
-  ]);
-  spawnAmbientNpc(entities, nextId, 'Проверяющий нижней кабины', Faction.LIQUIDATOR, Occupation.HUNTER, rooms.lowerLift.x + 12, rooms.lowerLift.y + 12, [
-    { defId: 'ammo_9mm', count: 8 },
-  ], 'makarov');
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_0_nfd13', rooms.terminal.x + 18 + 0.5, rooms.terminal.y + 30 + 0.5, { angle: 0, weapon: 'tt_pistol'});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_1_a100o', rooms.well.x + 22 + 0.5, rooms.well.y + 20 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'ambient_2_f2vff', rooms.lowerLift.x + 12 + 0.5, rooms.lowerLift.y + 12 + 0.5, { angle: 0, weapon: 'makarov'});
 }
 
 export function placeContainers(world: World, rooms: SiliconRooms, owners: Record<SiliconNpcId, number>): void {

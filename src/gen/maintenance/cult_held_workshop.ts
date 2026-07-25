@@ -2,6 +2,7 @@ import { getPlotNpcNumericId } from '../../data/npc_packages';
 /* ── AG83 cult-held workshop: repair, bargain, clear, sabotage ── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
+import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   Cell,
   ContainerKind,
@@ -19,13 +20,40 @@ import {
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+
+const AMBIENT_NPC_0: PlotNpcDef = {
+  name: 'Черноременный у ремня',
+  isFemale: true,
+  faction: Faction.CULTIST,
+  occupation: Occupation.PILGRIM,
+  sprite: Occupation.PILGRIM,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'pipe', count: 1 }, { defId: 'grey_briquette', count: 1 }],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'maintenance_ambient_0_2eabf', npc: AMBIENT_NPC_0 });
+
+const AMBIENT_NPC_1: PlotNpcDef = {
+  name: 'Сторож готовой партии',
+  isFemale: true,
+  faction: Faction.CULTIST,
+  occupation: Occupation.HUNTER,
+  sprite: Occupation.HUNTER,
+  hp: 50, maxHp: 50, money: 5, speed: 0.9,
+  inventory: [{ defId: 'wrench', count: 1 }, { defId: 'green_briquette', count: 1 }],
+  talkLines: ['...'],
+  talkLinesPost: ['...']
+};
+registerAuthoredNpc({ id: 'maintenance_ambient_1_inaj0', npc: AMBIENT_NPC_1 });
+
 import { changeResourceStock } from '../../systems/economy';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { placeDoor } from '../shared';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,
-  spawnAmbientNpc, spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
+  spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
 } from './content_helpers';
 
 const AG83_TAG = 'ag83_cult_workshop';
@@ -434,24 +462,8 @@ function spawnWorkshopNpcs(ctx: MaintContentCtx, post: Room, shop: Room, output:
   spawnPlotNpc(ctx, SABOTEUR_ID, SABOTEUR_DEF, shop.x + shop.w - 4, shop.y + shop.h - 3, Math.PI, { weapon: 'wrench' });
   const foremanId = ctx.nextId.v;
   spawnPlotNpc(ctx, FOREMAN_ID, FOREMAN_DEF, post.x + 4, post.y + 4, Math.PI / 2, { weapon: 'knife' });
-  spawnAmbientNpc(
-    ctx,
-    'Черноременный у ремня',
-    Faction.CULTIST,
-    Occupation.PILGRIM,
-    shop.x + 11,
-    shop.y + 5,
-    [{ defId: 'pipe', count: 1 }, { defId: 'grey_briquette', count: 1 }],
-  );
-  spawnAmbientNpc(
-    ctx,
-    'Сторож готовой партии',
-    Faction.CULTIST,
-    Occupation.HUNTER,
-    output.x + 4,
-    output.y + 4,
-    [{ defId: 'wrench', count: 1 }, { defId: 'green_briquette', count: 1 }],
-  );
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, 'maintenance_ambient_0_2eabf', shop.x + 11 + 0.5, shop.y + 5 + 0.5, { angle: 0});
+  requireSpawnedPlotNpcFromPackage(ctx.entities, ctx.nextId, 'maintenance_ambient_1_inaj0', output.x + 4 + 0.5, output.y + 4 + 0.5, { angle: 0});
   return foremanId;
 }
 
