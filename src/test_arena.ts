@@ -5,7 +5,8 @@ import { unstuckActorFromBlockers } from './systems/movement_collision';
 import { setPathBlockerRow, PATH_BLOCKER_SUBDIV, getPathBlockerRow, clearPathBlockersAtCell } from './core/path_blockers';
 import { seedGlobalRng } from './core/rand';
 import { applyMapEditorOp } from './systems/map_editor';
-
+import { generateDesignFloor } from './gen/design_floors/manifest';
+import type { DesignFloorId } from './data/design_floors';
 // ── Globals ──────────────────────────────────────────────────────────
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -59,7 +60,8 @@ function updateHUD() {
     [Space] Pause / Play
     [S] Step one frame
     [G] Toggle Grid
-    [F1-F4] Presets
+    [F1-F3] Presets
+    [F4] Generate Floor (Prompt)
   `.trim().replace(/\n\s+/g, '<br>');
 }
 
@@ -242,8 +244,8 @@ window.addEventListener('mousedown', (e) => {
     return;
   }
   if (e.button === 0) {
+    applyTool(false);
     isDragging = true;
-    applyTool();
   }
 });
 
@@ -262,7 +264,7 @@ window.addEventListener('mousemove', (e) => {
   mouseSubY = Math.floor(mouseWorldY * PATH_BLOCKER_SUBDIV);
 
   if (isDragging) {
-    applyTool();
+    applyTool(true);
   }
 });
 
@@ -294,9 +296,13 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'F1') loadPresetEmptyCorner();
   if (e.key === 'F2') loadPresetMaze();
   if (e.key === 'F3') loadPresetNarrow();
+  if (e.key === 'F4') {
+    const id = prompt('Enter design floor ID:', 'outer_district');
+    if (id) loadPresetFloor(id);
+  }
 });
 
-function applyTool() {
+function applyTool(dragged: boolean = isDragging) {
   const x = Math.floor(mouseWorldX);
   const y = Math.floor(mouseWorldY);
   if (x < 0 || x >= W || y < 0 || y >= W) return;
@@ -309,14 +315,12 @@ function applyTool() {
     world.cells[idx] = Cell.WALL;
     clearPathBlockersAtCell(world, idx);
   } else if (currentTool === 3) { // Monster
-    if (world.cells[idx] !== Cell.WALL && !isDragging) { // Only one click per monster
+    if (world.cells[idx] !== Cell.WALL && !dragged) { // Only one click per monster
       createMonster(mouseWorldX, mouseWorldY, MonsterKind.SBORKA);
-      isDragging = false;
     }
   } else if (currentTool === 6) { // NPC
-    if (world.cells[idx] !== Cell.WALL && !isDragging) {
+    if (world.cells[idx] !== Cell.WALL && !dragged) {
       createNPC(mouseWorldX, mouseWorldY);
-      isDragging = false;
     }
   } else if (currentTool === 4) { // Target
     if (!isDragging) {
@@ -331,10 +335,9 @@ function applyTool() {
       if (nearest) {
         tryAssignPathToCell(world, nearest, mouseWorldX, mouseWorldY);
       }
-      isDragging = false;
     }
   } else if (currentTool === 5) { // Blocker
-    if (!isDragging) {
+    if (!dragged) {
       subcellBlockerActive = !subcellBlockerActive;
     }
     const cellIdx = idx;
@@ -354,9 +357,10 @@ function createMonster(x: number, y: number, kind: MonsterKind = MonsterKind.SBO
   const dummyState = { currentZ: 0 } as GameState;
   const dummyPlayer = { id: 0, x: 0, y: 0 } as Entity;
   const nextIdObj = { v: nextEntityId };
-  applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
+  const res = applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
     kind: 'spawn_entity', x, y, entityDef: { kind: 'monster', monsterKind: kind }
   }, false);
+  console.log('createMonster res:', res);
   nextEntityId = nextIdObj.v;
 }
 
@@ -364,9 +368,10 @@ function createNPC(x: number, y: number) {
   const dummyState = { currentZ: 0 } as GameState;
   const dummyPlayer = { id: 0, x: 0, y: 0 } as Entity;
   const nextIdObj = { v: nextEntityId };
-  applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
+  const res = applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
     kind: 'spawn_entity', x, y, entityDef: { kind: 'npc', faction: Faction.CITIZEN }
   }, false);
+  console.log('createNPC res:', res);
   nextEntityId = nextIdObj.v;
 }
 
@@ -415,6 +420,31 @@ function loadPresetNarrow() {
   setPathBlockerRow(world, 10*W + 10, 3, 0b1111);
   
   createMonster(6, 10.5);
+}
+
+function loadPresetFloor(id: string) {
+  try {
+    const gen = generateDesignFloor(id as DesignFloorId, 12345);
+    world = gen.world;
+    entities = gen.entities;
+    nextEntityId = entities.reduce((max, e) => Math.max(max, e.id), 0) + 1;
+    
+    // Find player spawn to center camera
+    let spawnX = W / 2;
+    let spawnY = W / 2;
+    for (let i = 0; i < world.cells.length; i++) {
+      if (world.cells[i] === Cell.LIFT) {
+        spawnX = i % W;
+        spawnY = Math.floor(i / W);
+        break;
+      }
+    }
+    panX = spawnX;
+    panY = spawnY;
+    zoom = 8;
+  } catch (err) {
+    alert('Failed to generate floor: ' + err);
+  }
 }
 
 function loadPresetTangentStuck() {
