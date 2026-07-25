@@ -1,5 +1,5 @@
 import { World } from './core/world';
-import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, Occupation, type GameState } from './core/types';
+import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, type GameState } from './core/types';
 import { followPath, tryAssignPathToCell, setPathContext } from './systems/ai/pathfinding';
 import { unstuckActorFromBlockers } from './systems/movement_collision';
 import { setPathBlockerRow, PATH_BLOCKER_SUBDIV, getPathBlockerRow, clearPathBlockersAtCell } from './core/path_blockers';
@@ -355,7 +355,7 @@ function createMonster(x: number, y: number, kind: MonsterKind = MonsterKind.SBO
   const dummyPlayer = { id: 0, x: 0, y: 0 } as Entity;
   const nextIdObj = { v: nextEntityId };
   applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
-    kind: 'spawn_entity', x, y, entityDef: { kind: 'monster', monsterKind: kind, label: '', color: '' }
+    kind: 'spawn_entity', x, y, entityDef: { kind: 'monster', monsterKind: kind }
   }, false);
   nextEntityId = nextIdObj.v;
 }
@@ -365,7 +365,7 @@ function createNPC(x: number, y: number) {
   const dummyPlayer = { id: 0, x: 0, y: 0 } as Entity;
   const nextIdObj = { v: nextEntityId };
   applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
-    kind: 'spawn_entity', x, y, entityDef: { kind: 'npc', faction: Faction.CITIZEN, label: '', color: '' }
+    kind: 'spawn_entity', x, y, entityDef: { kind: 'npc', faction: Faction.CITIZEN }
   }, false);
   nextEntityId = nextIdObj.v;
 }
