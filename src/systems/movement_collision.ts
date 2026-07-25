@@ -16,6 +16,8 @@ export interface ActorOccupyPosition {
 export interface ActorUnstuckOptions {
   radius?: number;
   maxCellRadius?: number;
+  /** If true, rescue entities that are inside solid cells instead of leaving them for crush damage */
+  rescueFromSolid?: boolean;
 }
 
 const ACTOR_UNSTUCK_OFFSETS = [
@@ -118,8 +120,10 @@ export function unstuckActorFromBlockers(
   e: Entity,
   options: ActorUnstuckOptions = {},
 ): boolean {
-  // If the entity is directly inside a solid block, do not unstuck so it takes crush damage
-  if (world.solid(Math.floor(e.x), Math.floor(e.y))) return false;
+  // If the entity is directly inside a solid block and rescue is not requested,
+  // do not unstuck so it takes crush damage (samosbor).  AI entities pass
+  // rescueFromSolid=true to be extracted from accidental wall positions.
+  if (world.solid(Math.floor(e.x), Math.floor(e.y)) && !options.rescueFromSolid) return false;
 
   const radius = options.radius ?? actorOccupyRadius(e);
   const ignoreFineBlockers = entityIgnoresFineBlockers(e);

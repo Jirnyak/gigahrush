@@ -249,7 +249,8 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverId: getPlotNpcNumericId('vanka')!,
     type: QuestType.FETCH,
-    desc: 'Ванька боится теней больше, чем комендатуры. Найди и ликвидируй теневика по кличке Петля. Ищи широкое место — в узком коридоре тень оформляет удушье раньше, чем ты достанешь ствол.',
+    desc: 'Ванька боится теней больше, чем комендатуры. Найди и ликвидируй теневика по кличке Петля. Ищи широкое место — в узком коридоре тень оформляет удушье раньше, чем ты достанешь ствол. Принеси сгусток тьмы Ваньке.',
+    activeObjective: 'Убить теневика и принести сгусток тьмы Ваньке.',
     targetItem: 'strange_clot', targetCount: 1,
     rewardItem: 'strange_clot', rewardCount: 1,
     extraRewards: [{ defId: 'psi_recall', count: 1 }],
@@ -259,8 +260,10 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     giverId: getPlotNpcNumericId('vanka')!,
     type: QuestType.FETCH,
-    desc: 'Собери останки Петли и тащи Якову в лабораторию. Главное — не открывай банку: если сгусток почует воздух, к Якову придет не улика, а новый теневик.',
+    desc: 'Ванька запечатал сгусток Петли в банку. Тащи её Якову в лабораторию. Главное — не открывай: если сгусток почует воздух, придет новый теневик.',
+    activeObjective: 'Отнести сгусток тьмы Якову в лабораторию.',
     targetItem: 'strange_clot', targetCount: 1,
+    targetNpcId: getPlotNpcNumericId('yakov')!,
     rewardItem: 'bandage', rewardCount: 3,
     extraRewards: [{ defId: 'pills', count: 1 }],
     relationDelta: 15, xpReward: 40,

@@ -8,7 +8,7 @@ import {
 import { World } from '../../core/world';
 import { PATH_BLOCKER_SUBDIV, PATH_BLOCKER_BYTES_PER_CELL } from '../../core/path_blockers';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
-import { actorOccupyRadius, canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
+
 import { setDoorState } from '../door_state';
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
@@ -32,12 +32,9 @@ const FLOW_UNREACHED = -1;
 const FLOW_BLOCKED = -2;
 const PATH_CHUNK_LIMIT = 1024;
 const PATH_DESCEND_SEARCH_LIMIT = 2048;
-const PATH_LOOKAHEAD_CELLS = 6;
-const PATH_DIRECT_GOAL_RANGE = 12;
-const PATH_LINE_SAMPLE_STEP = 0.35;
+
 const PATH_WAYPOINT_REACH = 0.18;
 const PATH_WAYPOINT_REACH_SQ = PATH_WAYPOINT_REACH * PATH_WAYPOINT_REACH;
-const PATH_WAYPOINT_OFFSET = 0.08;
 const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
 const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
@@ -105,25 +102,7 @@ interface SteeringPathAssignment {
   pi: number;
 }
 
-interface PathWaypoint {
-  cell: number;
-  index: number;
-  x: number;
-  y: number;
-}
 
-interface PathWaypointCache {
-  world: World;
-  cellVersion: number;
-  pathBlockerVersion: number;
-  path: readonly number[];
-  pathLength: number;
-  pi: number;
-  sourceCell: number;
-  goalCell: number;
-  radius: number;
-  waypoint: PathWaypoint;
-}
 
 export interface PathfindingStats {
   routineUsed: number;
@@ -143,7 +122,6 @@ type AssignPathStatus = 'assigned' | 'same' | 'not_found';
 const _behaviorFlowFields = new Map<string, BehaviorFlowField>();
 const _flowPathAssignments = new WeakMap<Entity, FlowPathAssignment>();
 const _steeringPathAssignments = new WeakMap<Entity, SteeringPathAssignment>();
-const _pathWaypointCache = new WeakMap<Entity, PathWaypointCache>();
 const _roomTypeSourceProviders = new Map<string, BehaviorFlowFieldSourceProvider>();
 
 function beginPathFrame(time: number): void {
@@ -281,48 +259,24 @@ function isMacroCellPassable(world: World, ci: number, c: number): boolean {
   return true;
 }
 
-function isClearanceBlocker(world: World, ci: number, c: number): boolean {
-  if (isMacroCellPassable(world, ci, c)) return false;
-  if (c === Cell.DOOR) {
-    const door = world.doors.get(ci);
-    if (door && door.state === DoorState.CLOSED) return false;
-  }
-  return true;
-}
-
+/**
+ * A subcell is nav-passable if and only if:
+ *   1. Its parent macro cell is passable (FLOOR, WATER, or openable DOOR).
+ *   2. Its path blocker bit is clear.
+ * The BFS diagonal guard (cardinal neighbors must be passable) already
+ * prevents corner-cutting.  No clearance margins needed.
+ */
 function isSubcellNavPassable(world: World, si: number): boolean {
   const sx = si % SW;
   const sy = (si / SW) | 0;
   const cellX = (sx / PATH_BLOCKER_SUBDIV) | 0;
   const cellY = (sy / PATH_BLOCKER_SUBDIV) | 0;
   const cellI = cellY * W + cellX;
-  const cell = world.cells[cellI];
 
-  if (!isMacroCellPassable(world, cellI, cell)) return false;
+  if (!isMacroCellPassable(world, cellI, world.cells[cellI])) return false;
 
   const rx = sx % PATH_BLOCKER_SUBDIV;
   const ry = sy % PATH_BLOCKER_SUBDIV;
-
-  if (rx === 0) {
-    const nx = (cellX - 1 + W) & (W - 1);
-    const nci = cellY * W + nx;
-    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
-  } else if (rx === PATH_BLOCKER_SUBDIV - 1) {
-    const nx = (cellX + 1) & (W - 1);
-    const nci = cellY * W + nx;
-    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
-  }
-
-  if (ry === 0) {
-    const ny = (cellY - 1 + W) & (W - 1);
-    const nci = ny * W + cellX;
-    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
-  } else if (ry === PATH_BLOCKER_SUBDIV - 1) {
-    const ny = (cellY + 1) & (W - 1);
-    const nci = ny * W + cellX;
-    if (isClearanceBlocker(world, nci, world.cells[nci])) return false;
-  }
-
   const mask = world.pathBlockers[cellI * PATH_BLOCKER_BYTES_PER_CELL + ry] ?? 0;
   return (mask & (1 << rx)) === 0;
 }
@@ -382,25 +336,11 @@ function bakeNavigationTree(
       const nE = cy * SW + (cx === SW - 1 ? 0 : cx + 1);
       const nN = (cy === 0 ? SW - 1 : cy - 1) * SW + cx;
       const nS = (cy === SW - 1 ? 0 : cy + 1) * SW + cx;
-      const nNW = (cy === 0 ? SW - 1 : cy - 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
-      const nNE = (cy === 0 ? SW - 1 : cy - 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
-      const nSW = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
-      const nSE = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
 
-      const passW = checkNavPassable(world, nW);
-      const passE = checkNavPassable(world, nE);
-      const passN = checkNavPassable(world, nN);
-      const passS = checkNavPassable(world, nS);
-
-      if (passW) tail = visitNavNeighbor(world, nW, cur, componentId, tail);
-      if (passE) tail = visitNavNeighbor(world, nE, cur, componentId, tail);
-      if (passN) tail = visitNavNeighbor(world, nN, cur, componentId, tail);
-      if (passS) tail = visitNavNeighbor(world, nS, cur, componentId, tail);
-      
-      if (passW && passN) tail = visitNavNeighbor(world, nNW, cur, componentId, tail);
-      if (passE && passN) tail = visitNavNeighbor(world, nNE, cur, componentId, tail);
-      if (passW && passS) tail = visitNavNeighbor(world, nSW, cur, componentId, tail);
-      if (passE && passS) tail = visitNavNeighbor(world, nSE, cur, componentId, tail);
+      if (checkNavPassable(world, nW)) tail = visitNavNeighbor(world, nW, cur, componentId, tail);
+      if (checkNavPassable(world, nE)) tail = visitNavNeighbor(world, nE, cur, componentId, tail);
+      if (checkNavPassable(world, nN)) tail = visitNavNeighbor(world, nN, cur, componentId, tail);
+      if (checkNavPassable(world, nS)) tail = visitNavNeighbor(world, nS, cur, componentId, tail);
     }
     _navReachable += tail;
   }
@@ -470,25 +410,11 @@ function ensureBehaviorFlowField(
     const nE = cy * SW + (cx === SW - 1 ? 0 : cx + 1);
     const nN = (cy === 0 ? SW - 1 : cy - 1) * SW + cx;
     const nS = (cy === SW - 1 ? 0 : cy + 1) * SW + cx;
-    const nNW = (cy === 0 ? SW - 1 : cy - 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
-    const nNE = (cy === 0 ? SW - 1 : cy - 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
-    const nSW = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
-    const nSE = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
 
-    const passW = checkFlowPassable(world, next, nW);
-    const passE = checkFlowPassable(world, next, nE);
-    const passN = checkFlowPassable(world, next, nN);
-    const passS = checkFlowPassable(world, next, nS);
-
-    if (passW) tail = visitFlowNeighbor(world, next, nW, cur, tail);
-    if (passE) tail = visitFlowNeighbor(world, next, nE, cur, tail);
-    if (passN) tail = visitFlowNeighbor(world, next, nN, cur, tail);
-    if (passS) tail = visitFlowNeighbor(world, next, nS, cur, tail);
-    
-    if (passW && passN) tail = visitFlowNeighbor(world, next, nNW, cur, tail);
-    if (passE && passN) tail = visitFlowNeighbor(world, next, nNE, cur, tail);
-    if (passW && passS) tail = visitFlowNeighbor(world, next, nSW, cur, tail);
-    if (passE && passS) tail = visitFlowNeighbor(world, next, nSE, cur, tail);
+    if (checkFlowPassable(world, next, nW)) tail = visitFlowNeighbor(world, next, nW, cur, tail);
+    if (checkFlowPassable(world, next, nE)) tail = visitFlowNeighbor(world, next, nE, cur, tail);
+    if (checkFlowPassable(world, next, nN)) tail = visitFlowNeighbor(world, next, nN, cur, tail);
+    if (checkFlowPassable(world, next, nS)) tail = visitFlowNeighbor(world, next, nS, cur, tail);
   }
 
   _bfsCalls++;
@@ -803,121 +729,11 @@ function wrapFloat(v: number): number {
   return ((v % W) + W) % W;
 }
 
-function pathNoiseUnit(id: number, cell: number, salt: number): number {
-  let h = Math.imul(id | 0, 374761393) ^ Math.imul(cell | 0, 668265263) ^ Math.imul(salt, 2246822519);
-  h = Math.imul(h ^ (h >>> 16), 2246822519);
-  h = Math.imul(h ^ (h >>> 13), 3266489917);
-  return ((h ^ (h >>> 16)) >>> 0) / 0x100000000;
-}
-
-function centeredPathWaypoint(si: number, index: number): PathWaypoint {
-  const [x, y] = subcellToWorld(si);
-  return { cell: si, index, x, y };
-}
-
-function pathWaypointForCell(world: World, e: Entity, si: number, index: number, r: number, ignoreFineBlockers: boolean): PathWaypoint {
-  const center = centeredPathWaypoint(si, index);
-  const dx = world.delta(e.x, center.x);
-  const dy = world.delta(e.y, center.y);
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 0.01) return center;
-  if (world.cells[subcellToCell(si)] === Cell.DOOR) return center;
-
-  const ox = (pathNoiseUnit(e.id, si, 1) - 0.5) * PATH_WAYPOINT_OFFSET * 2;
-  const oy = (pathNoiseUnit(e.id, si, 2) - 0.5) * PATH_WAYPOINT_OFFSET * 2;
-  const x = center.x + ox;
-  const y = center.y + oy;
-  if (canActorOccupy(world, x, y, r, { ignoreFineBlockers })) return { cell: si, index, x, y };
-  return center;
-}
-
-function pathSegmentClear(world: World, x1: number, y1: number, x2: number, y2: number, r: number, ignoreFineBlockers: boolean): boolean {
-  const dx = world.delta(x1, x2);
-  const dy = world.delta(y1, y2);
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 0.01) return true;
-
-  const steps = Math.max(1, Math.ceil(dist / PATH_LINE_SAMPLE_STEP));
-  for (let step = 1; step <= steps; step++) {
-    const t = step / steps;
-    const x = wrapFloat(x1 + dx * t);
-    const y = wrapFloat(y1 + dy * t);
-    if (!canActorOccupy(world, x, y, r, { ignoreFineBlockers })) return false;
-  }
-  return true;
-}
-
-function computePathWaypoint(world: World, e: Entity, r: number, goalCell: number): PathWaypoint {
-  const ai = e.ai!;
-  const ignoreFineBlockers = entityIgnoresFineBlockers(e);
-  let fallback = pathWaypointForCell(world, e, ai.path[ai.pi], ai.pi, r, ignoreFineBlockers);
-  const goal = pathWaypointForCell(world, e, goalCell, ai.path.length - 1, r, ignoreFineBlockers);
-  if (
-    world.dist2(e.x, e.y, goal.x, goal.y) <= PATH_DIRECT_GOAL_RANGE * PATH_DIRECT_GOAL_RANGE &&
-    pathSegmentClear(world, e.x, e.y, goal.x, goal.y, r, ignoreFineBlockers)
-  ) {
-    return goal;
-  }
-  const centeredGoal = centeredPathWaypoint(goalCell, ai.path.length - 1);
-  if (
-    world.dist2(e.x, e.y, centeredGoal.x, centeredGoal.y) <= PATH_DIRECT_GOAL_RANGE * PATH_DIRECT_GOAL_RANGE &&
-    pathSegmentClear(world, e.x, e.y, centeredGoal.x, centeredGoal.y, r, ignoreFineBlockers)
-  ) {
-    return centeredGoal;
-  }
-
-  const last = Math.min(ai.path.length - 1, ai.pi + PATH_LOOKAHEAD_CELLS);
-
-  for (let index = last; index > ai.pi; index--) {
-    const waypoint = pathWaypointForCell(world, e, ai.path[index], index, r, ignoreFineBlockers);
-    if (pathSegmentClear(world, e.x, e.y, waypoint.x, waypoint.y, r, ignoreFineBlockers)) return waypoint;
-    const centered = centeredPathWaypoint(ai.path[index], index);
-    if (pathSegmentClear(world, e.x, e.y, centered.x, centered.y, r, ignoreFineBlockers)) return centered;
-  }
-
-  if (pathSegmentClear(world, e.x, e.y, fallback.x, fallback.y, r, ignoreFineBlockers)) return fallback;
-  return centeredPathWaypoint(ai.path[ai.pi], ai.pi);
-}
-
-function selectPathWaypoint(world: World, e: Entity, r: number): PathWaypoint {
-  const ai = e.ai!;
-  const sourceCell = subcellIdx(e.x, e.y);
-  const goalCell = subcellIdx(ai.tx, ai.ty);
-  const cellVersion = navigationCacheCellVersion(world);
-  const pathBlockerVersion = world.pathBlockerVersion;
-  const cached = _pathWaypointCache.get(e);
-  if (
-    cached &&
-    cached.world === world &&
-    cached.cellVersion === cellVersion &&
-    cached.pathBlockerVersion === pathBlockerVersion &&
-    cached.path === ai.path &&
-    cached.pathLength === ai.path.length &&
-    cached.pi === ai.pi &&
-    cached.sourceCell === sourceCell &&
-    cached.goalCell === goalCell &&
-    cached.radius === r
-  ) {
-    return cached.waypoint;
-  }
-
-  const waypoint = computePathWaypoint(world, e, r, goalCell);
-  _pathWaypointCache.set(e, {
-    world,
-    cellVersion,
-    pathBlockerVersion,
-    path: ai.path,
-    pathLength: ai.path.length,
-    pi: ai.pi,
-    sourceCell,
-    goalCell,
-    radius: r,
-    waypoint,
-  });
-  return waypoint;
-}
-
 /* ── Follow path ──────────────────────────────────────────────── */
+// Pure grid-based follower: entities traverse the BFS path subcell by subcell.
+// Float coordinates are interpolated for visual smoothness only.
+// No radius checks, no line-of-sight sampling, no collision tests.
+// The BFS path guarantees every step is a passable adjacent subcell.
 export function followPath(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   if (ai.pi >= ai.path.length) {
@@ -951,65 +767,53 @@ export function followPath(world: World, e: Entity, dt: number): void {
     return;
   }
 
-  const r = actorOccupyRadius(e);
-
+  // Advance past already-reached subcells
   while (ai.pi < ai.path.length) {
-    const cell = ai.path[ai.pi];
-    const [cx, cy] = subcellToWorld(cell);
+    const [cx, cy] = subcellToWorld(ai.path[ai.pi]);
     if (world.dist2(e.x, e.y, cx, cy) >= PATH_WAYPOINT_REACH_SQ) break;
     ai.pi++;
     ai.stuck = 0;
   }
-
   if (ai.pi >= ai.path.length) return;
 
-  // Proactively open doors: current cell, next path cell, and waypoint cell
+  // Open doors: current position, next subcell on path, and one ahead
   openPathDoorAtWorld(world, e.x, e.y);
   openPathDoor(world, ai.path[ai.pi]);
-  const waypoint = selectPathWaypoint(world, e, r);
+  if (ai.pi + 1 < ai.path.length) openPathDoor(world, ai.path[ai.pi + 1]);
 
-  let dx = world.delta(e.x, waypoint.x);
-  let dy = world.delta(e.y, waypoint.y);
+  // Target: center of the next subcell on the BFS path.
+  // BFS is 4-dir cardinal, so consecutive subcells are always cardinal neighbors.
+  // No diagonals, no lookahead. Entity moves straight to the next subcell center.
+  const [tx, ty] = subcellToWorld(ai.path[ai.pi]);
+  const dx = world.delta(e.x, tx);
+  const dy = world.delta(e.y, ty);
   const distSq = dx * dx + dy * dy;
-
-  if (distSq < PATH_WAYPOINT_REACH_SQ) {
-    ai.pi = Math.max(ai.pi + 1, waypoint.index + 1);
-    ai.stuck = 0;
-    return;
-  }
+  if (distSq < 0.0001) { ai.pi++; ai.stuck = 0; return; }
   const dist = Math.sqrt(distSq);
 
-  // Open doors in the way (never open hermetic doors — they protect apartments during samosbor)
-  openPathDoor(world, waypoint.cell);
-
-  // Move toward target
   const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
-  const beforeCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-  const nx = e.x + (dx / dist) * speed;
-  const ny = e.y + (dy / dist) * speed;
-  let moved = false;
-
-  // Open door ahead of movement if the next position is on a door cell
-  openPathDoorAtWorld(world, nx, ny);
-
-  const ignoreFineBlockers = entityIgnoresFineBlockers(e);
-  if (canActorOccupy(world, nx, e.y, r, { ignoreFineBlockers })) {
-    e.x = ((nx % W) + W) % W;
-    moved = true;
+  const step = Math.min(speed, dist);
+  const prevX = e.x;
+  const prevY = e.y;
+  // Axis-separated subcell collision: prevent entity from entering impassable subcells.
+  // Even though BFS path is cardinal, entity may not be axis-aligned with subcell center,
+  // so float movement toward the center is diagonal and can cross into wall macro cells.
+  const nx = e.x + (dx / dist) * step;
+  const ny = e.y + (dy / dist) * step;
+  if (isSubcellNavPassable(world, subcellIdx(nx, e.y))) {
+    e.x = wrapFloat(nx);
   }
-  if (canActorOccupy(world, e.x, ny, r, { ignoreFineBlockers })) {
-    e.y = ((ny % W) + W) % W;
-    moved = true;
+  if (isSubcellNavPassable(world, subcellIdx(e.x, ny))) {
+    e.y = wrapFloat(ny);
   }
 
-  // Stuck detection
-  const afterDx = world.delta(e.x, waypoint.x);
-  const afterDy = world.delta(e.y, waypoint.y);
-  const afterDistSq = afterDx * afterDx + afterDy * afterDy;
-  const afterCell = world.idx(Math.floor(e.x), Math.floor(e.y));
-  const progressed = moved && (afterDistSq < distSq - 0.0001 || afterCell !== beforeCell);
-  ai.stuck = progressed ? Math.max(0, ai.stuck - dt * 2) : ai.stuck + dt;
-  if (ai.stuck > 3) {
+  // Stuck: did the entity actually move?
+  const moved = (e.x !== prevX || e.y !== prevY);
+  ai.stuck = moved ? 0 : ai.stuck + dt;
+  if (ai.stuck > 2 && ai.pi < ai.path.length - 1) {
+    ai.pi++;
+    ai.stuck = 0;
+  } else if (ai.stuck > 4) {
     ai.path = [];
     ai.pi = 0;
     ai.stuck = 0;

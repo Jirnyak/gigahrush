@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>ГИГАХРУЩ — AI Test Arena</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; cursor: crosshair; }
+    #hud {
+      position: fixed; top: 10px; left: 10px;
+      color: #0f0; font-size: 13px; line-height: 1.5;
+      pointer-events: none; white-space: pre;
+      text-shadow: 0 0 6px rgba(0,255,0,0.3);
+    }
+    #help {
+      position: fixed; bottom: 10px; left: 10px;
+      color: #555; font-size: 11px; line-height: 1.4;
+      pointer-events: none; white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud"></div>
+  <div id="help"></div>
+  <script type="module" src="/src/test_arena.ts"></script>
+</body>
+</html>

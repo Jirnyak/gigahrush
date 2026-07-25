@@ -655,7 +655,7 @@ function handleSleeping(world: World, e: Entity, dt: number, profile: NpcAiProfi
         wanderNearby(world, e);
       }
     }
-    ai.timer = stableTimer(e, 'sleep_rethink', 8, 5);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'sleep_rethink', 8, 5) : 2.0;
   }
 
   if (ai.goal === AIGoal.SLEEP && ai.path.length === 0) {
@@ -713,7 +713,7 @@ function handleToilet(world: World, e: Entity, dt: number, time: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.TOILET;
     if (!gotoRoutineRoomOfTypes(world, e, [RoomType.BATHROOM], 'toilet', { allowTrespassFallback: true })) wanderNearby(world, e);
-    ai.timer = stableTimer(e, 'toilet_rethink', 7, 5);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'toilet_rethink', 7, 5) : 2.0;
   }
   if (n) {
     const cr = world.roomAt(e.x, e.y);
@@ -740,7 +740,7 @@ function handleDrink(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.DRINK;
     if (!gotoRoutineRoomOfTypes(world, e, [RoomType.KITCHEN, RoomType.BATHROOM], 'drink', { allowTrespassFallback: true })) wanderNearby(world, e);
-    ai.timer = stableTimer(e, 'drink_rethink', 8, 6);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'drink_rethink', 8, 6) : 2.0;
   }
   if (n) {
     const cr = world.roomAt(e.x, e.y);
@@ -789,7 +789,7 @@ function handleEat(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.EAT;
     if (!gotoRoutineRoomOfTypes(world, e, [RoomType.KITCHEN, RoomType.COMMON], 'eat', { allowTrespassFallback: true })) wanderNearby(world, e);
-    ai.timer = stableTimer(e, 'eat_rethink', 10, 8);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'eat_rethink', 10, 8) : 2.0;
   }
   if (n) {
     const cr = world.roomAt(e.x, e.y);
@@ -823,7 +823,7 @@ function handleWorking(world: World, e: Entity, dt: number, profile: NpcAiProfil
       const types = occupationWorkRoomTypes(e.occupation);
       if (!gotoRoutineRoomOfTypes(world, e, types, 'work')) wanderNearby(world, e);
     }
-    ai.timer = stableTimer(e, 'work_rethink', 14, 18);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'work_rethink', 14, 18) : 2.0;
   }
 
   if (ai.goal === AIGoal.WORK && ai.path.length === 0) {
@@ -870,7 +870,7 @@ function handleHeal(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.GOTO;
     if (!gotoRoutineRoomOfTypes(world, e, [RoomType.MEDICAL], 'heal', { allowTrespassFallback: true })) wanderNearby(world, e);
-    ai.timer = stableTimer(e, 'heal_rethink', 9, 8);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'heal_rethink', 9, 8) : 2.0;
   }
 
   if (ai.goal === AIGoal.GOTO && ai.path.length === 0) {
@@ -892,7 +892,7 @@ function handleSocial(world: World, e: Entity, dt: number, profile: NpcAiProfile
       ? [RoomType.COMMON, RoomType.HQ, RoomType.OFFICE] as const
       : [RoomType.COMMON, RoomType.SMOKING, RoomType.KITCHEN] as const;
     if (!gotoRoutineRoomOfTypes(world, e, types, 'social')) wanderNearby(world, e);
-    ai.timer = stableTimer(e, 'social_rethink', 8, 12);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'social_rethink', 8, 12) : 2.0;
   }
   if (ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
@@ -932,7 +932,7 @@ function handlePatrol(world: World, e: Entity, dt: number): void {
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WANDER;
     patrolCorridor(world, e);
-    ai.timer = stableTimer(e, 'patrol_rethink', 9, 14);
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'patrol_rethink', 9, 14) : 2.0;
   }
   followPath(world, e, dt);
 }
@@ -943,14 +943,14 @@ function handleWander(world: World, e: Entity, dt: number): void {
     ai.goal = AIGoal.WANDER;
     if (usesTravelerRoutine(e)) {
       wanderFar(world, e);
-      ai.timer = stableTimer(e, 'traveler_rethink', 10, 20);
+      ai.timer = ai.path.length > 0 ? stableTimer(e, 'traveler_rethink', 10, 20) : 2.0;
     } else {
       const roll = stableUnit(e, `wander:${Math.floor((ai.stateTimer ?? 0) / 15)}`);
       const routed = roll < 0.68 && gotoRoutineRoomOfTypes(world, e, [RoomType.COMMON, RoomType.KITCHEN, RoomType.HQ], 'wander');
       if (!routed) {
         wanderNearby(world, e);
       }
-      ai.timer = stableTimer(e, 'wander_rethink', 7, 12);
+      ai.timer = ai.path.length > 0 ? stableTimer(e, 'wander_rethink', 7, 12) : 2.0;
     }
   }
   followPath(world, e, dt);

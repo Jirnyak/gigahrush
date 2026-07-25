@@ -159,7 +159,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       if (e.role === NpcRole.CINEMATIC_ACTOR) {
         continue;
       }
-      unstuckActorFromBlockers(world, e);
+      unstuckActorFromBlockers(world, e, { radius: 0, rescueFromSolid: true });
       if (e.type === EntityType.NPC) {
         if (e.ai.npcState === undefined) {
           primeNpcAlifeState(e, clock, samosborActive, isMinistry ? 'ministry' : 'default');
