@@ -17,7 +17,12 @@ import { makeGameState } from './helpers';
 
 function openWorld(): World {
   const world = new World();
-  world.cells.fill(Cell.FLOOR);
+  world.cells.fill(Cell.WALL);
+  for (let y = 1; y < 60; y++) {
+    for (let x = 1; x < 60; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
   world.zoneMap.fill(0);
   world.zones[0] = {
     id: 0,
@@ -161,8 +166,8 @@ test('green dog drops target and flees from shotgun or loud metal noise', () => 
   resetNoiseRecords();
   const world = openWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(10, 10);
-  const dog = greenDog(2, 12, 10);
+  const target = player(2, 2);
+  const dog = greenDog(2, 5, 2);
   dog.ai!.combatTargetId = target.id;
   const entities = [target, dog];
   const state = makeGameState({ worldEvents: createWorldEventState() });
@@ -194,8 +199,8 @@ test('green dog treats valve and pipe events as loud metal counterplay', () => {
   resetNoiseRecords();
   const world = openWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(10, 10);
-  const dog = greenDog(20, 13, 10);
+  const target = player(2, 2);
+  const dog = greenDog(20, 5, 2);
   dog.ai!.combatTargetId = target.id;
   const entities = [target, dog];
   const state = makeGameState({ worldEvents: createWorldEventState() });
@@ -205,8 +210,8 @@ test('green dog treats valve and pipe events as loud metal counterplay', () => {
   publishEvent(state, {
     type: 'paritel_valve_changed',
     zoneId: 0,
-    x: 11,
-    y: 10,
+    x: 3,
+    y: 2,
     actorId: target.id,
     actorName: target.name,
     actorFaction: target.faction,

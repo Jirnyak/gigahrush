@@ -16,7 +16,12 @@ import { makeGameState, makeTestPlayer } from './helpers';
 
 function openWorld(): World {
   const world = new World();
-  world.cells.fill(Cell.FLOOR);
+  world.cells.fill(Cell.WALL);
+  for (let y = 1; y < 60; y++) {
+    for (let x = 1; x < 60; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
   return world;
 }
 
@@ -118,17 +123,17 @@ test('lotochnik drain armor and regeneration use local wet terrain only', () => 
 test('noise probe reveals Chernosliz without a full water scan', () => {
   resetNoiseRecords();
   const world = openWorld();
-  const target = makeTestPlayer({ id: 1, x: 20.5, y: 10.5, hp: 100, maxHp: 100 });
-  const threat = monster(MonsterKind.CHERNOSLIZ, 10.5, 10.5);
+  const target = makeTestPlayer({ id: 1, x: 12.5, y: 2.5, hp: 100, maxHp: 100 });
+  const threat = monster(MonsterKind.CHERNOSLIZ, 2.5, 2.5);
   const entities = [target, threat];
   const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState(), time: 1 });
   const msgs: Msg[] = [];
 
-  world.cells[world.idx(10, 10)] = Cell.WATER;
+  world.cells[world.idx(2, 2)] = Cell.WATER;
   prepare(world, entities);
   publishNoise(state, {
-    x: 11.5,
-    y: 10.5,
+    x: 3.5,
+    y: 2.5,
     radius: 12,
     ttl: 3,
     source: 'decoy',
