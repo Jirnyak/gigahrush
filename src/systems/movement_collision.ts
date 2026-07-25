@@ -50,8 +50,10 @@ export function actorOccupyRadius(e: Pick<Entity, 'type' | 'height' | 'radius' |
 }
 
 export function canActorOccupyCoarse(world: World, x: number, y: number, radius: number): boolean {
-  void radius; // Discrete logical radius (1 subcell) means we only check the center
-  return !world.solid(Math.floor(x), Math.floor(y));
+  return !world.solid(Math.floor(x + radius), Math.floor(y + radius)) &&
+    !world.solid(Math.floor(x + radius), Math.floor(y - radius)) &&
+    !world.solid(Math.floor(x - radius), Math.floor(y + radius)) &&
+    !world.solid(Math.floor(x - radius), Math.floor(y - radius));
 }
 
 export function canActorOccupyFine(world: World, x: number, y: number, radius: number): boolean {
@@ -132,12 +134,5 @@ export function unstuckActorFromBlockers(
 
   e.x = pos.x;
   e.y = pos.y;
-  if (e.ai) {
-    e.ai.path = [];
-    e.ai.pi = 0;
-    e.ai.stuck = 0;
-    e.ai.tx = Math.floor(pos.x);
-    e.ai.ty = Math.floor(pos.y);
-  }
   return true;
 }
