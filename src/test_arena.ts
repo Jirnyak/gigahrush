@@ -417,6 +417,23 @@ function loadPresetNarrow() {
   createMonster(6, 10.5);
 }
 
+function loadPresetTangentStuck() {
+  clearArena();
+  // Tangential wall scenario: A straight wall that the monster has to slide along or graze.
+  // We place a wall block
+  world.cells[5*W + 5] = Cell.WALL;
+  world.cells[5*W + 6] = Cell.WALL;
+  world.cells[6*W + 5] = Cell.WALL;
+  world.cells[6*W + 6] = Cell.WALL;
+  
+  createMonster(4.5, 7.5);
+  // Set target for the monster
+  const e = entities[0];
+  if (e) {
+    tryAssignPathToCell(world, e, 6.5, 4.5);
+  }
+}
+
 // Init
-loadPresetEmptyCorner();
+loadPresetTangentStuck();
 requestAnimationFrame(draw);

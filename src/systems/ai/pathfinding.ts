@@ -792,19 +792,49 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const dist = Math.sqrt(distSq);
 
   const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
-  const step = Math.min(speed, dist);
+  let remainingStep = speed;
   const prevX = e.x;
   const prevY = e.y;
-  // Axis-separated subcell collision: prevent entity from entering impassable subcells.
-  // Even though BFS path is cardinal, entity may not be axis-aligned with subcell center,
-  // so float movement toward the center is diagonal and can cross into wall macro cells.
-  const nx = e.x + (dx / dist) * step;
-  const ny = e.y + (dy / dist) * step;
-  if (isSubcellNavPassable(world, subcellIdx(nx, e.y))) {
-    e.x = wrapFloat(nx);
-  }
-  if (isSubcellNavPassable(world, subcellIdx(e.x, ny))) {
-    e.y = wrapFloat(ny);
+
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  // Strict orthogonal movement (Manhattan) to avoid diagonal corner clipping.
+  // Prioritize the axis with the larger delta to stay aligned with the BFS cardinal steps.
+  if (absDx >= absDy) {
+    if (absDx > 0.0001) {
+      const stepX = Math.min(remainingStep, absDx) * Math.sign(dx);
+      const nx = wrapFloat(e.x + stepX);
+      if (isSubcellNavPassable(world, subcellIdx(nx, e.y))) {
+        e.x = nx;
+        remainingStep -= Math.abs(stepX);
+      }
+    }
+    if (remainingStep > 0 && absDy > 0.0001) {
+      const stepY = Math.min(remainingStep, absDy) * Math.sign(dy);
+      const ny = wrapFloat(e.y + stepY);
+      if (isSubcellNavPassable(world, subcellIdx(e.x, ny))) {
+        e.y = ny;
+        remainingStep -= Math.abs(stepY);
+      }
+    }
+  } else {
+    if (absDy > 0.0001) {
+      const stepY = Math.min(remainingStep, absDy) * Math.sign(dy);
+      const ny = wrapFloat(e.y + stepY);
+      if (isSubcellNavPassable(world, subcellIdx(e.x, ny))) {
+        e.y = ny;
+        remainingStep -= Math.abs(stepY);
+      }
+    }
+    if (remainingStep > 0 && absDx > 0.0001) {
+      const stepX = Math.min(remainingStep, absDx) * Math.sign(dx);
+      const nx = wrapFloat(e.x + stepX);
+      if (isSubcellNavPassable(world, subcellIdx(nx, e.y))) {
+        e.x = nx;
+        remainingStep -= Math.abs(stepX);
+      }
+    }
   }
 
   // Stuck: did the entity actually move?
