@@ -162,10 +162,10 @@ test('actor blocker unstuck moves to nearest free point and clears stale path st
 test('actor blocker unstuck searches around coarse solids too', () => {
   const world = makeOpenWorld(30, 30, 2);
   world.set(31, 30, Cell.WALL);
-  // Place actor close enough to the wall at 31,30 so its radius (0.16) overlaps it (x+r >= 31)
-  const actor = npcInside(30.9, 30.5);
+  // Place actor center directly inside the wall (float radius overlap was removed in quantum 4x4 movement)
+  const actor = npcInside(31.5, 30.5);
 
-  assert.equal(unstuckActorFromBlockers(world, actor), true);
+  assert.equal(unstuckActorFromBlockers(world, actor, { rescueFromSolid: true }), true);
 
   assert.equal(canActorOccupy(world, actor.x, actor.y, HUMAN_R), true);
   assert.notEqual(world.idx(Math.floor(actor.x), Math.floor(actor.y)), world.idx(31, 30));

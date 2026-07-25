@@ -9027,23 +9027,20 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     if (def?.speed === 0) return;
     ai.goal = AIGoal.WANDER;
     ai.combatTargetId = undefined;
-    ai.timer -= dt;
-    if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-      // Phasing monsters: random direction wander
-      if (e.phasing) {
+    if (e.phasing) {
+      ai.timer -= dt;
+      if (ai.timer <= 0) {
         ai.timer = 2 + rng() * 3;
         ai.wanderAngle = rng() * Math.PI * 2;
-      } else {
-        wanderNearby(world, e);
       }
-      ai.timer = 1.5 + rng() * 2.5;
-    }
-    if (e.phasing) {
       const a = ai.wanderAngle ?? 0;
       const spd = e.speed * 0.4 * dt;
       e.x = ((e.x + Math.cos(a) * spd) % W + W) % W;
       e.y = ((e.y + Math.sin(a) * spd) % W + W) % W;
     } else {
+      if (ai.path.length === 0 || ai.pi >= ai.path.length) {
+        wanderNearby(world, e);
+      }
       followMonsterPath(world, e, dt);
     }
     return;

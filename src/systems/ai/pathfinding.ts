@@ -791,13 +791,28 @@ function hasLineOfSight(world: World, startSubcell: number, endSubcell: number):
     if (cx === x1 && cy === y1) return true;
     if (!isSubcellNavPassable(world, cy * SW + cx)) return false;
     let e2 = 2 * err;
+    let steppedX = false;
+    let steppedY = false;
     if (e2 >= absDy) {
       err += absDy;
       cx = (cx + sx + SW) % SW;
+      steppedX = true;
     }
     if (e2 <= absDx) {
       err += absDx;
       cy = (cy + sy + SW) % SW;
+      steppedY = true;
+    }
+
+    if (steppedX && steppedY) {
+      // If we stepped diagonally, ensure we aren't cutting a solid corner.
+      // At least one of the orthogonal paths must be passable (ideally both to be perfectly safe from float errors).
+      // We require BOTH to be passable so the Euclidean float line cannot physically touch a wall vertex.
+      const old_cx = (cx - sx + SW) % SW;
+      const old_cy = (cy - sy + SW) % SW;
+      if (!isSubcellNavPassable(world, old_cy * SW + cx) || !isSubcellNavPassable(world, cy * SW + old_cx)) {
+        return false;
+      }
     }
   }
   return true;
@@ -821,6 +836,11 @@ export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: num
     ai.stuck = 0;
     ai.tx = tx;
     ai.ty = ty;
+    return 'same';
+  }
+
+  const currentTarget = subcellIdx(ai.tx, ai.ty);
+  if (target === currentTarget && ai.path.length > 0 && ai.pi < ai.path.length) {
     return 'same';
   }
 
