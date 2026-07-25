@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { AIGoal, Cell, EntityType, Faction, MonsterKind, type Entity, type Msg } from '../src/core/types';
+import { bakeNavigationTree } from '../src/systems/ai/pathfinding';
 import { World } from '../src/core/world';
 import { DEF, generateSprite } from '../src/entities/green_dog';
 import { getMonsterEcology } from '../src/data/monster_ecology';
@@ -69,10 +70,11 @@ function greenDog(id: number, x: number, y: number): Entity {
   };
 }
 
-function prime(entities: Entity[]): void {
+function prime(world: World, entities: Entity[]): void {
   rebuildEntityIndex(entities);
   getEntityIndex().beginTelemetryFrame();
   setEntityMap(new Map(entities.map(e => [e.id, e])));
+  bakeNavigationTree(world);
 }
 
 test('green dog definition, ecology, and sprite read as a mossy pack predator', () => {
@@ -110,7 +112,7 @@ test('green dog howl shares target only through a bounded pack radius query', ()
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
-  prime(entities);
+  prime(world, entities);
   updateMonster(world, entities, caller, 0.1, 1, msgs, target.id, { v: 10 }, state);
 
   assert.equal(caller.ai?.combatTargetId, target.id);
@@ -137,7 +139,7 @@ test('green dog pack share is capped and cooldown-gated', () => {
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
-  prime(entities);
+  prime(world, entities);
   updateMonster(world, entities, caller, 0.1, 5, msgs, target.id, { v: 40 }, state);
 
   const firstShared = pack.filter(dog => dog.ai?.combatTargetId === target.id).length;
@@ -148,7 +150,7 @@ test('green dog pack share is capped and cooldown-gated', () => {
   assert.equal(howl.data?.shared, firstShared);
 
   for (const dog of pack) dog.ai!.combatTargetId = undefined;
-  prime(entities);
+  prime(world, entities);
   updateMonster(world, entities, caller, 0.1, 5.25, msgs, target.id, { v: 40 }, state);
 
   assert.equal(pack.filter(dog => dog.ai?.combatTargetId === target.id).length, 0);
@@ -178,7 +180,7 @@ test('green dog drops target and flees from shotgun or loud metal noise', () => 
     tags: ['weapon', 'shotgun', 'metal'],
   });
 
-  prime(entities);
+  prime(world, entities);
   updateMonster(world, entities, dog, 0.2, state.time, msgs, target.id, { v: 10 }, state);
 
   assert.equal(dog.ai?.combatTargetId, undefined);
@@ -214,7 +216,7 @@ test('green dog treats valve and pipe events as loud metal counterplay', () => {
     data: { pressure: 1 },
   });
 
-  prime(entities);
+  prime(world, entities);
   updateMonster(world, entities, dog, 0.2, state.time, msgs, target.id, { v: 30 }, state);
 
   assert.equal(dog.ai?.combatTargetId, undefined);

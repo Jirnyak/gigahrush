@@ -6,6 +6,7 @@ import { World } from '../src/core/world';
 import { MONSTERS } from '../src/entities/monster';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { setListenerPos } from '../src/systems/audio';
+import { bakeNavigationTree } from '../src/systems/ai/pathfinding';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { applyMonsterIncomingDamage, lotochnikDrainArmorActive } from '../src/systems/monster_traits';
@@ -40,9 +41,10 @@ function monster(kind: MonsterKind, x: number, y: number, hp?: number): Entity {
   };
 }
 
-function prepare(entities: Entity[]): void {
+function prepare(world: World, entities: Entity[]): void {
   rebuildEntityIndex(entities);
   setEntityMap(new Map(entities.map(e => [e.id, e])));
+  bakeNavigationTree(world);
 }
 
 function runMonsterHit(kind: MonsterKind, setup?: (world: World) => void): number {
@@ -52,7 +54,7 @@ function runMonsterHit(kind: MonsterKind, setup?: (world: World) => void): numbe
   const target = makeTestPlayer({ id: 1, x: 11.1, y: 10.5, hp: 100, maxHp: 100 });
   const threat = monster(kind, 10.5, 10.5);
   const entities = [target, threat];
-  prepare(entities);
+  prepare(world, entities);
 
   updateMonster(world, entities, threat, 0.2, 10, [], target.id, { v: 100 });
   return target.hp ?? 0;
@@ -101,7 +103,7 @@ test('lotochnik drain armor and regeneration use local wet terrain only', () => 
   world.features[world.idx(10, 10)] = Feature.SINK;
   assert.equal(lotochnikDrainArmorActive(world, threat), true);
   assert.equal(applyMonsterIncomingDamage(world, threat, 100) < 100, true);
-  prepare(entities);
+  prepare(world, entities);
   updateMonster(world, entities, threat, 2, 1, msgs, player.id, { v: 100 });
   assert.equal((threat.hp ?? 0) > 40, true, 'wet drain should regenerate Lotochnik up to its max HP');
 
@@ -123,7 +125,7 @@ test('noise probe reveals Chernosliz without a full water scan', () => {
   const msgs: Msg[] = [];
 
   world.cells[world.idx(10, 10)] = Cell.WATER;
-  prepare(entities);
+  prepare(world, entities);
   publishNoise(state, {
     x: 11.5,
     y: 10.5,
