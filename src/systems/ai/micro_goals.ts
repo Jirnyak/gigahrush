@@ -6,7 +6,7 @@ import { emitMarkovBark } from './barks';
 import { steerEntityTowardCell, clearEntitySteeringPath } from './pathfinding';
 import { aiPathMoveSpeed } from '../rpg';
 import { canActorOccupy, actorOccupyRadius, entityIgnoresFineBlockers } from '../movement_collision';
-import { findNoiseInvestigationTarget } from '../noise';
+
 import { pickupDrop } from '../inventory';
 import { getEntityIndex, ENTITY_MASK_NPC, ENTITY_MASK_ITEM_DROP } from '../entity_index';
 import { npcAutoEquipBestWeapon } from './combat';
@@ -108,7 +108,7 @@ export function tickMicroGoal(world: World, entities: Entity[], e: Entity, dt: n
   
   // Execution logic based on the specific micro-goal
   switch (ai.microGoalId) {
-    case 'investigate_noise':
+
     case 'search_lkp':
     case 'reposition':
     case 'loot_nearby':
@@ -144,7 +144,7 @@ export function tickMicroGoal(world: World, entities: Entity[], e: Entity, dt: n
   return true;
 }
 
-export function evaluateMicroStimuli(world: World, e: Entity, time: number, msgs: Msg[]): void {
+export function evaluateMicroStimuli(_world: World, e: Entity, time: number, msgs: Msg[]): void {
   const ai = e.ai;
   if (!ai || hasMicroGoal(e) || ai.combatTargetId !== undefined || ai.goal === AIGoal.FLEE || ai.goal === AIGoal.HIDE) {
     return;
@@ -196,17 +196,7 @@ export function evaluateMicroStimuli(world: World, e: Entity, time: number, msgs
     }
   }
 
-  
-  // 1. Investigate Noise
-  const noise = findNoiseInvestigationTarget(world, undefined, e, time);
-  if (noise && (ai.microCooldowns?.['investigate_noise'] ?? 0) <= 0) {
-    if (trySetMicroGoal(e, 'investigate_noise', { targetX: noise.x, targetY: noise.y, timer: 12 })) {
-      ai.microCooldowns = ai.microCooldowns || {};
-      ai.microCooldowns['investigate_noise'] = 30; // 30 sec cooldown
-      emitMarkovBark(e, msgs, time, 'alert', 'Что там?', 1.0, '#aac');
-      return;
-    }
-  }
+
 
   // 2. Loot items
   if (e.type === EntityType.NPC) {

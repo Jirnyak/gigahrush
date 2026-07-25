@@ -30,8 +30,8 @@ const NAV_UNKNOWN = -3;
 const NAV_BLOCKED = -2;
 const FLOW_UNREACHED = -1;
 const FLOW_BLOCKED = -2;
-const PATH_CHUNK_LIMIT = 1024;
-const PATH_DESCEND_SEARCH_LIMIT = 2048;
+const PATH_CHUNK_LIMIT = 8192;
+const PATH_DESCEND_SEARCH_LIMIT = 16384;
 
 const PATH_WAYPOINT_REACH = 0.18;
 const PATH_WAYPOINT_REACH_SQ = PATH_WAYPOINT_REACH * PATH_WAYPOINT_REACH;
@@ -600,6 +600,23 @@ function getLcaPathLength(t: number, start: number, end: number): number {
   return lenA + lenB;
 }
 
+export function getAcousticDistance(_world: World, x0: number, y0: number, x1: number, y1: number): number {
+  const s0 = subcellIdx(x0, y0);
+  const s1 = subcellIdx(x1, y1);
+  if (s0 === s1) return 0;
+  if (_navComponent[s0] !== _navComponent[s1] || _navComponent[s0] < 0 || _navComponent[s1] < 0) return Infinity;
+
+  let minLen = Infinity;
+  for (let t = 0; t < 4; t++) {
+    const len = getLcaPathLength(t, s0, s1);
+    if (len < minLen) minLen = len;
+  }
+  
+  if (minLen === Infinity) return Infinity;
+  return minLen / PATH_BLOCKER_SUBDIV;
+}
+
+
 function constructPathFromTree(t: number, start: number, end: number): number[] {
   const parent = _navParents[t];
   const depth = _navDepths[t];
@@ -759,60 +776,55 @@ function continueBehaviorFlowPath(world: World, e: Entity): AssignPathStatus {
   return tryAssignBehaviorFlowPath(world, e, assignment.key, assignment.sourceProvider);
 }
 
-function hasLineOfSight(world: World, startSubcell: number, endSubcell: number): boolean {
-  if (startSubcell === endSubcell) return true;
-  let x0 = startSubcell % SW;
-  let y0 = (startSubcell / SW) | 0;
-  let x1 = endSubcell % SW;
-  let y1 = (endSubcell / SW) | 0;
-
+function hasLineOfSight(world: World, x0: number, y0: number, x1: number, y1: number): boolean {
   let dx = x1 - x0;
   let dy = y1 - y0;
   
-  if (dx > SW / 2) dx -= SW;
-  else if (dx < -SW / 2) dx += SW;
-  if (dy > SW / 2) dy -= SW;
-  else if (dy < -SW / 2) dy += SW;
+  if (dx > W / 2) dx -= W;
+  else if (dx < -W / 2) dx += W;
+  if (dy > W / 2) dy -= W;
+  else if (dy < -W / 2) dy += W;
 
-  // We trace from (0,0) to (dx, dy) and add to x0, y0 wrapping manually
-  const absDx = Math.abs(dx);
-  const absDy = -Math.abs(dy);
-  const sx = dx > 0 ? 1 : -1;
-  const sy = dy > 0 ? 1 : -1;
-  let err = absDx + absDy;
+  let cx = Math.floor(x0 * PATH_BLOCKER_SUBDIV);
+  let cy = Math.floor(y0 * PATH_BLOCKER_SUBDIV);
+  const ex = Math.floor((x0 + dx) * PATH_BLOCKER_SUBDIV);
+  const ey = Math.floor((y0 + dy) * PATH_BLOCKER_SUBDIV);
 
-  let cx = x0;
-  let cy = y0;
+  const stepX = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
+  const stepY = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
+
+  let tMaxX = stepX !== 0 ? ((cx + (stepX > 0 ? 1 : 0)) / PATH_BLOCKER_SUBDIV - x0) / dx : Infinity;
+  let tMaxY = stepY !== 0 ? ((cy + (stepY > 0 ? 1 : 0)) / PATH_BLOCKER_SUBDIV - y0) / dy : Infinity;
+
+  const tDeltaX = stepX !== 0 ? Math.abs(1 / (dx * PATH_BLOCKER_SUBDIV)) : Infinity;
+  const tDeltaY = stepY !== 0 ? Math.abs(1 / (dy * PATH_BLOCKER_SUBDIV)) : Infinity;
+
+  const maxSteps = Math.abs(ex - cx) + Math.abs(ey - cy) + 2;
   let steps = 0;
-  // Failsafe limit
-  const limit = absDx - absDy + 2;
 
-  while (steps++ < limit) {
-    if (cx === x1 && cy === y1) return true;
-    if (!isSubcellNavPassable(world, cy * SW + cx)) return false;
-    let e2 = 2 * err;
-    let steppedX = false;
-    let steppedY = false;
-    if (e2 >= absDy) {
-      err += absDy;
-      cx = (cx + sx + SW) % SW;
-      steppedX = true;
-    }
-    if (e2 <= absDx) {
-      err += absDx;
-      cy = (cy + sy + SW) % SW;
-      steppedY = true;
-    }
+  while (steps++ < maxSteps) {
+    const wrapCX = ((cx % SW) + SW) % SW;
+    const wrapCY = ((cy % SW) + SW) % SW;
+    if (!isSubcellNavPassable(world, wrapCY * SW + wrapCX)) return false;
 
-    if (steppedX && steppedY) {
-      // If we stepped diagonally, ensure we aren't cutting a solid corner.
-      // At least one of the orthogonal paths must be passable (ideally both to be perfectly safe from float errors).
-      // We require BOTH to be passable so the Euclidean float line cannot physically touch a wall vertex.
-      const old_cx = (cx - sx + SW) % SW;
-      const old_cy = (cy - sy + SW) % SW;
-      if (!isSubcellNavPassable(world, old_cy * SW + cx) || !isSubcellNavPassable(world, cy * SW + old_cx)) {
-        return false;
-      }
+    if (cx === ex && cy === ey) break;
+
+    if (tMaxX < tMaxY) {
+      tMaxX += tDeltaX;
+      cx += stepX;
+    } else if (tMaxY < tMaxX) {
+      tMaxY += tDeltaY;
+      cy += stepY;
+    } else {
+      const w1x = ((cx + stepX) % SW + SW) % SW;
+      if (!isSubcellNavPassable(world, wrapCY * SW + w1x)) return false;
+      const w2y = ((cy + stepY) % SW + SW) % SW;
+      if (!isSubcellNavPassable(world, w2y * SW + wrapCX)) return false;
+
+      tMaxX += tDeltaX;
+      tMaxY += tDeltaY;
+      cx += stepX;
+      cy += stepY;
     }
   }
   return true;
@@ -1008,17 +1020,20 @@ export function followPath(world: World, e: Entity, dt: number): void {
   if (ai.pi >= ai.path.length) return;
 
   // Lookahead Path Smoothing (String Pulling)
-  const currentSubcell = subcellIdx(e.x, e.y);
   let lookaheadIndex = ai.pi;
   
-  if (ai.path.length > 0 && hasLineOfSight(world, currentSubcell, ai.path[ai.path.length - 1])) {
-    lookaheadIndex = ai.path.length - 1;
-  } else {
-    const lookaheadLimit = Math.min(ai.path.length - 1, ai.pi + 20);
-    for (let i = lookaheadLimit; i > ai.pi; i--) {
-      if (hasLineOfSight(world, currentSubcell, ai.path[i])) {
-        lookaheadIndex = i;
-        break;
+  if (ai.path.length > 0) {
+    const [lastX, lastY] = subcellToWorld(ai.path[ai.path.length - 1]);
+    if (hasLineOfSight(world, e.x, e.y, lastX, lastY)) {
+      lookaheadIndex = ai.path.length - 1;
+    } else {
+      const lookaheadLimit = Math.min(ai.path.length - 1, ai.pi + 20);
+      for (let i = lookaheadLimit; i > ai.pi; i--) {
+        const [tx, ty] = subcellToWorld(ai.path[i]);
+        if (hasLineOfSight(world, e.x, e.y, tx, ty)) {
+          lookaheadIndex = i;
+          break;
+        }
       }
     }
   }

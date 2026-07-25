@@ -18,6 +18,7 @@ import { ITEMS } from '../data/catalog';
 import { registerInventoryUseHandler, removeItem, type InventoryUseHandlerContext } from './inventory';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { isPlayerEntity } from './player_actor';
+import { getAcousticDistance } from './ai/pathfinding';
 
 export type NoiseSource =
   | 'weapon_fire'
@@ -409,10 +410,10 @@ export function findNoiseForActor(
     if (record.severity < minSeverity) continue;
     if (record.actorId === actor.id) continue;
     const effectiveRadius = record.radius * hearingMult;
-    const d2 = world.dist2(actor.x, actor.y, record.x, record.y);
-    if (d2 > effectiveRadius * effectiveRadius) continue;
+    const d = getAcousticDistance(world, actor.x, actor.y, record.x, record.y);
+    if (d > effectiveRadius) continue;
     const age = Math.max(0, time - record.time);
-    const nearness = 1 - d2 / Math.max(1, effectiveRadius * effectiveRadius);
+    const nearness = 1 - d / Math.max(0.1, effectiveRadius);
     const score = record.severity * 10 + nearness * 8 - age * 0.5;
     if (score > bestScore) {
       bestScore = score;
@@ -462,8 +463,8 @@ export function getNoiseHudCue(world: World, state: GameState, player: Entity, t
     const record = noiseRecords[i];
     if (record.z !== state.currentZ || record.severity < 2) continue;
     const own = record.actorId === player.id;
-    const d2 = world.dist2(player.x, player.y, record.x, record.y);
-    if (!own && d2 > record.radiusSq) continue;
+    const d = getAcousticDistance(world, player.x, player.y, record.x, record.y);
+    if (!own && d > record.radius) continue;
     const age = Math.max(0, time - record.time);
     if (age > 2.2 && !own) continue;
     const score = record.severity * 12 + (own ? 8 : 0) - age * 3;

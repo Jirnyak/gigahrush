@@ -35,6 +35,7 @@ import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
 import { MarkType, stampMark } from '../surface_marks';
 import { followPath, tryAssignPathToCell, wanderNearby } from './pathfinding';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
+import { emitMarkovBark } from './barks';
 import { Spr } from '../../render/sprite_index';
 import { getRecentEvents, publishEvent } from '../events';
 import { recordPlayerDamage } from '../damage';
@@ -5522,6 +5523,7 @@ function tryFollowNoise(
   e: Entity,
   dt: number,
   time: number,
+  msgs: Msg[],
   state?: GameState,
 ): boolean {
   if (hasAIFlag(e, 'deadEcho') && e.ai?.deadEchoRevealed !== true) return false;
@@ -5529,6 +5531,14 @@ function tryFollowNoise(
   if (!noise) return false;
 
   const ai = e.ai!;
+  if (noise.id !== ai.lastSeenNoiseId) {
+    ai.lastSeenNoiseId = noise.id;
+    if (noise.actorId !== undefined) {
+      ai.lastSeenTargetId = noise.actorId;
+    }
+    if (e.type === EntityType.NPC) emitMarkovBark(e, msgs, time, 'alert', 'Что там?', 1.0, '#aac');
+  }
+
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = undefined;
   const tx = Math.floor(noise.x);
@@ -9023,8 +9033,8 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     if (e.monsterKind === MonsterKind.CHERNOSLIZ && isChernoSlizHidden(world, e, player)) {
       const revealedByNoise = tryRevealChernoSlizByNoise(world, e, time, msgs, state);
       if (revealedByNoise) {
-        if (tryFollowNoise(world, e, dt, time, state)) return;
-      } else if (tryFollowNoise(world, e, dt, time, state)) {
+        if (tryFollowNoise(world, e, dt, time, msgs, state)) return;
+      } else if (tryFollowNoise(world, e, dt, time, msgs, state)) {
         return;
       }
       if (isChernoSlizHidden(world, e, player)) {
@@ -9032,7 +9042,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
         return;
       }
     }
-    if (tryFollowNoise(world, e, dt, time, state)) return;
+    if (tryFollowNoise(world, e, dt, time, msgs, state)) return;
     const tuning = bladeEliteTuning(e.monsterKind);
     if (tuning && ai.lastSeenTargetId === playerId) {
       publishBladeEliteEscape(tuning, world, e, player, playerId, state, 'lost_target');
