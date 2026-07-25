@@ -1,12 +1,10 @@
 import { World } from './core/world';
-import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, Occupation } from './core/types';
+import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, Occupation, type GameState } from './core/types';
 import { followPath, tryAssignPathToCell, setPathContext } from './systems/ai/pathfinding';
 import { unstuckActorFromBlockers } from './systems/movement_collision';
 import { setPathBlockerRow, PATH_BLOCKER_SUBDIV, getPathBlockerRow, clearPathBlockersAtCell } from './core/path_blockers';
 import { seedGlobalRng } from './core/rand';
-import { MONSTERS } from './entities/monster';
-import { randomRPG, getMaxHp } from './systems/rpg';
-import { randomName, freshNeeds } from './data/catalog';
+import { applyMapEditorOp } from './systems/map_editor';
 
 // ── Globals ──────────────────────────────────────────────────────────
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -353,40 +351,23 @@ function applyTool() {
 }
 
 function createMonster(x: number, y: number, kind: MonsterKind = MonsterKind.SBORKA) {
-  const def = MONSTERS[kind];
-  if (!def) return;
-  const hp = Math.max(1, def.hp);
-  entities.push({
-    id: nextEntityId++,
-    type: EntityType.MONSTER,
-    x, y,
-    angle: 0, pitch: 0, speed: def.speed, alive: true, sprite: def.sprite,
-    radius: def.radius || 0.18,
-    hp, maxHp: hp,
-    monsterKind: kind,
-    rpg: randomRPG(1),
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 }
-  });
+  const dummyState = { currentZ: 0 } as GameState;
+  const dummyPlayer = { id: 0, x: 0, y: 0 } as Entity;
+  const nextIdObj = { v: nextEntityId };
+  applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
+    kind: 'spawn_entity', x, y, entityDef: { kind: 'monster', monsterKind: kind, label: '', color: '' }
+  }, false);
+  nextEntityId = nextIdObj.v;
 }
 
 function createNPC(x: number, y: number) {
-  const faction = Faction.CITIZEN;
-  const name = randomName(faction);
-  const rpg = randomRPG(5);
-  const maxHp = getMaxHp(rpg);
-  entities.push({
-    id: nextEntityId++,
-    type: EntityType.NPC,
-    x, y,
-    angle: 0, pitch: 0, speed: 1.2, alive: true, sprite: Occupation.HOUSEWIFE,
-    name: name.name,
-    radius: 0.18,
-    hp: maxHp, maxHp,
-    rpg,
-    faction,
-    needs: freshNeeds(),
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 }
-  });
+  const dummyState = { currentZ: 0 } as GameState;
+  const dummyPlayer = { id: 0, x: 0, y: 0 } as Entity;
+  const nextIdObj = { v: nextEntityId };
+  applyMapEditorOp(world, entities, dummyPlayer, dummyState, nextIdObj, {
+    kind: 'spawn_entity', x, y, entityDef: { kind: 'npc', faction: Faction.CITIZEN, label: '', color: '' }
+  }, false);
+  nextEntityId = nextIdObj.v;
 }
 
 function clearArena() {
