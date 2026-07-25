@@ -29,6 +29,7 @@ function openWorld(): World {
     hqRoomId: -1,
   };
   setListenerPos(512, 512, world.dist2.bind(world));
+  world.cellVersion++;
   return world;
 }
 
@@ -160,6 +161,8 @@ test('nightmare pressure is capped and breaks when the target leaves the room-sc
     updateMonster(world, entities, threat, 1, i + 1, msgs, target.id, { v: 10 }, state);
   }
 
+  console.log('threat.x:', threat.x, 'threat.y:', threat.y, 'dist:', Math.sqrt(world.dist2(threat.x, threat.y, target.x, target.y)));
+  console.log('threat.monsterDmgMult:', threat.monsterDmgMult, 'threat.ai.path.length:', threat.ai?.path?.length);
   // Pressure accumulated: exact value depends on movement trajectory
   assert.equal(threat.monsterDmgMult! > 1, true, 'pressure accumulated');
   assert.equal(threat.monsterDmgMult! <= 1 + 4 * 0.1, true, 'pressure capped');

@@ -40,18 +40,10 @@ const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
 const SW = W * PATH_BLOCKER_SUBDIV;
 const SW2 = SW * SW;
-const TREES_COUNT = 4;
-const _navParents = [new Int32Array(SW2), new Int32Array(SW2), new Int32Array(SW2), new Int32Array(SW2)];
-const _navDepths = [new Int32Array(SW2), new Int32Array(SW2), new Int32Array(SW2), new Int32Array(SW2)];
+const _navParent = new Int32Array(SW2);
+const _navDepth = new Int32Array(SW2);
 const _navComponent = new Int32Array(SW2);
 const _navQueue = new Int32Array(SW2);
-const NAV_QUEUE_HALF = Math.floor(SW2 / 2);
-let _navHead1 = 0;
-let _navTail1 = 0;
-let _navHead2 = 0;
-let _navTail2 = 0;
-let _navBase1 = 0;
-let _navBase2 = NAV_QUEUE_HALF;
 const _flowSourceScratch: number[] = [];
 let _navWorld: World | null = null;
 let _navCellVersion = -1;
@@ -289,33 +281,11 @@ function isSubcellNavPassable(world: World, si: number): boolean {
   return (mask & (1 << rx)) === 0;
 }
 
-function getSubcellNavCost(world: World, cx: number, cy: number): number {
-  const nW = cy * SW + (cx === 0 ? SW - 1 : cx - 1);
-  const nE = cy * SW + (cx === SW - 1 ? 0 : cx + 1);
-  const nN = (cy === 0 ? SW - 1 : cy - 1) * SW + cx;
-  const nS = (cy === SW - 1 ? 0 : cy + 1) * SW + cx;
-  if (!isSubcellNavPassable(world, nW)) return 2;
-  if (!isSubcellNavPassable(world, nE)) return 2;
-  if (!isSubcellNavPassable(world, nN)) return 2;
-  if (!isSubcellNavPassable(world, nS)) return 2;
-  
-  const nNW = (cy === 0 ? SW - 1 : cy - 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
-  const nNE = (cy === 0 ? SW - 1 : cy - 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
-  const nSW = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === 0 ? SW - 1 : cx - 1);
-  const nSE = (cy === SW - 1 ? 0 : cy + 1) * SW + (cx === SW - 1 ? 0 : cx + 1);
-  if (!isSubcellNavPassable(world, nNW)) return 2;
-  if (!isSubcellNavPassable(world, nNE)) return 2;
-  if (!isSubcellNavPassable(world, nSW)) return 2;
-  if (!isSubcellNavPassable(world, nSE)) return 2;
-  
-  return 1;
-}
-
-function checkNavPassable(world: World, cell: number, parentArr: Int32Array): boolean {
-  const p = parentArr[cell];
+function checkNavPassable(world: World, cell: number): boolean {
+  const p = _navParent[cell];
   if (p !== NAV_UNKNOWN) return p !== NAV_BLOCKED;
   const pass = isSubcellNavPassable(world, cell);
-  if (!pass) parentArr[cell] = NAV_BLOCKED;
+  if (!pass) _navParent[cell] = NAV_BLOCKED;
   return pass;
 }
 
@@ -327,16 +297,14 @@ function checkFlowPassable(world: World, next: Int32Array, cell: number): boolea
   return pass;
 }
 
-export function bakeNavigationTree(
+function bakeNavigationTree(
   world: World,
   cacheCellVersion = world.cellVersion,
   cachePathBlockerVersion = world.pathBlockerVersion,
 ): void {
   _bfsCalls++;
-  for (let t = 0; t < TREES_COUNT; t++) {
-    _navParents[t].fill(NAV_UNKNOWN);
-    _navDepths[t].fill(0);
-  }
+  _navParent.fill(NAV_UNKNOWN);
+  _navDepth.fill(0);
   _navComponent.fill(-1);
   _navWorld = world;
   _navCellVersion = cacheCellVersion;
@@ -344,102 +312,50 @@ export function bakeNavigationTree(
   _navComponents = 0;
   _navReachable = 0;
 
-  const rootOffsets = [
-    0,
-    Math.floor(SW / 2),
-    Math.floor(SW / 2) * SW,
-    Math.floor(SW / 2) * SW + Math.floor(SW / 2),
-  ];
-
-  for (let t = 0; t < TREES_COUNT; t++) {
-    const parentArr = _navParents[t];
-    const depthArr = _navDepths[t];
-    const offset = rootOffsets[t];
-
-    for (let i = 0; i < SW2; i++) {
-      const root = (i + offset) % SW2;
-      if (parentArr[root] !== NAV_UNKNOWN) continue;
-      if (!isSubcellNavPassable(world, root)) {
-        parentArr[root] = NAV_BLOCKED;
-        if (t === 0) _navComponent[root] = -1;
-        continue;
-      }
-
-      let componentId = -1;
-      if (t === 0) {
-        componentId = _navComponents++;
-      } else {
-        componentId = _navComponent[root];
-      }
-
-      parentArr[root] = root;
-      if (t === 0) _navComponent[root] = componentId;
-      depthArr[root] = 0;
-      if (t === 0) _navReachable++;
-      _navQueue[_navBase1] = root;
-      _navHead1 = 0;
-      _navTail1 = 1;
-      _navHead2 = 0;
-      _navTail2 = 0;
-
-      while (_navHead1 !== _navTail1 || _navHead2 !== _navTail2) {
-        if (_navHead1 === _navTail1) {
-          let tmpBase = _navBase1; _navBase1 = _navBase2; _navBase2 = tmpBase;
-          let tmpHead = _navHead1; _navHead1 = _navHead2; _navHead2 = tmpHead;
-          let tmpTail = _navTail1; _navTail1 = _navTail2; _navTail2 = tmpTail;
-        }
-        
-        const cur = _navQueue[_navBase1 + _navHead1];
-        _navHead1 = (_navHead1 + 1) % NAV_QUEUE_HALF;
-        const cx = cur % SW;
-        const cy = (cur / SW) | 0;
-
-        const nW = cy * SW + (cx === 0 ? SW - 1 : cx - 1);
-        const nE = cy * SW + (cx === SW - 1 ? 0 : cx + 1);
-        const nN = (cy === 0 ? SW - 1 : cy - 1) * SW + cx;
-        const nS = (cy === SW - 1 ? 0 : cy + 1) * SW + cx;
-
-        if (checkNavPassable(world, nW, parentArr)) visitNavNeighbor(world, nW, cur, componentId, t, parentArr, depthArr);
-        if (checkNavPassable(world, nE, parentArr)) visitNavNeighbor(world, nE, cur, componentId, t, parentArr, depthArr);
-        if (checkNavPassable(world, nN, parentArr)) visitNavNeighbor(world, nN, cur, componentId, t, parentArr, depthArr);
-        if (checkNavPassable(world, nS, parentArr)) visitNavNeighbor(world, nS, cur, componentId, t, parentArr, depthArr);
-      }
+  for (let root = 0; root < SW2; root++) {
+    if (_navParent[root] !== NAV_UNKNOWN) continue;
+    if (!isSubcellNavPassable(world, root)) {
+      _navParent[root] = NAV_BLOCKED;
+      continue;
     }
+
+    const componentId = _navComponents++;
+    _navParent[root] = root;
+    _navComponent[root] = componentId;
+    _navDepth[root] = 0;
+    _navQueue[0] = root;
+    let head = 0;
+    let tail = 1;
+
+    while (head < tail) {
+      const cur = _navQueue[head++];
+      const cx = cur % SW;
+      const cy = (cur / SW) | 0;
+
+      const nW = cy * SW + (cx === 0 ? SW - 1 : cx - 1);
+      const nE = cy * SW + (cx === SW - 1 ? 0 : cx + 1);
+      const nN = (cy === 0 ? SW - 1 : cy - 1) * SW + cx;
+      const nS = (cy === SW - 1 ? 0 : cy + 1) * SW + cx;
+
+      if (checkNavPassable(world, nW)) tail = visitNavNeighbor(world, nW, cur, componentId, tail);
+      if (checkNavPassable(world, nE)) tail = visitNavNeighbor(world, nE, cur, componentId, tail);
+      if (checkNavPassable(world, nN)) tail = visitNavNeighbor(world, nN, cur, componentId, tail);
+      if (checkNavPassable(world, nS)) tail = visitNavNeighbor(world, nS, cur, componentId, tail);
+    }
+    _navReachable += tail;
   }
 
-  _bfsVisited += _navReachable * TREES_COUNT;
+  _bfsVisited += _navReachable;
 }
 
-function visitNavNeighbor(
-  world: World,
-  cell: number,
-  parent: number,
-  componentId: number,
-  t: number,
-  parentArr: Int32Array,
-  depthArr: Int32Array,
-): void {
-  if (parentArr[cell] !== NAV_UNKNOWN) return;
-  if (!checkNavPassable(world, cell, parentArr)) return;
-  parentArr[cell] = parent;
-  
-  const cx = cell % SW;
-  const cy = (cell / SW) | 0;
-  const cost = getSubcellNavCost(world, cx, cy);
-
-  depthArr[cell] = depthArr[parent] + cost;
-  if (t === 0) {
-    _navComponent[cell] = componentId;
-    _navReachable++;
-  }
-  
-  if (cost === 1) {
-    _navQueue[_navBase1 + _navTail1] = cell;
-    _navTail1 = (_navTail1 + 1) % NAV_QUEUE_HALF;
-  } else {
-    _navQueue[_navBase2 + _navTail2] = cell;
-    _navTail2 = (_navTail2 + 1) % NAV_QUEUE_HALF;
-  }
+function visitNavNeighbor(world: World, cell: number, parent: number, componentId: number, tail: number): number {
+  if (_navParent[cell] !== NAV_UNKNOWN) return tail;
+  if (!checkNavPassable(world, cell)) return tail;
+  _navParent[cell] = parent;
+  _navDepth[cell] = _navDepth[parent] + 1;
+  _navComponent[cell] = componentId;
+  _navQueue[tail] = cell;
+  return tail + 1;
 }
 
 function ensureNavigationTree(world: World): void {
@@ -475,30 +391,18 @@ function ensureBehaviorFlowField(
 
   const next = cached?.next ?? new Int32Array(SW2);
   next.fill(FLOW_UNREACHED);
-  _navHead1 = 0;
-  _navTail1 = 0;
-  _navHead2 = 0;
-  _navTail2 = 0;
-
+  let head = 0;
+  let tail = 0;
   for (const source of _flowSourceScratch) {
     if (source < 0 || source >= SW2) continue;
     if (next[source] === source) continue;
       if (!isSubcellNavPassable(world, source)) continue;
     next[source] = source;
-    _navQueue[_navBase1 + _navTail1] = source;
-    _navTail1 = (_navTail1 + 1) % NAV_QUEUE_HALF;
+    _navQueue[tail++] = source;
   }
 
-  let totalReachable = _navTail1;
-
-  while (_navHead1 !== _navTail1 || _navHead2 !== _navTail2) {
-    if (_navHead1 === _navTail1) {
-      let tmpBase = _navBase1; _navBase1 = _navBase2; _navBase2 = tmpBase;
-      let tmpHead = _navHead1; _navHead1 = _navHead2; _navHead2 = tmpHead;
-      let tmpTail = _navTail1; _navTail1 = _navTail2; _navTail2 = tmpTail;
-    }
-    const cur = _navQueue[_navBase1 + _navHead1];
-    _navHead1 = (_navHead1 + 1) % NAV_QUEUE_HALF;
+  while (head < tail) {
+    const cur = _navQueue[head++];
     const cx = cur % SW;
     const cy = (cur / SW) | 0;
 
@@ -507,19 +411,14 @@ function ensureBehaviorFlowField(
     const nN = (cy === 0 ? SW - 1 : cy - 1) * SW + cx;
     const nS = (cy === SW - 1 ? 0 : cy + 1) * SW + cx;
 
-    if (checkFlowPassable(world, next, nW)) visitFlowNeighbor(world, next, nW, cur);
-    if (checkFlowPassable(world, next, nE)) visitFlowNeighbor(world, next, nE, cur);
-    if (checkFlowPassable(world, next, nN)) visitFlowNeighbor(world, next, nN, cur);
-    if (checkFlowPassable(world, next, nS)) visitFlowNeighbor(world, next, nS, cur);
+    if (checkFlowPassable(world, next, nW)) tail = visitFlowNeighbor(world, next, nW, cur, tail);
+    if (checkFlowPassable(world, next, nE)) tail = visitFlowNeighbor(world, next, nE, cur, tail);
+    if (checkFlowPassable(world, next, nN)) tail = visitFlowNeighbor(world, next, nN, cur, tail);
+    if (checkFlowPassable(world, next, nS)) tail = visitFlowNeighbor(world, next, nS, cur, tail);
   }
 
   _bfsCalls++;
-  // Total reachable is computed inside visitFlowNeighbor incrementing totalReachable would need a variable.
-  // Actually, we don't return tail anymore. We can just count reachable by iterating next array?
-  // No, we can just use a module-level variable for flow Reached if needed, or recalculate.
-  // Wait, _bfsVisited is just a stat. 
-  // Let's just estimate it or remove the exact count, or keep it.
-  _bfsVisited += totalReachable; // Not accurate but it's just a stat.
+  _bfsVisited += tail;
   const field: BehaviorFlowField = {
     key,
     world,
@@ -528,7 +427,7 @@ function ensureBehaviorFlowField(
     roomCount: navigationCacheRoomCount(world),
     next,
     sourceCount: _flowSourceScratch.length,
-    reachable: totalReachable, // This is not exact anymore. Let's fix this in visitFlowNeighbor.
+    reachable: tail,
     lastUsed: ++_flowFieldTouch,
   };
   _behaviorFlowFields.set(key, field);
@@ -536,22 +435,12 @@ function ensureBehaviorFlowField(
   return field;
 }
 
-function visitFlowNeighbor(world: World, next: Int32Array, cell: number, parent: number): void {
-  if (next[cell] !== FLOW_UNREACHED) return;
-  if (!checkFlowPassable(world, next, cell)) return;
+function visitFlowNeighbor(world: World, next: Int32Array, cell: number, parent: number, tail: number): number {
+  if (next[cell] !== FLOW_UNREACHED) return tail;
+  if (!checkFlowPassable(world, next, cell)) return tail;
   next[cell] = parent;
-  
-  const cx = cell % SW;
-  const cy = (cell / SW) | 0;
-  const cost = getSubcellNavCost(world, cx, cy);
-
-  if (cost === 1) {
-    _navQueue[_navBase1 + _navTail1] = cell;
-    _navTail1 = (_navTail1 + 1) % NAV_QUEUE_HALF;
-  } else {
-    _navQueue[_navBase2 + _navTail2] = cell;
-    _navTail2 = (_navTail2 + 1) % NAV_QUEUE_HALF;
-  }
+  _navQueue[tail] = cell;
+  return tail + 1;
 }
 
 function trimBehaviorFlowFieldCache(): void {
@@ -568,55 +457,28 @@ function trimBehaviorFlowFieldCache(): void {
   }
 }
 
-function getLcaPathLength(t: number, start: number, end: number): number {
-  const parent = _navParents[t];
-  const depth = _navDepths[t];
-  let a = start;
-  let b = end;
-  let lenA = 0;
-  let lenB = 0;
-
-  let descendSearch = 0;
-  while (depth[b] > depth[a] && descendSearch < PATH_DESCEND_SEARCH_LIMIT) {
-    b = parent[b];
-    lenB++;
-    descendSearch++;
-  }
-  if (depth[b] > depth[a]) return Infinity;
-
-  while (depth[a] > depth[b] && lenA < PATH_CHUNK_LIMIT) {
-    a = parent[a];
-    lenA++;
+function buildBakedTreePath(world: World, start: number, end: number): number[] {
+  ensureNavigationTree(world);
+  if (start === end) return [];
+  if (_navParent[start] < 0 || _navParent[end] < 0 || _navComponent[start] !== _navComponent[end]) {
+    _bfsMiss++;
+    return [];
   }
 
-  while (a !== b && lenA + lenB < PATH_CHUNK_LIMIT * 2) {
-    a = parent[a];
-    b = parent[b];
-    lenA++;
-    lenB++;
-  }
-
-  if (a !== b) return Infinity;
-  return lenA + lenB;
-}
-
-function constructPathFromTree(t: number, start: number, end: number): number[] {
-  const parent = _navParents[t];
-  const depth = _navDepths[t];
   let a = start;
   let b = end;
   const forward: number[] = [];
   const reverse: number[] = [];
 
   let descendSearch = 0;
-  while (depth[b] > depth[a] && descendSearch < PATH_DESCEND_SEARCH_LIMIT) {
+  while (_navDepth[b] > _navDepth[a] && descendSearch < PATH_DESCEND_SEARCH_LIMIT) {
     reverse.push(b);
-    b = parent[b];
+    b = _navParent[b];
     descendSearch++;
   }
 
-  if (depth[b] > depth[a]) {
-    const path = climbFromStart(t, start);
+  if (_navDepth[b] > _navDepth[a]) {
+    const path = climbFromStart(start);
     if (path.length > 0) _bfsFound++;
     else _bfsMiss++;
     _bfsLimitHits++;
@@ -633,15 +495,15 @@ function constructPathFromTree(t: number, start: number, end: number): number[] 
     return forward;
   }
 
-  while (depth[a] > depth[b] && forward.length < PATH_CHUNK_LIMIT) {
-    a = parent[a];
+  while (_navDepth[a] > _navDepth[b] && forward.length < PATH_CHUNK_LIMIT) {
+    a = _navParent[a];
     forward.push(a);
   }
   while (a !== b && forward.length < PATH_CHUNK_LIMIT) {
-    a = parent[a];
+    a = _navParent[a];
     forward.push(a);
     reverse.push(b);
-    b = parent[b];
+    b = _navParent[b];
   }
 
   let chunked = false;
@@ -659,42 +521,14 @@ function constructPathFromTree(t: number, start: number, end: number): number[] 
   return forward;
 }
 
-function buildBakedTreePath(world: World, start: number, end: number): number[] {
-  ensureNavigationTree(world);
-  if (start === end) return [];
-  if (_navComponent[start] < 0 || _navComponent[end] < 0 || _navComponent[start] !== _navComponent[end]) {
-    _bfsMiss++;
-    return [];
-  }
-
-  let bestTree = -1;
-  let minPathLen = Infinity;
-
-  for (let t = 0; t < TREES_COUNT; t++) {
-    if (_navParents[t][start] < 0 || _navParents[t][end] < 0) continue;
-    const len = getLcaPathLength(t, start, end);
-    if (len < minPathLen) {
-      minPathLen = len;
-      bestTree = t;
-    }
-  }
-
-  if (bestTree < 0 || minPathLen === Infinity) {
-    return constructPathFromTree(0, start, end);
-  }
-
-  return constructPathFromTree(bestTree, start, end);
-}
-
-function climbFromStart(t: number, start: number): number[] {
-  const parent = _navParents[t];
+function climbFromStart(start: number): number[] {
   const path: number[] = [];
   let cell = start;
   while (path.length < PATH_CHUNK_LIMIT) {
-    const p = parent[cell];
-    if (p < 0 || p === cell) break;
-    path.push(p);
-    cell = p;
+    const parent = _navParent[cell];
+    if (parent < 0 || parent === cell) break;
+    path.push(parent);
+    cell = parent;
   }
   return path;
 }
@@ -758,51 +592,6 @@ function continueBehaviorFlowPath(world: World, e: Entity): AssignPathStatus {
   if (!assignment) return 'not_found';
   return tryAssignBehaviorFlowPath(world, e, assignment.key, assignment.sourceProvider);
 }
-
-function hasLineOfSight(world: World, startSubcell: number, endSubcell: number): boolean {
-  if (startSubcell === endSubcell) return true;
-  let x0 = startSubcell % SW;
-  let y0 = (startSubcell / SW) | 0;
-  let x1 = endSubcell % SW;
-  let y1 = (endSubcell / SW) | 0;
-
-  let dx = x1 - x0;
-  let dy = y1 - y0;
-  
-  if (dx > SW / 2) dx -= SW;
-  else if (dx < -SW / 2) dx += SW;
-  if (dy > SW / 2) dy -= SW;
-  else if (dy < -SW / 2) dy += SW;
-
-  // We trace from (0,0) to (dx, dy) and add to x0, y0 wrapping manually
-  const absDx = Math.abs(dx);
-  const absDy = -Math.abs(dy);
-  const sx = dx > 0 ? 1 : -1;
-  const sy = dy > 0 ? 1 : -1;
-  let err = absDx + absDy;
-
-  let cx = x0;
-  let cy = y0;
-  let steps = 0;
-  // Failsafe limit
-  const limit = absDx - absDy + 2;
-
-  while (steps++ < limit) {
-    if (cx === x1 && cy === y1) return true;
-    if (!isSubcellNavPassable(world, cy * SW + cx)) return false;
-    let e2 = 2 * err;
-    if (e2 >= absDy) {
-      err += absDy;
-      cx = (cx + sx + SW) % SW;
-    }
-    if (e2 <= absDx) {
-      err += absDx;
-      cy = (cy + sy + SW) % SW;
-    }
-  }
-  return true;
-}
-
 
 export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: number): AssignPathStatus {
   const ai = e.ai!;
@@ -987,49 +776,36 @@ export function followPath(world: World, e: Entity, dt: number): void {
   }
   if (ai.pi >= ai.path.length) return;
 
-  // Lookahead Path Smoothing (String Pulling)
-  const currentSubcell = subcellIdx(e.x, e.y);
-  let lookaheadIndex = ai.pi;
-  
-  if (ai.path.length > 0 && hasLineOfSight(world, currentSubcell, ai.path[ai.path.length - 1])) {
-    lookaheadIndex = ai.path.length - 1;
-  } else {
-    const lookaheadLimit = Math.min(ai.path.length - 1, ai.pi + 20);
-    for (let i = lookaheadLimit; i > ai.pi; i--) {
-      if (hasLineOfSight(world, currentSubcell, ai.path[i])) {
-        lookaheadIndex = i;
-        break;
-      }
-    }
-  }
-  
-  ai.pi = lookaheadIndex;
-
   // Open doors: current position, next subcell on path, and one ahead
   openPathDoorAtWorld(world, e.x, e.y);
   openPathDoor(world, ai.path[ai.pi]);
   if (ai.pi + 1 < ai.path.length) openPathDoor(world, ai.path[ai.pi + 1]);
 
-  // Target: center of the next subcell on the smoothed BFS path.
-  // Because of lookahead, this might be a diagonal or arbitrary angle step!
+  // Target: center of the next subcell on the BFS path.
+  // BFS is 4-dir cardinal, so consecutive subcells are always cardinal neighbors.
+  // No diagonals, no lookahead. Entity moves straight to the next subcell center.
   const [tx, ty] = subcellToWorld(ai.path[ai.pi]);
   const dx = world.delta(e.x, tx);
   const dy = world.delta(e.y, ty);
   const distSq = dx * dx + dy * dy;
   if (distSq < 0.0001) { ai.pi++; ai.stuck = 0; return; }
+  const dist = Math.sqrt(distSq);
 
   const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
+  const step = Math.min(speed, dist);
   const prevX = e.x;
   const prevY = e.y;
-
-  // With string pulling, movement is a direct Euclidean step towards the target.
-  const dist = Math.sqrt(distSq);
-  const nx = dx / dist;
-  const ny = dy / dist;
-  
-  const step = Math.min(speed, dist);
-  e.x = wrapFloat(e.x + nx * step);
-  e.y = wrapFloat(e.y + ny * step);
+  // Axis-separated subcell collision: prevent entity from entering impassable subcells.
+  // Even though BFS path is cardinal, entity may not be axis-aligned with subcell center,
+  // so float movement toward the center is diagonal and can cross into wall macro cells.
+  const nx = e.x + (dx / dist) * step;
+  const ny = e.y + (dy / dist) * step;
+  if (isSubcellNavPassable(world, subcellIdx(nx, e.y))) {
+    e.x = wrapFloat(nx);
+  }
+  if (isSubcellNavPassable(world, subcellIdx(e.x, ny))) {
+    e.y = wrapFloat(ny);
+  }
 
   // Stuck: did the entity actually move?
   const moved = (e.x !== prevX || e.y !== prevY);

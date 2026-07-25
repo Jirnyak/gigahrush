@@ -10,9 +10,7 @@ import type { DesignFloorId } from './data/design_floors';
 // ── Globals ──────────────────────────────────────────────────────────
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
-const hud = document.getElementById('hud')!;
-const help = document.getElementById('help')!;
-
+const hud = document.getElementById('hud') as HTMLDivElement;
 let world = new World();
 let entities: Entity[] = [];
 let nextEntityId = 1;
@@ -25,6 +23,7 @@ let currentTool = 1; // 1: Floor, 2: Wall, 3: Monster, 4: Target, 5: Blocker, 6:
 let showGrid = false;
 let subcellBlockerActive = false;
 let lastTime = performance.now();
+const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, W: false, A: false, S: false, D: false };
 let mouseWorldX = 0;
 let mouseWorldY = 0;
 let mouseSubX = 0;
@@ -37,49 +36,65 @@ setPathContext([], 0);
 
 // Helper for UI
 function updateHUD() {
-  const tools = ['-', '1: Floor', '2: Wall', '3: Monster', '4: Target', '5: Blocker', '6: NPC'];
   hud.innerHTML = `
     <b>AI Test Arena</b>
     FPS: ${Math.round(1000 / Math.max(1, performance.now() - lastTime))}
     Status: <span style="color:${paused ? '#f00' : '#0f0'}">${paused ? 'PAUSED' : 'PLAYING'}</span>
-    Tool: <b>${tools[currentTool]}</b>
     Entities: ${entities.length}
     Mouse: (${mouseWorldX.toFixed(2)}, ${mouseWorldY.toFixed(2)}) sub: ${mouseSubX},${mouseSubY}
   `.replace(/\n\s+/g, '<br>');
-
-  help.innerHTML = `
-    Controls:
-    [Middle Mouse] Drag to pan | [Scroll] Zoom
-    [1] Paint Floor
-    [2] Paint Wall
-    [3] Place Monster (random)
-    [4] Set Target (for nearest AI)
-    [5] Toggle Subcell Blocker
-    [6] Place NPC
-    [Del] Remove hovered entity
-    [Space] Pause / Play
-    [S] Step one frame
-    [G] Toggle Grid
-    [F1-F3] Presets
-    [F4] Generate Floor (Prompt)
-  `.trim().replace(/\n\s+/g, '<br>');
 }
+
+function setupSidebar() {
+  const tools = [0, 1, 2, 3, 6, 4, 5];
+  for (const t of tools) {
+    const btn = document.getElementById(`btn-tool-${t}`);
+    if (btn) {
+      btn.addEventListener('click', () => {
+        currentTool = t;
+        for (const t2 of tools) {
+          document.getElementById(`btn-tool-${t2}`)?.classList.remove('active');
+        }
+        btn.classList.add('active');
+      });
+    }
+  }
+
+  document.getElementById('btn-preset-empty')?.addEventListener('click', loadPresetEmptyCorner);
+  document.getElementById('btn-preset-maze')?.addEventListener('click', loadPresetMaze);
+  document.getElementById('btn-preset-narrow')?.addEventListener('click', loadPresetNarrow);
+  document.getElementById('btn-preset-floor')?.addEventListener('click', () => {
+    const input = document.getElementById('input-floor-id') as HTMLInputElement;
+    const id = input?.value || 'outer_district';
+    loadPresetFloor(id);
+  });
+}
+setupSidebar();
 
 // ── Rendering ────────────────────────────────────────────────────────
 function draw() {
   const now = performance.now();
-  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  const dtDraw = (now - lastTime) / 1000;
   lastTime = now;
+  
+  // Camera pan via WASD
+  const panSpeed = 600 * dtDraw / Math.max(1, zoom);
+  if (keys.w || keys.W || keys.ArrowUp) panY -= panSpeed;
+  if (keys.s || keys.S || keys.ArrowDown) panY += panSpeed;
+  if (keys.a || keys.A || keys.ArrowLeft) panX -= panSpeed;
+  if (keys.d || keys.D || keys.ArrowRight) panX += panSpeed;
 
   // Resize canvas
-  if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+  if (canvas.parentElement) {
+    if (canvas.width !== canvas.parentElement.clientWidth || canvas.height !== canvas.parentElement.clientHeight) {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
   }
 
   // Update logic if playing
   if (!paused) {
-    step(dt);
+    step(Math.min(dtDraw, 0.1));
   }
 
   // Draw
@@ -150,17 +165,28 @@ function draw() {
       ctx.beginPath();
       ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
       ctx.lineWidth = 2 / zoom;
-      ctx.moveTo(e.x, e.y);
+      let lastX = e.x;
+      let lastY = e.y;
       for (let j = e.ai.pi; j < e.ai.path.length; j++) {
         const ci = e.ai.path[j];
         const sX = ci % 4096;
         const sY = Math.floor(ci / 4096);
         const pX = sX / 4 + 0.125;
         const pY = sY / 4 + 0.125;
-        ctx.lineTo(pX, pY);
+        if (Math.abs(pX - lastX) > 512 || Math.abs(pY - lastY) > 512) {
+          ctx.moveTo(pX, pY);
+        } else {
+          ctx.lineTo(pX, pY);
+        }
+        lastX = pX;
+        lastY = pY;
       }
       if (e.ai.goal === AIGoal.HUNT || e.ai.goal === AIGoal.GOTO) {
-        ctx.lineTo(e.ai.tx, e.ai.ty);
+        if (Math.abs(e.ai.tx - lastX) > 512 || Math.abs(e.ai.ty - lastY) > 512) {
+          ctx.moveTo(e.ai.tx, e.ai.ty);
+        } else {
+          ctx.lineTo(e.ai.tx, e.ai.ty);
+        }
       }
       ctx.stroke();
       
@@ -204,13 +230,102 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
-const dummyState = {
-  clock: { totalMinutes: 0 },
-  msgs: [],
-  currentZ: 0,
-} as unknown as GameState;
+function createArenaState(): GameState {
+  return {
+    tick: 0,
+    time: 0,
+    clock: { hour: 8, minute: 0, totalMinutes: 0 },
+    samosborActive: false,
+    samosborTimer: 999999,
+    samosborCount: 0,
+    paused: false,
+    gameOver: false,
+    showInventory: false,
+    mapMode: 0,
+    showQuests: false,
+    invSel: 0,
+    msgs: [],
+    quests: [],
+    nextQuestId: 1,
+    currentZ: 0,
+    fogSpreadTimer: 0,
+    showMenu: false,
+    menuSel: 0,
+    showNpcMenu: false,
+    npcMenuSel: 0,
+    npcMenuTarget: 0,
+    npcMenuTab: 'main',
+    npcTalkText: '',
+    questPage: 0,
+    tradeCursorX: 0,
+    tradeCursorY: 0,
+    tradeSide: 'player',
+    showContainerMenu: false,
+    containerMenuTarget: 0,
+    containerCursorX: 0,
+    containerCursorY: 0,
+    containerSide: 'player',
+    showCraftMenu: false,
+    craftMode: 'craft',
+    craftCursor: 0,
+    craftFilter: '',
+    craftStationKind: 'any',
+    showDebug: false,
+    debugSel: 0,
+    showFactions: false,
+    factionRankScroll: 0,
+    showDemos: false,
+    showFeedback: false,
+    demosCursor: 0,
+    demosSearch: '',
+    demosSearchActive: false,
+    demosTab: 'profile',
+    demosFeedScroll: 0,
+    demosPostCursor: 0,
+    showLog: false,
+    logScroll: 0,
+    showHelp: false,
+    showControls: false,
+    controlView: 'keys',
+    controlSel: 0,
+    controlScroll: 0,
+    showUiSettings: false,
+    uiSettingsView: 'interface',
+    uiSettingsSel: 0,
+    uiSettingsScroll: 0,
+    showMapLegend: false,
+    mapLegendSel: 0,
+    mapLegendScroll: 0,
+    msgLog: [],
+    dmgFlash: 0,
+    dmgSeed: 0,
+    deathTimer: 0,
+    sleeping: false,
+    beamFx: 0,
+    beamAngle: 0,
+    beamLen: 0,
+    uvBeamFx: 0,
+    uvBeamLen: 0,
+    gameWon: false,
+    crafting: { knownRecipeIds: [], materialCount: {} },
+    worldEvents: {
+      nextId: 1,
+      recentEvents: { capacity: 100, start: 0, count: 0, items: new Array(100).fill(null) },
+      importantEvents: { capacity: 100, start: 0, count: 0, items: new Array(100).fill(null) },
+      zoneEvents: [],
+      facts: [],
+      nextFactId: 1,
+      lastLogKey: '',
+      lastLogTime: 0,
+    }
+  } as unknown as GameState;
+}
 
+import { ensureAlifeState } from './systems/alife';
+let arenaState = createArenaState();
+ensureAlifeState(arenaState);
 let gameTime = 0;
+const dummyPlayerId = 0;
 
 // ── Logic ────────────────────────────────────────────────────────────
 function step(dt: number) {
@@ -223,12 +338,12 @@ function step(dt: number) {
     dt,
     gameTime,
     msgs,
-    0, // dummy player ID
-    dummyState.clock,
+    dummyPlayerId,
+    arenaState.clock,
     false, // samosborActive
     { v: nextEntityId },
     0, // currentZ
-    dummyState
+    arenaState
   );
 
   for (const e of entities) {
@@ -261,8 +376,11 @@ function step(dt: number) {
 let isDragging = false;
 let isPanning = false;
 
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
 window.addEventListener('mousedown', (e) => {
-  if (e.button === 1) { // Middle click
+  if (e.target !== canvas) return;
+  if (e.button === 1 || e.button === 2) { // Middle or Right click
     isPanning = true;
     return;
   }
@@ -279,10 +397,13 @@ window.addEventListener('mousemove', (e) => {
   }
   
   // Calculate world coordinates
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
   const cw = canvas.width / 2;
   const ch = canvas.height / 2;
-  mouseWorldX = panX + (e.clientX - cw) / zoom;
-  mouseWorldY = panY + (e.clientY - ch) / zoom;
+  mouseWorldX = panX + (mouseX - cw) / zoom;
+  mouseWorldY = panY + (mouseY - ch) / zoom;
   mouseSubX = Math.floor(mouseWorldX * PATH_BLOCKER_SUBDIV);
   mouseSubY = Math.floor(mouseWorldY * PATH_BLOCKER_SUBDIV);
 
@@ -303,12 +424,17 @@ window.addEventListener('wheel', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.key >= '1' && e.key <= '6') currentTool = parseInt(e.key);
+  if (keys.hasOwnProperty(e.key)) keys[e.key as keyof typeof keys] = true;
+  if (e.key >= '1' && e.key <= '6') {
+    currentTool = parseInt(e.key);
+    document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`btn-tool-${currentTool}`)?.classList.add('active');
+  }
   if (e.key === ' ') { paused = !paused; e.preventDefault(); }
   if (e.key.toLowerCase() === 's') { step(0.016); }
   if (e.key.toLowerCase() === 'g') { showGrid = !showGrid; }
   
-  if (e.key === 'Delete') {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
     entities = entities.filter(ent => {
       const dx = ent.x - mouseWorldX;
       const dy = ent.y - mouseWorldY;
@@ -320,10 +446,25 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'F2') loadPresetMaze();
   if (e.key === 'F3') loadPresetNarrow();
   if (e.key === 'F4') {
-    const id = prompt('Enter design floor ID:', 'outer_district');
-    if (id) loadPresetFloor(id);
+    e.preventDefault();
+    const input = document.getElementById('input-floor-id') as HTMLInputElement;
+    const id = input?.value || 'outer_district';
+    loadPresetFloor(id);
   }
 });
+
+window.addEventListener('keyup', (e) => {
+  if (keys.hasOwnProperty(e.key)) keys[e.key as keyof typeof keys] = false;
+});
+
+import { bakeNavigationTree } from './systems/ai/pathfinding';
+const btnBakeBfs = document.getElementById('btn-bake-bfs');
+if (btnBakeBfs) {
+  btnBakeBfs.addEventListener('click', () => {
+    bakeNavigationTree(world);
+    console.log('BFS Navigation Tree Baked.');
+  });
+}
 
 function applyTool(dragged: boolean = isDragging) {
   const x = Math.floor(mouseWorldX);
@@ -334,9 +475,11 @@ function applyTool(dragged: boolean = isDragging) {
   if (currentTool === 1) { // Floor
     world.cells[idx] = Cell.FLOOR;
     clearPathBlockersAtCell(world, idx);
+    world.cellVersion++;
   } else if (currentTool === 2) { // Wall
     world.cells[idx] = Cell.WALL;
     clearPathBlockersAtCell(world, idx);
+    world.cellVersion++;
   } else if (currentTool === 3) { // Monster
     if (world.cells[idx] !== Cell.WALL && !dragged) { // Only one click per monster
       createMonster(mouseWorldX, mouseWorldY, MonsterKind.SBORKA);
@@ -398,51 +541,56 @@ function createNPC(x: number, y: number) {
   nextEntityId = nextIdObj.v;
 }
 
+const ARENA_OFFSET = 1024;
+
 function clearArena() {
   world.cells.fill(Cell.FLOOR);
   for (let i = 0; i < W*W; i++) clearPathBlockersAtCell(world, i);
+  world.cellVersion++;
   entities = [];
-  panX = 10;
-  panY = 10;
+  panX = ARENA_OFFSET + 10;
+  panY = ARENA_OFFSET + 10;
 }
 
 function loadPresetEmptyCorner() {
   clearArena();
-  // Draw an L-shaped room
   for (let i = 0; i < 20; i++) {
     for (let j = 0; j < 20; j++) {
-      world.cells[j*W + i] = Cell.WALL;
+      world.cells[(j + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.WALL;
     }
   }
-  for (let i = 5; i < 15; i++) world.cells[5*W + i] = Cell.FLOOR; // Horizontal
-  for (let j = 5; j < 15; j++) world.cells[j*W + 14] = Cell.FLOOR; // Vertical
-  createMonster(6, 5.5);
+  for (let i = 5; i < 15; i++) world.cells[(5 + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.FLOOR; // Horizontal
+  for (let j = 5; j < 15; j++) world.cells[(j + ARENA_OFFSET)*W + (14 + ARENA_OFFSET)] = Cell.FLOOR; // Vertical
+  createMonster(ARENA_OFFSET + 6, ARENA_OFFSET + 5.5);
+  world.cellVersion++;
 }
 
 function loadPresetMaze() {
   clearArena();
   for (let i = 0; i < 25; i++) {
     for (let j = 0; j < 25; j++) {
-      world.cells[j*W + i] = (i % 2 === 0 && j % 2 === 0) ? Cell.WALL : Cell.FLOOR;
+      world.cells[(j + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = (i % 2 === 0 && j % 2 === 0) ? Cell.WALL : Cell.FLOOR;
     }
   }
-  createMonster(1.5, 1.5);
+  createMonster(ARENA_OFFSET + 1.5, ARENA_OFFSET + 1.5);
+  world.cellVersion++;
 }
 
 function loadPresetNarrow() {
   clearArena();
   for (let i = 0; i < 20; i++) {
     for (let j = 0; j < 20; j++) {
-      world.cells[j*W + i] = Cell.WALL;
+      world.cells[(j + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.WALL;
     }
   }
-  for (let i = 5; i < 15; i++) world.cells[10*W + i] = Cell.FLOOR;
+  for (let i = 5; i < 15; i++) world.cells[(10 + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.FLOOR;
   
   // Create small blockers
-  setPathBlockerRow(world, 10*W + 10, 0, 0b1111);
-  setPathBlockerRow(world, 10*W + 10, 3, 0b1111);
+  setPathBlockerRow(world, (10 + ARENA_OFFSET)*W + (10 + ARENA_OFFSET), 0, 0b1111);
+  setPathBlockerRow(world, (10 + ARENA_OFFSET)*W + (10 + ARENA_OFFSET), 3, 0b1111);
   
-  createMonster(6, 10.5);
+  createMonster(ARENA_OFFSET + 6, ARENA_OFFSET + 10.5);
+  world.cellVersion++;
 }
 
 function loadPresetFloor(id: string) {
@@ -472,18 +620,15 @@ function loadPresetFloor(id: string) {
 
 function loadPresetTangentStuck() {
   clearArena();
-  // Tangential wall scenario: A straight wall that the monster has to slide along or graze.
-  // We place a wall block
-  world.cells[5*W + 5] = Cell.WALL;
-  world.cells[5*W + 6] = Cell.WALL;
-  world.cells[6*W + 5] = Cell.WALL;
-  world.cells[6*W + 6] = Cell.WALL;
+  world.cells[(5 + ARENA_OFFSET)*W + (5 + ARENA_OFFSET)] = Cell.WALL;
+  world.cells[(5 + ARENA_OFFSET)*W + (6 + ARENA_OFFSET)] = Cell.WALL;
+  world.cells[(6 + ARENA_OFFSET)*W + (5 + ARENA_OFFSET)] = Cell.WALL;
+  world.cells[(6 + ARENA_OFFSET)*W + (6 + ARENA_OFFSET)] = Cell.WALL;
   
-  createMonster(4.5, 7.5);
-  // Set target for the monster
+  createMonster(ARENA_OFFSET + 4.5, ARENA_OFFSET + 7.5);
   const e = entities[0];
   if (e) {
-    tryAssignPathToCell(world, e, 6.5, 4.5);
+    tryAssignPathToCell(world, e, ARENA_OFFSET + 6.5, ARENA_OFFSET + 4.5);
   }
 }
 

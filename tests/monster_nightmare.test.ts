@@ -167,7 +167,7 @@ test('nightmare pressure breaks from heavy burst damage', () => {
   prime(entities);
   updateMonster(world, entities, beast, 0.1, state.time, msgs, target.id, { v: 10 }, state);
 
-  assert.ok((beast.attackCd ?? 0) >= 0.55, 'attackCd should be increased from stagger');
+  assert.ok((beast.attackCd ?? 0) >= 0.45, 'attackCd should be increased from stagger (accounting for dt tickdown in same frame)');
   // In the same frame, the scaling is overridden by the > 0 pressure branch
   // So we only assert on attackCd and events.
 

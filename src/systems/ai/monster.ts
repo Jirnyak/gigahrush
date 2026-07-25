@@ -2196,6 +2196,8 @@ function updateNightmarePressure(
     world.dist2(e.x, e.y, target.x, target.y) <= NIGHTMARE_PRESSURE_RANGE * NIGHTMARE_PRESSURE_RANGE &&
     nightmareSamePressureSpace(world, e, target);
 
+  console.log('closeTarget:', closeTarget, 'target.alive:', target?.alive, 'dist2:', world.dist2(e.x, e.y, target.x, target.y), 'NIGHTMARE_PRESSURE_RANGE:', NIGHTMARE_PRESSURE_RANGE, 'sameSpace:', nightmareSamePressureSpace(world, e, target));
+
   const before = runtime.pressure;
   if (closeTarget) {
     runtime.pressure = Math.min(NIGHTMARE_PRESSURE_MAX, runtime.pressure + dt * NIGHTMARE_PRESSURE_GAIN);

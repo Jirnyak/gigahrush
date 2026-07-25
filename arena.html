@@ -5,25 +5,103 @@
   <title>ГИГАХРУЩ — AI Test Arena</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0a0a0f; overflow: hidden; font-family: 'Courier New', monospace; }
-    canvas { display: block; cursor: crosshair; }
+    body { background: #0a0a0f; overflow: hidden; font-family: 'Courier New', monospace; display: flex; color: #fff; }
+    #sidebar {
+      width: 250px;
+      height: 100vh;
+      background: #15151a;
+      border-right: 1px solid #333;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      overflow-y: auto;
+    }
+    .panel {
+      background: #222;
+      border: 1px solid #444;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .panel-title {
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    button {
+      background: #333;
+      border: 1px solid #555;
+      color: #fff;
+      padding: 6px 10px;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin-bottom: 5px;
+      transition: background 0.1s;
+    }
+    button:hover { background: #444; }
+    button.active { background: #080; border-color: #0f0; }
+    
+    #canvas-container {
+      flex: 1;
+      position: relative;
+    }
+    canvas { display: block; cursor: crosshair; width: 100%; height: 100%; }
+    
     #hud {
-      position: fixed; top: 10px; left: 10px;
+      position: absolute; top: 10px; left: 10px;
       color: #0f0; font-size: 13px; line-height: 1.5;
       pointer-events: none; white-space: pre;
       text-shadow: 0 0 6px rgba(0,255,0,0.3);
     }
-    #help {
-      position: fixed; bottom: 10px; left: 10px;
-      color: #555; font-size: 11px; line-height: 1.4;
-      pointer-events: none; white-space: pre;
-    }
   </style>
 </head>
 <body>
-  <canvas id="c"></canvas>
-  <div id="hud"></div>
-  <div id="help"></div>
+  <div id="sidebar">
+    <div class="panel">
+      <div class="panel-title">Tools</div>
+      <button id="btn-tool-0" class="active">0 - None / Select</button>
+      <button id="btn-tool-1">1 - Clear Cell</button>
+      <button id="btn-tool-2">2 - Draw Wall</button>
+      <button id="btn-tool-3">3 - Spawn Monster</button>
+      <button id="btn-tool-6">6 - Spawn NPC</button>
+      <button id="btn-tool-4">4 - Set AI Target</button>
+      <button id="btn-tool-5">5 - Subcell Blocker</button>
+      <button id="btn-bake-bfs" style="color: #f90; border-color: #a60; margin-top: 10px;">Bake BFS (Space to freeze)</button>
+    </div>
+    
+    <div class="panel">
+      <div class="panel-title">Presets & Gen</div>
+      <button id="btn-preset-empty">Empty Corner (F1)</button>
+      <button id="btn-preset-maze">Maze (F2)</button>
+      <button id="btn-preset-narrow">Narrow (F3)</button>
+      <div style="margin-top: 5px; display: flex; gap: 5px;">
+        <input type="text" id="input-floor-id" value="outer_district" style="flex: 1; min-width: 0; background: #111; color: #0f0; border: 1px solid #444; padding: 4px; font-family: 'Courier New', monospace; font-size: 13px;" />
+        <button id="btn-preset-floor" style="color: #0f0; border-color: #0f0; width: auto; padding: 4px 8px; margin: 0;">Gen</button>
+      </div>
+    </div>
+    
+    <div class="panel">
+      <div class="panel-title">Controls</div>
+      <div style="font-size: 11px; color: #888; line-height: 1.4;">
+        WASD / Right-Click: Pan<br>
+        Scroll: Zoom<br>
+        Space: Pause/Play<br>
+        S: Step one frame<br>
+        G: Toggle Grid<br>
+        Left Click: Apply Tool
+      </div>
+    </div>
+  </div>
+  
+  <div id="canvas-container">
+    <canvas id="c"></canvas>
+    <div id="hud"></div>
+  </div>
+  
   <script type="module" src="/src/test_arena.ts"></script>
 </body>
 </html>
