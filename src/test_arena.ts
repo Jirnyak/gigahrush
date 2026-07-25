@@ -1,7 +1,7 @@
 import { World } from './core/world';
 import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, type GameState } from './core/types';
-import { followPath, tryAssignPathToCell, setPathContext } from './systems/ai/pathfinding';
-import { unstuckActorFromBlockers } from './systems/movement_collision';
+import { tryAssignPathToCell, setPathContext } from './systems/ai/pathfinding';
+import { updateAI } from './systems/ai/index';
 import { setPathBlockerRow, PATH_BLOCKER_SUBDIV, getPathBlockerRow, clearPathBlockersAtCell } from './core/path_blockers';
 import { seedGlobalRng } from './core/rand';
 import { applyMapEditorOp } from './systems/map_editor';
@@ -204,18 +204,39 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
+const dummyState = {
+  clock: { totalMinutes: 0 },
+  msgs: [],
+  currentZ: 0,
+} as unknown as GameState;
+
+let gameTime = 0;
+
 // ── Logic ────────────────────────────────────────────────────────────
 function step(dt: number) {
+  gameTime += dt;
+  const msgs: any[] = [];
+
+  updateAI(
+    world,
+    entities,
+    dt,
+    gameTime,
+    msgs,
+    0, // dummy player ID
+    dummyState.clock,
+    false, // samosborActive
+    { v: nextEntityId },
+    0, // currentZ
+    dummyState
+  );
+
   for (const e of entities) {
-    if (!e.ai) continue;
-    // Follow path
-    followPath(world, e, dt);
+    if (!e.ai || !e.alive) continue;
     
     // Resolve collisions
-    unstuckActorFromBlockers(world, e, { radius: 0, rescueFromSolid: true });
-    
     for (const other of entities) {
-      if (other === e) continue;
+      if (other === e || !other.alive) continue;
       const dx = e.x - other.x;
       const dy = e.y - other.y;
       const dist2 = dx * dx + dy * dy;
@@ -232,6 +253,8 @@ function step(dt: number) {
       }
     }
   }
+
+  entities = entities.filter(e => e.alive);
 }
 
 // ── Interaction ──────────────────────────────────────────────────────
