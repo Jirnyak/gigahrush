@@ -10,6 +10,8 @@ import { PATH_BLOCKER_SUBDIV, PATH_BLOCKER_BYTES_PER_CELL } from '../../core/pat
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
 
 import { setDoorState } from '../door_state';
+import { hearingRadiusMetersForActor } from '../hearing';
+import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
@@ -1063,8 +1065,17 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const ny = dy / dist;
   
   const step = Math.min(speed, dist);
-  e.x = wrapFloat(e.x + nx * step);
-  e.y = wrapFloat(e.y + ny * step);
+  const opt = { ignoreFineBlockers: entityIgnoresFineBlockers(e) };
+  
+  const testX = wrapFloat(e.x + nx * step);
+  if (canActorOccupy(world, testX, e.y, 0, opt)) {
+    e.x = testX;
+  }
+  
+  const testY = wrapFloat(e.y + ny * step);
+  if (canActorOccupy(world, e.x, testY, 0, opt)) {
+    e.y = testY;
+  }
 
   // Stuck: did the entity actually move?
   const moved = (e.x !== prevX || e.y !== prevY);
