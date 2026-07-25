@@ -2196,7 +2196,7 @@ function updateNightmarePressure(
     world.dist2(e.x, e.y, target.x, target.y) <= NIGHTMARE_PRESSURE_RANGE * NIGHTMARE_PRESSURE_RANGE &&
     nightmareSamePressureSpace(world, e, target);
 
-  console.log('closeTarget:', closeTarget, 'target.alive:', target?.alive, 'dist2:', world.dist2(e.x, e.y, target.x, target.y), 'NIGHTMARE_PRESSURE_RANGE:', NIGHTMARE_PRESSURE_RANGE, 'sameSpace:', nightmareSamePressureSpace(world, e, target));
+
 
   const before = runtime.pressure;
   if (closeTarget) {
@@ -8978,6 +8978,20 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (lishennyyLightTarget && followLishennyyLightTarget(world, e, lishennyyLightTarget, dt)) return;
   target = updateSobrannyyTarget(world, e, target, time, msgs, state);
   target = updateObzhivalshchikTarget(world, e, target, dt, time, msgs, state);
+
+  // Unify Sound and Vision: Global hearing translates to HUNT vision
+  if (!target && (!ai.combatTargetId || ai.goal !== AIGoal.HUNT) && e.monsterKind !== MonsterKind.KHOROVAYA_MATKA && e.monsterKind !== MonsterKind.MATKA && e.monsterKind !== MonsterKind.ZOMBIE && e.monsterKind !== MonsterKind.CHERNOSLIZ && e.monsterKind !== MonsterKind.GREEN_DOG) {
+    const noise = findNoiseInvestigationTarget(world, state, e, time);
+    if (noise && noise.id !== ai.lastSeenNoiseId) {
+      ai.lastSeenNoiseId = noise.id;
+      if (noise.actorId !== undefined) {
+        ai.lastSeenTargetId = noise.actorId;
+      }
+      ai.tx = noise.x;
+      ai.ty = noise.y;
+      ai.goal = AIGoal.HUNT;
+    }
+  }
   updateNightmarePressure(world, e, target, dt, time, msgs, playerId, state);
   updateMukhozhukLeader(world, e, target, dt, time, msgs, state);
   if (updateBloodPlantRootHive(world, e, target, dt, time, msgs, playerId, state)) return;
