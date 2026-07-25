@@ -2435,61 +2435,64 @@ export function materializeAlifeFloorPopulation(
   reconcileExistingAlifeEntities(alife, entities);
   filterDeadPlotNpcs(alife, entities);
   const templates = extractAmbientNpcTemplates(entities);
-  if (templates.length === 0) return;
-  const floorIds = alife.floorIndex[floorKey] ?? [];
-  if (floorIds.length === 0 && Object.keys(alife.floorIndex).length === 0) return;
+  if (templates.length > 0) {
+    const floorIds = alife.floorIndex[floorKey] ?? [];
+    if (floorIds.length > 0 || Object.keys(alife.floorIndex).length > 0) {
+      const floorCaps = ensureAlifeFloorCaps(alife);
+      if (typeof floorCaps[floorKey] !== 'number' || floorCaps[floorKey]! > templates.length) {
+        floorCaps[floorKey] = templates.length;
+      }
 
-  const floorCaps = ensureAlifeFloorCaps(alife);
-  if (typeof floorCaps[floorKey] !== 'number' || floorCaps[floorKey]! > templates.length) {
-    floorCaps[floorKey] = templates.length;
-  }
-
-  let slot = 0;
-  for (const recordIndex of floorIds) {
-    if (slot >= templates.length) break;
-    const record = alife.npcs[recordIndex];
-    if (!record || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
-    const template = templates[slot];
-    slot++;
-    if (recordDead(alife, record)) continue;
-    const entity = materializeEntity(record, template, world, alife, nextId);
-    if (!entity) continue;
-    entities.push(entity);
-  }
-
-  if (slot < templates.length) {
-    const currentZ = floorKeyZ(floorKey) ?? state.currentZ ?? 100;
-    const surplusFloors = Object.keys(alife.floorIndex)
-      .filter(key => key !== floorKey && (alife.floorIndex[key]?.length ?? 0) > (floorCaps[key] ?? Math.min(alife.floorIndex[key]!.length, 30)))
-      .map(key => ({ key, z: floorKeyZ(key) }))
-      .filter((item): item is { key: string; z: number } => item.z !== undefined && floorRunZAllowsNpcs(item.z) !== false)
-      .sort((a, b) => {
-        const distA = Math.abs(a.z - currentZ);
-        const distB = Math.abs(b.z - currentZ);
-        if (distA !== distB) return distA - distB;
-        return b.z - a.z;
-      });
-
-    for (const { key: candidateKey } of surplusFloors) {
-      if (slot >= templates.length) break;
-      const candidateBucket = alife.floorIndex[candidateKey];
-      if (!candidateBucket || candidateBucket.length === 0) continue;
-      const cap = floorCaps[candidateKey] ?? Math.min(candidateBucket.length, 30);
-      if (candidateBucket.length <= cap) continue;
-
-      for (let i = candidateBucket.length - 1; i >= cap && slot < templates.length; i--) {
-        const recordIndex = candidateBucket[i];
+      let slot = 0;
+      for (const recordIndex of floorIds) {
+        if (slot >= templates.length) break;
         const record = alife.npcs[recordIndex];
-        if (!record || recordDead(alife, record) || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
+        if (!record || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
         const template = templates[slot];
         slot++;
-        moveAlifeNpcRecord(state, record.id, floorKey, { z: currentZ });
+        if (recordDead(alife, record)) continue;
         const entity = materializeEntity(record, template, world, alife, nextId);
         if (!entity) continue;
         entities.push(entity);
       }
+
+      if (slot < templates.length) {
+        const currentZ = floorKeyZ(floorKey) ?? state.currentZ ?? 100;
+        const surplusFloors = Object.keys(alife.floorIndex)
+          .filter(key => key !== floorKey && (alife.floorIndex[key]?.length ?? 0) > (floorCaps[key] ?? Math.min(alife.floorIndex[key]!.length, 30)))
+          .map(key => ({ key, z: floorKeyZ(key) }))
+          .filter((item): item is { key: string; z: number } => item.z !== undefined && floorRunZAllowsNpcs(item.z) !== false)
+          .sort((a, b) => {
+            const distA = Math.abs(a.z - currentZ);
+            const distB = Math.abs(b.z - currentZ);
+            if (distA !== distB) return distA - distB;
+            return b.z - a.z;
+          });
+
+        for (const { key: candidateKey } of surplusFloors) {
+          if (slot >= templates.length) break;
+          const candidateBucket = alife.floorIndex[candidateKey];
+          if (!candidateBucket || candidateBucket.length === 0) continue;
+          const cap = floorCaps[candidateKey] ?? Math.min(candidateBucket.length, 30);
+          if (candidateBucket.length <= cap) continue;
+
+          for (let i = candidateBucket.length - 1; i >= cap && slot < templates.length; i--) {
+            const recordIndex = candidateBucket[i];
+            const record = alife.npcs[recordIndex];
+            if (!record || recordDead(alife, record) || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
+            const template = templates[slot];
+            slot++;
+            moveAlifeNpcRecord(state, record.id, floorKey, { z: currentZ });
+            const entity = materializeEntity(record, template, world, alife, nextId);
+            if (!entity) continue;
+            entities.push(entity);
+          }
+        }
+      }
     }
   }
+
+
 
   // Ensure any other ordinary live NPCs on the floor (travelers, spawned patrols) have persistent A-Life records
   for (const entity of entities) {

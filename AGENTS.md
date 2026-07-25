@@ -546,3 +546,5 @@ When debugging complex state issues (like entity property bugs, missing visual I
 Example:
 "Please run this in your browser console and paste the output: `console.log(entities.find(e => e.plotNpcId === 'yakov').npcVisualId)`"
 
+
+> Никогда не ищи причину бага в 'старых версиях и сейвах' по дефолту. Мы всё тестируем в НОВОЙ ВЕРСИИ. Никаких сохранений и загрузок.

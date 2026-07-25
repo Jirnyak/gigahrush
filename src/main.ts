@@ -2903,6 +2903,7 @@ function installSmokeDebugHook(): void {
   });
   (window as any).__gigahrushState = () => (typeof state !== 'undefined' ? state : null);
   (window as any).__gigahrushWorld = () => (typeof world !== 'undefined' ? world : null);
+  (window as any).__gigahrushEntities = () => (typeof entities !== 'undefined' ? entities : null);
   if (!smokeDebug) return;
   window.__gigahrushSmokeState = () => {
     if (!started || pendingLoad || typeof state === 'undefined') return null;
