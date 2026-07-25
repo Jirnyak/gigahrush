@@ -789,7 +789,6 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const dy = world.delta(e.y, ty);
   const distSq = dx * dx + dy * dy;
   if (distSq < 0.0001) { ai.pi++; ai.stuck = 0; return; }
-  const dist = Math.sqrt(distSq);
 
   const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
   let remainingStep = speed;
