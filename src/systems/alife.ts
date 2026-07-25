@@ -1039,9 +1039,23 @@ function rpgForRecord(level: number, seed: number, index: number): RPGStats {
 
 function levelForRecord(plan: AlifeFloorPlan, faction: Faction, seed: number, index: number): number {
   const eliteBias = faction === Faction.LIQUIDATOR || faction === Faction.SCIENTIST || faction === Faction.CULTIST ? 0.14 : 0;
+  const u = unit(seed, index, 41);
+  
+  // 1. Original curve that pushes the average higher on deep floors
   const exponent = Math.max(0.82, Math.min(1.48, 1.46 - plan.danger * 0.11 - eliteBias));
-  const scaled = Math.pow(unit(seed, index, 41), exponent) * Math.log(ALIFE_MAX_LEVEL + 1);
-  return Math.max(1, Math.min(ALIFE_MAX_LEVEL, 1 + Math.floor(Math.expm1(scaled))));
+  const rawScaled = Math.pow(u, exponent) * Math.log(ALIFE_MAX_LEVEL + 1);
+  const rawLevel = Math.expm1(rawScaled);
+  
+  // 2. Floor capacity limit (10% on danger 1, 100% on danger 5)
+  const dangerFactor = 0.1 + 0.9 * ((plan.danger - 1) / 4);
+  
+  // 3. Elite breakthrough: u^200 creates a mathematically beautiful "fat tail"
+  // It is ~0 for 98% of the population, allowing only the absolute top 1-2% 
+  // to bypass the floor's danger limit.
+  const breakthrough = (1 - dangerFactor) * Math.pow(u, 200);
+  
+  const effectiveFactor = dangerFactor + breakthrough;
+  return Math.max(1, Math.min(ALIFE_MAX_LEVEL, 1 + Math.floor(rawLevel * effectiveFactor)));
 }
 
 function wealthForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, level: number, seed: number, index: number): number {
