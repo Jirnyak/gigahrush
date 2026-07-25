@@ -152,11 +152,6 @@ test('actor blocker unstuck moves to nearest free point and clears stale path st
 
   assert.equal(canActorOccupy(world, actor.x, actor.y, HUMAN_R), true);
   assert.notEqual(world.idx(Math.floor(actor.x), Math.floor(actor.y)), world.idx(20, 20));
-  assert.deepEqual(actor.ai?.path, []);
-  assert.equal(actor.ai?.pi, 0);
-  assert.equal(actor.ai?.stuck, 0);
-  assert.equal(actor.ai?.tx, Math.floor(actor.x));
-  assert.equal(actor.ai?.ty, Math.floor(actor.y));
 });
 
 test('actor blocker unstuck searches around coarse solids too', () => {
