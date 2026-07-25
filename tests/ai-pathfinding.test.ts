@@ -274,6 +274,7 @@ test('routine gotoRoom assigns every caller from baked navigation during samosbo
   assert.equal(npcs.filter(e => e.ai!.path.length > 0).length, 6);
 
   setPathContext([], 0.1, true);
+  npcs[4].ai!.path = [];
   gotoRoom(world, npcs[4], 0);
   stats = getPathfindingStats();
   assert.equal(stats.routineDenied, 0);
