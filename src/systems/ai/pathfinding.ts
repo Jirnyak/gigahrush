@@ -9,7 +9,7 @@ import { World } from '../../core/world';
 import { PATH_BLOCKER_SUBDIV, PATH_BLOCKER_BYTES_PER_CELL } from '../../core/path_blockers';
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
 
-import { setDoorState } from '../door_state';
+import { actorContactDoor } from '../door_state';
 import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
@@ -107,21 +107,16 @@ let _regionPortalIndices: number[][] = [];
 let _regionNext: Uint16Array | null = null;
 let _regionN = 0;
 
-/* ── Incremental-patch state (local wall break / build / door edit) ──
- * A patch refloods only the 16×16 clusters touching the changed cells and
- * rebuilds `_regionNext` wholesale (it is O(R·E), sub-ms). Cluster ids simply
- * GROW per patch — old ids are abandoned, never recycled — which keeps the
- * patch trivially correct (no id surgery). `_roomRegionId` maps a stable room
- * id to its fixed region id so a reflooded cluster can re-assert room-cell
- * membership without a global flood. Room ids never grow; only cluster ids do.
- * `_bakeBaseRegions` is the region count at the last full bake; once growth
- * exceeds ~50% of it, a patch falls back to a compacting full bake so the R×R
- * matrix stays inside the RAM budget under sustained churn. */
-const _roomRegionId = new Map<number, number>();
-let _bakeBaseRegions = 0;
+/* ── Runtime-edit state (local door toggle / wall break / build) ──
+ * Same-world geometry edits are ACCEPT-STALE: the baked region/portal/next-hop
+ * graph is NEVER rebuilt mid-game (that O(R²) rebuild froze large floors for
+ * 10 s+ on a single hermetic-door toggle — the banned mid-game rebake). The
+ * graph is authoritative only at the two PLANNED bakes (floor load, post-
+ * samosbor). Live walkability is still exact: the subcell query layer reads
+ * live cell + door state, so a closed/opened door is honored by real paths
+ * immediately; only the coarse cross-region hint goes briefly stale. See
+ * patchNavigationRegions() and optimization.md (Iron Law). */
 const NAV_PATCH_MAX_CELLS = 4096;
-const NAV_PATCH_MAX_CLUSTERS = 64;
-const NAV_COMPACT_GROWTH = 1.5;
 
 // Cells whose passability changed since the last bake/patch, fed by
 // markNavigationCellsDirty() from the runtime edit sites (wall break, build,
@@ -682,14 +677,12 @@ export function bakeNavigationTree(
 
   /* ── Step 1: Region assignment ──────────────────────────────── */
   _regionMap.fill(REGION_NONE);
-  _roomRegionId.clear();
   let nextRegionId = 1;
 
   // 1a: Room regions
   for (const room of world.rooms) {
     if (!room) continue;
     const rid = nextRegionId++;
-    _roomRegionId.set(room.id, rid);
     for (let ry = room.y; ry < room.y + room.h; ry++) {
       for (let rx = room.x; rx < room.x + room.w; rx++) {
         const ci = ((ry % W + W) % W) * W + ((rx % W + W) % W);
@@ -742,7 +735,6 @@ export function bakeNavigationTree(
     }
   }
   _numRegions = nextRegionId;
-  _bakeBaseRegions = nextRegionId;
   _navComponents = _numRegions;
 
   /* ── Step 2: Portal detection (grouped contiguous segments) ─── */
@@ -838,153 +830,40 @@ export function markNavigationCellsDirty(cells: Iterable<number>): void {
 }
 
 /**
- * Best-effort local refresh of the region/portal graph for the cells reported
- * via markNavigationCellsDirty() since the last bake, so a wall break / built
- * block / door lock updates navigation without a full O(W²) rebake.
+ * Same-world runtime geometry edits (hermetic/locked door toggle, wall break,
+ * block build, beam cell loss) are absorbed as ACCEPT-STALE. We re-sync the
+ * cache version so the query path stops re-entering every frame, but we do NOT
+ * touch the baked region/portal/next-hop graph. The authoritative graph is
+ * rebuilt ONLY at the two PLANNED points — floor generation/load (a new World
+ * object) and the post-samosbor stitch (unfreeze nulls `_navWorld`). Never
+ * mid-game. This is the Iron Law (optimization.md): no O(W²)/O(R²) recompute
+ * during active simulation.
  *
- * Philosophy (single universal O(1)-query system, geometry-agnostic): the only
- * authoritative full bakes are the PLANNED ones — floor generation/load (a new
- * World object) and the post-samosbor stitch (unfreeze nulls `_navWorld`). This
- * routine never full-bakes. When it can cheaply localize the reported change it
- * does; otherwise it leaves the baked graph slightly STALE until the next
- * planned bake and just re-syncs the cache version so it is not retried every
- * frame. A stale graph only yields a sub-optimal or briefly-missing path for a
- * few cells — acceptable — never a crash or an unbounded computation. This is
- * why unreported mutators (anomaly snakes, Conway life, block explosions from
- * other systems) need no wiring: they are simply absorbed as stale-until-bake.
+ * Why accept-stale is safe AND sufficient here: actual walkability is enforced
+ * LIVE at query time by the subcell layer — `getMacroMask`,
+ * `isSubcellNavPassable` and `isMacroCellPassable` all read live cell + door
+ * state, independent of the baked region graph. So a closed door / broken wall
+ * is honored by the real path immediately. The only thing that goes stale is the
+ * coarse cross-region ROUTING HINT (`_regionNext`): for the few edited cells it
+ * may suggest a route through a now-closed door (the intra-region/subcell BFS
+ * then fails that leg and the caller falls back) or miss a freshly-opened
+ * shortcut (same-cluster local BFS may still find it). A briefly sub-optimal or
+ * missing path for a few cells is acceptable; a multi-second frame freeze is not.
  *
- * Local-patch correctness (when it does run): cluster flood-fill is hard-bounded
- * to its own 16×16 block, so reflooding only the affected clusters reproduces
- * exactly the cluster regions a full bake would produce there. Room regions are
- * re-asserted from the unchanged `roomMap` via the stable `_roomRegionId`.
- * Portals are recomputed by dropping every portal on a border line touching an
- * affected cluster and rescanning those whole lines — any line NOT rescanned has
- * identical regionMap on both sides, so its portals are provably unchanged.
- * Cluster ids simply grow (old ids abandoned), so there is no id surgery.
+ * This is why unreported mutators (anomaly wall-snakes, Conway life, section
+ * shifts) never needed wiring — and equally why the REPORTED sites don't force a
+ * rebuild either: rebuilding the all-pairs region matrix (`buildRegionNext`,
+ * O(R²) alloc + one BFS per region) on a single door toggle froze large floors
+ * for 10 s+. markNavigationCellsDirty() reports are now advisory: we clear the
+ * bounded set so it can't overflow, and keep the hook so a future genuinely-local
+ * incremental updater could consume it without re-wiring the edit sites.
  */
-function patchNavigationRegions(world: World, cellV: number, pbV: number): void {
-  // Always re-sync versions + clear the report on exit so ensureNavigationTree
-  // does not re-enter every frame, regardless of whether we localized.
-  const finish = (): void => {
-    _navCellVersion = cellV;
-    _navPathBlockerVersion = pbV;
-    _navDirtyCells.clear();
-    _navDirtyFull = false;
-  };
-
-  const dirty = _navDirtyCells;
-  // Nothing localizable → accept stale (unreported mutation, overflow, no base).
-  if (_navDirtyFull || dirty.size === 0 || _bakeBaseRegions <= 0) { finish(); return; }
-
-  // Affected 16×16 clusters + affected border lines.
-  const clusterKeys = new Set<number>();
-  const affectedHRows = new Set<number>();
-  const affectedVCols = new Set<number>();
-  for (const ci of dirty) {
-    const cx = ci % W, cy = (ci / W) | 0;
-    const cc = (cx / CLUSTER_SIZE) | 0, cr = (cy / CLUSTER_SIZE) | 0;
-    clusterKeys.add(cr * CLUSTERS_PER_SIDE + cc);
-  }
-  if (clusterKeys.size > NAV_PATCH_MAX_CLUSTERS) { finish(); return; }
-
-  // Reflood each affected cluster with fresh (growing) ids.
-  let nextRegionId = _numRegions;
-  for (const key of clusterKeys) {
-    const cr = (key / CLUSTERS_PER_SIDE) | 0, cc = key % CLUSTERS_PER_SIDE;
-    const baseX = cc * CLUSTER_SIZE, baseY = cr * CLUSTER_SIZE;
-    // Border lines that touch this cluster (inside rows/cols and the one line
-    // past each edge, whose far endpoint is inside).
-    for (let k = 0; k <= CLUSTER_SIZE; k++) {
-      affectedHRows.add((baseY + k) % W);
-      affectedVCols.add((baseX + k) % W);
-    }
-    // Clear cluster, then re-assert room cells from the unchanged roomMap.
-    for (let dy = 0; dy < CLUSTER_SIZE; dy++) {
-      const cyl = (baseY + dy) % W;
-      for (let dx = 0; dx < CLUSTER_SIZE; dx++) {
-        const cxl = (baseX + dx) % W;
-        const ci = cyl * W + cxl;
-        _regionMap[ci] = REGION_NONE;
-        const roomId = world.roomMap[ci];
-        if (roomId >= 0 && isMacroCellPassable(world, ci, world.cells[ci])) {
-          const rid = _roomRegionId.get(roomId);
-          if (rid === undefined) { finish(); return; } // room created since bake → accept stale
-          _regionMap[ci] = rid;
-        }
-      }
-    }
-    // Flood remaining non-room passable cells (cluster-local, growing ids).
-    for (let dy = 0; dy < CLUSTER_SIZE; dy++) {
-      const cyl0 = (baseY + dy) % W;
-      for (let dx = 0; dx < CLUSTER_SIZE; dx++) {
-        const cxl0 = (baseX + dx) % W;
-        const ci = cyl0 * W + cxl0;
-        if (_regionMap[ci] !== REGION_NONE) continue;
-        if (!isMacroCellPassable(world, ci, world.cells[ci])) continue;
-        const rid = nextRegionId++;
-        let qH = 0, qT = 0;
-        _rBfsQueue[qT++] = ci;
-        _regionMap[ci] = rid;
-        while (qH < qT) {
-          const cur = _rBfsQueue[qH++];
-          const curX = cur % W, curY = (cur / W) | 0;
-          const nb = [
-            ((curY - 1 + W) % W) * W + curX,
-            curY * W + ((curX + 1) % W),
-            ((curY + 1) % W) * W + curX,
-            curY * W + ((curX - 1 + W) % W),
-          ];
-          for (let n = 0; n < 4; n++) {
-            const ni = nb[n];
-            if (_regionMap[ni] !== REGION_NONE) continue;
-            const nx = ni % W, ny = (ni / W) | 0;
-            if (((nx - baseX + W) % W) >= CLUSTER_SIZE) continue;
-            if (((ny - baseY + W) % W) >= CLUSTER_SIZE) continue;
-            if (!isMacroCellPassable(world, ni, world.cells[ni])) continue;
-            if (!macroCellsConnected(world, cur, ni)) continue;
-            _regionMap[ni] = rid;
-            _rBfsQueue[qT++] = ni;
-          }
-        }
-      }
-    }
-  }
-
-  // Cluster ids only grow (old ids abandoned). If sustained churn has grown the
-  // region count ~50% past the last compact bake, do a one-off full compacting
-  // bake now to keep the R×R matrix inside the RAM budget. Edits are local and
-  // infrequent, so this fires at most once per many thousands of edits — bounded,
-  // never per-frame. bakeNavigationTree re-syncs versions and clears the report.
-  if (nextRegionId > _bakeBaseRegions * NAV_COMPACT_GROWTH) {
-    bakeNavigationTree(world, cellV, pbV);
-    return;
-  }
-  _numRegions = nextRegionId;
-  _navComponents = _numRegions;
-
-  // Drop portals on any affected line, then rescan those whole lines.
-  const kept: Portal[] = [];
-  for (let pi = 0; pi < _portals.length; pi++) {
-    const p = _portals[pi];
-    const horizontal = p.cx === p.ncx;
-    if (horizontal ? affectedHRows.has(p.cy) : affectedVCols.has(p.cx)) continue;
-    kept.push(p);
-  }
-  _portals = kept;
-  for (const cy of affectedHRows) scanHorizontalBorderRow(world, cy);
-  for (const cx of affectedVCols) scanVerticalBorderCol(world, cx);
-  _numPortals = _portals.length;
-
-  // Rebuild region→portal index and the next-hop matrix wholesale.
-  _regionPortalIndices = [];
-  for (let i = 0; i < _numRegions; i++) _regionPortalIndices.push([]);
-  for (let pi = 0; pi < _numPortals; pi++) {
-    const p = _portals[pi];
-    _regionPortalIndices[p.regionA].push(pi);
-    _regionPortalIndices[p.regionB].push(pi);
-  }
-  buildRegionNext();
-  finish();
+function patchNavigationRegions(_world: World, cellV: number, pbV: number): void {
+  // Accept stale: re-sync versions + clear the report. No region-graph rebuild.
+  _navCellVersion = cellV;
+  _navPathBlockerVersion = pbV;
+  _navDirtyCells.clear();
+  _navDirtyFull = false;
 }
 
 function ensureNavigationTree(world: World): void {
@@ -1414,25 +1293,19 @@ export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: num
   return 'assigned';
 }
 
-function openPathDoor(world: World, subcell: number): void {
+// Universal door contact for a pathing actor at a subcell on its route.
+// People open, monsters bash — the policy lives in actorContactDoor().
+function openPathDoor(world: World, e: Entity, subcell: number): void {
   const ci = subcellToCell(subcell);
   if (world.cells[ci] !== Cell.DOOR) return;
-  const door = world.doors.get(ci);
-  if (door && door.state === DoorState.CLOSED) {
-    setDoorState(world, door, DoorState.OPEN);
-    door.timer = 5;
-  }
+  actorContactDoor(world, e, ci);
 }
 
-/** Open a door at world coordinates (not subcell). Used proactively during movement. */
-function openPathDoorAtWorld(world: World, wx: number, wy: number): void {
+/** Same, addressed by world coordinates (the cell the actor is stepping into). */
+function openPathDoorAtWorld(world: World, e: Entity, wx: number, wy: number): void {
   const ci = world.idx(Math.floor(wx), Math.floor(wy));
   if (world.cells[ci] !== Cell.DOOR) return;
-  const door = world.doors.get(ci);
-  if (door && door.state === DoorState.CLOSED) {
-    setDoorState(world, door, DoorState.OPEN);
-    door.timer = 5;
-  }
+  actorContactDoor(world, e, ci);
 }
 
 function validSteeringAssignment(assignment: SteeringPathAssignment, world: World, target: number): boolean {
@@ -1495,7 +1368,7 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
   }
 
   const nextCell = assignment.path[assignment.pi];
-  openPathDoor(world, nextCell);
+  openPathDoor(world, e, nextCell);
   const [nextX, nextY] = subcellToWorld(nextCell);
   const dx = world.delta(e.x, nextX);
   const dy = world.delta(e.y, nextY);
@@ -1581,9 +1454,9 @@ export function followPath(world: World, e: Entity, dt: number): void {
   ai.pi = lookaheadIndex;
 
   // Open doors: current position, next subcell on path, and one ahead
-  openPathDoorAtWorld(world, e.x, e.y);
-  openPathDoor(world, ai.path[ai.pi]);
-  if (ai.pi + 1 < ai.path.length) openPathDoor(world, ai.path[ai.pi + 1]);
+  openPathDoorAtWorld(world, e, e.x, e.y);
+  openPathDoor(world, e, ai.path[ai.pi]);
+  if (ai.pi + 1 < ai.path.length) openPathDoor(world, e, ai.path[ai.pi + 1]);
 
   // Target: center of the next subcell on the smoothed BFS path.
   // Because of lookahead, this might be a diagonal or arbitrary angle step!
@@ -1601,7 +1474,14 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const dist = Math.sqrt(distSq);
   const nx = dx / dist;
   const ny = dy / dist;
-  
+
+  // Resolve the door we are physically walking into. String pulling lets ai.pi
+  // skip past the door cell (LOS sees through a CLOSED door, but world.solid
+  // treats it as solid), so the path-waypoint contacts miss it and the actor
+  // jams against the leaf. Probe one cell ahead along the motion vector: people
+  // open it, monsters bash it (actorContactDoor policy).
+  openPathDoorAtWorld(world, e, e.x + nx * 0.7, e.y + ny * 0.7);
+
   const step = Math.min(speed, dist);
   const opt = { ignoreFineBlockers: entityIgnoresFineBlockers(e) };
   
