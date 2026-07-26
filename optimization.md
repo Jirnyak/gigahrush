@@ -42,6 +42,40 @@ If a system needs navigation during geometry mutation (e.g., monsters chasing du
 
 **History**: This rule exists because `cancelSamosborWave()` internally called `unfreezeNavigationCacheForWorld()` after `freezeNavigationCacheForWorld()` at samosbor start, causing every cell mutation to trigger a full 1M-cell BFS rebuild (~5-10ms/frame), resulting in 4-5x FPS drops. The bug recurred multiple times because no explicit rule prevented it.
 
+## Navigation: Region-Portal HPA* + Local Patch (accept-stale)
+
+Date: 2026-07-26.
+
+Navigation in `src/systems/ai/pathfinding.ts` is a **2-level Region-Portal HPA\*** graph, and runtime geometry edits update it through a **local patch + accept-stale** model — never a mid-game full rebake. This is how the game supports full local (infrequent) destructibility and construction of walls/doors while honoring the Iron Law above. Query stays O(1); the graph is always valid; the system is geometry-, anomaly- and map-agnostic ("survives whatever the snake changes, whatever explodes, whatever closes a door").
+
+**Graph shape:**
+
+- **Regions** = rooms + `16×16` cluster flood-fills. A cluster flood has a hard locality guard (`(nx − baseX + W) % W ≥ CLUSTER_SIZE`), so a cluster region can never spill past its own `16×16` — this is what makes scoped recompute possible.
+- **Portals** = contiguous border openings/doors between adjacent regions.
+- **Region-node next-hop matrix** `_regionNext[rS·R + rT]` = next region to step into on a fewest-hops route `rS→rT`. Built by one BFS per region over region adjacency, **O(R·E)** — NOT Floyd-Warshall O(P³), NOT a spanning tree. Every adjacent-region edge is kept, so toroidal cycles survive and there are no seams.
+
+**Two planned full bakes ONLY** (`bakeNavigationTree`), both auto-triggered by `ensureNavigationTree`:
+
+1. **New floor** — `replaceWorldFromGeneration` builds a new `World` object, so `_navWorld !== world`.
+2. **Post-samosbor stitch** — `unfreezeNavigationCacheForWorld` nulls `_navWorld`.
+
+**Same-world edit during gameplay → `patchNavigationRegions`, never a full bake:**
+
+- **Reported cells** (via `markNavigationCellsDirty(cells)`) get a local refresh: reflood only the affected `16×16` clusters, re-assert room cells from the unchanged `roomMap` via the stable `_roomRegionId` map, rescan those clusters' border lines, then rebuild `_regionNext` wholesale (O(R·E), sub-ms).
+- **Grow-ids strategy:** cluster ids simply GROW per patch (old ids abandoned, never recycled) — no free-list, no id surgery, so the patch is trivially correct. `_bakeBaseRegions` tracks the count at the last full bake; growth past `NAV_COMPACT_GROWTH` (1.5×) triggers one compacting full bake to keep the R×R matrix inside budget.
+- **Overflow bail:** more than `NAV_PATCH_MAX_CELLS` (4096) dirty cells or `NAV_PATCH_MAX_CLUSTERS` (64) affected clusters accepts-stale and defers to the next planned bake.
+
+**Accept-stale (the key rule — do not "fix"):** only *reported* cells are refreshed. Unreported mutators (anomaly wall-snakes, Conway life, section_shift, pseudolifts, and any other system that edits cells without calling `markNavigationCellsDirty`) are deliberately NOT wired. They are absorbed as **stale-until-next-planned-bake**: at worst a few cells give a briefly sub-optimal or missing path until the next new-floor/post-samosbor bake. This was an explicit design choice to keep the system one universal, geometry-independent path layer instead of chasing "dirty-set completeness at any cost". Do NOT reintroduce a hook in `core/world.ts markCellsDirty`, and do NOT instrument the ~15 anomaly mutators — that was the rejected complexity.
+
+**During samosbor** the cache stays frozen (`_frozenMacroMask` snapshot); patch does not run. See the Iron Law above.
+
+**Reporting sites currently wired** (the only mutators that get an immediate local patch):
+
+- `src/systems/breach_charge.ts` — breach-charge wall demolition.
+- `src/systems/weapon_beams.ts` — deletion/gravity beam cell removal.
+- `src/systems/door_state.ts` — `setDoorState` (lock/hermetic-close ↔ open) and `damageDoor` (broken open).
+- `src/main.ts` — map-editor / block-kit edits: `setCellToFloor`, door placement, `handleBlockKitTool` (wall placement).
+
 ## Path Blocker Core Storage
 
 Date: 2026-06-07.

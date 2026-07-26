@@ -388,6 +388,17 @@ AI movement stays toroidal and field-based:
 - runtime geometry mutation must bump the correct dirty versions so stale paths and flow fields rebuild;
 - actors must tolerate samosbor, doors and room changes by clearing or retargeting stale paths.
 
+### Navigation Graph And Runtime Edits
+
+The baked navigation is a 2-level **Region-Portal HPA\*** graph in `src/systems/ai/pathfinding.ts`: regions (rooms + `16×16` clusters) linked by portals, with a region-node next-hop matrix `_regionNext` built one BFS per region (O(R·E), no Floyd-Warshall, no spanning-tree seams, toroidal cycles preserved). Queries are O(1).
+
+Runtime destructibility/construction (wall break, wall/door build, door lock or break) updates the graph **incrementally**, never by a mid-game full rebake:
+
+- A mutator reports its changed cells via `markNavigationCellsDirty(cells)`. On the next `ensureNavigationTree`, `patchNavigationRegions` refloods only the affected `16×16` clusters, rescans their borders and rebuilds `_regionNext` (sub-ms). Cluster ids just grow; >1.5× growth triggers one compacting bake.
+- Full `bakeNavigationTree` happens at exactly two planned points — new floor and post-samosbor stitch — matching the Iron Law in [optimization.md](optimization.md).
+- **Accept-stale:** unreported mutators (anomaly wall-snakes, Conway life, section_shift, etc.) are intentionally not wired; their edits leave a briefly sub-optimal/missing path for a few cells until the next planned bake. This keeps navigation one universal, geometry/anomaly-agnostic layer. Do not add a `core/world.ts` hook or instrument anomaly mutators to "complete" the dirty set.
+- Wired reporting sites: `breach_charge.ts`, `weapon_beams.ts`, `door_state.ts`, `main.ts` (map-editor / block-kit).
+
 ## Debug And Telemetry
 
 Future debugging should show behavior pressure without serializing large histories:
