@@ -44,10 +44,8 @@ const MACRO_W2 = W * W;
 /* ── Region-Portal HPA* constants ─────────────────────────────── */
 const CLUSTER_SIZE = 16;
 const CLUSTERS_PER_SIDE = (W / CLUSTER_SIZE) | 0;
-const MAX_PORTALS = 1500;
-const PORTAL_UNREACHABLE = 65535;
 const REGION_NONE = 0;
-const INF_DIST = 1e9;
+const REGION_UNREACHABLE = 65535;
 
 const _navQueue = new Int32Array(SW2);
 const NAV_QUEUE_HALF = Math.floor(SW2 / 2);
@@ -67,6 +65,11 @@ let _frozenNavCellVersion = -1;
 let _frozenNavPathBlockerVersion = -1;
 let _frozenNavRoomCount = -1;
 let _frozenNavRefCount = 0;
+// Macro-mask snapshot taken when the cache is frozen. Query-time path
+// reconstruction (localRegionMacroBfs / findBorderSubcells) reads this instead
+// of live geometry, so a wall placed mid-samosbor cannot break an already-baked
+// path — matching the frozen-cache contract. Null when not frozen. 2 MB.
+let _frozenMacroMask: Uint16Array | null = null;
 let _flowFieldTouch = 0;
 let _routinePathUsed = 0;
 let _routinePathDenied = 0;
@@ -91,14 +94,29 @@ interface Portal {
 let _portals: Portal[] = [];
 let _numPortals = 0;
 let _regionPortalIndices: number[][] = [];
-let _fwDist: Float32Array | null = null;
-let _fwNext: Uint16Array | null = null;
-let _fwN = 0;
+
+/**
+ * Region-node next-hop matrix. Nodes are REGIONS (rooms + 16×16 clusters),
+ * NOT portals — there are far fewer regions than portals, so the R×R matrix
+ * stays small and bake stays O(R·E) instead of Floyd-Warshall's O(P³).
+ * `_regionNext[rS * R + rT]` = the next region to step into on a shortest
+ * (fewest region hops) route rS→rT, or REGION_UNREACHABLE if disconnected.
+ * This is a real graph with cycles (every adjacent-region edge kept), so
+ * toroidal loops are preserved and there are no spanning-tree seams.
+ */
+let _regionNext: Uint16Array | null = null;
+let _regionN = 0;
 
 const _rBfsQueue = new Int32Array(MACRO_W2);
 const _rBfsDist = new Int32Array(MACRO_W2);
 const _rBfsEpoch = new Int32Array(MACRO_W2);
 let _rBfsEpochId = 0;
+
+// Region-graph BFS scratch (grown to fit region count at bake time)
+let _regQueue = new Int32Array(1024);
+let _regFirstStep = new Int32Array(1024);
+let _regEpoch = new Int32Array(1024);
+let _regEpochId = 0;
 
 export type BehaviorFlowFieldSourceProvider = (world: World, out: number[]) => void;
 
@@ -235,6 +253,11 @@ export function freezeNavigationCacheForWorld(world: World): void {
   _frozenNavPathBlockerVersion = frozenPathBlockerVersion;
   _frozenNavRoomCount = world.rooms.length;
   _frozenNavRefCount = 1;
+  // Snapshot macro geometry so path reconstruction stays navigable even if
+  // cells/blockers mutate during the wave. Computed from the just-baked
+  // (== current) live geometry, so it matches the frozen region graph.
+  if (!_frozenMacroMask) _frozenMacroMask = new Uint16Array(MACRO_W2);
+  for (let ci = 0; ci < MACRO_W2; ci++) _frozenMacroMask[ci] = computeMacroMask(world, ci);
 }
 
 export function unfreezeNavigationCacheForWorld(world?: World): void {
@@ -244,6 +267,7 @@ export function unfreezeNavigationCacheForWorld(world?: World): void {
     _frozenNavPathBlockerVersion = -1;
     _frozenNavRoomCount = -1;
     _frozenNavRefCount = 0;
+    _frozenMacroMask = null;
     _navWorld = null;
     _behaviorFlowFields.clear();
     return;
@@ -258,6 +282,7 @@ export function unfreezeNavigationCacheForWorld(world?: World): void {
   _frozenNavPathBlockerVersion = -1;
   _frozenNavRoomCount = -1;
   _frozenNavRefCount = 0;
+  _frozenMacroMask = null;
   _navWorld = null;
   _behaviorFlowFields.clear();
 }
@@ -306,13 +331,11 @@ function isSubcellNavPassable(world: World, si: number): boolean {
   const cellX = (sx / PATH_BLOCKER_SUBDIV) | 0;
   const cellY = (sy / PATH_BLOCKER_SUBDIV) | 0;
   const cellI = cellY * W + cellX;
-
-  if (!isMacroCellPassable(world, cellI, world.cells[cellI])) return false;
-
   const rx = sx % PATH_BLOCKER_SUBDIV;
   const ry = sy % PATH_BLOCKER_SUBDIV;
-  const mask = world.pathBlockers[cellI * PATH_BLOCKER_BYTES_PER_CELL + ry] ?? 0;
-  return (mask & (1 << rx)) === 0;
+  // getMacroMask losslessly encodes cell/door state + per-subcell blockers
+  // (65535 when the macro cell is impassable), and is frozen-cache aware.
+  return (getMacroMask(world, cellI) & (1 << (ry * PATH_BLOCKER_SUBDIV + rx))) === 0;
 }
 
 function getSubcellNavCost(world: World, cx: number, cy: number): number {
@@ -422,6 +445,13 @@ function initMacroLut() {
 initMacroLut();
 
 function getMacroMask(world: World, ci: number): number {
+  // While frozen, read the baked snapshot so query-time path reconstruction
+  // ignores geometry mutated mid-samosbor (frozen-cache contract).
+  if (_frozenMacroMask && _frozenNavWorld === world) return _frozenMacroMask[ci];
+  return computeMacroMask(world, ci);
+}
+
+function computeMacroMask(world: World, ci: number): number {
   const cellC = world.cells[ci];
   if (cellC !== Cell.FLOOR && cellC !== Cell.WATER && cellC !== Cell.DOOR) return 65535;
   if (cellC === Cell.DOOR) {
@@ -688,7 +718,7 @@ export function bakeNavigationTree(
   }
   _numPortals = _portals.length;
 
-  /* ── Step 3: Region → portal index ──────────────────────────── */
+  /* ── Step 3: Region → portal index + region adjacency ───────── */
   _regionPortalIndices = [];
   for (let i = 0; i < _numRegions; i++) _regionPortalIndices.push([]);
   for (let pi = 0; pi < _numPortals; pi++) {
@@ -697,79 +727,51 @@ export function bakeNavigationTree(
     _regionPortalIndices[p.regionB].push(pi);
   }
 
-  /* ── Step 4: Intra-region BFS + Floyd-Warshall ──────────────── */
-  const N = Math.min(_numPortals, MAX_PORTALS);
-  if (N === 0) { _fwDist = null; _fwNext = null; _fwN = 0; return; }
-  _fwN = N;
-  const fwDist = new Float32Array(N * N);
-  const fwNext = new Uint16Array(N * N);
-  fwDist.fill(INF_DIST);
-  fwNext.fill(PORTAL_UNREACHABLE);
-  for (let i = 0; i < N; i++) { fwDist[i * N + i] = 0; fwNext[i * N + i] = i; }
+  /* ── Step 4: Region-node next-hop matrix ────────────────────────
+   * Nodes are regions; portals are edges. One BFS per region over the
+   * region-adjacency graph fills a dense R×R next-hop matrix. This is a
+   * real graph (all adjacent-region edges kept, cycles preserved) — no
+   * spanning-tree seams, no O(P³) Floyd-Warshall, no portal cap.
+   */
+  const R = _numRegions;
+  _regionN = R;
+  if (R <= 1 || _numPortals === 0) { _regionNext = null; return; }
 
-  // Intra-region edges: BFS between portals sharing a region
-  for (let r = 1; r < _numRegions; r++) {
-    const rp = _regionPortalIndices[r];
-    if (rp.length < 2) continue;
-    for (let a = 0; a < rp.length; a++) {
-      const pi = rp[a];
-      if (pi >= N) continue;
-      const startCell = portalCellInRegion(pi, r);
-      if (startCell < 0) continue;
-      _rBfsEpochId++;
-      if (_rBfsEpochId > 2000000000) { _rBfsEpoch.fill(0); _rBfsEpochId = 1; }
-      _rBfsEpoch[startCell] = _rBfsEpochId;
-      _rBfsDist[startCell] = 0;
-      let bH = 0, bT = 0;
-      _rBfsQueue[bT++] = startCell;
-      while (bH < bT) {
-        const cur = _rBfsQueue[bH++];
-        const d = _rBfsDist[cur];
-        const curX = cur % W, curY = (cur / W) | 0;
-        const nb = [
-          ((curY - 1 + W) % W) * W + curX,
-          curY * W + ((curX + 1) % W),
-          ((curY + 1) % W) * W + curX,
-          curY * W + ((curX - 1 + W) % W),
-        ];
-        for (let k = 0; k < 4; k++) {
-          const ni = nb[k];
-          if (_rBfsEpoch[ni] === _rBfsEpochId) continue;
-          if (_regionMap[ni] !== r) continue;
-          if (!macroCellsConnected(world, cur, ni)) continue;
-          _rBfsEpoch[ni] = _rBfsEpochId;
-          _rBfsDist[ni] = d + 1;
-          _rBfsQueue[bT++] = ni;
-        }
-      }
-      for (let b = 0; b < rp.length; b++) {
-        const pj = rp[b];
-        if (pj >= N || pj === pi) continue;
-        const targetCell = portalCellInRegion(pj, r);
-        if (_rBfsEpoch[targetCell] === _rBfsEpochId) {
-          const dist = _rBfsDist[targetCell];
-          if (dist < fwDist[pi * N + pj]) { fwDist[pi * N + pj] = dist; fwNext[pi * N + pj] = pj; }
-        }
+  if (_regQueue.length < R) {
+    _regQueue = new Int32Array(R);
+    _regFirstStep = new Int32Array(R);
+    _regEpoch = new Int32Array(R);
+    _regEpochId = 0;
+  }
+  const regionNext = new Uint16Array(R * R);
+  regionNext.fill(REGION_UNREACHABLE);
+
+  for (let src = 1; src < R; src++) {
+    const srcPortals = _regionPortalIndices[src];
+    if (srcPortals.length === 0) continue;
+    regionNext[src * R + src] = src;
+    _regEpochId++;
+    if (_regEpochId > 2000000000) { _regEpoch.fill(0); _regEpochId = 1; }
+    _regEpoch[src] = _regEpochId;
+    let qH = 0, qT = 0;
+    _regQueue[qT++] = src;
+    while (qH < qT) {
+      const cur = _regQueue[qH++];
+      const curPortals = _regionPortalIndices[cur];
+      for (let a = 0; a < curPortals.length; a++) {
+        const p = _portals[curPortals[a]];
+        const nbr = p.regionA === cur ? p.regionB : p.regionA;
+        if (nbr === REGION_NONE || _regEpoch[nbr] === _regEpochId) continue;
+        _regEpoch[nbr] = _regEpochId;
+        // First hop out of src is the neighbour itself; deeper hops inherit
+        // the first step recorded on `cur`.
+        regionNext[src * R + nbr] = cur === src ? nbr : _regFirstStep[cur];
+        _regFirstStep[nbr] = regionNext[src * R + nbr];
+        _regQueue[qT++] = nbr;
       }
     }
   }
-
-  // Floyd-Warshall (with skip optimization for sparse graphs)
-  for (let k = 0; k < N; k++) {
-    for (let i = 0; i < N; i++) {
-      const ik = fwDist[i * N + k];
-      if (ik >= INF_DIST) continue;
-      for (let j = 0; j < N; j++) {
-        const nd = ik + fwDist[k * N + j];
-        if (nd < fwDist[i * N + j]) {
-          fwDist[i * N + j] = nd;
-          fwNext[i * N + j] = fwNext[i * N + k];
-        }
-      }
-    }
-  }
-  _fwDist = fwDist;
-  _fwNext = fwNext;
+  _regionNext = regionNext;
 }
 
 function ensureNavigationTree(world: World): void {
@@ -901,6 +903,41 @@ function trimBehaviorFlowFieldCache(): void {
 }
 
 
+/** Walk the region-node next-hop matrix from rS to rT. Returns the region
+ *  chain [rS, …, rT] or null if unreachable. O(hops), no allocation beyond
+ *  the result. Cycles are preserved in the graph so there are no seams. */
+function regionPath(rS: number, rT: number): number[] | null {
+  if (!_regionNext || _regionN === 0) return null;
+  const R = _regionN;
+  if (_regionNext[rS * R + rT] === REGION_UNREACHABLE) return null;
+  const regions: number[] = [rS];
+  let cur = rS, safety = 0;
+  while (cur !== rT && safety <= R) {
+    const nxt = _regionNext[cur * R + rT];
+    if (nxt === REGION_UNREACHABLE || nxt === cur) return null;
+    regions.push(nxt);
+    cur = nxt;
+    safety++;
+  }
+  return cur === rT ? regions : null;
+}
+
+/** Pick the portal joining rA→rB whose rA-side cell is nearest to nearCell. */
+function portalBetween(rA: number, rB: number, nearCell: number): number {
+  const portals = _regionPortalIndices[rA];
+  if (!portals) return -1;
+  let best = -1, bestD = Infinity;
+  for (let a = 0; a < portals.length; a++) {
+    const pi = portals[a];
+    const p = _portals[pi];
+    const other = p.regionA === rA ? p.regionB : p.regionA;
+    if (other !== rB) continue;
+    const d = toroidalManhattan(nearCell, portalCellInRegion(pi, rA));
+    if (d < bestD) { bestD = d; best = pi; }
+  }
+  return best;
+}
+
 export function getAcousticDistance(world: World, x0: number, y0: number, x1: number, y1: number): number {
   const s0 = subcellIdx(x0, y0);
   const s1 = subcellIdx(x1, y1);
@@ -911,27 +948,22 @@ export function getAcousticDistance(world: World, x0: number, y0: number, x1: nu
   const rT = _regionMap[mEnd];
   if (rS === REGION_NONE || rT === REGION_NONE) return Infinity;
   if (rS === rT) return world.dist(x0, y0, x1, y1);
-  if (!_fwDist || _fwN === 0) return Infinity;
-  const portalsS = _regionPortalIndices[rS];
-  const portalsT = _regionPortalIndices[rT];
-  if (!portalsS || portalsS.length === 0 || !portalsT || portalsT.length === 0) return Infinity;
-  const N = _fwN;
-  let minDist = Infinity;
-  for (let a = 0; a < portalsS.length; a++) {
-    const pi = portalsS[a];
-    if (pi >= N) continue;
-    const dSrc = toroidalManhattan(mStart, portalCellInRegion(pi, rS));
-    for (let b = 0; b < portalsT.length; b++) {
-      const pj = portalsT[b];
-      if (pj >= N) continue;
-      const pd = _fwDist![pi * N + pj];
-      if (pd >= INF_DIST) continue;
-      const dDst = toroidalManhattan(portalCellInRegion(pj, rT), mEnd);
-      const total = dSrc + pd + dDst;
-      if (total < minDist) minDist = total;
-    }
+  ensureNavigationTree(world);
+  const regions = regionPath(rS, rT);
+  if (!regions) return Infinity;
+  // Sum toroidal-manhattan legs through the chosen portal chain.
+  let total = 0;
+  let cur = mStart;
+  for (let i = 0; i < regions.length - 1; i++) {
+    const pi = portalBetween(regions[i], regions[i + 1], cur);
+    if (pi < 0) return Infinity;
+    const entry = portalCellInRegion(pi, regions[i]);
+    const exit = portalCellInRegion(pi, regions[i + 1]);
+    total += toroidalManhattan(cur, entry);
+    cur = exit;
   }
-  return minDist === Infinity ? Infinity : minDist;
+  total += toroidalManhattan(cur, mEnd);
+  return total;
 }
 
 function buildBakedTreePath(world: World, start: number, end: number): number[] {
@@ -953,89 +985,33 @@ function buildBakedTreePath(world: World, start: number, end: number): number[] 
     return sp;
   }
 
-  // Cross-region: portal graph query
-  if (!_fwDist || !_fwNext || _fwN === 0) { _bfsMiss++; return []; }
-  const portalsS = _regionPortalIndices[rS];
-  const portalsT = _regionPortalIndices[rT];
-  if (!portalsS || portalsS.length === 0 || !portalsT || portalsT.length === 0) { _bfsMiss++; return []; }
-  const N = _fwN;
-  let bestCost = INF_DIST, bestSrc = -1, bestDst = -1;
-  for (let a = 0; a < portalsS.length; a++) {
-    const pi = portalsS[a];
-    if (pi >= N) continue;
-    const dSrc = toroidalManhattan(mStart, portalCellInRegion(pi, rS));
-    for (let b = 0; b < portalsT.length; b++) {
-      const pj = portalsT[b];
-      if (pj >= N) continue;
-      const pd = _fwDist![pi * N + pj];
-      if (pd >= INF_DIST) continue;
-      const dDst = toroidalManhattan(portalCellInRegion(pj, rT), mEnd);
-      const cost = dSrc + pd + dDst;
-      if (cost < bestCost) { bestCost = cost; bestSrc = pi; bestDst = pj; }
+  // Cross-region: region-node graph query. Walk the region chain, greedily
+  // picking the nearest portal between consecutive regions, and stitch the
+  // macro-cell path with intra-region BFS. No portal cap, no seams.
+  const regions = regionPath(rS, rT);
+  if (!regions) { _bfsMiss++; return []; }
+
+  const macroCells: number[] = [mStart];
+  let cur = mStart;
+  for (let i = 0; i < regions.length - 1; i++) {
+    const pi = portalBetween(regions[i], regions[i + 1], cur);
+    if (pi < 0) { _bfsMiss++; return []; }
+    const entry = portalCellInRegion(pi, regions[i]);
+    const exit = portalCellInRegion(pi, regions[i + 1]);
+    // Route from current cell to the portal entry within regions[i].
+    if (cur !== entry) {
+      const seg = localRegionMacroBfs(world, cur, entry, regions[i]);
+      if (seg.length === 0) { _bfsMiss++; return []; }
+      for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
     }
+    // Step across the portal.
+    if (macroCells[macroCells.length - 1] !== exit) macroCells.push(exit);
+    cur = exit;
   }
-  if (bestSrc < 0) { _bfsMiss++; return []; }
-
-  // Build portal chain
-  const chain: number[] = [];
-  let p = bestSrc;
-  let safety = 0;
-  while (p !== bestDst && safety < MAX_PORTALS) {
-    chain.push(p);
-    const next = _fwNext![p * N + bestDst];
-    if (next === PORTAL_UNREACHABLE || next === p) { _bfsMiss++; return []; }
-    p = next;
-    safety++;
-  }
-  chain.push(bestDst);
-
-  // Build macro cell path through portal chain with intra-region routing
-  const macroCells: number[] = [];
-
-  // Start → first portal entry side
-  const firstPortal = _portals[chain[0]];
-  const firstEntry = portalCellInRegion(chain[0], rS);
-  if (mStart !== firstEntry) {
-    const seg = localRegionMacroBfs(world, mStart, firstEntry, rS);
-    for (let k = 0; k < seg.length; k++) macroCells.push(seg[k]);
-  } else {
-    macroCells.push(firstEntry);
-  }
-
-  // Add first portal exit side
-  const firstExit = firstPortal.regionA === rS
-    ? firstPortal.ncy * W + firstPortal.ncx
-    : firstPortal.cy * W + firstPortal.cx;
-  if (macroCells[macroCells.length - 1] !== firstExit) macroCells.push(firstExit);
-
-  // Route through intermediate portals
-  for (let i = 1; i < chain.length; i++) {
-    const prevPortal = _portals[chain[i - 1]];
-    const curPortal = _portals[chain[i]];
-    // Find shared region between consecutive portals
-    let sharedRegion = REGION_NONE;
-    if (prevPortal.regionA === curPortal.regionA || prevPortal.regionA === curPortal.regionB) sharedRegion = prevPortal.regionA;
-    else if (prevPortal.regionB === curPortal.regionA || prevPortal.regionB === curPortal.regionB) sharedRegion = prevPortal.regionB;
-
-    if (sharedRegion !== REGION_NONE) {
-      const prevExit = portalCellInRegion(chain[i - 1], sharedRegion);
-      const curEntry = portalCellInRegion(chain[i], sharedRegion);
-      if (prevExit !== curEntry) {
-        const seg = localRegionMacroBfs(world, prevExit, curEntry, sharedRegion);
-        // Skip first cell (already added)
-        for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
-      }
-    }
-    // Add current portal exit side
-    const curExit = portalCellInRegion(chain[i], sharedRegion !== REGION_NONE && sharedRegion !== rT
-      ? (curPortal.regionA === sharedRegion ? curPortal.regionB : curPortal.regionA)
-      : rT);
-    if (macroCells[macroCells.length - 1] !== curExit) macroCells.push(curExit);
-  }
-
-  // Last portal exit → end
-  if (macroCells[macroCells.length - 1] !== mEnd) {
-    const seg = localRegionMacroBfs(world, macroCells[macroCells.length - 1], mEnd, rT);
+  // Final leg: last portal exit → end cell within the target region.
+  if (cur !== mEnd) {
+    const seg = localRegionMacroBfs(world, cur, mEnd, rT);
+    if (seg.length === 0) { _bfsMiss++; return []; }
     for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
   }
 

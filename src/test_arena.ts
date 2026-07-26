@@ -31,7 +31,7 @@ let mouseSubY = 0;
 
 // Setup
 seedGlobalRng(1337);
-world.cells.fill(Cell.FLOOR);
+world.cells.fill(Cell.WALL);
 setPathContext([], 0);
 
 // Helper for UI
@@ -544,7 +544,14 @@ function createNPC(x: number, y: number) {
 const ARENA_OFFSET = 1024;
 
 function clearArena() {
-  world.cells.fill(Cell.FLOOR);
+  world.cells.fill(Cell.WALL);
+  // Carve a 64×64 arena area so HPA* has manageable regions
+  for (let dy = -2; dy < 66; dy++) {
+    for (let dx = -2; dx < 66; dx++) {
+      const ci = ((ARENA_OFFSET + dy + W) % W) * W + ((ARENA_OFFSET + dx + W) % W);
+      world.cells[ci] = Cell.FLOOR;
+    }
+  }
   for (let i = 0; i < W*W; i++) clearPathBlockersAtCell(world, i);
   world.cellVersion++;
   entities = [];
@@ -635,3 +642,5 @@ function loadPresetTangentStuck() {
 // Init
 loadPresetTangentStuck();
 requestAnimationFrame(draw);
+Object.defineProperty(window, 'world', { get: () => world });
+Object.defineProperty(window, 'entities', { get: () => entities });
