@@ -13,6 +13,7 @@ import { setListenerPos } from '../src/systems/audio';
 import { monsterSpr } from '../src/render/sprite_index';
 import { S, CLEAR } from '../src/render/pixutil';
 import { makeGameState } from './helpers';
+import { bfsPath } from '../src/systems/ai/pathfinding';
 
 function openWorld(): World {
   const world = new World();
@@ -118,6 +119,7 @@ test('Slepoglaz definition, ecology, and sprite verify attributes and generation
 test('Slepoglaz aims at last sound position if present, and performs windup', () => {
   resetNoiseRecords();
   const world = openWorld();
+  bfsPath(world, 0, 0, 0, 0); // bake nav tree
   setListenerPos(512, 512, world.dist2.bind(world));
   const target = player(10, 10);
   const monster = slepoglaz(2, 20, 10);
@@ -155,6 +157,7 @@ test('Slepoglaz aims at last sound position if present, and performs windup', ()
 test('Slepoglaz aims at old position via sight if no recent loud noise', () => {
   resetNoiseRecords();
   const world = openWorld();
+  bfsPath(world, 0, 0, 0, 0); // bake nav tree
   setListenerPos(512, 512, world.dist2.bind(world));
   const target = player(10, 10);
   const monster = slepoglaz(2, 20, 10);

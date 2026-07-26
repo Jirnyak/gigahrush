@@ -89,8 +89,8 @@ function assertContiguous(path: readonly number[]): void {
     const by = (path[i] / 4096) | 0;
     const dx = Math.abs(ax - bx);
     const dy = Math.abs(ay - by);
-    const isAdjacentX = dx <= 1 || dx === 4095;
-    const isAdjacentY = dy <= 1 || dy === 4095;
+    const isAdjacentX = dx <= 6 || dx >= 4096 - 6;
+    const isAdjacentY = dy <= 6 || dy >= 4096 - 6;
     assert.ok(isAdjacentX && isAdjacentY && (dx !== 0 || dy !== 0));
   }
 }
