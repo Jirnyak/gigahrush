@@ -27,8 +27,6 @@ export function setPathContext(msgs: Msg[], time: number, _samosborActive = fals
 
 /* ── Baked navigation tree (toroidal, ordinary doors are openable) */
 
-const NAV_UNKNOWN = -3;
-const NAV_BLOCKED = -2;
 const FLOW_UNREACHED = -1;
 const FLOW_BLOCKED = -2;
 const PATH_CHUNK_LIMIT = 1048576;
@@ -40,19 +38,16 @@ const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
 const SW = W * PATH_BLOCKER_SUBDIV;
 const SW2 = SW * SW;
-const MACRO_TREES_COUNT = 64;
 const MACRO_W2 = W * W;
-const DIR_ROOT = 15;
-const DIR_UNREACHED = 0;
-const DIR_N = 1;
-const DIR_E = 2;
-const DIR_S = 3;
-const DIR_W = 4;
 
-const _macroFlowFields = Array.from({ length: 32 }, () => new Uint8Array(MACRO_W2));
-const _macroQueue = new Int32Array(MACRO_W2);
-const _lcaMark = new Uint32Array(MACRO_W2);
-let _lcaMarkId = 0;
+
+/* ── Region-Portal HPA* constants ─────────────────────────────── */
+const CLUSTER_SIZE = 16;
+const CLUSTERS_PER_SIDE = (W / CLUSTER_SIZE) | 0;
+const MAX_PORTALS = 1500;
+const PORTAL_UNREACHABLE = 65535;
+const REGION_NONE = 0;
+const INF_DIST = 1e9;
 
 const _navQueue = new Int32Array(SW2);
 const NAV_QUEUE_HALF = Math.floor(SW2 / 2);
@@ -82,6 +77,28 @@ let _bfsFound = 0;
 let _bfsMiss = 0;
 let _bfsLimitHits = 0;
 let _bfsVisited = 0;
+
+/* ── Region-Portal HPA* data structures ───────────────────────── */
+const _regionMap = new Int32Array(MACRO_W2);
+let _numRegions = 0;
+
+interface Portal {
+  cx: number; cy: number;
+  ncx: number; ncy: number;
+  regionA: number;
+  regionB: number;
+}
+let _portals: Portal[] = [];
+let _numPortals = 0;
+let _regionPortalIndices: number[][] = [];
+let _fwDist: Float32Array | null = null;
+let _fwNext: Uint16Array | null = null;
+let _fwN = 0;
+
+const _rBfsQueue = new Int32Array(MACRO_W2);
+const _rBfsDist = new Int32Array(MACRO_W2);
+const _rBfsEpoch = new Int32Array(MACRO_W2);
+let _rBfsEpochId = 0;
 
 export type BehaviorFlowFieldSourceProvider = (world: World, out: number[]) => void;
 
@@ -420,32 +437,143 @@ function getMacroMask(world: World, ci: number): number {
   return b0 | (b1 << 4) | (b2 << 8) | (b3 << 12);
 }
 
-function getMacroDir(t: number, cell: number): number {
-  const arrayIdx = t >> 1;
-  const isHigh = (t & 1) === 1;
-  const val = _macroFlowFields[arrayIdx][cell];
-  return isHigh ? (val >> 4) : (val & 0x0F);
+/* ── Region-Portal HPA* helpers ───────────────────────────────── */
+
+function macroCellsConnected(world: World, ci: number, ni: number): boolean {
+  const curMask = getMacroMask(world, ci);
+  if (curMask === 65535) return false;
+  const nMask = getMacroMask(world, ni);
+  if (nMask === 65535) return false;
+  const cx = ci % W, cy = (ci / W) | 0;
+  const nx = ni % W, ny = (ni / W) | 0;
+  if (ny === ((cy - 1 + W) % W) && nx === cx) {
+    for (let x = 0; x < 4; x++) if ((curMask & (1 << x)) === 0 && (nMask & (1 << (12 + x))) === 0) return true;
+  } else if (ny === ((cy + 1) % W) && nx === cx) {
+    for (let x = 0; x < 4; x++) if ((curMask & (1 << (12 + x))) === 0 && (nMask & (1 << x)) === 0) return true;
+  } else if (nx === ((cx + 1) % W) && ny === cy) {
+    for (let y = 0; y < 4; y++) if ((curMask & (1 << (y * 4 + 3))) === 0 && (nMask & (1 << (y * 4))) === 0) return true;
+  } else if (nx === ((cx - 1 + W) % W) && ny === cy) {
+    for (let y = 0; y < 4; y++) if ((curMask & (1 << (y * 4))) === 0 && (nMask & (1 << (y * 4 + 3))) === 0) return true;
+  }
+  return false;
 }
 
-function setMacroDir(t: number, cell: number, dir: number): void {
-  const arrayIdx = t >> 1;
-  const isHigh = (t & 1) === 1;
-  const val = _macroFlowFields[arrayIdx][cell];
-  if (isHigh) {
-    _macroFlowFields[arrayIdx][cell] = (val & 0x0F) | (dir << 4);
+function findBorderSubcells(world: World, cx: number, cy: number, ncx: number, ncy: number): [number, number] | null {
+  if (ncy === ((cy - 1 + W) % W) && ncx === cx) {
+    for (let x = 0; x < 4; x++) {
+      if (isSubcellNavPassable(world, (cy * 4) * SW + cx * 4 + x) && isSubcellNavPassable(world, (ncy * 4 + 3) * SW + ncx * 4 + x))
+        return [(cy * 4) * SW + cx * 4 + x, (ncy * 4 + 3) * SW + ncx * 4 + x];
+    }
+  } else if (ncy === ((cy + 1) % W) && ncx === cx) {
+    for (let x = 0; x < 4; x++) {
+      if (isSubcellNavPassable(world, (cy * 4 + 3) * SW + cx * 4 + x) && isSubcellNavPassable(world, (ncy * 4) * SW + ncx * 4 + x))
+        return [(cy * 4 + 3) * SW + cx * 4 + x, (ncy * 4) * SW + ncx * 4 + x];
+    }
+  } else if (ncx === ((cx + 1) % W) && ncy === cy) {
+    for (let y = 0; y < 4; y++) {
+      if (isSubcellNavPassable(world, (cy * 4 + y) * SW + cx * 4 + 3) && isSubcellNavPassable(world, (ncy * 4 + y) * SW + ncx * 4))
+        return [(cy * 4 + y) * SW + cx * 4 + 3, (ncy * 4 + y) * SW + ncx * 4];
+    }
+  } else if (ncx === ((cx - 1 + W) % W) && ncy === cy) {
+    for (let y = 0; y < 4; y++) {
+      if (isSubcellNavPassable(world, (cy * 4 + y) * SW + cx * 4) && isSubcellNavPassable(world, (ncy * 4 + y) * SW + ncx * 4 + 3))
+        return [(cy * 4 + y) * SW + cx * 4, (ncy * 4 + y) * SW + ncx * 4 + 3];
+    }
+  }
+  return null;
+}
+
+function portalCellInRegion(portalIdx: number, regionId: number): number {
+  const p = _portals[portalIdx];
+  if (p.regionA === regionId) return p.cy * W + p.cx;
+  return p.ncy * W + p.ncx;
+}
+
+function toroidalManhattan(ci: number, cj: number): number {
+  const ax = ci % W, ay = (ci / W) | 0;
+  const bx = cj % W, by = (cj / W) | 0;
+  let dx = Math.abs(ax - bx); if (dx > W / 2) dx = W - dx;
+  let dy = Math.abs(ay - by); if (dy > W / 2) dy = W - dy;
+  return dx + dy;
+}
+
+function emitPortalFromRun(xOrYmid: number, isHorizontal: boolean, cy: number, ncy: number, cx: number, ncx: number, rA: number, rB: number): void {
+  if (isHorizontal) {
+    _portals.push({ cx: xOrYmid, cy, ncx: xOrYmid, ncy, regionA: rA, regionB: rB });
   } else {
-    _macroFlowFields[arrayIdx][cell] = (val & 0xF0) | dir;
+    _portals.push({ cx, cy: xOrYmid, ncx, ncy: xOrYmid, regionA: rA, regionB: rB });
   }
 }
 
-function getMacroParent(m: number, dir: number): number {
-  const cx = m % W;
-  const cy = Math.floor(m / W);
-  if (dir === DIR_N) return (cy === 0 ? W - 1 : cy - 1) * W + cx;
-  if (dir === DIR_S) return (cy === W - 1 ? 0 : cy + 1) * W + cx;
-  if (dir === DIR_E) return cy * W + (cx === W - 1 ? 0 : cx + 1);
-  if (dir === DIR_W) return cy * W + (cx === 0 ? W - 1 : cx - 1);
-  return -1;
+function localRegionMacroBfs(world: World, mStart: number, mEnd: number, regionId: number): number[] {
+  if (mStart === mEnd) return [mEnd];
+  _rBfsEpochId++;
+  if (_rBfsEpochId > 2000000000) { _rBfsEpoch.fill(0); _rBfsEpochId = 1; }
+  _rBfsEpoch[mStart] = _rBfsEpochId;
+  _rBfsDist[mStart] = 0;
+  let head = 0, tail = 0;
+  _rBfsQueue[tail++] = mStart;
+  let found = false;
+  while (head < tail && !found) {
+    const cur = _rBfsQueue[head++];
+    const curCx = cur % W, curCy = (cur / W) | 0;
+    const d = _rBfsDist[cur];
+    const nb = [
+      ((curCy - 1 + W) % W) * W + curCx,
+      curCy * W + ((curCx + 1) % W),
+      ((curCy + 1) % W) * W + curCx,
+      curCy * W + ((curCx - 1 + W) % W),
+    ];
+    for (let k = 0; k < 4; k++) {
+      const ni = nb[k];
+      if (_rBfsEpoch[ni] === _rBfsEpochId) continue;
+      if (_regionMap[ni] !== regionId) continue;
+      if (!macroCellsConnected(world, cur, ni)) continue;
+      _rBfsEpoch[ni] = _rBfsEpochId;
+      _rBfsDist[ni] = d + 1;
+      _rBfsQueue[tail++] = ni;
+      if (ni === mEnd) { found = true; break; }
+    }
+  }
+  if (!found && _rBfsEpoch[mEnd] !== _rBfsEpochId) return [];
+  const path: number[] = [];
+  let cur = mEnd;
+  let safety = 0;
+  while (cur !== mStart && safety < MACRO_W2) {
+    path.push(cur);
+    const curCx = cur % W, curCy = (cur / W) | 0;
+    const d = _rBfsDist[cur];
+    const nb = [
+      ((curCy - 1 + W) % W) * W + curCx,
+      curCy * W + ((curCx + 1) % W),
+      ((curCy + 1) % W) * W + curCx,
+      curCy * W + ((curCx - 1 + W) % W),
+    ];
+    let moved = false;
+    for (let k = 0; k < 4; k++) {
+      const ni = nb[k];
+      if (_rBfsEpoch[ni] === _rBfsEpochId && _rBfsDist[ni] === d - 1 && _regionMap[ni] === regionId) {
+        cur = ni; moved = true; break;
+      }
+    }
+    if (!moved) break;
+    safety++;
+  }
+  path.push(mStart);
+  path.reverse();
+  return path;
+}
+
+function macroCellPathToSubcells(world: World, macroPath: number[], endSubcell: number): number[] {
+  if (macroPath.length <= 1) return macroPath.length === 1 ? [endSubcell] : [];
+  const subcellPath: number[] = [];
+  for (let i = 0; i < macroPath.length - 1; i++) {
+    const m = macroPath[i], nextM = macroPath[i + 1];
+    const border = findBorderSubcells(world, m % W, (m / W) | 0, nextM % W, (nextM / W) | 0);
+    if (border) { subcellPath.push(border[0]); subcellPath.push(border[1]); }
+  }
+  if (subcellPath.length > 0) subcellPath[subcellPath.length - 1] = endSubcell;
+  return subcellPath;
 }
 
 export function bakeNavigationTree(
@@ -454,142 +582,204 @@ export function bakeNavigationTree(
   cachePathBlockerVersion = world.pathBlockerVersion,
 ): void {
   _bfsCalls++;
-  for (let i = 0; i < 32; i++) {
-    _macroFlowFields[i].fill(0);
-  }
   _navWorld = world;
   _navCellVersion = cacheCellVersion;
   _navPathBlockerVersion = cachePathBlockerVersion;
 
-  for (let t = 0; t < MACRO_TREES_COUNT; t++) {
-    const ax = (t % 8) * 128 + 64;
-    const ay = Math.floor(t / 8) * 128 + 64;
-    const root = ay * W + ax;
+  /* ── Step 1: Region assignment ──────────────────────────────── */
+  _regionMap.fill(REGION_NONE);
+  let nextRegionId = 1;
 
-    let head = 0;
-    let tail = 0;
-    
-    setMacroDir(t, root, DIR_ROOT);
-    _macroQueue[tail++] = root;
-
-    while (head !== tail) {
-      const cur = _macroQueue[head++];
-      const cx = cur % W;
-      const cy = Math.floor(cur / W);
-      
-      const curMask = getMacroMask(world, cur);
-      const curLut = MACRO_LUT[curMask];
-      const curDir = getMacroDir(t, cur);
-
-      let canExitN = false, canExitE = false, canExitS = false, canExitW = false;
-      
-      if (curDir === DIR_ROOT) {
-         canExitN = (curLut & LUT_TOUCH_N) !== 0;
-         canExitE = (curLut & LUT_TOUCH_E) !== 0;
-         canExitS = (curLut & LUT_TOUCH_S) !== 0;
-         canExitW = (curLut & LUT_TOUCH_W) !== 0;
-      } else if (curDir === DIR_N) {
-         canExitN = (curLut & LUT_TOUCH_N) !== 0;
-         canExitE = (curLut & LUT_CONN_NE) !== 0;
-         canExitS = (curLut & LUT_CONN_NS) !== 0;
-         canExitW = (curLut & LUT_CONN_NW) !== 0;
-      } else if (curDir === DIR_E) {
-         canExitN = (curLut & LUT_CONN_NE) !== 0;
-         canExitE = (curLut & LUT_TOUCH_E) !== 0;
-         canExitS = (curLut & LUT_CONN_ES) !== 0;
-         canExitW = (curLut & LUT_CONN_EW) !== 0;
-      } else if (curDir === DIR_S) {
-         canExitN = (curLut & LUT_CONN_NS) !== 0;
-         canExitE = (curLut & LUT_CONN_ES) !== 0;
-         canExitS = (curLut & LUT_TOUCH_S) !== 0;
-         canExitW = (curLut & LUT_CONN_SW) !== 0;
-      } else if (curDir === DIR_W) {
-         canExitN = (curLut & LUT_CONN_NW) !== 0;
-         canExitE = (curLut & LUT_CONN_EW) !== 0;
-         canExitS = (curLut & LUT_CONN_SW) !== 0;
-         canExitW = (curLut & LUT_TOUCH_W) !== 0;
-      }
-
-      const nN_cx = cx;
-      const nN_cy = cy === 0 ? W - 1 : cy - 1;
-      const nN = nN_cy * W + nN_cx;
-      if (canExitN && getMacroDir(t, nN) === DIR_UNREACHED) {
-         const nMask = getMacroMask(world, nN);
-         const nLut = MACRO_LUT[nMask];
-         let aligned = false;
-         for (let x=0; x<4; x++) {
-             const cur_pass = (curMask & (1 << (0*4+x))) === 0;
-             const n_pass = (nMask & (1 << (3*4+x))) === 0;
-             if (cur_pass && n_pass) aligned = true;
-         }
-         if (aligned && (nLut & LUT_TOUCH_S)) {
-             setMacroDir(t, nN, DIR_S);
-             _macroQueue[tail++] = nN;
-         }
-      }
-
-      const nS_cx = cx;
-      const nS_cy = cy === W - 1 ? 0 : cy + 1;
-      const nS = nS_cy * W + nS_cx;
-      if (canExitS && getMacroDir(t, nS) === DIR_UNREACHED) {
-         const nMask = getMacroMask(world, nS);
-         const nLut = MACRO_LUT[nMask];
-         let aligned = false;
-         for (let x=0; x<4; x++) {
-             const cur_pass = (curMask & (1 << (3*4+x))) === 0;
-             const n_pass = (nMask & (1 << (0*4+x))) === 0;
-             if (cur_pass && n_pass) aligned = true;
-         }
-         if (aligned && (nLut & LUT_TOUCH_N)) {
-             setMacroDir(t, nS, DIR_N);
-             _macroQueue[tail++] = nS;
-         }
-      }
-
-      const nE_cx = cx === W - 1 ? 0 : cx + 1;
-      const nE_cy = cy;
-      const nE = nE_cy * W + nE_cx;
-      if (canExitE && getMacroDir(t, nE) === DIR_UNREACHED) {
-         const nMask = getMacroMask(world, nE);
-         const nLut = MACRO_LUT[nMask];
-         let aligned = false;
-         for (let y=0; y<4; y++) {
-             const cur_pass = (curMask & (1 << (y*4+3))) === 0;
-             const n_pass = (nMask & (1 << (y*4+0))) === 0;
-             if (cur_pass && n_pass) aligned = true;
-         }
-         if (aligned && (nLut & LUT_TOUCH_W)) {
-             setMacroDir(t, nE, DIR_W);
-             _macroQueue[tail++] = nE;
-         }
-      }
-
-      const nW_cx = cx === 0 ? W - 1 : cx - 1;
-      const nW_cy = cy;
-      const nW = nW_cy * W + nW_cx;
-      if (canExitW && getMacroDir(t, nW) === DIR_UNREACHED) {
-         const nMask = getMacroMask(world, nW);
-         const nLut = MACRO_LUT[nMask];
-         let aligned = false;
-         for (let y=0; y<4; y++) {
-             const cur_pass = (curMask & (1 << (y*4+0))) === 0;
-             const n_pass = (nMask & (1 << (y*4+3))) === 0;
-             if (cur_pass && n_pass) aligned = true;
-         }
-         if (aligned && (nLut & LUT_TOUCH_E)) {
-             setMacroDir(t, nW, DIR_E);
-             _macroQueue[tail++] = nW;
-         }
+  // 1a: Room regions
+  for (const room of world.rooms) {
+    if (!room) continue;
+    const rid = nextRegionId++;
+    for (let ry = room.y; ry < room.y + room.h; ry++) {
+      for (let rx = room.x; rx < room.x + room.w; rx++) {
+        const ci = ((ry % W + W) % W) * W + ((rx % W + W) % W);
+        if (world.roomMap[ci] === room.id && isMacroCellPassable(world, ci, world.cells[ci])) {
+          _regionMap[ci] = rid;
+        }
       }
     }
   }
+
+  // 1b: Cluster flood-fill for non-room passable cells
+  for (let clusterRow = 0; clusterRow < CLUSTERS_PER_SIDE; clusterRow++) {
+    for (let clusterCol = 0; clusterCol < CLUSTERS_PER_SIDE; clusterCol++) {
+      const baseX = clusterCol * CLUSTER_SIZE;
+      const baseY = clusterRow * CLUSTER_SIZE;
+      for (let dy = 0; dy < CLUSTER_SIZE; dy++) {
+        for (let dx = 0; dx < CLUSTER_SIZE; dx++) {
+          const cxl = (baseX + dx) % W;
+          const cyl = (baseY + dy) % W;
+          const ci = cyl * W + cxl;
+          if (_regionMap[ci] !== REGION_NONE) continue;
+          if (!isMacroCellPassable(world, ci, world.cells[ci])) continue;
+          const rid = nextRegionId++;
+          let qH = 0, qT = 0;
+          _rBfsQueue[qT++] = ci;
+          _regionMap[ci] = rid;
+          while (qH < qT) {
+            const cur = _rBfsQueue[qH++];
+            const curX = cur % W, curY = (cur / W) | 0;
+            const nb = [
+              ((curY - 1 + W) % W) * W + curX,
+              curY * W + ((curX + 1) % W),
+              ((curY + 1) % W) * W + curX,
+              curY * W + ((curX - 1 + W) % W),
+            ];
+            for (let k = 0; k < 4; k++) {
+              const ni = nb[k];
+              if (_regionMap[ni] !== REGION_NONE) continue;
+              const nx = ni % W, ny = (ni / W) | 0;
+              if (((nx - baseX + W) % W) >= CLUSTER_SIZE) continue;
+              if (((ny - baseY + W) % W) >= CLUSTER_SIZE) continue;
+              if (!isMacroCellPassable(world, ni, world.cells[ni])) continue;
+              if (!macroCellsConnected(world, cur, ni)) continue;
+              _regionMap[ni] = rid;
+              _rBfsQueue[qT++] = ni;
+            }
+          }
+        }
+      }
+    }
+  }
+  _numRegions = nextRegionId;
+  _navComponents = _numRegions;
+
+  /* ── Step 2: Portal detection (grouped contiguous segments) ─── */
+  _portals = [];
+  // Horizontal borders: between cy and (cy-1+W)%W
+  for (let cy = 0; cy < W; cy++) {
+    const ncy = (cy - 1 + W) % W;
+    let runStart = -1, runRA = 0, runRB = 0;
+    for (let cx = 0; cx < W; cx++) {
+      const ci = cy * W + cx, ni = ncy * W + cx;
+      const rA = _regionMap[ci], rB = _regionMap[ni];
+      const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
+      if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
+        if (runStart >= 0) emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
+        runStart = cx; runRA = rA; runRB = rB;
+      } else if (!ok && runStart >= 0) {
+        emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
+        runStart = -1;
+      }
+    }
+    if (runStart >= 0) emitPortalFromRun(((runStart + W - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
+  }
+  // Vertical borders: between cx and (cx-1+W)%W
+  for (let cx = 0; cx < W; cx++) {
+    const ncx = (cx - 1 + W) % W;
+    let runStart = -1, runRA = 0, runRB = 0;
+    for (let cy = 0; cy < W; cy++) {
+      const ci = cy * W + cx, ni = cy * W + ncx;
+      const rA = _regionMap[ci], rB = _regionMap[ni];
+      const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
+      if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
+        if (runStart >= 0) emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
+        runStart = cy; runRA = rA; runRB = rB;
+      } else if (!ok && runStart >= 0) {
+        emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
+        runStart = -1;
+      }
+    }
+    if (runStart >= 0) emitPortalFromRun(((runStart + W - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
+  }
+  _numPortals = _portals.length;
+
+  /* ── Step 3: Region → portal index ──────────────────────────── */
+  _regionPortalIndices = [];
+  for (let i = 0; i < _numRegions; i++) _regionPortalIndices.push([]);
+  for (let pi = 0; pi < _numPortals; pi++) {
+    const p = _portals[pi];
+    _regionPortalIndices[p.regionA].push(pi);
+    _regionPortalIndices[p.regionB].push(pi);
+  }
+
+  /* ── Step 4: Intra-region BFS + Floyd-Warshall ──────────────── */
+  const N = Math.min(_numPortals, MAX_PORTALS);
+  if (N === 0) { _fwDist = null; _fwNext = null; _fwN = 0; return; }
+  _fwN = N;
+  const fwDist = new Float32Array(N * N);
+  const fwNext = new Uint16Array(N * N);
+  fwDist.fill(INF_DIST);
+  fwNext.fill(PORTAL_UNREACHABLE);
+  for (let i = 0; i < N; i++) { fwDist[i * N + i] = 0; fwNext[i * N + i] = i; }
+
+  // Intra-region edges: BFS between portals sharing a region
+  for (let r = 1; r < _numRegions; r++) {
+    const rp = _regionPortalIndices[r];
+    if (rp.length < 2) continue;
+    for (let a = 0; a < rp.length; a++) {
+      const pi = rp[a];
+      if (pi >= N) continue;
+      const startCell = portalCellInRegion(pi, r);
+      if (startCell < 0) continue;
+      _rBfsEpochId++;
+      if (_rBfsEpochId > 2000000000) { _rBfsEpoch.fill(0); _rBfsEpochId = 1; }
+      _rBfsEpoch[startCell] = _rBfsEpochId;
+      _rBfsDist[startCell] = 0;
+      let bH = 0, bT = 0;
+      _rBfsQueue[bT++] = startCell;
+      while (bH < bT) {
+        const cur = _rBfsQueue[bH++];
+        const d = _rBfsDist[cur];
+        const curX = cur % W, curY = (cur / W) | 0;
+        const nb = [
+          ((curY - 1 + W) % W) * W + curX,
+          curY * W + ((curX + 1) % W),
+          ((curY + 1) % W) * W + curX,
+          curY * W + ((curX - 1 + W) % W),
+        ];
+        for (let k = 0; k < 4; k++) {
+          const ni = nb[k];
+          if (_rBfsEpoch[ni] === _rBfsEpochId) continue;
+          if (_regionMap[ni] !== r) continue;
+          if (!macroCellsConnected(world, cur, ni)) continue;
+          _rBfsEpoch[ni] = _rBfsEpochId;
+          _rBfsDist[ni] = d + 1;
+          _rBfsQueue[bT++] = ni;
+        }
+      }
+      for (let b = 0; b < rp.length; b++) {
+        const pj = rp[b];
+        if (pj >= N || pj === pi) continue;
+        const targetCell = portalCellInRegion(pj, r);
+        if (_rBfsEpoch[targetCell] === _rBfsEpochId) {
+          const dist = _rBfsDist[targetCell];
+          if (dist < fwDist[pi * N + pj]) { fwDist[pi * N + pj] = dist; fwNext[pi * N + pj] = pj; }
+        }
+      }
+    }
+  }
+
+  // Floyd-Warshall (with skip optimization for sparse graphs)
+  for (let k = 0; k < N; k++) {
+    for (let i = 0; i < N; i++) {
+      const ik = fwDist[i * N + k];
+      if (ik >= INF_DIST) continue;
+      for (let j = 0; j < N; j++) {
+        const nd = ik + fwDist[k * N + j];
+        if (nd < fwDist[i * N + j]) {
+          fwDist[i * N + j] = nd;
+          fwNext[i * N + j] = fwNext[i * N + k];
+        }
+      }
+    }
+  }
+  _fwDist = fwDist;
+  _fwNext = fwNext;
 }
+
 function ensureNavigationTree(world: World): void {
-  if (_navWorld === world) {
+  const cellV = navigationCacheCellVersion(world);
+  const pbV = navigationCachePathBlockerVersion(world);
+  if (_navWorld === world && _navCellVersion === cellV && _navPathBlockerVersion === pbV) {
     _pathCacheHits++;
     return;
   }
-  bakeNavigationTree(world, world.cellVersion, world.pathBlockerVersion);
+  bakeNavigationTree(world, cellV, pbV);
 }
 
 function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
@@ -710,230 +900,151 @@ function trimBehaviorFlowFieldCache(): void {
   }
 }
 
-function getMacroLca(t: number, mStart: number, mEnd: number): number {
-  _lcaMarkId++;
-  if (_lcaMarkId > 2000000000) {
-    _lcaMark.fill(0);
-    _lcaMarkId = 1;
-  }
-  let curr = mStart;
-  let steps = 0;
-  while (curr !== -1 && steps < 2000) {
-    _lcaMark[curr] = _lcaMarkId;
-    const dir = getMacroDir(t, curr);
-    if (dir === DIR_ROOT || dir === DIR_UNREACHED) {
-      if (dir === DIR_ROOT) _lcaMark[curr] = _lcaMarkId;
-      break;
-    }
-    curr = getMacroParent(curr, dir);
-    steps++;
-  }
-  curr = mEnd;
-  steps = 0;
-  while (curr !== -1 && steps < 2000) {
-    if (_lcaMark[curr] === _lcaMarkId) return curr;
-    const dir = getMacroDir(t, curr);
-    if (dir === DIR_ROOT || dir === DIR_UNREACHED) break;
-    curr = getMacroParent(curr, dir);
-    steps++;
-  }
-  if (_lcaMark[curr] === _lcaMarkId) return curr;
-  return -1;
-}
 
-
-export function getAcousticDistance(_world: World, x0: number, y0: number, x1: number, y1: number): number {
+export function getAcousticDistance(world: World, x0: number, y0: number, x1: number, y1: number): number {
   const s0 = subcellIdx(x0, y0);
   const s1 = subcellIdx(x1, y1);
   if (s0 === s1) return 0;
-
   const mStart = Math.floor((s0 % SW) / 4) + Math.floor((s0 / SW) / 4) * W;
   const mEnd = Math.floor((s1 % SW) / 4) + Math.floor((s1 / SW) / 4) * W;
-
-  let minLen = Infinity;
-  for (let t = 0; t < 8; t++) {
-    if (getMacroDir(t, mStart) === DIR_UNREACHED || getMacroDir(t, mEnd) === DIR_UNREACHED) continue;
-    const lca = getMacroLca(t, mStart, mEnd);
-    if (lca === -1) continue;
-
-    let lenA = 0;
-    let curr = mStart;
-    while (curr !== lca && lenA < 2000) {
-      curr = getMacroParent(curr, getMacroDir(t, curr));
-      lenA++;
-    }
-
-    let lenB = 0;
-    curr = mEnd;
-    while (curr !== lca && lenB < 2000) {
-      curr = getMacroParent(curr, getMacroDir(t, curr));
-      lenB++;
-    }
-    
-    if (lenA + lenB < minLen) minLen = lenA + lenB;
-  }
-  
-  if (minLen === Infinity) return Infinity;
-  return (minLen * 4) / PATH_BLOCKER_SUBDIV;
-}
-
-function constructPathFromTree(t: number, mStart: number, mEnd: number, world: World): number[] {
-  const lca = getMacroLca(t, mStart, mEnd);
-  if (lca === -1) return [];
-
-  const forward = [];
-  const reverse = [];
-
-  let curr = mStart;
-  let steps = 0;
-  while (curr !== lca && steps < 2000) {
-    forward.push(curr);
-    curr = getMacroParent(curr, getMacroDir(t, curr));
-    steps++;
-  }
-  
-  curr = mEnd;
-  steps = 0;
-  while (curr !== lca && steps < 2000) {
-    reverse.push(curr);
-    curr = getMacroParent(curr, getMacroDir(t, curr));
-    steps++;
-  }
-
-  forward.push(lca);
-  for (let i = reverse.length - 1; i >= 0; i--) {
-    forward.push(reverse[i]);
-  }
-
-  const subcellPath = [];
-  
-  for (let i = 0; i < forward.length; i++) {
-    const m = forward[i];
-    const cx = m % W;
-    const cy = Math.floor(m / W);
-    
-    if (i < forward.length - 1) {
-       const nextM = forward[i+1];
-       const ncx = nextM % W;
-       const ncy = Math.floor(nextM / W);
-       
-       let borderSx = cx * 4 + 2;
-       let borderSy = cy * 4 + 2;
-       let nBorderSx = ncx * 4 + 2;
-       let nBorderSy = ncy * 4 + 2;
-       
-       if (ncy === cy - 1 || (cy === 0 && ncy === W-1)) {
-           // N
-           for(let x=0; x<4; x++) {
-               if(isSubcellNavPassable(world, (cy*4)*SW + cx*4+x) && isSubcellNavPassable(world, (ncy*4+3)*SW + ncx*4+x)) {
-                   borderSx = cx*4+x; borderSy = cy*4;
-                   nBorderSx = ncx*4+x; nBorderSy = ncy*4+3;
-                   break;
-               }
-           }
-       } else if (ncy === cy + 1 || (cy === W-1 && ncy === 0)) {
-           // S
-           for(let x=0; x<4; x++) {
-               if(isSubcellNavPassable(world, (cy*4+3)*SW + cx*4+x) && isSubcellNavPassable(world, (ncy*4)*SW + ncx*4+x)) {
-                   borderSx = cx*4+x; borderSy = cy*4+3;
-                   nBorderSx = ncx*4+x; nBorderSy = ncy*4;
-                   break;
-               }
-           }
-       } else if (ncx === cx + 1 || (cx === W-1 && ncx === 0)) {
-           // E
-           for(let y=0; y<4; y++) {
-               if(isSubcellNavPassable(world, (cy*4+y)*SW + cx*4+3) && isSubcellNavPassable(world, (ncy*4+y)*SW + ncx*4)) {
-                   borderSx = cx*4+3; borderSy = cy*4+y;
-                   nBorderSx = ncx*4; nBorderSy = ncy*4+y;
-                   break;
-               }
-           }
-       } else if (ncx === cx - 1 || (cx === 0 && ncx === W-1)) {
-           // W
-           for(let y=0; y<4; y++) {
-               if(isSubcellNavPassable(world, (cy*4+y)*SW + cx*4) && isSubcellNavPassable(world, (ncy*4+y)*SW + ncx*4+3)) {
-                   borderSx = cx*4; borderSy = cy*4+y;
-                   nBorderSx = ncx*4+3; nBorderSy = ncy*4+y;
-                   break;
-               }
-           }
-       }
-       
-       subcellPath.push(borderSy * SW + borderSx);
-       subcellPath.push(nBorderSy * SW + nBorderSx);
-    } else if (forward.length === 1) {
-       let bestSx = cx * 4 + 2;
-       let bestSy = cy * 4 + 2;
-       if (!isSubcellNavPassable(world, bestSy * SW + bestSx)) {
-         let found = false;
-         for (let dy = 0; dy < 4 && !found; dy++) {
-           for (let dx = 0; dx < 4 && !found; dx++) {
-             const sx = cx * 4 + dx;
-             const sy = cy * 4 + dy;
-             if (isSubcellNavPassable(world, sy * SW + sx)) {
-               bestSx = sx;
-               bestSy = sy;
-               found = true;
-             }
-           }
-         }
-       }
-       subcellPath.push(bestSy * SW + bestSx);
+  const rS = _regionMap[mStart];
+  const rT = _regionMap[mEnd];
+  if (rS === REGION_NONE || rT === REGION_NONE) return Infinity;
+  if (rS === rT) return world.dist(x0, y0, x1, y1);
+  if (!_fwDist || _fwN === 0) return Infinity;
+  const portalsS = _regionPortalIndices[rS];
+  const portalsT = _regionPortalIndices[rT];
+  if (!portalsS || portalsS.length === 0 || !portalsT || portalsT.length === 0) return Infinity;
+  const N = _fwN;
+  let minDist = Infinity;
+  for (let a = 0; a < portalsS.length; a++) {
+    const pi = portalsS[a];
+    if (pi >= N) continue;
+    const dSrc = toroidalManhattan(mStart, portalCellInRegion(pi, rS));
+    for (let b = 0; b < portalsT.length; b++) {
+      const pj = portalsT[b];
+      if (pj >= N) continue;
+      const pd = _fwDist![pi * N + pj];
+      if (pd >= INF_DIST) continue;
+      const dDst = toroidalManhattan(portalCellInRegion(pj, rT), mEnd);
+      const total = dSrc + pd + dDst;
+      if (total < minDist) minDist = total;
     }
   }
-
-  return subcellPath;
+  return minDist === Infinity ? Infinity : minDist;
 }
 
 function buildBakedTreePath(world: World, start: number, end: number): number[] {
   ensureNavigationTree(world);
   if (start === end) return [];
-
   const mStart = Math.floor((start % SW) / 4) + Math.floor((start / SW) / 4) * W;
   const mEnd = Math.floor((end % SW) / 4) + Math.floor((end / SW) / 4) * W;
+  const rS = _regionMap[mStart];
+  const rT = _regionMap[mEnd];
+  if (rS === REGION_NONE || rT === REGION_NONE) { _bfsMiss++; return []; }
 
-  let bestTree = -1;
-  let minPathLen = Infinity;
-
-  for (let t = 0; t < MACRO_TREES_COUNT; t++) {
-    if (getMacroDir(t, mStart) === DIR_UNREACHED || getMacroDir(t, mEnd) === DIR_UNREACHED) continue;
-    
-    const lca = getMacroLca(t, mStart, mEnd);
-    if (lca === -1) continue;
-
-    let lenA = 0;
-    let curr = mStart;
-    while (curr !== lca && lenA < 2000) {
-      curr = getMacroParent(curr, getMacroDir(t, curr));
-      lenA++;
-    }
-
-    let lenB = 0;
-    curr = mEnd;
-    while (curr !== lca && lenB < 2000) {
-      curr = getMacroParent(curr, getMacroDir(t, curr));
-      lenB++;
-    }
-
-    const len = lenA + lenB;
-    if (len < minPathLen) {
-      minPathLen = len;
-      bestTree = t;
-    }
+  // Same region: local BFS
+  if (rS === rT) {
+    if (mStart === mEnd) { _bfsFound++; return [end]; }
+    const macroPath = localRegionMacroBfs(world, mStart, mEnd, rS);
+    if (macroPath.length === 0) { _bfsMiss++; return []; }
+    const sp = macroCellPathToSubcells(world, macroPath, end);
+    if (sp.length > 0) { _bfsFound++; } else { _bfsMiss++; }
+    return sp;
   }
 
-  if (bestTree < 0) {
-    _bfsMiss++;
-    return [];
+  // Cross-region: portal graph query
+  if (!_fwDist || !_fwNext || _fwN === 0) { _bfsMiss++; return []; }
+  const portalsS = _regionPortalIndices[rS];
+  const portalsT = _regionPortalIndices[rT];
+  if (!portalsS || portalsS.length === 0 || !portalsT || portalsT.length === 0) { _bfsMiss++; return []; }
+  const N = _fwN;
+  let bestCost = INF_DIST, bestSrc = -1, bestDst = -1;
+  for (let a = 0; a < portalsS.length; a++) {
+    const pi = portalsS[a];
+    if (pi >= N) continue;
+    const dSrc = toroidalManhattan(mStart, portalCellInRegion(pi, rS));
+    for (let b = 0; b < portalsT.length; b++) {
+      const pj = portalsT[b];
+      if (pj >= N) continue;
+      const pd = _fwDist![pi * N + pj];
+      if (pd >= INF_DIST) continue;
+      const dDst = toroidalManhattan(portalCellInRegion(pj, rT), mEnd);
+      const cost = dSrc + pd + dDst;
+      if (cost < bestCost) { bestCost = cost; bestSrc = pi; bestDst = pj; }
+    }
+  }
+  if (bestSrc < 0) { _bfsMiss++; return []; }
+
+  // Build portal chain
+  const chain: number[] = [];
+  let p = bestSrc;
+  let safety = 0;
+  while (p !== bestDst && safety < MAX_PORTALS) {
+    chain.push(p);
+    const next = _fwNext![p * N + bestDst];
+    if (next === PORTAL_UNREACHABLE || next === p) { _bfsMiss++; return []; }
+    p = next;
+    safety++;
+  }
+  chain.push(bestDst);
+
+  // Build macro cell path through portal chain with intra-region routing
+  const macroCells: number[] = [];
+
+  // Start → first portal entry side
+  const firstPortal = _portals[chain[0]];
+  const firstEntry = portalCellInRegion(chain[0], rS);
+  if (mStart !== firstEntry) {
+    const seg = localRegionMacroBfs(world, mStart, firstEntry, rS);
+    for (let k = 0; k < seg.length; k++) macroCells.push(seg[k]);
+  } else {
+    macroCells.push(firstEntry);
   }
 
-  _bfsFound++;
-  const subcellPath = constructPathFromTree(bestTree, mStart, mEnd, world);
-  if (subcellPath.length > 0) {
-    subcellPath[subcellPath.length - 1] = end;
+  // Add first portal exit side
+  const firstExit = firstPortal.regionA === rS
+    ? firstPortal.ncy * W + firstPortal.ncx
+    : firstPortal.cy * W + firstPortal.cx;
+  if (macroCells[macroCells.length - 1] !== firstExit) macroCells.push(firstExit);
+
+  // Route through intermediate portals
+  for (let i = 1; i < chain.length; i++) {
+    const prevPortal = _portals[chain[i - 1]];
+    const curPortal = _portals[chain[i]];
+    // Find shared region between consecutive portals
+    let sharedRegion = REGION_NONE;
+    if (prevPortal.regionA === curPortal.regionA || prevPortal.regionA === curPortal.regionB) sharedRegion = prevPortal.regionA;
+    else if (prevPortal.regionB === curPortal.regionA || prevPortal.regionB === curPortal.regionB) sharedRegion = prevPortal.regionB;
+
+    if (sharedRegion !== REGION_NONE) {
+      const prevExit = portalCellInRegion(chain[i - 1], sharedRegion);
+      const curEntry = portalCellInRegion(chain[i], sharedRegion);
+      if (prevExit !== curEntry) {
+        const seg = localRegionMacroBfs(world, prevExit, curEntry, sharedRegion);
+        // Skip first cell (already added)
+        for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
+      }
+    }
+    // Add current portal exit side
+    const curExit = portalCellInRegion(chain[i], sharedRegion !== REGION_NONE && sharedRegion !== rT
+      ? (curPortal.regionA === sharedRegion ? curPortal.regionB : curPortal.regionA)
+      : rT);
+    if (macroCells[macroCells.length - 1] !== curExit) macroCells.push(curExit);
   }
+
+  // Last portal exit → end
+  if (macroCells[macroCells.length - 1] !== mEnd) {
+    const seg = localRegionMacroBfs(world, macroCells[macroCells.length - 1], mEnd, rT);
+    for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
+  }
+
+  // Convert macro cell path to subcell waypoints
+  const subcellPath = macroCellPathToSubcells(world, macroCells, end);
+  if (subcellPath.length > 0) { _bfsFound++; }
+  else { _bfsMiss++; }
   return subcellPath;
+
 }
 
 function buildFlowFieldPath(field: BehaviorFlowField, start: number): number[] {

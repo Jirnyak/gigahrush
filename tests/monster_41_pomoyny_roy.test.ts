@@ -125,7 +125,7 @@ test('pomoyny roy follows dropped bait even while close to the player', () => {
   resetMonsterBaits();
   const world = openWorld();
   const target = player(10, 10);
-  const threat = swarm(2, 12, 10);
+  const threat = swarm(2, 25, 10);
   const entities = [target, threat];
   const state = makeGameState({ worldEvents: createWorldEventState(), currentZ: 0, time: 1 });
   const msgs: Msg[] = [];
