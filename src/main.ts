@@ -80,6 +80,7 @@ import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tr
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
+import { markNavigationCellsDirty } from './systems/ai/pathfinding';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
@@ -6449,7 +6450,10 @@ function setCellToFloor(x: number, y: number): void {
   const oldCell = world.cells[ci];
   if (oldCell === Cell.DOOR) world.removeDoorAt(ci);
   world.cells[ci] = Cell.FLOOR;
-  if (oldCell !== Cell.FLOOR) world.markCellsDirty();
+  if (oldCell !== Cell.FLOOR) {
+    markNavigationCellsDirty([ci]);
+    world.markCellsDirty();
+  }
   if (!world.floorTex[ci]) {
     const room = world.roomAt(x + 0.5, y + 0.5);
     world.floorTex[ci] = room?.floorTex ?? Tex.F_CONCRETE;
@@ -6545,6 +6549,7 @@ function handleDoorKitTool(player: Entity, useEdge: boolean, cx: number, cy: num
   const roomA = world.roomMap[world.idx(cx - 1, cy)] >= 0 ? world.roomMap[world.idx(cx - 1, cy)] : world.roomMap[world.idx(cx, cy - 1)];
   const roomB = world.roomMap[world.idx(cx + 1, cy)] >= 0 ? world.roomMap[world.idx(cx + 1, cy)] : world.roomMap[world.idx(cx, cy + 1)];
   world.cells[ci] = Cell.DOOR;
+  markNavigationCellsDirty([ci]);
   world.markCellsDirty();
   world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
   addRuntimeDoorToRoom(roomA, ci);
@@ -6572,6 +6577,7 @@ function handleBlockKitTool(player: Entity, useEdge: boolean, ci: number): void 
   }
   if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
   world.cells[ci] = Cell.WALL;
+  markNavigationCellsDirty([ci]);
   world.markCellsDirty();
   const room = world.roomAt(player.x, player.y);
   world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;

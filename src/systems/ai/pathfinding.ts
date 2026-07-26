@@ -107,6 +107,30 @@ let _regionPortalIndices: number[][] = [];
 let _regionNext: Uint16Array | null = null;
 let _regionN = 0;
 
+/* ── Incremental-patch state (local wall break / build / door edit) ──
+ * A patch refloods only the 16×16 clusters touching the changed cells and
+ * rebuilds `_regionNext` wholesale (it is O(R·E), sub-ms). Cluster ids simply
+ * GROW per patch — old ids are abandoned, never recycled — which keeps the
+ * patch trivially correct (no id surgery). `_roomRegionId` maps a stable room
+ * id to its fixed region id so a reflooded cluster can re-assert room-cell
+ * membership without a global flood. Room ids never grow; only cluster ids do.
+ * `_bakeBaseRegions` is the region count at the last full bake; once growth
+ * exceeds ~50% of it, a patch falls back to a compacting full bake so the R×R
+ * matrix stays inside the RAM budget under sustained churn. */
+const _roomRegionId = new Map<number, number>();
+let _bakeBaseRegions = 0;
+const NAV_PATCH_MAX_CELLS = 4096;
+const NAV_PATCH_MAX_CLUSTERS = 64;
+const NAV_COMPACT_GROWTH = 1.5;
+
+// Cells whose passability changed since the last bake/patch, fed by
+// markNavigationCellsDirty() from the runtime edit sites (wall break, build,
+// door lock). `_navDirtyFull` forces a full rebake (too many cells, or an
+// unaccounted invalidation). The set is the authoritative work-list for the
+// incremental patch; it is cleared on every bake and every patch.
+const _navDirtyCells = new Set<number>();
+let _navDirtyFull = false;
+
 const _rBfsQueue = new Int32Array(MACRO_W2);
 const _rBfsDist = new Int32Array(MACRO_W2);
 const _rBfsEpoch = new Int32Array(MACRO_W2);
@@ -527,6 +551,46 @@ function toroidalManhattan(ci: number, cj: number): number {
   return dx + dy;
 }
 
+/* Scan one horizontal border row (between cy and (cy-1+W)%W) for portal runs.
+ * Extracted verbatim from bake Step 2 so a local patch re-scans a single row
+ * with bit-identical run-grouping. Appends to `_portals`. */
+function scanHorizontalBorderRow(world: World, cy: number): void {
+  const ncy = (cy - 1 + W) % W;
+  let runStart = -1, runRA = 0, runRB = 0;
+  for (let cx = 0; cx < W; cx++) {
+    const ci = cy * W + cx, ni = ncy * W + cx;
+    const rA = _regionMap[ci], rB = _regionMap[ni];
+    const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
+    if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
+      if (runStart >= 0) emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
+      runStart = cx; runRA = rA; runRB = rB;
+    } else if (!ok && runStart >= 0) {
+      emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
+      runStart = -1;
+    }
+  }
+  if (runStart >= 0) emitPortalFromRun(((runStart + W - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
+}
+
+/* Scan one vertical border column (between cx and (cx-1+W)%W) for portal runs. */
+function scanVerticalBorderCol(world: World, cx: number): void {
+  const ncx = (cx - 1 + W) % W;
+  let runStart = -1, runRA = 0, runRB = 0;
+  for (let cy = 0; cy < W; cy++) {
+    const ci = cy * W + cx, ni = cy * W + ncx;
+    const rA = _regionMap[ci], rB = _regionMap[ni];
+    const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
+    if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
+      if (runStart >= 0) emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
+      runStart = cy; runRA = rA; runRB = rB;
+    } else if (!ok && runStart >= 0) {
+      emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
+      runStart = -1;
+    }
+  }
+  if (runStart >= 0) emitPortalFromRun(((runStart + W - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
+}
+
 function emitPortalFromRun(xOrYmid: number, isHorizontal: boolean, cy: number, ncy: number, cx: number, ncx: number, rA: number, rB: number): void {
   if (isHorizontal) {
     _portals.push({ cx: xOrYmid, cy, ncx: xOrYmid, ncy, regionA: rA, regionB: rB });
@@ -618,12 +682,14 @@ export function bakeNavigationTree(
 
   /* ── Step 1: Region assignment ──────────────────────────────── */
   _regionMap.fill(REGION_NONE);
+  _roomRegionId.clear();
   let nextRegionId = 1;
 
   // 1a: Room regions
   for (const room of world.rooms) {
     if (!room) continue;
     const rid = nextRegionId++;
+    _roomRegionId.set(room.id, rid);
     for (let ry = room.y; ry < room.y + room.h; ry++) {
       for (let rx = room.x; rx < room.x + room.w; rx++) {
         const ci = ((ry % W + W) % W) * W + ((rx % W + W) % W);
@@ -676,46 +742,13 @@ export function bakeNavigationTree(
     }
   }
   _numRegions = nextRegionId;
+  _bakeBaseRegions = nextRegionId;
   _navComponents = _numRegions;
 
   /* ── Step 2: Portal detection (grouped contiguous segments) ─── */
   _portals = [];
-  // Horizontal borders: between cy and (cy-1+W)%W
-  for (let cy = 0; cy < W; cy++) {
-    const ncy = (cy - 1 + W) % W;
-    let runStart = -1, runRA = 0, runRB = 0;
-    for (let cx = 0; cx < W; cx++) {
-      const ci = cy * W + cx, ni = ncy * W + cx;
-      const rA = _regionMap[ci], rB = _regionMap[ni];
-      const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
-      if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
-        if (runStart >= 0) emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
-        runStart = cx; runRA = rA; runRB = rB;
-      } else if (!ok && runStart >= 0) {
-        emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
-        runStart = -1;
-      }
-    }
-    if (runStart >= 0) emitPortalFromRun(((runStart + W - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
-  }
-  // Vertical borders: between cx and (cx-1+W)%W
-  for (let cx = 0; cx < W; cx++) {
-    const ncx = (cx - 1 + W) % W;
-    let runStart = -1, runRA = 0, runRB = 0;
-    for (let cy = 0; cy < W; cy++) {
-      const ci = cy * W + cx, ni = cy * W + ncx;
-      const rA = _regionMap[ci], rB = _regionMap[ni];
-      const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
-      if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
-        if (runStart >= 0) emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
-        runStart = cy; runRA = rA; runRB = rB;
-      } else if (!ok && runStart >= 0) {
-        emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
-        runStart = -1;
-      }
-    }
-    if (runStart >= 0) emitPortalFromRun(((runStart + W - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
-  }
+  for (let cy = 0; cy < W; cy++) scanHorizontalBorderRow(world, cy);
+  for (let cx = 0; cx < W; cx++) scanVerticalBorderCol(world, cx);
   _numPortals = _portals.length;
 
   /* ── Step 3: Region → portal index + region adjacency ───────── */
@@ -727,12 +760,25 @@ export function bakeNavigationTree(
     _regionPortalIndices[p.regionB].push(pi);
   }
 
-  /* ── Step 4: Region-node next-hop matrix ────────────────────────
-   * Nodes are regions; portals are edges. One BFS per region over the
-   * region-adjacency graph fills a dense R×R next-hop matrix. This is a
-   * real graph (all adjacent-region edges kept, cycles preserved) — no
-   * spanning-tree seams, no O(P³) Floyd-Warshall, no portal cap.
-   */
+  /* ── Step 4: Region-node next-hop matrix ─────────────────────── */
+  buildRegionNext();
+
+  // A full bake supersedes any pending incremental work.
+  _navDirtyCells.clear();
+  _navDirtyFull = false;
+}
+
+/**
+ * Rebuild the dense R×R region next-hop matrix from `_regionPortalIndices`.
+ * Nodes are regions; portals are edges. One BFS per region over the
+ * region-adjacency graph — a real graph (all adjacent-region edges kept,
+ * cycles preserved), no spanning-tree seams, no O(P³) Floyd-Warshall, no
+ * portal cap. Cost is O(R·E), sub-millisecond on real floors, so the
+ * incremental patch rebuilds it wholesale rather than trying to patch rows.
+ * Reads `_numRegions`, `_numPortals`, `_regionPortalIndices`, `_portals`;
+ * writes `_regionNext`, `_regionN`.
+ */
+function buildRegionNext(): void {
   const R = _numRegions;
   _regionN = R;
   if (R <= 1 || _numPortals === 0) { _regionNext = null; return; }
@@ -748,7 +794,7 @@ export function bakeNavigationTree(
 
   for (let src = 1; src < R; src++) {
     const srcPortals = _regionPortalIndices[src];
-    if (srcPortals.length === 0) continue;
+    if (!srcPortals || srcPortals.length === 0) continue;
     regionNext[src * R + src] = src;
     _regEpochId++;
     if (_regEpochId > 2000000000) { _regEpoch.fill(0); _regEpochId = 1; }
@@ -774,11 +820,186 @@ export function bakeNavigationTree(
   _regionNext = regionNext;
 }
 
+/**
+ * Mark macro cells whose passability changed, for the incremental nav patch.
+ * Runtime edit sites (wall break, block-kit build, door lock/break) call this
+ * with the affected cell indices right before/after bumping `world.cellVersion`
+ * or `world.pathBlockerVersion`. The next `ensureNavigationTree` refreshes just
+ * those cells locally (no full O(W²) rebake). Reporting is optional: unreported
+ * mutators are simply absorbed as stale-until-the-next-planned-bake. Overflowing
+ * the bounded set drops to that same stale behaviour for this batch.
+ */
+export function markNavigationCellsDirty(cells: Iterable<number>): void {
+  if (_navDirtyFull) return;
+  for (const ci of cells) {
+    _navDirtyCells.add(ci);
+    if (_navDirtyCells.size > NAV_PATCH_MAX_CELLS) { _navDirtyFull = true; _navDirtyCells.clear(); return; }
+  }
+}
+
+/**
+ * Best-effort local refresh of the region/portal graph for the cells reported
+ * via markNavigationCellsDirty() since the last bake, so a wall break / built
+ * block / door lock updates navigation without a full O(W²) rebake.
+ *
+ * Philosophy (single universal O(1)-query system, geometry-agnostic): the only
+ * authoritative full bakes are the PLANNED ones — floor generation/load (a new
+ * World object) and the post-samosbor stitch (unfreeze nulls `_navWorld`). This
+ * routine never full-bakes. When it can cheaply localize the reported change it
+ * does; otherwise it leaves the baked graph slightly STALE until the next
+ * planned bake and just re-syncs the cache version so it is not retried every
+ * frame. A stale graph only yields a sub-optimal or briefly-missing path for a
+ * few cells — acceptable — never a crash or an unbounded computation. This is
+ * why unreported mutators (anomaly snakes, Conway life, block explosions from
+ * other systems) need no wiring: they are simply absorbed as stale-until-bake.
+ *
+ * Local-patch correctness (when it does run): cluster flood-fill is hard-bounded
+ * to its own 16×16 block, so reflooding only the affected clusters reproduces
+ * exactly the cluster regions a full bake would produce there. Room regions are
+ * re-asserted from the unchanged `roomMap` via the stable `_roomRegionId`.
+ * Portals are recomputed by dropping every portal on a border line touching an
+ * affected cluster and rescanning those whole lines — any line NOT rescanned has
+ * identical regionMap on both sides, so its portals are provably unchanged.
+ * Cluster ids simply grow (old ids abandoned), so there is no id surgery.
+ */
+function patchNavigationRegions(world: World, cellV: number, pbV: number): void {
+  // Always re-sync versions + clear the report on exit so ensureNavigationTree
+  // does not re-enter every frame, regardless of whether we localized.
+  const finish = (): void => {
+    _navCellVersion = cellV;
+    _navPathBlockerVersion = pbV;
+    _navDirtyCells.clear();
+    _navDirtyFull = false;
+  };
+
+  const dirty = _navDirtyCells;
+  // Nothing localizable → accept stale (unreported mutation, overflow, no base).
+  if (_navDirtyFull || dirty.size === 0 || _bakeBaseRegions <= 0) { finish(); return; }
+
+  // Affected 16×16 clusters + affected border lines.
+  const clusterKeys = new Set<number>();
+  const affectedHRows = new Set<number>();
+  const affectedVCols = new Set<number>();
+  for (const ci of dirty) {
+    const cx = ci % W, cy = (ci / W) | 0;
+    const cc = (cx / CLUSTER_SIZE) | 0, cr = (cy / CLUSTER_SIZE) | 0;
+    clusterKeys.add(cr * CLUSTERS_PER_SIDE + cc);
+  }
+  if (clusterKeys.size > NAV_PATCH_MAX_CLUSTERS) { finish(); return; }
+
+  // Reflood each affected cluster with fresh (growing) ids.
+  let nextRegionId = _numRegions;
+  for (const key of clusterKeys) {
+    const cr = (key / CLUSTERS_PER_SIDE) | 0, cc = key % CLUSTERS_PER_SIDE;
+    const baseX = cc * CLUSTER_SIZE, baseY = cr * CLUSTER_SIZE;
+    // Border lines that touch this cluster (inside rows/cols and the one line
+    // past each edge, whose far endpoint is inside).
+    for (let k = 0; k <= CLUSTER_SIZE; k++) {
+      affectedHRows.add((baseY + k) % W);
+      affectedVCols.add((baseX + k) % W);
+    }
+    // Clear cluster, then re-assert room cells from the unchanged roomMap.
+    for (let dy = 0; dy < CLUSTER_SIZE; dy++) {
+      const cyl = (baseY + dy) % W;
+      for (let dx = 0; dx < CLUSTER_SIZE; dx++) {
+        const cxl = (baseX + dx) % W;
+        const ci = cyl * W + cxl;
+        _regionMap[ci] = REGION_NONE;
+        const roomId = world.roomMap[ci];
+        if (roomId >= 0 && isMacroCellPassable(world, ci, world.cells[ci])) {
+          const rid = _roomRegionId.get(roomId);
+          if (rid === undefined) { finish(); return; } // room created since bake → accept stale
+          _regionMap[ci] = rid;
+        }
+      }
+    }
+    // Flood remaining non-room passable cells (cluster-local, growing ids).
+    for (let dy = 0; dy < CLUSTER_SIZE; dy++) {
+      const cyl0 = (baseY + dy) % W;
+      for (let dx = 0; dx < CLUSTER_SIZE; dx++) {
+        const cxl0 = (baseX + dx) % W;
+        const ci = cyl0 * W + cxl0;
+        if (_regionMap[ci] !== REGION_NONE) continue;
+        if (!isMacroCellPassable(world, ci, world.cells[ci])) continue;
+        const rid = nextRegionId++;
+        let qH = 0, qT = 0;
+        _rBfsQueue[qT++] = ci;
+        _regionMap[ci] = rid;
+        while (qH < qT) {
+          const cur = _rBfsQueue[qH++];
+          const curX = cur % W, curY = (cur / W) | 0;
+          const nb = [
+            ((curY - 1 + W) % W) * W + curX,
+            curY * W + ((curX + 1) % W),
+            ((curY + 1) % W) * W + curX,
+            curY * W + ((curX - 1 + W) % W),
+          ];
+          for (let n = 0; n < 4; n++) {
+            const ni = nb[n];
+            if (_regionMap[ni] !== REGION_NONE) continue;
+            const nx = ni % W, ny = (ni / W) | 0;
+            if (((nx - baseX + W) % W) >= CLUSTER_SIZE) continue;
+            if (((ny - baseY + W) % W) >= CLUSTER_SIZE) continue;
+            if (!isMacroCellPassable(world, ni, world.cells[ni])) continue;
+            if (!macroCellsConnected(world, cur, ni)) continue;
+            _regionMap[ni] = rid;
+            _rBfsQueue[qT++] = ni;
+          }
+        }
+      }
+    }
+  }
+
+  // Cluster ids only grow (old ids abandoned). If sustained churn has grown the
+  // region count ~50% past the last compact bake, do a one-off full compacting
+  // bake now to keep the R×R matrix inside the RAM budget. Edits are local and
+  // infrequent, so this fires at most once per many thousands of edits — bounded,
+  // never per-frame. bakeNavigationTree re-syncs versions and clears the report.
+  if (nextRegionId > _bakeBaseRegions * NAV_COMPACT_GROWTH) {
+    bakeNavigationTree(world, cellV, pbV);
+    return;
+  }
+  _numRegions = nextRegionId;
+  _navComponents = _numRegions;
+
+  // Drop portals on any affected line, then rescan those whole lines.
+  const kept: Portal[] = [];
+  for (let pi = 0; pi < _portals.length; pi++) {
+    const p = _portals[pi];
+    const horizontal = p.cx === p.ncx;
+    if (horizontal ? affectedHRows.has(p.cy) : affectedVCols.has(p.cx)) continue;
+    kept.push(p);
+  }
+  _portals = kept;
+  for (const cy of affectedHRows) scanHorizontalBorderRow(world, cy);
+  for (const cx of affectedVCols) scanVerticalBorderCol(world, cx);
+  _numPortals = _portals.length;
+
+  // Rebuild region→portal index and the next-hop matrix wholesale.
+  _regionPortalIndices = [];
+  for (let i = 0; i < _numRegions; i++) _regionPortalIndices.push([]);
+  for (let pi = 0; pi < _numPortals; pi++) {
+    const p = _portals[pi];
+    _regionPortalIndices[p.regionA].push(pi);
+    _regionPortalIndices[p.regionB].push(pi);
+  }
+  buildRegionNext();
+  finish();
+}
+
 function ensureNavigationTree(world: World): void {
   const cellV = navigationCacheCellVersion(world);
   const pbV = navigationCachePathBlockerVersion(world);
   if (_navWorld === world && _navCellVersion === cellV && _navPathBlockerVersion === pbV) {
     _pathCacheHits++;
+    return;
+  }
+  // Same world, versions moved → a runtime geometry edit. Never full-bake here
+  // (that would be the banned mid-game O(W²)); patch locally / accept stale.
+  // Full bakes happen only on a NEW world (floor gen/load) or post-samosbor
+  // unfreeze (which nulls _navWorld), both of which fall through to the bake.
+  if (_navWorld === world) {
+    patchNavigationRegions(world, cellV, pbV);
     return;
   }
   bakeNavigationTree(world, cellV, pbV);
