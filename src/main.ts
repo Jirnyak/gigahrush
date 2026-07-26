@@ -80,7 +80,7 @@ import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tr
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
-import { markNavigationCellsDirty } from './systems/ai/pathfinding';
+import { bakeNavigationTree, markNavigationCellsDirty, prewarmNavigationTree } from './systems/ai/pathfinding';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
@@ -3357,6 +3357,11 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   loadingProgress('Финальные штрихи', 96);
   finishLoadedFloorVisuals(gen);
   rebuildEntityIndex(entities, 'load');
+  // Bake the navigation region tree here, behind the animated loading screen, with its
+  // own progress stage — otherwise this O(W²) bake fires lazily on the first pathfinding
+  // query of frame 1 (after the screen is hidden) and freezes the first gameplay second.
+  loadingProgress('Запекаем карты путей', 98);
+  bakeNavigationTree(world);
   loadingProgress('Готово', 100);
   const _t7 = performance.now();
 
@@ -5504,6 +5509,12 @@ function switchFloor(
         startCinematicCamera(runtimeCamera, player.x, player.y, waypoints);
       }
     }
+
+    // Bake the navigation region tree behind the animated loading screen, with its own
+    // progress stage (see initGame note) — keeps the first gameplay frame freeze-free.
+    loadingProgress('Запекаем карты путей', 96);
+    bakeNavigationTree(world);
+    loadingProgress('Готово', 100);
   });
 }
 
@@ -9223,6 +9234,11 @@ function gameLoop(now: number): void {
       showPlatformFullscreenAd().then(() => {
         fn();
         rebuildEntityIndex(entities, 'load');
+        // Warm the nav tree behind the still-animating loading screen — this O(W²) bake
+        // otherwise fires lazily on the first gameplay frame and freezes it. Guarded:
+        // no-op if the cache is already valid or frozen (samosbor). Universal across every
+        // scheduleLoading path (new game, floor change, teleport, restart).
+        if (typeof world !== 'undefined') prewarmNavigationTree(world);
         if (loadingWorker) {
           loadingWorker.postMessage({ type: 'stop' });
         }
@@ -9238,6 +9254,8 @@ function gameLoop(now: number): void {
 
     fn();
     rebuildEntityIndex(entities, 'load');
+    // Warm the nav tree behind the still-animating loading screen (see note above).
+    if (typeof world !== 'undefined') prewarmNavigationTree(world);
     if (loadingWorker) {
       loadingWorker.postMessage({ type: 'stop' });
     }

@@ -1009,6 +1009,18 @@ function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
   return field.world === world && field.roomCount === navigationCacheRoomCount(world);
 }
 
+/**
+ * Warm the navigation cache for a freshly loaded floor. Safe to call from the loading
+ * path: it bakes the O(W²) region tree once (the same work `ensureNavigationTree` would
+ * do lazily on the first query of frame 1), so the bake happens behind the animated
+ * loading screen instead of freezing the first gameplay frame. A no-op when the cache is
+ * already valid for this world, and never runs while the cache is frozen (samosbor).
+ */
+export function prewarmNavigationTree(world: World): void {
+  if (_frozenNavWorld) return;
+  ensureNavigationTree(world);
+}
+
 function ensureBehaviorFlowField(
   world: World,
   key: string,
