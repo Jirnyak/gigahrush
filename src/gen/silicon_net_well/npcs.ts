@@ -17,7 +17,7 @@ import {
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
+import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -114,29 +114,6 @@ export function siliconTerritorySpawnCells(world: World): Map<TerritoryOwner, nu
     if (list) list.push(i);
   }
   return cells;
-}
-
-export function alignSiliconNetWellAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = siliconTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isSiliconAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 109 + offset * 401) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
 }
 
 export function spawnNpcs(

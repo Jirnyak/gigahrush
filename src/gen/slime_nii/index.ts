@@ -26,7 +26,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, hashSeed, withSeededRandom } from '../../core/rand';
-import { factionToTerritoryOwner } from '../../data/factions';
 import { designNpcFloorKey, type PlotNpcDef, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -104,7 +103,6 @@ import {
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import './olevia';
 
 const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('slime_nii');
@@ -479,7 +477,6 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
     };
 
     finalizeExpandedFloor(generation, route, rngGen);
-    applyDesignFloorPopulationField(generation, route);
 
     return { ...generation, isDecentralized: true as const };
   });
@@ -909,52 +906,6 @@ function decorateMicroRoom(world: World, room: Room, serial: number): void {
     setFeature(world, room.x + room.w - 4, room.y + room.h - 4, secondary);
   }
   if (serial % 13 === 0) markScreenWall(world, room.x + (room.w >> 1), room.y - 1, serial);
-}
-
-function isSlimeNiiAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    (entity as Entity & { npcPackageId?: string }).npcPackageId === undefined &&
-    !entity.persistentNpcId &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-function slimeNiiTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const spec of SLIME_NII_HQ_SPECS) cells.set(spec.owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
-}
-
-export function alignSlimeNiiAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = slimeNiiTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isSlimeNiiAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 113 + offset * 431) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
 }
 
 function initWorld(world: World): void {

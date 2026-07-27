@@ -635,9 +635,9 @@ export function applyFloorObjectPlacementProfile(
   return summary;
 }
 
-export function applyStoryFloorObjectProfile(world: World, spawnX: number, spawnY: number, z: number): FloorObjectPlacementSummary | undefined {
-  return applyFloorObjectPlacementProfile(world, world.rooms, spawnX, spawnY, floorObjectProfileForStoryFloor(z), {
-    seed: hash32(z, world.rooms.length),
+export function applyStoryFloorObjectProfile(world: World, spawnX: number, spawnY: number, biome: string): FloorObjectPlacementSummary | undefined {
+  return applyFloorObjectPlacementProfile(world, world.rooms, spawnX, spawnY, floorObjectProfileForStoryFloor(biome), {
+    seed: hash32(world.rooms.length, Math.floor(spawnX)),
   });
 }
 

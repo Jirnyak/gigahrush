@@ -27,7 +27,6 @@ import {
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
 import { hashSeed, seededRandom } from '../../core/rand';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 
@@ -565,7 +564,6 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   expandRoofArchipelago(world, rngFn);
   applyRoofLosShelterPockets(world, rngFn);
   finalizeExpandedFloor(generation, route, rngFn);
-  applyDesignFloorPopulationField(generation, route);
 
   return { ...generation, isDecentralized: true as const };
 }

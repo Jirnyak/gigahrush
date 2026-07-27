@@ -360,7 +360,7 @@ function localizedCanvasText(value: unknown): string {
 
 const CANVAS_TEXT_GLITCH_CHARS = '#%&*+=?/\\<>[]{}';
 const CANVAS_TEXT_GLITCH_RE = /[A-Za-zА-Яа-яЁё]/;
-const CANVAS_TEXT_GLITCH_BASE_PER_MILLE = 10;
+const CANVAS_TEXT_GLITCH_BASE_PER_MILLE = 0;
 const CANVAS_TEXT_GLITCH_SAMOSBOR_BASE_PER_MILLE = 50;
 const CANVAS_TEXT_GLITCH_MAX_PER_MILLE = 100;
 

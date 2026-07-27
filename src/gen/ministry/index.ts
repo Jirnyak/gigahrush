@@ -15,7 +15,6 @@ import { calcZoneLevel } from '../../systems/rpg';
 import { Spr } from '../../render/sprite_index';
 import { runMinistryContent } from './content_manifest';
 import { applyMinistryMacroGeometry } from './geometry';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { rng, irand } from '../../core/rand';
 
 
@@ -590,7 +589,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
   // Phase 15: Rare procedural ministry monitors
   placeProceduralScreens(world, 30);
 
-  applyDesignFloorPopulationField({ world, entities, isDecentralized: true as const }, { id: 'ministry', z: 24 });
 
   return { world, entities, spawnX, spawnY };
 }

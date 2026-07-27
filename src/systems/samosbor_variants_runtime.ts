@@ -1,4 +1,4 @@
-import { } from '../core/types';
+import { rng } from '../core/rand';
 import {
   SAMOSBOR_VARIANTS,
   buildActiveSamosborVariant,
@@ -10,15 +10,6 @@ import {
 let activeVariant: ActiveSamosborVariant | null = null;
 let forcedNextVariant: SamosborVariantId | null = null;
 let lastVariant: SamosborVariantId | null = null;
-
-function secureRandom(): number {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    const arr = new Uint32Array(1);
-    crypto.getRandomValues(arr);
-    return arr[0] / 4294967296;
-  }
-  throw new Error("Secure random number generation is not supported in this environment.");
-}
 
 export function chooseSamosborVariant(floorTags: readonly string[], _zNum: number): ActiveSamosborVariant {
   if (forcedNextVariant) {
@@ -35,7 +26,7 @@ export function chooseSamosborVariant(floorTags: readonly string[], _zNum: numbe
 
   let total = 0;
   for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id, floorTags);
-  let roll = secureRandom() * Math.max(1, total);
+  let roll = rng() * Math.max(1, total);
   for (const def of SAMOSBOR_VARIANTS) {
     roll -= getSamosborVariantWeight(def.id, floorTags);
     if (roll <= 0) {

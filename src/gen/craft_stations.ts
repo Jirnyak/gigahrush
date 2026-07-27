@@ -473,12 +473,12 @@ export function placeCraftStationsForStoryFloor(
   world: World,
   spawnX: number,
   spawnY: number,
-  z: number,
+  biome: string,
   options: { seed?: number } = {},
 ): CraftStationPlacementSummary {
-  const profile = craftStationProfileForStoryFloor(z);
+  const profile = craftStationProfileForStoryFloor(biome);
   return placeCraftStationsWithProfile(world, world.rooms, spawnX, spawnY, profile, {
-    seed: options.seed ?? hash32(z, world.rooms.length, 0),
+    seed: options.seed ?? hash32(world.rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
   });
 }
 
@@ -488,9 +488,9 @@ export function placeMaintenanceCraftStations(
   spawnX: number,
   spawnY: number,
 ): CraftStationPlacementSummary {
-  const profile = craftStationProfileForStoryFloor(140);
+  const profile = craftStationProfileForStoryFloor('maintenance');
   return placeCraftStationsWithProfile(world, rooms, spawnX, spawnY, profile, {
-    seed: hash32(140, rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
+    seed: hash32(rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
   });
 }
 

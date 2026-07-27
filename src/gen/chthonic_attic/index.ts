@@ -10,7 +10,6 @@ import { genLog } from '../log';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { generateZones } from '../shared';
 import { publishEvent } from '../../systems/events';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 
 import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, ATTIC_CHAMBERS, ATTIC_SPINE, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, retuneAtticZones, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticRootStubs, stampAtticChokepoints, stampAtticLowCeilingShells, stampAtticCapillaryCracks, stampAtticExitCues, carveChthonicLabyrinth, nearestAtticAnchorPressure, traceChthonicAtticExitPaths, setDoorState, scorchRoom } from './geometry';
 import { ATTIC_NPCS, addAtticContainers, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticShaftCaches } from './npcs';
@@ -156,7 +155,6 @@ export function generateChthonicAtticDesignFloor(
   expandChthonicAtticRootNetwork(generation.world, generation.entities, rngFn);
   retuneExpandedChthonicAtticEcology(world);
 
-  applyDesignFloorPopulationField(generation, { id: 'chthonic_attic', z: 46 });
   return generation;
 }
 

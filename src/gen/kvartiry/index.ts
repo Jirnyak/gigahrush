@@ -17,7 +17,6 @@ import { placeProceduralScreens } from '../procedural_screens';
 
 import { KVARTIRY_POPULATION_PROFILE } from '../../data/population_profiles';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { initializeCellTerritory } from '../../systems/territory';
 import { calcZoneLevel } from '../../systems/rpg';
@@ -479,7 +478,6 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   });
 
   // ── Phase 9: Spawn NPCs (whole-floor natural baseline)
-  applyDesignFloorPopulationField({ world, entities, isDecentralized: true as const }, { id: 'kvartiry', z: 6 });
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   // ── Phase 10: Spawn items (ballots scattered everywhere) ─────

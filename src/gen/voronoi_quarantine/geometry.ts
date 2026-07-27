@@ -27,7 +27,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng, hashSeed } from '../../core/rand';
-import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -1320,29 +1319,6 @@ export function voronoiTerritorySpawnCells(world: World): Map<TerritoryOwner, nu
     if (list) list.push(i);
   }
   return cells;
-}
-
-export function alignVoronoiQuarantineAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = voronoiTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isVoronoiAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 131 + offset * 467) % list.length]!;
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
 }
 
 export function stampContamination(world: World, sites: readonly Site[], seed: number): void {

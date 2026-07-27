@@ -16,7 +16,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
+import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { registerRouteCue } from '../../systems/route_cues';
@@ -138,29 +138,6 @@ export function isProductionBeltAmbientNpc(entity: Entity): boolean {
     entity.alifeId === undefined &&
     entity.questId === -1 &&
     entity.faction !== undefined;
-}
-
-export function alignProductionBeltAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = productionBeltTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isProductionBeltAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 127 + offset * 463) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
 }
 
 export function seedExpandedProductionCaches(world: World, dockRooms: readonly Room[], hazardRooms: readonly Room[]): void {

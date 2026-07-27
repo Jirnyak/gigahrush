@@ -469,22 +469,27 @@ function applyRleArrayXor(world: World, saved: RleArraySave): boolean {
   return i === target.length;
 }
 
-// Cheap structural fingerprint of a base World (FNV-1a 32-bit over cells + roomMap
-// bytes + room/door counts). Guards the delta against generator drift: if the base
+// Cheap structural fingerprint of a base World (FNV-1a 32-bit over EVERY XOR-delta'd
+// array + room/door counts). Guards the delta against generator drift: if the base
 // regenerated at load differs from the one at save (any gen/stamp change, or a
-// (z,entry) asymmetry), the hash mismatches → decode returns null → graceful
-// regenerate-fresh instead of silent grid corruption.
+// (z,entry) asymmetry) in any persisted array — not just cells/roomMap — the hash
+// mismatches → decode returns null → graceful regenerate-fresh instead of silent
+// grid corruption. Runs once per floor save and once per load, never per frame.
 function worldBaseHash(world: World): number {
   let h = 0x811c9dc5 >>> 0;
-  const cells = world.cells;
-  for (let i = 0; i < cells.length; i++) {
-    h = (Math.imul(h ^ cells[i], 0x01000193)) >>> 0;
-  }
-  const roomMap = world.roomMap;
-  for (let i = 0; i < roomMap.length; i++) {
-    const v = roomMap[i] & 0xffff;
-    h = (Math.imul(h ^ (v & 0xff), 0x01000193)) >>> 0;
-    h = (Math.imul(h ^ ((v >> 8) & 0xff), 0x01000193)) >>> 0;
+  for (const { field, type } of WORLD_ARRAY_FIELDS) {
+    const arr = world[field] as Uint8Array | Int16Array;
+    if (type === 'i16') {
+      for (let i = 0; i < arr.length; i++) {
+        const v = arr[i] & 0xffff;
+        h = (Math.imul(h ^ (v & 0xff), 0x01000193)) >>> 0;
+        h = (Math.imul(h ^ ((v >> 8) & 0xff), 0x01000193)) >>> 0;
+      }
+    } else {
+      for (let i = 0; i < arr.length; i++) {
+        h = (Math.imul(h ^ arr[i], 0x01000193)) >>> 0;
+      }
+    }
   }
   const counts = [world.rooms.length & 0xffff, world.doors.size & 0xffff];
   for (const c of counts) {

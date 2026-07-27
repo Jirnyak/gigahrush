@@ -51,6 +51,36 @@ export function initFactionRelations(): void {
   }
 }
 
+/* ── Reset only the PLAYER row/column to base (death-continuation) ─ */
+// On death-rebirth the player continues as a different body. Faction↔faction
+// politics stay as persistent world state, but the player's personal standing
+// resets: the reborn actor is not recognized as "the player". Only PLAYER's
+// row (how the player feels) and column (how others feel about the player) revert.
+export function resetPlayerFactionRelations(): void {
+  const p = Faction.PLAYER;
+  for (let f = 0; f < FACTION_COUNT; f++) {
+    setFactionRel(p, f, BASE_FACTION_MATRIX[p][f]);
+    setFactionRel(f, p, BASE_FACTION_MATRIX[f][p]);
+  }
+}
+
+/* ── Snapshot / restore the dynamic matrix for save persistence ─── */
+// The matrix is persistent world state that must survive save/load. Snapshot is
+// a flat FACTION_COUNT² array of Int8 relation values; restore overlays a saved
+// snapshot onto the current (base-initialized) matrix and ignores malformed input.
+export function snapshotFactionRelations(): number[] {
+  return Array.from(factionRels);
+}
+
+export function restoreFactionRelations(input: unknown): void {
+  if (!Array.isArray(input) || input.length !== FACTION_COUNT * FACTION_COUNT) return;
+  for (let i = 0; i < input.length; i++) {
+    const v = input[i];
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    factionRels[i] = Math.max(-128, Math.min(127, v | 0));
+  }
+}
+
 
 
 /* ── Faction names ────────────────────────────────────────────── */

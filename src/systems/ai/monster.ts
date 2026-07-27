@@ -33,7 +33,7 @@ import { scaleMonsterDmg, strMeleeDmgMult } from '../rpg';
 import { applySporeHaze, hasSporeHazeProtection, zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
 import { MarkType, stampMark } from '../surface_marks';
-import { followPath, tryAssignPathToCell, wanderNearby } from './pathfinding';
+import { followPath, tryAssignPathToCell, wanderFar, wanderNearby } from './pathfinding';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
 import { Spr } from '../../render/sprite_index';
@@ -91,7 +91,7 @@ import {
 import { shareLocalTarget } from './monster_pack';
 import { selectMeleeTarget } from '../melee_targeting';
 import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
-import { isCarnivoreMonster } from '../../data/monster_ecology';
+import { isCarnivoreMonster, monsterPackMode } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 
@@ -9063,7 +9063,23 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       e.y = ((e.y + Math.sin(a) * spd) % W + W) % W;
     } else {
       if (ai.path.length === 0 || ai.pi >= ai.path.length) {
-        wanderNearby(world, e);
+        // Pack-mode wander (mode from monster ecology): roamers patrol wide, territorial
+        // packs leash back to their home room (~16-cell tether), everyone else wanders
+        // locally. Iron-Law safe — only assigns paths on the baked nav, never re-bakes.
+        const packMode = monsterPackMode(e.monsterKind);
+        if (packMode === 'roamer') {
+          wanderFar(world, e);
+        } else if (packMode === 'territorial' && ai.homeRoomId !== undefined) {
+          const home = world.rooms[ai.homeRoomId];
+          const hx = home ? home.x + (home.w >> 1) : e.x;
+          const hy = home ? home.y + (home.h >> 1) : e.y;
+          // Beyond the leash and a path home exists → walk home; otherwise wander in place.
+          const leashed = home !== undefined && world.dist2(e.x, e.y, hx, hy) > 256 &&
+            tryAssignPathToCell(world, e, hx, hy) !== 'not_found';
+          if (!leashed) wanderNearby(world, e);
+        } else {
+          wanderNearby(world, e);
+        }
       }
       followMonsterPath(world, e, dt);
     }

@@ -1831,6 +1831,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     monsterPlacementKind: 'underhell',
   },
   podad: {
+    npcTarget: 0, // z=-40 deep-hell floor: NPC-free by design (no ambient crowd)
     monsterBiasKinds: [MonsterKind.OLGOY, MonsterKind.KOSTOREZ, MonsterKind.ZHORNAYA_TVAR, MonsterKind.CHERNOSLIZ, MonsterKind.POLZUN],
     monsterTags: ['hell', 'podad', 'meat', 'deep', 'living_tunnels', 'moving_walls', 'section_shift', 'gate'],
     monsterPlacementKind: 'hell',

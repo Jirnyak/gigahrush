@@ -1421,6 +1421,11 @@ export function tryAssignBehaviorFlowPath(
   key: string,
   sourceProvider: BehaviorFlowFieldSourceProvider,
 ): AssignPathStatus {
+  // Low-mem (mobile): behavior flow fields are disabled to avoid the 64 MiB
+  // Int32Array(SW2) alloc + 16.7M-subcell BFS. Callers route through the region
+  // tree instead (see gotoNearestRoomOfTypes); this guard makes the alloc
+  // impossible regardless of caller. Unreachable today on mobile, but future-proof.
+  if (useLowMemNav()) return 'not_found';
   const ai = e.ai!;
   const start = subcellIdx(e.x, e.y);
   const field = ensureBehaviorFlowField(world, key, sourceProvider);
@@ -1839,12 +1844,53 @@ function roomTypeSourceProvider(types: readonly RoomType[]): BehaviorFlowFieldSo
   return provider;
 }
 
+/** Room-type sets that NPC routine routing requests via gotoNearestRoom*(). Kept
+ *  in sync with the literal calls in npc_fsm.ts; a set missing here just bakes
+ *  lazily once (a one-time desktop hitch), never a correctness bug. */
+const PREWARM_ROOM_TYPE_SETS: readonly RoomType[][] = [
+  [RoomType.OFFICE],
+  [RoomType.LIVING],
+  [RoomType.LIVING, RoomType.HQ, RoomType.COMMON],
+];
+
+/** Desktop: bake the common behavior flow fields behind the loading screen so
+ *  the first NPC to route on a fresh (or post-samosbor) floor doesn't pay the
+ *  64 MiB alloc + 16.7M-subcell BFS on a gameplay frame. Mobile skips flow fields
+ *  entirely (gotoNearestRoomOfTypes falls back to the region tree), so this is a
+ *  no-op there; also a no-op while frozen (mid-samosbor). */
+export function prewarmBehaviorFlowFields(world: World): void {
+  if (_frozenNavWorld) return;
+  if (useLowMemNav()) return;
+  for (const types of PREWARM_ROOM_TYPE_SETS) {
+    ensureBehaviorFlowField(world, roomTypeFieldKey(types), roomTypeSourceProvider(types));
+  }
+}
+
 export function gotoNearestRoomType(world: World, e: Entity, type: RoomType): boolean {
   return gotoNearestRoomOfTypes(world, e, [type]);
 }
 
 export function gotoNearestRoomOfTypes(world: World, e: Entity, types: readonly RoomType[]): boolean {
   if (types.length === 0) return false;
+  // Low-mem (mobile): skip behavior flow fields (64 MiB Int32Array + 16.7M-cell
+  // BFS per key). Pick the nearest room across the requested types by straight-line
+  // distance and route to it through the region tree (~1 MB on-demand column) — an
+  // approximation of the flow field's nearest-reachable pick, but memory-flat.
+  if (useLowMemNav()) {
+    let best = -1, bestD = Infinity;
+    for (const type of types) {
+      const id = findNearest(world, e, type);
+      const room = id >= 0 ? world.rooms[id] : undefined;
+      if (!room) continue;
+      const d = world.dist2(e.x, e.y, room.x + room.w / 2, room.y + room.h / 2);
+      if (d < bestD) { bestD = d; best = id; }
+    }
+    if (best < 0) return false;
+    const room = world.rooms[best]!;
+    const tx = room.x + Math.floor(room.w / 2) + 0.5;
+    const ty = room.y + Math.floor(room.h / 2) + 0.5;
+    return tryAssignPathToCell(world, e, tx, ty) !== 'not_found';
+  }
   const key = roomTypeFieldKey(types);
   const status = tryAssignBehaviorFlowPath(world, e, key, roomTypeSourceProvider(types));
   return status !== 'not_found';

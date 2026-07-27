@@ -12,7 +12,6 @@ import { generateZones, sanitizeDoors } from '../shared';
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { rng } from '../../core/rand';
 import './living_zone';
 
@@ -53,7 +52,6 @@ export function generateBlackMarket88DesignFloor(): FloorGeneration {
   };
 
   finalizeExpandedFloor(generation, route, rngGen);
-  applyDesignFloorPopulationField(generation, route);
 
   return { ...generation, isDecentralized: true as const };
 }

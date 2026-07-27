@@ -555,6 +555,7 @@ function handleVeretarSandUse(e: Entity, slotIdx: number, msgs: Msg[], time: num
       publishVeretarSandEvent(state, e, 'seal_blocked', VERETAR_UNSEALED_SAND, 1, 2);
       return true;
     }
+    removeItem(e, sealItemId, 1);
     if (slot.count <= 1) {
       slot.defId = VERETAR_SEALED_SAND;
       slot.count = 1;
@@ -563,7 +564,6 @@ function handleVeretarSandUse(e: Entity, slotIdx: number, msgs: Msg[], time: num
       slot.count--;
       addItem(e, VERETAR_SEALED_SAND, 1);
     }
-    removeItem(e, sealItemId, 1);
     msgs.push(msg(`Белый песок запечатан. Потрачен ${ITEMS[sealItemId]?.name ?? sealItemId}.`, time, '#f4e7b0'));
     publishVeretarSandEvent(state, e, 'sealed', VERETAR_SEALED_SAND, 1, 3, undefined, sealItemId);
     return true;

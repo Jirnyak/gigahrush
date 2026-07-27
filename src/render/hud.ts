@@ -2102,9 +2102,9 @@ export function drawHUD(
     ctx.textAlign = 'left';
   }
 
-  // ── Global neuro-interface overlay ──────────────────────
-  if (screenFxVisible) {
-    drawStaticNoise(ctx, 0, 0, w, h, time * 0.55, interferenceMode === 'full' ? 0.008 : 0.0035);
+  // ── Global neuro-interface overlay (opt-in 'full' mode only; samosbor veils are separate) ──
+  if (screenFxVisible && interferenceMode === 'full') {
+    drawStaticNoise(ctx, 0, 0, w, h, time * 0.55, 0.008);
     drawGlitchLine(ctx, w, h, time);
   }
 

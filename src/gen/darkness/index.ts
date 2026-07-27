@@ -1,4 +1,3 @@
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 /* ── Design z: Darkness — post-Void light-resource pocket ─── */
 
 import {
@@ -54,7 +53,6 @@ export function generateDarknessDesignFloor(): DarknessDesignGeneration {
   darknessStateByWorld.set(world, darknessState);
 
   const generation = { isDecentralized: true as const, world, entities, spawnX, spawnY, darknessState };
-    applyDesignFloorPopulationField(generation, { id: 'darkness', z: -52 });
     return { ...generation, isDecentralized: true as const };
 }
 

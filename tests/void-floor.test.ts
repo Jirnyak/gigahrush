@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import { Cell, Feature, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell, type ReachabilityAudit } from '../src/core/world';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
-import { territorySharesForStoryFloor } from '../src/data/floor_territory';
+import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { generateFloor, type FloorGeneration } from '../src/gen/floor_manifest';
 import { VOID_DEAD_LAMP_ROWS, VOID_GEOMETRY_ANCHORS } from '../src/gen/void/geometry';
 import { countTerritoryCells, territoryHqAnchors, territoryRoomOwner } from '../src/systems/territory';
@@ -183,7 +183,7 @@ test('VOID story floor has cell-first faction shares and human mini-HQ anchors',
   const anchorOwners = new Set(anchors.map(anchor => anchor.owner));
   const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
   const totalCells = W * W;
-  const targets = territorySharesForStoryFloor('void');
+  const targets = territorySharesForDesignFloor('void');
   const targetTotal = targets.reduce((sum, row) => sum + row.share, 0);
   let dominantOwner = ZoneFaction.CITIZEN;
 

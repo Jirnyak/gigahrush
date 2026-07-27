@@ -1411,12 +1411,25 @@ export function getMonsterEcology(kind: MonsterKind | undefined): MonsterEcology
   return kind === undefined ? undefined : MONSTER_ECOLOGY_BY_KIND[kind];
 }
 
+/** Pack spawn shape used by the design-floor monster populate to build anisotropic clusters. */
+export type MonsterPackMode = 'crowd' | 'loner' | 'territorial' | 'roamer';
+export interface MonsterPackShape {
+  /** crowd = dense homogeneous group; loner = solo; territorial = holds a home room; roamer = patrols wide. */
+  mode: MonsterPackMode;
+  /** [min, max] members grown per spawned pack cluster. */
+  size: readonly [number, number];
+  /** cluster radius in cells the members grow within (0 = single cell). */
+  spread: number;
+}
+
 interface MonsterEcologyContext {
   tags: readonly string[];
   anchorTags?: readonly string[];
   avoidTags?: readonly string[];
   anchorPenalty?: number;
   avoidPenalty?: number;
+  /** Explicit pack behavior; when absent it is inferred from tags (swarm/crowd/pack → crowd, else loner). */
+  pack?: MonsterPackShape;
 }
 
 const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext>> = {
@@ -1466,6 +1479,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     tags: ['residential', 'kitchen', 'storage', 'food', 'meat', 'corpse', 'feast', 'altar', 'predator', 'hell'],
     anchorTags: ['kitchen', 'storage', 'food', 'meat', 'corpse', 'feast', 'altar'],
     anchorPenalty: 0.32,
+    pack: { mode: 'territorial', size: [2, 4], spread: 4 },
   },
   [MonsterKind.POLZUN]: {
     tags: ['water', 'wet', 'bathroom', 'storage', 'industrial', 'conveyor', 'movement', 'fog', 'low'],
@@ -1498,6 +1512,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     avoidTags: ['water', 'hell', 'void'],
     anchorPenalty: 0.18,
     avoidPenalty: 0.35,
+    pack: { mode: 'roamer', size: [2, 3], spread: 8 },
   },
   [MonsterKind.MUKHOZHUK_HOST]: {
     tags: ['documents', 'office', 'hq', 'authority', 'quarantine', 'food', 'parasite', 'liquidator'],
@@ -1512,6 +1527,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     avoidTags: ['dry', 'bright', 'office'],
     anchorPenalty: 0.14,
     avoidPenalty: 0.22,
+    pack: { mode: 'roamer', size: [2, 4], spread: 10 },
   },
   [MonsterKind.BLOOD_PLANT]: {
     tags: ['plant', 'red_mold', 'mushroom', 'cult', 'contraband', 'storage', 'false_safe_block', 'meat', 'roots'],
@@ -1519,6 +1535,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     avoidTags: ['dry', 'documents', 'office'],
     anchorPenalty: 0.12,
     avoidPenalty: 0.3,
+    pack: { mode: 'territorial', size: [1, 3], spread: 3 },
   },
   [MonsterKind.SPORE_CARPET]: {
     tags: ['residential', 'living', 'office', 'storage', 'corridor', 'door', 'threshold', 'mushroom', 'spores', 'loot', 'false_safe_block'],
@@ -1808,6 +1825,36 @@ export function isCarnivoreMonster(kind: MonsterKind | undefined): boolean {
   const tags = MONSTER_ECOLOGY_CONTEXT[kind]?.tags;
   if (!tags) return false;
   return tags.includes('meat') || tags.includes('corpse') || tags.includes('predator') || tags.includes('food');
+}
+
+// Shared cached shapes — resolvers return these references (no per-call allocation, so
+// monsterPackMode is safe to call from the monster AI wander branch).
+const DEFAULT_MONSTER_PACK_SHAPE: MonsterPackShape = { mode: 'loner', size: [1, 1], spread: 0 };
+const SWARM_PACK_SHAPE: MonsterPackShape = { mode: 'crowd', size: [8, 16], spread: 5 };
+const CROWD_PACK_SHAPE: MonsterPackShape = { mode: 'crowd', size: [5, 10], spread: 6 };
+const SMALL_PACK_SHAPE: MonsterPackShape = { mode: 'crowd', size: [3, 6], spread: 6 };
+
+/**
+ * Pack spawn shape for a monster kind: explicit `pack` context wins, else inferred from
+ * ecology tags (swarm → big crowd, crowd → medium, pack → small crowd), else a loner.
+ * Consumed by the design-floor monster populate to build anisotropic clusters and by the
+ * monster AI wander branch to pick roam/territorial behavior.
+ */
+export function monsterPackShape(kind: MonsterKind | undefined): MonsterPackShape {
+  if (kind === undefined) return DEFAULT_MONSTER_PACK_SHAPE;
+  const context = MONSTER_ECOLOGY_CONTEXT[kind];
+  if (context?.pack) return context.pack;
+  const tags = context?.tags;
+  if (tags) {
+    if (tags.includes('swarm')) return SWARM_PACK_SHAPE;
+    if (tags.includes('crowd')) return CROWD_PACK_SHAPE;
+    if (tags.includes('pack')) return SMALL_PACK_SHAPE;
+  }
+  return DEFAULT_MONSTER_PACK_SHAPE;
+}
+
+export function monsterPackMode(kind: MonsterKind | undefined): MonsterPackMode {
+  return monsterPackShape(kind).mode;
 }
 
 function ecologyTagWeight(def: MonsterEcologyDef, query: MonsterEcologyQuery): number {

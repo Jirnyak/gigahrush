@@ -21,7 +21,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from './events';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
-import { mathRng } from '../core/rand';
+import { mathRng, rng } from '../core/rand';
 
 type ProtocolPhase = 'obtained' | 'started' | 'ended' | 'backlash' | 'rejected';
 
@@ -655,7 +655,7 @@ function resolveBacklash(
       break;
     case 'silence':
       forLocalCells(world, mark, (_x, _y, ci) => {
-        if (world.fog[ci] < 20 && mathRng() < 0.04) world.fog[ci] = 20;
+        if (world.fog[ci] < 20 && rng() < 0.04) world.fog[ci] = 20;
       });
       world.markFogDirty();
       break;

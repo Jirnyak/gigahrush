@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 24`;
+- `SAVE_SHAPE_VERSION = 25`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -50,7 +50,8 @@ Current runtime save sections include:
 - `economy`;
 - `banking`;
 - `stockMarket`;
-- `production`.
+- `production`;
+- `factionRelations` (плоский снимок динамической матрицы отношений фракций, FACTION_COUNT² Int8; сохраняется, т.к. отношения теперь персистентны между этажами и загрузками).
 
 If a system stores persistent state, it needs a current-shape serializer/sanitizer, a cap or compact representation, and a rejection/test path when shape compatibility changes.
 

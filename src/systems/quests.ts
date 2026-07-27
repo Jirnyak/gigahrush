@@ -7,7 +7,7 @@ import {
   RoomType, Cell, AIGoal, W, ZoneFaction, msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { rng, secureRandom } from '../core/rand';
+import { rng } from '../core/rand';
 import { ITEMS } from '../data/catalog';
 import { isSilverSlimeItem, SILVER_SLIME_SEALED_ID } from '../data/items';
 import { craftRecipeSourcesForQuest, getCraftRecipeSource } from '../data/craft_recipe_sources';
@@ -199,7 +199,7 @@ function authoredQuestMeta(step: AuthoredQuestMeta, state: GameState): Partial<Q
   if (step.eventPrivacy) meta.eventPrivacy = step.eventPrivacy;
   if (step.eventSeverity !== undefined) meta.eventSeverity = step.eventSeverity;
   if (step.eventTargetName) meta.eventTargetName = step.eventTargetName;
-//   if (step.failOnNpcDeathId) meta.failOnNpcDeathId = step.failOnNpcDeathId;
+  if (step.failOnNpcDeathId) meta.failOnNpcDeathId = step.failOnNpcDeathId;
   if (step.abandonsSideQuestIds?.length) meta.abandonsSideQuestIds = [...step.abandonsSideQuestIds];
   if (step.timeLimitMinutes !== undefined) {
     meta.timeLimitMinutes = step.timeLimitMinutes;
@@ -252,7 +252,7 @@ function proceduralQuestSpeechLine(
 }
 
 function visitNeedsConcreteTarget(q: Quest): boolean {
-  return q.targetRoom !== undefined || q.targetRoomType !== undefined || q.targetRoom !== undefined || q.targetZoneTag !== undefined;
+  return q.targetRoom !== undefined || q.targetRoomType !== undefined || q.targetRoomDefId !== undefined || q.targetZoneTag !== undefined;
 }
 
 function checkVisitQuestAtPlayer(q: Quest, player: Entity, world: World, state: GameState): boolean {
@@ -278,7 +278,7 @@ export function reassignQuestGivers(entities: Entity[]): void {
     if (e.type !== EntityType.NPC || !e.alive) continue;
     if (isPlotNpc(e)) continue;
     if (e.persistentNpcId) continue;
-    e.canGiveQuest = secureRandom() < proceduralQuestGiverChance();
+    e.canGiveQuest = rng() < proceduralQuestGiverChance();
   }
 }
 
@@ -318,7 +318,7 @@ function activeTalkQuestMatchesNpc(q: Quest, npc: Entity): boolean {
     !q.done &&
     !q.failed &&
     q.type === QuestType.TALK &&
-    (q.targetNpcId === npc.id || (npc.id !== undefined && q.targetNpcId === npc.id))
+    q.targetNpcId === npc.id
   );
 }
 
@@ -929,7 +929,7 @@ export function notifyKill(kind: MonsterKind, state: GameState): void {
   for (const q of state.quests) {
     if (q.done || q.type !== QuestType.KILL) continue;
     if (!isQuestTargetOnCurrentFloor(q, state)) continue;
-    const genericMonsterTarget = q.targetMonsterKind === undefined && q.targetNpcId === undefined && q.targetNpcId === undefined;
+    const genericMonsterTarget = q.targetMonsterKind === undefined && q.targetNpcId === undefined;
     if (q.targetMonsterKind === kind || genericMonsterTarget) {
       q.killCount = (q.killCount ?? 0) + 1;
     }
@@ -1622,7 +1622,7 @@ function generatePlotQuest(
       };
     }
     if (sq.type === QuestType.TALK) {
-      const targetNpcId = sq.targetNpcId ?? sq.targetNpcId;
+      const targetNpcId = sq.targetNpcId;
       if (!targetNpcId) continue;
       const id = state.nextQuestId++;
       const target = findByPlotLive(entities, targetNpcId);

@@ -59,6 +59,7 @@ export interface SavePayloadSections {
   banking: unknown;
   stockMarket: unknown;
   production: unknown;
+  factionRelations?: number[];
 }
 
 export interface SavePayloadBuildInput {
@@ -125,6 +126,7 @@ export interface SavePayload {
     banking: unknown;
     stockMarket: unknown;
     production: ProductionState[];
+    factionRelations?: number[];
     containers: WorldContainer[];
   };
 }
@@ -329,6 +331,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       banking: sections.banking,
       stockMarket: sections.stockMarket,
       production: normalizeProductionStateList(sections.production, state.currentZ),
+      factionRelations: sections.factionRelations,
       containers: containersForSave(input.containers),
     },
   };

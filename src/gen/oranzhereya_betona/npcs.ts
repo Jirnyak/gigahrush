@@ -21,7 +21,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
-import { factionToTerritoryOwner } from '../../data/factions';
 import { registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -115,29 +114,6 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'oranzhereya_market_sonya', NP
   eventPrivacy: 'secret',
   eventSeverity: 4,
 }]);
-
-export function alignOranzhereyaBetonaAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = oranzhereyaTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isOranzhereyaAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 109 + offset * 397) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
-}
 
 export function carveCultivationField(
   world: World,

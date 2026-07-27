@@ -9,7 +9,6 @@ import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { SEED } from "./meta";
 import { initWorld, buildNurseryRooms, connectNurseryRooms, decorateNursery, placeEmergencyPanels, placeLifts, tuneNurseryZones, placeDrops, registerStaticHazards } from "./geometry";
 import { expandTuringNurseryRouteGeometry, spawnNpcs, spawnAmbientNpcs, placeContainers, spawnThreats, registerNurseryRouteCues, reactionField } from "./npcs";
@@ -56,7 +55,6 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
     };
 
     finalizeExpandedFloor(generation, route, rngGen);
-    applyDesignFloorPopulationField(generation, route);
 
     return { ...generation, isDecentralized: true as const };
   });

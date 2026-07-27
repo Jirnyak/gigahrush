@@ -22,7 +22,6 @@ import {
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -510,29 +509,6 @@ export function turingTerritorySpawnCells(world: World): Map<TerritoryOwner, num
     if (list) list.push(i);
   }
   return cells;
-}
-
-export function alignTuringNurseryAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = turingTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isTuringAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 127 + offset * 443) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
 }
 
 export function spawnMonster(

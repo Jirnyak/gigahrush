@@ -1,4 +1,3 @@
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { seededRandom, hashSeed } from '../../core/rand';
 /* ── Design z: antenna_court / Антенный двор ─────────────── */
 
@@ -121,7 +120,6 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   expandAntennaCourtRouteGeometry(world, rngFn);
   retuneAntennaCourtRouteZones(world);
 
-  applyDesignFloorPopulationField(generation, { id: 'antenna_court', z: 42 });
   return { ...generation, isDecentralized: true as const };
 }
 

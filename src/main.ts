@@ -80,7 +80,7 @@ import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tr
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
-import { markNavigationCellsDirty, prewarmNavigationTreeAsync, behaviorFlowFieldCount } from './systems/ai/pathfinding';
+import { markNavigationCellsDirty, prewarmNavigationTreeAsync, prewarmBehaviorFlowFields, behaviorFlowFieldCount } from './systems/ai/pathfinding';
 import { createWorkerRegionNextSolver } from './systems/ai/nav_worker_pool';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
@@ -561,7 +561,7 @@ import {
   showPlatformFullscreenAd,
   isGamePushPortalTarget,
 } from './systems/platform_bridge';
-import { addFactionRel, addFactionRelMutual, initFactionRelations } from './data/relations';
+import { addFactionRel, addFactionRelMutual, initFactionRelations, resetPlayerFactionRelations, restoreFactionRelations } from './data/relations';
 import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera, startCinematicCamera } from './systems/camera';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
 import { randomTip } from './data/tips';
@@ -2314,7 +2314,9 @@ function continueDeathAsAlifePopulationNpc(): boolean {
       return;
     }
 
-    initFactionRelations();
+    // Death-continuation: faction↔faction politics persist; only the player's
+    // personal standing resets (the reborn body is a new social identity). SB4.
+    resetPlayerFactionRelations();
     initFactionControl(world);
     ensureProceduralSpriteSeeds(entities);
     applyContractFloorHooks(state, world, entities, nextEntityId, host);
@@ -2753,7 +2755,8 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     applyContractFloorHooks(state, world, entities, nextEntityId, player);
     syncPlayerRuntimeBaselines();
 
-    initFactionRelations();
+    // Faction relations persist across floor transitions (SB4); only per-cell
+    // faction control is rebuilt for the new floor geometry.
     initFactionControl(world);
     ensureProceduralSpriteSeeds(entities);
     state.samosborTimer = nextFloorRunSamosborCooldown(state);
@@ -5432,7 +5435,8 @@ function switchFloor(
     applyContractFloorHooks(state, world, entities, nextEntityId, player);
     syncPlayerRuntimeBaselines();
 
-    initFactionRelations();
+    // Faction relations persist across floor transitions (SB4); only per-cell
+    // faction control is rebuilt for the new floor geometry.
     initFactionControl(world);
     ensureProceduralSpriteSeeds(entities);
     state.samosborTimer = nextFloorRunSamosborCooldown(state);
@@ -6425,6 +6429,9 @@ function loadGame(): boolean {
       normalizeGameEconomy(state, dataState.economy);
       (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
       normalizeGameStockMarket(state, dataState.stockMarket);
+      // Overlay saved faction standing onto the base matrix (initFactionRelations
+      // ran above); malformed/absent data leaves the base intact. SB4.
+      restoreFactionRelations(dataState.factionRelations);
       // @ts-ignore
       setProductionState(state, dataState.production, floor);
       state.samosborActive = false;
@@ -9374,7 +9381,13 @@ function gameLoop(now: number): void {
         requestAnimationFrame(gameLoop);
       };
       if (typeof world !== 'undefined') {
-        prewarmNavigationTreeAsync(world, _navSolver).then(done, done);
+        prewarmNavigationTreeAsync(world, _navSolver).then(() => {
+          // Bake the common behavior flow fields while the (worker-rendered)
+          // loading screen is still up, so the first NPC route on this floor
+          // doesn't hitch. Desktop-only; no-op on mobile and mid-samosbor.
+          prewarmBehaviorFlowFields(world);
+          done();
+        }, done);
       } else {
         done();
       }
@@ -9974,7 +9987,7 @@ function gameLoop(now: number): void {
       ? 1
       : criticalInterference
         ? 0.65
-        : 0.32;
+        : 0;
   const glitch = screenInterference <= 0
     ? 0
     : state.samosborActive

@@ -73,8 +73,8 @@ function mergeProfiles(
   };
 }
 
-const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPlacementProfile>> = {
-  [30]: {
+const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<string, CraftStationPlacementProfile>> = {
+  ministry: {
     id: 'design_ministry',
     min: CRAFT_STATION_CAPS.design.min,
     max: CRAFT_STATION_CAPS.design.max,
@@ -87,7 +87,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
     },
     tags: ['design_floor', 'ministry'],
   },
-  [60]: {
+  kvartiry: {
     id: 'design_kvartiry',
     min: CRAFT_STATION_CAPS.design.min,
     max: CRAFT_STATION_CAPS.design.max,
@@ -100,7 +100,7 @@ const STORY_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<number, CraftStationPla
     },
     tags: ['design_floor', 'kvartiry'],
   },
-  [140]: {
+  maintenance: {
     id: 'design_maintenance_collectors',
     min: CRAFT_STATION_CAPS.maintenance.min,
     max: CRAFT_STATION_CAPS.maintenance.max,
@@ -337,8 +337,8 @@ const DEFAULT_PROCEDURAL_CRAFT_STATION_PROFILE: CraftStationPlacementProfile = {
   tags: ['procedural_floor', 'default'],
 };
 
-export function craftStationProfileForStoryFloor(z: number): CraftStationPlacementProfile | undefined {
-  const profile = STORY_FLOOR_CRAFT_STATION_PROFILES[z];
+export function craftStationProfileForStoryFloor(biome: string): CraftStationPlacementProfile | undefined {
+  const profile = STORY_FLOOR_CRAFT_STATION_PROFILES[biome];
   return profile ? cloneProfile(profile) : undefined;
 }
 
@@ -346,8 +346,7 @@ export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): C
   const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id];
   if (!profile) return undefined;
   return mergeProfiles(profile, {
-    // @ts-ignore
-    tags: [route.id, `z_${route.z}`, route.themeTags[0]?.toLowerCase() ?? 'route'],
+    tags: [route.id, `z_${route.z}`, route.themeTags?.[0]?.toLowerCase() ?? 'route'],
   });
 }
 

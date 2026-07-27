@@ -26,7 +26,7 @@ import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   getVoronoiQuarantineLayout,
   VORONOI_QUARANTINE_BASE_FLOOR,
-  VORONOI_QUARANTINE_ROOM_NAMES,
+  VORONOI_QUARANTINE_ROOM_DEF_IDS,
   VORONOI_QUARANTINE_ROUTE_ID,
   VORONOI_QUARANTINE_Z,
 } from '../src/gen/voronoi_quarantine';
@@ -161,7 +161,7 @@ test('voronoi_quarantine generator builds connected Laguerre quarantine cells', 
   assert.equal(microRooms.length >= 10_000, true, `micro rooms ${microRooms.length}`);
   assert.equal(irregularMicroRooms.length >= 9_000, true, `irregular micro rooms ${irregularMicroRooms.length}`);
 
-  for (const roomName of Object.values(VORONOI_QUARANTINE_ROOM_NAMES)) {
+  for (const roomName of Object.values(VORONOI_QUARANTINE_ROOM_DEF_IDS)) {
     assert.equal(gen.world.rooms.some(room => room.name === roomName), true, roomName);
   }
 

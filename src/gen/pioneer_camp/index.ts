@@ -13,7 +13,6 @@ import { hashSeed, withSeededRandom, seededRandom } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
 import { scatterAmbientLights, ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import type { DesignFloorGeneration } from '../floor_manifest';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CAMP_SEED, NPC_IDS, NPC_DEFS } from "./meta";
 import { expandPioneerCampFullFloor, tunePioneerCampPopulationZones, initCampWorld, buildCampCore, buildCampPaths, decorateCampCore, placeCampLifts, tuneCampZones, placeCampDrops } from "./geometry";
@@ -114,7 +113,6 @@ export function generatePioneerCampDesignFloor(seed = CAMP_SEED): FloorGeneratio
     world.bakeLights();
 
     const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: rooms.gate.x + 8.5, spawnY: rooms.gate.y + 8.5 };
-      applyDesignFloorPopulationField(generation, { id: 'pioneer_camp', z: 38 });
       return generation;
     });
 }

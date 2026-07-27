@@ -24,7 +24,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
@@ -744,28 +743,5 @@ export function blackMarket88TerritorySpawnCells(world: World): Map<TerritoryOwn
     if (list) list.push(i);
   }
   return cells;
-}
-
-export function alignBlackMarket88AmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = blackMarket88TerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isBlackMarket88AmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 139 + offset * 487) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
 }
 

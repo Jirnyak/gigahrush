@@ -6,7 +6,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
-import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
+import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
@@ -16,29 +16,6 @@ import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, UNDERHELL_FLOOR, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
 import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhellRouteCues, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
-
-export function alignUnderhellAmbientNpcTerritory(world: World, entities: Entity[]): void {
-  const cells = underhellTerritorySpawnCells(world);
-  const offsets = new Uint16Array(8);
-  for (const entity of entities) {
-    if (!isUnderhellAmbientNpc(entity) || entity.faction === undefined) continue;
-    const owner = factionToTerritoryOwner(entity.faction);
-    const list = cells.get(owner);
-    if (!list || list.length === 0) continue;
-    const offset = offsets[owner]++ | 0;
-    const cell = list[(entity.id * 131 + offset * 457) % list.length];
-    entity.x = (cell % W) + 0.5;
-    entity.y = ((cell / W) | 0) + 0.5;
-    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
-    if (entity.ai) {
-      entity.ai.tx = cell % W;
-      entity.ai.ty = (cell / W) | 0;
-      entity.ai.path = [];
-      entity.ai.pi = 0;
-      entity.ai.stuck = 0;
-    }
-  }
-}
 
 export function isUnderhellAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&

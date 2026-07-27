@@ -1,4 +1,3 @@
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import type { DesignFloorGeneration } from '../floor_manifest';
 import { seededRandom, hashSeed } from '../../core/rand';
 /* ── Design z: Райсовет и Живой архив ───────────────────────
@@ -164,7 +163,6 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   retuneRaionsovetArchiveZones(world);
   reinforceRaionsovetArchiveAuthoredHqTerritory(world);
 
-  applyDesignFloorPopulationField(generation, { id: 'raionsovet_archive', z: 22 });
   return generation;
 }
 

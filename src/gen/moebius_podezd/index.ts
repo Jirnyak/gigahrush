@@ -9,7 +9,6 @@ import {
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { hashSeed, seededRandom, withSeededRandom } from '../../core/rand';
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 import { MOEBIUS_PODEZD_SEED } from "./meta";
@@ -50,7 +49,6 @@ export function generateMoebiusPodezdDesignFloor(seed = MOEBIUS_PODEZD_SEED): Fl
 
     expandMoebiusPodezdRouteGeometry(world, rngFn);
     finalizeExpandedFloor(generation, route, rngFn);
-    applyDesignFloorPopulationField({ ...generation, isDecentralized: true as const }, route);
 
     return { ...generation, isDecentralized: true as const };
   });

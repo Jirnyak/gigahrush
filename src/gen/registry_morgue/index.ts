@@ -1,4 +1,3 @@
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import type { DesignFloorGeneration } from '../floor_manifest';
 import { seededRandom, hashSeed } from '../../core/rand';
 /* -- Design z: Морг регистраций ----------------------------
@@ -266,7 +265,6 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
   reinforceRegistryMorgueAuthoredTerritory(world);
   retuneRegistryMorgueZones(world);
 
-  applyDesignFloorPopulationField(generation, { id: 'registry_morgue', z: 18 });
   return generation;
 }
 

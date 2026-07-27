@@ -1,4 +1,3 @@
-import {  applyDesignFloorPopulationField } from '../design_floors/population';
 import {
   LiftDirection,
   Tex,
@@ -58,7 +57,6 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
 
   world.bakeLights();
   const generation = { isDecentralized: true as const, world, entities, spawnX, spawnY, productionState };
-    applyDesignFloorPopulationField(generation, { id: 'production_belt', z: -20 });
     return { ...generation, isDecentralized: true as const };
 }
 

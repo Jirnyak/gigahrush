@@ -183,7 +183,6 @@ function questHasMapRevealTarget(q: Quest): boolean {
     q.targetMarker?.roomDefId !== undefined ||
     q.targetMarker?.zoneTag !== undefined ||
     q.targetNpcId !== undefined ||
-    q.targetNpcId !== undefined ||
     q.targetMonsterKind !== undefined;
 }
 
@@ -255,10 +254,7 @@ export function revealQuestTargetOnMap(
   if (!entities?.length) return;
   const targetEntity = entities.find(e =>
     e.alive &&
-    (
-      (q.targetNpcId !== undefined && e.id === q.targetNpcId) ||
-      (q.targetNpcId !== undefined && e.id === q.targetNpcId)
-    ),
+    q.targetNpcId !== undefined && e.id === q.targetNpcId,
   );
   if (targetEntity) {
     revealQuestEntityMarker(world, targetEntity);
