@@ -258,7 +258,9 @@ Validation:
 
 ## P0: Floor Memory, Save And Storage Hitches
 
-Why this is hitch-visible:
+> **Shipped (Part 1/2):** floor-memory retention is now exactly one active floor, and the save stores that one floor as a delta against its deterministically regenerated base (`save.md`). The multi-candidate save-selection and cold-storage-tier items below are therefore historical; the still-relevant lanes are the RLE byte-writer (#2), double-restore avoidance (#3) and moving load parse/restore under the loading screen (#4). See "Shipped direction" below.
+
+Why this was hitch-visible under the old multi-floor retention:
 
 - `main.ts:3803` captures A-Life/floor memory and then writes a full JSON save through synchronous `localStorage.setItem`.
 - `systems/floor_memory.ts:1374` builds candidates by packing live worlds and cloning entities.
@@ -285,20 +287,18 @@ Safe optimizations inside the current format:
    - Saved floor-memory restore can regenerate design floors only to recover extras.
    - Store lightweight metadata or resolve extras only when that floor is taken active.
 
-Longer-term safe direction:
+Shipped direction (Part 1/2 — replaced the LRU/IndexedDB sketch this block used to propose):
 
-- Keep active floor live.
-- Keep a small hot inactive LRU of live `World` objects in RAM.
-- Move cold packed snapshots to IndexedDB as binary `Uint8Array` / `ArrayBuffer` blocks.
-- Keep `localStorage` as a small manifest plus critical player/run state.
-- Because this changes save shape, bump `SAVE_SHAPE_VERSION` and reject stale saves explicitly.
+- Exactly one floor is live: the active `World`. No hot-inactive LRU and no cold tier — a floor is a pure function of `(runSeed, z)` and regenerates deterministically on return, so departing floors are dropped, not parked. This removed the multi-candidate save-selection cost above (`MAX_FLOOR_MEMORY_SAVE_ENTRIES = 1`) and bounded live RAM to one `World` (the mobile-OOM fix).
+- `localStorage` holds player/run state plus that one active floor, and the floor is written as a **delta against its regenerated base** (XOR'd geometry + sparse room/door diffs; entities, containers and zones absolute), so even a dense floor fits under ~5 MB without an IndexedDB blob tier.
+- A `baseHash` (FNV-1a) drift guard makes a stale/drifted base decode to `null` → the loader regenerates the floor fresh instead of corrupting the grid. `SAVE_SHAPE_VERSION` bumped to 24; stale saves reject natively.
 
 Validation:
 
-- Fake-storage unit tests for put/get/delete/list/prune, quota failure, corrupt snapshot and missing cold ref.
-- Floor round-trip test: mutate doors, containers, `surfaceMap`, entities and fog; evict cold; restore; verify state.
-- Browser test: visit many floors, force cold tier, reload, return to old floors.
-- Measure heap after N visited floors, save JSON size, IndexedDB usage, cold restore time and floor transition latency.
+- Delta round-trip unit test: mutate doors, containers, `surfaceMap`, entities, walls and fog on a dense floor, `worldForSave(live, base)` → save → `worldFromSave(save, …, base2)` against an independently regenerated base; assert delta bytes ≪ full snapshot and every mutation survives (`tests/floor-memory.test.ts`).
+- Determinism + drift-guard: `generateFloorForTarget(z,e)` twice is byte-identical; a mismatched `baseHash` decodes to `null` and the loader falls back to a fresh floor with the rest of the save intact.
+- Browser test: revisit a floor via lift → deterministically identical layout; save+reload a dense floor → mutations survive and saved bytes stay under the `localStorage` ceiling.
+- Measure heap (should track one `World`), save JSON size and floor transition latency.
 
 ## P1: Render And Sprite Hot Paths
 
