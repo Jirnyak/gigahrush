@@ -80,7 +80,8 @@ import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tr
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
-import { bakeNavigationTree, markNavigationCellsDirty, prewarmNavigationTree } from './systems/ai/pathfinding';
+import { markNavigationCellsDirty, prewarmNavigationTreeAsync } from './systems/ai/pathfinding';
+import { createWorkerRegionNextSolver } from './systems/ai/nav_worker_pool';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
@@ -623,6 +624,13 @@ if (loadingCanvas && typeof loadingCanvas.transferControlToOffscreen === 'functi
   loadingWorker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
 }
 registerPwaServiceWorker();
+
+// Web Worker pool that bakes the navigation next-hop matrix (step 4, ~98% of
+// nav-bake cost) across cores behind the loading screen. Built once, reused for
+// every floor/samosbor rebake; workers spawn lazily on the first bake. In a
+// no-Worker environment the solver rejects and the bake falls back to the
+// synchronous kernel, so behavior is identical, just single-cored.
+const _navSolver = createWorkerRegionNextSolver();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
 const PLAYER_AGE_KEY = 'gigahrush_player_age';
 const PLAYER_SEX_KEY = 'gigahrush_player_sex';
@@ -3357,11 +3365,12 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   loadingProgress('Финальные штрихи', 96);
   finishLoadedFloorVisuals(gen);
   rebuildEntityIndex(entities, 'load');
-  // Bake the navigation region tree here, behind the animated loading screen, with its
-  // own progress stage — otherwise this O(W²) bake fires lazily on the first pathfinding
-  // query of frame 1 (after the screen is hidden) and freezes the first gameplay second.
+  // Nav region-tree bake is deferred to the async prewarm in the loading
+  // orchestration (gameLoop phase 2), which runs step 4 across the worker pool
+  // behind the still-animating loading screen. Baking here synchronously would
+  // freeze the main thread ~10 s (and trip the mobile watchdog). See
+  // prewarmNavigationTreeAsync.
   loadingProgress('Запекаем карты путей', 98);
-  bakeNavigationTree(world);
   loadingProgress('Готово', 100);
   const _t7 = performance.now();
 
@@ -5510,10 +5519,11 @@ function switchFloor(
       }
     }
 
-    // Bake the navigation region tree behind the animated loading screen, with its own
-    // progress stage (see initGame note) — keeps the first gameplay frame freeze-free.
+    // Nav region-tree bake is deferred to the async prewarm in the loading
+    // orchestration (gameLoop phase 2), which runs step 4 across the worker
+    // pool behind the loading screen instead of freezing the main thread. See
+    // initGame note and prewarmNavigationTreeAsync.
     loadingProgress('Запекаем карты путей', 96);
-    bakeNavigationTree(world);
     loadingProgress('Готово', 100);
   });
 }
@@ -9230,41 +9240,38 @@ function gameLoop(now: number): void {
     pendingLoad = null;
     pendingLoadStarted = false;
 
-    if (isGamePushPortalTarget()) {
-      showPlatformFullscreenAd().then(() => {
-        fn();
-        rebuildEntityIndex(entities, 'load');
-        // Warm the nav tree behind the still-animating loading screen — this O(W²) bake
-        // otherwise fires lazily on the first gameplay frame and freezes it. Guarded:
-        // no-op if the cache is already valid or frozen (samosbor). Universal across every
-        // scheduleLoading path (new game, floor change, teleport, restart).
-        if (typeof world !== 'undefined') prewarmNavigationTree(world);
-        if (loadingWorker) {
-          loadingWorker.postMessage({ type: 'stop' });
-        }
-        if (loadingCanvas) {
-          loadingCanvas.style.display = 'none';
-        }
+    // Warm the nav tree behind the still-animating loading screen, then tear the
+    // screen down. The bake's heavy step 4 runs across the worker pool (async),
+    // so the loading screen MUST stay up until it resolves — do the teardown in
+    // the continuation, never before. Guarded inside prewarm: no-op if the cache
+    // is already valid or frozen (samosbor). Universal across every
+    // scheduleLoading path (new game, floor change, teleport, restart, samosbor).
+    const finishDeferredLoad = (): void => {
+      rebuildEntityIndex(entities, 'load');
+      const done = (): void => {
+        if (loadingWorker) loadingWorker.postMessage({ type: 'stop' });
+        if (loadingCanvas) loadingCanvas.style.display = 'none';
         isFirstBootLoading = false;
         lastTime = performance.now(); // reset dt so we don't get a huge spike
         requestAnimationFrame(gameLoop);
+      };
+      if (typeof world !== 'undefined') {
+        prewarmNavigationTreeAsync(world, _navSolver).then(done, done);
+      } else {
+        done();
+      }
+    };
+
+    if (isGamePushPortalTarget()) {
+      showPlatformFullscreenAd().then(() => {
+        fn();
+        finishDeferredLoad();
       });
       return;
     }
 
     fn();
-    rebuildEntityIndex(entities, 'load');
-    // Warm the nav tree behind the still-animating loading screen (see note above).
-    if (typeof world !== 'undefined') prewarmNavigationTree(world);
-    if (loadingWorker) {
-      loadingWorker.postMessage({ type: 'stop' });
-    }
-    if (loadingCanvas) {
-      loadingCanvas.style.display = 'none';
-    }
-    isFirstBootLoading = false;
-    lastTime = performance.now(); // reset dt so we don't get a huge spike
-    requestAnimationFrame(gameLoop);
+    finishDeferredLoad();
     return;
   }
 

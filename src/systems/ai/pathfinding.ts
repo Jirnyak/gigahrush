@@ -14,6 +14,12 @@ import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
+import {
+  computeRegionNextRows,
+  MIN_REGIONS_FOR_WORKERS,
+  type RegionGraph,
+  type RegionNextSolver,
+} from './region_next';
 
 let _barkMsgs: Msg[] = [];
 let _barkTime = 0;
@@ -131,11 +137,11 @@ const _rBfsDist = new Int32Array(MACRO_W2);
 const _rBfsEpoch = new Int32Array(MACRO_W2);
 let _rBfsEpochId = 0;
 
-// Region-graph BFS scratch (grown to fit region count at bake time)
+// Region-graph BFS scratch (grown to fit region count at bake time). The
+// visited-epoch counter lives inside computeRegionNextRows, not here.
 let _regQueue = new Int32Array(1024);
 let _regFirstStep = new Int32Array(1024);
 let _regEpoch = new Int32Array(1024);
-let _regEpochId = 0;
 
 export type BehaviorFlowFieldSourceProvider = (world: World, out: number[]) => void;
 
@@ -670,6 +676,25 @@ export function bakeNavigationTree(
   cacheCellVersion = world.cellVersion,
   cachePathBlockerVersion = world.pathBlockerVersion,
 ): void {
+  bakeNavigationRegionsAndPortals(world, cacheCellVersion, cachePathBlockerVersion);
+
+  /* ── Step 4: Region-node next-hop matrix (synchronous) ───────── */
+  buildRegionNext();
+
+  finishNavigationBake();
+}
+
+/**
+ * Steps 1–3 of the bake: region assignment, portal detection, region→portal
+ * index. Cheap (~1% of bake time) and touches live world geometry, so it always
+ * runs on the main thread. Leaves `_regionMap`, `_portals`, `_numRegions`,
+ * `_numPortals`, `_regionPortalIndices` ready for step 4 (sync or worker).
+ */
+function bakeNavigationRegionsAndPortals(
+  world: World,
+  cacheCellVersion: number,
+  cachePathBlockerVersion: number,
+): void {
   _bfsCalls++;
   _navWorld = world;
   _navCellVersion = cacheCellVersion;
@@ -751,13 +776,54 @@ export function bakeNavigationTree(
     _regionPortalIndices[p.regionA].push(pi);
     _regionPortalIndices[p.regionB].push(pi);
   }
+}
 
-  /* ── Step 4: Region-node next-hop matrix ─────────────────────── */
-  buildRegionNext();
-
-  // A full bake supersedes any pending incremental work.
+/** Common tail: a full bake supersedes any pending incremental patch work. */
+function finishNavigationBake(): void {
   _navDirtyCells.clear();
   _navDirtyFull = false;
+}
+
+/**
+ * Parallel bake used behind the loading screen. Runs the exact same steps 1–3
+ * on the main thread, then offloads step 4 (`buildRegionNext`, ~98% of bake
+ * cost) to a Web Worker pool via the injected `solver`. Falls back to the
+ * synchronous kernel when there is no solver (Node/no-Worker), when the floor
+ * is too small to be worth the fan-out, or when a worker errors — so the result
+ * is always bit-identical to `bakeNavigationTree`. This is a bake-location
+ * change only: the graph, matrix and accept-stale runtime contract are
+ * unchanged. Callers must keep the loading screen up until the returned promise
+ * resolves (the region graph is not ready before then).
+ */
+export async function bakeNavigationTreeAsync(
+  world: World,
+  solver: RegionNextSolver | null,
+  cacheCellVersion = world.cellVersion,
+  cachePathBlockerVersion = world.pathBlockerVersion,
+): Promise<void> {
+  bakeNavigationRegionsAndPortals(world, cacheCellVersion, cachePathBlockerVersion);
+
+  const R = _numRegions;
+  _regionN = R;
+  // Steps 1–3 already re-pointed _navWorld/_regionMap/_portals at the new floor;
+  // null the stale previous-floor matrix now so a defensive query during the
+  // await can't index a mismatched-size _regionNext. (The loop is dormant behind
+  // the loading screen, so this is belt-and-braces.)
+  _regionNext = null;
+  if (R <= 1 || _numPortals === 0) {
+    _regionNext = null;
+  } else if (!solver || R < MIN_REGIONS_FOR_WORKERS) {
+    buildRegionNext();
+  } else {
+    try {
+      _regionNext = await solver(extractRegionGraph());
+    } catch {
+      // Any worker failure (spawn blocked, message error) → identical sync bake.
+      buildRegionNext();
+    }
+  }
+
+  finishNavigationBake();
 }
 
 /**
@@ -765,51 +831,64 @@ export function bakeNavigationTree(
  * Nodes are regions; portals are edges. One BFS per region over the
  * region-adjacency graph — a real graph (all adjacent-region edges kept,
  * cycles preserved), no spanning-tree seams, no O(P³) Floyd-Warshall, no
- * portal cap. Cost is O(R·E), sub-millisecond on real floors, so the
- * incremental patch rebuilds it wholesale rather than trying to patch rows.
- * Reads `_numRegions`, `_numPortals`, `_regionPortalIndices`, `_portals`;
- * writes `_regionNext`, `_regionN`.
+ * portal cap. Cost is O(R·E). Reads `_numRegions`, `_numPortals`,
+ * `_regionPortalIndices`, `_portals`; writes `_regionNext`, `_regionN`.
+ *
+ * The inner BFS lives in the pure `computeRegionNextRows` kernel so the
+ * synchronous path here and the parallel Web Workers (see bakeNavigationTree's
+ * async solver) run BIT-IDENTICAL code — same output regardless of core count.
  */
 function buildRegionNext(): void {
   const R = _numRegions;
   _regionN = R;
   if (R <= 1 || _numPortals === 0) { _regionNext = null; return; }
 
+  const graph = extractRegionGraph();
   if (_regQueue.length < R) {
     _regQueue = new Int32Array(R);
     _regFirstStep = new Int32Array(R);
     _regEpoch = new Int32Array(R);
-    _regEpochId = 0;
   }
   const regionNext = new Uint16Array(R * R);
   regionNext.fill(REGION_UNREACHABLE);
-
-  for (let src = 1; src < R; src++) {
-    const srcPortals = _regionPortalIndices[src];
-    if (!srcPortals || srcPortals.length === 0) continue;
-    regionNext[src * R + src] = src;
-    _regEpochId++;
-    if (_regEpochId > 2000000000) { _regEpoch.fill(0); _regEpochId = 1; }
-    _regEpoch[src] = _regEpochId;
-    let qH = 0, qT = 0;
-    _regQueue[qT++] = src;
-    while (qH < qT) {
-      const cur = _regQueue[qH++];
-      const curPortals = _regionPortalIndices[cur];
-      for (let a = 0; a < curPortals.length; a++) {
-        const p = _portals[curPortals[a]];
-        const nbr = p.regionA === cur ? p.regionB : p.regionA;
-        if (nbr === REGION_NONE || _regEpoch[nbr] === _regEpochId) continue;
-        _regEpoch[nbr] = _regEpochId;
-        // First hop out of src is the neighbour itself; deeper hops inherit
-        // the first step recorded on `cur`.
-        regionNext[src * R + nbr] = cur === src ? nbr : _regFirstStep[cur];
-        _regFirstStep[nbr] = regionNext[src * R + nbr];
-        _regQueue[qT++] = nbr;
-      }
-    }
-  }
+  computeRegionNextRows(
+    R, graph.portalRegionA, graph.portalRegionB, graph.regOffsets, graph.regFlat,
+    1, R, 0, regionNext, _regQueue, _regFirstStep, _regEpoch,
+  );
   _regionNext = regionNext;
+}
+
+/**
+ * Flatten the current region-adjacency graph into transferable typed arrays
+ * (portal region-pairs + CSR region→portal lists). This is the ONLY payload a
+ * bake worker needs — kilobytes, not the multi-MB world geometry — so cloning
+ * it per worker is cheap. Reads `_numRegions`, `_numPortals`, `_portals`,
+ * `_regionPortalIndices`; allocates fresh arrays (safe to transfer/clone).
+ */
+function extractRegionGraph(): RegionGraph {
+  const R = _numRegions;
+  const P = _numPortals;
+  const portalRegionA = new Int32Array(P);
+  const portalRegionB = new Int32Array(P);
+  for (let pi = 0; pi < P; pi++) {
+    const p = _portals[pi];
+    portalRegionA[pi] = p.regionA;
+    portalRegionB[pi] = p.regionB;
+  }
+  // CSR: regOffsets[r]..regOffsets[r+1] slices regFlat into region r's portals.
+  const regOffsets = new Int32Array(R + 1);
+  for (let r = 0; r < R; r++) {
+    const list = _regionPortalIndices[r];
+    regOffsets[r + 1] = regOffsets[r] + (list ? list.length : 0);
+  }
+  const regFlat = new Int32Array(regOffsets[R]);
+  for (let r = 0; r < R; r++) {
+    const list = _regionPortalIndices[r];
+    if (!list) continue;
+    let o = regOffsets[r];
+    for (let a = 0; a < list.length; a++) regFlat[o++] = list[a];
+  }
+  return { R, portalRegionA, portalRegionB, regOffsets, regFlat };
 }
 
 /**
@@ -898,6 +977,33 @@ function flowFieldValid(field: BehaviorFlowField, world: World): boolean {
 export function prewarmNavigationTree(world: World): void {
   if (_frozenNavWorld) return;
   ensureNavigationTree(world);
+}
+
+/**
+ * Async twin of `prewarmNavigationTree` for the loading path: same guards and
+ * same cache/version decision as `ensureNavigationTree`, but when a full bake is
+ * needed it routes step 4 through the Web Worker pool (`solver`) so the ~10 s
+ * next-hop bake runs across cores behind the loading screen instead of freezing
+ * the main thread (which trips the mobile watchdog). Identical result to the
+ * sync prewarm; used by every scheduleLoading path. Callers MUST keep the
+ * loading screen up until this resolves.
+ */
+export async function prewarmNavigationTreeAsync(
+  world: World,
+  solver: RegionNextSolver | null,
+): Promise<void> {
+  if (_frozenNavWorld) return;
+  const cellV = navigationCacheCellVersion(world);
+  const pbV = navigationCachePathBlockerVersion(world);
+  if (_navWorld === world && _navCellVersion === cellV && _navPathBlockerVersion === pbV) {
+    _pathCacheHits++;
+    return; // Cache already valid for this world — nothing to bake.
+  }
+  if (_navWorld === world) {
+    patchNavigationRegions(world, cellV, pbV); // Same world, runtime edit → accept-stale.
+    return;
+  }
+  await bakeNavigationTreeAsync(world, solver, cellV, pbV); // New world → full parallel bake.
 }
 
 function ensureBehaviorFlowField(
