@@ -16,6 +16,7 @@ import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
 import {
   computeRegionNextRows,
+  computeRegionNextColumn,
   MIN_REGIONS_FOR_WORKERS,
   type RegionGraph,
   type RegionNextSolver,
@@ -112,6 +113,76 @@ let _regionPortalIndices: number[][] = [];
  */
 let _regionNext: Uint16Array | null = null;
 let _regionN = 0;
+
+/* ── Low-memory (mobile) navigation mode ──────────────────────────
+ * The dense R×R `_regionNext` matrix costs R²·2 bytes — a mid floor (R≈11.5k)
+ * is 256 MB, a large one (R≈23k) over 1 GB. Desktop heaps swallow that; the
+ * iOS/WebKit per-tab ceiling (a few hundred MB, hard and invisible — no
+ * `performance.memory`) does not, so the single giant allocation Jetsam-kills
+ * the tab. On such devices we skip the matrix entirely and instead keep the
+ * (tiny) region-adjacency graph resident and answer `regionPath` from a small
+ * LRU of on-demand next-hop COLUMNS (one BFS per unique target region). Peak
+ * cost is ~cache-slots · R · 2 bytes (~1 MB) instead of R²·2.
+ *
+ * Detection is HARDWARE-biased and PC-favouring: lazy mode turns on ONLY when
+ * the device advertises no hover AND no fine pointer (a real phone/tablet). Any
+ * mouse, trackpad or stylus (hover or fine pointer present) is treated as
+ * desktop and keeps the exact dense-matrix path — better to misjudge a phone as
+ * a PC than a PC as a phone. Resolved once, lazily, and cached. */
+let _lowMemNav: boolean | null = null;
+
+function useLowMemNav(): boolean {
+  if (_lowMemNav !== null) return _lowMemNav;
+  // Node / no-DOM (tests, generation) → false: keep the deterministic dense
+  // path the parity tests trust.
+  const mm = typeof window !== 'undefined' ? window.matchMedia : undefined;
+  if (!mm) { _lowMemNav = false; return false; }
+  // `any-hover: none` → no pointing device on the whole system can hover;
+  // `any-pointer: fine` present → a mouse/trackpad/stylus exists → desktop.
+  const noHover = mm('(any-hover: none)').matches === true;
+  const noFine = mm('(any-pointer: fine)').matches !== true;
+  const hasTouch = (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)
+    || 'ontouchstart' in globalThis;
+  _lowMemNav = noHover && noFine && hasTouch;
+  return _lowMemNav;
+}
+
+/** LRU of next-hop columns for the low-mem path. Key = target region rT;
+ *  value = Uint16Array(R) where [cur] is the next hop cur→rT. Sized small: a
+ *  handful of active goals cover most NPC traffic, and each column is R·2 B. */
+const LOWMEM_COLUMN_SLOTS = 16;
+const _regionColumns = new Map<number, Uint16Array>();
+let _regionColScratch = new Int32Array(1024); // BFS queue, grown to R at bake.
+// Immutable region graph kept resident in low-mem mode (replaces the matrix).
+let _lowMemGraph: RegionGraph | null = null;
+
+/** Fetch (or lazily BFS-build + cache) the next-hop column toward target rT.
+ *  Returns null if there is no low-mem graph. LRU: re-insertion refreshes
+ *  recency; the coldest column is evicted past LOWMEM_COLUMN_SLOTS. */
+function regionColumnFor(rT: number): Uint16Array | null {
+  const g = _lowMemGraph;
+  if (!g) return null;
+  const cached = _regionColumns.get(rT);
+  if (cached) {
+    // Refresh recency (Map preserves insertion order → delete+set = MRU).
+    _regionColumns.delete(rT);
+    _regionColumns.set(rT, cached);
+    return cached;
+  }
+  const R = g.R;
+  const col = new Uint16Array(R);
+  col.fill(REGION_UNREACHABLE);
+  computeRegionNextColumn(
+    R, g.portalRegionA, g.portalRegionB, g.regOffsets, g.regFlat,
+    rT, col, _regionColScratch,
+  );
+  _regionColumns.set(rT, col);
+  if (_regionColumns.size > LOWMEM_COLUMN_SLOTS) {
+    const oldest = _regionColumns.keys().next().value;
+    if (oldest !== undefined) _regionColumns.delete(oldest);
+  }
+  return col;
+}
 
 /* ── Runtime-edit state (local door toggle / wall break / build) ──
  * Same-world geometry edits are ACCEPT-STALE: the baked region/portal/next-hop
@@ -678,10 +749,30 @@ export function bakeNavigationTree(
 ): void {
   bakeNavigationRegionsAndPortals(world, cacheCellVersion, cachePathBlockerVersion);
 
-  /* ── Step 4: Region-node next-hop matrix (synchronous) ───────── */
-  buildRegionNext();
+  /* ── Step 4: next-hop routing ────────────────────────────────
+   * Low-mem (mobile): install the resident region graph for on-demand column
+   * BFS — no R²·2 allocation. Desktop: build the dense matrix synchronously. */
+  if (useLowMemNav()) installLowMemNav();
+  else buildRegionNext();
 
   finishNavigationBake();
+}
+
+/**
+ * Low-mem step 4: keep the immutable region-adjacency graph resident (kilobytes
+ * to a couple hundred KB) and drop the dense matrix. `regionPath` then answers
+ * from an LRU of on-demand next-hop columns (see regionColumnFor). Reads the
+ * same steps-1–3 state as buildRegionNext; writes `_lowMemGraph`, `_regionN`,
+ * clears `_regionNext` and the column cache, grows the BFS scratch to R.
+ */
+function installLowMemNav(): void {
+  const R = _numRegions;
+  _regionN = R;
+  _regionNext = null;
+  _regionColumns.clear();
+  if (R <= 1 || _numPortals === 0) { _lowMemGraph = null; return; }
+  _lowMemGraph = extractRegionGraph();
+  if (_regionColScratch.length < R) _regionColScratch = new Int32Array(R);
 }
 
 /**
@@ -805,6 +896,18 @@ export async function bakeNavigationTreeAsync(
 
   const R = _numRegions;
   _regionN = R;
+
+  // Low-mem (mobile): never allocate the R²·2 matrix — it is the OOM cause on
+  // phones. Install the resident graph + on-demand columns and return; no
+  // worker fan-out needed (there is no dense matrix to parallelize).
+  if (useLowMemNav()) {
+    _regionNext = null;
+    installLowMemNav();
+    finishNavigationBake();
+    return;
+  }
+  _lowMemGraph = null; // Desktop path: ensure no stale low-mem graph lingers.
+
   // Steps 1–3 already re-pointed _navWorld/_regionMap/_portals at the new floor;
   // null the stale previous-floor matrix now so a defensive query during the
   // await can't index a mismatched-size _regionNext. (The loop is dormant behind
@@ -841,6 +944,7 @@ export async function bakeNavigationTreeAsync(
 function buildRegionNext(): void {
   const R = _numRegions;
   _regionN = R;
+  _lowMemGraph = null; // Dense-matrix path owns routing; no low-mem graph.
   if (R <= 1 || _numPortals === 0) { _regionNext = null; return; }
 
   const graph = extractRegionGraph();
@@ -1125,8 +1229,25 @@ function trimBehaviorFlowFieldCache(): void {
  *  chain [rS, …, rT] or null if unreachable. O(hops), no allocation beyond
  *  the result. Cycles are preserved in the graph so there are no seams. */
 function regionPath(rS: number, rT: number): number[] | null {
-  if (!_regionNext || _regionN === 0) return null;
   const R = _regionN;
+  if (R === 0) return null;
+  // Low-mem (mobile): read the on-demand column for rT instead of the dense
+  // matrix. col[cur] = next hop cur→rT; identical walk, ~1 MB instead of R²·2.
+  if (_lowMemGraph) {
+    const col = regionColumnFor(rT);
+    if (!col || col[rS] === REGION_UNREACHABLE) return null;
+    const regions: number[] = [rS];
+    let cur = rS, safety = 0;
+    while (cur !== rT && safety <= R) {
+      const nxt = col[cur];
+      if (nxt === REGION_UNREACHABLE || nxt === cur) return null;
+      regions.push(nxt);
+      cur = nxt;
+      safety++;
+    }
+    return cur === rT ? regions : null;
+  }
+  if (!_regionNext) return null;
   if (_regionNext[rS * R + rT] === REGION_UNREACHABLE) return null;
   const regions: number[] = [rS];
   let cur = rS, safety = 0;
