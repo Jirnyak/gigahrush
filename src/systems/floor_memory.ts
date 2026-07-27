@@ -38,6 +38,9 @@ export interface FloorMemoryEntry {
   samosborCount: number;
   estimatedBytes: number;
   generationExtras?: FloorMemoryGenerationExtras;
+  // Lazy resolver for the pristine base World (same (runSeed, z), pre-mutation) used
+  // to encode a delta save. Invoked only at serialize time; null → full snapshot.
+  baseForDelta?: () => World | null;
 }
 
 export interface FloorMemoryLoad {
@@ -107,6 +110,19 @@ interface FloorMemoryWorldSave {
   screenCells: number[];
   globalCeilingTier?: number;
   hasOpenSky?: boolean;
+  // ── delta-vs-regenerated-base mode (baseDelta === true) ──
+  // When set, `arrays` hold XOR-RLE (live[i] ^ base[i]) instead of absolute
+  // values, and rooms/doors are sparse diffs against a deterministically
+  // regenerated base; `baseHash` guards against generator drift. Everything
+  // else (zones, containers, surfaceMap, anomaly*, rail*, scalars) stays
+  // absolute in both modes. Absence of `baseDelta` == the full snapshot shape
+  // (network path + legacy round-trip), so these fields are all optional.
+  baseDelta?: true;
+  baseHash?: number;
+  roomPatches?: Array<[number, unknown]>;
+  roomsAppended?: unknown[];
+  doorsRemoved?: number[];
+  doorsUpsert?: Array<[number, unknown]>;
 }
 
 export interface FloorMemorySaveEntry {
@@ -141,14 +157,25 @@ export interface FloorMemoryRestoreOptions {
   isKnownFloorKey?: (key: string) => boolean;
 }
 
-const MAX_FLOOR_MEMORY_ENTRIES = 128;
-const MAX_FLOOR_MEMORY_SAVE_ENTRIES = 24;
+// Only the single active floor is ever retained or persisted. Floors regenerate
+// deterministically on transition (main.ts drops all departure captures), and the save
+// stores one active-floor snapshot plus the compact A-Life macro-population. Caps of 1
+// bound live RAM to one World (the iOS-OOM fix) and keep the save to one floor. The
+// byte-budget machinery below is now inert defence-in-depth — left in place, not removed.
+const MAX_FLOOR_MEMORY_ENTRIES = 1;
+const MAX_FLOOR_MEMORY_SAVE_ENTRIES = 1;
 const MAX_FLOOR_MEMORY_RESTORE_SCAN_ENTRIES = MAX_FLOOR_MEMORY_SAVE_ENTRIES * 4;
 const BYTES_PER_MIB = 1024 * 1024;
 const FLOOR_MEMORY_DEFAULT_BUDGET_BYTES = 1024 * BYTES_PER_MIB;
 const FLOOR_MEMORY_MIN_BUDGET_BYTES = 384 * BYTES_PER_MIB;
 const FLOOR_MEMORY_MAX_BUDGET_BYTES = 3072 * BYTES_PER_MIB;
-const FLOOR_MEMORY_SAVE_BUDGET_BYTES = 1536 * 1024;
+// Save-section gate for the one active-floor snapshot. Part 2 encodes the floor as a
+// delta vs a regenerated base (geometry ≈ tens of KiB), but the entity list stays
+// absolute, so a dense NPC floor (e.g. z=-12) is ~1.5-1.7 MiB of A-Life entities. This
+// must exceed that worst case or the section is silently dropped; it stays well under
+// localStorage's ~5 MiB ceiling (other sections are compact id/seed state), and an
+// over-quota total still fails gracefully via saveGame's setItem try/catch.
+const FLOOR_MEMORY_SAVE_BUDGET_BYTES = 3584 * 1024;
 const FLOOR_MEMORY_DEVICE_MEMORY_FRACTION = 0.5;
 const FLOOR_MEMORY_ENTRY_OVERHEAD_BYTES = 64 * 1024;
 const DEFAULT_ROUTE_LIFTS_PER_DIRECTION = 16;
@@ -390,6 +417,109 @@ function applyRleArray(world: World, saved: RleArraySave): boolean {
   return i === target.length;
 }
 
+// ── Delta-vs-regenerated-base codec ──────────────────────────────────────────
+// XOR-RLE: store (live[i] ^ base[i]) run-length encoded. Unchanged cells (the
+// overwhelming majority) become a value-0 run that collapses to a few bytes, so a
+// mutated floor's delta is tiny vs the absolute array. `roomMap` (Int16) needs no
+// special casing: JS `^` is 32-bit and the Int16Array store truncates to 16 bits,
+// so base ^ (live ^ base) === live for every value incl. -1 ("no room"). Streaming,
+// no scratch array — avoids 12×1 MiB temp allocations on mobile at save time.
+function encodeRleArrayXor(
+  live: Uint8Array | Int16Array,
+  base: Uint8Array | Int16Array,
+  field: WorldArrayField,
+  type: RleArrayType,
+): RleArraySave {
+  const out: number[] = [];
+  const mask = type === 'u8' ? 0xff : 0xffff;
+  const n = live.length;
+  let i = 0;
+  while (i < n) {
+    const value = (live[i] ^ base[i]) & mask;
+    let len = 1;
+    while (i + len < n && ((live[i + len] ^ base[i + len]) & mask) === value) len++;
+    pushVarUint(out, len);
+    pushRleValue(out, type, value);
+    i += len;
+  }
+  return { field, type, length: n, data: bytesToBase64(new Uint8Array(out)) };
+}
+
+// Apply an XOR-RLE delta onto the base World's array in place: target already holds
+// base[j]; XOR the stored delta to reconstruct live[j]. value===0 runs are no-ops
+// (the common case). Mutates `world` (the regenerated base reused as the live world).
+function applyRleArrayXor(world: World, saved: RleArraySave): boolean {
+  if (!saved || !WORLD_ARRAY_FIELDS.some(def => def.field === saved.field && def.type === saved.type)) return false;
+  const target = worldArray(world, saved.field);
+  if (saved.length !== target.length || typeof saved.data !== 'string') return false;
+  const bytes = tryBase64ToBytes(saved.data);
+  if (!bytes) return false;
+  const offset = { v: 0 };
+  let i = 0;
+  while (i < target.length && offset.v < bytes.length) {
+    const len = readVarUint(bytes, offset);
+    const value = readRleValue(bytes, offset, saved.type);
+    if (value === null) return false;
+    if (len <= 0 || i + len > target.length) return false;
+    if (value !== 0) {
+      for (let j = i, end = i + len; j < end; j++) target[j] ^= value;
+    }
+    i += len;
+  }
+  return i === target.length;
+}
+
+// Cheap structural fingerprint of a base World (FNV-1a 32-bit over cells + roomMap
+// bytes + room/door counts). Guards the delta against generator drift: if the base
+// regenerated at load differs from the one at save (any gen/stamp change, or a
+// (z,entry) asymmetry), the hash mismatches → decode returns null → graceful
+// regenerate-fresh instead of silent grid corruption.
+function worldBaseHash(world: World): number {
+  let h = 0x811c9dc5 >>> 0;
+  const cells = world.cells;
+  for (let i = 0; i < cells.length; i++) {
+    h = (Math.imul(h ^ cells[i], 0x01000193)) >>> 0;
+  }
+  const roomMap = world.roomMap;
+  for (let i = 0; i < roomMap.length; i++) {
+    const v = roomMap[i] & 0xffff;
+    h = (Math.imul(h ^ (v & 0xff), 0x01000193)) >>> 0;
+    h = (Math.imul(h ^ ((v >> 8) & 0xff), 0x01000193)) >>> 0;
+  }
+  const counts = [world.rooms.length & 0xffff, world.doors.size & 0xffff];
+  for (const c of counts) {
+    h = (Math.imul(h ^ (c & 0xff), 0x01000193)) >>> 0;
+    h = (Math.imul(h ^ ((c >> 8) & 0xff), 0x01000193)) >>> 0;
+  }
+  return h >>> 0;
+}
+
+// Room equality EXCLUDING `doors` — door churn flows through the door delta, not
+// room patches (a room's door list is rebuilt by reconcileRoomDoors on load).
+function roomsEqualExceptDoors(a: Room, b: Room): boolean {
+  return a.id === b.id
+    && a.type === b.type
+    && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+    && a.sealed === b.sealed
+    && a.name === b.name
+    && a.apartmentId === b.apartmentId
+    && a.wallTex === b.wallTex
+    && a.floorTex === b.floorTex
+    && a.ceilingTier === b.ceilingTier;
+}
+
+// Persisted door fields (roomA/roomB/keyId/isTutorialExit ride along in the upsert
+// payload; only these fields drive whether a door counts as "changed vs base").
+function doorsEqualForDelta(a: Door, b: Door): boolean {
+  return a.state === b.state
+    && a.roomA === b.roomA
+    && a.roomB === b.roomB
+    && a.keyId === b.keyId
+    && a.timer === b.timer
+    && a.hp === b.hp
+    && a.maxHp === b.maxHp;
+}
+
 function surfaceMapForSave(world: World): Array<[number, string]> {
   const out: Array<[number, string]> = [];
   for (const [idx, pixels] of world.surfaceMap) out.push([idx, bytesToBase64(pixels)]);
@@ -425,13 +555,17 @@ function numberEntryListForSave(input: Iterable<readonly [number, number]>): Arr
   return out;
 }
 
-export function worldForSave(world: World): FloorMemoryWorldSave {
-  return {
-    arrays: WORLD_ARRAY_FIELDS.map(def => encodeRleArray(worldArray(world, def.field), def.field, def.type)),
-    rooms: cloneJson(world.rooms),
+// Encode the active floor for the save. With no `base`, emits the full absolute
+// snapshot (network path + legacy shape, unchanged). With a `base` (the pristine
+// floor regenerated from the same (runSeed, z)), emits a compact delta: the 12
+// arrays XOR'd vs base, sparse room/door diffs, absolute everything else. The
+// delta fits localStorage's ~5 MB ceiling where a full dense-floor snapshot does not.
+export function worldForSave(world: World, base?: World | null): FloorMemoryWorldSave {
+  // Absolute in both modes: runtime-mutated or trivially small (zones' fog/faction,
+  // container inventories, cosmetic decals, anomaly/rail runtime, ceiling scalars).
+  const absolute = {
     apartmentRoomCount: finiteIntRange(world.apartmentRoomCount, 0, world.rooms.length, 0),
     zones: cloneJson(world.zones),
-    doors: [...world.doors.entries()].map(([idx, door]) => [idx, cloneJson(door)]),
     containers: cloneJson(world.containers),
     surfaceMap: surfaceMapForSave(world),
     anomalyTeleports: numberEntryListForSave(world.anomalyTeleports.entries()),
@@ -445,6 +579,49 @@ export function worldForSave(world: World): FloorMemoryWorldSave {
     screenCells: numberListForSave(world.screenCells),
     globalCeilingTier: Number.isFinite(world.globalCeilingTier) ? Math.max(0, Math.min(255, Math.floor(world.globalCeilingTier as number))) : undefined,
     hasOpenSky: world.hasOpenSky === true,
+  };
+  if (base) {
+    // Rooms only ever grow/append at runtime (never reorder/remove): base slots that
+    // changed → roomPatches; rooms past the base list (e.g. samosbor) → roomsAppended.
+    const roomPatches: Array<[number, unknown]> = [];
+    const roomsAppended: unknown[] = [];
+    const baseRoomCount = base.rooms.length;
+    for (let i = 0; i < world.rooms.length; i++) {
+      if (i < baseRoomCount) {
+        if (!roomsEqualExceptDoors(world.rooms[i], base.rooms[i])) roomPatches.push([i, cloneJson(world.rooms[i])]);
+      } else {
+        roomsAppended.push(cloneJson(world.rooms[i]));
+      }
+    }
+    // Doors: base∖live → removed; live absent-in-base or differing → upsert (whole
+    // Door, so roomA/roomB/keyId/isTutorialExit are preserved — the full path drops the last).
+    const doorsRemoved: number[] = [];
+    for (const idx of base.doors.keys()) {
+      if (!world.doors.has(idx)) doorsRemoved.push(idx);
+    }
+    const doorsUpsert: Array<[number, unknown]> = [];
+    for (const [idx, door] of world.doors) {
+      const baseDoor = base.doors.get(idx);
+      if (!baseDoor || !doorsEqualForDelta(door, baseDoor)) doorsUpsert.push([idx, cloneJson(door)]);
+    }
+    return {
+      baseDelta: true,
+      baseHash: worldBaseHash(base),
+      arrays: WORLD_ARRAY_FIELDS.map(def => encodeRleArrayXor(worldArray(world, def.field), worldArray(base, def.field), def.field, def.type)),
+      rooms: [],
+      roomPatches,
+      roomsAppended,
+      doors: [],
+      doorsRemoved,
+      doorsUpsert,
+      ...absolute,
+    };
+  }
+  return {
+    arrays: WORLD_ARRAY_FIELDS.map(def => encodeRleArray(worldArray(world, def.field), def.field, def.type)),
+    rooms: cloneJson(world.rooms),
+    doors: [...world.doors.entries()].map(([idx, door]) => [idx, cloneJson(door)]),
+    ...absolute,
   };
 }
 
@@ -546,6 +723,28 @@ function sanitizeItems(input: unknown, maxEntries: number): Item[] {
   return out;
 }
 
+function sanitizeRoomFields(raw: Record<string, unknown>, id: number): Room {
+  const w = finiteIntRange(raw.w, 1, W, 1);
+  const h = finiteIntRange(raw.h, 1, W, 1);
+  return {
+    id,
+    type: enumValue(raw.type, RoomType, RoomType.COMMON) as RoomType,
+    x: finiteIntRange(raw.x, 0, W - 1, 0),
+    y: finiteIntRange(raw.y, 0, W - 1, 0),
+    w,
+    h,
+    doors: restoreNumberList(raw.doors),
+    sealed: raw.sealed === true,
+    name: stringValue(raw.name, '', 120),
+    apartmentId: finiteIntRange(raw.apartmentId, -1, 32767, -1),
+    wallTex: finiteIntRange(raw.wallTex, 0, Tex.COUNT - 1, Tex.CONCRETE) as Tex,
+    floorTex: finiteIntRange(raw.floorTex, 0, Tex.COUNT - 1, Tex.F_CONCRETE) as Tex,
+    ceilingTier: typeof raw.ceilingTier === 'number' && Number.isFinite(raw.ceilingTier)
+      ? Math.max(0, Math.min(255, Math.floor(raw.ceilingTier)))
+      : undefined,
+  };
+}
+
 function sanitizeRooms(input: unknown): Room[] {
   if (!Array.isArray(input)) return [];
   const out: Room[] = [];
@@ -553,25 +752,35 @@ function sanitizeRooms(input: unknown): Room[] {
     if (!isRecord(raw)) continue;
     const id = finiteInt(raw.id, -1);
     if (id !== out.length) continue;
-    const w = finiteIntRange(raw.w, 1, W, 1);
-    const h = finiteIntRange(raw.h, 1, W, 1);
-    out.push({
-      id,
-      type: enumValue(raw.type, RoomType, RoomType.COMMON) as RoomType,
-      x: finiteIntRange(raw.x, 0, W - 1, 0),
-      y: finiteIntRange(raw.y, 0, W - 1, 0),
-      w,
-      h,
-      doors: restoreNumberList(raw.doors),
-      sealed: raw.sealed === true,
-      name: stringValue(raw.name, '', 120),
-      apartmentId: finiteIntRange(raw.apartmentId, -1, 32767, -1),
-      wallTex: finiteIntRange(raw.wallTex, 0, Tex.COUNT - 1, Tex.CONCRETE) as Tex,
-      floorTex: finiteIntRange(raw.floorTex, 0, Tex.COUNT - 1, Tex.F_CONCRETE) as Tex,
-      ceilingTier: typeof raw.ceilingTier === 'number' && Number.isFinite(raw.ceilingTier)
-        ? Math.max(0, Math.min(255, Math.floor(raw.ceilingTier)))
-        : undefined,
-    });
+    out.push(sanitizeRoomFields(raw, id));
+    if (out.length >= 32767) break;
+  }
+  return out;
+}
+
+// Delta mode: base-room overrides keyed by base index. Ids are re-forced to the
+// base slot on apply, so a corrupt/duplicate index cannot desync the room list.
+function sanitizeRoomPatches(input: unknown): Array<[number, Room]> {
+  const out: Array<[number, Room]> = [];
+  if (!Array.isArray(input)) return out;
+  for (const entry of input) {
+    if (!Array.isArray(entry) || entry.length !== 2 || !isRecord(entry[1])) continue;
+    const idx = finiteIntRange(entry[0], 0, 32766, -1);
+    if (idx < 0) continue;
+    out.push([idx, sanitizeRoomFields(entry[1], idx)]);
+    if (out.length >= 32767) break;
+  }
+  return out;
+}
+
+// Delta mode: rooms appended past the base list (e.g. samosbor). Final ids are
+// re-forced to the push position at apply time, so the sequential invariant holds.
+function sanitizeRoomList(input: unknown): Room[] {
+  const out: Room[] = [];
+  if (!Array.isArray(input)) return out;
+  for (const raw of input) {
+    if (!isRecord(raw)) continue;
+    out.push(sanitizeRoomFields(raw, finiteIntRange(raw.id, 0, 32766, 0)));
     if (out.length >= 32767) break;
   }
   return out;
@@ -748,19 +957,14 @@ function sanitizedWorldSave(input: unknown): FloorMemoryWorldSave | null {
     if (!saved) return null;
     arrays.push(saved);
   }
-  const rooms = sanitizeRooms(input.rooms);
-  const apartmentRoomCount = finiteIntRange(input.apartmentRoomCount, 0, rooms.length, -1);
-  if (apartmentRoomCount < 0) return null;
   const zones = sanitizeZones(input.zones);
   const surfaceMap: Array<[number, string]> = [];
   for (const [idx, pixels] of restoreSurfaceMap(input.surfaceMap)) surfaceMap.push([idx, bytesToBase64(pixels)]);
-  return {
+  // Absolute state shared by both modes (in delta mode the arrays are XOR-RLE but
+  // still valid length-W*W RLE streams, so the arrays loop above validates both).
+  const shared = {
     arrays,
-    rooms,
-    apartmentRoomCount,
     zones,
-    doors: sanitizeDoorEntries(input.doors, rooms),
-    containers: sanitizeContainers(input.containers, rooms, zones),
     surfaceMap,
     anomalyTeleports: restoreNumberEntries(input.anomalyTeleports)
       .filter(([a, b]) => a >= 0 && a < W * W && b >= 0 && b < W * W),
@@ -778,11 +982,118 @@ function sanitizedWorldSave(input: unknown): FloorMemoryWorldSave | null {
       : undefined,
     hasOpenSky: input.hasOpenSky === true,
   };
+  if (input.baseDelta === true) {
+    if (typeof input.baseHash !== 'number' || !Number.isFinite(input.baseHash)) return null;
+    // Final rooms/doors/containers are reconstructed from the base at decode. Here
+    // only the room-count-independent diff is sanitized; doorsUpsert + containers stay
+    // raw and are sanitized against base.rooms inside worldFromDelta.
+    return {
+      ...shared,
+      baseDelta: true,
+      baseHash: input.baseHash >>> 0,
+      rooms: [],
+      apartmentRoomCount: finiteIntRange(input.apartmentRoomCount, 0, 32767, 0),
+      roomPatches: sanitizeRoomPatches(input.roomPatches),
+      roomsAppended: sanitizeRoomList(input.roomsAppended),
+      doors: [],
+      doorsRemoved: restoreNumberList(input.doorsRemoved),
+      doorsUpsert: Array.isArray(input.doorsUpsert) ? input.doorsUpsert : [],
+      containers: Array.isArray(input.containers) ? input.containers : [],
+    };
+  }
+  const rooms = sanitizeRooms(input.rooms);
+  const apartmentRoomCount = finiteIntRange(input.apartmentRoomCount, 0, rooms.length, -1);
+  if (apartmentRoomCount < 0) return null;
+  return {
+    ...shared,
+    rooms,
+    apartmentRoomCount,
+    doors: sanitizeDoorEntries(input.doors, rooms),
+    containers: sanitizeContainers(input.containers, rooms, zones),
+  };
 }
 
-export function worldFromSave(input: unknown, spawnX?: number, spawnY?: number): World | null {
+// Apply a sanitized geometry delta onto the regenerated base World, reusing the base
+// in place as the live world. Ordering is load-bearing: XOR arrays first (authoritative
+// for the whole grid), then rooms, then zones (before the lift recompute), then doors
+// via plain Map ops (never removeDoorAt — it would double-write the grid over the XOR
+// result), then absolute state. A baseHash mismatch (generator drift / (z,entry)
+// asymmetry) returns null so the loader falls back to a fresh regenerate.
+function worldFromDelta(
+  saved: FloorMemoryWorldSave,
+  spawnX: number | undefined,
+  spawnY: number | undefined,
+  base: World | null,
+): World | null {
+  if (!base) return null;
+  if (typeof saved.baseHash !== 'number' || worldBaseHash(base) !== (saved.baseHash >>> 0)) return null;
+  // 1. XOR the 12 arrays onto the base grid (player edits, samosbor rewrites, door
+  //    cells, roomMap all ride here).
+  for (const def of WORLD_ARRAY_FIELDS) {
+    const arr = saved.arrays.find(candidate => candidate.field === def.field && candidate.type === def.type);
+    if (!arr || !applyRleArrayXor(base, arr)) return null;
+  }
+  // 2. Rooms: overwrite patched base slots, append the rest; ids re-forced to slot so
+  //    the dense-sequential invariant holds regardless of a corrupt payload.
+  const baseRoomCount = base.rooms.length;
+  const patches = (saved.roomPatches ?? []) as Array<[number, Room]>;
+  for (const [idx, room] of patches) {
+    if (idx >= 0 && idx < baseRoomCount) {
+      room.id = idx;
+      // defId/tags are generation-deterministic (never mutated at runtime) and the
+      // room sanitizer drops them; carry them from the pristine base slot so a
+      // patched room (e.g. sealed by samosbor) keeps its quest/event target id.
+      const baseRoom = base.rooms[idx];
+      if (baseRoom.defId !== undefined) room.defId = baseRoom.defId;
+      if (baseRoom.tags !== undefined) room.tags = baseRoom.tags;
+      base.rooms[idx] = room;
+    }
+  }
+  for (const room of (saved.roomsAppended ?? []) as Room[]) {
+    room.id = base.rooms.length;
+    base.rooms.push(room);
+  }
+  base.apartmentRoomCount = Math.max(0, Math.min(base.rooms.length, saved.apartmentRoomCount));
+  // 3. Zones before the lift recompute (recompute reads final zones + live zoneMap).
+  base.zones = saved.zones as Zone[];
+  // 4. Doors: plain Map delete/set onto the base's regenerated door Map.
+  for (const idx of saved.doorsRemoved ?? []) base.doors.delete(idx);
+  for (const [idx, door] of sanitizeDoorEntries(saved.doorsUpsert ?? [], base.rooms, base)) base.doors.set(idx, door);
+  reconcileRoomDoors(base);
+  recomputeWorldZoneLiftFlags(base);
+  // 5. Absolute state (containers sanitized against the final rooms/zones).
+  base.containers = sanitizeContainers(saved.containers, base.rooms, base.zones);
+  base.rebuildContainerMap();
+  if (Number.isFinite(spawnX) && Number.isFinite(spawnY)) {
+    rebuildGeneratedFloorPathBlockers(base, 0, spawnX as number, spawnY as number);
+  } else {
+    rebuildPathBlockersFromWorldObjects(base);
+  }
+  base.surfaceMap = restoreSurfaceMap(saved.surfaceMap);
+  base.anomalyTeleports = new Map(saved.anomalyTeleports);
+  base.anomalySmogSource = saved.anomalySmogSource;
+  base.anomalySmogCells = saved.anomalySmogCells;
+  base.anomalySmogHandled = saved.anomalySmogHandled;
+  base.railTracks = cloneJsonOr<World['railTracks']>(saved.railTracks, []);
+  base.railTrains = cloneJsonOr<World['railTrains']>(saved.railTrains, []);
+  base.railTrainCells = new Map(saved.railTrainCells);
+  base.slideCells = saved.slideCells;
+  base.screenCells = saved.screenCells;
+  base.globalCeilingTier = saved.globalCeilingTier;
+  base.hasOpenSky = saved.hasOpenSky;
+  base.markCellsDirty();
+  base.markSurfaceDirty();
+  base.markWallTexDirty();
+  base.markFloorTexDirty();
+  base.markFeaturesDirty(true);
+  base.markFogDirty();
+  return base;
+}
+
+export function worldFromSave(input: unknown, spawnX?: number, spawnY?: number, base?: World | null): World | null {
   const savedWorld = sanitizedWorldSave(input);
   if (!savedWorld) return null;
+  if (savedWorld.baseDelta) return worldFromDelta(savedWorld, spawnX, spawnY, base ?? null);
   const world = new World();
   for (const def of WORLD_ARRAY_FIELDS) {
     const saved = savedWorld.arrays.find(candidate => candidate.field === def.field && candidate.type === def.type);
@@ -1484,6 +1795,7 @@ export function captureFloorMemory(
   capturedAt: number,
   samosborCount: number,
   generationExtras?: FloorMemoryGenerationExtras,
+  baseForDelta?: () => World | null,
 ): boolean {
   const key = cleanFloorKey(keyInput);
   if (!key) return false;
@@ -1501,6 +1813,7 @@ export function captureFloorMemory(
     samosborCount,
     estimatedBytes,
     generationExtras,
+    baseForDelta,
   });
   floorMemoryBytes += estimatedBytes;
   trimFloorMemory();
@@ -1513,7 +1826,7 @@ export function hasFloorMemory(keyInput: string): boolean {
   return floorMemory.has(key) || packedFloorMemory.has(key);
 }
 
-export function takeFloorMemory(keyInput: string): FloorMemoryLoad | null {
+export function takeFloorMemory(keyInput: string, getBase?: () => World | null): FloorMemoryLoad | null {
   const key = cleanFloorKey(keyInput);
   if (!key) return null;
   const entry = floorMemory.get(key);
@@ -1533,7 +1846,10 @@ export function takeFloorMemory(keyInput: string): FloorMemoryLoad | null {
   const packed = packedFloorMemory.get(key);
   if (!packed) return null;
   removePackedFloorMemoryEntry(key);
-  const world = worldFromSave(packed.save.world, packed.save.spawnX, packed.save.spawnY);
+  // Only a delta save needs the regenerated base; the thunk is never called on a
+  // full snapshot (or a miss), so ordinary loads generate the floor exactly once.
+  const base = packed.save.world.baseDelta ? (getBase?.() ?? null) : undefined;
+  const world = worldFromSave(packed.save.world, packed.save.spawnX, packed.save.spawnY, base);
   if (!world) return null;
   return {
     fromMemory: true,
@@ -1554,7 +1870,7 @@ function entryForSave(entry: FloorMemoryEntry): FloorMemorySaveEntry {
     spawnY: Number.isFinite(entry.spawnY) ? entry.spawnY : W / 2,
     capturedAt: Number.isFinite(entry.capturedAt) ? entry.capturedAt : 0,
     samosborCount: Number.isFinite(entry.samosborCount) ? Math.max(0, Math.floor(entry.samosborCount)) : 0,
-    world: worldForSave(entry.world),
+    world: worldForSave(entry.world, entry.baseForDelta?.() ?? undefined),
     entities: cloneJson(entry.entities),
     estimatedBytes: entry.estimatedBytes,
   };

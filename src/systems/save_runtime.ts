@@ -18,13 +18,14 @@ import { floorRunStateForSave } from './procedural_floors';
 import { buildSavePayload, type SavePayload } from './save_payload';
 import { stockMarketForSave } from './stock_market';
 
-export const SAVE_SHAPE_VERSION = 22;
+export const SAVE_SHAPE_VERSION = 24;
 export type SaveShapeVersionStatus = 'missing' | 'old' | 'current' | 'newer' | 'invalid';
 
 export interface SaveRuntimeExtras {
   voidReturnPortal?: unknown;
   voidEntryFromFloor?: unknown;
   floorMemory?: unknown;
+  playedCinematics?: unknown;
 }
 
 export type GameSavePayload = SavePayload & { version: number };
@@ -67,6 +68,7 @@ export function createGameSavePayload(
       liftArachna: liftArachnaStateForSave(state),
       pseudolift: pseudoliftStateForSave(state),
       floorMemory: extras.floorMemory,
+      playedCinematics: extras.playedCinematics,
       alife: alifeForSave(state),
       alifeMobility: alifeMobilityForSave(state),
       computers: computersStateForSave(),

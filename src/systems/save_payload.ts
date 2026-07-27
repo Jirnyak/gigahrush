@@ -45,6 +45,7 @@ export interface SavePayloadSections {
   liftArachna: unknown;
   pseudolift: unknown;
   floorMemory: unknown;
+  playedCinematics?: unknown;
   alife: unknown;
   alifeMobility: unknown;
   computers?: unknown;
@@ -110,6 +111,7 @@ export interface SavePayload {
     liftArachna: unknown;
     pseudolift: unknown;
     floorMemory: unknown;
+    playedCinematics?: unknown;
     alife: unknown;
     alifeMobility: unknown;
     computers?: unknown;
@@ -313,6 +315,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       liftArachna: sections.liftArachna,
       pseudolift: sections.pseudolift,
       floorMemory: sections.floorMemory,
+      playedCinematics: sections.playedCinematics,
       alife: sections.alife,
       alifeMobility: sections.alifeMobility,
       computers: sections.computers,
@@ -390,6 +393,7 @@ export function summarizeSavePayload(
     { label: 'liftArachna', value: payload.state.liftArachna },
     { label: 'pseudolift', value: payload.state.pseudolift },
     { label: 'floorMemory', value: payload.state.floorMemory },
+    { label: 'playedCinematics', value: payload.state.playedCinematics },
     { label: 'voidReturnPortal', value: payload.state.voidReturnPortal },
     { label: 'voidEntryFromFloor', value: payload.state.voidEntryFromFloor },
   ];

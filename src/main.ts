@@ -80,7 +80,7 @@ import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tr
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
-import { markNavigationCellsDirty, prewarmNavigationTreeAsync } from './systems/ai/pathfinding';
+import { markNavigationCellsDirty, prewarmNavigationTreeAsync, behaviorFlowFieldCount } from './systems/ai/pathfinding';
 import { createWorkerRegionNextSolver } from './systems/ai/nav_worker_pool';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
@@ -345,11 +345,11 @@ import {
   invalidateFloorMemory,
   restoreFloorMemoryFromSave,
   takeFloorMemory,
-  hasFloorMemory,
   type FloorLiftAnchor,
   type FloorMemoryLoad,
   type FloorRouteLiftMirror,
 } from './systems/floor_memory';
+import { withPreservedGenerationRuntime } from './systems/generation_runtime_guard';
 import {
   packFloorForNetwork,
   serializeFloorSnapshot,
@@ -2017,6 +2017,12 @@ let prevPlayerActorId = -1;
 let prevPlayerActorHp = 100; // track current player actor HP changes for damage flash
 let lastProjectileHitMsgTick = -999;
 let runtimeCamera = createRuntimeCamera();
+// Which key-floor cinematics have already played this run. Floors are no longer
+// retained in floorMemory, so this bounded set replaces the old "!hasFloorMemory"
+// visited proxy that gated one-shot cinematics; persisted (capped) in the save so a
+// reload or lift-revisit does not replay them.
+const playedCinematicKeys = new Set<string>();
+const MAX_PLAYED_CINEMATIC_KEYS = 32;
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
 let pendingLoadStarted = false; // true = loading worker was started
 let pendingLoadWaitTime = 0;
@@ -2265,7 +2271,6 @@ function continueDeathAsAlifePopulationNpc(): boolean {
 
   endPsiPossession(entities, player, undefined, state.time, 'reset');
   captureCurrentAlifeFloor();
-  captureCurrentFloorMemory();
   clearPseudoliftActive(state, entities);
   const fromFloor = state.currentZ;
   commitFloorRunEntry(state, targetEntry);
@@ -2686,7 +2691,6 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const voidSpikeWasCarried = portal.voidSpikeCarried;
   const voidSpikeWasResolved = portal.voidSpikeResolved;
   const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
-  captureCurrentFloorMemory();
 
   state.currentZ = zForBaseFloor(100);
   state.gameWon = false;
@@ -3178,12 +3182,22 @@ function scheduleLoading(fn: () => void): void {
 
 function loadingProgress(stage: string, pct: number): void {
   loadingWorker?.postMessage({ type: 'progress', stage, pct });
+  // Crash breadcrumb. iOS/WebKit Jetsam can kill the tab mid-generation with
+  // ZERO console output, so we cannot see which phase OOMs. Persist the current
+  // phase synchronously; a post-crash reload leaves it set (it is only cleared
+  // on a fully successful load), so the last value = the phase that died.
+  // Diagnose after a crash from the console: localStorage.getItem('gigahrush_loadstage')
+  try {
+    if (pct >= 100) localStorage.removeItem('gigahrush_loadstage');
+    else localStorage.setItem('gigahrush_loadstage', pct + '% ' + stage);
+  } catch { /* localStorage unavailable — ignore */ }
 }
 
 function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: boolean = false): void {
   const _t0 = performance.now();
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
+  playedCinematicKeys.clear();
   resetNoiseRecords();
   musicSystem.reset();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
@@ -3431,6 +3445,25 @@ let netDeathReported = false;
 const MSG_LOG_SYNC_DEDUPE_SCAN = 32;
 
 function bootInitialGameOrTitle(): void {
+  // Crash breadcrumb readout. The mobile web inspector console is unreliable, so
+  // if the previous load died mid-generation (Jetsam OOM, no console output),
+  // surface the dying phase here — BEFORE the trailer load below overwrites it.
+  // Cleared automatically on any fully successful load, so it only fires after a
+  // real crash. Temporary diagnostic; remove once the WebKit crash is pinned.
+  try {
+    const crashed = localStorage.getItem('gigahrush_loadstage');
+    if (crashed) alert('Прошлая загрузка упала на фазе:\n' + crashed);
+  } catch { /* localStorage unavailable — ignore */ }
+  // Gameplay-heartbeat forensic: if the previous session left the "alive" flag set
+  // (no clean pagehide) and a ring, the tab died mid-play — surface the final-seconds
+  // trend so it's readable on the phone without devtools. See recordHeartbeat.
+  try {
+    if (localStorage.getItem('gigahrush_hb_alive') === '1') {
+      const raw = localStorage.getItem('gigahrush_hb');
+      if (raw) alert('Прошлая сессия оборвалась (краш?). Последние сек:\n' + formatHeartbeatRing(raw));
+    }
+    localStorage.removeItem('gigahrush_hb_alive');
+  } catch { /* localStorage unavailable — ignore */ }
   setAudioSuspendedForTitle(true);
   scheduleLoading(() => {
     const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
@@ -5157,7 +5190,20 @@ function floorMemoryKeyForTarget(z: number | readonly string[], entry: FloorRunE
   return entry ? floorRunEntryFloorKey(entry) : floorMemoryKeyForStoryFloor(typeof z === 'number' ? z : 0);
 }
 
+// Resolve the current live floor's (z, entry) the same way loadGame reconstructs
+// its (floor, generatedRunEntry) target, so the delta base regenerated at save
+// time is byte-identical to the one regenerated at load time.
+function currentFloorTarget(): { z: number | readonly string[]; entry: FloorRunEntry | null } {
+  const activeInstance = getActiveFloorInstance(state);
+  const runEntry = currentFloorRunEntry(state);
+  return {
+    z: activeInstance?.themeTags ?? runEntry.themeTags ?? state.currentZ,
+    entry: activeInstance ? null : runEntry,
+  };
+}
+
 function captureCurrentFloorMemory(): void {
+  const { z: baseZ, entry: baseEntry } = currentFloorTarget();
   captureFloorMemory(
     currentFloorMemoryKey(),
     world,
@@ -5167,19 +5213,12 @@ function captureCurrentFloorMemory(): void {
     state.time,
     state.samosborCount,
     activeSkyProvider ? { skyProvider: activeSkyProvider } : undefined,
-  );
-}
-
-function captureFloorMemoryByKey(key: string): void {
-  captureFloorMemory(
-    key,
-    world,
-    entities,
-    player.x,
-    player.y,
-    state.time,
-    state.samosborCount,
-    activeSkyProvider ? { skyProvider: activeSkyProvider } : undefined,
+    // Delta base: regenerate this floor's pristine geometry so the save stores only
+    // the runtime diff. Preserve live module singletons a throwaway regen would
+    // clobber (kvartiry uprising state). Lazy — invoked only at save serialization
+    // (entryForSave); the transient base World is unreferenced once the delta is
+    // computed, before the save JSON.stringify.
+    () => withPreservedGenerationRuntime(() => generateFloorForTarget(baseZ, baseEntry).world),
   );
 }
 
@@ -5222,7 +5261,17 @@ function floorMemoryGenerationExtrasForKey(key: string): Record<string, unknown>
 
 function loadFloorForTarget(z: number | readonly string[], entry: FloorRunEntry | null | undefined): FloorMemoryLoad {
   const memoryKey = floorMemoryKeyForTarget(z, entry);
-  const restored = takeFloorMemory(memoryKey);
+  // Lazy base for a delta-encoded snapshot: the pristine floor regenerated from
+  // (z, entry), identical to the save-time base. takeFloorMemory invokes it only
+  // when the stored entry is a delta — never on a miss or a full snapshot — so an
+  // ordinary load still generates the floor exactly once. No runtime-singleton
+  // guard here: a real floor load *wants* fresh module state.
+  let memoBase: World | null | undefined;
+  const getBase = (): World | null => {
+    if (memoBase === undefined) memoBase = generateFloorForTarget(z, entry).world;
+    return memoBase;
+  };
+  const restored = takeFloorMemory(memoryKey, getBase);
   if (restored) {
     // The fast-elevator grid is absolute and deterministic, so re-stamp it on
     // memory-restored floors too (idempotent: same fixed cells every load).
@@ -5255,7 +5304,6 @@ function switchFloor(
   restorePlayerBeforeWorldBoundary();
   const fromFloor = state.currentZ;
   captureCurrentAlifeFloor();
-  const departingMemoryKey = currentFloorMemoryKey();
   // Fast elevator / debug teleport: jump straight to an arbitrary route floor,
   // bypassing single-step route resolution and elevator anomaly machinery.
   const directTargetEntry = targetEntry ?? (targetZ !== undefined ? floorRunEntryForZ(state, targetZ) : null);
@@ -5318,7 +5366,6 @@ function switchFloor(
   const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
   const savedStatuses = player.statuses ? [...player.statuses] : undefined;
   const savedMoney = player.money ?? 100;
-  captureFloorMemoryByKey(departingMemoryKey);
 
   state.currentZ = nextFloor;
   if (nextFloor === 200) setVoidEntryFromFloor(state, fromFloor);
@@ -5493,8 +5540,11 @@ function switchFloor(
     loadingProgress('Финальные штрихи', 90);
     finishLoadedFloorVisuals(gen);
 
-    // Auto-trigger cinematic scenes on specific key floors
-    if (!hasFloorMemory(currentFloorMemoryKey())) {
+    // Auto-trigger cinematic scenes on specific key floors — once per run per floor.
+    // Floors are no longer retained in floorMemory, so a bounded played-set (persisted
+    // in the save) replaces the old "!hasFloorMemory" been-here-before proxy.
+    const cinematicKey = currentFloorMemoryKey();
+    if (!playedCinematicKeys.has(cinematicKey)) {
       const isCinematicFloor =
         nextFloor === 100 ||
         nextFloor === 180 ||
@@ -5509,6 +5559,7 @@ function switchFloor(
         ));
 
       if (isCinematicFloor && !activeFloorInstance && !route.activeInstance) {
+        if (playedCinematicKeys.size < MAX_PLAYED_CINEMATIC_KEYS) playedCinematicKeys.add(cinematicKey);
         // Preset waypoints (simple flight path from player's starting position)
         const waypoints = [
           [player.x, player.y],
@@ -6196,7 +6247,11 @@ function saveGame(): void {
       voidReturnPortal: voidReturnPortalStateForSave(state),
       voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
       floorMemory: floorMemoryStateForSave(),
+      playedCinematics: [...playedCinematicKeys],
     });
+    // The active-floor snapshot above was a transient capture for this save only;
+    // drop it so nothing floor-sized is retained (or re-archived) during play.
+    clearFloorMemory();
     const raw = JSON.stringify(data);
     const compactData = createPortalCompactSavePayload(data);
     const compactRaw = JSON.stringify(compactData);
@@ -6257,6 +6312,14 @@ function loadGame(): boolean {
     setAlifeState(state, dataState.alife);
     setAlifeMobilityState(state, dataState.alifeMobility);
     restoreDemosSocialFromSave(state, dataState.demosSocial);
+    playedCinematicKeys.clear();
+    if (Array.isArray(dataState.playedCinematics)) {
+      for (const key of dataState.playedCinematics) {
+        if (typeof key === 'string' && key && playedCinematicKeys.size < MAX_PLAYED_CINEMATIC_KEYS) {
+          playedCinematicKeys.add(key.slice(0, 64));
+        }
+      }
+    }
     const loadedRunEntry = currentFloorRunEntry(state);
     const floor = loadedFloorInstances.current?.themeTags ?? loadedRunEntry.themeTags ?? savedFloor;
     const generatedRunEntry = loadedFloorInstances.current ? null : loadedRunEntry;
@@ -9116,6 +9179,61 @@ function updateFpsMeter(now: number, frameMs: number): number {
   return displayedFps;
 }
 
+// ── Crash-forensic heartbeat (temporary diagnostic) ──────────────────────────
+// The mobile WebKit crash is silent (no console, no error). Once per ~1s of real
+// gameplay we append one compact sample to a bounded ring in localStorage, which
+// survives the process death — so the ring's tail shows what trended in the final
+// seconds and lets us tell the two failure modes apart:
+//   • worst frame ms climbing to 150-300+  → CPU watchdog (iOS kills a page whose
+//     frames run too long) → fix is temporal AI LOD.
+//   • worst ms stays fine but the ring ends abruptly → memory Jetsam (RAM ceiling).
+// `flow` also confirms on-device that the flow-field working set stays ≤3.
+// A clean exit (pagehide/beforeunload) clears the "alive" flag so normal play
+// never masquerades as a crash on the next boot. Remove once the crash is pinned.
+const HB_KEY = 'gigahrush_hb';
+const HB_ALIVE_KEY = 'gigahrush_hb_alive';
+const HB_RING_MAX = 24;
+type HbSample = { t: number; fps: number; worst: number; ent: number; flow: number; surf: number };
+const _hbRing: HbSample[] = [];
+let _hbLastFlush = 0;
+let _hbWorstMs = 0;
+let _hbAliveMarked = false;
+
+function recordHeartbeat(now: number, fps: number): void {
+  try {
+    if (!_hbAliveMarked) { localStorage.setItem(HB_ALIVE_KEY, '1'); _hbAliveMarked = true; }
+    _hbRing.push({
+      t: Math.round(now / 1000),
+      fps,
+      worst: Math.round(_hbWorstMs),
+      ent: entities.length,
+      flow: behaviorFlowFieldCount(),
+      surf: world.surfaceMap.size,
+    });
+    if (_hbRing.length > HB_RING_MAX) _hbRing.shift();
+    localStorage.setItem(HB_KEY, JSON.stringify(_hbRing));
+  } catch { /* storage disabled/full — diagnostics are best-effort */ }
+}
+
+/** Render the persisted heartbeat ring's tail as a compact phone-readable block. */
+function formatHeartbeatRing(raw: string): string {
+  try {
+    const ring = JSON.parse(raw) as HbSample[];
+    if (!Array.isArray(ring) || ring.length === 0) return '(пусто)';
+    const tail = ring.slice(-8);
+    const t0 = tail[0].t;
+    const rows = tail.map(s =>
+      `+${String(s.t - t0).padStart(2)}s ${String(s.worst).padStart(4)}ms ${String(s.fps).padStart(2)}fps ent${s.ent} flow${s.flow} surf${s.surf}`);
+    return rows.join('\n') + '\n\nworst 150-300+ → CPU watchdog; worst ок но обрыв → память';
+  } catch { return raw.slice(0, 300); }
+}
+
+if (typeof window !== 'undefined') {
+  const clearHbAlive = (): void => { try { localStorage.removeItem(HB_ALIVE_KEY); } catch { /* ignore */ } };
+  window.addEventListener('pagehide', clearHbAlive);
+  window.addEventListener('beforeunload', clearHbAlive);
+}
+
 function hudPerfDebugSnapshot(fps: number) {
   const ai = getAiStats();
   const entityStats = getEntityIndex().getDebugStats();
@@ -9816,6 +9934,16 @@ function gameLoop(now: number): void {
   updateMobileContext();
   const currentFps = updateFpsMeter(now, rawDt * 1000);
   checkPerformance(currentFps, state);
+  // Crash-forensic heartbeat: track the worst frame each ~1s of real gameplay.
+  if (started && !state.trailerMode && typeof world !== 'undefined') {
+    const fm = rawDt * 1000;
+    if (fm > _hbWorstMs) _hbWorstMs = fm;
+    if (now - _hbLastFlush >= 1000) {
+      recordHeartbeat(now, currentFps);
+      _hbLastFlush = now;
+      _hbWorstMs = 0;
+    }
+  }
 
   // ── Render ───────────────────────────────────────────────
   // Fog density varies by floor level

@@ -443,16 +443,25 @@ function installNetSphereBrowser(): { document: FakeBrowserDocument; restore: ()
   const previousDocument = globalThis.document;
   const previousLocalStorage = globalThis.localStorage;
   const previousSessionStorage = globalThis.sessionStorage;
+  const netFlagHost = globalThis as { __GIGAHRUSH_NET_BACKEND__?: boolean };
+  const previousNetBackend = netFlagHost.__GIGAHRUSH_NET_BACKEND__;
   const document = new FakeBrowserDocument();
   globalThis.document = document as unknown as Document;
   globalThis.localStorage = new FakeBrowserStorage();
   globalThis.sessionStorage = new FakeBrowserStorage();
+  // Client tests simulate a net-enabled (Cloudflare/GitHub) build. The Net
+  // Sphere client only activates when a backend is deemed available
+  // (portalAllowsOptionalNetwork → netSphereBackendAvailable); without this flag
+  // the whole client is gated off exactly as on itch/pikabu, so heartbeat,
+  // offline transitions and chat UI never run.
+  netFlagHost.__GIGAHRUSH_NET_BACKEND__ = true;
   return {
     document,
     restore: () => {
       globalThis.document = previousDocument;
       globalThis.localStorage = previousLocalStorage;
       globalThis.sessionStorage = previousSessionStorage;
+      netFlagHost.__GIGAHRUSH_NET_BACKEND__ = previousNetBackend;
     },
   };
 }

@@ -231,6 +231,11 @@ export default defineConfig((env) => {
     define: {
       "globalThis.__GIGAHRUSH_EN_LOCALE__": JSON.stringify(runtimeEnglishLocale()),
       "globalThis.__GIGAHRUSH_NPC_INTAKE_ENABLED__": JSON.stringify(includeNpcIntake),
+      // True only for the Cloudflare/Wrangler build (cf:dev/cf:deploy pass
+      // --mode cloudflare), which is the only build that actually serves the
+      // Net Sphere /api/net backend. itch/pikabu/plain builds get false → no
+      // network → no 404s. GitHub build is handled by hostname at runtime.
+      "globalThis.__GIGAHRUSH_NET_BACKEND__": JSON.stringify(env.mode === "cloudflare"),
       "__BUILD_VERSION__": JSON.stringify(buildVersionText),
     },
     resolve: {

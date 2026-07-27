@@ -215,7 +215,18 @@ export function portalAllowsCasinoLikeContent(): boolean {
 }
 
 export function portalAllowsOptionalNetwork(): boolean {
-  return !isStrictPortalMode();
+  if (isStrictPortalMode()) return false;
+  return netSphereBackendAvailable();
+}
+
+/** A real Net Sphere backend (/api/net) exists only in the Cloudflare/Wrangler
+ *  build (`--mode cloudflare`, i.e. cf:dev/cf:deploy — also covers `wrangler dev`
+ *  on localhost) or the GitHub build (which targets workers.dev by absolute URL).
+ *  itch, pikabu and plain static/dev hosts have no backend, so any request just
+ *  404s — treat optional network as unavailable there. See cloudflare.md. */
+function netSphereBackendAvailable(): boolean {
+  if (typeof window !== 'undefined' && window.location?.hostname === 'gigahrush.github.io') return true;
+  return Boolean((globalThis as { __GIGAHRUSH_NET_BACKEND__?: boolean }).__GIGAHRUSH_NET_BACKEND__);
 }
 
 export function portalBlocksDesignFloor(id: string | undefined): boolean {

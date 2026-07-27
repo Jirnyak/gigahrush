@@ -4,6 +4,7 @@ import { type Entity, EntityType, Faction, AIGoal, type GameState, msg } from '.
 import { World } from '../../core/world';
 import { publishEvent } from '../../systems/events';
 import { rng } from '../../core/rand';
+import { registerGenerationRuntimeGuard } from '../../systems/generation_runtime_guard';
 
 export type KvSocialPressurePoiId =
   | 'generic'
@@ -166,6 +167,29 @@ export function resetKvSocialPressurePois(): void {
   kvSocialPressureTime = 0;
   nextGlobalUprisingAt = 0;
 }
+
+// `generateKvartiry` resets+repopulates these live singletons on every build. That
+// is correct for a real floor load, but the save-time delta base regen must not wipe
+// the live floor's accumulated uprising state (POI cooldowns/trigger-counts + pacing
+// timers). Preserve the POI object references and timers across a throwaway regen.
+interface KvSocialPressureRuntimeSnapshot {
+  pois: PressurePoi[];
+  time: number;
+  nextGlobal: number;
+}
+registerGenerationRuntimeGuard({
+  snapshot(): KvSocialPressureRuntimeSnapshot {
+    return { pois: [...KV_SOCIAL_PRESSURE_POIS], time: kvSocialPressureTime, nextGlobal: nextGlobalUprisingAt };
+  },
+  restore(snapshot: unknown): void {
+    const snap = snapshot as KvSocialPressureRuntimeSnapshot;
+    if (!snap || !Array.isArray(snap.pois)) return;
+    KV_SOCIAL_PRESSURE_POIS.length = 0;
+    KV_SOCIAL_PRESSURE_POIS.push(...snap.pois);
+    kvSocialPressureTime = snap.time;
+    nextGlobalUprisingAt = snap.nextGlobal;
+  },
+});
 
 export function registerKvSocialPressurePoi(x: number, y: number, radius: number, pressure: number): void {
   KV_SOCIAL_PRESSURE_POIS.push(createPressurePoi(DEFAULT_POI_META, x, y, radius, pressure));

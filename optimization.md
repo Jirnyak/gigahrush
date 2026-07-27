@@ -54,6 +54,11 @@ Navigation in `src/systems/ai/pathfinding.ts` is a **2-level Region-Portal HPA\*
 - **Portals** = contiguous border openings/doors between adjacent regions.
 - **Region-node next-hop matrix** `_regionNext[rS·R + rT]` = next region to step into on a fewest-hops route `rS→rT`. Built by one BFS per region over region adjacency, **O(R·E)** — NOT Floyd-Warshall O(P³), NOT a spanning tree. Every adjacent-region edge is kept, so toroidal cycles survive and there are no seams.
 
+**Two next-hop representations, device-picked once** (`useLowMemNav()`, memoised):
+
+- **PC (default, dense):** the full `_regionNext = Uint16Array(R·R)` matrix. The step-4 BFS-per-region bake is parallelised across Web Workers (copy-mode `postMessage`, **no `SharedArrayBuffer`**; `src/systems/ai/nav_worker_pool.ts` + `nav_worker.ts`, worker count scales with cores). The pure kernel `region_next.ts computeRegionNextRows` is shared bit-identically by workers and the sync fallback (used below `MIN_REGIONS_FOR_WORKERS`, in Node, or when Workers are absent). O(1) query; costs `R²·2` bytes (a mid floor is 250MB–1GB).
+- **Mobile (low-mem):** **no dense matrix.** `regionPath` computes ONE next-hop **column** on demand via `computeRegionNextColumn` (single BFS rooted at the target region over the immutable `RegionGraph`) and keeps a `LOWMEM_COLUMN_SLOTS`=16 LRU (`_regionColumns`). ~1MB resident instead of hundreds, trading memory for a per-uncached-target BFS — this is what keeps the tab under the iOS/WebKit per-tab memory ceiling. All six bake triggers install this path identically via `installLowMemNav()`; patch/samosbor-freeze rules are unchanged. Detection is hardware-accurate and deliberately **PC-biased** (`any-hover: none` **and** no `any-pointer: fine` **and** touch present): misreading a phone as PC is preferred over the reverse, since the dense path merely costs memory a PC has. **The PC dense path is byte-for-byte unchanged by the mobile branch.**
+
 **Two planned full bakes ONLY** (`bakeNavigationTree`), both auto-triggered by `ensureNavigationTree`:
 
 1. **New floor** — `replaceWorldFromGeneration` builds a new `World` object, so `_navWorld !== world`.

@@ -148,17 +148,35 @@ function useLowMemNav(): boolean {
 }
 
 /** LRU of next-hop columns for the low-mem path. Key = target region rT;
- *  value = Uint16Array(R) where [cur] is the next hop cur→rT. Sized small: a
- *  handful of active goals cover most NPC traffic, and each column is R·2 B. */
-const LOWMEM_COLUMN_SLOTS = 16;
+ *  value = Uint16Array(R) where [cur] is the next hop cur→rT.
+ *
+ * Two knobs keep this both cheap AND playable with hundreds of pathing actors:
+ *  - Slot count is sized to the FLOOR at install (`_lowMemColSlots`), not a
+ *    fixed handful, so the whole working set of actively-targeted regions stays
+ *    resident and repeat queries are O(1) map hits instead of re-running the
+ *    O(R+E) BFS every time a goal repeats. Bounded by a byte budget, it is still
+ *    a tiny fraction of the dense R²·2 matrix (tens of MB vs 256 MB–1 GB).
+ *  - Cold columns (a genuine cache miss) are rationed per AI frame
+ *    (`_lowMemColBudget`). A retarget burst — floor load, samosbor, a room full
+ *    of NPCs re-goaling the same tick — can ask for hundreds of never-seen
+ *    columns at once; without a cap that is hundreds of BFS in one frame = the
+ *    freeze the user saw. Throttled callers get null (no path THIS frame) and
+ *    retry next frame; cache hits are never throttled. Accept-stale, bounded. */
+const LOWMEM_COLUMN_BUDGET_BYTES = 8 * 1024 * 1024; // ≈8 MB cap for the LRU.
+const LOWMEM_COLUMN_SLOTS_MIN = 64;
+const LOWMEM_COLUMN_SLOTS_MAX = 1024;
+const LOWMEM_COLUMN_BFS_PER_FRAME = 32; // fresh BFS budget per AI frame.
 const _regionColumns = new Map<number, Uint16Array>();
+let _lowMemColSlots = LOWMEM_COLUMN_SLOTS_MIN; // sized to R in installLowMemNav.
+let _lowMemColBudget = LOWMEM_COLUMN_BFS_PER_FRAME; // refilled per AI frame.
 let _regionColScratch = new Int32Array(1024); // BFS queue, grown to R at bake.
 // Immutable region graph kept resident in low-mem mode (replaces the matrix).
 let _lowMemGraph: RegionGraph | null = null;
 
 /** Fetch (or lazily BFS-build + cache) the next-hop column toward target rT.
- *  Returns null if there is no low-mem graph. LRU: re-insertion refreshes
- *  recency; the coldest column is evicted past LOWMEM_COLUMN_SLOTS. */
+ *  Returns null if there is no low-mem graph, or if this frame's cold-column
+ *  BFS budget is spent (caller retries next frame). LRU: re-insertion refreshes
+ *  recency; the coldest column is evicted past `_lowMemColSlots`. */
 function regionColumnFor(rT: number): Uint16Array | null {
   const g = _lowMemGraph;
   if (!g) return null;
@@ -169,6 +187,9 @@ function regionColumnFor(rT: number): Uint16Array | null {
     _regionColumns.set(rT, cached);
     return cached;
   }
+  // Cache miss → one O(R+E) BFS. Ration these so a burst can't stall the tick.
+  if (_lowMemColBudget <= 0) return null;
+  _lowMemColBudget--;
   const R = g.R;
   const col = new Uint16Array(R);
   col.fill(REGION_UNREACHABLE);
@@ -177,7 +198,7 @@ function regionColumnFor(rT: number): Uint16Array | null {
     rT, col, _regionColScratch,
   );
   _regionColumns.set(rT, col);
-  if (_regionColumns.size > LOWMEM_COLUMN_SLOTS) {
+  if (_regionColumns.size > _lowMemColSlots) {
     const oldest = _regionColumns.keys().next().value;
     if (oldest !== undefined) _regionColumns.delete(oldest);
   }
@@ -272,8 +293,17 @@ const _flowPathAssignments = new WeakMap<Entity, FlowPathAssignment>();
 const _steeringPathAssignments = new WeakMap<Entity, SteeringPathAssignment>();
 const _roomTypeSourceProviders = new Map<string, BehaviorFlowFieldSourceProvider>();
 
+/** Diagnostic: live count of resident behavior flow fields. Each is a full
+ *  Int32Array(SW²) (~64 MiB), so this × 64 MiB is the cache's mobile RAM. The
+ *  call graph only ever requests 3 keys (OFFICE / LIVING / {LIVING,HQ,COMMON}),
+ *  so this should read ≤3 — surface it on-device to confirm the working set. */
+export function behaviorFlowFieldCount(): number {
+  return _behaviorFlowFields.size;
+}
+
 function beginPathFrame(time: number): void {
   void time;
+  _lowMemColBudget = LOWMEM_COLUMN_BFS_PER_FRAME; // refill cold-column BFS ration (low-mem only).
   _routinePathUsed = 0;
   _routinePathDenied = 0;
   _routinePathDeferred = 0;
@@ -773,6 +803,13 @@ function installLowMemNav(): void {
   if (R <= 1 || _numPortals === 0) { _lowMemGraph = null; return; }
   _lowMemGraph = extractRegionGraph();
   if (_regionColScratch.length < R) _regionColScratch = new Int32Array(R);
+  // Size the column LRU to this floor: hold as many R·2-byte columns as fit the
+  // byte budget so the active target working set stays resident (few re-BFS),
+  // clamped to a sane range. Big floor → fewer slots, small floor → more.
+  _lowMemColSlots = Math.max(
+    LOWMEM_COLUMN_SLOTS_MIN,
+    Math.min(LOWMEM_COLUMN_SLOTS_MAX, Math.floor(LOWMEM_COLUMN_BUDGET_BYTES / (R * 2))),
+  );
 }
 
 /**

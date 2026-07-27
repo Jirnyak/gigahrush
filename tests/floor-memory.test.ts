@@ -32,6 +32,8 @@ import {
   setFloorMemorySaveByteBudgetForTests,
   takeFloorMemory,
   tryBase64ToBytes,
+  worldForSave,
+  worldFromSave,
 } from '../src/systems/floor_memory';
 import { canActorOccupy } from '../src/systems/movement_collision';
 
@@ -85,6 +87,53 @@ function testZone(id: number, hasLift: boolean): Zone {
     level: 0,
     hqRoomId: -1,
   };
+}
+
+// Deterministic dense-floor builder for the delta codec. Called independently for
+// base / base2 / live it must produce byte-identical Worlds — the way a real floor
+// regenerates identically from (runSeed, z). No RNG; a fixed integer hash fills the
+// arrays with high entropy so the *full* snapshot is large (poor RLE) and the delta
+// win is measurable. Two rooms (room 0 carries a generation-only defId+tags), two
+// doors on DOOR cells, two containers, one zone.
+function buildDeltaFloor(): World {
+  const world = new World();
+  for (let y = 40; y < 296; y++) {
+    for (let x = 40; x < 296; x++) {
+      const idx = world.idx(x, y);
+      const h = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+      world.cells[idx] = (h & 15) === 0 ? Cell.WALL : Cell.FLOOR;
+      world.floorTex[idx] = h & 0xff;
+      world.wallTex[idx] = (h >> 8) & 0xff;
+      world.features[idx] = (h >> 16) & 0xff;
+      world.roomMap[idx] = (h >> 3) & 1;
+      world.zoneMap[idx] = 0;
+    }
+  }
+  world.cells[world.idx(128, 128)] = Cell.FLOOR; // guarantee a floor spawn for the blocker rebuild
+  const doorA = world.idx(60, 60);
+  const doorB = world.idx(60, 80);
+  for (const [idx, roomB] of [[doorA, 1], [doorB, 1]] as ReadonlyArray<readonly [number, number]>) {
+    world.cells[idx] = Cell.DOOR;
+    world.doors.set(idx, { idx, state: DoorState.CLOSED, roomA: 0, roomB, keyId: '', timer: 0 });
+  }
+  const room0 = testRoom(0, [doorA, doorB]);
+  room0.x = 40; room0.y = 40; room0.w = 128; room0.h = 256;
+  room0.defId = 'quest_target_room'; // generation-only fields: dropped by the sanitizer,
+  room0.tags = ['tutorial', 'anchor']; // must be recovered from the base slot on a patch.
+  const room1 = testRoom(1);
+  room1.x = 168; room1.y = 40; room1.w = 128; room1.h = 256;
+  world.rooms = [room0, room1];
+  world.apartmentRoomCount = 0;
+  world.zones = [testZone(0, false)];
+  world.addContainer({
+    id: 1, x: 50, y: 50, z: 0, roomId: 0, zoneId: 0, kind: ContainerKind.METAL_CABINET,
+    name: 'cabinet', inventory: [{ defId: 'scrap', count: 2 }], access: 'public', discovered: false, tags: [],
+  });
+  world.addContainer({
+    id: 2, x: 200, y: 50, z: 0, roomId: 1, zoneId: 0, kind: ContainerKind.SAFE,
+    name: 'safe', inventory: [{ defId: 'ammo', count: 5 }], access: 'locked', discovered: false, tags: [],
+  });
+  return world;
 }
 
 function minLiftDistance(world: World, direction: LiftDirection): number {
@@ -260,13 +309,16 @@ test('floor memory save view is capped and prefers newest entries', () => {
   clearFloorMemory();
 });
 
-test('floor memory restore keeps saved entries packed and capped until take', () => {
+test('floor memory restore keeps only the active-floor entry packed until take', () => {
   clearFloorMemory();
   const world = new World();
   assert.equal(captureFloorMemory(proceduralMemoryKeyAt(0), world, [entity(50, EntityType.NPC)], 3, 4, 1, 0), true);
   const template = floorMemoryStateForSave().entries[0];
   assert.ok(template);
 
+  // A valid save now carries only the single active floor, but a stale or hand-edited blob may
+  // still list many. Restore honours the save cap (1) and the bounded scan window, keeping just
+  // the first known entry regardless of how many the blob claims.
   const entries = Array.from({ length: 32 }, (_, i) => ({
     ...JSON.parse(JSON.stringify(template)),
     key: proceduralMemoryKeyAt(i),
@@ -280,15 +332,15 @@ test('floor memory restore keeps saved entries packed and capped until take', ()
     bytes: 0,
     byteBudget: Number.MAX_SAFE_INTEGER,
   });
-  assert.equal(restored.restored, 24);
-  assert.equal(restored.keys.length, 24);
+  assert.equal(restored.restored, 1);
+  assert.equal(restored.keys.length, 1);
 
   const stats = floorMemoryStats();
   assert.equal(stats.fullCount, 0);
-  assert.equal(stats.packedCount, 24);
-  assert.ok(takeFloorMemory(proceduralMemoryKeyAt(23)));
+  assert.equal(stats.packedCount, 1);
+  assert.ok(takeFloorMemory(proceduralMemoryKeyAt(0)));
   assert.equal(floorMemoryStats().fullCount, 0);
-  assert.equal(floorMemoryStats().packedCount, 23);
+  assert.equal(floorMemoryStats().packedCount, 0);
   assert.equal(takeFloorMemory(proceduralMemoryKeyAt(31)), null);
   clearFloorMemory();
 });
@@ -301,15 +353,17 @@ test('floor memory restore skips unknown keys before applying restored entry cap
   const template = floorMemoryStateForSave().entries[0];
   assert.ok(template);
 
-  const unknownEntries = Array.from({ length: 23 }, (_, i) => ({
+  // Restore scans a bounded window (MAX_FLOOR_MEMORY_RESTORE_SCAN_ENTRIES) so a few stale/unknown
+  // keys at the front cannot starve out the one valid active-floor entry within that window.
+  const unknownEntries = Array.from({ length: 2 }, (_, i) => ({
     ...JSON.parse(JSON.stringify(template)),
     key: `design:missing_${i}`,
     capturedAt: i,
   }));
   const entries = [
     ...unknownEntries,
-    { ...JSON.parse(JSON.stringify(template)), key: staleInstanceKey, capturedAt: 23 },
-    { ...JSON.parse(JSON.stringify(template)), key: validKey, capturedAt: 24 },
+    { ...JSON.parse(JSON.stringify(template)), key: staleInstanceKey, capturedAt: 2 },
+    { ...JSON.parse(JSON.stringify(template)), key: validKey, capturedAt: 3 },
   ];
   clearFloorMemory();
 
@@ -320,7 +374,7 @@ test('floor memory restore skips unknown keys before applying restored entry cap
     byteBudget: Number.MAX_SAFE_INTEGER,
   });
   assert.equal(restored.restored, 1);
-  assert.equal(restored.skipped, 24);
+  assert.equal(restored.skipped, 3);
   assert.deepEqual(restored.keys, [validKey]);
   assert.equal(takeFloorMemory(staleInstanceKey), null);
   assert.ok(takeFloorMemory(validKey));
@@ -416,9 +470,11 @@ test('floor memory restore skips corrupt snapshots and malformed nested entries'
   badRle.world.arrays[0].data = 'AAAA';
 
   clearFloorMemory();
+  // Corrupt entry first: restore stops after the single valid entry it needs (save cap 1), so the
+  // corrupt snapshot must be scanned before the good one for its skip to be observable.
   const restored = restoreFloorMemoryFromSave({
     version: 1,
-    entries: [good, badRle],
+    entries: [badRle, good],
     bytes: 0,
     byteBudget: 0,
   });
@@ -703,4 +759,158 @@ test('ensureFloorRouteLiftLayout fills sparse fixed lifts up to 16 for roof and 
     if (world.cells[i] === Cell.LIFT && world.liftDir[i] === LiftDirection.DOWN) totalDown++;
   }
   assert.equal(totalDown, 16);
+});
+
+test('floor memory delta round-trips a mutated dense floor against a regenerated base', () => {
+  const base = buildDeltaFloor();
+  const base2 = buildDeltaFloor(); // independent regeneration, as at load time
+  const live = buildDeltaFloor();
+
+  // Geometry mutations, each forced to differ from the (identical) base value so the
+  // XOR delta is non-trivial for every one of the 12 arrays we touch.
+  const cellIdx = base.idx(70, 70);
+  live.cells[cellIdx] = base.cells[cellIdx] === Cell.WALL ? Cell.FLOOR : Cell.WALL;
+  const featIdx = base.idx(72, 72);
+  live.features[featIdx] = base.features[featIdx] ^ 0x5a;
+  const wallIdx = base.idx(74, 74);
+  live.wallTex[wallIdx] = base.wallTex[wallIdx] ^ 0x33;
+  const floorIdx = base.idx(76, 76);
+  live.floorTex[floorIdx] = base.floorTex[floorIdx] ^ 0x0f;
+  const chalkIdx = base.idx(78, 78);
+  live.surfaceFlags[chalkIdx] |= SURFACE_FLAG_CHALK_MAP;
+  const roomMapIdx = base.idx(80, 80);
+  live.roomMap[roomMapIdx] = base.roomMap[roomMapIdx] ^ 1;
+
+  // Room patch (seal + rename room 0), appended samosbor room, door delta.
+  live.rooms[0].sealed = true;
+  live.rooms[0].name = 'запечатанная';
+  const appended = testRoom(2);
+  appended.x = 44; appended.y = 44; appended.name = 'samosbor pocket';
+  live.rooms.push(appended);
+  const doorA = base.idx(60, 60);
+  const doorB = base.idx(60, 80);
+  const newDoor = base.idx(90, 90);
+  live.doors.delete(doorA); // removed
+  live.doors.get(doorB)!.state = DoorState.LOCKED; // changed
+  live.cells[newDoor] = Cell.DOOR; // added (cell must be DOOR for the door sanitizer)
+  live.doors.set(newDoor, { idx: newDoor, state: DoorState.OPEN, roomA: 0, roomB: 1, keyId: '', timer: 0 });
+
+  // Container loot (absolute in both modes).
+  live.containers[0].inventory = [];
+  live.containers[0].discovered = true;
+
+  const deltaSave = worldForSave(live, base);
+  const fullSave = worldForSave(live);
+  assert.equal(deltaSave.baseDelta, true);
+  const deltaBytes = JSON.stringify(deltaSave).length;
+  const fullBytes = JSON.stringify(fullSave).length;
+  assert.ok(deltaBytes * 10 < fullBytes, `delta ${deltaBytes} vs full ${fullBytes}`);
+
+  const roundTripped = JSON.parse(JSON.stringify(deltaSave));
+  const decoded = worldFromSave(roundTripped, 128.5, 128.5, base2);
+  assert.ok(decoded, 'delta must decode against an identically regenerated base');
+
+  // All 12 world arrays reconstruct byte-for-byte.
+  assert.deepEqual(decoded.cells, live.cells);
+  assert.deepEqual(decoded.roomMap, live.roomMap);
+  assert.deepEqual(decoded.wallTex, live.wallTex);
+  assert.deepEqual(decoded.floorTex, live.floorTex);
+  assert.deepEqual(decoded.features, live.features);
+  assert.deepEqual(decoded.aptMask, live.aptMask);
+  assert.deepEqual(decoded.hermoWall, live.hermoWall);
+  assert.deepEqual(decoded.zoneMap, live.zoneMap);
+  assert.deepEqual(decoded.factionControl, live.factionControl);
+  assert.deepEqual(decoded.fog, live.fog);
+  assert.deepEqual(decoded.liftDir, live.liftDir);
+  assert.deepEqual(decoded.surfaceFlags, live.surfaceFlags);
+
+  // Rooms: patch applied, generation-only defId/tags recovered from base, samosbor room appended.
+  assert.equal(decoded.rooms.length, 3);
+  assert.equal(decoded.rooms[0].sealed, true);
+  assert.equal(decoded.rooms[0].name, 'запечатанная');
+  assert.equal(decoded.rooms[0].defId, 'quest_target_room');
+  assert.deepEqual(decoded.rooms[0].tags, ['tutorial', 'anchor']);
+  assert.equal(decoded.rooms[1].sealed, false);
+  assert.equal(decoded.rooms[2].id, 2);
+  assert.equal(decoded.rooms[2].name, 'samosbor pocket');
+
+  // Doors: removed / changed / added.
+  assert.equal(decoded.doors.has(doorA), false);
+  assert.equal(decoded.doors.get(doorB)?.state, DoorState.LOCKED);
+  assert.equal(decoded.doors.has(newDoor), true);
+  assert.equal(decoded.doors.get(newDoor)?.state, DoorState.OPEN);
+
+  // Containers (absolute): the looted state survives verbatim.
+  assert.equal(decoded.containerById.get(1)?.inventory.length, 0);
+  assert.equal(decoded.containerById.get(1)?.discovered, true);
+  assert.equal(decoded.containerById.get(2)?.inventory.length, 1);
+});
+
+test('floor memory delta base regenerates byte-identically for the drift guard', () => {
+  const a = buildDeltaFloor();
+  const b = buildDeltaFloor();
+  assert.deepEqual(a.cells, b.cells);
+  assert.deepEqual(a.roomMap, b.roomMap);
+  assert.deepEqual(a.wallTex, b.wallTex);
+  assert.deepEqual(a.floorTex, b.floorTex);
+  assert.deepEqual(a.features, b.features);
+  assert.deepEqual(a.rooms, b.rooms);
+  assert.deepEqual([...a.doors.entries()], [...b.doors.entries()]);
+
+  // An empty delta (live === base) must satisfy the baseHash gate against the twin.
+  const save = JSON.parse(JSON.stringify(worldForSave(a, a)));
+  const decoded = worldFromSave(save, 128.5, 128.5, b);
+  assert.ok(decoded, 'identical base regeneration must pass the baseHash gate');
+});
+
+test('floor memory delta rejects a drifted or missing base and returns null', () => {
+  const base = buildDeltaFloor();
+  const live = buildDeltaFloor();
+  live.rooms[0].sealed = true; // one real change so it is a genuine delta
+  const save = JSON.parse(JSON.stringify(worldForSave(live, base)));
+
+  // Drifted base: a single differing cell changes the baseHash → decode bails to null
+  // so the loader falls back to a fresh regenerate instead of corrupting the grid.
+  const drifted = buildDeltaFloor();
+  const idx = drifted.idx(128, 128);
+  drifted.cells[idx] = drifted.cells[idx] === Cell.WALL ? Cell.FLOOR : Cell.WALL;
+  assert.equal(worldFromSave(save, 128.5, 128.5, drifted), null);
+
+  // Missing base → null.
+  assert.equal(worldFromSave(save, 128.5, 128.5, null), null);
+  assert.equal(worldFromSave(save, 128.5, 128.5, undefined), null);
+});
+
+test('floor memory delta survives the capture→save→restore→take pipeline', () => {
+  clearFloorMemory();
+  const key = floorKeyForDesign('living');
+  const live = buildDeltaFloor();
+  const doorB = live.idx(60, 80);
+  live.rooms[0].sealed = true;
+  live.rooms[0].name = 'запечатанная';
+  live.doors.get(doorB)!.state = DoorState.LOCKED;
+  live.containers[0].inventory = [];
+  live.containers[0].discovered = true;
+
+  // 9th arg is the lazy delta base thunk (mirrors captureCurrentFloorMemory at save time).
+  assert.equal(
+    captureFloorMemory(key, live, [], 128.5, 128.5, 7, 0, undefined, () => buildDeltaFloor()),
+    true,
+  );
+  const saved = JSON.parse(JSON.stringify(floorMemoryStateForSave()));
+  assert.equal(saved.entries[0]?.world.baseDelta, true);
+
+  clearFloorMemory();
+  const restored = restoreFloorMemoryFromSave(saved);
+  assert.equal(restored.restored, 1);
+  const loaded = takeFloorMemory(key, () => buildDeltaFloor());
+  assert.ok(loaded);
+  const w = loaded.generation.world;
+  assert.equal(w.rooms[0].sealed, true);
+  assert.equal(w.rooms[0].name, 'запечатанная');
+  assert.equal(w.rooms[0].defId, 'quest_target_room');
+  assert.equal(w.doors.get(doorB)?.state, DoorState.LOCKED);
+  assert.equal(w.containerById.get(1)?.inventory.length, 0);
+  assert.equal(w.containerById.get(1)?.discovered, true);
+  clearFloorMemory();
 });
