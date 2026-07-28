@@ -1,4 +1,4 @@
-import { Cell, Tex, RoomType, Feature, type Entity, W } from '../../core/types';
+import { Cell, Tex, RoomType, Feature, DoorState, type Entity, W } from '../../core/types';
 import { World } from '../../core/world';
 import { stampRoom } from '../shared';
 import { irand } from '../../core/rand';
@@ -47,22 +47,19 @@ export function generateLiquidatorBaseArena(world: World, entities: Entity[], ne
     }
   }
 
-  // Actually we need 2 doors for arena
-  let doorsAdded = 0;
-
-  for (let yy = -1; yy <= size; yy++) {
-    for (let xx = -1; xx <= size; xx++) {
-      if (doorsAdded >= 2) break;
-      if (xx === -1 || xx === size || yy === -1 || yy === size) {
-        const px = cx + xx;
-        const py = cy + yy;
-        const idx = world.idx(px, py);
-        if (world.cells[idx] === Cell.WALL && irand(1, 100) <= 5) {
-          world.cells[idx] = Cell.DOOR;
-          doorsAdded++;
-        }
-      }
-    }
+  // Two deterministic doors at the mid-points of the top and bottom walls, each
+  // registered in world.doors + room.doors. The previous 5% roll wrote orphan
+  // Cell.DOOR cells (never world.doors.set) and could place 0 doors on unlucky
+  // seeds; world.solid() treats an unregistered door as a solid wall, so the arena
+  // sealed into an unreachable 50×50 box. The maintenance floor's ensureConnectivity()
+  // pass (index.ts, phase 15) carves the outside approach to these registered doors.
+  const doorMidX = cx + Math.floor(size / 2);
+  const topDoorI = world.idx(doorMidX, cy - 1);
+  const bottomDoorI = world.idx(doorMidX, cy + size);
+  for (const doorI of [topDoorI, bottomDoorI]) {
+    world.cells[doorI] = Cell.DOOR;
+    world.doors.set(doorI, { idx: doorI, state: DoorState.CLOSED, roomA: room.id, roomB: -1, keyId: '', timer: 0 });
+    room.doors.push(doorI);
   }
 
   if (entities.length > 0) {

@@ -4,7 +4,7 @@
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
-  Cell, Tex, Feature, RoomType, ContainerKind, type Room, type Entity, EntityType, Faction, Occupation, QuestType,
+  Cell, Tex, Feature, RoomType, DoorState, ContainerKind, type Room, type Entity, EntityType, Faction, Occupation, QuestType,
   type Item, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -181,6 +181,10 @@ function generateLibrary(
   const doorI = world.idx(doorX, doorY);
   world.cells[doorI] = Cell.DOOR;
   world.aptMask[doorI] = 1;
+  // Register the door: an unregistered Cell.DOOR is solid in world.solid(), which would
+  // seal the reading room (the corridor below only carves the cells array, not this door).
+  world.doors.set(doorI, { idx: doorI, state: DoorState.CLOSED, roomA: roomId, roomB: -1, keyId: '', timer: 0 });
+  room.doors.push(doorI);
 
   // Phase 6: connect to maze — short southward corridor
   let cx = doorX, cy = world.wrap(doorY + 1);

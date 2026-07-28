@@ -74,31 +74,37 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   const hqLeftDoorIdx = world.idx(hq.x, hq.y + 10);
   world.cells[hqLeftDoorIdx] = Cell.DOOR;
   world.doors.set(hqLeftDoorIdx, { idx: hqLeftDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: armory.id, keyId: '', timer: 0 });
+  hq.doors.push(hqLeftDoorIdx); armory.doors.push(hqLeftDoorIdx);
   world.floorTex[hqLeftDoorIdx] = Tex.F_CONCRETE;
 
   const hqRightDoorIdx = world.idx(hq.x + hq.w, hq.y + 10);
   world.cells[hqRightDoorIdx] = Cell.DOOR;
   world.doors.set(hqRightDoorIdx, { idx: hqRightDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: medbay.id, keyId: '', timer: 0 });
+  hq.doors.push(hqRightDoorIdx); medbay.doors.push(hqRightDoorIdx);
   world.floorTex[hqRightDoorIdx] = Tex.F_CONCRETE;
 
   const hqTopDoorIdx = world.idx(spawnX, hq.y);
   world.cells[hqTopDoorIdx] = Cell.DOOR;
   world.doors.set(hqTopDoorIdx, { idx: hqTopDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: arena.id, keyId: '', timer: 0 });
+  hq.doors.push(hqTopDoorIdx); arena.doors.push(hqTopDoorIdx);
   world.floorTex[hqTopDoorIdx] = Tex.F_CONCRETE;
 
   const arenaBottomDoorIdx = world.idx(spawnX, arena.y + arena.h);
   world.cells[arenaBottomDoorIdx] = Cell.DOOR;
   world.doors.set(arenaBottomDoorIdx, { idx: arenaBottomDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: arena.id, roomB: hq.id, keyId: '', timer: 0 });
+  arena.doors.push(arenaBottomDoorIdx); hq.doors.push(arenaBottomDoorIdx);
   world.floorTex[arenaBottomDoorIdx] = Tex.F_CONCRETE;
 
   const armoryDoorIdx = world.idx(armory.x + armory.w, armory.y + 10);
   world.cells[armoryDoorIdx] = Cell.DOOR;
   world.doors.set(armoryDoorIdx, { idx: armoryDoorIdx, state: DoorState.OPEN, roomA: armory.id, roomB: hq.id, keyId: '', timer: 0 });
+  armory.doors.push(armoryDoorIdx); hq.doors.push(armoryDoorIdx);
   world.floorTex[armoryDoorIdx] = Tex.F_CONCRETE;
 
   const medbayDoorIdx = world.idx(medbay.x, medbay.y + 10);
   world.cells[medbayDoorIdx] = Cell.DOOR;
   world.doors.set(medbayDoorIdx, { idx: medbayDoorIdx, state: DoorState.OPEN, roomA: medbay.id, roomB: hq.id, keyId: '', timer: 0 });
+  medbay.doors.push(medbayDoorIdx); hq.doors.push(medbayDoorIdx);
   world.floorTex[medbayDoorIdx] = Tex.F_TILE;
 
   // Simple straight corridor floors between them

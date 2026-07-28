@@ -4,7 +4,7 @@
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
-  W, Cell, Tex, Feature, RoomType,
+  W, Cell, Tex, Feature, RoomType, DoorState,
   type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
   msg,
 } from '../../core/types';
@@ -177,6 +177,11 @@ function generateTemple(
   const doorI = world.idx(doorX, doorY);
   world.cells[doorI] = Cell.DOOR;
   world.aptMask[doorI] = 1;
+  // Register the door: without a world.doors entry world.solid() treats a Cell.DOOR
+  // as a permanently-solid wall, sealing the nave (the carved corridor below only
+  // connects the *cells* array, not this door cell).
+  world.doors.set(doorI, { idx: doorI, state: DoorState.CLOSED, roomA: roomId, roomB: -1, keyId: '', timer: 0 });
+  room.doors.push(doorI);
   // Crosses flanking the entrance (left and right of door)
   const crossL = world.idx(doorX - 1, doorY);
   const crossR = world.idx(doorX + 1, doorY);
