@@ -619,7 +619,7 @@ function publishDocumentGateAccessEvent(
 
 function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
   if (!ctx.state || !ctx.world || !isPlayerEntity(ctx.actor)) return false;
-  if (currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) return false;
+  if (!currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) return false;
   const target = findDocumentGateTarget(ctx.world, ctx.actor);
   if (!target) return false;
 
@@ -669,7 +669,7 @@ function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
 }
 
 function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'item_stolen' || currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
+  if (event.type !== 'item_stolen' || !currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
   if (!event.itemId || !DOCUMENT_GATE_ACCESS_BY_ITEM.has(event.itemId)) return;
   const ctx = contextByContainer(event.containerId);
   if (!ctx || ctx.theftEventIds.includes(event.id)) return;
@@ -688,7 +688,7 @@ function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void
 }
 
 function handleDocumentGateGuardKill(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'player_kill_npc' || currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
+  if (event.type !== 'player_kill_npc' || !currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
   const ctx = contextByGuard(event.targetId);
   if (!ctx || ctx.violentHandled) return;
   const door = ctx.world.doors.get(ctx.gateDoorIdx);

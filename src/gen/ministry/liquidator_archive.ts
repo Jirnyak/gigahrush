@@ -242,7 +242,7 @@ function handleLiquidatorIssueCardUse(ctx: InventoryUseHandlerContext): boolean 
     ctx.msgs.push(msg('Карточку выдачи принимает только окно игрока, не чужой карман.', ctx.time, '#aa8'));
     return true;
   }
-  if (!ctx.state || !ctx.world || currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) {
+  if (!ctx.state || !ctx.world || !currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) {
     ctx.msgs.push(msg('Карточку выдачи гасят у ликвидаторского шкафа Л-47 в Министерстве.', ctx.time, '#aa8'));
     return true;
   }
