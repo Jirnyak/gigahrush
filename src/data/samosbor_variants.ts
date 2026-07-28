@@ -128,7 +128,11 @@ export interface SamosborAftermathBeatDef {
   id: string;
   title: string;
   variants: readonly SamosborVariantId[];
-  floors?: readonly string[];
+  // #67: theme-token floor scope (ministry|kvartiry|living|maintenance|hell|void),
+  // matched against currentFloorRunEntry.themeTags in getSamosborAftermathBeats.
+  // Required (all 44 beats declare it) so a future beat MUST declare its scope —
+  // omitting it would silently make the beat dead on every floor.
+  floors: readonly string[];
   weight: number;
   cooldownSec: number;
   maxRuns: number;
@@ -1178,5 +1182,10 @@ export function getSamosborAftermathBeats(
   variant: SamosborVariantId,
   floorTags: readonly string[],
 ): readonly SamosborAftermathBeatDef[] {
-  return SAMOSBOR_AFTERMATH_BEATS.filter(def => def.variants.includes(variant) && def.tags.some(t => floorTags.includes(t)));
+  // #67: gate by def.floors (theme-token scope), NOT def.tags (flavor labels like
+  // ['fog','route']). floorTags are themeTags (theme tokens), which flavor tags
+  // never contain — the old def.tags predicate left 17/44 beats dead and fired
+  // ZERO aftermath beats across the whole ministry/kvartiry/living tier. tags are
+  // still spread into the emitted event's tags in samosbor.ts.
+  return SAMOSBOR_AFTERMATH_BEATS.filter(def => def.variants.includes(variant) && def.floors.some(t => floorTags.includes(t)));
 }
