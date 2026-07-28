@@ -2,7 +2,7 @@
 
 import type { Entity } from '../core/types';
 import { hashSeed } from '../core/rand';
-import { PLOT_CHAIN } from '../data/plot';
+import { PLOT_CHAIN, isPlotNpc } from '../data/plot';
 import { allNpcPackages, getNpcPackage, getPlotNpcNumericId, getPlotNpcStringId, type NpcPackageDef } from '../data/npc_packages';
 import type { AlifeNpcSnapshot } from './alife';
 import { finalizeMarkovContext, type MarkovTextContext } from './markov_context';
@@ -104,7 +104,7 @@ export function resolveNpcPackageForEntity(entity: Entity): NpcSpeechPackageView
     if (pack) return pack;
   }
 
-  if (entity.id) return resolvePackageForPlotNpcId(entity.id);
+  if (isPlotNpc(entity)) return resolvePackageForPlotNpcId(entity.id);
   if (entity.persistentNpcId) {
     const pack = speechPackageById(cleanId(entity.persistentNpcId) ?? '');
     if (pack) return pack;

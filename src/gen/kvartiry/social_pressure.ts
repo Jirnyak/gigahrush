@@ -5,6 +5,7 @@ import { World } from '../../core/world';
 import { publishEvent } from '../../systems/events';
 import { rng } from '../../core/rand';
 import { registerGenerationRuntimeGuard } from '../../systems/generation_runtime_guard';
+import { isPlotNpc } from '../../data/plot';
 
 export type KvSocialPressurePoiId =
   | 'generic'
@@ -373,5 +374,5 @@ function triggerPoiUprising(
 }
 
 function isConvertibleCitizen(e: Entity): boolean {
-  return e.type === EntityType.NPC && e.alive && e.faction === Faction.CITIZEN && !e.id;
+  return e.type === EntityType.NPC && e.alive && e.faction === Faction.CITIZEN && !isPlotNpc(e);
 }
