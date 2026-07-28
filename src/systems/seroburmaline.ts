@@ -310,7 +310,13 @@ export function tryCoverSeroburmalineSource(
   lookY: number,
   toolId?: string,
 ): boolean {
-  if (currentFloorRunEntry(state)!.themeTags.includes('maintenance') || !isPlayerEntity(player)) return false;
+  // Cover must be allowed exactly where seroburmaline lives: ON maintenance floors.
+  // This gate mirrors the exposure gate (updateSeroburmalineExposure, above) which
+  // early-returns when NOT maintenance — sources are placed only by the maintenance
+  // generator (gen/maintenance/seroburmaline_no_look.ts). The prior polarity was the
+  // logical inverse of :214, so the whole authored cover counterplay (covered feature,
+  // fog dim, surface mute, slime_sample_seroburmaline reward) could never fire in play.
+  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance') || !isPlayerEntity(player)) return false;
   const source = sourceAtCell(world, Math.floor(lookX), Math.floor(lookY), true);
   if (!source) return false;
 

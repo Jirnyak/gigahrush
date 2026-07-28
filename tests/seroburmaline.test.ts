@@ -3,10 +3,12 @@ import * as assert from 'node:assert/strict';
 
 import { RoomType, Cell } from '../src/core/types';
 import { World } from '../src/core/world';
-import { makeGameState, makeTestPlayer } from './helpers';
+import { makeGameState, makeTestPlayer, countInventoryItem } from './helpers';
 import { createWorldEventState } from '../src/systems/events';
 import {
   updateSeroburmalineExposure,
+  tryCoverSeroburmalineSource,
+  seroburmalineSourceCellState,
   SEROBURMALINE_ROOM_PREFIX,
   SEROBURMALINE_ACTIVE_FEATURE,
 } from '../src/systems/seroburmaline';
@@ -124,4 +126,40 @@ test('seroburmaline is avoided when near but facing away', () => {
 
   assert.equal(player.rpg!.psi, 10, 'PSI should not drop when facing away');
   assert.equal(state.msgs.some(m => m.text.includes('Серобурмалин сбоку.')), true, 'Avoid warning should be generated');
+});
+
+// Regression for the inverted cover gate (#24): the "no-look" counterplay must be
+// reachable exactly where seroburmaline lives — ON maintenance floors. The cover gate
+// used to early-return on maintenance (the logical inverse of the exposure gate), so
+// the whole authored mechanic was dead. These two cases pin the gate polarity.
+test('seroburmaline cover works ON a maintenance floor (counterplay is reachable)', () => {
+  const { world, sourceX, sourceY } = setupWorld();
+  const state = makeGameState({ worldEvents: createWorldEventState(), currentZ: -26, time: 100 });
+  const player = makeTestPlayer({
+    x: 1, y: 2, angle: 0, pitch: 0, alive: true,
+    inventory: [{ defId: 'duct_tape', count: 1 }],
+  });
+
+  const handled = tryCoverSeroburmalineSource(world, player, state, sourceX, sourceY);
+
+  assert.equal(handled, true, 'cover must be handled on a maintenance floor');
+  assert.equal(seroburmalineSourceCellState(world, sourceX, sourceY), 'covered', 'the source cell must become covered');
+  assert.equal(countInventoryItem(player, 'duct_tape'), 0, 'the cover material is consumed');
+  assert.equal(countInventoryItem(player, 'slime_sample_seroburmaline'), 1, 'sealing yields a no-look sample');
+  assert.equal(state.msgs.some(m => m.text.includes('Источник закрыт')), true, 'cover confirmation message');
+});
+
+test('seroburmaline cover is refused OFF maintenance (gate-polarity guard)', () => {
+  const { world, sourceX, sourceY } = setupWorld();
+  const state = makeGameState({ worldEvents: createWorldEventState(), currentZ: 0, time: 100 });
+  const player = makeTestPlayer({
+    x: 1, y: 2, angle: 0, pitch: 0, alive: true,
+    inventory: [{ defId: 'duct_tape', count: 1 }],
+  });
+
+  const handled = tryCoverSeroburmalineSource(world, player, state, sourceX, sourceY);
+
+  assert.equal(handled, false, 'off a maintenance floor the cover gate returns false');
+  assert.equal(seroburmalineSourceCellState(world, sourceX, sourceY), 'active', 'the source is untouched off maintenance');
+  assert.equal(countInventoryItem(player, 'duct_tape'), 1, 'no material is consumed when refused');
 });
