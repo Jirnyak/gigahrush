@@ -2821,6 +2821,11 @@ export function getAlifeLeaderboardSnapshot(state: GameState, player: Entity, li
   insertTop(entries, playerEntry, boundedLimit);
   for (const record of alife.npcs) {
     if (recordDead(alife, record)) continue;
+    // #127: the record the player inhabits post-death-continuation is already counted
+    // as the separate playerEntry above — skip it so the player isn't tallied as its own
+    // rival (inflating totalAlive / betterThanPlayer / rank). Mirrors the self-relation
+    // idiom at defaultPlayerRelationForRecord (:1133) and resetAlife…NewPlayer (:1918).
+    if (alife.playerRelationTargetAlifeId !== undefined && record.id === alife.playerRelationTargetAlifeId) continue;
     totalAlive++;
     const score = rankScore(recordRankStats(alife, record));
     if (score > playerScore) betterThanPlayer++;
