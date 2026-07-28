@@ -105,6 +105,19 @@ test('monster procedural sprite keys stay quantized to readable state tiers', ()
   assert.notEqual(proceduralEntitySpriteKey(base), proceduralEntitySpriteKey(nextTier));
 });
 
+test('#35 head-slug detached stage gets its own procedural sprite key', () => {
+  // The head-slug mutates shape across monsterStage (attached host → detached crawler); pre-fix the
+  // key omitted monsterStage, so the detached stage reused the host's cached silhouette. The fix folds
+  // stage into the key exactly like PROTOKOLNIK's pressure tier above — so stage is the sole
+  // discriminator here while cosmetic scale/z stay quantized out (a HEAD_SLUG-specific mirror of the
+  // tier test). notEqual is the regression-catcher: it collapses to equal on the pre-fix key.
+  const host = monsterEntity({ monsterKind: MonsterKind.HEAD_SLUG, monsterStage: 0 });
+  const hostCosmeticShift = monsterEntity({ monsterKind: MonsterKind.HEAD_SLUG, monsterStage: 0, spriteScale: 1.28, spriteZ: 0.3 });
+  const detached = monsterEntity({ monsterKind: MonsterKind.HEAD_SLUG, monsterStage: 1 });
+  assert.equal(proceduralEntitySpriteKey(host), proceduralEntitySpriteKey(hostCosmeticShift));
+  assert.notEqual(proceduralEntitySpriteKey(host), proceduralEntitySpriteKey(detached));
+});
+
 test('NPC readability visual ids are registered and produce distinct silhouettes', () => {
   const registered = new Set(NPC_VISUAL_FAMILIES.map(family => family.id));
   const hashes = new Set<number>();
