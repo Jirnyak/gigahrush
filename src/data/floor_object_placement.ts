@@ -435,7 +435,7 @@ const DESIGN_OBJECT_PROFILE_OVERRIDES: Partial<Record<string, Partial<FloorObjec
       wallDecorRule('production_belt_shift_signs', 'sign', Tex.POSTER_BASE, 2, 8, 10, productionWeights(0.7), ['production_belt', 'shift', 'sign'], { variantCount: 16, variantOffset: 16 }),
     ],
   },
-  service_z: {
+  service_floor: {
     tags: ['design_floor', 'service_floor', 'repair'],
     density: { features: 20, wallDecor: 10, screens: 5, maxPerRoom: 2 },
     featureRules: pumpMachineryRules('service_floor', 6, 18),

@@ -210,7 +210,7 @@ const DESIGN_FLOOR_CRAFT_STATION_PROFILES: Partial<Record<string, CraftStationPl
     },
     tags: ['design_floor', 'production_belt', 'industrial'],
   },
-  service_z: {
+  service_floor: {
     id: 'design_service_floor',
     min: 2,
     max: 4,

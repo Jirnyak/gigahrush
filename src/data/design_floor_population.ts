@@ -739,7 +739,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
       ],
     },
   },
-  bank_z: {
+  bank_floor: {
     npcFactions: [{ value: Faction.CITIZEN, weight: 62 }, { value: Faction.LIQUIDATOR, weight: 24 }, { value: Faction.WILD, weight: 11 }, { value: Faction.SCIENTIST, weight: 3 }],
     npcOccupations: [{ value: Occupation.SECRETARY, weight: 30 }, { value: Occupation.TRAVELER, weight: 24 }, { value: Occupation.STOREKEEPER, weight: 14 }, { value: Occupation.HUNTER, weight: 14 }, { value: Occupation.ALCOHOLIC, weight: 8 }, { value: Occupation.DIRECTOR, weight: 5 }, { value: Occupation.LOCKSMITH, weight: 5 }],
     monsterBiasKinds: [MonsterKind.PECHATEED, MonsterKind.PARAGRAPH, MonsterKind.KONTORSHCHIK, MonsterKind.PROTOKOLNIK, MonsterKind.SLEPOGLAZ],
@@ -1319,7 +1319,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     npcPlacementKind: 'industrial',
     monsterPlacementKind: 'industrial',
   },
-  service_z: {
+  service_floor: {
     npcNoun: 'ремонтник',
     npcFactions: [
       { value: Faction.LIQUIDATOR, weight: 52 },
@@ -1939,7 +1939,7 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
       maxPerBucket: 5,
     },
   },
-  horrorz: {
+  horrorfloor: {
     monsterBiasKinds: [MonsterKind.GLUBINNAYA_TEN],
     monsterTags: ['dark', 'void'],
     monsterPlacementKind: 'void',
