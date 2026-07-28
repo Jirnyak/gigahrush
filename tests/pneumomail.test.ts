@@ -65,7 +65,7 @@ function makePneumomailWorld(): {
 test('pneumomail intake covers required capsule outcomes with bounded history', () => {
   const { world, intake } = makePneumomailWorld();
   const state = makeGameState({
-    currentZ: 34,
+    currentZ: -26,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({ id: 1, x: 9, y: 10, inventory: [] });
@@ -95,7 +95,7 @@ test('pneumomail intake covers required capsule outcomes with bounded history', 
 test('pneumomail intercept, jam, and report publish explicit events', () => {
   const { world, intercept, jam, report } = makePneumomailWorld();
   const state = makeGameState({
-    currentZ: 34,
+    currentZ: -26,
     worldEvents: createWorldEventState(),
   });
   const player = makeTestPlayer({
@@ -125,4 +125,22 @@ test('pneumomail intercept, jam, and report publish explicit events', () => {
   assert.ok(getRecentEvents(state, { tags: ['pneumomail_intercept'], limit: 1 })[0]);
   assert.ok(getRecentEvents(state, { tags: ['pneumomail_jam'], limit: 1 })[0]);
   assert.ok(getRecentEvents(state, { tags: ['pneumomail_report'], limit: 1 })[0]);
+});
+
+// Pneumomail stations are stamped only by the maintenance content manifest, so the
+// tube is functional exactly where seroburmaline/heatline live — ON maintenance. Off
+// maintenance it is "числится, но не дышит": the interaction is still handled (flavor
+// refusal) but the functional switch must not run. Guards the gate polarity.
+test('pneumomail refuses to breathe OFF a maintenance floor (gate-polarity guard)', () => {
+  const { world, intake } = makePneumomailWorld();
+  const state = makeGameState({
+    currentZ: 0,
+    worldEvents: createWorldEventState(),
+  });
+  const player = makeTestPlayer({ id: 1, x: 9, y: 10, inventory: [] });
+
+  assert.equal(tryUsePneumomailTube(world, player, state, intake.x, intake.y), true);
+  assert.equal(getRecentEvents(state, { tags: ['pneumomail'], limit: 20 }).length, 0);
+  assert.equal(state.quests.filter(q => q.contractId === PNEUMOMAIL_CONTRACT_ID).length, 0);
+  assert.equal(countInventoryItem(player, PNEUMOMAIL_CAPSULE_ITEM_ID), 0);
 });
