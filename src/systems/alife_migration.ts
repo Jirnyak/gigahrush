@@ -451,20 +451,20 @@ function selectorMatches(route: RouteInfo, selector: AlifeDestinationSelector): 
   if (selector.floorKeys?.includes(route.floorKey)) return true;
   // @ts-ignore
   if (selector.themeTags?.some(t => route.themeTags?.includes(t))) {
-    
+    if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
     // @ts-ignore
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
     return true;
   }
   if (selector.routeTags?.some(tag => route.tags.includes(tag))) {
-    
+    if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
     // @ts-ignore
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
     return true;
   }
   // @ts-ignore
   if (!selector.floorKeys?.length && !selector.themeTags?.length && !selector.routeTags?.length) {
-    
+    if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
     // @ts-ignore
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
     return true;
