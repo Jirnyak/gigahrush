@@ -77,6 +77,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
     eventData: { releasedPlotNpcIds: ['spetspriemnik_prisoner_mira'] },
     eventTargetName: 'Ряд камер спецприёмника вышел по бирке ключа.',
     abandonsSideQuestIds: ['spetspriemnik_trade_names'],
+    blockedBySideQuestIds: ['spetspriemnik_trade_names'],
   },
   {
     id: 'spetspriemnik_trigger_riot',
@@ -122,6 +123,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_informant_tolya
     eventTags: [...BASE_TAGS, 'trade_names', 'hostage_economy'],
     eventTargetName: 'Фамилии задержанных обменяны на пропуск и донос.',
     blockedBySideQuestIds: ['spetspriemnik_release_cell_row'],
+    abandonsSideQuestIds: ['spetspriemnik_release_cell_row'],
   },
 ]);
 

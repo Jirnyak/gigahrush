@@ -345,6 +345,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_doctor_galina', NPC
     eventPrivacy: 'local',
     eventData: { treatmentWard: 'clean' },
     abandonsSideQuestIds: ['bolnichny_treat_infected_ward'],
+    blockedBySideQuestIds: ['bolnichny_treat_infected_ward'],
   },
 ]);
 
@@ -407,6 +408,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bolnichny_patient_grisha', NP
     eventPrivacy: 'local',
     eventData: { treatmentWard: 'infected' },
     abandonsSideQuestIds: ['bolnichny_treat_clean_ward'],
+    blockedBySideQuestIds: ['bolnichny_treat_clean_ward'],
   },
   {
     id: 'bolnichny_escort_infected_patient',

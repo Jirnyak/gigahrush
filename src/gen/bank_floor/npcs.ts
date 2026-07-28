@@ -249,6 +249,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_director_zinaida', DIREC
     eventTags: [...BANK_TAGS, 'forgery', 'debt_paper', 'report', 'legal'],
     eventData: { bankingAction: 'report_forged_debt_paper', debtRiskClosed: true },
     abandonsSideQuestIds: ['bank_cash_forged_debt_paper'],
+    blockedBySideQuestIds: ['bank_cash_forged_debt_paper'],
   },
 ]);
 
@@ -327,6 +328,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'bank_debtor_mitya', DEBTOR_DE
     eventTags: [...BANK_TAGS, 'forgery', 'debt_paper', 'cash_out', 'risk'],
     eventData: { bankingAction: 'cash_forged_debt_paper', heat: 3, debtRiskOpened: true },
     abandonsSideQuestIds: ['bank_report_forged_debt_paper'],
+    blockedBySideQuestIds: ['bank_report_forged_debt_paper'],
   },
 ]);
 

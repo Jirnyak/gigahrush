@@ -241,6 +241,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
     eventTags: ['black_market_88', 'caravan', 'protect_courier', 'black_route_papers'],
     eventData: { routeId: BLACK_MARKET_88_ROUTE_ID, marketAction: 'protect_courier', laneId: 'production_black_market_88' },
     blockedBySideQuestIds: ['market88_betray_supplier'],
+    abandonsSideQuestIds: ['market88_betray_supplier'],
   },
   {
     id: 'market88_steal_stamp',
