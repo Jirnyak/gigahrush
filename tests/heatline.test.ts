@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { World } from '../../src/core/world';
-import { summarizeHeatline, tryUseHeatlinePressure } from '../../src/systems/heatline';
-import { Feature, RoomType } from '../../src/core/types';
-import { createWorldEventState } from '../../src/systems/events';
-import { addTestRoom, makeGameState, makeTestPlayer } from '../helpers';
+import { World } from '../src/core/world';
+import { summarizeHeatline, tryUseHeatlinePressure } from '../src/systems/heatline';
+import { Feature, RoomType } from '../src/core/types';
+import { createWorldEventState } from '../src/systems/events';
+import { addTestRoom, makeGameState, makeTestPlayer } from './helpers';
 
 test('heatline: summarizeHeatline', async (t) => {
   await t.test('returns no rooms found message when empty', () => {
