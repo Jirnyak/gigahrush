@@ -453,3 +453,100 @@
   - `README:223` events «(512/128/32)» → реально `1024/512/128` (`types.ts:889-891`). `README:560`+table «18 сюжетных шагов» → `PLOT_CHAIN`=**19** (`plot.ts:190`), одна строка недокументирована.
 - **A12-LOW:** `README:371` «34 модуля зон `registerZoneContent`» → **35**; `README:449` «446 предметных ID» → **~452** (`items.ts:377-848`=411 literal + `DOCUMENT_ACCESS_ITEMS`=35 + `CHERNOBOG_DOCKET_ITEMS`=6; 2 dynamic-spread @`items.ts:816-817` → README лишь marginally off); `README:186` «577 слухов» → `BASE_RUMORS`≈**571** (`rumors.ts:61`); `README:70/84` `test:generation` без caveat (orphaned/не gate-clean).
 - **A12 cross-cut:** доки внутренне НЕПОСЛЕДОВАТЕЛЬНЫ (мигрированная + stale половины рядом; doc-pass обновил «как строятся этажи», но пропустил enum-таблицы/fact-map/import-contention). Нужен **точечный sweep конкретных строк, НЕ переписывание**. Контракт-доки (`save.md`/`ai.md` nav/`optimization.md` Iron Law) — trustworthy tier. **Не-drift (не трогать):** `architecture.md:720` `src/content.ts` (пример анти-паттерна), `:593`/`floor_catalog.ts` («data-only future» честно), `README:412` MonsterKind=69 (verified `types.ts:197`). → правки в Фазу 6 (после кода) или отдельный docs-sweep.
+
+---
+
+## Продолжение сессии 2026-07-28 (docs-supplement по прямому указанию владельца)
+
+> Владелец: «дополняй master_prompt.md своим контекстом и всё что сделал и что план ещё пополни README.md и сопутствующие документы всем что сделал». Это ДОБАВЛЕНИЕ к handoff, не переписывание. Docs-only → runtime-гейт не требуется (`git diff --check` чист); коммита НЕТ без явного разрешения.
+
+### Сделано в этой сессии (только доки, 0 правок кода)
+- **README.md — 4 хирургических правки, ПРИМЕНЕНЫ** (закрывают часть A12-дрейфа, всё сверено с source, не по памяти):
+  1. `:199` code-map: `floor_manifest.ts FloorLevel→карта` → `карта генераторов по z и theme-тегам` (A12-MED).
+  2. `:223` event-caps `(512/128/32)` → `(1024/512/128)` (сверено `types.ts:889-891`; A12-MED).
+  3. `:303` заголовок+рамка: убрано «определены в `FloorLevel` в `src/core/types.ts`», вписано «прежний enum `FloorLevel` удалён — 0 ссылок в `src/`, идентичность этажа = числовая координата `z`» (A12-HIGH bullet 1).
+  4. `:305-312` таблица биомов: первый столбец `MINISTRY=0`…`VOID=5` → theme-теги `ministry/kvartiry/living/maintenance/hell/void`; ВСЕ z/generator/role данные сохранены дословно (ministry z=+30, kvartiry z=+14, living z=0, maintenance z=−26, hell z=−36, void z=−50).
+- **problems.md — 8 строк в таблицу «Активные проблемы», ПРИМЕНЕНЫ** (формат `[Аудит 2026-07-28 · DEFERRED]`, зеркалит существующую `[РЕШЕНО]`-конвенцию; каждая = симптом+anchor+критерий закрытия): #9 (побочки giverId-frozen), #25 (3 TALK-контракта), #45 (эндшпиль-лифты одностор.), #149 (main-quest STEP 11 hard-blocker), #109 (малые караваны, +маскирует #110/#111), #171/#181 (stale `_z`-ключи оверрайдов), #170 (radon_exchange инертен), #179/#180 (самосбор варианты/aftermath). Полные доказательства — во внешнем ledger (см. ниже); в problems.md только симптом+критерий, без пересказа audit-логов.
+- **master_prompt.md — этот раздел** (context+сделанное+план).
+
+### Внешний ledger — единый источник по находкам
+Полный реестр находок живёт в agent-memory ВНЕ репозитория (не коммитить, не ссылаться из repo-доков): `~/.claude/projects/-Users-jirnyak-Mirror-gigahrush/memory/confirmed-audit-bugs-deferred.md` (~486KB — читать только через `grep`, не целиком). Индекс — `MEMORY.md` (строка 8 = указатель на #1–#181). **Нумерация: последняя заведённая находка = #181, следующая свободная = #182.** Новые находки вставлять ПЕРЕД якорем `**Wave-2 NEGATIVE lanes …**`. Формат: #1–65 = `NN.`, #100+ = `**#NNN —**`. Все находки #1–#181 = **DEFERRED**: применять/коммитить только после sign-off владельца (см. дисциплину ниже).
+
+### Коррекция §5.3 (populate-regression — STALE, снята)
+Прежнее утверждение «design floors зовут `align…AmbientNpcTerritory`, но не `applyDesignFloorPopulationField` → 0 ambient NPC» — **НЕВЕРНО/устарело**. `applyDesignFloorPopulationField` И `full_floor.ts` УДАЛЕНЫ. Популяция теперь ЦЕНТРАЛИЗОВАНА безусловно для каждого design-этажа в `src/gen/design_floors/manifest.ts` (`:171 populateDesignFloorAmbientNpcs(gen, route)` + `:175 populateDesignFloorMonsters`, гейт `:178 floorRunZAllowsNpcs(route.z) ? gen : withoutNpcEntities(gen)`), читает `design_floor_population.ts designFloorPopulationProfile`. «Дыры missing-call» НЕТ. Реальные остаточные дефекты популяции — иной механизм: **#170** (radon z=44) и **#171** (stale-ключи оверрайдов). См. [[gen-suite-pre-broken]].
+
+### Чистые NEGATIVE-полосы, прочёсанные в этой сессии (НЕ пере-запускать — пусто)
+- item-use dispatch — корректен.
+- document-floors-gate — ограничен ровно #163 (уже в ledger), новых нет.
+- weapon→ammo резолв — 20/20 разрешаются.
+- craft-рецепты — генеративны (не hardcode), источники `craft_recipe_sources.ts` 40/40 разрешаются в реальные ITEM id.
+
+### В работе на момент паузы (кандидат в #182)
+Полоса occupation-profile phantom-item: `occupation_profiles.ts` кладёт medkit/pencil в `tradeItems`, metal/tools в `questFetchItems`. Крукс — фильтруются ли эти пулы против реального `ITEMS` реестра в `generateNpcTradeItems` (`quests.ts:785-810`) и quest-fetch пулах (`quests.ts:2062/2081`). Если фантом реально доходит до игрока — завести как **#182 DEFER**; если пулы фильтруют — записать как чистую NEGATIVE-полосу. Проверка не докручена.
+
+### Состояние репозитория (важно для следующего агента)
+- HEAD = `18b69100` «Аудит: фаза 2» на `origin/main`.
+- **Рабочее дерево ГРЯЗНОЕ чужой параллельной UI-работой:** `M src/render/{economy_ui,hud,item_sprites,npc_ui,stats_ui,ui_layout}.ts` + `?? scripts/ui-shots.mjs`. **НЕ трогать / не стейджить / не ревертить / не коммитить / не редактировать эти файлы; hud.ts — особо off-limits; не заводить в них находок.**
+- `git stash@{0}` = `gemini-floorlevel-string-refactor-WIP-broken-2026-06-13` (427 файлов) — припаркованный сломанный рефактор Gemini. НЕ `pop`/`apply`/`drop` без явного указания владельца.
+- Мои правки этой сессии добавляют к грязному дереву только: `M README.md`, `M problems.md`, `M master_prompt.md`. `git diff --check` чист.
+
+### Остаточный drift-delta README (в отложенный docs-sweep, НЕ фиксил — риск фабрикации/churn)
+Осознанно НЕ тронуто (правка = либо выдумывание из памяти, либо частый churn-счётчик — сверять с source в момент sweep):
+- `README:384` «20 аномалий» (перечислено 17; id `hladon_cold_pocket`→`hladon`; пропущены `bad_apple_world`+`sandpile_perekrytie`; `FloorAnomalyId` union=19 real+`none`).
+- `README:560`+таблица «18 сюжетных шагов» → `PLOT_CHAIN`=19 (`plot.ts:190`); достроить таблицу из памяти = фабрикация, к тому же 19-й шаг и #149 soft-lock — отложенные баги; при sweep добавить строку + сноску про #149.
+- `README:371` «34 модуля зон»→35; `README:449` «446 предметных ID»→~452; `README:186` «577 слухов»→~571; `README:70/84` `test:generation` без caveat (orphaned/не gate-clean).
+- **НЕ тронуты вовсе в этой сессии** (только README получил 4 правки): FloorLevel-дрейф в `architecture.md` (`:35/:44/:75/:410/:412/:414`), `floors.md` (`:9/:29/:33/:63`), `alife.md` (`:168/:217/:312`), `optimization.md` (`:176/:194/:428`) — все перечислены в A12 выше, ждут точечного sweep (правка конкретных строк, НЕ переписывание).
+
+### Дисциплина автономии (неизменна — управляет ЛЮБЫМ действием над кодом)
+SHIP автономно ТОЛЬКО если ВСЁ верно: byte-identical при нормальной первой игре И byte-identical для любого входа кроме точного багового случая И механично И не-RED файл И без изменения gameplay/баланса/reachability И не включает мёртвый код И направление фикса — не design-call. Иначе DEFER. В этой сессии правок КОДА = 0. Doc-задача была явно санкционирована владельцем; коммит по-прежнему требует явного разрешения.
+
+---
+
+## Продолжение сессии 2026-07-29 (фаза-3 SHIPPED в LOCAL main + пуш по прямому указанию владельца)
+
+> Владелец: «дополняй всё что сделал в master_prompt.md, а также дополни README.md и все сопутствующие документы, а потом коммит и пуш на гитхаб». Это **явно санкционирует пуш** (снимает прежнее «только LOCAL main, не пушить») и правку master_prompt.md/README.md/доков. Правки — хирургические аддитивные; чужая UI-работа в грязном дереве (`src/render/*.ts` + `scripts/ui-shots.mjs`) НЕ трогается / не стейджится / не коммитится.
+
+### Что такое фаза-3
+После sign-off владельца (2026-07-28) в LOCAL `main` лёг **code-forced ship-safe** подмножество находок аудита A1–A12 (полный реестр — во внешнем ledger, симптомы — в §4A/§4B/Appendix A выше) — ровно те, что проходят «Дисциплину автономии» § выше: механичные, не-RED, byte-identical на нормальной первой игре, без изменения баланса/дизайна/reachability сверх точечного багового случая. Балансовые, RED-файловые и design-call находки остались **DEFERRED**. Итог: **25 коммитов `Аудит: фаза 3 — …`** (19 фиксов + 6 регресс-замков), `origin/main` был на `18b69100` (фаза 2). Все 25 гейт-зелёные (`npm run check` EXIT=0; `test:unit` без регрессий). Пушатся в этой сессии.
+
+### Батч фиксов (19 коммитов) — реставрация мёртвого/замороженного авторского контента, без новых систем
+- `5bd3ce5c` **#9** — `giverId` сайд-квестов размораживается бэкфиллом после регистрации NPC-пакета → 416/421 побочек снова выдаются (`plot.ts` + `black_market_88`/`silicon_net_well` npcs + `quests.ts`; со-коммитнут `tests/side-quest-giver-backfill.test.ts`).
+- `28ab0689` **#97–99, #168, #169** — double-dip взаимоисключающих сайд-квестов закрыт: ВСЕ ЧЕТЫРЕ abandon+block-связи (инвариант #96: неполный fix оставлял дыру).
+- `9d86353c` **#25, #125** — ленивый резолв целевого NPC контрактов + TALK-матч с фолбэком (`contracts.ts` + `quests.ts`); контракты и кросс-этажные TALK-сайдквесты засчитываются (`tests/contract-target-npc-resolve.test.ts`).
+- `44ba61e3` **#1, #2, #3, #6** — запечатанные комнаты (orphan `Cell.DOOR`) распечатаны + `room.doors` базы ликвидаторов.
+- `42ec69b2` **#24** — контрплей серобурмалина «не смотреть» оживлён.
+- `d057f75b` **#40, #50–54** + `af4ebd83` — мёртвые биом-механики восстановлены (инвертированный theme-gate; второй коммит — тот же класс для pneumomail).
+- `0c63e21c` **#113, #60** + `c9a5939b` (social_pressure + npc_package_speech) — регрессия `.id`-всегда-истинно (git-регрессия `83062ee1`: `.plotNpcId`→`.id`) восстановлена.
+- `99c9394f` **#149 [HARD BLOCKER]** — главный квест, шаг 11 (VISIT Ministry) конструируется: +`visitFloorZ` +`targetRoute.designFloorId:'ministry'` (ветка B `generatePlotQuest` + позиционный route-резолв z=30) → цепочка доходит до финала (шаги 12–18: Podad→Марфа→Вестники→Пустота→Творец).
+- `631e7134` **#35** — голова-слизень: detached-стадия попадает в ключ спрайта.
+- `f73f6f2a` **#64, #174** — поле `z` маркеров маршрута (WRONG-FIELD + снятие `@ts-ignore`).
+- `08533b9a` **#109** + `97d14d73` **#111** — малые караваны: `smallCaravanMemberEligible` снова пускает `isPlotNpc` (караваны спавнятся) + статус `'escorted'` терминальный (стоп двойной доставки).
+- `681919f9` **#61** + `793683a2` **#67** — самосбор: вес вариантов и пост-биты гейтятся по `def.floors` (theme-токены), не `def.tags` (WRONG-FIELD).
+- `459928c3` **#119** — A-Life миграция: селектор учитывает `minAbsZ` (dead-authored-field).
+- `b6772a00` **#127** — A-Life лидерборд не считает тело игрока (death-continuation) своим соперником.
+- `51b87309` **#171, #181** — stale `_z` ключи 3 design-этажных оверрайд-мап → реальные `route.id` (`bank_floor`/`service_floor`/`horrorfloor`).
+
+### Регресс-замки (6 коммитов) — все попадают в gated `test:unit`
+Замки импортят только из `data`/`systems`/`entities`/`core` (никогда `../src/gen/`), иначе раннер шунтирует их в осиротевший `test:generation` вне гейта (см. §5.2/A8):
+- `e9e68d01` + `33ca2c30` — theme-gate теплотрассы (замок полярности `d057f75b`); второй коммит — `git mv` из `tests/systems/` (раннер её НЕ сканирует) в `tests/`, где тест реально исполняется (+ suite `summarizeHeatline`).
+- `995f21c5` **#61/#67** — область самосбора по `.floors`, не `.tags`.
+- `32021916` **#127** — доска A-Life не считает вселённое тело соперником.
+- `f56288f2` **#35** — ключ спрайта отделившейся стадии головы-слизня.
+- `093f4737` **#149** — конструируемость шага 11 главного квеста.
+
+### Всё ещё DEFERRED (нужен свежий sign-off — НЕ применять/не пушить фиксы без него)
+- **#45** — эндшпиль-маршрут запечатан (roof z=+50 / void z=−50 недостижимы обычным лифтом; `ensureReachableRouteLifts` built-but-unwired). RED (`gen/shared.ts`) + design-call (одностор. gate намеренный?). **Единственный оставшийся top-blocker.**
+- **#170** — radon_exchange (z=44): авторский NPC-профиль инертен (author-intent: явный `npcTarget` vs граница `|z|>=44`).
+- **#179/#180** — самосбор variant+aftermath биом-гейты (FIELD-MIGRATION-RENAME — отдельный класс от `#61/#67` WRONG-FIELD, тем батчем НЕ закрыт).
+- Балансовые/RED: combat/armor resist, #73 (`alife` floorKey→band-z), #110 (caravan save-секция), arena payout unwired, plot_outcomes route-tag mismatches.
+
+### Сопутствующие доки, обновлённые в этой сессии
+- **problems.md** — 6 DEFERRED-строк аудита переведены в `[РЕШЕНО 2026-07-29 · фаза-3]` с фиксом+SHA (конвенция строк `[РЕШЕНО 2026-07-27]`): #9, #25, #149, #109/#111, #171/#181, самосбор #61/#67. Оставлены DEFERRED: #45 (эндшпиль-лифты), #170 (radon).
+- **README.md** — фаза-3 реставрирует поведение, которое README уже описывает как рабочее (главный квест проходим, побочки выдаются, комнаты распечатаны), поэтому shipped-факты README не менялись под фаза-3; вместо этого добит остаточный A12-drift (счётчики сверены с source в этой сессии, НЕ по памяти). Применено 6 правок: `577→582` слуха (`BASE_RUMORS`, `rumors.ts:61`, независимо подтверждено 582); `34→33` модуля зон (`registerZoneContent`: 38 grep − 1 определение = 37 регистраций в 33 модулях, «34» считало файл-определение); `20→19` аномалий (`FloorAnomalyId` union = 19 real + `none`; 18 активны [7 inline + 11 module] + `bad_apple_world` `mode:'none'`; исправлен фантомный id `hladon_cold_pocket→hladon`, добавлены пропущенные `sandpile_perekrytie`+`bad_apple_world`); `18→19` сюжетных шагов + достроена строка 19 таблицы (Жан Пустотник / FETCH / вернуть пустотный шип — финальный `void_warning`-шаг `plot.ts:428`, «18» промахивалось из-за дублированного `// Step 12`). **`446 предметных ID` перепроверено и ВЕРНО** (413 literal + 27 `DOCUMENT_ACCESS_ITEMS` + 6 `CHERNOBOG_DOCKET_ITEMS`) — не менялось. Прежние оценки §498 (`~452`/`~571`/`35`) были приблизительными («~») и заменены этими сверёнными числами. FloorLevel-drift в `architecture.md`/`floors.md`/`alife.md`/`optimization.md` — по-прежнему в отложенном docs-sweep (перечислен в §498 выше).
+
+### Состояние репозитория (обновление к §488 выше — та секция писалась до фаза-3 и устарела)
+- HEAD = `093f4737`; **25 коммитов впереди `origin/main` (`18b69100`)**; пуш в этой сессии по указанию владельца.
+- Грязное дерево (НЕ моё, НЕ трогать/не стейджить/не ревертить): `M src/render/{economy_ui,hud,item_sprites,npc_ui,stats_ui,ui_layout}.ts` + `?? scripts/ui-shots.mjs` — параллельная UI-работа владельца.
+- Мои docs-правки этой сессии (стейджатся отдельным docs-коммитом поверх фаза-3): `master_prompt.md` (этот раздел), `problems.md`, `README.md`.
+- `git stash@{0}` = `gemini-floorlevel-string-refactor-WIP-broken` — по-прежнему НЕ трогать.
+- Полный реестр находок #1–#181 — во внешнем ledger (`~/.claude/.../memory/confirmed-audit-bugs-deferred.md`), не в репо.
