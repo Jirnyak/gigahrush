@@ -17,6 +17,7 @@ import { placeProceduralScreens } from '../procedural_screens';
 
 import { KVARTIRY_POPULATION_PROFILE } from '../../data/population_profiles';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
+import { isPlotNpc } from '../../data/plot';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { initializeCellTerritory } from '../../systems/territory';
 import { calcZoneLevel } from '../../systems/rpg';
@@ -574,7 +575,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   let citizenCount = 0;
   let leader: Entity | null = null;
   for (const e of entities) {
-    if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN || e.id) continue;
+    if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN || isPlotNpc(e)) continue;
     citizenCount++;
     if (rng() < 1 / citizenCount) leader = e;
   }
@@ -586,7 +587,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   const rallyR2 = UPRISING_RADIUS * UPRISING_RADIUS;
   for (const e of entities) {
     if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN) continue;
-    if (e.id) continue; // don't convert plot NPCs
+    if (isPlotNpc(e)) continue; // don't convert plot NPCs
     if (world.dist2(e.x, e.y, rallyX, rallyY) <= rallyR2) ralliedCount++;
   }
 
@@ -597,7 +598,7 @@ function triggerUprising(world: World, entities: Entity[]): void {
   for (const e of entities) {
     if (converted >= AMBIENT_UPRISING_MAX_CONVERTED) break;
     if (e.type !== EntityType.NPC || !e.alive || e.faction !== Faction.CITIZEN) continue;
-    if (e.id) continue;
+    if (isPlotNpc(e)) continue;
     if (world.dist2(e.x, e.y, rallyX, rallyY) > rallyR2) continue;
     e.faction = Faction.WILD;
     if (e.ai) {
