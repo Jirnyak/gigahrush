@@ -112,6 +112,17 @@ const WITNESS_FACT_LINE_COOLDOWN_S = 90;
 const memories = new Map<number, NpcMemory>();
 let recentRumorLead: RecentRumorLead | undefined;
 
+/** Reset per-run NPC social memory. Called from initGame (new run) and the load
+ *  path alongside clearRoomMemory(): the Map is keyed by entity id and never
+ *  saved, so without this a New-Game-without-reload (which sets state.time→0)
+ *  would leak run-1 fear/trust/rumor state and future-dated cooldown timestamps
+ *  into run 2 via deterministic entity-id collision. Deliberately NOT called on
+ *  lift transitions — within-run memory persists across floors by design. */
+export function resetNpcMemoryStore(): void {
+  memories.clear();
+  recentRumorLead = undefined;
+}
+
 export function rememberRecentRumorLead(input: Omit<RecentRumorLead, 'expiresAt'>): void {
   recentRumorLead = {
     ...input,

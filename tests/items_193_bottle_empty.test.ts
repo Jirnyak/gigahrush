@@ -57,9 +57,9 @@ test('empty bottle is reachable through kitchens, living storage and braga produ
 test('cook trade can expose empty bottles, leaving a save or sell decision', () => {
   try {
     _overrideRng((() => {
-      const rolls = [0, 0.99, 0]);
+      const rolls = [0, 0.99, 0];
       return () => rolls.shift() ?? 0;
-    })();
+    })());
     const trade = generateNpcTradeItems(makeTestNpc({ occupation: Occupation.COOK }));
     assert.ok(trade.some(item => item.defId === ITEM_ID), 'cook trade must expose bottle purchases');
   } finally {

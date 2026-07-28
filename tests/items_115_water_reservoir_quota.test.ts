@@ -11,7 +11,7 @@ import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const ITEM_ID = 'water_reservoir_quota';
 
-function resourceStock(state: GameState, floor: resourceId: string): number {
+function resourceStock(state: GameState, floor: number, resourceId: string): number {
   const economy = ensureEconomyState(state);
   return economy.floors[floor]?.resources[resourceId]?.stock ?? 0;
 }

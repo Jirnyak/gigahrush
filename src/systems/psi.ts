@@ -44,6 +44,7 @@ export function resetPsiState(): void {
   shieldTimer = 0;
   markPos = null;
   possession = null;
+  controlTimers.clear();
 }
 
 // ── Cast an instant (non-projectile) PSI spell ───────────────────

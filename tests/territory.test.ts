@@ -118,7 +118,8 @@ test('territory helpers paint cells while preserving protected ownership', () =>
 
   const changed = paintRoomTerritory(world, room.id, ZoneFaction.WILD);
 
-  assert.equal(changed, 15);
+  // Derived, not hardcoded: every room cell repainted except the single protected aptMask cell.
+  assert.equal(changed, room.w * room.h - 1, `expected all but the one protected cell painted (room ${room.w}x${room.h})`);
   assert.equal(territoryOwnerAt(world, 20, 20), ZoneFaction.WILD);
   assert.equal(territoryOwnerAt(world, 21, 21), ZoneFaction.CITIZEN);
 

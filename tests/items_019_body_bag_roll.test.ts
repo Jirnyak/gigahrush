@@ -31,8 +31,8 @@ test('body bag roll supports report and hide contract decisions', () => {
   assert.equal(hide.type, QuestType.FETCH);
   assert.equal(report.targetItem, 'body_bag_roll');
   assert.equal(hide.targetItem, 'body_bag_roll');
-  assert.equal(report.target.floor.LIVING);
-  assert.equal(hide.target.floor.LIVING);
+  assert.equal(report.target.z, 2);
+  assert.equal(hide.target.z, 2);
   assert.equal(report.target.roomType, RoomType.MEDICAL);
   assert.equal(hide.target.roomType, RoomType.MEDICAL);
   assert.equal(report.rewardResourceId, 'medicine');

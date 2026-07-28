@@ -29,6 +29,16 @@ const MAX_NPC_BARK_LOG_RADIUS_METERS = 1024;
 const lastBarkByEntity = new Map<number, { time: number; text: string }>();
 const lastFloorBarkTimeBySignal = new Map<string, number>();
 let lastFloorAnyBarkTime = -100;
+
+/** Reset per-run ambient-bark cooldown state. Called from initGame (new run) and
+ *  the load path: these are keyed by state.time / entity id and never saved, so a
+ *  New-Game-without-reload (state.time→0) would otherwise leave lastFloorAnyBarkTime
+ *  at a large run-1 value and suppress all floor barks until game-time caught up. */
+export function resetBarkState(): void {
+  lastBarkByEntity.clear();
+  lastFloorBarkTimeBySignal.clear();
+  lastFloorAnyBarkTime = -100;
+}
 export type NpcBarkSignal = 'alert' | 'witness' | 'lead' | 'ambient';
 
 export interface NpcBarkLogContext {

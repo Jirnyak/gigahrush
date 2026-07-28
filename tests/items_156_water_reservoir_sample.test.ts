@@ -12,7 +12,7 @@ import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from '
 
 const ITEM_ID = 'water_reservoir_sample';
 
-function resourceStock(state: GameState, floor: resourceId: string): number {
+function resourceStock(state: GameState, floor: number, resourceId: string): number {
   const economy = ensureEconomyState(state);
   return economy.floors[floor]?.resources[resourceId]?.stock ?? 0;
 }

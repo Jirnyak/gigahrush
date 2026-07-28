@@ -55,16 +55,16 @@ test('lice shampoo stays a sell or save decision in inventory', () => {
 test('doctor and storekeeper trade can expose lice shampoo', () => {
   try {
     _overrideRng((() => {
-      const rolls = [0, (8 + 0.01) / 10, 0]);
+      const rolls = [0, (8 + 0.01) / 10, 0];
       return () => rolls.shift() ?? 0;
-    })();
+    })());
     const doctorTrade = generateNpcTradeItems(makeTestNpc({ occupation: Occupation.DOCTOR }));
     assert.ok(doctorTrade.some(item => item.defId === ITEM_ID), 'doctor trade pool must expose lice shampoo');
 
     _overrideRng((() => {
-      const rolls = [0, (9 + 0.01) / 21, 0]);
+      const rolls = [0, (9 + 0.01) / 21, 0];
       return () => rolls.shift() ?? 0;
-    })();
+    })());
     const storekeeperTrade = generateNpcTradeItems(makeTestNpc({ occupation: Occupation.STOREKEEPER }));
     assert.ok(storekeeperTrade.some(item => item.defId === ITEM_ID), 'storekeeper trade pool must expose vending hygiene goods');
   } finally {

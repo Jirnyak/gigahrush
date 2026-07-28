@@ -112,6 +112,14 @@ export function selectRumorForNpc(npc: Entity, snapshot: ContextSnapshot, now: n
   return renderRumor(best, snapshot, memory, now);
 }
 
+/* New game / restart clears the cross-run rumor event pool. state.worldEvents is
+ * re-created per run so event ids restart at 1; without this, surviving run-1
+ * records collide by eventId and silently drop early run-2 rumors at the dedup below. */
+export function resetRumorEvents(): void {
+  rumorEvents.length = 0;
+  syntheticRumorEventId = 1_000_000;
+}
+
 export function recordRumorEvent(event: WorldEvent | RumorEventLike): boolean {
   if (!isHighSignalRumorEvent(event)) return false;
   const rumorId = eventToStaticRumorId(event);

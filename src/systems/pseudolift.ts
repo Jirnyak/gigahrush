@@ -135,7 +135,7 @@ function normalizeSite(input: unknown): PseudoliftSite | null {
     accessX: Math.max(0, Math.min(W - 1, Math.floor(Number(input.accessX) || 0))),
     accessY: Math.max(0, Math.min(W - 1, Math.floor(Number(input.accessY) || 0))),
     direction,
-    zoneId: Math.max(-1, Math.min(63, Math.floor(Number(input.zoneId) || -1))),
+    zoneId: Math.max(-1, Math.min(63, Number.isFinite(Number(input.zoneId)) ? Math.floor(Number(input.zoneId)) : -1)),
     roomId: typeof input.roomId === 'number' && Number.isFinite(input.roomId) ? Math.floor(input.roomId) : undefined,
     fakeFloorLabel: typeof input.fakeFloorLabel === 'string' ? input.fakeFloorLabel.slice(0, 12) : '0',
     status: cleanStatus(input.status),

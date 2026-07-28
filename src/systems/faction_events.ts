@@ -1186,6 +1186,7 @@ function resetFactionEventRuntimeIfNeeded(state: GameState): void {
   spawnedFactionClashKeys.clear();
   zoneCooldownUntil.clear();
   recentEvents.length = 0;
+  activeFactionResidueSites.length = 0;
   lastFactionEventTime = state.time;
 }
 
@@ -1201,6 +1202,7 @@ export function resetFactionEventsForTests(): void {
   activeFactionClashes.length = 0;
   spawnedFactionClashKeys.clear();
   factionClashAftermaths.length = 0;
+  activeFactionResidueSites.length = 0;
   lastFactionEventTime = 0;
 }
 

@@ -31,7 +31,7 @@ import {
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
 import { safeParseJson } from './core/json';
-import { rng, hashSeed, randSeed, xorshift32, irand } from './core/rand';
+import { rng, hashSeed, randSeed, xorshift32, irand, mathRng } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './gen/procedural_screens';
@@ -292,16 +292,22 @@ import {
   publishWeaponNoise,
   resetNoiseRecords,
 } from './systems/noise';
-import { notifyActorDamaged } from './systems/combat_stimulus';
+import { notifyActorDamaged, resetCombatStimulus } from './systems/combat_stimulus';
 import { canSpawnEntityType, entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
 import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
+import { resetNpcMemoryStore } from './systems/npc_memory';
+import { resetBarkState } from './systems/ai/barks';
+import { resetMetroCooldown } from './systems/metro';
+import { clearActiveBet } from './systems/arena_betting';
+import { resetMonsterBaits } from './systems/monster_bait';
 import { UV_SPOTLIGHT_FX_SECONDS, UV_SPOTLIGHT_ID, useUvSpotlight, uvSpotlightRenderIntensity } from './systems/uv_spotlight';
 import { CHALK_ITEM_ID, drawEquippedChalkPixel } from './systems/chalk';
 import { isRidingRailTrain, updateRailTrains } from './systems/rail_trains';
 import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
 import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hladon';
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
-import { updateRouteCues } from './systems/route_cues';
+import { updateRouteCues, resetRouteCueHud } from './systems/route_cues';
+import { resetRumorEvents } from './systems/rumor';
 import { updateDangerField } from './systems/danger_field';
 import {
   resetMapExploration,
@@ -673,7 +679,7 @@ let playerSex = loadPlayerSex();
 let titlePlayerAgeText = String(playerAge);
 let titleRunSeedText = '';
 const TRAILER_ZS = Array.from({ length: 101 }, (_, i) => i - 50);
-let titleTrailerFloorIdx = Math.floor(Math.random() * TRAILER_ZS.length);
+let titleTrailerFloorIdx = Math.floor(mathRng() * TRAILER_ZS.length);
 let titleStartNeedsInit = true;
 let titleMode: TitleScreenMode = 'setup';
 let titleSetupSel = 0;
@@ -3249,6 +3255,14 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   initFactionControl(world);
   resetGeneratedFloorPopulationState();
   clearRoomMemory();
+  resetNpcMemoryStore();
+  resetBarkState();
+  resetMetroCooldown();
+  clearActiveBet();
+  resetCombatStimulus();
+  resetMonsterBaits();
+  resetRouteCueHud();
+  resetRumorEvents();
 
   state = {
     tick: 0,
@@ -3337,6 +3351,8 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   setVoidEntryFromFloor(state, undefined);
   netReportedSamosborCount = state.samosborCount;
   netDeathReported = false;
+  lastAttackFeedbackAt = -999;
+  lastProjectileHitMsgTick = -999;
   ensureBankingState(state);
   ensureStockMarketState(state);
   closeNetSphere();
@@ -6348,6 +6364,12 @@ function loadGame(): boolean {
       resetNoiseRecords();
       resetGeneratedFloorPopulationState();
       clearRoomMemory();
+      resetNpcMemoryStore();
+      resetBarkState();
+      resetMetroCooldown();
+      clearActiveBet();
+      resetCombatStimulus();
+      resetMonsterBaits();
       const loaded = loadFloorForTarget(floor, generatedRunEntry);
       const gen = loaded.generation;
 

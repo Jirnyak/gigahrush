@@ -385,7 +385,10 @@ function noiseZoneId(world: World, record: NoiseRecord): number {
 function shouldRespondToNoise(state: GameState, zoneId: number, record: NoiseRecord): boolean {
   const key = `${state.currentZ}:${zoneId}:${record.source}`;
   const last = lastNoisePatrolResponseAt.get(key) ?? -Infinity;
-  if (state.time - last < NOISE_PATROL_COOLDOWN_S) return false;
+  // `last <= state.time` guards an in-session restart: initGame resets state.time
+  // to 0 while this module Map persists, so a stale future timestamp would wrongly
+  // suppress responses. Time is monotonic within a run, so this never changes normal play.
+  if (last <= state.time && state.time - last < NOISE_PATROL_COOLDOWN_S) return false;
   lastNoisePatrolResponseAt.set(key, state.time);
   return true;
 }

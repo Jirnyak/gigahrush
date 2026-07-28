@@ -703,3 +703,11 @@ export function getActiveRouteCueHud(time: number, z: number): RouteCueHud | nul
   if (!activeHud || activeHud.expiresAt < time || activeHud.z !== z) return null;
   return activeHud;
 }
+
+/* New game / restart clears the singleton HUD banner. On a fresh page-load it is
+ * already null; on in-session restart it drops a stale run-1 cue that would else
+ * survive (state.time resets to 0, so the expiresAt/z guard above cannot evict a
+ * floor-0 cue). Mirrors the samosbor-rebuild nulling in replaceRouteCueStateForRebuild. */
+export function resetRouteCueHud(): void {
+  activeHud = null;
+}

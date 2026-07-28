@@ -408,7 +408,11 @@ export function updateLivingTunnelsAnomaly(world: World, player: Entity, state: 
     world.markCellsDirty();
     world.markWallTexDirty();
     world.markFloorTexDirty();
-    world.markFeaturesDirty(true);
+    // Iron Law (optimization.md): no full W² bakeLights during active sim. Every lamp
+    // change here already relights locally via setFeatureAt (carve :192 / restore :176);
+    // freshly-carved WALL→FLOOR gaps accept stale light until the next floor-load /
+    // post-samosbor bake (those cells are fog-dimmed on carve anyway).
+    world.markFeaturesDirty(false);
     world.markFogDirty();
   }
 
@@ -473,7 +477,9 @@ export function tryUseLivingTunnelsAnomaly(
   world.markCellsDirty();
   world.markWallTexDirty();
   world.markFloorTexDirty();
-  world.markFeaturesDirty(true);
+  // Iron Law: accept-stale light (see updateLivingTunnelsAnomaly). Lamp restores route
+  // through setFeatureAt's local relight; a one-shot player seal must not trigger a W² bake.
+  world.markFeaturesDirty(false);
   world.markFogDirty();
 
   if (method === 'sealant_tube') {

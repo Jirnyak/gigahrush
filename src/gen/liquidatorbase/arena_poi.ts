@@ -12,6 +12,7 @@ export function generateLiquidatorBaseArena(world: World, entities: Entity[], ne
   // We need to carve out a room.
   const room = stampRoom(world, world.rooms.length, RoomType.COMMON, cx, cy, size, size, 0);
   room.name = 'Арена';
+  room.tags = ['arena'];
 
   const ringSize = 20;
   const rx = cx + Math.floor(size / 2) - Math.floor(ringSize / 2);

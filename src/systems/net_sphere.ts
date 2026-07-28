@@ -694,6 +694,7 @@ async function sendChat(body: string): Promise<void> {
 
 function addLocalSystemMessage(body: string): void {
   runtime.chat.push({
+    // net-identity exception (rand.ts policy): local chat-message id needs collision resistance, not determinism
     id: Date.now() + Math.random(),
     nickname: 'СИСТЕМА',
     body,

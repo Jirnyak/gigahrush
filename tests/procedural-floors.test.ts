@@ -626,7 +626,7 @@ test('floor run reaches the next lower authored floor through procedural gaps', 
   const authored = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(authored?.z, -4);
   assert.equal(authored?.designFloorId, 'floor_69');
-  assert.equal(authored?.baseFloor === -26);
+  assert.equal(authored?.baseFloor, -26);
 });
 
 test('floor run UX labels avoid duplicate procedural z and keep return path', () => {
@@ -795,7 +795,7 @@ test('floor run reaches the upper Ministry authored ladder through procedural ga
   const camp = resolveFloorRunRoute(state, LiftDirection.UP);
   assert.equal(camp?.z, 38);
   assert.equal(camp?.designFloorId, 'pioneer_camp');
-  assert.equal(camp?.baseFloor === 0);
+  assert.equal(camp?.baseFloor, 0);
 });
 
 test('floor run exposes seeded procedural slots across the normal lift span', () => {
@@ -822,7 +822,7 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
   const moebiusPodezd = resolveFloorRunRoute(state, LiftDirection.UP);
   assert.equal(moebiusPodezd?.z, 2);
   assert.equal(moebiusPodezd?.designFloorId, 'moebius_podezd');
-  assert.equal(moebiusPodezd?.baseFloor === 14);
+  assert.equal(moebiusPodezd?.baseFloor, 14);
   commitFloorRunEntry(state, moebiusPodezd!);
 
   for (const expectedZ of [3]) {
@@ -875,7 +875,7 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
   const slimeNii = resolveFloorRunRoute(state, LiftDirection.UP);
   assert.equal(slimeNii?.z, 12);
   assert.equal(slimeNii?.designFloorId, 'slime_nii');
-  assert.equal(slimeNii?.baseFloor === 14);
+  assert.equal(slimeNii?.baseFloor, 14);
   commitFloorRunEntry(state, slimeNii!);
 
   const z13 = resolveFloorRunRoute(state, LiftDirection.UP);
@@ -885,7 +885,7 @@ test('floor run exposes seeded procedural slots across the normal lift span', ()
 
   const kvartiry = resolveFloorRunRoute(state, LiftDirection.UP);
   assert.equal(kvartiry?.z, 14);
-  assert.equal(kvartiry?.storyFloor === 14);
+  assert.equal(kvartiry?.storyFloor, 14);
 });
 
 function expectedProceduralFloorCount(): number {
@@ -2595,7 +2595,7 @@ testGenerationMatrix('liquidator procedural majority builds readable checkpoints
 
 testGenerationMatrix('admin pocket geometry exposes legal queue, staff chord and document landmarks', () => {
   const def = FLOOR_GEOMETRIES.find(item => item.id === 'admin_pockets');
-  assert.equal(def?.baseFloor === 30);
+  assert.equal(def?.baseFloor, 30);
   assert.equal(def?.tags.includes('admin'), true);
   assert.equal(def?.tags.includes('documents'), true);
 

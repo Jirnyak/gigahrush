@@ -4,6 +4,7 @@
  */
 
 export * from './meta';
+export * from './economy';
 import {
   type Entity,
 } from '../../core/types';

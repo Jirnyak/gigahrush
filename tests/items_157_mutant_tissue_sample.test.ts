@@ -78,7 +78,7 @@ test('mutant tissue sample has an NII handoff contract decision', () => {
   assert.ok(contract);
   assert.equal(contract.type, QuestType.FETCH);
   assert.equal(contract.faction, Faction.SCIENTIST);
-  assert.equal(contract.target.floor.LIVING);
+  assert.equal(contract.target.z, 2);
   assert.equal(contract.target.roomType, RoomType.CORRIDOR);
   assert.equal(contract.targetMonsterKind, MonsterKind.KRYSNOZHKA);
   assert.equal(contract.targetItem, ITEM_ID);

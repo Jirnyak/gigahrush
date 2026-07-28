@@ -246,8 +246,11 @@ function finiteNumber(value: unknown, fallback: number): number {
 function normalizeEvent(raw: unknown, fallbackId: number): WorldEvent | null {
   if (!isRecord(raw) || typeof raw.type !== 'string') return null;
   const event = raw as Partial<WorldEvent>;
+  // Explicit whitelist (mirrors normalizeContextFact below): every WorldEvent field is
+  // finite-guarded or length-capped from untrusted save JSON. No `...event` spread — an
+  // uncapped spread let a tampered save inject multi-MB strings / NaN-Infinity numbers that
+  // then live in the event ring buffers and render unbounded in the log/rumor UI.
   return {
-    ...event,
     id: Math.max(1, Math.floor(Number(event.id) || fallbackId)),
     type: raw.type as WorldEventType,
     time: finiteNumber(event.time, 0),
@@ -255,6 +258,24 @@ function normalizeEvent(raw: unknown, fallbackId: number): WorldEvent | null {
     hour: finiteNumber(event.hour, 0),
     minute: finiteNumber(event.minute, 0),
     z: normalizeFloor(event.z),
+    zoneId: Number.isFinite(event.zoneId) ? event.zoneId as number : undefined,
+    roomId: Number.isFinite(event.roomId) ? event.roomId as number : undefined,
+    x: Number.isFinite(event.x) ? event.x as number : undefined,
+    y: Number.isFinite(event.y) ? event.y as number : undefined,
+    actorId: Number.isFinite(event.actorId) ? event.actorId as number : undefined,
+    actorName: typeof event.actorName === 'string' ? event.actorName.slice(0, MAX_EVENT_DATA_STRING_LEN) : undefined,
+    actorFaction: Number.isFinite(event.actorFaction) ? event.actorFaction as WorldEvent['actorFaction'] : undefined,
+    targetId: Number.isFinite(event.targetId) ? event.targetId as number : undefined,
+    targetName: typeof event.targetName === 'string' ? event.targetName.slice(0, MAX_EVENT_DATA_STRING_LEN) : undefined,
+    targetFaction: Number.isFinite(event.targetFaction) ? event.targetFaction as WorldEvent['targetFaction'] : undefined,
+    itemId: typeof event.itemId === 'string' ? event.itemId.slice(0, MAX_EVENT_DATA_STRING_LEN) : undefined,
+    itemName: typeof event.itemName === 'string' ? event.itemName.slice(0, MAX_EVENT_DATA_STRING_LEN) : undefined,
+    itemCount: Number.isFinite(event.itemCount) ? event.itemCount as number : undefined,
+    itemValue: Number.isFinite(event.itemValue) ? event.itemValue as number : undefined,
+    monsterKind: Number.isFinite(event.monsterKind) ? event.monsterKind as WorldEvent['monsterKind'] : undefined,
+    containerId: Number.isFinite(event.containerId) ? event.containerId as number : undefined,
+    containerOwnerId: Number.isFinite(event.containerOwnerId) ? event.containerOwnerId as number : undefined,
+    containerFaction: Number.isFinite(event.containerFaction) ? event.containerFaction as WorldEvent['containerFaction'] : undefined,
     truth: 'fact',
     severity: clampSeverity(event.severity),
     privacy: normalizePrivacy(event.privacy),

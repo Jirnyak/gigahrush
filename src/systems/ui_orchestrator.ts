@@ -368,8 +368,8 @@ function normalizeUiSettings(raw: unknown): UiSettings {
   out.lightingQualityMode = normalizeLightingQualityMode(src.lightingQualityMode);
   out.crittersEnabled = typeof src.crittersEnabled === 'boolean' ? src.crittersEnabled : CRITTERS_ENABLED_DEFAULT;
   out.masterAudioEnabled = typeof src.masterAudioEnabled === 'boolean' ? src.masterAudioEnabled : MASTER_AUDIO_DEFAULT;
-  out.musicVolume = typeof src.musicVolume === 'number' ? src.musicVolume : MUSIC_VOLUME_DEFAULT;
-  out.sfxVolume = typeof src.sfxVolume === 'number' ? src.sfxVolume : SFX_VOLUME_DEFAULT;
+  out.musicVolume = normalizeVolume(src.musicVolume, MUSIC_VOLUME_DEFAULT);
+  out.sfxVolume = normalizeVolume(src.sfxVolume, SFX_VOLUME_DEFAULT);
   for (const def of MAP_LEGEND_TOGGLE_DEFS) {
     const value = src[def.id];
     if (typeof value === 'boolean') out[def.id] = value;
@@ -430,6 +430,11 @@ function cameraFovStepIndex(value: number): number {
   const steps = Math.round((CAMERA_FOV_MAX_DEGREES - CAMERA_FOV_MIN_DEGREES) / CAMERA_FOV_STEP_DEGREES) + 1;
   const normalized = normalizeCameraFovDegrees(value);
   return Math.max(0, Math.min(steps - 1, Math.round((normalized - CAMERA_FOV_MIN_DEGREES) / CAMERA_FOV_STEP_DEGREES)));
+}
+
+function normalizeVolume(value: unknown, def: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return def;
+  return Math.max(0, Math.min(1, value));
 }
 
 function loadUiSettings(): UiSettings {

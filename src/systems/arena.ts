@@ -1,4 +1,6 @@
 import { Entity, EntityType, GameState, LiftDirection, msg } from '../core/types';
+import { World } from '../core/world';
+import { getPlotNpcNumericId } from '../data/npc_packages';
 import { NpcInteractionContext } from './npc_interaction_options';
 import { placeBet, calculateOdds } from './arena_betting';
 
@@ -21,7 +23,7 @@ export interface ArenaOverlaySnapshot {
 export const arenaRuntime: {
   open: boolean;
   selection: number;
-  npcName: string;
+  npcId: number;
   fighterA: Entity | null;
   fighterB: Entity | null;
   oddsA: number;
@@ -30,7 +32,7 @@ export const arenaRuntime: {
 } = {
   open: false,
   selection: 0,
-  npcName: '',
+  npcId: -1,
   fighterA: null,
   fighterB: null,
   oddsA: 1.1,
@@ -43,15 +45,15 @@ export function isArenaOverlayOpen(): boolean {
 }
 
 function findFighters(entities: readonly Entity[]): { fighterA: Entity | null, fighterB: Entity | null } {
-  // Let's pretend there are entities with "arena_fighter" tags or we just pick 2 random alife NPCs.
-  // Wait, if marx_15 implemented arena battles, the combatants might have a specific property.
-  // We'll just look for alive NPCs that are close, or just create mocks for now.
-  let fighterA = null;
-  let fighterB = null;
+  // Pick the first two alive NPCs that are not the arena runners (matched by stable plot id,
+  // not display name). Unregistered ids resolve to undefined and simply never match a real NPC.
+  const markoId = getPlotNpcNumericId('marko_lolo');
+  const masterId = getPlotNpcNumericId('arena_master');
+  let fighterA: Entity | null = null;
+  let fighterB: Entity | null = null;
 
-  // Just take any two different NPCs
   for (const e of entities) {
-    if (e.alive && e.type === EntityType.NPC && e.name !== 'Мастер Арены' && e.name !== 'Марко Лоло') {
+    if (e.alive && e.type === EntityType.NPC && e.id !== markoId && e.id !== masterId) {
       if (!fighterA) fighterA = e;
       else if (!fighterB) {
         fighterB = e;
@@ -65,12 +67,14 @@ function findFighters(entities: readonly Entity[]): { fighterA: Entity | null, f
 
 export function openArena(ctx: NpcInteractionContext): void {
   arenaRuntime.open = true;
-  arenaRuntime.npcName = ctx.npc.name ?? '';
+  arenaRuntime.npcId = ctx.npc.id;
   arenaRuntime.ctx = ctx;
-  arenaRuntime.selection = arenaRuntime.npcName === 'Марко Лоло' ? 6 : 0; // selection up to 6 now
+  // Marko Lolo is the ring promoter: talking to him jumps straight to the "enter arena" action.
+  const enterOnly = ctx.npc.id === getPlotNpcNumericId('marko_lolo');
+  arenaRuntime.selection = enterOnly ? 6 : 0;
 
-  if (arenaRuntime.npcName !== 'Марко Лоло') {
-    const { fighterA, fighterB } = findFighters(ctx.entities ?? []); // Note: world from ctx
+  if (!enterOnly) {
+    const { fighterA, fighterB } = findFighters(ctx.entities ?? []);
     arenaRuntime.fighterA = fighterA;
     arenaRuntime.fighterB = fighterB;
     if (fighterA && fighterB) {
@@ -90,7 +94,7 @@ export function closeArena(): void {
 }
 
 export function moveArenaSelection(delta: number): void {
-  const max = arenaRuntime.npcName === 'Марко Лоло' ? 6 : 6;
+  const max = 6; // selections 0..6 (see the selection legend below)
   arenaRuntime.selection += delta;
   if (arenaRuntime.selection < 0) arenaRuntime.selection = max;
   if (arenaRuntime.selection > max) arenaRuntime.selection = 0;
@@ -105,11 +109,17 @@ export function moveArenaSelection(delta: number): void {
 // 5: Bet 500 on B
 // 6: Enter arena / Exit
 
-export function activateArenaSelection(ctx: { state: GameState; player?: Entity; switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean, targetZ?: number) => void }): void {
-  if (arenaRuntime.npcName === 'Марко Лоло' || arenaRuntime.selection === 6) {
+export function activateArenaSelection(ctx: { world: World; state: GameState; player?: Entity; switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean, targetZ?: number) => void }): void {
+  const enterOnly = arenaRuntime.npcId === getPlotNpcNumericId('marko_lolo');
+  if (enterOnly || arenaRuntime.selection === 6) {
     if (ctx.player) {
-      ctx.player.x = 100;
-      ctx.player.y = 63;
+      // Teleport into the middle of the arena ring by scanning for the tagged arena room on the
+      // current floor (de-hardcoded from fixed coords that could land the player inside a wall).
+      const arena = ctx.world.rooms.find(r => r?.tags?.includes('arena'));
+      if (arena) {
+        ctx.player.x = ctx.world.wrap(arena.x + Math.floor(arena.w / 2)) + 0.5;
+        ctx.player.y = ctx.world.wrap(arena.y + Math.floor(arena.h / 2)) + 0.5;
+      }
       ctx.state.msgs.push(msg('Вы выходите на арену.', ctx.state.time, '#f66'));
     }
     closeArena();

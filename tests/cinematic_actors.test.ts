@@ -120,7 +120,6 @@ test('cinematic_actors - extract and release npc', () => {
     solid: () => false,
     solidAtIdx: () => false,
     roomAt: () => null,
-    roomAt: () => null,
   } as unknown as World;
   addTestRoom(world, 0, 0, 9, 9);
 

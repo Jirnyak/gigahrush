@@ -55,9 +55,9 @@ test('storekeeper trade can expose imported toiletpaper', () => {
     let exposed = false;
     for (let selector = 0; selector < 1 && !exposed; selector += 0.001) {
       _overrideRng((() => {
-        const rolls = [0, selector, 0]);
+        const rolls = [0, selector, 0];
         return () => rolls.shift() ?? 0;
-      })();
+      })());
 
       const trade = generateNpcTradeItems(makeTestNpc({ occupation: Occupation.STOREKEEPER }));
       exposed = trade.some(item => item.defId === ITEM_ID);

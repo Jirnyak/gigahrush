@@ -338,8 +338,7 @@ const INTENT_ID_RE = /^[a-z][a-z0-9_]*$/;
 function selectorEmpty(selector: AlifeDestinationSelector): boolean {
   return !selector.floorKeys?.length &&
     !selector.routeTags?.length &&
-    // @ts-ignore
-    !selector.themeTagss?.length &&
+    !selector.themeTags?.length &&
     selector.minAbsZ === undefined &&
     selector.maxAbsZ === undefined;
 }

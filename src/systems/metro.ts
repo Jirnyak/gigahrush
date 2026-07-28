@@ -22,6 +22,14 @@ export interface MetroUseResult {
 
 let nextMetroUseAt = 0;
 
+/** Reset the metro turnstile cooldown on new run / load. `nextMetroUseAt` is an
+ *  absolute state.time value, module-scoped and never saved; without this an
+ *  in-session New-Game (state.time→0) leaves a stale future value that makes the
+ *  turnstile refuse ("остывает после прошлой ошибки") until game-time catches up. */
+export function resetMetroCooldown(): void {
+  nextMetroUseAt = 0;
+}
+
 function isRoutePanel(feature: Feature): boolean {
   return feature === Feature.SCREEN || feature === Feature.APPARATUS;
 }

@@ -39,9 +39,9 @@ test('roller brush can be stolen from storage or bought from storekeepers', () =
     let seen = false;
     for (let i = 0; i < 64 && !seen; i++) {
       _overrideRng((() => {
-        const rolls = [0, (i + 0.01) / 64, 0]);
+        const rolls = [0, (i + 0.01) / 64, 0];
         return () => rolls.shift() ?? 0;
-      })();
+      })());
       const storekeeperTrade = generateNpcTradeItems(makeTestNpc({ occupation: Occupation.STOREKEEPER }));
       seen = storekeeperTrade.some(item => item.defId === ITEM_ID);
     }

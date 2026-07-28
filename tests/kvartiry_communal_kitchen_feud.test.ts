@@ -25,7 +25,7 @@ function sideQuest(id: string): RegisteredSideQuest {
 }
 
 function assertKvartiryRoute(quest: RegisteredSideQuest, roomType: RoomType, tag: string): void {
-  assert.equal(quest.targetFloor.KVARTIRY, `${quest.id} must point to Kvartiry`);
+  assert.equal(quest.targetFloorZ, 60, `${quest.id} must point to Kvartiry`);
   assert.equal(quest.targetRoomType, roomType, `${quest.id} must mark a local room type`);
   assert.equal(quest.targetZoneTag, tag, `${quest.id} must resolve through a local trace tag`);
   assert.ok(quest.targetHint?.includes('Квартиры'), `${quest.id} needs a readable floor hint`);
@@ -46,7 +46,7 @@ test('communal kitchen feud registers five mutually resolving branches', () => {
     assert.ok(quest, `missing kitchen feud quest ${id}`);
     assert.equal(quest.type, QuestType.FETCH);
     assert.ok(getNpcPackageByPlotNpcId(quest.giverNpcId), `${id} has missing giver package`);
-    assert.equal(quest.targetFloor.KVARTIRY);
+    assert.equal(quest.targetFloorZ, 60);
     assert.equal(quest.targetRoomType, RoomType.KITCHEN);
     assert.equal(quest.targetZoneTag, 'kitchen_feud');
     assert.ok(quest.targetHint?.includes('Квартиры'), `${id} needs a floor hint`);

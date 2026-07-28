@@ -40,6 +40,7 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   // Generate Arena (COMMON)
   const arena = stampRoom(world, nextRoomId++, RoomType.COMMON, spawnX - 25, spawnY - 65, 50, 50, -1);
   arena.name = 'liquidator_arena_main';
+  arena.tags = ['arena'];
   arena.wallTex = Tex.HERMO_WALL;
   arena.floorTex = Tex.F_CONCRETE;
   protectRoom(world, arena.x, arena.y, arena.w, arena.h, arena.wallTex, arena.floorTex);

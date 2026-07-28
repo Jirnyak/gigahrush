@@ -36,7 +36,7 @@ test('hermodoor_service_log is deduped into the existing hermodoor journal', () 
 test('hermodoor journal has theft and black-market document decisions', () => {
   const contract = CONTRACTS.find(item => item.id === 'hospital_hermodoor_journal_theft');
   assert.equal(contract?.targetItem, SERVICE_LOG_ID);
-  assert.equal(contract?.target.floor.LIVING);
+  assert.equal(contract?.target.z, 2);
   assert.equal(contract?.target.roomType, RoomType.MEDICAL);
 
   const world = new World();

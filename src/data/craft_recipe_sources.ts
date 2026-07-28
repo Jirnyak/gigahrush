@@ -358,7 +358,6 @@ export function craftRecipeSourceCountsByKind(): Record<CraftRecipeSourceKind, n
     quest: craftRecipeSourcesByKind('quest').length,
     terminal: craftRecipeSourcesByKind('terminal').length,
     npc: craftRecipeSourcesByKind('npc').length,
-    // @ts-ignore
-    z: craftRecipeSourcesByKind('floor').length,
+    floor: craftRecipeSourcesByKind('floor').length,
   };
 }

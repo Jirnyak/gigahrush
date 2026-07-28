@@ -178,6 +178,7 @@ export function shouldSendHostSync(): boolean {
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let result = '';
+  // net-identity exception (rand.ts policy): room code must be unpredictable/collision-resistant, not deterministic
   for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
   return result;
 }

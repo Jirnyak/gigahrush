@@ -7,8 +7,7 @@ import {
   type Item,
   type WorldEventSeverity,
 } from '../core/types';
-// @ts-ignore
-import { floorKeyForDesign, floorKeyForDesign } from './floor_keys';
+import { floorKeyForDesign } from './floor_keys';
 
 export interface ScriptedArrivalAmmoDef {
   defId: string;
