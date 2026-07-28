@@ -702,6 +702,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   }
   if (e.monsterKind === MonsterKind.PROTOKOLNIK) h = mix32(h ^ Math.imul((e.protocolPressureTier ?? 0) + 1, 0x6d2b79f5));
   if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) h = mix32(h ^ Math.imul((e.monsterArmorStacks ?? ZAK_ARMOR_MAX_STACKS) + 1, 0x7feb352d));
+  if (e.monsterKind === MonsterKind.HEAD_SLUG) h = mix32(h ^ Math.imul((e.monsterStage ?? 0) + 1, 0x2545f491));
   h = mix32(h ^ Math.imul(e.type, 0x9e3779b1) ^ Math.imul(kind + 1, 0x85ebca6b) ^ Math.imul(occ + 1, 0xc2b2ae35));
   h = mix32(h ^ Math.imul((e.sprite ?? 0) + 1, 0x165667b1));
   if (e.npcVisualId) h = hashText(e.npcVisualId, h);
