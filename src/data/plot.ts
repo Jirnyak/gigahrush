@@ -339,9 +339,14 @@ export const PLOT_CHAIN: PlotStep[] = [
     giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
     desc: 'Нужны патроны. Иди в Министерство, запроси снабжение.',
-    targetFloorZ: 30,
+    targetFloorZ: 180,
+    targetRoute: { designFloorId: 'ministry', label: 'Z+30 Министерство' },
+    targetHint: 'Поднимайся лифтами на Z+30: Министерство.',
+    visitFloorZ: 180,
     rewardItem: 'ammo_762', rewardCount: 30,
     relationDelta: 20, xpReward: 100,
+    eventTags: ['ministry', 'design_route', 'upper_route'],
+    eventData: { routeId: 'ministry', floorZ: 30 },
   },
   // Step 12: Major Grom → go to Podad
   {
