@@ -14,6 +14,7 @@ import type { World } from '../core/world';
 import { CARAVAN_LANE_BY_ID, CARAVAN_LANES, SMALL_CARAVAN_TEMPLATES, type CaravanLaneDef, type SmallCaravanTemplateDef } from '../data/caravans';
 import type { EconomyFloorRef } from '../data/economy_rules';
 import { addFactionRelMutual } from '../data/relations';
+import { isPlotNpc } from '../data/plot';
 import {
   assignPersistentAlifeNpcFromEntity,
   captureAlifeFloorState,
@@ -587,7 +588,13 @@ function nearbyMemberPosition(world: World, x: number, y: number, index: number)
 function smallCaravanMemberEligible(state: GameState, npc: Entity, template: SmallCaravanTemplateDef, usedIds: ReadonlySet<number>): boolean {
   if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai) return false;
   if (usedIds.has(npc.id) || npc.faction !== template.faction) return false;
-  if (npc.id || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) return false;
+  // #109: skip plot NPCs, not "every entity". Commit 83062ee1 removed
+  // Entity.plotNpcId and mis-migrated this guard to `npc.id` (truthy for every
+  // spawned entity), so smallCaravanMemberEligible returned false for ALL NPCs
+  // and small caravans never recruited members. isPlotNpc is the canonical
+  // plot-band predicate; ordinary A-Life ids are allocated above the band. This
+  // mirrors the correctly-migrated sibling site emergency_panels.ts:524.
+  if (isPlotNpc(npc) || npc.canGiveQuest || (npc.questId !== undefined && npc.questId !== -1)) return false;
   if (npc.persistentNpcId === 'player' || npc.faction === Faction.PLAYER) return false;
   if (state.showNpcMenu && state.npcMenuTarget === npc.id) return false;
   if (npc.alifeId === undefined && npc.persistentNpcId) return false;
