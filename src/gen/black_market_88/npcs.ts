@@ -205,6 +205,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_deliver_night_stock',
     giverId: getPlotNpcNumericId('market88_marta_broker')!,
+    giverPlotNpcId: 'market88_marta_broker',
     type: QuestType.FETCH,
     desc: 'Марта Восьмая: «Принеси антибиотик в ночной запас. Деньги будут, но главный товар - доверие.»',
     targetItem: 'antibiotic',
@@ -224,6 +225,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_hide_courier',
     giverId: getPlotNpcNumericId('market88_zlata_silence')!,
+    giverPlotNpcId: 'market88_zlata_silence',
     type: QuestType.TALK,
     desc: 'Злата Тишина: «Найди Сашу Люка и скажи, что люк сегодня спит. Не геройствуй, просто доведи слова.»',
     targetNpcId: getPlotNpcNumericId('market88_courier_sasha')!,
@@ -243,6 +245,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_steal_stamp',
     giverId: getPlotNpcNumericId('market88_zlata_silence')!,
+    giverPlotNpcId: 'market88_zlata_silence',
     type: QuestType.FETCH,
     desc: 'Злата Тишина: «Нужна печать ЖЭК. Купить нельзя: продавца сдадут вместе с тобой, и печать сгорит до первого окна.»',
     targetItem: 'zhek_seal',
@@ -261,6 +264,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_settle_bad_debt',
     giverId: getPlotNpcNumericId('market88_mikhail_debt')!,
+    giverPlotNpcId: 'market88_mikhail_debt',
     type: QuestType.FETCH,
     desc: 'Михаил Долговой: «Восемьдесят восемь рублей - и я вычеркиваю твою строку до вечерней проверки.»',
     targetItem: 'money',
@@ -279,6 +283,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_return_ammo_crate',
     giverId: getPlotNpcNumericId('market88_zhoka_knife')!,
+    giverPlotNpcId: 'market88_zhoka_knife',
     type: QuestType.FETCH,
     desc: 'Жока Нож: «Верни двадцать четыре девятки в ряд. За полный ряд дам дробь и скажу, какой шкаф сегодня без охраны.»',
     targetItem: 'ammo_9mm',
@@ -298,6 +303,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'market88_betray_supplier',
     giverId: getPlotNpcNumericId('market88_zhoka_knife')!,
+    giverPlotNpcId: 'market88_zhoka_knife',
     type: QuestType.TALK,
     desc: 'Жока Нож: «Саша ведет поставщика мимо моей задвижки. Скажи ему, что маршрут продан, и не стой между мной и люком.»',
     targetNpcId: getPlotNpcNumericId('market88_courier_sasha')!,
@@ -321,10 +327,14 @@ export let contentRegistered = false;
 
 export function registerBlackMarket88DesignFloorContent(): void {
   if (contentRegistered) return;
+  // Group by the giver's string id: the eager numeric `giverId` freezes to
+  // `undefined` at literal-eval time (the giver NPC is registered below), so it
+  // cannot be the grouping key. registerFloorSideQuest backfills the numeric id.
   const questsByNpcId: Record<string, typeof SIDE_QUESTS[number][]> = {};
   for (const q of SIDE_QUESTS) {
-    if (!questsByNpcId[q.giverId]) questsByNpcId[q.giverId] = [];
-    questsByNpcId[q.giverId].push(q);
+    const giver = q.giverPlotNpcId;
+    if (!giver) continue;
+    (questsByNpcId[giver] ??= []).push(q);
   }
   for (const npcId of Object.keys(NPC_DEFS)) {
     const quests = questsByNpcId[npcId] || [];

@@ -450,6 +450,13 @@ export interface KillPressureDef {
 /* ── A single step in the linear story quest chain ───────────── */
 export interface PlotStep {
   giverId: number;
+  /**
+   * Authoring-time string id of the giver NPC. Used to resolve `giverId` lazily
+   * when the eager `getPlotNpcNumericId()` in a quest literal froze to `undefined`
+   * because the giver was not registered yet at literal-eval time (forward reference).
+   * Mirrors the runtime save-load resolution in main.ts. Optional; `giverId` wins when valid.
+   */
+  giverPlotNpcId?: string;
   type: QuestType;
   desc: string;
   /** HUD text before this step is accepted, when the player should find the giver. */
@@ -511,6 +518,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   {
     id: 'idol_ministry_registration',
     giverId: getPlotNpcNumericId('vera_propuskova')!,
+    giverPlotNpcId: 'vera_propuskova',
     type: QuestType.FETCH,
     desc: 'Принеси идол Чернобога Вере у окна. Она вернёт идол с корешком; без отметки это улика.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -534,6 +542,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   {
     id: 'idol_liquidator_field_report',
     giverId: getPlotNpcNumericId('polkovnik_streltsov')!,
+    giverPlotNpcId: 'polkovnik_streltsov',
     type: QuestType.FETCH,
     desc: 'Покажи идол Стрельцову. Ликвидаторы вернут вещь с жетоном и патронами; лицо попадет в список.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -557,6 +566,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   {
     id: 'idol_candle_concealment',
     giverId: getPlotNpcNumericId('batushka')!,
+    giverPlotNpcId: 'batushka',
     type: QuestType.FETCH,
     desc: 'Положи идол под свечу Батюшке. Он вернет вещь и святую воду; долг Якова останется.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -578,6 +588,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   {
     id: 'idol_counterfeit_decoy',
     giverId: getPlotNpcNumericId('stalker_mecheny')!,
+    giverPlotNpcId: 'stalker_mecheny',
     type: QuestType.FETCH,
     desc: 'Принеси Меченому лист с поддельной печатью. Он сделает приманку; настоящий идол останется Якову.',
     targetItem: 'forged_stamp_sheet', targetCount: 1,
@@ -599,6 +610,7 @@ export const SIDE_QUESTS: SideQuestStep[] = [
   {
     id: 'idol_hell_contact_handoff',
     giverId: getPlotNpcNumericId('hell_contact')!,
+    giverPlotNpcId: 'hell_contact',
     type: QuestType.FETCH,
     desc: 'Дай идол Никанору на проверку. Он вернет вещь с руной и водой; голос станет понятнее культу.',
     targetItem: 'idol_chernobog', targetCount: 1,
@@ -753,7 +765,7 @@ export function plotNpcHomeFloorKey(plotNpcId: string, defInput?: PlotNpcDef): s
   if (explicit) return explicit;
   return inferredQuestHomeFloorKey([
     ...PLOT_CHAIN.filter(q => q.giverId === getPlotNpcNumericId(plotNpcId)),
-    ...SIDE_QUESTS.filter(q => q.giverId === getPlotNpcNumericId(plotNpcId)),
+    ...SIDE_QUESTS.filter(q => sideQuestGiverId(q) === getPlotNpcNumericId(plotNpcId)),
   ]);
 }
 
@@ -771,7 +783,32 @@ export function registerSideQuest(
     quests,
     tags: options?.tags,
   });
+  // `giverId: getPlotNpcNumericId(SELF)!` in quest literals freezes to `undefined`:
+  // the quest array is evaluated before this function runs, so the giver's numeric
+  // id (assigned by the registration above) did not exist yet. Backfill it now that
+  // it does. Mutating in place is correct — these objects are the ones pushed into
+  // SIDE_QUESTS and read by the offer gate.
+  const giverNumId = getPlotNpcNumericId(checkedNpcId);
+  if (giverNumId !== undefined) {
+    for (const q of quests) {
+      if (typeof q.giverId !== 'number' || q.giverId < 1) {
+        (q as { giverId: number }).giverId = giverNumId;
+      }
+    }
+  }
   registerSideQuestSteps(quests);
+}
+
+/**
+ * Resolve a side quest's giver numeric id, tolerating a `giverId` that froze to
+ * `undefined` at literal-eval time (forward reference) by falling back to
+ * `giverPlotNpcId`. Registered quests get `giverId` backfilled at registration,
+ * so this fallback only matters for built-in literals whose giver is declared later.
+ */
+export function sideQuestGiverId(sq: SideQuestStep): number | undefined {
+  if (typeof sq.giverId === 'number' && sq.giverId >= 1) return sq.giverId;
+  if (sq.giverPlotNpcId) return getPlotNpcNumericId(sq.giverPlotNpcId);
+  return undefined;
 }
 
 export function registerFloorSideQuest(
@@ -835,7 +872,7 @@ export function hasAvailableQuest(plotNpcId: number, quests: Quest[]): boolean {
   }
   // Check SIDE_QUESTS
   for (const sq of SIDE_QUESTS) {
-    if (sq.giverId !== plotNpcId) continue;
+    if (sideQuestGiverId(sq) !== plotNpcId) continue;
     if (quests.some(q => q.sideQuestId === sq.id)) continue;
     if (!sideQuestPrereqsMet(sq, quests)) continue;
     return true;

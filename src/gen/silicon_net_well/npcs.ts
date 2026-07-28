@@ -78,13 +78,14 @@ export let contentRegistered = false;
 export function registerSiliconNetWellContent(): void {
   if (contentRegistered) return;
 
+  // Group by the giver's string id: the eager numeric `giverId` freezes to
+  // `undefined` at literal-eval time (the giver NPC is registered below), so it
+  // cannot be the grouping key. registerFloorSideQuest backfills the numeric id.
   const questsByGiver: Record<string, SideQuestStep[]> = {};
   for (const q of SIDE_QUESTS) {
-    if (!q.giverId) continue;
-    if (!questsByGiver[q.giverId]) {
-      questsByGiver[q.giverId] = [];
-    }
-    questsByGiver[q.giverId].push(q);
+    const giver = q.giverPlotNpcId;
+    if (!giver) continue;
+    (questsByGiver[giver] ??= []).push(q);
   }
 
   for (const npcId of Object.keys(NPC_DEFS) as SiliconNpcId[]) {

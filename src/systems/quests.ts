@@ -26,6 +26,7 @@ import {
   SIDE_QUESTS,
   hasAvailableQuest,
   isPlotNpc,
+  sideQuestGiverId,
   sideQuestPrereqsMet,
   type KillPressureDef,
   type PlotStep,
@@ -1583,7 +1584,7 @@ function generatePlotQuest(
 
   // ── Side quests (no prerequisite chain) ──
   for (const sq of SIDE_QUESTS) {
-    if (sq.giverId !== plotId) continue;
+    if (sideQuestGiverId(sq) !== plotId) continue;
     if (state.quests.some(q => q.sideQuestId === sq.id)) continue;
     if (!sideQuestPrereqsMet(sq, state.quests)) continue;
 

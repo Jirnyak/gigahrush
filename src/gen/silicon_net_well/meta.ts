@@ -211,6 +211,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'silicon_cibo_net_contact',
     giverId: getPlotNpcNumericId('silicon_cibo')!,
+    giverPlotNpcId: 'silicon_cibo',
     type: QuestType.FETCH,
     desc: 'Сибо: «Две энергоячейки к терминальному залу. Я открою НЕТ-обход и отдам излучатель, если он не заберёт нас первым.»',
     targetItem: 'ammo_energy',
@@ -227,6 +228,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'silicon_scientist_warning',
     giverId: getPlotNpcNumericId('silicon_cyborg_scientist')!,
+    giverPlotNpcId: 'silicon_cyborg_scientist',
     type: QuestType.TALK,
     desc: 'Выслушай киборга-учёного о GBE и риске НЕТ-взлома до работы с терминалами.',
     targetNpcId: getPlotNpcNumericId('silicon_cibo')!,
@@ -240,6 +242,7 @@ export const SIDE_QUESTS: readonly SideQuestStep[] = [
   {
     id: 'silicon_admin_turn_in_scientist',
     giverId: getPlotNpcNumericId('silicon_admin_checker')!,
+    giverPlotNpcId: 'silicon_admin_checker',
     type: QuestType.KILL,
     desc: 'Администратор: «Киборг объяснил слишком много. Уберите его или уведите от терминалов.»',
     targetNpcId: getPlotNpcNumericId('silicon_cyborg_scientist')!,
