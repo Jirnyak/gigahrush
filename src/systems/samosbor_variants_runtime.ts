@@ -15,7 +15,12 @@ export function chooseSamosborVariant(floorTags: readonly string[], _zNum: numbe
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;
-    if (forced && (!forced.tags || forced.tags.some(t => floorTags.includes(t)))) {
+    // #61: mirror floorWeight's scope gate — validate the forced variant against
+    // its theme-token scope (floors ?? tags), not the KIND-label tags. Otherwise
+    // debug-forcing maronary/istotit/veretar/classic always failed the tags gate
+    // and silently fell through to the weighted roll.
+    const forcedScope = forced ? (forced.floors ?? forced.tags) : undefined;
+    if (forced && forcedScope && forcedScope.some(t => floorTags.includes(t))) {
       activeVariant = buildActiveSamosborVariant(forced);
       lastVariant = activeVariant.def.id;
       return activeVariant;

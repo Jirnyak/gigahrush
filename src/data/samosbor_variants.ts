@@ -71,7 +71,12 @@ export type SamosborModifierId =
 export interface SamosborVariantDef {
   id: SamosborVariantId;
   displayName: string;
+  // #61: either KIND label(s) (classic/maronary/istotit/veretar) or theme tokens
+  // (wet/electric/meat). Variant floor scope = `floors ?? tags` — see floorWeight.
   tags: readonly string[];
+  // #61: explicit theme-token floor scope (ministry|kvartiry|living|maintenance|
+  // hell|void) for variants whose `tags` are KIND labels; optional because
+  // wet/electric/meat legitimately gate on their theme-token `tags` instead.
   floors?: readonly string[];
   weight: number;
   subsystems: readonly SamosborSubsystemId[];
@@ -1088,7 +1093,14 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
 ];
 
 function floorWeight(def: SamosborVariantDef, floorTags: readonly string[]): number {
-  if (!def.tags.some(t => floorTags.includes(t))) return 0;
+  // #61: gate selection by the theme-token scope (def.floors), NOT def.tags. For
+  // classic/maronary/istotit/veretar, tags are self-referential KIND labels
+  // (['classic'] etc.) absent from floorTags, so those 4 gated to 0 on EVERY
+  // floor — maronary/istotit/veretar 100% dead, classic reachable only via the
+  // total=0 fallback. wet/electric/meat omit floors and legitimately use their
+  // theme-token tags as scope, so fall back to tags. Unlocks the multiplier table.
+  const scope = def.floors ?? def.tags;
+  if (!scope.some(t => floorTags.includes(t))) return 0;
   if (floorTags.includes('ministry')) {
     if (def.id === 'electric') return def.weight * 1.8;
     if (def.id === 'istotit' || def.id === 'veretar') return def.weight * 2.2;
