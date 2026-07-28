@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { World } from '../../src/core/world';
-import { summarizeHeatline } from '../../src/systems/heatline';
-import { RoomType } from '../../src/core/types';
-import { addTestRoom } from '../helpers';
+import { summarizeHeatline, tryUseHeatlinePressure } from '../../src/systems/heatline';
+import { Feature, RoomType } from '../../src/core/types';
+import { createWorldEventState } from '../../src/systems/events';
+import { addTestRoom, makeGameState, makeTestPlayer } from '../helpers';
 
 test('heatline: summarizeHeatline', async (t) => {
   await t.test('returns no rooms found message when empty', () => {
@@ -87,5 +88,53 @@ test('heatline: summarizeHeatline', async (t) => {
     const result = summarizeHeatline(world, 2);
     // 1 header + 2 limited rooms
     assert.strictEqual(result.length, 3);
+  });
+});
+
+// The heatline pressure valve is a MAINTENANCE-biome mechanic: its stations are
+// stamped only on maintenance floors, so `tryUseHeatlinePressure` must run its
+// functional switch ON a maintenance floor and stay inert everywhere else. The
+// фаза-3 fix flipped an inverted theme-gate (`includes('maintenance')` had bailed
+// ON its own biome — dead exactly where it lives); this guards that polarity so it
+// cannot silently regress. The assertions are non-vacuous by construction: a valve
+// room with an APPARATUS look-target makes `pressureTargetRoom` resolve, so ON must
+// diverge (handled + a message) from OFF (gate bails: unhandled, no side effect). A
+// fixture that failed to build a valid target would fail the ON case, not pass silently.
+test('heatline: pressure valve honours the maintenance theme-gate', async (t) => {
+  function makeValveWorld(): { world: World; look: { x: number; y: number } } {
+    const world = new World();
+    addTestRoom(world, {
+      id: 0,
+      name: 'Теплотрасса Ноль: вентильный узел',
+      type: RoomType.PRODUCTION,
+      x: 10,
+      y: 10,
+      w: 6,
+      h: 6,
+      zoneId: 0,
+    });
+    const look = { x: 12, y: 12 };
+    world.features[world.idx(look.x, look.y)] = Feature.APPARATUS;
+    return { world, look };
+  }
+
+  await t.test('ON a maintenance floor the valve is live (handled + reacts)', () => {
+    const { world, look } = makeValveWorld();
+    const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState() });
+    const player = makeTestPlayer({ id: 1, x: 12, y: 13, inventory: [] });
+
+    const handled = tryUseHeatlinePressure(world, player, state, look.x, look.y);
+    assert.strictEqual(handled, true);
+    assert.ok(state.msgs.length >= 1, 'a live valve reports back to the player');
+  });
+
+  await t.test('OFF a maintenance floor the valve is inert (gate bails)', () => {
+    const { world, look } = makeValveWorld();
+    const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
+    const player = makeTestPlayer({ id: 1, x: 12, y: 13, inventory: [] });
+
+    const handled = tryUseHeatlinePressure(world, player, state, look.x, look.y);
+    assert.strictEqual(handled, false);
+    assert.strictEqual(state.msgs.length, 0, 'the gate must bail before any pressure logic runs');
   });
 });
