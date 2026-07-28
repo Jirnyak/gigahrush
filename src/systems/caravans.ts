@@ -304,7 +304,12 @@ function templateForLane(laneId: string): SmallCaravanTemplateDef | undefined {
 }
 
 function activeStatus(status: SmallCaravanStatus): boolean {
-  return status === 'waiting' || status === 'moving' || status === 'escorted';
+  // #111: 'escorted' is TERMINAL, not active. escortCaravan already delivers the
+  // cargo synchronously (applyLaneCargo) and bumps lane.runs; if the run stayed
+  // "active" updateSmallCaravans kept advancing its progress to a second
+  // completeSmallCaravanArrival delivery (double cargo + double runs). Marking it
+  // terminal also lets markActiveRunOutcome set expiresAt so the run prunes.
+  return status === 'waiting' || status === 'moving';
 }
 
 function terminalStatus(status: SmallCaravanStatus): boolean {
