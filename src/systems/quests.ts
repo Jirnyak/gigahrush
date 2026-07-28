@@ -1638,9 +1638,13 @@ function generatePlotQuest(
         id, type: sq.type,
         giverId: npc.id, giverName: npc.name ?? '???',
         desc,
-        targetNpcId: target?.id,
+        // Off-floor target ⇒ findByPlotLive returns undefined; fall back to the authored
+        // plot-npc numeric id (mirrors the plot-TALK branch :1497). A plot-package NPC
+        // materializes with entity.id === its plot numeric id (plot_npc_spawn.ts:61), so
+        // checkTalkQuest matchById fires when the player reaches it. Without the fallback
+        // targetNpcId froze undefined → cross-floor TALK side quests were uncompletable.
+        targetNpcId: target?.id ?? targetNpcId,
         targetNpcName: target?.name ?? targetName,
-//         targetNpcId,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
         extraRewards: sq.extraRewards,
         relationDelta: sq.relationDelta, xpReward: sq.xpReward,

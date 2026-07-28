@@ -45,6 +45,10 @@ export interface ContractDef {
   targetMonsterKind?: MonsterKind;
   killNeeded?: number;
   targetNpcId?: number;
+  /** Forward-ref plot-npc string id, resolved to the numeric id at runtime in
+   * contractToQuest. Use for targets registered AFTER contracts.ts import (gen-module
+   * registerSideQuest); the eager getPlotNpcNumericId('…')! froze to undefined (#25). */
+  targetPlotNpcStringId?: string;
   targetNpcName?: string;
   target: ContractTarget;
   rewardItem?: string;
@@ -342,7 +346,7 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.CITIZEN, rank: 1, type: QuestType.TALK,
     desc: 'Родком у двери просит довести группу ОБЖ до спортзала и Вадима Монитора. За карту и воду ведите шагом: потерянный шаг потом ищут всем журналом.',
     target: { z: 2, roomType: RoomType.COMMON, roomDefId: 'Спортзал-убежище ОБЖ', zoneTag: 'obzh_school', hint: 'Жилая зона: спортзал-убежище ОБЖ рядом с кабинетом; Вадим Монитор держит журнал эвакуации.' },
-    targetNpcId: getPlotNpcNumericId('ag16_vadim_monitor')!, targetNpcName: 'Вадим Монитор',
+    targetPlotNpcStringId: 'ag16_vadim_monitor', targetNpcName: 'Вадим Монитор',
     rewardItem: 'child_map', rewardCount: 1, extraRewards: [{ defId: 'water', count: 2 }],
     moneyReward: 80, rewardResourceId: 'documents', rewardScarcityMax: 2.0,
     xpReward: 50, relationDelta: 9, tags: ['expedition', 'floor_living', 'room_common', 'obzh_school', 'escort', 'children', 'shelter'],
@@ -2055,7 +2059,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.CITIZEN, rank: 0, type: QuestType.TALK,
     desc: 'Соседи просят не нести маршрутную квитанцию ни сержанту Баринову, ни Ваньке. Вернуться к Нине и сказать коротко: бумагу не видели.',
     target: { z: 2, roomType: RoomType.LIVING, roomDefId: 'Квартира тихой соседки', zoneTag: 'external_cell', hint: 'Жилая зона: поговорить с Ниной Павловной в ее квартире без общей кухни и лишних свидетелей.' },
-    targetNpcId: getPlotNpcNumericId('ag77_nina_neighbor')!, targetNpcName: 'Нина Павловна',
+    targetPlotNpcStringId: 'ag77_nina_neighbor', targetNpcName: 'Нина Павловна',
     rewardItem: 'bread', rewardCount: 1, extraRewards: [{ defId: 'note', count: 1 }],
     moneyReward: 0, rewardResourceId: 'documents', rewardScarcityMax: 1.4,
     xpReward: 30, relationDelta: 4, tags: ['external_cell', 'chernobog', 'silence', 'concealment', 'citizen', 'social'],
@@ -2109,7 +2113,7 @@ export const CONTRACTS: ContractDef[] = [
     faction: Faction.WILD, rank: 1, type: QuestType.TALK,
     desc: 'Найди Дайвера Кота и договорись о тихом проходе через мокрый обход. Не спрашивай имя, в мешок не смотри, пустым не приходи.',
     target: { z: -14, roomType: RoomType.CORRIDOR, zoneTag: 'water_bridge', hint: 'Коллекторы: сухой мост и водолазные метки. Поговорите с Дайвером Котом, пока обход не стал засадой.' },
-    targetNpcId: getPlotNpcNumericId('diver_kot')!, targetNpcName: 'Дайвер Кот',
+    targetPlotNpcStringId: 'diver_kot', targetNpcName: 'Дайвер Кот',
     rewardItem: 'ammo_harpoon', rewardCount: 3, extraRewards: [{ defId: 'rawmeat', count: 2 }],
     moneyReward: 75, rewardResourceId: 'ammo', rewardScarcityMax: 2.0,
     xpReward: 55, relationDelta: 8, tags: ['wild', 'negotiate', 'passage', 'maintenance', 'water_bridge', 'talk'],
@@ -2163,7 +2167,7 @@ export function contractToQuest(def: ContractDef, questId: number, giver?: { id:
     targetMonsterKind: def.targetMonsterKind,
     killCount: def.type === QuestType.KILL ? 0 : undefined,
     killNeeded: def.killNeeded,
-    targetNpcId: def.targetNpcId,
+    targetNpcId: def.targetNpcId ?? (def.targetPlotNpcStringId ? getPlotNpcNumericId(def.targetPlotNpcStringId) : undefined),
     targetNpcName: def.targetNpcName,
     rewardItem: def.rewardItem,
     rewardCount: def.rewardCount,
