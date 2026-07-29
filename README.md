@@ -6,14 +6,12 @@
 
 [![License](https://img.shields.io/badge/License-True%20People's%20v2.0-red?style=for-the-badge)](LICENSE.md)
 [![Platform](https://img.shields.io/badge/Platform-WebGL%20%2F%20HTML5-orange?style=for-the-badge&logo=html5)](https://gigahrush.github.io)
-[![Language](https://img.shields.io/badge/Made%20with-JavaScript-yellow?style=for-the-badge&logo=javascript)]()
+[![Language](https://img.shields.io/badge/Tech-TypeScript%20%2F%20WebGL-blue?style=for-the-badge&logo=typescript)]()
 [![Open Source](https://img.shields.io/badge/Open%20Source-❤️%20Forever-brightgreen?style=for-the-badge)]()
-[![Stars](https://img.shields.io/github/stars/Jirnyak/gigahrush?style=for-the-badge&color=gold)]()
-[![Forks](https://img.shields.io/github/forks/Jirnyak/gigahrush?style=for-the-badge)]()
 
 > **"No one has the right to take the keys to your own endless hallway. The concrete belongs to everyone."**
 
-[🎮 Play Now](https://gigahrush.github.io) &nbsp;·&nbsp; [📖 Wiki](#) &nbsp;·&nbsp; [🐛 Report Bug](../../issues) &nbsp;·&nbsp; [💬 Discord](#) &nbsp;·&nbsp; [🤝 Contribute](#)
+[🎮 Play Now](https://gigahrush.github.io) &nbsp;·&nbsp; [📖 Wiki](#) &nbsp;·&nbsp; [🐛 Report Bug](../../issues) &nbsp;·&nbsp; [💬 Discord](#)
 
 </div>
 
