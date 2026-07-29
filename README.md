@@ -1,5 +1,8 @@
 <div align="center">
 
+![GIGAHRUSH Banner](https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg)
+
+
 # GIGAH|RUSH — Toroidal 128³ Voxel Samosbor Engine
 
 [![C++](https://img.shields.io/badge/Language-C%2B%2B23-blue?style=for-the-badge&logo=c%2B%2B)][][![OpenGL](https://img.shields.io/badge/Render-OpenGL%204.6-red?style=for-the-badge)]()
