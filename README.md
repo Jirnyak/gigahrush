@@ -13,6 +13,42 @@
 </div>
 
 ---
+---
+
+## 📸 Authentic Repository Media & Screenshots Gallery
+
+<p align="center"><i>Showing 24 verified screenshot(s) and visual assets directly from the repository source tree:</i></p>
+
+<div align="center">
+
+<a href="PRCampaign/habr_alife_demos_identity_2026-06-08.png"><img src="PRCampaign/habr_alife_demos_identity_2026-06-08.png" width="48%" alt="habr alife demos identity 2026 06 08"/></a> &nbsp; <a href="PRCampaign/habr_alife_demos_identity_2026-06-08.svg"><img src="PRCampaign/habr_alife_demos_identity_2026-06-08.svg" width="48%" alt="habr alife demos identity 2026 06 08"/></a>
+<br/>
+<a href="PRCampaign/habr_architecture_layers_world_2026-06-08.png"><img src="PRCampaign/habr_architecture_layers_world_2026-06-08.png" width="48%" alt="habr architecture layers world 2026 06 08"/></a> &nbsp; <a href="PRCampaign/habr_architecture_layers_world_2026-06-08.svg"><img src="PRCampaign/habr_architecture_layers_world_2026-06-08.svg" width="48%" alt="habr architecture layers world 2026 06 08"/></a>
+<br/>
+<a href="PRCampaign/habr_mesh_pass_seeded_radius_2026-06-08.png"><img src="PRCampaign/habr_mesh_pass_seeded_radius_2026-06-08.png" width="48%" alt="habr mesh pass seeded radius 2026 06 08"/></a> &nbsp; <a href="PRCampaign/habr_mesh_pass_seeded_radius_2026-06-08.svg"><img src="PRCampaign/habr_mesh_pass_seeded_radius_2026-06-08.svg" width="48%" alt="habr mesh pass seeded radius 2026 06 08"/></a>
+<br/>
+<a href="PRCampaign/habr_raycaster_dda_split_2026-06-08.png"><img src="PRCampaign/habr_raycaster_dda_split_2026-06-08.png" width="48%" alt="habr raycaster dda split 2026 06 08"/></a> &nbsp; <a href="PRCampaign/habr_raycaster_dda_split_2026-06-08.svg"><img src="PRCampaign/habr_raycaster_dda_split_2026-06-08.svg" width="48%" alt="habr raycaster dda split 2026 06 08"/></a>
+<br/>
+<a href="PRCampaign/habr_samosbor_before_after_2026-06-08.png"><img src="PRCampaign/habr_samosbor_before_after_2026-06-08.png" width="48%" alt="habr samosbor before after 2026 06 08"/></a> &nbsp; <a href="PRCampaign/habr_samosbor_before_after_2026-06-08.svg"><img src="PRCampaign/habr_samosbor_before_after_2026-06-08.svg" width="48%" alt="habr samosbor before after 2026 06 08"/></a>
+<br/>
+<a href="PRCampaign/habr_world_cell_layers_map_2026-06-08.png"><img src="PRCampaign/habr_world_cell_layers_map_2026-06-08.png" width="48%" alt="habr world cell layers map 2026 06 08"/></a> &nbsp; <a href="PRCampaign/habr_world_cell_layers_map_2026-06-08.svg"><img src="PRCampaign/habr_world_cell_layers_map_2026-06-08.svg" width="48%" alt="habr world cell layers map 2026 06 08"/></a>
+<br/>
+<a href="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/live_02_living_full_map.png"><img src="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/live_02_living_full_map.png" width="48%" alt="live 02 living full map"/></a> &nbsp; <a href="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/live_03_inventory_prep.png"><img src="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/live_03_inventory_prep.png" width="48%" alt="live 03 inventory prep"/></a>
+<br/>
+<a href="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/live_07_maintenance_monster_pack.png"><img src="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/live_07_maintenance_monster_pack.png" width="48%" alt="live 07 maintenance monster pack"/></a> &nbsp; <a href="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/test_pointer_click_preview.png"><img src="PRCampaign/roadmap_2026-06-02/live_screenshots_2026-06-02/test_pointer_click_preview.png" width="48%" alt="test pointer click preview"/></a>
+<br/>
+<a href="arts/69worker_f_1.png"><img src="arts/69worker_f_1.png" width="48%" alt="69worker f 1"/></a> &nbsp; <a href="arts/69worker_f_2.png"><img src="arts/69worker_f_2.png" width="48%" alt="69worker f 2"/></a>
+<br/>
+<a href="arts/69worker_f_3.png"><img src="arts/69worker_f_3.png" width="48%" alt="69worker f 3"/></a> &nbsp; <a href="arts/69worker_f_4.png"><img src="arts/69worker_f_4.png" width="48%" alt="69worker f 4"/></a>
+<br/>
+<a href="arts/69worker_m_1.png"><img src="arts/69worker_m_1.png" width="48%" alt="69worker m 1"/></a> &nbsp; <a href="arts/bandit_f_1.png"><img src="arts/bandit_f_1.png" width="48%" alt="bandit f 1"/></a>
+<br/>
+<a href="arts/bandit_m_1.png"><img src="arts/bandit_m_1.png" width="48%" alt="bandit m 1"/></a> &nbsp; <a href="arts/bandit_m_2.png"><img src="arts/bandit_m_2.png" width="48%" alt="bandit m 2"/></a>
+<br/>
+
+</div>
+
+------
 
 ## 📖 Executive Architectural Overview
 
