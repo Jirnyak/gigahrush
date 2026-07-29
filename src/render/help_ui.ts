@@ -187,7 +187,7 @@ export function drawHelpMenu(
   }
 
   ctx.font = `${6.5 * s}px monospace`;
-  ctx.fillStyle = '#567';
+  ctx.fillStyle = '#7a93a0';
   const footer = `${controlHint('help')} закрыть HELP  |  ${menuCloseHint()} назад  |  ${controlHint('controlsMenu')} все бинды`;
   ctx.fillText(fitTextStable(ctx, footer, panelW - pad * 2), panelX + pad, panelY + panelH - pad);
   ctx.restore();

@@ -3,7 +3,7 @@
 import { ItemType, type ItemDef } from '../core/types';
 import { ITEMS, ITEM_TAGS } from '../data/items';
 import { S, rgba, noise, clamp, CLEAR } from './pixutil';
-import { fitText } from './ui_text';
+import { fitTextStable } from './ui_text';
 
 export type ItemSpriteData = Uint32Array;
 
@@ -15544,10 +15544,11 @@ export function drawItemGridIcon(
   ctx.beginPath();
   ctx.rect(x + 2 * sx, y + 2 * sy, Math.max(1, cellSize - 6 * sx), Math.max(1, cellSize - 7 * sy));
   ctx.clip();
-  ctx.font = `${4.8 * sy}px monospace`;
+  ctx.font = `${5.8 * sy}px monospace`;
   ctx.textAlign = 'center';
-  ctx.fillStyle = selected ? '#0fa' : '#b8c8c8';
-  ctx.fillText(fitText(ctx, name, cellSize - 6 * sx), x + cellSize / 2 - sx, nameY);
+  ctx.fillStyle = selected ? '#0fa' : '#d6e2e2';
+  // Static, readable label (no snake-scroll animation); ellipsis when clipped.
+  ctx.fillText(fitTextStable(ctx, name, cellSize - 6 * sx, 'ellipsis'), x + cellSize / 2 - sx, nameY);
   ctx.restore();
 
   drawItemIcon(ctx, defId, iconX, canvasTop, iconSize, iconSize, alpha);

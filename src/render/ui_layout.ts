@@ -298,7 +298,7 @@ export function fullscreenInventoryLayout(canvasW: number, canvasH: number, sx: 
   const fitW = canvasW / (8 + GRID_CELL_UNITS * GRID_COLS + 132);
   const fitH = canvasH / (14 + GRID_CELL_UNITS * GRID_ROWS + 8);
   const scale = Math.max(0.72, Math.min(4.2, base, fitW, fitH));
-  const textScale = scale <= 1.2 ? scale : Math.max(1.05, scale * 0.72);
+  const textScale = scale <= 1.2 ? scale : Math.max(1.2, scale * 0.9);
   const cell = GRID_CELL_UNITS * scale;
   const gridX = 8 * scale;
   const gridY = 14 * scale;

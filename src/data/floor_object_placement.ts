@@ -70,6 +70,11 @@ export interface FloorObjectPlacementProfile {
   id: string;
   tags: readonly string[];
   density?: FloorObjectPlacementDensity;
+  // Explicit decorative-column cap. Overrides the density-derived default when set
+  // (0 disables columns entirely — density cannot express zero because addDensity
+  // collapses a 0 sum back to undefined → the room-count default). Use for outdoor/
+  // street floors where interior support columns look wrong.
+  columnCap?: number;
   roomTextureRules?: readonly RoomTextureRule[];
   wallDecorRules?: readonly WallDecorPlacementRule[];
   featureRules?: readonly FeaturePlacementRule[];
@@ -329,6 +334,10 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
 };
 
 const DESIGN_OBJECT_PROFILE_OVERRIDES: Partial<Record<string, Partial<FloorObjectPlacementProfile>>> = {
+  // Outdoor avenue/crossroads: suppress interior support columns. With the tall
+  // open-road ceiling they scale skyward and read as stray pillars in the street.
+  // Wall/ceiling decor still applies via the base theme layer.
+  manhattan_crossroads: { columnCap: 0 },
   bolnichny_korpus: {
     tags: ['design_floor', 'medical'],
     density: { features: 12, wallDecor: 8, screens: 4, maxPerRoom: 2 },
@@ -681,6 +690,7 @@ function addDensity(
 function profileLayerHasContent(layer: Partial<FloorObjectPlacementProfile> | undefined): layer is Partial<FloorObjectPlacementProfile> {
   return !!layer && (
     !!layer.density ||
+    layer.columnCap !== undefined ||
     !!layer.roomTextureRules?.length ||
     !!layer.wallDecorRules?.length ||
     !!layer.featureRules?.length ||
@@ -698,6 +708,7 @@ function composeProfile(
   const activeLayers = layers.filter(profileLayerHasContent);
   if (!craftStations && activeLayers.length === 0) return undefined;
   let density: FloorObjectPlacementDensity | undefined;
+  let columnCap: number | undefined;
   const profileTags: string[] = [...tags];
   const roomTextureRules: RoomTextureRule[] = [];
   const wallDecorRules: WallDecorPlacementRule[] = [];
@@ -708,6 +719,7 @@ function composeProfile(
   for (const layer of activeLayers) {
     profileTags.push(...(layer.tags ?? []));
     density = addDensity(density, layer.density);
+    if (layer.columnCap !== undefined) columnCap = layer.columnCap;
     roomTextureRules.push(...(layer.roomTextureRules ?? []));
     wallDecorRules.push(...(layer.wallDecorRules ?? []));
     featureRules.push(...(layer.featureRules ?? []));
@@ -719,6 +731,7 @@ function composeProfile(
     id,
     tags: uniqueStrings(profileTags),
     density,
+    columnCap,
     roomTextureRules: roomTextureRules.length > 0 ? roomTextureRules : undefined,
     wallDecorRules: wallDecorRules.length > 0 ? wallDecorRules : undefined,
     featureRules: featureRules.length > 0 ? featureRules : undefined,

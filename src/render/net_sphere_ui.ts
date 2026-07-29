@@ -1,5 +1,5 @@
 import { type NetSphereSnapshot } from '../systems/net_sphere';
-import { controlHint } from '../systems/controls';
+import { controlHint, menuCloseHint } from '../systems/controls';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise } from './hud_fx';
 import { fitText, wrapTextLines } from './ui_text';
 
@@ -133,8 +133,8 @@ export function drawNetSphereMenu(
     }
   }
 
-  ctx.fillStyle = '#607080';
-  ctx.fillText(fitText(ctx, '/help все команды', leftW), leftX, commandY);
+  ctx.fillStyle = '#7a93a0';
+  ctx.fillText(fitText(ctx, `/help команды  |  ${menuCloseHint()} закрыть`, leftW), leftX, commandY);
   ctx.restore();
 
   ctx.strokeStyle = 'rgba(92,246,255,0.34)';

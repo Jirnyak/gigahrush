@@ -8,7 +8,7 @@
 
 ## Слой данных
 
-Базовая единица - `ItemDef` в `src/data/items.ts`: `id`, русское `name`, `ItemType`, `desc`, `spawnRooms`, `spawnW`, `value`, опциональные `tags`, `stack`, `durability` и `use`. Сейчас registry содержит 434 item id.
+Базовая единица - `ItemDef` в `src/data/items.ts`: `id`, русское `name`, `ItemType`, `desc`, `spawnRooms`, `spawnW`, `value`, опциональные `tags`, `stack`, `durability` и `use`. Сейчас registry содержит 446 item id.
 
 `ItemType` намеренно грубый: `FOOD`, `DRINK`, `MEDICINE`, `WEAPON`, `TOOL`, `KEY`, `NOTE`, `MISC`, `AMMO`. Новые подтипы обычно выражаются tags, use-handler, weapon stats, resource mapping или production recipe. Новый enum нужен только если существующие каналы не могут выразить поведение без частных костылей.
 
@@ -49,7 +49,7 @@ World item drops подбираются через тот же inventory transfe
 
 ## Оружие
 
-Физическое оружие живет в `src/data/weapons.ts`, ПСИ-сгустки - в `src/data/psi.ts`, объединенный read-only registry экспортируется из `src/data/catalog.ts` как `WEAPON_STATS`. Сейчас есть 70 физических weapon stat entries и 18 PSI entries.
+Физическое оружие живет в `src/data/weapons.ts`, ПСИ-сгустки - в `src/data/psi.ts`, объединенный read-only registry экспортируется из `src/data/catalog.ts` как `WEAPON_STATS`. Сейчас есть 71 физических weapon stat entries и 18 PSI entries.
 
 Каждое `ItemType.WEAPON` должно иметь executable stats или быть явно небоевым предметом другого типа. Физические stats задают damage, range, speed, durability, ranged/ammo, projectile speed, pellets/spread, projectile type, AoE, beam flags и sound id. Role tiers дают HUD/readability язык: emergency melee, industrial tool, reach, heavy, control, sidearm, rifle, corridor shotgun, ammo burn, grenade, rare energy, fuel clear, PSI.
 

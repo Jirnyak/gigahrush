@@ -294,9 +294,10 @@ Available API:
 - `seedGlobalRng(seed)` — re-seed the global state (used at run start and floor transitions).
 - `seededRandom(seed)` / `SeedRng` / `xorshift32(seed)` — local deterministic sequences for procedural content that must be reproducible from a seed.
 - `pickFrom(arr)`, `shuffleWith(arr, rand)`, `irandFrom(rand, lo, hi)` — convenience wrappers.
+- `mathRng()` / `mathIrand(a, b)` — **sanctioned `Math.random()` wrappers, cosmetic-only.** Permitted **exclusively** for non-deterministic visual (damage flash, blood, particles), audio/music, and non-simulation UI rolls — cases where randomness can never desync gameplay, AI, saves, or deterministic tests. **Forbidden** in geometry, generation, AI, loot, spawns, and any save- or test-affecting logic; use `rng()` / `seededRandom` there. This is the FX/UI carve-out — note the `rng()` bullet above says "FX, and UI rolls" for the deterministic path, but purely-cosmetic FX/UI may instead use `mathRng`.
 - `_overrideRng(fn)` / `_restoreRng()` — **test-only** hooks for mocking. Never use in production code.
 
-The only permitted exception to the `Math.random()` ban: cryptographic or network-identity values where determinism would be a security/collision risk (e.g., session tokens, online peer IDs in `online_client.ts` / `net_sphere.ts`). Such cases must be explicitly commented with the reason.
+The only permitted exception for **raw** `Math.random()` (i.e. bypassing even the `mathRng` wrapper): cryptographic or network-identity values where determinism would be a security/collision risk (e.g., session tokens, online peer IDs in `online_client.ts` / `net_sphere.ts`). Such cases must be explicitly commented with the reason.
 
 In tests, do not mock `Math.random`. Use `_overrideRng(() => value)` / `_restoreRng()` or `seedGlobalRng(seed)`.
 

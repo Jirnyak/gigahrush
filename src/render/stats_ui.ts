@@ -13,7 +13,7 @@ import {
 } from '../systems/rpg';
 import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
-import { fitText as fitStatText, formatUiNumber, wrapTextLines } from './ui_text';
+import { fitTextStable as fitStatText, formatUiNumber, wrapTextLines } from './ui_text';
 import { drawInventoryFinanceBlock, readFinanceSnapshot } from './economy_ui';
 import { fullscreenInventoryLayout } from './ui_layout';
 import { drawItemGridIcon } from './item_sprites';
@@ -41,11 +41,11 @@ export function drawInventory(
   drawNeuroPanel(ctx, 0, 0, cw, ch, time, 80);
 
   // Title + money + close hint
-  drawGlitchText(ctx, 'ИНВЕНТАРЬ', 8 * sx, 9 * ts, time, 800, '#6cf', 7.2 * ts);
+  drawGlitchText(ctx, 'ИНВЕНТАРЬ', 8 * sx, 9 * ts, time, 800, '#6f96a4', 7.2 * ts);
   ctx.font = `${7.2 * ts}px monospace`;
   const finance = readFinanceSnapshot(player, state);
   const mj = textJitter(time, 801);
-  ctx.fillStyle = `rgba(238,238,68,${flicker(time, 802)})`;
+  ctx.fillStyle = `rgba(194,162,76,${flicker(time, 802)})`;
   const titleMoney = finance.hasBanking
     ? `₽${Math.round(finance.cash)} сч ${Math.round(finance.accountRubles)}`
     : `₽${Math.round(finance.cash)}`;
@@ -69,17 +69,19 @@ export function drawInventory(
       const cy = gridY + row * cellSz;
       const selected = idx === state.invSel;
 
-      ctx.fillStyle = selected ? 'rgba(0,60,50,0.6)' : 'rgba(5,15,20,0.8)';
+      ctx.fillStyle = selected ? 'rgba(14,54,48,0.65)' : 'rgba(10,20,26,0.72)';
       ctx.fillRect(cx, cy, cellSz - 2, cellSz - 2);
-      ctx.strokeStyle = selected ? 'rgba(0,255,200,0.6)' : 'rgba(0,100,80,0.25)';
+      ctx.strokeStyle = selected ? 'rgba(74,150,130,0.8)' : 'rgba(52,96,86,0.4)';
+      ctx.lineWidth = selected ? 1.5 : 1;
       ctx.strokeRect(cx, cy, cellSz - 2, cellSz - 2);
+      ctx.lineWidth = 1;
 
       if (idx < inv.length) {
         const item = inv[idx];
         const def = ITEMS[item.defId];
         drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.86);
         if (item.count > 1) {
-          ctx.fillStyle = '#6a8';
+          ctx.fillStyle = '#6f8a72';
           ctx.font = `${5 * sy}px monospace`;
           ctx.textAlign = 'center';
           ctx.fillText(`×${item.count}`, cx + cellSz / 2, cy + cellSz - 5 * sy);
@@ -91,10 +93,10 @@ export function drawInventory(
 
   const damageTypeLabel = (dt: DamageType | undefined) => {
     switch (dt) {
-      case DamageType.FIRE: return { text: '🔴 огонь', color: '#f64' };
-      case DamageType.ENERGY: return { text: '🔵 энерго', color: '#4cf' };
-      case DamageType.PSI: return { text: '🟣 пси', color: '#c6f' };
-      case DamageType.BUCKSHOT: return { text: '🟡 дробь', color: '#ec4' };
+      case DamageType.FIRE: return { text: '🔴 огонь', color: '#b35a3f' };
+      case DamageType.ENERGY: return { text: '🔵 энерго', color: '#4d8fa0' };
+      case DamageType.PSI: return { text: '🟣 пси', color: '#9a6a9c' };
+      case DamageType.BUCKSHOT: return { text: '🟡 дробь', color: '#c2a24c' };
       case DamageType.KINETIC:
       default: return { text: '⚫ кинетика', color: '#aaa' };
     }
@@ -132,7 +134,7 @@ export function drawInventory(
       }
 
       if (def.resistances) {
-        ctx.fillStyle = '#8cf';
+        ctx.fillStyle = '#7996a4';
         ctx.fillText('Сопротивления:', details.x, infoY);
         infoY += 5.8 * ts;
         for (const [dtStr, val] of Object.entries(def.resistances)) {
@@ -146,12 +148,12 @@ export function drawInventory(
         }
       }
 
-      ctx.fillStyle = '#da4';
+      ctx.fillStyle = '#ab8339';
       ctx.font = `${5.1 * ts}px monospace`;
       ctx.fillText(fitStatText(ctx, `Цена: ${def.value ?? 0}₽`, details.w), details.x, infoY + 1.4 * ts);
 
       if (def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL || def.resistances) {
-        ctx.fillStyle = '#6a6';
+        ctx.fillStyle = '#5f8a5f';
         ctx.fillText(fitStatText(ctx, `${controlHint('gameMenu')} использовать`, layout.use.w), layout.use.x, layout.use.y + 7.4 * ts);
       }
       ctx.fillStyle = '#a86';
@@ -170,7 +172,7 @@ export function drawInventory(
   const contentBottom = Math.min(ch - 6 * ts, layout.grid.y + layout.grid.h - 2 * ts);
 
   // Name + Level + Attributes on same row
-  ctx.fillStyle = '#ee4';
+  ctx.fillStyle = '#c2a24c';
   ctx.font = `${6.4 * ts}px monospace`;
   const nameStr = player.name ?? 'Вы';
   const titleLine = player.rpg ? `${nameStr}  Ур.${player.rpg.level}` : nameStr;
@@ -183,14 +185,14 @@ export function drawInventory(
     const apLabel = rpg.attrPoints > 0 ? `  +${rpg.attrPoints}` : '';
     const attrLine = `${controlHint('attrStr')}СИЛ:${rpg.str}  ${controlHint('attrAgi')}ЛОВ:${rpg.agi}  ${controlHint('attrInt')}ИНТ:${rpg.int}${apLabel}`;
     ctx.font = `${5.3 * ts}px monospace`;
-    ctx.fillStyle = '#e84';
+    ctx.fillStyle = '#b3703f';
     ctx.fillText(fitStatText(ctx, attrLine, barW), stX, stY);
     stY += 7.2 * ts;
   }
 
   // Attribute points (always visible)
   if (player.rpg) {
-    ctx.fillStyle = player.rpg.attrPoints > 0 ? '#ee4' : '#888';
+    ctx.fillStyle = player.rpg.attrPoints > 0 ? '#c2a24c' : '#888';
     ctx.font = `${5.1 * ts}px monospace`;
     ctx.fillText(`Очков характеристик: ${player.rpg.attrPoints}`, stX, stY);
     stY += 6.4 * ts;
@@ -209,8 +211,8 @@ export function drawInventory(
       barW,
       ts,
       capped ? 1 : player.rpg.xp / xpNeeded,
-      '#af4',
-      '#8a8',
+      '#6e9268',
+      '#6e8a72',
     );
   }
 
@@ -223,7 +225,7 @@ export function drawInventory(
     barW,
     ts,
     (player.hp ?? 0) / (player.maxHp ?? 100),
-    '#e44',
+    '#a2483e',
     '#aaa',
   );
 
@@ -237,18 +239,18 @@ export function drawInventory(
       barW,
       ts,
       player.rpg.maxPsi > 0 ? player.rpg.psi / player.rpg.maxPsi : 0,
-      '#a4f',
-      '#a4f',
+      '#8a6a9c',
+      '#8a6a9c',
     );
   }
 
   // Needs
   if (player.needs) {
     const needs: [string, number, string][] = [
-      ['Еда', player.needs.food, '#8a4'],
-      ['Вода', player.needs.water, '#48c'],
-      ['Сон', player.needs.sleep, '#a8f'],
-      ['Туалет', Math.max(0, 100 - player.needs.pee), '#da4'],
+      ['Еда', player.needs.food, '#7e914e'],
+      ['Вода', player.needs.water, '#4d7f96'],
+      ['Сон', player.needs.sleep, '#6c76a4'],
+      ['Туалет', Math.max(0, 100 - player.needs.pee), '#ab8339'],
     ];
     for (const [label, val, color] of needs) {
       stY = drawCompactMeter(ctx, `${label}: ${Math.round(val)}`, stX, stY, barW, ts, val / 100, color, '#aaa');
@@ -341,7 +343,7 @@ function drawInventoryEquipmentBlock(
   maxBottom = Number.POSITIVE_INFINITY,
 ): number {
   if (y + 8.2 * sy > maxBottom) return y;
-  drawGlitchText(ctx, 'ЭКИПИРОВКА', x, y, time, 840, '#6cf', 5.8 * sy);
+  drawGlitchText(ctx, 'ЭКИПИРОВКА', x, y, time, 840, '#6f96a4', 5.8 * sy);
   let cy = y + 8.2 * sy;
   ctx.font = `${4.7 * sy}px monospace`;
   const lineH = 6.2 * sy;
@@ -384,17 +386,17 @@ function drawRpgEffectBlock(
   const suffix = (delta: string) => delta ? ` (${delta})` : '';
   const lines: [string, string][] = [
     [
-      '#e84',
+      '#b3703f',
       `СИЛ HP ${current.maxHp}${suffix(strNext ? statDelta(current, strNext, 'maxHp') : '')}  ` +
       `ближ ${signedPct(current.meleeDamageMult)}  тяж ${reducedPct(current.heavyWeaponSpeedMult)}`,
     ],
     [
-      '#4e8',
+      '#56926a',
       `ЛОВ ход ${signedPct(current.moveSpeedMult)}  темп ${reducedPct(current.attackCooldownMult)}  ` +
       `разброс ${reducedPct(current.rangedSpreadMult)}${suffix(agiNext ? statDelta(current, agiNext, 'attackCooldownMult') : '')}`,
     ],
     [
-      '#68f',
+      '#6480a6',
       `ИНТ ПСИ ${current.maxPsi}${suffix(intNext ? statDelta(current, intNext, 'maxPsi') : '')}  ` +
       `длит +${Math.round(current.psiDurationBonusSec)}с  цена ${reducedPct(current.psiCostMult)}  ` +
       `контр ${signedPct(current.contractRewardMult)}  док ${signedPct(current.documentRewardMult)}`,

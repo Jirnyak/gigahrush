@@ -54,7 +54,7 @@ export function drawControlsMenu(
   const titleJ = textJitter(time, 1141);
   drawGlitchText(ctx, isButtons ? 'КНОПКИ' : 'ГОРЯЧИЕ КЛАВИШИ', 12 * sx + titleJ.dx, 12 * sy + titleJ.dy, time, 1142, '#6cf', 11 * sy);
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillStyle = '#577';
+  ctx.fillStyle = '#7a93a0';
   ctx.fillText(
     fitText(ctx, isButtons
       ? `${menuCloseHint()} закрыть`
@@ -70,7 +70,7 @@ export function drawControlsMenu(
   const labelW = Math.max(40 * sx, w - x * 2 - groupW - keyW - 12 * sx);
 
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillStyle = '#345';
+  ctx.fillStyle = '#5a7080';
   ctx.fillText('РАЗДЕЛ', x + 14 * sx, top - 7 * sy);
   ctx.fillText('ДЕЙСТВИЕ', x + groupW + 18 * sx, top - 7 * sy);
   ctx.fillText(isButtons ? 'КНОПКА' : 'КЛАВИШИ / ЗНАЧЕНИЕ', x + groupW + labelW + 20 * sx, top - 7 * sy);
@@ -133,7 +133,7 @@ export function drawControlsMenu(
     ctx.fillRect(barX, thumbY, 3 * sx, thumbH);
   }
 
-  ctx.fillStyle = capture ? '#fd6' : '#456';
+  ctx.fillStyle = capture ? '#fd6' : '#6a828e';
   ctx.font = `${7 * sy}px monospace`;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(

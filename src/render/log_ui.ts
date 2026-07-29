@@ -38,7 +38,7 @@ export function drawLogMenu(
 
   const log = state.msgLog;
   if (log.length === 0) {
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = '#8a9';
     ctx.font = `${8 * sy}px monospace`;
     ctx.fillText('Пусто.', 12 * sx, 34 * sy);
     return;
@@ -86,7 +86,7 @@ export function drawLogMenu(
     const y = topY + row * lineH;
 
     if (vl.stamp) {
-      ctx.fillStyle = '#666';
+      ctx.fillStyle = '#7c8a93';
       ctx.fillText(vl.stamp, 12 * sx, y);
     }
     ctx.fillStyle = vl.color;
@@ -110,7 +110,7 @@ export function drawLogMenu(
   }
 
   // Bottom hint
-  ctx.fillStyle = '#555';
+  ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(
     fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${log.length} зап.  |  ${menuCloseHint()} закрыть`, w - 24 * sx),

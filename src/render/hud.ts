@@ -92,9 +92,8 @@ import { autoPickupEnabled, cameraPlaneLen, hudMotionMode, screenInterferenceMod
 import { titleLanguageDef } from '../data/languages';
 import { getLocalizationLanguage } from '../systems/localization';
 
-const BAR_W = 50, BAR_H = 4;
-const VITAL_LABEL_FONT = 6;
-const VITAL_PERCENT_FONT = 5.2;
+const VITAL_LABEL_FONT = 7;
+const VITAL_PERCENT_FONT = 6.6;
 const NEEDS_PANEL_H = 20;
 const COMBAT_TARGET_SCAN_CAP = 160;
 const COMBAT_TARGET_QUERY_CAP = COMBAT_TARGET_SCAN_CAP * 2;
@@ -1076,25 +1075,49 @@ function drawPointerLockPrompt(
   time: number,
 ): void {
   const lang = titleLanguageDef(getLocalizationLanguage());
-  const panelW = Math.min(w - 18 * sx, 226 * sx);
-  const panelH = 48 * sy;
+  // Wide enough that the full onboarding sentences wrap instead of clipping mid-word.
+  const panelW = Math.min(w - 18 * sx, 268 * sx);
+  const textMaxW = panelW - 16 * sx;
   const x = (w - panelW) * 0.5;
-  const y = h * 0.5 - 54 * sy;
+  // Measure/wrap each block at its own font before sizing the panel.
+  ctx.font = `${8 * sy}px monospace`;
+  const titleLines = wrapHudText(ctx, lang.pointerLockPrompt, textMaxW, 2);
+  ctx.font = `${7 * sy}px monospace`;
+  const ctrlLines = [
+    ...wrapHudText(ctx, lang.pointerLockControls1(controlHint('gameMenu')), textMaxW, 2),
+    ...wrapHudText(ctx, lang.pointerLockControls2(menuCloseHint(), controlHint('interact')), textMaxW, 3),
+  ];
+  const topPad = 5 * sy;
+  const titleLineH = 10 * sy;
+  const ctrlLineH = 8.5 * sy;
+  const gap = 3 * sy;
+  const botPad = 5 * sy;
+  const panelH = topPad + titleLines.length * titleLineH + gap + ctrlLines.length * ctrlLineH + botPad;
+  const y = h * 0.5 - 6 * sy - panelH;
   ctx.save();
   drawNeuroPanel(ctx, x, y, panelW, panelH, time, 1501);
-  ctx.strokeStyle = 'rgba(100,220,255,0.58)';
+  ctx.strokeStyle = 'rgba(96,150,170,0.5)';
   ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
   ctx.textAlign = 'center';
-  ctx.shadowColor = '#6cf';
-  ctx.shadowBlur = 7;
+  ctx.textBaseline = 'top';
+  let ty = y + topPad;
+  ctx.shadowColor = '#3a6a7a';
+  ctx.shadowBlur = 4;
   ctx.font = `${8 * sy}px monospace`;
-  ctx.fillStyle = '#9df';
-  ctx.fillText(fitHudText(ctx, lang.pointerLockPrompt, panelW - 14 * sx), w * 0.5, y + 6 * sy);
+  ctx.fillStyle = '#8ba8b8';
+  for (const line of titleLines) {
+    ctx.fillText(line, w * 0.5, ty);
+    ty += titleLineH;
+  }
   ctx.shadowBlur = 0;
+  ty += gap;
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillStyle = '#9ab';
-  ctx.fillText(fitHudText(ctx, lang.pointerLockControls1(controlHint('gameMenu')), panelW - 14 * sx), w * 0.5, y + 20 * sy);
-  ctx.fillText(fitHudText(ctx, lang.pointerLockControls2(menuCloseHint(), controlHint('interact')), panelW - 14 * sx), w * 0.5, y + 32 * sy);
+  for (const line of ctrlLines) {
+    ctx.fillText(line, w * 0.5, ty);
+    ty += ctrlLineH;
+  }
+  ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -1112,10 +1135,10 @@ function drawCombatWeaponPanel(
   const panelH = 25 * s;
   const panelX = bottomSlot.x + bottomSlot.w - panelW - 4 * s;
   const panelY = bottomSlot.y - panelH - 3 * s;
-  const statusColor = weapon.cannotFireReason ? '#f84' : weapon.lowResource ? '#fc4' : weapon.cooldown > 0.05 ? '#8cf' : '#9d9';
+  const statusColor = weapon.cannotFireReason ? '#b3663f' : weapon.lowResource ? '#c2a24c' : weapon.cooldown > 0.05 ? '#7996a4' : '#7f9a7f';
   drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, 190);
   if (weapon.cannotFireReason || weapon.lowResource) {
-    ctx.strokeStyle = weapon.cannotFireReason ? 'rgba(255,80,50,0.75)' : 'rgba(255,210,80,0.55)';
+    ctx.strokeStyle = weapon.cannotFireReason ? 'rgba(176,72,60,0.7)' : 'rgba(176,150,72,0.5)';
     ctx.lineWidth = 1;
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
   }
@@ -1127,14 +1150,14 @@ function drawCombatWeaponPanel(
   ctx.fillText(fitHudText(ctx, lines.title, panelW - 9 * s), panelX + 4.5 * s, panelY + 2 * s);
 
   ctx.font = `${5.2 * s}px monospace`;
-  ctx.fillStyle = '#8cf';
+  ctx.fillStyle = '#7996a4';
   ctx.fillText(fitHudText(ctx, lines.fact, panelW - 9 * s), panelX + 4.5 * s, panelY + 9.5 * s);
 
   ctx.font = `${6.4 * s}px monospace`;
   ctx.fillStyle = statusColor;
   ctx.fillText(fitHudText(ctx, lines.state, 42 * s), panelX + 4.5 * s, panelY + 16 * s);
   ctx.textAlign = 'right';
-  ctx.fillStyle = weapon.cannotFireReason ? '#f84' : weapon.lowResource ? '#fc4' : '#d7ffd7';
+  ctx.fillStyle = weapon.cannotFireReason ? '#b3663f' : weapon.lowResource ? '#c2a24c' : '#bcd6bc';
   ctx.fillText(fitHudText(ctx, lines.resource, panelW - 51 * s), panelX + panelW - 4.5 * s, panelY + 16 * s);
   ctx.textAlign = 'left';
 
@@ -1147,26 +1170,26 @@ function combatTargetPalette(attitude: CombatTargetAttitude): { bg: string; stro
     case 'hostile':
       return {
         bg: 'rgba(28,4,5,0.78)',
-        stroke: 'rgba(255,70,58,0.9)',
-        text: '#ff9a8f',
-        bar: '#ff543f',
-        glow: '#f44',
+        stroke: 'rgba(180,72,62,0.85)',
+        text: '#d89a90',
+        bar: '#a2483e',
+        glow: '#a2483e',
       };
     case 'friendly':
       return {
         bg: 'rgba(4,24,14,0.76)',
-        stroke: 'rgba(70,255,145,0.82)',
-        text: '#a9ffc7',
-        bar: '#58f092',
-        glow: '#4f8',
+        stroke: 'rgba(86,146,106,0.8)',
+        text: '#a9d8bc',
+        bar: '#5a9a78',
+        glow: '#4f9682',
       };
     default:
       return {
         bg: 'rgba(30,22,4,0.76)',
-        stroke: 'rgba(255,205,64,0.84)',
-        text: '#ffe084',
-        bar: '#f4c542',
-        glow: '#fc4',
+        stroke: 'rgba(176,140,64,0.82)',
+        text: '#d8c084',
+        bar: '#c2a24c',
+        glow: '#c2a24c',
       };
   }
 }
@@ -1199,8 +1222,8 @@ function drawCombatSightFeedback(
     let textW = tw - 10 * s;
     if (hasQuestMarker) {
       const questColor = target.questMarkerTone === 'procedural'
-        ? { bg: 'rgba(3,34,58,0.95)', stroke: '#80d8ff', shadow: '#22aaff', text: '#80d8ff' }
-        : { bg: 'rgba(94,58,0,0.95)', stroke: '#fff15a', shadow: '#ffb000', text: '#ffe84a' };
+        ? { bg: 'rgba(3,34,58,0.95)', stroke: '#7fa8c4', shadow: '#3a7aa0', text: '#7fa8c4' }
+        : { bg: 'rgba(94,58,0,0.95)', stroke: '#d8c25a', shadow: '#b3823a', text: '#d8c85a' };
       const markX = tx + 5 * s;
       const markY = ty + 2 * s;
       const markW = 9 * s;
@@ -1210,10 +1233,14 @@ function drawCombatSightFeedback(
       ctx.strokeStyle = questColor.stroke;
       ctx.strokeRect(markX + 0.5, markY + 0.5, markW - 1, markH - 1);
       ctx.shadowColor = questColor.shadow;
-      ctx.shadowBlur = 8;
-      ctx.font = `bold ${10 * s}px monospace`;
+      ctx.shadowBlur = 4;
+      ctx.font = `bold ${9 * s}px monospace`;
       ctx.fillStyle = questColor.text;
-      ctx.fillText('!', markX + 2.2 * s, ty + 0.5 * s);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('!', markX + markW / 2, markY + markH / 2 + 0.5 * s);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
       ctx.shadowBlur = 0;
       ctx.font = `${6.5 * s}px monospace`;
       ctx.fillStyle = palette.text;
@@ -1221,14 +1248,14 @@ function drawCombatSightFeedback(
       textW = tw - 23 * s;
     }
     ctx.shadowColor = palette.glow;
-    ctx.shadowBlur = 5;
+    ctx.shadowBlur = 3;
     ctx.fillText(fitHudText(ctx, label, textW, target.isOnlinePeer ? { skipTranslate: true } : undefined), textX, ty + 3 * s);
     ctx.shadowBlur = 0;
     const hpTrackW = tw - 10 * s;
     const hpW = hpTrackW * Math.max(0, Math.min(1, target.hpPct / 100));
     ctx.fillStyle = 'rgba(255,255,255,0.16)';
     ctx.fillRect(tx + 5 * s, ty + 13 * s, hpTrackW, 2 * s);
-    ctx.fillStyle = target.hpPct < 30 ? '#f84' : palette.bar;
+    ctx.fillStyle = target.hpPct < 30 ? '#b3663f' : palette.bar;
     ctx.fillRect(tx + 5 * s, ty + 13 * s, hpW, 2 * s);
   }
 }
@@ -1447,39 +1474,59 @@ export function drawHUD(
 
   if (showCompactPanels && showBottomTabs && player.needs) {
     const bars: [string, number, number, string][] = [
-      ['ХП', player.hp ?? 100, player.maxHp ?? 100, '#e44'],
+      ['ХП', player.hp ?? 100, player.maxHp ?? 100, '#a2483e'],
     ];
     if (player.rpg) {
-      bars.push(['ПСИ', player.rpg.psi, player.rpg.maxPsi, '#a4f']);
+      bars.push(['ПСИ', player.rpg.psi, player.rpg.maxPsi, '#8a6a9c']);
     }
     bars.push(
-      ['ЕДА', player.needs.food, 100, '#8a4'],
-      ['ВОДА', player.needs.water, 100, '#48c'],
-      ['СОН', player.needs.sleep, 100, '#a8f'],
-      ['ТУАЛ', Math.max(0, 100 - player.needs.pee), 100, '#da4'],
+      ['ЕДА', player.needs.food, 100, '#7e914e'],
+      ['ВОДА', player.needs.water, 100, '#4d7f96'],
+      ['СОН', player.needs.sleep, 100, '#6c76a4'],
+      ['ТУАЛ', Math.max(0, 100 - player.needs.pee), 100, '#ab8339'],
     );
     if (player.rpg) {
       const capped = player.rpg.level >= RPG_LEVEL_CAP;
-      bars.push(['XP', capped ? 1 : player.rpg.xp, capped ? 1 : xpForLevel(player.rpg.level + 1), '#af4']);
+      bars.push(['XP', capped ? 1 : player.rpg.xp, capped ? 1 : xpForLevel(player.rpg.level + 1), '#6e9268']);
     }
     const barAreaW = Math.max(1, bottomVitals.w - 16 * sx);
-    const barSpacing = Math.max(26 * sx, Math.min(62 * sx, barAreaW / bars.length));
+    const barSpacing = Math.max(32 * sx, Math.min(76 * sx, barAreaW / bars.length));
     const vitalTextScale = Math.max(1, Math.min(sx, sy));
-    const barW = Math.max(18 * sx, Math.min(BAR_W * sx, barSpacing - 8 * sx));
+    const barW = Math.max(24 * sx, Math.min(68 * sx, barSpacing - 7 * sx));
+    const labelFont = VITAL_LABEL_FONT * vitalTextScale;
+    const percentFont = VITAL_PERCENT_FONT * vitalTextScale;
+    const barH = Math.max(4, 5.5 * sy);
+    const barTop = barY + 11 * sy;
+    ctx.textBaseline = 'alphabetic';
     bars.forEach(([label, current, max, color], i) => {
       const bx = bottomVitals.x + 8 * sx + i * barSpacing;
       const by = barY + 3 * sy;
       const pct = toPercent(current, max);
-      const labelFont = VITAL_LABEL_FONT * vitalTextScale;
-      const percentFont = VITAL_PERCENT_FONT * vitalTextScale;
-      drawRoutineHudText(ctx, label, bx, by, time, i * 13 + 7, '#8cc', labelFont, reducedHudMotion);
-      ctx.save();
-      ctx.textAlign = 'right';
-      drawRoutineHudText(ctx, formatVitalPercent(pct), bx + barW, by + 0.6 * sy, time, i * 19 + 101, '#9ac', percentFont, reducedHudMotion);
-      ctx.restore();
+      const fillW = barW * Math.max(0, Math.min(1, pct / 100));
+      const low = pct <= 22;
+      // Label — crisp, bright, no jitter
+      ctx.textAlign = 'left';
       ctx.font = `${labelFont}px monospace`;
-      // Holo bar
-      drawHoloBar(ctx, bx, by + 9 * sy, barW, BAR_H * sy, pct, color, time, i);
+      ctx.fillStyle = '#e6eef0';
+      ctx.fillText(label, bx, by + labelFont);
+      // Percent — right-aligned, in the vital's own colour (red pulse when critical)
+      ctx.textAlign = 'right';
+      ctx.font = `${percentFont}px monospace`;
+      ctx.fillStyle = low ? '#d1604a' : color;
+      ctx.fillText(formatVitalPercent(pct), bx + barW, by + labelFont);
+      ctx.textAlign = 'left';
+      // Gauge — dark track, solid colour fill, top highlight, thin frame
+      ctx.fillStyle = 'rgba(6,12,18,0.92)';
+      ctx.fillRect(bx, barTop, barW, barH);
+      ctx.fillStyle = color;
+      ctx.fillRect(bx, barTop, fillW, barH);
+      if (fillW > 1) {
+        ctx.fillStyle = 'rgba(208,218,214,0.12)';
+        ctx.fillRect(bx, barTop, fillW, Math.max(1, barH * 0.34));
+      }
+      ctx.strokeStyle = 'rgba(120,150,150,0.26)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(bx) + 0.5, Math.round(barTop) + 0.5, Math.round(barW) - 1, Math.round(barH) - 1);
     });
   }
   const needsWeaponReadiness = showCompactPanels && (showWeaponPanel || showCrosshair);

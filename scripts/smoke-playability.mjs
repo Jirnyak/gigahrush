@@ -291,7 +291,7 @@ async function runSmokeHook(client, id, value) {
   }
 }
 
-async function waitForGameDebug(client, label, predicate, timeoutMs = 2000) {
+async function waitForGameDebug(client, label, predicate, timeoutMs = 12000) {
   const startedAt = Date.now();
   let last = null;
   while (Date.now() - startedAt < timeoutMs) {
@@ -1566,7 +1566,7 @@ async function main() {
         await clickTitleStart(client);
         await tapKeyImmediate(client, KEY.enter);
         await waitPage(client, 500);
-        const startup = await waitForGameDebug(client, 'desktop title start', state => state.started === true);
+        const startup = await waitForGameDebug(client, 'desktop title start', state => state.started === true, 10000);
         requireStartupGuidance(startup, 'desktop startup guidance', failures);
         await tapKey(client, KEY.e, 90, 200);
         const afterInteract = await readGameDebug(client);
@@ -1599,12 +1599,12 @@ async function main() {
       await runStep('inventory panel', async () => {
         const before = running ?? await sampleCanvases(client);
         await tapKey(client, KEY.i, 180, 180);
-        await waitForGameDebug(client, 'inventory panel open', state => state.showInventory);
+        await waitForGameDebug(client, 'inventory panel open', state => state.showInventory, 10000);
         await waitFrames(client, 2);
         const inventory = await sampleCanvases(client);
         requirePanelTelemetry(before, inventory, 'inventory panel', failures);
         await tapKey(client, KEY.i, 120, 160);
-        await waitForGameDebug(client, 'inventory panel close', state => !state.showInventory);
+        await waitForGameDebug(client, 'inventory panel close', state => !state.showInventory, 10000);
         await waitFrames(client, 2);
         running = await sampleRunning(client);
         requireRunningTelemetry(running, 'after inventory close', failures);

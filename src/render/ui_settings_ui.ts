@@ -93,7 +93,7 @@ export function drawUiSettingsMenu(
   const labelW = Math.max(48 * sx, w - x * 2 - groupW - stateW - 12 * sx);
 
   ctx.font = `${7 * sy}px monospace`;
-  ctx.fillStyle = '#345';
+  ctx.fillStyle = '#5a7080';
   ctx.fillText('РАЗДЕЛ', x + 14 * sx, top - 7 * sy);
   ctx.fillText(view === 'interface' ? 'ПРЕСЕТ / ЭЛЕМЕНТ' : 'НАСТРОЙКА', x + groupW + 18 * sx, top - 7 * sy);
   ctx.fillText(view === 'interface' ? 'СТАТУС' : 'ЗНАЧЕНИЕ', x + groupW + labelW + 20 * sx, top - 7 * sy);
@@ -180,7 +180,7 @@ export function drawUiSettingsMenu(
     ctx.fillRect(barX, thumbY, 3 * sx, thumbH);
   }
 
-  ctx.fillStyle = '#456';
+  ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px monospace`;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(

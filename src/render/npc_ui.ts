@@ -16,7 +16,7 @@ import {
 import { questDeadlineText, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { dialogMenuScale, tradeMenuGridLayout } from './ui_layout';
-import { drawCenteredWrappedText, drawWrappedText, fitText } from './ui_text';
+import { drawCenteredWrappedText, drawWrappedText, fitTextStable } from './ui_text';
 import { drawDurakInterface } from './durak_ui';
 import { drawDiceInterface } from './dice_ui';
 import { drawDominoInterface } from './domino_ui';
@@ -65,11 +65,11 @@ export function drawNpcMenu(
   const fName = npc.faction !== undefined ? FACTION_NAMES[npc.faction as Faction] : '';
   const oName = npc.occupation !== undefined ? OCCUPATION_NAMES[npc.occupation] : '';
   ctx.font = `${9 * sy}px monospace`;
-  drawGlitchText(ctx, fitText(ctx, npc.name ?? '???', pw - 16 * sx), px + 8 * sx, py + 10 * sy, time, 900, '#0fa', 9 * sy);
+  drawGlitchText(ctx, fitTextStable(ctx, npc.name ?? '???', pw - 16 * sx), px + 8 * sx, py + 10 * sy, time, 900, '#4f9682', 9 * sy);
   ctx.fillStyle = '#688';
   ctx.font = `${6.2 * sy}px monospace`;
   const fj = textJitter(time, 901);
-  ctx.fillText(fitText(ctx, `${fName} · ${oName}`, pw - 16 * sx), px + 8 * sx + fj.dx, py + 22 * sy + fj.dy);
+  ctx.fillText(fitTextStable(ctx, `${fName} · ${oName}`, pw - 16 * sx), px + 8 * sx + fj.dx, py + 22 * sy + fj.dy);
 
   if (state.npcMenuTab === 'main') {
     const items = getNpcMenuOptions({ state, player, npc, entities });
@@ -80,12 +80,12 @@ export function drawNpcMenu(
       const mj = textJitter(time, 910 + i);
       ctx.fillStyle = items[i].disabled
         ? selected ? '#9a6' : '#665'
-        : selected ? `rgba(0,255,170,${flicker(time, 920 + i)})` : '#688';
+        : selected ? `rgba(79,150,130,${flicker(time, 920 + i)})` : '#688';
       ctx.fillText(`${selected ? '▶ ' : '  '}${items[i].label}`, px + 16 * sx + mj.dx, yy + mj.dy);
     }
     ctx.fillStyle = '#456';
     ctx.font = `${6.8 * sy}px monospace`;
-    ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} выбор  |  ${controlHint('gameMenu')} выбрать  |  ${menuCloseHint()} закрыть`, pw - 16 * sx), px + 8 * sx, py + ph - 11 * sy);
+    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} выбор  |  ${controlHint('gameMenu')} выбрать  |  ${menuCloseHint()} закрыть`, pw - 16 * sx), px + 8 * sx, py + ph - 11 * sy);
 
   } else if (state.npcMenuTab === 'talk') {
     // Talk: show procedural text
@@ -117,7 +117,7 @@ export function drawNpcMenu(
       // Quest giver
       ctx.fillStyle = '#8af';
       ctx.font = `${7.8 * sy}px monospace`;
-      ctx.fillText(fitText(ctx, `От: ${q.giverName ?? '???'}`, pw - 16 * sx), px + 8 * sx, py + 38 * sy);
+      ctx.fillText(fitTextStable(ctx, `От: ${q.giverName ?? '???'}`, pw - 16 * sx), px + 8 * sx, py + 38 * sy);
       // Quest description — word-wrapped
       ctx.fillStyle = '#dda';
       const maxW = pw - 16 * sx;
@@ -135,7 +135,7 @@ export function drawNpcMenu(
         ly += 12 * sy;
         ctx.fillStyle = remaining <= 120 ? '#f66' : remaining <= 360 ? '#fa6' : '#8cf';
         ctx.font = `${6.8 * sy}px monospace`;
-        ctx.fillText(fitText(ctx, `Срок: ${questDeadlineText(q, state.clock.totalMinutes)}`, maxW), px + 8 * sx, ly);
+        ctx.fillText(fitTextStable(ctx, `Срок: ${questDeadlineText(q, state.clock.totalMinutes)}`, maxW), px + 8 * sx, ly);
       }
     }
     ctx.fillStyle = '#555';
@@ -143,7 +143,7 @@ export function drawNpcMenu(
     const hint = total > 1
       ? `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать  |  ${controlHint('gameMenu')} назад  |  ${menuCloseHint()} закрыть`
       : `${controlHint('gameMenu')} назад  |  ${menuCloseHint()} закрыть`;
-    ctx.fillText(fitText(ctx, hint, pw - 16 * sx), px + 8 * sx, py + ph - 11 * sy);
+    ctx.fillText(fitTextStable(ctx, hint, pw - 16 * sx), px + 8 * sx, py + ph - 11 * sy);
 
   } else if (state.npcMenuTab === NPC_MENU_INTERFACE_TAB) {
     const durak = getDurakSnapshot();
@@ -169,22 +169,22 @@ export function drawNpcMenu(
     const snapshot = getNpcInteractionInterfaceSnapshot();
     ctx.fillStyle = '#d7f7ff';
     ctx.font = `${9.2 * sy}px monospace`;
-    drawGlitchText(ctx, fitText(ctx, snapshot.title || 'ИНТЕРФЕЙС', pw - 16 * sx), px + 8 * sx, py + 38 * sy, time, 940, '#ffd36a', 9.2 * sy);
+    drawGlitchText(ctx, fitTextStable(ctx, snapshot.title || 'ИНТЕРФЕЙС', pw - 16 * sx), px + 8 * sx, py + 38 * sy, time, 940, '#ffd36a', 9.2 * sy);
 
     ctx.fillStyle = '#888';
     ctx.font = `${6.8 * sy}px monospace`;
     let ly = py + 56 * sy;
     const maxW = pw - 16 * sx;
-    ctx.fillText(fitText(ctx, snapshot.npcName || npc.name || 'NPC', maxW), px + 8 * sx, ly);
+    ctx.fillText(fitTextStable(ctx, snapshot.npcName || npc.name || 'NPC', maxW), px + 8 * sx, ly);
     ly += 14 * sy;
     if (snapshot.stakeRubles !== undefined) {
       ctx.fillStyle = '#ee4';
-      ctx.fillText(fitText(ctx, `Ставка: ₽${snapshot.stakeRubles}`, maxW), px + 8 * sx, ly);
+      ctx.fillText(fitTextStable(ctx, `Ставка: ₽${snapshot.stakeRubles}`, maxW), px + 8 * sx, ly);
       ly += 12 * sy;
     }
     if (snapshot.priceRubles !== undefined) {
       ctx.fillStyle = '#ee4';
-      ctx.fillText(fitText(ctx, `Цена: ₽${snapshot.priceRubles}`, maxW), px + 8 * sx, ly);
+      ctx.fillText(fitTextStable(ctx, `Цена: ₽${snapshot.priceRubles}`, maxW), px + 8 * sx, ly);
       ly += 12 * sy;
     }
     ctx.fillStyle = '#ccc';
@@ -238,26 +238,44 @@ export function drawNpcMenu(
       return count;
     };
 
-    // ── Title (centered) ──
-    ctx.fillStyle = '#aaa';
-    ctx.font = `${8.2 * sy}px monospace`;
+    // ── Title (centered) ── baseline 'top' so tall glyphs never clip the canvas edge
+    ctx.fillStyle = '#e8eef0';
+    ctx.font = `${8 * sy}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('ТОРГ', cw / 2, 10 * sy);
+    ctx.textBaseline = 'top';
+    ctx.fillText('ТОРГ', cw / 2, 1.5 * sy);
+    ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
 
-    // ── Headers with money ──
-    ctx.font = `${7.1 * sy}px monospace`;
-    ctx.fillStyle = '#ee4';
-    ctx.fillText(`Вы: ₽${player.money ?? 0}`, startX, startY - 8 * sy);
-    ctx.fillStyle = '#cc9';
-    ctx.fillText(fitText(ctx, `Вы отдаете · ${deal.creditValue}₽`, gridTotal), playerOfferX, startY - 8 * sy);
-    ctx.fillStyle = '#9cf';
-    ctx.fillText(fitText(ctx, `Вы берете · ${deal.fullPrice}₽`, gridTotal), npcOfferX, startY - 8 * sy);
-    ctx.fillStyle = '#8cf';
-    ctx.fillText(
-      fitText(ctx, `${npc.name?.split(' ')[0] ?? 'NPC'}: ₽${npc.money ?? 0}`, gridTotal),
-      npcX, startY - 8 * sy,
-    );
+    // ── Framed columns with header strips (money / offer values) ──
+    const headH = 13 * sy;
+    const gridSpanH = gridRows * cellSz;
+    const drawColumnFrame = (gx: number, title: string, value: string, accent: string, stripBg: string) => {
+      const fx = gx - 2 * sx;
+      const fy = startY - headH;
+      const fw = gridTotal + 4 * sx;
+      const fh = headH + gridSpanH + 3 * sy;
+      ctx.fillStyle = 'rgba(6,11,17,0.85)';
+      ctx.fillRect(fx, fy, fw, fh);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(fx + 0.5, fy + 0.5, fw - 1, fh - 1);
+      ctx.fillStyle = stripBg;
+      ctx.fillRect(fx, fy, fw, headH);
+      ctx.fillStyle = accent;
+      ctx.font = `${6.6 * sy}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(fitTextStable(ctx, title, fw * 0.62, 'clip'), fx + 4 * sx, fy + headH - 3.6 * sy);
+      if (value) {
+        ctx.textAlign = 'right';
+        ctx.fillText(fitTextStable(ctx, value, fw * 0.5, 'clip'), fx + fw - 4 * sx, fy + headH - 3.6 * sy);
+        ctx.textAlign = 'left';
+      }
+    };
+    drawColumnFrame(startX, 'ВЫ', `₽${player.money ?? 0}`, '#c2a24c', 'rgba(52,48,8,0.66)');
+    drawColumnFrame(playerOfferX, 'ОТДАЁТЕ', deal.creditValue ? `${deal.creditValue}₽` : '', '#bd8f6c', 'rgba(54,34,8,0.62)');
+    drawColumnFrame(npcOfferX, 'БЕРЁТЕ', deal.fullPrice ? `${deal.fullPrice}₽` : '', '#8193a4', 'rgba(8,32,54,0.62)');
+    drawColumnFrame(npcX, npc.name?.split(' ')[0] ?? 'ТОРГОВЕЦ', `₽${npc.money ?? 0}`, '#7996a4', 'rgba(8,22,50,0.62)');
 
     // ── Draw grid helper ──
     const drawGrid = (
@@ -272,10 +290,12 @@ export function drawNpcMenu(
           const cy = startY + row * cellSz;
           const selected = state.tradeSide === side && state.tradeCursorX === col && state.tradeCursorY === row;
 
-          ctx.fillStyle = selected ? 'rgba(120,120,50,0.5)' : 'rgba(30,30,30,0.8)';
+          ctx.fillStyle = selected ? 'rgba(96,88,36,0.5)' : 'rgba(16,24,32,0.5)';
           ctx.fillRect(cx, cy, cellSz - 2, cellSz - 2);
-          ctx.strokeStyle = selected ? '#ee4' : '#444';
+          ctx.strokeStyle = selected ? '#c2a24c' : 'rgba(70,90,104,0.7)';
+          ctx.lineWidth = selected ? 1.5 : 1;
           ctx.strokeRect(cx, cy, cellSz - 2, cellSz - 2);
+          ctx.lineWidth = 1;
 
           if (idx < inv.length) {
             const item = inv[idx];
@@ -298,14 +318,14 @@ export function drawNpcMenu(
             const padX = Math.max(3, 2.5 * sx);
             const innerW = Math.max(1, cellSz - padX * 2);
             const topY = cy + 5.3 * sy;
-            ctx.font = `${Math.max(4, 3.5 * sy)}px monospace`;
-            ctx.fillStyle = side === 'npc' || side === 'npc_offer' ? '#8cf' : '#ee4';
+            ctx.font = `${Math.max(4, 4.3 * sy)}px monospace`;
+            ctx.fillStyle = side === 'npc' || side === 'npc_offer' ? '#7996a4' : '#c2a24c';
             const questW = questLabel ? Math.min(cellSz * 0.42, Math.max(12 * sx, ctx.measureText(questLabel).width + 2 * sx)) : 0;
-            ctx.fillText(fitText(ctx, roleLabel, Math.max(1, innerW - questW)), cx + padX, topY);
+            ctx.fillText(fitTextStable(ctx, roleLabel, Math.max(1, innerW - questW)), cx + padX, topY);
             if (questLabel) {
               ctx.fillStyle = questItemStateColor(price.questState);
               ctx.textAlign = 'right';
-              ctx.fillText(fitText(ctx, questLabel, questW), cx + cellSz - padX, topY);
+              ctx.fillText(fitTextStable(ctx, questLabel, questW), cx + cellSz - padX, topY);
               ctx.textAlign = 'left';
             }
             drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.84, {
@@ -315,14 +335,14 @@ export function drawNpcMenu(
             });
             const countText = staged > 0 ? `→${staged}` : item.count > 1 ? `×${item.count}` : '';
             ctx.fillStyle = price.color;
-            ctx.font = `${Math.max(4, 4.05 * sy)}px monospace`;
+            ctx.font = `${Math.max(4, 4.7 * sy)}px monospace`;
             const countW = countText ? Math.min(cellSz * 0.42, Math.max(11 * sx, ctx.measureText(countText).width + 3 * sx)) : 0;
             const bottomY = cy + cellSz - 3.7 * sy;
-            ctx.fillText(fitText(ctx, price.text, Math.max(1, innerW - countW)), cx + padX, bottomY);
+            ctx.fillText(fitTextStable(ctx, price.text, Math.max(1, innerW - countW)), cx + padX, bottomY);
             if (countText) {
               ctx.textAlign = 'right';
-              ctx.fillStyle = staged > 0 ? '#fc4' : '#8a8';
-              ctx.fillText(fitText(ctx, countText, countW), cx + cellSz - padX, bottomY);
+              ctx.fillStyle = staged > 0 ? '#c2a24c' : '#6e8a72';
+              ctx.fillText(fitTextStable(ctx, countText, countW), cx + cellSz - padX, bottomY);
               ctx.textAlign = 'left';
             }
             ctx.restore();
@@ -338,13 +358,13 @@ export function drawNpcMenu(
 
     const canDeal = ((deal.npcOfferCount ?? 0) > 0 || deal.creditCount > 0) && (player.money ?? 0) >= deal.cashDue;
     const dealSelected = state.tradeSide === 'deal';
-    ctx.fillStyle = dealSelected ? (canDeal ? 'rgba(40,110,55,0.9)' : 'rgba(120,65,25,0.9)') : 'rgba(20,28,24,0.94)';
+    ctx.fillStyle = dealSelected ? (canDeal ? 'rgba(38,84,48,0.9)' : 'rgba(96,58,26,0.9)') : 'rgba(20,28,24,0.94)';
     ctx.fillRect(dealX, dealY, dealW, dealH);
-    ctx.strokeStyle = dealSelected ? (canDeal ? '#8f8' : '#f84') : '#466';
+    ctx.strokeStyle = dealSelected ? (canDeal ? '#6e9268' : '#b3663f') : '#466';
     ctx.strokeRect(dealX, dealY, dealW, dealH);
     ctx.textAlign = 'center';
-    ctx.font = `${6.4 * sy}px monospace`;
-    ctx.fillStyle = canDeal ? '#8f8' : '#f84';
+    ctx.font = `${7.2 * sy}px monospace`;
+    ctx.fillStyle = canDeal ? '#6e9268' : '#b3663f';
     const dealText = canDeal
       ? deal.cashDue > 0
         ? `ОБМЕН · доплата ${deal.cashDue}₽`
@@ -356,16 +376,16 @@ export function drawNpcMenu(
       : ((deal.npcOfferCount ?? 0) <= 0 && deal.creditCount <= 0)
         ? 'ОБМЕН · выберите предметы'
         : `НЕ ХВАТАЕТ ${deal.cashDue - (player.money ?? 0)}₽`;
-    ctx.fillText(fitText(ctx, dealText, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH * 0.62);
+    ctx.fillText(fitTextStable(ctx, dealText, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH * 0.62);
     const unpaidSurplus = Math.max(0, deal.surplus - deal.changeDue);
-    ctx.fillStyle = deal.changeDue > 0 ? '#8f8' : unpaidSurplus > 0 ? '#fa6' : '#889';
-    ctx.font = `${5.6 * sy}px monospace`;
+    ctx.fillStyle = deal.changeDue > 0 ? '#6e9268' : unpaidSurplus > 0 ? '#bd8f6c' : '#99a';
+    ctx.font = `${6.1 * sy}px monospace`;
     const summaryLine = deal.changeDue > 0
       ? `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · сдача ${deal.changeDue}₽${unpaidSurplus > 0 ? ` · без сдачи ${unpaidSurplus}₽` : ''}`
       : unpaidSurplus > 0
         ? `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · сдачи нет (${unpaidSurplus}₽)`
       : `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · наличными ${deal.cashDue}₽`;
-    ctx.fillText(fitText(ctx, summaryLine, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH + 7.2 * sy);
+    ctx.fillText(fitTextStable(ctx, summaryLine, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH + 7.2 * sy);
     ctx.textAlign = 'left';
 
     // ── Selected item description ──
@@ -388,7 +408,7 @@ export function drawNpcMenu(
         ctx.fillStyle = '#ccc';
         ctx.font = `${7.2 * sy}px monospace`;
         const descW = Math.min(cw - 16 * sx, totalW + 24 * sx);
-        ctx.fillText(fitText(ctx, `${def.name} ×${item.count}`, descW), cw / 2, descY);
+        ctx.fillText(fitTextStable(ctx, `${def.name} ×${item.count}`, descW), cw / 2, descY);
         ctx.fillStyle = '#888';
         ctx.font = `${6.3 * sy}px monospace`;
         let actionY = drawCenteredWrappedText(ctx, def.desc, cw / 2, descY + 9 * sy, descW, 8 * sy, 2);
@@ -397,23 +417,23 @@ export function drawNpcMenu(
         ctx.fillStyle = price.color;
         actionY = Math.min(actionY + 2 * sy, ch - 50 * sy);
         if (state.tradeSide === 'npc') {
-          ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} запросить: ${price.line}`, descW), cw / 2, actionY);
+          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} запросить: ${price.line}`, descW), cw / 2, actionY);
           ctx.fillStyle = price.scarcityColor;
-          ctx.fillText(fitText(ctx, price.detail, descW), cw / 2, actionY + 8 * sy);
+          ctx.fillText(fitTextStable(ctx, price.detail, descW), cw / 2, actionY + 8 * sy);
         } else if (state.tradeSide === 'player_offer') {
-          ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} убрать единицу из того, что отдаете`, descW), cw / 2, actionY);
+          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} убрать единицу из того, что отдаете`, descW), cw / 2, actionY);
         } else if (state.tradeSide === 'npc_offer') {
-          ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} убрать единицу из того, что берете`, descW), cw / 2, actionY);
+          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} убрать единицу из того, что берете`, descW), cw / 2, actionY);
         } else {
-          ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} предложить: ${price.line}`, descW), cw / 2, actionY);
+          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} предложить: ${price.line}`, descW), cw / 2, actionY);
           ctx.fillStyle = price.scarcityColor;
-          ctx.fillText(fitText(ctx, price.detail, descW), cw / 2, actionY + 8 * sy);
+          ctx.fillText(fitTextStable(ctx, price.detail, descW), cw / 2, actionY + 8 * sy);
         }
       }
     } else if (state.tradeSide === 'deal') {
       ctx.fillStyle = canDeal ? '#8f8' : '#f84';
       ctx.font = `${7 * sy}px monospace`;
-      ctx.fillText(fitText(ctx, canDeal ? `${controlBindingLabel('gameMenu')} подтвердить сделку` : 'Сделка пока невозможна', Math.min(cw - 16 * sx, totalW)), cw / 2, descY + 6 * sy);
+      ctx.fillText(fitTextStable(ctx, canDeal ? `${controlBindingLabel('gameMenu')} подтвердить сделку` : 'Сделка пока невозможна', Math.min(cw - 16 * sx, totalW)), cw / 2, descY + 6 * sy);
     } else {
       ctx.fillStyle = '#555';
       ctx.font = `${6.2 * sy}px monospace`;
@@ -426,9 +446,9 @@ export function drawNpcMenu(
     ctx.font = `${5.8 * sy}px monospace`;
     ctx.textAlign = 'right';
     const hintW = Math.max(60 * sx, cw - 16 * sx);
-    ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, hintW), cw - 8 * sx, ch - 24 * sy);
-    ctx.fillText(fitText(ctx, `${controlBindingLabel('gameMenu')} положить/убрать/обмен`, hintW), cw - 8 * sx, ch - 16 * sy);
-    ctx.fillText(fitText(ctx, `${menuCloseHint()} назад`, hintW), cw - 8 * sx, ch - 8 * sy);
+    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, hintW), cw - 8 * sx, ch - 24 * sy);
+    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} положить/убрать/обмен`, hintW), cw - 8 * sx, ch - 16 * sy);
+    ctx.fillText(fitTextStable(ctx, `${menuCloseHint()} назад`, hintW), cw - 8 * sx, ch - 8 * sy);
     ctx.textAlign = 'left';
 
   }

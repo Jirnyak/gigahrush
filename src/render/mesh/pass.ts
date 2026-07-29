@@ -75,7 +75,11 @@ function collectMeshInstances(context: MeshPassContext, out: DrawMeshInstance[],
   stats.chunksConsidered = chunks;
   stats.chunksBuilt = chunks;
   stats.visualSlotBytesScanned = Math.min(context.profile.visualSlotScanCap, scene.stats.visualSlotsRead);
-  stats.visualSlotMergeOutputs = scene.instances.filter(instance => (instance.flags & MeshInstanceFlag.Merged) !== 0).length;
+  let mergeOutputs = 0;
+  for (const instance of scene.instances) {
+    if ((instance.flags & MeshInstanceFlag.Merged) !== 0) mergeOutputs++;
+  }
+  stats.visualSlotMergeOutputs = mergeOutputs;
   stats.unknownVisualSlotCodes = scene.stats.unknownVisualCodes;
 }
 

@@ -256,10 +256,14 @@ export function drawQuestLog(
   const all = [...active, ...done];
 
   if (all.length === 0) {
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = '#9ab';
     ctx.font = `${8 * sy}px monospace`;
     const emptyLine = currentObjective?.line ?? `Нет заданий. Поговорите с жильцами ${controlHint('interact')}.`;
     ctx.fillText(fitText(ctx, emptyLine, pw - 16 * sx), px + 8 * sx, py + 24 * sy);
+    // Close hint even when empty — never leave the player without a visible exit.
+    ctx.fillStyle = '#7a93a0';
+    ctx.font = `${7 * sy}px monospace`;
+    ctx.fillText(fitText(ctx, `${menuCloseHint()} закрыть`, pw - 16 * sx), px + 8 * sx, py + ph - 8 * sy);
     return;
   }
 
@@ -362,7 +366,7 @@ export function drawQuestLog(
   }
 
   // Bottom hint
-  ctx.fillStyle = '#555';
+  ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px monospace`;
   const pageHint = all.length > 1 ? `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать` : '';
   const activeHint = isQuestSelectableAsActive(q) ? `${controlHint('gameMenu')} ${isActiveQuest ? 'снять цель' : 'цель на карте'}` : '';

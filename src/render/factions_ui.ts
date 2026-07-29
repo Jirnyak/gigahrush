@@ -158,7 +158,7 @@ function drawFactionSnapshotPanel(
     drawnContested++;
   }
   if (drawnContested === 0) {
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = '#8a9';
     ctx.fillText('Границы устойчивы.', x + 6, yy);
     yy += 10 * sy;
   }
@@ -168,7 +168,7 @@ function drawFactionSnapshotPanel(
   ctx.fillText('Недавнее', x + 6, yy);
   yy += 10 * sy;
   if (snapshot.recentEvents.length === 0) {
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = '#8a9';
     ctx.fillText('Фракционных событий пока нет.', x + 6, yy);
     return;
   }
@@ -319,7 +319,7 @@ export function drawFactionMenu(
   );
 
   // Hint
-  ctx.fillStyle = '#555';
+  ctx.fillStyle = '#7a93a0';
   ctx.font = `${8 * sy}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';

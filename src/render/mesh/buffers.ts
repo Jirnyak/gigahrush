@@ -59,6 +59,8 @@ const BOX_FACES = [
   { n: [0, 0, -1], c: [[-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, -0.5, -0.5], [-0.5, -0.5, -0.5]] },
 ] as const;
 
+const BOX_FACE_INDICES = [0, 1, 2, 0, 2, 3] as const;
+
 function color01(value: number): number {
   return Math.max(0, Math.min(1, value / 255));
 }
@@ -87,7 +89,9 @@ function pushVertex(
   nx: number,
   ny: number,
   nz: number,
-  color: readonly [number, number, number],
+  r: number,
+  g: number,
+  b: number,
 ): void {
   const i = cursor.offset;
   cursor.data[i] = x;
@@ -96,9 +100,9 @@ function pushVertex(
   cursor.data[i + 3] = nx;
   cursor.data[i + 4] = ny;
   cursor.data[i + 5] = nz;
-  cursor.data[i + 6] = color01(color[0]);
-  cursor.data[i + 7] = color01(color[1]);
-  cursor.data[i + 8] = color01(color[2]);
+  cursor.data[i + 6] = color01(r);
+  cursor.data[i + 7] = color01(g);
+  cursor.data[i + 8] = color01(b);
   cursor.offset = i + MESH_VERTEX_STRIDE;
 }
 
@@ -116,19 +120,21 @@ function appendBox(
   if (!reserve(cursor, BOX_TRIANGLES)) return false;
   const cos = Math.cos(yaw);
   const sin = Math.sin(yaw);
-  const indices = [0, 1, 2, 0, 2, 3] as const;
+  const cr = color[0];
+  const cg = color[1];
+  const cb = color[2];
 
   for (const face of BOX_FACES) {
     const nx = face.n[0] * cos - face.n[1] * sin;
     const ny = face.n[0] * sin + face.n[1] * cos;
     const nz = face.n[2];
-    for (const index of indices) {
+    for (const index of BOX_FACE_INDICES) {
       const corner = face.c[index];
       const lx = corner[0] * sx;
       const ly = corner[1] * sy;
       const wx = cx + lx * cos - ly * sin;
       const wy = cy + lx * sin + ly * cos;
-      pushVertex(cursor, wx, wy, cz + corner[2] * sz, nx, ny, nz, color);
+      pushVertex(cursor, wx, wy, cz + corner[2] * sz, nx, ny, nz, cr, cg, cb);
     }
   }
   cursor.triangleCount += BOX_TRIANGLES;
@@ -161,7 +167,9 @@ function appendTemplateInstance(cursor: BuildCursor, instance: MeshInstance, tem
       nx * cos - ny * sin,
       nx * sin + ny * cos,
       nz,
-      [colors[ci], colors[ci + 1], colors[ci + 2]],
+      colors[ci],
+      colors[ci + 1],
+      colors[ci + 2],
     );
   }
   cursor.triangleCount += template.triangleCount;
@@ -254,7 +262,9 @@ function appendVoxelChunk(cursor: BuildCursor, chunk: VoxelChunkMesh): boolean {
         normals[vi] || 0,
         normals[vi + 1] || 0,
         normals[vi + 2] || 0,
-        [colors[ci] ?? 128, colors[ci + 1] ?? 128, colors[ci + 2] ?? 128],
+        colors[ci] ?? 128,
+        colors[ci + 1] ?? 128,
+        colors[ci + 2] ?? 128,
       );
     }
     cursor.triangleCount++;

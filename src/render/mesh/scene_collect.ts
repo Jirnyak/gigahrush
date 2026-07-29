@@ -2310,22 +2310,38 @@ export function capMeshInstances(
   out.length = 0;
   if (!profile.enabled || raw.length <= 0) return out;
   const capCenter = cameraCellCenter(context);
-  const scored = raw.map((instance, order) => {
+  // Fused map+filter+score in a single pass: only in-radius instances get a
+  // scored wrapper (and only they pay priorityForModel). The old
+  // raw.map(...).filter(...) allocated a wrapper for every raw instance —
+  // including the ones immediately discarded — plus an intermediate array,
+  // every frame. Output is byte-identical (same rows, same `order` = raw
+  // index, same sort keys); this only removes per-frame GC pressure.
+  const scored: Array<{
+    instance: MeshInstance;
+    order: number;
+    stableD2: number;
+    radius: number;
+    priority: number;
+    seed: number;
+  }> = [];
+  for (let order = 0; order < raw.length; order++) {
+    const instance = raw[order];
     const stableDx = wrappedDelta(capCenter.x, instance.x);
     const stableDy = wrappedDelta(capCenter.y, instance.y);
     const stableD2 = stableDx * stableDx + stableDy * stableDy;
     const radius = (instance.flags & MeshInstanceFlag.CorridorVolume) !== 0
       ? Math.max(profile.radius, profile.proceduralFieldRadius)
       : profile.radius;
-    return {
+    if (stableD2 > radius * radius + 2) continue;
+    scored.push({
       instance,
       order,
       stableD2,
       radius,
       priority: priorityForModel(instance.modelId, instance.flags),
       seed: instance.seed >>> 0,
-    };
-  }).filter(row => row.stableD2 <= row.radius * row.radius + 2);
+    });
+  }
   scored.sort((a, b) =>
     b.priority - a.priority ||
     a.stableD2 - b.stableD2 ||

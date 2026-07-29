@@ -469,7 +469,7 @@ export function drawDemosMenu(
 
   ctx.font = `${7 * sy}px monospace`;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#456';
+  ctx.fillStyle = '#7a93a0';
   const searchHint = state.demosSearchActive
     ? 'печать — фильтр  |  Backspace — стереть  |  Del — очистить  |  Enter — применить'
     : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} — вкладки  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} или колесо — листать  |  Enter — поиск`;

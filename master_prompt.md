@@ -550,3 +550,165 @@ SHIP автономно ТОЛЬКО если ВСЁ верно: byte-identical 
 - Мои docs-правки этой сессии (стейджатся отдельным docs-коммитом поверх фаза-3): `master_prompt.md` (этот раздел), `problems.md`, `README.md`.
 - `git stash@{0}` = `gemini-floorlevel-string-refactor-WIP-broken` — по-прежнему НЕ трогать.
 - Полный реестр находок #1–#181 — во внешнем ledger (`~/.claude/.../memory/confirmed-audit-bugs-deferred.md`), не в репо.
+
+---
+
+# ЧАСТЬ II — БЭКЛОГ ВЛАДЕЛЬЦА (капча-сессия 2026-07-29)
+
+> **Что это.** Разбор устного дампа владельца (~82 пункта «хочу / сломано / надо углубить»), собранного в одну структуру. Это **сессия фиксации**, а не план: цель — записать ВСЁ максимально полно, приоритеты и порядок выставляем позже. Секция **append-only**: она НЕ отменяет и НЕ переписывает аудит-ledger выше (§0–§552); это отдельный слой намерений владельца, заземлённый в текущий код.
+>
+> **Как заземлено.** 10 параллельных read-only исследовательских агентов прочесали `src/` под HEAD `093f4737` (без правок). Каждый пункт = **Дизайн** (что хочет владелец) + **Код** (STATUS + `файл:строка` + корень/точка расширения). Числа/строки — из source этой сессии, не по памяти; где агент отметил риск обфускации grep — факт перепроверен через Read.
+>
+> **Легенда статусов:** `EXISTS` работает; `PARTIAL` есть каркас, не хватает слоя; `MISSING` с нуля; `BUG` сломано/мертво; `[BUG]` — подтверждённый дефект, ссылка на ledger-находку где есть. Приставка `[владелец: уточнить]` — премиса не совпала с кодом, нужен разбор.
+
+## Сквозные корни (несколько пунктов — один фикс)
+
+- **`applyDamage()` расщеплён надвое → A2 + A6 + часть D5.** Player-исходящий урон (мили `main.ts:~4160`, снаряд `~4906`, AoE `~4999`) зовёт только `applyMonsterArmorHit`, НИКОГДА `calculateDamage`; NPC-путь (`ai/combat.ts:465/676`) зовёт `calculateDamage`. Плюс 0 из ~70 физ-оружий задают `damageType` (`weapons.ts:8` — только поле интерфейса) → тиры брони KIN/BUCK/ENERGY/FIRE мертвы у ЛЮБОГО атакующего. Один общий `applyDamage()` (calculateDamage → applyMonsterArmorHit на обеих сторонах) чинит A2 и A6 разом. Совпадает с memory `confirmed-combat-armor-bug` (Finding 1+2).
+- **Абьюз шкалы тиров потолка → B3 + B4 (+ первопричина B1 на roof).** `ceilHeight` — per-cell `Uint8` (`core/world.ts:213`), высота = `1+tier*0.5` (`webgl.ts:1235`). Документированный диапазон 0–3, но генераторы вкидывают 14 (roof) / 198 (crossroads) / 240 (outer_district) для фейка неба → стена высотой ~100 → текстура тайлится ~100× (B4) и лампы висят на z≈100 (B3). **Ловушка:** `tests/ceiling_height.test.ts` ждёт capped-формулу `2.0+min(tier,2)*1.5`, НЕ совпадающую с шипнутой `1+tier*0.5`; «починка» `getCeilingHeightForTier` под тест рассинхронит mesh и raycast.
+- **`ensureReachableRouteLifts` не подключён → K4 + K7 + ledger #45.** `gen/shared.ts:2005` — готовый фикс, **0 вызовов**. Из-за одностороннего размещения route-лифтов на ministry(z=30)/underhell(z=−38)/podad(z=−40) roof(+50) и void(−50) недостижимы обычным лифтом, при этом HUD рисует «↑ следующий этаж». Одна проводка в `generateDesignFloor` открывает и открытый мир (roof/outer_district z=48/50), и Пустоту разом. Это **единственный оставшийся top-blocker** аудита (#45, DEFERRED — RED `gen/shared.ts` + design-call).
+- **`def.tags`-vs-`def.floors` рассинхрон namespace → D1 + ledger #61/#67/#179/#180.** Гейты в `samosbor_variants.ts` путали variant-NAME теги с biome-`floorTags`. WRONG-FIELD-подкласс (#61/#67) уже пофикшен **локально, НО НЕ запушен** (`681919f9`/`793683a2`; origin/main на 25 коммитов позади) — вот почему владелец всё ещё видит баг в своём билде. FIELD-MIGRATION-подкласс (#179/#180: variant+aftermath biome-гейты) — по-прежнему DEFERRED.
+- **Синглтон `let player` в `main.ts:2012` → N1 (+ хвост N2/N3).** Абстракция `isPlayerEntity`/`player_actor.ts:17` уже есть и используется, но глобальный `player` и ветвления по нему (`ownerId===player.id`, peer-body writes, hardcoded `persistentNpcId:'player'`) держат эго-центричную модель. Ретайр синглтона в per-slot акторы разблокирует чистый мультиактор/онлайн.
+- **Рендер-only криттеры (`data/critters.ts` + `render/critters.ts`) → E3 + E4.** Полностью декоративны: `mathRng`, не сохраняются, ноль связи с A-Life/gameplay → правки тут низкориск.
+
+## A. Бой / урон / броня / оружие
+
+- **A1 — PSI в правую руку как инструмент** — `PARTIAL`. Дизайн: PSI как отдельный tool-режим RMB, не слитый с оружием. Код: два дженерик hand-слота есть — `weapon` (`core/types.ts:633`, LMB) и `tool` (`:637`, RMB `main.ts:6756`), PSI-абилка (`psiCost`, `psi.ts`) кастуется из ЛЮБОГО; выделенного PSI-слота/режима нет. Точка расширения: tool-use путь `main.ts:~6752`.
+- **A2 — типы урона + глубина брони + врождённая броня монстров (CORE)** — `[BUG]/PARTIAL`. Дизайн: типы урона и броня — КЛЮЧЕВАЯ тактическая механика («КОР» у монстров). Код: enum `DamageType` (5, `types.ts:195`), резисты предметов (`:702`), `calculateDamage` (`combat.ts:4`), врождённая броня монстров (`monster_armor.ts:198`) — ВСЁ есть и монстро-броня работает на всех путях, НО worn-armor-резист мёртв: 0/70 физ-оружий задают `damageType`, а `stats_ui.ts:98` рисует «Защита: КИН:80%…», которую бой не выдаёт. См. сквозной корень #1.
+- **A3 — баг перезарядки / скейл ловкости** — `EXISTS` (баг НЕ воспроизведён). Код: `calculateReloadTime` (`combat.ts:44`, `0.25+0.75·e^(−0.05·agi)` — выше AGI → быстрее), `agiAttackSpeedMult` (`rpg.ts:163`) — скейл корректный, не инвертирован. Нит: reload берёт сырой `agi`, attack-speed берёт `positivePoints(agi)` → отрицательный AGI замедлит reload (fringe). **[владелец: уточнить]** точный репро.
+- **A4 — бесконечные патроны у NPC** — `[BUG]`. Код: reload у NPC (`ai/combat.ts:347`) ставит `currentMag=magazineSize` БЕЗ проверки/расхода патронов из инвентаря; выстрел (`:625`) снимает патрон «если есть, но не падает если нет». NPC-стрелки не пустеют. Корень: reload-путь `:344-350`.
+- **A5 — у культистов нет PSI** — `EXISTS/PARTIAL` (претензия в основном НЕверна). Код: `defaultWeapons(CULTIST)=['knife','psi_strike']` (`faction_events.ts:1859`), event-культисты кастуют PSI (`ai/combat.ts:620`). Пробел: только spawn-путь faction-event; у обычных occupation/A-Life культистов PSI в лоадауте нет. Расширить лоадаут occupation-профиля культиста.
+- **A6 — «урон от игрока сифонит HP, а не наносит удары»** — `[BUG]` но МИСДЕСКРАЙБ. Код: siphon/lifesteal-ветки НЕТ; все три player-пути делают `hp -=` И полный пайплайн (`notifyActorDamaged` агро/threat + `handleKill`). Реальный со-located дефект = пропуск `calculateDamage` (сквозной корень #1): worn-резист скипается на всех player-атаках, а снаряд/AoE бьёт ~4× против дистанционного пути. Не в ledger по имени «сифон».
+- **A7 — универсальный FPS-вьюмодель оружия** — `MISSING`. Дизайн: процедурный вьюмодель по умолчанию + авторский оверрайд. Код: экранного оружия/рук нет; `hud.ts:~1702` рисует лишь 2D-панель боя, `item_sprites.ts` — иконки. Хук: screen-space вьюмодель в `hud.ts` (2D) или screen-anchored sprite-pass в `webgl.ts`.
+
+## B. Потолки / вертикальная геометрия
+
+- **B1 — потолки: debug-телепорт ≠ вход лифтом** — `NO CODE DIVERGENCE` (главный репро владельца). Код: debug (`debugTeleportTo` `main.ts:5606`) и лифт зовут ОДИН `switchFloor`→`loadFloorForTarget`→`stampCeilingHeights`. Единственная реальная разница — `spawnAtDefault=true` (debug спавнит в авторской `spawnX/Y`) → на per-room-tier этажах (ministry tier1 vs tier2 холлы) можно упасть в комнату с низким потолком. Для roof (единый `globalCeilingTier=14`) это НЕ объясняет — тогда смотреть GL re-upload ceilTex (`webgl.ts:3370`) или лаг тика `updateGeneratedDynamicSky`. **[владелец: уточнить]** точный этаж+точку.
+- **B2 — воздух над комнатами vs сплошная заливка; заливка крыши** — `EXISTS` (ступенчатый raycast потолка, не solid). Код: per-cell марш `webgl.ts:1392-1454`; открытое небо через `uUseDynamicSky` (`:3523`) сэмплит `uDynamicSky` (провайдер `roof/index.ts:556`); `Cell.ABYSS` — тёмный. Roof `globalCeilingTier=14` → бетонная крышка на высоте 8, ЕСЛИ dynamic-sky не активен.
+- **B3 — лампы ниже потолка / рассинхрон мешей потолка** — `EXISTS`, но завязано на абьюз тиров. Код: лампа raycast `webgl.ts:2857` (`1+ceilHeight*0.5−0.1`) == mesh `scene_collect.ts:2288` — согласованы. Рассинхрон: гигантские тиры (crossroads 198 → лампа z≈100) или лампа на WALL-клетке наследует pass-2 wall-rise. См. сквозной корень #2 (+ ловушка теста).
+- **B4 — дублирование текстуры от высоты потолка** — `EXISTS` (тайлинг на мировой юнит, wrap). Код: v-координата `webgl.ts:1267-1268` тайлит раз на юнит высоты → стена тира-198 повторяет текстуру ~100×. Фикс: делить v-координату на `ceilH`, либо клампить тиры генераторов к 0–3. Сквозной корень #2.
+- **B5 — новая мелкая проблема потолка в maintenance/ministry** — `EXISTS` (per-room `ceilingTier`). Код: ministry (`index.ts:520`, холлы 2 иначе 1), maintenance (`index.ts:137`, 2/1), потребляется `ceilingTierForRoom` (`ceiling_heights.ts:44`). Именно тут видна spawn-разница B1.
+- **B6 — провалы/пропасти вниз** — `MISSING`. Дизайн: стены идут вверх — нужны и ямы вниз. Код: есть UP-массив (`ceilHeight`) и up-марш, но НЕТ floor-depth и down-марша; пол фикс на z=0 (`webgl.ts:1339` ABYSS — плоский). Хук: `floorDepth:Uint8Array` на `World` + stamp-pass + GL-uniform + down-марш симметрично `webgl.ts:1392`.
+
+## C. Вода / текстуры / меши
+
+- **C1 — отражения воды и лужи** — `PARTIAL`. Код: planar-отражение `webgl.ts:1362` (гейт `uLightQuality>=3 && Cell.WATER`), отражает ТОЛЬКО стену по лучу (не сцену/сущности/небо), `reflectFactor≤0.4`. Большинство «мокрого» — некосметичные декали (`wetConcrete`, `wet_dirt`). Расширить сэмплинг за пределы wall-only.
+- **C2 — больше текстур** — `EXISTS`. Код: `Tex.COUNT=232` слотов 64×64; большинство — процедурные диапазоны вариантов, рукотворных wall/floor мало (стены 0–7). Добавить: запись `Tex` (bump COUNT) + `gen_*` писатель в `textures[Tex.X]`.
+- **C3 — лампы Ада должны быть сфинктерами** — `[BUG]`. Код: `applyHellLamp` (`webgl.ts:1467/707`) рисует органический сфинктер ТОЛЬКО когда `organicLightCell` (tex MEAT/GUT/LARVA/F_MEAT/F_GUT); ген Ада ставит `Feature.LAMP` на не-мясные клетки → падает в индустриальную лампу. Корень: сфинктер гейтится по tex поверхности, не по hell/feature.
+- **C4 — сдвиг/оффсет текстуры стен (особенно в MP)** — `[BUG]`. Код: SP `texXi` корректен; MP-корень — sync (`online_client.ts`) несёт только entities/actors/items, НИКОГДА `wallTex/floorTex/cells/surfaceVersion` → runtime-мутации геометрии (`wall_snake`/`section_shift`/`breach_charge`/самосбор-stitch) применяются локально → пиры видят устаревшие/сдвинутые стены.
+
+## D. Самосбор
+
+- **D1 — сломана система вариантов (звал veretar → получил wet)** — `[BUG]`. Код: forced-id учитывается только внутри `chooseSamosborVariant`, но `ensureSamosborWarning` (`samosbor.ts:2166`) КЭШИРУЕТ вариант по `(z, samosborCount)`, а старт (`:2327`) переиспользует `warning.variant`; debug (`debug.ts:1494`, cases 30/31/35) ставит `samosborTimer=0`, но НЕ зовёт `clearActiveSamosborVariant`/сброс кэша → если 30-сек окно уже прокатило вариант, форс — no-op. Вторичный гейт: forced-id дропается, если `themeTags` не пересекают `floors??tags`. Ledger: пересекается с #61/#67 (WRONG-FIELD, фикс локальный-непушнутый) + #179/#180 (DEFERRED). Фикс: чистить active+кэш в debug-форсе, либо `getForcedSamosborVariant()` приоритетнее кэша. Сквозной корень #4.
+- **D2 — сделать самосбор реже** — `EXISTS` (кулдаун-константы). Код: `nextFloorRunSamosborCooldown` (`procedural_floors.ts:610`), MIN=45/MAX=1500с; глубина СЖИМАЕТ max (чаще глубже) + ~8% rapid (<120с) + ~15% calm (>20мин). Фикс: поднять MIN/MAX, убрать 8% rapid, ослабить/инвертировать depth-член.
+- **D3 — плотный/сплошной туман** — `PARTIAL` (тонкий by design). Код: `applyLocalFog` (`webgl.ts:394`) кап `0.88` (0.78·pulse). Фикс: поднять множитель/кап к 1.0, срезать амплитуду pulse.
+- **D4 — тематичные монстры по биому** — `PARTIAL`. Дизайн: мясо→кошмары, мокро→акулы. Код: `pickMonsterKindForWave` (`samosbor.ts:3628`) — только глубина/счётчик, БЕЗ variant-аргумента; `FOG_SHARK` доминирует у ВСЕХ вариантов. Тема только через cell-эффекты (wet→water+shark, meat→hell_meat_walls). Фикс: прокинуть `variant` + карта `def.id→MonsterKind[]`.
+- **D5 — спецэффекты istotit/veretar + противогаз/дыхание в тумане** — `FX EXISTS / противогаз MISSING`. Код: per-variant screen-FX (`hud.ts:1990` veil/noise/crawl) есть; но противогазы (`ip4_gasmask`, `gasmask_filter`, `anti_spore_inhaler`) — чистые economy/quest-предметы, НОЛЬ ссылок в `samosbor/cell_hazards/needs`; туман не дренит HP → нечего смягчать. Фикс: тик экспозиции-дыхания в тумане с проверкой надетой маски/расходом фильтра.
+- **D6 — механика «сопротивляться ходу волны» глючит** — `PARTIAL/BUG-suspect`. Код: единственный «resist» — ISTOTIT bell-compulsion (`samosbor.ts:975`, тянет к укрытию, удержание interact = `resisting`); механики сопротивления самому ФРОНТУ тумана нет. Подозрение: `interactHeld` перегружен (та же клавиша, что use) → сопротивление одновременно жмёт двери/контейнеры; нет отдельного биндинга.
+- **D7 — эффекты «вместе с текстом»** — `EXISTS` (функционально). Код: warning-окно `drawSamosborWarningInstruction` + `startLine` в лог (`samosbor.ts:2333`) + активные veils; текст и FX уже связаны. Уточнить, что не устраивает.
+
+> Реальные variant-id (`samosbor_variants.ts`): `classic`(ALL,w60) · `wet`(kvartiry/living/maintenance/hell,w20,акула) · `electric`(ministry/kvartiry/living/maintenance,w16) · `meat`(…,w14,мясные стены) · `maronary`(ALL,w4) · `istotit`(CIVIL,w3,колокол) · `veretar`(ALL,w4,fog_delete). Выбор целиком байпасится, если active/cached вариант уже есть (баг D1).
+
+## E. Распределение популяции / криттеры
+
+- **E1 — неравномерное распределение NPC/монстров** — `PARTIAL`. Дизайн: NPC у баз/домов; монстры у логовищ/хотспотов; жилые = жильцы+дикие+ликвидаторы, БЕЗ монстров; +зоны-логова +аномальные зоны. Код: NPC кластеризованы везде (взвешенное поле + anchors, `population_placement.ts:288`); монстры кластеризованы на DESIGN-этажах (`spawnDesignMonsterPacks`+`growPackCells`+`homeRoomId`), но РАВНОМЕРНЫ на ПРОЦЕДУРНЫХ (`spawnMonster→randomFloorCell`, `procedural_floor.ts:4330`, только min-dist от игрока). «Жилые=без монстров» НЕ гейтнуто (`monsterShareForRouteZ`>0 всегда). Фикс: дать процедурным монстрам anchor/pack-путь + residential no-monster гейт (`swarm_nests.ts` уже моделит логова).
+- **E2 — NPC подбирают/бросают предметы (улучшить)** — `PARTIAL`. Код: подбор 3 способами (`micro_goals.ts:201` loot_nearby + `combat.ts:64` grab + бартер); дроп тонкий — только `dropNpcInventory` на смерти, добровольного сброса нет. Добавить drop-micro-goal.
+- **E3 — крысы жмутся к стенам → нужен зигзаг/блуждание** — `[BUG]` (как описал владелец). Код: `pickNewCritterTarget` (`render/critters.ts:174`) явно предпочитает клетку с `hasAdjacentWall` = намеренный wall-hug. Фикс: убрать nearWall-предпочтение / добавить jitter. (Это рендер-криттер, ≠ `MonsterKind.KRYSNOZHKA`.) Сквозной корень #6.
+- **E4 — добавить крыс/тараканов/мух** — `EXISTS`. Код: `CRITTER_DEFS` (`data/critters.ts:19`) — rat/roach(хрустит)/fly(бобает) уже есть; 256-слот пул, `mathRng`, не сохраняется, тумблер `crittersEnabled`. Мухи уже есть; расширить = новые `CritterDef` или контекстный спавн (у трупов/еды/воды).
+
+## F. Социалка NPC / идентичность
+
+- **F1 — процедурные разговоры NPC↔NPC + больше строк** — `PARTIAL`. Код: соц-осознание есть (`demos_ai_social.ts:45` рёбра друг/семья/враг → talkBias и т.д.), барки авторские (~147 def-файлов) + безлимитный Markov; но обмена репликами между двумя NPC НЕТ (нет `talkTarget`/converse-цикла), барки только в лог/HUD. Добавить парный обмен барками в FSM.
+- **F2 — отношения и подарки** — `PARTIAL`. Код: `playerRelation` get/set/add (`npc_relations.ts:19`) есть; меню NPC = talk/quest/trade/leave + азартные; глагола «подарить» НЕТ. Добавить `gift`→`addNpcPlayerRelation` по ценности предмета.
+- **F3 — раздельные имя/фамилия NPC** — `EXISTS` (уже сделано). Код: `randomName()` (`names.ts:257`) возвращает `{name, firstName, lastName, female}` по фракции. Работы нет.
+- **F4 — реакция на соц-нарушение (не тот туалет)** — `PARTIAL`. Код: нужды pee/poo (`needs.ts`) + `AIGoal.TOILET` реальны; территория (`npc_fsm.ts:110`) правит только пейзинг NPC, не наказание игрока; норм-нарушение→агрессии НЕТ (`main.ts:6547` «toilet — no penalty»). Добавить: игрок в чужой BATHROOM → падение relation/hostile через свидетелей.
+- **F5 — работа за зарплату** — `PARTIAL`. Код: NPC `handleWorking` (`npc_fsm.ts:812`, путь к рабочей комнате, без выплаты); деньги игрока только quest/trade/contracts/gambling — занятости/оклада нет. Добавить job-терминал с оплатой `money` за цикл.
+
+## G. Markov / генеративный текст
+
+- **G1 — Markov-записки** — `PARTIAL/MISSING`. Код: `noteText()` (`inventory.ts:1921`) = авторский/генераторный текст, НЕ Markov; Markov подключён только к речи (барки/диалог/слухи/квесты/Demos). Прогнать текст записок/экранов через `generateMarkovText`.
+- **G2 — улучшить корпус/параллелить** — `EXISTS`. Код: `markov_text.ts:211` + компилятор `compile_markov_matrix.ts:373`, backoff `order=2`; корпус 5 файлов ~2.35МБ прекомпилится offline в `markov_compiled_matrix.ts`. Расширить: `order`=3, чистка/рост корпуса, суб-корпуса по контексту; «параллель» = параллелить offline-компиляцию (build-time).
+
+## H. Прогрессия / RPG
+
+- **H1 — перки** — `MISSING`. Код: `rpg.ts:274` только point-buy STR/AGI/INT; перк/дерева нет. Гринфилд у `spendAttrPoint` + `RPGStats`.
+- **H2 — перманентный стат-предмет на этаж (Bioshock ADAM / девочка)** — `MISSING`. Код: ни один предмет не даёт перманентный стат; единственный путь — `spendAttrPoint`. Добавить `ItemDef` use-хендлер → грант перм-стата, спавн раз/этаж (`population_placement`/`content_manifest`).
+- **H3 — ачивки/челленджи** — `MISSING`. Код: трекинга нет вовсе. Новая ограниченная система + save-секция.
+- **H4 — фермы (выращивание)** — `PARTIAL`. Код: `oranzhereya_betona` (теплица) — design-этаж есть, но «no runtime growth simulation», грядки статичны. Добавить ограниченный per-floor growth-тик + harvestable-состояние.
+
+## I. Квесты / сюжет
+
+- **I1 — сюжетные предметы падают со смертью NPC** — `EXISTS(generic)/BUG(нет защиты цепочки)`. Код: `dropEntityInventory` на смерти (`main.ts:4443/4525`); но giver держит награды, не следующий fetch-предмет, и если giver умер — шаг становится непроходимым, ре-роута нет.
+- **I2 — единая цепочка-маркер сюжета** — `EXISTS(PARTIAL)`. Код: `PLOT_CHAIN` 19 шагов (`plot.ts:190`); одна активная цель в HUD (`route_cues.ts:243`) + шеврон (`hud.ts:430`) + восклицательные маркеры (`hud.ts:959`). Резолвится в комнаты/контейнеры/NPC или hint-текст; точного маяка для KILL-целей нет.
+- **I3 — стрелка квеста «Петля» не указывает** — `[BUG]` (проектный пробел; НЕ в ledger). Код: шаг 5 = `FETCH strange_clot`, «теневик Петля» — только флейвор (`plot.ts:248`), сущность с именем Петля НЕ спавнится вообще; резолвера позиции монстра нет (`route_cues.ts:252`+`contracts.ts:651`) → KILL/FETCH-kill получают лишь счётчик. Фикс: заспавнить именованную Петлю + добавить monster-target резолв.
+- **I4 — больше процедурных + кросс-этажных квестов** — `EXISTS(rich)`. Код: `registerSideQuest` (218 вызовов), `contracts.ts` кросс-этаж через `target.z`, `markov_procedural_quests`, Demos-нотисы; сюжет 10–16 кросс-этажный. Расширять у `registerSideQuest`.
+- **I5 — цепочка Громов→министерство→база ликвидаторов→коллекторы + запертые двери у лифтов + ключи** — `PARTIAL/MISSING` (крупный дизайн-билд). Код: майор Гром владеет шагами 8–12 (`plot.ts:285`); шаг 11 = VISIT-министерство «запроси снабжение», но Министерство НЕ даёт follow-on job, шаг 12 → Podad, не ликвидаторы. `liquidatorbase` (z=−16) есть, но НЕ вшит в `PLOT_CHAIN`. Фракции COLLECTOR НЕТ (коллекторы = место); есть дженерик `cult_liquidator_clash`. Ключ-двери дженерик (`door.keyId`, `interactions.ts:484`), но не у лифтов, ключи = документы/пермиты, не kill-drop. Ближайший lift-unlock — kill-гейт `podad_lower_route` (`route_gates.ts:33`). Связано с ledger #130 (метро-направления).
+- **I6 — переработать плейсхолдеры «не та дверь»** — `MISSING` (премиса не совпала). Код: плейсхолдера «wrong door» нет; `wrong_door.ts` — шипнутая Maronary-аномалия самосбора. Под этим именем убирать нечего. **[владелец: уточнить]** что именно за плейсхолдеры.
+- **I7 — убрать пустой «гоп-стоп»** — `EXISTS` (не пустой). Код: `kvartiry/sery_gopnik.ts` — «Серый Гопник» WILD + квест `sery_cigs` (FETCH 10 cigs → награда) + 8 talk-строк. Функциональный shakedown, не пустой. **[владелец: уточнить]** возможно, речь о другом инстансе.
+
+## J. Кинематики / туториал
+
+- **J1 — универсальная per-floor кинематика + спич-баблы** — `PARTIAL`. Код: cinematic-камера (`camera.ts:220`) авто-раз/ран на ЗАХАРДКОЖЕННОМ списке (100/180/200+liquidatorbase/horror/cave), фикс-вейпоинты, без каста NPC/баблов. Баблы живые (`hud.ts:1263` off `e.activeBark`). Сделать data-driven per-floor.
+- **J2 — летающая камера, кастящая NPC из популяции** — `PARTIAL` (fly-cam реальна; каст МЁРТВ). Код: `trailer`-режим (`camera.ts:296`, BFS-полёт) в титуле; слой каста `cinematic_actors.ts` (`selectCinematicExtras`/`extractNpcForScene`) — БЕЗ вызовов = dead-code, `NpcRole.CINEMATIC_ACTOR` не назначается. Подключить слой каста.
+- **J3 — харизматичный повторяющийся злодей** — `PARTIAL/MISSING`. Код: Творец — эндгейм VOID-босс (`creator.ts`, шаг 16), форшадоу в диалогах; но единичная поздняя встреча, не рекуррентный экранный антагонист. Добавить персистентного злодея, встречающегося по этажам.
+- **J4 — туториал «рабочий день» в квартире (без лифтов) → самосбор** — `EXISTS`. Код: `tutorial.ts` DRINK→TOILET→EAT→WORK→SAMOSBOR→ESCAPE→FIND_KEY→UNLOCK→EXIT; старт `main.ts:10188`; выход = LOCKED-дверь квартиры, нужен `key_tutorial_apartment`. Близко к дизайну владельца. (Буквальное «без лифтов» не подтверждено; выход через дверь, не лифт.)
+- **J5 — кордон/чекпоинт министерства** — `EXISTS`. Код: `ministry/document_gate.ts` (доступ legal/forged/stolen/bribe/… + инспектор-охрана) + permit_office/queue_hall/weapon_permit_bureau. Бюрократический пермит-кордон, не физический блокпост ликвидаторов.
+
+## K. Этажи / генерация
+
+- **K1 — процедурная сшивка этажей и коридоры** — `PARTIAL`. Код: `stitchSectorBoundaries` (`procedural_floor.ts:2562`, 2 коридора/грань через 40-cell probe + `connectRoomsMST`); эвристика может пропустить грань/сделать лишние коридоры, но `ensureConnectivity` (`shared.ts:1365`) — BFS-бэкстоп → недостижимого не шипит. Расширять у `stitchSectorBoundaries`.
+- **K2 — изолированный запечатанный лут-карман на этаж** — `MISSING`. Код: замурованной breach-only полости нет; есть достижимые SECRET_STASH/SAFE + deep-stashes + флаг `room.sealed`. Добавить sealed-stamp pass за отбойник/breach.
+- **K3 — этаж гномов/майнкрафт** — `MISSING`. Ближайшее: `chthonic_attic` (z=46 «старые шахты»)/`shahta_atrium` (z=−24). Вставить новый `design_floor` + data + запись в `DESIGN_FLOOR_GENERATORS`.
+- **K4 — открытый мир (этаж)** — `EXISTS(паттерн)`. Код: `roof`(z=50)+`outer_district`(z=48) уже `hasOpenSky:true`, sky-провайдер, улицы/дома. Шаблон под больший открытый мир. Оба сейчас route-запечатаны — см. K7 / сквозной корень #3.
+- **K5 — лабиринт ужасов с бессмертным монстром** — `EXISTS`. Код: `horrorfloor/index.ts:120` (z=−46) спавнит `GLUBINNAYA_TEN` (hp 99999 + `phasing` = бессмертный), `SCULPTURE`, `NIGHTMARE`. `STALKER_HUNTER` — не код-символ (только лор-корпус). Строить бессмертного охотника на `GLUBINNAYA_TEN`.
+- **K6 — пещеры + кирка + добыча из стен** — `PARTIAL`. Код: кирки/пещер нет, но `jackhammer` (Отбойный молоток) копает WALL→FLOOR (`handleJackhammerTool` `main.ts:6633`), БЕЗ дропа при разрушении; хук аномалии `living_tunnels.ts:466`. Добавить кирку + этаж-пещеры + drop-on-break.
+- **K7 — починить Пустоту** — `[BUG]` (достижимость = ledger #45). Код: генератор Void (z=−50) полон; поломка — односторонние route-лифты (ministry/underhell/podad) → roof(+50)/void(−50) недостижимы, HUD врёт «↑ следующий этаж» (`problems.md:53`). Готовый `ensureReachableRouteLifts` (`shared.ts:2005`) — 0 вызовов; вшить в `generateDesignFloor`. Сквозной корень #3.
+
+## L. Крафт / экономика / разрушаемость
+
+- **L1 — все декорации = ящики (ребаланс)** — `NOT CONFIRMED` **[владелец: уточнить]**. Код: данные размещения разнообразны по биому (`floor_object_placement.ts:164`: TABLE/SHELF/LAMP/DESK/CHAIR/…); ящики — это лут-КОНТЕЙНЕРЫ (`WEAPON_CRATE`), не декор-фичи. Впечатление «всё ящики» — вероятно рендер/визуал-модель, не эти данные (стоит связать с аудитом спрайтов/мешей).
+- **L2 — улучшить лут-таблицы** — `EXISTS`. Код: `procedural_loot.ts:18` `FACTION_LOOT_PROFILES` + `buildLootPool` + `calculateMaxLootValue`; item spawn через `items.ts` spawnRooms/spawnW, дропы монстров `monster_ecology.ts`. Развито; тюнить у профилей/tag-весов.
+- **L3 — слить крафт с производством** — `TWO SEPARATE SYSTEMS`. Код: `crafting.ts` (станок, `CraftVector`) vs `production.ts` (пассивная фабрика, item-IO). Разные модели данных + UX; слияние требует унификации recipe-моделей.
+- **L4 — разрушаемые декорации/окружение** — `PARTIAL`. Код: стены/двери рушатся отбойником + `breach_charge` (`applyFloorOpening`); `hermoWall`/`aptMask` защищены; дропа ресурсов НЕТ, снаряд/AoE геометрию НЕ режет. README-«баррикада» = квест-гейт kvartiry + nav-блокеры (`path_blockers.ts`). Декор-фичи/контейнеры в дроп не рушатся.
+
+## M. Звук
+
+- **M1 — универсальное пространственное распространение звука** — `EXISTS` (окклюзия бинарна, без затухания сквозь стены). Код: `noise.ts:205/382` ограниченная модель шум-записей (cap 64, radius 48м, TTL); `getAcousticDistance` = запечённый region/portal-путь (огибает стены, `Infinity` если недостижимо) → осознаёт связность/окклюзию, но НЕ затухание-сквозь-стену. Расширить затуханием по дистанции пути. (Файлы: `noise.ts`+`hearing.ts`; runtime-аудио отдельно в `audio.ts`.)
+
+## N. Онлайн / мультиплеер
+
+- **N1 — уйти от эго-центризма игрока / онлайн-рельсы** — `PARTIAL`. Код: `isPlayerEntity`/`player_actor.ts:17` есть и широко используется; блокеры — глобальный `let player` (`main.ts:2012`) + ветвления (`ownerId===player.id` `:4585`, peer-body writes `:1378`, hardcoded `persistentNpcId:'player'` `:1824`) + асимметричные механики по `isPlayerEntity` (rail_trains 38 vs 260, hladon, ration_coupons, demos_social, swarm_nests, durak). Сквозной корень #5.
+- **N2 — локальный чат баблами + /whisper** — `PARTIAL`. Код: баблы (`hud.ts:1263`) рисуются off `e.activeBark`, но ПРОПУСКАЮТ игрока (`:1277`); единственный чат — глобальный NET-SPHERE фид со slash-парсером (`/host /join /netgen…`), без `/whisper`, не локальный. Ставить `player.activeBark` на локальную строку + добавить `/whisper` в свитч `net_sphere.ts:718`.
+- **N3 — рассинхрон инвентаря в MP** — `[BUG]`. Код: пир применяет reconciliation инвентаря (`player.inventory=se.syncInventory`, `main.ts:1369`) только при `ackPeerActorGen>=getPeerActorGen()`; пир бампит `_peerActorGen` каждые 20Гц (`online_client.ts:55`) → обгоняет ack хоста → гейт false → подобранный предмет не попадает в открытую панель; клик по клетке ревелит его. Корень: sync инвентаря завязан на тот же monotonic actor-gen ack, что HP/бой.
+- **N4 — «присоединиться к случайному» (GitHub) не работает** — `PARTIAL/BUG` (не GitHub!). Код: сигналинг = Cloudflare Worker Durable Object (`gigahrush.bileter.workers.dev`), GitHub Pages — только статик-хост, гистов/сигналинга НЕТ. Флоу связан end-to-end; вероятные поломки: (a) SQL случайной комнаты БЕЗ self-exclusion → одинокому хосту выдаёт его же комнату; (b) лаг heartbeat 0–30с + poll 5с → `randomRoomId` устаревший/null; (c) нет другого хоста за 90с → null → «укажите код». **В формулировке бэклога исправить: Cloudflare, не GitHub.**
+
+## O. Мобильная версия
+
+- **O1 — краш на мобиле** — `LIKELY-CAUSE`. Код: жёсткий `throw new Error('WebGL2 not supported')` (`webgl.ts:3028`) если `getContext('webgl2')` null → фатал на устройствах без WebGL2 (старый iOS Safari, lockdown, слабый/блоклистнутый Android). Потеря контекста обработана. Вторично: OOM от 1024²-мира + ре-аплоад текстур на low-RAM. Глобального `window.onerror` нет. Добавить WebGL2-fallback/понятное сообщение + onerror.
+- **O2 — улучшить мобилу / iOS fullscreen** — `EXISTS`. Код: iOS детектится (`fullscreen.ts:38`); т.к. у iOS Safari нет element-Fullscreen API, `canUseMobileFullscreen` false → кнопка FULL падает в `openStandalonePage` (`?standalone=1`). Расширять у iOS-ветки `fullscreen.ts` + safe-insets `mobile.ts:87`.
+
+## P. UI / ввод
+
+- **P1 — мелкие шрифты (читаемость)** — `EXISTS / нет пользовательского text-scale`. Код: весь UI-текст инлайн `${N*s}px monospace`, N≈4–8; панели используют сырые sy-множители до `4*sy`; тумблера uiScale/размера шрифта нет. Добавить `textScale`-настройку (`stats_ui.ts:34` уже читает layout).
+- **P2 — инвентарь мышью** — `EXISTS` (уже сделано). Код: `handleTapInventory` (`main.ts:7925`), `hudCanvas` pointerup → полностью кликабельная сетка + use/drop + клик-трата очков стата. Работы нет.
+
+## Q. Разное
+
+- **Q1 — предметы появляются из ниоткуда (жилой этаж)** — `EXISTS` (runtime-спавн by-design). Код: `tickProduction` (`production.ts:925`) пушит скрафченное в output-контейнер комнаты по кадансу; `ensureProductionRooms` может СОЗДАТЬ контейнер в runtime. Репро: этаж с размещённой фабрикой. Не баг сам по себе — владелец, возможно, хочет видимость/гейтинг.
+- **Q2 — баг анимации ликвидатора** — `[BUG]`. Код: клипы авто-деривятся из `ART_SPRITE_MANIFEST` (`animations/defs/auto.ts`); 5 рядов ликвидатора, но только `liquidator_m_1` имеет паки → все мужские анимируются как m_1, женский `f_1` + m_3/m_5/m_6 НЕ анимируются, `BLACK_LIQUIDATOR` без пака. Корень: нет frame-паков для вариантов + несколько manifest-рядов делят один visualId.
+- **Q3 — Math.random → единый xorshift везде** — `INVENTORY`. Код: глобальный `rng()` уже xorshift (ОК). `mathRng()`=обёртка `Math.random`, импортится 23 модулями; `mathIrand()` — DEAD (0 вызовов, безопасно удалить). Сырой `Math.random` = 2 намеренных net-identity (`online_client.ts:182`, `net_sphere.ts:698`). FX/аудио (audio 37, critters 15, music, blood_fx) — недетерминизм намеренный; gameplay/sim call-sites под коллапс к `rng()`: `damage.ts`, `needs.ts`, `faction_events.ts`, `samosbor.ts`, `void_protocols.ts`, `emergency_panels.ts`. **[владелец: решить]** какие call-sites делать детерминированными (FX оставить?).
+
+## R. Документация
+
+- **R1 — свести demos.md / problems.md / floors.md** — `OVERLAP CONFIRMED`. Код-доки: `demos.md` (соц-A-Life «Инфосеть Демос») делегирует в `markov.md`, пересекается с `alife.md`; `problems.md` (сквозной debt-ledger) by-design пересекает каждый систем-док, вверху битая stray-строка таблицы; `floors.md` позиционирует себя линзой к architecture/anomalies/balance/economics/alife. Смежный дубль-набор: `markov.md` vs `markov_plan.md` vs 111 файлов `marx_0…marx_110.md` (одноразовые агентские task-брифы, коллизия имён, к Markov отношения НЕ имеют). Решить: слить/переразметить границы, вычистить/заархивировать `marx_*`.
+
+## Пункты, требующие решения владельца перед реализацией
+
+Быстрый список `[владелец: уточнить/решить]`, вытащенный наверх для разбора:
+- **A3** — точный репро «бага перезарядки/ловкости» (в коде скейл корректен).
+- **B1** — конкретный этаж+точка, где debug-потолок ≠ лифт-потолок (код-дивергенции нет; вероятно spawn-комната или roof sky-tick).
+- **D7** — что именно не устраивает в «эффекты+текст» (сейчас связано и функционально).
+- **I6** — какие «плейсхолдеры не та дверь» имеются в виду (в коде такого плейсхолдера нет).
+- **I7** — какой «пустой гоп-стоп» (найденный — функциональный).
+- **L1** — «все декорации ящики»: подтвердить, что это визуал/меш, а не данные размещения.
+- **Q3** — какие call-sites `mathRng` коллапсить в детерминированный `rng()`, а какие FX оставить намеренно недетерминированными.
+- **Балансовые/RED-развилки** (пересекаются с DEFERRED-ledger, нужен sign-off): единый `applyDamage()` (A2+A6), бесконечные патроны NPC (A4), проводка `ensureReachableRouteLifts` (K4+K7+#45), сброс кэша варианта самосбора (D1), ретайр синглтона `player` (N1).

@@ -254,7 +254,7 @@ export function drawCraftMenu(
   drawGlitchText(ctx, menuTitle(snapshot.mode), layout.title.x, layout.title.y, uiTime, 931, '#6cf', 9 * sy);
   ctx.font = `${6.2 * sy}px monospace`;
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#567';
+  ctx.fillStyle = '#7a93a0';
   ctx.fillText(fitTextStable(ctx, `${menuCloseHint()} закрыть`, layout.close.w), layout.close.x + layout.close.w, layout.close.y);
   ctx.textAlign = 'left';
 
@@ -271,7 +271,7 @@ export function drawCraftMenu(
   const visibleRows = Math.max(1, Math.floor((layout.list.h - 20 * sy) / layout.rowH));
   const first = Math.max(0, Math.min(Math.max(0, entries.length - visibleRows), cursor - Math.floor(visibleRows * 0.5)));
   if (entries.length === 0) {
-    ctx.fillStyle = '#667';
+    ctx.fillStyle = '#8a9';
     drawWrappedText(ctx, craftMenuFallbackText(snapshot.mode), layout.list.x + 5 * sx, listTop, layout.list.w - 10 * sx, 9 * sy, 3);
   } else {
     for (let row = 0; row < visibleRows; row++) {
@@ -322,7 +322,7 @@ export function drawCraftMenu(
     const station = entry.kind === 'recipe' ? entry.station : snapshot.stationKind;
     ctx.fillText(fitTextStable(ctx, `СТАНЦИЯ: ${station}`, layout.detail.w - 10 * sx), layout.detail.x + 5 * sx, y);
   } else {
-    ctx.fillStyle = '#667';
+    ctx.fillStyle = '#8a9';
     ctx.font = `${7 * sy}px monospace`;
     drawWrappedText(ctx, craftMenuFallbackText(snapshot.mode), layout.detail.x + 8 * sx, layout.detail.y + 28 * sy, layout.detail.w - 16 * sx, 9 * sy, 4);
   }

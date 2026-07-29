@@ -93,12 +93,12 @@ function shortResourceName(resourceId: string | undefined): string {
 
 export function scarcityBand(multiplier: number): ScarcityBand {
   const m = Number.isFinite(multiplier) ? multiplier : 1;
-  if (m >= 2.05) return { label: 'КРИЗИС', short: 'КРЗ', color: '#f55' };
-  if (m >= 1.35) return { label: 'ДЕФИЦИТ', short: 'ДФЦ', color: '#fa4' };
-  if (m >= 1.12) return { label: 'НАПРЯЖ.', short: 'НАП', color: '#dda64a' };
-  if (m <= 0.72) return { label: 'ИЗБЫТОК', short: 'ИЗБ', color: '#6cf' };
-  if (m <= 0.88) return { label: 'ЗАПАС', short: 'ЗАП', color: '#8cf' };
-  return { label: 'НОРМА', short: 'НОР', color: '#8a8' };
+  if (m >= 2.05) return { label: 'КРИЗИС', short: 'КРЗ', color: '#b0483c' };
+  if (m >= 1.35) return { label: 'ДЕФИЦИТ', short: 'ДФЦ', color: '#b3844a' };
+  if (m >= 1.12) return { label: 'НАПРЯЖ.', short: 'НАП', color: '#b0904a' };
+  if (m <= 0.72) return { label: 'ИЗБЫТОК', short: 'ИЗБ', color: '#6f96a4' };
+  if (m <= 0.88) return { label: 'ЗАПАС', short: 'ЗАП', color: '#7996a4' };
+  return { label: 'НОРМА', short: 'НОР', color: '#6e8a72' };
 }
 
 export function questItemState(state: GameState, defId: string): QuestItemState {
@@ -119,8 +119,8 @@ export function questItemStateLabel(state: QuestItemState): string {
 }
 
 export function questItemStateColor(state: QuestItemState): string {
-  if (state === 'target') return '#6cf';
-  if (state === 'reward') return '#8f8';
+  if (state === 'target') return '#6f96a4';
+  if (state === 'reward') return '#6e9268';
   return '#888';
 }
 
@@ -260,27 +260,27 @@ export function readFinanceSnapshot(player: Entity, state: GameState): FinanceSn
 
 export function financeDetailLines(snapshot: FinanceSnapshot): FinanceLine[] {
   const lines: FinanceLine[] = [
-    { text: `Наличные: ${compactRubles(snapshot.cash)}`, color: '#ee4' },
+    { text: `Наличные: ${compactRubles(snapshot.cash)}`, color: '#c2a24c' },
   ];
   if (snapshot.hasBanking) {
-    lines.push({ text: `Счет: ${compactRubles(snapshot.accountRubles)}`, color: '#8cf' });
+    lines.push({ text: `Счет: ${compactRubles(snapshot.accountRubles)}`, color: '#7996a4' });
     if (snapshot.depositPrincipal > 0 || snapshot.depositYield > 0) {
       lines.push({
         text: `Депозит: ${compactRubles(snapshot.depositPrincipal)} +~${compactRubles(snapshot.depositYield)}`,
-        color: '#8f8',
+        color: '#6e9268',
       });
     }
     if (snapshot.debtRubles > 0 || snapshot.creditLimit > 0) {
       const debt = snapshot.debtRubles > 0 ? `Долг: ${compactRubles(snapshot.debtRubles)}` : 'Долг: 0₽';
       const limit = snapshot.creditLimit > 0 ? ` / лимит ${compactRubles(snapshot.creditLimit)}` : '';
-      lines.push({ text: `${debt}${limit}`, color: snapshot.debtRubles > 0 ? '#f86' : '#789' });
+      lines.push({ text: `${debt}${limit}`, color: snapshot.debtRubles > 0 ? '#b3663f' : '#789' });
     }
   }
   if (snapshot.hasStock) {
-    lines.push({ text: `Портфель: ${compactRubles(snapshot.portfolioValue)}`, color: '#9df' });
+    lines.push({ text: `Портфель: ${compactRubles(snapshot.portfolioValue)}`, color: '#8ba4b0' });
     lines.push({
       text: `Акции P/L: ${formatSignedRubles(snapshot.portfolioPL)}`,
-      color: snapshot.portfolioPL >= 0 ? '#8f8' : '#f86',
+      color: snapshot.portfolioPL >= 0 ? '#6e9268' : '#b3663f',
     });
   }
   return lines;
@@ -290,8 +290,8 @@ export function hudFinanceLines(snapshot: FinanceSnapshot, state?: GameState): F
   const top = snapshot.hasBanking
     ? `₽${Math.round(snapshot.cash)} сч ${Math.round(snapshot.accountRubles)}`
     : `₽${Math.round(snapshot.cash)}`;
-  const lines: FinanceLine[] = [{ text: top, color: '#ee4' }];
-  if (snapshot.debtRubles > 0) lines.push({ text: `долг ${compactRubles(snapshot.debtRubles)}`, color: '#f86' });
+  const lines: FinanceLine[] = [{ text: top, color: '#c2a24c' }];
+  if (snapshot.debtRubles > 0) lines.push({ text: `долг ${compactRubles(snapshot.debtRubles)}`, color: '#b3663f' });
   if (state) {
     const pressure = economyPressureLine(state);
     if (pressure) lines.push(pressure);
@@ -305,26 +305,26 @@ function inventoryFinanceLines(snapshot: FinanceSnapshot): FinanceLine[] {
       text: snapshot.hasBanking
         ? `Наличные: ${compactRubles(snapshot.cash)}  Счет: ${compactRubles(snapshot.accountRubles)}`
         : `Наличные: ${compactRubles(snapshot.cash)}`,
-      color: '#ee4',
+      color: '#c2a24c',
     },
   ];
   if (snapshot.depositPrincipal > 0 || snapshot.depositYield > 0) {
     lines.push({
       text: `Депозит: ${compactRubles(snapshot.depositPrincipal)} +~${compactRubles(snapshot.depositYield)}`,
-      color: '#8f8',
+      color: '#6e9268',
     });
   }
   if (snapshot.hasBanking && (snapshot.debtRubles > 0 || snapshot.creditLimit > 0)) {
     const limit = snapshot.creditLimit > 0 ? ` / лимит ${compactRubles(snapshot.creditLimit)}` : '';
     lines.push({
       text: `Долг: ${compactRubles(snapshot.debtRubles)}${limit}`,
-      color: snapshot.debtRubles > 0 ? '#f86' : '#789',
+      color: snapshot.debtRubles > 0 ? '#b3663f' : '#789',
     });
   }
   if (snapshot.hasStock) {
     lines.push({
       text: `Портфель: ${compactRubles(snapshot.portfolioValue)}  P/L ${formatSignedRubles(snapshot.portfolioPL)}`,
-      color: snapshot.portfolioPL >= 0 ? '#8f8' : '#f86',
+      color: snapshot.portfolioPL >= 0 ? '#6e9268' : '#b3663f',
     });
   }
   return lines;
@@ -375,7 +375,7 @@ export function drawInventoryFinanceBlock(
   const visible = lines.slice(0, available);
   if (visible.length === 0) return y;
 
-  drawGlitchText(ctx, 'ФИНАНСЫ', x, y, time, 830, '#6cf', 6 * sy);
+  drawGlitchText(ctx, 'ФИНАНСЫ', x, y, time, 830, '#6f96a4', 6 * sy);
   let cy = y + 8.4 * sy;
   ctx.font = `${5.8 * sy}px monospace`;
   for (const line of visible) {
@@ -416,7 +416,7 @@ export function tradeCellPriceDisplay(
   const questState = questItemState(state, defId);
   return {
     text: compactRubles(price),
-    color: price > 0 ? '#da4' : '#777',
+    color: price > 0 ? '#ab8339' : '#777',
     scarcityColor: band.color,
     scarcityLabel: band.short,
     questState,

@@ -12,6 +12,45 @@
 import { W, Cell } from '../core/types';
 import type { World } from '../core/world';
 
+/* ── Bounded surface-mark storage ─────────────────────────────── *
+ * world.surfaceMap holds one 1KB tile per marked cell. Ambient
+ * residue (blood trails, urine drips, scorch) is stamped continuously
+ * during ordinary play and is never pruned on its own, so the map grows
+ * without bound. This cap MUST stay ≤ SURF_MAX_SLOTS in render/webgl.ts
+ * (the surface atlas has exactly that many tiles): the moment the live
+ * cell count crosses that threshold the renderer abandons cheap
+ * incremental dirty-cell uploads and instead does a full O(N log N)
+ * re-sort of every entry plus a ~3 MB atlas/index re-upload on every
+ * camera move — the gradual-FPS-decay driver on populated floors.
+ * Keeping the map bounded here holds the renderer on its incremental
+ * path permanently. Functional cells (surfaceFlags != 0 — chalk-map
+ * clues, craft/interactive fixtures) are never evicted; only ambient
+ * decoration is FIFO-evicted oldest-first (Map preserves insertion
+ * order). Black-hand cult trails are unflagged but recent and few, so
+ * FIFO leaves them intact in practice. */
+export const SURFACE_MAP_MAX_CELLS = 1024;
+
+function evictOldestAmbientSurfaceCell(world: World, keepCi: number): void {
+  for (const key of world.surfaceMap.keys()) {
+    if (key === keepCi) continue;
+    if (world.surfaceFlags[key] !== 0) continue; // preserve functional marks
+    world.surfaceMap.delete(key);
+    world.markSurfaceCellDirty(key); // let the renderer reclaim the freed slot
+    return;
+  }
+  // Every remaining cell is functional/flagged — nothing safe to evict.
+}
+
+/** Get the surface tile for a cell, allocating (and capping) on first touch. */
+function acquireSurfaceCell(world: World, ci: number): Uint8Array {
+  let cell = world.surfaceMap.get(ci);
+  if (cell) return cell;
+  if (world.surfaceMap.size >= SURFACE_MAP_MAX_CELLS) evictOldestAmbientSurfaceCell(world, ci);
+  cell = new Uint8Array(1024);
+  world.surfaceMap.set(ci, cell);
+  return cell;
+}
+
 /* ── Fast hash (same family as pixutil.noise) ─────────────────── */
 function hash(n: number): number {
   n = (n ^ 61) ^ (n >>> 16);
@@ -402,11 +441,7 @@ export function paintSurfacePixel(
   const fy = y - Math.floor(y);
   const px = Math.max(0, Math.min(15, Math.floor(fx * 16)));
   const py = Math.max(0, Math.min(15, Math.floor(fy * 16)));
-  let cell = world.surfaceMap.get(ci);
-  if (!cell) {
-    cell = new Uint8Array(1024);
-    world.surfaceMap.set(ci, cell);
-  }
+  const cell = acquireSurfaceCell(world, ci);
 
   const idx = (py * 16 + px) << 2;
   const newA = Math.max(1, Math.min(255, Math.floor(alpha)));
@@ -503,8 +538,7 @@ export function stampMark(
       if (newA <= 0) continue;
 
       // Write to cell's surface map
-      let cell = world.surfaceMap.get(ci);
-      if (!cell) { cell = new Uint8Array(1024); world.surfaceMap.set(ci, cell); }
+      const cell = acquireSurfaceCell(world, ci);
 
       const idx = (py * 16 + px) << 2;
       writeSurfacePixel(cell, idx, r, g, b, newA);
@@ -550,10 +584,7 @@ export function stampLocalMark(
       const newA = Math.min(255, Math.floor(intensity * alpha));
       if (newA <= 0) continue;
 
-      if (!cell) {
-        cell = new Uint8Array(1024);
-        world.surfaceMap.set(ci, cell);
-      }
+      if (!cell) cell = acquireSurfaceCell(world, ci);
       writeSurfacePixel(cell, (py * 16 + px) << 2, r, g, b, newA);
       touched = true;
     }

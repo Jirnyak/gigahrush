@@ -30,11 +30,12 @@ export interface Critter {
   targetY: number;
   speed: number;
   phase: number;
+  heading: number; // current wander heading (radians), rotated per retarget for local zigzag
 }
 
 export const MAX_CRITTERS = 256;
 export const CRITTERS_POOL: Critter[] = Array.from({ length: MAX_CRITTERS }, () => ({
-  active: false, defId: 'roach', x: 0, y: 0, z: 0, targetX: 0, targetY: 0, speed: 1, phase: 0
+  active: false, defId: 'roach', x: 0, y: 0, z: 0, targetX: 0, targetY: 0, speed: 1, phase: 0, heading: 0
 }));
 
 export function updateCritters(world: World, dt: number, playerX: number, playerY: number) {
@@ -78,6 +79,7 @@ export function updateCritters(world: World, dt: number, playerX: number, player
           nc.targetY = nc.y;
           nc.speed = def.speed;
           nc.phase = mathRng() * 100;
+          nc.heading = mathRng() * Math.PI * 2;
           spawned++;
         }
       }
@@ -145,18 +147,6 @@ function getAdjacentFloors(world: World, x: number, y: number) {
   return floors;
 }
 
-function hasAdjacentWall(world: World, x: number, y: number): boolean {
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      if (world.get(x + dx, y + dy) === Cell.WALL) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 export function pickNewCritterTarget(world: World, c: Critter, playerX: number, playerY: number, def: any, distToPlayer: number) {
   if (mathRng() > 0.05) return;
 
@@ -169,22 +159,23 @@ export function pickNewCritterTarget(world: World, c: Critter, playerX: number, 
       c.targetY = c.y + (dy > 0 ? 1 : -1);
     } else {
       c.speed = def.speed;
-      const candidates = getAdjacentFloors(world, c.x, c.y);
-      if (candidates.length > 0) {
-        let nearWall = null;
-        for (let i = 0; i < candidates.length; i++) {
-          if (hasAdjacentWall(world, candidates[i].x, candidates[i].y)) {
-            nearWall = candidates[i];
-            break;
-          }
-        }
-        if (nearWall) {
-          c.targetX = nearWall.x;
-          c.targetY = nearWall.y;
-        } else {
+      // Local zigzag wander: rotate the heading by a random +/- turn each retarget
+      // so rats dart in erratic broken lines instead of hugging walls.
+      c.heading += (mathRng() - 0.5) * Math.PI * 1.2;
+      const step = 1 + mathRng();
+      const tx = c.x + Math.cos(c.heading) * step;
+      const ty = c.y + Math.sin(c.heading) * step;
+      if (world.get(Math.round(tx), Math.round(ty)) === Cell.FLOOR) {
+        c.targetX = tx;
+        c.targetY = ty;
+      } else {
+        // Blocked ahead: bounce to a random open neighbor and reface toward it.
+        const candidates = getAdjacentFloors(world, c.x, c.y);
+        if (candidates.length > 0) {
           const rC = candidates[Math.floor(mathRng() * candidates.length)];
           c.targetX = rC.x;
           c.targetY = rC.y;
+          c.heading = Math.atan2(rC.y - c.y, rC.x - c.x);
         }
       }
     }

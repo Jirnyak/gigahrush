@@ -64,7 +64,6 @@ const MAP_AUTHORED_IDLE_NPC_MARKER = { stroke: '#064225', fill: '#35d072' };
 const MAP_AUTHORED_ACTIVE_NPC_MARKER = { stroke: '#8a5c00', fill: '#ffd21f' };
 const MAP_PROCEDURAL_NPC_MARKER = { stroke: '#04375c', fill: '#49b8ff' };
 const MAP_UNEXPLORED_FADE_RADIUS = 3;
-const MAP_OVERVIEW_SIZE = W;
 const mapCrowdHashKeys = new Int32Array(MAP_CROWD_BIN_HASH_CAP);
 const mapCrowdHashBins = new Int16Array(MAP_CROWD_BIN_HASH_CAP);
 const mapCrowdX = new Float32Array(MAP_FULL_ENTITY_DOT_BUDGET);
@@ -138,6 +137,18 @@ interface FloorOverviewCache {
   ctx: CanvasRenderingContext2D;
   imageData: ImageData;
   signature: string;
+  cropX: number;
+  cropY: number;
+  cropW: number;
+  cropH: number;
+}
+
+interface FloorOverview {
+  canvas: HTMLCanvasElement;
+  cropX: number;
+  cropY: number;
+  cropW: number;
+  cropH: number;
 }
 
 const floorOverviewCache = new WeakMap<World, FloorOverviewCache>();
@@ -1320,42 +1331,78 @@ function overviewCellRgb(world: World, ci: number, highContrast: boolean): [numb
   return [(packed >> 16) & 255, (packed >> 8) & 255, packed & 255];
 }
 
-function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, highContrast: boolean): HTMLCanvasElement | null {
+// Torus-aware bounding box of the floor's actual geometry. A floor occupies only a
+// small slice of the 1024² torus; rasterizing the whole world makes it a tiny cluster.
+// Rooms can straddle the wrap seam, so anchor every span to the first room's origin via
+// world.delta and accumulate min/max in that continuous frame, then wrap the origin back.
+function floorOverviewBounds(world: World): { x: number; y: number; w: number; h: number } {
+  const rooms = world.rooms;
+  if (rooms.length === 0) return { x: 0, y: 0, w: W, h: W };
+  const ax = rooms[0].x;
+  const ay = rooms[0].y;
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  for (const r of rooms) {
+    const dx0 = world.delta(ax, r.x);
+    const dy0 = world.delta(ay, r.y);
+    if (dx0 < minX) minX = dx0;
+    if (dy0 < minY) minY = dy0;
+    if (dx0 + r.w > maxX) maxX = dx0 + r.w;
+    if (dy0 + r.h > maxY) maxY = dy0 + r.h;
+  }
+  const margin = 3;
+  minX -= margin; minY -= margin; maxX += margin; maxY += margin;
+  const w = Math.min(W, Math.max(1, Math.round(maxX - minX)));
+  const h = Math.min(W, Math.max(1, Math.round(maxY - minY)));
+  return { x: world.wrap(ax + minX), y: world.wrap(ay + minY), w, h };
+}
+
+function floorOverviewCanvas(ctx: CanvasRenderingContext2D, world: World, highContrast: boolean): FloorOverview | null {
   const signature = overviewSignature(world, highContrast);
   const cached = floorOverviewCache.get(world);
-  if (cached && cached.signature === signature) return cached.canvas;
+  if (cached && cached.signature === signature) {
+    return { canvas: cached.canvas, cropX: cached.cropX, cropY: cached.cropY, cropW: cached.cropW, cropH: cached.cropH };
+  }
 
   const doc = ctx.canvas.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
   if (!doc) return null;
+  const bounds = floorOverviewBounds(world);
+  const bw = bounds.w;
+  const bh = bounds.h;
   const canvas = cached?.canvas ?? doc.createElement('canvas');
-  canvas.width = MAP_OVERVIEW_SIZE;
-  canvas.height = MAP_OVERVIEW_SIZE;
+  canvas.width = bw;
+  canvas.height = bh;
   const bufferCtx = cached?.ctx ?? canvas.getContext('2d');
   if (!bufferCtx) return null;
-  const imageData = cached?.imageData?.width === MAP_OVERVIEW_SIZE && cached.imageData.height === MAP_OVERVIEW_SIZE
+  const imageData = cached?.imageData?.width === bw && cached.imageData.height === bh
     ? cached.imageData
-    : bufferCtx.createImageData(MAP_OVERVIEW_SIZE, MAP_OVERVIEW_SIZE);
+    : bufferCtx.createImageData(bw, bh);
   const data = imageData.data;
   let out = 0;
-  for (let ci = 0; ci < W * W; ci++) {
-    if (isMapCellExplored(world, ci)) {
-      const [r, g, b] = overviewCellRgb(world, ci, highContrast);
-      data[out++] = r;
-      data[out++] = g;
-      data[out++] = b;
-    } else {
-      const x = ci % W;
-      const y = (ci / W) | 0;
-      const shade = 3 + ((Math.imul(x + 11, 73856093) ^ Math.imul(y + 17, 19349663)) & 3);
-      data[out++] = shade;
-      data[out++] = shade + 2;
-      data[out++] = shade + 4;
+  for (let ry = 0; ry < bh; ry++) {
+    const wy = world.wrap(bounds.y + ry);
+    for (let rx = 0; rx < bw; rx++) {
+      const wx = world.wrap(bounds.x + rx);
+      const ci = wy * W + wx;
+      if (isMapCellExplored(world, ci)) {
+        const [r, g, b] = overviewCellRgb(world, ci, highContrast);
+        data[out++] = r;
+        data[out++] = g;
+        data[out++] = b;
+      } else {
+        const shade = 3 + ((Math.imul(wx + 11, 73856093) ^ Math.imul(wy + 17, 19349663)) & 3);
+        data[out++] = shade;
+        data[out++] = shade + 2;
+        data[out++] = shade + 4;
+      }
+      data[out++] = 255;
     }
-    data[out++] = 255;
   }
   bufferCtx.putImageData(imageData, 0, 0);
-  floorOverviewCache.set(world, { canvas, ctx: bufferCtx, imageData, signature });
-  return canvas;
+  floorOverviewCache.set(world, {
+    canvas, ctx: bufferCtx, imageData, signature,
+    cropX: bounds.x, cropY: bounds.y, cropW: bw, cropH: bh,
+  });
+  return { canvas, cropX: bounds.x, cropY: bounds.y, cropW: bw, cropH: bh };
 }
 
 function drawMapLegendSwatches(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, sy: number, highContrast: boolean): void {
@@ -1456,7 +1503,9 @@ export function drawMapLegendMenu(
 ): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  const s = Math.max(1, Math.min(1.35, Math.min(sx, sy)));
+  // Match the menu-family scale (hud.ts menuScale cap 1.68); the legend previously
+  // clamped tighter at 1.35, making it the smallest-text menu despite ample empty space.
+  const s = Math.max(1, Math.min(1.68, Math.min(sx, sy)));
   const pad = 14 * s;
   const gap = 16 * s;
   const highContrast = mapHighContrastEnabled();
@@ -1483,7 +1532,7 @@ export function drawMapLegendMenu(
   ctx.font = `${13 * s}px monospace`;
   ctx.fillText('ЛЕГЕНДА КАРТЫ', leftX, 26 * s);
   ctx.font = `${7 * s}px monospace`;
-  ctx.fillStyle = '#577';
+  ctx.fillStyle = '#7a93a0';
   ctx.fillText(
     fitTextStable(ctx, `${controlHint('mapLegend')} открыть/закрыть  |  ${controlHint('gameMenu')} переключить  |  ${menuCloseHint()} закрыть`, leftW),
     leftX,
@@ -1492,7 +1541,7 @@ export function drawMapLegendMenu(
 
   ctx.textBaseline = 'middle';
   ctx.font = `${7 * s}px monospace`;
-  ctx.fillStyle = '#345';
+  ctx.fillStyle = '#5a7080';
   ctx.fillText('РАЗДЕЛ', leftX + 14 * s, top - 10 * s);
   ctx.fillText('СЛОЙ', leftX + Math.min(72 * s, leftW * 0.24) + 16 * s, top - 10 * s);
   ctx.fillText('СТАТУС', leftX + leftW - 86 * s, top - 10 * s);
@@ -1506,8 +1555,8 @@ export function drawMapLegendMenu(
 
   const overviewTop = 52 * s;
   const overviewSide = Math.min(rightW - 16 * s, h - overviewTop - 24 * s);
-  const overviewX = rightX + (rightW - overviewSide) * 0.5;
-  const overviewY = overviewTop + 18 * s;
+  const boxX = rightX + (rightW - overviewSide) * 0.5;
+  const boxY = overviewTop + 18 * s;
   ctx.fillStyle = 'rgba(1,7,10,0.94)';
   ctx.fillRect(rightX, overviewTop, rightW, overviewSide + 24 * s);
   ctx.strokeStyle = '#17404a';
@@ -1515,26 +1564,36 @@ export function drawMapLegendMenu(
   ctx.fillStyle = '#7aa';
   ctx.textBaseline = 'alphabetic';
   ctx.font = `${8 * s}px monospace`;
-  ctx.fillText('СХЕМА ВСЕГО ЭТАЖА', overviewX, overviewTop + 11 * s);
+  ctx.fillText('СХЕМА ВСЕГО ЭТАЖА', boxX, overviewTop + 11 * s);
   const overview = floorOverviewCanvas(ctx, world, highContrast);
   if (overview) {
+    // Fit the cropped floor into the square box preserving aspect ratio (the crop is
+    // rarely square), so the floor fills the panel instead of shrinking to a corner.
+    const fit = overviewSide / Math.max(overview.cropW, overview.cropH);
+    const drawW = overview.cropW * fit;
+    const drawH = overview.cropH * fit;
+    const overviewX = boxX + (overviewSide - drawW) * 0.5;
+    const overviewY = boxY + (overviewSide - drawH) * 0.5;
     ctx.save();
     const smoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(overview, overviewX, overviewY, overviewSide, overviewSide);
+    ctx.drawImage(overview.canvas, overviewX, overviewY, drawW, drawH);
     ctx.imageSmoothingEnabled = smoothing;
     ctx.restore();
+    // Player crosshair, placed by the player's offset within the crop (torus-aware).
+    const relX = world.wrap(Math.floor(player.x) - overview.cropX);
+    const relY = world.wrap(Math.floor(player.y) - overview.cropY);
+    const px = overviewX + (relX / overview.cropW) * drawW;
+    const py = overviewY + (relY / overview.cropH) * drawH;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(px - 5, py);
+    ctx.lineTo(px + 5, py);
+    ctx.moveTo(px, py - 5);
+    ctx.lineTo(px, py + 5);
+    ctx.stroke();
   }
-  const px = overviewX + (world.wrap(Math.floor(player.x)) / W) * overviewSide;
-  const py = overviewY + (world.wrap(Math.floor(player.y)) / W) * overviewSide;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(px - 5, py);
-  ctx.lineTo(px + 5, py);
-  ctx.moveTo(px, py - 5);
-  ctx.lineTo(px, py + 5);
-  ctx.stroke();
 }
 
 /* ── Minimap ──────────────────────────────────────────────────── */

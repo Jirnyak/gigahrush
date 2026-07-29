@@ -199,13 +199,13 @@ export function drawContainerMenu(
       ctx.fillText(fitText(ctx, actionInfo.label, descW), cw / 2, Math.min(actionY + 16 * sy, ch - 34 * sy));
     }
   } else {
-    ctx.fillStyle = '#555';
+    ctx.fillStyle = '#7c8a93';
     ctx.font = `${6.4 * sy}px monospace`;
     ctx.fillText('Пустой слот', cw / 2, descY + 6 * sy);
   }
   ctx.textAlign = 'left';
 
-  ctx.fillStyle = '#555';
+  ctx.fillStyle = '#7a93a0';
   ctx.font = `${5.8 * sy}px monospace`;
   ctx.textAlign = 'right';
   const hintW = Math.max(60 * sx, cw - 16 * sx);

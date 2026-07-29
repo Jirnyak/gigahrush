@@ -624,9 +624,11 @@ export function applyFloorObjectPlacementProfile(
     ceilingCap: density?.features === undefined && density?.screens === undefined
       ? undefined
       : Math.min(128, Math.max(0, Math.ceil((density?.features ?? 0) * 0.55) + Math.ceil((density?.screens ?? 0) * 1.2))),
-    columnCap: density?.features === undefined
-      ? undefined
-      : Math.min(48, Math.max(0, Math.ceil((density?.features ?? 0) * 0.18))),
+    columnCap: profile.columnCap !== undefined
+      ? profile.columnCap
+      : density?.features === undefined
+        ? undefined
+        : Math.min(48, Math.max(0, Math.ceil((density?.features ?? 0) * 0.18))),
     maxPerRoom: density?.maxPerRoom === undefined ? undefined : Math.max(2, density.maxPerRoom + 1),
     avoidX: spawnX,
     avoidY: spawnY,

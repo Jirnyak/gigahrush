@@ -120,7 +120,7 @@ export function drawFeedbackMenu(
   ctx.fillText('Спасибо за то, что играете в гигахрущ!', w / 2, py + ph - 32 * sy);
 
   // Controls
-  ctx.fillStyle = '#456';
+  ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px monospace`;
   ctx.fillText(
     fitText(ctx, `${controlBindingLabel('gameMenu')} — открыть ссылки  |  ${menuCloseHint()} — закрыть`, pw - 12 * _sx),
