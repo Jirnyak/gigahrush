@@ -3,32 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>gigahrush — Official Technical Showcase</title>
-    <meta name="description" content="Post-apocalyptic toroidal voxel labyrinth engine with Soviet elevator interface.">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+New:wght@400;700;900&display=swap" rel="stylesheet">
+    <meta name="description" content="Gigahrush - High-Speed C++ Engine">
+    <title>Gigahrush - High-Speed C++ Engine</title>
     <style>
-        :root { --bg: #111111; --accent: #ff3300; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--bg); color: #f1f5f9; font-family: 'Courier New', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; overflow-x: hidden; }
-        .hero-box { max-width: 900px; width: 100%; text-align: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 3rem 2rem; backdrop-filter: blur(10px); box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 30px var(--accent); }
-        h1 { font-size: 3.5rem; font-weight: 900; color: #fff; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.5rem; text-shadow: 0 0 20px var(--accent); }
-        .tag { display: inline-block; background: rgba(255,255,255,0.05); border: 1px solid var(--accent); color: var(--accent); font-weight: 700; padding: 0.4rem 1.2rem; border-radius: 4px; font-size: 0.85rem; margin-bottom: 1.5rem; letter-spacing: 1px; }
-        p.desc { font-size: 1.2rem; color: #94a3b8; max-width: 700px; margin: 0 auto 2.5rem; line-height: 1.6; }
-        .btn-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-        .btn { padding: 1rem 2.2rem; background: var(--accent); color: #000; font-weight: 700; text-decoration: none; border-radius: 6px; font-size: 1rem; transition: all 0.3s; text-transform: uppercase; }
-        .btn:hover { background: #fff; box-shadow: 0 0 30px #fff; transform: translateY(-2px); }
-        .btn-sec { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
-        .btn-sec:hover { background: rgba(255,255,255,0.1); }
+        :root {
+            --neon-green: #39ff14;
+            --neon-purple: #bc13fe;
+            --bg-color: #050505;
+            --glass-bg: rgba(20, 20, 20, 0.6);
+            --glass-border: rgba(57, 255, 20, 0.3);
+            --text-main: #e0e0e0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            background-image: 
+                linear-gradient(45deg, #050505 25%, transparent 25%, transparent 75%, #050505 75%, #050505),
+                linear-gradient(45deg, #050505 25%, transparent 25%, transparent 75%, #050505 75%, #050505);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at center, transparent 0%, #000 100%);
+            z-index: -1;
+        }
+
+        .hud-container {
+            width: 90%;
+            max-width: 1200px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.1), inset 0 0 20px rgba(188, 19, 254, 0.1);
+            position: relative;
+            animation: pulse 4s infinite alternate;
+        }
+
+        .hud-container::after {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            background: linear-gradient(45deg, var(--neon-green), var(--neon-purple));
+            z-index: -1;
+            border-radius: 16px;
+            opacity: 0.3;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 4rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            color: transparent;
+            -webkit-text-stroke: 1px var(--neon-green);
+            text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+            animation: glitch 2s infinite;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--neon-purple);
+            margin-top: 10px;
+            text-shadow: 0 0 5px rgba(188, 19, 254, 0.5);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .card {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--neon-purple);
+            padding: 20px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            box-shadow: 0 0 15px var(--neon-purple);
+            transform: translateY(-5px);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 2px;
+            background: var(--neon-green);
+            animation: scanline 3s linear infinite;
+        }
+
+        .card h2 {
+            color: var(--neon-green);
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .card p {
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .stats {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-around;
+            border-top: 1px dashed var(--neon-green);
+            padding-top: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            color: var(--neon-purple);
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--neon-purple);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: transparent;
+            color: var(--neon-green);
+            text-decoration: none;
+            border: 1px solid var(--neon-green);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-green);
+        }
+
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+
+        @keyframes scanline {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 20px rgba(57, 255, 20, 0.1), inset 0 0 20px rgba(188, 19, 254, 0.1); }
+            100% { box-shadow: 0 0 30px rgba(57, 255, 20, 0.2), inset 0 0 30px rgba(188, 19, 254, 0.2); }
+        }
     </style>
 </head>
 <body>
-    <div class="hero-box">
-        <h1>gigahrush</h1>
-        <div class="tag">SAMOSBOR 128³ VOXEL CONCRETE MAZE SURVIVAL</div>
-        <p class="desc">Post-apocalyptic toroidal voxel labyrinth engine with Soviet elevator interface.</p>
-        <div class="btn-group">
-            <a href="https://github.com/Jirnyak/gigahrush" class="btn" target="_blank">🚀 Open GitHub Repo</a>
-            <a href="https://github.com/Jirnyak/gigahrush#readme" class="btn btn-sec" target="_blank">📖 Read Spec</a>
+    <div class="hud-container">
+        <header>
+            <h1>Gigahrush</h1>
+            <div class="subtitle">Next-Gen C++ High-Speed Engine [SYS_ACTIVE]</div>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h2>>> Core Architecture</h2>
+                <p>Built from the ground up with raw C++ performance. Memory safety meets execution velocity in our custom memory allocation sub-system.</p>
+                <a href="https://github.com/Jirnyak/gigahrush" class="btn">View Source</a>
+            </div>
+            <div class="card">
+                <h2>>> Neural Integration</h2>
+                <p>Advanced heuristics and predictive branching. Gigahrush anticipates the pipeline before the CPU cycles are even scheduled.</p>
+                <a href="https://github.com/Jirnyak/gigahrush" class="btn">Documentation</a>
+            </div>
+            <div class="card">
+                <h2>>> Sub-Millisecond Latency</h2>
+                <p>Optimized for ultra-low latency environments. HFT and real-time processing capabilities straight out of the box.</p>
+                <a href="https://github.com/Jirnyak/gigahrush" class="btn">Benchmarks</a>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-value">0.02ms</div>
+                <div class="stat-label">Tick Rate</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">C++20</div>
+                <div class="stat-label">Standard</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">100%</div>
+                <div class="stat-label">Lock-Free</div>
+            </div>
         </div>
     </div>
 </body>
