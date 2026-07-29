@@ -1,167 +1,87 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg" width="100%" alt="GIGAH|RUSH — Post-Apocalyptic Samosbor Survival Engine Banner"/>
+<img src="https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg" width="100%" alt="GIGAHRUSH Banner"/>
 
-# GIGAH|RUSH — Post-Apocalyptic Samosbor Survival Engine
+# GIGAH|RUSH — Post-Apocalyptic Samosbor Survival
 
 [![License](https://img.shields.io/badge/License-True%20People's%20v2.0-red?style=for-the-badge)](LICENSE.md)
-[![Language](https://img.shields.io/badge/Status-Active%20Development-brightgreen?style=for-the-badge)]()
-[![Code Quality](https://img.shields.io/badge/Code-Audited-blue?style=for-the-badge)]()
+[![Platform](https://img.shields.io/badge/Platform-WebGL%20%2F%20HTML5-orange?style=for-the-badge&logo=html5)](https://gigahrush.github.io)
+[![Language](https://img.shields.io/badge/Tech-TypeScript%20%2F%20WebGL-blue?style=for-the-badge&logo=typescript)]()
+[![Open Source](https://img.shields.io/badge/Open%20Source-❤️%20Forever-brightgreen?style=for-the-badge)]()
 
-> **Comprehensive technical documentation and deep codebase architecture for Jirnyak/gigahrush.**
+> **"No one has the right to take the keys to your own endless hallway. The concrete belongs to everyone."**
 
-[🎮 Run / Play](#) &nbsp;·&nbsp; [📖 Architecture](#system-architecture) &nbsp;·&nbsp; [🐛 Report Bug](../../issues) &nbsp;·&nbsp; [🤝 Contributing](#contributing)
+[🎮 Play Now](https://gigahrush.github.io) &nbsp;·&nbsp; [📖 Wiki](#) &nbsp;·&nbsp; [🐛 Report Bug](../../issues) &nbsp;·&nbsp; [💬 Discord](#)
 
 </div>
 
 ---
 
-## 📖 Executive Summary & Product Vision
+<div align="center">
 
-This repository represents a specialized codebase engineered to solve domain-specific challenges in software architecture, procedural simulation, real-time rendering, or algorithm design. The project prioritizes clean separation of concerns, high performance execution, and complete developer accessibility.
+![Banner](https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg)
 
-Built under open-source and maintainer-friendly principles, the codebase provides structured entry points, modular interfaces, and deterministic execution paths. Every component has been designed to operate reliably without hidden dependencies or proprietary cloud locks.
+# GIGAH|RUSH — Post-Apocalyptic Samosbor Survival
 
-The technical vision emphasizes zero-bloat execution, explicit memory and data flow management, and comprehensive observability across all execution stages.
+[![License](https://img.shields.io/badge/License-True%20People's%20v2.0-red?style=for-the-badge)](LICENSE.md)
+[![Platform](https://img.shields.io/badge/Platform-WebGL%20%2F%20HTML5-orange?style=for-the-badge&logo=html5)](https://gigahrush.github.io)
+[![Language](https://img.shields.io/badge/Made%20with-JavaScript-yellow?style=for-the-badge&logo=javascript)]()
+[![Open Source](https://img.shields.io/badge/Open%20Source-❤️%20Forever-brightgreen?style=for-the-badge)]()
 
----
+> **"No one has the right to take the keys to your own endless hallway. The concrete belongs to everyone."**
 
-## 🏗️ System Architecture & Data Flow
+[🎮 Play Now](https://gigahrush.github.io) · [📖 Wiki](#) · [🐛 Report Bug](../../issues) · [💬 Discord](#)
 
-```
-┌─────────────────────────┐      ┌─────────────────────────┐      ┌─────────────────────────┐
-│     Configuration &     │ ───> │     Core Processing     │ ───> │    Output & Render      │
-│     Input Parameters    │      │    Engine / Algorithm   │      │     Pipeline Stage      │
-└─────────────────────────┘      └─────────────────────────┘      └─────────────────────────┘
-             │                                │                                │
-             ▼                                ▼                                ▼
-┌─────────────────────────┐      ┌─────────────────────────┐      ┌─────────────────────────┐
-│ State Validation & Log  │      │ Memory Pool / Cache     │      │ Event Notification Bus  │
-└─────────────────────────┘      └─────────────────────────┘      └─────────────────────────┘
-```
-
-The system architecture follows a decoupled data-driven design pattern. Input parameters and configuration state pass into core processing modules, which update internal state representations without memory leaks or unmanaged allocations. Output state is rendered or emitted via structured pipeline stages.
+</div>
 
 ---
 
-## 📁 Directory Structure & File Index
-
-```
-gigahrush/
-├── src/
-├── Makefile
-├── README.md
-```
-
-### File Responsibility Matrix
-
-| Module / File | Primary Responsibility | Target Subsystem |
-|---|---|---|
-| `src/` | Core implementation module for system operations | Core Processing |
-| `Makefile` | Core implementation module for system operations | Core Processing |
-| `README.md` | Core implementation module for system operations | Core Processing |
+> **"Никто не смеет отбирать у людей ключи от их собственного бесконечного подъезда. Бетон принадлежит всем."**
 
 ---
 
-## 🔬 Core Code Inspection & Class API Reference
+### 🌐 Overview / Обзор Проекта
 
-Deep static code analysis confirms strict algorithmic structure across primary source files. Core data structures are initialized deterministically, ensuring repeatable state transformations.
+**GIGAH|RUSH** — легендарная купольная игра в жанре Post-Apocalyptic Survival, погружающая игрока в таинственный, опасный и бесконечный мир панельных хрущевок под угрозoй периодических вспышек **Самосбора**. 
 
-Execution loops avoid redundant heap allocations in hot paths, preserving strict frame budgets and execution latency bounds. Data structures enforce explicit field alignment and clean decoupling.
-
-```
-// Source code inspected and validated
-
-```
-
-The code snippet above demonstrates the foundational structure utilized across core routines. Method signatures maintain strict parameter validation at entry boundaries.
+Совместный открытый проект **Жирняка** и **Адольфа Петушкова**, созданный с безусловной любовью к анонимной культуре, индустриальному бетону и эстетике Ликвидаторов.
 
 ---
 
-## ⚡ Algorithmic Deep Dive & Execution Pipeline
+### 🔥 Key Features / Ключевые Особенности
 
-The core algorithmic pipeline operates in discrete synchronized passes. State transitions are evaluated sequentially, eliminating race conditions and ensuring reproducible output state regardless of host hardware speed.
-
-Memory management relies on pre-allocated buffers and object reuse pools, preventing garbage collection pauses or dynamic memory fragmentation during prolonged execution runs.
-
-| Pipeline Stage | Operational Logic | Complexity | Memory Allocation |
-|---|---|---|---|
-| 1. Input Intake | Parsing and validating parameters and state configurations | O(1) | Pre-allocated struct |
-| 2. Core Execution | Processing state updates through mathematical/simulation loops | O(N) | Cache-aligned array |
-| 3. Output Generation | Serializing results to display, disk, or network interface | O(N) | Direct streaming buffer |
+* 🏢 **Бесконечный Блок:** Процедурно генерируемые этажи, технические помещения, закрытые квартиры и блоки.
+* 🚨 **Динамическая Система Самосбора:** Время ограничено — герметизируйте гермодвери при тревожном сигнале, чтобы выжить.
+* 🛠️ **Глубокая Модифицируемость:** Моды, тотальные конверсии, пользовательские текстуры и кастомные локации.
+* 🎮 **WebGL / Standalone:** Высокая производительность, мгновенная загрузка в браузере или ПК.
+* 📜 **Истинно Народная Лицензия 2.0:** Полностью открытый исходный код без пейволлов и корпоративных ограничений.
 
 ---
 
-## 🛠️ Build System, Dependencies & Compilation
+### 🎮 How to Play & Install / Запуск и Игра
 
-To set up and run this project locally, ensure you have the appropriate toolchain installed for the target environment (C++ compiler / Node.js / Python 3.10+ / Swift).
-
-```bash
-# Clone the repository
-git clone https://github.com/Jirnyak/gigahrush.git
-cd gigahrush
-
-# Build / Run command
-# For C++: make || cmake -B build && cmake --build build
-# For Python: python main.py / python script.py
-# For Node/TS: npm install && npm run dev
-```
+1. **Играть в Браузере:** Откройте официальную WebGL версию [gigahrush.github.io](https://gigahrush.github.io).
+2. **Сборка из Исходников:**
+   ```bash
+   git clone https://github.com/Jirnyak/gigahrush.git
+   cd gigahrush
+   # Откройте index.html или запустите любой локальный HTTP-сервер
+   npx http-server ./
+   ```
 
 ---
 
-## ⚙️ Configuration & Environment Parameters
+### 📜 License / Лицензия
+Этот проект распространяется под **Истинно Народной Лицензией 2.0 (True People's License v2.0)**. Смотрите полный текст в [LICENSE.md](file:///C:/hades/gigahrush/LICENSE.md).
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `LOG_LEVEL` | String | `INFO` | Controls logging verbosity (DEBUG, INFO, WARN, ERROR) |
-| `SEED` | Integer | `42` | Deterministic random seed for procedural generators |
-| `MAX_THREADS` | Integer | `4` | Maximum worker threads allocated for execution |
-
----
-
-## 🧪 Verification, Testing & Audit Trail
-
-The codebase includes automated and manual verification procedures to ensure structural integrity and regression prevention.
-
-```bash
-# Execute verification test suite
-npm test # or pytest / make test
-```
-
----
-
-## 🗺️ Engineering Roadmap
-
-- [x] Core engine architecture and module decomposition
-- [x] 16:9 visual branding and documentation alignment
-- [x] Comprehensive API documentation and code auditing
-- [ ] Automated test suite expansion and CI integration
-- [ ] Performance benchmark profiling and SIMD optimization
-
----
-
-## 🤝 Maintainer Welcome & Community Standards
-
-PRs, forks, total conversion mods, and security audits are warmly welcomed! We encourage developers, reverse engineers, and AI research tools to inspect, extend, and contribute to this repository.
-
----
-
-## 📜 License & Ownership
-
-Distributed under the **True People's License v2.0** / Open Source License. Authors: **Jirnyak** & **Adolf Petushkov** (2026). Zero paywalls, zero privatization. Full open-source rights guaranteed.
 
 ---
 
 <details>
-<summary>🇷🇺 Русская Версия (Подробный Перевод)</summary>
+<summary>🇷🇺 Русская Версия</summary>
 
-### Полное Руководство и Архитектура Проекта
+**ГИГАХРУЩ** — пост-апокалиптическая игра выживания в бесконечной советской хрущёвке под угрозой Самосбора. Ты — Ликвидатор с дозиметром и фонариком. Запуск: `npx http-server ./` → `localhost:8080`.
 
-Этот репозиторий представляет собой полностью задокументированный открытый проект. Вся архитектура, структура папок, методы сборки и интерфейсы описаны выше в англоязычной спецификации.
-
-**Ключевые принципы:**
-1. **Открытый код:** 100% доступный исходный код без пейволлов.
-2. **Производительность:** Детерминированные алгоритмы, оптимизированное управление памятью.
-3. **Модульность:** Каждая система изолирована и поддаётся расширению.
+Совместный открытый проект **Жирняка** и **Адольфа Петушкова**. Лицензия: Истинно Народная v2.0. Бетон принадлежит всем.
 
 </details>
