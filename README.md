@@ -1,6 +1,6 @@
 <div align="center">
 
-![Banner](https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg)
+<img src="https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg" width="100%" alt="GIGAHRUSH Banner"/>
 
 # GIGAH|RUSH — Post-Apocalyptic Samosbor Survival
 
@@ -8,14 +8,20 @@
 [![Platform](https://img.shields.io/badge/Platform-WebGL%20%2F%20HTML5-orange?style=for-the-badge&logo=html5)](https://gigahrush.github.io)
 [![Language](https://img.shields.io/badge/Made%20with-JavaScript-yellow?style=for-the-badge&logo=javascript)]()
 [![Open Source](https://img.shields.io/badge/Open%20Source-❤️%20Forever-brightgreen?style=for-the-badge)]()
+[![Stars](https://img.shields.io/github/stars/Jirnyak/gigahrush?style=for-the-badge&color=gold)]()
+[![Forks](https://img.shields.io/github/forks/Jirnyak/gigahrush?style=for-the-badge)]()
 
 > **"No one has the right to take the keys to your own endless hallway. The concrete belongs to everyone."**
 
-[🎮 Play Now](https://gigahrush.github.io) · [📖 Wiki](#) · [🐛 Report Bug](../../issues) · [💬 Discord](#)
+[🎮 Play Now](https://gigahrush.github.io) &nbsp;·&nbsp; [📖 Wiki](#) &nbsp;·&nbsp; [🐛 Report Bug](../../issues) &nbsp;·&nbsp; [💬 Discord](#) &nbsp;·&nbsp; [🤝 Contribute](#)
 
 </div>
 
 ---
+
+# 🏢 GIGAH|RUSH (ГИГАХРУЩ) — Post-Apocalyptic Samosbor Survival
+
+![Gigahrush Banner](https://raw.githubusercontent.com/marko1olo/gigahrush/main/docs/banner.jpg)
 
 > **"Никто не смеет отбирать у людей ключи от их собственного бесконечного подъезда. Бетон принадлежит всем."**
 
@@ -54,15 +60,3 @@
 
 ### 📜 License / Лицензия
 Этот проект распространяется под **Истинно Народной Лицензией 2.0 (True People's License v2.0)**. Смотрите полный текст в [LICENSE.md](file:///C:/hades/gigahrush/LICENSE.md).
-
-
----
-
-<details>
-<summary>🇷🇺 Русская Версия</summary>
-
-**ГИГАХРУЩ** — пост-апокалиптическая игра выживания в бесконечной советской хрущёвке под угрозой Самосбора. Ты — Ликвидатор с дозиметром и фонариком. Запуск: `npx http-server ./` → `localhost:8080`.
-
-Совместный открытый проект **Жирняка** и **Адольфа Петушкова**. Лицензия: Истинно Народная v2.0. Бетон принадлежит всем.
-
-</details>
