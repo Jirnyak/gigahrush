@@ -192,6 +192,7 @@ uniform highp usampler2D uDoorStates; // W×W: door states (0=open, 1=closed, 2=
 uniform sampler2D uAtlas;             // packed texture atlas
 uniform vec2  uAtlasSize;             // atlas dimensions in pixels
 uniform int   uUseDynamicSky;         // roof/open-air ceiling override
+uniform int   uHasOpenSky;            // 1 → this floor renders see-through open sky above finite walls
 uniform sampler2D uDynamicSky;        // 1024×1024 dynamic sky/cloud texture
 uniform vec3  uDynamicSkyTint;
 uniform vec3  uBaseFogColor;
@@ -231,6 +232,13 @@ const float TEX_F = ${TEX.toFixed(1)};
 const int TEX_I = ${TEX};
 const int ATLAS_COLS_I = ${ATLAS_COLS};
 const float PI = 3.14159265;
+
+// Open-sky march: a ceiling tier at/above SKY_TIER reads as open air (roof deck
+// 14 / street 240), below it as an enclosed volume. Kept in sync with
+// SKY_TIER_THRESHOLD in gen/ceiling_heights.ts. SKY_STEPS is how far the ceiling
+// march traces on open-sky floors before it gives up to sky (tunable for perf).
+const float SKY_TIER = 8.0;
+const int SKY_STEPS = 24;
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
@@ -1407,22 +1415,58 @@ void main() {
         float dEnter = 0.0;
         float currentDist = -1.0;
         bool isRiser = false;
+        bool isWallFace = false; // open-sky: ray struck the vertical face of a finite wall/tower silhouette
+        bool skyEscape = false;  // open-sky: ray cleared every finite structure into open sky
         int cside = 0;
         float marchHc = 1.0;
         float rawPrevTier = float(texelFetch(uCeil, ivec2(wrapI(int(floor(uPos.x))), wrapI(int(floor(uPos.y)))), 0).r);
         float prevHc = 1.0 + rawPrevTier * 0.5;
-        for (int cs = 0; cs < 16; cs++) {
+        for (int cs = 0; cs < SKY_STEPS; cs++) {
+          if (uHasOpenSky == 0 && cs >= 16) break; // closed floors: identical 16-step trace, no sky work
           ivec2 mc = ivec2(wrapI(cmx), wrapI(cmy));
           float rawMarchTier = float(texelFetch(uCeil, mc, 0).r);
           marchHc = 1.0 + rawMarchTier * 0.5;
-          if (uCamHeight + slope * dEnter >= marchHc) { currentDist = dEnter + 0.001; isRiser = true; break; }
-          float dExit = min(csdx, csdy);
-          if (uCamHeight + slope * dExit >= marchHc) { currentDist = (marchHc - uCamHeight) / slope; break; }
-          prevHc = marchHc;
-          if (csdx < csdy) { dEnter = csdx; csdx += ddx; cmx += stepX; cside = 0; }
-          else             { dEnter = csdy; csdy += ddy; cmy += stepY; cside = 1; }
-          if (dEnter > MAX_DIST) break;
+          if (uHasOpenSky == 1) {
+            // Universal see-through march. A WALL cell is a finite silhouette: if
+            // the sightline is still below its top where the ray enters, we strike
+            // the vertical face; otherwise the ray clears it and we see over the
+            // top. A non-wall cell below the sky band is a real ceiling/soffit
+            // plane. A cell at/above the sky band is open air — passes straight
+            // through (this is the "прозрачность"). uCells is fetched only here,
+            // so closed floors never pay for it.
+            uint mcType = texelFetch(uCells, mc, 0).r;
+            if (mcType == ${Cell.WALL}u) {
+              if (uCamHeight + slope * dEnter < marchHc) { currentDist = dEnter + 0.001; isWallFace = true; break; }
+            } else if (rawMarchTier < SKY_TIER) {
+              if (uCamHeight + slope * dEnter >= marchHc) { currentDist = dEnter + 0.001; isRiser = true; break; }
+              float dExitO = min(csdx, csdy);
+              if (uCamHeight + slope * dExitO >= marchHc) { currentDist = (marchHc - uCamHeight) / slope; break; }
+            }
+            prevHc = marchHc;
+            if (csdx < csdy) { dEnter = csdx; csdx += ddx; cmx += stepX; cside = 0; }
+            else             { dEnter = csdy; csdy += ddy; cmy += stepY; cside = 1; }
+            if (dEnter > MAX_DIST) { skyEscape = true; break; }
+          } else {
+            if (uCamHeight + slope * dEnter >= marchHc) { currentDist = dEnter + 0.001; isRiser = true; break; }
+            float dExit = min(csdx, csdy);
+            if (uCamHeight + slope * dExit >= marchHc) { currentDist = (marchHc - uCamHeight) / slope; break; }
+            prevHc = marchHc;
+            if (csdx < csdy) { dEnter = csdx; csdx += ddx; cmx += stepX; cside = 0; }
+            else             { dEnter = csdy; csdy += ddy; cmy += stepY; cside = 1; }
+            if (dEnter > MAX_DIST) break;
+          }
         }
+        if (skyEscape && uHasOpenSky == 1) {
+          // Open-sky terminal: the ray left every finite structure behind.
+          if (!wallDrawn) {
+            if (uUseDynamicSky == 1) {
+              vec2 skyPos = uPos + vec2(rayDX, rayDY) * (MAX_DIST * 0.5);
+              vec2 skyUv = wrapF(skyPos) / float(W_SIZE);
+              pixel = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
+            }
+            pixelDepth = 1.0; // sky sits behind everything (pixel already = fogColor() with no dynamic sky)
+          }
+        } else {
         if (currentDist < 0.0) currentDist = (marchHc - uCamHeight) / slope;
         if (currentDist <= MAX_DIST && (!wallDrawn || currentDist < wallDist)) {
           float floorX = uPos.x + rayDX * currentDist;
@@ -1436,7 +1480,27 @@ void main() {
           float baseLitCeil = uLightQuality > 0 ? sampleLightSmooth(vec2(floorX, floorY)).x : sampleLight(cCell);
           float cLit = min(1.0, uAmbient + baseLitCeil * (1.0 - uAmbient) + flashlightBoost(currentDist) + toolBeam * 0.82);
 
-          if (isRiser) {
+          if (isWallFace) {
+            // Distant finite wall / tower silhouette seen through the open sky
+            // above a nearer structure. Cheap shading only (atlas + local light +
+            // fog + tool beam); no normal-map perturb or dynamic point lights —
+            // these faces are far (>16 u) and outside light radii, so the full
+            // wall path would cost heavily for ≈0 visible gain.
+            float wallHitX;
+            if (cside == 0) wallHitX = uPos.y + rayDY * currentDist;
+            else            wallHitX = uPos.x + rayDX * currentDist;
+            wallHitX -= floor(wallHitX);
+            int rtx = int(floor(wallHitX * TEX_F)) & (TEX_I - 1);
+            if (cside == 0 && rayDX < 0.0) rtx = TEX_I - 1 - rtx;
+            if (cside == 1 && rayDY > 0.0) rtx = TEX_I - 1 - rtx;
+            float zFace = uCamHeight + slope * currentDist;
+            int rty = int(floor((marchHc - zFace) * TEX_F)) & (TEX_I - 1);
+            uint marchWallTex = texelFetch(uWallTex, cCell, 0).r; // 0 == Tex.CONCRETE, a fine default
+            vec3 wc = sampleAtlas(marchWallTex, rtx, rty).rgb * (0.34 + cLit * 0.40);
+            wc = applyToolBeamTint(wc, toolBeam);
+            pixel = applyLocalFog(wc, cCell, ff);
+            pixelDepth = min(1.0, currentDist / MAX_DIST);
+          } else if (isRiser) {
             // Vertical concrete soffit between two ceiling heights.
             float wallHitX;
             if (cside == 0) wallHitX = uPos.y + rayDY * currentDist;
@@ -1473,7 +1537,11 @@ void main() {
               cc = sampleAtlas(${Tex.CEIL}u, ftx, fty).rgb * (0.25 + cLit * 0.35);
               cc = applyHellLamp(cc, ftx, fty, cCell.x, cCell.y, currentDist);
             } else {
-              if (uUseDynamicSky == 1) {
+              if (uUseDynamicSky == 1 && uHasOpenSky == 0) {
+                // Non-open-sky floors keep their dynamic-sky ceiling override. On
+                // open-sky floors the sky is the see-through terminal above finite
+                // walls; reaching an actual ceiling plane here means we are INSIDE
+                // an enclosed volume (house etc.) → draw real concrete, not sky.
                 vec2 skyUv = wrapF(vec2(floorX, floorY)) / float(W_SIZE);
                 cc = texture(uDynamicSky, skyUv).rgb * uDynamicSkyTint;
                 cc *= 0.45 + cLit * 0.55;
@@ -1502,6 +1570,7 @@ void main() {
             pixelDepth = min(1.0, currentDist / MAX_DIST);
           }
           }
+        }
         }
       }
   }
@@ -3057,7 +3126,7 @@ export function initWebGL(
     'uResolution', 'uPos', 'uAngle', 'uPitch', 'uFogDensity',
     'uGlitch', 'uPlaneLen', 'uCamHeight', 'uFlashlight', 'uToolBeam', 'uToolBeamRange', 'uAmbient', 'uTime', 'uLightQuality', 'uPurpleFog', 'uFogColor',
     'uCells', 'uWallTex', 'uFloorTex', 'uFeatures', 'uCeil', 'uLight', 'uFog',
-    'uDoorStates', 'uAtlas', 'uAtlasSize', 'uUseDynamicSky', 'uDynamicSky',
+    'uDoorStates', 'uAtlas', 'uAtlasSize', 'uUseDynamicSky', 'uHasOpenSky', 'uDynamicSky',
     'uDynamicSkyTint', 'uBaseFogColor', 'uSurfaceAtlas', 'uSurfaceIdx',
     'uDetailFloorCount', 'uDetailFloor0', 'uDetailFloor1', 'uDetailFloorColor0', 'uDetailFloorColor1',
     'uDetailWallCount', 'uDetailWall0', 'uDetailWall1', 'uDetailWallColor0', 'uDetailWallColor1',
@@ -3326,6 +3395,16 @@ export function updateWorldData(world: World): void {
   gl.bindTexture(gl.TEXTURE_2D, glState.featuresTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.features);
   glState.featureVersion = world.featureVersion;
+
+  // Ceiling-height tiers are a full world texture like the rest and MUST re-upload
+  // on world replacement. Floor switches mint a fresh World whose ceilHeightVersion
+  // resets to the same constant every floor, so the per-frame version gate in
+  // updateDynamicData never fires — without this the GPU keeps the first floor's
+  // ceilings forever (tall crossroads/roads render as the low start-floor ceiling).
+  gl.bindTexture(gl.TEXTURE_2D, glState.ceilTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.ceilHeight);
+  glState.ceilHeightVersion = world.ceilHeightVersion;
+
   glState.lightVersion = world.lightVersion;
   glState.lightBlinksVersion = world.lightVersion;
 
@@ -3521,6 +3600,7 @@ export function renderSceneGL(
       ? [skyFog.r, skyFog.g, skyFog.b]
       : [5, 5, 8];
   gl.uniform1i(ru['uUseDynamicSky']!, activeDynamicSky ? 1 : 0);
+  gl.uniform1i(ru['uHasOpenSky']!, world.hasOpenSky ? 1 : 0);
   gl.uniform3f(ru['uDynamicSkyTint']!, skyR, skyG, skyB);
   gl.uniform3f(
     ru['uBaseFogColor']!,

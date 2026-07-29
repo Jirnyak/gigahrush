@@ -17,7 +17,7 @@ import {
   VISUAL_SLOTS_PER_CELL,
   type World,
 } from '../../core/world';
-import { getCeilingHeightForTier } from '../../gen/ceiling_heights';
+import { getCeilingHeightForTier, SKY_TIER_THRESHOLD } from '../../gen/ceiling_heights';
 import {
   VISUAL_CELL_DEFS,
   visualCellDefByCode,
@@ -2284,8 +2284,13 @@ const CEILING_SPAN_MODELS = new Set<string>(['column_hint', 'column_concrete_squ
 // the per-cell ceiling height (tier t -> ceilZ = 1 + t*0.5, matching the
 // raycaster). Standard cells (tier 0) are untouched.
 function applyCeilingHeight(world: World, instance: MeshInstance): void {
-  const tier = world.ceilHeight[world.idx(world.wrap(Math.floor(instance.x)), world.wrap(Math.floor(instance.y)))];
-  const ceilZ = getCeilingHeightForTier(Math.max(0, tier));
+  const rawTier = world.ceilHeight[world.idx(world.wrap(Math.floor(instance.x)), world.wrap(Math.floor(instance.y)))];
+  // A sky-magnitude tier (open-sky roof deck 14, street 240, deep canyon 198) is
+  // not a ceiling a column can span or a fixture can hang from — clamp to the top
+  // of the enclosed band so structural meshes never stretch floor-to-sky as столбы.
+  // Enclosed rooms (tier ≤4 < 7) are unaffected → byte-identical there.
+  const tier = Math.max(0, Math.min(rawTier, SKY_TIER_THRESHOLD - 1));
+  const ceilZ = getCeilingHeightForTier(tier);
   if (instance.z >= 0.9) {
     // Nudge ceiling-mounted meshes slightly below the raycaster ceiling plane
     // so they reliably pass the depth test after the variable-height ceiling march.

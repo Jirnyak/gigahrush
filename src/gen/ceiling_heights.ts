@@ -39,6 +39,15 @@ const TIER_GRAND = 3;
 const LARGE_AREA = 80;   // w*h at/above which a room reads as a hall
 const GRAND_AREA = 150;  // ...and a grand hall
 
+// Open-sky floors only: a ceiling tier at/above this reads as "open air / sky"
+// (roof deck = 14, outer-district street = 240); below it is a real enclosed
+// volume (house interior ≤ 4). On those floors a wall never inherits a sky tier —
+// it takes its enclosed neighbour's height, or, if bounded only by sky, a varied
+// skyline strictly below this band so the raycaster shows sky above every tower.
+// Enclosed floors ignore this entirely (gated by world.hasOpenSky).
+// Keep in sync with SKY_TIER in the raycaster (render/webgl.ts).
+export const SKY_TIER_THRESHOLD = 8;
+
 const MASK = W - 1;      // W is a power of two, so wrap == & MASK
 
 function ceilingTierForRoom(room: Room): number {
@@ -76,7 +85,12 @@ export function stampCeilingHeights(world: World): void {
     const rowDn = ((y + 1) & MASK) * W;
     for (let x = 0; x < W; x++) {
       const i = rowMid + x;
-      if (cells[i] !== Cell.WALL) continue;
+      const c = cells[i];
+      // Closed floors rebuild only WALL cells (byte-identical to before). Open-sky
+      // floors ALSO rebuild DOOR / LIFT / ABYSS: the primary DDA draws those as
+      // solid columns too, so if they keep their sky-magnitude pass-1 tier (14/240)
+      // they shoot up as столбы (the reported door bug). Give them a finite height.
+      if (c !== Cell.WALL && !(world.hasOpenSky && (c === Cell.DOOR || c === Cell.LIFT || c === Cell.ABYSS))) continue;
       const xL = (x - 1) & MASK;
       const xR = (x + 1) & MASK;
       let m = 0;
@@ -89,31 +103,68 @@ export function stampCeilingHeights(world: World): void {
       j = rowDn + x;      if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
       j = rowDn + xR;     if (cells[j] !== Cell.WALL && ceil[j] > m) m = ceil[j];
       
-      // If a global ceiling is used (like the sky), do not let the walls rise to the sky level.
-      // Instead, assign a deterministic pseudo-random height to create a varied skyline of parapets.
-      if (world.globalCeilingTier !== undefined && m === world.globalCeilingTier) {
-        if (world.hasOpenSky) {
-          m = TIER_ROOM; // Disable varied skyline and tall walls when sky is explicitly open
-        } else {
+      // Open-sky floors: a wall must never inherit a sky-magnitude tier — that
+      // is exactly what produced a solid столб rising to the sky lid. Rebuild
+      // its height from enclosed neighbours only; a wall bounded solely by sky
+      // becomes a free-standing silhouette. Gated on hasOpenSky, so every
+      // enclosed floor (and the n_crossroads canyons) keeps the legacy skyline
+      // branch below byte-for-byte.
+      if (world.hasOpenSky) {
+        let mf = 0; // tallest FINITE (enclosed, below the sky band) open neighbour
+        j = rowUp + xL;  if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowUp + x;   if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowUp + xR;  if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowMid + xL; if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowMid + xR; if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowDn + xL;  if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowDn + x;   if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        j = rowDn + xR;  if (cells[j] !== Cell.WALL && ceil[j] < SKY_TIER_THRESHOLD && ceil[j] > mf) mf = ceil[j];
+        if (c !== Cell.WALL) {
+          // DOOR / LIFT / ABYSS: a passage or fixture set into a structure. Finite —
+          // match the enclosing interior, or, bounded only by open sky, a doorframe
+          // height (tier 3 → h 2.5). Never a sky column and never a skyline tower.
+          m = mf > 0 ? mf : 3;
+        } else if (mf > 0) {
+          // Wall of an enclosed structure (house, partition, ledge): match its
+          // interior volume → finite wall. The raycaster shows sky above its top.
+          m = mf;
+        } else if (m >= SKY_TIER_THRESHOLD) {
+          // Free-standing wall bounded only by sky (roof towers/parapets, street
+          // megastructures): deterministic varied skyline, every tier strictly
+          // below the sky band so sky always shows above the tallest silhouette.
           const rid = roomMap[i];
-          if (rid >= 0) {
-            // If the wall belongs to a room, use a consistent height for the whole room
-            const hash = (rid * 113) % 100;
-            if (hash < 15) m = TIER_GRAND;
-            else if (hash < 40) m = TIER_LARGE;
-            else if (hash < 75) m = TIER_CORRIDOR;
-            else m = TIER_ROOM;
-          } else {
-            // For abyss walls with no room, use a chunked spatial hash
-            const hash = ((x >> 3) * 73 + (y >> 3) * 13) % 100;
-            if (hash < 10) m = TIER_GRAND;
-            else if (hash < 30) m = TIER_LARGE;
-            else if (hash < 65) m = TIER_CORRIDOR;
-            else m = TIER_ROOM;
-          }
+          const hash = rid >= 0 ? (rid * 113) % 100 : ((x >> 3) * 73 + (y >> 3) * 13) % 100;
+          if (hash < 12) m = 12;
+          else if (hash < 30) m = 9;
+          else if (hash < 55) m = 7;
+          else if (hash < 80) m = 5;
+          else m = 3;
+        }
+        // else (mf === 0 && m < SKY_TIER_THRESHOLD): interior-only or wall-locked
+        // stub — keep the finite max already computed above.
+      } else if (world.globalCeilingTier !== undefined && m === world.globalCeilingTier) {
+        // Legacy non-open-sky flatten branch, preserved verbatim: a wall touching
+        // a global-ceiling cell gets a varied parapet skyline instead of rising to
+        // the lid. Currently dead (globalCeilingTier is only set by hasOpenSky
+        // floors), but a future enclosed floor could set it and must match this.
+        const rid = roomMap[i];
+        if (rid >= 0) {
+          // If the wall belongs to a room, use a consistent height for the whole room
+          const hash = (rid * 113) % 100;
+          if (hash < 15) m = TIER_GRAND;
+          else if (hash < 40) m = TIER_LARGE;
+          else if (hash < 75) m = TIER_CORRIDOR;
+          else m = TIER_ROOM;
+        } else {
+          // For abyss walls with no room, use a chunked spatial hash
+          const hash = ((x >> 3) * 73 + (y >> 3) * 13) % 100;
+          if (hash < 10) m = TIER_GRAND;
+          else if (hash < 30) m = TIER_LARGE;
+          else if (hash < 65) m = TIER_CORRIDOR;
+          else m = TIER_ROOM;
         }
       }
-      
+
       ceil[i] = m;
     }
   }

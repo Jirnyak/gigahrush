@@ -162,6 +162,16 @@ Dynamic sky:
   ambient tint and fog tint.
 - `setDynamicSkyTexture()` updates or clears the GPU texture.
 - Sky is still sampled inside the existing raycaster pass, not a separate world.
+- On `world.hasOpenSky` floors (roof, outer district) the raycaster runs a
+  see-through ceiling march (`uHasOpenSky`, `SKY_TIER >= 8.0`): finite walls are
+  drawn to their tier top and the ray continues into open sky above them, so
+  distant walls read as silhouettes and the dynamic sky (or fog/horizon tint, if
+  no sky provider) becomes the terminal seen through the vertical negative space.
+  Gated by `uHasOpenSky`, so enclosed floors keep the identical 16-step ceiling
+  trace with no extra texel fetches.
+- The instanced mesh column pass (`scene_collect.applyCeilingHeight`) clamps the
+  ceiling tier below `SKY_TIER_THRESHOLD`, so structural columns and hung
+  fixtures never stretch floor-to-sky on open-sky / deep-canyon floors.
 
 ## Filters And Screen Effects
 
