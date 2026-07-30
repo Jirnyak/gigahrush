@@ -360,9 +360,9 @@ function localizedCanvasText(value: unknown): string {
 
 const CANVAS_TEXT_GLITCH_CHARS = '#%&*+=?/\\<>[]{}';
 const CANVAS_TEXT_GLITCH_RE = /[A-Za-zА-Яа-яЁё]/;
-const CANVAS_TEXT_GLITCH_BASE_PER_MILLE = 0;
-const CANVAS_TEXT_GLITCH_SAMOSBOR_BASE_PER_MILLE = 50;
-const CANVAS_TEXT_GLITCH_MAX_PER_MILLE = 100;
+const CANVAS_TEXT_GLITCH_BASE_PER_MILLE = 1;
+const CANVAS_TEXT_GLITCH_SAMOSBOR_BASE_PER_MILLE = 10;
+const CANVAS_TEXT_GLITCH_MAX_PER_MILLE = 20;
 
 let canvasTextGlitchPerMille = CANVAS_TEXT_GLITCH_BASE_PER_MILLE;
 
@@ -389,28 +389,32 @@ function canvasTextGlitchTick(): number {
   return Math.floor(now / 85);
 }
 
-function canvasTextGlitchHash(text: string, index: number, x: number, y: number, tick: number): number {
+/** Per-string seed: hashed once, then mixed per glyph index — keeps the scan O(n). */
+function canvasTextGlitchSeed(text: string, x: number, y: number, tick: number): number {
   let h = (0x811c9dc5 ^ tick ^ Math.round(x * 7) ^ Math.round(y * 13)) >>> 0;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i) + i * 17;
     h = Math.imul(h, 0x01000193) >>> 0;
   }
-  h ^= Math.imul(index + 1, 0x9e3779b9);
+  return h >>> 0;
+}
+
+function canvasTextGlitchAt(seed: number, index: number): number {
+  let h = (seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0;
+  h = Math.imul(h, 0x01000193) >>> 0;
   h ^= h >>> 16;
   return h >>> 0;
 }
 
 function canvasTextGlitch(text: string, x: number, y: number): string {
-  if (text.length < 4) return text;
+  if (canvasTextGlitchPerMille <= 0 || text.length === 0) return text;
   if (!uiElementEnabled('text_glitch')) return text;
   const chars = Array.from(text);
-  const maxChanges = Math.max(1, Math.min(4, Math.floor(chars.length / 16)));
-  const tick = canvasTextGlitchTick();
+  const seed = canvasTextGlitchSeed(text, x, y, canvasTextGlitchTick());
   let changed = 0;
-  for (let i = 0; i < chars.length && changed < maxChanges; i++) {
-    const ch = chars[i];
-    if (!CANVAS_TEXT_GLITCH_RE.test(ch)) continue;
-    const h = canvasTextGlitchHash(text, i, x, y, tick);
+  for (let i = 0; i < chars.length; i++) {
+    if (!CANVAS_TEXT_GLITCH_RE.test(chars[i])) continue;
+    const h = canvasTextGlitchAt(seed, i);
     if ((h % 1000) >= canvasTextGlitchPerMille) continue;
     chars[i] = CANVAS_TEXT_GLITCH_CHARS[(h >>> 10) % CANVAS_TEXT_GLITCH_CHARS.length];
     changed++;

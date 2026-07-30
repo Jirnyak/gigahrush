@@ -1240,7 +1240,7 @@ function drawCombatSightFeedback(
       ctx.textBaseline = 'middle';
       ctx.fillText('!', markX + markW / 2, markY + markH / 2 + 0.5 * s);
       ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
+      ctx.textBaseline = 'top';
       ctx.shadowBlur = 0;
       ctx.font = `${6.5 * s}px monospace`;
       ctx.fillStyle = palette.text;
@@ -1528,6 +1528,8 @@ export function drawHUD(
       ctx.lineWidth = 1;
       ctx.strokeRect(Math.round(bx) + 0.5, Math.round(barTop) + 0.5, Math.round(barW) - 1, Math.round(barH) - 1);
     });
+    // Restore the HUD-wide baseline convention: everything below positions text by its top edge.
+    ctx.textBaseline = 'top';
   }
   const needsWeaponReadiness = showCompactPanels && (showWeaponPanel || showCrosshair);
   const combatWeapon = needsWeaponReadiness ? getWeaponReadiness(player) : null;
