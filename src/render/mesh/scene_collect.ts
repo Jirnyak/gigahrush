@@ -17,7 +17,7 @@ import {
   VISUAL_SLOTS_PER_CELL,
   type World,
 } from '../../core/world';
-import { getCeilingHeightForTier, SKY_TIER_THRESHOLD } from '../../gen/ceiling_heights';
+import { cellCeilingHeight, cellHasCeiling } from '../../gen/ceiling_heights';
 import {
   VISUAL_CELL_DEFS,
   visualCellDefByCode,
@@ -2280,25 +2280,36 @@ function priorityForModel(modelId: string, flags: number): number {
 // ceiling. Ordinary furniture keeps its authored height.
 const CEILING_SPAN_MODELS = new Set<string>(['column_hint', 'column_concrete_square', 'column_concrete_round']);
 
-// Render-only: lift ceiling-mounted fixtures and stretch full-height columns to
-// the per-cell ceiling height (tier t -> ceilZ = 1 + t*0.5, matching the
-// raycaster). Standard cells (tier 0) are untouched.
-function applyCeilingHeight(world: World, instance: MeshInstance): void {
-  const rawTier = world.ceilHeight[world.idx(world.wrap(Math.floor(instance.x)), world.wrap(Math.floor(instance.y)))];
-  // A sky-magnitude tier (open-sky roof deck 14, street 240, deep canyon 198) is
-  // not a ceiling a column can span or a fixture can hang from — clamp to the top
-  // of the enclosed band so structural meshes never stretch floor-to-sky as столбы.
-  // Enclosed rooms (tier ≤4 < 7) are unaffected → byte-identical there.
-  const tier = Math.max(0, Math.min(rawTier, SKY_TIER_THRESHOLD - 1));
-  const ceilZ = getCeilingHeightForTier(tier);
-  if (instance.z >= 0.9) {
+// Render-only: anchor everything that depends on ceiling height to the single
+// per-cell truth (`cellCeilingHeight`, mirrored by the raycaster). Ceiling-mounted
+// fixtures (lamps, pipe/cable runs) hang from the real plane; full-height columns
+// stretch up to it. Returns false when the instance must be dropped.
+function applyCeilingHeight(world: World, instance: MeshInstance): boolean {
+  const ceilingMounted = instance.z >= 0.9;
+  const spansToCeiling = CEILING_SPAN_MODELS.has(instance.modelId);
+  if (!ceilingMounted && !spansToCeiling) return true;
+
+  const cellX = Math.floor(instance.x);
+  const cellY = Math.floor(instance.y);
+  if (!cellHasCeiling(world, cellX, cellY)) {
+    // Sky band (open-sky roof lid, street canyon): there is no ceiling plane at
+    // any height. Previously these were clamped to the top of the enclosed band,
+    // which left lamps and pipe runs floating in mid-air over open streets.
+    // A fixture with nothing to hang from is dropped; a column just stays the
+    // free-standing height it was authored at instead of shooting up as a столб.
+    return !ceilingMounted;
+  }
+
+  const ceilZ = cellCeilingHeight(world, cellX, cellY);
+  if (ceilingMounted) {
     // Nudge ceiling-mounted meshes slightly below the raycaster ceiling plane
     // so they reliably pass the depth test after the variable-height ceiling march.
     // This must happen even on standard tier=0 ceilings to avoid Z-fighting/depth culling.
     instance.z += ceilZ - 1 - 0.02;
-  } else if (tier > 0 && CEILING_SPAN_MODELS.has(instance.modelId)) {
+  } else {
     instance.scaleZ *= ceilZ;
   }
+  return true;
 }
 
 export function capMeshInstances(
@@ -2353,6 +2364,7 @@ export function capMeshInstances(
   let visualSlotMergeCount = 0;
   for (const row of scored) {
     if (out.length >= profile.instanceCap) break;
+    if (!applyCeilingHeight(context.world, row.instance)) continue;
     if ((row.instance.flags & MeshInstanceFlag.VisualSlot) !== 0) {
       if (visualSlotCount >= profile.visualSlotInstanceCap) continue;
       if ((row.instance.flags & MeshInstanceFlag.Merged) !== 0) {
@@ -2361,7 +2373,6 @@ export function capMeshInstances(
       }
       visualSlotCount++;
     }
-    applyCeilingHeight(context.world, row.instance);
     out.push(row.instance);
   }
   return out;

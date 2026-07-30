@@ -10,6 +10,7 @@ import {
   type Entity, EntityType, ProjType, MonsterKind,
 } from '../core/types';
 import { World, type WorldGridDirtyRect } from '../core/world';
+import { getCeilingHeightForTier } from '../gen/ceiling_heights';
 import { getActiveSamosborVariant } from '../systems/samosbor_variants_runtime';
 import {
   entityUsesProceduralSprite,
@@ -2923,7 +2924,7 @@ function uploadDynamicLights(
       if (lrad > 0) {
         const lx = cx + dx + 0.5;
         const ly = cy + dy + 0.5;
-        const lz = (feat === Feature.LAMP) ? (1.0 + Math.max(0, world.ceilHeight[idx]) * 0.5) - 0.1 : 0.4;
+        const lz = (feat === Feature.LAMP) ? getCeilingHeightForTier(Math.max(0, world.ceilHeight[idx])) - 0.1 : 0.4;
         lightCandidates.push({ lx, ly, lz, r: lr, g: lg, b: lb, radius: lrad, dist2 });
       }
     }
@@ -3844,7 +3845,7 @@ function featureSpriteZ(feature: Feature, tier: number = 0): number {
     case Feature.LIFT_BUTTON:
     case Feature.SCREEN:
     case Feature.SLIDE: return 0.22;
-    case Feature.LAMP: return (1.0 + Math.max(0, tier) * 0.5) - 0.88;
+    case Feature.LAMP: return getCeilingHeightForTier(Math.max(0, tier)) - 0.88;
     default: return 0;
   }
 }

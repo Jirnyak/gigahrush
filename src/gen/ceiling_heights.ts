@@ -27,8 +27,34 @@ import { Cell, type Room, RoomType, W } from '../core/types';
  */
 
 
+/**
+ * The one truth for the rendered ceiling plane. The raycaster mirrors this
+ * exactly in GLSL (`ceilH = 1.0 + rawTier * 0.5`, render/webgl.ts); every
+ * consumer on the TS side — feature sprites, lights, meshes — must go through
+ * `cellCeilingHeight()` rather than re-deriving it.
+ */
 export function getCeilingHeightForTier(tier: number): number {
   return 1.0 + tier * 0.5;
+}
+
+/** Rendered ceiling height above the floor for one cell. Wraps on the torus. */
+export function cellCeilingHeight(world: World, x: number, y: number): number {
+  return getCeilingHeightForTier(cellCeilingTier(world, x, y));
+}
+
+/** Raw ceiling tier of one cell. Wraps on the torus. */
+export function cellCeilingTier(world: World, x: number, y: number): number {
+  return world.ceilHeight[world.idx(world.wrap(x), world.wrap(y))];
+}
+
+/**
+ * True when the cell is an enclosed volume — something can hang from its
+ * ceiling and a full-height column can reach it. At/above the sky band the
+ * "ceiling" is open air (roof lid, street canyon), so there is no plane to
+ * attach to at any height.
+ */
+export function cellHasCeiling(world: World, x: number, y: number): boolean {
+  return cellCeilingTier(world, x, y) < SKY_TIER_THRESHOLD;
 }
 
 const TIER_ROOM = 0;
