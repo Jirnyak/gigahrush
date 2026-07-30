@@ -2,7 +2,9 @@ import { Entity, EntityType, GameState, LiftDirection, msg } from '../core/types
 import { World } from '../core/world';
 import { getPlotNpcNumericId } from '../data/npc_packages';
 import { NpcInteractionContext } from './npc_interaction_options';
-import { placeBet, calculateOdds } from './arena_betting';
+import { placeBet, calculateOdds, onArenaDuelEnded, refundActiveBet, getCurrentActiveBet } from './arena_betting';
+import { forceCombatThreat } from './combat_stimulus';
+import { getEntityIndex } from './entity_index';
 
 export interface ArenaFighterSnapshot {
   id: string;
@@ -124,21 +126,92 @@ export function activateArenaSelection(ctx: { world: World; state: GameState; pl
     }
     closeArena();
   } else {
-    if (arenaRuntime.fighterA && arenaRuntime.fighterB && ctx.player) {
+    const fighterA = arenaRuntime.fighterA;
+    const fighterB = arenaRuntime.fighterB;
+    if (fighterA && fighterB && ctx.player) {
       const amounts = [50, 100, 500];
-      const fighter = arenaRuntime.selection < 3 ? arenaRuntime.fighterA : arenaRuntime.fighterB;
+      const fighter = arenaRuntime.selection < 3 ? fighterA : fighterB;
       const odds = arenaRuntime.selection < 3 ? arenaRuntime.oddsA : arenaRuntime.oddsB;
       const amount = amounts[arenaRuntime.selection % 3];
 
       const success = placeBet(ctx.state, ctx.player, amount, String(fighter.id), odds);
       if (success) {
         ctx.state.msgs.push(msg(`Ставка принята: ${amount}₽ на ${fighter.name} (x${odds.toFixed(2)}).`, ctx.state.time, '#4cf'));
+        startArenaDuel(ctx.world, ctx.state, fighterA, fighterB);
         closeArena();
       } else {
         ctx.state.msgs.push(msg('Недостаточно средств или ставка уже сделана.', ctx.state.time, '#f44'));
       }
     }
   }
+}
+
+/* ── Duel simulation ──────────────────────────────────────────────
+ * The two fighters really fight through the normal combat AI: each gets a forced
+ * 'fight' threat memory pointing at the other (re-applied on a cadence so it never
+ * expires mid-duel). First death settles the active bet via onArenaDuelEnded; a
+ * fizzled duel (timeout / fighter vanished off-floor) refunds the stake. Deaths are
+ * real persistent A-Life facts — arena bouts are lethal by design. */
+const DUEL_TIMEOUT_S = 180;
+const DUEL_THREAT_CADENCE_S = 2;
+
+let activeDuel: { aId: number; bId: number; elapsed: number; threatAccum: number } | null = null;
+
+function startArenaDuel(world: World, state: GameState, a: Entity, b: Entity): void {
+  // Teleport both fighters into the arena ring (same tag scan as the player entry).
+  const arena = world.rooms.find(r => r?.tags?.includes('arena'));
+  if (arena) {
+    const cx = arena.x + Math.floor(arena.w / 2);
+    const cy = arena.y + Math.floor(arena.h / 2);
+    a.x = world.wrap(cx - 2) + 0.5; a.y = world.wrap(cy) + 0.5;
+    b.x = world.wrap(cx + 2) + 0.5; b.y = world.wrap(cy) + 0.5;
+  }
+  forceCombatThreat(a, b, state.time);
+  forceCombatThreat(b, a, state.time);
+  activeDuel = { aId: a.id, bId: b.id, elapsed: 0, threatAccum: 0 };
+  state.msgs.push(msg('Бой начался! Бойцы сходятся на арене.', state.time, '#fa4'));
+}
+
+export function updateArenaDuel(state: GameState, entities: readonly Entity[], dt: number): void {
+  if (!activeDuel) return;
+  activeDuel.elapsed += dt;
+  activeDuel.threatAccum += dt;
+  if (activeDuel.threatAccum < DUEL_THREAT_CADENCE_S) return;
+  activeDuel.threatAccum = 0;
+
+  const byId = getEntityIndex().byId;
+  const a = byId.get(activeDuel.aId);
+  const b = byId.get(activeDuel.bId);
+  const aAlive = a?.alive === true;
+  const bAlive = b?.alive === true;
+
+  if (aAlive && bAlive) {
+    if (activeDuel.elapsed >= DUEL_TIMEOUT_S) {
+      // Fizzle: nobody died — return the stake.
+      if (getCurrentActiveBet()) refundActiveBet(state, entities);
+      state.msgs.push(msg('Бой затянулся и объявлен несостоявшимся. Ставка возвращена.', state.time, '#cc9'));
+      activeDuel = null;
+      return;
+    }
+    forceCombatThreat(a!, b!, state.time);
+    forceCombatThreat(b!, a!, state.time);
+    return;
+  }
+
+  if (!aAlive && !bAlive) {
+    // Both gone (double kill or despawned): no winner, refund.
+    if (getCurrentActiveBet()) refundActiveBet(state, entities);
+    state.msgs.push(msg('Оба бойца выбыли. Ставка возвращена.', state.time, '#cc9'));
+  } else {
+    const winner = aAlive ? a! : b!;
+    onArenaDuelEnded(state, entities, String(winner.id));
+    state.msgs.push(msg(`Бой окончен. Победитель: ${winner.name ?? 'боец'}.`, state.time, '#4cf'));
+  }
+  activeDuel = null;
+}
+
+export function resetArenaDuel(): void {
+  activeDuel = null;
 }
 
 export function getArenaOverlaySnapshot(): ArenaOverlaySnapshot {

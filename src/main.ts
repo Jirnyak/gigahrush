@@ -304,6 +304,7 @@ import { UV_SPOTLIGHT_FX_SECONDS, UV_SPOTLIGHT_ID, useUvSpotlight, uvSpotlightRe
 import { CHALK_ITEM_ID, drawEquippedChalkPixel } from './systems/chalk';
 import { isRidingRailTrain, updateRailTrains } from './systems/rail_trains';
 import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
+import { updateArenaDuel } from './systems/arena';
 import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hladon';
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
 import { updateRouteCues, resetRouteCueHud } from './systems/route_cues';
@@ -9699,6 +9700,7 @@ function gameLoop(now: number): void {
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'post_ai', gameOver: false })) updateWorldData(world);
     lastContentHookMs += performance.now() - contentStart;
     updateCarnivorousFungus(world, entities, player, state, dt, nextEntityId);
+    updateArenaDuel(state, entities, dt);
     const hazardStart = performance.now();
     tickCellHazards(world, entities, state, dt, player, input.fwd || input.back || input.strafeL || input.strafeR || input.touch.moveX !== 0 || input.touch.moveY !== 0);
     lastHazardUpdateMs = performance.now() - hazardStart;

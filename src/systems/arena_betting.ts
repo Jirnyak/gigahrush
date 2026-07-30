@@ -93,6 +93,21 @@ export function onArenaDuelEnded(state: GameState, entities: readonly Entity[], 
   currentActiveBet = null;
 }
 
+/** Duel fizzled (timeout, fighter vanished): return the stake without payout. */
+export function refundActiveBet(state: GameState, entities: readonly Entity[]): void {
+  if (!currentActiveBet) return;
+  const player = getCurrentPlayerEntity(entities);
+  if (player) transferMoney(null, player, currentActiveBet.amount);
+  publishEvent(state, {
+    type: 'arena_bet_refunded' as any,
+    tags: ['arena', 'betting'],
+    severity: 1,
+    privacy: 'private',
+    data: { amount: currentActiveBet.amount },
+  });
+  currentActiveBet = null;
+}
+
 export function clearActiveBet(): void {
   currentActiveBet = null;
 }

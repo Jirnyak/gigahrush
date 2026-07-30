@@ -293,6 +293,16 @@ export function notifyActorDamaged(
   if ((victim.hp ?? 1) <= 0) publishActorKillEvent(world, state, attacker, victim, source);
 }
 
+/**
+ * Force a fight reaction (arena duels, authored scenes): the victim attacks the
+ * aggressor through the normal forcedTarget AI path regardless of factions.
+ * Callers re-apply on a cadence to keep the memory from expiring mid-fight.
+ */
+export function forceCombatThreat(victim: Entity, attacker: Entity, time: number): void {
+  if (!victim.alive || !attacker.alive || victim.id === attacker.id) return;
+  setThreatMemory(victim, attacker, 1, 'npc_melee', time, 'fight');
+}
+
 export function getRecentCombatThreat(victim: Entity, time: number): CombatThreat | undefined {
   const memory = threatMemory.get(victim);
   if (!memory || memory.expiresAt <= time) return undefined;
