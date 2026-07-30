@@ -1,15 +1,34 @@
-import { Entity, DamageType } from '../core/types';
-import { ITEMS } from '../data/catalog';
+import { Entity, DamageType, type GameState } from '../core/types';
+import type { World } from '../core/world';
+import { ITEMS, WEAPON_STATS } from '../data/catalog';
+import { applyMonsterArmorHit, type MonsterArmorHitInput, type MonsterArmorHitResult } from './monster_armor';
 
 export function calculateDamage(baseDamage: number, damageType: DamageType | undefined, target: Entity): number {
   let resist = 0;
   if (target.armorDefId) {
     const armorDef = ITEMS[target.armorDefId];
-    if (armorDef && armorDef.resistances && damageType !== undefined) {
-      resist = armorDef.resistances[damageType] ?? 0;
+    if (armorDef && armorDef.resistances) {
+      // Нетипизированный источник урона считается кинетикой — иначе резисты брони молча не работают.
+      resist = armorDef.resistances[damageType ?? DamageType.KINETIC] ?? 0;
     }
   }
   return Math.max(0, baseDamage * (100 - resist) / 100);
+}
+
+/* Единый конвейер урона: резист надетой брони цели (по типу урона оружия),
+   затем врождённая броня монстров. Тип берётся из input.damageType, иначе
+   из реестра оружия по weaponId, иначе кинетика. */
+export function applyDamage(
+  world: World,
+  state: GameState,
+  target: Entity,
+  input: MonsterArmorHitInput & { damageType?: DamageType },
+): MonsterArmorHitResult {
+  const damageType = input.damageType
+    ?? (input.weaponId !== undefined ? WEAPON_STATS[input.weaponId]?.damageType : undefined);
+  const typed = Math.round(calculateDamage(input.damage, damageType, target));
+  if (typed === input.damage) return applyMonsterArmorHit(world, state, target, input);
+  return applyMonsterArmorHit(world, state, target, { ...input, damage: typed });
 }
 
 export function applyHitStaggerAndKnockback(target: Entity, sourceX: number, sourceY: number, damage: number): void {

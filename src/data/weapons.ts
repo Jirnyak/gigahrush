@@ -225,3 +225,15 @@ export const PHYS_WEAPON_ROLE_TIERS: Record<string, WeaponRoleTier> = {
   g41_grenade_launcher: 'grenade',
   tracked_zhernov: 'melee_heavy',
 };
+
+/* Тип урона выводится из ролевого тира (дробовики — дробь, энерго — энергия,
+   огнемёты — огонь, остальное — кинетика); явный damageType в статах имеет приоритет. */
+const ROLE_TIER_DAMAGE_TYPES: Partial<Record<WeaponRoleTier, DamageType>> = {
+  shotgun_corridor_stop: DamageType.BUCKSHOT,
+  rare_energy: DamageType.ENERGY,
+  fuel_clear: DamageType.FIRE,
+};
+
+for (const [id, ws] of Object.entries(PHYS_WEAPON_STATS)) {
+  ws.damageType ??= ROLE_TIER_DAMAGE_TYPES[PHYS_WEAPON_ROLE_TIERS[id]] ?? DamageType.KINETIC;
+}

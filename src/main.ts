@@ -92,7 +92,7 @@ import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } fr
 import { musicSystem } from './systems/music';
 
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
-import { applyMonsterArmorHit } from './systems/monster_armor';
+import { applyDamage } from './systems/combat';
 import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/combat';
 import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
@@ -848,7 +848,7 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
   entityIndex.queryRadius(actor.x, actor.y, range + (ws.hitRadius ?? 0.6) + 0.5, meleeQuery, ENTITY_MASK_ACTOR);
   const target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
   if (target && target.hp !== undefined) {
-    const armor = applyMonsterArmorHit(world, state, target, { damage: normalDmg, attacker: actor, weaponId });
+    const armor = applyDamage(world, state, target, { damage: normalDmg, attacker: actor, weaponId });
     const dmg = armor.damage;
     target.hp -= dmg;
     target.staggerTimer = 0.15;
@@ -4152,7 +4152,7 @@ function handlePlayerAttack(_dt: number): void {
         const e = meleeTarget;
         if (e.hp !== undefined) {
           const rawDmg = debugOnePunchMeleeDamage(e, normalDmg);
-          const armor = applyMonsterArmorHit(world, state, e, {
+          const armor = applyDamage(world, state, e, {
             damage: rawDmg,
             attacker: player,
             weaponId,
@@ -4895,7 +4895,7 @@ function processProjectileEntityCollision(
   if (pt === ProjType.FLAME) reducePaupsinaWeb(e, state.time, state.msgs, state, projectileActor(p), 'fire');
   if (e.hp !== undefined) {
     const counterplayDmg = adjustMonsterProjectileDamage(e, p, baseDmg);
-    const armor = applyMonsterArmorHit(world, state, e, {
+    const armor = applyDamage(world, state, e, {
       damage: counterplayDmg,
       attacker: projectileActor(p),
       weaponId: p.weapon,
@@ -4984,7 +4984,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
     if (e.hp !== undefined) {
       const falloff = 1 - (dist / radius) * 0.6;
       const rawFinalDmg = Math.round(dmg * falloff);
-      const armor = applyMonsterArmorHit(world, state, e, {
+      const armor = applyDamage(world, state, e, {
         damage: rawFinalDmg,
         attacker: actor,
         weaponId: p.weapon,

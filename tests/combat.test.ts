@@ -25,6 +25,7 @@ test('calculateDamage handles zero damage', () => {
   assert.equal(calculateDamage(0, DamageType.KINETIC, makeTarget('armor_medium')), 0);
 });
 
-test('calculateDamage returns unmodified damage when damageType is undefined', () => {
-  assert.equal(calculateDamage(15, undefined, makeTarget('armor_medium')), 15);
+test('calculateDamage treats undefined damageType as KINETIC', () => {
+  // armor_medium: КИН 40% -> 15 * (100-40)/100 = 9
+  assert.equal(calculateDamage(15, undefined, makeTarget('armor_medium')), 9);
 });
