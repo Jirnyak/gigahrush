@@ -3,6 +3,7 @@
 import {
   ContainerKind,
   Faction,
+  LiftDirection,
   MonsterKind,
   RoomType,
   Tex,
@@ -187,6 +188,19 @@ export const FLOOR_RUN_MIN_Z = -50;
 export const FLOOR_RUN_MAX_Z = 50;
 export const FLOOR_RUN_VOID_Z = -50;
 export const FLOOR_RUN_NPC_FREE_Z = -48;
+
+/**
+ * Gen-time route contract: which lift directions a floor at `z` must offer.
+ * Mid-route floors need both; the roof (z = MAX) is the top — down only; the
+ * void (z = MIN) is the intentional terminus «конец» — no lifts, no return.
+ * Runtime route gates are a separate systems-level concern on top of this.
+ */
+export function routeExpectedLiftDirections(z: number): LiftDirection[] {
+  if (z <= FLOOR_RUN_MIN_Z) return [];
+  const directions: LiftDirection[] = [LiftDirection.DOWN];
+  if (z < FLOOR_RUN_MAX_Z) directions.push(LiftDirection.UP);
+  return directions;
+}
 
 export function isProceduralFloorZ(z: number): boolean {
   return z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z && Math.abs(z % 2) === 1;

@@ -7,7 +7,8 @@ import {
 } from '../../data/design_floors';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { floorRunZAllowsNpcs } from '../../data/procedural_floors';
+import { floorRunZAllowsNpcs, routeExpectedLiftDirections } from '../../data/procedural_floors';
+import { ensureReachableRouteLifts } from '../shared';
 import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
@@ -148,6 +149,11 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     }
     if (!route) return gen;
     gen.world.hasOpenSky = route.hasOpenSky;
+    // Route-contract lift guarantee (still geometry phase, before objects/territory):
+    // every expected direction gets a lift reachable from spawn; lifts of unexpected
+    // directions (or stranded in sealed pockets) are demoted. Void z=MIN expects [] —
+    // the intentional no-return terminus stays lift-free.
+    ensureReachableRouteLifts(gen.world, gen.spawnX, gen.spawnY, routeExpectedLiftDirections(route.z));
     applyDesignFloorObjectProfile(gen.world, gen.spawnX, gen.spawnY, route);
     if (id === 'markov_stairwell') reinforceMarkovStairwellAuthoredHqTerritory(gen.world);
     if (id === 'service_floor') reinforceServiceFloorAuthoredHqTerritory(gen.world);

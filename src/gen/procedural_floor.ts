@@ -57,6 +57,7 @@ import {
   floorRunZAllowsNpcs,
   geometryById,
   majorityById,
+  routeExpectedLiftDirections,
   proceduralFloorAnomalyRoutePressure,
   proceduralFloorRoutePressureLevel,
   // @ts-ignore
@@ -90,6 +91,7 @@ import {
   decorateRoom,
   ensureConnectivity,
   generateZones,
+  ensureReachableRouteLifts,
   isConnectivityWalkable,
   placeDoorAt,
   placeLifts,
@@ -16225,6 +16227,9 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     ensureSumpRepairDryAccess(world, rooms, spec, spawn.spawnX, spawn.spawnY);
     ensureSumpLiftDryAccess(world, spec, spawn.spawnX, spawn.spawnY);
     ensureCollectorDryLiftAccess(world, spec, spawn.spawnX, spawn.spawnY);
+    // Route-contract lift guarantee: after final connectivity repair, every expected
+    // direction must have a lift reachable from spawn (stranded/unexpected lifts demoted).
+    ensureReachableRouteLifts(world, spawn.spawnX, spawn.spawnY, routeExpectedLiftDirections(spec.z));
     const reachable = reachableCellsFrom(world, spawn.spawnX, spawn.spawnY);
     ensureContainersReachable(world, rooms, spec, reachable);
     containerizeLooseProceduralDrops(world, rooms, entities, spec, reachable);
