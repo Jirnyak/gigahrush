@@ -23,6 +23,17 @@ Current authoritative shape:
 - `src/systems/save_payload.ts`: compact payload construction, payload size accounting, portal compaction and section normalization.
 - Domain systems own their own compact serializers/sanitizers where possible.
 
+## Autosave
+
+`saveGame(auto)` in `main.ts` fires automatically:
+
+- After every `scheduleLoading` load by default (`autosaveAfter = true`): floor switch, samosbor rebuild and local patch, void return, death continuation, online snapshot. It runs behind the loading screen, so it costs no gameplay frame time.
+- On tab hide/close (`visibilitychange`/`pagehide` via `setPageHiddenPause`), throttled to 15s; the `localStorage` write is synchronous and survives tab close.
+- Explicit opt-out (`false`) exists only where a save would clobber a real one with a worthless state: restart after death (the pre-death save stays as the player's rollback), new game / continue from the title, and right after `loadGame` itself. `autoSaveGame` additionally guards trailer mode, not-started, gameOver and mid-load.
+- Alongside the cloud save, GamePush receives personal records `score` (max cumulative XP) and `floor` (max |Z| reached), computed as max against the platform-stored value — no save-shape involvement. The `floor` field must be declared in the GamePush panel.
+
+New `scheduleLoading` call sites get autosave automatically; pass `false` only when the loaded state must not overwrite the player's save.
+
 The save is not a full object graph. Save ids, seeds, compact facts and sparse overrides.
 
 ## Current Payload Sections

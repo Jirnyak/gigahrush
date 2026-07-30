@@ -16,7 +16,9 @@ npm run artifacts:verify
 npm run check:release
 ```
 
-`npm run itch:build` emits an itch.io HTML5 upload under `itch/`: `index.html` for direct single-file upload, `gigahrush-itch.zip` with `index.html` at the archive root, and upload notes for PWA manifest, icons and service worker metadata.
+`npm run itch:build` emits an itch.io HTML5 upload under `itch/`: `index.html`, `gigahrush-itch.zip` with `index.html` at the archive root, and upload notes for PWA manifest, icons and service worker metadata.
+
+Since 2026-07-30 music ships as 10 separate lazily-fetched `*.ogg` files next to `index.html` (first-load gzip dropped 13.4 MB → ~6 MB). Uploads to every portal MUST be the full ZIP — a lone `index.html` no longer carries music. Both zip scripts pack all of `dist/` recursively, so no extra steps are needed beyond uploading the archive.
 
 `npm run pikabu:build` emits a separate upload candidate under `pikabu/`: `index.html`, `gigahrush-pikabu.zip` with `index.html` at the archive root, and private setup notes. The script injects `gigahrush-portal=pikabu` metadata into the copied artifact only; the canonical `dist/` build is not changed.
 

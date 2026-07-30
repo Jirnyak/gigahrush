@@ -640,6 +640,8 @@ export async function savePlatformRawGameSave(
   raw: string,
   bytes: number,
   compact?: PlatformSaveCandidate,
+  score?: number,
+  floor?: number,
 ): Promise<PlatformSaveStatus> {
   const fullCandidate: PlatformSaveCandidate = { raw, bytes, mode: 'full' };
   let touchedSdk = false;
@@ -670,6 +672,18 @@ export async function savePlatformRawGameSave(
         const record = portalSaveRecord(candidate.raw, candidate.bytes, candidate.mode ?? 'full');
         savedAt = Math.max(savedAt, record.savedAt);
         gp.player.set('progress', JSON.stringify(record));
+        // Personal records live platform-side (max against the stored value), so
+        // they survive new runs without touching the save shape. `score` = best
+        // cumulative XP (replaces the sandbox-test `score: 100` stub); `floor` =
+        // deepest |Z| reached — the field must be declared in the GamePush panel.
+        if (score !== undefined && Number.isFinite(score)) {
+          const prevScore = Number(gp.player.get?.('score')) || 0;
+          gp.player.set('score', Math.max(prevScore, Math.max(0, Math.round(score))));
+        }
+        if (floor !== undefined && Number.isFinite(floor)) {
+          const prevFloor = Number(gp.player.get?.('floor')) || 0;
+          gp.player.set('floor', Math.max(prevFloor, Math.max(0, Math.round(floor))));
+        }
         await gp.player.sync?.({ storage: 'cloud' });
         touchedSdk = true;
       } else if (gp.player.set) {

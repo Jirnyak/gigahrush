@@ -109,7 +109,7 @@ Command intent:
 - `npm run test:generation`: expanded generation matrix.
 - `npm run content:audit`: static source/content audit.
 - `npm run check:readonly`: typecheck, unit tests, content audit; safest broad agent gate.
-- `npm run build`: production single-file browser build; writes `dist/`.
+- `npm run build`: production browser build; writes `dist/` — single-file `index.html` plus lazily-fetched `*.ogg` music files and workers alongside it (uploads must ship the whole `dist/` set, not just `index.html`).
 - `npm run smoke`: headless browser playability smoke; requires existing `dist/` and Chrome or `CHROME_BIN`.
 - `npm run check`: default CI gate; writes `dist/`.
 - `npm run check:browser` / `npm run check:full`: use for render, UI, mobile, canvas, input, or smoke-risk changes when Chrome is available.

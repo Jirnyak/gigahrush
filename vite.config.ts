@@ -62,6 +62,11 @@ function buildSizeManifest(): Plugin {
         }
       }
 
+      // Bundle key iteration order is not stable across builds for emitted
+      // assets; sort so the manifest (and artifacts:verify hashes) stay deterministic.
+      chunks.sort((a, b) => a.fileName.localeCompare(b.fileName));
+      assets.sort((a, b) => a.fileName.localeCompare(b.fileName));
+      modules.sort((a, b) => a.id.localeCompare(b.id) || a.chunk.localeCompare(b.chunk));
       manifest = JSON.stringify({ version: 1, chunks, assets, modules }, null, 2);
     },
     async writeBundle(options) {
@@ -69,6 +74,24 @@ function buildSizeManifest(): Plugin {
       const outDir = options.dir ? (path.isAbsolute(options.dir) ? options.dir : path.resolve(root, options.dir)) : path.resolve(root, "dist");
       await mkdir(outDir, { recursive: true });
       await writeFile(path.join(outDir, "build-size-manifest.json"), manifest);
+    },
+  };
+}
+
+// Music OGGs ship as separate lazy-fetched files instead of base64 inside the
+// single-file HTML: inlined they added ~10MB raw and over half of the gzip
+// transfer (13.4MB → ~6MB first load). Must run AFTER viteSingleFile, whose
+// recommended config sets assetsInlineLimit = () => true; config hooks apply in
+// plugin order, so this override wins. Everything else stays inlined. The
+// itch/pikabu zip scripts pack all of dist/ recursively, and sw.js runtime-caches
+// same-origin fetches, so the tracks ride along on every portal automatically.
+function keepMusicExternalPlugin(): Plugin {
+  return {
+    name: "gigahrush-keep-music-external",
+    enforce: "post",
+    config(config) {
+      if (!config.build) config.build = {};
+      config.build.assetsInlineLimit = (filePath: string) => !filePath.endsWith(".ogg");
     },
   };
 }
@@ -226,6 +249,7 @@ export default defineConfig((env) => {
       buildSizeManifest(),
       ...(includeNpcIntake ? [npcIntakeSubproject()] : []),
       viteSingleFile(),
+      keepMusicExternalPlugin(),
       pwaServiceWorkerVersionPlugin(),
     ],
     define: {

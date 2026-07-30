@@ -241,7 +241,7 @@ import { setDoorState, damageDoor } from './systems/door_state';
 import {
   freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
   meleeDamage, actorMoveSpeed, agiAttackSpeedMult,
-  spendAttrPoint, getMaxHp, getMaxPsi, randomRPG, xpForLevel,
+  spendAttrPoint, getMaxHp, getMaxPsi, randomRPG, xpForLevel, totalXpForLevel,
   RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP,
   HUMANOID_BASE_MOVE_SPEED,
   normalizeHumanoidBaseMoveSpeed,
@@ -1845,6 +1845,9 @@ function setPageHiddenPause(hidden: boolean): void {
   pageHiddenPause = hidden;
   pageHiddenInputCleared = false;
   setAudioSuspendedForPage(hidden);
+  // Tab hidden/closing: flush progress now — the localStorage write is synchronous,
+  // so it survives even an outright tab close. Throttled against alt-tab spam.
+  if (hidden && performance.now() - lastAutoSaveAt > 15000) autoSaveGame();
   if (!hidden) scheduleResize();
   syncPauseState();
 }
@@ -2031,6 +2034,7 @@ let runtimeCamera = createRuntimeCamera();
 const playedCinematicKeys = new Set<string>();
 const MAX_PLAYED_CINEMATIC_KEYS = 32;
 let pendingLoad: (() => void) | null = null; // deferred heavy generation callback
+let pendingLoadAutosave = false; // autosave once this load lands (floor transitions, not fresh inits)
 let pendingLoadStarted = false; // true = loading worker was started
 let pendingLoadWaitTime = 0;
 let pendingLoadAckYielded = 0;
@@ -2806,7 +2810,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
     finishLoadedFloorVisuals(gen);
-  });
+  }, true);
 }
 
 function tryUseVoidReturnPortal(playerCell: number): boolean {
@@ -3182,8 +3186,14 @@ function drawLoading(): void {
   drawLoadingScreen(ctx, hudCanvas.width, hudCanvas.height, performance.now(), isFirstBootLoading, '', 0, 0, currentTip);
 }
 
-function scheduleLoading(fn: () => void): void {
+// autosaveAfter=true by default: every load (floor switch, samosbor rebuild/patch,
+// void return, death continuation, online snapshot) flushes a save once it lands.
+// Pass false ONLY where a save would clobber a real one with a worthless state:
+// fresh restart/new game, title flows, and right after loadGame itself.
+// (autoSaveGame additionally guards trailer mode / not-started / gameOver.)
+function scheduleLoading(fn: () => void, autosaveAfter = true): void {
   pendingLoad = fn;
+  pendingLoadAutosave = autosaveAfter;
   pendingLoadStarted = false;
   loadingWorkerAck = false;
   pendingLoadWaitTime = 0;
@@ -5075,7 +5085,7 @@ function checkRestart(): void {
   }
   if (state.gameOver && input.use) {
     resetRuntimeCamera(runtimeCamera);
-    scheduleLoading(() => { initGame(); });
+    scheduleLoading(() => { initGame(); }, false);
     input.use = false;
   }
 }
@@ -5597,7 +5607,7 @@ function switchFloor(
     // initGame note and prewarmNavigationTreeAsync.
     loadingProgress('Запекаем карты путей', 96);
     loadingProgress('Готово', 100);
-  });
+  }, true);
 }
 
 function formatFloorZ(z: number): string {
@@ -6259,7 +6269,7 @@ function normalizeQuestList(input: unknown, nextQuestIdInput: unknown, nowMinute
   return { quests, nextQuestId };
 }
 
-function saveGame(): void {
+function saveGame(auto = false): void {
   try {
     makeCurrentPlayer(endPsiPossession(entities, player, state.msgs, state.time, 'cancelled'));
     captureCurrentAlifeFloor();
@@ -6283,11 +6293,21 @@ function saveGame(): void {
       raw: compactRaw,
       bytes: compactBytes,
       mode: 'compact',
-    });
-    state.msgs.push(msg('Игра сохранена', state.time, '#4f4'));
+    }, totalXpForLevel(player.rpg?.level ?? 1) + (player.rpg?.xp ?? 0), Math.abs(state.currentZ));
+    state.msgs.push(msg(auto ? 'Автосохранение' : 'Игра сохранена', state.time, '#4f4'));
   } catch {
     state.msgs.push(msg('Ошибка сохранения!', state.time, '#f44'));
   }
+}
+
+// Autosave gate: only mid-run gameplay states. Never the title trailer world,
+// a fresh restart after death (the pre-death save stays as the player's fallback)
+// or mid-load — those would overwrite a real save with a worthless one.
+let lastAutoSaveAt = 0;
+function autoSaveGame(): void {
+  if (!started || typeof state === 'undefined' || state.trailerMode || state.gameOver || pendingLoad) return;
+  lastAutoSaveAt = performance.now();
+  saveGame(true);
 }
 
 function loadGame(): boolean {
@@ -6500,7 +6520,7 @@ function loadGame(): boolean {
 
       // Update WebGL world data after load
       finishLoadedFloorVisuals(gen);
-    });
+    }, false);
     return true;
   } catch {
     state.msgs.push(msg('Ошибка загрузки!', state.time, '#f44'));
@@ -9385,7 +9405,9 @@ function gameLoop(now: number): void {
     }
     // Phase 2: loading screen is visible, now do the heavy work
     const fn = pendingLoad;
+    const autosaveAfter = pendingLoadAutosave;
     pendingLoad = null;
+    pendingLoadAutosave = false;
     pendingLoadStarted = false;
 
     // Warm the nav tree behind the still-animating loading screen, then tear the
@@ -9419,12 +9441,14 @@ function gameLoop(now: number): void {
     if (isGamePushPortalTarget()) {
       showPlatformFullscreenAd().then(() => {
         fn();
+        if (autosaveAfter) autoSaveGame();
         finishDeferredLoad();
       });
       return;
     }
 
     fn();
+    if (autosaveAfter) autoSaveGame();
     finishDeferredLoad();
     return;
   }
@@ -10190,7 +10214,7 @@ function startGameFromTitle(): void {
         startTutorial(state, player);
       }
       finishStartGameFromTitle();
-    });
+    }, false);
     return;
   }
   finishStartGameFromTitle();
@@ -10204,7 +10228,7 @@ function continueGameFromTitle(): void {
     titleStartNeedsInit = false;
     finishStartGameFromTitle();
     loadGame();
-  });
+  }, false);
 }
 
 function startHandler(e: KeyboardEvent): void {
