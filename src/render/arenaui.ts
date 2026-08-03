@@ -28,12 +28,12 @@ export function drawArenaOverlay(
   drawNeuroPanel(ctx, x, y, panelW, panelH, time, 1500);
 
   ctx.fillStyle = '#9a6';
-  ctx.font = `${10 * s}px monospace`;
+  ctx.font = `${10 * s}px "VT323", monospace`;
   ctx.fillText('МАСТЕР АРЕНЫ', x + pad + jitter.dx, y + pad + 10 * s + jitter.dy);
 
   drawStaticNoise(ctx, x + pad, y + pad + 16 * s, maxW, 2 * s, time, 0.4);
 
-  ctx.font = `${8.6 * sy}px monospace`;
+  ctx.font = `${8.6 * sy}px "VT323", monospace`;
 
   if (game.fighterA && game.fighterB) {
     const opts = [
@@ -73,7 +73,7 @@ export function drawArenaOverlay(
   drawStaticNoise(ctx, x + pad, y + panelH - pad - 12 * s, maxW, 2 * s, time, 0.2);
 
   ctx.fillStyle = '#565';
-  ctx.font = `${6 * s}px monospace`;
+  ctx.font = `${6 * s}px "VT323", monospace`;
   const hints = fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} ВЫБОР | ${controlHint('gameMenu')} ПОДТВЕРДИТЬ | ${menuCloseHint()} ВЫХОД`, maxW);
   ctx.fillText(hints, x + pad, y + panelH - pad);
 

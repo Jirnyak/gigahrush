@@ -24,7 +24,7 @@ export function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
 export function drawBadge(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, h: number, s: number, color: string): void {
   rect(ctx, x, y, w, h, '#090d0d', '#303936');
   ctx.fillStyle = color;
-  ctx.font = `${Math.max(7, Math.round(h * 0.52))}px monospace`;
+  ctx.font = `${Math.max(7, Math.round(h * 0.52))}px "VT323", monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(fitText(ctx, text, w - 5 * s), Math.round(x + w * 0.5), Math.round(y + h * 0.53));

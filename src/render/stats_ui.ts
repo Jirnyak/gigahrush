@@ -42,7 +42,7 @@ export function drawInventory(
 
   // Title + money + close hint
   drawGlitchText(ctx, 'ИНВЕНТАРЬ', 8 * sx, 9 * ts, time, 800, '#6f96a4', 7.2 * ts);
-  ctx.font = `${7.2 * ts}px monospace`;
+  ctx.font = `${7.2 * ts}px "VT323", monospace`;
   const finance = readFinanceSnapshot(player, state);
   const mj = textJitter(time, 801);
   ctx.fillStyle = `rgba(194,162,76,${flicker(time, 802)})`;
@@ -51,7 +51,7 @@ export function drawInventory(
     : `₽${Math.round(finance.cash)}`;
   ctx.fillText(fitStatText(ctx, titleMoney, 92 * ts), 96 * ts + mj.dx, 9 * ts + mj.dy);
   ctx.fillStyle = '#456';
-  ctx.font = `${5.8 * ts}px monospace`;
+  ctx.font = `${5.8 * ts}px "VT323", monospace`;
   ctx.textAlign = 'right';
   ctx.fillText(`${menuCloseHint()} закрыть`, cw - 8 * ts, 9 * ts);
   ctx.textAlign = 'left';
@@ -82,7 +82,7 @@ export function drawInventory(
         drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.86);
         if (item.count > 1) {
           ctx.fillStyle = '#6f8a72';
-          ctx.font = `${5 * sy}px monospace`;
+          ctx.font = `${5 * sy}px "VT323", monospace`;
           ctx.textAlign = 'center';
           ctx.fillText(`×${item.count}`, cx + cellSz / 2, cy + cellSz - 5 * sy);
           ctx.textAlign = 'left';
@@ -113,10 +113,10 @@ export function drawInventory(
     const def = ITEMS[item.defId];
     if (def) {
       ctx.fillStyle = '#ccc';
-      ctx.font = `${6.2 * ts}px monospace`;
+      ctx.font = `${6.2 * ts}px "VT323", monospace`;
       ctx.fillText(fitStatText(ctx, `${def.name} ×${item.count}`, details.w), details.x, details.y);
       ctx.fillStyle = '#888';
-      ctx.font = `${4.8 * ts}px monospace`;
+      ctx.font = `${4.8 * ts}px "VT323", monospace`;
       let infoY = details.y + 7.5 * ts;
       const descLines = wrapTextLines(ctx, def.desc, details.w, 2, { stable: true, mode: 'clip' });
       for (const line of descLines) {
@@ -149,7 +149,7 @@ export function drawInventory(
       }
 
       ctx.fillStyle = '#ab8339';
-      ctx.font = `${5.1 * ts}px monospace`;
+      ctx.font = `${5.1 * ts}px "VT323", monospace`;
       ctx.fillText(fitStatText(ctx, `Цена: ${def.value ?? 0}₽`, details.w), details.x, infoY + 1.4 * ts);
 
       if (def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL || def.resistances) {
@@ -161,7 +161,7 @@ export function drawInventory(
     }
   } else {
     ctx.fillStyle = '#555';
-    ctx.font = `${5.2 * ts}px monospace`;
+    ctx.font = `${5.2 * ts}px "VT323", monospace`;
     ctx.fillText('Пустой слот', details.x, details.y + 6.5 * ts);
   }
 
@@ -173,7 +173,7 @@ export function drawInventory(
 
   // Name + Level + Attributes on same row
   ctx.fillStyle = '#c2a24c';
-  ctx.font = `${6.4 * ts}px monospace`;
+  ctx.font = `${6.4 * ts}px "VT323", monospace`;
   const nameStr = player.name ?? 'Вы';
   const titleLine = player.rpg ? `${nameStr}  Ур.${player.rpg.level}` : nameStr;
   ctx.fillText(fitStatText(ctx, titleLine, barW), stX, stY);
@@ -184,7 +184,7 @@ export function drawInventory(
     const rpg = player.rpg;
     const apLabel = rpg.attrPoints > 0 ? `  +${rpg.attrPoints}` : '';
     const attrLine = `${controlHint('attrStr')}СИЛ:${rpg.str}  ${controlHint('attrAgi')}ЛОВ:${rpg.agi}  ${controlHint('attrInt')}ИНТ:${rpg.int}${apLabel}`;
-    ctx.font = `${5.3 * ts}px monospace`;
+    ctx.font = `${5.3 * ts}px "VT323", monospace`;
     ctx.fillStyle = '#b3703f';
     ctx.fillText(fitStatText(ctx, attrLine, barW), stX, stY);
     stY += 7.2 * ts;
@@ -193,7 +193,7 @@ export function drawInventory(
   // Attribute points (always visible)
   if (player.rpg) {
     ctx.fillStyle = player.rpg.attrPoints > 0 ? '#c2a24c' : '#888';
-    ctx.font = `${5.1 * ts}px monospace`;
+    ctx.font = `${5.1 * ts}px "VT323", monospace`;
     ctx.fillText(`Очков характеристик: ${player.rpg.attrPoints}`, stX, stY);
     stY += 6.4 * ts;
     stY = drawRpgEffectBlock(ctx, player, stX, stY, barW, ts);
@@ -269,7 +269,7 @@ export function drawInventory(
   if (zhelemishLine && stY + 6 * ts <= columnsY - 1 * ts) {
     stY += 2 * ts;
     ctx.fillStyle = '#9c6';
-    ctx.font = `${5 * ts}px monospace`;
+    ctx.font = `${5 * ts}px "VT323", monospace`;
     ctx.fillText(fitStatText(ctx, zhelemishLine, barW), stX, stY);
     stY += 6 * ts;
   }
@@ -281,7 +281,7 @@ export function drawInventory(
   const statsY = stY + 3 * ts;
   if (statsY + 4.8 * ts <= columnsY - 1 * ts) {
     ctx.fillStyle = '#888';
-    ctx.font = `${4.5 * ts}px monospace`;
+    ctx.font = `${4.5 * ts}px "VT323", monospace`;
     const day = Math.floor(state.clock.totalMinutes / 1440);
     ctx.fillText(fitStatText(ctx, `Выжил дней: ${day}  |  Самосборов: ${state.samosborCount}`, barW), stX, statsY);
   }
@@ -345,7 +345,7 @@ function drawInventoryEquipmentBlock(
   if (y + 8.2 * sy > maxBottom) return y;
   drawGlitchText(ctx, 'ЭКИПИРОВКА', x, y, time, 840, '#6f96a4', 5.8 * sy);
   let cy = y + 8.2 * sy;
-  ctx.font = `${4.7 * sy}px monospace`;
+  ctx.font = `${4.7 * sy}px "VT323", monospace`;
   const lineH = 6.2 * sy;
   for (const line of lines) {
     if (cy + lineH * 0.35 > maxBottom) break;
@@ -403,7 +403,7 @@ function drawRpgEffectBlock(
     ],
   ];
 
-  ctx.font = `${5.5 * sy}px monospace`;
+  ctx.font = `${5.5 * sy}px "VT323", monospace`;
   for (const [color, line] of lines) {
     ctx.fillStyle = color;
     ctx.fillText(fitStatText(ctx, line, w), x, y);
@@ -424,7 +424,7 @@ function drawCompactMeter(
   labelColor: string,
 ): number {
   ctx.fillStyle = labelColor;
-  ctx.font = `${4.5 * sy}px monospace`;
+  ctx.font = `${4.5 * sy}px "VT323", monospace`;
   ctx.fillText(fitStatText(ctx, label, w), x, y);
   y += 6.4 * sy;
   drawStatBar(ctx, x, y, w, 1.8 * sy, pct, color);

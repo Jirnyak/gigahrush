@@ -82,6 +82,7 @@ import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { CHALK_ITEM_ID } from './chalk';
 import { isPlayerEntity } from './player_actor';
 import { rng, mathRng } from '../core/rand';
+import { drawNeuroPanel } from '../render/hud_fx';
 
 /* ── Command execution ───────────────────────────────────────── */
 
@@ -2143,13 +2144,12 @@ export function drawDebugOverlay(
   const margin = 6 * sx;
 
   // Background
-  ctx.fillStyle = 'rgba(0,0,0,0.98)';
-  ctx.fillRect(0, 0, w, h);
+  drawNeuroPanel(ctx, 0, 0, w, h, performance.now() / 1000, 150);
   ctx.strokeStyle = '#ff0';
   ctx.lineWidth = 1 * sx;
   ctx.strokeRect(margin, margin, w - margin * 2, h - margin * 2);
 
-  ctx.font = `${fs}px monospace`;
+  ctx.font = `${fs}px "VT323", monospace`;
   ctx.textBaseline = 'top';
 
   // Divider at 55% width
