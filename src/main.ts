@@ -1952,8 +1952,9 @@ function resize() {
   }
   document.documentElement.style.setProperty('--app-viewport-width', `${cssWidth}px`);
   document.documentElement.style.setProperty('--app-viewport-height', `${cssHeight}px`);
-  const width = cssWidth;
-  const height = cssHeight;
+  const PIXEL_SCALE = 2;
+  const width = Math.max(1, Math.floor(cssWidth / PIXEL_SCALE));
+  const height = Math.max(1, Math.floor(cssHeight / PIXEL_SCALE));
   if (canvas.width !== width) canvas.width = width;
   if (canvas.height !== height) canvas.height = height;
   if (hudCanvas.width !== width) hudCanvas.width = width;

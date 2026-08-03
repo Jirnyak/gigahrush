@@ -1745,12 +1745,11 @@ export function drawHUD(
       }
       if (showInteractionPrompt || interaction.kind === 'item_drop') {
         const targetId = interaction.colorSeed;
-        const h0 = ((targetId * 2654435761) >>> 0) % 360;
-        const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
-        const eg = Math.round(200 + 55 * Math.cos((h0 + 120) * Math.PI / 180));
-        const eb = Math.round(200 + 55 * Math.cos((h0 + 240) * Math.PI / 180));
+        const er = 79;
+        const eg = 255;
+        const eb = 162;
         
-        ctx.font = `${9 * sy}px "VT323", monospace`;
+        ctx.font = `bold ${11 * sy}px "VT323", monospace`;
         const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w - 12 * sx);
         const textWidth = ctx.measureText(prompt).width;
         

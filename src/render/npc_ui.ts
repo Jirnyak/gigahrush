@@ -254,11 +254,7 @@ export function drawNpcMenu(
       const fy = startY - headH;
       const fw = gridTotal + 4 * sx;
       const fh = headH + gridSpanH + 3 * sy;
-      ctx.fillStyle = 'rgba(6,11,17,0.85)';
-      ctx.fillRect(fx, fy, fw, fh);
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(fx + 0.5, fy + 0.5, fw - 1, fh - 1);
+      drawNeuroPanel(ctx, fx, fy, fw, fh, performance.now() / 1000, fx);
       ctx.fillStyle = stripBg;
       ctx.fillRect(fx, fy, fw, headH);
       ctx.fillStyle = accent;

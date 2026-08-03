@@ -65,7 +65,7 @@ export function drawLoadingScreen(
   drawUnifiedLoading(ctx, width, height, now, isFirstLoad, progressStage, progressPct, dots, currentTip);
 }
 
-import { drawStaticNoise } from './hud_fx';
+import { drawNeuroPanel } from './hud_fx';
 
 /**
  * The one unified atmospheric loading screen. Shows the system briefing, controls, survival rules,
@@ -86,18 +86,7 @@ function drawUnifiedLoading(
 ): void {
   const time = typeof performance !== 'undefined' ? performance.now() / 1000 : now / 1000;
   
-  ctx.fillStyle = '#050707';
-  ctx.fillRect(0, 0, width, height);
-  // VHS Static Noise and interlacing
-  drawStaticNoise(ctx as CanvasRenderingContext2D, 0, 0, width, height, time, 0.12);
-  
-  ctx.save();
-  ctx.globalAlpha = 0.2;
-  ctx.fillStyle = '#0a1014';
-  for (let y = 0; y < height; y += 4) {
-    if (y % 8 === 0) ctx.fillRect(0, y, width, 2);
-  }
-  ctx.restore();
+  drawNeuroPanel(ctx as CanvasRenderingContext2D, 0, 0, width, height, time, 500);
 
   // Subtle terminal border on larger screens
   if (width >= 500 && height >= 400) {

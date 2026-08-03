@@ -287,7 +287,7 @@ export function drawStaticNoise(
   const noiseW = Math.max(8, Math.min(STATIC_NOISE_MAX_W, Math.ceil(w / STATIC_NOISE_PIXEL_SCALE)));
   const noiseH = Math.max(8, Math.min(STATIC_NOISE_MAX_H, Math.ceil(h / STATIC_NOISE_PIXEL_SCALE)));
   const cache = getStaticNoiseCache(noiseW, noiseH);
-  updateStaticNoise(cache, Math.floor(time * 12));
+  updateStaticNoise(cache, Math.floor(time * 6));
 
   ctx.save();
   ctx.globalAlpha = intensity;

@@ -62,7 +62,8 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
 
   const time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
   
-  ctx.fillStyle = '#060a0f';
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(6, 10, 15, 0.4)';
   ctx.fillRect(0, 0, w, h);
   drawStaticNoise(ctx, 0, 0, w, h, time, 0.15);
 
