@@ -107,7 +107,7 @@ function drawUnifiedLoading(
 
     // Title
     const titleSize = Math.max(18, Math.min(36, Math.round(height / 24)));
-    ctx.font = `bold ${titleSize}px "VT323", monospace`;
+    ctx.font = `bold ${titleSize}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#e56a20';
     ctx.textAlign = 'center';
     const titleText = canvasTextGlitch('[ СИСТЕМНАЯ СВОДКА ОТ ПАРТИИ ]', centerX, topTitleY);
@@ -115,13 +115,13 @@ function drawUnifiedLoading(
 
     // Subtitle
     const subSize = Math.max(12, Math.min(20, Math.round(height / 44)));
-    ctx.font = `${subSize}px "VT323", monospace`;
+    ctx.font = `${subSize}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#bbb';
     ctx.fillText(isFirstLoad ? 'ПРОЦЕДУРНЫЙ СИМУЛЯТОР ВЫЖИВАНИЯ В ГИГАХРУЩЕ' : 'ПЕРЕСБОРКА СЕКТОРА • ДЕРЖИТЕСЬ, ТОВАРИЩ', centerX, topSubY);
 
     // Hazard warning banner
     const warnSize = Math.max(12, Math.min(18, Math.round(height / 48)));
-    ctx.font = `bold ${warnSize}px "VT323", monospace`;
+    ctx.font = `bold ${warnSize}px "Pixelify Sans", monospace`;
     ctx.fillStyle = pulseWarn ? '#ff4433' : '#d03020';
     const warnText = canvasTextGlitch('!!! НЕ ЖДИТЕ ПОЩАДЫ, ТОВАРИЩИ. ВЫ ПРЕДУПРЕЖДЕНЫ !!!', centerX, topWarnY);
     ctx.fillText(warnText, centerX, topWarnY);
@@ -131,7 +131,7 @@ function drawUnifiedLoading(
     const baseText = 'ЗАГРУЗКА';
     const dotsStr = '.'.repeat(dots);
 
-    ctx.font = `${Math.round(height / 22)}px "VT323", monospace`;
+    ctx.font = `${Math.round(height / 22)}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#aaa';
     ctx.textAlign = 'center';
     const glitchedBase = canvasTextGlitch(baseText, centerX, centerY);
@@ -154,7 +154,7 @@ function drawUnifiedLoading(
 
     if (progressStage) {
       const stageSize = Math.max(12, Math.min(16, Math.round(height / 52)));
-      ctx.font = `${stageSize}px "VT323", monospace`;
+      ctx.font = `${stageSize}px "Pixelify Sans", monospace`;
       ctx.fillStyle = '#779999';
       ctx.textAlign = 'center';
       ctx.fillText(progressStage, centerX, barY + barH + stageSize + 6);
@@ -168,7 +168,7 @@ function drawUnifiedLoading(
     // Left Column: Key bindings
     const leftX = Math.round(width * 0.05);
     ctx.textAlign = 'left';
-    ctx.font = `bold ${colSize + 1}px "VT323", monospace`;
+    ctx.font = `bold ${colSize + 1}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#44ccaa';
     ctx.fillText('> ОСНОВНЫЕ КЛАВИШИ <', leftX, startY);
 
@@ -187,10 +187,10 @@ function drawUnifiedLoading(
     const descOffset = Math.max(140, Math.round(width * 0.13));
     for (let i = 0; i < leftControls.length; i++) {
       const rowY = startY + (i + 1.4) * lineH;
-      ctx.font = `bold ${colSize}px "VT323", monospace`;
+      ctx.font = `bold ${colSize}px "Pixelify Sans", monospace`;
       ctx.fillStyle = '#ddf0f0';
       ctx.fillText(leftControls[i][0], leftX, rowY);
-      ctx.font = `${colSize}px "VT323", monospace`;
+      ctx.font = `${colSize}px "Pixelify Sans", monospace`;
       ctx.fillStyle = '#88aaaa';
       ctx.fillText(`— ${leftControls[i][1]}`, leftX + descOffset, rowY);
     }
@@ -198,7 +198,7 @@ function drawUnifiedLoading(
     // Right Column: Survival Rules
     const rightX = Math.round(width * 0.52);
     const rightMaxW = width * 0.95 - rightX;
-    ctx.font = `bold ${colSize + 1}px "VT323", monospace`;
+    ctx.font = `bold ${colSize + 1}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#eeaa22';
     ctx.fillText('> ПРАВИЛА ВЫЖИВАНИЯ <', rightX, startY);
 
@@ -224,19 +224,19 @@ function drawUnifiedLoading(
     const topWarnY = Math.round(height * 0.13);
 
     const titleSize = Math.max(16, Math.min(26, Math.round(width / 18)));
-    ctx.font = `bold ${titleSize}px "VT323", monospace`;
+    ctx.font = `bold ${titleSize}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#e56a20';
     ctx.textAlign = 'center';
     const titleText = canvasTextGlitch('[ СИСТЕМНАЯ СВОДКА ОТ ПАРТИИ ]', centerX, topTitleY);
     ctx.fillText(titleText, centerX, topTitleY);
 
     const subSize = Math.max(11, Math.min(16, Math.round(width / 32)));
-    ctx.font = `${subSize}px "VT323", monospace`;
+    ctx.font = `${subSize}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#bbb';
     ctx.fillText(isFirstLoad ? 'БЕЗЖАЛОСТНЫЙ СИМУЛЯТОР В ГИГАХРУЩЕ' : 'ПЕРЕСБОРКА СЕКТОРА • ДЕРЖИТЕСЬ', centerX, topSubY);
 
     const warnSize = Math.max(11, Math.min(15, Math.round(width / 34)));
-    ctx.font = `bold ${warnSize}px "VT323", monospace`;
+    ctx.font = `bold ${warnSize}px "Pixelify Sans", monospace`;
     ctx.fillStyle = pulseWarn ? '#ff4433' : '#d03020';
     ctx.fillText('НЕ ЖДИТЕ ПОЩАДЫ. ВЫ ПРЕДУПРЕЖДЕНЫ.', centerX, topWarnY);
 
@@ -245,7 +245,7 @@ function drawUnifiedLoading(
     const baseText = 'ЗАГРУЗКА';
     const dotsStr = '.'.repeat(dots);
 
-    ctx.font = `${Math.max(16, Math.round(height / 32))}px "VT323", monospace`;
+    ctx.font = `${Math.max(16, Math.round(height / 32))}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#aaa';
     const glitchedBase = canvasTextGlitch(baseText, centerX, centerY);
     const baseWidth = ctx.measureText(glitchedBase).width;
@@ -267,7 +267,7 @@ function drawUnifiedLoading(
 
     if (progressStage) {
       const stageSize = Math.max(11, Math.round(height / 60));
-      ctx.font = `${stageSize}px "VT323", monospace`;
+      ctx.font = `${stageSize}px "Pixelify Sans", monospace`;
       ctx.fillStyle = '#779999';
       ctx.textAlign = 'center';
       ctx.fillText(progressStage, centerX, barY + barH + stageSize + 6);
@@ -281,7 +281,7 @@ function drawUnifiedLoading(
 
     const startY1 = Math.round(height * 0.33);
     ctx.textAlign = 'left';
-    ctx.font = `bold ${colSize + 1}px "VT323", monospace`;
+    ctx.font = `bold ${colSize + 1}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#44ccaa';
     ctx.fillText('> ОСНОВНЫЕ КЛАВИШИ <', leftX, startY1);
 
@@ -295,16 +295,16 @@ function drawUnifiedLoading(
 
     for (let i = 0; i < controlsP.length; i++) {
       const rowY = startY1 + (i + 1.4) * lineH;
-      ctx.font = `bold ${colSize}px "VT323", monospace`;
+      ctx.font = `bold ${colSize}px "Pixelify Sans", monospace`;
       ctx.fillStyle = '#ddf0f0';
       ctx.fillText(controlsP[i][0], leftX, rowY);
-      ctx.font = `${colSize}px "VT323", monospace`;
+      ctx.font = `${colSize}px "Pixelify Sans", monospace`;
       ctx.fillStyle = '#88aaaa';
       ctx.fillText(`— ${controlsP[i][1]}`, leftX + descOffset, rowY);
     }
 
     const startY2 = Math.round(height * 0.54);
-    ctx.font = `bold ${colSize + 1}px "VT323", monospace`;
+    ctx.font = `bold ${colSize + 1}px "Pixelify Sans", monospace`;
     ctx.fillStyle = '#eeaa22';
     ctx.fillText('> ПРАВИЛА ВЫЖИВАНИЯ <', leftX, startY2);
 
@@ -343,7 +343,7 @@ function drawNumberedTip(
 ): void {
   if (!currentTip) return;
   const tipSize = Math.max(12, Math.min(20, Math.round(height / 46)));
-  ctx.font = `${tipSize}px "VT323", monospace`;
+  ctx.font = `${tipSize}px "Pixelify Sans", monospace`;
 
   const maxW = width * 0.86;
   const words = currentTip.split(' ');
@@ -385,13 +385,13 @@ function drawTipItem(
   fontSize: number,
   lineH: number,
 ): number {
-  ctx.font = `bold ${fontSize}px "VT323", monospace`;
+  ctx.font = `bold ${fontSize}px "Pixelify Sans", monospace`;
   ctx.fillStyle = '#eeddaa';
   const prefix = `• ${topic}: `;
   ctx.fillText(prefix, x, y);
   const prefixW = ctx.measureText(prefix).width;
 
-  ctx.font = `${fontSize}px "VT323", monospace`;
+  ctx.font = `${fontSize}px "Pixelify Sans", monospace`;
   ctx.fillStyle = '#99aa99';
 
   if (prefixW + ctx.measureText(desc).width <= maxW) {

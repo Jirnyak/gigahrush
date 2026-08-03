@@ -15544,7 +15544,7 @@ export function drawItemGridIcon(
   ctx.beginPath();
   ctx.rect(x + 2 * sx, y + 2 * sy, Math.max(1, cellSize - 6 * sx), Math.max(1, cellSize - 7 * sy));
   ctx.clip();
-  ctx.font = `${5.8 * sy}px "VT323", monospace`;
+  ctx.font = `${5.8 * sy}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   ctx.fillStyle = selected ? '#0fa' : '#d6e2e2';
   // Static, readable label (no snake-scroll animation); ellipsis when clipped.

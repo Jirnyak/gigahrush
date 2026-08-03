@@ -49,12 +49,12 @@ export function drawContainerMenu(
   const access = containerAccessInfo(container, player, state);
 
   ctx.fillStyle = '#aaa';
-  ctx.font = `${8.2 * sy}px "VT323", monospace`;
+  ctx.font = `${8.2 * sy}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   ctx.fillText('КОНТЕЙНЕР', cw / 2, 10 * sy);
   ctx.textAlign = 'left';
 
-  ctx.font = `${7.2 * sy}px "VT323", monospace`;
+  ctx.font = `${7.2 * sy}px "Pixelify Sans", monospace`;
   ctx.fillStyle = '#ee4';
   ctx.fillText(`Вы: ${playerInv.length}/${MAX_INVENTORY_SLOTS}`, startX, startY - 9 * sy);
   const columnW = gridTotal;
@@ -64,7 +64,7 @@ export function drawContainerMenu(
   
   let infoY = startY + 4 * sy;
   ctx.fillStyle = access.color;
-  ctx.font = `${7.2 * sy}px "VT323", monospace`;
+  ctx.font = `${7.2 * sy}px "Pixelify Sans", monospace`;
   for (const line of wrapTextLines(ctx, access.label, layout.infoW)) {
     ctx.fillText(line, layout.infoX, infoY);
     infoY += 9 * sy;
@@ -72,7 +72,7 @@ export function drawContainerMenu(
   infoY += 4 * sy;
 
   ctx.fillStyle = '#888';
-  ctx.font = `${6.4 * sy}px "VT323", monospace`;
+  ctx.font = `${6.4 * sy}px "Pixelify Sans", monospace`;
   for (const line of wrapTextLines(ctx, access.detail, layout.infoW)) {
     ctx.fillText(line, layout.infoX, infoY);
     infoY += 8 * sy;
@@ -138,7 +138,7 @@ export function drawContainerMenu(
             : stolenHere ? 'КРАД' : 'ВАШ';
           ctx.fillStyle = value.scarcityColor;
           ctx.fillRect(cx + 1 * sx, cy + 1 * sy, Math.max(1, 2 * sx), cellSz - 4 * sy);
-          ctx.font = `${4.5 * sy}px "VT323", monospace`;
+          ctx.font = `${4.5 * sy}px "Pixelify Sans", monospace`;
           ctx.fillStyle = side === 'player' && stolenHere ? '#f84' : side === 'container' ? access.color : '#ee4';
           ctx.fillText(ownerLabel, cx + 4 * sx, cy + 4.2 * sy);
           if (questLabel) {
@@ -153,7 +153,7 @@ export function drawContainerMenu(
             bottomReserveUnits: 6,
           });
           ctx.fillStyle = value.scarcityColor;
-          ctx.font = `${4.8 * sy}px "VT323", monospace`;
+          ctx.font = `${4.8 * sy}px "Pixelify Sans", monospace`;
           ctx.fillText(
             fitText(ctx, value.priceText, item.count > 1 ? cellSz - 18 * sx : cellSz - 6 * sx),
             cx + 4 * sx,
@@ -161,7 +161,7 @@ export function drawContainerMenu(
           );
           if (item.count > 1) {
             ctx.fillStyle = '#8a8';
-            ctx.font = `${4.8 * sy}px "VT323", monospace`;
+            ctx.font = `${4.8 * sy}px "Pixelify Sans", monospace`;
             ctx.fillText(`x${item.count}`, cx + cellSz - 16 * sx, cy + cellSz - 5 * sy);
           }
         }
@@ -180,11 +180,11 @@ export function drawContainerMenu(
     const item = curInv[curIdx];
     const def = ITEMS[item.defId];
     ctx.fillStyle = '#ccc';
-    ctx.font = `${7.3 * sy}px "VT323", monospace`;
+    ctx.font = `${7.3 * sy}px "Pixelify Sans", monospace`;
     const descW = Math.min(cw - 16 * sx, totalW + 24 * sx);
     ctx.fillText(fitText(ctx, `${def?.name ?? item.defId} x${item.count}`, descW), cw / 2, descY);
     ctx.fillStyle = '#888';
-    ctx.font = `${6.4 * sy}px "VT323", monospace`;
+    ctx.font = `${6.4 * sy}px "Pixelify Sans", monospace`;
     let actionY = drawCenteredWrappedText(ctx, def?.desc ?? '', cw / 2, descY + 9 * sy, descW, 8 * sy, 2);
     const side = state.containerSide === 'player' ? 'player' : 'container';
     const actionInfo = containerItemActionInfo(container, player, side, item, state);
@@ -210,13 +210,13 @@ export function drawContainerMenu(
     }
   } else {
     ctx.fillStyle = '#7c8a93';
-    ctx.font = `${6.4 * sy}px "VT323", monospace`;
+    ctx.font = `${6.4 * sy}px "Pixelify Sans", monospace`;
     ctx.fillText('Пустой слот', cw / 2, descY + 6 * sy);
   }
   ctx.textAlign = 'left';
 
   ctx.fillStyle = '#7a93a0';
-  ctx.font = `${5.8 * sy}px "VT323", monospace`;
+  ctx.font = `${5.8 * sy}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'right';
   const hintW = Math.max(60 * sx, cw - 16 * sx);
   ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} - курсор`, hintW), cw - 8 * sx, ch - 24 * sy);

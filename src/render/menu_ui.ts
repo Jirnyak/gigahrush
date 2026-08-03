@@ -35,14 +35,14 @@ export function drawGameMenu(
   ctx.shadowBlur = 10;
   const tj = textJitter(time, 700);
   ctx.fillStyle = `rgba(200,0,0,${flicker(time, 701)})`;
-  ctx.font = `bold ${20 * sy}px "VT323", monospace`;
+  ctx.font = `bold ${20 * sy}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   ctx.fillText('ГИГАХРУЩ', w / 2 + tj.dx, py + 20 * sy + tj.dy);
   ctx.shadowBlur = 0;
   ctx.restore();
 
   // Menu items
-  ctx.font = `${9 * sy}px "VT323", monospace`;
+  ctx.font = `${9 * sy}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   for (let i = 0; i < GAME_MENU_ITEMS.length; i++) {
     const selected = i === state.menuSel;
@@ -55,7 +55,7 @@ export function drawGameMenu(
   }
 
   ctx.fillStyle = '#7a93a0';
-  ctx.font = `${7 * sy}px "VT323", monospace`;
+  ctx.font = `${7 * sy}px "Pixelify Sans", monospace`;
   ctx.fillText(
     fitText(ctx, `${controlBindingLabel('controlsMenu')} — клавиши  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('gameMenu')} — подтвердить  |  ${menuCloseHint()} — закрыть`, pw - 12 * _sx),
     w / 2,

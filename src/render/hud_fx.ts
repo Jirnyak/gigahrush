@@ -249,7 +249,7 @@ export function drawGlitchText(
   const alpha = flicker(time, seed + 77);
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = `${fontSize}px "VT323", monospace`;
+  ctx.font = `${fontSize}px "Pixelify Sans", monospace`;
 
   // Occasional character dropout (1 char replaced with noise)
   const dropIdx = hash2(Math.floor(time * 4), seed) > 0.92
@@ -424,13 +424,13 @@ export function drawSeroburmalineNoLookFx(
     const y = h * 0.5 - fontSize * 3.1;
     const pulse = 0.76 + Math.sin(time * 9) * 0.12;
     ctx.textAlign = 'center';
-    ctx.font = `bold ${fontSize}px "VT323", monospace`;
+    ctx.font = `bold ${fontSize}px "Pixelify Sans", monospace`;
     ctx.shadowColor = `rgba(190,110,150,${0.45 * intensity})`;
     ctx.shadowBlur = 8;
     ctx.fillStyle = `rgba(235,205,218,${pulse * intensity})`;
     ctx.fillText(fx.warning, x + (hash2(Math.floor(time * 18), 870) - 0.5) * 2.2, y);
     ctx.shadowBlur = 0;
-    ctx.font = `${Math.max(8, Math.floor(fontSize * 0.62))}px "VT323", monospace`;
+    ctx.font = `${Math.max(8, Math.floor(fontSize * 0.62))}px "Pixelify Sans", monospace`;
     ctx.fillStyle = `rgba(190,215,205,${0.56 * intensity})`;
     ctx.fillText('в сторону / вниз / закрыть', x, y + fontSize * 1.15);
   }
@@ -486,7 +486,7 @@ export function drawSignalRows(
   ctx.clip();
   const textSize = Math.max(6, fontSize);
   const labels = ['ЗВУК', 'КАРТ', 'ЛЮДИ'];
-  ctx.font = `bold ${textSize}px "VT323", monospace`;
+  ctx.font = `bold ${textSize}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < count; i++) {
@@ -501,13 +501,13 @@ export function drawSignalRows(
     ctx.globalAlpha = 1;
     ctx.fillStyle = color;
     ctx.fillText(labels[i] ?? 'СИГН', x + 7, cy);
-    ctx.font = `${textSize}px "VT323", monospace`;
+    ctx.font = `${textSize}px "Pixelify Sans", monospace`;
     ctx.shadowColor = i === 0 ? color : 'rgba(0,0,0,0)';
     ctx.shadowBlur = i === 0 ? 5 : 0;
     ctx.fillStyle = i === 0 ? '#fff4c2' : '#e4e4e4';
     ctx.fillText(lines[i], x + labelW + 8, cy);
     ctx.shadowBlur = 0;
-    ctx.font = `bold ${textSize}px "VT323", monospace`;
+    ctx.font = `bold ${textSize}px "Pixelify Sans", monospace`;
   }
   ctx.restore();
 }
@@ -554,7 +554,7 @@ export function drawRangedThreatCue(
   ctx.globalAlpha = pulse;
 
   ctx.textAlign = 'center';
-  ctx.font = 'bold 10px "VT323", monospace';
+  ctx.font = 'bold 10px "Pixelify Sans", monospace';
   ctx.shadowColor = cue.color;
   ctx.shadowBlur = 8;
   const arrow = side < -0.2 ? '< ' : side > 0.2 ? ' >' : '';

@@ -63,12 +63,12 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   const time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
   
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(6, 10, 15, 0.4)';
+  ctx.fillStyle = 'rgba(6, 10, 15, 0.1)';
   ctx.fillRect(0, 0, w, h);
-  drawStaticNoise(ctx, 0, 0, w, h, time, 0.15);
+  drawStaticNoise(ctx, 0, 0, w, h, time, 0.05);
 
   ctx.save();
-  ctx.globalAlpha = 0.25;
+  ctx.globalAlpha = 0.15;
   ctx.fillStyle = '#0a1014';
   for (let y = 0; y < h; y += 4) {
     if (y % 8 === 0) ctx.fillRect(0, y, w, 2);
@@ -78,12 +78,12 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c00';
-  ctx.font = `bold ${Math.round(48 * s)}px "VT323", monospace`;
+  ctx.font = `bold ${Math.round(48 * s)}px "Pixelify Sans", monospace`;
   const titleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 180 : 160) * s : cy - 122 * s;
   const subtitleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 138 : 118) * s : cy - 76 * s;
   ctx.fillText(lang.title, cx, titleY);
   ctx.fillStyle = '#666';
-  ctx.font = `${Math.round(16 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(16 * s)}px "Pixelify Sans", monospace`;
   ctx.fillText(lang.subtitle, cx, subtitleY);
 
   const hits = options.mode === 'setup'
@@ -93,7 +93,7 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
       : [];
 
   ctx.fillStyle = '#555';
-  ctx.font = `${Math.round(12 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(12 * s)}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   if (options.mode === 'language') {
     if (options.mobile) {
@@ -115,12 +115,12 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   }
 
   ctx.fillStyle = '#705858';
-  ctx.font = `${Math.round(11 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(11 * s)}px "Pixelify Sans", monospace`;
   if (options.mode !== 'setup') ctx.fillText(fitText(ctx, lang.languageHint, w * 0.9), cx, h - 12 * s);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#557766';
-  ctx.font = `${Math.round(11 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(11 * s)}px "Pixelify Sans", monospace`;
   ctx.fillText(GAME_BUILD_VERSION, 12 * s, h - 12 * s);
 
   if (typeof window !== 'undefined') {
@@ -142,7 +142,7 @@ function drawLanguageMenu(
   const w = ctx.canvas.width;
   const fieldW = Math.min(w * 0.9, 460 * s);
   ctx.fillStyle = '#888';
-  ctx.font = `${Math.round(16 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(16 * s)}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   ctx.fillText(fitText(ctx, lang.startPrompt, w * 0.9), cx, y + 94 * s);
   hits.push({ field: 'start', x: cx - fieldW / 2, y: y + 68 * s, w: fieldW, h: 40 * s });
@@ -171,10 +171,10 @@ function drawSetupMenu(
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#d6b24c';
-  ctx.font = `bold ${Math.round(18 * s)}px "VT323", monospace`;
+  ctx.font = `bold ${Math.round(18 * s)}px "Pixelify Sans", monospace`;
   ctx.fillText(fitText(ctx, lang.setupTitle, panelW - 24 * s), cx, y + 24 * s);
   ctx.fillStyle = '#667';
-  ctx.font = `${Math.round(10 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(10 * s)}px "Pixelify Sans", monospace`;
   ctx.fillText(fitText(ctx, lang.setupSubtitle, panelW - 24 * s), cx, y + 40 * s);
 
   let rowY = y + 56 * s;
@@ -187,13 +187,13 @@ function drawSetupMenu(
 
     ctx.textAlign = 'left';
     ctx.fillStyle = selected ? '#d8ffe8' : '#7b9a9a';
-    ctx.font = `bold ${Math.round(11 * s)}px "VT323", monospace`;
+    ctx.font = `bold ${Math.round(11 * s)}px "Pixelify Sans", monospace`;
     ctx.fillText(fitText(ctx, `${selected ? '> ' : '  '}${row.label}`, panelW * 0.4), x + 18 * s, rowY + 13 * s);
 
     const commandRow = row.field === 'start' || row.field === 'addNpc';
     ctx.textAlign = commandRow ? 'center' : 'right';
     ctx.fillStyle = commandRow ? (selected ? '#ffd46a' : '#9a7b44') : (selected ? '#8fffd2' : '#698b88');
-    ctx.font = `${Math.round(11 * s)}px "VT323", monospace`;
+    ctx.font = `${Math.round(11 * s)}px "Pixelify Sans", monospace`;
     const valueMaxW = commandRow ? panelW - 52 * s : panelW * 0.48;
     const valueX = commandRow ? cx : x + panelW - 18 * s;
     ctx.fillText(fitText(ctx, row.value, valueMaxW), valueX, rowY + 13 * s);
@@ -201,7 +201,7 @@ function drawSetupMenu(
     if (row.hint) {
       ctx.textAlign = 'left';
       ctx.fillStyle = selected ? '#668' : '#465';
-      ctx.font = `${Math.round(8 * s)}px "VT323", monospace`;
+      ctx.font = `${Math.round(8 * s)}px "Pixelify Sans", monospace`;
       ctx.fillText(fitText(ctx, row.hint, panelW - 40 * s), x + 18 * s, rowY + 24 * s);
     }
 
@@ -210,7 +210,7 @@ function drawSetupMenu(
   }
 
   ctx.fillStyle = '#555';
-  ctx.font = `${Math.round(12 * s)}px "VT323", monospace`;
+  ctx.font = `${Math.round(12 * s)}px "Pixelify Sans", monospace`;
   ctx.textAlign = 'center';
   ctx.fillText(fitText(ctx, lang.setupControlHint, w * 0.92), cx, Math.max(y + panelH + 24 * s, w * 0.05 > 40 ? ctx.canvas.height - 30 * s : y + panelH + 24 * s));
 
@@ -250,10 +250,10 @@ function drawLanguageSwitch(
     drawFlag(ctx, def.flag, x + 7 * s, y + 7 * s, 42 * s, 28 * s);
     ctx.textAlign = 'left';
     ctx.fillStyle = active ? '#ffd46a' : '#86a9ad';
-    ctx.font = `bold ${Math.round(12 * s)}px "VT323", monospace`;
+    ctx.font = `bold ${Math.round(12 * s)}px "Pixelify Sans", monospace`;
     ctx.fillText(def.code, x + 56 * s, y + 18 * s);
     ctx.fillStyle = active ? '#d8c68a' : '#60777a';
-    ctx.font = `${Math.round(9 * s)}px "VT323", monospace`;
+    ctx.font = `${Math.round(9 * s)}px "Pixelify Sans", monospace`;
     ctx.fillText(fitText(ctx, def.name, chipW - 62 * s), x + 56 * s, y + 32 * s);
     hits.push({ id: def.id, x, y, w: chipW, h: chipH });
   }
