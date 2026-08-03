@@ -2149,7 +2149,7 @@ export function drawDebugOverlay(
   ctx.lineWidth = 1 * sx;
   ctx.strokeRect(margin, margin, w - margin * 2, h - margin * 2);
 
-  ctx.font = `${fs}px "Pixelify Sans", monospace`;
+  ctx.font = `${fs}px "Press Start 2P", monospace`;
   ctx.textBaseline = 'top';
 
   // Divider at 55% width

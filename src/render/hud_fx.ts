@@ -22,70 +22,34 @@ function hashByte(n: number): number {
   return n & 255;
 }
 
-interface StaticNoiseCache {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  image: ImageData;
-  w: number;
-  h: number;
-  seed: number;
-}
+const STATIC_NOISE_W = 160;
+const STATIC_NOISE_H = 100;
+const STATIC_NOISE_FRAMES = 8;
+let noiseFrames: HTMLCanvasElement[] | OffscreenCanvas[] | null = null;
 
-const STATIC_NOISE_MAX_W = 160;
-const STATIC_NOISE_MAX_H = 100;
-const STATIC_NOISE_PIXEL_SCALE = 6;
-let staticNoiseCache: StaticNoiseCache | null = null;
-
-function getStaticNoiseCache(w: number, h: number): StaticNoiseCache {
-  if (staticNoiseCache && staticNoiseCache.w === w && staticNoiseCache.h === h) {
-    return staticNoiseCache;
+function initNoiseFrames(): void {
+  if (noiseFrames) return;
+  noiseFrames = [];
+  for (let f = 0; f < STATIC_NOISE_FRAMES; f++) {
+    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(STATIC_NOISE_W, STATIC_NOISE_H);
+    canvas.width = STATIC_NOISE_W;
+    canvas.height = STATIC_NOISE_H;
+    const ctx = canvas.getContext('2d', { alpha: true }) as CanvasRenderingContext2D;
+    const imgData = ctx.createImageData(STATIC_NOISE_W, STATIC_NOISE_H);
+    const data = imgData.data;
+    const count = STATIC_NOISE_W * STATIC_NOISE_H;
+    const seed = 100 + f * 17;
+    for (let i = 0; i < count; i++) {
+      const v = hashByte(seed * 374761393 + i * 668265263);
+      const di = i << 2;
+      data[di] = v;
+      data[di + 1] = v;
+      data[di + 2] = v;
+      data[di + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    noiseFrames.push(canvas as any);
   }
-  if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') {
-    staticNoiseCache = {
-      canvas: {} as HTMLCanvasElement,
-      ctx: {
-        createImageData: () => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
-        putImageData: () => {},
-      } as unknown as CanvasRenderingContext2D,
-      image: { data: new Uint8ClampedArray(w * h * 4), width: w, height: h } as unknown as ImageData,
-      w,
-      h,
-      seed: -1,
-    };
-    return staticNoiseCache;
-  }
-  
-  const canvas = typeof document !== 'undefined'
-    ? document.createElement('canvas')
-    : new OffscreenCanvas(w, h);
-  canvas.width = w;
-  canvas.height = h;
-  const noiseCtx = canvas.getContext('2d', { alpha: true }) as CanvasRenderingContext2D;
-  staticNoiseCache = {
-    canvas: canvas as any,
-    ctx: noiseCtx,
-    image: noiseCtx.createImageData(w, h),
-    w,
-    h,
-    seed: -1,
-  };
-  return staticNoiseCache;
-}
-
-function updateStaticNoise(cache: StaticNoiseCache, seed: number): void {
-  if (cache.seed === seed) return;
-  cache.seed = seed;
-  const data = cache.image.data;
-  const count = cache.w * cache.h;
-  for (let i = 0; i < count; i++) {
-    const v = hashByte(seed * 374761393 + i * 668265263);
-    const di = i << 2;
-    data[di] = v;
-    data[di + 1] = v;
-    data[di + 2] = v;
-    data[di + 3] = 255;
-  }
-  cache.ctx.putImageData(cache.image, 0, 0);
 }
 
 /* ── Text jitter: small XY offset that varies over time ───────── *
@@ -249,7 +213,7 @@ export function drawGlitchText(
   const alpha = flicker(time, seed + 77);
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = `${fontSize}px "Pixelify Sans", monospace`;
+  ctx.font = `${fontSize}px "Press Start 2P", monospace`;
 
   // Occasional character dropout (1 char replaced with noise)
   const dropIdx = hash2(Math.floor(time * 4), seed) > 0.92
@@ -284,15 +248,16 @@ export function drawStaticNoise(
   time: number, intensity = 0.03,
 ): void {
   if (intensity <= 0 || w <= 0 || h <= 0) return;
-  const noiseW = Math.max(8, Math.min(STATIC_NOISE_MAX_W, Math.ceil(w / STATIC_NOISE_PIXEL_SCALE)));
-  const noiseH = Math.max(8, Math.min(STATIC_NOISE_MAX_H, Math.ceil(h / STATIC_NOISE_PIXEL_SCALE)));
-  const cache = getStaticNoiseCache(noiseW, noiseH);
-  updateStaticNoise(cache, Math.floor(time * 6));
+  initNoiseFrames();
+  if (!noiseFrames) return;
+  
+  const frameIdx = Math.floor(time * 12) % STATIC_NOISE_FRAMES;
+  const frame = noiseFrames[frameIdx];
 
   ctx.save();
   ctx.globalAlpha = intensity;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(cache.canvas, x, y, w, h);
+  ctx.drawImage(frame as CanvasImageSource, x, y, w, h);
   ctx.restore();
 }
 
@@ -424,13 +389,13 @@ export function drawSeroburmalineNoLookFx(
     const y = h * 0.5 - fontSize * 3.1;
     const pulse = 0.76 + Math.sin(time * 9) * 0.12;
     ctx.textAlign = 'center';
-    ctx.font = `bold ${fontSize}px "Pixelify Sans", monospace`;
+    ctx.font = `bold ${fontSize}px "Press Start 2P", monospace`;
     ctx.shadowColor = `rgba(190,110,150,${0.45 * intensity})`;
     ctx.shadowBlur = 8;
     ctx.fillStyle = `rgba(235,205,218,${pulse * intensity})`;
     ctx.fillText(fx.warning, x + (hash2(Math.floor(time * 18), 870) - 0.5) * 2.2, y);
     ctx.shadowBlur = 0;
-    ctx.font = `${Math.max(8, Math.floor(fontSize * 0.62))}px "Pixelify Sans", monospace`;
+    ctx.font = `${Math.max(8, Math.floor(fontSize * 0.62))}px "Press Start 2P", monospace`;
     ctx.fillStyle = `rgba(190,215,205,${0.56 * intensity})`;
     ctx.fillText('в сторону / вниз / закрыть', x, y + fontSize * 1.15);
   }
@@ -486,7 +451,7 @@ export function drawSignalRows(
   ctx.clip();
   const textSize = Math.max(6, fontSize);
   const labels = ['ЗВУК', 'КАРТ', 'ЛЮДИ'];
-  ctx.font = `bold ${textSize}px "Pixelify Sans", monospace`;
+  ctx.font = `bold ${textSize}px "Press Start 2P", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < count; i++) {
@@ -501,13 +466,13 @@ export function drawSignalRows(
     ctx.globalAlpha = 1;
     ctx.fillStyle = color;
     ctx.fillText(labels[i] ?? 'СИГН', x + 7, cy);
-    ctx.font = `${textSize}px "Pixelify Sans", monospace`;
+    ctx.font = `${textSize}px "Press Start 2P", monospace`;
     ctx.shadowColor = i === 0 ? color : 'rgba(0,0,0,0)';
     ctx.shadowBlur = i === 0 ? 5 : 0;
     ctx.fillStyle = i === 0 ? '#fff4c2' : '#e4e4e4';
     ctx.fillText(lines[i], x + labelW + 8, cy);
     ctx.shadowBlur = 0;
-    ctx.font = `bold ${textSize}px "Pixelify Sans", monospace`;
+    ctx.font = `bold ${textSize}px "Press Start 2P", monospace`;
   }
   ctx.restore();
 }
@@ -554,7 +519,7 @@ export function drawRangedThreatCue(
   ctx.globalAlpha = pulse;
 
   ctx.textAlign = 'center';
-  ctx.font = 'bold 10px "Pixelify Sans", monospace';
+  ctx.font = 'bold 10px "Press Start 2P", monospace';
   ctx.shadowColor = cue.color;
   ctx.shadowBlur = 8;
   const arrow = side < -0.2 ? '< ' : side > 0.2 ? ' >' : '';

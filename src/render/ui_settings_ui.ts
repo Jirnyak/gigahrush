@@ -77,9 +77,9 @@ export function drawUiSettingsMenu(
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#6cf';
-  ctx.font = `${11 * sy}px "Pixelify Sans", monospace`;
+  ctx.font = `${11 * sy}px "Press Start 2P", monospace`;
   ctx.fillText(view === 'graphics' ? 'НАСТРОЙКИ ГРАФИКИ' : view === 'audio' ? 'НАСТРОЙКИ АУДИО' : 'НАСТРОЙКИ ИНТЕРФЕЙСА', 12 * sx, 12 * sy);
-  ctx.font = `${7 * sy}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#577';
   ctx.fillText(
     fitTextStable(ctx, `${controlHint('uiSettings')} открыть/закрыть  |  ${controlHint('gameMenu')} принять/переключить  |  ${menuCloseHint()} закрыть`, w - 24 * sx),
@@ -92,7 +92,7 @@ export function drawUiSettingsMenu(
   const stateW = Math.min(80 * sx, w * 0.24);
   const labelW = Math.max(48 * sx, w - x * 2 - groupW - stateW - 12 * sx);
 
-  ctx.font = `${7 * sy}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#5a7080';
   ctx.fillText('РАЗДЕЛ', x + 14 * sx, top - 7 * sy);
   ctx.fillText(view === 'interface' ? 'ПРЕСЕТ / ЭЛЕМЕНТ' : 'НАСТРОЙКА', x + groupW + 18 * sx, top - 7 * sy);
@@ -181,7 +181,7 @@ export function drawUiSettingsMenu(
   }
 
   ctx.fillStyle = '#7a93a0';
-  ctx.font = `${7 * sy}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(
     fitTextStable(ctx, view === 'graphics'

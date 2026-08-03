@@ -442,7 +442,7 @@ function drawToolStrip(ctx: CanvasRenderingContext2D, layout: Layout, state: Map
   const panelH = Math.min(layout.h - layout.headerH - layout.bottomH - layout.gap * 2, tools.length * rowH + 20 * s);
   drawNeuroPanel(ctx, x - 4 * s, y - 20 * s, w + 8 * s, panelH + 24 * s, time, 1310);
   
-  ctx.font = `${7 * s}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#63f6ff';
   ctx.fillText('ИНСТРУМЕНТ', x, y - 10 * s);
   for (const tool of tools) {
@@ -476,7 +476,7 @@ function drawPalette(ctx: CanvasRenderingContext2D, layout: Layout, state: MapEd
   const panelH = Math.min(layout.h - layout.headerH - layout.bottomH - layout.gap * 2, visibleRows * rowH + 20 * s);
   drawNeuroPanel(ctx, x - 4 * s, y - 20 * s, w + 8 * s, panelH + 24 * s, time, 1311);
 
-  ctx.font = `${7 * s}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#63f6ff';
   ctx.fillText('ПАЛИТРА', x, y - 10 * s);
   for (let i = start; i < end; i++) {
@@ -841,7 +841,7 @@ function drawInspector(
 
   drawNeuroPanel(ctx, x - 4 * s, y - 4 * s, w + 8 * s, 100 * s, time, 1312);
 
-  ctx.font = `${7 * s}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#63f6ff';
   ctx.fillText('ИНСПЕКТОР', x, y + 6 * s);
   y += 18 * s;
@@ -883,7 +883,7 @@ function drawModePanel(
   drawStaticNoise(ctx, x, y, panelW, panelH, time, 0.014);
   drawGlitchText(ctx, state.menuTitle ?? String(mode).toUpperCase(), x + pad, y + 8 * s, time, 1251, '#63f6ff', 9 * s);
 
-  ctx.font = `${7 * s}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
   if (mode === 'details') {
     const lines = [
       `xy ${Math.floor(Number(state.cursorX ?? 0))},${Math.floor(Number(state.cursorY ?? 0))}`,
@@ -942,7 +942,7 @@ function drawStatus(
   const x = layout.x + layout.pad;
   const y = layout.y + layout.h - layout.bottomH + 5 * s;
   const w = layout.w - layout.pad * 2;
-  ctx.font = `${7 * s}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
   const status = state.error
     ? state.error
     : state.status
@@ -982,7 +982,7 @@ export function drawMapEditor(
 
   ctx.textBaseline = 'top';
   drawGlitchText(ctx, 'НЕТ-ТЕРМИНАЛ ГЕН: РЕДАКТОР КАРТЫ', layout.x + layout.pad, layout.y + 8 * s, time, 1231, '#63f6ff', 10 * s);
-  ctx.font = `${7 * s}px "Pixelify Sans", monospace`;
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#607080';
   const subtitle = state.mode ? `режим: ${state.mode}` : 'снимок этажа';
   ctx.fillText(fitText(ctx, subtitle, layout.w * 0.36), layout.x + layout.w - layout.pad - 128 * s, layout.y + 10 * s);
