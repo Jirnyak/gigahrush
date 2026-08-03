@@ -158,7 +158,7 @@ export function drawInventory(
       ctx.font = `${5.1 * ts}px "Press Start 2P", monospace`;
       ctx.fillText(fitStatText(ctx, `Цена: ${def.value ?? 0}₽`, details.w), details.x, infoY + 1.4 * ts);
       
-      const actionY = infoY + 5.4 * ts;
+      const actionY = infoY + 7.4 * ts;
       if (def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL || def.resistances) {
         ctx.fillStyle = '#5f8a5f';
         ctx.fillText(fitStatText(ctx, `${controlHint('gameMenu')} исп.`, layout.use.w), layout.use.x, actionY);
@@ -166,7 +166,7 @@ export function drawInventory(
       ctx.fillStyle = '#a86';
       ctx.fillText(fitStatText(ctx, `${controlHint('drop')} вык.`, layout.drop.w), layout.drop.x, actionY);
       
-      infoY = actionY + 2 * ts;
+      infoY = actionY + 4 * ts;
     }
   } else {
     ctx.fillStyle = '#555';

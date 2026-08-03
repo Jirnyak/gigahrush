@@ -92,8 +92,8 @@ import { autoPickupEnabled, cameraPlaneLen, hudMotionMode, screenInterferenceMod
 import { titleLanguageDef } from '../data/languages';
 import { getLocalizationLanguage } from '../systems/localization';
 
-const VITAL_LABEL_FONT = 7;
-const VITAL_PERCENT_FONT = 6.6;
+const VITAL_LABEL_FONT = 5.0;
+const VITAL_PERCENT_FONT = 5.0;
 const NEEDS_PANEL_H = 20;
 const COMBAT_TARGET_SCAN_CAP = 160;
 const COMBAT_TARGET_QUERY_CAP = COMBAT_TARGET_SCAN_CAP * 2;
@@ -1218,6 +1218,7 @@ function drawCombatSightFeedback(
     ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, th - 1);
     ctx.fillStyle = palette.text;
     ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
     let textX = tx + 5 * s;
     let textW = tw - 10 * s;
     if (hasQuestMarker) {
@@ -1493,8 +1494,8 @@ export function drawHUD(
     const barSpacing = Math.max(32 * sx, Math.min(76 * sx, barAreaW / bars.length));
     const vitalTextScale = Math.max(1, Math.min(sx, sy));
     const barW = Math.max(24 * sx, Math.min(68 * sx, barSpacing - 7 * sx));
-    const labelFont = Math.min(VITAL_LABEL_FONT, Math.floor(barW / 7)) * vitalTextScale;
-    const percentFont = Math.min(VITAL_PERCENT_FONT, Math.floor(barW / 7)) * vitalTextScale;
+    const labelFont = Math.min(VITAL_LABEL_FONT, Math.floor(barW / 9)) * vitalTextScale;
+    const percentFont = Math.min(VITAL_PERCENT_FONT, Math.floor(barW / 9)) * vitalTextScale;
     const barH = Math.max(4, 5.5 * sy);
     const barTop = barY + 11 * sy;
     ctx.textBaseline = 'alphabetic';
@@ -1749,12 +1750,12 @@ export function drawHUD(
         const eg = 255;
         const eb = 162;
         
-        ctx.font = `bold ${11 * sy}px "Press Start 2P", monospace`;
+        ctx.font = `bold ${7.5 * sy}px "Press Start 2P", monospace`;
         const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w - 12 * sx);
         const textWidth = ctx.measureText(prompt).width;
         
         const panelW = textWidth + 16 * sx;
-        const panelH = 16 * sy;
+        const panelH = 13 * sy;
         const panelX = slots.centerInteraction.x + slots.centerInteraction.w * 0.5 - panelW * 0.5;
         const panelY = slots.centerInteraction.y - 11.5 * sy;
         

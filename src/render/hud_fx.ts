@@ -29,9 +29,13 @@ let noiseFrames: HTMLCanvasElement[] | OffscreenCanvas[] | null = null;
 
 function initNoiseFrames(): void {
   if (noiseFrames) return;
+  const hasDoc = typeof document !== 'undefined';
+  const hasOffscreen = typeof OffscreenCanvas !== 'undefined';
+  if (!hasDoc && !hasOffscreen) return;
+  
   noiseFrames = [];
   for (let f = 0; f < STATIC_NOISE_FRAMES; f++) {
-    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(STATIC_NOISE_W, STATIC_NOISE_H);
+    const canvas = hasDoc ? document.createElement('canvas') : new OffscreenCanvas(STATIC_NOISE_W, STATIC_NOISE_H) as any;
     canvas.width = STATIC_NOISE_W;
     canvas.height = STATIC_NOISE_H;
     const ctx = canvas.getContext('2d', { alpha: true }) as CanvasRenderingContext2D;
@@ -126,7 +130,7 @@ export function drawNeuroPanel(
   
   // Base white/grey border
   ctx.strokeStyle = 'rgba(200, 210, 200, 0.6)';
-  ctx.strokeRect(x, y, w, h);
+  ctx.strokeRect(bx, by, bw, bh);
 
   // PS1-style blocky inner corners
   const cornerLen = Math.min(16, w * 0.1, h * 0.1);

@@ -600,8 +600,6 @@ import {
 import { installCanvasLocalization, setCanvasTextGlitchPressure, setLocalizationLanguage } from './systems/localization';
 import {
   ACTIVE_ACTOR_SOFT_LIMIT_STEP,
-  MAX_ACTIVE_ACTOR_SOFT_LIMIT,
-  MIN_ACTIVE_ACTOR_SOFT_LIMIT,
   normalizeActiveActorSoftLimit,
   setActiveActorSoftLimit,
 } from './data/entity_limits';
@@ -649,7 +647,7 @@ const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'start' | 'continue' | 'trailer' | 'feedback'>;
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback'>;
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 
@@ -669,8 +667,7 @@ function getTitleSetupFields(): readonly TitleInputField[] {
   if (hasValidSaveGame()) fields.push('continue');
   fields.push('start');
   if (NPC_INTAKE_ENABLED) fields.push('addNpc');
-  fields.push('trailer');
-  fields.push('language', 'name', 'age', 'sex', 'seed', 'actorCap', 'feedback');
+  fields.push('language', 'name', 'age', 'sex', 'seed', 'feedback');
   return fields;
 }
 let started = false;
@@ -1794,19 +1791,11 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
     });
   }
   rows.push(
-    { field: 'trailer', label: 'РЕЖИМ ТРЕЙЛЕРА', value: 'ЭТАЖ ' + TRAILER_ZS[titleTrailerFloorIdx], hint: 'Технический демо-режим. Enter: запуск, Влево/Вправо: карта', selected: selected('trailer') },
     { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
     { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
     { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
     { field: 'sex', label: lang.sexLabel, value: shownSex, hint: lang.setupSexHint, selected: selected('sex') },
     { field: 'seed', label: lang.seedLabel, value: `${shownSeed}${seedCursor}`, hint: lang.setupSeedHint, selected: selected('seed') },
-    {
-      field: 'actorCap',
-      label: lang.setupActorCapLabel,
-      value: lang.actorCapValue(titleActiveActorSoftLimit, MIN_ACTIVE_ACTOR_SOFT_LIMIT, MAX_ACTIVE_ACTOR_SOFT_LIMIT),
-      hint: lang.setupActorCapHint,
-      selected: selected('actorCap'),
-    },
     { field: 'feedback', label: 'ОБРАТНАЯ СВЯЗЬ', value: 'ТИТРЫ И ТГ', hint: 'Команда разработчиков и комьюнити', selected: selected('feedback') },
   );
   return rows;
