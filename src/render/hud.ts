@@ -1745,19 +1745,27 @@ export function drawHUD(
       }
       if (showInteractionPrompt || interaction.kind === 'item_drop') {
         const targetId = interaction.colorSeed;
-        // Deterministic color from targetId — shifted to cyan/teal palette
         const h0 = ((targetId * 2654435761) >>> 0) % 360;
         const er = Math.round(100 + 80 * Math.cos(h0 * Math.PI / 180));
         const eg = Math.round(200 + 55 * Math.cos((h0 + 120) * Math.PI / 180));
         const eb = Math.round(200 + 55 * Math.cos((h0 + 240) * Math.PI / 180));
+        
+        ctx.font = `${9 * sy}px "VT323", monospace`;
+        const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w - 12 * sx);
+        const textWidth = ctx.measureText(prompt).width;
+        
+        const panelW = textWidth + 16 * sx;
+        const panelH = 16 * sy;
+        const panelX = slots.centerInteraction.x + slots.centerInteraction.w * 0.5 - panelW * 0.5;
+        const panelY = slots.centerInteraction.y - 11.5 * sy;
+        
+        drawNeuroPanel(ctx, panelX, panelY, panelW, panelH, time, targetId + 777);
+        
         const eAlpha = flicker(time, targetId + 500);
         ctx.fillStyle = `rgba(${er},${eg},${eb},${eAlpha})`;
-        ctx.font = `${9 * sy}px "VT323", monospace`;
         ctx.textAlign = 'center';
-        // Subtle glow behind
         ctx.shadowColor = `rgba(${er},${eg},${eb},0.4)`;
         ctx.shadowBlur = 6;
-        const prompt = fitHudText(ctx, `${interactionPromptHint()}${interaction.prompt}`, slots.centerInteraction.w);
         ctx.fillText(prompt, slots.centerInteraction.x + slots.centerInteraction.w * 0.5, slots.centerInteraction.y);
         ctx.shadowBlur = 0;
         ctx.textAlign = 'left';

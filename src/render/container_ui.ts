@@ -114,10 +114,18 @@ export function drawContainerMenu(
         const cy = startY + row * cellSz;
         const selected = state.containerSide === side && state.containerCursorX === col && state.containerCursorY === row;
 
-        ctx.fillStyle = selected ? 'rgba(80,120,110,0.55)' : 'rgba(30,30,30,0.82)';
+        ctx.fillStyle = selected ? 'rgba(50, 180, 150, 0.15)' : 'rgba(10, 20, 25, 0.25)';
         ctx.fillRect(cx, cy, cellSz - 2, cellSz - 2);
-        ctx.strokeStyle = selected ? '#0fa' : '#444';
-        ctx.strokeRect(cx, cy, cellSz - 2, cellSz - 2);
+        ctx.strokeStyle = selected ? '#0fa' : '#2a4a4a';
+        ctx.lineWidth = selected ? 2 : 1;
+        ctx.strokeRect(cx + 0.5, cy + 0.5, cellSz - 3, cellSz - 3);
+        ctx.lineWidth = 1;
+        
+        // VHS Scanlines effect for cell background
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        for (let sl = 0; sl < cellSz - 2; sl += 3) {
+          ctx.fillRect(cx, cy + sl, cellSz - 2, 1);
+        }
 
         if (idx < inv.length) {
           const item = inv[idx];

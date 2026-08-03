@@ -2,6 +2,7 @@ import { TITLE_LANGUAGES, type TitleLanguageId, type TitleFlagKind, titleLanguag
 import { controlBindingLabel } from '../systems/controls';
 import { fitText } from './ui_text';
 import { GAME_BUILD_VERSION } from '../core/version';
+import { drawNeuroPanel, drawStaticNoise } from './hud_fx';
 
 export type TitleScreenMode = 'language' | 'setup' | 'feedback';
 export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'trailer' | 'start' | 'continue' | 'feedback';
@@ -59,13 +60,18 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   const cy = h / 2;
   const lang = titleLanguageDef(options.languageId);
 
-  ctx.fillStyle = 'rgba(9, 9, 9, 0.65)';
+  const time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+  
+  ctx.fillStyle = '#060a0f';
   ctx.fillRect(0, 0, w, h);
+  drawStaticNoise(ctx, 0, 0, w, h, time, 0.15);
 
   ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = '#210006';
-  for (let y = 0; y < h; y += 18 * s) ctx.fillRect(0, y, w, 1);
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = '#0a1014';
+  for (let y = 0; y < h; y += 4) {
+    if (y % 8 === 0) ctx.fillRect(0, y, w, 2);
+  }
   ctx.globalAlpha = 1;
   ctx.restore();
 
@@ -159,11 +165,8 @@ function drawSetupMenu(
   const x = cx - panelW / 2;
   const y = top;
 
-  ctx.fillStyle = 'rgba(4,8,10,0.88)';
-  ctx.fillRect(x, y, panelW, panelH);
-  ctx.strokeStyle = '#243b40';
-  ctx.lineWidth = Math.max(1, 1.5 * s);
-  ctx.strokeRect(x + 0.5, y + 0.5, panelW - 1, panelH - 1);
+  const time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 999);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#d6b24c';
@@ -231,11 +234,17 @@ function drawLanguageSwitch(
     const def = TITLE_LANGUAGES[i];
     const x = x0 + i * (chipW + gap);
     const active = def.id === activeId;
-    ctx.fillStyle = active ? 'rgba(50,18,18,0.92)' : 'rgba(8,16,18,0.72)';
-    ctx.strokeStyle = active ? '#d6b24c' : '#304a50';
-    ctx.lineWidth = Math.max(1, 1.5 * s);
-    ctx.fillRect(x, y, chipW, chipH);
-    ctx.strokeRect(x + 0.5, y + 0.5, chipW - 1, chipH - 1);
+    const time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+    
+    if (active) {
+      drawNeuroPanel(ctx, x, y, chipW, chipH, time, 10 + i);
+    } else {
+      ctx.fillStyle = 'rgba(8,16,18,0.72)';
+      ctx.fillRect(x, y, chipW, chipH);
+      ctx.strokeStyle = '#304a50';
+      ctx.lineWidth = Math.max(1, 1.5 * s);
+      ctx.strokeRect(x + 0.5, y + 0.5, chipW - 1, chipH - 1);
+    }
 
     drawFlag(ctx, def.flag, x + 7 * s, y + 7 * s, 42 * s, 28 * s);
     ctx.textAlign = 'left';

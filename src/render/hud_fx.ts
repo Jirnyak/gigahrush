@@ -40,12 +40,29 @@ function getStaticNoiseCache(w: number, h: number): StaticNoiseCache {
   if (staticNoiseCache && staticNoiseCache.w === w && staticNoiseCache.h === h) {
     return staticNoiseCache;
   }
-  const canvas = document.createElement('canvas');
+  if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') {
+    staticNoiseCache = {
+      canvas: {} as HTMLCanvasElement,
+      ctx: {
+        createImageData: () => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
+        putImageData: () => {},
+      } as unknown as CanvasRenderingContext2D,
+      image: { data: new Uint8ClampedArray(w * h * 4), width: w, height: h } as unknown as ImageData,
+      w,
+      h,
+      seed: -1,
+    };
+    return staticNoiseCache;
+  }
+  
+  const canvas = typeof document !== 'undefined'
+    ? document.createElement('canvas')
+    : new OffscreenCanvas(w, h);
   canvas.width = w;
   canvas.height = h;
-  const noiseCtx = canvas.getContext('2d', { alpha: true })!;
+  const noiseCtx = canvas.getContext('2d', { alpha: true }) as CanvasRenderingContext2D;
   staticNoiseCache = {
-    canvas,
+    canvas: canvas as any,
     ctx: noiseCtx,
     image: noiseCtx.createImageData(w, h),
     w,
