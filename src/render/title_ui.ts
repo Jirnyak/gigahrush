@@ -79,15 +79,15 @@ export function drawTitleScreen(ctx: CanvasRenderingContext2D, options: DrawTitl
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c00';
   ctx.font = `bold ${Math.round(48 * s)}px "Press Start 2P", monospace`;
-  const titleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 180 : 160) * s : cy - 122 * s;
-  const subtitleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 138 : 118) * s : cy - 76 * s;
+  const titleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 200 : 170) * s : cy - 132 * s;
+  const subtitleY = options.mode === 'setup' ? cy - (options.setupRows.length > 7 ? 150 : 120) * s : cy - 86 * s;
   ctx.fillText(lang.title, cx, titleY);
   ctx.fillStyle = '#666';
   ctx.font = `${Math.round(16 * s)}px "Press Start 2P", monospace`;
   ctx.fillText(lang.subtitle, cx, subtitleY);
 
   const hits = options.mode === 'setup'
-    ? drawSetupMenu(ctx, cx, cy - (options.setupRows.length > 7 ? 124 : options.setupRows.length > 5 ? 104 : 48) * s, s, options)
+    ? drawSetupMenu(ctx, cx, cy - (options.setupRows.length > 7 ? 134 : options.setupRows.length > 5 ? 104 : 48) * s, s, options)
     : options.mode === 'language'
       ? drawLanguageMenu(ctx, cx, cy - 44 * s, s, options.languageId)
       : [];
@@ -160,8 +160,8 @@ function drawSetupMenu(
   const lang = titleLanguageDef(options.languageId);
   const hits: TitleLanguageHit[] = [];
   const panelW = Math.min(w * 0.92, 560 * s);
-  const rowH = Math.max(24, 28 * s);
-  const gap = Math.max(3, 4 * s);
+  const rowH = Math.max(30, 32 * s);
+  const gap = Math.max(4, 5 * s);
   const panelH = 64 * s + options.setupRows.length * rowH + Math.max(0, options.setupRows.length - 1) * gap + 24 * s;
   const x = cx - panelW / 2;
   const y = top;
@@ -188,7 +188,7 @@ function drawSetupMenu(
     ctx.textAlign = 'left';
     ctx.fillStyle = selected ? '#d8ffe8' : '#7b9a9a';
     ctx.font = `bold ${Math.round(11 * s)}px "Press Start 2P", monospace`;
-    ctx.fillText(fitText(ctx, `${selected ? '> ' : '  '}${row.label}`, panelW * 0.4), x + 18 * s, rowY + 13 * s);
+    ctx.fillText(fitText(ctx, `${selected ? '> ' : '  '}${row.label}`, panelW * 0.4), x + 18 * s, rowY + 14 * s);
 
     const commandRow = row.field === 'start' || row.field === 'addNpc';
     ctx.textAlign = commandRow ? 'center' : 'right';
@@ -196,13 +196,13 @@ function drawSetupMenu(
     ctx.font = `${Math.round(11 * s)}px "Press Start 2P", monospace`;
     const valueMaxW = commandRow ? panelW - 52 * s : panelW * 0.48;
     const valueX = commandRow ? cx : x + panelW - 18 * s;
-    ctx.fillText(fitText(ctx, row.value, valueMaxW), valueX, rowY + 13 * s);
+    ctx.fillText(fitText(ctx, row.value, valueMaxW), valueX, rowY + 14 * s);
 
     if (row.hint) {
       ctx.textAlign = 'left';
       ctx.fillStyle = selected ? '#668' : '#465';
       ctx.font = `${Math.round(8 * s)}px "Press Start 2P", monospace`;
-      ctx.fillText(fitText(ctx, row.hint, panelW - 40 * s), x + 18 * s, rowY + 24 * s);
+      ctx.fillText(fitText(ctx, row.hint, panelW - 40 * s), x + 18 * s, rowY + 27 * s);
     }
 
     hits.push({ field: row.field, x: x + 10 * s, y: rowY, w: panelW - 20 * s, h: rowH });

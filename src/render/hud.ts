@@ -1207,9 +1207,9 @@ function drawCombatSightFeedback(
     ctx.font = `${6.5 * s}px "Press Start 2P", monospace`;
     const hasQuestMarker = target.questMarkerTone !== null;
     const minW = (hasQuestMarker ? 88 : 72) * s;
-    const maxW = Math.min(ctx.canvas.width - 8 * s, 124 * s);
+    const maxW = Math.min(ctx.canvas.width - 8 * s, 180 * s);
     const tw = Math.max(minW, Math.min(maxW, ctx.measureText(label).width + (hasQuestMarker ? 25 : 13) * s));
-    const th = 18 * s;
+    const th = 17 * s;
     const tx = Math.max(4 * s, Math.min(ctx.canvas.width - tw - 4 * s, target.screenX * sx - tw * 0.5));
     const ty = Math.max(4 * s, Math.min(ctx.canvas.height - th - 4 * s, target.headY * sy - 22 * s));
     ctx.fillStyle = palette.bg;
@@ -1493,8 +1493,8 @@ export function drawHUD(
     const barSpacing = Math.max(32 * sx, Math.min(76 * sx, barAreaW / bars.length));
     const vitalTextScale = Math.max(1, Math.min(sx, sy));
     const barW = Math.max(24 * sx, Math.min(68 * sx, barSpacing - 7 * sx));
-    const labelFont = VITAL_LABEL_FONT * vitalTextScale;
-    const percentFont = VITAL_PERCENT_FONT * vitalTextScale;
+    const labelFont = Math.min(VITAL_LABEL_FONT, Math.floor(barW / 7)) * vitalTextScale;
+    const percentFont = Math.min(VITAL_PERCENT_FONT, Math.floor(barW / 7)) * vitalTextScale;
     const barH = Math.max(4, 5.5 * sy);
     const barTop = barY + 11 * sy;
     ctx.textBaseline = 'alphabetic';

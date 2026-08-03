@@ -124,14 +124,6 @@ export function drawNeuroPanel(
   const bw = w - 4;
   const bh = h - 4;
   
-  // Red channel offset (left)
-  ctx.strokeStyle = 'rgba(255, 40, 40, 0.6)';
-  ctx.strokeRect(bx - 1.5, by, bw, bh);
-  
-  // Blue channel offset (right)
-  ctx.strokeStyle = 'rgba(40, 100, 255, 0.6)';
-  ctx.strokeRect(bx + 1.5, by, bw, bh);
-  
   // Base white/grey border
   ctx.strokeStyle = 'rgba(200, 210, 200, 0.6)';
   ctx.strokeRect(x, y, w, h);

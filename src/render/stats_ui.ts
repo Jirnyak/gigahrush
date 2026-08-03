@@ -161,10 +161,10 @@ export function drawInventory(
       const actionY = infoY + 5.4 * ts;
       if (def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL || def.resistances) {
         ctx.fillStyle = '#5f8a5f';
-        ctx.fillText(fitStatText(ctx, `${controlHint('gameMenu')} использовать`, layout.use.w), layout.use.x, actionY);
+        ctx.fillText(fitStatText(ctx, `${controlHint('gameMenu')} исп.`, layout.use.w), layout.use.x, actionY);
       }
       ctx.fillStyle = '#a86';
-      ctx.fillText(fitStatText(ctx, `${controlHint('drop')} выкинуть`, layout.drop.w), layout.drop.x, actionY);
+      ctx.fillText(fitStatText(ctx, `${controlHint('drop')} вык.`, layout.drop.w), layout.drop.x, actionY);
       
       infoY = actionY + 2 * ts;
     }

@@ -82,8 +82,8 @@ export function drawUiSettingsMenu(
   ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.fillStyle = '#577';
   ctx.fillText(
-    fitTextStable(ctx, `${controlHint('uiSettings')} открыть/закрыть  |  ${controlHint('gameMenu')} принять/переключить  |  ${menuCloseHint()} закрыть`, w - 24 * sx),
-    12 * sx,
+    fitTextStable(ctx, `${controlHint('uiSettings')} открыть/закрыть  |  ${controlHint('gameMenu')} принять/переключить  |  ${menuCloseHint()} закрыть`, w - 32 * sx),
+    16 * sx,
     26 * sy,
   );
 
@@ -189,8 +189,8 @@ export function drawUiSettingsMenu(
       : view === 'audio'
         ? 'ВЛЕВО/ВПРАВО для настройки звука; верхняя строка сбрасывает значения по умолчанию.'
         : 'Новичок используется по умолчанию. ENTER переключает UI; ВЛЕВО/ВПРАВО для обзора.',
-    w - 24 * sx),
-    12 * sx,
+    w - 32 * sx),
+    16 * sx,
     h - 10 * sy,
   );
   ctx.textBaseline = prevTextBaseline;
