@@ -290,6 +290,14 @@ curl -fsSI "https://gigahrush.github.io/?v=$(git rev-parse --short HEAD)" | grep
 
 `last-modified` должен быть сегодняшним. Если он старый, подожди и повтори; в первый раз обычно хватает 30-60 секунд.
 
+**Наблюдение 2026-08-06: legacy-билдер Pages деградировал.** Исторически сборка занимала 40-49 секунд. В этот день она стала упираться в ~10-минутный потолок: из семи прогонов подряд один прошёл за 592 с, остальные упали с `Page build failed` на 624-642 с. Размер payload ни при чём — 11.5 МБ падает так же, как 25 МБ; `.nojekyll` и публикация без истории тоже не влияют. Проверять статус сборки честнее так, а не по `Published` от `gh-pages`:
+
+```bash
+gh api repos/GIGAHRUSH/gigahrush.github.io/pages/builds/latest --jq '{status, created_at, updated_at}'
+```
+
+Если билдер снова встанет, запасной путь — Actions вместо legacy: `scripts/pages-workflow.yml` подмешивается в публикацию шагом `gh-pages:deploy` и лежит в ветке как `.github/workflows/pages.yml`. Триггер у него ручной (`workflow_dispatch`). Оговорка: 2026-08-06 его шаг `deploy-pages` сам упёрся в таймаут ожидания GitHub, то есть путь не подтверждён. Переключение источника Pages на Actions требует прав `admin` на `GIGAHRUSH/gigahrush.github.io` (у рабочего аккаунта только `push`), это тумблер Settings → Pages → Source.
+
 ## 7. Проверка Живого Сайта
 
 Проверь HTTP-ответ с cache-busting параметром по короткому хэшу коммита:
