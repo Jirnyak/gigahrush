@@ -30,7 +30,7 @@
     "cf:schema": "node scripts/cloudflare-net-setup.mjs --schema-only",
     "cf:dev": "npm run build -- --mode cloudflare && wrangler dev",
     "cf:deploy": "npm run build -- --mode cloudflare && wrangler deploy",
-    "gh-pages:deploy": "rm -rf node_modules/.cache/gh-pages && vite build --mode cloudflare --base=/ && gh-pages -d dist -b main --dotfiles --no-history -r https://github.com/GIGAHRUSH/gigahrush.github.io.git",
+    "gh-pages:deploy": "rm -rf node_modules/.cache/gh-pages && vite build --mode cloudflare --base=/ && mkdir -p dist/.github/workflows && cp scripts/pages-workflow.yml dist/.github/workflows/pages.yml && gh-pages -d dist -b main --dotfiles --no-history -r https://github.com/GIGAHRUSH/gigahrush.github.io.git",
     "check": "npm run typecheck && npm run test:unit && npm run content:audit && npm run build",
     "check:full": "npm run check && npm run smoke"
   },
