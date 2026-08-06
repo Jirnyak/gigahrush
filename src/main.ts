@@ -566,8 +566,10 @@ import {
   markPlatformReady,
   savePlatformRawGameSave,
   showPlatformFullscreenAd,
+  isPlatformAdOnScreen,
   isGamePushPortalTarget,
 } from './systems/platform_bridge';
+import { reportPlatformProgress } from './systems/platform_progress';
 import { addFactionRel, addFactionRelMutual, initFactionRelations, resetPlayerFactionRelations, restoreFactionRelations } from './data/relations';
 import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera, startCinematicCamera } from './systems/camera';
 import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
@@ -2028,6 +2030,13 @@ let pendingLoadAutosave = false; // autosave once this load lands (floor transit
 let pendingLoadStarted = false; // true = loading worker was started
 let pendingLoadWaitTime = 0;
 let pendingLoadAckYielded = 0;
+let pendingLoadAdRequested = false; // portal ad slot asked for this load
+let pendingLoadAdSettled = false;   // platform reported the slot done
+let pendingLoadAdDone = false;      // overlay is up (or nothing to show): load may run
+let pendingLoadAdWaitStart = 0;
+// How long a load waits for the ad overlay to actually appear before giving up on
+// it. Only the appearance is waited for — the ad then plays over the generation.
+const PORTAL_AD_OPEN_WAIT_MS = 1200;
 let platformGameplayMarkedActive = false;
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
@@ -3213,6 +3222,10 @@ function scheduleLoading(fn: () => void, autosaveAfter = true): void {
   loadingWorkerAck = false;
   pendingLoadWaitTime = 0;
   pendingLoadAckYielded = 0;
+  pendingLoadAdRequested = false;
+  pendingLoadAdSettled = false;
+  pendingLoadAdDone = false;
+  pendingLoadAdWaitStart = 0;
 }
 
 function loadingProgress(stage: string, pct: number): void {
@@ -3628,6 +3641,8 @@ function reportNetSphereProgressEvents(): void {
   } else if (!state.gameOver) {
     netDeathReported = false;
   }
+  // Same facts, portal side: leaderboard records and milestone achievements.
+  reportPlatformProgress(state, player);
 }
 
 function roundPlayerDamage(amount: number): number {
@@ -9428,7 +9443,32 @@ function gameLoop(now: number): void {
       requestAnimationFrame(gameLoop);
       return;
     }
-    if (pageHiddenPause || platformPause) {
+    // Phase 1c: portal ad slot. We wait only for the overlay to actually appear,
+    // then run generation underneath it — deliberately. The GamePush overlay and
+    // its countdown draw on the main thread, so generation freezes the timer and
+    // it finishes counting once the load is done; the player closes the banner and
+    // lands straight in the game. That reads as "the ad took the time", not "the
+    // game froze", and it costs one wait instead of ad + load back to back.
+    // Owner decision, 2026-08-07 — see gamepush.md §6.
+    if (!pendingLoadAdDone && isGamePushPortalTarget()) {
+      if (!pendingLoadAdRequested) {
+        pendingLoadAdRequested = true;
+        pendingLoadAdWaitStart = now;
+        void showPlatformFullscreenAd().then(() => { pendingLoadAdSettled = true; });
+      }
+      const adOpen = isPlatformAdOnScreen();
+      // Settled without an overlay = the platform had nothing to show. The wait cap
+      // keeps a silent slot from holding the load hostage.
+      if (!adOpen && !pendingLoadAdSettled && now - pendingLoadAdWaitStart < PORTAL_AD_OPEN_WAIT_MS) {
+        lastTime = now;
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+      pendingLoadAdDone = true;
+    }
+    // The ad pauses the game through the portal bridge; during a load that pause
+    // must not stop the generation running under the overlay.
+    if (pageHiddenPause || (platformPause && !isPlatformAdOnScreen())) {
       clearExternalPauseInputsOnce();
       if (typeof state !== 'undefined') {
         state.sleeping = false;
@@ -9472,15 +9512,6 @@ function gameLoop(now: number): void {
         done();
       }
     };
-
-    if (isGamePushPortalTarget()) {
-      showPlatformFullscreenAd().then(() => {
-        fn();
-        if (autosaveAfter) autoSaveGame();
-        finishDeferredLoad();
-      });
-      return;
-    }
 
     fn();
     if (autosaveAfter) autoSaveGame();

@@ -70,8 +70,15 @@ interface GamePushSounds {
 }
 
 interface GamePushAds {
-  showFullscreen?(): void | Promise<void>;
+  showFullscreen?(): void | Promise<unknown>;
+  isFullscreenAvailable?: boolean;
+  isFullscreenPlaying?: boolean;
+  isAdblockEnabled?: boolean;
   on?(event: 'fullscreen:start' | 'fullscreen:close', handler: (success?: boolean) => void): void;
+}
+
+interface GamePushAchievements {
+  unlock?(options: { tag?: string; id?: number }): void | Promise<unknown>;
 }
 
 interface GamePushSdk {
@@ -80,6 +87,7 @@ interface GamePushSdk {
   language?: string;
   sounds?: GamePushSounds;
   ads?: GamePushAds;
+  achievements?: GamePushAchievements;
   gameStart?(): void | Promise<void>;
   gameReady?(): void;
   changeLanguage?(lang: string): void;
@@ -380,8 +388,40 @@ function gamePushSdkAsync(): Promise<GamePushSdk | null> {
   return gamePushSdkPromise;
 }
 
-let activeFullscreenAdResolve: ((success: boolean) => void) | null = null;
-let activeFullscreenAdTimeout: ReturnType<typeof setTimeout> | undefined;
+// The GamePush fullscreen overlay — including its 3-2-1 countdown — is drawn on
+// the page main thread. Floor generation blocks that thread for seconds, so an ad
+// shown while generation runs freezes mid-countdown and the player pays for it
+// twice. The ad and the heavy load must therefore never overlap: callers wait for
+// the resolved promise AND for isPlatformAdOnScreen() to go false.
+const FULLSCREEN_AD_START_TIMEOUT_MS = 4000;   // no 'start' by then = platform showed nothing
+const FULLSCREEN_AD_SETTLE_GRACE_MS = 400;     // SDK promise settled before 'start' arrived
+const FULLSCREEN_AD_HARD_TIMEOUT_MS = 60000;   // ad started but never reported a close
+let activeFullscreenAdResolve: ((shown: boolean) => void) | null = null;
+let fullscreenAdTimers: ReturnType<typeof setTimeout>[] = [];
+let fullscreenAdOnScreen = false;
+
+function clearFullscreenAdTimers(): void {
+  for (const timer of fullscreenAdTimers) clearTimeout(timer);
+  fullscreenAdTimers = [];
+}
+
+function armFullscreenAdTimer(ms: number, fn: () => void): void {
+  fullscreenAdTimers.push(setTimeout(fn, ms));
+}
+
+function finishFullscreenAd(shown: boolean): void {
+  clearFullscreenAdTimers();
+  const resolve = activeFullscreenAdResolve;
+  activeFullscreenAdResolve = null;
+  resolve?.(shown);
+}
+
+/** True while a portal ad overlay owns the screen. Heavy main-thread work
+ *  (floor generation) must stay off until this goes false, otherwise the ad
+ *  countdown freezes and the player waits for the ad twice. */
+export function isPlatformAdOnScreen(): boolean {
+  return fullscreenAdOnScreen;
+}
 
 function bindGamePushEvents(gp = gamePushSdk()): void {
   if (!gp || gamePushEventsBound || !gp.on) return;
@@ -396,22 +436,26 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
   }
   if (gp.ads && typeof gp.ads.on === 'function') {
     gp.ads.on('fullscreen:start', () => {
-      if (activeFullscreenAdTimeout !== undefined) {
-        clearTimeout(activeFullscreenAdTimeout);
-        activeFullscreenAdTimeout = undefined;
+      // The overlay is up: drop the "nothing was shown" timers and hold the caller
+      // until close, so no heavy main-thread work can freeze the countdown.
+      clearFullscreenAdTimers();
+      fullscreenAdOnScreen = true;
+      if (activeFullscreenAdResolve) {
+        // Last resort: a host that opens an ad and never reports a close would
+        // otherwise strand the caller on the loading screen forever.
+        armFullscreenAdTimer(FULLSCREEN_AD_HARD_TIMEOUT_MS, () => {
+          fullscreenAdOnScreen = false;
+          bridgeOptions.onPauseChange?.(false);
+          finishFullscreenAd(true);
+        });
       }
       bridgeOptions.onPauseChange?.(true);
     });
     gp.ads.on('fullscreen:close', (success?: boolean) => {
-      if (activeFullscreenAdTimeout !== undefined) {
-        clearTimeout(activeFullscreenAdTimeout);
-        activeFullscreenAdTimeout = undefined;
-      }
+      const wasOnScreen = fullscreenAdOnScreen;
+      fullscreenAdOnScreen = false;
       bridgeOptions.onPauseChange?.(false);
-      if (activeFullscreenAdResolve) {
-        activeFullscreenAdResolve(success ?? false);
-        activeFullscreenAdResolve = null;
-      }
+      finishFullscreenAd(wasOnScreen || success === true);
     });
   }
   gamePushEventsBound = true;
@@ -435,25 +479,13 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
       try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch (e) { console.error('GamePush SDK error:', e); }
     }
 
-    // 2. Player sync (Test 4: сохранение)
-    try {
-      if (gp.player) {
-        if (typeof gp.player.set === 'function') {
-          gp.player.set('score', 100);
-          gp.player.set('progress', 'test');
-          if (typeof gp.player.sync === 'function') void gp.player.sync();
-        }
-      }
-    } catch (e) { console.error('GamePush SDK error:', e); }
-
-    // 3. Language (Test 6, 7)
-    try {
-      if (gp.language && typeof gp.changeLanguage === 'function') {
-        gp.changeLanguage(gp.language === 'es' ? 'en' : gp.language);
-      }
-    } catch (e) { console.error('GamePush SDK error:', e); }
-
-
+    // NOTHING ELSE belongs here. The sandbox save/language/sound probes that used
+    // to run on this first gesture also ran for every live player: they wrote
+    // `progress='test'` and `score=100` over the real cloud-save slot, which is
+    // why only 2 of 543 Pikabu players ever had a save and both leaderboards read
+    // a constant 100 (see retention.md). Real progress is written by
+    // savePlatformRawGameSave / submitPlatformLeaderboardStats; the remaining
+    // sandbox tests are marked manually — see gamepush.md.
   };
 
   if (typeof document !== 'undefined') {
@@ -672,18 +704,7 @@ export async function savePlatformRawGameSave(
         const record = portalSaveRecord(candidate.raw, candidate.bytes, candidate.mode ?? 'full');
         savedAt = Math.max(savedAt, record.savedAt);
         gp.player.set('progress', JSON.stringify(record));
-        // Personal records live platform-side (max against the stored value), so
-        // they survive new runs without touching the save shape. `score` = best
-        // cumulative XP (replaces the sandbox-test `score: 100` stub); `floor` =
-        // deepest |Z| reached — the field must be declared in the GamePush panel.
-        if (score !== undefined && Number.isFinite(score)) {
-          const prevScore = Number(gp.player.get?.('score')) || 0;
-          gp.player.set('score', Math.max(prevScore, Math.max(0, Math.round(score))));
-        }
-        if (floor !== undefined && Number.isFinite(floor)) {
-          const prevFloor = Number(gp.player.get?.('floor')) || 0;
-          gp.player.set('floor', Math.max(prevFloor, Math.max(0, Math.round(floor))));
-        }
+        applyPlatformRecords(gp.player, score, floor);
         await gp.player.sync?.({ storage: 'cloud' });
         touchedSdk = true;
       } else if (gp.player.set) {
@@ -765,30 +786,115 @@ export async function hydratePlatformSaveFromCloud(): Promise<PlatformLoadResult
   }
 }
 
-export function showPlatformFullscreenAd(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const gp = gamePushSdk();
-    if (gp && gp.ads && typeof gp.ads.showFullscreen === 'function') {
-      activeFullscreenAdResolve = resolve;
-      try {
-        gp.ads.showFullscreen();
-      } catch (e) {
-        console.error('GamePush showFullscreen error:', e);
-        activeFullscreenAdResolve = null;
-        resolve(false);
-        return;
-      }
-      // Timeout fallback: if the ad does not start within 800ms, assume it was skipped or failed.
-      activeFullscreenAdTimeout = setTimeout(() => {
-        activeFullscreenAdTimeout = undefined;
-        if (activeFullscreenAdResolve === resolve) {
-          activeFullscreenAdResolve = null;
-          resolve(false);
-        }
-      }, 800);
-    } else {
-      resolve(false);
+// Personal records live platform-side (max against the stored value), so they
+// survive new runs without touching the save shape. `score` = best cumulative XP,
+// `floor` = deepest |Z| reached; both fields must be declared in the GamePush
+// panel, and the leaderboards `Опыт выживания` (99388) / `Самый глубокий этаж`
+// (99389) read them directly. Cached locally so a repeat submit with an unchanged
+// record costs no SDK write.
+let bestReportedScore = 0;
+let bestReportedFloor = 0;
+
+function applyPlatformRecords(player: GamePushPlayer, score?: number, floor?: number): boolean {
+  if (typeof player.set !== 'function') return false;
+  let changed = false;
+  if (score !== undefined && Number.isFinite(score)) {
+    const next = Math.max(0, Math.round(score));
+    const prev = Math.max(bestReportedScore, Number(player.get?.('score')) || 0);
+    if (next > prev) {
+      player.set('score', next);
+      changed = true;
     }
+    bestReportedScore = Math.max(prev, next);
+  }
+  if (floor !== undefined && Number.isFinite(floor)) {
+    const next = Math.max(0, Math.round(floor));
+    const prev = Math.max(bestReportedFloor, Number(player.get?.('floor')) || 0);
+    if (next > prev) {
+      player.set('floor', next);
+      changed = true;
+    }
+    bestReportedFloor = Math.max(prev, next);
+  }
+  return changed;
+}
+
+/** Pushes the personal records to the portal outside the save path — death and
+ *  other run-ending moments never reach savePlatformRawGameSave, so without this
+ *  the leaderboards only ever see saved runs. */
+export async function submitPlatformLeaderboardStats(score: number, floor: number): Promise<boolean> {
+  try {
+    const gp = await gamePushSdkAsync();
+    if (!gp?.player) return false;
+    bindGamePushEvents(gp);
+    await waitForGamePushReady(gp);
+    if (!applyPlatformRecords(gp.player, score, floor)) return false;
+    await gp.player.sync?.({ storage: 'cloud' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const unlockedAchievementTags = new Set<string>();
+
+/** Unlocks a GamePush achievement by tag. The tag must exist in the GamePush
+ *  panel; a host without the achievements module (itch, direct build, Yandex) is
+ *  a silent no-op. Repeat unlocks are dropped locally: this is an event, not a
+ *  per-frame state sync. */
+export function unlockPlatformAchievement(tag: string): void {
+  if (!tag || unlockedAchievementTags.has(tag)) return;
+  const achievements = gamePushSdk()?.achievements;
+  if (!achievements || typeof achievements.unlock !== 'function') return;
+  unlockedAchievementTags.add(tag);
+  try {
+    const result = achievements.unlock({ tag });
+    if (result && typeof (result as Promise<unknown>).catch === 'function') {
+      void (result as Promise<unknown>).catch(() => {});
+    }
+  } catch (e) {
+    console.error('GamePush achievements error:', e);
+  }
+}
+
+/** Resolves once the platform is done with the ad slot: either nothing was shown
+ *  (no SDK, no inventory, adblock, platform cooldown) or the overlay opened and
+ *  closed again. Never resolves while the overlay is still up — see
+ *  isPlatformAdOnScreen. */
+export function showPlatformFullscreenAd(): Promise<boolean> {
+  const ads = gamePushSdk()?.ads;
+  const showFullscreen = ads?.showFullscreen;
+  if (!ads || typeof showFullscreen !== 'function') return Promise.resolve(false);
+  // Availability flags keep floor transitions free of dead waiting when the
+  // platform has nothing to show (own cooldown, adblock, unsupported host).
+  if (ads.isFullscreenAvailable === false || ads.isAdblockEnabled === true) return Promise.resolve(false);
+  if (activeFullscreenAdResolve) return Promise.resolve(false);
+  return new Promise(resolve => {
+    activeFullscreenAdResolve = resolve;
+    let settledEarly = false;
+    try {
+      const shown = showFullscreen.call(ads);
+      if (shown && typeof (shown as Promise<unknown>).then === 'function') {
+        // The SDK promise settles on close, but on some hosts it settles right
+        // away for a slot that opens a moment later. Give 'fullscreen:start' a
+        // short grace window before letting the caller run heavy work.
+        const onSettled = (): void => {
+          if (fullscreenAdOnScreen || settledEarly) return;
+          settledEarly = true;
+          armFullscreenAdTimer(FULLSCREEN_AD_SETTLE_GRACE_MS, () => {
+            if (!fullscreenAdOnScreen) finishFullscreenAd(false);
+          });
+        };
+        void (shown as Promise<unknown>).then(onSettled, onSettled);
+      }
+    } catch (e) {
+      console.error('GamePush showFullscreen error:', e);
+      finishFullscreenAd(false);
+      return;
+    }
+    armFullscreenAdTimer(FULLSCREEN_AD_START_TIMEOUT_MS, () => {
+      if (!fullscreenAdOnScreen) finishFullscreenAd(false);
+    });
   });
 }
 
@@ -804,8 +910,9 @@ export function resetPlatformBridgeForTests(): void {
   gamePushGameStartSent = false;
   gamePushGameplayActive = false;
   activeFullscreenAdResolve = null;
-  if (activeFullscreenAdTimeout !== undefined) {
-    clearTimeout(activeFullscreenAdTimeout);
-    activeFullscreenAdTimeout = undefined;
-  }
+  fullscreenAdOnScreen = false;
+  clearFullscreenAdTimers();
+  unlockedAchievementTags.clear();
+  bestReportedScore = 0;
+  bestReportedFloor = 0;
 }
