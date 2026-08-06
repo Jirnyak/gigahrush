@@ -41,6 +41,7 @@ import { generateNumberRegistryDesignFloor } from '../number_registry';
 import { generateObschezhitieSmenyDesignFloor } from '../obschezhitie_smeny';
 import { generateOranzhereyaBetonaDesignFloor } from '../oranzhereya_betona';
 import { generatePenroseLaundryDesignFloor, reinforcePenroseLaundryAuthoredHqTerritory } from '../penrose_laundry';
+import { generatePerevalkaDesignFloor, reinforcePerevalkaAuthoredHqTerritory } from '../perevalka';
 import { generatePioneerCampDesignFloor } from '../pioneer_camp';
 import { generatePodadDesignFloor } from '../podad';
 import {
@@ -99,6 +100,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, (seed: number) => FloorGene
   obschezhitie_smeny: generateObschezhitieSmenyDesignFloor,
   penrose_laundry: generatePenroseLaundryDesignFloor,
   black_market_88: generateBlackMarket88DesignFloor,
+  perevalka: generatePerevalkaDesignFloor,
   production_belt: generateProductionBeltDesignFloor,
   service_floor: generateServiceFloorDesignFloor,
   silicon_net_well: generateSiliconNetWellDesignFloor,
@@ -166,6 +168,7 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     if (id === 'shahta_atrium') reinforceShahtaAtriumAuthoredHqTerritory(gen.world);
     if (id === 'production_belt') reinforceProductionBeltAuthoredHqTerritory(gen.world);
     if (id === 'penrose_laundry') reinforcePenroseLaundryAuthoredHqTerritory(gen.world);
+    if (id === 'perevalka') reinforcePerevalkaAuthoredHqTerritory(gen.world);
     // Floor-authored post-territory reinforcement (HQ ownership, zone tuning) that the
     // generator deferred to a hook; previously this hook was set but never invoked.
     gen.onAfterTerritory?.(gen.world, gen.entities);

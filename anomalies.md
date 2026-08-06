@@ -8,7 +8,7 @@
 
 ## Что является системой
 
-Процедурный этаж - это route-stop в `FloorRun`, а не новый `FloorLevel`. Данные `ProceduralFloorSpec` задают `key`, `z`, seed, depth, danger, геометрию, majority-фракцию, anomaly-профиль, лутовые bias и monster bias. Сейчас источник данных содержит 54 процедурных route-остановки, 10 geometry-профилей, 5 majority-профилей и 20 anomaly-профилей.
+Процедурный этаж - это route-stop в `FloorRun`. Данные `ProceduralFloorSpec` задают `key`, `z`, seed, depth, danger, геометрию, majority-фракцию, anomaly-профиль, лутовые bias и monster bias. Сейчас источник данных содержит 50 процедурных route-остановок (все нечётные `z` в `[-50, 50]`, `PROCEDURAL_FLOOR_COUNT`), 10 geometry-профилей, 5 majority-профилей и 20 anomaly-профилей (18 играбельных + `none` + отключённый `bad_apple_world` с весом 0).
 
 `World` остается одной 1024x1024 тороидальной клеточной поверхностью. В ней живут `cells`, `roomMap`, `zoneMap`, `wallTex`, `floorTex`, `features`, light/fog/surface state, doors, rooms, containers, route marks и сущности. Любая динамика обязана работать через `world.idx`, `world.wrap`, `world.delta`, `world.dist` или `world.dist2`; прямые плоские координатные допущения ломают тороид.
 

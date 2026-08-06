@@ -45,6 +45,7 @@ Current runtime save sections include:
 - `floorRun`;
 - `floorInstances`;
 - optional `voidReturnPortal`;
+- `voidEntryFromFloor` (route `z` the player entered the Void from; written in `save_runtime.ts`/`save_payload.ts`, restored through `setVoidEntryFromFloor` with an `isValidZ` guard);
 - `alife`;
 - `alifeMobility`;
 - `computers`;

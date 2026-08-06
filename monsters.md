@@ -17,7 +17,7 @@
 - при необходимости aiFlags или generic tactic hook;
 - counterplay, rumor/event cues и редкий loot/corpse hint, если игрок должен научиться правилу.
 
-Сейчас `MONSTERS` и `MONSTER_ECOLOGY` покрывают 67 monster kinds. Sprite indices вычисляются автоматически через `src/render/sprite_index.ts`; `generateSprites()` присваивает indices на старте, поэтому spawn-код не должен хранить магические sprite numbers.
+Сейчас `MONSTERS` и `MONSTER_ECOLOGY` покрывают 69 monster kinds (таблица ниже перечисляет 67 — в ней не хватает `SCULPTURE` и `GNOME`, оба реально спавнятся). Sprite indices вычисляются автоматически через `src/render/sprite_index.ts`; `generateSprites()` присваивает indices на старте, поэтому spawn-код не должен хранить магические sprite numbers.
 
 ## Базовая модель
 

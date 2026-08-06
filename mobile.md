@@ -194,6 +194,15 @@ This avoids incorrect sizing around mobile browser address bars.
 
 ## Canvas Sizing
 
+Единица канваса: игра рендерит в ПОЛОВИНУ CSS-разрешения. `resize()`
+(`src/main.ts`) держит `const PIXEL_SCALE = 2` и ставит
+`canvas.width = floor(cssWidth / 2)`, `canvas.height = floor(cssHeight / 2)`
+для game- и HUD-канваса (backing store, не ×DPR). Любой порог, выраженный в
+пикселях канваса, надо считать от половинной ширины и НЕ делить дополнительно
+на `devicePixelRatio`. Тот же множитель объясняет, почему `npm run smoke`
+падает на предусловии `unexpected canvas size 640x316` в собственном окне
+1280x720: гейт требует ≥ 640x360 от backing store.
+
 Do not rely only on `window.innerWidth` / `innerHeight` on mobile. Prefer
 `visualViewport` when available:
 

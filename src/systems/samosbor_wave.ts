@@ -159,6 +159,9 @@ const LOCAL_STITCH_DEPTH = 5;
 
 let activeWave: SamosborWave | null = null;
 let lastWaveSnapshot: SamosborWaveDebugSnapshot | null = null;
+// World whose navigation freeze this module currently holds, so every release
+// path is scoped and refcount-safe instead of hard-resetting the shared cache.
+let waveFrozenNavWorld: World | null = null;
 
 function circularSegmentsForCoords(
   coords: readonly number[],
@@ -1650,8 +1653,19 @@ export function cancelSamosborWave(): void {
     activeWave.finished = true;
     lastWaveSnapshot = buildSnapshot(activeWave, false);
   }
-  unfreezeNavigationCacheForWorld();
+  // Release exactly the freeze this module took, scoped to that world so the
+  // shared refcount stays honest. The argument-less reset nulls `_navWorld` and
+  // would force the very full bake the Iron Law forbids: `cancelSamosborWave()`
+  // runs immediately before `freezeNavigationCacheForWorld()` at samosbor start.
+  releaseWaveNavigationFreeze();
   activeWave = null;
+}
+
+function releaseWaveNavigationFreeze(): void {
+  if (!waveFrozenNavWorld) return;
+  const frozen = waveFrozenNavWorld;
+  waveFrozenNavWorld = null;
+  unfreezeNavigationCacheForWorld(frozen);
 }
 
 export function startSamosborWave(
@@ -1765,6 +1779,7 @@ function setupActiveSamosborWave(
   options: StartSamosborWaveOptions,
 ): void {
   freezeNavigationCacheForWorld(world);
+  waveFrozenNavWorld = world;
   wave.originIdx = anchorIdx;
   wave.seed = options.seed ?? seedForWave(state, wave.scale, anchorIdx);
   wave.patchRoomId = makePatchRoom(world, wave);
@@ -1928,13 +1943,13 @@ export function finishSamosborWave(
   if (replacement) {
     applyGeneratedFieldPatch(world, entities, state, wave, replacement);
     lastWaveSnapshot = buildSnapshot(wave, false);
-    unfreezeNavigationCacheForWorld(world);
+    releaseWaveNavigationFreeze();
     activeWave = null;
     return lastWaveSnapshot;
   }
   lastWaveSnapshot = buildSnapshot(wave, false);
   if (!state.samosborActive || wave.debug) {
-    unfreezeNavigationCacheForWorld(world);
+    releaseWaveNavigationFreeze();
     activeWave = null;
   }
   return lastWaveSnapshot;

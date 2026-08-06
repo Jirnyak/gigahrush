@@ -20,3 +20,18 @@ gatbage/
 
 *.log
 venv/
+
+# Мусор в корне: одноразовые фиксеры, дампы и артефакты отладки.
+# Инструменты проекта живут в scripts/ и объявлены в package.json — в корне им не место.
+/*.py
+/*.cjs
+/*.patch
+/*.diff
+/*.cpuprofile
+/*.txt
+!/robots.txt
+/marx_*.md
+/pr_body*.md
+/pr-body*.txt
+/merge_logs/
+/recovered_edits/

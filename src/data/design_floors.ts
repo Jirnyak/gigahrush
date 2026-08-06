@@ -50,6 +50,7 @@ export type DesignFloorId =
   | 'maintenance'
   | 'hell'
   | 'outer_district'
+  | 'perevalka'
   | 'void';
 
 export interface DesignFloorRouteDef {
@@ -94,6 +95,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'obschezhitie_smeny', z: -6, displayName: 'Общежитие смены', themeTags: ['living'], color: '#d6b37a', role: 'сон, тихая кража, свидетели и укрытие', danger: 2 },
   { id: 'penrose_laundry', z: -8, displayName: 'Прачечная Пенроуза', themeTags: ['living'], color: '#9ef', role: 'апериодичная прачечная, пар, тайники', danger: 3 },
   { id: 'black_market_88', z: -10, displayName: 'Черный рынок 88', themeTags: ['living'], color: '#fd4', role: 'торговля, контрабанда, долги', danger: 3 },
+  { id: 'perevalka', z: -12, displayName: 'Перевалка', themeTags: ['maintenance'], color: '#c9a', role: 'грузовой ярус: досмотр, серый обход, спуск в промзону', danger: 3 },
   { id: 'production_belt', z: -14, displayName: 'Производственный пояс', themeTags: ['maintenance'], color: '#fd6', role: 'хабар и ремонт', danger: 4 },
   { id: 'service_floor', z: -18, displayName: 'Служебный этаж', themeTags: ['maintenance'], color: '#8cf', role: 'служебный обход и ремонт', danger: 3 },
   { id: 'hyperbolic_switchyard', z: -20, displayName: 'Гиперболическая стрелочная', themeTags: ['maintenance'], color: '#7ff0b8', role: 'дуги, ложные платформы, стрелочные семейства', danger: 4 },

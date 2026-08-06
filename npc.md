@@ -47,7 +47,7 @@ Runtime `Entity.id`, pathfinding, cooldowns, текущие координаты
 
 ## Этажи в анкете
 
-`homeFloorKey` должен показываться как route stop, а не как отдельная "story feature". UI обязан сначала показывать фиксированные story/design route stops в z-порядке сверху вниз, затем procedural fallback stops в z-порядке. Внутренний ключ сохраняется точным (`story:living`, `design:floor_69`, `procedural:z17`), потому что save, A-Life, floor memory and debug paths общаются через route keys.
+`homeFloorKey` должен показываться как route stop, а не как отдельная "story feature". UI обязан сначала показывать фиксированные story/design route stops в z-порядке сверху вниз, затем procedural fallback stops в z-порядке. Внутренний ключ сохраняется точным (`design:living`, `design:floor_69`, `procedural:z17`; префикса `story:` нет — анкета с ним отклоняется валидатором), потому что save, A-Life, floor memory and debug paths общаются через route keys.
 
 Story floors остаются шестью `FloorLevel` base/story anchors в коде, но пользователь формы выбирает не enum-тип этажа, а место маршрута.
 

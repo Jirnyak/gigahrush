@@ -30,7 +30,7 @@
 - `sink_broken`: explicit repair-pending adapter для существующей `Feature.SINK`; генераторы могут пометить раковину сломанной, она перекрывает lazy drinking prompt до будущего ремонта.
 - `toilet_relief`: lazy adapter для существующих `Feature.TOILET`; игрок снижает needs pressure, видит сообщение и публикуется `interactive_used`.
 - `toilet_broken`: explicit repair-pending adapter для существующей `Feature.TOILET`; генераторы могут пометить унитаз сломанным, он перекрывает lazy relief prompt до будущего ремонта.
-- `workbench_basic`: explicit feature-backed interactive на `Feature.MACHINE`; сейчас это inspect-only верстак для обычных rooms that do not open crafting.
+- `workbench_basic` (ВНИМАНИЕ: мёртвое определение — ни один генератор его не ставит, `rg workbench_basic src/` вне `data/interactive.ts` = 0): explicit feature-backed interactive на `Feature.MACHINE`; сейчас это inspect-only верстак для обычных rooms that do not open crafting.
 - `craft_lathe`: feature-backed `Feature.MACHINE` station with `open_craft_menu`, station `lathe`, and a craft station surface flag.
 - `disassembly_workbench`: feature-backed `Feature.TABLE` station with `open_disassembly_menu`, station `workbench`, and a disassembly surface flag.
 - `craft_lab_bench`: feature-backed `Feature.APPARATUS` station with `open_craft_menu`, station `lab`, and a lab station surface flag.

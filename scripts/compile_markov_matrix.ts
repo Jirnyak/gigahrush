@@ -463,6 +463,26 @@ class MarkovModel {
 
 
 const RAW_CORPUS: { text: string; tags: string[] }[] = [];
+let rejectedMeta = 0;
+
+/**
+ * Корпус собран из внешних текстов и содержит следы веб-скрейпа: ссылки,
+ * призывы подписаться, названия площадок и движков. Такие слова попадают в
+ * матрицу как обычные состояния и потом всплывают в реплике NPC, разрушая
+ * иллюзию мира. Это единственная точка входа корпуса — фильтруем здесь, чтобы
+ * следующий импорт не занёс мусор заново.
+ */
+function isInWorldSentence(sentence: string): boolean {
+  // Плейсхолдеры вида <SUBJ>/<PLACE> латинские по построению — снимаем их
+  // перед проверкой на латиницу, иначе отбросим весь нормальный корпус.
+  const body = sentence.replace(/<[A-Z_]+>/g, ' ');
+  if (/https?:\/\/|www\.|\b[a-z0-9-]+\.(?:ru|com|net|org|io|tv|me)\b/i.test(body)) return false;
+  if (/[@#]\w/.test(body)) return false;
+  if (/[A-Za-z]{3,}/.test(body)) return false;
+  if (/подписывайт|подписк|подпишит|лайк|репост|донат|патреон|бусти|телеграм|ютуб|твитч|дискорд|стрим(?:ер|инг)|подкаст|бугурт|тред[ыао]?\b|пикабу|реддит|автор канала/i.test(body)) return false;
+  return true;
+}
+
 try {
   const corpusDir = path.join(process.cwd(), 'src/data/training_corpus');
   if (fs.existsSync(corpusDir)) {
@@ -501,13 +521,15 @@ try {
         clean = clean.replace(/^[А-ЯЁ][а-яё]+\b(?!\s+(?:это|был|в|на|с|от|из|к|по|за|для|о|у|и|а|но|или))\b/g, '<NPC_NAME>');
 
         const wordsCount = clean.split(' ').length;
-        if (wordsCount >= 3 && wordsCount <= 50) {
+        if (wordsCount >= 3 && wordsCount <= 50 && isInWorldSentence(clean)) {
           RAW_CORPUS.push({ text: clean, tags: ['lore', 'neutral'] });
           added++;
+        } else if (wordsCount >= 3 && wordsCount <= 50) {
+          rejectedMeta++;
         }
       }
     }
-    console.log(`[System] Loaded ${added} sentences from corpus.`);
+    console.log(`[System] Loaded ${added} sentences from corpus (rejected ${rejectedMeta} out-of-world/meta sentences).`);
   }
 } catch (e) {
   console.log('[System] Error loading corpus:', e);

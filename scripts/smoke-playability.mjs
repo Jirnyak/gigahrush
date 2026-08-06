@@ -1065,8 +1065,12 @@ async function sampleCanvases(client) {
       readyState: document.readyState,
       gameCanvas: game instanceof HTMLCanvasElement,
       hudCanvas: hud instanceof HTMLCanvasElement,
+      // Backing store (game renders at 1/PIXEL_SCALE of CSS size by design).
       gameWidth: game?.width ?? 0,
       gameHeight: game?.height ?? 0,
+      // What the player actually sees. Independent of the internal render scale.
+      gameCssWidth: Math.round(game?.getBoundingClientRect?.().width ?? 0),
+      gameCssHeight: Math.round(game?.getBoundingClientRect?.().height ?? 0),
       hudLit: Math.max(hudCorner.lit, hudCenter.lit, hudBottom.lit),
       hudSum: Math.max(hudCorner.sum, hudCenter.sum, hudBottom.sum),
       hudAlphaSum: Math.max(hudCorner.alphaSum, hudCenter.alphaSum, hudBottom.alphaSum),
@@ -1089,7 +1093,16 @@ async function sampleCanvases(client) {
 
 function requireTitleTelemetry(sample, failures) {
   if (!sample.gameCanvas || !sample.hudCanvas) failures.push('missing game or HUD canvas');
-  if (sample.gameWidth < 640 || sample.gameHeight < 360) failures.push(`unexpected canvas size ${sample.gameWidth}x${sample.gameHeight}`);
+  // The canvas is stretched to the viewport in CSS px and rendered at a lower
+  // internal resolution on purpose (`PIXEL_SCALE` in main.ts). Gate on what the
+  // player sees, plus a sanity floor on the backing store, so the check keeps
+  // working if the render scale is retuned.
+  if (sample.gameCssWidth < 640 || sample.gameCssHeight < 360) {
+    failures.push(`unexpected canvas size ${sample.gameCssWidth}x${sample.gameCssHeight} css px`);
+  }
+  if (sample.gameWidth < 160 || sample.gameHeight < 120) {
+    failures.push(`unexpected backing store ${sample.gameWidth}x${sample.gameHeight}`);
+  }
   if (sample.hudLit < 10) failures.push(`title/HUD canvas appears blank (${sample.hudLit} lit samples)`);
 }
 

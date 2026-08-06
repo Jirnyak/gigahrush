@@ -138,7 +138,10 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   if (generated && generated.source === 'generated_markov' && hasText(generated.text) && !generated.fallbackUsed) {
     return {
       ...generated,
-      text: generated.text.replace(/\s+/g, ' ').trim(),
+      // Universal rule: authored text is never truncated, generated text is
+      // ALWAYS capped. `maxCharsForRequest` falls back to the per-intent cap,
+      // so a caller that forgets `maxChars` still cannot overflow a HUD panel.
+      text: capText(generated.text, maxCharsForRequest(request)),
       tags: normalizeResultTags(request, generated.tags),
       fallbackUsed: false,
     };

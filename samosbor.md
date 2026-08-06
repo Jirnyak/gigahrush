@@ -11,7 +11,7 @@
 1. Система выбирает вариант и предупреждает игрока (~30s warning).
 2. HUD/log получают короткую строку expected variant/action.
 3. Укрытия, гермы и локальные shelter hooks могут подготовить safe rooms.
-4. Active phase запускает **3–8 одновременных фронтов** по всему этажу, каждый мутирует клетки (fog, текстуры, features) и спавнит монстров по мере распространения.
+4. Active phase запускает **6–14 одновременных фронтов** по всему этажу, каждый мутирует клетки (fog, текстуры, features) и спавнит монстров по мере распространения.
 5. Типы фронтов: `crack` (молния по коридорам), `wave` (расширяющийся диск), `tendril` (щупальце по проходам), `flash` (мгновенная вспышка).
 6. Параллельно: seal logic, вариантные эффекты, `systems/samosbor_wave.ts` local mutation, fog effects, player pressure monsters, random entity transfer.
 7. После активной фазы свежая локальная геометрия stitched back into the same active floor through the heavy transition gate.
@@ -64,16 +64,16 @@ Shelter hooks must be bounded. They may prepare a few rooms, publish facts, and 
 
 ## Multi-Front Chaos Engine
 
-The active phase launches 3–8 simultaneous `SamosborFront` propagation fronts across the floor:
+The active phase launches 6–14 simultaneous `SamosborFront` propagation fronts across the floor (`FRONT_MIN_COUNT`/`FRONT_MAX_COUNT`, `src/systems/samosbor.ts`):
 
 | Front type | Behavior | Budget/tick | Lifespan |
 |---|---|---|---|
-| `crack` | Narrow BFS along corridors, avoids rooms | 6 | 300 ticks |
-| `wave` | Expanding disc from origin | 18 | 500 ticks |
-| `tendril` | Winding path through corridors | 4 | 400 ticks |
-| `flash` | Instant burst, dies fast | 48 | 30 ticks |
+| `crack` | Narrow BFS along corridors, avoids rooms | 16 | 300 ticks |
+| `wave` | Expanding disc from origin | 36 | 500 ticks |
+| `tendril` | Winding path through corridors | 12 | 400 ticks |
+| `flash` | Instant burst, dies fast | 96 | 30 ticks |
 
-Each front mutates cells it passes through: sets fog (200+), tissue overlay, and with small probabilities mutates floor/wall textures (12%/5%) and features (3%). Monsters spawn every ~20 processed cells.
+Each front mutates cells it passes through: sets fog (200+), tissue overlay, and mutates floor/wall textures (55%/35%) and features (22%). Monsters spawn every `FRONT_MONSTER_CELL_INTERVAL = 30` processed cells. Note: the per-type `maxAge` lifespan above is stored and incremented but never compared, so a front currently dies only when its frontier empties.
 
 Fronts **never** touch `aptMask`, `hermoWall`, `Cell.LIFT`, or shelter room cells. Front origins are distributed across different zones.
 
@@ -90,7 +90,7 @@ Current timing constants (in `procedural_floors.ts`):
 
 ## Local Rebuild Contract
 
-The intended shipped path is local splice:
+The shipped path is the floor-wide front field: fronts mutate cells in real time and the touched field is stitched against a fresh generation by `applyFrontFieldStitch` at the end of the active phase. The bounded local wave in `src/systems/samosbor_wave.ts` is implemented but reachable only from debug (`startSamosborWave` has one caller, `debugStartSamosborWaveAtPlayer`), so treat it as an experiment, not as the live contract. Both paths share the same field rules:
 
 - choose a mutable source point on the current map;
 - spread bounded fog/light through reachable volume;
@@ -100,7 +100,7 @@ The intended shipped path is local splice:
 - stitch boundary floors/rooms so the player is not sealed by a rebuild;
 - prune route cues whose source/target cells were inside the final local rebuild field.
 
-If local wave start fails, the runtime may use a heavier fallback. Docs and tests should treat local splice as the primary contract, not as the only possible implementation path.
+Known gap: the live front-field stitch does NOT run the entity relocation and container cleanup that the debug wave path performs, so entities and containers can end up sealed inside regenerated walls (see the deferred audit ledger).
 
 Runtime geometry mutations must bump relevant dirty versions through existing helpers or local precedent so render, AI path fields, fog and map caches do not keep stale state.
 

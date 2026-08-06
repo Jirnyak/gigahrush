@@ -39,7 +39,7 @@
 
 ### Игрок И Потребности
 
-- Новый игрок стартует в `src/main.ts` с `100 HP`, `100 maxHp`, `100₽`, пустым инвентарем, без оружия, `freshRPG(1)` и `10 PSI`.
+- Новый игрок стартует в `src/main.ts` с `100 HP`, `100 maxHp`, `100₽`, пустым инвентарем, без оружия, `freshRPG(1)` и `100 PSI` (`BASE_PSI = 100`).
 - Пункт сборов вылазки в `src/gen/living/expedition_prep.ts` дает публичный минимальный набор: `water x1`, `bread x1`, `bandage x1`, `ammo_9mm x4`, маршрутные бумаги и талоны.
 - `freshNeeds()` дает стартовые еду/воду примерно `70..100`, сон `60..100`, мочу `0..30`, кал `0..20`.
 - Дрейн в `src/systems/needs.ts`: еда `0.08/s`, вода `0.12/s`, сон `0.05/s`.
@@ -49,18 +49,21 @@
 
 ### RPG
 
-- HP уровня: `100 + 10 * (level - 1)`.
-- PSI уровня: `10 + 1 * (level - 1)`.
-- XP threshold: `80 * L + 5 * L^2`; переход с 1 на 2 уровень требует `180 XP`.
-- STR дает melee damage без hard cap: `+1%` за каждое очко силы; maxHP без hard cap: `+1` за каждое очко силы; level добавляет `+level-1` к базовому урону melee-оружия, кулаки остаются `level`.
-- AGI дает скорость без hard cap: `+1%` к движению за каждое очко ловкости; attack cooldown и spread улучшаются обратной асимптотой без floor.
-- INT дает maxPSI без hard cap: `+1` за каждое очко интеллекта; XP, contract reward и document reward растут по мягким асимптотам; PSI cost уменьшается обратной асимптотой без floor.
+Числа ниже сверены с `src/systems/rpg.ts` и `src/data/rpg_progression.ts` (2026-08-06).
+
+- HP уровня: `100 + 1 * (level - 1)` (`BASE_HP = 100`, `HP_PER_LEVEL = 1`).
+- PSI уровня: `100 + 1 * (level - 1)` (`BASE_PSI = 100`, `PSI_PER_LEVEL = 1`) — стартовый PSI = 100, не 10.
+- XP threshold: `xpForLevel(L) = 75 + 25*rank + 10*rank*(rank-1)`, где `rank = L-1`; переход с 1 на 2 уровень требует `100 XP` (не 180). Жёсткий кап `RPG_LEVEL_CAP = 255`.
+- STR: melee damage `+1%` за очко (`STR_MELEE_DAMAGE_PER_POINT = 0.01`); maxHP — **мультипликативно** `+1%` за очко (`STR_HP_PER_POINT = 0.01`), а не `+1 HP`.
+- AGI дает скорость: `+1%` к движению за каждое очко ловкости; attack cooldown и spread улучшаются обратной асимптотой без floor.
+- INT: maxPSI — **мультипликативно** `+1%` за очко (`INT_PSI_PER_POINT = 0.01`), а не `+1 PSI`; длительность PSI `+1 c` за очко; XP, contract reward и document reward растут по мягким асимптотам; PSI cost уменьшается обратной асимптотой без floor.
+- Перков в коде нет: ни `perkPoints`, ни `perks`, ни `src/data/perks.ts`. Всё, что описано в `rpg.md` про перки, — нереализованный план.
 
 ### Экономика
 
-- `src/data/items.ts`: 253 item ids, цена `0..24000`.
-- Грубые группы цен: еда обычно до `40`, напитки до `18`, медицина до `220`, ammo обычно до `300`, инструменты до `1500`, оружие до `24000`.
-- Топ-выбросы: `gravity_beam_emitter=24000`, `bfg=12500`, `psi_beam=9000`, `gauss=7200`.
+- `src/data/items.ts`: ~446 item ids (411 инлайн + вычисляемые ключи + `documents_access.ts` + `chernobog_docket.ts`). Ценовой потолок после ребейза (`economics.md` §0) — сотни тысяч, не `24000`.
+- Грубые группы цен: еда обычно до `40`, напитки до `18`, медицина до `220`, ammo обычно до `300`, инструменты до `1500`; энергетическое/PSI/топовое снаряжение живёт в десятках и сотнях тысяч (пороги — `ECONOMY_TOP_GEAR_MIN_VALUES`, `src/data/economics.ts`).
+- Топ-выбросы (факт, `src/data/items.ts`): `gravity_beam_emitter=500000`, `grn420_gravizhernov=140000`, `bfg=180000`, `gauss=60000`, `psi_beam=45000`.
 - `src/data/resources.ts`: 17 ресурсов. Примеры: water `120/35`, food `140/40`, medicine `70/20`, ammo `80/18`, psi `20/5`, slime samples `12/3`.
 - Цена через `src/systems/economy.ts`: item value * scarcity * demand * tariff * trader spread.
 - Scarcity surplus floor `0.65`; default scarcity cap `4`, price cap `5`, reward cap `3`.
@@ -69,7 +72,7 @@
 
 ### Контракты И Награды
 
-- `src/data/contracts.ts`: 205 assignment templates at runtime.
+- `src/data/contracts.ts`: ~202-206 assignment templates at runtime (`EXPEDITION_CONTRACTS` + `CARAVAN_CONTRACTS` + инлайн).
 - Ordinary non-authored NPCs are selected as procedural quest givers at `10%` when the floor assigns quest affordances; plot NPCs stay on authored quest rules.
 - Authoring-base денежные награды примерно `0..340`, median около `115`, average около `119`; runtime `quest_rewards` сейчас платит примерно `2x` по деньгам для принятых системных/процедурных заданий.
 - XP награды примерно `2x` от authoring-base и формульной сложности; обычный процедурный baseline начинается от `40 * difficulty`.
@@ -92,15 +95,15 @@
 - Ranged examples: `makarov 22/0.52`, `ppsh 8/0.07`, `shotgun 12x7/1.2`, `ak47 26/0.14`, `machinegun 13/0.05`, `grenade 90 AoE 4.5`, `gauss 180`, `bfg 270 AoE 9`, `GBE 500` deletion beam range `30`.
 - Расход патронов сейчас ровно `1` ammo item за выстрел, включая дробовик с pellets.
 - PSI stats live in `src/data/psi.ts`: cost `3..23`, projectile damage `12..96`, no passive regen.
-- Monster base stats: 67 видов, HP `8..1000`, speed `0..3.15`.
+- Monster base stats: 69 видов (`MonsterKind` == `MONSTERS` == `MONSTER_ECOLOGY`), HP `8..1000`, speed `0..3.15`.
 - Monster level scaling: HP `+12%`, damage `+10%`, speed `+2%` per zone level.
-- Floor zone bonus: Maintenance `+4`, Hell `+9`, Void `+15`.
+- Floor zone bonus: именованных бонусов по этажам в коде НЕТ. `calcZoneLevel` (`src/systems/rpg.ts`) даёт только generic `depthBonus = floor(abs(z) * 1.5)`; поверх него отдельные генераторы добавляют hell `+2`, underhell `+5`, podad `+3/+5`, остальные `0`.
 - Mechanical monster modifier variants are removed; new creatures are standalone packages with ecology/counterplay data, and special tactics use generic bounded AI profiles.
 
 ### Самосбор
 
 - New game samosbor timer: `120..180s`.
-- Warning window: `18s`.
+- Warning window: `30s` (`SAMOSBOR_WARNING_WINDOW`, `src/systems/samosbor.ts`).
 - Active duration: `12..90s * variant.durationMult`.
 - Seal timing: `10s + variant/modifier delta` before end.
 - Unsheltered pressure: fog radius `4`, fog strength `155`, `-4 HP`, `-3 PSI`.
@@ -119,7 +122,7 @@
 - Majority faction on procedural floors multiplies matching faction by `4.5`.
 - Money heavy tail capped at `5_000_000`; bank floor multiplier `6.5`, Ministry `2.4`, Maintenance `1.25`, Hell `0.45`.
 - Active floor is limited by generator template slots and entity soft limits, not by total assigned records.
-- Entity soft limits: NPC `5000`, monsters `10000`, item drops `100000`.
+- Entity soft limits: NPC и монстры делят ОДИН пул (`ACTIVE_ACTOR_SOFT_LIMIT`, дефолт `4096`, настраиваемый `1024..16384`); item drops/billboards/projectiles делят `FLOOR_OBJECT_SOFT_LIMIT = 65536`.
 
 ## 4. Релизные Целевые Диапазоны
 
@@ -145,7 +148,7 @@
 
 ### Инвентарь
 
-Сейчас `25` слотов и default stack `999` делают hoarding возможным. Для релизного survival это допустимо только если scarcity держится доступностью, а не весом.
+Сейчас `64` слота (`MAX_INVENTORY_SLOTS`, сетка 8x8) и максимум стека `255` (`MAX_ITEM_STACK`) — цифры `25`/`999` ниже по тексту устарели и относятся к прошлой ревизии. Hoarding всё равно возможен. Для релизного survival это допустимо только если scarcity держится доступностью, а не весом.
 
 Целевые stack caps, если будет отдельный pass:
 

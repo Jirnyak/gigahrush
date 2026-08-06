@@ -83,6 +83,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   obschezhitie_smeny: shares(56, 16, 7, 8, 13),
   penrose_laundry: shares(56, 17, 7, 8, 12),
   black_market_88: shares(16, 9, 8, 7, 60),
+  perevalka: shares(30, 34, 6, 6, 24),
   production_belt: shares(14, 50, 6, 18, 12),
   service_floor: shares(16, 52, 6, 12, 14),
   hyperbolic_switchyard: shares(12, 44, 8, 16, 20),

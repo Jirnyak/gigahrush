@@ -23,10 +23,10 @@
 
 **Floor Generation System:**
 - **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
-- **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
+- **Odd-numbered floors** (`Z % 2 !== 0`) are assembled by `src/gen/procedural_floor.ts` from the geometry `recipePool` of the rolled profile plus `src/gen/procedural_structure_library.ts` families, and then get a procedural anomaly. They do NOT import or splice pieces of authored design floors — `procedural_floor.ts` imports no design-floor generator; only `themeTags` are inherited from the profile.
 
 
-Authored design floors - ручные route-stop packages с string id в `src/data/design_floors.ts` и генератором в `src/gen/design_floors/`. Это банковский этаж, архивы, коммунальные кольца, рынки, метро, подад, крыши, лаборатории, производственные пояса и другие сильные места. Они нужны там, где этаж должен иметь уникальную читаемую структуру, персонажей, решения и контент.
+Authored design floors - ручные route-stop packages с string id в `src/data/design_floors.ts`, генератором в собственном пакете `src/gen/<floor_id>/` и регистрацией в `src/gen/design_floors/manifest.ts` (сам каталог `src/gen/design_floors/` содержит только `manifest.ts` и `population.ts`). Это банковский этаж, архивы, коммунальные кольца, рынки, метро, подад, крыши, лаборатории, производственные пояса и другие сильные места. Они нужны там, где этаж должен иметь уникальную читаемую структуру, персонажей, решения и контент.
 
 Procedural floors - промежуточные roguelike-этажи между рукотворными остановками. Их описывает `anomalies.md`: geometry profile, majority faction, anomaly profile, danger, seed, loot bias and monster bias. Procedural floor не слабее design floor по системной честности: он обязан иметь достижимые лифты, комнаты, лут, угрозы, решение и память.
 

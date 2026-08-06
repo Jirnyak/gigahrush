@@ -208,7 +208,7 @@ This keeps visible floor life dense but breaks the line of identical workers wal
 
 There is no active-floor hot/warm/cold tiering. Every live AI actor receives the frame. Cadence belongs only to expensive choices inside that actor:
 
-- NPC utility rescore uses a stable personal timer around `0.45..1.0s`; the selected intent keeps executing every frame.
+- NPC utility rescore uses a stable personal timer of `1.5..4.0s` (`UTILITY_RETHINK_BASE_SEC = 1.5` + `UTILITY_RETHINK_SPREAD_SEC = 2.5`, `src/systems/ai/npc_fsm.ts`), plus longer per-intent timers; the selected intent keeps executing every frame.
 - Combat target scans use `combatTargetId` / `combatScanCd` and bucket queries; current targets are validated cheaply before a new scan.
 - Path assignment uses baked navigation and cached behavior flow fields; current paths are followed every frame.
 - Noise, social, crowd and threat reads are bounded by radius, result cap and local cooldown.

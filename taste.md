@@ -28,7 +28,7 @@
   мясо, кишка, void-стены, плакаты и экраны.
 - `src/render/sprites.ts` и `src/entities/*.ts`: billboard-спрайты, процедурные
   NPC, процедурные монстры, снаряды.
-- `src/render/blood.ts` и `src/render/marks.ts`: persistent кровь, gore, пули,
+- `src/render/blood.ts` и `src/systems/surface_marks.ts`: persistent кровь, gore, пули,
   ожоги, web, PSI, Maronary, черная ладонь и прочие surface marks.
 - `src/systems/audio.ts`: процедурные шаги, двери, сирены, Маронарий, Веретар,
   Истотит, выстрелы, попадания, плоть, PSI, ambient drone.

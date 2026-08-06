@@ -28,9 +28,11 @@ Path blockers реализованы как дешевый активный сл
 - actors that are restored, spawned or caught inside a current blocker mask are
   relocated to the nearest valid coarse+fine occupancy point through the same
   movement helper;
-- coarse route/pathfinding remains cell-level and does not become an
-  `8192x8192` graph;
-- packed floor memory and save payloads do not serialize the full 8 MiB blocker
+- ~~coarse route/pathfinding remains cell-level~~ — **superseded by shipped code**:
+  pathfinding now runs a subcell graph at `SW = W * PATH_BLOCKER_SUBDIV` = `4096`
+  (`src/systems/ai/pathfinding.ts`, `bfsPath` over `subcellIdx`/`subcellToWorld`,
+  passability through `getMacroMask`). The `8192x8192` bound was never crossed;
+- packed floor memory and save payloads do not serialize the full 4 MiB blocker
   field;
 - `World.visualSlots`, visual model bounds and mesh scene collection are not
   collision sources.
@@ -42,7 +44,10 @@ Not shipped:
 - sparse persistent blocker overrides;
 - debug overlay for blocker masks;
 - full-cell gate/shutter semantics;
-- subcell navigation graph or subcell BFS.
+- ~~subcell navigation graph or subcell BFS~~ — **SHIPPED since this document was
+  written** (4096² subcell BFS in `src/systems/ai/pathfinding.ts`, together with
+  the Universal Micro-Goal system in `src/systems/ai/micro_goals.ts`). Everything
+  else in this list is still genuinely not shipped.
 
 ## Problem
 
@@ -99,18 +104,21 @@ pathBlockerDirtyVersion: number;
 Constants:
 
 ```ts
-PATH_BLOCKER_SUBDIV = 8;
-PATH_BLOCKER_ROWS_PER_CELL = 8;
-PATH_BLOCKER_BYTES_PER_CELL = 8;
+PATH_BLOCKER_SUBDIV = 4;
+PATH_BLOCKER_ROWS_PER_CELL = 4;
+PATH_BLOCKER_BYTES_PER_CELL = PATH_BLOCKER_ROWS_PER_CELL; // 4
 ```
 
-Each cell owns eight bytes. Each byte is one 8-subcell row. Bit `0..7` marks a
+(Shipped values, `src/core/path_blockers.ts`. This document originally specified
+an 8×8 grid; the implementation landed as 4×4.)
+
+Each cell owns four bytes. Each byte is one 4-subcell row. The low bits mark a
 forbidden actor-center position inside that row.
 
 The array size is:
 
 ```txt
-1024 * 1024 * 8 bytes = 8 MiB
+1024 * 1024 * 4 bytes = 4 MiB
 ```
 
 This is acceptable for the active world. It is not acceptable as a full copy in
@@ -266,8 +274,10 @@ unstuckActorFromBlockers(world, entity, options?)
 
 `canActorOccupy()` combines:
 
-- existing four-corner coarse `world.solid()` checks;
-- fine `pathBlockedAt()` center sampling.
+- coarse `world.solid()` — as shipped this is a **center-only** check
+  (`canActorOccupyCoarse`, `src/systems/movement_collision.ts`), not four-corner;
+- fine `pathBlockedAt()` center sampling, skipped for actors matched by
+  `entityIgnoresFineBlockers()` (flying / noclip / false-phase monsters).
 
 Options:
 

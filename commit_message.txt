@@ -1,6 +1,0 @@
-feat(marx_74): improve mobile touch controllers and UI
-
-- Increased virtual joystick dead zone and max radius by adding configuration in `JOYSTICK_CONFIG`.
-- Reduced touch move threshold to make the joystick more responsive.
-- Integrated haptic feedback (`navigator.vibrate`) for action and interact buttons via `triggerHapticFeedback`.
-- Increased visual size of the interaction button `[E]` and enhanced HUD background opacity in CSS to make mobile elements more distinguishable.

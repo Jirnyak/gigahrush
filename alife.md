@@ -305,7 +305,7 @@ Apartments and homes:
 
 Population is assigned by route identity, not just by base enum floor.
 
-- Story floors: `story:living`, `story:kvartiry`, `story:ministry`, etc.
+- Design floors (включая шесть бывших story-этажей): `design:<DesignFloorId>`, например `design:living`, `design:ministry`. Префикса `story:` в коде НЕТ (`FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown'`).
 - Design floors: their `DesignFloorId`, e.g. `bank_floor`.
 - Procedural floors: their per-run spec key, e.g. `z13`.
 

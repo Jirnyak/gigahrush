@@ -12,7 +12,7 @@
 
 Shipped monster ecology is already part of the runtime:
 
-- `MONSTERS` and `MONSTER_ECOLOGY` cover the current 67 `MonsterKind` values.
+- `MONSTERS` and `MONSTER_ECOLOGY` cover the current 69 `MonsterKind` values.
 - `MonsterDef` owns stats, sprite generator registration, ranged/projectile shape, `aiFlags`, floor list, local counterplay and loot hints.
 - `MonsterEcologyDef` owns spawn identity: floors, rooms, weights, rarity, samosbor gating, role, cue, rule, floor fit, counterplay, death-log hint, rumor ids and rare drops.
 - `chooseFloorMonsterKind()` and `rankMonsterEcology()` select monsters for floor/procedural generation through ecology data, rarity gates, room/floor context and route pressure.
