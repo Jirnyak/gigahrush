@@ -1,0 +1,58 @@
+# Публикация ГИГАХРУЩА на GitHub Pages через Actions.
+#
+# Зачем: legacy-билдер Pages 2026-08-06 начал виснуть на этом репозитории и
+# падать по таймауту (~10 мин) на любой сборке — и на 25 МБ, и на 11.5 МБ.
+# Actions заливает готовый артефакт напрямую, минуя тот билдер.
+#
+# Файл живёт в `public/.github/workflows/pages.yml` основного репозитория
+# gigahrush, поэтому Vite копирует его в `dist/`, а `gh-pages --dotfiles`
+# публикует вместе с сайтом. Так он переживает `--no-history`, который
+# каждый деплой перезаписывает ветку одним коммитом.
+name: Deploy Pages
+
+# Только ручной запуск. 2026-08-06 legacy-билдер Pages сначала висел по 10 минут
+# на каждой сборке, а к вечеру ожил (30 с). Этот workflow — запасной путь на
+# случай, если он снова встанет: тогда включить `push` или дёрнуть вручную.
+# Внимание: шаг deploy-pages в тот же день сам упирался в таймаут ожидания
+# GitHub, так что запасной путь не проверен как рабочий.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # enablement переключает источник Pages на Actions токеном воркфлоу:
+      # у владельца репозитория обычного PAT-доступа `push` для этого не хватает.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # Артефакт собираем из рабочего дерева без служебных каталогов:
+      # .git тянет историю, .github к сайту отношения не имеет.
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
+          ls -la _site | head -20
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
