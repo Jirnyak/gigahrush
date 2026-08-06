@@ -27,8 +27,9 @@ export interface MeshPassContext {
   dynamicLightsPos?: Float32Array;
   dynamicLightsColor?: Float32Array;
   dynamicLightsRadius?: Float32Array;
-  mode: MeshGraphicsMode;
-  profile: ResolvedVisualGeometryProfile;
+  mode?: MeshGraphicsMode;
+  /** Absent only in synthetic/test contexts; the game always resolves one. */
+  profile?: ResolvedVisualGeometryProfile | null;
   entities?: readonly Entity[];
 }
 

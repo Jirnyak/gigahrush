@@ -1,6 +1,5 @@
 import { RoomType, Tex } from '../core/types';
 import { hashSeed } from '../core/rand';
-import { DESIGN_FLOOR_ROUTES } from './design_floors';
 import type { FloorThemeProfile } from './floor_theme_profiles';
 
 export type VisualSurfaceFloorPattern = 'plain' | 'checker' | 'smallTile' | 'lino' | 'wetConcrete' | 'metalGrid';
@@ -221,19 +220,23 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function floorTag(z: number): string {
-  const floor = DESIGN_FLOOR_ROUTES.find(r => r.z === z);
-  return (floor ? floor.id : 'floor').toLowerCase();
+// The floor's own identity tag. A design floor on the vertical route is tagged by
+// its route id; a procedural floor has none and keeps the generic tag so a row can
+// still ask for "any floor". This previously fed a z→route lookup with a
+// `themeClass` field that FloorThemeProfile never declared, silenced by @ts-ignore:
+// the lookup always missed, so every floor in the game resolved to the same
+// 'floor' / 'floor_floor' pair and the per-floor tag was never per-floor.
+function floorTag(theme: FloorThemeProfile): string {
+  return (theme.routeId ? String(theme.routeId) : 'floor').toLowerCase();
 }
 
 function themeTags(theme: FloorThemeProfile): Set<string> {
   const tags = new Set<string>();
   tags.add(theme.kind);
   tags.add(`kind_${theme.kind}`);
-  // @ts-ignore
-  tags.add(floorTag(theme.themeClass));
-  // @ts-ignore
-  tags.add(`floor_${floorTag(theme.themeClass)}`);
+  const floorId = floorTag(theme);
+  tags.add(floorId);
+  tags.add(`floor_${floorId}`);
   tags.add(`danger_${theme.danger}`);
   if (theme.routeId) tags.add(String(theme.routeId));
   if (theme.routeZ !== undefined) {
@@ -284,8 +287,6 @@ function rowMatches(
   options: ResolveVisualSurfaceProfileOptions,
 ): boolean {
   if (row.kinds && !row.kinds.includes(theme.kind)) return false;
-  // @ts-ignore
-  if (row.themeTagss && !row.themeTagss.includes(theme.themeClass)) return false;
   if (row.routeIds && (!theme.routeId || !row.routeIds.includes(String(theme.routeId)))) return false;
   if (row.roomTypes && (options.roomType === undefined || !row.roomTypes.includes(options.roomType))) return false;
   if (!texMatches(row.wallTex, options.wallTex)) return false;

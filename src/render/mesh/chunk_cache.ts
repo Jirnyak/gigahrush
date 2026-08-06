@@ -130,14 +130,11 @@ export class MeshChunkCache {
 
   update(context: MeshPassContext, out: MeshInstance[] = []): MeshChunkCacheStats {
     out.length = 0;
-    const profile = resolveMeshSceneProfile({
-      ...context,
-      profile: {
-        ...(context.profile ?? {}),
-        chunkSize: context.profile?.chunkSize ?? CHUNK_SIZE,
-        maxChunksPerFrame: context.profile?.maxChunksPerFrame ?? MAX_CHUNKS_PER_FRAME,
-      },
-    });
+    // resolveMeshSceneProfile already defaults chunkSize / maxChunksPerFrame to
+    // the same 8 / 8 this module used to re-inject here through a rebuilt
+    // context, so the override was a no-op that also gave `context.profile` a
+    // second meaning.
+    const profile = resolveMeshSceneProfile(context);
     if (!profile.enabled) {
       this.clear();
       return { enabled: false, chunksConsidered: 0, chunksBuilt: 0, chunksReused: 0, instances: 0 };
@@ -173,7 +170,7 @@ export class MeshChunkCache {
         !versionsEqual(entry.versions, versions);
       if (stale && chunksBuilt < profile.maxChunksPerFrame) {
         const instances: MeshInstance[] = [];
-        collectMeshChunk({ ...context, profile }, candidate.chunkX, candidate.chunkY, instances);
+        collectMeshChunk(context, candidate.chunkX, candidate.chunkY, instances, undefined, profile);
         entry = {
           key,
           chunkX: candidate.chunkX,
@@ -192,7 +189,7 @@ export class MeshChunkCache {
       }
       if (entry) raw.push(...entry.instances);
     }
-    capMeshInstances({ ...context, profile }, raw, out, profile);
+    capMeshInstances(context, raw, out, profile);
     return {
       enabled: true,
       chunksConsidered: candidates.length,

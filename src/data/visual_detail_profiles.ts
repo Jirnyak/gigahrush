@@ -1,6 +1,5 @@
 import { RoomType, Tex } from '../core/types';
 import { hashSeed } from '../core/rand';
-import { DESIGN_FLOOR_ROUTES } from './design_floors';
 import type { FloorThemeProfile } from './floor_theme_profiles';
 
 export const VISUAL_DETAIL_MAX_ACTIVE_FAMILIES = 8;
@@ -386,19 +385,19 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function floorTag(z: number): string {
-  const floor = DESIGN_FLOOR_ROUTES.find(r => r.z === z);
-  return (floor ? floor.id : 'floor').toLowerCase();
+// Same contract as the surface-profile tagger: identify the floor by its route id
+// instead of a z→route lookup fed a `themeClass` field FloorThemeProfile never had.
+function floorTag(theme: FloorThemeProfile): string {
+  return (theme.routeId ? String(theme.routeId) : 'floor').toLowerCase();
 }
 
 function themeTags(theme: FloorThemeProfile): Set<string> {
   const tags = new Set<string>();
   tags.add(theme.kind);
   tags.add(`kind_${theme.kind}`);
-  // @ts-ignore
-  tags.add(floorTag(theme.themeClass));
-  // @ts-ignore
-  tags.add(`floor_${floorTag(theme.themeClass)}`);
+  const floorId = floorTag(theme);
+  tags.add(floorId);
+  tags.add(`floor_${floorId}`);
   tags.add(`danger_${theme.danger}`);
   if (theme.routeId) tags.add(String(theme.routeId));
   if (theme.routeZ !== undefined) {
@@ -443,8 +442,6 @@ function hasBlockedTag(tags: ReadonlySet<string>, blocked: readonly string[] | u
 
 function rowMatches(row: VisualDetailProfileRow, theme: FloorThemeProfile, tags: ReadonlySet<string>): boolean {
   if (row.kinds && !row.kinds.includes(theme.kind)) return false;
-  // @ts-ignore
-  if (row.themeTagss && !row.themeTagss.includes(theme.themeClass)) return false;
   if (row.routeIds && (!theme.routeId || !row.routeIds.includes(String(theme.routeId)))) return false;
   if (row.minDanger !== undefined && theme.danger < row.minDanger) return false;
   if (row.maxDanger !== undefined && theme.danger > row.maxDanger) return false;
