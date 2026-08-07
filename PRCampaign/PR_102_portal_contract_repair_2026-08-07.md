@@ -102,4 +102,10 @@ see the KPI line for the result. Live portal iframe QA is still owner-side and h
 - The double floor generation at boot (title trailer world, then a second `initGame` on "Начать")
   — owner chose not to touch the title screen this session. It remains the largest known
   time-to-play cost and the prime suspect behind the `56%` no-input rate.
-- Build weight (`dist/index.html` `11 476 096` bytes) — untouched.
+- Build weight — untouched, and the earlier `11 476 096` byte figure is stale. A current
+  build produces `24 974 281` bytes (`5.93` MB gzip) because `src/data/markov_compiled_matrix.ts`
+  (`15 411 045` bytes, compiled 2026-08-06 12:24) and `src/data/bad_apple_frame_pack.ts`
+  (`4 313 636` bytes) are inlined. The Pikabu ZIP is effectively unchanged (`13 034 160` bytes
+  now versus `13 031 440` on 2026-08-06), so the download is the same size but the browser
+  parses `25` MB of JS before the first frame. Fetching the corpus lazily, as music already is,
+  is the open lever.
