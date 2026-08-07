@@ -61,6 +61,8 @@ import {
   type FloorRunEntry,
 } from '../systems/procedural_floors';
 import { getActiveRouteCueHud, getObjectiveRouteHud, type ObjectiveRouteHud, type RouteCueHud } from '../systems/route_cues';
+import { guideTarget } from '../systems/target_guide';
+import { drawTargetGuide } from './target_guide';
 import { getNearestSmallCaravan, type SmallCaravanHudSnapshot } from '../systems/caravans';
 import { getSeroburmalineHudFx } from '../systems/seroburmaline';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_PROJECTILE, getEntityIndex } from '../systems/entity_index';
@@ -1721,6 +1723,15 @@ export function drawHUD(
 
   if (showCompactPanels && showRouteHints) {
     drawVoidReturnPortalHint(ctx, slots.centerInteraction, sx, sy, time, player, state, world);
+  }
+
+  // On-screen target guidance: the tutorial chain, then the active task from the
+  // quest screen. Which target is current is decided in systems/target_guide;
+  // here we only draw it. The quest marker follows the route-hints UI toggle, the
+  // tutorial chain does not — a new player must not be able to hide it by accident.
+  if (showCompactPanels && !emergencyPanelOpen) {
+    const guide = guideTarget(world, state, entities, player, { questGuide: routeHintsVisible });
+    if (guide) drawTargetGuide(ctx, sx, sy, time, world, player, guide);
   }
 
   // Universal [E] interaction prompt (color changes per target object)

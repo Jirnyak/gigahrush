@@ -214,6 +214,12 @@ function objectiveKind(q: Quest): ObjectiveKind {
   return 'system';
 }
 
+/** The objective the HUD calls `ЦЕЛЬ`. Exported so the on-screen target guide
+ *  points at exactly the same task the panel names. */
+export function getPrimaryRouteObjective(state: GameState): Quest | undefined {
+  return primaryRouteObjective(state);
+}
+
 function primaryRouteObjective(state: GameState): Quest | undefined {
   let best: Quest | undefined;
   let bestScore = -Infinity;

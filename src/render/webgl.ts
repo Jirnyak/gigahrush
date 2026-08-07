@@ -2293,6 +2293,78 @@ function getUniforms(gl: WebGL2RenderingContext, prog: WebGLProgram, names: stri
   return u;
 }
 
+/** Last camera the raycaster actually drew with. Kept so canvas overlays can put a
+ *  marker exactly where an object appears on screen, using the same projection the
+ *  sprite pass uses — no gameplay state, just a generic render channel. */
+interface CameraProjection {
+  px: number;
+  py: number;
+  dirX: number;
+  dirY: number;
+  planeX: number;
+  planeY: number;
+  invDet: number;
+  halfH: number;
+  camHeight: number;
+}
+
+let lastCameraProjection: CameraProjection | null = null;
+
+function rememberCameraProjection(
+  px: number,
+  py: number,
+  pAngle: number,
+  pPitch: number,
+  camHeight: number,
+  planeLen: number,
+): void {
+  const dirX = Math.cos(pAngle);
+  const dirY = Math.sin(pAngle);
+  const planeX = -dirY * planeLen;
+  const planeY = dirX * planeLen;
+  lastCameraProjection = {
+    px,
+    py,
+    dirX,
+    dirY,
+    planeX,
+    planeY,
+    invDet: 1.0 / (planeX * dirY - dirX * planeY),
+    halfH: Math.floor(SCR_H / 2) + Math.floor(pPitch * SCR_H),
+    camHeight,
+  };
+}
+
+export interface ProjectedWorldPoint {
+  /** Horizontal position in SCR_W space; can fall outside [0, SCR_W]. */
+  x: number;
+  /** Vertical position of the point's floor contact in SCR_H space. */
+  groundY: number;
+  /** Full on-screen height of a one-unit-tall object at this distance. */
+  unitHeight: number;
+  /** Camera-space depth in world units; <= 0 means behind the camera. */
+  depth: number;
+}
+
+/** Projects a world point with the last rendered camera. Returns null before the
+ *  first frame. Mirrors the sprite pass math, so results line up with what the
+ *  player sees. */
+export function projectWorldPoint(world: World, x: number, y: number): ProjectedWorldPoint | null {
+  const cam = lastCameraProjection;
+  if (!cam) return null;
+  const dx = world.delta(cam.px, x);
+  const dy = world.delta(cam.py, y);
+  const depth = cam.invDet * (-cam.planeY * dx + cam.planeX * dy);
+  if (depth <= 0.0001) return { x: 0, groundY: cam.halfH, unitHeight: 0, depth };
+  const lateral = cam.invDet * (cam.dirY * dx - cam.dirX * dy);
+  return {
+    x: (SCR_W / 2) * (1 + lateral / depth),
+    groundY: cam.halfH + (cam.camHeight * SCR_H) / depth,
+    unitHeight: Math.abs(SCR_H / depth),
+    depth,
+  };
+}
+
 function planeLenForFov(fovRadians: number): number {
   const fov = Number.isFinite(fovRadians) ? fovRadians : DEFAULT_FOV_RADIANS;
   const clamped = Math.max(Math.PI / 3, Math.min((110 * Math.PI) / 180, fov));
@@ -3561,6 +3633,7 @@ export function renderSceneGL(
   const pPitch = camera.pitch;
   const camHeight = camera.height;
   const planeLen = planeLenForFov(camera.fovRadians || DEFAULT_FOV_RADIANS);
+  rememberCameraProjection(px, py, pAngle, pPitch, camHeight, planeLen);
 
   // Check if player is in purple fog
   const pci = world.idx(Math.floor(px), Math.floor(py));
