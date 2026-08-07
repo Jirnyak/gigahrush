@@ -200,3 +200,12 @@ and static questionnaire still load, and the form tells the player to use
 - новый блок в canvas overlay `src/render/net_sphere_ui.ts`.
 
 Для realtime-чата или присутствия без polling следующим шагом будет Durable Object + WebSocket, но текущая D1/polling схема проще и дешевле для первого публичного билда.
+
+## Online Co-op Relay (SHIPPED)
+
+Realtime-кооп уже использует Durable Object + WebSocket:
+
+- Endpoint: `GET /api/online/v1/ws?room=CODE&role=host|peer` (`functions/api/online/v1/ws.ts` → `functions/do/floor_room.ts`).
+- Один DO `FloorRoomDO` на комнату (binding `ONLINE_FLOORS`, `idFromName(roomId)`); хост = слот 0, гости = слоты 1–3, освободившиеся слоты переиспользуются после дисконнекта.
+- DO — тупой форвардер: host→peers broadcast (с `_targetSlot`/`_excludeSlot` фильтрами), peer→host с проставленным `_peerSlot`. Вся игровая логика клиентская (протокол v2, см. `online.md` «SHIPPED: Protocol v2»).
+- Биллинг: каждое WS-сообщение — DO-запрос; пара хост+гость генерит ~100k сообщений в час. Free tier (100k DO-запросов/день) ≈ один час одной сессии в сутки; Workers Paid держит сотни параллельных комнат (~$0.02/комнато-час). Поэтому клиент склеивает весь host→peer трафик в один пакет `host_state` на тик.

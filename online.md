@@ -6,6 +6,28 @@
 
 Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review, revised 2026-06-02 after host-player Cloudflare test planning and hundreds-player server-track review, revised 2026-07-12 after successful peer inventory sync, container loot tests and Net Sphere chat synchronization fixes.
 
+## SHIPPED: Protocol v2 — host-authoritative peer state (2026-08-08)
+
+Реализовано в коде (`src/systems/online_protocol.ts`, `src/systems/online_client.ts`, обвязка в `main.ts`); это shipped facts, а не план:
+
+- **Владение**: хост владеет актором пира целиком (инвентарь, HP, магазин, деньги, потребности, RPG). Пиру принадлежат только позиция/угол (валидируются на проходимость) и локальное предсказание для мгновенного UI.
+- **Peer→host**: `peer_move` 20 Гц (только позиция, `gen` для гейта снапов) + надёжные нумерованные интенты `peer_intent` (fire с melee hit-claim `targetId`, reload, tool, use_item, drop, container take/put/close, interact). Каждый выстрел — отдельный интент (автоматика не теряет патроны на коалессинге). Хост acks каждый seq, даже отклонённый.
+- **Host→peer**: ОДИН пакет `host_state` на тик 8 Гц (каждое WS-сообщение — оплачиваемый DO-запрос): entity sync (AOI 32 клетки, кап 64), двери, per-slot `actors` (авторитетное эхо с `lastSeq`/`ackMoveGen`), per-slot `containers` (live-push открытого контейнера при любой мутации — хостом, NPC, другим пиром), `fx` (звуки выстрелов/смертей, кап 24), `cells` (патчи геометрии: фронты самосбора, отбойник, киты; кап 384/тик), флаг `sam`.
+- **Reconciliation**: host-exclusive поля (hp, stagger, деньги, смерть) применяются всегда; предсказанные (инвентарь, маг, needs, rpg) — только когда `lastSeq` эха догнал последний отправленный интент. Это заменило actorGen delta-merge, который дедлочился в бою.
+- **Интерполяция**: пир хранит два последних сетевых сэмпла на сущность и покадрово интерполирует с задержкой 150 мс (экстраполяция ≤1 интервала, потом снап).
+- **Персонаж пира**: приносится из домашнего сейва (`actorImport` в `peer_join`, сейв флашится при welcome). Домой состояние возвращается ТОЛЬКО через эвакуацию: E на любом лифте = `visit_end` с санированным экспортом (инвентарь/оружие/деньги/rpg), пир мержит его поверх загруженного домашнего сейва. Смерть/обрыв связи: домашний сейв нетронут, труп с лутом остаётся у хоста (`dropEntityInventory`). Автосейв/сейв ЗАБЛОКИРОВАН у пира в мире хоста (`saveGame` guard + `scheduleLoading(..., false)` для снапшотов) — мир хоста не может затереть домашний сейв.
+- **Этаж/самосбор**: лифт хоста и пост-самосборный ститч переносят пир-акторов и рассылают полный ре-снапшот (`resyncAllPeersToCurrentFloor`). Самосбор при подключённых пирах ВКЛЮЧЁН: фронты стримятся клеточными патчами, хост-гейт `isOnlineConnected()` снят.
+- **XP/атрибуция**: `handleKill` принимает киллера; килы пира дают XP пир-актору (через эхо), а не хосту.
+- **Версионирование**: `pv: 2` в `peer_join`; несовпадение — `server_error: version_mismatch`.
+- **DO relay**: слоты 1–3 переиспользуются после дисконнекта (fixed leak: `nextSlot` не откатывался — 3 коннекта навсегда закрывали комнату). Кап: хост + 3 пира.
+- **NPC для пира (добавлено вторым проходом 2026-08-08)**: E на NPC → хост резолвит, генерит торговый ассортимент и реплику (`generateTalkText` с контекстом своего мира) и шлёт `npc_open`; меню пира работает на синкнутой сущности. Торговля — relaxed-trust по доктрине этого дока: пир гоняет ПОЛНЫЙ локальный торговый код (корзины/цены/`executeTradeDeal`) на копиях, а хосту летит интент `trade_deal {give, take, netCash}`, который хост применяет с клампом к реально существующему. Ассортимент/деньги открытого NPC пушатся в `host_state.npcs` при изменении (dirty-push как у контейнеров, self-heal по дистанции >10 клеток). Реплики — интент `npc_talk` → таргетированный ответ. Квесты/кастомные опции гостю недоступны («Недоступно в гостях»).
+- **Пауза хоста**: при живых пирах меню хоста НЕ паузит мир (стандартная MP-семантика; pointer-gate/скрытая вкладка паузят по-прежнему — браузер троттлит rAF сам).
+- **Двери из cell-патчей**: клетка, ставшая DOOR, получает у пира placeholder-запись в `world.doors` (состояние доезжает door-синком); клетка, переставшая быть DOOR, теряет запись.
+- **XP deletion beam** пира идёт пиру (колбэк с киллером).
+- Тесты: `tests/online_protocol.test.ts` (санитизация интентов/экспорта/trade_deal, эхо-reconciliation, клеточные патчи, интерполяция, container/npc dirty-push, slot bookkeeping).
+
+Известные ограничения v2 (кандидаты следующей итерации): квесты/контракты/кастомные NPC-опции для пира; карма/экономические события сделок пира не публикуются (только материальный обмен); цены пира считаются по его локальной эконом-копии (relaxed-trust, допустимо по Trust Correction); /invade ждёт обкатки коопа.
+
 Scope: полноценный опциональный online mode через Cloudflare Workers/Durable Objects, где Cloudflare является sync/interaction authority для shared facts, а не полной удаленной копией offline-симуляции. Локальная single-player игра, `npm run dev`, single-file build и local save остаются полностью playable без Cloudflare, WebSocket, D1 и сети.
 
 ## 1. Цель

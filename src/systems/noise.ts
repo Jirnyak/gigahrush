@@ -18,6 +18,8 @@ import { ITEMS } from '../data/catalog';
 import { registerInventoryUseHandler, removeItem, type InventoryUseHandlerContext } from './inventory';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { isPlayerEntity } from './player_actor';
+import { isOnlineHost } from './online_client';
+import { pushNetFx } from './online_protocol';
 import { getAcousticDistance } from './ai/pathfinding';
 
 export type NoiseSource =
@@ -289,6 +291,9 @@ export function publishWeaponNoise(
   y = actor.y,
 ): NoiseRecord | undefined {
   if (!state) return undefined;
+  // Online host: every weapon noise (host, NPC or peer shot) doubles as a
+  // cosmetic net fx so peers hear the fight; the shooter's own slot skips it.
+  if (isOnlineHost()) pushNetFx({ k: 'shot', x, y, w: weaponId, s: actor.peerSlot });
   const profile = weaponNoiseProfile(weaponId, ws);
   if (!profile) return undefined;
   return publishActorNoise(state, actor, {

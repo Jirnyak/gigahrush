@@ -33,11 +33,21 @@ export class FloorRoomDO {
       this.hostWs = server;
       slot = 0;
     } else {
-      if (this.nextSlot > 3) {
+      // Reuse freed slots: a disconnected (or reconnecting) peer must not
+      // burn one of the 3 seats forever.
+      const taken = new Set<number>();
+      for (const s of this.sessions.values()) {
+        if (s.role === 'peer') taken.add(s.slot);
+      }
+      let free = 0;
+      for (let candidate = 1; candidate <= 3; candidate++) {
+        if (!taken.has(candidate)) { free = candidate; break; }
+      }
+      if (free === 0) {
         server.close(1008, 'Room full');
         return new Response(null, { status: 101, webSocket: client });
       }
-      slot = this.nextSlot++;
+      slot = free;
     }
 
     this.sessions.set(server, { slot, role });

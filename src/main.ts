@@ -7,20 +7,52 @@ import { registerPwaServiceWorker } from './pwa';
 import {
   setOnlineMessageHandler,
   sendOnlineMessage,
-  sendPeerAction,
+  sendPeerIntent,
   isOnlineHost,
   isOnlinePeer,
   isOnlineConnected,
-  maybeSendPeerInput,
+  maybeSendPeerMove,
+  getPeerMoveGen,
   getOnlineSlot,
   compactEntity,
   shouldSendHostSync,
-  getPeerGen,
-  getPeerActorGen,
-  notePeerActorState,
-  type PeerActorState,
+  disconnectOnline,
+  ONLINE_PROTOCOL_VERSION,
   type SyncEntity,
 } from './systems/online_client';
+import {
+  sanitizeIntent,
+  packActorEcho,
+  applyActorEcho,
+  peerLastSentSeq,
+  hostNoteProcessedSeq,
+  hostLastProcessedSeq,
+  hostSetOpenContainer,
+  hostOpenContainer,
+  hostContainerPayloadChanged,
+  hostSetOpenNpc,
+  hostOpenNpc,
+  hostNpcPayloadChanged,
+  hostClearSlot,
+  pushNetFx,
+  drainNetFx,
+  drainNetCellPatch,
+  applyNetCellPatch,
+  markNetCellTouched,
+  noteNetSample,
+  dropNetSample,
+  clearNetSamples,
+  updateNetInterpolation,
+  buildVisitExport,
+  sanitizeVisitExport,
+  applyVisitExport,
+  unpackItems as unpackNetItems,
+  packItems as packNetItems,
+  hostTickRemoteActor,
+  hostStartRemoteReload,
+  type ActorEcho,
+  type NetFx,
+} from './systems/online_protocol';
 
 import {
   W, Cell, DoorState, Feature, Tex, RoomType, LiftDirection,
@@ -97,7 +129,7 @@ import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/com
 import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
-  countAmmo, removeItem, publishPlayerItemEvent, updateInventoryConditions,
+  countAmmo, removeItem, addItem, publishPlayerItemEvent, updateInventoryConditions,
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { createMobileControls, type MobileControls } from './mobile';
@@ -429,6 +461,9 @@ import {
   addTradeOfferFromSlot,
   clearTradeOffers,
   executeTradeDeal,
+  getTradeDealSummary,
+  getTradeNpcOffer,
+  getTradeOffer,
   removeTradeAskSlot,
   removeTradeOfferSlot,
   type TradeResult,
@@ -700,11 +735,10 @@ setActiveActorSoftLimit(titleActiveActorSoftLimit);
 
 // ── Online multiplayer message handler ──────────────────────
 let onlinePeerFloorReady = false;
-const _lastPeerActor = new Map<number, Record<string, unknown>>();  // delta-merge: last received actor state per slot
-const _peerAckedGen = new Map<number, number>();  // last processed peer gen per slot
-const _peerAckedActorGen = new Map<number, number>();  // last changed peer actor payload reconciled by host
+const _peerMoveGen = new Map<number, number>();      // host: last received move gen per slot (echoed for snap gating)
 const _peerNextFireAt = new Map<number, number>();  // wall-clock ms gate: next allowed peer attack per slot
 const _peerNextToolAt = new Map<number, number>(); // host-side peer world-tool effect gate
+const _peerVisitEnded = new Set<number>();         // host: slots whose visit already ended (death/evac sent once)
 
 // Peer-side transient remote container copy: a single reserved synthetic id kept
 // only in containerById (never containerMap/containers → no world mesh). Backs the
@@ -720,9 +754,6 @@ let _snapTotal = 0;
 let _snapReceived = 0;
 let _snapSpawnX = W / 2;
 let _snapSpawnY = W / 2;
-let _peerPendingFireAction = false;
-let _peerPendingReloadAction = false;
-let _peerPendingToolUse: 'edge' | 'hold' | undefined;
 
 function spawnPeerProjectile(actor: Entity, weaponId: string, ws: WeaponStats): void {
   const cos = Math.cos(actor.angle);
@@ -796,7 +827,7 @@ function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats):
   if (ws.isRanged) {
     spawnPeerPsiProjectile(actor, psiId, ws);
   } else {
-    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, (e) => handleKill(e, true));
+    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, (e) => handleKill(e, true, 0, 0, 1, actor));
     if (psiResult.beamLen) {
       state.beamFx = 0.35;
       state.beamAngle = actor.angle;
@@ -807,7 +838,7 @@ function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats):
   publishWeaponNoise(state, actor, psiId, ws);
 }
 
-function applyPeerFireAction(actor: Entity, slot: number): void {
+function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: number): void {
   const weaponId = equippedCombatItemId(actor);
   const ws = getWeaponStats(actor, weaponId);
   const nowMs = performance.now();
@@ -817,15 +848,24 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
   _peerNextFireAt.set(slot, nowMs + Math.max(0.05, ws.speed * atkSpeedMod) * 1000);
 
   if (ws.psiCost) {
+    // v2 host authority: psi is spent here, mirroring the peer's prediction.
+    if (!actor.rpg || actor.rpg.psi < ws.psiCost) return;
+    actor.rpg.psi -= ws.psiCost;
     applyPeerPsiWorldEffect(actor, weaponId, ws);
     return;
   }
 
   if (ws.isRanged) {
-    if (!ws.ammoType && ws.magazineSize !== Infinity && (actor.currentMag ?? 0) <= 0) return;
+    // v2 host authority: consume the magazine for real; reload arrives as its
+    // own intent and completes in hostTickRemoteActor.
+    if (ws.magazineSize !== Infinity) {
+      if (actor.reloading || (actor.currentMag ?? 0) <= 0) return;
+      if (!consumeAmmo(actor, state, weaponId)) return;
+    }
     if (ws.projType === ProjType.FLAME) reducePaupsinaWeb(actor, state.time, state.msgs, state, actor, 'fire');
     if (ws.deletionBeam) {
-      fireDeletionBeam(world, entities, actor, state, weaponId, ws, handleKill);
+      fireDeletionBeam(world, entities, actor, state, weaponId, ws,
+        (e, kp, vx, vy, gore) => handleKill(e, kp, vx, vy, gore, actor));
     } else {
       spawnPeerProjectile(actor, weaponId, ws);
     }
@@ -835,6 +875,12 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
     return;
   }
 
+  if (ws.magazineSize === 1) {
+    // single-charge melee cycles its pseudo-magazine like the peer predicts
+    actor.currentMag = 0;
+    hostStartRemoteReload(actor);
+  }
+  consumeDurability(actor, [], state.time, state, weaponId);
   const normalDmg = meleeDamage(actor.rpg, weaponId, ws.dmg);
   const range = ws.range;
   const ax = actor.x + Math.cos(actor.angle) * range;
@@ -845,7 +891,20 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
   const entityIndex = getEntityIndex();
   const meleeQuery: Entity[] = [];
   entityIndex.queryRadius(actor.x, actor.y, range + (ws.hitRadius ?? 0.6) + 0.5, meleeQuery, ENTITY_MASK_ACTOR);
-  const target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
+  // Hit claim: the peer aimed at what it saw through interpolation lag. Accept
+  // the claimed target when it is plausibly in reach (range + lag slack);
+  // otherwise fall back to the host's own melee targeting.
+  let target: Entity | undefined | null;
+  if (claimedTargetId !== undefined) {
+    const claimed = entityIndex.byId.get(claimedTargetId);
+    const slack = 1.5;
+    if (claimed?.alive && claimed !== actor && claimed.hp !== undefined
+      && (claimed.type === EntityType.MONSTER || claimed.type === EntityType.NPC)
+      && world.dist2(actor.x, actor.y, claimed.x, claimed.y) <= (range + slack) * (range + slack)) {
+      target = claimed;
+    }
+  }
+  if (!target) target = selectMeleeTarget(world, actor, meleeQuery, range, weaponId);
   if (target && target.hp !== undefined) {
     const armor = applyDamage(world, state, target, { damage: normalDmg, attacker: actor, weaponId });
     const dmg = armor.damage;
@@ -864,7 +923,7 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
     if (target.hp <= 0) {
       target.hp = 0;
       target.alive = false;
-      if (!isPlayerEntity(target)) handleKill(target, true, mVx, mVy, 1);
+      if (!isPlayerEntity(target)) handleKill(target, true, mVx, mVy, 1, actor);
     }
     hitSomething = true;
   }
@@ -880,40 +939,91 @@ function applyPeerFireAction(actor: Entity, slot: number): void {
   notifyLiftArachnaNoise(world, actor, state, weaponId);
 }
 
-function peerActorSnapshot(actor = player): PeerActorState {
-  return {
-    hp: actor.hp ?? 100,
-    maxHp: actor.maxHp ?? 100,
-    alive: actor.alive,
-    weapon: actor.weapon ?? '',
-    tool: actor.tool ?? '',
-    sprite: actor.sprite,
-    spriteScale: actor.spriteScale,
-    npcVisualId: actor.npcVisualId,
-    sex: actor.sex,
-    armorDefId: actor.armorDefId,
-    money: actor.money,
-    staggerTimer: actor.staggerTimer,
-    currentMag: actor.currentMag,
-    reloading: actor.reloading,
-    reloadTimer: actor.reloadTimer,
-    attackCd: actor.attackCd,
-    inventory: actor.inventory?.map(i => i.data !== undefined ? { defId: i.defId, count: i.count, data: i.data } : { defId: i.defId, count: i.count }),
-    needs: actor.needs ? { food: actor.needs.food, water: actor.needs.water, sleep: actor.needs.sleep, pee: actor.needs.pee, poo: actor.needs.poo } : undefined,
-    rpg: actor.rpg ? { level: actor.rpg.level, xp: actor.rpg.xp, attrPoints: actor.rpg.attrPoints, str: actor.rpg.str, agi: actor.rpg.agi, int: actor.rpg.int, psi: actor.rpg.psi, maxPsi: actor.rpg.maxPsi } : undefined,
-  };
+/** Host: pack the live, mutated World + entities and stream it to one peer in
+ *  order. The peer restores this verbatim instead of regenerating from seed,
+ *  so runtime mutations (doors, containers, loot, route lifts, carved
+ *  passages) can never desync. Also used to re-sync after the host switches
+ *  floors or after a post-samosbor stitch. */
+function sendFloorSnapshotToPeer(peerSlot: number, spawnX: number, spawnY: number): void {
+  const runSeed = ensureFloorRunState(state).runSeed;
+  const snapshot = packFloorForNetwork(world, entities, {
+    z: state.currentZ,
+    runSeed,
+    floorKey: currentFloorMemoryKey(),
+    spawnX, spawnY,
+    samosborCount: state.samosborCount,
+    gameTime: state.time,
+    nextEntityId: nextEntityId.v,
+  });
+  const chunks = chunkFloorSnapshot(serializeFloorSnapshot(snapshot));
+  sendOnlineMessage({
+    type: 'floor_snapshot_begin',
+    _targetSlot: peerSlot,
+    total: chunks.length,
+    z: state.currentZ,
+    runSeed,
+    peerSlot,
+    spawnX, spawnY,
+  });
+  for (let i = 0; i < chunks.length; i++) {
+    sendOnlineMessage({
+      type: 'floor_snapshot_chunk',
+      _targetSlot: peerSlot,
+      i,
+      data: chunks[i],
+    });
+  }
 }
 
-function sendPeerInventorySync(actor: Entity): void {
-  if (actor.peerSlot === undefined) return;
-  sendOnlineMessage({
-    type: 'peer_inventory_sync',
-    _targetSlot: actor.peerSlot,
-    weapon: actor.weapon ?? '',
-    tool: actor.tool ?? '',
-    money: actor.money,
-    inventory: actor.inventory?.map(i => i.data !== undefined ? { defId: i.defId, count: i.count, data: i.data } : { defId: i.defId, count: i.count }),
-  });
+function inventoryCountOf(e: Entity, defId: string): number {
+  let n = 0;
+  for (const it of e.inventory ?? []) if (it.defId === defId) n += it.count;
+  return n;
+}
+
+/** Host: re-send the current floor to every connected peer (floor switch /
+ *  post-samosbor stitch). Peer actors are already placed at the new spawn. */
+function resyncAllPeersToCurrentFloor(): void {
+  if (!isOnlineHost()) return;
+  for (const e of entities) {
+    if (e.peerSlot === undefined || e.peerSlot <= 0) continue;
+    if (_peerVisitEnded.has(e.peerSlot)) continue;
+    sendFloorSnapshotToPeer(e.peerSlot, e.x, e.y);
+  }
+}
+
+/** Peer: leave the host's world and load the home save back (flushed at join
+ *  time). An evacuation export folds the visited actor on top and re-saves;
+ *  death or connection loss loads the home state untouched. */
+let _peerReturningHome = false;
+function peerReturnHome(exp: ReturnType<typeof sanitizeVisitExport>, note: string, color: string): void {
+  if (_peerReturningHome) return;
+  _peerReturningHome = true;
+  onlinePeerFloorReady = false;
+  disconnectOnline();
+  scheduleLoading(() => {
+    if (loadGame()) {
+      if (exp) {
+        applyVisitExport(player, exp);
+        saveGame(true);
+      }
+      state.msgs.push(msg(note, state.time, color));
+    }
+    _peerReturningHome = false;
+  }, false);
+}
+
+/** Peer: one-shot actor import sent with peer_join — the visiting character
+ *  the host will own for the whole session (they bring their home loadout). */
+function peerJoinActorImport(): Record<string, unknown> {
+  return {
+    ...buildVisitExport(player),
+    hp: player.hp ?? 100,
+    maxHp: player.maxHp ?? 100,
+    npcVisualId: player.npcVisualId,
+    sex: player.sex,
+    needs: player.needs ? { food: player.needs.food, water: player.needs.water, sleep: player.needs.sleep, pee: player.needs.pee, poo: player.needs.poo } : undefined,
+  };
 }
 
 function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
@@ -922,24 +1032,26 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
   if (!(actor.inventory ?? []).some(item => item.defId === toolId)) { actor.tool = ''; return; }
   const now = performance.now();
   if (now < (_peerNextToolAt.get(slot) ?? 0)) return;
+  // v2 host authority: the host consumes durability/psi for real (the old
+  // protocol restored them because the peer owned its own inventory).
   const activeLightDrain = activeToolLightDrainPerSecond(toolId);
   if (activeLightDrain > 0) {
+    consumeToolDurability(actor, 0.125 * activeLightDrain, [], state.time, state);
     _peerNextToolAt.set(slot, now + 125);
     return;
   }
   if (WEAPON_STATS[toolId]?.psiCost) {
     const psiToolStats = getWeaponStats(actor, toolId);
+    const cost = psiToolStats.psiCost ?? 0;
+    if (!actor.rpg || actor.rpg.psi < cost) return;
+    actor.rpg.psi -= cost;
     const atkSpeedMod = actor.rpg ? agiAttackSpeedMult(actor.rpg) : 1;
     _peerNextToolAt.set(slot, now + Math.max(0.05, psiToolStats.speed * atkSpeedMod) * 1000);
     applyPeerPsiWorldEffect(actor, toolId, psiToolStats);
     return;
   }
   if (toolId === UV_SPOTLIGHT_ID) {
-    const inventoryBefore = actor.inventory ? structuredClone(actor.inventory) : undefined;
-    const toolBefore = actor.tool;
     const result = useUvSpotlight(world, entities, actor, state);
-    actor.inventory = inventoryBefore;
-    actor.tool = toolBefore;
     if (result) {
       state.uvBeamFx = UV_SPOTLIGHT_FX_SECONDS;
       state.uvBeamLen = result.beamLen;
@@ -949,8 +1061,8 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
     return;
   }
   if (toolId === CHALK_ITEM_ID) {
-    const def = ITEMS[CHALK_ITEM_ID];
-    drawEquippedChalkPixel(world, actor, def?.durability ?? 0);
+    consumeToolDurability(actor, 0.1, [], state.time, state);
+    drawEquippedChalkPixel(world, actor, ITEMS[CHALK_ITEM_ID]?.durability ?? 0);
     _peerNextToolAt.set(slot, now + 45);
     return;
   }
@@ -988,6 +1100,7 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
         const roomB = world.roomMap[world.idx(cx + 1, cy)] >= 0 ? world.roomMap[world.idx(cx + 1, cy)] : world.roomMap[world.idx(cx, cy + 1)];
         world.cells[ci] = Cell.DOOR;
         world.markCellsDirty();
+        markNetCellTouched(ci);
         world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
         addRuntimeDoorToRoom(roomA, ci); addRuntimeDoorToRoom(roomB, ci);
         changedWorld = true;
@@ -1000,6 +1113,7 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
       if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
       world.cells[ci] = Cell.WALL;
       world.markCellsDirty();
+      markNetCellTouched(ci);
       const room = world.roomAt(actor.x, actor.y);
       world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;
       world.markWallTexDirty();
@@ -1036,13 +1150,54 @@ setOnlineMessageHandler((msgData: any) => {
   }
 
   // ── HOST: peer joined → spawn remote actor, send floor seed ──
+  // ── PEER: got a slot — introduce ourselves with the imported home character ──
+  if (msgData.type === 'welcome' && !isOnlineHost() && msgData.role === 'peer') {
+    try {
+      const count = parseInt(localStorage.getItem('gigahrush_net_sessions_count') || '0', 10);
+      localStorage.setItem('gigahrush_net_sessions_count', String(count + 1));
+    } catch {}
+    // Flush the home save NOW: the visit ends either by evac-merge on top of
+    // this state or by loading it back unchanged after death/disconnect.
+    saveGame(true);
+    const snap = getNetSphereSnapshot();
+    let nicknameStr = '';
+    try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
+    sendOnlineMessage({
+      type: 'peer_join',
+      pv: ONLINE_PROTOCOL_VERSION,
+      netGen: snap.netGen,
+      nickname: nicknameStr || snap.profile?.nickname,
+      actorImport: peerJoinActorImport(),
+    });
+  }
+
   if (msgData.type === 'peer_join' && isOnlineHost()) {
     const peerSlot = msgData._peerSlot;
+    if (msgData.pv !== ONLINE_PROTOCOL_VERSION) {
+      sendOnlineMessage({ type: 'server_error', _targetSlot: peerSlot, reason: 'version_mismatch' });
+      return;
+    }
     state.msgs.push(msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
 
     // Spawn peer at host player position (guaranteed passable)
     const spawnX = player.x, spawnY = player.y;
 
+    // The visitor brings their home character: sanitize the import once, then
+    // the host owns the actor for the whole session.
+    const imp = sanitizeVisitExport(msgData.actorImport);
+    const impRaw = (msgData.actorImport ?? {}) as Record<string, unknown>;
+    const impMaxHp = typeof impRaw.maxHp === 'number' && Number.isFinite(impRaw.maxHp)
+      ? Math.max(1, Math.min(9999, Math.floor(impRaw.maxHp))) : 100;
+    const impHp = typeof impRaw.hp === 'number' && Number.isFinite(impRaw.hp)
+      ? Math.max(1, Math.min(impMaxHp, Math.floor(impRaw.hp))) : impMaxHp;
+    const impNeeds = freshNeeds();
+    const needsRaw = impRaw.needs as Record<string, unknown> | undefined;
+    if (needsRaw && typeof needsRaw === 'object') {
+      for (const key of ['food', 'water', 'sleep', 'pee', 'poo'] as const) {
+        const v = needsRaw[key];
+        if (typeof v === 'number' && Number.isFinite(v)) (impNeeds as unknown as Record<string, number>)[key] = Math.max(0, Math.min(100, v));
+      }
+    }
     const remoteActor: Entity = {
       id: nextEntityId.v++,
       type: EntityType.NPC,
@@ -1052,57 +1207,29 @@ setOnlineMessageHandler((msgData: any) => {
       speed: HUMANOID_BASE_MOVE_SPEED,
       sprite: Occupation.TRAVELER,
       spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
-      needs: freshNeeds(),
-      hp: 100, maxHp: 100,
-      money: 100,
-      inventory: [],
-      weapon: '', tool: '',
+      needs: impNeeds,
+      hp: impHp, maxHp: impMaxHp,
+      money: imp?.money ?? 0,
+      inventory: imp ? unpackNetItems(imp.inventory) : [],
+      weapon: imp?.weapon ?? '', tool: imp?.tool ?? '',
+      armorDefId: imp?.armorDefId,
       name: msgData.nickname || `Игрок ${peerSlot}`,
       netGen: msgData.netGen,
+      npcVisualId: typeof impRaw.npcVisualId === 'string' ? impRaw.npcVisualId.slice(0, 40) : undefined,
+      sex: typeof impRaw.sex === 'string' ? (impRaw.sex as CharacterSex) : undefined,
       rpg: freshRPG(1),
       faction: Faction.PLAYER,
       peerSlot,
       ...playerAlifeFields(),
     } as Entity;
+    if (imp?.rpg && remoteActor.rpg) Object.assign(remoteActor.rpg, imp.rpg);
     entities.push(remoteActor);
-
-    // Full-floor checkpoint: pack the host's live, mutated World + entities and
-    // stream it to the peer in order. The peer restores this verbatim instead of
-    // regenerating from seed, so runtime mutations (doors, containers, loot,
-    // route lifts, carved passages) can never desync. Seed is still sent as a
-    // fallback identity hint.
-    const runSeed = ensureFloorRunState(state).runSeed;
-    const snapshot = packFloorForNetwork(world, entities, {
-      z: state.currentZ,
-      runSeed,
-      floorKey: currentFloorMemoryKey(),
-      spawnX, spawnY,
-      samosborCount: state.samosborCount,
-      gameTime: state.time,
-      nextEntityId: nextEntityId.v,
-    });
-    const chunks = chunkFloorSnapshot(serializeFloorSnapshot(snapshot));
-    sendOnlineMessage({
-      type: 'floor_snapshot_begin',
-      _targetSlot: peerSlot,
-      total: chunks.length,
-      z: state.currentZ,
-      runSeed,
-      peerSlot,
-      spawnX, spawnY,
-    });
-    for (let i = 0; i < chunks.length; i++) {
-      sendOnlineMessage({
-        type: 'floor_snapshot_chunk',
-        _targetSlot: peerSlot,
-        i,
-        data: chunks[i],
-      });
-    }
+    _peerVisitEnded.delete(peerSlot);
+    sendFloorSnapshotToPeer(peerSlot, spawnX, spawnY);
   }
 
-  // ── HOST: apply peer input to remote actor (delta-merge) ──
-  if (msgData.type === 'peer_input' && isOnlineHost()) {
+  // ── HOST: peer position stream (the only peer-owned state) ──
+  if (msgData.type === 'peer_move' && isOnlineHost()) {
     const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
     if (actor) {
       // Validate position — only accept if the target cell is passable
@@ -1114,58 +1241,78 @@ setOnlineMessageHandler((msgData: any) => {
       }
       actor.angle = msgData.angle ?? actor.angle;
       actor.pitch = msgData.pitch ?? actor.pitch;
-      // Delta-merge: compare with last snapshot, only apply fields peer changed
-      const a = msgData.actor;
-      if (a) {
-        const slot = msgData._peerSlot as number;
-        const prev = _lastPeerActor.get(slot);
-        const peerChanged = (key: string): boolean => {
-          if (!prev) return true; // first message — apply all
-          return JSON.stringify((a as Record<string, unknown>)[key]) !== JSON.stringify((prev as Record<string, unknown>)[key]);
-        };
-        if (peerChanged('hp')) actor.hp = a.hp;
-        if (peerChanged('maxHp')) actor.maxHp = a.maxHp;
-        if (peerChanged('alive')) actor.alive = a.alive;
-        if (peerChanged('weapon')) actor.weapon = a.weapon;
-        if (peerChanged('tool')) actor.tool = a.tool;
-        if (peerChanged('sprite')) actor.sprite = a.sprite;
-        if (peerChanged('spriteScale')) actor.spriteScale = a.spriteScale;
-        if (peerChanged('npcVisualId')) actor.npcVisualId = a.npcVisualId;
-        if (peerChanged('sex')) actor.sex = a.sex;
-        actor.faction = Faction.PLAYER;
-        if (peerChanged('armorDefId')) actor.armorDefId = a.armorDefId;
-        if (peerChanged('money')) actor.money = a.money;
-        if (peerChanged('staggerTimer')) actor.staggerTimer = a.staggerTimer;
-        if (peerChanged('currentMag')) actor.currentMag = a.currentMag;
-        if (peerChanged('reloading')) actor.reloading = a.reloading;
-        if (peerChanged('reloadTimer')) actor.reloadTimer = a.reloadTimer;
-        if (peerChanged('attackCd')) actor.attackCd = a.attackCd;
-        if (peerChanged('inventory')) actor.inventory = a.inventory;
-        if (peerChanged('needs') && a.needs && actor.needs) Object.assign(actor.needs, a.needs);
-        if (peerChanged('rpg') && a.rpg && actor.rpg) Object.assign(actor.rpg, a.rpg);
-        _lastPeerActor.set(slot, structuredClone(a));
-        if (typeof msgData.gen === 'number') _peerAckedGen.set(slot, msgData.gen);
-        if (typeof msgData.actorGen === 'number') _peerAckedActorGen.set(slot, msgData.actorGen);
-        const action = msgData.action as { fire?: boolean; reload?: boolean; toolUse?: 'edge' | 'hold' } | undefined;
-        if (action?.fire) applyPeerFireAction(actor, slot);
-        if (action?.toolUse) applyPeerToolUse(actor, slot, action.toolUse === 'edge');
-      }
+      if (typeof msgData.gen === 'number') _peerMoveGen.set(msgData._peerSlot as number, msgData.gen);
     }
   }
 
-  // ── HOST: peer shared-world action (interact/container/drop) — reliable, not throttled ──
-  if (msgData.type === 'peer_action' && isOnlineHost()) {
-    const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
-    if (actor) {
-      // ── Peer interact: doors + item pickup ──
-      if (msgData.interact) {
+  // ── HOST: numbered peer intent — the only way peer-owned state mutates ──
+  if (msgData.type === 'peer_intent' && isOnlineHost()) {
+    const slot = msgData._peerSlot as number;
+    const seq = typeof msgData.seq === 'number' ? Math.floor(msgData.seq) : 0;
+    const intent = sanitizeIntent(msgData.intent);
+    const actor = entities.find(e => e.peerSlot === slot && e.alive);
+    // Every intent — even a rejected one — acks its seq, or the peer's echo
+    // reconciliation would starve behind a single dropped action.
+    if (seq > 0) hostNoteProcessedSeq(slot, seq);
+    if (actor && intent) {
+      // ── fire: host consumes ammo/psi and resolves the shot (hit-claim aware) ──
+      if (intent.kind === 'fire') {
+        applyPeerFireAction(actor, slot, intent.targetId);
+      }
+
+      // ── reload: mirror of the peer's local prediction rules ──
+      if (intent.kind === 'reload') {
+        hostStartRemoteReload(actor);
+      }
+
+      // ── tool: host-side world effect + real resource consumption ──
+      if (intent.kind === 'tool') {
+        applyPeerToolUse(actor, slot, intent.edge);
+      }
+
+      // ── use_item: eat/heal/equip through the shared inventory system ──
+      if (intent.kind === 'use_item') {
+        const invSlot = actor.inventory?.[intent.slot];
+        if (invSlot && invSlot.defId === intent.defId) {
+          const zoneId = world.zoneMap[world.idx(Math.floor(actor.x), Math.floor(actor.y))];
+          useItem(actor, intent.slot, [], state.time, state, zoneId, world);
+        }
+      }
+
+      // ── Peer interact: evacuation lift, doors, pickup, containers ──
+      if (intent.kind === 'interact') {
         let handled = false;
-        // Try door first
         const lx = actor.x + Math.cos(actor.angle) * 1.5;
         const ly = actor.y + Math.sin(actor.angle) * 1.5;
         const cx = Math.floor(world.wrap(lx));
         const cy = Math.floor(world.wrap(ly));
         const idx = world.idx(cx, cy);
+        // Evacuation ritual: for a visitor a lift is not floor travel — it is
+        // the way home. Reaching one alive exports the actor to the peer save.
+        const liftAt = (ci: number): boolean => world.cells[ci] === Cell.LIFT && world.features[ci] !== Feature.MACHINE;
+        let onLift = liftAt(idx);
+        if (!onLift) {
+          const px = Math.floor(actor.x), py = Math.floor(actor.y);
+          for (let dy = -1; dy <= 1 && !onLift; dy++) for (let dx = -1; dx <= 1 && !onLift; dx++) {
+            if (liftAt(world.idx(px + dx, py + dy))) onLift = true;
+          }
+        }
+        if (onLift) {
+          _peerVisitEnded.add(slot);
+          sendOnlineMessage({
+            type: 'visit_end',
+            _targetSlot: slot,
+            evac: true,
+            export: buildVisitExport(actor),
+          });
+          state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} уехал на лифте домой.`, state.time, '#8cf'));
+          const ai = entities.indexOf(actor);
+          if (ai >= 0) entities.splice(ai, 1);
+          rebuildEntityIndex(entities, 'load');
+          hostClearSlot(slot);
+          hostSetOpenContainer(slot, null);
+          return;
+        }
         if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
           const door = world.doors.get(idx)!;
           if (door.state === DoorState.CLOSED) {
@@ -1187,6 +1334,39 @@ setOnlineMessageHandler((msgData: any) => {
             }
           }
         }
+        // Try NPC (talk/trade) — same E priority the host player gets. The
+        // host resolves the NPC, generates its trade stock and dialog line,
+        // and streams a menu copy; the peer's menu runs on the synced entity.
+        if (!handled) {
+          const tx = world.wrap(lx);
+          const ty = world.wrap(ly);
+          let bestNpc: Entity | null = null;
+          let bestNpcD2 = 1.7 * 1.7;
+          const npcQuery: Entity[] = [];
+          getEntityIndex().queryRadius(tx, ty, 1.7, npcQuery, ENTITY_MASK_ACTOR);
+          for (const e of npcQuery) {
+            if (!e.alive || e.type !== EntityType.NPC || e.peerSlot !== undefined || e === actor) continue;
+            const d2 = world.dist2(tx, ty, e.x, e.y);
+            if (d2 < bestNpcD2) { bestNpc = e; bestNpcD2 = d2; }
+          }
+          if (bestNpc) {
+            if (!bestNpc.inventory || bestNpc.inventory.length === 0) {
+              bestNpc.inventory = generateNpcTradeItems(bestNpc);
+            }
+            hostSetOpenNpc(slot, bestNpc.id);
+            sendOnlineMessage({
+              type: 'npc_open',
+              _targetSlot: slot,
+              npc: {
+                id: bestNpc.id,
+                inventory: packNetItems(bestNpc.inventory, 64),
+                money: Math.max(0, Math.floor(bestNpc.money ?? 0)),
+              },
+              talk: generateTalkText(bestNpc, { world, state, player: actor, time: state.time }),
+            });
+            handled = true;
+          }
+        }
         // Try item pickup if door wasn't toggled
         if (!handled) {
           let bestDrop: Entity | null = null;
@@ -1197,9 +1377,8 @@ setOnlineMessageHandler((msgData: any) => {
             if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
           }
           if (bestDrop) {
-            const result = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state);
-            if (result.pickedAny) sendPeerInventorySync(actor);
-            handled = result.handled;
+            // actor_echo carries the authoritative inventory next sync tick
+            handled = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state).handled;
           }
         }
         // Try opening / searching a container in front of the peer. Host is the
@@ -1217,6 +1396,7 @@ setOnlineMessageHandler((msgData: any) => {
           if (container) {
             container.lastOpenedBy = actor.id;
             container.lastOpenedAt = state.time;
+            hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
             sendOnlineMessage({
               type: 'container_open',
               _targetSlot: actor.peerSlot,
@@ -1226,20 +1406,58 @@ setOnlineMessageHandler((msgData: any) => {
         }
       }
 
-      // ── Peer drop item ──
-      if (msgData.drop) {
+      // ── NPC dialog line requested ──
+      if (intent.kind === 'npc_talk') {
+        const npc = getEntityIndex().byId.get(intent.npcId);
+        if (npc?.alive && npc.type === EntityType.NPC && world.dist2(actor.x, actor.y, npc.x, npc.y) <= 36) {
+          sendOnlineMessage({
+            type: 'npc_talk',
+            _targetSlot: slot,
+            npcId: npc.id,
+            text: generateTalkText(npc, { world, state, player: actor, time: state.time }),
+          });
+        }
+      }
+
+      if (intent.kind === 'npc_close') {
+        hostSetOpenNpc(slot, null);
+      }
+
+      // ── Relaxed-trust deal: the peer priced and executed the trade locally
+      // with the same trade code; the host applies the material exchange,
+      // clamping every count and the cash to what actually exists. ──
+      if (intent.kind === 'trade_deal') {
+        const npc = getEntityIndex().byId.get(intent.npcId);
+        if (npc?.alive && npc.type === EntityType.NPC && npc.peerSlot === undefined
+          && world.dist2(actor.x, actor.y, npc.x, npc.y) <= 36) {
+          for (const item of intent.give) {
+            const n = Math.min(item.count, inventoryCountOf(actor, item.defId));
+            if (n > 0 && removeItem(actor, item.defId, n)) addItem(npc, item.defId, n, item.data);
+          }
+          for (const item of intent.take) {
+            const n = Math.min(item.count, inventoryCountOf(npc, item.defId));
+            if (n > 0 && removeItem(npc, item.defId, n)) addItem(actor, item.defId, n, item.data);
+          }
+          actor.money = Math.max(0, Math.floor((actor.money ?? 0) - intent.netCash));
+          npc.money = Math.max(0, Math.floor((npc.money ?? 0) + intent.netCash));
+          state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} торгуется с ${npc.name ?? 'жителем'}.`, state.time, '#8cf'));
+        }
+      }
+
+      // ── Peer drop item (slot-validated against the host-owned inventory) ──
+      if (intent.kind === 'drop') {
         const dropX = actor.x + Math.cos(actor.angle) * 3.0;
         const dropY = actor.y + Math.sin(actor.angle) * 3.0;
-        const defId = msgData.defId as string;
-        const count = Math.max(1, Math.floor((msgData.count as number) || 1));
-        if (defId) {
-          removeItem(actor, defId, count);
-          if (actor.weapon === defId) actor.weapon = '';
-          if (actor.tool === defId) actor.tool = '';
+        const invSlot = actor.inventory?.[intent.slot];
+        if (invSlot && invSlot.defId === intent.defId) {
+          const count = Math.min(invSlot.count, intent.count);
+          removeItem(actor, intent.defId, count);
+          if (actor.weapon === intent.defId) actor.weapon = '';
+          if (actor.tool === intent.defId) actor.tool = '';
           entities.push({
             id: nextEntityId.v++, type: EntityType.ITEM_DROP,
             x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-            inventory: [{ defId, count, data: msgData.data }],
+            inventory: [invSlot.data !== undefined ? { defId: intent.defId, count, data: invSlot.data } : { defId: intent.defId, count }],
           } as Entity);
           state.msgs.push(msg(`Игрок ${actor.peerSlot} выбросил предмет`, state.time, '#aa6'));
         }
@@ -1249,26 +1467,24 @@ setOnlineMessageHandler((msgData: any) => {
       // Peer sends the container's cell + slot; host resolves the real container
       // there, runs the real take/put against the peer actor (all theft/karma/
       // purchase/event side effects stay host-owned), then echoes fresh contents
-      // back to that peer. Peer inventory reconciles via entity_sync. On close
+      // back to that peer. Peer inventory reconciles via the actor echo. On close
       // the host just drops any transient generated loot bookkeeping — the
       // container itself lives in the host world.
-      if (msgData.container) {
-        const op = msgData.container as { op: string; cx: number; cy: number; slot?: number };
-        if (op.op !== 'close') {
-          const container = resolvePeerContainerAtCell(world, state.currentZ, op.cx, op.cy);
+      if (intent.kind === 'container') {
+        if (intent.op === 'close') {
+          hostSetOpenContainer(slot, null);
+        } else {
+          const container = resolvePeerContainerAtCell(world, state.currentZ, intent.cx, intent.cy);
           if (container) {
-            const slot = Math.max(0, Math.floor(op.slot ?? 0));
-            let inventoryChanged = false;
-            if (op.op === 'take') {
-              inventoryChanged = takeFromContainer(container, actor, slot, 1, { state, world, entities });
-            } else if (op.op === 'put') {
-              inventoryChanged = putIntoContainer(container, actor, slot, 1, { state, world, entities });
+            const cSlot = Math.max(0, Math.floor(intent.slot ?? 0));
+            if (intent.op === 'take') {
+              takeFromContainer(container, actor, cSlot, 1, { state, world, entities });
+            } else if (intent.op === 'put') {
+              putIntoContainer(container, actor, cSlot, 1, { state, world, entities });
             }
-            sendOnlineMessage({
-              type: 'container_sync',
-              container: containerSyncPayload(container),
-            });
-            if (inventoryChanged) sendPeerInventorySync(actor);
+            hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
+            // fresh contents ride the next host_state container push; inventory
+            // reconciles via actor_echo — no extra targeted messages needed
           }
         }
       }
@@ -1283,6 +1499,16 @@ setOnlineMessageHandler((msgData: any) => {
     _snapSpawnX = msgData.spawnX ?? W / 2;
     _snapSpawnY = msgData.spawnY ?? W / 2;
     onlinePeerFloorReady = false;
+    // Mid-session re-snapshot (host lift / post-samosbor): stale interpolation
+    // samples and an open remote-container view must not survive the swap.
+    clearNetSamples();
+    if (state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+      world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
+      _peerRemoteContainerCell = null;
+      state.showContainerMenu = false;
+      state.containerMenuTarget = -1;
+      syncPauseState();
+    }
   }
 
   if (msgData.type === 'floor_snapshot_chunk' && isOnlinePeer() && _snapChunks) {
@@ -1344,71 +1570,60 @@ setOnlineMessageHandler((msgData: any) => {
       rebuildEntityIndex(entities, 'load');
       onlinePeerFloorReady = true;
       state.msgs.push(msg('Этаж загружен. Синхронизация...', state.time, '#8cf'));
-    });
+    }, false); // never autosave the host's floor over the peer's home save
   }
 
-  // ── PEER: entity sync from host — patch in-place, lerp positions ──
-  if (msgData.type === 'entity_sync' && isOnlinePeer() && onlinePeerFloorReady) {
-    const syncEntities: SyncEntity[] = msgData.entities;
-    if (!syncEntities) return;
-
+  // ── PEER: one host_state packet per tick — entities, actor echo, doors,
+  // fx, cell patches, container updates, samosbor flag ──
+  if (msgData.type === 'host_state' && isOnlinePeer() && onlinePeerFloorReady) {
+    const nowMs = performance.now();
     const mySlot = getOnlineSlot();
+
+    // 1. Authoritative own-actor echo (replaces the old actorGen machinery)
+    const echo = (msgData.actors ?? {})[String(mySlot)] as ActorEcho | undefined;
+    if (echo) {
+      const fullyAcked = (echo.lastSeq ?? 0) >= peerLastSentSeq();
+      applyActorEcho(player, echo, fullyAcked);
+    }
+
+    // 2. Entity sync — record samples for per-frame interpolation
+    const syncEntities: SyncEntity[] = msgData.entities ?? [];
     const seenIds = new Set<number>();
     for (const se of syncEntities) {
       seenIds.add(se.id);
       if (se.peerSlot === mySlot) {
-        // Only snap position if far from host truth (>6 cells = teleport/correction)
-        // and the host has already processed our latest movement packet.
-        const hostAcked = se.ackPeerGen !== undefined && se.ackPeerGen >= getPeerGen();
+        // Own actor: position correction only, and only when the host has
+        // processed our newest move packet (otherwise its truth is stale).
+        const hostAcked = echo?.ackMoveGen !== undefined && echo.ackMoveGen >= getPeerMoveGen();
         const pdx = world.delta(player.x, se.x);
         const pdy = world.delta(player.y, se.y);
         if (hostAcked && pdx * pdx + pdy * pdy > 36) {
           player.x = se.x;
           player.y = se.y;
         }
-        const hostAckedActor = se.ackPeerActorGen !== undefined && se.ackPeerActorGen >= getPeerActorGen();
-        if (hostAckedActor) {
-          player.hp = se.hp;
-          player.maxHp = se.maxHp;
-          player.staggerTimer = se.staggerTimer;
-          player.currentMag = se.currentMag;
-          player.reloading = se.reloading;
-          player.reloadTimer = se.reloadTimer;
-          player.attackCd = se.attackCd;
-          if (se.syncInventory) player.inventory = se.syncInventory;
-        }
-        // Death is always accepted unconditionally
         if (!se.alive) player.alive = false;
         continue;
       }
-      // Find existing entity by id
       let existing: Entity | undefined;
       for (let i = 0; i < entities.length; i++) {
         if (entities[i].id === se.id && entities[i] !== player) { existing = entities[i]; break; }
       }
       if (existing) {
-        // Lerp position for smooth movement (blend toward target)
-        const LERP = 0.4;
-        const dx = world.delta(existing.x, se.x);
-        const dy = world.delta(existing.y, se.y);
-        if (dx * dx + dy * dy < 16) { // only lerp if close (< 4 cells)
-          existing.x = world.wrap(existing.x + dx * LERP);
-          existing.y = world.wrap(existing.y + dy * LERP);
-        } else {
-          existing.x = se.x; existing.y = se.y; // teleport if far
-        }
-        existing.angle = se.angle; existing.pitch = se.pitch;
+        noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
+        existing.pitch = se.pitch;
         existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
-        // Sync non-simulated cosmetics
         existing.name = se.name; existing.peerSlot = se.peerSlot; existing.netGen = se.netGen;
         existing.sprite = se.sprite; existing.spriteScale = se.spriteScale; existing.weapon = se.weapon; existing.tool = se.tool;
         existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
         existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
         existing.currentMag = se.currentMag; existing.reloading = se.reloading; existing.reloadTimer = se.reloadTimer; existing.attackCd = se.attackCd;
         existing.speed = se.speed; existing.monsterKind = se.monsterKind;
-        existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined;
+        // Only item drops carry contents over entity sync; an NPC keeps its
+        // local trade-copy inventory (streamed via the npc_open/npcs push).
+        if (se.type === EntityType.ITEM_DROP) {
+          existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined;
+        }
       } else {
-        // New entity — add it
         entities.push({
           id: se.id, type: se.type,
           x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
@@ -1421,19 +1636,21 @@ setOnlineMessageHandler((msgData: any) => {
           speed: se.speed, monsterKind: se.monsterKind,
           inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined,
         } as Entity);
+        noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
       }
     }
     // Remove entities not in sync (except local player)
     for (let i = entities.length - 1; i >= 0; i--) {
       if (entities[i] === player) continue;
-      if (!seenIds.has(entities[i].id)) entities.splice(i, 1);
+      if (!seenIds.has(entities[i].id)) {
+        dropNetSample(entities[i].id);
+        entities.splice(i, 1);
+      }
     }
     rebuildEntityIndex(entities, 'load');
-  }
 
-  // ── PEER: door state sync from host ──
-  if (msgData.type === 'door_sync' && isOnlinePeer() && onlinePeerFloorReady) {
-    const doors: { idx: number; state: number }[] = msgData.doors;
+    // 3. Doors
+    const doors: { idx: number; state: number }[] | undefined = msgData.doors;
     if (doors) {
       for (const ds of doors) {
         const door = world.doors.get(ds.idx);
@@ -1442,15 +1659,46 @@ setOnlineMessageHandler((msgData: any) => {
         }
       }
     }
-  }
 
-  // ── PEER: host-authoritative inventory correction (pickup/container) ──
-  if (msgData.type === 'peer_inventory_sync' && isOnlinePeer() && onlinePeerFloorReady) {
-    player.weapon = typeof msgData.weapon === 'string' ? msgData.weapon : '';
-    player.tool = typeof msgData.tool === 'string' ? msgData.tool : '';
-    player.money = typeof msgData.money === 'number' ? msgData.money : player.money;
-    player.inventory = Array.isArray(msgData.inventory) ? msgData.inventory : undefined;
-    notePeerActorState(peerActorSnapshot());
+    // 4. Cosmetic fx (shots/deaths the host resolved)
+    const fxList: NetFx[] | undefined = msgData.fx;
+    if (Array.isArray(fxList)) {
+      for (const fx of fxList) {
+        if (!fx || typeof fx.x !== 'number' || typeof fx.y !== 'number') continue;
+        if (fx.s !== undefined && fx.s === mySlot) continue; // own action, already played
+        if (fx.k === 'shot') {
+          const ws = fx.w ? WEAPON_STATS[fx.w] : undefined;
+          playSoundAt(ws ? () => playWeaponSound(fx.w!, ws) : playAttack, fx.x, fx.y);
+        } else if (fx.k === 'death') {
+          playSoundAt(playFleshHit, fx.x, fx.y);
+        }
+      }
+    }
+
+    // 5. Geometry patches (samosbor fronts, tools)
+    applyNetCellPatch(world, msgData.cells);
+
+    // 6. Live update for the container the peer is viewing
+    const containerPayload = (msgData.containers ?? {})[String(mySlot)] as ContainerSyncPayload | undefined;
+    if (containerPayload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+      const copy = buildRemoteContainer(world, containerPayload, PEER_REMOTE_CONTAINER_ID);
+      world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
+      _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+    }
+
+    // 6b. Live update for the NPC menu the peer is viewing (trade stock/money)
+    const npcPayload = (msgData.npcs ?? {})[String(mySlot)] as { id: number; inventory?: unknown; money?: number } | undefined;
+    if (npcPayload && state.showNpcMenu && state.npcMenuTarget === npcPayload.id) {
+      const npc = entities.find(e => e.id === npcPayload.id && e !== player);
+      if (npc) {
+        npc.inventory = unpackNetItems(npcPayload.inventory, 64);
+        npc.money = Math.max(0, Math.floor(npcPayload.money ?? 0));
+        primeTradePriceCache(state, [npc.inventory, player.inventory]);
+      }
+    }
+
+    // 7. Samosbor display state (host simulates; peer shows and survives it)
+    if (typeof msgData.sam === 'boolean') state.samosborActive = msgData.sam;
   }
 
   // ── PEER: host opened/searched a container → show its inventory copy ──
@@ -1472,15 +1720,44 @@ setOnlineMessageHandler((msgData: any) => {
     }
   }
 
-  // ── PEER: fresh contents for the open container copy (after take/put) ──
-  if (msgData.type === 'container_sync' && isOnlinePeer() && onlinePeerFloorReady) {
-    const payload = msgData.container as ContainerSyncPayload | undefined;
-    if (payload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID &&
-        _peerRemoteContainerCell && _peerRemoteContainerCell.x === payload.cx && _peerRemoteContainerCell.y === payload.cy) {
-      const copy = buildRemoteContainer(world, payload, PEER_REMOTE_CONTAINER_ID);
-      world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
-      _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+  // ── PEER: host opened an NPC menu — talk line + trade copy on the synced entity ──
+  if (msgData.type === 'npc_open' && isOnlinePeer() && onlinePeerFloorReady) {
+    const payload = msgData.npc as { id: number; inventory?: unknown; money?: number } | undefined;
+    const npc = payload ? entities.find(e => e.id === payload.id && e !== player) : undefined;
+    if (payload && npc) {
+      npc.inventory = unpackNetItems(payload.inventory, 64);
+      npc.money = Math.max(0, Math.floor(payload.money ?? 0));
+      closeNpcInteractionInterface();
+      clearTradeOffers(state);
+      state.showNpcMenu = true;
+      state.npcMenuTarget = npc.id;
+      state.npcMenuTab = 'main';
+      state.npcTalkText = typeof msgData.talk === 'string' ? msgData.talk.slice(0, 2000) : '';
+      state.tradeCursorX = 0;
+      state.tradeCursorY = 0;
+      state.tradeSide = 'npc';
+      state.npcMenuSel = npcMenuSelectionFor({ state, player, npc, entities }, 'talk');
+      primeTradePriceCache(state, [npc.inventory, player.inventory]);
+      syncPauseState();
     }
+  }
+
+  // ── PEER: dialog line generated by the host ──
+  if (msgData.type === 'npc_talk' && isOnlinePeer() && onlinePeerFloorReady) {
+    if (state.showNpcMenu && state.npcMenuTarget === msgData.npcId && typeof msgData.text === 'string') {
+      state.npcTalkText = msgData.text.slice(0, 2000);
+    }
+  }
+
+  // ── PEER: visit over — evacuation export or death; go home either way ──
+  if (msgData.type === 'visit_end' && isOnlinePeer()) {
+    peerReturnHome(
+      msgData.evac === true ? sanitizeVisitExport(msgData.export) : null,
+      msgData.evac === true
+        ? 'Вы вернулись домой с добычей.'
+        : 'Вы погибли в гостях. Тело и добыча остались там.',
+      msgData.evac === true ? '#8cf' : '#f44',
+    );
   }
 
   // ── HOST: peer disconnected ──
@@ -1492,18 +1769,18 @@ setOnlineMessageHandler((msgData: any) => {
       entities.splice(idx, 1);
       rebuildEntityIndex(entities, 'load');
     }
-    _lastPeerActor.delete(slot);
-    _peerAckedGen.delete(slot);
-    _peerAckedActorGen.delete(slot);
+    hostClearSlot(slot);
+    _peerMoveGen.delete(slot);
     _peerNextFireAt.delete(slot);
     _peerNextToolAt.delete(slot);
+    _peerVisitEnded.delete(slot);
     state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
   }
 
-  // ── PEER: host disconnected ──
+  // ── PEER: host disconnected — the world is gone, wake up at home ──
   if (msgData.type === 'host_disconnected' && isOnlinePeer()) {
     state.msgs.push(msg('Хост отключился. Сессия завершена.', state.time, '#f44'));
-    onlinePeerFloorReady = false;
+    peerReturnHome(null, 'Вы очнулись дома. Сессионная добыча осталась в том мире.', '#f88');
   }
 
   // ── Server error (room not found, no welcome) ──
@@ -1517,8 +1794,12 @@ setOnlineMessageHandler((msgData: any) => {
 
   // ── Connection lost ──
   if (msgData.type === 'disconnected') {
-    onlinePeerFloorReady = false;
-    state.msgs.push(msg('Соединение потеряно.', state.time, '#f44'));
+    if (onlinePeerFloorReady) {
+      // Unexpected drop mid-visit: no evacuation, no export — wake up at home.
+      peerReturnHome(null, 'Связь оборвалась. Вы очнулись дома без сессионной добычи.', '#f44');
+    } else if (!_peerReturningHome) {
+      state.msgs.push(msg('Соединение потеряно.', state.time, '#f44'));
+    }
   }
 });
 
@@ -4277,6 +4558,17 @@ function playerActions(_dt: number): void {
   handlePlayerAttack(_dt);
 }
 
+/** Peer hit-claim: the melee target the peer sees through interpolation lag.
+ *  Sent with the fire intent; the host validates range before honoring it. */
+function peerLocalMeleeClaimId(): number | undefined {
+  const weaponId = equippedCombatItemId(player);
+  const ws = getWeaponStats(player, weaponId);
+  if (ws.isRanged || ws.psiCost) return undefined;
+  const entityIndex = getEntityIndex();
+  entityIndex.queryRadius(player.x, player.y, ws.range + (ws.hitRadius ?? 0.6) + 0.5, meleeHitQuery, ENTITY_MASK_ACTOR);
+  return selectMeleeTarget(world, player, meleeHitQuery, ws.range, weaponId)?.id;
+}
+
 function peerLocalMeleeWouldHit(weaponId: string, ws: WeaponStats): boolean {
   const range = ws.range;
   const ax = player.x + Math.cos(player.angle) * range;
@@ -4527,18 +4819,22 @@ function playerKillMessage(e: Entity): string {
     : `Убито: ${name}`;
 }
 
-function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLevel = 1): void {
+function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLevel = 1, killer?: Entity): void {
   if (isPlayerEntity(e)) {
     const hpBefore = e.id === prevPlayerActorId ? prevPlayerActorHp : (e.maxHp ?? e.hp ?? 100);
     if (absorbPsiShieldDamage(e, hpBefore, state.msgs, state.time) > 0) return;
   }
+  // Online: peers hear/see deaths as cosmetic fx (entity_sync only flips alive)
+  if (isOnlineHost()) pushNetFx({ k: 'death', x: e.x, y: e.y, m: e.monsterKind });
+  // Kill attribution: host player by default; peer actors earn their own XP.
+  const killerActor = killer ?? player;
   // Death blood pool — directional + gore-scaled
   spawnDeathPool(world, e.x, e.y, e.type === EntityType.MONSTER, goreLevel, pvx, pvy);
   if (killerIsPlayer) {
     state.msgs.push(msg(playerKillMessage(e), state.time, '#4f4'));
   }
   if (killerIsPlayer && (e.type === EntityType.MONSTER || e.type === EntityType.NPC)) {
-    recordEntityKill(player, e);
+    recordEntityKill(killerActor, e);
     const eventCell = world.idx(Math.floor(e.x), Math.floor(e.y));
     const zoneId = world.zoneMap[eventCell];
     const roomId = world.roomMap[eventCell];
@@ -4548,9 +4844,9 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       roomId: roomId >= 0 ? roomId : undefined,
       x: e.x,
       y: e.y,
-      actorId: player.id,
-      actorName: player.name ?? 'Вы',
-      actorFaction: player.faction,
+      actorId: killerActor.id,
+      actorName: killerActor.name ?? 'Вы',
+      actorFaction: killerActor.faction,
       targetId: e.id,
       targetName: entityDisplayName(e),
       targetFaction: e.faction,
@@ -4560,7 +4856,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       tags: e.type === EntityType.MONSTER ? ['combat', 'kill', 'monster'] : ['combat', 'kill', 'npc'],
       data: undefined,
 	    });
-    if (e.type === EntityType.NPC) recordFactionClashPlayerHit(state, world, player, e, e.maxHp ?? 1);
+    if (e.type === EntityType.NPC) recordFactionClashPlayerHit(state, world, killerActor, e, e.maxHp ?? 1);
   }
   // Drop NPC inventory as loot
   if (e.type === EntityType.NPC) {
@@ -4571,7 +4867,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     clearFogInZone(world, e.fogBossZone, state.msgs, state.time, state);
   }
   if (e.monsterKind !== undefined) {
-    if (killerIsPlayer) notifyKill(e.monsterKind, state);
+    if (killerIsPlayer && killerActor === player) notifyKill(e.monsterKind, state);
     const dropRng = xorshift32(((state.time * 1000) + e.id) >>> 0);
     const regularLoot = dropMonsterLoot(e, entities, nextEntityId, dropRng);
     if (regularLoot.length > 0) {
@@ -4587,7 +4883,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     }
     spawnStoryDeathDrops(e, killerIsPlayer, entities, nextEntityId, state, state.msgs);
     if (killerIsPlayer) {
-      awardXP(player, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), state.msgs, state.time);
+      awardXP(killerActor, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), killerActor === player ? state.msgs : [], state.time);
     }
     // Herald killed — check if the Podad lower route is now open.
     if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && currentFloorRunEntry(state).themeTags.includes('hell')) {
@@ -4605,8 +4901,8 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       }
     }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
-    awardXP(player, xpForNpcKill(e.rpg?.level ?? 1), state.msgs, state.time);
-    if (e.id) notifyNpcKill(e.id, state);
+    awardXP(killerActor, xpForNpcKill(e.rpg?.level ?? 1), killerActor === player ? state.msgs : [], state.time);
+    if (e.id && killerActor === player) notifyNpcKill(e.id, state);
   }
   const contentDeath = runContentEntityDeathHooks({ world, entities, player, state, nextEntityId, killed: e, killerIsPlayer });
   if (contentDeath.worldChanged) updateWorldData(world);
@@ -4952,8 +5248,9 @@ function processProjectileEntityCollision(
       }
       tryMonsterProjectileStagger(world, state, e, p, player.id);
       if (e.type === EntityType.NPC && isPlayerOwnedProjectile(p)) {
-        applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player, state);
-        recordFactionClashPlayerHit(state, world, player, e, dmg);
+        const shooter = projectileActor(p) ?? player;
+        applyDamageRelationPenalty(shooter.faction, e.faction, dmg, e, shooter, state);
+        recordFactionClashPlayerHit(state, world, shooter, e, dmg);
       }
       notifyActorDamaged(world, e, projectileActor(p), dmg, 'projectile', state.time, state);
       const hitAngle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
@@ -4966,14 +5263,14 @@ function processProjectileEntityCollision(
     if (!debugImmortalPlayerHit && e.hp <= 0) {
       e.alive = false;
       e.hp = 0;
-      handleKill(e, isPlayerOwnedProjectile(p), p.vx ?? 0, p.vy ?? 0, p.projGore ?? 1);
+      handleKill(e, isPlayerOwnedProjectile(p), p.vx ?? 0, p.vy ?? 0, p.projGore ?? 1, projectileActor(p));
       recordMonsterProjectileDeath(
         world,
         state,
         e,
         p,
         projectileActor(p),
-        (target, vx, vy, gore) => handleKill(target, isPlayerOwnedProjectile(p), vx, vy, gore),
+        (target, vx, vy, gore) => handleKill(target, isPlayerOwnedProjectile(p), vx, vy, gore, projectileActor(p)),
         entities,
       );
     }
@@ -4991,7 +5288,7 @@ function processProjectileEntityCollision(
     p.x = hitX;
     p.y = hitY;
     p.spriteZ = hitZ;
-    psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, isPlayerOwnedProjectile(p)));
+    psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, isPlayerOwnedProjectile(p), 0, 0, 1, projectileActor(p)));
   }
   // Flame projectiles pierce through (don't die on hit)
   if (pt !== ProjType.FLAME && pt !== ProjType.GRENADE) {
@@ -5363,6 +5660,11 @@ function switchFloor(
   closeCraftMenu();
   restorePlayerBeforeWorldBoundary();
   const fromFloor = state.currentZ;
+  // Online: connected peers ride along — carry their actors across the
+  // transition and re-stream the new floor to them afterwards.
+  const travelingPeers = isOnlineHost()
+    ? entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive && !_peerVisitEnded.has(e.peerSlot))
+    : [];
   captureCurrentAlifeFloor();
   // Fast elevator / debug teleport: jump straight to an arbitrary route floor,
   // bypassing single-step route resolution and elevator anomaly machinery.
@@ -5509,6 +5811,12 @@ function switchFloor(
       ...playerAlifeFields(player),
     };
     entities.push(player);
+    for (const pa of travelingPeers) {
+      pa.id = nextEntityId.v++;
+      pa.x = spawn.x;
+      pa.y = spawn.y;
+      entities.push(pa);
+    }
     applyContractFloorHooks(state, world, entities, nextEntityId, player);
     syncPlayerRuntimeBaselines();
 
@@ -5656,6 +5964,7 @@ function switchFloor(
     // pool behind the loading screen instead of freezing the main thread. See
     // initGame note and prewarmNavigationTreeAsync.
     loadingProgress('Запекаем карты путей', 96);
+    if (travelingPeers.length > 0) resyncAllPeersToCurrentFloor();
     loadingProgress('Готово', 100);
   }, true);
 }
@@ -5780,19 +6089,19 @@ function openContainerMenu(container: WorldContainer): void {
 
 /** Online peer: mirror a container take/put to the host instead of mutating a
  *  host-world container locally. The container copy carries the host cell in its
- *  x/y, so the host resolves the real container there. Contents echo back via
- *  `container_sync`; the peer's own inventory syncs through `entity_sync`. */
+ *  x/y, so the host resolves the real container there. Fresh contents ride the
+ *  host_state container push; the peer's own inventory via the actor echo. */
 function peerContainerActivate(container: WorldContainer): void {
   const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
   if (state.containerSide === 'container') {
     const slot = container.inventory[idx];
     if (!slot) { state.msgs.push(msg('Пустой слот.', state.time, '#888')); return; }
-    sendPeerAction({ container: { op: 'take', cx: container.x, cy: container.y, slot: idx } });
+    sendPeerIntent({ kind: 'container', op: 'take', cx: container.x, cy: container.y, slot: idx });
     state.msgs.push(msg(`Взять: ${ITEMS[slot.defId]?.name ?? slot.defId}`, state.time, '#8f8'));
   } else {
     const slot = player.inventory?.[idx];
     if (!slot) { state.msgs.push(msg('Пустой слот.', state.time, '#888')); return; }
-    sendPeerAction({ container: { op: 'put', cx: container.x, cy: container.y, slot: idx } });
+    sendPeerIntent({ kind: 'container', op: 'put', cx: container.x, cy: container.y, slot: idx });
     state.msgs.push(msg(`Положить: ${ITEMS[slot.defId]?.name ?? slot.defId}`, state.time, '#8cf'));
   }
 }
@@ -5803,7 +6112,7 @@ function closeContainerMenu(): void {
   if (isOnlinePeer() && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
     world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
     if (_peerRemoteContainerCell) {
-      sendPeerAction({ container: { op: 'close', cx: _peerRemoteContainerCell.x, cy: _peerRemoteContainerCell.y } });
+      sendPeerIntent({ kind: 'container', op: 'close', cx: _peerRemoteContainerCell.x, cy: _peerRemoteContainerCell.y });
       _peerRemoteContainerCell = null;
     }
   }
@@ -6320,6 +6629,9 @@ function normalizeQuestList(input: unknown, nextQuestIdInput: unknown, nowMinute
 }
 
 function saveGame(auto = false): void {
+  // Online visitor: NEVER write the host's floor into the home save — the
+  // visit exports only through the evacuation ritual (visit_end).
+  if (isOnlinePeer() && onlinePeerFloorReady) return;
   try {
     makeCurrentPlayer(endPsiPossession(entities, player, state.msgs, state.time, 'cancelled'));
     captureCurrentAlifeFloor();
@@ -6637,6 +6949,7 @@ function setCellToFloor(x: number, y: number): void {
   if (oldCell !== Cell.FLOOR) {
     markNavigationCellsDirty([ci]);
     world.markCellsDirty();
+    if (isOnlineHost()) markNetCellTouched(ci);
   }
   if (!world.floorTex[ci]) {
     const room = world.roomAt(x + 0.5, y + 0.5);
@@ -6735,6 +7048,7 @@ function handleDoorKitTool(player: Entity, useEdge: boolean, cx: number, cy: num
   world.cells[ci] = Cell.DOOR;
   markNavigationCellsDirty([ci]);
   world.markCellsDirty();
+  if (isOnlineHost()) markNetCellTouched(ci);
   world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
   addRuntimeDoorToRoom(roomA, ci);
   addRuntimeDoorToRoom(roomB, ci);
@@ -6763,6 +7077,7 @@ function handleBlockKitTool(player: Entity, useEdge: boolean, ci: number): void 
   world.cells[ci] = Cell.WALL;
   markNavigationCellsDirty([ci]);
   world.markCellsDirty();
+  if (isOnlineHost()) markNetCellTouched(ci);
   const room = world.roomAt(player.x, player.y);
   world.wallTex[ci] = room?.wallTex ?? Tex.CONCRETE;
   world.markWallTexDirty();
@@ -7022,9 +7337,14 @@ function shouldHandleMenuWheelInput(): boolean {
 function syncPauseState(): void {
   if (typeof state === 'undefined') return;
   const wasPaused = state.paused;
-  const nextPaused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
+  const menuPause = state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
     state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
     isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
+  // Hosting a live session: menus must not freeze the shared world — peers
+  // keep playing. Standard multiplayer semantics; the menu is at your own risk.
+  const hostWithPeers = isOnlineHost() && typeof entities !== 'undefined'
+    && entities.some(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive);
+  const nextPaused = pointerCaptureGateVisible() || pageHiddenPause || platformPause || (menuPause && !hostWithPeers);
   state.paused = nextPaused;
   if (wasPaused || nextPaused) clearPausedPointerGameplayInputs();
   syncPointerCursorClasses();
@@ -7469,6 +7789,14 @@ function closeHelpMenu(): void {
 function useInventorySelection(): void {
   const zoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
   const slot = player.inventory?.[state.invSel];
+  if (isOnlinePeer()) {
+    // Peer: optimistic local prediction + intent; the host runs the real use
+    // and the actor_echo reconciles (story-item outcomes stay host/quest-side).
+    if (!slot) return;
+    sendPeerIntent({ kind: 'use_item', slot: state.invSel, defId: slot.defId });
+    useItem(player, state.invSel, state.msgs, state.time, state, zoneId, world);
+    return;
+  }
   if (slot && applyStoryItemOutcomes({
     trigger: 'use',
     item: { ...slot },
@@ -7482,12 +7810,12 @@ function useInventorySelection(): void {
 
 function dropInventorySelection(): void {
   if (isOnlinePeer()) {
-    // Peer: remove locally + tell host to spawn the drop entity
+    // Peer: optimistic local removal + intent; host spawns the drop entity
     const slot = player.inventory?.[state.invSel];
     if (!slot) return;
     const defId = slot.defId;
     const count = slot.count;
-    const data = slot.data;
+    sendPeerIntent({ kind: 'drop', slot: state.invSel, defId, count });
     // Unequip if needed
     const def = ITEMS[defId];
     if (def) {
@@ -7497,7 +7825,6 @@ function dropInventorySelection(): void {
     }
     player.inventory!.splice(state.invSel, 1);
     state.msgs.push(msg(`Выброшено: ${def?.name ?? defId}${count > 1 ? ' ×' + count : ''}`, state.time, '#aa6'));
-    sendPeerAction(data !== undefined ? { drop: true, defId, count, data } : { drop: true, defId, count });
     return;
   }
   dropItem(player, state.invSel, entities, state.msgs, state.time, nextEntityId, state, world);
@@ -7515,6 +7842,14 @@ function activateNpcTalk(npc: Entity | undefined): void {
   state.npcMenuTab = 'talk';
   if (!npc) {
     state.npcTalkText = '...';
+    return;
+  }
+
+  if (isOnlinePeer()) {
+    // The host owns the world context (quests, factions, rumors) — it
+    // generates the line and answers with a targeted npc_talk message.
+    sendPeerIntent({ kind: 'npc_talk', npcId: npc.id });
+    if (!state.npcTalkText) state.npcTalkText = '...';
     return;
   }
 
@@ -7588,6 +7923,7 @@ function activateNpcMainSelection(npc: Entity | undefined): void {
       activateNpcTalk(npc);
       break;
     case 'quest':
+      if (isOnlinePeer()) { state.msgs.push(msg('Недоступно в гостях.', state.time, '#f84')); break; }
       activateNpcQuest(npc);
       break;
     case 'trade':
@@ -7602,9 +7938,13 @@ function activateNpcMainSelection(npc: Entity | undefined): void {
       clearTradeOffers(state);
       closeNpcInteractionInterface(state);
       state.showNpcMenu = false;
+      if (isOnlinePeer()) sendPeerIntent({ kind: 'npc_close', npcId: npc.id });
       syncPauseState();
       break;
     default:
+      // Custom options (recipes, contracts, factions) read host-world state
+      // the visitor does not have — next iteration.
+      if (isOnlinePeer()) { state.msgs.push(msg('Недоступно в гостях.', state.time, '#f84')); break; }
       activateNpcCustomMenuOption({
         state, player, npc, entities,
         roomDefIdResolver: (x, y) => world.roomAt(x, y)?.name
@@ -7666,6 +8006,28 @@ function reportTradeResult(npc: Entity, result: TradeResult): void {
 function activateTradeSelection(npc: Entity): void {
   const idx = state.tradeCursorY * INVENTORY_GRID_COLS + state.tradeCursorX;
   const zoneId = currentPlayerZoneId();
+  if (isOnlinePeer() && state.tradeSide === 'deal') {
+    // Relaxed-trust deal: the full local trade code prices and executes the
+    // exchange against the synced copies (instant UI); the host then applies
+    // the material result from the intent, clamped to what actually exists.
+    const asNetItem = (i: Item) => i.data !== undefined
+      ? { defId: i.defId, count: i.count, data: i.data }
+      : { defId: i.defId, count: i.count };
+    const give = getTradeOffer(state).filter(i => i.count > 0).map(asNetItem);
+    const take = getTradeNpcOffer(state).filter(i => i.count > 0).map(asNetItem);
+    const summary = getTradeDealSummary(state, npc, { zoneId });
+    const result = executeTradeDeal(state, player, npc, { zoneId });
+    if (result.ok) {
+      sendPeerIntent({
+        kind: 'trade_deal',
+        npcId: npc.id,
+        give, take,
+        netCash: Math.round(summary.cashDue - summary.changeDue),
+      });
+    }
+    reportTradeResult(npc, result);
+    return;
+  }
   const result = state.tradeSide === 'deal'
     ? executeTradeDeal(state, player, npc, { zoneId })
     : state.tradeSide === 'npc'
@@ -9561,39 +9923,36 @@ function gameLoop(now: number): void {
     }
   }
 
-  // ── Online: peer sends throttled input + immediate edge actions ──
+  // ── Online: peer streams position; actions go out as immediate intents ──
   if (isOnlineConnected()) {
     if (isOnlinePeer()) {
       const peerMenuOpen = state.showContainerMenu || state.showInventory || state.showNpcMenu
         || state.showCraftMenu || state.showMenu;
-      // Continuous state + coarse action intent are throttled together: peer owns
-      // local inventory/resource simulation; host only applies visible world effects.
-      const peerInputSent = maybeSendPeerInput({
+      maybeSendPeerMove({
         x: player.x, y: player.y,
         angle: player.angle, pitch: player.pitch ?? 0,
-        actor: peerActorSnapshot(),
-        action: {
-          fire: _peerPendingFireAction || undefined,
-          reload: _peerPendingReloadAction || undefined,
-          toolUse: _peerPendingToolUse,
-        },
       });
-      if (peerInputSent) {
-        _peerPendingFireAction = false;
-        _peerPendingReloadAction = false;
-        _peerPendingToolUse = undefined;
-      }
       // Interact stays reliable/immediate because it opens host-owned doors,
-      // pickups and containers; gameplay resource ticks do not use this path.
+      // pickups, containers and the evacuation lift.
       if (input.interact) {
-        if (!peerMenuOpen) sendPeerAction({ interact: true });
+        if (!peerMenuOpen) sendPeerIntent({ kind: 'interact' });
         input.interact = false;
       }
     }
-    if (isOnlineHost() && shouldSendHostSync()) {
-      // Find all peer actors to build AOI centers
-      const peerActors = entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive);
-      if (peerActors.length > 0) {
+    if (isOnlineHost()) {
+      const peerActors = entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0);
+      // Host owns peer resources: tick cooldowns/reloads every frame, and
+      // close the visit once for any peer who died this frame.
+      for (const pa of peerActors) {
+        if (pa.alive) {
+          if (!state.paused) hostTickRemoteActor(pa, dt);
+        } else if (pa.peerSlot !== undefined && !_peerVisitEnded.has(pa.peerSlot)) {
+          _peerVisitEnded.add(pa.peerSlot);
+          sendOnlineMessage({ type: 'visit_end', _targetSlot: pa.peerSlot, evac: false });
+        }
+      }
+      const livePeers = peerActors.filter(e => e.alive);
+      if (livePeers.length > 0 && shouldSendHostSync()) {
         const AOI_R2 = 32 * 32; // 32 cell radius squared
         const MAX_SYNC = 64;
         // Collect candidates with distance score
@@ -9607,7 +9966,7 @@ function gameLoop(now: number): void {
           }
           // Find nearest peer distance
           let nearest = Infinity;
-          for (const pa of peerActors) {
+          for (const pa of livePeers) {
             const d2 = world.dist2(e.x, e.y, pa.x, pa.y);
             if (d2 < nearest) nearest = d2;
           }
@@ -9623,27 +9982,70 @@ function gameLoop(now: number): void {
         // Cap and compact
         const syncEntities: ReturnType<typeof compactEntity>[] = [];
         for (let i = 0; i < candidates.length && syncEntities.length < MAX_SYNC; i++) {
-          const ce = candidates[i].e;
-          const ackGen = ce.peerSlot !== undefined ? _peerAckedGen.get(ce.peerSlot) : undefined;
-          const ackActorGen = ce.peerSlot !== undefined ? _peerAckedActorGen.get(ce.peerSlot) : undefined;
-          syncEntities.push(compactEntity(ce, ackGen, ackActorGen));
+          syncEntities.push(compactEntity(candidates[i].e));
         }
-        sendOnlineMessage({ type: 'entity_sync', entities: syncEntities });
-        // Send door state sync — only doors near any peer or host
+        // Door state — only doors near any peer or host
         const DOOR_R2 = 32 * 32;
         const doorSync: { idx: number; state: number }[] = [];
         for (const [idx, door] of world.doors) {
           const dx = idx % W, dy = Math.floor(idx / W);
           let near = false;
-          for (const pa of peerActors) {
+          for (const pa of livePeers) {
             if (world.dist2(dx + 0.5, dy + 0.5, pa.x, pa.y) < DOOR_R2) { near = true; break; }
           }
           if (!near && world.dist2(dx + 0.5, dy + 0.5, player.x, player.y) < DOOR_R2) near = true;
           if (near) doorSync.push({ idx, state: door.state });
         }
-        if (doorSync.length > 0) {
-          sendOnlineMessage({ type: 'door_sync', doors: doorSync });
+        // Per-slot authoritative actor echoes + live container/NPC menu views
+        const actorEchoes: Record<string, ActorEcho> = {};
+        const containerPushes: Record<string, ContainerSyncPayload> = {};
+        const npcPushes: Record<string, { id: number; inventory: ReturnType<typeof packNetItems>; money: number }> = {};
+        for (const pa of livePeers) {
+          const slot = pa.peerSlot!;
+          actorEchoes[String(slot)] = packActorEcho(pa, hostLastProcessedSeq(slot), _peerMoveGen.get(slot));
+          const openCell = hostOpenContainer(slot);
+          if (openCell) {
+            const container = world.containersAt(openCell.cx, openCell.cy)
+              .find(c => c.discovered || c.access !== 'secret');
+            if (container) {
+              const payload = containerSyncPayload(container);
+              // Push only when contents changed since the last push (host or
+              // NPC took/put something while the peer menu is open).
+              if (hostContainerPayloadChanged(slot, JSON.stringify(payload))) {
+                containerPushes[String(slot)] = payload;
+              }
+            }
+          }
+          const openNpcId = hostOpenNpc(slot);
+          if (openNpcId !== null) {
+            const npc = getEntityIndex().byId.get(openNpcId);
+            // Self-heal the watch: NPC died/left or the peer wandered off
+            if (!npc || !npc.alive || world.dist2(pa.x, pa.y, npc.x, npc.y) > 100) {
+              hostSetOpenNpc(slot, null);
+            } else {
+              const payload = {
+                id: npc.id,
+                inventory: packNetItems(npc.inventory, 64),
+                money: Math.max(0, Math.floor(npc.money ?? 0)),
+              };
+              if (hostNpcPayloadChanged(slot, JSON.stringify(payload))) {
+                npcPushes[String(slot)] = payload;
+              }
+            }
+          }
         }
+        // ONE packet per tick: every WS message is a billed DO request.
+        sendOnlineMessage({
+          type: 'host_state',
+          entities: syncEntities,
+          doors: doorSync.length > 0 ? doorSync : undefined,
+          actors: actorEchoes,
+          containers: Object.keys(containerPushes).length > 0 ? containerPushes : undefined,
+          npcs: Object.keys(npcPushes).length > 0 ? npcPushes : undefined,
+          fx: drainNetFx(),
+          cells: drainNetCellPatch(world),
+          sam: state.samosborActive,
+        });
       }
     }
   }
@@ -9681,7 +10083,7 @@ function gameLoop(now: number): void {
     updateRuntimeCamera(runtimeCamera, world, dt);
   }
 
-  // ── Peer-mode local update: camera, movement and local body resources ──────
+  // ── Peer-mode local update: camera, movement, prediction, interpolation ──
   if (peerMode && !state.paused && !state.gameOver) {
     state.time += dt;
     state.tick++;
@@ -9689,12 +10091,18 @@ function gameLoop(now: number): void {
     applyKnockbackPhysics(dt);
     movePlayer(dt);
     rebuildEntityIndexForSimulation(entities, entityIndexFrame).beginTelemetryFrame();
+    // Synced entities glide along their 8Hz network samples every frame.
+    updateNetInterpolation(world, entities, player, performance.now());
+    // Local prediction decides WHEN an action happens (instant feedback);
+    // each decision goes out as an immediate numbered intent — per shot, so
+    // automatics no longer lose rounds to the old 20Hz coalescing.
     const peerCombat = tickPeerLocalCombatResources(dt);
     const peerToolUse = tickPeerLocalToolResources(dt);
-    _peerPendingFireAction ||= peerCombat.fire;
-    _peerPendingReloadAction ||= peerCombat.reload;
-    _peerPendingToolUse = _peerPendingToolUse ?? peerToolUse;
-    notePeerActorState(peerActorSnapshot());
+    if (peerCombat.fire) {
+      sendPeerIntent({ kind: 'fire', weaponId: equippedCombatItemId(player), targetId: peerLocalMeleeClaimId() });
+    }
+    if (peerCombat.reload) sendPeerIntent({ kind: 'reload' });
+    if (peerToolUse) sendPeerIntent({ kind: 'tool', edge: peerToolUse === 'edge' });
   }
 
   if (!state.paused && !state.gameOver && !peerMode) {
@@ -9797,7 +10205,9 @@ function gameLoop(now: number): void {
     updateBlockCrushDamage(world, entities, state, dt);
     updateProceduralAnomalies(world, player, state, dt);
     const samosborStart = performance.now();
-    const samosborRebuild = isOnlineConnected() ? false : updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
+    // v2: samosbor runs with peers connected — fronts stream as net cell
+    // patches and the post-stitch rebuild re-streams the whole floor.
+    const samosborRebuild = updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
     lastSamosborUpdateMs = performance.now() - samosborStart;
     if (samosborRebuild) {
       closeCraftMenu();
@@ -9807,8 +10217,20 @@ function gameLoop(now: number): void {
         captureCurrentAlifeFloor();
         clearWrongDoorRemaps(world, state, 'world_rebuild');
         clearPseudoliftActive(state, entities);
+        // rebuildWorld keeps only the current player — carry peer actors over
+        const stitchPeers = isOnlineHost()
+          ? entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive && !_peerVisitEnded.has(e.peerSlot))
+          : [];
         const replacement = currentRouteRebuildGeneration();
         rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentZ, replacement, state.tutorialMode);
+        for (const pa of stitchPeers) {
+          if (!entities.includes(pa)) {
+            pa.id = nextEntityId.v++;
+            pa.x = player.x;
+            pa.y = player.y;
+            entities.push(pa);
+          }
+        }
         initFactionControl(world);
         materializeCurrentAlifeFloor();
         ensureProceduralSpriteSeeds(entities);
@@ -9822,6 +10244,7 @@ function gameLoop(now: number): void {
         restoreVoidReturnPortalForCurrentWorld();
         applyDesignRouteGates(world, player, state);
         finishLoadedFloorVisuals(replacement);
+        if (stitchPeers.length > 0) resyncAllPeersToCurrentFloor();
       });
       requestAnimationFrame(gameLoop);
       return;

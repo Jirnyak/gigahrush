@@ -95,6 +95,17 @@ export function updateNeeds(
     recordNeedDebugResult(result);
   }
 
+  // Online peer actors: the host owns their bodies, so they get the same
+  // exact tick as the player regardless of distance (≤3 of them ever).
+  for (const e of needsEntities) {
+    if (e.peerSlot === undefined || e.peerSlot <= 0) continue;
+    if (!e.alive || !e.needs || hotNeedIds.has(e.id)) continue;
+    hotNeedIds.add(e.id);
+    const result = applyNeedTick(entities, e, dt, time, msgs, playerId, nextId, state, passiveHealthRegenTimeScale);
+    rememberNeedsTouch(e.id, time);
+    recordNeedDebugResult(result);
+  }
+
   if (player?.alive) {
     entityIndex.queryRadius(player.x, player.y, HOT_NEEDS_RADIUS, hotNeeds, ENTITY_MASK_NPC);
     for (const e of hotNeeds) {

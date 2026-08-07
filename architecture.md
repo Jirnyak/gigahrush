@@ -545,6 +545,19 @@ Avoid:
 
 The current `systems/events.ts` is the browser version of an EventBus. It already uses fixed-size buffers and avoids unbounded logs. Use it before inventing another bus.
 
+### Online Co-op Ownership (Protocol v2)
+
+The optional online layer follows one hard invariant: **exactly one writer per piece of state**. The host owns the entire peer actor (inventory, hp, magazine, money, needs, rpg) and the whole shared world; the peer owns only its position/angle plus local prediction. Peer actions travel as numbered intents; the host acks every seq (even rejected ones) and answers with an authoritative actor echo — never re-introduce dual-writer merges (the old actorGen delta-merge deadlocked in combat).
+
+Module ownership:
+
+- `systems/online_protocol.ts` — message types, sanitization, intent seq/ack, echo pack/apply, snapshot interpolation, net cell patches, fx queue, per-slot bookkeeping. Pure helpers; no world simulation.
+- `systems/online_client.ts` — WS transport, room lifecycle, send throttles.
+- `systems/online_containers.ts` — host-authoritative container copies for peers.
+- `main.ts` — wiring only: message dispatch, host intent executor, sync-tick packet assembly.
+
+Rules: all host→peer traffic per tick goes into ONE `host_state` packet (every WS message is a billed Durable Object request); geometry mutations that peers must see call `markNetCellTouched`; cosmetic shot/death fx are pushed centrally (`publishWeaponNoise` hook + `handleKill`) — never per fire-path; in entity sync, `inventory` applies to ITEM_DROP entities only (an NPC keeps its peer-side trade copy). `functions/do/floor_room.ts` stays a dumb relay — no game logic server-side.
+
 ## 11. Floor Architecture
 
 **Floor Generation System:**

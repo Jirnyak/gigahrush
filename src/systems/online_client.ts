@@ -1,10 +1,14 @@
-// ── Online client transport ────────────────────────────────
-// Minimal host-relay POC: host simulates shared world, peer owns local body resources.
-// Messages: peer→host throttled state/action claims at 20Hz, host-owned interact
-// actions immediately, host→peer entity sync at 8Hz.
+// ── Online client transport (protocol v2) ──────────────────
+// Host-authoritative model: the host simulates the shared world AND every
+// peer actor's owned state (inventory, hp, mag, money, needs, rpg). Peers
+// send throttled position moves at 20Hz plus reliable numbered intents;
+// the host answers with one host_state packet per sync tick (~8Hz) that
+// carries entity sync, per-slot actor echoes, doors, fx and cell patches.
 
 import { type Entity } from '../core/types';
-import { getNetSphereSnapshot } from './net_sphere';
+import { nextIntentMsg, resetOnlineProtocolState, type PeerIntent } from './online_protocol';
+
+export const ONLINE_PROTOCOL_VERSION = 2;
 
 // ── Connection state ──────────────────────────────────────
 
@@ -13,11 +17,11 @@ let currentRoomId: string | null = null;
 let isHost = false;
 let mySlot: number | undefined;
 let messageCallback: ((msg: any) => void) | null = null;
-let lastInputSendTime = 0;
+let lastMoveSendTime = 0;
 let lastHostSyncTime = 0;
 
-const PEER_INPUT_INTERVAL_MS = 50;   // 20 Hz continuous state
-const HOST_SYNC_INTERVAL_MS = 125;   // 8 Hz entity sync
+const PEER_MOVE_INTERVAL_MS = 50;    // 20 Hz position stream
+const HOST_SYNC_INTERVAL_MS = 125;   // 8 Hz host_state packet
 
 // ── Public queries ────────────────────────────────────────
 
@@ -39,76 +43,33 @@ export function sendOnlineMessage(msg: any) {
   }
 }
 
-// ── Peer→Host: immediate host-owned edge action (interact/container/drop) ──
+// ── Peer→Host: reliable numbered intent ───────────────────
 
-/** Send a one-shot shared-world action that must not be lost to throttling. */
-export function sendPeerAction(action: Record<string, unknown>): void {
-  if (isHost) return;
-  sendOnlineMessage({ type: 'peer_action', ...action });
+/** Send a gameplay intent to the host. Returns the assigned sequence number
+ *  (0 when not connected as a peer). The peer applies the action optimistically
+ *  through its local prediction paths; the host's actor_echo reconciles. */
+export function sendPeerIntent(intent: PeerIntent): number {
+  if (isHost || !isOnlineConnected()) return 0;
+  const msg = nextIntentMsg(intent);
+  sendOnlineMessage(msg);
+  return msg.seq;
 }
 
-let _peerGen = 0;  // generation counter: bumped on each peer_input send
-let _peerActorGen = 0;  // last peer_input gen whose actor payload changed
-let _lastPeerActorPayload = '';
-export function getPeerGen(): number { return _peerGen; }
-export function getPeerActorGen(): number { return _peerActorGen; }
-export function notePeerActorState(actor: PeerActorState): void {
-  const actorPayload = JSON.stringify(actor);
-  if (actorPayload !== _lastPeerActorPayload) {
-    _lastPeerActorPayload = actorPayload;
-    _peerActorGen = _peerGen + 1;
-  }
-}
+// ── Peer→Host: throttled position stream ─────────────────
 
-/** Full peer actor state snapshot. Host uses delta-merge: only applies fields
- *  the peer actually changed vs. the previous snapshot, preserving host-side
- *  mutations (monster damage, item pickups) that the peer hasn't seen yet. */
-export interface OnlineItemSnapshot {
-  defId: string;
-  count: number;
-  data?: unknown;
-}
+let _moveGen = 0;  // bumped per move send; host echoes ack for position-snap gating
 
-export interface PeerActorState {
-  hp: number; maxHp: number; alive: boolean;
-  weapon: string; tool: string; sprite: number;
-  spriteScale?: number;
-  npcVisualId?: string; sex?: string;
-  armorDefId?: string;
-  money?: number;
-  staggerTimer?: number;
-  currentMag?: number;
-  reloading?: boolean;
-  reloadTimer?: number;
-  attackCd?: number;
-  inventory?: OnlineItemSnapshot[];
-  needs?: { food: number; water: number; sleep: number; pee: number; poo: number };
-  rpg?: { level: number; xp: number; attrPoints: number; str: number; agi: number; int: number; psi: number; maxPsi: number };
-}
+export function getPeerMoveGen(): number { return _moveGen; }
 
-export interface PeerInputActionState {
-  fire?: boolean;
-  reload?: boolean;
-  toolUse?: 'edge' | 'hold';
-}
-
-export function maybeSendPeerInput(p: {
-  x: number; y: number; angle: number; pitch: number;
-  actor: PeerActorState;
-  action?: PeerInputActionState;
-}): boolean {
-  if (isHost) return false; // host doesn't send input to itself
+export function maybeSendPeerMove(p: { x: number; y: number; angle: number; pitch: number }): boolean {
+  if (isHost) return false;
   const now = performance.now();
-  if (now - lastInputSendTime < PEER_INPUT_INTERVAL_MS) return false;
-  lastInputSendTime = now;
-  notePeerActorState(p.actor);
+  if (now - lastMoveSendTime < PEER_MOVE_INTERVAL_MS) return false;
+  lastMoveSendTime = now;
   sendOnlineMessage({
-    type: 'peer_input',
+    type: 'peer_move',
     x: p.x, y: p.y, angle: p.angle, pitch: p.pitch,
-    actor: p.actor,
-    action: p.action,
-    gen: ++_peerGen,
-    actorGen: _peerActorGen,
+    gen: ++_moveGen,
   });
   return true;
 }
@@ -127,20 +88,10 @@ export interface SyncEntity {
   currentMag?: number; reloading?: boolean; reloadTimer?: number; attackCd?: number;
   speed: number; monsterKind?: number;
   dropDefId?: string; dropCount?: number; dropData?: unknown;
-  syncInventory?: OnlineItemSnapshot[];
-  ackPeerGen?: number;  // last processed peer gen — peer skips position snaps until acked
-  ackPeerActorGen?: number;  // last processed changed actor payload — peer accepts inventory/combat reconciliation when acked
   netGen?: string;
 }
 
-function compactItems(items: Entity['inventory']): OnlineItemSnapshot[] | undefined {
-  return items?.map(i => i.data !== undefined
-    ? { defId: i.defId, count: i.count, data: i.data }
-    : { defId: i.defId, count: i.count });
-}
-
-export function compactEntity(e: Entity, ackPeerGen?: number, ackPeerActorGen?: number): SyncEntity {
-  const syncInv = e.peerSlot !== undefined ? compactItems(e.inventory) : undefined;
+export function compactEntity(e: Entity): SyncEntity {
   const drop = e.inventory?.[0];
   return {
     id: e.id, type: e.type,
@@ -158,13 +109,10 @@ export function compactEntity(e: Entity, ackPeerGen?: number, ackPeerActorGen?: 
     dropDefId: drop?.defId,
     dropCount: drop?.count,
     dropData: drop?.data,
-    syncInventory: syncInv,
-    ackPeerGen,
-    ackPeerActorGen,
   };
 }
 
-/** Returns true if it's time to send the next entity sync. */
+/** Returns true if it's time to send the next host_state packet. */
 export function shouldSendHostSync(): boolean {
   if (!isHost) return false;
   const now = performance.now();
@@ -207,9 +155,8 @@ export function disconnectOnline(): void {
   currentRoomId = null;
   isHost = false;
   mySlot = undefined;
-  _peerGen = 0;
-  _peerActorGen = 0;
-  _lastPeerActorPayload = '';
+  _moveGen = 0;
+  resetOnlineProtocolState();
 }
 
 function connectWs(roomId: string, role: 'host' | 'peer') {
@@ -241,20 +188,8 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
         welcomeReceived = true;
         mySlot = data.slot;
         console.log(`[online] slot=${mySlot}, role=${role}`);
-        if (role === 'peer') {
-          try {
-            const count = parseInt(localStorage.getItem('gigahrush_net_sessions_count') || '0', 10);
-            localStorage.setItem('gigahrush_net_sessions_count', String(count + 1));
-          } catch {}
-          const snap = getNetSphereSnapshot();
-          let nicknameStr = '';
-          try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
-          ws?.send(JSON.stringify({
-            type: 'peer_join',
-            netGen: snap.netGen,
-            nickname: nicknameStr || snap.profile?.nickname,
-          }));
-        }
+        // peer_join (with the actor import) is sent by the game's welcome
+        // handler — the transport layer doesn't know the player entity.
       }
       // Server rejected (room not found, etc.) — auto-disconnect
       if (data.type === 'error') {
@@ -275,9 +210,8 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
     currentRoomId = null;
     isHost = false;
     mySlot = undefined;
-    _peerGen = 0;
-    _peerActorGen = 0;
-    _lastPeerActorPayload = '';
+    _moveGen = 0;
+    resetOnlineProtocolState();
     // Notify game about disconnect
     if (messageCallback) messageCallback({ type: 'disconnected' });
   };

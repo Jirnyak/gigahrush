@@ -20,6 +20,8 @@ import { MONSTERS } from '../entities/monster';
 import { Spr } from '../render/sprite_index';
 import { stampMark, MarkType } from './surface_marks';
 import { forceHide } from './ai';
+import { isOnlineHost } from './online_client';
+import { markNetCellTouched } from './online_protocol';
 import { SeedRng } from '../core/rand';
 import {
   playIstotitBell,
@@ -425,6 +427,7 @@ function mutateFrontCell(
       world.fog[ci] = Math.min(255, 180 + ((rng() * 75) | 0));
       world.tissue[ci] = Math.min(255, 160 + ((rng() * 95) | 0));
       frontTouchedCells.add(ci);
+      if (isOnlineHost()) markNetCellTouched(ci);
       return FRONT_DIRTY_CELLS | FRONT_DIRTY_FLOOR_TX | FRONT_DIRTY_WALL_TX | FRONT_DIRTY_SURFACE | FRONT_DIRTY_FOG;
     }
     // Even if not carved, mutate the wall texture
@@ -445,6 +448,7 @@ function mutateFrontCell(
       world.fog[ci] = 0;
       world.tissue[ci] = 0;
       frontTouchedCells.add(ci);
+      if (isOnlineHost()) markNetCellTouched(ci);
       return FRONT_DIRTY_CELLS | FRONT_DIRTY_WALL_TX | FRONT_DIRTY_SURFACE | FRONT_DIRTY_FOG;
     }
   }
@@ -489,7 +493,10 @@ function mutateFrontCell(
     flags |= FRONT_DIRTY_SURFACE;
   }
 
-  if (flags) frontTouchedCells.add(ci);
+  if (flags) {
+    frontTouchedCells.add(ci);
+    if (isOnlineHost()) markNetCellTouched(ci);
+  }
   return flags;
 }
 
