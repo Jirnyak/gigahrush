@@ -2,7 +2,7 @@ import { type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
 import { portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryMapLabel, floorRunEntryRouteId } from './procedural_floors';
-import { startOnlineHost, joinOnlinePeer, isOnlineHost, getOnlineRoomId, isOnlineConnected, sendOnlineMessage } from './online_client';
+import { startOnlineHost, joinOnlinePeer, isOnlineHost, isOnlinePeer, getOnlineRoomId, isOnlineConnected, sendOnlineMessage } from './online_client';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
 export type NetSphereEventType = 'samosbor' | 'death';
@@ -136,6 +136,12 @@ interface NetSphereRuntime {
   lastChatId: number;
   lastProgress: NetSphereProgress | null;
   bound: boolean;
+  invadeSearchActive: boolean;
+  invadeBusy: boolean;
+  nextInvadePollAt: number;
+  invadePollsLeft: number;
+  lastInvasionKey: string;
+  lastInvasionWarnAt: number;
 }
 
 class NetSphereApiError extends Error {
@@ -161,6 +167,10 @@ const NET_FETCH_TIMEOUT_MS = 10_000;
 const CHAT_LIMIT = 300;
 const DRAFT_LIMIT = 160;
 const MARKET_IMPULSE_LIMIT = 16;
+const INVADE_POLL_MS = 5_000;
+const INVADE_POLL_TRIES = 36;
+const INVASION_REWARN_MS = 180_000;
+const NOTICE_LIMIT = 8;
 
 
 const runtime: NetSphereRuntime = {
@@ -186,6 +196,12 @@ const runtime: NetSphereRuntime = {
   lastChatId: 0,
   lastProgress: null,
   bound: false,
+  invadeSearchActive: false,
+  invadeBusy: false,
+  nextInvadePollAt: 0,
+  invadePollsLeft: 0,
+  lastInvasionKey: '',
+  lastInvasionWarnAt: 0,
 };
 let inputUnbind: (() => void) | null = null;
 const NET_SPHERE_INPUT_LISTENER_OPTIONS: AddEventListenerOptions = { capture: true };
@@ -569,6 +585,7 @@ async function heartbeat(state: GameState, player: Entity): Promise<void> {
     applyServerPayload(data);
     runtime.status = 'online';
     runtime.nextHeartbeatAt = performance.now() + HEARTBEAT_MS;
+    handleInvasionSignal((data as { invasion?: unknown }).invasion);
   } catch (err) {
     runtime.status = 'offline';
     runtime.error = netFailureText(err, 'heartbeat');
@@ -692,6 +709,72 @@ async function sendChat(body: string): Promise<void> {
   }
 }
 
+// ── Invasions (/invade) ───────────────────────────────────
+// HUD-bound notices: net_sphere has no access to the game message log, so
+// main.ts drains this queue right after tickNetSphere each frame.
+const pendingNotices: { text: string; color: string }[] = [];
+
+function pushNetNotice(text: string, color: string): void {
+  if (pendingNotices.length < NOTICE_LIMIT) pendingNotices.push({ text, color });
+}
+
+export function consumeNetSphereNotices(): { text: string; color: string }[] {
+  return pendingNotices.length ? pendingNotices.splice(0) : pendingNotices;
+}
+
+/** Victim side: the /hello heartbeat says a dark tenant marked this session.
+ *  Silently open a host room (no /host needed) and warn the player once. */
+function handleInvasionSignal(invasion: unknown): void {
+  if (!invasion || typeof invasion !== 'object') return;
+  const by = (invasion as { by?: unknown }).by;
+  if (typeof by !== 'string' || !by) return;
+  if (!runtime.lastProgress || !runtime.lastProgress.alive || runtime.lastProgress.gameOver) return;
+  if (isOnlinePeer()) return; // guests can't host; the mark expires server-side
+  const now = performance.now();
+  if (runtime.lastInvasionKey === by && now - runtime.lastInvasionWarnAt < INVASION_REWARN_MS) return;
+  runtime.lastInvasionKey = by;
+  runtime.lastInvasionWarnAt = now;
+  if (!isOnlineHost()) {
+    startOnlineHost();
+    runtime.nextHeartbeatAt = 0; // report hosting_room now so the invader finds the door
+  }
+  const nickname = cleanNickname(String((invasion as { nickname?: unknown }).nickname ?? '')) || 'тёмный жилец';
+  addLocalSystemMessage(`⚠ ИНВАЗИЯ: ${nickname} вторгается в вашу секцию!`);
+  pushNetNotice(`ТЁМНЫЙ ЖИЛЕЦ «${nickname.toUpperCase()}» ВТОРГАЕТСЯ В ВАШУ СЕКЦИЮ`, '#f66');
+}
+
+/** Invader side: poll the matchmaker until a victim's room opens. */
+async function pollInvade(): Promise<void> {
+  if (runtime.invadeBusy) return;
+  runtime.invadeBusy = true;
+  runtime.nextInvadePollAt = performance.now() + INVADE_POLL_MS;
+  try {
+    const data = await postJson('/invade', {
+      netGen: runtime.netGen,
+      sessionId: runtime.sessionId,
+    }) as { status?: string; roomId?: string };
+    if (!runtime.invadeSearchActive) return;
+    if (data.status === 'ready' && typeof data.roomId === 'string' && data.roomId) {
+      runtime.invadeSearchActive = false;
+      joinOnlinePeer(data.roomId, true);
+      addLocalSystemMessage(`ИНВАЗИЯ: канал найден. Вторжение в секцию ${data.roomId}...`);
+      pushNetNotice('ВЫ ВТОРГАЕТЕСЬ В ЧУЖУЮ СЕКЦИЮ', '#f66');
+    } else if (data.status === 'empty') {
+      runtime.invadeSearchActive = false;
+      addLocalSystemMessage('ИНВАЗИЯ: в НЕТ-СФЕРЕ нет доступных жертв.');
+    } else if (--runtime.invadePollsLeft <= 0) {
+      runtime.invadeSearchActive = false;
+      addLocalSystemMessage('ИНВАЗИЯ: жертва не открыла канал. Отбой.');
+    }
+  } catch (err) {
+    runtime.invadeSearchActive = false;
+    runtime.error = netFailureText(err, 'heartbeat');
+    addLocalSystemMessage('ИНВАЗИЯ: канал НЕТ-СФЕРЫ не отвечает.');
+  } finally {
+    runtime.invadeBusy = false;
+  }
+}
+
 function addLocalSystemMessage(body: string): void {
   runtime.chat.push({
     // net-identity exception (rand.ts policy): local chat-message id needs collision resistance, not determinism
@@ -769,8 +852,27 @@ function submitDraft(): void {
         addLocalSystemMessage(`Подключение к комнате ${roomToJoin}...`);
         return;
       }
+      case '/invade': {
+        if (isOnlineConnected()) {
+          addLocalSystemMessage('Вы уже в сети. Инвазия недоступна из активной сессии.');
+          return;
+        }
+        if (!runtime.lastProgress || !runtime.lastProgress.alive || runtime.lastProgress.gameOver) {
+          addLocalSystemMessage('Мёртвые не вторгаются.');
+          return;
+        }
+        if (runtime.invadeSearchActive) {
+          addLocalSystemMessage('ИНВАЗИЯ: поиск уже идёт...');
+          return;
+        }
+        runtime.invadeSearchActive = true;
+        runtime.nextInvadePollAt = 0;
+        runtime.invadePollsLeft = INVADE_POLL_TRIES;
+        addLocalSystemMessage('ИНВАЗИЯ: поиск жертвы в НЕТ-СФЕРЕ...');
+        return;
+      }
       case '/help': {
-        addLocalSystemMessage('Команды: /host, /join CODE, /netgen, /new, /clear, /help');
+        addLocalSystemMessage('Команды: /host, /join CODE, /invade, /netgen, /new, /clear, /help');
         return;
       }
       default: {
@@ -935,6 +1037,7 @@ export function tickNetSphere(state: GameState, player: Entity): void {
   if (now >= runtime.nextHeartbeatAt) void heartbeat(state, player);
   if (runtime.open && now >= runtime.nextPollAt) void pollOpenStats();
   if (runtime.open && now >= runtime.nextMarketPollAt) void pollMarketSnapshot();
+  if (runtime.invadeSearchActive && now >= runtime.nextInvadePollAt) void pollInvade();
 }
 
 export function pollNetMarketSnapshot(): void {

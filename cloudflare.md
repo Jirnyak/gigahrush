@@ -15,6 +15,7 @@
 - `cloudflare/d1/net_sphere.sql` - каноническая D1-схема для свежей базы.
 - `cloudflare/d1/net_sphere_names.sql` - историческая guarded-миграция для ника и человекочитаемой сводки событий.
 - `cloudflare/d1/net_sphere_v2.sql` - guarded-миграция для добавления total_sessions и hosting_room.
+- `cloudflare/d1/net_sphere_v3.sql` - guarded-миграция инвазий (`invaded_by`, `invaded_at` в net_sessions).
 - `cloudflare/d1/net_sphere_market.sql` - историческая идемпотентная миграция для опциональных таблиц НЕТ-биржи.
 
 Клиент остается без runtime-зависимостей: только `fetch` к same-origin `/api/net/*`.
@@ -68,7 +69,8 @@ Cloudflare docs:
 1. `cloudflare/d1/net_sphere.sql` - каноническая полная схема для свежей D1 базы. В ней должны быть все таблицы, которые текущий Worker может читать или писать.
 2. `cloudflare/d1/net_sphere_names.sql` - историческая миграция для баз, созданных до `nickname`, `net_events.nickname` и `net_events.summary`. Файл содержит обычные `ALTER TABLE`, но setup применяет их только если колонок еще нет.
 3. `cloudflare/d1/net_sphere_v2.sql` - миграция добавления total_sessions и hosting_room.
-4. `cloudflare/d1/net_sphere_market.sql` - идемпотентная миграция для таблиц НЕТ-биржи. Таблицы `net_market_impulses`, `net_market_budgets` и `net_market_snapshots` опциональны для локального билда игры, но обязательны для hosted `/api/net/market`; setup применяет их по умолчанию.
+4. `cloudflare/d1/net_sphere_v3.sql` - миграция инвазий: `net_sessions.invaded_by` и `net_sessions.invaded_at` для матчмейкинга `/invade`.
+5. `cloudflare/d1/net_sphere_market.sql` - идемпотентная миграция для таблиц НЕТ-биржи. Таблицы `net_market_impulses`, `net_market_budgets` и `net_market_snapshots` опциональны для локального билда игры, но обязательны для hosted `/api/net/market`; setup применяет их по умолчанию.
 
 `npm run dev`, `npm run build`, `npm run test:unit` и локальная игра не требуют Cloudflare credentials. Cloudflare нужен только для `npm run cf:setup`, `npm run cf:schema`, `npm run cf:dev` и деплоя Worker.
 

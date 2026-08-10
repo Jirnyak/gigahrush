@@ -43,14 +43,32 @@ test('isHostile: player vs NPC', () => {
 
   assert.equal(isHostile(angryNpc, player), true);
   assert.equal(isHostile(friendlyNpc, player), false);
-  // Player does not automatically consider angry NPCs hostile unless logic dictates,
-  // let's adjust this test. The function is `isHostile(attacker, target)`
-  // `isHostile(player, angryNpc)` -> Player faction is PLAYER, angryNpc is CITIZEN.
-  // areFactionsHostile(PLAYER, CITIZEN) is false by default.
-  // isHostile actually doesn't have a special check for player targeting an NPC with negative playerRelation,
-  // it checks `isNpcPlayerHostile(attacker)` when attacker is NPC.
-  assert.equal(isHostile(player, angryNpc), false);
+  // The personal channel is symmetric: an NPC that personally hates the player
+  // (and therefore attacks) also reads as hostile FROM the player, regardless
+  // of the faction matrix.
+  assert.equal(isHostile(player, angryNpc), true);
   assert.equal(isHostile(player, friendlyNpc), false);
+});
+
+test('isHostile: personal hostility overrides a befriended faction matrix (invader case)', () => {
+  initFactionRelations();
+  const player = makeTestEntity({ id: 20, type: EntityType.NPC, faction: Faction.PLAYER, persistentNpcId: 'player' });
+  const invader = makeTestEntity({ id: 21, type: EntityType.NPC, faction: Faction.WILD, playerRelation: -100 });
+
+  // The host befriended the wilds in this run: matrix relation above the threshold.
+  applyFactionRelationDeltas([[Faction.WILD, 120]]);
+  assert.equal(areFactionsHostile(Faction.PLAYER, Faction.WILD), false);
+
+  // The invader stays mutually hostile through the personal channel.
+  assert.equal(isHostile(invader, player), true);
+  assert.equal(isHostile(player, invader), true);
+
+  // An ordinary wild NPC without personal hate honours the befriended matrix.
+  const wildFriend = makeTestEntity({ id: 22, type: EntityType.NPC, faction: Faction.WILD });
+  assert.equal(isHostile(player, wildFriend), false);
+  assert.equal(isHostile(wildFriend, player), false);
+
+  initFactionRelations();
 });
 
 test('isHostile: handles monster attitudes correctly', () => {

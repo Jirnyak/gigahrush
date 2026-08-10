@@ -67,7 +67,8 @@ export interface MarketSnapshotPayload {
   updatedAt: number;
 }
 
-const ONLINE_WINDOW_MS = 90_000;
+export const ONLINE_WINDOW_MS = 90_000;
+export const INVASION_TTL_MS = 120_000;
 const NET_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 const SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
 const EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;

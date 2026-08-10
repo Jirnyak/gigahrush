@@ -15,6 +15,7 @@ export const ONLINE_PROTOCOL_VERSION = 2;
 let ws: WebSocket | null = null;
 let currentRoomId: string | null = null;
 let isHost = false;
+let isInvader = false;
 let mySlot: number | undefined;
 let messageCallback: ((msg: any) => void) | null = null;
 let lastMoveSendTime = 0;
@@ -28,6 +29,7 @@ const HOST_SYNC_INTERVAL_MS = 125;   // 8 Hz host_state packet
 export function getOnlineSlot(): number | undefined { return mySlot; }
 export function isOnlineHost(): boolean { return isHost; }
 export function isOnlinePeer(): boolean { return !isHost && isOnlineConnected(); }
+export function isOnlineInvader(): boolean { return isInvader; }
 export function isOnlineConnected(): boolean { return ws !== null && ws.readyState === WebSocket.OPEN; }
 export function getOnlineRoomId(): string | null { return currentRoomId; }
 
@@ -136,14 +138,16 @@ export function startOnlineHost(): string {
   const roomId = generateRoomCode();
   currentRoomId = roomId;
   isHost = true;
+  isInvader = false;
   connectWs(roomId, 'host');
   return roomId;
 }
 
-export function joinOnlinePeer(roomId: string): void {
+export function joinOnlinePeer(roomId: string, invader = false): void {
   if (ws) ws.close();
   currentRoomId = roomId;
   isHost = false;
+  isInvader = invader;
   connectWs(roomId, 'peer');
 }
 
@@ -154,6 +158,7 @@ export function disconnectOnline(): void {
   }
   currentRoomId = null;
   isHost = false;
+  isInvader = false;
   mySlot = undefined;
   _moveGen = 0;
   resetOnlineProtocolState();
@@ -209,6 +214,7 @@ function connectWs(roomId: string, role: 'host' | 'peer') {
     ws = null;
     currentRoomId = null;
     isHost = false;
+    isInvader = false;
     mySlot = undefined;
     _moveGen = 0;
     resetOnlineProtocolState();

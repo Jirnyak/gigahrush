@@ -108,6 +108,13 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   if (attacker.type === EntityType.NPC && isPlayerEntity(target) && isNpcPlayerHostile(attacker)) {
     return true;
   }
+  // Symmetric personal channel: an NPC personally hostile to the player (they
+  // already attack, see the target-is-player branch) reads as hostile FROM the
+  // player too, even when the faction matrix was befriended in this run
+  // (e.g. a WILD-faction invader vs a host who allied with the wilds).
+  if (isPlayerEntity(attacker) && target.type === EntityType.NPC && isNpcPlayerHostile(target)) {
+    return true;
+  }
   // NPC vs NPC / Player
   const aFaction = attacker.faction ?? Faction.CITIZEN;
   const bFaction = target.faction ?? Faction.CITIZEN;

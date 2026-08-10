@@ -14,12 +14,14 @@ import {
 } from '../functions/api/net/common';
 import { onRequestPost as postEvent } from '../functions/api/net/event';
 import { onRequestPost as postHello } from '../functions/api/net/hello';
+import { onRequestPost as postInvade } from '../functions/api/net/invade';
 import { onRequestGet as getStats } from '../functions/api/net/stats';
 
 const D1_SQL_FILES = [
   'cloudflare/d1/net_sphere.sql',
   'cloudflare/d1/net_sphere_names.sql',
   'cloudflare/d1/net_sphere_v2.sql',
+  'cloudflare/d1/net_sphere_v3.sql',
   'cloudflare/d1/net_sphere_market.sql',
 ];
 const SETUP_SQL_FILES = [
@@ -32,7 +34,7 @@ const EXPECTED_D1_TABLE_COLUMNS: Record<string, string[]> = {
     'net_gen', 'nickname', 'created_at', 'last_seen_at', 'runs', 'total_samosbors',
     'deaths', 'best_level', 'best_samosbor_count', 'last_floor', 'total_sessions', 'progress_json',
   ],
-  net_sessions: ['session_id', 'net_gen', 'last_seen_at', 'hosting_room'],
+  net_sessions: ['session_id', 'net_gen', 'last_seen_at', 'hosting_room', 'invaded_by', 'invaded_at'],
   net_events: ['event_key', 'net_gen', 'nickname', 'type', 'summary', 'created_at', 'payload_json'],
   net_chat: ['id', 'net_gen', 'body', 'created_at'],
   net_market_impulses: ['id', 'net_gen', 'corp_id', 'kind', 'magnitude', 'created_at', 'event_key'],
@@ -63,6 +65,8 @@ interface SessionRow {
   net_gen: string;
   last_seen_at: number;
   hosting_room: string;
+  invaded_by: string;
+  invaded_at: number;
 }
 
 interface ChatRow {
@@ -123,6 +127,31 @@ class FakeD1 implements D1Database {
         value: this.players.size,
         total_sessions: [...this.players.values()].reduce((sum, row) => sum + (row.total_sessions || 0), 0)
       };
+    }
+    if (query.includes('invaded_by') && query.includes('WHERE s.session_id = ?')) {
+      const row = this.sessions.get(String(values[0]));
+      const cutoff = Number(values[1]);
+      if (!row || !row.invaded_by || row.invaded_at < cutoff) return null;
+      return { invaded_by: row.invaded_by, nickname: this.players.get(row.invaded_by)?.nickname ?? '' };
+    }
+    if (query.includes('FROM net_sessions WHERE invaded_by = ?')) {
+      const invader = String(values[0]);
+      const rows = [...this.sessions.values()]
+        .filter(row => row.invaded_by === invader)
+        .sort((a, b) => b.invaded_at - a.invaded_at);
+      return rows[0] ? { session_id: rows[0].session_id, hosting_room: rows[0].hosting_room } : null;
+    }
+    if (query.includes('json_extract')) {
+      const cutoff = Number(values[0]);
+      const invaderGen = String(values[1]);
+      const invaderSession = String(values[2]);
+      const candidates = [...this.sessions.values()].filter(row => {
+        if (row.last_seen_at < cutoff || row.net_gen === invaderGen || row.session_id === invaderSession || row.invaded_by) return false;
+        let progress: Record<string, unknown> = {};
+        try { progress = JSON.parse(this.players.get(row.net_gen)?.progress_json || '{}'); } catch {}
+        return progress.alive === true && progress.gameOver !== true;
+      });
+      return candidates[0] ? { session_id: candidates[0].session_id, hosting_room: candidates[0].hosting_room } : null;
     }
     if (query.includes('ORDER BY RANDOM() LIMIT 1') && query.includes('FROM net_sessions')) {
       const cutoff = Number(values[0]);
@@ -201,13 +230,39 @@ class FakeD1 implements D1Database {
       return { meta: { changes: 1 } };
     }
     if (query.includes('INSERT INTO net_sessions')) {
-      this.sessions.set(String(values[0]), {
-        session_id: String(values[0]),
+      const key = String(values[0]);
+      const existing = this.sessions.get(key);
+      this.sessions.set(key, {
+        session_id: key,
         net_gen: String(values[1]),
         last_seen_at: Number(values[2]),
         hosting_room: String(values[3] || ''),
+        // Real upsert only touches net_gen/last_seen_at/hosting_room —
+        // a pending invasion mark survives heartbeats.
+        invaded_by: existing?.invaded_by ?? '',
+        invaded_at: existing?.invaded_at ?? 0,
       });
       return { meta: { changes: 1 } };
+    }
+    if (query.includes("UPDATE net_sessions SET invaded_by = ''")) {
+      const cutoff = Number(values[0]);
+      let changes = 0;
+      for (const row of this.sessions.values()) {
+        if (row.invaded_by && row.invaded_at < cutoff) {
+          row.invaded_by = '';
+          row.invaded_at = 0;
+          changes++;
+        }
+      }
+      return { meta: { changes } };
+    }
+    if (query.includes('UPDATE net_sessions SET invaded_by = ?')) {
+      const row = this.sessions.get(String(values[2]));
+      if (row) {
+        row.invaded_by = String(values[0]);
+        row.invaded_at = Number(values[1]);
+      }
+      return { meta: { changes: row ? 1 : 0 } };
     }
     if (query.includes('UPDATE net_players SET runs = runs + 1')) {
       const row = this.players.get(String(values[0]));
@@ -1286,6 +1341,55 @@ test('Net Sphere hello upserts presence and returns profile stats with fake D1',
   assert.equal(profile.nickname, 'Жилец');
   assert.equal(profile.runs, 1);
   assert.equal(profile.bestLevel, 3);
+});
+
+test('Net Sphere invade marks a victim, hello warns them, hosting_room completes the cycle', async () => {
+  const db = new FakeD1();
+  const invader = { netGen: 'NET-DARK-6666', sessionId: 'SES-DARK-6666' };
+
+  // Victim heartbeats: alive, not hosting yet.
+  await postHello({ request: postRequest(identityBody()), env: { GIGA_NET: db } });
+
+  // Invader asks for a victim → the session is marked, room not open yet.
+  let data = await responseJson(await postInvade({ request: postRequest(invader), env: { GIGA_NET: db } }));
+  assert.equal(data.ok, true);
+  assert.equal(data.status, 'waiting');
+  assert.equal(db.sessions.get('SES-ABCD-1234')?.invaded_by, 'NET-DARK-6666');
+
+  // Victim's next heartbeat carries the invasion signal.
+  const hello2 = await responseJson(await postHello({ request: postRequest(identityBody()), env: { GIGA_NET: db } }));
+  assert.deepEqual(hello2.invasion, { by: 'NET-DARK-6666', nickname: '' });
+  // The heartbeat upsert must not wipe the pending mark.
+  assert.equal(db.sessions.get('SES-ABCD-1234')?.invaded_by, 'NET-DARK-6666');
+
+  // Victim silently opened a host room and reported it → invader gets the door.
+  const hosting = identityBody();
+  (hosting.progress as Record<string, unknown>).hostingRoomId = 'ROOM7777';
+  await postHello({ request: postRequest(hosting), env: { GIGA_NET: db } });
+  data = await responseJson(await postInvade({ request: postRequest(invader), env: { GIGA_NET: db } }));
+  assert.equal(data.status, 'ready');
+  assert.equal(data.roomId, 'ROOM7777');
+});
+
+test('Net Sphere invade returns empty without eligible victims and skips dead runs', async () => {
+  const db = new FakeD1();
+  const invader = { netGen: 'NET-DARK-6666', sessionId: 'SES-DARK-6666' };
+
+  // Nobody online at all.
+  let data = await responseJson(await postInvade({ request: postRequest(invader), env: { GIGA_NET: db } }));
+  assert.equal(data.status, 'empty');
+
+  // A dead run is not a valid victim.
+  const dead = identityBody();
+  (dead.progress as Record<string, unknown>).alive = false;
+  await postHello({ request: postRequest(dead), env: { GIGA_NET: db } });
+  data = await responseJson(await postInvade({ request: postRequest(invader), env: { GIGA_NET: db } }));
+  assert.equal(data.status, 'empty');
+
+  // The invader's own session is never its target.
+  await postHello({ request: postRequest({ ...identityBody(), ...invader }), env: { GIGA_NET: db } });
+  data = await responseJson(await postInvade({ request: postRequest(invader), env: { GIGA_NET: db } }));
+  assert.equal(data.status, 'empty');
 });
 
 test('Net Sphere storage prune drops stale volatile rows without changing aggregate totals', async () => {

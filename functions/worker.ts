@@ -2,6 +2,7 @@ import { onRequestGet as getStats } from './api/net/stats';
 import { onRequestGet as getChat, onRequestPost as postChat } from './api/net/chat';
 import { onRequestPost as postEvent } from './api/net/event';
 import { onRequestPost as postHello } from './api/net/hello';
+import { onRequestPost as postInvade } from './api/net/invade';
 import { onRequestGet as getMarket, onRequestPost as postMarket } from './api/net/market';
 import { apiError, type Env as NetEnv, type PagesContext } from './api/net/common';
 // @ts-ignore The hosted intake worker is a dependency-free MJS subproject.
@@ -30,6 +31,7 @@ type Method = 'GET' | 'POST';
 const NET_ROUTES: Record<string, Partial<Record<Method, Handler>>> = {
   '/api/net/stats': { GET: getStats },
   '/api/net/hello': { POST: postHello },
+  '/api/net/invade': { POST: postInvade },
   '/api/net/event': { POST: postEvent },
   '/api/net/chat': { GET: getChat, POST: postChat },
   '/api/net/market': { GET: getMarket, POST: postMarket },

@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS net_sessions (
   session_id TEXT PRIMARY KEY,
   net_gen TEXT NOT NULL,
   last_seen_at INTEGER NOT NULL,
-  hosting_room TEXT NOT NULL DEFAULT ''
+  hosting_room TEXT NOT NULL DEFAULT '',
+  invaded_by TEXT NOT NULL DEFAULT '',
+  invaded_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_net_sessions_last_seen

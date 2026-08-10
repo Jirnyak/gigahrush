@@ -12,6 +12,7 @@ const netSchemaFiles = [
   { path: 'cloudflare/d1/net_sphere.sql', mode: 'execute' },
   { path: 'cloudflare/d1/net_sphere_names.sql', mode: 'guarded' },
   { path: 'cloudflare/d1/net_sphere_v2.sql', mode: 'guarded' },
+  { path: 'cloudflare/d1/net_sphere_v3.sql', mode: 'guarded' },
   { path: 'cloudflare/d1/net_sphere_market.sql', mode: 'execute' },
 ];
 const npcSchemaFiles = [

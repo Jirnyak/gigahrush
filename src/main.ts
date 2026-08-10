@@ -10,6 +10,7 @@ import {
   sendPeerIntent,
   isOnlineHost,
   isOnlinePeer,
+  isOnlineInvader,
   isOnlineConnected,
   maybeSendPeerMove,
   getPeerMoveGen,
@@ -547,6 +548,7 @@ import {
   reportNetSphereEvent,
   setNetSphereChatHandler,
   tickNetSphere,
+  consumeNetSphereNotices,
   hashNetGen,
   _test_storage
 } from './systems/net_sphere';
@@ -1013,6 +1015,20 @@ function peerReturnHome(exp: ReturnType<typeof sanitizeVisitExport>, note: strin
   }, false);
 }
 
+/** Host: invaders materialize far from the host, in guaranteed-playable space —
+ *  a random live actor's cell (NPC/monster positions are reachable by construction).
+ *  Fallback when the floor has no far actors (e.g. empty endgame floors): host cell. */
+const INVADER_MIN_SPAWN_DIST = 24;
+function invaderSpawnPoint(): { x: number; y: number } {
+  const anchors = entities.filter(e =>
+    e.alive && e.peerSlot === undefined && e.id !== player.id &&
+    (e.type === EntityType.NPC || e.type === EntityType.MONSTER) &&
+    world.dist(e.x, e.y, player.x, player.y) >= INVADER_MIN_SPAWN_DIST);
+  if (anchors.length === 0) return { x: player.x, y: player.y };
+  const at = anchors[Math.floor(rng() * anchors.length)];
+  return { x: at.x, y: at.y };
+}
+
 /** Peer: one-shot actor import sent with peer_join — the visiting character
  *  the host will own for the whole session (they bring their home loadout). */
 function peerJoinActorImport(): Record<string, unknown> {
@@ -1168,6 +1184,7 @@ setOnlineMessageHandler((msgData: any) => {
       netGen: snap.netGen,
       nickname: nicknameStr || snap.profile?.nickname,
       actorImport: peerJoinActorImport(),
+      invader: isOnlineInvader() || undefined,
     });
   }
 
@@ -1177,10 +1194,14 @@ setOnlineMessageHandler((msgData: any) => {
       sendOnlineMessage({ type: 'server_error', _targetSlot: peerSlot, reason: 'version_mismatch' });
       return;
     }
-    state.msgs.push(msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
+    const isInvader = msgData.invader === true;
+    state.msgs.push(isInvader
+      ? msg(`⚠ ТЁМНЫЙ ЖИЛЕЦ ВТОРГСЯ НА ЭТАЖ`, state.time, '#f66')
+      : msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
 
-    // Spawn peer at host player position (guaranteed passable)
-    const spawnX = player.x, spawnY = player.y;
+    // Coop guest spawns at the host (guaranteed passable); invader — far away.
+    const spawnAt = isInvader ? invaderSpawnPoint() : { x: player.x, y: player.y };
+    const spawnX = spawnAt.x, spawnY = spawnAt.y;
 
     // The visitor brings their home character: sanitize the import once, then
     // the host owns the actor for the whole session.
@@ -1218,11 +1239,16 @@ setOnlineMessageHandler((msgData: any) => {
       npcVisualId: typeof impRaw.npcVisualId === 'string' ? impRaw.npcVisualId.slice(0, 40) : undefined,
       sex: typeof impRaw.sex === 'string' ? (impRaw.sex as CharacterSex) : undefined,
       rpg: freshRPG(1),
-      faction: Faction.PLAYER,
+      // Invaders are WILD: hostile to the host (PLAYER), his NPCs and monsters
+      // through the ordinary relation matrix — no special-case AI anywhere.
+      faction: isInvader ? Faction.WILD : Faction.PLAYER,
       peerSlot,
       ...playerAlifeFields(),
     } as Entity;
     if (imp?.rpg && remoteActor.rpg) Object.assign(remoteActor.rpg, imp.rpg);
+    // playerAlifeFields() marks visitors personally friendly (relation 100);
+    // an invader must read hostile through the personal channel too.
+    if (isInvader) remoteActor.playerRelation = -100;
     entities.push(remoteActor);
     _peerVisitEnded.delete(peerSlot);
     sendFloorSnapshotToPeer(peerSlot, spawnX, spawnY);
@@ -5813,8 +5839,9 @@ function switchFloor(
     entities.push(player);
     for (const pa of travelingPeers) {
       pa.id = nextEntityId.v++;
-      pa.x = spawn.x;
-      pa.y = spawn.y;
+      const at = pa.faction === Faction.WILD ? invaderSpawnPoint() : spawn;
+      pa.x = at.x;
+      pa.y = at.y;
       entities.push(pa);
     }
     applyContractFloorHooks(state, world, entities, nextEntityId, player);
@@ -9914,6 +9941,9 @@ function gameLoop(now: number): void {
   uiTime += frameDt;
   let dt = frameDt;
   tickNetSphere(state, player);
+  for (const notice of consumeNetSphereNotices()) {
+    state.msgs.push(msg(notice.text, state.time, notice.color));
+  }
 
   const snap = getNetSphereSnapshot();
   if (snap.netGen && player) {
@@ -10226,8 +10256,9 @@ function gameLoop(now: number): void {
         for (const pa of stitchPeers) {
           if (!entities.includes(pa)) {
             pa.id = nextEntityId.v++;
-            pa.x = player.x;
-            pa.y = player.y;
+            const at = pa.faction === Faction.WILD ? invaderSpawnPoint() : { x: player.x, y: player.y };
+            pa.x = at.x;
+            pa.y = at.y;
             entities.push(pa);
           }
         }
