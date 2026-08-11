@@ -19,6 +19,11 @@ interface PlatformBridgeOptions {
   onPauseChange?: PauseChangeHandler;
   onAudioMuteChange?: (muted: boolean) => void;
   onLanguageDetected?: (language: string) => void;
+  /** Asked by the user-gesture progress sync when no local save exists yet:
+   *  the game should write a real autosave synchronously (no-op outside an
+   *  active run). Lets the sandbox probe push genuine progress even on a
+   *  fresh profile. */
+  requestLocalSave?: () => void;
 }
 
 type PlatformSaveStatus = 'queued' | 'no-sdk' | 'skipped-size' | 'failed';
@@ -846,30 +851,40 @@ export function syncPlatformProgressFromUserGesture(): boolean {
   if (gestureProgressSynced || !cloudHydrateSettled) return false;
   const player = gamePushSdk()?.player;
   if (!player || typeof player.set !== 'function') return false;
+  // The probe must push a REAL change: the SDK skips a sync with no dirty
+  // fields, so re-asserting identical values never reaches the platform and
+  // the sandbox test stays red. The progress record's savedAt makes the write
+  // genuinely dirty — so a current-shape local save is required. On a fresh
+  // profile the game is asked for a real autosave right here in the gesture
+  // stack (no-op until a run is actually active — keep retrying until then).
+  let localRaw: string | null = null;
+  try {
+    localRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_SAVE_KEY) : null;
+    if (!localRaw || !isCurrentRawSave(localRaw)) {
+      bridgeOptions.requestLocalSave?.();
+      localRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_SAVE_KEY) : null;
+    }
+  } catch {
+    // Local storage can be blocked in embedded portal contexts.
+  }
+  if (!localRaw || !isCurrentRawSave(localRaw)) return false;
   const score = Math.max(bestReportedScore, Number(player.get?.('score')) || 0);
   const floor = Math.max(bestReportedFloor, Number(player.get?.('floor')) || 0);
   player.set('score', score);
   player.set('floor', floor);
   bestReportedScore = score;
   bestReportedFloor = floor;
-  try {
-    const localRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_SAVE_KEY) : null;
-    if (localRaw && isCurrentRawSave(localRaw)) {
-      const cloud = decodePortalSaveRecord(player.get?.('progress'));
-      const localSavedAt = localPortalSaveTime();
-      // After hydrate the freshest save lives in localStorage; the timestamp
-      // guard is a second lock against clobbering another device's newer save.
-      if (!cloud || cloud.raw === localRaw || cloud.savedAt <= 0 || localSavedAt >= cloud.savedAt) {
-        const bytes = new TextEncoder().encode(localRaw).length;
-        if (isGamePushCloudSaveSizeAllowed(bytes)) {
-          const record = portalSaveRecord(localRaw, bytes, 'full');
-          player.set('progress', JSON.stringify(record));
-          rememberLocalPortalSaveTime(record.savedAt);
-        }
-      }
+  const cloud = decodePortalSaveRecord(player.get?.('progress'));
+  const localSavedAt = localPortalSaveTime();
+  // After hydrate the freshest save lives in localStorage; the timestamp
+  // guard is a second lock against clobbering another device's newer save.
+  if (!cloud || cloud.raw === localRaw || cloud.savedAt <= 0 || localSavedAt >= cloud.savedAt) {
+    const bytes = new TextEncoder().encode(localRaw).length;
+    if (isGamePushCloudSaveSizeAllowed(bytes)) {
+      const record = portalSaveRecord(localRaw, bytes, 'full');
+      player.set('progress', JSON.stringify(record));
+      rememberLocalPortalSaveTime(record.savedAt);
     }
-  } catch {
-    // Local storage can be blocked in embedded portal contexts.
   }
   gestureProgressSynced = true;
   try {

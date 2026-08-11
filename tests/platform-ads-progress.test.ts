@@ -182,7 +182,7 @@ test('sandbox dev mode shows the ad even when availability flags say no', async 
   resetPlatformBridgeForTests();
 });
 
-test('user-gesture progress sync writes only the player\'s own real values', async () => {
+test('user-gesture progress sync retries until a real save exists, then latches', async () => {
   resetPlatformBridgeForTests();
   const player = fakePlayer();
 
@@ -190,13 +190,45 @@ test('user-gesture progress sync writes only the player\'s own real values', asy
     await withGamePush({ player }, async () => {
       initPlatformBridge({});
       await sleep(10); // let the cloud hydrate settle; the gesture sync waits for it
+      // No save yet: an unchanged-values sync would be dropped by the SDK and
+      // the sandbox would see nothing — so nothing is written and no latch.
+      assert.equal(syncPlatformProgressFromUserGesture(), false);
+      assert.equal(player.syncs, 0);
+      assert.equal(player.values.score, undefined);
+
+      localStorage.setItem('gigahrush_save', currentShapeSaveRaw('mid-run'));
       assert.equal(syncPlatformProgressFromUserGesture(), true);
       assert.equal(player.values.score, 0);
       assert.equal(player.values.floor, 0);
-      assert.equal(player.values.progress, undefined);
+      assert.equal(JSON.parse(String(player.values.progress)).marker, undefined);
+      assert.equal(JSON.parse(String(JSON.parse(String(player.values.progress)).raw)).marker, 'mid-run');
       assert.equal(player.syncs, 1);
       // Once per session: a second gesture must not spam the rate limit.
       assert.equal(syncPlatformProgressFromUserGesture(), false);
+      assert.equal(player.syncs, 1);
+    });
+  });
+  resetPlatformBridgeForTests();
+});
+
+test('user-gesture progress sync asks the game for a fresh autosave on a clean profile', async () => {
+  resetPlatformBridgeForTests();
+  const player = fakePlayer();
+
+  await withLocalStorage({}, async () => {
+    await withGamePush({ player }, async () => {
+      let saveRequests = 0;
+      initPlatformBridge({
+        requestLocalSave: () => {
+          saveRequests++;
+          localStorage.setItem('gigahrush_save', currentShapeSaveRaw('gesture-autosave'));
+        },
+      });
+      await sleep(10);
+      assert.equal(syncPlatformProgressFromUserGesture(), true);
+      assert.equal(saveRequests, 1);
+      const record = JSON.parse(String(player.values.progress));
+      assert.equal(JSON.parse(record.raw).marker, 'gesture-autosave');
       assert.equal(player.syncs, 1);
     });
   });

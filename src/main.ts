@@ -2396,6 +2396,9 @@ const PLAYER_BAR_AUDIO_SLEEP_COOLDOWN = 4.0;
 initPlatformBridge({
   onPauseChange: setPlatformPause,
   onAudioMuteChange: setAudioSuspendedForPlatformMute,
+  // The user-gesture progress probe needs a real save to push on a fresh
+  // profile; autoSaveGame's own gate keeps this a no-op outside a live run.
+  requestLocalSave: () => autoSaveGame(),
   onLanguageDetected: (lang: string) => {
     const isRu = lang === 'ru' || lang === 'be' || lang === 'kk' || lang === 'uk' || lang === 'uz';
     const nextLang = isRu ? 'ru' : 'en';
