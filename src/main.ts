@@ -686,7 +686,8 @@ const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback'>;
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback' | 'character' | 'back'>;
+type TitleSetupPage = 'main' | 'character';
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 
@@ -701,12 +702,17 @@ function hasValidSaveGame(): boolean {
   }
 }
 
+// The launch menu is split into two setup pages so it always fits vertically:
+// the main page keeps the run commands, character details live one level down.
 function getTitleSetupFields(): readonly TitleInputField[] {
+  if (titleSetupPage === 'character') {
+    return ['name', 'age', 'sex', 'seed', 'back'];
+  }
   const fields: TitleInputField[] = [];
   if (hasValidSaveGame()) fields.push('continue');
   fields.push('start');
   if (NPC_INTAKE_ENABLED) fields.push('addNpc');
-  fields.push('language', 'name', 'age', 'sex', 'seed', 'feedback');
+  fields.push('character', 'language', 'feedback');
   return fields;
 }
 let started = false;
@@ -719,6 +725,7 @@ const TRAILER_ZS = Array.from({ length: 101 }, (_, i) => i - 50);
 let titleTrailerFloorIdx = Math.floor(mathRng() * TRAILER_ZS.length);
 let titleStartNeedsInit = true;
 let titleMode: TitleScreenMode = 'setup';
+let titleSetupPage: TitleSetupPage = 'main';
 let titleSetupSel = 0;
 let titleInputField: TitleInputField = getTitleSetupFields()[titleSetupSel];
 let titleLanguageId = loadTitleLanguageId();
@@ -2010,6 +2017,12 @@ function openTitleSetupMenu(): void {
   showTitle();
 }
 
+function openTitleSetupPage(page: TitleSetupPage): void {
+  titleSetupPage = page;
+  setTitleSelection(page === 'character' ? 'name' : 'character');
+  showTitle();
+}
+
 function openNpcIntakePage(): void {
   if (!NPC_INTAKE_ENABLED) return;
   try {
@@ -2032,8 +2045,16 @@ function editTitleFieldFromPointer(field: TitleInputField): void {
     startGameFromTitle();
     return;
   }
+  if (field === 'continue') {
+    continueGameFromTitle();
+    return;
+  }
   if (field === 'addNpc') {
     openNpcIntakePage();
+    return;
+  }
+  if (field === 'character' || field === 'back') {
+    openTitleSetupPage(field === 'character' ? 'character' : 'main');
     return;
   }
   if (field === 'language') {
@@ -2084,6 +2105,16 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
   const ageCursor = cursorOn && selected('age') ? '_' : '';
   const seedCursor = cursorOn && selected('seed') ? '_' : '';
   const rows: TitleSetupRowView[] = [];
+  if (titleSetupPage === 'character') {
+    rows.push(
+      { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
+      { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
+      { field: 'sex', label: lang.sexLabel, value: shownSex, hint: lang.setupSexHint, selected: selected('sex') },
+      { field: 'seed', label: lang.seedLabel, value: `${shownSeed}${seedCursor}`, hint: lang.setupSeedHint, selected: selected('seed') },
+      { field: 'back', label: lang.setupBackLabel, value: lang.setupBackValue, hint: lang.setupBackHint, selected: selected('back') },
+    );
+    return rows;
+  }
   if (hasValidSaveGame()) {
     rows.push({ field: 'continue', label: lang.setupContinueLabel, value: lang.setupContinueValue, hint: lang.setupContinueHint, selected: selected('continue') });
   }
@@ -2100,11 +2131,8 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
     });
   }
   rows.push(
+    { field: 'character', label: lang.setupCharacterLabel, value: `${shownName} · ${shownAge} · ${shownSex}`, hint: lang.setupCharacterHint, selected: selected('character') },
     { field: 'language', label: lang.setupLanguageLabel, value: titleLanguageDef(titleLanguageId).name, hint: lang.setupLanguageHint, selected: selected('language') },
-    { field: 'name', label: lang.nameLabel, value: `${shownName}${nameCursor}`, hint: lang.setupNameHint, selected: selected('name') },
-    { field: 'age', label: lang.ageLabel, value: `${shownAge}${ageCursor}`, hint: lang.setupAgeHint, selected: selected('age') },
-    { field: 'sex', label: lang.sexLabel, value: shownSex, hint: lang.setupSexHint, selected: selected('sex') },
-    { field: 'seed', label: lang.seedLabel, value: `${shownSeed}${seedCursor}`, hint: lang.setupSeedHint, selected: selected('seed') },
     { field: 'feedback', label: 'ОБРАТНАЯ СВЯЗЬ', value: 'ТИТРЫ И ТГ', hint: 'Команда разработчиков и комьюнити', selected: selected('feedback') },
   );
   return rows;
@@ -2343,7 +2371,11 @@ let pendingLoadAdDone = false;      // overlay is up (or nothing to show): load 
 let pendingLoadAdWaitStart = 0;
 // How long a load waits for the ad overlay to actually appear before giving up on
 // it. Only the appearance is waited for — the ad then plays over the generation.
-const PORTAL_AD_OPEN_WAIT_MS = 1200;
+// Matches the bridge's own fullscreen-start window: 1200 ms lost the race to real
+// banner start latency, generation blocked the main thread and the overlay never
+// came up. Slots with nothing to show still resolve the promise early, so the
+// full wait is only ever paid when an ad is genuinely on its way.
+const PORTAL_AD_OPEN_WAIT_MS = 4000;
 let platformGameplayMarkedActive = false;
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
@@ -10671,6 +10703,7 @@ function returnToTitleScreen(): void {
   clearPointerCaptureGate();
   titleRunSeedText = '';
   titleMode = 'language';
+  titleSetupPage = 'main';
   setTitleSelection('start');
   titleStartNeedsInit = true;
   closeMobilePanels(true);
@@ -10786,6 +10819,11 @@ function startHandler(e: KeyboardEvent): void {
     return;
   }
 
+  if (e.code === 'Escape' && titleSetupPage === 'character') {
+    openTitleSetupPage('main');
+    e.preventDefault();
+    return;
+  }
   if (e.code === 'Tab' || e.code === 'ArrowDown') {
     moveTitleSelection(1);
     e.preventDefault();
@@ -10830,6 +10868,8 @@ function startHandler(e: KeyboardEvent): void {
       showTitle();
     }
     else if (titleInputField === 'addNpc') openNpcIntakePage();
+    else if (titleInputField === 'character') openTitleSetupPage('character');
+    else if (titleInputField === 'back') openTitleSetupPage('main');
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'age') moveTitleSelection(1);
@@ -10905,6 +10945,10 @@ function handleTitleGamepadInput(frame: InputFrame): void {
   }
 
   if (closeEdge) {
+    if (titleSetupPage === 'character') {
+      openTitleSetupPage('main');
+      return;
+    }
     titleMode = 'language';
     setTitleSelection('start');
     showTitle();
@@ -10944,6 +10988,8 @@ function handleTitleGamepadInput(frame: InputFrame): void {
     if (titleInputField === 'continue') continueGameFromTitle();
     else if (titleInputField === 'start') startGameFromTitle();
     else if (titleInputField === 'addNpc') openNpcIntakePage();
+    else if (titleInputField === 'character') openTitleSetupPage('character');
+    else if (titleInputField === 'back') openTitleSetupPage('main');
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'sex') cyclePlayerSex();

@@ -85,6 +85,7 @@ interface GamePushSdk {
   ready?: Promise<void>;
   player?: GamePushPlayer;
   language?: string;
+  isDev?: boolean;
   sounds?: GamePushSounds;
   ads?: GamePushAds;
   achievements?: GamePushAchievements;
@@ -127,6 +128,8 @@ let gamePushEventsBound = false;
 let gamePushReadySent = false;
 let gamePushGameStartSent = false;
 let gamePushGameplayActive = false;
+let cloudHydrateSettled = false;
+let gestureProgressSynced = false;
 
 function portalGlobal(): PortalGlobal {
   return globalThis as PortalGlobal;
@@ -468,29 +471,30 @@ function bindGamePushEvents(gp = gamePushSdk()): void {
   //   1. markPlatformReady() tries synchronous gameStart when SDK is already on the global (sandbox preload).
   //   2. If SDK wasn't ready at markPlatformReady time, this user-gesture handler is the fallback.
   // The gamePushGameStartSent flag ensures exactly one call.
-  let sandboxTestsTriggered = false;
-  const fulfillSandboxTests = () => {
-    if (sandboxTestsTriggered) return;
-    sandboxTestsTriggered = true;
-
+  const onUserGesture = () => {
     // 1. gameStart fallback (Test 2, 3) — only if not already sent from markPlatformReady
     if (!gamePushGameStartSent) {
       gamePushGameStartSent = true;
       try { if (typeof gp.gameStart === 'function') gp.gameStart(); } catch (e) { console.error('GamePush SDK error:', e); }
     }
 
-    // NOTHING ELSE belongs here. The sandbox save/language/sound probes that used
-    // to run on this first gesture also ran for every live player: they wrote
-    // `progress='test'` and `score=100` over the real cloud-save slot, which is
-    // why only 2 of 543 Pikabu players ever had a save and both leaderboards read
-    // a constant 100 (see retention.md). Real progress is written by
-    // savePlatformRawGameSave / submitPlatformLeaderboardStats; the remaining
-    // sandbox tests are marked manually — see gamepush.md.
+    // 2. Real progress sync — the sandbox "progress saves to the player" test
+    // needs gp.player.set + sync inside a user-gesture call stack. The old fake
+    // probes here wrote `progress='test'` and `score=100` over every live
+    // player's cloud slot (2 of 543 Pikabu players had a real save — see
+    // retention.md); this writes ONLY the player's own current values, so it is
+    // a no-op data-wise for live players. Retries until the cloud hydrate has
+    // settled, then the listeners drop off.
+    syncPlatformProgressFromUserGesture();
+    if (gamePushGameStartSent && gestureProgressSynced && typeof document !== 'undefined') {
+      document.removeEventListener('pointerdown', onUserGesture);
+      document.removeEventListener('keydown', onUserGesture);
+    }
   };
 
   if (typeof document !== 'undefined') {
-    document.addEventListener('pointerdown', fulfillSandboxTests);
-    document.addEventListener('keydown', fulfillSandboxTests);
+    document.addEventListener('pointerdown', onUserGesture);
+    document.addEventListener('keydown', onUserGesture);
   }
 }
 
@@ -765,6 +769,17 @@ export async function loadPlatformRawGameSave(localRaw?: string | null): Promise
 }
 
 export async function hydratePlatformSaveFromCloud(): Promise<PlatformLoadResult> {
+  try {
+    return await hydratePlatformSaveFromCloudInner();
+  } finally {
+    // The user-gesture progress sync must not race the hydrate: until the cloud
+    // candidate has been merged into localStorage, pushing the local save up
+    // could overwrite a newer save from another device.
+    cloudHydrateSettled = true;
+  }
+}
+
+async function hydratePlatformSaveFromCloudInner(): Promise<PlatformLoadResult> {
   if (typeof localStorage === 'undefined' || !localStorage.getItem) return { status: 'no-sdk' };
   let localRaw: string | null = null;
   try {
@@ -819,6 +834,55 @@ function applyPlatformRecords(player: GamePushPlayer, score?: number, floor?: nu
   return changed;
 }
 
+/** Re-asserts the player's own current progress inside a user-gesture call
+ *  stack. The GamePush sandbox auto-test "progress must save to the player"
+ *  only accepts gp.player.set + sync called synchronously from a click/keydown,
+ *  so this runs on the first gesture — but unlike the removed sandbox stubs it
+ *  writes REAL data only: the stored score/floor records re-set to their own
+ *  max, and the actual local save (never over a newer cloud record). For a live
+ *  player this is data-wise a no-op; for the sandbox it is the probe it wants.
+ *  Runs once per session, and only after the cloud hydrate settled. */
+export function syncPlatformProgressFromUserGesture(): boolean {
+  if (gestureProgressSynced || !cloudHydrateSettled) return false;
+  const player = gamePushSdk()?.player;
+  if (!player || typeof player.set !== 'function') return false;
+  const score = Math.max(bestReportedScore, Number(player.get?.('score')) || 0);
+  const floor = Math.max(bestReportedFloor, Number(player.get?.('floor')) || 0);
+  player.set('score', score);
+  player.set('floor', floor);
+  bestReportedScore = score;
+  bestReportedFloor = floor;
+  try {
+    const localRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_SAVE_KEY) : null;
+    if (localRaw && isCurrentRawSave(localRaw)) {
+      const cloud = decodePortalSaveRecord(player.get?.('progress'));
+      const localSavedAt = localPortalSaveTime();
+      // After hydrate the freshest save lives in localStorage; the timestamp
+      // guard is a second lock against clobbering another device's newer save.
+      if (!cloud || cloud.raw === localRaw || cloud.savedAt <= 0 || localSavedAt >= cloud.savedAt) {
+        const bytes = new TextEncoder().encode(localRaw).length;
+        if (isGamePushCloudSaveSizeAllowed(bytes)) {
+          const record = portalSaveRecord(localRaw, bytes, 'full');
+          player.set('progress', JSON.stringify(record));
+          rememberLocalPortalSaveTime(record.savedAt);
+        }
+      }
+    }
+  } catch {
+    // Local storage can be blocked in embedded portal contexts.
+  }
+  gestureProgressSynced = true;
+  try {
+    const synced = player.sync?.({ storage: 'cloud' });
+    if (synced && typeof (synced as Promise<unknown>).catch === 'function') {
+      void (synced as Promise<unknown>).catch(() => {});
+    }
+  } catch (e) {
+    console.error('GamePush SDK error:', e);
+  }
+  return true;
+}
+
 /** Pushes the personal records to the portal outside the save path — death and
  *  other run-ending moments never reach savePlatformRawGameSave, so without this
  *  the leaderboards only ever see saved runs. */
@@ -862,12 +926,15 @@ export function unlockPlatformAchievement(tag: string): void {
  *  closed again. Never resolves while the overlay is still up — see
  *  isPlatformAdOnScreen. */
 export function showPlatformFullscreenAd(): Promise<boolean> {
-  const ads = gamePushSdk()?.ads;
+  const gp = gamePushSdk();
+  const ads = gp?.ads;
   const showFullscreen = ads?.showFullscreen;
   if (!ads || typeof showFullscreen !== 'function') return Promise.resolve(false);
   // Availability flags keep floor transitions free of dead waiting when the
   // platform has nothing to show (own cooldown, adblock, unsupported host).
-  if (ads.isFullscreenAvailable === false || ads.isAdblockEnabled === true) return Promise.resolve(false);
+  // The sandbox (gp.isDev) draws its own mock overlay regardless of these
+  // flags — an adblocker on the developer's browser must not hide it there.
+  if (gp?.isDev !== true && (ads.isFullscreenAvailable === false || ads.isAdblockEnabled === true)) return Promise.resolve(false);
   if (activeFullscreenAdResolve) return Promise.resolve(false);
   return new Promise(resolve => {
     activeFullscreenAdResolve = resolve;
@@ -909,6 +976,8 @@ export function resetPlatformBridgeForTests(): void {
   gamePushReadySent = false;
   gamePushGameStartSent = false;
   gamePushGameplayActive = false;
+  cloudHydrateSettled = false;
+  gestureProgressSynced = false;
   activeFullscreenAdResolve = null;
   fullscreenAdOnScreen = false;
   clearFullscreenAdTimers();

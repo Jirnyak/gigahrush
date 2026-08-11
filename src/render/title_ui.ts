@@ -5,7 +5,7 @@ import { GAME_BUILD_VERSION } from '../core/version';
 import { drawNeuroPanel, drawStaticNoise } from './hud_fx';
 
 export type TitleScreenMode = 'language' | 'setup' | 'feedback';
-export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'trailer' | 'start' | 'continue' | 'feedback';
+export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'trailer' | 'start' | 'continue' | 'feedback' | 'character' | 'back';
 
 export interface TitleLanguageHit {
   id?: TitleLanguageId;
@@ -190,13 +190,13 @@ function drawSetupMenu(
     ctx.font = `bold ${Math.round(11 * s)}px "Press Start 2P", monospace`;
     ctx.fillText(fitText(ctx, `${selected ? '> ' : '  '}${row.label}`, panelW * 0.4), x + 18 * s, rowY + 14 * s);
 
-    const commandRow = row.field === 'start' || row.field === 'addNpc';
-    ctx.textAlign = commandRow ? 'center' : 'right';
+    // Command rows keep the gold accent but align right like every other value:
+    // a centered value under a long label («ДОБАВИТЬ ПЕРСОНАЖА») overlapped it.
+    const commandRow = row.field === 'start' || row.field === 'addNpc' || row.field === 'character' || row.field === 'back';
+    ctx.textAlign = 'right';
     ctx.fillStyle = commandRow ? (selected ? '#ffd46a' : '#9a7b44') : (selected ? '#8fffd2' : '#698b88');
     ctx.font = `${Math.round(11 * s)}px "Press Start 2P", monospace`;
-    const valueMaxW = commandRow ? panelW - 52 * s : panelW * 0.48;
-    const valueX = commandRow ? cx : x + panelW - 18 * s;
-    ctx.fillText(fitText(ctx, row.value, valueMaxW), valueX, rowY + 14 * s);
+    ctx.fillText(fitText(ctx, row.value, panelW * 0.48), x + panelW - 18 * s, rowY + 14 * s);
 
     if (row.hint) {
       ctx.textAlign = 'left';

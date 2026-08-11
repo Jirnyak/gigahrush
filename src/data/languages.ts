@@ -26,6 +26,11 @@ export interface TitleLanguageDef {
   setupContinueHint: string;
   setupAddNpcLabel: string;
   setupAddNpcValue: string;
+  setupCharacterLabel: string;
+  setupCharacterHint: string;
+  setupBackLabel: string;
+  setupBackValue: string;
+  setupBackHint: string;
   setupLanguageLabel: string;
   setupActorCapLabel: string;
   setupAddNpcHint: string;
@@ -80,6 +85,11 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupContinueHint: 'ENTER загружает сохраненную игру',
     setupAddNpcLabel: 'ДОБАВИТЬ ПЕРСОНАЖА',
     setupAddNpcValue: 'анкета NPC',
+    setupCharacterLabel: 'ПЕРСОНАЖ',
+    setupCharacterHint: 'ENTER открывает имя, возраст, пол и сид',
+    setupBackLabel: 'НАЗАД',
+    setupBackValue: 'меню запуска',
+    setupBackHint: 'ENTER или ESC возвращает в меню запуска',
     setupLanguageLabel: 'ЯЗЫК',
     setupActorCapLabel: 'ЛИМИТ NPC/МОБОВ',
     setupAddNpcHint: 'открывает отдельную страницу формы без захвата курсора',
@@ -132,6 +142,11 @@ export const TITLE_LANGUAGES: readonly TitleLanguageDef[] = [
     setupContinueHint: 'ENTER loads the saved game',
     setupAddNpcLabel: 'ADD CHARACTER',
     setupAddNpcValue: 'NPC form',
+    setupCharacterLabel: 'CHARACTER',
+    setupCharacterHint: 'ENTER opens name, age, sex and seed',
+    setupBackLabel: 'BACK',
+    setupBackValue: 'launch menu',
+    setupBackHint: 'ENTER or ESC returns to the launch menu',
     setupLanguageLabel: 'LANGUAGE',
     setupActorCapLabel: 'NPC/MOB LIMIT',
     setupAddNpcHint: 'opens the standalone questionnaire page without cursor capture',

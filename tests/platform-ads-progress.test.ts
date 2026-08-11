@@ -6,7 +6,9 @@ import {
   isPlatformAdOnScreen,
   resetPlatformBridgeForTests,
   showPlatformFullscreenAd,
+  syncPlatformProgressFromUserGesture,
 } from '../src/systems/platform_bridge';
+import { SAVE_SHAPE_VERSION } from '../src/systems/save_runtime';
 import { reportPlatformProgress, resetPlatformProgressForTests } from '../src/systems/platform_progress';
 import type { Entity, GameState } from '../src/core/types';
 
@@ -22,6 +24,7 @@ interface FakeAds {
 
 interface FakeGamePush {
   on?(event: string, handler: () => void): void;
+  isDev?: boolean;
   ads?: FakeAds;
   achievements?: { unlocked: string[]; unlock(options: { tag?: string }): void };
   player?: {
@@ -139,6 +142,114 @@ test('fullscreen ad resolves when the platform shows nothing at all', async () =
     assert.equal(await showPlatformFullscreenAd(), false);
     assert.equal(ads.shows, 1);
     assert.equal(isPlatformAdOnScreen(), false);
+  });
+  resetPlatformBridgeForTests();
+});
+
+async function withLocalStorage<T>(entries: Record<string, string>, run: () => Promise<T>): Promise<T> {
+  const globals = globalThis as typeof globalThis & { localStorage?: unknown };
+  const original = globals.localStorage;
+  const store = new Map<string, string>(Object.entries(entries));
+  globals.localStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => { store.set(key, String(value)); },
+    removeItem: (key: string) => { store.delete(key); },
+  };
+  try {
+    return await run();
+  } finally {
+    if (original !== undefined) globals.localStorage = original;
+    else delete globals.localStorage;
+  }
+}
+
+function currentShapeSaveRaw(marker: string): string {
+  return JSON.stringify({ version: SAVE_SHAPE_VERSION, marker });
+}
+
+test('sandbox dev mode shows the ad even when availability flags say no', async () => {
+  resetPlatformBridgeForTests();
+  const handlers = new Map<string, AdHandler>();
+  const ads = fakeAds(true, handlers);
+  ads.isFullscreenAvailable = false;
+  ads.isAdblockEnabled = true;
+
+  await withGamePush({ ads, isDev: true }, async () => {
+    initPlatformBridge({});
+    await showPlatformFullscreenAd();
+    assert.equal(ads.shows, 1);
+  });
+  resetPlatformBridgeForTests();
+});
+
+test('user-gesture progress sync writes only the player\'s own real values', async () => {
+  resetPlatformBridgeForTests();
+  const player = fakePlayer();
+
+  await withLocalStorage({}, async () => {
+    await withGamePush({ player }, async () => {
+      initPlatformBridge({});
+      await sleep(10); // let the cloud hydrate settle; the gesture sync waits for it
+      assert.equal(syncPlatformProgressFromUserGesture(), true);
+      assert.equal(player.values.score, 0);
+      assert.equal(player.values.floor, 0);
+      assert.equal(player.values.progress, undefined);
+      assert.equal(player.syncs, 1);
+      // Once per session: a second gesture must not spam the rate limit.
+      assert.equal(syncPlatformProgressFromUserGesture(), false);
+      assert.equal(player.syncs, 1);
+    });
+  });
+  resetPlatformBridgeForTests();
+});
+
+test('user-gesture progress sync pushes the real local save to the cloud slot', async () => {
+  resetPlatformBridgeForTests();
+  const player = fakePlayer();
+  player.values.score = 4200;
+  const localRaw = currentShapeSaveRaw('local');
+
+  await withLocalStorage({ gigahrush_save: localRaw }, async () => {
+    await withGamePush({ player }, async () => {
+      initPlatformBridge({});
+      await sleep(10);
+      assert.equal(syncPlatformProgressFromUserGesture(), true);
+      // Records re-assert their own max — never lowered, never invented.
+      assert.equal(player.values.score, 4200);
+      const record = JSON.parse(String(player.values.progress));
+      assert.equal(record.raw, localRaw);
+      assert.equal(record.shapeVersion, SAVE_SHAPE_VERSION);
+      assert.equal(player.syncs, 1);
+    });
+  });
+  resetPlatformBridgeForTests();
+});
+
+test('user-gesture progress sync never clobbers a newer cloud save', async () => {
+  resetPlatformBridgeForTests();
+  const player = fakePlayer();
+  const cloudRaw = currentShapeSaveRaw('cloud-newer');
+  const cloudRecord = JSON.stringify({
+    kind: 'gigahrush-save',
+    recordVersion: 1,
+    mode: 'full',
+    shapeVersion: SAVE_SHAPE_VERSION,
+    savedAt: Date.now() + 1_000_000,
+    bytes: cloudRaw.length,
+    raw: cloudRaw,
+  });
+  player.values.progress = cloudRecord;
+
+  // Local save exists but this device has no portal save timestamp: the newer
+  // cloud record must survive, while score/floor still sync for the sandbox.
+  await withLocalStorage({ gigahrush_save: currentShapeSaveRaw('local-stale') }, async () => {
+    await withGamePush({ player }, async () => {
+      initPlatformBridge({});
+      await sleep(10);
+      assert.equal(syncPlatformProgressFromUserGesture(), true);
+      assert.equal(player.values.progress, cloudRecord);
+      assert.equal(player.syncs, 1);
+    });
   });
   resetPlatformBridgeForTests();
 });
