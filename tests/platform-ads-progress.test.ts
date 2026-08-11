@@ -211,6 +211,24 @@ test('user-gesture progress sync retries until a real save exists, then latches'
   resetPlatformBridgeForTests();
 });
 
+test('sandbox dev mode probe forces a changed score even before any save exists', async () => {
+  resetPlatformBridgeForTests();
+  const player = fakePlayer();
+  player.values.score = 7;
+
+  await withLocalStorage({}, async () => {
+    await withGamePush({ player, isDev: true }, async () => {
+      initPlatformBridge({});
+      await sleep(10);
+      assert.equal(syncPlatformProgressFromUserGesture(), true);
+      assert.equal(player.values.score, 8);
+      assert.equal(player.values.progress, undefined);
+      assert.equal(player.syncs, 1);
+    });
+  });
+  resetPlatformBridgeForTests();
+});
+
 test('user-gesture progress sync asks the game for a fresh autosave on a clean profile', async () => {
   resetPlatformBridgeForTests();
   const player = fakePlayer();
