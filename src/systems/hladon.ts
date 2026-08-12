@@ -334,7 +334,8 @@ function clearHladonRoom(world: World, room: Room, seed: number): void {
       if (world.roomMap[ci] !== room.id) continue;
       if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
       world.fog[ci] = Math.min(world.fog[ci], 10);
-      if ((dx + dy) % 7 === 0) stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.3, 0.35, seed + dx * 41 + dy * 97, 135, 135, 125, false);
+      // intensity is 0..255: a fractional value floors to zero alpha and stamps nothing.
+      if ((dx + dy) % 7 === 0) stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.3, 90, seed + dx * 41 + dy * 97, 135, 135, 125, false);
     }
   }
   world.markFogDirty();

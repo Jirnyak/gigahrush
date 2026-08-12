@@ -12405,19 +12405,46 @@ function stampHladonFrost(world: World, room: Room, seedBase: number, danger: nu
         world.features[ci] = Feature.NONE;
       }
       if ((dx + dy + seedBase) % 5 === 0) {
-        stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 0.45, seedBase + dx * 37 + dy * 101, 185, 220, 235, false);
+        stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 115, seedBase + dx * 37 + dy * 101, 185, 220, 235, false);
       }
     }
   }
 
   for (let dx = 0; dx < room.w; dx += 2) {
     for (const y of [room.y, room.y + room.h - 1]) {
-      stampSurfaceSplat(world, room.x + dx, y, 0.5, 0.5, 0.38, 0.75, seedBase + dx * 17 + y, 210, 238, 255, true);
+      stampSurfaceSplat(world, room.x + dx, y, 0.5, 0.5, 0.38, 190, seedBase + dx * 17 + y, 210, 238, 255, true);
     }
   }
   for (let dy = 0; dy < room.h; dy += 2) {
     for (const x of [room.x, room.x + room.w - 1]) {
-      stampSurfaceSplat(world, x, room.y + dy, 0.5, 0.5, 0.38, 0.75, seedBase + dy * 23 + x, 210, 238, 255, true);
+      stampSurfaceSplat(world, x, room.y + dy, 0.5, 0.5, 0.38, 190, seedBase + dy * 23 + x, 210, 238, 255, true);
+    }
+  }
+
+  // Frost creep one cell OUTSIDE the pocket: the cold has to be readable before
+  // the player steps into it, so the transition carries a fainter fringe on the
+  // approach cells. Bounded by the room perimeter, generation-time only.
+  const fringeSpan = (v: number, limit: number): boolean => v % 2 === 0 && limit > 0;
+  for (let dx = -1; dx <= room.w; dx++) {
+    for (const y of [room.y - 1, room.y + room.h]) {
+      if (!fringeSpan(dx + 1, room.w)) continue;
+      const x = world.wrap(room.x + dx);
+      const wy = world.wrap(y);
+      const ci = world.idx(x, wy);
+      if (world.roomMap[ci] === room.id) continue;
+      if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
+      stampSurfaceSplat(world, x, wy, 0.5, 0.5, 0.26, 85, seedBase + dx * 53 + wy * 11, 198, 226, 244, false);
+    }
+  }
+  for (let dy = 0; dy < room.h; dy++) {
+    for (const x of [room.x - 1, room.x + room.w]) {
+      if (!fringeSpan(dy, room.h)) continue;
+      const wx = world.wrap(x);
+      const y = world.wrap(room.y + dy);
+      const ci = world.idx(wx, y);
+      if (world.roomMap[ci] === room.id) continue;
+      if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
+      stampSurfaceSplat(world, wx, y, 0.5, 0.5, 0.26, 85, seedBase + dy * 71 + wx * 13, 198, 226, 244, false);
     }
   }
 
