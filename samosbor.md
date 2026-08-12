@@ -102,6 +102,10 @@ The shipped path is the floor-wide front field: fronts mutate cells in real time
 
 Known gap: the live front-field stitch does NOT run the entity relocation and container cleanup that the debug wave path performs, so entities and containers can end up sealed inside regenerated walls (see the deferred audit ledger).
 
+Leaving the floor mid-samosbor is an abort, not an end. Death continuation, lift travel, the void return and save loading clear `state.samosborActive` directly, and each of them calls `abortSamosborRuntime()` (`src/systems/samosbor.ts`). That drops the touched-cell set (otherwise the next stitch rewrites those indices on an unrelated floor), releases the frozen navigation cache (otherwise it stays pinned to the discarded world and the loading-screen nav prewarm silently stops), and resets shelter/zone/warning bookkeeping. Any new place that ends a samosbor without going through the normal end branch must call it too.
+
+The stitch's `Перестроенный участок` room derives its bounds from the cells that actually adopted its id (offsets through `world.delta`, so a field across the world seam stays a small box) and is not created at all when no cell adopted it.
+
 Runtime geometry mutations must bump relevant dirty versions through existing helpers or local precedent so render, AI path fields, fog and map caches do not keep stale state.
 
 ## A-Life, Floor Memory And Save
