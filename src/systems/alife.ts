@@ -97,6 +97,7 @@ const ALIFE_POPULATION = ALIFE_POPULATION_CAPACITY;
 const ALIFE_MIN_FLOOR_POOL = 32;
 const ALIFE_SAVE_OVERRIDE_CAP = 12_000;
 const ALIFE_SAVE_DEAD_IDS_CAP = 65_536;
+const ALIFE_SAVE_PLOT_DEAD_IDS_CAP = 4_096;
 const ALIFE_MONEY_CAP = 5_000_000;
 const ALIFE_PLAYER_RELATION_UNSET = -128;
 const ALIFE_NPC_SPEED_MIN = 0.1;
@@ -2608,6 +2609,10 @@ function applyOverride(alife: AlifeState, input: unknown): void {
   if (typeof input.spriteSeed === 'number' && Number.isFinite(input.spriteSeed)) {
     setRecordSpriteSeed(alife, record, clampInt(input.spriteSeed, recordSpriteSeed(alife, record) ?? 1, 1, 0x7fffffff));
   }
+  // RPG first: setRecordRpg recomputes maxHp from the level, so restoring hp
+  // before it clamped the value against the pre-restore maximum.
+  const rpg = normalizeRpg(input.rpg);
+  if (rpg) setRecordRpg(alife, record, rpg);
   setRecordHp(alife, record, clampInt(input.hp, recordHp(alife, record), 0, recordMaxHp(alife, record)));
   setRecordMoney(
     alife,
@@ -2635,8 +2640,6 @@ function applyOverride(alife: AlifeState, input: unknown): void {
     setRecordPlayerRelation(alife, record, input.playerRelation);
   }
   if (typeof input.karma === 'number' && Number.isFinite(input.karma)) setRecordKarma(alife, record, input.karma);
-  const rpg = normalizeRpg(input.rpg);
-  if (rpg) setRecordRpg(alife, record, rpg);
   setRecordTouched(alife, record);
 }
 
@@ -2678,8 +2681,11 @@ export function setAlifeState(state: GameState, input: unknown, options?: Create
   }
   if (Array.isArray(save.deadPlotNpcIds)) {
     for (const rawId of save.deadPlotNpcIds) {
-      if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
-        alife.deadPlotNpcIds.add(rawId);
+      // Cap and integer-check on the read side too: the writer bounds this list,
+      // a hand-edited or truncated payload does not.
+      if (alife.deadPlotNpcIds.size >= ALIFE_SAVE_PLOT_DEAD_IDS_CAP) break;
+      if (typeof rawId === 'number') {
+        if (Number.isInteger(rawId) && rawId > 0) alife.deadPlotNpcIds.add(rawId);
       } else if (typeof rawId === 'string' && rawId.length > 0) {
         const numericId = getPlotNpcNumericId(rawId)!;
         if (numericId !== undefined) alife.deadPlotNpcIds.add(numericId);
@@ -2687,7 +2693,11 @@ export function setAlifeState(state: GameState, input: unknown, options?: Create
     }
   }
   if (Array.isArray(save.overrides)) {
-    for (const item of save.overrides) applyOverride(alife, item);
+    let applied = 0;
+    for (const item of save.overrides) {
+      if (applied++ >= ALIFE_SAVE_OVERRIDE_CAP) break;
+      applyOverride(alife, item);
+    }
   }
   (state as AlifeHost).alife = alife;
   return alife;

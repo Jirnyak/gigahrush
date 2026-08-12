@@ -139,6 +139,11 @@ export class EntityIndex {
   private readonly usedDynamicBucketIndices: number[] = [];
   private readonly staticIndexedIds = new Set<number>();
   private readonly bucketVisits = new Uint32Array(BUCKET_COUNT);
+  // Capped-query bookkeeping. Scratch, not state: queryRadiusCapped runs tens of
+  // thousands of times per second across AI, render and UI, and used to allocate
+  // both arrays on every call.
+  private readonly capDistances: number[] = [];
+  private readonly capIds: number[] = [];
   private bucketVisitId = 1;
   readonly byId = new Map<number, Entity>();
   readonly byAlifeId = new Map<number, Entity>();
@@ -595,8 +600,10 @@ export class EntityIndex {
     const capped = Number.isFinite(maxResults);
     const cap = capped ? Math.max(0, Math.floor(maxResults)) : Infinity;
     if (cap <= 0) return 0;
-    const distances: number[] = [];
-    const ids: number[] = [];
+    const distances = this.capDistances;
+    const ids = this.capIds;
+    distances.length = 0;
+    ids.length = 0;
     const addCandidate = (e: Entity, d2: number): void => {
       if (!capped) {
         out.push(e);

@@ -6807,6 +6807,10 @@ function loadGame(): boolean {
     closeMapEditorAndRefreshWorld();
     restoreFloorMemoryFromSave(dataState.floorMemory, {
       generationExtrasForKey: floorMemoryGenerationExtrasForKey,
+      // In strict portal mode a blocked design floor is served by a procedural
+      // spec at its even z. Without the run's spec deck the key validator only
+      // knows odd procedural zs and silently dropped that floor's snapshot.
+      floorKeyContext: { proceduralSpecs: ensureFloorRunState(state).specs },
     });
     scheduleLoading(() => {
       resetNoiseRecords();
