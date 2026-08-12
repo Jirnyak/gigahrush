@@ -1,5 +1,4 @@
 import { getPlotNpcNumericId } from './data/npc_packages';
-import { zForBaseFloor } from './data/design_floors';
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
 import './index.css';
 import './systems/demos_runtime';
@@ -3046,13 +3045,13 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const voidSpikeWasResolved = portal.voidSpikeResolved;
   const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
 
-  state.currentZ = zForBaseFloor(100);
+  state.currentZ = 0;
   state.gameWon = false;
   state.gameOver = false;
   resetRuntimeCamera(runtimeCamera);
   clearVoidReturnPortalState(state);
   setVoidEntryFromFloor(state, undefined);
-  forceFloorRunStory(state, 100);
+  forceFloorRunStory(state, 0);
   const floorInstances = ensureFloorInstanceState(state, 100);
   floorInstances.current = null;
   floorInstances.lastStableFloor = 100;

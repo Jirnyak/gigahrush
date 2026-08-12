@@ -118,7 +118,7 @@ registerSideQuest('kv_vera_poteryashkina', VERA, [{
   type: QuestType.TALK,
   desc: 'Вера Потеряшкина: «Скажите Нине {dir}: Женя пьёт и может дойти. Без этого она не откроет детский аптечный запас.»',
   targetNpcId: getPlotNpcNumericId('kv_nina_tabletkina')!,
-  targetFloorZ: 60,
+  targetFloorZ: 14,
   targetRoomDefId: 'Аптечный разменник',
   targetZoneTag: KV_MEDICINE_TRUST_TAG,
   targetHint: 'Квартиры: от угла потерянного ребёнка дойдите до Аптечного разменника и поговорите с Ниной.',

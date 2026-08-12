@@ -122,10 +122,6 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
 
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);
 
-export function zForBaseFloor(z: number): number {
-  return designFloorAtZ(z)?.z ?? 0;
-}
-
 export function designFloorById(id: string): DesignFloorRouteDef | undefined {
   return DESIGN_FLOOR_ROUTES.find(def => def.id === id);
 }

@@ -107,7 +107,7 @@ for (const student of STUDENT_DEFS) {
   registerAuthoredNpc({
     id: student.id,
     npc: student.npc,
-    homeFloorKey: storyNpcFloorKey(60),
+    homeFloorKey: storyNpcFloorKey(14),
     tags: ['kvartiry', 'red_corner', 'student'],
   });
 }

@@ -49,7 +49,7 @@ const KEEPER_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: KEEPER_ID,
   npc: KEEPER_DEF,
-  homeFloorKey: storyNpcFloorKey(140),
+  homeFloorKey: storyNpcFloorKey(-26),
   tags: ['maintenance', 'filtronos', 'keeper'],
 });
 

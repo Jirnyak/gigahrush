@@ -90,7 +90,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [
     rewardCount: 1,
     relationDelta: -6,
     xpReward: 40,
-    targetFloorZ: 100,
+    targetFloorZ: 0,
     targetHint: 'Жилая зона: белый проход рядом с комнатой окна; песок лежит полосой у рамы, засвеченный кадр ждёт на пороге.',
     eventTargetName: 'Игрок выбрал белый обход Веретара: путь стал короче, свидетель после окна замолчал.',
     eventSeverity: 4,

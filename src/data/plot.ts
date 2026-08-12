@@ -20,6 +20,8 @@ import {
   } from '../core/types';
 import type { QuestRouteTarget } from './contracts';
 import { designFloorAtZ, designFloorById } from './design_floors';
+import { floorKeyForDesign, floorKeyForProcedural } from './floor_keys';
+import { proceduralFloorKey } from './procedural_floors';
 import {
   allNpcPackages,
   getNpcPackageByPlotNpcId,
@@ -100,16 +102,11 @@ export interface PlotNpcDef {
   talkQuestResponse?: string | readonly string[];
 }
 
-// @ts-ignore
+/** Floor key of a route coordinate: `design:<id>` for an authored stop,
+ *  `procedural:<key>` for a procedural one. */
 export function storyNpcFloorKey(z: number): string {
-  switch (z) {
-    case 30: return 'design:ministry';
-    case 60: return 'design:kvartiry';
-    case 100: return 'design:living';
-    case 140: return 'design:maintenance';
-    case 180: return 'design:hell';
-    case 200: return 'design:void';
-  }
+  const design = designFloorAtZ(z);
+  return design ? floorKeyForDesign(design.id) : floorKeyForProcedural(proceduralFloorKey(z));
 }
 
 export function designNpcFloorKey(routeId: string): string {
@@ -320,11 +317,11 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'bandage', rewardCount: 5,
     extraRewards: [{ defId: 'antidep', count: 2 }, { defId: 'ammo_762', count: 20 }],
     relationDelta: 25, xpReward: 180,
-    targetFloorZ: 180,
+    targetFloorZ: -36,
     targetRoute: { z: -36, label: 'Z-36 Мясной низ' },
     targetRoomDefId: 'Зона закрепления',
     targetHint: 'Удерживай позицию "Зона закрепления" в Мясном низу ровно 300 секунд. Выйдешь — таймер сбросится, и всё начнется заново.',
-    visitFloorZ: 180,
+    visitFloorZ: -36,
     holdSeconds: 300,
     holdResetOnExit: true,
     holdSpawnMonsters: 3,
@@ -339,10 +336,10 @@ export const PLOT_CHAIN: PlotStep[] = [
     giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
     desc: 'Нужны патроны. Иди в Министерство, запроси снабжение.',
-    targetFloorZ: 180,
+    targetFloorZ: 30,
     targetRoute: { designFloorId: 'ministry', label: 'Z+30 Министерство' },
     targetHint: 'Поднимайся лифтами на Z+30: Министерство.',
-    visitFloorZ: 180,
+    visitFloorZ: 30,
     rewardItem: 'ammo_762', rewardCount: 30,
     relationDelta: 20, xpReward: 100,
     eventTags: ['ministry', 'design_route', 'upper_route'],
@@ -356,10 +353,10 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'ammo_762', rewardCount: 24,
     extraRewards: [{ defId: 'bandage', count: 3 }],
     relationDelta: 18, xpReward: 120,
-    targetFloorZ: 180,
+    targetFloorZ: -40,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     targetHint: 'Спускайся лифтами на Z-40: Подад.',
-    visitFloorZ: 180,
+    visitFloorZ: -40,
     eventTags: ['podad', 'design_route', 'lower_route'],
     eventData: { routeId: 'podad', floorZ: -40 },
   },
@@ -371,7 +368,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetNpcId: getPlotNpcNumericId('herald_clue')!,
     rewardItem: 'psi_phase', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
-    targetFloorZ: 180,
+    targetFloorZ: -40,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     relationDelta: 8, xpReward: 70,
   },
@@ -383,7 +380,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetMonsterKind: MonsterKind.HERALD, killNeeded: 3,
     rewardItem: 'psi_void_needle', rewardCount: 1,
     extraRewards: [{ defId: 'antidep', count: 2 }],
-    targetFloorZ: 180,
+    targetFloorZ: -40,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     relationDelta: 10, xpReward: 220,
     eventTags: ['podad', 'herald_gate', 'lower_route_unlocked'],
@@ -397,10 +394,10 @@ export const PLOT_CHAIN: PlotStep[] = [
     rewardItem: 'psi_stabilizer', rewardCount: 1,
     extraRewards: [{ defId: 'holy_water', count: 1 }],
     relationDelta: 6, xpReward: 180,
-    targetFloorZ: 200,
+    targetFloorZ: -50,
     targetRoute: { z: -50, label: 'Z-50 Пустота' },
     targetHint: 'Спускайся на Z-50: Пустота.',
-    visitFloorZ: 200,
+    visitFloorZ: -50,
     eventTags: ['below_and_below', 'void_contact', 'design_route'],
     eventData: { routeId: 'design:void', floorZ: -50 },
     eventTargetName: 'Путь ниже открыт до Z-50.',

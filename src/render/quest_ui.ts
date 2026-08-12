@@ -1,4 +1,3 @@
-import { zForBaseFloor } from '../data/design_floors';
 /* ── Quest log panel — paginated, one quest per page ──────────── */
 
 import {
@@ -9,6 +8,7 @@ import {
   QuestType,
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
+import { designFloorAtZ } from '../data/design_floors';
 import { isQuestTargetOnCurrentFloor, questRouteFloor, questRouteTargetLabel, questTargetLiftDirection } from '../systems/contracts';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { getRecentEvents } from '../systems/events';
@@ -19,23 +19,26 @@ import { getActiveQuest, isQuestSelectableAsActive, type CurrentObjective } from
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
 import { drawWrappedText, fitText } from './ui_text';
 
-const FLOOR_NAMES: Record<number, string> = {
-  [30]: 'Министерство',
-  [60]: 'Квартиры',
-  [100]: 'Жилая зона',
-  [140]: 'Коллекторы',
-  [180]: 'Мясной низ',
-  [200]: 'Пустота',
-};
-
+// Quest route floors are plain route coordinates. Only the six base floors get a
+// hand-written short label; every other route stop falls back to its coordinate
+// instead of printing `undefined`.
 const FLOOR_SHORT_NAMES: Record<number, string> = {
   [30]: 'МИН',
-  [60]: 'КВ',
-  [100]: 'ЖИЛ',
-  [140]: 'КОЛ',
-  [180]: 'АД',
-  [200]: 'ПУСТ',
+  [14]: 'КВ',
+  [0]: 'ЖИЛ',
+  [-26]: 'КОЛ',
+  [-36]: 'АД',
+  [-50]: 'ПУСТ',
 };
+
+function floorShortLabel(z: number): string {
+  return FLOOR_SHORT_NAMES[z] ?? `Z${formatFloorZ(z)}`;
+}
+
+function floorLongLabel(z: number): string {
+  const name = designFloorAtZ(z)?.displayName;
+  return name ? `${name} Z${formatFloorZ(z)}` : `Этаж Z${formatFloorZ(z)}`;
+}
 
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {
   [RoomType.LIVING]: 'жилые комнаты',
@@ -88,7 +91,7 @@ function displayFloor(q: Quest, state: GameState): number | undefined {
 function objectiveFloorLabel(q: Quest, state: GameState): string {
   const floor = displayFloor(q, state);
   if (floor === undefined) return 'ЭТ ?';
-  return isQuestTargetOnCurrentFloor(q, state) ? 'ЭТ ЗДЕСЬ' : `ЭТ ${FLOOR_SHORT_NAMES[floor]}`;
+  return isQuestTargetOnCurrentFloor(q, state) ? 'ЭТ ЗДЕСЬ' : `ЭТ ${floorShortLabel(floor)}`;
 }
 
 function deadlineMeta(q: Quest, state: GameState): { text: string; stroke: string; fill: string; color: string } {
@@ -202,14 +205,10 @@ function questRouteHint(q: Quest, state: GameState): string {
     const dir = questTargetLiftDirection(q, state) === LiftDirection.DOWN ? '↓' : '↑';
     const currentZ = currentFloorRunEntry(state).z;
     const routeLabel = questRouteTargetLabel(q, state);
-    const targetZ = zForBaseFloor(floor);
-    const target = routeLabel || `${FLOOR_NAMES[floor]} Z${formatFloorZ(targetZ)}`;
+    const target = routeLabel || floorLongLabel(floor);
     return detail
       ? `Цель: ${target}. Лифт ${dir} от Z${formatFloorZ(currentZ)}. ${detail}`
       : `Цель: ${target}. Лифт ${dir} от Z${formatFloorZ(currentZ)}.`;
-  }
-  if (q.type === QuestType.TALK && q.targetNpcId && q.targetNpcId === undefined) {
-    return 'Собеседник на другом уровне. Нужен лифт.';
   }
   if (q.type === QuestType.VISIT && q.targetRoom === undefined) {
     return 'Комната появится на карте после входа на этаж.';

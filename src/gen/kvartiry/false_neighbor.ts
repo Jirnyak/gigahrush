@@ -66,7 +66,7 @@ registerSideQuest('kv_raya_podozritelnaya', RAYA, [{
   rewardCount: 1,
   extraRewards: [{ defId: 'fake_pass', count: 1 }],
   relationDelta: 14, xpReward: 85, moneyReward: 45,
-  targetFloorZ: 60,
+  targetFloorZ: 14,
   targetRoomType: RoomType.LIVING,
   targetZoneTag: FALSE_NEIGHBOR_TAG,
   targetRoomDefId: FALSE_NEIGHBOR_ROOM_NAME,

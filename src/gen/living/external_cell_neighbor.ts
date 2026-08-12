@@ -305,7 +305,7 @@ registerSideQuestSteps([
     id: TRADE_QUEST,
     giverId: getPlotNpcNumericId('yakov')!,
     type: QuestType.VISIT,
-    visitFloorZ: 140,
+    visitFloorZ: -26,
     desc: 'Яков Давидович: "По модели Нины маршрут неполный. Спуститесь в Коллекторы и вернитесь с отметкой, что он вообще выводит вниз."',
     rewardItem: 'caravan_route',
     rewardCount: 1,

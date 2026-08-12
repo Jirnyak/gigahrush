@@ -27,14 +27,12 @@ import {
   designFloorAtZ,
   designFloorById,
   type DesignFloorId,
-  zForBaseFloor,
 } from '../data/design_floors';
 import {
   floorKeyForDesign,
   floorKeyForProcedural,
   floorKeyZ,
 } from '../data/floor_keys';
-import {  } from '../data/design_floors';
 import {
   routeDirectionBlockedByClosedGate,
   routeGateDirectionIsClosed,
@@ -473,7 +471,7 @@ export function commitFloorRunEntrySnapshot(state: GameState, input: unknown): F
 
 export function forceFloorRunStory(state: GameState, z: number): void {
   const run = ensureFloorRunState(state, z);
-  run.currentZ = zForBaseFloor(z);
+  run.currentZ = z;
 }
 
 export function isCurrentProceduralFloor(state: GameState): boolean {

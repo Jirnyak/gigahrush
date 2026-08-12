@@ -101,7 +101,7 @@ for (const assistant of ASSISTANT_DEFS) {
   registerAuthoredNpc({
     id: assistant.id,
     npc: assistant.npc,
-    homeFloorKey: storyNpcFloorKey(140),
+    homeFloorKey: storyNpcFloorKey(-26),
     tags: ['maintenance', 'flooded_lab', 'assistant'],
   });
 }

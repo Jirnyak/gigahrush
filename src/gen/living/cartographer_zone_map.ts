@@ -51,7 +51,7 @@ registerSideQuest(CARTOGRAPHER_ID, NPC_DEF, [
     giverId: getPlotNpcNumericId(CARTOGRAPHER_ID)!,
     type: QuestType.VISIT,
     desc: 'Сева Картограф: «Спустись в Коллекторы и вернись с отметкой нижней зацепки. Если слышишь воду - держи фильтр или фонарь под рукой.»',
-    visitFloorZ: 140,
+    visitFloorZ: -26,
     rewardItem: 'caravan_route',
     rewardCount: 1,
     extraRewards: [{ defId: 'water', count: 1 }],

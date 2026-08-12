@@ -141,7 +141,7 @@ registerSideQuest('ag44_dr_kruglov', NPC_DEFS.ag44_dr_kruglov, [
     rewardItem: 'pills', rewardCount: 1,
     extraRewards: [{ defId: 'clean_health_cert', count: 1 }],
     relationDelta: 12, xpReward: 45, moneyReward: 55,
-    targetFloorZ: 100,
+    targetFloorZ: 0,
     targetRoomType: RoomType.MEDICAL,
     targetZoneTag: CONTENT_TAG,
     targetHint: 'Жилая зона: аварийный медпост Круглова и его опечатанный шкаф.',

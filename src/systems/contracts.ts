@@ -31,6 +31,7 @@ import {
   setQuestTargetRoute,
 } from '../data/contracts';
 import { ITEMS } from '../data/catalog';
+import { floorLevelDisplayName } from '../gen/floor_manifest';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../render/sprite_index';
@@ -56,7 +57,7 @@ import {
   proceduralFloorKey,
   type ProceduralFloorSpec,
 } from '../data/procedural_floors';
-import { designFloorAtZ, designFloorById, zForBaseFloor } from '../data/design_floors';
+import { designFloorAtZ, designFloorById } from '../data/design_floors';
 import { assignProceduralQuestDeadline } from './quest_deadlines';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { intContractRewardMult } from './rpg';
@@ -103,15 +104,6 @@ export interface QuestTargetRoomResolution {
   container?: WorldContainer;
   source: 'quest_room' | 'tagged_container' | 'room_type';
 }
-
-const CONTRACT_FLOOR_NAMES: Record<number, string> = {
-  [30]: 'Министерство',
-  [60]: 'Квартиры',
-  [100]: 'Жилая зона',
-  [140]: 'Коллекторы',
-  [180]: 'Мясной низ',
-  [200]: 'Пустота',
-};
 
 const GOVNYAK_COURIER_OUTCOMES: Record<string, {
   id: string;
@@ -173,8 +165,7 @@ function proceduralSpecRouteTags(spec: ProceduralFloorSpec): Set<string> {
   return tags;
 }
 
-function proceduralSpecMatchesRoute(spec: ProceduralFloorSpec, route: QuestRouteTarget, baseFloor?: number): boolean {
-  if (baseFloor !== undefined && false) return false;
+function proceduralSpecMatchesRoute(spec: ProceduralFloorSpec, route: QuestRouteTarget): boolean {
   if (route.z !== undefined && spec.z !== route.z) return false;
   if (route.anomalyId !== undefined && spec.anomalyId !== route.anomalyId) return false;
   if (route.tags?.length) {
@@ -187,18 +178,17 @@ function proceduralSpecMatchesRoute(spec: ProceduralFloorSpec, route: QuestRoute
 function resolveProceduralRouteTarget(
   state: GameState,
   route: QuestRouteTarget,
-  baseFloor?: number,
 ): ProceduralFloorSpec | undefined {
   const run = ensureFloorRunState(state);
   if (route.z !== undefined && isProceduralFloorZ(route.z)) {
     const spec = run.specs[proceduralFloorKey(route.z)];
-    return spec && proceduralSpecMatchesRoute(spec, route, baseFloor) ? spec : undefined;
+    return spec && proceduralSpecMatchesRoute(spec, route) ? spec : undefined;
   }
 
   let best: ProceduralFloorSpec | undefined;
   let bestScore = -Infinity;
   for (const spec of Object.values(run.specs)) {
-    if (!proceduralSpecMatchesRoute(spec, route, baseFloor)) continue;
+    if (!proceduralSpecMatchesRoute(spec, route)) continue;
     const visitedPenalty = run.visited[spec.key] ? 12 : 0;
     const score = spec.danger * 20 - Math.abs(spec.z - run.currentZ) - visitedPenalty;
     if (score > bestScore || (score === bestScore && (!best || spec.z < best.z))) {
@@ -209,13 +199,15 @@ function resolveProceduralRouteTarget(
   return best;
 }
 
-function routeBaseFloor(state: GameState, route: QuestRouteTarget, fallback?: number): number | undefined {
+/** Route coordinate of a resolved route target. Used to keep the quest's own
+ *  `targetFloorZ`/`visitFloorZ` hint in sync with the route it actually points
+ *  at; it used to answer a fixed legacy base-floor code, which stamped every
+ *  routed contract as «Жилая зона» in the log. */
+function routeFloorZ(state: GameState, route: QuestRouteTarget, fallback?: number): number | undefined {
   const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
   if (z !== undefined) {
-    const designFloor = designFloorAtZ(z);
-    if (designFloor) return 100;
-    const spec = ensureFloorRunState(state).specs[proceduralFloorKey(z)];
-    if (spec) return 100;
+    if (designFloorAtZ(z)) return z;
+    if (ensureFloorRunState(state).specs[proceduralFloorKey(z)]) return z;
   }
   return fallback;
 }
@@ -253,14 +245,14 @@ function normalizeQuestRouteTarget(q: Quest, state: GameState): QuestRouteTarget
       normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     }
   } else {
-    const spec = resolveProceduralRouteTarget(state, route, q.targetFloorZ);
+    const spec = resolveProceduralRouteTarget(state, route);
     if (spec) normalized = routeTargetFromSpec(normalized, spec);
   }
 
-  const baseFloor = routeBaseFloor(state, normalized, q.targetFloorZ);
-  if (baseFloor !== undefined) {
-    q.targetFloorZ = baseFloor;
-    if (q.type === QuestType.VISIT) q.visitFloorZ = baseFloor;
+  const routeZTarget = routeFloorZ(state, normalized, q.targetFloorZ);
+  if (routeZTarget !== undefined) {
+    q.targetFloorZ = routeZTarget;
+    if (q.type === QuestType.VISIT) q.visitFloorZ = routeZTarget;
   }
   setQuestTargetRoute(q, normalized);
   return normalized;
@@ -324,10 +316,8 @@ function entryMatchesRouteTarget(entry: FloorRunEntry, route: QuestRouteTarget, 
     const tags = proceduralSpecRouteTags(entry.spec);
     for (const tag of route.tags) if (!tags.has(tag)) return false;
   }
-  if (normalizedZ === undefined && route.designFloorId === undefined && route.anomalyId === undefined && !route.tags?.length) {
-    const baseFloor = routeBaseFloor(state, route);
-    return baseFloor === undefined || entry.themeTags.includes(baseFloor as any);
-  }
+  // A route with no coordinate, design floor, anomaly or tag carries no
+  // positional claim at all, so every entry matches.
   return true;
 }
 
@@ -403,7 +393,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
 
 function zhelemishTargetHint(target: ZhelemishNiiTarget): string {
   if (target.kind === 'procedural_mushroom') {
-    return `НИИ: Z${formatFloorZ(target.z ?? 0)}, процедурная грибница (${CONTRACT_FLOOR_NAMES[target.z ?? 100]}-основа). Ищите аппаратуру/стеллажи с желемышем; сдавайте только запечатанную пробу.`;
+    return `НИИ: Z${formatFloorZ(target.z ?? 0)}, процедурная грибница (${floorLevelDisplayName(target.themeTags)}-основа). Ищите аппаратуру/стеллажи с желемышем; сдавайте только запечатанную пробу.`;
   }
   return 'Жилая зона: грибная прачечная первой смены. Ищите аппаратный стол с пломбой НИИ; открытый комок будет загрязнён.';
 }
@@ -468,8 +458,8 @@ function questObjectiveKindForContract(def: ContractDef): QuestRewardObjectiveKi
 function contractTargetZ(def: ContractDef, q: Quest): number {
   const route = questTargetRoute(q);
   if (route?.z !== undefined) return route.z;
-  if (route?.designFloorId) return designFloorById(route.designFloorId)?.z ?? zForBaseFloor(def.target.z);
-  return zForBaseFloor(def.target.z);
+  if (route?.designFloorId) return designFloorById(route.designFloorId)?.z ?? (routeZ(def.target.z) ?? 0);
+  return routeZ(def.target.z) ?? 0;
 }
 
 function contractTargetDanger(state: GameState, def: ContractDef, q: Quest): 1 | 2 | 3 | 4 | 5 {
@@ -550,7 +540,7 @@ export function questTargetLiftDirection(q: Quest, state: GameState): LiftDirect
   const positionalRoute = routeHasPositionalTarget(route) ? route : undefined;
   if ((floor === undefined && !positionalRoute) || isQuestTargetOnCurrentFloor(q, state)) return undefined;
   const currentZ = currentFloorRunEntry(state).z;
-  const targetZ = routeZ(positionalRoute?.z) ?? (positionalRoute?.designFloorId ? designFloorById(positionalRoute.designFloorId)?.z : undefined) ?? (floor !== undefined ? zForBaseFloor(floor) : undefined);
+  const targetZ = routeZ(positionalRoute?.z) ?? (positionalRoute?.designFloorId ? designFloorById(positionalRoute.designFloorId)?.z : undefined) ?? routeZ(floor);
   if (targetZ === undefined) return undefined;
   if (currentZ === targetZ) return undefined;
   return targetZ < currentZ ? LiftDirection.DOWN : LiftDirection.UP;

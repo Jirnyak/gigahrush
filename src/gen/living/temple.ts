@@ -51,7 +51,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: 'batushka',
   npc: NPC_DEF,
-  homeFloorKey: storyNpcFloorKey(60),
+  homeFloorKey: storyNpcFloorKey(14),
   tags: ['kvartiry', 'temple'],
   quests: [
     {
