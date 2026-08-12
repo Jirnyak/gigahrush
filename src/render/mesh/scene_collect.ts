@@ -1,3 +1,4 @@
+import { getEntityIndex } from '../../systems/entity_index';
 import {
   Cell,
   ContainerKind,
@@ -2176,6 +2177,7 @@ export function collectMeshChunk(
 
 interface BillboardCacheEntry {
   entityCount: number;
+  indexVersion: number;
   map: Map<number, Entity[]>;
 }
 const billboardCache = new WeakMap<World, BillboardCacheEntry>();
@@ -2183,8 +2185,11 @@ const billboardCache = new WeakMap<World, BillboardCacheEntry>();
 function getBillboardMap(world: World, entities?: readonly Entity[]): Map<number, Entity[]> | undefined {
   if (!entities) return undefined;
   const count = entities.length;
+  // The entity count alone misses a same-frame death+spawn, which left a dead
+  // billboard in the map; the index version changes on every rebuild.
+  const indexVersion = getEntityIndex().getVersion();
   let entry = billboardCache.get(world);
-  if (!entry || entry.entityCount !== count) {
+  if (!entry || entry.entityCount !== count || entry.indexVersion !== indexVersion) {
     const map = new Map<number, Entity[]>();
     for (const e of entities) {
       if (e.alive && e.type === EntityType.BILLBOARD) {
@@ -2197,7 +2202,7 @@ function getBillboardMap(world: World, entities?: readonly Entity[]): Map<number
         list.push(e);
       }
     }
-    entry = { entityCount: count, map };
+    entry = { entityCount: count, indexVersion, map };
     billboardCache.set(world, entry);
   }
   return entry.map;
