@@ -6419,7 +6419,7 @@ function normalizeInventory(input: unknown): Item[] {
 function normalizeEquippedItem(
   value: unknown,
   inventory: readonly Item[],
-  equipSlot: 'weapon' | 'tool',
+  equipSlot: 'weapon' | 'tool' | 'armor',
 ): string {
   const defId = cleanSaveText(value, '', 64);
   if (!defId || !inventory.some(slot => slot.defId === defId)) return '';
@@ -6755,7 +6755,10 @@ function loadGame(): boolean {
     const data = isRecord(parsed) ? parsed : {};
     const dataPlayer = isRecord(data.player) ? data.player : {};
     const dataState = isRecord(data.state) ? data.state : {};
-    const savedFloor = isValidZ(dataState.currentZ) ? zForBaseFloor(dataState.currentZ) : (typeof dataState.currentZ === 'number' ? dataState.currentZ : zForBaseFloor(100));
+    // Fallback route coordinate for saves without a restorable floorRun. The old
+    // form ran a valid z through zForBaseFloor, which answers 0 for every odd
+    // (procedural) z — a save made on a procedural floor fell back to the start.
+    const savedFloor = isValidZ(dataState.currentZ) ? dataState.currentZ : 0;
     const savedFloorRun = floorRunSaveHasRestorableRoute(dataState.floorRun)
       ? dataState.floorRun as Parameters<typeof setFloorRunState>[1]
       : undefined;
@@ -6767,6 +6770,7 @@ function loadGame(): boolean {
     const normalizedQuests = normalizeQuestList(dataState.quests, dataState.nextQuestId, normalizedClock.totalMinutes);
     const normalizedWeapon = normalizeEquippedItem(dataPlayer.weapon, normalizedInventory, 'weapon');
     const normalizedTool = normalizeEquippedItem(dataPlayer.tool, normalizedInventory, 'tool');
+    const normalizedArmor = normalizeEquippedItem(dataPlayer.armorDefId, normalizedInventory, 'armor');
 
     setFloorRunState(state, savedFloorRun, savedFloor);
     const loadedFloorInstances = setFloorInstanceState(state, dataState.floorInstances as Parameters<typeof setFloorInstanceState>[1], savedFloor);
@@ -6850,6 +6854,7 @@ function loadGame(): boolean {
         inventory: normalizedInventory,
         weapon: normalizedWeapon,
         tool: normalizedTool,
+        armorDefId: normalizedArmor || undefined,
         money: clampInt(dataPlayer.money, 100, 0, MAX_SAVE_MONEY),
         rpg: normalizedRpg,
         statuses: normalizePlayerStatuses(dataPlayer.statuses),
@@ -6879,12 +6884,12 @@ function loadGame(): boolean {
       state.tutorialMode = dataState.tutorialMode === true;
       state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
       state.tutorialExitTimer = typeof dataState.tutorialExitTimer === 'number' ? dataState.tutorialExitTimer : undefined;
-      // @ts-ignore
-      state.currentZ = floor;
-      // @ts-ignore
-      setFloorRunState(state, savedFloorRun, floor);
-      // @ts-ignore
-      setFloorInstanceState(state, loadedFloorInstances, floor);
+      // `floor` is the generation target (theme tags of the restored entry); the
+      // run coordinate is the entry's z. Assigning the tag array here left
+      // state.currentZ non-numeric until the first lift ride.
+      state.currentZ = loadedRunEntry.z;
+      setFloorRunState(state, savedFloorRun, loadedRunEntry.z);
+      setFloorInstanceState(state, loadedFloorInstances, loadedRunEntry.z);
       setLiftArachnaState(state, dataState.liftArachna as Parameters<typeof setLiftArachnaState>[1]);
       setPseudoliftState(state, dataState.pseudolift as Parameters<typeof setPseudoliftState>[1]);
       state.worldEvents = normalizeWorldEventState(dataState.worldEvents as Parameters<typeof normalizeWorldEventState>[0]);
