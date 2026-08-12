@@ -2949,6 +2949,77 @@ function uploadSurfaceIndexCell(gl: WebGL2RenderingContext, glState: GLState, ci
   );
 }
 
+/* Static lamp/candle scan for the dynamic light slots. The scan itself sweeps a
+ * 81x81 cell disc, but its result only depends on the camera cell and the
+ * feature/ceiling data, so it is cached and refreshed when one of those changes
+ * — not 60 times a second. Only the nearest slots are kept, insert-sorted into a
+ * fixed pool, so neither the sweep nor the frame allocates. */
+interface ScannedLight {
+  lx: number; ly: number; lz: number;
+  r: number; g: number; b: number;
+  radius: number; dist2: number;
+}
+
+const DYNAMIC_LIGHT_SLOTS = 8;
+const scannedLights: ScannedLight[] = Array.from({ length: DYNAMIC_LIGHT_SLOTS }, () => (
+  { lx: 0, ly: 0, lz: 0, r: 0, g: 0, b: 0, radius: 0, dist2: 0 }
+));
+let scannedLightCount = 0;
+let scannedLightWorld: World | null = null;
+let scannedLightCx = Number.NaN;
+let scannedLightCy = Number.NaN;
+let scannedLightFeatureVersion = -1;
+let scannedLightCeilVersion = -1;
+
+function insertScannedLight(lx: number, ly: number, lz: number, r: number, g: number, b: number, radius: number, dist2: number): void {
+  if (scannedLightCount >= DYNAMIC_LIGHT_SLOTS && dist2 >= scannedLights[DYNAMIC_LIGHT_SLOTS - 1].dist2) return;
+  let pos = scannedLightCount < DYNAMIC_LIGHT_SLOTS ? scannedLightCount++ : DYNAMIC_LIGHT_SLOTS - 1;
+  while (pos > 0 && scannedLights[pos - 1].dist2 > dist2) {
+    const prev = scannedLights[pos - 1];
+    scannedLights[pos - 1] = scannedLights[pos];
+    scannedLights[pos] = prev;
+    pos--;
+  }
+  const slot = scannedLights[pos];
+  slot.lx = lx; slot.ly = ly; slot.lz = lz;
+  slot.r = r; slot.g = g; slot.b = b;
+  slot.radius = radius; slot.dist2 = dist2;
+}
+
+function refreshScannedLights(world: World, cx: number, cy: number): void {
+  if (
+    scannedLightWorld === world &&
+    scannedLightCx === cx &&
+    scannedLightCy === cy &&
+    scannedLightFeatureVersion === world.featureVersion &&
+    scannedLightCeilVersion === world.ceilHeightVersion
+  ) return;
+  scannedLightWorld = world;
+  scannedLightCx = cx;
+  scannedLightCy = cy;
+  scannedLightFeatureVersion = world.featureVersion;
+  scannedLightCeilVersion = world.ceilHeightVersion;
+  scannedLightCount = 0;
+
+  const maxDrawGrid = Math.ceil(MAX_DRAW);
+  for (let dy = -maxDrawGrid; dy <= maxDrawGrid; dy++) {
+    for (let dx = -maxDrawGrid; dx <= maxDrawGrid; dx++) {
+      const dist2 = dx * dx + dy * dy;
+      if (dist2 > MAX_DRAW * MAX_DRAW) continue;
+      const wx = world.wrap(cx + dx);
+      const wy = world.wrap(cy + dy);
+      const idx = world.idx(wx, wy);
+      const feat = world.features[idx];
+      if (feat === Feature.LAMP) {
+        const lz = getCeilingHeightForTier(Math.max(0, world.ceilHeight[idx])) - 0.1;
+        insertScannedLight(cx + dx + 0.5, cy + dy + 0.5, lz, 1.0, 0.9, 0.8, 8.0, dist2);
+      } else if (feat === Feature.CANDLE) {
+        insertScannedLight(cx + dx + 0.5, cy + dy + 0.5, 0.4, 0.8, 0.5, 0.2, 5.0, dist2);
+      }
+    }
+  }
+}
+
 function uploadDynamicLights(
   gl: WebGL2RenderingContext,
   ru: Record<string, WebGLUniformLocation | null>,
@@ -2976,41 +3047,11 @@ function uploadDynamicLights(
     dynLightCount++;
   }
 
-  const maxDrawGrid = Math.ceil(MAX_DRAW);
-  const cx = Math.floor(px);
-  const cy = Math.floor(py);
-  const lightCandidates: { lx: number, ly: number, lz: number, r: number, g: number, b: number, radius: number, dist2: number }[] = [];
+  refreshScannedLights(world, Math.floor(px), Math.floor(py));
 
-  for (let dy = -maxDrawGrid; dy <= maxDrawGrid; dy++) {
-    for (let dx = -maxDrawGrid; dx <= maxDrawGrid; dx++) {
-      const dist2 = dx * dx + dy * dy;
-      if (dist2 > MAX_DRAW * MAX_DRAW) continue;
-
-      const wx = world.wrap(cx + dx);
-      const wy = world.wrap(cy + dy);
-      const idx = world.idx(wx, wy);
-      const feat = world.features[idx];
-
-      let lr = 0, lg = 0, lb = 0, lrad = 0;
-      if (feat === Feature.LAMP) {
-        lr = 1.0; lg = 0.9; lb = 0.8; lrad = 8.0;
-      } else if (feat === Feature.CANDLE) {
-        lr = 0.8; lg = 0.5; lb = 0.2; lrad = 5.0;
-      }
-
-      if (lrad > 0) {
-        const lx = cx + dx + 0.5;
-        const ly = cy + dy + 0.5;
-        const lz = (feat === Feature.LAMP) ? getCeilingHeightForTier(Math.max(0, world.ceilHeight[idx])) - 0.1 : 0.4;
-        lightCandidates.push({ lx, ly, lz, r: lr, g: lg, b: lb, radius: lrad, dist2 });
-      }
-    }
-  }
-
-  lightCandidates.sort((A, B) => A.dist2 - B.dist2);
-
-  for (const c of lightCandidates) {
-    if (dynLightCount >= 8) break;
+  for (let i = 0; i < scannedLightCount; i++) {
+    const c = scannedLights[i];
+    if (dynLightCount >= DYNAMIC_LIGHT_SLOTS) break;
     gl.uniform3f(ru[`uDynamicLights[${dynLightCount}].pos`]!, c.lx, c.ly, c.lz);
     gl.uniform3f(ru[`uDynamicLights[${dynLightCount}].color`]!, c.r, c.g, c.b);
     gl.uniform1f(ru[`uDynamicLights[${dynLightCount}].radius`]!, c.radius);
