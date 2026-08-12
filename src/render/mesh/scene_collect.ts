@@ -2378,12 +2378,17 @@ export const containerSourceAdapter: MeshSourceAdapter = {
   },
 };
 
+const _rawCollectScratch: MeshInstance[] = [];
+
 export function collectMeshSceneWithStats(context: MeshPassContext, out: MeshInstance[] = []): MeshSceneCollectResult {
   out.length = 0;
   const profile = resolveMeshSceneProfile(context);
   const stats = newStats();
   if (!profile.enabled) return { instances: out, stats };
-  const raw: MeshInstance[] = [];
+  // Module scratch: this collection runs every frame, and the pre-cap list is
+  // the largest array in the pass.
+  const raw = _rawCollectScratch;
+  raw.length = 0;
   scanLocalRadiusCells(context, profile, raw, stats);
   collectProceduralCeilingPipeNetwork(context, profile, raw);
   collectProceduralFloorScatter(context, profile, raw);

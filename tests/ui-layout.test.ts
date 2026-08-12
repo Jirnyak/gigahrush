@@ -42,6 +42,8 @@ class CanvasStubContext {
   fillRect(_x: number, _y: number, _w: number, _h: number): void {}
   strokeRect(_x: number, _y: number, _w: number, _h: number): void {}
   beginPath(): void {}
+  rect(_x: number, _y: number, _w: number, _h: number): void {}
+  clip(): void {}
   moveTo(_x: number, _y: number): void {}
   lineTo(_x: number, _y: number): void {}
   closePath(): void {}

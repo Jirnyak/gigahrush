@@ -3038,6 +3038,14 @@ function uploadShadowCasters(
   px: number,
   py: number
 ): void {
+  // No current program declares uShadowCasters, so getUniformLocation returns
+  // null and every upload below is a no-op. Bail before sweeping the whole
+  // entity array each frame; the sweep revives by itself once a shader exposes
+  // the uniform.
+  if (!ru['uShadowCasters[0]']) {
+    glState.shadowCasterCount = 0;
+    return;
+  }
   let shadowCasterCount = 0;
   for (const e of entities) {
     if (shadowCasterCount >= 32) break;
@@ -3050,8 +3058,8 @@ function uploadShadowCasters(
       height = 0.15;
     }
 
-    const dx = e.x - px;
-    const dy = e.y - py;
+    const dx = toroidalDelta(e.x, px);
+    const dy = toroidalDelta(e.y, py);
     if (dx * dx + dy * dy > MAX_DRAW * MAX_DRAW) continue;
 
     glState.shadowCasters[shadowCasterCount * 4 + 0] = e.x;
@@ -3928,12 +3936,15 @@ function featureSpriteZ(feature: Feature, tier: number = 0): number {
   }
 }
 
-function featureOffset(feature: Feature, x: number, y: number): { ox: number; oy: number } {
+// Written into module scratch instead of a fresh object: this resolves once per
+// visible feature cell per frame.
+let _featureOffsetX = 0;
+let _featureOffsetY = 0;
+
+function featureOffset(feature: Feature, x: number, y: number): void {
   const h = ((x * 73856093) ^ (y * 19349663) ^ (feature * 83492791)) >>> 0;
-  return {
-    ox: (((h & 3) - 1.5) * 0.035),
-    oy: ((((h >>> 2) & 3) - 1.5) * 0.035),
-  };
+  _featureOffsetX = ((h & 3) - 1.5) * 0.035;
+  _featureOffsetY = (((h >>> 2) & 3) - 1.5) * 0.035;
 }
 
 function containerSpriteScale(kind: ContainerKind): number {
@@ -3992,9 +4003,9 @@ function collectStaticObjectSprites(world: World, px: number, py: number, count:
       if (feature === Feature.NONE || feature === Feature.CANDLE) continue;
       const cell = world.cells[idx];
       if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-      const off = featureOffset(feature, x, y);
-      const sx = x + 0.5 + off.ox;
-      const sy = y + 0.5 + off.oy;
+      featureOffset(feature, x, y);
+      const sx = x + 0.5 + _featureOffsetX;
+      const sy = y + 0.5 + _featureOffsetY;
       const dx = toroidalDelta(sx, px);
       const dy = toroidalDelta(sy, py);
       const dist = dx * dx + dy * dy;
@@ -4256,7 +4267,10 @@ function renderSpritesGL(
       // 2) Drop shadow blob (for ambient lighting)
       let shadowIntensity = eLight;
 
-      let bestLight: { x: number, y: number, r: number, g: number, b: number } | null = null;
+      // Scalars, not an object: this runs per drawn sprite (up to
+      // VISIBLE_SPRITE_CAP) times per light, every frame.
+      let bestLightX = 0;
+      let bestLightY = 0;
       let bestWeight = -1;
       for (let i = 0; i < glState.dynamicLightCount; i++) {
         const lx = glState.dynamicLightsPos[i * 3];
@@ -4270,17 +4284,18 @@ function renderSpritesGL(
           const weight = (1.0 - dist / radius) * Math.max(lr, lg, lb);
           if (weight > bestWeight) {
             bestWeight = weight;
-            bestLight = { x: lx, y: ly, r: lr, g: lg, b: lb };
+            bestLightX = lx;
+            bestLightY = ly;
           }
         }
       }
 
-      if (bestLight) {
+      if (bestWeight >= 0) {
         // True dynamic 2D projection drop shadow (uIsShadow == 3)
         // Project onto floor away from the light source
-        const lx = bestLight.x;
-        const ly = bestLight.y;
-        
+        const lx = bestLightX;
+        const ly = bestLightY;
+
         let lgx = (ex - lx);
         let lgy = (ey - ly);
         const ldist = Math.hypot(lgx, lgy);

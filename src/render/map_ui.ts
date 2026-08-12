@@ -1099,6 +1099,14 @@ function drawMap(
   ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
   ctx.fillRect(mapX, mapY, mapW, mapH);
 
+  // Markers are placed by cell offset and drawn centred, so a marker on the last
+  // ring lands exactly on the border and spills its half-size (up to 6px) onto
+  // whatever HUD panel sits next to the minimap. Clip everything to the widget.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mapX, mapY, mapW, mapH);
+  ctx.clip();
+
   const pxI = Math.floor(player.x);
   const pyI = Math.floor(player.y);
   const cellW = mapW / (radius * 2);
@@ -1277,6 +1285,7 @@ function drawMap(
     pcy + Math.sin(player.angle) * 4 * cellH,
   );
   ctx.stroke();
+  ctx.restore();
 }
 
 function overviewSignature(world: World, highContrast: boolean): string {

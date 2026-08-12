@@ -36,19 +36,35 @@ function cloneStats(stats: MeshPassStats): MeshPassStats {
   return { ...stats };
 }
 
+const EMISSIVE_COLOR: readonly [number, number, number] = [210, 174, 96];
+const DEFAULT_MESH_COLOR: readonly [number, number, number] = [118, 112, 96];
+// Colour is a pure function of the model id, but the lookup ran up to 13
+// substring scans and allocated a fresh triple per instance per frame
+// (128..512 instances). Resolve once per id and share the tuple.
+const meshColorByModelId = new Map<string, readonly [number, number, number]>();
+
+function resolveMeshColor(modelId: string): readonly [number, number, number] {
+  if (modelId.includes('column')) return [112, 114, 108];
+  if (modelId.includes('machine') || modelId.includes('apparatus')) return [82, 92, 88];
+  if (modelId.includes('pipe') || modelId.includes('cable')) return [92, 74, 56];
+  if (modelId.includes('panel') || modelId.includes('button')) return [82, 92, 92];
+  if (modelId.includes('meat') || modelId.includes('organic')) return [112, 50, 50];
+  if (modelId.includes('cave')) return [92, 90, 82];
+  if (modelId.includes('collector')) return [74, 70, 60];
+  if (modelId.includes('corridor')) return [96, 96, 88];
+  if (modelId.includes('bed')) return [94, 82, 82];
+  if (modelId.includes('chair') || modelId.includes('table') || modelId.includes('desk') || modelId.includes('shelf')) return [112, 82, 52];
+  return DEFAULT_MESH_COLOR;
+}
+
 function colorForSceneInstance(instance: SceneMeshInstance): readonly [number, number, number] {
-  if ((instance.flags & MeshInstanceFlag.Emissive) !== 0) return [210, 174, 96];
-  if (instance.modelId.includes('column')) return [112, 114, 108];
-  if (instance.modelId.includes('machine') || instance.modelId.includes('apparatus')) return [82, 92, 88];
-  if (instance.modelId.includes('pipe') || instance.modelId.includes('cable')) return [92, 74, 56];
-  if (instance.modelId.includes('panel') || instance.modelId.includes('button')) return [82, 92, 92];
-  if (instance.modelId.includes('meat') || instance.modelId.includes('organic')) return [112, 50, 50];
-  if (instance.modelId.includes('cave')) return [92, 90, 82];
-  if (instance.modelId.includes('collector')) return [74, 70, 60];
-  if (instance.modelId.includes('corridor')) return [96, 96, 88];
-  if (instance.modelId.includes('bed')) return [94, 82, 82];
-  if (instance.modelId.includes('chair') || instance.modelId.includes('table') || instance.modelId.includes('desk') || instance.modelId.includes('shelf')) return [112, 82, 52];
-  return [118, 112, 96];
+  if ((instance.flags & MeshInstanceFlag.Emissive) !== 0) return EMISSIVE_COLOR;
+  let color = meshColorByModelId.get(instance.modelId);
+  if (!color) {
+    color = resolveMeshColor(instance.modelId);
+    meshColorByModelId.set(instance.modelId, color);
+  }
+  return color;
 }
 
 function drawInstanceFromScene(instance: SceneMeshInstance): DrawMeshInstance {
@@ -244,8 +260,9 @@ class MeshPass implements MeshPassHandle {
       return cloneStats(stats);
     }
     const instanceOut = this.instanceScratch;
-    collectMeshInstances({ ...context, profile }, instanceOut, stats);
-    collectVoxelMeshes({ ...context, profile }, this.voxelScratch, stats);
+    const passContext = { ...context, profile };
+    collectMeshInstances(passContext, instanceOut, stats);
+    collectVoxelMeshes(passContext, this.voxelScratch, stats);
     const bufferStart = nowMs();
     const result = buildMeshVertexBatch(
       instanceOut,
