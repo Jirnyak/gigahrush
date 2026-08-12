@@ -86,3 +86,31 @@ test('actor tactic profile makes slime woman flee local hostile crowd without fu
   assert.equal(slime.ai?.goal, AIGoal.FLEE);
   assert.equal((slime.ai?.tacticNearbyHostiles ?? 0) >= 4, true);
 });
+
+// Regression lock: beginTactic used to re-arm its own timer every frame, so the
+// tactic timer could never reach zero — a slime woman that fled a crowd once
+// kept fleeing for the rest of her life, never stalking or attacking again.
+test('slime woman leaves the flee tactic once the crowd is gone', () => {
+  resetCombatStimulus();
+  const world = makeOpenWorld();
+  const clock = { hour: 8, minute: 0, totalMinutes: 8 * 60 };
+  const player = makeTestPlayer({ id: 1, x: 5.5, y: 5.5, hp: 100, maxHp: 100 });
+  const slime = slimeWoman({ x: 24.5, y: 24.5 });
+  const crowd = [
+    makeTestNpc({ id: 3, x: 23.5, y: 24.5, faction: Faction.CITIZEN }),
+    makeTestNpc({ id: 4, x: 25.5, y: 24.5, faction: Faction.CITIZEN }),
+    makeTestNpc({ id: 5, x: 24.5, y: 23.5, faction: Faction.CITIZEN }),
+    makeTestNpc({ id: 6, x: 24.5, y: 25.5, faction: Faction.CITIZEN }),
+  ];
+  const entities = [player, slime, ...crowd];
+
+  tick(world, entities, player, 8, clock);
+  assert.equal(slime.ai?.tacticId, 'slime_woman_flee_crowd');
+
+  for (const npc of crowd) npc.alive = false;
+  const alone = [player, slime];
+  // SLIME_WOMAN_FLEE_SECONDS is 2.7 at a 0.12 step.
+  for (let i = 0; i < 40; i++) tick(world, alone, player, 8.12 + i * 0.12, clock);
+
+  assert.notEqual(slime.ai?.tacticId, 'slime_woman_flee_crowd');
+});

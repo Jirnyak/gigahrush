@@ -348,14 +348,18 @@ function refreshFacts(world: World, actor: Entity, time: number, player: Entity 
 
 function beginTactic(actor: Entity, tacticId: string, phase: string, seconds: number): void {
   const ai = actor.ai!;
+  // Arm the timer on entry only. Re-arming it every frame (the tactics call this
+  // before subtracting dt) pinned it at its full value, so no tactic could ever
+  // expire: an actor that entered the flee tactic once fled for the rest of its
+  // life and never returned to stalking or attacking.
   if (ai.tacticId !== tacticId || ai.tacticPhase !== phase || (ai.tacticTimer ?? 0) <= 0) {
     ai.path = [];
     ai.pi = 0;
     ai.timer = 0;
+    ai.tacticTimer = seconds;
   }
   ai.tacticId = tacticId;
   ai.tacticPhase = phase;
-  ai.tacticTimer = Math.max(ai.tacticTimer ?? 0, seconds);
 }
 
 function followTacticPath(world: World, actor: Entity, dt: number, speedMult = 1): void {
