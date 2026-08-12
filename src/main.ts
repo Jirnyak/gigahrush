@@ -118,7 +118,7 @@ import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
 import { generateTalkText } from './systems/dialogue';
-import { updateSamosbor, rebuildWorld, clearFogInZone, updateIstotitBellCompulsion, getSamosborWarningSnapshot } from './systems/samosbor';
+import { updateSamosbor, rebuildWorld, clearFogInZone, updateIstotitBellCompulsion, getSamosborWarningSnapshot, abortSamosborRuntime } from './systems/samosbor';
 import { getActiveSamosborVariant } from './systems/samosbor_variants_runtime';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
 import { musicSystem } from './systems/music';
@@ -2674,6 +2674,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     finalizeDeathContinuationHost(host);
     state.samosborTimer = nextFloorRunSamosborCooldown(state);
     state.samosborActive = false;
+    abortSamosborRuntime();
     floorTeleportCd = 0;
     resetPsiState();
     clearLiftArachnaActive(state);
@@ -3112,6 +3113,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     ensureProceduralSpriteSeeds(entities);
     state.samosborTimer = nextFloorRunSamosborCooldown(state);
     state.samosborActive = false;
+    abortSamosborRuntime();
     floorTeleportCd = 0;
     resetPsiState();
     clearLiftArachnaActive(state);
@@ -5887,6 +5889,7 @@ function switchFloor(
     ensureProceduralSpriteSeeds(entities);
     state.samosborTimer = nextFloorRunSamosborCooldown(state);
     state.samosborActive = false;
+    abortSamosborRuntime();
     floorTeleportCd = 0;
 
     resetPsiState();
@@ -6910,6 +6913,7 @@ function loadGame(): boolean {
       // @ts-ignore
       setProductionState(state, dataState.production, floor);
       state.samosborActive = false;
+      abortSamosborRuntime();
       if (savedSamosborActive) {
         state.samosborTimer = Math.max(state.samosborTimer, 45);
         state.msgs.push(msg('Активный самосбор из сохранения сброшен: маршрут восстановлен, следующий цикл пересчитан.', state.time, '#fa4'));

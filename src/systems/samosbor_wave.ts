@@ -1515,9 +1515,12 @@ export function applyFrontFieldStitch(
 
   // Copy cells from replacement floor
   let copied = 0;
-  // Create a patch room for generic stitched cells
+  // Create a patch room for generic stitched cells. Its bounds are filled in
+  // after the copy from the cells that actually got the id — a fixed 1x1 box at
+  // (0,0) made every bbox consumer (territory, room centre, shelters, A-Life
+  // anchors) read the map corner as "the rebuilt section".
   const patchRoomId = world.rooms.length;
-  world.rooms.push({
+  const patchRoom = {
     id: patchRoomId,
     type: RoomType.COMMON,
     x: 0,
@@ -1530,7 +1533,8 @@ export function applyFrontFieldStitch(
     apartmentId: -1,
     wallTex: Tex.CONCRETE,
     floorTex: Tex.F_CONCRETE,
-  });
+  };
+  world.rooms.push(patchRoom);
 
   for (const idx of allIndices) {
     const oldFog = world.fog[idx];
@@ -1580,6 +1584,41 @@ export function applyFrontFieldStitch(
         break;
       }
     }
+  }
+
+  // Patch-room bounds from the cells that carry its id. Offsets go through
+  // world.delta so a field straddling the world seam stays a small box.
+  let patchCells = 0;
+  let patchOriginX = 0;
+  let patchOriginY = 0;
+  let patchMinDx = 0;
+  let patchMaxDx = 0;
+  let patchMinDy = 0;
+  let patchMaxDy = 0;
+  for (const idx of allIndices) {
+    if (world.roomMap[idx] !== patchRoomId) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    if (patchCells === 0) {
+      patchOriginX = x;
+      patchOriginY = y;
+    } else {
+      const dx = world.delta(patchOriginX, x);
+      const dy = world.delta(patchOriginY, y);
+      if (dx < patchMinDx) patchMinDx = dx;
+      if (dx > patchMaxDx) patchMaxDx = dx;
+      if (dy < patchMinDy) patchMinDy = dy;
+      if (dy > patchMaxDy) patchMaxDy = dy;
+    }
+    patchCells++;
+  }
+  if (patchCells === 0) {
+    if (world.rooms[world.rooms.length - 1] === patchRoom) world.rooms.pop();
+  } else {
+    patchRoom.x = world.wrap(patchOriginX + patchMinDx);
+    patchRoom.y = world.wrap(patchOriginY + patchMinDy);
+    patchRoom.w = patchMaxDx - patchMinDx + 1;
+    patchRoom.h = patchMaxDy - patchMinDy + 1;
   }
 
   refreshPassiveFeatureLists(world, source, mask);

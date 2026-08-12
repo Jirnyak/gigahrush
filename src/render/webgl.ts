@@ -4010,13 +4010,15 @@ function collectStaticObjectSprites(world: World, px: number, py: number, count:
   const maxDist2 = MAX_DRAW * MAX_DRAW;
   for (const container of world.containers) {
     if (container.access === 'secret' && !container.discovered) continue;
-    if (container.tags.includes('feature_loot') || container.tags.includes('mesh_hidden')) continue;
+    // Distance first: the tag scans below are two linear array walks, and the
+    // whole floor's container list is swept every frame.
     const ox = container.x + 0.55;
     const oy = container.y + 0.5;
     const dx = toroidalDelta(ox, px);
     const dy = toroidalDelta(oy, py);
     const dist = dx * dx + dy * dy;
     if (dist >= maxDist2) continue;
+    if (container.tags.includes('feature_loot') || container.tags.includes('mesh_hidden')) continue;
     count = pushVisibleSprite(
       count,
       null,

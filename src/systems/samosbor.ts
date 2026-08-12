@@ -423,7 +423,7 @@ function mutateFrontCell(
       world.floorTex[ci] = RANDOM_FLOOR_TEX[(rng() * RANDOM_FLOOR_TEX.length) | 0];
       world.wallTex[ci] = RANDOM_WALL_TEX[(rng() * RANDOM_WALL_TEX.length) | 0];
       if (world.roomMap[ci] >= 0) world.roomMap[ci] = -1;
-      if (world.features[ci] !== Feature.NONE) world.features[ci] = Feature.NONE;
+      world.setFeatureAt(ci, Feature.NONE, true, cellDirtyRect(ci));
       world.fog[ci] = Math.min(255, 180 + ((rng() * 75) | 0));
       world.tissue[ci] = Math.min(255, 160 + ((rng() * 95) | 0));
       frontTouchedCells.add(ci);
@@ -441,7 +441,7 @@ function mutateFrontCell(
   if (cell === Cell.FLOOR && rng() < 0.22) {
     if (!frontAdjacentLiftOrProtected(world, ci) && frontWalkableNeighborCount(world, ci) >= 3) {
       if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
-      if (world.features[ci] !== Feature.NONE) world.features[ci] = Feature.NONE;
+      world.setFeatureAt(ci, Feature.NONE, true, cellDirtyRect(ci));
       world.cells[ci] = Cell.WALL;
       world.wallTex[ci] = RANDOM_WALL_TEX[(rng() * RANDOM_WALL_TEX.length) | 0];
       if (world.roomMap[ci] >= 0) world.roomMap[ci] = -1;
@@ -489,7 +489,10 @@ function mutateFrontCell(
 
   // Feature mutation (~22%)
   if (rng() < 0.22 && cell === Cell.FLOOR) {
-    world.features[ci] = RANDOM_FEATURES[(rng() * RANDOM_FEATURES.length) | 0];
+    // setFeatureAt, not a raw write: it bumps featureVersion (GPU feature texture,
+    // mesh chunk cache, light scan), relights locally for lamp/candle and keeps
+    // world.screenCells/slideCells — which are serialized into floor memory.
+    world.setFeatureAt(ci, RANDOM_FEATURES[(rng() * RANDOM_FEATURES.length) | 0], true, cellDirtyRect(ci));
     flags |= FRONT_DIRTY_SURFACE;
   }
 
@@ -919,6 +922,37 @@ function tickSamosborRoomSirens(world: World, entities: Entity[], state: GameSta
       tags: ['samosbor', 'siren', 'living_room', 'room_siren'],
     });
   }
+}
+
+/** Drops all samosbor runtime state that is bound to the world being left.
+ *  Floor switch, death continuation and save load all clear
+ *  `state.samosborActive` directly; without this the module kept the touched-cell
+ *  set (the next stitch would rewrite those indices on an unrelated floor), the
+ *  frozen navigation cache (pinned to the discarded world, which disables the
+ *  loading-screen prewarm) and stale shelter/zone bookkeeping. */
+export function abortSamosborRuntime(): void {
+  clearSamosborFronts();
+  frontTouchedCells.clear();
+  cancelSamosborWave();
+  clearSamosborWaveSnapshot();
+  unfreezeNavigationCacheForWorld();
+  clearSamosborRoomSirens();
+  clearIstotitShelters();
+  clearLocalSamosborShelters();
+  clearSamosborWarning(true);
+  samosborSealed = false;
+  activeSamosborZoneId = -1;
+  activeSamosborPreviousZoneFaction = null;
+  activeSamosborPreviousTerritory = [];
+  activeSamosborPreviousZoneFogged = false;
+  activeSamosborScale = 'full';
+  samosborPlayerShelterRoomId = -1;
+  pendingAftermath = null;
+  fogSpawnAccum = 0;
+  samosborDirectorAccum = 0;
+  maronaryPingAccum = 0;
+  randomEntityTransferAccum = 0;
+  playerPressureSpawnAccum = 0;
 }
 
 export function resetSamosborRuntimeForTests(): void {
