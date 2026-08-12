@@ -89,7 +89,7 @@ import {
   drawSeroburmalineNoLookFx,
 } from './hud_fx';
 import { fitTextStable as fitUiText, setUiTextTime } from './ui_text';
-import { allocateHudSlot, createHudSlots, getMobileHudSafeContext, type UiRect } from './ui_layout';
+import { allocateHudSlot, canvasMenuScale, createHudSlots, getMobileHudSafeContext, mobileHudSafeInsetsForCanvas, type UiRect } from './ui_layout';
 import { autoPickupEnabled, cameraPlaneLen, hudMotionMode, screenInterferenceMode, uiElementEnabled } from '../systems/ui_orchestrator';
 import { titleLanguageDef } from '../data/languages';
 import { getLocalizationLanguage } from '../systems/localization';
@@ -1396,7 +1396,7 @@ export function drawHUD(
   const h = ctx.canvas.height;
   const sx = w / SCR_W;
   const sy = h / SCR_H;
-  const menuScale = Math.max(0.72, Math.min(1.68, Math.min(sx, sy)));
+  const menuScale = canvasMenuScale(w, h, SCR_W, SCR_H);
   const msx = menuScale;
   const msy = menuScale;
 
@@ -1409,7 +1409,7 @@ export function drawHUD(
   const mobileHud = getMobileHudSafeContext();
   const slots = createHudSlots(w, h, sx, sy, {
     mobileControls: mobileHud.enabled,
-    safeInsets: mobileHud.safeInsets,
+    safeInsets: mobileHudSafeInsetsForCanvas(mobileHud, w, h),
     bottomVitalsHeight: NEEDS_PANEL_H * sy,
     topRightWidth: 212 * sx,
   });

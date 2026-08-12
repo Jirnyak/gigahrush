@@ -7,7 +7,7 @@ import {
 } from '../core/types';
 import { occupationProfile } from '../data/occupation_profiles';
 import { cleanFloorKey, floorKeyForDesign, floorKeyZ, floorKeyKind, floorKeyRouteId } from './floor_keys';
-import { designFloorById } from '../data/design_floors';
+import { designFloorAtZ, designFloorById } from '../data/design_floors';
 import {
   alifeNpcRecordCount,
   getAlifeNpcRecordSnapshot,
@@ -41,14 +41,12 @@ const FACTION_LABELS: Record<Faction, string> = {
   [Faction.PLAYER]: 'Игрок',
 };
 
-const FLOOR_LABELS: Record<number, string> = {
-  [30]: 'Министерство',
-  [60]: 'Квартиры',
-  [100]: 'Жилая зона',
-  [140]: 'Коллекторы',
-  [180]: 'Ад',
-  [200]: 'Пустота',
-};
+/** Название этажа по маршрутной координате. Раньше карта была на кодах снятого
+ *  FloorLevel, а искали в ней по реальному z — попадания не было никогда, и
+ *  профиль печатал «этаж 14» вместо «Квартиры». */
+function floorLabelForZ(z: number): string {
+  return designFloorAtZ(z)?.displayName ?? `этаж ${z}`;
+}
 
 interface DemosJourneyLike {
   alifeId?: unknown;
@@ -293,7 +291,7 @@ function locationLabel(state: GameState, entities: readonly Entity[], snapshot: 
   const mobility = findMobilityLabel(state, snapshot.id);
   if (mobility) return mobility;
   
-  const baseFloorLabel = FLOOR_LABELS[snapshot.z] ?? `этаж ${snapshot.z}`;
+  const baseFloorLabel = floorLabelForZ(snapshot.z);
   const z = demosFloorKeyZ(state, snapshot.floorKey, snapshot.z);
   const floorNumber = demosFloorNumberLabel(z);
   

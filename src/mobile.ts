@@ -240,10 +240,13 @@ class MobileControlsImpl implements MobileControls {
   private syncHudSafeContext(): void {
     const active = this.enabled && this.context.started;
     const safe = computeMobileHudSafeInsets(active);
+    const viewport = mobileViewportSize();
     setMobileHudSafeContext({
       enabled: active,
       portrait: safe.portrait,
       safeInsets: safe.safeInsets,
+      viewportWidth: viewport.w,
+      viewportHeight: viewport.h,
     });
     const cssInsets = safe.safeInsets ?? { top: 0, right: 0, bottom: 0, left: 0 };
     this.root.style.setProperty('--mobile-safe-top-px', `${cssInsets.top}px`);

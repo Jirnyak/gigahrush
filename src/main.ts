@@ -108,7 +108,7 @@ import { resetComputerState, restoreComputersFromSave } from './systems/computer
 import { resetNetHackState, restoreNetHackFromSave } from './systems/net_hack';
 import { stampMark, MarkType } from './systems/surface_marks';
 import { stampUrineTrace } from './systems/urination';
-import { containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
+import { canvasMenuScale, containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
@@ -8120,9 +8120,9 @@ function activateTradeSelection(npc: Entity): void {
 }
 
 function menuScale(): { sx: number; sy: number } {
-  const sx = hudCanvas.width / SCR_W;
-  const sy = hudCanvas.height / SCR_H;
-  const s = Math.max(0.8, Math.min(2, Math.min(sx, sy)));
+  // Same helper the panels are drawn with — the tap layer must not clamp the
+  // scale differently than the draw layer.
+  const s = canvasMenuScale(hudCanvas.width, hudCanvas.height, SCR_W, SCR_H);
   return { sx: s, sy: s };
 }
 
@@ -8376,7 +8376,10 @@ function pointInRect(x: number, y: number, rx: number, ry: number, rw: number, r
 }
 
 function handleTapControls(y: number, h: number, sy: number): void {
-  const top = 34 * sy;
+  // Must match the row origin the panel is drawn with (controls_ui.ts /
+  // ui_settings_ui.ts use 44*sy): a 10*sy offset over a 12*sy pitch made 83% of
+  // every drawn row select the row below it.
+  const top = 44 * sy;
   const rowH = 12 * sy;
   const visible = controlsVisibleRows();
   const relRow = Math.floor((y - top) / rowH);
@@ -8402,7 +8405,7 @@ function handleTapControls(y: number, h: number, sy: number): void {
 }
 
 function handleTapUiSettings(y: number, h: number, sy: number): void {
-  const top = 34 * sy;
+  const top = 44 * sy;
   const rowH = 12 * sy;
   const visible = uiSettingsVisibleRows();
   const relRow = Math.floor((y - top) / rowH);

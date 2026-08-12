@@ -182,6 +182,11 @@ export function drawHelpMenu(
     const start = col * perColumn;
     const end = Math.min(sections.length, start + perColumn);
     for (let i = start; i < end; i++) {
+      // A section that cannot fit must not be started: the per-line guard alone
+      // let the heading and its rule paint past the panel — on a phone in
+      // landscape the single-column layout pushed the last four headings over
+      // the footer and off the canvas.
+      if (y + 11 * s > contentBottom) break;
       y = drawHelpSection(ctx, sections[i], x, y, colW, contentBottom, s, uiTime, 1230 + i * 7);
     }
   }

@@ -107,14 +107,17 @@ function requestPointerLockSafe(canvas: HTMLCanvasElement): void {
   }
 }
 
-function captureTextInput(input: InputState, e: KeyboardEvent): void {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
+/** Returns true when the keystroke was consumed as text. Navigation keys
+ *  (Escape, Enter, arrows, …) are not consumed and still reach the bindings. */
+function captureTextInput(input: InputState, e: KeyboardEvent): boolean {
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
   let text = '';
   if (e.key === 'Backspace') text = '\b';
   else if (e.key === 'Delete') text = '\x7f';
   else if (e.key.length === 1) text = e.key;
-  if (!text) return;
+  if (!text) return false;
   input.textInput = (input.textInput + text).slice(-64);
+  return true;
 }
 
 class InputBinder {
@@ -151,7 +154,13 @@ class InputBinder {
       e.preventDefault();
       this.options.onFullscreenToggle?.();
     }
-    if (this.options.shouldCaptureTextInput?.() === true) captureTextInput(this.input, e);
+    // A keystroke eaten by a text field must not also drive its gameplay
+    // binding: with an online host running unpaused, typing in the Demos search
+    // used to walk, sleep and relieve the character.
+    if (this.options.shouldCaptureTextInput?.() === true && captureTextInput(this.input, e)) {
+      e.preventDefault();
+      return;
+    }
     applyControlCode(this.input, e.code, true);
     e.preventDefault();
   }

@@ -26,8 +26,10 @@ export const FACTION_LOOT_PROFILES: Record<Faction, LootProfile> = {
 
 export function calculateMaxLootValue(level: number, danger: number, faction: Faction): number {
   // Smooth exponential: knives at d1→shotguns d3→automatics d5/high level
-  // Floor of 500 ensures basic firearms (makarov=420) are always in the pool;
-  // weighted random keeps them rare at low tiers without hard-gating.
+  // Floor of 1000 ensures basic firearms (makarov=420) are always in the pool;
+  // weighted random keeps them rare at low tiers without hard-gating. Note the
+  // floor also swallows the curve itself until roughly level 49 — depth scaling
+  // is a balance question for the owner, not a bug in this helper.
   // Energy/BFG stay legendary (value 60000+) — unreachable even at max.
   let base = Math.max(1000, 15 + Math.pow(danger * 2 + level * 0.6, 2.1) * 0.45);
   if (faction === Faction.LIQUIDATOR) base *= 1.8;

@@ -9,6 +9,14 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** Uniform scale of the canvas menu layer. Draw and hit-test must use the same
+ *  clamp: main.ts used to clamp to [0.8, 2] while the panels were painted with
+ *  [0.72, 1.68], so on wide tablets taps landed on a different row than the one
+ *  drawn. */
+export function canvasMenuScale(canvasW: number, canvasH: number, scrW: number, scrH: number): number {
+  return clamp(Math.min(canvasW / scrW, canvasH / scrH), 0.72, 1.68);
+}
+
 export interface UiRect {
   x: number;
   y: number;
@@ -26,7 +34,14 @@ export interface HudSafeInsets {
 export interface MobileHudSafeContext {
   enabled: boolean;
   portrait: boolean;
+  /** CSS pixels — the same numbers the touch DOM is laid out with. */
   safeInsets?: Partial<HudSafeInsets>;
+  /** CSS width of the viewport the insets were measured in. The HUD canvas runs
+   *  at a fraction of that (PIXEL_SCALE), so the insets must be rescaled before
+   *  they are used as canvas units — unscaled they reserved twice the space and
+   *  could collapse every HUD slot to zero width in portrait. */
+  viewportWidth?: number;
+  viewportHeight?: number;
 }
 
 let mobileHudSafeContext: MobileHudSafeContext = {
@@ -39,6 +54,28 @@ export function setMobileHudSafeContext(next: MobileHudSafeContext): void {
     enabled: next.enabled,
     portrait: next.portrait,
     safeInsets: next.safeInsets,
+    viewportWidth: next.viewportWidth,
+    viewportHeight: next.viewportHeight,
+  };
+}
+
+/** Mobile safe insets converted from CSS pixels into canvas pixels. */
+export function mobileHudSafeInsetsForCanvas(
+  context: MobileHudSafeContext,
+  canvasW: number,
+  canvasH: number,
+): Partial<HudSafeInsets> | undefined {
+  const insets = context.safeInsets;
+  if (!insets) return undefined;
+  const vw = context.viewportWidth;
+  const vh = context.viewportHeight;
+  const scaleX = vw && vw > 0 ? canvasW / vw : 1;
+  const scaleY = vh && vh > 0 ? canvasH / vh : 1;
+  return {
+    top: insets.top === undefined ? undefined : insets.top * scaleY,
+    bottom: insets.bottom === undefined ? undefined : insets.bottom * scaleY,
+    left: insets.left === undefined ? undefined : insets.left * scaleX,
+    right: insets.right === undefined ? undefined : insets.right * scaleX,
   };
 }
 

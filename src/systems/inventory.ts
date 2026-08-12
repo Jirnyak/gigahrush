@@ -1281,23 +1281,41 @@ export function getInventoryPrepSummary(e: Entity): InventoryPrepLine[] {
   ];
 }
 
-function hasRoomForOutputAfterConsuming(e: Entity, outputId: string, consumedIds: readonly string[]): boolean {
+/** Room for `outputCount` units of `outputId` once `consumedIds` leave the bag.
+ *  addItem is all-or-nothing, so a guard that only proved room for a single unit
+ *  let the input be consumed while the multi-unit payout returned zero. */
+function hasRoomForOutputAfterConsuming(
+  e: Entity,
+  outputId: string,
+  consumedIds: readonly string[],
+  outputCount = 1,
+): boolean {
   const def = ITEMS[outputId];
   if (!def) return false;
   const inv = e.inventory ?? [];
-  if (inv.some(slot => slot.defId === outputId && slot.count < getStack(def) && canStackData(slot.data, undefined))) return true;
+  const stack = getStack(def);
+  const needed = Math.max(1, outputCount);
 
   const consumeCounts = new Map<string, number>();
   for (const id of consumedIds) consumeCounts.set(id, (consumeCounts.get(id) ?? 0) + 1);
   let freedSlots = 0;
+  let capacity = 0;
   for (const slot of inv) {
     const consume = consumeCounts.get(slot.defId) ?? 0;
-    if (consume <= 0) continue;
-    const taken = Math.min(slot.count, consume);
-    consumeCounts.set(slot.defId, consume - taken);
-    if (taken >= slot.count) freedSlots++;
+    if (consume > 0) {
+      const taken = Math.min(slot.count, consume);
+      consumeCounts.set(slot.defId, consume - taken);
+      if (taken >= slot.count) {
+        freedSlots++;
+        continue;
+      }
+    }
+    if (slot.defId === outputId && canStackData(slot.data, undefined)) {
+      capacity += Math.max(0, stack - slot.count);
+    }
   }
-  return inv.length - freedSlots < MAX_INVENTORY_SLOTS;
+  const freeSlots = Math.max(0, MAX_INVENTORY_SLOTS - (inv.length - freedSlots));
+  return capacity + freeSlots * stack >= needed;
 }
 
 function consumeDocumentItems(e: Entity, ids: readonly string[]): boolean {
@@ -1401,7 +1419,7 @@ function handleDirectDocumentActionUse(
 
   const consume = action.consume !== false;
   const outputCount = Math.max(1, action.outputCount ?? 1);
-  if (action.outputItemId && !hasRoomForOutputAfterConsuming(e, action.outputItemId, consume ? [defId] : [])) {
+  if (action.outputItemId && !hasRoomForOutputAfterConsuming(e, action.outputItemId, consume ? [defId] : [], outputCount)) {
     msgs.push(msg('Некуда положить выдачу. Освободите слот перед окном.', time, '#aa8'));
     return true;
   }
