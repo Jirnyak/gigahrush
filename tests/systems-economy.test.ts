@@ -25,8 +25,11 @@ test('getEconomyQuote calculates correct prices considering item value, demand, 
   const quoteCanned = getEconomyQuote(state, 'canned');
 
   assert.equal(quoteCanned.basePrice, 10);
-  assert.equal(quoteCanned.buyPrice, 12);
+  // Жилая зона обслуживается караванными линиями, поэтому в цене покупки
+  // сидит их тариф (до починки линий он был инертен и цена была 12).
+  assert.equal(quoteCanned.buyPrice, 13);
   assert.equal(quoteCanned.sellPrice, 9);
+  assert.ok(quoteCanned.tags.includes('caravan_tariff'));
   assert.equal(quoteCanned.scarcityMultiplier, 1);
   assert.equal(typeof quoteCanned.demandMultiplier, 'number');
   assert.equal(typeof quoteCanned.tariffMultiplier, 'number');

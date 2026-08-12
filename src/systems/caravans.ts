@@ -11,7 +11,8 @@ import {
   type WorldEvent,
 } from '../core/types';
 import type { World } from '../core/world';
-import { CARAVAN_LANE_BY_ID, CARAVAN_LANES, SMALL_CARAVAN_TEMPLATES, type CaravanLaneDef, type SmallCaravanTemplateDef } from '../data/caravans';
+import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z } from '../data/procedural_floors';
+import { CARAVAN_LANE_BY_ID, CARAVAN_LANES, SMALL_CARAVAN_TEMPLATES, laneFromZ, laneToZ, type CaravanLaneDef, type SmallCaravanTemplateDef } from '../data/caravans';
 import type { EconomyFloorRef } from '../data/economy_rules';
 import { addFactionRelMutual } from '../data/relations';
 import { isPlotNpc } from '../data/plot';
@@ -23,7 +24,7 @@ import {
   recordAlifeNpcDeath,
   sampleAlifeFloorRecordIds,
 } from './alife';
-import { changeResourceStock, invalidateEconomyPrices, registerEconomyTariffProvider } from './economy';
+import { changeResourceStock, invalidateEconomyPrices, moveResourceStock, registerEconomyTariffProvider } from './economy';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { cleanFloorKey, floorKeyForDesign  } from './floor_keys';
 
@@ -196,11 +197,11 @@ function normalizeMemberAlifeIds(value: unknown, limit: number): number[] {
 }
 
 function lanePrimaryFromFloorKey(def: CaravanLaneDef): string {
-  return cleanFloorKey(def.fromFloorKeys?.[0] ?? floorKeyForDesign(String(def.fromFloor)));
+  return cleanFloorKey(def.fromFloorKeys?.[0] ?? floorKeyForDesign(String(laneFromZ(def))));
 }
 
 function lanePrimaryToFloorKey(def: CaravanLaneDef): string {
-  return cleanFloorKey(def.toFloorKeys?.[0] ?? floorKeyForDesign(String(def.toFloor)));
+  return cleanFloorKey(def.toFloorKeys?.[0] ?? floorKeyForDesign(String(laneToZ(def))));
 }
 
 function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunState | undefined {
@@ -211,8 +212,10 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
   const def = CARAVAN_LANE_BY_ID[laneId];
   if (!template || !def) return undefined;
   const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, 48) : `${template.id}_${Math.floor(now)}`;
-  const floor = typeof raw.z === 'number' ? raw.z : def.toFloor;
-  if (![30, 60, 100, 140, 180, 200].includes(floor)) return undefined;
+  // Route coordinate of the run itself: a caravan is spawned on the floor the
+  // player is standing on, not on the lane's destination.
+  const floor = typeof raw.z === 'number' ? Math.trunc(raw.z) : laneToZ(def);
+  if (!Number.isFinite(floor) || floor < FLOOR_RUN_MIN_Z || floor > FLOOR_RUN_MAX_Z) return undefined;
   const status = normalizeSmallCaravanStatus(raw.status);
   const expiresAt = saneNumber(raw.expiresAt, now + SMALL_CARAVAN_ACTIVE_SECONDS);
   const fromFloorKey = cleanFloorKey(raw.fromFloorKey) || lanePrimaryFromFloorKey(def);
@@ -232,7 +235,8 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
     memberIds: normalizeMemberIds(raw.memberIds),
     memberAlifeIds: normalizeMemberAlifeIds(raw.memberAlifeIds, template.memberCount),
     fromFloorKey,
-    toFloorKey, z: def.toFloor,
+    toFloorKey,
+    z: floor,
   };
 }
 
@@ -318,7 +322,7 @@ function terminalStatus(status: SmallCaravanStatus): boolean {
 }
 
 function floorMatchesLane(z: number, def: CaravanLaneDef): boolean {
-  return z === def.fromFloor || z === def.toFloor;
+  return z === laneFromZ(def) || z === laneToZ(def);
 }
 
 function addPlayerRelation(faction: Faction, delta: number): void {
@@ -346,12 +350,16 @@ function applyLaneCargo(
   multiplier: number,
   reason: string,
 ): number[] {
-  const counts = cargo.map(delta => Math.max(1, Math.round(delta.count * multiplier)));
-  for (let i = 0; i < cargo.length; i++) {
-    const delta = cargo[i];
-    const count = counts[i];
-    changeResourceStock(state, delta.resourceId, -count, def.fromFloor, { reason, tags: ['caravan', def.id] });
-    changeResourceStock(state, delta.resourceId, count, def.toFloor, { reason, tags: ['caravan', def.id] });
+  // One conserving move per resource: the two independent clamped writes it
+  // replaced minted cargo when the source was empty and destroyed it when the
+  // destination was already at its ceiling.
+  const counts: number[] = [];
+  for (const delta of cargo) {
+    const requested = Math.max(1, Math.round(delta.count * multiplier));
+    counts.push(moveResourceStock(state, delta.resourceId, requested, laneFromZ(def), laneToZ(def), {
+      reason,
+      tags: ['caravan', def.id],
+    }));
   }
   return counts;
 }
@@ -370,7 +378,7 @@ function publishSmallCaravanEvent(
 ): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: run?.z ?? def.toFloor,
+    z: run?.z ?? laneToZ(def),
     zoneId: source?.zoneId,
     roomId: source?.roomId,
     x: run?.x ?? source?.x,
@@ -390,8 +398,8 @@ function publishSmallCaravanEvent(
       runId: run?.id,
       templateId: run?.templateId,
       caravanAction: action,
-      fromFloor: def.fromFloor.toString(),
-      toFloor: def.toFloor.toString(),
+      fromFloor: laneFromZ(def).toString(),
+      toFloor: laneToZ(def).toString(),
       resourceIds: def.resourceDeltas.map(delta => delta.resourceId),
       deltaCounts: counts,
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
@@ -415,7 +423,7 @@ function publishCaravanEvent(
 ): void {
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: def.toFloor,
+    z: laneToZ(def),
     zoneId: source?.zoneId,
     roomId: source?.roomId,
     x: source?.x,
@@ -433,8 +441,8 @@ function publishCaravanEvent(
       name: def.name,
       laneId: def.id,
       caravanAction: action,
-      fromFloor: def.fromFloor.toString(),
-      toFloor: def.toFloor.toString(),
+      fromFloor: laneFromZ(def).toString(),
+      toFloor: laneToZ(def).toString(),
       resourceIds: def.resourceDeltas.map(delta => delta.resourceId),
       deltaCounts: counts,
       tariffMultiplier: getCaravanLaneTariffMultiplier(state, def.id),
@@ -458,7 +466,7 @@ function migrateLaneAlifeRecords(state: GameState, def: CaravanLaneDef, lane: Ca
   });
   let moved = 0;
   for (const id of ids) {
-    if (moveAlifeNpcRecord(state, id, toFloorKey, { z: def.toFloor, preservePosition: false })) moved++;
+    if (moveAlifeNpcRecord(state, id, toFloorKey, { z: laneToZ(def), preservePosition: false })) moved++;
   }
   return moved;
 }
@@ -472,9 +480,7 @@ function processLane(state: GameState, def: CaravanLaneDef, lane: CaravanLaneSta
   const counts = deltaCountsFor(def, throughput);
   for (let i = 0; i < def.resourceDeltas.length; i++) {
     const delta = def.resourceDeltas[i];
-    const count = counts[i];
-    changeResourceStock(state, delta.resourceId, -count, def.fromFloor);
-    changeResourceStock(state, delta.resourceId, count, def.toFloor);
+    moveResourceStock(state, delta.resourceId, counts[i], laneFromZ(def), laneToZ(def));
   }
 
   lane.runs++;
@@ -751,7 +757,7 @@ function moveSmallCaravanAlifeMembers(
       continue;
     }
     if (live) captureAlifeFloorState(state, [live]);
-    if (moveAlifeNpcRecord(state, id, toFloorKey, { z: def.toFloor, preservePosition: false })) moved++;
+    if (moveAlifeNpcRecord(state, id, toFloorKey, { z: laneToZ(def), preservePosition: false })) moved++;
   }
   return moved;
 }
@@ -850,7 +856,6 @@ export function tickCaravans(
 ): number {
   if (state.tutorialMode) return 0;
   const caravans = ensureCaravanState(state);
-  const elapsed = Math.max(0, dt);
   if (!force) {
     caravans.tickAccum += Math.max(0, dt);
     if (caravans.tickAccum < CARAVAN_TICK_SECONDS) return 0;
@@ -867,7 +872,10 @@ export function tickCaravans(
     scanned++;
     if (processLane(state, def, caravans.lanes[def.id], force)) processed++;
   }
-  updateSmallCaravans(state, elapsed || CARAVAN_TICK_SECONDS, world, entities, player, nextId);
+  // One gate == one caravan tick: `dt` here is the caller's accumulator step
+  // (~1 s), not the 30 s gate, so passing it made every run expire before its
+  // progress could reach 1.
+  updateSmallCaravans(state, CARAVAN_TICK_SECONDS, world, entities, player, nextId);
   return processed;
 }
 
@@ -932,7 +940,7 @@ export function robCaravanCargo(state: GameState, laneId: string, source?: World
   const lane = ensureCaravanState(state).lanes[def.id];
   const counts = deltaCountsFor(def, 0.7);
   for (let i = 0; i < def.resourceDeltas.length; i++) {
-    changeResourceStock(state, def.resourceDeltas[i].resourceId, -counts[i], def.toFloor);
+    changeResourceStock(state, def.resourceDeltas[i].resourceId, -counts[i], laneToZ(def));
   }
   lane.raids++;
   lane.stability = clamp(lane.stability - 0.24, MIN_STABILITY, MAX_STABILITY);
@@ -1026,7 +1034,7 @@ export function getCaravanResourceTariffMultiplier(
   let multiplier = 1;
   for (const def of CARAVAN_LANES) {
     if (!def.tariffResourceIds.includes(resourceId)) continue;
-    if (def.fromFloor !== z && def.toFloor !== z) continue;
+    if (laneFromZ(def) !== z && laneToZ(def) !== z) continue;
     multiplier *= getCaravanLaneTariffMultiplier(state, def.id);
   }
   return Number(clamp(multiplier, 0.5, 3).toFixed(3));

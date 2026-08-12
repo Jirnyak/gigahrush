@@ -8,6 +8,7 @@ import { World } from '../src/core/world';
 import { CARAVAN_LANES, SMALL_CARAVAN_TEMPLATES } from '../src/data/caravans';
 import { createEconomyFloorState } from '../src/data/economy';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { alifeForSave, sampleAlifeFloorRecordIds, setAlifeState } from '../src/systems/alife';
 import {
   CARAVAN_TICK_SECONDS,
@@ -40,6 +41,10 @@ function addCaravanSpawnRoom(world: World): void {
   world.cells[world.idx(23, 19)] = Cell.LIFT;
   world.features[world.idx(24, 20)] = Feature.LIFT_BUTTON;
 }
+
+// Ordinary A-Life ids live above the plot band; isPlotNpc() keys on alifeId, so a
+// fixture with alifeId 1 is treated as a plot NPC and refused as a caravan member.
+const ORDINARY_ALIFE_ID = getPlotNpcCount() + 1;
 
 function caravanNpc(overrides: Partial<Entity> = {}): Entity {
   return makeTestNpc({
@@ -75,16 +80,16 @@ test('forced caravan tick moves stock between two floors and publishes visible e
     worldEvents: createWorldEventState(),
   });
   const economy = ensureEconomyState(state);
-  economy.floors['kvartiry'] = createEconomyFloorState('kvartiry');
-  economy.floors['living'] = createEconomyFloorState('living');
+  economy.floors[14] = createEconomyFloorState(14);
+  economy.floors[0] = createEconomyFloorState(0);
 
-  const beforeKvFood = economy.floors['kvartiry']!.resources.food.stock;
-  const beforeLivingFood = economy.floors['living']!.resources.food.stock;
+  const beforeKvFood = economy.floors[14]!.resources.food.stock;
+  const beforeLivingFood = economy.floors[0]!.resources.food.stock;
 
   assert.equal(tickCaravans(state, CARAVAN_TICK_SECONDS, true, 1), 1);
 
-  assert.ok(economy.floors['kvartiry']!.resources.food.stock < beforeKvFood);
-  assert.ok(economy.floors['living']!.resources.food.stock > beforeLivingFood);
+  assert.ok(economy.floors[14]!.resources.food.stock < beforeKvFood);
+  assert.ok(economy.floors[0]!.resources.food.stock > beforeLivingFood);
   assert.equal(
     getRecentEvents(state, { tags: ['caravan', 'tariff', 'supply_lane', LANE_QUEUE], limit: 1 }).length,
     1,
@@ -99,13 +104,13 @@ test('caravan tariff getter reflects robbery pressure and paid stabilization', (
     worldEvents: createWorldEventState(),
   });
 
-  const before = getCaravanResourceTariffMultiplier(state, 'drink_water'.LIVING);
+  const before = getCaravanResourceTariffMultiplier(state, 'drink_water', 0);
   assert.equal(robCaravanCargo(state, LANE_QUEUE), true);
-  const pressured = getCaravanResourceTariffMultiplier(state, 'drink_water'.LIVING);
+  const pressured = getCaravanResourceTariffMultiplier(state, 'drink_water', 0);
   assert.ok(pressured > before);
 
   assert.equal(payCaravanTariff(state, LANE_QUEUE), true);
-  const stabilized = getCaravanResourceTariffMultiplier(state, 'drink_water'.LIVING);
+  const stabilized = getCaravanResourceTariffMultiplier(state, 'drink_water', 0);
   assert.ok(stabilized < pressured);
 });
 
@@ -115,9 +120,9 @@ test('caravan tariffs feed item economy quotes and invalidate cached prices', ()
     time: 220,
     worldEvents: createWorldEventState(),
   });
-  ensureEconomyState(state).floors['living'] = createEconomyFloorState('living');
+  ensureEconomyState(state).floors[0] = createEconomyFloorState(0);
 
-  const beforeTariff = getCaravanResourceTariffMultiplier(state, 'drink_water'.LIVING);
+  const beforeTariff = getCaravanResourceTariffMultiplier(state, 'drink_water', 0);
   const beforeQuote = getEconomyQuote(state, 'filtered_water');
   const cachedBefore = getAdjustedItemPrice(state, 'filtered_water');
 
@@ -125,7 +130,7 @@ test('caravan tariffs feed item economy quotes and invalidate cached prices', ()
   assert.equal(beforeQuote.tags.includes('caravan_tariff'), true);
   assert.equal(robCaravanCargo(state, LANE_QUEUE), true);
 
-  const pressuredTariff = getCaravanResourceTariffMultiplier(state, 'drink_water'.LIVING);
+  const pressuredTariff = getCaravanResourceTariffMultiplier(state, 'drink_water', 0);
   const pressuredQuote = getEconomyQuote(state, 'filtered_water');
 
   assert.ok(pressuredTariff > beforeTariff);
@@ -247,7 +252,7 @@ test('small caravan runs open near service cells without appending new people', 
     worldEvents: createWorldEventState(),
   });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
-  const npc = caravanNpc({ id: 2, alifeId: 1, persistentNpcId: 'alife:1' });
+  const npc = caravanNpc({ id: 2, alifeId: ORDINARY_ALIFE_ID, persistentNpcId: `alife:${ORDINARY_ALIFE_ID}` });
   const entities = [player, npc];
   const nextId = { v: getPlotNpcCount() + 2 }
 
@@ -255,7 +260,7 @@ test('small caravan runs open near service cells without appending new people', 
   assert.ok(run);
   assert.equal(entities.length, 2);
   assert.deepEqual(run.memberIds, [2]);
-  assert.deepEqual(run.memberAlifeIds, [1]);
+  assert.deepEqual(run.memberAlifeIds, [ORDINARY_ALIFE_ID]);
 
   const nearest = getNearestSmallCaravan(state, world, player, 80);
   assert.equal(nearest?.id, run?.id);
@@ -273,14 +278,14 @@ test('small caravan claims existing persistent A-Life members', () => {
     worldEvents: createWorldEventState(),
   });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
-  const npc = caravanNpc({ id: 2, alifeId: 1, persistentNpcId: 'alife:1' });
+  const npc = caravanNpc({ id: 2, alifeId: ORDINARY_ALIFE_ID, persistentNpcId: `alife:${ORDINARY_ALIFE_ID}` });
   const entities = [player, npc];
 
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
 
   assert.ok(run);
   assert.deepEqual(run.memberIds, [2]);
-  assert.deepEqual(run.memberAlifeIds, [1]);
+  assert.deepEqual(run.memberAlifeIds, [ORDINARY_ALIFE_ID]);
 });
 
 test('small caravan assigns identity only to eligible ordinary members', () => {
@@ -293,7 +298,7 @@ test('small caravan assigns identity only to eligible ordinary members', () => {
     worldEvents: createWorldEventState(),
   });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
-  const npc = caravanNpc({ id: 2 });
+  const npc = caravanNpc({ id: 2, alifeId: undefined });
   const entities = [player, npc];
 
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
@@ -340,7 +345,7 @@ test('small caravan arrival moves surviving member A-Life records to destination
     worldEvents: createWorldEventState(),
   });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
-  const npc = caravanNpc({ id: 2 });
+  const npc = caravanNpc({ id: 2, alifeId: undefined });
   const entities = [player, npc];
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
   assert.ok(run);
@@ -353,7 +358,6 @@ test('small caravan arrival moves surviving member A-Life records to destination
   assert.equal(run.status, 'arrived');
   const moved = alifeForSave(state).overrides.find(item => item.id === npc.alifeId);
   assert.equal(moved?.floorKey, 'design:kvartiry');
-  assert.equal(moved?.floor.KVARTIRY);
   assert.equal(alifeForSave(state).deadIds.includes(npc.alifeId), false);
 });
 
@@ -367,7 +371,7 @@ test('caravan raids do not kill every persistent member by default', () => {
     worldEvents: createWorldEventState(),
   });
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
-  const npc = caravanNpc({ id: 2 });
+  const npc = caravanNpc({ id: 2, alifeId: undefined });
   const entities = [player, npc];
   const run = spawnSmallCaravanNear(state, world, entities, { v: 3 }, player, 'queue_lift_porters');
   assert.ok(run);

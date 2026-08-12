@@ -398,18 +398,21 @@ function maybePublishScarcityThreshold(
   });
 }
 
-export function changeResourceStock(
+/** Applies a stock delta and answers how much of it actually landed. The stock
+ *  is clamped to `[0, target*2]`, so a transfer that trusts the requested amount
+ *  on both sides mints or destroys resources — use `moveResourceStock`. */
+function applyResourceStockDelta(
   state: GameState,
   resourceId: string,
   delta: number,
-  z: number = state.currentZ,
-  opts: ResourceStockChangeOptions = {},
-): boolean {
+  z: number,
+  opts: ResourceStockChangeOptions,
+): number | undefined {
   const econ = ensureEconomyState(state);
   const floorState = econ.floors[z] ?? createEconomyFloorState(z);
   econ.floors[z] = floorState;
   const stock = floorState.resources[resourceId];
-  if (!stock) return false;
+  if (!stock) return undefined;
   const previousStock = stock.stock;
   const next = clamp(stock.stock + delta, 0, Math.max(1, stock.target) * 2);
   stock.lastDelta = next - stock.stock;
@@ -420,7 +423,39 @@ export function changeResourceStock(
     if (res) maybePublishScarcityThreshold(state, res, previousStock, next, z, opts);
   }
   floorState.lastTickAt = state.time;
-  return true;
+  return stock.lastDelta;
+}
+
+export function changeResourceStock(
+  state: GameState,
+  resourceId: string,
+  delta: number,
+  z: number = state.currentZ,
+  opts: ResourceStockChangeOptions = {},
+): boolean {
+  return applyResourceStockDelta(state, resourceId, delta, z, opts) !== undefined;
+}
+
+/** Conserving transfer between two floors: the destination is credited exactly
+ *  what the source lost, and anything the destination could not absorb goes
+ *  back. Returns the amount actually moved. */
+export function moveResourceStock(
+  state: GameState,
+  resourceId: string,
+  count: number,
+  fromZ: number,
+  toZ: number,
+  opts: ResourceStockChangeOptions = {},
+): number {
+  if (!(count > 0) || fromZ === toZ) return 0;
+  const removed = applyResourceStockDelta(state, resourceId, -count, fromZ, opts);
+  if (removed === undefined || removed >= 0) return 0;
+  const available = -removed;
+  const added = applyResourceStockDelta(state, resourceId, available, toZ, opts) ?? 0;
+  if (added < available) {
+    applyResourceStockDelta(state, resourceId, available - added, fromZ, opts);
+  }
+  return added;
 }
 
 export function canSpendResources(state: GameState, inputs: { id: string; count: number }[], z: number = state.currentZ): boolean {

@@ -1,4 +1,6 @@
 import { Faction, Occupation } from '../core/types';
+import { designFloorById } from './design_floors';
+import { floorKeyRouteId } from './floor_keys';
 
 export interface CaravanResourceDelta {
   resourceId: string;
@@ -8,10 +10,12 @@ export interface CaravanResourceDelta {
 export interface CaravanLaneDef {
   id: string;
   name: string;
-  fromFloor: number;
-  toFloor: number;
-  fromFloorKeys?: readonly string[];
-  toFloorKeys?: readonly string[];
+  /** Route floor keys are the truth for a lane; the z coordinate is derived from
+   *  them (`laneFromZ`/`laneToZ`). The old numeric fromFloor/toFloor carried
+   *  codes of the removed FloorLevel enum and pointed at floors that no longer
+   *  exist. */
+  fromFloorKeys: readonly string[];
+  toFloorKeys: readonly string[];
   resourceDeltas: readonly CaravanResourceDelta[];
   tariffResourceIds: readonly string[];
   feeRubles: number;
@@ -49,8 +53,6 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'kvartiry_living_food_water',
     name: 'Квартиры -> Жилая: еда и вода',
-    fromFloor: 60,
-    toFloor: 100,
     fromFloorKeys: ['design:kvartiry'],
     toFloorKeys: ['design:living'],
     resourceDeltas: [{ resourceId: 'food', count: 6 }, { resourceId: 'drink_water', count: 5 }],
@@ -62,8 +64,6 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'maintenance_living_tools',
     name: 'Коллекторы -> Жилая: металл и инструмент',
-    fromFloor: 140,
-    toFloor: 100,
     fromFloorKeys: ['design:maintenance'],
     toFloorKeys: ['design:living'],
     resourceDeltas: [{ resourceId: 'metal', count: 5 }, { resourceId: 'tools', count: 3 }],
@@ -75,8 +75,6 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'production_black_market_88',
     name: 'Производственный пояс -> рынок 88',
-    fromFloor: 140,
-    toFloor: 100,
     fromFloorKeys: ['design:production_belt'],
     toFloorKeys: ['design:black_market_88'],
     resourceDeltas: [{ resourceId: 'contraband', count: 3 }, { resourceId: 'ammo', count: 4 }],
@@ -89,8 +87,6 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'ministry_market_docs',
     name: 'Министерство -> Жилая: бумаги и бланки',
-    fromFloor: 30,
-    toFloor: 100,
     fromFloorKeys: ['design:ministry'],
     toFloorKeys: ['design:living'],
     resourceDeltas: [{ resourceId: 'documents', count: 5 }, { resourceId: 'paper', count: 4 }],
@@ -103,8 +99,6 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'hell_cult_psi_goods',
     name: 'Мясной низ -> культовые ПСИ-грузы',
-    fromFloor: 180,
-    toFloor: 100,
     fromFloorKeys: ['design:hell'],
     toFloorKeys: ['design:living'],
     resourceDeltas: [{ resourceId: 'psi', count: 2 }, { resourceId: 'contraband', count: 2 }],
@@ -116,8 +110,6 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
   {
     id: 'net_exchange_data',
     name: 'Министерство -> Жилая: НЕТ-схемы и бумаги',
-    fromFloor: 30,
-    toFloor: 100,
     fromFloorKeys: ['design:silicon_net_well'],
     toFloorKeys: ['design:living'],
     resourceDeltas: [{ resourceId: 'electronics', count: 3 }, { resourceId: 'documents', count: 2 }],
@@ -133,6 +125,19 @@ export const CARAVAN_LANES: readonly CaravanLaneDef[] = [
 export const CARAVAN_LANE_BY_ID: Record<string, CaravanLaneDef> = Object.fromEntries(
   CARAVAN_LANES.map(lane => [lane.id, lane]),
 );
+
+function laneZ(keys: readonly string[]): number {
+  const design = designFloorById(floorKeyRouteId(keys[0] ?? ''));
+  return design ? design.z : 0;
+}
+
+export function laneFromZ(def: CaravanLaneDef): number {
+  return laneZ(def.fromFloorKeys);
+}
+
+export function laneToZ(def: CaravanLaneDef): number {
+  return laneZ(def.toFloorKeys);
+}
 
 export const SMALL_CARAVAN_TEMPLATES: readonly SmallCaravanTemplateDef[] = [
   {
