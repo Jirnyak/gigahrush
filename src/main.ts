@@ -1470,8 +1470,13 @@ setOnlineMessageHandler((msgData: any) => {
             const n = Math.min(item.count, inventoryCountOf(npc, item.defId));
             if (n > 0 && removeItem(npc, item.defId, n)) addItem(actor, item.defId, n, item.data);
           }
-          actor.money = Math.max(0, Math.floor((actor.money ?? 0) - intent.netCash));
-          npc.money = Math.max(0, Math.floor((npc.money ?? 0) + intent.netCash));
+          // One clamped move, not two independent ones: clamping each side alone
+          // minted money whenever the payer could not cover netCash.
+          const actorMoney = Math.max(0, Math.floor(actor.money ?? 0));
+          const npcMoney = Math.max(0, Math.floor(npc.money ?? 0));
+          const moved = Math.max(-npcMoney, Math.min(actorMoney, Math.floor(intent.netCash)));
+          actor.money = actorMoney - moved;
+          npc.money = npcMoney + moved;
           state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} торгуется с ${npc.name ?? 'жителем'}.`, state.time, '#8cf'));
         }
       }

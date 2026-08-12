@@ -279,8 +279,12 @@ function pickStratumCell(
 }
 
 function hasCellTerritoryField(world: World): boolean {
-  for (let i = 0; i < world.factionControl.length; i += 257) {
-    if (world.factionControl[i] !== 0) return true;
+  // Exact, not sampled: this runs once per generation-time placement, and the
+  // old every-257th-cell probe missed any authored territory patch smaller than
+  // ~0.4% of the floor — those floors silently fell back to zone faction.
+  const field = world.factionControl;
+  for (let i = 0; i < field.length; i++) {
+    if (field[i] !== 0) return true;
   }
   return false;
 }
