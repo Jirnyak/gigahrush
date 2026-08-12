@@ -177,7 +177,7 @@ function currentWaterForCloth(player: Entity): string {
   return '';
 }
 
-function protectionFor(player: Entity, state: GameState, runtime: SmogRuntime, autoPrepare: boolean): SmogProtection {
+function protectionFor(player: Entity, state: GameState, runtime: SmogRuntime, autoPrepare: boolean, world?: World): SmogProtection {
   if (hasItem(player, 'gasmask_filter')) return 'filter';
   if (runtime.wetClothUntil > state.time) return 'wet_cloth';
   if (hasItem(player, WET_RAG_BUNDLE_ITEM)) {
@@ -187,7 +187,7 @@ function protectionFor(player: Entity, state: GameState, runtime: SmogRuntime, a
       runtime.wetClothUntil = state.time + WET_RAG_BUNDLE_SECONDS;
       publishEvent(state, {
         type: 'player_use_item',
-        zoneId: playerZoneId(player),
+        zoneId: playerZoneId(player, world),
         x: player.x,
         y: player.y,
         actorId: player.id,
@@ -215,7 +215,7 @@ function protectionFor(player: Entity, state: GameState, runtime: SmogRuntime, a
   runtime.wetClothUntil = state.time + WET_CLOTH_SECONDS;
   publishEvent(state, {
     type: 'player_use_item',
-    zoneId: playerZoneId(player),
+    zoneId: playerZoneId(player, world),
     x: player.x,
     y: player.y,
     actorId: player.id,
@@ -378,7 +378,7 @@ export function getProceduralSmogStatus(world: World, player: Entity, state: Gam
   const intensity = active ? world.fog[pci] / 255 : 0;
   const source = active ? sourcePosition(world) : { x: player.x, y: player.y };
   const sourceDistance = active ? world.dist(player.x, player.y, source.x + 0.5, source.y + 0.5) : Infinity;
-  const protection = protectionFor(player, state, runtime, false);
+  const protection = protectionFor(player, state, runtime, false, world);
   const inside = active && !world.anomalySmogHandled && world.fog[pci] >= SMOG_ENTER_FOG;
   const prompt = active && !world.anomalySmogHandled && sourceDistance <= 2.4
     ? 'E: перекрыть источник смога'
@@ -443,7 +443,7 @@ export function updateProceduralAnomalies(world: World, player: Entity, state: G
   const inside = world.fog[pci] >= SMOG_ENTER_FOG;
   const source = sourcePosition(world);
   const sourceDistance = world.dist(player.x, player.y, source.x + 0.5, source.y + 0.5);
-  const protection = protectionFor(player, state, runtime, inside);
+  const protection = protectionFor(player, state, runtime, inside, world);
 
   if (sourceDistance <= 6 && !runtime.sourceFound) {
     runtime.sourceFound = true;

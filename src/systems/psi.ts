@@ -201,7 +201,9 @@ function castStorm(
     while (dAngle < -Math.PI) dAngle += Math.PI * 2;
     if (Math.abs(dAngle) > 1.05) continue; // ~60 degrees
     if (e.hp !== undefined) {
-      const finalDmg = Math.round(calculateDamage(dmg, DamageType.PSI, e));
+      // Same monster-trait pass as the beam and AoE paths: without it a braced
+      // панельник and a wet лоточник lost their positional counterplay to storm.
+      const finalDmg = applyMonsterIncomingDamage(world, e, Math.round(calculateDamage(dmg, DamageType.PSI, e)));
       e.hp -= finalDmg;
       spawnBloodHit(world, e.x, e.y, player.angle, finalDmg, e.type === EntityType.MONSTER);
       if (e.hp <= 0) {

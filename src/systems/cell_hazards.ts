@@ -151,24 +151,43 @@ function normalizeCells(cells: readonly number[]): number[] {
   return out;
 }
 
+/** Shortest signed offset on the 1024 torus. Hazard sites are stamped from
+ *  generator rooms, which may straddle the world seam: a plain mean would put
+ *  the centre near the map middle and blow the query radius up to its ceiling,
+ *  so the actor broadphase would scan the wrong region and nobody standing in
+ *  the goo would ever be ticked. */
+function torusDelta(from: number, to: number): number {
+  let d = to - from;
+  if (d > W / 2) d -= W;
+  if (d < -W / 2) d += W;
+  return d;
+}
+
+function wrapCoord(v: number): number {
+  return ((v % W) + W) % W;
+}
+
 function siteCenter(cells: readonly number[]): { x: number; y: number } {
   if (cells.length === 0) return { x: 0, y: 0 };
+  const anchorX = cells[0] % W;
+  const anchorY = (cells[0] / W) | 0;
   let sx = 0;
   let sy = 0;
   for (const cell of cells) {
-    sx += cell % W;
-    sy += (cell / W) | 0;
+    sx += torusDelta(anchorX, cell % W);
+    sy += torusDelta(anchorY, (cell / W) | 0);
   }
-  return { x: sx / cells.length + 0.5, y: sy / cells.length + 0.5 };
+  return {
+    x: wrapCoord(anchorX + sx / cells.length) + 0.5,
+    y: wrapCoord(anchorY + sy / cells.length) + 0.5,
+  };
 }
 
 function siteQueryRadius(cells: readonly number[], center: { x: number; y: number }): number {
   let maxD2 = 1;
   for (const cell of cells) {
-    const x = cell % W + 0.5;
-    const y = ((cell / W) | 0) + 0.5;
-    const dx = x - center.x;
-    const dy = y - center.y;
+    const dx = torusDelta(center.x, cell % W + 0.5);
+    const dy = torusDelta(center.y, ((cell / W) | 0) + 0.5);
     maxD2 = Math.max(maxD2, dx * dx + dy * dy);
   }
   return Math.min(96, Math.sqrt(maxD2) + HAZARD_BUCKET_STALE_PAD);
