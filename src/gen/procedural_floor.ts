@@ -35,6 +35,7 @@ import { proceduralContainerValueCap as economyProceduralContainerValueCap } fro
 import { emergencyPanelDefsForGeometry, type EmergencyPanelDef } from '../data/emergency_panels';
 import { factionToTerritoryOwner, territoryOwnerName, territoryOwnerToFaction } from '../data/factions';
 import { chooseFloorMonsterKind, getMonsterEcology } from '../data/monster_ecology';
+import { growPackCells, packPlanFor } from './monster_packs';
 import {
   populationLevelForRouteZ,
   proceduralPopulationBudget,
@@ -4264,20 +4265,18 @@ function tumannikFogSpawn(world: World, pos: { x: number; y: number }): { x: num
   return best;
 }
 
-function spawnMonster(
+/** Lead kind for a pack on this procedural floor. `floorThemeTags` carries the
+ *  floor's biome so the authored ecology affinity applies here exactly as it
+ *  does on design floors. */
+function chooseProceduralMonsterKind(
   world: World,
-  entities: Entity[],
-  nextId: { v: number },
   spec: ProceduralFloorSpec,
-  sx: number,
-  sy: number,
+  pos: { x: number; y: number },
   allowRare: boolean,
-): MonsterKind | null {
-  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return null;
-  const pos = randomFloorCell(world, sx, sy, 90 * 90);
-  if (!pos) return null;
-  const kind = chooseFloorMonsterKind({
+): MonsterKind {
+  return chooseFloorMonsterKind({
     z: spec.z,
+    floorThemeTags: spec.themeTags,
     roomType: roomTypeAt(world, pos.x, pos.y),
     floorTags: spec.monsterBiasTags,
     samosborCount: spec.danger,
@@ -4286,6 +4285,17 @@ function spawnMonster(
     biasKinds: spec.monsterBiasKinds,
     routePressure: routePressureLevel(spec),
   });
+}
+
+function spawnMonsterOfKind(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  spec: ProceduralFloorSpec,
+  kind: MonsterKind,
+  pos: { x: number; y: number },
+): MonsterKind | null {
+  if (!canSpawnEntityType(entities, EntityType.MONSTER)) return null;
   const def = MONSTERS[kind];
   const spawnPos = kind === MonsterKind.BEZEKHIY
     ? bezekhiyDoorSpawn(world, pos) ?? pos
@@ -4329,14 +4339,39 @@ function stampPaupsinaWebWarning(world: World, cx: number, cy: number, seed: num
   }
 }
 
+/**
+ * Procedural floors populate monsters as packs, through the same shared shape
+ * helpers the design floors use: one lead kind per center, members grown into
+ * the tightest free cells around it. Scattering singles made every procedural
+ * floor read as evenly-sprinkled noise regardless of what was spawned.
+ */
 function spawnMonsters(world: World, entities: Entity[], nextId: { v: number }, spec: ProceduralFloorSpec, sx: number, sy: number): void {
-  const count = entitySpawnSlots(entities, EntityType.MONSTER, proceduralMonsterCount(spec));
+  let budget = entitySpawnSlots(entities, EntityType.MONSTER, proceduralMonsterCount(spec));
   const rareLimit = rareMonsterLimit(spec);
   let rareSpawned = 0;
-  for (let i = 0; i < count; i++) {
+  const used = new Set<number>();
+  for (let packSerial = 0; budget > 0; packSerial++) {
+    const center = randomFloorCell(world, sx, sy, 90 * 90);
+    if (!center) break;
     const allowRare = rareSpawned < rareLimit && chance(rareMonsterChance(spec));
-    const kind = spawnMonster(world, entities, nextId, spec, sx, sy, allowRare);
-    if (kind !== null && getMonsterEcology(kind)?.rare) rareSpawned++;
+    const kind = chooseProceduralMonsterKind(world, spec, center, allowRare);
+    const { shape, memberCount } = packPlanFor(kind, budget, rng());
+    const centerCell = world.idx(center.x, center.y);
+    const cells = growPackCells(world, centerCell, memberCount, shape.spread, used, spec.seed, packSerial);
+    // A center on an occupied or non-candidate cell yields no cells; spend one
+    // budget unit anyway so the loop cannot spin on a crowded floor.
+    if (cells.length === 0) {
+      budget--;
+      continue;
+    }
+    let spawnedInPack = 0;
+    for (const cell of cells) {
+      const pos = { x: cell % W, y: (cell / W) | 0 };
+      if (spawnMonsterOfKind(world, entities, nextId, spec, kind, pos) === null) break;
+      spawnedInPack++;
+      budget--;
+    }
+    if (spawnedInPack > 0 && getMonsterEcology(kind)?.rare) rareSpawned++;
   }
 }
 

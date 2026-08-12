@@ -17,14 +17,14 @@ import {
   designFloorPopulationProfile,
   type WeightedDesignValue,
 } from '../../data/design_floor_population';
-import { chooseFloorMonsterKind, monsterPackShape } from '../../data/monster_ecology';
+import { chooseFloorMonsterKind } from '../../data/monster_ecology';
+import { growPackCells, packPlanFor } from '../monster_packs';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import type { FloorGeneration } from '../floor_manifest';
 import {
-  isPopulationPlacementCandidateCell,
   sampleNaturalPopulationCells,
   samplePlacementFieldCells,
 } from '../population_placement';
@@ -178,45 +178,6 @@ function isAmbientMonster(entity: Entity): boolean {
  * claimed by an earlier pack (in `used`) are skipped so packs never overlap; nearest
  * cells win (tight cluster) with a rand32 tiebreak. Returns [] only if nothing is free.
  */
-function growPackCells(
-  world: World,
-  center: number,
-  memberCount: number,
-  spread: number,
-  used: Set<number>,
-  seed: number,
-  packSerial: number,
-): number[] {
-  if (memberCount <= 1 || spread <= 0) {
-    if (used.has(center) || !isPopulationPlacementCandidateCell(world, center)) return [];
-    used.add(center);
-    return [center];
-  }
-  const r = Math.max(1, Math.min(24, Math.ceil(spread)));
-  const cx = center % W;
-  const cy = (center / W) | 0;
-  const r2 = r * r;
-  const candidates: { cell: number; key: number }[] = [];
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      const d2 = dx * dx + dy * dy;
-      if (d2 > r2) continue;
-      const cell = world.idx(world.wrap(cx + dx), world.wrap(cy + dy));
-      if (used.has(cell) || !isPopulationPlacementCandidateCell(world, cell)) continue;
-      // key = squared distance (tight cluster) + fractional rand tiebreak
-      candidates.push({ cell, key: d2 + rand32(seed, packSerial * 131 + cell, 617) });
-    }
-  }
-  candidates.sort((a, b) => a.key - b.key);
-  const take = Math.min(memberCount, candidates.length);
-  const out: number[] = [];
-  for (let i = 0; i < take; i++) {
-    out.push(candidates[i].cell);
-    used.add(candidates[i].cell);
-  }
-  return out;
-}
-
 function makeMonster(
   id: number,
   cell: number,
@@ -287,6 +248,7 @@ function spawnDesignMonsterPacks(generation: Omit<FloorGeneration, 'spawnX' | 's
     let roll = 0;
     const leadKind = chooseFloorMonsterKind({
       z: route.z,
+      floorThemeTags: route.themeTags,
       roomType: roomTypeAt(world, center),
       floorTags,
       samosborCount,
@@ -296,9 +258,7 @@ function spawnDesignMonsterPacks(generation: Omit<FloorGeneration, 'spawnX' | 's
       routePressure,
       rng: () => rand32(seed, center, 503 + roll++),
     });
-    const shape = monsterPackShape(leadKind);
-    const span = Math.max(0, shape.size[1] - shape.size[0]);
-    const memberCount = Math.max(1, Math.min(budget, shape.size[0] + Math.floor(rand32(seed, p, 211) * (span + 1))));
+    const { shape, memberCount } = packPlanFor(leadKind, budget, rand32(seed, p, 211));
     const cells = growPackCells(world, center, memberCount, shape.spread, used, seed, p);
     if (cells.length === 0) continue;
     const homeRoomId = shape.mode === 'territorial' && world.roomMap[center] >= 0 ? world.roomMap[center] : undefined;

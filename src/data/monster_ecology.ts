@@ -2,6 +2,7 @@
 
 import { MonsterKind, RoomType } from '../core/types';
 import { rng } from '../core/rand';
+import { designFloorAtZ } from './design_floors';
 
 export interface MonsterLootEntry {
   itemDefId: string;
@@ -47,6 +48,11 @@ export interface MonsterCueTask {
 
 export interface MonsterEcologyQuery {
   z: number;
+  /** Biome tags of the floor being populated (`design floor themeTags` or
+   *  `ProceduralFloorSpec.themeTags`). Authored `floors` anchors are matched
+   *  through these, so ecology affinity works on every route stop — design,
+   *  procedural or samosbor — instead of only on the six even anchor zs. */
+  floorThemeTags?: readonly string[];
   roomType?: RoomType;
   floorTags?: readonly string[];
   roomTags?: readonly string[];
@@ -1894,10 +1900,40 @@ function ecologyWaveAllows(def: MonsterEcologyDef, query: MonsterEcologyQuery): 
   return true;
 }
 
+/** Biome tags an ecology def is native to, derived once from its authored
+ *  `floors` anchors through the design-floor registry. */
+const ECOLOGY_THEME_TAGS = new Map<MonsterKind, ReadonlySet<string>>();
+
+function ecologyThemeTags(def: MonsterEcologyDef): ReadonlySet<string> {
+  let tags = ECOLOGY_THEME_TAGS.get(def.kind);
+  if (!tags) {
+    const set = new Set<string>();
+    for (const z of def.floors) {
+      for (const tag of designFloorAtZ(z)?.themeTags ?? []) set.add(tag);
+    }
+    tags = set;
+    ECOLOGY_THEME_TAGS.set(def.kind, set);
+  }
+  return tags;
+}
+
+/** Native-floor test. Theme tags are the universal key: a procedural floor never
+ *  sits on an authored anchor z, so a plain `floors.includes(z)` was dead there
+ *  and every monster came out equally likely. */
+function ecologyFloorFits(def: MonsterEcologyDef, query: MonsterEcologyQuery): boolean {
+  const floorTags = query.floorThemeTags;
+  if (floorTags && floorTags.length > 0) {
+    const native = ecologyThemeTags(def);
+    for (const tag of floorTags) if (native.has(tag)) return true;
+    return false;
+  }
+  return def.floors.includes(query.z);
+}
+
 function floorHasNativePool(query: MonsterEcologyQuery): boolean {
   for (const def of MONSTER_ECOLOGY) {
     if (excludedFromSpawn(def, query)) continue;
-    if (!def.floors.includes(query.z)) continue;
+    if (!ecologyFloorFits(def, query)) continue;
     if (!ecologyWaveAllows(def, query)) continue;
     return true;
   }
@@ -1905,7 +1941,7 @@ function floorHasNativePool(query: MonsterEcologyQuery): boolean {
 }
 
 function ecologyFloorWeight(def: MonsterEcologyDef, query: MonsterEcologyQuery): number {
-  const floorFits = def.floors.includes(query.z);
+  const floorFits = ecologyFloorFits(def, query);
   const mode = monsterFloorAffinityMode(query);
   if (mode === 'none') return 1;
   if (mode === 'strict') return floorFits ? 1 : 0;

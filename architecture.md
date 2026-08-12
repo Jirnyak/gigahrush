@@ -165,6 +165,7 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - Agents should mostly add new files here.
 - Floor-wide placement should use the shared placement field in `src/gen/population_placement.ts` instead of choosing ad hoc clusters.
 - Routed design floors use `src/data/design_floor_population.ts` and `src/gen/design_floors/population.ts` for their broad NPC/monster fields after route-scale geometry is finalized; local generators still own named NPCs, authored encounters and floor-specific rooms.
+- Monster packs are shared, not per-floor-family: `src/gen/monster_packs.ts` owns pack shape/member count and cell growth, and both the design-floor populate and `src/gen/procedural_floor.ts` call it. Biome affinity is keyed by floor theme tags (`MonsterEcologyQuery.floorThemeTags`), so one ecology table serves design floors, procedural floors and samosbor waves — see `ecology.md`.
 
 `systems/`
 

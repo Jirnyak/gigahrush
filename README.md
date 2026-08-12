@@ -205,6 +205,7 @@ src/
     void/                    финальная пустота и протоколы
     design_floors/           генераторы 50 авторских дизайн-этажей
     procedural_floor.ts      процедурный генератор прослоек
+    monster_packs.ts         общая расстановка стай монстров (дизайн + процедурные этажи)
     procedural_screens.ts    процедурные экраны с сообщениями (Tex.SCREEN_BASE)
     floor_object_placement.ts расстановка декораций и предметов
     craft_stations.ts        размещение верстаков крафта

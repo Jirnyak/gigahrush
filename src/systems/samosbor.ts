@@ -562,6 +562,7 @@ function tickSamosborFront(
   z: number,
   samosborCount: number,
   shelterSet: ReadonlySet<number>,
+  themeTags: readonly string[],
 ): { processed: number; changed: number; batchFlags: number } {
   if (front.dead) return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };
   front.age++;
@@ -604,7 +605,7 @@ function tickSamosborFront(
       // Spawn monster every N processed cells, up to the front's cap
       if (front.processed % FRONT_MONSTER_CELL_INTERVAL === 0 && front.monstersSpawned < front.monsterCap) {
         if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci] && canSpawnEntityType(entities, EntityType.MONSTER)) {
-          const kind = pickMonsterKindForWave(z, samosborCount);
+          const kind = pickMonsterKindForWave(z, samosborCount, themeTags);
           entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, z));
           front.monstersSpawned++;
         }
@@ -642,11 +643,12 @@ function tickAllSamosborFronts(
   z: number,
   samosborCount: number,
   shelterSet: ReadonlySet<number>,
+  themeTags: readonly string[],
 ): void {
   let allFlags = FRONT_DIRTY_NONE;
   frontTickDirtyCells.length = 0;
   for (const front of activeSamosborFronts) {
-    const result = tickSamosborFront(world, entities, nextId, front, variant, z, samosborCount, shelterSet);
+    const result = tickSamosborFront(world, entities, nextId, front, variant, z, samosborCount, shelterSet, themeTags);
     allFlags |= result.batchFlags;
   }
   // Prune dead fronts
@@ -2473,7 +2475,7 @@ export function updateSamosbor(
     while (samosborFrontTickAccum >= SAMOSBOR_FRONT_TICK_INTERVAL && catchup < SAMOSBOR_FRONT_MAX_CATCHUP_TICKS) {
       samosborFrontTickAccum -= SAMOSBOR_FRONT_TICK_INTERVAL;
       catchup++;
-      tickAllSamosborFronts(world, entities, nextId, activeVariant, state.currentZ, state.samosborCount, shelterSet);
+      tickAllSamosborFronts(world, entities, nextId, activeVariant, state.currentZ, state.samosborCount, shelterSet, samosborFloorThemeTags(state));
     }
     // Drain excess accumulated time beyond cap
     if (samosborFrontTickAccum > SAMOSBOR_FRONT_TICK_INTERVAL * SAMOSBOR_FRONT_MAX_CATCHUP_TICKS) {
@@ -3666,9 +3668,17 @@ export function getSamosborDebugLines(): string[] {
 }
 
 /* ── Shared helpers for monster creation ───────────────────────── */
-function pickMonsterKindForWave(z: number, samosborCount: number): MonsterKind {
+/** Biome tags of the floor the samosbor is running on. Passed into the ecology
+ *  query so wave monsters follow the same authored biome affinity as ordinary
+ *  floor population — on procedural stops too. */
+function samosborFloorThemeTags(state: GameState): readonly string[] {
+  return currentFloorRunEntry(state).themeTags;
+}
+
+function pickMonsterKindForWave(z: number, samosborCount: number, themeTags?: readonly string[]): MonsterKind {
   return chooseFloorMonsterKind({
     z,
+    floorThemeTags: themeTags,
     floorTags: ['samosbor', 'fog'],
     samosborCount,
     allowRare: samosborCount >= 4 && rng() < 0.08,
@@ -3723,9 +3733,10 @@ function randomEnumValue<T extends number>(values: readonly T[]): T {
   return values[Math.floor(rng() * values.length)];
 }
 
-function randomMonsterKindWeighted(z: number, samosborCount: number): MonsterKind {
+function randomMonsterKindWeighted(z: number, samosborCount: number, themeTags?: readonly string[]): MonsterKind {
   return chooseFloorMonsterKind({
     z,
+    floorThemeTags: themeTags,
     floorTags: ['samosbor', 'fog', 'rewrite'],
     samosborCount,
     allowRare: samosborCount >= 4 && rng() < 0.08,
@@ -3829,8 +3840,8 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   });
 }
 
-function rewriteMonsterAsRandom(world: World, entity: Entity, z: number, samosborCount: number): void {
-  const kind = randomMonsterKindWeighted(z, samosborCount);
+function rewriteMonsterAsRandom(world: World, entity: Entity, z: number, samosborCount: number, themeTags?: readonly string[]): void {
+  const kind = randomMonsterKindWeighted(z, samosborCount, themeTags);
   const def = MONSTERS[kind];
   const level = randomNpcLevel();
   const rpg = randomRPG(level);
@@ -3967,7 +3978,7 @@ function applyMaronaryFogEffectAtCell(
       effect = isPlayerEntity(target) ? 'player_rewritten' : 'npc_rewritten';
       targetName = target.name;
     } else if (target.type === EntityType.MONSTER) {
-      rewriteMonsterAsRandom(world, target, z, samosborCount);
+      rewriteMonsterAsRandom(world, target, z, samosborCount, samosborFloorThemeTags(state));
       effect = 'monster_rewritten';
       targetName = MONSTERS[target.monsterKind ?? MonsterKind.SBORKA]?.name;
     } else if (target.type === EntityType.ITEM_DROP) {
@@ -4134,7 +4145,7 @@ function createIstotitThingAtCell(
     return 'item_created';
   }
   if (roll < 0.58 && canSpawnEntityType(entities, EntityType.MONSTER)) {
-    const kind = randomMonsterKindWeighted(z, samosborCount);
+    const kind = randomMonsterKindWeighted(z, samosborCount, samosborFloorThemeTags(state));
     entities.push(createMonster(world, nextId, kind, x + 0.5, y + 0.5, z, true));
     return 'monster_created';
   }
@@ -4242,12 +4253,13 @@ function spawnOneFogMonsterAtCell(
   variant: ActiveSamosborVariant,
   z: number,
   ci: number,
+  themeTags?: readonly string[],
 ): boolean {
   if (!canSpawnEntityType(entities, EntityType.MONSTER)) return false;
   if (world.cells[ci] !== Cell.FLOOR || world.aptMask[ci]) return false;
   const kind = variant.extraEyes > 0 && rng() < 0.25
     ? MonsterKind.EYE
-    : pickMonsterKindForWave(z, samosborCount);
+    : pickMonsterKindForWave(z, samosborCount, themeTags);
   entities.push(createMonster(world, nextId, kind, (ci % W) + 0.5, ((ci / W) | 0) + 0.5, z));
   return true;
 }
@@ -4308,7 +4320,7 @@ function applySamosborFogEffectAtCell(
   if (hasSamosborSubsystem(variant, 'fog_delete')) return applyVeretarFogEffectAtCell(world, entities, state, variant, ci);
   if (hasSamosborSubsystem(variant, 'fog_create')) return applyIstotitFogEffectAtCell(world, entities, state, nextId, variant, z, samosborCount, ci);
   if (hasSamosborSubsystem(variant, 'wet_spawn_shark')) return applyWetFogEffectAtCell(world, entities, nextId, samosborCount, variant, z, ci);
-  return spawnOneFogMonsterAtCell(world, entities, nextId, samosborCount, variant, z, ci);
+  return spawnOneFogMonsterAtCell(world, entities, nextId, samosborCount, variant, z, ci, samosborFloorThemeTags(state));
 }
 
 export function applySamosborFogEffectAtCellForTests(

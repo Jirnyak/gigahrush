@@ -153,7 +153,18 @@ Distinct from the runtime `pack_hunter` archetype (target sharing between alread
 - `territorial`: small group pinned to a home room; the AI leashes it back (`ai.homeRoomId`).
 - `roamer`: small group that patrols wide (`wanderFar`).
 
-The design-floor populate (`src/gen/design_floors/population.ts`) consumes it: pack centers come from the field-weighted placement sampler (so per-kind `zoneWeights` keep peaceful CITIZEN zones sparse), each center grows one homogeneous pack up to the shared active-actor budget. Two tiny generic hooks in the WANDER branch of `src/systems/ai/monster.ts` read `monsterPackMode` for the roamer/territorial motion — no per-monster brain, all placement-time and baked-nav only.
+Pack placement is shared, not per-floor-family: `src/gen/monster_packs.ts` owns `packPlanFor` (shape + member count against the remaining budget) and `growPackCells` (members grown into the tightest free cells around the center). Both floor families call it:
+
+- design floors (`src/gen/design_floors/population.ts`) take pack centers from the field-weighted placement sampler, so per-kind `zoneWeights` keep peaceful CITIZEN zones sparse;
+- procedural floors (`src/gen/procedural_floor.ts`) take centers from `randomFloorCell` and grow the same packs. Scattering singles there made every procedural stop read as evenly-sprinkled noise no matter what was spawned.
+
+Two tiny generic hooks in the WANDER branch of `src/systems/ai/monster.ts` read `monsterPackMode` for the roamer/territorial motion — no per-monster brain, all placement-time and baked-nav only.
+
+## Floor Affinity Is Biome-Keyed
+
+`MonsterEcologyDef.floors` lists authored biome anchors as design-floor coordinates (`30 / 14 / 0 / −26 / −36 / −50`). The runtime key is the floor's **biome tags**, not its coordinate: `MonsterEcologyQuery.floorThemeTags` is matched against the tags those anchors resolve to (`designFloorAtZ(z).themeTags`, cached per kind). A raw `floors.includes(z)` test only ever matched the six even anchors, so on procedural stops (always odd `z`) the whole affinity dimension was inert — `NATIVE_FLOOR_MULT` never applied and a ministry-native creature was as likely as a collector-native one on a collector floor.
+
+Every populate passes the tags it already owns: `ProceduralFloorSpec.themeTags` for procedural floors, `route.themeTags` for design floors, `currentFloorRunEntry(state).themeTags` for samosbor waves. A query without tags falls back to the coordinate test, so authored anchors keep working unchanged. Do not convert coordinates with `floorRunProfileZ` for this: that helper inverts the scale (it maps ministry `+30` onto the collector anchor `−26`) and is meant for depth/danger profiles, not for biome identity.
 
 ## Implementation Lanes
 
