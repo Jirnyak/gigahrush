@@ -5,6 +5,7 @@ import { World } from '../core/world';
 import { stampLocalMark, stampMark, MarkType } from './surface_marks';
 import { Spr } from '../render/sprite_index';
 import { ensureEntityIndex } from './entity_index';
+import { markDangerFieldCell } from './danger_field';
 import { addVisualSlotByPriority, removeVisualSlotCode } from '../gen/visual_cell_slots.js';
 import { mathRng as rng, SeedRng } from '../core/rand';
 
@@ -398,6 +399,7 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
   // Danger/Blood vector field impulse
   const fieldIdx = world.idx(cx, cy);
   world.dangerField[fieldIdx] = Math.min(255, world.dangerField[fieldIdx] + 50);
+  markDangerFieldCell(world, cx, cy);
 
   const sRng = new SeedRng(seed);
 

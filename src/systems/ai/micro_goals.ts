@@ -161,10 +161,8 @@ export function evaluateMicroStimuli(_world: World, e: Entity, time: number, msg
       const near = _microQueryOut[i];
       if (!near.alive) continue;
       
-      const dx = near.x - e.x;
-      const dy = near.y - e.y;
-      const dist2 = dx * dx + dy * dy;
-      
+      const dist2 = _world.dist2(near.x, near.y, e.x, e.y);
+
       if (dist2 < 9 && dist2 > 0) { // 3 cells squared
         if ((ai.microCooldowns?.['greet'] ?? 0) <= 0) {
           ai.microCooldowns = ai.microCooldowns || {};
@@ -206,10 +204,8 @@ export function evaluateMicroStimuli(_world: World, e: Entity, time: number, msg
       const near = _microQueryOut[i];
       if (!near.alive) continue;
       
-      const dx = near.x - e.x;
-      const dy = near.y - e.y;
-      const dist2 = dx * dx + dy * dy;
-      
+      const dist2 = _world.dist2(near.x, near.y, e.x, e.y);
+
       if (dist2 < 4) {
         if ((ai.microCooldowns?.['loot_nearby'] ?? 0) <= 0) {
           if (trySetMicroGoal(e, 'loot_nearby', { targetX: near.x, targetY: near.y, timer: 10, sourceId: near.id })) {

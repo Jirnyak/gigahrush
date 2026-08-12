@@ -77,8 +77,7 @@ function tryCombatLootGrab(world: World, e: Entity, dt: number): void {
   for (let i = 0; i < count; i++) {
     const drop = combatLootQuery[i];
     if (!drop.alive || drop.type !== EntityType.ITEM_DROP) continue;
-    const d2 = (drop.x - e.x) ** 2 + (drop.y - e.y) ** 2;
-    if (d2 > COMBAT_LOOT_RANGE_SQ) continue;
+    if (world.dist2(drop.x, drop.y, e.x, e.y) > COMBAT_LOOT_RANGE_SQ) continue;
     pickupDrop(world, drop, e, _barkMsgs, _barkTime);
     grabbed = true;
   }

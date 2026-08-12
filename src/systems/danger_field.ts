@@ -19,6 +19,19 @@ let activeMaxX = W - 1;
 let activeMaxY = W - 1;
 let isFullScan = true;
 
+/** Writers of `world.dangerField` must report the touched cell: the update below
+ *  only scans the active bounding box, and an empty field collapses that box to
+ *  an empty range. Without this the first idle tick would freeze the box and no
+ *  later impulse would ever decay or diffuse. */
+export function markDangerFieldCell(world: World, cx: number, cy: number): void {
+  const x = world.wrap(cx);
+  const y = world.wrap(cy);
+  if (x < activeMinX) activeMinX = x;
+  if (x > activeMaxX) activeMaxX = x;
+  if (y < activeMinY) activeMinY = y;
+  if (y > activeMaxY) activeMaxY = y;
+}
+
 export function updateDangerField(world: World, dt: number): void {
   // Update ~2 times a second to save CPU
   tickCounter += dt;
