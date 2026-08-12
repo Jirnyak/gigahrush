@@ -1049,19 +1049,27 @@ export function addItem(e: InventoryHolder, defId: string, count = 1, data?: unk
 }
 
 /* ── Remove item from inventory ───────────────────────────────── */
+/** All-or-nothing, like addItem: a partial removal that then answers `false`
+ *  reads as "nothing happened" at the call site and silently voids the
+ *  remainder. Nothing is mutated unless the full count is available. */
 export function removeItem(e: InventoryHolder, defId: string, count = 1): boolean {
   if (!e.inventory) return false;
-  for (let i = e.inventory.length - 1; i >= 0; i--) {
-    const slot = e.inventory[i];
-    if (slot.defId === defId) {
-      const rem = Math.min(count, slot.count);
-      slot.count -= rem;
-      count -= rem;
-      if (slot.count <= 0) e.inventory.splice(i, 1);
-      if (count <= 0) return true;
-    }
+  if (count <= 0) return true;
+  let available = 0;
+  for (const slot of e.inventory) {
+    if (slot.defId === defId) available += slot.count;
+    if (available >= count) break;
   }
-  return count <= 0;
+  if (available < count) return false;
+  for (let i = e.inventory.length - 1; i >= 0 && count > 0; i--) {
+    const slot = e.inventory[i];
+    if (slot.defId !== defId) continue;
+    const rem = Math.min(count, slot.count);
+    slot.count -= rem;
+    count -= rem;
+    if (slot.count <= 0) e.inventory.splice(i, 1);
+  }
+  return true;
 }
 
 /* ── Check if entity has item ─────────────────────────────────── */
