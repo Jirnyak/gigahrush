@@ -361,6 +361,26 @@ function reportTampering(world: World, player: Entity, state: GameState, target:
   return true;
 }
 
+/** Prompt for the aimed tube fixture, so the HUD stops offering « обыскать» on a
+ *  cell where `E` actually works the pneumomail. Mirrors the gate below: off a
+ *  maintenance floor the fixture is ordinary searchable decor. */
+export function pneumomailPrompt(
+  world: World,
+  state: GameState,
+  lookX: number,
+  lookY: number,
+): string | null {
+  const target = targetAt(world, lookX, lookY);
+  if (!target) return null;
+  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance')) return null;
+  switch (target.role) {
+    case 'intake': return ' пневмопочта';
+    case 'intercept': return ' перехват почты';
+    case 'jam': return ' заглушка трубы';
+    case 'report': return ' доклад о вмешательстве';
+  }
+}
+
 export function tryUsePneumomailTube(
   world: World,
   player: Entity,
@@ -371,10 +391,9 @@ export function tryUsePneumomailTube(
   const target = targetAt(world, lookX, lookY);
   if (!target) return false;
 
-  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance')) {
-    state.msgs.push(msg('Пневмопочта здесь числится, но не дышит.', state.time, '#888'));
-    return true;
-  }
+  // Off a maintenance floor the node is dead scenery: do not swallow `E`, or the
+  // fixture's own search/loot action becomes unreachable.
+  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance')) return false;
 
   switch (target.role) {
     case 'intake':

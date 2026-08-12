@@ -129,8 +129,7 @@ test('pneumomail intercept, jam, and report publish explicit events', () => {
 
 // Pneumomail stations are stamped only by the maintenance content manifest, so the
 // tube is functional exactly where seroburmaline/heatline live — ON maintenance. Off
-// maintenance it is "числится, но не дышит": the interaction is still handled (flavor
-// refusal) but the functional switch must not run. Guards the gate polarity.
+// maintenance the functional switch must not run. Guards the gate polarity.
 test('pneumomail refuses to breathe OFF a maintenance floor (gate-polarity guard)', () => {
   const { world, intake } = makePneumomailWorld();
   const state = makeGameState({
@@ -139,7 +138,10 @@ test('pneumomail refuses to breathe OFF a maintenance floor (gate-polarity guard
   });
   const player = makeTestPlayer({ id: 1, x: 9, y: 10, inventory: [] });
 
-  assert.equal(tryUsePneumomailTube(world, player, state, intake.x, intake.y), true);
+  // Falls through (false) instead of swallowing `E`: off a maintenance floor the
+  // fixture is ordinary searchable decor, and consuming the press made its own
+  // loot action unreachable. The gate itself still refuses to act.
+  assert.equal(tryUsePneumomailTube(world, player, state, intake.x, intake.y), false);
   assert.equal(getRecentEvents(state, { tags: ['pneumomail'], limit: 20 }).length, 0);
   assert.equal(state.quests.filter(q => q.contractId === PNEUMOMAIL_CONTRACT_ID).length, 0);
   assert.equal(countInventoryItem(player, PNEUMOMAIL_CAPSULE_ITEM_ID), 0);

@@ -87,7 +87,7 @@ import {
   moveNetTerminalBankPreset,
   tryUseNetTerminalGen,
 } from './net_terminal_gen';
-import { tryUsePneumomailTube } from './pneumomail';
+import { pneumomailPrompt, tryUsePneumomailTube } from './pneumomail';
 import { pseudoliftPrompt, tryUsePseudolift } from './pseudolift';
 import { floorRunLiftPrompt, currentFloorRunLabel } from './procedural_floors';
 import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } from './procedural_anomalies';
@@ -395,6 +395,9 @@ function findNormalPriorityTargetForLook(ctx: InteractionContext): InteractionTa
   if (cell === Cell.LIFT) {
     return target('lift', idx + 200000, 'lift', idx % W, (idx / W) | 0, 60, liftPrompt(ctx, idx));
   }
+
+  const pneumomail = pneumomailPrompt(ctx.world, ctx.state, ctx.lookX, ctx.lookY);
+  if (pneumomail) return target('instant', idx + 690000, 'pneumomail', idx % W, (idx / W) | 0, 61, pneumomail);
 
   const contentTarget = findContentInteractionTarget(ctx);
   if (contentTarget) return target('instant', contentTarget.id, contentTarget.targetId, contentTarget.x, contentTarget.y, contentTarget.priority, contentTarget.prompt);
