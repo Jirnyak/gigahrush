@@ -2163,6 +2163,8 @@ export function dropItem(
   entities.push({
     id: dropId, type: EntityType.ITEM_DROP,
     x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+    // ownerId marks a deliberately placed stash — exempt from the drop FIFO cap.
+    ownerId: player.id,
     inventory: [{ defId: slot.defId, count: dropCount, data: slot.data }],
   });
 

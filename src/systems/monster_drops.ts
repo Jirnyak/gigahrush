@@ -2,7 +2,7 @@ import { EntityType, type Entity } from '../core/types';
 import { chooseMonsterRareDrop } from '../data/monster_ecology';
 import { generateMonsterLoot, type GeneratedLoot } from './procedural_loot';
 import { Spr } from '../render/sprite_index';
-import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
+import { canSpawnEntityType, enforceItemDropFifoCap, entitySpawnSlots } from './entity_limits';
 import { rng } from '../core/rand';
 
 export interface MonsterRareLootDrop {
@@ -73,6 +73,7 @@ export function dropMonsterLoot(
     });
     spawned.push(loot);
   }
+  if (spawned.length > 0) enforceItemDropFifoCap(entities);
 
   return spawned;
 }

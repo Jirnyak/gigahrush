@@ -325,7 +325,7 @@ import {
   resetNoiseRecords,
 } from './systems/noise';
 import { notifyActorDamaged, resetCombatStimulus } from './systems/combat_stimulus';
-import { entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
+import { enforceItemDropFifoCap, entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
 import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
 import { resetNpcMemoryStore } from './systems/npc_memory';
 import { resetBarkState } from './systems/ai/barks';
@@ -4860,6 +4860,7 @@ function dropEntityInventory(e: Entity): void {
     });
   }
   e.inventory = [];
+  enforceItemDropFifoCap(entities);
 }
 
 /* ── Shared kill handling (melee + projectile) ────────────────── */

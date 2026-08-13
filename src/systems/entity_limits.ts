@@ -1,5 +1,6 @@
-import { EntityType, type Entity } from '../core/types';
-import { activeActorSoftLimit, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT } from '../data/entity_limits';
+import { EntityType, ItemType, type Entity } from '../core/types';
+import { activeActorSoftLimit, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT, ITEM_DROP_FIFO_CAP } from '../data/entity_limits';
+import { ITEMS } from '../data/items';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
 
 export function entitySoftLimit(type: EntityType): number | undefined {
@@ -91,4 +92,38 @@ export function entitySpawnSlots(entities: readonly Entity[], type: EntityType, 
 
 export function canSpawnEntityType(entities: readonly Entity[], type: EntityType): boolean {
   return remainingEntitySpawnSlots(entities, type) > 0;
+}
+
+// Keys, documents and quest-tagged contents are progression-critical; drops
+// the player placed deliberately carry ownerId. Neither is FIFO-evictable.
+function isExpendableDrop(e: Entity): boolean {
+  if (!e.alive || e.type !== EntityType.ITEM_DROP) return false;
+  if (e.ownerId !== undefined) return false;
+  for (const item of e.inventory ?? []) {
+    const def = ITEMS[item.defId];
+    if (!def) continue;
+    if (def.type === ItemType.KEY || def.type === ItemType.NOTE) return false;
+    if (def.tags?.includes('quest') || def.tags?.includes('document')) return false;
+  }
+  return true;
+}
+
+// Live drops accumulate for a whole floor run (only samosbor sweeps them) and
+// each one taxes the per-frame static reindex. Called after death-loot bursts:
+// past the cap the oldest expendable drops (entity array order = creation
+// order) silently rot away. Returns the number evicted.
+export function enforceItemDropFifoCap(entities: Entity[]): number {
+  let live = 0;
+  for (const e of entities) if (e.alive && e.type === EntityType.ITEM_DROP) live++;
+  let toEvict = live - ITEM_DROP_FIFO_CAP;
+  if (toEvict <= 0) return 0;
+  let evicted = 0;
+  for (const e of entities) {
+    if (toEvict <= 0) break;
+    if (!isExpendableDrop(e)) continue;
+    e.alive = false;
+    toEvict--;
+    evicted++;
+  }
+  return evicted;
 }
