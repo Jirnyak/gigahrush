@@ -843,7 +843,11 @@ export interface SideQuestRegistrySnapshot {
 export function getSideQuestRegistrySnapshot(): readonly SideQuestRegistrySnapshot[] {
   return SIDE_QUESTS.map(q => ({
     id: q.id,
-    giverId: q.giverId,
+    // Resolved, not raw: literal-declared quests (the idol branch) reference a
+    // giver registered later, so their `giverId` field stays frozen at
+    // undefined while the offer gate resolves them through giverPlotNpcId.
+    // An inspection API that reports undefined here is simply lying.
+    giverId: sideQuestGiverId(q) ?? q.giverId,
     type: q.type,
     desc: q.desc,
   }));

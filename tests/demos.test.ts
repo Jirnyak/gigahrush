@@ -11,6 +11,7 @@ import {
   moveDemosCursor,
 } from '../src/systems/demos';
 import { floorKeyForDesign } from '../src/systems/floor_keys';
+import { npcReservedIdentityId } from '../src/data/npc_packages';
 import { makeGameState } from './helpers';
 import '../src/gen/maintenance/gordon';
 
@@ -103,11 +104,18 @@ test('Demos resolves authored plot sprite and route floor number for reserved pr
   createPrefilledAlifeState(state, 12345, 1, {
     buckets: [{
       floorKey: floorKeyForDesign('maintenance'),
-      z: -14,
+      z: -26,
       targetCount: 1,
       reserved: [{
+        // ИЗВЕСТНО КРАСНЫЙ: контракт резервных личностей A-Life не сходится с
+        // этим вызовом. Установлено: (1) поле z должно быть каноническим (-26),
+        // а не старым -14; (2) явный числовой plotNpcId ПОДМЕНЯЕТ личность —
+        // это индекс регистрации пакетов, и Гордон превращался в Марко Лоло;
+        // (3) без него конвейер всё равно берёт первую зарегистрированную
+        // личность вместо запрошенной по id. Нужен разбор buildAlifeState-
+        // FromPopulationPlan: как бакетный reserved связывается с пакетом.
+        id: npcReservedIdentityId('gordon_freeman'),
         kind: 'plot',
-        plotNpcId: 'gordon_freeman',
         name: 'Гордон Фримен',
         female: false,
         faction: Faction.SCIENTIST,

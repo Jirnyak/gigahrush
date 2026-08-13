@@ -12,6 +12,8 @@ import '../src/gen/design_floors/manifest';
 
 import { MonsterKind, RoomType } from '../src/core/types';
 import { ITEMS } from '../src/data/catalog';
+import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
+import { getPlotNpcPackageByNumericId } from '../src/data/npc_packages';
 import { CONTRACTS } from '../src/data/contracts';
 import { FACTORIES } from '../src/data/factories';
 import { MONSTER_ECOLOGY } from '../src/data/monster_ecology';
@@ -21,6 +23,7 @@ import {
   allPlotNpcIds,
   getSideQuestRegistrySnapshot,
   hasPlotNpc,
+  sideQuestGiverId,
   type PlotStep,
 } from '../src/data/plot';
 import { PLOT_ROOMS } from '../src/data/plot_rooms';
@@ -64,9 +67,10 @@ function assertMonster(kind: number | undefined, scope: string): void {
   assert.equal(MONSTER_IDS.has(kind), true, `${scope} references missing monster kind ${kind}`);
 }
 
-function assertContractTarget(contract: { target?: { floor?: number; roomType?: number; hint?: string } }, scope: string): void {
+function assertContractTarget(contract: { target?: { z?: number; roomType?: number; hint?: string } }, scope: string): void {
   assert.ok(contract.target, `${scope} is missing target metadata`);
-  const floor = contract.target.floor;
+  // Поле называется z (канон проекта); прежнее target.floor не существует.
+  const floor = contract.target.z;
   assert.equal(floor !== undefined && FLOOR_LEVEL_IDS.has(floor), true, `${scope}.target references missing floor ${floor}`);
   if (contract.target.roomType !== undefined) {
     assert.equal(ROOM_TYPE_IDS.has(contract.target.roomType), true, `${scope}.target references missing room type ${contract.target.roomType}`);
@@ -80,9 +84,12 @@ function rumorReveals(reveals: RumorDef['reveals']): readonly RumorReveal[] {
 }
 
 function assertPlotStep(step: PlotStep, scope: string): void {
-  assert.equal(hasPlotNpc(step.giverNpcId), true, `${scope} has missing giverNpcId "${step.giverNpcId}"`);
+  // giverId — числовой id пакета NPC, бэкфиллится при регистрации.
+  // sideQuestGiverId разрешает и числовой giverId, и ленивый giverPlotNpcId
+  // (ветка идола объявлена в литерале раньше своих NPC).
+  assert.equal(getPlotNpcPackageByNumericId(sideQuestGiverId(step as never) ?? -1) !== undefined, true, `${scope} has missing giver package "${step.giverId}"`);
   if (step.targetNpcId) {
-    assert.equal(hasPlotNpc(step.targetNpcId), true, `${scope} has missing targetNpcId "${step.targetNpcId}"`);
+    assert.equal(getPlotNpcPackageByNumericId(step.targetNpcId) !== undefined, true, `${scope} has missing targetNpcId "${step.targetNpcId}"`);
   }
   if (step.targetPlotNpcId) {
     assert.equal(hasPlotNpc(step.targetPlotNpcId), true, `${scope} has missing targetPlotNpcId "${step.targetPlotNpcId}"`);
@@ -116,7 +123,13 @@ test('side quest registry snapshot exposes unique ids after floor manifests impo
 
   for (const entry of entries) {
     assertTrimmedText(entry.id, `SIDE_QUESTS.${entry.id}.id`);
-    assertTrimmedText(entry.giverNpcId, `SIDE_QUESTS.${entry.id}.giverNpcId`);
+    // Снапшот отдаёт числовой giverId (поля giverNpcId нет): проверяем, что он
+    // резолвится в реальный пакет NPC, а не что это непустая строка.
+    assert.equal(
+      getPlotNpcPackageByNumericId(entry.giverId) !== undefined,
+      true,
+      `SIDE_QUESTS.${entry.id}.giverId ${entry.giverId} must resolve to an NPC package`,
+    );
   }
 
   assertUnique(entries.map(entry => entry.id), 'SIDE_QUESTS snapshot id');
@@ -207,8 +220,12 @@ test('contracts, rumors, rooms, and variants reference existing ids', () => {
     for (const rumorId of def.rumorIds) {
       const rumor = RUMORS_BY_ID.get(rumorId);
       assert.ok(rumor, `SCREEN_SIGNAL_DEFS.${def.id} references missing rumor "${rumorId}"`);
-      assert.equal(
-        true,
+      // Условие ассерта было утеряно при автозамене (осталось assert.equal(true, "текст"),
+      // то есть сравнение true со строкой — вечно красное). Смысл: этажи слуха и
+      // этажи сигнала должны пересекаться, иначе экран ссылается на слух, который
+      // на его этажах не ходит.
+      assert.ok(
+        rumor.floors.some(z => def.floors.includes(z)),
         `SCREEN_SIGNAL_DEFS.${def.id} rumor "${rumorId}" has no valid floor overlap`,
       );
       if (rumor.lead?.roomType !== undefined && def.roomTypes?.includes(rumor.lead.roomType)) hasRoomLead = true;
@@ -251,7 +268,7 @@ test('monster ecology covers every registered monster and resolves tactical refe
       for (const floor of rumor.floors) rumorFloors.add(floor);
     }
     for (const floor of def.floors) {
-      assert.equal(rumorFloors.has(floor), true, `${scope} has no rumor coverage on floor ${number[floor]}`);
+      assert.equal(rumorFloors.has(floor), true, `${scope} has no rumor coverage on floor ${floor}`);
     }
 
     for (const drop of def.rareDrops) {
