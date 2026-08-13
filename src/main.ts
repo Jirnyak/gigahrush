@@ -3038,6 +3038,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const savedMaxHp = player.maxHp ?? 100;
   const savedWeapon = player.weapon ?? '';
   const savedTool = player.tool ?? '';
+  const savedArmor = player.armorDefId;
   const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
   const savedStatuses = player.statuses ? [...player.statuses] : undefined;
   const savedMoney = player.money ?? 100;
@@ -3101,6 +3102,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       inventory: savedInventory,
       weapon: savedWeapon,
       tool: savedTool,
+      armorDefId: savedArmor,
       money: savedMoney,
       rpg: savedRpg,
       statuses: savedStatuses,
@@ -5800,6 +5802,7 @@ function switchFloor(
   const savedMaxHp = player.maxHp ?? 100;
   const savedWeapon = player.weapon ?? '';
   const savedTool = player.tool ?? '';
+  const savedArmor = player.armorDefId;
   const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
   const savedStatuses = player.statuses ? [...player.statuses] : undefined;
   const savedMoney = player.money ?? 100;
@@ -5870,6 +5873,7 @@ function switchFloor(
       inventory: savedInventory,
       weapon: savedWeapon,
       tool: savedTool,
+      armorDefId: savedArmor,
       money: savedMoney,
       rpg: savedRpg,
       statuses: savedStatuses,
