@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import { Cell, LiftDirection, W } from '../src/core/types';
 import type { World } from '../src/core/world';
+import { makeProceduralFloorSpec, type ProceduralFloorSpec } from '../src/data/procedural_floors';
 import type { FloorGeneration } from '../src/gen/floor_manifest';
 
 interface GeneratorTiming {
@@ -15,6 +16,27 @@ const RUN_GENERATION_MATRIX = process.env.GIGAHRUSH_GENERATION_MATRIX === '1';
 const GENERATION_SKIP_REASON = 'run npm run test:generation for the full generation matrix';
 
 const ORTHO_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+/**
+ * Первый прогонный этаж, на котором сходятся условия сцены.
+ *
+ * Прибивать координату `(n, z)` нельзя: геометрия, большинство и пятёрка
+ * lootBias тянутся жребием из пулов по тегам, поэтому любой новый элемент пула
+ * сдвигает раздачу и тест краснеет, хотя сцена цела. Контракт авторского
+ * схрона — «где условия совпали, он есть», а не «он на этаже 1/-34».
+ */
+export function findProceduralSpec(
+  match: (spec: ProceduralFloorSpec) => boolean,
+  label: string,
+): ProceduralFloorSpec {
+  for (let n = 1; n <= 96; n++) {
+    for (let z = -31; z >= -127; z--) {
+      const spec = makeProceduralFloorSpec(n, z);
+      if (match(spec)) return spec;
+    }
+  }
+  throw new Error(`no procedural floor satisfies ${label}`);
+}
 
 export function timeFloorGeneration<T extends FloorGeneration>(label: string, fn: () => T): T {
   const startedAt = process.hrtime.bigint();

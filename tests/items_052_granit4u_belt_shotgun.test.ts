@@ -4,9 +4,10 @@ import * as assert from 'node:assert/strict';
 import { Faction, ItemType, RoomType } from '../src/core/types';
 import { ITEMS, WEAPON_ROLE_TIERS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
-import { makeProceduralFloorSpec, PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER } from '../src/data/procedural_floors';
+import { PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER } from '../src/data/procedural_floors';
 import { resourceForItem } from '../src/data/resources';
-import { generateProceduralFloor } from '../src/gen/procedural_floor';
+import { DEEP_LIQUIDATOR_REWARD_MIN_DEPTH, generateProceduralFloor } from '../src/gen/procedural_floor';
+import { findProceduralSpec } from './generator_helpers';
 import { containerAccessInfo } from '../src/systems/containers';
 import { makeTestPlayer } from './helpers';
 
@@ -42,11 +43,17 @@ test('granit4u belt shotgun is a slow crowd-control shell weapon', () => {
 });
 
 test('granit4u is reachable as a deep liquidator procedural reward theft', () => {
-  const spec = makeProceduralFloorSpec(5, -46);
-
-  assert.equal(spec.danger, 5);
-  assert.equal(spec.majorityId, 'liquidators');
-  assert.ok(spec.lootBiasIds.includes('granit4u_belt_shotgun'));
+  // Единственный схрон, который жребий действительно гейтит: генератор выходит,
+  // если ствола нет в пятёрке lootBias. Владелец подтвердил редкость (около 1.7%
+  // глубоких этажей), поэтому условие входит в поиск этажа, а не в ассерт по
+  // прибитой координате.
+  const spec = findProceduralSpec(
+    candidate => candidate.danger >= 5
+      && candidate.majorityId === 'liquidators'
+      && candidate.depth >= DEEP_LIQUIDATOR_REWARD_MIN_DEPTH
+      && candidate.lootBiasIds.includes('granit4u_belt_shotgun'),
+    'deep liquidator reward stash conditions',
+  );
 
   const generated = generateProceduralFloor(spec);
   const stash = generated.world.containers.find(container =>

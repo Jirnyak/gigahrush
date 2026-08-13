@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { ItemType, Occupation, RoomType } from '../src/core/types';
-import { generateNpcTradeItems } from '../src/data/occupation_profiles';
+import { generateNpcTradeItems, occupationTradeItems } from '../src/data/occupation_profiles';
 import { ITEM_TAGS, ITEMS, getStack } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
@@ -51,7 +51,13 @@ test('empty sample jar stays trade goods rather than a usable sample', () => {
 });
 
 test('scientist trade can expose empty sample jars', () => {
-  const rolls = [0, (6 + 0.01) / 13, 0];
+  // Бросок вычисляется из позиции в пуле, а не пишется числом: раньше здесь
+  // стояло `(i + 0.01) / N` под старый размер таблицы, и как только у учёного
+  // появились новые товары, мок начал выбирать чужой предмет. Настоящий
+  // контракт — что предмет вообще есть в пуле профессии.
+  const pool = occupationTradeItems(Occupation.SCIENTIST);
+  assert.ok(pool.includes(ITEM_ID), 'scientist trade pool must carry the jar');
+  const rolls = [0, (pool.indexOf(ITEM_ID) + 0.01) / pool.length, 0];
   _overrideRng(() => rolls.shift() ?? 0);
   try {
     const npc = makeTestNpc({ occupation: Occupation.SCIENTIST });

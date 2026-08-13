@@ -4,9 +4,9 @@ import * as assert from 'node:assert/strict';
 import { ItemType, RoomType } from '../src/core/types';
 import { ITEMS, WEAPON_ROLE_TIERS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
-import { makeProceduralFloorSpec } from '../src/data/procedural_floors';
 import { resourceForItem } from '../src/data/resources';
-import { generateProceduralFloor } from '../src/gen/procedural_floor';
+import { DEEP_RECON_STASH_MIN_DEPTH, generateProceduralFloor } from '../src/gen/procedural_floor';
+import { findProceduralSpec } from './generator_helpers';
 
 test('losyash rifle is a rare anti-elite precision weapon on bolt projectile rules', () => {
   const def = ITEMS.losyash_rifle;
@@ -30,12 +30,15 @@ test('losyash rifle is a rare anti-elite precision weapon on bolt projectile rul
 });
 
 test('losyash rifle is reachable from a deep procedural recon stash', () => {
-  const spec = makeProceduralFloorSpec(1, -49);
-
-  assert.equal(spec.geometryId, 'sump_causeways');
-  assert.equal(spec.danger, 5);
-  assert.ok(spec.lootBiasIds.includes('losyash_rifle'));
-  assert.ok(spec.lootBiasIds.includes('rifle_bolt_pack'));
+  // Условия сцены — те же, что у addDeepReconStash: глубина, опасность и
+  // геометрия отстойников. Пятёрка lootBias схрон НЕ гейтит, поэтому требовать
+  // от неё именно этот ствол значило бы пиннить жребий, а не контракт.
+  const spec = findProceduralSpec(
+    candidate => candidate.geometryId === 'sump_causeways'
+      && candidate.danger >= 5
+      && candidate.depth >= DEEP_RECON_STASH_MIN_DEPTH,
+    'deep recon stash conditions',
+  );
 
   const generated = generateProceduralFloor(spec);
   const stash = generated.world.containers.find(container =>

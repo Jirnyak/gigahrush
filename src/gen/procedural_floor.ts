@@ -135,12 +135,12 @@ import {
 
 const EXCLUDE_GNILUSHKA = [MonsterKind.GNILUSHKA] as const;
 const O15_ENGINEER_FLAMER_ID = 'o15_multijet_flamer';
-const O15_ENGINEER_STASH_MIN_DEPTH = 30;
+export const O15_ENGINEER_STASH_MIN_DEPTH = 30;
 const LOSYASH_RIFLE_ID = 'losyash_rifle';
 const RIFLE_BOLT_PACK_ID = 'rifle_bolt_pack';
-const DEEP_RECON_STASH_MIN_DEPTH = 45;
+export const DEEP_RECON_STASH_MIN_DEPTH = 45;
 const GRANIT4U_BELT_SHOTGUN_ID = 'granit4u_belt_shotgun';
-const DEEP_LIQUIDATOR_REWARD_MIN_DEPTH = 45;
+export const DEEP_LIQUIDATOR_REWARD_MIN_DEPTH = 45;
 const WILD_MAJORITY_REWARD_TAG = 'wild_reward_leaf';
 const WILD_MAJORITY_RISK_TAG = 'wild_risk_cue';
 const WILD_MAJORITY_SHORTCUT_TAG = 'wild_unsafe_shortcut';
