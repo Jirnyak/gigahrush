@@ -2,11 +2,11 @@
 
 import { W, Cell, ProjType, type Entity, EntityType } from '../core/types';
 import { World } from '../core/world';
-import { stampLocalMark, stampMark, MarkType } from './surface_marks';
+import { stampLocalMark, stampMark, MarkType, SURFACE_MAP_MAX_CELLS } from './surface_marks';
 import { Spr } from '../render/sprite_index';
 import { ensureEntityIndex } from './entity_index';
 import { markDangerFieldCell } from './danger_field';
-import { addVisualSlotByPriority, removeVisualSlotCode } from '../gen/visual_cell_slots.js';
+import { addVisualSlotByPriority, hasVisualSlotCode, removeVisualSlotCode } from '../gen/visual_cell_slots.js';
 import { mathRng as rng, SeedRng } from '../core/rand';
 
 /* ── Transient world-space particles ──────────────────────────── */
@@ -380,6 +380,28 @@ export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: n
 }
 
 /* ── Large blood pool on death ────────────────────────────────── */
+// Meat chunks are permanent visual slots (and a real food resource for NPCs
+// and monsters), but every death added 2-3 forever, crowding useful geometry
+// out of the mesh instance cap. One chunk stack per cell, and the floor keeps
+// at most SURFACE_MAP_MAX_CELLS gore cells — past that the oldest cell is
+// cleared, the same ratchet bound ambient surface marks use.
+const goreCellFifo: number[] = [];
+let goreFifoWorld: World | null = null;
+
+function acquireGoreCell(world: World, ci: number): boolean {
+  if (goreFifoWorld !== world) { goreFifoWorld = world; goreCellFifo.length = 0; }
+  if (hasVisualSlotCode(world, ci, 34)) return false;
+  if (!goreCellFifo.includes(ci)) {
+    goreCellFifo.push(ci);
+    if (goreCellFifo.length > SURFACE_MAP_MAX_CELLS) {
+      const oldest = goreCellFifo.shift()!;
+      removeVisualSlotCode(world, oldest, 34); // corpse_meat_chunk
+      removeVisualSlotCode(world, oldest, 35); // corpse_bone_chunk
+    }
+  }
+  return true;
+}
+
 export function spawnDeathPool(world: World, ex: number, ey: number, gore = false, goreLevel = 1, pvx = 0, pvy = 0): void {
   bindParticleWorld(world);
   const seed = ++_splatterSeed;
@@ -429,7 +451,7 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
   }
 
   // Central procedural mesh chunk
-  if (goreLevel >= 1) {
+  if (goreLevel >= 1 && acquireGoreCell(world, world.idx(cx, cy))) {
     const chunkCount = 2 + Math.floor(sRng.random() * 2); // 2 to 3 chunks in center
     for (let i = 0; i < chunkCount; i++) {
       addVisualSlotByPriority(world, world.idx(cx, cy), 34, seed + i);
