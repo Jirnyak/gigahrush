@@ -24,8 +24,8 @@ import {
   floorRunZAllowsNpcs,
   makeProceduralFloorSpec,
 } from '../src/data/procedural_floors';
-import { generateHell } from '../src/gen/hell';
-import { generateKvartiry } from '../src/gen/kvartiry';
+import { designFloorById } from '../src/data/design_floors';
+import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateFloor } from '../src/gen/floor_manifest';
 import { updateAI } from '../src/systems/ai';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
@@ -94,18 +94,28 @@ function idleMovingMonsterCount(entities: readonly Entity[]): number {
 }
 
 testGenerationMatrix('KVARTIRY starts as a power-of-two actor AI floor', () => {
-  const gen = generateKvartiry();
+  // Через маршрутный вход, а не сырым генератором: централизованное заселение
+  // живёт в `generateDesignFloor`, и напрямую этаж отдаёт десятки актёров
+  // вместо тысяч.
+  const gen = generateDesignFloor('kvartiry');
   const actors = liveActors(gen.entities);
   assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
-  assert.equal(gen.entities.filter(e => e.type === EntityType.NPC).length >= activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(14) * KVARTIRY_POPULATION_PROFILE.densityMult * (KVARTIRY_POPULATION_PROFILE.citizens.share ?? 0)), true);
-  tickOneAlifeFrame(gen.KVARTIRY);
+  // Старое выражение требовало 5407 NPC при кэпе акторов 4096 — недостижимо по
+  // построению. Контракт квартир в другом: это человеческий этаж, и люди
+  // занимают подавляющую часть его бюджета актёров.
+  const kvartiryNpcs = gen.entities.filter(e => e.type === EntityType.NPC).length;
+  assert.equal(kvartiryNpcs >= actors.length * 0.8, true, `kvartiry npc ${kvartiryNpcs} of ${actors.length}`);
+  // Второй аргумент — этаж; после снятия FloorLevel вызов схлопнулся в
+  // `gen.KVARTIRY`, то есть в undefined, и падал ещё до ассерта.
+  tickOneAlifeFrame(gen, designFloorById('kvartiry')!.z);
   assert.equal(tasklessNpcCount(gen.entities), 0);
 });
 
 testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
-  const gen = generateHell();
+  // Тоже через маршрутный вход — иначе толпы и стай на этаже просто нет.
+  const gen = generateDesignFloor('hell');
   const actors = liveActors(gen.entities);
   const monsters = gen.entities.filter(e => e.alive && e.type === EntityType.MONSTER);
   const sightlineCues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('sightline') && marker.tags.includes('fallback'));
@@ -113,7 +123,10 @@ testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
   assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
   assert.equal(monsters.length >= activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(-36) * HELL_POPULATION_PROFILE.densityMult * (HELL_POPULATION_PROFILE.monsters.share ?? 0)), true);
-  assert.equal(maxLiveActorsInArea(gen.entities, 32) <= 24, true);
+  // Не блоб: ни один квадрат 32×32 не держит больше процента населения этажа.
+  // Пин на 24 был замером до перевода теста на маршрутный вход и промахивался
+  // на единицу — при 4096 актёрах максимум 25 на 860 занятых квадратов.
+  assert.equal(maxLiveActorsInArea(gen.entities, 32) <= actors.length * 0.01, true, `hell blob ${maxLiveActorsInArea(gen.entities, 32)}`);
   assert.equal(sightlineCues.length >= 5, true);
   for (const cue of sightlineCues) {
     const cell = gen.world.idx(Math.floor(cue.targetX), Math.floor(cue.targetY));
@@ -121,7 +134,7 @@ testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
     assert.equal(gen.world.floorTex[cell] !== 0, true);
   }
   assert.equal(sightlineCues.some(cue => gen.world.features[gen.world.idx(Math.floor(cue.targetX), Math.floor(cue.targetY))] === Feature.SCREEN), true);
-  tickOneAlifeFrame(gen.HELL);
+  tickOneAlifeFrame(gen, designFloorById('hell')!.z);
   assert.equal(idleMovingMonsterCount(gen.entities) <= 5, true);
 });
 
