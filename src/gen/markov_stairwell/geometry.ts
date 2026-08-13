@@ -109,13 +109,19 @@ export function carveLine(
   wallTex: Tex,
 ): void {
   const half = width >> 1;
-  if (ay === by) {
-    const minX = Math.min(ax, bx);
-    carveRect(world, minX, ay - half, Math.abs(bx - ax) + 1, width, floorTex, wallTex);
-    return;
+  if (ay !== by) {
+    const minY = Math.min(ay, by);
+    carveRect(world, ax - half, minY, width, Math.abs(by - ay) + 1, floorTex, wallTex);
   }
-  const minY = Math.min(ay, by);
-  carveRect(world, ax - half, minY, width, Math.abs(by - ay) + 1, floorTex, wallTex);
+  if (ax !== bx) {
+    // Колено. Прямой отрезок обязан доходить до цели: раньше при разнице по
+    // обеим осям вертикали хватало, а горизонтали не было вовсе — дверь
+    // открывалась в тупиковую шахту, и все 26 штабных подсобок были отрезаны.
+    // Угол берётся на ряду цели (`by`): он проходит ниже гермоядра штаба, а
+    // угол на ряду двери (`ay`) прорубил бы ядро насквозь.
+    const minX = Math.min(ax, bx);
+    carveRect(world, minX, by - half, Math.abs(bx - ax) + 1, width, floorTex, wallTex);
+  }
 }
 
 export function addDoor(world: World, room: Room, x: number, y: number, state = DoorState.CLOSED, keyId = ''): number {

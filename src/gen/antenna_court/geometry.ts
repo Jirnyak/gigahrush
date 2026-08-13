@@ -800,7 +800,14 @@ export function placeAntennaMiniHqBlock(
     if (def.hermetic) markHermeticRoomShell(world, room);
     paintRoomFaction(world, room, spec.owner);
     decorateAntennaRoomByType(world, room, rng, spec.owner);
-    openAntennaRoomDoor(world, room, def.side, def.hermetic ? DoorState.HERMETIC_OPEN : DoorState.CLOSED);
+    if (!openAntennaRoomDoor(world, room, def.side, def.hermetic ? DoorState.HERMETIC_OPEN : DoorState.CLOSED)) continue;
+    // Дверь открывает ровно одну клетку наружу, а до зала компаунда от ряда
+    // комнат — до восьми клеток стены. Без этой перемычки комната зависела от
+    // случайного двора рядом: у ликвидаторов журнал и санузел так и оказались
+    // отрезанными наглухо.
+    const stubX = room.x + (room.w >> 1);
+    const stubY = def.side === 'south' ? room.y + room.h : room.y - 1;
+    carveSignalCableLine(world, stubX, stubY, stubX, hallY, 0, protectedCells, spec.floorTex);
   }
 }
 
@@ -871,18 +878,6 @@ export function placeAntennaMicroBlock(
 ): void {
   const hallY = spec.y + (spec.h >> 1);
   carveAntennaHall(world, spec.x + 3, hallY, Math.max(1, spec.w - 6), 1, protectedCells, Tex.F_CONCRETE);
-  if (spec.connectX !== undefined && spec.connectY !== undefined) {
-    carveSignalCableLine(
-      world,
-      spec.x + (spec.w >> 1),
-      hallY,
-      spec.connectX,
-      spec.connectY,
-      1,
-      protectedCells,
-      Tex.F_CONCRETE,
-    );
-  }
   let serial = 0;
   for (const side of ['north', 'south'] as const) {
     let cursor = spec.x + 5;
@@ -912,6 +907,21 @@ export function placeAntennaMicroBlock(
       cursor += rw + 3;
       serial++;
     }
+  }
+  // Кабель к сети тянется ПОСЛЕ застройки блока. Пока он шёл первым, полосы
+  // микрокомнат ставились поверх него и срезали выход в двор: 101 комната
+  // висела вокруг зала, отрезанного от этажа.
+  if (spec.connectX !== undefined && spec.connectY !== undefined) {
+    carveSignalCableLine(
+      world,
+      spec.x + (spec.w >> 1),
+      hallY,
+      spec.connectX,
+      spec.connectY,
+      1,
+      protectedCells,
+      Tex.F_CONCRETE,
+    );
   }
 }
 
