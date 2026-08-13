@@ -565,6 +565,12 @@ Rules: all host→peer traffic per tick goes into ONE `host_state` packet (every
 - **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
 - **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
 
+**Порядок фаз и хуки этажа.** `generateDesignFloor` (`src/gen/design_floors/manifest.ts`) выполняет обязательную последовательность: генератор этажа → гарантия маршрутных лифтов → профиль объектов → инициализация поклеточной территории → хук `onAfterTerritory` → централизованное заселение ambient-NPC → хук `onAfterPopulate` → стаи монстров. Оба хука объявлены в `FloorGeneration` (`src/gen/floor_manifest.ts`) и существуют, чтобы этаж не тащил свою специфику в общий манифест.
+
+Ключевое следствие: до `onAfterPopulate` толпы на этаже ещё НЕТ. Всё, что работает поверх ambient-NPC — промоушен локальных ролей, пересчёт по населению, авторские сцены вокруг людей — обязано жить в этом хуке, а не в теле генератора. Этаж 69 промотировал работниц внутри генератора и годами видел только десяток авторских NPC вместо трёхсот с лишним.
+
+Второе следствие: обычные сущности этажа обязаны получать `id` ВЫШЕ сюжетного пула (`getPlotNpcCount()`), иначе предмет или монстр попадает в зарезервированный диапазон `1..N` и опознаётся как сюжетный NPC. Канон для генератора: `nextId.v = getPlotNpcCount() + 1000`.
+
 Each floor should have the same outer structure:
 
 ```txt
