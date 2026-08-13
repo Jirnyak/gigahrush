@@ -183,6 +183,9 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     // route (theme/z/danger) so counts are correct — the per-generator populate calls
     // that passed hardcoded/partial routes have been removed.
     populateDesignFloorAmbientNpcs(gen, route);
+    // Хук этажа поверх готовой толпы: промоушен локальных ролей и прочая
+    // работа, которой нужны уже размещённые ambient-NPC.
+    gen.onAfterPopulate?.(gen.world, gen.entities);
     // Monster packs after NPCs: both draw from one shared active-actor budget, so placing
     // NPCs first then fitting monsters into the remaining slots starves neither. Packs are
     // anisotropic (crowds, loners, territorial holds, roamers) driven by monster ecology.

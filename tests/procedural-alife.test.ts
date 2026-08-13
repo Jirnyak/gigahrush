@@ -136,6 +136,9 @@ testGenerationMatrix('floor 69 adult sprite templates survive A-Life materializa
   materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, 'design:floor_69');
   const materializedSprites = generated.entities.filter(entity =>
     entity.type === EntityType.NPC &&
+    // Симметрично шаблонам: авторские Роза, Сима и Ира носят тот же визуал, но
+    // приходят пакетами, а не промоушеном толпы — иначе их трое лишних.
+    !(entity as any).npcPackageId &&
     entity.alifeId !== undefined &&
     isFloor69FemaleSprite(entity.sprite)
   );

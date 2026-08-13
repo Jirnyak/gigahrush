@@ -7,6 +7,7 @@ import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
 import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
+import { isPlotNpc } from '../../data/plot';
 import { carveCorridor, generateZones, placeDoor, protectRoom, stampRoom } from '../shared';
 import { FLOOR_69_Z, FLOOR_69_WORKER_ROLE, FLOOR_69_CONTROL_ANCHORS, floor69EventTags, FLOOR_69_DEFAULT_SEED, FLOOR_69_FEMALE_SPRITE_COUNT, FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS } from './meta';
 
@@ -24,17 +25,24 @@ export function floor69FemaleSprite(entity: Entity): number {
   return Spr.F69_FEMALE_NPC_BASE + (hashFloor69Entity(entity, 0x690069) % FLOOR_69_FEMALE_SPRITE_COUNT);
 }
 
+/**
+ * Кандидатка в работницы опознаётся структурой, а не русским префиксом имени.
+ * Ambient-NPC — безымянный шаблон размещения (`design_floors/population.ts`),
+ * имя ему даёт A-Life позже, поэтому проверка по 'Этаж 69: посетитель ' не
+ * срабатывала НИ РАЗУ: вместо трёхсот работниц этаж отдавал ноль. Заодно ушло
+ * условие `!entity.id`, истинное только для нулевого id.
+ */
 export function isFloor69GeneratedVisitor(entity: Entity): boolean {
-  if (!FLOOR_69_WORKER_ROLE?.sourceNamePrefix) return false;
+  if (!FLOOR_69_WORKER_ROLE) return false;
   return entity.type === EntityType.NPC &&
-    !entity.id &&
+    !isPlotNpc(entity) &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
     entity.occupation !== Occupation.CHILD &&
     FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS.has(entity.occupation ?? Occupation.TRAVELER) &&
     (!FLOOR_69_WORKER_ROLE.requiresFemale || entity.isFemale !== false) &&
-    (entity.name?.startsWith(FLOOR_69_WORKER_ROLE.sourceNamePrefix) ?? false);
+    !isFloor69Worker(entity);
 }
 
 export function shouldPromoteFloor69Worker(entity: Entity): boolean {
@@ -54,11 +62,10 @@ export function isFloor69Worker(entity: Entity): boolean {
 }
 
 export function promoteFloor69Worker(entity: Entity): void {
-  const sourcePrefix = FLOOR_69_WORKER_ROLE?.sourceNamePrefix;
   const rolePrefix = FLOOR_69_WORKER_ROLE?.roleNamePrefix;
-  if (sourcePrefix && rolePrefix && entity.name?.startsWith(sourcePrefix)) {
-    entity.name = entity.name.replace(sourcePrefix, rolePrefix);
-  }
+  // Промоушен и есть тот момент, когда безымянный шаблон становится ролью:
+  // имя присваивается здесь, а не ожидается от генератора населения.
+  if (rolePrefix && !entity.name?.startsWith(rolePrefix)) entity.name = `${rolePrefix}${entity.id}`;
   if (!isFloor69Worker(entity)) return;
   entity.occupation = FLOOR_69_WORKER_ROLE?.outputOccupation ?? Occupation.PERFORMER;
   entity.sprite = floor69FemaleSprite(entity);

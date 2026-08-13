@@ -275,7 +275,10 @@ export function normalizeFloorRunEntrySnapshot(input: unknown): FloorRunEntrySna
   };
 }
 
-export function createFloorRunState(startZ = 2): FloorRunState {
+// Дефолт — жилой (z=0), канонический старт игры (`main.ts` ставит туда же).
+// Стояла двойка — «представитель жилого» из отменённой схемы координат; на
+// каноне это подъезд Мёбиуса, то есть повреждённый сейв уезжал в лестницу.
+export function createFloorRunState(startZ = 0): FloorRunState {
   const runSeed = randomRunSeed();
   const run: FloorRunState = {
     runSeed,
@@ -290,7 +293,7 @@ export function createFloorRunState(startZ = 2): FloorRunState {
 
 export function normalizeFloorRunState(
   input: Partial<FloorRunState> | null | undefined,
-  defaultZ = 2,
+  defaultZ = 0,
 ): FloorRunState {
   const runSeed = normalizeRunSeed(input?.runSeed);
   const z = normalizeZ(input?.currentZ, defaultZ);

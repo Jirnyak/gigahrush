@@ -101,7 +101,9 @@ test('route lift normalization never demotes fast-elevator cabins', () => {
 });
 
 test('floor unlock bits start with the start floor and grow on visit', () => {
-  const run = createFloorRunState('living');
+  // Прогон адресуется числовым z, а не строковым id маршрута: 'living' попадал
+  // прямо в unlockedZs и делал биты разблокировки строками.
+  const run = createFloorRunState(0);
   assert.deepEqual(run.unlockedZs, [0]);
 
   const state = { currentZ: 0, floorRun: run } as never;

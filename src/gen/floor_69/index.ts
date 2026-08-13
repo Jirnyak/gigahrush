@@ -31,7 +31,6 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
     applyFloor69OwnershipVisibilityHeatmap(world);
     seedContainers(world, rooms);
     spawnFloor69Npcs(world, entities, nextId, rooms);
-    applyFloor69AmbientSpriteTemplates(entities);
     seedLooseItems(entities, nextId, rooms);
     registerFloor69RouteCues(world, rooms);
 
@@ -50,6 +49,9 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
       entities,
       spawnX,
       spawnY,
+      // Промоушен работниц — после централизованного заселения: до него
+      // толпа ещё не создана, и раньше он крутился по десятку авторских NPC.
+      onAfterPopulate: (_world, floorEntities) => applyFloor69AmbientSpriteTemplates(floorEntities),
       routeId: DESIGN_FLOOR_ID,
       z: DESIGN_FLOOR_Z,
       seed,

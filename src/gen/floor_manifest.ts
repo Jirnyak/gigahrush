@@ -17,6 +17,9 @@ export interface FloorGeneration {
   spawnY: number;
   isDecentralized?: boolean;
   onAfterTerritory?: (world: World, entities: Entity[]) => void;
+  /** После централизованного заселения: этаж видит уже созданную толпу.
+   *  До этого хука ambient-NPC ещё не существуют. */
+  onAfterPopulate?: (world: World, entities: Entity[]) => void;
 }
 
 export interface DesignFloorGeneration extends FloorGeneration {
