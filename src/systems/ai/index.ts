@@ -74,6 +74,13 @@ export function getAiStats(): AiStats {
   return { ...aiStats };
 }
 
+// Rescue-from-solid is a rare error state, but its cell probes ran for every
+// actor every frame. Combat actors (crowd-push is the main stuck source) keep
+// the every-frame check; the rest are swept round-robin on a budget, matching
+// the updateBloodTrails cadence pattern.
+const UNSTUCK_ACTOR_BUDGET = 256;
+let unstuckCursor = 0;
+
 function isBossActor(e: Entity): boolean {
   if (e.isFogBoss) return true;
   switch (e.monsterKind) {
@@ -145,8 +152,13 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       zoneId: world.zoneMap[ci],
     };
   });
+  const aiCount = entityIndex.ai.length;
+  const unstuckStart = aiCount > 0 ? unstuckCursor % aiCount : 0;
+  unstuckCursor = aiCount > 0 ? (unstuckStart + UNSTUCK_ACTOR_BUDGET) % aiCount : 0;
+  let aiIdx = -1;
   try {
     for (const e of entityIndex.ai) {
+      aiIdx++;
       if (!e || !e.alive || !e.ai) continue;
       if (isPlayerEntity(e)) {
         aiStats.skipped++;
@@ -159,7 +171,11 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       if (e.role === NpcRole.CINEMATIC_ACTOR) {
         continue;
       }
-      unstuckActorFromBlockers(world, e, { radius: 0, rescueFromSolid: true });
+      if (aiCount <= UNSTUCK_ACTOR_BUDGET
+        || ((aiIdx - unstuckStart + aiCount) % aiCount) < UNSTUCK_ACTOR_BUDGET
+        || e.ai.combatTargetId !== undefined) {
+        unstuckActorFromBlockers(world, e, { radius: 0, rescueFromSolid: true });
+      }
       if (e.type === EntityType.NPC) {
         if (e.ai.npcState === undefined) {
           primeNpcAlifeState(e, clock, samosborActive, isMinistry ? 'ministry' : 'default');
