@@ -1355,11 +1355,20 @@ function populationPlanCounts(plan: AlifePopulationPlan, total: number): number[
   return counts.map(count => Math.max(0, count));
 }
 
+// Личность резерва опознаётся строковым `npc:<пакет>`. Числовой plotNpcId — это
+// позиционный индекс регистрации пакетов: он зависит от набора импортов, поэтому
+// принятый снаружи как ключ он подменяет человека. Строка сильнее числа.
+function reservedPlotSlot(reserved: AlifePopulationReservedNpc): number | undefined {
+  const packageId = typeof reserved.id === 'string' ? packageIdFromReservedIdentityId(reserved.id) : undefined;
+  return (packageId ? getPlotNpcNumericId(packageId) : undefined) ?? reserved.plotNpcId;
+}
+
 function applyReservedNpcToRecord(alife: AlifeState, record: AlifeNpcRecord, reserved: AlifePopulationReservedNpc): void {
   if (reserved.id !== undefined) record.reservedIdentityId = cleanFloorKey(String(reserved.id));
   if (reserved.kind) record.reservedKind = reserved.kind;
   if (reserved.presence === 'population' || reserved.presence === 'event_only') record.reservedPresence = reserved.presence;
-  if (reserved.plotNpcId !== undefined) record.plotNpcId = reserved.plotNpcId;
+  const plotSlot = reservedPlotSlot(reserved);
+  if (plotSlot !== undefined) record.plotNpcId = plotSlot;
   if (reserved.name) {
     record.name = reserved.name.slice(0, 80);
     const parts = reserved.name.split(' ');
@@ -1433,7 +1442,14 @@ export function buildAlifeStateFromPopulationPlan(
 ): AlifeState {
   void state;
   const plan = normalizePopulationPlan(inputPlan);
-  const boundedTotal = clampInt(total, ALIFE_POPULATION, 0, ALIFE_POPULATION);
+  const plotCount = getPlotNpcCount();
+  const includesPlot = plan.buckets.some(b => b.reserved?.some(r => r.kind === 'plot' || reservedPlotSlot(r) !== undefined)) ?? false;
+  // Сюжетный пул занимает слоты 1..N целиком, поэтому план с сюжетными личностями
+  // не может быть короче него: иначе резерв обрезается и запрошенный человек
+  // молча заменяется первым зарегистрированным. Раздача по бакетам считается по
+  // запрошенному размеру, добор до сюжетного пула — записи сверх плана.
+  const planTotal = clampInt(total, ALIFE_POPULATION, 0, ALIFE_POPULATION);
+  const boundedTotal = includesPlot ? Math.max(planTotal, Math.min(plotCount, ALIFE_POPULATION)) : planTotal;
   const npcs: AlifeNpcRecord[] = [];
   const floorIndex: Record<string, number[]> = {};
   const floorCap: Record<string, number> = {};
@@ -1450,9 +1466,7 @@ export function buildAlifeStateFromPopulationPlan(
     deadPlotNpcIds: new Set(),
     leaderboardVersion: 0,
   };
-  const counts = populationPlanCounts(plan, boundedTotal);
-  const plotCount = getPlotNpcCount();
-  const includesPlot = plan.buckets.some(b => b.reserved?.some(r => r.kind === 'plot' || r.plotNpcId !== undefined)) ?? false;
+  const counts = populationPlanCounts(plan, planTotal);
   const plotCountToEnsure = includesPlot ? Math.min(plotCount, boundedTotal) : 0;
   const extraReserved: Array<{ floorPlan: AlifeFloorPlan; reserved: AlifePopulationReservedNpc; bucketIndex: number[] }> = [];
 
@@ -1468,7 +1482,7 @@ export function buildAlifeStateFromPopulationPlan(
     floorIndex[floorPlan.key] = bucket;
     for (let n = 0; n < reserved.length; n++) {
       const res = reserved[n];
-      const targetId = res.plotNpcId;
+      const targetId = reservedPlotSlot(res);
       if (targetId !== undefined && targetId >= 1 && targetId <= plotCountToEnsure) {
         if (npcs[targetId - 1]) {
           applyReservedNpcToRecord(alife, npcs[targetId - 1]!, res);

@@ -265,7 +265,10 @@ export function alifeReservedIdentityFromNpcPackage(pack: NpcPackageDef): AlifeR
     kind,
     presence: reservedPresenceForPackage(pack.placement.presence),
     floorKey: pack.placement.homeFloorKey,
-    npcPackageId: pack.id,
+    // Ключ личности — тот, КЕМ строка резерва является: пакет, объявивший
+    // content.plotNpcId, занимает слот этого сюжетного человека, а не свой.
+    // По нему же схлопываются дубли, иначе два пакета зарезервируют одного.
+    npcPackageId: pack.content?.plotNpcId ?? pack.id,
     plotNpcId: pack.content?.plotNpcId ? getPlotNpcNumericId(pack.content.plotNpcId) : undefined,
     name: npcPackageDisplayName(pack),
     female: pack.demographics.sex === 'female',
