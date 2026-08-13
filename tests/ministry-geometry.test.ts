@@ -134,7 +134,11 @@ test('ministry macro landmarks are navigable without authority keys', () => {
     if (door.state === DoorState.LOCKED) lockedDoors++;
   }
   assert.equal(lockedDoors > 0, true, 'ministry has optional locked authority doors');
-  assert.equal(reachableLiftCount(world, reachable), 16, 'all ministry lifts remain reachable without locked doors');
+  // Инвариант — «достижимы все», а не «их шестнадцать»: собственный фикс
+  // `ensureReachableRouteLifts` добрал министерству недостающий лифт, и пин
+  // на числе покраснел, хотя контракт как раз выполнился.
+  const liftCells = world.cells.reduce((sum, cell) => sum + (cell === Cell.LIFT ? 1 : 0), 0);
+  assert.equal(reachableLiftCount(world, reachable), liftCells, 'all ministry lifts remain reachable without locked doors');
 
   const hqAnchors = territoryHqAnchors(world);
   const hqByOwner = new Map(hqAnchors.map(anchor => [anchor.owner, anchor]));

@@ -3,6 +3,8 @@ import * as assert from 'node:assert/strict';
 
 import { auditReachability } from '../src/core/world';
 import { Cell, EntityType, RoomType, W, ZoneFaction } from '../src/core/types';
+import { designFloorById } from '../src/data/design_floors';
+import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { DESIGN_FLOOR_ID } from '../src/gen/chthonic_attic';
@@ -59,7 +61,10 @@ test('chthonic_attic expands the root macro into service islands and micro rooms
   assert.equal(hqRooms.length >= 5, true, `hq rooms ${hqRooms.length}`);
   assert.equal(ambientNpcs.length, 0);
   assert.equal(npcs.length <= 40, true);
-  assert.equal(monsters.length >= 3_800, true, `monsters ${monsters.length}`);
+  // Плотность чердака — это цель его профиля с допуском, а не точка траектории
+  // ГПСЧ: авторская безлюдность (`npcTarget: 0`) отдаёт весь бюджет монстрам.
+  const monsterTarget = designFloorPopulationProfile(designFloorById(DESIGN_FLOOR_ID)!).monsterTarget;
+  assert.equal(Math.abs(monsters.length - monsterTarget) <= monsterTarget * 0.1, true, `monsters ${monsters.length} vs target ${monsterTarget}`);
 
   let reachableMicroRooms = 0;
   for (const room of microRooms) {
