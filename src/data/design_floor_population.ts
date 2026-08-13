@@ -2066,13 +2066,13 @@ function designMonsterMult(route: DesignFloorRouteDef): number {
 function baseNpcTarget(route: DesignFloorRouteDef): number {
   if (route.z <= -48 || Math.abs(route.z) >= 44) return 0;
   const total = basePopulationTotalAtDefaultSoftLimit(route.z);
-  return clampInt(total * (1 - monsterShareForRouteZ(route.z)) * designNpcMult(route), 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
+  return clampInt(total * (1 - monsterShareForRouteZ(route.z, route.danger)) * designNpcMult(route), 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
 function baseMonsterTarget(route: DesignFloorRouteDef): number {
   const total = basePopulationTotalAtDefaultSoftLimit(route.z);
   const dangerMult = 0.92 + Math.max(1, Math.min(5, route.danger)) * 0.045;
-  return clampInt(total * monsterShareForRouteZ(route.z) * designMonsterMult(route) * dangerMult, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
+  return clampInt(total * monsterShareForRouteZ(route.z, route.danger) * designMonsterMult(route) * dangerMult, 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {

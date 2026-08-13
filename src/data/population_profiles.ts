@@ -296,8 +296,38 @@ export function baseMonsterPopulationAtDefaultSoftLimit(z: number): number {
   return Math.max(100, Math.round(100 + (DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT - 100) * eased));
 }
 
-export function monsterShareForRouteZ(z: number): number {
-  return Math.max(0, Math.min(0.96, baseMonsterPopulationAtDefaultSoftLimit(z) / DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT));
+/**
+ * Danger a floor is expected to carry purely from its altitude band: 1 at the
+ * living floor, 5 at either terminus. The authored `danger` field is read as a
+ * DEVIATION from this norm (see monsterShareForRouteZ), so a floor whose
+ * danger matches its depth keeps exactly the historical population mix.
+ */
+export function expectedDangerForRouteZ(z: number): number {
+  return 1 + 4 * populationDepth01(z);
+}
+
+// Asymmetric on purpose. Downward (a deliberately peaceful floor high up) is
+// the case the depth curve cannot express at all, so it gets full weight.
+// Upward is already served by the depth curve plus the danger multiplier in
+// baseMonsterTarget, and the share saturates near 0.96 — a strong upward
+// weight would flatten every deep floor onto the same ceiling and strip the
+// authored NPCs out of Hell and Underhell.
+const DANGER_DEVIATION_WEIGHT_DOWN = 0.25;
+const DANGER_DEVIATION_WEIGHT_UP = 0.08;
+
+/**
+ * Share of the floor population that is monsters. Depth sets the baseline;
+ * the authored `danger` then pulls it down for deliberately peaceful floors
+ * (a social camp high up) and up for deliberately hostile ones (a danger-5
+ * hospital mid-route). Omitting `danger` reproduces the pure depth curve.
+ */
+export function monsterShareForRouteZ(z: number, danger?: number): number {
+  const depthShare = baseMonsterPopulationAtDefaultSoftLimit(z) / DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
+  const authored = danger === undefined ? expectedDangerForRouteZ(z) : Math.max(1, Math.min(5, danger));
+  const deviation = authored - expectedDangerForRouteZ(z);
+  const weight = deviation < 0 ? DANGER_DEVIATION_WEIGHT_DOWN : DANGER_DEVIATION_WEIGHT_UP;
+  const factor = Math.max(0.35, Math.min(1.6, 1 + deviation * weight));
+  return Math.max(0, Math.min(0.96, depthShare * factor));
 }
 
 export function populationLevelForRouteZ(z: number, danger = 1): number {
@@ -326,7 +356,7 @@ export function proceduralPopulationBudget(input: ProceduralPopulationBudgetInpu
   const profile = PROCEDURAL_POPULATION_PROFILES[input.profileId];
   const band = proceduralPopulationBand(input.z);
   const baseTotal = basePopulationTotalAtDefaultSoftLimit(input.z);
-  const monsterShare = input.npcAllowed ? monsterShareForRouteZ(input.z) : 1;
+  const monsterShare = input.npcAllowed ? monsterShareForRouteZ(input.z, input.danger) : 1;
   const npcBase = input.npcAllowed ? baseTotal * (1 - monsterShare) : 0;
   const monsterBase = baseTotal * monsterShare;
   const rawNpcs = input.npcAllowed ? scaledPopulationCount(profile.npcs, npcBase, input.danger, input.anomalyPressure) : 0;
