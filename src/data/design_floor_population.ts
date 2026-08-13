@@ -21,6 +21,7 @@ import {
   monsterShareForRouteZ,
   populationLevelForRouteZ,
 } from './population_profiles';
+import { floorRunZAllowsNpcs } from './procedural_floors';
 
 export interface DesignPlacementFieldProfile {
   noiseScale: number;
@@ -359,11 +360,25 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     npcPlacementKind: 'social',
   },
   roof: {
+    // The upper terminus carries no ordinary residents — nobody lives out on the
+    // open deck. Its own decision, not an altitude band
+    // (`procedural-floors.test.ts` pins `roof.npcTarget === 0`).
+    npcTarget: 0,
     monsterBiasKinds: [MonsterKind.EYE, MonsterKind.SHADOW, MonsterKind.REBAR, MonsterKind.LAMPOGLAZ, MonsterKind.TONKAYA_TEN],
     monsterTags: ['roof', 'sky', 'antenna', 'signal', 'wind', 'open', 'weather'],
     monsterPlacementKind: 'roof',
   },
+  outer_district: {
+    // Streets and houses with nobody left in them — the floor's quiet is an
+    // abandoned town, not a sleeping one. No ambient crowd; whatever moves out
+    // there is a monster or an authored figure.
+    npcTarget: 0,
+  },
   chthonic_attic: {
+    // A service attic nobody lives in: no ordinary residents, only authored
+    // packages. Stated here rather than left to an altitude band, so the
+    // emptiness is this floor's own decision (`chthonic-attic.test.ts` asserts it).
+    npcTarget: 0,
     monsterBiasKinds: [
       MonsterKind.TUBE_EEL,
       MonsterKind.TRUBNYY_AVTOMAT,
@@ -379,9 +394,8 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     monsterPlacementKind: 'attic',
   },
   radon_exchange: {
-    // z=44 falls under the baseNpcTarget |z|>=44 endgame silencer, but this is a
-    // staffed ministry floor with an authored operator crowd (#170): keep an
-    // explicit target so the profile does not collapse to 0 ambient NPCs.
+    // An ordinary override, not a workaround: the shutter crowd is denser than
+    // the altitude curve alone would staff this floor with (#170).
     npcTarget: 420,
     npcNoun: 'оператор заслонок',
     npcFactions: [{ value: Faction.SCIENTIST, weight: 58 }, { value: Faction.LIQUIDATOR, weight: 34 }, { value: Faction.CITIZEN, weight: 8 }],
@@ -2063,21 +2077,24 @@ function designMonsterMult(route: DesignFloorRouteDef): number {
               : 1;
 }
 
-// Route bands that carry no ordinary population at all: the endgame descent
-// and the outermost shell at either end. A floor here can still ship authored
-// NPC packages, and can opt back in with an explicit `npcTarget` override
-// (radon_exchange does exactly that).
+// One rule for who carries ordinary population, and it is `floorRunZAllowsNpcs`
+// — the same predicate A-Life, the run route and the anomalies read. Above it
+// the curve is continuous: NPC share is whatever the depth/danger mix leaves
+// over from monsters, so a floor thins out toward either terminus instead of
+// falling off a cliff at a hardcoded band. A floor that should be emptier or
+// busier than its altitude says is floor-specific business — express it with an
+// authored `npcTarget` / `npcMult` override, not with a second silencer here.
 function baseNpcTarget(route: DesignFloorRouteDef): number {
-  if (route.z <= -48 || Math.abs(route.z) >= 44) return 0;
+  if (!floorRunZAllowsNpcs(route.z)) return 0;
   const total = basePopulationTotalAtDefaultSoftLimit(route.z);
   return clampInt(total * (1 - monsterShareForRouteZ(route.z, route.danger)) * designNpcMult(route), 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
-// Note for a future reader: on the NPC-free bands above, a low authored
+// Note for a future reader: on the NPC-free descent below, a low authored
 // `danger` no longer moves people in — there are none — so it thins the floor
-// out instead. That is deliberate: a danger-2 rooftop reads as a quiet empty
-// deck, not as a monster pit. Do not "fix" it by forcing the whole budget into
-// monsters; that would make peaceful floors the most hostile on the route.
+// out instead. That is deliberate: a quiet deep deck reads as empty, not as a
+// monster pit. Do not "fix" it by forcing the whole budget into monsters; that
+// would make peaceful floors the most hostile on the route.
 function baseMonsterTarget(route: DesignFloorRouteDef): number {
   const total = basePopulationTotalAtDefaultSoftLimit(route.z);
   const dangerMult = 0.92 + Math.max(1, Math.min(5, route.danger)) * 0.045;
