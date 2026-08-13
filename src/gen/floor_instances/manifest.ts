@@ -61,8 +61,7 @@ function designPocketFloorInstance(
   instanceSeed: number,
 ): FloorGeneration {
   const generationSeed = floorInstanceGenerationSeed(def, runSeed, instanceSeed);
-  // @ts-ignore
-  const generation = generateFloor(def.themeTags, generationSeed);
+  const generation = generateFloor(def.z, generationSeed);
   return floorInstanceAllowsNpcs(def) ? generation : withoutNpcEntities(generation);
 }
 

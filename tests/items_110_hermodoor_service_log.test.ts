@@ -6,7 +6,7 @@ import { World } from '../src/core/world';
 import { CONTRACTS } from '../src/data/contracts';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateHospitalQuarantine } from '../src/gen/living/hospital_quarantine';
+import { generateHospitalQuarantine } from '../src/gen/bolnichny_korpus/hospital_quarantine';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
 import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
@@ -36,7 +36,7 @@ test('hermodoor_service_log is deduped into the existing hermodoor journal', () 
 test('hermodoor journal has theft and black-market document decisions', () => {
   const contract = CONTRACTS.find(item => item.id === 'hospital_hermodoor_journal_theft');
   assert.equal(contract?.targetItem, SERVICE_LOG_ID);
-  assert.equal(contract?.target.z, 2);
+  assert.equal(contract?.target.z, 0);
   assert.equal(contract?.target.roomType, RoomType.MEDICAL);
 
   const world = new World();

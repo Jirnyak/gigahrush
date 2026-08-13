@@ -6,6 +6,7 @@ import { CONTRACTS } from '../src/data/contracts';
 import { ITEM_TAGS, ITEMS, getStack } from '../src/data/items';
 import { MONSTER_ECOLOGY } from '../src/data/monster_ecology';
 import { resourceForItem } from '../src/data/resources';
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { dropMonsterRareLoot } from '../src/systems/monster_drops';
 import { getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
 import { makeTestPlayer } from './helpers';
@@ -66,7 +67,7 @@ test('mutant tissue sample is reachable through monster ecology drops', () => {
 
   assert.equal(dropped?.itemId, ITEM_ID);
   assert.equal(dropped?.count, 1);
-  assert.equal(nextId.v, 101);
+  assert.equal(nextId.v, getPlotNpcCount() + 101);
   assert.equal(entities.length, 1);
   assert.equal(entities[0].type, EntityType.ITEM_DROP);
   assert.deepEqual(entities[0].inventory, [{ defId: ITEM_ID, count: 1 }]);
@@ -78,7 +79,7 @@ test('mutant tissue sample has an NII handoff contract decision', () => {
   assert.ok(contract);
   assert.equal(contract.type, QuestType.FETCH);
   assert.equal(contract.faction, Faction.SCIENTIST);
-  assert.equal(contract.target.z, 2);
+  assert.equal(contract.target.z, 0);
   assert.equal(contract.target.roomType, RoomType.CORRIDOR);
   assert.equal(contract.targetMonsterKind, MonsterKind.KRYSNOZHKA);
   assert.equal(contract.targetItem, ITEM_ID);

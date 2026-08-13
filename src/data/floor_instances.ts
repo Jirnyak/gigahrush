@@ -21,6 +21,9 @@ export interface FloorInstanceDef {
   displayNumber: string;
   title: string;
   themeTags: readonly string[];
+  // Base floor the pocket copies (numeric z, project canon): design_pocket
+  // runs the ordinary floor generator at this z and reskins it as a loop.
+  z: number;
   seedTag: string;
   generatorId: FloorInstanceGeneratorId;
   exitRule: FloorInstanceExitRuleId;
@@ -43,6 +46,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '404',
     title: 'Не найден',
     themeTags: ['design'],
+    z: 0,
 
     seedTag: 'not_found',
     generatorId: 'design_pocket',
@@ -63,6 +67,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '556',
     title: 'П-46',
     themeTags: ['design'],
+    z: 14,
 
     seedTag: 'p46_protocol',
     generatorId: 'design_pocket',
@@ -83,6 +88,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '777',
     title: 'Счастливый',
     themeTags: ['design'],
+    z: 0,
 
     seedTag: 'lucky_shelter',
     generatorId: 'design_pocket',
@@ -103,6 +109,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '1337',
     title: 'Элитный',
     themeTags: ['design'],
+    z: -26,
 
     seedTag: 'radio_code',
     generatorId: 'design_pocket',
@@ -123,6 +130,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '013',
     title: 'Служебный',
     themeTags: ['design'],
+    z: 30,
 
     seedTag: 'service_order',
     generatorId: 'design_pocket',
@@ -143,6 +151,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '089',
     title: 'Теплый лифт',
     themeTags: ['design'],
+    z: -26,
 
     seedTag: 'warm_shaft',
     generatorId: 'design_pocket',
@@ -170,6 +179,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '000',
     title: 'Нулевой список',
     themeTags: ['design'],
+    z: -50,
 
     seedTag: 'zero_register',
     generatorId: 'design_pocket',
@@ -190,6 +200,7 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     displayNumber: '912',
     title: 'Чужая очередь',
     themeTags: ['design'],
+    z: 14,
 
     seedTag: 'wrong_queue',
     generatorId: 'design_pocket',
