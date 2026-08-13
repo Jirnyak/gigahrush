@@ -20,7 +20,7 @@ import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, generateZones, stampRoom } from '../shared';
-import { CAYLEY_BYURO_BASE_FLOOR, CayleyElement, CayleyGenerator, CayleyCoset, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_NEXT, CayleyByuroState, Point, CayleyHqSpec, CAYLEY_GRAPH_POINTS, CAYLEY_LATTICE_X, CAYLEY_LATTICE_Y, CAYLEY_TERRITORY_GRID, CAYLEY_HQ_SPECS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
+import { CAYLEY_BYURO_Z, CayleyElement, CayleyGenerator, CayleyCoset, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_NEXT, CayleyByuroState, Point, CayleyHqSpec, CAYLEY_GRAPH_POINTS, CAYLEY_LATTICE_X, CAYLEY_LATTICE_Y, CAYLEY_TERRITORY_GRID, CAYLEY_HQ_SPECS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
 import { spawnNpc, spawnMonster, addContainer } from "./npcs";
 
 export function cayleyApplyFormSequence(sequence: readonly CayleyGenerator[], start: CayleyElement = 'e'): CayleyElement {
@@ -796,7 +796,7 @@ export function registerCayleyRouteCue(world: World, rooms: ReturnType<typeof cr
     y: lobby.y + 0.5,
     targetX: target.x + 0.5,
     targetY: target.y + 0.5,
-    z: CAYLEY_BYURO_BASE_FLOOR,
+    z: CAYLEY_BYURO_Z,
     label: 'Порядок форм',
     hint: 'R потом S ведет в SR2. Обратный порядок приведет в другую очередь.',
     targetName: CAYLEY_BYURO_ROOM_NAMES.srr,

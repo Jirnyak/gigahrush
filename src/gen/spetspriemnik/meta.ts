@@ -16,7 +16,6 @@ export const SPETSPRIEMNIK_ROUTE_ID = 'spetspriemnik' as const;
 
 export const SPETSPRIEMNIK_Z = 40 as const;
 
-export const SPETSPRIEMNIK_BASE_FLOOR = 30;
 
 export const SPETSPRIEMNIK_CELL_KEY = 'container_key_label';
 

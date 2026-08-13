@@ -21,7 +21,7 @@ import {
   placeDoorAt,
   stampRoom,
 } from '../shared';
-import { REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_BASE_FLOOR, NextId, MorgueDoorSide, MorgueRecordDomain, MorgueDrawerSlot, MorgueArchiveBlockSpec, MORGUE_RECORD_DOMAIN_ORDER, REGISTRY_MORGUE_HQ_SPECS, MORGUE_RECORD_DOMAINS } from "./meta";
+import { REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_Z, NextId, MorgueDoorSide, MorgueRecordDomain, MorgueDrawerSlot, MorgueArchiveBlockSpec, MORGUE_RECORD_DOMAIN_ORDER, REGISTRY_MORGUE_HQ_SPECS, MORGUE_RECORD_DOMAINS } from "./meta";
 import { dressMorgueSupportRoom, dressDrawerRoom, nextMorgueContainerId, drawerInventory } from "./npcs";
 
 export function setCellFeature(world: World, x: number, y: number, feature: Feature): void {
@@ -589,7 +589,7 @@ export function addHilbertDrawerRegistry(world: World, drawerSlots: readonly Mor
       id: nextMorgueContainerId(world),
       x: slot.x,
       y: slot.y,
-      z: REGISTRY_MORGUE_BASE_FLOOR,
+      z: REGISTRY_MORGUE_Z,
       roomId: slot.roomId,
       zoneId: world.zoneMap[world.idx(slot.x, slot.y)],
       kind: ContainerKind.FILING_CABINET,

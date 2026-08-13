@@ -17,7 +17,6 @@ export const TURING_NURSERY_ROUTE_ID = 'turing_nursery' as const;
 
 export const TURING_NURSERY_Z = 10 as const;
 
-export const TURING_NURSERY_BASE_FLOOR = 60;
 
 export const TURING_NURSERY_ROOM_PREFIX = 'Ясли Тьюринга';
 

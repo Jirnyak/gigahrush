@@ -21,7 +21,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
-import { SPETSPRIEMNIK_BASE_FLOOR, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, CY, BASE_TAGS, NextId, NpcId } from "./meta";
+import { SPETSPRIEMNIK_Z, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, CY, BASE_TAGS, NextId, NpcId } from "./meta";
 import { addRoom, carveLine, connectRoomToPoint, addGateAt, paintRoomTerritory, setFeature, setLift, placeBarredSightline, decorateRoom, buildCellblockBsp } from "./geometry";
 
 export function buildGuardLoop(world: World): number {
@@ -55,7 +55,7 @@ export function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: SPETSPRIEMNIK_BASE_FLOOR,
+    z: SPETSPRIEMNIK_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,

@@ -15,7 +15,7 @@ export const REGISTRY_MORGUE_ROUTE_ID = 'registry_morgue' as const;
 
 export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
 
-export const REGISTRY_MORGUE_BASE_FLOOR = 30;
+export const REGISTRY_MORGUE_Z = 18;
 
 export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
 

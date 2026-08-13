@@ -17,7 +17,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
-import { REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_BASE_FLOOR, CORPSE_NUMBER_TAG_ITEM, NextId, MorgueRecordDomain, MORGUE_RECORD_DOMAINS } from "./meta";
+import { REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_Z, CORPSE_NUMBER_TAG_ITEM, NextId, MorgueRecordDomain, MORGUE_RECORD_DOMAINS } from "./meta";
 import { setCellFeature, addDrop } from "./geometry";
 
 export function dressMorgueSupportRoom(world: World, room: Room, seed: number): void {
@@ -138,7 +138,7 @@ export function addMorgueContainer(
     id: world.containers.length + 1,
     x,
     y,
-    z: REGISTRY_MORGUE_BASE_FLOOR,
+    z: REGISTRY_MORGUE_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

@@ -20,7 +20,7 @@ import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
-import { NUMBER_REGISTRY_BASE_FLOOR, NextId, NUMBER_REGISTRY_TERRITORY_TARGETS } from "./meta";
+import { NUMBER_REGISTRY_Z, NextId, NUMBER_REGISTRY_TERRITORY_TARGETS } from "./meta";
 
 export function nextContainerId(world: World): number {
   let id = world.containers.length + 1;
@@ -44,7 +44,7 @@ export function addRegistryContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: NUMBER_REGISTRY_BASE_FLOOR,
+    z: NUMBER_REGISTRY_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

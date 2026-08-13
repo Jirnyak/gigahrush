@@ -35,7 +35,7 @@ import {
   UPPER_BUREAU_ROUTE_ID,
   UPPER_BUREAU_DISPLAY_NAME,
   UPPER_BUREAU_ANCHOR_Z,
-  UPPER_BUREAU_BASE_FLOOR,
+  UPPER_BUREAU_Z,
   UPPER_BUREAU_AUDIT_HEAT_MAX} from './meta';
 import {
   nextContainerId} from './npcs';
@@ -770,7 +770,7 @@ export function applyUpperBureauFlagChange(
     const severity = next.auditHeat >= 3 ? 5 : recordChanged ? 4 : 3;
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: UPPER_BUREAU_BASE_FLOOR,
+      z: UPPER_BUREAU_Z,
       zoneId: change.zoneId,
       roomId: change.roomId,
       x: change.x,
@@ -923,7 +923,7 @@ export function addBureauContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: UPPER_BUREAU_BASE_FLOOR,
+    z: UPPER_BUREAU_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -1487,7 +1487,7 @@ export function upperBureauBaselineZoneLevel(world: World, x: number, y: number)
     world.dist(x, y, 628, 430),
     world.dist(x, y, 546, 482),
   );
-  const base = Math.max(2, calcZoneLevel(x, y, UPPER_BUREAU_BASE_FLOOR));
+  const base = Math.max(2, calcZoneLevel(x, y, UPPER_BUREAU_Z));
   const localBoost = archiveD < 185 ? 2 : serviceD < 195 || auditD < 170 ? 1 : 0;
   const edgeBoost = world.dist(x, y, W / 2, W / 2) > 310 ? 1 : 0;
   return Math.max(2, Math.min(5, base + localBoost + edgeBoost));
@@ -1883,7 +1883,7 @@ export function finalizeUpperBureauFloor(world: World, salon: Room): void {
   }
 
   ensureConnectivity(world, salon.x + 8.5, salon.y + 10.5);
-  placeProceduralScreens(world, UPPER_BUREAU_BASE_FLOOR);
+  placeProceduralScreens(world, UPPER_BUREAU_Z);
   world.bakeLights();
 }
 

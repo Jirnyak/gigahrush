@@ -14,7 +14,7 @@ import { ITEMS } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { randomRPG } from '../../systems/rpg';
 import { rng } from '../../core/rand';
-import { SHAHTA_ATRIUM_BASE_FLOOR } from "./meta";
+import { SHAHTA_ATRIUM_Z } from "./meta";
 import { setFeature } from "./geometry";
 
 export function addContainer(
@@ -35,7 +35,7 @@ export function addContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -14,7 +14,7 @@ import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
-import { DESIGN_NPC_HOME_FLOOR_KEY, NUMBER_REGISTRY_ROUTE_ID, NUMBER_REGISTRY_BASE_FLOOR, NextId, ROUTE_TARGET, REGISTRAR_DEF, PRIME_GUARD_DEF, COMPOSITE_DEF } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, NUMBER_REGISTRY_ROUTE_ID, NUMBER_REGISTRY_Z, NextId, ROUTE_TARGET, REGISTRAR_DEF, PRIME_GUARD_DEF, COMPOSITE_DEF } from "./meta";
 import { fillDefaultTextures, stampRegistryRoom, placeLiftCell, decorateRegistryRooms, retuneZoneMap, retuneNumberRegistryZones, registerNumberRegistryRouteCues, expandNumberRegistryGeometry, carveNumberRegistryCorridors, addNumberRegistryDoors, populateNumberRegistry } from "./geometry";
 import { alignNumberRegistryAmbientNpcTerritory } from "./npcs";
 
@@ -26,7 +26,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus'
     desc: 'Вера Модульная: «Заплати 97 рублей в кассу модуля. Я дам ордер и скажу, по какому остатку идти.»',
     targetItem: 'money',
     targetCount: 97,
-    targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
+    targetFloorZ: NUMBER_REGISTRY_Z,
     targetRoute: ROUTE_TARGET,
     targetRoomDefId: 'Касса модуля 7',
     targetHint: 'Числовой реестр z=+32: касса рядом с залом сверки остатков.',
@@ -49,7 +49,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus'
     desc: 'Вера Модульная: «Принеси чистый бланк. По нему сверим остаток и откроем пересечную картотеку без лишней очереди.»',
     targetItem: 'blank_form',
     targetCount: 1,
-    targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
+    targetFloorZ: NUMBER_REGISTRY_Z,
     targetRoute: ROUTE_TARGET,
     targetRoomDefId: 'Зал сверки остатков',
     targetHint: 'Числовой реестр: искать столы с экранами остатков у центрального зала.',
@@ -75,7 +75,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_prime_guard',
     desc: 'Федор Простой: «Убей параграф в простом коридоре. Потом бери короткий ход, пока бумага не начала шевелиться.»',
     targetMonsterKind: MonsterKind.PARAGRAPH,
     killNeeded: 1,
-    targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
+    targetFloorZ: NUMBER_REGISTRY_Z,
     targetRoute: ROUTE_TARGET,
     targetRoomDefId: 'Простой рискованный коридор',
     targetHint: 'Числовой реестр: короткий верхний коридор с красными отметками и печатеедами.',
@@ -101,7 +101,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_composite_wit
     desc: 'Семен Составной: «Принеси бланк в публичный обход. Очередь длинная, зато с печатью и без простого коридора.»',
     targetItem: 'blank_form',
     targetCount: 1,
-    targetFloorZ: NUMBER_REGISTRY_BASE_FLOOR,
+    targetFloorZ: NUMBER_REGISTRY_Z,
     targetRoute: ROUTE_TARGET,
     targetRoomDefId: 'Составной публичный обход',
     targetHint: 'Числовой реестр: нижний коридор с лавками и свидетелями.',

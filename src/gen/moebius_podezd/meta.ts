@@ -10,7 +10,6 @@ export const MOEBIUS_PODEZD_ROUTE_ID = 'moebius_podezd' as const;
 
 export const MOEBIUS_PODEZD_Z = 2;
 
-export const MOEBIUS_PODEZD_BASE_FLOOR = 60;
 
 export const MOEBIUS_PODEZD_SEED = hashSeed(MOEBIUS_PODEZD_ROUTE_ID);
 

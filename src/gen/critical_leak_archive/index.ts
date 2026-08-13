@@ -11,7 +11,7 @@ import { World } from '../../core/world';
 import { hashSeed } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
 import { sanitizeDoors } from '../shared';
-import { DESIGN_NPC_HOME_FLOOR_KEY, CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_Z, CRITICAL_LEAK_ARCHIVE_BASE_FLOOR, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, CriticalLeakArchiveGeneration, NextId, TARGET_ROUTE, ARCHIVIST_DEF, LIQUIDATOR_DEF } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_Z, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, CriticalLeakArchiveGeneration, NextId, TARGET_ROUTE, ARCHIVIST_DEF, LIQUIDATOR_DEF } from "./meta";
 import { addDoor, expandArchiveMidAndMicro, paintCriticalLeakHqTerritory, placeLift, decorateArchiveRooms, carveContaminatedShortcut, connectAnchors, buildRooms, tuneInitialZones } from "./geometry";
 import { buildPercolationField, carvePercolationComponent, spawnLeakNpc, populateContainers } from "./npcs";
 
@@ -22,7 +22,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_archivist_varva
     type: QuestType.FETCH,
     desc: 'Варвара Сухопись: «Найдете сухую жалобу под сургучом - донесите, не заходя лишний раз в воду. Мокрая причина становится слухом.»',
     targetItem: 'sealed_complaint', targetCount: 1,
-    targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    targetFloorZ: CRITICAL_LEAK_ARCHIVE_Z,
     targetRoute: TARGET_ROUTE,
     targetRoomDefId: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.dryIndex,
     targetHint: 'сухой пакет лежит на архивном острове; водяной короткий ход быстрее, но заражает маршрут',
@@ -42,7 +42,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor
     giverId: getPlotNpcNumericId('critical_leak_liquidator_egor')!,
     type: QuestType.VISIT,
     desc: 'Егор Отсечка: «Дойдите до пульта водоотсечки. Шлюз не спасет архив, но даст сухой край для отхода.»',
-    targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    targetFloorZ: CRITICAL_LEAK_ARCHIVE_Z,
     targetRoute: TARGET_ROUTE,
     targetRoomDefId: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.floodgate,
     targetHint: 'пульт стоит за зараженным водяным коротким ходом и сухой обходной перемычкой',
@@ -59,7 +59,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor
     type: QuestType.FETCH,
     desc: 'Егор Отсечка: «Если полезете коротким ходом, принесите мазок воды. Без пробы все скажут, что вы просто намочили сапоги.»',
     targetItem: 'contaminated_swab', targetCount: 1,
-    targetFloorZ: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    targetFloorZ: CRITICAL_LEAK_ARCHIVE_Z,
     targetRoute: TARGET_ROUTE,
     targetRoomDefId: CRITICAL_LEAK_ARCHIVE_ROOM_NAMES.shortcut,
     rewardItem: 'wet_rag_bundle', rewardCount: 1,

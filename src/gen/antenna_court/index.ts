@@ -15,7 +15,7 @@ import {
   placeDoor,
 } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
-import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_BASE_FLOOR, CONTAINER_ID_BASE } from "./meta";
+import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_Z, CONTAINER_ID_BASE } from "./meta";
 import { AntennaCourtGeneration, antennaCourtDebugLines, expandAntennaCourtRouteGeometry, retuneAntennaCourtRouteZones, stampAntennaCourtRooms, retuneAntennaZones, decorateAntennaCourt, placeAuthoredSignalScreens, dropItem, dropDesk, placeFixedLift } from "./geometry";
 import { createAntennaCourtSignalState, spawnPlotNpc, spawnSignalMonsters, addContainer } from "./npcs";
 
@@ -48,7 +48,7 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   generateZones(world);
   retuneAntennaZones(world, rooms);
   decorateAntennaCourt(world, rooms);
-  placeProceduralScreens(world, ANTENNA_COURT_BASE_FLOOR);
+  placeProceduralScreens(world, ANTENNA_COURT_Z);
   placeAuthoredSignalScreens(world, rooms);
 
   const pasha = spawnPlotNpc(entities, nextId, 'antenna_pasha_grown', rooms.radioClub, 4, 4, 0);

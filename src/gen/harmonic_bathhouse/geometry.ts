@@ -20,7 +20,7 @@ import {
   placeDoorAt,
   stampRoom,
 } from '../shared';
-import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_BASE_FLOOR, BathhouseDecisionId, BathhouseRouteNode, BathhouseRooms, Point, NextId, SEED, CX, CY, FIELD_W, SERVICE_GRID_X, SERVICE_GRID_Y, BATHHOUSE_HQ_SPECS, BATHHOUSE_OWNER_SEQUENCE } from "./meta";
+import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, BathhouseDecisionId, BathhouseRouteNode, BathhouseRooms, Point, NextId, SEED, CX, CY, FIELD_W, SERVICE_GRID_X, SERVICE_GRID_Y, BATHHOUSE_HQ_SPECS, BATHHOUSE_OWNER_SEQUENCE } from "./meta";
 
 export function idxField(x: number, y: number): number {
   return y * FIELD_W + x;
@@ -700,7 +700,7 @@ export function registerCues(world: World, rooms: BathhouseRooms): string[] {
       y: cue.room.y + cue.room.h / 2,
       targetX: cue.target.x + cue.target.w / 2,
       targetY: cue.target.y + cue.target.h / 2,
-      z: HARMONIC_BATHHOUSE_BASE_FLOOR,
+      z: HARMONIC_BATHHOUSE_Z,
       label: cue.label,
       hint: cue.hint,
       targetName: cue.target.name,

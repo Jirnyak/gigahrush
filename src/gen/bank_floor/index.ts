@@ -4,7 +4,7 @@ export * from './meta';
 export * from './geometry';
 export * from './npcs';
 
-import { BANK_ROOM_NAMES, BANK_FLOOR_ROUTE_ID, BANK_FLOOR_Z, BANK_FLOOR_BASE_FLOOR, BANK_TAGS, type BankFloorState, type BankFloorGeneration, type BankActionKind } from './meta';
+import { BANK_ROOM_NAMES, BANK_FLOOR_ROUTE_ID, BANK_FLOOR_Z, BANK_TAGS, type BankFloorState, type BankFloorGeneration, type BankActionKind } from './meta';
 import { BANK_VAULT_RISK_RADIUS, createBankRooms, dressBankRooms, generateBankZones, expandBankFloorRouteGeometry } from './geometry';
 import { DIRECTOR_DEF, CASHIER_DEF, CREDIT_DEF, GUARD_DEF, DEBTOR_DEF, spawnBankNpc, addBankContainers, applyBankFloorTerritorySeeds } from './npcs';
 import { W, Tex, LiftDirection, type Entity, type GameState, type WorldEvent } from '../../core/types';
@@ -74,7 +74,7 @@ export function publishBankFloorEvent(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    z: BANK_FLOOR_BASE_FLOOR,
+    z: BANK_FLOOR_Z,
     roomId,
     zoneId,
     targetName,

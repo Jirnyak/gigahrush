@@ -10,7 +10,7 @@ import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
-import { DESIGN_NPC_HOME_FLOOR_KEY, SPETSPRIEMNIK_ROUTE_ID, SPETSPRIEMNIK_Z, SPETSPRIEMNIK_BASE_FLOOR, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, BASE_TAGS, NPC_DEFS } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, SPETSPRIEMNIK_ROUTE_ID, SPETSPRIEMNIK_Z, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, BASE_TAGS, NPC_DEFS } from "./meta";
 import { metricsByWorld, expandSpetspriemnikRouteGeometry, reinforceSpetspriemnikRouteGates, tuneSpetspriemnikRouteZones, calculateMetrics } from "./geometry";
 import { placeContainers, buildCore, spawnAuthoredActors } from "./npcs";
 
@@ -20,7 +20,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_nachalnik_krivd
     giverId: getPlotNpcNumericId('spetspriemnik_nachalnik_krivda')!,
     type: QuestType.VISIT,
     desc: 'Проверь гермокамеру спецприёмника. Кривда даст корешок, если дверь держит сирену, а люди внутри не шумят.',
-    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_Z,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomDefId: 'Камера спецприёмника 05: гермоукрытие',
     holdSeconds: 25,
@@ -43,7 +43,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_guard_savva', N
     desc: 'Отдай Савве пачку сигарет у решётки. Он не продаст ключ, но бирка может упасть не туда.',
     targetItem: 'cigs',
     targetCount: 1,
-    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_Z,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     rewardItem: SPETSPRIEMNIK_CELL_KEY,
     rewardCount: 1,
@@ -64,7 +64,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
     desc: 'Принеси Мире бирку от ключа. Она выведет ряд камер тихо, пока караул спорит с журналом обхода.',
     targetItem: SPETSPRIEMNIK_CELL_KEY,
     targetCount: 1,
-    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_Z,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomDefId: 'Клетка свиданий и обмена фамилий',
     rewardItem: 'personal_file_copy',
@@ -84,7 +84,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_prisoner_mira',
     giverId: getPlotNpcNumericId('spetspriemnik_prisoner_mira')!,
     type: QuestType.VISIT,
     desc: 'Удержи двор переклички, пока Мира срывает список. Шум поднимет охрану, но волна ограничена двором.',
-    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_Z,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomDefId: SPETSPRIEMNIK_ROOM_NAMES.riotYard,
     holdSeconds: 35,
@@ -111,7 +111,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_informant_tolya
     desc: 'Принеси Толе копию личного дела из сейфа начальника. Он обменяет фамилии на пропуск и чужой донос.',
     targetItem: 'personal_file_copy',
     targetCount: 1,
-    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_Z,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     targetRoomDefId: SPETSPRIEMNIK_ROOM_NAMES.command,
     rewardItem: SPETSPRIEMNIK_PERMIT_KEY,
@@ -135,7 +135,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_clerk_alla', NP
     desc: 'Принеси Алле украденную печать терминала. Она поставит выпускной штамп, если окно приёма ещё целое.',
     targetItem: 'stolen_terminal_stamp',
     targetCount: 1,
-    targetFloorZ: SPETSPRIEMNIK_BASE_FLOOR,
+    targetFloorZ: SPETSPRIEMNIK_Z,
     targetRoute: { designFloorId: SPETSPRIEMNIK_ROUTE_ID, z: SPETSPRIEMNIK_Z },
     rewardItem: 'forged_permit_slip',
     rewardCount: 1,

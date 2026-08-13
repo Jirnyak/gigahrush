@@ -16,7 +16,6 @@ export const PENROSE_LAUNDRY_ROUTE_ID = 'penrose_laundry' as const;
 
 export const PENROSE_LAUNDRY_Z = -8;
 
-export const PENROSE_LAUNDRY_BASE_FLOOR = 100;
 
 export const PENROSE_LAUNDRY_ROOM_DEF_IDS = {
   liftLobby: 'Лифтовая бирка прачечной П-81',

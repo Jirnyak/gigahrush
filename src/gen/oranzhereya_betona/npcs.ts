@@ -26,7 +26,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { DESIGN_NPC_HOME_FLOOR_KEY, ORANZHEREYA_BETONA_BASE_FLOOR, CONTENT_TAG, NPC_DEFS } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, ORANZHEREYA_BETONA_Z, CONTENT_TAG, NPC_DEFS } from "./meta";
 import { NextId, GreenhouseRooms, setGreenhouseFloor, setFeature, roomCell, cloneInventory, uniqueTags } from "./geometry";
 
 export type GreenhouseNpcId =
@@ -330,7 +330,7 @@ export function addContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    z: ORANZHEREYA_BETONA_BASE_FLOOR,
+    z: ORANZHEREYA_BETONA_Z,
     roomId: room.id,
     zoneId: world.zoneMap[idx],
     kind,

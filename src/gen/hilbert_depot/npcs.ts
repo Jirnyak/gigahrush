@@ -19,7 +19,7 @@ import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/fact
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { territoryOwnerAtIndex } from '../../systems/territory';
-import { HILBERT_DEPOT_BASE_FLOOR, Point, DEPOT_HQ_SPECS } from "./meta";
+import { HILBERT_DEPOT_Z, Point, DEPOT_HQ_SPECS } from "./meta";
 import { paintDepotRoomOwner, hardenDepotHqRoom, setFeature, roomCell, uniqueTags } from "./geometry";
 
 export function applyHilbertDepotTerritorySeeds(world: World): void {
@@ -132,7 +132,7 @@ export function addContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    z: HILBERT_DEPOT_BASE_FLOOR,
+    z: HILBERT_DEPOT_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

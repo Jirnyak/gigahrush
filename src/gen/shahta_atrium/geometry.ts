@@ -20,7 +20,7 @@ import {
   placeDoor,
   stampRoom,
 } from '../shared';
-import { DESIGN_FLOOR_ID, SHAHTA_ATRIUM_ROUTE_Z, SHAHTA_ATRIUM_BASE_FLOOR, CX, CY, INNER_R, MID_R, OUTER_R, VOID_R, SHAHTA_MICRO_TYPES, ShahtaHqCompound, ShahtaMidMicroStats, SHAHTA_HQ_SPECS, ShahtaAtriumState, BridgeBuild } from "./meta";
+import { DESIGN_FLOOR_ID, SHAHTA_ATRIUM_ROUTE_Z, SHAHTA_ATRIUM_Z, CX, CY, INNER_R, MID_R, OUTER_R, VOID_R, SHAHTA_MICRO_TYPES, ShahtaHqCompound, ShahtaMidMicroStats, SHAHTA_HQ_SPECS, ShahtaAtriumState, BridgeBuild } from "./meta";
 
 export function logicalRoom(
   world: World,
@@ -681,7 +681,7 @@ export function registerCues(world: World, rooms: ReturnType<typeof buildService
     y: CY,
     targetX: CX + OUTER_R - 16,
     targetY: CY,
-    z: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_Z,
     label: 'Открытый мост',
     hint: 'Быстро, шумно, почти без укрытий. Монстров удобно выманивать на прямую.',
     targetName: 'восточная галерея шахты',
@@ -703,7 +703,7 @@ export function registerCues(world: World, rooms: ReturnType<typeof buildService
     y: CY,
     targetX: 936,
     targetY: CY,
-    z: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_Z,
     label: 'Сервисный обод',
     hint: 'Длинный обход с укрытиями, шкафами и аварийным щитком.',
     targetName: 'восточный ремонтный пост',
@@ -719,7 +719,7 @@ export function registerCues(world: World, rooms: ReturnType<typeof buildService
     y: rooms.repair.y + 7,
     targetX: CX + 214,
     targetY: CY - 216,
-    z: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_Z,
     label: 'Ремонт перемычки',
     hint: 'Перемычка оборвана над провалом. Щиток и листы дают короткий путь, но это не главный маршрут.',
     targetName: 'оборванная перемычка',
@@ -735,7 +735,7 @@ export function registerCues(world: World, rooms: ReturnType<typeof buildService
     y: CY - MID_R,
     targetX: CX,
     targetY: CY + MID_R,
-    z: SHAHTA_ATRIUM_BASE_FLOOR,
+    z: SHAHTA_ATRIUM_Z,
     label: 'Острова укрытий',
     hint: `Укрытия на мостах: ${state.coverIslands}, оценка LOS/cover ${state.losCoverScore}.`,
     targetName: 'южная дуга атриума',

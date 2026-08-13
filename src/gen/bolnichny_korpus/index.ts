@@ -89,7 +89,6 @@ const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bolnichny_korpus');
 
 export const BOLNICHNY_KORPUS_ROUTE_ID = 'bolnichny_korpus' as const;
 export const BOLNICHNY_KORPUS_Z = 16 as const;
-export const BOLNICHNY_KORPUS_BASE_FLOOR = 60;
 
 export const BOLNICHNY_KORPUS_META = {
   routeId: BOLNICHNY_KORPUS_ROUTE_ID,
@@ -1473,7 +1472,7 @@ function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: BOLNICHNY_KORPUS_BASE_FLOOR,
+    z: BOLNICHNY_KORPUS_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

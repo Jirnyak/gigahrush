@@ -24,7 +24,7 @@ export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
 export const DARK_METRO_FUTURE_Z = -32;
 export const DARK_METRO_DEFAULT_SEED = 0x17da_4b0d;
 
-export const DARK_METRO_BASE_FLOOR = 140;
+export const DARK_METRO_Z = -32;
 
 export const enum PlatformLightState {
   OFF = 0,
@@ -426,7 +426,7 @@ export function publishDarkMetroAmbushWarning(
   const zoneId = world.zoneMap[world.idx(px, py)];
   publishEvent(state, {
     type: 'monster_sighted',
-    z: DARK_METRO_BASE_FLOOR,
+    z: DARK_METRO_Z,
     zoneId: zoneId >= 0 ? zoneId : undefined,
     x: actor.x,
     y: actor.y,

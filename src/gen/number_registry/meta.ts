@@ -14,7 +14,6 @@ export const NUMBER_REGISTRY_ROUTE_ID = 'number_registry' as const;
 
 export const NUMBER_REGISTRY_Z = 32 as const;
 
-export const NUMBER_REGISTRY_BASE_FLOOR = 30;
 
 export const NUMBER_REGISTRY_DEBUG_ENTRY = 'design_floor.number_registry' as const;
 

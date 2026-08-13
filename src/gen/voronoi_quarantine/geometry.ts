@@ -38,7 +38,7 @@ import { publishEvent } from '../../systems/events';
 import {
   DESIGN_NPC_HOME_FLOOR_KEY,
   VORONOI_QUARANTINE_ROUTE_ID,
-  VORONOI_QUARANTINE_BASE_FLOOR} from './meta';
+  VORONOI_QUARANTINE_Z} from './meta';
 import {
   spawnPlotNpc,
   nextContainerId,
@@ -1588,7 +1588,7 @@ export function addContainer(
     id: nextContainerId(world),
     x: world.wrap(point.x),
     y: world.wrap(point.y),
-    z: VORONOI_QUARANTINE_BASE_FLOOR,
+    z: VORONOI_QUARANTINE_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(point.x, point.y)],
     kind,
@@ -1730,7 +1730,7 @@ export function hash01(seed: number, a: number, b: number, c: number): number {
 registerContentInteractionHook({
   id: 'voronoi_quarantine_airlock_protocol',
   target(ctx: ContentInteractionContext) {
-    if (ctx.state.currentZ !== VORONOI_QUARANTINE_BASE_FLOOR) return null;
+    if (ctx.state.currentZ !== VORONOI_QUARANTINE_Z) return null;
     const lx = Math.floor(ctx.lookX);
     const ly = Math.floor(ctx.lookY);
     const idx = ctx.world.idx(lx, ly);
@@ -1760,7 +1760,7 @@ registerContentInteractionHook({
     };
   },
   use(ctx: ContentInteractionContext) {
-    if (ctx.state.currentZ !== VORONOI_QUARANTINE_BASE_FLOOR) return { handled: false };
+    if (ctx.state.currentZ !== VORONOI_QUARANTINE_Z) return { handled: false };
     const lx = Math.floor(ctx.lookX);
     const ly = Math.floor(ctx.lookY);
     const idx = ctx.world.idx(lx, ly);
@@ -1786,7 +1786,7 @@ registerContentInteractionHook({
       }
       publishEvent(ctx.state, {
         type: 'permit_forged',
-        z: VORONOI_QUARANTINE_BASE_FLOOR,
+        z: VORONOI_QUARANTINE_Z,
         privacy: 'public',
         severity: 2,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'permit', 'forgery', 'checkpoint'],
@@ -1810,7 +1810,7 @@ registerContentInteractionHook({
       ctx.state.msgs.push(msg(`Аварийный протокол гермошлюзов: переключено дверей (${toggled}).`, ctx.state.time, '#f84'));
       publishEvent(ctx.state, {
         type: 'emergency_panel_used',
-        z: VORONOI_QUARANTINE_BASE_FLOOR,
+        z: VORONOI_QUARANTINE_Z,
         privacy: 'public',
         severity: 3,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'safeguard', 'hermetic_seal', 'quarantine'],
@@ -1846,7 +1846,7 @@ registerContentInteractionHook({
       ctx.state.msgs.push(msg(`Включена УФ-очистка: рассеян туман (${purged}), ослаблены угрозы (${monstersHurt}). Выдан деактиватор.`, ctx.state.time, '#9ed'));
       publishEvent(ctx.state, {
         type: 'emergency_panel_used',
-        z: VORONOI_QUARANTINE_BASE_FLOOR,
+        z: VORONOI_QUARANTINE_Z,
         privacy: 'public',
         severity: 3,
         tags: [VORONOI_QUARANTINE_ROUTE_ID, 'decon', 'purge', 'sanitation'],
@@ -1865,7 +1865,7 @@ registerContentRuntimeHook({
   id: 'voronoi_quarantine_patrol_ai',
   phases: ['floor_activity'],
   update(ctx: ContentRuntimeContext) {
-    if (ctx.state.currentZ !== VORONOI_QUARANTINE_BASE_FLOOR) return false;
+    if (ctx.state.currentZ !== VORONOI_QUARANTINE_Z) return false;
     quarantineCheckTimer += ctx.dt;
     if (quarantineCheckTimer < 5.0) return false;
     quarantineCheckTimer = 0;

@@ -18,7 +18,6 @@ export const ORANZHEREYA_BETONA_ROUTE_ID = 'oranzhereya_betona' as const;
 
 export const ORANZHEREYA_BETONA_Z = -2 as const;
 
-export const ORANZHEREYA_BETONA_BASE_FLOOR = 100;
 
 export const ORANZHEREYA_BETONA_DISPLAY_NAME = 'Оранжерея бетона';
 

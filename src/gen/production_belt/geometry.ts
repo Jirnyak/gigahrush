@@ -24,7 +24,7 @@ import {
   stampRoom,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
-import { DESIGN_FLOOR_ID, PRODUCTION_BELT_ROUTE_Z, PRODUCTION_BELT_BASE_FLOOR, PRODUCTION_BELT_FACTORY_LINES } from "./meta";
+import { DESIGN_FLOOR_ID, PRODUCTION_BELT_ROUTE_Z, PRODUCTION_BELT_Z, PRODUCTION_BELT_FACTORY_LINES } from "./meta";
 import { ProductionBeltLineState, seedExpandedProductionCaches, stampMachineHazardCues } from "./npcs";
 
 export interface ProductionBeltLineDef {
@@ -960,7 +960,7 @@ export function publishProductionBeltDecision(
   const badBatch = decisionId === 'expose_bad_batch' || decisionId === 'steal_bad_batch';
   return publishEvent(game, {
     type: badBatch ? 'room_blocked_production' : 'room_produced_items',
-    z: PRODUCTION_BELT_BASE_FLOOR,
+    z: PRODUCTION_BELT_Z,
     zoneId: zoneId >= 0 ? zoneId : undefined,
     roomId: line?.roomId,
     containerId: line?.outputContainerId,

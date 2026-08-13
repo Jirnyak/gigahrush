@@ -21,7 +21,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { rng } from '../../core/rand';
-import { MOEBIUS_PODEZD_BASE_FLOOR, SHORTCUT_X, SEAM_KEY_ID } from "./meta";
+import { MOEBIUS_PODEZD_Z, SHORTCUT_X, SEAM_KEY_ID } from "./meta";
 import { MoebiusRooms, NextId, setFeature } from "./geometry";
 
 export function isMoebiusAmbientNpc(entity: Entity): boolean {
@@ -92,7 +92,7 @@ export function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: MOEBIUS_PODEZD_BASE_FLOOR,
+    z: MOEBIUS_PODEZD_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

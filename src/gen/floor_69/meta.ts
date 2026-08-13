@@ -16,7 +16,7 @@ export const FLOOR_69_RAID_SHUTTER_GATES = [
   { x: 760, y1: 505, y2: 519, doorY: 512, bypass: { ax: 736, ay: 552, bx: 904, by: 552 } },
 ] as const;
 
-export const FLOOR_69_BASE_FLOOR = 140;
+export const FLOOR_69_Z = -4;
 export const FLOOR_69_MAX_FLAGS = 8;
 export const FLOOR_69_CHECKPOINT_CROWD_CAP = 12;
 export const FLOOR_69_FEMALE_SPRITE_COUNT = Spr.F69_FEMALE_NPC_7 - Spr.F69_FEMALE_NPC_BASE + 1;

@@ -14,7 +14,7 @@ import { World } from '../../core/world';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom } from '../shared';
-import { ATTRACTOR_DVOR_BASE_FLOOR, CX, CY, FLOW_FLOOR, DEAD_FLOOR, ATTRACTOR_DVOR_ROOM_DEF_IDS, DoorSide, Point, DoorSite, AttractorHqSupportSpec, AttractorStationSpec, AttractorRooms, AttractorStreamline, AttractorSwitchPanel, AttractorDvorState, FLOW_SPECS, ATTRACTOR_HQ_COMPOUNDS, ATTRACTOR_STATIONS } from "./meta";
+import { ATTRACTOR_DVOR_Z, CX, CY, FLOW_FLOOR, DEAD_FLOOR, ATTRACTOR_DVOR_ROOM_DEF_IDS, DoorSide, Point, DoorSite, AttractorHqSupportSpec, AttractorStationSpec, AttractorRooms, AttractorStreamline, AttractorSwitchPanel, AttractorDvorState, FLOW_SPECS, ATTRACTOR_HQ_COMPOUNDS, ATTRACTOR_STATIONS } from "./meta";
 import { paintAttractorAuthoredHqOwners, carvePolyline, carveLineWidth } from "./npcs";
 
 export const attractorStates = new WeakMap<World, AttractorDvorState>();
@@ -557,7 +557,7 @@ export function registerAttractorRouteCues(world: World, rooms: AttractorRooms):
     y: rooms.entry.y + 14,
     targetX: rooms.northSpine.x + 226,
     targetY: rooms.northSpine.y + 14,
-    z: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_Z,
     label: 'Синяя струя',
     hint: 'Поток ведет вокруг двора быстрее прямой линии.',
     targetName: ATTRACTOR_DVOR_ROOM_DEF_IDS.northSpine,
@@ -574,7 +574,7 @@ export function registerAttractorRouteCues(world: World, rooms: AttractorRooms):
     y: rooms.southSpine.y + 14,
     targetX: rooms.deadZone.x + 58,
     targetY: rooms.deadZone.y + 30,
-    z: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_Z,
     label: 'Мертвая зона',
     hint: 'Короткий срез проходит через воду, гермодвери и плохой звук.',
     targetName: ATTRACTOR_DVOR_ROOM_DEF_IDS.deadZone,
@@ -591,7 +591,7 @@ export function registerAttractorRouteCues(world: World, rooms: AttractorRooms):
     y: rooms.guardLoop.y + 20,
     targetX: rooms.westSwitch.x + 8,
     targetY: rooms.westSwitch.y + 10,
-    z: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_Z,
     label: 'Петля патруля',
     hint: 'Патруль ходит по внешнему циклу; параметрический щиток дает окно.',
     targetName: ATTRACTOR_DVOR_ROOM_DEF_IDS.westSwitch,

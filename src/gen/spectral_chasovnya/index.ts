@@ -10,7 +10,7 @@ import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
 import { registerContentInteractionHook } from '../../systems/content_hooks';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
-import { DESIGN_NPC_HOME_FLOOR_KEY, SPECTRAL_CHASOVNYA_ROUTE_ID, SPECTRAL_CHASOVNYA_BASE_FLOOR, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS, NextId, SpectralChasovnyaGeneration, NPC_ID, MIRON_DEF } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, SPECTRAL_CHASOVNYA_ROUTE_ID, SPECTRAL_CHASOVNYA_Z, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS, NextId, SpectralChasovnyaGeneration, NPC_ID, MIRON_DEF } from "./meta";
 import { spectralStateByWorld, expandSpectralRouteGeometry, buildRooms, dressRooms, tuneZones, buildSpectralState, reinforceSpectralChasovnyaAuthoredHqTerritory, registerSpectralRouteCues, findBellNodeForLook, ringSpectralChasovnyaBell } from "./geometry";
 import { placeContent, alignSpectralChasovnyaAmbientNpcTerritory } from "./npcs";
 
@@ -21,7 +21,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_ID, MIRON_DEF, [{
   desc: 'Мирон Звонарь: «Принеси звукоизлучатель в радиоризницу. Настроим тишину так, чтобы слепые ушли к колоколу, а не к тебе.»',
   targetItem: 'sound_emitter',
   targetCount: 1,
-  targetFloorZ: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+  targetFloorZ: SPECTRAL_CHASOVNYA_Z,
   targetRoute: { designFloorId: SPECTRAL_CHASOVNYA_ROUTE_ID },
   targetRoomDefId: SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.radioSacristy,
   targetHint: 'Спектральная часовня z=-42: радиоризница стоит за боковой акустической тенью.',

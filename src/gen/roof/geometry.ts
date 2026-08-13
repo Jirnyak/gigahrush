@@ -23,7 +23,7 @@ import {
 } from '../shared';
 
 import {
-  ROOF_BASE_FLOOR,
+  ROOF_Z,
   ROOF_SKY_WIDTH,
   ROOF_SKY_HEIGHT,
   CX,
@@ -1435,7 +1435,7 @@ export function registerRoofWindShelterCue(world: World, rooms: Record<string, R
     y: cueY,
     targetX: shelterX,
     targetY: shelterY,
-    z: ROOF_BASE_FLOOR,
+    z: ROOF_Z,
     label: 'Ветер крыши',
     hint: 'ветер режет открытую плиту; вентиляционное укрытие ниже по проходу',
     targetName: 'Вентиляционное укрытие',

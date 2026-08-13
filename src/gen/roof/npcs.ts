@@ -22,7 +22,7 @@ import { rng } from '../../core/rand';
 
 import {
   ROOF_ROUTE_ID,
-  ROOF_BASE_FLOOR,
+  ROOF_Z,
   CX,
   CY} from './meta';
 
@@ -117,7 +117,7 @@ export function addRoofContainer(
     id,
     x,
     y,
-    z: ROOF_BASE_FLOOR,
+    z: ROOF_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

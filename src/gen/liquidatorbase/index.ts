@@ -4,7 +4,7 @@ import type { FloorGeneration } from '../floor_manifest';
 import { stampRoom, protectRoom } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
-export const LIQUIDATOR_BASE_BASE_FLOOR = 140;
+export const LIQUIDATOR_BASE_Z = -16;
 
 export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   const world = new WorldClass();

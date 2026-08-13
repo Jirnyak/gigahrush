@@ -225,7 +225,8 @@ const INDUSTRIAL_OCCUPATIONS: readonly WeightedDesignValue<Occupation>[] = [
 ];
 
 const CHILD_CAMP_OCCUPATIONS: readonly WeightedDesignValue<Occupation>[] = [
-
+  // Children dominate the pioneer camp crowd; adult entries below are staff.
+  { value: Occupation.CHILD, weight: 60 },
   { value: Occupation.COOK, weight: 6 },
   { value: Occupation.DOCTOR, weight: 5 },
   { value: Occupation.SECRETARY, weight: 4 },
@@ -378,6 +379,10 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     monsterPlacementKind: 'attic',
   },
   radon_exchange: {
+    // z=44 falls under the baseNpcTarget |z|>=44 endgame silencer, but this is a
+    // staffed ministry floor with an authored operator crowd (#170): keep an
+    // explicit target so the profile does not collapse to 0 ambient NPCs.
+    npcTarget: 420,
     npcNoun: 'оператор заслонок',
     npcFactions: [{ value: Faction.SCIENTIST, weight: 58 }, { value: Faction.LIQUIDATOR, weight: 34 }, { value: Faction.CITIZEN, weight: 8 }],
     npcOccupations: [{ value: Occupation.SCIENTIST, weight: 34 }, { value: Occupation.ELECTRICIAN, weight: 24 }, { value: Occupation.HUNTER, weight: 18 }, { value: Occupation.SECRETARY, weight: 14 }, { value: Occupation.MECHANIC, weight: 10 }],

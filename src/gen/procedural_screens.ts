@@ -10,6 +10,7 @@ import {
   type Room,
 } from '../core/types';
 import { World } from '../core/world';
+import { designFloorAtZ } from '../data/design_floors';
 import {
   SCREEN_SIGNAL_DEFS,
   screenSignalEligible,
@@ -30,6 +31,10 @@ export { SCREEN_FRAMES, SCREEN_VARIANTS } from '../data/procedural_screen_textur
 const SCREEN_MAX_RATIO = 0.01;
 const SCREEN_CONTEXT_RADIUS = 10;
 
+// Screen density/looks are a property of the floor's THEME, keyed by that
+// theme's base z. Authored floors pass their own canonical z (e.g. antenna
+// court z=42), so every lookup here first folds z down to its theme base —
+// otherwise a themed floor silently gets no screens at all.
 const FLOOR_CAP: Record<number, number> = {
   [30]: 180,
   [14]: 160,
@@ -38,6 +43,21 @@ const FLOOR_CAP: Record<number, number> = {
   [-36]: 48,
   [-50]: 0,
 };
+
+const THEME_BASE_Z: Record<string, number> = {
+  ministry: 30,
+  kvartiry: 14,
+  living: 0,
+  maintenance: -26,
+  hell: -36,
+  void: -50,
+};
+
+function screenThemeZ(z: number): number {
+  if (z in FLOOR_CAP) return z;
+  const theme = designFloorAtZ(z)?.themeTags?.[0];
+  return (theme !== undefined ? THEME_BASE_Z[theme] : undefined) ?? 0;
+}
 
 const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const proceduralScreenCells = new WeakMap<World, Set<number>>();
@@ -396,7 +416,11 @@ function placeHellScreens(world: World, cap: number, owned: Set<number>): void {
   }
 }
 
-export function placeProceduralScreens(world: World, z: number): void {
+export function placeProceduralScreens(world: World, floorZ: number): void {
+  // Fold to the theme base once, here: every helper below (cap, wall texture,
+  // room eligibility, signal scope) is keyed by theme, not by the individual
+  // authored floor.
+  const z = screenThemeZ(floorZ);
   restoreExistingScreens(world, z);
   const cap = floorScreenCap(z);
   if (cap <= 0) return;

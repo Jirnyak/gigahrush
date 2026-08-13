@@ -1,6 +1,6 @@
 /* -- Design z: bank_floor - cash desks, debt and vault risk -- */
 
-import { BANK_HQ_ROOM_NAMES, BANK_ROOM_NAMES, DESIGN_NPC_HOME_FLOOR_KEY, BANK_FLOOR_BASE_FLOOR, type BankFloorState, BANK_TAGS } from './meta';
+import { BANK_HQ_ROOM_NAMES, BANK_ROOM_NAMES, DESIGN_NPC_HOME_FLOOR_KEY, BANK_FLOOR_Z, type BankFloorState, BANK_TAGS } from './meta';
 import { BankMicroBlockSpec, createBankRooms, setFeature } from './geometry';
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
@@ -591,7 +591,7 @@ export function addBankContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: BANK_FLOOR_BASE_FLOOR,
+    z: BANK_FLOOR_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: opts.kind,

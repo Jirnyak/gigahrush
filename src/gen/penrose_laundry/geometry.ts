@@ -15,7 +15,7 @@ import { World } from '../../core/world';
 import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom } from '../shared';
-import { PENROSE_LAUNDRY_BASE_FLOOR, PENROSE_LAUNDRY_ROOM_DEF_IDS, PenroseLaundrySymbol, PenroseTileSpec, PenroseFullNode, PenroseLaundryState, C, PHI, GOLDEN_TURN, LOCK_KEY_ID, SYMBOL_CHAIN_IDS, FULL_FLOOR_NODE_COUNT, FULL_FLOOR_NODE_RADIUS_MIN, FULL_FLOOR_NODE_RADIUS_SPAN, FULL_FLOOR_NODE_SYMBOLS, PENROSE_HQ_SPECS } from "./meta";
+import { PENROSE_LAUNDRY_Z, PENROSE_LAUNDRY_ROOM_DEF_IDS, PenroseLaundrySymbol, PenroseTileSpec, PenroseFullNode, PenroseLaundryState, C, PHI, GOLDEN_TURN, LOCK_KEY_ID, SYMBOL_CHAIN_IDS, FULL_FLOOR_NODE_COUNT, FULL_FLOOR_NODE_RADIUS_MIN, FULL_FLOOR_NODE_RADIUS_SPAN, FULL_FLOOR_NODE_SYMBOLS, PENROSE_HQ_SPECS } from "./meta";
 import { carvePenroseEdgeDrains, decoratePenroseSupportRoom } from "./npcs";
 
 export const penroseLaundryStates = new WeakMap<World, PenroseLaundryState>();
@@ -829,7 +829,7 @@ export function registerPenroseRouteCues(world: World, roomsById: Map<string, Ro
     y: first.y + first.h / 2,
     targetX: hidden.x + hidden.w / 2,
     targetY: hidden.y + hidden.h / 2,
-    z: PENROSE_LAUNDRY_BASE_FLOOR,
+    z: PENROSE_LAUNDRY_Z,
     roomId: first.id,
     targetRoomId: hidden.id,
     zoneId: world.zoneMap[world.idx(first.x + Math.floor(first.w / 2), first.y + Math.floor(first.h / 2))],

@@ -10,7 +10,7 @@ import {
 export const DESIGN_FLOOR_ID = 'roof' as const;
 export const ROOF_ROUTE_ID = DESIGN_FLOOR_ID;
 export const ROOF_FUTURE_Z = 50 as const;
-export const ROOF_BASE_FLOOR = 30;
+export const ROOF_Z = 50;
 export const ROOF_SKY_WIDTH = 1024 as const;
 export const ROOF_SKY_HEIGHT = 1024 as const;
 

@@ -11,7 +11,6 @@ export const ATTRACTOR_DVOR_ROUTE_ID = 'attractor_dvor' as const;
 
 export const ATTRACTOR_DVOR_Z = -34;
 
-export const ATTRACTOR_DVOR_BASE_FLOOR = 140;
 
 export const CX = W >> 1;
 

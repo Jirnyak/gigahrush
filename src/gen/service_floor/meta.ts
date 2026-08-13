@@ -9,7 +9,6 @@ export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('service_floor');
 
 export const DESIGN_FLOOR_ID = 'service_floor' as const;
 export const SERVICE_FLOOR_Z = -18;
-export const SERVICE_FLOOR_BASE_FLOOR = 140;
 
 export const MASTER_SCOPE_TAG = 'service_master_scope';
 export const LIFT_MACHINE_ROOM = 'Машинный зал лифтовой группы С-15';

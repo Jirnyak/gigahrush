@@ -9,7 +9,7 @@ import {
 import { REACH_GATE_NONE, auditReachability } from '../../core/world';
 import { World } from '../../core/world';
 import { registerRouteCue } from '../../systems/route_cues';
-import { RADON_EXCHANGE_ROUTE_ID, RADON_EXCHANGE_BASE_FLOOR, RadonRooms, RadonTerritoryAnchor, TERRITORY_UNASSIGNED } from "./meta";
+import { RADON_EXCHANGE_ROUTE_ID, RADON_EXCHANGE_Z, RadonRooms, RadonTerritoryAnchor, TERRITORY_UNASSIGNED } from "./meta";
 import { isRadonTerritoryPassable, radonRoomOwnerHint, claimRadonTerritoryCell, claimRadonRoomTerritory } from "./geometry";
 
 export function addContainer(
@@ -29,7 +29,7 @@ export function addContainer(
     id: nextContainerId.v++,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,
@@ -51,7 +51,7 @@ export function registerRadonRouteCues(world: World, rooms: RadonRooms, keyConta
     y: rooms.exchangeHall.y + 18.5,
     targetX: rooms.shutterEast.x + 12.5,
     targetY: rooms.shutterEast.y + 7.5,
-    z: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_Z,
     roomId: rooms.exchangeHall.id,
     targetRoomId: rooms.shutterEast.id,
     zoneId: world.zoneMap[world.idx(rooms.exchangeHall.x + 8, rooms.exchangeHall.y + 18)],
@@ -84,7 +84,7 @@ export function registerRadonRouteCues(world: World, rooms: RadonRooms, keyConta
     y: rooms.downLift.y + 8.5,
     targetX: rooms.serviceChord.x + 14.5,
     targetY: rooms.serviceChord.y + 7.5,
-    z: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_Z,
     roomId: rooms.downLift.id,
     targetRoomId: rooms.serviceChord.id,
     zoneId: world.zoneMap[world.idx(rooms.downLift.x + 8, rooms.downLift.y + 8)],
@@ -117,7 +117,7 @@ export function registerRadonRouteCues(world: World, rooms: RadonRooms, keyConta
     y: rooms.projectionKey.y + 5.5,
     targetX: keyContainer.x + 0.5,
     targetY: keyContainer.y + 0.5,
-    z: RADON_EXCHANGE_BASE_FLOOR,
+    z: RADON_EXCHANGE_Z,
     roomId: rooms.projectionKey.id,
     targetRoomId: rooms.projectionKey.id,
     zoneId: world.zoneMap[world.idx(rooms.projectionKey.x + 6, rooms.projectionKey.y + 5)],

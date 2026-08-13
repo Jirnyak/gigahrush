@@ -21,7 +21,7 @@ import { setTerritoryOwnerAtIndex } from '../../systems/territory';
 import {
   stampRoom,
 } from '../shared';
-import { HILBERT_DEPOT_BASE_FLOOR, HILBERT_DEPOT_CARGO_TAG, HILBERT_DEPOT_CHORD_TAG, CURVE_X, CURVE_Y, CONTENT_TAG, SAFE_AISLE_RADIUS, BAY_FIRST_INDEX, ROUTE_GRAPH_ORDER, ROUTE_GRAPH_X, ROUTE_GRAPH_Y, ROUTE_GRAPH_STEP, BLOCK_GRAPH_ORDER, BLOCK_GRAPH_X, BLOCK_GRAPH_Y, BLOCK_GRAPH_STEP, Point, DEPOT_OWNER_SEQUENCE, DEPOT_HQ_SPECS, HilbertDepotState } from "./meta";
+import { HILBERT_DEPOT_Z, HILBERT_DEPOT_CARGO_TAG, HILBERT_DEPOT_CHORD_TAG, CURVE_X, CURVE_Y, CONTENT_TAG, SAFE_AISLE_RADIUS, BAY_FIRST_INDEX, ROUTE_GRAPH_ORDER, ROUTE_GRAPH_X, ROUTE_GRAPH_Y, ROUTE_GRAPH_STEP, BLOCK_GRAPH_ORDER, BLOCK_GRAPH_X, BLOCK_GRAPH_Y, BLOCK_GRAPH_STEP, Point, DEPOT_OWNER_SEQUENCE, DEPOT_HQ_SPECS, HilbertDepotState } from "./meta";
 import { cargoInventory, addContainer } from "./npcs";
 
 export function expandHilbertDepotRouteGeometry(world: World, rng: () => number): void {
@@ -323,7 +323,7 @@ export function registerHilbertDepotRouteCues(
     y: entry.y + 7.5,
     targetX: firstCargo.x + 0.5,
     targetY: firstCargo.y + 0.5,
-    z: HILBERT_DEPOT_BASE_FLOOR,
+    z: HILBERT_DEPOT_Z,
     roomId: entry.id,
     targetRoomId: world.roomMap[world.idx(firstCargo.x, firstCargo.y)],
     zoneId: world.zoneMap[world.idx(entry.x + entry.w - 3, entry.y + 7)],
@@ -351,7 +351,7 @@ export function registerHilbertDepotRouteCues(
       y: from.y + 0.5,
       targetX: to.x + 0.5,
       targetY: to.y + 0.5,
-      z: HILBERT_DEPOT_BASE_FLOOR,
+      z: HILBERT_DEPOT_Z,
       zoneId: world.zoneMap[world.idx(from.x, from.y)],
       label: 'запертая хорда',
       hint: 'решетка режет десятки индексов, но открывает чужой учет и охрану',
@@ -374,7 +374,7 @@ export function registerHilbertDepotRouteCues(
     y: points[points.length - 9].y + 0.5,
     targetX: exit.x + 2.5,
     targetY: exit.y + 7.5,
-    z: HILBERT_DEPOT_BASE_FLOOR,
+    z: HILBERT_DEPOT_Z,
     roomId: exit.id,
     targetRoomId: exit.id,
     zoneId: world.zoneMap[world.idx(exit.x + 2, exit.y + 7)],

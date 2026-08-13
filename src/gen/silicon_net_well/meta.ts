@@ -19,7 +19,6 @@ export const DESIGN_FLOOR_ID = 'silicon_net_well' as const;
 
 export const SILICON_NET_WELL_Z = -22;
 
-export const SILICON_NET_WELL_BASE_FLOOR = 140;
 
 export const SEED = hashSeed(DESIGN_FLOOR_ID);
 

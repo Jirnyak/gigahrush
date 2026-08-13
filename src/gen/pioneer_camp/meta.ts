@@ -16,7 +16,7 @@ export const PIONEER_CAMP_DESIGN_FLOOR_ID = 'pioneer_camp' as const;
 
 export const PIONEER_CAMP_ROUTE_Z = 38;
 
-export const PIONEER_CAMP_BASE_FLOOR = 100;
+export const PIONEER_CAMP_Z = 38;
 
 export const PIONEER_CAMP_DISPLAY_NAME = 'Пионерлагерь';
 

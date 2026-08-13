@@ -16,7 +16,6 @@ export const SPECTRAL_CHASOVNYA_ROUTE_ID = 'spectral_chasovnya' as const;
 
 export const SPECTRAL_CHASOVNYA_Z = -42 as const;
 
-export const SPECTRAL_CHASOVNYA_BASE_FLOOR = 180;
 
 export const SPECTRAL_CHASOVNYA_ROOM_DEF_IDS = {
   entry: 'Преддверие спектральной часовни',

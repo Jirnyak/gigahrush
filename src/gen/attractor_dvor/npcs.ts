@@ -22,7 +22,7 @@ import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_BASE_FLOOR, DEAD_FLOOR, Point, AttractorRooms, ATTRACTOR_HQ_COMPOUNDS } from "./meta";
+import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, DEAD_FLOOR, Point, AttractorRooms, ATTRACTOR_HQ_COMPOUNDS } from "./meta";
 import { paintAttractorRoomOwner, roomByName } from "./geometry";
 
 export function paintAttractorAuthoredHqOwners(world: World): void {
@@ -151,7 +151,7 @@ export function addContainer(
     id: world.containers.length + 1,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: ATTRACTOR_DVOR_BASE_FLOOR,
+    z: ATTRACTOR_DVOR_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)] ?? 0,
     kind,

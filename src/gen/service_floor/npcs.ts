@@ -1,4 +1,4 @@
-import { DESIGN_NPC_HOME_FLOOR_KEY, JANITOR_DEPOT, PUMP_RESCUE_ROOM, SERVICE_FLOOR_BASE_FLOOR } from './meta';
+import { DESIGN_NPC_HOME_FLOOR_KEY, JANITOR_DEPOT, PUMP_RESCUE_ROOM, SERVICE_FLOOR_Z } from './meta';
 import { nextServiceEntityId, setFeature } from './geometry';
 /* ── Design z: service_floor — lift machines and staff routes ─ */
 
@@ -344,7 +344,7 @@ export function addServiceContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: SERVICE_FLOOR_BASE_FLOOR,
+    z: SERVICE_FLOOR_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

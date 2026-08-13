@@ -18,7 +18,7 @@ import { World } from '../../core/world';
 import { registerRouteCue } from '../../systems/route_cues';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { stampRoom } from '../shared';
-import { NUMBER_REGISTRY_BASE_FLOOR, NextId, ResidueLane, RESIDUE_LANES, NUMBER_REGISTRY_CRT_INTERSECTIONS, RegistryTerritoryTarget, NUMBER_REGISTRY_TERRITORY_TARGETS, REGISTRAR_DEF, PRIME_GUARD_DEF, COMPOSITE_DEF, RegistryBlockSpec, RegistryHqSpec, NUMBER_REGISTRY_HQ_SPECS, NUMBER_REGISTRY_BLOCKS } from "./meta";
+import { NUMBER_REGISTRY_Z, NextId, ResidueLane, RESIDUE_LANES, NUMBER_REGISTRY_CRT_INTERSECTIONS, RegistryTerritoryTarget, NUMBER_REGISTRY_TERRITORY_TARGETS, REGISTRAR_DEF, PRIME_GUARD_DEF, COMPOSITE_DEF, RegistryBlockSpec, RegistryHqSpec, NUMBER_REGISTRY_HQ_SPECS, NUMBER_REGISTRY_BLOCKS } from "./meta";
 import { addRegistryContainer, spawnNpc, spawnMonster } from "./npcs";
 
 
@@ -552,7 +552,7 @@ export function registerNumberRegistryRouteCues(world: World, rooms: Record<stri
     y: rooms.hub.y + 9.5,
     targetX: rooms.prime.x + rooms.prime.w - 6.5,
     targetY: rooms.prime.y + 5.5,
-    z: NUMBER_REGISTRY_BASE_FLOOR,
+    z: NUMBER_REGISTRY_Z,
     roomId: rooms.hub.id,
     targetRoomId: rooms.prime.id,
     zoneId: world.zoneMap[world.idx(rooms.hub.x + rooms.hub.w - 4, rooms.hub.y + 9)],
@@ -585,7 +585,7 @@ export function registerNumberRegistryRouteCues(world: World, rooms: Record<stri
     y: rooms.hub.y + rooms.hub.h - 8.5,
     targetX: rooms.composite.x + rooms.composite.w - 7.5,
     targetY: rooms.composite.y + 9.5,
-    z: NUMBER_REGISTRY_BASE_FLOOR,
+    z: NUMBER_REGISTRY_Z,
     roomId: rooms.hub.id,
     targetRoomId: rooms.composite.id,
     zoneId: world.zoneMap[world.idx(rooms.hub.x + rooms.hub.w - 4, rooms.hub.y + rooms.hub.h - 8)],

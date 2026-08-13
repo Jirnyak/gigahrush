@@ -14,7 +14,6 @@ export const CAYLEY_BYURO_ROUTE_ID = 'cayley_byuro' as const;
 
 export const CAYLEY_BYURO_Z = 36;
 
-export const CAYLEY_BYURO_BASE_FLOOR = 30;
 
 export type CayleyElement = 'e' | 'r' | 'rr' | 's' | 'sr' | 'srr';
 

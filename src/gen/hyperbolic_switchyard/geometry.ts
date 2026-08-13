@@ -16,7 +16,7 @@ import { clamp } from '../../core/math';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom } from '../shared';
-import { HYPERBOLIC_SWITCHYARD_BASE_FLOOR, HYPERBOLIC_SWITCHYARD_ROOM_NAMES, SwitchyardArcSummary, SwitchyardPlatformSummary, ArcSpec, SwitchyardRooms, SwitchyardDoorSide, SwitchyardServiceBlockSpec, SWITCHYARD_SERVICE_BLOCKS, SWITCHYARD_HQ_SPECS, SWITCHYARD_MICRO_TYPES, GUIDE_DEF } from "./meta";
+import { HYPERBOLIC_SWITCHYARD_Z, HYPERBOLIC_SWITCHYARD_ROOM_NAMES, SwitchyardArcSummary, SwitchyardPlatformSummary, ArcSpec, SwitchyardRooms, SwitchyardDoorSide, SwitchyardServiceBlockSpec, SWITCHYARD_SERVICE_BLOCKS, SWITCHYARD_HQ_SPECS, SWITCHYARD_MICRO_TYPES, GUIDE_DEF } from "./meta";
 
 export function carveArcFamilies(world: World): {
   allCells: number[];
@@ -759,7 +759,7 @@ export function registerSwitchyardCue(
     y,
     targetX,
     targetY,
-    z: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
+    z: HYPERBOLIC_SWITCHYARD_Z,
     label: opts.label,
     hint: opts.hint,
     targetName: opts.target.name,

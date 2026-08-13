@@ -17,7 +17,7 @@ export const HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID = 'hyperbolic_switchyard' as 
 
 export const HYPERBOLIC_SWITCHYARD_ROUTE_Z = -20;
 
-export const HYPERBOLIC_SWITCHYARD_BASE_FLOOR = 140;
+export const HYPERBOLIC_SWITCHYARD_Z = -20;
 
 export const HYPERBOLIC_SWITCHYARD_ROOM_NAMES = {
   shortcut: 'Геодезическая служебная кишка',

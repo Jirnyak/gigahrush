@@ -29,7 +29,6 @@ export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bank_floor');
 
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
 export const BANK_FLOOR_Z = 26;
-export const BANK_FLOOR_BASE_FLOOR = 30;
 
 export const BANK_FLOOR_META = {
   routeId: BANK_FLOOR_ROUTE_ID,

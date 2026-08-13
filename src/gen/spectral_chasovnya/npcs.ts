@@ -21,7 +21,7 @@ import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { territoryOwnerAtIndex } from '../../systems/territory';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { SPECTRAL_CHASOVNYA_BASE_FLOOR, NextId, SpectralRooms, NPC_ID, SPECTRAL_AMBIENT_NPC_PREFIX, MIRON_DEF } from "./meta";
+import { SPECTRAL_CHASOVNYA_Z, NextId, SpectralRooms, NPC_ID, SPECTRAL_AMBIENT_NPC_PREFIX, MIRON_DEF } from "./meta";
 import { placeFeature } from "./geometry";
 
 export function spawnPlotNpc(entities: Entity[], nextId: NextId, npcId: typeof NPC_ID, _def: PlotNpcDef, x: number, y: number, angle: number): number {
@@ -89,7 +89,7 @@ export function addSpectralContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

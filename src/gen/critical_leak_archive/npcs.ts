@@ -12,7 +12,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_BASE_FLOOR, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, PercolationField, NextId, GRID_W, GRID_H, SITE_P, BOND_P, WATER_TAGS } from "./meta";
+import { CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_Z, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, PercolationField, NextId, GRID_W, GRID_H, SITE_P, BOND_P, WATER_TAGS } from "./meta";
 import { gridIndex, gridCenter, largestBondComponent, carveDisc, carveLine, setFeature } from "./geometry";
 
 export function rand01(seed: number, i: number, salt: number): number {
@@ -106,7 +106,7 @@ export function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+    z: CRITICAL_LEAK_ARCHIVE_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

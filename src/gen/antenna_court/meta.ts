@@ -14,7 +14,7 @@ export const DESIGN_FLOOR_ID = 'antenna_court' as const;
 
 export const ANTENNA_COURT_ROUTE_Z = 42 as const;
 
-export const ANTENNA_COURT_BASE_FLOOR = 30;
+export const ANTENNA_COURT_Z = 42;
 
 export const SIGNAL_FLAG_TUNED = 1 << 0;
 

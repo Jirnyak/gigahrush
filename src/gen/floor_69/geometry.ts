@@ -8,7 +8,7 @@ import { Spr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
 import { carveCorridor, generateZones, placeDoor, protectRoom, stampRoom } from '../shared';
-import { FLOOR_69_BASE_FLOOR, FLOOR_69_WORKER_ROLE, FLOOR_69_CONTROL_ANCHORS, floor69EventTags, FLOOR_69_DEFAULT_SEED, FLOOR_69_FEMALE_SPRITE_COUNT, FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS } from './meta';
+import { FLOOR_69_Z, FLOOR_69_WORKER_ROLE, FLOOR_69_CONTROL_ANCHORS, floor69EventTags, FLOOR_69_DEFAULT_SEED, FLOOR_69_FEMALE_SPRITE_COUNT, FLOOR_69_WORKER_CANDIDATE_OCCUPATIONS } from './meta';
 
 export function hashFloor69Entity(entity: Entity, salt = 0): number {
   let h = (entity.id ^ Math.imul(Math.floor(entity.x * 16), 0x45d9f3b) ^ Math.imul(Math.floor(entity.y * 16), 0x119de1f3) ^ salt) >>> 0;
@@ -924,7 +924,7 @@ export function registerFloor69RouteCues(world: World, rooms: Floor69Rooms): voi
     y: refugeCueY,
     targetX: roomMidX(rooms.refuge),
     targetY: roomMidY(rooms.refuge),
-    z: FLOOR_69_BASE_FLOOR,
+    z: FLOOR_69_Z,
     label: '69: долг/убежище',
     hint: 'пост, ключ и расписка дают риск рейда; тихая комната дает воду, бинт и жалобу',
     targetName: rooms.refuge.name,
@@ -949,7 +949,7 @@ export function registerFloor69RouteCues(world: World, rooms: Floor69Rooms): voi
     y: blackmailCueY,
     targetX: roomMidX(rooms.staffLift),
     targetY: roomMidY(rooms.staffLift),
-    z: FLOOR_69_BASE_FLOOR,
+    z: FLOOR_69_Z,
     label: '69: сейф/черный ход',
     hint: 'сейф компромата опасен охраной; награда - пропуск, рычаг или служебный выход',
     targetName: rooms.staffLift.name,
@@ -970,7 +970,7 @@ export function registerFloor69RouteCues(world: World, rooms: Floor69Rooms): voi
 export function applyZones(world: World): void {
   generateZones(world);
   for (const zone of world.zones) {
-    zone.level = Math.max(2, Math.min(5, calcZoneLevel(zone.cx, zone.cy, FLOOR_69_BASE_FLOOR)));
+    zone.level = Math.max(2, Math.min(5, calcZoneLevel(zone.cx, zone.cy, FLOOR_69_Z)));
     zone.faction = zone.id % 7 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
     zone.fogged = false;
   }

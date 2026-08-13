@@ -11,7 +11,7 @@ import { MONSTERS } from '../../entities/monster';
 import { setTerritoryOwnerAtIndex } from '../../systems/territory';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
-import { DESIGN_NPC_HOME_FLOOR_KEY, DESIGN_FLOOR_ID, ANTENNA_COURT_BASE_FLOOR, CX, CY, TARGET_SHARE_BY_FACTION, NPC_DEFS } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, DESIGN_FLOOR_ID, ANTENNA_COURT_Z, CX, CY, TARGET_SHARE_BY_FACTION, NPC_DEFS } from "./meta";
 import { AntennaCourtSignalState, antennaRoomOwnerOverride, antennaOwnerTerritoryWeight } from "./geometry";
 
 export interface AntennaTerritorySeed {
@@ -250,7 +250,7 @@ export function addContainer(
     id,
     x,
     y,
-    z: ANTENNA_COURT_BASE_FLOOR,
+    z: ANTENNA_COURT_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

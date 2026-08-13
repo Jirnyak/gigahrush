@@ -10,7 +10,6 @@ export const CANTOR_PUSTOTY_ROUTE_ID = 'cantor_pustoty' as const;
 
 export const CANTOR_PUSTOTY_Z = -44 as const;
 
-export const CANTOR_PUSTOTY_BASE_FLOOR = 200;
 
 export const CANTOR_PUSTOTY_ROOM_NAMES = {
   entry: 'Кантор пустоты: входной остров досок',

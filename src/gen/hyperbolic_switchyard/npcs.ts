@@ -18,7 +18,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { HYPERBOLIC_SWITCHYARD_BASE_FLOOR, GUIDE_NPC_ID, SwitchyardRooms } from "./meta";
+import { HYPERBOLIC_SWITCHYARD_Z, GUIDE_NPC_ID, SwitchyardRooms } from "./meta";
 
 export function spawnGuide(entities: Entity[], nextId: { v: number }, room: Room): void {
   requireSpawnedPlotNpcFromPackage(entities, nextId, GUIDE_NPC_ID, room.x + 8.5, room.y + room.h - 6.5, {
@@ -117,7 +117,7 @@ export function addContainer(
     id: nextId.v++,
     x,
     y,
-    z: HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
+    z: HYPERBOLIC_SWITCHYARD_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

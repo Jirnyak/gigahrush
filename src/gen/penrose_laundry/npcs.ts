@@ -20,7 +20,7 @@ import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { PENROSE_LAUNDRY_BASE_FLOOR, PenroseLaundryState, C, LOCK_KEY_ID, IGOR_DEF, LIDIA_DEF, TONYA_DEF } from "./meta";
+import { PENROSE_LAUNDRY_Z, PenroseLaundryState, C, LOCK_KEY_ID, IGOR_DEF, LIDIA_DEF, TONYA_DEF } from "./meta";
 import { carvePenroseLine, featureForPenroseRoom, setFeature, roomById } from "./geometry";
 
 export function carvePenroseEdgeDrains(world: World): void {
@@ -111,7 +111,7 @@ export function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: PENROSE_LAUNDRY_BASE_FLOOR,
+    z: PENROSE_LAUNDRY_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

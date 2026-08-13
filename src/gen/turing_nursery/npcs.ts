@@ -77,7 +77,7 @@ import { monsterSpr } from '../../render/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { DESIGN_NPC_HOME_FLOOR_KEY, TURING_NURSERY_ROUTE_ID, TURING_NURSERY_BASE_FLOOR, TURING_NURSERY_ROOM_PREFIX, SEED, FIELD_SIZE, FIELD_CELLS, FIELD_STEPS, TURING_HQ_SPECS, NPC_DEFS } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, TURING_NURSERY_ROUTE_ID, TURING_NURSERY_Z, TURING_NURSERY_ROOM_PREFIX, SEED, FIELD_SIZE, FIELD_CELLS, FIELD_STEPS, TURING_HQ_SPECS, NPC_DEFS } from "./meta";
 import { NextId, ReactionField, NurseryRooms, carveTuringMacroNetwork, buildTuringHqSuites, buildTuringDistricts, buildTuringCabinetStrips, buildTuringOuterAnnexes, buildTuringStateGraphRooms, reinforceTuringNurseryDoorSlots, tryAddTuringRoom, connectRoomsNarrow, paintRoomTerritory, decorateMicroRoom, stainReactionRoom, stampReactionWater, laplace, fieldWrap, clamp01, addWetCell, setFeature, markScreenWall, roomCx, roomCy } from "./geometry";
 
 export type TuringNpcId =
@@ -262,7 +262,7 @@ export function registerNurseryRouteCues(world: World, rooms: NurseryRooms, cont
     y: rooms.entry.y + 11.5,
     targetX: containers.basinKit.x + 0.5,
     targetY: containers.basinKit.y + 0.5,
-    z: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_Z,
     roomId: rooms.entry.id,
     targetRoomId: rooms.basin.id,
     zoneId: world.zoneMap[world.idx(rooms.entry.x + 22, rooms.entry.y + 11)],
@@ -283,7 +283,7 @@ export function registerNurseryRouteCues(world: World, rooms: NurseryRooms, cont
     y: rooms.burn.y + 13.5,
     targetX: roomCx(rooms.bridge) + 0.5,
     targetY: roomCy(rooms.bridge) + 0.5,
-    z: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_Z,
     roomId: rooms.burn.id,
     targetRoomId: rooms.bridge.id,
     zoneId: world.zoneMap[world.idx(rooms.burn.x + 12, rooms.burn.y + 13)],
@@ -304,7 +304,7 @@ export function registerNurseryRouteCues(world: World, rooms: NurseryRooms, cont
     y: rooms.ward.y + 18.5,
     targetX: containers.exposureFile.x + 0.5,
     targetY: containers.exposureFile.y + 0.5,
-    z: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_Z,
     roomId: rooms.ward.id,
     targetRoomId: rooms.exposure.id,
     zoneId: world.zoneMap[world.idx(rooms.ward.x + 18, rooms.ward.y + 18)],
@@ -565,7 +565,7 @@ export function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: TURING_NURSERY_BASE_FLOOR,
+    z: TURING_NURSERY_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

@@ -18,7 +18,7 @@ import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
-import { CAYLEY_BYURO_ROUTE_ID, CAYLEY_BYURO_Z, CAYLEY_BYURO_BASE_FLOOR, CayleyByuroState, CAYLEY_TAGS } from "./meta";
+import { CAYLEY_BYURO_ROUTE_ID, CAYLEY_BYURO_Z, CayleyByuroState, CAYLEY_TAGS } from "./meta";
 
 export function createState(spawnX: number, spawnY: number): CayleyByuroState {
   return {
@@ -111,7 +111,7 @@ export function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: CAYLEY_BYURO_BASE_FLOOR,
+    z: CAYLEY_BYURO_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: opts.kind,

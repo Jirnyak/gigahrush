@@ -16,7 +16,7 @@ import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { PIONEER_CAMP_BASE_FLOOR, CX, CY, NPC_IDS, CampNpcId, CampRooms, NPC_DEFS } from "./meta";
+import { PIONEER_CAMP_Z, CX, CY, NPC_IDS, CampNpcId, CampRooms, NPC_DEFS } from "./meta";
 import { setFeature } from "./geometry";
 
 export function spawnCampNpcs(
@@ -114,7 +114,7 @@ export function addCampContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: PIONEER_CAMP_BASE_FLOOR,
+    z: PIONEER_CAMP_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

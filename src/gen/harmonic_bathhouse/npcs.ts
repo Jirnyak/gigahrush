@@ -23,7 +23,7 @@ import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { randomRPG } from '../../systems/rpg';
-import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_BASE_FLOOR, BathhouseThermalBands, BathhouseRooms, HarmonicField, NextId, FIELD_W, FIELD_H, FIELD_STEP, FIELD_ORIGIN_X, FIELD_ORIGIN_Y } from "./meta";
+import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, BathhouseThermalBands, BathhouseRooms, HarmonicField, NextId, FIELD_W, FIELD_H, FIELD_STEP, FIELD_ORIGIN_X, FIELD_ORIGIN_Y } from "./meta";
 import { idxField, carveDisc, setFeature, forRoomCells, roomWaterCells } from "./geometry";
 
 export function hash01(seed: number, x: number, y: number, salt: number): number {
@@ -382,7 +382,7 @@ export function addContainer(
     id: world.containers.length,
     x,
     y,
-    z: HARMONIC_BATHHOUSE_BASE_FLOOR,
+    z: HARMONIC_BATHHOUSE_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

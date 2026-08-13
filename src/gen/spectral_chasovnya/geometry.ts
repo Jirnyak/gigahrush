@@ -22,7 +22,7 @@ import { publishNoise } from '../../systems/noise';
 import { registerRouteCue } from '../../systems/route_cues';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, stampRoom } from '../shared';
-import { SPECTRAL_CHASOVNYA_ROUTE_ID, SPECTRAL_CHASOVNYA_Z, SPECTRAL_CHASOVNYA_BASE_FLOOR, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS, SpectralRooms, ROOM_DEF_ID_TO_KEY, SpectralDecision, SpectralStandingWaveRoom, SpectralShadowZone, SpectralBellNode, SpectralChasovnyaState, BELL_COOLDOWN_SEC, BELL_INTERACTION_RANGE, BELL_LOOK_RADIUS, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y, SpectralHqSpec, SPECTRAL_HQ_SPECS } from "./meta";
+import { SPECTRAL_CHASOVNYA_ROUTE_ID, SPECTRAL_CHASOVNYA_Z, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS, SpectralRooms, ROOM_DEF_ID_TO_KEY, SpectralDecision, SpectralStandingWaveRoom, SpectralShadowZone, SpectralBellNode, SpectralChasovnyaState, BELL_COOLDOWN_SEC, BELL_INTERACTION_RANGE, BELL_LOOK_RADIUS, SPECTRAL_CENTER_X, SPECTRAL_CENTER_Y, SpectralHqSpec, SPECTRAL_HQ_SPECS } from "./meta";
 
 export const spectralStateByWorld = new WeakMap<World, SpectralChasovnyaState>();
 
@@ -772,7 +772,7 @@ export function registerQuietShadowRouteCue(world: World, rooms: SpectralRooms):
     y: entry.y,
     targetX: quiet.x,
     targetY: quiet.y,
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     label: 'Тихая тень',
     hint: 'Боковая зона гасит шаги. Хороший путь, если не стрелять.',
     targetName: rooms.quietSouth.name,
@@ -804,7 +804,7 @@ export function registerMainBellRouteCue(world: World, rooms: SpectralRooms, sta
     y: rooms.nave.y + 4,
     targetX: bell.x,
     targetY: bell.y,
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     label: 'Колокол',
     hint: 'Звон собирает слуховых тварей к клетке. Это не защита, а отвлечение.',
     targetName: rooms.bellCage.name,
@@ -836,7 +836,7 @@ export function registerFocusWarningRouteCue(world: World, rooms: SpectralRooms)
     y: rooms.nave.y + (rooms.nave.h >> 1),
     targetX: focus.x,
     targetY: focus.y,
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     label: 'Слуховой фокус',
     hint: 'Выстрел здесь раскрывает линию слепым. Приманка или тихий обход лучше прямого боя.',
     targetName: rooms.focusArch.name,
@@ -860,7 +860,7 @@ export function registerRadioSacristyRouteCue(world: World, rooms: SpectralRooms
     y: rooms.quietNorth.y + 4,
     targetX: radio.x,
     targetY: radio.y,
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     label: 'Радиоризница',
     hint: 'Радиоузел дает предметы для слуха и глушения, но шкаф заперт.',
     targetName: rooms.radioSacristy.name,
@@ -923,7 +923,7 @@ export function ringSpectralChasovnyaBell(
   const noise = publishNoise(state, {
     x: node.x,
     y: node.y,
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     radius: node.radius,
     ttl: 4.0,
     source: 'siren',
@@ -959,7 +959,7 @@ export function ringSpectralChasovnyaBell(
     : 'Колокол ударил низко. Эхо ушло в боковые тени.', state.time, '#d6a64b'));
   publishEvent(state, {
     type: 'monster_bait_placed',
-    z: SPECTRAL_CHASOVNYA_BASE_FLOOR,
+    z: SPECTRAL_CHASOVNYA_Z,
     roomId: node.roomId,
     x: node.x,
     y: node.y,

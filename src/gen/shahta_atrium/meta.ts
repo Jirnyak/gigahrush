@@ -12,7 +12,7 @@ export const DESIGN_FLOOR_ID = 'shahta_atrium' as const;
 
 export const SHAHTA_ATRIUM_ROUTE_Z = -24 as const;
 
-export const SHAHTA_ATRIUM_BASE_FLOOR = 140;
+export const SHAHTA_ATRIUM_Z = -24;
 
 export const CX = W >> 1;
 
