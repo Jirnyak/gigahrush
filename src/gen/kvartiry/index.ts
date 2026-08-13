@@ -527,7 +527,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   buildKvartirySocialMacroGraph(world, spawnX, spawnY);
 
   // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
-  placeProceduralScreens(world, 60);
+  placeProceduralScreens(world, 14);
 
   return { world, entities, spawnX, spawnY };
 }

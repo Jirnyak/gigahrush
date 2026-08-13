@@ -59,7 +59,7 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   // Manifest-owned side content
   nextId = runHellContent(world, entities, nextId);
 
-  placeProceduralScreens(world, 180);
+  placeProceduralScreens(world, -36);
 
   return { world, entities, spawnX, spawnY };
 }

@@ -210,7 +210,7 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
   /* ══════════════════════════════════════════════════════════════
      Phase 16: Rare procedural monitor/gauge walls
      ══════════════════════════════════════════════════════════════ */
-  placeProceduralScreens(world, 140);
+  placeProceduralScreens(world, -26);
   placeCollectorMacroPanels(world, centerX, centerY);
 
   /* ══════════════════════════════════════════════════════════════

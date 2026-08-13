@@ -173,7 +173,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
 
   /* ── B4: Rare procedural TV/monitor walls in suitable rooms ─── */
-  placeProceduralScreens(world, 100);
+  placeProceduralScreens(world, 0);
 
   /* ── C: Items in all rooms ─────────────────────────── */
   nextId = spawnRoomItems(world, entities, nextId);
@@ -203,6 +203,6 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
 export function regrowMaze(world: World): void {
   wipeVolatile(world);
   generateVolatileMaze(world);
-  placeProceduralScreens(world, 100);
+  placeProceduralScreens(world, 0);
   buildLivingHubGeometry(world);
 }
