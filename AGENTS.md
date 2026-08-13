@@ -87,6 +87,7 @@ Read additional docs only when relevant to the task:
 | Optional Cloudflare Net Sphere deployment, Worker/D1, network payloads | `cloudflare.md` |
 | Player-facing text, lore voice, scenario/domain packets | `scenarist.md`; use `../gatbage/reference/scenario_writers/README.md` only for broad text-pass work |
 | Visual/audio/UI/atmosphere taste decisions | `taste.md` |
+| Высота потолков, шахты, пропасти, небо, высота стен | `vertical.md` |
 | Authored route-floor briefs and expansion packets | `../gatbage/reference/design_floors/`, `../gatbage/reference/expansions/` only for floor/route planning tasks |
 | Cautious UX rework plans; not shipped facts until implemented | `../gatbage/reference/ux_rework/` only for UX rework tasks |
 | Localization pipeline, generated reports, locale seeding/applying | `../gatbage/reference/localization/` only for localization tasks |
