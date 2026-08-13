@@ -57,12 +57,30 @@ export function remainingFloorObjectSpawnSlots(entities: readonly Entity[]): num
 
 export function remainingEntitySpawnSlots(entities: readonly Entity[], type: EntityType): number {
   const limit = entitySoftLimit(type);
+  const cappedActor = isSoftCappedActorType(type);
+  const floorObject = isFloorObjectType(type);
+  if (limit === undefined && !cappedActor && !floorObject) return Number.POSITIVE_INFINITY;
+  // Spawn bursts (death loot, waves) call this per item — the type count and
+  // the shared-pool count fold into one entities pass instead of two.
+  let typeCount = 0;
+  let sharedCount = 0;
+  for (const entity of entities) {
+    if (!entity.alive) continue;
+    if (cappedActor) {
+      if (isNativePlayerBodyEntity(entity) || isPlayerEntity(entity)) continue;
+      if (entity.type === type) typeCount++;
+      if (isSoftCappedActorType(entity.type)) sharedCount++;
+    } else {
+      if (entity.type === type) typeCount++;
+      if (floorObject && isFloorObjectType(entity.type)) sharedCount++;
+    }
+  }
   const typeRemaining = limit === undefined
     ? Number.POSITIVE_INFINITY
-    : Math.max(0, limit - countLiveEntitiesOfType(entities, type));
-  if (isFloorObjectType(type)) return Math.min(typeRemaining, remainingFloorObjectSpawnSlots(entities));
-  if (!isSoftCappedActorType(type)) return typeRemaining;
-  return Math.min(typeRemaining, remainingActiveActorSpawnSlots(entities));
+    : Math.max(0, limit - typeCount);
+  if (floorObject) return Math.min(typeRemaining, Math.max(0, FLOOR_OBJECT_SOFT_LIMIT - sharedCount));
+  if (!cappedActor) return typeRemaining;
+  return Math.min(typeRemaining, Math.max(0, activeActorSoftLimit() - sharedCount));
 }
 
 export function entitySpawnSlots(entities: readonly Entity[], type: EntityType, requested: number): number {

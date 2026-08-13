@@ -2,7 +2,7 @@ import { EntityType, type Entity } from '../core/types';
 import { chooseMonsterRareDrop } from '../data/monster_ecology';
 import { generateMonsterLoot, type GeneratedLoot } from './procedural_loot';
 import { Spr } from '../render/sprite_index';
-import { canSpawnEntityType } from './entity_limits';
+import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { rng } from '../core/rand';
 
 export interface MonsterRareLootDrop {
@@ -51,8 +51,12 @@ export function dropMonsterLoot(
   if (lootItems.length === 0) return [];
 
   const spawned = [];
+  // Slots are taken once and decremented locally — the per-item recheck was a
+  // full entities scan per loot item on every death.
+  let slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, lootItems.length);
   for (const loot of lootItems) {
-    if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) break;
+    if (slots <= 0) break;
+    slots--;
 
     const entityId = nextId.v++;
     entities.push({

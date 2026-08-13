@@ -82,9 +82,13 @@ function drawInstanceFromScene(instance: SceneMeshInstance): DrawMeshInstance {
   };
 }
 
+// Module scratch: the post-cap scene list was reallocated every frame even
+// though collectMeshSceneWithStats already accepts a reusable out array.
+const _sceneCollectScratch: SceneMeshInstance[] = [];
+
 function collectMeshInstances(context: MeshPassContext, out: DrawMeshInstance[], stats: MeshPassStats): void {
   out.length = 0;
-  const scene = collectMeshSceneWithStats(context);
+  const scene = collectMeshSceneWithStats(context, _sceneCollectScratch);
   for (const instance of scene.instances) out.push(drawInstanceFromScene(instance));
   const chunkArea = Math.max(1, Math.floor(context.profile?.chunkSize || 8) ** 2);
   const chunks = Math.ceil(scene.stats.cellsScanned / chunkArea);

@@ -381,6 +381,10 @@ export class EntityIndex {
     this.staticIndexedIds.clear();
     let liveCount = 0;
     let itemCount = 0;
+    // Runs every simulation frame: bucket stats are folded into the compaction
+    // loop instead of a second full pass over all buckets.
+    let usedBucketCount = 0;
+    let maxBucketSize = 0;
     for (const bucket of this.staticBuckets) {
       let write = 0;
       for (const e of bucket) {
@@ -394,8 +398,13 @@ export class EntityIndex {
         if (e.type === EntityType.ITEM_DROP) itemCount++;
       }
       bucket.length = write;
+      if (write > 0) {
+        usedBucketCount++;
+        if (write > maxBucketSize) maxBucketSize = write;
+      }
     }
-    this.recomputeStaticBucketStats();
+    this.staticUsedBucketCount = usedBucketCount;
+    this.staticMaxBucketSize = maxBucketSize;
     return { liveCount, itemCount };
   }
 

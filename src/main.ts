@@ -325,7 +325,7 @@ import {
   resetNoiseRecords,
 } from './systems/noise';
 import { notifyActorDamaged, resetCombatStimulus } from './systems/combat_stimulus';
-import { canSpawnEntityType, entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
+import { entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
 import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
 import { resetNpcMemoryStore } from './systems/npc_memory';
 import { resetBarkState } from './systems/ai/barks';
@@ -4844,9 +4844,13 @@ function tickPeerLocalToolResources(dt: number): 'edge' | 'hold' | undefined {
 /* ── Drop inventory as ITEM_DROP entities at death position ──── */
 function dropEntityInventory(e: Entity): void {
   if (!e.inventory || e.inventory.length === 0) return;
+  // Slots are taken once and decremented locally — the per-item recheck was a
+  // full entities scan per inventory slot on every death.
+  let slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, e.inventory.length);
   for (const item of e.inventory) {
     if (!item || item.count <= 0) continue;
-    if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) break;
+    if (slots <= 0) break;
+    slots--;
     entities.push({
       id: nextEntityId.v++, type: EntityType.ITEM_DROP,
       x: e.x + (rng() - 0.5) * 0.5,
