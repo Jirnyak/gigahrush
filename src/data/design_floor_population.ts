@@ -2063,12 +2063,21 @@ function designMonsterMult(route: DesignFloorRouteDef): number {
               : 1;
 }
 
+// Route bands that carry no ordinary population at all: the endgame descent
+// and the outermost shell at either end. A floor here can still ship authored
+// NPC packages, and can opt back in with an explicit `npcTarget` override
+// (radon_exchange does exactly that).
 function baseNpcTarget(route: DesignFloorRouteDef): number {
   if (route.z <= -48 || Math.abs(route.z) >= 44) return 0;
   const total = basePopulationTotalAtDefaultSoftLimit(route.z);
   return clampInt(total * (1 - monsterShareForRouteZ(route.z, route.danger)) * designNpcMult(route), 0, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT);
 }
 
+// Note for a future reader: on the NPC-free bands above, a low authored
+// `danger` no longer moves people in — there are none — so it thins the floor
+// out instead. That is deliberate: a danger-2 rooftop reads as a quiet empty
+// deck, not as a monster pit. Do not "fix" it by forcing the whole budget into
+// monsters; that would make peaceful floors the most hostile on the route.
 function baseMonsterTarget(route: DesignFloorRouteDef): number {
   const total = basePopulationTotalAtDefaultSoftLimit(route.z);
   const dangerMult = 0.92 + Math.max(1, Math.min(5, route.danger)) * 0.045;

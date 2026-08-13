@@ -343,7 +343,12 @@ export function craftStationProfileForStoryFloor(biome: string): CraftStationPla
 }
 
 export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): CraftStationPlacementProfile | undefined {
-  const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id];
+  // The three base biomes (ministry / kvartiry / maintenance) are route stops
+  // too, and they are generated through the design path — but their craft
+  // content is authored in the story table, keyed by the same id. Without this
+  // fallback every lathe, workbench and recipe board on the Collectors,
+  // Kvartiry and Ministry was authored and never placed.
+  const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id] ?? STORY_FLOOR_CRAFT_STATION_PROFILES[route.id];
   if (!profile) return undefined;
   return mergeProfiles(profile, {
     tags: [route.id, `z_${route.z}`, route.themeTags?.[0]?.toLowerCase() ?? 'route'],

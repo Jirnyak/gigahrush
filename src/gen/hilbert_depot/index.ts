@@ -16,7 +16,7 @@ import {
 } from '../shared';
 import { xorshift32 } from '../../core/rand';
 import { DESIGN_FLOOR_ID, HILBERT_DEPOT_ROUTE_Z, CURVE_ORDER, CURVE_STEP, CURVE_X, CURVE_Y, BAY_FIRST_INDEX, BAY_INDEX_STEP, HilbertDepotState, HilbertDepotGeneration } from "./meta";
-import { expandHilbertDepotRouteGeometry, carveSafeCurve, decorateSafeCurve, addCargoBay, addDepotChords, registerHilbertDepotRouteCues, addItemDrop, addNamedRoom, connectRoomToPoint, placeLift, hilbertTracePoints } from "./geometry";
+import { expandHilbertDepotRouteGeometry, ensureDepotHqDoorsAfterSanitize, carveSafeCurve, decorateSafeCurve, addCargoBay, addDepotChords, registerHilbertDepotRouteCues, addItemDrop, addNamedRoom, connectRoomToPoint, placeLift, hilbertTracePoints } from "./geometry";
 import { applyHilbertDepotTerritorySeeds, alignHilbertDepotAmbientNpcTerritory, addDepotPressure, refreshContainerZones } from "./npcs";
 
 export function generateHilbertDepotDesignFloor(seed: number): HilbertDepotGeneration {
@@ -75,6 +75,7 @@ export function generateHilbertDepotDesignFloor(seed: number): HilbertDepotGener
   refreshContainerZones(world);
   ensureConnectivity(world, state.debugEntry.spawnX, state.debugEntry.spawnY);
   sanitizeDoors(world);
+  ensureDepotHqDoorsAfterSanitize(world);
   world.rebuildContainerMap();
   registerHilbertDepotRouteCues(world, state, points, entry, exit);
   world.bakeLights();

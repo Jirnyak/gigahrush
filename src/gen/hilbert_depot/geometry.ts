@@ -107,6 +107,28 @@ export function buildDepotBlockRooms(world: World, node: Point, owner: Territory
   }
 }
 
+/**
+ * Re-seat the faction HQ hermetic doors after `sanitizeDoors`. The compounds
+ * are built during the route expansion, i.e. BEFORE sanitize, which then drops
+ * every doorway whose jambs the expansion carving had opened up — four of five
+ * depot HQs ended up as sealed boxes with no registered door and could not
+ * close during samosbor. Same defect and same remedy as the pioneer camp.
+ */
+export function ensureDepotHqDoorsAfterSanitize(world: World): void {
+  for (const spec of DEPOT_HQ_SPECS) {
+    const room = world.rooms.find(candidate => candidate?.name === spec.name);
+    if (!room) continue;
+    const hasHermetic = room.doors.some(idx => {
+      const door = world.doors.get(idx);
+      return door?.state === DoorState.HERMETIC_OPEN || door?.state === DoorState.HERMETIC_CLOSED;
+    });
+    if (hasHermetic) continue;
+    ensureDepotHqDoor(world, room, spec.owner);
+  }
+  world.markCellsDirty();
+  world.markWallTexDirty();
+}
+
 export function buildDepotHqCompounds(world: World): void {
   for (const spec of DEPOT_HQ_SPECS) {
     const floorTex = depotOwnerFloor(spec.owner, spec.x + spec.y);
