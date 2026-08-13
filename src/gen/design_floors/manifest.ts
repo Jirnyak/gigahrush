@@ -8,7 +8,7 @@ import {
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { floorRunZAllowsNpcs, routeExpectedLiftDirections } from '../../data/procedural_floors';
-import { ensureReachableRouteLifts } from '../shared';
+import { ensureReachableRouteLifts, generateZones } from '../shared';
 import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
@@ -160,6 +160,11 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     if (id === 'markov_stairwell') reinforceMarkovStairwellAuthoredHqTerritory(gen.world);
     if (id === 'service_floor') reinforceServiceFloorAuthoredHqTerritory(gen.world);
 
+    // Zone fallback: canonical generators build zones themselves before territory init
+    // (hell, kvartiry); if a generator skipped it, world.zones stays empty and zone-level
+    // consumers (population placement, HUD map, runtime) see 0 of 64 zones. Never
+    // overwrite zones a floor authored itself.
+    if (gen.world.zones.length === 0) generateZones(gen.world);
     initializeCellTerritory(gen.world, {
       seed,
       targetShares: territorySharesForDesignFloor(id),
