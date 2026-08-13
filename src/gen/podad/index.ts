@@ -44,6 +44,9 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
     rooms.entry.name = `${rooms.entry.name} ${CAPILLARY_FIELD_TAG}${capillaryCells}]`;
     
     expandPodadRouteGeometry(world, rng);
+    // Expansion carves volume after the earlier connectivity passes — stitch any
+    // orphaned expansion components back to spawn before HQ shells are re-hardened.
+    ensureConnectivity(world, SPAWN_X + 0.5, SPAWN_Y + 0.5);
     reinforcePodadAuthoredHqTerritory(world);
 
     world.bakeLights();

@@ -7,7 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
-import { generateZones, sanitizeDoors } from '../shared';
+import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
 import { DESIGN_NPC_HOME_FLOOR_KEY, SPETSPRIEMNIK_ROUTE_ID, SPETSPRIEMNIK_Z, SPETSPRIEMNIK_BASE_FLOOR, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, BASE_TAGS, NPC_DEFS } from "./meta";
@@ -161,6 +161,9 @@ export function generateSpetspriemnikDesignFloor(seed: number): FloorGeneration 
   generateZones(world);
 
   expandSpetspriemnikRouteGeometry(world, rand);
+  // Расширение режет объём независимыми блоками — сшиваем компоненты со спавном
+  // до решёточных ворот и санации дверей (контракт: reachable ≈ passable).
+  ensureConnectivity(world, CX + 0.5, 270.5);
   tuneSpetspriemnikRouteZones(world);
   reinforceSpetspriemnikRouteGates(world);
 

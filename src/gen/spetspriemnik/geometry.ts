@@ -467,11 +467,47 @@ export function buildSpetspriemnikMidSpines(world: World, mask: Uint8Array): voi
   }
 }
 
+/* Перимeтровый обход караула: кольцевой коридор по внешнему краю, спицы к
+   срединным хребтам и караульные будки. Даёт маршрутный масштаб (passable)
+   и микрокомнаты, не трогая авторский центр (всё через mask-safe карвинг). */
+export function buildPerimeterGuardWalk(world: World, mask: Uint8Array): void {
+  const ring: readonly [number, number, number, number][] = [
+    [48, 48, 976, 48],
+    [48, 976, 976, 976],
+    [48, 48, 48, 976],
+    [976, 48, 976, 976],
+  ];
+  for (const [ax, ay, bx, by] of ring) carveSafeLine(world, mask, ax, ay, bx, by, 11, Tex.F_CONCRETE, Tex.METAL);
+  const spokes: readonly [number, number, number, number][] = [
+    [48, 148, 118, 148],
+    [906, 148, 976, 148],
+    [48, 512, 108, 512],
+    [916, 512, 976, 512],
+    [48, 876, 120, 876],
+    [904, 876, 976, 876],
+    [370, 48, 370, 108],
+    [370, 920, 370, 976],
+    [654, 48, 654, 108],
+    [654, 920, 654, 976],
+  ];
+  for (const [ax, ay, bx, by] of spokes) carveSafeLine(world, mask, ax, ay, bx, by, 5, Tex.F_CONCRETE, Tex.METAL);
+  let serial = 0;
+  for (let x = 120; x <= 904; x += 112) {
+    tryStampOwnedRoom(world, mask, RoomType.OFFICE, x, 62, 14, 10, `Караульная будка обхода ${++serial}`, Tex.METAL, Tex.F_CONCRETE, 'north', ZoneFaction.LIQUIDATOR);
+    tryStampOwnedRoom(world, mask, RoomType.STORAGE, x, 952, 14, 10, `Караульная будка обхода ${++serial}`, Tex.METAL, Tex.F_CONCRETE, 'south', ZoneFaction.LIQUIDATOR);
+  }
+  for (let x = 96; x <= 928; x += 64) {
+    setFeature(world, x, 48, x % 128 === 96 ? Feature.SCREEN : Feature.LAMP);
+    setFeature(world, x, 976, Feature.LAMP);
+  }
+}
+
 export function expandSpetspriemnikRouteGeometry(world: World, rng: () => number): void {
   const mask = buildProtectedMask(world);
   buildSpetspriemnikMidSpines(world, mask);
   for (const spec of HQ_SPECS) buildHqCompound(world, mask, spec);
   for (const spec of SUPPORT_CLUSTERS) buildSupportCluster(world, mask, spec, rng);
+  buildPerimeterGuardWalk(world, mask);
   world.markCellsDirty();
   world.markWallTexDirty();
   world.markFloorTexDirty();

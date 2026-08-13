@@ -13,7 +13,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { registerRouteCue } from '../../systems/route_cues';
-import { placeLifts } from '../shared';
+import { ensureConnectivity, placeLifts } from '../shared';
 import { finalizeExpandedFloor} from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { hashSeed, seededRandom } from '../../core/rand';
@@ -165,6 +165,9 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
     floorTex: Tex.F_CONCRETE,
     wallTex: Tex.METAL,
   }, entities);
+  // Расширение (внешняя обвязка, боксы, компаунды) режется после базового ядра —
+  // сшиваем оторванные компоненты со спавном до санации дверей в finalize.
+  ensureConnectivity(world, serviceState.debugEntry.spawnX, serviceState.debugEntry.spawnY);
 
   const generation = {
     world,

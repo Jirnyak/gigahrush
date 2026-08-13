@@ -11,6 +11,7 @@ import {
 } from '../admin_common';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
+import { ensureConnectivity } from '../shared';
 import {
   fillDefaultTextures,
   expandUpperBureauGeometry,
@@ -61,6 +62,9 @@ export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
   const spawnY = rooms.salon.y + 10.5;
 
   expandUpperBureauGeometry(world, rand);
+  // Expansion tiers/districts carve after finalizeUpperBureauFloor's connectivity
+  // pass — stitch orphaned expansion components back to the spawn component.
+  ensureConnectivity(world, spawnX, spawnY);
   retuneUpperBureauZones(world);
   reinforceUpperBureauAuthoredHqTerritory(world);
 

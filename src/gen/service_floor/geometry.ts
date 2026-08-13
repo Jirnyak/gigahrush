@@ -104,7 +104,55 @@ export function expandServiceFloorMachineMaze(
   buildLiquidatorServiceOutposts(world);
   buildServiceBayRows(world, rng);
   buildServiceBypassWallStations(world);
+  buildOuterServiceDuctNetwork(world, staffTex, staffWall);
   registerExpandedServiceUtilityGraph(world, cores, booths, pumps, basins);
+}
+
+/* Внешняя обвязка С-15: кабельные дукты по самому краю тора (полный footprint
+   0..1023 по обеим осям), внутреннее кольцо и спицы к штатному компаунду.
+   Всё через carveServiceRun/openExpansionTile — лифты, двери и комнаты целы. */
+export function buildOuterServiceDuctNetwork(world: World, floorTex: Tex, wallTex: Tex): void {
+  // Краевые дукты: пересекают шов мира, дают playable-клетки на x=0/1023 и y=0/1023.
+  carveServiceRun(world, 0, 12, 1023, 12, 7, floorTex, wallTex);
+  carveServiceRun(world, 0, 1012, 1023, 1012, 7, floorTex, wallTex);
+  carveServiceRun(world, 12, 0, 12, 1023, 7, floorTex, wallTex);
+  carveServiceRun(world, 1012, 0, 1012, 1023, 7, floorTex, wallTex);
+  // Внутреннее кольцо и его стойки — связывают край с верхним/нижним штатными ходами.
+  carveServiceRun(world, 12, 110, 1012, 110, 7, floorTex, wallTex);
+  carveServiceRun(world, 12, 930, 1012, 930, 7, floorTex, wallTex);
+  carveServiceRun(world, 110, 12, 110, 1012, 7, floorTex, wallTex);
+  carveServiceRun(world, 940, 12, 940, 1012, 7, floorTex, wallTex);
+  const spokes: readonly [number, number, number, number][] = [
+    [244, 110, 244, 188],
+    [520, 110, 520, 188],
+    [780, 110, 780, 188],
+    [244, 836, 244, 930],
+    [520, 836, 520, 930],
+    [780, 836, 780, 930],
+    [110, 514, 244, 514],
+    [780, 514, 940, 514],
+  ];
+  for (const [ax, ay, bx, by] of spokes) carveServiceRun(world, ax, ay, bx, by, 5, floorTex, wallTex);
+  // Обходные будки на кольцах: микрокомнаты с дверями к дуктам.
+  let serial = 0;
+  for (let x = 150; x <= 870; x += 120) {
+    serial++;
+    const top = stampOwnedServiceRoom(world, serial % 2 === 0 ? RoomType.OFFICE : RoomType.STORAGE, x, 24, 14, 10, `Обходная будка внешнего кольца ${serial}`, ZoneFaction.LIQUIDATOR);
+    if (top) connectOwnedServiceRoom(world, top, ZoneFaction.LIQUIDATOR, { side: 'north', targetX: x + 7, targetY: 15 });
+    serial++;
+    const bottom = stampOwnedServiceRoom(world, serial % 2 === 0 ? RoomType.STORAGE : RoomType.COMMON, x, 986, 14, 10, `Обходная будка внешнего кольца ${serial}`, ZoneFaction.LIQUIDATOR);
+    if (bottom) connectOwnedServiceRoom(world, bottom, ZoneFaction.LIQUIDATOR, { side: 'south', targetX: x + 7, targetY: 1009 });
+    serial++;
+    const inner = stampOwnedServiceRoom(world, serial % 2 === 0 ? RoomType.PRODUCTION : RoomType.STORAGE, x, 124, 14, 10, `Обходная будка внутреннего кольца ${serial}`, ZoneFaction.LIQUIDATOR);
+    if (inner) connectOwnedServiceRoom(world, inner, ZoneFaction.LIQUIDATOR, { side: 'north', targetX: x + 7, targetY: 113 });
+    serial++;
+    const lower = stampOwnedServiceRoom(world, serial % 2 === 0 ? RoomType.STORAGE : RoomType.OFFICE, x, 942, 14, 10, `Обходная будка внутреннего кольца ${serial}`, ZoneFaction.LIQUIDATOR);
+    if (lower) connectOwnedServiceRoom(world, lower, ZoneFaction.LIQUIDATOR, { side: 'north', targetX: x + 7, targetY: 933 });
+  }
+  for (let x = 64; x <= 960; x += 64) {
+    setFeature(world, x, 12, x % 128 === 64 ? Feature.SCREEN : Feature.LAMP);
+    setFeature(world, x, 1012, Feature.APPARATUS);
+  }
 }
 
 export function placeServiceFloorEmergencyPanels(world: World): number {

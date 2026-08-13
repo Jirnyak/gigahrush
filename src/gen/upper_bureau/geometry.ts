@@ -1398,6 +1398,20 @@ export function addMiniHqCluster(world: World, spec: UpperBureauHqSpec): void {
   addDoor(world, bathroom, bathroom.x + (bathroom.w >> 1), bathroom.y - 1, DoorState.CLOSED, '', Tex.DOOR_WOOD);
 }
 
+/* Route-scale perimeter bypass: an outer inspection gallery ring around the
+   districts. The full-span cross boulevards (x=308/676, y=308/704) intersect
+   it, so the ring joins the main component without extra spokes. */
+export function addPerimeterBypassGallery(world: World): void {
+  carveRibbonLine(world, 52, 52, 952, 52, 9, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
+  carveRibbonLine(world, 52, 952, 952, 952, 9, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
+  carveRibbonLine(world, 52, 52, 52, 952, 9, Tex.F_MARBLE_TILE, Tex.F_RED_CARPET);
+  carveRibbonLine(world, 952, 52, 952, 952, 9, Tex.F_MARBLE_TILE, Tex.F_RED_CARPET);
+  placeFeatureRow(world, 72, 48, 932, 48, 24, Feature.LAMP);
+  placeFeatureRow(world, 72, 956, 932, 956, 24, Feature.LAMP);
+  placeFeatureRow(world, 48, 72, 48, 932, 24, Feature.LAMP);
+  placeFeatureRow(world, 956, 72, 956, 932, 24, Feature.LAMP);
+}
+
 export function addUpperBureauDistricts(world: World): void {
   carveRibbonLine(world, 40, 308, 964, 308, 5, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
   carveRibbonLine(world, 40, 704, 964, 704, 5, Tex.F_MARBLE_TILE, Tex.F_GREEN_CARPET);
@@ -1415,6 +1429,7 @@ export function expandUpperBureauGeometry(world: World, rng: () => number): void
   addStaffBalconyTier(world);
   addServiceTier(world, rng);
   addUpperBureauDistricts(world);
+  addPerimeterBypassGallery(world);
   sealUpperBureauRouteCutRooms(world);
 }
 
