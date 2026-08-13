@@ -122,6 +122,13 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
 
 export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);
 
+// Canonical theme→z derivation: numeric floor scopes elsewhere (samosbor
+// variants/director, screen signals) build on this instead of hand-kept lists,
+// so a new authored floor joins its theme's scopes automatically.
+export function designFloorZsByTheme(theme: string): readonly number[] {
+  return DESIGN_FLOOR_ROUTES.filter(def => def.themeTags?.includes(theme)).map(def => def.z);
+}
+
 export function designFloorById(id: string): DesignFloorRouteDef | undefined {
   return DESIGN_FLOOR_ROUTES.find(def => def.id === id);
 }

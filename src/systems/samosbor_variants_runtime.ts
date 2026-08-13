@@ -11,16 +11,18 @@ let activeVariant: ActiveSamosborVariant | null = null;
 let forcedNextVariant: SamosborVariantId | null = null;
 let lastVariant: SamosborVariantId | null = null;
 
-export function chooseSamosborVariant(floorTags: readonly string[], _zNum: number): ActiveSamosborVariant {
+export function chooseSamosborVariant(floorTags: readonly string[], z: number): ActiveSamosborVariant {
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;
     // #61: mirror floorWeight's scope gate — validate the forced variant against
-    // its theme-token scope (floors ?? tags), not the KIND-label tags. Otherwise
-    // debug-forcing maronary/istotit/veretar/classic always failed the tags gate
-    // and silently fell through to the weighted roll.
-    const forcedScope = forced ? (forced.floors ?? forced.tags) : undefined;
-    if (forced && forcedScope && forcedScope.some(t => floorTags.includes(t))) {
+    // its floor scope (numeric-z floors, or theme-token tags for wet/electric/
+    // meat), not the KIND-label tags. Otherwise debug-forcing maronary/istotit/
+    // veretar/classic always failed the tags gate and silently fell through.
+    const inForcedScope = forced
+      ? (forced.floors ? forced.floors.includes(z) : forced.tags.some(t => floorTags.includes(t)))
+      : false;
+    if (forced && inForcedScope) {
       activeVariant = buildActiveSamosborVariant(forced);
       lastVariant = activeVariant.def.id;
       return activeVariant;
@@ -30,10 +32,10 @@ export function chooseSamosborVariant(floorTags: readonly string[], _zNum: numbe
 
 
   let total = 0;
-  for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id, floorTags);
+  for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id, z, floorTags);
   let roll = rng() * Math.max(1, total);
   for (const def of SAMOSBOR_VARIANTS) {
-    roll -= getSamosborVariantWeight(def.id, floorTags);
+    roll -= getSamosborVariantWeight(def.id, z, floorTags);
     if (roll <= 0) {
       activeVariant = buildActiveSamosborVariant(def);
       lastVariant = activeVariant.def.id;

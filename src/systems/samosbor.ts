@@ -2961,7 +2961,7 @@ function applyPendingSamosborAftermath(
     }
   }
   knownSamosborTime = state.time;
-  const defs = getSamosborAftermathBeats(pending.variant.def.id, currentFloorRunEntry(state).themeTags);
+  const defs = getSamosborAftermathBeats(pending.variant.def.id, state.currentZ);
   const target = 1;
   const used = new Set<string>();
   const applied: string[] = [];
@@ -3631,7 +3631,7 @@ export function getSamosborDebugLines(): string[] {
   const warning = getSamosborWarningSnapshot();
   let cooldown = 0;
   let hasCooldown = false;
-  for (const def of getSamosborAftermathBeats(last ?? 'classic', ["living"])) {
+  for (const def of getSamosborAftermathBeats(last ?? 'classic', 0)) {
     const rt = aftermathRuntime.get(def.id);
     if (!rt || rt.runs >= def.maxRuns) continue;
     const remaining = Math.max(0, Math.ceil(rt.lastAt + def.cooldownSec - knownSamosborTime));

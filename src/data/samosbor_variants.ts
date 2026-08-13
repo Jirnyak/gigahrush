@@ -1,4 +1,5 @@
 import { MonsterKind } from '../core/types';
+import { designFloorZsByTheme } from './design_floors';
 
 export type SamosborVariantId = 'classic' | 'wet' | 'electric' | 'meat' | 'maronary' | 'istotit' | 'veretar';
 export type SamosborAudioCueId = 'siren' | 'bell' | 'beep' | 'distant_alarm';
@@ -74,10 +75,12 @@ export interface SamosborVariantDef {
   // #61: either KIND label(s) (classic/maronary/istotit/veretar) or theme tokens
   // (wet/electric/meat). Variant floor scope = `floors ?? tags` — see floorWeight.
   tags: readonly string[];
-  // #61: explicit theme-token floor scope (ministry|kvartiry|living|maintenance|
-  // hell|void) for variants whose `tags` are KIND labels; optional because
-  // wet/electric/meat legitimately gate on their theme-token `tags` instead.
-  floors?: readonly string[];
+  // Explicit numeric-z floor scope (project canon) for variants whose `tags`
+  // are KIND labels; optional because wet/electric/meat legitimately gate on
+  // their theme-token `tags` (matched against themeTags) instead. Theme groups
+  // are derived from DESIGN_FLOOR_ROUTES below, so new authored floors join
+  // their theme's scope automatically.
+  floors?: readonly number[];
   weight: number;
   subsystems: readonly SamosborSubsystemId[];
   visual: SamosborVisualProfile;
@@ -133,11 +136,11 @@ export interface SamosborAftermathBeatDef {
   id: string;
   title: string;
   variants: readonly SamosborVariantId[];
-  // #67: theme-token floor scope (ministry|kvartiry|living|maintenance|hell|void),
-  // matched against currentFloorRunEntry.themeTags in getSamosborAftermathBeats.
-  // Required (all 44 beats declare it) so a future beat MUST declare its scope —
-  // omitting it would silently make the beat dead on every floor.
-  floors: readonly string[];
+  // #67: numeric-z floor scope (project canon), matched against the current z
+  // in getSamosborAftermathBeats. Required (all 44 beats declare it) so a
+  // future beat MUST declare its scope — omitting it would silently make the
+  // beat dead on every floor.
+  floors: readonly number[];
   weight: number;
   cooldownSec: number;
   maxRuns: number;
@@ -154,10 +157,18 @@ export interface SamosborAftermathBeatDef {
   fogStrength?: number;
 }
 
-const ALL_FLOORS = ['ministry', 'kvartiry', 'living', 'maintenance', 'hell', 'void'];
-const CIVIL_FLOORS = ['ministry', 'kvartiry', 'living'];
-const CIVIL_AND_SERVICE_FLOORS = ['ministry', 'kvartiry', 'living', 'maintenance'];
-const VOID_AND_CIVIL_SERVICE_FLOORS = ['ministry', 'kvartiry', 'living', 'maintenance', 'void'];
+// Numeric-z theme groups derived from the authored route: a new design floor
+// joins its theme's samosbor scope automatically, no list to keep in sync.
+const MINISTRY_FLOORS = designFloorZsByTheme('ministry');
+const KVARTIRY_FLOORS = designFloorZsByTheme('kvartiry');
+const LIVING_FLOORS = designFloorZsByTheme('living');
+const MAINTENANCE_FLOORS = designFloorZsByTheme('maintenance');
+const HELL_FLOORS = designFloorZsByTheme('hell');
+const VOID_FLOORS = designFloorZsByTheme('void');
+const CIVIL_FLOORS = [...MINISTRY_FLOORS, ...KVARTIRY_FLOORS, ...LIVING_FLOORS];
+const CIVIL_AND_SERVICE_FLOORS = [...CIVIL_FLOORS, ...MAINTENANCE_FLOORS];
+const ALL_FLOORS = [...CIVIL_AND_SERVICE_FLOORS, ...HELL_FLOORS, ...VOID_FLOORS];
+const VOID_AND_CIVIL_SERVICE_FLOORS = [...CIVIL_AND_SERVICE_FLOORS, ...VOID_FLOORS];
 
 export const SAMOSBOR_BASE_SUBSYSTEMS: readonly SamosborSubsystemId[] = [
   'warning',
@@ -518,7 +529,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_electric_eye',
     title: 'Глаз после озона',
     variants: ['electric'],
-    floors: ['ministry', 'kvartiry', 'living', 'maintenance'],
+    floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 14,
     cooldownSec: 300,
     maxRuns: 8,
@@ -547,7 +558,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_supply_shortage',
     title: 'Срыв снабжения',
     variants: ['wet', 'electric', 'meat'],
-    floors: ['ministry', 'kvartiry', 'living', 'maintenance'],
+    floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 8,
     cooldownSec: 600,
     maxRuns: 5,
@@ -562,7 +573,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_faction_panic',
     title: 'Фракционная паника',
     variants: ['electric', 'meat'],
-    floors: ['ministry', 'kvartiry', 'living', 'maintenance'],
+    floors: CIVIL_AND_SERVICE_FLOORS,
     weight: 9,
     cooldownSec: 360,
     maxRuns: 7,
@@ -621,7 +632,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_ministry_forms_eaten',
     title: 'Съеденные бланки',
     variants: ['electric', 'meat'],
-    floors: ['ministry', 'kvartiry'],
+    floors: [...MINISTRY_FLOORS, ...KVARTIRY_FLOORS],
     weight: 14,
     cooldownSec: 780,
     maxRuns: 3,
@@ -636,7 +647,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_open_fridge_line',
     title: 'Открытый общий холодильник',
     variants: ['wet', 'meat'],
-    floors: ['kvartiry', 'living'],
+    floors: [...KVARTIRY_FLOORS, ...LIVING_FLOORS],
     weight: 15,
     cooldownSec: 660,
     maxRuns: 4,
@@ -696,7 +707,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_pressure_station_drop',
     title: 'Провал давления',
     variants: ['wet', 'electric'],
-    floors: ['maintenance'],
+    floors: MAINTENANCE_FLOORS,
     weight: 20,
     cooldownSec: 720,
     maxRuns: 4,
@@ -711,7 +722,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_burnt_tool_locker',
     title: 'Сгоревший инструментальный шкаф',
     variants: ['electric', 'wet'],
-    floors: ['maintenance'],
+    floors: MAINTENANCE_FLOORS,
     weight: 16,
     cooldownSec: 780,
     maxRuns: 3,
@@ -726,7 +737,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_service_airlock_fault',
     title: 'Сервисный шлюз не держит',
     variants: ['wet', 'electric', 'classic'],
-    floors: ['maintenance'],
+    floors: MAINTENANCE_FLOORS,
     weight: 16,
     cooldownSec: 540,
     maxRuns: 4,
@@ -740,7 +751,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_zinc_slime_bucket',
     title: 'Ведро зачистки забыто',
     variants: ['wet', 'classic'],
-    floors: ['maintenance'],
+    floors: MAINTENANCE_FLOORS,
     weight: 9,
     cooldownSec: 840,
     maxRuns: 3,
@@ -755,7 +766,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_slime_sense_node',
     title: 'Узел слышит после отбоя',
     variants: ['wet', 'classic'],
-    floors: ['maintenance'],
+    floors: MAINTENANCE_FLOORS,
     weight: 5,
     cooldownSec: 1260,
     maxRuns: 2,
@@ -770,7 +781,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_late_tube_eel',
     title: 'Поздний угорь',
     variants: ['wet'],
-    floors: ['maintenance', 'hell'],
+    floors: [...MAINTENANCE_FLOORS, ...HELL_FLOORS],
     weight: 13,
     cooldownSec: 900,
     maxRuns: 3,
@@ -785,7 +796,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_cult_cache_unsealed',
     title: 'Культовый схрон раскрылся',
     variants: ['meat'],
-    floors: ['hell'],
+    floors: HELL_FLOORS,
     weight: 15,
     cooldownSec: 900,
     maxRuns: 3,
@@ -800,7 +811,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_herald_afterimage',
     title: 'Послеслед вестника',
     variants: ['meat', 'classic'],
-    floors: ['hell'],
+    floors: HELL_FLOORS,
     weight: 14,
     cooldownSec: 1080,
     maxRuns: 2,
@@ -815,7 +826,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_hell_meat_supply_rot',
     title: 'Гнилая мясная выдача',
     variants: ['meat', 'wet'],
-    floors: ['hell'],
+    floors: HELL_FLOORS,
     weight: 16,
     cooldownSec: 840,
     maxRuns: 3,
@@ -830,7 +841,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_fibrous_capsule_cut',
     title: 'Фиброзная капсула',
     variants: ['meat'],
-    floors: ['hell'],
+    floors: HELL_FLOORS,
     weight: 6,
     cooldownSec: 1260,
     maxRuns: 2,
@@ -845,7 +856,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_void_psi_cache',
     title: 'ПСИ-схрон без владельца',
     variants: ['classic', 'maronary', 'veretar'],
-    floors: ['void'],
+    floors: VOID_FLOORS,
     weight: 16,
     cooldownSec: 960,
     maxRuns: 3,
@@ -860,7 +871,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_void_spirit_echo',
     title: 'Эхо без жильца',
     variants: ['classic', 'maronary', 'veretar'],
-    floors: ['void'],
+    floors: VOID_FLOORS,
     weight: 15,
     cooldownSec: 1080,
     maxRuns: 2,
@@ -875,7 +886,7 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     id: 'aftermath_void_false_map',
     title: 'Ложная белая карта',
     variants: ['classic', 'maronary', 'veretar'],
-    floors: ['void'],
+    floors: VOID_FLOORS,
     weight: 14,
     cooldownSec: 900,
     maxRuns: 3,
@@ -1092,15 +1103,15 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
   },
 ];
 
-function floorWeight(def: SamosborVariantDef, floorTags: readonly string[]): number {
-  // #61: gate selection by the theme-token scope (def.floors), NOT def.tags. For
+function floorWeight(def: SamosborVariantDef, z: number, floorTags: readonly string[]): number {
+  // #61: gate selection by the floor scope (def.floors), NOT def.tags. For
   // classic/maronary/istotit/veretar, tags are self-referential KIND labels
   // (['classic'] etc.) absent from floorTags, so those 4 gated to 0 on EVERY
   // floor — maronary/istotit/veretar 100% dead, classic reachable only via the
-  // total=0 fallback. wet/electric/meat omit floors and legitimately use their
-  // theme-token tags as scope, so fall back to tags. Unlocks the multiplier table.
-  const scope = def.floors ?? def.tags;
-  if (!scope.some(t => floorTags.includes(t))) return 0;
+  // total=0 fallback. def.floors is numeric z (project canon); wet/electric/meat
+  // omit floors and legitimately use their theme-token tags as scope (procedural
+  // odd floors mix themes at run time, so tags still cover them).
+  if (def.floors ? !def.floors.includes(z) : !def.tags.some(t => floorTags.includes(t))) return 0;
   if (floorTags.includes('ministry')) {
     if (def.id === 'electric') return def.weight * 1.8;
     if (def.id === 'istotit' || def.id === 'veretar') return def.weight * 2.2;
@@ -1132,9 +1143,9 @@ function floorWeight(def: SamosborVariantDef, floorTags: readonly string[]): num
   return def.weight;
 }
 
-export function getSamosborVariantWeight(id: SamosborVariantId, floorTags: readonly string[]): number {
+export function getSamosborVariantWeight(id: SamosborVariantId, z: number, floorTags: readonly string[]): number {
   const def = SAMOSBOR_VARIANTS.find(v => v.id === id);
-  return def ? floorWeight(def, floorTags) : 0;
+  return def ? floorWeight(def, z, floorTags) : 0;
 }
 
 export function buildActiveSamosborVariant(def: SamosborVariantDef): ActiveSamosborVariant {
@@ -1192,12 +1203,11 @@ export function getSamosborVariantName(id: SamosborVariantId | null | undefined)
 
 export function getSamosborAftermathBeats(
   variant: SamosborVariantId,
-  floorTags: readonly string[],
+  z: number,
 ): readonly SamosborAftermathBeatDef[] {
-  // #67: gate by def.floors (theme-token scope), NOT def.tags (flavor labels like
-  // ['fog','route']). floorTags are themeTags (theme tokens), which flavor tags
-  // never contain — the old def.tags predicate left 17/44 beats dead and fired
-  // ZERO aftermath beats across the whole ministry/kvartiry/living tier. tags are
+  // #67: gate by def.floors (numeric-z scope, project canon), NOT def.tags
+  // (flavor labels like ['fog','route']) — the old def.tags predicate left
+  // 17/44 beats dead across the whole ministry/kvartiry/living tier. tags are
   // still spread into the emitted event's tags in samosbor.ts.
-  return SAMOSBOR_AFTERMATH_BEATS.filter(def => def.variants.includes(variant) && def.floors.some(t => floorTags.includes(t)));
+  return SAMOSBOR_AFTERMATH_BEATS.filter(def => def.variants.includes(variant) && def.floors.includes(z));
 }

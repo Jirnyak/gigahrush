@@ -1,4 +1,5 @@
 import { type WorldEventSeverity } from '../core/types';
+import { designFloorZsByTheme } from './design_floors';
 import { type SamosborVariantId } from './samosbor_variants';
 
 export type SamosborBeatPhase = 'warning' | 'active' | 'aftermath';
@@ -43,13 +44,17 @@ export const SAMOSBOR_DIRECTOR_MIN_INTERVAL: Record<SamosborBeatPhase, number> =
 
 export const SAMOSBOR_DIRECTOR_EFFECT_FAIL_COOLDOWN = 20;
 
-const ALL_FLOORS = [34, 2, -6, -14, -40, -48] as const;
-
-const CIVIL_FLOORS = [34, 2, -6] as const;
-const SERVICE_FLOORS = [2, -6, -14] as const;
-const MAINTENANCE_FLOORS = [-14] as const;
-const HELL_FLOORS = [-40] as const;
-const VOID_FLOORS = [-48] as const;
+// Theme scopes derived from the authored route (the old hand-picked lists
+// held ONE stale z per theme, so beats never fired anywhere else).
+const MINISTRY_FLOORS = designFloorZsByTheme('ministry');
+const KVARTIRY_FLOORS = designFloorZsByTheme('kvartiry');
+const LIVING_FLOORS = designFloorZsByTheme('living');
+const MAINTENANCE_FLOORS = designFloorZsByTheme('maintenance');
+const HELL_FLOORS = designFloorZsByTheme('hell');
+const VOID_FLOORS = designFloorZsByTheme('void');
+const CIVIL_FLOORS = [...MINISTRY_FLOORS, ...KVARTIRY_FLOORS, ...LIVING_FLOORS] as const;
+const SERVICE_FLOORS = [...KVARTIRY_FLOORS, ...LIVING_FLOORS, ...MAINTENANCE_FLOORS] as const;
+const ALL_FLOORS = [...CIVIL_FLOORS, ...MAINTENANCE_FLOORS, ...HELL_FLOORS, ...VOID_FLOORS] as const;
 const ALL_VARIANTS = ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'] as const;
 
 const registry: SamosborBeatDef[] = [];

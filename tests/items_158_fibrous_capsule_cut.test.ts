@@ -45,7 +45,7 @@ test('fibrous capsule cut is reachable from meat samosbor aftermath and meat mon
   }
 
   assert.equal(
-    getSamosborAftermathBeats(-36).some(def => def.id === 'aftermath_fibrous_capsule_cut'),
+    beat.variants.some(v => getSamosborAftermathBeats(v, -36).some(def => def.id === 'aftermath_fibrous_capsule_cut')),
     true,
   );
   assert.ok(
