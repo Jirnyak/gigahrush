@@ -47,6 +47,7 @@ import './content_manifest';
 import { runZoneContentModules } from './zone_content';
 import { buildLivingHubGeometry } from './geometry';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
+import { getPlotNpcCount } from '../../data/npc_packages';
 import { spawnSideQuestNpcs } from './side_quests';
 
 export { generateSlideTextures } from './slides';
@@ -57,7 +58,11 @@ export { generatePosterTextures, pickPosterTex } from './posters';
 export function generateWorld(_seed?: number, isTutorial: boolean = false): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  let nextId = 1;
+  // Первые id зарезервированы под сюжетный пул (1..getPlotNpcCount()), и
+  // обычные сущности не имеют права туда попадать: предмет или монстр с
+  // чужим номером выдаёт себя за сюжетного NPC — так пропадали Зоя из
+  // прачечной и Лев, а проверки «этот человек уже есть» срабатывали ложно.
+  let nextId = getPlotNpcCount() + 1000;
 
   /* ── A: Permanent apartments ───────────────────────── */
   const apartments = generateApartments(world);

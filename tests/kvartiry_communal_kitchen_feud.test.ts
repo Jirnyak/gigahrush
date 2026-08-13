@@ -13,6 +13,7 @@ import { FALSE_NEIGHBOR_QUEST_ID, FALSE_NEIGHBOR_TAG } from '../src/gen/kvartiry
 import { MEDICINE_SWAP_QUEST_IDS, MEDICINE_SWAP_TAG } from '../src/gen/kvartiry/medicine_swap';
 import { PUSTOY_SOSED_QUEST_IDS } from '../src/gen/kvartiry/pustoy_sosed';
 import { RATION_QUEUE_QUEST_IDS, RATION_QUEUE_TAG } from '../src/gen/kvartiry/ration_queue';
+import { designFloorById } from '../src/data/design_floors';
 import { WATER_RIOT_QUEST_IDS, WATER_RIOT_TAG } from '../src/gen/kvartiry/water_riot';
 import '../src/data/npc_plot_packages';
 
@@ -25,7 +26,9 @@ function sideQuest(id: string): RegisteredSideQuest {
 }
 
 function assertKvartiryRoute(quest: RegisteredSideQuest, roomType: RoomType, tag: string): void {
-  assert.equal(quest.targetFloorZ, 60, `${quest.id} must point to Kvartiry`);
+  // Канон берётся из маршрута, а не пишется числом: шестьдесят — координата
+  // отменённой схемы, квартиры давно на z=14.
+  assert.equal(quest.targetFloorZ, designFloorById('kvartiry')!.z, `${quest.id} must point to Kvartiry`);
   assert.equal(quest.targetRoomType, roomType, `${quest.id} must mark a local room type`);
   assert.equal(quest.targetZoneTag, tag, `${quest.id} must resolve through a local trace tag`);
   assert.ok(quest.targetHint?.includes('Квартиры'), `${quest.id} needs a readable floor hint`);
@@ -45,8 +48,10 @@ test('communal kitchen feud registers five mutually resolving branches', () => {
     const quest = SIDE_QUESTS.find(q => q.id === id);
     assert.ok(quest, `missing kitchen feud quest ${id}`);
     assert.equal(quest.type, QuestType.FETCH);
-    assert.ok(getNpcPackageByPlotNpcId(quest.giverNpcId), `${id} has missing giver package`);
-    assert.equal(quest.targetFloorZ, 60);
+    // Поле давно называется giverId: `giverNpcId` читался как undefined, и
+    // проверка выдающего квест молча проходила мимо пакета.
+    assert.ok(getNpcPackageByPlotNpcId(quest.giverId), `${id} has missing giver package`);
+    assert.equal(quest.targetFloorZ, designFloorById('kvartiry')!.z);
     assert.equal(quest.targetRoomType, RoomType.KITCHEN);
     assert.equal(quest.targetZoneTag, 'kitchen_feud');
     assert.ok(quest.targetHint?.includes('Квартиры'), `${id} needs a floor hint`);
@@ -98,7 +103,8 @@ test('Kvartiry social crisis route stays legible from ration to false-neighbor d
     const quest = sideQuest(id);
     assertKvartiryRoute(quest, RoomType.MEDICAL, 'medicine_trust');
     assertRumorTrace(quest);
-    assert.equal(quest.targetRoomName, 'Аптечный разменник');
+    // Поле переименовано в targetRoomDefId: старое имя читалось как undefined.
+    assert.equal(quest.targetRoomDefId, 'Аптечный разменник');
     assert.equal(quest.eventTags?.includes(MEDICINE_SWAP_TAG), true, `${id} must tag the medicine swap`);
   }
 
