@@ -3,16 +3,11 @@ import * as assert from 'node:assert/strict';
 
 import { Cell, DoorState, EntityType, Feature, RoomType, W, ZoneFaction, type Entity } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell } from '../src/core/world';
-import { hashSeed, seededRandom } from '../src/core/rand';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import { applyDesignFloorPopulationField } from '../src/gen/population';
-import {
-  expandRaionsovetArchiveGeometry,
-  generateRaionsovetArchiveDesignFloor,
-} from '../src/gen/raionsovet_archive';
+import type { FloorGeneration } from '../src/gen/floor_manifest';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 const RAIONSOVET_ARCHIVE_TARGET_SHARES = new Map<ZoneFaction, number>([
@@ -39,7 +34,7 @@ function isAmbientNpcTemplate(entity: Entity): boolean {
     entity.questId === -1;
 }
 
-function entityRoomType(entity: Entity, gen: ReturnType<typeof generateRaionsovetArchiveDesignFloor>): RoomType | undefined {
+function entityRoomType(entity: Entity, gen: FloorGeneration): RoomType | undefined {
   const cell = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
   const roomId = gen.world.roomMap[cell];
   return roomId >= 0 ? gen.world.rooms[roomId]?.type : undefined;
@@ -49,10 +44,9 @@ test('raionsovet archive profile populates queues, offices, and dangerous stacks
   const route = designFloorById('raionsovet_archive');
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
-  const gen = generateRaionsovetArchiveDesignFloor();
-  const rng = seededRandom(hashSeed('test:raionsovet-archive-expand', route.z));
-  expandRaionsovetArchiveGeometry(gen.world, rng);
-  applyDesignFloorPopulationField(gen, route);
+  // Full manifest pipeline: geometry expansion runs inside the generator and the
+  // ambient NPC / monster populate runs in generateDesignFloor after territory init.
+  const gen = generateDesignFloor('raionsovet_archive', 61_061);
 
   const ambientNpcs = gen.entities.filter(isAmbientNpcTemplate);
   const monsters = gen.entities.filter(entity => entity.type === EntityType.MONSTER);

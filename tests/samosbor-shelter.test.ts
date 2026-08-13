@@ -380,7 +380,8 @@ test('classic fog effect spawns a monster from active fog', () => {
     ctx.state,
     ctx.nextId,
     ctx.state.samosborCount,
-    testVariant('classic').LIVING,
+    testVariant('classic'),
+    ctx.state.currentZ ?? 0,
     ctx.ci,
   );
 
@@ -428,7 +429,8 @@ test('active samosbor spawns nearby pressure monster targeting unsheltered playe
     ctx.entities,
     ctx.state,
     ctx.nextId,
-    testVariant('classic').LIVING,
+    testVariant('classic'),
+    ctx.state.currentZ ?? 0,
   ), true);
 
   const monster = ctx.entities.find(e => e.type === EntityType.MONSTER);
@@ -462,7 +464,8 @@ test('active samosbor pressure spawn is skipped for accepted shelter player', ()
     ctx.entities,
     state,
     ctx.nextId,
-    testVariant('classic').LIVING,
+    testVariant('classic'),
+    state.currentZ ?? 0,
   ), false);
   assert.equal(ctx.entities.some(e => e.type === EntityType.MONSTER), false);
 });
@@ -490,7 +493,8 @@ test('maronary fog effect rewrites actor identity in active fog', () => {
     ctx.state,
     ctx.nextId,
     ctx.state.samosborCount,
-    testVariant('maronary').LIVING,
+    testVariant('maronary'),
+    ctx.state.currentZ ?? 0,
     ctx.ci,
   );
 
@@ -784,7 +788,7 @@ function makeRuntimeGenerationCase(seed: number, floor: number): RuntimeGenerati
     id: containerId,
     x: room.x + 2,
     y: room.y + 2,
-    floor,
+    z: floor,
     roomId: room.id,
     zoneId: 0,
     kind: ContainerKind.TOOL_LOCKER,
@@ -857,7 +861,7 @@ test('local samosbor patch can be deferred before replacement generation', () =>
   state.samosborTimer = 0;
   let replacementCalls = 0;
   let scheduledPatch: (() => void) | null = null;
-  const replacement = makeRuntimeGenerationCase(8, 'ministry').generation;
+  const replacement = makeRuntimeGenerationCase(8, 30).generation;
   const needsFullRebuild = updateSamosbor(
     ctx.world,
     ctx.entities,
@@ -885,9 +889,9 @@ test('local samosbor patch can be deferred before replacement generation', () =>
   assert.equal(replacementCalls, 1);
 });
 
-function runReplacementRebuild(seed: number, floor: number): RuntimeGenerationCase {
-  const ctx = makeRuntimeGenerationCase(seed, floor);
-  rebuildWorld(ctx.target, ctx.entities, ctx.nextId, seed, floor, ctx.generation);
+function runReplacementRebuild(seed: number, z: number): RuntimeGenerationCase {
+  const ctx = makeRuntimeGenerationCase(seed, z);
+  rebuildWorld(ctx.target, ctx.entities, ctx.nextId, seed, z, ctx.generation);
   return ctx;
 }
 
@@ -900,7 +904,7 @@ function assertDirtyVersionsBumped(ctx: RuntimeGenerationCase): void {
 }
 
 test('story-floor samosbor rebuild copies generated protected state and bumps dirty versions', () => {
-  const ctx = runReplacementRebuild(1, 'ministry');
+  const ctx = runReplacementRebuild(1, 30);
 
   assert.equal(ctx.target.aptMask[ctx.protectedIdx], 1);
   assert.equal(ctx.target.hermoWall[ctx.protectedIdx], 1);
@@ -913,7 +917,7 @@ test('story-floor samosbor rebuild copies generated protected state and bumps di
 });
 
 test('design-floor samosbor rebuild resets stale screens and surfaces from replacement', () => {
-  const ctx = runReplacementRebuild(2, 'living');
+  const ctx = runReplacementRebuild(2, 0);
 
   assert.deepEqual(ctx.target.screenCells, [ctx.screenIdx]);
   assert.equal(ctx.target.surfaceMap.has(ctx.surfaceIdx), true);
@@ -925,7 +929,7 @@ test('design-floor samosbor rebuild resets stale screens and surfaces from repla
 });
 
 test('procedural samosbor rebuild copies anomaly, smog, fog and rail runtime state', () => {
-  const ctx = runReplacementRebuild(3, 'maintenance');
+  const ctx = runReplacementRebuild(3, -26);
 
   assert.equal(ctx.target.anomalyTeleports.get(ctx.teleportA), ctx.teleportB);
   assert.equal(ctx.target.anomalyTeleports.has(ctx.staleIdx), false);
@@ -942,14 +946,14 @@ test('procedural samosbor rebuild copies anomaly, smog, fog and rail runtime sta
 });
 
 test('full samosbor rebuild preserves old fog on walkable regenerated cells only', () => {
-  const ctx = makeRuntimeGenerationCase(4, 'ministry');
+  const ctx = makeRuntimeGenerationCase(4, 30);
   ctx.generation.world.cells[ctx.staleIdx] = Cell.FLOOR;
   ctx.generation.world.floorTex[ctx.staleIdx] = Tex.F_CONCRETE;
   ctx.generation.world.wallTex[ctx.staleIdx] = Tex.CONCRETE;
   ctx.generation.world.zoneMap[ctx.staleIdx] = 0;
   ctx.generation.world.fog[ctx.staleIdx] = 0;
 
-  rebuildWorld(ctx.target, ctx.entities, ctx.nextId, 4, 'ministry', ctx.generation);
+  rebuildWorld(ctx.target, ctx.entities, ctx.nextId, 4, 30, ctx.generation);
 
   assert.equal(ctx.target.cells[ctx.staleIdx], Cell.FLOOR);
   assert.equal(ctx.target.aptMask[ctx.staleIdx], 0);

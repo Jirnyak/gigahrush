@@ -6,9 +6,9 @@ import { World } from '../src/core/world';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { FACTORIES, productionRouteGoals } from '../src/data/factories';
 import { ITEMS } from '../src/data/items';
-import { METRO_DEPOT_ROOM_NAME } from '../src/data/metro';
+import { METRO_DEPOT_ROOM_DEF_ID } from '../src/data/metro';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateMetroErrorLine } from '../src/gen/maintenance/metro_error_line';
+import { generateMetroErrorLine } from '../src/gen/dark_metro/error_line';
 
 const ITEM_ID = 'rail_spike_pack';
 
@@ -35,7 +35,7 @@ test('rail spike pack is reachable from depot and production surfaces', () => {
   const entities: Entity[] = [];
   generateMetroErrorLine({ world, entities, nextId: { v: 1 }, spawnX: 512, spawnY: 512 });
 
-  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_NAME);
+  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_DEF_ID);
   assert.ok(depot, 'metro depot room should exist');
 
   const source = entities.find(entity =>

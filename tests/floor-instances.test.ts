@@ -53,7 +53,7 @@ test('floor instance registry has package generators without ordinary route z co
     assert.equal(floorKeyKind(key), 'floor_instance', `${def.id} key kind`);
     assert.equal(floorKeyKnown(key), true, `${def.id} known key`);
     assert.equal(floorKeyZ(key), undefined, `${def.id} should not occupy route z`);
-    assert.equal(floorKeyBaseFloor(key), def.baseFloor, `${def.id} base floor`);
+    assert.deepEqual(floorKeyBaseFloor(key), def.themeTags, `${def.id} theme tags`);
     assert.equal(floorKeyAllowsNpcs(key), floorInstanceAllowsNpcs(def), `${def.id} npc policy`);
     assert.equal(def.exitRule, 'next_lift_returns', `${def.id} exit rule`);
     assert.equal(def.debugCommandId, 'arm_floor_instance', `${def.id} debug command`);
@@ -110,17 +110,17 @@ test('active floor instance state round-trips a floor instance world key', () =>
   setFloorInstanceState(state, {
     current: {
       id: 'loop_404',
-      fromFloor: 'living',
-      intendedFloor: 'maintenance',
-      returnFloor: 'maintenance',
+      fromFloor: 0, // living
+      intendedFloor: -26, // maintenance
+      returnFloor: -26, // maintenance
       direction: LiftDirection.DOWN,
     },
-  }.LIVING);
+  });
 
   const saved = floorInstanceStateForSave(state);
   assert.equal(saved.current?.worldKey, floorInstanceWorldKey('loop_404'));
 
   const loaded = makeGameState({ currentZ: 0 });
-  setFloorInstanceState(loaded, saved.LIVING);
+  setFloorInstanceState(loaded, saved);
   assert.equal(floorInstanceStateForSave(loaded).current?.worldKey, floorInstanceWorldKey('loop_404'));
 });

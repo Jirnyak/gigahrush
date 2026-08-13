@@ -5,9 +5,9 @@ import { ContainerKind, EntityType, ItemType, RoomType, type Entity } from '../s
 import { World } from '../src/core/world';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { ITEMS } from '../src/data/items';
-import { METRO_DEPOT_ROOM_NAME } from '../src/data/metro';
+import { METRO_DEPOT_ROOM_DEF_ID } from '../src/data/metro';
 import { RESOURCE_BY_ID, resourceForItem } from '../src/data/resources';
-import { generateMetroErrorLine } from '../src/gen/maintenance/metro_error_line';
+import { generateMetroErrorLine } from '../src/gen/dark_metro/error_line';
 
 const ITEM_ID = 'track_diagram_scrap';
 
@@ -46,7 +46,7 @@ test('track diagram scrap can be found in the maintenance metro depot', () => {
   const entities: Entity[] = [];
   generateMetroErrorLine({ world, entities, nextId: { v: 1 }, spawnX: 512, spawnY: 512 });
 
-  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_NAME);
+  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_DEF_ID);
   assert.ok(depot, 'metro depot room should exist');
 
   const source = entities.find(entity =>

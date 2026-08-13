@@ -204,7 +204,8 @@ test('texture atlas procedural ranges stay allocated and filled', () => {
   assert.equal(Tex.F_CARPET_EDGE_BASE + 16, Tex.SCREEN_BASE);
   assert.equal(Tex.SCREEN_BASE + 32, Tex.LARVA_BODY);
   assert.equal(Tex.LARVA_BODY + 1, Tex.DOOR_HERMETIC);
-  assert.equal(Tex.DOOR_HERMETIC + 1, Tex.COUNT);
+  assert.equal(Tex.DOOR_HERMETIC + 1, Tex.F_GRASS);
+  assert.equal(Tex.F_GRASS + 1, Tex.COUNT);
 
   const ranges: readonly [string, number, number][] = [
     ['slides', Tex.SLIDE_1, Tex.SLIDE_8],

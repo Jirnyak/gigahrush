@@ -57,14 +57,14 @@ test('water reservoir sample sale feeds water economy evidence', () => {
     inventory: [],
     money: 200,
   });
-  const beforeStock = resourceStock(0, 'drink_water');
+  const beforeStock = resourceStock(state, 0, 'drink_water');
 
   const result = sellToNpc(state, player, buyer, 0, { reason: 'water_safety_evidence' });
 
   assert.equal(result.ok, true);
   assert.equal(result.code, 'sold');
   assert.equal(result.quote?.resourceId, 'drink_water');
-  assert.equal(resourceStock(0, 'drink_water'), beforeStock + 1);
+  assert.equal(resourceStock(state, 0, 'drink_water'), beforeStock + 1);
   assert.equal(countInventoryItem(player, ITEM_ID), 0);
   assert.equal(countInventoryItem(buyer, ITEM_ID), 1);
   assert.ok((player.money ?? 0) > 0);

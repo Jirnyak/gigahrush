@@ -75,7 +75,7 @@ test('damages door when time passes damage threshold', () => {
 test('clears stale records on floor change', () => {
   const { world, state, entities, nextEntityId } = setupBorerWorld();
 
-  state.currentZ = 'hell';
+  state.currentZ = -36; // hell (src/data/design_floors.ts), any z != setup's 0 means a floor change
   state.time = 20;
 
   updateHermodoorBorer(world, entities, state, 1, nextEntityId);

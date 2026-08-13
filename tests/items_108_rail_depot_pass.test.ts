@@ -3,10 +3,10 @@ import * as assert from 'node:assert/strict';
 
 import { DoorState, EntityType, ItemType, RoomType, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
-import { METRO_DEPOT_ROOM_NAME } from '../src/data/metro';
+import { METRO_DEPOT_ROOM_DEF_ID } from '../src/data/metro';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateMetroErrorLine } from '../src/gen/maintenance/metro_error_line';
+import { generateMetroErrorLine } from '../src/gen/dark_metro/error_line';
 import { generateDocumentGate } from '../src/gen/ministry/document_gate';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
@@ -37,7 +37,7 @@ test('rail depot pass is reachable in the maintenance transport depot', () => {
   const entities: Entity[] = [];
   generateMetroErrorLine({ world, entities, nextId: { v: 1 }, spawnX: 512, spawnY: 512 });
 
-  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_NAME);
+  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_DEF_ID);
   assert.ok(depot, 'metro depot room should exist');
 
   const source = entities.find(entity =>

@@ -237,7 +237,9 @@ test('voronoi_quarantine exposes pass, border, escort and supply decisions', () 
   assert.equal(gen.world.containers.some(container => container.tags.includes('forgery') && container.inventory.some(item => item.defId === 'blank_form')), true);
   assert.equal(gen.entities.some(entity => entity.type === EntityType.MONSTER && entity.monsterKind === MonsterKind.CHERNOSLIZ), true);
   assert.equal(zoneFactions.has(ZoneFaction.LIQUIDATOR), true);
-  assert.equal(zoneFactions.has(ZoneFaction.SAMOSBOR), true);
+  // generateZones contract (src/gen/shared.ts): no SAMOSBOR zones at generation time;
+  // samosbor claims zones only at runtime.
+  assert.equal(zoneFactions.has(ZoneFaction.SAMOSBOR), false);
 
   for (const questId of [
     'voronoi_quarantine_decon_border',

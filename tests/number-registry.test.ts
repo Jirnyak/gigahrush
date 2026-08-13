@@ -7,14 +7,13 @@ import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../src/data/factions';
 import { SIDE_QUESTS } from '../src/data/plot';
-import { expandDesignFloorGeneration } from '../src/gen/full_floor';
+import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   NUMBER_REGISTRY_CRT_INTERSECTIONS,
   NUMBER_REGISTRY_DECISIONS,
   NUMBER_REGISTRY_RESIDUE_LANES,
   NUMBER_REGISTRY_ROUTE_ID,
   NUMBER_REGISTRY_TERRITORY_TARGETS,
-  generateNumberRegistryDesignFloor,
 } from '../src/gen/number_registry';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt } from '../src/systems/territory';
@@ -22,7 +21,7 @@ import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt } from '../sr
 function generateNumberRegistry() {
   const route = designFloorById(NUMBER_REGISTRY_ROUTE_ID);
   assert.ok(route);
-  return expandDesignFloorGeneration(generateNumberRegistryDesignFloor(), route);
+  return generateDesignFloor(NUMBER_REGISTRY_ROUTE_ID, 61_061);
 }
 
 let cachedNumberRegistry: ReturnType<typeof generateNumberRegistry> | undefined;

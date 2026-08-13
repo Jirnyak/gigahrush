@@ -5,10 +5,11 @@ import { ContainerKind, EntityType, ItemType, QuestType, RoomType, type Entity }
 import { World } from '../src/core/world';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
-import { METRO_DEPOT_ROOM_NAME } from '../src/data/metro';
+import { METRO_DEPOT_ROOM_DEF_ID } from '../src/data/metro';
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateMetroErrorLine } from '../src/gen/maintenance/metro_error_line';
+import { generateMetroErrorLine } from '../src/gen/dark_metro/error_line';
 
 const ITEM_ID = 'rail_signal_lamp';
 
@@ -40,7 +41,7 @@ test('rail signal lamp is reachable from the maintenance metro depot', () => {
   const entities: Entity[] = [];
   generateMetroErrorLine({ world, entities, nextId: { v: 1 }, spawnX: 512, spawnY: 512 });
 
-  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_NAME);
+  const depot = world.rooms.find(room => room?.name === METRO_DEPOT_ROOM_DEF_ID);
   assert.ok(depot, 'metro depot room should exist');
 
   const source = entities.find(entity =>
@@ -55,7 +56,7 @@ test('Borya can spend the rail signal lamp after the switch repair', () => {
   const quest = SIDE_QUESTS.find(step => step.id === 'ag19_signal_lamp');
 
   assert.ok(quest, 'Borya signal-lamp side quest should be registered');
-  assert.equal(quest.giverNpcId, 'ag19_borya_conductor');
+  assert.equal(quest.giverId, getPlotNpcNumericId('ag19_borya_conductor'));
   assert.equal(quest.type, QuestType.FETCH);
   assert.equal(quest.targetItem, ITEM_ID);
   assert.equal(quest.targetCount, 1);

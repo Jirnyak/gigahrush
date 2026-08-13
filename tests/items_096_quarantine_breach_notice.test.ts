@@ -5,7 +5,7 @@ import { DoorState, ItemType, RoomType, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateHospitalQuarantine } from '../src/gen/living/hospital_quarantine';
+import { generateHospitalQuarantine } from '../src/gen/bolnichny_korpus/hospital_quarantine';
 import { generateDocumentGate } from '../src/gen/ministry/document_gate';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
