@@ -99,6 +99,8 @@ export interface UnderhellDesignGeneration {
   ritualState: UnderhellRitualState;
   thresholdChain: UnderhellThresholdChainScore;
   isDecentralized: true;
+  /** Manifest hook: re-assert authored/expansion HQ ownership after initializeCellTerritory. */
+  onAfterTerritory?: (world: World, entities: Entity[]) => void;
 }
 
 export interface UnderhellGenerationOptions {

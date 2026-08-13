@@ -78,7 +78,7 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { DESIGN_NPC_HOME_FLOOR_KEY, TURING_NURSERY_ROUTE_ID, TURING_NURSERY_BASE_FLOOR, TURING_NURSERY_ROOM_PREFIX, SEED, FIELD_SIZE, FIELD_CELLS, FIELD_STEPS, TURING_HQ_SPECS, NPC_DEFS } from "./meta";
-import { NextId, ReactionField, NurseryRooms, carveTuringMacroNetwork, buildTuringHqSuites, buildTuringDistricts, buildTuringCabinetStrips, buildTuringOuterAnnexes, buildTuringStateGraphRooms, tryAddTuringRoom, connectRoomsNarrow, paintRoomTerritory, decorateMicroRoom, stainReactionRoom, stampReactionWater, laplace, fieldWrap, clamp01, addWetCell, setFeature, markScreenWall, roomCx, roomCy } from "./geometry";
+import { NextId, ReactionField, NurseryRooms, carveTuringMacroNetwork, buildTuringHqSuites, buildTuringDistricts, buildTuringCabinetStrips, buildTuringOuterAnnexes, buildTuringStateGraphRooms, reinforceTuringNurseryDoorSlots, tryAddTuringRoom, connectRoomsNarrow, paintRoomTerritory, decorateMicroRoom, stainReactionRoom, stampReactionWater, laplace, fieldWrap, clamp01, addWetCell, setFeature, markScreenWall, roomCx, roomCy } from "./geometry";
 
 export type TuringNpcId =
   | 'turing_nursery_mother_agafya'
@@ -177,6 +177,7 @@ export function expandTuringNurseryRouteGeometry(world: World, rng: () => number
   buildTuringStateGraphRooms(world, field, rng);
 
   stampReactionWater(world, field, SEED ^ 0x7070, 1600);
+  reinforceTuringNurseryDoorSlots(world);
   world.markCellsDirty();
   world.markFloorTexDirty();
   world.markWallTexDirty();

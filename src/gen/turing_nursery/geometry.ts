@@ -238,7 +238,10 @@ export function buildTuringDistricts(world: World, field: ReactionField, rng: ()
       else decorateSupportRoom(world, room, 20 + i);
       connectRooms(world, lab, room.y > lab.y + lab.h ? 'south' : room.x < lab.x ? 'west' : 'east', room, room.y > lab.y + lab.h ? 'north' : room.x < lab.x ? 'east' : 'west', room === bowl ? DoorState.HERMETIC_CLOSED : DoorState.CLOSED);
     }
-    buildTuringMicroBlock(world, lab, spec.owner, `микроячейка ${spec.name}`, 5 + (i % 3), 3 + (i % 2), i);
+    // One extra micro row per district: placement collisions eat ~8% of the
+    // grid attempts, which left the full-scale brief (>=760 nursery rooms)
+    // short by ~20 rooms.
+    buildTuringMicroBlock(world, lab, spec.owner, `микроячейка ${spec.name}`, 5 + (i % 3), 4 + (i % 2), i);
   }
 }
 
@@ -739,6 +742,42 @@ export function connectRooms(world: World, a: Room, sideA: DoorSide, b: Room, si
   const bd = world.doors.get(bi);
   if (ad) ad.roomB = b.id;
   if (bd) bd.roomB = a.id;
+}
+
+/* ── Door slot reinforcement ──────────────────────────────────────────────
+   Route expansion carves 3-wide corridors from room interiors, which blows out
+   the wall flanks beside registered door cells; the shared sanitizeDoors pass
+   then drops those doors as invalid (no 2-wall flank). Rebuild proper door
+   geometry for every registered door before finalize: re-open the door cell
+   and re-wall its flanks, keeping the pass-through sides walkable. */
+export function reinforceTuringNurseryDoorSlots(world: World): void {
+  const walkable = (c: number) => c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER;
+  for (const [idx, door] of world.doors) {
+    const room = world.rooms[door.roomA];
+    if (!room) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    let vertical: boolean;
+    if (y === room.y - 1 || y === room.y + room.h) vertical = true;
+    else if (x === room.x - 1 || x === room.x + room.w) vertical = false;
+    else continue;
+    const pass = vertical ? ([[0, -1], [0, 1]] as const) : ([[-1, 0], [1, 0]] as const);
+    const flank = vertical ? ([[-1, 0], [1, 0]] as const) : ([[0, -1], [0, 1]] as const);
+    if (!pass.every(([dx, dy]) => walkable(world.cells[world.idx(x + dx, y + dy)]))) continue;
+    world.cells[idx] = Cell.DOOR;
+    world.wallTex[idx] = door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
+    for (const [dx, dy] of flank) {
+      const ci = world.idx(x + dx, y + dy);
+      const cell = world.cells[ci];
+      if (cell === Cell.LIFT || cell === Cell.DOOR || world.doors.has(ci) || world.roomMap[ci] >= 0 || world.containerMap.has(ci)) continue;
+      world.cells[ci] = Cell.WALL;
+      world.wallTex[ci] = room.wallTex;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(true);
 }
 
 export function addDoorAt(world: World, room: Room, x: number, y: number, state: DoorState, keyId = ''): number {

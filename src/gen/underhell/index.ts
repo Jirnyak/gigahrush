@@ -72,3 +72,4 @@ export function generateUnderhellDesignFloor(options: UnderhellGenerationOptions
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./expansion";

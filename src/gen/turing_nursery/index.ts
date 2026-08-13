@@ -37,10 +37,13 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
     registerStaticHazards(world, rooms);
     registerNurseryRouteCues(world, rooms, containers);
 
+    // Keep the pre-expansion sanitize: expansion room placement is tuned
+    // against the sanitized door set (stray door cells block placements).
+    // Doors carved open by the expansion are rebuilt afterwards by
+    // reinforceTuringNurseryDoorSlots before finalize re-sanitizes.
     sanitizeDoors(world);
     ensureConnectivity(world, rooms.entry.x + 16.5, rooms.entry.y + 12.5);
     world.rebuildContainerMap();
-    world.bakeLights();
 
     const route = designFloorById('turing_nursery')!;
     const rngGen = () => rng();
@@ -55,6 +58,9 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
     };
 
     finalizeExpandedFloor(generation, route, rngGen);
+    // Door reinforcement can pinch a corridor that ran tangent to a doorway;
+    // re-stitch reachability on the final geometry.
+    ensureConnectivity(world, rooms.entry.x + 16.5, rooms.entry.y + 12.5);
 
     return { ...generation, isDecentralized: true as const };
   });

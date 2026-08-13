@@ -1,17 +1,21 @@
 import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  MonsterKind, RoomType,
+  MonsterKind, Occupation, RoomType,
   Tex, W, ZoneFaction,
   type Entity, type Item, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
+import { designFloorById } from '../../data/design_floors';
+import { designFloorPopulationProfile } from '../../data/design_floor_population';
+import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
+import { entitySpawnSlots } from '../../systems/entity_limits';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../render/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import { ensureConnectivity, generateZones } from '../shared';
+import { ensureConnectivity, finalizeExpandedFloor, generateZones } from '../shared';
+import { expandUnderhellRouteGeometry, reinforceUnderhellAuthoredHqTerritory } from './expansion';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, UNDERHELL_FLOOR, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
@@ -20,7 +24,7 @@ import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhe
 export function isUnderhellAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.id === undefined &&
+    (entity as Entity & { npcPackageId?: string }).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -39,6 +43,99 @@ export function underhellTerritorySpawnCells(world: World): Map<ZoneFaction, num
     if (list) list.push(i);
   }
   return cells;
+}
+
+/* ── Floor-owned ambient crowd ─────────────────────────────────────────────
+   The threshold post is worked only by liquidator and cultist veterans (the
+   authored control brief), while the central populate derives ambient faction
+   from cell territory — on underhell that would leak wild/citizen ambients.
+   So the generator fills the profile's npcTarget itself (the central populate
+   is idempotent and only tops up), and the onAfterTerritory hook snaps every
+   veteran onto its own faction's territory once cell ownership is final. */
+
+const UNDERHELL_AMBIENT_NAME_PREFIX = 'Нижний пропускник: ветеран ';
+
+function pickWeightedWith<T>(rand: () => number, values: readonly { value: T; weight: number }[]): T {
+  let total = 0;
+  for (const entry of values) total += entry.weight;
+  let roll = rand() * total;
+  for (const entry of values) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.value;
+  }
+  return values[values.length - 1].value;
+}
+
+export function spawnUnderhellAmbientVeterans(world: World, entities: Entity[], nextId: { v: number }): void {
+  const route = designFloorById(UNDERHELL_ROUTE_ID)!;
+  const profile = designFloorPopulationProfile(route);
+  const count = entitySpawnSlots(entities, EntityType.NPC, profile.npcTarget);
+  if (count <= 0) return;
+  const floorCells: number[] = [];
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.FLOOR) continue;
+    if (world.aptMask[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
+    floorCells.push(i);
+  }
+  if (floorCells.length === 0) return;
+  const factionCounts = new Map<Faction, number>();
+  for (let i = 0; i < count; i++) {
+    // Guarantee both authored factions appear even for tiny targets.
+    const faction: Faction = i === 0 ? Faction.LIQUIDATOR
+      : i === 1 ? Faction.CULTIST
+        : pickWeightedWith(rng, profile.npcFactions);
+    factionCounts.set(faction, (factionCounts.get(faction) ?? 0) + 1);
+    const occupation = pickWeightedWith(rng, profile.npcOccupations);
+    const cell = floorCells[Math.floor(rng() * floorCells.length)];
+    const x = cell % W;
+    const y = (cell / W) | 0;
+    const hp = Math.round(70 + Math.min(95, Math.abs(route.z) * 1.3 + profile.npcLevel * 7));
+    entities.push({
+      id: nextId.v++,
+      type: EntityType.NPC,
+      x: x + 0.5,
+      y: y + 0.5,
+      angle: rng() * Math.PI * 2,
+      pitch: 0,
+      alive: true,
+      speed: 0.95 + rng() * 0.42,
+      sprite: occupation,
+      name: `${UNDERHELL_AMBIENT_NAME_PREFIX}${i + 1}`,
+      hp,
+      maxHp: hp,
+      ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+      faction,
+      occupation,
+      isTraveler: occupation === Occupation.TRAVELER || occupation === Occupation.HUNTER || occupation === Occupation.PILGRIM,
+      assignedRoomId: -1,
+      questId: -1,
+      canGiveQuest: false,
+      rpg: randomRPG(profile.npcLevel),
+    });
+  }
+}
+
+export function alignUnderhellAmbientNpcTerritory(world: World, entities: Entity[]): void {
+  const cells = underhellTerritorySpawnCells(world);
+  const offsets = new Uint16Array(8);
+  for (const entity of entities) {
+    if (!isUnderhellAmbientNpc(entity) || entity.faction === undefined) continue;
+    const owner = factionToTerritoryOwner(entity.faction);
+    const list = cells.get(owner);
+    if (!list || list.length === 0) continue;
+    const offset = offsets[owner]++ | 0;
+    const cell = list[(entity.id * 131 + offset * 457) % list.length];
+    entity.x = (cell % W) + 0.5;
+    entity.y = ((cell / W) | 0) + 0.5;
+    entity.assignedRoomId = world.roomMap[cell] >= 0 ? world.roomMap[cell] : -1;
+    if (entity.ai) {
+      entity.ai.tx = cell % W;
+      entity.ai.ty = (cell / W) | 0;
+      entity.ai.path = [];
+      entity.ai.pi = 0;
+      entity.ai.stuck = 0;
+    }
+  }
 }
 
 export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGate: boolean): UnderhellDesignGeneration {
@@ -160,20 +257,76 @@ export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGa
   };
   if (forceOpenVoidGate) tryOpenUnderhellVoidGate(world, ritualState);
   registerUnderhellRouteCues(world, ritualState, entry, fallback, threshold, witnessA, toll, lowerFallback, sacrifice, gate);
-  const thresholdChain = scoreUnderhellThresholdChain(world, ritualState);
 
-  world.bakeLights();
-  genLog(`[FLOOR19_UNDERHELL] generated ${UNDERHELL_ROUTE_ID} seed ${seed} rooms=${world.rooms.length} gate=${voidGateCell} chain=${thresholdChain.score}/${thresholdChain.minScore}`);
+  // Route-scale expansion around the authored threshold core, then the shared
+  // finalize pass (zones, door sanitize, container map, light bake). The
+  // threshold chain is scored on the final expanded world so the stored score
+  // matches any later re-score.
+  const route = designFloorById(UNDERHELL_ROUTE_ID)!;
+  const rngGen = () => rng();
+  expandUnderhellRouteGeometry(world, rngGen);
+  ensureConnectivity(world, SPAWN_X + 0.5, SPAWN_Y + 0.5);
 
-  return {
-    isDecentralized: true,
+  const generation = {
+    isDecentralized: true as const,
     world,
     entities,
     spawnX: SPAWN_X + 0.5,
     spawnY: SPAWN_Y + 0.5,
+  };
+  finalizeExpandedFloor(generation, route, rngGen);
+  restoreUnderhellWitnessDoors(world, ritualState);
+  retuneUnderhellZones(world);
+  spawnUnderhellAmbientVeterans(world, entities, nextId);
+  const thresholdChain = scoreUnderhellThresholdChain(world, ritualState);
+
+  genLog(`[FLOOR19_UNDERHELL] generated ${UNDERHELL_ROUTE_ID} seed ${seed} rooms=${world.rooms.length} gate=${voidGateCell} chain=${thresholdChain.score}/${thresholdChain.minScore}`);
+
+  return {
+    ...generation,
     ritualState,
     thresholdChain,
+    onAfterTerritory: (afterWorld: World, afterEntities: Entity[]) => {
+      reinforceUnderhellAuthoredHqTerritory(afterWorld);
+      alignUnderhellAmbientNpcTerritory(afterWorld, afterEntities);
+    },
   };
+}
+
+/* The shared finalize pass sanitizes doors with strict wall-flank rules; the
+   authored witness cages must keep their hermetic doors (quest branch + late
+   openWitnessCells hook), so re-register them and rebuild their door slots. */
+export function restoreUnderhellWitnessDoors(world: World, ritual: UnderhellRitualState): void {
+  for (const doorIdx of ritual.witnessDoorCells) {
+    const x = doorIdx % W;
+    const y = (doorIdx / W) | 0;
+    const horizontal = isUnderhellWalkableCell(world, world.idx(x - 1, y)) && isUnderhellWalkableCell(world, world.idx(x + 1, y));
+    world.cells[doorIdx] = Cell.DOOR;
+    world.wallTex[doorIdx] = Tex.DOOR_METAL;
+    world.hermoWall[doorIdx] = 1;
+    let roomA = -1;
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+      const roomId = world.roomMap[world.idx(x + dx, y + dy)];
+      if (roomId >= 0) { roomA = roomId; break; }
+    }
+    if (!world.doors.has(doorIdx)) {
+      world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_CLOSED, roomA, roomB: -1, keyId: '', timer: 0 });
+    }
+    const room = world.rooms[roomA];
+    if (room && !room.doors.includes(doorIdx)) room.doors.push(doorIdx);
+    // Rebuild the flank walls so the cage door keeps door geometry.
+    const flank = horizontal ? ([[0, -1], [0, 1]] as const) : ([[-1, 0], [1, 0]] as const);
+    for (const [dx, dy] of flank) {
+      const ci = world.idx(x + dx, y + dy);
+      if (world.cells[ci] === Cell.LIFT || world.doors.has(ci) || world.roomMap[ci] >= 0) continue;
+      world.cells[ci] = Cell.WALL;
+      world.wallTex[ci] = Tex.HERMO_WALL;
+      world.hermoWall[ci] = 1;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+  world.markCellsDirty();
+  world.markWallTexDirty();
 }
 
 export function sinkUnderhellAbyss(world: World): void {
