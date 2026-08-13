@@ -161,6 +161,10 @@ export const VISUAL_CELL_CODES = {
   CEILING_LIGHT_PANEL: visualCode('ceiling_light_panel'),
   WALL_PANEL_SCREEN: visualCode('wall_panel_screen'),
   RUBBLE_CHUNK: visualCode('rubble_chunk'),
+  // The decor-dedup pass (b2ed5641) dropped this key with its src consumer,
+  // but the column tests still address the slot code by name; tests are not
+  // typechecked, so the resulting `undefined` wrote code 0 (empty) silently.
+  COLUMN_CONCRETE_SQUARE: visualCode('column_concrete_square'),
   FURNITURE_TABLE_HINT: visualCode('furniture_table_hint'),
   FURNITURE_DESK_HINT: visualCode('furniture_desk_hint'),
   FURNITURE_CHAIR_HINT: visualCode('furniture_chair_hint'),
