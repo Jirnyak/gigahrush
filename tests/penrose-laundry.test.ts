@@ -32,8 +32,7 @@ import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
-  PENROSE_LAUNDRY_BASE_FLOOR,
-  PENROSE_LAUNDRY_ROOM_NAMES,
+  PENROSE_LAUNDRY_ROOM_DEF_IDS,
   PENROSE_LAUNDRY_ROUTE_ID,
   PENROSE_LAUNDRY_Z,
   getPenroseLaundryState,
@@ -102,13 +101,15 @@ test('penrose_laundry is registered as a routed Living-band design floor', () =>
 });
 
 test('normal lift route reaches penrose_laundry before black_market_88', () => {
-  const state = makeGameState({ currentZ: -26 });
-  setFloorRunState(state, { runSeed: 81081, currentZ: -7, specs: {}, visited: {} }.MAINTENANCE);
+  // Старт на z=-7: вниз идёт -8 (прачечная) → -9 (проц) → -10 (чёрный рынок 88).
+  const state = makeGameState({ currentZ: -7 });
+  setFloorRunState(state, { runSeed: 81081, currentZ: -7, specs: {}, visited: {} });
 
   const laundry = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(laundry?.z, PENROSE_LAUNDRY_Z);
   assert.equal(laundry?.designFloorId, PENROSE_LAUNDRY_ROUTE_ID);
-  assert.equal(laundry?.baseFloor, PENROSE_LAUNDRY_BASE_FLOOR);
+  // У FloorRunEntry больше нет поля baseFloor; авторский этаж — не процедурный.
+  assert.equal(laundry?.procedural, false);
   commitFloorRunEntry(state, laundry!);
 
   const gap = resolveFloorRunRoute(state, LiftDirection.DOWN);
@@ -135,15 +136,15 @@ test('penrose_laundry generator builds a connected finite symbol patch with deci
   assert.equal(spawnCell, Cell.FLOOR);
   assert.equal(hasReachableLift(gen, LiftDirection.UP), true);
   assert.equal(hasReachableLift(gen, LiftDirection.DOWN), true);
-  for (const roomName of Object.values(PENROSE_LAUNDRY_ROOM_NAMES)) {
+  for (const roomName of Object.values(PENROSE_LAUNDRY_ROOM_DEF_IDS)) {
     assert.equal(names.has(roomName), true, roomName);
   }
   assert.equal(state.tiles.length, 13);
   assert.deepEqual(state.symbolChainRoomNames, [
-    PENROSE_LAUNDRY_ROOM_NAMES.firstSun,
-    PENROSE_LAUNDRY_ROOM_NAMES.deflationB,
-    PENROSE_LAUNDRY_ROOM_NAMES.secondSun,
-    PENROSE_LAUNDRY_ROOM_NAMES.hiddenCache,
+    PENROSE_LAUNDRY_ROOM_DEF_IDS.firstSun,
+    PENROSE_LAUNDRY_ROOM_DEF_IDS.deflationB,
+    PENROSE_LAUNDRY_ROOM_DEF_IDS.secondSun,
+    PENROSE_LAUNDRY_ROOM_DEF_IDS.hiddenCache,
   ]);
   assert.equal(state.deflationPocketRoomNames.length, 2);
   assert.equal(state.waterCells >= 45, true);

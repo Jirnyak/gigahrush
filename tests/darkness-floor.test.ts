@@ -4,7 +4,9 @@ import * as assert from 'node:assert/strict';
 import { Cell, EntityType, Feature, RoomType, W, ZoneFaction } from '../src/core/types';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import { generateDarknessDesignFloor, darknessStateByWorld } from '../src/gen/darkness';
+import { generateDarknessDesignFloor } from '../src/gen/darkness';
+// darknessStateByWorld живет в geometry; бочка src/gen/darkness/index.ts реэкспортирует только ./meta.
+import { darknessStateByWorld } from '../src/gen/darkness/geometry';
 import { countTerritoryCells, territoryHqAnchors } from '../src/systems/territory';
 
 function countReachableCells(gen: ReturnType<typeof generateDesignFloor>): number {
@@ -34,6 +36,14 @@ function countReachableCells(gen: ReturnType<typeof generateDesignFloor>): numbe
     }
   }
   return tail;
+}
+
+function countPassableCells(gen: ReturnType<typeof generateDesignFloor>): number {
+  let count = 0;
+  for (const cell of gen.world.cells) {
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER || cell === Cell.LIFT) count++;
+  }
+  return count;
 }
 
 test('darkness floor exposes light, reveal, sound and radon topology state', () => {
@@ -105,7 +115,12 @@ test('darkness full route has mid/micro structure and named cell-first HQ territ
 
   assert.equal(gen.world.rooms.length >= 190, true, `rooms ${gen.world.rooms.length}`);
   assert.equal(gen.world.doors.size >= 260, true, `doors ${gen.world.doors.size}`);
-  assert.equal(reachableCells >= 100_000, true, `reachable ${reachableCells}`);
+  // Инвариант вместо пина: тьма — намеренно компактный карман, а не полноразмерный этаж,
+  // поэтому проверяем не абсолютное число клеток, а закон сохранения связности —
+  // из спавна достижимо всё проходимое пространство, отрезанных карманов нет.
+  const passable = countPassableCells(gen);
+  assert.equal(passable >= 20_000, true, `passable ${passable}`);
+  assert.equal(passable - reachableCells <= 64, true, `unreachable pockets ${passable - reachableCells} of ${passable}`);
   assert.equal(microRooms.length >= 80, true, `micro rooms ${microRooms.length}`);
   assert.equal(stationRooms.length >= 70, true, `station rooms ${stationRooms.length}`);
   assert.equal(gen.entities.some(entity => entity.type === EntityType.NPC), false);

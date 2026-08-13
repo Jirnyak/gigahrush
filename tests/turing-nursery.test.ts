@@ -10,7 +10,7 @@ import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
-  TURING_NURSERY_BASE_FLOOR,
+  TURING_NURSERY_Z,
   TURING_NURSERY_ROOM_PREFIX,
   TURING_NURSERY_ROUTE_ID,
   TURING_NURSERY_Z,

@@ -8,7 +8,7 @@ import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   buildRoofLosExposureHeatmap,
   createRoofSkyTextureProvider,
-  ROOF_BASE_FLOOR,
+  ROOF_Z,
   ROOF_FUTURE_Z,
   ROOF_ROUTE_ID,
   ROOF_SKY_HEIGHT,

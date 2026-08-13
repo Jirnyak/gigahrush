@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import { EntityType, W, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { SIDE_QUESTS } from '../src/data/plot';
+import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import { generatePressovik } from '../src/gen/maintenance/pressovik';
 import { getCellHazardMoveMultiplier } from '../src/systems/cell_hazards';
 import { getRecentEvents, publishEvent } from '../src/systems/events';
@@ -27,7 +28,8 @@ function playerAt(x: number, y: number): Entity {
 test('Pressovik registers a stop quest with timing and production hooks', () => {
   const quest = SIDE_QUESTS.find(q => q.id === 'pressovik_manual_stop');
   assert.ok(quest, 'missing pressovik stop quest');
-  assert.equal(quest.giverNpcId, 'pressovik_stop_master');
+  // Выдатчик хранится числовым giverId; строкового giverNpcId в SideQuestStep нет.
+  assert.equal(quest.giverId, getPlotNpcNumericId('pressovik_stop_master'));
   assert.equal(quest.eventTags?.includes('pressovik'), true);
   assert.equal(quest.eventTags?.includes('timing'), true);
   assert.equal(quest.eventTags?.includes('production'), true);

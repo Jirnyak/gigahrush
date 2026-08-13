@@ -2,6 +2,7 @@ import { MONSTERS, MONSTER_SPRITES } from '../src/entities/monster';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import {
   AIGoal, Cell, EntityType, Feature, MonsterKind, RoomType, type Entity, type Msg,
 } from '../src/core/types';
@@ -10,6 +11,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/rzhavnik';
 import { generateRzhavnikShelf } from '../src/gen/maintenance/rzhavnik_shelf';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
+import { bakeNavigationTree } from '../src/systems/ai/pathfinding';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { publishNoise } from '../src/systems/noise';
@@ -22,6 +24,9 @@ function storageWorld(): World {
   addTestRoom(world, { id: 1, type: RoomType.STORAGE, x: 10, y: 10, w: 16, h: 10 });
   world.features[world.idx(14, 13)] = Feature.SHELF;
   world.features[world.idx(15, 13)] = Feature.SHELF;
+  // Акустика шума идёт по запечённому нав-дереву (в игре его печёт загрузка этажа):
+  // без bake getAcousticDistance даёт Infinity и громкий металл «не слышен».
+  bakeNavigationTree(world);
   return world;
 }
 

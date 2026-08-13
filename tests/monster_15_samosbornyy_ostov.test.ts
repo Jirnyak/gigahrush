@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
+import { getPlotNpcCount, getPlotNpcNumericId } from '../src/data/npc_packages';
 
 import { Cell, DoorState, EntityType, MonsterKind, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
@@ -52,7 +53,8 @@ test('Самосборный Остов scene has warning, safe options, and a b
   assert.ok(liquidator, 'liquidator report/burn path NPC should be present');
 
   const questIds = new Set(SIDE_QUESTS
-    .filter(q => q.giverNpcId === SAMOSBORNYY_OSTOV_LIQUIDATOR_ID)
+    // Квест-выдатчик хранится числовым giverId (строкового giverNpcId в SideQuestStep нет).
+    .filter(q => q.giverId === getPlotNpcNumericId(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID))
     .map(q => q.id));
   assert.equal(questIds.has('samosbornyy_ostov_report'), true);
   assert.equal(questIds.has('samosbornyy_ostov_burn'), true);

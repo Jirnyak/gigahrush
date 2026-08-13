@@ -8,7 +8,7 @@ import { designFloorPopulationProfile } from '../src/data/design_floor_populatio
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
 import {
-  CRITICAL_LEAK_ARCHIVE_BASE_FLOOR,
+  CRITICAL_LEAK_ARCHIVE_Z,
   CRITICAL_LEAK_ARCHIVE_ROOM_NAMES,
   CRITICAL_LEAK_ARCHIVE_ROUTE_ID,
   CRITICAL_LEAK_ARCHIVE_Z,

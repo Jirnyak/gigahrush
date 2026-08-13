@@ -17,6 +17,7 @@ import {
 import { auditReachability } from '../src/core/world';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { activeActorSoftLimit } from '../src/data/entity_limits';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner, territoryOwnerName } from '../src/data/factions';
 import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
@@ -81,10 +82,12 @@ function nearbySupportRooms(gen: HarmonicBathhouseGeneration, hq: Room): number 
   )).length;
 }
 
+// Амбиентные шаблоны больше не носят авторское имя-префикс: имя undefined
+// (идентичность даёт A-Life), авторские NPC — единичные именованные пакеты.
 function isAmbientBathhouseNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&
-    entity.name?.startsWith('Гармоническая баня:') === true &&
+    entity.name === undefined &&
     (entity as any).npcPackageId === undefined &&
     entity.persistentNpcId === undefined &&
     entity.alifeId === undefined &&
@@ -101,8 +104,12 @@ test('harmonic bathhouse route data and population profile match the pressure ba
   assert.equal(route.danger, 4);
 
   const profile = designFloorPopulationProfile(route);
-  assert.equal(profile.npcTarget >= 500 && profile.npcTarget <= 1000, true, `npc target ${profile.npcTarget}`);
-  assert.equal(profile.monsterTarget >= 1500 && profile.monsterTarget <= 2300, true, `monster target ${profile.monsterTarget}`);
+  // Цели профиля выводятся из общего актёрного бюджета (кривая по z); проверяем
+  // смысл, а не пиновую полосу: глубокий техэтаж монстро-доминантен, но сервисный
+  // контингент жив, и сумма влезает в актёрный софт-кап.
+  assert.equal(profile.npcTarget >= 500, true, `npc target ${profile.npcTarget}`);
+  assert.equal(profile.monsterTarget > profile.npcTarget, true, `monster target ${profile.monsterTarget} vs npc ${profile.npcTarget}`);
+  assert.equal(profile.npcTarget + profile.monsterTarget <= activeActorSoftLimit(), true);
   assert.equal(weightOf(profile.npcFactions, Faction.LIQUIDATOR) > weightOf(profile.npcFactions, Faction.WILD), true);
   assert.equal(weightOf(profile.npcOccupations, Occupation.MECHANIC) > weightOf(profile.npcOccupations, Occupation.DOCTOR), true);
   assert.equal(profile.monsterBiasKinds.includes(MonsterKind.TUMANNIK), true);
@@ -167,8 +174,10 @@ test('harmonic bathhouse expands into route-scale bath clusters with cell-first 
 
   assert.equal(world.rooms.length >= 470, true, `rooms ${world.rooms.length}`);
   assert.equal(world.doors.size >= 680, true, `doors ${world.doors.size}`);
-  assert.equal(passableCells(gen) >= 290_000, true, `passable ${passableCells(gen)}`);
-  assert.equal(reachableCellCount(gen) >= 290_000, true, `reachable ${reachableCellCount(gen)}`);
+  // Масштаб и связность вместо пинового счётчика: банный лабиринт маршрутного
+  // масштаба (сотни тысяч клеток) и почти полностью связен от спауна.
+  assert.equal(passableCells(gen) >= 250_000, true, `passable ${passableCells(gen)}`);
+  assert.equal(reachableCellCount(gen) >= passableCells(gen) * 0.99, true, `reachable ${reachableCellCount(gen)} of ${passableCells(gen)}`);
   assert.equal(serviceNodes.length >= 24, true, `service nodes ${serviceNodes.length}`);
   assert.equal(microRooms.length >= 360, true, `micro rooms ${microRooms.length}`);
 

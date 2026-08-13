@@ -38,29 +38,43 @@ export function testGenerationMatrix(name: string, fn: () => void): void {
   test(name, { skip: RUN_GENERATION_MATRIX ? false : GENERATION_SKIP_REASON }, fn);
 }
 
-function playableBounds(world: World): { count: number; minX: number; minY: number; maxX: number; maxY: number } {
-  const out = { count: 0, minX: W, minY: W, maxX: -1, maxY: -1 };
+/** Сторона блока покрытия: карта делится на 8x8 блоков по 128x128 клеток. */
+const FOOTPRINT_BLOCK = 128;
+
+function playableCoverage(world: World): { count: number; emptyBlocks: number; blocks: number } {
+  const side = W / FOOTPRINT_BLOCK;
+  const grid = new Uint8Array(side * side);
+  let count = 0;
   for (let y = 0; y < W; y++) {
     for (let x = 0; x < W; x++) {
       const cell = world.cells[world.idx(x, y)];
       if (cell !== Cell.FLOOR && cell !== Cell.WATER && cell !== Cell.DOOR && cell !== Cell.LIFT) continue;
-      out.count++;
-      if (x < out.minX) out.minX = x;
-      if (y < out.minY) out.minY = y;
-      if (x > out.maxX) out.maxX = x;
-      if (y > out.maxY) out.maxY = y;
+      count++;
+      grid[((y / FOOTPRINT_BLOCK) | 0) * side + ((x / FOOTPRINT_BLOCK) | 0)] = 1;
     }
   }
-  return out;
+  let emptyBlocks = 0;
+  for (const value of grid) if (!value) emptyBlocks++;
+  return { count, emptyBlocks, blocks: side * side };
 }
 
 export function assertFullFootprint(world: World, label: string): void {
-  const bounds = playableBounds(world);
-  assert.equal(bounds.minX, 0, `${label} minX`);
-  assert.equal(bounds.minY, 0, `${label} minY`);
-  assert.equal(bounds.maxX, W - 1, `${label} maxX`);
-  assert.equal(bounds.maxY, W - 1, `${label} maxY`);
-  assert.equal(bounds.count >= 18_000, true, `${label} playable cells`);
+  // Граница: этаж маршрута занимает весь тор 1024x1024, а не остров в середине
+  // карты — это и есть контракт расширения до полного этажа.
+  //
+  // Раньше граница проверялась углами bbox (minX===0 && maxX===W-1). Это пин
+  // микросостояния и вдобавок неверен на торе: одна случайная клетка в столбце
+  // 0 закрывала проверку целиком, а глухая полоса в 44 столбца у шва её роняла
+  // (dark_metro: minX=44 при 936 занятых столбцах из 1024 и 0 пустых блоков) —
+  // хотя этаж карту покрывает. Сплошная стена у шва тора не отличима от стены
+  // в любом другом месте: у тора нет края, к которому можно прижаться.
+  //
+  // Инвариант вместо пина: ни один из 64 блоков 128x128 (1/64 карты) не остаётся
+  // полностью глухим. Остров в центре карты по-прежнему валит проверку — у него
+  // пустует весь внешний обод блоков.
+  const coverage = playableCoverage(world);
+  assert.equal(coverage.emptyBlocks, 0, `${label} footprint: ${coverage.emptyBlocks}/${coverage.blocks} blocks 128x128 have no playable cell`);
+  assert.equal(coverage.count >= 18_000, true, `${label} playable cells ${coverage.count}`);
 }
 
 export function reachableCells(gen: FloorGeneration): Uint8Array {

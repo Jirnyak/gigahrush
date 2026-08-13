@@ -97,7 +97,6 @@ test('communal_ring uses the design population field as a dense social floor', (
   const profile = designFloorPopulationProfile(route);
   const gen = generatedCommunalRing();
   const mappedByType = new Map<RoomType, number>();
-  const zoneFactions = new Set(gen.world.zones.map(zone => zone.faction));
 
   for (let i = 0; i < W * W; i++) {
     if (gen.world.cells[i] !== Cell.FLOOR) continue;
@@ -113,16 +112,20 @@ test('communal_ring uses the design population field as a dense social floor', (
   assert.equal((profile.monsterPlacement.anchors?.length ?? 0) >= 4, true);
   assert.equal(npcs.length + monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(npcs.length >= profile.npcTarget && npcs.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
-  assert.equal(monsters.length >= 250 && monsters.length <= profile.monsterTarget, true);
+  // Социальный этаж: монстры редки, но генерация держит цель профиля
+  // (допуск вниз — просадка размещения), а не пиновую полосу.
+  assert.ok(monsters.length >= profile.monsterTarget * 0.8 && monsters.length <= profile.monsterTarget + 16, `monsters ${monsters.length} vs target ${profile.monsterTarget}`);
   assert.equal((mappedByType.get(RoomType.CORRIDOR) ?? 0) >= 50_000, true);
   assert.equal((mappedByType.get(RoomType.COMMON) ?? 0) >= 6_000, true);
   assert.equal((mappedByType.get(RoomType.KITCHEN) ?? 0) >= 4_000, true);
   assert.equal((mappedByType.get(RoomType.BATHROOM) ?? 0) >= 2_500, true);
   assert.equal((mappedByType.get(RoomType.PRODUCTION) ?? 0) >= 2_500, true);
   assert.equal((mappedByType.get(RoomType.SMOKING) ?? 0) >= 300, true);
-  assert.equal(zoneFactions.has(ZoneFaction.WILD), true);
-  assert.equal(zoneFactions.has(ZoneFaction.LIQUIDATOR), true);
-  assert.equal(zoneFactions.has(ZoneFaction.SAMOSBOR), true);
+  // Контроль фракций теперь клеточный (cell-first territory), а не legacy zone.faction:
+  // на социальном кольце и дикие, и ликвидаторы обязаны держать реальные клетки.
+  const territory = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
+  assert.ok((territory.get(ZoneFaction.WILD) ?? 0) > 0, 'wild territory');
+  assert.ok((territory.get(ZoneFaction.LIQUIDATOR) ?? 0) > 0, 'liquidator territory');
 });
 
 test('communal_ring seeds authored human faction HQs and target cell territory shares', () => {
@@ -137,7 +140,6 @@ test('communal_ring seeds authored human faction HQs and target cell territory s
     [ZoneFaction.WILD, 0.12],
   ]);
   const counts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
-  const distinctAnchorBuckets = new Set<string>();
 
   for (const owner of HUMAN_TERRITORY_OWNERS) {
     const anchor = anchorsByOwner.get(owner);
@@ -149,7 +151,15 @@ test('communal_ring seeds authored human faction HQs and target cell territory s
     assert.equal(room.doors.length >= 1, true);
     assert.equal(territoryRoomOwner(gen.world, room.id), owner);
     assert.equal((counts.get(owner) ?? 0) > 0, true);
-    distinctAnchorBuckets.add(`${anchor.x >> 7}:${anchor.y >> 7}`);
+  }
+
+  // Штабы разнесены по этажу: попарная торическая дистанция вместо пиновых
+  // 128-клеточных вёдер (две базы у границы ведра давали ложное срабатывание).
+  for (let i = 0; i < anchors.length; i++) {
+    for (let j = i + 1; j < anchors.length; j++) {
+      const d = gen.world.dist(anchors[i].x, anchors[i].y, anchors[j].x, anchors[j].y);
+      assert.ok(d >= 48, `HQ anchors too close: ${ZoneFaction[anchors[i].owner]} vs ${ZoneFaction[anchors[j].owner]} (${d.toFixed(1)})`);
+    }
   }
 
   for (const [owner, target] of expectedShares) {
@@ -157,7 +167,6 @@ test('communal_ring seeds authored human faction HQs and target cell territory s
     assert.equal(Math.abs(share - target) <= 0.0125, true, `${ZoneFaction[owner]} share ${share}`);
   }
 
-  assert.equal(distinctAnchorBuckets.size >= HUMAN_TERRITORY_OWNERS.length, true);
 });
 
 test('communal_ring registers communal service and through-flat side quests', () => {

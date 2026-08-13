@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import { AIGoal, Cell, EntityType, MonsterKind, W, type Entity, type WorldContainer } from '../src/core/types';
 import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';

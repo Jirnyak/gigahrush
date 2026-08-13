@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+import { getPlotNpcCount } from '../src/data/npc_packages';
 import {
   EntityType,
   MonsterKind,
@@ -64,7 +65,7 @@ test('Pustoy Sosed registers verification, avoidance, and reveal quests', () => 
   assert.equal(sideQuestPrereqsMet(flee!, [doneSideQuest(PUSTOY_SOSED_QUEST_IDS.closeReveal)]), false);
 
   const rumor = RUMORS.find(r => r.id === PUSTOY_SOSED_REFLECTION_RUMOR_ID);
-  assert.equal(rumor?.lead?.roomName, PUSTOY_SOSED_ROOM_NAME);
+  assert.equal(rumor?.lead?.roomDefId, PUSTOY_SOSED_ROOM_NAME);
   assert.equal(rumor?.lead?.itemId, 'fake_pass');
 });
 

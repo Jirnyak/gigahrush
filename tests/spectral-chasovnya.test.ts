@@ -10,8 +10,7 @@ import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
-  SPECTRAL_CHASOVNYA_BASE_FLOOR,
-  SPECTRAL_CHASOVNYA_ROOM_NAMES,
+  SPECTRAL_CHASOVNYA_ROOM_DEF_IDS,
   SPECTRAL_CHASOVNYA_ROUTE_ID,
   SPECTRAL_CHASOVNYA_Z,
   getSpectralChasovnyaState,
@@ -111,11 +110,11 @@ test('spectral_chasovnya exposes standing waves, shadows, bells and reachable ex
   assert.equal(hasReachableLift(gen, LiftDirection.DOWN), true);
 
   for (const name of [
-    SPECTRAL_CHASOVNYA_ROOM_NAMES.bellCage,
-    SPECTRAL_CHASOVNYA_ROOM_NAMES.radioSacristy,
-    SPECTRAL_CHASOVNYA_ROOM_NAMES.quietSouth,
-    SPECTRAL_CHASOVNYA_ROOM_NAMES.focusArch,
-    SPECTRAL_CHASOVNYA_ROOM_NAMES.exit,
+    SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.bellCage,
+    SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.radioSacristy,
+    SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.quietSouth,
+    SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.focusArch,
+    SPECTRAL_CHASOVNYA_ROOM_DEF_IDS.exit,
   ]) {
     assert.equal(reachableRoomCells(gen, name) > 0, true, name);
   }
@@ -186,15 +185,23 @@ test('spectral_chasovnya scales into acoustic districts with cell-first faction 
     assert.equal(support.length >= 4, true, `support rooms ${title}: ${support.length}`);
   }
 
+  // Амбиентные слушатели больше не носят авторское имя-префикс: имя undefined
+  // (идентичность даёт A-Life), авторские NPC — единичные именованные пакеты.
   const ambientNpcs = gen.entities.filter(entity =>
     entity.type === EntityType.NPC &&
-    entity.name?.startsWith('Спектральная часовня: слушатель ') === true &&
+    entity.name === undefined &&
     entity.faction !== undefined
   );
   const ownTerritoryNpcs = ambientNpcs.filter(entity =>
     territoryOwnerAt(gen.world, entity.x, entity.y) === factionToTerritoryOwner(entity.faction!)
   );
-  assert.equal(ambientNpcs.length >= 180, true, `ambient npcs ${ambientNpcs.length}`);
+  // Инвариант вместо пина: глубокий адский этаж почти пуст от людей, конкретное число
+  // задаёт кривая населения. Проверяем, что хор слушателей вообще существует и что
+  // генератор отработал цель профиля (допуск на размещение — 10%, но не меньше 16).
+  const npcTarget = designFloorPopulationProfile(designFloorById(SPECTRAL_CHASOVNYA_ROUTE_ID)!).npcTarget;
+  const npcTolerance = Math.max(16, Math.round(npcTarget * 0.1));
+  assert.equal(npcTarget > 0, true, `npc target ${npcTarget}`);
+  assert.equal(Math.abs(ambientNpcs.length - npcTarget) <= npcTolerance, true, `ambient npcs ${ambientNpcs.length} vs target ${npcTarget}`);
   assert.equal(ownTerritoryNpcs.length >= Math.floor(ambientNpcs.length * 0.9), true, `own territory ${ownTerritoryNpcs.length}/${ambientNpcs.length}`);
 });
 
@@ -202,7 +209,8 @@ test('spectral_chasovnya bell interaction publishes a bounded sound bait pulse',
   const gen = spectralGen();
   const node = gen.spectralState.bellNodes[0];
   const player = makeTestPlayer({ id: 9001, x: node.x + 1, y: node.y, angle: Math.PI });
-  const state = makeGameState({ currentZ: -36, time: 10 });
+  // Канонический z часовни — SPECTRAL_CHASOVNYA_Z (-42): игрок стоит на самом этаже.
+  const state = makeGameState({ currentZ: SPECTRAL_CHASOVNYA_Z, time: 10 });
   const target = findInteractionTarget({
     world: gen.world,
     state,
@@ -227,7 +235,12 @@ test('spectral_chasovnya bell interaction publishes a bounded sound bait pulse',
   assert.equal(result.handled, true);
   assert.equal(ringSpectralChasovnyaBell(gen.world, state, player, gen.entities, 'missing_node'), false);
   assert.equal(gen.spectralState.rungBellNodeIds.includes(node.id), true);
-  const noise = getRecentNoiseRecords(state, { z: -36, source: 'siren', minSeverity: 4, limit: 1 })[0];
+  // ПОДОЗРЕНИЕ НА БАГ SRC: src/gen/spectral_chasovnya/geometry.ts публикует шум/события
+  // с z: SPECTRAL_CHASOVNYA_Z (180 — стухшая константа старой схемы этажей),
+  // поэтому колокольная приманка не совпадает ни с одним каноническим currentZ (-50..50)
+  // и в реальной игре инертна. Тест сверяет канонический z этажа и останется красным,
+  // пока src не переведён на SPECTRAL_CHASOVNYA_Z.
+  const noise = getRecentNoiseRecords(state, { z: SPECTRAL_CHASOVNYA_Z, source: 'siren', minSeverity: 4, limit: 1 })[0];
   assert.ok(noise);
   assert.equal(noise.tags.includes('spectral_chasovnya'), true);
   assert.equal(noise.radius <= 48, true);

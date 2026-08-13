@@ -4,10 +4,10 @@ import * as assert from 'node:assert/strict';
 import { Cell, DoorState, EntityType, Faction, MonsterKind, Occupation, RoomType, W, ZoneFaction } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { activeActorSoftLimit } from '../src/data/entity_limits';
 import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
-  RADON_EXCHANGE_BASE_FLOOR,
   RADON_EXCHANGE_PROJECTION_KEY,
   RADON_EXCHANGE_ROOM_NAMES,
   RADON_EXCHANGE_ROUTE_ID,
@@ -103,8 +103,15 @@ test('radon_exchange exposes projection-key, service-chord and open-scanline dec
   const monsters = gen.entities.filter(entity => entity.type === EntityType.MONSTER);
   const lockedProjectionDoors = [...gen.world.doors.values()].filter(door => door.keyId === RADON_EXCHANGE_PROJECTION_KEY);
 
-  assert.equal(npcs.length, 48);
-  assert.equal(monsters.length, 3800);
+  // Инвариант вместо пина точных чисел: генератор обязан отработать цель профиля
+  // (допуск на размещение — 10%, но не меньше 16 существ), а сумма — влезть в общий
+  // мягкий лимит активных актёров.
+  const profile = designFloorPopulationProfile(designFloorById(RADON_EXCHANGE_ROUTE_ID)!);
+  const npcTolerance = Math.max(16, Math.round(profile.npcTarget * 0.1));
+  const monsterTolerance = Math.max(16, Math.round(profile.monsterTarget * 0.1));
+  assert.equal(Math.abs(npcs.length - profile.npcTarget) <= npcTolerance, true, `npcs ${npcs.length} vs target ${profile.npcTarget}`);
+  assert.equal(Math.abs(monsters.length - profile.monsterTarget) <= monsterTolerance, true, `monsters ${monsters.length} vs target ${profile.monsterTarget}`);
+  assert.equal(npcs.length + monsters.length <= activeActorSoftLimit(), true, `population ${npcs.length + monsters.length}`);
   assert.equal(monsters.some(entity => entity.monsterKind === MonsterKind.SLEPOGLAZ), true);
   assert.equal(monsters.some(entity => entity.monsterKind === MonsterKind.LAMPOGLAZ), true);
   assert.equal(lockedProjectionDoors.length >= 2, true);

@@ -81,8 +81,13 @@ test('genfix 039 slime_nii ships full-scale lab geometry and cell-first faction 
 
   assert.equal(world.rooms.length >= 650, true, `rooms ${world.rooms.length}`);
   assert.equal(world.doors.size >= 700, true, `doors ${world.doors.size}`);
-  assert.equal(passableCells(world) >= 260_000, true, `passable ${passableCells(world)}`);
-  assert.equal(reachable >= 255_000, true, `reachable ${reachable}`);
+  // Инвариант вместо пина: масштаб этажа плюс закон сохранения связности — всё проходимое
+  // достижимо из спавна. Сейчас проверка красная по существу: ensureConnectivity зовётся
+  // до expandSlimeNiiRouteGeometry, а finalizeExpandedFloor его не повторяет, поэтому
+  // пристроенные районы висят отрезанными. Это баг src, а не порог теста.
+  const passable = passableCells(world);
+  assert.equal(passable >= 200_000, true, `passable ${passable}`);
+  assert.equal(passable - reachable <= 64, true, `unreachable pockets ${passable - reachable} of ${passable}`);
   assert.equal(researchRooms.length >= 18, true, `research rooms ${researchRooms.length}`);
   assert.equal(microRooms.length >= 520, true, `micro rooms ${microRooms.length}`);
   assert.equal(hermeticHqs.length >= 5, true, `hermetic HQs ${hermeticHqs.length}`);

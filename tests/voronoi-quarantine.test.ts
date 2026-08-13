@@ -25,7 +25,7 @@ import { SIDE_QUESTS } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   getVoronoiQuarantineLayout,
-  VORONOI_QUARANTINE_BASE_FLOOR,
+  VORONOI_QUARANTINE_Z,
   VORONOI_QUARANTINE_ROOM_DEF_IDS,
   VORONOI_QUARANTINE_ROUTE_ID,
   VORONOI_QUARANTINE_Z,

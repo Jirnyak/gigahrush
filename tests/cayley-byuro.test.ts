@@ -5,13 +5,13 @@ import { DoorState, EntityType, MonsterKind, Occupation, W, ZoneFaction } from '
 import { auditReachability } from '../src/core/world';
 import { DESIGN_FLOOR_ROUTES, designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { activeActorSoftLimit } from '../src/data/entity_limits';
 import { PROCEDURAL_FLOOR_ZS } from '../src/data/procedural_floors';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
 import { countTerritoryCells, territoryHqAnchors, territoryOwnerAt, territoryRoomOwner } from '../src/systems/territory';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
-  CAYLEY_BYURO_BASE_FLOOR,
   CAYLEY_BYURO_ROOM_NAMES,
   CAYLEY_BYURO_ROUTE_ID,
   CAYLEY_BYURO_TARGET_TERRITORY_SHARES,
@@ -125,7 +125,14 @@ test('cayley_byuro full route applies bounded Ministry population pressure', () 
   assert.ok(profile.monsterTarget >= 98 && profile.monsterTarget <= 9800, 'monsterTarget in bounds');
   assert.equal(profile.npcOccupations.some(value => value.value === Occupation.SECRETARY && value.weight >= 30), true);
   assert.equal(profile.monsterBiasKinds.includes(MonsterKind.PARAGRAPH), true);
-  assert.equal(npcs.length >= 560 && npcs.length <= 900, true);
-  assert.equal(monsters.length >= 760 && monsters.length <= 1150, true);
+  // Инвариант вместо пина численности: генератор обязан отработать цель профиля, а не
+  // попасть в жёсткое окно чисел. Допуск на размещение — 10% (но не меньше 16 существ),
+  // сверху — общий мягкий лимит активных актёров.
+  const populationBudget = activeActorSoftLimit();
+  const npcTolerance = Math.max(16, Math.round(profile.npcTarget * 0.1));
+  const monsterTolerance = Math.max(16, Math.round(profile.monsterTarget * 0.1));
+  assert.equal(Math.abs(npcs.length - profile.npcTarget) <= npcTolerance, true, `npcs ${npcs.length} vs target ${profile.npcTarget}`);
+  assert.equal(Math.abs(monsters.length - profile.monsterTarget) <= monsterTolerance, true, `monsters ${monsters.length} vs target ${profile.monsterTarget}`);
+  assert.equal(npcs.length + monsters.length <= populationBudget, true, `population ${npcs.length + monsters.length} over cap ${populationBudget}`);
   assert.equal(gen.cayleyState.routeId, CAYLEY_BYURO_ROUTE_ID);
 });

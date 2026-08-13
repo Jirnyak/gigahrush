@@ -47,6 +47,8 @@ function myasomerFixture(): { world: World; entities: Entity[]; site: NonNullabl
   assert.ok(site, 'myasomer site should be generated in an empty hell test world');
   entities[0].x = site.x;
   entities[0].y = site.y;
+  // Инвариант вместо пина этажа: обработчик мясомера сравнивает state.currentZ и event.z
+  // ровно с site.z, поэтому тесты берут z из самого сайта, а не из числа в коде.
   return { world, entities, site };
 }
 
@@ -83,11 +85,11 @@ test('myasomer generation creates local quiet and loud rewards', () => {
 
 test('quiet cache publishes myasomer quiet-clear without spawning threats', () => {
   const { entities, site } = myasomerFixture();
-  const state = makeGameState({ currentZ: -26, time: 20 });
+  const state = makeGameState({ currentZ: site.z, time: 20 });
 
   publishEvent(state, {
     type: 'container_opened',
-    z: -36,
+    z: site.z,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.x,
@@ -111,13 +113,13 @@ test('quiet cache publishes myasomer quiet-clear without spawning threats', () =
 
 test('siren shard noise escalates locally and caps spawned pressure', () => {
   const { entities, site } = myasomerFixture();
-  const state = makeGameState({ currentZ: -26, time: 40 });
+  const state = makeGameState({ currentZ: site.z, time: 40 });
 
   for (let i = 0; i < 5; i++) {
     state.time += 1;
     publishEvent(state, {
       type: 'item_stolen',
-      z: -36,
+      z: site.z,
       zoneId: site.zoneId,
       roomId: site.roomId,
       x: site.x,
@@ -144,7 +146,7 @@ test('siren shard noise escalates locally and caps spawned pressure', () => {
   for (const threat of threats) threat.alive = false;
   publishEvent(state, {
     type: 'player_kill_monster',
-    z: -36,
+    z: site.z,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.x,
@@ -166,11 +168,11 @@ test('siren shard noise escalates locally and caps spawned pressure', () => {
 
 test('fire sears the listening vein and removes shadow pressure', () => {
   const { entities, site } = myasomerFixture();
-  const state = makeGameState({ currentZ: -26, time: 60 });
+  const state = makeGameState({ currentZ: site.z, time: 60 });
 
   publishEvent(state, {
     type: 'burn_cleanup',
-    z: -36,
+    z: site.z,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.veinX,
@@ -193,7 +195,7 @@ test('fire sears the listening vein and removes shadow pressure', () => {
     state.time += 1;
     publishEvent(state, {
       type: 'item_stolen',
-      z: -36,
+      z: site.z,
       zoneId: site.zoneId,
       roomId: site.roomId,
       x: site.x,

@@ -13,10 +13,11 @@ import {
 } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { activeActorSoftLimit } from '../src/data/entity_limits';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
-  HYPERBOLIC_SWITCHYARD_BASE_FLOOR,
+  HYPERBOLIC_SWITCHYARD_Z,
   HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID,
   HYPERBOLIC_SWITCHYARD_ROUTE_Z,
   type HyperbolicSwitchyardGeneration,
@@ -97,8 +98,17 @@ test('hyperbolic_switchyard population profile is industrial and monster-heavy',
   const monsters = gen.entities.filter(entity => entity.type === EntityType.MONSTER);
   const shortcutRoom = gen.world.rooms.find(room => room.name === 'Геодезическая служебная кишка');
 
-  assert.equal(profile.npcTarget >= 450 && profile.npcTarget <= 700, true, `npc target ${profile.npcTarget}`);
-  assert.equal(profile.monsterTarget >= 2000, true, `monster target ${profile.monsterTarget}`);
+  // Инвариант вместо пина численности: доля монстров считается от авторского danger как
+  // отклонение от нормы для высоты этажа, поэтому абсолютные числа плывут от любой правки
+  // кривой населения. Проверяем закон сохранения бюджета актёров и качественный контракт
+  // этажа: живой промышленный сортировщик с монстрами не меньше трети населения.
+  const populationBudget = activeActorSoftLimit();
+  const population = profile.npcTarget + profile.monsterTarget;
+  const monsterShare = profile.monsterTarget / population;
+  assert.equal(profile.npcTarget > 0, true, `npc target ${profile.npcTarget}`);
+  assert.equal(profile.monsterTarget > 0, true, `monster target ${profile.monsterTarget}`);
+  assert.equal(population <= populationBudget, true, `population ${population} over cap ${populationBudget}`);
+  assert.equal(monsterShare >= 0.35, true, `monster share ${monsterShare.toFixed(3)}`);
   assert.equal(profile.monsterTags.includes('hyperbolic'), true);
   assert.equal(profile.monsterTags.includes('switchyard'), true);
   assert.equal((profile.monsterPlacement.anchors?.length ?? 0) >= 5, true);

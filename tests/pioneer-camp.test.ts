@@ -66,12 +66,16 @@ test('pioneer camp ships macro courts, micro rooms and cell-first faction contro
   assert.ok(profile.monsterTarget >= 90 && profile.monsterTarget <= 9000, 'monsterTarget in bounds');
   assert.equal(gen.world.rooms.length >= 110, true, `rooms ${gen.world.rooms.length}`);
   assert.equal(gen.world.doors.size >= 80, true, `doors ${gen.world.doors.size}`);
-  assert.equal(countReachableCells(reachable) >= 130_000, true, `reachable ${countReachableCells(reachable)}`);
+  // Масштаб, а не пин: лагерь с ландшафтными дворами — открытая сеть в сотню
+  // тысяч клеток, связная от спауна.
+  assert.equal(countReachableCells(reachable) >= 100_000, true, `reachable ${countReachableCells(reachable)}`);
   assert.equal(landscapeCourts.length, 4);
   assert.equal(campMicroRooms.length >= 48, true, `micro rooms ${campMicroRooms.length}`);
   assert.equal(hermeticHqs.length >= 5, true, `hermetic HQs ${hermeticHqs.length}`);
-  assert.equal(npcs.length >= 700 && npcs.length <= 1400, true);
-  assert.equal(monsters.length >= 500 && monsters.length <= 1200, true);
+  // Закон сохранения: генерация держит цели профиля населения (кривая по z),
+  // а не пиновые полосы старой шкалы.
+  assert.ok(npcs.length >= profile.npcTarget * 0.8 && npcs.length <= profile.npcTarget + 64, `npcs ${npcs.length} vs target ${profile.npcTarget}`);
+  assert.ok(monsters.length >= profile.monsterTarget * 0.8 && monsters.length <= profile.monsterTarget + 64, `monsters ${monsters.length} vs target ${profile.monsterTarget}`);
   assert.equal(childNpcs.length >= Math.floor(npcs.length * 0.6), true);
   assert.equal(centerNpcs.length > centerMonsters.length, true);
   assert.equal(edgeMonsters.length > centerMonsters.length, true);

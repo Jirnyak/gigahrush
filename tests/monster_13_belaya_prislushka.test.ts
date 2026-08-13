@@ -26,7 +26,8 @@ test('Белая Прислушка registers one living-zone POI and the expect
   const rescue = SIDE_QUESTS.find(q => q.id === BELAYA_PRISLUSHKA_QUEST_IDS.rescue);
   assert.equal(rescue?.type, QuestType.TALK);
   assert.equal(rescue?.timeLimitMinutes, 30);
-  assert.equal(rescue?.targetFloorZ, 100);
+  // Канон Z после миграции: жилой этаж = 0 (раньше в тесте стоял старый номер 100).
+  assert.equal(rescue?.targetFloorZ, 0);
   assert.equal(rescue?.eventTags?.includes('compulsion'), true);
 
   const clear = SIDE_QUESTS.find(q => q.id === BELAYA_PRISLUSHKA_QUEST_IDS.sourceCleared);

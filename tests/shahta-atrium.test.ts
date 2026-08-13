@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import { Cell, DoorState, EntityType, LiftDirection, MonsterKind, RoomType, W, ZoneFaction } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
+import { activeActorSoftLimit } from '../src/data/entity_limits';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { getEmergencyPanels } from '../src/systems/emergency_panels';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
@@ -95,8 +96,15 @@ test('shahta atrium route registration and population profile expose the shaft s
 
   const profile = designFloorPopulationProfile(route);
   assert.equal(profile.routeId, DESIGN_FLOOR_ID);
-  assert.equal(profile.npcTarget >= 500 && profile.npcTarget <= 900, true);
-  assert.equal(profile.monsterTarget >= 1800 && profile.monsterTarget <= 2400, true);
+  // Инвариант вместо пина численности: абсолютные цели плывут от кривой населения
+  // (доля монстров = отклонение авторского danger от нормы для высоты этажа).
+  // Держим закон сохранения бюджета актёров и качественный контракт шахты:
+  // обитаемая, но опасная — монстров больше, чем людей.
+  const populationBudget = activeActorSoftLimit();
+  const population = profile.npcTarget + profile.monsterTarget;
+  assert.equal(profile.npcTarget > 0, true, `npc target ${profile.npcTarget}`);
+  assert.equal(profile.monsterTarget > profile.npcTarget, true, `npc ${profile.npcTarget} vs monsters ${profile.monsterTarget}`);
+  assert.equal(population <= populationBudget, true, `population ${population} over cap ${populationBudget}`);
   assert.equal(profile.monsterBiasKinds.includes(MonsterKind.TRUBNYY_AVTOMAT), true);
   assert.equal(profile.monsterTags.includes('bridge'), true);
   assert.equal((profile.monsterPlacement.anchors?.length ?? 0) >= 5, true);

@@ -21,7 +21,7 @@ import { SIDE_QUESTS } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import {
   measureSpetspriemnikMetrics,
-  SPETSPRIEMNIK_BASE_FLOOR,
+  SPETSPRIEMNIK_Z,
   SPETSPRIEMNIK_CELL_KEY,
   SPETSPRIEMNIK_GUARD_KEY,
   SPETSPRIEMNIK_PERMIT_KEY,
