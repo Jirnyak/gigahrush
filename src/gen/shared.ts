@@ -2350,6 +2350,14 @@ export function restoreAuthoredRoomShell(world: World, name: string, type: RoomT
 export function finalizeExpandedFloor(generation: any, _route: any, _rng: () => number): void {
   generateZones(generation.world);
   sanitizeDoors(generation.world);
+  // Connectivity belongs HERE, after the expansion that this function
+  // finalizes. Floors call ensureConnectivity in their own body — i.e. before
+  // they expand — so everything the expansion carved stayed as separate
+  // components: tens of thousands of cells and whole named rooms the player
+  // could see on the map and never reach.
+  if (typeof generation.spawnX === 'number' && typeof generation.spawnY === 'number') {
+    ensureConnectivity(generation.world, generation.spawnX, generation.spawnY);
+  }
   generation.world.rebuildContainerMap();
   generation.world.bakeLights();
 }

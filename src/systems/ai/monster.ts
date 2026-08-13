@@ -248,7 +248,13 @@ const BORSHCHEVIK_SEED_SQ = 4.8 * 4.8;
 const BORSHCHEVIK_SAP_RANGE_SQ = 1.55 * 1.55;
 const BORSHCHEVIK_SEED_COOLDOWN_SEC = 5.6;
 const BORSHCHEVIK_ROOT_COOLDOWN_SEC = 8.5;
-const BLOOD_PLANT_TENDRIL_RANGE_SQ = BLOOD_PLANT_TENDRIL_RANGE * BLOOD_PLANT_TENDRIL_RANGE;
+// Lazily squared: blood_plant and this module import each other, so reading
+// the imported constant at module-evaluation time throws a TDZ ReferenceError
+// whenever blood_plant happens to be entered first (it did — the whole
+// blood-plant test file failed to load).
+function bloodPlantTendrilRangeSq(): number {
+  return BLOOD_PLANT_TENDRIL_RANGE * BLOOD_PLANT_TENDRIL_RANGE;
+}
 const OBZHIVALSHCHIK_BREACH_ANGER = 70;
 const OBZHIVALSHCHIK_MAX_ANGER = 100;
 const OBZHIVALSHCHIK_GROWTH_CAP = 6;
@@ -5200,7 +5206,7 @@ function updateLampPoweredReadability(
 
 function monsterDetectSq(world: World, e: Entity, fallback: number): number {
   if (hasAIFlag(e, 'rootedPlant')) return BORSHCHEVIK_DETECT_SQ;
-  if (hasAIFlag(e, 'rootHive')) return BLOOD_PLANT_TENDRIL_RANGE_SQ;
+  if (hasAIFlag(e, 'rootHive')) return bloodPlantTendrilRangeSq();
   if (hasAIFlag(e, 'protocolPressure')) return PROTOKOLNIK_DETECT_SQ;
   if (hasAIFlag(e, 'documentHunter')) return PECHATEED_DETECT_SQ;
   if (hasAIFlag(e, 'documentScent')) return KONTORSHCHIK_DETECT_SQ;
@@ -5312,7 +5318,7 @@ function updateBloodPlantRootHive(
   ai.plantRootCd = Math.max(0, (ai.plantRootCd ?? 0) - dt);
   if (ai.plantRootCd <= 0) {
     const heal = healBloodPlantFromRedMold(world, e);
-    if (heal.healed > 0 && target?.id === playerId && world.dist2(e.x, e.y, target.x, target.y) <= BLOOD_PLANT_TENDRIL_RANGE_SQ) {
+    if (heal.healed > 0 && target?.id === playerId && world.dist2(e.x, e.y, target.x, target.y) <= bloodPlantTendrilRangeSq()) {
       msgs.push(msg('Красная плесень в ящиках кормит ствол. Уберите пробу или жгите быстрее.', time, '#d66'));
     }
     ai.plantRootCd = BLOOD_PLANT_HEAL_SCAN_SEC + ((e.id % 3) * 0.13);
@@ -5325,7 +5331,7 @@ function updateBloodPlantRootHive(
   }
 
   const d2 = world.dist2(e.x, e.y, target.x, target.y);
-  if (d2 > BLOOD_PLANT_TENDRIL_RANGE_SQ) {
+  if (d2 > bloodPlantTendrilRangeSq()) {
     ai.goal = AIGoal.IDLE;
     ai.combatTargetId = undefined;
     return true;

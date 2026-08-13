@@ -11,6 +11,7 @@ import {
   type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { setTerritoryOwnerAtIndex } from '../../systems/territory';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom } from '../shared';
@@ -70,12 +71,56 @@ export function expandAttractorDvorRouteGeometry(world: World, rng: () => number
   world.markFeaturesDirty(true);
 }
 
+/** Zones covering the authored dead cut, found from the room itself. */
+function attractorDeadCutZoneIndices(world: World): Set<number> {
+  const indices = new Set<number>();
+  const deadRoom = world.rooms.find(room => room?.name === ATTRACTOR_DVOR_ROOM_DEF_IDS.deadZone);
+  if (!deadRoom) return indices;
+  for (let y = deadRoom.y; y < deadRoom.y + deadRoom.h; y++) {
+    for (let x = deadRoom.x; x < deadRoom.x + deadRoom.w; x++) {
+      indices.add(world.zoneMap[world.idx(x, y)]);
+    }
+  }
+  return indices;
+}
+
+/**
+ * Re-state the authored dead cut AFTER the manifest rebuilt cell territory.
+ * `initializeCellTerritory` repaints ownership from faction seeds and then
+ * `syncZoneMetadataFromTerritory` recomputes every zone.faction from those
+ * cells, so a cut declared during generation was silently erased and the floor
+ * shipped with zero samosbor ground. Scoped to the cut on purpose: re-running
+ * the full zone tuning here would flatten the fine-grained cell-first
+ * territory (cultists and scientists lose their ground to the zone average).
+ */
+export function applyAttractorDeadCutTerritory(world: World): void {
+  const deadRoom = world.rooms.find(room => room?.name === ATTRACTOR_DVOR_ROOM_DEF_IDS.deadZone);
+  if (!deadRoom) return;
+  for (let y = deadRoom.y; y < deadRoom.y + deadRoom.h; y++) {
+    for (let x = deadRoom.x; x < deadRoom.x + deadRoom.w; x++) {
+      setTerritoryOwnerAtIndex(world, world.idx(x, y), ZoneFaction.SAMOSBOR);
+    }
+  }
+  for (const zoneIndex of attractorDeadCutZoneIndices(world)) {
+    const zone = world.zones[zoneIndex];
+    if (!zone) continue;
+    zone.faction = ZoneFaction.SAMOSBOR;
+    zone.level = Math.max(zone.level, 5);
+  }
+}
+
 export function tuneAttractorDvorRouteZones(world: World, syncCellField = true): void {
-  for (const zone of world.zones) {
+  // Zone centres are scattered, not gridded, so the old hardcoded rectangle
+  // (450..580 x 520..640) caught no centre at all and the floor shipped with
+  // ZERO samosbor zones. Anchor the dead cut to the authored room instead:
+  // whatever zones actually cover it are the dead cut.
+  const deadZoneIndices = attractorDeadCutZoneIndices(world);
+  for (let zoneIndex = 0; zoneIndex < world.zones.length; zoneIndex++) {
+    const zone = world.zones[zoneIndex];
     const d = world.dist(zone.cx, zone.cy, CX, CY);
     const inCore = d < 178;
     const inOuterFlow = zone.cx < 236 || zone.cx > 788 || zone.cy < 236 || zone.cy > 788;
-    const inDeadCut = zone.cx >= 450 && zone.cx <= 580 && zone.cy >= 520 && zone.cy <= 640;
+    const inDeadCut = deadZoneIndices.has(zoneIndex);
     if (inDeadCut) {
       zone.faction = ZoneFaction.SAMOSBOR;
       zone.level = Math.max(zone.level, 5);

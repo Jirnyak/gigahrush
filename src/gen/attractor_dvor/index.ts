@@ -9,7 +9,7 @@ import { seededRandom, hashSeed } from '../../core/rand';
 import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
 import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, ATTRACTOR_DVOR_ROOM_DEF_IDS, AttractorDvorState } from "./meta";
-import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, placeLifts, registerAttractorRouteCues } from "./geometry";
+import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, applyAttractorDeadCutTerritory, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, placeLifts, registerAttractorRouteCues } from "./geometry";
 import { placeContainers, spawnActors } from "./npcs";
 
 export function generateAttractorDvorDesignFloor(): FloorGeneration {
@@ -74,7 +74,19 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
     // ensureConnectivity was NOT called here previously, actually wait!
     // generateAttractorDvorDesignFloor previously just returned the layout, but let's check!
     
-    const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: state.debugEntry.spawnX, spawnY: state.debugEntry.spawnY };
+    const generation: DesignFloorGeneration = {
+      isDecentralized: true,
+      world,
+      entities,
+      spawnX: state.debugEntry.spawnX,
+      spawnY: state.debugEntry.spawnY,
+      // initializeCellTerritory in the manifest rebuilds cell ownership from
+      // faction seeds and then recomputes every zone.faction from it, so the
+      // authored dead cut has to be re-stated afterwards or it is erased.
+      onAfterTerritory: (w) => {
+        applyAttractorDeadCutTerritory(w);
+      },
+    };
     ensureConnectivity(world, generation.spawnX, generation.spawnY);
     
     placeAttractorDvorEmergencyPanels(world);

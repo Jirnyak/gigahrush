@@ -31,6 +31,11 @@ import { genLog } from '../log';
 import { isPlayerEntity } from '../../systems/player_actor';
 import { rng } from '../../core/rand';
 
+// Канонический z Мясного низа (маршрут: hell = -36). Раньше здесь стояло
+// число 180 из отменённой схемы этажей — сайт и его события были
+// внутренне согласованы, но лежали вне координат реального маршрута.
+const HELL_Z = -36;
+
 const MYASOMER_ID = 'myasomer';
 const MYASOMER_NAME = 'Мясомер';
 const ROOM_NAME = 'Коридор Мясомера';
@@ -104,7 +109,7 @@ export function generateMyasomer(world: World, entities: Entity[], nextId: { v: 
   const cy = world.wrap(room.y + (room.h >> 1));
   const ci = world.idx(cx, cy);
   activeSite = {
-    z: 180,
+    z: HELL_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     x: cx + 0.5,
@@ -341,7 +346,7 @@ function addQuietCache(world: World, room: Room): number {
     id: nextContainerId(world),
     x,
     y,
-    z: 180,
+    z: HELL_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.TRASH_BIN,
@@ -369,7 +374,7 @@ function addShardCache(world: World, room: Room): number {
     id: nextContainerId(world),
     x,
     y,
-    z: 180,
+    z: HELL_Z,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
