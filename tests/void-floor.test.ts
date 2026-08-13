@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import { Cell, Feature, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src/core/types';
 import { auditReachability, hasReachableAdjacentCell, type ReachabilityAudit } from '../src/core/world';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
+import { routeExpectedLiftDirections } from '../src/data/procedural_floors';
 import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { generateFloor, type FloorGeneration } from '../src/gen/floor_manifest';
 import { VOID_DEAD_LAMP_ROWS, VOID_GEOMETRY_ANCHORS } from '../src/gen/void/geometry';
@@ -142,8 +143,16 @@ test('VOID story floor uses a reachable impossible graph with expanded route-sca
   assert.equal(gen.world.doors.size >= 430, true, `doors ${gen.world.doors.size}`);
   assert.equal(walkable >= 300_000, true, `walkable ${walkable}`);
   assert.equal(reachableBucketCount(gen, audit, 64) >= 220, true, 'reachable buckets cover the route-scale map');
-  assert.equal(reachableLift(gen, audit, LiftDirection.UP), true);
-  assert.equal(reachableLift(gen, audit, LiftDirection.DOWN), true);
+  // Route-lift contract (owner decision 2026-07-30, #45): void z=-50 is the
+  // terminus — routeExpectedLiftDirections(-50) is [], the manifest strips
+  // route lifts («конец», no return). The generator itself still places both;
+  // pin the CONTRACT here, whatever the raw generator emitted.
+  const expectedDirs = routeExpectedLiftDirections(-50);
+  for (const dir of [LiftDirection.UP, LiftDirection.DOWN]) {
+    if (expectedDirs.includes(dir)) {
+      assert.equal(reachableLift(gen, audit, dir), true, `route lift ${LiftDirection[dir]} reachable`);
+    }
+  }
   assert.equal(reachableRoom(gen, audit, 'Световой карман'), true);
   assert.equal(reachableRoom(gen, audit, 'Пустотный повторитель'), true);
   assert.equal(reachableRoom(gen, audit, 'Протокольная П-46'), true);

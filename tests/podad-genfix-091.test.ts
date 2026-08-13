@@ -5,6 +5,7 @@ import { Cell, LiftDirection, RoomType, W, ZoneFaction, type Room } from '../src
 import { auditReachability } from '../src/core/world';
 import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
+import { routeExpectedLiftDirections } from '../src/data/procedural_floors';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { countTerritoryCells, territoryHqAnchors, territoryRoomOwner } from '../src/systems/territory';
 
@@ -82,8 +83,13 @@ test('genfix 091 podad preserves living-tunnel macro while adding mid/micro room
   assert.equal(organStations.length >= 28, true, `organ stations ${organStations.length}`);
   assert.equal(scarYards.length >= 4, true, `scar yards ${scarYards.length}`);
   assert.equal(taggedHqs.length, 5);
-  assert.equal(reachableLift(world, audit.reachable, LiftDirection.UP), true);
-  assert.equal(hasDownLift, false);
+  // Route-lift contract (owner decision 2026-07-30, #45): podad z=-40 expects
+  // [DOWN, UP] via routeExpectedLiftDirections — both directions must be
+  // reachable. The old `hasDownLift === false` predates that decision.
+  for (const dir of routeExpectedLiftDirections(-40)) {
+    assert.equal(reachableLift(world, audit.reachable, dir), true, `route lift ${LiftDirection[dir]} reachable`);
+  }
+  assert.equal(hasDownLift, routeExpectedLiftDirections(-40).includes(LiftDirection.DOWN));
 
   const anchors = territoryHqAnchors(world);
   const anchorOwners = new Set(anchors.map(anchor => anchor.owner));

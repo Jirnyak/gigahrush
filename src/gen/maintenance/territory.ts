@@ -112,12 +112,19 @@ function claimMaintenanceHqRoom(world: World, room: Room | undefined, owner: Ter
   return true;
 }
 
-function chooseMaintenanceHqFallbackRoom(world: World, targetX: number, targetY: number, usedRooms: Set<number>): Room | undefined {
+function chooseMaintenanceHqFallbackRoom(
+  world: World,
+  targetX: number,
+  targetY: number,
+  usedRooms: Set<number>,
+  tooClose?: (room: Room) => boolean,
+): Room | undefined {
   let best: Room | undefined;
   let bestScore = Infinity;
   for (const room of world.rooms) {
     if (!room || usedRooms.has(room.id) || room.apartmentId >= 0 || room.w <= 2 || room.h <= 2) continue;
     if (room.w * room.h > 1200 || mappedRoomCells(world, room).length === 0) continue;
+    if (tooClose?.(room)) continue;
     const center = roomCenter(room);
     const score = world.dist2(center.x, center.y, targetX, targetY) - Math.min(240, room.w * room.h);
     if (score < bestScore) {
@@ -142,6 +149,16 @@ const HQ_TARGET_NAMES = [
 
 function seedMaintenanceHqTerritory(world: World): void {
   const usedRooms = new Set<number>();
+  // Faction HQs must stay territorially distinct (> HQ_SPAWN_RADIUS apart):
+  // the CITIZEN and WILD fallback targets sit ~96 cells from each other, so an
+  // unguarded fallback could glue two staffs together. Margin covers the gap
+  // between a room's center and wherever the territory anchor lands inside it.
+  const claimedCenters: { x: number; y: number }[] = [];
+  const minHqGap = HQ_SPAWN_RADIUS + 16;
+  const tooClose = (room: Room): boolean => {
+    const center = roomCenter(room);
+    return claimedCenters.some(p => world.dist2(p.x, p.y, center.x, center.y) <= minHqGap * minHqGap);
+  };
 
   const roomsByName = new Map<string, Room>();
   for (const room of world.rooms) {
@@ -152,12 +169,12 @@ function seedMaintenanceHqTerritory(world: World): void {
   }
 
   for (const seed of MAINTENANCE_HQ_SEEDS) {
-    const room = roomsByName.get(seed.roomDefId);
-    const picked = room && mappedRoomCells(world, room).length > 0
-      ? room
-      : chooseMaintenanceHqFallbackRoom(world, seed.fallbackX, seed.fallbackY, usedRooms);
+    const named = roomsByName.get(seed.roomDefId);
+    let picked = named && mappedRoomCells(world, named).length > 0 && !tooClose(named) ? named : undefined;
+    picked ??= chooseMaintenanceHqFallbackRoom(world, seed.fallbackX, seed.fallbackY, usedRooms, tooClose);
     if (!picked) continue;
     usedRooms.add(picked.id);
+    claimedCenters.push(roomCenter(picked));
     hardenMaintenanceHqSeed(world, picked, seed.owner);
   }
 
