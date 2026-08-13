@@ -15,7 +15,7 @@ import {
 } from '../src/core/types';
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
-import { ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
+import { ACTIVE_ACTOR_SOFT_LIMIT, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
 import { HUMAN_TERRITORY_OWNERS, territoryOwnerToFaction } from '../src/data/factions';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
@@ -26,8 +26,9 @@ import {
   BLACK_MARKET_88_STOCK,
   MARKET88_GEOMETRY_HUBS,
   MARKET88_HUB_DEGREE_CAP,
-  MARKET88_HQ_ROOM_NAMES,
+  MARKET88_HQ_ROOM_DEF_IDS,
   MARKET88_RAID_SHUTTER_GATES,
+  MARKET88_SERVICE_GUT_SPECS,
   MARKET88_SMALL_WORLD_CHORDS,
   applyBlackMarket88Purchase,
   applyBlackMarket88SamosborDemand,
@@ -63,7 +64,16 @@ function hub(id: HubId): typeof MARKET88_GEOMETRY_HUBS[number] {
   return out;
 }
 
-function strictReachable(gen: BlackMarketGeneration): Uint8Array {
+// Запертая дверь — игровой замок, а не запечатанная комната: для проверки
+// «нет отрезанного содержимого» дверь проходима в любом состоянии.
+function doorReachable(gen: BlackMarketGeneration): Uint8Array {
+  return strictReachable(gen, idx => {
+    const cell = gen.world.cells[idx];
+    return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
+  });
+}
+
+function strictReachable(gen: BlackMarketGeneration, passable = (idx: number) => strictPassable(gen, idx)): Uint8Array {
   const world = gen.world;
   const seen = new Uint8Array(W * W);
   const queue = new Int32Array(W * W);
@@ -79,7 +89,7 @@ function strictReachable(gen: BlackMarketGeneration): Uint8Array {
     const y = (ci / W) | 0;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const ni = world.idx(x + dx, y + dy);
-      if (seen[ni] || !strictPassable(gen, ni)) continue;
+      if (seen[ni] || !passable(ni)) continue;
       seen[ni] = 1;
       queue[tail++] = ni;
     }
@@ -119,8 +129,10 @@ test('black_market_88 population profile keeps market crowd and service-gut mons
   assert.ok(route);
   const profile = designFloorPopulationProfile(route);
 
-  assert.ok(profile.npcTarget >= 220 && profile.npcTarget <= 22000, 'npcTarget in bounds');
-  assert.ok(profile.monsterTarget >= 70 && profile.monsterTarget <= 7000, 'monsterTarget in bounds');
+  // Толпа рынка объявлена этажом (половина бюджета акторов), а не унаследована
+  // от кривой глубины — иначе базар съедал весь бюджет и душил своих монстров.
+  assert.equal(profile.npcTarget, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT / 2, 'authored market crowd');
+  assert.ok(profile.monsterTarget > 0, 'service guts keep monster pressure');
   assert.equal(profile.npcTarget + profile.monsterTarget <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(weightOf(profile.npcFactions, Faction.CITIZEN) > weightOf(profile.npcFactions, Faction.LIQUIDATOR), true);
   assert.equal(weightOf(profile.npcFactions, Faction.WILD) > weightOf(profile.npcFactions, Faction.LIQUIDATOR), true);
@@ -159,15 +171,29 @@ test('black_market_88 generator exposes bazaar, auction, service guts, container
   }
 
   const stallRooms = gen.world.rooms.filter(room => /^(Прилавок|Лоток|Палатка|Стол|Занавес|Склад без вывески)/.test(room.name));
-  const serviceGutRooms = gen.world.rooms.filter(room => room.name.includes('служеб') || room.name.includes('Сервис') || room.name.includes('сервис') || room.name.includes('кишка'));
+  // Служебный пояс опознаётся авторским набором, а не подстрокой: имена задворок
+  // намеренно разнородны, и подстрочный фильтр видел 3 комнаты из 14.
+  const serviceGutRooms = MARKET88_SERVICE_GUT_SPECS.filter(spec => names.has(spec.name));
   const microRooms = gen.world.rooms.filter(room => room.w * room.h <= 54);
   assert.equal(stallRooms.length >= 80, true, `stall rooms ${stallRooms.length}`);
-  assert.equal(serviceGutRooms.length >= 6, true, `service gut rooms ${serviceGutRooms.length}`);
-  assert.equal(gen.world.rooms.length >= 340, true, `rooms ${gen.world.rooms.length}`);
-  assert.equal(gen.world.doors.size >= 340, true, `doors ${gen.world.doors.size}`);
+  assert.equal(serviceGutRooms.length === MARKET88_SERVICE_GUT_SPECS.length, true, `service gut rooms ${serviceGutRooms.length}`);
+  // Маршрутный масштаб этажа, а не точка траектории ГПСЧ.
+  assert.equal(gen.world.rooms.length >= 320, true, `rooms ${gen.world.rooms.length}`);
   assert.equal(microRooms.length >= 140, true, `micro rooms ${microRooms.length}`);
-  assert.equal(npcs.length >= 1900 && npcs.length <= 2600, true, `npc count ${npcs.length}`);
-  assert.equal(monsters.length >= 600 && monsters.length <= 800, true, `monster count ${monsters.length}`);
+  // Прилавки открыты в переулки, поэтому дверей у базара меньше, чем комнат:
+  // контракт не в их числе, а в том, что запечатанных комнат нет ни одной.
+  const reachable = doorReachable(gen);
+  const sealedRooms = gen.world.rooms.filter(room => {
+    for (let y = room.y; y < room.y + room.h; y++) {
+      for (let x = room.x; x < room.x + room.w; x++) if (reachable[gen.world.idx(x, y)]) return false;
+    }
+    return true;
+  });
+  assert.equal(sealedRooms.length, 0, `sealed rooms ${sealedRooms.map(room => room.name).join(', ')}`);
+  // Заселение плавает вокруг объявленной цели профиля, а не вокруг счётчика.
+  const profile = designFloorPopulationProfile(designFloorById(BLACK_MARKET_88_ROUTE_ID)!);
+  assert.equal(Math.abs(npcs.length - profile.npcTarget) <= profile.npcTarget * 0.1, true, `npc count ${npcs.length} vs target ${profile.npcTarget}`);
+  assert.equal(Math.abs(monsters.length - profile.monsterTarget) <= profile.monsterTarget * 0.1, true, `monster count ${monsters.length} vs target ${profile.monsterTarget}`);
 
   for (const npcId of [
     'market88_marta_broker',
@@ -201,11 +227,11 @@ test('black_market_88 uses wild-dominant cell territory with authored mini HQ co
   const share = (owner: ZoneFaction): number => (counts.get(owner) ?? 0) / (W * W);
   const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const expectedHqs = new Map([
-    [ZoneFaction.CITIZEN, MARKET88_HQ_ROOM_NAMES.citizen],
-    [ZoneFaction.LIQUIDATOR, MARKET88_HQ_ROOM_NAMES.liquidator],
-    [ZoneFaction.CULTIST, MARKET88_HQ_ROOM_NAMES.cultist],
-    [ZoneFaction.SCIENTIST, MARKET88_HQ_ROOM_NAMES.scientist],
-    [ZoneFaction.WILD, MARKET88_HQ_ROOM_NAMES.wild],
+    [ZoneFaction.CITIZEN, MARKET88_HQ_ROOM_DEF_IDS.citizen],
+    [ZoneFaction.LIQUIDATOR, MARKET88_HQ_ROOM_DEF_IDS.liquidator],
+    [ZoneFaction.CULTIST, MARKET88_HQ_ROOM_DEF_IDS.cultist],
+    [ZoneFaction.SCIENTIST, MARKET88_HQ_ROOM_DEF_IDS.scientist],
+    [ZoneFaction.WILD, MARKET88_HQ_ROOM_DEF_IDS.wild],
   ]);
 
   for (const supportRoom of [

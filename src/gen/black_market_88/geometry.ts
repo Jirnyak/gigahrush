@@ -300,37 +300,40 @@ export function addBazaarLandmarks(world: World): Market88BazaarRooms {
   };
 }
 
+// Задворки базара: замкнутый служебный пояс по периметру рядов. Имена не
+// однотипны намеренно, поэтому опознавать пояс подстрокой нельзя — набор здесь.
+export const MARKET88_SERVICE_GUT_SPECS: readonly {
+  type: RoomType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  side: Market88RoomSide;
+  targetX: number;
+  targetY: number;
+  wallTex: Tex;
+  floorTex: Tex;
+}[] = [
+  { type: RoomType.STORAGE, x: 198, y: 306, w: 28, h: 13, name: 'Северный склад краденых тюков 88', side: 'south', targetX: 208, targetY: MARKET88_NORTH, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.PRODUCTION, x: 330, y: 304, w: 32, h: 15, name: 'Сервисная кишка под весами 88', side: 'south', targetX: 344, targetY: MARKET88_NORTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.STORAGE, x: 652, y: 306, w: 30, h: 13, name: 'Склад чужой медицины 88', side: 'south', targetX: 664, targetY: MARKET88_NORTH, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
+  { type: RoomType.PRODUCTION, x: 790, y: 306, w: 32, h: 15, name: 'Закрытый перегон поставщика 88', side: 'south', targetX: 792, targetY: MARKET88_NORTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.STORAGE, x: 202, y: 704, w: 28, h: 13, name: 'Южный склад мокрой партии 88', side: 'north', targetX: 216, targetY: MARKET88_SOUTH, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+  { type: RoomType.PRODUCTION, x: 382, y: 704, w: 32, h: 15, name: 'Задняя мастерская пломб 88', side: 'north', targetX: 392, targetY: MARKET88_SOUTH, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.STORAGE, x: 610, y: 704, w: 30, h: 14, name: 'Темный ряд долговых ящиков 88', side: 'north', targetX: 624, targetY: MARKET88_SOUTH, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET },
+  { type: RoomType.PRODUCTION, x: 790, y: 704, w: 34, h: 15, name: 'Мясной протек склада 88', side: 'north', targetX: 808, targetY: MARKET88_SOUTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.PRODUCTION, x: 86, y: 374, w: 26, h: 18, name: 'Западная служебная утроба 88', side: 'east', targetX: MARKET88_WEST, targetY: 384, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.STORAGE, x: 88, y: 500, w: 24, h: 18, name: 'Клетка должников за занавесом 88', side: 'east', targetX: MARKET88_WEST, targetY: 500, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.PRODUCTION, x: 88, y: 610, w: 26, h: 18, name: 'Западный люк грязного товара 88', side: 'east', targetX: MARKET88_WEST, targetY: 628, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.STORAGE, x: 912, y: 376, w: 26, h: 18, name: 'Восточная кладовая сухих имен 88', side: 'west', targetX: MARKET88_EAST, targetY: 384, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.PRODUCTION, x: 912, y: 496, w: 28, h: 18, name: 'Восточный сервис рейдовых задвижек 88', side: 'west', targetX: MARKET88_EAST, targetY: 500, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
+  { type: RoomType.STORAGE, x: 912, y: 612, w: 26, h: 18, name: 'Восточный склад черного маршрута 88', side: 'west', targetX: MARKET88_EAST, targetY: 628, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
+];
+
 export function addBazaarServiceGuts(world: World, rng: () => number): Market88ServiceGutPlacement[] {
-  const specs: readonly {
-    type: RoomType;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    name: string;
-    side: Market88RoomSide;
-    targetX: number;
-    targetY: number;
-    wallTex: Tex;
-    floorTex: Tex;
-  }[] = [
-    { type: RoomType.STORAGE, x: 198, y: 306, w: 28, h: 13, name: 'Северный склад краденых тюков 88', side: 'south', targetX: 208, targetY: MARKET88_NORTH, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.PRODUCTION, x: 330, y: 304, w: 32, h: 15, name: 'Сервисная кишка под весами 88', side: 'south', targetX: 344, targetY: MARKET88_NORTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.STORAGE, x: 652, y: 306, w: 30, h: 13, name: 'Склад чужой медицины 88', side: 'south', targetX: 664, targetY: MARKET88_NORTH, wallTex: Tex.TILE_W, floorTex: Tex.F_TILE },
-    { type: RoomType.PRODUCTION, x: 790, y: 306, w: 32, h: 15, name: 'Закрытый перегон поставщика 88', side: 'south', targetX: 792, targetY: MARKET88_NORTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.STORAGE, x: 202, y: 704, w: 28, h: 13, name: 'Южный склад мокрой партии 88', side: 'north', targetX: 216, targetY: MARKET88_SOUTH, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
-    { type: RoomType.PRODUCTION, x: 382, y: 704, w: 32, h: 15, name: 'Задняя мастерская пломб 88', side: 'north', targetX: 392, targetY: MARKET88_SOUTH, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.STORAGE, x: 610, y: 704, w: 30, h: 14, name: 'Темный ряд долговых ящиков 88', side: 'north', targetX: 624, targetY: MARKET88_SOUTH, wallTex: Tex.MARBLE, floorTex: Tex.F_GREEN_CARPET },
-    { type: RoomType.PRODUCTION, x: 790, y: 704, w: 34, h: 15, name: 'Мясной протек склада 88', side: 'north', targetX: 808, targetY: MARKET88_SOUTH, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.PRODUCTION, x: 86, y: 374, w: 26, h: 18, name: 'Западная служебная утроба 88', side: 'east', targetX: MARKET88_WEST, targetY: 384, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.STORAGE, x: 88, y: 500, w: 24, h: 18, name: 'Клетка должников за занавесом 88', side: 'east', targetX: MARKET88_WEST, targetY: 500, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.PRODUCTION, x: 88, y: 610, w: 26, h: 18, name: 'Западный люк грязного товара 88', side: 'east', targetX: MARKET88_WEST, targetY: 628, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.STORAGE, x: 912, y: 376, w: 26, h: 18, name: 'Восточная кладовая сухих имен 88', side: 'west', targetX: MARKET88_EAST, targetY: 384, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.PRODUCTION, x: 912, y: 496, w: 28, h: 18, name: 'Восточный сервис рейдовых задвижек 88', side: 'west', targetX: MARKET88_EAST, targetY: 500, wallTex: Tex.PIPE, floorTex: Tex.F_CONCRETE },
-    { type: RoomType.STORAGE, x: 912, y: 612, w: 26, h: 18, name: 'Восточный склад черного маршрута 88', side: 'west', targetX: MARKET88_EAST, targetY: 628, wallTex: Tex.BRICK, floorTex: Tex.F_LINO },
-  ];
   const placements: Market88ServiceGutPlacement[] = [];
-  for (const spec of specs) {
+  for (const spec of MARKET88_SERVICE_GUT_SPECS) {
     const room = tryBazaarRoom(
       world,
       spec.type,

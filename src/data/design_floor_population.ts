@@ -1251,6 +1251,11 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     },
   },
   black_market_88: {
+    // Толпа базара объявлена, а не унаследована от высоты: на z=-10 кривая
+    // глубины отдавала рынку 3779 человек — 92% бюджета акторов, и на монстров
+    // сервисного пояса не оставалось ничего. Половина бюджета — это плотный
+    // рынок, вокруг которого заселение и плавает.
+    npcTarget: DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT / 2,
     npcFactions: [{ value: Faction.CITIZEN, weight: 48 }, { value: Faction.WILD, weight: 31 }, { value: Faction.LIQUIDATOR, weight: 14 }, { value: Faction.SCIENTIST, weight: 7 }],
     npcOccupations: SOCIAL_OCCUPATIONS,
     monsterBiasKinds: [MonsterKind.KRYSNOZHKA, MonsterKind.POMOYNY_ROY, MonsterKind.NELYUD, MonsterKind.BEZEKHIY, MonsterKind.SLIMEVIK],
