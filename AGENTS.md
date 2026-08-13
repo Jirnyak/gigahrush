@@ -486,6 +486,7 @@ Do not use README to promise unfinished work. Do not bury implementation facts o
 
 - Prefer `rg` / `rg --files` for search.
 - Read local patterns before inventing helper APIs.
+- Minimum constants. Before adding a new named constant or tuning knob, derive the value from an existing canonical one (`ITEM_DROP_FIFO_CAP = MAX_ACTIVE_ACTOR_SOFT_LIMIT`; the gore-cell cap reuses `SURFACE_MAP_MAX_CELLS`). A new constant needs a reason no existing constant can express, and каждая лишняя ручка — это будущий рассинхрон.
 - Keep edits close to the requested behavior.
 - Add abstraction only when it removes real duplication or matches an established local pattern.
 - Do not split files for arbitrary line counts.
