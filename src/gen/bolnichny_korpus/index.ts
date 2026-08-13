@@ -487,11 +487,11 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
 
     sanitizeDoors(world);
     ensureConnectivity(world, rooms.triageEntrance.x + 58.5, rooms.triageEntrance.y + 17.5);
-    reinforceBolnichnyKorpusGates(world);
 
     const route = designFloorById('bolnichny_korpus')!;
     const rngGen = () => rng();
     expandBolnichnyKorpusRouteGeometry(world, rngGen);
+    reinforceBolnichnyKorpusGates(world);
 
     const generation = {
       world,
@@ -502,6 +502,10 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
     };
 
     finalizeExpandedFloor(generation, route, rngGen);
+    // Связность расширения прорубает в оболочку режимных комнат обычные двери и
+    // обходит оба ключевых шлюза. Комнату при этом не замуровываем: проход
+    // остаётся, но становится по пропуску — иначе этаж рассыпается на карманы.
+    rekeyBolnichnyGatedRoomStrays(world);
 
     return { ...generation, isDecentralized: true as const };
   });
@@ -602,6 +606,41 @@ export function reinforceBolnichnyKorpusGates(world: World): void {
   if (black) {
     restoreBolnichnyGatedRoomShell(world, black, true);
     placeGateLine(world, black.x + (black.w >> 1), black.y - 8, 'horizontal', DoorState.HERMETIC_CLOSED, '', black);
+  }
+}
+
+/** Режимные комнаты корпуса и ключ, которым закрывается вход в каждую. */
+function bolnichnyGatedRoomKeys(): readonly (readonly [string, string])[] {
+  return [
+    [BOLNICHNY_ROOM_NAMES.pharmacy, 'official_quarantine_clearance'],
+    [BOLNICHNY_ROOM_NAMES.coldStore, 'official_quarantine_clearance'],
+    [BOLNICHNY_ROOM_NAMES.papers, 'forged_quarantine_clearance'],
+  ];
+}
+
+/**
+ * Двери, которые связность расширения прорубила в оболочку режимной комнаты,
+ * перевешиваются на её ключ. Не замуровываем: единственный вход у аптеки —
+ * именно такая дверь, а полное восстановление оболочки после связности
+ * оставляло этаж с карманами на 19 тысяч клеток.
+ */
+export function rekeyBolnichnyGatedRoomStrays(world: World): void {
+  for (const [name, keyId] of bolnichnyGatedRoomKeys()) {
+    const room = world.rooms.find(candidate => candidate.name === name);
+    if (!room) continue;
+    for (let dy = -1; dy <= room.h; dy++) {
+      for (let dx = -1; dx <= room.w; dx++) {
+        if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
+        const idx = world.idx(room.x + dx, room.y + dy);
+        const door = world.doors.get(idx);
+        if (!door || door.keyId) continue;
+        door.state = DoorState.LOCKED;
+        door.keyId = keyId;
+        world.wallTex[idx] = Tex.DOOR_METAL;
+        if (door.roomA < 0) door.roomA = room.id;
+        if (!room.doors.includes(idx)) room.doors.push(idx);
+      }
+    }
   }
 }
 
