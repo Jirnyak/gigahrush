@@ -5,7 +5,8 @@ import { Faction, ItemType, ProjType, RoomType } from '../src/core/types';
 import { ITEMS, WEAPON_ROLE_TIERS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
 import { resourceForItem } from '../src/data/resources';
-import { O15_ENGINEER_STASH_MIN_DEPTH, generateProceduralFloor } from '../src/gen/procedural_floor';
+import { authoredCacheById, authoredCacheMatchesFloor } from '../src/data/authored_caches';
+import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { findProceduralSpec } from './generator_helpers';
 import { containerAccessInfo } from '../src/systems/containers';
 import { makeTestPlayer } from './helpers';
@@ -37,15 +38,10 @@ test('o15 multijet flamer is a focused engineer napalm weapon without new projec
 });
 
 test('o15 multijet flamer is reachable from a deep engineer stash with napalm', () => {
-  // Условия сцены — те же, что у addDeepEngineerStash. Координата этажа тут
-  // ничего не значит: геометрия и большинство тянутся жребием из пулов.
-  const spec = findProceduralSpec(
-    candidate => (candidate.geometryId === 'workshops' || candidate.geometryId === 'service_spines')
-      && candidate.majorityId === 'liquidators'
-      && candidate.depth >= O15_ENGINEER_STASH_MIN_DEPTH
-      && candidate.danger >= 4,
-    'deep engineer stash conditions',
-  );
+  // Условия сцены берутся из реестра схронов, а не переписываются в тесте:
+  // одно место истины и для генератора, и для проверки.
+  const cache = authoredCacheById('deep_engineer_stash')!;
+  const spec = findProceduralSpec(candidate => authoredCacheMatchesFloor(cache, candidate), 'deep_engineer_stash');
 
   const generated = generateProceduralFloor(spec);
   const stash = generated.world.containers.find(container =>

@@ -5,7 +5,8 @@ import { ItemType } from '../src/core/types';
 import { ITEMS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
 import { resourceForItem } from '../src/data/resources';
-import { DEEP_RECON_STASH_MIN_DEPTH, generateProceduralFloor } from '../src/gen/procedural_floor';
+import { authoredCacheById, authoredCacheMatchesFloor } from '../src/data/authored_caches';
+import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { findProceduralSpec } from './generator_helpers';
 
 test('rifle bolt pack is scarce Losyash rifle ammunition', () => {
@@ -26,14 +27,10 @@ test('rifle bolt pack is scarce Losyash rifle ammunition', () => {
 });
 
 test('rifle bolt pack is reachable from the deep sump recon stash', () => {
-  // Схрон гейтится глубиной, опасностью и геометрией, а не пятёркой lootBias:
-  // требовать от жребия именно эти два id — пин на траектории ГПСЧ.
-  const spec = findProceduralSpec(
-    candidate => candidate.geometryId === 'sump_causeways'
-      && candidate.danger >= 5
-      && candidate.depth >= DEEP_RECON_STASH_MIN_DEPTH,
-    'deep recon stash conditions',
-  );
+  // Условия сцены берутся из реестра схронов, а не переписываются в тесте:
+  // одно место истины и для генератора, и для проверки.
+  const cache = authoredCacheById('deep_recon_stash')!;
+  const spec = findProceduralSpec(candidate => authoredCacheMatchesFloor(cache, candidate), 'deep_recon_stash');
 
   const generated = generateProceduralFloor(spec);
   const stash = generated.world.containers.find(container =>

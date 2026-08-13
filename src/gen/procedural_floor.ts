@@ -30,6 +30,7 @@ import { World } from '../core/world';
 import { rng, withSeededRandom, xorshift32 } from '../core/rand';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { ITEM_TAGS, getStack, spawnCount } from '../data/items';
+import { AUTHORED_CACHES, authoredCacheContents, authoredCacheMatchesFloor, type AuthoredCacheDef } from '../data/authored_caches';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { proceduralContainerValueCap as economyProceduralContainerValueCap } from '../data/economics';
 import { emergencyPanelDefsForGeometry, type EmergencyPanelDef } from '../data/emergency_panels';
@@ -134,13 +135,8 @@ import {
 } from './procedural_geometry_recipes';
 
 const EXCLUDE_GNILUSHKA = [MonsterKind.GNILUSHKA] as const;
-const O15_ENGINEER_FLAMER_ID = 'o15_multijet_flamer';
-export const O15_ENGINEER_STASH_MIN_DEPTH = 30;
-const LOSYASH_RIFLE_ID = 'losyash_rifle';
-const RIFLE_BOLT_PACK_ID = 'rifle_bolt_pack';
-export const DEEP_RECON_STASH_MIN_DEPTH = 45;
-const GRANIT4U_BELT_SHOTGUN_ID = 'granit4u_belt_shotgun';
-export const DEEP_LIQUIDATOR_REWARD_MIN_DEPTH = 45;
+// Условия схронов переехали в реестр `data/authored_caches.ts`: генератор
+// больше не знает ни одного предмета по имени.
 const WILD_MAJORITY_REWARD_TAG = 'wild_reward_leaf';
 const WILD_MAJORITY_RISK_TAG = 'wild_risk_cue';
 const WILD_MAJORITY_SHORTCUT_TAG = 'wild_unsafe_shortcut';
@@ -3840,111 +3836,53 @@ function spawnLoot(world: World, rooms: Room[], spec: ProceduralFloorSpec, spawn
   }
 }
 
-function addDeepEngineerStash(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
-  if (spec.depth < O15_ENGINEER_STASH_MIN_DEPTH || spec.danger < 4 || spec.majorityId !== 'liquidators') return;
-  if (spec.geometryId !== 'workshops' && spec.geometryId !== 'service_spines') return;
-  const candidates = rooms.filter(room =>
-    room.id !== 0 &&
-    (room.type === RoomType.PRODUCTION || room.type === RoomType.STORAGE),
-  );
-  if (candidates.length === 0) return;
-  const preferred = candidates[(spec.seed + spec.depth) % candidates.length];
-  const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ 0x6015, preferred);
-  if (!target) return;
-  addProceduralLootContainer(
-    world,
-    spec,
-    target.room,
-    target,
-    ContainerKind.WEAPON_CRATE,
-    [
-      { defId: O15_ENGINEER_FLAMER_ID, count: 1 },
-      { defId: 'napalm_mix', count: 3 },
-      { defId: 'empty_roks_tank', count: 1 },
-    ],
-    ['deep_engineer_stash', 'engineer', 'breach', 'napalm', 'fuel'],
-    'Инженерный тайник 6О15-УТТХ',
-  );
-}
-
-function addDeepReconStash(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
-  if (spec.depth < DEEP_RECON_STASH_MIN_DEPTH || spec.danger < 5 || spec.geometryId !== 'sump_causeways') return;
-  const preferredRooms = rooms.filter(room =>
-    room.id !== 0 &&
-    (room.type === RoomType.STORAGE || room.type === RoomType.PRODUCTION || room.type === RoomType.HQ),
-  );
-  const candidates = preferredRooms.length > 0 ? preferredRooms : rooms.filter(room => room.id !== 0);
-  if (candidates.length === 0) return;
-  const preferred = candidates[(spec.seed + spec.depth * 13) % candidates.length];
-  const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ 0x1047, preferred);
-  if (!target) return;
-  addProceduralLootContainer(
-    world,
-    spec,
-    target.room,
-    target,
-    ContainerKind.SECRET_STASH,
-    [
-      { defId: LOSYASH_RIFLE_ID, count: 1 },
-      { defId: RIFLE_BOLT_PACK_ID, count: 3 },
-      { defId: 'filtered_water', count: 1 },
-    ],
-    ['deep_recon_stash', 'anti_elite', LOSYASH_RIFLE_ID, RIFLE_BOLT_PACK_ID],
-    'Глубинный разведтайник Лосяша',
-  );
-}
-
-function addSumpIslandStashes(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
-  if (spec.geometryId !== 'sump_causeways') return;
-  const islands = rooms.filter(room => room.name.startsWith(SUMP_STASH_ROOM_PREFIX));
-  const target = Math.min(2, islands.length);
-  const occupied = new Set<number>();
-  for (let i = 0; i < target; i++) {
-    const room = islands[(spec.seed + i * 7) % islands.length];
-    const pos = findReachableContainerCell(world, [room], reachable, spec.seed ^ 0x5a5a ^ i, room, occupied);
-    if (!pos) continue;
-    occupied.add(world.idx(pos.x, pos.y));
-    addProceduralLootContainer(
-      world,
-      spec,
-      room,
-      pos,
-      ContainerKind.SECRET_STASH,
-      [
-        { defId: 'filtered_water', count: 1 },
-        { defId: i % 2 === 0 ? 'sealant_tube' : 'valve_tag', count: 1 },
-        { defId: 'wet_rag_bundle', count: 2 },
-      ],
-      ['sump_island_stash', 'blackwater_crossing', 'contaminated_route', 'repair_cache'],
-      `Тайник сухого острова ${i + 1}`,
-    );
+/**
+ * Именованные схроны. Генератор не знает ни одного предмета по имени: он
+ * сверяет контекст этажа с реестром `AUTHORED_CACHES` и берёт содержимое из
+ * предметов, объявивших этот дом тегом. Раньше здесь лежали четыре рукописные
+ * функции с захардкоженными списками, а награда ликвидаторов вдобавок
+ * гейтилась жребием lootBias — сцена существовала, только если случайная
+ * пятёрка вытянула её ствол.
+ */
+function addAuthoredCaches(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
+  for (const def of AUTHORED_CACHES) {
+    if (!authoredCacheMatchesFloor(def, spec)) continue;
+    const contents = authoredCacheContents(def.id, spec.danger);
+    if (contents.length === 0) continue;
+    const candidates = rooms.filter(room => room.id !== 0 && authoredCacheRoomFits(def, room));
+    if (candidates.length === 0) continue;
+    const copies = Math.min(def.copies ?? 1, candidates.length);
+    const occupied = new Set<number>();
+    for (let i = 0; i < copies; i++) {
+      const preferred = candidates[(spec.seed + spec.depth * 13 + i * 7) % candidates.length];
+      const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ authoredCacheSalt(def.id) ^ i, preferred, occupied);
+      if (!target) continue;
+      occupied.add(world.idx(target.x, target.y));
+      addProceduralLootContainer(
+        world,
+        spec,
+        target.room,
+        target,
+        def.kind,
+        contents.map(entry => ({ ...entry })),
+        [def.id, ...(def.tags ?? []), ...contents.map(entry => entry.defId)],
+        copies > 1 ? `${def.name} ${i + 1}` : def.name,
+      );
+    }
   }
 }
 
-function addDeepLiquidatorRewardStash(world: World, rooms: Room[], spec: ProceduralFloorSpec, reachable: Uint8Array): void {
-  if (spec.depth < DEEP_LIQUIDATOR_REWARD_MIN_DEPTH || spec.danger < 5 || spec.majorityId !== 'liquidators') return;
-  if (!spec.lootBiasIds.includes(GRANIT4U_BELT_SHOTGUN_ID)) return;
-  const candidates = rooms.filter(room =>
-    room.id !== 0 &&
-    (room.type === RoomType.HQ || room.type === RoomType.STORAGE || room.type === RoomType.PRODUCTION),
-  );
-  if (candidates.length === 0) return;
-  const preferred = candidates[(spec.seed + spec.depth * 19) % candidates.length];
-  const target = findReachableContainerCell(world, candidates, reachable, spec.seed ^ 0x4704, preferred);
-  if (!target) return;
-  addProceduralLootContainer(
-    world,
-    spec,
-    target.room,
-    target,
-    ContainerKind.WEAPON_CRATE,
-    [
-      { defId: GRANIT4U_BELT_SHOTGUN_ID, count: 1 },
-      { defId: 'ammo_shells', count: 3 },
-    ],
-    ['deep_liquidator_reward', GRANIT4U_BELT_SHOTGUN_ID, 'ammo_shells'],
-    'Глубинный ликвидаторский ящик «Гранит»-4у',
-  );
+function authoredCacheRoomFits(def: AuthoredCacheDef, room: Room): boolean {
+  if (def.roomNamePrefix) return room.name.startsWith(def.roomNamePrefix);
+  if (def.roomTypes) return def.roomTypes.includes(room.type);
+  return true;
+}
+
+/** Детерминированная соль на схрон, чтобы два схрона не спорили за одну клетку. */
+function authoredCacheSalt(id: string): number {
+  let hash = 0x9e37;
+  for (let i = 0; i < id.length; i++) hash = (Math.imul(hash, 31) + id.charCodeAt(i)) | 0;
+  return hash;
 }
 
 function occupationForFaction(faction: Faction, roomType: RoomType): Occupation {
@@ -16263,10 +16201,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     applyCultistMajorityProfile(world, rooms, spec, spawnX, spawnY, placement.reachable);
     const wildRewardSites = placeWildMajorityRewards(world, rooms, spec, wildLayout, placement.reachable, spawnX, spawnY);
     spawnLoot(world, rooms, spec, spawnX, spawnY, placement.reachable);
-    addSumpIslandStashes(world, rooms, spec, placement.reachable);
-    addDeepEngineerStash(world, rooms, spec, placement.reachable);
-    addDeepReconStash(world, rooms, spec, placement.reachable);
-    addDeepLiquidatorRewardStash(world, rooms, spec, placement.reachable);
+    addAuthoredCaches(world, rooms, spec, placement.reachable);
     applyProceduralFloorObjectProfile(world, rooms, spec, placement.reachable);
     initializeProceduralTerritory(world, spec);
     if (allowNpcs) {

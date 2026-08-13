@@ -5,7 +5,8 @@ import { ItemType, RoomType } from '../src/core/types';
 import { ITEMS, WEAPON_ROLE_TIERS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
 import { resourceForItem } from '../src/data/resources';
-import { DEEP_RECON_STASH_MIN_DEPTH, generateProceduralFloor } from '../src/gen/procedural_floor';
+import { authoredCacheById, authoredCacheMatchesFloor } from '../src/data/authored_caches';
+import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { findProceduralSpec } from './generator_helpers';
 
 test('losyash rifle is a rare anti-elite precision weapon on bolt projectile rules', () => {
@@ -30,15 +31,10 @@ test('losyash rifle is a rare anti-elite precision weapon on bolt projectile rul
 });
 
 test('losyash rifle is reachable from a deep procedural recon stash', () => {
-  // Условия сцены — те же, что у addDeepReconStash: глубина, опасность и
-  // геометрия отстойников. Пятёрка lootBias схрон НЕ гейтит, поэтому требовать
-  // от неё именно этот ствол значило бы пиннить жребий, а не контракт.
-  const spec = findProceduralSpec(
-    candidate => candidate.geometryId === 'sump_causeways'
-      && candidate.danger >= 5
-      && candidate.depth >= DEEP_RECON_STASH_MIN_DEPTH,
-    'deep recon stash conditions',
-  );
+  // Условия сцены берутся из реестра схронов, а не переписываются в тесте:
+  // одно место истины и для генератора, и для проверки.
+  const cache = authoredCacheById('deep_recon_stash')!;
+  const spec = findProceduralSpec(candidate => authoredCacheMatchesFloor(cache, candidate), 'deep_recon_stash');
 
   const generated = generateProceduralFloor(spec);
   const stash = generated.world.containers.find(container =>

@@ -6,7 +6,8 @@ import { ITEMS, WEAPON_ROLE_TIERS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
 import { PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER } from '../src/data/procedural_floors';
 import { resourceForItem } from '../src/data/resources';
-import { DEEP_LIQUIDATOR_REWARD_MIN_DEPTH, generateProceduralFloor } from '../src/gen/procedural_floor';
+import { authoredCacheById, authoredCacheMatchesFloor } from '../src/data/authored_caches';
+import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { findProceduralSpec } from './generator_helpers';
 import { containerAccessInfo } from '../src/systems/containers';
 import { makeTestPlayer } from './helpers';
@@ -43,17 +44,10 @@ test('granit4u belt shotgun is a slow crowd-control shell weapon', () => {
 });
 
 test('granit4u is reachable as a deep liquidator procedural reward theft', () => {
-  // Единственный схрон, который жребий действительно гейтит: генератор выходит,
-  // если ствола нет в пятёрке lootBias. Владелец подтвердил редкость (около 1.7%
-  // глубоких этажей), поэтому условие входит в поиск этажа, а не в ассерт по
-  // прибитой координате.
-  const spec = findProceduralSpec(
-    candidate => candidate.danger >= 5
-      && candidate.majorityId === 'liquidators'
-      && candidate.depth >= DEEP_LIQUIDATOR_REWARD_MIN_DEPTH
-      && candidate.lootBiasIds.includes('granit4u_belt_shotgun'),
-    'deep liquidator reward stash conditions',
-  );
+  // Условия сцены берутся из реестра схронов, а не переписываются в тесте:
+  // одно место истины и для генератора, и для проверки.
+  const cache = authoredCacheById('deep_liquidator_reward')!;
+  const spec = findProceduralSpec(candidate => authoredCacheMatchesFloor(cache, candidate), 'deep_liquidator_reward');
 
   const generated = generateProceduralFloor(spec);
   const stash = generated.world.containers.find(container =>
