@@ -15,7 +15,7 @@ import { scatterAmbientLights, ensureConnectivity, generateZones, sanitizeDoors 
 import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CAMP_SEED, NPC_IDS, NPC_DEFS } from "./meta";
-import { expandPioneerCampFullFloor, tunePioneerCampPopulationZones, initCampWorld, buildCampCore, buildCampPaths, decorateCampCore, placeCampLifts, tuneCampZones, placeCampDrops } from "./geometry";
+import { expandPioneerCampFullFloor, reinforceCampDoorSlots, ensureCampHqHermeticDoors, tunePioneerCampPopulationZones, initCampWorld, buildCampCore, buildCampPaths, decorateCampCore, placeCampLifts, tuneCampZones, placeCampDrops } from "./geometry";
 import { spawnCampNpcs, placeCampContainers, spawnCampThreats } from "./npcs";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.shift, NPC_DEFS.camp_shift_tamara, [{
@@ -107,6 +107,12 @@ export function generatePioneerCampDesignFloor(seed = CAMP_SEED): FloorGeneratio
     tunePioneerCampPopulationZones(world);
     
     sanitizeDoors(world);
+    // Re-seat the HQ hermetic doors AFTER sanitize: the guard inside the
+    // expansion ran before it, so sanitize was eating the very doors it
+    // installed and three faction HQs ended up unable to seal.
+    reinforceCampDoorSlots(world);
+    ensureCampHqHermeticDoors(world);
+    reinforceCampDoorSlots(world);
     ensureConnectivity(world, rooms.gate.x + 8.5, rooms.gate.y + 8.5);
     world.rebuildContainerMap();
     scatterAmbientLights(world, rngFn, 260);

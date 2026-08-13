@@ -226,6 +226,46 @@ export function buildCampFactionHqs(world: World, mask: Uint8Array): void {
   }
 }
 
+/**
+ * Rebuild the flanking walls of every camp door so `sanitizeDoors` keeps it.
+ * The camp is carved as open landscape, so a doorway cut into a hut wall often
+ * ends up with open ground on one side; sanitize then demotes it to plain
+ * floor. Faction HQs lose their HERMETIC doors that way and can no longer seal
+ * during samosbor. Runs after sanitize, mirroring the nursery's door pass.
+ */
+export function reinforceCampDoorSlots(world: World): void {
+  const walkable = (c: number) => c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER;
+  for (const [idx, door] of world.doors) {
+    const room = world.rooms[door.roomA];
+    if (!room) continue;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    let vertical: boolean;
+    if (y === room.y - 1 || y === room.y + room.h) vertical = true;
+    else if (x === room.x - 1 || x === room.x + room.w) vertical = false;
+    else continue;
+    const pass = vertical ? ([[0, -1], [0, 1]] as const) : ([[-1, 0], [1, 0]] as const);
+    const flank = vertical ? ([[-1, 0], [1, 0]] as const) : ([[0, -1], [0, 1]] as const);
+    if (!pass.every(([dx, dy]) => walkable(world.cells[world.idx(x + dx, y + dy)]))) continue;
+    const hermetic = door.state === DoorState.HERMETIC_OPEN || door.state === DoorState.HERMETIC_CLOSED;
+    world.cells[idx] = Cell.DOOR;
+    world.wallTex[idx] = hermetic ? Tex.HERMO_WALL : Tex.DOOR_WOOD;
+    if (hermetic) world.hermoWall[idx] = 1;
+    for (const [dx, dy] of flank) {
+      const ci = world.idx(x + dx, y + dy);
+      const cell = world.cells[ci];
+      if (cell === Cell.LIFT || cell === Cell.DOOR || world.doors.has(ci) || world.roomMap[ci] >= 0 || world.containerMap.has(ci)) continue;
+      world.cells[ci] = Cell.WALL;
+      world.wallTex[ci] = hermetic ? Tex.HERMO_WALL : room.wallTex;
+      if (hermetic) world.hermoWall[ci] = 1;
+      world.features[ci] = Feature.NONE;
+    }
+  }
+  world.markCellsDirty();
+  world.markWallTexDirty();
+  world.markFeaturesDirty(true);
+}
+
 export function ensureCampHqHermeticDoors(world: World): void {
   const hqSitesMap = new Map(CAMP_HQ_SITES.map(site => [site.name, site]));
   let remainingHqSites = hqSitesMap.size;
