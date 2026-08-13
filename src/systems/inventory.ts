@@ -1077,6 +1077,20 @@ export function hasItem(e: InventoryHolder, defId: string): boolean {
   return (e.inventory ?? []).some(i => i.defId === defId);
 }
 
+/* ── After chosen items leave an inventory (trade, container deposit), drop
+   equip pointers that referenced them — mirrors dropItem's unequip so a sold
+   weapon can't stay phantom-equipped and swing/never-break forever. Scoped to
+   the lost defIds: a blanket inventory sweep would disarm template NPCs whose
+   loadout weapon never had an inventory slot. ── */
+export function reconcileEquippedAfterLoss(e: Entity, lostDefIds: Iterable<string>): void {
+  for (const defId of lostDefIds) {
+    if (!defId || hasItem(e, defId)) continue;
+    if (e.weapon === defId) e.weapon = '';
+    if (e.tool === defId) e.tool = '';
+    if (e.armorDefId === defId) e.armorDefId = undefined;
+  }
+}
+
 function inventoryCount(e: InventoryHolder, defId: string): number {
   let total = 0;
   for (const slot of e.inventory ?? []) if (slot.defId === defId) total += slot.count;

@@ -49,7 +49,7 @@ import {
 } from './shelter_tally';
 import { isPlayerEntity } from './player_actor';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
-import { itemAddCapacity, addItemMovedCount, consumeInventorySlot } from './inventory';
+import { itemAddCapacity, addItemMovedCount, consumeInventorySlot, reconcileEquippedAfterLoss } from './inventory';
 
 const THEFT_WITNESS_RADIUS = 7;
 const THEFT_WITNESS_SCAN_CAP = 160;
@@ -1264,6 +1264,7 @@ export function putIntoContainer(
     addItemMovedCount(actor, defId, moved - added, originalData);
     return false;
   }
+  reconcileEquippedAfterLoss(actor, [defId]);
   const unlock = access.unlock ? unlockContainerForActor(container, actor, state) : null;
   container.lastOpenedBy = actor.id;
   container.lastOpenedAt = state?.time;

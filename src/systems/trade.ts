@@ -2,7 +2,7 @@ import { Entity, GameState, Item } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { type EconomyFloorRef } from '../data/economy_rules';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
-import { addItem } from './inventory';
+import { addItem, reconcileEquippedAfterLoss } from './inventory';
 import {
   changeResourceStock,
   getEconomyQuote,
@@ -623,6 +623,8 @@ export function executeTradeDeal(
   removeInventoryItems(npc.inventory, npcOffer);
   for (const item of npcOffer) addItem(player, item.defId, item.count, item.data);
   for (const item of playerOffer) addItem(npc, item.defId, item.count, item.data);
+  reconcileEquippedAfterLoss(player, playerOffer.map(i => i.defId));
+  reconcileEquippedAfterLoss(npc, npcOffer.map(i => i.defId));
   player.money = (player.money ?? 0) - summary.cashDue + summary.changeDue;
   npc.money = (npc.money ?? 0) + summary.cashDue - summary.changeDue;
   applyTradeAskStockDeltas(state, npc, npcOffer, opts);
@@ -678,6 +680,8 @@ export function buyFromNpc(
   decrementSlot(npcInv, slotIndex);
   addItem(player, defId, 1, slot.data);
   for (const item of playerOffer) addItem(npc, item.defId, item.count, item.data);
+  reconcileEquippedAfterLoss(player, playerOffer.map(i => i.defId));
+  reconcileEquippedAfterLoss(npc, [defId]);
   player.money = (player.money ?? 0) - cashDue + credit.changeDue;
   npc.money = (npc.money ?? 0) + cashDue - credit.changeDue;
   if (quote.resourceId) changeResourceStock(state, quote.resourceId, -1, stockFloorForTrade(state, opts));
@@ -710,6 +714,7 @@ export function sellToNpc(
   npc.money = (npc.money ?? 0) - price;
   player.money = (player.money ?? 0) + price;
   decrementSlot(playerInv, slotIndex);
+  reconcileEquippedAfterLoss(player, [defId]);
   if (quote.resourceId) changeResourceStock(state, quote.resourceId, 1, stockFloorForTrade(state, opts));
   recordPlayerItemSale(state, player, npc, defId, 1, price, opts.zoneId, {
     tags: ['sell', ...quote.tags],
