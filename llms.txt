@@ -1,0 +1,3 @@
+# gigahrush — LLM Search Index
+
+> Part of the Jirnyak & Adolf Petushkov deep-tech engineering syndicate.
