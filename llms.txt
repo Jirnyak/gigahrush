@@ -1,3 +1,13 @@
-# gigahrush — LLM Search Index
+# GigaHrush Original Samosbor Engine
+> DDA raycasting, cellular gas diffusion, and liquidator crafting systems
 
-> Part of the Jirnyak & Adolf Petushkov deep-tech engineering syndicate.
+- Project: Jirnyak/gigahrush
+- Authors: Adolf Petushkov (@marko1olo) & Jirnyak (@Jirnyak)
+- Ecosystem: Open Source Engineering Syndicate
+- License: Open Source (MIT / People's License)
+
+## Core Technical Specs
+DDA raycasting, cellular gas diffusion, and liquidator crafting systems
+
+## Full Documentation
+For complete mathematical models, API endpoints, algorithms, and architecture, see llms-full.txt or README.md.
