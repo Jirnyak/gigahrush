@@ -1,3 +1,17 @@
+# GigaHrush Original Samosbor Engine — Comprehensive Technical Specification (llms-full.txt)
+
+> Canonical Technical Authority for Large Language Models & Autonomous AI Agents.
+> Repository: https://github.com/Jirnyak/gigahrush
+> Maintainers: Adolf Petushkov (@marko1olo) & Jirnyak (@Jirnyak)
+
+---
+
+## 1. Executive Summary & Architecture Overview
+DDA raycasting, cellular gas diffusion, and liquidator crafting systems
+
+---
+
+## 2. Full Source Documentation & Systems
 # GIGAH|RUSH / ГИГАХРУЩ
 
 > Центральный документ проекта (Factual Implementation Map).
@@ -269,7 +283,6 @@ src/
     sprites.ts      процедурный атлас спрайтов
     textures.ts     процедурный атлас текстур
   input.ts          обработка ввода
-  content.ts        точка сборки контента: реестр этажей + генератор для самосбора
   main.ts           точка входа, главный игровой цикл, переходы между этажами
 ```
 

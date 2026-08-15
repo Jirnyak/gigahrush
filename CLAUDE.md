@@ -12,7 +12,7 @@
 
 > Центральный документ агентского поведения.
 >
-> Роль: обязательная инструкция для всех агентов, работающих с кодом, документами, PR, релизами и системными контрактами ГИГАХРУЩА. Этот файл не заменяет `README.md` и root system docs; он говорит, как безопасно читать, менять, проверять и не ломать проект.
+> Роль: обязательная инструкция для всех агентов, работающих с кодом, документами, PR, релизами и системными контрактами ГИГАХРУЩА. Этот файл не заменяет `manifest.md` и root system docs; он говорит, как безопасно читать, менять, проверять и не ломать проект.
 
 ## Operating Contract
 
@@ -51,7 +51,7 @@ Do not add frontend frameworks, imported UI kits, physics engines, ECS libraries
 
 Before changing gameplay, content, generation, systems, rendering, save/load, or docs:
 
-1. Read `README.md`. It is the factual implementation map.
+1. Read `manifest.md`. It is the factual implementation map. `README.md` is the public-facing page and is NOT a source of truth.
 2. Read `architecture.md` before touching shared systems, integration points, floor architecture, save/load, A-Life, generation, or render hooks.
 3. Read the relevant source files under `src/`; never implement from docs alone.
 4. Check `git status --short` and do not overwrite unrelated dirty work.
@@ -62,7 +62,7 @@ Read additional docs only when relevant to the task:
 
 | Task area | Read |
 | --- | --- |
-| Current shipped facts, commands, implementation map | `README.md` |
+| Current shipped facts, commands, implementation map | `manifest.md` |
 | Shared systems, ownership, layer boundaries, integration risk | `architecture.md` |
 | Design direction, next-iteration priorities, player promise | `desdoc.md` |
 | Active-floor AI, NPC utility, pathfinding, tactics, actor cadence | `ai.md` |
@@ -204,7 +204,7 @@ and must not import each other. `npm run check:invariants` enforces this mechani
 
 ## Source Of Truth Rules
 
-- `README.md` documents shipped behavior only. Update it when implementation facts change, not for intent.
+- `manifest.md` documents shipped behavior only. Update it when implementation facts change, not for intent. `README.md` is the public/marketing surface, co-owned, and may contain claims the code does not back — never cite it as fact.
 - `architecture.md` documents engineering contracts and ownership rules.
 - `desdoc.md` may describe future intent; verify against current code before implementation. Archived root plans under `../gatbage/` are historical comparison only.
 - Active scenario/localization docs guide text passes; they are not substitutes for source inspection.
@@ -484,7 +484,7 @@ For PR, media, portal submission or KPI monitoring work, treat `PRCampaign/KPI.m
 
 Update docs only when facts change.
 
-- `README.md`: shipped game behavior, commands and active implementation map.
+- `manifest.md`: shipped game behavior, commands and active implementation map.
 - `architecture.md`: engineering contracts and ownership rules.
 - `desdoc.md`: planning and future work.
 - `samosbor.md`: samosbor system contract and extension rules.

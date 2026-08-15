@@ -8,7 +8,7 @@
 
 Purpose: turn the current TypeScript/Vite raycaster game into a content factory where many agents can add rooms, NPCs, quests, events, monsters, documents, economy hooks, and floor variants without fighting over the same files.
 
-This document is based on the current code, `README.md`, and `desdoc.md` as of 2026-05-24, with later active system contracts split into root domain docs. It is not a rewrite plan. The project is already playable; architecture work must protect that.
+This document is based on the current code, `manifest.md`, and `desdoc.md` as of 2026-05-24, with later active system contracts split into root domain docs. It is not a rewrite plan. The project is already playable; architecture work must protect that.
 
 ## 1. Current Fact Map
 
@@ -107,7 +107,7 @@ These are the rules every new module must preserve.
 - No generator that seals a room without proving it is reachable.
 - No permanent POI on LIVING without `aptMask` protection and a corridor/door connection.
 - Feature-like gameplay must use the feature-first overlay contract: generate/map `Feature`, `Cell`, container or billboard primitives first, then attach or lazily resolve `InteractiveDef` behavior. Do not couple the number or placement of decor fixtures to interaction action code.
-- README is implementation fact. `desdoc.md` is roadmap and tone. Root domain docs such as `samosbor.md` and `save.md` describe active systems, and `problems.md` tracks problematic non-system mechanics. This file is the engineering contract.
+- `manifest.md` is implementation fact (README.md is the public page, not a source of truth). `desdoc.md` is roadmap and tone. Root domain docs such as `samosbor.md` and `save.md` describe active systems, and `problems.md` tracks problematic non-system mechanics. This file is the engineering contract.
 - Save compatibility is not sacred. Breaking save shape changes should bump the save shape version and reject stale saves explicitly instead of carrying legacy migrations.
 
 ### Storage-Order Bias Is Forbidden
