@@ -16,8 +16,9 @@
 > Проверено 2026-07-28: жёсткое правило про `Math.random()` здесь соблюдено полностью — вне
 > `src/core/rand.ts` осталось ровно два вызова, оба в объявленных исключениях
 > (`src/systems/online_client.ts`, `src/systems/net_sphere.ts`) и оба с требуемым комментарием
-> о причине. Механической проверки у правила нет: `scripts/content-audit.mjs` его не покрывает,
-> так что соблюдение держится на дисциплине.
+> о причине. С 2026-08-15 у правила есть механическая проверка: `npm run check:invariants`
+> падает, если вызовов вне `core/rand.ts` станет больше двух. Дисциплина больше не единственная
+> опора.
 
 > Центральный документ агентского поведения.
 >
@@ -108,6 +109,7 @@ npm run typecheck
 npm run test:unit
 npm run test:generation
 npm run content:audit
+npm run check:invariants
 npm run check:readonly
 npm run build
 npm run smoke
@@ -123,7 +125,8 @@ Command intent:
 - `npm run test:unit`: Node unit tests through `tsx --test`.
 - `npm run test:generation`: expanded generation matrix.
 - `npm run content:audit`: static source/content audit.
-- `npm run check:readonly`: typecheck, unit tests, content audit; safest broad agent gate.
+- `npm run check:invariants`: layer boundaries, raw `Math.random()` ban, function-length ceiling. Add `--report` for the full listing.
+- `npm run check:readonly`: typecheck, unit tests, content audit, invariants; safest broad agent gate.
 - `npm run build`: production single-file browser build; writes `dist/`.
 - `npm run smoke`: headless browser playability smoke; requires existing `dist/` and Chrome or `CHROME_BIN`.
 - `npm run check`: default CI gate; writes `dist/`.
@@ -174,7 +177,8 @@ Current active source layers:
 src/
   core/       primitive types, enums, constants, World, shared state shapes
   data/       definition registries: items, weapons, plot, economy, permits, terminals, variants
-  entities/   monster definitions and procedural sprite packages
+  entities/   monster definitions, procedural sprite packages, sprite id index
+  world/      operations over World storage: path blockers, visual slots, ceiling heights
   gen/        floor generators, design floors, procedural floors, additive content modules
   systems/    runtime logic: AI, quests, A-Life, samosbor, factions, economy, save, interactions
   render/     WebGL raycaster, procedural sprites/textures, HUD, map, canvas overlays
@@ -182,10 +186,21 @@ src/
   main.ts     browser entry point, game loop, floor switching, save/load wiring
 ```
 
-Keep the five-layer contract intact:
+Keep the layer contract intact. Import order is:
 
-- `core/` owns primitive shapes only. Changes here are integration work.
+```txt
+core → data → entities → world → systems → { gen, render }
+```
+
+Note the direction: generators CONSUME systems (433 imports of `territory`, `surface_marks`,
+`events`, `rpg`), so `gen/` sits ABOVE `systems/`, not below it. `gen/` and `render/` are
+peers and must not import each other. `scripts/check-invariants.mjs` enforces this
+mechanically with a ratchet; `npm run check:invariants` reports the current state.
+
+- `core/` owns primitive shapes only. Changes here are integration work. It imports nothing from other layers.
 - `data/` owns definitions only. No world mutation, frame logic or DOM work.
+- `entities/` owns entity definition packages, sprite generation hooks and the sprite id index.
+- `world/` owns operations over `World` typed-array storage. It imports only `core/` and `data/`, and anyone may import it. A file belongs here when it mutates or reads `World` but is called equally by generation, runtime and render.
 - `gen/` owns construction: rooms, corridors, POIs, initial placement, floor content.
 - `systems/` owns generic runtime behavior. Systems consume definitions and publish facts.
 - `render/` reads state and draws. It must not decide gameplay.
@@ -220,7 +235,7 @@ Yellow, edit narrowly:
 - `src/gen/design_floors/manifest.ts`
 - `src/data/items.ts`, `src/data/weapons.ts`, `src/data/psi.ts`, `src/data/plot.ts`
 - `src/entities/monster.ts`
-- `src/render/sprite_index.ts`, `src/render/sprites.ts`, `src/render/textures.ts`
+- `src/entities/sprite_index.ts`, `src/render/sprites.ts`, `src/render/textures.ts`
 - `src/systems/debug.ts`, `src/systems/debug_cheats.ts`
 
 Red, integrator-owned:

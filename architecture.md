@@ -16,9 +16,10 @@ The real project shape is:
 
 ```txt
 src/
-  core/       low-level constants, enums, World, shared state shapes
+  core/       low-level constants, enums, World, shared state shapes, pixel math
   data/       definition registries: items, weapons, plot, economy, permits, terminals, variants
-  entities/   monster definitions and procedural sprite generators
+  entities/   monster definitions, procedural sprite generators, sprite id index
+  world/      operations over World storage: path blockers, visual slots, ceiling heights
   gen/        floor generators and hand-made content modules
   systems/    runtime logic: AI, quests, samosbor, factions, events, inventory, save/runtime state
   render/     raycaster/WebGL/HUD/map/log/canvas overlay rendering
@@ -134,14 +135,30 @@ Review requirement: when touching AI, A-Life, economy, factions, quests, migrati
 
 ## 3. Layer Contract
 
-The project should stay in five layers.
+The import order is:
 
 ```txt
-Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
-       \              \              /
-        \              Event Store  /
-         Core Types + World Arrays
+core  ->  data  ->  entities  ->  world  ->  systems  ->  { gen, render }
 ```
+
+Read the direction carefully, because it is the opposite of the phase order. Floor
+generation happens *before* runtime in time, but in the import graph generators
+CONSUME systems: 433 imports of `systems/territory`, `systems/surface_marks`,
+`systems/events` and `systems/rpg` come from `gen/`. So `gen/` sits ABOVE `systems/`.
+`gen/` and `render/` are peers — neither may import the other.
+
+`scripts/check-invariants.mjs` enforces this mechanically as a ratchet: every known
+violation has a baseline count, and the check fails both when the count grows and when
+it shrinks without the baseline being lowered, so cleared ground cannot be silently
+retaken. Run `npm run check:invariants -- --report` for the current listing.
+
+The recurring mistake this layer order exists to prevent: a leaf file — a registry, a
+util, a set of operations over `World` — gets filed under whichever layer called it
+first, and then everyone imports it. That single pattern produced 288 of the project's
+backward edges across five files (`pixutil`, `sprite_index`, `path_blockers`,
+`visual_cell_slots`, `ceiling_heights`). Before adding a file to `gen/` or `render/`,
+check whether it actually decides generation or drawing, or whether it is a leaf that
+belongs in `core/`, `data/`, `entities/` or `world/`.
 
 `core/`
 
@@ -157,6 +174,13 @@ Definitions  ->  Generation  ->  Runtime Systems  ->  Render/UI
 - No frame logic here.
 - Definitions should be plain objects or readonly arrays.
 - Visual mesh definitions live here as data-only registries: visual cell codes, model definitions, geometry profiles and surface profiles.
+
+`world/`
+
+- Owns operations over `World` typed-array storage: stamping and clearing path blockers, filling and resolving visual cell slots, deriving ceiling heights.
+- Imports only `core/` and `data/`. Anyone may import it.
+- A file belongs here when it reads or mutates `World` but is called equally by generation, runtime systems and render. `ceiling_heights` is the clearest case: it lived in `gen/` and had zero importers inside `gen/`.
+- It is not a place for gameplay decisions, and not a second `systems/`. No cadence, no per-frame work, no event publication — just operations the callers invoke.
 
 `gen/`
 
