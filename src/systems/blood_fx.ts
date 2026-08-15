@@ -6,7 +6,7 @@ import { stampLocalMark, stampMark, MarkType, SURFACE_MAP_MAX_CELLS } from './su
 import { Spr } from '../entities/sprite_index';
 import { ensureEntityIndex } from './entity_index';
 import { markDangerFieldCell } from './danger_field';
-import { addVisualSlotByPriority, hasVisualSlotCode, removeVisualSlotCode } from '../gen/visual_cell_slots.js';
+import { addVisualSlotByPriority, hasVisualSlotCode, removeVisualSlotCode } from '../world/visual_cell_slots';
 import { mathRng as rng, SeedRng } from '../core/rand';
 
 /* ── Transient world-space particles ──────────────────────────── */

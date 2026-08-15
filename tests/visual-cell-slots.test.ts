@@ -27,7 +27,7 @@ import {
   rebuildVisualSlotsFromWorldFeatures,
   resolveVisualCellFace,
   visualWallLineMergeCompatible,
-} from '../src/gen/visual_cell_slots';
+} from '../src/world/visual_cell_slots';
 import {
   captureFloorMemory,
   clearFloorMemory,

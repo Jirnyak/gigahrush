@@ -90,7 +90,7 @@ import {
 } from '../monster_traits';
 import { shareLocalTarget } from './monster_pack';
 import { selectMeleeTarget } from '../melee_targeting';
-import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
+import { findMeatChunkCell, removeVisualSlotCode } from '../../world/visual_cell_slots';
 import { isCarnivoreMonster, monsterPackMode } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';

@@ -42,7 +42,7 @@ import {
 } from '../../data/occupation_profiles';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import { cleanSurfaceArea } from '../surface_cleanup';
-import { findMeatChunkCell, removeVisualSlotCode } from '../../gen/visual_cell_slots';
+import { findMeatChunkCell, removeVisualSlotCode } from '../../world/visual_cell_slots';
 import {
   NPC_UTILITY_INTENTS,
   createNpcUtilityScoreBuffer,

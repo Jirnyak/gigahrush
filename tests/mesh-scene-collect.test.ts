@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { Cell, Feature, RoomType, Tex, W } from '../src/core/types';
 import { World, setVisualSlot as setWorldVisualSlot } from '../src/core/world';
-import { fillVisualSlotsForRoomDecor } from '../src/gen/visual_cell_slots';
+import { fillVisualSlotsForRoomDecor } from '../src/world/visual_cell_slots';
 import type { CameraView } from '../src/systems/camera';
 import { resolveVisualGeometryProfile } from '../src/data/visual_geometry_profiles';
 import { visualModelDef, type VisualModelId } from '../src/data/visual_models';

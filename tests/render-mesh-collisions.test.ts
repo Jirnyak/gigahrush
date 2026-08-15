@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { World, EMPTY_VISUAL_CELL_CODE } from '../src/core/world';
-import { addVisualSlotFirstFree, addVisualSlotByPriority } from '../src/gen/visual_cell_slots';
+import { addVisualSlotFirstFree, addVisualSlotByPriority } from '../src/world/visual_cell_slots';
 import { visualCellDefById } from '../src/data/visual_cell_slots';
 
 function code(id: string): number {

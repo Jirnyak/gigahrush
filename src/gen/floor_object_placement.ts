@@ -24,7 +24,7 @@ import {
   fillVisualSlotsForRoomDecor,
   fillVisualSlotsFromFeature,
   type VisualSlotRoomDecorSummary,
-} from './visual_cell_slots';
+} from '../world/visual_cell_slots';
 
 interface ObjectCandidate {
   room: Room;
