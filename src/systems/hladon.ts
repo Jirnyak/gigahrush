@@ -33,6 +33,8 @@ interface HladonCache {
   fringeCells: number;
   cellVersion: number;
   roomSignature: number;
+  /** Сколько комнат было у мира при сборке: дешёвый отбой для этажей без хладона. */
+  roomCount: number;
   lastLevel: 0 | 1 | 2;
   lastRoomId: number;
   countered: boolean;
@@ -102,6 +104,7 @@ function buildHladonCache(world: World, roomSignature = hladonRoomSignature(worl
     fringeCells: 0,
     cellVersion: world.cellVersion,
     roomSignature,
+    roomCount: world.rooms.length,
     lastLevel: 0,
     lastRoomId: -1,
     countered: false,
@@ -142,19 +145,21 @@ function buildHladonCache(world: World, roomSignature = hladonRoomSignature(worl
   return cache;
 }
 
+/* Маска холода посчитана BFS по КЛЕТКАМ, поэтому смена cellVersion её обесценивает
+   всегда. Раньше здесь стояло обратное: при несовпадении версии, но совпавшей
+   сигнатуре комнат, застаревшей маске просто проставлялся новый номер версии — стена,
+   выросшая в оболочке кармана, продолжала морозить. Комнаты при этом тоже надо
+   сверять: карман размораживают переименованием. Перебирать комнаты каждый кадр
+   нельзя, поэтому этаж без хладона отбивается по числу комнат, не читая имён. */
 function getHladonCache(world: World): HladonCache {
-  let cache = hladonCaches.get(world);
-  if (cache && cache.cellVersion === world.cellVersion) return cache;
-  
-  const roomSignature = hladonRoomSignature(world);
-  if (cache && cache.roomSignature === roomSignature) {
-    cache.cellVersion = world.cellVersion;
-    return cache;
+  const cache = hladonCaches.get(world);
+  if (cache && cache.cellVersion === world.cellVersion) {
+    if (cache.rooms.length === 0 && cache.roomCount === world.rooms.length) return cache;
+    if (cache.roomSignature === hladonRoomSignature(world)) return cache;
   }
-  
-  cache = buildHladonCache(world, roomSignature);
-  hladonCaches.set(world, cache);
-  return cache;
+  const fresh = buildHladonCache(world);
+  hladonCaches.set(world, fresh);
+  return fresh;
 }
 
 function coldLevelAt(world: World, cache: HladonCache, x: number, y: number): 0 | 1 | 2 {

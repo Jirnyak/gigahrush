@@ -32,7 +32,7 @@ import {
   getNpcMenuOptions,
 } from '../src/systems/npc_interaction_options';
 import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer, addTestRoom } from './helpers';
-import { checkQuests } from '../src/systems/quests';
+import { checkQuests, checkTalkQuest } from '../src/systems/quests';
 import { useInteractive } from '../src/systems/interactive';
 import { useItem } from '../src/systems/inventory';
 
@@ -242,7 +242,15 @@ test('quest completion unlocks stable recipe ids from eventData', () => {
     }],
   });
 
+  // KILL-квест от NPC закрывается СДАЧЕЙ, а не сам по себе: в checkQuests ветка
+  // KILL сразу выходит при contractId === undefined («manual turn-in required for
+  // NPC quests»), и это записанный контракт, а не недосмотр. Проверяем, что
+  // checkQuests его действительно не закрывает, и закрываем разговором с гивером —
+  // тем самым путём, которым его закроет игрок.
   checkQuests(player, world, [player, giver], state, state.msgs);
+  assert.equal(state.quests[0].done, false, 'квест от NPC не должен закрываться без сдачи');
+
+  checkTalkQuest(giver, player, world, [player, giver], state, state.msgs);
 
   assert.equal(state.quests[0].done, true);
   assert.equal(known(state, 'craft_item_homemade_9mm'), true);

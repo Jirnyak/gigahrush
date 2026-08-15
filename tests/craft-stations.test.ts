@@ -219,8 +219,14 @@ testGenerationMatrix('ordinary story floor craft station placement stays reachab
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
   const stations = craftStationCells(gen.world);
 
-  assert.equal(stations.length >= CRAFT_STATION_CAPS.story.min, true, 'ordinary story floor should place craft stations');
-  assert.equal(stations.length <= CRAFT_STATION_CAPS.story.max, true, `station count ${stations.length}`);
+  // Порога `CRAFT_STATION_CAPS.story` не существует и, судя по таблице, не существовало
+  // никогда: там есть maintenance/procedural/design. Тесты не тайпчекаются, поэтому
+  // выражение молча читалось как undefined и падало на `.min`. Границы у сюжетного
+  // этажа задаёт его собственный профиль — тот же, по которому его и застраивают.
+  const profile = craftStationProfileForStoryFloor('ministry');
+  assert.ok(profile, 'ministry craft station profile should exist');
+  assert.equal(stations.length >= profile.min, true, 'ordinary story floor should place craft stations');
+  assert.equal(stations.length <= profile.max, true, `station count ${stations.length}`);
   assert.equal(stations.every(idx => audit.reachable[idx] === 1), true, 'ordinary story stations should be reachable');
   assert.equal(stations.every(idx => gen.world.aptMask[idx] === 0), true, 'ordinary story stations should not occupy aptMask cells');
 });
