@@ -1,6 +1,11 @@
 import { beforeEach, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+/* Самосбор перестраивает этаж чужим генератором: слой systems не имеет права
+   звать gen, генератор ставит точка сборки. Тесту, который доводит волну до
+   сшивки или до полной перестройки, реестр контента нужен явно. */
+import '../src/content';
+
 import {
   AIGoal,
   Cell,

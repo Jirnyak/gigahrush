@@ -13,7 +13,12 @@ import {
 import { floorKeyForDesign } from '../src/systems/floor_keys';
 import { npcReservedIdentityId } from '../src/data/npc_packages';
 import { makeGameState } from './helpers';
-import '../src/gen/maintenance/gordon';
+/* Реестр контента целиком: здесь нужен Гордон с коллекторов. Раньше стоял
+   точечный импорт модуля из слоя генерации, и по этой подстроке
+   scripts/run-unit-tests.mjs уводил весь файл в негейтованный набор generation:
+   семь зелёных тестов не проверялись ни одним гейтом. Не возвращай сюда
+   прямой импорт из слоя генерации — файл снова выпадет из гейта. */
+import '../src/content';
 
 function makeDemosState() {
   const state = makeGameState({ currentZ: 0 });
@@ -107,13 +112,10 @@ test('Demos resolves authored plot sprite and route floor number for reserved pr
       z: -26,
       targetCount: 1,
       reserved: [{
-        // ИЗВЕСТНО КРАСНЫЙ: контракт резервных личностей A-Life не сходится с
-        // этим вызовом. Установлено: (1) поле z должно быть каноническим (-26),
-        // а не старым -14; (2) явный числовой plotNpcId ПОДМЕНЯЕТ личность —
-        // это индекс регистрации пакетов, и Гордон превращался в Марко Лоло;
-        // (3) без него конвейер всё равно берёт первую зарегистрированную
-        // личность вместо запрошенной по id. Нужен разбор buildAlifeState-
-        // FromPopulationPlan: как бакетный reserved связывается с пакетом.
+        // Связывание идёт строковым npc:<пакет>, а не числовым plotNpcId:
+        // reservedPlotSlot в systems/alife.ts специально предпочитает строку.
+        // Числом сюда лезть нельзя — раньше Гордон превращался в Марко Лоло.
+        // Второе условие — канонический z: коллекторы это -26, а не старое -14.
         id: npcReservedIdentityId('gordon_freeman'),
         kind: 'plot',
         name: 'Гордон Фримен',
