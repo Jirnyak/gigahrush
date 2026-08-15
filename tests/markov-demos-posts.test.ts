@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { Faction, Occupation, type WorldEvent } from '../src/core/types';
 import { DEMOS_AUTHOR_FALLBACK_CAP } from '../src/data/demos_posts';
 import {
@@ -16,11 +15,13 @@ import {
   type DemosSpeechRouter,
 } from '../src/systems/demos_posts';
 import type { AlifeNpcSnapshot } from '../src/systems/alife';
+import { SAVE_SHAPE_VERSION } from '../src/core/save_shape';
 
+/* Раньше версия вычитывалась регексом из исходника save_runtime.ts, чтобы не тащить
+   в тест весь его импорт. Теперь константа живёт в листе без зависимостей и берётся
+   обычным импортом — читать исходник глазами регекспа больше незачем. */
 function currentSaveShapeVersion(): number {
-  const source = readFileSync(new URL('../src/systems/save_runtime.ts', import.meta.url), 'utf8');
-  const match = source.match(/export\s+const\s+SAVE_SHAPE_VERSION\s*=\s*(\d+)/);
-  return match ? Number(match[1]) : NaN;
+  return SAVE_SHAPE_VERSION;
 }
 
 function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {

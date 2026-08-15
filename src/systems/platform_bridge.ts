@@ -1,5 +1,5 @@
 import { safeParseJson } from '../core/json';
-import { SAVE_SHAPE_VERSION, saveShapeVersionStatus } from './save_runtime';
+import { SAVE_SHAPE_VERSION, saveShapeVersionStatus } from '../core/save_shape';
 import { designFloorProfile } from '../data/design_floor_profiles';
 
 type PauseChangeHandler = (paused: boolean) => void;

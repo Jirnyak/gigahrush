@@ -25,7 +25,7 @@ import {
   markPlatformGameplayStart,
   markPlatformGameplayStop,
 } from '../src/systems/platform_bridge';
-import { SAVE_SHAPE_VERSION } from '../src/systems/save_runtime';
+import { SAVE_SHAPE_VERSION } from '../src/core/save_shape';
 import { createPortalCompactSavePayload, summarizeSavePayload, type SavePayload } from '../src/systems/save_payload';
 import { QuestType } from '../src/core/types';
 import { designFloorAmbientLight, designFloorProfile, designFloorPseudoliftChance } from '../src/data/design_floor_profiles';

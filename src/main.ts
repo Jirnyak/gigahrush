@@ -583,7 +583,8 @@ import {
   replayMapEditorPatchForCurrentFloor,
   setMapEditorPatchState,
 } from './systems/map_editor';
-import { createGameSavePayload, saveShapeVersionStatus } from './systems/save_runtime';
+import { createGameSavePayload } from './systems/save_runtime';
+import { saveShapeVersionStatus } from './core/save_shape';
 import { createPortalCompactSavePayload } from './systems/save_payload';
 import {
   MAX_SAVE_MONEY, clampInt, clampNumber, finiteNumber, isRecord, normalizeClock,

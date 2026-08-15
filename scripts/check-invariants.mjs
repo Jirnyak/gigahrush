@@ -52,11 +52,16 @@ const BASELINE = {
 };
 
 /* Крупнейший цикл в графе рантайм-импортов (типы стёрты — они не существуют при сборке).
-   Был 293 и держался одним ребром systems/samosbor → gen/floor_manifest. Ребро срезано:
-   генератор этажей приходит в самосбор инъекцией из точки сборки src/content.ts.
-   Ленивый реестр этажей вместо 63 статических импортов сверх этого не даёт ничего:
-   замерено — те же 106. */
-const RUNTIME_CYCLE_BASELINE = 106;
+   История: 293 → 106 (срезано ребро systems/samosbor → gen/floor_manifest, генератор
+   приходит инъекцией из точки сборки src/content.ts) → 36 (константа версии сейва уехала
+   в лист core/save_shape.ts, и platform_bridge перестал тянуть весь save_runtime) → 10
+   (markov_text берёт реляцию из data/relations, а не через systems/factions).
+   Ленивый реестр этажей сверх этого не даёт ничего — замерено.
+   Оставшиеся 10 — настоящий клубок, а не keystone: factions ↔ noise ↔ online_client ↔
+   online_protocol ↔ inventory ↔ permits ↔ crafting ↔ containers ↔ faction_events ↔
+   alife/squad_logic. Ни одно ребро не роняет его больше чем на 3; здесь нужен разбор
+   ответственностей, а не перенос листа. */
+const RUNTIME_CYCLE_BASELINE = 10;
 
 const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
 const MAX_FUNCTION_LINES = 200;

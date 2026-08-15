@@ -5,7 +5,7 @@ import {
   SAVE_SHAPE_VERSION,
   saveShapeVersionStatus,
   saveShapeVersionSupported,
-} from '../src/systems/save_runtime';
+} from '../src/core/save_shape';
 
 test('save runtime accepts only the current shape version', () => {
   assert.equal(saveShapeVersionStatus({ version: SAVE_SHAPE_VERSION }), 'current');

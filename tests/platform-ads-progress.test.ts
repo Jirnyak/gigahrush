@@ -8,7 +8,7 @@ import {
   showPlatformFullscreenAd,
   syncPlatformProgressFromUserGesture,
 } from '../src/systems/platform_bridge';
-import { SAVE_SHAPE_VERSION } from '../src/systems/save_runtime';
+import { SAVE_SHAPE_VERSION } from '../src/core/save_shape';
 import { reportPlatformProgress, resetPlatformProgressForTests } from '../src/systems/platform_progress';
 import type { Entity, GameState } from '../src/core/types';
 

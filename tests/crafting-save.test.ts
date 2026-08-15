@@ -13,11 +13,8 @@ import {
   learnCraftRecipe,
   restoreCraftingState,
 } from '../src/systems/crafting';
-import {
-  SAVE_SHAPE_VERSION,
-  createGameSavePayload,
-  saveShapeVersionStatus,
-} from '../src/systems/save_runtime';
+import { createGameSavePayload } from '../src/systems/save_runtime';
+import { SAVE_SHAPE_VERSION, saveShapeVersionStatus } from '../src/core/save_shape';
 import { makeGameState, makeTestPlayer } from './helpers';
 
 function savePlayer(overrides: Partial<Entity> = {}): Entity {

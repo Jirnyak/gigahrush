@@ -4,7 +4,11 @@ import { rng } from '../core/rand';
 import { randomName } from '../data/catalog';
 import { MARKOV_TEXT_DEFINITIONS, MarkovIntent, MarkovSource } from '../data/markov_text';
 import { COMPILED_SKELETONS, COMPILED_CATEGORIES, COMPILED_MARKOV_GRAPH, COMPILED_PATTERN_DISTANCES } from '../data/markov_compiled_matrix';
-import { getFactionRelation } from './factions';
+/* Реляция берётся из data/relations напрямую, а не через systems/factions:
+   getFactionRelation там — однострочный проброс к getFactionRel, а ребро
+   markov_text → factions держало рантайм-цикл на 26 файлов. Генератору речи
+   не нужна система войны за территорию, ему нужно одно число. */
+import { getFactionRel } from '../data/relations';
 
 export interface MarkovTextContext {
   readonly actorId?: number;
@@ -112,7 +116,7 @@ function resolveCategory(tag: string, ctx: MarkovTextContext | undefined): strin
       const fId = match ? parseInt(match.replace('faction_id_', '')) : -1;
       let relation = 0;
       if (fId !== -1) {
-        relation = getFactionRelation(ctx.faction!, fId);
+        relation = getFactionRel(ctx.faction!, fId);
       }
       const weight = Math.max(10, Math.abs(relation) + 10);
       return { item, weight };
