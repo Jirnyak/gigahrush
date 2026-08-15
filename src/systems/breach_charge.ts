@@ -9,7 +9,7 @@ import {
 } from '../core/types';
 import type { World } from '../core/world';
 import { ITEMS } from '../data/items';
-import { rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
+import { rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { markNavigationCellsDirty } from './ai/pathfinding';
 import { spawnBreachDust } from './blood_fx';
 import { publishEvent } from './events';

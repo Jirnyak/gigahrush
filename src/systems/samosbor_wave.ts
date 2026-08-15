@@ -16,7 +16,7 @@ import {
 import { VISUAL_SLOTS_PER_CELL } from "../core/world";
 import type { World, WorldGridDirtyRect } from "../core/world";
 import type { FloorGeneration } from "../gen/floor_manifest";
-import { rebuildPathBlockersFromWorldObjects } from "../gen/path_blockers";
+import { rebuildPathBlockersFromWorldObjects } from "../world/path_blockers";
 import {
   freezeNavigationCacheForWorld,
   unfreezeNavigationCacheForWorld,

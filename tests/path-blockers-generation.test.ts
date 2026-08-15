@@ -10,7 +10,7 @@ import {
 } from '../src/core/path_blockers';
 import { pathBlockerIdForContainerKind, pathBlockerIdForFeature } from '../src/data/path_blockers';
 import { generateFloor, type FloorGeneration } from '../src/gen/floor_manifest';
-import { rebuildPathBlockersFromWorldObjects } from '../src/gen/path_blockers';
+import { rebuildPathBlockersFromWorldObjects } from '../src/world/path_blockers';
 
 let cachedMaintenance: FloorGeneration | undefined;
 

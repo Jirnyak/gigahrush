@@ -14,7 +14,7 @@ import {
   rebuildPathBlockersFromWorldObjects,
   stampPathBlocker,
   stampPathBlockerDef,
-} from '../src/gen/path_blockers';
+} from '../src/world/path_blockers';
 
 const RECT_TEST_DEF: PathBlockerDef = {
   id: 'test_rect_blocker',

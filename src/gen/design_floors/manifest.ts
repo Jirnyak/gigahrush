@@ -14,7 +14,7 @@ import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
 import { applyDesignFloorObjectProfile } from '../floor_object_placement';
 import { fillVisualSlotsForWorldFeatures } from '../visual_cell_slots';
-import { rebuildGeneratedFloorPathBlockers } from '../path_blockers';
+import { rebuildGeneratedFloorPathBlockers } from '../../world/path_blockers';
 import { populateDesignFloorAmbientNpcs, populateDesignFloorMonsters } from './population';
 import { generateAntennaCourtDesignFloor } from '../antenna_court';
 import { generateAttractorDvorDesignFloor } from '../attractor_dvor';

@@ -107,7 +107,7 @@ import type { FloorGeneration } from './floor_manifest';
 import { decorateCarnivorousFungusRoom } from './carnivorous_fungus_room';
 import { applyProceduralFloorObjectProfile } from './floor_object_placement';
 import { fillVisualSlotsForWorldFeatures } from './visual_cell_slots';
-import { rebuildGeneratedFloorPathBlockers } from './path_blockers';
+import { rebuildGeneratedFloorPathBlockers } from '../world/path_blockers';
 import { applyProceduralAnomalyProfile } from './procedural_anomalies';
 import { applyProceduralStructureLibrary } from './procedural_structure_library';
 import { ensureZombieApocalypseQuarantineDoor } from './procedural_anomalies/zombie_apocalypse';

@@ -5,7 +5,7 @@ import {
 import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { ITEMS } from '../data/catalog';
-import { rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
+import { rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   getPermitDef,

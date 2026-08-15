@@ -20,7 +20,7 @@ import {
   drawBadAppleFrame,
 } from '../../data/bad_apple_frames';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
-import { rebuildPathBlockersFromWorldObjects } from '../../gen/path_blockers';
+import { rebuildPathBlockersFromWorldObjects } from '../../world/path_blockers';
 import { primeBadAppleProjectorAudio, updateBadAppleProjectorLoop } from '../audio';
 import { publishEvent } from '../events';
 

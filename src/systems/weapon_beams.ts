@@ -13,7 +13,7 @@ import {
 import type { World } from '../core/world';
 import type { WeaponStats } from '../data/weapons';
 import { ITEMS } from '../data/items';
-import { rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
+import { rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { markNavigationCellsDirty } from './ai/pathfinding';
 import { stampMark, MarkType } from './surface_marks';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';

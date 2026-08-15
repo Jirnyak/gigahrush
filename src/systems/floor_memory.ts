@@ -22,7 +22,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { type FloorGeneration } from '../gen/floor_manifest';
-import { rebuildGeneratedFloorPathBlockers, rebuildPathBlockersFromWorldObjects } from '../gen/path_blockers';
+import { rebuildGeneratedFloorPathBlockers, rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { cleanFloorKey, floorKeyForDesign, floorKeyKnown, type FloorKeyResolveContext  } from './floor_keys';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { isNativePlayerBodyEntity } from './player_actor';
