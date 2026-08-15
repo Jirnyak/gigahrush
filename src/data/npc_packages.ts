@@ -17,6 +17,7 @@ import {
   type NpcPackageValidationResult,
 } from './npc_package_schema';
 import { COMMUNITY_NPC_PACKAGE_FOLDERS } from './npc_packages/community';
+import { PLOT_NPC_ID_ORDER } from './npc_plot_ids';
 import { getStack, ITEMS } from './items';
 
 export type NpcPackageKind = 'plot' | 'design' | 'procedural';
@@ -313,19 +314,42 @@ export function registerNpcPackage(input: NpcPackageDef | NpcPackageRegistryInpu
   NPC_PACKAGES_BY_ID.set(pack.id, pack);
 }
 
-let nextPlotNpcId = 1;
+/* Слот сюжетной личности берётся из замороженного списка, а не из счётчика
+   регистраций: число обязано зависеть от того, КТО этот человек, а не от того,
+   какие модули оказались импортированы. Подробности и правила ведения списка —
+   в `npc_plot_ids.ts`. Пакет вне списка получает слот за его концом; это путь
+   для тестовых и общинных пакетов, а не для игрового контента. */
+const PLOT_NPC_SLOT_BY_ID = new Map<string, number>();
+const PLOT_NPC_ID_BY_SLOT: string[] = [];
+for (let i = 0; i < PLOT_NPC_ID_ORDER.length; i++) {
+  PLOT_NPC_SLOT_BY_ID.set(PLOT_NPC_ID_ORDER[i], i + 1);
+  PLOT_NPC_ID_BY_SLOT[i + 1] = PLOT_NPC_ID_ORDER[i];
+}
+let plotNpcSlotCeiling = PLOT_NPC_ID_ORDER.length;
 const PLOT_NPC_PACKAGES_BY_NUMERIC_ID: NpcPackageDef[] = [];
 
+function claimPlotNpcSlot(stringId: string): number {
+  const known = PLOT_NPC_SLOT_BY_ID.get(stringId);
+  if (known !== undefined) return known;
+  const slot = ++plotNpcSlotCeiling;
+  PLOT_NPC_SLOT_BY_ID.set(stringId, slot);
+  PLOT_NPC_ID_BY_SLOT[slot] = stringId;
+  return slot;
+}
+
 export function registerPlotNpc(input: NpcPackageDef | NpcPackageRegistryInput): number {
-  const id = nextPlotNpcId++;
   const pack = normalizeNpcPackageInput(input);
+  const id = claimPlotNpcSlot(pack.id);
   registerNpcPackage(pack);
   PLOT_NPC_PACKAGES_BY_NUMERIC_ID[id] = pack;
   return id;
 }
 
+/** Верхняя граница слотов сюжетного пула. Не «сколько пакетов загрузилось»:
+ *  диапазон `1..getPlotNpcCount()` резервируется в A-Life целиком и не должен
+ *  дышать вместе с составом импортов. */
 export function getPlotNpcCount(): number {
-  return nextPlotNpcId - 1;
+  return plotNpcSlotCeiling;
 }
 
 export function getPlotNpcPackageByNumericId(id: number): NpcPackageDef | undefined {
@@ -333,12 +357,11 @@ export function getPlotNpcPackageByNumericId(id: number): NpcPackageDef | undefi
 }
 
 export function getPlotNpcNumericId(stringId: string): number | undefined {
-  const idx = PLOT_NPC_PACKAGES_BY_NUMERIC_ID.findIndex(pack => pack?.id === stringId);
-  return idx >= 1 ? idx : undefined;
+  return PLOT_NPC_SLOT_BY_ID.get(stringId);
 }
 
 export function getPlotNpcStringId(id: number): string | undefined {
-  return PLOT_NPC_PACKAGES_BY_NUMERIC_ID[id]?.id;
+  return PLOT_NPC_ID_BY_SLOT[id];
 }
 
 export function registerNpcPackages(inputs: readonly (NpcPackageDef | NpcPackageRegistryInput)[]): void {
