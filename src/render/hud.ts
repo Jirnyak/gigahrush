@@ -1378,6 +1378,413 @@ export function renderStatusIcons(ctx: CanvasRenderingContext2D, player: Entity)
 }
 
 /* ── The HUD is drawn on the 2D canvas overlaying the 3D view ── */
+/* Экраны, включаемые флагами state.show*. Чистая диспетчеризация: каждая ветвь —
+ * один вызов рисования, ветви независимы. Вынесено из drawHUD без изменения тел. */
+function drawToggledScreens(
+  ctx: CanvasRenderingContext2D,
+  player: Entity, state: GameState, world: World, entities: Entity[],
+  sx: number, sy: number, msx: number, msy: number, time: number,
+  emergencyPanelOpen: boolean,
+): void {
+// ── Full map menu ────────────────────────────────────────
+if (state.mapMode === 2) {
+  drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentZ, state, time);
+}
+
+if (state.showMapLegend) {
+  drawMapLegendMenu(ctx, world, player, state, sx, sy, time);
+}
+
+// ── Inventory (if toggled) ───────────────────────────────
+if (state.showInventory) {
+  drawInventory(ctx, player, state, sx, sy, time);
+}
+
+// ── Quest log (if toggled) ───────────────────────────────
+if (state.showQuests) {
+  drawQuestLog(ctx, state, msx, msy, time, getCurrentObjective(state, entities));
+}
+
+// ── Faction relations matrix (F) ─────────────────────────
+if (state.showFactions) {
+  drawFactionMenu(ctx, player, entities, state, msx, msy, time);
+}
+
+// ── Инфосеть Демос ─────────────────────────────────────
+if (state.showDemos) {
+  drawDemosMenu(ctx, state, entities, msx, msy, time);
+}
+
+// ── Message log (L) ─────────────────────────────────────
+if (state.showLog) {
+  drawLogMenu(ctx, state, msx, msy, time);
+}
+
+// ── Controls / keybinds (Tab) ────────────────────────────
+if (state.showControls) {
+  drawControlsMenu(ctx, state, msx, msy, time);
+}
+
+// ── One-page HELP poster (F1) ────────────────────────────
+if (state.showHelp) {
+  drawHelpMenu(ctx, state, msx, msy, time);
+}
+
+// ── UI orchestrator (U) ──────────────────────────────────
+if (state.showUiSettings) {
+  drawUiSettingsMenu(ctx, state, msx, msy, time);
+}
+
+// ── Game menu (Enter) ────────────────────────────────────
+if (state.showMenu) {
+  drawGameMenu(ctx, state, msx, msy, time);
+}
+
+// ── Feedback / Credits menu ──────────────────────────────
+if (state.showFeedback) {
+  drawFeedbackMenu(ctx, state, msx, msy, time);
+}
+
+// ── NPC interaction menu ─────────────────────────────────
+if (state.showNpcMenu) {
+  drawNpcMenu(ctx, player, state, entities, msx, msy, time);
+}
+
+// ── Container menu ──────────────────────────────────────
+if (state.showContainerMenu) {
+  drawContainerMenu(ctx, player, state, world, msx, msy);
+}
+
+if (state.showCraftMenu) {
+  drawCraftMenu(ctx, player, state, msx, msy, time);
+}
+
+if (emergencyPanelOpen) {
+  drawEmergencyPanelMenu(ctx, player, msx, msy, time);
+}
+}
+
+/* Оверлеи-терминалы. Флаги открытости не приходят параметрами: это тривиальные
+ * предикаты без состояния, и двадцать аргументов в сигнатуре опаснее их повторного
+ * вызова. Внутри кадра их значение измениться не может. */
+function drawOpenOverlays(
+  ctx: CanvasRenderingContext2D,
+  player: Entity, state: GameState, world: World, entities: Entity[],
+  sx: number, sy: number, msx: number, msy: number, w: number, h: number, time: number,
+): void {
+// ── Debug screen (~) ─────────────────────────────────────
+if (state.showDebug) {
+  drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state, state.debugSel);
+}
+
+// ── NET Sphere terminal (N) ──────────────────────────────
+if (isNetSphereOpen()) {
+  drawNetSphereMenu(ctx, msx, msy, time, getNetSphereSnapshot());
+}
+
+
+if (isArenaOverlayOpen()) {
+  const arena = getArenaOverlaySnapshot();
+  drawArenaOverlay(ctx, msx, msy, time, arena);
+}
+
+if (isGamblingOverlayOpen()) {
+  const gambling = getGamblingOverlaySnapshot(player);
+  drawGamblingOverlay(ctx, msx, msy, time, gambling);
+}
+
+if (isComputerOverlayOpen()) {
+  const computer = getComputerOverlaySnapshot(world, state);
+  drawComputerOverlay(ctx, msx, msy, time, computer);
+}
+
+if (isNetHackOverlayOpen()) {
+  const hack = getNetHackOverlaySnapshot(world, state, player);
+  drawNetHackOverlay(ctx, msx, msy, time, hack);
+}
+
+if (isFastElevatorOverlayOpen()) {
+  drawFastElevatorOverlay(ctx, msx, msy, time, getFastElevatorOverlaySnapshot(player), player);
+}
+
+if (isNetTerminalGenDeniedOpen()) {
+  const terminal = getNetTerminalGenRuntimeSnapshot();
+  drawNetTerminalGenDenied(ctx, msx, msy, time, {
+    status: 'locked',
+    code: terminal.terminalIdx >= 0 ? `IDX ${terminal.terminalIdx}` : undefined,
+    lines: [
+      'НЕТ-ГЕН не найден.',
+      'Банковский счёт доступен, редактор карты закрыт.',
+    ],
+    footer: `${menuCloseHint()} закрыть  |  счёт без ГЕН`,
+  });
+}
+
+if (isNetTerminalBankOpen()) {
+  drawNetTerminalBank(ctx, msx, msy, time, getNetTerminalBankSnapshot(state, player));
+}
+
+if (isMapEditorOpen()) {
+  drawMapEditor(ctx, msx, msy, time, world, entities, player, {
+    ...getMapEditorSnapshot(state),
+    terminals: getNetTerminalGenTerminals(),
+  });
+}
+
+}
+
+/* Экран конца игры. Вынесено из drawHUD без изменения тела. */
+function drawGameOverScreen(
+  ctx: CanvasRenderingContext2D,
+  player: Entity, state: GameState, world: World,
+  sy: number, w: number, h: number, time: number,
+): void {
+// ── Game over (neuro-interface death) ─────────────────────
+if (state.gameOver && state.gameWon) {
+  // Victory end screen — black fade-in
+  const winAlpha = Math.min(1, state.deathTimer * 0.4);
+  ctx.fillStyle = `rgba(0,0,0,${winAlpha})`;
+  ctx.fillRect(0, 0, w, h);
+
+  if (state.deathTimer > 1) {
+    const textAlpha = Math.min(1, (state.deathTimer - 1) * 0.5);
+    const dj = textJitter(time * 0.5, 999);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,255,128,0.4)';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = `rgba(200,255,200,${textAlpha})`;
+    ctx.font = `bold ${28 * sy}px "Press Start 2P", monospace`;
+    ctx.fillText('КОНЕЦ ИГРЫ', w / 2 + dj.dx, h / 2 - 20 * sy + dj.dy);
+    ctx.fillStyle = `rgba(0,200,100,${textAlpha * 0.15})`;
+    ctx.fillText('КОНЕЦ ИГРЫ', w / 2 + dj.dx + 3, h / 2 - 20 * sy + dj.dy + 1);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(136,170,136,${Math.min(1, (state.deathTimer - 2) * 0.4)})`;
+    ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
+    ctx.fillText(fitHudText(ctx, voidReturnVictoryLine(state), w * 0.82), w / 2, h / 2 + 10 * sy);
+    ctx.fillText('[R] — заново', w / 2, h / 2 + 30 * sy);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+} else if (state.gameOver) {
+  const deathAlpha = Math.min(0.5, state.deathTimer * 0.15);
+  const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.7);
+  grd.addColorStop(0, `rgba(0,0,0,0)`);
+  grd.addColorStop(1, `rgba(0,0,0,${deathAlpha})`);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  // Intense static noise
+  drawStaticNoise(ctx, 0, 0, w, h, time, 0.06 * Math.min(1, state.deathTimer * 0.3));
+
+  const textAlpha = 0.6 + Math.sin(time * 3) * 0.3;
+  const dj = textJitter(time * 2, 777);
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,0,0,0.5)';
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = `rgba(200,0,0,${textAlpha})`;
+  ctx.font = `bold ${24 * sy}px "Press Start 2P", monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2, h / 2 - 20 * sy + dj.dy);
+  // RGB split ghost
+  ctx.fillStyle = `rgba(0,200,200,${textAlpha * 0.15})`;
+  ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2 + 3, h / 2 - 20 * sy + dj.dy + 1);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = `rgba(136,136,136,${Math.min(1, state.deathTimer * 0.5)})`;
+  const deathCause = inferDeathCause(state, player, world);
+  ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
+  ctx.fillText(deathCause.title, w / 2, h / 2 + 10 * sy);
+  ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
+  ctx.fillText(fitHudText(ctx, deathCause.detail, w * 0.82), w / 2, h / 2 + 24 * sy);
+  ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
+  ctx.fillText('[R] — заново', w / 2, h / 2 + 44 * sy);
+  ctx.fillText('[Enter] — продолжить путь', w / 2, h / 2 + 60 * sy);
+  ctx.fillText('за случайного человека', w / 2, h / 2 + 74 * sy);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+}
+
+/* Лента событий в левом верхнем углу. Вынесено из drawHUD без изменения тела. */
+function drawEventBand(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  slots: ReturnType<typeof createHudSlots>,
+  sx: number, sy: number, w: number, h: number,
+  time: number, gameTime: number,
+  showCompactPanels: boolean, showMessages: boolean, showMinimap: boolean,
+  reducedHudMotion: boolean,
+): void {
+// ── Stenographic summary: top-left event band ─────────
+if (showCompactPanels && showMessages && !state.samosborActive) {
+  const s = Math.max(1, Math.min(sx, sy));
+  const pad = 4 * s;
+  const headerH = 8 * s;
+  const rowH = 7.2 * s;
+  const rowGap = 1.8 * s;
+  const minimapReserve = showMinimap ? HUD_MINIMAP_UNITS * s + 6 * s : 0;
+  const summaryRight = showMinimap
+    ? Math.max(slots.safe.left, w - slots.safe.right - minimapReserve)
+    : w - slots.safe.right;
+  const summaryW = Math.max(0, summaryRight - slots.safe.left);
+  const summarySlot = { ...slots.topLeftEvent, w: summaryW };
+  const availableH = Math.max(0, summarySlot.y + summarySlot.h - summarySlot.cursorY);
+  const maxPanelH = Math.min(availableH, Math.max(40 * s, h * 0.33));
+  const plannedMsgs: Array<{
+    msg: GameState['msgs'][number];
+    index: number;
+    stamp: string;
+    stampW: number;
+    lines: string[];
+    h: number;
+  }> = [];
+  const scanStart = Math.max(0, state.msgs.length - MSG_SCAN_MAX);
+  ctx.save();
+  ctx.font = `${5.8 * s}px "Press Start 2P", monospace`;
+  const bodyW = Math.max(1, summaryW - pad * 2);
+  let usedH = 0;
+  for (let i = state.msgs.length - 1; i >= scanStart && plannedMsgs.length < MSG_MAX; i--) {
+    const m = state.msgs[i];
+    if (!hudMessageVisible(m.time, gameTime)) continue;
+    if (m.hud === false) continue;
+    const day = m.day;
+    const hour = String(m.hour).padStart(2, '0');
+    const minute = String(m.minute).padStart(2, '0');
+    const dist = m.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(m.distanceMeters))}м` : '';
+    const stamp = `Д${day} ${hour}:${minute}${dist}`;
+    const stampW = Math.min(58 * s, Math.max(34 * s, ctx.measureText(stamp).width + 5 * s));
+    const textW = Math.max(42 * s, bodyW - stampW);
+    const remainingH = maxPanelH - pad * 2 - headerH - usedH;
+    const remainingLines = Math.max(1, Math.floor((remainingH - rowGap) / rowH));
+    const maxLines = Math.min(HUD_SUMMARY_MAX_LINES_PER_MSG, remainingLines);
+    const lines = wrapHudText(ctx, m.text, textW, maxLines);
+    const itemH = Math.max(rowH, lines.length * rowH) + rowGap;
+    if (pad * 2 + headerH + usedH + itemH > maxPanelH) {
+      if (plannedMsgs.length === 0 && remainingLines > 0) {
+        const clipped = wrapHudText(ctx, m.text, textW, remainingLines);
+        plannedMsgs.push({ msg: m, index: i, stamp, stampW, lines: clipped, h: clipped.length * rowH });
+      }
+      break;
+    }
+    plannedMsgs.push({ msg: m, index: i, stamp, stampW, lines, h: itemH });
+    usedH += itemH;
+  }
+  ctx.restore();
+  if (plannedMsgs.length > 0 && summaryW >= 128 * s) {
+    const panelH = Math.min(maxPanelH, pad * 2 + headerH + plannedMsgs.reduce((sum, item) => sum + item.h, 0));
+    const rect = allocateHudSlot(summarySlot, panelH, summaryW, 'left');
+    slots.topLeftEvent.cursorY = summarySlot.cursorY;
+    const reserveY = rect.y + rect.h + summarySlot.gap;
+    slots.topCenterCritical.cursorY = Math.max(slots.topCenterCritical.cursorY, reserveY);
+    drawNeuroPanel(ctx, rect.x, rect.y, rect.w, rect.h, time, 306);
+    drawStaticNoise(ctx, rect.x, rect.y, rect.w, rect.h, time, 0.006);
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.shadowBlur = 0;
+    ctx.font = `${6.2 * s}px "Press Start 2P", monospace`;
+    const titleY = rect.y + pad + 2.5 * s;
+    ctx.fillStyle = 'rgba(130,235,230,0.88)';
+    ctx.fillText(fitHudText(ctx, 'СТЕНОСВОДКА', 78 * s), rect.x + pad, titleY);
+    ctx.font = `${5.4 * s}px "Press Start 2P", monospace`;
+    ctx.fillStyle = 'rgba(82,110,126,0.84)';
+    ctx.fillText(fitHudText(ctx, 'последние сообщения', Math.max(16 * s, rect.w - 92 * s)), rect.x + pad + 82 * s, titleY + 0.4 * s);
+    ctx.strokeStyle = 'rgba(70,220,255,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(rect.x + pad, rect.y + pad + headerH);
+    ctx.lineTo(rect.x + rect.w - pad, rect.y + pad + headerH);
+    ctx.stroke();
+
+    let my = rect.y + pad + headerH + 4 * s;
+    for (const item of plannedMsgs) {
+      const m = item.msg;
+      const age = hudMessageAgeSeconds(m.time, gameTime);
+      const alpha = age > HUD_MESSAGE_FADE_START_SECONDS
+        ? 1 - (age - HUD_MESSAGE_FADE_START_SECONDS) / (HUD_MESSAGE_TTL_SECONDS - HUD_MESSAGE_FADE_START_SECONDS)
+        : 1;
+      const rowJitter = routineJitter(reducedHudMotion, time, item.index * 17 + 300);
+      const rowY = my + rowJitter.dy * 0.28;
+      ctx.globalAlpha = alpha * flicker(time, item.index + 300);
+      ctx.font = `${5.3 * s}px "Press Start 2P", monospace`;
+      ctx.fillStyle = 'rgba(120,145,160,0.82)';
+      ctx.fillText(fitHudText(ctx, item.stamp, item.stampW - 4 * s), rect.x + pad + rowJitter.dx * 0.28, rowY);
+      ctx.fillStyle = m.color;
+      ctx.font = `${5.8 * s}px "Press Start 2P", monospace`;
+      const textX = rect.x + pad + item.stampW;
+      const textW = Math.max(32 * s, rect.x + rect.w - pad - textX);
+      for (let line = 0; line < item.lines.length; line++) {
+        ctx.fillText(fitHudText(ctx, item.lines[line], textW), textX + rowJitter.dx * 0.28, rowY + line * rowH);
+      }
+      my += item.h;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+}
+}
+
+/* Левая панель: зона, время, комната. Вынесено из drawHUD без изменения тела. */
+function drawLocationPanel(
+  ctx: CanvasRenderingContext2D,
+  player: Entity, state: GameState, world: World,
+  sx: number, sy: number, time: number,
+  bottomVitals: ReturnType<typeof createHudSlots>['bottomVitals'], barY: number,
+  showCompactPanels: boolean, showLocationPanel: boolean, reducedHudMotion: boolean,
+): void {
+// ── Zone info + time + room (neuro-interface left panel) ──
+if (showCompactPanels && showLocationPanel) {
+  const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
+  const zid = world.zoneMap[pci];
+  const zone = world.zones[zid];
+  const territoryOwner = territoryOwnerAtIndex(world, pci);
+  const floorEntry = currentFloorRunEntry(state);
+
+  // Game clock + day counter — just above status bar
+  const hh = String(state.clock.hour).padStart(2, '0');
+  const mm = String(state.clock.minute).padStart(2, '0');
+  const day = Math.floor(state.clock.totalMinutes / 1440);
+  const floorInstance = currentFloorInstanceLabel(state);
+  const leftX = bottomVitals.x + 4 * sx;
+  const leftInfoW = Math.max(70 * sx, Math.min(220 * sx, bottomVitals.w - 8 * sx));
+  if (floorInstance) {
+    drawRoutineHudText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), leftX, barY - 52 * sy, time, 404, '#f4a', 8 * sy, reducedHudMotion);
+  }
+  drawRoutineHudText(ctx, `День ${day}  ${hh}:${mm}`, leftX, barY - 42 * sy, time, 400, '#8ac', 9 * sy, reducedHudMotion);
+  ctx.font = `${9 * sy}px "Press Start 2P", monospace`;
+
+  // Zone
+  if (zone) {
+    const [zr, zg, zb] = ZONE_COLORS[zid % 64];
+    const fLabel = ZONE_FACTION_NAMES[territoryOwner];
+    const zj = routineJitter(reducedHudMotion, time, 410);
+    ctx.fillStyle = `rgba(${zr},${zg},${zb},${flicker(time, 411)})`;
+    ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
+    ctx.fillText(fitHudText(ctx, `■ Сектор ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), leftX + zj.dx, barY - 32 * sy + zj.dy);
+    const fColor = territoryOwner === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
+    drawRoutineHudText(ctx, fitHudText(ctx, `Терр. ${fLabel}`, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy, reducedHudMotion);
+    ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
+  }
+
+  // Room info
+  const room = world.roomAt(player.x, player.y);
+  if (room) {
+    drawRoutineHudText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 13 * sy, time, 420, '#688', 7 * sy, reducedHudMotion);
+    ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
+  }
+  drawRoutineHudText(
+    ctx,
+    fitHudText(ctx, compactFloorLabel(floorEntry), leftInfoW),
+    leftX,
+    barY - 5.5 * sy,
+    time,
+    424,
+    floorEntry.color,
+    5.6 * sy,
+    reducedHudMotion,
+  );
+}
+}
+
 export function drawHUD(
   ctx: CanvasRenderingContext2D,
   _scaleX: number, _scaleY: number,
@@ -1569,112 +1976,7 @@ export function drawHUD(
     }
   }
 
-  // ── Stenographic summary: top-left event band ─────────
-  if (showCompactPanels && showMessages && !state.samosborActive) {
-    const s = Math.max(1, Math.min(sx, sy));
-    const pad = 4 * s;
-    const headerH = 8 * s;
-    const rowH = 7.2 * s;
-    const rowGap = 1.8 * s;
-    const minimapReserve = showMinimap ? HUD_MINIMAP_UNITS * s + 6 * s : 0;
-    const summaryRight = showMinimap
-      ? Math.max(slots.safe.left, w - slots.safe.right - minimapReserve)
-      : w - slots.safe.right;
-    const summaryW = Math.max(0, summaryRight - slots.safe.left);
-    const summarySlot = { ...slots.topLeftEvent, w: summaryW };
-    const availableH = Math.max(0, summarySlot.y + summarySlot.h - summarySlot.cursorY);
-    const maxPanelH = Math.min(availableH, Math.max(40 * s, h * 0.33));
-    const plannedMsgs: Array<{
-      msg: GameState['msgs'][number];
-      index: number;
-      stamp: string;
-      stampW: number;
-      lines: string[];
-      h: number;
-    }> = [];
-    const scanStart = Math.max(0, state.msgs.length - MSG_SCAN_MAX);
-    ctx.save();
-    ctx.font = `${5.8 * s}px "Press Start 2P", monospace`;
-    const bodyW = Math.max(1, summaryW - pad * 2);
-    let usedH = 0;
-    for (let i = state.msgs.length - 1; i >= scanStart && plannedMsgs.length < MSG_MAX; i--) {
-      const m = state.msgs[i];
-      if (!hudMessageVisible(m.time, gameTime)) continue;
-      if (m.hud === false) continue;
-      const day = m.day;
-      const hour = String(m.hour).padStart(2, '0');
-      const minute = String(m.minute).padStart(2, '0');
-      const dist = m.distanceMeters !== undefined ? ` ${Math.max(0, Math.round(m.distanceMeters))}м` : '';
-      const stamp = `Д${day} ${hour}:${minute}${dist}`;
-      const stampW = Math.min(58 * s, Math.max(34 * s, ctx.measureText(stamp).width + 5 * s));
-      const textW = Math.max(42 * s, bodyW - stampW);
-      const remainingH = maxPanelH - pad * 2 - headerH - usedH;
-      const remainingLines = Math.max(1, Math.floor((remainingH - rowGap) / rowH));
-      const maxLines = Math.min(HUD_SUMMARY_MAX_LINES_PER_MSG, remainingLines);
-      const lines = wrapHudText(ctx, m.text, textW, maxLines);
-      const itemH = Math.max(rowH, lines.length * rowH) + rowGap;
-      if (pad * 2 + headerH + usedH + itemH > maxPanelH) {
-        if (plannedMsgs.length === 0 && remainingLines > 0) {
-          const clipped = wrapHudText(ctx, m.text, textW, remainingLines);
-          plannedMsgs.push({ msg: m, index: i, stamp, stampW, lines: clipped, h: clipped.length * rowH });
-        }
-        break;
-      }
-      plannedMsgs.push({ msg: m, index: i, stamp, stampW, lines, h: itemH });
-      usedH += itemH;
-    }
-    ctx.restore();
-    if (plannedMsgs.length > 0 && summaryW >= 128 * s) {
-      const panelH = Math.min(maxPanelH, pad * 2 + headerH + plannedMsgs.reduce((sum, item) => sum + item.h, 0));
-      const rect = allocateHudSlot(summarySlot, panelH, summaryW, 'left');
-      slots.topLeftEvent.cursorY = summarySlot.cursorY;
-      const reserveY = rect.y + rect.h + summarySlot.gap;
-      slots.topCenterCritical.cursorY = Math.max(slots.topCenterCritical.cursorY, reserveY);
-      drawNeuroPanel(ctx, rect.x, rect.y, rect.w, rect.h, time, 306);
-      drawStaticNoise(ctx, rect.x, rect.y, rect.w, rect.h, time, 0.006);
-
-      ctx.save();
-      ctx.textAlign = 'left';
-      ctx.shadowBlur = 0;
-      ctx.font = `${6.2 * s}px "Press Start 2P", monospace`;
-      const titleY = rect.y + pad + 2.5 * s;
-      ctx.fillStyle = 'rgba(130,235,230,0.88)';
-      ctx.fillText(fitHudText(ctx, 'СТЕНОСВОДКА', 78 * s), rect.x + pad, titleY);
-      ctx.font = `${5.4 * s}px "Press Start 2P", monospace`;
-      ctx.fillStyle = 'rgba(82,110,126,0.84)';
-      ctx.fillText(fitHudText(ctx, 'последние сообщения', Math.max(16 * s, rect.w - 92 * s)), rect.x + pad + 82 * s, titleY + 0.4 * s);
-      ctx.strokeStyle = 'rgba(70,220,255,0.25)';
-      ctx.beginPath();
-      ctx.moveTo(rect.x + pad, rect.y + pad + headerH);
-      ctx.lineTo(rect.x + rect.w - pad, rect.y + pad + headerH);
-      ctx.stroke();
-
-      let my = rect.y + pad + headerH + 4 * s;
-      for (const item of plannedMsgs) {
-        const m = item.msg;
-        const age = hudMessageAgeSeconds(m.time, gameTime);
-        const alpha = age > HUD_MESSAGE_FADE_START_SECONDS
-          ? 1 - (age - HUD_MESSAGE_FADE_START_SECONDS) / (HUD_MESSAGE_TTL_SECONDS - HUD_MESSAGE_FADE_START_SECONDS)
-          : 1;
-        const rowJitter = routineJitter(reducedHudMotion, time, item.index * 17 + 300);
-        const rowY = my + rowJitter.dy * 0.28;
-        ctx.globalAlpha = alpha * flicker(time, item.index + 300);
-        ctx.font = `${5.3 * s}px "Press Start 2P", monospace`;
-        ctx.fillStyle = 'rgba(120,145,160,0.82)';
-        ctx.fillText(fitHudText(ctx, item.stamp, item.stampW - 4 * s), rect.x + pad + rowJitter.dx * 0.28, rowY);
-        ctx.fillStyle = m.color;
-        ctx.font = `${5.8 * s}px "Press Start 2P", monospace`;
-        const textX = rect.x + pad + item.stampW;
-        const textW = Math.max(32 * s, rect.x + rect.w - pad - textX);
-        for (let line = 0; line < item.lines.length; line++) {
-          ctx.fillText(fitHudText(ctx, item.lines[line], textW), textX + rowJitter.dx * 0.28, rowY + line * rowH);
-        }
-        my += item.h;
-      }
-      ctx.restore();
-      ctx.globalAlpha = 1;
-    }
-  }
+  drawEventBand(ctx, state, slots, sx, sy, w, h, time, gameTime, showCompactPanels, showMessages, showMinimap, reducedHudMotion);
 
   if (showCompactPanels && showMinimap) {
     const s = Math.max(1, Math.min(sx, sy));
@@ -1831,135 +2133,9 @@ export function drawHUD(
     drawWorldSpeechBubbles(ctx, world, player, entities, sx, sy, gameTime);
   }
 
-  // ── Zone info + time + room (neuro-interface left panel) ──
-  if (showCompactPanels && showLocationPanel) {
-    const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
-    const zid = world.zoneMap[pci];
-    const zone = world.zones[zid];
-    const territoryOwner = territoryOwnerAtIndex(world, pci);
-    const floorEntry = currentFloorRunEntry(state);
+  drawLocationPanel(ctx, player, state, world, sx, sy, time, bottomVitals, barY, showCompactPanels, showLocationPanel, reducedHudMotion);
 
-    // Game clock + day counter — just above status bar
-    const hh = String(state.clock.hour).padStart(2, '0');
-    const mm = String(state.clock.minute).padStart(2, '0');
-    const day = Math.floor(state.clock.totalMinutes / 1440);
-    const floorInstance = currentFloorInstanceLabel(state);
-    const leftX = bottomVitals.x + 4 * sx;
-    const leftInfoW = Math.max(70 * sx, Math.min(220 * sx, bottomVitals.w - 8 * sx));
-    if (floorInstance) {
-      drawRoutineHudText(ctx, fitHudText(ctx, `Лифт ${floorInstance}`, leftInfoW), leftX, barY - 52 * sy, time, 404, '#f4a', 8 * sy, reducedHudMotion);
-    }
-    drawRoutineHudText(ctx, `День ${day}  ${hh}:${mm}`, leftX, barY - 42 * sy, time, 400, '#8ac', 9 * sy, reducedHudMotion);
-    ctx.font = `${9 * sy}px "Press Start 2P", monospace`;
-
-    // Zone
-    if (zone) {
-      const [zr, zg, zb] = ZONE_COLORS[zid % 64];
-      const fLabel = ZONE_FACTION_NAMES[territoryOwner];
-      const zj = routineJitter(reducedHudMotion, time, 410);
-      ctx.fillStyle = `rgba(${zr},${zg},${zb},${flicker(time, 411)})`;
-      ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
-      ctx.fillText(fitHudText(ctx, `■ Сектор ${zid + 1}  Ур.${zone.level ?? 1}`, leftInfoW), leftX + zj.dx, barY - 32 * sy + zj.dy);
-      const fColor = territoryOwner === ZoneFaction.SAMOSBOR ? '#c4f' : '#7aa';
-      drawRoutineHudText(ctx, fitHudText(ctx, `Терр. ${fLabel}`, leftInfoW), leftX, barY - 22 * sy, time, 412, fColor, 7 * sy, reducedHudMotion);
-      ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-    }
-
-    // Room info
-    const room = world.roomAt(player.x, player.y);
-    if (room) {
-      drawRoutineHudText(ctx, fitHudText(ctx, room.name, leftInfoW), leftX, barY - 13 * sy, time, 420, '#688', 7 * sy, reducedHudMotion);
-      ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-    }
-    drawRoutineHudText(
-      ctx,
-      fitHudText(ctx, compactFloorLabel(floorEntry), leftInfoW),
-      leftX,
-      barY - 5.5 * sy,
-      time,
-      424,
-      floorEntry.color,
-      5.6 * sy,
-      reducedHudMotion,
-    );
-  }
-
-  // ── Full map menu ────────────────────────────────────────
-  if (state.mapMode === 2) {
-    drawFullMap(ctx, world, entities, player, sx, sy, state.quests, currentFloorInstanceLabel(state), state.currentZ, state, time);
-  }
-
-  if (state.showMapLegend) {
-    drawMapLegendMenu(ctx, world, player, state, sx, sy, time);
-  }
-
-  // ── Inventory (if toggled) ───────────────────────────────
-  if (state.showInventory) {
-    drawInventory(ctx, player, state, sx, sy, time);
-  }
-
-  // ── Quest log (if toggled) ───────────────────────────────
-  if (state.showQuests) {
-    drawQuestLog(ctx, state, msx, msy, time, getCurrentObjective(state, entities));
-  }
-
-  // ── Faction relations matrix (F) ─────────────────────────
-  if (state.showFactions) {
-    drawFactionMenu(ctx, player, entities, state, msx, msy, time);
-  }
-
-  // ── Инфосеть Демос ─────────────────────────────────────
-  if (state.showDemos) {
-    drawDemosMenu(ctx, state, entities, msx, msy, time);
-  }
-
-  // ── Message log (L) ─────────────────────────────────────
-  if (state.showLog) {
-    drawLogMenu(ctx, state, msx, msy, time);
-  }
-
-  // ── Controls / keybinds (Tab) ────────────────────────────
-  if (state.showControls) {
-    drawControlsMenu(ctx, state, msx, msy, time);
-  }
-
-  // ── One-page HELP poster (F1) ────────────────────────────
-  if (state.showHelp) {
-    drawHelpMenu(ctx, state, msx, msy, time);
-  }
-
-  // ── UI orchestrator (U) ──────────────────────────────────
-  if (state.showUiSettings) {
-    drawUiSettingsMenu(ctx, state, msx, msy, time);
-  }
-
-  // ── Game menu (Enter) ────────────────────────────────────
-  if (state.showMenu) {
-    drawGameMenu(ctx, state, msx, msy, time);
-  }
-
-  // ── Feedback / Credits menu ──────────────────────────────
-  if (state.showFeedback) {
-    drawFeedbackMenu(ctx, state, msx, msy, time);
-  }
-
-  // ── NPC interaction menu ─────────────────────────────────
-  if (state.showNpcMenu) {
-    drawNpcMenu(ctx, player, state, entities, msx, msy, time);
-  }
-
-  // ── Container menu ──────────────────────────────────────
-  if (state.showContainerMenu) {
-    drawContainerMenu(ctx, player, state, world, msx, msy);
-  }
-
-  if (state.showCraftMenu) {
-    drawCraftMenu(ctx, player, state, msx, msy, time);
-  }
-
-  if (emergencyPanelOpen) {
-    drawEmergencyPanelMenu(ctx, player, msx, msy, time);
-  }
+  drawToggledScreens(ctx, player, state, world, entities, sx, sy, msx, msy, time, emergencyPanelOpen);
 
   const liftArachnaWarning = getLiftArachnaWarningSnapshot(state);
   if (liftArachnaWarning && !state.gameOver) {
@@ -2031,129 +2207,9 @@ export function drawHUD(
     drawUvSpotlightFx(ctx, w, h, state.uvBeamFx, state.uvBeamLen, time);
   }
 
-  // ── Game over (neuro-interface death) ─────────────────────
-  if (state.gameOver && state.gameWon) {
-    // Victory end screen — black fade-in
-    const winAlpha = Math.min(1, state.deathTimer * 0.4);
-    ctx.fillStyle = `rgba(0,0,0,${winAlpha})`;
-    ctx.fillRect(0, 0, w, h);
+  drawGameOverScreen(ctx, player, state, world, sy, w, h, time);
 
-    if (state.deathTimer > 1) {
-      const textAlpha = Math.min(1, (state.deathTimer - 1) * 0.5);
-      const dj = textJitter(time * 0.5, 999);
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(0,255,128,0.4)';
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = `rgba(200,255,200,${textAlpha})`;
-      ctx.font = `bold ${28 * sy}px "Press Start 2P", monospace`;
-      ctx.fillText('КОНЕЦ ИГРЫ', w / 2 + dj.dx, h / 2 - 20 * sy + dj.dy);
-      ctx.fillStyle = `rgba(0,200,100,${textAlpha * 0.15})`;
-      ctx.fillText('КОНЕЦ ИГРЫ', w / 2 + dj.dx + 3, h / 2 - 20 * sy + dj.dy + 1);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = `rgba(136,170,136,${Math.min(1, (state.deathTimer - 2) * 0.4)})`;
-      ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
-      ctx.fillText(fitHudText(ctx, voidReturnVictoryLine(state), w * 0.82), w / 2, h / 2 + 10 * sy);
-      ctx.fillText('[R] — заново', w / 2, h / 2 + 30 * sy);
-      ctx.textAlign = 'left';
-      ctx.restore();
-    }
-  } else if (state.gameOver) {
-    const deathAlpha = Math.min(0.5, state.deathTimer * 0.15);
-    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.min(w, h) * 0.7);
-    grd.addColorStop(0, `rgba(0,0,0,0)`);
-    grd.addColorStop(1, `rgba(0,0,0,${deathAlpha})`);
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, w, h);
-
-    // Intense static noise
-    drawStaticNoise(ctx, 0, 0, w, h, time, 0.06 * Math.min(1, state.deathTimer * 0.3));
-
-    const textAlpha = 0.6 + Math.sin(time * 3) * 0.3;
-    const dj = textJitter(time * 2, 777);
-    ctx.save();
-    ctx.shadowColor = 'rgba(255,0,0,0.5)';
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = `rgba(200,0,0,${textAlpha})`;
-    ctx.font = `bold ${24 * sy}px "Press Start 2P", monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2, h / 2 - 20 * sy + dj.dy);
-    // RGB split ghost
-    ctx.fillStyle = `rgba(0,200,200,${textAlpha * 0.15})`;
-    ctx.fillText('ВЫ ПОГИБЛИ', w / 2 + dj.dx * 2 + 3, h / 2 - 20 * sy + dj.dy + 1);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = `rgba(136,136,136,${Math.min(1, state.deathTimer * 0.5)})`;
-    const deathCause = inferDeathCause(state, player, world);
-    ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
-    ctx.fillText(deathCause.title, w / 2, h / 2 + 10 * sy);
-    ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
-    ctx.fillText(fitHudText(ctx, deathCause.detail, w * 0.82), w / 2, h / 2 + 24 * sy);
-    ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
-    ctx.fillText('[R] — заново', w / 2, h / 2 + 44 * sy);
-    ctx.fillText('[Enter] — продолжить путь', w / 2, h / 2 + 60 * sy);
-    ctx.fillText('за случайного человека', w / 2, h / 2 + 74 * sy);
-    ctx.textAlign = 'left';
-    ctx.restore();
-  }
-
-  // ── Debug screen (~) ─────────────────────────────────────
-  if (state.showDebug) {
-    drawDebugOverlay(ctx, sx, sy, w, h, world, entities, state, state.debugSel);
-  }
-
-  // ── NET Sphere terminal (N) ──────────────────────────────
-  if (netSphereOpen) {
-    drawNetSphereMenu(ctx, msx, msy, time, getNetSphereSnapshot());
-  }
-
-
-  if (arenaOpen) {
-    const arena = getArenaOverlaySnapshot();
-    drawArenaOverlay(ctx, msx, msy, time, arena);
-  }
-
-  if (gamblingOpen) {
-    const gambling = getGamblingOverlaySnapshot(player);
-    drawGamblingOverlay(ctx, msx, msy, time, gambling);
-  }
-
-  if (computerOpen) {
-    const computer = getComputerOverlaySnapshot(world, state);
-    drawComputerOverlay(ctx, msx, msy, time, computer);
-  }
-
-  if (hackOpen) {
-    const hack = getNetHackOverlaySnapshot(world, state, player);
-    drawNetHackOverlay(ctx, msx, msy, time, hack);
-  }
-
-  if (fastElevatorOpen) {
-    drawFastElevatorOverlay(ctx, msx, msy, time, getFastElevatorOverlaySnapshot(player), player);
-  }
-
-  if (netTerminalGenDeniedOpen) {
-    const terminal = getNetTerminalGenRuntimeSnapshot();
-    drawNetTerminalGenDenied(ctx, msx, msy, time, {
-      status: 'locked',
-      code: terminal.terminalIdx >= 0 ? `IDX ${terminal.terminalIdx}` : undefined,
-      lines: [
-        'НЕТ-ГЕН не найден.',
-        'Банковский счёт доступен, редактор карты закрыт.',
-      ],
-      footer: `${menuCloseHint()} закрыть  |  счёт без ГЕН`,
-    });
-  }
-
-  if (netTerminalBankOpen) {
-    drawNetTerminalBank(ctx, msx, msy, time, getNetTerminalBankSnapshot(state, player));
-  }
-
-  if (mapEditorOpen) {
-    drawMapEditor(ctx, msx, msy, time, world, entities, player, {
-      ...getMapEditorSnapshot(state),
-      terminals: getNetTerminalGenTerminals(),
-    });
-  }
+  drawOpenOverlays(ctx, player, state, world, entities, sx, sy, msx, msy, w, h, time);
 
   renderStatusIcons(ctx, player);
 
