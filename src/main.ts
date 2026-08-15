@@ -1283,6 +1283,136 @@ function onOnlinePeerMove(msgData: any): void {
 }
 
 // ── HOST: numbered peer intent — the only way peer-owned state mutates ──
+// ── Peer interact: evacuation lift, doors, pickup, containers ──
+// Ранний return выходит из обработчика, а не из диспетчера: ветви взаимоисключающие
+// по intent.kind, так что «дальше» и раньше ничего не совпадало.
+function onPeerIntentInteract(actor: Entity, slot: number): void
+{
+  let handled = false;
+  const lx = actor.x + Math.cos(actor.angle) * 1.5;
+  const ly = actor.y + Math.sin(actor.angle) * 1.5;
+  const cx = Math.floor(world.wrap(lx));
+  const cy = Math.floor(world.wrap(ly));
+  const idx = world.idx(cx, cy);
+  // Evacuation ritual: for a visitor a lift is not floor travel — it is
+  // the way home. Reaching one alive exports the actor to the peer save.
+  const liftAt = (ci: number): boolean => world.cells[ci] === Cell.LIFT && world.features[ci] !== Feature.MACHINE;
+  let onLift = liftAt(idx);
+  if (!onLift) {
+    const px = Math.floor(actor.x), py = Math.floor(actor.y);
+    for (let dy = -1; dy <= 1 && !onLift; dy++) for (let dx = -1; dx <= 1 && !onLift; dx++) {
+      if (liftAt(world.idx(px + dx, py + dy))) onLift = true;
+    }
+  }
+  if (onLift) {
+    _peerVisitEnded.add(slot);
+    sendOnlineMessage({
+      type: 'visit_end',
+      _targetSlot: slot,
+      evac: true,
+      export: buildVisitExport(actor),
+    });
+    state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} уехал на лифте домой.`, state.time, '#8cf'));
+    const ai = entities.indexOf(actor);
+    if (ai >= 0) entities.splice(ai, 1);
+    rebuildEntityIndex(entities, 'load');
+    hostClearSlot(slot);
+    hostSetOpenContainer(slot, null);
+    return;
+  }
+  if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
+    const door = world.doors.get(idx)!;
+    if (door.state === DoorState.CLOSED) {
+      setDoorState(world, door, DoorState.OPEN);
+      door.timer = 0; handled = true;
+    } else if (door.state === DoorState.OPEN) {
+      setDoorState(world, door, DoorState.CLOSED); handled = true;
+    } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
+      setDoorState(world, door, DoorState.HERMETIC_OPEN);
+      door.timer = 0; handled = true;
+    } else if (door.state === DoorState.HERMETIC_OPEN) {
+      setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
+    } else if (door.state === DoorState.LOCKED) {
+      const keyId = door.keyId || 'key';
+      if (actor.inventory?.some((i: { defId: string }) => i.defId === keyId)) {
+        setDoorState(world, door, DoorState.OPEN);
+        door.timer = 0; handled = true;
+        state.msgs.push(msg(`Игрок ${actor.peerSlot} отпер дверь ключом`, state.time, '#4a4'));
+      }
+    }
+  }
+  // Try NPC (talk/trade) — same E priority the host player gets. The
+  // host resolves the NPC, generates its trade stock and dialog line,
+  // and streams a menu copy; the peer's menu runs on the synced entity.
+  if (!handled) {
+    const tx = world.wrap(lx);
+    const ty = world.wrap(ly);
+    let bestNpc: Entity | null = null;
+    let bestNpcD2 = 1.7 * 1.7;
+    const npcQuery: Entity[] = [];
+    getEntityIndex().queryRadius(tx, ty, 1.7, npcQuery, ENTITY_MASK_ACTOR);
+    for (const e of npcQuery) {
+      if (!e.alive || e.type !== EntityType.NPC || e.peerSlot !== undefined || e === actor) continue;
+      const d2 = world.dist2(tx, ty, e.x, e.y);
+      if (d2 < bestNpcD2) { bestNpc = e; bestNpcD2 = d2; }
+    }
+    if (bestNpc) {
+      if (!bestNpc.inventory || bestNpc.inventory.length === 0) {
+        bestNpc.inventory = generateNpcTradeItems(bestNpc);
+      }
+      hostSetOpenNpc(slot, bestNpc.id);
+      sendOnlineMessage({
+        type: 'npc_open',
+        _targetSlot: slot,
+        npc: {
+          id: bestNpc.id,
+          inventory: packNetItems(bestNpc.inventory, 64),
+          money: Math.max(0, Math.floor(bestNpc.money ?? 0)),
+        },
+        talk: generateTalkText(bestNpc, { world, state, player: actor, time: state.time }),
+      });
+      handled = true;
+    }
+  }
+  // Try item pickup if door wasn't toggled
+  if (!handled) {
+    let bestDrop: Entity | null = null;
+    let bestD2 = 2.5 * 2.5; // max 2.5 cell range
+    for (const e of entities) {
+      if (e.type !== EntityType.ITEM_DROP || !e.alive) continue;
+      const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
+      if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
+    }
+    if (bestDrop) {
+      // actor_echo carries the authoritative inventory next sync tick
+      handled = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state).handled;
+    }
+  }
+  // Try opening / searching a container in front of the peer. Host is the
+  // sole authority: it resolves (or lazily generates) the container and
+  // sends the peer a transient inventory copy to view — the peer never
+  // generates anything (floor seed is non-deterministic) and never spawns
+  // a world mesh for it.
+  if (!handled) {
+    // Prefer the cell the peer faces (matches the local look-direction
+    // targeting and lets "обыскать" generate loot on the faced feature),
+    // then fall back to a nearby container.
+    const container = resolvePeerContainerAtCell(world, state.currentZ, Math.floor(cx), Math.floor(cy))
+      ?? firstNearbyContainer(world, actor, state)
+      ?? resolvePeerContainerAtCell(world, state.currentZ, Math.floor(actor.x), Math.floor(actor.y));
+    if (container) {
+      container.lastOpenedBy = actor.id;
+      container.lastOpenedAt = state.time;
+      hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
+      sendOnlineMessage({
+        type: 'container_open',
+        _targetSlot: actor.peerSlot,
+        container: containerSyncPayload(container),
+      });
+    }
+  }
+}
+
 function onOnlinePeerIntent(msgData: any): void {
   const slot = msgData._peerSlot as number;
   const seq = typeof msgData.seq === 'number' ? Math.floor(msgData.seq) : 0;
@@ -1316,132 +1446,7 @@ function onOnlinePeerIntent(msgData: any): void {
       }
     }
 
-    // ── Peer interact: evacuation lift, doors, pickup, containers ──
-    if (intent.kind === 'interact') {
-      let handled = false;
-      const lx = actor.x + Math.cos(actor.angle) * 1.5;
-      const ly = actor.y + Math.sin(actor.angle) * 1.5;
-      const cx = Math.floor(world.wrap(lx));
-      const cy = Math.floor(world.wrap(ly));
-      const idx = world.idx(cx, cy);
-      // Evacuation ritual: for a visitor a lift is not floor travel — it is
-      // the way home. Reaching one alive exports the actor to the peer save.
-      const liftAt = (ci: number): boolean => world.cells[ci] === Cell.LIFT && world.features[ci] !== Feature.MACHINE;
-      let onLift = liftAt(idx);
-      if (!onLift) {
-        const px = Math.floor(actor.x), py = Math.floor(actor.y);
-        for (let dy = -1; dy <= 1 && !onLift; dy++) for (let dx = -1; dx <= 1 && !onLift; dx++) {
-          if (liftAt(world.idx(px + dx, py + dy))) onLift = true;
-        }
-      }
-      if (onLift) {
-        _peerVisitEnded.add(slot);
-        sendOnlineMessage({
-          type: 'visit_end',
-          _targetSlot: slot,
-          evac: true,
-          export: buildVisitExport(actor),
-        });
-        state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} уехал на лифте домой.`, state.time, '#8cf'));
-        const ai = entities.indexOf(actor);
-        if (ai >= 0) entities.splice(ai, 1);
-        rebuildEntityIndex(entities, 'load');
-        hostClearSlot(slot);
-        hostSetOpenContainer(slot, null);
-        return;
-      }
-      if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
-        const door = world.doors.get(idx)!;
-        if (door.state === DoorState.CLOSED) {
-          setDoorState(world, door, DoorState.OPEN);
-          door.timer = 0; handled = true;
-        } else if (door.state === DoorState.OPEN) {
-          setDoorState(world, door, DoorState.CLOSED); handled = true;
-        } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
-          setDoorState(world, door, DoorState.HERMETIC_OPEN);
-          door.timer = 0; handled = true;
-        } else if (door.state === DoorState.HERMETIC_OPEN) {
-          setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
-        } else if (door.state === DoorState.LOCKED) {
-          const keyId = door.keyId || 'key';
-          if (actor.inventory?.some((i: { defId: string }) => i.defId === keyId)) {
-            setDoorState(world, door, DoorState.OPEN);
-            door.timer = 0; handled = true;
-            state.msgs.push(msg(`Игрок ${actor.peerSlot} отпер дверь ключом`, state.time, '#4a4'));
-          }
-        }
-      }
-      // Try NPC (talk/trade) — same E priority the host player gets. The
-      // host resolves the NPC, generates its trade stock and dialog line,
-      // and streams a menu copy; the peer's menu runs on the synced entity.
-      if (!handled) {
-        const tx = world.wrap(lx);
-        const ty = world.wrap(ly);
-        let bestNpc: Entity | null = null;
-        let bestNpcD2 = 1.7 * 1.7;
-        const npcQuery: Entity[] = [];
-        getEntityIndex().queryRadius(tx, ty, 1.7, npcQuery, ENTITY_MASK_ACTOR);
-        for (const e of npcQuery) {
-          if (!e.alive || e.type !== EntityType.NPC || e.peerSlot !== undefined || e === actor) continue;
-          const d2 = world.dist2(tx, ty, e.x, e.y);
-          if (d2 < bestNpcD2) { bestNpc = e; bestNpcD2 = d2; }
-        }
-        if (bestNpc) {
-          if (!bestNpc.inventory || bestNpc.inventory.length === 0) {
-            bestNpc.inventory = generateNpcTradeItems(bestNpc);
-          }
-          hostSetOpenNpc(slot, bestNpc.id);
-          sendOnlineMessage({
-            type: 'npc_open',
-            _targetSlot: slot,
-            npc: {
-              id: bestNpc.id,
-              inventory: packNetItems(bestNpc.inventory, 64),
-              money: Math.max(0, Math.floor(bestNpc.money ?? 0)),
-            },
-            talk: generateTalkText(bestNpc, { world, state, player: actor, time: state.time }),
-          });
-          handled = true;
-        }
-      }
-      // Try item pickup if door wasn't toggled
-      if (!handled) {
-        let bestDrop: Entity | null = null;
-        let bestD2 = 2.5 * 2.5; // max 2.5 cell range
-        for (const e of entities) {
-          if (e.type !== EntityType.ITEM_DROP || !e.alive) continue;
-          const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
-          if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
-        }
-        if (bestDrop) {
-          // actor_echo carries the authoritative inventory next sync tick
-          handled = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state).handled;
-        }
-      }
-      // Try opening / searching a container in front of the peer. Host is the
-      // sole authority: it resolves (or lazily generates) the container and
-      // sends the peer a transient inventory copy to view — the peer never
-      // generates anything (floor seed is non-deterministic) and never spawns
-      // a world mesh for it.
-      if (!handled) {
-        // Prefer the cell the peer faces (matches the local look-direction
-        // targeting and lets "обыскать" generate loot on the faced feature),
-        // then fall back to a nearby container.
-        const container = resolvePeerContainerAtCell(world, state.currentZ, Math.floor(cx), Math.floor(cy))
-          ?? firstNearbyContainer(world, actor, state)
-          ?? resolvePeerContainerAtCell(world, state.currentZ, Math.floor(actor.x), Math.floor(actor.y));
-        if (container) {
-          container.lastOpenedBy = actor.id;
-          container.lastOpenedAt = state.time;
-          hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
-          sendOnlineMessage({
-            type: 'container_open',
-            _targetSlot: actor.peerSlot,
-            container: containerSyncPayload(container),
-          });
-        }
-      }
-    }
+    if (intent.kind === 'interact') { onPeerIntentInteract(actor, slot); return; }
 
     // ── NPC dialog line requested ──
     if (intent.kind === 'npc_talk') {
