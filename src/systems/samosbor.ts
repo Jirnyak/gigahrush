@@ -37,7 +37,8 @@ import {
 import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
-import { floorLevelDisplayName, generateFloor, type FloorGeneration } from '../gen/floor_manifest';
+import { generateFloor, type FloorGeneration } from '../gen/floor_manifest';
+import { floorLevelDisplayName } from '../data/floor_names';
 import { clearPathBlockerRegion, rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { flashSamosborWarningScreens } from '../gen/procedural_screens';
 import { pick, weightedPick } from '../gen/shared';

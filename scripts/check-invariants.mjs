@@ -41,7 +41,7 @@ const ALLOWED = {
 /* Известные нарушения на момент установки проверки. Только вниз. */
 const BASELINE = {
   'gen->render': 5,
-  'systems->gen': 8,
+  'systems->gen': 6,
   'systems->render': 3,
   'data->entities': 3,
   'entities->render': 2,

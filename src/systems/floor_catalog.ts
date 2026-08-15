@@ -5,7 +5,7 @@ import {
   type FloorCatalogRarity,
   type FloorContentStatus,
 } from '../data/floor_catalog';
-import { floorLevelDisplayName } from '../gen/floor_manifest';
+import { floorLevelDisplayName } from '../data/floor_names';
 
 export interface FloorCatalogQuery {
   readonly themeTags?: readonly string[];

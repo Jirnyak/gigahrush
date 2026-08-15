@@ -80,10 +80,6 @@ import {
   generateFloorInstance,
 } from './gen/floor_instances/manifest';
 import {
-  // @ts-ignore
-  FLOOR_MESSAGE_COLORS,
-  // @ts-ignore
-  FLOOR_NAMES,
   generateFloor,
   isValidZ,
   resetGeneratedFloorPopulationState,

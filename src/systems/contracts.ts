@@ -31,7 +31,7 @@ import {
   setQuestTargetRoute,
 } from '../data/contracts';
 import { ITEMS } from '../data/catalog';
-import { floorLevelDisplayName } from '../gen/floor_manifest';
+import { floorLevelDisplayName } from '../data/floor_names';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
