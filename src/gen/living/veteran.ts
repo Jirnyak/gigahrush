@@ -10,7 +10,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { authoredNpcSpr } from '../../render/sprite_index';
+import { authoredNpcSpr } from '../../entities/sprite_index';
 import { rng } from '../../core/rand';
 
 const NPC_ID = 'veteran_stepanych';

@@ -8,7 +8,7 @@ import { finalizeExpandedFloor} from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { LiftDirection, AIGoal } from '../../core/types';
 import { randomRPG } from '../../systems/rpg';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { MACRO_SIZE, MACRO_GRID, OFFSET_MACRO } from "./meta";
 import { blackoutHorrorLights } from "./geometry";
 

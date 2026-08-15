@@ -8,7 +8,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { getRecentEvents, publishEvent, registerWorldEventObserver } from '../../systems/events';
 import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminMonster, spawnAdminNpc,

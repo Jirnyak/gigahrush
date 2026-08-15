@@ -18,7 +18,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 import { SPETSPRIEMNIK_Z, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, CY, BASE_TAGS, NextId, NpcId } from "./meta";

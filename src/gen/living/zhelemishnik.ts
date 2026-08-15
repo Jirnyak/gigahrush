@@ -9,7 +9,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS, entityDisplayName } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { connectProtectedRoom, protectRoom } from '../shared';
 import { genLog } from '../log';

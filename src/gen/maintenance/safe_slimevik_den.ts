@@ -29,7 +29,7 @@ import {
   type Entity,
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {

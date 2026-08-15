@@ -68,7 +68,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 registerAuthoredNpc({ id: 'ambient_2_f2vff', npc: AMBIENT_NPC_2 });
 
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { DESIGN_NPC_HOME_FLOOR_KEY, SILICON_NET_WELL_Z, SiliconNpcId, SiliconRooms, NPC_DEFS, SIDE_QUESTS } from "./meta";
 import { setFeature } from "./geometry";

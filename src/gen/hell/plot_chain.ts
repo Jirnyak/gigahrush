@@ -8,7 +8,7 @@ import { World } from '../../core/world';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 
 export function generateHellPlotChain(
   world: World, entities: Entity[], nextId: { v: number },

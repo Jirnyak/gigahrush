@@ -8,7 +8,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
 import { stampMark, MarkType } from './surface_marks';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { addItem, hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
 

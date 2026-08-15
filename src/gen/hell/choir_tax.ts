@@ -12,7 +12,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { connectProtectedRoom, connectToNetwork, findClearArea, protectRoom, stampRoom } from '../shared';

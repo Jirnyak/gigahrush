@@ -14,7 +14,7 @@ import {
   type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { stampRoom } from '../shared';
 import { CX, CY, CAMP_GATE_X, CAMP_GATE_Y, CAMP_GATE_W, CAMP_GATE_H, CAMP_SAFE_TRAIL_STEPS, CAMP_BUFFER_TRAIL_STEPS, CampRooms, CampHqSite, CAMP_OWNER_BUCKETS, CAMP_TERRITORY_ITERATIONS, CAMP_TERRITORY_TARGETS, CAMP_CLUSTER_SPECS, CAMP_LANDSCAPE_COURTS, CAMP_HQ_SITES, CAMP_TERRITORY_SEEDS } from "./meta";

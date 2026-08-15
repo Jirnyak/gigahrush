@@ -27,7 +27,7 @@ import { type PlotNpcDef } from '../../data/plot';
 import { canPlaceRoom, connectProtectedRoom, connectToNetwork, findClearArea, protectRoom, stampRoom } from '../shared';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng, irand } from '../../core/rand';
 

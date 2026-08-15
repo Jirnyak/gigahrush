@@ -14,7 +14,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 import { REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_Z, CORPSE_NUMBER_TAG_ITEM, NextId, MorgueRecordDomain, MORGUE_RECORD_DOMAINS } from "./meta";

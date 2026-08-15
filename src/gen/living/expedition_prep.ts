@@ -9,7 +9,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
 import { placeLivingExpeditionCraftStations } from '../craft_stations';

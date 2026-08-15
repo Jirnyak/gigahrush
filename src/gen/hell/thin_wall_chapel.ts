@@ -10,7 +10,7 @@ import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { stampBlackHandTrail } from '../../systems/surface_marks';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { connectProtectedRoom, findClearArea, protectRoom, stampRoom } from '../shared';

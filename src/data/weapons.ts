@@ -1,6 +1,6 @@
 /* ── Weapon stats registry — melee & ranged physical weapons ─── */
 
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { ProjType, DamageType } from '../core/types';
 
 export interface WeaponStats {

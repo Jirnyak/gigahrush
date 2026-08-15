@@ -9,7 +9,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent } from '../events';
 import { randomRPG } from '../rpg';
 import { currentProceduralFloorSpec } from '../procedural_floors';

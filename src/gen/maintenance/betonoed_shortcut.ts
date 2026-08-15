@@ -9,7 +9,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { registerContentInteractionHook, registerContentRuntimeHook } from '../../systems/content_hooks';
 import { publishEvent } from '../../systems/events';
 import { hasItem, removeItem } from '../../systems/inventory';

@@ -91,7 +91,7 @@ import {
 } from './gen/floor_manifest';
 import { generateTextures } from './render/textures';
 import { generateSprites } from './render/sprites';
-import { Spr, monsterSpr } from './render/sprite_index';
+import { Spr, monsterSpr } from './entities/sprite_index';
 import {
   SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData,
   disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,

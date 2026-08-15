@@ -20,7 +20,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, DEAD_FLOOR, Point, AttractorRooms, ATTRACTOR_HQ_COMPOUNDS } from "./meta";
 import { paintAttractorRoomOwner, roomByName } from "./geometry";

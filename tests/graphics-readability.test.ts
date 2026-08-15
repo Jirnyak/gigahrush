@@ -11,7 +11,7 @@ import {
 import { MONSTERS } from '../src/entities/monster';
 import { generateNpcProfileSprite, proceduralEntitySpriteKey } from '../src/entities/procedural_visuals';
 import { NPC_READABILITY_VISUAL_IDS, NPC_VISUAL_FAMILIES } from '../src/entities/npc_visuals';
-import { Spr } from '../src/render/sprite_index';
+import { Spr } from '../src/entities/sprite_index';
 import { generateSprites } from '../src/render/sprites';
 
 function spriteHash(sprite: Uint32Array): number {

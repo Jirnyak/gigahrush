@@ -20,7 +20,7 @@ import { World } from '../../core/world';
 import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { addRailTrainRoute } from '../../systems/rail_trains';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

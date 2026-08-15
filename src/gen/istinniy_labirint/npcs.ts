@@ -14,7 +14,7 @@ import {
 import { SURFACE_FLAG_CHALK_MAP, World } from '../../core/world';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';

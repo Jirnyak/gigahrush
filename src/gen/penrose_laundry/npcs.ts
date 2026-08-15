@@ -18,7 +18,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { PENROSE_LAUNDRY_Z, PenroseLaundryState, C, LOCK_KEY_ID, IGOR_DEF, LIDIA_DEF, TONYA_DEF } from "./meta";
 import { carvePenroseLine, featureForPenroseRoom, setFeature, roomById } from "./geometry";

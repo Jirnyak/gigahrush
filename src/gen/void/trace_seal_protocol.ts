@@ -8,7 +8,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
 import { hasItem, removeItem } from '../../systems/inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

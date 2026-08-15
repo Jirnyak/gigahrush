@@ -14,7 +14,7 @@ import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { randomRPG, getMaxHp } from '../../systems/rpg';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { rng } from '../../core/rand';
 
 export function generateForpost(

@@ -36,7 +36,7 @@ import { MarkType, stampMark } from '../surface_marks';
 import { followPath, tryAssignPathToCell, wanderFar, wanderNearby } from './pathfinding';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { getRecentEvents, publishEvent } from '../events';
 import { recordPlayerDamage } from '../damage';
 import { setDoorState } from '../door_state';

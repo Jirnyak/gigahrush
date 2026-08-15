@@ -11,7 +11,7 @@ import {
 } from '../core/types';
 import type { World } from '../core/world';
 import { occupationProfile } from '../data/occupation_profiles';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { recordPlayerDamage } from './damage';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';

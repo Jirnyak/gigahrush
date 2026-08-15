@@ -17,7 +17,7 @@ import { addFactionRelMutual } from '../data/relations';
 import { getStack, spawnCount } from '../data/items';
 import { chooseFloorMonsterKind } from '../data/monster_ecology';
 import { MONSTERS } from '../entities/monster';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { stampMark, MarkType } from './surface_marks';
 import { forceHide } from './ai';
 import { isOnlineHost } from './online_client';

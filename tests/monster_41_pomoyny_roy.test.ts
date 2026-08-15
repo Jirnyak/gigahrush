@@ -9,7 +9,7 @@ import { updateMonster, setEntityMap } from '../src/systems/ai/monster';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { placeMonsterBait, resetMonsterBaits } from '../src/systems/monster_bait';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
-import { monsterSpr } from '../src/render/sprite_index';
+import { monsterSpr } from '../src/entities/sprite_index';
 import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 

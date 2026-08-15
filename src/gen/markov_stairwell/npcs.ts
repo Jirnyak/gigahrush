@@ -13,7 +13,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 import { MARKOV_STAIRWELL_BYPASS_KEY, BASE_FLOOR, ChainRoom } from "./meta";

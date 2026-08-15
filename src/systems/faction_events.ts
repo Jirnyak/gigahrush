@@ -24,7 +24,7 @@ import { getStack } from '../data/items';
 import { getEntityIndex } from './entity_index';
 import { addFactionRelMutual } from '../data/relations';
 import { stampMark, MarkType } from './surface_marks';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { ensureRoomContainers } from './containers';
 import { controlHint } from './controls';

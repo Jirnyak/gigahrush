@@ -12,7 +12,7 @@ import { World } from '../../core/world';
 import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { runMinistryContent } from './content_manifest';
 import { applyMinistryMacroGeometry } from './geometry';
 import { rng, irand } from '../../core/rand';

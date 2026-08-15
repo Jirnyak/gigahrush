@@ -12,7 +12,7 @@ import {
 import { World } from '../core/world';
 import { entityDisplayName } from '../entities/monster';
 import { MarkType, stampMark } from './surface_marks';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { playExplosion, playSoundAt } from './audio';
 import { getEntityIndex, ENTITY_MASK_ACTOR } from './entity_index';
 import { publishEvent } from './events';

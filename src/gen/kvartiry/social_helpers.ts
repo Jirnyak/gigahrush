@@ -9,7 +9,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef } from '../../data/plot';
 import { findClearArea, protectRoom, stampRoom, connectProtectedRoom } from '../shared';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerKvSocialPressurePoi } from './social_pressure';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng, irand } from '../../core/rand';

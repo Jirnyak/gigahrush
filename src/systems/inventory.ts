@@ -38,7 +38,7 @@ import {
 } from '../data/craft_recipe_sources';
 import { getPermitDef, getPermitForgeryRecipe } from '../data/permits';
 import { World } from '../core/world';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { playPickup } from './audio';
 import { cleanCellHazardsNear } from './cell_hazards';
 import { changeResourceStock } from './economy';

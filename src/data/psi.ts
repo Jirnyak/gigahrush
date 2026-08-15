@@ -3,7 +3,7 @@
 import type { WeaponStats } from './weapons';
 import type { WeaponRoleTier } from './weapons';
 import { DamageType } from '../core/types';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 
 export const PSI_WEAPON_STATS: Record<string, WeaponStats> = {
   psi_strike:   { damageType: DamageType.PSI, dmg: 12, durability: 0, range: 0, speed: 0.42, isRanged: true,  psiCost: 3,  projSpeed: 18, projSprite: Spr.PSI_BOLT },

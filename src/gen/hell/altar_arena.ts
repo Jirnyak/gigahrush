@@ -9,7 +9,7 @@ import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { getMaxHp, gaussianLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { playRouteCueTone, playSoundAt } from '../../systems/audio';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';

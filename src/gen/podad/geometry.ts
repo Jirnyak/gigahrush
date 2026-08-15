@@ -5,7 +5,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { irand } from '../../core/rand';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import {
   carveCorridor,

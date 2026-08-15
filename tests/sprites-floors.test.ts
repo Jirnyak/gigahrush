@@ -19,7 +19,7 @@ import {
   SPRITE_CONTAINER_KINDS,
   SPRITE_FEATURES,
   SPRITE_MONSTER_KINDS,
-} from '../src/render/sprite_index';
+} from '../src/entities/sprite_index';
 import { generateSprites } from '../src/render/sprites';
 import { generateTextures } from '../src/render/textures';
 import { rebuildWorld } from '../src/systems/samosbor';

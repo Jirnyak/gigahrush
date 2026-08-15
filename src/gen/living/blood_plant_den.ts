@@ -19,7 +19,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { registerBloodPlantRootSite } from '../../systems/blood_plant';
 import { connectProtectedRoom, protectRoom, stampRoom } from '../shared';

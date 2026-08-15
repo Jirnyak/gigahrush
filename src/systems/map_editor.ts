@@ -22,7 +22,7 @@ import { getStack } from '../data/items';
 import { CONTAINER_DEFS } from '../data/container_defs';
 import { randomOccupation } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { markEntityIndexDirty } from './entity_index';
 import { npcAutoEquipBestWeapon } from './ai/combat';
 import { irand } from '../core/rand';

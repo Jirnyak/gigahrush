@@ -10,7 +10,7 @@ import {
   type GameState,
 } from '../core/types';
 import { World } from '../core/world';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
 import { hasAirborneHazardProtection } from './status';

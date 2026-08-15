@@ -3,7 +3,7 @@
 import { W, Cell, ProjType, type Entity, EntityType } from '../core/types';
 import { World } from '../core/world';
 import { stampLocalMark, stampMark, MarkType, SURFACE_MAP_MAX_CELLS } from './surface_marks';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { ensureEntityIndex } from './entity_index';
 import { markDangerFieldCell } from './danger_field';
 import { addVisualSlotByPriority, hasVisualSlotCode, removeVisualSlotCode } from '../gen/visual_cell_slots.js';

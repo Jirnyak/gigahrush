@@ -35,7 +35,7 @@ import {
   type NetTerminalGenTerminalDef,
   type NetTerminalGenFloorProfile,
 } from '../data/net_terminal_gen';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import {
   accountToCash,
   cashToAccount,

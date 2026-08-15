@@ -7,7 +7,7 @@ import {
   type WorldEvent, type WorldEventSeverity,
 } from '../../core/types';
 import { auditReachability, World, type ReachabilityAudit } from '../../core/world';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';

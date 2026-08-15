@@ -15,7 +15,7 @@ import {
 import { World } from '../../core/world';
 import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { HYPERBOLIC_SWITCHYARD_Z, GUIDE_NPC_ID, SwitchyardRooms } from "./meta";

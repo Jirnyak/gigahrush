@@ -23,7 +23,7 @@ import { generateContainerLoot } from '../../systems/procedural_loot';
 import { floorRunZAllowsNpcs, type ProceduralFloorSpec } from '../../data/procedural_floors';
 import { MONSTERS } from '../../entities/monster';
 import { HEAD_SLUG_HOSTED_STAGE } from '../../entities/head_slug';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { canSpawnEntityType, entitySpawnSlots } from '../../systems/entity_limits';
 import { gaussianLevel, getMaxHp, randomRPG } from '../../systems/rpg';
 import { registerRouteCue } from '../../systems/route_cues';

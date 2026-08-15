@@ -14,7 +14,7 @@ import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { PIONEER_CAMP_Z, CX, CY, NPC_IDS, CampNpcId, CampRooms, NPC_DEFS } from "./meta";
 import { setFeature } from "./geometry";

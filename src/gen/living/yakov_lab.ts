@@ -16,7 +16,7 @@ import {
 import { World } from '../../core/world';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { placeCraftStationAt, type CraftStationDefId } from '../craft_stations';
 import { rng } from '../../core/rand';
 

@@ -9,7 +9,7 @@ import { World } from '../../core/world';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 
 export function generateVoidPlotChain(
   world: World,

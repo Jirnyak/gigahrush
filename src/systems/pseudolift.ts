@@ -17,7 +17,7 @@ import { World } from '../core/world';
 import { hashSeed, randSeed, seededRandom } from '../core/rand';
 import { designFloorPseudoliftChance } from '../data/design_floor_profiles';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
-import { monsterSpr } from '../render/sprite_index';
+import { monsterSpr } from '../entities/sprite_index';
 import { MarkType, stampMark } from './surface_marks';
 import { publishEvent } from './events';
 import { getActiveFloorInstance } from './floor_instances';

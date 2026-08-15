@@ -73,7 +73,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 registerAuthoredNpc({ id: 'ambient_2_2os1r', npc: AMBIENT_NPC_2 });
 
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';

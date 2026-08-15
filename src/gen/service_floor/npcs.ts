@@ -25,7 +25,7 @@ import { World } from '../../core/world';
 import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 

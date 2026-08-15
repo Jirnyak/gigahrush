@@ -1,7 +1,7 @@
 import { EntityType, type Entity } from '../core/types';
 import { chooseMonsterRareDrop } from '../data/monster_ecology';
 import { generateMonsterLoot, type GeneratedLoot } from './procedural_loot';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { canSpawnEntityType, enforceItemDropFifoCap, entitySpawnSlots } from './entity_limits';
 import { rng } from '../core/rand';
 

@@ -4,7 +4,7 @@ import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, DoorState, EntityType, Feature, LiftDirection, Occupation, RoomType, Tex, ZoneFaction, type Entity, type Room } from '../../core/types';
 import { World } from '../../core/world';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
 import { isPlotNpc } from '../../data/plot';

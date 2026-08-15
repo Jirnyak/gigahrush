@@ -7,7 +7,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { MONSTERS } from '../entities/monster';
-import { monsterSpr } from '../render/sprite_index';
+import { monsterSpr } from '../entities/sprite_index';
 import { stampMark, MarkType } from './surface_marks';
 import { equippedToolLightScore } from '../data/tool_lights';
 import { playBreak, playDoor, playSoundAt } from './audio';

@@ -10,7 +10,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { Spr, monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { changeResourceStock } from '../../systems/economy';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

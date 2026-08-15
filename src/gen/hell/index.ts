@@ -15,7 +15,7 @@ import { buildHellGeometry, imprintHellArenaValleys } from './geometry';
 import { runHellContent } from './content_manifest';
 import { rng, irand } from '../../core/rand';
 import { entitySpawnSlots } from '../../systems/entity_limits';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 
 export function generateHell(generationSeed = 0x4d594153): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();

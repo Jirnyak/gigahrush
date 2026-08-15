@@ -1,9 +1,7 @@
 /* Procedural non-explicit adult art-study sprites. */
 
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
-
-export const ART_NUDE_VARIANTS = 4;
-export const F69_FEMALE_NPC_VARIANTS = 8;
+import { ART_NUDE_VARIANTS } from '../entities/sprite_index';
 
 function upscaleTo128(t: Uint32Array): Uint32Array {
   const out = new Uint32Array(128 * 128);

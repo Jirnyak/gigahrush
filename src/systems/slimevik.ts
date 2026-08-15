@@ -18,7 +18,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/items';
 import { slimeRoomAttractionWeight, slimeSampleIdForRoomName } from '../data/slime_defs';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { cleanCellHazardsNear } from './cell_hazards';
 import { recordPlayerDamage } from './damage';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_MONSTER, ensureEntityIndex } from './entity_index';

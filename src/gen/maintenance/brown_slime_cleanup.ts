@@ -2,7 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { Cell, EntityType, Faction, Feature, Occupation, RoomType, Tex } from '../../core/types';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 const SLIME_SCRAPER_ITEM = 'slime_scraper';import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';

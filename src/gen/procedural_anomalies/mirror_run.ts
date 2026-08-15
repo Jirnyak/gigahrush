@@ -2,7 +2,7 @@ import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { registerRouteCue } from '../../systems/route_cues';
 import { canSpawnEntityType } from '../../systems/entity_limits';
 import { Cell, EntityType, Feature, RoomType, Tex, type Room } from '../../core/types';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import {
   isWalkableCell,
   roomCell,

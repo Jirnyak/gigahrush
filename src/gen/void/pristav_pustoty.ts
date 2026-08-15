@@ -8,7 +8,7 @@ import {
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
 import { addItem } from '../../systems/inventory';
 import { registerRouteCue } from '../../systems/route_cues';

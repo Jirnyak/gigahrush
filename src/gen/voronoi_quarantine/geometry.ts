@@ -29,7 +29,7 @@ import { World } from '../../core/world';
 import { rng, hashSeed } from '../../core/rand';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
 import { buildVoronoiRoomCells, type VoronoiRoomSite } from '../voronoi_cells';

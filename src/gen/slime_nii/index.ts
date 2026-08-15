@@ -91,7 +91,7 @@ const AMBIENT_NPC_3: PlotNpcDef = {
 registerAuthoredNpc({ id: 'ambient_3_lbia6', npc: AMBIENT_NPC_3 });
 
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
 import {

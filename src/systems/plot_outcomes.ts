@@ -18,7 +18,7 @@ import {
   type StoryOutcomeCondition,
   type StoryOutcomeTrigger,
 } from '../data/plot_outcomes';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
 
 import { designFloorAtZ } from '../data/design_floors';

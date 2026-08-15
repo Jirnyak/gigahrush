@@ -12,7 +12,7 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { registerZoneContent } from './zone_content';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { rng } from '../../core/rand';
 
 const NPC_DEF: PlotNpcDef = {

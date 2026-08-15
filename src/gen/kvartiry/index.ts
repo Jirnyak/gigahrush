@@ -21,7 +21,7 @@ import { isPlotNpc } from '../../data/plot';
 import { registerContentRuntimeHook } from '../../systems/content_hooks';
 import { initializeCellTerritory } from '../../systems/territory';
 import { calcZoneLevel } from '../../systems/rpg';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { buildKvartirySocialMacroGraph } from './social_macro_graph';
 import {
   resetKvartiryContentState,

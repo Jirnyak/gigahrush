@@ -13,7 +13,7 @@ import {
   type VoidProtocolDef,
 } from '../data/void_protocols';
 import { MONSTERS } from '../entities/monster';
-import { monsterSpr, Spr } from '../render/sprite_index';
+import { monsterSpr, Spr } from '../entities/sprite_index';
 import { recordPlayerDamage } from './damage';
 import { setDoorState } from './door_state';
 import { addItem, removeItem } from './inventory';

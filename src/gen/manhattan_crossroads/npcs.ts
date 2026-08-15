@@ -80,7 +80,7 @@ const AMBIENT_NPC_3: PlotNpcDef = {
 registerAuthoredNpc({ id: 'manhattan_ambient_3_0flfn', npc: AMBIENT_NPC_3 });
 
 import { MONSTERS } from '../../entities/monster';
-import { Spr, monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../entities/sprite_index';
 import {
   randomRPG,
   scaleMonsterHp,

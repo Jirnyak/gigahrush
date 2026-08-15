@@ -12,7 +12,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
-import { monsterSpr } from '../render/sprite_index';
+import { monsterSpr } from '../entities/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
 import { ENTITY_MASK_ACTOR, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';

@@ -9,7 +9,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { randomAtticRootCell } from './geometry';
 import { DESIGN_NPC_HOME_FLOOR_KEY, type ChthonicAtticRootChoice } from './meta';

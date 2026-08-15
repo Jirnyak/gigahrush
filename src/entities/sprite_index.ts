@@ -12,8 +12,12 @@
 /*            ArtNude variants | F69 female NPCs ]               */
 
 import { ContainerKind, Feature, MonsterKind } from '../core/types';
-import { AUTHORED_NPC_SPRITE_GENERATORS, NPC_SPRITE_GENERATORS } from '../entities/npc';
-import { ART_NUDE_VARIANTS, F69_FEMALE_NPC_VARIANTS } from './art_sprites';
+import { AUTHORED_NPC_SPRITE_GENERATORS, NPC_SPRITE_GENERATORS } from './npc';
+
+/* Хвостовые блоки раскладки: их размер задаёт смещения ниже, поэтому счётчики живут здесь,
+   а генераторы в render/art_sprites.ts читают их отсюда. */
+export const ART_NUDE_VARIANTS = 4;
+export const F69_FEMALE_NPC_VARIANTS = 8;
 
 export const SPRITE_MONSTER_KINDS = Object.values(MonsterKind)
   .filter((value): value is MonsterKind => typeof value === 'number')

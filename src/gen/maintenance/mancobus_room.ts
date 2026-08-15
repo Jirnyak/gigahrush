@@ -12,7 +12,7 @@ import { World } from '../../core/world';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { rng } from '../../core/rand';
 
 const ROOM_W = 11;

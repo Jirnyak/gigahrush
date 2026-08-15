@@ -7,7 +7,7 @@ import { DEF as CREATOR_DEF } from '../src/entities/creator';
 import { DEF as MANCOBUS_DEF } from '../src/entities/mancobus';
 import { DEF as NIGHTMARE_DEF } from '../src/entities/nightmare';
 import { MONSTERS } from '../src/entities/monster';
-import { Spr } from '../src/render/sprite_index';
+import { Spr } from '../src/entities/sprite_index';
 import { setListenerPos } from '../src/systems/audio';
 import { setEntityMap, tryMonsterProjectileStagger, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';

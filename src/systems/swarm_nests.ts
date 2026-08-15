@@ -13,7 +13,7 @@ import {
 import { World } from '../core/world';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { ITEMS } from '../data/items';
-import { Spr, monsterSpr } from '../render/sprite_index';
+import { Spr, monsterSpr } from '../entities/sprite_index';
 import { MarkType, stampMark } from './surface_marks';
 import { publishEvent } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';

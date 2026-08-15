@@ -18,7 +18,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { rng } from '../../core/rand';
 import { MOEBIUS_PODEZD_Z, SHORTCUT_X, SEAM_KEY_ID } from "./meta";

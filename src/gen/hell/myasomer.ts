@@ -22,7 +22,7 @@ import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

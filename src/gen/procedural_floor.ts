@@ -69,7 +69,7 @@ import {
 } from '../data/procedural_floors';
 import { territorySharesForProceduralSpec } from '../data/floor_territory';
 import { MONSTERS } from '../entities/monster';
-import { monsterSpr, Spr } from '../render/sprite_index';
+import { monsterSpr, Spr } from '../entities/sprite_index';
 import { MarkType, stampMark } from '../systems/surface_marks';
 import { setDoorState } from '../systems/door_state';
 import {

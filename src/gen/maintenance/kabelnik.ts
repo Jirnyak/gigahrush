@@ -6,7 +6,7 @@ import {
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {

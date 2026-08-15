@@ -6,7 +6,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { playMaronaryPing } from '../../systems/audio';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';

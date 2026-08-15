@@ -8,7 +8,7 @@ import {
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { setDoorState } from '../../systems/door_state';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

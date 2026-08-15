@@ -12,7 +12,7 @@ import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { registerZoneContent } from './zone_content';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { registerContentEntityDeathHook } from '../../systems/content_hooks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { genLog } from '../log';

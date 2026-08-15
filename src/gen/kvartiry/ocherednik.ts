@@ -74,7 +74,7 @@ talkLinesPost: ['...'],
 registerAuthoredNpc({ id: 'kv_ambient_4_hmsud', npc: AMBIENT_NPC_4 });
 
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
   createSocialPoiRoom,

@@ -12,7 +12,7 @@ import {
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom } from '../shared';
 import { PENROSE_LAUNDRY_Z, PENROSE_LAUNDRY_ROOM_DEF_IDS, PenroseLaundrySymbol, PenroseTileSpec, PenroseFullNode, PenroseLaundryState, C, PHI, GOLDEN_TURN, LOCK_KEY_ID, SYMBOL_CHAIN_IDS, FULL_FLOOR_NODE_COUNT, FULL_FLOOR_NODE_RADIUS_MIN, FULL_FLOOR_NODE_RADIUS_SPAN, FULL_FLOOR_NODE_SYMBOLS, PENROSE_HQ_SPECS } from "./meta";

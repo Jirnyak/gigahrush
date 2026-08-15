@@ -6,7 +6,7 @@ import {
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
   type MaintContentCtx, findMaintArea, openTile, setFeature, setWater,

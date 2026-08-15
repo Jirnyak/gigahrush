@@ -15,7 +15,7 @@ import {
 import { World } from '../core/world';
 import { ITEMS } from '../data/items';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { spawnBloodHit } from './blood_fx';
 import { playGrowl, playSoundAt } from './audio';
 import { recordPlayerDamage } from './damage';

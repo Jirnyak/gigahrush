@@ -16,7 +16,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { publishEvent } from '../../systems/events';
 import {

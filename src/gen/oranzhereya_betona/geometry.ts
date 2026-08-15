@@ -19,7 +19,7 @@ import {
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { ITEMS } from '../../data/catalog';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import {
   carveCorridor,
   roomExit,

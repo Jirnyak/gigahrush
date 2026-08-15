@@ -7,7 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
-import { authoredNpcSpr } from '../../render/sprite_index';
+import { authoredNpcSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 

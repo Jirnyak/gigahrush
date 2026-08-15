@@ -39,7 +39,7 @@ registerAuthoredNpc({ id: 'kv_ambient_1_ie4ia', npc: AMBIENT_NPC_1 });
 
 import { addFactionRelMutual } from '../../data/relations';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {

@@ -23,7 +23,7 @@ import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { DESIGN_NPC_HOME_FLOOR_KEY, ORANZHEREYA_BETONA_Z, CONTENT_TAG, NPC_DEFS } from "./meta";

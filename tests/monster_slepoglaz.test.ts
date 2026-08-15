@@ -10,7 +10,7 @@ import { createWorldEventState } from '../src/systems/events';
 import { publishNoise, resetNoiseRecords } from '../src/systems/noise';
 import { getEntityIndex, rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
-import { monsterSpr } from '../src/render/sprite_index';
+import { monsterSpr } from '../src/entities/sprite_index';
 import { S, CLEAR } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 import { bfsPath } from '../src/systems/ai/pathfinding';

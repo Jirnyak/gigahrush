@@ -20,7 +20,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { randomRPG } from '../../systems/rpg';
 import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, BathhouseThermalBands, BathhouseRooms, HarmonicField, NextId, FIELD_W, FIELD_H, FIELD_STEP, FIELD_ORIGIN_X, FIELD_ORIGIN_Y } from "./meta";

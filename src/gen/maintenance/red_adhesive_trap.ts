@@ -5,7 +5,7 @@ import {
 } from '../../core/types';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { stampMark, MarkType } from '../../systems/surface_marks';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 

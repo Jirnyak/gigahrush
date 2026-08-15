@@ -20,7 +20,7 @@ import {
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { growPackCells, packPlanFor } from '../monster_packs';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import type { FloorGeneration } from '../floor_manifest';

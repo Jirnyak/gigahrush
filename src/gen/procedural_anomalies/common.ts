@@ -8,7 +8,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import type { ProceduralFloorSpec } from '../../data/procedural_floors';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import {
   buildWalkablePlacementMap,
   isProtectedPlacementCell,

@@ -7,7 +7,7 @@ import { DEF, generateSprite } from '../src/entities/sculpture';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { updateMonster, setEntityMap } from '../src/systems/ai/monster';
 import { getEntityIndex, rebuildEntityIndex } from '../src/systems/entity_index';
-import { monsterSpr } from '../src/render/sprite_index';
+import { monsterSpr } from '../src/entities/sprite_index';
 import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 

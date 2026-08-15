@@ -17,7 +17,7 @@ import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { territoryOwnerAtIndex } from '../../systems/territory';
 import { HILBERT_DEPOT_Z, Point, DEPOT_HQ_SPECS } from "./meta";
 import { paintDepotRoomOwner, hardenDepotHqRoom, setFeature, roomCell, uniqueTags } from "./geometry";

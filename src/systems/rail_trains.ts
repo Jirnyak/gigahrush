@@ -14,7 +14,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../data/runtime_topology';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 

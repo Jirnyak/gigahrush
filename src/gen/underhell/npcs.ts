@@ -12,7 +12,7 @@ import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/fact
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { ensureConnectivity, finalizeExpandedFloor, generateZones } from '../shared';
 import { expandUnderhellRouteGeometry, reinforceUnderhellAuthoredHqTerritory } from './expansion';

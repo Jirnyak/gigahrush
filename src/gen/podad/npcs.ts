@@ -6,7 +6,7 @@ import {
 import { World } from '../../core/world';
 import { rng, irand } from '../../core/rand';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import {

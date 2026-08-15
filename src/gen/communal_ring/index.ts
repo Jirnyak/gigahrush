@@ -100,7 +100,7 @@ const AMBIENT_NPC_4: PlotNpcDef = {
 registerAuthoredNpc({ id: 'ambient_4_3k24r', npc: AMBIENT_NPC_4 });
 
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';

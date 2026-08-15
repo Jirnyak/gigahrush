@@ -6,7 +6,7 @@ import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { ITEMS, WEAPON_ROLE_TIERS, WEAPON_STATS } from '../src/data/catalog';
 import { ITEM_TAGS } from '../src/data/items';
 import { resourceForItem } from '../src/data/resources';
-import { Spr } from '../src/render/sprite_index';
+import { Spr } from '../src/entities/sprite_index';
 
 test('pistol grenade launcher is a rare militia single-shot explosive weapon', () => {
   const def = ITEMS.pistol_grenade_launcher;

@@ -2,7 +2,7 @@ import { ZoneFaction, type Entity, type Occupation } from '../../core/types';
 import { World } from '../../core/world';
 import { designFloorProfile, FLOOR_69_WORKER_ROLE_ID } from '../../data/design_floor_profiles';
 import { designNpcFloorKey } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import type { FloorGeneration } from '../floor_manifest';
 
 export const DESIGN_FLOOR_ID = 'floor_69' as const;

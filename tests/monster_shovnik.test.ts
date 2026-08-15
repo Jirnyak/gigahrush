@@ -14,7 +14,7 @@ import { World } from '../src/core/world';
 import { RUMORS } from '../src/data/rumors';
 import { getMonsterEcology, MONSTER_ECOLOGY } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/shovnik';
-import { monsterSpr } from '../src/render/sprite_index';
+import { monsterSpr } from '../src/entities/sprite_index';
 import { S } from '../src/core/pixutil';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';

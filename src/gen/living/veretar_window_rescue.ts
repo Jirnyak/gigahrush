@@ -9,7 +9,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { findClearArea, protectRoom } from '../shared';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';

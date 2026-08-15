@@ -12,7 +12,7 @@ import {
   type Room,
 } from '../../core/types';
 import { auditReachability, hasReachableAdjacentCell, World } from '../../core/world';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import { stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';

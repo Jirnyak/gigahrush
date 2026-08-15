@@ -21,7 +21,7 @@ import { NPC_VISUAL_FLOOR69_FEMALE_ID } from '../data/design_floor_profiles';
 import { generateFloor69FemaleNpcSprite } from '../render/art_sprites';
 import { getGeneratedArtSprite } from '../render/generated_art_sprites';
 import { S, CLEAR, clamp, noise, rgba } from '../core/pixutil';
-import { Spr, authoredNpcSpriteGeneratorOffset } from '../render/sprite_index';
+import { Spr, authoredNpcSpriteGeneratorOffset } from './sprite_index';
 
 export const NPC_VISUAL_FLOOR69_FEMALE = NPC_VISUAL_FLOOR69_FEMALE_ID;
 export const NPC_VISUAL_LIQUIDATOR_MASKED = 'liquidator_masked';

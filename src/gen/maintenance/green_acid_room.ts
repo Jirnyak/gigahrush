@@ -4,7 +4,7 @@ import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Cell, EntityType, Feature, MonsterKind, RoomType, Tex,
 } from '../../core/types';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import {
   type MaintContentCtx, findMaintArea, setFeature, setWater,
   spawnMonstersNear, stampMaintRoom,

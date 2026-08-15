@@ -9,7 +9,7 @@ import { updateMonster, setEntityMap, tryMonsterProjectileStagger } from '../src
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { setListenerPos } from '../src/systems/audio';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
-import { monsterSpr } from '../src/render/sprite_index';
+import { monsterSpr } from '../src/entities/sprite_index';
 import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 

@@ -21,7 +21,7 @@ import { ITEMS } from '../../data/items';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { entityDisplayName } from '../../entities/monster';
 import { followPath, tryAssignPathToCell } from './pathfinding';
-import { Spr, hostileProjectileSprite } from '../../render/sprite_index';
+import { Spr, hostileProjectileSprite } from '../../entities/sprite_index';
 import { findCombatTarget, dropNpcInventory, deterministicScanCd, hasClearLineOfFire } from './monster';
 import { recordEntityKill } from '../alife_rating';
 import { recordPlayerDamage } from '../damage';

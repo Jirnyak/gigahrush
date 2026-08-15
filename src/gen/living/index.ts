@@ -26,7 +26,7 @@ import { type Entity, Cell, Tex, EntityType, AIGoal, W, MonsterKind, RoomType, Z
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { sampleNaturalPopulationCells } from '../population_placement';
 import { baseMonsterPopulationAtDefaultSoftLimit } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';

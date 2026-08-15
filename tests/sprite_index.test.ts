@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert';
-import { authoredNpcSpriteGeneratorOffset, isAuthoredNpcSpr, Spr } from '../src/render/sprite_index';
+import { authoredNpcSpriteGeneratorOffset, isAuthoredNpcSpr, Spr } from '../src/entities/sprite_index';
 
 describe('Sprite Index Utilities', () => {
   describe('authoredNpcSpriteGeneratorOffset', () => {

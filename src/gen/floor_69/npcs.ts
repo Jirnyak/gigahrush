@@ -5,7 +5,7 @@ import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../../entities/npc_visuals';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { shouldPromoteFloor69Worker, isFloor69Worker, promoteFloor69Worker, floor69ControlAt, Floor69Rooms } from './geometry';
 import { HOME_FLOOR_KEY, FLOOR_69_CHECKPOINT_CROWD_CAP, IRA_WORKER_LINES, IRA_WORKER_POST_LINES, floor69EventTags, floor69RouteEventData, FLOOR_69_Z } from './meta';

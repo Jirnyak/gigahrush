@@ -15,7 +15,7 @@ import {
 } from '../../core/types';
 import { World, auditReachability } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { CantorRooms } from "./meta";
 import { dropItem } from "./geometry";

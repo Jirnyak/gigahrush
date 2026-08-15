@@ -34,7 +34,7 @@ import { ITEMS } from '../data/catalog';
 import { floorLevelDisplayName } from '../gen/floor_manifest';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
-import { monsterSpr, Spr } from '../render/sprite_index';
+import { monsterSpr, Spr } from '../entities/sprite_index';
 import { rng, hashSeed } from '../core/rand';
 import { getResourceContractPressure } from './economy';
 import { publishEvent } from './events';

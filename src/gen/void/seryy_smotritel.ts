@@ -7,7 +7,7 @@ import {
 import { World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

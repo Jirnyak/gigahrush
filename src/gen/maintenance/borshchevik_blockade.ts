@@ -13,7 +13,7 @@ import {
   type Room,
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { registerBorshchevikRootSite } from '../../systems/borshchevik';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { randomRPG } from '../../systems/rpg';

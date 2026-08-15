@@ -7,7 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { storyNpcFloorKey, type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminMonster,
   spawnAdminNpc,

@@ -13,7 +13,7 @@ import { designFloorAtZ } from "../data/design_floors";
 import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
-import { monsterSpr, Spr } from '../render/sprite_index';
+import { monsterSpr, Spr } from '../entities/sprite_index';
 import { CRITTERS_POOL, MAX_CRITTERS } from '../render/critters';
 import { awardXP, randomRPG, getMaxHp } from './rpg';
 import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';

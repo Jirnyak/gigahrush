@@ -8,7 +8,7 @@ import {
 import { World } from '../../core/world';
 import { VOID_PROTOCOLS } from '../../data/void_protocols';
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr, Spr } from '../../render/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, placeDoorAt, stampRoom } from '../shared';
 import { rng } from '../../core/rand';

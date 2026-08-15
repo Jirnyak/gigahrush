@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Faction, Occupation } from '../src/core/types';
 import { createPrefilledAlifeState } from '../src/systems/alife';
-import { Spr } from '../src/render/sprite_index';
+import { Spr } from '../src/entities/sprite_index';
 import {
   applyDemosSearchText,
   demosRelationBand,

@@ -23,7 +23,7 @@ talkLinesPost: ['...'],
 registerAuthoredNpc({ id: 'kv_ambient_0_6omcn', npc: AMBIENT_NPC_0 });
 
 import { MONSTERS } from '../../entities/monster';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
   createSocialPoiRoom, placeDropNear, roomCell, setFeatureIfFloor, spawnSocialNpc,

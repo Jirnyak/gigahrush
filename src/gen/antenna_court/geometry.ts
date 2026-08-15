@@ -5,7 +5,7 @@ import {
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import {
   stampRoom,

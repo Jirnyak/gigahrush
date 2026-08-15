@@ -23,7 +23,7 @@ import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
 import { getCritterRenderEnabled, CRITTERS_POOL } from './critters';
 import { CRITTER_DEFS } from '../data/critters';
-import { containerSpr, featureSpr } from './sprite_index';
+import { containerSpr, featureSpr } from '../entities/sprite_index';
 import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites';
 import {
   animatedEntityTextureOverride,

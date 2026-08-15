@@ -12,7 +12,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/items';
-import { Spr } from '../render/sprite_index';
+import { Spr } from '../entities/sprite_index';
 import { entityDisplayName } from '../entities/monster';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';

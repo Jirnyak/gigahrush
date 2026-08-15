@@ -7,7 +7,7 @@ import {
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
-import { Spr, monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';

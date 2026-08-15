@@ -11,7 +11,7 @@ import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
 import { runMaintenanceContent } from './content_manifest';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import { applyCollectorMacroGeometry, placeCollectorMacroPanels } from './geometry';
 import {
   MAINTENANCE_TERRITORY_SEED,

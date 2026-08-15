@@ -26,7 +26,7 @@ import {
   npcVisualUsesDynamicTexture,
   npcVisualWorldSpriteScale,
 } from './npc_visuals';
-import { authoredNpcSpriteGeneratorOffset } from '../render/sprite_index';
+import { authoredNpcSpriteGeneratorOffset } from './sprite_index';
 import { resolveNpcArtVisualId } from '../data/npc_art_visuals';
 
 export { isFloor69FemaleSprite } from './npc_visuals';

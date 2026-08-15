@@ -15,7 +15,7 @@ import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { MONSTERS } from '../../entities/monster';
-import { Spr, monsterSpr } from '../../render/sprite_index';
+import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { runVoidContent } from './content_manifest';
 import { applyVoidRevealLighting, buildVoidGeometry, paintVoidDefaults } from './geometry';
 import { rng, irand } from '../../core/rand';

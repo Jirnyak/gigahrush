@@ -5,7 +5,7 @@ import {
 } from '../../core/types';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { monsterSpr } from '../../render/sprite_index';
+import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature, stampMaintRoom,

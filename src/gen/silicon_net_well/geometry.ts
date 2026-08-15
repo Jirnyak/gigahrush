@@ -13,7 +13,7 @@ import {
   type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { Spr } from '../../render/sprite_index';
+import { Spr } from '../../entities/sprite_index';
 import {
   stampRoom,
 } from '../shared';
