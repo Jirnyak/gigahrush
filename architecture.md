@@ -152,6 +152,34 @@ violation has a baseline count, and the check fails both when the count grows an
 it shrinks without the baseline being lowered, so cleared ground cannot be silently
 retaken. Run `npm run check:invariants -- --report` for the current listing.
 
+Backward edges and cycles are separate metrics, and the script measures the largest
+runtime-import cycle on its own line. Six backward edges between layers do not move it
+at all; one edge did. `systems/samosbor.ts` imported `generateFloor` from
+`gen/floor_manifest`, and that single edge held a cycle of 293 files. It is cut: the
+floor generator now arrives by injection (`setSamosborFloorGenerator`), the type
+`FloorGeneration` is imported as `import type` and erased at build, and the cycle is
+106. A lazy floor registry instead of the 63 static imports in
+`gen/design_floors/manifest.ts` was measured and gives nothing on top of that — the
+same 106 — and it would break content registration, which is an import-time effect.
+
+**Точка сборки контента: `src/content.ts`.** Контент регистрируется побочным эффектом
+импорта: генераторы этажей на верхнем уровне объявляют пакеты NPC, сайд-квесты, зоны и
+наблюдателей событий. Пока дорога к ним шла через самосбор, реестр наполнялся у того,
+кто случайно затянул самосбор (464 пакета), и пустовал у того, кто не затянул (101).
+Теперь дорога одна и названа: `src/content.ts` — корневой слой, точка сборки, ей одной
+разрешено видеть и `systems`, и `gen`. Она же ставит генератор в самосбор. `main.ts`
+берёт её одной строкой; тест, которому нужен весь реестр, пишет `import '../src/content'`
+и остаётся в юнит-гейте (прямой импорт из `src/gen/` уводит файл в негейтованный набор
+generation — см. `tests.md`). Очерёдность внутри `content.ts` значима: она задаёт порядок
+`NPC_PACKAGES` и `SIDE_QUESTS`, а от него зависит план населения A-Life.
+
+**Слоты сюжетных личностей: `src/data/npc_plot_ids.ts`.** Числовой `plotNpcId` — не
+идентификатор, а номер слота: им индексируются плотные массивы A-Life, по нему работает
+диапазонный `isPlotNpc`, и он уходит в сейв. Раньше слот выдавался счётчиком в порядке
+регистрации, то есть зависел от состава импортов. Порядок заморожен списком; пакет вне
+списка получает слот за его концом, а `tests/content-registration-order.test.ts` следит,
+чтобы таких не заводилось. Новый NPC дописывается В КОНЕЦ списка.
+
 The recurring mistake this layer order exists to prevent: a leaf file — a registry, a
 util, a set of operations over `World` — gets filed under whichever layer called it
 first, and then everyone imports it. That single pattern produced 288 of the project's
