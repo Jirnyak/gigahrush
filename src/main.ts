@@ -1154,77 +1154,437 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
   if (changedWorld) updateWorldData(world);
 }
 
-setOnlineMessageHandler((msgData: any) => {
-  if (msgData.type === 'chat_ping') {
-    const text = msgData.text || '';
-    const duration = Math.max(0, Math.min(6, Math.max(2.5, text.length * 0.12)));
-    if (duration > 0 && entities) {
-      for (let i = 0; i < entities.length; i++) {
-        const e = entities[i];
-        if (e.id === player?.id) continue;
-        if ((e.peerSlot !== undefined || e.netGen) && (e.netGen === msgData.netGen || e.name === msgData.nickname)) {
-          e.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
-          break;
+/* ── Сетевой диспетчер: одна ветвь на тип сообщения ──────────────
+ * Ветви взаимоисключающие по msgData.type, поэтому ранний выход из
+ * обработчика равнозначен прежнему «дальше всё равно не совпадёт».
+ * msgData остаётся any: объединения форм сообщений в протоколе нет,
+ * сам setOnlineMessageHandler объявлен как (msg: any) => void.
+ */
+
+function onOnlineChatPing(msgData: any): void {
+  const text = msgData.text || '';
+  const duration = Math.max(0, Math.min(6, Math.max(2.5, text.length * 0.12)));
+  if (duration > 0 && entities) {
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e.id === player?.id) continue;
+      if ((e.peerSlot !== undefined || e.netGen) && (e.netGen === msgData.netGen || e.name === msgData.nickname)) {
+        e.activeBark = { text, until: state.time + duration, color: '#cca', skipTranslate: true };
+        break;
+      }
+    }
+  }
+}
+
+// ── PEER: got a slot — introduce ourselves with the imported home character ──
+function onOnlineWelcome(_msgData: any): void {
+  try {
+    const count = parseInt(localStorage.getItem('gigahrush_net_sessions_count') || '0', 10);
+    localStorage.setItem('gigahrush_net_sessions_count', String(count + 1));
+  } catch {}
+  // Flush the home save NOW: the visit ends either by evac-merge on top of
+  // this state or by loading it back unchanged after death/disconnect.
+  saveGame(true);
+  const snap = getNetSphereSnapshot();
+  let nicknameStr = '';
+  try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
+  sendOnlineMessage({
+    type: 'peer_join',
+    pv: ONLINE_PROTOCOL_VERSION,
+    netGen: snap.netGen,
+    nickname: nicknameStr || snap.profile?.nickname,
+    actorImport: peerJoinActorImport(),
+    invader: isOnlineInvader() || undefined,
+  });
+}
+
+// ── HOST: peer joined → spawn remote actor, send floor seed ──
+function onOnlinePeerJoin(msgData: any): void {
+  const peerSlot = msgData._peerSlot;
+  if (msgData.pv !== ONLINE_PROTOCOL_VERSION) {
+    sendOnlineMessage({ type: 'server_error', _targetSlot: peerSlot, reason: 'version_mismatch' });
+    return;
+  }
+  const isInvader = msgData.invader === true;
+  state.msgs.push(isInvader
+    ? msg(`⚠ ТЁМНЫЙ ЖИЛЕЦ ВТОРГСЯ НА ЭТАЖ`, state.time, '#f66')
+    : msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
+
+  // Coop guest spawns at the host (guaranteed passable); invader — far away.
+  const spawnAt = isInvader ? invaderSpawnPoint() : { x: player.x, y: player.y };
+  const spawnX = spawnAt.x, spawnY = spawnAt.y;
+
+  // The visitor brings their home character: sanitize the import once, then
+  // the host owns the actor for the whole session.
+  const imp = sanitizeVisitExport(msgData.actorImport);
+  const impRaw = (msgData.actorImport ?? {}) as Record<string, unknown>;
+  const impMaxHp = typeof impRaw.maxHp === 'number' && Number.isFinite(impRaw.maxHp)
+    ? Math.max(1, Math.min(9999, Math.floor(impRaw.maxHp))) : 100;
+  const impHp = typeof impRaw.hp === 'number' && Number.isFinite(impRaw.hp)
+    ? Math.max(1, Math.min(impMaxHp, Math.floor(impRaw.hp))) : impMaxHp;
+  const impNeeds = freshNeeds();
+  const needsRaw = impRaw.needs as Record<string, unknown> | undefined;
+  if (needsRaw && typeof needsRaw === 'object') {
+    for (const key of ['food', 'water', 'sleep', 'pee', 'poo'] as const) {
+      const v = needsRaw[key];
+      if (typeof v === 'number' && Number.isFinite(v)) (impNeeds as unknown as Record<string, number>)[key] = Math.max(0, Math.min(100, v));
+    }
+  }
+  const remoteActor: Entity = {
+    id: nextEntityId.v++,
+    type: EntityType.NPC,
+    x: spawnX, y: spawnY,
+    angle: -Math.PI / 2, pitch: 0,
+    alive: true,
+    speed: HUMANOID_BASE_MOVE_SPEED,
+    sprite: Occupation.TRAVELER,
+    spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
+    needs: impNeeds,
+    hp: impHp, maxHp: impMaxHp,
+    money: imp?.money ?? 0,
+    inventory: imp ? unpackNetItems(imp.inventory) : [],
+    weapon: imp?.weapon ?? '', tool: imp?.tool ?? '',
+    armorDefId: imp?.armorDefId,
+    name: msgData.nickname || `Игрок ${peerSlot}`,
+    netGen: msgData.netGen,
+    npcVisualId: typeof impRaw.npcVisualId === 'string' ? impRaw.npcVisualId.slice(0, 40) : undefined,
+    sex: typeof impRaw.sex === 'string' ? (impRaw.sex as CharacterSex) : undefined,
+    rpg: freshRPG(1),
+    // Invaders are WILD: hostile to the host (PLAYER), his NPCs and monsters
+    // through the ordinary relation matrix — no special-case AI anywhere.
+    faction: isInvader ? Faction.WILD : Faction.PLAYER,
+    peerSlot,
+    ...playerAlifeFields(),
+  } as Entity;
+  if (imp?.rpg && remoteActor.rpg) Object.assign(remoteActor.rpg, imp.rpg);
+  // playerAlifeFields() marks visitors personally friendly (relation 100);
+  // an invader must read hostile through the personal channel too.
+  if (isInvader) remoteActor.playerRelation = -100;
+  entities.push(remoteActor);
+  _peerVisitEnded.delete(peerSlot);
+  sendFloorSnapshotToPeer(peerSlot, spawnX, spawnY);
+}
+
+// ── HOST: peer position stream (the only peer-owned state) ──
+function onOnlinePeerMove(msgData: any): void {
+  const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
+  if (actor) {
+    // Validate position — only accept if the target cell is passable
+    const nx = world.wrap(msgData.x);
+    const ny = world.wrap(msgData.y);
+    if (!world.solid(Math.floor(nx), Math.floor(ny))) {
+      actor.x = nx;
+      actor.y = ny;
+    }
+    actor.angle = msgData.angle ?? actor.angle;
+    actor.pitch = msgData.pitch ?? actor.pitch;
+    if (typeof msgData.gen === 'number') _peerMoveGen.set(msgData._peerSlot as number, msgData.gen);
+  }
+}
+
+// ── HOST: numbered peer intent — the only way peer-owned state mutates ──
+function onOnlinePeerIntent(msgData: any): void {
+  const slot = msgData._peerSlot as number;
+  const seq = typeof msgData.seq === 'number' ? Math.floor(msgData.seq) : 0;
+  const intent = sanitizeIntent(msgData.intent);
+  const actor = entities.find(e => e.peerSlot === slot && e.alive);
+  // Every intent — even a rejected one — acks its seq, or the peer's echo
+  // reconciliation would starve behind a single dropped action.
+  if (seq > 0) hostNoteProcessedSeq(slot, seq);
+  if (actor && intent) {
+    // ── fire: host consumes ammo/psi and resolves the shot (hit-claim aware) ──
+    if (intent.kind === 'fire') {
+      applyPeerFireAction(actor, slot, intent.targetId);
+    }
+
+    // ── reload: mirror of the peer's local prediction rules ──
+    if (intent.kind === 'reload') {
+      hostStartRemoteReload(actor);
+    }
+
+    // ── tool: host-side world effect + real resource consumption ──
+    if (intent.kind === 'tool') {
+      applyPeerToolUse(actor, slot, intent.edge);
+    }
+
+    // ── use_item: eat/heal/equip through the shared inventory system ──
+    if (intent.kind === 'use_item') {
+      const invSlot = actor.inventory?.[intent.slot];
+      if (invSlot && invSlot.defId === intent.defId) {
+        const zoneId = world.zoneMap[world.idx(Math.floor(actor.x), Math.floor(actor.y))];
+        useItem(actor, intent.slot, [], state.time, state, zoneId, world);
+      }
+    }
+
+    // ── Peer interact: evacuation lift, doors, pickup, containers ──
+    if (intent.kind === 'interact') {
+      let handled = false;
+      const lx = actor.x + Math.cos(actor.angle) * 1.5;
+      const ly = actor.y + Math.sin(actor.angle) * 1.5;
+      const cx = Math.floor(world.wrap(lx));
+      const cy = Math.floor(world.wrap(ly));
+      const idx = world.idx(cx, cy);
+      // Evacuation ritual: for a visitor a lift is not floor travel — it is
+      // the way home. Reaching one alive exports the actor to the peer save.
+      const liftAt = (ci: number): boolean => world.cells[ci] === Cell.LIFT && world.features[ci] !== Feature.MACHINE;
+      let onLift = liftAt(idx);
+      if (!onLift) {
+        const px = Math.floor(actor.x), py = Math.floor(actor.y);
+        for (let dy = -1; dy <= 1 && !onLift; dy++) for (let dx = -1; dx <= 1 && !onLift; dx++) {
+          if (liftAt(world.idx(px + dx, py + dy))) onLift = true;
+        }
+      }
+      if (onLift) {
+        _peerVisitEnded.add(slot);
+        sendOnlineMessage({
+          type: 'visit_end',
+          _targetSlot: slot,
+          evac: true,
+          export: buildVisitExport(actor),
+        });
+        state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} уехал на лифте домой.`, state.time, '#8cf'));
+        const ai = entities.indexOf(actor);
+        if (ai >= 0) entities.splice(ai, 1);
+        rebuildEntityIndex(entities, 'load');
+        hostClearSlot(slot);
+        hostSetOpenContainer(slot, null);
+        return;
+      }
+      if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
+        const door = world.doors.get(idx)!;
+        if (door.state === DoorState.CLOSED) {
+          setDoorState(world, door, DoorState.OPEN);
+          door.timer = 0; handled = true;
+        } else if (door.state === DoorState.OPEN) {
+          setDoorState(world, door, DoorState.CLOSED); handled = true;
+        } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
+          setDoorState(world, door, DoorState.HERMETIC_OPEN);
+          door.timer = 0; handled = true;
+        } else if (door.state === DoorState.HERMETIC_OPEN) {
+          setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
+        } else if (door.state === DoorState.LOCKED) {
+          const keyId = door.keyId || 'key';
+          if (actor.inventory?.some((i: { defId: string }) => i.defId === keyId)) {
+            setDoorState(world, door, DoorState.OPEN);
+            door.timer = 0; handled = true;
+            state.msgs.push(msg(`Игрок ${actor.peerSlot} отпер дверь ключом`, state.time, '#4a4'));
+          }
+        }
+      }
+      // Try NPC (talk/trade) — same E priority the host player gets. The
+      // host resolves the NPC, generates its trade stock and dialog line,
+      // and streams a menu copy; the peer's menu runs on the synced entity.
+      if (!handled) {
+        const tx = world.wrap(lx);
+        const ty = world.wrap(ly);
+        let bestNpc: Entity | null = null;
+        let bestNpcD2 = 1.7 * 1.7;
+        const npcQuery: Entity[] = [];
+        getEntityIndex().queryRadius(tx, ty, 1.7, npcQuery, ENTITY_MASK_ACTOR);
+        for (const e of npcQuery) {
+          if (!e.alive || e.type !== EntityType.NPC || e.peerSlot !== undefined || e === actor) continue;
+          const d2 = world.dist2(tx, ty, e.x, e.y);
+          if (d2 < bestNpcD2) { bestNpc = e; bestNpcD2 = d2; }
+        }
+        if (bestNpc) {
+          if (!bestNpc.inventory || bestNpc.inventory.length === 0) {
+            bestNpc.inventory = generateNpcTradeItems(bestNpc);
+          }
+          hostSetOpenNpc(slot, bestNpc.id);
+          sendOnlineMessage({
+            type: 'npc_open',
+            _targetSlot: slot,
+            npc: {
+              id: bestNpc.id,
+              inventory: packNetItems(bestNpc.inventory, 64),
+              money: Math.max(0, Math.floor(bestNpc.money ?? 0)),
+            },
+            talk: generateTalkText(bestNpc, { world, state, player: actor, time: state.time }),
+          });
+          handled = true;
+        }
+      }
+      // Try item pickup if door wasn't toggled
+      if (!handled) {
+        let bestDrop: Entity | null = null;
+        let bestD2 = 2.5 * 2.5; // max 2.5 cell range
+        for (const e of entities) {
+          if (e.type !== EntityType.ITEM_DROP || !e.alive) continue;
+          const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
+          if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
+        }
+        if (bestDrop) {
+          // actor_echo carries the authoritative inventory next sync tick
+          handled = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state).handled;
+        }
+      }
+      // Try opening / searching a container in front of the peer. Host is the
+      // sole authority: it resolves (or lazily generates) the container and
+      // sends the peer a transient inventory copy to view — the peer never
+      // generates anything (floor seed is non-deterministic) and never spawns
+      // a world mesh for it.
+      if (!handled) {
+        // Prefer the cell the peer faces (matches the local look-direction
+        // targeting and lets "обыскать" generate loot on the faced feature),
+        // then fall back to a nearby container.
+        const container = resolvePeerContainerAtCell(world, state.currentZ, Math.floor(cx), Math.floor(cy))
+          ?? firstNearbyContainer(world, actor, state)
+          ?? resolvePeerContainerAtCell(world, state.currentZ, Math.floor(actor.x), Math.floor(actor.y));
+        if (container) {
+          container.lastOpenedBy = actor.id;
+          container.lastOpenedAt = state.time;
+          hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
+          sendOnlineMessage({
+            type: 'container_open',
+            _targetSlot: actor.peerSlot,
+            container: containerSyncPayload(container),
+          });
+        }
+      }
+    }
+
+    // ── NPC dialog line requested ──
+    if (intent.kind === 'npc_talk') {
+      const npc = getEntityIndex().byId.get(intent.npcId);
+      if (npc?.alive && npc.type === EntityType.NPC && world.dist2(actor.x, actor.y, npc.x, npc.y) <= 36) {
+        sendOnlineMessage({
+          type: 'npc_talk',
+          _targetSlot: slot,
+          npcId: npc.id,
+          text: generateTalkText(npc, { world, state, player: actor, time: state.time }),
+        });
+      }
+    }
+
+    if (intent.kind === 'npc_close') {
+      hostSetOpenNpc(slot, null);
+    }
+
+    // ── Relaxed-trust deal: the peer priced and executed the trade locally
+    // with the same trade code; the host applies the material exchange,
+    // clamping every count and the cash to what actually exists. ──
+    if (intent.kind === 'trade_deal') {
+      const npc = getEntityIndex().byId.get(intent.npcId);
+      if (npc?.alive && npc.type === EntityType.NPC && npc.peerSlot === undefined
+        && world.dist2(actor.x, actor.y, npc.x, npc.y) <= 36) {
+        for (const item of intent.give) {
+          const n = Math.min(item.count, inventoryCountOf(actor, item.defId));
+          if (n > 0 && removeItem(actor, item.defId, n)) addItem(npc, item.defId, n, item.data);
+        }
+        for (const item of intent.take) {
+          const n = Math.min(item.count, inventoryCountOf(npc, item.defId));
+          if (n > 0 && removeItem(npc, item.defId, n)) addItem(actor, item.defId, n, item.data);
+        }
+        // One clamped move, not two independent ones: clamping each side alone
+        // minted money whenever the payer could not cover netCash.
+        const actorMoney = Math.max(0, Math.floor(actor.money ?? 0));
+        const npcMoney = Math.max(0, Math.floor(npc.money ?? 0));
+        const moved = Math.max(-npcMoney, Math.min(actorMoney, Math.floor(intent.netCash)));
+        actor.money = actorMoney - moved;
+        npc.money = npcMoney + moved;
+        state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} торгуется с ${npc.name ?? 'жителем'}.`, state.time, '#8cf'));
+      }
+    }
+
+    // ── Peer drop item (slot-validated against the host-owned inventory) ──
+    if (intent.kind === 'drop') {
+      const dropX = actor.x + Math.cos(actor.angle) * 3.0;
+      const dropY = actor.y + Math.sin(actor.angle) * 3.0;
+      const invSlot = actor.inventory?.[intent.slot];
+      if (invSlot && invSlot.defId === intent.defId) {
+        const count = Math.min(invSlot.count, intent.count);
+        removeItem(actor, intent.defId, count);
+        if (actor.weapon === intent.defId) actor.weapon = '';
+        if (actor.tool === intent.defId) actor.tool = '';
+        entities.push({
+          id: nextEntityId.v++, type: EntityType.ITEM_DROP,
+          x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
+          inventory: [invSlot.data !== undefined ? { defId: intent.defId, count, data: invSlot.data } : { defId: intent.defId, count }],
+        } as Entity);
+        state.msgs.push(msg(`Игрок ${actor.peerSlot} выбросил предмет`, state.time, '#aa6'));
+      }
+    }
+
+    // ── Peer container: take / put / close — host-authoritative ──
+    // Peer sends the container's cell + slot; host resolves the real container
+    // there, runs the real take/put against the peer actor (all theft/karma/
+    // purchase/event side effects stay host-owned), then echoes fresh contents
+    // back to that peer. Peer inventory reconciles via the actor echo. On close
+    // the host just drops any transient generated loot bookkeeping — the
+    // container itself lives in the host world.
+    if (intent.kind === 'container') {
+      if (intent.op === 'close') {
+        hostSetOpenContainer(slot, null);
+      } else {
+        const container = resolvePeerContainerAtCell(world, state.currentZ, intent.cx, intent.cy);
+        if (container) {
+          const cSlot = Math.max(0, Math.floor(intent.slot ?? 0));
+          if (intent.op === 'take') {
+            takeFromContainer(container, actor, cSlot, 1, { state, world, entities });
+          } else if (intent.op === 'put') {
+            putIntoContainer(container, actor, cSlot, 1, { state, world, entities });
+          }
+          hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
+          // fresh contents ride the next host_state container push; inventory
+          // reconciles via actor_echo — no extra targeted messages needed
         }
       }
     }
   }
+}
 
-  // ── HOST: peer joined → spawn remote actor, send floor seed ──
-  // ── PEER: got a slot — introduce ourselves with the imported home character ──
-  if (msgData.type === 'welcome' && !isOnlineHost() && msgData.role === 'peer') {
-    try {
-      const count = parseInt(localStorage.getItem('gigahrush_net_sessions_count') || '0', 10);
-      localStorage.setItem('gigahrush_net_sessions_count', String(count + 1));
-    } catch {}
-    // Flush the home save NOW: the visit ends either by evac-merge on top of
-    // this state or by loading it back unchanged after death/disconnect.
-    saveGame(true);
-    const snap = getNetSphereSnapshot();
-    let nicknameStr = '';
-    try { nicknameStr = localStorage.getItem('gigahrush_player_name') ?? ''; } catch {}
-    sendOnlineMessage({
-      type: 'peer_join',
-      pv: ONLINE_PROTOCOL_VERSION,
-      netGen: snap.netGen,
-      nickname: nicknameStr || snap.profile?.nickname,
-      actorImport: peerJoinActorImport(),
-      invader: isOnlineInvader() || undefined,
-    });
+function onOnlineFloorSnapshotBegin(msgData: any): void {
+  state.msgs.push(msg('Получаю этаж хоста...', state.time, '#8cf'));
+  _snapTotal = Math.max(0, Math.floor(msgData.total ?? 0));
+  _snapChunks = new Array(_snapTotal);
+  _snapReceived = 0;
+  _snapSpawnX = msgData.spawnX ?? W / 2;
+  _snapSpawnY = msgData.spawnY ?? W / 2;
+  onlinePeerFloorReady = false;
+  // Mid-session re-snapshot (host lift / post-samosbor): stale interpolation
+  // samples and an open remote-container view must not survive the swap.
+  clearNetSamples();
+  if (state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+    world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
+    _peerRemoteContainerCell = null;
+    state.showContainerMenu = false;
+    state.containerMenuTarget = -1;
+    syncPauseState();
   }
+}
 
-  if (msgData.type === 'peer_join' && isOnlineHost()) {
-    const peerSlot = msgData._peerSlot;
-    if (msgData.pv !== ONLINE_PROTOCOL_VERSION) {
-      sendOnlineMessage({ type: 'server_error', _targetSlot: peerSlot, reason: 'version_mismatch' });
-      return;
-    }
-    const isInvader = msgData.invader === true;
-    state.msgs.push(isInvader
-      ? msg(`⚠ ТЁМНЫЙ ЖИЛЕЦ ВТОРГСЯ НА ЭТАЖ`, state.time, '#f66')
-      : msg(`Игрок ${peerSlot} подключился.`, state.time, '#8cf'));
+function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]): void {
+  const i = Math.floor(msgData.i ?? -1);
+  if (i >= 0 && i < _snapTotal && chunks[i] === undefined) {
+    chunks[i] = typeof msgData.data === 'string' ? msgData.data : '';
+    _snapReceived++;
+  }
+  if (_snapReceived < _snapTotal) return;
+  // All chunks in — reassemble, unpack, and swap in the host's floor.
+  const serialized = reassembleFloorSnapshot(chunks, _snapTotal);
+  _snapChunks = null;
+  const snapshot = serialized !== null ? deserializeFloorSnapshot(serialized) : null;
+  const unpacked = snapshot ? unpackFloorFromNetwork(snapshot) : null;
+  if (!unpacked) {
+    state.msgs.push(msg('Ошибка распаковки этажа хоста.', state.time, '#f44'));
+    return;
+  }
+  const spawnX = _snapSpawnX, spawnY = _snapSpawnY;
+  const peerMySlot = getOnlineSlot();
+  scheduleLoading(() => {
+    // Re-stamp the derived, non-serialized layers that generation owns
+    // (mirrors loadFloorForTarget for memory-restored floors).
+    injectFastElevators(unpacked.world);
+    fillVisualSlotsForWorldFeatures(unpacked.world, unpacked.meta.runSeed);
+    stampCeilingHeights(unpacked.world);
+    state.currentZ = unpacked.meta.z;
+    world = replaceWorldFromGeneration(world, { world: unpacked.world });
+    entities = unpacked.entities;
+    // Never mint a local id that collides with a host-authored entity.
+    nextEntityId.v = Math.max(nextEntityId.v, unpacked.meta.nextEntityId, syncNextEntityId(entities, nextEntityId.v));
 
-    // Coop guest spawns at the host (guaranteed passable); invader — far away.
-    const spawnAt = isInvader ? invaderSpawnPoint() : { x: player.x, y: player.y };
-    const spawnX = spawnAt.x, spawnY = spawnAt.y;
-
-    // The visitor brings their home character: sanitize the import once, then
-    // the host owns the actor for the whole session.
-    const imp = sanitizeVisitExport(msgData.actorImport);
-    const impRaw = (msgData.actorImport ?? {}) as Record<string, unknown>;
-    const impMaxHp = typeof impRaw.maxHp === 'number' && Number.isFinite(impRaw.maxHp)
-      ? Math.max(1, Math.min(9999, Math.floor(impRaw.maxHp))) : 100;
-    const impHp = typeof impRaw.hp === 'number' && Number.isFinite(impRaw.hp)
-      ? Math.max(1, Math.min(impMaxHp, Math.floor(impRaw.hp))) : impMaxHp;
-    const impNeeds = freshNeeds();
-    const needsRaw = impRaw.needs as Record<string, unknown> | undefined;
-    if (needsRaw && typeof needsRaw === 'object') {
-      for (const key of ['food', 'water', 'sleep', 'pee', 'poo'] as const) {
-        const v = needsRaw[key];
-        if (typeof v === 'number' && Number.isFinite(v)) (impNeeds as unknown as Record<string, number>)[key] = Math.max(0, Math.min(100, v));
-      }
-    }
-    const remoteActor: Entity = {
+    // Create local player actor for camera attachment
+    const localPlayer: Entity = {
       id: nextEntityId.v++,
       type: EntityType.NPC,
       x: spawnX, y: spawnY,
@@ -1233,610 +1593,274 @@ setOnlineMessageHandler((msgData: any) => {
       speed: HUMANOID_BASE_MOVE_SPEED,
       sprite: Occupation.TRAVELER,
       spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
-      needs: impNeeds,
-      hp: impHp, maxHp: impMaxHp,
-      money: imp?.money ?? 0,
-      inventory: imp ? unpackNetItems(imp.inventory) : [],
-      weapon: imp?.weapon ?? '', tool: imp?.tool ?? '',
-      armorDefId: imp?.armorDefId,
-      name: msgData.nickname || `Игрок ${peerSlot}`,
-      netGen: msgData.netGen,
-      npcVisualId: typeof impRaw.npcVisualId === 'string' ? impRaw.npcVisualId.slice(0, 40) : undefined,
-      sex: typeof impRaw.sex === 'string' ? (impRaw.sex as CharacterSex) : undefined,
+      needs: freshNeeds(),
+      hp: 100, maxHp: 100,
+      money: 100,
+      inventory: [],
+      weapon: '', tool: '',
+      name: 'Вы',
+      netGen: getNetSphereSnapshot().netGen,
       rpg: freshRPG(1),
-      // Invaders are WILD: hostile to the host (PLAYER), his NPCs and monsters
-      // through the ordinary relation matrix — no special-case AI anywhere.
-      faction: isInvader ? Faction.WILD : Faction.PLAYER,
-      peerSlot,
+      faction: Faction.PLAYER,
+      peerSlot: peerMySlot,
       ...playerAlifeFields(),
     } as Entity;
-    if (imp?.rpg && remoteActor.rpg) Object.assign(remoteActor.rpg, imp.rpg);
-    // playerAlifeFields() marks visitors personally friendly (relation 100);
-    // an invader must read hostile through the personal channel too.
-    if (isInvader) remoteActor.playerRelation = -100;
-    entities.push(remoteActor);
-    _peerVisitEnded.delete(peerSlot);
-    sendFloorSnapshotToPeer(peerSlot, spawnX, spawnY);
-  }
-
-  // ── HOST: peer position stream (the only peer-owned state) ──
-  if (msgData.type === 'peer_move' && isOnlineHost()) {
-    const actor = entities.find(e => e.peerSlot === msgData._peerSlot && e.alive);
-    if (actor) {
-      // Validate position — only accept if the target cell is passable
-      const nx = world.wrap(msgData.x);
-      const ny = world.wrap(msgData.y);
-      if (!world.solid(Math.floor(nx), Math.floor(ny))) {
-        actor.x = nx;
-        actor.y = ny;
-      }
-      actor.angle = msgData.angle ?? actor.angle;
-      actor.pitch = msgData.pitch ?? actor.pitch;
-      if (typeof msgData.gen === 'number') _peerMoveGen.set(msgData._peerSlot as number, msgData.gen);
-    }
-  }
-
-  // ── HOST: numbered peer intent — the only way peer-owned state mutates ──
-  if (msgData.type === 'peer_intent' && isOnlineHost()) {
-    const slot = msgData._peerSlot as number;
-    const seq = typeof msgData.seq === 'number' ? Math.floor(msgData.seq) : 0;
-    const intent = sanitizeIntent(msgData.intent);
-    const actor = entities.find(e => e.peerSlot === slot && e.alive);
-    // Every intent — even a rejected one — acks its seq, or the peer's echo
-    // reconciliation would starve behind a single dropped action.
-    if (seq > 0) hostNoteProcessedSeq(slot, seq);
-    if (actor && intent) {
-      // ── fire: host consumes ammo/psi and resolves the shot (hit-claim aware) ──
-      if (intent.kind === 'fire') {
-        applyPeerFireAction(actor, slot, intent.targetId);
-      }
-
-      // ── reload: mirror of the peer's local prediction rules ──
-      if (intent.kind === 'reload') {
-        hostStartRemoteReload(actor);
-      }
-
-      // ── tool: host-side world effect + real resource consumption ──
-      if (intent.kind === 'tool') {
-        applyPeerToolUse(actor, slot, intent.edge);
-      }
-
-      // ── use_item: eat/heal/equip through the shared inventory system ──
-      if (intent.kind === 'use_item') {
-        const invSlot = actor.inventory?.[intent.slot];
-        if (invSlot && invSlot.defId === intent.defId) {
-          const zoneId = world.zoneMap[world.idx(Math.floor(actor.x), Math.floor(actor.y))];
-          useItem(actor, intent.slot, [], state.time, state, zoneId, world);
-        }
-      }
-
-      // ── Peer interact: evacuation lift, doors, pickup, containers ──
-      if (intent.kind === 'interact') {
-        let handled = false;
-        const lx = actor.x + Math.cos(actor.angle) * 1.5;
-        const ly = actor.y + Math.sin(actor.angle) * 1.5;
-        const cx = Math.floor(world.wrap(lx));
-        const cy = Math.floor(world.wrap(ly));
-        const idx = world.idx(cx, cy);
-        // Evacuation ritual: for a visitor a lift is not floor travel — it is
-        // the way home. Reaching one alive exports the actor to the peer save.
-        const liftAt = (ci: number): boolean => world.cells[ci] === Cell.LIFT && world.features[ci] !== Feature.MACHINE;
-        let onLift = liftAt(idx);
-        if (!onLift) {
-          const px = Math.floor(actor.x), py = Math.floor(actor.y);
-          for (let dy = -1; dy <= 1 && !onLift; dy++) for (let dx = -1; dx <= 1 && !onLift; dx++) {
-            if (liftAt(world.idx(px + dx, py + dy))) onLift = true;
-          }
-        }
-        if (onLift) {
-          _peerVisitEnded.add(slot);
-          sendOnlineMessage({
-            type: 'visit_end',
-            _targetSlot: slot,
-            evac: true,
-            export: buildVisitExport(actor),
-          });
-          state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} уехал на лифте домой.`, state.time, '#8cf'));
-          const ai = entities.indexOf(actor);
-          if (ai >= 0) entities.splice(ai, 1);
-          rebuildEntityIndex(entities, 'load');
-          hostClearSlot(slot);
-          hostSetOpenContainer(slot, null);
-          return;
-        }
-        if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
-          const door = world.doors.get(idx)!;
-          if (door.state === DoorState.CLOSED) {
-            setDoorState(world, door, DoorState.OPEN);
-            door.timer = 0; handled = true;
-          } else if (door.state === DoorState.OPEN) {
-            setDoorState(world, door, DoorState.CLOSED); handled = true;
-          } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
-            setDoorState(world, door, DoorState.HERMETIC_OPEN);
-            door.timer = 0; handled = true;
-          } else if (door.state === DoorState.HERMETIC_OPEN) {
-            setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
-          } else if (door.state === DoorState.LOCKED) {
-            const keyId = door.keyId || 'key';
-            if (actor.inventory?.some((i: { defId: string }) => i.defId === keyId)) {
-              setDoorState(world, door, DoorState.OPEN);
-              door.timer = 0; handled = true;
-              state.msgs.push(msg(`Игрок ${actor.peerSlot} отпер дверь ключом`, state.time, '#4a4'));
-            }
-          }
-        }
-        // Try NPC (talk/trade) — same E priority the host player gets. The
-        // host resolves the NPC, generates its trade stock and dialog line,
-        // and streams a menu copy; the peer's menu runs on the synced entity.
-        if (!handled) {
-          const tx = world.wrap(lx);
-          const ty = world.wrap(ly);
-          let bestNpc: Entity | null = null;
-          let bestNpcD2 = 1.7 * 1.7;
-          const npcQuery: Entity[] = [];
-          getEntityIndex().queryRadius(tx, ty, 1.7, npcQuery, ENTITY_MASK_ACTOR);
-          for (const e of npcQuery) {
-            if (!e.alive || e.type !== EntityType.NPC || e.peerSlot !== undefined || e === actor) continue;
-            const d2 = world.dist2(tx, ty, e.x, e.y);
-            if (d2 < bestNpcD2) { bestNpc = e; bestNpcD2 = d2; }
-          }
-          if (bestNpc) {
-            if (!bestNpc.inventory || bestNpc.inventory.length === 0) {
-              bestNpc.inventory = generateNpcTradeItems(bestNpc);
-            }
-            hostSetOpenNpc(slot, bestNpc.id);
-            sendOnlineMessage({
-              type: 'npc_open',
-              _targetSlot: slot,
-              npc: {
-                id: bestNpc.id,
-                inventory: packNetItems(bestNpc.inventory, 64),
-                money: Math.max(0, Math.floor(bestNpc.money ?? 0)),
-              },
-              talk: generateTalkText(bestNpc, { world, state, player: actor, time: state.time }),
-            });
-            handled = true;
-          }
-        }
-        // Try item pickup if door wasn't toggled
-        if (!handled) {
-          let bestDrop: Entity | null = null;
-          let bestD2 = 2.5 * 2.5; // max 2.5 cell range
-          for (const e of entities) {
-            if (e.type !== EntityType.ITEM_DROP || !e.alive) continue;
-            const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
-            if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
-          }
-          if (bestDrop) {
-            // actor_echo carries the authoritative inventory next sync tick
-            handled = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state).handled;
-          }
-        }
-        // Try opening / searching a container in front of the peer. Host is the
-        // sole authority: it resolves (or lazily generates) the container and
-        // sends the peer a transient inventory copy to view — the peer never
-        // generates anything (floor seed is non-deterministic) and never spawns
-        // a world mesh for it.
-        if (!handled) {
-          // Prefer the cell the peer faces (matches the local look-direction
-          // targeting and lets "обыскать" generate loot on the faced feature),
-          // then fall back to a nearby container.
-          const container = resolvePeerContainerAtCell(world, state.currentZ, Math.floor(cx), Math.floor(cy))
-            ?? firstNearbyContainer(world, actor, state)
-            ?? resolvePeerContainerAtCell(world, state.currentZ, Math.floor(actor.x), Math.floor(actor.y));
-          if (container) {
-            container.lastOpenedBy = actor.id;
-            container.lastOpenedAt = state.time;
-            hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
-            sendOnlineMessage({
-              type: 'container_open',
-              _targetSlot: actor.peerSlot,
-              container: containerSyncPayload(container),
-            });
-          }
-        }
-      }
-
-      // ── NPC dialog line requested ──
-      if (intent.kind === 'npc_talk') {
-        const npc = getEntityIndex().byId.get(intent.npcId);
-        if (npc?.alive && npc.type === EntityType.NPC && world.dist2(actor.x, actor.y, npc.x, npc.y) <= 36) {
-          sendOnlineMessage({
-            type: 'npc_talk',
-            _targetSlot: slot,
-            npcId: npc.id,
-            text: generateTalkText(npc, { world, state, player: actor, time: state.time }),
-          });
-        }
-      }
-
-      if (intent.kind === 'npc_close') {
-        hostSetOpenNpc(slot, null);
-      }
-
-      // ── Relaxed-trust deal: the peer priced and executed the trade locally
-      // with the same trade code; the host applies the material exchange,
-      // clamping every count and the cash to what actually exists. ──
-      if (intent.kind === 'trade_deal') {
-        const npc = getEntityIndex().byId.get(intent.npcId);
-        if (npc?.alive && npc.type === EntityType.NPC && npc.peerSlot === undefined
-          && world.dist2(actor.x, actor.y, npc.x, npc.y) <= 36) {
-          for (const item of intent.give) {
-            const n = Math.min(item.count, inventoryCountOf(actor, item.defId));
-            if (n > 0 && removeItem(actor, item.defId, n)) addItem(npc, item.defId, n, item.data);
-          }
-          for (const item of intent.take) {
-            const n = Math.min(item.count, inventoryCountOf(npc, item.defId));
-            if (n > 0 && removeItem(npc, item.defId, n)) addItem(actor, item.defId, n, item.data);
-          }
-          // One clamped move, not two independent ones: clamping each side alone
-          // minted money whenever the payer could not cover netCash.
-          const actorMoney = Math.max(0, Math.floor(actor.money ?? 0));
-          const npcMoney = Math.max(0, Math.floor(npc.money ?? 0));
-          const moved = Math.max(-npcMoney, Math.min(actorMoney, Math.floor(intent.netCash)));
-          actor.money = actorMoney - moved;
-          npc.money = npcMoney + moved;
-          state.msgs.push(msg(`${actor.name || `Игрок ${slot}`} торгуется с ${npc.name ?? 'жителем'}.`, state.time, '#8cf'));
-        }
-      }
-
-      // ── Peer drop item (slot-validated against the host-owned inventory) ──
-      if (intent.kind === 'drop') {
-        const dropX = actor.x + Math.cos(actor.angle) * 3.0;
-        const dropY = actor.y + Math.sin(actor.angle) * 3.0;
-        const invSlot = actor.inventory?.[intent.slot];
-        if (invSlot && invSlot.defId === intent.defId) {
-          const count = Math.min(invSlot.count, intent.count);
-          removeItem(actor, intent.defId, count);
-          if (actor.weapon === intent.defId) actor.weapon = '';
-          if (actor.tool === intent.defId) actor.tool = '';
-          entities.push({
-            id: nextEntityId.v++, type: EntityType.ITEM_DROP,
-            x: dropX, y: dropY, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-            inventory: [invSlot.data !== undefined ? { defId: intent.defId, count, data: invSlot.data } : { defId: intent.defId, count }],
-          } as Entity);
-          state.msgs.push(msg(`Игрок ${actor.peerSlot} выбросил предмет`, state.time, '#aa6'));
-        }
-      }
-
-      // ── Peer container: take / put / close — host-authoritative ──
-      // Peer sends the container's cell + slot; host resolves the real container
-      // there, runs the real take/put against the peer actor (all theft/karma/
-      // purchase/event side effects stay host-owned), then echoes fresh contents
-      // back to that peer. Peer inventory reconciles via the actor echo. On close
-      // the host just drops any transient generated loot bookkeeping — the
-      // container itself lives in the host world.
-      if (intent.kind === 'container') {
-        if (intent.op === 'close') {
-          hostSetOpenContainer(slot, null);
-        } else {
-          const container = resolvePeerContainerAtCell(world, state.currentZ, intent.cx, intent.cy);
-          if (container) {
-            const cSlot = Math.max(0, Math.floor(intent.slot ?? 0));
-            if (intent.op === 'take') {
-              takeFromContainer(container, actor, cSlot, 1, { state, world, entities });
-            } else if (intent.op === 'put') {
-              putIntoContainer(container, actor, cSlot, 1, { state, world, entities });
-            }
-            hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
-            // fresh contents ride the next host_state container push; inventory
-            // reconciles via actor_echo — no extra targeted messages needed
-          }
-        }
-      }
-    }
-  }
-
-  if (msgData.type === 'floor_snapshot_begin' && isOnlinePeer()) {
-    state.msgs.push(msg('Получаю этаж хоста...', state.time, '#8cf'));
-    _snapTotal = Math.max(0, Math.floor(msgData.total ?? 0));
-    _snapChunks = new Array(_snapTotal);
-    _snapReceived = 0;
-    _snapSpawnX = msgData.spawnX ?? W / 2;
-    _snapSpawnY = msgData.spawnY ?? W / 2;
-    onlinePeerFloorReady = false;
-    // Mid-session re-snapshot (host lift / post-samosbor): stale interpolation
-    // samples and an open remote-container view must not survive the swap.
-    clearNetSamples();
-    if (state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
-      world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
-      _peerRemoteContainerCell = null;
-      state.showContainerMenu = false;
-      state.containerMenuTarget = -1;
-      syncPauseState();
-    }
-  }
-
-  if (msgData.type === 'floor_snapshot_chunk' && isOnlinePeer() && _snapChunks) {
-    const i = Math.floor(msgData.i ?? -1);
-    if (i >= 0 && i < _snapTotal && _snapChunks[i] === undefined) {
-      _snapChunks[i] = typeof msgData.data === 'string' ? msgData.data : '';
-      _snapReceived++;
-    }
-    if (_snapReceived < _snapTotal) return;
-    // All chunks in — reassemble, unpack, and swap in the host's floor.
-    const serialized = reassembleFloorSnapshot(_snapChunks, _snapTotal);
-    _snapChunks = null;
-    const snapshot = serialized !== null ? deserializeFloorSnapshot(serialized) : null;
-    const unpacked = snapshot ? unpackFloorFromNetwork(snapshot) : null;
-    if (!unpacked) {
-      state.msgs.push(msg('Ошибка распаковки этажа хоста.', state.time, '#f44'));
-      return;
-    }
-    const spawnX = _snapSpawnX, spawnY = _snapSpawnY;
-    const peerMySlot = getOnlineSlot();
-    scheduleLoading(() => {
-      // Re-stamp the derived, non-serialized layers that generation owns
-      // (mirrors loadFloorForTarget for memory-restored floors).
-      injectFastElevators(unpacked.world);
-      fillVisualSlotsForWorldFeatures(unpacked.world, unpacked.meta.runSeed);
-      stampCeilingHeights(unpacked.world);
-      state.currentZ = unpacked.meta.z;
-      world = replaceWorldFromGeneration(world, { world: unpacked.world });
-      entities = unpacked.entities;
-      // Never mint a local id that collides with a host-authored entity.
-      nextEntityId.v = Math.max(nextEntityId.v, unpacked.meta.nextEntityId, syncNextEntityId(entities, nextEntityId.v));
-
-      // Create local player actor for camera attachment
-      const localPlayer: Entity = {
-        id: nextEntityId.v++,
-        type: EntityType.NPC,
-        x: spawnX, y: spawnY,
-        angle: -Math.PI / 2, pitch: 0,
-        alive: true,
-        speed: HUMANOID_BASE_MOVE_SPEED,
-        sprite: Occupation.TRAVELER,
-        spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
-        needs: freshNeeds(),
-        hp: 100, maxHp: 100,
-        money: 100,
-        inventory: [],
-        weapon: '', tool: '',
-        name: 'Вы',
-        netGen: getNetSphereSnapshot().netGen,
-        rpg: freshRPG(1),
-        faction: Faction.PLAYER,
-        peerSlot: peerMySlot,
-        ...playerAlifeFields(),
-      } as Entity;
-      entities.push(localPlayer);
-      player = localPlayer;
-      setCurrentPlayerEntity(player);
-      finishLoadedFloorVisuals();
-      rebuildEntityIndex(entities, 'load');
-      onlinePeerFloorReady = true;
-      state.msgs.push(msg('Этаж загружен. Синхронизация...', state.time, '#8cf'));
-    }, false); // never autosave the host's floor over the peer's home save
-  }
-
-  // ── PEER: one host_state packet per tick — entities, actor echo, doors,
-  // fx, cell patches, container updates, samosbor flag ──
-  if (msgData.type === 'host_state' && isOnlinePeer() && onlinePeerFloorReady) {
-    const nowMs = performance.now();
-    const mySlot = getOnlineSlot();
-
-    // 1. Authoritative own-actor echo (replaces the old actorGen machinery)
-    const echo = (msgData.actors ?? {})[String(mySlot)] as ActorEcho | undefined;
-    if (echo) {
-      const fullyAcked = (echo.lastSeq ?? 0) >= peerLastSentSeq();
-      applyActorEcho(player, echo, fullyAcked);
-    }
-
-    // 2. Entity sync — record samples for per-frame interpolation
-    const syncEntities: SyncEntity[] = msgData.entities ?? [];
-    const seenIds = new Set<number>();
-    for (const se of syncEntities) {
-      seenIds.add(se.id);
-      if (se.peerSlot === mySlot) {
-        // Own actor: position correction only, and only when the host has
-        // processed our newest move packet (otherwise its truth is stale).
-        const hostAcked = echo?.ackMoveGen !== undefined && echo.ackMoveGen >= getPeerMoveGen();
-        const pdx = world.delta(player.x, se.x);
-        const pdy = world.delta(player.y, se.y);
-        if (hostAcked && pdx * pdx + pdy * pdy > 36) {
-          player.x = se.x;
-          player.y = se.y;
-        }
-        if (!se.alive) player.alive = false;
-        continue;
-      }
-      let existing: Entity | undefined;
-      for (let i = 0; i < entities.length; i++) {
-        if (entities[i].id === se.id && entities[i] !== player) { existing = entities[i]; break; }
-      }
-      if (existing) {
-        noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
-        existing.pitch = se.pitch;
-        existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
-        existing.name = se.name; existing.peerSlot = se.peerSlot; existing.netGen = se.netGen;
-        existing.sprite = se.sprite; existing.spriteScale = se.spriteScale; existing.weapon = se.weapon; existing.tool = se.tool;
-        existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
-        existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
-        existing.currentMag = se.currentMag; existing.reloading = se.reloading; existing.reloadTimer = se.reloadTimer; existing.attackCd = se.attackCd;
-        existing.speed = se.speed; existing.monsterKind = se.monsterKind;
-        // Only item drops carry contents over entity sync; an NPC keeps its
-        // local trade-copy inventory (streamed via the npc_open/npcs push).
-        if (se.type === EntityType.ITEM_DROP) {
-          existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined;
-        }
-      } else {
-        entities.push({
-          id: se.id, type: se.type,
-          x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
-          alive: se.alive, hp: se.hp, maxHp: se.maxHp,
-          sprite: se.sprite, weapon: se.weapon, tool: se.tool,
-          name: se.name, peerSlot: se.peerSlot, netGen: se.netGen,
-          sex: se.sex, npcVisualId: se.npcVisualId,
-          faction: se.faction, staggerTimer: se.staggerTimer,
-          currentMag: se.currentMag, reloading: se.reloading, reloadTimer: se.reloadTimer, attackCd: se.attackCd,
-          speed: se.speed, monsterKind: se.monsterKind,
-          inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined,
-        } as Entity);
-        noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
-      }
-    }
-    // Remove entities not in sync (except local player)
-    for (let i = entities.length - 1; i >= 0; i--) {
-      if (entities[i] === player) continue;
-      if (!seenIds.has(entities[i].id)) {
-        dropNetSample(entities[i].id);
-        entities.splice(i, 1);
-      }
-    }
+    entities.push(localPlayer);
+    player = localPlayer;
+    setCurrentPlayerEntity(player);
+    finishLoadedFloorVisuals();
     rebuildEntityIndex(entities, 'load');
+    onlinePeerFloorReady = true;
+    state.msgs.push(msg('Этаж загружен. Синхронизация...', state.time, '#8cf'));
+  }, false); // never autosave the host's floor over the peer's home save
+}
 
-    // 3. Doors
-    const doors: { idx: number; state: number }[] | undefined = msgData.doors;
-    if (doors) {
-      for (const ds of doors) {
-        const door = world.doors.get(ds.idx);
-        if (door && door.state !== ds.state) {
-          setDoorState(world, door, ds.state as DoorState);
-        }
-      }
-    }
+// ── PEER: one host_state packet per tick — entities, actor echo, doors,
+// fx, cell patches, container updates, samosbor flag ──
+function onOnlineHostState(msgData: any): void {
+  const nowMs = performance.now();
+  const mySlot = getOnlineSlot();
 
-    // 4. Cosmetic fx (shots/deaths the host resolved)
-    const fxList: NetFx[] | undefined = msgData.fx;
-    if (Array.isArray(fxList)) {
-      for (const fx of fxList) {
-        if (!fx || typeof fx.x !== 'number' || typeof fx.y !== 'number') continue;
-        if (fx.s !== undefined && fx.s === mySlot) continue; // own action, already played
-        if (fx.k === 'shot') {
-          const ws = fx.w ? WEAPON_STATS[fx.w] : undefined;
-          playSoundAt(ws ? () => playWeaponSound(fx.w!, ws) : playAttack, fx.x, fx.y);
-        } else if (fx.k === 'death') {
-          playSoundAt(playFleshHit, fx.x, fx.y);
-        }
-      }
-    }
-
-    // 5. Geometry patches (samosbor fronts, tools)
-    applyNetCellPatch(world, msgData.cells);
-
-    // 6. Live update for the container the peer is viewing
-    const containerPayload = (msgData.containers ?? {})[String(mySlot)] as ContainerSyncPayload | undefined;
-    if (containerPayload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
-      const copy = buildRemoteContainer(world, containerPayload, PEER_REMOTE_CONTAINER_ID);
-      world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
-      _peerRemoteContainerCell = { x: copy.x, y: copy.y };
-    }
-
-    // 6b. Live update for the NPC menu the peer is viewing (trade stock/money)
-    const npcPayload = (msgData.npcs ?? {})[String(mySlot)] as { id: number; inventory?: unknown; money?: number } | undefined;
-    if (npcPayload && state.showNpcMenu && state.npcMenuTarget === npcPayload.id) {
-      const npc = entities.find(e => e.id === npcPayload.id && e !== player);
-      if (npc) {
-        npc.inventory = unpackNetItems(npcPayload.inventory, 64);
-        npc.money = Math.max(0, Math.floor(npcPayload.money ?? 0));
-        primeTradePriceCache(state, [npc.inventory, player.inventory]);
-      }
-    }
-
-    // 7. Samosbor display state (host simulates; peer shows and survives it)
-    if (typeof msgData.sam === 'boolean') state.samosborActive = msgData.sam;
+  // 1. Authoritative own-actor echo (replaces the old actorGen machinery)
+  const echo = (msgData.actors ?? {})[String(mySlot)] as ActorEcho | undefined;
+  if (echo) {
+    const fullyAcked = (echo.lastSeq ?? 0) >= peerLastSentSeq();
+    applyActorEcho(player, echo, fullyAcked);
   }
 
-  // ── PEER: host opened/searched a container → show its inventory copy ──
-  // The copy lives ONLY in containerById under a fixed synthetic id, so it backs
-  // the menu but never enters containerMap/containers (no world mesh, no cell
-  // collision). Same "inventory as a synced copy" model the peer already uses.
-  if (msgData.type === 'container_open' && isOnlinePeer() && onlinePeerFloorReady) {
-    const payload = msgData.container as ContainerSyncPayload | undefined;
-    if (payload) {
-      const copy = buildRemoteContainer(world, payload, PEER_REMOTE_CONTAINER_ID);
-      world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
-      state.showContainerMenu = true;
-      state.containerMenuTarget = PEER_REMOTE_CONTAINER_ID;
-      state.containerCursorX = 0;
-      state.containerCursorY = 0;
-      state.containerSide = 'container';
-      _peerRemoteContainerCell = { x: copy.x, y: copy.y };
-      syncPauseState();
+  // 2. Entity sync — record samples for per-frame interpolation
+  const syncEntities: SyncEntity[] = msgData.entities ?? [];
+  const seenIds = new Set<number>();
+  for (const se of syncEntities) {
+    seenIds.add(se.id);
+    if (se.peerSlot === mySlot) {
+      // Own actor: position correction only, and only when the host has
+      // processed our newest move packet (otherwise its truth is stale).
+      const hostAcked = echo?.ackMoveGen !== undefined && echo.ackMoveGen >= getPeerMoveGen();
+      const pdx = world.delta(player.x, se.x);
+      const pdy = world.delta(player.y, se.y);
+      if (hostAcked && pdx * pdx + pdy * pdy > 36) {
+        player.x = se.x;
+        player.y = se.y;
+      }
+      if (!se.alive) player.alive = false;
+      continue;
+    }
+    let existing: Entity | undefined;
+    for (let i = 0; i < entities.length; i++) {
+      if (entities[i].id === se.id && entities[i] !== player) { existing = entities[i]; break; }
+    }
+    if (existing) {
+      noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
+      existing.pitch = se.pitch;
+      existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
+      existing.name = se.name; existing.peerSlot = se.peerSlot; existing.netGen = se.netGen;
+      existing.sprite = se.sprite; existing.spriteScale = se.spriteScale; existing.weapon = se.weapon; existing.tool = se.tool;
+      existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
+      existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
+      existing.currentMag = se.currentMag; existing.reloading = se.reloading; existing.reloadTimer = se.reloadTimer; existing.attackCd = se.attackCd;
+      existing.speed = se.speed; existing.monsterKind = se.monsterKind;
+      // Only item drops carry contents over entity sync; an NPC keeps its
+      // local trade-copy inventory (streamed via the npc_open/npcs push).
+      if (se.type === EntityType.ITEM_DROP) {
+        existing.inventory = se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined;
+      }
+    } else {
+      entities.push({
+        id: se.id, type: se.type,
+        x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
+        alive: se.alive, hp: se.hp, maxHp: se.maxHp,
+        sprite: se.sprite, weapon: se.weapon, tool: se.tool,
+        name: se.name, peerSlot: se.peerSlot, netGen: se.netGen,
+        sex: se.sex, npcVisualId: se.npcVisualId,
+        faction: se.faction, staggerTimer: se.staggerTimer,
+        currentMag: se.currentMag, reloading: se.reloading, reloadTimer: se.reloadTimer, attackCd: se.attackCd,
+        speed: se.speed, monsterKind: se.monsterKind,
+        inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined,
+      } as Entity);
+      noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
+    }
+  }
+  // Remove entities not in sync (except local player)
+  for (let i = entities.length - 1; i >= 0; i--) {
+    if (entities[i] === player) continue;
+    if (!seenIds.has(entities[i].id)) {
+      dropNetSample(entities[i].id);
+      entities.splice(i, 1);
+    }
+  }
+  rebuildEntityIndex(entities, 'load');
+
+  // 3. Doors
+  const doors: { idx: number; state: number }[] | undefined = msgData.doors;
+  if (doors) {
+    for (const ds of doors) {
+      const door = world.doors.get(ds.idx);
+      if (door && door.state !== ds.state) {
+        setDoorState(world, door, ds.state as DoorState);
+      }
     }
   }
 
-  // ── PEER: host opened an NPC menu — talk line + trade copy on the synced entity ──
-  if (msgData.type === 'npc_open' && isOnlinePeer() && onlinePeerFloorReady) {
-    const payload = msgData.npc as { id: number; inventory?: unknown; money?: number } | undefined;
-    const npc = payload ? entities.find(e => e.id === payload.id && e !== player) : undefined;
-    if (payload && npc) {
-      npc.inventory = unpackNetItems(payload.inventory, 64);
-      npc.money = Math.max(0, Math.floor(payload.money ?? 0));
-      closeNpcInteractionInterface();
-      clearTradeOffers(state);
-      state.showNpcMenu = true;
-      state.npcMenuTarget = npc.id;
-      state.npcMenuTab = 'main';
-      state.npcTalkText = typeof msgData.talk === 'string' ? msgData.talk.slice(0, 2000) : '';
-      state.tradeCursorX = 0;
-      state.tradeCursorY = 0;
-      state.tradeSide = 'npc';
-      state.npcMenuSel = npcMenuSelectionFor({ state, player, npc, entities }, 'talk');
+  // 4. Cosmetic fx (shots/deaths the host resolved)
+  const fxList: NetFx[] | undefined = msgData.fx;
+  if (Array.isArray(fxList)) {
+    for (const fx of fxList) {
+      if (!fx || typeof fx.x !== 'number' || typeof fx.y !== 'number') continue;
+      if (fx.s !== undefined && fx.s === mySlot) continue; // own action, already played
+      if (fx.k === 'shot') {
+        const ws = fx.w ? WEAPON_STATS[fx.w] : undefined;
+        playSoundAt(ws ? () => playWeaponSound(fx.w!, ws) : playAttack, fx.x, fx.y);
+      } else if (fx.k === 'death') {
+        playSoundAt(playFleshHit, fx.x, fx.y);
+      }
+    }
+  }
+
+  // 5. Geometry patches (samosbor fronts, tools)
+  applyNetCellPatch(world, msgData.cells);
+
+  // 6. Live update for the container the peer is viewing
+  const containerPayload = (msgData.containers ?? {})[String(mySlot)] as ContainerSyncPayload | undefined;
+  if (containerPayload && state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
+    const copy = buildRemoteContainer(world, containerPayload, PEER_REMOTE_CONTAINER_ID);
+    world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
+    _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+  }
+
+  // 6b. Live update for the NPC menu the peer is viewing (trade stock/money)
+  const npcPayload = (msgData.npcs ?? {})[String(mySlot)] as { id: number; inventory?: unknown; money?: number } | undefined;
+  if (npcPayload && state.showNpcMenu && state.npcMenuTarget === npcPayload.id) {
+    const npc = entities.find(e => e.id === npcPayload.id && e !== player);
+    if (npc) {
+      npc.inventory = unpackNetItems(npcPayload.inventory, 64);
+      npc.money = Math.max(0, Math.floor(npcPayload.money ?? 0));
       primeTradePriceCache(state, [npc.inventory, player.inventory]);
-      syncPauseState();
     }
   }
 
-  // ── PEER: dialog line generated by the host ──
-  if (msgData.type === 'npc_talk' && isOnlinePeer() && onlinePeerFloorReady) {
-    if (state.showNpcMenu && state.npcMenuTarget === msgData.npcId && typeof msgData.text === 'string') {
-      state.npcTalkText = msgData.text.slice(0, 2000);
-    }
-  }
+  // 7. Samosbor display state (host simulates; peer shows and survives it)
+  if (typeof msgData.sam === 'boolean') state.samosborActive = msgData.sam;
+}
 
-  // ── PEER: visit over — evacuation export or death; go home either way ──
-  if (msgData.type === 'visit_end' && isOnlinePeer()) {
-    peerReturnHome(
-      msgData.evac === true ? sanitizeVisitExport(msgData.export) : null,
-      msgData.evac === true
-        ? 'Вы вернулись домой с добычей.'
-        : 'Вы погибли в гостях. Тело и добыча остались там.',
-      msgData.evac === true ? '#8cf' : '#f44',
-    );
+// ── PEER: host opened/searched a container → show its inventory copy ──
+// The copy lives ONLY in containerById under a fixed synthetic id, so it backs
+// the menu but never enters containerMap/containers (no world mesh, no cell
+// collision). Same "inventory as a synced copy" model the peer already uses.
+function onOnlineContainerOpen(msgData: any): void {
+  const payload = msgData.container as ContainerSyncPayload | undefined;
+  if (payload) {
+    const copy = buildRemoteContainer(world, payload, PEER_REMOTE_CONTAINER_ID);
+    world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
+    state.showContainerMenu = true;
+    state.containerMenuTarget = PEER_REMOTE_CONTAINER_ID;
+    state.containerCursorX = 0;
+    state.containerCursorY = 0;
+    state.containerSide = 'container';
+    _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+    syncPauseState();
   }
+}
 
-  // ── HOST: peer disconnected ──
-  if (msgData.type === 'peer_disconnected' && isOnlineHost()) {
-    // Remove remote actor for the disconnected peer
-    const slot = msgData.slot;
-    const idx = entities.findIndex(e => e.peerSlot === slot);
-    if (idx >= 0) {
-      entities.splice(idx, 1);
-      rebuildEntityIndex(entities, 'load');
-    }
-    hostClearSlot(slot);
-    _peerMoveGen.delete(slot);
-    _peerNextFireAt.delete(slot);
-    _peerNextToolAt.delete(slot);
-    _peerVisitEnded.delete(slot);
-    state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
+// ── PEER: host opened an NPC menu — talk line + trade copy on the synced entity ──
+function onOnlineNpcOpen(msgData: any): void {
+  const payload = msgData.npc as { id: number; inventory?: unknown; money?: number } | undefined;
+  const npc = payload ? entities.find(e => e.id === payload.id && e !== player) : undefined;
+  if (payload && npc) {
+    npc.inventory = unpackNetItems(payload.inventory, 64);
+    npc.money = Math.max(0, Math.floor(payload.money ?? 0));
+    closeNpcInteractionInterface();
+    clearTradeOffers(state);
+    state.showNpcMenu = true;
+    state.npcMenuTarget = npc.id;
+    state.npcMenuTab = 'main';
+    state.npcTalkText = typeof msgData.talk === 'string' ? msgData.talk.slice(0, 2000) : '';
+    state.tradeCursorX = 0;
+    state.tradeCursorY = 0;
+    state.tradeSide = 'npc';
+    state.npcMenuSel = npcMenuSelectionFor({ state, player, npc, entities }, 'talk');
+    primeTradePriceCache(state, [npc.inventory, player.inventory]);
+    syncPauseState();
   }
+}
 
-  // ── PEER: host disconnected — the world is gone, wake up at home ──
-  if (msgData.type === 'host_disconnected' && isOnlinePeer()) {
-    state.msgs.push(msg('Хост отключился. Сессия завершена.', state.time, '#f44'));
-    peerReturnHome(null, 'Вы очнулись дома. Сессионная добыча осталась в том мире.', '#f88');
+// ── PEER: dialog line generated by the host ──
+function onOnlineNpcTalk(msgData: any): void {
+  if (state.showNpcMenu && state.npcMenuTarget === msgData.npcId && typeof msgData.text === 'string') {
+    state.npcTalkText = msgData.text.slice(0, 2000);
   }
+}
 
-  // ── Server error (room not found, no welcome) ──
-  if (msgData.type === 'server_error') {
-    onlinePeerFloorReady = false;
-    const reason = msgData.reason === 'no_welcome'
-      ? 'Комната не найдена — хост не отвечает.'
-      : `Ошибка сервера: ${msgData.reason ?? 'неизвестная'}`;
-    state.msgs.push(msg(reason, state.time, '#f44'));
-  }
+// ── PEER: visit over — evacuation export or death; go home either way ──
+function onOnlineVisitEnd(msgData: any): void {
+  peerReturnHome(
+    msgData.evac === true ? sanitizeVisitExport(msgData.export) : null,
+    msgData.evac === true
+      ? 'Вы вернулись домой с добычей.'
+      : 'Вы погибли в гостях. Тело и добыча остались там.',
+    msgData.evac === true ? '#8cf' : '#f44',
+  );
+}
 
-  // ── Connection lost ──
-  if (msgData.type === 'disconnected') {
-    if (onlinePeerFloorReady) {
-      // Unexpected drop mid-visit: no evacuation, no export — wake up at home.
-      peerReturnHome(null, 'Связь оборвалась. Вы очнулись дома без сессионной добычи.', '#f44');
-    } else if (!_peerReturningHome) {
-      state.msgs.push(msg('Соединение потеряно.', state.time, '#f44'));
-    }
+// ── HOST: peer disconnected ──
+function onOnlinePeerDisconnected(msgData: any): void {
+  // Remove remote actor for the disconnected peer
+  const slot = msgData.slot;
+  const idx = entities.findIndex(e => e.peerSlot === slot);
+  if (idx >= 0) {
+    entities.splice(idx, 1);
+    rebuildEntityIndex(entities, 'load');
   }
+  hostClearSlot(slot);
+  _peerMoveGen.delete(slot);
+  _peerNextFireAt.delete(slot);
+  _peerNextToolAt.delete(slot);
+  _peerVisitEnded.delete(slot);
+  state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
+}
+
+// ── PEER: host disconnected — the world is gone, wake up at home ──
+function onOnlineHostDisconnected(_msgData: any): void {
+  state.msgs.push(msg('Хост отключился. Сессия завершена.', state.time, '#f44'));
+  peerReturnHome(null, 'Вы очнулись дома. Сессионная добыча осталась в том мире.', '#f88');
+}
+
+// ── Server error (room not found, no welcome) ──
+function onOnlineServerError(msgData: any): void {
+  onlinePeerFloorReady = false;
+  const reason = msgData.reason === 'no_welcome'
+    ? 'Комната не найдена — хост не отвечает.'
+    : `Ошибка сервера: ${msgData.reason ?? 'неизвестная'}`;
+  state.msgs.push(msg(reason, state.time, '#f44'));
+}
+
+// ── Connection lost ──
+function onOnlineDisconnected(_msgData: any): void {
+  if (onlinePeerFloorReady) {
+    // Unexpected drop mid-visit: no evacuation, no export — wake up at home.
+    peerReturnHome(null, 'Связь оборвалась. Вы очнулись дома без сессионной добычи.', '#f44');
+  } else if (!_peerReturningHome) {
+    state.msgs.push(msg('Соединение потеряно.', state.time, '#f44'));
+  }
+}
+
+setOnlineMessageHandler((msgData: any) => {
+  if (msgData.type === 'chat_ping') { onOnlineChatPing(msgData); return; }
+  if (msgData.type === 'welcome' && !isOnlineHost() && msgData.role === 'peer') { onOnlineWelcome(msgData); return; }
+  if (msgData.type === 'peer_join' && isOnlineHost()) { onOnlinePeerJoin(msgData); return; }
+  if (msgData.type === 'peer_move' && isOnlineHost()) { onOnlinePeerMove(msgData); return; }
+  if (msgData.type === 'peer_intent' && isOnlineHost()) { onOnlinePeerIntent(msgData); return; }
+  if (msgData.type === 'floor_snapshot_begin' && isOnlinePeer()) { onOnlineFloorSnapshotBegin(msgData); return; }
+  if (msgData.type === 'floor_snapshot_chunk' && isOnlinePeer() && _snapChunks) { onOnlineFloorSnapshotChunk(msgData, _snapChunks); return; }
+  if (msgData.type === 'host_state' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineHostState(msgData); return; }
+  if (msgData.type === 'container_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineContainerOpen(msgData); return; }
+  if (msgData.type === 'npc_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineNpcOpen(msgData); return; }
+  if (msgData.type === 'npc_talk' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineNpcTalk(msgData); return; }
+  if (msgData.type === 'visit_end' && isOnlinePeer()) { onOnlineVisitEnd(msgData); return; }
+  if (msgData.type === 'peer_disconnected' && isOnlineHost()) { onOnlinePeerDisconnected(msgData); return; }
+  if (msgData.type === 'host_disconnected' && isOnlinePeer()) { onOnlineHostDisconnected(msgData); return; }
+  if (msgData.type === 'server_error') { onOnlineServerError(msgData); return; }
+  if (msgData.type === 'disconnected') { onOnlineDisconnected(msgData); return; }
 });
 
 function looksLikeNetGenName(value: string): boolean {
