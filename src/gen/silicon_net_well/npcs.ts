@@ -94,6 +94,12 @@ export function registerSiliconNetWellContent(): void {
   contentRegistered = true;
 }
 
+/* Регистрация при импорте, как у production_belt, chthonic_attic и dark_metro.
+   Пока она ждала первого вызова генератора этажа, этих людей не было ни в
+   SIDE_QUESTS, ни в плане населения A-Life. Вызов из тела генератора оставлен —
+   он идемпотентен. */
+registerSiliconNetWellContent();
+
 export function isSiliconAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     entity.alive &&

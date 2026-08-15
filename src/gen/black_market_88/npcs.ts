@@ -344,6 +344,13 @@ export function registerBlackMarket88DesignFloorContent(): void {
   contentRegistered = true;
 }
 
+/* Регистрация при импорте, как у production_belt, chthonic_attic и dark_metro.
+   Пока она ждала первого вызова генератора этажа, этих людей не было ни в
+   SIDE_QUESTS, ни в плане населения A-Life: до первого визита на 88-й их
+   личности не резервировались. Вызов из тела генератора оставлен — он
+   идемпотентен и страхует прямой вызов генератора мимо этого модуля. */
+registerBlackMarket88DesignFloorContent();
+
 export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, serviceGuts: readonly Market88ServiceGutPlacement[]): void {
   if (rooms.tunnelCacheWest) {
     addContainer(world, rooms.tunnelCacheWest, 9, 5, ContainerKind.SECRET_STASH, 'Тайник западного обхода 88', 'secret', 5, [
