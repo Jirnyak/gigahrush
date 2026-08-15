@@ -6,7 +6,8 @@ import { auditReachability } from '../src/core/world';
 import { entityUsesProceduralSprite, generateNpcProfileSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
-import { generateFloor, isValidZ } from '../src/gen/floor_manifest';
+import { generateFloor } from '../src/gen/floor_manifest';
+import { isValidZ } from '../src/data/design_floors';
 import { measureLivingShelterShells } from '../src/gen/living/geometry';
 import { S } from '../src/core/pixutil';
 import {

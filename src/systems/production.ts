@@ -1,3 +1,4 @@
+import { isValidZ } from '../data/design_floors';
 import {
   Cell,
   ContainerKind,
@@ -71,10 +72,6 @@ const AUTO_OUTPUT_TAG = 'auto_production_output';
 const MAX_SAVED_TIME = 365 * 24 * 60 * 60;
 const BLOCKED_REASONS = ['no_inputs', 'container_full', 'no_container'] as const;
 type ProductionBlockedReason = typeof BLOCKED_REASONS[number];
-
-function isValidZ(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value);
-}
 
 function cleanFinite(value: unknown, fallback: number, min = 0, max = MAX_SAVED_TIME): number {
   const n = Number(value);

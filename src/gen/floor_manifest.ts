@@ -32,10 +32,6 @@ export function resetGeneratedFloorPopulationState(): void {
 
 const DEFAULT_STORY_FLOOR_SEED = 0x47524748;
 
-export function isValidZ(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value);
-}
-
 export function generateFloor(z: number, runSeed = DEFAULT_STORY_FLOOR_SEED, isTutorial = false): FloorGeneration {
   if (z % 2 !== 0) {
     return generateProceduralFloor(makeProceduralFloorSpec(runSeed, z));

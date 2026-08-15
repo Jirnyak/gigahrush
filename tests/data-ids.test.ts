@@ -56,7 +56,7 @@ import { ZHELEMISH_DEFS, ZHELEMISH_ITEM_IDS, validateZhelemishDefs } from '../sr
 import { MONSTERS } from '../src/entities/monster';
 import { BLACK_MARKET_88_CONTRACT_ROWS } from '../src/gen/black_market_88';
 import '../src/gen/design_floors/manifest';
-import { isValidZ } from '../src/gen/floor_manifest';
+import { isValidZ } from '../src/data/design_floors';
 
 type QuestLike = PlotStep & {
   id?: string;

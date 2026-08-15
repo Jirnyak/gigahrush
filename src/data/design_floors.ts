@@ -135,3 +135,9 @@ export function designFloorById(id: string): DesignFloorRouteDef | undefined {
 export function designFloorAtZ(z: number): DesignFloorRouteDef | undefined {
   return DESIGN_FLOOR_ROUTES.find(def => def.z === z);
 }
+
+/** Проверка координаты этажа. Живёт здесь, а не в gen/: маршрутный z — это данные,
+ *  и его валидируют и systems/, и санитайзер сейва, которым слой генерации недоступен. */
+export function isValidZ(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value);
+}
