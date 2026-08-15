@@ -5,7 +5,7 @@ import { EntityType, ItemType, type Entity } from '../src/core/types';
 import { DOCUMENT_ACCESS_ITEMS } from '../src/data/documents_access';
 import { ITEMS } from '../src/data/items';
 import { generateItemSprite, itemDropDefId } from '../src/render/item_sprites';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 function opaquePixels(sprite: Uint32Array): number {
   let opaque = 0;

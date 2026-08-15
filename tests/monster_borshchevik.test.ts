@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/borshchevik';
 import { generateBorshchevikBlockade } from '../src/gen/maintenance/borshchevik_blockade';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import {
   BORSHCHEVIK_SMOKE_BURST_CELL_CAP,

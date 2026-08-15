@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import { MonsterKind } from '../src/core/types';
 import { DEF, generateSprite } from '../src/entities/mukhozhuk';
 import { getMonsterEcology } from '../src/data/monster_ecology';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 test('mukhozhuk definition and ecology read correctly', () => {
   const ecology = getMonsterEcology(MonsterKind.MUKHOZHUK_HOST);

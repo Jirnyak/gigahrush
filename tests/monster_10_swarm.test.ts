@@ -18,7 +18,7 @@ import { MONSTERS } from '../src/entities/monster';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { generateSwarmNest } from '../src/gen/maintenance/swarm_nest';
 import { monsterSpr, Spr } from '../src/render/sprite_index';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { useItem } from '../src/systems/inventory';
 import {

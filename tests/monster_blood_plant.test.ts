@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import { EntityType, MonsterKind, type Entity } from '../src/core/types';
 import { DEF, generateSprite } from '../src/entities/blood_plant';
 import { getMonsterEcology } from '../src/data/monster_ecology';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 test('blood plant definition, ecology, and sprite read as a red mold rooted hive', () => {
   const ecology = getMonsterEcology(MonsterKind.BLOOD_PLANT);

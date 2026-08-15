@@ -5,7 +5,7 @@ import { AIGoal, Cell, EntityType, Faction, MonsterKind, type Entity } from '../
 import { World } from '../src/core/world';
 import { MONSTER_ECOLOGY } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/pechateed';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';

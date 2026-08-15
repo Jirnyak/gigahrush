@@ -8,7 +8,7 @@ import { DEF, generateSprite } from '../src/entities/zakalennaya_armatura';
 import { generateProceduralMonsterSprite } from '../src/entities/procedural_visuals';
 import { applyMonsterArmorHit, ZAKALENNAYA_ARMATURA_ARMOR_STACKS } from '../src/systems/monster_armor';
 import { getRecentEvents } from '../src/systems/events';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 
 function monster(overrides: Partial<Entity> = {}): Entity {

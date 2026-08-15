@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/blood_plant';
 import { generateBloodPlantDen } from '../src/gen/living/blood_plant_den';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { Spr } from '../src/render/sprite_index';
 import { MONSTER_SPRITES } from '../src/entities/monster';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';

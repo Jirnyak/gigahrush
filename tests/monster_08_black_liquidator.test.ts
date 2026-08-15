@@ -8,7 +8,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { SAMOSBOR_AFTERMATH_BEATS } from '../src/data/samosbor_variants';
 import { DEF, generateBlackLiquidatorSprite } from '../src/entities/black_liquidator';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { setListenerPos } from '../src/systems/audio';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';

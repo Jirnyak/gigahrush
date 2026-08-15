@@ -4,7 +4,7 @@ import {
   proceduralScreenTex,
 } from '../data/procedural_screen_textures';
 import { drawTextCentered } from './text';
-import { S, rgba, noise, clamp } from './pixutil';
+import { S, rgba, noise, clamp } from '../core/pixutil';
 
 function tpx(t: Uint32Array, x: number, y: number, c: number): void {
   if (x >= 0 && x < S && y >= 0 && y < S) t[y * S + x] = c;

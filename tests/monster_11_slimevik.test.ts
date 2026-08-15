@@ -9,7 +9,7 @@ import { CONTRACTS } from '../src/data/contracts';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/slimevik';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { getRecentEvents, publishEvent } from '../src/systems/events';
 import { tryUseSlimevikInteraction, updateSlimevikMonster } from '../src/systems/slimevik';

@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { BAIT_ATTRACTED_MONSTER_KINDS, getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/zhornaya_tvar';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { setListenerPos } from '../src/systems/audio';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';

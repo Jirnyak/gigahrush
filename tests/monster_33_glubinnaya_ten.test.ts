@@ -10,7 +10,7 @@ import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 
 function openDarkWorld(): World {

@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite, put, line, ellipse, triangle } from '../src/entities/fog_shark';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import {
   FOG_SHARK_PACK_CAP,
   setEntityMap,

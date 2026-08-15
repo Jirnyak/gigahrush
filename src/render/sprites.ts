@@ -15,7 +15,7 @@ import { monsterProjectileFamily, type MonsterProjectileFamily } from '../data/m
 import { ContainerKind,
   Feature,
 } from '../core/types';
-import { S, rgba, noise, clamp, CLEAR } from './pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 import { Spr, monsterSpr, SPRITE_CONTAINER_KINDS, SPRITE_FEATURES, SPRITE_MONSTER_KINDS } from './sprite_index';
 import { ART_NUDE_VARIANTS, F69_FEMALE_NPC_VARIANTS, generateArtNudeSprite, generateFloor69FemaleNpcSprite } from './art_sprites';
 

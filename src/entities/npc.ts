@@ -1,6 +1,6 @@
 /* ── NPC sprite generation — one per occupation ──────────────── */
 
-import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
 /* ── Base humanoid sprite generator ──────────────────────────── */
 function genHumanoid(

@@ -17,7 +17,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/gnilushka';
 import { generateGnilushkaLostCell } from '../src/gen/living/gnilushka_lost_cell';
 import { monsterSpr } from '../src/render/sprite_index';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { isHostile } from '../src/systems/factions';
 import { activateInteraction, findInteractionTarget } from '../src/systems/interactions';

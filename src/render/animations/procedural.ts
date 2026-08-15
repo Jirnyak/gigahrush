@@ -1,4 +1,4 @@
-import { S } from '../pixutil';
+import { S } from '../../core/pixutil';
 import type {
   RenderAnimationProceduralCachePolicy,
   RenderAnimationProceduralContext,

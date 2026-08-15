@@ -1,5 +1,5 @@
 import { EntityType, Faction, MonsterKind, Occupation, type Entity } from '../core/types';
-import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 import { MONSTER_SPRITES } from './monster';
 import { generateIdolSprite } from './idol';
 import { generateKantselyarskiyIdolSprite } from './kantselyarskiy_idol';

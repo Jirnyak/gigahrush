@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import { MonsterKind } from '../src/core/types';
 import { DEF, generateSprite } from '../src/entities/paragraph';
 import { generateSprite as generateEyeSprite } from '../src/entities/eye';
-import { CLEAR, S } from '../src/render/pixutil';
+import { CLEAR, S } from '../src/core/pixutil';
 
 function spriteHash(sprite: Uint32Array): number {
   let h = 2166136261;

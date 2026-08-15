@@ -20,7 +20,7 @@ import type {
 } from '../systems/demos_save';
 import { controlBindingLabel, menuCloseHint } from '../systems/controls';
 import { routeDemosSpeech } from '../systems/markov_router_adapters';
-import { S } from './pixutil';
+import { S } from '../core/pixutil';
 import { drawGlitchText, drawNeuroPanel } from './hud_fx';
 import { drawDemosFeedPanel } from './demos_feed_ui';
 import {

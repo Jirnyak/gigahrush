@@ -2,7 +2,7 @@
 
 import { Tex } from '../../core/types';
 import { drawTextCentered, CELL_H } from '../../render/text';
-import { S, rgba, noise, clamp } from '../../render/pixutil';
+import { S, rgba, noise, clamp } from '../../core/pixutil';
 import { rng } from '../../core/rand';
 
 function tpx(t: Uint32Array, x: number, y: number, c: number): void {

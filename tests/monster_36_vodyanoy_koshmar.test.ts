@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/vodyanoy_koshmar';
 import { generateVodyanoyKoshmarLine } from '../src/gen/maintenance/vodyanoy_koshmar_line';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import {
   VODYANOY_WET_LINE_MAX_CELLS,

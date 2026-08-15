@@ -9,7 +9,7 @@ import { getMonsterEcology, MONSTER_ECOLOGY } from '../src/data/monster_ecology'
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/chernosliz';
 import { generateBlackSlimeEyes } from '../src/gen/maintenance/black_slime_eyes';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { setListenerPos } from '../src/systems/audio';
 import { isChernoSlizHidden, setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { takeFromContainer } from '../src/systems/containers';

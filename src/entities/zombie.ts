@@ -2,7 +2,7 @@
 
 import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
-import { rgba, noise, clamp, CLEAR, outline } from '../render/pixutil';
+import { rgba, noise, clamp, CLEAR, outline } from '../core/pixutil';
 const S = 128;
 
 export const DEF: MonsterDef = {

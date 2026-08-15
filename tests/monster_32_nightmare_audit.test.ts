@@ -6,7 +6,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateNightmareSprite, generateSprite } from '../src/entities/nightmare';
 import { generateSprite as generateShadowSprite } from '../src/entities/shadow';
 import { generateSprite as generateSpiritSprite } from '../src/entities/spirit';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 function spriteHash(sprite: Uint32Array): number {
   let h = 2166136261;

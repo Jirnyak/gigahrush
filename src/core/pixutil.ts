@@ -1,6 +1,6 @@
 /* ── Shared pixel utilities for procedural sprites & textures ── */
 
-import { TEX } from '../core/types';
+import { TEX } from './types';
 
 export const S = TEX;
 

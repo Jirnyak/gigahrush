@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import { MonsterKind } from '../src/core/types';
 import { DEF, generateSprite } from '../src/entities/matka';
 import { getMonsterEcology } from '../src/data/monster_ecology';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 test('matka definition, ecology, and sprite read as a warm-wall crawler spawner', () => {
   const ecology = getMonsterEcology(MonsterKind.MATKA);

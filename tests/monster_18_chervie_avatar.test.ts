@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/chervie_avatar';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import {
   CHERVIE_MIND_PULSE_CAP,
   CHERVIE_MIND_PULSE_COOLDOWN_SEC,

@@ -7,7 +7,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/mukhozhuk';
 import { MONSTERS } from '../src/entities/monster';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import {
   MUKHOZHUK_COMMAND_SCAN_CAP,
   commandMukhozhukNearby,

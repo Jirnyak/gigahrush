@@ -17,7 +17,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/lozhnyy_dukh';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { Spr } from '../src/render/sprite_index';
 import { setListenerPos } from '../src/systems/audio';
 import { rebuildEntityIndex } from '../src/systems/entity_index';

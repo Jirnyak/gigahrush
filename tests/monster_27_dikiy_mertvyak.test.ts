@@ -10,7 +10,7 @@ import { updateMonster, setEntityMap } from '../src/systems/ai/monster';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 function openWorld(): World {

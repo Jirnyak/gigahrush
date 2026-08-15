@@ -2,7 +2,7 @@
 
 import { ItemType, type ItemDef } from '../core/types';
 import { ITEMS, ITEM_TAGS } from '../data/items';
-import { S, rgba, noise, clamp, CLEAR } from './pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 import { fitTextStable } from './ui_text';
 
 export type ItemSpriteData = Uint32Array;

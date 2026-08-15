@@ -16,7 +16,7 @@ import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { publishNoise } from '../src/systems/noise';
 import { setListenerPos } from '../src/systems/audio';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { addTestRoom, makeGameState } from './helpers';
 
 function storageWorld(): World {

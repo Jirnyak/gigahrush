@@ -7,7 +7,7 @@ import { World } from '../src/core/world';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, generateSprite } from '../src/entities/slime_woman';
 import { generateSlimeWomanSump } from '../src/gen/maintenance/slime_woman_sump';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { getCellHazardMoveMultiplier } from '../src/systems/cell_hazards';
 import { takeFromContainer } from '../src/systems/containers';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';

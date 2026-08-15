@@ -36,7 +36,7 @@ import {
   GENERATED_ART_SPRITE_IDS,
   getGeneratedArtSprite,
 } from '../src/render/generated_art_sprites';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 

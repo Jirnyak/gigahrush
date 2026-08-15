@@ -6,7 +6,7 @@ import { World } from '../src/core/world';
 import { MONSTERS } from '../src/entities/monster';
 import { DEF as TONKAYA_TEN_DEF, generateSprite } from '../src/entities/tonkaya_ten';
 import { getMonsterEcology } from '../src/data/monster_ecology';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';

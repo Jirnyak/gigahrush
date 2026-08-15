@@ -11,7 +11,7 @@ import { publishNoise, resetNoiseRecords } from '../src/systems/noise';
 import { getEntityIndex, rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
 import { monsterSpr } from '../src/render/sprite_index';
-import { S, CLEAR } from '../src/render/pixutil';
+import { S, CLEAR } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 import { bfsPath } from '../src/systems/ai/pathfinding';
 

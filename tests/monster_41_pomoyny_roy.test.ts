@@ -10,7 +10,7 @@ import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { placeMonsterBait, resetMonsterBaits } from '../src/systems/monster_bait';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { monsterSpr } from '../src/render/sprite_index';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 
 function openWorld(): World {

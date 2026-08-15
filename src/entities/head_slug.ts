@@ -2,7 +2,7 @@
 
 import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
-import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
 export const HEAD_SLUG_HOSTED_STAGE = 0;
 export const HEAD_SLUG_DETACHED_STAGE = 1;

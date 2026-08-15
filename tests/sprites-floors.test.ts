@@ -8,7 +8,7 @@ import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateFloor, isValidZ } from '../src/gen/floor_manifest';
 import { measureLivingShelterShells } from '../src/gen/living/geometry';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import {
   containerSpr,
   featureSpr,

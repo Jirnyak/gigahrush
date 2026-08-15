@@ -2,7 +2,7 @@
 
 import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
-import { S, rgba, noise, clamp, CLEAR } from '../render/pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
 export const DEF: MonsterDef = {
   kind: MonsterKind.TONKAYA_TEN,

@@ -23,7 +23,7 @@ import {
   generateSporeCarpetCache,
   SPORE_CARPET_CACHE_ROOM_NAME,
 } from '../src/gen/living/spore_carpet_cache';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { Spr } from '../src/render/sprite_index';
 import { setEntityMap, tryMonsterProjectileStagger, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';

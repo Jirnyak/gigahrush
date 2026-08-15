@@ -1,6 +1,6 @@
 import { Tex } from '../core/types';
 import { drawTextCentered } from './text';
-import { S, rgba, noise, clamp } from './pixutil';
+import { S, rgba, noise, clamp } from '../core/pixutil';
 
 const BG_R = 30, BG_G = 55, BG_B = 45;
 const COL_KEY = rgba(255, 230, 80);

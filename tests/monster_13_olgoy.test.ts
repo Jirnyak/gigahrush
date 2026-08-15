@@ -23,7 +23,7 @@ import {
   placeMonsterBait,
   resetMonsterBaits,
 } from '../src/systems/monster_bait';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 function openWorld(): World {

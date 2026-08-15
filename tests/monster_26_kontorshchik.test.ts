@@ -16,7 +16,7 @@ import {
 } from '../src/systems/document_scent';
 import { baitKindForItem, monsterBaitPreviewForItem } from '../src/systems/monster_bait';
 import { mapEditorEntityBrushes } from '../src/systems/map_editor_catalog';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 function sortedFloors(floors: readonly number[] | undefined): number[] {
   return [...(floors ?? [])].sort((a, b) => a - b);

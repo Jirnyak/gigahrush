@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { MonsterKind } from '../src/core/types';
-import { CLEAR, S } from '../src/render/pixutil';
+import { CLEAR, S } from '../src/core/pixutil';
 import { DEF, generateSprite } from '../src/entities/polzun';
 
 test('polzun remains a slow heavy doorway threat with local guidance', () => {

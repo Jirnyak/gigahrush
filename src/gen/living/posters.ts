@@ -8,7 +8,7 @@
 
 import { Tex } from '../../core/types';
 import { drawTextCentered, measureText, CELL_H } from '../../render/text';
-import { S, rgba, noise, clamp } from '../../render/pixutil';
+import { S, rgba, noise, clamp } from '../../core/pixutil';
 
 function tpx(t: Uint32Array, x: number, y: number, c: number): void {
   if (x >= 0 && x < S && y >= 0 && y < S) t[y * S + x] = c;

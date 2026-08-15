@@ -17,7 +17,7 @@ import {
   NEW_MONSTER_KINDS,
   type MonsterDef,
 } from '../src/entities/monster';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 const ZERO_WEIGHT_MONSTERS = new Set<MonsterKind>([
   MonsterKind.CREATOR,

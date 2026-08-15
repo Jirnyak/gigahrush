@@ -11,7 +11,7 @@ import { registerCellHazardSite } from '../src/systems/cell_hazards';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
 import { makeGameState } from './helpers';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 
 function openWorld(): World {
   const world = new World();

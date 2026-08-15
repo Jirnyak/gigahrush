@@ -18,7 +18,7 @@ import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { setListenerPos } from '../src/systems/audio';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { getRecentEvents } from '../src/systems/events';
-import { CLEAR, S } from '../src/render/pixutil';
+import { CLEAR, S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
 
 function openWorld(): World {

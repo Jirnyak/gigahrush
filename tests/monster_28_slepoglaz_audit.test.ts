@@ -6,7 +6,7 @@ import { MonsterKind } from '../src/core/types';
 import { MONSTER_ECOLOGY, getMonsterEcology } from '../src/data/monster_ecology';
 import { generateSprite as generateEyeSprite } from '../src/entities/eye';
 import { DEF, generateSprite } from '../src/entities/slepoglaz';
-import { CLEAR, S } from '../src/render/pixutil';
+import { CLEAR, S } from '../src/core/pixutil';
 
 function spriteHash(sprite: Uint32Array): number {
   let h = 2166136261;

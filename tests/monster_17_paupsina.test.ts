@@ -5,7 +5,7 @@ import * as assert from 'node:assert/strict';
 import { EntityType, MonsterKind, ProjType, type Entity } from '../src/core/types';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { DEF, PAUPSINA_WEB_COOLDOWN_SEC, generateSprite } from '../src/entities/paupsina';
-import { S } from '../src/render/pixutil';
+import { S } from '../src/core/pixutil';
 import {
   PAUPSINA_WEB_DURATION_SEC,
   activePaupsinaWeb,

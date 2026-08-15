@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { rgba } from '../src/render/pixutil';
+import { rgba } from '../src/core/pixutil';
 import {
   clearRenderAnimationProceduralSources,
   RenderAnimationProceduralFrameCache,

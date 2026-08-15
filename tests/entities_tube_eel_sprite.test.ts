@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { generateSprite } from '../src/entities/tube_eel';
-import { S, CLEAR, rgba } from '../src/render/pixutil';
+import { S, CLEAR, rgba } from '../src/core/pixutil';
 
 test('generateSprite creates a Uint32Array of expected size', () => {
   const sprite = generateSprite();

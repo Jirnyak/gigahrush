@@ -1,6 +1,6 @@
 /* Procedural non-explicit adult art-study sprites. */
 
-import { S, rgba, noise, clamp, CLEAR } from './pixutil';
+import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
 export const ART_NUDE_VARIANTS = 4;
 export const F69_FEMALE_NPC_VARIANTS = 8;

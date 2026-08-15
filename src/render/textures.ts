@@ -5,7 +5,7 @@ import { generateSlideTextures } from '../gen/living/slides';
 import { generatePosterTextures } from '../gen/living/posters';
 import { generateHintTextures } from './hint_textures';
 import { generateProceduralScreenTextures } from './procedural_screen_textures';
-import { S, rgba, noise, clamp } from './pixutil';
+import { S, rgba, noise, clamp } from '../core/pixutil';
 
 export type TexData = Uint32Array; // S*S RGBA pixels (0xAABBGGRR little-endian)
 
