@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
+/* Полная перестройка этажа самосбором зовёт генератор, которого у самосбора
+   больше нет своего: слой systems не имеет права звать gen. Ставит его точка
+   сборки. */
+import '../src/content';
+
 import { Cell, ContainerKind, DoorState, EntityType, Feature, LiftDirection, MonsterKind, Occupation, Tex, W, type Entity } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { entityUsesProceduralSprite, generateNpcProfileSprite, generateProceduralEntitySprite, isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
