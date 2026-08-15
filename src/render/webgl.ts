@@ -10,7 +10,7 @@ import {
   type Entity, EntityType, ProjType, MonsterKind,
 } from '../core/types';
 import { World, type WorldGridDirtyRect } from '../core/world';
-import { getCeilingHeightForTier } from '../gen/ceiling_heights';
+import { getCeilingHeightForTier } from '../world/ceiling_heights';
 import { getActiveSamosborVariant } from '../systems/samosbor_variants_runtime';
 import {
   entityUsesProceduralSprite,

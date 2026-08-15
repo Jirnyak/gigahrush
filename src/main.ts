@@ -71,7 +71,7 @@ import { updateCritters, getCritterRenderEnabled } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
-import { stampCeilingHeights } from './gen/ceiling_heights';
+import { stampCeilingHeights } from './world/ceiling_heights';
 import { fillVisualSlotsForWorldFeatures } from './world/visual_cell_slots';
 import { syncNextEntityId } from './gen/content_manifest_utils';
 import {

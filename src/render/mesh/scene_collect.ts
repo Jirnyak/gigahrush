@@ -20,7 +20,7 @@ import {
   VISUAL_SLOTS_PER_CELL,
   type World,
 } from '../../core/world';
-import { cellCeilingHeight, cellHasCeiling } from '../../gen/ceiling_heights';
+import { cellCeilingHeight, cellHasCeiling } from '../../world/ceiling_heights';
 import {
   VISUAL_CELL_DEFS,
   visualCellDefByCode,

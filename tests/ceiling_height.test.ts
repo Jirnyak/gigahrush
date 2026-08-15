@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getCeilingHeightForTier } from '../src/gen/ceiling_heights.js';
+import { getCeilingHeightForTier } from '../src/world/ceiling_heights';
 
 describe('Ceiling Height Tiering', () => {
   it('caps ceiling height and uses correct base step', () => {
