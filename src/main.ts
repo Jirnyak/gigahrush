@@ -1,5 +1,6 @@
 /* ── ГИГАХРУЩ — main entry point ──────────────────────────────── */
 import './index.css';
+import './content';                 // реестр контента + генератор этажей для самосбора
 import './systems/demos_runtime';
 import { registerPwaServiceWorker } from './pwa';
 import {

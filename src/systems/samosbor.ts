@@ -37,7 +37,7 @@ import {
 import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
 import { regrowMaze } from '../gen/living';
-import { generateFloor, type FloorGeneration } from '../gen/floor_manifest';
+import type { FloorGeneration } from '../gen/floor_manifest';
 import { floorLevelDisplayName } from '../data/floor_names';
 import { clearPathBlockerRegion, rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { flashSamosborWarningScreens } from '../gen/procedural_screens';
@@ -116,6 +116,28 @@ import {
   territoryOwnerAt,
   territoryOwnerAtIndex,
 } from './territory';
+
+/* ── Генератор этажей приходит инъекцией ─────────────────────────
+ * Самосбор перестраивает этаж, но не имеет права знать, кто его порождает:
+ * слой systems стоит под gen. Прямой импорт `generateFloor` из
+ * `gen/floor_manifest` замыкал рантайм-цикл на 293 файла и заодно работал
+ * де-факто триггером загрузки всего контента — импорт одного самосбора тянул
+ * 63 генератора этажей. Теперь генератор ставит точка сборки: `src/content.ts`.
+ * Тип FloorGeneration импортируется как type и при сборке стирается — рёбра нет. */
+export type FloorGenerator = (z: number, runSeed?: number, isTutorial?: boolean) => FloorGeneration;
+
+let floorGenerator: FloorGenerator | undefined;
+
+export function setSamosborFloorGenerator(generator: FloorGenerator): void {
+  floorGenerator = generator;
+}
+
+function generateFloor(z: number, runSeed?: number, isTutorial?: boolean): FloorGeneration {
+  if (!floorGenerator) {
+    throw new Error('[SAMOSBOR] генератор этажей не установлен: точка сборки должна импортировать src/content.ts');
+  }
+  return floorGenerator(z, runSeed, isTutorial);
+}
 
 const MONSTERS_PER_SAMOSBOR = 16;
 const RANDOM_MAP_MONSTERS_PER_SAMOSBOR = 22;

@@ -52,9 +52,11 @@ const BASELINE = {
 };
 
 /* Крупнейший цикл в графе рантайм-импортов (типы стёрты — они не существуют при сборке).
-   Держится одним ребром systems/samosbor → gen/floor_manifest: убрать только его достаточно,
-   чтобы стало 106. Почему это ещё не сделано — в problems.md. */
-const RUNTIME_CYCLE_BASELINE = 293;
+   Был 293 и держался одним ребром systems/samosbor → gen/floor_manifest. Ребро срезано:
+   генератор этажей приходит в самосбор инъекцией из точки сборки src/content.ts.
+   Ленивый реестр этажей вместо 63 статических импортов сверх этого не даёт ничего:
+   замерено — те же 106. */
+const RUNTIME_CYCLE_BASELINE = 106;
 
 const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
 const MAX_FUNCTION_LINES = 200;

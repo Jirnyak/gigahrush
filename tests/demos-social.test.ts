@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 
 import { makeGameState } from './helpers';
 
+/* Тесту нужны авторские связи людей с этажей (rotenbergov из министерства,
+   f69_accountant_nil с 69-го). Раньше они приезжали случайно — транзитивно
+   через systems/samosbor. Теперь реестр контента грузится явно. */
+import '../src/content';
+
 import { EntityType, Faction, Occupation, type Entity, type GameState } from '../src/core/types';
 import {
   DEMOS_EDGE_DEBT,
