@@ -123,6 +123,30 @@ A-Life saves compact identity state, not live NPC arrays:
 
 Live materialized NPCs fold back before transitions, samosbor rebuilds and save. Ordinary killed people are not silently replaced by background refill.
 
+### Слоты сюжетных личностей и старые сейвы (2026-08-15)
+
+Числовой `plotNpcId` уходит в сейв тремя каналами: `deadPlotNpcIds`, `Quest.giverId` /
+`targetNpcId` / `failOnNpcDeathId`, и `AlifeNpcOverride.id` (для сюжетника id записи
+равен его слоту). Раньше слот выдавался счётчиком регистраций, теперь берётся из
+замороженного списка `src/data/npc_plot_ids.ts`.
+
+Первые 464 слота сохранены побайтово — список снят с настоящего графа импортов, поэтому
+подавляющее большинство сейвов не двигается. Сдвинулись ровно слоты **465..473**: их
+заняли девять личностей чёрного рынка и кремниевого колодца, которые раньше
+регистрировались не при импорте, а при первой генерации своего этажа. У сейва, сделанного
+до реформы, оверрайд или маркер смерти обычного человека с одним из этих девяти номеров
+сядет на сюжетную личность.
+
+`SAVE_SHAPE_VERSION` намеренно НЕ бампнут, и это решение, а не недосмотр. Старая сборка
+двигала эти же слоты сама — как только игрок впервые открывал 88-й этаж или кремниевый
+колодец, `getPlotNpcCount()` рос с 464 до 470 и 473 прямо посреди прогона. То есть
+единственного «правильного» дореформенного расклада для этих номеров не существует, и
+бамп версии ничего бы не восстановил — он бы только гарантированно стёр прогон каждому
+игроку ради риска, который требует совпадения двух редких условий сразу: сейв старше
+2026-08-15 И взаимодействие ровно с одним из девяти конкретных людей из стотысячного
+пула. Если решение окажется неверным, лечится одной строкой: поднять
+`SAVE_SHAPE_VERSION` в `src/systems/save_runtime.ts`.
+
 ## Events, Economy And Production
 
 Events use bounded ring buffers and save only compact public/private facts. Economy, banking, stock market and production save sparse runtime state rather than regenerating every consequence from current frame objects.

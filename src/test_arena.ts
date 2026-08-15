@@ -1,3 +1,4 @@
+import './content';   // вторая точка входа (arena.html): без неё у самосбора нет генератора этажей
 import { World } from './core/world';
 import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, type GameState } from './core/types';
 import { tryAssignPathToCell, setPathContext } from './systems/ai/pathfinding';

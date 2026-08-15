@@ -47,8 +47,12 @@ export function isArenaOverlayOpen(): boolean {
 }
 
 function findFighters(entities: readonly Entity[]): { fighterA: Entity | null, fighterB: Entity | null } {
-  // Pick the first two alive NPCs that are not the arena runners (matched by stable plot id,
-  // not display name). Unregistered ids resolve to undefined and simply never match a real NPC.
+  // Pick the first two alive NPCs that are not the arena runners (matched by stable plot slot,
+  // not display name). Слоты приходят из замороженного списка npc_plot_ids.ts, поэтому числа
+  // определены всегда, независимо от того, загружен ли контент: раньше здесь можно было
+  // рассчитывать на undefined у незарегистрированного пакета, теперь нельзя. Совпадение по
+  // e.id остаётся осмысленным, потому что сюжетный NPC спавнится ровно со своим слотом
+  // (gen/plot_npc_spawn.ts), а обычные сущности обязаны брать id выше getPlotNpcCount().
   const markoId = getPlotNpcNumericId('marko_lolo');
   const masterId = getPlotNpcNumericId('arena_master');
   let fighterA: Entity | null = null;

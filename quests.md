@@ -37,6 +37,35 @@
 - публикует событие for public consequences;
 - переживает samosbor или явно объясняет why it is exempt/current-floor only.
 
+### Побочный эффект заморозки слотов (2026-08-15)
+
+Литералы вида `targetNpcId: getPlotNpcNumericId('X')!` внутри вызова `registerSideQuest`
+вычисляются ДО регистрации, поэтому пока слот выдавался счётчиком, они замерзали в
+`undefined`, если `X` регистрировался позже. `registerSideQuest` умел чинить только
+`giverId` (бэкфилл, см. комментарий в `src/data/plot.ts`); остальные поля так и оставались
+пустыми. После заморозки слотов в `src/data/npc_plot_ids.ts` резолвится всё сразу, и 32
+поля у 30 квестов ожили. Это не новая механика, это переставший быть мёртвым контент,
+но поведение изменилось:
+
+- **19 квестов получили `targetNpcId`.** 17 из них типа TALK и раньше НЕ ПРЕДЛАГАЛИСЬ
+  вовсе: `systems/quests.ts` пропускает TALK без цели. Среди них `permit_stamp_route`,
+  `stamp_archive_route`, `ag104_report_ministry`, `crossroads_zebra_escort`,
+  `prod_worker_escort`, `f69_hide_worker`, `underhell_free_witness`,
+  `turing_nursery_expose_growth_child`, `m13_rescue_anya_from_prislushka`.
+- **2 квеста KILL** (`kantselev_kill_makhno`, `ag83_clear_cult_workshop`) перестали
+  засчитывать любое убийство монстра и требуют именную цель. Обе цели спавнятся.
+- **9 эскортов получили `failOnNpcDeathId`** и стали проваливаемыми: `ag72_*`, `ag81_*`,
+  `bolnichny_escort_infected_patient`, `labyrinth_rescue_lost_pavel`,
+  `morgue_relative_escort`, `ostliq_aid_broken_respirator`,
+  `voronoi_quarantine_escort_infected`. Провал ловится только при убийстве игроком:
+  `notifyNpcKill` зовётся из `main.ts` при `killerActor === player`.
+- **4 идол-квеста в `src/data/plot.ts` получили `giverId`** — сегодня no-op, сырых
+  читателей поля нет, гивер и раньше резолвился через `giverPlotNpcId`.
+
+Все цели проверены: каждая ссылается на реальный пакет (`tests/data-ids.test.ts`,
+`tests/content-registry.test.ts`). Что стоит посмотреть глазами при случае — проходимы ли
+17 оживших TALK-квестов вживую: раньше их никто не видел, и играть их не пробовали.
+
 ## Системные задания и контракты
 
 Contracts/assignments live in `src/data/contracts.ts` and runtime conversion in `src/systems/contracts.ts`. Они покрывают `FETCH`, `VISIT`, `KILL`, `TALK`, route targets, room resolution, target items, monster kinds, faction issuer, rank, deadline, money/XP/relation rewards and failure events.
