@@ -1,0 +1,35 @@
+# Страховочный прогон гейта. Основная защита — локальный хук .githooks/pre-push;
+# этот workflow ловит то, что уехало мимо хука: коммиты агентов, чужие машины,
+# правки через веб-интерфейс GitHub.
+#
+# npm run test:generation сюда НЕ входит: у матрицы генерации 29 известных
+# падений (см. tests.md), она красная by design и гейтом быть не может.
+name: check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run check

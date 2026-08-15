@@ -1,0 +1,21 @@
+#!/bin/sh
+# Гейт до отправки. Ловит поломку раньше, чем она уедет в main.
+#
+# Включается один раз на клон:  git config core.hooksPath .githooks
+# Разовый обход (осознанный):   GIGAHRUSH_SKIP_CHECK=1 git push
+#
+# Здесь check:readonly, а не check: сборка пишет dist/ и занимает минуты,
+# а её страхует workflow .github/workflows/check.yml.
+
+if [ -n "$GIGAHRUSH_SKIP_CHECK" ]; then
+  echo "pre-push: гейт пропущен по GIGAHRUSH_SKIP_CHECK"
+  exit 0
+fi
+
+echo "pre-push: npm run check:readonly"
+if ! npm run --silent check:readonly; then
+  echo ""
+  echo "pre-push: гейт красный, push отменён."
+  echo "          Починить, либо осознанно обойти: GIGAHRUSH_SKIP_CHECK=1 git push"
+  exit 1
+fi
