@@ -22,6 +22,15 @@
  * одновременно (`scripts/check-invariants.mjs`, ALLOWED.root).
  */
 
+/* Жилой и квартиры — первыми, и это не вкусовщина. Порядок регистрации задаёт
+   порядок NPC_PACKAGES и SIDE_QUESTS, а от него зависит состав плана населения
+   A-Life в новом прогоне. Раньше эти два грузились раньше дизайн-этажей потому,
+   что systems/samosbor тянул gen/living, а следом gen/floor_manifest тянул
+   kvartiry — то есть по случайности графа. Ребро срезано, случайность ушла,
+   очерёдность записана здесь явно. Проверено: порядок обоих реестров совпадает
+   с дореформенным побайтово, все 464 позиции. */
+import './gen/living';
+import './gen/kvartiry';
 import { generateFloor } from './gen/floor_manifest';
 import { setSamosborFloorGenerator } from './systems/samosbor';
 
