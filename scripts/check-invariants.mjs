@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /*
- * Механическая проверка трёх инвариантов, которые до сих пор держались только на дисциплине:
+ * Механическая проверка инвариантов, которые до сих пор держались только на дисциплине:
  *
  *   1. Границы слоёв — кто кого имеет право импортировать.
+ *   1б. Крупнейший цикл рантайм-импортов. Отдельная метрика: рёбра и циклы не одно
+ *       и то же, можно убрать 92% обратных рёбер и не сдвинуть цикл.
  *   2. Запрет сырого Math.random() вне core/rand.ts.
  *   3. Потолок длины функции.
  *
@@ -49,6 +51,11 @@ const BASELINE = {
   'data->gen': 1,
 };
 
+/* Крупнейший цикл в графе рантайм-импортов (типы стёрты — они не существуют при сборке).
+   Держится одним ребром systems/samosbor → gen/floor_manifest: убрать только его достаточно,
+   чтобы стало 106. Почему это ещё не сделано — в problems.md. */
+const RUNTIME_CYCLE_BASELINE = 293;
+
 const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
 const MAX_FUNCTION_LINES = 200;
 const LONG_FUNCTION_BASELINE = 27;
@@ -83,8 +90,10 @@ for (const file of files) {
   const from = layerOf(srcRel);
   const text = fs.readFileSync(file, 'utf8');
 
-  for (const m of text.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)['"](\.[^'"]+)['"]/g)) {
-    const abs = path.resolve(path.dirname(file), m[1]).replace(/\.(js|ts)$/, '');
+  // Голый `import './x'` тоже ребро: именно так подключаются content-манифесты,
+  // регистрирующие контент побочным эффектом. Ловить только `from` — занижать граф.
+  for (const m of text.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)['"](\.[^'"]+)['"]|^\s*import\s+['"](\.[^'"]+)['"]/gm)) {
+    const abs = path.resolve(path.dirname(file), m[1] ?? m[2]).replace(/\.(js|ts)$/, '');
     const targetRel = path.relative(srcRoot, abs).replaceAll(path.sep, '/');
     if (targetRel.startsWith('..')) continue;
     const to = layerOf(targetRel);
@@ -106,6 +115,73 @@ for (const key of new Set([...edgeCounts.keys(), ...Object.keys(BASELINE)])) {
   } else if (now < was) {
     notes.push(`Слои: ${key} — ${now} (было ${was}). Опусти BASELINE в ${path.basename(import.meta.filename)}.`);
   }
+}
+
+/* ── Проверка 1б: крупнейший цикл рантайм-импортов ──────────────
+   Обратные рёбра и циклы — разные метрики. Можно убрать 92% рёбер и не сдвинуть
+   цикл, если уцелело одно замыкающее. Поэтому цикл считается отдельно. */
+const runtimeEdges = new Map();
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  const text = fs.readFileSync(file, 'utf8');
+  const out = new Set();
+  for (const m of text.matchAll(/import\s+(type\s+)?(\{[^}]*\}|[\w*\s,]+?)?\s*from\s*['"](\.[^'"]+)['"]|import\s+['"](\.[^'"]+)['"]/gs)) {
+    if (m[1]) continue;                                  // import type — стирается
+    const spec = (m[2] ?? '').trim();
+    if (spec.startsWith('{')) {
+      const parts = spec.slice(1, -1).split(',').map(x => x.trim()).filter(Boolean);
+      if (parts.length && parts.every(x => x.startsWith('type '))) continue;
+    }
+    const abs = path.resolve(path.dirname(file), m[3] ?? m[4]).replace(/\.(js|ts)$/, '');
+    let target = path.relative(srcRoot, abs).replaceAll(path.sep, '/');
+    if (target.startsWith('..')) continue;
+    if (!fs.existsSync(path.join(srcRoot, `${target}.ts`))) target = `${target}/index`;
+    out.add(target);
+  }
+  runtimeEdges.set(srcRel.replace(/\.ts$/, ''), out);
+}
+
+/* Итеративный Тарьян: рекурсия на ~900 узлах переполняет стек. */
+function largestCycle(graph) {
+  const index = new Map(), low = new Map(), onStack = new Set(), stack = [];
+  let counter = 0, best = 0;
+  for (const root of graph.keys()) {
+    if (index.has(root)) continue;
+    const work = [[root, graph.get(root)?.values() ?? [][Symbol.iterator]()]];
+    index.set(root, counter); low.set(root, counter++); stack.push(root); onStack.add(root);
+    while (work.length) {
+      const [node, it] = work[work.length - 1];
+      let descended = false;
+      for (const next of it) {
+        if (!index.has(next)) {
+          index.set(next, counter); low.set(next, counter++); stack.push(next); onStack.add(next);
+          work.push([next, graph.get(next)?.values() ?? [][Symbol.iterator]()]);
+          descended = true;
+          break;
+        }
+        if (onStack.has(next)) low.set(node, Math.min(low.get(node), index.get(next)));
+      }
+      if (descended) continue;
+      work.pop();
+      if (work.length) {
+        const parent = work[work.length - 1][0];
+        low.set(parent, Math.min(low.get(parent), low.get(node)));
+      }
+      if (low.get(node) === index.get(node)) {
+        let size = 0, popped;
+        do { popped = stack.pop(); onStack.delete(popped); size++; } while (popped !== node);
+        if (size > best) best = size;
+      }
+    }
+  }
+  return best;
+}
+
+const runtimeCycle = largestCycle(runtimeEdges);
+if (runtimeCycle > RUNTIME_CYCLE_BASELINE) {
+  failures.push(`Цикл: крупнейший цикл рантайм-импортов ${runtimeCycle} файлов, разрешено ${RUNTIME_CYCLE_BASELINE}.`);
+} else if (runtimeCycle < RUNTIME_CYCLE_BASELINE) {
+  notes.push(`Цикл: ${runtimeCycle} файлов (было ${RUNTIME_CYCLE_BASELINE}). Опусти RUNTIME_CYCLE_BASELINE.`);
 }
 
 /* ── Проверка 2: сырой Math.random ─────────────────────────────── */
@@ -175,4 +251,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, Math.random (${randomHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}).`);
