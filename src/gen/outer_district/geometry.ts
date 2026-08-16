@@ -166,7 +166,10 @@ function stampPanelHouse(world: World, rng: SeedRng, nextRoomId: {v: number}, rx
     apartmentId: -1,
     wallTex: HOUSE_WALL_TEX,
     floorTex: HOUSE_FLOOR_TEX,
-    ceilingTier: 4, // standard low ceiling
+    // Потолка панельки здесь нет намеренно: ярус 4 — это 3.0 м, вдвое выше
+    // обычной комнаты, и подписан он был как «standard low ceiling». Интерьер
+    // выводится из своей формы, улица снаружи остаётся небом (240 у базовой
+    // комнаты района).
   };
 
   // Build walls and floor

@@ -12,6 +12,7 @@ import {
   type Room,
   type Zone,
 } from '../core/types';
+import { SKY_TIER_THRESHOLD } from '../world/ceiling_heights';
 import { World } from '../core/world';
 import { rng, pick, pickFrom, shuffleWith, type RandomSource, irand } from '../core/rand';
 import { ROOM_DEFS } from '../data/catalog';
@@ -2341,9 +2342,13 @@ export function stampHQRooms(world: World): void {
 export function validateFloorGeometry(world: World): void {
   for (const room of world.rooms) {
     if (!room) continue;
-    if (room.ceilingTier !== undefined && room.ceilingTier > 2) {
-      console.warn(`[Sanity] Room ${room.id} has invalid ceilingTier ${room.ceilingTier}. Capping to 2.`);
-      room.ceilingTier = 2;
+    // Потолок шкалы — последний ярус ниже полосы неба. Кэп стоял на 2 и потому
+    // физически запрещал процедурному этажу зал выше 2.0; всё, что объявлено
+    // небом (198/240 у крыши, улицы и перекрёстков), проходит мимо — санитайзер
+    // зовётся только из `gen/procedural_floor.ts`.
+    if (room.ceilingTier !== undefined && room.ceilingTier > SKY_TIER_THRESHOLD - 1) {
+      console.warn(`[Sanity] Room ${room.id} has invalid ceilingTier ${room.ceilingTier}. Capping to ${SKY_TIER_THRESHOLD - 1}.`);
+      room.ceilingTier = SKY_TIER_THRESHOLD - 1;
     }
     if (room.ceilingTier !== undefined && room.ceilingTier < 0) {
       room.ceilingTier = 0;

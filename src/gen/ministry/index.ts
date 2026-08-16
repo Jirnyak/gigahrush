@@ -512,17 +512,9 @@ function placeMinistryItems(rooms: Room[], entities: Entity[], nextId: number): 
 
 /* ── Main generator ───────────────────────────────────────────── */
 
-export function setupMinistryRooms(world: World) {
-  for (const room of world.rooms) {
-    if (!room) continue;
-    // Limit ceiling tier to max 2 to prevent mesh overlapping and Z-fighting
-    if (room.type === RoomType.COMMON) { // Hall / Grand hall
-      room.ceilingTier = 2; // High ceiling for halls, but capped at 2
-    } else {
-      room.ceilingTier = 1; // Standard ceiling
-    }
-  }
-}
+// Таблицы «тип комнаты → высота» здесь больше нет: ярус выводится из формы
+// пространства в `world/ceiling_heights.ts`, и зал министерства раскрывается
+// своим радиусом и ролью, а не назначенной двойкой.
 
 export function generateMinistry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
@@ -573,8 +565,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
 
   // Phase 12: Monsters removed, now handled by population field
 
-
-  setupMinistryRooms(world);
 
   // Phase 12b-13: Manifest-owned administrative content
   {

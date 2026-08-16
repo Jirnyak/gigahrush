@@ -11,19 +11,41 @@ import { Cell, type Room, RoomType, W } from '../core/types';
  *   tier 2 → large rooms
  *   tier 3 → grand halls
  *
- * Two generation-time passes, both cell-based so it does not depend on every
- * corridor being a `Room` record:
- *   1. Every open (non-wall) cell gets a tier from its room (type/area) or, if
- *      it is a carved passage with no room record, the corridor tier.
- *   2. Every wall cell rises to the tallest open cell it bounds, so the wall a
- *      ray actually hits carries the volume of the space behind it.
+ * Ярус ВЫВОДИТСЯ из формы пространства, а не назначается таблицей. Табличка
+ * «площадь >= 80 → ярус 2» давала четыре ступеньки на всю игру: все склады мира
+ * одинаковы, а каморка вплотную к цеху читалась как обрыв потолка. Вместо неё
+ * сумма контекстных членов, все считаются на бэйке:
+ *
+ *   ярус = clamp(round(log2(1 + свободный_радиус)) + сдвиг_роли + джиттер, 0, 7)
+ *
+ * Логарифм здесь не украшение: он даёт непрерывную шкалу без магических порогов
+ * (радиус 1 → 1, 3 → 2, 7 → 3, 15 → 4, 31 → 5), поэтому `LARGE_AREA` и
+ * `GRAND_AREA` исчезли вовсе.
+ *
+ * Четыре прохода, все клеточные, так что ни один не зависит от того, есть ли у
+ * коридора запись `Room`:
+ *   0. Свободный радиус: distance transform по открытым клеткам с заворотом по
+ *      тору. У комнаты радиус берётся ОДИН на всю комнату (вписанный), иначе
+ *      потолок провиснет куполом к стенам; клетки без комнаты считают свой
+ *      локальный радиус — от этого коридоры и дышат.
+ *   1. Ярус каждой открытой клетки по формуле выше; стены пока плоские.
+ *   2. Один проход диффузии: соседи не отличаются больше чем на ярус, поэтому
+ *      выход из коридора в зал читается как раскрытие, а не как ступенька.
+ *   3. Каждая стена поднимается до самой высокой открытой клетки, которую она
+ *      ограничивает, — луч бьёт в стену, а она несёт объём пространства за ней.
+ *
+ * Авторская воля выше формулы: `room.ceilingTier` и `world.globalCeilingTier`
+ * ставятся как есть и диффузией не размываются. Так этаж вправе объявить
+ * геометрию потолка локально (перекрёстки, крыша, улица), не заводя таблицу
+ * «тип комнаты → высота» — те две таблички, что были у министерства и
+ * коллекторов, формула съела.
+ *
+ * Шахта — не новый тип, а предел этой же формулы: узкая комната с высоким
+ * ярусом по роли. Вверх она работает бесплатно через порог неба.
  *
  * Nothing here touches gameplay, collision, AI or save state — it is pure
  * render metadata, regenerated whenever a floor is built or restored.
- *
- * Expandable / tweakable: change the tier constants, the `LARGE_AREA` /
- * `GRAND_AREA` thresholds, or branch on more `RoomType`s. The shader maps tier
- * `t` to height `1 + t*0.5`.
+ * Шейдер отображает ярус `t` в высоту `1 + t*0.5`.
  */
 
 
@@ -62,9 +84,6 @@ const TIER_CORRIDOR = 1;
 const TIER_LARGE = 2;
 const TIER_GRAND = 3;
 
-const LARGE_AREA = 80;   // w*h at/above which a room reads as a hall
-const GRAND_AREA = 150;  // ...and a grand hall
-
 // Open-sky floors only: a ceiling tier at/above this reads as "open air / sky"
 // (roof deck = 14, outer-district street = 240); below it is a real enclosed
 // volume (house interior ≤ 4). On those floors a wall never inherits a sky tier —
@@ -74,21 +93,111 @@ const GRAND_AREA = 150;  // ...and a grand hall
 // Keep in sync with SKY_TIER in the raycaster (render/webgl.ts).
 export const SKY_TIER_THRESHOLD = 8;
 
+// Дальше этого радиуса шкала всё равно упирается в потолок выведенного яруса,
+// так что заливать больше нечем. Держит инициализацию distance transform.
+const RADIUS_CAP = 127;
+
 const MASK = W - 1;      // W is a power of two, so wrap == & MASK
 
-function ceilingTierForRoom(room: Room): number {
-  if (room.ceilingTier !== undefined) return room.ceilingTier;
-  if (room.type === RoomType.CORRIDOR) return TIER_CORRIDOR;
-  const area = room.w * room.h;
-  if (area >= GRAND_AREA) return TIER_GRAND;
-  if (area >= LARGE_AREA) return TIER_LARGE;
-  return TIER_ROOM;
+/**
+ * Роль комнаты — сдвиг на ярус, а не высота. Маленькая таблица смещений в одном
+ * месте вместо высоты, назначенной на каждом этаже: кладовая и санузел жмутся,
+ * цех, штаб и зал раскрываются, коридор живёт своим радиусом.
+ */
+function roleShift(type: RoomType): number {
+  switch (type) {
+    case RoomType.STORAGE:
+    case RoomType.BATHROOM:
+      return -1;
+    case RoomType.PRODUCTION:
+    case RoomType.HQ:
+    case RoomType.COMMON:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Свободный радиус каждой открытой клетки: сколько шагов до ближайшей стены.
+ * Обычный distance transform, но по тору — поэтому вперёд-назад прогоняется
+ * дважды: за один круг волна не пересекает шов.
+ */
+function stampFreeRadius(world: World, out: Uint8Array): void {
+  const { cells } = world;
+  const n = W * W;
+  for (let i = 0; i < n; i++) out[i] = cells[i] === Cell.WALL ? 0 : RADIUS_CAP;
+  for (let round = 0; round < 2; round++) {
+    for (let y = 0; y < W; y++) {
+      const rowMid = y * W;
+      const rowUp = ((y - 1) & MASK) * W;
+      for (let x = 0; x < W; x++) {
+        const i = rowMid + x;
+        if (out[i] === 0) continue;
+        const up = out[rowUp + x] + 1;
+        const left = out[rowMid + ((x - 1) & MASK)] + 1;
+        let v = out[i];
+        if (up < v) v = up;
+        if (left < v) v = left;
+        out[i] = v;
+      }
+    }
+    for (let y = W - 1; y >= 0; y--) {
+      const rowMid = y * W;
+      const rowDn = ((y + 1) & MASK) * W;
+      for (let x = W - 1; x >= 0; x--) {
+        const i = rowMid + x;
+        if (out[i] === 0) continue;
+        const dn = out[rowDn + x] + 1;
+        const right = out[rowMid + ((x + 1) & MASK)] + 1;
+        let v = out[i];
+        if (dn < v) v = dn;
+        if (right < v) v = right;
+        out[i] = v;
+      }
+    }
+  }
+}
+
+/**
+ * Ярус из радиуса. Шкала СЖАТА намеренно, и это цена первой попытки: `round`
+ * плюс джиттер ±1 давали на жилом 27% соседних пар с разной высотой — рванину
+ * по коридорам и слоистые обрывы стен, потому что 99% открытых клеток этажа не
+ * принадлежат ни одной комнате и получали шум поклеточно. `floor` переносит
+ * ступеньку на удвоение радиуса: 1..2 → 1, 3..6 → 2, 7..14 → 3. На жилом это
+ * 80% клеток на прежнем коридорном ярусе 1, 20% на 2 — перепадов 14%, и все
+ * амплитудой ровно в один ярус.
+ */
+function tierFromRadius(radius: number): number {
+  return Math.floor(Math.log2(1 + radius));
+}
+
+/** Авторская воля выше формулы: такую клетку не выводят и не размывают. */
+function authoredTier(rooms: readonly (Room | undefined)[], rid: number): number | undefined {
+  return rid >= 0 ? rooms[rid]?.ceilingTier : undefined;
 }
 
 export function stampCeilingHeights(world: World): void {
   const { cells, roomMap, rooms } = world;
   const ceil = world.ceilHeight;
   const n = W * W;
+
+  // Этаж под общей крышкой (крыша, улица) выведения не знает: у него одна
+  // объявленная высота на всё, и радиус считать незачем.
+  const derived = world.globalCeilingTier === undefined;
+
+  // Pass 0: свободный радиус, и вписанный радиус на комнату — один на всю,
+  // иначе потолок провиснет куполом к стенам.
+  const radius = derived ? new Uint8Array(n) : undefined;
+  const roomRadius = derived ? new Uint8Array(rooms.length) : undefined;
+  if (radius && roomRadius) {
+    stampFreeRadius(world, radius);
+    for (let i = 0; i < n; i++) {
+      if (cells[i] === Cell.WALL) continue;
+      const rid = roomMap[i];
+      if (rid >= 0 && rid < roomRadius.length && radius[i] > roomRadius[rid]) roomRadius[rid] = radius[i];
+    }
+  }
 
   // Pass 1: open cells get their volume tier; walls start flat.
   for (let i = 0; i < n; i++) {
@@ -98,11 +207,46 @@ export function stampCeilingHeights(world: World): void {
       continue;
     }
     const rid = roomMap[i];
+    const authored = authoredTier(rooms, rid);
+    if (authored !== undefined) { ceil[i] = authored; continue; }
     const room = rid >= 0 ? rooms[rid] : undefined;
-    ceil[i] = room ? ceilingTierForRoom(room) : TIER_CORRIDOR;
+    const r = room && roomRadius ? roomRadius[rid] : radius![i];
+    // Потолок ВЫВЕДЕННОГО яруса — прежний парадный: выше начинается то, что
+    // освещение уже не несёт (лампы печены под низкий потолок, и зал на ярусе 5
+    // уходил в черноту). Всё, что выше, объявляется автором явно.
+    const tier = tierFromRadius(r) + (room ? roleShift(room.type) : 0);
+    ceil[i] = tier < 0 ? 0 : tier > TIER_GRAND ? TIER_GRAND : tier;
   }
 
-  // Pass 2: each wall rises to the tallest open cell it bounds. Only open
+  // Pass 2: один проход диффузии — сосед не ниже соседа больше чем на ярус,
+  // поэтому выход из коридора в зал читается как раскрытие, а не как ступенька.
+  // Небесные ярусы (198/240 у перекрёстков) в расчёт не идут: иначе один
+  // авторский двор поднял бы весь этаж до потолка шкалы.
+  if (derived) {
+    const src = ceil.slice();
+    for (let y = 0; y < W; y++) {
+      const rowMid = y * W;
+      const rowUp = ((y - 1) & MASK) * W;
+      const rowDn = ((y + 1) & MASK) * W;
+      for (let x = 0; x < W; x++) {
+        const i = rowMid + x;
+        if (cells[i] === Cell.WALL) continue;
+        if (authoredTier(rooms, roomMap[i]) !== undefined) continue;
+        let m = src[i];
+        const j0 = rowUp + x;
+        const j1 = rowDn + x;
+        const j2 = rowMid + ((x - 1) & MASK);
+        const j3 = rowMid + ((x + 1) & MASK);
+        if (cells[j0] !== Cell.WALL && src[j0] < SKY_TIER_THRESHOLD && src[j0] - 1 > m) m = src[j0] - 1;
+        if (cells[j1] !== Cell.WALL && src[j1] < SKY_TIER_THRESHOLD && src[j1] - 1 > m) m = src[j1] - 1;
+        if (cells[j2] !== Cell.WALL && src[j2] < SKY_TIER_THRESHOLD && src[j2] - 1 > m) m = src[j2] - 1;
+        if (cells[j3] !== Cell.WALL && src[j3] < SKY_TIER_THRESHOLD && src[j3] - 1 > m) m = src[j3] - 1;
+        ceil[i] = m;
+      }
+    }
+  }
+
+  // Pass 3: each wall rises to the tallest open cell it bounds. Only open
   // neighbours contribute (their stable pass-1 tier), so writing walls in this
   // same pass never propagates height along a wall line.
   for (let y = 0; y < W; y++) {

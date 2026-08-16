@@ -71,10 +71,12 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
     expandManhattanCrossroadsRouteShell(world, () => rng.random());
     finalizeExpandedFloor(generation, route, () => rng.random());
 
-    for (const room of world.rooms) {
-      if (room) room.ceilingTier = 198;
-    }
-    
+    // Небо объявляют ТОЛЬКО три уличные комнаты (выше по функции), и расширение
+    // маршрутной оболочки переиспользует их же. Бланкетного прохода по всем
+    // комнатам здесь больше нет: он красил небом и интерьеры зданий, из-за чего
+    // в комнате внутри дома не было потолка вовсе. Внутри — обычный потолок,
+    // выведенный из формы комнаты; снаружи — каньон.
+
     return { ...generation, isDecentralized: true as const };
   });
 }
