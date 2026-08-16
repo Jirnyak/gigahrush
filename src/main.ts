@@ -66,7 +66,7 @@ import { safeParseJson } from './core/json';
 import { rng, hashSeed, randSeed, xorshift32, irand, mathRng } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
-import { updateProceduralScreens } from './gen/procedural_screens';
+import { updateProceduralScreens } from './world/procedural_screens';
 import { updateCritters, getCritterRenderEnabled } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';

@@ -12,11 +12,11 @@ import {
 import { World } from '../../core/world';
 import { ROOM_DEFS } from '../../data/catalog';
 import { pickPosterTex } from './posters';
-import { pick, shuffle, connectRoomsMST, canPlaceRoom, stampRoom, decorateRoom, placeAbyssPits, connectToNetwork, ensureConnectivity, sanitizeDoors, pruneDeadEnds, placeLifts, repairRoomWalls, shapeRoom, openVolatileDoors, placeAirlocks, ensurePermanentRoomAccess, punchThinWalls } from '../shared';
+import { shuffle, connectRoomsMST, canPlaceRoom, stampRoom, decorateRoom, placeAbyssPits, connectToNetwork, ensureConnectivity, sanitizeDoors, pruneDeadEnds, placeLifts, repairRoomWalls, shapeRoom, openVolatileDoors, placeAirlocks, ensurePermanentRoomAccess, punchThinWalls } from '../shared';
 import { connectApartmentsToMaze } from './apartments';
 import { seedLivingMacroRouteIntent } from './geometry';
 import { maybePlaceBrokenFixture } from '../interactive_fixtures';
-import { rng, irand } from '../../core/rand';
+import { rng, irand, pick } from '../../core/rand';
 
 /* ── Generate the volatile gigastructure ─────────────────────── */
 function cleanupOldVolatileRooms(world: World): void {

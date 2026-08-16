@@ -126,6 +126,18 @@ export function shuffleWith<T>(rand: RandomSource, items: T[]): T[] {
   return items;
 }
 
+/** pickFrom с глобальным RNG по умолчанию. */
+export const pick = <T>(items: readonly T[], rand: RandomSource = rng): T => pickFrom(rand, items);
+
+/** Взвешенный выбор по полю spawnW; null, если суммарный вес не положителен. */
+export function weightedPick<T extends { spawnW: number }>(defs: T[]): T | null {
+  const total = defs.reduce((s, d) => s + d.spawnW, 0);
+  if (total <= 0) return null;
+  let r = (irand(0, 10000) / 10000) * total;
+  for (const d of defs) { r -= d.spawnW; if (r <= 0) return d; }
+  return defs[defs.length - 1];
+}
+
 /** Stable 32-bit hash for string ids and procedural route keys. */
 export function hashSeed(text: string, seed = 0): number {
   let h = (0x811c9dc5 ^ seed) >>> 0;

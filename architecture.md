@@ -158,7 +158,7 @@ Backward edges and cycles are separate metrics, and the script measures the larg
 runtime-import cycle on its own line. Six backward edges between layers do not move it
 at all; one edge did. `systems/samosbor.ts` imported `generateFloor` from
 `gen/floor_manifest`, and that single edge held a cycle of 293 files. It is cut: the
-floor generator now arrives by injection (`setSamosborFloorGenerator`), the type
+floor generator now arrives by injection (`setSamosborGenServices`), the type
 `FloorGeneration` is imported as `import type` and erased at build, and the cycle fell
 to 106. A lazy floor registry instead of the 63 static imports in
 `gen/design_floors/manifest.ts` was measured and gives nothing on top of that — the
@@ -183,6 +183,17 @@ What is left is 4: `ai/combat ↔ ai/monster ↔ ai/micro_goals ↔ ai/khorovaya
 is mutual logic inside one subsystem — targeting, firing, micro-goals and the matka
 reference each other on purpose — not somebody else's leaf, so it stays.
 
+**Runtime `systems → gen` edges are now zero** (2026-08-16). The last three were the same
+two classes as before: leaves filed under `gen/` (`pick`/`weightedPick` went to
+`core/rand.ts`, `procedural_screens.ts` to `world/`) and one genuine layer inversion
+(`regrowMaze`, which joined `generateFloor` in the `setSamosborGenServices` seam). The
+ratchet still counts 3 because it is syntactic: all three are `import type FloorGeneration`
+from `gen/floor_manifest`, erased at build. Driving that to zero means moving the type into
+`core/types.ts` and touching ~70 importing files for a counter, so it stays where it is.
+What this unlocks is the point: `systems/` no longer reaches into `gen/`, so the static
+`import './content'` in `main.ts` can become a dynamic `import()` and the 63 floor
+generators can leave the startup chunk. That is a separate change with its own risk.
+
 **Точка сборки контента: `src/content.ts`.** Контент регистрируется побочным эффектом
 импорта: генераторы этажей на верхнем уровне объявляют пакеты NPC, сайд-квесты, зоны и
 наблюдателей событий. Пока дорога к ним шла через самосбор, реестр наполнялся у того,
@@ -205,7 +216,8 @@ The recurring mistake this layer order exists to prevent: a leaf file — a regi
 util, a set of operations over `World` — gets filed under whichever layer called it
 first, and then everyone imports it. That single pattern produced 288 of the project's
 backward edges across five files (`pixutil`, `sprite_index`, `path_blockers`,
-`visual_cell_slots`, `ceiling_heights`). Before adding a file to `gen/` or `render/`,
+`visual_cell_slots`, `ceiling_heights`); `procedural_screens` was the sixth, found in the
+same way — it imports only `core/` and `data/`, and lives in `world/` now. Before adding a file to `gen/` or `render/`,
 check whether it actually decides generation or drawing, or whether it is a leaf that
 belongs in `core/`, `data/`, `entities/` or `world/`.
 

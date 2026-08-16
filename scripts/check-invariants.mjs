@@ -40,10 +40,16 @@ const ALLOWED = {
   root: ['core', 'data', 'entities', 'world', 'systems', 'gen', 'render'],
 };
 
-/* Известные нарушения на момент установки проверки. Только вниз. */
+/* Известные нарушения на момент установки проверки. Только вниз.
+   systems->gen: из шести осталось три, и все три — `import type FloorGeneration`
+   из gen/floor_manifest (samosbor, samosbor_wave, floor_memory). При сборке тип
+   стирается, рантайм-ребра нет: цикл и разрезание бандла они не держат. Довести
+   счётчик до нуля можно только переселив сам тип в core/types, а это ~70 файлов
+   импортёров ради косметики — не стоит того. Проверка синтаксическая и типы
+   отличать не умеет, поэтому число зафиксировано здесь, а не занижено. */
 const BASELINE = {
   'gen->render': 5,
-  'systems->gen': 6,
+  'systems->gen': 3,
   'systems->render': 3,
   'data->entities': 3,
   'entities->render': 2,

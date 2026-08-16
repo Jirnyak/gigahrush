@@ -30,7 +30,7 @@ import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
-import { SCREEN_FRAMES } from '../procedural_screens';
+import { SCREEN_FRAMES } from '../../world/procedural_screens';
 import { rng } from '../../core/rand';
 
 export const EKRANNIK_ID = 'ekrannik';

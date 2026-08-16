@@ -45,7 +45,7 @@ const bucketDefs = [
   {
     id: 'texture_code',
     label: 'texture code',
-    match: id => id === 'src/render/textures.ts' || id === 'src/gen/procedural_screens.ts',
+    match: id => id === 'src/render/textures.ts' || id === 'src/world/procedural_screens.ts',
   },
 ];
 

@@ -13,7 +13,7 @@ import {
   type Zone,
 } from '../core/types';
 import { World } from '../core/world';
-import { rng, pickFrom, shuffleWith, type RandomSource, irand } from '../core/rand';
+import { rng, pick, pickFrom, shuffleWith, type RandomSource, irand } from '../core/rand';
 import { ROOM_DEFS } from '../data/catalog';
 
 
@@ -30,7 +30,6 @@ export function pickRandomRoom(world: World, rand: RandomSource = rng): Room | u
   if (!world.rooms || world.rooms.length === 0) return undefined;
   return pickFrom(rand, world.rooms);
 }
-export const pick = <T>(a: readonly T[], rand: RandomSource = rng): T => pickFrom(rand, a);
 export const shuffle = <T>(a: T[], rand: RandomSource = rng): T[] => shuffleWith(rand, a);
 
 export type ArrivalSpawnReason =
@@ -1704,15 +1703,6 @@ export function openVolatileDoors(world: World): void {
     world.cells[idx] = Cell.FLOOR;
     world.removeDoorAt(idx);
   }
-}
-
-/* ── Weighted random pick ────────────────────────────────────── */
-export function weightedPick<T extends { spawnW: number }>(defs: T[]): T | null {
-  const total = defs.reduce((s, d) => s + d.spawnW, 0);
-  if (total <= 0) return null;
-  let r = (irand(0, 10000) / 10000) * total;
-  for (const d of defs) { r -= d.spawnW; if (r <= 0) return d; }
-  return defs[defs.length - 1];
 }
 
 const CARDINAL_DIRS = [[1,0],[-1,0],[0,1],[0,-1]] as const;

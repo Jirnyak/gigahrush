@@ -13,7 +13,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { placeLifts, generateZones, ensureConnectivity } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 
 import { KVARTIRY_POPULATION_PROFILE } from '../../data/population_profiles';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';

@@ -37,15 +37,15 @@
    идут в том же порядке. Абсолютные индексы массивов при этом сдвинуты, потому
    что девять пакетов чёрного рынка и кремниевого колодца встали в середину:
    раньше они регистрировались только при первой генерации своего этажа. */
-import './gen/living';
+import { regrowMaze } from './gen/living';
 import './gen/kvartiry';
 import { generateFloor } from './gen/floor_manifest';
-import { setSamosborFloorGenerator } from './systems/samosbor';
+import { setSamosborGenServices } from './systems/samosbor';
 
 /* Сюжетная цепочка и тринадцать главных личностей. Сюда же приезжает
    `npc_plot_packages` — он подключается голым импортом из `data/plot`. */
 import './data/plot';
 
 /* Самосбор перестраивает этаж, но не знает, кто его порождает: слой systems
-   стоит под gen и звать его не имеет права. Генератор ставится здесь. */
-setSamosborFloorGenerator(generateFloor);
+   стоит под gen и звать его не имеет права. Стройка ставится здесь. */
+setSamosborGenServices({ generateFloor, regrowMaze });

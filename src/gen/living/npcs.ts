@@ -8,10 +8,9 @@ import {
 import { World } from '../../core/world';
 import { ITEMS, NOTES } from '../../data/catalog';
 import { spawnCount } from '../../data/items';
-import { pick, weightedPick } from '../shared';
 import { Spr } from '../../entities/sprite_index';
 import type { AptPlan } from './apartments';
-import { rng, irand } from '../../core/rand';
+import { rng, irand, pick, weightedPick } from '../../core/rand';
 
 
 

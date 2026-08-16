@@ -21,8 +21,7 @@ import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { gaussianLevel, getMaxHp, randomRPG } from '../../systems/rpg';
 import { initializeCellTerritory, territoryHqAnchors, territoryOwnerAtIndex } from '../../systems/territory';
-import { pick } from '../shared';
-import { rng, irand } from '../../core/rand';
+import { rng, irand, pick } from '../../core/rand';
 
 const MAINTENANCE_NPC_TARGET_AT_DEFAULT_CAP = 500;
 export const MAINTENANCE_TERRITORY_SEED = 0x4d770077;

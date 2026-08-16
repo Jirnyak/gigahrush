@@ -6,14 +6,14 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 
-import { pick, ensureConnectivity, placeLifts, generateZones } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { ensureConnectivity, placeLifts, generateZones } from '../shared';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { calcZoneLevel } from '../../systems/rpg';
 import { initializeCellTerritory } from '../../systems/territory';
 import { buildHellGeometry, imprintHellArenaValleys } from './geometry';
 import { runHellContent } from './content_manifest';
-import { rng, irand } from '../../core/rand';
+import { rng, irand, pick } from '../../core/rand';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { Spr } from '../../entities/sprite_index';
 

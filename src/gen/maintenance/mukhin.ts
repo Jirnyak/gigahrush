@@ -4,8 +4,7 @@ import { Faction, Occupation, QuestType, type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { pick } from '../shared';
-import { rng } from '../../core/rand';
+import { rng, pick } from '../../core/rand';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Валерий Мухин',

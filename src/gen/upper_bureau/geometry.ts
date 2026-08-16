@@ -26,7 +26,7 @@ import { calcZoneLevel } from '../../systems/rpg';
 import { publishEvent } from '../../systems/events';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { ensureConnectivity, generateZones, stampRoom } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 import {
   type NextId, addItemDrop, setFeature,
 } from '../admin_common';

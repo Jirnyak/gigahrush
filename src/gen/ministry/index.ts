@@ -9,13 +9,13 @@ import {
   EntityType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
 import { Spr } from '../../entities/sprite_index';
 import { runMinistryContent } from './content_manifest';
 import { applyMinistryMacroGeometry } from './geometry';
-import { rng, irand } from '../../core/rand';
+import { rng, irand, pick } from '../../core/rand';
 
 
 /* ── Portrait picker — coordinate-hash like posters ───────────── */

@@ -7,8 +7,8 @@ import {
   type Room, type Entity,
   EntityType, } from '../../core/types';
 import { World } from '../../core/world';
-import { pick, placeLifts, generateZones, ensureConnectivity } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
 import { runMaintenanceContent } from './content_manifest';
 import { Spr } from '../../entities/sprite_index';
@@ -19,7 +19,7 @@ import {
   relocateMaintenanceFactionNpcSquads,
   spawnMaintenanceFactionNpcSquads,
 } from './territory';
-import { rng, irand } from '../../core/rand';
+import { rng, irand, pick } from '../../core/rand';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)

@@ -1,5 +1,5 @@
 import { currentFloorRunEntry } from './procedural_floors';
-import { rng, xorshift32, irand, mathRng } from '../core/rand';
+import { rng, xorshift32, irand, mathRng, pick, weightedPick } from '../core/rand';
 /* ── САМОСБОР — the maze restructures itself ─────────────────── */
 /*   Every floor runs a local wave from a random mutable map point. */
 /*   Protected rooms, hermowalls and lifts are preserved.           */
@@ -36,12 +36,10 @@ import {
 } from './audio';
 import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
-import { regrowMaze } from '../gen/living';
 import type { FloorGeneration } from '../gen/floor_manifest';
 import { floorLevelDisplayName } from '../data/floor_names';
 import { clearPathBlockerRegion, rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
-import { flashSamosborWarningScreens } from '../gen/procedural_screens';
-import { pick, weightedPick } from '../gen/shared';
+import { flashSamosborWarningScreens } from '../world/procedural_screens';
 import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { publishEvent } from './events';
 import { generateNpcLoadout } from './procedural_loot';
@@ -117,26 +115,40 @@ import {
   territoryOwnerAtIndex,
 } from './territory';
 
-/* ── Генератор этажей приходит инъекцией ─────────────────────────
+/* ── Постройка этажа приходит инъекцией ──────────────────────────
  * Самосбор перестраивает этаж, но не имеет права знать, кто его порождает:
  * слой systems стоит под gen. Прямой импорт `generateFloor` из
  * `gen/floor_manifest` замыкал рантайм-цикл на 293 файла и заодно работал
  * де-факто триггером загрузки всего контента — импорт одного самосбора тянул
- * 63 генератора этажей. Теперь генератор ставит точка сборки: `src/content.ts`.
+ * 63 генератора этажей. Тем же ребром висел `regrowMaze` из `gen/living`.
+ * Теперь обе стройки ставит точка сборки: `src/content.ts`.
  * Тип FloorGeneration импортируется как type и при сборке стирается — рёбра нет. */
-export type FloorGenerator = (z: number, runSeed?: number, isTutorial?: boolean) => FloorGeneration;
+export interface SamosborGenServices {
+  /** Полная генерация этажа: конец волны сшивает результат с уцелевшей частью мира. */
+  generateFloor(z: number, runSeed?: number, isTutorial?: boolean): FloorGeneration;
+  /** Пересев волатильного лабиринта жилого этажа после волны. */
+  regrowMaze(world: World): void;
+}
 
-let floorGenerator: FloorGenerator | undefined;
+let genServices: SamosborGenServices | undefined;
 
-export function setSamosborFloorGenerator(generator: FloorGenerator): void {
-  floorGenerator = generator;
+export function setSamosborGenServices(services: SamosborGenServices): void {
+  genServices = services;
+}
+
+function genService(): SamosborGenServices {
+  if (!genServices) {
+    throw new Error('[SAMOSBOR] постройка этажей не установлена: точка сборки должна импортировать src/content.ts');
+  }
+  return genServices;
 }
 
 function generateFloor(z: number, runSeed?: number, isTutorial?: boolean): FloorGeneration {
-  if (!floorGenerator) {
-    throw new Error('[SAMOSBOR] генератор этажей не установлен: точка сборки должна импортировать src/content.ts');
-  }
-  return floorGenerator(z, runSeed, isTutorial);
+  return genService().generateFloor(z, runSeed, isTutorial);
+}
+
+function regrowMaze(world: World): void {
+  genService().regrowMaze(world);
 }
 
 const MONSTERS_PER_SAMOSBOR = 16;

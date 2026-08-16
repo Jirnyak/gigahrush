@@ -34,7 +34,7 @@ import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { reassignQuestGivers } from '../../systems/quests';
 import { calcZoneLevel, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { generateZones, stampHQRooms } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 import { designFloorPopulationProfile } from '../../data/design_floor_population';
 import { DESIGN_FLOOR_ROUTES } from '../../data/design_floors';
 import { Faction } from '../../core/types';

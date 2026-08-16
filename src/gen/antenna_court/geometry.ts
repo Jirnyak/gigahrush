@@ -10,7 +10,7 @@ import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import {
   stampRoom,
 } from '../shared';
-import { SCREEN_FRAMES } from '../procedural_screens';
+import { SCREEN_FRAMES } from '../../world/procedural_screens';
 import type { FloorGeneration } from '../floor_manifest';
 import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, SIGNAL_FLAG_TUNED, SIGNAL_FLAG_MARKET_JAMMED, SIGNAL_FLAG_VOID_RECORDED, SIGNAL_FLAG_MINISTRY_NOTICED, SIGNAL_FLAG_BATTERY_STOLEN, SIGNAL_FLAG_EXPOSED, CX, CY, ANTENNA_COURT_ROUTE_DECISIONS, ANTENNA_TERRITORY_TARGETS, TARGET_SHARE_BY_FACTION, SIGNAL_CLUES } from "./meta";
 import { applyAntennaCourtTerritory } from "./npcs";

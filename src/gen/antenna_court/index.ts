@@ -14,7 +14,7 @@ import {
   generateZones,
   placeDoor,
 } from '../shared';
-import { placeProceduralScreens } from '../procedural_screens';
+import { placeProceduralScreens } from '../../world/procedural_screens';
 import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_Z, CONTAINER_ID_BASE } from "./meta";
 import { AntennaCourtGeneration, antennaCourtDebugLines, expandAntennaCourtRouteGeometry, retuneAntennaCourtRouteZones, stampAntennaCourtRooms, retuneAntennaZones, decorateAntennaCourt, placeAuthoredSignalScreens, dropItem, dropDesk, placeFixedLift } from "./geometry";
 import { createAntennaCourtSignalState, spawnPlotNpc, spawnSignalMonsters, addContainer } from "./npcs";
