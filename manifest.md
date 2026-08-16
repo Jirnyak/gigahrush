@@ -224,7 +224,10 @@ src/
     alife_migration.ts миграция NPC между этажами
     demos.ts       view-модель «Инфосети Демос»
     demos_runtime.ts фоновый социальный цикл Демоса (посты, реакции, квесты)
-    markov_text.ts / speech_router.ts роутер речи NPC на цепях Маркова
+    markov_text.ts / speech_router.ts роутер речи NPC на цепях Маркова;
+                   контекст входит в выбор битовой маской канонических тегов
+                   (словарь COMPILED_TAG_BITS в матрице), атом выбирается
+                   вероятностно по Score = W_base + α·bitCount + β·косинус PCA
     net_sphere.ts  клиент онлайн-контура Cloudflare Net Sphere
     online_client.ts транспорт онлайн-коопа: WS-релей, peer_move 20 Гц, host_state 8 Гц
     online_protocol.ts протокол v2: интенты с seq, actor echo, интерполяция, cell-патчи, fx

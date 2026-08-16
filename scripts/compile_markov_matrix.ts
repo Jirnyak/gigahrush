@@ -41,7 +41,137 @@ interface CategoryItem {
   text: string;
   weight: number;
   tags: string[];
+  mask?: number;
+  pcaDanger?: number;
+  pcaWealth?: number;
+  pcaNeed?: number;
 }
+
+/* ── Канонический словарь тегов ────────────────────────────────────
+   Классы эквивалентности из markov_plan.md §2.1 плюс семантические оси.
+   Ровно 32 имени = один int32 на ребро графа: bitCount(A & C) вместо
+   перебора строковых ключей в горячем цикле. Порядок здесь ничего не
+   значит для рантайма — словарь выпускается в матрицу как
+   COMPILED_TAG_BITS (имя → маска), рантайм читает имена оттуда.
+   Расширение: новый тег добавляется сюда или в TAG_ALIASES, не в генератор. */
+const CANONICAL_TAGS = [
+  'danger', 'samosbor', 'monster', 'anomaly', 'combat', 'weapon', 'fear', 'need',
+  'water', 'food', 'wound', 'medical', 'repair', 'door', 'room', 'zone',
+  'trade', 'wealth', 'item', 'document', 'bureaucracy', 'guard', 'liquidator', 'science',
+  'faction', 'person', 'relation', 'hostile', 'theft', 'shelter', 'survival', 'action',
+] as const;
+
+if (CANONICAL_TAGS.length > 32) {
+  throw new Error(`Канонических тегов ${CANONICAL_TAGS.length}, в int32 влезает 32`);
+}
+
+const TAG_BIT = new Map<string, number>();
+/* Беззнаково: 1 << 31 в JS отрицательное, а маска едет в JSON и в тесты. */
+CANONICAL_TAGS.forEach((name, i) => TAG_BIT.set(name, (1 << i) >>> 0));
+
+/* Сырые теги игровых данных (475 штук) сворачиваются в канонические классы.
+   Гранулярность rifle/shotgun/shells не несёт смысла для выбора реплики —
+   несёт «оружие». Всё неучтённое даёт нулевой вклад, это не ошибка. */
+const TAG_ALIASES: Record<string, readonly string[]> = {
+  // оружие и бой
+  rifle: ['weapon'], shotgun: ['weapon'], shells: ['weapon'], ammo: ['weapon'],
+  ammo_762: ['weapon'], ammo_shells: ['weapon'], ammo_burn: ['weapon', 'danger'],
+  grenade: ['weapon', 'danger'], precision: ['weapon'], flame: ['weapon', 'danger'],
+  breach: ['combat', 'door'], counterplay: ['combat'], bait: ['combat'],
+  // угрозы
+  slime: ['monster'], slime_counterplay: ['monster', 'combat'],
+  mystic: ['anomaly'], topology: ['anomaly'], aftermath: ['samosbor'],
+  // нужда и тело
+  thirst: ['water', 'need'], hunger: ['food', 'need'],
+  medicine: ['medical'], concentrate: ['food'], brewing: ['water', 'trade'],
+  // ремонт и инфраструктура
+  maintenance: ['repair'], tool: ['repair'], engineer: ['repair', 'person'],
+  repair_input: ['repair', 'trade'], filter: ['repair', 'survival'],
+  electronics: ['science', 'repair'], metal: ['item', 'trade'], fuel: ['item', 'trade'],
+  lift: ['zone'], route: ['zone'], corridor_stop: ['room'],
+  kvartiry: ['zone'], ministry: ['zone', 'bureaucracy'],
+  // наука
+  nii: ['science'], sample: ['science'], reagent: ['science'],
+  // порядок, бумаги, торговля
+  permit: ['document', 'bureaucracy'], paper: ['document'], access: ['document'],
+  evidence: ['document', 'theft'], audit: ['bureaucracy', 'document'],
+  official: ['bureaucracy'], control: ['bureaucracy'], order: ['bureaucracy'],
+  queue: ['bureaucracy', 'relation'], issue_stash: ['document', 'trade'],
+  black_market: ['trade', 'theft'], production: ['trade'], factory_input: ['trade'],
+  shortage: ['trade', 'need'], contraband: ['theft', 'trade'],
+  currency: ['wealth', 'trade'], valuable: ['wealth'], resource: ['item'],
+  expensive_item: ['wealth', 'item'], cheap_item: ['item'],
+  // люди и стороны
+  cleanup: ['guard'], security: ['guard'], citizen: ['faction', 'person'],
+  wild: ['faction'], cult: ['faction', 'anomaly'], resident_good: ['person'],
+  help: ['relation'], anger: ['hostile'], panic: ['fear'], sadness: ['fear'],
+  emotion: ['fear'], relief: ['shelter'], safe: ['shelter'],
+  // среда
+  air: ['survival'], dark: ['survival'], water_hazard: ['water', 'danger'],
+  urgent: ['need', 'danger'], spoiled: ['food'], trophy: ['wealth'],
+  documents: ['document'], contract: ['document', 'trade'],
+};
+
+function tagMask(tags: readonly string[]): number {
+  let mask = 0;
+  for (const raw of tags) {
+    const direct = TAG_BIT.get(raw);
+    if (direct !== undefined) { mask |= direct; continue; }
+    const aliases = TAG_ALIASES[raw];
+    if (!aliases) continue;
+    for (const name of aliases) mask |= TAG_BIT.get(name) ?? 0;
+  }
+  return mask >>> 0;
+}
+
+/* Упаковка ребра: count * 2^14 + индекс маски в COMPILED_MASK_TABLE.
+   Различных масок ~10 тысяч на 125 тысяч рёбер, поэтому в ребро едет индекс,
+   а не сама 32-битная маска: число остаётся коротким (влезает в SMI, значит
+   лежит в объекте без боксинга) и хорошо жмётся, тогда как полная упаковка
+   count * 2^32 + mask давала десятизначные уникальные числа и раздувала gzip. */
+const MASK_INDEX_BITS = 14;
+const EDGE_COUNT_SCALE = 1 << MASK_INDEX_BITS;
+
+function popcount(v: number): number {
+  let x = v - ((v >>> 1) & 0x55555555);
+  x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
+  x = (x + (x >>> 4)) & 0x0f0f0f0f;
+  return (x * 0x01010101) >>> 24;
+}
+
+/* Оси PCA — это не таблица чисел, а объявление того, какие классы лежат на
+   какой оси. Величина по оси выводится из состава маски, а где у источника
+   есть настоящее число (цена предмета, урон монстра, вес аномалии) — из него. */
+const AXIS_DANGER = tagMask(['danger', 'samosbor', 'monster', 'anomaly', 'combat', 'weapon', 'fear', 'hostile']);
+const AXIS_WEALTH = tagMask(['trade', 'wealth', 'item', 'document']);
+const AXIS_NEED = tagMask(['need', 'water', 'food', 'wound', 'medical']);
+
+function axisFromMask(mask: number, axis: number): number {
+  return Math.min(1, popcount(mask & axis) / 2);
+}
+
+function withDerivedAxes(item: CategoryItem): CategoryItem {
+  const mask = tagMask(item.tags);
+  item.mask = mask;
+  item.pcaDanger = round2(item.pcaDanger ?? axisFromMask(mask, AXIS_DANGER));
+  item.pcaWealth = round2(item.pcaWealth ?? axisFromMask(mask, AXIS_WEALTH));
+  item.pcaNeed = round2(item.pcaNeed ?? axisFromMask(mask, AXIS_NEED));
+  return item;
+}
+
+function round2(v: number): number {
+  return Math.round(Math.max(-1, Math.min(1, v)) * 100) / 100;
+}
+
+const ITEM_TYPE_TAGS: Partial<Record<ItemType, readonly string[]>> = {
+  [ItemType.WEAPON]: ['weapon', 'combat'],
+  [ItemType.AMMO]: ['weapon'],
+  [ItemType.FOOD]: ['food', 'need'],
+  [ItemType.DRINK]: ['water', 'need'],
+  [ItemType.MEDICINE]: ['medical', 'wound'],
+  [ItemType.TOOL]: ['repair'],
+  [ItemType.NOTE]: ['document'],
+};
 
 function buildItemCategories(): Record<string, CategoryItem[]> {
   const categories: Record<string, CategoryItem[]> = {
@@ -54,18 +184,27 @@ function buildItemCategories(): Record<string, CategoryItem[]> {
     RESOURCE: []
   };
   
+  /* Шкала ценности берётся из самого реестра, а не константой: ось Ценности
+     растянута между «пустые карманы» и самым дорогим предметом игры. */
+  const maxValue = Math.max(1, ...Object.values(ITEMS).map(d => d.value || 0));
+  const valueSpan = Math.log10(maxValue + 1);
+
   for (const def of Object.values(ITEMS)) {
     if (!isSanitizedWord(def.name)) continue;
-    
+
     const weight = Math.max(10, def.value || 10);
+    /* Тип предмета — такой же источник смысла, как его теги: у брони и пайка
+       в реестре тегов может не быть вовсе, а класс эквивалентности есть. */
     const tags = def.tags ? [...def.tags] : [];
-    
+    tags.push('item', ...(ITEM_TYPE_TAGS[def.type] ?? []));
+
     const catItem: CategoryItem = {
       text: def.name.toLowerCase(),
       weight,
-      tags
+      tags,
+      pcaWealth: round2((Math.log10((def.value || 0) + 1) / valueSpan) * 2 - 1),
     };
-    
+
     categories.ITEM.push(catItem);
     
     switch (def.type) {
@@ -120,13 +259,20 @@ function buildFactionCategories(): CategoryItem[] {
 
 function buildThreatCategories(): CategoryItem[] {
   const items: CategoryItem[] = [];
-  for (const key of Object.keys(MONSTERS)) {
-    const def = MONSTERS[Number(key) as MonsterKind];
-    if (def && def.name) {
-      items.push({ text: def.name.toLowerCase(), weight: 50, tags: ['danger', 'monster'] });
-    }
+  /* Опасность монстра — его собственные урон и живучесть, нормированные по
+     самому опасному в реестре. Таблицы «кто страшнее» не заводим. */
+  const defs = Object.keys(MONSTERS).map(k => MONSTERS[Number(k) as MonsterKind]).filter(d => d && d.name);
+  const maxDmg = Math.max(1, ...defs.map(d => d.dmg || 0));
+  const maxHp = Math.max(1, ...defs.map(d => d.hp || 0));
+  for (const def of defs) {
+    items.push({
+      text: def.name.toLowerCase(),
+      weight: 50,
+      tags: ['danger', 'monster'],
+      pcaDanger: round2(((def.dmg || 0) / maxDmg + (def.hp || 0) / maxHp) / 2),
+    });
   }
-  items.push({ text: 'самосбор', weight: 100, tags: ['samosbor', 'danger'] });
+  items.push({ text: 'самосбор', weight: 100, tags: ['samosbor', 'danger'], pcaDanger: 1 });
   items.push({ text: 'аномалия', weight: 50, tags: ['mystic', 'danger'] });
   return items;
 }
@@ -189,9 +335,17 @@ function buildDocumentCategories(): CategoryItem[] {
 
 function buildAnomalyCategories(): CategoryItem[] {
   const items: CategoryItem[] = [];
+  /* Вес аномалии в раскладке этажа — готовая мера её редкости/тяжести;
+     редкая аномалия звучит опаснее частой. */
+  const maxWeight = Math.max(1, ...FLOOR_ANOMALIES.filter(d => d.id !== 'none').map(d => d.weight));
   for (const def of FLOOR_ANOMALIES) {
     if (def.id !== 'none') {
-      items.push({ text: def.title.toLowerCase(), weight: def.weight * 5, tags: ['danger', 'anomaly', ...def.tags] });
+      items.push({
+        text: def.title.toLowerCase(),
+        weight: def.weight * 5,
+        tags: ['danger', 'anomaly', ...def.tags],
+        pcaDanger: round2(1 - def.weight / (maxWeight + 1)),
+      });
     }
   }
   return items;
@@ -360,7 +514,10 @@ const END_TOKEN = "</s>";
 
 interface TransitionInfo {
   count: number;
-  tags: Record<string, number>;
+  /* маска → сколько предложений с ней прошло через это ребро. Свернём в один
+     int32 на сериализации: бит выживает, если он был у большинства. Простой OR
+     насыщает частые истории до «все теги» и убивает различимость. */
+  maskCounts: Map<number, number>;
 }
 
 type MarkovGraph = Map<string, Map<string, TransitionInfo>>;
@@ -386,7 +543,7 @@ class MarkovModel {
     }).filter(w => w.length > 0);
   }
 
-  public train(corpus: { text: string; tags: string[] }[]) {
+  public train(corpus: { text: string; mask: number }[]) {
     for (const item of corpus) {
       const tokens = this.tokenize(item.text);
       if (tokens.length < 3) continue;
@@ -404,14 +561,13 @@ class MarkovModel {
 
           const transitions = this.graph.get(history)!;
           if (!transitions.has(nextToken)) {
-            transitions.set(nextToken, { count: 0, tags: {} });
+            transitions.set(nextToken, { count: 0, maskCounts: new Map() });
           }
 
           const transInfo = transitions.get(nextToken)!;
           transInfo.count += 1;
-          
-          for (const tag of item.tags) {
-            transInfo.tags[tag] = (transInfo.tags[tag] || 0) + 1;
+          if (item.mask !== 0) {
+            transInfo.maskCounts.set(item.mask, (transInfo.maskCounts.get(item.mask) || 0) + 1);
           }
         }
       }
@@ -462,8 +618,56 @@ class MarkovModel {
 }
 
 
-const RAW_CORPUS: { text: string; tags: string[] }[] = [];
+const RAW_CORPUS: { text: string; mask: number }[] = [];
 let rejectedMeta = 0;
+
+/* ── Классификация предложений корпуса ─────────────────────────────
+   Ручной разметки нет и быть не должно. Тег предложения выводится из двух
+   механических источников: какие плейсхолдеры классов эквивалентности в нём
+   стоят после абстрагирования, и какие канонические слова игры в нём есть. */
+const PLACEHOLDER_TAGS: Record<string, readonly string[]> = {
+  '<SUBJ>': ['person'],
+  '<NPC_NAME>': ['person'],
+  '<PLACE>': ['room'],
+  '<THREAT>': ['danger'],
+  '<ITEM>': ['item'],
+  '<FACTION>': ['faction'],
+  '<ACTION_VERB>': ['action'],
+  '<EMOTION>': ['fear'],
+};
+
+const PLACEHOLDER_MASKS = new Map<string, number>(
+  Object.entries(PLACEHOLDER_TAGS).map(([ph, tags]) => [ph, tagMask(tags)])
+);
+
+/* Словарь канонических слов строится из самих игровых категорий: у каждого
+   предмета, монстра, комнаты и аномалии уже есть теги — значит есть и маска
+   для слов его названия. Русская морфология срезается префиксом. */
+const STEM_LEN = 5;
+const CANONICAL_STEMS = new Map<string, number>();
+for (const items of Object.values(CANONICAL_CATEGORIES)) {
+  for (const item of items) {
+    const mask = tagMask(item.tags);
+    if (mask === 0) continue;
+    for (const word of item.text.toLocaleLowerCase('ru-RU').split(/[^а-яё]+/)) {
+      if (word.length < STEM_LEN) continue;
+      const stem = word.slice(0, STEM_LEN);
+      CANONICAL_STEMS.set(stem, (CANONICAL_STEMS.get(stem) || 0) | mask);
+    }
+  }
+}
+
+function classifySentence(sentence: string): number {
+  let mask = 0;
+  for (const [placeholder, phMask] of PLACEHOLDER_MASKS) {
+    if (sentence.includes(placeholder)) mask |= phMask;
+  }
+  for (const word of sentence.toLocaleLowerCase('ru-RU').split(/[^а-яё]+/)) {
+    if (word.length < STEM_LEN) continue;
+    mask |= CANONICAL_STEMS.get(word.slice(0, STEM_LEN)) ?? 0;
+  }
+  return mask;
+}
 
 /**
  * Корпус собран из внешних текстов и содержит следы веб-скрейпа: ссылки,
@@ -522,7 +726,7 @@ try {
 
         const wordsCount = clean.split(' ').length;
         if (wordsCount >= 3 && wordsCount <= 50 && isInWorldSentence(clean)) {
-          RAW_CORPUS.push({ text: clean, tags: ['lore', 'neutral'] });
+          RAW_CORPUS.push({ text: clean, mask: classifySentence(clean) });
           added++;
         } else if (wordsCount >= 3 && wordsCount <= 50) {
           rejectedMeta++;
@@ -537,13 +741,24 @@ try {
 
 
 function compileAndVerify(): void {
+  const unknownTags = new Set<string>();
   for (const [catName, items] of Object.entries(CANONICAL_CATEGORIES)) {
     for (const item of items) {
       if (!isSanitizedWord(item.text)) {
         throw new Error(`Sanitization check failed for item in ${catName}: ${item.text}`);
       }
+      for (const raw of item.tags) {
+        if (!TAG_BIT.has(raw) && !TAG_ALIASES[raw]) unknownTags.add(raw);
+      }
+      withDerivedAxes(item);
     }
   }
+  console.log(`[Compile Markov Matrix] Tag vocabulary: ${CANONICAL_TAGS.length} canonical bits, ${Object.keys(TAG_ALIASES).length} aliases, ${unknownTags.size} raw tags left unmapped.`);
+
+  /* Словарь для рантайма: канонические имена и синонимы в одной таблице. */
+  const tagDictionary: Record<string, number> = {};
+  for (const name of CANONICAL_TAGS) tagDictionary[name] = TAG_BIT.get(name)!;
+  for (const alias of Object.keys(TAG_ALIASES)) tagDictionary[alias] = tagMask([alias]);
 
   console.log('[Compile Markov Matrix] Training Markov Model...');
   const model = new MarkovModel(1);
@@ -554,18 +769,62 @@ function compileAndVerify(): void {
   model.buildHeuristics(targetTags);
 
   console.log('[Compile Markov Matrix] Serializing graph...');
-  const objGraph: any = {};
+  /* Ребро — одно число: старшие биты count, младшие 32 — маска тегов.
+     Объект {count, tags:{...}} на 124к рёбер стоил ~37 МиБ постоянной кучи
+     и ~5 МБ бандла, причём хранил одну и ту же константу. */
+  const edgeMasks = new Map<string, Map<string, number>>();
+  const maskFreq = new Map<number, number>();
+  let maskedEdges = 0;
   for (const [hist, trans] of model.graph.entries()) {
-    objGraph[hist] = {};
+    const row = new Map<string, number>();
     for (const [next, info] of trans.entries()) {
-      objGraph[hist][next] = { count: info.count, tags: info.tags };
+      let mask = 0;
+      if (info.maskCounts.size > 0) {
+        const majority = info.count / 2;
+        for (let bit = 0; bit < CANONICAL_TAGS.length; bit++) {
+          const flag = (1 << bit) >>> 0;
+          let hits = 0;
+          for (const [m, c] of info.maskCounts) if (m & flag) hits += c;
+          if (hits >= majority) mask = (mask | flag) >>> 0;
+        }
+      }
+      if (mask !== 0) maskedEdges++;
+      row.set(next, mask);
+      maskFreq.set(mask, (maskFreq.get(mask) ?? 0) + 1);
     }
+    edgeMasks.set(hist, row);
   }
 
-  const objDistances: any = {};
+  /* Частые маски получают младшие индексы: короче число в JSON. */
+  const maskTable = [...maskFreq.entries()].sort((a, b) => b[1] - a[1]).map(([m]) => m);
+  if (maskTable.length > EDGE_COUNT_SCALE) {
+    throw new Error(`различных масок ${maskTable.length}, в ${MASK_INDEX_BITS} бит индекса влезает ${EDGE_COUNT_SCALE}`);
+  }
+  const maskIndex = new Map(maskTable.map((m, i) => [m, i]));
+
+  const objGraph: Record<string, Record<string, number>> = {};
+  for (const [hist, row] of edgeMasks) {
+    const out: Record<string, number> = {};
+    for (const [next, mask] of row) {
+      const count = model.graph.get(hist)!.get(next)!.count;
+      const packed = count * EDGE_COUNT_SCALE + maskIndex.get(mask)!;
+      if (packed > 0x7fffffff) throw new Error(`ребро ${packed} вышло за SMI: count ${count}`);
+      out[next] = packed;
+    }
+    objGraph[hist] = out;
+  }
+  console.log(`[Compile Markov Matrix] Edges with a non-empty tag mask: ${maskedEdges}; distinct masks: ${maskTable.length}.`);
+
+  /* Пустые карты не выпускаем: категория, до которой корпус не абстрагирован,
+     недостижима обходом графа, и рантайм обязан такую цель пропускать, а не
+     вести к ней. Пустая карта в матрице выглядела бы как рабочая цель. */
+  const objDistances: Record<string, Record<string, number>> = {};
+  const unreachable: string[] = [];
   for (const [target, distMap] of model.patternDistances.entries()) {
+    if (distMap.size === 0) { unreachable.push(target); continue; }
     objDistances[target] = Object.fromEntries(distMap.entries());
   }
+  console.log(`[Compile Markov Matrix] Steerable skeleton targets: ${Object.keys(objDistances).length}; not present in corpus: ${unreachable.join(', ') || 'none'}.`);
 
   const outPath = path.resolve(__dirname, '../src/data/markov_compiled_matrix.ts');
   const fileContent = `/* ── Precompiled Markov Matrix & Categories (Build-Time Generated) ── */
@@ -576,6 +835,11 @@ export interface CompiledCategoryItem {
   readonly text: string;
   readonly weight: number;
   readonly tags: readonly string[];
+  /** Битовая маска канонических тегов, биты — из COMPILED_TAG_BITS. */
+  readonly mask: number;
+  readonly pcaDanger: number;
+  readonly pcaWealth: number;
+  readonly pcaNeed: number;
 }
 
 export interface CompiledSyntaxSkeleton {
@@ -585,10 +849,35 @@ export interface CompiledSyntaxSkeleton {
   readonly weight: number;
 }
 
+/**
+ * Канонический словарь тегов: имя → маска. Единственный контракт между всем,
+ * что производит контекст в игре, и корпусом. Рантайм читает биты отсюда и
+ * не хардкодит порядок; синонимы («thirst») раскрываются в свои канонические
+ * биты (water|need) прямо в этой таблице.
+ */
+export const COMPILED_TAG_BITS: Readonly<Record<string, number>> = ${JSON.stringify(tagDictionary, null, 2)} as const;
+
 export const COMPILED_CATEGORIES: Readonly<Record<string, readonly CompiledCategoryItem[]>> = ${JSON.stringify(CANONICAL_CATEGORIES, null, 2)} as const;
 export const COMPILED_SKELETONS: readonly CompiledSyntaxSkeleton[] = ${JSON.stringify(CANONICAL_SKELETONS, null, 2)} as const;
 
-export const COMPILED_MARKOV_GRAPH: Record<string, Record<string, { count: number, tags: Record<string, number> }>> = JSON.parse(${JSON.stringify(JSON.stringify(objGraph))});
+/**
+ * Ребро упаковано в одно число: count * 2^${MASK_INDEX_BITS} + индекс маски
+ * в COMPILED_MASK_TABLE. Распаковка — markovEdgeCount() / markovEdgeMask().
+ */
+export const COMPILED_MARKOV_GRAPH: Record<string, Record<string, number>> = JSON.parse(${JSON.stringify(JSON.stringify(objGraph))});
+
+/** Таблица различных масок тегов; индекс лежит в младших битах ребра. */
+export const COMPILED_MASK_TABLE: readonly number[] = JSON.parse(${JSON.stringify(JSON.stringify(maskTable))});
+
+export const MARKOV_EDGE_COUNT_SCALE = ${EDGE_COUNT_SCALE};
+
+export function markovEdgeCount(edge: number): number {
+  return (edge / MARKOV_EDGE_COUNT_SCALE) | 0;
+}
+
+export function markovEdgeMask(edge: number): number {
+  return COMPILED_MASK_TABLE[edge & ${EDGE_COUNT_SCALE - 1}] ?? 0;
+}
 export const COMPILED_PATTERN_DISTANCES: Record<string, Record<string, number>> = JSON.parse(${JSON.stringify(JSON.stringify(objDistances))});
 `;
 

@@ -3,7 +3,10 @@
 import { rng } from '../core/rand';
 import { randomName } from '../data/catalog';
 import { MARKOV_TEXT_DEFINITIONS, MarkovIntent, MarkovSource } from '../data/markov_text';
-import { COMPILED_SKELETONS, COMPILED_CATEGORIES, COMPILED_MARKOV_GRAPH, COMPILED_PATTERN_DISTANCES } from '../data/markov_compiled_matrix';
+import {
+  COMPILED_SKELETONS, COMPILED_CATEGORIES, COMPILED_MARKOV_GRAPH, COMPILED_PATTERN_DISTANCES,
+  COMPILED_TAG_BITS, markovEdgeCount, markovEdgeMask,
+} from '../data/markov_compiled_matrix';
 /* Реляция берётся из data/relations напрямую, а не через systems/factions:
    getFactionRelation там — однострочный проброс к getFactionRel, а ребро
    markov_text → factions держало рантайм-цикл на 26 файлов. Генератору речи
@@ -98,7 +101,99 @@ export function computePcaContext(context: MarkovTextContext | undefined) {
   };
 }
 
-function resolveCategory(tag: string, ctx: MarkovTextContext | undefined): string {
+/* Score(A,C) = W_base + α·bitCount(Tags_A ∩ Tags_C) + β·CosineSim(V(A), V(C)).
+   α держит тег главным различителем, β — мягкая доводка по осям, W_base
+   логарифмический, чтобы предмет за 5000 не съедал всю категорию. */
+const SCORE_TAG_ALPHA = 1.5;
+const SCORE_PCA_BETA = 1.0;
+/* В обходе графа тег умножает вес: там он конкурирует с эвристикой скелета,
+   поэтому прибавка кратная, а не аддитивная. Прежние +15 за тег подбирались
+   вслепую на ветке, которая ни разу не срабатывала. */
+const GRAPH_TAG_ALPHA = 3;
+/* Спуск к цели скелета экспоненциальный, а не 100/(d+1): пологий градиент
+   тонул в разбросе count (частотное слово на d=8 било редкое на d=0), обход
+   гулял на постоянной дистанции и не доходил до цели — фраза упиралась в
+   потолок в 100 слов. При основании 8 медиана реплики 125 символов и 300 из
+   300 прогонов различны, копипасты корпуса нет. */
+const SKELETON_GRADIENT = 8;
+const SKELETON_OFF_PATH = 1e-4;
+
+/* Скелеты ссылаются на все категории, но корпус абстрагирован только до
+   восьми плейсхолдеров (categoryMap компилятора). У остальных целей карта
+   расстояний пуста: дойти до них обходом графа нельзя в принципе. Такую цель
+   надо пропускать, а не вести к ней — иначе patternIndex не двигается,
+   конец фразы давится множителем 0.01 и реплика идёт до упора в maxWords.
+   Слот всё равно наполняется из COMPILED_CATEGORIES при подстановке. */
+const STEERABLE_TARGETS: ReadonlySet<string> = (() => {
+  const set = new Set<string>();
+  for (const target of Object.keys(COMPILED_PATTERN_DISTANCES)) {
+    for (const _ in COMPILED_PATTERN_DISTANCES[target]) { set.add(target); break; }
+  }
+  return set;
+})();
+
+function bitCount(v: number): number {
+  let x = v - ((v >>> 1) & 0x55555555);
+  x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
+  x = (x + (x >>> 4)) & 0x0f0f0f0f;
+  return (x * 0x01010101) >>> 24;
+}
+
+/** Маска контекста: имена тегов резолвятся через словарь матрицы, не по порядку. */
+function contextTagMask(tags: Iterable<string>): number {
+  let mask = 0;
+  for (const tag of tags) mask |= COMPILED_TAG_BITS[tag] ?? 0;
+  return mask;
+}
+
+/**
+ * Что игра сейчас говорит о ситуации, в терминах канонического словаря.
+ * Единственная точка, где контекст превращается в биты: и обход графа, и
+ * подстановка атомов смотрят на одну и ту же маску. Новая система добавляет
+ * свой тег в словарь и кладёт его в ctx.tags — ветка здесь не нужна.
+ */
+export function buildContextTagMask(ctx: MarkovTextContext | undefined): number {
+  if (!ctx) return 0;
+  const activeTags = new Set<string>();
+  if (ctx.tags) {
+    for (const tag of ctx.tags) activeTags.add(tag);
+  }
+  if (ctx.occupation === 2 || ctx.occupation === 1) activeTags.add('guard'); // just examples based on occupation ID mapping
+  if (ctx.occupation === 3) activeTags.add('repair');
+  if ((ctx.thirst || 0) > 60 || ctx.needBand === 'urgent') activeTags.add('thirst');
+  if ((ctx.hunger || 0) > 60 || ctx.needBand === 'urgent') activeTags.add('hunger');
+  if (ctx.isSamosborActive) activeTags.add('samosbor');
+  if ((ctx.dangerLevel || 0) > 50 || ctx.dangerBand === 'threat') activeTags.add('danger');
+  if (ctx.relationBand === 'hostile') activeTags.add('hostile');
+  if (ctx.recentTrauma) activeTags.add('fear');
+  if (ctx.foundItemValue !== undefined) {
+    if (ctx.foundItemValue >= 1000) activeTags.add('expensive_item');
+    if (ctx.foundItemValue < 100) activeTags.add('cheap_item');
+  }
+  return contextTagMask(activeTags);
+}
+
+/** Выбор атома категории по Score(A,C). Отдельная точка входа для тестов. */
+export function pickCategoryAtom(categoryName: string, ctx: MarkovTextContext | undefined): string {
+  return resolveCategory(`<${categoryName}>`, ctx, buildContextTagMask(ctx));
+}
+
+function atomScore(
+  item: { readonly weight: number; readonly mask: number; readonly pcaDanger: number; readonly pcaWealth: number; readonly pcaNeed: number },
+  ctxMask: number, cd: number, cw: number, cn: number, ctxNorm: number,
+): number {
+  const wBase = Math.log10(1 + Math.max(0, item.weight));
+  const overlap = bitCount(item.mask & ctxMask);
+  let cosine = 0;
+  const itemNorm = Math.sqrt(item.pcaDanger * item.pcaDanger + item.pcaWealth * item.pcaWealth + item.pcaNeed * item.pcaNeed);
+  if (itemNorm > 0 && ctxNorm > 0) {
+    cosine = (item.pcaDanger * cd + item.pcaWealth * cw + item.pcaNeed * cn) / (itemNorm * ctxNorm);
+  }
+  const score = wBase + SCORE_TAG_ALPHA * overlap + SCORE_PCA_BETA * cosine;
+  return score > 0.01 ? score : 0.01;
+}
+
+function resolveCategory(tag: string, ctx: MarkovTextContext | undefined, ctxMask: number): string {
   const categoryName = tag.replace(/[<>]/g, '');
   if (categoryName === 'NPC_NAME') {
     const r = rng();
@@ -130,36 +225,21 @@ function resolveCategory(tag: string, ctx: MarkovTextContext | undefined): strin
     return items[Math.floor(rng() * items.length)].text;
   }
 
-  const pcaCtx = computePcaContext(ctx);
-  const targetDanger = pcaCtx.pcaDanger;
-  const targetWealth = pcaCtx.pcaWealth;
-  const targetNeed = pcaCtx.pcaNeed;
+  /* Два прохода без аллокаций: argmin с полосой 0.1 всплывал одними и теми же
+     атомами и не читал weight вовсе. Здесь выбор вероятностный по Score. */
+  const pca = computePcaContext(ctx);
+  const cd = pca.pcaDanger, cw = pca.pcaWealth, cn = pca.pcaNeed;
+  const ctxNorm = Math.sqrt(cd * cd + cw * cw + cn * cn);
 
-  let bestMatches: any[] = [];
-  let minDistance = Infinity;
+  let total = 0;
+  for (const item of items) total += atomScore(item, ctxMask, cd, cw, cn, ctxNorm);
 
+  let r = rng() * total;
   for (const item of items) {
-    let itemDanger = 0, itemWealth = 0, itemNeed = 0;
-    if (item.tags.includes('danger') || item.tags.includes('monster')) itemDanger = 0.8;
-    if (item.tags.includes('wealth') || item.tags.includes('trade')) itemWealth = 0.8;
-    if (item.tags.includes('need') || item.tags.includes('food')) itemNeed = 0.8;
-
-    const d = Math.sqrt(
-      Math.pow(itemDanger - targetDanger, 2) +
-      Math.pow(itemWealth - targetWealth, 2) +
-      Math.pow(itemNeed - targetNeed, 2)
-    );
-
-    if (d < minDistance) {
-      minDistance = d;
-      bestMatches = [item];
-    } else if (Math.abs(d - minDistance) < 0.1) {
-      bestMatches.push(item);
-    }
+    r -= atomScore(item, ctxMask, cd, cw, cn, ctxNorm);
+    if (r <= 0) return item.text;
   }
-
-  const selected = bestMatches[Math.floor(rng() * bestMatches.length)];
-  return selected ? selected.text : items[Math.floor(rng() * items.length)].text;
+  return items[items.length - 1].text;
 }
 
 export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterResult {
@@ -212,86 +292,47 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
   const pattern = skeleton.pattern.map(p => `<${p}>`);
   const START_TOKEN = "<s>";
   const END_TOKEN = "</s>";
-  const order = 2;
   const maxWords = 100;
-  
-  let currentSequence = Array(order).fill(START_TOKEN);
+  /* Без запроса длину держит не число, а конец предложения из корпуса. */
+  const charBudget = request.maxChars && request.maxChars > 0 ? request.maxChars : Infinity;
+  let spentChars = 0;
+
+  /* Матрица компилируется на порядке 1: истории графа и ключи эвристики
+     скелетов — одиночные токены. Рантайм собирал двухсловный ключ, поэтому
+     не попадал ни в граф (там спасал откат), ни в COMPILED_PATTERN_DISTANCES
+     (а там отката не было: промах давал ×0.01 всем кандидатам сразу, и
+     скелет переставал вести генерацию вообще). */
+  const currentSequence = [START_TOKEN];
   const result: string[] = [];
 
-  const activeTags = new Set<string>();
   const ctx = request.context || {};
-  if (ctx.tags) {
-    for (const tag of ctx.tags) activeTags.add(tag);
-  }
-  if (ctx.occupation === 2 || ctx.occupation === 1) activeTags.add('guard'); // just examples based on occupation ID mapping
-  if (ctx.occupation === 3) activeTags.add('repair');
-  if ((ctx.thirst || 0) > 60 || ctx.needBand === 'urgent') activeTags.add('thirst');
-  if ((ctx.hunger || 0) > 60 || ctx.needBand === 'urgent') activeTags.add('hunger');
-  if (ctx.isSamosborActive) activeTags.add('samosbor');
-  if ((ctx.dangerLevel || 0) > 50 || ctx.dangerBand === 'threat') activeTags.add('danger');
-  if (ctx.relationBand === 'hostile') activeTags.add('hostile');
-  if (ctx.recentTrauma) activeTags.add('fear');
-  if (ctx.foundItemValue !== undefined) {
-    if (ctx.foundItemValue >= 1000) activeTags.add('expensive_item');
-    if (ctx.foundItemValue < 100) activeTags.add('cheap_item');
-  }
+  const ctxMask = buildContextTagMask(ctx);
 
   let patternIndex = 0;
 
   for (let step = 0; step < maxWords; step++) {
-    const len = currentSequence.length;
-    let history = currentSequence[len - 2] + ' ' + currentSequence[len - 1];
-    let transitions = COMPILED_MARKOV_GRAPH[history];
-    let entries = transitions ? Object.entries(transitions) : null;
-
-    if (entries && entries.length === 1 && rng() < 0.25) {
-      const fallbackHistory = currentSequence[len - 1];
-      const fallbackTransitions = COMPILED_MARKOV_GRAPH[fallbackHistory];
-      if (fallbackTransitions) {
-        const fallbackEntries = Object.entries(fallbackTransitions);
-        if (fallbackEntries.length > 1) {
-          history = fallbackHistory;
-          transitions = fallbackTransitions;
-          entries = fallbackEntries;
-        }
-      }
-    }
-
-    if (!entries || entries.length === 0) {
-      history = currentSequence[len - 1];
-      transitions = COMPILED_MARKOV_GRAPH[history];
-      entries = transitions ? Object.entries(transitions) : null;
-    }
+    const history = currentSequence[currentSequence.length - 1];
+    const transitions = COMPILED_MARKOV_GRAPH[history];
+    const entries = transitions ? Object.entries(transitions) : null;
 
     if (!entries || entries.length === 0) break;
 
     const candidates: { word: string, weight: number }[] = [];
     let tw = 0;
 
+    while (patternIndex < pattern.length && !STEERABLE_TARGETS.has(pattern[patternIndex])) patternIndex++;
     const currentTarget = patternIndex < pattern.length ? pattern[patternIndex] : null;
     const targetDistMap = currentTarget ? COMPILED_PATTERN_DISTANCES[currentTarget] : null;
-    const lastSequenceWord = currentSequence[currentSequence.length - 1];
 
-    for (const [nextWord, info] of entries) {
-      let weight = info.count;
+    for (const [nextWord, edge] of entries) {
+      let weight = markovEdgeCount(edge);
 
-      let matchBoost = 1;
-      for (const tag of Object.keys(info.tags || {})) {
-        if (activeTags.has(tag)) {
-          matchBoost += 15;
-        }
-      }
-      weight *= matchBoost;
+      const overlap = bitCount(markovEdgeMask(edge) & ctxMask);
+      if (overlap > 0) weight *= 1 + GRAPH_TAG_ALPHA * overlap;
 
       if (currentTarget && targetDistMap) {
-        const nextHistory = lastSequenceWord + ' ' + nextWord;
-        const dist = targetDistMap[nextHistory];
-        
-        if (dist !== undefined) {
-          weight *= (100 / (dist + 1));
-        } else {
-          weight *= 0.01;
-        }
+        const dist = targetDistMap[nextWord];
+        weight *= dist !== undefined ? Math.pow(SKELETON_GRADIENT, -dist) : SKELETON_OFF_PATH;
       }
 
       candidates.push({ word: nextWord, weight });
@@ -317,15 +358,27 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
 
     result.push(chosenWord);
     currentSequence.push(chosenWord);
+    spentChars += chosenWord.length + 1;
 
     if (currentTarget && chosenWord === currentTarget) {
       patternIndex++;
+    }
+
+    /* Скелет ведёт генерацию к своим целям и до их закрытия давит конец
+       фразы (промах по эвристике — ×0.01, включая </s>). Поэтому останов
+       здесь: скелет закрыт и корпус сам поставил точку — реплика целая.
+       Исчерпав бюджет символов, снимаем ведение, иначе получатель дорежет
+       строку по-живому. */
+    if (patternIndex >= pattern.length && /^[.!?]$/.test(chosenWord)) break;
+    if (spentChars >= charBudget) {
+      if (patternIndex >= pattern.length) break;
+      patternIndex = pattern.length;
     }
   }
 
   const resolvedResult = result.map(word => {
     if (word.startsWith('<') && word.endsWith('>')) {
-      return resolveCategory(word, ctx);
+      return resolveCategory(word, ctx, ctxMask);
     }
     return word;
   });
