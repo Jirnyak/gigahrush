@@ -2058,6 +2058,18 @@ export function placeLifts(
 /* ── Zone generation: 64 organic macro-regions ~128×128 ──────── */
 const ZONE_GRID = 8;  // 8×8 = 64 zones
 const ZONE_CELL = Math.floor(W / ZONE_GRID); // ~128
+const ZONE_JITTER = 20; // центр гуляет внутри своей coarse-ячейки на ±ZONE_JITTER
+
+// Вороной ниже смотрит только в блок 3×3 coarse-ячеек вокруг клетки. Это верно,
+// пока самый дальний центр своей ячейки (диагональ) ближе, чем самый ближний центр
+// через одну (по оси). Вырастет джиттер — сборка упадёт здесь, а не разойдётся молча
+// на границах зон. ZONE_GRID заворачивается через & — только степень двойки.
+if (Math.SQRT2 * (ZONE_CELL / 2 + ZONE_JITTER) >= 1.5 * ZONE_CELL - ZONE_JITTER) {
+  throw new Error(`[ZONES] ZONE_JITTER=${ZONE_JITTER} ломает 3×3-окрестность Вороного`);
+}
+if ((ZONE_GRID & (ZONE_GRID - 1)) !== 0) {
+  throw new Error(`[ZONES] ZONE_GRID=${ZONE_GRID} должен быть степенью двойки`);
+}
 
 export function generateZones(world: World): void {
   const zones: Zone[] = [];
@@ -2066,8 +2078,8 @@ export function generateZones(world: World): void {
   for (let zy = 0; zy < ZONE_GRID; zy++) {
     for (let zx = 0; zx < ZONE_GRID; zx++) {
       const id = zy * ZONE_GRID + zx;
-      const cx = world.wrap(zx * ZONE_CELL + Math.floor(ZONE_CELL / 2) + irand(-20, 20));
-      const cy = world.wrap(zy * ZONE_CELL + Math.floor(ZONE_CELL / 2) + irand(-20, 20));
+      const cx = world.wrap(zx * ZONE_CELL + Math.floor(ZONE_CELL / 2) + irand(-ZONE_JITTER, ZONE_JITTER));
+      const cy = world.wrap(zy * ZONE_CELL + Math.floor(ZONE_CELL / 2) + irand(-ZONE_JITTER, ZONE_JITTER));
 
       // Faction distribution: 30% citizen, 20% liquidator, 20% cultist, 15% wild, 15% samosbor-free
       const roll = irand(0, 10000) / 10000;
@@ -2100,21 +2112,59 @@ export function generateZones(world: World): void {
     const bgx = b.id % ZONE_GRID;
     return (agy % 2 === 0) ? agx - bgx : bgx - agx;
   });
+  // Таблица «coarse-ячейка → индекс в отсортированном массиве» строится ДО того, как
+  // id перезаписывается порядковым номером: сейчас в id ещё лежит исходное zy*ZONE_GRID+zx.
+  const gridToZone = new Int32Array(ZONE_GRID * ZONE_GRID);
+  for (let i = 0; i < zones.length; i++) gridToZone[zones[i].id] = i;
   // Reassign IDs to match new order
   for (let i = 0; i < zones.length; i++) zones[i].id = i;
 
-  // Voronoi assignment: each cell → nearest zone center
+  // Voronoi assignment: each cell → nearest zone center.
+  // Центр не выходит за свою coarse-ячейку, поэтому ближайший лежит в блоке 3×3 вокруг
+  // клетки: 9 кандидатов вместо 64. Полный перебор — 67 млн расстояний на КАЖДОЙ смене
+  // этажа (~300 мс). world.delta заинлайнен: иначе 9 млн вызовов метода.
+  const HALF_W = W >> 1;
+  const centerX = new Int32Array(zones.length);
+  const centerY = new Int32Array(zones.length);
+  for (let i = 0; i < zones.length; i++) { centerX[i] = zones[i].cx; centerY[i] = zones[i].cy; }
+  const candZ = new Int32Array(9);
+  const candX = new Int32Array(9);
+  const candDy2 = new Int32Array(9);  // dy зависит только от строки — считаем при пересборке набора
+
   for (let y = 0; y < W; y++) {
-    for (let x = 0; x < W; x++) {
-      let bestD = Infinity;
-      let bestZ = 0;
-      for (let z = 0; z < zones.length; z++) {
-        const dx = world.delta(x, zones[z].cx);
-        const dy = world.delta(y, zones[z].cy);
-        const d = dx * dx + dy * dy;
-        if (d < bestD) { bestD = d; bestZ = z; }
+    const gy = (y / ZONE_CELL) | 0;
+    const row = y * W;
+    for (let gx = 0; gx < ZONE_GRID; gx++) {
+      let k = 0;
+      for (let oy = -1; oy <= 1; oy++) {
+        const ny = (gy + oy + ZONE_GRID) & (ZONE_GRID - 1);
+        for (let ox = -1; ox <= 1; ox++) {
+          const nx = (gx + ox + ZONE_GRID) & (ZONE_GRID - 1);
+          const z = gridToZone[ny * ZONE_GRID + nx];
+          let dy = centerY[z] - y;
+          if (dy > HALF_W) dy -= W; else if (dy < -HALF_W) dy += W;
+          candZ[k] = z;
+          candX[k] = centerX[z];
+          candDy2[k] = dy * dy;
+          k++;
+        }
       }
-      world.zoneMap[y * W + x] = bestZ;
+      const xEnd = gx === ZONE_GRID - 1 ? W : (gx + 1) * ZONE_CELL;
+      for (let x = gx * ZONE_CELL; x < xEnd; x++) {
+        let bestD = Infinity;
+        let bestZ = 0;
+        for (let c = 0; c < 9; c++) {
+          let dx = candX[c] - x;
+          if (dx > HALF_W) dx -= W; else if (dx < -HALF_W) dx += W;
+          const d = dx * dx + candDy2[c];
+          const z = candZ[c];
+          // Брутфорс шёл по z по возрастанию со строгим `<`, то есть при равных
+          // расстояниях оставлял МЕНЬШИЙ индекс. Здесь порядок обхода другой,
+          // поэтому ничья решается явно — иначе расходится на границах зон.
+          if (d < bestD || (d === bestD && z < bestZ)) { bestD = d; bestZ = z; }
+        }
+        world.zoneMap[row + x] = bestZ;
+      }
     }
   }
 
