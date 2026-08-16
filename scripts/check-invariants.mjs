@@ -73,7 +73,7 @@ const RUNTIME_CYCLE_BASELINE = 4;
 
 const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
 const MAX_FUNCTION_LINES = 200;
-const LONG_FUNCTION_BASELINE = 27;
+const LONG_FUNCTION_BASELINE = 26;
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
