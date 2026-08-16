@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 /* -- AG81 compromised liquidator: proof route and faction choice -- */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -17,7 +19,7 @@ import {
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { publishEvent, getRecentEvents, registerWorldEventObserver } from '../../systems/events';
 import {
@@ -151,7 +153,7 @@ function branchBlockers(id: string): string[] {
   return BRANCH_QUEST_IDS.filter(qid => qid !== id);
 }
 
-registerSideQuest(DEFECTOR_ID, DEFECTOR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, DEFECTOR_ID, DEFECTOR_DEF, [
   {
     id: ROUTE_QUEST,
     giverId: getPlotNpcNumericId(DEFECTOR_ID)!,
@@ -189,7 +191,7 @@ registerSideQuest(DEFECTOR_ID, DEFECTOR_DEF, [
   },
 ]);
 
-registerSideQuest(DUTY_ID, DUTY_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, DUTY_ID, DUTY_DEF, [{
   id: REPORT_QUEST,
   giverId: getPlotNpcNumericId(DUTY_ID)!,
   type: QuestType.FETCH,
@@ -210,7 +212,7 @@ registerSideQuest(DUTY_ID, DUTY_DEF, [{
   eventData: { ag81Outcome: 'report', rumorIds: ['faction_liquidator_ammo'] },
 }]);
 
-registerSideQuest(RADIO_ID, RADIO_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, RADIO_ID, RADIO_DEF, [{
   id: INFORMANT_QUEST,
   giverId: getPlotNpcNumericId(RADIO_ID)!,
   type: QuestType.FETCH,
@@ -230,7 +232,7 @@ registerSideQuest(RADIO_ID, RADIO_DEF, [{
   eventData: { ag81Outcome: 'informant', rumorIds: ['faction_chernobog_recruitment'] },
 }]);
 
-registerSideQuest(CULT_ID, CULT_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, CULT_ID, CULT_DEF, [{
   id: CULT_QUEST,
   giverId: getPlotNpcNumericId(CULT_ID)!,
   type: QuestType.FETCH,
@@ -251,7 +253,7 @@ registerSideQuest(CULT_ID, CULT_DEF, [{
   eventData: { ag81Outcome: 'cult_handoff', rumorIds: ['faction_cultist_after_fog'] },
 }]);
 
-registerSideQuest(HARDLINER_ID, HARDLINER_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, HARDLINER_ID, HARDLINER_DEF, [{
   id: KILL_QUEST,
   giverId: getPlotNpcNumericId(HARDLINER_ID)!,
   type: QuestType.KILL,

@@ -2,12 +2,14 @@
 /* Старый архивариус. Ищет потерянные дела (записки).              */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('ministry');
 import {
   W, Cell,
   type Entity, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 
@@ -37,7 +39,7 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('arkhivarius_kafkin', NPC_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'arkhivarius_kafkin', NPC_DEF, [
   {
     id: 'kafkin_notes',
     giverId: getPlotNpcNumericId('arkhivarius_kafkin')!,

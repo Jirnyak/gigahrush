@@ -1,6 +1,8 @@
 /* ── Очередь за пайком — Kvartiry social pressure POI ────────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   Tex,
   Feature,
@@ -12,7 +14,7 @@ import {
   } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity, type WorldContainer } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Витя Нормировщик',
@@ -25,7 +27,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_qzhf4', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_qzhf4', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Молчун с бидоном',
@@ -38,7 +40,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_pcmfd', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_pcmfd', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Бабка без номера',
@@ -51,7 +53,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_ix63s', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_ix63s', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_3: PlotNpcDef = {
   name: 'Очередник с арматурой',
@@ -64,7 +66,7 @@ const AMBIENT_NPC_3: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_3_qprnk', npc: AMBIENT_NPC_3 });
+registerAuthoredNpc({ id: 'kv_ambient_3_qprnk', npc: AMBIENT_NPC_3, homeFloorKey: HOME_FLOOR_KEY });
 
 import {
   type SocialPoiRoom,

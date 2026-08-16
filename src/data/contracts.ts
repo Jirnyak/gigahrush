@@ -748,16 +748,6 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     xpReward: 150, relationDelta: 10, tags: ['expedition', 'floor_void', 'room_office', 'container', 'filing_cabinet', 'documents', 'void_contract'],
   },
   {
-    id: 'exp_void_jean_message', title: 'Сообщение Пустотнику', issuer: 'Зеленый экран',
-    faction: Faction.SCIENTIST, rank: 4, type: QuestType.TALK,
-    desc: 'Зелёный экран просит дойти до Жана Пустотника и сверить подпись в пустом ордере. Платят стабилизатором; не стойте в зелёной линии под экраном.',
-    target: { z: -50, roomType: RoomType.COMMON, zoneTag: 'void_warning_cell', hint: 'Пустота: камера Жана Пустотника у зеленых стен.' },
-    targetNpcId: getPlotNpcNumericId('void_warning')!, targetNpcName: 'Жан Пустотник',
-    rewardItem: 'psi_stabilizer', rewardCount: 1, extraRewards: [{ defId: 'antidep', count: 2 }],
-    moneyReward: 210, rewardResourceId: 'medicine', rewardScarcityMax: 2.4,
-    xpReward: 135, relationDelta: 11, tags: ['expedition', 'floor_void', 'room_anomaly', 'talk', 'escort', 'medicine', 'void_contract'],
-  },
-  {
     id: 'exp_void_paragraph_cleanup', title: 'Параграф после конца', issuer: 'Последняя редакция',
     faction: Faction.LIQUIDATOR, rank: 4, type: QuestType.KILL,
     desc: 'Последняя редакция ставит двух Параграфов в зелёном проходе под зачистку. Награда энергоячейками и осколком сирены; держите шкафы между собой и стеной.',

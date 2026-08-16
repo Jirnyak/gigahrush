@@ -1,10 +1,12 @@
 /* ── Brown slime cleanup: bounded residue room ───────────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { Cell, EntityType, Faction, Feature, Occupation, RoomType, Tex } from '../../core/types';
 import { Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
-const SLIME_SCRAPER_ITEM = 'slime_scraper';import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
+const SLIME_SCRAPER_ITEM = 'slime_scraper';import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -18,7 +20,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_wo1ov', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_wo1ov', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,
   stampMaintRoom,

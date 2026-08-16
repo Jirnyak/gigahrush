@@ -23,11 +23,14 @@ import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 import { _overrideRng, _restoreRng } from '../src/core/rand';
 import '../src/data/npc_plot_packages';
 
+// Трое торговцев базы — `liquidator_armorer/medic/quartermaster` — сняты с
+// регистрации 2026-08-16: их роли в базе несут спавнящиеся близнецы `liq_*`
+// (Капитан Броня, Доктор Смерть, Снабженец Петрович), а сами они не появлялись
+// нигде. Тогда же снят `void_warning`: Пустота безлюдна, и три финальных шага
+// цепочки идут без дающего вовсе. Слоты в `npc_plot_ids.ts` за всеми остаются:
+// список только дополняется.
 const MAIN_PLOT_IDS = [
   'marko_lolo',
-  'liquidator_armorer',
-  'liquidator_medic',
-  'liquidator_quartermaster',
   'olga',
   'barni',
   'yakov',
@@ -35,7 +38,6 @@ const MAIN_PLOT_IDS = [
   'major_grom',
   'hell_contact',
   'herald_clue',
-  'void_warning',
   'voice',
 ] as const;
 

@@ -1,6 +1,8 @@
 /* ── AG41 charge cage — production output with container conflict ─ */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   ContainerKind,
   Faction,
@@ -13,7 +15,7 @@ import {
   type Room,
   type WorldContainer,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { placeDoor } from '../shared';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,
@@ -69,7 +71,7 @@ const ADA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag41_charge_nazar', NAZAR_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag41_charge_nazar', NAZAR_DEF, [{
   id: 'ag41_charge_robot_audit',
   giverId: getPlotNpcNumericId('ag41_charge_nazar')!,
   type: QuestType.KILL,
@@ -81,7 +83,7 @@ registerSideQuest('ag41_charge_nazar', NAZAR_DEF, [{
   relationDelta: 12, xpReward: 70, moneyReward: 85,
 }]);
 
-registerSideQuest('ag41_charge_ada', ADA_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag41_charge_ada', ADA_DEF, [{
   id: 'ag41_charge_circuit_waiver',
   giverId: getPlotNpcNumericId('ag41_charge_ada')!,
   type: QuestType.FETCH,

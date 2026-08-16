@@ -16,7 +16,7 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import {
@@ -108,7 +108,7 @@ const WITNESS_RAISA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('zoya_surguchnaya', ZOYA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'zoya_surguchnaya', ZOYA_DEF, [
   {
     id: 'stamp_room_padding',
     giverId: getPlotNpcNumericId('zoya_surguchnaya')!,

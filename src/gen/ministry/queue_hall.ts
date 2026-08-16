@@ -13,7 +13,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc,
 } from '../admin_common';
@@ -127,7 +127,7 @@ const KLAVDIYA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('osip_kartochny', OSIP_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'osip_kartochny', OSIP_DEF, [
   {
     id: 'archive_card_books',
     giverId: getPlotNpcNumericId('osip_kartochny')!,
@@ -150,7 +150,7 @@ registerSideQuest('osip_kartochny', OSIP_DEF, [
   },
 ]);
 
-registerSideQuest('klavdiya_ocherednaya', KLAVDIYA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'klavdiya_ocherednaya', KLAVDIYA_DEF, [
   {
     id: 'queue_water',
     giverId: getPlotNpcNumericId('klavdiya_ocherednaya')!,

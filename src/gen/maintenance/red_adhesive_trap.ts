@@ -4,9 +4,11 @@ import {
   EntityType, Faction, Feature, MonsterKind, Occupation, RoomType, Tex,
 } from '../../core/types';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { stampMark, MarkType } from '../../systems/surface_marks';
 import { Spr } from '../../entities/sprite_index';
-import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -23,7 +25,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_fb1ov', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_fb1ov', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature,
   spawnMonstersNear, stampMaintRoom,

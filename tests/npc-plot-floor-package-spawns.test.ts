@@ -76,16 +76,18 @@ test('migrated Hell named actor carries package id', () => {
   assert.equal(meduka.npcPackageId, 'meduka_meguku');
 });
 
-test('migrated Void named actors carry package ids', () => {
+test('протокол следа на Пустоте строит комнату и не приводит людей', () => {
+  // Пустота безлюдна по решению автора: механика следа осталась (комната,
+  // чёрный ящик, контейнеры), а объяснявшие её клерк и соседка сняты вместе с
+  // анкетами. Здесь проверяется именно это — POI строится, NPC не появляются.
   const world = openTestWorld();
   const entities: Entity[] = [];
+  const roomsBefore = world.rooms.length;
 
   generateTraceSealProtocol(world, entities, { v: 50 }, 512, 512);
 
-  const clerk = plotNpc(entities, 'floor20_void_protocol_clerk');
-  const neighbor = plotNpc(entities, 'floor20_void_borrowed_neighbor');
-  assert.equal(clerk.npcPackageId, 'floor20_void_protocol_clerk');
-  assert.equal(neighbor.npcPackageId, 'floor20_void_borrowed_neighbor');
+  assert.equal(world.rooms.length > roomsBefore, true, 'комната протокола следа не построилась');
+  assert.equal(entities.some(entity => entity.type === EntityType.NPC), false, 'на Пустоте не должно быть людей');
 });
 
 test('migrated design-floor named actors carry package ids', () => {

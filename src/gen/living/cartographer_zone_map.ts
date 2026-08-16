@@ -8,7 +8,9 @@ import {
   type ContainerAccess, type Entity, type Room, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('living');
 import { Spr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { protectRoom } from '../shared';
@@ -45,7 +47,7 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(CARTOGRAPHER_ID, NPC_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, CARTOGRAPHER_ID, NPC_DEF, [
   {
     id: 'ag43_cartographer_maintenance_lead',
     giverId: getPlotNpcNumericId(CARTOGRAPHER_ID)!,

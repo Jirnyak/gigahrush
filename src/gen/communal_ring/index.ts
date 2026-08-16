@@ -5,6 +5,8 @@ import {
   reinforceCommunalRingAuthoredHqTerritory,
 } from './geometry';
 import { designFloorById } from '../../data/design_floors';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('communal_ring');
 import { finalizeExpandedFloor} from '../shared';
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -45,7 +47,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_0_yxmpv', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'ambient_0_yxmpv', npc: AMBIENT_NPC_0, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Очередник с тазом',
@@ -58,7 +60,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_1_avqes', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'ambient_1_avqes', npc: AMBIENT_NPC_1, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Повар у второй плиты',
@@ -71,7 +73,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_2_2guhe', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'ambient_2_2guhe', npc: AMBIENT_NPC_2, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_3: PlotNpcDef = {
   name: 'Слесарь душевой очереди',
@@ -84,7 +86,7 @@ const AMBIENT_NPC_3: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_3_yxahc', npc: AMBIENT_NPC_3 });
+registerAuthoredNpc({ id: 'ambient_3_yxahc', npc: AMBIENT_NPC_3, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_4: PlotNpcDef = {
   name: 'Курящий свидетель',
@@ -97,7 +99,7 @@ const AMBIENT_NPC_4: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_4_3k24r', npc: AMBIENT_NPC_4 });
+registerAuthoredNpc({ id: 'ambient_4_3k24r', npc: AMBIENT_NPC_4, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -105,7 +107,6 @@ import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
-const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('communal_ring');
 
 export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
 export const COMMUNAL_RING_ROUTE_Z = 4;

@@ -1,6 +1,8 @@
 /* ── Станция давления — pumps, valves, pressure bureaucracy ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   Cell,
@@ -12,7 +14,7 @@ import {
   QuestType,
   MonsterKind,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Раиса Клапанная',
@@ -25,7 +27,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_k9pr9', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_k9pr9', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
@@ -58,7 +60,7 @@ const BORIS_DEF: PlotNpcDef = {
   talkQuestResponse: 'Сава прислал? Передай: водомер крутится даже без воды. Это не авария, это план.',
 };
 
-registerSideQuest('ag04_pressure_boris', BORIS_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag04_pressure_boris', BORIS_DEF, [
   {
     id: 'ag04_pressure_wrenches',
     giverId: getPlotNpcNumericId('ag04_pressure_boris')!,

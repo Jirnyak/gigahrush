@@ -1,6 +1,8 @@
 /* ── Маршрутный сход: три спорных выхода с этажа Квартир ─────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   Cell,
   ContainerKind,
@@ -15,7 +17,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Ликвидатор с мелом',
@@ -28,7 +30,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_ofpl6', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_ofpl6', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Соседка у цепочки',
@@ -41,7 +43,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_mdg3i', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_mdg3i', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Бегунок восемьдесят восемь',
@@ -54,7 +56,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_797dt', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_797dt', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import {
@@ -183,7 +185,7 @@ const SONYA: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('kv08_borya_prorez', BORYA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv08_borya_prorez', BORYA, [{
   id: 'kv08_open_manhattan_crossroads',
   giverId: getPlotNpcNumericId('kv08_borya_prorez')!,
   type: QuestType.FETCH,
@@ -194,7 +196,7 @@ registerSideQuest('kv08_borya_prorez', BORYA, [{
   relationDelta: 12, xpReward: 60, moneyReward: 45,
 }]);
 
-registerSideQuest('kv08_marina_ring', MARINA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv08_marina_ring', MARINA, [{
   id: 'kv08_hold_communal_ring',
   giverId: getPlotNpcNumericId('kv08_marina_ring')!,
   type: QuestType.FETCH,
@@ -205,7 +207,7 @@ registerSideQuest('kv08_marina_ring', MARINA, [{
   relationDelta: 16, xpReward: 55, moneyReward: 20,
 }]);
 
-registerSideQuest('kv08_sonya_88', SONYA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv08_sonya_88', SONYA, [{
   id: 'kv08_sell_market_88_lane',
   giverId: getPlotNpcNumericId('kv08_sonya_88')!,
   type: QuestType.FETCH,

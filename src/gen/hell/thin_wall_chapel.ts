@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('hell');
 /* ── Тонкая стена — Hell phasing encounter ───────────────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -7,7 +9,7 @@ import {
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { stampBlackHandTrail } from '../../systems/surface_marks';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -51,7 +53,7 @@ const SCOUT_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(BLACK_HAND_SCOUT_ID, SCOUT_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, BLACK_HAND_SCOUT_ID, SCOUT_DEF, [
   {
     id: BLACK_HAND_REPORT_QUEST_ID,
     giverId: getPlotNpcNumericId(BLACK_HAND_SCOUT_ID)!,

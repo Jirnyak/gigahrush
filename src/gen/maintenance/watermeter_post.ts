@@ -1,6 +1,8 @@
 /* ── Водомерный пост — radio/water bureaucracy quest hub ─────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import {
   Tex,
@@ -11,7 +13,7 @@ import {
   QuestType,
   MonsterKind,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Практикантка Неля',
@@ -24,7 +26,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_px4os', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_px4os', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,
@@ -55,7 +57,7 @@ const SAVA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag04_watermeter_sava', SAVA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag04_watermeter_sava', SAVA_DEF, [
   {
     id: 'ag04_watermeter_tools',
     giverId: getPlotNpcNumericId('ag04_watermeter_sava')!,

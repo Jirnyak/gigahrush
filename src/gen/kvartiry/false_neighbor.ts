@@ -1,13 +1,15 @@
 /* ── Комната чужой очереди — Kvartiry close-reveal encounter ─── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, MonsterKind, Occupation, QuestType,
   RoomType, Tex, Feature, type Entity, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Леня Очередной',
@@ -20,7 +22,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_6omcn', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_6omcn', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';

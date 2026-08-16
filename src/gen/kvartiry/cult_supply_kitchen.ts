@@ -1,6 +1,8 @@
 /* ── Кухня снабжения ячейки: бытовая культовая логистика ─────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   Cell,
   ContainerKind,
@@ -15,7 +17,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Паломник с авоськой',
@@ -28,7 +30,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_cw63m', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_cw63m', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Мальчик у порога',
@@ -41,7 +43,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_rdrii', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_rdrii', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Ликвидатор без протокола',
@@ -54,7 +56,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_0cpa3', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_0cpa3', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 import {
   createSocialPoiRoom,
@@ -113,7 +115,7 @@ const NYURA: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('kv_zina_kladovaya', ZINA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_zina_kladovaya', ZINA, [{
   id: 'kv_cult_supply_negotiate',
   giverId: getPlotNpcNumericId('kv_zina_kladovaya')!,
   type: QuestType.FETCH,
@@ -124,7 +126,7 @@ registerSideQuest('kv_zina_kladovaya', ZINA, [{
   relationDelta: 6, xpReward: 45, moneyReward: 8,
 }]);
 
-registerSideQuest('kv_nyura_vdveryah', NYURA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_nyura_vdveryah', NYURA, [{
   id: 'kv_cult_supply_expose',
   giverId: getPlotNpcNumericId('kv_nyura_vdveryah')!,
   type: QuestType.FETCH,

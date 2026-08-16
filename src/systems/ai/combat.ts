@@ -12,7 +12,7 @@ import {
 } from '../audio';
 import { applyDamageRelationPenalty, isHostile } from '../factions';
 import { calculateDamage, applyHitStaggerAndKnockback, calculateReloadTime } from '../combat';
-import { clearFogInZone } from '../samosbor';
+import { clearFogInZone } from '../fog_zone';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../blood_fx';

@@ -159,10 +159,29 @@ runtime-import cycle on its own line. Six backward edges between layers do not m
 at all; one edge did. `systems/samosbor.ts` imported `generateFloor` from
 `gen/floor_manifest`, and that single edge held a cycle of 293 files. It is cut: the
 floor generator now arrives by injection (`setSamosborFloorGenerator`), the type
-`FloorGeneration` is imported as `import type` and erased at build, and the cycle is
-106. A lazy floor registry instead of the 63 static imports in
+`FloorGeneration` is imported as `import type` and erased at build, and the cycle fell
+to 106. A lazy floor registry instead of the 63 static imports in
 `gen/design_floors/manifest.ts` was measured and gives nothing on top of that — the
 same 106 — and it would break content registration, which is an import-time effect.
+
+The rest of the way down was leaves and responsibilities, not keystones: the save-shape
+constant moved to `core/save_shape.ts` and `markov_text` took its relation from
+`data/relations` instead of `systems/factions` (106 → 36 → 10). The remaining ten were a
+real tangle — `factions ↔ noise ↔ online_client ↔ online_protocol ↔ inventory ↔ permits
+↔ crafting ↔ containers ↔ faction_events ↔ alife/squad_logic` — where no single edge
+dropped it by more than three. Two ownership calls untied it (10 → 4):
+
+- the delta vocabulary of the relation matrix (`applyFactionRelationDeltas`,
+  `applyTheftRelationPenalty`, `applyRoomMemoryRelationPenalty`,
+  `applyInfrastructureRelationResponse` and the `FactionRelationDelta` type) lives with
+  the matrix in `data/relations.ts`. Permits, containers and emergency panels need to
+  move a number in that matrix, not the rest of faction logic;
+- clearing zone fog after a fog boss dies is `systems/fog_zone.ts`, a leaf. Combat no
+  longer imports the whole samosbor module for one function.
+
+What is left is 4: `ai/combat ↔ ai/monster ↔ ai/micro_goals ↔ ai/khorovaya_matka`. That
+is mutual logic inside one subsystem — targeting, firing, micro-goals and the matka
+reference each other on purpose — not somebody else's leaf, so it stays.
 
 **Точка сборки контента: `src/content.ts`.** Контент регистрируется побочным эффектом
 импорта: генераторы этажей на верхнем уровне объявляют пакеты NPC, сайд-квесты, зоны и
@@ -278,6 +297,38 @@ Use `src/gen/population_placement.ts` for floor-wide scattering:
 - This is generation-time field sampling, not runtime buckets, not per-cell spawn caps, and not a content-specific exception.
 
 Special rooms and authored POIs should influence the field with weights or anchors. They should not own broad population placement by directly pushing hundreds of entities into a small room or arena. Local scripted encounters can still spawn bounded local groups when that group is the gameplay object.
+
+### Authored NPC Delivery Contract
+
+Authored people arrive on a floor by one rule and one rule only: **the package registry decides the
+cast, `placement.homeFloorKey` decides where.** `generateDesignFloor` closes every floor with
+`deliverFloorNpcPackages` (`gen/plot_npc_spawn.ts`), which walks the registry and places everyone who
+declared this floor and whom the floor module did not place itself. Modules still position their own
+people precisely — in their room, in their pose, next to their scene — and almost always do; the
+shared step only stops a forgotten spawn line from deleting a character from the game. Before it,
+that is exactly what happened: Олевия Кибер with her quest and seven authored residents were
+registered and never placed, and nothing said so.
+
+Two consequences follow, and both are contracts:
+
+- `homeFloorKey` is a delivery address, not a caption. Declaring the wrong floor now puts the person
+  in the wrong place instead of nowhere. `presence: 'event_only'` opts out — that person arrives with
+  an event, not with a floor.
+- An NPC-free route floor is exactly that: **nobody**, authored included. The Void carries no people
+  at all — `withoutNpcEntities` stays the single strict filter, and there is no second «keep the
+  authored ones» path to reason about. Nobody stands there, and no identity is kept for the place
+  either: the package that used to live in the Void cell is gone from the registry.
+
+A `PLOT_CHAIN` step may therefore have **no giver at all** (`giverId` is optional). Such a step is
+granted by the chain itself the moment the previous one closes — the player kills the heralds,
+descends, and the journal updates without a conversation — and it closes on the deed, because there
+is nobody to report to (`checkQuests` runs a `giverless` quest down the same branch as a contract;
+the quest carries `giverId: -1`, the value the save sanitizer already uses for «no giver», and
+`sourceLabel` for the journal's «От:» line). No floor hook, no event_only identity, no second
+system: an unmanned step states that it is unmanned, and the chain does the rest.
+
+Both directions are locked by `tests/npc-home-floor.test.ts` over all design floors: declared home
+equals actual floor, and everyone who declared a floor is on it.
 
 ### A-Life Integration Contract
 

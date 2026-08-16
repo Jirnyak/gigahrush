@@ -1,6 +1,8 @@
 /* ── AG19 Metro Error Line — platform pocket in maintenance ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   W,
   Cell,
@@ -12,7 +14,7 @@ import {
   QuestType,
   MonsterKind,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   METRO_DEPOT_ROOM_DEF_ID,
   METRO_ERROR_ROOM_DEF_ID,
@@ -93,7 +95,7 @@ const LOST_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag19_zhanna_ticket', ZHANNA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag19_zhanna_ticket', ZHANNA_DEF, [
   {
     id: 'ag19_ticket_proof',
     giverId: getPlotNpcNumericId('ag19_zhanna_ticket')!,
@@ -106,7 +108,7 @@ registerSideQuest('ag19_zhanna_ticket', ZHANNA_DEF, [
   },
 ]);
 
-registerSideQuest('ag19_borya_conductor', BORYA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag19_borya_conductor', BORYA_DEF, [
   {
     id: 'ag19_switch_handle',
     giverId: getPlotNpcNumericId('ag19_borya_conductor')!,
@@ -132,7 +134,7 @@ registerSideQuest('ag19_borya_conductor', BORYA_DEF, [
   },
 ]);
 
-registerSideQuest('ag19_lost_passenger', LOST_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag19_lost_passenger', LOST_DEF, [
   {
     id: 'ag19_lost_passenger_to_conductor',
     giverId: getPlotNpcNumericId('ag19_lost_passenger')!,

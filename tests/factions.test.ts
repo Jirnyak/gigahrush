@@ -6,10 +6,9 @@ import {
   getFactionRelation,
   areFactionsHostile,
   isHostile,
-  applyFactionRelationDeltas,
 } from '../src/systems/factions';
 import { makeTestEntity } from './helpers';
-import { initFactionRelations } from '../src/data/relations';
+import { applyFactionRelationDeltas, initFactionRelations } from '../src/data/relations';
 
 test('getFactionRelation returns base relation value', () => {
   initFactionRelations();

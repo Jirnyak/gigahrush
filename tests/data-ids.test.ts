@@ -249,7 +249,10 @@ test('story and side quest ids are unique and resolve through NPC packages', () 
   const validateQuest = (q: QuestLike, id: string): void => {
     // giverId is numeric and backfilled at registration; sideQuestGiverId also
     // resolves the giverPlotNpcId fallback for built-in literals.
-    if (sideQuestGiverId(q as SideQuestStep) === undefined) missing.push(dataRef('quest', id, 'giverId', q.giverId));
+    // Шаг без дающего — законная форма: его выдаёт цепочка, а не разговор.
+    // Ловим только висячую ссылку: объявил дающего — он обязан разрешаться.
+    const declaresGiver = q.giverId !== undefined || q.giverPlotNpcId !== undefined;
+    if (declaresGiver && sideQuestGiverId(q as SideQuestStep) === undefined) missing.push(dataRef('quest', id, 'giverId', q.giverId));
     if (q.targetNpcId && !getPlotNpcPackageByNumericId(q.targetNpcId)) missing.push(dataRef('quest', id, 'targetNpcId', q.targetNpcId));
     if (q.targetPlotNpcId && !hasPlotNpc(q.targetPlotNpcId)) missing.push(dataRef('quest', id, 'targetPlotNpcId', q.targetPlotNpcId));
     if (q.failOnNpcDeathPlotId && !hasPlotNpc(q.failOnNpcDeathPlotId)) missing.push(dataRef('quest', id, 'failOnNpcDeathPlotId', q.failOnNpcDeathPlotId));

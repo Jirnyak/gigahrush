@@ -29,6 +29,62 @@ export function addFactionRelMutual(a: number, b: number, delta: number): void {
   addFactionRel(b, a, delta);
 }
 
+/* ── Наборы дельт: словарь мутаций матрицы ────────────────────── */
+// Живут рядом с матрицей, а не в systems/factions: это её собственный
+// вокабуляр, и любой системе (пропуска, контейнеры, панели) он нужен без
+// остальной фракционной логики — иначе получается импортный цикл.
+export type FactionRelationDelta = readonly [Faction, number];
+
+export function applyFactionRelationDeltas(
+  deltas: readonly FactionRelationDelta[],
+  actor: Faction = Faction.PLAYER,
+): Record<string, number> {
+  const applied: Record<string, number> = {};
+  for (const [faction, delta] of deltas) {
+    if (delta === 0) continue;
+    addFactionRelMutual(actor, faction, delta);
+    applied[Faction[faction] ?? String(faction)] = (applied[Faction[faction] ?? String(faction)] ?? 0) + delta;
+  }
+  return applied;
+}
+
+/* ── Узкий социальный штраф за замеченную/выявленную кражу ────── */
+export function applyTheftRelationPenalty(
+  victimFaction: Faction | undefined,
+  witnessed: boolean,
+  audited: boolean,
+): number {
+  if (victimFaction === undefined || victimFaction === Faction.PLAYER) return 0;
+  if (!witnessed && !audited) return 0;
+
+  const penalty = witnessed ? -4 : -2;
+  addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
+  return penalty;
+}
+
+export function applyRoomMemoryRelationPenalty(victimFaction: Faction | undefined, severity: number): number {
+  if (victimFaction === undefined || victimFaction === Faction.PLAYER) return 0;
+  const penalty = severity >= 5 ? -2 : -1;
+  addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
+  return penalty;
+}
+
+export function applyInfrastructureRelationResponse(
+  ownerFaction: Faction | null | undefined,
+  action: 'repair' | 'shutdown' | 'force' | 'overload',
+): number {
+  if (ownerFaction === null || ownerFaction === undefined || ownerFaction === Faction.PLAYER) return 0;
+  const delta = action === 'repair'
+    ? (ownerFaction === Faction.WILD ? 0 : 1)
+    : action === 'shutdown'
+      ? -1
+      : action === 'force'
+        ? -2
+        : -4;
+  if (delta !== 0) addFactionRelMutual(Faction.PLAYER, ownerFaction, delta);
+  return delta;
+}
+
 /* ── Base faction attitudes (used for initialization) ─────────── */
 // [row faction][col faction] = base attitude
 // <=−50 hostile, −50..50 neutral, >=50 friendly

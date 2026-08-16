@@ -250,6 +250,7 @@ function normalizeQuestMeta(q: Quest, raw: Record<string, unknown>): void {
   if (contractFaction !== undefined) q.contractFaction = contractFaction;
   if (raw.contractRank !== undefined) q.contractRank = clampInt(raw.contractRank, 0, 0, 10);
   if (isValidZ(raw.visitFloorZ)) q.visitFloorZ = raw.visitFloorZ;
+  if (raw.giverless === true) q.giverless = true;
 }
 
 function normalizeQuestHold(q: Quest, raw: Record<string, unknown>): void {

@@ -8,7 +8,6 @@ import {
 import { World } from '../../core/world';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../entities/sprite_index';
 
 export function generateVoidPlotChain(
@@ -22,7 +21,6 @@ export function generateVoidPlotChain(
   const sy = Math.floor(spawnY);
   const room = stampWarningRoom(world, sx, sy);
   decorateWarningRoom(world, room);
-  spawnVoidWarning(world, room, entities, nextId);
   dropRoomItem(world, room, entities, nextId, room.w - 2, room.h - 2, [
     { defId: 'bottled_voice', count: 1 },
   ]);
@@ -49,17 +47,6 @@ function decorateWarningRoom(world: World, room: Room): void {
   world.features[world.idx(room.x + 1, room.y + 1)] = Feature.SCREEN;
   world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.LAMP;
   world.features[world.idx(room.x + 1, room.y + room.h - 2)] = Feature.SHELF;
-}
-
-function spawnVoidWarning(
-  world: World,
-  room: Room,
-  entities: Entity[],
-  nextId: { v: number },
-): void {
-  const x = world.wrap(room.x + Math.floor(room.w / 2));
-  const y = world.wrap(room.y + Math.floor(room.h / 2) + 1);
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'void_warning', x + 0.5, y + 0.5);
 }
 
 function dropRoomItem(

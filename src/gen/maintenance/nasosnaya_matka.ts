@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 /* ── Monster_10: Насосная Матка — local water-pressure boss room ─ */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -7,7 +9,7 @@ import {
   type Entity, type GameState, type Room, type WorldContainer,
   type WorldEvent, type WorldEventSeverity,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { changeResourceStock } from '../../systems/economy';
 import { getRecentEvents, publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -56,7 +58,7 @@ const KIRA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(WATCHER_ID, KIRA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, WATCHER_ID, KIRA_DEF, [
   {
     id: VALVE_QUEST_ID,
     giverId: getPlotNpcNumericId(WATCHER_ID)!,

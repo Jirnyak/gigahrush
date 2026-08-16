@@ -1,6 +1,8 @@
 /* -- Design z: bolnichny_korpus - triage, quarantine and ward choices -- */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bolnichny_korpus');
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
@@ -42,7 +44,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_0_0tp43', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'ambient_0_0tp43', npc: AMBIENT_NPC_0, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Вентиляционный фельдшер',
@@ -58,7 +60,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_1_0zpgs', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'ambient_1_0zpgs', npc: AMBIENT_NPC_1, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Ликвидатор у чёрной палаты',
@@ -73,7 +75,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_2_2h1k6', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'ambient_2_2h1k6', npc: AMBIENT_NPC_2, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -85,7 +87,6 @@ import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 
-const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bolnichny_korpus');
 
 export const BOLNICHNY_KORPUS_ROUTE_ID = 'bolnichny_korpus' as const;
 export const BOLNICHNY_KORPUS_Z = 16 as const;

@@ -14,6 +14,8 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
+
+export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('manhattan_crossroads');
 import { SeedRng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { designNpcFloorKey, type PlotNpcDef , registerAuthoredNpc } from '../../data/plot';
@@ -31,7 +33,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'manhattan_ambient_0_v2yd8', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'manhattan_ambient_0_v2yd8', npc: AMBIENT_NPC_0, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Патрульная у южной зебры',
@@ -46,7 +48,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'manhattan_ambient_1_mwalm', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'manhattan_ambient_1_mwalm', npc: AMBIENT_NPC_1, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Торговец с бордюра',
@@ -62,7 +64,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'manhattan_ambient_2_vjxv5', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'manhattan_ambient_2_vjxv5', npc: AMBIENT_NPC_2, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_3: PlotNpcDef = {
   name: 'Дорожный бродяга',
@@ -77,7 +79,7 @@ const AMBIENT_NPC_3: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'manhattan_ambient_3_0flfn', npc: AMBIENT_NPC_3 });
+registerAuthoredNpc({ id: 'manhattan_ambient_3_0flfn', npc: AMBIENT_NPC_3, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../entities/sprite_index';
@@ -88,7 +90,6 @@ import {
 } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
-export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('manhattan_crossroads');
 
 export const DESIGN_FLOOR_ID = 'manhattan_crossroads' as const;
 export const MANHATTAN_CROSSROADS_Z = 8;

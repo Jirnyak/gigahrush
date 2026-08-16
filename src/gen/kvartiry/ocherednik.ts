@@ -1,12 +1,14 @@
 /* ── Очередник: мутировавшая очередь как социальный монстр ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   type Entity, type Item, type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Номер сорок первый',
@@ -19,7 +21,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_8qmll', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_8qmll', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Мальчик с пустым бидоном',
@@ -32,7 +34,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_glc5f', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_glc5f', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Свидетель в ватнике',
@@ -45,7 +47,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_sdgjz', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_sdgjz', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_3: PlotNpcDef = {
   name: 'Ликвидатор у стены',
@@ -58,7 +60,7 @@ const AMBIENT_NPC_3: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_3_u4qt3', npc: AMBIENT_NPC_3 });
+registerAuthoredNpc({ id: 'kv_ambient_3_u4qt3', npc: AMBIENT_NPC_3, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_4: PlotNpcDef = {
   name: 'Бабка без талона',
@@ -71,7 +73,7 @@ const AMBIENT_NPC_4: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_4_hmsud', npc: AMBIENT_NPC_4 });
+registerAuthoredNpc({ id: 'kv_ambient_4_hmsud', npc: AMBIENT_NPC_4, homeFloorKey: HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -143,7 +145,7 @@ const YASHA: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('kv_ocherednik_lyuba', LYUBA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_ocherednik_lyuba', LYUBA, [{
   id: 'kv_ocherednik_show_coupon',
   giverId: getPlotNpcNumericId('kv_ocherednik_lyuba')!,
   type: QuestType.FETCH,
@@ -158,7 +160,7 @@ registerSideQuest('kv_ocherednik_lyuba', LYUBA, [{
   eventData: { monsterId: 'ocherednik', route: 'coupon', rumorIds: ['kvartiry_queue_unrest'] },
 }]);
 
-registerSideQuest('kv_ocherednik_efim', EFIM, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_ocherednik_efim', EFIM, [{
   id: 'kv_ocherednik_expose_leader',
   giverId: getPlotNpcNumericId('kv_ocherednik_efim')!,
   type: QuestType.FETCH,
@@ -173,7 +175,7 @@ registerSideQuest('kv_ocherednik_efim', EFIM, [{
   eventData: { monsterId: 'ocherednik', route: 'expose', rumorIds: ['ration_coupon_forgery_risk'] },
 }]);
 
-registerSideQuest('kv_ocherednik_yasha', YASHA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_ocherednik_yasha', YASHA, [{
   id: 'kv_ocherednik_fight_through',
   giverId: getPlotNpcNumericId('kv_ocherednik_yasha')!,
   type: QuestType.KILL,

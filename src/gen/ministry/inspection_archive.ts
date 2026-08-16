@@ -1,6 +1,8 @@
 /* ── Инспекционный архив — Ministry access-control POI ───────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('ministry');
 import {
   Cell,
   ContainerKind,
@@ -16,7 +18,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc, spawnAdminMonster,
 } from '../admin_common';
@@ -142,7 +144,7 @@ const YURI_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('nina_dosmotrova', NINA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'nina_dosmotrova', NINA_DEF, [
   {
     id: 'inspection_temp_pass_retrieval',
     giverId: getPlotNpcNumericId('nina_dosmotrova')!,
@@ -165,7 +167,7 @@ registerSideQuest('nina_dosmotrova', NINA_DEF, [
   },
 ]);
 
-registerSideQuest('evsey_zasov', EVSEY_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'evsey_zasov', EVSEY_DEF, [
   {
     id: 'archive_denunciation_index',
     giverId: getPlotNpcNumericId('evsey_zasov')!,
@@ -178,7 +180,7 @@ registerSideQuest('evsey_zasov', EVSEY_DEF, [
   },
 ]);
 
-registerSideQuest('marfa_zhalobnaya', MARFA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'marfa_zhalobnaya', MARFA_DEF, [
   {
     id: 'complaint_window_double',
     giverId: getPlotNpcNumericId('marfa_zhalobnaya')!,
@@ -191,7 +193,7 @@ registerSideQuest('marfa_zhalobnaya', MARFA_DEF, [
   },
 ]);
 
-registerSideQuest('yuri_dvertsov', YURI_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'yuri_dvertsov', YURI_DEF, [
   {
     id: 'inspection_paper_eater',
     giverId: getPlotNpcNumericId('yuri_dvertsov')!,

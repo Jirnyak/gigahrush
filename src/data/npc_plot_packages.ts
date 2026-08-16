@@ -1,7 +1,6 @@
 import { type CharacterSex, Faction, Occupation, type Item } from '../core/types';
 import { NPC_VISUAL_OLGA_DMITRIEVNA } from './art_sprite_manifest';
-// @ts-ignore
-import { floorKeyForDesign, floorKeyForDesign } from './floor_keys';
+import { floorKeyForDesign } from './floor_keys';
 import { getStack, ITEMS } from './items';
 import { NPC_PACKAGE_INVENTORY_CAP } from './npc_package_schema';
 import type { NpcPackageDef, NpcPackagePresence } from './npc_packages';
@@ -136,65 +135,8 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
     voiceTags: ['liquidator', 'technical'],
   }));
 
-  export const LIQUIDATOR_ARMORER_ID = registerPlotNpc(plotNpcPackage({
-    id: 'liquidator_armorer',
-    displayName: 'Оружейник форпоста',
-    publicLine: 'Ликвидатор, ответственный за учет и выдачу стволов и патронов.',
-    sex: 'male',
-    age: 45,
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    sprite: Occupation.HUNTER,
-    homeFloorKey: floorKeyForDesign('liquidatorbase'),
-    hp: 4000, maxHp: 4000, level: 12, money: 350, speed: 1.2,
-    inventory: [],
-    talkLines: [
-      'Пустой ствол — мёртвый ствол. Бери патроны.',
-      'Каждый выстрел под протокол, но для своих найдём исключения.',
-    ],
-    talkLinesPost: [],
-    voiceTags: ['liquidator', 'terse'],
-  }));
 
-  export const LIQUIDATOR_MEDIC_ID = registerPlotNpc(plotNpcPackage({
-    id: 'liquidator_medic',
-    displayName: 'Медик ликвидаторов',
-    publicLine: 'Врач, выдающий аптечки, бинты и антидепрессанты перед и после рейдов.',
-    sex: 'female',
-    age: 38,
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.DOCTOR,
-    sprite: Occupation.DOCTOR,
-    homeFloorKey: floorKeyForDesign('liquidatorbase'),
-    hp: 1200, maxHp: 1200, level: 10, money: 200, speed: 1.1,
-    inventory: [],
-    talkLines: [
-      'Если кашляешь пылью — бери антидеп, пока не поздно.',
-      'Аптечек мало, расходуй с умом.',
-    ],
-    talkLinesPost: [],
-    voiceTags: ['medical', 'liquidator'],
-  }));
 
-  export const LIQUIDATOR_QUARTERMASTER_ID = registerPlotNpc(plotNpcPackage({
-    id: 'liquidator_quartermaster',
-    displayName: 'Квартирмейстер',
-    publicLine: 'Инженер-снабженец, у которого можно выменять броню, снаряжение и взрывчатку.',
-    sex: 'male',
-    age: 52,
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.ENGINEER,
-    sprite: Occupation.ELECTRICIAN,
-    homeFloorKey: floorKeyForDesign('liquidatorbase'),
-    hp: 2000, maxHp: 2000, level: 15, money: 500, speed: 1.0,
-    inventory: [],
-    talkLines: [
-      'Снаряжение не казённое, береги как зеницу ока.',
-      'Если пойдёшь в глухой обход, бери шашку на всякий случай.',
-    ],
-    talkLinesPost: [],
-    voiceTags: ['liquidator', 'technical'],
-  }));
 
   export const OLGA_ID = registerPlotNpc(plotNpcPackage({
     id: 'olga',
@@ -445,7 +387,7 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
     faction: Faction.CULTIST,
     occupation: Occupation.PILGRIM,
     sprite: Occupation.PILGRIM,
-    homeFloorKey: floorKeyForDesign('hell'),
+    homeFloorKey: floorKeyForDesign('podad'),
     hp: 900, maxHp: 900, level: 10, money: 12, speed: 0.9,
     inventory: [
       { defId: 'holy_water', count: 1 },
@@ -500,37 +442,6 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
     voiceTags: ['cult', 'threshold'],
   }));
 
-  export const VOID_WARNING_ID = registerPlotNpc(plotNpcPackage({
-    id: 'void_warning',
-    displayName: 'Жан Пустотник',
-    publicLine: 'Пустотный ученый на нижнем пороге, предупреждающий о голосе, ловушке и Творце.',
-    sex: 'male',
-    age: 44,
-    faction: Faction.SCIENTIST,
-    occupation: Occupation.SCIENTIST,
-    sprite: Occupation.SCIENTIST,
-    homeFloorKey: floorKeyForDesign('void'),
-    hp: 700, maxHp: 700, level: 10, money: 0, speed: 1.0,
-    inventory: [
-      { defId: 'antidep', count: 2 },
-      { defId: 'psi_stabilizer', count: 1 },
-    ],
-    talkLines: [
-      'Журнал протокола уже листает страницы сам. Слушай коротко: метки ставь мелом, записи делай после выхода.',
-      'Не смотри в зелёный источник дольше трёх вдохов. Потом хуже карта и хуже прицел.',
-      'Если дверь повторилась, не радуйся короткому пути. Проверь метку, воду и обратную сторону.',
-      'Ордер здесь не открывает двери. Он нужен посту: покажешь бумагу, меньше будут трогать сумку.',
-      'Творец не разговаривает. Он давит дистанцией и ошибками маршрута; держи стабилизатор при себе.',
-      'Шип не оружие. Это опасный образец для возврата, держи отдельно от еды и документов.',
-    ],
-    talkLinesPost: [
-      'Запись держится. Не проверяй её вслух, пока рядом зелёный источник.',
-      'Журнал вернулся без меня. Значит, бумага дошла, а я застрял между зелёной стеной и лифтом.',
-      'Если зелёный источник снова пищит, уходи боком и не теряй дверь из вида.',
-    ],
-    talkQuestResponse: 'Ты прошёл порог. Хорошо. Плохая новость: голос в банке не выводит. Он повторяет маршрут чужим голосом, а лишний шаг закрывает дверь за спиной.',
-    voiceTags: ['scientist', 'void'],
-  }));
 
   export const VOICE_ID = registerPlotNpc(plotNpcPackage({
     id: 'voice',
@@ -557,7 +468,10 @@ import { registerNpcPackageFromPlotNpc } from './npc_packages';
 import type { PlotNpcDef } from './plot';
 
 export function registerFactionTraders(npcs: Record<string, PlotNpcDef>) {
-  registerNpcPackageFromPlotNpc({ id: 'liq_armorer', npc: npcs['liq_armorer'] });
-  registerNpcPackageFromPlotNpc({ id: 'liq_medic', npc: npcs['liq_medic'] });
-  registerNpcPackageFromPlotNpc({ id: 'liq_quartermaster', npc: npcs['liq_quartermaster'] });
+  // Все трое стоят в базе ликвидаторов и больше нигде: дом должен совпадать с
+  // этажом материализации, иначе A-Life резервирует их в чужом бакете.
+  const home = floorKeyForDesign('liquidatorbase');
+  registerNpcPackageFromPlotNpc({ id: 'liq_armorer', npc: { ...npcs['liq_armorer'], homeFloorKey: home } });
+  registerNpcPackageFromPlotNpc({ id: 'liq_medic', npc: { ...npcs['liq_medic'], homeFloorKey: home } });
+  registerNpcPackageFromPlotNpc({ id: 'liq_quartermaster', npc: { ...npcs['liq_quartermaster'], homeFloorKey: home } });
 }

@@ -18,14 +18,13 @@ import {
   isChernobogDocketItem,
 } from '../data/chernobog_docket';
 import { getStack } from '../data/items';
-import { addFactionRelMutual } from '../data/relations';
+import { addFactionRelMutual, applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from '../data/relations';
 import { changeResourceStock, getEconomyQuote, type EconomyQuote } from './economy';
 import { controlHint } from './controls';
 import { publishEvent } from './events';
 
 import { generateContainerLoot } from './procedural_loot';
 import { recordPermitAccess } from './permits';
-import { applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from './factions';
 import { addKarma } from './alife_rating';
 import { publishMaronaryShavingAcquired } from './maronary_shaving';
 import { territoryOwnerToFaction } from '../data/factions';

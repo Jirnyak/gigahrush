@@ -13,7 +13,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc,
 } from '../admin_common';
@@ -119,7 +119,7 @@ const WITNESS_LIDIYA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('galina_korotkostvolnaya', GALINA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'galina_korotkostvolnaya', GALINA_DEF, [
   {
     id: 'weapon_permit_legal_forms',
     giverId: getPlotNpcNumericId('galina_korotkostvolnaya')!,
@@ -137,7 +137,7 @@ registerSideQuest('galina_korotkostvolnaya', GALINA_DEF, [
   },
 ]);
 
-registerSideQuest('boris_podchistkin', BORIS_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'boris_podchistkin', BORIS_DEF, [
   {
     id: 'weapon_permit_forged_stamp',
     giverId: getPlotNpcNumericId('boris_podchistkin')!,
@@ -155,7 +155,7 @@ registerSideQuest('boris_podchistkin', BORIS_DEF, [
   },
 ]);
 
-registerSideQuest('stepan_patronov', STEPAN_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'stepan_patronov', STEPAN_DEF, [
   {
     id: 'weapon_permit_sidearm_issue',
     giverId: getPlotNpcNumericId('stepan_patronov')!,

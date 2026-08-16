@@ -51,8 +51,6 @@ const FACTION_VS_MONSTER: number[] = [
   /* PLAYER  */ -100,
 ];
 
-export type FactionRelationDelta = readonly [Faction, number];
-
 /** Get dynamic faction-to-faction relation */
 export function getFactionRelation(a: Faction, b: Faction): number {
   return getFactionRel(a, b);
@@ -66,19 +64,6 @@ export function getFactionMonsterRelation(f: Faction): number {
 /** Check if two factions are hostile (base relation) */
 export function areFactionsHostile(a: Faction, b: Faction): boolean {
   return getFactionRelation(a, b) <= HOSTILE_RELATION_THRESHOLD;
-}
-
-export function applyFactionRelationDeltas(
-  deltas: readonly FactionRelationDelta[],
-  actor: Faction = Faction.PLAYER,
-): Record<string, number> {
-  const applied: Record<string, number> = {};
-  for (const [faction, delta] of deltas) {
-    if (delta === 0) continue;
-    addFactionRelMutual(actor, faction, delta);
-    applied[Faction[faction] ?? String(faction)] = (applied[Faction[faction] ?? String(faction)] ?? 0) + delta;
-  }
-  return applied;
 }
 
 /** Check if entity considers another entity hostile */
@@ -487,43 +472,6 @@ export function applyDamageRelationPenalty(
     addFactionRelMutual(attackerFaction, targetFaction, penalty);
     if (attacker) addKarma(attacker, -Math.max(1, Math.min(4, Math.floor(damage / 20) || 1)));
   }
-}
-
-/* ── Apply narrow social penalty for witnessed/audited theft ─── */
-export function applyTheftRelationPenalty(
-  victimFaction: Faction | undefined,
-  witnessed: boolean,
-  audited: boolean,
-): number {
-  if (victimFaction === undefined || victimFaction === Faction.PLAYER) return 0;
-  if (!witnessed && !audited) return 0;
-
-  const penalty = witnessed ? -4 : -2;
-  addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
-  return penalty;
-}
-
-export function applyRoomMemoryRelationPenalty(victimFaction: Faction | undefined, severity: number): number {
-  if (victimFaction === undefined || victimFaction === Faction.PLAYER) return 0;
-  const penalty = severity >= 5 ? -2 : -1;
-  addFactionRelMutual(victimFaction, Faction.PLAYER, penalty);
-  return penalty;
-}
-
-export function applyInfrastructureRelationResponse(
-  ownerFaction: Faction | null | undefined,
-  action: 'repair' | 'shutdown' | 'force' | 'overload',
-): number {
-  if (ownerFaction === null || ownerFaction === undefined || ownerFaction === Faction.PLAYER) return 0;
-  const delta = action === 'repair'
-    ? (ownerFaction === Faction.WILD ? 0 : 1)
-    : action === 'shutdown'
-      ? -1
-      : action === 'force'
-        ? -2
-        : -4;
-  if (delta !== 0) addFactionRelMutual(Faction.PLAYER, ownerFaction, delta);
-  return delta;
 }
 
 export function canCreateMacroGoal(state: GameState): boolean {

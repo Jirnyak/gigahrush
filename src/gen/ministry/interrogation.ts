@@ -12,7 +12,7 @@ import {
   type Entity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type NextId, createAdminRoom, setFeature, addItemDrop, spawnAdminNpc,
   spawnAdminMonster,
@@ -68,7 +68,7 @@ const WITNESS_RIMMA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('lidiya_protokolnaya', LIDIYA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'lidiya_protokolnaya', LIDIYA_DEF, [
   {
     id: 'interrogation_bandages',
     giverId: getPlotNpcNumericId('lidiya_protokolnaya')!,

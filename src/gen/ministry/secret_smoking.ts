@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('ministry');
 /* ── Тайная курилка — permanent room (ministry) ───────────────── */
 /* Hidden smoking room used by dissident clerks. Журналистка Аврора */
 /* gives FETCH quest for compromising notes about samosbor cover-up. */
@@ -9,7 +11,7 @@ import {
   EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../entities/sprite_index';
 import { genLog } from '../log';
@@ -49,7 +51,7 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(AVRORA_ID, NPC_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, AVRORA_ID, NPC_DEF, [
   {
     id: 'avrora_compromat',
     giverId: getPlotNpcNumericId(AVRORA_ID)!,

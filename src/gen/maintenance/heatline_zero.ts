@@ -1,6 +1,8 @@
 /* ── Теплотрасса Ноль — local static heat hazard slice ───────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   Tex,
@@ -11,7 +13,7 @@ import {
   QuestType,
   MonsterKind,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature, setWater,
   spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
@@ -68,7 +70,7 @@ const MIRA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag14_zakhar_nulevoy', ZAKHAR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag14_zakhar_nulevoy', ZAKHAR_DEF, [
   {
     id: 'ag14_heatline_cool_valve',
     giverId: getPlotNpcNumericId('ag14_zakhar_nulevoy')!,
@@ -91,7 +93,7 @@ registerSideQuest('ag14_zakhar_nulevoy', ZAKHAR_DEF, [
   },
 ]);
 
-registerSideQuest('ag14_mira_obvodnaya', MIRA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag14_mira_obvodnaya', MIRA_DEF, [
   {
     id: 'ag14_heatline_safe_bypass',
     giverId: getPlotNpcNumericId('ag14_mira_obvodnaya')!,

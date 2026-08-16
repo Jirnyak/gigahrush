@@ -43,7 +43,7 @@ const NPC_DEF: PlotNpcDef = {
 registerAuthoredNpc({
   id: NPC_ID,
   npc: NPC_DEF,
-  homeFloorKey: designNpcFloorKey('black_market_88'),
+  homeFloorKey: designNpcFloorKey('living'),
   tags: ['black_market_88', 'artifact'],
   quests: [
     {

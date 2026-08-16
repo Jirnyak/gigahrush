@@ -6,7 +6,7 @@ import { rng, xorshift32, irand, mathRng } from '../core/rand';
 
 import {
   W, Cell, DoorState, ZoneFaction, RoomType, Tex, Feature, ContainerKind, Faction,
-  type Entity, type GameState, type Msg, type Room, type WorldContainer, type WorldEventType,
+  type Entity, type GameState, type Room, type WorldContainer, type WorldEventType,
   EntityType, AIGoal, MonsterKind, Occupation,
   msg,
 } from '../core/types';
@@ -5056,39 +5056,6 @@ export function tickRandomEntityTransferForTests(
   variant?: ActiveSamosborVariant,
 ): boolean {
   return tickRandomEntityTransfer(world, entities, state, variant);
-}
-
-/* ── Clear fog when fog boss is killed ────────────────────────── */
-export function clearFogInZone(world: World, zoneId: number, msgs: Msg[], time: number, state?: GameState): void {
-  const zone = world.zones[zoneId];
-  if (!zone) return;
-  zone.fogged = false;
-  // Clear all fog cells belonging to this zone
-  let fogDirty = false;
-  const fogRects: WorldGridDirtyRect[] = [];
-  for (let i = 0; i < W * W; i++) {
-    if (world.zoneMap[i] === zoneId && world.fog[i] !== 0) {
-      world.fog[i] = 0;
-      fogDirty = true;
-      pushCellDirtyRect(fogRects, i);
-    }
-  }
-  if (fogDirty) world.markFogDirty(fogRects);
-  msgs.push(msg(
-    `Туман в зоне ${zoneId} ушёл. Ликвидаторы могут заходить.`,
-    time, '#4f4',
-  ));
-  if (state) {
-    publishEvent(state, {
-      type: 'fog_boss_killed',
-      zoneId,
-      x: zone.cx,
-      y: zone.cy,
-      severity: 5,
-      privacy: 'public',
-      tags: ['samosbor', 'fog', 'boss', 'clear'],
-    });
-  }
 }
 
 /* ── Apply active samosbor effect in fogged areas ─────────────── */

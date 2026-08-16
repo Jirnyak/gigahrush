@@ -1,12 +1,14 @@
 /* -- FLOOR16 collectors pressure reroute: water choice and eel work -- */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType, RoomType, Tex,
   msg,
   type Entity, type GameState, type Room, type WorldContainer,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { changeResourceStock } from '../../systems/economy';
 import { getRecentEvents, publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -118,7 +120,7 @@ const DEBTOR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('collectors_pressure_boss_varya', VARYA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'collectors_pressure_boss_varya', VARYA_DEF, [
   {
     id: DRAIN_LIVING_QUEST,
     giverId: getPlotNpcNumericId('collectors_pressure_boss_varya')!,
@@ -141,7 +143,7 @@ registerSideQuest('collectors_pressure_boss_varya', VARYA_DEF, [
   },
 ]);
 
-registerSideQuest('collectors_drowned_cartographer', CARTOGRAPHER_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'collectors_drowned_cartographer', CARTOGRAPHER_DEF, [
   {
     id: 'floor16_collectors_flooded_map',
     giverId: getPlotNpcNumericId('collectors_drowned_cartographer')!,
@@ -164,7 +166,7 @@ registerSideQuest('collectors_drowned_cartographer', CARTOGRAPHER_DEF, [
   },
 ]);
 
-registerSideQuest('collectors_tube_hunter_ilyas', ILYAS_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'collectors_tube_hunter_ilyas', ILYAS_DEF, [
   {
     id: 'floor16_collectors_hunt_tube_eel',
     giverId: getPlotNpcNumericId('collectors_tube_hunter_ilyas')!,
@@ -178,7 +180,7 @@ registerSideQuest('collectors_tube_hunter_ilyas', ILYAS_DEF, [
   },
 ]);
 
-registerSideQuest('collectors_water_debtor', DEBTOR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'collectors_water_debtor', DEBTOR_DEF, [
   {
     id: DRAIN_KVARTIRY_QUEST,
     giverId: getPlotNpcNumericId('collectors_water_debtor')!,

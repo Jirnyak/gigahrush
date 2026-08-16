@@ -528,7 +528,7 @@ registerNpcInteractionOption({
   id: 'arena',
   order: 5,
   label: () => 'Арена',
-  visible: ctx => ctx.npc.id === getPlotNpcNumericId('arena_master') || ctx.npc.id === getPlotNpcNumericId('marko_lolo'),
+  visible: ctx => ctx.npc.id === getPlotNpcNumericId('marko_lolo'),
   activate: ctx => {
     openArena(ctx);
   },

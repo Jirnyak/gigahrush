@@ -1,13 +1,10 @@
 /* ── Void trace seal — local protocol backlash room ───────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
-import {
-  Cell, ContainerKind, DoorState, EntityType, AIGoal, Faction, Feature, MonsterKind, Occupation, RoomType, Tex, msg,
-  type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
-} from '../../core/types';
+
+import { Cell, ContainerKind, DoorState, EntityType, AIGoal, Feature, MonsterKind, RoomType, Tex, msg, type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType } from '../../core/types';
 import { World } from '../../core/world';
 import { createWorldContextStore } from '../../world/world_contexts';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
@@ -15,11 +12,8 @@ import { hasItem, removeItem } from '../../systems/inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
-import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 
-const CLERK_ID = 'floor20_void_protocol_clerk';
-const NEIGHBOR_ID = 'floor20_void_borrowed_neighbor';
 const PROTOCOL_ID = 'trace_seal';
 const PROTOCOL_NAME = 'Запечатать след';
 const TAG_RULE = 'void_rule';
@@ -33,52 +27,6 @@ const TRACE_SEAL_COSTS = [
   { itemId: 'psi_stabilizer', label: 'ПСИ-стабилизатор' },
 ] as const;
 
-const CLERK_DEF: PlotNpcDef = {
-  name: 'Клерк протокола следа',
-  isFemale: false,
-  faction: Faction.SCIENTIST,
-  occupation: Occupation.SECRETARY,
-  sprite: Occupation.SECRETARY,
-  hp: 180,
-  maxHp: 180,
-  money: 0,
-  speed: 0.8,
-  inventory: [{ defId: 'note', count: 1 }],
-  talkLines: [
-    'Форма короткая: запечатать след или оставить его уликой. Первый вариант закрывает проход, второй зовет свидетеля.',
-    'Цель уже выбрана черным ящиком. Не бегайте по этажу: смотрите номер в записке.',
-    'Запечатаете след - заплатите сургучом, ячейкой или здоровьем. Соседний проход закроется на месте.',
-  ],
-  talkLinesPost: [
-    'Под сиреной пишите одно действие и цену. Длинную формулировку дверь не примет.',
-    'Черный ящик печатает адрес следа. Бумагу потом можно показать клерку или двери.',
-  ],
-};
-
-const NEIGHBOR_DEF: PlotNpcDef = {
-  name: 'Соседка, взятая взаймы',
-  isFemale: true,
-  faction: Faction.CITIZEN,
-  occupation: Occupation.HOUSEWIFE,
-  sprite: Occupation.HOUSEWIFE,
-  hp: 120,
-  maxHp: 120,
-  money: 4,
-  speed: 0.9,
-  inventory: [{ defId: 'bread', count: 1 }],
-  talkLines: [
-    'Я открыла дверь на площадке за хлебом. Шагнула сюда, а моя квартира осталась за другой ручкой.',
-    'Не прячь след ради тишины. Закроешь соседний проход - люди за ним перестанут отвечать.',
-    'Если запечатаешь, я хотя бы буду знать, какая дверь меня утащила.',
-  ],
-  talkLinesPost: [
-    'Соседний проход уже закрыт. За ним кашляли, теперь молчат - это на вашей бумаге.',
-    'Меня вернут не туда. Но улика с адресом останется, и меня будут искать не по слухам.',
-  ],
-};
-
-registerSideQuest(CLERK_ID, CLERK_DEF, []);
-registerSideQuest(NEIGHBOR_ID, NEIGHBOR_DEF, []);
 
 interface TraceSealContext {
   world: World;
@@ -407,28 +355,10 @@ function addTraceContainer(
   return id;
 }
 
-function spawnProtocolNpc(
-  world: World,
-  entities: Entity[],
-  nextId: { v: number },
-  plotNpcId: string,
-  _def: PlotNpcDef,
-  x: number,
-  y: number,
-): void {
-  const px = world.wrap(x) + 0.5;
-  const py = world.wrap(y) + 0.5;
-  requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, px, py, {
-    angle: 0,
-    canGiveQuest: false,
-    aiTarget: { x: px, y: py },
-  });
-}
-
 export function generateTraceSealProtocol(
   world: World,
   entities: Entity[],
-  nextId: { v: number },
+  _nextId: { v: number },
   spawnX: number,
   spawnY: number,
 ): void {
@@ -472,9 +402,6 @@ export function generateTraceSealProtocol(
   world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.APPARATUS;
   world.features[world.idx(room.x + 2, room.y + room.h - 2)] = Feature.LAMP;
   world.features[world.idx(room.x + room.w - 3, room.y + room.h - 2)] = Feature.LAMP;
-
-  spawnProtocolNpc(world, entities, nextId, CLERK_ID, CLERK_DEF, room.x + 3, room.y + room.h - 3);
-  spawnProtocolNpc(world, entities, nextId, NEIGHBOR_ID, NEIGHBOR_DEF, room.x + room.w - 4, room.y + room.h - 3);
 
   const sealContainerId = addTraceContainer(
     world,

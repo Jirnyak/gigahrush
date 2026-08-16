@@ -55,13 +55,15 @@ const BASELINE = {
    История: 293 → 106 (срезано ребро systems/samosbor → gen/floor_manifest, генератор
    приходит инъекцией из точки сборки src/content.ts) → 36 (константа версии сейва уехала
    в лист core/save_shape.ts, и platform_bridge перестал тянуть весь save_runtime) → 10
-   (markov_text берёт реляцию из data/relations, а не через systems/factions).
+   (markov_text берёт реляцию из data/relations, а не через systems/factions) → 4
+   (клубок из 10 разобран по ответственностям: словарь дельт матрицы отношений уехал
+   к самой матрице в data/relations, а снятие зонного тумана — в лист systems/fog_zone,
+   и бой перестал тянуть весь самосбор).
    Ленивый реестр этажей сверх этого не даёт ничего — замерено.
-   Оставшиеся 10 — настоящий клубок, а не keystone: factions ↔ noise ↔ online_client ↔
-   online_protocol ↔ inventory ↔ permits ↔ crafting ↔ containers ↔ faction_events ↔
-   alife/squad_logic. Ни одно ребро не роняет его больше чем на 3; здесь нужен разбор
-   ответственностей, а не перенос листа. */
-const RUNTIME_CYCLE_BASELINE = 10;
+   Оставшиеся 4 — ядро боевого AI: ai/combat ↔ ai/monster ↔ ai/micro_goals ↔
+   ai/khorovaya_matka. Это взаимная логика одного слоя, а не чужой лист: цель и
+   стрельба, микроцели и матка ссылаются друг на друга по существу. */
+const RUNTIME_CYCLE_BASELINE = 4;
 
 const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
 const MAX_FUNCTION_LINES = 200;

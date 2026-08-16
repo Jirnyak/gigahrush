@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 /* ── Красный уголок — permanent room (kvartiry floor) ─────────── */
 /* Bolshie Stalin'ist common room with portraits, lamps, desk and  */
 /* a teacher NPC. Hand-crafted, protected with aptMask.            */
@@ -9,7 +11,7 @@ import {
   EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../entities/sprite_index';
 import { genLog } from '../log';
@@ -51,7 +53,7 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(ZOYA_ID, NPC_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, ZOYA_ID, NPC_DEF, [
   {
     id: 'zoya_ballots',
     giverId: getPlotNpcNumericId(ZOYA_ID)!,

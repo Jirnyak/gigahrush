@@ -1,12 +1,14 @@
 /* ── Аварийный сброс — repair/steal/flee pressure loop ───────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   AIGoal, Cell, EntityType, Tex, Feature, RoomType, Faction, Occupation, QuestType,
   MonsterKind,
   type Entity,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -91,7 +93,7 @@ const TOMA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag04_sluice_marfa', MARFA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag04_sluice_marfa', MARFA_DEF, [
   {
     id: 'ag04_sluice_repair_pump',
     giverId: getPlotNpcNumericId('ag04_sluice_marfa')!,
@@ -115,7 +117,7 @@ registerSideQuest('ag04_sluice_marfa', MARFA_DEF, [
   },
 ]);
 
-registerSideQuest('ag04_sluice_egor', EGOR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag04_sluice_egor', EGOR_DEF, [
   {
     id: 'ag04_sluice_loot_clamps',
     giverId: getPlotNpcNumericId('ag04_sluice_egor')!,
@@ -139,7 +141,7 @@ registerSideQuest('ag04_sluice_egor', EGOR_DEF, [
   },
 ]);
 
-registerSideQuest('ag04_sluice_toma', TOMA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag04_sluice_toma', TOMA_DEF, [
   {
     id: 'ag04_sluice_power_panel',
     giverId: getPlotNpcNumericId('ag04_sluice_toma')!,

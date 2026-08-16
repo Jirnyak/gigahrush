@@ -54,12 +54,11 @@ function findFighters(entities: readonly Entity[]): { fighterA: Entity | null, f
   // e.id остаётся осмысленным, потому что сюжетный NPC спавнится ровно со своим слотом
   // (gen/plot_npc_spawn.ts), а обычные сущности обязаны брать id выше getPlotNpcCount().
   const markoId = getPlotNpcNumericId('marko_lolo');
-  const masterId = getPlotNpcNumericId('arena_master');
   let fighterA: Entity | null = null;
   let fighterB: Entity | null = null;
 
   for (const e of entities) {
-    if (e.alive && e.type === EntityType.NPC && e.id !== markoId && e.id !== masterId) {
+    if (e.alive && e.type === EntityType.NPC && e.id !== markoId) {
       if (!fighterA) fighterA = e;
       else if (!fighterB) {
         fighterB = e;

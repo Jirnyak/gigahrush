@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 /* ── Чернобожий Свод: cult false-shelter room anchor ─────────── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -9,7 +11,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { FALSE_SAFE_BLOCK_ROOM_PREFIX, FALSE_SAFE_BLOCK_TAG } from '../../data/procedural_floors';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Черноременный у койки',
@@ -22,7 +24,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_6c1ht', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_6c1ht', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Сосед без места',
@@ -35,7 +37,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_ie4ia', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_ie4ia', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 import { addFactionRelMutual } from '../../data/relations';
 import { MONSTERS } from '../../entities/monster';
@@ -299,7 +301,7 @@ registerSideQuest(WITNESS_ID, WITNESS, [{
   eventTargetName: 'Список снабжения Чернобожьего Свода вынесен к соседям.',
 }]);
 
-registerSideQuest(CUSTODIAN_ID, CUSTODIAN, []);
+registerFloorSideQuest(HOME_FLOOR_KEY, CUSTODIAN_ID, CUSTODIAN, []);
 
 registerWorldEventObserver(handleSvodEvents);
 

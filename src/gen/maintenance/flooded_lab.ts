@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 /* ── Затопленная лаборатория — permanent room (maintenance) ───── */
 /* Hand-crafted scientific lab built into the maintenance maze.    */
 /* NPC: Профессор Тесла — gives FETCH quest for energy cells.      */
@@ -9,7 +11,7 @@ import {
   EntityType, Faction, Occupation, QuestType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../entities/sprite_index';
 import { genLog } from '../log';
@@ -47,7 +49,7 @@ const NPC_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(PROFESSOR_ID, NPC_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, PROFESSOR_ID, NPC_DEF, [
   {
     id: 'tesla_energy',
     giverId: getPlotNpcNumericId(PROFESSOR_ID)!,

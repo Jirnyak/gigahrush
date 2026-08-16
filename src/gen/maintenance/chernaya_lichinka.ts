@@ -7,6 +7,8 @@ import {
   type WorldEvent, type WorldEventSeverity, type WorldEventType,
 } from '../../core/types';
 import type { World } from '../../core/world';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
@@ -14,7 +16,7 @@ import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { cleanCellHazardsNear, registerCellHazardSite } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
-import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -28,7 +30,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_fyogg', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_fyogg', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 import {
   type MaintContentCtx, findMaintArea, openTile, setFeature,
   stampMaintRoom,

@@ -87,7 +87,14 @@ function assertPlotStep(step: PlotStep, scope: string): void {
   // giverId — числовой id пакета NPC, бэкфиллится при регистрации.
   // sideQuestGiverId разрешает и числовой giverId, и ленивый giverPlotNpcId
   // (ветка идола объявлена в литерале раньше своих NPC).
-  assert.equal(getPlotNpcPackageByNumericId(sideQuestGiverId(step as never) ?? -1) !== undefined, true, `${scope} has missing giver package "${step.giverId}"`);
+  // Шаг вправе не иметь дающего вовсе — тогда его выдаёт сама цепочка (финал в
+  // безлюдной Пустоте). Проверяется именно висячая ссылка: объявил дающего —
+  // пакет обязан существовать. Сайд-квесту дающий бэкфиллится при регистрации,
+  // так что этим послаблением он воспользоваться не может.
+  const declaresGiver = step.giverId !== undefined || step.giverPlotNpcId !== undefined;
+  if (declaresGiver) {
+    assert.equal(getPlotNpcPackageByNumericId(sideQuestGiverId(step as never) ?? -1) !== undefined, true, `${scope} has missing giver package "${step.giverId}"`);
+  }
   if (step.targetNpcId) {
     assert.equal(getPlotNpcPackageByNumericId(step.targetNpcId) !== undefined, true, `${scope} has missing targetNpcId "${step.targetNpcId}"`);
   }

@@ -34,7 +34,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_0_nfd13', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'ambient_0_nfd13', npc: AMBIENT_NPC_0, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Техник кремниевого лаза',
@@ -50,7 +50,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_1_a100o', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'ambient_1_a100o', npc: AMBIENT_NPC_1, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Проверяющий нижней кабины',
@@ -65,7 +65,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
   talkLines: ['Проходи.', 'Не мешай.'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'ambient_2_f2vff', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'ambient_2_f2vff', npc: AMBIENT_NPC_2, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';

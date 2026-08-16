@@ -1,6 +1,8 @@
 /* ── Угол потерянного ребёнка — Kvartiry social pressure POI ─── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   Cell,
   ContainerKind,
@@ -15,7 +17,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Женя из сорок третьей',
@@ -28,7 +30,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_cs8y3', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_cs8y3', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Девочка с картой',
@@ -41,7 +43,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_3xca0', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_3xca0', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Сосед-дежурный',
@@ -54,7 +56,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_ud6cn', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_ud6cn', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 import {
   createSocialPoiRoom,

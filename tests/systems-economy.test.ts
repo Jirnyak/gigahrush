@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getEconomyQuote } from '../src/systems/economy';
+// Тариф караванных линий приходит в цену провайдером, который регистрируется
+// побочным эффектом импорта. Раньше модуль затягивался случайно (economy →
+// containers → factions → caravans); теперь зависимость объявлена явно.
+import '../src/systems/caravans';
 import { makeGameState } from './helpers';
 import { Faction, Occupation } from '../src/core/types';
 

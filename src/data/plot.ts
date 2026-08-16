@@ -402,31 +402,31 @@ export const PLOT_CHAIN: PlotStep[] = [
     eventData: { routeId: 'design:void', floorZ: -50 },
     eventTargetName: 'Путь ниже открыт до Z-50.',
   },
-  // Step 15: Void warning → test the threshold voice
+  // Step 15: порог Пустоты отвечает чужим голосом — забрать банку
   {
-    giverId: getPlotNpcNumericId('void_warning')!,
     type: QuestType.FETCH,
-    desc: 'Творец вышел на связь чужим голосом. Жан просит проверить ловушку: забери голос в банке из его камеры и верни обратно. Крышку не открывать, даже если банка начнет торговаться.',
+    sourceLabel: 'Пустота',
+    desc: 'Творец вышел на связь чужим голосом. В камере у зелёных стен стоит банка с этим голосом: забери её и держи при себе. Крышку не открывать, даже если банка начнёт торговаться.',
     targetItem: 'bottled_voice', targetCount: 1,
     rewardItem: 'psi_stabilizer', rewardCount: 1,
     extraRewards: [{ defId: 'antidep', count: 1 }],
     relationDelta: 6, xpReward: 140,
   },
-  // Step 16: Void warning → kill the Creator
+  // Step 16: списать Творца
   {
-    giverId: getPlotNpcNumericId('void_warning')!,
     type: QuestType.KILL,
+    sourceLabel: 'Пустота',
     desc: 'Пора списывать Творца. Спускайся в Пустоту. [ДАННЫЕ УДАЛЕНЫ]. Держись укрытий между зелёными залпами: этот акт ты подписываешь сам.',
     targetMonsterKind: MonsterKind.CREATOR, killNeeded: 1,
     rewardItem: 'void_spike', rewardCount: 1,
     extraRewards: [{ defId: 'psi_stabilizer', count: 1 }],
     relationDelta: 12, xpReward: 500,
   },
-  // Step 17: Void warning → leave the return consequence behind
+  // Step 17: вынести последствие возвращения
   {
-    giverId: getPlotNpcNumericId('void_warning')!,
     type: QuestType.FETCH,
-    desc: 'Забери пустотный шип и отдай Жану перед возвращением. Не тащи в жилые блоки то, что не проходит по инвентарной описи.',
+    sourceLabel: 'Пустота',
+    desc: 'Забери пустотный шип и вынеси его сам. Предъявлять его тут больше некому, а в жилые блоки не тащат то, что не проходит по инвентарной описи.',
     targetItem: 'void_spike', targetCount: 1,
     rewardItem: 'holy_water', rewardCount: 2,
     extraRewards: [{ defId: 'bandage', count: 3 }, { defId: 'antidep', count: 1 }],
@@ -451,7 +451,13 @@ export interface KillPressureDef {
 
 /* ── A single step in the linear story quest chain ───────────── */
 export interface PlotStep {
-  giverId: number;
+  /**
+   * Кому принадлежит поручение. Может отсутствовать: там, где говорить не с кем,
+   * шаг выдаёт сама цепочка, как только закрыт предыдущий, и закрывает его дело,
+   * а не разговор. Так работает финал в Пустоте — этаж безлюден, и заводить ради
+   * трёх поручений личность не нужно.
+   */
+  giverId?: number;
   /**
    * Authoring-time string id of the giver NPC. Used to resolve `giverId` lazily
    * when the eager `getPlotNpcNumericId()` in a quest literal froze to `undefined`
@@ -495,6 +501,8 @@ export interface PlotStep {
   killPressure?: KillPressureDef;
   /** Auto-complete VISIT quest when player enters this floor */
   visitFloorZ?: number;
+  /** Подпись отправителя для шага без дающего: в журнале это строка «От: …». */
+  sourceLabel?: string;
   /** Optional explicit deadline for authored urgent side quests. */
   timeLimitMinutes?: number;
   holdSeconds?: number;
@@ -847,7 +855,7 @@ export function getSideQuestRegistrySnapshot(): readonly SideQuestRegistrySnapsh
     // giver registered later, so their `giverId` field stays frozen at
     // undefined while the offer gate resolves them through giverPlotNpcId.
     // An inspection API that reports undefined here is simply lying.
-    giverId: sideQuestGiverId(q) ?? q.giverId,
+    giverId: sideQuestGiverId(q) ?? q.giverId ?? -1,
     type: q.type,
     desc: q.desc,
   }));
@@ -886,19 +894,6 @@ export function hasAvailableQuest(plotNpcId: number, quests: Quest[]): boolean {
   return false;
 }
 
-/* ── Arena Master ─────────────────────────────────────────────── */
-registerSideQuest('arena_master', {
-  name: 'Мастер Арены',
-  isFemale: false,
-  age: 45,
-  faction: Faction.LIQUIDATOR,
-  occupation: Occupation.DIRECTOR,
-  sprite: Occupation.DIRECTOR,
-  hp: 100, maxHp: 100, level: 10, money: 500, speed: 1.0,
-  inventory: [],
-  talkLines: ['Готов сделать ставку?'],
-  talkLinesPost: []
-}, [], { tags: ['arena'] });
 
 import './npc_plot_packages';
 

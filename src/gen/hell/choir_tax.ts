@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('hell');
 /* ── Hell choir tax: capped PSI combat/trade/extraction POI ───── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -11,7 +13,7 @@ import {
 import { World } from '../../core/world';
 import { registerFloorScopedReset } from '../../world/world_contexts';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -180,7 +182,7 @@ const LIQUIDATOR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(GUIDE_ID, GUIDE_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, GUIDE_ID, GUIDE_DEF, [
   {
     id: 'hell18_break_altar_signal',
     giverId: getPlotNpcNumericId(GUIDE_ID)!,
@@ -197,7 +199,7 @@ registerSideQuest(GUIDE_ID, GUIDE_DEF, [
   },
 ]);
 
-registerSideQuest(TAXMAN_ID, TAXMAN_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, TAXMAN_ID, TAXMAN_DEF, [
   {
     id: 'hell18_pay_cult_tax',
     giverId: getPlotNpcNumericId(TAXMAN_ID)!,
@@ -228,7 +230,7 @@ registerSideQuest(TAXMAN_ID, TAXMAN_DEF, [
   },
 ]);
 
-registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, LIQUIDATOR_ID, LIQUIDATOR_DEF, [
   {
     id: 'hell18_extract_last_liquidator',
     giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,

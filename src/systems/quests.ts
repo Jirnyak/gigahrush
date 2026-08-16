@@ -484,15 +484,21 @@ export function getCurrentObjective(state: Pick<GameState, 'quests' | 'activeQue
 
   const available = nextAvailablePlotStep(state.quests);
   if (!available) return null;
-  const giverName = plotNpcDisplayName(available.step.giverId) ?? getPlotNpcStringId(available.step.giverId);
-  const target = findByPlotLive(entities, available.step.giverId);
+  const giverId = available.step.giverId;
+  // Шаг без дающего цепочка выдаёт сама, поэтому звать «поговорить» не с кем:
+  // висит его собственная цель, пока `checkQuests` не превратит шаг в поручение.
+  const giverName = giverId !== undefined
+    ? (plotNpcDisplayName(giverId) ?? getPlotNpcStringId(giverId))
+    : undefined;
+  const target = giverId !== undefined ? findByPlotLive(entities, giverId) : undefined;
   return {
-    line: available.step.offerObjective ?? `Цель: поговорить с ${giverName}.`,
+    line: available.step.offerObjective
+      ?? (giverName ? `Цель: поговорить с ${giverName}.` : available.step.desc),
     detail: available.step.offerObjective ? undefined : available.step.desc,
     source: 'plot_offer',
     plotStepIndex: available.index,
     targetEntityId: target?.id,
-    targetNpcId: available.step.giverId,
+    targetNpcId: giverId,
     color: '#9df',
   };
 }
@@ -867,6 +873,28 @@ function plotTalkTargetIsDead(q: Quest, entities: readonly Entity[], state: Game
   return isPlotNpcDeadKnown(state, q.targetNpcId);
 }
 
+/* ── Шаг сюжета без дающего ───────────────────────────────────── */
+/* Там, где говорить не с кем, поручение выдаёт сама цепочка: закрылся
+ * предыдущий шаг — следующий появляется в журнале. Так устроен финал в Пустоте:
+ * игрок спускается, и задача обновляется без разговора, потому что этаж
+ * безлюден. Закрывает такой шаг дело, а не сдача: приёмщика нет, и `checkQuests`
+ * ведёт его по той же ветке, что контракт. */
+function grantGiverlessPlotStep(
+  player: Entity, world: World, entities: Entity[], state: GameState, msgs: Msg[],
+): void {
+  const available = nextAvailablePlotStep(state.quests);
+  if (!available || available.step.giverId !== undefined) return;
+  const quest = generatePlotQuest(
+    { id: GIVERLESS_QUEST_GIVER, name: available.step.sourceLabel, x: player.x, y: player.y },
+    world, entities, state,
+  );
+  if (!quest) return;
+  quest.giverless = true;
+  scaleAuthoredQuestRewards(quest);
+  state.quests.push(quest);
+  msgs.push(msg(`Новое поручение: ${quest.desc}`, state.time, '#4af'));
+}
+
 /* ── Check all active quests for completion ───────────────────── */
 export function checkQuests(
   player: Entity, world: World, entities: Entity[],
@@ -874,6 +902,7 @@ export function checkQuests(
 ): void {
   const previousIndex = _currentIndex;
   _currentIndex = buildEntityIndex(entities);
+  grantGiverlessPlotStep(player, world, entities, state, msgs);
   for (const q of state.quests) {
     if (q.done) continue;
     ensureQuestDeadline(q, state.clock.totalMinutes, questDeadlineContext(q, player, world, state));
@@ -890,7 +919,9 @@ export function checkQuests(
 
     switch (q.type) {
       case QuestType.FETCH:
-        if (q.contractId === undefined) break; // manual turn-in required for NPC quests
+        // Сдавать лично — только когда есть кому: у контракта и у шага без
+        // дающего приёмщика нет, и делo закрывает сам предмет.
+        if (q.contractId === undefined && !q.giverless) break;
         if (q.targetItem === 'money') {
           if ((player.money ?? 0) >= (q.targetCount ?? 1)) complete = true;
         } else if (q.targetItem) {
@@ -909,7 +940,7 @@ export function checkQuests(
         break;
 
       case QuestType.KILL:
-        if (q.contractId === undefined) break; // manual turn-in required for NPC quests
+        if (q.contractId === undefined && !q.giverless) break;
         if (q.killCount !== undefined && q.killNeeded !== undefined) {
           if (q.killCount >= q.killNeeded) complete = true;
         }
@@ -1420,7 +1451,7 @@ function toroidalDirection(world: World, fromX: number, fromY: number, toX: numb
   return 'недалеко';
 }
 
-function nearestRoomOfType(world: World, npc: Entity, roomType: number): Room | null {
+function nearestRoomOfType(world: World, npc: { x: number; y: number }, roomType: number): Room | null {
   const current = world.roomAt(npc.x, npc.y);
   if (current?.type === roomType) return current;
 
@@ -1437,7 +1468,7 @@ function nearestRoomOfType(world: World, npc: Entity, roomType: number): Room | 
   return best;
 }
 
-function nearestRoomByName(world: World, npc: Entity, roomName: string): Room | null {
+function nearestRoomByName(world: World, npc: { x: number; y: number }, roomName: string): Room | null {
   const current = world.roomAt(npc.x, npc.y);
   if (current?.name === roomName) return current;
 
@@ -1460,13 +1491,19 @@ function plotNpcDisplayName(plotNpcId: number): string | undefined {
 }
 
 /* ── Generate plot quest from PLOT_CHAIN ──────────────────────── */
+/** Дающий сюжетного шага: живой NPC либо, для шага без дающего, `GIVERLESS_QUEST_GIVER`. */
+interface PlotQuestGiver { id: number; name?: string; x: number; y: number }
+
+/** Отсутствие дающего в квесте: то же значение кладёт санитайзер сейва. */
+const GIVERLESS_QUEST_GIVER = -1;
+
 function generatePlotQuest(
-  npc: Entity, world: World, entities: Entity[], state: GameState,
+  npc: PlotQuestGiver, world: World, entities: Entity[], state: GameState,
 ): Quest | null {
-  const plotId = npc.id!;
+  const plotId = npc.id;
   for (let i = 0; i < PLOT_CHAIN.length; i++) {
     const step = PLOT_CHAIN[i];
-    if (step.giverId !== plotId) continue;
+    if ((step.giverId ?? GIVERLESS_QUEST_GIVER) !== plotId) continue;
     // Skip if this step already has a quest (active or done)
     if (state.quests.some(q => q.plotStepIndex === i)) continue;
     // All previous steps must be done

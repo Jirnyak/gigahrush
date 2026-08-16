@@ -1,6 +1,8 @@
 /* -- Podpolnaya ammo smelter: contested Kvartiry ammo route ------- */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   Cell,
   ContainerKind,
@@ -14,7 +16,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Тимур на стрёме',
@@ -27,7 +29,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_vw6ed', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_vw6ed', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Соседка с мокрым платком',
@@ -40,7 +42,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_zi20t', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_zi20t', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Ученик у тигля',
@@ -53,7 +55,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_eh76y', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_eh76y', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 import {
   createSocialPoiRoom,
@@ -107,7 +109,7 @@ const POLINA: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('kv_gesha_gilza', GESHA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_gesha_gilza', GESHA, [{
   id: 'kv_smelter_metal_help',
   giverId: getPlotNpcNumericId('kv_gesha_gilza')!,
   type: QuestType.FETCH,
@@ -118,7 +120,7 @@ registerSideQuest('kv_gesha_gilza', GESHA, [{
   relationDelta: 8, xpReward: 45, moneyReward: 15,
 }]);
 
-registerSideQuest('kv_polina_obhodnaya', POLINA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_polina_obhodnaya', POLINA, [{
   id: 'kv_smelter_report',
   giverId: getPlotNpcNumericId('kv_polina_obhodnaya')!,
   type: QuestType.FETCH,

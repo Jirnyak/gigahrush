@@ -7,7 +7,7 @@ import {
   type PermitDef,
   type PermitForgeryRecipe,
 } from '../data/permits';
-import { applyFactionRelationDeltas, type FactionRelationDelta } from './factions';
+import { applyFactionRelationDeltas, type FactionRelationDelta } from '../data/relations';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 

@@ -1,12 +1,14 @@
 /* ── Баррикадированный лестничный пролёт — four-route POI ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   AIGoal, Cell, DoorState, EntityType, Feature, Faction, MonsterKind, Occupation, QuestType, RoomType, Tex,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Пацан на стрёме',
@@ -19,7 +21,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_es06t', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_es06t', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';

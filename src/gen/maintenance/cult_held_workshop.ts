@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 /* ── AG83 cult-held workshop: repair, bargain, clear, sabotage ── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -20,7 +22,7 @@ import {
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Черноременный у ремня',
@@ -33,7 +35,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_2eabf', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_2eabf', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Сторож готовой партии',
@@ -46,7 +48,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_1_inaj0', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'maintenance_ambient_1_inaj0', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 import { changeResourceStock } from '../../systems/economy';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -145,7 +147,7 @@ const SABOTEUR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, MECHANIC_ID, MECHANIC_DEF, [
   {
     id: REPAIR_QUEST,
     giverId: getPlotNpcNumericId(MECHANIC_ID)!,
@@ -176,7 +178,7 @@ registerSideQuest(MECHANIC_ID, MECHANIC_DEF, [
   },
 ]);
 
-registerSideQuest(FOREMAN_ID, FOREMAN_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, FOREMAN_ID, FOREMAN_DEF, [
   {
     id: TRIBUTE_QUEST,
     giverId: getPlotNpcNumericId(FOREMAN_ID)!,
@@ -193,7 +195,7 @@ registerSideQuest(FOREMAN_ID, FOREMAN_DEF, [
   },
 ]);
 
-registerSideQuest(SABOTEUR_ID, SABOTEUR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, SABOTEUR_ID, SABOTEUR_DEF, [
   {
     id: SABOTAGE_QUEST,
     giverId: getPlotNpcNumericId(SABOTEUR_ID)!,

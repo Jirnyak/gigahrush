@@ -12,6 +12,9 @@ import { ensureReachableRouteLifts, generateZones } from '../shared';
 import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
+import { syncNextEntityId } from '../content_manifest_utils';
+import { deliverFloorNpcPackages } from '../plot_npc_spawn';
+import { floorKeyForDesign } from '../../data/floor_keys';
 import { applyDesignFloorObjectProfile } from '../floor_object_placement';
 import { fillVisualSlotsForWorldFeatures } from '../../world/visual_cell_slots';
 import { rebuildGeneratedFloorPathBlockers } from '../../world/path_blockers';
@@ -186,6 +189,11 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     // Хук этажа поверх готовой толпы: промоушен локальных ролей и прочая
     // работа, которой нужны уже размещённые ambient-NPC.
     gen.onAfterPopulate?.(gen.world, gen.entities);
+    // Единая доставка авторских людей: реестр пакетов решает состав этажа, а не
+    // память автора модуля. Кого генератор поставил сам — тот уже стоит и
+    // повторно не появляется; добираются только забытые.
+    const deliveryId = { v: syncNextEntityId(gen.entities, 0) };
+    deliverFloorNpcPackages(gen.world, gen.entities, deliveryId, floorKeyForDesign(id));
     // Monster packs after NPCs: both draw from one shared active-actor budget, so placing
     // NPCs first then fitting monsters into the remaining slots starves neither. Packs are
     // anisotropic (crowds, loners, territorial holds, roamers) driven by monster ecology.

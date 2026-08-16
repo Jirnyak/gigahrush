@@ -38,7 +38,7 @@ import { monsterSpr } from '../entities/sprite_index';
 import { randomRPG } from './rpg';
 import { removeItem } from './inventory';
 import { publishEvent } from './events';
-import { applyInfrastructureRelationResponse } from './factions';
+import { applyInfrastructureRelationResponse } from '../data/relations';
 import { territoryFactionAt } from './territory';
 import { setDoorState } from './door_state';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';

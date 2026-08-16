@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('ministry');
 import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* ── Проверочный коридор документов — Ministry document gate ─── */
 
@@ -10,7 +12,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { createWorldContextStore } from '../../world/world_contexts';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { ITEMS } from '../../data/catalog';
 import { DOCUMENT_MINISTRY_GATE_ACCESS_DEFS } from '../../data/documents_access';
 import { ITEM_TAGS } from '../../data/items';
@@ -345,7 +347,7 @@ const GATE_WITNESS_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('galina_okoshechnaya', GALINA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'galina_okoshechnaya', GALINA_DEF, [
   {
     id: 'document_gate_official_slip',
     giverId: getPlotNpcNumericId('galina_okoshechnaya')!,
@@ -358,7 +360,7 @@ registerSideQuest('galina_okoshechnaya', GALINA_DEF, [
   },
 ]);
 
-registerSideQuest('arkadiy_podlozhny', ARKADIY_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'arkadiy_podlozhny', ARKADIY_DEF, [
   {
     id: 'document_gate_forged_slip',
     giverId: getPlotNpcNumericId('arkadiy_podlozhny')!,
@@ -371,7 +373,7 @@ registerSideQuest('arkadiy_podlozhny', ARKADIY_DEF, [
   },
 ]);
 
-registerSideQuest('boris_bezchekovy', BORIS_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'boris_bezchekovy', BORIS_DEF, [
   {
     id: 'document_gate_quiet_bribe',
     giverId: getPlotNpcNumericId('boris_bezchekovy')!,

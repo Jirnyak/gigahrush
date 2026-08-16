@@ -1,6 +1,8 @@
 /* ── AG18 concentrate press — factory loop without factory sim ── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   Cell,
   ContainerKind,
@@ -14,7 +16,7 @@ import {
   type Room,
   type WorldContainer,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { placeDoor } from '../shared';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,
@@ -121,7 +123,7 @@ function contentTags(extra: readonly string[] = []): string[] {
   return tags;
 }
 
-registerSideQuest('ag18_press_master', MASTER_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag18_press_master', MASTER_DEF, [{
   id: 'ag18_repair_concentrate_line',
   giverId: getPlotNpcNumericId('ag18_press_master')!,
   type: QuestType.FETCH,
@@ -132,7 +134,7 @@ registerSideQuest('ag18_press_master', MASTER_DEF, [{
   relationDelta: 12, xpReward: 55, moneyReward: 65,
 }]);
 
-registerSideQuest('ag18_press_input', INPUT_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag18_press_input', INPUT_DEF, [{
   id: 'ag18_deliver_filter_input',
   giverId: getPlotNpcNumericId('ag18_press_input')!,
   type: QuestType.FETCH,
@@ -143,7 +145,7 @@ registerSideQuest('ag18_press_input', INPUT_DEF, [{
   relationDelta: 10, xpReward: 45, moneyReward: 35,
 }]);
 
-registerSideQuest('ag18_press_guard', GUARD_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag18_press_guard', GUARD_DEF, [{
   id: 'ag18_defend_press_rebar',
   giverId: getPlotNpcNumericId('ag18_press_guard')!,
   type: QuestType.KILL,
@@ -155,7 +157,7 @@ registerSideQuest('ag18_press_guard', GUARD_DEF, [{
   relationDelta: 14, xpReward: 65, moneyReward: 80,
 }]);
 
-registerSideQuest('ag18_press_thief', THIEF_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag18_press_thief', THIEF_DEF, [{
   id: 'ag18_steal_press_output',
   giverId: getPlotNpcNumericId('ag18_press_thief')!,
   type: QuestType.FETCH,

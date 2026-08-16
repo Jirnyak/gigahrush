@@ -19,7 +19,7 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import {
@@ -148,7 +148,7 @@ const INTERN_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('nii_audit_runner', RUNNER_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'nii_audit_runner', RUNNER_DEF, [
   {
     id: QUEST_FIND_ROOM,
     giverId: getPlotNpcNumericId('nii_audit_runner')!,
@@ -160,7 +160,7 @@ registerSideQuest('nii_audit_runner', RUNNER_DEF, [
   },
 ]);
 
-registerSideQuest('nii_auditor_irina', IRINA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'nii_auditor_irina', IRINA_DEF, [
   {
     id: QUEST_CONCEAL,
     giverId: getPlotNpcNumericId('nii_auditor_irina')!,
@@ -173,7 +173,7 @@ registerSideQuest('nii_auditor_irina', IRINA_DEF, [
   },
 ]);
 
-registerSideQuest('nii_liquidator_maxim', MAXIM_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'nii_liquidator_maxim', MAXIM_DEF, [
   {
     id: QUEST_EXPOSE,
     giverId: getPlotNpcNumericId('nii_liquidator_maxim')!,
@@ -186,7 +186,7 @@ registerSideQuest('nii_liquidator_maxim', MAXIM_DEF, [
   },
 ]);
 
-registerSideQuest('nii_market_senya', SENYA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'nii_market_senya', SENYA_DEF, [
   {
     id: QUEST_SELL,
     giverId: getPlotNpcNumericId('nii_market_senya')!,

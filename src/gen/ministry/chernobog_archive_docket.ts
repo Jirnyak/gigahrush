@@ -1,9 +1,11 @@
 /* ── Досье ЧБ — Ministry Chernobog archive decisions ─────────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('ministry');
 import { Faction, Occupation, QuestType, type Entity, type Room } from '../../core/types';
 import { chernobogDocketQuestEventTags, chernobogDocketQuestRumorIds } from '../../data/chernobog_docket';
-import { type PlotNpcDef, registerSideQuest, registerSideQuestSteps } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuestSteps, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { type NextId, spawnAdminNpc } from '../admin_common';
 
 function docketEvent(
@@ -158,7 +160,7 @@ const CULT_CONTACT_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('chernobog_docket_registrar', REGISTRAR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'chernobog_docket_registrar', REGISTRAR_DEF, [
   {
     id: 'chernobog_submit_cell_map',
     giverId: getPlotNpcNumericId('chernobog_docket_registrar')!,
@@ -178,7 +180,7 @@ registerSideQuest('chernobog_docket_registrar', REGISTRAR_DEF, [
   },
 ]);
 
-registerSideQuest('chernobog_docket_copyist', COPYIST_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'chernobog_docket_copyist', COPYIST_DEF, [
   {
     id: 'chernobog_forge_witness_correction',
     giverId: getPlotNpcNumericId('chernobog_docket_copyist')!,
@@ -198,7 +200,7 @@ registerSideQuest('chernobog_docket_copyist', COPYIST_DEF, [
   },
 ]);
 
-registerSideQuest('chernobog_docket_buyer', BUYER_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'chernobog_docket_buyer', BUYER_DEF, [
   {
     id: 'chernobog_sell_confiscation_act',
     giverId: getPlotNpcNumericId('chernobog_docket_buyer')!,
@@ -217,7 +219,7 @@ registerSideQuest('chernobog_docket_buyer', BUYER_DEF, [
   },
 ]);
 
-registerSideQuest('chernobog_docket_keeper', KEEPER_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'chernobog_docket_keeper', KEEPER_DEF, [
   {
     id: 'chernobog_hide_external_index',
     giverId: getPlotNpcNumericId('chernobog_docket_keeper')!,
@@ -237,7 +239,7 @@ registerSideQuest('chernobog_docket_keeper', KEEPER_DEF, [
   },
 ]);
 
-registerSideQuest('chernobog_docket_liquidator', LIQUIDATOR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'chernobog_docket_liquidator', LIQUIDATOR_DEF, [
   {
     id: 'chernobog_show_liquidator_memo',
     giverId: getPlotNpcNumericId('chernobog_docket_liquidator')!,
@@ -256,7 +258,7 @@ registerSideQuest('chernobog_docket_liquidator', LIQUIDATOR_DEF, [
   },
 ]);
 
-registerSideQuest('chernobog_docket_cult_contact', CULT_CONTACT_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'chernobog_docket_cult_contact', CULT_CONTACT_DEF, [
   {
     id: 'chernobog_show_cult_contact',
     giverId: getPlotNpcNumericId('chernobog_docket_cult_contact')!,

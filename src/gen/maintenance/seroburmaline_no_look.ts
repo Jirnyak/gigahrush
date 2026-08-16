@@ -11,7 +11,9 @@ import {
   type Room,
 } from '../../core/types';
 import { MarkType, stampMark } from '../../systems/surface_marks';
-import { type PlotNpcDef, registerAuthoredNpc } from '../../data/plot';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -25,7 +27,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
   talkLines: ['...'],
   talkLinesPost: ['...']
 };
-registerAuthoredNpc({ id: 'maintenance_ambient_0_tvcyi', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'maintenance_ambient_0_tvcyi', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 import {
   forSeroburmalineSourceCells,
   SEROBURMALINE_ACTIVE_FEATURE,

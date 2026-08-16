@@ -13,7 +13,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type NextId, addItemDrop, createAdminRoom, setFeature, spawnAdminNpc,
 } from '../admin_common';
@@ -140,7 +140,7 @@ const TIMUR_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('marfa_pasportnaya', MARFA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'marfa_pasportnaya', MARFA_DEF, [
   {
     id: 'archive_obtain_permit',
     giverId: getPlotNpcNumericId('marfa_pasportnaya')!,
@@ -153,7 +153,7 @@ registerSideQuest('marfa_pasportnaya', MARFA_DEF, [
   },
 ]);
 
-registerSideQuest('ippolit_podshtampov', IPPOLIT_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ippolit_podshtampov', IPPOLIT_DEF, [
   {
     id: 'archive_forge_stamp',
     giverId: getPlotNpcNumericId('ippolit_podshtampov')!,
@@ -166,7 +166,7 @@ registerSideQuest('ippolit_podshtampov', IPPOLIT_DEF, [
   },
 ]);
 
-registerSideQuest('kira_kartotechnaya', KIRA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kira_kartotechnaya', KIRA_DEF, [
   {
     id: 'archive_steal_card',
     giverId: getPlotNpcNumericId('kira_kartotechnaya')!,
@@ -179,7 +179,7 @@ registerSideQuest('kira_kartotechnaya', KIRA_DEF, [
   },
 ]);
 
-registerSideQuest('timur_nedostacha', TIMUR_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'timur_nedostacha', TIMUR_DEF, [
   {
     id: 'archive_return_file',
     giverId: getPlotNpcNumericId('timur_nedostacha')!,

@@ -1,6 +1,8 @@
 /* ── Паровые вентили — static steam fake, no simulation ───────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   Tex,
   Feature,
@@ -10,7 +12,7 @@ import {
   QuestType,
   MonsterKind,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, setWater,
   spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
@@ -39,7 +41,7 @@ const LIDIA_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag04_steam_lidia', LIDIA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag04_steam_lidia', LIDIA_DEF, [
   {
     id: 'ag04_steam_eyes',
     giverId: getPlotNpcNumericId('ag04_steam_lidia')!,

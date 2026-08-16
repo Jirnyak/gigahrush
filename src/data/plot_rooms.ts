@@ -106,6 +106,7 @@ export const PLOT_ROOMS: Record<string, PlotRoomDef> = {
     wallTex: Tex.VOID_WALL,
     floorTex: Tex.F_VOID,
     roomType: RoomType.MEDICAL,
-    plotNpcs: ['void_warning'],
+    // Место осталось, жильца нет: Пустота безлюдна.
+    plotNpcs: [],
   },
 };

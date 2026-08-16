@@ -1,6 +1,8 @@
 /* ── Monster_09 Pressovik — production-line timing room ──────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   ContainerKind,
   Faction,
@@ -16,7 +18,7 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { registerFloorScopedReset } from '../../world/world_contexts';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { registerCellHazardSite, cleanCellHazardsNear } from '../../systems/cell_hazards';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -59,7 +61,7 @@ const MASTER_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('pressovik_stop_master', MASTER_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'pressovik_stop_master', MASTER_DEF, [{
   id: STOP_QUEST_ID,
   giverId: getPlotNpcNumericId('pressovik_stop_master')!,
   type: QuestType.FETCH,

@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* ── Ремонтник Без Смены: local shortcut/tool route encounter ─── */
 
@@ -10,7 +12,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { registerFloorScopedReset } from '../../world/world_contexts';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -75,7 +77,7 @@ const REMONTNIK_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(NPC_ID, REMONTNIK_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, NPC_ID, REMONTNIK_DEF, [
   {
     id: WORK_ORDER_QUEST,
     giverId: getPlotNpcNumericId(NPC_ID)!,

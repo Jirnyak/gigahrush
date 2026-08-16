@@ -1,6 +1,8 @@
 /* ── Нелегальная типография — Kvartiry social pressure POI ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import {
   Tex,
   Feature,
@@ -11,7 +13,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type Entity } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Ира Свидетель',
@@ -24,7 +26,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_tp9h9', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_tp9h9', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Курьер с мокрой печатью',
@@ -37,7 +39,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_kg8bu', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_kg8bu', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 import { createSocialPoiRoom, placeDropNear, setFeatureIfFloor, spawnSocialNpc } from './social_helpers';
 
@@ -63,7 +65,7 @@ const DIMA: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('kv_dima_pechatnik', DIMA, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'kv_dima_pechatnik', DIMA, [{
   id: 'kv_print_notes',
   giverId: getPlotNpcNumericId('kv_dima_pechatnik')!,
   type: QuestType.FETCH,

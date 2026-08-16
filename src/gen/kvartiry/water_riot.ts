@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 /* ── Водяной бунт у стояка — Kvartiry scarcity POI ───────────── */
 
 import {
@@ -20,7 +22,7 @@ import {
   type WorldEventSeverity,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest , registerAuthoredNpc } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
   name: 'Мать с пустой канистрой',
@@ -33,7 +35,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_0_arz5m', npc: AMBIENT_NPC_0 });
+registerAuthoredNpc({ id: 'kv_ambient_0_arz5m', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_1: PlotNpcDef = {
   name: 'Слесарь у сухого вентиля',
@@ -46,7 +48,7 @@ const AMBIENT_NPC_1: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_1_q7zog', npc: AMBIENT_NPC_1 });
+registerAuthoredNpc({ id: 'kv_ambient_1_q7zog', npc: AMBIENT_NPC_1, homeFloorKey: HOME_FLOOR_KEY });
 
 const AMBIENT_NPC_2: PlotNpcDef = {
   name: 'Очередник без талона',
@@ -59,11 +61,11 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 talkLines: ['Проходи своей дорогой.', 'Мне не до разговоров.'],
 talkLinesPost: ['...'],
 };
-registerAuthoredNpc({ id: 'kv_ambient_2_c64hj', npc: AMBIENT_NPC_2 });
+registerAuthoredNpc({ id: 'kv_ambient_2_c64hj', npc: AMBIENT_NPC_2, homeFloorKey: HOME_FLOOR_KEY });
 
 import { changeResourceStock } from '../../systems/economy';
 import { getRecentEvents, publishEvent, registerWorldEventObserver } from '../../systems/events';
-import { applyFactionRelationDeltas, type FactionRelationDelta } from '../../systems/factions';
+import { applyFactionRelationDeltas, type FactionRelationDelta } from '../../data/relations';
 import {
   createSocialPoiRoom,
   placeDropNear,

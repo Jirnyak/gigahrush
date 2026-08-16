@@ -1,6 +1,8 @@
 /* ── AG68 blue glow sample — sealed science trade with risk ───── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
   ContainerKind,
   Faction,
@@ -13,7 +15,7 @@ import {
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { changeResourceStock } from '../../systems/economy';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { MarkType, stampMark } from '../../systems/surface_marks';
@@ -75,7 +77,7 @@ const CLEANER_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag68_blue_sample_buyer', BUYER_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag68_blue_sample_buyer', BUYER_DEF, [{
   id: SELL_QUEST_ID,
   giverId: getPlotNpcNumericId('ag68_blue_sample_buyer')!,
   type: QuestType.FETCH,
@@ -86,7 +88,7 @@ registerSideQuest('ag68_blue_sample_buyer', BUYER_DEF, [{
   relationDelta: 14, xpReward: 95, moneyReward: 260,
 }]);
 
-registerSideQuest('ag68_blue_sample_cleaner', CLEANER_DEF, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag68_blue_sample_cleaner', CLEANER_DEF, [{
   id: DESTROY_QUEST_ID,
   giverId: getPlotNpcNumericId('ag68_blue_sample_cleaner')!,
   type: QuestType.FETCH,

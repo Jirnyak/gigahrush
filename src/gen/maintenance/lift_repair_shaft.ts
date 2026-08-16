@@ -1,6 +1,8 @@
 /* ── AG50 lift repair shaft — repair/reroute/loot expedition ─── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   ContainerKind,
@@ -14,7 +16,7 @@ import {
   W,
   type Room,
 } from '../../core/types';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
   setWater, spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
@@ -72,7 +74,7 @@ const GUARD_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest('ag50_shaft_sasha', SASHA_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag50_shaft_sasha', SASHA_DEF, [
   {
     id: 'ag50_shaft_inspect',
     giverId: getPlotNpcNumericId('ag50_shaft_sasha')!,
@@ -106,7 +108,7 @@ registerSideQuest('ag50_shaft_sasha', SASHA_DEF, [
   },
 ]);
 
-registerSideQuest('ag50_shaft_guard', GUARD_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, 'ag50_shaft_guard', GUARD_DEF, [
   {
     id: 'ag50_shaft_override_form',
     giverId: getPlotNpcNumericId('ag50_shaft_guard')!,

@@ -821,6 +821,8 @@ export interface Quest {
   type: QuestType;
   giverId: number;            // NPC entity id
   giverName: string;
+  /** Дающего нет в мире: поручение выдало событие, и сдавать его некому. */
+  giverless?: boolean;
   desc: string;
   // FETCH: targetItem + targetCount
   targetItem?: string;        // item def id

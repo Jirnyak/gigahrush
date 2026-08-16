@@ -1,4 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('hell');
 /* ── Hell PSI meat cache: finite cult trade/theft/fight POI ───── */
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
@@ -11,7 +13,7 @@ import {
 import { World } from '../../core/world';
 import { registerFloorScopedReset } from '../../world/world_contexts';
 import { freshNeeds } from '../../data/catalog';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -127,7 +129,7 @@ const KEEPER_DEF: PlotNpcDef = {
   ],
 };
 
-registerSideQuest(KEEPER_ID, KEEPER_DEF, [
+registerFloorSideQuest(HOME_FLOOR_KEY, KEEPER_ID, KEEPER_DEF, [
   {
     id: 'ag54_keeper_raw_meat_tithe',
     giverId: getPlotNpcNumericId(KEEPER_ID)!,

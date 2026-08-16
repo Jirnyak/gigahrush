@@ -1,13 +1,15 @@
 /* ── Пустой Сосед: verifiable false-neighbor encounter ───────── */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
+
+const HOME_FLOOR_KEY = designNpcFloorKey('kvartiry');
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal, Cell, EntityType, Faction, Feature, MonsterKind, Occupation, QuestType,
   RoomType, Tex, type Entity, type GameState, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { type PlotNpcDef, registerSideQuest, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
 import { addFactionRelMutual } from '../../data/relations';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -269,7 +271,7 @@ registerSideQuest(COMPLAINANT_ID, COMPLAINANT, [{
   },
 }]);
 
-registerSideQuest(LIQUIDATOR_ID, LIQUIDATOR, [{
+registerFloorSideQuest(HOME_FLOOR_KEY, LIQUIDATOR_ID, LIQUIDATOR, [{
   id: PUSTOY_SOSED_QUEST_IDS.closeReveal,
   giverId: getPlotNpcNumericId(LIQUIDATOR_ID)!,
   type: QuestType.KILL,

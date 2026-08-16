@@ -124,44 +124,62 @@ export function requireSpawnedPlotNpcFromPackage(
   return entity as Entity & { npcPackageId: string };
 }
 
-export function spawnPendingPlotNpcsForFloor(
+/** Комната под якорь: сперва объявленный псевдоним (`spawnRoomAlias` анкеты →
+ *  `placement.roomId`) по тегам и имени комнаты, иначе любая комната этажа. */
+function roomForPlacement(world: World, roomId: string | undefined): Room | undefined {
+  if (roomId) {
+    const alias = roomId.toLowerCase();
+    const tagged = world.rooms.find(room => room.tags?.some(tag => tag.toLowerCase() === alias));
+    if (tagged) return tagged;
+    const named = world.rooms.find(room => room.name?.toLowerCase().includes(alias));
+    if (named) return named;
+  }
+  return pickRandomRoom(world) ?? undefined;
+}
+
+/**
+ * Единая доставка авторских NPC на этаж: реестр пакетов — единственный источник
+ * состава, дом человека (`placement.homeFloorKey`) — единственное условие.
+ *
+ * Модуль этажа по-прежнему волен поставить своего человека сам, в свою комнату и
+ * позу, — и почти всегда так и делает; этот шаг добирает только тех, кого никто
+ * не поставил. До него забытая строчка спавна молча выкидывала персонажа из игры
+ * вместе с его квестом (так пропали Олевия Кибер и семеро фоновых жильцов), и
+ * заметить это можно было лишь прогоном всех этажей.
+ *
+ * `event_only` пропускается: такой человек приходит событием, а не этажом.
+ */
+export function deliverFloorNpcPackages(
   world: World,
   entities: Entity[],
   nextId: { v: number },
   floorKey: string,
-  namedRooms?: Record<string, Room>,
-): void {
+): number {
+  const placed = new Set<string>();
+  for (const entity of entities) {
+    const id = (entity as Entity & { npcPackageId?: string }).npcPackageId;
+    if (id) placed.add(id);
+  }
+  let delivered = 0;
   for (const pack of allNpcPackages()) {
     if (pack.placement.homeFloorKey !== floorKey) continue;
-    if (pack.content?.plotNpcId == null) continue;
+    if (pack.placement.presence === 'event_only') continue;
+    const plotNpcId = pack.content?.plotNpcId;
+    if (plotNpcId == null || placed.has(pack.id)) continue;
+    const numericId = getPlotNpcNumericId(plotNpcId);
+    if (numericId !== undefined && entities.some(e => e.id === numericId && e.alive)) continue;
 
-    // Check if already alive to avoid duplicates (just in case, though A-Life usually handles this)
-    if (entities.some(e => e.id === getPlotNpcNumericId(pack.content?.plotNpcId!) && e.alive)) continue;
-
-    let x = 0, y = 0;
-    if (pack.placement.roomId && namedRooms?.[pack.placement.roomId]) {
-      const room = namedRooms[pack.placement.roomId];
-      x = room.x + Math.floor(room.w / 2) + 0.5;
-      y = room.y + Math.floor(room.h / 2) + 0.5;
-    } else {
-      const room = pickRandomRoom(world);
-      if (room) {
-        x = room.x + Math.floor(room.w / 2) + 0.5;
-        y = room.y + Math.floor(room.h / 2) + 0.5;
-      } else {
-        const pos = findRandomFloorCell(world);
-        if (pos) {
-          x = pos.x + 0.5;
-          y = pos.y + 0.5;
-        }
-      }
-    }
-
-    if (x > 0 || y > 0) {
-      requireSpawnedPlotNpcFromPackage(entities, nextId, pack.content.plotNpcId, x, y, {
-        angle: rng() * Math.PI * 2,
-        canGiveQuest: true,
-      });
-    }
+    const room = roomForPlacement(world, pack.placement.roomId);
+    const cell = room ? undefined : findRandomFloorCell(world);
+    const spot = room
+      ? { x: room.x + Math.floor(room.w / 2) + 0.5, y: room.y + Math.floor(room.h / 2) + 0.5 }
+      : cell && { x: cell.x + 0.5, y: cell.y + 0.5 };
+    if (!spot) continue;
+    const entity = spawnPlotNpcFromPackage(entities, nextId, plotNpcId, spot.x, spot.y, {
+      angle: rng() * Math.PI * 2,
+      canGiveQuest: true,
+    });
+    if (entity) delivered++;
   }
+  return delivered;
 }
