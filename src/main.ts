@@ -61,7 +61,7 @@ import {
   EntityType, Faction, MonsterKind, Occupation, ProjType, QuestType, AIGoal,
   msg, setMsgClock,
 } from './core/types';
-import { World, replaceWorldFromGeneration } from './core/world';
+import { World, replaceWorldFromGeneration, MAX_LIVE_WORLDS, peakLiveWorldCount } from './core/world';
 import { safeParseJson } from './core/json';
 import { rng, hashSeed, randSeed, xorshift32, irand, mathRng } from './core/rand';
 import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
@@ -91,8 +91,9 @@ import { Spr, monsterSpr } from './entities/sprite_index';
 import {
   SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData,
   disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
-  webglContextLost, webglNeedsReinit, clearWebGLReinitFlag,
+  webglContextLost, webglNeedsReinit, clearWebGLReinitFlag, getGlTextureMemoryStats,
 } from './render/webgl';
+import { dropWorldContextsExcept, worldContextStats } from './world/world_contexts';
 import { drawHUD, drawPointerCaptureGate } from './render/hud';
 import { drawFeedbackMenu } from './render/feedback_ui';
 import {
@@ -3002,7 +3003,7 @@ function openVoidReturnPortalFromCreator(creator: Entity, enteredFromFloor?: num
   state.msgs.push(msg('Перед входом можно оставить Пустотный шип Жану, если он у вас.', state.time, '#8cf'));
   publishEvent(state, {
     type: 'floor_transition',
-    z: 200,
+    z: -50,
     zoneId,
     x: x + 0.5,
     y: y + 0.5,
@@ -3154,7 +3155,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
 
     publishEvent(state, {
       type: 'floor_transition',
-      z: 100,
+      z: 0,
       zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
       x: player.x,
       y: player.y,
@@ -3512,10 +3513,21 @@ function setGeneratedDynamicSky(gen?: FloorGeneration): void {
 }
 
 function finishLoadedFloorVisuals(gen?: FloorGeneration): void {
+  // The single floor-unload point. Every load path routes through here, so this
+  // is where content modules stop holding the floor they were built for. Without
+  // it a store whose module does not run on the new floor keeps pointing at the
+  // old one — and a context pins not just the 42 MiB World but that floor's
+  // entities. Runs AFTER generation: the incoming floor's modules registered
+  // against the incoming world, and register() already dropped the outgoing
+  // floor's entries; this clears the stores that never ran and so never noticed.
+  dropWorldContextsExcept(world);
   ensureProceduralSpriteSeeds(entities);
   setGeneratedDynamicSky(gen);
   updateWorldData(world);
   rebuildProceduralSpriteCache(entities);
+  // Universal end-of-floor-load hook (every load path routes through here), so
+  // this is the one place the heartbeat's "post" sample and floor counter belong.
+  recordFloorHeartbeat('post');
 }
 
 function updateGeneratedDynamicSky(dt: number): void {
@@ -3615,7 +3627,13 @@ function loadingProgress(stage: string, pct: number): void {
     if (pct >= 100) localStorage.removeItem('gigahrush_loadstage');
     else localStorage.setItem('gigahrush_loadstage', pct + '% ' + stage);
   } catch { /* localStorage unavailable — ignore */ }
+  // Heartbeat "pre" sample: the first progress tick of a load, while the outgoing
+  // world and its sprite cache are still live. Paired with the "post" sample in
+  // finishLoadedFloorVisuals, so the dump shows the step a transition costs.
+  if (pct >= 100) _hbLoadSampled = false;
+  else if (!_hbLoadSampled) { _hbLoadSampled = true; recordFloorHeartbeat('pre'); }
 }
+let _hbLoadSampled = false;
 
 function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: boolean = false): void {
   const _t0 = performance.now();
@@ -5614,7 +5632,7 @@ function scheduleLocalSamosborPatch(fn: () => void): void {
 }
 
 function floorTargetAllowsNpcPopulation(entry: ReturnType<typeof currentFloorRunEntry> | null | undefined, z: number): boolean {
-  return z !== 200 && (!entry || floorRunEntryAllowsNpcs(entry));
+  return z !== FLOOR_RUN_VOID_Z && (!entry || floorRunEntryAllowsNpcs(entry));
 }
 
 function currentFloorAllowsNpcPopulation(): boolean {
@@ -9402,29 +9420,110 @@ function updateFpsMeter(now: number, frameMs: number): number {
 // `flow` also confirms on-device that the flow-field working set stays ≤3.
 // A clean exit (pagehide/beforeunload) clears the "alive" flag so normal play
 // never masquerades as a crash on the next boot. Remove once the crash is pinned.
+//
+// The dumps so far all read as Jetsam (worst frame fine, ring cut mid-play), so
+// the ring also carries memory. `heap` is Chrome-only and reports -1 on the very
+// platform that crashes, which is why `tex`/`spr` exist: they are self-accounted
+// from our own allocations and therefore work identically in WebKit. `fl`/`up`
+// separate a per-transition step from a slow session-long climb.
 const HB_KEY = 'gigahrush_hb';
 const HB_ALIVE_KEY = 'gigahrush_hb_alive';
 const HB_RING_MAX = 24;
-type HbSample = { t: number; fps: number; worst: number; ent: number; flow: number; surf: number };
+type HbSample = {
+  t: number; fps: number; worst: number; ent: number; flow: number; surf: number;
+  /** usedJSHeapSize MiB, or -1 where the browser exposes no heap API (Safari). */
+  heap: number;
+  /** Self-accounted MiB: GPU textures + live world grids. Available everywhere. */
+  tex: number;
+  /** Live procedural + item sprite textures — the variable half of `tex`. */
+  spr: number;
+  /** Floor loads completed this session. */
+  fl: number;
+  /** Seconds since boot. */
+  up: number;
+  /** Peak live Worlds. Invariant is MAX_LIVE_WORLDS; anything above is a leak. */
+  w: number;
+  /** Entities held by content stores still pointing at a departed floor. The
+   *  world counter alone would read clean while these keep a dead floor's
+   *  monsters, NPCs and drops alive, so it is reported separately. */
+  stale: number;
+  /** Set on the two extra samples taken around a floor switch. */
+  mark?: string;
+};
 const _hbRing: HbSample[] = [];
 let _hbLastFlush = 0;
 let _hbWorstMs = 0;
 let _hbAliveMarked = false;
+let _hbFloorLoads = 0;
+const _hbBootMs = performance.now();
 
-function recordHeartbeat(now: number, fps: number): void {
+function hbHeapMiB(): number {
+  const mem = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
+  const used = mem?.usedJSHeapSize;
+  return typeof used === 'number' ? (used / 1048576) | 0 : -1;
+}
+
+/** MiB we can account for ourselves, and the sprite-cache count driving it. */
+function hbTextureMiB(): { tex: number; spr: number } {
+  const gpu = getGlTextureMemoryStats();
+  const grids = typeof world !== 'undefined' ? world.gridByteSize() : 0;
+  return {
+    tex: ((gpu.totalBytes + grids) / 1048576) | 0,
+    spr: gpu.proceduralSprites + gpu.itemSprites,
+  };
+}
+
+function pushHeartbeat(sample: HbSample): void {
   try {
     if (!_hbAliveMarked) { localStorage.setItem(HB_ALIVE_KEY, '1'); _hbAliveMarked = true; }
-    _hbRing.push({
-      t: Math.round(now / 1000),
-      fps,
-      worst: Math.round(_hbWorstMs),
-      ent: entities.length,
-      flow: behaviorFlowFieldCount(),
-      surf: world.surfaceMap.size,
-    });
+    _hbRing.push(sample);
     if (_hbRing.length > HB_RING_MAX) _hbRing.shift();
     localStorage.setItem(HB_KEY, JSON.stringify(_hbRing));
   } catch { /* storage disabled/full — diagnostics are best-effort */ }
+}
+
+function recordHeartbeat(now: number, fps: number): void {
+  const mem = hbTextureMiB();
+  pushHeartbeat({
+    t: Math.round(now / 1000),
+    fps,
+    worst: Math.round(_hbWorstMs),
+    ent: entities.length,
+    flow: behaviorFlowFieldCount(),
+    surf: world.surfaceMap.size,
+    heap: hbHeapMiB(),
+    tex: mem.tex,
+    spr: mem.spr,
+    fl: _hbFloorLoads,
+    up: Math.round((now - _hbBootMs) / 1000),
+    w: peakLiveWorldCount(),
+    stale: worldContextStats(typeof world !== 'undefined' ? world : null).staleEntities,
+  });
+}
+
+/** Extra sample either side of a floor load, so a per-transition step in `tex`
+ *  is visible in the dump instead of being averaged into the 1 Hz trend. */
+function recordFloorHeartbeat(phase: 'pre' | 'post'): void {
+  if (typeof world === 'undefined') return;
+  const now = performance.now();
+  if (phase === 'post') _hbFloorLoads++;
+  const mem = hbTextureMiB();
+  pushHeartbeat({
+    t: Math.round(now / 1000),
+    fps: 0,
+    worst: 0,
+    ent: entities.length,
+    flow: behaviorFlowFieldCount(),
+    surf: world.surfaceMap.size,
+    heap: hbHeapMiB(),
+    tex: mem.tex,
+    spr: mem.spr,
+    fl: _hbFloorLoads,
+    up: Math.round((now - _hbBootMs) / 1000),
+    w: peakLiveWorldCount(),
+    stale: worldContextStats(typeof world !== 'undefined' ? world : null).staleEntities,
+    mark: phase,
+  });
 }
 
 /** Render the persisted heartbeat ring's tail as a compact phone-readable block. */
@@ -9434,9 +9533,18 @@ function formatHeartbeatRing(raw: string): string {
     if (!Array.isArray(ring) || ring.length === 0) return '(пусто)';
     const tail = ring.slice(-8);
     const t0 = tail[0].t;
-    const rows = tail.map(s =>
-      `+${String(s.t - t0).padStart(2)}s ${String(s.worst).padStart(4)}ms ${String(s.fps).padStart(2)}fps ent${s.ent} flow${s.flow} surf${s.surf}`);
-    return rows.join('\n') + '\n\nworst 150-300+ → CPU watchdog; worst ок но обрыв → память';
+    const rows = tail.map(s => {
+      // Old rings predate the memory fields; render them as before instead of "undefined".
+      const mem = s.tex === undefined
+        ? ''
+        : ` tex${s.tex} spr${s.spr} heap${s.heap} fl${s.fl} w${s.w} stale${s.stale}${s.mark ? ' ' + s.mark : ''}`;
+      return `+${String(s.t - t0).padStart(2)}s ${String(s.worst).padStart(4)}ms ${String(s.fps).padStart(2)}fps`
+        + ` ent${s.ent} flow${s.flow} surf${s.surf}${mem}`;
+    });
+    return rows.join('\n')
+      + '\n\nworst 150-300+ → CPU watchdog; worst ок но обрыв → память'
+      + '\ntex/spr — МиБ и спрайт-текстуры, считаем сами (heap-1 = Safari)'
+      + `\nw — пик живых миров (норма ≤${MAX_LIVE_WORLDS}); stale — сущности с выгруженных этажей (норма 0)`;
   } catch { return raw.slice(0, 300); }
 }
 

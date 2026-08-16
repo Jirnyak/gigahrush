@@ -300,7 +300,7 @@ function handleBelayaPrislushkaOutcome(state: GameState, event: WorldEvent): voi
 
   publishEvent(state, {
     type: event.type,
-    z: 100,
+    z: 0,
     zoneId: event.zoneId,
     roomId: event.roomId,
     x: event.x,
@@ -480,7 +480,7 @@ function addContainer(
     id: nextContainerId(world),
     x: wx,
     y: wy,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -330,7 +330,7 @@ function addMarketContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,

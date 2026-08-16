@@ -7,6 +7,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
+import { createWorldContextStore } from '../world/world_contexts';
 import {
   VOID_PROTOCOLS,
   getVoidProtocolDef,
@@ -61,7 +62,6 @@ let debugProtocolCursor = 0;
 
 const BORROWED_LIGHT_PROTOCOL_ID = 'borrowed_light';
 const SPIRIT_TOLL_PROTOCOL_ID = 'spirit_toll';
-const LOCAL_RULE_CONTEXT_CAP = 8;
 const VOID_RULE_TAG = 'void_rule';
 const BORROWED_LIGHT_TAG = 'borrowed_light';
 const SPIRIT_TOLL_TAG = 'spirit_toll';
@@ -98,8 +98,8 @@ interface VoidSpiritTollChamberContext {
   bypassDoorIdx: number;
 }
 
-const localRuleChambers: VoidRuleChamberContext[] = [];
-const spiritTollChambers: VoidSpiritTollChamberContext[] = [];
+const localRuleChambers = createWorldContextStore<VoidRuleChamberContext>();
+const spiritTollChambers = createWorldContextStore<VoidSpiritTollChamberContext>();
 
 export function registerVoidBorrowedLightChamber(
   world: World,
@@ -108,17 +108,15 @@ export function registerVoidBorrowedLightChamber(
   consumeContainerId: number,
   keepContainerId: number,
 ): void {
-  const existing = localRuleChambers.find(ctx => ctx.world === world && ctx.roomId === roomId);
-  if (existing) {
-    existing.entities = entities;
-    existing.consumeContainerId = consumeContainerId;
-    existing.keepContainerId = keepContainerId;
-    return;
-  }
-  localRuleChambers.push({ world, entities, roomId, consumeContainerId, keepContainerId });
-  if (localRuleChambers.length > LOCAL_RULE_CONTEXT_CAP) {
-    localRuleChambers.splice(0, localRuleChambers.length - LOCAL_RULE_CONTEXT_CAP);
-  }
+  localRuleChambers.register(
+    world, roomId,
+    { world, entities, roomId, consumeContainerId, keepContainerId },
+    (existing, incoming) => {
+      existing.entities = incoming.entities;
+      existing.consumeContainerId = incoming.consumeContainerId;
+      existing.keepContainerId = incoming.keepContainerId;
+    },
+  );
 }
 
 export function registerVoidSpiritTollChamber(
@@ -134,35 +132,33 @@ export function registerVoidSpiritTollChamber(
   tollDoorIdx: number,
   bypassDoorIdx: number,
 ): void {
-  const existing = spiritTollChambers.find(ctx => ctx.world === world && ctx.roomId === roomId);
-  if (existing) {
-    existing.entities = entities;
-    existing.obeyContainerId = obeyContainerId;
-    existing.breakContainerId = breakContainerId;
-    existing.payContainerId = payContainerId;
-    existing.rerouteContainerId = rerouteContainerId;
-    existing.exploitContainerId = exploitContainerId;
-    existing.entranceDoorIdx = entranceDoorIdx;
-    existing.tollDoorIdx = tollDoorIdx;
-    existing.bypassDoorIdx = bypassDoorIdx;
-    return;
-  }
-  spiritTollChambers.push({
-    world,
-    entities,
-    roomId,
-    obeyContainerId,
-    breakContainerId,
-    payContainerId,
-    rerouteContainerId,
-    exploitContainerId,
-    entranceDoorIdx,
-    tollDoorIdx,
-    bypassDoorIdx,
-  });
-  if (spiritTollChambers.length > LOCAL_RULE_CONTEXT_CAP) {
-    spiritTollChambers.splice(0, spiritTollChambers.length - LOCAL_RULE_CONTEXT_CAP);
-  }
+  spiritTollChambers.register(
+    world, roomId,
+    {
+      world,
+      entities,
+      roomId,
+      obeyContainerId,
+      breakContainerId,
+      payContainerId,
+      rerouteContainerId,
+      exploitContainerId,
+      entranceDoorIdx,
+      tollDoorIdx,
+      bypassDoorIdx,
+    },
+    (existing, incoming) => {
+      existing.entities = incoming.entities;
+      existing.obeyContainerId = incoming.obeyContainerId;
+      existing.breakContainerId = incoming.breakContainerId;
+      existing.payContainerId = incoming.payContainerId;
+      existing.rerouteContainerId = incoming.rerouteContainerId;
+      existing.exploitContainerId = incoming.exploitContainerId;
+      existing.entranceDoorIdx = incoming.entranceDoorIdx;
+      existing.tollDoorIdx = incoming.tollDoorIdx;
+      existing.bypassDoorIdx = incoming.bypassDoorIdx;
+    },
+  );
 }
 
 function protocolEventType(phase: ProtocolPhase): WorldEventType {
@@ -300,27 +296,19 @@ function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
 function findLocalRuleChamber(event: WorldEvent): VoidRuleChamberContext | undefined {
   const containerId = event.containerId;
   if (containerId === undefined) return undefined;
-  for (let i = localRuleChambers.length - 1; i >= 0; i--) {
-    const ctx = localRuleChambers[i];
-    if (ctx.consumeContainerId === containerId || ctx.keepContainerId === containerId) return ctx;
-  }
-  return undefined;
+  return localRuleChambers.find(ctx =>
+    ctx.consumeContainerId === containerId || ctx.keepContainerId === containerId);
 }
 
 function findSpiritTollChamber(event: WorldEvent): VoidSpiritTollChamberContext | undefined {
   const containerId = event.containerId;
   if (containerId === undefined) return undefined;
-  for (let i = spiritTollChambers.length - 1; i >= 0; i--) {
-    const ctx = spiritTollChambers[i];
-    if (
-      ctx.obeyContainerId === containerId
-      || ctx.breakContainerId === containerId
-      || ctx.payContainerId === containerId
-      || ctx.rerouteContainerId === containerId
-      || ctx.exploitContainerId === containerId
-    ) return ctx;
-  }
-  return undefined;
+  return spiritTollChambers.find(ctx =>
+    ctx.obeyContainerId === containerId
+    || ctx.breakContainerId === containerId
+    || ctx.payContainerId === containerId
+    || ctx.rerouteContainerId === containerId
+    || ctx.exploitContainerId === containerId);
 }
 
 function eventContainer(ctx: { world: World }, event: WorldEvent): WorldContainer | undefined {

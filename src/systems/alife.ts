@@ -913,7 +913,7 @@ function factionForPlan(plan: AlifeFloorPlan, seed: number, index: number): Fact
 
 function occupationForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, seed: number, index: number): Occupation {
   if (plan.occupationWeights && plan.occupationWeights.length > 0) return pickWeighted(plan.occupationWeights, seed, index, 24);
-  if (profile.faction === Faction.CITIZEN && plan.z === 140) {
+  if (profile.faction === Faction.CITIZEN && plan.z === -26) {
     return unit(seed, index, 22) < 0.55 ? Occupation.MECHANIC : Occupation.ELECTRICIAN;
   }
   if (profile.faction === Faction.CITIZEN && plan.z === 30) {
@@ -1062,8 +1062,8 @@ function levelForRecord(plan: AlifeFloorPlan, faction: Faction, seed: number, in
 function wealthForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, level: number, seed: number, index: number): number {
   const floorMult = plan.z === 30 ? 2.4
     : plan.key === floorKeyForDesign('bank_floor') ? 6.5
-      : plan.z === 140 ? 1.25
-        : plan.z === 180 ? 0.45
+      : plan.z === -26 ? 1.25
+        : plan.z === -36 ? 0.45
           : 1;
   const base = (8 + plan.danger * 3 + level * 0.8) * profile.wealthMult * floorMult;
   const u = Math.max(0.000001, 1 - unit(seed, index, 42));

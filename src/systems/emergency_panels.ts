@@ -21,6 +21,7 @@ import {
   type WorldEventSeverity,
 } from '../core/types';
 import { World } from '../core/world';
+import { registerFloorScopedReset } from '../world/world_contexts';
 import {
   EMERGENCY_PANEL_DEFS,
   getEmergencyPanelDef,
@@ -121,6 +122,8 @@ interface PanelActionResult {
 
 const panelStates = new WeakMap<World, EmergencyPanelWorldState>();
 let menuState: EmergencyPanelMenuState | null = null;
+// One floor at a time: drop it when its floor stops being the one played.
+registerFloorScopedReset(current => { if (menuState?.world !== current) menuState = null; });
 
 function panelWorldState(world: World): EmergencyPanelWorldState {
   let state = panelStates.get(world);

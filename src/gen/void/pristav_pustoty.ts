@@ -6,6 +6,7 @@ import {
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { ITEMS } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
@@ -28,7 +29,6 @@ const TAG_VIOLATE = 'violate';
 const TAG_ANCHOR = 'anchor';
 const TAG_DONE = 'resolved';
 const TAG_RULE_STATED = 'rule_stated';
-const CONTEXT_CAP = 8;
 const TOLL_RUBLES = 5;
 
 const SAFE_TAX_IDS = new Set([
@@ -64,24 +64,19 @@ interface PristavContext {
   anchorY: number;
 }
 
-const pristavContexts: PristavContext[] = [];
+const pristavContexts = createWorldContextStore<PristavContext>();
 
 function registerPristavContext(ctx: PristavContext): void {
-  const existing = pristavContexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.ruleContainerId = ctx.ruleContainerId;
-    existing.obeyContainerId = ctx.obeyContainerId;
-    existing.payContainerId = ctx.payContainerId;
-    existing.violateContainerId = ctx.violateContainerId;
-    existing.anchorContainerId = ctx.anchorContainerId;
-    existing.penaltyDoorIdx = ctx.penaltyDoorIdx;
-    existing.anchorX = ctx.anchorX;
-    existing.anchorY = ctx.anchorY;
-    return;
-  }
-  pristavContexts.push(ctx);
-  if (pristavContexts.length > CONTEXT_CAP) pristavContexts.splice(0, pristavContexts.length - CONTEXT_CAP);
+  pristavContexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.ruleContainerId = incoming.ruleContainerId;
+    existing.obeyContainerId = incoming.obeyContainerId;
+    existing.payContainerId = incoming.payContainerId;
+    existing.violateContainerId = incoming.violateContainerId;
+    existing.anchorContainerId = incoming.anchorContainerId;
+    existing.penaltyDoorIdx = incoming.penaltyDoorIdx;
+    existing.anchorX = incoming.anchorX;
+    existing.anchorY = incoming.anchorY;  });
 }
 
 function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
@@ -90,8 +85,9 @@ function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
 
 function findPristavContext(event: WorldEvent): PristavContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = pristavContexts.length - 1; i >= 0; i--) {
-    const ctx = pristavContexts[i];
+  const list = pristavContexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (
       ctx.ruleContainerId === event.containerId
       || ctx.obeyContainerId === event.containerId
@@ -417,7 +413,7 @@ function addPristavContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: 200,
+    z: -50,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,
@@ -559,7 +555,7 @@ export function generatePristavPustoty(
     y: entranceY + 0.5,
     targetX: room.x + (room.w >> 1) + 0.5,
     targetY: room.y + 1.5,
-    z: 200,
+    z: -50,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(room.x + 1, entranceY)],

@@ -183,7 +183,7 @@ registerWorldEventObserver((state, event) => {
     if (!outcome) return;
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: 100,
+      z: 0,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -205,7 +205,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type !== 'item_stolen' || !event.tags.includes(CONTENT_TAG)) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: 100,
+    z: 0,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -255,7 +255,7 @@ function addSupplyContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

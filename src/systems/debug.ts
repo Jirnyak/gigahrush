@@ -1143,7 +1143,7 @@ function grantDebugPermitPack(player: Entity): string[] {
 
 function debugPermitTagForFloor(z: number): PermitAccessTag {
   if (z === 30) return 'ministry_n3';
-  if (z === 60) return 'quarantine';
+  if (z === 14) return 'quarantine';
   return 'general_admin';
 }
 

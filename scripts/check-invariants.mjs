@@ -208,6 +208,38 @@ if (randomHits.length > MATH_RANDOM_BASELINE) {
   notes.push(`Math.random: ${randomHits.length} (было ${MATH_RANDOM_BASELINE}). Опусти MATH_RANDOM_BASELINE.`);
 }
 
+/* ── Проверка 4: мёртвое координатное пространство этажей ──────── */
+// Канон — числовой z из DESIGN_FLOOR_ROUTES: министерство 30, квартиры 14,
+// жилой 0, коллекторы -26, ад -36, пустота -50. Прошлая схема кодировала те же
+// шесть тем как 30/60/100/140/180/200 и росла с глубиной. Её удалили, но 134
+// контентных места продолжали публиковать мёртвые ключи, так что события,
+// слухи и планы A-Life указывали на несуществующие этажи, а перевёрнутые
+// диапазоны (`z < 100`) молча ловили не те этажи. Схема пережила собственное
+// удаление ровно потому, что ничто не мешало ей вернуться — теперь мешает.
+// 30 не в списке: у министерства канон совпал со старым ключом.
+const LEGACY_FLOOR_KEYS = [60, 100, 140, 180, 200];
+const legacyZHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    for (const key of LEGACY_FLOOR_KEYS) {
+      // Только z-контекст: те же числа законны как радиус, hp или процент.
+      const asValue = new RegExp(`\\bz\\s*[:=]\\s*${key}\\b`);
+      const asCompare = new RegExp(`\\bz\\s*(===|!==|>=|<=|>|<)\\s*${key}\\b`);
+      if (asValue.test(line) || asCompare.test(line)) {
+        legacyZHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+        break;
+      }
+    }
+  });
+}
+if (legacyZHits.length) {
+  failures.push(`Мёртвые координаты этажей: ${legacyZHits.length} мест используют ключи ${LEGACY_FLOOR_KEYS.join('/')}.`);
+  failures.push('    Канон: 60→14, 100→0, 140→-26, 180→-36, 200→-50 (см. DESIGN_FLOOR_ROUTES).');
+  for (const h of legacyZHits) failures.push(`    ${h}`);
+}
+
 /* ── Проверка 3: длина функции ─────────────────────────────────── */
 const longFunctions = [];
 for (const file of files) {
@@ -258,4 +290,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0).`);

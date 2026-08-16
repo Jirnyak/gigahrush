@@ -7,6 +7,7 @@ import {
   type WorldEvent, type WorldEventSeverity, type WorldEventType,
 } from '../../core/types';
 import type { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { Spr, monsterSpr } from '../../entities/sprite_index';
@@ -43,7 +44,6 @@ const TAG_HARVEST = 'harvest';
 const TAG_WITNESS = 'cult_witness';
 const HAZARD_KIND = 'black_slime_larva';
 const SAMPLE_ITEM = 'slime_sample_black';
-const MAX_CONTEXTS = 8;
 const MAX_THREATS = 3;
 const CHAMBER_W = 24;
 const CHAMBER_H = 14;
@@ -74,21 +74,16 @@ interface LichinkaContext {
   rewardDropped: boolean;
 }
 
-const contexts: LichinkaContext[] = [];
+const contexts = createWorldContextStore<LichinkaContext>();
 
 function registerLichinkaContext(ctx: LichinkaContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.residueCells = ctx.residueCells;
-    existing.sampleContainerId = ctx.sampleContainerId;
-    existing.sealContainerId = ctx.sealContainerId;
-    existing.kitContainerId = ctx.kitContainerId;
-    existing.witnessId = ctx.witnessId;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > MAX_CONTEXTS) contexts.splice(0, contexts.length - MAX_CONTEXTS);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.residueCells = incoming.residueCells;
+    existing.sampleContainerId = incoming.sampleContainerId;
+    existing.sealContainerId = incoming.sealContainerId;
+    existing.kitContainerId = incoming.kitContainerId;
+    existing.witnessId = incoming.witnessId;  });
 }
 
 function nextContainerId(world: World): number {
@@ -125,7 +120,7 @@ function addLichinkaContainer(
     id,
     x: wx,
     y: wy,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -177,7 +172,7 @@ function publishLichinkaEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `chernaya_lichinka_${phase}` as WorldEventType,
-    z: 140,
+    z: -26,
     zoneId: source.zoneId ?? zoneAt(ctx),
     roomId: ctx.roomId,
     x: source.x ?? ctx.centerX,
@@ -217,8 +212,9 @@ function publishLichinkaEvent(
 
 function findByContainer(event: WorldEvent): LichinkaContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (
       ctx.sampleContainerId === event.containerId ||
       ctx.sealContainerId === event.containerId ||
@@ -230,16 +226,18 @@ function findByContainer(event: WorldEvent): LichinkaContext | undefined {
 
 function findByThreat(event: WorldEvent): LichinkaContext | undefined {
   if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].threatIds.includes(event.targetId)) return contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].threatIds.includes(event.targetId)) return list[i];
   }
   return undefined;
 }
 
 function findByWitness(event: WorldEvent): LichinkaContext | undefined {
   if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].witnessId === event.targetId) return contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].witnessId === event.targetId) return list[i];
   }
   return undefined;
 }
@@ -247,8 +245,9 @@ function findByWitness(event: WorldEvent): LichinkaContext | undefined {
 function findByHazard(event: WorldEvent): LichinkaContext | undefined {
   const hazardId = typeof event.data?.hazardId === 'string' ? event.data.hazardId : '';
   if (!hazardId) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].hazardId === hazardId) return contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].hazardId === hazardId) return list[i];
   }
   return undefined;
 }
@@ -259,8 +258,9 @@ function findByUv(event: WorldEvent): LichinkaContext | undefined {
   if (!Number.isFinite(event.x) || !Number.isFinite(event.y)) return undefined;
   const x = event.x ?? 0;
   const y = event.y ?? 0;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (ctx.world.dist2(x, y, ctx.centerX, ctx.centerY) <= 8 * 8) return ctx;
   }
   return undefined;

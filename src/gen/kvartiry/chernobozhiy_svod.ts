@@ -354,7 +354,7 @@ function publishQuestOutcome(
   for (const [faction, delta] of outcome.relationDeltas) addFactionRelMutual(Faction.PLAYER, faction, delta);
   publishEvent(state, {
     type: outcome.type,
-    z: 60,
+    z: 14,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -416,7 +416,7 @@ function addSvodContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    z: 60,
+    z: 14,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

@@ -128,6 +128,27 @@ export function designFloorZsByTheme(theme: string): readonly number[] {
   return DESIGN_FLOOR_ROUTES.filter(def => def.themeTags?.includes(theme)).map(def => def.z);
 }
 
+/* Base floor of a theme: the six route stops whose id IS the theme name
+ * (living 0, kvartiry 14, ministry 30, maintenance -26, hell -36, void -50).
+ *
+ * These six numbers are the whole floor coordinate space. An older scheme keyed
+ * the same six themes as 30/60/100/140/180/200, ascending with depth; it was
+ * removed, but ~140 content sites kept publishing the dead keys, so events,
+ * rumors and A-Life plans pointed at floors that do not exist. Derive from the
+ * route table here rather than re-typing the numbers — a hand-kept copy is what
+ * let the old space survive its own deletion. `scripts/check-invariants.mjs`
+ * fails the build if a legacy key reappears. */
+// A theme's base stop is the one route entry named after its own theme; every
+// other stop borrows a theme (roof is 'ministry', floor_69 is 'maintenance').
+export const DESIGN_FLOOR_THEME_BASES: readonly DesignFloorRouteDef[] =
+  DESIGN_FLOOR_ROUTES.filter(def => def.themeTags?.includes(def.id));
+
+export function designFloorBaseZ(theme: string): number {
+  const base = DESIGN_FLOOR_THEME_BASES.find(def => def.id === theme);
+  if (!base) throw new Error(`designFloorBaseZ: unknown theme '${theme}'`);
+  return base.z;
+}
+
 export function designFloorById(id: string): DesignFloorRouteDef | undefined {
   return DESIGN_FLOOR_ROUTES.find(def => def.id === id);
 }

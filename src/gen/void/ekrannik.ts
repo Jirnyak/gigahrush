@@ -23,6 +23,7 @@ import {
   type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
@@ -44,7 +45,6 @@ const TAG_DANGER = 'ekrannik_danger';
 const TAG_READ_DONE = 'ekrannik_read_done';
 const TAG_DISABLED_DONE = 'ekrannik_disabled_done';
 const TAG_DANGER_DONE = 'ekrannik_danger_done';
-const CONTEXT_CAP = 8;
 
 const SCREEN_VARIANT_LIFT = 3;
 const SCREEN_VARIANT_MINISTRY = 4;
@@ -66,23 +66,19 @@ interface EkrannikContext {
   pressureMonsterIds: number[];
 }
 
-const contexts: EkrannikContext[] = [];
+const contexts = createWorldContextStore<EkrannikContext>();
 
 function registerEkrannikContext(ctx: EkrannikContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.dangerRoomId = ctx.dangerRoomId;
-    existing.readContainerId = ctx.readContainerId;
-    existing.fuseContainerId = ctx.fuseContainerId;
-    existing.dangerContainerId = ctx.dangerContainerId;
-    existing.screenCells = ctx.screenCells;
-    existing.controllerMonsterId = ctx.controllerMonsterId;
-    existing.pressureMonsterIds = ctx.pressureMonsterIds;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > CONTEXT_CAP) contexts.splice(0, contexts.length - CONTEXT_CAP);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.dangerRoomId = incoming.dangerRoomId;
+    existing.readContainerId = incoming.readContainerId;
+    existing.fuseContainerId = incoming.fuseContainerId;
+    existing.dangerContainerId = incoming.dangerContainerId;
+    existing.screenCells = incoming.screenCells;
+    existing.controllerMonsterId = incoming.controllerMonsterId;
+    existing.pressureMonsterIds = incoming.pressureMonsterIds;
+  });
 }
 
 function contextContainers(ctx: EkrannikContext): (WorldContainer | undefined)[] {
@@ -106,25 +102,18 @@ function markContext(ctx: EkrannikContext, tag: string): void {
 }
 
 function findContextForContainer(event: WorldEvent): EkrannikContext | undefined {
-  if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (
-      ctx.readContainerId === event.containerId ||
-      ctx.fuseContainerId === event.containerId ||
-      ctx.dangerContainerId === event.containerId
-    ) return ctx;
-  }
-  return undefined;
+  const containerId = event.containerId;
+  if (containerId === undefined) return undefined;
+  return contexts.find(ctx =>
+    ctx.readContainerId === containerId ||
+    ctx.fuseContainerId === containerId ||
+    ctx.dangerContainerId === containerId);
 }
 
 function findContextForMonster(event: WorldEvent): EkrannikContext | undefined {
-  if (event.targetId === undefined || event.z !== 200) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (ctx.pressureMonsterIds.includes(event.targetId)) return ctx;
-  }
-  return undefined;
+  const targetId = event.targetId;
+  if (targetId === undefined || event.z !== -50) return undefined;
+  return contexts.find(ctx => ctx.pressureMonsterIds.includes(targetId));
 }
 
 function pushHud(state: GameState, line: string, color: string): void {
@@ -332,7 +321,7 @@ function addEkrannikContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: 200,
+    z: -50,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
@@ -517,7 +506,7 @@ export function generateEkrannik(
     y: room.y + 5.5,
     targetX: room.x + room.w - 3.5,
     targetY: room.y + 5.5,
-    z: 200,
+    z: -50,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(room.x + 5, room.y + 5)],

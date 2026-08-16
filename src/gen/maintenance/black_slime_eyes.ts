@@ -7,6 +7,7 @@ import {
   type WorldEventType,
 } from '../../core/types';
 import type { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -27,7 +28,6 @@ const ROOM_W = 24;
 const ROOM_H = 15;
 const ENTRY_W = 7;
 const ENTRY_H = 7;
-const MAX_RUNTIME_CONTEXTS = 4;
 const MAX_GENERATED_SITES_PER_RUNTIME = 1;
 const MAX_EYES_PER_SITE = 3;
 
@@ -46,19 +46,14 @@ interface BlackSlimeContext {
 }
 
 let generatedSites = 0;
-const contexts: BlackSlimeContext[] = [];
+const contexts = createWorldContextStore<BlackSlimeContext>();
 
 function registerBlackSlimeContext(ctx: BlackSlimeContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.sampleContainerId = ctx.sampleContainerId;
-    existing.sealContainerId = ctx.sealContainerId;
-    existing.kitContainerId = ctx.kitContainerId;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > MAX_RUNTIME_CONTEXTS) contexts.splice(0, contexts.length - MAX_RUNTIME_CONTEXTS);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.sampleContainerId = incoming.sampleContainerId;
+    existing.sealContainerId = incoming.sealContainerId;
+    existing.kitContainerId = incoming.kitContainerId;  });
 }
 
 function nextContainerId(world: World): number {
@@ -84,7 +79,7 @@ function addBlackSlimeContainer(
     id,
     x: wx,
     y: wy,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -101,8 +96,9 @@ function addBlackSlimeContainer(
 
 function findContextByContainer(event: WorldEvent): BlackSlimeContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (
       ctx.sampleContainerId === event.containerId ||
       ctx.sealContainerId === event.containerId ||
@@ -114,8 +110,9 @@ function findContextByContainer(event: WorldEvent): BlackSlimeContext | undefine
 
 function findContextByEye(event: WorldEvent): BlackSlimeContext | undefined {
   if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].eyeIds.includes(event.targetId)) return contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].eyeIds.includes(event.targetId)) return list[i];
   }
   return undefined;
 }
@@ -140,7 +137,7 @@ function publishBlackSlimeEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: `black_slime_${phase}` as WorldEventType,
-    z: 140,
+    z: -26,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x,

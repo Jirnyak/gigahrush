@@ -309,7 +309,7 @@ function handlePustoySosedOutcome(state: GameState, event: WorldEvent): void {
 
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: 60,
+    z: 14,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,

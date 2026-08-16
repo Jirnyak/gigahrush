@@ -373,7 +373,7 @@ function connectSocialRoutes(world: World, nodes: readonly KvSocialMacroNode[]):
       y: from.accessY,
       targetX: to.accessX,
       targetY: to.accessY,
-      z: 60,
+      z: 14,
       roomId: from.roomId,
       targetRoomId: to.roomId,
       zoneId: from.zoneId,

@@ -173,7 +173,7 @@ function addKitchenContainer(
     id: nextContainerId(world),
     x: pos.x,
     y: pos.y,
-    z: 60,
+    z: 14,
     roomId: poi.room.id,
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,

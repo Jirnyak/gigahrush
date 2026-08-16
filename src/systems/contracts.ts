@@ -383,7 +383,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
     kind: "living_cellar",
     targetKey: "living_mushroom_cellar",
     themeTags: ["living"],
-    z: 100,
+    z: 0,
     roomType: RoomType.PRODUCTION,
     roomDefId: 'Грибная прачечная первой смены',
     danger: 2,

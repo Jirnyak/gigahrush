@@ -14,6 +14,7 @@ import {
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
@@ -42,7 +43,7 @@ interface SlimeWomanSumpContext {
   sampled: boolean;
 }
 
-const contexts: SlimeWomanSumpContext[] = [];
+const contexts = createWorldContextStore<SlimeWomanSumpContext>();
 
 function nextContainerId(world: MaintContentCtx['world']): number {
   let id = world.containers.length + 1;
@@ -67,7 +68,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -98,16 +99,17 @@ function dropNote(ctx: MaintContentCtx, x: number, y: number, text: string): voi
 }
 
 function registerContext(ctx: SlimeWomanSumpContext): void {
-  contexts.push(ctx);
-  if (contexts.length > 6) contexts.splice(0, contexts.length - 6);
+  // Previously an unconditional push capped at 6: a room re-registered on the
+  // same floor stacked duplicates. Keying by room makes the refresh explicit.
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    Object.assign(existing, incoming);
+  });
 }
 
 function contextForEvent(event: WorldEvent): SlimeWomanSumpContext | undefined {
-  if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].sampleContainerId === event.containerId) return contexts[i];
-  }
-  return undefined;
+  const containerId = event.containerId;
+  if (containerId === undefined) return undefined;
+  return contexts.find(ctx => ctx.sampleContainerId === containerId);
 }
 
 function handleSlimeWomanSumpEvent(state: GameState, event: WorldEvent): void {

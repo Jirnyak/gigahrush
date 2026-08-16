@@ -5,6 +5,7 @@ import {
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { MarkType, stampMark } from '../../systems/surface_marks';
@@ -22,7 +23,6 @@ const TAG_HEARD = 'signal_heard';
 const TAG_FOLLOW = 'signal_follow';
 const TAG_DISABLE = 'signal_disable';
 const TAG_AVOID = 'signal_avoid';
-const CONTEXT_CAP = 8;
 const SCREEN_FRAMES = 4;
 
 interface SignalshchikContext {
@@ -44,26 +44,23 @@ interface SignalshchikContext {
   cleared: boolean;
 }
 
-const signalshchikContexts: SignalshchikContext[] = [];
+const signalshchikContexts = createWorldContextStore<SignalshchikContext>();
 
 function signalTags(phase: string, extra: string[] = []): string[] {
   return ['monster', 'maronary', 'green_source', 'signal', ENCOUNTER_ID, phase, 'samosbor_maronary', ...extra].slice(0, 8);
 }
 
 function registerSignalshchikContext(ctx: SignalshchikContext): void {
-  const existing = signalshchikContexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    Object.assign(existing, ctx);
-    return;
-  }
-  signalshchikContexts.push(ctx);
-  if (signalshchikContexts.length > CONTEXT_CAP) signalshchikContexts.splice(0, signalshchikContexts.length - CONTEXT_CAP);
+  signalshchikContexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    Object.assign(existing, incoming);
+  });
 }
 
 function findSignalshchikContext(event: WorldEvent): SignalshchikContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = signalshchikContexts.length - 1; i >= 0; i--) {
-    const ctx = signalshchikContexts[i];
+  const list = signalshchikContexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (
       event.containerId === ctx.heardContainerId ||
       event.containerId === ctx.followContainerId ||
@@ -244,7 +241,7 @@ function addSignalContainer(
     id,
     x: wx,
     y: wy,
-    z: 200,
+    z: -50,
     roomId,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.SECRET_STASH,
@@ -453,7 +450,7 @@ export function generateMaronarySignalshchik(
     y: room.y + 3.5,
     targetX: avoidRoom.x + (avoidRoom.w >> 1) + 0.5,
     targetY: avoidRoom.y + (avoidRoom.h >> 1) + 0.5,
-    z: 200,
+    z: -50,
     roomId: room.id,
     targetRoomId: avoidRoom.id,
     zoneId: world.zoneMap[world.idx(room.x + 3, room.y + 3)],

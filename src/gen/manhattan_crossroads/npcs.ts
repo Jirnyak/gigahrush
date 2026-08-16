@@ -369,7 +369,7 @@ export function addContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: 60,
+    z: 14,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -107,6 +107,11 @@ const PROCEDURAL_SPRITE_CACHE_MAX = 8192;
 const PROCEDURAL_SPRITE_CACHE_TARGET = 8192;
 const ITEM_SPRITE_CACHE_MAX = 8192;
 const ITEM_SPRITE_CACHE_TARGET = 8192;
+// Every sprite — static, procedural or item — is upscaled to this square RGBA
+// texture, so one cache entry always costs the same. The heartbeat multiplies
+// the live cache sizes by it to report GPU bytes on platforms with no heap API.
+const SPRITE_TEX_SIZE = 128;
+const SPRITE_TEX_BYTES = SPRITE_TEX_SIZE * SPRITE_TEX_SIZE * 4;
 const ITEM_DROP_WORLD_SPRITE_SCALE = 0.34;
 const VISIBLE_SPRITE_CAP = 512;
 const VISIBLE_ENTITY_QUERY_CAP = VISIBLE_SPRITE_CAP * 2;
@@ -140,6 +145,47 @@ export function getRenderSceneDebugStats(): RenderSceneDebugStats {
 
 export function getMeshPassDebugStats(): MeshPassStats {
   return glState?.meshPass?.stats() ?? createMeshPassStats();
+}
+
+/** GPU texture bytes this renderer allocated, for the crash heartbeat.
+ *
+ * iOS WebKit exposes no memory API at all (`performance.memory` is Chrome-only),
+ * and a killed tab leaves no console — so the only way to see what the phone was
+ * holding is to account for it ourselves. Counted exactly:
+ *   • sprite textures — the variable term, and the one that dominates: three
+ *     caches of SPRITE_TEX_BYTES entries each, two of them capped at 8192.
+ *   • per-cell data textures — fixed per context: nine R8UI planes (cells,
+ *     wallTex, floorTex, features, ceilHeight, lightBlinks, fog, doorStates)
+ *     at 1 byte, light at R32F, the surface index at R16UI.
+ *   • the surface-mark atlas.
+ * Deliberately NOT counted: the tile atlas, dynamic sky and the ray/bloom FBOs.
+ * Together they are under ~2 MB and none of them grow during play, so folding
+ * them in would cost a glState field and buy no discrimination.
+ */
+export function getGlTextureMemoryStats(): {
+  spriteTextures: number;
+  proceduralSprites: number;
+  itemSprites: number;
+  spriteBytes: number;
+  dataTextureBytes: number;
+  totalBytes: number;
+} {
+  const staticSprites = glState?.spriteTextures.length ?? 0;
+  const proceduralSprites = glState?.proceduralSpriteTextures.size ?? 0;
+  const itemSprites = glState?.itemSpriteTextures.size ?? 0;
+  const spriteBytes = (staticSprites + proceduralSprites + itemSprites) * SPRITE_TEX_BYTES;
+  const perCellBytes = 8 * 1 + 4 + 2; // 8×R8UI + light R32F + surface index R16UI
+  const dataTextureBytes = glState
+    ? W * W * perCellBytes + SURF_ATLAS_SIZE * SURF_ATLAS_SIZE * 4
+    : 0;
+  return {
+    spriteTextures: staticSprites,
+    proceduralSprites,
+    itemSprites,
+    spriteBytes,
+    dataTextureBytes,
+    totalBytes: spriteBytes + dataTextureBytes,
+  };
 }
 
 /* ── GLSL Shaders ─────────────────────────────────────────────── */
@@ -2639,8 +2685,8 @@ function buildAtlas(gl: WebGL2RenderingContext, textures: TexData[]): WebGLTextu
 
 function createSpriteTexture(gl: WebGL2RenderingContext, spr: SpriteData): WebGLTexture {
   const srcSize = Math.sqrt(spr.length) | 0;
-  const targetSize = 128;
-  const pixels = new Uint8Array(targetSize * targetSize * 4);
+  const targetSize = SPRITE_TEX_SIZE;
+  const pixels = new Uint8Array(SPRITE_TEX_BYTES);
 
   for (let y = 0; y < targetSize; y++) {
     const sy = Math.floor((y / targetSize) * srcSize);

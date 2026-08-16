@@ -6,6 +6,7 @@ import {
   type Entity, type GameState, type Room, type WorldEvent, type WorldEventSeverity,
 } from '../../core/types';
 import type { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -19,7 +20,6 @@ import { rng } from '../../core/rand';
 const HLADON_ROOM_PREFIX = 'Хладон:';
 const SITE_TAG = 'hladonets';
 const THREAT_NAME = 'Хладонец';
-const MAX_CONTEXTS = 6;
 
 interface HladonetsContext {
   world: World;
@@ -32,35 +32,25 @@ interface HladonetsContext {
   cleared: boolean;
 }
 
-const contexts: HladonetsContext[] = [];
+const contexts = createWorldContextStore<HladonetsContext>();
 
 function registerHladonetsContext(ctx: HladonetsContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.threatId = ctx.threatId;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > MAX_CONTEXTS) contexts.splice(0, contexts.length - MAX_CONTEXTS);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.threatId = incoming.threatId;
+  });
 }
 
 function contextByRoom(event: WorldEvent): HladonetsContext | undefined {
-  if (event.roomId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (ctx.roomId === event.roomId) return ctx;
-  }
-  return undefined;
+  const roomId = event.roomId;
+  if (roomId === undefined) return undefined;
+  return contexts.byRoom(roomId);
 }
 
 function contextByThreat(event: WorldEvent): HladonetsContext | undefined {
-  if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (ctx.threatId === event.targetId) return ctx;
-  }
-  return undefined;
+  const targetId = event.targetId;
+  if (targetId === undefined) return undefined;
+  return contexts.find(ctx => ctx.threatId === targetId);
 }
 
 function eventDataString(event: WorldEvent, key: string): string | undefined {
@@ -86,7 +76,7 @@ function publishHladonetsEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: 'rumor_observed',
-    z: 140,
+    z: -26,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x,

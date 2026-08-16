@@ -15222,7 +15222,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Папки шуршат дальше без вас. Бумажная угроза осталась в стороне.',
     };
   }
-  if (z === 140) {
+  if (z === -26) {
     return {
       label: 'трубный стук',
       hint: 'трубы считают мокрый обход',
@@ -15233,7 +15233,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Трубный стук ушел в бетон. Засада осталась шуметь в стороне.',
     };
   }
-  if (z === 180) {
+  if (z === -36) {
     return {
       label: 'мясной зов',
       hint: 'стены дышат в сторону плотного боя',
@@ -15244,7 +15244,7 @@ function pressureCueProfile(z: number, spec: ProceduralFloorSpec): {
       ignoredText: 'Мясной зов стих за спиной. Проход остался кормить тишину.',
     };
   }
-  if (z === 200) {
+  if (z === -50) {
     return {
       label: 'пустой тон',
       hint: 'тишина показывает опасную прямую',
@@ -15283,7 +15283,7 @@ function choosePressureTargetRoom(world: World, rooms: Room[], spec: ProceduralF
     const pref = preferredTypes.indexOf(room.type);
     if (pref >= 0) score += 80 - pref * 12;
     if (room.type === RoomType.CORRIDOR) score += routePressureLevel(spec) * 8;
-    if (room.type === RoomType.PRODUCTION && spec.z === 140) score += 20;
+    if (room.type === RoomType.PRODUCTION && spec.z === -26) score += 20;
     if (score > bestScore) {
       bestScore = score;
       best = room;

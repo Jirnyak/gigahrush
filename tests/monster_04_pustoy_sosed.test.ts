@@ -106,7 +106,7 @@ test('Pustoy Sosed quest completion publishes compact outcome event data', () =>
   });
 
   const outcome = getRecentEvents(state, { type: 'faction_relation_changed', tags: ['pustoy_sosed_outcome'], limit: 1 })[0];
-  assert.equal(outcome?.z, 60);
+  assert.equal(outcome?.z, 14);
   assert.equal(outcome?.data?.outcome, 'exposed');
   assert.equal(outcome?.tags.includes('false_neighbor'), true);
   assert.equal(outcome?.tags.includes('infected'), true);

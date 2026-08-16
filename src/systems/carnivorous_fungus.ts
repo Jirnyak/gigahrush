@@ -5,6 +5,7 @@ import {
   type Entity, type GameState, type Room, type WorldEventSeverity, msg,
 } from '../core/types';
 import { World } from '../core/world';
+import { registerFloorScopedReset } from '../world/world_contexts';
 import { ITEMS } from '../data/catalog';
 import { addFactionRelMutual } from '../data/relations';
 import { stampMark, MarkType } from './surface_marks';
@@ -25,6 +26,9 @@ const HAZARD_RADIUS2 = 4.2 * 4.2;
 const NEARBY_RADIUS2 = 72 * 72;
 
 let trackedWorld: World | null = null;
+// Drop the floor when it stops being the one played: the slot itself was
+// always one-floor-wide, it just outlived its floor. See world_contexts.
+registerFloorScopedReset(current => { if (trackedWorld !== current) trackedWorld = null; });
 let scanAccum = 0;
 let hazardAccum = 0;
 let nextHazardMsgAt = 0;

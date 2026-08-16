@@ -145,7 +145,7 @@ testGenerationMatrix('VOID keeps NPC-free endgame density through monsters', () 
   assert.equal(actors.length >= 1000, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
   assert.equal(gen.entities.filter(e => e.type === EntityType.MONSTER).length >= activeActorCountAtDefaultSoftLimit(VOID_POPULATION_PROFILE.guardians), true);
-  assert.equal(VOID_POPULATION_PROFILE.z, 200);
+  assert.equal(VOID_POPULATION_PROFILE.z, -50);
 });
 
 test('procedural population budget scales by danger anomaly pressure and route band', () => {

@@ -125,6 +125,45 @@ function lightFeature(feature: number): boolean {
   return feature === Feature.LAMP || feature === Feature.CANDLE;
 }
 
+/* ── Live-world invariant ─────────────────────────────────────────
+ * Only one floor is active at a time. A second World is legitimate only while a
+ * transition is in flight (the incoming floor is built before the outgoing one
+ * is dropped) and for the lift's one-floor-back cache — so the ceiling is two,
+ * not one. Anything above that is a retained dead floor: 42 MiB of grids each,
+ * which is what kills a phone tab.
+ *
+ * Written as a counter rather than a comment because the layer contract is also
+ * written down and is still violated in sixteen places. `liveWorldCount()` is an
+ * observable number: the heartbeat prints it on the player's phone and
+ * `tests/world-live-count.test.ts` asserts on it after a forced GC.
+ *
+ * The count is an upper bound that converges — FinalizationRegistry runs after
+ * collection, so a just-dropped world is still counted until the GC gets to it.
+ * Assert against it only after forcing GC; treat it as a trend anywhere else. */
+export const MAX_LIVE_WORLDS = 2;
+
+let liveWorlds = 0;
+let peakLiveWorlds = 0;
+const liveWorldRegistry = typeof FinalizationRegistry === 'function'
+  ? new FinalizationRegistry<void>(() => { liveWorlds--; })
+  : null;
+
+/** Worlds constructed and not yet collected. Upper bound; see the note above. */
+export function liveWorldCount(): number {
+  return liveWorlds;
+}
+
+/** Highest `liveWorldCount()` seen this session — survives the GC lag that makes
+ *  a single reading unreliable, so this is the figure worth putting in a dump. */
+export function peakLiveWorldCount(): number {
+  return peakLiveWorlds;
+}
+
+/** Test-only: forget the peak so one case cannot poison the next. */
+export function resetPeakLiveWorldCount(): void {
+  peakLiveWorlds = liveWorlds;
+}
+
 const LIGHT_MAX_RADIUS = 8;
 const LIGHT_GRID_SIZE = LIGHT_MAX_RADIUS * 2 + 1;
 const LIGHT_QUEUE_CAP = LIGHT_GRID_SIZE * LIGHT_GRID_SIZE;
@@ -224,6 +263,9 @@ export class World {
   private surfaceDirtyFull = true;
 
   constructor() {
+    liveWorlds++;
+    if (liveWorlds > peakLiveWorlds) peakLiveWorlds = liveWorlds;
+    liveWorldRegistry?.register(this, undefined);
     const n = W * W;
     this.cells    = new Uint8Array(n).fill(Cell.WALL);
     this.roomMap  = new Int16Array(n).fill(-1);
@@ -245,6 +287,36 @@ export class World {
     this.liftDir  = new Uint8Array(n);              // LiftDirection (0=DOWN, 1=UP)
     this.surfaceFlags = new Uint8Array(n);
     this.ceilHeight = new Uint8Array(n);            // 0 = standard ceiling height
+  }
+
+  /** Bytes held by this world's typed-array grids, for the crash heartbeat.
+   *
+   * One World is a fixed, sizeable block of memory, and floor switching builds a
+   * fresh one while the old one is still reachable — so this figure times the
+   * number of live worlds is the term that decides whether a phone survives the
+   * transition. Counts only the grids: the Rooms/doors/containers object graph
+   * is unmeasurable from here and small next to W*W planes. */
+  gridByteSize(): number {
+    return this.cells.byteLength
+      + this.roomMap.byteLength
+      + this.wallTex.byteLength
+      + this.floorTex.byteLength
+      + this.features.byteLength
+      + this.lampBlinks.byteLength
+      + this.light.byteLength
+      + this.lightBlinks.byteLength
+      + this.visualSlots.byteLength
+      + this.pathBlockers.byteLength
+      + this.aptMask.byteLength
+      + this.hermoWall.byteLength
+      + this.zoneMap.byteLength
+      + this.factionControl.byteLength
+      + this.fog.byteLength
+      + this.tissue.byteLength
+      + this.dangerField.byteLength
+      + this.liftDir.byteLength
+      + this.surfaceFlags.byteLength
+      + this.ceilHeight.byteLength;
   }
 
   addContainer(container: WorldContainer): void {

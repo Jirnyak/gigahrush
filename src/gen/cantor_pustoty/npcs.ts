@@ -52,7 +52,7 @@ export function addContainer(
     id: nextContainerId(world),
     x: world.wrap(x),
     y: world.wrap(y),
-    z: 200,
+    z: -50,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

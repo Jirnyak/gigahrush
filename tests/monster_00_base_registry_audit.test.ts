@@ -260,7 +260,7 @@ test('monster ecology selection respects floor placement and rare gates', () => 
 
 test('universal monster ecology keeps zero-weight monsters in data but out of weighted picks', () => {
   const ranked = rankMonsterEcology({
-    z: 60,
+    z: 14,
     samosborCount: 99,
     allowRare: true,
   }, monsterKinds().length);
@@ -280,7 +280,7 @@ test('universal monster ecology keeps zero-weight monsters in data but out of we
 
 test('floor affinity boosts native and design-biased monsters without filtering the table', () => {
   const ranked = rankMonsterEcology({
-    z: 60,
+    z: 14,
     samosborCount: 99,
     allowRare: true,
     biasKinds: [MonsterKind.TUBE_EEL],

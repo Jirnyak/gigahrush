@@ -156,7 +156,7 @@ function addSmelterContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: 60,
+    z: 14,
     roomId: poi.room.id,
     zoneId: world.zoneMap[ci],
     kind,

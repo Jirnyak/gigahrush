@@ -5,6 +5,7 @@ import {
   type Entity, type GameState, type Item, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr } from '../../entities/sprite_index';
@@ -28,7 +29,6 @@ const TAG_WATCHED = 'watched';
 const TAG_AVOIDED = 'avoided';
 const TAG_DISABLED = 'disabled';
 const TAG_SAMPLE = 'sample';
-const CONTEXT_CAP = 8;
 const WATCH_RANGE = 10;
 const WATCH_RANGE2 = WATCH_RANGE * WATCH_RANGE;
 const WATCH_ANGLE = 0.62;
@@ -52,7 +52,7 @@ interface SeryyContext extends SeryySmotritelGeneration {
   sampleTaken: boolean;
 }
 
-const contexts: SeryyContext[] = [];
+const contexts = createWorldContextStore<SeryyContext>();
 
 function contextTags(phase: string): string[] {
   return [TAG_ID, TAG_NO_LOOK, TAG_SEROBURMALINE, TAG_MONSTER, TAG_PSI, phase];
@@ -63,25 +63,21 @@ function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
 }
 
 function registerContext(ctx: SeryyContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.sourceX = ctx.sourceX;
-    existing.sourceY = ctx.sourceY;
-    existing.watchContainerId = ctx.watchContainerId;
-    existing.avoidContainerId = ctx.avoidContainerId;
-    existing.disableContainerId = ctx.disableContainerId;
-    existing.sampleContainerId = ctx.sampleContainerId;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > CONTEXT_CAP) contexts.splice(0, contexts.length - CONTEXT_CAP);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.sourceX = incoming.sourceX;
+    existing.sourceY = incoming.sourceY;
+    existing.watchContainerId = incoming.watchContainerId;
+    existing.avoidContainerId = incoming.avoidContainerId;
+    existing.disableContainerId = incoming.disableContainerId;
+    existing.sampleContainerId = incoming.sampleContainerId;  });
 }
 
 function contextForEvent(event: WorldEvent): SeryyContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (
       ctx.watchContainerId === event.containerId
       || ctx.avoidContainerId === event.containerId
@@ -162,7 +158,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: 200,
+    z: -50,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.SECRET_STASH,
@@ -477,7 +473,7 @@ export function generateSeryySmotritel(
     y: entry.y + (entry.h >> 1) + 0.5,
     targetX: reward.x + 4.5,
     targetY: reward.y + 2.5,
-    z: 200,
+    z: -50,
     roomId: entry.id,
     targetRoomId: reward.id,
     zoneId: world.zoneMap[world.idx(entry.x + 2, entry.y + (entry.h >> 1))],

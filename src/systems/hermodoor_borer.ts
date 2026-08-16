@@ -121,7 +121,7 @@ function doorY(idx: number): number {
 }
 
 function borerFloorsAllowThreat(z: number): boolean {
-  return z !== 180 && z !== 200;
+  return z !== -36 && z !== -50;
 }
 
 function occupiedApartmentIds(entities: readonly Entity[]): Set<number> {

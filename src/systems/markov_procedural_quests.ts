@@ -3,6 +3,7 @@
 import { MonsterKind, QuestType, RoomType, Quest } from '../core/types';
 import { ITEMS } from '../data/items';
 import type { ContractDef } from '../data/contracts';
+import { DESIGN_FLOOR_THEME_BASES, designFloorAtZ } from '../data/design_floors';
 import { monsterTypeName } from '../entities/monster';
 import type { ContextSnapshot } from './context';
 import {
@@ -359,13 +360,30 @@ function result(
   };
 }
 
+/* Player-facing floor name for a quest target.
+ *
+ * This was a ladder of bands in the removed coordinate scheme, which ascended
+ * with depth: the lowest band meant Ministry and the living floor sat two bands
+ * up. In
+ * canonical coordinates depth DESCENDS, so every real z landed in the first two
+ * bands — the living floor (z = 0) announced itself as «Квартиры», and nothing
+ * below ever named itself at all. A literal renumbering could not fix an
+ * inverted scale, so the bands are gone.
+ *
+ * Named stops answer for themselves; anything between them (procedural floors)
+ * takes the name of the nearest theme base, which is what the bands were
+ * reaching for. Derived from the route table, so a new authored floor is covered
+ * without touching this. */
 function floorName(z: number): string {
-  if (z < 0) return 'Министерство';
-  if (z < 100) return 'Квартиры';
-  if (z < 200) return 'Жилая зона';
-  if (z < 300) return 'Коллекторы';
-  if (z < 400) return 'Ад';
-  return 'Пустота';
+  const exact = designFloorAtZ(z);
+  if (exact) return exact.displayName;
+  let nearest = DESIGN_FLOOR_THEME_BASES[0];
+  let bestGap = Number.POSITIVE_INFINITY;
+  for (const base of DESIGN_FLOOR_THEME_BASES) {
+    const gap = Math.abs(z - base.z);
+    if (gap < bestGap) { bestGap = gap; nearest = base; }
+  }
+  return nearest.displayName;
 }
 
 function roomTypeName(roomType: RoomType): string {

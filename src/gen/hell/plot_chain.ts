@@ -37,7 +37,7 @@ function registerAnchorCue(world: World, anchorRoom: Room): void {
     y,
     targetX: x,
     targetY: y,
-    z: 180,
+    z: -36,
     roomId: anchorRoom.id,
     targetRoomId: anchorRoom.id,
     label: 'зона закрепления',

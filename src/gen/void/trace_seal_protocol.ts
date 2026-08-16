@@ -6,6 +6,7 @@ import {
   type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -26,7 +27,6 @@ const TAG_PROTOCOL = 'trace_seal';
 const TAG_SEAL = 'seal';
 const TAG_LEAVE_EVIDENCE = 'leave_evidence';
 const TAG_DONE = 'resolved';
-const CONTEXT_CAP = 8;
 const TRACE_SEAL_COSTS = [
   { itemId: 'seal_wax', label: 'сургуч' },
   { itemId: 'ammo_energy', label: 'энергоячейка' },
@@ -90,20 +90,15 @@ interface TraceSealContext {
   backlashDoorIdx: number;
 }
 
-const traceSealContexts: TraceSealContext[] = [];
+const traceSealContexts = createWorldContextStore<TraceSealContext>();
 
 function registerTraceSealContext(ctx: TraceSealContext): void {
-  const existing = traceSealContexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.sealContainerId = ctx.sealContainerId;
-    existing.evidenceContainerId = ctx.evidenceContainerId;
-    existing.targetDoorIdx = ctx.targetDoorIdx;
-    existing.backlashDoorIdx = ctx.backlashDoorIdx;
-    return;
-  }
-  traceSealContexts.push(ctx);
-  if (traceSealContexts.length > CONTEXT_CAP) traceSealContexts.splice(0, traceSealContexts.length - CONTEXT_CAP);
+  traceSealContexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.sealContainerId = incoming.sealContainerId;
+    existing.evidenceContainerId = incoming.evidenceContainerId;
+    existing.targetDoorIdx = incoming.targetDoorIdx;
+    existing.backlashDoorIdx = incoming.backlashDoorIdx;  });
 }
 
 function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
@@ -112,8 +107,9 @@ function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
 
 function findTraceSealContext(event: WorldEvent): TraceSealContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = traceSealContexts.length - 1; i >= 0; i--) {
-    const ctx = traceSealContexts[i];
+  const list = traceSealContexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (ctx.sealContainerId === event.containerId || ctx.evidenceContainerId === event.containerId) return ctx;
   }
   return undefined;
@@ -396,7 +392,7 @@ function addTraceContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: 200,
+    z: -50,
     roomId,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,

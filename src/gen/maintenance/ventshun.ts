@@ -6,6 +6,7 @@ import {
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import type { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -25,7 +26,6 @@ const TAG_VALVE = 'valve';
 const TAG_REWARD = 'reward';
 const ROOM_W = 22;
 const ROOM_H = 13;
-const MAX_CONTEXTS = 4;
 const MAX_THREATS = 3;
 
 interface VentshunContext {
@@ -46,19 +46,14 @@ interface VentshunContext {
   cleared: boolean;
 }
 
-const contexts: VentshunContext[] = [];
+const contexts = createWorldContextStore<VentshunContext>();
 
 function registerVentshunContext(ctx: VentshunContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.valveContainerId = ctx.valveContainerId;
-    existing.rewardContainerId = ctx.rewardContainerId;
-    existing.ventCells = ctx.ventCells;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > MAX_CONTEXTS) contexts.splice(0, contexts.length - MAX_CONTEXTS);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.valveContainerId = incoming.valveContainerId;
+    existing.rewardContainerId = incoming.rewardContainerId;
+    existing.ventCells = incoming.ventCells;  });
 }
 
 function nextContainerId(world: World): number {
@@ -84,7 +79,7 @@ function addVentshunContainer(
     id,
     x: wx,
     y: wy,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
@@ -101,8 +96,9 @@ function addVentshunContainer(
 
 function findContextByCue(event: WorldEvent): VentshunContext | undefined {
   if (event.data?.cueId !== CUE_ID) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (event.roomId === ctx.roomId || event.zoneId === ctx.world.zoneMap[ctx.world.idx(Math.floor(ctx.warningX), Math.floor(ctx.warningY))]) return ctx;
   }
   return undefined;
@@ -110,8 +106,9 @@ function findContextByCue(event: WorldEvent): VentshunContext | undefined {
 
 function findContextByContainer(event: WorldEvent): VentshunContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (ctx.valveContainerId === event.containerId || ctx.rewardContainerId === event.containerId) return ctx;
   }
   return undefined;
@@ -119,8 +116,9 @@ function findContextByContainer(event: WorldEvent): VentshunContext | undefined 
 
 function findContextByThreat(event: WorldEvent): VentshunContext | undefined {
   if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].threatIds.includes(event.targetId)) return contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].threatIds.includes(event.targetId)) return list[i];
   }
   return undefined;
 }
@@ -155,7 +153,7 @@ function publishVentshunEvent(
   const room = ctx.world.rooms[ctx.roomId];
   publishEvent(state, {
     type: phase === 'sprung' ? 'monster_sighted' : 'rumor_observed',
-    z: 140,
+    z: -26,
     zoneId: source.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? ctx.targetX,
@@ -501,7 +499,7 @@ function registerVentshunCueAndContext(
     y: warningY,
     targetX,
     targetY,
-    z: 140,
+    z: -26,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(Math.floor(warningX), Math.floor(warningY))],

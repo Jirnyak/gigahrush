@@ -109,7 +109,7 @@ function addOutputLocker(ctx: MaintContentCtx, room: Room, ownerNpcId: number): 
     id: nextContainerId(ctx),
     x,
     y,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     kind: ContainerKind.TOOL_LOCKER,

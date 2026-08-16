@@ -20,6 +20,7 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -30,7 +31,6 @@ import { rng } from '../../core/rand';
 
 export const PERESTANOVSHCHIK_ID = 'perestanovshchik' as const;
 
-const CHAMBER_CONTEXT_CAP = 8;
 const ANCHOR_TAG = 'anchor_disable';
 
 interface PerestanovshchikPair {
@@ -47,7 +47,7 @@ interface PerestanovshchikContext {
   disabled: boolean;
 }
 
-const contexts: PerestanovshchikContext[] = [];
+const contexts = createWorldContextStore<PerestanovshchikContext>();
 
 function setVoidRoomTextures(world: World, room: Room): void {
   room.wallTex = Tex.VOID_WALL;
@@ -89,7 +89,7 @@ function addContainer(
     id,
     x: world.wrap(x),
     y: world.wrap(y),
-    z: 200,
+    z: -50,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
@@ -190,27 +190,20 @@ function connectSouthNorth(world: World, north: Room, south: Room): void {
 }
 
 function registerContext(ctx: PerestanovshchikContext): void {
-  const existing = contexts.find(c => c.world === ctx.world && c.roomId === ctx.roomId);
-  if (existing) {
-    existing.anchorIdx = ctx.anchorIdx;
-    existing.anchorContainerId = ctx.anchorContainerId;
-    existing.pairs = ctx.pairs;
-    existing.disabled = ctx.disabled;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > CHAMBER_CONTEXT_CAP) contexts.splice(0, contexts.length - CHAMBER_CONTEXT_CAP);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.anchorIdx = incoming.anchorIdx;
+    existing.anchorContainerId = incoming.anchorContainerId;
+    existing.pairs = incoming.pairs;
+    existing.disabled = incoming.disabled;
+  });
 }
 
 function contextForEvent(event: WorldEvent): PerestanovshchikContext | undefined {
-  if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (
-      contexts[i].anchorContainerId === event.containerId &&
-      (event.roomId === undefined || event.roomId === contexts[i].roomId)
-    ) return contexts[i];
-  }
-  return undefined;
+  const containerId = event.containerId;
+  if (containerId === undefined) return undefined;
+  return contexts.find(ctx =>
+    ctx.anchorContainerId === containerId
+    && (event.roomId === undefined || event.roomId === ctx.roomId));
 }
 
 function disablePerestanovshchikAnchor(ctx: PerestanovshchikContext): number {
@@ -327,7 +320,7 @@ export function generatePerestanovshchik(
     y: ((safeSource / W) | 0) + 0.5,
     targetX: (safeTarget % W) + 0.5,
     targetY: ((safeTarget / W) | 0) + 0.5,
-    z: 200,
+    z: -50,
     roomId: entry.id,
     targetRoomId: anchor.id,
     zoneId: world.zoneMap[safeSource],
@@ -350,7 +343,7 @@ export function generatePerestanovshchik(
     y: ((loopSource / W) | 0) + 0.5,
     targetX: (loopTarget % W) + 0.5,
     targetY: ((loopTarget / W) | 0) + 0.5,
-    z: 200,
+    z: -50,
     roomId: entry.id,
     targetRoomId: loop.id,
     zoneId: world.zoneMap[loopSource],

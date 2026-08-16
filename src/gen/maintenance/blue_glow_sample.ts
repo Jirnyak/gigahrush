@@ -184,7 +184,7 @@ function addSampleContainer(ctx: MaintContentCtx, room: Room, x: number, y: numb
     id: nextContainerId(ctx),
     x,
     y,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     kind: ContainerKind.MEDICAL_CABINET,

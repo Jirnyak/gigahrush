@@ -6,6 +6,7 @@ import {
   type Entity, type GameState, type Room, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { registerFloorScopedReset } from '../../world/world_contexts';
 import { freshNeeds, randomName } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { getMaxHp, gaussianLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -111,6 +112,9 @@ const RIB_COVER_CELLS: readonly [number, number][] = [
 ];
 
 let activeWorld: World | null = null;
+// Drop the floor when it stops being the one played: the slot itself was
+// always one-floor-wide, it just outlived its floor. See world_contexts.
+registerFloorScopedReset(current => { if (activeWorld !== current) activeWorld = null; });
 let activeEntities: Entity[] | null = null;
 let activeSite: AltarArenaSite | null = null;
 
@@ -142,7 +146,7 @@ export function spawnHellAltarArena(world: World, entities: Entity[], nextId: { 
   const cy = room.y + (room.h >> 1);
   const ci = world.idx(cx, cy);
   activeSite = {
-    z: 180,
+    z: -36,
     roomId: room.id,
     roomX: room.x,
     roomY: room.y,
@@ -566,7 +570,7 @@ function registerAltarRouteCue(world: World, room: Room, entry: Route, escape: R
     y: cueY,
     targetX: cx,
     targetY: cy,
-    z: 180,
+    z: -36,
     roomId: room.id,
     targetRoomId: room.id,
     zoneId: world.zoneMap[world.idx(Math.floor(cx), Math.floor(cy))],

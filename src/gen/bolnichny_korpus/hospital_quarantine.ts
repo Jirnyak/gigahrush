@@ -346,7 +346,7 @@ registerWorldEventObserver((state, event) => {
     if (sideQuestId === QUEST_MIRA_MESSAGE) {
       publishEvent(state, {
         type: 'faction_relation_changed',
-        z: 100,
+        z: 0,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -364,7 +364,7 @@ registerWorldEventObserver((state, event) => {
     if (sideQuestId === QUEST_MIRA_SANITARY) {
       publishEvent(state, {
         type: 'hazard_cleaned',
-        z: 100,
+        z: 0,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -385,7 +385,7 @@ registerWorldEventObserver((state, event) => {
       const lida = sideQuestId === QUEST_LIDA_ANTIBIOTIC;
       publishEvent(state, {
         type: 'faction_relation_changed',
-        z: 100,
+        z: 0,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -414,7 +414,7 @@ registerWorldEventObserver((state, event) => {
     if (sideQuestId === QUEST_TARAS_SEAL_WARD) {
       publishEvent(state, {
         type: 'door_sealed',
-        z: 100,
+        z: 0,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -435,7 +435,7 @@ registerWorldEventObserver((state, event) => {
     if (event.tags.includes('medical_fraud') && sourceOutcome(event) === 'fraud_exposed') {
       publishEvent(state, {
         type: 'faction_relation_changed',
-        z: 100,
+        z: 0,
         zoneId: event.zoneId,
         roomId: event.roomId,
         actorId: event.actorId,
@@ -458,7 +458,7 @@ registerWorldEventObserver((state, event) => {
   ) {
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: 100,
+      z: 0,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -564,7 +564,7 @@ function addHospitalContainer(
     id: world.containers.length + 1,
     x,
     y,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -6,6 +6,7 @@ import {
   RoomType, Tex, msg,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent, type WorldEventType,
 } from '../../core/types';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
@@ -65,7 +66,7 @@ interface FiltronosContext {
   contaminated: boolean;
 }
 
-const contexts: FiltronosContext[] = [];
+const contexts = createWorldContextStore<FiltronosContext>();
 
 function pushHud(state: GameState, text: string, color: string): void {
   state.msgs.push(msg(text, state.time, color));
@@ -76,21 +77,15 @@ function eventType(phase: 'protected' | 'distracted' | 'contaminated' | 'recover
 }
 
 function findContextByContainer(event: WorldEvent): FiltronosContext | undefined {
-  if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (ctx.worldContainerId === event.containerId && ctx.roomId === event.roomId) return ctx;
-  }
-  return undefined;
+  const containerId = event.containerId;
+  if (containerId === undefined) return undefined;
+  return contexts.find(ctx => ctx.worldContainerId === containerId && ctx.roomId === event.roomId);
 }
 
 function findContextByMonster(event: WorldEvent): FiltronosContext | undefined {
   const id = event.targetId ?? event.actorId;
   if (id === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].monsterId === id) return contexts[i];
-  }
-  return undefined;
+  return contexts.find(ctx => ctx.monsterId === id);
 }
 
 function contextContainer(ctx: FiltronosContext): WorldContainer | undefined {
@@ -124,7 +119,7 @@ function publishFiltronosEvent(
   const container = contextContainer(ctx);
   publishEvent(state, {
     type: eventType(phase),
-    z: 140,
+    z: -26,
     zoneId: source.zoneId ?? container?.zoneId,
     roomId: ctx.roomId,
     x: source.x ?? container?.x,
@@ -364,7 +359,7 @@ function addFilterContainer(ctx: MaintContentCtx, room: Room, owner: Entity): nu
     id: nextContainerId(ctx),
     x,
     y,
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ctx.world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,
@@ -429,7 +424,7 @@ export function generateFiltronos(ctx: MaintContentCtx): void {
   dropAt(ctx, room.x + 2, room.y + room.h - 2, 'note', 1,
     'Памятка фильтрового кэша: если ящик дышит внутрь, сначала герметик на щель или говняк в сторону. Живой Фильтронос портит только этот запас.');
 
-  contexts.push({
+  contexts.register(ctx.world, room.id, {
     worldContainerId: containerId,
     roomId: room.id,
     monsterId,
@@ -439,6 +434,11 @@ export function generateFiltronos(ctx: MaintContentCtx): void {
     distracted: false,
     recovered: false,
     contaminated: false,
+  }, (existing, incoming) => {
+    // Was an unconditional push capped at 16 — a re-registered room stacked
+    // duplicates. Refresh the live handles and keep the progress flags.
+    existing.worldContainerId = incoming.worldContainerId;
+    existing.monsterId = incoming.monsterId;
+    existing.entities = incoming.entities;
   });
-  if (contexts.length > 16) contexts.splice(0, contexts.length - 16);
 }

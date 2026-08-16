@@ -15,6 +15,7 @@ import {
   type WorldContainer,
   type WorldEvent,
 } from '../../core/types';
+import { registerFloorScopedReset } from '../../world/world_contexts';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { registerCellHazardSite, cleanCellHazardsNear } from '../../systems/cell_hazards';
@@ -93,6 +94,15 @@ interface PressovikRuntime {
 
 let latestRuntime: PressovikRuntime | null = null;
 const runtimeByContainerId = new Map<number, PressovikRuntime>();
+// Same shape as the sixteen `contexts` arrays, under different names: the runtime
+// holds `worldRef`, and the container map was never cleared, so both outlived the
+// floor they describe. Container ids are per-floor anyway — keeping them across a
+// transition could only ever produce a wrong hit.
+registerFloorScopedReset(current => {
+  if (latestRuntime?.worldRef === current) return;
+  latestRuntime = null;
+  runtimeByContainerId.clear();
+});
 
 function eventDataString(event: WorldEvent, key: string): string | undefined {
   const value = event.data?.[key];
@@ -235,7 +245,7 @@ function addContainer(
     x: wx,
     y: wy,
     // @ts-ignore
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,

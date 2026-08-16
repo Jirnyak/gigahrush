@@ -128,7 +128,7 @@ function normalizeSite(input: unknown): PseudoliftSite | null {
     key: input.key.slice(0, 96),
     routeKey: input.routeKey.slice(0, 96),
     routeKind: typeof input.routeKind === 'string' ? input.routeKind.slice(0, 24) : 'route',
-    z: typeof input.z === 'number' && Number.isInteger(input.z) ? input.z : 100,
+    z: typeof input.z === 'number' && Number.isInteger(input.z) ? input.z : 0,
     liftIdx,
     liftX: Math.max(0, Math.min(W - 1, Math.floor(Number(input.liftX) || liftIdx % W))),
     liftY: Math.max(0, Math.min(W - 1, Math.floor(Number(input.liftY) || ((liftIdx / W) | 0)))),

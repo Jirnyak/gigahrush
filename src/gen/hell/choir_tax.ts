@@ -9,6 +9,7 @@ import {
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { registerFloorScopedReset } from '../../world/world_contexts';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
@@ -104,6 +105,9 @@ const BRANCH_SPECS: Record<ChoirBranch, ChoirBranchSpec> = {
 };
 
 let activeWorld: World | null = null;
+// Drop the floor when it stops being the one played: the slot itself was
+// always one-floor-wide, it just outlived its floor. See world_contexts.
+registerFloorScopedReset(current => { if (activeWorld !== current) activeWorld = null; });
 let activeEntities: Entity[] | null = null;
 let activeSite: ChoirSite | null = null;
 
@@ -295,7 +299,7 @@ export function generateHell18ChoirTax(world: World, entities: Entity[], nextId:
   const cx = world.wrap(room.x + (room.w >> 1));
   const cy = world.wrap(room.y + (room.h >> 1));
   activeSite = {
-    z: 180,
+    z: -36,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(cx, cy)],
     x: cx + 0.5,
@@ -864,7 +868,7 @@ function addChoirCache(world: World, room: Room, ownerNpcId: number): number {
     id,
     x,
     y,
-    z: 180,
+    z: -36,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.CASHBOX,
@@ -890,7 +894,7 @@ function addChoirRefusalLedger(world: World, room: Room): number {
     id,
     x,
     y,
-    z: 180,
+    z: -36,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.FILING_CABINET,

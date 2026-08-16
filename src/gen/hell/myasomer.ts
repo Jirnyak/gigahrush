@@ -19,6 +19,7 @@ import {
   type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { registerFloorScopedReset } from '../../world/world_contexts';
 import { ITEMS } from '../../data/catalog';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
@@ -79,6 +80,9 @@ interface MyasomerLayout {
 }
 
 let activeWorld: World | null = null;
+// Drop the floor when it stops being the one played: the slot itself was
+// always one-floor-wide, it just outlived its floor. See world_contexts.
+registerFloorScopedReset(current => { if (activeWorld !== current) activeWorld = null; });
 let activeEntities: Entity[] | null = null;
 let activeSite: MyasomerSite | null = null;
 

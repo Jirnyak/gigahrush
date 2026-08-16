@@ -8,6 +8,7 @@ import {
   type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../entities/sprite_index';
@@ -113,22 +114,17 @@ interface MatkaDokumentovContext {
   empowerments: number;
 }
 
-const contexts: MatkaDokumentovContext[] = [];
-const MAX_CONTEXTS = 4;
+const contexts = createWorldContextStore<MatkaDokumentovContext>();
 
 function registerContext(ctx: MatkaDokumentovContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.coreContainerId = ctx.coreContainerId;
-    existing.cancelContainerId = ctx.cancelContainerId;
-    existing.burnContainerId = ctx.burnContainerId;
-    existing.decoyContainerId = ctx.decoyContainerId;
-    existing.cabinetContainerIds = ctx.cabinetContainerIds;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > MAX_CONTEXTS) contexts.splice(0, contexts.length - MAX_CONTEXTS);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.coreContainerId = incoming.coreContainerId;
+    existing.cancelContainerId = incoming.cancelContainerId;
+    existing.burnContainerId = incoming.burnContainerId;
+    existing.decoyContainerId = incoming.decoyContainerId;
+    existing.cabinetContainerIds = incoming.cabinetContainerIds;
+  });
 }
 
 function nextContainerId(world: World): number {
@@ -172,26 +168,20 @@ function addMatkaContainer(
 }
 
 function findContextByContainer(event: WorldEvent): MatkaDokumentovContext | undefined {
-  if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (
-      ctx.coreContainerId === event.containerId ||
-      ctx.cancelContainerId === event.containerId ||
-      ctx.burnContainerId === event.containerId ||
-      ctx.decoyContainerId === event.containerId ||
-      ctx.cabinetContainerIds.includes(event.containerId)
-    ) return ctx;
-  }
-  return undefined;
+  const containerId = event.containerId;
+  if (containerId === undefined) return undefined;
+  return contexts.find(ctx =>
+    ctx.coreContainerId === containerId ||
+    ctx.cancelContainerId === containerId ||
+    ctx.burnContainerId === containerId ||
+    ctx.decoyContainerId === containerId ||
+    ctx.cabinetContainerIds.includes(containerId));
 }
 
 function findContextByThreat(event: WorldEvent): MatkaDokumentovContext | undefined {
-  if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    if (contexts[i].threatIds.includes(event.targetId)) return contexts[i];
-  }
-  return undefined;
+  const targetId = event.targetId;
+  if (targetId === undefined) return undefined;
+  return contexts.find(ctx => ctx.threatIds.includes(targetId));
 }
 
 function hasTag(event: WorldEvent, tag: string): boolean {

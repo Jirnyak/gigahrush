@@ -663,7 +663,7 @@ export function registerPodadCue(
     y: from.y + 0.5,
     targetX: to.x + 0.5,
     targetY: to.y + 0.5,
-    z: 180,
+    z: -36,
     roomId: source.id,
     targetRoomId: target.id,
     zoneId: world.zoneMap[cell],

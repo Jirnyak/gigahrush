@@ -397,7 +397,7 @@ function addPrepContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[ci],
     kind,

@@ -6,6 +6,7 @@ import {
   type Entity, type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
 import { MarkType, stampMark } from '../../systems/surface_marks';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
@@ -28,7 +29,6 @@ const ROOM_DEF_ID = 'Пломбировщик: шовная ремонтная';
 const BYPASS_NAME = 'Пломбировщик: обход пломбы';
 const KILL_AWAY_RADIUS2 = 3.4 * 3.4;
 const SHOT_INTERRUPT_RADIUS2 = 8 * 8;
-const MAX_CONTEXTS = 4;
 
 const CUT_ITEMS = new Set(['knife', 'axe', 'liquidator_axe', 'wrench', 'hammer', 'sledgehammer', 'fire_hook', 'crowbar']);
 const REPAIR_ITEMS = new Set(['sealant_tube', 'hermo_gasket']);
@@ -50,21 +50,17 @@ interface PlombContext {
   shotHandled: boolean;
 }
 
-const contexts: PlombContext[] = [];
+const contexts = createWorldContextStore<PlombContext>();
 
 function registerContext(ctx: PlombContext): void {
-  const existing = contexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.entities = ctx.entities;
-    existing.entitiesMap = ctx.entitiesMap;
-    existing.sealedDoorIdx = ctx.sealedDoorIdx;
-    existing.alternateDoorIdx = ctx.alternateDoorIdx;
-    existing.sealContainerId = ctx.sealContainerId;
-    existing.monsterId = ctx.monsterId;
-    return;
-  }
-  contexts.push(ctx);
-  if (contexts.length > MAX_CONTEXTS) contexts.splice(0, contexts.length - MAX_CONTEXTS);
+  contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.entities = incoming.entities;
+    existing.entitiesMap = incoming.entitiesMap;
+    existing.sealedDoorIdx = incoming.sealedDoorIdx;
+    existing.alternateDoorIdx = incoming.alternateDoorIdx;
+    existing.sealContainerId = incoming.sealContainerId;
+    existing.monsterId = incoming.monsterId;
+  });
 }
 
 function doorX(idx: number): number {
@@ -97,7 +93,7 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.TOOL_LOCKER,
@@ -307,7 +303,7 @@ function publishPlombEvent(
 ): void {
   publishEvent(state, {
     type,
-    z: 100,
+    z: 0,
     zoneId: ctx.world.zoneMap[ctx.sealedDoorIdx],
     roomId: ctx.roomId,
     x: doorX(ctx.sealedDoorIdx) + 0.5,
@@ -343,25 +339,18 @@ function openSealedDoor(ctx: PlombContext, state: GameState): boolean {
 
 function contextByContainer(event: WorldEvent): PlombContext | undefined {
   if (event.containerId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (ctx.sealContainerId === event.containerId) return ctx;
-  }
-  return undefined;
+  return contexts.find(ctx => ctx.sealContainerId === event.containerId);
 }
 
 function contextByMonster(event: WorldEvent): PlombContext | undefined {
   if (event.targetId === undefined) return undefined;
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
-    if (ctx.monsterId === event.targetId) return ctx;
-  }
-  return undefined;
+  return contexts.find(ctx => ctx.monsterId === event.targetId);
 }
 
 function nearestActiveContextToPlayer(): PlombContext | undefined {
-  for (let i = contexts.length - 1; i >= 0; i--) {
-    const ctx = contexts[i];
+  const list = contexts.all();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ctx = list[i];
     if (!ctx.entitiesMap) {
       ctx.entitiesMap = new Map();
       for (let j = 0; j < ctx.entities.length; j++) {

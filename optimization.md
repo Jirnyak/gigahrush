@@ -257,6 +257,19 @@ Validation:
 
 ## P0: Floor Memory, Save And Storage Hitches
 
+> **Shipped 2026-08-16 — live-world ceiling.** Retention was one floor by design and three-to-eight in
+> fact: nineteen content modules kept per-floor state in module-level storage capped by entry COUNT
+> while each entry pinned a whole `World` (42 MiB of grids) plus that floor's entities. Six floor loads
+> left `arrayBuffers` at 477 MiB with only the current floor referenced. Now `MAX_LIVE_WORLDS` = 2 is an
+> observable number (`liveWorldCount()`, `FinalizationRegistry`), storage is `createWorldContextStore()`
+> keyed by room on one world, and `dropWorldContextsExcept()` in `finishLoadedFloorVisuals()` is the
+> single unload point. Same six loads: 127 MiB, one live world. See `architecture.md` §2 and
+> `crash_memory.md`.
+>
+> Note for future memory work: `worldContextStats().staleEntities` exists because the world count alone
+> gives false comfort — a store pointing at a departed floor keeps its ~9600 entities whether or not the
+> `World` object itself is collectable at that instant.
+
 > **Shipped (Part 1/2):** floor-memory retention is now exactly one active floor, and the save stores that one floor as a delta against its deterministically regenerated base (`save.md`). The multi-candidate save-selection and cold-storage-tier items below are therefore historical; the still-relevant lanes are the RLE byte-writer (#2), double-restore avoidance (#3) and moving load parse/restore under the loading screen (#4). See "Shipped direction" below.
 
 Why this was hitch-visible under the old multi-floor retention:

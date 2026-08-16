@@ -74,7 +74,7 @@ test('maintenance slime-singing vent stash exposes smoke candle checks', () => {
   const stash = world.containers.find(container => container.inventory.some(item => item.defId === 'smoke_candle_check'));
   assert.ok(stash, 'slime-singing vent sample stash should expose smoke candles');
   assert.equal(stash.inventory.find(item => item.defId === 'smoke_candle_check')?.count, 2);
-  assert.equal(stash.z, 140);
+  assert.equal(stash.z, -26);
   assert.equal(stash.tags.includes('route_cue'), true);
   assert.equal(entities.some(entity => entity.type === EntityType.MONSTER), true);
 });

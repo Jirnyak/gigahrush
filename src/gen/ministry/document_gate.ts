@@ -9,6 +9,7 @@ import {
   type WorldEventPrivacy, type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { createWorldContextStore } from '../../world/world_contexts';
 import { type PlotNpcDef, registerAuthoredNpc, registerSideQuest, storyNpcFloorKey } from '../../data/plot';
 import { ITEMS } from '../../data/catalog';
 import { DOCUMENT_MINISTRY_GATE_ACCESS_DEFS } from '../../data/documents_access';
@@ -35,7 +36,6 @@ const GATE_H = 9;
 const CONTENT_TAG = 'document_gate';
 const ACCESS_SCAN_RADIUS = 10;
 const ACCESS_SCAN_RADIUS2 = ACCESS_SCAN_RADIUS * ACCESS_SCAN_RADIUS;
-const MAX_CONTEXTS = 4;
 const GATE_GUARD_ID = 'document_gate_inspector_sukhar';
 const GATE_WITNESS_ID = 'document_gate_zina_ochevidnaya';
 
@@ -232,7 +232,7 @@ const DOCUMENT_GATE_REJECT_HINT_TAGS = new Set([
   'document', 'documents', 'permit', 'pass', 'access', 'archive', 'ministry', 'ministry_access',
   'document_gate', 'quarantine', 'weapon_permit',
 ]);
-const documentGateContexts: DocumentGateContext[] = [];
+const documentGateContexts = createWorldContextStore<DocumentGateContext>();
 
 const GALINA_DEF: PlotNpcDef = {
   name: 'Галина Окошечная',
@@ -409,17 +409,12 @@ registerAuthoredNpc({
 });
 
 function registerDocumentGateContext(ctx: DocumentGateContext): void {
-  const existing = documentGateContexts.find(item => item.world === ctx.world && item.roomId === ctx.roomId);
-  if (existing) {
-    existing.gateDoorIdx = ctx.gateDoorIdx;
-    existing.guardId = ctx.guardId;
-    existing.containerId = ctx.containerId;
+  documentGateContexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
+    existing.gateDoorIdx = incoming.gateDoorIdx;
+    existing.guardId = incoming.guardId;
+    existing.containerId = incoming.containerId;
     existing.violentHandled = false;
-    existing.theftEventIds = [];
-    return;
-  }
-  documentGateContexts.push(ctx);
-  if (documentGateContexts.length > MAX_CONTEXTS) documentGateContexts.splice(0, documentGateContexts.length - MAX_CONTEXTS);
+    existing.theftEventIds = [];  });
 }
 
 function doorX(idx: number): number {

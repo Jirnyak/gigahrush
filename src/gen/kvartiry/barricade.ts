@@ -353,7 +353,7 @@ export function generateBarricade(
     y: westEntry.y,
     targetX,
     targetY,
-    z: 60,
+    z: 14,
     roomId: poi.room.id,
     targetRoomId: poi.room.id,
     zoneId: world.zoneMap[markerCell],

@@ -169,7 +169,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type === 'quest_completed' && sideQuestId(event) === 'ag44_medpost_restock_bandages') {
     publishEvent(state, {
       type: 'faction_relation_changed',
-      z: 100,
+      z: 0,
       zoneId: event.zoneId,
       roomId: event.roomId,
       actorId: event.actorId,
@@ -187,7 +187,7 @@ registerWorldEventObserver((state, event) => {
   if (event.type !== 'item_stolen' || !event.tags.includes(CONTENT_TAG) || !isMedpostMedicine(event.itemId)) return;
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: 100,
+    z: 0,
     zoneId: event.zoneId,
     roomId: event.roomId,
     actorId: event.actorId,
@@ -344,7 +344,7 @@ function addMedContainer(
     id: nextContainerId(world),
     x,
     y,
-    z: 100,
+    z: 0,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.MEDICAL_CABINET,

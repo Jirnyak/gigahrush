@@ -9,6 +9,7 @@ import {
   type WorldEventType,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { registerFloorScopedReset } from '../../world/world_contexts';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
@@ -96,6 +97,8 @@ registerSideQuest(NPC_ID, REMONTNIK_DEF, [
 ]);
 
 let activeRemontnik: RemontnikSite | null = null;
+// One floor at a time: drop it when its floor stops being the one played.
+registerFloorScopedReset(current => { if (activeRemontnik?.world !== current) activeRemontnik = null; });
 
 function nextContainerId(ctx: MaintContentCtx): number {
   let id = ctx.world.containers.length + 1;
@@ -119,7 +122,7 @@ function addContainer(
     x: wx,
     y: wy,
     // @ts-ignore
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
@@ -321,7 +324,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
   ].filter(Boolean);
   publishEvent(state, {
     type: outcomeType(outcome),
-    z: 140,
+    z: -26,
     zoneId: site.zoneId,
     roomId: site.roomId,
     x: site.shortcutX + 0.5,

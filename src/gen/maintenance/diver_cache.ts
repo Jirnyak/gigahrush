@@ -36,7 +36,7 @@ function addDiverPrepLocker(
     x: wx,
     y: wy,
     // @ts-ignore
-    z: 140,
+    z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
     ...container,
