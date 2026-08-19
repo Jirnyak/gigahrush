@@ -12,8 +12,10 @@ import { type World } from '../core/world';
 import { freshNeeds } from '../data/catalog';
 import { getNpcPackageByPlotNpcId, npcPackageDisplayName, type NpcPackageDef, allNpcPackages } from '../data/npc_packages';
 import { freshRPG } from '../systems/rpg';
-import { findRandomFloorCell, pickRandomRoom } from './shared';
+import { findRandomFloorCell } from './shared';
 import { rng } from '../core/rand';
+import { findNamedRoom } from './named_rooms';
+import { occupationPreferredVisitRooms } from '../data/occupation_profiles';
 
 export interface PlotNpcSpawnOptions {
   angle?: number;
@@ -124,17 +126,41 @@ export function requireSpawnedPlotNpcFromPackage(
   return entity as Entity & { npcPackageId: string };
 }
 
-/** Комната под якорь: сперва объявленный псевдоним (`spawnRoomAlias` анкеты →
- *  `placement.roomId`) по тегам и имени комнаты, иначе любая комната этажа. */
+/**
+ * Комната под якорь по объявленному псевдониму (`spawnRoomAlias` анкеты →
+ * `placement.roomId`). Совпадение точное: `defId` именованной комнаты этажа,
+ * затем её теги.
+ *
+ * Поиска по русскому отображаемому имени тут больше нет — это была подстрока по
+ * тексту для игрока, ломавшаяся от любой правки названия. Нет и падения в
+ * случайную комнату: комната — это место, а случайная комната местом не
+ * является, и человек, объявивший дом, не должен оказываться неизвестно где.
+ * Не нашли объявленное — пусть решает общее правило размещения выше.
+ */
 function roomForPlacement(world: World, roomId: string | undefined): Room | undefined {
-  if (roomId) {
-    const alias = roomId.toLowerCase();
-    const tagged = world.rooms.find(room => room.tags?.some(tag => tag.toLowerCase() === alias));
-    if (tagged) return tagged;
-    const named = world.rooms.find(room => room.name?.toLowerCase().includes(alias));
-    if (named) return named;
-  }
-  return pickRandomRoom(world) ?? undefined;
+  if (!roomId) return undefined;
+  const named = findNamedRoom(world, roomId);
+  if (named) return named;
+  return world.rooms.find(room => room?.tags?.some(tag => tag === roomId));
+}
+
+/**
+ * Комната по ремеслу: человек, не объявивший дом, всё равно не бросается куда
+ * попало — врача тянет в медпункт, клерка в кабинет, жильца в жилую. Список
+ * тяготений берётся из профиля занятия, того же, которым пользуются квесты.
+ *
+ * Выбор детерминирован от id пакета: один и тот же человек на одном и том же
+ * этаже встаёт в одну и ту же комнату, а разные люди одного ремесла не слипаются
+ * в первую попавшуюся.
+ */
+function roomForOccupation(world: World, occupation: Occupation | undefined, packId: string): Room | undefined {
+  const preferred = occupationPreferredVisitRooms(occupation);
+  if (preferred.length === 0) return undefined;
+  const fitting = world.rooms.filter(room => room && room.apartmentId < 0 && preferred.includes(room.type));
+  if (fitting.length === 0) return undefined;
+  let hash = 2166136261;
+  for (let i = 0; i < packId.length; i++) hash = Math.imul(hash ^ packId.charCodeAt(i), 16777619);
+  return fitting[(hash >>> 0) % fitting.length];
 }
 
 /**
@@ -169,7 +195,8 @@ export function deliverFloorNpcPackages(
     const numericId = getPlotNpcNumericId(plotNpcId);
     if (numericId !== undefined && entities.some(e => e.id === numericId && e.alive)) continue;
 
-    const room = roomForPlacement(world, pack.placement.roomId);
+    const room = roomForPlacement(world, pack.placement.roomId)
+      ?? roomForOccupation(world, pack.affiliation.occupation, pack.id);
     const cell = room ? undefined : findRandomFloorCell(world);
     const spot = room
       ? { x: room.x + Math.floor(room.w / 2) + 0.5, y: room.y + Math.floor(room.h / 2) + 0.5 }

@@ -32,6 +32,8 @@ import { baseMonsterPopulationAtDefaultSoftLimit } from '../../data/population_p
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { reassignQuestGivers } from '../../systems/quests';
+import { assertNamedRooms } from '../named_rooms';
+import { LIVING_NAMED_ROOMS } from './rooms';
 import { calcZoneLevel, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { generateZones, stampHQRooms } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
@@ -197,6 +199,10 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
 
   /* ── E: Quest givers + spawn ───────────────────────── */
   reassignQuestGivers(entities);
+  // Объявленное обязано быть вырытым. Проверку держит сам этаж, а не общий
+  // манифест: модуль несёт своё внутри себя, и центрального реестра авторских
+  // комнат в проекте не заводится (`rooms.md`).
+  assertNamedRooms(world, 'living', LIVING_NAMED_ROOMS);
   return {
     world, entities,
     spawnX: startRoom.spawnX,

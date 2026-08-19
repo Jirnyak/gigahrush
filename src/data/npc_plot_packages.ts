@@ -18,6 +18,8 @@ interface MainPlotNpcPackageInput {
   spriteScale?: number;
   npcVisualId?: string;
   homeFloorKey: string;
+  /** Псевдоним именованной комнаты своего этажа: таблица `gen/<этаж>/rooms.ts`. */
+  roomId?: string;
   presence?: NpcPackagePresence;
   hp: number;
   maxHp: number;
@@ -91,6 +93,7 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
     },
     placement: {
       homeFloorKey: input.homeFloorKey,
+      roomId: input.roomId,
       presence: input.presence ?? 'anchor',
       mobility: 'fixed_home',
     },
@@ -141,6 +144,7 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
   export const OLGA_ID = registerPlotNpc(plotNpcPackage({
     id: 'olga',
     displayName: 'Ольга Дмитриевна',
+    roomId: 'tutor_hall',
     publicLine: 'Врач жилой зоны, подписывающая новичкам допуск на вылазки и списывающая бинты.',
     sex: 'female',
     age: 31,
@@ -195,6 +199,7 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
   export const BARNI_ID = registerPlotNpc(plotNpcPackage({
     id: 'barni',
     displayName: 'Сержант Баринов',
+    roomId: 'armory',
     publicLine: 'Ликвидатор-инструктор жилой зоны, выдающий новичку Макаров и короткие боевые правила.',
     sex: 'male',
     age: 39,
@@ -243,6 +248,7 @@ function plotNpcPackage(input: MainPlotNpcPackageInput): NpcPackageDef {
   export const YAKOV_ID = registerPlotNpc(plotNpcPackage({
     id: 'yakov',
     displayName: 'Яков Давидович',
+    roomId: 'yakov_lab',
     publicLine: 'НИИ-исследователь Самосбора, переводящий бытовую вводную в полевую работу с образцами.',
     sex: 'male',
     age: 61,

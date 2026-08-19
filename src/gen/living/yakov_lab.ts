@@ -15,6 +15,8 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { stampRoom, protectRoom, findClearArea } from '../shared';
+import { applyNamedRoom } from '../named_rooms';
+import { LIVING_NAMED_ROOMS } from './rooms';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../entities/sprite_index';
 import { placeCraftStationAt, type CraftStationDefId } from '../craft_stations';
@@ -85,7 +87,6 @@ export function generateYakovLab(
 
   if (candidates.length > 0) {
     room = candidates[Math.floor(rng() * candidates.length)];
-    room.name = 'Лаборатория';
     room.wallTex = Tex.TILE_W;
     room.floorTex = Tex.F_TILE;
     protectRoom(world, room.x, room.y, room.w, room.h, Tex.TILE_W, Tex.F_TILE);
@@ -100,7 +101,6 @@ export function generateYakovLab(
     const labY = pos ? pos.y : (cy + 100) % W;
 
     room = stampRoom(world, nextRoomId++, RoomType.MEDICAL, labX, labY, labW, labH, -1);
-    room.name = 'Лаборатория';
     room.wallTex = Tex.TILE_W;
     room.floorTex = Tex.F_TILE;
     protectRoom(world, labX, labY, labW, labH, Tex.TILE_W, Tex.F_TILE);
@@ -110,6 +110,10 @@ export function generateYakovLab(
     world.features[world.idx(labX + 1, labY + 1)] = Feature.APPARATUS;
     world.features[world.idx(labX + labW - 2, labY + 1)] = Feature.SHELF;
   }
+
+  // Обе стратегии — занятая готовая комната и вырытая новая — сходятся здесь:
+  // личность приходит из таблицы этажа, а не переписывается руками в двух местах.
+  applyNamedRoom(room, 'yakov_lab', LIVING_NAMED_ROOMS.yakov_lab);
 
   placeYakovLabCraftStations(world, room);
 

@@ -18,6 +18,8 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { stampRoom, protectRoom } from '../shared';
+import { stampNamedRoom } from '../named_rooms';
+import { LIVING_NAMED_ROOMS } from './rooms';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../entities/sprite_index';
 import { spawnTutorialKey } from './tutorial_apartments';
@@ -104,9 +106,10 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
         }
   }
 
-  const room = stampRoom(world, nextRoomId++, RoomType.COMMON, hallX, hallY, hallW, hallH, -1);
-  room.name = 'Актовый зал';
-  room.tags = ['tutorial'];
+  // Личность зала — из таблицы этажа: одна строка работает и объявлением, и рытьём,
+  // и `defId`, которым Ольга Дмитриевна объявила это место своим.
+  const room = stampNamedRoom(world, nextRoomId++, 'tutor_hall', LIVING_NAMED_ROOMS.tutor_hall,
+    hallX, hallY, hallW, hallH);
   room.wallTex = Tex.TILE_W;
   room.floorTex = Tex.F_TILE;
   room.sealed = false; // Must be false so ensureConnectivity punches an exit to the maze!
@@ -255,9 +258,10 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   const armX = hallX + hallW + 1;
   const armY = hallY + 1;
 
-  const armory = stampRoom(world, nextRoomId++, RoomType.PRODUCTION, armX, armY, armW, armH, -1);
-  armory.name = 'Оружейная';
-  armory.tags = ['tutorial'];
+  // То же и здесь: оружейную объявляет таблица этажа, а сержант Баринов ссылается
+  // на неё псевдонимом, а не на русское имя, которое пишется для игрока.
+  const armory = stampNamedRoom(world, nextRoomId++, 'armory', LIVING_NAMED_ROOMS.armory,
+    armX, armY, armW, armH);
   armory.wallTex = Tex.METAL;
   armory.floorTex = Tex.F_CONCRETE;
   armory.sealed = true;

@@ -18,6 +18,7 @@ import {
   placeCraftStationAt,
 } from '../src/gen/craft_stations';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
+import { findNamedRoom } from '../src/gen/named_rooms';
 import { generateFloor } from '../src/gen/floor_manifest';
 import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { activateInteraction, findInteractionTarget } from '../src/systems/interactions';
@@ -201,7 +202,9 @@ testGenerationMatrix('LIVING expedition prep exposes reachable lathe and disasse
 
 testGenerationMatrix('Yakov lab exposes a guaranteed reachable lathe and disassembly workbench', () => {
   const gen = livingCraftStationsForRead();
-  const lab = gen.world.rooms.find(room => room?.name === 'Лаборатория');
+  // По псевдониму, а не по русскому имени: имя — текст для игрока, оно вправе
+  // меняться, а `defId` именованной комнаты — стабильная ссылка (`rooms.md`).
+  const lab = findNamedRoom(gen.world, 'yakov_lab');
   assert.ok(lab, 'Yakov lab should be generated');
   const audit = auditReachability(gen.world, gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY)));
   const inLab = (idx: number) => gen.world.roomMap[idx] === lab.id;

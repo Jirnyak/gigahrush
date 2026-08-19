@@ -72,6 +72,7 @@ Read additional docs only when relevant to the task:
 | `Инфосеть Демос`, NPC social graph, feed, reactions, quest notices | `demos.md` |
 | Samosbor warning, shelter, local rebuild, variants, aftermath | `samosbor.md` |
 | Save/load shape, `localStorage`, payload sections, sanitization | `save.md` |
+| Комнаты как основа мира: AI, A-Life, занятия, именованные комнаты, размещение | `rooms.md` |
 | Vertical route, route keys, floor memory, geometry ownership | `floors.md` |
 | Procedural floor anomalies, cellular-world effects, anomaly runtime | `anomalies.md`; use `../gatbage/reference/procedural_floors/` only for authoring docs |
 | Economy, resources, factories, production, caravans, banking, markets | `economics.md` |
