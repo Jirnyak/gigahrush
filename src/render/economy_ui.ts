@@ -300,14 +300,14 @@ export function hudFinanceLines(snapshot: FinanceSnapshot, state?: GameState): F
 }
 
 function inventoryFinanceLines(snapshot: FinanceSnapshot): FinanceLine[] {
+  // One fact per line: the column is half of the right panel, and two amounts on
+  // a line only ever showed the first one.
   const lines: FinanceLine[] = [
-    {
-      text: snapshot.hasBanking
-        ? `Наличные: ${compactRubles(snapshot.cash)}  Счет: ${compactRubles(snapshot.accountRubles)}`
-        : `Наличные: ${compactRubles(snapshot.cash)}`,
-      color: '#c2a24c',
-    },
+    { text: `Наличные: ${compactRubles(snapshot.cash)}`, color: '#c2a24c' },
   ];
+  if (snapshot.hasBanking) {
+    lines.push({ text: `Счет: ${compactRubles(snapshot.accountRubles)}`, color: '#c2a24c' });
+  }
   if (snapshot.depositPrincipal > 0 || snapshot.depositYield > 0) {
     lines.push({
       text: `Депозит: ${compactRubles(snapshot.depositPrincipal)} +~${compactRubles(snapshot.depositYield)}`,
@@ -315,15 +315,21 @@ function inventoryFinanceLines(snapshot: FinanceSnapshot): FinanceLine[] {
     });
   }
   if (snapshot.hasBanking && (snapshot.debtRubles > 0 || snapshot.creditLimit > 0)) {
-    const limit = snapshot.creditLimit > 0 ? ` / лимит ${compactRubles(snapshot.creditLimit)}` : '';
     lines.push({
-      text: `Долг: ${compactRubles(snapshot.debtRubles)}${limit}`,
+      text: `Долг: ${compactRubles(snapshot.debtRubles)}`,
       color: snapshot.debtRubles > 0 ? '#b3663f' : '#789',
     });
+    if (snapshot.creditLimit > 0) {
+      lines.push({ text: `Лимит: ${compactRubles(snapshot.creditLimit)}`, color: '#789' });
+    }
   }
   if (snapshot.hasStock) {
     lines.push({
-      text: `Портфель: ${compactRubles(snapshot.portfolioValue)}  P/L ${formatSignedRubles(snapshot.portfolioPL)}`,
+      text: `Портфель: ${compactRubles(snapshot.portfolioValue)}`,
+      color: '#6e9268',
+    });
+    lines.push({
+      text: `P/L ${formatSignedRubles(snapshot.portfolioPL)}`,
       color: snapshot.portfolioPL >= 0 ? '#6e9268' : '#b3663f',
     });
   }
@@ -370,14 +376,14 @@ export function drawInventoryFinanceBlock(
   maxBottom: number,
 ): number {
   const lines = inventoryFinanceLines(readFinanceSnapshot(player, state));
-  const lineH = 7.2 * sy;
+  const lineH = 6.2 * sy;
   const available = Math.max(1, Math.floor((maxBottom - y - 7 * sy) / lineH));
   const visible = lines.slice(0, available);
   if (visible.length === 0) return y;
 
-  drawGlitchText(ctx, 'ФИНАНСЫ', x, y, time, 830, '#6f96a4', 6 * sy);
-  let cy = y + 8.4 * sy;
-  ctx.font = `${5.8 * sy}px "Press Start 2P", monospace`;
+  drawGlitchText(ctx, 'ФИНАНСЫ', x, y, time, 830, '#6f96a4', 5.8 * sy);
+  let cy = y + 8.2 * sy;
+  ctx.font = `${4.7 * sy}px "Press Start 2P", monospace`;
   for (const line of visible) {
     ctx.fillStyle = line.color;
     ctx.fillText(fitText(ctx, line.text, w), x, cy);

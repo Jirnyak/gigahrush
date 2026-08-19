@@ -14,9 +14,13 @@ import {
   createHudSlots,
   dialogMenuScale,
   fullscreenInventoryLayout,
+  npcMenuLayout,
+  TRADE_POOL_HALF_COLS,
   tradeMenuGridLayout,
+  tradePanelOrigin,
 } from '../src/render/ui_layout';
 import { CONTROL_ACTIONS } from '../src/systems/controls';
+import { TRADE_OFFER_SLOT_CAP } from '../src/systems/trade';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 import '../src/data/npc_plot_packages';
@@ -85,6 +89,26 @@ test('NPC dialog text can grow beyond the capped global HUD scale', () => {
   assert.ok(dialogMenuScale(1920, 1080, 2, 2) <= 2.72);
 });
 
+test('NPC dialog box stays inside the canvas at any HUD scale', () => {
+  for (const [w, h] of [[640, 400], [1920, 1080], [900, 340], [420, 900]] as const) {
+    const box = npcMenuLayout(w, h, 2.4, 2.4);
+    assert.ok(box.x >= 0 && box.y >= 0, `box escapes ${w}x${h}`);
+    assert.ok(box.x + box.w <= w + 1e-6 && box.y + box.h <= h + 1e-6, `box overflows ${w}x${h}`);
+    // Everything inside is placed in 440x320 units, so the scale must follow the box.
+    assert.ok(Math.abs(box.w / 440 - box.scale) < 1e-6);
+    assert.ok(Math.abs(box.h / 320 - box.scale) < 1e-6);
+  }
+});
+
+test('NPC option list windows around the selection instead of running off the box', () => {
+  const box = npcMenuLayout(900, 340, 2.4, 2.4, 24, 20);
+  assert.ok(box.visibleRows >= 1);
+  assert.ok(box.firstRow + box.visibleRows <= 24);
+  assert.ok(box.firstRow <= 20 && 20 < box.firstRow + box.visibleRows, 'selection must stay visible');
+  assert.ok(box.listTop + box.visibleRows * box.rowH <= box.y + box.h);
+  assert.equal(npcMenuLayout(900, 340, 2.4, 2.4, 3, 0).firstRow, 0);
+});
+
 test('inventory grid is an 8x8 power-of-two actor inventory', () => {
   assert.equal(INVENTORY_GRID_COLS, 8);
   assert.equal(INVENTORY_GRID_ROWS, 8);
@@ -99,12 +123,45 @@ test('trade and container inventories use large cells on desktop canvases', () =
   assert.ok(containerMenuGridLayout(1920, 1080).cell >= 66);
 });
 
-test('trade inventory scale still fits shorter canvases', () => {
+test('trade pool has a cell for every stack a basket can hold', () => {
+  // A staged item with no cell is an item the player cannot take back.
+  assert.ok(TRADE_POOL_HALF_COLS * INVENTORY_GRID_ROWS >= TRADE_OFFER_SLOT_CAP);
+  assert.ok((TRADE_POOL_HALF_COLS - 1) * INVENTORY_GRID_ROWS < TRADE_OFFER_SLOT_CAP, 'no dead columns');
+});
+
+test('fullscreen inventory grid clears the title and fills the height it has', () => {
+  for (const [w, h] of [[1920, 1080], [1280, 720], [844, 390]] as const) {
+    const layout = fullscreenInventoryLayout(w, h, w / 320, h / 200);
+    // The title is drawn at 9 text units with a 7.2 face — the grid starts below it.
+    assert.ok(layout.grid.y >= 16.2 * layout.textScale, `title overlaps grid at ${w}x${h}`);
+    assert.ok(layout.grid.y + layout.grid.h <= h + 0.001, `grid overflows ${w}x${h}`);
+    // Either the height or the width cap is tight: no idle space on both axes.
+    const spareH = h - (layout.grid.y + layout.grid.h);
+    assert.ok(spareH <= 7 * layout.textScale || layout.grid.x + layout.grid.w >= w * 0.44, `grid too small at ${w}x${h}`);
+    assert.ok(layout.details.x >= layout.grid.x + layout.grid.w, `columns overlap at ${w}x${h}`);
+    assert.ok(layout.details.w >= w * 0.4, `right column too narrow at ${w}x${h}`);
+  }
+});
+
+test('trade puts the shared pool between both inventories', () => {
   const layout = tradeMenuGridLayout(1280, 720);
-  assert.ok(layout.cell > 33);
-  assert.ok(layout.startX >= -0.001);
-  assert.ok(layout.npcX + layout.gridTotal <= 1280 + 0.001);
-  assert.ok(layout.dealY + layout.dealH <= 720 * 0.82 + 70 * layout.scale + 0.001);
+  assert.ok(layout.cell > 40, 'three boxes must be roomier than four');
+  assert.equal(layout.poolCols, TRADE_POOL_HALF_COLS * 2);
+  const player = tradePanelOrigin(layout, 'player');
+  const pool = tradePanelOrigin(layout, 'pool');
+  const npc = tradePanelOrigin(layout, 'npc');
+  assert.ok(player.x >= -0.001);
+  assert.equal(player.y, pool.y);
+  assert.equal(pool.y, npc.y);
+  assert.ok(pool.x >= player.x + layout.gridTotal);
+  assert.ok(npc.x >= pool.x + layout.poolTotal);
+  assert.ok(npc.x + layout.gridTotal <= 1280 + 0.001);
+  assert.ok(player.y - layout.headH >= -0.001);
+  // The info band lives under the grids and inside the canvas.
+  assert.ok(layout.info.y >= player.y + layout.rows * layout.cell);
+  assert.ok(layout.info.y + layout.dealH <= 720 + 0.001);
+  assert.ok(layout.dealX >= layout.info.x - 0.001);
+  assert.ok(layout.dealX + layout.dealW <= layout.info.x + layout.info.w + 0.001);
 });
 
 test('grid scale does not force tiny mobile canvases to overflow', () => {

@@ -1,4 +1,5 @@
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS } from '../data/inventory_limits';
+import { TRADE_OFFER_SLOT_CAP } from '../systems/trade';
 
 const GRID_COLS = INVENTORY_GRID_COLS;
 const GRID_ROWS = INVENTORY_GRID_ROWS;
@@ -136,28 +137,46 @@ export interface ContainerMenuGridLayout {
   startY: number;
   containerX: number;
   gridTotal: number;
-  infoX: number;
-  infoW: number;
+  headerW: number;
   close: UiRect;
 }
+
+export type TradePanelSide = 'player' | 'pool' | 'npc';
+
+/** Both baskets share one box in the middle, split in half: your side of the
+ *  table on the left, theirs on the right, each column pair reading toward the
+ *  inventory it came from. Two full 8x8 baskets cost the inventories half the
+ *  screen for slots a deal never uses, so the half is exactly as wide as the
+ *  basket cap needs — a staged item is always visible and always reachable. */
+export const TRADE_POOL_HALF_COLS = Math.max(1, Math.ceil(TRADE_OFFER_SLOT_CAP / GRID_ROWS));
+export const TRADE_POOL_COLS = TRADE_POOL_HALF_COLS * 2;
 
 export interface TradeMenuGridLayout {
   scale: number;
   cell: number;
-  sideGap: number;
-  centerGap: number;
   cols: number;
   rows: number;
+  poolCols: number;
+  poolHalfCols: number;
   gridTotal: number;
-  startX: number;
-  startY: number;
-  playerOfferX: number;
-  npcOfferX: number;
+  poolTotal: number;
+  headH: number;
+  gridY: number;
+  playerX: number;
+  poolX: number;
   npcX: number;
+  info: UiRect;
   dealX: number;
   dealY: number;
   dealW: number;
   dealH: number;
+}
+
+export function tradePanelOrigin(layout: TradeMenuGridLayout, side: TradePanelSide): { x: number; y: number } {
+  return {
+    x: side === 'player' ? layout.playerX : side === 'pool' ? layout.poolX : layout.npcX,
+    y: layout.gridY,
+  };
 }
 
 export interface CraftMenuLayout {
@@ -178,6 +197,56 @@ export interface CraftMenuLayout {
 export function dialogMenuScale(canvasW: number, canvasH: number, sx: number, sy: number): number {
   const raw = Math.min(canvasW / 320, canvasH / 200);
   return Math.max(sx, sy, clamp(raw, 1, 2.72));
+}
+
+/** The NPC dialog is a 440x320-unit box. */
+const NPC_MENU_UNITS_W = 440;
+const NPC_MENU_UNITS_H = 320;
+const NPC_MENU_MARGIN_UNITS = 24;
+const NPC_MENU_ROW_UNITS = 17;
+const NPC_MENU_LIST_TOP_UNITS = 42;
+const NPC_MENU_HINT_UNITS = 20;
+
+export interface NpcMenuLayout extends UiRect {
+  scale: number;
+  rowH: number;
+  listTop: number;
+  firstRow: number;
+  visibleRows: number;
+}
+
+/** One box for the dialog, shared by the renderer and the tap layer.
+ *
+ *  The scale is capped by the canvas: `dialogMenuScale` takes the HUD scale as a
+ *  floor, so on a short canvas the box used to be clipped to the screen while
+ *  every offset inside it kept the uncapped scale — the option list, the poker
+ *  table and the hint line then drew past the frame and over each other. Capping
+ *  the scale instead keeps the 440x320 unit grid honest, and the option window
+ *  guarantees a long list never runs out of the box. */
+export function npcMenuLayout(
+  canvasW: number,
+  canvasH: number,
+  sx: number,
+  sy: number,
+  optionCount = 0,
+  selected = 0,
+): NpcMenuLayout {
+  const scale = Math.min(
+    dialogMenuScale(canvasW, canvasH, sx, sy),
+    canvasW / (NPC_MENU_UNITS_W + NPC_MENU_MARGIN_UNITS),
+    canvasH / (NPC_MENU_UNITS_H + NPC_MENU_MARGIN_UNITS),
+  );
+  const w = NPC_MENU_UNITS_W * scale;
+  const h = NPC_MENU_UNITS_H * scale;
+  const x = (canvasW - w) / 2;
+  const y = (canvasH - h) / 2;
+  const rowH = NPC_MENU_ROW_UNITS * scale;
+  const listTop = y + NPC_MENU_LIST_TOP_UNITS * scale;
+  const listBottom = y + h - NPC_MENU_HINT_UNITS * scale;
+  const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowH));
+  const maxFirst = Math.max(0, optionCount - visibleRows);
+  const firstRow = clamp(selected - ((visibleRows - 1) >> 1), 0, maxFirst);
+  return { scale, x, y, w, h, rowH, listTop, firstRow, visibleRows };
 }
 
 function scaledRect(originX: number, originY: number, scale: number, x: number, y: number, w: number, h: number): UiRect {
@@ -336,23 +405,34 @@ export function fullscreenInventoryLayout(canvasW: number, canvasH: number, sx: 
   const fitH = canvasH / (14 + GRID_CELL_UNITS * GRID_ROWS + 8);
   const scale = Math.max(0.72, Math.min(4.2, base, fitW, fitH));
   const textScale = scale <= 1.2 ? scale : Math.max(1.2, scale * 0.9);
-  const cell = GRID_CELL_UNITS * scale;
-  const gridX = 8 * scale;
-  const gridY = 14 * scale;
+  // The 8x8 grid may not eat the canvas. The right column carries the item
+  // description at full text scale, and at full grid scale it was too narrow
+  // for it — the last line of every description was cut off.
+  // The title line is drawn at text scale (baseline 9, face 7.2), so the grid
+  // clears it in text units — measured in grid units alone the header sat on
+  // the first row. Below that the grid takes all the height it can get, capped
+  // by width so the right column keeps room for the item description.
+  const gridY = 18 * textScale;
+  const gridScale = Math.max(0.72, Math.min(
+    (canvasH - gridY - 6 * textScale) / (GRID_CELL_UNITS * GRID_ROWS),
+    (canvasW * 0.5) / (GRID_CELL_UNITS * GRID_COLS + 20),
+  ));
+  const cell = GRID_CELL_UNITS * gridScale;
+  const gridX = 8 * gridScale;
   const gridW = GRID_COLS * cell;
   const gridH = GRID_ROWS * cell;
-  const stX = gridX + gridW + 12 * scale;
+  const stX = gridX + gridW + 12 * gridScale;
   const rightW = Math.max(72 * scale, canvasW - stX - 8 * scale);
-  const detailsY = Math.max(8 * scale, gridY - 4 * scale);
+  const detailsY = Math.max(8 * textScale, gridY - 4 * gridScale);
   const detailsH = 58 * textScale;
   const actionW = Math.min(82 * textScale, rightW);
   const actionY = detailsY + 37 * textScale;
   const grid = { x: gridX, y: gridY, w: gridW, h: gridH, cell, cols: GRID_COLS, rows: GRID_ROWS };
   return {
-    scale,
+    scale: gridScale,
     textScale,
     grid,
-    close: { x: canvasW - 88 * scale, y: 0, w: 88 * scale, h: 18 * scale },
+    close: { x: canvasW - 88 * textScale, y: 0, w: 88 * textScale, h: 18 * textScale },
     details: { x: stX, y: detailsY, w: rightW, h: detailsH },
     use: { x: stX, y: actionY, w: actionW, h: 12 * textScale },
     drop: { x: stX + actionW + 6 * textScale, y: actionY, w: actionW, h: 12 * textScale },
@@ -365,10 +445,13 @@ export function fullscreenInventoryLayout(canvasW: number, canvasH: number, sx: 
 export function containerMenuGridLayout(canvasW: number, canvasH: number): ContainerMenuGridLayout {
   const cellUnits = 28;
   const gapUnits = 16;
-  const infoUnits = 86;
-  const verticalUnits = 30 + cellUnits * GRID_ROWS + 66;
-  const horizontalUnits = cellUnits * GRID_COLS * 2 + gapUnits + infoUnits;
-  
+  // Access, theft and production status live on the header line above the grids.
+  // As a right-hand column they cost both inventories a third of the width for
+  // four wrapped words, and the cells shrank on every canvas.
+  const headerUnits = 46;
+  const verticalUnits = headerUnits + cellUnits * GRID_ROWS + 66;
+  const horizontalUnits = cellUnits * GRID_COLS * 2 + gapUnits;
+
   const raw = Math.min(canvasW / 320, canvasH / 200);
   const byW = (canvasW * 0.94) / horizontalUnits;
   const byH = (canvasH * 0.92) / verticalUnits;
@@ -378,11 +461,10 @@ export function containerMenuGridLayout(canvasW: number, canvasH: number): Conta
 
   const cell = cellUnits * scale;
   const gap = gapUnits * scale;
-  const infoW = infoUnits * scale;
   const gridTotal = GRID_COLS * cell;
-  const totalW = gridTotal * 2 + gap + infoW;
+  const totalW = gridTotal * 2 + gap;
   const startX = (canvasW - totalW) / 2;
-  const startY = 30 * scale;
+  const startY = headerUnits * scale;
   return {
     scale,
     cell,
@@ -393,18 +475,20 @@ export function containerMenuGridLayout(canvasW: number, canvasH: number): Conta
     startY,
     containerX: startX + gridTotal + gap,
     gridTotal,
-    infoX: startX + gridTotal * 2 + gap + 10 * scale,
-    infoW: infoW - 10 * scale,
+    headerW: Math.max(80 * scale, canvasW - 24 * scale),
     close: { x: 0, y: canvasH - 30 * scale, w: canvasW, h: 30 * scale },
   };
 }
 
 export function tradeMenuGridLayout(canvasW: number, canvasH: number): TradeMenuGridLayout {
   const cellUnits = 26;
-  const sideGapUnits = 16 * 0.35;
-  const centerGapUnits = 16 * 0.6;
-  const horizontalUnits = cellUnits * GRID_COLS * 4 + sideGapUnits * 2 + centerGapUnits;
-  const verticalUnits = 24 + cellUnits * GRID_ROWS + 58;
+  const headUnits = 12;
+  const gapUnits = 14;
+  const topUnits = 16;
+  const infoGapUnits = 14;
+  const infoUnits = 96;
+  const horizontalUnits = cellUnits * (GRID_COLS * 2 + TRADE_POOL_COLS) + gapUnits * 2;
+  const verticalUnits = topUnits + headUnits + cellUnits * GRID_ROWS + infoGapUnits + infoUnits;
 
   const raw = Math.min(canvasW / 320, canvasH / 200);
   const byW = (canvasW * 0.98) / horizontalUnits;
@@ -414,36 +498,42 @@ export function tradeMenuGridLayout(canvasW: number, canvasH: number): TradeMenu
   const scale = clamp(fit, Math.min(minScale, fit), 5.5);
 
   const cell = cellUnits * scale;
-  const sideGap = Math.max(4 * scale, sideGapUnits * scale);
-  const centerGap = Math.max(6 * scale, centerGapUnits * scale);
+  const headH = headUnits * scale;
   const gridTotal = GRID_COLS * cell;
-  const totalW = gridTotal * 4 + sideGap * 2 + centerGap;
-  const startX = (canvasW - totalW) / 2;
-  const startY = 24 * scale;
-  const playerOfferX = startX + gridTotal + sideGap;
-  const npcOfferX = playerOfferX + gridTotal + centerGap;
-  const npcX = npcOfferX + gridTotal + sideGap;
-  const dealX = playerOfferX;
-  const dealY = startY + GRID_ROWS * cell + 10 * scale;
-  const dealW = gridTotal * 2 + centerGap;
-  const dealH = 17 * scale;
+  const poolTotal = TRADE_POOL_COLS * cell;
+  const gap = gapUnits * scale;
+  const totalW = gridTotal * 2 + poolTotal + gap * 2;
+  const playerX = Math.max(4 * scale, (canvasW - totalW) / 2);
+  const poolX = playerX + gridTotal + gap;
+  const npcX = poolX + poolTotal + gap;
+  const gridY = (topUnits + headUnits) * scale;
+  const infoY = gridY + GRID_ROWS * cell + infoGapUnits * scale;
+  const info = {
+    x: playerX,
+    y: infoY,
+    w: totalW,
+    h: Math.max(infoUnits * scale, canvasH - infoY - 6 * scale),
+  };
+  const dealW = Math.min(info.w, 200 * scale);
   return {
     scale,
     cell,
-    sideGap,
-    centerGap,
     cols: GRID_COLS,
     rows: GRID_ROWS,
+    poolCols: TRADE_POOL_COLS,
+    poolHalfCols: TRADE_POOL_HALF_COLS,
     gridTotal,
-    startX,
-    startY,
-    playerOfferX,
-    npcOfferX,
+    poolTotal,
+    headH,
+    gridY,
+    playerX,
+    poolX,
     npcX,
-    dealX,
-    dealY,
+    info,
+    dealX: info.x + (info.w - dealW) / 2,
+    dealY: infoY,
     dealW,
-    dealH,
+    dealH: 17 * scale,
   };
 }
 

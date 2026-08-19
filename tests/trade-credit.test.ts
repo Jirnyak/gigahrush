@@ -16,6 +16,7 @@ import {
   getTradeOffer,
   removeTradeAskSlot,
   removeTradeOfferSlot,
+  TRADE_OFFER_SLOT_CAP,
 } from '../src/systems/trade';
 import { getRecentEvents } from '../src/systems/events';
 import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
@@ -260,18 +261,21 @@ test('trade credit offer caps distinct staged slots and can be cleared', () => {
     inventory: Array.from({ length: MAX_INVENTORY_SLOTS + 1 }, (_, i) => ({ defId: 'water', count: 1, data: { serial: i } })),
   });
 
-  for (let i = 0; i < MAX_INVENTORY_SLOTS; i++) {
+  // The basket is smaller than an inventory on purpose: the trade table shows
+  // every staged stack, and what it cannot show could not be taken back.
+  assert.ok(TRADE_OFFER_SLOT_CAP < MAX_INVENTORY_SLOTS);
+  for (let i = 0; i < TRADE_OFFER_SLOT_CAP; i++) {
     assert.equal(addTradeOfferFromSlot(state, player, npc, i).ok, true);
     assert.equal(addTradeAskFromSlot(state, npc, i).ok, true);
   }
-  const overflow = addTradeOfferFromSlot(state, player, npc, MAX_INVENTORY_SLOTS);
-  const askOverflow = addTradeAskFromSlot(state, npc, MAX_INVENTORY_SLOTS);
+  const overflow = addTradeOfferFromSlot(state, player, npc, TRADE_OFFER_SLOT_CAP);
+  const askOverflow = addTradeAskFromSlot(state, npc, TRADE_OFFER_SLOT_CAP);
   assert.equal(overflow.ok, false);
   assert.equal(overflow.code, 'offer_full');
   assert.equal(askOverflow.ok, false);
   assert.equal(askOverflow.code, 'ask_full');
-  assert.equal(getTradeOffer(state).length, MAX_INVENTORY_SLOTS);
-  assert.equal(getTradeNpcOffer(state).length, MAX_INVENTORY_SLOTS);
+  assert.equal(getTradeOffer(state).length, TRADE_OFFER_SLOT_CAP);
+  assert.equal(getTradeNpcOffer(state).length, TRADE_OFFER_SLOT_CAP);
 
   clearTradeOffers(state);
   assert.equal(getTradeOffer(state).length, 0);

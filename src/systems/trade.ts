@@ -81,7 +81,10 @@ interface TradeOfferSession {
   npcOffer: Item[];
 }
 
-export const TRADE_OFFER_SLOT_CAP = MAX_INVENTORY_SLOTS;
+/** A deal is a handful of stacks, not a second inventory: the basket holds a
+ *  quarter of an inventory, which is exactly what the trade table can show. A
+ *  staged item the player cannot see is a staged item they cannot take back. */
+export const TRADE_OFFER_SLOT_CAP = MAX_INVENTORY_SLOTS / 4;
 
 const tradeOfferSessions = new WeakMap<GameState, TradeOfferSession>();
 

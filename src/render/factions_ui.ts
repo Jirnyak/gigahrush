@@ -204,14 +204,20 @@ function drawRankRow(
   ctx.font = `${7.5 * sy}px "Press Start 2P", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
+  // Every column is measured, not guessed: karma used to be pinned at a fixed
+  // offset and a four-digit rank or a two-digit level drew straight through it
+  // ("L96" + "K610" читалось как "L9K610").
   ctx.fillStyle = entry.player ? '#fff' : '#bbb';
-  const prefix = `${String(entry.rank).padStart(3, ' ')} ${FACTION_SHORT[entry.faction]} L${String(entry.level).padStart(2, '0')}`;
+  const prefix = `${String(entry.rank).padStart(3, ' ')} ${FACTION_SHORT[entry.faction]} L${String(entry.level).padStart(2, '0')} `;
   ctx.fillText(prefix, x + 6, y);
+  const karmaX = x + 6 + ctx.measureText(prefix).width;
+  const karmaW = ctx.measureText('K-100 ').width;
   ctx.fillStyle = karmaColor(entry.karma);
-  ctx.fillText(`K${entry.karma}`, x + Math.min(w - 42 * sy, 76 * sy), y);
+  ctx.fillText(`K${entry.karma}`, karmaX, y);
   ctx.fillStyle = entry.player ? '#eff' : '#9ab';
-  const nameX = x + 112 * sy;
-  const nameW = Math.max(24, w - (nameX - x) - 58 * sy);
+  const nameX = karmaX + karmaW;
+  const scoreW = ctx.measureText(`${entry.score} `).width;
+  const nameW = Math.max(24, x + w - 6 - scoreW - nameX);
   ctx.fillText(fitText(ctx, entry.name, nameW), nameX, y);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#edb';

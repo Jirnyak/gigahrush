@@ -15,8 +15,8 @@ import {
 } from '../systems/npc_interaction_options';
 import { questDeadlineText, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
-import { dialogMenuScale, tradeMenuGridLayout } from './ui_layout';
-import { drawCenteredWrappedText, drawWrappedText, fitTextStable } from './ui_text';
+import { npcMenuLayout, tradeMenuGridLayout, tradePanelOrigin } from './ui_layout';
+import { drawWrappedText, fitTextStable } from './ui_text';
 import './durak_ui';
 import './dice_ui';
 import './domino_ui';
@@ -54,13 +54,16 @@ export function drawNpcMenu(
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  const ds = dialogMenuScale(w, h, sx, sy);
-  sx = ds;
-  sy = ds;
-  const pw = Math.min(440 * sx, w - 24 * sx);
-  const ph = Math.min(320 * sy, h - 24 * sy);
-  const px = (w - pw) / 2;
-  const py = (h - ph) / 2;
+  const listOptions = isNpcMenuOptionListTab(state.npcMenuTab)
+    ? getNpcMenuOptions({ state, player, npc, entities })
+    : undefined;
+  const box = npcMenuLayout(w, h, sx, sy, listOptions?.length ?? 0, state.npcMenuSel);
+  sx = box.scale;
+  sy = box.scale;
+  const pw = box.w;
+  const ph = box.h;
+  const px = box.x;
+  const py = box.y;
   const time = uiTime;
 
   // Background — neuro-panel
@@ -79,16 +82,26 @@ export function drawNpcMenu(
   ctx.fillText(fitTextStable(ctx, `${fName} · ${oName}`, pw - 16 * sx), px + 8 * sx + fj.dx, py + 22 * sy + fj.dy);
 
   if (isNpcMenuOptionListTab(state.npcMenuTab)) {
-    const items = getNpcMenuOptions({ state, player, npc, entities });
-    ctx.font = `${8.6 * sy}px "Press Start 2P", monospace`;
-    for (let i = 0; i < items.length; i++) {
+    const items = listOptions ?? [];
+    const last = Math.min(items.length, box.firstRow + box.visibleRows);
+    const labelW = pw - 32 * sx;
+    ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
+    for (let i = box.firstRow; i < last; i++) {
       const selected = i === state.npcMenuSel;
-      const yy = py + 42 * sy + i * 17 * sy;
+      const yy = box.listTop + (i - box.firstRow) * box.rowH;
       const mj = textJitter(time, 910 + i);
       ctx.fillStyle = items[i].disabled
         ? selected ? PALETTE.warning : PALETTE.textMuted
         : selected ? `rgba(0,255,102,${flicker(time, 920 + i)})` : PALETTE.textBase;
-      ctx.fillText(`${selected ? '▶ ' : '  '}${items[i].label}`, px + 16 * sx + mj.dx, yy + mj.dy);
+      ctx.fillText(fitTextStable(ctx, `${selected ? '▶ ' : '  '}${items[i].label}`, labelW), px + 16 * sx + mj.dx, yy + mj.dy);
+    }
+    if (items.length > box.visibleRows) {
+      ctx.fillStyle = PALETTE.textMuted;
+      ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
+      ctx.textAlign = 'right';
+      if (box.firstRow > 0) ctx.fillText('▲', px + pw - 10 * sx, box.listTop);
+      if (last < items.length) ctx.fillText('▼', px + pw - 10 * sx, box.listTop + (box.visibleRows - 1) * box.rowH);
+      ctx.textAlign = 'left';
     }
     ctx.fillStyle = '#456';
     ctx.font = `${6.8 * sy}px "Press Start 2P", monospace`;
@@ -209,12 +222,7 @@ export function drawNpcMenu(
     const gridRows = layout.rows;
     const cellSz = layout.cell;
     const gridTotal = layout.gridTotal;
-    const totalW = layout.npcX - layout.startX + gridTotal;
-    const startX = layout.startX;
-    const startY = layout.startY;
-    const playerOfferX = layout.playerOfferX;
-    const npcOfferX = layout.npcOfferX;
-    const npcX = layout.npcX;
+    const info = layout.info;
     const dealX = layout.dealX;
     const dealY = layout.dealY;
     const dealW = layout.dealW;
@@ -240,13 +248,13 @@ export function drawNpcMenu(
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
 
-    // ── Framed columns with header strips (money / offer values) ──
-    const headH = 13 * sy;
+    // ── Framed panels with header strips (money / offer values) ──
+    const headH = layout.headH;
     const gridSpanH = gridRows * cellSz;
-    const drawColumnFrame = (gx: number, title: string, value: string, accent: string, stripBg: string) => {
+    const drawColumnFrame = (gx: number, gy: number, gw: number, title: string, value: string, accent: string, stripBg: string) => {
       const fx = gx - 2 * sx;
-      const fy = startY - headH;
-      const fw = gridTotal + 4 * sx;
+      const fy = gy - headH;
+      const fw = gw + 4 * sx;
       const fh = headH + gridSpanH + 3 * sy;
       drawNeuroPanel(ctx, fx, fy, fw, fh, performance.now() / 1000, fx);
       ctx.fillStyle = stripBg;
@@ -254,30 +262,45 @@ export function drawNpcMenu(
       ctx.fillStyle = accent;
       ctx.font = `${6.6 * sy}px "Press Start 2P", monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText(fitTextStable(ctx, title, fw * 0.62, 'clip'), fx + 4 * sx, fy + headH - 3.6 * sy);
+      // Both ends get half the strip: title 62% + value 50% used to overlap in
+      // the middle, and in the narrow pool box they collided outright.
+      const halfW = Math.max(1, fw * 0.5 - 5 * sx);
+      ctx.fillText(fitTextStable(ctx, title, halfW, 'clip'), fx + 4 * sx, fy + headH - 3.6 * sy);
       if (value) {
         ctx.textAlign = 'right';
-        ctx.fillText(fitTextStable(ctx, value, fw * 0.5, 'clip'), fx + fw - 4 * sx, fy + headH - 3.6 * sy);
+        ctx.fillText(fitTextStable(ctx, value, halfW, 'clip'), fx + fw - 4 * sx, fy + headH - 3.6 * sy);
         ctx.textAlign = 'left';
       }
     };
-    drawColumnFrame(startX, 'ВЫ', `₽${player.money ?? 0}`, '#c2a24c', 'rgba(52,48,8,0.66)');
-    drawColumnFrame(playerOfferX, 'ОТДАЁТЕ', deal.creditValue ? `${deal.creditValue}₽` : '', '#bd8f6c', 'rgba(54,34,8,0.62)');
-    drawColumnFrame(npcOfferX, 'БЕРЁТЕ', deal.fullPrice ? `${deal.fullPrice}₽` : '', '#8193a4', 'rgba(8,32,54,0.62)');
-    drawColumnFrame(npcX, npc.name?.split(' ')[0] ?? 'ТОРГОВЕЦ', `₽${npc.money ?? 0}`, '#7996a4', 'rgba(8,22,50,0.62)');
+    const playerOrigin = tradePanelOrigin(layout, 'player');
+    const poolOrigin = tradePanelOrigin(layout, 'pool');
+    const npcOrigin = tradePanelOrigin(layout, 'npc');
+    drawColumnFrame(playerOrigin.x, playerOrigin.y, gridTotal, 'ВЫ', `₽${player.money ?? 0}`, '#c2a24c', 'rgba(52,48,8,0.66)');
+    // Each half of the strip labels the half of the table under it. The sums are
+    // not repeated here — they live in the summary line under the grids, and in
+    // a box this narrow a number would eat the word.
+    drawColumnFrame(poolOrigin.x, poolOrigin.y, layout.poolTotal, 'ДАЮ', 'БЕРУ', '#bd8f6c', 'rgba(54,34,8,0.62)');
+    drawColumnFrame(npcOrigin.x, npcOrigin.y, gridTotal, npc.name?.split(' ')[0] ?? 'ТОРГОВЕЦ', `₽${npc.money ?? 0}`, '#7996a4', 'rgba(8,22,50,0.62)');
 
-    // ── Draw grid helper ──
-    const drawGrid = (
-      inv: readonly { defId: string; count: number; data?: unknown }[],
-      gx: number,
-      side: 'player' | 'player_offer' | 'npc_offer' | 'npc',
-    ) => {
+    // ── Cell grid helper ──
+    // A cell knows which basket it belongs to and its slot in it, so the shared
+    // pool can mix both sides in one box without a second cursor space: the
+    // cursor still stores (side, slot) exactly as the trade code reads it.
+    type TradeCell = {
+      item?: { defId: string; count: number; data?: unknown };
+      side: 'player' | 'player_offer' | 'npc_offer' | 'npc';
+      slot: number;
+    };
+    const cursorSlot = state.tradeCursorY * gridCols + state.tradeCursorX;
+    const drawGrid = (cells: readonly TradeCell[], origin: { x: number; y: number }, cols: number) => {
+      const gx = origin.x;
       for (let row = 0; row < gridRows; row++) {
-        for (let col = 0; col < gridCols; col++) {
-          const idx = row * gridCols + col;
+        for (let col = 0; col < cols; col++) {
+          const cell = cells[row * cols + col];
+          const side = cell?.side ?? 'player';
           const cx = gx + col * cellSz;
-          const cy = startY + row * cellSz;
-          const selected = state.tradeSide === side && state.tradeCursorX === col && state.tradeCursorY === row;
+          const cy = origin.y + row * cellSz;
+          const selected = cell !== undefined && cell.slot >= 0 && state.tradeSide === side && cursorSlot === cell.slot;
 
           ctx.fillStyle = selected ? 'rgba(50, 180, 150, 0.15)' : 'rgba(10, 20, 25, 0.25)';
           ctx.fillRect(cx, cy, cellSz - 2, cellSz - 2);
@@ -292,8 +315,8 @@ export function drawNpcMenu(
             ctx.fillRect(cx, cy + sl, cellSz - 2, 1);
           }
 
-          if (idx < inv.length) {
-            const item = inv[idx];
+          if (cell?.item) {
+            const item = cell.item;
             const priceMode = side === 'npc' || side === 'npc_offer' ? 'buy' : 'sell';
             const price = tradeCellPriceDisplay(state, npc, item.defId, priceMode);
             const questLabel = questItemStateLabel(price.questState);
@@ -345,10 +368,35 @@ export function drawNpcMenu(
       }
     };
 
-    drawGrid(plrInv, startX, 'player');
-    drawGrid(playerOffer, playerOfferX, 'player_offer');
-    drawGrid(npcOffer, npcOfferX, 'npc_offer');
-    drawGrid(npcInv, npcX, 'npc');
+    const inventoryCells = (
+      inv: readonly { defId: string; count: number; data?: unknown }[],
+      side: 'player' | 'npc',
+    ): TradeCell[] => {
+      const cells: TradeCell[] = [];
+      for (let i = 0; i < gridCols * gridRows; i++) cells.push({ item: inv[i], side, slot: i });
+      return cells;
+    };
+    // Left half of the pool is what you put on the table, right half what you
+    // asked for — each half faces the inventory it came from.
+    const half = layout.poolHalfCols;
+    const poolCells: TradeCell[] = [];
+    for (let row = 0; row < gridRows; row++) {
+      for (let col = 0; col < layout.poolCols; col++) {
+        const mine = col < half;
+        const slot = row * half + (col % half);
+        const basket = mine ? playerOffer : npcOffer;
+        poolCells.push({ item: basket[slot], side: mine ? 'player_offer' : 'npc_offer', slot });
+      }
+    }
+
+    drawGrid(inventoryCells(plrInv, 'player'), playerOrigin, gridCols);
+    drawGrid(poolCells, poolOrigin, layout.poolCols);
+    drawGrid(inventoryCells(npcInv, 'npc'), npcOrigin, gridCols);
+    // Divider between the two halves of the table — the only thing separating
+    // what you give from what you take.
+    const dividerW = Math.max(2, 1.5 * sx);
+    ctx.fillStyle = 'rgba(150,178,190,0.7)';
+    ctx.fillRect(poolOrigin.x + half * cellSz - dividerW * 0.5, poolOrigin.y, dividerW, gridRows * cellSz);
 
     const canDeal = ((deal.npcOfferCount ?? 0) > 0 || deal.creditCount > 0) && (player.money ?? 0) >= deal.cashDue;
     const dealSelected = state.tradeSide === 'deal';
@@ -372,6 +420,13 @@ export function drawNpcMenu(
         : `НЕ ХВАТАЕТ ${deal.cashDue - (player.money ?? 0)}₽`;
     ctx.fillText(fitTextStable(ctx, dealText, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH * 0.62);
     const unpaidSurplus = Math.max(0, deal.surplus - deal.changeDue);
+    ctx.textAlign = 'left';
+
+    // ── Info band under the grids: deal summary, selected item, controls ──
+    const infoX = info.x + 4 * sx;
+    const infoW = info.w - 8 * sx;
+    let infoY = dealY + dealH + 10 * sy;
+    ctx.textAlign = 'left';
     ctx.fillStyle = deal.changeDue > 0 ? '#6e9268' : unpaidSurplus > 0 ? '#bd8f6c' : '#99a';
     ctx.font = `${6.1 * sy}px "Press Start 2P", monospace`;
     const summaryLine = deal.changeDue > 0
@@ -379,11 +434,8 @@ export function drawNpcMenu(
       : unpaidSurplus > 0
         ? `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · сдачи нет (${unpaidSurplus}₽)`
       : `NPC ${deal.fullPrice}₽ · вы ${deal.creditValue}₽ · наличными ${deal.cashDue}₽`;
-    ctx.fillText(fitTextStable(ctx, summaryLine, dealW - 8 * sx), dealX + dealW / 2, dealY + dealH + 7.2 * sy);
-    ctx.textAlign = 'left';
+    infoY = drawWrappedText(ctx, summaryLine, infoX, infoY, infoW, 8 * sy, 3) + 8 * sy;
 
-    // ── Selected item description ──
-    const descY = dealY + dealH + 18 * sy;
     const curIdx = state.tradeCursorY * gridCols + state.tradeCursorX;
     const curInv = state.tradeSide === 'player'
       ? plrInv
@@ -394,55 +446,51 @@ export function drawNpcMenu(
           : state.tradeSide === 'npc'
             ? npcInv
             : [];
-    ctx.textAlign = 'center';
     if (curIdx < curInv.length) {
       const item = curInv[curIdx];
       const def = ITEMS[item.defId];
       if (def) {
         ctx.fillStyle = '#ccc';
         ctx.font = `${7.2 * sy}px "Press Start 2P", monospace`;
-        const descW = Math.min(cw - 16 * sx, totalW + 24 * sx);
-        ctx.fillText(fitTextStable(ctx, `${itemInstanceName(item)} ×${item.count}`, descW), cw / 2, descY);
+        infoY = drawWrappedText(ctx, `${itemInstanceName(item)} ×${item.count}`, infoX, infoY, infoW, 9 * sy, 2) + 3 * sy;
         ctx.fillStyle = '#888';
         ctx.font = `${6.3 * sy}px "Press Start 2P", monospace`;
-        let actionY = drawCenteredWrappedText(ctx, def.desc, cw / 2, descY + 9 * sy, descW, 8 * sy, 2);
+        infoY = drawWrappedText(ctx, def.desc, infoX, infoY, infoW, 8 * sy, 5) + 5 * sy;
         const priceMode = state.tradeSide === 'npc' || state.tradeSide === 'npc_offer' ? 'buy' : 'sell';
         const price = tradePriceDisplay(state, player, npc, item.defId, priceMode);
+        const action = state.tradeSide === 'player_offer'
+          ? `${controlBindingLabel('gameMenu')} убрать единицу из того, что отдаете`
+          : state.tradeSide === 'npc_offer'
+            ? `${controlBindingLabel('gameMenu')} убрать единицу из того, что берете`
+            : state.tradeSide === 'npc'
+              ? `${controlBindingLabel('gameMenu')} запросить: ${price.line}`
+              : `${controlBindingLabel('gameMenu')} предложить: ${price.line}`;
         ctx.fillStyle = price.color;
-        actionY = Math.min(actionY + 2 * sy, ch - 50 * sy);
-        if (state.tradeSide === 'npc') {
-          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} запросить: ${price.line}`, descW), cw / 2, actionY);
+        infoY = drawWrappedText(ctx, action, infoX, infoY, infoW, 8 * sy, 3) + 2 * sy;
+        if (state.tradeSide === 'npc' || state.tradeSide === 'player') {
           ctx.fillStyle = price.scarcityColor;
-          ctx.fillText(fitTextStable(ctx, price.detail, descW), cw / 2, actionY + 8 * sy);
-        } else if (state.tradeSide === 'player_offer') {
-          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} убрать единицу из того, что отдаете`, descW), cw / 2, actionY);
-        } else if (state.tradeSide === 'npc_offer') {
-          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} убрать единицу из того, что берете`, descW), cw / 2, actionY);
-        } else {
-          ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} предложить: ${price.line}`, descW), cw / 2, actionY);
-          ctx.fillStyle = price.scarcityColor;
-          ctx.fillText(fitTextStable(ctx, price.detail, descW), cw / 2, actionY + 8 * sy);
+          infoY = drawWrappedText(ctx, price.detail, infoX, infoY, infoW, 8 * sy, 3);
         }
       }
     } else if (state.tradeSide === 'deal') {
       ctx.fillStyle = canDeal ? '#8f8' : '#f84';
       ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-      ctx.fillText(fitTextStable(ctx, canDeal ? `${controlBindingLabel('gameMenu')} подтвердить сделку` : 'Сделка пока невозможна', Math.min(cw - 16 * sx, totalW)), cw / 2, descY + 6 * sy);
+      drawWrappedText(ctx, canDeal ? `${controlBindingLabel('gameMenu')} подтвердить сделку` : 'Сделка пока невозможна', infoX, infoY, infoW, 9 * sy, 3);
     } else {
       ctx.fillStyle = '#555';
       ctx.font = `${6.2 * sy}px "Press Start 2P", monospace`;
-      ctx.fillText('Пусто', cw / 2, descY + 6 * sy);
+      ctx.fillText('Пусто', infoX, infoY);
     }
-    ctx.textAlign = 'left';
 
-    // ── Hint (bottom-right, stacked) ──
+    // ── Controls at the foot of the band, right-aligned ──
     ctx.fillStyle = '#555';
     ctx.font = `${5.8 * sy}px "Press Start 2P", monospace`;
     ctx.textAlign = 'right';
-    const hintW = Math.max(60 * sx, cw - 16 * sx);
-    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, hintW), cw - 8 * sx, ch - 24 * sy);
-    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} положить/убрать/обмен`, hintW), cw - 8 * sx, ch - 16 * sy);
-    ctx.fillText(fitTextStable(ctx, `${menuCloseHint()} назад`, hintW), cw - 8 * sx, ch - 8 * sy);
+    const hintX = info.x + info.w - 4 * sx;
+    const hintY = Math.max(infoY + 8 * sy, ch - 26 * sy);
+    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} курсор`, infoW), hintX, hintY);
+    ctx.fillText(fitTextStable(ctx, `${controlBindingLabel('gameMenu')} положить/убрать/обмен`, infoW), hintX, hintY + 8 * sy);
+    ctx.fillText(fitTextStable(ctx, `${menuCloseHint()} назад`, infoW), hintX, hintY + 16 * sy);
     ctx.textAlign = 'left';
 
   }

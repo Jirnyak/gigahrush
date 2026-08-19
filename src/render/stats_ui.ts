@@ -5,13 +5,7 @@ import { ITEMS, WEAPON_STATS } from '../data/catalog';
 import { itemInstanceName } from '../data/items';
 import { getEquippedToolDurability, getWeaponReadiness } from '../systems/inventory';
 import { controlHint, menuCloseHint } from '../systems/controls';
-import {
-  rpgStatEffects,
-  rpgStatEffectsAfterSpend,
-  RPG_LEVEL_CAP,
-  xpForLevel,
-  type RPGStatEffects,
-} from '../systems/rpg';
+import { RPG_LEVEL_CAP, xpForLevel } from '../systems/rpg';
 import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { fitTextStable as fitStatText, formatUiNumber, wrapTextLines } from './ui_text';
@@ -122,12 +116,12 @@ export function drawInventory(
       ctx.fillStyle = '#ccc';
       ctx.font = `${6.2 * ts}px "Press Start 2P", monospace`;
       ctx.fillText(fitStatText(ctx, `${itemInstanceName(item)} ×${item.count}`, details.w), details.x, details.y);
-      ctx.fillStyle = '#888';
-      ctx.font = `${4.8 * ts}px "Press Start 2P", monospace`;
-      const descLines = wrapTextLines(ctx, def.desc, details.w, 2, { stable: true, mode: 'clip' });
+      ctx.fillStyle = '#999';
+      ctx.font = `${5.6 * ts}px "Press Start 2P", monospace`;
+      const descLines = wrapTextLines(ctx, def.desc, details.w, 4, { stable: true, mode: 'clip' });
       for (const line of descLines) {
         ctx.fillText(line, details.x, infoY);
-        infoY += 5.8 * ts;
+        infoY += 6.6 * ts;
       }
       if (def.type === ItemType.WEAPON) {
         const ws = WEAPON_STATS[def.id];
@@ -135,21 +129,21 @@ export function drawInventory(
           const dt = damageTypeLabel(ws.damageType);
           ctx.fillStyle = dt.color;
           ctx.fillText(`Урон: ${dt.text}`, details.x, infoY);
-          infoY += 5.8 * ts;
+          infoY += 6.6 * ts;
         }
       }
 
       if (def.resistances) {
         ctx.fillStyle = '#7996a4';
         ctx.fillText('Сопротивления:', details.x, infoY);
-        infoY += 5.8 * ts;
+        infoY += 6.6 * ts;
         for (const [dtStr, val] of Object.entries(def.resistances)) {
           const dt = parseInt(dtStr, 10) as DamageType;
           if (!isNaN(dt) && val) {
             const dtInfo = damageTypeLabel(dt);
             ctx.fillStyle = dtInfo.color;
             ctx.fillText(`  ${dtInfo.text}: ${val}%`, details.x, infoY);
-            infoY += 5.8 * ts;
+            infoY += 6.6 * ts;
           }
         }
       }
@@ -179,34 +173,31 @@ export function drawInventory(
   const stX = details.x;
   const barW = Math.max(24 * sx, details.w);
   let stY = Math.max(infoY + 4 * ts, details.y + 12 * ts);
-  const contentBottom = Math.min(ch - 6 * ts, layout.grid.y + layout.grid.h - 2 * ts);
+  // The right column runs to the bottom of the canvas: it stopped at the grid
+  // bottom, so shrinking the grid stole rows from finance and equipment.
+  const contentBottom = ch - 6 * ts;
 
-  // Name + Level + Attributes on same row
+  // Name, level and spendable points on one row. The three-line breakdown of
+  // what every attribute multiplies used to live under it — nobody read it, and
+  // it ate exactly the room the equipment block needs at the bottom.
   ctx.fillStyle = '#c2a24c';
-  ctx.font = `${6.4 * ts}px "Press Start 2P", monospace`;
+  ctx.font = `${5.4 * ts}px "Press Start 2P", monospace`;
   const nameStr = player.name ?? 'Вы';
-  const titleLine = player.rpg ? `${nameStr}  Ур.${player.rpg.level}` : nameStr;
+  const titleLine = player.rpg ? `${nameStr}  Ур.${player.rpg.level}  Очки ${player.rpg.attrPoints}` : nameStr;
   ctx.fillText(fitStatText(ctx, titleLine, barW), stX, stY);
-  stY += 8.2 * ts;
+  stY += 6.6 * ts;
 
-  // Attributes in their own compact row to avoid name/level overlap.
+  // Attributes in their own compact row; the keys are shown only while there is
+  // something to spend on them.
   if (player.rpg) {
     const rpg = player.rpg;
-    const apLabel = rpg.attrPoints > 0 ? `  +${rpg.attrPoints}` : '';
-    const attrLine = `${controlHint('attrStr')}СИЛ:${rpg.str}  ${controlHint('attrAgi')}ЛОВ:${rpg.agi}  ${controlHint('attrInt')}ИНТ:${rpg.int}${apLabel}`;
-    ctx.font = `${5.3 * ts}px "Press Start 2P", monospace`;
+    const attrLine = rpg.attrPoints > 0
+      ? `${controlHint('attrStr')}СИЛ ${rpg.str}  ${controlHint('attrAgi')}ЛОВ ${rpg.agi}  ${controlHint('attrInt')}ИНТ ${rpg.int}`
+      : `СИЛ ${rpg.str}  ЛОВ ${rpg.agi}  ИНТ ${rpg.int}`;
+    ctx.font = `${5 * ts}px "Press Start 2P", monospace`;
     ctx.fillStyle = '#b3703f';
     ctx.fillText(fitStatText(ctx, attrLine, barW), stX, stY);
-    stY += 7.2 * ts;
-  }
-
-  // Attribute points (always visible)
-  if (player.rpg) {
-    ctx.fillStyle = player.rpg.attrPoints > 0 ? '#c2a24c' : '#888';
-    ctx.font = `${5.1 * ts}px "Press Start 2P", monospace`;
-    ctx.fillText(`Очков характеристик: ${player.rpg.attrPoints}`, stX, stY);
-    stY += 6.4 * ts;
-    stY = drawRpgEffectBlock(ctx, player, stX, stY, barW, ts);
+    stY += 6.2 * ts;
   }
 
   // XP bar
@@ -286,15 +277,6 @@ export function drawInventory(
 
   drawInventoryFinanceBlock(ctx, player, state, stX, columnsY, financeW, ts, time, contentBottom);
   drawInventoryEquipmentBlock(ctx, equipmentLines, stX + financeW + columnsGap, columnsY, equipmentW, ts, time, contentBottom);
-
-  // Stats
-  const statsY = stY + 3 * ts;
-  if (statsY + 4.8 * ts <= columnsY - 1 * ts) {
-    ctx.fillStyle = '#888';
-    ctx.font = `${4.5 * ts}px "Press Start 2P", monospace`;
-    const day = Math.floor(state.clock.totalMinutes / 1440);
-    ctx.fillText(fitStatText(ctx, `Выжил дней: ${day}  |  Самосборов: ${state.samosborCount}`, barW), stX, statsY);
-  }
 }
 
 interface EquipmentLine {
@@ -364,62 +346,6 @@ function drawInventoryEquipmentBlock(
     cy += lineH;
   }
   return cy + 2.2 * sy;
-}
-
-function signedPct(mult: number): string {
-  const pct = Math.round((mult - 1) * 100);
-  return `${pct >= 0 ? '+' : ''}${pct}%`;
-}
-
-function reducedPct(mult: number): string {
-  return `-${Math.max(0, Math.round((1 - mult) * 100))}%`;
-}
-
-function statDelta(current: RPGStatEffects, next: RPGStatEffects, key: keyof RPGStatEffects): string {
-  const diff = next[key] - current[key];
-  if (Math.abs(diff) < 0.005) return '';
-  if (key === 'maxHp' || key === 'maxPsi') return `+${Math.round(diff)}`;
-  return diff > 0 ? signedPct(next[key] / current[key]) : reducedPct(next[key] / current[key]);
-}
-
-function drawRpgEffectBlock(
-  ctx: CanvasRenderingContext2D,
-  player: Entity,
-  x: number, y: number, w: number, sy: number,
-): number {
-  const rpg = player.rpg;
-  if (!rpg) return y;
-  const current = rpgStatEffects(rpg);
-  const strNext = rpg.attrPoints > 0 ? rpgStatEffectsAfterSpend(rpg, 'str') : undefined;
-  const agiNext = rpg.attrPoints > 0 ? rpgStatEffectsAfterSpend(rpg, 'agi') : undefined;
-  const intNext = rpg.attrPoints > 0 ? rpgStatEffectsAfterSpend(rpg, 'int') : undefined;
-  const suffix = (delta: string) => delta ? ` (${delta})` : '';
-  const lines: [string, string][] = [
-    [
-      '#b3703f',
-      `СИЛ HP ${current.maxHp}${suffix(strNext ? statDelta(current, strNext, 'maxHp') : '')}  ` +
-      `ближ ${signedPct(current.meleeDamageMult)}  тяж ${reducedPct(current.heavyWeaponSpeedMult)}`,
-    ],
-    [
-      '#56926a',
-      `ЛОВ ход ${signedPct(current.moveSpeedMult)}  темп ${reducedPct(current.attackCooldownMult)}  ` +
-      `разброс ${reducedPct(current.rangedSpreadMult)}${suffix(agiNext ? statDelta(current, agiNext, 'attackCooldownMult') : '')}`,
-    ],
-    [
-      '#6480a6',
-      `ИНТ ПСИ ${current.maxPsi}${suffix(intNext ? statDelta(current, intNext, 'maxPsi') : '')}  ` +
-      `длит +${Math.round(current.psiDurationBonusSec)}с  цена ${reducedPct(current.psiCostMult)}  ` +
-      `контр ${signedPct(current.contractRewardMult)}  док ${signedPct(current.documentRewardMult)}`,
-    ],
-  ];
-
-  ctx.font = `${5.5 * sy}px "Press Start 2P", monospace`;
-  for (const [color, line] of lines) {
-    ctx.fillStyle = color;
-    ctx.fillText(fitStatText(ctx, line, w), x, y);
-    y += 6.2 * sy;
-  }
-  return y + 1.5 * sy;
 }
 
 function drawCompactMeter(

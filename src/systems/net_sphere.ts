@@ -1,6 +1,6 @@
 import { type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
-import { portalAllowsOptionalNetwork } from './platform_bridge';
+import { isStrictPortalMode, portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryMapLabel, floorRunEntryRouteId } from './procedural_floors';
 import { startOnlineHost, joinOnlinePeer, isOnlineHost, isOnlinePeer, getOnlineRoomId, isOnlineConnected, sendOnlineMessage } from './online_client';
 
@@ -286,6 +286,16 @@ function setChatScroll(value: number): void {
 function adjustChatScroll(delta: number): void {
   setChatScroll(runtime.chatScroll + delta);
 }
+
+/** The panel itself needs no backend: only the requests do. A build without
+ *  `/api/net` (dev server, itch) still shows the terminal, the local identity and
+ *  a closed channel — before this the N key was simply not bound there and the
+ *  screen looked broken. Strict portals keep the whole feature hidden. */
+function netSpherePanelAllowed(): boolean {
+  return !isStrictPortalMode();
+}
+
+const NET_SPHERE_NO_BACKEND_TEXT = 'Канал закрыт: в этой сборке нет сети. Терминал работает локально.';
 
 function ensureIdentity(): void {
   if (!runtime.netGen) {
@@ -690,6 +700,14 @@ async function sendChat(body: string): Promise<void> {
     }
   }
 
+  // No backend: the line still lands in the local terminal above, but there is
+  // nowhere to post it — a request here would just 404 on every message.
+  if (!portalAllowsOptionalNetwork()) {
+    runtime.error = NET_SPHERE_NO_BACKEND_TEXT;
+    runtime.chatBusy = false;
+    return;
+  }
+
   try {
     const data = await postJson('/chat', {
       netGen: runtime.netGen,
@@ -885,7 +903,7 @@ function submitDraft(): void {
 }
 
 export function bindNetSphereInput(options: NetSphereInputOptions = {}): () => void {
-  if (!portalAllowsOptionalNetwork()) return () => {};
+  if (!netSpherePanelAllowed()) return () => {};
   if (runtime.bound && inputUnbind) return inputUnbind;
   runtime.bound = true;
   ensureIdentity();
@@ -1015,13 +1033,13 @@ export function isNetSphereChatInputActive(): boolean {
 }
 
 export function openNetSphere(): void {
-  if (!portalAllowsOptionalNetwork()) return;
+  if (!netSpherePanelAllowed()) return;
   ensureIdentity();
   runtime.open = true;
   runtime.chatInputActive = false;
   runtime.chatScroll = 0;
   runtime.nextPollAt = 0;
-  runtime.error = '';
+  runtime.error = portalAllowsOptionalNetwork() ? '' : NET_SPHERE_NO_BACKEND_TEXT;
 }
 
 export function closeNetSphere(): void {
@@ -1097,7 +1115,7 @@ export function reportNetSphereEvent(
 }
 
 export function getNetSphereSnapshot(): NetSphereSnapshot {
-  if (!portalAllowsOptionalNetwork()) {
+  if (!netSpherePanelAllowed()) {
     return {
       open: false,
       netGen: '',

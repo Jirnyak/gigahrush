@@ -128,7 +128,7 @@ import { resetComputerState, restoreComputersFromSave } from './systems/computer
 import { resetNetHackState, restoreNetHackFromSave } from './systems/net_hack';
 import { stampMark, MarkType } from './systems/surface_marks';
 import { stampUrineTrace } from './systems/urination';
-import { canvasMenuScale, containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, tradeMenuGridLayout } from './render/ui_layout';
+import { canvasMenuScale, containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, npcMenuLayout, TRADE_POOL_HALF_COLS, tradeMenuGridLayout, tradePanelOrigin } from './render/ui_layout';
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
@@ -5829,15 +5829,17 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
   playExplosion();
   publishExplosionNoise(state, actor, p.x, p.y, radius, pt === ProjType.BFG ? 'bfg' : 'grenade');
 
-  // Screen flash for ALL explosions
+  // Screen flash for ALL explosions; the tally is only reported for the player's
+  // own blasts — someone else's grenades filled the log with hit counts the
+  // player had no way to attribute.
   if (pt === ProjType.BFG) {
     state.dmgFlash = 0.8;
     state.dmgSeed = 2; // green tint marker
-    state.msgs.push(msg(`БФГ! Уничтожено целей: ${hits}`, state.time, '#4f4'));
+    if (isPlayer) state.msgs.push(msg(`БФГ! Уничтожено целей: ${hits}`, state.time, '#4f4'));
   } else {
     state.dmgFlash = Math.max(state.dmgFlash, 0.4);
     state.dmgSeed = 3; // orange tint marker for explosions
-    state.msgs.push(msg(`Взрыв! Поражено: ${hits}`, state.time, '#fa0'));
+    if (isPlayer) state.msgs.push(msg(`Взрыв! Поражено: ${hits}`, state.time, '#fa0'));
   }
 }
 
@@ -8108,6 +8110,28 @@ function reportTradeResult(npc: Entity, result: TradeResult): void {
   else if (result.code === 'no_item') state.msgs.push(msg('Пустой слот или предмет уже выбран', state.time, '#888'));
 }
 
+/** The pool box is a view over both baskets — the left half is your offer, the
+ *  right half what you asked for — so its (column, row) maps to a basket slot,
+ *  and the cursor keeps living in the (side, slot) space the trade code reads.
+ *  A basket is exactly as tall as the grid and TRADE_POOL_HALF_COLS wide, so
+ *  every staged stack has a cell. */
+function tradePoolCell(): { col: number; row: number } {
+  const slot = state.tradeCursorY * INVENTORY_GRID_COLS + state.tradeCursorX;
+  const half = TRADE_POOL_HALF_COLS;
+  const base = state.tradeSide === 'npc_offer' ? half : 0;
+  return { col: base + (slot % half), row: Math.floor(slot / half) };
+}
+
+function setTradePoolCursor(col: number, row: number): boolean {
+  const half = TRADE_POOL_HALF_COLS;
+  if (col < 0 || col >= half * 2 || row < 0 || row >= INVENTORY_GRID_ROWS) return false;
+  const slot = row * half + (col % half);
+  state.tradeSide = col < half ? 'player_offer' : 'npc_offer';
+  state.tradeCursorX = slot % INVENTORY_GRID_COLS;
+  state.tradeCursorY = Math.floor(slot / INVENTORY_GRID_COLS);
+  return true;
+}
+
 function activateTradeSelection(npc: Entity): void {
   const idx = state.tradeCursorY * INVENTORY_GRID_COLS + state.tradeCursorX;
   const zoneId = currentPlayerZoneId();
@@ -8508,43 +8532,50 @@ function handleTapNpcMenu(x: number, y: number, w: number, h: number, sx: number
   const npc = ensureEntityIndex(entities).byId.get(state.npcMenuTarget);
   if (!npc) return;
   if (isNpcMenuOptionListTab(state.npcMenuTab)) {
-    const pw = Math.min(440 * sx, w - 24 * sx);
-    const ph = Math.min(320 * sy, h - 24 * sy);
-    const px = (w - pw) / 2;
-    const py = (h - ph) / 2;
     const options = getNpcMenuOptions({ state, player, npc, entities });
     clampNpcMenuSelection(state, options);
-    for (let i = 0; i < options.length; i++) {
-      const yy = py + 42 * sy + i * 17 * sy;
-      if (pointInRect(x, y, px + 8 * sx, yy - 6 * sy, 220 * sx, 16 * sy)) {
+    const box = npcMenuLayout(w, h, sx, sy, options.length, state.npcMenuSel);
+    const px = box.x;
+    const py = box.y;
+    const pw = box.w;
+    const ph = box.h;
+    const scale = box.scale;
+    const last = Math.min(options.length, box.firstRow + box.visibleRows);
+    for (let i = box.firstRow; i < last; i++) {
+      const yy = box.listTop + (i - box.firstRow) * box.rowH;
+      if (pointInRect(x, y, px + 8 * scale, yy - 6 * scale, pw - 16 * scale, box.rowH)) {
         state.npcMenuSel = i;
         activateNpcMainSelection(npc);
         return;
       }
     }
-    if (pointInRect(x, y, px, py + ph - 22 * sy, pw, 22 * sy)) {
+    if (pointInRect(x, y, px, py + ph - 22 * scale, pw, 22 * scale)) {
       state.showNpcMenu = false;
       syncPauseState();
     }
   } else if (state.npcMenuTab === 'trade') {
     const layout = tradeMenuGridLayout(w, h);
     const cellSz = layout.cell;
-    for (const panel of [
-      { side: 'player', x: layout.startX },
-      { side: 'player_offer', x: layout.playerOfferX },
-      { side: 'npc_offer', x: layout.npcOfferX },
-      { side: 'npc', x: layout.npcX },
-    ] as const) {
+    for (const side of ['player', 'npc'] as const) {
+      const origin = tradePanelOrigin(layout, side);
       for (let row = 0; row < layout.rows; row++) {
         for (let col = 0; col < layout.cols; col++) {
-          if (pointInRect(x, y, panel.x + col * cellSz, layout.startY + row * cellSz, cellSz, cellSz)) {
-            state.tradeSide = panel.side;
+          if (pointInRect(x, y, origin.x + col * cellSz, origin.y + row * cellSz, cellSz, cellSz)) {
+            state.tradeSide = side;
             state.tradeCursorX = col;
             state.tradeCursorY = row;
             activateTradeSelection(npc);
             return;
           }
         }
+      }
+    }
+    const poolOrigin = tradePanelOrigin(layout, 'pool');
+    for (let row = 0; row < layout.rows; row++) {
+      for (let col = 0; col < layout.poolCols; col++) {
+        if (!pointInRect(x, y, poolOrigin.x + col * cellSz, poolOrigin.y + row * cellSz, cellSz, cellSz)) continue;
+        if (setTradePoolCursor(col, row)) activateTradeSelection(npc);
+        return;
       }
     }
     if (pointInRect(x, y, layout.dealX, layout.dealY, layout.dealW, layout.dealH + 10 * layout.scale)) {
@@ -9424,50 +9455,59 @@ function handleMenuInput(): void {
         const dnNav = menuDownNav();
         const leftNav = menuRepeatStep('left', invLeft, leftEdge);
         const rightNav = menuRepeatStep('right', invRight || input.drop, rightEdge || dropEdge);
-        const panels = ['player', 'player_offer', 'npc_offer', 'npc'] as const;
+        // Three boxes: your inventory, the shared pool, theirs. The pool holds
+        // both baskets, so the cursor walks it as one list and only maps back to
+        // (side, slot) when it lands.
+        const toDeal = () => {
+          state.tradeSide = 'deal';
+          state.tradeCursorX = 0;
+          state.tradeCursorY = 0;
+        };
         if (state.tradeSide === 'deal') {
-          if (upNav) {
-            state.tradeSide = 'player_offer';
+          if (upNav || leftNav) {
+            state.tradeSide = 'player';
             state.tradeCursorX = INVENTORY_GRID_COLS - 1;
             state.tradeCursorY = INVENTORY_GRID_ROWS - 1;
+          } else if (dnNav || rightNav) {
+            state.tradeSide = 'npc';
+            state.tradeCursorX = 0;
+            state.tradeCursorY = INVENTORY_GRID_ROWS - 1;
           }
-          if (leftNav) state.tradeSide = 'player_offer';
-          if (rightNav) state.tradeSide = 'npc_offer';
+        } else if (state.tradeSide === 'player_offer' || state.tradeSide === 'npc_offer') {
+          const cell = tradePoolCell();
+          if (upNav) setTradePoolCursor(cell.col, cell.row - 1);
+          else if (dnNav) {
+            if (!setTradePoolCursor(cell.col, cell.row + 1)) toDeal();
+          } else if (leftNav) {
+            if (!setTradePoolCursor(cell.col - 1, cell.row)) {
+              state.tradeSide = 'player';
+              state.tradeCursorX = INVENTORY_GRID_COLS - 1;
+              state.tradeCursorY = cell.row;
+            }
+          } else if (rightNav) {
+            if (!setTradePoolCursor(cell.col + 1, cell.row)) {
+              state.tradeSide = 'npc';
+              state.tradeCursorX = 0;
+              state.tradeCursorY = cell.row;
+            }
+          }
+        } else {
+          const fromPlayer = state.tradeSide === 'player';
+          if (upNav) state.tradeCursorY = Math.max(0, state.tradeCursorY - 1);
+          else if (dnNav) {
+            if (state.tradeCursorY < INVENTORY_GRID_ROWS - 1) state.tradeCursorY++;
+            else toDeal();
+          } else if (leftNav) {
+            if (state.tradeCursorX > 0) state.tradeCursorX--;
+            else if (!fromPlayer) setTradePoolCursor(TRADE_POOL_HALF_COLS * 2 - 1, state.tradeCursorY);
+          } else if (rightNav) {
+            if (state.tradeCursorX < INVENTORY_GRID_COLS - 1) state.tradeCursorX++;
+            else if (fromPlayer) setTradePoolCursor(0, state.tradeCursorY);
+          }
+        }
+        if (state.tradeSide === 'player' || state.tradeSide === 'npc') {
           state.tradeCursorX = Math.max(0, Math.min(INVENTORY_GRID_COLS - 1, state.tradeCursorX));
           state.tradeCursorY = Math.max(0, Math.min(INVENTORY_GRID_ROWS - 1, state.tradeCursorY));
-        } else {
-          let panelIndex = panels.indexOf(state.tradeSide as typeof panels[number]);
-          if (panelIndex < 0) panelIndex = 3;
-          if (upNav) state.tradeCursorY = Math.max(0, state.tradeCursorY - 1);
-          if (dnNav) {
-            if (state.tradeCursorY >= INVENTORY_GRID_ROWS - 1) {
-              state.tradeSide = 'deal';
-              state.tradeCursorX = 0;
-              state.tradeCursorY = 0;
-            } else {
-              state.tradeCursorY++;
-            }
-          }
-          if (state.tradeSide !== 'deal' && leftNav) {
-            if (state.tradeCursorX > 0) {
-              state.tradeCursorX--;
-            } else if (panelIndex > 0) {
-              state.tradeSide = panels[panelIndex - 1];
-              state.tradeCursorX = INVENTORY_GRID_COLS - 1;
-            }
-          }
-          if (state.tradeSide !== 'deal' && rightNav) {
-            if (state.tradeCursorX < INVENTORY_GRID_COLS - 1) {
-              state.tradeCursorX++;
-            } else if (panelIndex < panels.length - 1) {
-              state.tradeSide = panels[panelIndex + 1];
-              state.tradeCursorX = 0;
-            }
-          }
-          if (state.tradeSide !== 'deal') {
-            state.tradeCursorX = Math.max(0, Math.min(INVENTORY_GRID_COLS - 1, state.tradeCursorX));
-            state.tradeCursorY = Math.max(0, Math.min(INVENTORY_GRID_ROWS - 1, state.tradeCursorY));
-          }
         }
         // Enter stages inventory items, removes basket items, or commits the centered deal.
         if (acceptEdge) {

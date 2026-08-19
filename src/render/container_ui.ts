@@ -14,7 +14,7 @@ import {
 } from './economy_ui';
 import { containerMenuGridLayout } from './ui_layout';
 import { drawNeuroPanel } from './hud_fx';
-import { drawCenteredWrappedText, fitText, wrapTextLines } from './ui_text';
+import { drawCenteredWrappedText, fitText } from './ui_text';
 import { drawItemGridIcon } from './item_sprites';
 import { PALETTE } from './ui_utils';
 
@@ -55,59 +55,44 @@ export function drawContainerMenu(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillText('КОНТЕЙНЕР', cw / 2, 10 * sy);
-  ctx.textAlign = 'left';
 
-  ctx.font = `${7.2 * sy}px "Press Start 2P", monospace`;
-  ctx.fillStyle = PALETTE.warning;
-  ctx.fillText(`Вы: ${playerInv.length}/${MAX_INVENTORY_SLOTS}`, startX, startY - 9 * sy);
-  const columnW = gridTotal;
-  const containerName = fitText(ctx, container.name, columnW * 0.85);
+  // Access, theft and production status are header lines: as a right-hand column
+  // they took a third of the width from both inventories.
+  const headerW = layout.headerW;
+  ctx.font = `${6.6 * sy}px "Press Start 2P", monospace`;
   ctx.fillStyle = access.canTake ? PALETTE.primary : PALETTE.danger;
-  ctx.fillText(`${containerName}: ${containerInv.length}`, containerX, startY - 9 * sy);
-  
-  let infoY = startY + 4 * sy;
-  ctx.fillStyle = access.canTake ? PALETTE.primary : PALETTE.danger;
-  ctx.font = `${7.2 * sy}px "Press Start 2P", monospace`;
-  for (const line of wrapTextLines(ctx, access.label, layout.infoW)) {
-    ctx.fillText(line, layout.infoX, infoY);
-    infoY += 9 * sy;
-  }
-  infoY += 4 * sy;
+  const accessLine = access.detail ? `${access.label} · ${access.detail}` : access.label;
+  ctx.fillText(fitText(ctx, accessLine, headerW), cw / 2, 22 * sy);
 
-  ctx.fillStyle = PALETTE.textMuted;
-  ctx.font = `${6.4 * sy}px "Press Start 2P", monospace`;
-  for (const line of wrapTextLines(ctx, access.detail, layout.infoW)) {
-    ctx.fillText(line, layout.infoX, infoY);
-    infoY += 8 * sy;
-  }
   const theftStatus = containerTheftStatus(container);
-  if (theftStatus) {
-    infoY += 4 * sy;
-    ctx.fillStyle = theftStatus.color === '#ff4444' ? PALETTE.danger : PALETTE.warning;
-    for (const line of wrapTextLines(ctx, `${theftStatus.label}: ${theftStatus.detail}`, layout.infoW)) {
-      ctx.fillText(line, layout.infoX, infoY);
-      infoY += 8 * sy;
-    }
-  }
-  if (container.tags.includes('production_output')) {
+  let statusLine = theftStatus ? `${theftStatus.label}: ${theftStatus.detail}` : '';
+  let statusColor = theftStatus?.color === '#ff4444' ? PALETTE.danger : PALETTE.warning;
+  if (!statusLine && container.tags.includes('production_output')) {
     const produced = container.lastProducedItemId ? ITEMS[container.lastProducedItemId]?.name ?? container.lastProducedItemId : '';
     const reason = container.productionBlockedReason === 'no_inputs'
       ? 'нет сырья'
       : container.productionBlockedReason === 'container_full'
         ? 'ящик полон'
         : 'нет ящика';
-    const status = container.productionBlockedReason
+    statusLine = container.productionBlockedReason
       ? `Цех стоит: ${reason}`
       : produced
         ? `Цех: ${produced} x${container.lastProducedCount ?? 1}`
         : `Цех: ${container.factoryId ?? 'ожидает сырьё'}`;
-    infoY += 4 * sy;
-    ctx.fillStyle = container.productionBlockedReason ? PALETTE.warning : PALETTE.primary;
-    for (const line of wrapTextLines(ctx, status, layout.infoW)) {
-      ctx.fillText(line, layout.infoX, infoY);
-      infoY += 8 * sy;
-    }
+    statusColor = container.productionBlockedReason ? PALETTE.warning : PALETTE.primary;
   }
+  if (statusLine) {
+    ctx.fillStyle = statusColor;
+    ctx.fillText(fitText(ctx, statusLine, headerW), cw / 2, 31 * sy);
+  }
+  ctx.textAlign = 'left';
+
+  ctx.font = `${7.2 * sy}px "Press Start 2P", monospace`;
+  ctx.fillStyle = PALETTE.warning;
+  ctx.fillText(`Вы: ${playerInv.length}/${MAX_INVENTORY_SLOTS}`, startX, startY - 9 * sy);
+  const containerName = fitText(ctx, container.name, gridTotal * 0.85);
+  ctx.fillStyle = access.canTake ? PALETTE.primary : PALETTE.danger;
+  ctx.fillText(`${containerName}: ${containerInv.length}`, containerX, startY - 9 * sy);
 
   const drawGrid = (inv: { defId: string; count: number }[], gx: number, side: 'player' | 'container') => {
     for (let row = 0; row < gridRows; row++) {

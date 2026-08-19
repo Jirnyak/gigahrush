@@ -34,11 +34,12 @@ function statLine(
   ctx.fillText(fitText(ctx, value, w - valueOffset, options), valueX, y);
 }
 
+/** Metadata gets its own line and the message follows indented under it: sharing
+ *  one line meant the body column was whatever the timestamp and the nickname
+ *  left over — three characters wide on a long nick. */
 type ChatVisualLine = {
-  kind: 'compact_label' | 'compact_body' | 'line';
-  label: string;
-  labelW: number;
-  body: string;
+  kind: 'label' | 'body';
+  text: string;
 };
 
 export function drawNetSphereMenu(
@@ -155,8 +156,9 @@ export function drawNetSphereMenu(
   const promptH = Math.min(18 * s, Math.max(10 * s, chatH * 0.42));
   const msgTop = chatY + 20 * s;
   const msgBottom = Math.max(msgTop, chatY + chatH - promptH - 4 * s);
-  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
-  const compactChat = chatW < 180 * s;
+  ctx.font = `${7.6 * s}px "Press Start 2P", monospace`;
+  const bodyIndent = 12 * s;
+  const bodyW = Math.max(20 * s, chatW - 8 * s - bodyIndent);
   const messageEnds: number[] = [];
   const vlines: ChatVisualLine[] = [];
   for (let i = 0; i < net.chat.length; i++) {
@@ -165,19 +167,9 @@ export function drawNetSphereMenu(
     const name = line.nickname || 'Жилец';
     const nameW = Math.max(24 * s, Math.min(96 * s, chatW * 0.3));
     const label = `[${stamp} ${fitText(ctx, name, nameW, { skipTranslate: true })}]`;
-    const labelW = ctx.measureText(label).width;
-    if (compactChat) {
-      const bodyW = Math.max(20 * s, chatW - 16 * s);
-      vlines.push({ kind: 'compact_label', label: fitText(ctx, label, chatW - 12 * s, { skipTranslate: true }), labelW, body: '' });
-      for (const body of wrapTextLines(ctx, line.body, bodyW, 3, { skipTranslate: true })) {
-        vlines.push({ kind: 'compact_body', label: '', labelW: 0, body });
-      }
-    } else {
-      const bodyW = Math.max(20 * s, chatW - 16 * s - labelW);
-      const wrapped = wrapTextLines(ctx, line.body, bodyW, 3, { skipTranslate: true });
-      for (let j = 0; j < wrapped.length; j++) {
-        vlines.push({ kind: 'line', label: j === 0 ? label : '', labelW, body: wrapped[j] });
-      }
+    vlines.push({ kind: 'label', text: fitText(ctx, label, chatW - 12 * s, { skipTranslate: true }) });
+    for (const body of wrapTextLines(ctx, line.body, bodyW, 4, { skipTranslate: true })) {
+      vlines.push({ kind: 'body', text: body });
     }
     messageEnds[i] = vlines.length;
   }
@@ -207,22 +199,13 @@ export function drawNetSphereMenu(
   for (let i = startLine; i < endLine; i++) {
     const line = vlines[i];
     const yLine = firstLineY + (i - startLine) * lineH;
-    if (line.kind === 'compact_label') {
+    if (line.kind === 'label') {
       ctx.fillStyle = '#6b7f8a';
-      ctx.fillText(line.label, chatX + 6 * s, yLine);
+      ctx.fillText(line.text, chatX + 6 * s, yLine);
       continue;
-    }
-    if (line.kind === 'compact_body') {
-      ctx.fillStyle = '#d6f6ee';
-      ctx.fillText(line.body, chatX + 10 * s, yLine);
-      continue;
-    }
-    if (line.label) {
-      ctx.fillStyle = '#6b7f8a';
-      ctx.fillText(line.label, chatX + 6 * s, yLine);
     }
     ctx.fillStyle = '#d6f6ee';
-    ctx.fillText(line.body, chatX + 9 * s + line.labelW, yLine);
+    ctx.fillText(line.text, chatX + 6 * s + bodyIndent, yLine);
   }
 
   if (maxChatScroll > 0) {
