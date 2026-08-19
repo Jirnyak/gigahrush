@@ -1,6 +1,8 @@
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
 import { mathRng as rng } from '../core/rand';
+import { registerTabletopGame } from './tabletop';
+import { controlBindingLabel } from './controls';
 
 export type CheckersSide = 'player' | 'npc';
 export type CheckersWinner = CheckersSide | 'draw' | '';
@@ -27,6 +29,8 @@ export interface CheckersSnapshot {
   selectedPieceId?: number;
   cursorX: number;
   cursorY: number;
+  /** False only at a co-op table while the other human moves. */
+  yourTurn: boolean;
 }
 
 export interface CheckersInput {
@@ -69,10 +73,64 @@ interface CheckersGame {
   cursorX: number;
   cursorY: number;
   mustCaptureWithPieceId?: number;
+  /** Cursor and selection of the 'npc' seat, in BOARD coordinates like the
+   *  player's. Unused against an NPC — the AI needs no cursor. */
+  npcCursorX: number;
+  npcCursorY: number;
+  npcSelectedPieceId?: number;
+  /** Co-op table: a human sits in the 'npc' seat, so its turn waits for input
+   *  instead of being played out by `chooseNpcMove`. */
+  remote: boolean;
+  /** Display name of the 'player' seat, for mirroring the board. */
+  playerName: string;
 }
 
 let game: CheckersGame | null = null;
 let nextPieceId = 1;
+
+const BOARD_MAX = 7;
+
+function otherSide(side: CheckersSide): CheckersSide {
+  return side === 'player' ? 'npc' : 'player';
+}
+
+/** Whose input the board waits for. */
+function seatToAct(g: CheckersGame): CheckersSide | null {
+  if (g.phase === 'player_turn') return 'player';
+  if (g.phase === 'npc_turn') return 'npc';
+  return null;
+}
+
+function cursorOf(g: CheckersGame, seat: CheckersSide): { x: number; y: number } {
+  return seat === 'player' ? { x: g.cursorX, y: g.cursorY } : { x: g.npcCursorX, y: g.npcCursorY };
+}
+
+function setCursor(g: CheckersGame, seat: CheckersSide, x: number, y: number): void {
+  if (seat === 'player') { g.cursorX = x; g.cursorY = y; return; }
+  g.npcCursorX = x; g.npcCursorY = y;
+}
+
+function selectionOf(g: CheckersGame, seat: CheckersSide): number | undefined {
+  return seat === 'player' ? g.selectedPieceId : g.npcSelectedPieceId;
+}
+
+function setSelection(g: CheckersGame, seat: CheckersSide, id: number | undefined): void {
+  if (seat === 'player') g.selectedPieceId = id;
+  else g.npcSelectedPieceId = id;
+}
+
+/** Log voice: against an NPC the log speaks to the one human reading it, at a
+ *  co-op table both seats read it, so everyone is named. */
+function sideName(g: CheckersGame, side: CheckersSide): string {
+  if (side === 'npc') return g.npcName;
+  return g.remote ? g.playerName : 'Вы';
+}
+
+/** The board seen from the other chair: a real 180° turn of the table, so the
+ *  second human also has their own men at the bottom moving up. */
+function mirrorPiece(piece: CheckersPiece): CheckersPiece {
+  return { ...piece, side: otherSide(piece.side), x: BOARD_MAX - piece.x, y: BOARD_MAX - piece.y };
+}
 
 function cleanMoney(actor: Entity): number {
   const money = actor.money ?? 0;
@@ -350,18 +408,21 @@ function settleCheckersGame(g: CheckersGame, state: GameState, player: Entity, n
     return;
   }
   const amount = transferCheckersStake(state, player, npc, g.winner, g.stakeRubles);
-  const line = g.winner === 'player'
-    ? `Шашки: вы выиграли ₽${amount}.`
-    : `Шашки: вы проиграли ₽${amount}.`;
+  const line = g.remote
+    ? `Шашки: ${sideName(g, g.winner)} забрал ₽${amount}.`
+    : g.winner === 'player'
+      ? `Шашки: вы выиграли ₽${amount}.`
+      : `Шашки: вы проиграли ₽${amount}.`;
   appendLog(g, line);
   state.msgs.push(msg(line, state.time, g.winner === 'player' ? '#8f8' : '#f84'));
 }
 
 export function startCheckersGame(
   ctx: { state: GameState; player: Entity; npc: Entity },
+  options: { stake?: number; remote?: boolean } = {},
 ): boolean {
-  const stake = checkersStakeFromNpc(ctx.npc);
-  if (stake <= 0 || cleanMoney(ctx.player) < stake) return false;
+  const stake = options.stake ?? checkersStakeFromNpc(ctx.npc);
+  if (stake <= 0 || cleanMoney(ctx.player) < stake || cleanMoney(ctx.npc) < stake) return false;
   game = {
     open: true,
     npcId: ctx.npc.id,
@@ -375,8 +436,12 @@ export function startCheckersGame(
     log: [],
     cursorX: 3,
     cursorY: 5,
+    npcCursorX: BOARD_MAX - 3,
+    npcCursorY: BOARD_MAX - 5,
+    remote: options.remote === true,
+    playerName: ctx.player.name ?? 'Игрок',
   };
-  appendLog(game, 'Доска расставлена. Ваш ход первый.');
+  appendLog(game, game.remote ? `Доска расставлена. Первым ходит ${game.playerName}.` : 'Доска расставлена. Ваш ход первый.');
   publishEvent(ctx.state, {
     type: 'gambling_bet',
     x: ctx.player.x,
@@ -400,11 +465,23 @@ export function closeCheckersGame(): void {
   game = null;
 }
 
+/** A table the host runs for us: we hold no game, only the view it ships. */
+let remoteView: CheckersSnapshot | null = null;
+
+export function setCheckersRemoteView(view: unknown): void {
+  remoteView = (view as CheckersSnapshot | null) ?? null;
+}
+
 export function isCheckersGameOpen(): boolean {
-  return !!game?.open;
+  return remoteView !== null || !!game?.open;
 }
 
 export function getCheckersSnapshot(): CheckersSnapshot {
+  return remoteView ?? buildCheckersView('player');
+}
+
+/** The board as `seat` may see it, always computed from the live game. */
+function buildCheckersView(seat: CheckersSide): CheckersSnapshot {
   const g = game;
   if (!g) {
     return {
@@ -419,35 +496,59 @@ export function getCheckersSnapshot(): CheckersSnapshot {
       log: [],
       cursorX: 0,
       cursorY: 0,
+      yourTurn: false,
     };
   }
+  // For 'player' this is the original view verbatim; 'npc' gets the board turned
+  // around, so its own men sit at the bottom and advance upward as usual.
+  const mirror = seat === 'npc';
+  const cursor = cursorOf(g, seat);
+  const acts = seatToAct(g) === seat;
   return {
     open: g.open,
     npcId: g.npcId,
-    npcName: g.npcName,
+    npcName: mirror ? g.playerName : g.npcName,
     stakeRubles: g.stakeRubles,
-    pieces: [...g.pieces],
-    phase: g.phase,
-    winner: g.winner,
+    pieces: mirror ? g.pieces.map(mirrorPiece) : [...g.pieces],
+    phase: g.phase === 'finished' ? 'finished' : acts ? 'player_turn' : 'npc_turn',
+    winner: mirror ? mirrorWinner(g.winner) : g.winner,
     message: g.message,
     log: [...g.log],
-    selectedPieceId: g.selectedPieceId,
-    cursorX: g.cursorX,
-    cursorY: g.cursorY,
+    selectedPieceId: selectionOf(g, seat),
+    cursorX: mirror ? BOARD_MAX - cursor.x : cursor.x,
+    cursorY: mirror ? BOARD_MAX - cursor.y : cursor.y,
+    yourTurn: acts,
   };
 }
 
-export function handleCheckersInput(ctx: { state: GameState; player: Entity; npc: Entity; input: CheckersInput }): CheckersInputResult {
+function mirrorWinner(winner: CheckersWinner): CheckersWinner {
+  if (winner === 'player') return 'npc';
+  if (winner === 'npc') return 'player';
+  return winner;
+}
+
+export function handleCheckersInput(ctx: {
+  state: GameState; player: Entity; npc: Entity; input: CheckersInput; seat?: CheckersSide;
+}): CheckersInputResult {
   const g = game;
   if (!g?.open || g.npcId !== ctx.npc.id) return { handled: false };
+  const seat = ctx.seat ?? 'player';
   if (g.phase === 'finished') {
     if (ctx.input.interactEdge || ctx.input.dropEdge || ctx.input.escEdge) return { handled: true, closeInterface: true };
     return { handled: true };
   }
   if (ctx.input.escEdge) {
-    g.winner = 'npc';
+    // Walking away is conceding: the stake goes to whoever stayed.
+    g.winner = otherSide(seat);
     settleCheckersGame(g, ctx.state, ctx.player, ctx.npc);
     return { handled: true, closeInterface: true };
+  }
+
+  // Co-op table: both chairs are humans and play through the very same turn
+  // code, so the AI block below never runs.
+  if (g.remote) {
+    if (seatToAct(g) !== seat) return { handled: true };
+    return playSeatTurn(g, ctx, seat);
   }
 
   if (g.phase === 'npc_turn') {
@@ -476,37 +577,53 @@ export function handleCheckersInput(ctx: { state: GameState; player: Entity; npc
     return { handled: true };
   }
 
-  // Player turn navigation
-  if (ctx.input.leftNav) g.cursorX = Math.max(0, g.cursorX - 1);
-  if (ctx.input.rightNav) g.cursorX = Math.min(7, g.cursorX + 1);
-  if (ctx.input.upNav) g.cursorY = Math.max(0, g.cursorY - 1);
-  if (ctx.input.downNav) g.cursorY = Math.min(7, g.cursorY + 1);
+  return playSeatTurn(g, ctx, 'player');
+}
 
+/** One seat's move: navigate, pick a man, move or capture, hand the board over.
+ *  `seat` is 'player' against an NPC and either chair at a co-op table. The
+ *  'npc' chair sees the board turned around, so its navigation is inverted to
+ *  match what that human is looking at. */
+function playSeatTurn(
+  g: CheckersGame,
+  ctx: { state: GameState; player: Entity; npc: Entity; input: CheckersInput },
+  seat: CheckersSide,
+): CheckersInputResult {
+  const flip = seat === 'npc' ? -1 : 1;
+  const cursor = cursorOf(g, seat);
+  let { x: cx, y: cy } = cursor;
+  if (ctx.input.leftNav) cx = clampBoard(cx - flip);
+  if (ctx.input.rightNav) cx = clampBoard(cx + flip);
+  if (ctx.input.upNav) cy = clampBoard(cy - flip);
+  if (ctx.input.downNav) cy = clampBoard(cy + flip);
+  setCursor(g, seat, cx, cy);
+
+  const selectedId = selectionOf(g, seat);
   if (ctx.input.dropEdge) {
-    if (g.selectedPieceId && !g.mustCaptureWithPieceId) {
-      g.selectedPieceId = undefined;
+    if (selectedId && !g.mustCaptureWithPieceId) {
+      setSelection(g, seat, undefined);
     }
     return { handled: true };
   }
 
   if (ctx.input.interactEdge) {
-    if (g.selectedPieceId) {
-      const piece = g.pieces.find(p => p.id === g.selectedPieceId);
+    if (selectedId) {
+      const piece = g.pieces.find(p => p.id === selectedId);
       if (!piece) return { handled: true };
 
       const moves = generateMovesForPiece(g.pieces, piece);
 
-      let allPlayerMoves = getAllMovesForSide(g.pieces, 'player');
+      let allSeatMoves = getAllMovesForSide(g.pieces, seat);
       if (g.mustCaptureWithPieceId) {
-          allPlayerMoves = moves.filter(m => m.isCapture);
+          allSeatMoves = moves.filter(m => m.isCapture);
       }
 
-      const hasAnyCaptures = allPlayerMoves.some(m => m.isCapture);
+      const hasAnyCaptures = allSeatMoves.some(m => m.isCapture);
 
-      const move = moves.find(m => m.endX === g.cursorX && m.endY === g.cursorY);
+      const move = moves.find(m => m.endX === cx && m.endY === cy);
 
       if (!move) {
-        if (!g.mustCaptureWithPieceId) g.selectedPieceId = undefined; // deselect if invalid move
+        if (!g.mustCaptureWithPieceId) setSelection(g, seat, undefined); // deselect if invalid move
         return { handled: true };
       }
 
@@ -529,22 +646,22 @@ export function handleCheckersInput(ctx: { state: GameState; player: Entity; npc
         }
       }
 
-      g.selectedPieceId = undefined;
+      setSelection(g, seat, undefined);
       g.mustCaptureWithPieceId = undefined;
-      g.phase = 'npc_turn';
+      g.phase = seat === 'player' ? 'npc_turn' : 'player_turn';
       checkWinCondition(g);
       if (g.winner) settleCheckersGame(g, ctx.state, ctx.player, ctx.npc);
     } else {
-      const piece = getPieceAt(g.pieces, g.cursorX, g.cursorY);
-      if (piece && piece.side === 'player') {
-        const allPlayerMoves = getAllMovesForSide(g.pieces, 'player');
-        const hasCaptures = allPlayerMoves.some(m => m.isCapture);
+      const piece = getPieceAt(g.pieces, cx, cy);
+      if (piece && piece.side === seat) {
+        const allSeatMoves = getAllMovesForSide(g.pieces, seat);
+        const hasCaptures = allSeatMoves.some(m => m.isCapture);
         const pieceMoves = generateMovesForPiece(g.pieces, piece);
-        
+
         if (hasCaptures && !pieceMoves.some(m => m.isCapture)) {
            appendLog(g, 'Вы должны выбрать шашку, которая может бить!');
         } else if (pieceMoves.length > 0) {
-           g.selectedPieceId = piece.id;
+           setSelection(g, seat, piece.id);
         }
       }
     }
@@ -552,3 +669,40 @@ export function handleCheckersInput(ctx: { state: GameState; player: Entity; npc
 
   return { handled: true };
 }
+
+function clampBoard(v: number): number {
+  return Math.max(0, Math.min(BOARD_MAX, v));
+}
+
+/** Walking away mid-table is conceding: the stake goes to whoever stayed. */
+function forfeitCheckers(ctx: { state: GameState; player: Entity; npc: Entity; quitter: CheckersSide }): void {
+  const g = game;
+  if (!g || g.phase === 'finished') return;
+  g.winner = otherSide(ctx.quitter);
+  settleCheckersGame(g, ctx.state, ctx.player, ctx.npc);
+}
+
+registerTabletopGame({
+  id: 'checkers',
+  title: 'ШАШКИ',
+  menuLabel: 'Играть в шашки',
+  itemId: 'checkers_board',
+  order: 33,
+  stake: checkersStakeFromNpc,
+  start: (ctx, options) => startCheckersGame(ctx, options),
+  close: closeCheckersGame,
+  isOpen: isCheckersGameOpen,
+  input: ctx => handleCheckersInput(ctx),
+  snapshot: getCheckersSnapshot,
+  view: seat => buildCheckersView(seat),
+  setView: setCheckersRemoteView,
+  forfeit: ctx => forfeitCheckers(ctx),
+  intro: ctx => ({
+    lines: [
+      `${ctx.opponent.name ?? 'NPC'} достает стертую доску и деревянные шашки.`,
+      `Ставка зафиксирована: ₽${ctx.stake}.`,
+      'Ходят по диагонали вперед, дамка ходит назад. Взятие обязательно.',
+    ],
+    message: `${controlBindingLabel('gameMenu')} выбрать/ходить, ${controlBindingLabel('drop')} отмена.`,
+  }),
+});

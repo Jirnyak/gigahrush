@@ -6,6 +6,35 @@
 
 Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review, revised 2026-06-02 after host-player Cloudflare test planning and hundreds-player server-track review, revised 2026-07-12 after successful peer inventory sync, container loot tests and Net Sphere chat synchronization fixes.
 
+## SHIPPED: Co-op tables — turn-based sub-games between players (2026-08-19)
+
+`systems/coop_session.ts` is the generic layer; each activity registers itself
+(`registerCoopActivity`) from its own file, so the layer never knows a game.
+
+- **Handshake.** `E` on another human opens the same NPC menu, filtered to what
+  applies to a live player (`playerTarget` on the option def). Any pick becomes a
+  proposal; the invited side answers with LMB/RMB on a small prompt over live
+  gameplay, and an unanswered invite lapses after `COOP_INVITE_TIMEOUT` (20 game
+  seconds) so nobody can be pinned in a prompt.
+- **Authority.** The table lives on the host: it runs the game module, moves the
+  money, and ships each seat only the view of its own chair. A peer sends nothing
+  but the keystrokes of its seat (`coop_propose` / `coop_reply` / `coop_input` /
+  `coop_leave`), so a fabricated "I won" buys nothing. This is deliberately
+  stricter than the relaxed-trust NPC `trade_deal`: a wager and a player-to-player
+  swap are exactly where relaxed trust mints money and duplicates items.
+- **Seats.** The two chairs keep the minigames' own `'player' | 'npc'` names so
+  their turn logic feeds through unchanged: the proposer sits in `'player'`, the
+  responder in `'npc'`, and `advanceNpc` simply stands down when `remote` is set.
+- **Freeze.** Seated actors are out of play — `movePlayer`, `isHostile` and
+  `applyDamage` all check `isCoopSeated`. The world around them keeps simulating;
+  a third player is never paused by someone else's card game.
+- **One table per host.** Every minigame holds a single module-level game, so a
+  second proposal is refused with «Стол занят». Lifting the cap is a change in the
+  game modules, not in the layer.
+- **Known limits.** Poker is not implemented — it is a new module registering the
+  same way, with no protocol change. The host must carry `peerSlot = 0` (the room's
+  own numbering) for peers to tell a human from an NPC.
+
 ## SHIPPED: Protocol v2 — host-authoritative peer state (2026-08-08)
 
 Реализовано в коде (`src/systems/online_protocol.ts`, `src/systems/online_client.ts`, обвязка в `main.ts`); это shipped facts, а не план:

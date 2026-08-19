@@ -6,13 +6,20 @@ import { ITEMS } from '../src/data/catalog';
 import { designFloorProfile } from '../src/data/design_floor_profiles';
 import {
   activateNpcCustomMenuOption,
-  CARD_DECK_ITEM_ID,
   closeNpcInteractionInterface,
-  DICE_BONE_ITEM_ID,
-  DOMINO_BOX_ITEM_ID,
   getNpcInteractionInterfaceSnapshot,
   getNpcMenuOptions,
 } from '../src/systems/npc_interaction_options';
+import { tabletopGame } from '../src/systems/tabletop';
+import { npcMenuGroupTab } from '../src/systems/npc_interaction_options';
+
+// Настолки живут в своей группе меню, а не в корне: спрашивать надо её вкладку.
+const GAMES_TAB = npcMenuGroupTab('tabletop');
+
+// Единственный источник правды о наборе для игры — сама игра, через реестр.
+const CARD_DECK_ITEM_ID = tabletopGame('durak')!.itemId;
+const DICE_BONE_ITEM_ID = tabletopGame('dice')!.itemId;
+const DOMINO_BOX_ITEM_ID = tabletopGame('domino')!.itemId;
 import { getDiceSnapshot } from '../src/systems/dice';
 import { getDominoSnapshot } from '../src/systems/domino';
 import { getDurakSnapshot } from '../src/systems/durak';
@@ -71,6 +78,7 @@ test('domino box is a non-active inventory item for NPC menu affordances', () =>
 
 test('durak NPC menu option requires a card deck on either side and player stake money', () => {
   const state = makeGameState();
+  state.npcMenuTab = GAMES_TAB;
   const player = makeTestPlayer({ money: 10, inventory: [] });
   const npc = makeTestNpc({ money: 100, inventory: [] });
 
@@ -91,6 +99,7 @@ test('durak NPC menu option requires a card deck on either side and player stake
 
 test('dice NPC menu option requires bone dice on either side and player stake money', () => {
   const state = makeGameState();
+  state.npcMenuTab = GAMES_TAB;
   const player = makeTestPlayer({ money: 10, inventory: [] });
   const npc = makeTestNpc({ money: 100, inventory: [] });
 
@@ -116,6 +125,7 @@ test('dice NPC menu option requires bone dice on either side and player stake mo
 
 test('domino NPC menu option requires a domino box on either side and player stake money', () => {
   const state = makeGameState();
+  state.npcMenuTab = GAMES_TAB;
   const player = makeTestPlayer({ money: 10, inventory: [] });
   const npc = makeTestNpc({ money: 100, inventory: [] });
 

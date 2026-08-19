@@ -13820,6 +13820,130 @@ function drawCheckersBoardSprite(t: Uint32Array, seed: number): void {
   drawNoiseDust(t, seed + 1010, grime, 15);
 }
 
+function drawChessSetSprite(t: Uint32Array, seed: number): void {
+  const boardDark: [number, number, number] = [42, 40, 36];
+  const boardLight: [number, number, number] = [198, 172, 118];
+  const hinge: [number, number, number] = [92, 96, 92];
+  const white: [number, number, number] = [214, 200, 168];
+  const black: [number, number, number] = [58, 56, 54];
+  // The nut standing in for the lost black queen — the item description promises it.
+  const steel: [number, number, number] = [138, 142, 138];
+  const grime: [number, number, number] = [64, 68, 58];
+
+  ellipse(t, 33, 54, 21, 4.5, [14, 15, 13], seed + 2100, 84);
+  rect(t, 12, 18, 54, 48, [104, 70, 44], seed + 2101, 240);
+  outlineRect(t, 12, 18, 54, 48, [26, 20, 16]);
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const c = (x + y) % 2 === 1 ? boardDark : boardLight;
+      rect(t, 14 + x * 5, 20 + y * 3, 17 + x * 5, 22 + y * 3, c, seed + x * 3 + y, 218);
+    }
+  }
+  // The fold: the board is a case that shuts on its own pieces.
+  line(t, 33, 18, 33, 48, 1.5, hinge, seed + 2102, 200);
+  for (let i = 0; i < 5; i++) {
+    const x = 18 + i * 8;
+    const light = i % 2 === 0;
+    ellipse(t, x, 30 + (i % 3), 2.5, 3.5, light ? white : black, seed + 2110 + i, 240);
+    ellipse(t, x, 27 + (i % 3), 2, 2, light ? white : black, seed + 2120 + i, 240);
+  }
+  ellipse(t, 46, 34, 3, 2.5, steel, seed + 2130, 240);
+  ellipse(t, 46, 34, 1.4, 1.2, [30, 32, 30], seed + 2131, 220);
+  drawNoiseDust(t, seed + 2140, grime, 16);
+}
+
+function drawGoSetSprite(t: Uint32Array, seed: number): void {
+  const board: [number, number, number] = [186, 150, 92];
+  const grid: [number, number, number] = [58, 44, 28];
+  const black: [number, number, number] = [30, 30, 32];
+  const white: [number, number, number] = [222, 220, 210];
+  const pouch: [number, number, number] = [78, 68, 54];
+  const grime: [number, number, number] = [64, 68, 58];
+
+  ellipse(t, 33, 54, 21, 4.5, [14, 15, 13], seed + 2200, 84);
+  rect(t, 10, 14, 50, 50, board, seed + 2201, 244);
+  outlineRect(t, 10, 14, 50, 50, [52, 40, 26]);
+  // Nine by nine: stones sit ON the intersections, so the grid is what matters.
+  for (let i = 0; i < 9; i++) {
+    line(t, 13 + i * 4.4, 17, 13 + i * 4.4, 47, 1, grid, seed + 2210 + i, 190);
+    line(t, 13, 17 + i * 3.7, 47, 17 + i * 3.7, 1, grid, seed + 2230 + i, 190);
+  }
+  for (const [sx, sy] of [[2, 2], [6, 2], [2, 6], [6, 6], [4, 4]]) {
+    ellipse(t, 13 + sx * 4.4, 17 + sy * 3.7, 1, 1, grid, seed + 2250 + sx * sy, 220);
+  }
+  const stones: [number, number, boolean][] = [[2, 2, true], [3, 3, false], [6, 2, false], [4, 5, true], [5, 4, true], [2, 6, false]];
+  for (let i = 0; i < stones.length; i++) {
+    const [gx, gy, dark] = stones[i];
+    ellipse(t, 13 + gx * 4.4, 17 + gy * 3.7, 2, 1.8, dark ? black : white, seed + 2260 + i, 246);
+  }
+  ellipse(t, 55, 40, 6, 8, pouch, seed + 2280, 236);
+  ellipse(t, 55, 33, 4, 2, [52, 46, 36], seed + 2281, 220);
+  drawNoiseDust(t, seed + 2290, grime, 14);
+}
+
+function drawBackgammonSetSprite(t: Uint32Array, seed: number): void {
+  const board: [number, number, number] = [132, 92, 54];
+  const burn: [number, number, number] = [70, 44, 24];
+  const pointLight: [number, number, number] = [198, 170, 116];
+  const pointDark: [number, number, number] = [58, 46, 34];
+  const checker: [number, number, number] = [206, 186, 140];
+  const grime: [number, number, number] = [64, 68, 58];
+
+  ellipse(t, 33, 54, 22, 4.5, [14, 15, 13], seed + 2300, 84);
+  rect(t, 8, 16, 58, 50, board, seed + 2301, 244);
+  outlineRect(t, 8, 16, 58, 50, [40, 26, 16]);
+  // Burnt into plywood by hand: the points are scorch marks, not paint. No
+  // triangle primitive here, so each point tapers as a stack of shrinking bars.
+  for (let i = 0; i < 12; i++) {
+    const x = 11 + i * 4;
+    const c = i % 2 === 0 ? pointLight : pointDark;
+    for (let step = 0; step < 6; step++) {
+      const inset = step * 0.25;
+      rect(t, x + inset, 18 + step * 2, x + 3 - inset, 20 + step * 2, c, seed + 2310 + i * 7 + step, 226);
+      rect(t, x + inset, 46 - step * 2, x + 3 - inset, 48 - step * 2, c, seed + 2330 + i * 7 + step, 226);
+    }
+  }
+  line(t, 33, 16, 33, 50, 2, burn, seed + 2350, 210);
+  for (let i = 0; i < 4; i++) {
+    ellipse(t, 13 + i * 2, 22 + i, 2, 1.4, checker, seed + 2360 + i, 240);
+    ellipse(t, 53 - i * 2, 45 - i, 2, 1.4, [110, 96, 76], seed + 2370 + i, 240);
+  }
+  rect(t, 44, 24, 50, 30, [222, 218, 206], seed + 2380, 244);
+  rect(t, 52, 26, 58, 32, [222, 218, 206], seed + 2381, 244);
+  drawNoiseDust(t, seed + 2390, grime, 15);
+}
+
+function drawBattleshipPadSprite(t: Uint32Array, seed: number): void {
+  const paper: [number, number, number] = [204, 206, 192];
+  const cell: [number, number, number] = [150, 168, 178];
+  const ink: [number, number, number] = [46, 58, 84];
+  const pencil: [number, number, number] = [176, 148, 62];
+  const lead: [number, number, number] = [58, 58, 60];
+  const grime: [number, number, number] = [96, 98, 86];
+
+  ellipse(t, 33, 54, 20, 4, [14, 15, 13], seed + 2400, 82);
+  rect(t, 12, 12, 52, 52, paper, seed + 2401, 246);
+  outlineRect(t, 12, 12, 52, 52, [120, 122, 110]);
+  // Squared exercise-book paper: the grid IS the item.
+  for (let i = 0; i < 11; i++) {
+    line(t, 14 + i * 3.4, 16, 14 + i * 3.4, 48, 1, cell, seed + 2410 + i, 150);
+    line(t, 14, 16 + i * 3.2, 48, 16 + i * 3.2, 1, cell, seed + 2430 + i, 150);
+  }
+  for (const [x, y, w, h] of [[1, 1, 4, 1], [3, 4, 1, 3], [7, 2, 1, 2], [5, 7, 2, 1]]) {
+    rect(t, 14 + x * 3.4, 16 + y * 3.2, 14 + (x + w) * 3.4, 16 + (y + h) * 3.2, ink, seed + 2450 + x + y, 210);
+  }
+  // Half the pages are already played out and crossed through.
+  for (let i = 0; i < 5; i++) {
+    const x = 16 + Math.floor(noise(i, 21, seed) * 26);
+    const y = 20 + Math.floor(noise(i, 22, seed) * 22);
+    line(t, x, y, x + 3, y + 3, 1, ink, seed + 2470 + i, 190);
+    line(t, x + 3, y, x, y + 3, 1, ink, seed + 2480 + i, 190);
+  }
+  line(t, 54, 18, 58, 44, 2.5, pencil, seed + 2490, 240);
+  ellipse(t, 54, 17, 1.4, 1.6, lead, seed + 2491, 240);
+  drawNoiseDust(t, seed + 2495, grime, 12);
+}
+
 function drawDominoBoxSprite(t: Uint32Array, seed: number): void {
   const box: [number, number, number] = [96, 42, 32];
   const boxLight: [number, number, number] = [154, 70, 48];
@@ -15355,6 +15479,18 @@ function drawMiscSprite(t: Uint32Array, seed: number, p: Palette, defId: string)
       return;
     case 'domino_box':
       drawDominoBoxSprite(t, seed);
+      return;
+    case 'chess_set':
+      drawChessSetSprite(t, seed);
+      return;
+    case 'go_set':
+      drawGoSetSprite(t, seed);
+      return;
+    case 'backgammon_set':
+      drawBackgammonSetSprite(t, seed);
+      return;
+    case 'battleship_pad':
+      drawBattleshipPadSprite(t, seed);
       return;
     case 'fuse':
       drawFuseSprite(t, seed);

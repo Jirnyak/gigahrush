@@ -1,3 +1,4 @@
+import { registerTabletopPanel } from './tabletop_ui';
 import { type CheckersSnapshot, type CheckersPiece } from '../systems/checkers';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { fitText } from './ui_text';
@@ -108,3 +109,5 @@ export function drawCheckersInterface(
   ctx.fillText(fitText(ctx, action, pw - pad * 2), Math.round(px + pw * 0.5), controlsY);
   ctx.restore();
 }
+
+registerTabletopPanel('checkers', drawCheckersInterface as never);

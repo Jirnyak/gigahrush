@@ -84,6 +84,9 @@ export interface SyncEntity {
   alive: boolean; hp: number; maxHp: number;
   sprite: number; weapon: string; tool: string;
   name: string; peerSlot?: number;
+  /** Only for player actors: the co-op menu prices a table from both purses, so
+   *  a peer has to know what the other human is carrying. */
+  money?: number;
   sex?: string; npcVisualId?: string;
   faction?: number; staggerTimer?: number;
   spriteScale?: number;
@@ -102,6 +105,7 @@ export function compactEntity(e: Entity): SyncEntity {
     alive: e.alive, hp: e.hp ?? 0, maxHp: e.maxHp ?? 100,
     sprite: e.sprite, weapon: e.weapon || '', tool: e.tool || '',
     name: e.name || '', peerSlot: e.peerSlot,
+    money: e.peerSlot !== undefined ? Math.max(0, Math.floor(e.money ?? 0)) : undefined,
     netGen: e.netGen,
     sex: e.sex, npcVisualId: e.npcVisualId,
     faction: e.faction, staggerTimer: e.staggerTimer,

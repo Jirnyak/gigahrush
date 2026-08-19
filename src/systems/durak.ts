@@ -1,6 +1,7 @@
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
 import { mathRng as rng } from '../core/rand';
+import { registerTabletopGame } from './tabletop';
 
 export type DurakSuit = 'clubs' | 'diamonds' | 'hearts' | 'spades';
 export type DurakRank = 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
@@ -41,6 +42,9 @@ export interface DurakSnapshot {
   canPlaySelected: boolean;
   canFinishTurn: boolean;
   canTake: boolean;
+  /** False only at a co-op table while the other human is thinking. Always true
+   *  against an NPC: its moves resolve inline, so the seat never waits. */
+  yourTurn: boolean;
   finished: boolean;
   winner: DurakWinner;
   message: string;
@@ -78,6 +82,15 @@ interface DurakGame {
   defenderStartCards: number;
   defenderTaking: boolean;
   selectedIndex: number;
+  /** Cursor of the 'npc' seat. Unused against an NPC — the AI needs no cursor —
+   *  and only alive at a co-op table, where a human sits there. */
+  npcSelectedIndex: number;
+  /** Co-op table: the 'npc' seat is a human, so the AI must not move for it and
+   *  play waits for that seat's input instead of resolving inline. */
+  remote: boolean;
+  /** Display name of the 'player' seat, needed to mirror the table for the
+   *  other human. Against an NPC nothing reads it. */
+  playerName: string;
   winner: DurakWinner;
   settled: boolean;
   message: string;
@@ -122,6 +135,15 @@ function otherSide(side: DurakSide): DurakSide {
   return side === 'player' ? 'npc' : 'player';
 }
 
+/** Log voice. Against an NPC the log is written to the one human reading it, so
+ *  its own seat is «вы». At a co-op table both seats read the same log, so
+ *  everyone is named. */
+function sideName(g: DurakGame, side: DurakSide, capitalized = false): string {
+  if (side === 'npc') return g.npcName;
+  if (g.remote) return g.playerName;
+  return capitalized ? 'Вы' : 'вы';
+}
+
 function handOf(g: DurakGame, side: DurakSide): DurakCard[] {
   return side === 'player' ? g.playerHand : g.npcHand;
 }
@@ -163,12 +185,31 @@ function drawToSix(g: DurakGame, side: DurakSide): void {
 }
 
 function updateSelection(g: DurakGame): void {
-  const hand = g.playerHand;
-  if (hand.length <= 0) {
-    g.selectedIndex = 0;
-    return;
-  }
-  g.selectedIndex = Math.max(0, Math.min(hand.length - 1, g.selectedIndex));
+  g.selectedIndex = clampCursor(g.playerHand, g.selectedIndex);
+  g.npcSelectedIndex = clampCursor(g.npcHand, g.npcSelectedIndex);
+}
+
+function clampCursor(hand: readonly DurakCard[], index: number): number {
+  if (hand.length <= 0) return 0;
+  return Math.max(0, Math.min(hand.length - 1, index));
+}
+
+function cursorOf(g: DurakGame, side: DurakSide): number {
+  return side === 'player' ? g.selectedIndex : g.npcSelectedIndex;
+}
+
+function setCursor(g: DurakGame, side: DurakSide, index: number): void {
+  if (side === 'player') g.selectedIndex = index;
+  else g.npcSelectedIndex = index;
+}
+
+/** Whose input the table is waiting for. Uncovered attack on the table means the
+ *  defender owes an answer; anything else is the attacker's move. Against an NPC
+ *  this is always 'player' by the time control returns, because `advanceNpc`
+ *  resolves the other seat inline. */
+function seatToAct(g: DurakGame): DurakSide {
+  if (uncoveredIndex(g) >= 0 && !g.defenderTaking) return g.defender;
+  return g.attacker;
 }
 
 function playerWon(g: DurakGame): DurakWinner {
@@ -222,9 +263,11 @@ function settleDurakGame(g: DurakGame, state: GameState, player: Entity, npc: En
     return;
   }
   const amount = transferDurakStake(state, player, npc, g.winner, g.stakeRubles);
-  const line = g.winner === 'player'
-    ? `Дурак: вы выиграли ₽${amount}.`
-    : `Дурак: вы проиграли ₽${amount}.`;
+  const line = g.remote
+    ? `Дурак: ${sideName(g, g.winner, true)} забрал ₽${amount}.`
+    : g.winner === 'player'
+      ? `Дурак: вы выиграли ₽${amount}.`
+      : `Дурак: вы проиграли ₽${amount}.`;
   appendLog(g, line);
   state.msgs.push(msg(line, state.time, g.winner === 'player' ? '#8f8' : '#f84'));
 }
@@ -239,7 +282,7 @@ function finishTurnWithOutcome(g: DurakGame, state: GameState, player: Entity, n
       defenderHand.push(pair.attack);
       if (pair.defense) defenderHand.push(pair.defense);
     }
-    appendLog(g, `${defenderBefore === 'player' ? 'Вы взяли' : g.npcName + ' взял'} карты со стола.`);
+    appendLog(g, `${sideName(g, defenderBefore, true)} ${defenderBefore === 'player' && !g.remote ? 'взяли' : 'взял'} карты со стола.`);
   } else {
     let count = 0;
     for (const pair of g.table) count += pair.defense ? 2 : 1;
@@ -272,7 +315,7 @@ function playAttackCard(g: DurakGame, side: DurakSide, card: DurakCard): boolean
   const removed = removeCardById(handOf(g, side), card.id);
   if (!removed) return false;
   g.table.push({ attack: removed });
-  appendLog(g, `${side === 'player' ? 'Вы ходите' : g.npcName + ' ходит'}: ${formatDurakCard(removed)}.`);
+  appendLog(g, `${sideName(g, side, true)} ${side === 'player' && !g.remote ? 'ходите' : 'ходит'}: ${formatDurakCard(removed)}.`);
   g.phase = g.defender === 'player' ? 'player_defense' : 'player_attack';
   updateSelection(g);
   return true;
@@ -287,13 +330,16 @@ function playDefenseCard(g: DurakGame, side: DurakSide, card: DurakCard): boolea
   const removed = removeCardById(handOf(g, side), card.id);
   if (!removed) return false;
   g.table[idx].defense = removed;
-  appendLog(g, `${side === 'player' ? 'Вы кроете' : g.npcName + ' кроет'}: ${formatDurakCard(removed)}.`);
+  appendLog(g, `${sideName(g, side, true)} ${side === 'player' && !g.remote ? 'кроете' : 'кроет'}: ${formatDurakCard(removed)}.`);
   g.phase = g.attacker === 'player' ? 'player_attack' : 'player_defense';
   updateSelection(g);
   return true;
 }
 
 function advanceNpc(g: DurakGame, state: GameState, player: Entity, npc: Entity): void {
+  // Co-op table: a human sits in the 'npc' seat, so nothing moves for it — the
+  // table simply waits, and `seatToAct` hands the turn over.
+  if (g.remote) return;
   for (let guard = 0; guard < 16 && g.phase !== 'finished'; guard++) {
     if (g.attacker === 'npc') {
       const canAdd = g.table.length === 0 || g.defenderTaking || allCovered(g);
@@ -429,10 +475,10 @@ export function chooseNpcAttackCard(g: Pick<DurakGame, 'attacker' | 'defenderSta
 
 export function startDurakGame(
   ctx: { state: GameState; player: Entity; npc: Entity },
-  options: { rng?: () => number; deck?: readonly DurakCard[] } = {},
+  options: { rng?: () => number; deck?: readonly DurakCard[]; stake?: number; remote?: boolean } = {},
 ): boolean {
-  const stake = durakStakeFromNpc(ctx.npc);
-  if (stake <= 0 || cleanMoney(ctx.player) < stake) return false;
+  const stake = options.stake ?? durakStakeFromNpc(ctx.npc);
+  if (stake <= 0 || cleanMoney(ctx.player) < stake || cleanMoney(ctx.npc) < stake) return false;
   const deck = options.deck ? options.deck.map(card => ({ ...card })) : shuffleDurakDeck(createDurakDeck(), options.rng);
   if (deck.length < 13) return false;
   const playerHand: DurakCard[] = [];
@@ -465,12 +511,15 @@ export function startDurakGame(
     defenderStartCards: attacker === 'player' ? npcHand.length : playerHand.length,
     defenderTaking: false,
     selectedIndex: 0,
+    npcSelectedIndex: 0,
+    remote: options.remote === true,
+    playerName: ctx.player.name ?? 'Игрок',
     winner: '',
     settled: false,
     message: '',
     log: [],
   };
-  appendLog(game, `Козырь: ${formatDurakSuit(trumpSuit)}. Первым ходит ${attacker === 'player' ? 'вы' : game.npcName}.`);
+  appendLog(game, `Козырь: ${formatDurakSuit(trumpSuit)}. Первым ходит ${sideName(game, attacker)}.`);
   publishEvent(ctx.state, {
     type: 'gambling_bet',
     x: ctx.player.x,
@@ -495,11 +544,25 @@ export function closeDurakGame(): void {
   game = null;
 }
 
-export function isDurakGameOpen(): boolean {
-  return !!game?.open;
+/** A table the host runs for us: we hold no game, only the view it ships. */
+let remoteView: DurakSnapshot | null = null;
+
+export function setDurakRemoteView(view: unknown): void {
+  remoteView = (view as DurakSnapshot | null) ?? null;
 }
 
+export function isDurakGameOpen(): boolean {
+  return remoteView !== null || !!game?.open;
+}
+
+/** What the local UI draws: the view the host shipped for our chair, or — when
+ *  we are the one running the table — the table itself. */
 export function getDurakSnapshot(): DurakSnapshot {
+  return remoteView ?? buildDurakView('player');
+}
+
+/** The table as `seat` may see it, always computed from the live game. */
+function buildDurakView(seat: DurakSide): DurakSnapshot {
   const g = game;
   if (!g) {
     return {
@@ -523,6 +586,7 @@ export function getDurakSnapshot(): DurakSnapshot {
       canPlaySelected: false,
       canFinishTurn: false,
       canTake: false,
+      yourTurn: false,
       finished: false,
       winner: '',
       message: '',
@@ -530,49 +594,74 @@ export function getDurakSnapshot(): DurakSnapshot {
     };
   }
   updateSelection(g);
-  const selectedCard = g.playerHand[g.selectedIndex];
-  const canPlaySelected = !!selectedCard && (
-    (g.phase === 'player_attack' && isDurakAttackLegal(g, 'player', selectedCard)) ||
-    (g.phase === 'player_defense' && uncoveredIndex(g) >= 0 && canDurakCover(g.table[uncoveredIndex(g)].attack, selectedCard, g.trumpSuit))
+  // Everything below is told from `seat`'s chair: its own cards are the hand,
+  // the other seat is only a count. For 'player' this is the original view
+  // verbatim; 'npc' is the same table mirrored for the human sitting there.
+  const mirror = seat === 'npc';
+  const own = handOf(g, seat);
+  const selectedIndex = cursorOf(g, seat);
+  const selectedCard = own[selectedIndex];
+  const attacking = g.attacker === seat;
+  const live = g.phase !== 'finished';
+  // Against an NPC the opponent moves inline, so the seat is never made to wait
+  // — the original view had no turn gate and must keep none.
+  const acts = live && (!g.remote || seatToAct(g) === seat);
+  const canPlaySelected = acts && !!selectedCard && (
+    (attacking && isDurakAttackLegal(g, seat, selectedCard)) ||
+    (!attacking && uncoveredIndex(g) >= 0 && canDurakCover(g.table[uncoveredIndex(g)].attack, selectedCard, g.trumpSuit))
   );
   return {
     open: g.open,
     npcId: g.npcId,
-    npcName: g.npcName,
+    npcName: mirror ? g.playerName : g.npcName,
     stakeRubles: g.stakeRubles,
     trumpSuit: g.trumpSuit,
     trumpCard: g.trumpCard,
     talonCount: g.talon.length,
     discardCount: g.discardCount,
-    attacker: g.attacker,
-    defender: g.defender,
-    phase: g.phase,
+    attacker: mirror ? otherSide(g.attacker) : g.attacker,
+    defender: mirror ? otherSide(g.defender) : g.defender,
+    phase: g.phase === 'finished' ? 'finished' : attacking ? 'player_attack' : 'player_defense',
     defenderTaking: g.defenderTaking,
     defenderStartCards: g.defenderStartCards,
-    playerHand: [...g.playerHand],
-    npcHandCount: g.npcHand.length,
+    playerHand: [...own],
+    npcHandCount: handOf(g, otherSide(seat)).length,
     table: g.table.map(pair => ({ attack: pair.attack, defense: pair.defense })),
-    selectedIndex: g.selectedIndex,
+    selectedIndex,
     selectedCard,
     canPlaySelected,
-    canFinishTurn: g.phase === 'player_attack' && g.table.length > 0 && (g.defenderTaking || allCovered(g)),
-    canTake: g.phase === 'player_defense',
+    canFinishTurn: acts && attacking && g.table.length > 0 && (g.defenderTaking || allCovered(g)),
+    canTake: acts && !attacking,
+    yourTurn: acts,
     finished: g.phase === 'finished',
-    winner: g.winner,
+    winner: mirror ? mirrorWinner(g.winner) : g.winner,
     message: g.message,
     log: [...g.log],
   };
 }
 
-export function handleDurakInput(ctx: { state: GameState; player: Entity; npc: Entity; input: DurakInput }): DurakInputResult {
+function mirrorWinner(winner: DurakWinner): DurakWinner {
+  if (winner === 'player') return 'npc';
+  if (winner === 'npc') return 'player';
+  return winner;
+}
+
+/** `seat` is which chair the input came from. Against an NPC it is always the
+ *  'player' chair and every branch below reads exactly as it did before; at a
+ *  co-op table the same branches serve whichever human is on the move. */
+export function handleDurakInput(ctx: {
+  state: GameState; player: Entity; npc: Entity; input: DurakInput; seat?: DurakSide;
+}): DurakInputResult {
   const g = game;
   if (!g?.open || g.npcId !== ctx.npc.id) return { handled: false };
+  const seat = ctx.seat ?? 'player';
+  const hand = handOf(g, seat);
   if (ctx.input.leftNav) {
-    g.selectedIndex = Math.max(0, g.selectedIndex - 1);
+    setCursor(g, seat, Math.max(0, cursorOf(g, seat) - 1));
     return { handled: true };
   }
   if (ctx.input.rightNav) {
-    g.selectedIndex = Math.min(Math.max(0, g.playerHand.length - 1), g.selectedIndex + 1);
+    setCursor(g, seat, Math.min(Math.max(0, hand.length - 1), cursorOf(g, seat) + 1));
     return { handled: true };
   }
   if (g.phase === 'finished') {
@@ -580,14 +669,25 @@ export function handleDurakInput(ctx: { state: GameState; player: Entity; npc: E
     return { handled: true };
   }
   if (ctx.input.escEdge) {
-    g.winner = 'npc';
+    // Walking away is conceding: the stake goes to whoever stayed.
+    g.winner = otherSide(seat);
     g.phase = 'finished';
     settleDurakGame(g, ctx.state, ctx.player, ctx.npc);
     return { handled: true, closeInterface: true };
   }
+  // A co-op table waits its turn; a table against an NPC never has to.
+  if (g.remote && seatToAct(g) !== seat) return { handled: true };
+  const attacking = g.attacker === seat;
   if (ctx.input.dropEdge) {
-    if (g.phase === 'player_defense') {
+    if (!attacking) {
       g.defenderTaking = true;
+      // Against an NPC the attacker piles on and the turn resolves at once. At a
+      // co-op table the human attacker gets that choice instead, so the turn
+      // stays open until they end it.
+      if (g.remote) {
+        appendLog(g, `${sideName(g, seat, true)} берет. ${sideName(g, otherSide(seat), true)} может подкинуть по рангу или закончить.`);
+        return { handled: true };
+      }
       while (true) {
         const card = chooseNpcAttackCard(g);
         if (!card) break;
@@ -597,31 +697,63 @@ export function handleDurakInput(ctx: { state: GameState; player: Entity; npc: E
       advanceNpc(g, ctx.state, ctx.player, ctx.npc);
       return { handled: true };
     }
-    if (g.phase === 'player_attack' && g.table.length > 0 && (g.defenderTaking || allCovered(g))) {
+    if (g.table.length > 0 && (g.defenderTaking || allCovered(g))) {
       finishTurnWithOutcome(g, ctx.state, ctx.player, ctx.npc, g.defenderTaking);
       advanceNpc(g, ctx.state, ctx.player, ctx.npc);
       return { handled: true };
     }
   }
   if (ctx.input.interactEdge) {
-    const card = g.playerHand[g.selectedIndex];
+    const card = hand[cursorOf(g, seat)];
     if (!card) return { handled: true };
-    if (g.phase === 'player_attack') {
-      if (!playAttackCard(g, 'player', card)) {
+    if (attacking) {
+      if (!playAttackCard(g, seat, card)) {
         appendLog(g, 'Эту карту нельзя подкинуть сейчас.');
         return { handled: true };
       }
       advanceNpc(g, ctx.state, ctx.player, ctx.npc);
       return { handled: true };
     }
-    if (g.phase === 'player_defense') {
-      if (!playDefenseCard(g, 'player', card)) {
-        appendLog(g, 'Этой картой не кроется.');
-        return { handled: true };
-      }
-      advanceNpc(g, ctx.state, ctx.player, ctx.npc);
+    if (!playDefenseCard(g, seat, card)) {
+      appendLog(g, 'Этой картой не кроется.');
       return { handled: true };
     }
+    advanceNpc(g, ctx.state, ctx.player, ctx.npc);
+    return { handled: true };
   }
   return { handled: true };
 }
+
+/** Walking away mid-table is conceding: the stake goes to whoever stayed. */
+function forfeitDurak(ctx: { state: GameState; player: Entity; npc: Entity; quitter: DurakSide }): void {
+  const g = game;
+  if (!g || g.phase === 'finished') return;
+  g.winner = otherSide(ctx.quitter);
+  g.phase = 'finished';
+  settleDurakGame(g, ctx.state, ctx.player, ctx.npc);
+}
+
+registerTabletopGame({
+  id: 'durak',
+  title: 'ДУРАК',
+  menuLabel: 'Играть в дурака',
+  itemId: 'card_deck',
+  order: 30,
+  stake: durakStakeFromNpc,
+  start: (ctx, options) => startDurakGame(ctx, options),
+  close: closeDurakGame,
+  isOpen: isDurakGameOpen,
+  input: ctx => handleDurakInput(ctx),
+  snapshot: getDurakSnapshot,
+  view: seat => buildDurakView(seat),
+  setView: setDurakRemoteView,
+  forfeit: ctx => forfeitDurak(ctx),
+  intro: ctx => ({
+    lines: [
+      `${ctx.opponent.name ?? 'NPC'} кладет колоду на край стола. Козырь открыт.`,
+      `Ставка зафиксирована: ₽${ctx.stake}.`,
+      'Подкидной дурак на двоих, без перевода.',
+    ],
+    message: 'Деньги переходят только после победы или сдачи.',
+  }),
+});

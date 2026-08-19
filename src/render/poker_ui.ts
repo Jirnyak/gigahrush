@@ -1,20 +1,24 @@
+/* ── Панель покера ───────────────────────────────────────────────────────────
+ *
+ * Модуль рисует себя сам и ничего не знает о соседях: свои масти, фигуры, туз,
+ * рубашка и рамка карты живут здесь. Общего карточного модуля нет намеренно —
+ * инкапсуляция дороже экономии строк, и перекрасить покер нельзя, задев дурака.
+ */
+
 import { registerTabletopPanel } from './tabletop_ui';
-import {
-  formatDurakSuit,
-  type DurakCard,
-  type DurakSnapshot,
-  type DurakSuit,
-} from '../systems/durak';
+import type { PokerCard, PokerSnapshot, PokerSuit } from '../systems/poker';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { fitText } from './ui_text';
 import { clamp, rect, drawBadge } from './ui_utils';
 
 const CARD_ASPECT = 0.70;
-const MAX_VISIBLE_NPC_BACKS = 8;
-type PixelMask = readonly string[];
-type CourtRank = 11 | 12 | 13;
+const BOARD_SLOTS = 5;
 
-const RANK_LABELS: Record<DurakCard['rank'], string> = {
+const RANK_LABELS: Record<PokerCard['rank'], string> = {
+  2: '2',
+  3: '3',
+  4: '4',
+  5: '5',
   6: '6',
   7: '7',
   8: '8',
@@ -26,7 +30,12 @@ const RANK_LABELS: Record<DurakCard['rank'], string> = {
   14: 'Т',
 };
 
-const SUIT_MASKS: Record<DurakSuit, PixelMask> = {
+type PixelMask = readonly string[];
+type CourtRank = 11 | 12 | 13;
+
+
+
+const SUIT_MASKS: Record<PokerSuit, PixelMask> = {
   diamonds: [
     '000010000',
     '000111000',
@@ -134,7 +143,7 @@ const ACE_MASK: PixelMask = [
   '000020000',
 ];
 
-const SUIT_STYLES: Record<DurakSuit, { primary: string; accent: string; outline: string }> = {
+const SUIT_STYLES: Record<PokerSuit, { primary: string; accent: string; outline: string }> = {
   diamonds: { primary: '#9c302d', accent: '#c8513e', outline: '#6d211d' },
   hearts: { primary: '#9a2e2f', accent: '#c84b48', outline: '#68201f' },
   clubs: { primary: '#111914', accent: '#365541', outline: '#050807' },
@@ -177,15 +186,15 @@ function drawPixelMask(
   }
 }
 
-function suitStyle(suit: DurakSuit): { primary: string; accent: string; outline: string } {
+function suitStyle(suit: PokerSuit): { primary: string; accent: string; outline: string } {
   return SUIT_STYLES[suit];
 }
 
-function drawPixelSuit(ctx: CanvasRenderingContext2D, suit: DurakSuit, x: number, y: number, cell: number): void {
+function drawPixelSuit(ctx: CanvasRenderingContext2D, suit: PokerSuit, x: number, y: number, cell: number): void {
   drawPixelMask(ctx, SUIT_MASKS[suit], x, y, cell, suitStyle(suit));
 }
 
-function drawCourtIcon(ctx: CanvasRenderingContext2D, card: DurakCard, x: number, y: number, w: number, h: number): void {
+function drawCourtIcon(ctx: CanvasRenderingContext2D, card: PokerCard, x: number, y: number, w: number, h: number): void {
   const rank = card.rank as CourtRank;
   const mask = COURT_MASKS[rank];
   const c = Math.max(2, Math.floor(Math.min(w * 0.52 / maskWidth(mask), h * 0.46 / mask.length)));
@@ -196,7 +205,7 @@ function drawCourtIcon(ctx: CanvasRenderingContext2D, card: DurakCard, x: number
   drawPixelSuit(ctx, card.suit, x + w * 0.5 - maskWidth(SUIT_MASKS[card.suit]) * suitCell * 0.5, y + h * 0.72 - SUIT_MASKS[card.suit].length * suitCell * 0.5, suitCell);
 }
 
-function drawAceIcon(ctx: CanvasRenderingContext2D, card: DurakCard, x: number, y: number, w: number, h: number): void {
+function drawAceIcon(ctx: CanvasRenderingContext2D, card: PokerCard, x: number, y: number, w: number, h: number): void {
   const c = Math.max(2, Math.floor(Math.min(w * 0.60 / maskWidth(ACE_MASK), h * 0.46 / ACE_MASK.length)));
   const mx = x + w * 0.5 - maskWidth(ACE_MASK) * c * 0.5;
   const my = y + h * 0.48 - ACE_MASK.length * c * 0.5;
@@ -205,12 +214,12 @@ function drawAceIcon(ctx: CanvasRenderingContext2D, card: DurakCard, x: number, 
   drawPixelSuit(ctx, card.suit, x + w * 0.5 - maskWidth(SUIT_MASKS[card.suit]) * suitCell * 0.5, y + h * 0.48 - SUIT_MASKS[card.suit].length * suitCell * 0.5, suitCell);
 }
 
-function drawLargeSuit(ctx: CanvasRenderingContext2D, card: DurakCard, x: number, y: number, w: number, h: number): void {
+function drawLargeSuit(ctx: CanvasRenderingContext2D, card: PokerCard, x: number, y: number, w: number, h: number): void {
   const cell = Math.max(2, Math.round(h * 0.034));
   drawPixelSuit(ctx, card.suit, x + w * 0.5 - maskWidth(SUIT_MASKS[card.suit]) * cell * 0.5, y + h * 0.50 - SUIT_MASKS[card.suit].length * cell * 0.5, cell);
 }
 
-function drawCardCenter(ctx: CanvasRenderingContext2D, card: DurakCard, x: number, y: number, w: number, h: number, s: number): void {
+function drawCardCenter(ctx: CanvasRenderingContext2D, card: PokerCard, x: number, y: number, w: number, h: number, s: number): void {
   if (h < 42 * s) {
     drawLargeSuit(ctx, card, x, y, w, h);
     return;
@@ -269,7 +278,7 @@ function drawCardSlot(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
 
 function drawPlayingCard(
   ctx: CanvasRenderingContext2D,
-  card: DurakCard,
+  card: PokerCard,
   x: number,
   y: number,
   w: number,
@@ -322,119 +331,84 @@ function drawPlayingCard(
   ctx.restore();
 }
 
-function drawNpcHand(ctx: CanvasRenderingContext2D, snapshot: DurakSnapshot, x: number, y: number, maxW: number, cardW: number, cardH: number, s: number): void {
-  const shown = Math.min(MAX_VISIBLE_NPC_BACKS, Math.max(0, snapshot.npcHandCount));
-  const step = shown <= 1 ? 0 : Math.min(cardW * 0.36, Math.max(4 * s, (maxW - cardW) / (shown - 1)));
-  const totalW = shown <= 0 ? 0 : cardW + step * (shown - 1);
-  const startX = x + (maxW - totalW) * 0.5;
-  for (let i = 0; i < shown; i++) drawCardBack(ctx, startX + i * step, y, cardW, cardH, s, 0.96);
-  drawBadge(ctx, `${snapshot.npcName}: ${snapshot.npcHandCount}`, x, y + cardH + 3 * s, maxW, 13 * s, s, '#8ca7a1');
-}
-
-function handLayout(maxW: number, preferredH: number, count: number, s: number): { cardW: number; cardH: number; step: number; totalW: number } {
-  let cardH = Math.max(28 * s, preferredH);
-  let cardW = cardH * CARD_ASPECT;
-  const minStep = cardW * 0.34;
-  let step = count <= 1 ? 0 : Math.min(cardW + 2 * s, (maxW - cardW) / (count - 1));
-  if (count > 1 && step < minStep) {
-    cardW = Math.max(16 * s, maxW / (1 + (count - 1) * 0.34));
-    cardH = cardW / CARD_ASPECT;
-    step = cardW * 0.34;
+function drawHoleRow(
+  ctx: CanvasRenderingContext2D,
+  cards: readonly PokerCard[],
+  hiddenCount: number,
+  x: number,
+  y: number,
+  w: number,
+  cardW: number,
+  cardH: number,
+  s: number,
+): void {
+  const count = Math.max(cards.length, hiddenCount);
+  const gap = 4 * s;
+  const totalW = count * cardW + gap * Math.max(0, count - 1);
+  const startX = x + (w - totalW) * 0.5;
+  for (let i = 0; i < count; i++) {
+    const cx = startX + i * (cardW + gap);
+    const card = cards[i];
+    if (card) drawPlayingCard(ctx, card, cx, y, cardW, cardH, s);
+    else drawCardBack(ctx, cx, y, cardW, cardH, s, 0.96);
   }
-  return { cardW, cardH, step, totalW: count <= 0 ? 0 : cardW + step * Math.max(0, count - 1) };
 }
 
-function drawPlayerHand(ctx: CanvasRenderingContext2D, snapshot: DurakSnapshot, x: number, y: number, maxW: number, preferredH: number, s: number): void {
-  const count = snapshot.playerHand.length;
-  if (count <= 0) {
-    drawBadge(ctx, 'РУКА ПУСТА', x + maxW * 0.5 - 42 * s, y + 8 * s, 84 * s, 15 * s, s, '#737a75');
+function drawBoard(ctx: CanvasRenderingContext2D, snapshot: PokerSnapshot, x: number, y: number, w: number, h: number, s: number): void {
+  rect(ctx, x, y, w, h, 'rgba(6,9,9,0.62)', '#343c38');
+  drawBadge(ctx, `БАНК ${snapshot.potRubles}Р`, x + 5 * s, y + 4 * s, 78 * s, 13 * s, s, '#d1aa54');
+  drawBadge(ctx, snapshot.streetLabel, x + w - 5 * s - 70 * s, y + 4 * s, 70 * s, 13 * s, s, '#8ca7a1');
+
+  const gap = 5 * s;
+  const areaY = y + 22 * s;
+  const areaH = Math.max(1, h - 28 * s);
+  let cardH = Math.min(52 * s, areaH);
+  let cardW = cardH * CARD_ASPECT;
+  const maxCardW = (w - 10 * s - gap * (BOARD_SLOTS - 1)) / BOARD_SLOTS;
+  if (cardW > maxCardW) {
+    cardW = maxCardW;
+    cardH = cardW / CARD_ASPECT;
+  }
+  const totalW = cardW * BOARD_SLOTS + gap * (BOARD_SLOTS - 1);
+  const startX = x + (w - totalW) * 0.5;
+  const startY = areaY + Math.max(0, (areaH - cardH) * 0.4);
+  for (let i = 0; i < BOARD_SLOTS; i++) {
+    const cx = startX + i * (cardW + gap);
+    const card = snapshot.board[i];
+    if (card) drawPlayingCard(ctx, card, cx, startY, cardW, cardH, s);
+    else drawCardSlot(ctx, cx, startY, cardW, cardH, s);
+  }
+}
+
+function drawActionRow(ctx: CanvasRenderingContext2D, snapshot: PokerSnapshot, x: number, y: number, w: number, h: number, s: number): void {
+  const actions = snapshot.actions;
+  if (actions.length <= 0) {
+    drawBadge(ctx, snapshot.finished ? 'РАЗДАЧА ЗАКРЫТА' : 'ХОДИТ СОПЕРНИК', x + w * 0.25, y, w * 0.5, h, s, '#737a75');
     return;
   }
-  const layout = handLayout(maxW, preferredH, count, s);
-  const startX = x + (maxW - layout.totalW) * 0.5;
-  for (let i = 0; i < count; i++) {
+  const gap = 5 * s;
+  const bw = (w - gap * (actions.length - 1)) / actions.length;
+  for (let i = 0; i < actions.length; i++) {
+    const bx = x + i * (bw + gap);
     const selected = i === snapshot.selectedIndex;
-    const playable = selected && snapshot.canPlaySelected;
-    const lift = selected ? 5 * s : 0;
-    drawPlayingCard(ctx, snapshot.playerHand[i], startX + i * layout.step, y - lift, layout.cardW, layout.cardH, s, {
-      selected,
-      playable,
-      dimmed: selected && !snapshot.canPlaySelected,
-    });
-  }
-}
-
-function tableStatus(snapshot: DurakSnapshot): string {
-  if (snapshot.finished) {
-    if (snapshot.winner === 'draw') return 'НИЧЬЯ';
-    return snapshot.winner === 'player' ? 'ВЫИГРЫШ' : 'ПРОИГРЫШ';
-  }
-  if (snapshot.phase === 'player_attack') {
-    if (snapshot.defenderTaking) return 'NPC БЕРЕТ: ПОДКИНЬТЕ ИЛИ СТОП';
-    return snapshot.table.length === 0 ? 'ВАШ ХОД: АТАКА' : 'ПОДКИНУТЬ ИЛИ ОТБОЙ';
-  }
-  return 'ЗАЩИТА: КРОЙТЕ ИЛИ БЕРИТЕ';
-}
-
-function drawTablePairs(ctx: CanvasRenderingContext2D, snapshot: DurakSnapshot, x: number, y: number, w: number, h: number, s: number): void {
-  rect(ctx, x, y, w, h, 'rgba(6,9,9,0.62)', '#343c38');
-  drawBadge(ctx, 'ВЫЛОЖЕНО', x + 5 * s, y + 4 * s, 72 * s, 13 * s, s, '#79847d');
-
-  if (snapshot.table.length <= 0) {
-    ctx.fillStyle = '#4d5752';
-    ctx.font = `${Math.max(8, Math.round(8 * s))}px "Press Start 2P", monospace`;
+    rect(ctx, bx, y, bw, h, selected ? '#16201d' : '#0a0f0f', selected ? '#d6b15d' : '#303936');
+    ctx.fillStyle = selected ? '#d8cba0' : '#8d9690';
+    ctx.font = `${Math.max(7, Math.round(h * 0.42))}px "Press Start 2P", monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('ПУСТО', Math.round(x + w * 0.5), Math.round(y + h * 0.53));
-    return;
+    ctx.fillText(fitText(ctx, actions[i].label, bw - 6 * s), Math.round(bx + bw * 0.5), Math.round(y + h * 0.54));
   }
-
-  const pairCount = snapshot.table.length;
-  const cols = Math.min(3, pairCount);
-  const rows = Math.ceil(pairCount / cols);
-  const gapX = 5 * s;
-  const gapY = 5 * s;
-  const cardAreaY = y + 23 * s;
-  const cardAreaH = Math.max(1, h - 29 * s);
-  const usableRowsH = Math.max(1, cardAreaH - gapY * Math.max(0, rows - 1));
-  let cardH = Math.min(46 * s, usableRowsH / Math.max(1, rows) / 1.12);
-  let cardW = cardH * CARD_ASPECT;
-  let pairW = cardW * 1.45;
-  const maxPairW = (w - 10 * s - gapX * Math.max(0, cols - 1)) / cols;
-  if (pairW > maxPairW) {
-    pairW = maxPairW;
-    cardW = pairW / 1.45;
-    cardH = cardW / CARD_ASPECT;
-  }
-  const pairH = cardH * 1.12;
-  const totalW = pairW * cols + gapX * Math.max(0, cols - 1);
-  const totalH = pairH * rows + gapY * Math.max(0, rows - 1);
-  const startX = x + (w - totalW) * 0.5;
-  const startY = cardAreaY + Math.max(0, (cardAreaH - totalH) * 0.42);
-
-  snapshot.table.forEach((pair, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const ax = startX + col * (pairW + gapX);
-    const ay = startY + row * (pairH + gapY);
-    drawPlayingCard(ctx, pair.attack, ax, ay, cardW, cardH, s);
-    const dx = ax + cardW * 0.45;
-    const dy = ay + cardH * 0.10;
-    if (pair.defense) drawPlayingCard(ctx, pair.defense, dx, dy, cardW, cardH, s);
-    else drawCardSlot(ctx, dx, dy, cardW, cardH, s);
-  });
 }
 
-function drawDeckAndTrump(ctx: CanvasRenderingContext2D, snapshot: DurakSnapshot, x: number, y: number, cardW: number, cardH: number, s: number): void {
-  drawCardBack(ctx, x + cardW * 0.42, y, cardW, cardH, s);
-  drawPlayingCard(ctx, snapshot.trumpCard, x, y + cardH * 0.18, cardW, cardH, s, { trump: true });
-  drawBadge(ctx, `КОЛ ${snapshot.talonCount}`, x - 2 * s, y + cardH + 4 * s, cardW * 1.45, 13 * s, s, '#d1aa54');
-  drawBadge(ctx, `ОТБ ${snapshot.discardCount}`, x - 2 * s, y + cardH + 19 * s, cardW * 1.45, 13 * s, s, '#6f7771');
+function outcomeLine(snapshot: PokerSnapshot): string {
+  if (!snapshot.finished) return snapshot.yourTurn ? 'ВАШ ХОД' : 'ЖДЕМ СОПЕРНИКА';
+  if (snapshot.winner === 'draw') return 'НИЧЬЯ';
+  return snapshot.winner === 'player' ? 'ВЫИГРЫШ' : 'ПРОИГРЫШ';
 }
 
-export function drawDurakInterface(
+export function drawPokerInterface(
   ctx: CanvasRenderingContext2D,
-  snapshot: DurakSnapshot,
+  snapshot: PokerSnapshot,
   px: number,
   py: number,
   pw: number,
@@ -447,19 +421,18 @@ export function drawDurakInterface(
   const pad = 8 * s;
   const headerY = py + 36 * sy;
   const controlsY = py + ph - 17 * sy;
-  const handPreferredH = clamp(ph * 0.20, 34 * sy, 60 * sy);
-  const playerLayout = handLayout(pw - pad * 2, handPreferredH, Math.max(1, snapshot.playerHand.length), s);
-  const selectedLiftReserve = 7 * s;
-  const handY = controlsY - playerLayout.cardH - 10 * sy;
-  const statusH = 15 * sy;
-  const statusY = handY - selectedLiftReserve - 8 * sy - statusH;
-  const topCardH = clamp(playerLayout.cardH * 0.64, 24 * sy, 40 * sy);
+  const actionH = 16 * sy;
+  const actionY = controlsY - actionH - 8 * sy;
+  const handCardH = clamp(ph * 0.16, 30 * sy, 54 * sy);
+  const handCardW = handCardH * CARD_ASPECT;
+  const handY = actionY - handCardH - 20 * sy;
+  const topCardH = clamp(handCardH * 0.72, 24 * sy, 42 * sy);
   const topCardW = topCardH * CARD_ASPECT;
   const topY = headerY + 25 * sy;
-  const tableY = topY + topCardH + 20 * sy;
-  const tableH = Math.max(1, statusY - tableY - 8 * sy);
-  const tableX = px + pad;
-  const tableW = pw - pad * 2;
+  const boardY = topY + topCardH + 20 * sy;
+  const boardH = Math.max(1, handY - boardY - 18 * sy);
+  const innerX = px + pad;
+  const innerW = pw - pad * 2;
 
   ctx.save();
   rect(ctx, px + 4 * sx, py + 32 * sy, pw - 8 * sx, ph - 43 * sy, 'rgba(2,5,5,0.74)', '#27312f');
@@ -468,32 +441,33 @@ export function drawDurakInterface(
   ctx.textBaseline = 'top';
   ctx.fillStyle = '#d1aa54';
   ctx.font = `bold ${10 * sy}px "Press Start 2P", monospace`;
-  ctx.fillText(fitText(ctx, 'ДУРАК', pw * 0.22), px + pad, headerY);
+  ctx.fillText(fitText(ctx, 'ПОКЕР', pw * 0.22), innerX, headerY);
 
   ctx.fillStyle = '#8d9690';
   ctx.font = `${7.2 * sy}px "Press Start 2P", monospace`;
-  const turn = snapshot.attacker === 'player' ? 'ВЫ ХОДИТЕ' : `${snapshot.npcName} ХОДИТ`;
-  const meta = `СТАВКА ${snapshot.stakeRubles}Р | КОЗЫРЬ ${formatDurakSuit(snapshot.trumpSuit)} | ${turn}`;
-  ctx.fillText(fitText(ctx, meta, pw - pad * 2 - 58 * s), px + pad, headerY + 13 * sy);
+  const meta = `АНТЕ ${snapshot.stakeRubles}Р | БАНК ${snapshot.potRubles}Р | ${outcomeLine(snapshot)}`;
+  ctx.fillText(fitText(ctx, meta, innerW), innerX, headerY + 13 * sy);
 
-  const npcW = Math.min(pw * 0.38, Math.max(92 * s, pw - pad * 2 - 108 * s));
-  drawNpcHand(ctx, snapshot, px + pad, topY, npcW, topCardW, topCardH, s);
-  drawDeckAndTrump(ctx, snapshot, px + pw - pad - topCardW * 1.45, topY, topCardW, topCardH, s);
-  drawTablePairs(ctx, snapshot, tableX, tableY, tableW, tableH, s);
+  drawHoleRow(ctx, snapshot.npcHand, snapshot.npcHandCount, innerX, topY, innerW, topCardW, topCardH, s);
+  drawBadge(ctx, fitText(ctx, `${snapshot.npcName}: ВНЕС ${snapshot.npcPaid}Р`, innerW - 8 * s), innerX, topY + topCardH + 3 * s, innerW, 13 * s, s, '#8ca7a1');
 
-  const status = snapshot.message || snapshot.log[snapshot.log.length - 1] || tableStatus(snapshot);
-  drawBadge(ctx, fitText(ctx, status.toUpperCase(), tableW - 8 * s), tableX, statusY, tableW, statusH, s, '#c4cdc7');
-  drawPlayerHand(ctx, snapshot, px + pad, handY, pw - pad * 2, handPreferredH, s);
+  drawBoard(ctx, snapshot, innerX, boardY, innerW, boardH, s);
+  drawHoleRow(ctx, snapshot.playerHand, snapshot.playerHand.length, innerX, handY, innerW, handCardW, handCardH, s);
+
+  const status = snapshot.message || snapshot.log[snapshot.log.length - 1] || outcomeLine(snapshot);
+  const handLine = snapshot.handLabel ? `${snapshot.handLabel.toUpperCase()} | ` : '';
+  drawBadge(ctx, fitText(ctx, `${handLine}${status.toUpperCase()}`, innerW - 8 * s), innerX, handY - 17 * sy, innerW, 15 * sy, s, '#c4cdc7');
+  drawActionRow(ctx, snapshot, innerX, actionY, innerW, actionH, s);
 
   const action = snapshot.finished
     ? `${controlHint('gameMenu')} ЗАКРЫТЬ  ${menuCloseHint()} ВЫЙТИ`
-    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} КАРТА  ${controlHint('gameMenu')} СЫГРАТЬ  ${controlBindingLabel('drop')} ВЗЯТЬ/СТОП  ${menuCloseHint()} СДАТЬСЯ`;
+    : `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} ВЫБОР  ${controlHint('gameMenu')} ХОД  ${controlBindingLabel('drop')} ПАС  ${menuCloseHint()} СДАТЬСЯ`;
   ctx.fillStyle = '#59615d';
   ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(fitText(ctx, action, pw - pad * 2), Math.round(px + pw * 0.5), controlsY);
+  ctx.fillText(fitText(ctx, action, innerW), Math.round(px + pw * 0.5), controlsY);
   ctx.restore();
 }
 
-registerTabletopPanel('durak', drawDurakInterface as never);
+registerTabletopPanel('poker', drawPokerInterface as never);

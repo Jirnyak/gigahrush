@@ -1,6 +1,8 @@
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
 import { mathRng as rng } from '../core/rand';
+import { registerTabletopGame } from './tabletop';
+import { controlBindingLabel } from './controls';
 
 export type DominoSide = 'player' | 'npc';
 export type DominoWinner = DominoSide | 'draw' | '';
@@ -44,6 +46,8 @@ export interface DominoSnapshot {
   winner: DominoWinner;
   canPlaySelected: boolean;
   canDrawOrPass: boolean;
+  /** False only at a co-op table while the other human moves. */
+  yourTurn: boolean;
   message: string;
   log: readonly string[];
 }
@@ -72,7 +76,16 @@ interface DominoGame {
   board: DominoBoardTile[];
   selectedIndex: number;
   selectedEnd: DominoEnd;
+  /** Cursor and chosen board end of the 'npc' seat. Unused against an NPC — the
+   *  AI needs neither — and only alive at a co-op table. */
+  npcSelectedIndex: number;
+  npcSelectedEnd: DominoEnd;
   phase: DominoPhase;
+  /** Co-op table: a human sits in the 'npc' seat, so `advanceNpc` stands down
+   *  and the turn waits for that seat's input. */
+  remote: boolean;
+  /** Display name of the 'player' seat, for mirroring the table. */
+  playerName: string;
   winner: DominoWinner;
   settled: boolean;
   passStreak: number;
@@ -125,11 +138,45 @@ function boardRightPip(board: readonly DominoBoardTile[]): number {
 }
 
 function updateSelection(g: DominoGame): void {
-  if (g.playerHand.length <= 0) {
-    g.selectedIndex = 0;
-    return;
-  }
-  g.selectedIndex = Math.max(0, Math.min(g.playerHand.length - 1, g.selectedIndex));
+  g.selectedIndex = clampCursor(g.playerHand, g.selectedIndex);
+  g.npcSelectedIndex = clampCursor(g.npcHand, g.npcSelectedIndex);
+}
+
+function clampCursor(hand: readonly DominoTile[], index: number): number {
+  if (hand.length <= 0) return 0;
+  return Math.max(0, Math.min(hand.length - 1, index));
+}
+
+function cursorOf(g: DominoGame, side: DominoSide): number {
+  return side === 'player' ? g.selectedIndex : g.npcSelectedIndex;
+}
+
+function setCursor(g: DominoGame, side: DominoSide, index: number): void {
+  if (side === 'player') g.selectedIndex = index;
+  else g.npcSelectedIndex = index;
+}
+
+function endOf(g: DominoGame, side: DominoSide): DominoEnd {
+  return side === 'player' ? g.selectedEnd : g.npcSelectedEnd;
+}
+
+function setEnd(g: DominoGame, side: DominoSide, end: DominoEnd): void {
+  if (side === 'player') g.selectedEnd = end;
+  else g.npcSelectedEnd = end;
+}
+
+/** Whose input the table waits for. */
+function seatToAct(g: DominoGame): DominoSide | null {
+  if (g.phase === 'player_turn') return 'player';
+  if (g.phase === 'npc_turn') return 'npc';
+  return null;
+}
+
+/** Log voice: against an NPC the log speaks to the one human reading it, at a
+ *  co-op table both seats read it, so everyone is named. */
+function sideName(g: DominoGame, side: DominoSide): string {
+  if (side === 'npc') return g.npcName;
+  return g.remote ? g.playerName : 'Вы';
 }
 
 function sortOpeningCandidate(a: DominoTile, b: DominoTile): number {
@@ -173,9 +220,9 @@ function hasAnyLegalMove(g: DominoGame, side: DominoSide): boolean {
   return false;
 }
 
-function canPlaceSelected(g: DominoGame): boolean {
-  const tile = g.playerHand[g.selectedIndex];
-  if (!tile || g.phase !== 'player_turn') return false;
+function canPlaceSelected(g: DominoGame, side: DominoSide = 'player'): boolean {
+  const tile = handOf(g, side)[cursorOf(g, side)];
+  if (!tile || seatToAct(g) !== side) return false;
   return legalEndsForTile(g, tile).length > 0;
 }
 
@@ -319,7 +366,7 @@ function drawUntilPlayable(g: DominoGame, side: DominoSide): boolean {
 
 function passTurn(g: DominoGame, state: GameState, player: Entity, npc: Entity, side: DominoSide): void {
   g.passStreak++;
-  appendLog(g, `${side === 'player' ? 'Вы пропускаете ход' : g.npcName + ' пропускает ход'}.`);
+  appendLog(g, `${sideName(g, side)} ${side === 'player' && !g.remote ? 'пропускаете' : 'пропускает'} ход.`);
   if (g.passStreak >= 2 && g.boneyard.length === 0) {
     finishBlocked(g, state, player, npc);
     return;
@@ -328,6 +375,8 @@ function passTurn(g: DominoGame, state: GameState, player: Entity, npc: Entity, 
 }
 
 function advanceNpc(g: DominoGame, state: GameState, player: Entity, npc: Entity): void {
+  // Co-op table: a human sits in the 'npc' seat, so nothing moves for it.
+  if (g.remote) return;
   for (let guard = 0; guard < MAX_NPC_STEPS && g.phase === 'npc_turn'; guard++) {
     let move = chooseNpcMove(g);
     if (!move) {
@@ -405,10 +454,10 @@ export function dominoStakeFromNpc(npc: Entity): number {
 
 export function startDominoGame(
   ctx: { state: GameState; player: Entity; npc: Entity },
-  options: { rng?: () => number; deck?: readonly DominoTile[] } = {},
+  options: { rng?: () => number; deck?: readonly DominoTile[]; stake?: number; remote?: boolean } = {},
 ): boolean {
-  const stake = dominoStakeFromNpc(ctx.npc);
-  if (stake <= 0 || cleanMoney(ctx.player) < stake) return false;
+  const stake = options.stake ?? dominoStakeFromNpc(ctx.npc);
+  if (stake <= 0 || cleanMoney(ctx.player) < stake || cleanMoney(ctx.npc) < stake) return false;
   const deck = options.deck ? options.deck.map(tile => ({ ...tile })) : shuffleDominoSet(createDominoSet(), options.rng);
   if (deck.length < HAND_SIZE * 2) return false;
   const playerHand: DominoTile[] = [];
@@ -433,7 +482,11 @@ export function startDominoGame(
     board: [],
     selectedIndex,
     selectedEnd: 'right',
+    npcSelectedIndex: Math.max(0, npcHand.findIndex(tile => tile.id === opening.tile.id)),
+    npcSelectedEnd: 'right',
     phase: opening.side === 'player' ? 'player_turn' : 'npc_turn',
+    remote: options.remote === true,
+    playerName: ctx.player.name ?? 'Игрок',
     winner: '',
     settled: false,
     passStreak: 0,
@@ -441,7 +494,7 @@ export function startDominoGame(
     message: '',
     log: [],
   };
-  appendLog(game, `Домино роздано. Первым ходит ${opening.side === 'player' ? 'вы' : game.npcName}: ${formatDominoTile(opening.tile)}.`);
+  appendLog(game, `Домино роздано. Первым ходит ${opening.side === 'player' && !game.remote ? 'вы' : sideName(game, opening.side)}: ${formatDominoTile(opening.tile)}.`);
   publishEvent(ctx.state, {
     type: 'gambling_bet',
     x: ctx.player.x,
@@ -466,11 +519,23 @@ export function closeDominoGame(): void {
   game = null;
 }
 
+/** A table the host runs for us: we hold no game, only the view it ships. */
+let remoteView: DominoSnapshot | null = null;
+
+export function setDominoRemoteView(view: unknown): void {
+  remoteView = (view as DominoSnapshot | null) ?? null;
+}
+
 export function isDominoGameOpen(): boolean {
-  return !!game?.open;
+  return remoteView !== null || !!game?.open;
 }
 
 export function getDominoSnapshot(): DominoSnapshot {
+  return remoteView ?? buildDominoView('player');
+}
+
+/** The table as `seat` may see it, always computed from the live game. */
+function buildDominoView(seat: DominoSide): DominoSnapshot {
   const g = game;
   if (!g) {
     return {
@@ -491,46 +556,61 @@ export function getDominoSnapshot(): DominoSnapshot {
       winner: '',
       canPlaySelected: false,
       canDrawOrPass: false,
+      yourTurn: false,
       message: '',
       log: [],
     };
   }
   updateSelection(g);
-  const selectedTile = g.playerHand[g.selectedIndex];
-  const canPlay = canPlaceSelected(g);
+  // Told from `seat`'s chair: own hand, opponent's count. For 'player' this is
+  // the original view verbatim.
+  const mirror = seat === 'npc';
+  const own = handOf(g, seat);
+  const acts = seatToAct(g) === seat;
   return {
     open: g.open,
     npcId: g.npcId,
-    npcName: g.npcName,
+    npcName: mirror ? g.playerName : g.npcName,
     stakeRubles: g.stakeRubles,
-    playerHand: [...g.playerHand],
-    npcHandCount: g.npcHand.length,
+    playerHand: [...own],
+    npcHandCount: handOf(g, mirror ? 'player' : 'npc').length,
     boneyardCount: g.boneyard.length,
     board: g.board.map(tile => ({ tile: tile.tile, left: tile.left, right: tile.right, side: tile.side })),
     leftPip: boardLeftPip(g.board),
     rightPip: boardRightPip(g.board),
-    selectedIndex: g.selectedIndex,
-    selectedEnd: g.selectedEnd,
-    selectedTile,
-    phase: g.phase,
+    selectedIndex: cursorOf(g, seat),
+    selectedEnd: endOf(g, seat),
+    selectedTile: own[cursorOf(g, seat)],
+    phase: g.phase === 'finished' ? 'finished' : acts ? 'player_turn' : 'npc_turn',
     finished: g.phase === 'finished',
-    winner: g.winner,
-    canPlaySelected: canPlay,
-    canDrawOrPass: g.phase === 'player_turn' && !hasAnyLegalMove(g, 'player'),
+    winner: mirror ? mirrorWinner(g.winner) : g.winner,
+    canPlaySelected: canPlaceSelected(g, seat),
+    canDrawOrPass: acts && !hasAnyLegalMove(g, seat),
+    yourTurn: acts,
     message: g.message,
     log: [...g.log],
   };
 }
 
-export function handleDominoInput(ctx: { state: GameState; player: Entity; npc: Entity; input: DominoInput }): DominoInputResult {
+function mirrorWinner(winner: DominoWinner): DominoWinner {
+  if (winner === 'player') return 'npc';
+  if (winner === 'npc') return 'player';
+  return winner;
+}
+
+export function handleDominoInput(ctx: {
+  state: GameState; player: Entity; npc: Entity; input: DominoInput; seat?: DominoSide;
+}): DominoInputResult {
   const g = game;
   if (!g?.open || g.npcId !== ctx.npc.id) return { handled: false };
+  const seat = ctx.seat ?? 'player';
+  const hand = handOf(g, seat);
   if (ctx.input.leftNav) {
-    g.selectedIndex = Math.max(0, g.selectedIndex - 1);
+    setCursor(g, seat, Math.max(0, cursorOf(g, seat) - 1));
     return { handled: true };
   }
   if (ctx.input.rightNav) {
-    g.selectedIndex = Math.min(Math.max(0, g.playerHand.length - 1), g.selectedIndex + 1);
+    setCursor(g, seat, Math.min(Math.max(0, hand.length - 1), cursorOf(g, seat) + 1));
     return { handled: true };
   }
   if (g.phase === 'finished') {
@@ -538,38 +618,73 @@ export function handleDominoInput(ctx: { state: GameState; player: Entity; npc: 
     return { handled: true };
   }
   if (ctx.input.escEdge) {
-    g.winner = 'npc';
+    // Walking away is conceding: the stake goes to whoever stayed.
+    g.winner = seat === 'player' ? 'npc' : 'player';
     settleDominoGame(g, ctx.state, ctx.player, ctx.npc);
     return { handled: true, closeInterface: true };
   }
   if (ctx.input.dropEdge) {
-    g.selectedEnd = g.selectedEnd === 'left' ? 'right' : 'left';
-    appendLog(g, `Сторона выкладки: ${g.selectedEnd === 'left' ? 'левая' : 'правая'}.`);
+    setEnd(g, seat, endOf(g, seat) === 'left' ? 'right' : 'left');
+    appendLog(g, `Сторона выкладки: ${endOf(g, seat) === 'left' ? 'левая' : 'правая'}.`);
     return { handled: true };
   }
-  if (g.phase !== 'player_turn') return { handled: true };
+  if (seatToAct(g) !== seat) return { handled: true };
   if (ctx.input.interactEdge) {
-    const tile = g.playerHand[g.selectedIndex];
+    const tile = hand[cursorOf(g, seat)];
     const legal = tile ? legalEndsForTile(g, tile) : [];
     if (tile && legal.length > 0) {
-      const end = legal.includes(g.selectedEnd) ? g.selectedEnd : legal[0];
-      if (placeTile(g, 'player', tile, end)) {
-        finishMoveOrPassTurn(g, ctx.state, ctx.player, ctx.npc, 'npc');
+      const chosen = endOf(g, seat);
+      const end = legal.includes(chosen) ? chosen : legal[0];
+      if (placeTile(g, seat, tile, end)) {
+        finishMoveOrPassTurn(g, ctx.state, ctx.player, ctx.npc, seat === 'player' ? 'npc' : 'player');
         advanceNpc(g, ctx.state, ctx.player, ctx.npc);
       }
       return { handled: true };
     }
-    if (hasAnyLegalMove(g, 'player')) {
+    if (hasAnyLegalMove(g, seat)) {
       appendLog(g, 'Эта костяшка не подходит к краям.');
       return { handled: true };
     }
-    if (drawUntilPlayable(g, 'player')) {
-      appendLog(g, 'Вы добираете из коробки. Подходящая костяшка уже в руке.');
+    if (drawUntilPlayable(g, seat)) {
+      appendLog(g, `${sideName(g, seat)} ${seat === 'player' && !g.remote ? 'добираете' : 'добирает'} из коробки. Подходящая костяшка уже в руке.`);
       return { handled: true };
     }
-    passTurn(g, ctx.state, ctx.player, ctx.npc, 'player');
+    passTurn(g, ctx.state, ctx.player, ctx.npc, seat);
     advanceNpc(g, ctx.state, ctx.player, ctx.npc);
     return { handled: true };
   }
   return { handled: true };
 }
+
+/** Walking away mid-table is conceding: the stake goes to whoever stayed. */
+function forfeitDomino(ctx: { state: GameState; player: Entity; npc: Entity; quitter: DominoSide }): void {
+  const g = game;
+  if (!g || g.phase === 'finished') return;
+  g.winner = otherSide(ctx.quitter);
+  settleDominoGame(g, ctx.state, ctx.player, ctx.npc);
+}
+
+registerTabletopGame({
+  id: 'domino',
+  title: 'ДОМИНО',
+  menuLabel: 'Играть в домино',
+  itemId: 'domino_box',
+  order: 32,
+  stake: dominoStakeFromNpc,
+  start: (ctx, options) => startDominoGame(ctx, options),
+  close: closeDominoGame,
+  isOpen: isDominoGameOpen,
+  input: ctx => handleDominoInput(ctx),
+  snapshot: getDominoSnapshot,
+  view: seat => buildDominoView(seat),
+  setView: setDominoRemoteView,
+  forfeit: ctx => forfeitDomino(ctx),
+  intro: ctx => ({
+    lines: [
+      `${ctx.opponent.name ?? 'NPC'} высыпает костяшки из коробки.`,
+      `Ставка зафиксирована: ₽${ctx.stake}.`,
+      'По 7 костяшек. Кладите к совпадающему краю; если хода нет, добирайте из коробки.',
+    ],
+    message: `${controlBindingLabel('gameMenu')} сыграть/добрать, ${controlBindingLabel('drop')} меняет левый/правый край.`,
+  }),
+});

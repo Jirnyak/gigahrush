@@ -21,6 +21,29 @@ import {
   type SyncEntity,
 } from './systems/online_client';
 import {
+  activeCoopSession,
+  adoptCoopSession,
+  applyCoopInput,
+  applyCoopView,
+  clearCoopInvite,
+  coopActivity,
+  coopSeatOf,
+  coopViews,
+  endCoopSession,
+  isCoopSeated,
+  isNetworkedPlayerActor,
+  openCoopSession,
+  pendingCoopInvite,
+  proposeCoopSession,
+  setCoopInvite,
+  tickCoopInvite,
+  COOP_INVITE_TIMEOUT,
+  type CoopInput,
+  type CoopInvite,
+  type CoopSeat,
+} from './systems/coop_session';
+import { drawCoopInvitePrompt } from './render/coop_invite_ui';
+import {
   sanitizeIntent,
   packActorEcho,
   applyActorEcho,
@@ -228,16 +251,18 @@ import {
   updateKillQuestPressure,
 } from './systems/quests';
 import { applyPickedStoryItemOutcomes, applyStoryItemOutcomes, spawnStoryDeathDrops } from './systems/plot_outcomes';
-import { handleDiceInput, isDiceGameOpen } from './systems/dice';
-import { handleDominoInput, isDominoGameOpen } from './systems/domino';
-import { handleCheckersInput, isCheckersGameOpen } from './systems/checkers';
-import { handleDurakInput, isDurakGameOpen } from './systems/durak';
+import { openTabletopGameFor } from './systems/tabletop';
 import {
   activateNpcCustomMenuOption,
   clampNpcMenuSelection,
   closeNpcInteractionInterface,
+  openNpcInteractionInterface,
   getNpcMenuOptions,
   NPC_MENU_INTERFACE_TAB,
+  isNpcMenuOptionListTab,
+  npcMenuGroupOf,
+  npcMenuGroupTab,
+  NPC_MENU_BACK_ID,
   npcMenuOptionAt,
   npcMenuSelectionFor,
 } from './systems/npc_interaction_options';
@@ -1431,6 +1456,33 @@ function onOnlinePeerIntent(msgData: any): void {
 
     if (intent.kind === 'interact') { onPeerIntentInteract(actor, slot); return; }
 
+    // ── Co-op table: the peer proposes, answers and plays its own seat; the
+    // table and the money stay host-side (see systems/coop_session.ts). ──
+    if (intent.kind === 'coop_propose') {
+      const target = getEntityIndex().byId.get(intent.targetId);
+      if (target && target.alive && isNetworkedPlayerActor(target) && target.id !== actor.id
+        && world.dist2(actor.x, actor.y, target.x, target.y) <= 36) {
+        hostProposeCoop(actor, target, intent.activityId);
+      } else {
+        coopNotify(actor, 'Игрок слишком далеко.');
+      }
+    }
+
+    if (intent.kind === 'coop_reply') {
+      const invite = pendingCoopInvite();
+      if (invite && invite.toId === actor.id) hostResolveCoopReply(intent.accept);
+    }
+
+    if (intent.kind === 'coop_input') {
+      const seat = coopSeatOf(actor.id);
+      if (seat) hostApplyCoopInput(seat, intent.input, intent.confirm === true);
+    }
+
+    if (intent.kind === 'coop_leave') {
+      const seat = coopSeatOf(actor.id);
+      if (seat) hostEndCoopSession(seat, `${actor.name || 'Игрок'} вышел из-за стола.`);
+    }
+
     // ── NPC dialog line requested ──
     if (intent.kind === 'npc_talk') {
       const npc = getEntityIndex().byId.get(intent.npcId);
@@ -1643,6 +1695,7 @@ function onOnlineHostState(msgData: any): void {
       existing.pitch = se.pitch;
       existing.alive = se.alive; existing.hp = se.hp; existing.maxHp = se.maxHp;
       existing.name = se.name; existing.peerSlot = se.peerSlot; existing.netGen = se.netGen;
+      if (se.money !== undefined) existing.money = se.money;
       existing.sprite = se.sprite; existing.spriteScale = se.spriteScale; existing.weapon = se.weapon; existing.tool = se.tool;
       existing.sex = se.sex as Entity['sex']; existing.npcVisualId = se.npcVisualId;
       existing.faction = se.faction; existing.staggerTimer = se.staggerTimer;
@@ -1659,7 +1712,7 @@ function onOnlineHostState(msgData: any): void {
         x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
         alive: se.alive, hp: se.hp, maxHp: se.maxHp,
         sprite: se.sprite, weapon: se.weapon, tool: se.tool,
-        name: se.name, peerSlot: se.peerSlot, netGen: se.netGen,
+        name: se.name, peerSlot: se.peerSlot, netGen: se.netGen, money: se.money,
         sex: se.sex, npcVisualId: se.npcVisualId,
         faction: se.faction, staggerTimer: se.staggerTimer,
         currentMag: se.currentMag, reloading: se.reloading, reloadTimer: se.reloadTimer, attackCd: se.attackCd,
@@ -1790,6 +1843,296 @@ function onOnlineVisitEnd(msgData: any): void {
   );
 }
 
+/* ── Co-op tables (systems/coop_session.ts) ───────────────────
+ * The table itself always lives on the host: it holds the game, moves the
+ * money and ships each seat the view of its own chair. A peer only proposes,
+ * answers, and sends its own keystrokes. */
+
+/** The other human directly in front of the player, if any. Mirrors the reach
+ *  the host uses for a peer's E (`onPeerIntentInteract`). */
+function facedNetworkedPlayer(): Entity | null {
+  const lookX = world.wrap(player.x + Math.cos(player.angle) * 1.5);
+  const lookY = world.wrap(player.y + Math.sin(player.angle) * 1.5);
+  const near: Entity[] = [];
+  ensureEntityIndex(entities).queryRadius(lookX, lookY, 1.7, near, ENTITY_MASK_ACTOR);
+  let best: Entity | null = null;
+  let bestD2 = 1.7 * 1.7;
+  for (const e of near) {
+    if (!e.alive || e.id === player.id || !isNetworkedPlayerActor(e)) continue;
+    const d2 = world.dist2(lookX, lookY, e.x, e.y);
+    if (d2 < bestD2) { best = e; bestD2 = d2; }
+  }
+  return best;
+}
+
+/** The actor of a co-op seat, on whichever machine is asking. */
+function coopSeatActor(seat: CoopSeat): Entity | undefined {
+  const session = activeCoopSession();
+  if (!session) return undefined;
+  const id = seat === 'player' ? session.playerId : session.npcId;
+  return id === player.id ? player : ensureEntityIndex(entities).byId.get(id);
+}
+
+/** Host: both seated actors, or null when either has left the floor. */
+function coopTableCtx(): { state: GameState; player: Entity; npc: Entity } | null {
+  const a = coopSeatActor('player');
+  const b = coopSeatActor('npc');
+  if (!a || !b) return null;
+  return { state, player: a, npc: b };
+}
+
+function coopNotify(actor: Entity, text: string, color = '#f84'): void {
+  if (actor.id === player.id) { state.msgs.push(msg(text, state.time, color)); return; }
+  if (isOnlineHost() && actor.peerSlot !== undefined && actor.peerSlot > 0) {
+    sendOnlineMessage({ type: 'coop_note', _targetSlot: actor.peerSlot, text, color });
+  }
+}
+
+/** Open the table locally: same overlay the NPC minigames use, on the opponent. */
+function openCoopInterfaceLocally(opponent: Entity, activityId: string, stake: number): void {
+  const def = coopActivity(activityId);
+  if (!def) return;
+  closeNpcInteractionInterface(state);
+  state.showNpcMenu = true;
+  state.npcMenuTarget = opponent.id;
+  state.npcMenuTab = NPC_MENU_INTERFACE_TAB;
+  openNpcInteractionInterface({ state, player, npc: opponent, entities }, {
+    id: activityId,
+    title: def.title,
+    stakeRubles: stake > 0 ? stake : undefined,
+    lines: [
+      `За столом: ${opponent.name || 'игрок'}.`,
+      stake > 0 ? `Ставка ₽${stake} с каждого.` : 'Меняетесь вещами, деньги не в игре.',
+      'Выход из партии засчитывается как сдача.',
+    ],
+    message: 'Ход переходит по очереди.',
+  });
+  syncPauseState();
+}
+
+function closeCoopInterfaceLocally(): void {
+  if (state.npcMenuTab !== NPC_MENU_INTERFACE_TAB) return;
+  closeNpcInteractionInterface(state);
+  state.showNpcMenu = false;
+  state.npcMenuTab = 'main';
+  syncPauseState();
+}
+
+/** Host: hand each seat the view of its own chair — its own hand, the
+ *  opponent's card count. The local seat installs its view the same way a peer
+ *  does, so the host sitting in either chair renders correctly. */
+function pushCoopViews(): void {
+  const session = activeCoopSession();
+  const views = coopViews();
+  if (!session || !views) return;
+  const def = coopActivity(session.activityId);
+  for (const seat of ['player', 'npc'] as CoopSeat[]) {
+    const actor = coopSeatActor(seat);
+    if (!actor) continue;
+    const view = seat === 'player' ? views.player : views.npc;
+    if (actor.id === player.id) { def?.setView(view); continue; }
+    if (actor.peerSlot !== undefined && actor.peerSlot > 0) {
+      sendOnlineMessage({ type: 'coop_view', _targetSlot: actor.peerSlot, activityId: session.activityId, view });
+    }
+  }
+}
+
+/** Host: propose a table. The invited side has to agree before anything opens. */
+function hostProposeCoop(from: Entity, to: Entity, activityId: string): void {
+  const result = proposeCoopSession(activityId, from, to, state.time);
+  if (!result.ok) { coopNotify(from, result.reason); return; }
+  const invite = result.invite;
+  coopNotify(from, `Приглашение отправлено: ${to.name || 'игрок'}.`, '#8cf');
+  if (to.id === player.id) return; // host is the invited one: prompt draws from local state
+  if (to.peerSlot !== undefined && to.peerSlot > 0) {
+    sendOnlineMessage({ type: 'coop_invite', _targetSlot: to.peerSlot, invite });
+  }
+}
+
+/** Host: the invited side answered. */
+function hostResolveCoopReply(accept: boolean): void {
+  const invite = pendingCoopInvite();
+  if (!invite) return;
+  const from = invite.fromId === player.id ? player : ensureEntityIndex(entities).byId.get(invite.fromId);
+  const to = invite.toId === player.id ? player : ensureEntityIndex(entities).byId.get(invite.toId);
+  clearCoopInvite();
+  if (!from || !to) return;
+  if (!accept) {
+    coopNotify(from, `${to.name || 'Игрок'} отказался.`, '#f84');
+    coopNotify(to, 'Вы отказались.', '#aa6');
+    return;
+  }
+  const opened = openCoopSession({ state, player: from, npc: to }, invite.activityId, invite.stake);
+  if (!opened.ok) { coopNotify(from, opened.reason); coopNotify(to, opened.reason); return; }
+  const def = coopActivity(invite.activityId);
+  for (const seat of ['player', 'npc'] as CoopSeat[]) {
+    const actor = seat === 'player' ? from : to;
+    if (actor.id === player.id) { openCoopInterfaceLocally(seat === 'player' ? to : from, invite.activityId, invite.stake); continue; }
+    if (actor.peerSlot !== undefined && actor.peerSlot > 0) {
+      sendOnlineMessage({
+        type: 'coop_open', _targetSlot: actor.peerSlot,
+        activityId: invite.activityId, title: def?.title ?? '', stake: invite.stake, seat,
+        playerId: from.id, npcId: to.id, opponentId: seat === 'player' ? to.id : from.id,
+      });
+    }
+  }
+  pushCoopViews();
+}
+
+/** Host: tear the table down on both sides. `quitter` set means someone walked
+ *  away mid-game and forfeits the stake to the one who stayed. */
+function hostEndCoopSession(quitter?: CoopSeat, note = ''): void {
+  const session = activeCoopSession();
+  if (!session) return;
+  const ctx = coopTableCtx();
+  const seats: { seat: CoopSeat; actor: Entity | undefined }[] = [
+    { seat: 'player', actor: coopSeatActor('player') },
+    { seat: 'npc', actor: coopSeatActor('npc') },
+  ];
+  endCoopSession(quitter, ctx ?? undefined);
+  for (const { actor } of seats) {
+    if (!actor) continue;
+    if (actor.id === player.id) { closeCoopInterfaceLocally(); if (note) state.msgs.push(msg(note, state.time, '#aa6')); continue; }
+    if (actor.peerSlot !== undefined && actor.peerSlot > 0) {
+      sendOnlineMessage({ type: 'coop_end', _targetSlot: actor.peerSlot, note });
+    }
+  }
+}
+
+/** Either machine: feed the local seat's keystrokes to the table. */
+function routeCoopInput(input: CoopInput, confirm = false): void {
+  const session = activeCoopSession();
+  const seat = coopSeatOf(player.id);
+  if (!session || !seat) return;
+  if (isOnlinePeer()) {
+    sendPeerIntent({ kind: 'coop_input', input, confirm });
+    return;
+  }
+  hostApplyCoopInput(seat, input, confirm);
+}
+
+function hostApplyCoopInput(seat: CoopSeat, input: CoopInput, confirm: boolean): void {
+  const ctx = coopTableCtx();
+  if (!ctx) { hostEndCoopSession(undefined, 'Партнер пропал из-за стола.'); return; }
+  const result = applyCoopInput(ctx, seat, input, confirm ? { confirm: true } : undefined);
+  if (result?.closeInterface) {
+    // The activity settled itself (win, bust, surrender): close, do not forfeit
+    // a second time on top of its own settlement.
+    hostEndCoopSession();
+    return;
+  }
+  pushCoopViews();
+}
+
+/** Host, per frame: a seat that died mid-table loses it. Players are frozen at
+ *  the table but NOT protected — sitting down to a game in a dangerous place is
+ *  the player's own bet — so the corpse must not keep playing. */
+function tickCoopDeaths(): void {
+  const session = activeCoopSession();
+  if (!session) return;
+  for (const seat of ['player', 'npc'] as CoopSeat[]) {
+    const actor = coopSeatActor(seat);
+    if (actor && actor.alive) continue;
+    hostEndCoopSession(seat, `${actor?.name || 'Игрок'} не доиграл: за столом убили.`);
+    return;
+  }
+}
+
+/** Host, per frame: drop an invite nobody answered. */
+function tickCoopInvites(): void {
+  if (!isOnlineHost() && isOnlineConnected()) return;
+  const lapsed = tickCoopInvite(state.time);
+  if (!lapsed) return;
+  const from = lapsed.fromId === player.id ? player : ensureEntityIndex(entities).byId.get(lapsed.fromId);
+  const to = lapsed.toId === player.id ? player : ensureEntityIndex(entities).byId.get(lapsed.toId);
+  if (from) coopNotify(from, 'Приглашение осталось без ответа.', '#aa6');
+  if (to) coopNotify(to, 'Приглашение истекло.', '#aa6');
+  if (to && to.id !== player.id && to.peerSlot !== undefined && to.peerSlot > 0) {
+    sendOnlineMessage({ type: 'coop_invite', _targetSlot: to.peerSlot, invite: null });
+  }
+}
+
+/** Invited player only: a small prompt over live gameplay, since the world
+ *  around them keeps running while they decide. */
+function drawCoopInvitePromptIfPending(sx: number, sy: number): void {
+  const invite = pendingCoopInvite();
+  if (!invite || invite.toId !== player.id) return;
+  const title = coopActivity(invite.activityId)?.title ?? invite.activityId;
+  drawCoopInvitePrompt(ctx, sx, sy, invite, title, Math.max(0, invite.expiresAt - state.time), COOP_INVITE_TIMEOUT);
+}
+
+/** A held trigger must not answer for the player: the buttons only count once
+ *  they have been seen released while the prompt is up. */
+let _coopAnswerArmed = false;
+
+/** Invited player: left button accepts, right button refuses. Both are consumed
+ *  here so the same click does not also fire the weapon behind the prompt. */
+function handleCoopInvitePointer(): void {
+  const invite = pendingCoopInvite();
+  if (!invite || invite.toId !== player.id) { _coopAnswerArmed = false; return; }
+  if (!_coopAnswerArmed) {
+    if (!input.attack && !input.use) _coopAnswerArmed = true;
+    input.attack = false;
+    input.use = false;
+    return;
+  }
+  if (input.attack) { input.attack = false; input.use = false; _coopAnswerArmed = false; answerCoopInvite(true); return; }
+  if (input.use) { input.attack = false; input.use = false; _coopAnswerArmed = false; answerCoopInvite(false); }
+}
+
+/** Any client: the invited player answered with the mouse. */
+function answerCoopInvite(accept: boolean): void {
+  const invite = pendingCoopInvite();
+  if (!invite || invite.toId !== player.id) return;
+  if (isOnlinePeer()) {
+    setCoopInvite(null);
+    sendPeerIntent({ kind: 'coop_reply', accept });
+    state.msgs.push(msg(accept ? 'Вы согласились.' : 'Вы отказались.', state.time, accept ? '#8f8' : '#aa6'));
+    return;
+  }
+  hostResolveCoopReply(accept);
+}
+
+// ── PEER: the host addressed a co-op message to us ──
+function onOnlineCoopInvite(msgData: any): void {
+  const invite = msgData.invite as CoopInvite | null;
+  setCoopInvite(invite && typeof invite === 'object' ? {
+    activityId: String(invite.activityId ?? '').slice(0, 24),
+    fromId: Math.floor(Number(invite.fromId) || 0),
+    toId: player.id,
+    fromName: String(invite.fromName ?? 'Игрок').slice(0, 40),
+    stake: Math.max(0, Math.floor(Number(invite.stake) || 0)),
+    expiresAt: state.time + COOP_INVITE_TIMEOUT,
+  } : null);
+}
+
+function onOnlineCoopOpen(msgData: any): void {
+  const activityId = String(msgData.activityId ?? '').slice(0, 24);
+  if (!coopActivity(activityId)) return;
+  const playerId = Math.floor(Number(msgData.playerId) || 0);
+  const npcId = Math.floor(Number(msgData.npcId) || 0);
+  adoptCoopSession({ activityId, playerId, npcId, stake: Math.max(0, Math.floor(Number(msgData.stake) || 0)) });
+  const opponent = ensureEntityIndex(entities).byId.get(Math.floor(Number(msgData.opponentId) || 0));
+  if (opponent) openCoopInterfaceLocally(opponent, activityId, Math.max(0, Math.floor(Number(msgData.stake) || 0)));
+}
+
+function onOnlineCoopView(msgData: any): void {
+  applyCoopView(String(msgData.activityId ?? '').slice(0, 24), msgData.view);
+}
+
+function onOnlineCoopEnd(msgData: any): void {
+  endCoopSession();
+  adoptCoopSession(null);
+  closeCoopInterfaceLocally();
+  const note = typeof msgData.note === 'string' ? msgData.note.slice(0, 120) : '';
+  if (note) state.msgs.push(msg(note, state.time, '#aa6'));
+}
+
+function onOnlineCoopNote(msgData: any): void {
+  const text = typeof msgData.text === 'string' ? msgData.text.slice(0, 120) : '';
+  if (text) state.msgs.push(msg(text, state.time, typeof msgData.color === 'string' ? msgData.color.slice(0, 9) : '#8cf'));
+}
+
 // ── HOST: peer disconnected ──
 function onOnlinePeerDisconnected(msgData: any): void {
   // Remove remote actor for the disconnected peer
@@ -1844,6 +2187,11 @@ setOnlineMessageHandler((msgData: any) => {
   if (msgData.type === 'container_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineContainerOpen(msgData); return; }
   if (msgData.type === 'npc_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineNpcOpen(msgData); return; }
   if (msgData.type === 'npc_talk' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineNpcTalk(msgData); return; }
+  if (msgData.type === 'coop_invite' && isOnlinePeer()) { onOnlineCoopInvite(msgData); return; }
+  if (msgData.type === 'coop_open' && isOnlinePeer()) { onOnlineCoopOpen(msgData); return; }
+  if (msgData.type === 'coop_view' && isOnlinePeer()) { onOnlineCoopView(msgData); return; }
+  if (msgData.type === 'coop_end' && isOnlinePeer()) { onOnlineCoopEnd(msgData); return; }
+  if (msgData.type === 'coop_note' && isOnlinePeer()) { onOnlineCoopNote(msgData); return; }
   if (msgData.type === 'visit_end' && isOnlinePeer()) { onOnlineVisitEnd(msgData); return; }
   if (msgData.type === 'peer_disconnected' && isOnlineHost()) { onOnlinePeerDisconnected(msgData); return; }
   if (msgData.type === 'host_disconnected' && isOnlinePeer()) { onOnlineHostDisconnected(msgData); return; }
@@ -4108,6 +4456,10 @@ function movePlayer(dt: number): void {
   const actor = player;
   if (!actor.alive) return;
   if (state.sleeping || state.trailerMode) return; // no movement while sleeping or in trailer mode
+  // Seated at a co-op table: you are out of play until it ends. The world keeps
+  // running around you — hosting means menus do not freeze the shared floor —
+  // so the freeze has to be explicit here rather than ride on the pause flag.
+  if (isCoopSeated(actor.id)) return;
   floorTeleportCd = Math.max(0, floorTeleportCd - dt);
 
   if ((actor.staggerTimer ?? 0) > 0) {
@@ -6140,6 +6492,12 @@ function openNpcMenu(npc: Entity): void {
   state.tradeCursorX = 0;
   state.tradeCursorY = 0;
   state.tradeSide = 'npc';
+  // Another human carries what they looted, not a generated shop stock, and has
+  // no quest marker or faction aftermath to report.
+  if (isNetworkedPlayerActor(npc)) {
+    state.npcMenuSel = 0;
+    return;
+  }
   // Generate NPC trade inventory if empty
   if (!npc.inventory || npc.inventory.length === 0) {
     npc.inventory = generateNpcTradeItems(npc);
@@ -7282,22 +7640,15 @@ function confirmActiveMobileSelection(): void {
     activateCraftSelection();
   } else if (state.showNpcMenu) {
     const npc = ensureEntityIndex(entities).byId.get(state.npcMenuTarget);
-    if (state.npcMenuTab === 'main') {
+    if (isNpcMenuOptionListTab(state.npcMenuTab)) {
       activateNpcMainSelection(npc);
     } else if (state.npcMenuTab === 'talk' || state.npcMenuTab === 'quest') {
       state.npcMenuTab = 'main';
     } else if (state.npcMenuTab === NPC_MENU_INTERFACE_TAB) {
-      if (npc && isDurakGameOpen()) {
-        const result = handleDurakInput({ state, player, npc, input: { interactEdge: true } });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (npc && isDiceGameOpen()) {
-        const result = handleDiceInput({ state, player, npc, input: { interactEdge: true } });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (npc && isDominoGameOpen()) {
-        const result = handleDominoInput({ state, player, npc, input: { interactEdge: true } });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (npc && isCheckersGameOpen()) {
-        const result = handleCheckersInput({ state, player, npc, input: { interactEdge: true } });
+      if (coopSeatOf(player.id) !== null) {
+        routeCoopInput({ interactEdge: true });
+      } else if (npc && openTabletopGameFor(npc.id)) {
+        const result = openTabletopGameFor(npc.id)!.input({ state, player, npc, input: { interactEdge: true } });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else {
         closeNpcInteractionInterface(state);
@@ -7642,6 +7993,27 @@ function activateNpcMainSelection(npc: Entity | undefined): void {
   if (!option) return;
   if (option.disabled) {
     if (option.disabledReason) state.msgs.push(msg(option.disabledReason, state.time, '#f84'));
+    return;
+  }
+  // A group line is not an action: it opens the group's own list.
+  const groupId = npcMenuGroupOf(option.id);
+  if (groupId !== null) {
+    state.npcMenuTab = npcMenuGroupTab(groupId);
+    state.npcMenuSel = 0;
+    return;
+  }
+  if (option.id === NPC_MENU_BACK_ID) {
+    state.npcMenuTab = 'main';
+    state.npcMenuSel = 0;
+    return;
+  }
+  // Another human is not an NPC you can simply act upon: every menu action
+  // becomes a proposal that the other side has to accept.
+  if (isNetworkedPlayerActor(npc) && npc.id !== player.id && option.id !== 'leave') {
+    state.showNpcMenu = false;
+    syncPauseState();
+    if (isOnlinePeer()) sendPeerIntent({ kind: 'coop_propose', targetId: npc.id, activityId: option.id });
+    else hostProposeCoop(player, npc, option.id);
     return;
   }
   switch (option.id) {
@@ -8128,7 +8500,7 @@ function handleTapContainerMenu(x: number, y: number, w: number, h: number): voi
 function handleTapNpcMenu(x: number, y: number, w: number, h: number, sx: number, sy: number): void {
   const npc = ensureEntityIndex(entities).byId.get(state.npcMenuTarget);
   if (!npc) return;
-  if (state.npcMenuTab === 'main') {
+  if (isNpcMenuOptionListTab(state.npcMenuTab)) {
     const pw = Math.min(440 * sx, w - 24 * sx);
     const ph = Math.min(320 * sy, h - 24 * sy);
     const px = (w - pw) / 2;
@@ -8197,17 +8569,10 @@ function handleTapNpcMenu(x: number, y: number, w: number, h: number, sx: number
     const px = (w - pw) / 2;
     const py = (h - ph) / 2;
     if (pointInRect(x, y, px, py + ph - 22 * sy, pw, 22 * sy)) {
-      if (isDurakGameOpen()) {
-        const result = handleDurakInput({ state, player, npc, input: { escEdge: true } });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (isDiceGameOpen()) {
-        const result = handleDiceInput({ state, player, npc, input: { escEdge: true } });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (isDominoGameOpen()) {
-        const result = handleDominoInput({ state, player, npc, input: { escEdge: true } });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (isCheckersGameOpen()) {
-        const result = handleCheckersInput({ state, player, npc, input: { escEdge: true } });
+      if (coopSeatOf(player.id) !== null) {
+        routeCoopInput({ escEdge: true });
+      } else if (npc && openTabletopGameFor(npc.id)) {
+        const result = openTabletopGameFor(npc.id)!.input({ state, player, npc, input: { escEdge: true } });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else {
         closeNpcInteractionInterface(state);
@@ -8852,12 +9217,16 @@ function handleMenuInput(): void {
   // ── Enter accepts menu rows; Backspace/Delete closes them ─────
   let gameMenuOpenedThisFrame = false;
   if (closeEdge) {
-    if (state.showNpcMenu) {
+    // Inside a menu group the close key steps ONE level out; it must not shut
+    // the whole conversation from a submenu.
+    if (state.showNpcMenu && npcMenuGroupOf(state.npcMenuTab) !== null) {
+      state.npcMenuTab = 'main';
+      state.npcMenuSel = 0;
+    }
+    else if (state.showNpcMenu) {
       const npc = ensureEntityIndex(entities).byId.get(state.npcMenuTarget);
-      if (npc && isDurakGameOpen()) handleDurakInput({ state, player, npc, input: { escEdge: true } });
-      else if (npc && isDiceGameOpen()) handleDiceInput({ state, player, npc, input: { escEdge: true } });
-      else if (npc && isDominoGameOpen()) handleDominoInput({ state, player, npc, input: { escEdge: true } });
-      else if (npc && isCheckersGameOpen()) handleCheckersInput({ state, player, npc, input: { escEdge: true } });
+      if (coopSeatOf(player.id) !== null) routeCoopInput({ escEdge: true });
+      else if (npc && openTabletopGameFor(npc.id)) openTabletopGameFor(npc.id)!.input({ state, player, npc, input: { escEdge: true } });
       clearTradeOffers(state);
       closeNpcInteractionInterface();
       state.showNpcMenu = false;
@@ -9020,7 +9389,7 @@ function handleMenuInput(): void {
   // ── NPC menu navigation ──────────────────────────────────
   else if (state.showNpcMenu) {
     const npc = ensureEntityIndex(entities).byId.get(state.npcMenuTarget);
-    if (state.npcMenuTab === 'main') {
+    if (isNpcMenuOptionListTab(state.npcMenuTab)) {
       const upNav = menuUpNav();
       const dnNav = menuDownNav();
       const options = npc ? getNpcMenuOptions({ state, player, npc, entities }) : [];
@@ -9103,46 +9472,30 @@ function handleMenuInput(): void {
         state.npcMenuTab = 'main';
       }
     } else if (state.npcMenuTab === NPC_MENU_INTERFACE_TAB) {
-      if (npc && isDurakGameOpen()) {
-        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', invRight, rightEdge);
-        const result = handleDurakInput({
-          state,
-          player,
-          npc,
-          input: { leftNav, rightNav, interactEdge: acceptEdge, dropEdge },
-        });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (npc && isDiceGameOpen()) {
-        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', invRight, rightEdge);
-        const result = handleDiceInput({
-          state,
-          player,
-          npc,
-          input: { leftNav, rightNav, interactEdge: acceptEdge, dropEdge },
-        });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (npc && isDominoGameOpen()) {
-        const leftNav = menuRepeatStep('left', invLeft, leftEdge);
-        const rightNav = menuRepeatStep('right', invRight, rightEdge);
-        const result = handleDominoInput({
-          state,
-          player,
-          npc,
-          input: { leftNav, rightNav, interactEdge: acceptEdge, dropEdge },
-        });
-        if (result.closeInterface) closeNpcInteractionInterface(state);
-      } else if (npc && isCheckersGameOpen()) {
+      // Seated at a co-op table: the keystrokes belong to OUR chair and go to
+      // whoever runs the table, instead of driving a local game directly.
+      if (coopSeatOf(player.id) !== null) {
         const leftNav = menuRepeatStep('left', invLeft, leftEdge);
         const rightNav = menuRepeatStep('right', invRight, rightEdge);
         const upNav = menuUpNav();
         const downNav = menuDownNav();
-        const result = handleCheckersInput({
+        if (leftNav || rightNav || upNav || downNav || acceptEdge || dropEdge || closeEdge) {
+          routeCoopInput({ leftNav, rightNav, upNav, downNav, interactEdge: acceptEdge, dropEdge, escEdge: closeEdge });
+        }
+      } else if (npc && openTabletopGameFor(npc.id)) {
+        const table = openTabletopGameFor(npc.id)!;
+        const result = table.input({
           state,
           player,
           npc,
-          input: { leftNav, rightNav, upNav, downNav, interactEdge: acceptEdge, dropEdge },
+          input: {
+            leftNav: menuRepeatStep('left', invLeft, leftEdge),
+            rightNav: menuRepeatStep('right', invRight, rightEdge),
+            upNav: menuUpNav(),
+            downNav: menuDownNav(),
+            interactEdge: acceptEdge,
+            dropEdge,
+          },
         });
         if (result.closeInterface) closeNpcInteractionInterface(state);
       } else if (acceptEdge || closeEdge) {
@@ -9483,6 +9836,9 @@ function gameLoop(now: number): void {
     state.msgs.push(msg(notice.text, state.time, notice.color));
   }
 
+  if (isOnlineConnected() && !isOnlinePeer()) { tickCoopInvites(); tickCoopDeaths(); }
+  handleCoopInvitePointer();
+
   const snap = getNetSphereSnapshot();
   if (snap.netGen && player) {
     player.netGen = snap.netGen;
@@ -9503,11 +9859,18 @@ function gameLoop(now: number): void {
       // Interact stays reliable/immediate because it opens host-owned doors,
       // pickups, containers and the evacuation lift.
       if (input.interact) {
-        if (!peerMenuOpen) sendPeerIntent({ kind: 'interact' });
+        // Another human is not a host-owned fixture: the menu is a local
+        // proposal screen, so it opens here rather than round-tripping.
+        const facedPlayer = peerMenuOpen ? null : facedNetworkedPlayer();
+        if (facedPlayer) openNpcMenu(facedPlayer);
+        else if (!peerMenuOpen) sendPeerIntent({ kind: 'interact' });
         input.interact = false;
       }
     }
     if (isOnlineHost()) {
+      // The room numbers the host 0 and peers 1..3 (functions/do/floor_room.ts),
+      // so carrying that slot is what lets a peer tell a human from an NPC.
+      if (player.peerSlot === undefined) player.peerSlot = 0;
       const peerActors = entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0);
       // Host owns peer resources: tick cooldowns/reloads every frame, and
       // close the visit once for any peer who died this frame.
@@ -10158,6 +10521,7 @@ function gameLoop(now: number): void {
       pointerLockHint: !mobileControls?.isEnabled() && !input.mouse.locked && !pointerCaptureGateVisible(),
       pointerCaptureGate: pointerCaptureGateVisible(),
     });
+    drawCoopInvitePromptIfPending(hudCanvas.width / SCR_W, hudCanvas.height / SCR_H);
   }
   if (!started) {
     showTitle();

@@ -8,22 +8,26 @@ import {
   type DesignFloorNpcPredicateProfile,
 } from '../data/design_floor_profiles';
 import { craftRecipeLearnedMessage, isCraftRecipeKnown, learnCraftRecipe } from './crafting';
-import { closeDiceGame, diceStakeFromNpc, startDiceGame } from './dice';
-import { closeDominoGame, dominoStakeFromNpc, startDominoGame } from './domino';
-import { closeCheckersGame, checkersStakeFromNpc, startCheckersGame } from './checkers';
-import { closeDurakGame, durakStakeFromNpc, startDurakGame } from './durak';
+import { isNetworkedPlayerActor } from './coop_session';
+import { COOP_BARTER_ID } from './coop_barter';
+import { tabletopGames, type TabletopGameDef } from './tabletop';
+// Side-effect imports: each game registers itself with the tabletop registry.
+import './durak';
+import './dice';
+import './domino';
+import './checkers';
+import './poker';
+import './chess';
+import './go';
+import './backgammon';
+import './battleship';
 import { canOpenDemosProfileForNpc, demosCursorForNpcProfile } from './demos_profiles';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { currentFloorRunEntry } from './procedural_floors';
 import { npcHasQuestMarker } from './quests';
-import { controlBindingLabel } from './controls';
 import { buildContextSnapshot } from './context';
 import { renderMarkovDialogueTalk } from './markov_dialogue';
 
-export const CARD_DECK_ITEM_ID = 'card_deck';
-export const DICE_BONE_ITEM_ID = 'dice_bone';
-export const DOMINO_BOX_ITEM_ID = 'domino_box';
-export const CHECKERS_BOARD_ITEM_ID = 'checkers_board';
 export const NPC_MENU_INTERFACE_TAB = 'interface';
 
 export interface NpcInteractionContext {
@@ -70,7 +74,51 @@ export interface NpcInteractionOptionDef {
   visible: (ctx: NpcInteractionContext) => boolean;
   disabledReason?: (ctx: NpcInteractionContext) => string | undefined;
   activate: (ctx: NpcInteractionContext) => void;
+  /** Also offered when the target is another human rather than an NPC. Default
+   *  false: most options (dialogue, quests, lessons, arena) only make sense
+   *  against an NPC. See `getNpcMenuOptions`. */
+  playerTarget?: boolean;
+  /** Fold this option into a named group. The menu then shows ONE line for the
+   *  whole group and lists its members when you open it. Generic on purpose:
+   *  tabletop games are simply the first cluster big enough to need it. */
+  group?: string;
 }
+
+/** Group headings, registered by whoever owns the cluster. */
+interface NpcMenuGroupDef { id: string; label: (ctx: NpcInteractionContext) => string; order: number }
+
+const optionGroups = new Map<string, NpcMenuGroupDef>();
+
+export function registerNpcMenuGroup(def: NpcMenuGroupDef): void {
+  optionGroups.set(def.id, def);
+}
+
+/** A group is browsed as its own menu tab, so it needs no new state field. */
+export const NPC_MENU_GROUP_PREFIX = 'group:';
+
+export function npcMenuGroupTab(groupId: string): string {
+  return NPC_MENU_GROUP_PREFIX + groupId;
+}
+
+/** The group being browsed, or null on any other tab. */
+export function npcMenuGroupOf(tab: string): string | null {
+  return tab.startsWith(NPC_MENU_GROUP_PREFIX) ? tab.slice(NPC_MENU_GROUP_PREFIX.length) : null;
+}
+
+/** Tabs that render a list of options: the root and every group. */
+export function isNpcMenuOptionListTab(tab: string): boolean {
+  return tab === 'main' || tab.startsWith(NPC_MENU_GROUP_PREFIX);
+}
+
+/** Marks the synthetic «back» line and the synthetic group lines apart from
+ *  real options, so activation can tell them from something to run. */
+export const NPC_MENU_BACK_ID = 'group_back';
+
+/** Builtin tabs that survive when the target is another human. Talk, quest and
+ *  the priced NPC trade are all NPC-only: a live player generates no Markov
+ *  line, hands out no errands and sells at no price list. Swapping goods with
+ *  one goes through the `barter` option instead. */
+const PLAYER_TARGET_BUILTINS = new Set(['leave']);
 
 interface NpcRecipeLesson {
   source: CraftRecipeSourceDef;
@@ -106,38 +154,6 @@ function countItem(actor: Entity, defId: string): number {
     if (slot.defId === defId && slot.count > 0) count += slot.count;
   }
   return count;
-}
-
-function hasCardDeck(ctx: NpcInteractionContext): boolean {
-  return countItem(ctx.player, CARD_DECK_ITEM_ID) > 0 || countItem(ctx.npc, CARD_DECK_ITEM_ID) > 0;
-}
-
-function hasDice(ctx: NpcInteractionContext): boolean {
-  return countItem(ctx.player, DICE_BONE_ITEM_ID) > 0 || countItem(ctx.npc, DICE_BONE_ITEM_ID) > 0;
-}
-
-function hasDominoBox(ctx: NpcInteractionContext): boolean {
-  return countItem(ctx.player, DOMINO_BOX_ITEM_ID) > 0 || countItem(ctx.npc, DOMINO_BOX_ITEM_ID) > 0;
-}
-
-function hasCheckersBoard(ctx: NpcInteractionContext): boolean {
-  return countItem(ctx.player, CHECKERS_BOARD_ITEM_ID) > 0 || countItem(ctx.npc, CHECKERS_BOARD_ITEM_ID) > 0;
-}
-
-function durakStake(ctx: NpcInteractionContext): number {
-  return durakStakeFromNpc(ctx.npc);
-}
-
-function diceStake(ctx: NpcInteractionContext): number {
-  return diceStakeFromNpc(ctx.npc);
-}
-
-function dominoStake(ctx: NpcInteractionContext): number {
-  return dominoStakeFromNpc(ctx.npc);
-}
-
-function checkersStake(ctx: NpcInteractionContext): number {
-  return checkersStakeFromNpc(ctx.npc);
 }
 
 function currentDesignRouteId(state: GameState): string {
@@ -237,14 +253,63 @@ function menuOptionOrderCompare(aOrder: number, aId: string, bOrder: number, bId
 function pushBuiltinMenuOption(options: NpcMenuOption[], ctx: NpcInteractionContext, index: number): void {
   const def = BUILTIN_MENU_OPTIONS[index];
   if (!def) return;
+  if (isNetworkedPlayerActor(ctx.npc) && !PLAYER_TARGET_BUILTINS.has(def.id)) return;
   const label = def.id === 'quest' && npcHasQuestMarker(ctx.npc, ctx.state) ? def.questMarkerLabel : def.label;
   options.push({ id: def.id, label, order: def.order });
 }
 
+/** The list for the CURRENT tab: the root menu, or the contents of the group
+ *  being browsed. Reading the tab here is what keeps every call site — the
+ *  panel, the pointer hit-test, the keyboard nav — unaware that groups exist.
+ *
+ *  The same menu serves an NPC and another human; the human's version simply
+ *  drops what cannot apply to a live player. */
 export function getNpcMenuOptions(ctx: NpcInteractionContext): NpcMenuOption[] {
+  const groupId = npcMenuGroupOf(ctx.state.npcMenuTab);
+  if (groupId !== null) return groupMenuOptions(ctx, groupId);
+  return rootMenuOptions(ctx);
+}
+
+/** Inside a group: its members, plus a way back out for the mouse. */
+function groupMenuOptions(ctx: NpcInteractionContext, groupId: string): NpcMenuOption[] {
+  const playerTarget = isNetworkedPlayerActor(ctx.npc);
   const options: NpcMenuOption[] = [];
+  for (const def of customOptions) {
+    if (def.group !== groupId) continue;
+    if (playerTarget && def.playerTarget !== true) continue;
+    if (!def.visible(ctx)) continue;
+    const disabledReason = def.disabledReason?.(ctx);
+    options.push({ id: def.id, label: def.label(ctx), order: def.order, disabled: !!disabledReason, disabledReason });
+  }
+  options.sort((a, b) => menuOptionOrderCompare(a.order, a.id, b.order, b.id));
+  options.push({ id: NPC_MENU_BACK_ID, label: 'Назад', order: 9000 });
+  return options;
+}
+
+/** True when a group has anything to show — an empty group must not offer an
+ *  empty room. */
+function groupHasVisibleMembers(ctx: NpcInteractionContext, groupId: string): boolean {
+  const playerTarget = isNetworkedPlayerActor(ctx.npc);
+  for (const def of customOptions) {
+    if (def.group !== groupId) continue;
+    if (playerTarget && def.playerTarget !== true) continue;
+    if (def.visible(ctx)) return true;
+  }
+  return false;
+}
+
+function rootMenuOptions(ctx: NpcInteractionContext): NpcMenuOption[] {
+  const options: NpcMenuOption[] = [];
+  const playerTarget = isNetworkedPlayerActor(ctx.npc);
+  // One line per non-empty group, in place of all its members.
+  for (const group of optionGroups.values()) {
+    if (!groupHasVisibleMembers(ctx, group.id)) continue;
+    options.push({ id: npcMenuGroupTab(group.id), label: group.label(ctx), order: group.order });
+  }
   let builtinIndex = 0;
   for (const def of customOptions) {
+    if (def.group !== undefined) continue;
+    if (playerTarget && def.playerTarget !== true) continue;
     if (!def.visible(ctx)) continue;
     while (builtinIndex < BUILTIN_MENU_OPTIONS.length) {
       const builtin = BUILTIN_MENU_OPTIONS[builtinIndex];
@@ -265,6 +330,7 @@ export function getNpcMenuOptions(ctx: NpcInteractionContext): NpcMenuOption[] {
     pushBuiltinMenuOption(options, ctx, builtinIndex);
     builtinIndex++;
   }
+  options.sort((a, b) => menuOptionOrderCompare(a.order, a.id, b.order, b.id));
   return options;
 }
 
@@ -300,10 +366,8 @@ export function openNpcInteractionInterface(ctx: NpcInteractionContext, request:
 }
 
 export function closeNpcInteractionInterface(state?: GameState): void {
-  closeDurakGame();
-  closeDiceGame();
-  closeDominoGame();
-  closeCheckersGame();
+  // Whatever table was on the panel folds up with it, whichever game it was.
+  for (const game of tabletopGames()) game.close();
   runtime.open = false;
   runtime.id = '';
   runtime.title = '';
@@ -385,130 +449,6 @@ registerNpcInteractionOption({
   },
 });
 
-registerNpcInteractionOption({
-  id: 'durak',
-  order: 30,
-  label: ctx => `Играть в дурака (₽${durakStake(ctx)})`,
-  visible: ctx => portalAllowsCasinoLikeContent() && hasCardDeck(ctx),
-  disabledReason: ctx => {
-    const stake = durakStake(ctx);
-    if (stake <= 0) return 'У NPC нет денег для ставки.';
-    if (cleanMoney(ctx.player) < stake) return `Нужно ₽${stake} для ставки в дурака.`;
-    return undefined;
-  },
-  activate: ctx => {
-    const stake = durakStake(ctx);
-    if (!startDurakGame(ctx)) {
-      ctx.state.msgs.push(msg('Партию в дурака не удалось разложить.', ctx.state.time, '#f84'));
-      return;
-    }
-    openNpcInteractionInterface(ctx, {
-      id: 'durak',
-      title: 'ДУРАК',
-      stakeRubles: stake,
-      lines: [
-        `${ctx.npc.name ?? 'NPC'} кладет колоду на край стола. Козырь открыт.`,
-        `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
-        'Подкидной дурак на двоих, без перевода.',
-      ],
-      message: 'Деньги переходят только после победы или сдачи.',
-    });
-  },
-});
-
-registerNpcInteractionOption({
-  id: 'dice',
-  order: 31,
-  label: ctx => `Играть в кости (₽${diceStake(ctx)})`,
-  visible: ctx => portalAllowsCasinoLikeContent() && hasDice(ctx),
-  disabledReason: ctx => {
-    const stake = diceStake(ctx);
-    if (stake <= 0) return 'У NPC нет денег для ставки.';
-    if (cleanMoney(ctx.player) < stake) return `Нужно ₽${stake} для ставки в кости.`;
-    return undefined;
-  },
-  activate: ctx => {
-    const stake = diceStake(ctx);
-    if (!startDiceGame(ctx)) {
-      ctx.state.msgs.push(msg('Кости не легли на стол.', ctx.state.time, '#f84'));
-      return;
-    }
-    openNpcInteractionInterface(ctx, {
-      id: 'dice',
-      title: 'КОСТИ',
-      stakeRubles: stake,
-      lines: [
-        `${ctx.npc.name ?? 'NPC'} ставит пару костей на бетон.`,
-        `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
-        'Бросайте до 21. Перебор проигрывает; равный счет оставляет деньги при себе.',
-      ],
-      message: `${controlBindingLabel('gameMenu')} бросить, ${controlBindingLabel('drop')} стоп: передать ход NPC.`,
-    });
-  },
-});
-
-registerNpcInteractionOption({
-  id: 'domino',
-  order: 32,
-  label: ctx => `Играть в домино (₽${dominoStake(ctx)})`,
-  visible: ctx => portalAllowsCasinoLikeContent() && hasDominoBox(ctx),
-  disabledReason: ctx => {
-    const stake = dominoStake(ctx);
-    if (stake <= 0) return 'У NPC нет денег для ставки.';
-    if (cleanMoney(ctx.player) < stake) return `Нужно ₽${stake} для ставки в домино.`;
-    return undefined;
-  },
-  activate: ctx => {
-    const stake = dominoStake(ctx);
-    if (!startDominoGame(ctx)) {
-      ctx.state.msgs.push(msg('Домино не разложилось на столе.', ctx.state.time, '#f84'));
-      return;
-    }
-    openNpcInteractionInterface(ctx, {
-      id: 'domino',
-      title: 'ДОМИНО',
-      stakeRubles: stake,
-      lines: [
-        `${ctx.npc.name ?? 'NPC'} высыпает костяшки из коробки.`,
-        `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
-        'По 7 костяшек. Кладите к совпадающему краю; если хода нет, добирайте из коробки.',
-      ],
-      message: `${controlBindingLabel('gameMenu')} сыграть/добрать, ${controlBindingLabel('drop')} меняет левый/правый край.`,
-    });
-  },
-});
-
-registerNpcInteractionOption({
-  id: 'checkers',
-  order: 33,
-  label: ctx => `Играть в шашки (₽${checkersStake(ctx)})`,
-  visible: ctx => portalAllowsCasinoLikeContent() && hasCheckersBoard(ctx),
-  disabledReason: ctx => {
-    const stake = checkersStake(ctx);
-    if (stake <= 0) return 'У NPC нет денег для ставки.';
-    if (cleanMoney(ctx.player) < stake) return `Нужно ₽${stake} для ставки в шашки.`;
-    return undefined;
-  },
-  activate: ctx => {
-    const stake = checkersStake(ctx);
-    if (!startCheckersGame(ctx)) {
-      ctx.state.msgs.push(msg('Шашки не удалось разложить.', ctx.state.time, '#f84'));
-      return;
-    }
-    openNpcInteractionInterface(ctx, {
-      id: 'checkers',
-      title: 'ШАШКИ',
-      stakeRubles: stake,
-      lines: [
-        `${ctx.npc.name ?? 'NPC'} достает стертую доску и деревянные шашки.`,
-        `Ставка зафиксирована: 10% от денег NPC, сейчас ₽${stake}.`,
-        'Ходят по диагонали вперед, дамка ходит назад. Взятие обязательно.',
-      ],
-      message: `${controlBindingLabel('gameMenu')} выбрать/ходить, ${controlBindingLabel('drop')} отмена.`,
-    });
-  },
-});
-
 for (const profile of allDesignFloorProfiles()) {
   for (const option of profile.npcInteractions ?? []) {
     registerNpcInteractionOption({
@@ -521,8 +461,6 @@ for (const profile of allDesignFloorProfiles()) {
     });
   }
 }
-
-
 
 registerNpcInteractionOption({
   id: 'arena',
@@ -640,3 +578,71 @@ registerNpcInteractionOption({
   },
 });
 
+const TABLETOP_GROUP = 'tabletop';
+
+/* ── Tabletop games ────────────────────────────────────────────
+ * Every board and card game gets its menu line from the registry, so adding one
+ * is a single registration in `systems/<game>.ts` and nothing here. Wording is
+ * uniform on purpose: label, stake, and the two reasons a table cannot start. */
+registerNpcMenuGroup({
+  id: TABLETOP_GROUP,
+  // The count is on the line so nobody opens an empty shelf: it already tells
+  // you how many sets are actually on this table.
+  label: ctx => `Сыграть (${tabletopGames().filter(g => sideHasSet(ctx, g.itemId)).length})`,
+  order: 30,
+});
+
+for (const game of tabletopGames()) {
+  registerNpcInteractionOption({
+    id: game.id,
+    group: TABLETOP_GROUP,
+    playerTarget: true,
+    order: game.order,
+    label: ctx => `${game.menuLabel} (₽${tableStake(ctx, game)})`,
+    visible: ctx => portalAllowsCasinoLikeContent() && sideHasSet(ctx, game.itemId),
+    disabledReason: ctx => {
+      const stake = tableStake(ctx, game);
+      if (stake <= 0) return isNetworkedPlayerActor(ctx.npc) ? 'Ставку не покрыть.' : 'У NPC нет денег для ставки.';
+      if (cleanMoney(ctx.player) < stake) return `Нужно ₽${stake} для ставки.`;
+      return undefined;
+    },
+    activate: ctx => {
+      const stake = tableStake(ctx, game);
+      if (!game.start(ctx, { stake })) {
+        ctx.state.msgs.push(msg('Партию не удалось разложить.', ctx.state.time, '#f84'));
+        return;
+      }
+      const intro = game.intro({ opponent: ctx.npc, stake });
+      openNpcInteractionInterface(ctx, {
+        id: game.id,
+        title: game.title,
+        stakeRubles: stake,
+        lines: intro.lines,
+        message: intro.message,
+      });
+    },
+  });
+}
+
+/** Against an NPC the stake is its own ten percent; across a co-op table the
+ *  poorer purse sets it, so both sides can actually cover the bet. */
+function tableStake(ctx: NpcInteractionContext, game: TabletopGameDef): number {
+  return isNetworkedPlayerActor(ctx.npc)
+    ? Math.min(game.stake(ctx.player), game.stake(ctx.npc))
+    : game.stake(ctx.npc);
+}
+
+/** One set on the table is enough: either chair may be the one carrying it. */
+function sideHasSet(ctx: NpcInteractionContext, itemId: string): boolean {
+  return countItem(ctx.player, itemId) > 0 || countItem(ctx.npc, itemId) > 0;
+}
+
+registerNpcInteractionOption({
+  id: COOP_BARTER_ID,
+  playerTarget: true,
+  order: 20,
+  label: () => 'Обмен',
+  // Only ever between two humans: an NPC sells at a price, it does not swap.
+  visible: ctx => isNetworkedPlayerActor(ctx.npc),
+  activate: () => { /* routed as a co-op proposal before it ever gets here */ },
+});

@@ -370,6 +370,10 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   card_deck: ['cards', 'durak', 'resident_good', 'trade'],
   domino_box: ['domino', 'table_game', 'resident_good', 'trade'],
   checkers_board: ['checkers', 'table_game', 'resident_good', 'trade'],
+  chess_set: ['chess', 'table_game', 'resident_good', 'trade'],
+  go_set: ['go', 'table_game', 'resident_good', 'trade'],
+  backgammon_set: ['backgammon', 'table_game', 'resident_good', 'trade'],
+  battleship_pad: ['battleship', 'table_game', 'paper', 'resident_good', 'trade'],
   ...CHERNOBOG_DOCKET_ITEM_TAGS,
 };
 
@@ -651,6 +655,10 @@ export const ITEMS: Record<string, ItemDef> = {
   card_deck:{ id:'card_deck', name:'Колода карт', type:ItemType.MISC, desc:'Засаленная колода для кухонного дурака, долговой паузы и разговора, который проще вести через козыри.', spawnRooms:[RoomType.COMMON,RoomType.SMOKING,RoomType.LIVING,RoomType.KITCHEN], spawnW:0.55, value:22, tags:[...ITEM_TAGS.card_deck], stack:1 },
   domino_box:{ id:'domino_box', name:'Коробка домино', type:ItemType.MISC, desc:'Пластмассовые костяшки в мягкой коробке. За столом слышно не спор, а сухой щелчок счета.', spawnRooms:[RoomType.COMMON,RoomType.SMOKING,RoomType.LIVING,RoomType.KITCHEN], spawnW:0.48, value:24, tags:[...ITEM_TAGS.domino_box], stack:1 },
   checkers_board:{ id:'checkers_board', name:'Шашки', type:ItemType.MISC, desc:'Стертая деревянная доска с набором шашек. Коробка не сохранилась, шашки перетянуты канцелярской резинкой.', spawnRooms:[RoomType.COMMON,RoomType.LIVING,RoomType.KITCHEN,RoomType.SMOKING], spawnW:0.44, value:30, tags:[...ITEM_TAGS.checkers_board], stack:1 },
+  chess_set:{ id:'chess_set', name:'Шахматы', type:ItemType.MISC, desc:'Складная доска, фигуры из двух разных наборов. Черный ферзь заменен гайкой, и все за столом делают вид, что так и было.', spawnRooms:[RoomType.COMMON,RoomType.LIVING,RoomType.OFFICE,RoomType.SMOKING], spawnW:0.34, value:46, tags:[...ITEM_TAGS.chess_set], stack:1 },
+  go_set:{ id:'go_set', name:'Набор го', type:ItemType.MISC, desc:'Расчерченная доска девять на девять и два мешочка камней, черные и белые. Откуда он в этих стенах, объяснить никто не берется.', spawnRooms:[RoomType.COMMON,RoomType.LIVING,RoomType.OFFICE], spawnW:0.16, value:78, tags:[...ITEM_TAGS.go_set], stack:1 },
+  backgammon_set:{ id:'backgammon_set', name:'Нарды', type:ItemType.MISC, desc:'Самодельная доска, выжженная по фанере, с парой костей в кармашке. Стучат так, что слышно через два этажа.', spawnRooms:[RoomType.COMMON,RoomType.SMOKING,RoomType.LIVING,RoomType.KITCHEN], spawnW:0.42, value:38, tags:[...ITEM_TAGS.backgammon_set], stack:1 },
+  battleship_pad:{ id:'battleship_pad', name:'Блокнот морского боя', type:ItemType.MISC, desc:'Тетрадь в клетку, расчерченная на поля, с огрызком карандаша на резинке. Половина страниц уже отыграна и заштрихована.', spawnRooms:[RoomType.COMMON,RoomType.LIVING,RoomType.OFFICE,RoomType.SMOKING], spawnW:0.5, value:12, tags:[...ITEM_TAGS.battleship_pad], stack:1 },
   resident_trinket_box:{ id:'resident_trinket_box', name:'Коробка жильцовых мелочей', type:ItemType.MISC, desc:'Пуговицы, значки, чужой ключ без двери. Небольшая ценность, если не думать, чья.', spawnRooms:[RoomType.LIVING,RoomType.STORAGE,RoomType.COMMON], spawnW:0.45, value:34, tags:[...ITEM_TAGS.resident_trinket_box], stack:3 },
   party_portrait_pin:{ id:'party_portrait_pin', name:'Значок с портрета партии', type:ItemType.MISC, desc:'Малый значок с большой уверенностью. Бюро любит такие мелочи, пока не спрашивают год выпуска.', spawnRooms:[RoomType.OFFICE,RoomType.COMMON,RoomType.LIVING], spawnW:0.55, value:22, tags:[...ITEM_TAGS.party_portrait_pin], stack:6 },
   stolen_terminal_stamp:{ id:'stolen_terminal_stamp', name:'Украденная печать терминала', type:ItemType.MISC, desc:'Служебная печать с терминального стола. Очередь подделывает легко, память камер - хуже.', spawnRooms:[RoomType.OFFICE,RoomType.SMOKING,RoomType.STORAGE], spawnW:0.16, value:155, tags:[...ITEM_TAGS.stolen_terminal_stamp], stack:1 },

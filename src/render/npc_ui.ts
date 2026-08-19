@@ -4,23 +4,27 @@ import { type Entity, type GameState, Faction } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
-import { getDiceSnapshot } from '../systems/dice';
-import { getDominoSnapshot } from '../systems/domino';
-import { getCheckersSnapshot } from '../systems/checkers';
-import { getDurakSnapshot } from '../systems/durak';
+import { openTabletopGameFor } from '../systems/tabletop';
+import { tabletopPanel } from './tabletop_ui';
 import {
   getNpcInteractionInterfaceSnapshot,
   getNpcMenuOptions,
+  isNpcMenuOptionListTab,
   NPC_MENU_INTERFACE_TAB,
 } from '../systems/npc_interaction_options';
 import { questDeadlineText, questRemainingMinutes } from '../systems/quest_deadlines';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { dialogMenuScale, tradeMenuGridLayout } from './ui_layout';
 import { drawCenteredWrappedText, drawWrappedText, fitTextStable } from './ui_text';
-import { drawDurakInterface } from './durak_ui';
-import { drawDiceInterface } from './dice_ui';
-import { drawDominoInterface } from './domino_ui';
-import { drawCheckersInterface } from './checkers_ui';
+import './durak_ui';
+import './dice_ui';
+import './domino_ui';
+import './checkers_ui';
+import './poker_ui';
+import './chess_ui';
+import './go_ui';
+import './backgammon_ui';
+import './battleship_ui';
 import {
   questItemStateColor,
   questItemStateLabel,
@@ -73,7 +77,7 @@ export function drawNpcMenu(
   const fj = textJitter(time, 901);
   ctx.fillText(fitTextStable(ctx, `${fName} · ${oName}`, pw - 16 * sx), px + 8 * sx + fj.dx, py + 22 * sy + fj.dy);
 
-  if (state.npcMenuTab === 'main') {
+  if (isNpcMenuOptionListTab(state.npcMenuTab)) {
     const items = getNpcMenuOptions({ state, player, npc, entities });
     ctx.font = `${8.6 * sy}px "Press Start 2P", monospace`;
     for (let i = 0; i < items.length; i++) {
@@ -148,24 +152,11 @@ export function drawNpcMenu(
     ctx.fillText(fitTextStable(ctx, hint, pw - 16 * sx), px + 8 * sx, py + ph - 11 * sy);
 
   } else if (state.npcMenuTab === NPC_MENU_INTERFACE_TAB) {
-    const durak = getDurakSnapshot();
-    if (durak.open && durak.npcId === npc.id) {
-      drawDurakInterface(ctx, durak, px, py, pw, ph, sx, sy, time);
-      return;
-    }
-    const dice = getDiceSnapshot();
-    if (dice.open && dice.npcId === npc.id) {
-      drawDiceInterface(ctx, dice, px, py, pw, ph, sx, sy, time);
-      return;
-    }
-    const domino = getDominoSnapshot();
-    if (domino.open && domino.npcId === npc.id) {
-      drawDominoInterface(ctx, domino, px, py, pw, ph, sx, sy, time);
-      return;
-    }
-    const checkers = getCheckersSnapshot();
-    if (checkers.open && checkers.npcId === npc.id) {
-      drawCheckersInterface(ctx, checkers, px, py, pw, ph, sx, sy, time);
+    // Whatever table is live for this NPC draws itself; the panel names no game.
+    const table = openTabletopGameFor(npc.id);
+    const drawPanel = table ? tabletopPanel(table.id) : undefined;
+    if (table && drawPanel) {
+      drawPanel(ctx, table.snapshot() as never, px, py, pw, ph, sx, sy, time);
       return;
     }
     const snapshot = getNpcInteractionInterfaceSnapshot();

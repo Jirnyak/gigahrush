@@ -20,6 +20,7 @@ import { W, Cell, DoorState, type Entity, type Item } from '../core/types';
 import { World } from '../core/world';
 import { countAmmo, removeItem, equippedCombatItemId, getWeaponStats } from './inventory';
 import { calculateReloadTime } from './combat';
+import { resetCoopState } from './coop_session';
 
 // ── Intents (peer → host) ────────────────────────────────────
 
@@ -35,7 +36,27 @@ export type PeerIntent =
   | { kind: 'npc_close'; npcId: number }
   /** Relaxed-trust deal: the peer ran the full local trade UI/pricing; the
    *  host applies the material result (clamped to what actually exists). */
-  | { kind: 'trade_deal'; npcId: number; give: NetItem[]; take: NetItem[]; netCash: number };
+  | { kind: 'trade_deal'; npcId: number; give: NetItem[]; take: NetItem[]; netCash: number }
+  /* ── Co-op tables (see systems/coop_session.ts) ────────────────
+   * Unlike an NPC minigame, the table itself lives on the host: the peer only
+   * proposes, answers, and sends the keystrokes for its own seat. Money moves
+   * host-side, so a peer cannot fabricate a win. */
+  | { kind: 'coop_propose'; targetId: number; activityId: string }
+  | { kind: 'coop_reply'; accept: boolean }
+  | { kind: 'coop_input'; input: CoopWireInput; offer?: NetItem[]; confirm?: boolean }
+  | { kind: 'coop_leave' };
+
+/** The keystrokes a seat can send. Mirrors `CoopInput` in coop_session.ts;
+ *  everything is a plain flag, so nothing but booleans crosses the wire. */
+export interface CoopWireInput {
+  leftNav?: boolean;
+  rightNav?: boolean;
+  upNav?: boolean;
+  downNav?: boolean;
+  interactEdge?: boolean;
+  dropEdge?: boolean;
+  escEdge?: boolean;
+}
 
 export interface PeerIntentMsg {
   type: 'peer_intent';
@@ -103,8 +124,38 @@ export function sanitizeIntent(raw: unknown): PeerIntent | null {
           ? Math.max(-1_000_000, Math.min(1_000_000, Math.floor(r.netCash)))
           : 0,
       };
+    case 'coop_propose':
+      if (typeof r.activityId !== 'string') return null;
+      return {
+        kind: 'coop_propose',
+        targetId: clampInt(r.targetId, 0, 1e9),
+        activityId: r.activityId.slice(0, 24),
+      };
+    case 'coop_reply':
+      return { kind: 'coop_reply', accept: r.accept === true };
+    case 'coop_input':
+      return {
+        kind: 'coop_input',
+        input: sanitizeCoopInput(r.input),
+        offer: r.offer === undefined ? undefined : unpackItems(r.offer, 16),
+        confirm: r.confirm === true,
+      };
+    case 'coop_leave': return { kind: 'coop_leave' };
     default: return null;
   }
+}
+
+function sanitizeCoopInput(raw: unknown): CoopWireInput {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    leftNav: r.leftNav === true,
+    rightNav: r.rightNav === true,
+    upNav: r.upNav === true,
+    downNav: r.downNav === true,
+    interactEdge: r.interactEdge === true,
+    dropEdge: r.dropEdge === true,
+    escEdge: r.escEdge === true,
+  };
 }
 
 function clampInt(v: unknown, lo: number, hi: number): number {
@@ -501,6 +552,9 @@ export function hostNpcPayloadChanged(slot: number, payloadJson: string): boolea
 export function hostClearSlot(slot: number): void { _slots.delete(slot); }
 
 export function resetOnlineProtocolState(): void {
+  // A dropped or restarted session takes any open co-op table with it: the
+  // seats no longer exist, so nothing is left to settle.
+  resetCoopState();
   _slots.clear();
   _fxQueue = [];
   _touchedCells.clear();
