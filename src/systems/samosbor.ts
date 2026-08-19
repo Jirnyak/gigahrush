@@ -3822,10 +3822,10 @@ function rewriteActorAsRandomNpc(state: GameState, entity: Entity, variant: Acti
   const maxHp = getMaxHp(rpg);
   const loadout = randomNpcInventory(faction, rpg.level);
   const wasPlayer = isPlayerEntity(entity);
-  if (entity.type === EntityType.NPC && entity.id && entity.alifeId === undefined) {
-    recordAlifeNpcDeath(state, entity);
-    delete (entity as Partial<Entity>).id;
-  }
+  // Человека здесь переписывают, а не убивают, и id у него не отбирают: живая
+  // сущность без id выпадает из индекса, из квестов и из усыновления A-Life,
+  // то есть перестаёт существовать для всего мира, оставаясь на экране.
+  // Запись догонит его на ближайшей материализации этажа.
   entity.name = wasPlayer ? `${named.name} (вы)` : named.name;
   entity.firstName = named.firstName;
   entity.lastName = named.lastName;

@@ -8,6 +8,15 @@ import {
   DEMOS_EDGE_QUEST,
   DEMOS_EDGE_WORK,
 } from './demos_posts';
+// Шкала отношений — общая для фракций, людей и игрока; определена один раз
+// в `relations.ts`, здесь только реэкспорт, как и флаги рёбер выше.
+import {
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
+  RELATION_MAX,
+  RELATION_MIN,
+  RELATION_UNSET,
+} from './relations';
 
 export const DEMOS_SOCIAL_PLAYER_SLOT = 0;
 export const DEMOS_SOCIAL_NPC_SLOT_START = 1;
@@ -17,11 +26,6 @@ export const DEMOS_SOCIAL_INITIAL_NPC_SLOTS = 4;
 export const DEMOS_SOCIAL_PUBLIC_SLOTS = 10;
 export const DEMOS_SOCIAL_SLOTS = DEMOS_SOCIAL_PUBLIC_SLOTS;
 export const DEMOS_SOCIAL_CANDIDATE_TRIES = 24;
-export const DEMOS_RELATION_EMPTY = -128;
-export const DEMOS_RELATION_MIN = -127;
-export const DEMOS_RELATION_MAX = 127;
-export const DEMOS_RELATION_HOSTILE_THRESHOLD = -64;
-export const DEMOS_RELATION_FRIENDLY_THRESHOLD = 64;
 export const DEMOS_SOCIAL_OVERRIDE_CAP = 8192;
 
 export {
@@ -33,6 +37,11 @@ export {
   DEMOS_EDGE_HIDDEN,
   DEMOS_EDGE_QUEST,
   DEMOS_EDGE_WORK,
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
+  RELATION_MAX,
+  RELATION_MIN,
+  RELATION_UNSET,
 };
 
 export type DemosRelationBandId = 'enemy' | 'cold' | 'neutral' | 'warm' | 'friend';
@@ -106,7 +115,6 @@ export interface DemosAuthoredRelationDef {
   relation: number;
   role: DemosSocialRoleId;
   flags?: number;
-  bidirectional?: boolean;
 }
 
 export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
@@ -116,7 +124,6 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 88,
     role: DemosSocialRoleId.FRIEND,
     flags: DEMOS_EDGE_FRIEND,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'barni',
@@ -124,7 +131,6 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 98,
     role: DemosSocialRoleId.PARTNER,
     flags: DEMOS_EDGE_FRIEND,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'olevia_kiber',
@@ -132,30 +138,26 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 75,
     role: DemosSocialRoleId.PARTNER,
     flags: DEMOS_EDGE_WORK | DEMOS_EDGE_FRIEND,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'viktor_argonov',
     toPlotNpcId: 'olevia_kiber',
-    relation: DEMOS_RELATION_MIN,
+    relation: RELATION_MIN,
     role: DemosSocialRoleId.ENEMY,
     flags: DEMOS_EDGE_ENEMY | DEMOS_EDGE_DEBT,
-    bidirectional: false,
   },
   {
     fromPlotNpcId: 'viktor_argonov',
     toPlotNpcId: 'valeriy_mukhin',
-    relation: DEMOS_RELATION_HOSTILE_THRESHOLD - 20,
+    relation: RELATION_HOSTILE_THRESHOLD - 20,
     role: DemosSocialRoleId.ENEMY,
     flags: DEMOS_EDGE_ENEMY,
-    bidirectional: false,
   },
   {
     fromPlotNpcId: 'vanka',
     toPlotNpcId: 'yakov',
     relation: 22,
     role: DemosSocialRoleId.ACQUAINTANCE,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'major_grom',
@@ -163,7 +165,6 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 34,
     role: DemosSocialRoleId.ACQUAINTANCE,
     flags: DEMOS_EDGE_WORK,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'rotenbergov',
@@ -171,7 +172,6 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: -96,
     role: DemosSocialRoleId.ENEMY,
     flags: DEMOS_EDGE_ENEMY | DEMOS_EDGE_DEBT,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'f69_asya_pryanikova',
@@ -179,7 +179,6 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 95,
     role: DemosSocialRoleId.PARTNER,
     flags: DEMOS_EDGE_FAMILY,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'f69_asya_pryanikova',
@@ -187,7 +186,6 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 100,
     role: DemosSocialRoleId.PARENT,
     flags: DEMOS_EDGE_FAMILY,
-    bidirectional: true,
   },
   {
     fromPlotNpcId: 'f69_borya_pryanikov',
@@ -195,6 +193,5 @@ export const DEMOS_AUTHORED_RELATIONS: readonly DemosAuthoredRelationDef[] = [
     relation: 100,
     role: DemosSocialRoleId.PARENT,
     flags: DEMOS_EDGE_FAMILY,
-    bidirectional: true,
   },
 ] as const;

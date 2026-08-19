@@ -1,16 +1,18 @@
 import { Faction, type Entity } from '../core/types';
-import { getFactionRel } from '../data/relations';
+import {
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
+  RELATION_MAX,
+  RELATION_MIN,
+  clampRelation,
+  getFactionRel,
+} from '../data/relations';
 
-export const RELATION_MIN = -100;
-export const RELATION_MAX = 100;
-export const HOSTILE_RELATION_THRESHOLD = -50;
-export const FRIENDLY_RELATION_THRESHOLD = 50;
+// Шкала и пороги — общие, определены в `data/relations.ts`. Здесь только
+// личная половина: отношение конкретного человека к игроку.
+export { RELATION_FRIENDLY_THRESHOLD, RELATION_HOSTILE_THRESHOLD, RELATION_MAX, RELATION_MIN, clampRelation };
 export const NPC_PLAYER_RELATION_FLUCTUATION = 12;
 export const QUEST_FACTION_RELATION_DELTA = 1;
-
-export function clampRelation(value: number): number {
-  return Math.max(RELATION_MIN, Math.min(RELATION_MAX, Math.trunc(value)));
-}
 
 export function getFactionPlayerRelation(faction: Faction | undefined): number {
   return getFactionRel(faction ?? Faction.CITIZEN, Faction.PLAYER);
@@ -31,7 +33,7 @@ export function addNpcPlayerRelation(npc: Entity, delta: number): number {
 }
 
 export function isNpcPlayerHostile(npc: Entity): boolean {
-  return getNpcPlayerRelation(npc) <= HOSTILE_RELATION_THRESHOLD;
+  return getNpcPlayerRelation(npc) <= RELATION_HOSTILE_THRESHOLD;
 }
 
 export function completedQuestFactionRelationDelta(authoredDelta: number | undefined): number {

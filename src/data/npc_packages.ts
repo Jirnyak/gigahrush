@@ -90,7 +90,6 @@ export interface NpcSocialLinkDef {
   relation: number;
   role: DemosSocialRoleId;
   flags?: readonly DemosSocialEdgeFlagId[];
-  bidirectional?: boolean;
 }
 
 export interface NpcSocialDef {

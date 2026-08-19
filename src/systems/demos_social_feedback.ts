@@ -9,9 +9,9 @@ import type { AlifeMigrationReason } from '../data/alife_migration';
 import {
   DEMOS_EDGE_DEBT,
   DEMOS_EDGE_ENEMY,
-  DEMOS_EDGE_FAMILY,
   DEMOS_EDGE_FRIEND,
-  DEMOS_RELATION_FRIENDLY_THRESHOLD,
+  DEMOS_SOCIAL_NPC_SLOTS,
+  RELATION_FRIENDLY_THRESHOLD,
 } from '../data/demos_social';
 import { DEMOS_EDGE_QUEST } from '../data/demos_posts';
 import {
@@ -38,6 +38,7 @@ import {
   applyDemosRelationDelta,
   getDemosNpcOnlySocialEdges,
   type DemosRelationDeltaResult,
+  type DemosRelationDeltaTarget,
 } from './demos_social';
 import { getRecentEvents, publishEvent } from './events';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
@@ -81,9 +82,14 @@ type DemosSocialFeedbackHost = GameState & {
 };
 
 const DEFAULT_EVENT_LIMIT = 24;
-const DEFAULT_OUTCOME_LIMIT = 8;
-const DEFAULT_OUTCOME_PER_EVENT = 4;
-const DEFAULT_DEATH_EDGE_LIMIT = 6;
+// Ответ круга близких — не «до четырёх реакций»: у смерти столько последствий,
+// сколько у человека было связей. Кап остаётся как граница работы за тик,
+// но одну смерть он резать не вправе.
+const DEFAULT_OUTCOME_LIMIT = 32;
+const DEFAULT_OUTCOME_PER_EVENT = DEMOS_SOCIAL_NPC_SLOTS;
+// Все связи убитого, а не выборка: слотов у человека столько, и молча
+// отбрасывать чью-то потерю нельзя.
+const DEFAULT_DEATH_EDGE_LIMIT = DEMOS_SOCIAL_NPC_SLOTS;
 
 function ensureFeedbackState(state: GameState): DemosSocialFeedbackState {
   const host = state as DemosSocialFeedbackHost;
@@ -160,7 +166,7 @@ function isThreatReactionEvent(event: WorldEvent): boolean {
 
 function importantDelta(delta: number, relation: number, previous: number): boolean {
   if (Math.abs(delta) >= 8) return true;
-  if (previous < DEMOS_RELATION_FRIENDLY_THRESHOLD && relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD) return true;
+  if (previous < RELATION_FRIENDLY_THRESHOLD && relation >= RELATION_FRIENDLY_THRESHOLD) return true;
   return false;
 }
 
@@ -197,11 +203,17 @@ function applyFeedbackDelta(
   flags: number,
   reason: string,
   budget: { remaining: number; published: number },
+  opts: { toPlayer?: boolean; propagate?: boolean } = {},
 ): number {
-  if (budget.remaining <= 0 || fromAlifeId === undefined || toAlifeId === undefined || fromAlifeId === toAlifeId) return 0;
-  const result = applyDemosRelationDelta(state, fromAlifeId, { targetKind: 'alife', targetAlifeId: toAlifeId }, delta, {
+  if (budget.remaining <= 0 || fromAlifeId === undefined) return 0;
+  const target: DemosRelationDeltaTarget = opts.toPlayer
+    ? { targetKind: 'player' }
+    : { targetKind: 'alife', targetAlifeId: toAlifeId };
+  if (!opts.toPlayer && (toAlifeId === undefined || fromAlifeId === toAlifeId)) return 0;
+  const result = applyDemosRelationDelta(state, fromAlifeId, target, delta, {
     flags,
     reasonTag: reason,
+    propagate: opts.propagate,
   });
   if (!result?.changed) return 0;
   budget.remaining--;
@@ -215,27 +227,36 @@ function processDeathFeedback(
   budget: { remaining: number; published: number },
   maxDeathEdges: number,
 ): number {
-  const killerAlifeId = actorAlifeId(event);
   const victimAlifeId = targetAlifeId(event);
-  if (killerAlifeId === undefined || victimAlifeId === undefined) return 0;
+  if (victimAlifeId === undefined) return 0;
+  // Игрок в графе — не запись A-Life, а собственный слот, поэтому убийца им
+  // опознаётся по типу события, а не по id.
+  const killerIsPlayer = event.type === 'player_kill_npc';
+  const killerAlifeId = actorAlifeId(event);
+  if (!killerIsPlayer && killerAlifeId === undefined) return 0;
   let changed = 0;
   let scanned = 0;
   for (const edge of getDemosNpcOnlySocialEdges(state, victimAlifeId)) {
     if (scanned >= maxDeathEdges || budget.remaining <= 0) break;
     scanned++;
     if (edge.targetAlifeId === undefined || edge.targetAlifeId === killerAlifeId) continue;
-    const close = (edge.flags & (DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND)) !== 0 || edge.relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD;
-    if (!close) continue;
-    const family = (edge.flags & DEMOS_EDGE_FAMILY) !== 0;
+    // Цена смерти — ровно то, чем человек был для оставшегося. Любил на всю
+    // шкалу — столько же и отнимется у убийцы; ненавидел — столько же
+    // прибавится. Ни деления, ни отдельных ставок за родню и друзей: вес связи
+    // и есть ставка, а «близость» — просто её величина.
+    const delta = -edge.relation;
+    if (delta === 0) continue;
     changed += applyFeedbackDelta(
       state,
       event,
       edge.targetAlifeId,
       killerAlifeId,
-      family ? -16 : -10,
-      DEMOS_EDGE_ENEMY,
-      family ? 'family_revenge' : 'friend_revenge',
+      delta,
+      0,
+      delta < 0 ? 'bond_revenge' : 'bond_relief',
       budget,
+      // Только прямые связи убитого: расходиться дальше по знакомым весть не должна.
+      { toPlayer: killerIsPlayer, propagate: false },
     );
   }
   return changed;

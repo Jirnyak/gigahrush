@@ -104,8 +104,8 @@ test('Demos event feedback caps relation outcomes per tick', () => {
   });
 
   assert.equal(summary.relationChanges, 2);
-  assert.equal(relationFromTo(state, 3, 1), -10);
-  assert.equal(relationFromTo(state, 4, 1), -10);
+  assert.equal(relationFromTo(state, 3, 1), -90);
+  assert.equal(relationFromTo(state, 4, 1), -90);
   assert.equal(relationFromTo(state, 5, 1), 0);
 });
 
@@ -122,7 +122,8 @@ test('Demos death feedback worsens family relation toward a known killer', () =>
   });
 
   assert.equal(summary.relationChanges, 1);
-  assert.equal(relationFromTo(state, 3, 1), -16);
+  // Цена смерти — вес связи целиком, а не отдельная ставка «за родню».
+  assert.equal(relationFromTo(state, 3, 1), -104);
   assert.ok(getRecentEvents(state, { tags: ['demos_social'], limit: 1 }).length >= 1);
 });
 

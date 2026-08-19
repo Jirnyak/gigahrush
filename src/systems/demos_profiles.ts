@@ -24,8 +24,8 @@ import {
   DEMOS_EDGE_FRIEND,
   DEMOS_EDGE_QUEST,
   DEMOS_EDGE_WORK,
-  DEMOS_RELATION_FRIENDLY_THRESHOLD,
-  DEMOS_RELATION_HOSTILE_THRESHOLD,
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
   DEMOS_SOCIAL_PUBLIC_SLOTS,
   DemosSocialRoleId,
 } from '../data/demos_social';
@@ -335,8 +335,8 @@ function relationLabel(score: number): { label: string; color: string } {
 }
 
 function roleFromRelation(relation: number): DemosSocialRoleId {
-  if (relation <= DEMOS_RELATION_HOSTILE_THRESHOLD) return DemosSocialRoleId.ENEMY;
-  if (relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD) return DemosSocialRoleId.FRIEND;
+  if (relation <= RELATION_HOSTILE_THRESHOLD) return DemosSocialRoleId.ENEMY;
+  if (relation >= RELATION_FRIENDLY_THRESHOLD) return DemosSocialRoleId.FRIEND;
   return relation < 0 ? DemosSocialRoleId.RIVAL : DemosSocialRoleId.ACQUAINTANCE;
 }
 
@@ -752,8 +752,8 @@ export function getDemosProfileDetails(state: GameState, alifeId: number): Demos
     capitalLabel: capital.label,
     familyStatusLabel: familyStatusLabel(snapshot, links),
     relationToPlayerLabel: `${relationScore} / ${relation.label}`,
-    friendsCount: links.filter(link => link.relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD || link.role === DemosSocialRoleId.FRIEND).length,
-    enemiesCount: links.filter(link => link.relation <= DEMOS_RELATION_HOSTILE_THRESHOLD || link.role === DemosSocialRoleId.ENEMY).length,
+    friendsCount: links.filter(link => link.relation >= RELATION_FRIENDLY_THRESHOLD || link.role === DemosSocialRoleId.FRIEND).length,
+    enemiesCount: links.filter(link => link.relation <= RELATION_HOSTILE_THRESHOLD || link.role === DemosSocialRoleId.ENEMY).length,
     familyCount: links.filter(link => isFamilyRole(link.role)).length,
     traits,
     packageFlavorTags: packageFlavorTags(pack),

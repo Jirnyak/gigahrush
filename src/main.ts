@@ -5286,7 +5286,12 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       severity: e.isFogBoss || e.type === EntityType.NPC ? 4 : 3,
       privacy: 'local',
       tags: e.type === EntityType.MONSTER ? ['combat', 'kill', 'monster'] : ['combat', 'kill', 'npc'],
-      data: undefined,
+      // Личности убийцы и жертвы: без них социальные последствия смерти
+      // некому адресовать, и весь ответ круга близких молчит.
+      data: {
+        actorAlifeId: killerActor.alifeId,
+        targetAlifeId: e.alifeId,
+      },
 	    });
     if (e.type === EntityType.NPC) recordFactionClashPlayerHit(state, world, killerActor, e, e.maxHp ?? 1);
   }

@@ -13,8 +13,8 @@ import {
   DEMOS_EDGE_HIDDEN,
   DEMOS_EDGE_QUEST,
   DEMOS_EDGE_WORK,
-  DEMOS_RELATION_MAX,
-  DEMOS_RELATION_MIN,
+  RELATION_MAX,
+  RELATION_MIN,
   DemosSocialRoleId,
 } from './demos_social';
 import { DESIGN_FLOOR_ROUTES } from './design_floors';
@@ -438,7 +438,7 @@ function validateLoadout(problems: ProblemList, loadout: Record<string, unknown>
 
 function validateSocial(problems: ProblemList, packId: string | undefined, social: Record<string, unknown>, context?: NpcPackageValidationContext): void {
   integerInRange(problems, 'social.playerRelation', social.playerRelation, -100, 100, true);
-  integerInRange(problems, 'social.karma', social.karma, DEMOS_RELATION_MIN, DEMOS_RELATION_MAX, true);
+  integerInRange(problems, 'social.karma', social.karma, RELATION_MIN, RELATION_MAX, true);
   if (social.links === undefined) return;
   if (!Array.isArray(social.links)) {
     problems.errors.push('social.links must be an array');
@@ -463,11 +463,8 @@ function validateSocial(problems: ProblemList, packId: string | undefined, socia
         problems.errors.push(`social.links[${index}].targetNpcId references unknown NPC package "${target}"`);
       }
     }
-    integerInRange(problems, `social.links[${index}].relation`, link.relation, DEMOS_RELATION_MIN, DEMOS_RELATION_MAX);
+    integerInRange(problems, `social.links[${index}].relation`, link.relation, RELATION_MIN, RELATION_MAX);
     validateEnum(problems, `social.links[${index}].role`, DemosSocialRoleId, link.role);
-    if (link.bidirectional !== undefined && typeof link.bidirectional !== 'boolean') {
-      problems.errors.push(`social.links[${index}].bidirectional must be boolean`);
-    }
     if (link.flags !== undefined) {
       if (!Array.isArray(link.flags)) {
         problems.errors.push(`social.links[${index}].flags must be an array`);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { EntityType, Faction, QuestType } from '../src/core/types';
 import { World } from '../src/core/world';
-import { getFactionRel, initFactionRelations, setFactionRel } from '../src/data/relations';
+import { RELATION_FRIENDLY_THRESHOLD, RELATION_HOSTILE_THRESHOLD, RELATION_MAX, RELATION_MIN, getFactionRel, initFactionRelations, setFactionRel } from '../src/data/relations';
 import { applyDamageRelationPenalty, isHostile } from '../src/systems/factions';
 import { getFactionPlayerRelation } from '../src/systems/npc_relations';
 import { getRecentEvents } from '../src/systems/events';
@@ -19,14 +19,15 @@ test('player attack lowers personal NPC relation and can make that NPC hostile',
     type: EntityType.NPC,
     name: 'Недовольный сосед',
     faction: Faction.CITIZEN,
-    playerRelation: -49,
+    // На волосок над порогом вражды: удар обязан перевести черту.
+    playerRelation: RELATION_HOSTILE_THRESHOLD + 1,
   });
 
   applyDamageRelationPenalty(player.faction, npc.faction, 10, npc, player);
 
-  assert.equal(npc.playerRelation, -51);
+  assert.equal(npc.playerRelation, RELATION_HOSTILE_THRESHOLD - 1);
   assert.equal(player.karma, -1);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), 48);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD - 2);
   assert.equal(isHostile(npc, player), true);
 });
 
@@ -77,7 +78,7 @@ test('quest completion gives small faction gain and stronger giver relation gain
   checkTalkQuest(giver, player, world, [player, giver], state, state.msgs);
 
   assert.equal(state.quests[0].done, true);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), 51);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD + 1);
   assert.equal(giver.playerRelation, 15);
   assert.equal(getRecentEvents(state, { type: 'quest_completed', limit: 1 })[0]?.data?.factionRelationDelta, 1);
 });
@@ -114,7 +115,7 @@ test('addNpcPlayerRelation initializes from faction relation if not set', () => 
   assert.equal(npc.playerRelation, baseRel + 10);
 });
 
-test('addNpcPlayerRelation clamps the relation within [-100, 100]', () => {
+test('addNpcPlayerRelation clamps the relation to the single canonical scale', () => {
   const npc = makeTestEntity({
     id: 3,
     type: EntityType.NPC,
@@ -123,10 +124,11 @@ test('addNpcPlayerRelation clamps the relation within [-100, 100]', () => {
   });
 
   const newRel = addNpcPlayerRelation(npc, 50);
-  assert.equal(newRel, 100);
-  assert.equal(npc.playerRelation, 100);
+  assert.equal(newRel, RELATION_MAX);
+  assert.equal(npc.playerRelation, RELATION_MAX);
 
-  const newRel2 = addNpcPlayerRelation(npc, -250);
-  assert.equal(newRel2, -100);
-  assert.equal(npc.playerRelation, -100);
+  // Заведомо больше всего диапазона: кламп обязан удержать нижнюю границу.
+  const newRel2 = addNpcPlayerRelation(npc, RELATION_MIN - RELATION_MAX - 1);
+  assert.equal(newRel2, RELATION_MIN);
+  assert.equal(npc.playerRelation, RELATION_MIN);
 });

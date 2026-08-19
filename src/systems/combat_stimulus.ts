@@ -247,7 +247,8 @@ function publishActorKillEvent(world: World, state: GameState | undefined, kille
       severity: cleanSeverity(target.type === EntityType.NPC ? 4 : 3),
       privacy: 'local',
       tags: target.type === EntityType.MONSTER ? ['combat', 'kill', 'monster'] : ['combat', 'kill', 'npc'],
-      data: { source },
+      // Личности сторон: круг близких убитого отвечает убийце, кем бы он ни был.
+      data: { source, actorAlifeId: killer.alifeId, targetAlifeId: target.alifeId },
     });
     return;
   }

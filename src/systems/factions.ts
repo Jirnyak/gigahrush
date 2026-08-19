@@ -31,9 +31,10 @@ import {
   updateTerritoryCapture,
 } from './territory';
 import {
-  HOSTILE_RELATION_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
   addNpcPlayerRelation,
   isNpcPlayerHostile,
+  setNpcPlayerRelation,
 } from './npc_relations';
 import { applyDemosRelationDelta } from './demos_social';
 import { addKarma } from './alife_rating';
@@ -63,7 +64,7 @@ export function getFactionMonsterRelation(f: Faction): number {
 
 /** Check if two factions are hostile (base relation) */
 export function areFactionsHostile(a: Faction, b: Faction): boolean {
-  return getFactionRelation(a, b) <= HOSTILE_RELATION_THRESHOLD;
+  return getFactionRelation(a, b) <= RELATION_HOSTILE_THRESHOLD;
 }
 
 /** Check if entity considers another entity hostile */
@@ -76,7 +77,7 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   if (isPsiMad(attacker)) return target.id !== attacker.id;
   if (isPassiveDefensiveNeutralMonster(attacker) || isPassiveDefensiveNeutralMonster(target)) return false;
   if (isPlayerEntity(target) && attacker.id !== target.id) {
-    if (attacker.type === EntityType.MONSTER) return getFactionMonsterRelation(Faction.PLAYER) <= HOSTILE_RELATION_THRESHOLD;
+    if (attacker.type === EntityType.MONSTER) return getFactionMonsterRelation(Faction.PLAYER) <= RELATION_HOSTILE_THRESHOLD;
     if (attacker.type === EntityType.NPC && isNpcPlayerHostile(attacker)) return true;
     return areFactionsHostile(attacker.faction ?? Faction.CITIZEN, Faction.PLAYER);
   }
@@ -84,11 +85,11 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   if (attacker.type === EntityType.MONSTER) {
     // Monsters are hostile to everyone except cultists
     const tFaction = target.faction ?? Faction.CITIZEN;
-    return getFactionMonsterRelation(tFaction) <= HOSTILE_RELATION_THRESHOLD;
+    return getFactionMonsterRelation(tFaction) <= RELATION_HOSTILE_THRESHOLD;
   }
   if (target.type === EntityType.MONSTER) {
     const aFaction = attacker.faction ?? Faction.CITIZEN;
-    return getFactionMonsterRelation(aFaction) <= HOSTILE_RELATION_THRESHOLD;
+    return getFactionMonsterRelation(aFaction) <= RELATION_HOSTILE_THRESHOLD;
   }
   if (attacker.type === EntityType.NPC && isPlayerEntity(target) && isNpcPlayerHostile(attacker)) {
     return true;
@@ -456,12 +457,14 @@ export function applyDamageRelationPenalty(
   // Penalty proportional to damage: -1 per 5 damage, min -1
   const penalty = -Math.max(1, Math.floor(damage / 5));
   if (attackerFaction === Faction.PLAYER && target?.type === EntityType.NPC) {
-    addNpcPlayerRelation(target, penalty);
-    if (state && target.alifeId !== undefined) {
-      applyDemosRelationDelta(state, target.alifeId, { targetKind: 'player' }, penalty, {
-        reasonTag: 'damage',
-      });
-    }
+    // Один накопитель: дельта уходит в граф, живая сущность зеркалит результат.
+    // Две независимые прибавки к одному числу давали разный итог в зависимости
+    // от того, когда игрок ушёл с этажа.
+    const applied = state && target.alifeId !== undefined
+      ? applyDemosRelationDelta(state, target.alifeId, { targetKind: 'player' }, penalty, { reasonTag: 'damage' })
+      : undefined;
+    if (applied) setNpcPlayerRelation(target, applied.relation);
+    else addNpcPlayerRelation(target, penalty);
   } else if (state && target?.type === EntityType.NPC && attacker?.type === EntityType.NPC && target.alifeId !== undefined && attacker.alifeId !== undefined) {
     applyDemosRelationDelta(state, target.alifeId, { targetKind: 'alife', targetAlifeId: attacker.alifeId }, penalty, {
       reasonTag: 'damage',

@@ -11,8 +11,8 @@ import {
 import type { ContractDef, QuestRouteTarget } from '../data/contracts';
 import type { ContextSnapshot } from './context';
 import {
-  FRIENDLY_RELATION_THRESHOLD,
-  HOSTILE_RELATION_THRESHOLD,
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
 } from './npc_relations';
 
 export type MarkovRelationBand = 'hostile' | 'cold' | 'neutral' | 'warm' | 'friend';
@@ -527,10 +527,10 @@ export function buildMarkovContextHash(context: Omit<MarkovTextContext, 'context
 
 export function relationBandForScore(value: number | undefined): MarkovRelationBand | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined;
-  if (value <= HOSTILE_RELATION_THRESHOLD) return 'hostile';
+  if (value <= RELATION_HOSTILE_THRESHOLD) return 'hostile';
   if (value < -10) return 'cold';
   if (value < 25) return 'neutral';
-  if (value < FRIENDLY_RELATION_THRESHOLD) return 'warm';
+  if (value < RELATION_FRIENDLY_THRESHOLD) return 'warm';
   return 'friend';
 }
 

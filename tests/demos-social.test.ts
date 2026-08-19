@@ -14,9 +14,9 @@ import {
   DEMOS_EDGE_ENEMY,
   DEMOS_EDGE_FRIEND,
   DEMOS_EDGE_WORK,
-  DEMOS_RELATION_EMPTY,
-  DEMOS_RELATION_MAX,
-  DEMOS_RELATION_MIN,
+  RELATION_UNSET,
+  RELATION_MAX,
+  RELATION_MIN,
   DEMOS_SOCIAL_NPC_SLOT_START,
   DEMOS_SOCIAL_NPC_SLOTS,
   DEMOS_SOCIAL_PLAYER_SLOT,
@@ -147,7 +147,7 @@ test('Demos social graph stores only valid directed NPC targets and relation byt
       assert.notEqual(edge.targetAlifeId, alifeId);
       assert.equal(seen.has(edge.targetAlifeId), false);
       seen.add(edge.targetAlifeId);
-      assert.ok(edge.relation >= DEMOS_RELATION_MIN && edge.relation <= DEMOS_RELATION_MAX);
+      assert.ok(edge.relation >= RELATION_MIN && edge.relation <= RELATION_MAX);
     }
   }
 });
@@ -156,10 +156,10 @@ test('Demos social graph leaves empty NPC slots with the -128 relation sentinel'
   const graph = debugGraph(stateWithPopulation(404, 1));
   assert.equal(graph.targets.length, DEMOS_SOCIAL_PUBLIC_SLOTS);
   assert.equal(graph.targets[DEMOS_SOCIAL_PLAYER_SLOT], 0);
-  assert.notEqual(graph.relations[DEMOS_SOCIAL_PLAYER_SLOT], DEMOS_RELATION_EMPTY);
+  assert.notEqual(graph.relations[DEMOS_SOCIAL_PLAYER_SLOT], RELATION_UNSET);
   for (let i = DEMOS_SOCIAL_NPC_SLOT_START; i < graph.targets.length; i++) {
     assert.equal(graph.targets[i], 0);
-    assert.equal(graph.relations[i], DEMOS_RELATION_EMPTY);
+    assert.equal(graph.relations[i], RELATION_UNSET);
   }
 });
 
@@ -167,13 +167,14 @@ test('Demos player relation is stored in public slot zero and exposed with outgo
   const state = stateWithPopulation(505, 8, [{
     faction: Faction.CULTIST,
   }]);
-  captureAlifeFloorState(state, [{ ...deadAlifeEntity(1), alive: true, hp: 10, playerRelation: -100 }]);
+  // Шкала одна: что положили, то и лежит в слоте игрока — без перевода.
+  captureAlifeFloorState(state, [{ ...deadAlifeEntity(1), alive: true, hp: 10, playerRelation: RELATION_MIN }]);
   const playerSlot = getDemosRelationToPlayerSlot(state, 1);
   assert.ok(playerSlot);
   assert.equal(playerSlot.slot, 0);
   assert.equal(playerSlot.targetKind, 'player');
   assert.equal(playerSlot.targetAlifeId, undefined);
-  assert.equal(playerSlot.relation, DEMOS_RELATION_MIN);
+  assert.equal(playerSlot.relation, RELATION_MIN);
 
   const outgoing = getDemosOutgoingSocialEdges(state, 1);
   assert.equal(outgoing[0].slot, 0);
@@ -198,8 +199,8 @@ test('Demos relation delta to player persists as the same relation override shap
 test('Demos relation deltas propagate through source friends and enemies', () => {
   const state = stateWithPopulation(525, 8);
   for (const id of [1, 2, 3]) clearDemosNpcSocialEdges(state, id);
-  setDemosSocialEdge(state, 1, 2, DEMOS_RELATION_MAX, DEMOS_EDGE_FRIEND);
-  setDemosSocialEdge(state, 1, 3, DEMOS_RELATION_MIN, DEMOS_EDGE_ENEMY);
+  setDemosSocialEdge(state, 1, 2, RELATION_MAX, DEMOS_EDGE_FRIEND);
+  setDemosSocialEdge(state, 1, 3, RELATION_MIN, DEMOS_EDGE_ENEMY);
   const beforeFriendToPlayer = getDemosRelationToPlayerSlot(state, 2)?.relation ?? 0;
   const beforeEnemyToPlayer = getDemosRelationToPlayerSlot(state, 3)?.relation ?? 0;
 
@@ -209,7 +210,7 @@ test('Demos relation deltas propagate through source friends and enemies', () =>
   assert.equal((getDemosRelationToPlayerSlot(state, 3)?.relation ?? 0) - beforeEnemyToPlayer, 10);
 
   clearDemosNpcSocialEdges(state, 2);
-  setDemosSocialEdge(state, 1, 2, DEMOS_RELATION_MAX, DEMOS_EDGE_FRIEND);
+  setDemosSocialEdge(state, 1, 2, RELATION_MAX, DEMOS_EDGE_FRIEND);
   applyDemosRelationDelta(state, 1, { targetKind: 'alife', targetAlifeId: 4 }, -12, { reasonTag: 'npc_target_test' });
 
   assert.equal(getDemosNpcOnlySocialEdges(state, 2).find(edge => edge.targetAlifeId === 4)?.relation, -12);
@@ -317,7 +318,6 @@ test('Demos bidirectional package link compiles into two directed edges without 
         relation: 74,
         role: DemosSocialRoleId.WORK,
         flags: ['work'],
-        bidirectional: true,
       }],
     }),
     demosPackage('demos_bidir_b', 'Второй Бидир'),

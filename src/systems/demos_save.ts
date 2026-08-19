@@ -13,9 +13,9 @@ import {
 import type { GameState } from '../core/types';
 
 export const DEMOS_SOCIAL_SAVE_VERSION = 1;
-export const DEMOS_RELATION_EMPTY = -128;
-export const DEMOS_RELATION_MIN = -127;
-export const DEMOS_RELATION_MAX = 127;
+export const RELATION_UNSET = -128;
+export const RELATION_MIN = -127;
+export const RELATION_MAX = 127;
 export const DEMOS_REACTION_DELTA_MIN = -8;
 export const DEMOS_REACTION_DELTA_MAX = 8;
 
@@ -158,8 +158,8 @@ function sanitizeRelationOverride(raw: unknown): DemosRelationOverride | undefin
   const targetAlifeId = raw.targetKind === 'alife' ? positiveId(raw.targetAlifeId) : undefined;
   if (fromAlifeId === undefined) return undefined;
   if (raw.targetKind === 'alife' && (targetAlifeId === undefined || fromAlifeId === targetAlifeId)) return undefined;
-  const value = intIn(raw.value, DEMOS_RELATION_EMPTY, DEMOS_RELATION_EMPTY, DEMOS_RELATION_MAX);
-  if (value === DEMOS_RELATION_EMPTY) return undefined;
+  const value = intIn(raw.value, RELATION_UNSET, RELATION_UNSET, RELATION_MAX);
+  if (value === RELATION_UNSET) return undefined;
   const postId = positiveId(raw.postId);
   const reactionId = positiveId(raw.reactionId);
   const updatedAt = typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : undefined;

@@ -1668,6 +1668,20 @@ function sanitizeFloor(value: unknown, fallback: number): number {
     : fallback;
 }
 
+/**
+ * Живой человек без записи A-Life и без авторской личности. Авторские
+ * (`plotNpcId` / `npcPackageId` / `persistentNpcId`) приходят со своим резервом
+ * и усыновлению не подлежат; всех остальных макропопуляция обязана принять.
+ */
+export function needsAlifeAdoption(entity: Entity): boolean {
+  return entity.type === EntityType.NPC &&
+    entity.alive &&
+    entity.alifeId === undefined &&
+    !entity.persistentNpcId &&
+    !(entity as Entity & { npcPackageId?: string }).npcPackageId &&
+    !('plotNpcId' in entity && (entity as Entity & { plotNpcId?: unknown }).plotNpcId !== undefined);
+}
+
 function isAmbientNpcCandidate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
     (!entity.id || entity.id <= 0 || entity.name === undefined) &&
@@ -2550,11 +2564,13 @@ export function materializeAlifeFloorPopulation(
 
 
 
-  // Ensure any other ordinary live NPCs on the floor (travelers, spawned patrols) have persistent A-Life records
+  // Каждый живой человек на этаже обязан числиться в макропопуляции: без записи
+  // A-Life его смерть не факт, его отношения не существуют, Демос его не знает,
+  // а состояние не сворачивается при уходе с этажа. Раньше усыновление требовало
+  // ещё и `questId === -1`, и всякий, кому генератор поля не проставил вовсе,
+  // молча оставался вне мира — так жили телохранители Махно на коллекторах.
   for (const entity of entities) {
-    if (entity.type === EntityType.NPC && entity.alive && entity.alifeId === undefined && !('plotNpcId' in entity && (entity as any).plotNpcId !== undefined) && !(entity as any).npcPackageId && !entity.persistentNpcId && entity.questId === -1) {
-      assignPersistentAlifeNpcFromEntity(state, entity, entities, floorKey);
-    }
+    if (needsAlifeAdoption(entity)) assignPersistentAlifeNpcFromEntity(state, entity, entities, floorKey);
   }
 
   // Dynamic Event: Lost Child

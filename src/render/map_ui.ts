@@ -20,7 +20,7 @@ import {
   mapCellFogAmount,
   mapExplorationVersion,
 } from '../systems/map_exploration';
-import { FRIENDLY_RELATION_THRESHOLD, getNpcPlayerRelation } from '../systems/npc_relations';
+import { RELATION_FRIENDLY_THRESHOLD, getNpcPlayerRelation } from '../systems/npc_relations';
 import { controlHint, menuCloseHint } from '../systems/controls';
 import {
   mapHighContrastEnabled,
@@ -222,7 +222,7 @@ function mapEntityCrowdGroup(e: Entity, player: Entity): number {
   if (e.type === EntityType.BILLBOARD) return -1;
   if (e.type !== EntityType.NPC) return -1;
   if (isHostile(e, player)) return MAP_CROWD_GROUP_HOSTILE_NPC;
-  if (getNpcPlayerRelation(e) < FRIENDLY_RELATION_THRESHOLD) {
+  if (getNpcPlayerRelation(e) < RELATION_FRIENDLY_THRESHOLD) {
     return MAP_CROWD_GROUP_NEUTRAL_NPC;
   }
   return MAP_CROWD_GROUP_FRIENDLY_NPC;

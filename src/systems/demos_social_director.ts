@@ -14,11 +14,10 @@ import {
   type DemosOutgoingSocialEdge,
   type DemosPostAuthorFact,
 } from './demos_posts';
+import { clampRelation } from '../data/relations';
 import {
   DEMOS_REACTION_DELTA_MAX,
   DEMOS_REACTION_DELTA_MIN,
-  DEMOS_RELATION_MAX,
-  DEMOS_RELATION_MIN,
   type DemosPersistentPost,
   type DemosPersistentReaction,
   type DemosRelationOverride,
@@ -92,10 +91,6 @@ function hash32(a: number, b: number, c = 0): number {
   x = Math.imul(x, 0x297a2d39);
   x ^= x >>> 15;
   return x >>> 0;
-}
-
-function clampRelation(value: number): number {
-  return Math.max(DEMOS_RELATION_MIN, Math.min(DEMOS_RELATION_MAX, Math.trunc(value)));
 }
 
 function clampDelta(value: number): number {

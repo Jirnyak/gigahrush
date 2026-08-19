@@ -188,7 +188,6 @@ test('full NPC package covers bio, speech, social, RPG, visual and loadout field
         relation: 80,
         role: DemosSocialRoleId.FRIEND,
         flags: ['friend', 'work'],
-        bidirectional: true,
       }],
     },
     visual: {

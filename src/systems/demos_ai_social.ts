@@ -7,8 +7,8 @@ import {
   DEMOS_EDGE_ENEMY,
   DEMOS_EDGE_FAMILY,
   DEMOS_EDGE_FRIEND,
-  DEMOS_RELATION_FRIENDLY_THRESHOLD,
-  DEMOS_RELATION_HOSTILE_THRESHOLD,
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
 } from '../data/demos_social';
 import { getDemosNpcOnlySocialEdges } from './demos_social';
 
@@ -71,8 +71,8 @@ export function buildDemosAiSocialContext(
     if (!near) continue;
 
     const family = (edge.flags & DEMOS_EDGE_FAMILY) !== 0;
-    const friend = family || (edge.flags & DEMOS_EDGE_FRIEND) !== 0 || edge.relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD;
-    const enemy = (edge.flags & DEMOS_EDGE_ENEMY) !== 0 || edge.relation <= DEMOS_RELATION_HOSTILE_THRESHOLD;
+    const friend = family || (edge.flags & DEMOS_EDGE_FRIEND) !== 0 || edge.relation >= RELATION_FRIENDLY_THRESHOLD;
+    const enemy = (edge.flags & DEMOS_EDGE_ENEMY) !== 0 || edge.relation <= RELATION_HOSTILE_THRESHOLD;
     if (family) {
       context.familyNearby = true;
       context.escortBias += 7;

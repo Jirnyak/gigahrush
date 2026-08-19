@@ -7,8 +7,26 @@ import { rng } from '../core/rand';
 /* ── Constants ────────────────────────────────────────────────── */
 export const FACTION_COUNT = 6; // CITIZEN, LIQUIDATOR, CULTIST, SCIENTIST, WILD, PLAYER
 
+/* ── Отношение: одно число на пару ────────────────────────────────
+ * Кто угодно к кому угодно — фракция к фракции, человек к человеку,
+ * человек к игроку — измеряется одной шкалой и хранится в одном знаковом
+ * байте. Диапазон — весь байт минус единственное значение, отданное под
+ * «не задано»; второй шкалы, второго клампа и конвертации между ними в
+ * проекте быть не должно, каждая такая пара — будущий рассинхрон.
+ * Пороги — ровно половина пути в каждую сторону. */
+export const RELATION_UNSET = -128;
+export const RELATION_MIN = -127;
+export const RELATION_MAX = 127;
+export const RELATION_HOSTILE_THRESHOLD = -64;
+export const RELATION_FRIENDLY_THRESHOLD = 64;
+
+export function clampRelation(value: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(RELATION_MIN, Math.min(RELATION_MAX, Math.round(value)));
+}
+
 /* ── Dynamic faction relation matrix — Int8Array flat ────────── */
-// factionRels[a * FACTION_COUNT + b] = how faction a feels about faction b (-128..127)
+// factionRels[a * FACTION_COUNT + b] = how faction a feels about faction b (-127..127)
 const factionRels = new Int8Array(FACTION_COUNT * FACTION_COUNT);
 
 /* ── Get / set / add faction relation ─────────────────────────── */
@@ -17,7 +35,7 @@ export function getFactionRel(a: number, b: number): number {
 }
 
 export function setFactionRel(a: number, b: number, v: number): void {
-  factionRels[a * FACTION_COUNT + b] = Math.max(-128, Math.min(127, v | 0));
+  factionRels[a * FACTION_COUNT + b] = clampRelation(v);
 }
 
 export function addFactionRel(a: number, b: number, delta: number): void {
@@ -86,16 +104,23 @@ export function applyInfrastructureRelationResponse(
 }
 
 /* ── Base faction attitudes (used for initialization) ─────────── */
-// [row faction][col faction] = base attitude
-// <=−50 hostile, −50..50 neutral, >=50 friendly
+// [row faction][col faction] = base attitude.
+// Клетки записаны порогами, а не числами: «враждебны», «дружелюбны», «свои».
+// Рукописные значения тут уже разъезжались со шкалой — стоило порогу вражды
+// сдвинуться, как все пары, написанные ровно на старом пороге, молча стали
+// нейтральными, и фракции перестали воевать.
+const HOSTILE = RELATION_HOSTILE_THRESHOLD;
+const FRIENDLY = RELATION_FRIENDLY_THRESHOLD;
+const KIN = RELATION_MAX;
+const WARY = Math.round(RELATION_HOSTILE_THRESHOLD * 0.4);
 const BASE_FACTION_MATRIX: number[][] = [
-  /*                CIT   LIQ   CUL   SCI   WILD  PLAYER */
-  /* CITIZEN  */ [  100,   50,    0,   50,  -50,    50 ],
-  /* LIQUID.  */ [   50,  100,  -50,   50,  -50,    50 ],
-  /* CULTIST  */ [    0,  -50,  100,  -20,  -50,     0 ],
-  /* SCIENTIST*/ [   50,   50,  -20,  100,  -50,    50 ],
-  /* WILD     */ [  -50,  -50,  -50,  -50,  100,   -50 ],
-  /* PLAYER   */ [   50,   50,    0,   50,  -50,   100 ],
+  /*                  CIT       LIQ       CUL      SCI      WILD    PLAYER  */
+  /* CITIZEN  */ [    KIN, FRIENDLY,        0, FRIENDLY, HOSTILE, FRIENDLY ],
+  /* LIQUID.  */ [ FRIENDLY,     KIN,  HOSTILE, FRIENDLY, HOSTILE, FRIENDLY ],
+  /* CULTIST  */ [      0,  HOSTILE,      KIN,     WARY, HOSTILE,        0 ],
+  /* SCIENTIST*/ [ FRIENDLY, FRIENDLY,    WARY,      KIN, HOSTILE, FRIENDLY ],
+  /* WILD     */ [ HOSTILE,  HOSTILE,  HOSTILE,  HOSTILE,     KIN,  HOSTILE ],
+  /* PLAYER   */ [ FRIENDLY, FRIENDLY,       0, FRIENDLY, HOSTILE,      KIN ],
 ];
 
 /* ── Initialize dynamic faction relations from base matrix ────── */

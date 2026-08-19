@@ -10,12 +10,12 @@ import {
   DEMOS_EDGE_HIDDEN,
   DEMOS_EDGE_WORK,
   DEMOS_PLAYER_SOCIAL_SLOT,
-  DEMOS_RELATION_EMPTY,
-  DEMOS_RELATION_FRIENDLY_THRESHOLD,
-  DEMOS_RELATION_HOSTILE_THRESHOLD,
+  RELATION_UNSET,
+  RELATION_FRIENDLY_THRESHOLD,
+  RELATION_HOSTILE_THRESHOLD,
   DEMOS_SOCIAL_INITIAL_NPC_SLOTS,
-  DEMOS_RELATION_MAX,
-  DEMOS_RELATION_MIN,
+  RELATION_MAX,
+  RELATION_MIN,
   DEMOS_SOCIAL_CANDIDATE_TRIES,
   DEMOS_SOCIAL_NPC_SLOTS,
   DEMOS_SOCIAL_NPC_SLOT_START,
@@ -32,7 +32,7 @@ import {
   type NpcPackageDef,
   type NpcSocialLinkDef,
 } from '../data/npc_packages';
-import { getFactionRel } from '../data/relations';
+import { clampRelation, getFactionRel } from '../data/relations';
 import {
   alifeNpcRecordCount,
   alifeSeed,
@@ -155,10 +155,6 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
   return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
-function clampRelation(value: number): number {
-  return clampInt(Math.round(value), 0, DEMOS_RELATION_MIN, DEMOS_RELATION_MAX);
-}
-
 function edgeOffset(alifeId: number, slot: number): number {
   return (alifeId - 1) * DEMOS_SOCIAL_PUBLIC_SLOTS + slot;
 }
@@ -243,7 +239,7 @@ function weakestSlot(graph: DemosSocialGraph, sourceId: number): number {
   let weakest = Number.POSITIVE_INFINITY;
   for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     const offset = edgeOffset(sourceId, slot);
-    const score = Math.abs(graph.relations[offset] === DEMOS_RELATION_EMPTY ? 0 : graph.relations[offset]);
+    const score = Math.abs(graph.relations[offset] === RELATION_UNSET ? 0 : graph.relations[offset]);
     if (score < weakest) {
       weakest = score;
       out = slot;
@@ -274,6 +270,43 @@ function setEdgeAtSlot(
   return true;
 }
 
+/**
+ * Отношение — свойство ПАРЫ, а не направления: если он тебе друг, то и ты ему
+ * друг на то же число. Роль при этом остаётся направленной, иначе родитель и
+ * ребёнок станут родителями друг друга. Зеркалим только число и флаги, и пишем
+ * напрямую по слоту — иначе получим взаимную рекурсию.
+ */
+function mirrorEdgeRelation(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  targetId: number,
+  relation: number,
+  flags: number,
+): void {
+  if (!validAlifeId(graph, targetId) || sourceId === targetId) return;
+  let slot = findExistingTargetSlot(graph, targetId, sourceId);
+  if (slot < 0) slot = firstEmptySlot(graph, targetId);
+  // Мест нет — вытесняем слабейшую связь: взаимность важнее знакомства «ни о чём».
+  if (slot < 0) slot = weakestSlot(graph, targetId);
+  if (slot < 0) return;
+  const offset = edgeOffset(targetId, slot);
+  const hadEdge = graph.targets[offset] === sourceId;
+  const role = hadEdge && graph.roles[offset] ? graph.roles[offset] as DemosSocialRoleId : roleForRelation(relation);
+  setEdgeAtSlot(graph, targetId, slot, sourceId, relation, flags, role);
+}
+
+/** Роль встречного ребра: число уже зеркалено, направлено только имя связи. */
+function setEdgeRole(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  targetId: number,
+  role: DemosSocialRoleId,
+): void {
+  const slot = findExistingTargetSlot(graph, sourceId, targetId);
+  if (slot < 0) return;
+  graph.roles[edgeOffset(sourceId, slot)] = role & 0xff;
+}
+
 function setEdge(
   graph: DemosSocialGraph,
   sourceId: number,
@@ -285,7 +318,9 @@ function setEdge(
   if (!validAlifeId(graph, sourceId) || !validAlifeId(graph, targetId)) return false;
   if (sourceId === targetId || edgeTargetExists(graph, sourceId, targetId)) return false;
   const slot = firstEmptySlot(graph, sourceId);
-  return slot >= 0 && setEdgeAtSlot(graph, sourceId, slot, targetId, relation, flags, role);
+  if (slot < 0 || !setEdgeAtSlot(graph, sourceId, slot, targetId, relation, flags, role)) return false;
+  mirrorEdgeRelation(graph, sourceId, targetId, relation, flags);
+  return true;
 }
 
 function setAuthoredEdge(
@@ -398,17 +433,8 @@ function setPackageEdgeAtResolvedSlot(
   return setEdgeAtSlot(graph, sourceId, slot, targetId, relation, relationFlags(relation, rawFlags), role);
 }
 
+/** Связь пакета ставится парой: односторонних отношений в графе не бывает. */
 function applyPackageLink(
-  graph: DemosSocialGraph,
-  sourceId: number,
-  targetId: number | undefined,
-  link: NpcSocialLinkDef,
-): void {
-  if (targetId === undefined) return;
-  setPackageEdgeAtResolvedSlot(graph, sourceId, targetId, link);
-}
-
-function applyPackageBidirectionalLink(
   graph: DemosSocialGraph,
   sourceId: number,
   targetId: number | undefined,
@@ -432,9 +458,7 @@ function applyPackageRelationsForSource(
   const rand = xorshift32(source.id);
   const shuffledLinks = shuffleWith(rand, [...links]);
   for (const link of shuffledLinks.slice(0, DEMOS_SOCIAL_NPC_SLOTS)) {
-    const targetId = resolveTarget(link.targetNpcId);
-    if (link.bidirectional) applyPackageBidirectionalLink(graph, source.id, targetId, link);
-    else applyPackageLink(graph, source.id, targetId, link);
+    applyPackageLink(graph, source.id, resolveTarget(link.targetNpcId), link);
   }
 }
 
@@ -463,6 +487,12 @@ function applyPackageRelationsForLazySource(
   applyPackageRelationsForSource(graph, source, pack, targetPackageId => resolvePackageAlifeId(state, graph, targetPackageId));
 }
 
+/**
+ * Авторская связь ставится сразу парой: число одно на обоих, роль встречного
+ * ребра переворачивается (родитель → ребёнок). Односторонних отношений в графе
+ * не бывает — «он её ненавидит, а она не в курсе» описывается не связью, а её
+ * отсутствием.
+ */
 function applyAuthoredDirection(
   graph: DemosSocialGraph,
   fromId: number | undefined,
@@ -471,14 +501,10 @@ function applyAuthoredDirection(
   reverse = false,
 ): void {
   if (fromId === undefined || toId === undefined) return;
-  setAuthoredEdge(
-    graph,
-    fromId,
-    toId,
-    def.relation,
-    def.flags ?? 0,
-    reverse ? reverseAuthoredRole(def.role) : def.role,
-  );
+  const role = reverse ? reverseAuthoredRole(def.role) : def.role;
+  if (!setAuthoredEdge(graph, fromId, toId, def.relation, def.flags ?? 0, role)) return;
+  mirrorEdgeRelation(graph, fromId, toId, clampRelation(def.relation), relationFlags(def.relation, def.flags ?? 0));
+  setEdgeRole(graph, toId, fromId, reverseAuthoredRole(role));
 }
 
 function applyAllAuthoredRelations(
@@ -492,7 +518,6 @@ function applyAllAuthoredRelations(
     const toId = byPlotId.get(getPlotNpcNumericId(def.toPlotNpcId) ?? -1);
 
     applyAuthoredDirection(graph, fromId, toId, def);
-    if (def.bidirectional) applyAuthoredDirection(graph, toId, fromId, def, true);
   }
 }
 
@@ -505,7 +530,7 @@ function applyAuthoredRelationsForSource(
   for (const def of DEMOS_AUTHORED_RELATIONS) {
     if (getPlotNpcNumericId(def.fromPlotNpcId) === source.plotNpcId) {
       applyAuthoredDirection(graph, source.id, findPlotNpcAlifeId(state, graph, def.toPlotNpcId), def);
-    } else if (def.bidirectional && getPlotNpcNumericId(def.toPlotNpcId) === source.plotNpcId) {
+    } else if (getPlotNpcNumericId(def.toPlotNpcId) === source.plotNpcId) {
       applyAuthoredDirection(graph, source.id, findPlotNpcAlifeId(state, graph, def.fromPlotNpcId), def, true);
     }
   }
@@ -595,12 +620,18 @@ function addFamilyEdges(
     if (!child || child.occupation !== Occupation.CHILD) continue;
     const parents = pickParentCandidates(child, buckets, graph, snapshots, seed);
     for (const parentId of parents) {
-      setEdge(graph, child.id, parentId, familyRelation(seed, child.id, parentId, 96), DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, DemosSocialRoleId.PARENT);
-      setEdge(graph, parentId, child.id, familyRelation(seed, parentId, child.id, 88), DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, DemosSocialRoleId.CHILD);
+      // Одно число на пару: родство симметрично, направлена только роль.
+      const bond = familyRelation(seed, Math.min(child.id, parentId), Math.max(child.id, parentId), 92);
+      setEdge(graph, child.id, parentId, bond, DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, DemosSocialRoleId.PARENT);
+      setEdgeRole(graph, parentId, child.id, DemosSocialRoleId.CHILD);
     }
     if (parents.length >= 2) {
-      setEdge(graph, parents[0], parents[1], familyRelation(seed, parents[0], parents[1], 86), DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, DemosSocialRoleId.PARTNER);
-      setEdge(graph, parents[1], parents[0], familyRelation(seed, parents[1], parents[0], 86), DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, DemosSocialRoleId.PARTNER);
+      setEdge(
+        graph, parents[0], parents[1],
+        familyRelation(seed, Math.min(parents[0], parents[1]), Math.max(parents[0], parents[1]), 86),
+        DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, DemosSocialRoleId.PARTNER,
+      );
+      setEdgeRole(graph, parents[1], parents[0], DemosSocialRoleId.PARTNER);
     }
   }
 }
@@ -626,7 +657,7 @@ function describeCandidateEdge(
   }
   if (mode === 2) {
     const relation = clampRelation(48 + relationJitter(seed, source.id, target.id, salt, 24));
-    const friend = relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD;
+    const friend = relation >= RELATION_FRIENDLY_THRESHOLD;
     return {
       relation,
       flags: DEMOS_EDGE_FACTION | (friend ? DEMOS_EDGE_FRIEND : 0),
@@ -642,8 +673,8 @@ function describeCandidateEdge(
   }
   const base = mode === 4 ? Math.round(factionAffinity(source.faction, target.faction) * 0.5) : factionAffinity(source.faction, target.faction);
   const relation = clampRelation(base + relationJitter(seed, source.id, target.id, salt, mode === 4 ? 40 : 32));
-  const friendly = relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD;
-  const hostile = relation <= DEMOS_RELATION_HOSTILE_THRESHOLD;
+  const friendly = relation >= RELATION_FRIENDLY_THRESHOLD;
+  const hostile = relation <= RELATION_HOSTILE_THRESHOLD;
   return {
     relation,
     flags: (friendly ? DEMOS_EDGE_FRIEND : 0) | (hostile ? DEMOS_EDGE_ENEMY : 0),
@@ -732,9 +763,9 @@ function demosSocialState(state: GameState): DemosSocialSaveState | undefined {
   return (state as GameState & { demosSocial?: DemosSocialSaveState }).demosSocial;
 }
 
+/** Отношение к игроку — то же число в той же шкале; переводить нечего. */
 function playerRelationToDemosRelation(snapshot: AlifeNpcSnapshot): number {
-  const relation = snapshot.playerRelation ?? getFactionPlayerRelation(snapshot.faction);
-  return clampRelation(relation * DEMOS_RELATION_MAX / 100);
+  return clampRelation(snapshot.playerRelation ?? getFactionPlayerRelation(snapshot.faction));
 }
 
 function setPlayerEdgeAtSlot(
@@ -754,7 +785,7 @@ function setPlayerEdgeAtSlot(
 
 function initializePlayerSlot(graph: DemosSocialGraph, snapshot: AlifeNpcSnapshot): void {
   const offset = edgeOffset(snapshot.id, DEMOS_PLAYER_SOCIAL_SLOT);
-  if (graph.relations[offset] !== DEMOS_RELATION_EMPTY) return;
+  if (graph.relations[offset] !== RELATION_UNSET) return;
   const relation = playerRelationToDemosRelation(snapshot);
   setPlayerEdgeAtSlot(graph, snapshot.id, relation, relationFlags(relation), roleForRelation(relation));
 }
@@ -783,6 +814,7 @@ function applySavedRelationOverride(graph: DemosSocialGraph, override: DemosRela
     relationFlags(relation),
     roleForRelation(relation),
   );
+  mirrorEdgeRelation(graph, override.fromAlifeId, targetAlifeId, relation, relationFlags(relation));
   recordOverride(graph, `${override.fromAlifeId}->alife:${override.targetAlifeId}`);
 }
 
@@ -820,7 +852,7 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
     socialRef: social,
     socialOverrideCount: social?.relationOverrides.length ?? 0,
   };
-  graph.relations.fill(DEMOS_RELATION_EMPTY);
+  graph.relations.fill(RELATION_UNSET);
   if (total > DEMOS_FULL_GRAPH_BUILD_LIMIT) return graph;
   const snapshots = new Array<AlifeNpcSnapshot | undefined>(total + 1);
   for (let id = 1; id <= total; id++) snapshots[id] = getAlifeNpcRecordSnapshot(state, id);
@@ -913,15 +945,15 @@ function viewForNpcEdge(graph: DemosSocialGraph, alifeId: number, slot: number):
 }
 
 function roleForRelation(relation: number): DemosSocialRoleId {
-  if (relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD) return DemosSocialRoleId.FRIEND;
-  if (relation <= DEMOS_RELATION_HOSTILE_THRESHOLD) return DemosSocialRoleId.ENEMY;
+  if (relation >= RELATION_FRIENDLY_THRESHOLD) return DemosSocialRoleId.FRIEND;
+  if (relation <= RELATION_HOSTILE_THRESHOLD) return DemosSocialRoleId.ENEMY;
   return DemosSocialRoleId.ACQUAINTANCE;
 }
 
 function relationFlags(relation: number, extra = 0): number {
   let flags = extra & 0xff;
-  if (relation >= DEMOS_RELATION_FRIENDLY_THRESHOLD) flags |= DEMOS_EDGE_FRIEND;
-  if (relation <= DEMOS_RELATION_HOSTILE_THRESHOLD) flags |= DEMOS_EDGE_ENEMY;
+  if (relation >= RELATION_FRIENDLY_THRESHOLD) flags |= DEMOS_EDGE_FRIEND;
+  if (relation <= RELATION_HOSTILE_THRESHOLD) flags |= DEMOS_EDGE_ENEMY;
   return flags & 0xff;
 }
 
@@ -932,8 +964,8 @@ export function getDemosRelationToPlayerSlot(state: GameState, alifeId: number):
   if (!validAlifeId(graph, alifeId)) return undefined;
   initializeLazyRow(state, graph, alifeId);
   const offset = edgeOffset(alifeId, DEMOS_PLAYER_SOCIAL_SLOT);
-  if (graph.relations[offset] === DEMOS_RELATION_EMPTY) initializePlayerSlot(graph, snapshot);
-  const relation = graph.relations[offset] === DEMOS_RELATION_EMPTY ? playerRelationToDemosRelation(snapshot) : graph.relations[offset];
+  if (graph.relations[offset] === RELATION_UNSET) initializePlayerSlot(graph, snapshot);
+  const relation = graph.relations[offset] === RELATION_UNSET ? playerRelationToDemosRelation(snapshot) : graph.relations[offset];
   const flags = graph.flags[offset] || relationFlags(relation);
   return {
     slot: DEMOS_PLAYER_SOCIAL_SLOT,
@@ -970,7 +1002,7 @@ export function clearDemosNpcSocialEdges(state: GameState, alifeId: number): voi
   for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     const offset = edgeOffset(alifeId, slot);
     graph.targets[offset] = 0;
-    graph.relations[offset] = DEMOS_RELATION_EMPTY;
+    graph.relations[offset] = RELATION_UNSET;
     graph.flags[offset] = 0;
     graph.roles[offset] = 0;
   }
@@ -980,11 +1012,11 @@ export function clearDemosNpcSocialEdges(state: GameState, alifeId: number): voi
 export function demosNpcRelationBand(scoreInput: number): DemosRelationBand {
   const score = clampRelation(scoreInput);
   if (score < -96) return { label: 'ненавидит', color: '#ff3b4f' };
-  if (score <= DEMOS_RELATION_HOSTILE_THRESHOLD) return { label: 'враг', color: '#ff6a3b' };
+  if (score <= RELATION_HOSTILE_THRESHOLD) return { label: 'враг', color: '#ff6a3b' };
   if (score < -32) return { label: 'недруг', color: '#f09a38' };
   if (score < 0) return { label: 'холодное', color: '#d7b86a' };
   if (score < 32) return { label: 'нейтрально', color: '#b8c0a0' };
-  if (score < DEMOS_RELATION_FRIENDLY_THRESHOLD) return { label: 'приятель', color: '#8fd47a' };
+  if (score < RELATION_FRIENDLY_THRESHOLD) return { label: 'приятель', color: '#8fd47a' };
   if (score < 96) return { label: 'друг', color: '#51e08e' };
   return { label: 'любовь', color: '#ff7ad9' };
 }
@@ -1013,13 +1045,13 @@ export function getDemosSocialGraphStats(state: GameState): DemosSocialGraphStat
   for (let i = 0; i < graph.targets.length; i++) {
     const publicSlot = i % DEMOS_SOCIAL_PUBLIC_SLOTS;
     const exists = publicSlot === DEMOS_PLAYER_SOCIAL_SLOT
-      ? graph.relations[i] !== DEMOS_RELATION_EMPTY
+      ? graph.relations[i] !== RELATION_UNSET
       : graph.targets[i] !== 0;
     if (!exists) continue;
     directedEdges++;
     if ((graph.flags[i] & DEMOS_EDGE_FAMILY) !== 0) familyEdges++;
     if (graph.roles[i] === DemosSocialRoleId.PARENT) parentEdges++;
-    if ((graph.flags[i] & DEMOS_EDGE_ENEMY) !== 0 || graph.relations[i] <= DEMOS_RELATION_HOSTILE_THRESHOLD) enemyEdges++;
+    if ((graph.flags[i] & DEMOS_EDGE_ENEMY) !== 0 || graph.relations[i] <= RELATION_HOSTILE_THRESHOLD) enemyEdges++;
   }
   return {
     totalRecords: graph.total,
@@ -1083,8 +1115,9 @@ function persistRelationOverride(state: GameState, graph: DemosSocialGraph, resu
   graph.socialOverrideCount = social.relationOverrides.length;
 }
 
+/** Обратный перевод не нужен: шкала одна. Остаётся только кламп. */
 function demosRelationToPlayerRelation(relation: number): number {
-  return Math.max(-100, Math.min(100, Math.round(clampRelation(relation) * 100 / DEMOS_RELATION_MAX)));
+  return clampRelation(relation);
 }
 
 export function existingDemosRelationToNewPlayer(
@@ -1116,7 +1149,7 @@ export function existingDemosRelationToNewPlayer(
   const slot = findExistingTargetSlot(graph, fromAlifeId, targetAlifeId);
   if (slot < 0) return undefined;
   const relation = graph.relations[edgeOffset(fromAlifeId, slot)];
-  return relation === DEMOS_RELATION_EMPTY ? undefined : demosRelationToPlayerRelation(relation);
+  return relation === RELATION_UNSET ? undefined : demosRelationToPlayerRelation(relation);
 }
 
 export function resetDemosPlayerRelationSlotsForNewPlayer(state: GameState): void {
@@ -1144,7 +1177,7 @@ export function resetDemosPlayerRelationSlotsForNewPlayer(state: GameState): voi
 }
 
 function propagationDelta(sourceDelta: number, circleRelation: number): number {
-  return clampInt(Math.round(sourceDelta * clampRelation(circleRelation) / DEMOS_RELATION_MAX), 0, -32, 32);
+  return clampInt(Math.round(sourceDelta * clampRelation(circleRelation) / RELATION_MAX), 0, -32, 32);
 }
 
 function applyNpcRelationDelta(
@@ -1166,11 +1199,14 @@ function applyNpcRelationDelta(
     setEdgeAtSlot(graph, fromAlifeId, slot, targetAlifeId, 0, 0, DemosSocialRoleId.ACQUAINTANCE);
   }
   const offset = edgeOffset(fromAlifeId, slot);
-  const previous = graph.relations[offset] === DEMOS_RELATION_EMPTY ? 0 : graph.relations[offset];
+  const previous = graph.relations[offset] === RELATION_UNSET ? 0 : graph.relations[offset];
   const relation = clampRelation(previous + delta);
   graph.relations[offset] = relation;
   graph.flags[offset] = relationFlags(relation, graph.flags[offset] | (opts.flags ?? 0));
   graph.roles[offset] = roleForRelation(relation);
+  // Пара, а не направление: встречное ребро получает то же число.
+  initializeLazyRow(state, graph, targetAlifeId);
+  mirrorEdgeRelation(graph, fromAlifeId, targetAlifeId, relation, graph.flags[offset]);
   recordOverride(graph, `${fromAlifeId}->alife:${targetAlifeId}`);
   return {
     changed: relation !== previous,
@@ -1228,7 +1264,7 @@ function propagateRelationDelta(
     if (result.targetKind === 'alife' && relatedAlifeId === result.targetAlifeId) continue;
     const related = getAlifeNpcRecordSnapshot(state, relatedAlifeId);
     if (!related || related.dead) continue;
-    const delta = propagationDelta(result.delta, graph.relations[offset] === DEMOS_RELATION_EMPTY ? 0 : graph.relations[offset]);
+    const delta = propagationDelta(result.delta, graph.relations[offset] === RELATION_UNSET ? 0 : graph.relations[offset]);
     if (delta === 0) continue;
     processed++;
     const target = result.targetKind === 'player'
@@ -1252,7 +1288,10 @@ export function applyDemosRelationDelta(
 ): DemosRelationDeltaResult | undefined {
   const graph = ensureGraph(state);
   if (!validAlifeId(graph, fromAlifeId)) return undefined;
-  const delta = clampInt(deltaInput, 0, -32, 32);
+  // Дельта живёт в том же диапазоне, что и само отношение: убийство любимого
+  // человека обязано мочь развернуть его целиком. Прежний потолок в ±32 делал
+  // смерть дешевле царапины, потому что резал повод, а не результат.
+  const delta = clampInt(deltaInput, 0, RELATION_MIN - RELATION_MAX, RELATION_MAX - RELATION_MIN);
   if (delta === 0) return undefined;
   const result = target.targetKind === 'player'
     ? applyPlayerRelationDelta(state, graph, fromAlifeId, delta, opts)
@@ -1278,7 +1317,27 @@ export function setDemosSocialEdge(
   if (slot < 0) slot = firstEmptySlot(graph, fromAlifeId);
   if (slot < 0) slot = weakestSlot(graph, fromAlifeId);
   const relation = clampRelation(relationInput);
-  const ok = setEdgeAtSlot(graph, fromAlifeId, slot, targetAlifeId, relation, relationFlags(relation, flagsInput), roleForRelation(relation));
-  if (ok) recordOverride(graph, `${fromAlifeId}->alife:${targetAlifeId}`);
+  const flags = relationFlags(relation, flagsInput);
+  const ok = setEdgeAtSlot(graph, fromAlifeId, slot, targetAlifeId, relation, flags, roleForRelation(relation));
+  if (ok) {
+    initializeLazyRow(state, graph, targetAlifeId);
+    mirrorEdgeRelation(graph, fromAlifeId, targetAlifeId, relation, flags);
+    recordOverride(graph, `${fromAlifeId}->alife:${targetAlifeId}`);
+    // Поставленная связь обязана пережить перестройку графа. Раньше ручное
+    // ребро жило только в памяти и исчезало при первом же пересборе, тогда как
+    // дельта через `applyDemosRelationDelta` сохранялась — один и тот же факт
+    // с двумя разными сроками жизни.
+    persistRelationOverride(state, graph, {
+      changed: true,
+      fromAlifeId,
+      targetKind: 'alife',
+      targetAlifeId,
+      previous: relation,
+      relation,
+      delta: 0,
+      flags,
+      reasonTag: 'authored_edge',
+    });
+  }
   return ok;
 }

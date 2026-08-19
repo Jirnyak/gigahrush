@@ -51,19 +51,22 @@ test('Demos AI social helper reads outgoing friend and enemy slots from supplied
   assert.ok((ctx?.targetHostilityBias ?? 0) > 0);
 });
 
-test('Demos AI social helper does not search incoming edges', () => {
+/* Отношение — свойство пары, а не направления. Связь, поставленную с той
+ * стороны, актор обязан видеть как свою: искать «входящие рёбра» больше негде,
+ * потому что входящих и исходящих не существует по отдельности. */
+test('Demos AI social helper sees a bond declared from the other side', () => {
   const state = makeSocialState();
   clearDemosNpcSocialEdges(state, 1);
   clearDemosNpcSocialEdges(state, 4);
   setDemosSocialEdge(state, 4, 1, 110, DEMOS_EDGE_FRIEND);
 
   const actor = makeTestNpc({ id: 10, alifeId: 1, x: 10, y: 10 });
-  const incomingOnly = makeTestNpc({ id: 40, alifeId: 4, x: 11, y: 10 });
-  const ctx = buildDemosAiSocialContext(state, actor, new Map([[4, incomingOnly]]));
+  const other = makeTestNpc({ id: 40, alifeId: 4, x: 11, y: 10 });
+  const ctx = buildDemosAiSocialContext(state, actor, new Map([[4, other]]));
 
-  assert.equal(ctx?.friendNearby, false);
-  assert.equal(ctx?.strongestFriendEntityId, undefined);
-  assert.equal(ctx?.talkBias, 0);
+  assert.equal(ctx?.friendNearby, true, 'связь односторонней быть не может');
+  assert.equal(ctx?.strongestFriendEntityId, 40);
+  assert.ok((ctx?.talkBias ?? 0) > 0);
 });
 
 test('Demos AI social helper uses caller supplied live map and ignores off-map relations', () => {
