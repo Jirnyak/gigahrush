@@ -116,7 +116,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   // Push per-frame refs into sub-modules
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
-  setNpcContext(msgs, time);
+  setNpcContext(msgs, time, currentZ);
   expireMonsterBaits(state, time);
 
   // Main rebuilds the runtime broadphase once before simulation; AI only consumes it.

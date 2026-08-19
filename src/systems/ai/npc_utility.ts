@@ -12,6 +12,7 @@ import {
 } from "../../core/types";
 import {
   occupationHasProfileTag,
+  occupationPreferredVisitRooms,
   occupationProfile,
   occupationWorkRoomTypeWeight,
 } from "../../data/occupation_profiles";
@@ -138,6 +139,18 @@ export interface NpcUtilitySelection {
   emergency: boolean;
 }
 
+/**
+ * Что комната помнит о человеке. Снимок, а не сама запись: скоринг остаётся
+ * чистым, а чтение `systems/room_memory` живёт там, где известен этаж.
+ */
+export interface NpcUtilityRoomMemorySnapshot {
+  hostile?: boolean;
+  helpful?: boolean;
+  stash?: boolean;
+  /** 1..5, как у записи памяти. */
+  severity?: number;
+}
+
 export interface NpcUtilityTargetCandidate {
   id: number | string;
   roomId?: number;
@@ -151,6 +164,9 @@ export interface NpcUtilityTargetCandidate {
   capacity?: number;
   danger?: number;
   factionPenalty?: number;
+  memory?: NpcUtilityRoomMemorySnapshot;
+  /** 0..1: 1 — на памяти сюда не ходил, 0 — только что оттуда вышел. */
+  novelty?: number;
 }
 
 export interface NpcUtilityTargetPreferenceContext {
@@ -163,6 +179,11 @@ export interface NpcUtilityTargetPreferenceContext {
   distanceScale?: number;
   stickiness?: number;
   stableJitter?: number;
+  /** Нужды и здоровье: комната интересна всем, что в ней можно закрыть. */
+  needs?: Partial<Needs>;
+  hp?: number;
+  maxHp?: number;
+  riskTolerance?: number;
 }
 
 const HASH_OFFSET = 2166136261 >>> 0;
@@ -874,6 +895,111 @@ const NPC_UTILITY_INTENT_ROOM_AFFORDANCE: Partial<
   wander: "wander",
 };
 
+/* ── Интерес к комнате: независимые каналы, складываемые весами ───
+ *
+ * Канон (`rooms.md`): распорядка нет, есть один контекстный автомат, где всё
+ * входит каналом, а не веткой. Новый фактор добавляется строкой сюда и весом
+ * ниже; белых списков «кому куда можно» не бывает — просто у большинства
+ * комнат сумма мала. Шкала общая с `ROOM_AFFORDANCES` (8..40).
+ */
+const ROOM_INTEREST = {
+  /** Множитель суммы «что я тут закрою» по всем нуждам сразу. */
+  need: 0.5,
+  /** Тяга ремесла к своим комнатам; вторая комната списка тянет вдвое слабее. */
+  craft: 12,
+  /** Где при мне убивали или крали. */
+  memoryHostile: 26,
+  /** Где помогали, чинили, выводили. */
+  memoryHelpful: 10,
+  /** Слух о чужом запасе: тянет ровно настолько, насколько человек рисковый. */
+  memoryStash: 16,
+  /** Давно не был. */
+  novelty: 9,
+} as const;
+
+/**
+ * Чем комната интересна сама по себе, до всякой цены пути. Отрицательной сумма
+ * становится законно: комната с плохой памятью отталкивает сильнее, чем тянет
+ * её же назначение.
+ */
+export function npcUtilityRoomInterest(
+  roomType: RoomType | undefined,
+  context: NpcUtilityTargetPreferenceContext,
+  memory?: NpcUtilityRoomMemorySnapshot,
+): number {
+  return (
+    npcUtilityRoomTypeWeightForIntent(context.intent, roomType, context.occupation) +
+    roomNeedInterest(roomType, context) +
+    roomCraftInterest(roomType, context.occupation) +
+    roomMemoryInterest(memory, context)
+  );
+}
+
+function needAffordanceInterest(
+  roomType: RoomType | undefined,
+  affordance: RoomAffordanceId,
+  exclude: RoomAffordanceId | undefined,
+  pressure: number,
+): number {
+  if (affordance === exclude || pressure <= 0) return 0;
+  return roomAffordanceWeight(roomType, affordance) * pressure;
+}
+
+function roomNeedInterest(
+  roomType: RoomType | undefined,
+  context: NpcUtilityTargetPreferenceContext,
+): number {
+  if (roomType === undefined) return 0;
+  const needs = context.needs;
+  const heal = healthPressure(context.hp, context.maxHp);
+  if (!needs && heal <= 0) return 0;
+  // Назначение текущего намерения уже учтено отдельным каналом — не считаем дважды.
+  const exclude = NPC_UTILITY_INTENT_ROOM_AFFORDANCE[context.intent];
+  const sum =
+    needAffordanceInterest(roomType, "eat", exclude, lowNeedPressure(needs?.food)) +
+    needAffordanceInterest(roomType, "drink", exclude, lowNeedPressure(needs?.water)) +
+    needAffordanceInterest(roomType, "sleep", exclude, lowNeedPressure(needs?.sleep)) +
+    needAffordanceInterest(
+      roomType,
+      "toilet",
+      exclude,
+      Math.max(highNeedPressure(needs?.pee), highNeedPressure(needs?.poo)),
+    ) +
+    needAffordanceInterest(roomType, "heal", exclude, heal);
+  return sum * ROOM_INTEREST.need;
+}
+
+function roomCraftInterest(
+  roomType: RoomType | undefined,
+  occupation: Occupation | undefined,
+): number {
+  if (roomType === undefined) return 0;
+  const preferred = occupationPreferredVisitRooms(occupation);
+  const index = preferred.indexOf(roomType);
+  return index < 0 ? 0 : ROOM_INTEREST.craft / (index + 1);
+}
+
+function roomMemoryInterest(
+  memory: NpcUtilityRoomMemorySnapshot | undefined,
+  context: NpcUtilityTargetPreferenceContext,
+): number {
+  if (!memory) return 0;
+  // Свежая тяжёлая память весит вдвое против выцветшей, но не пропадает совсем.
+  const weight = 0.4 + clamp01((memory.severity ?? 1) / 5) * 0.6;
+  let score = 0;
+  if (memory.hostile) score -= ROOM_INTEREST.memoryHostile * weight;
+  if (memory.helpful) score += ROOM_INTEREST.memoryHelpful * weight;
+  if (memory.stash) {
+    score +=
+      ROOM_INTEREST.memoryStash *
+      unitTrait(
+        context.riskTolerance,
+        defaultRiskTolerance(context.faction, context.occupation),
+      );
+  }
+  return score;
+}
+
 export function scoreNpcUtilityTargetPreference(
   target: NpcUtilityTargetCandidate,
   context: NpcUtilityTargetPreferenceContext,
@@ -894,11 +1020,8 @@ export function scoreNpcUtilityTargetPreference(
   const danger = unitish(target.danger);
   let score =
     positive(target.utility) +
-    npcUtilityRoomTypeWeightForIntent(
-      context.intent,
-      roomType,
-      context.occupation,
-    ) +
+    npcUtilityRoomInterest(roomType, context, target.memory) +
+    clamp01(target.novelty ?? 0) * ROOM_INTEREST.novelty +
     stableTargetJitter(
       context.identity,
       context.intent,

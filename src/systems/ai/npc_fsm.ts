@@ -38,8 +38,14 @@ import { factionToTerritoryOwner } from '../../data/factions';
 import {
   occupationHasAnyRoutineTag,
   occupationHasRoutineTag,
-  occupationWorkRoomTypes,
 } from '../../data/occupation_profiles';
+import {
+  getRoomMemory,
+  getRoomMemoryCount,
+  roomMemoryIsHelpful,
+  roomMemoryIsHostile,
+  roomMemoryRevealsStash,
+} from '../room_memory';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import { cleanSurfaceArea } from '../surface_cleanup';
 import { findMeatChunkCell, removeVisualSlotCode } from '../../world/visual_cell_slots';
@@ -48,12 +54,15 @@ import {
   createNpcUtilityScoreBuffer,
   npcUtilityIdentityFromEntity,
   npcUtilityJitter01,
+  npcUtilityRoomInterest,
   npcUtilityRoomTypeWeightForIntent,
   scoreNpcUtilityTargetPreference,
   scoreNpcUtilities,
   selectNpcUtilityIntent,
   type NpcUtilityIntentId,
+  type NpcUtilityRoomMemorySnapshot,
   type NpcUtilityTargetCandidate,
+  type NpcUtilityTargetPreferenceContext,
   type NpcUtilityThreatSnapshot,
 } from './npc_utility';
 import { rng } from '../../core/rand';
@@ -62,10 +71,13 @@ export type NpcAiProfile = 'default' | 'ministry';
 
 let _barkMsgs: Msg[] = [];
 let _barkTime = 0;
+/** Этаж активного прогона: ключ коммунальной памяти комнат (`room_memory`). */
+let _routineZ: number | undefined;
 
-export function setNpcContext(msgs: Msg[], time: number): void {
+export function setNpcContext(msgs: Msg[], time: number, currentZ?: number): void {
   _barkMsgs = msgs;
   _barkTime = time;
+  _routineZ = currentZ;
 }
 
 const UTILITY_THREAT_RADIUS = 16;
@@ -90,7 +102,12 @@ const utilityScoreBuffer = createNpcUtilityScoreBuffer();
 const routineFriendlyRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineFallbackRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineSeenRoomIds = new Set<number>();
+const ROUTINE_VISIT_MEMORY = 6;
 const utilityIntentByNpc = new WeakMap<Entity, NpcUtilityIntentId>();
+/* Где человек был в последнее время. Кольцо фиксированной длины на живую
+ * сущность: новизна нужна только активному этажу и умирает вместе с ним, в
+ * сейв не идёт и в A-Life не складывается. */
+const routineVisitsByNpc = new WeakMap<Entity, number[]>();
 const utilityScoreByNpc = new WeakMap<Entity, number>();
 const utilityNextDecisionAtByNpc = new WeakMap<Entity, number>();
 const cleanerNextSurfaceAtByNpc = new WeakMap<Entity, number>();
@@ -101,6 +118,58 @@ function stableUnit(e: Entity, salt: string | number): number {
 
 function stableTimer(e: Entity, salt: string | number, base: number, spread: number): number {
   return base + stableUnit(e, salt) * spread;
+}
+
+function noteRoutineRoomVisit(e: Entity, roomId: number | undefined): void {
+  if (roomId === undefined || roomId < 0) return;
+  const visits = routineVisitsByNpc.get(e);
+  if (!visits) {
+    routineVisitsByNpc.set(e, [roomId]);
+    return;
+  }
+  if (visits[visits.length - 1] === roomId) return;
+  visits.push(roomId);
+  if (visits.length > ROUTINE_VISIT_MEMORY) visits.shift();
+}
+
+/** 0..1: единица — на памяти сюда не ходил, ноль — только что оттуда вышел. */
+function routineRoomNovelty(e: Entity, roomId: number): number {
+  const visits = routineVisitsByNpc.get(e);
+  if (!visits) return 1;
+  const index = visits.lastIndexOf(roomId);
+  if (index < 0) return 1;
+  return (visits.length - 1 - index) / ROUTINE_VISIT_MEMORY;
+}
+
+function routineRoomMemorySnapshot(roomId: number): NpcUtilityRoomMemorySnapshot | undefined {
+  // Ключ памяти — строка, а спрашивают её на каждую комнату окна сканирования.
+  // Пустая память (обычный случай до первого следа игрока) не стоит ничего.
+  if (_routineZ === undefined || getRoomMemoryCount() === 0) return undefined;
+  const record = getRoomMemory(_routineZ, roomId);
+  if (!record) return undefined;
+  return {
+    hostile: roomMemoryIsHostile(record),
+    helpful: roomMemoryIsHelpful(record),
+    stash: roomMemoryRevealsStash(record),
+    severity: record.severity,
+  };
+}
+
+function routineRoomPreferenceContext(
+  e: Entity,
+  intent: NpcUtilityIntentId,
+): NpcUtilityTargetPreferenceContext {
+  return {
+    identity: npcUtilityIdentityFromEntity(e),
+    intent,
+    occupation: e.occupation,
+    faction: e.faction,
+    needs: e.needs,
+    hp: e.hp,
+    maxHp: e.maxHp,
+    stableJitter: 2,
+    distanceScale: 96,
+  };
 }
 
 function ownTerritoryOwner(e: Entity): TerritoryOwner | undefined {
@@ -378,13 +447,13 @@ export function updateNPC(
       handleSleeping(world, e, dt, profile);
       break;
     case 'work':
-      handleWorking(world, e, dt, profile);
+      handleWorking(world, e, dt);
       break;
     case 'heal':
       handleHeal(world, e, dt);
       break;
     case 'social':
-      handleSocial(world, e, dt, profile);
+      handleSocial(world, e, dt);
       break;
     case 'combat':
     case 'patrol':
@@ -491,6 +560,9 @@ function buildLocalUtilityScores(
 ): Partial<Record<NpcUtilityIntentId, number>> {
   const local: Partial<Record<NpcUtilityIntentId, number>> = {};
   const room = world.roomAt(e.x, e.y);
+  // Опрос «где я сейчас» идёт на такте переоценки: этого хватает на новизну и
+  // не стоит ни одного лишнего обращения к карте комнат.
+  noteRoutineRoomVisit(e, room?.id);
   const cellOwner = territoryOwnerAtIndex(world, world.idx(Math.floor(e.x), Math.floor(e.y)));
   if (cellOwner === ZoneFaction.SAMOSBOR) {
     addLocalScore(local, 'safety', e.faction === Faction.CULTIST ? -5 : 14);
@@ -641,26 +713,25 @@ function tryAmbientBark(e: Entity, dt: number, samosborActive: boolean): void {
 
 /* ── Intent handlers ─────────────────────────────────────────── */
 
+/** Годится ли комната, в которой человек уже стоит, под его намерение. */
+function roomSuitsIntent(e: Entity, room: Room | null | undefined, intent: NpcUtilityIntentId): boolean {
+  return !!room && npcUtilityRoomTypeWeightForIntent(intent, room.type, e.occupation) > 0;
+}
+
 function handleSleeping(world: World, e: Entity, dt: number, profile: NpcAiProfile): void {
   const ai = e.ai!;
   if (ai.goal === AIGoal.IDLE || ai.timer <= 0) {
     ai.goal = AIGoal.SLEEP;
-    if (profile === 'ministry') {
-      if (!gotoRoutineRoomOfTypes(world, e, [RoomType.OFFICE, RoomType.LIVING], 'sleep', { preferredRoomId: e.assignedRoomId, allowTrespassFallback: true })) {
-        wanderNearby(world, e);
-      }
-    } else {
-      const targetRoom = findFamilyRoom(world, e, RoomType.LIVING);
-      if (!gotoRoutineRoomOfTypes(world, e, [RoomType.LIVING, RoomType.OFFICE], 'sleep', { preferredRoomId: targetRoom, allowTrespassFallback: true })) {
-        wanderNearby(world, e);
-      }
+    const preferredRoomId = profile === 'ministry' ? e.assignedRoomId : findFamilyRoom(world, e, RoomType.LIVING);
+    if (!gotoRoutineRoom(world, e, 'sleep', { preferredRoomId, allowTrespassFallback: true })) {
+      wanderNearby(world, e);
     }
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'sleep_rethink', 8, 5) : 2.0;
   }
 
   if (ai.goal === AIGoal.SLEEP && ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && (cr.type === RoomType.LIVING || cr.type === RoomType.OFFICE)) {
+    if (roomSuitsIntent(e, cr, 'sleep')) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'sleep_in_room', 8, 12);
     }
@@ -712,12 +783,12 @@ function handleToilet(world: World, e: Entity, dt: number, time: number): void {
   if (handleWildOpenUrination(world, e, dt, time)) return;
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.TOILET;
-    if (!gotoRoutineRoomOfTypes(world, e, [RoomType.BATHROOM], 'toilet', { allowTrespassFallback: true })) wanderNearby(world, e);
+    if (!gotoRoutineRoom(world, e, 'toilet', { allowTrespassFallback: true })) wanderNearby(world, e);
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'toilet_rethink', 7, 5) : 2.0;
   }
   if (n) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && cr.type === RoomType.BATHROOM && n.pee < 15 && n.poo < 15) {
+    if (roomSuitsIntent(e, cr, 'toilet') && n.pee < 15 && n.poo < 15) {
       ai.goal = AIGoal.IDLE;
       ai.timer = 0.5;
     }
@@ -725,7 +796,7 @@ function handleToilet(world: World, e: Entity, dt: number, time: number): void {
 
   if (ai.goal === AIGoal.TOILET && ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && cr.type === RoomType.BATHROOM) {
+    if (roomSuitsIntent(e, cr, 'toilet')) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'toilet_in_room', 6, 10);
     }
@@ -739,12 +810,12 @@ function handleDrink(world: World, e: Entity, dt: number): void {
   const n = e.needs;
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.DRINK;
-    if (!gotoRoutineRoomOfTypes(world, e, [RoomType.KITCHEN, RoomType.BATHROOM], 'drink', { allowTrespassFallback: true })) wanderNearby(world, e);
+    if (!gotoRoutineRoom(world, e, 'drink', { allowTrespassFallback: true })) wanderNearby(world, e);
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'drink_rethink', 8, 6) : 2.0;
   }
   if (n) {
     const cr = world.roomAt(e.x, e.y);
-    if ((cr?.type === RoomType.KITCHEN || cr?.type === RoomType.BATHROOM) && n.water > 82) {
+    if (roomSuitsIntent(e, cr, 'drink') && n.water > 82) {
       ai.goal = AIGoal.IDLE;
       ai.timer = 0.5;
     }
@@ -752,7 +823,7 @@ function handleDrink(world: World, e: Entity, dt: number): void {
 
   if (ai.goal === AIGoal.DRINK && ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && (cr.type === RoomType.KITCHEN || cr.type === RoomType.BATHROOM)) {
+    if (roomSuitsIntent(e, cr, 'drink')) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'drink_in_room', 6, 10);
     }
@@ -788,12 +859,12 @@ function handleEat(world: World, e: Entity, dt: number): void {
 
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.EAT;
-    if (!gotoRoutineRoomOfTypes(world, e, [RoomType.KITCHEN, RoomType.COMMON], 'eat', { allowTrespassFallback: true })) wanderNearby(world, e);
+    if (!gotoRoutineRoom(world, e, 'eat', { allowTrespassFallback: true })) wanderNearby(world, e);
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'eat_rethink', 10, 8) : 2.0;
   }
   if (n) {
     const cr = world.roomAt(e.x, e.y);
-    if ((cr?.type === RoomType.KITCHEN || cr?.type === RoomType.COMMON) && n.food > 82) {
+    if (roomSuitsIntent(e, cr, 'eat') && n.food > 82) {
       ai.goal = AIGoal.IDLE;
       ai.timer = 0.5;
     }
@@ -801,7 +872,7 @@ function handleEat(world: World, e: Entity, dt: number): void {
 
   if (ai.goal === AIGoal.EAT && ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && (cr.type === RoomType.KITCHEN || cr.type === RoomType.COMMON)) {
+    if (roomSuitsIntent(e, cr, 'eat')) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'eat_in_room', 8, 12);
     }
@@ -810,18 +881,13 @@ function handleEat(world: World, e: Entity, dt: number): void {
   followPath(world, e, dt);
 }
 
-function handleWorking(world: World, e: Entity, dt: number, profile: NpcAiProfile): void {
+function handleWorking(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   tryCleanerSurfaceWork(world, e);
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WORK;
-    if (profile === 'ministry') {
-      if (!tryGotoAssignedWorkRoom(world, e) && !gotoRoutineRoomOfTypes(world, e, [RoomType.OFFICE, RoomType.COMMON], 'work')) {
-        wanderNearby(world, e);
-      }
-    } else if (!tryGotoAssignedWorkRoom(world, e)) {
-      const types = occupationWorkRoomTypes(e.occupation);
-      if (!gotoRoutineRoomOfTypes(world, e, types, 'work')) wanderNearby(world, e);
+    if (!tryGotoAssignedWorkRoom(world, e) && !gotoRoutineRoom(world, e, 'work')) {
+      wanderNearby(world, e);
     }
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'work_rethink', 14, 18) : 2.0;
   }
@@ -869,13 +935,13 @@ function handleHeal(world: World, e: Entity, dt: number): void {
   }
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.GOTO;
-    if (!gotoRoutineRoomOfTypes(world, e, [RoomType.MEDICAL], 'heal', { allowTrespassFallback: true })) wanderNearby(world, e);
+    if (!gotoRoutineRoom(world, e, 'heal', { allowTrespassFallback: true })) wanderNearby(world, e);
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'heal_rethink', 9, 8) : 2.0;
   }
 
   if (ai.goal === AIGoal.GOTO && ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && cr.type === RoomType.MEDICAL) {
+    if (roomSuitsIntent(e, cr, 'heal')) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'heal_in_room', 8, 12);
     }
@@ -884,19 +950,16 @@ function handleHeal(world: World, e: Entity, dt: number): void {
   followPath(world, e, dt);
 }
 
-function handleSocial(world: World, e: Entity, dt: number, profile: NpcAiProfile): void {
+function handleSocial(world: World, e: Entity, dt: number): void {
   const ai = e.ai!;
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WANDER;
-    const types = profile === 'ministry'
-      ? [RoomType.COMMON, RoomType.HQ, RoomType.OFFICE] as const
-      : [RoomType.COMMON, RoomType.SMOKING, RoomType.KITCHEN] as const;
-    if (!gotoRoutineRoomOfTypes(world, e, types, 'social')) wanderNearby(world, e);
+    if (!gotoRoutineRoom(world, e, 'social')) wanderNearby(world, e);
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'social_rethink', 8, 12) : 2.0;
   }
   if (ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
-    if (cr && (cr.type === RoomType.COMMON || cr.type === RoomType.SMOKING || cr.type === RoomType.KITCHEN || cr.type === RoomType.HQ)) {
+    if (roomSuitsIntent(e, cr, 'social')) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'social_in_room', 6, 10);
     }
@@ -946,7 +1009,7 @@ function handleWander(world: World, e: Entity, dt: number): void {
       ai.timer = ai.path.length > 0 ? stableTimer(e, 'traveler_rethink', 10, 20) : 2.0;
     } else {
       const roll = stableUnit(e, `wander:${Math.floor((ai.stateTimer ?? 0) / 15)}`);
-      const routed = roll < 0.68 && gotoRoutineRoomOfTypes(world, e, [RoomType.COMMON, RoomType.KITCHEN, RoomType.HQ], 'wander');
+      const routed = roll < 0.68 && gotoRoutineRoom(world, e, 'wander');
       if (!routed) {
         wanderNearby(world, e);
       }
@@ -978,33 +1041,38 @@ interface RoutineRoomOptions {
   allowTrespassFallback?: boolean;
 }
 
-function gotoRoutineRoomOfTypes(
+/**
+ * Куда пойти под это намерение. Списка «кому куда можно» здесь нет: кандидат —
+ * любая комната этажа, а годность и вес даёт контекстная сумма интереса
+ * (`npcUtilityRoomInterest`). Комната отсеивается не типом, а тем, что ей нечем
+ * этого человека сейчас заинтересовать.
+ */
+function gotoRoutineRoom(
   world: World,
   e: Entity,
-  types: readonly RoomType[],
   intent: NpcUtilityIntentId,
   options: RoutineRoomOptions = {},
 ): boolean {
-  if (types.length === 0) return false;
   routineFriendlyRoomCandidates.length = 0;
   routineFallbackRoomCandidates.length = 0;
   routineSeenRoomIds.clear();
+  const context = routineRoomPreferenceContext(e, intent);
   const allowFallback = options.allowTrespassFallback === true ||
     routineIntentAllowsSurvivalTrespass(intent) ||
     isRoutineTrespassRelaxed(e);
   const considerRoom = (room: Room | undefined): void => {
     if (!room || routineSeenRoomIds.has(room.id)) return;
     routineSeenRoomIds.add(room.id);
-    if (!types.includes(room.type)) return;
-    const utility = npcUtilityRoomTypeWeightForIntent(intent, room.type, e.occupation);
-    if (utility <= 0 && room.id !== options.preferredRoomId && room.id !== e.assignedRoomId) return;
+    const anchored = room.id === options.preferredRoomId || room.id === e.assignedRoomId;
+    const memory = routineRoomMemorySnapshot(room.id);
+    if (!anchored && npcUtilityRoomInterest(room.type, context, memory) <= 0) return;
     const friendly = territoryFriendlyForNpc(e, territoryRoomOwner(world, room.id));
     if (!friendly && !allowFallback) return;
     const cx = room.x + room.w / 2;
     const cy = room.y + room.h / 2;
     const distance = Math.sqrt(world.dist2(e.x, e.y, cx, cy));
     if (distance > routineRoomDistanceLimit(e, room, intent, options.preferredRoomId)) return;
-    const target = routineRoomTargetCandidate(world, e, room, intent, friendly, options.preferredRoomId, distance);
+    const target = routineRoomTargetCandidate(world, e, room, context, memory, friendly, options.preferredRoomId, distance);
     pushRoutineRoomCandidate(friendly ? routineFriendlyRoomCandidates : routineFallbackRoomCandidates, target);
   };
 
@@ -1031,7 +1099,8 @@ function routineRoomTargetCandidate(
   world: World,
   e: Entity,
   room: Room,
-  intent: NpcUtilityIntentId,
+  context: NpcUtilityTargetPreferenceContext,
+  memory: NpcUtilityRoomMemorySnapshot | undefined,
   friendly: boolean,
   preferredRoomId: number | undefined,
   distance: number,
@@ -1047,14 +1116,9 @@ function routineRoomTargetCandidate(
     distance,
     factionPenalty: friendly ? 0 : 18,
     danger: world.dangerField[world.idx(Math.floor(room.x + room.w/2), Math.floor(room.y + room.h/2))] / 255,
-  }, {
-    identity: npcUtilityIdentityFromEntity(e),
-    intent,
-    occupation: e.occupation,
-    faction: e.faction,
-    stableJitter: 2,
-    distanceScale: 96,
-  });
+    memory,
+    novelty: routineRoomNovelty(e, room.id),
+  }, context);
   return {
     id: room.id,
     roomId: room.id,
