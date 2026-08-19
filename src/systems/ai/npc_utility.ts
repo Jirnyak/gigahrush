@@ -35,6 +35,7 @@ export const NPC_UTILITY_INTENTS = [
   "social",
   "patrol",
   "faction_assault",
+  "store",
   "wander",
 ] as const;
 
@@ -53,7 +54,8 @@ export const NPC_UTILITY_INTENT_INDEX = {
   social: 9,
   patrol: 10,
   faction_assault: 11,
-  wander: 12,
+  store: 12,
+  wander: 13,
 } as const satisfies Record<NpcUtilityIntentId, number>;
 
 export const NPC_UTILITY_INTENT_COUNT = NPC_UTILITY_INTENTS.length;
@@ -213,6 +215,7 @@ const NPC_UTILITY_INTENT_PATIENCE: Record<NpcUtilityIntentId, number> = {
   eat: 0.35,
   faction_assault: 0.5,
   sleep: 0.6,
+  store: 0.85,
   social: 0.85,
   work: 0.9,
   patrol: 0.9,
@@ -340,6 +343,13 @@ export function npcUtilityRhythmBias(
       phase = Math.max(
         minuteWindow01(shifted, 650, 360),
         minuteWindow01(shifted, 1250, 300),
+      );
+      break;
+    case "store":
+      // Носят вещи в те же часы, когда работают, но чуть позже: сначала дело.
+      phase = Math.max(
+        minuteWindow01(shifted, 700, 200),
+        minuteWindow01(shifted, 1010, 210),
       );
       break;
     case "wander":
@@ -594,6 +604,31 @@ function scoreFactionAssault(context: NpcUtilityScoreContext): number {
   return 0;
 }
 
+/**
+ * Сходить на склад. Своей тяги у намерения нет: его поднимает то, что человек
+ * несёт лишнее или ему нечем стрелять, и этот вес приходит из `local` — там,
+ * где известны вещи. Пустой карман — и склад проигрывает даже прогулке.
+ */
+function scoreStore(
+  context: NpcUtilityScoreContext,
+  minute: number,
+  urgentNeed: number,
+  threatPressure: number,
+  stickiness: number,
+): number {
+  const drive = localScore(context, "store");
+  if (drive <= 0) return 0;
+  return clampScore(
+    drive +
+      npcUtilityRhythmBias("store", minute, context.identity, 8) +
+      currentStickiness(context, "store", stickiness) -
+      urgentNeed * 25 -
+      threatPressure * 40 -
+      (context.samosborActive ? 40 : 0) -
+      targetPenalty(context, "store"),
+  );
+}
+
 function scoreWander(
   context: NpcUtilityScoreContext,
   minute: number,
@@ -744,6 +779,11 @@ export function scoreNpcUtilities(
     out,
     "wander",
     scoreWander(context, minute, urgentNeed, threatPressure, stickiness),
+  );
+  setScore(
+    out,
+    "store",
+    scoreStore(context, minute, urgentNeed, threatPressure, stickiness),
   );
   setScore(out, "faction_assault", scoreFactionAssault(context));
 
@@ -905,6 +945,7 @@ export function npcUtilityRoomTypeWeightForIntent(
     case "social":
     case "patrol":
     case "wander":
+    case "store":
     case "faction_assault":
       return 0;
   }
@@ -929,6 +970,7 @@ const NPC_UTILITY_INTENT_ROOM_AFFORDANCE: Partial<
   social: "social",
   patrol: "patrol",
   wander: "wander",
+  store: "store",
 };
 
 /* ── Интерес к комнате: независимые каналы, складываемые весами ───

@@ -4,11 +4,20 @@ import {
   type Entity, type Msg,
   EntityType, AIGoal, RoomType, NpcState, Faction,
   ZoneFaction, Occupation, type GameClock, Cell, type TerritoryOwner, type Room,
+  ItemType,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { msg } from '../../core/types';
 import { entityDisplayName } from '../../entities/monster';
 import { WEAPON_STATS } from '../../data/catalog';
+import { ITEMS } from '../../data/items';
+import {
+  canAccessContainer,
+  containerAccessInfo,
+  putIntoContainer,
+  takeFromContainer,
+} from '../containers';
+import { npcAutoEquipBestWeapon } from './combat';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from '../entity_index';
 import { isHostile } from '../factions';
 import { stampUrineTraceCadenced } from '../urination';
@@ -103,6 +112,11 @@ const NPC_TOILET_POO_RATE = 15;
 const CLEANER_SURFACE_RADIUS = 1.35;
 const CLEANER_SURFACE_RETRY_BASE_SEC = 2.5;
 const CLEANER_SURFACE_RETRY_SPREAD_SEC = 2.5;
+/** Сколько лишнего надо нести, чтобы вообще собраться на склад. */
+const STORE_SPARE_MIN = 2;
+const STORE_SPARE_CAP = 4;
+const STORE_ACTION_BASE_SEC = 1.5;
+const STORE_ACTION_SPREAD_SEC = 1.5;
 const emergencyLocalActors: Entity[] = [];
 const utilityLocalActors: Entity[] = [];
 const utilityScoreBuffer = createNpcUtilityScoreBuffer();
@@ -133,6 +147,7 @@ const routineVisitsByNpc = new WeakMap<Entity, number[]>();
 const utilityScoreByNpc = new WeakMap<Entity, number>();
 const utilityNextDecisionAtByNpc = new WeakMap<Entity, number>();
 const cleanerNextSurfaceAtByNpc = new WeakMap<Entity, number>();
+const storeNextActionAtByNpc = new WeakMap<Entity, number>();
 
 function stableUnit(e: Entity, salt: string | number): number {
   return npcUtilityJitter01(npcUtilityIdentityFromEntity(e), salt);
@@ -371,6 +386,9 @@ function stateForIntent(intent: NpcUtilityIntentId, e: Entity, profile: NpcAiPro
     case 'eat':
       return NpcState.LUNCH;
     case 'work':
+    case 'store':
+      // Носить вещи на склад — та же работа: отдельного состояния не заводим,
+      // иначе речь, анимации и диалоги обязаны узнать про новое слово.
       return NpcState.WORKING;
     case 'social':
       return profile === 'ministry' ? NpcState.MEETING : NpcState.FREE_TIME;
@@ -393,7 +411,8 @@ function goalForIntent(intent: NpcUtilityIntentId): AIGoal {
     case 'drink': return AIGoal.DRINK;
     case 'eat': return AIGoal.EAT;
     case 'sleep': return AIGoal.SLEEP;
-    case 'work': return AIGoal.WORK;
+    case 'work':
+    case 'store': return AIGoal.WORK;
     case 'heal': return AIGoal.GOTO;
     case 'combat': return AIGoal.HUNT;
     case 'faction_assault': return AIGoal.GOTO;
@@ -534,6 +553,9 @@ export function updateNPC(
     case 'faction_assault':
       handleFactionAssault(world, e, dt, state);
       break;
+    case 'store':
+      handleStore(world, e, dt, state);
+      break;
     case 'wander':
       handleWander(world, e, dt);
       break;
@@ -672,6 +694,8 @@ function buildLocalUtilityScores(
     addLocalScore(local, 'wander', 12);
     addLocalScore(local, 'work', -8);
   }
+  const storeDrive = npcStoreDrive(e, roomSuitsIntent(e, room, 'store'));
+  if (storeDrive > 0) addLocalScore(local, 'store', storeDrive);
   if (e.faction === Faction.LIQUIDATOR || occupationHasRoutineTag(e.occupation, 'patrol')) addLocalScore(local, 'patrol', 10);
   if (e.faction === Faction.WILD) addLocalScore(local, 'wander', 6);
   if (samosborActive) {
@@ -997,6 +1021,145 @@ function tryCleanerSurfaceWork(world: World, e: Entity): void {
   if (cleaned <= 0 || !e.ai) return;
   e.ai.goal = AIGoal.WORK;
   e.ai.timer = Math.max(e.ai.timer, 0.4);
+}
+
+/* ── Склад: отнести лишнее, взять патроны ─────────────────────────
+ *
+ * Деятельность `store` у комнаты (`ROOM_AFFORDANCES`) до сих пор ни к чему не
+ * вела: склад был достижим только по ремеслу. Теперь у него есть намерение, и
+ * оно не выдумывает себе тяги — её поднимает то, что человек несёт лишнее или
+ * ему нечем стрелять. Пустой карман, полный магазин — и склад проигрывает
+ * прогулке.
+ */
+
+/** Патроны, которые человеку нужны под его же оружие. */
+function npcAmmoTypeFor(e: Entity): string | undefined {
+  return WEAPON_STATS[e.weapon ?? '']?.ammoType;
+}
+
+/** Служит ли вещь этому человеку. Всё остальное — хабар, ему место на складе. */
+function itemServesNpc(e: Entity, defId: string): boolean {
+  if (defId === e.weapon || defId === e.tool) return true;
+  const def = ITEMS[defId];
+  if (!def) return true;
+  if (def.value <= 0) return true;
+  if (def.tags?.some(tag => tag === 'quest' || tag === 'persistent' || tag === 'cannot_drop')) return true;
+  switch (def.type) {
+    case ItemType.FOOD:
+    case ItemType.DRINK:
+    case ItemType.MEDICINE:
+    case ItemType.KEY:
+    case ItemType.NOTE:
+      return true;
+    case ItemType.AMMO:
+      return defId === npcAmmoTypeFor(e);
+    default:
+      return false;
+  }
+}
+
+function spareInventorySlot(e: Entity): number {
+  const inv = e.inventory;
+  if (!inv) return -1;
+  for (let i = 0; i < inv.length; i++) {
+    if (!itemServesNpc(e, inv[i].defId)) return i;
+  }
+  return -1;
+}
+
+function npcNeedsAmmo(e: Entity): boolean {
+  const ammo = npcAmmoTypeFor(e);
+  if (!ammo || !npcHasRangedWeapon(e)) return false;
+  return !e.inventory?.some(slot => slot.defId === ammo && slot.count > 0);
+}
+
+/** Готовность лезть в чужой запас. Не занятие и не фракция — черта человека. */
+function npcRaidsForeignContainers(e: Entity): boolean {
+  return stableUnit(e, 'store_raid') > 0.75;
+}
+
+/**
+ * Насколько человеку сейчас нужен склад. Привычка носить вещи своя у каждого:
+ * иначе весь этаж снимался бы к складам одновременно. Тому, кто уже стоит на
+ * складе, хватает и одной лишней вещи — раз пришёл, доделай.
+ */
+function npcStoreDrive(e: Entity, atStorage: boolean): number {
+  // Пустые карманы дела не отменяют: за патронами идут именно с пустыми.
+  let spare = 0;
+  for (const slot of e.inventory ?? []) {
+    if (!itemServesNpc(e, slot.defId)) spare++;
+    if (spare >= STORE_SPARE_CAP) break;
+  }
+  const carry = spare >= (atStorage ? 1 : STORE_SPARE_MIN) ? 12 + spare * 10 : 0;
+  // Вооружённому без патронов склад нужнее любого хабара: это дело одного
+  // захода и возникает оно ровно после того, как человек отстрелялся.
+  const restock = npcNeedsAmmo(e) ? 40 : 0;
+  if (carry + restock <= 0) return 0;
+  return (carry + restock) * (0.4 + 0.6 * stableUnit(e, 'store_habit'));
+}
+
+function findNpcStorageContainer(
+  world: World,
+  e: Entity,
+  room: Room,
+  state?: import('../../core/types').GameState,
+): import('../../core/types').WorldContainer | undefined {
+  let foreign: import('../../core/types').WorldContainer | undefined;
+  const raids = npcRaidsForeignContainers(e);
+  for (const container of world.containers) {
+    if (container.roomId !== room.id) continue;
+    if (canAccessContainer(container, e)) return container;
+    if (raids && foreign === undefined && containerAccessInfo(container, e, state).canTake) foreign = container;
+  }
+  return foreign;
+}
+
+/** Одна сделка со складом. Возвращает true, когда на складе больше нечего делать. */
+function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/types').GameState): boolean {
+  const room = world.roomAt(e.x, e.y);
+  if (!room || !roomSuitsIntent(e, room, 'store')) return false;
+  const container = findNpcStorageContainer(world, e, room, state);
+  if (!container) return true;
+
+  const spare = spareInventorySlot(e);
+  if (spare >= 0) {
+    const slot = e.inventory?.[spare];
+    if (slot && putIntoContainer(container, e, spare, slot.count, state)) {
+      return spareInventorySlot(e) < 0;
+    }
+  }
+
+  if (npcNeedsAmmo(e)) {
+    const ammo = npcAmmoTypeFor(e);
+    const ammoSlot = container.inventory.findIndex(slot => slot.defId === ammo && slot.count > 0);
+    if (ammoSlot >= 0 && takeFromContainer(container, e, ammoSlot, container.inventory[ammoSlot].count, state)) {
+      npcAutoEquipBestWeapon(e);
+    }
+  }
+  return true;
+}
+
+function handleStore(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
+  const ai = e.ai!;
+  if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
+    ai.goal = AIGoal.WORK;
+    if (!gotoRoutineRoom(world, e, 'store', { allowTrespassFallback: npcRaidsForeignContainers(e) })) {
+      wanderNearby(world, e);
+    }
+    ai.timer = ai.path.length > 0 ? stableTimer(e, 'store_rethink', 9, 10) : 2.0;
+  }
+
+  if (ai.path.length === 0 && (storeNextActionAtByNpc.get(e) ?? -Infinity) <= _barkTime) {
+    storeNextActionAtByNpc.set(e, _barkTime + stableTimer(e, 'store_action', STORE_ACTION_BASE_SEC, STORE_ACTION_SPREAD_SEC));
+    if (tickNpcStorageWork(world, e, state)) {
+      ai.goal = AIGoal.IDLE;
+      ai.timer = 0.5;
+    } else {
+      wanderInRoom(world, e);
+    }
+  }
+
+  followPath(world, e, dt);
 }
 
 function handleHeal(world: World, e: Entity, dt: number): void {
