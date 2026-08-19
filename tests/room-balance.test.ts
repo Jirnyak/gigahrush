@@ -1,0 +1,247 @@
+/* Балансировка интереса к комнате (`rooms.md`).
+ *
+ * Замок не на конкретное число, а на форму распределения: люди в разных
+ * состояниях расходятся по разным комнатам, никакой канал не перетягивает
+ * всех на себя, и — отдельно — очень сильная нужда обязана перебить начатое
+ * дело, а терпеливое дело перебить путь не вправе.
+ *
+ * Ничью решает физика: при равном интересе идут в БЛИЖНЮЮ комнату, а между
+ * равными по интересу и расстоянию — джиттер личности, а не номер в массиве.
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  AIGoal, Cell, EntityType, Faction, Occupation, RoomType, ZoneFaction,
+  type Entity, type GameClock,
+} from '../src/core/types';
+import { World } from '../src/core/world';
+import { setPathContext } from '../src/systems/ai/pathfinding';
+import { setNpcContext, updateNPC } from '../src/systems/ai/npc_fsm';
+import {
+  npcUtilityEmergencyScore,
+  npcUtilityIntentPatience,
+} from '../src/systems/ai/npc_utility';
+import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
+import { addTestRoom, makeTestPlayer } from './helpers';
+
+const CROWD = 64;
+const OCCUPATIONS = [
+  Occupation.MECHANIC, Occupation.DOCTOR, Occupation.CLERK, Occupation.HOUSEWIFE,
+  Occupation.TEACHER, Occupation.COOK, Occupation.ENGINEER, Occupation.CLEANER,
+];
+const ALL_ROOM_TYPES = [
+  RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE,
+  RoomType.MEDICAL, RoomType.COMMON, RoomType.CLASSROOM, RoomType.PRODUCTION,
+  RoomType.CORRIDOR, RoomType.SMOKING, RoomType.OFFICE, RoomType.HQ,
+];
+
+function makeOpenFloor(): World {
+  const world = new World();
+  for (let y = 0; y < 128; y++) {
+    for (let x = 0; x < 128; x++) {
+      const idx = world.idx(x, y);
+      world.cells[idx] = Cell.FLOOR;
+      world.factionControl[idx] = ZoneFaction.CITIZEN;
+    }
+  }
+  return world;
+}
+
+/** Этаж-город: по два экземпляра каждой деятельности кольцом вокруг центра. */
+function makeTownFloor(): World {
+  const world = makeOpenFloor();
+  ALL_ROOM_TYPES.forEach((type, i) => {
+    for (let copy = 0; copy < 2; copy++) {
+      const slot = i * 2 + copy;
+      const angle = (slot / (ALL_ROOM_TYPES.length * 2)) * Math.PI * 2;
+      addTestRoom(world, {
+        id: slot + 1,
+        type,
+        x: Math.round(64 + Math.cos(angle) * (28 + copy * 14)) - 3,
+        y: Math.round(64 + Math.sin(angle) * (28 + copy * 14)) - 3,
+        w: 6, h: 6,
+        zoneId: slot + 1,
+        zoneFaction: ZoneFaction.CITIZEN,
+      });
+    }
+  });
+  return world;
+}
+
+function makeNpc(id: number, needs: Entity['needs'], overrides: Partial<Entity> = {}): Entity {
+  return {
+    id,
+    type: EntityType.NPC,
+    x: 64.5,
+    y: 64.5,
+    angle: 0,
+    pitch: 0,
+    alive: true,
+    speed: 1,
+    sprite: 0,
+    hp: 50,
+    maxHp: 50,
+    faction: Faction.CITIZEN,
+    occupation: OCCUPATIONS[id % OCCUPATIONS.length],
+    alifeId: 4000 + id,
+    needs,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+    ...overrides,
+  };
+}
+
+function tick(world: World, npc: Entity, minutes: number, hour: number): void {
+  const entities = [makeTestPlayer({ id: 1, x: 126, y: 126 }), npc];
+  rebuildEntityIndexForSimulation(entities, minutes);
+  setPathContext([], minutes);
+  setNpcContext([], minutes, 0);
+  const clock: GameClock = { hour, minute: 0, totalMinutes: minutes };
+  updateNPC(world, entities, npc, 0, minutes, clock, false);
+}
+
+/** Куда разошлась толпа одинаково настроенных людей: тип комнаты → сколько. */
+function targetRoomHistogram(
+  world: World,
+  needs: Entity['needs'],
+  hour: number,
+  hp = 50,
+): Map<RoomType, number> {
+  const hist = new Map<RoomType, number>();
+  for (let i = 0; i < CROWD; i++) {
+    const npc = makeNpc(i, { ...needs! }, { hp });
+    tick(world, npc, hour * 60, hour);
+    const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
+    if (room) hist.set(room.type, (hist.get(room.type) ?? 0) + 1);
+  }
+  return hist;
+}
+
+function dominant(hist: Map<RoomType, number>): [RoomType, number] {
+  let best: [RoomType, number] = [RoomType.CORRIDOR, 0];
+  for (const entry of hist) if (entry[1] > best[1]) best = entry;
+  return best;
+}
+
+test('нужда ведёт в свою комнату: голод на кухню, мочевой в санузел, рана в медпункт', () => {
+  const world = makeTownFloor();
+  const cases: [string, Entity['needs'], number, RoomType][] = [
+    ['голод', { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 }, 50, RoomType.KITCHEN],
+    ['жажда', { food: 90, water: 2, sleep: 90, pee: 5, poo: 5 }, 50, RoomType.KITCHEN],
+    ['мочевой', { food: 90, water: 90, sleep: 90, pee: 99, poo: 90 }, 50, RoomType.BATHROOM],
+    ['рана', { food: 90, water: 90, sleep: 90, pee: 5, poo: 5 }, 6, RoomType.MEDICAL],
+  ];
+  for (const [label, needs, hp, expected] of cases) {
+    const hist = targetRoomHistogram(world, needs, 12, hp);
+    const [type, count] = dominant(hist);
+    assert.equal(type, expected, `${label}: ожидалась своя комната`);
+    assert.ok(count >= CROWD * 0.75, `${label}: нужда должна вести уверенно, а не еле-еле`);
+  }
+});
+
+test('сонного ночью ведёт домой, а не на работу', () => {
+  const world = makeTownFloor();
+  const hist = targetRoomHistogram(world, { food: 90, water: 90, sleep: 4, pee: 5, poo: 5 }, 2);
+  assert.equal(dominant(hist)[0], RoomType.LIVING);
+});
+
+test('без нужды люди расходятся, а не прут в одну комнату', () => {
+  const world = makeTownFloor();
+  const hist = targetRoomHistogram(world, { food: 95, water: 95, sleep: 90, pee: 5, poo: 5 }, 12);
+  const [, top] = dominant(hist);
+
+  assert.ok(hist.size >= 4, `сытые должны разойтись хотя бы по четырём деятельностям, а разошлись по ${hist.size}`);
+  assert.ok(top <= CROWD * 0.6, `самая людная деятельность забрала ${top} из ${CROWD} — канал перетягивает всех на себя`);
+});
+
+test('при равном интересе идут в ближнюю комнату, а не в одну и ту же', () => {
+  const world = makeOpenFloor();
+  const kitchens = [
+    addTestRoom(world, { id: 1, type: RoomType.KITCHEN, x: 10, y: 10, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN }),
+    addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 100, y: 10, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN }),
+    addTestRoom(world, { id: 3, type: RoomType.KITCHEN, x: 10, y: 100, w: 6, h: 6, zoneId: 3, zoneFaction: ZoneFaction.CITIZEN }),
+    addTestRoom(world, { id: 4, type: RoomType.KITCHEN, x: 100, y: 100, w: 6, h: 6, zoneId: 4, zoneFaction: ZoneFaction.CITIZEN }),
+  ];
+  let ownNearest = 0;
+  const used = new Set<number>();
+  for (let i = 0; i < CROWD; i++) {
+    const x = 8 + (i % 8) * 16 + 0.5;
+    const y = 8 + Math.floor(i / 8) * 16 + 0.5;
+    const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 }, { x, y });
+    tick(world, npc, 720, 12);
+    const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
+    if (!room) continue;
+    used.add(room.id);
+    let nearest = kitchens[0];
+    let best = Infinity;
+    for (const kitchen of kitchens) {
+      const d = world.dist2(x, y, kitchen.x + kitchen.w / 2, kitchen.y + kitchen.h / 2);
+      if (d < best) { best = d; nearest = kitchen; }
+    }
+    if (room.id === nearest.id) ownNearest++;
+  }
+
+  assert.equal(used.size, kitchens.length, 'все четыре кухни должны быть кому-то ближайшими');
+  assert.ok(ownNearest >= CROWD * 0.85, `в свою ближнюю пошли только ${ownNearest} из ${CROWD}`);
+});
+
+test('ровную ничью решает личность, а не номер комнаты в массиве', () => {
+  const world = makeOpenFloor();
+  addTestRoom(world, { id: 1, type: RoomType.KITCHEN, x: 34, y: 61, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 88, y: 61, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+
+  const hist = new Map<number, number>();
+  for (let i = 0; i < CROWD; i++) {
+    const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 });
+    tick(world, npc, 720, 12);
+    const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
+    if (room) hist.set(room.id, (hist.get(room.id) ?? 0) + 1);
+  }
+
+  const first = hist.get(1) ?? 0;
+  const second = hist.get(2) ?? 0;
+  assert.equal(first + second, CROWD);
+  assert.ok(Math.min(first, second) >= CROWD * 0.25, `две одинаковые кухни разделили толпу ${first}/${second} — ничью решает не личность`);
+});
+
+test('терпение выводится числом на намерение, а не списком срочных дел', () => {
+  // Угроза срочна сразу, работа — почти никогда; порог растёт вместе с терпением.
+  assert.equal(npcUtilityIntentPatience('flee'), 0);
+  assert.ok(npcUtilityIntentPatience('toilet') < npcUtilityIntentPatience('sleep'));
+  assert.ok(npcUtilityIntentPatience('sleep') < npcUtilityIntentPatience('work'));
+  assert.ok(npcUtilityEmergencyScore('flee') < npcUtilityEmergencyScore('toilet'));
+  assert.ok(npcUtilityEmergencyScore('toilet') < npcUtilityEmergencyScore('work'));
+  assert.ok(npcUtilityEmergencyScore('work') > 90, 'работа обязана набрать почти предельный счёт, чтобы стать срочной');
+});
+
+test('лопнувший мочевой перебивает начатый путь, а лёгкий голод — нет', () => {
+  const world = makeTownFloor();
+  let ranToToilet = 0;
+  let keptWorking = 0;
+
+  for (let i = 0; i < 16; i++) {
+    const npc = makeNpc(i, { food: 90, water: 90, sleep: 90, pee: 5, poo: 5 });
+    tick(world, npc, 540, 9);
+    const startedGoal = npc.ai!.goal;
+    assert.notEqual(startedGoal, AIGoal.TOILET);
+
+    npc.needs!.pee = 100;
+    npc.needs!.poo = 100;
+    for (let step = 1; step <= 12; step++) tick(world, npc, 540 + step, 9);
+    if (npc.ai!.goal === AIGoal.TOILET) ranToToilet++;
+  }
+
+  for (let i = 0; i < 16; i++) {
+    const npc = makeNpc(i, { food: 90, water: 90, sleep: 90, pee: 5, poo: 5 });
+    tick(world, npc, 540, 9);
+    const startedGoal = npc.ai!.goal;
+    // Лёгкий голод: дело терпит, начатый путь бросать не за чем.
+    npc.needs!.food = 62;
+    for (let step = 1; step <= 12; step++) tick(world, npc, 540 + step, 9);
+    if (npc.ai!.goal === startedGoal) keptWorking++;
+  }
+
+  assert.equal(ranToToilet, 16, 'с лопнувшим мочевым обязаны бросить дело и бежать');
+  assert.ok(keptWorking >= 14, `лёгкий голод сорвал с дела ${16 - keptWorking} человек из 16`);
+});

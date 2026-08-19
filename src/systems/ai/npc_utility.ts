@@ -192,12 +192,31 @@ const DAY_MINUTES = 1440;
 const DEFAULT_SWITCH_MARGIN = 8;
 const DEFAULT_EMERGENCY_MARGIN = 1;
 const DEFAULT_EMERGENCY_SCORE = 58;
-const EMERGENCY_INTENTS: ReadonlySet<NpcUtilityIntentId> = new Set([
-  "safety",
-  "flee",
-  "combat",
-  "heal",
-]);
+
+/* ── Терпение: насколько дело согласно подождать ──────────────────
+ *
+ * Ноль — не терпит вовсе, единица — подождёт сколько угодно. Одно число на
+ * намерение вместо списка «что считается срочным»: отсюда выводится и порог,
+ * за которым дело становится срочным, и право бросить ради него начатый путь.
+ * Нелинейность здесь намеренная — терпеливое дело обязано набрать почти
+ * предельный счёт, чтобы перебить чужой путь, а лопающийся мочевой набирает
+ * свой порог сам собой.
+ */
+const NPC_UTILITY_INTENT_PATIENCE: Record<NpcUtilityIntentId, number> = {
+  safety: 0,
+  combat: 0,
+  flee: 0,
+  heal: 0.15,
+  toilet: 0.2,
+  drink: 0.3,
+  eat: 0.35,
+  faction_assault: 0.5,
+  sleep: 0.6,
+  social: 0.85,
+  work: 0.9,
+  patrol: 0.9,
+  wander: 1,
+};
 
 export function createNpcUtilityScoreBuffer(): Float32Array {
   return new Float32Array(NPC_UTILITY_INTENT_COUNT);
@@ -769,12 +788,28 @@ export function bestNpcUtilityIntent(
   };
 }
 
+/** Насколько дело согласно ждать: 0 — не терпит, 1 — подождёт сколько угодно. */
+export function npcUtilityIntentPatience(intent: NpcUtilityIntentId): number {
+  return NPC_UTILITY_INTENT_PATIENCE[intent] ?? 1;
+}
+
+/**
+ * Счёт, за которым дело перестаёт терпеть. Порог тем выше, чем терпеливее
+ * намерение: угроза срочна сразу, работа — почти никогда.
+ */
+export function npcUtilityEmergencyScore(
+  intent: NpcUtilityIntentId,
+  threshold = DEFAULT_EMERGENCY_SCORE,
+): number {
+  return threshold + npcUtilityIntentPatience(intent) * (100 - threshold);
+}
+
 export function isNpcUtilityEmergencyIntent(
   intent: NpcUtilityIntentId,
   score = Infinity,
   threshold = DEFAULT_EMERGENCY_SCORE,
 ): boolean {
-  return EMERGENCY_INTENTS.has(intent) && score >= threshold;
+  return score >= npcUtilityEmergencyScore(intent, threshold);
 }
 
 export function shouldSwitchNpcUtilityIntent(

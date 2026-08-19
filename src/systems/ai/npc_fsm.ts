@@ -54,6 +54,7 @@ import {
   createNpcUtilityScoreBuffer,
   npcUtilityIdentityFromEntity,
   npcUtilityJitter01,
+  npcUtilityIntentPatience,
   npcUtilityRoomInterest,
   npcUtilityRoomTypeWeightForIntent,
   scoreNpcUtilityTargetPreference,
@@ -103,6 +104,8 @@ const routineFriendlyRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineFallbackRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineSeenRoomIds = new Set<number>();
 const ROUTINE_VISIT_MEMORY = 6;
+/** Граница терпеливого дела: работа, досуг, патруль и прогулка (см. таблицу терпения). */
+const ROUTINE_PATIENT_INTENT = 0.85;
 const utilityIntentByNpc = new WeakMap<Entity, NpcUtilityIntentId>();
 /* Где человек был в последнее время. Кольцо фиксированной длины на живую
  * сущность: новизна нужна только активному этажу и умирает вместе с ним, в
@@ -216,14 +219,8 @@ function hasActivePath(e: Entity): boolean {
 function canHoldRoutineFrame(e: Entity, intent: NpcUtilityIntentId): boolean {
   const ai = e.ai;
   if (!ai || ai.combatTargetId !== undefined || hasActivePath(e) || ai.timer <= 0) return false;
-  return intent === 'work' || intent === 'social' || intent === 'patrol' || intent === 'wander';
-}
-
-function utilityIntentInterruptsActivePath(current: NpcUtilityIntentId, selected: NpcUtilityIntentId): boolean {
-  if (selected === current) return false;
-  if (selected === 'combat' || selected === 'flee') return true;
-  if (selected === 'safety' || selected === 'heal') return current !== 'safety' && current !== 'flee' && current !== 'combat';
-  return false;
+  // Кадр держат только терпеливые дела: срочное обязано пересчитаться сразу.
+  return npcUtilityIntentPatience(intent) >= ROUTINE_PATIENT_INTENT;
 }
 
 function preferredEmergencyRoomId(world: World, e: Entity): number | undefined {
@@ -512,10 +509,12 @@ function selectAndEnterUtilityIntent(
     switchMargin: UTILITY_SWITCH_MARGIN,
     emergencyScore: UTILITY_EMERGENCY_SCORE,
   });
+  // Начатый путь бросают только ради дела, которое уже не терпит: порог берётся
+  // из терпения самого намерения, а не из списка «что считается срочным».
   if (
     currentIntent !== undefined &&
     hasActivePath(e) &&
-    !utilityIntentInterruptsActivePath(currentIntent, selected.intent)
+    !(selected.switched && selected.emergency)
   ) {
     utilityNextDecisionAtByNpc.set(e, now + utilityRethinkInterval(e));
     return { intent: currentIntent, rescored: true };
@@ -1144,8 +1143,15 @@ function pushRoutineRoomCandidate(candidates: NpcUtilityTargetCandidate[], candi
   candidates.length = ROUTINE_ROOM_CANDIDATE_CAP;
 }
 
+/**
+ * Ничью решает физика, а не номер комнаты в массиве: при равном интересе идут
+ * в ближнюю. Номер остаётся последним средством — только между комнатами,
+ * которые равны и по интересу, и по расстоянию, то есть взаимозаменяемы.
+ */
 function compareRoutineRoomCandidates(a: NpcUtilityTargetCandidate, b: NpcUtilityTargetCandidate): number {
-  return (b.utility ?? 0) - (a.utility ?? 0) || Number(a.roomId ?? a.id) - Number(b.roomId ?? b.id);
+  return (b.utility ?? 0) - (a.utility ?? 0)
+    || (a.distance ?? 0) - (b.distance ?? 0)
+    || Number(a.roomId ?? a.id) - Number(b.roomId ?? b.id);
 }
 
 function tryAssignRoutineRoomCandidate(world: World, e: Entity, candidates: readonly NpcUtilityTargetCandidate[]): boolean {
