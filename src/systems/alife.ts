@@ -1746,13 +1746,21 @@ export function recordAlifeNpcDeath(state: GameState, entity: Entity): void {
     const record = alife.npcs[entity.alifeId - 1];
     if (record) {
       captureEntityToRecord(alife, record, entity);
+      // Этаж смерти, а не объявленный дом: по нему потом ищут оставшееся от
+      // человека, и у части пакетов дом расходится с местом жизни.
+      setRecordFloorKey(alife, record, currentAlifeFloorKey(state));
       setRecordDead(alife, record, true);
       setRecordHp(alife, record, 0);
       setRecordTouched(alife, record);
       alife.leaderboardVersion++;
     }
   }
-  if (isPlotNpc(entity)) alife.deadPlotNpcIds.add(entity.id);
+  // Личность узнаётся и по слоту A-Life, и по id сущности: авторский NPC,
+  // которому не досталось `alifeId`, всё равно остаётся тем самым человеком,
+  // и его смерть обязана быть фактом, а не молчанием.
+  if (isPlotNpc(entity) || (entity.type === EntityType.NPC && getPlotNpcPackageByNumericId(entity.id) !== undefined)) {
+    alife.deadPlotNpcIds.add(entity.id);
+  }
 }
 
 export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Entity): void {
@@ -2202,6 +2210,25 @@ export function isPlotNpcDead(state: GameState, id: number): boolean {
 export function isPlotNpcDeadKnown(state: GameState, id: number): boolean {
   const alife = (state as AlifeHost).alife;
   return alife?.deadPlotNpcIds.has(id) ?? false;
+}
+
+export function hasDeadPlotNpcs(state: GameState): boolean {
+  return ((state as AlifeHost).alife?.deadPlotNpcIds.size ?? 0) > 0;
+}
+
+/**
+ * Где и на каком этаже осталась личность. Координаты уже пишет
+ * `recordAlifeNpcDeath` через `captureEntityToRecord`, отдельного поля под смерть
+ * заводить не нужно.
+ */
+export function plotNpcDeathSpot(
+  state: GameState, plotNpcId: number,
+): { x: number; y: number; floorKey: string } | undefined {
+  const alife = (state as AlifeHost).alife;
+  if (!alife?.deadPlotNpcIds.has(plotNpcId)) return undefined;
+  const record = alife.npcs[plotNpcId - 1];
+  if (!record || record.x === undefined || record.y === undefined) return undefined;
+  return { x: record.x, y: record.y, floorKey: recordFloorKey(alife, record) };
 }
 
 export function getAlifeNpcTotalMoney(state: GameState, npc: Entity | undefined): number | undefined {
@@ -2724,6 +2751,20 @@ export function alifeForSave(state: GameState): AlifeSaveState {
   for (const record of alife.npcs) {
     if (recordDead(alife, record)) {
       if (deadIds.length < ALIFE_SAVE_DEAD_IDS_CAP) deadIds.push(record.id);
+      // Место гибели сюжетной личности — не украшение: по нему возвращается её
+      // дневник, и без него цепочка запирается насмерть после перезагрузки.
+      // Компактный оверрайд, только координаты и этаж; остальная личность
+      // мёртвому не нужна.
+      if (alife.deadPlotNpcIds.has(record.id) && record.x !== undefined && record.y !== undefined
+        && overrides.length < ALIFE_SAVE_OVERRIDE_CAP) {
+        overrides.push({
+          id: record.id,
+          floorKey: recordFloorKey(alife, record),
+          z: recordFloor(alife, record),
+          x: record.x,
+          y: record.y,
+        });
+      }
       continue;
     }
     if (!recordTouched(alife, record) || overrides.length >= ALIFE_SAVE_OVERRIDE_CAP) continue;

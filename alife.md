@@ -351,6 +351,7 @@ Current shipped behavior:
 
 - Authored named NPCs keep `plotNpcId`.
 - A-Life records killed `plotNpcId` values and filters those named NPCs on later floor generation.
+- **Смерть сюжетной личности записывает место, а не только факт.** `recordAlifeNpcDeath` через `captureEntityToRecord` кладёт `record.x/y` и приколачивает `floorKey` к этажу гибели, а не к объявленному дому: у части пакетов эти этажи расходятся. Личность узнаётся и по слоту A-Life, и по id сущности — авторский NPC без `alifeId` всё равно тот самый человек. По этому месту система следа возвращает дневник покойного (`quests.md`, «След покойного»).
 - Persistent A-Life NPCs can be quest candidates through their stable `canGiveQuest` affordance. It is a `10%` roll, not a separate population caste and not true for every persistent NPC.
 
 Target behavior:

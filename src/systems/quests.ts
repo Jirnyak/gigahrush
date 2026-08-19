@@ -86,13 +86,14 @@ import {
 import { applyDemosRelationDelta } from './demos_social';
 import { pushNpcLogMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
-import { getAlifeNpcTotalMoney, isPlotNpcDeadKnown } from './alife';
+import { currentAlifeFloorKey, getAlifeNpcTotalMoney, hasDeadPlotNpcs, isPlotNpcDeadKnown, plotNpcDeathSpot } from './alife';
+import { holdsPlotDiary, plotDiaryOnFloor, spawnPlotDiary } from './plot_trace';
 import { revealQuestTargetOnMap } from './map_exploration';
 import {
   resolveNpcPackageForEntity,
   selectNpcLockedQuestResponse,
 } from './npc_package_speech';
-import { getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../data/npc_packages';
+import { plotNpcDisplayName } from '../data/npc_packages';
 import {
   craftRecipeExists,
   craftRecipeLearnedMessage,
@@ -133,10 +134,6 @@ function findById(entities: readonly Entity[], id: number) {
 function findByPlotLive(entities: readonly Entity[], plotId: number) {
   const e = findById(entities, plotId);
   return (e?.type === EntityType.NPC && e.alive) ? e : undefined;
-}
-function findByPlotAll(entities: readonly Entity[], plotId: number) {
-  const e = findById(entities, plotId);
-  return e?.type === EntityType.NPC ? e : undefined;
 }
 function findMonLive(entities: readonly Entity[], kind: MonsterKind) {
   if (_currentIndex) return _currentIndex.byMonLive.get(kind);
@@ -465,20 +462,35 @@ function activeObjectiveQuest(state: Pick<GameState, 'quests' | 'activeQuestId'>
   return active.find(q => q.plotStepIndex !== undefined) ?? active[0];
 }
 
-export function getCurrentObjective(state: Pick<GameState, 'quests' | 'activeQuestId'>, entities: readonly Entity[] = []): CurrentObjective | null {
+/* ── Цель, когда собеседник мёртв ─────────────────────────────────
+ * Пока цепочка ждёт покойного, «поговорить с ним» — тупиковая строка. Задача
+ * подменяется на выполнимую: забрать дневник там, где человек погиб. Живого
+ * состояния под это не нужно — подсказка висит ровно столько, сколько строка
+ * цели остаётся невыполнимой. */
+function deadPlotNpcObjective(plotNpcId: number | undefined, state: GameState): string | undefined {
+  if (plotNpcId === undefined || plotNpcId < 1 || !isPlotNpcDeadKnown(state, plotNpcId)) return undefined;
+  const name = plotNpcDisplayName(plotNpcId) ?? getPlotNpcStringId(plotNpcId) ?? 'адресат';
+  return `${name} мёртв. Заберите дневник там, где он погиб.`;
+}
+
+export function getCurrentObjective(state: GameState, entities: readonly Entity[] = []): CurrentObjective | null {
   const q = activeObjectiveQuest(state);
   if (q) {
     const step = q.plotStepIndex !== undefined ? PLOT_CHAIN[q.plotStepIndex] : undefined;
     const target = objectiveTargetEntity(q, entities);
+    const line = questObjectiveLine(q);
+    const dead = (q.plotStepIndex !== undefined || q.sideQuestId !== undefined)
+      ? deadPlotNpcObjective(q.type === QuestType.TALK ? q.targetNpcId : q.giverId, state)
+      : undefined;
     return {
-      line: questObjectiveLine(q),
-      detail: step?.activeObjective ? q.desc : undefined,
+      line: dead ?? line,
+      detail: dead ? line : (step?.activeObjective ? q.desc : undefined),
       source: 'quest',
       questId: q.id,
       plotStepIndex: q.plotStepIndex,
       targetEntityId: target?.id,
       targetNpcId: q.targetNpcId,
-      color: q.plotStepIndex !== undefined ? '#6cf' : q.sideQuestId ? '#f7a7d8' : '#ffd35f',
+      color: dead ? '#b08a5a' : q.plotStepIndex !== undefined ? '#6cf' : q.sideQuestId ? '#f7a7d8' : '#ffd35f',
     };
   }
 
@@ -491,15 +503,17 @@ export function getCurrentObjective(state: Pick<GameState, 'quests' | 'activeQue
     ? (plotNpcDisplayName(giverId) ?? getPlotNpcStringId(giverId))
     : undefined;
   const target = giverId !== undefined ? findByPlotLive(entities, giverId) : undefined;
+  const offerLine = available.step.offerObjective
+    ?? (giverName ? `Цель: поговорить с ${giverName}.` : available.step.desc);
+  const dead = deadPlotNpcObjective(giverId, state);
   return {
-    line: available.step.offerObjective
-      ?? (giverName ? `Цель: поговорить с ${giverName}.` : available.step.desc),
-    detail: available.step.offerObjective ? undefined : available.step.desc,
+    line: dead ?? offerLine,
+    detail: dead ? offerLine : (available.step.offerObjective ? undefined : available.step.desc),
     source: 'plot_offer',
     plotStepIndex: available.index,
     targetEntityId: target?.id,
     targetNpcId: giverId,
-    color: '#9df',
+    color: dead ? '#b08a5a' : '#9df',
   };
 }
 
@@ -865,34 +879,101 @@ function updateHoldoutQuest(
   return q.holdProgressSeconds >= q.holdSeconds;
 }
 
-function plotTalkTargetIsDead(q: Quest, entities: readonly Entity[], state: GameState): boolean {
-  if (q.plotStepIndex === undefined || q.type !== QuestType.TALK || !q.targetNpcId) return false;
-  const target = findByPlotAll(entities, q.targetNpcId);
-  if (target) return !target.alive;
-  if (!q.targetNpcId) return false;
-  return isPlotNpcDeadKnown(state, q.targetNpcId);
+/* ── След вместо разговора ────────────────────────────────────────
+ * Смерть авторской личности не обрывает дело: она оставляет дневник. Дневник
+ * в рюкзаке — единственное, что даёт покойному голос, и читают его ровно три
+ * места: выдача его шага, сдача его поручения и закрытие разговора с ним.
+ * Отдельного состояния под это нет: носитель — сам предмет. */
+function plotNpcSpeaksThroughDiary(
+  plotNpcId: number | undefined, player: Entity, state: GameState,
+): boolean {
+  if (plotNpcId === undefined || plotNpcId < 1) return false;
+  return isPlotNpcDeadKnown(state, plotNpcId) && holdsPlotDiary(player, plotNpcId);
 }
 
-/* ── Шаг сюжета без дающего ───────────────────────────────────── */
+/** Дело, которое некому принять лично: контракт, шаг без дающего либо дневник покойного. */
+function questNeedsNoLiveReceiver(q: Quest, player: Entity, state: GameState): boolean {
+  return q.contractId !== undefined
+    || q.giverless === true
+    || ((q.plotStepIndex !== undefined || q.sideQuestId !== undefined)
+      && plotNpcSpeaksThroughDiary(q.giverId, player, state));
+}
+
+/** Разговор, которого уже не будет: цель мертва, и её дневник на руках. */
+function plotTalkClosedByDiary(q: Quest, player: Entity, state: GameState): boolean {
+  if (q.plotStepIndex === undefined && q.sideQuestId === undefined) return false;
+  return q.type === QuestType.TALK && plotNpcSpeaksThroughDiary(q.targetNpcId, player, state);
+}
+
+/* ── Шаг сюжета без живого дающего ────────────────────────────── */
 /* Там, где говорить не с кем, поручение выдаёт сама цепочка: закрылся
  * предыдущий шаг — следующий появляется в журнале. Так устроен финал в Пустоте:
- * игрок спускается, и задача обновляется без разговора, потому что этаж
- * безлюден. Закрывает такой шаг дело, а не сдача: приёмщика нет, и `checkQuests`
- * ведёт его по той же ветке, что контракт. */
+ * этаж безлюден, и дающего у шага нет вовсе. Тем же путём идёт шаг, чей
+ * дающий умер, а дневник его подобран. Закрывает такой шаг дело, а не сдача:
+ * приёмщика нет, и `checkQuests` ведёт его по той же ветке, что контракт. */
 function grantGiverlessPlotStep(
   player: Entity, world: World, entities: Entity[], state: GameState, msgs: Msg[],
 ): void {
   const available = nextAvailablePlotStep(state.quests);
-  if (!available || available.step.giverId !== undefined) return;
+  if (!available) return;
+  const giverId = available.step.giverId;
+  if (giverId !== undefined && !plotNpcSpeaksThroughDiary(giverId, player, state)) return;
   const quest = generatePlotQuest(
-    { id: GIVERLESS_QUEST_GIVER, name: available.step.sourceLabel, x: player.x, y: player.y },
+    {
+      id: giverId ?? GIVERLESS_QUEST_GIVER,
+      name: giverId !== undefined ? plotNpcDisplayName(giverId) : available.step.sourceLabel,
+      x: player.x, y: player.y,
+    },
     world, entities, state,
   );
   if (!quest) return;
   quest.giverless = true;
   scaleAuthoredQuestRewards(quest);
   state.quests.push(quest);
+  if (giverId !== undefined) {
+    msgs.push(msg("Дневник дописан за покойного: дело переходит к вам.", state.time, '#aa8'));
+  }
   msgs.push(msg(`Новое поручение: ${quest.desc}`, state.time, '#4af'));
+}
+
+/* ── Самопочинка: дневник возвращается на место смерти ────────────
+ * «Дневника нет» — это условие его появления, а не потеря. Выброшенный,
+ * проданный или не поднятый дневник снова лежит там, где человек умер, как
+ * только цепочка в него упирается: координаты смерти уже хранит A-Life.
+ * Поэтому запереть цепочку смертью нельзя в принципе. */
+/** Все, кого цепочка ждёт, а они мертвы и их дневника у игрока нет. */
+function stalledPlotNpcIds(player: Entity, state: GameState): number[] {
+  const out: number[] = [];
+  const consider = (awaited: number | undefined) => {
+    if (awaited === undefined || awaited < 1 || out.includes(awaited)) return;
+    if (isPlotNpcDeadKnown(state, awaited) && !holdsPlotDiary(player, awaited)) out.push(awaited);
+  };
+  for (const q of state.quests) {
+    if (q.done || q.failed) continue;
+    if (q.plotStepIndex === undefined && q.sideQuestId === undefined) continue;
+    consider(q.type === QuestType.TALK ? q.targetNpcId : q.giverId);
+  }
+  consider(nextAvailablePlotStep(state.quests)?.step.giverId);
+  return out;
+}
+
+function ensurePlotDiaryOnDeathSpot(
+  player: Entity, world: World, entities: Entity[], state: GameState, msgs: Msg[], nextEntityId?: { v: number },
+): void {
+  // Гард O(1): без мёртвых сюжетных личностей ветка не стоит ничего.
+  if (!nextEntityId || !hasDeadPlotNpcs(state)) return;
+  // Перебираем всех застрявших, а не первого: покойник с другого этажа не
+  // вправе задерживать того, чьё тело лежит здесь.
+  for (const plotNpcId of stalledPlotNpcIds(player, state)) {
+    const spot = plotNpcDeathSpot(state, plotNpcId);
+    if (!spot || spot.floorKey !== currentAlifeFloorKey(state)) continue;
+    if (plotDiaryOnFloor(world, entities, plotNpcId)) continue;
+    if (!spawnPlotDiary(plotNpcId, spot.x, spot.y, world, entities, nextEntityId, player)) return;
+    const name = plotNpcDisplayName(plotNpcId);
+    msgs.push(msg(name
+      ? `На этом этаже остались записи: ${name}.`
+      : 'На этом этаже остались чьи-то записи.', state.time, '#aa8'));
+  }
 }
 
 /* ── Check all active quests for completion ───────────────────── */
@@ -903,6 +984,7 @@ export function checkQuests(
   const previousIndex = _currentIndex;
   _currentIndex = buildEntityIndex(entities);
   grantGiverlessPlotStep(player, world, entities, state, msgs);
+  ensurePlotDiaryOnDeathSpot(player, world, entities, state, msgs, nextEntityId);
   for (const q of state.quests) {
     if (q.done) continue;
     ensureQuestDeadline(q, state.clock.totalMinutes, questDeadlineContext(q, player, world, state));
@@ -919,9 +1001,10 @@ export function checkQuests(
 
     switch (q.type) {
       case QuestType.FETCH:
-        // Сдавать лично — только когда есть кому: у контракта и у шага без
-        // дающего приёмщика нет, и делo закрывает сам предмет.
-        if (q.contractId === undefined && !q.giverless) break;
+        // Сдавать лично — только когда есть кому: у контракта, у шага без
+        // дающего и у покойного с подобранным дневником приёмщика нет,
+        // и делo закрывает сам предмет.
+        if (!questNeedsNoLiveReceiver(q, player, state)) break;
         if (q.targetItem === 'money') {
           if ((player.money ?? 0) >= (q.targetCount ?? 1)) complete = true;
         } else if (q.targetItem) {
@@ -940,14 +1023,14 @@ export function checkQuests(
         break;
 
       case QuestType.KILL:
-        if (q.contractId === undefined && !q.giverless) break;
+        if (!questNeedsNoLiveReceiver(q, player, state)) break;
         if (q.killCount !== undefined && q.killNeeded !== undefined) {
           if (q.killCount >= q.killNeeded) complete = true;
         }
         break;
 
       case QuestType.TALK:
-        complete = plotTalkTargetIsDead(q, entities, state);
+        complete = plotTalkClosedByDiary(q, player, state);
         break;
     }
 
@@ -1483,11 +1566,6 @@ function nearestRoomByName(world: World, npc: { x: number; y: number }, roomName
     }
   }
   return best;
-}
-
-function plotNpcDisplayName(plotNpcId: number): string | undefined {
-  const pack = getNpcPackageByPlotNpcId(plotNpcId);
-  return pack ? npcPackageDisplayName(pack) : undefined;
 }
 
 /* ── Generate plot quest from PLOT_CHAIN ──────────────────────── */

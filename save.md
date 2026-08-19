@@ -117,7 +117,7 @@ A-Life saves compact identity state, not live NPC arrays:
 - seed/count basis for reconstruction;
 - up to `65_536` dead procedural A-Life ids;
 - dead plot ids;
-- sparse changed-record overrides;
+- sparse changed-record overrides — включая **компактный оверрайд на каждый мёртвый сюжетный слот** (`id`, `floorKey`, `z`, `x`, `y`, без личности). Место гибели не декорация: по нему возвращается дневник покойного, и без него сюжетная цепочка запиралась бы навсегда после первой же перезагрузки. Канал оверрайдов существовал раньше и уже нёс эти поля, поэтому форма сейва не менялась и `SAVE_SHAPE_VERSION` не тронут;
 - capped mobility state for cold journeys, pending active-floor arrivals and migration cursor/cadence;
 - player social/rank inputs through the current player entity state.
 

@@ -1,6 +1,6 @@
 /* ── Item definitions — еда, напитки, медицина, оружие, амуниция, разное ── */
 
-import { RoomType, ItemType, type ItemDef, type Entity, DamageType } from '../core/types';
+import { RoomType, ItemType, type Item, type ItemDef, type Entity, DamageType } from '../core/types';
 import { CHERNOBOG_DOCKET_ITEMS, CHERNOBOG_DOCKET_ITEM_TAGS } from './chernobog_docket';
 import { DOCUMENT_ACCESS_ITEMS, DOCUMENT_ACCESS_ITEM_TAGS } from './documents_access';
 import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from './inventory_limits';
@@ -79,6 +79,18 @@ export function itemEquipSlot(def: ItemDef): ItemEquipSlot | null {
 
 export function itemHasUseAction(def: ItemDef): boolean {
   return typeof def.use === 'function';
+}
+
+/**
+ * Имя конкретного экземпляра. Записка вправе носить своё: у определения имя общее
+ * («Дневник»), а у листа в руках — чьё именно («Дневник Якова Давидовича»).
+ * Читают это только поверхности, где для длинного имени есть место; в остальном
+ * `def.name` остаётся достаточным.
+ */
+export function itemInstanceName(item: Item): string {
+  const data = item.data as { title?: unknown } | undefined;
+  const title = typeof data?.title === 'string' ? data.title.trim().slice(0, 64) : '';
+  return title || ITEMS[item.defId]?.name || item.defId;
 }
 
 export function itemStackableByDefault(def: ItemDef): boolean {
@@ -853,4 +865,5 @@ export const ITEMS: Record<string, ItemDef> = {
   blue_glow_sample_sealed: { id:'blue_glow_sample_sealed', name:'Герметичный синий образец', type:ItemType.MISC, desc:'Запаянная ампула с голубым свечением. НИИ платит за целую герму и чистый журнал эксперимента.', spawnRooms:[], spawnW:0, value:420, stack:1, use:openBlueGlowSample },
   blue_glow_sample_open: { id:'blue_glow_sample_open', name:'Открытый синий образец', type:ItemType.MISC, desc:'Синяя проба без гермы. Дает короткий прилив, но пачкает руки, журнал и ближайший протокол.', spawnRooms:[], spawnW:0, value:90, stack:1, use:useOpenBlueGlowSample },
   ballot: { id:'ballot', name:'Бюллетень', type:ItemType.MISC, desc:'Избирательный бюллетень. Галочка стоит заранее, но очередь всё равно нужна.', spawnRooms:[RoomType.OFFICE,RoomType.COMMON,RoomType.LIVING,RoomType.CORRIDOR], spawnW:1, value:1 },
+  npc_diary: { id:'npc_diary', name:'Дневник', type:ItemType.NOTE, desc:'Личные заметки покойного. По ним видно, кому он был должен и что не успел передать. Годится вместо разговора там, где разговаривать больше не с кем.', spawnRooms:[], spawnW:0, value:40, stack:1, tags:['document'] },
 };

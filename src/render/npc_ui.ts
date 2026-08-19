@@ -2,6 +2,7 @@
 
 import { type Entity, type GameState, Faction } from '../core/types';
 import { ITEMS } from '../data/catalog';
+import { itemInstanceName } from '../data/items';
 import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { openTabletopGameFor } from '../systems/tabletop';
@@ -293,7 +294,6 @@ export function drawNpcMenu(
 
           if (idx < inv.length) {
             const item = inv[idx];
-            const def = ITEMS[item.defId];
             const priceMode = side === 'npc' || side === 'npc_offer' ? 'buy' : 'sell';
             const price = tradeCellPriceDisplay(state, npc, item.defId, priceMode);
             const questLabel = questItemStateLabel(price.questState);
@@ -322,7 +322,7 @@ export function drawNpcMenu(
               ctx.fillText(fitTextStable(ctx, questLabel, questW), cx + cellSz - padX, topY);
               ctx.textAlign = 'left';
             }
-            drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.84, {
+            drawItemGridIcon(ctx, item.defId, itemInstanceName(item), cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.84, {
               nameYUnits: 11,
               iconTopUnits: 12.5,
               bottomReserveUnits: 7.6,
@@ -402,7 +402,7 @@ export function drawNpcMenu(
         ctx.fillStyle = '#ccc';
         ctx.font = `${7.2 * sy}px "Press Start 2P", monospace`;
         const descW = Math.min(cw - 16 * sx, totalW + 24 * sx);
-        ctx.fillText(fitTextStable(ctx, `${def.name} ×${item.count}`, descW), cw / 2, descY);
+        ctx.fillText(fitTextStable(ctx, `${itemInstanceName(item)} ×${item.count}`, descW), cw / 2, descY);
         ctx.fillStyle = '#888';
         ctx.font = `${6.3 * sy}px "Press Start 2P", monospace`;
         let actionY = drawCenteredWrappedText(ctx, def.desc, cw / 2, descY + 9 * sy, descW, 8 * sy, 2);

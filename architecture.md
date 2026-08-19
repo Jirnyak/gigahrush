@@ -349,6 +349,7 @@ Persistent A-Life is a pillar system, not another spawn table. The shipped targe
 The identity boundary is:
 
 - `systems/alife.ts` owns ordinary human NPC identity, death, changed-record overrides, floor assignment and materialization.
+- `systems/plot_trace.ts` owns the dead-plot-NPC diary: item shape, the death-time attach and the world spawn. It knows nothing about the quest chain — `systems/quests.ts` reads the single predicate «его дневник у меня» in three places and repairs itself. The direction is one-way (`quests → plot_trace`); do not import quests from it.
 - `systems/npc_relations.ts` owns personal NPC relation constants and helpers; faction systems consume it for hostility and penalties instead of duplicating thresholds.
 - `gen/` owns geometry, rooms, POIs, monsters, loot and placement templates.
 - `systems/ai/` owns behavior for live actors only.

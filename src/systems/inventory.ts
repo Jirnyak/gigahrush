@@ -1959,7 +1959,12 @@ function handleCraftRecipeItemSourceUse(
 }
 
 function noteText(data: unknown): string {
-  return craftRecipeNoteText(data) ?? String(data);
+  const recipe = craftRecipeNoteText(data);
+  if (recipe) return recipe;
+  // Записка вправе носить структурные данные, а не голую строку: тогда читаемым
+  // является поле `text`, а не всё содержимое (см. дневник в `plot_trace.ts`).
+  const text = (data as { text?: unknown } | undefined)?.text;
+  return typeof text === 'string' ? text : String(data);
 }
 
 function handleCraftRecipeNoteSourceUse(data: unknown, msgs: Msg[], time: number, state: GameState | undefined): void {

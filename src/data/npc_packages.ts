@@ -441,6 +441,12 @@ export function registerReviewedCommunityNpcPackages(): readonly string[] {
   return registerCommunityNpcPackageFolders(COMMUNITY_NPC_PACKAGE_FOLDERS);
 }
 
+/** Имя сюжетной личности по её числовому слоту; `undefined`, если слот пуст. */
+export function plotNpcDisplayName(plotNpcId: number): string | undefined {
+  const pack = getNpcPackageByPlotNpcId(plotNpcId);
+  return pack ? npcPackageDisplayName(pack) : undefined;
+}
+
 export function npcPackageDisplayName(pack: NpcPackageDef): string {
   if (pack.identity.displayName) return pack.identity.displayName;
   const name = [

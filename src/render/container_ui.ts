@@ -3,6 +3,7 @@
 import { type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import { itemInstanceName } from '../data/items';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { containerAccessInfo, containerItemActionInfo, containerTheftStatus } from '../systems/containers';
 import { controlBindingLabel, menuCloseHint } from '../systems/controls';
@@ -131,7 +132,6 @@ export function drawContainerMenu(
 
         if (idx < inv.length) {
           const item = inv[idx];
-          const def = ITEMS[item.defId];
           const value = itemValueDisplay(state, item.defId);
           const questLabel = questItemStateLabel(value.questState);
           const stolenHere = container.stolenItemIds?.includes(item.defId) === true;
@@ -149,7 +149,7 @@ export function drawContainerMenu(
             ctx.fillText(questLabel, cx + cellSz - 4 * sx, cy + 4.2 * sy);
             ctx.textAlign = 'left';
           }
-          drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.84, {
+          drawItemGridIcon(ctx, item.defId, itemInstanceName(item), cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.84, {
             nameYUnits: 10.5,
             iconTopUnits: 11.5,
             bottomReserveUnits: 6,
@@ -184,7 +184,7 @@ export function drawContainerMenu(
     ctx.fillStyle = '#ccc';
     ctx.font = `${7.3 * sy}px "Press Start 2P", monospace`;
     const descW = Math.min(cw - 16 * sx, totalW + 24 * sx);
-    ctx.fillText(fitText(ctx, `${def?.name ?? item.defId} x${item.count}`, descW), cw / 2, descY);
+    ctx.fillText(fitText(ctx, `${itemInstanceName(item)} x${item.count}`, descW), cw / 2, descY);
     ctx.fillStyle = '#888';
     ctx.font = `${6.4 * sy}px "Press Start 2P", monospace`;
     let actionY = drawCenteredWrappedText(ctx, def?.desc ?? '', cw / 2, descY + 9 * sy, descW, 8 * sy, 2);

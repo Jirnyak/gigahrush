@@ -516,6 +516,7 @@ import {
   resetAlifePlayerRelationsForNewPlayer,
   setAlifeState,
 } from './systems/alife';
+import { attachPlotDiary } from './systems/plot_trace';
 import {
   applyDemosSearchText,
   cleanDemosSearchQuery,
@@ -5292,6 +5293,7 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
   // Drop NPC inventory as loot
   if (e.type === EntityType.NPC) {
     recordAlifeNpcDeath(state, e);
+    attachPlotDiary(e);
     dropEntityInventory(e);
   }
   if (e.isFogBoss && e.fogBossZone !== undefined) {

@@ -2,6 +2,7 @@
 
 import { type Entity, type GameState, ItemType, DamageType } from '../core/types';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
+import { itemInstanceName } from '../data/items';
 import { getEquippedToolDurability, getWeaponReadiness } from '../systems/inventory';
 import { controlHint, menuCloseHint } from '../systems/controls';
 import {
@@ -84,8 +85,7 @@ export function drawInventory(
 
       if (idx < inv.length) {
         const item = inv[idx];
-        const def = ITEMS[item.defId];
-        drawItemGridIcon(ctx, item.defId, def?.name ?? item.defId, cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.86);
+        drawItemGridIcon(ctx, item.defId, itemInstanceName(item), cx, cy, cellSz, sx, sy, selected, selected ? 1 : 0.86);
         if (item.count > 1) {
           ctx.fillStyle = '#6f8a72';
           ctx.font = `${5 * sy}px "Press Start 2P", monospace`;
@@ -121,7 +121,7 @@ export function drawInventory(
     if (def) {
       ctx.fillStyle = '#ccc';
       ctx.font = `${6.2 * ts}px "Press Start 2P", monospace`;
-      ctx.fillText(fitStatText(ctx, `${def.name} ×${item.count}`, details.w), details.x, details.y);
+      ctx.fillText(fitStatText(ctx, `${itemInstanceName(item)} ×${item.count}`, details.w), details.x, details.y);
       ctx.fillStyle = '#888';
       ctx.font = `${4.8 * ts}px "Press Start 2P", monospace`;
       const descLines = wrapTextLines(ctx, def.desc, details.w, 2, { stable: true, mode: 'clip' });

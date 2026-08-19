@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { EntityType, Faction, QuestType, type Quest } from '../src/core/types';
 import { World } from '../src/core/world';
 import { checkQuests, resetNonStoryQuestsForNewPlayer } from '../src/systems/quests';
+import { recordAlifeNpcDeath } from '../src/systems/alife';
+import { plotDiaryItem } from '../src/systems/plot_trace';
 import { makeGameState, makeTestEntity, makeTestNpc, makeTestPlayer } from './helpers';
 import '../src/data/npc_plot_packages';
 
@@ -41,10 +43,14 @@ test('death continuation resets non-story quests and keeps plot quests', () => {
   assert.equal(giver.canGiveQuest, true);
 });
 
-test('dead plot talk target auto-completes the active story talk quest', () => {
+/* Смерть цели больше не закрывает разговор сама: игрок узнаёт о ней, подняв
+ * дневник покойного. Один факт — один путь; телепатического автозачёта нет. */
+test('dead plot talk target closes the story talk quest only through the diary', () => {
+  const barni = getPlotNpcNumericId('barni') ?? 42;
   const player = makeTestPlayer({ id: 1 });
   const target = makeTestEntity({
-    id: getPlotNpcNumericId('barni') ?? 42,
+    id: barni,
+    alifeId: barni,
     type: EntityType.NPC,
     name: 'Баринов',
     faction: Faction.CITIZEN,
@@ -59,12 +65,17 @@ test('dead plot talk target auto-completes the active story talk quest', () => {
       desc: 'Поговорить с Бариновым.',
       targetItem: undefined,
       targetCount: undefined,
-      targetNpcId: getPlotNpcNumericId('barni'),
+      targetNpcId: barni,
       targetNpcName: 'Баринов',
       plotStepIndex: 0,
     })],
   });
+  recordAlifeNpcDeath(state, target);
 
+  checkQuests(player, new World(), [player, target], state, state.msgs);
+  assert.equal(state.quests[0].done, false, 'смерть цели закрыла разговор без дневника');
+
+  player.inventory = [plotDiaryItem(barni, 'Баринов')!];
   checkQuests(player, new World(), [player, target], state, state.msgs);
 
   assert.equal(state.quests[0].done, true);
