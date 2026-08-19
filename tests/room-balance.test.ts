@@ -205,6 +205,66 @@ test('ровную ничью решает личность, а не номер 
   assert.ok(Math.min(first, second) >= CROWD * 0.25, `две одинаковые кухни разделили толпу ${first}/${second} — ничью решает не личность`);
 });
 
+test('забитая комната тянет слабее пустой, хоть и ближе', () => {
+  const world = makeOpenFloor();
+  const packed = addTestRoom(world, { id: 1, type: RoomType.KITCHEN, x: 44, y: 61, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  const empty = addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 88, y: 61, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+
+  // Ближняя кухня уже занята: двадцать человек стоят в ней.
+  const standing: Entity[] = [];
+  for (let i = 0; i < 20; i++) {
+    standing.push(makeNpc(500 + i, { food: 90, water: 90, sleep: 90, pee: 0, poo: 0 }, {
+      x: packed.x + 1 + (i % 5) + 0.5,
+      y: packed.y + 1 + Math.floor(i / 5) + 0.5,
+    }));
+  }
+
+  let choseEmpty = 0;
+  for (let i = 0; i < 16; i++) {
+    const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 });
+    const entities = [makeTestPlayer({ id: 1, x: 126, y: 126 }), ...standing, npc];
+    const minutes = 720 + i;
+    rebuildEntityIndexForSimulation(entities, minutes);
+    setPathContext([], minutes);
+    setNpcContext([], minutes, 0);
+    updateNPC(world, entities, npc, 0, minutes, { hour: 12, minute: 0, totalMinutes: minutes }, false);
+    const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
+    if (room?.id === empty.id) choseEmpty++;
+  }
+
+  assert.ok(choseEmpty >= 12, `в пустую дальнюю кухню пошли только ${choseEmpty} из 16 — забитость не считается контекстом`);
+});
+
+test('на большом этаже отбирает ближних, а не начало массива', () => {
+  const world = makeOpenFloor();
+  // Двести комнат-пустышек занимают начало массива и всё окно старого скана.
+  for (let id = 1; id <= 200; id++) {
+    addTestRoom(world, {
+      id,
+      type: RoomType.LIVING,
+      x: (id % 20) * 6,
+      y: Math.floor(id / 20) * 6,
+      w: 4, h: 4,
+      zoneId: id,
+      zoneFaction: ZoneFaction.CITIZEN,
+    });
+  }
+  // Дальняя кухня стоит в самом начале массива, ближняя — в самом конце.
+  const far = addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 4, y: 4, w: 5, h: 5, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+  const near = addTestRoom(world, { id: 260, type: RoomType.KITCHEN, x: 70, y: 66, w: 5, h: 5, zoneId: 260, zoneFaction: ZoneFaction.CITIZEN });
+
+  let choseNear = 0;
+  for (let i = 0; i < 16; i++) {
+    const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 });
+    tick(world, npc, 720 + i, 12);
+    const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
+    if (room?.id === near.id) choseNear++;
+  }
+
+  assert.ok(world.dist2(64.5, 64.5, near.x + 2, near.y + 2) < world.dist2(64.5, 64.5, far.x + 2, far.y + 2));
+  assert.equal(choseNear, 16, `в ближнюю кухню с последним номером пошли ${choseNear} из 16 — отбор идёт по массиву, а не по расстоянию`);
+});
+
 test('терпение выводится числом на намерение, а не списком срочных дел', () => {
   // Угроза срочна сразу, работа — почти никогда; порог растёт вместе с терпением.
   assert.equal(npcUtilityIntentPatience('flee'), 0);

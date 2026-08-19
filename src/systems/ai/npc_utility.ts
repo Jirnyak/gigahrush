@@ -17,6 +17,7 @@ import {
   occupationWorkRoomTypeWeight,
 } from "../../data/occupation_profiles";
 import {
+  ROOM_AFFORDANCES,
   roomAffordanceWeight,
   type RoomAffordanceId,
 } from "../../data/room_affordances";
@@ -968,6 +969,29 @@ export function npcUtilityRoomInterest(
     roomCraftInterest(roomType, context.occupation) +
     roomMemoryInterest(memory, context)
   );
+}
+
+/** Все типы комнат словаря деятельности. Порядок не важен: это ключи таблицы. */
+export const NPC_UTILITY_ROOM_TYPES: readonly RoomType[] = Object.keys(ROOM_AFFORDANCES)
+  .map(Number)
+  .filter(value => Number.isInteger(value)) as RoomType[];
+
+/** Длина буфера, в который тип комнаты кладётся своим числовым значением. */
+export const NPC_UTILITY_ROOM_TYPE_SLOTS = Math.max(...NPC_UTILITY_ROOM_TYPES) + 1;
+
+/**
+ * Интерес, зависящий ТОЛЬКО от типа комнаты, — на все типы разом.
+ *
+ * Этаж — это тысячи комнат (квартиры: 13873), и считать по каждой то, что
+ * зависит лишь от её типа, значит умножать одну и ту же дюжину чисел на
+ * тысячи. Считается один раз за выбор, дальше по комнате остаётся индекс.
+ */
+export function fillNpcUtilityRoomTypeInterest(
+  context: NpcUtilityTargetPreferenceContext,
+  out: Float32Array,
+): Float32Array {
+  for (const type of NPC_UTILITY_ROOM_TYPES) out[type] = npcUtilityRoomInterest(type, context);
+  return out;
 }
 
 function needAffordanceInterest(

@@ -51,7 +51,9 @@ import { cleanSurfaceArea } from '../surface_cleanup';
 import { findMeatChunkCell, removeVisualSlotCode } from '../../world/visual_cell_slots';
 import {
   NPC_UTILITY_INTENTS,
+  NPC_UTILITY_ROOM_TYPE_SLOTS,
   createNpcUtilityScoreBuffer,
+  fillNpcUtilityRoomTypeInterest,
   npcUtilityIdentityFromEntity,
   npcUtilityJitter01,
   npcUtilityIntentPatience,
@@ -87,7 +89,11 @@ const UTILITY_SWITCH_MARGIN = 7;
 const UTILITY_EMERGENCY_SCORE = 58;
 const UTILITY_RETHINK_BASE_SEC = 1.5;
 const UTILITY_RETHINK_SPREAD_SEC = 2.5;
-const TERRITORY_ROOM_TARGET_SCAN_CAP = 96;
+/* Скольким ближайшим ГОДНЫМ комнатам достаётся дорогая оценка. Меньше прежних
+ * 96 не потому, что стало хуже: раньше из 96 комнат окна годными оказывались
+ * единицы, а сюда попадают только те, которым есть что предложить, и только
+ * ближайшие. Восьмёрка финалистов выбирается из них. */
+const ROUTINE_NEAREST_ROOM_CAP = 24;
 const ROUTINE_ROOM_CANDIDATE_CAP = 8;
 const ROUTINE_LOCAL_ROOM_DISTANCE = 132;
 const ROUTINE_SURVIVAL_ROOM_DISTANCE = 220;
@@ -103,9 +109,22 @@ const utilityScoreBuffer = createNpcUtilityScoreBuffer();
 const routineFriendlyRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineFallbackRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineSeenRoomIds = new Set<number>();
+const routineNearbyRoomIds: number[] = [];
+const routineNearbyKeys: number[] = [];
+/** Номер комнаты влезает в младшие разряды ключа сортировки по расстоянию. */
+const ROUTINE_ROOM_KEY_SCALE = 1 << 18;
+const routineTypeInterest = new Float32Array(NPC_UTILITY_ROOM_TYPE_SLOTS);
 const ROUTINE_VISIT_MEMORY = 6;
 /** Граница терпеливого дела: работа, досуг, патруль и прогулка (см. таблицу терпения). */
 const ROUTINE_PATIENT_INTENT = 0.85;
+const ROOM_CROWD_REFRESH_SEC = 0.5;
+/** Человеку нужно вдвое больше своей клетки: он сам и проход мимо него. */
+const ROOM_PERSONAL_SPACE_CELLS = 2;
+/* Забитость комнаты как контекст: где уже стоят люди, туда тянет слабее.
+ * Считается ОДНОЙ переписью на этаж раз в полсекунды, а не запросом на
+ * человека и не обходом комнаты — иначе выбор цели стал бы квадратичным. */
+const roomCrowdCounts: number[] = [];
+let roomCrowdRefreshedAt = -Infinity;
 const utilityIntentByNpc = new WeakMap<Entity, NpcUtilityIntentId>();
 /* Где человек был в последнее время. Кольцо фиксированной длины на живую
  * сущность: новизна нужна только активному этажу и умирает вместе с ним, в
@@ -121,6 +140,61 @@ function stableUnit(e: Entity, salt: string | number): number {
 
 function stableTimer(e: Entity, salt: string | number, base: number, spread: number): number {
   return base + stableUnit(e, salt) * spread;
+}
+
+/* Зеркало комнат в плоских массивах: центр и тип.
+ *
+ * Отбор ближайших идёт по всему этажу, а этаж — это до 14 тысяч комнат. Ходить
+ * по такому числу объектов на каждое решение дорого не из-за арифметики, а
+ * из-за разыменования; в трёх плоских массивах тот же проход стоит втрое
+ * меньше. Геометрия комнат статична, поэтому зеркало живёт до смены этажа и
+ * подновляется по времени — на случай, если самосбор дострочил комнат. */
+const ROOM_MIRROR_REFRESH_SEC = 1;
+const ROOM_MIRROR_HOLE = 255;
+let roomMirrorWorld: World | undefined;
+let roomMirrorAt = -Infinity;
+let roomMirrorCount = 0;
+let roomMirrorCx = new Float32Array(0);
+let roomMirrorCy = new Float32Array(0);
+let roomMirrorType = new Uint8Array(0);
+
+function refreshRoomMirror(world: World): void {
+  const count = world.rooms.length;
+  const elapsed = _barkTime - roomMirrorAt;
+  if (roomMirrorWorld === world && roomMirrorCount === count && elapsed >= 0 && elapsed < ROOM_MIRROR_REFRESH_SEC) return;
+  roomMirrorWorld = world;
+  roomMirrorCount = count;
+  roomMirrorAt = _barkTime;
+  if (roomMirrorCx.length < count) {
+    roomMirrorCx = new Float32Array(count);
+    roomMirrorCy = new Float32Array(count);
+    roomMirrorType = new Uint8Array(count);
+  }
+  for (let id = 0; id < count; id++) {
+    const room = world.rooms[id];
+    if (room === undefined) {
+      roomMirrorType[id] = ROOM_MIRROR_HOLE;
+      continue;
+    }
+    roomMirrorCx[id] = room.x + room.w * 0.5;
+    roomMirrorCy[id] = room.y + room.h * 0.5;
+    roomMirrorType[id] = room.type;
+  }
+}
+
+function refreshRoomCrowd(world: World, entities: readonly Entity[]): void {
+  const elapsed = _barkTime - roomCrowdRefreshedAt;
+  if (elapsed >= 0 && elapsed < ROOM_CROWD_REFRESH_SEC) return;
+  roomCrowdRefreshedAt = _barkTime;
+  const rooms = world.rooms.length;
+  roomCrowdCounts.length = rooms;
+  roomCrowdCounts.fill(0);
+  for (const other of entities) {
+    // Игрок ходит той же сущностью NPC — он тоже занимает место в комнате.
+    if (!other.alive || other.type !== EntityType.NPC) continue;
+    const roomId = world.roomMap[world.idx(Math.floor(other.x), Math.floor(other.y))];
+    if (roomId >= 0 && roomId < rooms) roomCrowdCounts[roomId]++;
+  }
 }
 
 function noteRoutineRoomVisit(e: Entity, roomId: number | undefined): void {
@@ -387,6 +461,7 @@ export function updateNPC(
   state?: import('../../core/types').GameState,
 ): void {
   const ai = e.ai!;
+  refreshRoomCrowd(world, entities);
 
   const special = tickNpcSpecialRoutine(e, clock);
   if (special.clearUtility) {
@@ -1079,19 +1154,61 @@ function gotoRoutineRoom(
   considerRoom(e.assignedRoomId !== undefined ? world.rooms[e.assignedRoomId] : undefined);
   considerRoom(world.roomAt(e.x, e.y) ?? undefined);
 
-  const roomCount = world.rooms.length;
-  const scanCount = Math.min(roomCount, TERRITORY_ROOM_TARGET_SCAN_CAP);
-  const scanStart = roomCount > 0
-    ? Math.floor(stableUnit(e, `routine_room_scan:${intent}`) * roomCount) % roomCount
-    : 0;
-  for (let scanned = 0; scanned < scanCount; scanned++) {
-    considerRoom(world.rooms[(scanStart + scanned) % roomCount]);
+  for (const roomId of collectNearestRoomIds(world, e, intent, context)) {
+    considerRoom(world.rooms[roomId]);
   }
   routineFriendlyRoomCandidates.sort(compareRoutineRoomCandidates);
   if (tryAssignRoutineRoomCandidate(world, e, routineFriendlyRoomCandidates)) return true;
   if (!allowFallback) return false;
   routineFallbackRoomCandidates.sort(compareRoutineRoomCandidates);
   return tryAssignRoutineRoomCandidate(world, e, routineFallbackRoomCandidates);
+}
+
+/**
+ * Ближайшие комнаты, которым вообще есть что предложить.
+ *
+ * Отбор физический, а не по месту в массиве: этаж — это тысячи комнат
+ * (квартиры: 13873), и окно «96 подряд от случайного места» показывало
+ * человеку меньше процента этажа, зато с другого его конца. Проход идёт по
+ * всем комнатам, но дёшево: индекс в таблице интереса по типу плюс `dist2`.
+ * Дорогое — память комнаты, территория, danger, полный скоринг — достаётся
+ * только ближайшим `ROUTINE_NEAREST_ROOM_CAP`.
+ */
+function collectNearestRoomIds(
+  world: World,
+  e: Entity,
+  intent: NpcUtilityIntentId,
+  context: NpcUtilityTargetPreferenceContext,
+): readonly number[] {
+  fillNpcUtilityRoomTypeInterest(context, routineTypeInterest);
+  const limit = routineScanDistanceLimit(e, intent);
+  const limit2 = limit === Infinity ? Infinity : limit * limit;
+  refreshRoomMirror(world);
+  const count = roomMirrorCount;
+  // Расстояние и номер в одном числе: сортировать плотный массив чисел дешевле,
+  // чем держать разрежённую таблицу на весь этаж.
+  let found = 0;
+  for (let id = 0; id < count; id++) {
+    const type = roomMirrorType[id];
+    if (type === ROOM_MIRROR_HOLE || routineTypeInterest[type] <= 0) continue;
+    const d2 = world.dist2(e.x, e.y, roomMirrorCx[id], roomMirrorCy[id]);
+    if (d2 > limit2) continue;
+    routineNearbyKeys[found++] = Math.round(d2) * ROUTINE_ROOM_KEY_SCALE + id;
+  }
+  routineNearbyKeys.length = found;
+  if (found > ROUTINE_NEAREST_ROOM_CAP) {
+    routineNearbyKeys.sort(compareNumbers);
+    routineNearbyKeys.length = ROUTINE_NEAREST_ROOM_CAP;
+  }
+  routineNearbyRoomIds.length = routineNearbyKeys.length;
+  for (let i = 0; i < routineNearbyKeys.length; i++) {
+    routineNearbyRoomIds[i] = routineNearbyKeys[i] % ROUTINE_ROOM_KEY_SCALE;
+  }
+  return routineNearbyRoomIds;
+}
+
+function compareNumbers(a: number, b: number): number {
+  return a - b;
 }
 
 function routineRoomTargetCandidate(
@@ -1113,6 +1230,8 @@ function routineRoomTargetCandidate(
     roomType: room.type,
     utility: assignedBonus + preferredBonus + territoryUtility,
     distance,
+    crowd: roomCrowdCounts[room.id] ?? 0,
+    capacity: Math.max(1, (room.w * room.h) / ROOM_PERSONAL_SPACE_CELLS),
     factionPenalty: friendly ? 0 : 18,
     danger: world.dangerField[world.idx(Math.floor(room.x + room.w/2), Math.floor(room.y + room.h/2))] / 255,
     memory,
@@ -1129,11 +1248,17 @@ function routineRoomTargetCandidate(
   };
 }
 
-function routineRoomDistanceLimit(e: Entity, room: Room, intent: NpcUtilityIntentId, preferredRoomId: number | undefined): number {
-  if (room.id === preferredRoomId || room.id === e.assignedRoomId) return Infinity;
+/** Насколько далеко человек вообще готов идти под это дело. */
+function routineScanDistanceLimit(e: Entity, intent: NpcUtilityIntentId): number {
   if (usesTravelerRoutine(e)) return routineIntentAllowsSurvivalTrespass(intent) ? ROUTINE_TRAVELER_NEED_ROOM_DISTANCE : Infinity;
   if (routineIntentAllowsSurvivalTrespass(intent)) return ROUTINE_SURVIVAL_ROOM_DISTANCE;
   return ROUTINE_LOCAL_ROOM_DISTANCE;
+}
+
+function routineRoomDistanceLimit(e: Entity, room: Room, intent: NpcUtilityIntentId, preferredRoomId: number | undefined): number {
+  // Своя и назначенная комнаты дальностью не ограничены: домой идут через этаж.
+  if (room.id === preferredRoomId || room.id === e.assignedRoomId) return Infinity;
+  return routineScanDistanceLimit(e, intent);
 }
 
 function pushRoutineRoomCandidate(candidates: NpcUtilityTargetCandidate[], candidate: NpcUtilityTargetCandidate): void {
