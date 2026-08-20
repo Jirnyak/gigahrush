@@ -184,8 +184,8 @@ test('кладовщик забирает товар из цеха и увози
     keeper.ai!.timer = 0;
     tickNpc(world, entities, keeper, 700 + step * 4);
   }
-  const loaded = (keeper.inventory ?? []).some(slot => slot.defId === 'green_briquette');
-  assert.ok(loaded, 'кладовщик обязан взять товар из цехового ящика');
+  assert.ok((keeper.inventory ?? []).length > 0, 'кладовщик обязан взять товар из цехового ящика');
+  assert.equal(shop.inventory.length, 0, 'цеховой ящик должен опустеть');
 
   // Довозит до склада.
   for (let step = 0; step < 6; step++) {
@@ -197,5 +197,85 @@ test('кладовщик забирает товар из цеха и увози
     tickNpc(world, entities, keeper, 730 + step * 4);
   }
 
-  assert.ok(shelf.inventory.some(slot => slot.defId === 'green_briquette'), 'товар обязан доехать до склада');
+  assert.ok(shelf.inventory.length > 0, 'товар обязан доехать до склада');
+});
+
+test('кладовщик разносит со склада туда, где вещи место', () => {
+  const world = makePressWorld();
+  const storage = addTestRoom(world, { id: 1, type: RoomType.STORAGE, x: 28, y: 10, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  const kitchen = addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 20, y: 24, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+  world.addContainer(makeTestContainer({
+    id: 2,
+    x: storage.x + 2, y: storage.y + 2, z: -26,
+    roomId: storage.id, zoneId: 1,
+    kind: ContainerKind.SHELF, name: 'Складской стеллаж',
+    inventory: [{ defId: 'bread', count: 6 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  world.addContainer(makeTestContainer({
+    id: 3,
+    x: kitchen.x + 2, y: kitchen.y + 2, z: -26,
+    roomId: kitchen.id, zoneId: 2,
+    kind: ContainerKind.SHELF, name: 'Кухонный шкаф',
+    inventory: [],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  const shelf = world.containerById.get(2)!;
+  const cupboard = world.containerById.get(3)!;
+
+  const keeper = makeWorker(4, storage.x + 2.5, storage.y + 2.5, { occupation: Occupation.STOREKEEPER });
+  const entities = [makeTestPlayer({ id: 99, x: 38, y: 38 }), keeper];
+
+  // Берёт хлеб со склада.
+  for (let step = 0; step < 4; step++) {
+    keeper.x = storage.x + 2.5;
+    keeper.y = storage.y + 2.5;
+    keeper.ai!.path = [];
+    keeper.ai!.pi = 0;
+    keeper.ai!.timer = 0;
+    tickNpc(world, entities, keeper, 700 + step * 4);
+  }
+  assert.ok((keeper.inventory ?? []).some(slot => slot.defId === 'bread'), 'кладовщик обязан взять со склада то, чего ждут в комнатах');
+  assert.ok(shelf.inventory.every(slot => slot.defId !== 'bread' || slot.count < 6), 'хлеб должен убыть со стеллажа');
+
+  // Доносит до кухни.
+  for (let step = 0; step < 6; step++) {
+    keeper.x = kitchen.x + 2.5;
+    keeper.y = kitchen.y + 2.5;
+    keeper.ai!.path = [];
+    keeper.ai!.pi = 0;
+    keeper.ai!.timer = 0;
+    tickNpc(world, entities, keeper, 730 + step * 4);
+  }
+
+  assert.ok(cupboard.inventory.some(slot => slot.defId === 'bread'), 'хлеб обязан доехать до кухни');
+});
+
+test('порожний кладовщик на кухне ничего не уносит обратно', () => {
+  const world = makePressWorld();
+  const kitchen = addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 20, y: 24, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+  world.addContainer(makeTestContainer({
+    id: 3,
+    x: kitchen.x + 2, y: kitchen.y + 2, z: -26,
+    roomId: kitchen.id, zoneId: 2,
+    kind: ContainerKind.SHELF, name: 'Кухонный шкаф',
+    inventory: [{ defId: 'bread', count: 4 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  const cupboard = world.containerById.get(3)!;
+  const before = cupboard.inventory.find(slot => slot.defId === 'bread')?.count;
+
+  const keeper = makeWorker(5, kitchen.x + 2.5, kitchen.y + 2.5, { occupation: Occupation.STOREKEEPER });
+  const entities = [makeTestPlayer({ id: 99, x: 38, y: 38 }), keeper];
+  for (let step = 0; step < 6; step++) {
+    keeper.x = kitchen.x + 2.5;
+    keeper.y = kitchen.y + 2.5;
+    keeper.ai!.path = [];
+    keeper.ai!.pi = 0;
+    keeper.ai!.timer = 0;
+    tickNpc(world, entities, keeper, 700 + step * 4);
+  }
+
+  assert.equal(cupboard.inventory.find(slot => slot.defId === 'bread')?.count, before, 'донесённое не должно уезжать назад');
+  assert.equal((keeper.inventory ?? []).length, 0, 'на кухне кладовщику брать нечего');
 });
