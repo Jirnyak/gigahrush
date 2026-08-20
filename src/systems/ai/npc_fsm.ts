@@ -11,6 +11,7 @@ import { msg } from '../../core/types';
 import { entityDisplayName } from '../../entities/monster';
 import { WEAPON_STATS } from '../../data/catalog';
 import { ITEMS } from '../../data/items';
+import { roomAffordanceWeight } from '../../data/room_affordances';
 import {
   canAccessContainer,
   containerAccessInfo,
@@ -538,7 +539,7 @@ export function updateNPC(
       handleSleeping(world, e, dt, profile);
       break;
     case 'work':
-      handleWorking(world, e, dt);
+      handleWorking(world, e, dt, state);
       break;
     case 'heal':
       handleHeal(world, e, dt);
@@ -979,19 +980,31 @@ function handleEat(world: World, e: Entity, dt: number): void {
   followPath(world, e, dt);
 }
 
-function handleWorking(world: World, e: Entity, dt: number): void {
+function handleWorking(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
   const ai = e.ai!;
   tryCleanerSurfaceWork(world, e);
+  // Куда кладовщику ехать за грузом или с грузом — это и есть его смена.
+  const errandRoomId = supplyErrandRoomId(world, e);
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WORK;
-    if (!tryGotoAssignedWorkRoom(world, e) && !gotoRoutineRoom(world, e, 'work')) {
-      wanderNearby(world, e);
-    }
+    // Рейс — наряд, а не предпочтение: иначе кладовщик каждый раз выбирал бы
+    // свой же склад, где ему по ремеслу интереснее, и за грузом не поехал.
+    const errandRoom = errandRoomId !== undefined ? world.rooms[errandRoomId] : undefined;
+    const routed = errandRoom
+      ? tryAssignPathToRoomCenter(world, e, errandRoom) !== 'not_found'
+      : tryGotoAssignedWorkRoom(world, e) || gotoRoutineRoom(world, e, 'work');
+    if (!routed) wanderNearby(world, e);
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'work_rethink', 14, 18) : 2.0;
   }
 
   if (ai.goal === AIGoal.WORK && ai.path.length === 0) {
     const cr = world.roomAt(e.x, e.y);
+    // Сложить сделанное в ящик — часть смены, а не отдельное дело: работник не
+    // обязан ради этого бросать работу и тащить выход через весь этаж.
+    if ((storeNextActionAtByNpc.get(e) ?? -Infinity) <= _barkTime) {
+      storeNextActionAtByNpc.set(e, _barkTime + stableTimer(e, 'store_action', STORE_ACTION_BASE_SEC, STORE_ACTION_SPREAD_SEC));
+      if (scanSpareInventory(e).first >= 0 || npcIsSupplyCarrier(e)) tickNpcStorageWork(world, e, state);
+    }
     if (cr && (cr.id === e.assignedRoomId || npcUtilityRoomTypeWeightForIntent('work', cr.type, e.occupation) > 0)) {
       wanderInRoom(world, e);
       ai.timer = stableTimer(e, 'work_in_room', 7, 13);
@@ -999,6 +1012,32 @@ function handleWorking(world: World, e: Entity, dt: number): void {
   }
 
   followPath(world, e, dt);
+}
+
+/**
+ * Рейс кладовщика: с грузом — на склад, где есть место, порожняком — туда, где
+ * товар уже лежит и ждёт вывоза. Обычному человеку рейса нет.
+ */
+function supplyErrandRoomId(world: World, e: Entity): number | undefined {
+  if (!npcIsSupplyCarrier(e)) return undefined;
+  const bestRank = roomAffordanceWeight(RoomType.STORAGE, 'store');
+  const loaded = scanSpareInventory(e).first >= 0;
+  let bestRoom: number | undefined;
+  let bestDist = Infinity;
+  for (const container of world.containers) {
+    const room = world.rooms[container.roomId];
+    const rank = storeRank(room);
+    if (!room || rank <= 0) continue;
+    if (loaded ? rank < bestRank : rank >= bestRank) continue;
+    if (!loaded && !container.inventory.some(slot => slot.count > 0)) continue;
+    if (!canAccessContainer(container, e)) continue;
+    const d = world.dist2(e.x, e.y, container.x, container.y);
+    if (d < bestDist) {
+      bestDist = d;
+      bestRoom = room.id;
+    }
+  }
+  return bestRoom;
 }
 
 function cleanerCanCleanCell(world: World, e: Entity, idx: number): boolean {
@@ -1037,34 +1076,65 @@ function npcAmmoTypeFor(e: Entity): string | undefined {
   return WEAPON_STATS[e.weapon ?? '']?.ammoType;
 }
 
-/** Служит ли вещь этому человеку. Всё остальное — хабар, ему место на складе. */
-function itemServesNpc(e: Entity, defId: string): boolean {
-  if (defId === e.weapon || defId === e.tool) return true;
+/** Роль вещи в карманах: своя, личный запас или хабар. */
+type NpcItemRole = 'own' | 'reserve' | 'spare';
+
+function itemRoleForNpc(e: Entity, defId: string): NpcItemRole {
+  if (defId === e.weapon || defId === e.tool) return 'own';
   const def = ITEMS[defId];
-  if (!def) return true;
-  if (def.value <= 0) return true;
-  if (def.tags?.some(tag => tag === 'quest' || tag === 'persistent' || tag === 'cannot_drop')) return true;
+  if (!def) return 'own';
+  if (def.value <= 0) return 'own';
+  if (def.tags?.some(tag => tag === 'quest' || tag === 'persistent' || tag === 'cannot_drop')) return 'own';
   switch (def.type) {
+    case ItemType.KEY:
+    case ItemType.NOTE:
+      return 'own';
+    case ItemType.AMMO:
+      return defId === npcAmmoTypeFor(e) ? 'own' : 'spare';
     case ItemType.FOOD:
     case ItemType.DRINK:
     case ItemType.MEDICINE:
-    case ItemType.KEY:
-    case ItemType.NOTE:
-      return true;
-    case ItemType.AMMO:
-      return defId === npcAmmoTypeFor(e);
+      // Одну еду человек носит при себе, остальное — излишек: иначе пекарь
+      // остался бы стоять со всей сменой хлеба в карманах.
+      return 'reserve';
     default:
-      return false;
+      return 'spare';
   }
 }
 
-function spareInventorySlot(e: Entity): number {
+/**
+ * Первый лишний слот и общее их число. Личный запас каждого вида оставляется
+ * один раз, всё сверх него — излишек и едет на склад вместе с хабаром.
+ */
+function scanSpareInventory(e: Entity): { first: number; count: number } {
   const inv = e.inventory;
-  if (!inv) return -1;
+  let first = -1;
+  let count = 0;
+  if (!inv) return { first, count };
+  let keptFood = false;
+  let keptDrink = false;
+  let keptMedicine = false;
   for (let i = 0; i < inv.length; i++) {
-    if (!itemServesNpc(e, inv[i].defId)) return i;
+    const defId = inv[i].defId;
+    let role = itemRoleForNpc(e, defId);
+    if (role === 'reserve') {
+      const type = ITEMS[defId]?.type;
+      const kept = type === ItemType.FOOD ? keptFood : type === ItemType.DRINK ? keptDrink : keptMedicine;
+      if (!kept) {
+        if (type === ItemType.FOOD) keptFood = true;
+        else if (type === ItemType.DRINK) keptDrink = true;
+        else keptMedicine = true;
+        role = 'own';
+      } else {
+        role = 'spare';
+      }
+    }
+    if (role !== 'spare') continue;
+    if (first < 0) first = i;
+    count++;
+    if (count >= STORE_SPARE_CAP) break;
   }
-  return -1;
+  return { first, count };
 }
 
 function npcNeedsAmmo(e: Entity): boolean {
@@ -1078,6 +1148,16 @@ function npcRaidsForeignContainers(e: Entity): boolean {
   return stableUnit(e, 'store_raid') > 0.75;
 }
 
+/** Кладовщик: его дело — возить товар оттуда, где он появился, туда, где хранят. */
+function npcIsSupplyCarrier(e: Entity): boolean {
+  return e.occupation === Occupation.STOREKEEPER || occupationHasRoutineTag(e.occupation, 'supply');
+}
+
+/** Насколько комната годится КАК ХРАНИЛИЩЕ: у склада полный вес, у цеха малый. */
+function storeRank(room: Room | null | undefined): number {
+  return room ? roomAffordanceWeight(room.type, 'store') : 0;
+}
+
 /**
  * Насколько человеку сейчас нужен склад. Привычка носить вещи своя у каждого:
  * иначе весь этаж снимался бы к складам одновременно. Тому, кто уже стоит на
@@ -1085,16 +1165,14 @@ function npcRaidsForeignContainers(e: Entity): boolean {
  */
 function npcStoreDrive(e: Entity, atStorage: boolean): number {
   // Пустые карманы дела не отменяют: за патронами идут именно с пустыми.
-  let spare = 0;
-  for (const slot of e.inventory ?? []) {
-    if (!itemServesNpc(e, slot.defId)) spare++;
-    if (spare >= STORE_SPARE_CAP) break;
-  }
+  const spare = scanSpareInventory(e).count;
   const carry = spare >= (atStorage ? 1 : STORE_SPARE_MIN) ? 12 + spare * 10 : 0;
   // Вооружённому без патронов склад нужнее любого хабара: это дело одного
   // захода и возникает оно ровно после того, как человек отстрелялся.
   const restock = npcNeedsAmmo(e) ? 40 : 0;
   if (carry + restock <= 0) return 0;
+  // Возка кладовщику не привычка, а ремесло: множитель привычки к ней не идёт.
+  if (npcIsSupplyCarrier(e)) return carry + restock;
   return (carry + restock) * (0.4 + 0.6 * stableUnit(e, 'store_habit'));
 }
 
@@ -1114,49 +1192,78 @@ function findNpcStorageContainer(
   return foreign;
 }
 
-/** Одна сделка со складом. Возвращает true, когда на складе больше нечего делать. */
-function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/types').GameState): boolean {
-  const room = world.roomAt(e.x, e.y);
-  if (!room || !roomSuitsIntent(e, room, 'store')) return false;
-  const container = findNpcStorageContainer(world, e, room, state);
-  if (!container) return true;
+/**
+ * Что человек делает на складе прямо сейчас.
+ *
+ * `busy` — сделка прошла, есть смысл остаться; `done` — дело закрыто;
+ * `nothing` — здесь заняться нечем, надо идти в другую комнату. Различие важно:
+ * работник цеха обязан сперва попробовать местный ящик и только потом нести
+ * смену через этаж.
+ */
+type NpcStorageOutcome = 'busy' | 'done' | 'nothing';
 
-  const spare = spareInventorySlot(e);
-  if (spare >= 0) {
-    const slot = e.inventory?.[spare];
-    if (slot && putIntoContainer(container, e, spare, slot.count, state)) {
-      return spareInventorySlot(e) < 0;
+function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/types').GameState): NpcStorageOutcome {
+  const room = world.roomAt(e.x, e.y);
+  const rank = storeRank(room);
+  if (!room || rank <= 0) return 'nothing';
+  const container = findNpcStorageContainer(world, e, room, state);
+  if (!container) return 'nothing';
+  const carrier = npcIsSupplyCarrier(e);
+  const bestRank = roomAffordanceWeight(RoomType.STORAGE, 'store');
+
+  // Кладовщик в цеху не складывает, а забирает: это место, откуда возят.
+  if (carrier && rank < bestRank) {
+    const load = container.inventory.findIndex(slot => slot.count > 0);
+    if (load < 0) return 'nothing';
+    return takeFromContainer(container, e, load, container.inventory[load].count, state) ? 'busy' : 'nothing';
+  }
+
+  const spare = scanSpareInventory(e);
+  if (spare.first >= 0) {
+    const slot = e.inventory?.[spare.first];
+    if (slot && putIntoContainer(container, e, spare.first, slot.count, state)) {
+      return scanSpareInventory(e).first < 0 && !npcNeedsAmmo(e) ? 'done' : 'busy';
     }
+    // Ящик не принял — вещь поедет туда, где место есть.
+    if (!npcNeedsAmmo(e)) return 'nothing';
   }
 
   if (npcNeedsAmmo(e)) {
     const ammo = npcAmmoTypeFor(e);
     const ammoSlot = container.inventory.findIndex(slot => slot.defId === ammo && slot.count > 0);
-    if (ammoSlot >= 0 && takeFromContainer(container, e, ammoSlot, container.inventory[ammoSlot].count, state)) {
+    if (ammoSlot < 0) return spare.first >= 0 ? 'nothing' : 'done';
+    if (takeFromContainer(container, e, ammoSlot, container.inventory[ammoSlot].count, state)) {
       npcAutoEquipBestWeapon(e);
+      return 'busy';
     }
   }
-  return true;
+  return 'done';
 }
 
 function handleStore(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
   const ai = e.ai!;
-  if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
+
+  // Сперва — здесь: работник цеха кладёт смену в свой ящик, если место есть, и
+  // только потом несёт её через этаж.
+  let outcome: NpcStorageOutcome = 'nothing';
+  if (ai.path.length === 0 && (storeNextActionAtByNpc.get(e) ?? -Infinity) <= _barkTime) {
+    storeNextActionAtByNpc.set(e, _barkTime + stableTimer(e, 'store_action', STORE_ACTION_BASE_SEC, STORE_ACTION_SPREAD_SEC));
+    outcome = tickNpcStorageWork(world, e, state);
+    if (outcome === 'done') {
+      ai.goal = AIGoal.IDLE;
+      ai.timer = 0.5;
+    } else if (outcome === 'busy') {
+      wanderInRoom(world, e);
+      ai.timer = stableTimer(e, 'store_in_room', 3, 4);
+    }
+  }
+
+  if (outcome === 'nothing' && (ai.timer <= 0 || ai.goal === AIGoal.IDLE)) {
     ai.goal = AIGoal.WORK;
     if (!gotoRoutineRoom(world, e, 'store', { allowTrespassFallback: npcRaidsForeignContainers(e) })) {
       wanderNearby(world, e);
     }
     ai.timer = ai.path.length > 0 ? stableTimer(e, 'store_rethink', 9, 10) : 2.0;
-  }
-
-  if (ai.path.length === 0 && (storeNextActionAtByNpc.get(e) ?? -Infinity) <= _barkTime) {
-    storeNextActionAtByNpc.set(e, _barkTime + stableTimer(e, 'store_action', STORE_ACTION_BASE_SEC, STORE_ACTION_SPREAD_SEC));
-    if (tickNpcStorageWork(world, e, state)) {
-      ai.goal = AIGoal.IDLE;
-      ai.timer = 0.5;
-    } else {
-      wanderInRoom(world, e);
-    }
   }
 
   followPath(world, e, dt);

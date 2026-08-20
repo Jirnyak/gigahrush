@@ -2,6 +2,7 @@ import { isValidZ } from '../data/design_floors';
 import {
   Cell,
   ContainerKind,
+  EntityType,
   Faction,
   Feature,
   type ContainerAccess,
@@ -29,6 +30,8 @@ import { ITEMS } from '../data/catalog';
 import { CONTAINER_DEFS } from '../data/container_defs';
 import { getStack } from '../data/items';
 import { ensureRoomContainers } from './containers';
+import { addItemMovedCount } from './inventory';
+import { isPlayerEntity } from './player_actor';
 import { canSpendResources, spendResources } from './economy';
 import { publishEvent } from './events';
 import { territoryOwnerToFaction } from '../data/factions';
@@ -510,6 +513,57 @@ function consumeInputItems(container: WorldContainer, recipe: FactoryRecipeDef):
   consumeItemStacks(container, recipe.inputItems);
 }
 
+/* ── Товар попадает в руки, а не возникает в ящике ────────────────
+ *
+ * Раньше выход смены телепортировался в контейнер цеха. Теперь его забирает
+ * тот, кто стоит у станка: дальше вещь живёт по общим правилам — работник сам
+ * положит её в цеховой ящик, если есть место, или понесёт на склад, а
+ * кладовщик заберёт из цеха и увезёт. В ящик уходит только то, что человек
+ * не унёс, и то, что произведено на пустом цеху.
+ */
+/** Кто сейчас стоит в цеху у этого станка. Ближайший забирает смену. */
+function workerAtMachine(
+  world: World,
+  p: ProductionState,
+  container: WorldContainer,
+  entities: readonly Entity[],
+): Entity | undefined {
+  let best: Entity | undefined;
+  let bestDist = Infinity;
+  for (const worker of entities) {
+    if (!worker.alive || worker.type !== EntityType.NPC || isPlayerEntity(worker)) continue;
+    if (world.roomMap[world.idx(Math.floor(worker.x), Math.floor(worker.y))] !== p.roomId) continue;
+    const d = world.dist2(container.x, container.y, worker.x, worker.y);
+    if (d < bestDist) {
+      best = worker;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/** Отдать смену человеку у станка. Возвращает то, что в руки не влезло. */
+function handOutputsToWorker(
+  world: World,
+  p: ProductionState,
+  container: WorldContainer,
+  outputs: readonly ItemStackDef[],
+  entities: readonly Entity[] | undefined,
+): readonly ItemStackDef[] {
+  // Списка нет — некому и передавать: выход достаётся ящику, как раньше.
+  if (!entities || entities.length === 0) return outputs;
+  const worker = workerAtMachine(world, p, container, entities);
+  if (!worker) return outputs;
+  const leftovers: ItemStackDef[] = [];
+  for (const out of outputs) {
+    const count = Math.floor(out.count);
+    if (!Number.isFinite(count) || count <= 0) continue;
+    const taken = addItemMovedCount(worker, out.defId, count);
+    if (taken < count) leftovers.push({ defId: out.defId, count: count - taken });
+  }
+  return leftovers;
+}
+
 function addOutputStacks(container: WorldContainer, outputs: readonly ItemStackDef[]): void {
   for (const out of outputs) {
     const def = ITEMS[out.defId];
@@ -858,10 +912,11 @@ function processSuccessfulProduction(
   outputs: readonly ItemStackDef[],
   badBatch: FactoryBadBatchDef | undefined,
   observer?: Entity,
+  entities?: readonly Entity[],
 ): void {
   spendResources(state, recipe.inputs, p.z);
   consumeInputItems(container, recipe);
-  addOutputStacks(container, outputs);
+  addOutputStacks(container, handOutputsToWorker(world, p, container, outputs, entities));
   container.factoryId = factory.id;
   container.lastProducedAt = state.time;
   container.lastProducedItemId = outputs[0]?.defId;
@@ -919,7 +974,13 @@ function processSuccessfulProduction(
   }
 }
 
-export function tickProduction(state: GameState, world: World, force = false, observer?: Entity): number {
+export function tickProduction(
+  state: GameState,
+  world: World,
+  force = false,
+  observer?: Entity,
+  entities?: readonly Entity[],
+): number {
   ensureProductionRooms(state, world);
   let made = 0;
   for (const p of productionList(state)) {
@@ -943,7 +1004,7 @@ export function tickProduction(state: GameState, world: World, force = false, ob
     const outputs = badBatch ? badBatch.outputs : recipe.outputs;
     if (handleFullContainer(state, world, p, factory, recipe, container, outputs, badBatch, observer)) continue;
 
-    processSuccessfulProduction(state, world, p, factory, recipe, container, outputs, badBatch, observer);
+    processSuccessfulProduction(state, world, p, factory, recipe, container, outputs, badBatch, observer, entities);
     made++;
   }
   if (force) state.msgs.push(msg(`[PROD] тик: партий ${made}`, state.time, made > 0 ? '#4f4' : '#888'));

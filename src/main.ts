@@ -10313,7 +10313,7 @@ function gameLoop(now: number): void {
     }
     if (state.tick % 60 === 0) {
       tickContainerAudits(state, world, player, entities);
-      tickProduction(state, world, false, player);
+      tickProduction(state, world, false, player, entities);
       tickBankingInterest(state);
       tickStockMarket(state);
     }
