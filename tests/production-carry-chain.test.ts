@@ -365,3 +365,93 @@ test('обеднённый этаж работает на привезённом
   assert.ok(after < before, 'привезённое сырьё обязано убыть из ящика');
   assert.ok(made > stalled, 'на привезённом сырье цех обязан заработать');
 });
+
+test('повар сам идёт за едой, когда на кухне пусто и кладовщика нет', () => {
+  const world = makePressWorld();
+  const storage = addTestRoom(world, { id: 1, type: RoomType.STORAGE, x: 28, y: 10, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  const kitchen = addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 20, y: 24, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+  world.addContainer(makeTestContainer({
+    id: 2,
+    x: storage.x + 2, y: storage.y + 2, z: -26,
+    roomId: storage.id, zoneId: 1,
+    kind: ContainerKind.SHELF, name: 'Складской стеллаж',
+    inventory: [{ defId: 'bread', count: 6 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  world.addContainer(makeTestContainer({
+    id: 3,
+    x: kitchen.x + 2, y: kitchen.y + 2, z: -26,
+    roomId: kitchen.id, zoneId: 2,
+    kind: ContainerKind.SHELF, name: 'Кухонный шкаф',
+    inventory: [],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  const cupboard = world.containerById.get(3)!;
+
+  const cook = makeWorker(8, storage.x + 2.5, storage.y + 2.5, {
+    occupation: Occupation.COOK,
+    assignedRoomId: kitchen.id,
+  });
+  const entities = [makeTestPlayer({ id: 99, x: 38, y: 38 }), cook];
+
+  for (let step = 0; step < 4; step++) {
+    cook.x = storage.x + 2.5;
+    cook.y = storage.y + 2.5;
+    cook.ai!.path = [];
+    cook.ai!.pi = 0;
+    cook.ai!.timer = 0;
+    tickNpc(world, entities, cook, 700 + step * 4);
+  }
+  assert.ok((cook.inventory ?? []).some(slot => slot.defId === 'bread'), 'с пустой кухни повар обязан сходить за едой сам');
+
+  for (let step = 0; step < 6; step++) {
+    cook.x = kitchen.x + 2.5;
+    cook.y = kitchen.y + 2.5;
+    cook.ai!.path = [];
+    cook.ai!.pi = 0;
+    cook.ai!.timer = 0;
+    tickNpc(world, entities, cook, 730 + step * 4);
+  }
+  assert.ok(cupboard.inventory.some(slot => slot.defId === 'bread'), 'принесённое обязано лечь в кухонный шкаф');
+});
+
+test('при полной кухне повар за припасом не ходит, а хабар сдаёт как все', () => {
+  const world = makePressWorld();
+  const storage = addTestRoom(world, { id: 1, type: RoomType.STORAGE, x: 28, y: 10, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  const kitchen = addTestRoom(world, { id: 2, type: RoomType.KITCHEN, x: 20, y: 24, w: 6, h: 6, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
+  world.addContainer(makeTestContainer({
+    id: 2,
+    x: storage.x + 2, y: storage.y + 2, z: -26,
+    roomId: storage.id, zoneId: 1,
+    kind: ContainerKind.SHELF, name: 'Складской стеллаж',
+    inventory: [{ defId: 'bread', count: 6 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  world.addContainer(makeTestContainer({
+    id: 3,
+    x: kitchen.x + 2, y: kitchen.y + 2, z: -26,
+    roomId: kitchen.id, zoneId: 2,
+    kind: ContainerKind.SHELF, name: 'Кухонный шкаф',
+    inventory: [{ defId: 'bread', count: 4 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  const shelf = world.containerById.get(2)!;
+
+  const cook = makeWorker(9, storage.x + 2.5, storage.y + 2.5, {
+    occupation: Occupation.COOK,
+    assignedRoomId: kitchen.id,
+    inventory: [{ defId: 'zhelemish_sample_sealed', count: 2 }, { defId: 'arena_gold_trophy', count: 1 }],
+  });
+  const entities = [makeTestPlayer({ id: 99, x: 38, y: 38 }), cook];
+  for (let step = 0; step < 6; step++) {
+    cook.x = storage.x + 2.5;
+    cook.y = storage.y + 2.5;
+    cook.ai!.path = [];
+    cook.ai!.pi = 0;
+    cook.ai!.timer = 0;
+    tickNpc(world, entities, cook, 700 + step * 4);
+  }
+
+  assert.equal((cook.inventory ?? []).some(slot => slot.defId === 'bread'), false, 'при полной кухне за едой ходить незачем');
+  assert.ok(shelf.inventory.some(slot => slot.defId === 'zhelemish_sample_sealed'), 'хабар обязан сдаваться на склад как обычно');
+});
