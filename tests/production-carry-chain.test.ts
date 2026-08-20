@@ -14,6 +14,7 @@ import {
 } from '../src/core/types';
 import { World } from '../src/core/world';
 import { createWorldEventState } from '../src/systems/events';
+import { changeResourceStock } from '../src/systems/economy';
 import { ensureProductionRooms, tickProduction, type ProductionState } from '../src/systems/production';
 import { setPathContext } from '../src/systems/ai/pathfinding';
 import { setNpcContext, updateNPC } from '../src/systems/ai/npc_fsm';
@@ -278,4 +279,89 @@ test('порожний кладовщик на кухне ничего не ун
 
   assert.equal(cupboard.inventory.find(slot => slot.defId === 'bread')?.count, before, 'донесённое не должно уезжать назад');
   assert.equal((keeper.inventory ?? []).length, 0, 'на кухне кладовщику брать нечего');
+});
+
+test('кладовщик не берёт со склада то, чему некуда ехать', () => {
+  const world = makePressWorld();
+  const storage = addTestRoom(world, { id: 1, type: RoomType.STORAGE, x: 28, y: 10, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  world.addContainer(makeTestContainer({
+    id: 2,
+    x: storage.x + 2, y: storage.y + 2, z: -26,
+    roomId: storage.id, zoneId: 1,
+    kind: ContainerKind.SHELF, name: 'Складской стеллаж',
+    inventory: [{ defId: 'bread', count: 6 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  const shelf = world.containerById.get(2)!;
+
+  // Кухни на этаже нет — хлебу ехать некуда, и трогать его незачем.
+  const keeper = makeWorker(6, storage.x + 2.5, storage.y + 2.5, { occupation: Occupation.STOREKEEPER });
+  const entities = [makeTestPlayer({ id: 99, x: 38, y: 38 }), keeper];
+  for (let step = 0; step < 8; step++) {
+    keeper.x = storage.x + 2.5;
+    keeper.y = storage.y + 2.5;
+    keeper.ai!.path = [];
+    keeper.ai!.pi = 0;
+    keeper.ai!.timer = 0;
+    tickNpc(world, entities, keeper, 700 + step * 4);
+  }
+
+  assert.equal(shelf.inventory.find(slot => slot.defId === 'bread')?.count, 6, 'хлеб не должен ездить со склада на склад');
+});
+
+test('обеднённый этаж работает на привезённом сырье, и кладовщик его подвозит', () => {
+  const state = makePressState();
+  const world = makePressWorld();
+  primeProduction(state, world);
+  const storage = addTestRoom(world, { id: 1, type: RoomType.STORAGE, x: 28, y: 10, w: 6, h: 6, zoneId: 1, zoneFaction: ZoneFaction.CITIZEN });
+  world.addContainer(makeTestContainer({
+    id: 2,
+    x: storage.x + 2, y: storage.y + 2, z: -26,
+    roomId: storage.id, zoneId: 1,
+    kind: ContainerKind.SHELF, name: 'Складской стеллаж',
+    // Промышленная масса: ровно то сырьё, на котором стоит брикетный цех.
+    inventory: [{ defId: 'rubber_strip', count: 3 }],
+    access: 'room', faction: Faction.CITIZEN, tags: [],
+  }));
+  const shop = world.containerById.get(1)!;
+
+  // Этаж обеднел: запаса промышленной массы больше нет.
+  changeResourceStock(state, 'industrial_slurry', -9999, -26);
+
+  tickProduction(state, world, true);
+  assert.equal(shop.productionBlockedReason, 'no_inputs', 'без запаса и без подвоза цех обязан встать');
+  const stalled = shop.inventory.reduce((sum, slot) => sum + (slot.defId === 'grey_briquette' || slot.defId === 'green_briquette' ? slot.count : 0), 0);
+
+  // Кладовщик видит вставший цех и везёт ему сырьё со склада.
+  const keeper = makeWorker(7, storage.x + 2.5, storage.y + 2.5, { occupation: Occupation.STOREKEEPER });
+  const entities = [makeTestPlayer({ id: 99, x: 38, y: 38 }), keeper];
+  for (let step = 0; step < 4; step++) {
+    keeper.x = storage.x + 2.5;
+    keeper.y = storage.y + 2.5;
+    keeper.ai!.path = [];
+    keeper.ai!.pi = 0;
+    keeper.ai!.timer = 0;
+    tickNpc(world, entities, keeper, 700 + step * 4);
+  }
+  assert.ok((keeper.inventory ?? []).some(slot => slot.defId === 'rubber_strip'), 'кладовщик обязан взять сырьё для вставшего цеха');
+
+  for (let step = 0; step < 6; step++) {
+    keeper.x = 12.5;
+    keeper.y = 13.5;
+    keeper.ai!.path = [];
+    keeper.ai!.pi = 0;
+    keeper.ai!.timer = 0;
+    tickNpc(world, entities, keeper, 730 + step * 4);
+  }
+  assert.ok(shop.inventory.some(slot => slot.defId === 'rubber_strip'), 'сырьё обязано доехать до цеха');
+
+  const countIn = (holder: { inventory: { defId: string; count: number }[] }, defId: string): number =>
+    holder.inventory.reduce((sum, slot) => sum + (slot.defId === defId ? slot.count : 0), 0);
+  const before = countIn(shop, 'rubber_strip');
+  for (const p of (state as unknown as { production: ProductionState[] }).production) p.nextTickAt = 0;
+  tickProduction(state, world, true);
+  const after = countIn(shop, 'rubber_strip');
+  const made = shop.inventory.reduce((sum, slot) => sum + (slot.defId === 'grey_briquette' || slot.defId === 'green_briquette' ? slot.count : 0), 0);
+  assert.ok(after < before, 'привезённое сырьё обязано убыть из ящика');
+  assert.ok(made > stalled, 'на привезённом сырье цех обязан заработать');
 });

@@ -12,6 +12,8 @@ import { entityDisplayName } from '../../entities/monster';
 import { WEAPON_STATS } from '../../data/catalog';
 import { ITEMS } from '../../data/items';
 import { roomAffordanceWeight } from '../../data/room_affordances';
+import { FACTORIES } from '../../data/factories';
+import { resourceForItem } from '../../data/resources';
 import { itemAddCapacity } from '../inventory';
 import {
   canAccessContainer,
@@ -1114,7 +1116,9 @@ function itemRoleForNpc(e: Entity, defId: string): NpcItemRole {
     case ItemType.DRINK:
     case ItemType.MEDICINE:
       // Одну еду человек носит при себе, остальное — излишек: иначе пекарь
-      // остался бы стоять со всей сменой хлеба в карманах.
+      // остался бы стоять со всей сменой хлеба в карманах. Кладовщика это
+      // правило не обходит намеренно: пусть подворовывает из груза, отдельного
+      // случая для него дешевле не заводить, чем описывать честность.
       return 'reserve';
     default:
       return 'spare';
@@ -1130,8 +1134,6 @@ function scanSpareInventory(e: Entity): { first: number; count: number } {
   let first = -1;
   let count = 0;
   if (!inv) return { first, count };
-  // Кладовщик личного запаса из груза не выкраивает: он его везёт.
-  const keepsReserve = !npcIsSupplyCarrier(e);
   let keptFood = false;
   let keptDrink = false;
   let keptMedicine = false;
@@ -1140,7 +1142,7 @@ function scanSpareInventory(e: Entity): { first: number; count: number } {
     let role = itemRoleForNpc(e, defId);
     if (role === 'reserve') {
       const type = ITEMS[defId]?.type;
-      const kept = !keepsReserve || (type === ItemType.FOOD ? keptFood : type === ItemType.DRINK ? keptDrink : keptMedicine);
+      const kept = type === ItemType.FOOD ? keptFood : type === ItemType.DRINK ? keptDrink : keptMedicine;
       if (!kept) {
         if (type === ItemType.FOOD) keptFood = true;
         else if (type === ItemType.DRINK) keptDrink = true;
@@ -1179,6 +1181,27 @@ function storeRank(room: Room | null | undefined): number {
   return room ? roomAffordanceWeight(room.type, 'store') : 0;
 }
 
+/** Годится ли вещь в сырьё этому цеховому ящику. Своё сырьё цех не отдаёт. */
+function containerUsesAsInput(container: import('../../core/types').WorldContainer, defId: string): boolean {
+  if (!container.factoryId) return false;
+  const resource = resourceForItem(defId)?.id;
+  if (!resource) return false;
+  const factory = FACTORIES.find(f => f.id === container.factoryId);
+  if (!factory) return false;
+  // Вещь, которую цех сам же и выпускает, сырьём ему не считается — иначе
+  // кладовщик возил бы туда его собственную продукцию.
+  const produced = factory.recipes.some(recipe =>
+    recipe.outputs.some(out => out.defId === defId)
+    || recipe.badBatch?.outputs.some(out => out.defId === defId) === true);
+  if (produced) return false;
+  return factory.recipes.some(recipe => recipe.inputs.some(input => input.id === resource));
+}
+
+/** Ждёт ли ящик подвоза: цех встал без входа, и вещь ему годится. */
+function containerAwaitsInput(container: import('../../core/types').WorldContainer, defId: string): boolean {
+  return container.productionBlockedReason === 'no_inputs' && containerUsesAsInput(container, defId);
+}
+
 /**
  * Куда вещь просится по своей природе: где она водится, но не хранится.
  *
@@ -1196,12 +1219,12 @@ function deliveryRoomTypesFor(defId: string): readonly RoomType[] {
 /** Ближайшая комната, куда эту вещь можно донести и где её примут. */
 function deliveryRoomFor(world: World, e: Entity, defId: string, count: number): number | undefined {
   const types = deliveryRoomTypesFor(defId);
-  if (types.length === 0) return undefined;
   let best: number | undefined;
   let bestDist = Infinity;
   for (const container of world.containers) {
     const room = world.rooms[container.roomId];
-    if (!room || !types.includes(room.type)) continue;
+    // Либо вещи здесь место по природе, либо встал цех и ждёт именно её.
+    if (!room || !(types.includes(room.type) || containerAwaitsInput(container, defId))) continue;
     if (!canAccessContainer(container, e)) continue;
     if (itemAddCapacity(container, defId, count, undefined) <= 0) continue;
     const d = world.dist2(e.x, e.y, container.x, container.y);
@@ -1291,15 +1314,17 @@ function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/
   const room = world.roomAt(e.x, e.y);
   const rank = storeRank(room);
   const carrier = npcIsSupplyCarrier(e);
-  // Разнос: кладовщик отдаёт груз там, где этой вещи место, даже если комната
-  // ничего не хранит — кухне сдают хлеб, а не ставят её на учёт.
-  if (carrier && rank <= 0) {
-    const cargo = room ? deliveryCargoSlot(world, e) : undefined;
-    if (!room || !cargo || cargo.roomId !== room.id) return 'nothing';
-    const target = findNpcStorageContainer(world, e, room, state);
-    const slot = e.inventory?.[cargo.slot];
-    if (!target || !slot) return 'nothing';
-    return putIntoContainer(target, e, cargo.slot, slot.count, state) ? 'busy' : 'done';
+  // Разнос идёт раньше вывоза и не смотрит на ранг комнаты: кухне сдают хлеб,
+  // вставшему цеху — сырьё, а не ставят их на складской учёт.
+  if (carrier && room) {
+    const cargo = deliveryCargoSlot(world, e);
+    if (cargo && cargo.roomId === room.id) {
+      const target = findNpcStorageContainer(world, e, room, state);
+      const slot = e.inventory?.[cargo.slot];
+      if (!target || !slot) return 'nothing';
+      return putIntoContainer(target, e, cargo.slot, slot.count, state) ? 'busy' : 'done';
+    }
+    if (rank <= 0) return 'nothing';
   }
   if (!room || rank <= 0) return 'nothing';
   const container = findNpcStorageContainer(world, e, room, state);
@@ -1308,7 +1333,7 @@ function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/
 
   // Кладовщик в цеху не складывает, а забирает: это место, откуда возят.
   if (carrier && rank < bestRank) {
-    const load = container.inventory.findIndex(slot => slot.count > 0);
+    const load = container.inventory.findIndex(slot => slot.count > 0 && !containerUsesAsInput(container, slot.defId));
     if (load < 0) return 'nothing';
     return takeFromContainer(container, e, load, container.inventory[load].count, state) ? 'busy' : 'nothing';
   }
@@ -1319,7 +1344,11 @@ function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/
   if (carrier && depositableSlot(world, e, true) < 0 && rank >= bestRank) {
     for (let i = 0; i < container.inventory.length; i++) {
       const item = container.inventory[i];
-      if (item.count <= 0 || deliveryRoomTypesFor(item.defId).length === 0) continue;
+      if (item.count <= 0) continue;
+      // Проверяется КОМНАТА, а не тип: вещь, которой «место на кухне», нельзя
+      // брать там, где кухни нет, — иначе она поедет со склада и вернётся на
+      // склад, и так без конца.
+      if (deliveryRoomFor(world, e, item.defId, item.count) === undefined) continue;
       if (takeFromContainer(container, e, i, item.count, state)) return 'done';
     }
   }

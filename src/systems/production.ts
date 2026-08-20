@@ -24,11 +24,13 @@ import {
   type FactoryDef,
   type FactoryRecipeDef,
   type ItemStackDef,
+  type ResourceStack,
 } from '../data/factories';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { ITEMS } from '../data/catalog';
 import { CONTAINER_DEFS } from '../data/container_defs';
 import { getStack } from '../data/items';
+import { resourceForItem } from '../data/resources';
 import { ensureRoomContainers } from './containers';
 import { addItemMovedCount } from './inventory';
 import { isPlayerEntity } from './player_actor';
@@ -468,9 +470,80 @@ function resolveOutputContainer(
     ?? bestContainer(containers, recipe, tags, c => !isOtherFactoryOutput(c, factory));
 }
 
-function missingResourceIds(state: GameState, recipe: FactoryRecipeDef, z: number): string[] {
-  const missing: string[] = [];
+/* ── Вход смены: сперва привезённое, потом запас этажа ────────────
+ *
+ * Числовой запас этажа остаётся бухгалтерией, но привезённое в цех сырьё
+ * теперь расходуется первым и честно убывает из ящика. Отсюда же берётся
+ * смысл подвоза: когда этаж обеднел и запаса не хватает, цех работает ровно
+ * настолько, насколько ему привезли.
+ */
+/**
+ * Годится ли вещь из ящика в сырьё. Выход смены и объявленные предметы-входы
+ * не годятся: ящик у цеха один и тот же, и без этого правила гильзоплавка
+ * съела бы собственные патроны как металл.
+ */
+function countsAsRawInput(recipe: FactoryRecipeDef, defId: string): boolean {
+  if (recipe.outputs.some(out => out.defId === defId)) return false;
+  if (recipe.badBatch?.outputs.some(out => out.defId === defId)) return false;
+  if (recipe.inputItems?.some(input => input.defId === defId)) return false;
+  return true;
+}
+
+function containerResourceCount(container: WorldContainer, recipe: FactoryRecipeDef, resourceId: string): number {
+  let count = 0;
+  for (const item of container.inventory) {
+    if (!countsAsRawInput(recipe, item.defId)) continue;
+    if (resourceForItem(item.defId)?.id === resourceId) count += item.count;
+  }
+  return count;
+}
+
+/** Чего не хватает после того, как посчитали привезённое. */
+function resourceInputsBeyondContainer(
+  container: WorldContainer,
+  recipe: FactoryRecipeDef,
+): ResourceStack[] {
+  const rest: ResourceStack[] = [];
   for (const input of recipe.inputs) {
+    const left = input.count - containerResourceCount(container, recipe, input.id);
+    if (left > 0) rest.push({ id: input.id, count: left });
+  }
+  return rest;
+}
+
+/** Съесть привезённое сырьё и вернуть остаток, который спишется с этажа. */
+function consumeResourceInputs(
+  container: WorldContainer,
+  recipe: FactoryRecipeDef,
+): ResourceStack[] {
+  const rest: ResourceStack[] = [];
+  for (const input of recipe.inputs) {
+    let left = input.count;
+    for (let i = 0; i < container.inventory.length && left > 0; i++) {
+      const item = container.inventory[i];
+      if (!countsAsRawInput(recipe, item.defId)) continue;
+      if (resourceForItem(item.defId)?.id !== input.id) continue;
+      const take = Math.min(left, item.count);
+      item.count -= take;
+      left -= take;
+      if (item.count <= 0) {
+        container.inventory.splice(i, 1);
+        i--;
+      }
+    }
+    if (left > 0) rest.push({ id: input.id, count: left });
+  }
+  return rest;
+}
+
+function missingResourceIds(
+  state: GameState,
+  recipe: FactoryRecipeDef,
+  z: number,
+  container: WorldContainer,
+): string[] {
+  const missing: string[] = [];
+  for (const input of resourceInputsBeyondContainer(container, recipe)) {
     if (!canSpendResources(state, [input], z)) missing.push(input.id);
   }
   return missing;
@@ -824,7 +897,7 @@ function handleMissingInputs(
   container: WorldContainer,
   observer?: Entity,
 ): boolean {
-  const missingResources = missingResourceIds(state, recipe, p.z);
+  const missingResources = missingResourceIds(state, recipe, p.z, container);
   const missingItems = missingInputItemIds(container, recipe);
   if (missingResources.length > 0 || missingItems.length > 0) {
     p.blockedReason = 'no_inputs';
@@ -914,7 +987,7 @@ function processSuccessfulProduction(
   observer?: Entity,
   entities?: readonly Entity[],
 ): void {
-  spendResources(state, recipe.inputs, p.z);
+  spendResources(state, consumeResourceInputs(container, recipe), p.z);
   consumeInputItems(container, recipe);
   addOutputStacks(container, handOutputsToWorker(world, p, container, outputs, entities));
   container.factoryId = factory.id;
