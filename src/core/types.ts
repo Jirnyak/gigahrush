@@ -112,6 +112,9 @@ export enum RoomType {
   OFFICE,      // бухгалтерия — paperwork
   HQ,          // штаб фракции — spawn + охрана
   CLASSROOM,   // класс/ясли
+  SHOP,        // лавка — торговля лицом к лицу
+  BAR,         // бар — выпивка и сходка
+  MARKET,      // торговый ряд — общий зал, где торгуют многие
 }
 
 export interface Room {
@@ -1010,6 +1013,8 @@ export const WORLD_EVENT_TYPES = [
   'quest_created',
   'quest_completed',
   'quest_failed',
+  'scene_started',
+  'scene_ended',
   'contract_created',
   'contract_completed',
   'contract_failed',
@@ -1081,8 +1086,6 @@ export const WORLD_EVENT_TYPES = [
   'obzhivalshchik_calmed',
   'obzhivalshchik_breached',
   'matka_child_spawned',
-  'swarm_source_sealed',
-  'swarm_source_burned',
   'death_seen',
 ] as const;
 
@@ -1202,6 +1205,8 @@ export interface GameState {
   paused: boolean;
   gameOver: boolean;
   trailerMode?: boolean;
+  /** Играется сцена этажа: камера у режиссёра, ввод игрока молчит. Не часть формы сейва. */
+  sceneLock?: boolean;
   tutorialMode?: boolean;
   tutorialStep?: number;
   tutorialExitTimer?: number;

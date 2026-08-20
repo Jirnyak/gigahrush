@@ -119,6 +119,9 @@ const ROOM_TAGS: Record<RoomType, string> = {
   [RoomType.OFFICE]: 'office',
   [RoomType.HQ]: 'hq',
   [RoomType.CLASSROOM]: 'classroom',
+  [RoomType.SHOP]: 'shop',
+  [RoomType.BAR]: 'bar',
+  [RoomType.MARKET]: 'market',
 };
 
 const FACTION_TAGS: Record<Faction, string> = {

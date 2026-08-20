@@ -37,3 +37,4 @@ import './lampoglaz_corridor';
 import './gnilushka_lost_cell';
 import './blood_plant_den';
 import './spore_carpet_cache';
+import './trade_row';

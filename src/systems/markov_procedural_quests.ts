@@ -400,5 +400,8 @@ function roomTypeName(roomType: RoomType): string {
     case RoomType.OFFICE: return 'кабинет';
     case RoomType.HQ: return 'штаб';
     case RoomType.CLASSROOM: return 'класс';
+    case RoomType.SHOP: return 'лавка';
+    case RoomType.BAR: return 'бар';
+    case RoomType.MARKET: return 'торговый ряд';
   }
 }

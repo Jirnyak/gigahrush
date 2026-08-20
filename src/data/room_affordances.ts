@@ -88,6 +88,29 @@ export const ROOM_AFFORDANCES: Readonly<Record<RoomType, RoomAffordanceDef>> = {
     expectedFeatures: [Feature.DESK, Feature.SCREEN, Feature.CHAIR],
     tags: ['office', 'paperwork', 'admin'],
   },
+  [RoomType.SHOP]: {
+    roomType: RoomType.SHOP,
+    // Лавка не хранилище, а точка выдачи: товар в неё ВОЗЯТ (`store` ноль —
+    // «куда не хранят, туда и разносят»), а люди заходят поглядеть.
+    affordances: { social: 12, wander: 10 },
+    expectedFeatures: [Feature.SHELF, Feature.TABLE],
+    tags: ['trade', 'shop', 'queue', 'public'],
+  },
+  [RoomType.BAR]: {
+    roomType: RoomType.BAR,
+    // Бар держится на двух каналах сразу: сюда тянет поговорить и выпить,
+    // поэтому люди скапливаются сами, без отдельной подсистемы посиделок.
+    affordances: { social: 30, drink: 22, eat: 10, wander: 12, shelter: -4 },
+    expectedFeatures: [Feature.TABLE, Feature.CHAIR],
+    tags: ['bar', 'social', 'drink', 'idle', 'public'],
+  },
+  [RoomType.MARKET]: {
+    roomType: RoomType.MARKET,
+    // Ряд — проходной зал: через него ходят и в нём толкутся.
+    affordances: { social: 24, wander: 20, patrol: 10, eat: 6 },
+    expectedFeatures: [Feature.TABLE, Feature.SHELF],
+    tags: ['trade', 'market', 'crowd', 'public', 'hall'],
+  },
   [RoomType.HQ]: {
     roomType: RoomType.HQ,
     affordances: { patrol: 20, shelter: 18, social: 10, hide: 18 },

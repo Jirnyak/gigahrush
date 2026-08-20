@@ -16,7 +16,7 @@ export interface ContainerDef {
 export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   [ContainerKind.WOODEN_CHEST]: {
     kind: ContainerKind.WOODEN_CHEST, name: 'Деревянный сундук', capacitySlots: 10, proceduralValueCap: 75, defaultAccess: 'owner',
-    roomTypes: [RoomType.LIVING, RoomType.STORAGE], tags: ['home', 'food', 'paper'],
+    roomTypes: [RoomType.LIVING, RoomType.STORAGE, RoomType.SHOP, RoomType.MARKET], tags: ['home', 'food', 'paper'],
   },
   [ContainerKind.METAL_CABINET]: {
     kind: ContainerKind.METAL_CABINET, name: 'Железный шкаф', capacitySlots: 12, proceduralValueCap: 120, defaultAccess: 'room',
@@ -32,7 +32,7 @@ export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   },
   [ContainerKind.FRIDGE]: {
     kind: ContainerKind.FRIDGE, name: 'Холодильник', capacitySlots: 8, proceduralValueCap: 60, defaultAccess: 'room',
-    roomTypes: [RoomType.KITCHEN], tags: ['food'],
+    roomTypes: [RoomType.KITCHEN, RoomType.BAR], tags: ['food'],
   },
   [ContainerKind.SAFE]: {
     kind: ContainerKind.SAFE, name: 'Сейф', capacitySlots: 10, proceduralValueCap: 260, defaultAccess: 'locked',
@@ -44,11 +44,11 @@ export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   },
   [ContainerKind.CASHBOX]: {
     kind: ContainerKind.CASHBOX, name: 'Касса', capacitySlots: 5, proceduralValueCap: 110, defaultAccess: 'owner',
-    roomTypes: [RoomType.OFFICE, RoomType.KITCHEN], tags: ['trade', 'valuable'],
+    roomTypes: [RoomType.OFFICE, RoomType.KITCHEN, RoomType.SHOP, RoomType.MARKET, RoomType.BAR], tags: ['trade', 'valuable'],
   },
   [ContainerKind.SECRET_STASH]: {
     kind: ContainerKind.SECRET_STASH, name: 'Тайник', capacitySlots: 8, proceduralValueCap: 220, defaultAccess: 'secret',
-    roomTypes: [RoomType.CORRIDOR, RoomType.SMOKING, RoomType.LIVING], tags: ['secret', 'paper', 'forged', 'contraband'],
+    roomTypes: [RoomType.CORRIDOR, RoomType.SMOKING, RoomType.LIVING, RoomType.BAR], tags: ['secret', 'paper', 'forged', 'contraband'],
   },
   [ContainerKind.EMERGENCY_BOX]: {
     kind: ContainerKind.EMERGENCY_BOX, name: 'Аварийный ящик', capacitySlots: 8, proceduralValueCap: 85, defaultAccess: 'public',

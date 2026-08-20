@@ -432,6 +432,9 @@ const ROOM_TYPE_NAMES: Record<RoomType, string> = {
   [RoomType.OFFICE]: 'кабинет',
   [RoomType.HQ]: 'штаб',
   [RoomType.CLASSROOM]: 'класс',
+  [RoomType.SHOP]: 'лавка',
+  [RoomType.BAR]: 'бар',
+  [RoomType.MARKET]: 'торговый ряд',
 };
 
 const FACTION_NAMES: Record<number, string> = {

@@ -53,6 +53,9 @@ const ROOM_TYPE_NAMES: Record<RoomType, string> = {
   [RoomType.OFFICE]: 'кабинеты',
   [RoomType.HQ]: 'штабы',
   [RoomType.CLASSROOM]: 'классы',
+  [RoomType.SHOP]: 'лавки',
+  [RoomType.BAR]: 'бары',
+  [RoomType.MARKET]: 'торговые ряды',
 };
 
 const QUEST_TYPE_LABELS: Record<QuestType, string> = {

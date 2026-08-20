@@ -297,6 +297,12 @@ function applyColdResidentCadence(e: Entity, dt: number, time: number, world: Wo
     n.water = Math.min(100, n.water + 4.5 * dt);
     n.pendingPoo = (n.pendingPoo ?? 0) + food * 0.35 * dt;
     n.pendingPee = (n.pendingPee ?? 0) + 2.1 * dt;
+  } else if (room?.type === RoomType.BAR) {
+    // В баре наливают. Без этого канал `drink` у бара вёл бы людей туда, где
+    // жажда не гаснет, и они бы отскакивали.
+    n.water = Math.min(100, n.water + 5.5 * dt);
+    n.food = Math.min(100, n.food + 1.2 * dt);
+    n.pendingPee = (n.pendingPee ?? 0) + 3.4 * dt;
   } else if (room?.type === RoomType.BATHROOM) {
     n.water = Math.min(100, n.water + 2 * dt);
     if (n.pee > 5 && world) {
@@ -319,7 +325,7 @@ function applyColdResidentCadence(e: Entity, dt: number, time: number, world: Wo
   if (e.ai?.npcState === NpcState.SLEEPING && (room?.type === RoomType.LIVING || room?.type === RoomType.OFFICE)) {
     n.sleep = Math.min(100, n.sleep + 2.8 * dt);
   }
-  if (e.ai?.npcState === NpcState.LUNCH && (room?.type === RoomType.COMMON || room?.type === RoomType.KITCHEN)) {
+  if (e.ai?.npcState === NpcState.LUNCH && (room?.type === RoomType.COMMON || room?.type === RoomType.KITCHEN || room?.type === RoomType.BAR)) {
     n.food = Math.min(100, n.food + 1.5 * dt);
     n.water = Math.min(100, n.water + 1.5 * dt);
   }

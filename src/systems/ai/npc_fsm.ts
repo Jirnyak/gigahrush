@@ -1281,9 +1281,19 @@ function containerAwaitsInput(container: import('../../core/types').WorldContain
  * боезапас кладовщик разносить не побежит.
  */
 function deliveryRoomTypesFor(defId: string): readonly RoomType[] {
-  const rooms = ITEMS[defId]?.spawnRooms;
-  if (!rooms || rooms.length === 0) return [];
-  return rooms.filter(type => roomAffordanceWeight(type, 'store') === 0);
+  // Адрес вещи — там, где она водится по генерации, И там, где её ресурсу
+  // положено лежать по экономике. Второе нужно, чтобы товар доезжал до лавок
+  // и баров без правки `spawnRooms` у четырёх сотен предметов.
+  const spawn = ITEMS[defId]?.spawnRooms ?? [];
+  const stocked = resourceForItem(defId)?.roomTypes ?? [];
+  const out: RoomType[] = [];
+  for (const type of spawn) {
+    if (roomAffordanceWeight(type, 'store') === 0) out.push(type);
+  }
+  for (const type of stocked) {
+    if (roomAffordanceWeight(type, 'store') === 0 && !out.includes(type)) out.push(type);
+  }
+  return out;
 }
 
 /** Ближайшая комната, куда эту вещь можно донести и где её примут. */
