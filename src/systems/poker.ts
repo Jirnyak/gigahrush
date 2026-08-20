@@ -9,7 +9,7 @@
 
 import { msg, type Entity, type GameState } from '../core/types';
 import { publishEvent } from './events';
-import { mathRng as rng } from '../core/rand';
+import { rng } from '../core/rand';
 import { registerTabletopGame } from './tabletop';
 
 export type PokerSuit = 'clubs' | 'diamonds' | 'hearts' | 'spades';

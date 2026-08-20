@@ -5,6 +5,7 @@
 import { W } from '../core/types';
 import { World } from '../core/world';
 import { bfsPath, subcellToWorld } from './ai/pathfinding.js';
+import { cellCeilingHeight, SKY_TIER_THRESHOLD, cellCeilingTier } from '../world/ceiling_heights';
 import { mathRng as rng } from '../core/rand';
 
 export type CameraMode = 'player' | 'free' | 'death' | 'trailer' | 'cinematic';
@@ -48,6 +49,32 @@ export interface CinematicCameraState {
   time: number;
   angleTarget: number;
   flySpeed: number;
+  /* Режиссёрские поля. Без них поведение прежнее: камера летит по курсу
+   * взгляда и возвращается к игроку, исчерпав путь. */
+  /** Точка внимания. Задана — камера смотрит на неё, а летит куда ведёт путь. */
+  lookAtX?: number;
+  lookAtY?: number;
+  /** Облёт вокруг точки внимания. Позиция считается аналитически, путь не нужен. */
+  orbitRadius?: number;
+  orbitSpeed?: number;
+  orbitPhase?: number;
+  /** Целевая высота, к которой камера подходит плавно. */
+  heightTarget?: number;
+  /** Исчерпав путь, держать позу вместо возврата к игроку. Владелец сцены решает, когда отпустить. */
+  hold?: boolean;
+}
+
+/** Режиссёрская настройка полёта. Пустой объект = прежнее поведение. */
+export interface CinematicCameraAim {
+  /** Точка внимания; `null` снимает её и возвращает взгляд по курсу. */
+  lookAt?: { x: number; y: number } | null;
+  /** Облёт вокруг точки внимания; `null` снимает облёт. */
+  orbit?: { radius: number; speed: number; phase?: number } | null;
+  height?: number;
+  flySpeed?: number;
+  hold?: boolean;
+  /** Начальный угол камеры: сцена стартует со взгляда игрока, а не с нулевого. */
+  angle?: number;
 }
 
 export interface RuntimeCamera {
@@ -110,6 +137,15 @@ const FREE_CAMERA_TURN_SPEED = 2.5;
 const FREE_CAMERA_PITCH_SPEED = 1.6;
 const FREE_CAMERA_MIN_HEIGHT = 0.08;
 const FREE_CAMERA_MAX_HEIGHT = 8.0;
+/* Общий почерк пролёта: трейлер и сцена летят и дышат одинаково. */
+const CINEMATIC_FLY_SPEED = 4.0;
+const CINEMATIC_TURN_RATE = 6.0;
+const CINEMATIC_BREATH_HEIGHT = 0.15;
+const CINEMATIC_BREATH_PITCH = 0.1;
+/* Допуск на узел маршрута и потолок субшагов за кадр: шаг крупнее допуска —
+ * и камера начинает срезать углы по хорде, то есть лететь сквозь простенки. */
+const CINEMATIC_NODE_REACH = 0.5;
+const CINEMATIC_MAX_SUBSTEPS = 64;
 
 const DEATH_BALL_RADIUS = 0.2;
 const DEATH_FRICTION = 0.65;
@@ -222,6 +258,7 @@ export function startCinematicCamera(
   px: number,
   py: number,
   waypoints: number[][],
+  aim?: CinematicCameraAim,
 ): void {
   camera.mode = 'cinematic';
   resetCameraBob(camera.bob);
@@ -239,58 +276,265 @@ export function startCinematicCamera(
     active: true,
     time: 0,
     angleTarget: 0,
-    flySpeed: 2.5,
+    flySpeed: CINEMATIC_FLY_SPEED,
   };
+  if (aim) aimCinematicCamera(camera, aim);
+}
+
+/** Перенацелить летящую камеру, не перезапуская пролёт: сцена меняет план кадра между репликами. */
+export function aimCinematicCamera(camera: RuntimeCamera, aim: CinematicCameraAim): void {
+  const ts = camera.cinematic;
+  if (!ts) return;
+  if (aim.lookAt !== undefined) {
+    ts.lookAtX = aim.lookAt === null ? undefined : wrapCoord(aim.lookAt.x);
+    ts.lookAtY = aim.lookAt === null ? undefined : wrapCoord(aim.lookAt.y);
+  }
+  if (aim.orbit !== undefined) {
+    if (aim.orbit === null) {
+      ts.orbitRadius = undefined;
+      ts.orbitSpeed = undefined;
+    } else {
+      ts.orbitRadius = Math.max(0.5, aim.orbit.radius);
+      ts.orbitSpeed = aim.orbit.speed;
+      ts.orbitPhase = aim.orbit.phase ?? ts.orbitPhase ?? 0;
+    }
+  }
+  if (aim.height !== undefined) ts.heightTarget = clampHeight(aim.height);
+  if (aim.flySpeed !== undefined) ts.flySpeed = Math.max(0, aim.flySpeed);
+  if (aim.hold !== undefined) ts.hold = aim.hold;
+  if (aim.angle !== undefined) camera.free.angle = aim.angle;
+}
+
+/** Проложить новый маршрут для той же сцены. Курсор узлов сбрасывается, прицел сохраняется. */
+export function setCinematicCameraPath(camera: RuntimeCamera, waypoints: number[][]): void {
+  const ts = camera.cinematic;
+  if (!ts) return;
+  ts.path = waypoints;
+  ts.targetNodeIndex = 0;
+}
+
+/**
+ * Проложить маршрут ПО ПРОХОДИМЫМ КЛЕТКАМ. Пути этажа и так запечены, и лететь
+ * сквозь бетон незачем: зритель должен видеть дорогу, а не изнанку стен.
+ * Если прохода нет вовсе, остаётся прямая — пустой кадр хуже короткого сквозняка.
+ */
+export function routeCinematicCamera(camera: RuntimeCamera, world: World, tx: number, ty: number): void {
+  const ts = camera.cinematic;
+  if (!ts) return;
+  const nodes = bfsPath(world, Math.floor(camera.free.x), Math.floor(camera.free.y), Math.floor(tx), Math.floor(ty));
+  const waypoints: number[][] = nodes.map(node => subcellToWorld(node) as unknown as number[]);
+  waypoints.push([tx, ty]);
+  setCinematicCameraPath(camera, waypoints);
+}
+
+/**
+ * Пройти по маршруту за кадр, НЕ срезая углы.
+ *
+ * Сквозь стены камера пролетала не потому, что маршрут плохой, а потому что шаг
+ * за кадр был крупнее допуска на узел: на скорости 22 клетки в секунду камера
+ * проходит за кадр три четверти клетки, перескакивает узел, не «съев» его, и
+ * дальше идёт по хорде — то есть напрямую через угол простенка.
+ *
+ * Поэтому кадровое перемещение режется на короткие шаги (не длиннее допуска),
+ * и на каждом шаге камера правит курс на текущий узел. Получается ход строго по
+ * ломаной, которую проложил BFS. Стена вдобавок останавливает шаг: если узел
+ * почему-то оказался за ней, кадр замрёт на месте, а не окажется в бетоне —
+ * такой узел через `CINEMATIC_NODE_REACH` всё равно будет признан пройденным.
+ */
+function flyAlongRoute(camera: RuntimeCamera, world: World, ts: CinematicCameraState, dt: number): void {
+  let budget = ts.flySpeed * dt;
+  let guard = CINEMATIC_MAX_SUBSTEPS;
+  // Запечённое дерево путей находит дорогу не всегда: на части этажей маршрута
+  // до зала попросту нет, и тогда в пути остаётся единственный узел — сама цель.
+  // Лететь к ней по прямой значит идти сквозь бетон, поэтому в таком кадре
+  // камера пробирается со скольжением вдоль стен и узел не бросает.
+  const routeless = ts.path.length <= 1;
+  while (budget > 0 && guard-- > 0 && ts.targetNodeIndex < ts.path.length) {
+    const node = ts.path[ts.targetNodeIndex];
+    const dx = world.delta(camera.free.x, node[0]);
+    const dy = world.delta(camera.free.y, node[1]);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < CINEMATIC_NODE_REACH) {
+      ts.targetNodeIndex++;
+      continue;
+    }
+    ts.angleTarget = Math.atan2(dy, dx);
+    const step = Math.min(budget, CINEMATIC_NODE_REACH, dist);
+    const nx = wrapCoord(camera.free.x + (dx / dist) * step);
+    const ny = wrapCoord(camera.free.y + (dy / dist) * step);
+    if (!world.solid(Math.floor(nx), Math.floor(ny))) {
+      camera.free.x = nx;
+      camera.free.y = ny;
+      budget -= step;
+      continue;
+    }
+    if (!routeless) {
+      ts.targetNodeIndex++;
+      continue;
+    }
+    // Стена на прямой: разъезжаемся по осям, чтобы обогнуть её, а не пройти насквозь.
+    const slidX = wrapCoord(camera.free.x + (dx / dist) * step);
+    const slidY = wrapCoord(camera.free.y + (dy / dist) * step);
+    let moved = false;
+    if (!world.solid(Math.floor(slidX), Math.floor(camera.free.y))) { camera.free.x = slidX; moved = true; }
+    if (!world.solid(Math.floor(camera.free.x), Math.floor(slidY))) { camera.free.y = slidY; moved = true; }
+    budget -= step;
+    if (!moved) break; // упёрлись в тупик; такт закроется по своему таймауту
+  }
+}
+
+/**
+ * Потолок над камерой. Высоко — хорошо, сквозь перекрытие — нет: план режется
+ * по потолку текущей клетки, отступая ровно на амплитуду покачивания, чтобы
+ * «дыхание» кадра не пробивало плиту. Под открытым небом ограничивать нечем.
+ *
+ * Масштаб для справки: глаз человека 0.5 = 1.8 м, значит единица высоты ≈ 3.6 м,
+ * а обычное перекрытие (ярус 0) — те же 3.6 м. Отсюда рабочий потолок плана
+ * около 0.85, то есть примерно три метра над полом.
+ */
+function ceilingLimitedHeight(world: World, x: number, y: number, wanted: number): number {
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  if (cellCeilingTier(world, cx, cy) >= SKY_TIER_THRESHOLD) return clampHeight(wanted);
+  const ceiling = cellCeilingHeight(world, cx, cy) - CINEMATIC_BREATH_HEIGHT;
+  return clampHeight(Math.min(wanted, Math.max(FREE_CAMERA_MIN_HEIGHT, ceiling)));
+}
+
+/** Дошла ли камера до конца проложенного маршрута. Сцена ждёт этого, прежде чем давать реплику. */
+export function cinematicCameraArrived(camera: RuntimeCamera): boolean {
+  const ts = camera.cinematic;
+  if (!ts) return true;
+  return ts.targetNodeIndex >= ts.path.length;
 }
 
 export function updateCinematicCamera(camera: RuntimeCamera, world: World, dt: number): void {
   if (camera.mode !== 'cinematic' || !camera.cinematic) return;
   const ts = camera.cinematic;
   ts.time += dt;
-  ts.flySpeed = 4.0;
+  const directed = ts.lookAtX !== undefined && ts.lookAtY !== undefined;
 
-  if (ts.path.length === 0 || ts.targetNodeIndex >= ts.path.length) {
-    camera.mode = 'player';
+  // Облёт: позиция вокруг точки внимания считается аналитически, маршрут не нужен.
+  // Радиус поджимается, пока точка не окажется в проходимой клетке: круг шире
+  // комнаты иначе уводил бы оператора в бетон на каждом втором обороте.
+  if (directed && ts.orbitRadius !== undefined && ts.orbitSpeed !== undefined) {
+    ts.orbitPhase = (ts.orbitPhase ?? 0) + ts.orbitSpeed * dt;
+    const cos = Math.cos(ts.orbitPhase);
+    const sin = Math.sin(ts.orbitPhase);
+    // Радиус поджимается до первой проходимой клетки. Если свободной нет вовсе
+    // (актёры прижаты к стене, и весь сектор круга в бетоне) — кадр остаётся на
+    // прежнем месте: замереть на секунду честнее, чем уехать внутрь простенка.
+    let placed = false;
+    for (let radius = ts.orbitRadius; radius >= CINEMATIC_NODE_REACH; radius -= CINEMATIC_NODE_REACH) {
+      const ox = wrapCoord(ts.lookAtX! + cos * radius);
+      const oy = wrapCoord(ts.lookAtY! + sin * radius);
+      if (world.solid(Math.floor(ox), Math.floor(oy))) continue;
+      camera.free.x = ox;
+      camera.free.y = oy;
+      placed = true;
+      break;
+    }
+    if (!placed && !world.solid(Math.floor(ts.lookAtX!), Math.floor(ts.lookAtY!))) {
+      camera.free.x = ts.lookAtX!;
+      camera.free.y = ts.lookAtY!;
+    }
+    applyCinematicGaze(camera, world, ts, dt, true);
     return;
   }
 
+  // Маршрут исчерпан: держим кадр, если сцена этого просила, иначе отдаём камеру игроку.
+  if (ts.path.length === 0 || ts.targetNodeIndex >= ts.path.length) {
+    if (!ts.hold) {
+      camera.mode = 'player';
+      return;
+    }
+    applyCinematicGaze(camera, world, ts, dt, directed);
+    return;
+  }
+
+  if (directed) {
+    flyAlongRoute(camera, world, ts, dt);
+    if (ts.targetNodeIndex >= ts.path.length && !ts.hold) {
+      camera.mode = 'player';
+      return;
+    }
+    applyCinematicGaze(camera, world, ts, dt, true);
+    return;
+  }
+
+  let courseAngle = ts.angleTarget;
   while (ts.targetNodeIndex < ts.path.length) {
     const waypoint = ts.path[ts.targetNodeIndex];
-    const tx = waypoint[0];
-    const ty = waypoint[1];
-    const dx = world.delta(camera.free.x, tx);
-    const dy = world.delta(camera.free.y, ty);
-    const dist2 = dx * dx + dy * dy;
-
-    if (dist2 < 0.64) {
+    const dx = world.delta(camera.free.x, waypoint[0]);
+    const dy = world.delta(camera.free.y, waypoint[1]);
+    if (dx * dx + dy * dy < 0.64) {
       ts.targetNodeIndex++;
     } else {
-      ts.angleTarget = Math.atan2(dy, dx);
+      courseAngle = Math.atan2(dy, dx);
+      ts.angleTarget = courseAngle;
       break;
     }
   }
 
   if (ts.targetNodeIndex >= ts.path.length) {
-    camera.mode = 'player';
+    if (!ts.hold) {
+      camera.mode = 'player';
+      return;
+    }
+    applyCinematicGaze(camera, world, ts, dt, directed);
     return;
   }
 
-  let vx = Math.cos(camera.free.angle) * ts.flySpeed * dt;
-  let vy = Math.sin(camera.free.angle) * ts.flySpeed * dt;
-
-  const nx = wrapCoord(camera.free.x + vx);
-  const ny = wrapCoord(camera.free.y + vy);
-
+  // Без точки внимания камера летит туда, куда смотрит — прежнее поведение трейлерного пролёта.
+  // С точкой внимания курс и взгляд разъезжаются: летим по маршруту, смотрим на актёров.
+  const heading = directed ? courseAngle : camera.free.angle;
+  const nx = wrapCoord(camera.free.x + Math.cos(heading) * ts.flySpeed * dt);
+  const ny = wrapCoord(camera.free.y + Math.sin(heading) * ts.flySpeed * dt);
+  // Маршрут проложен по проходимым клеткам, но между узлами камера идёт по хорде
+  // и на поворотах срезает угол сквозь простенок. По осям разъезжаемся отдельно:
+  // тогда срезанный угол превращается в скольжение вдоль стены, а не в проход через неё.
+  // Между узлами камера идёт свободно. Маршрут уже проложен по проходимым клеткам,
+  // и этого достаточно: попытка ещё и тереться о стены давала залипание в простенках
+  // и растягивала пролёт втрое. Остаются лишь микросрезы угла на поворотах.
   camera.free.x = nx;
   camera.free.y = ny;
+  applyCinematicGaze(camera, world, ts, dt, directed);
+}
 
-  let diff = ts.angleTarget - camera.free.angle;
+/** Взгляд, высота и наклон кадра. Наклон выводится из геометрии, а не из подобранного числа. */
+function applyCinematicGaze(
+  camera: RuntimeCamera,
+  world: World,
+  ts: CinematicCameraState,
+  dt: number,
+  directed: boolean,
+): void {
+  // Режется итоговая высота, а не план: иначе верхняя точка покачивания упиралась
+  // бы в плиту ровно на зазор, и кадр всё равно «висел под потолком».
+  const wanted = (ts.heightTarget ?? CAMERA_STANDING_HEIGHT) + Math.sin(ts.time * 0.7) * CINEMATIC_BREATH_HEIGHT;
+  camera.free.height = ceilingLimitedHeight(world, camera.free.x, camera.free.y, wanted);
+
+  if (!directed) {
+    turnToward(camera, ts.angleTarget, dt);
+    camera.free.pitch = Math.sin(ts.time * 1.1) * CINEMATIC_BREATH_PITCH;
+    return;
+  }
+
+  const dx = world.delta(camera.free.x, ts.lookAtX!);
+  const dy = world.delta(camera.free.y, ts.lookAtY!);
+  turnToward(camera, Math.atan2(dy, dx), dt);
+
+  // Экранное смещение точки высоты h на дистанции d равно (camHeight - h) / d в долях экрана,
+  // а pitch задан в тех же долях (webgl.ts horizonShift). Положительный pitch поднимает взгляд,
+  // поэтому камера выше цели наклоняется вниз.
+  const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+  camera.free.pitch = clampPitch((CAMERA_STANDING_HEIGHT - camera.free.height) / dist);
+}
+
+function turnToward(camera: RuntimeCamera, target: number, dt: number): void {
+  let diff = target - camera.free.angle;
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
-  camera.free.angle += diff * Math.min(1, dt * 6.0);
-
-  camera.free.height = CAMERA_STANDING_HEIGHT + Math.sin(ts.time * 0.7) * 0.15;
-  camera.free.pitch = Math.sin(ts.time * 1.1) * 0.1;
+  camera.free.angle += diff * Math.min(1, dt * CINEMATIC_TURN_RATE);
 }
 
 export function startTrailerCamera(
@@ -335,7 +579,7 @@ export function updateTrailerCamera(camera: RuntimeCamera, world: World, dt: num
   if (camera.mode !== 'trailer' || !camera.trailer) return;
   const ts = camera.trailer;
   ts.time += dt;
-  ts.flySpeed = 4.0; // Cinematic flight (not too fast to avoid wide orbits)
+  ts.flySpeed = CINEMATIC_FLY_SPEED; // Cinematic flight (not too fast to avoid wide orbits)
 
   // Path navigation
   if (ts.path.length === 0 || ts.targetNodeIndex >= ts.path.length) {
@@ -378,14 +622,11 @@ export function updateTrailerCamera(camera: RuntimeCamera, world: World, dt: num
   camera.free.y = ny;
 
   // Smoothly interpolate angle (fast enough to not overshoot tight corners)
-  let diff = ts.angleTarget - camera.free.angle;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
-  camera.free.angle += diff * Math.min(1, dt * 6.0);
+  turnToward(camera, ts.angleTarget, dt);
 
   // Cinematic bob and pitch
-  camera.free.height = CAMERA_STANDING_HEIGHT + Math.sin(ts.time * 0.7) * 0.15;
-  camera.free.pitch = Math.sin(ts.time * 1.1) * 0.1;
+  camera.free.height = CAMERA_STANDING_HEIGHT + Math.sin(ts.time * 0.7) * CINEMATIC_BREATH_HEIGHT;
+  camera.free.pitch = Math.sin(ts.time * 1.1) * CINEMATIC_BREATH_PITCH;
 }
 
 export function updateRuntimeCamera(camera: RuntimeCamera, world: World, dt: number, subject?: CameraSubject): void {

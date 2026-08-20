@@ -19,7 +19,8 @@ Current authoritative shape:
 
 ## Runtime Entry Points
 
-- `src/systems/save_runtime.ts`: shape version, version status, top-level payload creation and runtime section gathering.
+- `src/core/save_shape.ts`: the `SAVE_SHAPE_VERSION` constant and the pure version-status check. A dependency-free leaf — anyone who needs only the number imports this, not the runtime.
+- `src/systems/save_runtime.ts`: top-level payload creation and runtime section gathering.
 - `src/systems/save_payload.ts`: compact payload construction, payload size accounting, portal compaction and section normalization.
 - Domain systems own their own compact serializers/sanitizers where possible.
 
@@ -54,6 +55,7 @@ Current runtime save sections include:
 - `pseudolift`;
 - `floorMemory` (снапшот только текущего активного этажа);
 - `playedCinematics` (какие синематики ключевых этажей уже проиграны в этом ране, capped);
+- `playedScenes` (id уже сыгранных **сцен этажа**, `src/systems/cinematics.ts`; кап `MAX_PLAYED_SCENES = 32`, каждый id обрезается до 64 символов). Пишется из `floorScenesForSave()`, восстанавливается через `restoreFloorScenesFromSave()`, `resetFloorScenes()` чистит и сыгранное, и список посещённых этажей. Секция опциональна и добавлена аддитивно, поэтому `SAVE_SHAPE_VERSION` не менялась; сейв без неё читается как «ничего не сыграно», и `first_visit`-сцена проиграет заново. Список посещённых этажей (`visitedFloorKeys`) намеренно НЕ сохраняется: сыгранного id достаточно, чтобы сцена не повторилась;
 - `netTerminalGen`;
 - `mapEditorPatches`;
 - `worldEvents`;
@@ -66,6 +68,8 @@ Current runtime save sections include:
 - `factionRelations` (плоский снимок динамической матрицы отношений фракций, FACTION_COUNT² Int8; сохраняется, т.к. отношения теперь персистентны между этажами и загрузками).
 
 If a system stores persistent state, it needs a current-shape serializer/sanitizer, a cap or compact representation, and a rejection/test path when shape compatibility changes.
+
+**Транзиентная роль не имеет права заехать в персистентную секцию.** Роль актёра сцены (`NpcRole.CINEMATIC_ACTOR`) — состояние кадра: пока сцена идёт, `updateAI` пропускает такого актёра целиком. `captureEntityToRecord` (`src/systems/alife.ts`) поэтому кладёт в запись роль, которой человек жил ДО сцены (`cinematicState.originalRole`, иначе `WANDERER`), и обнуляет `record.cinematicState`; материализация страхует то же с другой стороны. Иначе автосейв посреди сцены — а он срабатывает на сворачивании вкладки — навсегда выключал человека из симуляции: живой снаружи, мебель внутри. Замок — `tests/scene-role-not-persisted.test.ts`. Общее правило: если поле описывает текущий кадр, а не личность, оно либо не пишется, либо приводится к персистентной форме на входе в запись.
 
 The crafting section stores only the player material bank and known recipe ids: 9 numeric material counts and deduplicated current recipe ids. Item composition and recipe definitions remain data registries, not item-instance save data.
 

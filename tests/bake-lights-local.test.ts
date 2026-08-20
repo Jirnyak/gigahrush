@@ -114,3 +114,33 @@ test('setFeatureAt with a non-light feature leaves the lightmap untouched', () =
   }
   assert.equal(mismatches, 0, 'lightmap unchanged by non-light feature change');
 });
+
+/* The samosbor wave front eats several lamps inside one tick, then relights each
+ * one through its own window instead of paying a full W² bake per tick. Batched
+ * windowed relights must land on exactly the same lightmap as one full bake —
+ * including lamps whose ±R boxes overlap, and mixed add/remove in one batch. */
+test('a batch of relightAround calls matches one full bake (samosbor wave tick)', () => {
+  // Four lamps in a cluster: 500,500 / 500,506 / 506,500 / 512,512.
+  // The first three overlap each other's radius-8 windows.
+  const cluster = [500 * 1024 + 500, 506 * 1024 + 500, 500 * 1024 + 506, 512 * 1024 + 512];
+  const eaten = cluster.slice(0, 3); // wave front removes three of them
+  const grown = 504 * 1024 + 494;    // and stamps one candle nearby in the same tick
+
+  const reference = flooredWorld();
+  for (const i of cluster) reference.features[i] = Feature.LAMP;
+  for (const i of eaten) reference.features[i] = Feature.NONE;
+  reference.features[grown] = Feature.CANDLE;
+  reference.bakeLights();
+
+  const batched = flooredWorld();
+  for (const i of cluster) batched.features[i] = Feature.LAMP;
+  batched.bakeLights();
+  // Mutate every cell first, exactly like the wave batch, then relight per cell.
+  for (const i of eaten) batched.features[i] = Feature.NONE;
+  batched.features[grown] = Feature.CANDLE;
+  const before = batched.lightVersion;
+  for (const i of [...eaten, grown]) batched.relightAround(i);
+
+  assert.notEqual(batched.lightVersion, before, 'lightVersion bumped for the batch');
+  assertLightEqual(batched, reference, 'batched windowed relight');
+});

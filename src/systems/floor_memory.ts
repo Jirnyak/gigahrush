@@ -1214,7 +1214,11 @@ function routeLiftWalkable(world: World, idx: number): boolean {
 let _bfsSeen: Uint8Array | null = null;
 let _bfsCells: Int32Array | null = null;
 
-function collectReachableRouteCells(world: World, startIdx: number): { cells: Int32Array; count: number; seen: Uint8Array } {
+/** Walkable cells the spawn point can actually reach — the BFS product every
+ *  route-lift placement decision reads. */
+interface RouteReachability { cells: Int32Array; count: number; seen: Uint8Array }
+
+function collectReachableRouteCells(world: World, startIdx: number): RouteReachability {
   const n = W * W;
   if (!_bfsSeen || _bfsSeen.length !== n) _bfsSeen = new Uint8Array(n);
   if (!_bfsCells || _bfsCells.length !== n) _bfsCells = new Int32Array(n);
@@ -1258,7 +1262,7 @@ function nearestRouteLiftWalkable(world: World, x: number, y: number, radius: nu
   return -1;
 }
 
-function reachableRouteCellsFromPoint(world: World, x: number, y: number): { cells: Int32Array; count: number; seen: Uint8Array } {
+function reachableRouteCellsFromPoint(world: World, x: number, y: number): RouteReachability {
   return collectReachableRouteCells(world, nearestRouteLiftWalkable(world, x, y, 64));
 }
 
@@ -1700,14 +1704,6 @@ function fillRouteLift(
   return true;
 }
 
-function routeLiftCount(world: World, direction: LiftDirection): number {
-  let count = 0;
-  for (let i = 0; i < world.cells.length; i++) {
-    if (world.cells[i] === Cell.LIFT && world.liftDir[i] === direction && world.features[i] !== Feature.MACHINE) count++;
-  }
-  return count;
-}
-
 function markRouteLiftLayoutDirty(world: World): void {
   world.markCellsDirty();
   world.markWallTexDirty();
@@ -1753,6 +1749,29 @@ export function ensureFloorRouteLiftLayout(
   let primaryAccessIdx = -1;
   let changed = false;
 
+  // Reachability is a full-floor BFS and the anchor list a full-floor cell scan.
+  // This pass used to re-run both after every step whether or not the step had
+  // mutated anything — ten BFS sweeps and a dozen W² scans per call, in the same
+  // frame a boss kill opens a route gate (main.ts → applyDesignRouteGates).
+  // Compute them lazily and drop them only when a lift really moved under us
+  // (Iron Law, optimization.md).
+  let reachableCache: RouteReachability | null = null;
+  const anchorCache = new Map<LiftDirection, FloorLiftAnchor[]>();
+  const reachable = (): RouteReachability =>
+    (reachableCache ??= reachableRouteCellsFromPoint(world, spawnX, spawnY));
+  const anchorsFor = (direction: LiftDirection): FloorLiftAnchor[] => {
+    let list = anchorCache.get(direction);
+    if (!list) {
+      list = collectFloorLiftAnchors(world, direction);
+      anchorCache.set(direction, list);
+    }
+    return list;
+  };
+  const invalidateFloorScan = (): void => {
+    reachableCache = null;
+    anchorCache.clear();
+  };
+
   for (let i = 0; i < world.cells.length; i++) {
     const dir = world.liftDir[i] as LiftDirection;
     if (world.cells[i] === Cell.LIFT && world.features[i] !== Feature.MACHINE && !expected.has(dir)) {
@@ -1773,13 +1792,13 @@ export function ensureFloorRouteLiftLayout(
   const primaryAnchor = mirror?.anchors[0];
   const primaryAnchorIdx = primaryAnchor ? world.idx(primaryAnchor.liftX, primaryAnchor.liftY) : -1;
   if (mirror) {
-    for (const anchor of collectFloorLiftAnchors(world, mirror.direction)) {
+    for (const anchor of anchorsFor(mirror.direction)) {
       if (demoteLift(anchor.liftIdx)) {
         demoted++;
         changed = true;
+        invalidateFloorScan();
       }
     }
-    let reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
     // anchors[0] is the lift the player rode: placed first (and never dropped by
     // the subset slice) so the return lift lands at their arrival coordinates.
     const rest = shuffleWith(rng, mirror.anchors.slice(1));
@@ -1790,7 +1809,7 @@ export function ensureFloorRouteLiftLayout(
         world,
         mirrorAnchors[i],
         mirror.direction,
-        reachable,
+        reachable(),
         floorTex,
         i === 0 ? ROUTE_LIFT_MIRROR_PRIMARY_RELOCATE_RADIUS : ROUTE_LIFT_MIRROR_RELOCATE_RADIUS,
       );
@@ -1804,21 +1823,19 @@ export function ensureFloorRouteLiftLayout(
         // The ridden lift's return counterpart survives the rest of this pass.
         if (pinnedLift < 0) pinnedLift = spot.idx;
       }
-      reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+      invalidateFloorScan();
     }
   }
 
   const blockedIdx = world.idx(Math.floor(spawnX), Math.floor(spawnY));
   for (const direction of expected) {
-    let reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
-    let anchors = collectFloorLiftAnchors(world, direction);
+    let anchors = anchorsFor(direction);
     const preservesMirroredAnchors = mirror?.direction === direction;
-    const spacingTarget = routeLiftSpacingTarget(reachable.count, targetCount);
     if (
       !preservesMirroredAnchors &&
       (
         anchors.length > targetCount ||
-        routeLiftAnchorsNeedRedistribution(world, anchors, spacingTarget)
+        routeLiftAnchorsNeedRedistribution(world, anchors, routeLiftSpacingTarget(reachable().count, targetCount))
       )
     ) {
       demoted += rebuildRouteLiftDirection(
@@ -1827,46 +1844,48 @@ export function ensureFloorRouteLiftLayout(
         floorTex,
       );
       changed = true;
-      reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+      invalidateFloorScan();
     }
 
-    for (const anchor of collectFloorLiftAnchors(world, direction)) {
-      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachable, floorTex);
+    for (const anchor of anchorsFor(direction)) {
+      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachable(), floorTex);
       if (usable.usable) {
-        if (usable.changed) changed = true;
-        reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+        if (usable.changed) {
+          changed = true;
+          invalidateFloorScan();
+        }
       } else if (demoteLift(anchor.liftIdx)) {
         demoted++;
         changed = true;
+        invalidateFloorScan();
       }
     }
 
-    anchors = collectFloorLiftAnchors(world, direction);
+    anchors = anchorsFor(direction).slice();
     while (anchors.length > targetCount) {
       const anchor = anchors.pop();
       if (!anchor) break;
       if (demoteLift(anchor.liftIdx)) {
         demoted++;
         changed = true;
+        invalidateFloorScan();
       }
     }
 
-    reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
-    let currentAnchorCount = collectFloorLiftAnchors(world, direction).length;
+    let currentAnchorCount = anchorsFor(direction).length;
     while (currentAnchorCount < targetCount) {
-      if (!fillRouteLift(world, reachable, direction, floorTex, spawnX, spawnY, blockedIdx)) break;
+      if (!fillRouteLift(world, reachable(), direction, floorTex, spawnX, spawnY, blockedIdx)) break;
       placed++;
       changed = true;
       currentAnchorCount++;
-      reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+      invalidateFloorScan();
     }
 
-    reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
-    for (const anchor of collectFloorLiftAnchors(world, direction)) {
-      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachable, floorTex);
+    for (const anchor of anchorsFor(direction)) {
+      const usable = ensureRouteLiftUsable(world, anchor.liftIdx, direction, reachable(), floorTex);
       if (usable.changed) {
         changed = true;
-        reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
+        invalidateFloorScan();
       }
     }
   }
@@ -1875,15 +1894,14 @@ export function ensureFloorRouteLiftLayout(
   // coordinates (disconnected geometry). Point the caller at the closest return
   // lift that does exist, so the player still steps out beside one.
   if (mirror && primaryLiftIdx < 0 && primaryAnchorIdx >= 0) {
-    const reachable = reachableRouteCellsFromPoint(world, spawnX, spawnY);
     const ax = primaryAnchorIdx % W;
     const ay = (primaryAnchorIdx / W) | 0;
     let bestDist = ROUTE_LIFT_MIRROR_SPAWN_FALLBACK_RADIUS + 1;
-    for (const anchor of collectFloorLiftAnchors(world, mirror.direction)) {
+    for (const anchor of anchorsFor(mirror.direction)) {
       const dist = Math.abs(world.delta(ax, anchor.liftX)) + Math.abs(world.delta(ay, anchor.liftY));
       if (dist >= bestDist) continue;
-      const access = routeLiftAccessCandidates(world, anchor.liftIdx, reachable)
-        .find(idx => reachable.seen[idx] !== 0);
+      const access = routeLiftAccessCandidates(world, anchor.liftIdx, reachable())
+        .find(idx => reachable().seen[idx] !== 0);
       if (access === undefined) continue;
       bestDist = dist;
       primaryLiftIdx = anchor.liftIdx;
@@ -1897,8 +1915,10 @@ export function ensureFloorRouteLiftLayout(
   }
 
   return {
-    down: routeLiftCount(world, LiftDirection.DOWN),
-    up: routeLiftCount(world, LiftDirection.UP),
+    // Same predicate as the anchor scan (LIFT cell, matching liftDir, not a
+    // fast-elevator cabin), so the cached list answers it without two more W² scans.
+    down: anchorsFor(LiftDirection.DOWN).length,
+    up: anchorsFor(LiftDirection.UP).length,
     placed,
     demoted,
     mirrored,

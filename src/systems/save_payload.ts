@@ -46,6 +46,7 @@ export interface SavePayloadSections {
   pseudolift: unknown;
   floorMemory: unknown;
   playedCinematics?: unknown;
+  playedScenes?: unknown;
   alife: unknown;
   alifeMobility: unknown;
   computers?: unknown;
@@ -113,6 +114,7 @@ export interface SavePayload {
     pseudolift: unknown;
     floorMemory: unknown;
     playedCinematics?: unknown;
+    playedScenes?: unknown;
     alife: unknown;
     alifeMobility: unknown;
     computers?: unknown;
@@ -318,6 +320,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       pseudolift: sections.pseudolift,
       floorMemory: sections.floorMemory,
       playedCinematics: sections.playedCinematics,
+      playedScenes: sections.playedScenes,
       alife: sections.alife,
       alifeMobility: sections.alifeMobility,
       computers: sections.computers,
@@ -397,6 +400,7 @@ export function summarizeSavePayload(
     { label: 'pseudolift', value: payload.state.pseudolift },
     { label: 'floorMemory', value: payload.state.floorMemory },
     { label: 'playedCinematics', value: payload.state.playedCinematics },
+    { label: 'playedScenes', value: payload.state.playedScenes },
     { label: 'voidReturnPortal', value: payload.state.voidReturnPortal },
     { label: 'voidEntryFromFloor', value: payload.state.voidEntryFromFloor },
   ];

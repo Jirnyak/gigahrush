@@ -35,7 +35,7 @@ const ACTOR_UNSTUCK_OFFSETS = [
 export function entityIgnoresFineBlockers(e: Pick<Entity, 'type' | 'monsterKind'>): boolean {
   if (e.type !== EntityType.MONSTER || e.monsterKind === undefined) return false;
   const flags = MONSTERS[e.monsterKind]?.aiFlags;
-  return flags !== undefined && (flags.includes('flying') || flags.includes('noclip') || flags.includes('falsePhase'));
+  return flags !== undefined && (flags.includes('flying') || flags.includes('noclip'));
 }
 
 export function actorOccupyRadius(e: Pick<Entity, 'type' | 'height' | 'radius' | 'monsterKind'>): number {

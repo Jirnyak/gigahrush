@@ -6,8 +6,8 @@ import { generateKantselyarskiyIdolSprite } from './kantselyarskiy_idol';
 import { generateNightmareSprite } from './nightmare';
 import { generateProtokolnikSprite } from './protokolnik';
 import { generateRobotSprite } from './robot';
-import { generateBlackLiquidatorSprite } from './black_liquidator';
 import { HEAD_SLUG_DETACHED_STAGE, generateSlugSprite } from './head_slug';
+import { BLACK_LIQUIDATOR_REVEALED_STAGE, generateRevealedSprite as generateRevealedBlackLiquidatorSprite, generateSprite as generateDisguisedBlackLiquidatorSprite } from './black_liquidator';
 import {
   AUTHORED_NPC_SPRITE_GENERATORS,
   NPC_SPRITE_GENERATORS,
@@ -632,7 +632,7 @@ function corruptFalseHuman(seed: number): Uint32Array {
   return t;
 }
 
-export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number, pressureTier = 0, armorStacks?: number): Uint32Array {
+export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number, pressureTier = 0, armorStacks?: number, monsterStage = 0): Uint32Array {
   if (kind === MonsterKind.NELYUD) return corruptFalseHuman(seed);
 
   const special = kind === MonsterKind.NIGHTMARE ? generateNightmareSprite(seed)
@@ -640,7 +640,13 @@ export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number,
     : kind === MonsterKind.IDOL ? generateIdolSprite(seed)
     : kind === MonsterKind.KANTSELYARSKIY_IDOL ? generateKantselyarskiyIdolSprite(seed)
     : kind === MonsterKind.PROTOKOLNIK ? generateProtokolnikSprite(seed, pressureTier)
-    : kind === MonsterKind.BLACK_LIQUIDATOR ? generateBlackLiquidatorSprite(seed % 12)
+    // Замаскированный носит чужую форму (арт ликвидатора + мел), раскрытый —
+    // собственный силуэт. Оба спрайта приходят из файла вида и минуют мутацию:
+    // портить чужой арт шумом нельзя, на нём и держится сходство.
+    : kind === MonsterKind.BLACK_LIQUIDATOR
+      ? (monsterStage === BLACK_LIQUIDATOR_REVEALED_STAGE
+        ? generateRevealedBlackLiquidatorSprite(seed % 12)
+        : generateDisguisedBlackLiquidatorSprite(seed))
     : undefined;
   if (special) return special;
 
@@ -703,6 +709,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   if (e.monsterKind === MonsterKind.PROTOKOLNIK) h = mix32(h ^ Math.imul((e.protocolPressureTier ?? 0) + 1, 0x6d2b79f5));
   if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) h = mix32(h ^ Math.imul((e.monsterArmorStacks ?? ZAK_ARMOR_MAX_STACKS) + 1, 0x7feb352d));
   if (e.monsterKind === MonsterKind.HEAD_SLUG) h = mix32(h ^ Math.imul((e.monsterStage ?? 0) + 1, 0x2545f491));
+  if (e.monsterKind === MonsterKind.BLACK_LIQUIDATOR) h = mix32(h ^ Math.imul((e.monsterStage ?? 0) + 1, 0x2545f491));
   h = mix32(h ^ Math.imul(e.type, 0x9e3779b1) ^ Math.imul(kind + 1, 0x85ebca6b) ^ Math.imul(occ + 1, 0xc2b2ae35));
   h = mix32(h ^ Math.imul((e.sprite ?? 0) + 1, 0x165667b1));
   if (e.npcVisualId) h = hashText(e.npcVisualId, h);
@@ -773,7 +780,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
     if (e.monsterKind === MonsterKind.HEAD_SLUG && e.monsterStage === HEAD_SLUG_DETACHED_STAGE) {
       return generateSlugSprite();
     }
-    return generateProceduralMonsterSprite(e.monsterKind ?? MonsterKind.SBORKA, seed, e.protocolPressureTier, e.monsterArmorStacks);
+    return generateProceduralMonsterSprite(e.monsterKind ?? MonsterKind.SBORKA, seed, e.protocolPressureTier, e.monsterArmorStacks, e.monsterStage);
   }
   return null;
 }

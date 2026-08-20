@@ -424,9 +424,18 @@ export function subcellIdx(worldX: number, worldY: number): number {
 }
 
 export function subcellToWorld(si: number): [number, number] {
-  const sx = si % SW;
-  const sy = (si / SW) | 0;
-  return [sx / PATH_BLOCKER_SUBDIV + 0.5 / PATH_BLOCKER_SUBDIV, sy / PATH_BLOCKER_SUBDIV + 0.5 / PATH_BLOCKER_SUBDIV];
+  return [subcellWorldX(si), subcellWorldY(si)];
+}
+
+/* Скалярные близнецы subcellToWorld: в followPath центр подклетки берут до
+ * двадцати раз за кадр на актёра, и пара в кортеже там — чистый мусор для GC.
+ * Арифметика та же, до бита. */
+function subcellWorldX(si: number): number {
+  return (si % SW) / PATH_BLOCKER_SUBDIV + 0.5 / PATH_BLOCKER_SUBDIV;
+}
+
+function subcellWorldY(si: number): number {
+  return ((si / SW) | 0) / PATH_BLOCKER_SUBDIV + 0.5 / PATH_BLOCKER_SUBDIV;
 }
 
 export function subcellToCell(si: number): number {
@@ -1464,10 +1473,36 @@ function continueBehaviorFlowPath(world: World, e: Entity): AssignPathStatus {
   return tryAssignBehaviorFlowPath(world, e, assignment.key, assignment.sourceProvider);
 }
 
+/* Один шаг DDA попадает в ту же макроклетку, что и предыдущий, в среднем три
+ * раза из четырёх: PATH_BLOCKER_SUBDIV подклеток на клетку. Маска клетки за
+ * время одной трассировки измениться не может — hasLineOfSight ничего не
+ * мутирует, — поэтому память на одну клетку даёт тот же ответ, что и
+ * isSubcellNavPassable, но без повторного computeMacroMask. Сбрасывается на
+ * входе в трассировку: между вызовами геометрия уже может быть другой. */
+let _losMemoCell = -1;
+let _losMemoMask = 0;
+const _occupyOpt = { ignoreFineBlockers: false };
+
+function losSubcellPassable(world: World, si: number): boolean {
+  const sx = si % SW;
+  const sy = (si / SW) | 0;
+  const cellI = ((sy / PATH_BLOCKER_SUBDIV) | 0) * W + ((sx / PATH_BLOCKER_SUBDIV) | 0);
+  if (cellI !== _losMemoCell) {
+    _losMemoCell = cellI;
+    _losMemoMask = getMacroMask(world, cellI);
+  }
+  return (_losMemoMask & (1 << ((sy % PATH_BLOCKER_SUBDIV) * PATH_BLOCKER_SUBDIV + (sx % PATH_BLOCKER_SUBDIV)))) === 0;
+}
+
+function hasLineOfSightToSubcell(world: World, e: Entity, si: number): boolean {
+  return hasLineOfSight(world, e.x, e.y, subcellWorldX(si), subcellWorldY(si));
+}
+
 function hasLineOfSight(world: World, x0: number, y0: number, x1: number, y1: number): boolean {
+  _losMemoCell = -1;
   let dx = x1 - x0;
   let dy = y1 - y0;
-  
+
   if (dx > W / 2) dx -= W;
   else if (dx < -W / 2) dx += W;
   if (dy > W / 2) dy -= W;
@@ -1489,30 +1524,46 @@ function hasLineOfSight(world: World, x0: number, y0: number, x1: number, y1: nu
 
   const maxSteps = Math.abs(ex - cx) + Math.abs(ey - cy) + 2;
   let steps = 0;
+  // cx/cy остаются развёрнутыми — по ним сравнивают с концом луча. Рядом идут
+  // их обёрнутые копии: шаг всегда ±1, поэтому шов проходится одной проверкой
+  // вместо двух остатков на ось на каждом шаге.
+  let wrapCX = ((cx % SW) + SW) % SW;
+  let wrapCY = ((cy % SW) + SW) % SW;
 
   while (steps++ < maxSteps) {
-    const wrapCX = ((cx % SW) + SW) % SW;
-    const wrapCY = ((cy % SW) + SW) % SW;
-    if (!isSubcellNavPassable(world, wrapCY * SW + wrapCX)) return false;
+    const cellI = ((wrapCY / PATH_BLOCKER_SUBDIV) | 0) * W + ((wrapCX / PATH_BLOCKER_SUBDIV) | 0);
+    if (cellI !== _losMemoCell) {
+      _losMemoCell = cellI;
+      _losMemoMask = getMacroMask(world, cellI);
+    }
+    if ((_losMemoMask & (1 << ((wrapCY % PATH_BLOCKER_SUBDIV) * PATH_BLOCKER_SUBDIV + (wrapCX % PATH_BLOCKER_SUBDIV)))) !== 0) return false;
 
     if (cx === ex && cy === ey) break;
 
     if (tMaxX < tMaxY) {
       tMaxX += tDeltaX;
       cx += stepX;
+      wrapCX += stepX;
+      if (wrapCX < 0) wrapCX = SW - 1; else if (wrapCX >= SW) wrapCX = 0;
     } else if (tMaxY < tMaxX) {
       tMaxY += tDeltaY;
       cy += stepY;
+      wrapCY += stepY;
+      if (wrapCY < 0) wrapCY = SW - 1; else if (wrapCY >= SW) wrapCY = 0;
     } else {
-      const w1x = ((cx + stepX) % SW + SW) % SW;
-      if (!isSubcellNavPassable(world, wrapCY * SW + w1x)) return false;
-      const w2y = ((cy + stepY) % SW + SW) % SW;
-      if (!isSubcellNavPassable(world, w2y * SW + wrapCX)) return false;
+      let w1x = wrapCX + stepX;
+      if (w1x < 0) w1x = SW - 1; else if (w1x >= SW) w1x = 0;
+      if (!losSubcellPassable(world, wrapCY * SW + w1x)) return false;
+      let w2y = wrapCY + stepY;
+      if (w2y < 0) w2y = SW - 1; else if (w2y >= SW) w2y = 0;
+      if (!losSubcellPassable(world, w2y * SW + wrapCX)) return false;
 
       tMaxX += tDeltaX;
       tMaxY += tDeltaY;
       cx += stepX;
       cy += stepY;
+      wrapCX = w1x;
+      wrapCY = w2y;
     }
   }
   return true;
@@ -1694,32 +1745,32 @@ export function followPath(world: World, e: Entity, dt: number): void {
 
   // Advance past already-reached subcells
   while (ai.pi < ai.path.length) {
-    const [cx, cy] = subcellToWorld(ai.path[ai.pi]);
-    if (world.dist2(e.x, e.y, cx, cy) >= PATH_WAYPOINT_REACH_SQ) break;
+    const si = ai.path[ai.pi];
+    if (world.dist2(e.x, e.y, subcellWorldX(si), subcellWorldY(si)) >= PATH_WAYPOINT_REACH_SQ) break;
     ai.pi++;
     ai.stuck = 0;
   }
   if (ai.pi >= ai.path.length) return;
 
   // Lookahead Path Smoothing (String Pulling)
+  const lastIdx = ai.path.length - 1;
+  const lookaheadLimit = lastIdx < ai.pi + 20 ? lastIdx : ai.pi + 20;
   let lookaheadIndex = ai.pi;
-  
-  if (ai.path.length > 0) {
-    const [lastX, lastY] = subcellToWorld(ai.path[ai.path.length - 1]);
-    if (hasLineOfSight(world, e.x, e.y, lastX, lastY)) {
-      lookaheadIndex = ai.path.length - 1;
-    } else {
-      const lookaheadLimit = Math.min(ai.path.length - 1, ai.pi + 20);
-      for (let i = lookaheadLimit; i > ai.pi; i--) {
-        const [tx, ty] = subcellToWorld(ai.path[i]);
-        if (hasLineOfSight(world, e.x, e.y, tx, ty)) {
-          lookaheadIndex = i;
-          break;
-        }
+
+  // Дальний конец пробуется первым: одна удачная линия схлопывает весь хвост.
+  // Но когда окно и так достаёт до конца, эта проба — ровно первая итерация
+  // цикла ниже, и раньше она стоила вторую трассировку на каждый вызов.
+  if (lookaheadLimit < lastIdx && hasLineOfSightToSubcell(world, e, ai.path[lastIdx])) {
+    lookaheadIndex = lastIdx;
+  } else {
+    for (let i = lookaheadLimit; i > ai.pi; i--) {
+      if (hasLineOfSightToSubcell(world, e, ai.path[i])) {
+        lookaheadIndex = i;
+        break;
       }
     }
   }
-  
+
   ai.pi = lookaheadIndex;
 
   // Open doors: current position, next subcell on path, and one ahead
@@ -1729,9 +1780,9 @@ export function followPath(world: World, e: Entity, dt: number): void {
 
   // Target: center of the next subcell on the smoothed BFS path.
   // Because of lookahead, this might be a diagonal or arbitrary angle step!
-  const [tx, ty] = subcellToWorld(ai.path[ai.pi]);
-  const dx = world.delta(e.x, tx);
-  const dy = world.delta(e.y, ty);
+  const targetSi = ai.path[ai.pi];
+  const dx = world.delta(e.x, subcellWorldX(targetSi));
+  const dy = world.delta(e.y, subcellWorldY(targetSi));
   const distSq = dx * dx + dy * dy;
   if (distSq < 0.0001) { ai.pi++; ai.stuck = 0; return; }
 
@@ -1752,8 +1803,11 @@ export function followPath(world: World, e: Entity, dt: number): void {
   openPathDoorAtWorld(world, e, e.x + nx * 0.7, e.y + ny * 0.7);
 
   const step = Math.min(speed, dist);
-  const opt = { ignoreFineBlockers: entityIgnoresFineBlockers(e) };
-  
+  // Запрос на занятие клетки живёт ровно до двух чтений подряд и никем не
+  // удерживается: одна общая ячейка вместо объекта на каждый шаг каждого актёра.
+  const opt = _occupyOpt;
+  opt.ignoreFineBlockers = entityIgnoresFineBlockers(e);
+
   const testX = wrapFloat(e.x + nx * step);
   if (canActorOccupy(world, testX, e.y, 0, opt)) {
     e.x = testX;

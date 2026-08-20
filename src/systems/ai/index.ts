@@ -20,7 +20,7 @@ import { ensureEntityIndex } from '../entity_index';
 import { hearingRadiusMetersForActor } from '../hearing';
 import { unstuckActorFromBlockers } from '../movement_collision';
 import { isPlayerEntity } from '../player_actor';
-import { updateSwarmNests } from '../swarm_nests';
+import { setFactionsSocialContext } from '../factions';
 import { designFloorAtZ } from '../../data/design_floors';
 import { isPlotNpc } from '../../data/plot';
 
@@ -75,11 +75,19 @@ export function getAiStats(): AiStats {
 }
 
 // Rescue-from-solid is a rare error state, but its cell probes ran for every
-// actor every frame. Combat actors (crowd-push is the main stuck source) keep
-// the every-frame check; the rest are swept round-robin on a budget, matching
-// the updateBloodTrails cadence pattern.
+// actor every frame. Actors are swept round-robin on a budget, matching the
+// updateBloodTrails cadence pattern.
 const UNSTUCK_ACTOR_BUDGET = 256;
+// Боевая цель поднимает актёра из очереди вне очереди — но не каждый кадр.
+// На людном этаже её держит половина живых, и ежекадровое исключение съедало
+// бюджет целиком (≈1300 вызовов вместо 256). Маска разводит бойцов по кадрам
+// фазой от id: застрявший в толкучке боец выбирается за восемь кадров, что
+// не медленнее очереди раунд-робина на той же толпе.
+const UNSTUCK_COMBAT_FRAME_MASK = 7;
 let unstuckCursor = 0;
+// Запрос на вызволение один и тот же для всех: раньше он собирался заново на
+// каждого актёра каждый кадр. unstuckActorFromBlockers его только читает.
+const UNSTUCK_ACTOR_OPTIONS = { radius: 0, rescueFromSolid: true } as const;
 
 function isBossActor(e: Entity): boolean {
   if (e.isFogBoss) return true;
@@ -117,6 +125,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
   setNpcContext(msgs, time, currentZ);
+  setFactionsSocialContext(state);
   expireMonsterBaits(state, time);
 
   // Main rebuilds the runtime broadphase once before simulation; AI only consumes it.
@@ -133,7 +142,6 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
     radiusMeters: hearingRadiusMetersForActor(player, state?.npcLogRadiusMeters),
     dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
   });
-  updateSwarmNests(world, entities, dt, time, player, nextId, state);
   aiFrame = (aiFrame + 1) & 0x3fffffff;
   resetAiStats(aiFrame, entityIndex.ai.length, entityIndex.projectiles.length);
 
@@ -173,8 +181,9 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       }
       if (aiCount <= UNSTUCK_ACTOR_BUDGET
         || ((aiIdx - unstuckStart + aiCount) % aiCount) < UNSTUCK_ACTOR_BUDGET
-        || e.ai.combatTargetId !== undefined) {
-        unstuckActorFromBlockers(world, e, { radius: 0, rescueFromSolid: true });
+        || (e.ai.combatTargetId !== undefined
+          && (((aiFrame + e.id) & UNSTUCK_COMBAT_FRAME_MASK) === 0))) {
+        unstuckActorFromBlockers(world, e, UNSTUCK_ACTOR_OPTIONS);
       }
       if (e.type === EntityType.NPC) {
         if (e.ai.npcState === undefined) {
@@ -192,8 +201,8 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       if (e.type === EntityType.NPC) {
         aiStats.updatedNpc++;
         trySimulateNpcAmmoRestock(e, dt);
-        if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, player, state)) continue;
-        if (!tryFactionCombat(world, entities, e, dt, time, msgs, nextId, state, player ?? null, {
+        if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, state)) continue;
+        if (!tryFactionCombat(world, entities, e, dt, time, msgs, nextId, state, {
           visualProjectiles: true,
           simple: true,
         })) {
@@ -204,7 +213,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       }
       if (e.type === EntityType.MONSTER) {
         aiStats.updatedMonster++;
-        if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, player, state)) continue;
+        if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, state)) continue;
         updateMonster(world, entities, e, dt, time, msgs, playerId, nextId, state);
       }
     }

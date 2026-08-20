@@ -94,10 +94,22 @@ function markColdMask(cache: HladonCache, ci: number, level: 1 | 2): boolean {
   return true;
 }
 
-function buildHladonCache(world: World, roomSignature = hladonRoomSignature(world)): HladonCache {
+/* Очередь BFS — чистая времянка на время сборки, поэтому она одна на модуль.
+   Самосбор дёргает cellVersion каждый тик, и своя Int32Array(W*W) на кадр — это
+   4 МБ мусора в кадре боя. Маска так не переиспользуется: она переживает вызов
+   и принадлежит миру, поэтому её отдаёт устаревший кэш того же мира. */
+let _coldQueue: Int32Array | null = null;
+
+function buildHladonCache(
+  world: World,
+  stale?: HladonCache,
+  roomSignature = hladonRoomSignature(world),
+): HladonCache {
   const rooms = world.rooms.filter(isActiveHladonRoom);
+  const reusable = stale && stale.mask.length === W * W ? stale.mask : null;
+  if (reusable) reusable.fill(0);
   const cache: HladonCache = {
-    mask: rooms.length > 0 ? new Uint8Array(W * W) : new Uint8Array(0),
+    mask: rooms.length > 0 ? (reusable ?? new Uint8Array(W * W)) : new Uint8Array(0),
     rooms,
     roomIds: new Set(rooms.map(room => room.id)),
     coreCells: 0,
@@ -112,7 +124,8 @@ function buildHladonCache(world: World, roomSignature = hladonRoomSignature(worl
   };
   if (rooms.length === 0) return cache;
 
-  const queue = new Int32Array(W * W);
+  if (!_coldQueue || _coldQueue.length !== W * W) _coldQueue = new Int32Array(W * W);
+  const queue = _coldQueue;
   let tail = 0;
   for (const room of rooms) {
     for (let dy = 0; dy < room.h; dy++) {
@@ -157,7 +170,7 @@ function getHladonCache(world: World): HladonCache {
     if (cache.rooms.length === 0 && cache.roomCount === world.rooms.length) return cache;
     if (cache.roomSignature === hladonRoomSignature(world)) return cache;
   }
-  const fresh = buildHladonCache(world);
+  const fresh = buildHladonCache(world, cache);
   hladonCaches.set(world, fresh);
   return fresh;
 }

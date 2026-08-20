@@ -35,7 +35,7 @@ These three docs own different questions:
 Boundary rules:
 
 - Ecology may read live NPC/monster facts through AI/runtime APIs, but it must not mutate the A-Life pool directly.
-- A monster can target the player, NPCs or other monsters when faction/hostility rules allow it. Player-only ecology is an exception, not the default.
+- A monster can target the player, NPCs or other monsters when faction/hostility rules allow it. Player-only ecology is an exception, not the default. This is now enforced, not aspirational: the "prefer player" pass in `src/systems/ai/monster.ts` is gone, so a monster no longer re-targets the player past the ray check, scan cadence and hostility. An appetite (documents, meat, blood, scent, threshold crossing, an unmasking witness) must be written about **any bearer of the trait** and evaluated inside the target-choice function that owns it.
 - If an ecological effect kills, infects, scares, saves or moves an ordinary NPC and that fact must persist, it should surface through events, A-Life foldback, quest/faction/economy state or an explicit bounded save section.
 - Monster persistence, if added later, should be a separate compact ecology/state pool. It must not be mixed into the ordinary NPC social graph.
 - Ordinary monster placement remains generation/event owned. Timed refill-to-cap after monster deaths is forbidden.
@@ -64,6 +64,9 @@ ecology data
 - Owns monster packages: `MonsterDef`, procedural sprites and registry wiring.
 - A package should not know generator internals, save shape or render placement.
 - `MonsterAIFlag` is a compact vocabulary for behavior families. Add a flag only when it is generic enough for more than one content case or clearly belongs in the shared monster loop.
+- **One property, one flag (2026-08-20).** A species declares its property as a flag in `aiFlags` and brings its sprite in its own `src/entities/<id>.ts`. Adding a field to `AIState` (`src/core/types.ts`) or a species-owned function to the shared `src/systems/ai/monster.ts` is forbidden: every entity in the world carries an `AIState`, so a field added for one monster is paid for by all of them. Reference implementations: `weepingAngel` (Sculpture — moves only while unobserved) and `looksLiquidator` (Black Liquidator — wears another faction's shape until it is alone or hit).
+- Species runtime state, when it is genuinely needed, lives in a `WeakMap` keyed by `Entity` next to the species logic — never in `AIState`. Sobrannyy, Slime Woman, Green Dog, Fog Shark and Nightmare already work this way.
+- A species may reuse an existing entity field instead of adding one. `monsterStage` already distinguishes two-mode monsters (Head Slug, Black Liquidator); the sprite path keys off it through `proceduralEntitySpriteKey`.
 
 `data/`
 

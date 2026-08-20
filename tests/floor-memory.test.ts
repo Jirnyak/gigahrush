@@ -1049,3 +1049,34 @@ test('floor memory delta survives the capture→save→restore→take pipeline',
   assert.equal(w.containerById.get(1)?.discovered, true);
   clearFloorMemory();
 });
+
+/* The layout pass caches its floor-wide BFS and lift scan for the duration of one
+ * call and drops them only when a lift actually moved — otherwise a single boss
+ * kill (main.ts → applyDesignRouteGates) paid ten reachability sweeps and a dozen
+ * W² scans inside one frame. The lock: a settled floor must come back byte-for-byte
+ * identical on a repeat call and report no work, so a stale cache cannot hide a
+ * lift the pass should have seen. */
+test('route lift layout is idempotent on a settled floor and reports no further work', () => {
+  const world = new World();
+  for (let y = 100; y < 356; y++) {
+    for (let x = 100; x < 356; x++) {
+      world.cells[world.idx(x, y)] = Cell.FLOOR;
+    }
+  }
+  const dirs = [LiftDirection.DOWN, LiftDirection.UP];
+
+  const first = ensureFloorRouteLiftLayout(world, 228.5, 228.5, dirs, { countPerDirection: 4 });
+  assert.equal(first.down, 4);
+  assert.equal(first.up, 4);
+  assert.equal(first.placed, 8);
+  const settled = Uint8Array.from(world.cells);
+  const settledDirs = Uint8Array.from(world.liftDir);
+
+  const second = ensureFloorRouteLiftLayout(world, 228.5, 228.5, dirs, { countPerDirection: 4 });
+  assert.equal(second.down, 4);
+  assert.equal(second.up, 4);
+  assert.equal(second.placed, 0, 'settled floor needs no new lifts');
+  assert.equal(second.demoted, 0, 'settled floor loses no lifts');
+  assert.deepEqual(Array.from(world.cells), Array.from(settled), 'cells untouched by the repeat pass');
+  assert.deepEqual(Array.from(world.liftDir), Array.from(settledDirs), 'lift directions untouched');
+});

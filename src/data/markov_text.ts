@@ -1578,6 +1578,7 @@ export const MARKOV_DOMAINS = [
     ...corpus('space_move', 'talk_context', 'dialogue.general', GENERAL_LINES, ['room'], ['room']),
     ...corpus('space_move', 'talk_context', 'context.safe', CONTEXT_SAFE_OWN_ZONE_LINES, ['room', 'safe'], ['room']),
     ...corpus('space_move', 'talk_context', 'context.lift', CONTEXT_LIFT_ANOMALY_LINES, ['lift', 'route', 'danger'], ['event', 'route']),
+    ...corpusRecord('space_move', 'talk_context', 'context.lift.floor', CONTEXT_LIFT_ANOMALY_FLOOR_LINES, ['lift', 'route', 'danger'], ['event', 'route'], 'floor'),
   ], 'У гермы тихо. Иди по сухой стене.'),
   domain('needs', ['need', 'food', 'water', 'medical'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'lore_note'], domainAtoms('needs', COMPILED_NEED_ATOMS, COMPILED_SEVERITY_ATOMS, COMPILED_ITEM_ATOMS_USE, COMPILED_ACTION_ATOMS, COMPILED_BAN_ATOMS), [
     ...corpus('needs', 'talk_context', 'context.hunger', CONTEXT_HUNGER_LINES, ['need', 'food'], ['need']),
@@ -1586,11 +1587,13 @@ export const MARKOV_DOMAINS = [
     ...corpus('needs', 'bark_ambient', 'bark.hunger', CONTEXT_BARK_HUNGER, ['need', 'food'], ['need']),
     ...corpus('needs', 'bark_ambient', 'bark.thirst', CONTEXT_BARK_THIRST, ['need', 'water'], ['need']),
     ...corpus('needs', 'bark_ambient', 'bark.wounded', CONTEXT_BARK_WOUNDED, ['need', 'medical'], ['need']),
+    ...corpus('needs', 'talk_context', 'context.medical_room', MEDICAL_ROOM_LINES, ['need', 'medical'], ['need']),
   ], 'Кушайте вовремя.'),
   domain('danger', ['danger', 'samosbor', 'monster', 'door'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'rumor_flavor', 'lore_note'], domainAtoms('danger', COMPILED_THREAT_ATOMS, COMPILED_STATE_ATOMS, COMPILED_SEVERITY_ATOMS, COMPILED_BAN_ATOMS), [
     ...corpus('danger', 'talk_context', 'context.danger', CONTEXT_DANGEROUS_ZONE_LINES, ['danger'], ['event']),
     ...corpus('danger', 'talk_context', 'context.samosbor_warning', CONTEXT_SAMOSBOR_WARNING_LINES, ['danger', 'samosbor'], ['event']),
     ...corpus('danger', 'talk_context', 'context.monster', CONTEXT_MONSTER_KILL_LINES, ['danger', 'monster'], ['event']),
+    ...corpusRecord('danger', 'talk_context', 'context.monster.floor', CONTEXT_MONSTER_KILL_FLOOR_LINES, ['danger', 'monster'], ['event'], 'floor'),
     ...corpus('danger', 'bark_ambient', 'bark.fear', CONTEXT_BARK_FEAR, ['danger'], ['event']),
     ...corpus('danger', 'bark_ambient', 'bark.samosbor_hide', CONTEXT_BARK_SAMOSBOR_HIDE, ['danger', 'samosbor'], ['event']),
   ], 'Не стой в коридоре, ищи герму.'),
@@ -1619,10 +1622,15 @@ export const MARKOV_DOMAINS = [
   ], 'Руки покажи, потом поговорим.'),
   domain('factions', ['faction', 'sector', 'territory'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'demos_post', 'procedural_quest', 'rumor_flavor'], domainAtoms('factions', COMPILED_FACTION_NAME_ATOMS, COMPILED_FACTION_ATOMS, COMPILED_STATE_ATOMS, COMPILED_BAN_ATOMS, COMPILED_ACTION_ATOMS), [
     ...corpusRecord('factions', 'talk_ambient', 'faction', FACTION_LINES, ['faction'], ['faction']),
-    ...corpusRecord('factions', 'bark_ambient', 'bark.faction.ambient', CONTEXT_BARK_FACTION_AMBIENT, ['faction'], ['faction']),
+    ...corpusRecord('factions', 'talk_context', 'context.faction', CONTEXT_FACTION_LINES, ['faction'], ['faction'], 'faction'),
+    ...corpusRecord('factions', 'bark_ambient', 'bark.faction.ambient', CONTEXT_BARK_FACTION_AMBIENT, ['faction'], ['faction'], 'faction'),
+    ...corpusRecord('factions', 'bark_ambient', 'bark.faction.clash', CONTEXT_BARK_FACTION, ['faction', 'danger', 'combat'], ['faction', 'event'], 'faction'),
+    ...corpusRecord('factions', 'bark_ambient', 'bark.faction.hide', CONTEXT_BARK_FACTION_HIDE, ['faction', 'danger', 'samosbor'], ['faction', 'event'], 'faction'),
+    ...corpusRecord('factions', 'bark_ambient', 'bark.faction.wounded', CONTEXT_BARK_FACTION_WOUNDED, ['faction', 'need', 'wound'], ['faction', 'need'], 'faction'),
   ], 'В чужом секторе сначала спрашивают пароль.'),
   domain('world_events', ['event', 'rumor', 'production', 'faction'], ['talk_ambient', 'talk_context', 'log_speech', 'rumor_flavor', 'demos_post', 'demos_reaction', 'document_flavor', 'lore_note'], domainAtoms('world_events', COMPILED_THREAT_ATOMS, COMPILED_STATE_ATOMS, COMPILED_ACTION_ATOMS, COMPILED_TRADE_ATOMS), [
     ...corpus('world_events', 'talk_context', 'context.faction_event', CONTEXT_FACTION_EVENT_LINES, ['event', 'faction'], ['event']),
+    ...corpusRecord('world_events', 'talk_context', 'context.faction_event.faction', CONTEXT_FACTION_EVENT_FACTION_LINES, ['event', 'faction'], ['event'], 'faction'),
     ...corpus('world_events', 'talk_context', 'room.combat', ROOM_MEMORY_COMBAT_LINES, ['event', 'combat'], ['event']),
     ...corpus('world_events', 'talk_context', 'room.samosbor', ROOM_MEMORY_SAMOSBOR_LINES, ['event', 'samosbor'], ['event']),
     ...corpus('world_events', 'talk_context', 'room.repair', ROOM_MEMORY_REPAIR_LINES, ['event', 'repair'], ['event']),
@@ -1632,6 +1640,17 @@ export const MARKOV_DOMAINS = [
     ...corpus('interactions', 'talk_context', 'room.help', ROOM_MEMORY_HELP_LINES, ['interaction', 'help'], ['action']),
     ...corpus('interactions', 'talk_context', 'room.repair', ROOM_MEMORY_REPAIR_LINES, ['interaction', 'repair'], ['action']),
   ], 'Общий ящик открывают при людях.'),
+  /* Профессия — такая же полоса контекста, как нужда или фракция: `occupation`
+     приходит в `MarkovTextContext` из снимка NPC и ведёт счёт по `Occupation`.
+     Домен объявлен рядом с остальными и по тому же контракту; отдельного
+     механизма у семьи профессий нет и заводить его не за что. */
+  domain('occupations', ['occupation', 'role', 'ordinary_npc'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'rumor_flavor'], domainAtoms('occupations', COMPILED_SUBJ_ATOMS, COMPILED_STATE_ATOMS, COMPILED_ACTION_ATOMS, COMPILED_TERMINAL_ATOMS), [
+    ...corpusRecord('occupations', 'talk_ambient', 'occupation.talk', OCC_LINES, ['occupation'], ['relation'], 'occupation'),
+    ...corpusRecord('occupations', 'talk_context', 'occupation.context', CONTEXT_OCCUPATION_LINES, ['occupation'], ['relation'], 'occupation'),
+    ...corpusRecord('occupations', 'talk_context', 'occupation.ministry', MINISTRY_OCC_LINES, ['occupation', 'office'], ['relation'], 'occupation'),
+    ...corpusRecord('occupations', 'bark_ambient', 'occupation.bark', CONTEXT_BARK_OCCUPATION_AMBIENT, ['occupation'], ['relation'], 'occupation'),
+    ...corpus('occupations', 'talk_context', 'occupation.clerk', MINISTRY_CLERK_LINES, ['occupation', 'office'], ['relation']),
+  ], 'Сначала работа, потом разговоры.'),
   domain('procedural_skeletons', ['dialogue', 'ordinary_npc', 'room', 'need', 'danger', 'trade', 'item', 'event', 'faction', 'relation'], ['talk_ambient', 'talk_context', 'log_speech', 'bark_ambient', 'procedural_quest', 'rumor_flavor', 'demos_post', 'demos_reaction', 'document_flavor', 'lore_note'], PROCEDURAL_SKELETON_ATOMS, [], 'Сначала дело, потом разговоры.'),
 ] as const satisfies readonly MarkovDomain[];
 
@@ -1705,6 +1724,10 @@ function domain(
   };
 }
 
+/* Обрезки корпуса здесь нет намеренно: прежний `cap = 14` молча отбрасывал
+   хвост авторского текста, то есть повторял ту же болезнь, что и корпус, не
+   вписанный в реестр. Реестр — не бюджет, а адрес: строку роняет только
+   чёрный список тона. */
 function corpus(
   domainId: string,
   intent: MarkovIntent,
@@ -1712,11 +1735,9 @@ function corpus(
   lines: readonly string[],
   contextTags: readonly string[],
   anchorKinds: readonly string[],
-  cap = 14,
 ): readonly MarkovCorpusLine[] {
   const out: MarkovCorpusLine[] = [];
   for (const line of lines) {
-    if (out.length >= cap) break;
     if (!lineAllowedForCorpus(line)) continue;
     out.push({
       id: `${prefix}.${out.length}`,
@@ -1732,6 +1753,11 @@ function corpus(
   return out;
 }
 
+/* Ключ записи — не украшение идентификатора, а полоса контекста, по которой
+   строку выбирают: `keyTag` отделён от `prefix` именно поэтому. Четыре корпуса
+   профессий и пять фракционных ведут счёт по одному и тому же перечислению,
+   значит и полоса у них обязана быть одна (`occupation.5`, `faction.1`), а не
+   производная от имени массива. */
 function corpusRecord(
   domainId: string,
   intent: MarkovIntent,
@@ -1739,11 +1765,11 @@ function corpusRecord(
   record: Readonly<Record<number, readonly string[]>>,
   contextTags: readonly string[],
   anchorKinds: readonly string[],
-  capPerKey = 5,
+  keyTag = prefix,
 ): readonly MarkovCorpusLine[] {
   const out: MarkovCorpusLine[] = [];
   for (const [key, lines] of Object.entries(record)) {
-    out.push(...corpus(domainId, intent, `${prefix}.${key}`, lines, [...contextTags, `${prefix}.${key}`], anchorKinds, capPerKey));
+    out.push(...corpus(domainId, intent, `${prefix}.${key}`, lines, [...contextTags, `${keyTag}.${key}`], anchorKinds));
   }
   return out;
 }

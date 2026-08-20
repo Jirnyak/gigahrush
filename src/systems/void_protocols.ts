@@ -431,14 +431,14 @@ function nearestLevel(world: World, mark: VoidProtocolMark): number {
 }
 
 function applySilence(world: World, mark: VoidProtocolMark): boolean {
-  let changed = 0;
   forLocalCells(world, mark, (_x, _y, ci) => {
     if (world.features[ci] === Feature.LAMP || world.features[ci] === Feature.CANDLE) {
-      world.setFeatureAt(ci, Feature.NONE, false);
-      changed++;
+      // Default rebakeLights: each snuffed source relights its own ±R window.
+      // The old trailing markFeaturesDirty(true) was a full W² bake inside the
+      // frame the player pressed E (Iron Law, optimization.md).
+      world.setFeatureAt(ci, Feature.NONE);
     }
   });
-  if (changed > 0) world.markFeaturesDirty(true);
   return true;
 }
 
@@ -583,8 +583,10 @@ function keepBorrowedLightEvidence(world: World, mark: VoidProtocolMark): void {
       door.timer = 0;
     }
   }
+  // markBorrowedLightReceipt already relit the receipt lamp's own window through
+  // setFeatureAt; the full W² bakeLights that stood here ran inside the frame a
+  // publishEvent observer fired (Iron Law, optimization.md).
   markBorrowedLightReceipt(world, mark, true);
-  world.bakeLights();
 }
 
 function applyBorrowedLightBacklash(

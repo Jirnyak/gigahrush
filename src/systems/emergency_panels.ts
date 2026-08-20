@@ -340,10 +340,12 @@ function addLamps(world: World, rooms: readonly Room[], seed: number): number {
     if (added >= 5) return;
     if (world.cells[idx] !== Cell.FLOOR || world.features[idx] !== Feature.NONE) return;
     if (((x * 17 + y * 31 + seed) & 15) !== 0) return;
-    world.setFeatureAt(idx, Feature.LAMP, false);
+    // Default rebakeLights: the panel touches ≤5 cells, so setFeatureAt relights
+    // each ±R window itself. A trailing markFeaturesDirty(true) here meant a full
+    // W² bake on every press of E (Iron Law, optimization.md).
+    world.setFeatureAt(idx, Feature.LAMP);
     added++;
   });
-  if (added > 0) world.markFeaturesDirty(true);
   return added;
 }
 
@@ -351,10 +353,9 @@ function removeLamps(world: World, rooms: readonly Room[]): number {
   let removed = 0;
   forRoomCells(world, rooms, idx => {
     if (world.features[idx] !== Feature.LAMP) return;
-    world.setFeatureAt(idx, Feature.NONE, false);
+    world.setFeatureAt(idx, Feature.NONE);
     removed++;
   });
-  if (removed > 0) world.markFeaturesDirty(true);
   return removed;
 }
 

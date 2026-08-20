@@ -37,12 +37,13 @@ Critical runtime facts:
 - `systems/floor_memory.ts` is a single-entry save↔load handoff for the **current active floor only**, keyed by stable floor key. A floor is a pure function of `(runSeed, z)` (`src/gen` has zero `Math.random`), so departing floors are not retained: leaving a floor folds its NPCs into A-Life and discards the `World`, and returning regenerates it deterministically identical. Live RAM is therefore one `World` (the mobile-OOM fix). Player mutations on the active floor — decals, bullet/blood marks, container loot, opened/broken doors, corpses — survive **save→load** because the browser save packs that one floor as a delta against the regenerated base (`worldForSave(world, base)`; see `save.md`), not because floors are parked in memory. Samosbor/rebuild paths update the active `World` in place. UI-only map exploration is transient and can reset on restore.
 - Desktop input treats `Esc` as browser/pointer-lock territory by default, not as a gameplay/window key, though the hotkey table can still store `Escape` like any other captured code. `Enter` opens the game menu from normal gameplay and is the keyboard accept/confirm key inside canvas menus, while LMB accepts the selected row only when a canvas menu is open. RMB closes or steps back from open canvas menus including Net Sphere, and mouse wheel is menu up/down navigation except where a focused terminal uses it for history scroll. In Net Sphere, `Enter` selects the chat line when inactive and submits the current line when active, `Space` stays chat text input only while the chat line is active, `Backspace` erases chat only while chat input is active, `N` closes only when chat input is inactive, `Delete` closes the terminal, and mouse wheel / `PageUp` / `PageDown` / arrow keys scroll the loaded chat history. Top-level shortcut menus, including the `F1` HELP poster, open only from normal gameplay; the same shortcut closes its own panel when no text input or key-capture field is active. Handled window keys are consumed so they do not fall through to the game menu. `E` is the default in-world interaction binding for pickups, doors, NPCs, containers and aimed interactables. Keyboard and mouse-button capture is universal: ordinary keys, `Space`, `Backspace`, `Esc`, LMB/RMB/MMB and extra mouse buttons are represented as control codes and can be assigned to any action.
 - `main.ts` owns the game loop and calls systems in fixed order.
-- `systems/camera.ts` owns transient runtime camera modes and resolves them to `CameraView` for render. The death camera is one mode of this system; future free-camera and cinematic modes should plug into the same API.
+- `systems/camera.ts` owns transient runtime camera modes and resolves them to `CameraView` for render. Death, free, trailer and `cinematic` are all modes of this one system. The `cinematic` mode is directed: an optional `lookAt` point splits heading from gaze, `orbit` circles that point analytically, `hold` keeps the pose instead of returning control when the route ends, `heightTarget` is clamped against `world.ceilHeight` for the current cell, and `routeCinematicCamera` lays the flight path over **walkable** cells through `bfsPath`. Per-frame movement is cut into substeps no longer than the node-reach tolerance; a longer step overshoots the node and the camera then travels the chord — i.e. through the wall corner.
+- `systems/cinematics.ts` owns floor scenes; `systems/cinematic_actors.ts` owns taking an NPC out of the world into a scene and giving them back. See `Floor Scene Contract` below.
 - `systems/events.ts` is the current EventBus analogue: fixed-size ring buffers, public event publication, and query filters.
 - Shared `E` interaction goes through `systems/interactions.ts`; generated gambling machines, local computers, NPC table-game interfaces, NET-hack terminals, emergency panels, Net Terminal Gen and special floor interactions plug into that dispatcher.
 - `systems/interactive.ts` is the generic sparse cell-bound interactive layer. Definitions live in `src/data/interactive.ts`, explicit generation helpers live in `src/gen/interactive_placement.ts`, broken fixture placement lives in `src/gen/interactive_fixtures.ts`, and one `ContentInteractionHook` exposes feature-like objects and container adapters to the shared dispatcher. Current shipped adapters are transient: lazy `Feature.SINK` drinking, lazy `Feature.TOILET` needs relief, repair-pending broken sink/toilet fixtures, explicit `workbench_basic` placement and visible `WorldContainer` delegation. `src/data/floor_object_placement.ts` defines story-floor, design-route and procedural-geometry profiles for static decor features, explicit interactives, broken fixture overlays and craft-station subprofiles; `src/gen/floor_object_placement.ts` applies them once during generation through reachable bounded placement. Complex runtime-owned objects such as moving trains stay in their authored/anomaly systems. The contract is feature-first: floor generators own how many visual primitives exist and where they are, while `InteractiveDef` ids own what `E` does when a matching primitive is targeted. They do not change save shape.
 - `systems/alife.ts` owns persistent procedural NPC identity. A run creates a compact NPC pool around `100_000` procedural identities within a `131_072` technical capacity, materializes only the active floor into live `entities`, folds live state back on transitions/rebuilds/saves, and records permanent deaths. Browser saves keep dead procedural A-Life ids with a current cap of `65_536`. Age is stored as a byte column and sex as a byte code column in the cold pool; snapshots expose ordinary `number`/`CharacterSex` values for Demos, quests, AI and UI. `systems/npc_relations.ts` owns compact personal relation-to-player math shared by A-Life, quests and hostility. `alife.md` is the detailed design contract for this feature.
-- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `25` (`SAVE_SHAPE_VERSION`, `src/systems/save_runtime.ts`); old or unversioned saves are rejected rather than migrated. `save.md` is the detailed persistence contract.
+- Save/load uses `systems/save_runtime.ts` and `systems/save_payload.ts`. Current save shape version is `25` (`SAVE_SHAPE_VERSION`, `src/core/save_shape.ts` — a dependency-free leaf; the runtime only imports it); old or unversioned saves are rejected rather than migrated. `save.md` is the detailed persistence contract.
 - Existing content extensibility already exists in `registerSideQuest`, `registerZoneContent`, floor content manifests, `SAMOSBOR_VARIANTS`, `getSamosborBeatDefs()`, contract/economy registries, route/design-floor ids and `publishEvent`. `samosbor.md` is the detailed samosbor contract.
 
 ## 1.1 Project Bible And Honest Scope
@@ -280,6 +281,22 @@ Critters (rats, roaches, flies) and similar ambient visual effects are pure clie
 - They are drawn in a single instanced array call (`gl.drawArraysInstanced`) making them effectively free for CPU and AI.
 - Future ambient life or micro-details should follow this exact pattern: data-oriented update loops producing visual particles, entirely disconnected from the heavy A-Life, saving, or AI routing systems.
 
+### Species Property Contract
+
+Established 2026-08-20. **A species declares its property as data, not as core state.** The contract has three parts and no exceptions by default:
+
+1. **Flag in `aiFlags`.** The behaviour is expressed as a `MonsterAIFlag` against a generic rule that the shared loop already knows how to run. Add a flag only when it is generic enough for more than one content case.
+2. **Sprite in its own file.** `src/entities/<id>.ts` owns `DEF` and `generateSprite()`. A generator may take another baked sprite as its base and draw procedural detail over it (`getGeneratedArtSprite`, 128x128, resampled by `createSpriteTexture`), but it must have a fully drawn fallback if the art is missing.
+3. **State in a `WeakMap` keyed by `Entity`, next to the species logic — never in `AIState`.**
+
+Forbidden: a field in `AIState` (`src/core/types.ts`) added for one species, and a species-owned `update<Species>()` function inside the shared `src/systems/ai/monster.ts`. `AIState` is carried by **every entity in the world**, including dropped items and projectiles, so a field added for one monster is paid for by all of them. `core/types.ts` is a RED integrator-owned file precisely because of this cost.
+
+Prefer reusing an entity field that already exists before adding one: `monsterStage` already carries two-mode species (Head Slug, Black Liquidator), `AIGoal` carries goals, and shared threat memory (`getRecentCombatThreat`) already answers "was I hit recently" without a per-species flag.
+
+Reference implementations: `weepingAngel` (Sculpture) and `looksLiquidator` (Black Liquidator — one line in `isHostile`, `src/systems/factions.ts`). `WeakMap` state: Sobrannyy, Slime Woman, Green Dog, Fog Shark, Nightmare. A `profile.id === '<species>'` check in a shared layer is tolerated where nothing else works, but it is the first symptom of the same disease and never justifies a new core field.
+
+The 2026-08-20 cleanup that established this contract removed 25 fields from `AIState` and about 800 lines from `ai/monster.ts`. The census of the species clusters still sitting in `AIState` is in `problems.md`, «Механика одного вида, размазанная по ядру».
+
 ### Mesh And Fine Blocker Boundary
 
 `mesh.md` is the active contract for the shipped decorative mesh pass.
@@ -341,6 +358,102 @@ system: an unmanned step states that it is unmanned, and the chain does the rest
 
 Both directions are locked by `tests/npc-home-floor.test.ts` over all design floors: declared home
 equals actual floor, and everyone who declared a floor is on it.
+
+### Floor Scene Contract
+
+A floor scene is a **declaration, not code**. The floor lists actors and beats; one shared player
+(`systems/cinematics.ts`) acts them out. A scene has no combat of its own, no death of its own and no
+resettlement of its own — it places people, gives them a line and points the camera. Everything else
+is done by the same systems that run without a spectator: AI fights on its own, A-Life remembers the
+dead, the relation matrix decides who shoots whom.
+
+The load-bearing rule follows from that: **a beat may not assign an outcome.** `defect` changes a
+faction and then it is whatever it is; `awaitDeath` WAITS for a death with a `timeout` ceiling, it
+does not cause one. A scene that writes down the result of a fight is a cutscene, not a world event.
+`maxSeconds` is a camera fuse, not a plot guarantee — a scene ending early leaves the floor in
+whatever state the fight produced, and that is an acceptable outcome.
+
+Ownership and boundaries:
+
+- **The camera arrives by injection.** The runtime camera lives in the entry point, so `main.ts`
+  calls `bindSceneCamera(runtimeCamera)`; importing it from `systems/` would create a `systems → main`
+  edge. Without a bound camera scenes simply do not play — no fallback path, no second owner.
+- **The anchor is a named room, not a coordinate.** `anchorRoomAlias` is matched against `room.defId`,
+  the same exact lookup the named-room table uses. It is resolved locally in `systems/` on purpose:
+  `gen/` sits ABOVE `systems/`, so importing the named-room helper here would invert the layer.
+- **`release` is mandatory, and it is why.** `updateAI` skips every actor whose `role` is
+  `NpcRole.CINEMATIC_ACTOR` outright (`systems/ai/index.ts`) — while the role is on them they do not
+  scan, walk or shoot; they are scenery. Without a `release` beat "the fight then runs by the normal
+  rules" is impossible. `endScene` releases everyone unconditionally, so a scene cannot leak a frozen
+  actor into the live floor even if it times out mid-beat.
+- **`depart` is leaving, not dying.** State is folded back into A-Life, the record moves to another
+  floor key, the entity is spliced out. Setting `alive = false` there would make the corpse sweeper
+  record those people as permanently dead.
+- **The scene does not create identities behind A-Life's back.** `packageId` calls an authored
+  resident who already lives on this floor; `source: 'alife'` materializes existing pool records;
+  only anonymous crowd filler is spawned outright, and it is spawned as scenery under the actor role.
+- Played scene ids persist (`playedScenes`, capped), so `first_visit` means first visit per run and
+  survives save/load. `state.sceneLock` is the single input gate; systems must not add a second one.
+- **A scene must be abortable from outside, and every world boundary must abort it.** `abortFloorScene(state, entities)`
+  drops the active scene, clears `sceneLock`, releases the actors with their own roles and returns the
+  camera to the player. It is called on death continuation, on `switchFloor` and on `loadGame`
+  (`main.ts`), and by `resetFloorScenes` — the three ways a scene can lose the world it was playing in.
+  Order matters at two of them: on a floor switch the abort runs **before** A-Life fold-back, or actors
+  ride into their records wearing a scene role that does not exist on the new floor; on load the abort
+  runs before `restoreFloorScenesFromSave`, so the run being discarded cannot leave a lock behind. A
+  missing abort does not corrupt data — it locks input forever, which is worse.
+- **Scene actors are not bodies.** `randomDeathContinuationNpc` (`main.ts`) skips
+  `NpcRole.CINEMATIC_ACTOR` candidates: a `depart` beat may legitimately take that actor off the floor,
+  and the player would ride along. `depart` itself skips `isPlayerEntity` for the mirror reason —
+  someone who became the player mid-scene must not be spliced out of the world by a beat.
+- **The scene role never reaches A-Life.** `depart` calls `releaseNpcFromScene` **before**
+  `captureAlifeFloorState`, and `captureEntityToRecord` normalizes the role anyway
+  (`alife.md`, `save.md`). Two layers on purpose: the beat can be reordered, the record cannot lie.
+
+Edge cases are locked by `tests/floor-scene-edges.test.ts`.
+
+New scenes are content, not engine work: register a declaration, anchor it to a named room, and add
+no branch to `main.ts`.
+
+### Observer-Owned Detection
+
+Detection range is a property of the **observer**, never of the observed and never of the player.
+`tryFactionCombat` (`systems/ai/combat.ts`) computes it from how ready for a fight the actor is and
+how far their weapon reaches — `max(brave ? NPC_CHASE_RANGE : NPC_COMBAT_RANGE, weapon maxRange)` —
+plus a forced-target widening when the actor was just damaged. It takes no `player` parameter.
+
+The previous shape read `hostileToPlayer ? NPC_CHASE_RANGE : ...`, and it broke the world twice over:
+sight distance came from an actor's relation to the player rather than to whoever they were looking
+at, so in one fight the player-hostile side saw eighteen cells and the friendly side eight; and it
+switched on the mere presence of the player on the floor, so the world behaved differently depending
+on whether anyone was watching.
+
+The same rule bans the monster-side counterpart. There is no "prefer player" pass: a monster does not
+re-measure the distance to the player after target selection, and nothing may bypass the ray check,
+the scan cadence or hostility on the player's behalf. Special appetites belong in the target-choice
+function that owns them (documents, meat, blood, scent, threshold, mask) and must be written about
+**any bearer of the trait**, not about one face. Non-goals of this rule: hostility itself is still
+faction matrix plus the directed personal-enmity edge (`isDemosPersonalEnemy`, injected per frame via
+`setFactionsSocialContext`), and damage-driven retaliation still overrides passive ranges.
+
+This generalizes: any system asking "how far is the player" as a proxy for "is this happening" is
+suspect, and so is any system appending the player to a result set that was already capped. Shipped
+consequences of the same rule:
+
+- caravans: samosbor fate read from `world.fog` under the caravan, off-floor runs continue instead of
+  being declared raided, spawn anchored on an eligible member rather than the camera;
+- faction events: sector weighted by contested territory, population and danger; anchor is the sector
+  HQ, not the player's cell; `sawPlayer` is an observation, not a spawn condition;
+- emergency shelter: a room is scored by who already sits in it (`isHostile` / faction friendliness),
+  and the per-actor shelter jitter no longer mixes in `playerRelation`;
+- actor tactics: the player is not re-added to sense facts after the capped index query — he has to
+  fit through `scanCap` like everyone else, or a monster in a crowd always sees him and loses his
+  neighbours;
+- lift-anomaly rumours spread from the lift, and `ContextSnapshot` no longer carries `playerDistance`.
+
+The player-facing exceptions that remain are deliberate and narrow: log lines written in second
+person, the HUD, the camera, and debug forcing commands. A message being player-only is fine; a
+world fact being player-only is the bug.
 
 ### A-Life Integration Contract
 
@@ -782,7 +895,7 @@ Prefer controlled fakes:
 
 - Fog color, density, HUD warnings, and spawn weights instead of volumetric fog simulation.
 - Static water/steam/pressure room states instead of fluid simulation.
-- Room names, notes, event logs, and NPC barks instead of huge bespoke cutscenes.
+- Room names, notes, event logs, and NPC barks instead of huge bespoke cutscenes. The shipped floor-scene system is exactly this fake and no more: real people, real barks, a directed camera and beats that may not decide an outcome (`Floor Scene Contract`). A beat that scripts who dies is the bespoke cutscene this rule forbids.
 - Procedural texture variants instead of imported assets.
 - Spawn tables and behavior flags instead of one-off AI branches.
 - Slow economy ticks instead of live market micro-simulation.

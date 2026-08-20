@@ -499,4 +499,8 @@ export const PLOT_NPC_ID_ORDER: readonly string[] = [
   'silicon_cibo',
   'silicon_cyborg_scientist',
   'silicon_admin_checker',
+  /* Сцена-пролог жилого этажа. Дописано в конец: сейв хранит числовые слоты,
+     и вставка выше сдвинула бы чужие личности. */
+  'prologue_colonel',
+  'strelok',
 ];

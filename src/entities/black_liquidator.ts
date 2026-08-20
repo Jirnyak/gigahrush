@@ -1,8 +1,24 @@
-/* -- Black Liquidator: false post-samosbor cleanup patrol -------- */
+/* -- Черный ликвидатор: выглядит как свой ----------------------------
+ *
+ * Всё свойство вида — внешность. Спрайт берётся у настоящего ликвидатора
+ * (арт художника, запечённый в `generated_art_sprites`), и поверх него
+ * процедурно ставится меловой номер на маску. По канону слухов чёрных и
+ * отличают именно так: «у чёрных номера на масках мелом, не краской».
+ *
+ * Номер мелкий: издали он сливается с маской, вблизи читается.
+ *
+ * Режима два, и оба живут здесь: пока рядом есть свидетели, он ходит чужой
+ * формой; оставшись с жертвой один на один — или получив по себе — сбрасывает
+ * маскировку и показывает то, чем является. Различает режимы существующее поле
+ * `monsterStage`, ровно как у головной слизи; своих полей в `AIState` вид не
+ * заводит, на выходе обычный процедурный спрайт общего пайплайна.
+ */
 
 import { MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
+import { firstPartyNpcArt } from './npc_visuals';
+import { seededRandom } from '../core/rand';
 
 export const DEF: MonsterDef = {
   kind: MonsterKind.BLACK_LIQUIDATOR,
@@ -12,7 +28,7 @@ export const DEF: MonsterDef = {
   dmg: 15,
   attackRate: 1.8,
   sprite: 0,
-  aiFlags: ['falsePatrol'],
+  aiFlags: ['looksLiquidator'],
   counterplay: 'Не верьте обходу после тяжелого отбоя: держите дистанцию, прячьте образцы и сверяйте номер маски до открытия двери.',
   lootHint: 'обугленная бирка, мел с номером, черный крюк из инструментальной сумки',
 };
@@ -135,6 +151,65 @@ export function generateBlackLiquidatorSprite(seed = 0): Uint32Array {
   return t;
 }
 
-export function generateSprite(): Uint32Array {
-  return generateBlackLiquidatorSprite(0);
+/** Арты настоящих ликвидаторов: чёрный неотличим от них, пока не разглядишь мел. */
+const LIQUIDATOR_ART_IDS = ['liquidator_m_1', 'liquidator_m_3', 'liquidator_m_5', 'liquidator_m_6'] as const;
+const ART_SIDE = 128;
+/** Меловой номер: две-три цифры мелким штрихом на уровне маски. */
+const CHALK = rgba(226, 224, 214, 220);
+
+/** Одна меловая палочка. Мел ложится неровно, поэтому пиксели через один пропускаются. */
+function chalkStroke(t: Uint32Array, x0: number, y0: number, x1: number, y1: number, rand: () => number): void {
+  const steps = Math.max(1, Math.abs(x1 - x0), Math.abs(y1 - y0));
+  for (let i = 0; i <= steps; i++) {
+    if (rand() < 0.22) continue;
+    const x = Math.round(x0 + (x1 - x0) * i / steps);
+    const y = Math.round(y0 + (y1 - y0) * i / steps);
+    if (x >= 0 && x < ART_SIDE && y >= 0 && y < ART_SIDE) t[y * ART_SIDE + x] = CHALK;
+  }
+}
+
+/** Цифра-палочка 3x5 в семисегментной раскладке: мельче уже не читается. */
+function chalkDigit(t: Uint32Array, x: number, y: number, digit: number, rand: () => number): void {
+  const segs = [
+    [0b1110111, 0b0100100, 0b1011101, 0b1101101, 0b0101110, 0b1101011, 0b1111011, 0b0100101, 0b1111111, 0b1101111][digit],
+  ][0];
+  if (segs & 0b0000001) chalkStroke(t, x, y, x + 2, y, rand);
+  if (segs & 0b0000010) chalkStroke(t, x, y, x, y + 2, rand);
+  if (segs & 0b0000100) chalkStroke(t, x + 2, y, x + 2, y + 2, rand);
+  if (segs & 0b0001000) chalkStroke(t, x, y + 2, x + 2, y + 2, rand);
+  if (segs & 0b0010000) chalkStroke(t, x, y + 2, x, y + 4, rand);
+  if (segs & 0b0100000) chalkStroke(t, x + 2, y + 2, x + 2, y + 4, rand);
+  if (segs & 0b1000000) chalkStroke(t, x, y + 4, x + 2, y + 4, rand);
+}
+
+/**
+ * Спрайт: арт живого ликвидатора плюс меловой номер на маске.
+ * Если арт почему-то не запечён, остаётся прежний полностью рисованный силуэт —
+ * вид не должен исчезать из-за отсутствующего ассета.
+ */
+/** Маскировка сброшена: под формой был он. */
+export const BLACK_LIQUIDATOR_REVEALED_STAGE = 1;
+
+/** Спрайт без маскировки — тот самый чёрный силуэт. */
+export function generateRevealedSprite(seed = 0): Uint32Array {
+  return generateBlackLiquidatorSprite(seed);
+}
+
+export function generateSprite(seed = 0): Uint32Array {
+  const rand = seededRandom(seed || 1);
+  const artId = LIQUIDATOR_ART_IDS[Math.floor(rand() * LIQUIDATOR_ART_IDS.length) % LIQUIDATOR_ART_IDS.length];
+  const art = firstPartyNpcArt(artId);
+  if (!art) return generateBlackLiquidatorSprite(seed);
+
+  const t = art.slice();
+  // Маска сидит в верхней трети арта; номер ставится сбоку от неё, как пометка
+  // смены, а не как надпись по центру лица.
+  const maskY = Math.round(ART_SIDE * 0.30) + Math.floor(rand() * 3);
+  let x = Math.round(ART_SIDE * 0.44) + Math.floor(rand() * 3);
+  const digits = 2 + (rand() < 0.4 ? 1 : 0);
+  for (let i = 0; i < digits; i++) {
+    chalkDigit(t, x, maskY, Math.floor(rand() * 10), rand);
+    x += 4;
+  }
+  return t;
 }

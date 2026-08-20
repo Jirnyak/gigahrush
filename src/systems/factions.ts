@@ -9,6 +9,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
+import { monsterHasAIFlag } from '../entities/monster';
 import { MAX_ACTIVE_MACRO_GOALS } from '../data/entity_limits';
 import { occupationHasAnyProfileTag, occupationHasProfileTag } from '../data/occupation_profiles';
 import {
@@ -36,7 +37,7 @@ import {
   isNpcPlayerHostile,
   setNpcPlayerRelation,
 } from './npc_relations';
-import { applyDemosRelationDelta } from './demos_social';
+import { applyDemosRelationDelta, isDemosPersonalEnemy } from './demos_social';
 import { addKarma } from './alife_rating';
 import { isPassiveDefensiveNeutralMonster } from './monster_traits';
 import { checkAssaultResolution } from './alife/squad_logic';
@@ -67,6 +68,28 @@ export function areFactionsHostile(a: Faction, b: Faction): boolean {
   return getFactionRelation(a, b) <= RELATION_HOSTILE_THRESHOLD;
 }
 
+/* ── Личная вражда между людьми — ссылка на кадр ──────────────── */
+// Социальный граф Демоса живёт в GameState, а isHostile зовётся из самого
+// горячего скана боя и state не принимает. Ссылку подсовывают раз за кадр, как
+// соседним AI-модулям (setPathContext / setCombatContext / setNpcContext).
+// Без контекста личная вражда просто не читается: остаётся матрица фракций.
+let socialContextState: GameState | undefined;
+
+export function setFactionsSocialContext(state?: GameState): void {
+  socialContextState = state;
+}
+
+/** Личное отношение одного человека к другому. Зовётся ТОЛЬКО когда матрица
+ *  фракций уже ответила «не враги»: если фракции враждебны, ответ известен. */
+function isPersonallyHostile(attacker: Entity, target: Entity): boolean {
+  const state = socialContextState;
+  if (state === undefined) return false;
+  const from = attacker.alifeId;
+  const to = target.alifeId;
+  if (from === undefined || to === undefined) return false;
+  return isDemosPersonalEnemy(state, from, to);
+}
+
 /** Check if entity considers another entity hostile */
 export function isHostile(attacker: Entity, target: Entity): boolean {
   // PSI control: controlled entities don't attack their controller (and vice-versa)
@@ -87,6 +110,15 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
     const tFaction = target.faction ?? Faction.CITIZEN;
     return getFactionMonsterRelation(tFaction) <= RELATION_HOSTILE_THRESHOLD;
   }
+  // Черный ликвидатор выглядит как свой: настоящие ликвидаторы не поднимают
+  // тревогу, пока он не ударил первым. Состояния для этого не нужно — ударив,
+  // он попадёт в память угрозы жертвы (`notifyActorDamaged`), и та ответит
+  // через `forcedTarget` в обход этой проверки.
+  if (target.type === EntityType.MONSTER
+    && monsterHasAIFlag(target, 'looksLiquidator')
+    && (attacker.faction ?? Faction.CITIZEN) === Faction.LIQUIDATOR) {
+    return false;
+  }
   if (target.type === EntityType.MONSTER) {
     const aFaction = attacker.faction ?? Faction.CITIZEN;
     return getFactionMonsterRelation(aFaction) <= RELATION_HOSTILE_THRESHOLD;
@@ -104,7 +136,11 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   // NPC vs NPC / Player
   const aFaction = attacker.faction ?? Faction.CITIZEN;
   const bFaction = target.faction ?? Faction.CITIZEN;
-  return areFactionsHostile(aFaction, bFaction);
+  if (areFactionsHostile(aFaction, bFaction)) return true;
+  // Игрок — просто NPC, поэтому личный канал вражды обязан работать и между
+  // людьми: свои же соседи по фракции, ненавидящие друг друга по графу Демоса,
+  // считаются врагами. Ребро направленное — встречное читается своим вызовом.
+  return isPersonallyHostile(attacker, target);
 }
 
 /* ── Territory counting per owner ────────────────────────────── */
@@ -352,7 +388,7 @@ export function updateFactionActivity(
   updateNoisePatrolResponse(world, entities, state);
   evaluateMacroGoalsGC(world, state, elapsed, entities);
   updateFactionEvents(state, world, player, entities, nextId, elapsed, allowSpawns);
-  tickCaravans(state, elapsed, false, MAX_CARAVAN_LANES_PER_TICK, world, entities, player, nextId);
+  tickCaravans(state, elapsed, false, MAX_CARAVAN_LANES_PER_TICK, world, entities, nextId);
   factionUiSnapshotAccum += elapsed;
   const uiRefreshSec = state.showFactions ? UI_OPEN_REFRESH_SEC : UI_IDLE_REFRESH_SEC;
   if (!factionUiSnapshot || factionUiSnapshot.z !== state.currentZ || factionUiSnapshotAccum >= uiRefreshSec) {

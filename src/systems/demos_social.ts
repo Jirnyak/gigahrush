@@ -1082,6 +1082,21 @@ function findExistingTargetSlot(graph: DemosSocialGraph, fromAlifeId: number, ta
   return -1;
 }
 
+/** Личная вражда одного человека к другому — чтение для горячего пути боя.
+ *  Граф НЕ строится и ленивая строка НЕ инициализируется: рёбра пишутся только
+ *  в уже инициализированную строку, поэтому неинициализированная означает
+ *  «рёбер нет» и стоит одно чтение байта. Нет графа в состоянии — нет и личной
+ *  вражды, отношения остаются фракционными. */
+export function isDemosPersonalEnemy(state: GameState, fromAlifeId: number, targetAlifeId: number): boolean {
+  const graph = (state as GameState & DemosSocialHost).demosSocialGraph;
+  // targetAlifeId > 0 обязателен: пустой слот хранит цель 0 и отношение
+  // RELATION_UNSET, которое ниже порога вражды.
+  if (graph === undefined || targetAlifeId <= 0 || graph.initialized[fromAlifeId] !== 1) return false;
+  const slot = findExistingTargetSlot(graph, fromAlifeId, targetAlifeId);
+  if (slot < 0) return false;
+  return graph.relations[edgeOffset(fromAlifeId, slot)] <= RELATION_HOSTILE_THRESHOLD;
+}
+
 function ensureWritableDemosSocialState(state: GameState, graph: DemosSocialGraph): DemosSocialSaveState {
   const host = state as GameState & { demosSocial?: DemosSocialSaveState };
   if (!host.demosSocial) host.demosSocial = createEmptyDemosSocialSaveState();

@@ -1150,7 +1150,6 @@ function inventorySpecialUseLabel(defId: string, def: ItemDef, slot: Item): stri
   if (defId === INCENDIARY_12G_ITEM) return `${accept} выжечь`;
   if (defId === GASMASK_FILTER_ITEM) return `${accept} отработать`;
   if (defId === CONTAMINATED_SWAB_ITEM) return `${accept} сдать/сбыть`;
-  if (itemHasTag(defId, 'temporary_seal')) return `${accept} заклеить`;
   if (defId === VERETAR_UNSEALED_SAND) return `${accept} запечатать / высыпать`;
   if (defId === VERETAR_SEALED_SAND) return `${accept} проверить пломбу`;
   if (AUDIT_PROOF_TRADE_VALUES[defId]) return `${accept} сдать/сбыть`;

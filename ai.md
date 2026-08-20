@@ -18,10 +18,10 @@ The current implementation has moved ordinary NPCs off the old global schedule p
 - `src/systems/ai/npc_utility.ts` scores safety, combat, flee, toilet, drink, eat, sleep, work, heal, social, patrol and wander from needs, threat, role, soft rhythm, local room context and current-intent stickiness.
 - `src/systems/ai/npc_fsm.ts` is now the utility executor: it selects the winning intent on an actor-local rethink timer, maps it to a visible/debug `NpcState`, and reuses bounded path/needs handlers for travel and activity every frame.
 - Ministry NPCs use the same executor with a ministry profile; the old separate ministry schedule path is removed.
-- `src/systems/ai/combat.ts` gives NPC combat, fleeing, physical ranged fire and relation-aware hostility higher priority than routine behavior.
+- `src/systems/ai/combat.ts` gives NPC combat, fleeing, physical ranged fire and relation-aware hostility higher priority than routine behavior. It has no `player` parameter: **detection range is a property of the observer** — `max(brave ? NPC_CHASE_RANGE : NPC_COMBAT_RANGE, own weapon maxRange)`, widened for a forced target after recent damage. There is no brave/armed entry gate either: everyone looks around, and a non-combatant simply flees what they notice. Hostility is the faction matrix plus the directed personal-enmity edge from the Demos social graph (`isDemosPersonalEnemy`), read through a per-frame state reference set by `setFactionsSocialContext(state)` in `updateAI` — `isHostile` sits in the hottest scan and takes no `state`. Symmetrically, `src/systems/ai/monster.ts` has no "prefer player" pass: nothing may re-target the player past the ray check, the scan cadence or hostility. See `architecture.md`, «Observer-Owned Detection».
 - `src/systems/ai/pathfinding.ts` provides a toroidal baked navigation tree and cached behavior flow fields for shared targets such as kitchens, bathrooms and work rooms.
 - `src/systems/ai/tactics.ts` is the shared actor tactic runner. It is called from `updateAI()` before the ordinary NPC/monster branch only for actors with a registered profile, so unprofiled crowd AI keeps the cheap baseline path.
-- `src/systems/ai/monster.ts` contains the monster target loop and many `MonsterKind`/`aiFlags` behavior hooks.
+- `src/systems/ai/monster.ts` contains the monster target loop and the `MonsterKind`/`aiFlags` behavior hooks. It is not the place to park one species: a per-species `update<Species>()` block here, or a field added to `AIState` for one monster, is the failure mode described under «One Property, One Flag» below. Three such blocks were deleted on 2026-08-20 — `updateFalseLiquidatorPatrol`, `updateLozhnyyDukhFalsePhase` and `updateGlubinnayaTenSecondBeat` no longer exist and must not be reintroduced.
 - `src/systems/entity_index.ts` is the runtime broadphase for AI target, threat and local actor queries.
 - `src/data/entity_limits.ts` defines one shared 4096 active NPC+monster actor soft cap for the current floor; this is a gameplay density ceiling, not an AI scheduling trick.
 
@@ -40,7 +40,7 @@ This is used for NPC and monster combat across the whole active floor. The short
 The short combat-step must not erase personal behavior:
 
 - every actor can keep `combatTargetId`, cooldowns, path/frustration, current intent/debug label and recent damage memory;
-- NPC role, faction, bravery, weapon, personal relation to the player, needs and utility pressure still decide whether they fight, flee, hide, patrol, work or recover;
+- NPC role, faction, bravery, weapon, personal relation — to the player and to other people alike, through the directed Demos enmity edge — needs and utility pressure still decide whether they fight, flee, hide, patrol, work or recover;
 - routine utility can resume after danger passes. Micro-goals like noise investigation, looting, and friendly bartering can naturally interrupt routine travel without destroying the main intent;
 - player distance does not decide AI cadence or whether an actor exists;
 - actors do not scan noise or targets every frame; those expensive choices use local cooldowns and cached ids, while movement, cooldowns, attacks and current intents continue every frame.
@@ -206,7 +206,7 @@ This keeps visible floor life dense but breaks the line of identical workers wal
 
 ## Decision Cadence
 
-There is no active-floor hot/warm/cold tiering. Every live AI actor receives the frame. Cadence belongs only to expensive choices inside that actor:
+There is no active-floor hot/warm/cold tiering. Every live AI actor receives the frame, with exactly three exclusions, and none of them is a distance tier: the controlled player, peer-controlled bodies in online co-op, and actors held by a running floor scene (`NpcRole.CINEMATIC_ACTOR`, `src/systems/cinematics.ts`) — those are scenery until the scene's `release` beat gives them back. Cadence belongs only to expensive choices inside that actor:
 
 - NPC utility rescore uses a stable personal timer of `1.5..4.0s` (`UTILITY_RETHINK_BASE_SEC = 1.5` + `UTILITY_RETHINK_SPREAD_SEC = 2.5`, `src/systems/ai/npc_fsm.ts`), plus longer per-intent timers; the selected intent keeps executing every frame.
 - Combat target scans use `combatTargetId` / `combatScanCd` and bucket queries; current targets are validated cheaply before a new scan.
@@ -307,6 +307,18 @@ Generic monster states:
 
 These do not require a new enum per monster. They can map to existing `AIGoal`, `monsterStage`, `ai.*` scalar fields and `aiFlags`.
 
+### One Property, One Flag
+
+Rule of the project since 2026-08-20. A species declares its property as a flag in `aiFlags` and brings its sprite in its own `src/entities/<id>.ts`.
+
+- **Forbidden:** a field in `AIState` (`src/core/types.ts`) for one species, and a species-owned function in the shared `src/systems/ai/monster.ts`. Every entity in the world carries an `AIState` — including dropped items and projectiles — so a field added for one monster is paid for by all of them.
+- **Reference (right):** Sculpture — the whole idea «moves only while unobserved» is the `weepingAngel` flag against a generic freeze-under-gaze rule; zero core fields, zero own functions in the shared AI.
+- **Reference (right):** Black Liquidator — the property is appearance, and it lives in `src/entities/black_liquidator.ts`. The `looksLiquidator` flag buys exactly one line in `isHostile` (`src/systems/factions.ts`); the two modes reuse the existing `monsterStage` field, as Head Slug already does.
+- **If state is genuinely needed:** put it in a `WeakMap` keyed by `Entity` next to the species logic, never in `AIState`. Sobrannyy, Slime Woman, Green Dog, Fog Shark and Nightmare already work this way, and their behaviour survived the 2026-08-20 cleanup unchanged because of it.
+- **Cadence:** a species check that does not need every frame must not run every frame. The Black Liquidator witness scan runs about twice a second, staggered by entity id (`(Math.floor(time * 2) + e.id) % 4`), and reads «I was hit» from the shared threat memory (`getRecentCombatThreat`) instead of storing its own flag.
+
+The cleanup that established this rule removed 25 fields from `AIState` and roughly 800 lines from `ai/monster.ts`. The census of the species clusters still left in `AIState` is in `problems.md`.
+
 ## Monster Stimuli
 
 Shared stimuli should be compact and prioritized:
@@ -403,7 +415,7 @@ Runtime destructibility/construction (wall break, wall/door build, door lock or 
 
 Future debugging should show behavior pressure without serializing large histories:
 
-- AI stats: live AI, updated actors, skipped controlled-player actors, NPC/monster split, plot/boss/attacker/projectile-owner counts.
+- AI stats: live AI, updated actors, skipped controlled-player actors, NPC/monster split, plot/boss/attacker/projectile-owner counts. Actors held by a floor scene are skipped without incrementing `aiStats.skipped`, so during a scene the counters under-report — read `activeFloorSceneId()` before blaming the numbers.
 - Pathfinding stats: cache hits, bakes, assigned paths, denied/deferred paths.
 - Entity-index stats: query count, bucket checks, max result count.
 - NPC intent sample: last intent, last score, next decision time, target room/cell.

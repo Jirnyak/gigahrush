@@ -2,7 +2,7 @@
 
 import { rng } from '../core/rand';
 import { randomName } from '../data/catalog';
-import { MARKOV_TEXT_DEFINITIONS, MarkovIntent, MarkovSource } from '../data/markov_text';
+import { MARKOV_TEXT_DEFINITIONS, MarkovCorpusLine, MarkovIntent, MarkovSource } from '../data/markov_text';
 import {
   COMPILED_SKELETONS, COMPILED_CATEGORIES, COMPILED_MARKOV_GRAPH, COMPILED_PATTERN_DISTANCES,
   COMPILED_TAG_BITS, markovEdgeCount, markovEdgeMask,
@@ -242,9 +242,83 @@ function resolveCategory(tag: string, ctx: MarkovTextContext | undefined, ctxMas
   return items[items.length - 1].text;
 }
 
+/**
+ * Полосы контекста, по которым выбирают авторскую строку. Тег контекста
+ * приходит составным (`need.food.low`, `faction.citizen`), а корпус размечен
+ * листьями (`need`, `food`, `faction`) — поэтому в множество кладутся и целый
+ * тег, и его префиксы, и его сегменты. Профессия и фракция приходят числами и
+ * дают полосу вида `occupation.5`: по ней запись корпуса, размеченная ключом
+ * того же перечисления, попадает к своему NPC, а не к соседу по этажу.
+ */
+function contextFacets(context: MarkovTextContext | undefined): ReadonlySet<string> {
+  const facets = new Set<string>();
+  if (!context) return facets;
+  for (const tag of context.tags ?? []) {
+    const parts = tag.split('.');
+    for (let i = 1; i <= parts.length; i++) facets.add(parts.slice(0, i).join('.'));
+    for (const part of parts) facets.add(part);
+  }
+  if (context.occupation !== undefined) facets.add(`occupation.${context.occupation}`).add('occupation');
+  if (context.faction !== undefined) facets.add(`faction.${context.faction}`).add('faction');
+  if (context.needBand === 'low' || context.needBand === 'urgent') facets.add('need');
+  if (context.dangerBand !== undefined && context.dangerBand !== 'quiet') facets.add('danger');
+  if (context.isSamosborActive) facets.add('samosbor').add('danger');
+  return facets;
+}
+
+export interface CuratedCorpusPick {
+  readonly line: MarkovCorpusLine;
+  readonly domainId: string;
+}
+
+/**
+ * Источник `curated_pool` — вторая ветка единого ядра: точная строка
+ * сценариста из корпуса домена, без обхода графа. Реестр доменов — её
+ * единственный адрес, поэтому корпус, не вписанный в домен, недостижим по
+ * построению, а не по забывчивости.
+ *
+ * Полосы строки — условие И, а не сумма баллов: реплика «Гражданским после
+ * фракционной драки...» размечена `event`+`faction` и обязана молчать там, где
+ * драки не было, иначе NPC ссылается на событие, которого в контексте нет.
+ * Отбор — верхний ярус по числу полос (адресная реплика профессии бьёт общую
+ * реплику домена), внутри яруса — вероятностный по весу строки.
+ */
+export function selectCuratedCorpusLine(
+  intent: MarkovIntent,
+  context: MarkovTextContext | undefined,
+): CuratedCorpusPick | undefined {
+  const facets = contextFacets(context);
+  const pool: CuratedCorpusPick[] = [];
+  let best = -1;
+  for (const domain of MARKOV_TEXT_DEFINITIONS.domains) {
+    if (!domain.allowedIntents.includes(intent)) continue;
+    let domainScore = 0;
+    for (const tag of domain.tags) if (facets.has(tag)) domainScore++;
+    for (const line of domain.corpus) {
+      if (line.intent !== intent) continue;
+      if (line.blockedTags?.some(tag => facets.has(tag))) continue;
+      const required = line.contextTags ?? [];
+      if (!required.every(tag => facets.has(tag))) continue;
+      const score = domainScore + required.length;
+      if (score < best) continue;
+      if (score > best) { best = score; pool.length = 0; }
+      pool.push({ line, domainId: domain.id });
+    }
+  }
+  if (pool.length === 0) return undefined;
+  let total = 0;
+  for (const pick of pool) total += Math.max(1, pick.line.weight ?? 1);
+  let r = rng() * total;
+  for (const pick of pool) {
+    r -= Math.max(1, pick.line.weight ?? 1);
+    if (r <= 0) return pick;
+  }
+  return pool[pool.length - 1];
+}
+
 export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterResult {
   const source = request.source ?? 'generated_markov';
-  
+
   if (source === 'locked_author_text' || request.intent === 'locked_author_text') {
     return {
       text: request.lockedText || request.exactFallback || MARKOV_TEXT_DEFINITIONS.intentFallbacks['locked_author_text'] || '',
@@ -253,6 +327,21 @@ export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterRe
       tags: [],
       fallbackUsed: false,
     };
+  }
+
+  if (source === 'curated_pool') {
+    const picked = selectCuratedCorpusLine(request.intent, request.context);
+    if (picked) {
+      return {
+        text: picked.line.text,
+        source: 'curated_pool',
+        intent: request.intent,
+        templateId: picked.line.id,
+        domainId: picked.domainId,
+        tags: picked.line.contextTags ?? [],
+        fallbackUsed: false,
+      };
+    }
   }
 
   if (Object.keys(COMPILED_MARKOV_GRAPH).length === 0) {

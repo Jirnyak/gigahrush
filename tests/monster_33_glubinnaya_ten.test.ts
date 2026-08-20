@@ -64,7 +64,7 @@ function syncEntities(entities: Entity[]): void {
 
 test('glubinnaya ten is standalone hell and void shadow content', () => {
   assert.equal(DEF.kind, MonsterKind.GLUBINNAYA_TEN);
-  assert.deepEqual(DEF.aiFlags, ['secondBeat']);
+  assert.equal(DEF.aiFlags, undefined);
   assert.match(DEF.counterplay ?? '', /свет|фонар|не догоня/i);
   assert.equal(MONSTERS[MonsterKind.GLUBINNAYA_TEN], DEF);
   assert.equal(MONSTER_SPRITES[MonsterKind.GLUBINNAYA_TEN], generateSprite);
@@ -103,58 +103,4 @@ test('glubinnaya ten sprite has a broken body, second silhouette, and pale cuts'
   assert.ok(faintSecondBody >= 120, 'afterimage must be visible as a separate faint body');
   assert.ok(paleCuts >= 8, 'pale eye/cut marks must remain readable');
   assert.ok(blueEdges >= 90, 'blue-gray edges keep the body readable in dark rooms');
-});
-
-test('glubinnaya ten second beat collapses when the player does not chase the afterimage', () => {
-  const world = openDarkWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(14.5, 10.5);
-  const threat = glubinnayaTen(10.5, 10.5);
-  const entities = [target, threat];
-  const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState() });
-
-  syncEntities(entities);
-  updateMonster(world, entities, threat, 0.1, 1, msgs, target.id, { v: 100 }, state);
-  assert.equal(threat.ai?.secondBeatX !== undefined, true, 'second beat should arm in dark close range');
-
-  syncEntities(entities);
-  updateMonster(world, entities, threat, 0.8, 1.8, msgs, target.id, { v: 100 }, state);
-
-  assert.equal(threat.ai?.secondBeatTimer, undefined);
-  assert.equal(target.hp, 100);
-  assert.equal(msgs.some(m => m.text.includes('потеряла второй темп')), true);
-  assert.equal(
-    getRecentEvents(state, { type: 'monster_windup_interrupted', tags: ['glubinnaya_ten', 'second_beat'], limit: 1 }).length,
-    1,
-  );
-});
-
-test('glubinnaya ten second beat hits when the player enters the dark afterimage', () => {
-  const world = openDarkWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(14.5, 10.5);
-  const threat = glubinnayaTen(10.5, 10.5);
-  const entities = [target, threat];
-  const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: -36, worldEvents: createWorldEventState() });
-
-  syncEntities(entities);
-  updateMonster(world, entities, threat, 0.1, 5, msgs, target.id, { v: 100 }, state);
-  const afterX = threat.ai?.secondBeatX;
-  const afterY = threat.ai?.secondBeatY;
-  assert.equal(afterX !== undefined && afterY !== undefined, true);
-
-  target.x = afterX!;
-  target.y = afterY!;
-  syncEntities(entities);
-  updateMonster(world, entities, threat, 0.1, 5.1, msgs, target.id, { v: 100 }, state);
-
-  assert.equal((target.hp ?? 100) < 100, true, 'entering the afterimage should trigger the delayed strike');
-  assert.equal(threat.ai?.secondBeatTimer, undefined);
-  assert.equal(msgs.some(m => m.text.includes('вторым телом')), true);
-  assert.equal(
-    getRecentEvents(state, { type: 'monster_sighted', tags: ['glubinnaya_ten', 'second_beat', 'hit'], limit: 1 }).length,
-    1,
-  );
 });

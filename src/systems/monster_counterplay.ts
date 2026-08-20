@@ -23,17 +23,11 @@ import {
   recordFogSharkIgnited,
   type FogSharkCollateralKillHandler,
 } from './fog_shark';
-import {
-  isSwarmFireProjectile,
-  recordSwarmFireDeath,
-  swarmProjectileDamage,
-} from './swarm_nests';
 
 export function adjustMonsterProjectileDamage(target: Entity, projectile: Entity, baseDamage: number): number {
   const plantAdjusted = borshchevikProjectileDamage(target, projectile, baseDamage);
   const bloodPlantAdjusted = bloodPlantProjectileDamage(target, projectile, plantAdjusted);
-  const fogAdjusted = fogSharkProjectileDamage(target, projectile, bloodPlantAdjusted);
-  return swarmProjectileDamage(target, projectile, fogAdjusted);
+  return fogSharkProjectileDamage(target, projectile, bloodPlantAdjusted);
 }
 
 export function recordMonsterProjectileDeath(
@@ -53,9 +47,6 @@ export function recordMonsterProjectileDeath(
   }
   if (target.monsterKind === MonsterKind.FOG_SHARK && isFogSharkFireProjectile(projectile)) {
     recordFogSharkIgnited(world, state, target, actor, onKill);
-  }
-  if (target.monsterKind === MonsterKind.SWARM && isSwarmFireProjectile(projectile)) {
-    recordSwarmFireDeath(world, state, target, actor);
   }
 }
 

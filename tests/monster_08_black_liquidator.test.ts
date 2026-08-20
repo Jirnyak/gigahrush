@@ -106,7 +106,6 @@ test('black liquidator is standalone aftermath monster content with capped patro
 
   assert.equal(DEF.kind, MonsterKind.BLACK_LIQUIDATOR);
   assert.equal(MONSTERS[MonsterKind.BLACK_LIQUIDATOR], DEF);
-  assert.deepEqual(DEF.aiFlags, ['falsePatrol']);
   assert.equal((ecology?.spawnWeight ?? 0) > 0 && (ecology?.spawnWeight ?? 1) < 0.2, true);
   assert.equal(ecology?.minSamosborCount, 3);
   assert.equal(ecology?.rare, true);
@@ -122,40 +121,4 @@ test('black liquidator is standalone aftermath monster content with capped patro
   assert.equal(red > 0, true, 'red lens glints should distinguish the mask');
   assert.equal(chalk >= 5, true, 'chalk mask numbers should be visible');
   assert.notEqual(spriteHash(spriteA), spriteHash(spriteB), 'seeded silhouettes should vary within a patrol');
-});
-
-test('black liquidator knocks while neutral and reveals on forbidden samples', () => {
-  const { world, doorIdx } = openWorldWithDoor();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(30, 10);
-  const threat = blackLiquidator(10.5, 10.5);
-  threat.ai!.falsePatrolDoorIdx = doorIdx;
-  const entities = [target, threat];
-  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
-  const msgs: Msg[] = [];
-
-  prime(entities);
-  updateMonster(world, entities, threat, 0.2, 1, msgs, target.id, { v: 10 }, state);
-
-  assert.equal(threat.ai?.combatTargetId, undefined);
-  assert.equal(threat.ai?.falsePatrolRevealed, undefined);
-  assert.ok(getRecentEvents(state, { type: 'false_liquidator_knock', tags: ['black_liquidator'], limit: 1 })[0]);
-
-  target.x = 18;
-  target.inventory = [{ defId: 'nii_sample_container', count: 1 }];
-  prime(entities);
-  updateMonster(world, entities, threat, 0.2, 2, msgs, target.id, { v: 10 }, state);
-
-  assert.equal(threat.ai?.falsePatrolRevealed, undefined);
-  assert.equal(threat.monsterStage, undefined);
-
-  target.inventory = [{ defId: 'govnyak_sample', count: 1 }];
-  prime(entities);
-  updateMonster(world, entities, threat, 0.2, 3, msgs, target.id, { v: 10 }, state);
-
-  assert.equal(threat.ai?.falsePatrolRevealed, true);
-  assert.equal(threat.monsterStage, 1);
-  const revealed = getRecentEvents(state, { type: 'false_liquidator_revealed', tags: ['black_liquidator'], limit: 1 })[0];
-  assert.ok(revealed);
-  assert.equal(revealed.data?.reason, 'forbidden_sample');
 });

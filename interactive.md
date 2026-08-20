@@ -32,8 +32,9 @@
 - `toilet_broken`: explicit repair-pending adapter для существующей `Feature.TOILET`; генераторы могут пометить унитаз сломанным, он перекрывает lazy relief prompt до будущего ремонта.
 - `workbench_basic` (ВНИМАНИЕ: мёртвое определение — ни один генератор его не ставит, `rg workbench_basic src/` вне `data/interactive.ts` = 0): explicit feature-backed interactive на `Feature.MACHINE`; сейчас это inspect-only верстак для обычных rooms that do not open crafting.
 - `craft_lathe`: feature-backed `Feature.MACHINE` station with `open_craft_menu`, station `lathe`, and a craft station surface flag.
-- `disassembly_workbench`: feature-backed `Feature.TABLE` station with `open_disassembly_menu`, station `workbench`, and a disassembly surface flag.
+- `disassembly_workbench`: feature-backed `Feature.TABLE` station with `open_disassembly_menu`, station `workbench`, and a disassembly surface flag. **Он и разбирает, и собирает.** Действие у него одно намеренно: `useInteractive()` выполняет только первое подошедшее, поэтому вторая кнопка «собрать» была бы недостижима. Вторую половину меню даёт переключатель режима внутри самого меню — `toggleCraftMenuMode()` (`src/systems/crafting.ts`), стрелки влево/вправо на клавиатуре и тап по заголовку панели на мобиле. `craftMenuSnapshot()` и так считает оба списка, режим лишь выбирает показываемый.
 - `craft_lab_bench`: feature-backed `Feature.APPARATUS` station with `open_craft_menu`, station `lab`, and a lab station surface flag.
+- `net_craft_terminal`: feature-backed `Feature.SCREEN` station with `open_craft_menu` и станцией `net_terminal`. Единственный интерактив без `surfaceFlag`: профили `craft_station_placement` знают только четыре станции генератора, поэтому терминал ставится системным проходом `placeGeneratedInteractablesForCurrentFloor()` (`src/systems/interactions.ts`) — один на этаж, по тому же посетажному сиду, что и компьютер, автомат и NET-терминал взлома.
 - `recipe_billboard`: feature-backed `Feature.SCREEN` source with `learn_recipe` for `floor_recipe_billboard_basics` and a recipe billboard surface flag.
 - `container_adapter`: adapter для видимых `WorldContainer`; target идет через generic interactive layer, но inventory/access/theft/UI остаются в существующей container system.
 
@@ -713,7 +714,10 @@ Gameplay:
 - kind `open_disassembly_menu`;
 - station `workbench`;
 - sets `INTERACTIVE_SURFACE_FLAG_DISASSEMBLY_WORKBENCH`;
-- event `interactive_used`.
+- event `interactive_used`;
+- сборка по схеме на этом же верстаке — через `toggleCraftMenuMode()` внутри открытого меню, а не вторым действием дефа.
+
+Цена ошибки была прямая: пока верстак умел только разбирать, **242 из 451 рецептов** (все со станцией `workbench`) некуда было принести. Замок — `tests/craft-reachable.test.ts`, потолок «рецептов без достижимой станции» равен нулю.
 
 ### `craft_lab_bench`
 
@@ -730,6 +734,25 @@ Gameplay:
 - station `lab`;
 - sets `INTERACTIVE_SURFACE_FLAG_CRAFT_LAB_BENCH`;
 - event `interactive_used`.
+
+### `net_craft_terminal`
+
+Visual:
+
+```ts
+{ kind: 'feature', feature: Feature.SCREEN }
+```
+
+Gameplay:
+
+- action `open_net_craft`;
+- kind `open_craft_menu`;
+- station `net_terminal`;
+- surface flag не ставит;
+- event `interactive_used`;
+- размещение: `placeGeneratedInteractablesForCurrentFloor()`, один на этаж, сид `interactables:<z>:<rooms>`.
+
+До него станция `net_terminal` не существовала в мире вовсе, и **18 рецептов** с кибернетикой и метаматерией были недостижимы.
 
 ### `recipe_billboard`
 
@@ -830,9 +853,10 @@ Examples that should be added through this system:
 - `stove_cook`: food crafting;
 - `stove_dead`: inspect message or repair action;
 - `workbench_basic`: current shipped inspect action;
-- `disassembly_workbench`: current shipped disassembly station;
+- `disassembly_workbench`: current shipped disassembly + craft station (mode toggle inside the menu);
 - `craft_lathe`: current shipped lathe station;
 - `craft_lab_bench`: current shipped lab station;
+- `net_craft_terminal`: current shipped `net_terminal` station, placed by the per-floor system pass;
 - `workbench_repair`: future gear repair station;
 - `machine_press`: production/crafting machine;
 - `apparatus_sample_processor`: sample processing;
@@ -1095,8 +1119,8 @@ Current UI integration:
 
 - `sink_drink`, `toilet_relief`, `sink_broken`, `toilet_broken` and `workbench_basic` are message/event actions;
 - `container_adapter` opens the existing container overlay through `openContainerMenu`.
-- `craft_lathe` and `craft_lab_bench` open craft mode through `openCraftMenu`.
-- `disassembly_workbench` opens disassembly mode through `openCraftMenu`.
+- `craft_lathe`, `craft_lab_bench` and `net_craft_terminal` open craft mode through `openCraftMenu`.
+- `disassembly_workbench` opens disassembly mode through `openCraftMenu`; сборка на нём доступна через переключатель режима в самом меню (стрелки влево/вправо, тап по заголовку панели), а не вторым действием.
 - `recipe_billboard` learns recipes through the crafting recipe-source path.
 
 ## Debug And Audit

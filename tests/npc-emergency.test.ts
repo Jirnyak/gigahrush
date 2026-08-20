@@ -20,6 +20,7 @@ import {
   chooseNpcEmergencyIntent,
   collectNpcEmergencyShelterCandidates,
 } from '../src/systems/ai/npc_emergency';
+import { initFactionRelations } from '../src/data/relations';
 import { addTestRoom, makeTestNpc, makeTestPlayer } from './helpers';
 
 function makeAi() {
@@ -236,6 +237,75 @@ test('shelter crowd penalty counts room actors after unrelated local actors', ()
   assert.equal(chooseNpcEmergencyDecision(world, npc, options).targetRoomId, empty.id);
 });
 
+// Личный джиттер укрытия — это подпись самого NPC. Отношение к игроку в сид не
+// входит: подружившись или разругавшись, человек не обязан менять своё убежище.
+test('shelter jitter ignores personal relation to the player', () => {
+  initFactionRelations();
+  const world = new World();
+  const near = addTestRoom(world, { id: 41, x: 40, y: 40, w: 5, h: 5, type: RoomType.LIVING, zoneFaction: ZoneFaction.CITIZEN });
+  const far = addTestRoom(world, { id: 42, x: 52, y: 40, w: 5, h: 5, type: RoomType.LIVING, zoneFaction: ZoneFaction.CITIZEN });
+  addDoor(world, near, DoorState.HERMETIC_OPEN);
+  addDoor(world, far, DoorState.HERMETIC_OPEN);
+  const options = {
+    phase: 'active' as const,
+    shelterRoomIds: [near.id, far.id],
+    includeNearbyRooms: false,
+    seedSalt: 11,
+  };
+  const decisionFor = (playerRelation: number) => {
+    const npc = makeTestNpc({ id: 77, x: 46.5, y: 44.5, faction: Faction.CITIZEN, playerRelation, ai: makeAi() });
+    const decision = chooseNpcEmergencyDecision(world, npc, options);
+    return {
+      jitter: decision.jitter,
+      roomId: decision.targetRoomId,
+      scores: decision.candidates.map(candidate => `${candidate.roomId}:${candidate.score}`),
+      rethink: decision.rethinkAfterSec,
+    };
+  };
+
+  const hated = decisionFor(-100);
+  const neutral = decisionFor(0);
+  const loved = decisionFor(100);
+
+  assert.deepEqual(neutral, hated);
+  assert.deepEqual(loved, hated);
+});
+
+// Укрытие оценивают по тому, кто в нём сидит, и правило одно на всех: игрок —
+// просто NPC. Враждебный сосед по комнате отталкивает ровно так же, как
+// враждебный игрок, и одинаково сильно.
+test('shelter avoids a hated occupant the same way for an NPC and for the player', () => {
+  initFactionRelations();
+  const world = new World();
+  const occupied = addTestRoom(world, { id: 31, x: 40, y: 30, w: 5, h: 5, type: RoomType.LIVING, zoneFaction: ZoneFaction.CITIZEN });
+  const free = addTestRoom(world, { id: 32, x: 20, y: 30, w: 5, h: 5, type: RoomType.LIVING, zoneFaction: ZoneFaction.CITIZEN });
+  addDoor(world, occupied, DoorState.HERMETIC_OPEN);
+  addDoor(world, free, DoorState.HERMETIC_OPEN);
+  const npc = makeTestNpc({ id: 60, x: 32.5, y: 32.5, faction: Faction.CITIZEN, playerRelation: -100, ai: makeAi() });
+
+  const options = (localActors: readonly ReturnType<typeof makeTestNpc>[]) => ({
+    phase: 'active' as const,
+    shelterRoomIds: [occupied.id, free.id],
+    includeNearbyRooms: false,
+    localActors,
+    seedSalt: 5,
+  });
+  const scoreOf = (localActors: readonly ReturnType<typeof makeTestNpc>[], roomId: number) =>
+    collectNpcEmergencyShelterCandidates(world, npc, options(localActors)).find(c => c.roomId === roomId)?.score;
+
+  const enemyNpc = makeTestNpc({ id: 61, x: occupied.x + 1, y: occupied.y + 1, faction: Faction.WILD });
+  const enemyPlayer = makeTestPlayer({ id: 1, x: occupied.x + 1, y: occupied.y + 1 });
+  const emptyScore = scoreOf([], occupied.id);
+  const npcOccupantScore = scoreOf([enemyNpc], occupied.id);
+  const playerOccupantScore = scoreOf([enemyPlayer], occupied.id);
+
+  assert.ok(emptyScore !== undefined && npcOccupantScore !== undefined && playerOccupantScore !== undefined);
+  assert.equal(npcOccupantScore, playerOccupantScore);
+  assert.ok(npcOccupantScore < emptyScore);
+  assert.equal(chooseNpcEmergencyDecision(world, npc, options([enemyNpc])).targetRoomId, free.id);
+  assert.equal(chooseNpcEmergencyDecision(world, npc, options([enemyPlayer])).targetRoomId, free.id);
+});
+
 test('apply emergency decision only stamps one NPC AI target', () => {
   const world = new World();
   const shelter = addTestRoom(world, { id: 7, x: 30, y: 30, w: 5, h: 5, type: RoomType.LIVING, zoneFaction: ZoneFaction.CITIZEN });
@@ -252,7 +322,7 @@ test('apply emergency decision only stamps one NPC AI target', () => {
   const decision = chooseNpcEmergencyDecision(world, npc, {
     phase: 'active',
     localShelterRoomIds: [shelter.id],
-    player,
+    localActors: [player],
     includeNearbyRooms: false,
   });
 

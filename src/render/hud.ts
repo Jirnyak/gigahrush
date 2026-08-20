@@ -151,6 +151,8 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.WILD]: 'Дикие',
   [ZoneFaction.SCIENTIST]: 'Учёные',
 };
+/** Доля высоты кадра под каждую полосу сцены. */
+const SCENE_LETTERBOX_FRACTION = 0.1;
 const MSG_MAX = 12;
 const MSG_SCAN_MAX = 32;
 const HUD_MESSAGE_TTL_SECONDS = 8;
@@ -1263,33 +1265,47 @@ function drawCombatSightFeedback(
   }
 }
 
-function drawWorldSpeechBubbles(
+/**
+ * Точка зрения для баблов. Обычно это игрок, но во время сцены этажа кадр
+ * держит камера в десятках клеток от него — а бабл обязан считаться от того,
+ * чьими глазами смотрят, иначе речь актёров рисуется мимо экрана.
+ */
+export interface SpeechBubbleView {
+  x: number;
+  y: number;
+  angle: number;
+  pitch: number;
+  /** Кого не озвучивать: обычно сам игрок. */
+  id?: number;
+}
+
+export function drawWorldSpeechBubbles(
   ctx: CanvasRenderingContext2D,
   world: World,
-  player: Entity,
+  view: SpeechBubbleView,
   entities: Entity[],
   sx: number,
   sy: number,
   time: number,
 ): void {
-  const ca = Math.cos(player.angle);
-  const sa = Math.sin(player.angle);
+  const ca = Math.cos(view.angle);
+  const sa = Math.sin(view.angle);
   const s = Math.max(1, Math.min(sx, sy));
-  
+
   for (const e of entities) {
-    if (!e.alive || e.id === player.id || !e.activeBark) continue;
+    if (!e.alive || e.id === view.id || !e.activeBark) continue;
     if (time > e.activeBark.until) continue;
-    
-    const dx = world.delta(player.x, e.x);
-    const dy = world.delta(player.y, e.y);
+
+    const dx = world.delta(view.x, e.x);
+    const dy = world.delta(view.y, e.y);
     const d2 = dx * dx + dy * dy;
     if (d2 > 16 * 16) continue; // max 16 meters
-    
+
     const forward = dx * ca + dy * sa;
     if (forward <= 0.35) continue; // Behind camera
-    
+
     const side = -dx * sa + dy * ca;
-    const projection = combatSpriteProjection(e, forward, side, player.pitch);
+    const projection = combatSpriteProjection(e, forward, side, view.pitch);
     if (!projection) continue;
     
     const text = e.activeBark.text;
@@ -1343,6 +1359,32 @@ function drawWorldSpeechBubbles(
     
     ctx.restore();
   }
+}
+
+/**
+ * Наложение сцены этажа: вместо HUD — кадр. Полосы сверху и снизу говорят, что
+ * управление сейчас не у игрока, а речь актёров проецируется от камеры.
+ * Ничего игрового здесь не решается: это чтение состояния, не запись.
+ */
+export function drawSceneOverlay(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  view: SpeechBubbleView,
+  entities: Entity[],
+  sx: number,
+  sy: number,
+  time: number,
+): void {
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const bar = Math.round(h * SCENE_LETTERBOX_FRACTION);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, bar);
+  ctx.fillRect(0, h - bar, w, bar);
+  ctx.restore();
+  drawWorldSpeechBubbles(ctx, world, view, entities, sx, sy, time);
 }
 
 function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: number): void {

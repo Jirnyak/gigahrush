@@ -28,7 +28,6 @@ export interface ContextSnapshot {
   npcOccupation?: number;
   npcNeeds?: Needs;
   npcHpRatio?: number;
-  playerDistance?: number;
   samosborActive?: boolean;
   hasActiveContract: boolean;
   hasRecentPlayerTheft: boolean;
@@ -79,7 +78,6 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
   let roomType: RoomType | undefined;
   let roomDefId: string | undefined;
   let roomMemory: RoomMemoryRecord | undefined;
-  let playerDistance: number | undefined;
   let nearbyContainer = false;
   let nearbyScreenRumorIds: readonly string[] = [];
 
@@ -102,11 +100,6 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     }
     nearbyContainer = hasNearbyContainer(world, x, y);
     nearbyScreenRumorIds = screenRumorsNear(world, x, y);
-    if (options.player) playerDistance = world.dist(npc.x, npc.y, options.player.x, options.player.y);
-  } else if (options.player) {
-    const dx = shortestDelta(npc.x, options.player.x);
-    const dy = shortestDelta(npc.y, options.player.y);
-    playerDistance = Math.sqrt(dx * dx + dy * dy);
   }
 
   const hp = npc.hp ?? npc.maxHp ?? 100;
@@ -129,7 +122,6 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
     npcOccupation: npc.occupation,
     npcNeeds: n,
     npcHpRatio: hpRatio,
-    playerDistance,
     samosborActive: state?.samosborActive,
     hasActiveContract: (state?.quests?.some(q => !q.done && q.contractId !== undefined) ?? false)
       || hasRecentFact(state, 'quest_hook', now, undefined, 12, ['contract']),
@@ -259,11 +251,4 @@ function hasRecentFact(
     return true;
   }
   return false;
-}
-
-function shortestDelta(a: number, b: number): number {
-  let d = b - a;
-  if (d > W / 2) d -= W;
-  if (d < -W / 2) d += W;
-  return d;
 }

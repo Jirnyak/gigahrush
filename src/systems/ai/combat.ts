@@ -10,7 +10,7 @@ import {
   playAttack, playHostileEnergyShot, playHostileFlame, playHostileGunshot, playHostileNailgun,
   playHostilePsiCast, playHostileShotgun, playSoundAt,
 } from '../audio';
-import { applyDamageRelationPenalty, isHostile } from '../factions';
+import { applyDamageRelationPenalty } from '../factions';
 import { calculateDamage, applyHitStaggerAndKnockback, calculateReloadTime } from '../combat';
 import { clearFogInZone } from '../fog_zone';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
@@ -28,7 +28,7 @@ import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, getEntityIndex } from '../entity_index';
 import { applyMonsterIncomingDamage } from '../monster_traits';
 import { publishWeaponNoise } from '../noise';
-import { getCurrentPlayerEntity, isPlayerEntity } from '../player_actor';
+import { isPlayerEntity } from '../player_actor';
 import { getRecentCombatThreat, notifyActorDamaged, npcCombatProfile } from '../combat_stimulus';
 import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
 import {
@@ -176,6 +176,15 @@ interface FactionCombatOptions {
   simple?: boolean;
 }
 
+/* Кого боец вообще считает целью — свойство правил, а не конкретного бойца:
+ * предикат ничего не захватывает. На верхнем уровне он живёт в единственном
+ * экземпляре вместо двух тысяч одинаковых замыканий за кадр. Тождество тоже
+ * сохраняется: combatTargetQueryMask сравнивает фильтр с canBeMonsterTarget,
+ * и этот — по-прежнему не он, то есть маска запроса та же. */
+function npcCombatTargetFilter(o: Entity): boolean {
+  return o.type === EntityType.NPC || o.type === EntityType.MONSTER || isPlayerEntity(o);
+}
+
 function continueFlee(world: World, e: Entity, dt: number): boolean {
   const ai = e.ai!;
   if (ai.path.length === 0 || ai.pi >= ai.path.length) return false;
@@ -266,55 +275,67 @@ function npcThreatScore(e: Entity, precomputedWs?: import('../../data/catalog').
   return hp + weapon + level;
 }
 
-function npcShouldFleeTarget(e: Entity, target: Entity, eWs?: import('../../data/catalog').WeaponStats): boolean {
-  if (npcIsBrave(e)) return false;
+function npcShouldFleeTarget(e: Entity, target: Entity, eWs?: import('../../data/catalog').WeaponStats, brave = npcIsBrave(e)): boolean {
+  if (brave) return false;
   return npcThreatScore(e, eWs) < npcThreatScore(target) * NPC_FLEE_THREAT_RATIO;
 }
 
-function livePlayerTarget(entities: readonly Entity[]): Entity | undefined {
-  return getCurrentPlayerEntity(entities);
-}
-
 export function tryFactionCombat(
-  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, player?: Entity | null, options?: FactionCombatOptions,
+  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, options?: FactionCombatOptions,
 ): boolean {
   tryCombatLootGrab(world, e, dt);
-  const combatItem = npcCombatItemId(e);
-  const weaponId = combatItem.id;
-  const ws = combatItem.ws;
-  const rangedProfile = ws.isRanged ? npcRangedProfile(ws) : undefined;
-  const isArmed = ws.dmg > 3 || ws.isRanged;
-  const visualProjectiles = options?.visualProjectiles ?? true;
-  const simple = options?.simple === true;
 
-  const isCombatant = npcIsBrave(e) ||
-    isArmed;
-  const playerTarget = player === null
-    ? undefined
-    : player?.alive && isPlayerEntity(player)
-      ? player
-      : livePlayerTarget(entities);
-  const hostileToPlayer = playerTarget !== undefined && isHostile(e, playerTarget);
+  // Два выхода, которым не нужны ни оружие, ни цель, стояли ПОСЛЕ разбора
+  // оружия: бегущий и оглушённый честно платили за две справки о снаряжении и
+  // профиль дальнобойности, чтобы тут же выйти. Справки чистые, перенос выходов
+  // выше них ничего в исходе не меняет.
   const ai = e.ai!;
   if (ai.goal === AIGoal.FLEE && ai.timer > 0) return continueFlee(world, e, dt);
-  const damageThreat = getRecentCombatThreat(e, _time);
-  const forcedTarget = damageThreat?.reaction !== 'startled' ? damageThreat?.attacker : undefined;
-  if (!isCombatant && !hostileToPlayer && !forcedTarget) return false;
-
-  const detectRange = forcedTarget ? Math.max(NPC_CHASE_RANGE, rangedProfile?.maxRange ?? NPC_COMBAT_RANGE)
-    : hostileToPlayer ? NPC_CHASE_RANGE : rangedProfile ? rangedProfile.maxRange : NPC_COMBAT_RANGE;
   if ((ai.staggerTimer ?? 0) > 0) {
     ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
     e.attackCd = Math.max(e.attackCd ?? 0, 0.12);
     return true;
   }
+
+  const combatItem = npcCombatItemId(e);
+  const weaponId = combatItem.id;
+  const ws = combatItem.ws;
+  const rangedProfile = ws.isRanged ? npcRangedProfile(ws) : undefined;
+  const visualProjectiles = options?.visualProjectiles ?? true;
+  const simple = options?.simple === true;
+
+  const damageThreat = getRecentCombatThreat(e, _time);
+  const forcedTarget = damageThreat?.reaction !== 'startled' ? damageThreat?.attacker : undefined;
+  // По сторонам смотрят все. Небоец в этой ветке не дерётся — он замечает
+  // опасность и убегает; смелость и оружие решают лишь ДАЛЬНОСТЬ, с которой он
+  // её замечает. Раньше сюда пускало «враждебен игроку»: мирный житель реагировал
+  // на угрозу, только если этой угрозой был игрок, и спокойно стоял рядом с
+  // враждебным ему соседом-NPC.
+
+  // Дальность обнаружения — свойство НАБЛЮДАТЕЛЯ: насколько он готов к бою и
+  // как далеко бьёт его оружие. От игрока она не зависит вовсе.
+  //
+  // Раньше здесь стояло `hostileToPlayer ? NPC_CHASE_RANGE : ...`, и это ломало
+  // мир двумя способами сразу. Во-первых, дальность зрения бралась из отношения
+  // к игроку, а не к тому, кого высматривают: в одном бою враждебная игроку
+  // сторона видела на 18 клеток, дружественная — на 8, и полковник не замечал
+  // противника в собственном зале. Во-вторых, она переключалась самим фактом
+  // присутствия игрока на этаже — мир вёл себя по-разному в зависимости от того,
+  // смотрит на него кто-нибудь или нет. Игрок здесь такой же NPC, как остальные.
+  // Смелость — свойство личности, а не момента: одна справка на вызов вместо
+  // двух (вторую брал npcShouldFleeTarget сразу следом).
+  const brave = npcIsBrave(e);
+  const braveRange = brave ? NPC_CHASE_RANGE : NPC_COMBAT_RANGE;
+  const detectRange = forcedTarget
+    ? Math.max(NPC_CHASE_RANGE, rangedProfile?.maxRange ?? NPC_COMBAT_RANGE)
+    : Math.max(braveRange, rangedProfile?.maxRange ?? 0);
   const prevTarget = ai.combatTargetId;
   const target = forcedTarget?.alive
     ? forcedTarget
     : findCombatTarget(
       world, entities, e, dt,
       detectRange * detectRange, deterministicScanCd(e.id, 0.8, 0.4),
-      o => o.type === EntityType.NPC || o.type === EntityType.MONSTER || isPlayerEntity(o),
+      npcCombatTargetFilter,
     );
 
   if (!target) {
@@ -326,7 +347,7 @@ export function tryFactionCombat(
     }
     return false;
   }
-  if (damageThreat?.reaction === 'flee' || (damageThreat?.reaction !== 'fight' && npcShouldFleeTarget(e, target, ws))) {
+  if (damageThreat?.reaction === 'flee' || (damageThreat?.reaction !== 'fight' && npcShouldFleeTarget(e, target, ws, brave))) {
     ai.combatTargetId = target.id;
     return startFleeFromThreat(world, e, target, dt);
   }

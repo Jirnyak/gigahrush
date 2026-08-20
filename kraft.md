@@ -17,7 +17,7 @@
 - item-based recipes в `src/data/craft_recipes.ts` с id `craft_item_<item_id>`;
 - источники изучения рецептов в `src/data/craft_recipe_sources.ts`;
 - runtime API, sanitizer, save payload, craft/disassembly actions and menu snapshots in `src/systems/crafting.ts`;
-- интерактивные станции `craft_lathe`, `disassembly_workbench`, `craft_lab_bench`, `recipe_billboard` in `src/data/interactive.ts`;
+- интерактивные станции `craft_lathe`, `disassembly_workbench`, `craft_lab_bench`, `net_craft_terminal`, `recipe_billboard` in `src/data/interactive.ts`;
 - bounded station placement profiles in `src/data/craft_station_placement.ts` and `src/gen/craft_stations.ts`;
 - canvas craft/disassembly UI in `src/render/craft_ui.ts`, opened through the shared `E` interaction dispatcher;
 - tests for data shape, runtime atomicity, save, recipe sources, UI and station reachability.
@@ -119,22 +119,31 @@ Unknown recipes are not listed in the craft UI. The menu shows only known recipe
 
 Station kinds are semantic recipe requirements:
 
-- `any`: simple survival/document recipes that do not need a special station.
-- `workbench`: ordinary workbench crafting and the only valid disassembly station.
-- `lathe`: mechanical, weapon, ammo and metal/tool crafting.
-- `lab`: medical, PSI, slime/sample and reagent crafting.
-- `net_terminal`: cybernetic, NET, terminal-tagged and metamatter recipes. Current ordinary station placement does not create a generic NET crafting bench; route/terminal content must supply a matching craft entry point if those recipes should be crafted in-world.
+- `any`: simple survival/document recipes that do not need a special station (22 рецепта).
+- `workbench`: ordinary workbench crafting and the only valid disassembly station (242 рецепта).
+- `lathe`: mechanical, weapon, ammo and metal/tool crafting (92 рецепта).
+- `lab`: medical, PSI, slime/sample and reagent crafting (77 рецептов).
+- `net_terminal`: cybernetic, NET, terminal-tagged and metamatter recipes (18 рецептов).
 
 Current interactive station ids:
 
 | Interactive id | Feature | Action | Station |
 | --- | --- | --- | --- |
 | `craft_lathe` | `Feature.MACHINE` | `open_craft_menu` | `lathe` |
-| `disassembly_workbench` | `Feature.TABLE` | `open_disassembly_menu` | `workbench` |
+| `disassembly_workbench` | `Feature.TABLE` | `open_disassembly_menu` | `workbench` (разбор **и** сборка, см. ниже) |
 | `craft_lab_bench` | `Feature.APPARATUS` | `open_craft_menu` | `lab` |
+| `net_craft_terminal` | `Feature.SCREEN` | `open_craft_menu` | `net_terminal` |
 | `recipe_billboard` | `Feature.SCREEN` | `learn_recipe` | source `floor_recipe_billboard_basics` |
 
-Station identity is stored in `world.surfaceFlags` next to the visual feature. This lets floor memory recover station behavior when the matching feature survives. Placement is generation-time bounded work, not runtime refill.
+Station identity is stored in `world.surfaceFlags` next to the visual feature. This lets floor memory recover station behavior when the matching feature survives. Placement is generation-time bounded work, not runtime refill. Исключение — `net_craft_terminal`: `surfaceFlag` у него нет, потому что профили `craft_station_placement` знают только четыре станции генератора; терминал ставит системный проход `placeGeneratedInteractablesForCurrentFloor()` (`src/systems/interactions.ts`) — один на этаж, по посетажному сиду `interactables:<z>:<rooms>`.
+
+### Достижимость станций (закрыто 2026-08-20)
+
+Станция, объявленная в рецепте, но не существующая в мире, — это молча недостижимый контент. Было **260 рецептов из 451**: у верстака имелось только действие разбора (242 рецепта `workbench` некуда было принести), а интерактива со станцией `net_terminal` не существовало вовсе (ещё 18).
+
+- **Верстак и разбирает, и собирает.** Второе действие в `InteractiveDef` не помогло бы: `useInteractive()` выполняет только первое подошедшее. Режим переключается ВНУТРИ меню — `toggleCraftMenuMode()` в `src/systems/crafting.ts`, стрелки влево/вправо на клавиатуре, тап по заголовку панели на мобиле. `craftMenuSnapshot()` и так считал оба списка; режим лишь выбирает показываемый, и переключение сбрасывает `craftCursor`.
+- **Сетевой терминал** даёт станцию `net_terminal` на каждом этаже.
+- **Замок** — `tests/craft-reachable.test.ts`, потолок «рецептов без достижимой станции» равен нулю. Новая станция обязана появиться и в `INTERACTIVE_DEFS`, и на этаже: тест собирает список станций из дефов сам.
 
 Reachable shipped paths include:
 

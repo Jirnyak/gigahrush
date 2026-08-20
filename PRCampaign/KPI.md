@@ -41,7 +41,25 @@ For rich modern SPA editors like Teletype (`teletype.in`), Medium, Notion, or Su
    - **Step E (Native CDN Image Drop):** User or agent drags local PNG files (`1.png` .. `7.png` from e.g. `/Users/jirnyak/Mirror/screens`) directly onto the placeholder boxes in Teletype editor. Teletype natively uploads images to its CDN (`teletype.in/files/...`) and inserts published image nodes.
    - **Step F (Publish):** Click **Publish** (`↑`).
 
-Current date baseline: 2026-08-07.
+**ITCH.IO & REMOTE BROWSER CDP AUTOMATION PIPELINE (Proven 2026-08-20):**
+When managing and automating itch.io pages and remote host browser instances via Chrome DevTools Protocol (CDP port 9222 / Opera GX / Chromium):
+1. **RATING URL DEFECT & GOLDEN RULE:**
+   - **DO NOT USE** `https://itch.io/game/rate/<ID>`: itch.io returns a 404 ("We couldn't find your page") on numeric game IDs for published games with custom creator subdomains.
+   - **ALWAYS USE** `https://<creator>.itch.io/<slug>/rate`: The verified, active rating endpoint that renders the 1-to-5 star selector and review submission widget is strictly **`https://tenevik.itch.io/gigahrush/rate`**.
+2. **CHROMIUM CDP WEBSOCKET CONCURRENCY & LOCKOUT RULE:**
+   - Chromium permits only **one** active debugger client attached to a page target (`ws://127.0.0.1:9222/devtools/page/<UUID>`). If an agent script leaves a socket open or hangs, all subsequent connection requests to that tab will silently stall without returning messages.
+   - **Solution:** Always wrap connections in `try/finally` with `ws.close()`, kill stuck node tasks before launching new ones, or create a fresh clean tab via `curl -s -X PUT "http://127.0.0.1:9222/json/new?https://..."` to guarantee zero lock contention.
+3. **AVOID IN-SCRIPT NAVIGATION RACES:**
+   - DO NOT call `window.location.href = ...` or `Page.navigate` within a script while awaiting further `Runtime.evaluate` promises on the same WebSocket. Navigating reloads the page and destroys the V8 execution context, causing the pending promise to never resolve.
+   - **Solution:** Open the target URL directly via `/json/new` or wait for the navigation to finish before establishing the WebSocket connection for evaluation.
+4. **ITCH.IO EDIT FORM PERSISTENCE & WYSIWYG SYNC:**
+   - itch.io uses Redactor (`.redactor-in`, `.redactor-editor`) and a hidden `textarea[name="game[description]"]`.
+   - To update store copy: set both `textarea.value = html` and `redactor.innerHTML = html`, dispatch `input` and `change` bubbling events, then invoke `document.querySelector('button.save_btn').click()`.
+   - Wait 4-5 seconds for the server-side POST to settle before navigating to the public page.
+
+Current date baseline: 2026-08-20.
+
+Latest itch.io store page refresh & CDP automation: 2026-08-20. Replaced outdated description with rich 2026 feature list, direct rating CTA button (`https://tenevik.itch.io/gigahrush/rate` verified with active 1-5 star review system), controls, and community links. Established headless remote browser automation via Opera GX Chrome DevTools Protocol (CDP port 9222) and documented the post-mortem of rating link 404s, CDP single-client concurrency locks, and Redactor form synchronization.
 
 Latest release deploy: 2026-08-07, commits `c7623af0` (portal contract), `47e8036f` (on-screen target guidance) and `4890ec63` (report corrections) are on `origin/main`. `npm run check` exit `0`, `npm run smoke` passed. Cloudflare Worker deployed, version `dadaf387-c8c3-4897-811f-d4482d07a1de`, `https://gigahrush.bileter.workers.dev/?v=4890ec63` answers `200` and `/api/net/stats` returns live JSON (`totalPlayers: 564`, `totalSamosbors: 123`, `totalDeaths: 124`, chat rows present). GitHub Pages published and verified fresh: build `status: built`, `created_at 2026-08-07T01:01:42Z`, `updated_at 2026-08-07T01:02:08Z`, `last-modified` today — the legacy Pages builder degradation logged on 2026-08-06 (`592-642` s, six failures of seven) did NOT recur, this build took `26` s. Upload candidates rebuilt locally and NOT uploaded anywhere: `itch/gigahrush-itch.zip` (`13.03` MB, also the MyIndie candidate) and `pikabu/gigahrush-pikabu.zip` (`13 034 160` bytes, GamePush credentials embedded). New in this release beyond the portal contract: on-screen target guidance — a pulsing bracket on the current target plus an arrow around the crosshair, driving the linear tutorial chain (sink, toilet, key, locked door, Ольга Дмитриевна) and then the active task from the `Q` screen; owner tested the tutorial chain live and confirmed it works as intended.
 
@@ -65,6 +83,7 @@ Latest Reddit Liminal Space PR preparation: `PRCampaign/PR_94_reddit_liminal_pos
 Latest VK/TG broad suggestion queue generation: `PRCampaign/PR_88_broad_suggestions_queue_2026-06-09.md` on 2026-06-09. Owner indicated that Telegram is open and requested aggressive continuation into suggestion boxes (предложки) for VK, Telegram, and sites, celebrating the recent successful post in GameDev по-русски (`https://vk.com/wall-194760187_44623`). Drafts and target queues for `@KwagaGames_robot`, `RPG Horror Games`, `Инди Спейс`, StopGame Blogs and XGM were prepared. Pending browser subagent execution or manual owner posting (owner offered to login if needed).
 
 | Date       | Source                   | Action/Event                                                                 | Outcome/Reach / Notes                                                                                                     |
+| 2026-08-20 | itch.io / CDP Automation | Updated GIGAH|RUSH store page copy, rating CTA & screenshots via CDP port 9222 | Updated live itch store (`https://tenevik.itch.io/gigahrush`) with direct rating CTA (`https://tenevik.itch.io/gigahrush/rate`), 2026 features list, controls, community links, and curated screenshot asset pack. Established full remote DOM & file upload automation via CDP. |
 | 2026-08-02 | Teletype                 | Established HTML Preview Pipeline & Teletype Editor Rule                      | Proven Teletype publishing workflow via local HTML preview (`preview_teletype_article.html`) & rich paste. Documented ProseMirror state sync, base64 CDN stripping rules, and AppleScript UTF-8 encoding requirements. |
 | 2026-07-30 | Pikabu Games / GamePush | Deployed and verified live update v51 on Pikabu Games                        | Moderator updated build v51 on Pikabu Games. Rating 3.5/5 (11 reviews), badge "Недавно обновлена", GamePush floor stats added. |
 | 2026-07-27 | Fandom Wiki / itch.io    | Published game "ТЕАТР" & added to Fandom Wiki "The Theater" (Rev 24262)       | Live Wiki: https://secret-files.fandom.com/ru/wiki/The_Theater, Game: https://tenevik.itch.io/theatre                     |

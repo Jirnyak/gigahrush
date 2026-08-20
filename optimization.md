@@ -35,12 +35,43 @@ Forbidden during active gameplay frames:
 - `bakeNavigationTree` (1M-cell BFS)
 - `ensureBehaviorFlowField` with cache miss (1M-cell BFS)
 - `rebuildPathBlockersFromWorldObjects` without freeze protection
-- `bakeLights` on the full world
+- `bakeLights` on the full world — including its **disguised form** `world.markFeaturesDirty(true)`, which is the same full W² bake behind a dirty-flag name. Runtime code that changed a light feature must use `world.relightAround(idx)` per changed cell (windowed `bakeLightsLocal` + `lightVersion` bump); the full bake belongs to generation only.
+- `ensureFloorRouteLiftLayout` recomputing its full-floor BFS/anchor scans per step — it runs mid-frame from `applyDesignRouteGates`, so its reachability and anchor lists must stay lazily cached and be dropped only when a lift actually moved.
 - Any new O(W²) computation triggered per-frame or per-entity
 
 If a system needs navigation during geometry mutation (e.g., monsters chasing during samosbor), it must use the frozen/cached tree from before the mutation started. Stale paths are acceptable — the world is actively collapsing.
 
 **History**: This rule exists because `cancelSamosborWave()` internally called `unfreezeNavigationCacheForWorld()` after `freezeNavigationCacheForWorld()` at samosbor start, causing every cell mutation to trigger a full 1M-cell BFS rebuild (~5-10ms/frame), resulting in 4-5x FPS drops. The bug recurred multiple times because no explicit rule prevented it.
+
+## Закон владельца: полная симуляция этажа — цель, а не перерасход
+
+Date: 2026-08-20.
+
+Замер жилого этажа: **AI стоит около 13.4 мс на кадр при 2154 актёрах** — бой 50%,
+утилити-FSM 27%, pathfinding 32% сквозным (доли перекрываются: путь считается и из
+боя, и из FSM). Это примерно 80% бюджета 60 fps ещё до рендера. Правки боевого AI
+той же сессии дали ±0.5 мс, то есть просадки не внесли и запаса не создали.
+
+Решение владельца: **«смысл игры именно в живых полностью симулируемых активных
+этажах»**. Из этого следует прямой запрет, и он сильнее любого выигрыша в кадре:
+
+- **ЗАПРЕЩЕН LOD акторов** — «дальние думают реже».
+- **ЗАПРЕЩЕН тиринг «горячий/холодный»** по расстоянию до камеры.
+- **ЗАПРЕЩЕН радиус симуляции вокруг игрока** и любая схема «считаем только рядом».
+
+Причина не только вкусовая: такие схемы противоречат закону «игрок — просто NPC»
+(`problems.md`, «Player-Anchored Simulation»). Мир, который считает себя иначе там,
+где стоит камера, перестаёт быть миром — и это ровно тот класс ошибок, который в
+той же сессии выжигали в AI, караванах и фракционных событиях.
+
+Оптимизировать AI можно **только бесплатно**: снятые лишние вызовы, забытые
+кадансы, переиспользованные буферы, убранные аллокации в кадре, индекс вместо
+скана. Всё, что меняет, СКОЛЬКО акторов реально думает, — это дизайн-изменение и
+требует владельца.
+
+Исключения, которые уже есть и трогать их не надо: LOD нужд вокруг игрока
+(`systems/needs.ts`, с холодным round-robin) и нарративная режиссура самосбора.
+Они перечислены в `problems.md` как осознанные бюджеты.
 
 ## Navigation: Region-Portal HPA* + Local Patch (accept-stale)
 
@@ -116,6 +147,7 @@ Implementation rules:
 
 - Never assign a value capped above the typed-array range into that typed array; JavaScript typed arrays wrap/truncate silently.
 - Keep live current-floor `Entity` objects ergonomic when they are not the 100k storage problem; compact the cold/persistent columns and expose snapshots through helpers.
+- **`AIState` is not scratch space for one species.** Every entity in the world carries an `AIState`, including dropped items and projectiles, so a field added for a single monster is paid for by the whole active floor at the `4096` actor ceiling. Species state belongs in a `WeakMap` keyed by `Entity` next to the species logic; the 2026-08-20 cleanup moved the surviving cases there and deleted 25 fields outright. Contract: `architecture.md`, «Species Property Contract».
 - Save payloads may remain JSON numbers/strings when that is the current shape, but load must sanitize to the same caps used by runtime columns.
 - Add tests for max-value round trips whenever a field moves into a typed array.
 
@@ -515,3 +547,34 @@ Minimum checks by change type:
 **Changes:**
 1. **`getWeaponStats` Fast Path:** Skipped evaluating `govnyakAimSpreadMult` and `sporeHazeAimSpreadMult` for entities without statuses or for melee weapons. This prevents allocating empty arrays `(e.statuses ?? [])` and doing `.findIndex()` multiple times per frame per NPC.
 2. **`queryRadiusCapped` / `queryPathRadius` In-Place Sort:** Replaced array `.push()`, `.pop()`, and `.length = cap` resizing in hot loops with a GC-free, in-place insertion sort logic. This eliminates major array reallocation overhead in V8 when spatial limits are hit.
+
+**Date:** 2026-08-20
+**Target:** Фризы в кадре — все три нарушали Iron Law: полный бейк O(W²) внутри симулируемого кадра.
+**Changes:**
+
+1. **Волна самосбора не пекёт полную карту света.** Флаг `DirtyFlags.light` в
+   `systems/samosbor_wave.ts` был булевым: любая съеденная фронтом лампа означала
+   `markFeaturesDirty(true)`, то есть `bakeLights()` на весь мир — в том самом кадре,
+   когда игрок бежит от фронта. Флаг стал списком клеток `lightCells`, и каждая
+   съеденная лампа гасится своим окном через новый `World.relightAround(idx)`
+   (`bakeLightsLocal` + бамп `lightVersion`). Локальные бейки подряд остаются точными:
+   каждый пересобирает свой бокс ±R из всех источников в ±2R, а повторное
+   распространение в уже верную внешнюю клетку только max-комбинирует то, что там и
+   так лежало. Замер: **18.79 → 0.31 мс**.
+2. **Полные бейки на взаимодействие убраны.** Аварийные панели
+   (`systems/emergency_panels.ts`), протоколы Пустоты (`systems/void_protocols.ts`) и
+   хладон (`systems/hladon.ts`) заканчивались хвостовым `markFeaturesDirty(true)` /
+   `world.bakeLights()` после правки нескольких клеток — то есть полный W² бейк на
+   каждое нажатие `E`. Хвосты сняты: `setFeatureAt` с дефолтным `rebakeLights` уже
+   пересвечивает своё окно ±R сам. Правило на будущее: генерация вправе брать полный
+   бейк, рантайм — только `relightAround()` поклеточно.
+3. **Маршрутные лифты не гоняют BFS в кадре.** `ensureFloorRouteLiftLayout`
+   (`systems/floor_memory.ts`) зовётся не только на загрузке этажа, но и из
+   `applyDesignRouteGates` — в кадре, где убийство босса открывает маршрутный гейт. Проход
+   пересчитывал полнофлорный BFS достижимости и полнофлорный скан якорей после каждого
+   шага независимо от того, поменял ли шаг хоть что-то: около десяти BFS-проходов и
+   дюжина W²-сканов за вызов. Оба стали ленивыми (`reachableCache`, `anchorCache`) и
+   сбрасываются только когда лифт действительно сдвинулся. Замер: **48–54 → 10.7 мс**.
+
+**Validation note:** это не упрощение поведения — свет, лифты и панели дают тот же
+результат, меняется только объём работы. Замеры сняты на жилом этаже.

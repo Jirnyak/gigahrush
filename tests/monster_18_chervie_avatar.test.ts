@@ -141,7 +141,10 @@ test('Chervie power source is local, radius-bounded, and line-breakable', () => 
 test('Chervie mind pulse is capped and cooldown-gated', () => {
   const world = openWorld();
   const threat = chervie();
-  const target = player();
+  // Ложный приказ выписывают на ближайшего в радиусе импульса, кто не своей
+  // стороны. Игрок попадает под это правило наравне с NPC, поэтому в этом
+  // прогоне он стоит ближе всех — иначе подставили бы соседа.
+  const target = player(11.5);
   world.features[world.idx(11, 10)] = Feature.APPARATUS;
   const entities = [
     target,

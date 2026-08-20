@@ -25,6 +25,7 @@ export interface SaveRuntimeExtras {
   voidEntryFromFloor?: unknown;
   floorMemory?: unknown;
   playedCinematics?: unknown;
+  playedScenes?: unknown;
 }
 
 export type GameSavePayload = SavePayload & { version: number };
@@ -48,6 +49,7 @@ export function createGameSavePayload(
       pseudolift: pseudoliftStateForSave(state),
       floorMemory: extras.floorMemory,
       playedCinematics: extras.playedCinematics,
+      playedScenes: extras.playedScenes,
       alife: alifeForSave(state),
       alifeMobility: alifeMobilityForSave(state),
       computers: computersStateForSave(),

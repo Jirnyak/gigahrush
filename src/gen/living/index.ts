@@ -47,6 +47,7 @@ import { generateYakovLab } from './yakov_lab';
 import { generateVankaDen, spawnVankaShadows } from './vanka_den';
 import './content_manifest';
 import { runZoneContentModules } from './zone_content';
+import { carvePrologueHall } from './prologue_hall';
 import { buildLivingHubGeometry } from './geometry';
 import { spawnRoomItems, spawnFamilies, spawnTravelers } from './npcs';
 import { getPlotNpcCount } from '../../data/npc_packages';
@@ -132,8 +133,18 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   runZoneContentModules(world, entities, nid);
   nextId = nid.v;
 
+  /* ── B0b: Разборный зал сцены-пролога ──────────────────────────
+   * Не зонный модуль: зал обязан стоять в считанных десятках клеток от
+   * Актового, а центр зоны — это сотни. Расстояние здесь и есть содержание,
+   * поэтому место берётся от стартовой комнаты, а не от жребия зоны.
+   * Роется ПОСЛЕ хаб-геометрии, чтобы её районные лучи не застроили проём. */
+  carvePrologueHall(world, world.rooms.length);
+  world.apartmentRoomCount = Math.max(world.apartmentRoomCount, world.rooms.length);
+
   /* ── B1: Readable hub routes and district motifs ─────────────── */
   buildLivingHubGeometry(world);
+
+
 
   /* ── B2: Shadows near Vanka (needs corridors to exist) */
   spawnVankaShadows(world, entities, { v: nextId });

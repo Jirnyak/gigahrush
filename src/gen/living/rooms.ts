@@ -26,4 +26,9 @@ export const LIVING_NAMED_ROOMS = {
     name: 'Лаборатория Якова Давидовича',
     tags: ['lab', 'science'],
   },
+  prologue_hall: {
+    type: RoomType.COMMON,
+    name: 'Разборный зал',
+    tags: ['scene', 'liquidator', 'aftermath'],
+  },
 } as const satisfies NamedRoomTable;

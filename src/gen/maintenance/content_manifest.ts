@@ -59,7 +59,6 @@ import { generateOstavshiysyaLikvidator } from './ostavshiysya_likvidator';
 import { generateFiltronos } from './filtronos';
 import { generateRzhavnikShelf } from './rzhavnik_shelf';
 import { generateBorshchevikBlockade } from './borshchevik_blockade';
-import { generateSwarmNest } from './swarm_nest';
 
 export function runMaintenanceContent(
   world: World,
@@ -213,19 +212,6 @@ export function runMaintenanceContent(
   nextId = syncNextEntityId(entities, nextId);
 
   generateVentshun({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
-  nextId = syncNextEntityId(entities, nextId);
-
-  withPoiGenerationMetadata(world, entities, {
-    id: 'maint_swarm_nest',
-    // @ts-ignore
-    z: 'maintenance',
-    debugLabel: 'Коллекторы: вентиляционная матка роя',
-    decisionHooks: [
-      { kind: 'repair', id: 'swarm_source_seal', label: 'заклеить источник роя изолентой или герметиком' },
-      { kind: 'kill', id: 'swarm_source_burn', label: 'выжечь источник роя огнем' },
-      { kind: 'flee', id: 'swarm_bodies_sprint', label: 'пробежать через короткоживущие тела без зачистки источника' },
-    ],
-  }, () => generateSwarmNest({ world, entities, nextId: { v: nextId }, spawnX, spawnY }));
   nextId = syncNextEntityId(entities, nextId);
 
   generateBrownSlimeCleanup({ world, entities, nextId: { v: nextId }, spawnX, spawnY });

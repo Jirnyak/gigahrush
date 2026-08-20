@@ -95,7 +95,9 @@ interface DirtyFlags {
   cells: boolean;
   wallTex: boolean;
   floorTex: boolean;
-  light: boolean;
+  /** Cells whose light feature the batch ate. Relit one ±R window each — a full
+   *  W² bakeLights here froze the frame the player runs from the wave front. */
+  lightCells: number[];
   fog: boolean;
   surface: boolean;
   visualSlots: boolean;
@@ -600,7 +602,10 @@ function markDirty(
   if (flags.cells) world.markCellsDirty(rects);
   if (flags.wallTex) world.markWallTexDirty(rects);
   if (flags.floorTex) world.markFloorTexDirty(rects);
-  if (flags.light) world.markFeaturesDirty(true, rects);
+  // Iron Law (optimization.md): no full W² bakeLights inside a simulated frame.
+  // Every lamp the batch ate is relit through its own ±R window instead.
+  for (const idx of flags.lightCells) world.relightAround(idx);
+  if (flags.lightCells.length > 0) world.markFeaturesDirty(false, rects);
   if (flags.fog) world.markFogDirty(rects);
   if (flags.surface) world.markSurfaceDirty();
   if (flags.visualSlots) world.markVisualSlotsDirty();
@@ -688,7 +693,7 @@ function cleanSolidCell(
     changed = true;
   }
   if (world.features[idx] !== Feature.NONE) {
-    if (featureCastsLight(world.features[idx])) flags.light = true;
+    if (featureCastsLight(world.features[idx])) flags.lightCells.push(idx);
     world.setFeatureAt(idx, Feature.NONE, false, dirtyRectForIndex(idx));
     flags.cells = true;
     changed = true;
@@ -743,7 +748,7 @@ function applyFloor(
     changed = true;
   }
   if (world.features[idx] !== Feature.NONE && oldRoom < 0) {
-    if (featureCastsLight(world.features[idx])) flags.light = true;
+    if (featureCastsLight(world.features[idx])) flags.lightCells.push(idx);
     world.setFeatureAt(idx, Feature.NONE, false, dirtyRectForIndex(idx));
     clearVisualSlotsBatched(world, idx, flags);
     flags.cells = true;
@@ -1341,7 +1346,7 @@ function applyGeneratedFieldPatch(
     cells: false,
     wallTex: false,
     floorTex: false,
-    light: false,
+    lightCells: [],
     fog: false,
     surface: false,
     visualSlots: false,
@@ -1500,7 +1505,7 @@ export function applyFrontFieldStitch(
     cells: false,
     wallTex: false,
     floorTex: false,
-    light: false,
+    lightCells: [],
     fog: false,
     surface: false,
     visualSlots: false,
@@ -1878,7 +1883,7 @@ export function tickSamosborWave(
     cells: false,
     wallTex: false,
     floorTex: false,
-    light: false,
+    lightCells: [],
     fog: false,
     surface: false,
     visualSlots: false,

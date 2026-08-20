@@ -15,6 +15,8 @@ import { isPlayerEntity } from '../player_actor';
 import { occupationHasAnyProfileTag, occupationHasProfileTag } from '../../data/occupation_profiles';
 import { roomSupports } from '../../data/room_affordances';
 import { factionToTerritoryOwner } from '../../data/factions';
+import { RELATION_FRIENDLY_THRESHOLD } from '../../data/relations';
+import { getFactionRelation, isHostile } from '../factions';
 import { territoryOwnerAt, territoryOwnerAtIndex } from '../territory';
 
 export const NPC_EMERGENCY_DEFAULT_CANDIDATE_CAP = 12;
@@ -106,7 +108,6 @@ export interface NpcEmergencyOptions {
   includeNearbyRooms?: boolean;
   localActors?: readonly Entity[];
   localActorCap?: number;
-  player?: Entity;
   pressureX?: number;
   pressureY?: number;
   seedSalt?: number;
@@ -137,6 +138,7 @@ interface DoorProfile {
   entryOpen: boolean;
 }
 
+/** Личный сид укрытия: только то, чем NPC является сам. Отношение к игроку сюда не входит. */
 export function npcEmergencyJitter(npc: Entity, salt = 0): number {
   let h = 2166136261 ^ salt;
   h = mixHash(h, npc.id);
@@ -144,7 +146,6 @@ export function npcEmergencyJitter(npc: Entity, salt = 0): number {
   h = mixHash(h, npc.familyId ?? 0);
   h = mixHash(h, npc.faction ?? -1);
   h = mixHash(h, npc.occupation ?? -1);
-  h = mixHash(h, npc.playerRelation ?? 0);
   h = mixStringHash(h, npc.persistentNpcId ?? String(npc.id ?? npc.name ?? ''));
   h ^= h >>> 16;
   h = Math.imul(h, 2246822507);
@@ -322,7 +323,7 @@ export function scoreNpcEmergencyShelterCandidate(
   const crowdPenalty = roomCrowdPenalty(world, room.id, options.localActors, options.localActorCap);
   const sourceScore = sourceBias(sources);
   const roleScore = roleRoomBias(intent, room);
-  const playerScore = playerShelterScore(world, npc, room.id, options.player);
+  const occupantScore = roomOccupantRelationScore(world, npc, room.id, options.localActors, options.localActorCap);
   const passableScore = target.passable ? 6 : -18;
   const sealedScore = room.sealed ? (currentRoomId === room.id ? 30 : 6) : 0;
   const inaccessiblePenalty = !door.entryOpen && currentRoomId !== room.id ? 16 : 0;
@@ -335,7 +336,7 @@ export function scoreNpcEmergencyShelterCandidate(
     intent.shelterBias +
     door.score +
     factionScore +
-    playerScore +
+    occupantScore +
     passableScore +
     sealedScore -
     distancePenalty -
@@ -683,12 +684,41 @@ function roomCrowdPenalty(world: World, roomId: number, actors: readonly Entity[
   return Math.max(0, count - 2) * 4;
 }
 
-function playerShelterScore(world: World, npc: Entity, roomId: number, player: Entity | undefined): number {
-  if (!player?.alive) return 0;
-  const playerRoom = world.roomAt(player.x, player.y);
-  if (!playerRoom || playerRoom.id !== roomId) return 0;
-  const relation = npc.playerRelation ?? 0;
-  if (relation <= -40) return -18 + relation / 10;
-  if (relation >= 40) return 6 + relation / 25;
-  return -2;
+/**
+ * Кто уже сидит в комнате. Игрок — просто NPC, поэтому правило одно на всех:
+ * тот, к кому у меня сильное отношение, решает, лезу я сюда или обхожу.
+ * Вражда (личная по графу Демоса или фракционная) читается через `isHostile`,
+ * дружба — по матрице фракций. Список локальных актёров уже ограничен вызовом.
+ */
+function roomOccupantRelationScore(
+  world: World,
+  npc: Entity,
+  roomId: number,
+  actors: readonly Entity[] | undefined,
+  requestedCap = NPC_EMERGENCY_DEFAULT_LOCAL_ACTOR_CAP,
+): number {
+  if (!actors || actors.length === 0) return 0;
+  const cap = clampInt(requestedCap, 0, 64);
+  if (cap <= 0) return 0;
+  let seen = 0;
+  let friendly = false;
+  let stranger = false;
+  for (const actor of actors) {
+    if (!actor.alive || actor.id === npc.id) continue;
+    if (actor.type !== EntityType.NPC && actor.type !== EntityType.MONSTER) continue;
+    if (world.roomAt(actor.x, actor.y)?.id !== roomId) continue;
+    if (isHostile(npc, actor)) return -18;
+    if (isFriendlyOccupant(npc, actor)) friendly = true;
+    else stranger = true;
+    if (++seen >= cap) break;
+  }
+  if (friendly) return 6;
+  return stranger ? -2 : 0;
+}
+
+function isFriendlyOccupant(npc: Entity, actor: Entity): boolean {
+  if (actor.type === EntityType.MONSTER) return false;
+  const own = npc.faction ?? Faction.CITIZEN;
+  const their = actor.faction ?? Faction.CITIZEN;
+  return getFactionRelation(own, their) >= RELATION_FRIENDLY_THRESHOLD;
 }

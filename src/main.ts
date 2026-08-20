@@ -81,7 +81,7 @@ import {
   W, Cell, DoorState, Feature, Tex, RoomType, LiftDirection,
   type CharacterSex, type Entity, type GameState, type Item, type Quest, type WorldContainer,
   type PlayerDamageSourceKind, type PlayerAlife,
-  EntityType, Faction, MonsterKind, Occupation, ProjType, QuestType, AIGoal,
+  EntityType, Faction, MonsterKind, NpcRole, Occupation, ProjType, QuestType, AIGoal,
   msg, setMsgClock,
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
@@ -117,7 +117,8 @@ import {
   webglContextLost, webglNeedsReinit, clearWebGLReinitFlag,
 } from './render/webgl';
 import { dropWorldContextsExcept } from './world/world_contexts';
-import { drawHUD, drawPointerCaptureGate } from './render/hud';
+import { drawHUD, drawPointerCaptureGate, drawSceneOverlay } from './render/hud';
+import { abortFloorScene, bindSceneCamera, floorScenesForSave, resetFloorScenes, restoreFloorScenesFromSave } from './systems/cinematics';
 import { drawFeedbackMenu } from './render/feedback_ui';
 import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
@@ -2718,6 +2719,9 @@ let prevPlayerActorId = -1;
 let prevPlayerActorHp = 100; // track current player actor HP changes for damage flash
 let lastProjectileHitMsgTick = -999;
 let runtimeCamera = createRuntimeCamera();
+// Сцены этажа живут в системном слое и не вправе знать про входную точку:
+// камера приходит к ним инъекцией, один раз за запуск.
+bindSceneCamera(runtimeCamera);
 // Which key-floor cinematics have already played this run. Floors are no longer
 // retained in floorMemory, so this bounded set replaces the old "!hasFloorMemory"
 // visited proxy that gated one-shot cinematics; persisted (capped) in the save so a
@@ -2925,6 +2929,9 @@ function randomDeathContinuationNpc(random: () => number = rng): Entity | undefi
   for (const candidate of entities) {
     if (!candidate.alive || candidate.type !== EntityType.NPC) continue;
     if (candidate.id === player.id || isNativePlayerBodyEntity(candidate) || isPlayerEntity(candidate)) continue;
+    // Актёр сцены — не тело для продолжения: его такты вправе увести его с этажа,
+    // а вместе с ним уехал бы и игрок.
+    if (candidate.role === NpcRole.CINEMATIC_ACTOR) continue;
     seen++;
     if (random() * seen < 1) selected = candidate;
   }
@@ -3076,6 +3083,9 @@ function continueDeathAsAlifePopulationNpc(): boolean {
 
 function continueDeathAsRandomNpc(): boolean {
   if (!state.gameOver || state.gameWon) return false;
+  // Смерть под сцену обрывает её: досматривать кадр некому, а замок и роли
+  // актёров пережили бы смену тела и заперли бы управление навсегда.
+  abortFloorScene(state, entities);
   if (continueDeathAsFloorNpc()) return true;
   return continueDeathAsAlifePopulationNpc();
 }
@@ -3960,6 +3970,12 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   resetRuntimeCamera(runtimeCamera);
   clearFloorMemory();
   playedCinematicKeys.clear();
+  // `state` здесь ещё не пересобран (первый запуск — вовсе undefined), поэтому
+  // отдаём прошлые состояние и массив: сброс обязан закрыть игравшую сцену.
+  resetFloorScenes(
+    typeof state === 'undefined' ? undefined : state,
+    typeof entities === 'undefined' ? undefined : entities,
+  );
   resetNoiseRecords();
   musicSystem.reset();
   const initialRunSeed = normalizeFloorRunSeed(runSeedOverride);
@@ -4456,7 +4472,7 @@ function applyKnockbackPhysics(dt: number): void {
 function movePlayer(dt: number): void {
   const actor = player;
   if (!actor.alive) return;
-  if (state.sleeping || state.trailerMode) return; // no movement while sleeping or in trailer mode
+  if (state.sleeping || state.trailerMode || state.sceneLock) return; // no movement while sleeping, in trailer mode or during a floor scene
   // Seated at a co-op table: you are out of play until it ends. The world keeps
   // running around you — hosting means menus do not freeze the shared floor —
   // so the freeze has to be explicit here rather than ride on the pause flag.
@@ -4974,6 +4990,7 @@ function handlePlayerAttack(_dt: number): void {
 function playerActions(_dt: number): void {
   if (!player.alive) return;
   if (state.sleeping) return; // no actions while sleeping
+  if (state.sceneLock) return; // a floor scene owns the frame: no interact, no fire
 
   // Pickup (on interact key E, if looking at item drop)
   // Auto-pickup handles walking over items (see tick%15 below)
@@ -6099,6 +6116,9 @@ function switchFloor(
 ): void {
   closeCraftMenu();
   restorePlayerBeforeWorldBoundary();
+  // Этаж уезжает вместе со сценой. Оборвать её надо ДО складывания A-Life:
+  // иначе актёры уедут в записи с ролью сцены, которой на новом этаже нет.
+  abortFloorScene(state, entities);
   const fromFloor = state.currentZ;
   // Online: connected peers ride along — carry their actors across the
   // transition and re-stream the new floor to them afterwards.
@@ -6724,6 +6744,7 @@ function saveGame(auto = false): void {
       voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
       floorMemory: floorMemoryStateForSave(),
       playedCinematics: [...playedCinematicKeys],
+      playedScenes: floorScenesForSave(),
     });
     // The active-floor snapshot above was a transient capture for this save only;
     // drop it so nothing floor-sized is retained (or re-archived) during play.
@@ -6810,6 +6831,10 @@ function loadGame(): boolean {
         }
       }
     }
+    // Сцена текущего прогона обрывается вместе с ним, и только потом на её место
+    // встаёт сыгранное из сейва.
+    abortFloorScene(state, entities);
+    restoreFloorScenesFromSave(dataState.playedScenes);
     const loadedRunEntry = currentFloorRunEntry(state);
     const floor = loadedFloorInstances.current?.themeTags ?? loadedRunEntry.themeTags ?? savedFloor;
     const generatedRunEntry = loadedFloorInstances.current ? null : loadedRunEntry;
@@ -10452,8 +10477,10 @@ function gameLoop(now: number): void {
       updateRuntimeCamera(runtimeCamera, world, dt, player);
     }
 
-    // Skip cinematic mode if any key is pressed
-    if (runtimeCamera.mode === 'cinematic') {
+    // Skip cinematic mode if any key is pressed. A floor scene is exempt: it owns
+    // the camera until its own last beat, and releasing it early would leave the
+    // player watching a fight he was never given control over.
+    if (runtimeCamera.mode === 'cinematic' && !state.sceneLock) {
       if (input.fwd || input.back || input.left || input.right || input.attack || input.use || input.interact || input.escape) {
         runtimeCamera.mode = 'player';
       }
@@ -10561,7 +10588,10 @@ function gameLoop(now: number): void {
   });
   ctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   const hudDrawStart = performance.now();
-  if (!state.trailerMode) {
+  if (state.sceneLock) {
+    // Сцена: вместо HUD — кадр, и речь актёров проецируется от камеры, а не от игрока.
+    drawSceneOverlay(ctx, world, cameraView, entities, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, state.time);
+  } else if (!state.trailerMode) {
     drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, renderActor, state, world, entities, uiTime, {
       fps: currentFps,
       perf: uiElementEnabled('fps_counter') ? hudPerfDebugSnapshot(currentFps) : undefined,

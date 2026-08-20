@@ -10,7 +10,6 @@ import { entityDisplayName } from '../entities/monster';
 import { HEAD_SLUG_DETACHED_STAGE } from '../entities/head_slug';
 import { consumeToolDurability, getEquippedToolDurability } from './inventory';
 import { publishEvent } from './events';
-import { interruptLozhnyyDukhFalsePhase } from './ai/monster';
 
 export const UV_SPOTLIGHT_ID = 'uv_spotlight';
 
@@ -178,11 +177,6 @@ function applyUvMonsterEffect(world: World, target: Entity, dirX: number, dirY: 
       target.ai.timer = 1.0;
     }
     return 'spirit_stagger';
-  }
-  if (target.monsterKind === MonsterKind.LOZHNYY_DUKH) {
-    return interruptLozhnyyDukhFalsePhase(world, undefined, target, undefined, 'uv_spotlight')
-      ? 'false_phase_interrupted'
-      : null;
   }
   if (target.monsterKind === MonsterKind.SLIME_WOMAN) {
     target.attackCd = Math.max(target.attackCd ?? 0, 2.1);

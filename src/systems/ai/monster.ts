@@ -11,7 +11,7 @@ import {
 import { World } from '../../core/world';
 import { calculateDamage, applyHitStaggerAndKnockback } from '../combat';
 import { DamageType } from '../../core/types';
-import { MONSTERS, entityDisplayName, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
+import { MONSTERS, entityDisplayName, monsterHasAIFlag, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS, getStack } from '../../data/items';
 import { MAX_INVENTORY_SLOTS } from '../../data/inventory_limits';
 import { occupationHasProfileTag } from '../../data/occupation_profiles';
@@ -54,11 +54,12 @@ import {
 import { entityInActiveCellHazard, registerCellHazardSite } from '../cell_hazards';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ENTITY_MASK_NPC, ensureEntityIndex, getEntityIndex } from '../entity_index';
-import { notifyActorDamaged } from '../combat_stimulus';
+import { getRecentCombatThreat, notifyActorDamaged } from '../combat_stimulus';
 import { applyDemosRelationDelta } from '../demos_social';
 import { updateSlimevikMonster } from '../slimevik';
 import { updateGnilushkaMonster } from '../gnilushka';
 import { territoryOwnerAtIndex } from '../territory';
+import { BLACK_LIQUIDATOR_REVEALED_STAGE } from '../../entities/black_liquidator';
 import { HEAD_SLUG_DETACHED_STAGE, HEAD_SLUG_HOSTED_STAGE } from '../../entities/head_slug';
 import { updateKhorovayaMatka } from './khorovaya_matka';
 import {
@@ -110,8 +111,6 @@ const LISHENNYY_LIGHT_SCAN_CAP = 72;
 const CHERNOSLIZ_SCAN_CAP = 64;
 const DOCUMENT_HUNTER_SCAN_CAP = 72;
 const SLEPOGLAZ_BEAM_SCAN_CAP = 96;
-const PREFER_PLAYER = 15;
-const PREFER_SQ = PREFER_PLAYER * PREFER_PLAYER;
 const PECHATEED_DETECT_SQ = 24 * 24;
 const PECHATEED_FALLBACK_SQ = 10 * 10;
 const KONTORSHCHIK_DETECT_SQ = 28 * 28;
@@ -141,12 +140,6 @@ const BEZEKHIY_DOOR_SCAN_RADIUS = 3;
 const BEZEKHIY_LUNGE_STEP = 2.8;
 const BEZEKHIY_LUNGE_HIT_SQ = 1.55 * 1.55;
 const BEZEKHIY_LUNGE_DAMAGE_MULT = 2.35;
-const BLACK_LIQUIDATOR_CLOSE_REVEAL_SQ = 5.2 * 5.2;
-const BLACK_LIQUIDATOR_SAMPLE_REVEAL_SQ = 14 * 14;
-const BLACK_LIQUIDATOR_DOOR_REVEAL_SQ = 16 * 16;
-const BLACK_LIQUIDATOR_DOOR_SCAN_RADIUS = 9;
-const BLACK_LIQUIDATOR_KNOCK_RANGE_SQ = 2.15 * 2.15;
-const BLACK_LIQUIDATOR_KNOCK_COOLDOWN_SEC = 9;
 export const TRESKOTNIK_WINDUP_SEC = 0.35;
 export const TRESKOTNIK_STAGGER_SEC = 1.35;
 const TRESKOTNIK_DETECT_SQ = 18 * 18;
@@ -155,16 +148,6 @@ const TRESKOTNIK_SPRINT_SEC = 0.62;
 const TRESKOTNIK_SPRINT_SPEED_MULT = 3.25;
 const TRESKOTNIK_HIT_SQ = 1.35 * 1.35;
 const TRESKOTNIK_BURST_DMG_MULT = 1.45;
-const FALSE_PHASE_DETECT_SQ = 24 * 24;
-const FALSE_PHASE_DOOR_SCAN_RADIUS = 3;
-const FALSE_PHASE_DOOR_RANGE_SQ = 2.85 * 2.85;
-const FALSE_PHASE_WINDUP_SEC = 0.78;
-const FALSE_PHASE_ACTIVE_SEC = 0.8;
-const FALSE_PHASE_COOLDOWN_SEC = 11.5;
-const FALSE_PHASE_INTERRUPT_STAGGER_SEC = 1.1;
-const FALSE_PHASE_INTERRUPT_WEAK_SEC = 2.4;
-const FALSE_PHASE_WEAK_DAMAGE_MULT = 0.62;
-const FALSE_PHASE_WEAK_MOVE_MULT = 0.72;
 const DIKIY_SHOVE_RADIUS = 2.65;
 const DIKIY_SHOVE_SCAN_CAP = 12;
 const DIKIY_SHOVE_TRIGGER = 1.0;
@@ -356,15 +339,6 @@ const TUMANNIK_COLLAPSE_SEC = 2.4;
 const TUMANNIK_STRIKE_RANGE_SQ = 1.55 * 1.55;
 const TUMANNIK_STRIKE_DMG_MULT = 1.35;
 const TUMANNIK_OFFSET_CUE_COOLDOWN = 5.5;
-const GLUB_SECOND_BEAT_ARM_RANGE_SQ = 4.6 * 4.6;
-const GLUB_SECOND_BEAT_TRIGGER_SQ = 1.85 * 1.85;
-const GLUB_SECOND_BEAT_HOLD_SQ = 0.58 * 0.58;
-const GLUB_SECOND_BEAT_HOLD_SEC = 0.72;
-const GLUB_SECOND_BEAT_ARM_SEC = 2.2;
-const GLUB_SECOND_BEAT_DODGE = 2.6;
-const GLUB_SECOND_BEAT_LIGHT_SAFE = 0.32;
-const GLUB_SECOND_BEAT_DMG_MULT = 1.75;
-const GLUB_SECOND_BEAT_COOLDOWN = 2.25;
 const TONKAYA_BAIT_SCAN_RADIUS = 10;
 const TONKAYA_BAIT_SCAN_RADIUS_SQ = TONKAYA_BAIT_SCAN_RADIUS * TONKAYA_BAIT_SCAN_RADIUS;
 const TONKAYA_BAIT_MAX_VISIBLE = 15;
@@ -437,7 +411,6 @@ const LOZHNYY_DUKH_RUMOR_IDS = ['ecology_lozhnyy_dukh_door'] as const;
 const RZHAVNIK_RUMOR_IDS = ['monster_rzhavnik_scrap', 'ecology_rzhavnik_first_leap'] as const;
 const TRESKOTNIK_RUMOR_IDS = ['monster_treskotnik_crack_pulse', 'ecology_treskotnik_corner'] as const;
 const NELYUD_RUMOR_IDS = ['ecology_nelyud_close'] as const;
-const BLACK_LIQUIDATOR_RUMOR_IDS = ['monster_black_liquidator_wrong_count', 'ecology_black_liquidator_masks', 'samosbor_false_cleanup_patrol'] as const;
 const MUKHOZHUK_RUMOR_IDS = ['monster_mukhozhuk_host_command', 'ecology_mukhozhuk_quarantine'] as const;
 const CHERVIE_RUMOR_IDS = ['monster_chervie_avatar_screen', 'ecology_chervie_avatar_disconnect'] as const;
 const SPORE_CARPET_RUMOR_IDS = ['monster_spore_carpet_lifted_corner', 'ecology_spore_carpet_fire_salt'] as const;
@@ -483,6 +456,10 @@ let _entityById = new Map<number, Entity>();
 export function setEntityMap(m: Map<number, Entity>): void { _entityById = m; }
 
 const combatQuery: Entity[] = [];
+const disguiseWitnessQuery: Entity[] = [];
+/** Кто рядом считается свидетелем маскировки. */
+const BLACK_LIQUIDATOR_WITNESS_RADIUS = 12;
+const BLACK_LIQUIDATOR_WITNESS_CAP = 16;
 const monsterMeleeHitQuery: Entity[] = [];
 const immediateTopCandidates: Entity[] = [];
 const documentHunterQuery: Entity[] = [];
@@ -497,6 +474,8 @@ const fogSharkPackQuery: Entity[] = [];
 const headSlugHostQuery: Entity[] = [];
 const mukhozhukCommandQuery: Entity[] = [];
 const cherviePulseQuery: Entity[] = [];
+const bezekhiyEchoQuery: Entity[] = [];
+const pomoynyRoyQuery: Entity[] = [];
 const sporeCarpetPuffQuery: Entity[] = [];
 const lishennyyLightQuery: Entity[] = [];
 
@@ -2412,7 +2391,12 @@ function publishProtokolnikPressure(
   });
 }
 
+/* Давление копится на любого, кто держит строку протокола, поэтому и пульс
+ * прилетает любому. Игроку он раньше доставался один: NPC жгли кулдаун сверки
+ * и уходили целыми. */
 function applyProtokolnikPulse(
+  world: World,
+  entities: Entity[],
   state: GameState | undefined,
   e: Entity,
   target: Entity,
@@ -2421,36 +2405,41 @@ function applyProtokolnikPulse(
   time: number,
   msgs: Msg[],
   playerId: number,
+  nextId: { v: number },
 ): void {
-  if (target.id !== playerId || target.hp === undefined) return;
+  if (target.hp === undefined) return;
   const dmg = Math.round(Math.min(
     PROTOKOLNIK_PRESSURE_PULSE_MAX,
     0.65 + pressure * 0.024 + documentPressure * 0.08,
   ) * 10) / 10;
   if (dmg <= 0) return;
 
-  if (isDebugOnePunchManEnabled()) {
+  if (target.id === playerId && isDebugOnePunchManEnabled()) {
     keepDebugOnePunchManAlive(target);
   } else {
     { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
+    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+    if (target.id === playerId) recordPlayerDamage(state, e, dmg, `Протокол сжал виски: -${dmg}`);
     if (target.hp <= 0) {
       target.alive = false;
       target.hp = 0;
+      if (target.type === EntityType.NPC && target.id !== playerId) dropNpcInventory(target, entities, nextId);
     }
   }
-  recordPlayerDamage(state, e, dmg, `Протокол сжал виски: -${dmg}`);
-  msgs.push(msg(`Протокол давит: -${dmg}. Бумаги усиливают сверку.`, time, '#d8a4ff'));
+  if (target.id === playerId) msgs.push(msg(`Протокол давит: -${dmg}. Бумаги усиливают сверку.`, time, '#d8a4ff'));
   playSoundAt(playHostilePsiCast, e.x, e.y);
 }
 
 export function updateProtokolnikProtocolPressure(
   world: World,
+  entities: Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
+  nextId: { v: number },
   state?: GameState,
 ): void {
   if (!hasAIFlag(e, 'protocolPressure') || !e.ai || dt <= 0) return;
@@ -2510,189 +2499,8 @@ export function updateProtokolnikProtocolPressure(
   ai.protocolPressurePulseCd = (ai.protocolPressurePulseCd ?? 0) - dt;
   if (pressure >= PROTOKOLNIK_PRESSURE_PULSE_THRESHOLD && ai.protocolPressurePulseCd <= 0) {
     ai.protocolPressurePulseCd = PROTOKOLNIK_PRESSURE_PULSE_CD;
-    applyProtokolnikPulse(state, e, target, pressure, documentPressure, time, msgs, playerId);
+    applyProtokolnikPulse(world, entities, state, e, target, pressure, documentPressure, time, msgs, playerId, nextId);
   }
-}
-
-function forbiddenCleanupSample(e: Entity | undefined): boolean {
-  if (!e?.inventory) return false;
-  for (const item of e.inventory) {
-    if (item.count <= 0) continue;
-    const tags = ITEM_TAGS[item.defId] ?? ITEMS[item.defId]?.tags ?? [];
-    if (tags.includes('sample') && (tags.includes('contraband') || tags.includes('science') || tags.includes('slime'))) return true;
-    if (tags.includes('govnyak') && tags.includes('contraband')) return true;
-    if (tags.includes('evidence') && tags.includes('science')) return true;
-  }
-  return false;
-}
-
-function nearOpenHermeticDoor(world: World, x: number, y: number, radius: number): boolean {
-  const cx = Math.floor(x);
-  const cy = Math.floor(y);
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      if (dx * dx + dy * dy > radius * radius) continue;
-      const idx = world.idx(cx + dx, cy + dy);
-      if (world.cells[idx] !== Cell.DOOR) continue;
-      const door = world.doors.get(idx);
-      if (door?.state === DoorState.HERMETIC_OPEN) return true;
-    }
-  }
-  return false;
-}
-
-function falsePatrolDoorPassable(world: World, x: number, y: number): boolean {
-  const idx = world.idx(x, y);
-  return (world.cells[idx] === Cell.FLOOR || world.cells[idx] === Cell.WATER) && !world.solid(x, y);
-}
-
-function falsePatrolDoorStandCell(world: World, doorIdx: number, e: Entity): { x: number; y: number } | null {
-  const x = doorIdx % W;
-  const y = (doorIdx / W) | 0;
-  const dirs = [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-  ] as const;
-  let best: { x: number; y: number } | null = null;
-  let bestD2 = Infinity;
-  for (const [dx, dy] of dirs) {
-    const sx = world.wrap(x + dx);
-    const sy = world.wrap(y + dy);
-    if (!falsePatrolDoorPassable(world, sx, sy)) continue;
-    const d2 = world.dist2(e.x, e.y, sx + 0.5, sy + 0.5);
-    if (d2 < bestD2) {
-      bestD2 = d2;
-      best = { x: sx, y: sy };
-    }
-  }
-  return best;
-}
-
-function falsePatrolDoorValid(world: World, doorIdx: number): boolean {
-  if (world.cells[doorIdx] !== Cell.DOOR) return false;
-  const door = world.doors.get(doorIdx);
-  return !!door && door.state !== DoorState.LOCKED;
-}
-
-function findFalsePatrolDoor(world: World, e: Entity): number | undefined {
-  const ai = e.ai!;
-  const cached = ai.falsePatrolDoorIdx;
-  if (cached !== undefined && falsePatrolDoorValid(world, cached)) {
-    const x = cached % W;
-    const y = (cached / W) | 0;
-    if (world.dist2(e.x, e.y, x + 0.5, y + 0.5) <= (BLACK_LIQUIDATOR_DOOR_SCAN_RADIUS + 2) ** 2) return cached;
-  }
-
-  const ex = Math.floor(e.x);
-  const ey = Math.floor(e.y);
-  let best: number | undefined;
-  let bestScore = Infinity;
-  for (let dy = -BLACK_LIQUIDATOR_DOOR_SCAN_RADIUS; dy <= BLACK_LIQUIDATOR_DOOR_SCAN_RADIUS; dy++) {
-    for (let dx = -BLACK_LIQUIDATOR_DOOR_SCAN_RADIUS; dx <= BLACK_LIQUIDATOR_DOOR_SCAN_RADIUS; dx++) {
-      const x = world.wrap(ex + dx);
-      const y = world.wrap(ey + dy);
-      const idx = world.idx(x, y);
-      if (!falsePatrolDoorValid(world, idx)) continue;
-      if (!falsePatrolDoorStandCell(world, idx, e)) continue;
-      const d2 = world.dist2(e.x, e.y, x + 0.5, y + 0.5);
-      const score = d2 + (((idx ^ e.id) & 15) * 0.05);
-      if (score < bestScore) {
-        bestScore = score;
-        best = idx;
-      }
-    }
-  }
-  return best;
-}
-
-function publishFalseLiquidatorKnock(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  doorIdx: number,
-): void {
-  if (!state) return;
-  const x = doorIdx % W;
-  const y = (doorIdx / W) | 0;
-  publishEvent(state, {
-    type: 'false_liquidator_knock',
-    zoneId: zoneIdAt(world, x, y),
-    roomId: world.roomAt(x + 0.5, y + 0.5)?.id,
-    x: x + 0.5,
-    y: y + 0.5,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    monsterKind: MonsterKind.BLACK_LIQUIDATOR,
-    severity: 3,
-    privacy: 'local',
-    tags: ['monster', 'black_liquidator', 'false_cleanup', 'knock'],
-    data: {
-      doorIdx,
-      rumorIds: BLACK_LIQUIDATOR_RUMOR_IDS,
-      counterplay: 'verify mask number, keep door closed, hide samples',
-    },
-  });
-}
-
-function publishFalseLiquidatorRevealed(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  player: Entity | undefined,
-  reason: string,
-): void {
-  if (!state) return;
-  publishEvent(state, {
-    type: 'false_liquidator_revealed',
-    zoneId: zoneIdAt(world, e.x, e.y),
-    roomId: world.roomAt(e.x, e.y)?.id,
-    x: e.x,
-    y: e.y,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    targetId: player?.id,
-    targetName: player ? entityDisplayName(player) : undefined,
-    targetFaction: player?.faction,
-    monsterKind: MonsterKind.BLACK_LIQUIDATOR,
-    severity: 4,
-    privacy: 'local',
-    tags: ['monster', 'black_liquidator', 'false_cleanup', 'revealed', reason],
-    data: {
-      reason,
-      rumorIds: BLACK_LIQUIDATOR_RUMOR_IDS,
-      counterplay: 'break distance, close doors, drop or hide forbidden samples',
-    },
-  });
-}
-
-function revealFalseLiquidator(
-  world: World,
-  e: Entity,
-  player: Entity | undefined,
-  reason: string,
-  time: number,
-  msgs: Msg[],
-  state?: GameState,
-): void {
-  const ai = e.ai!;
-  if (ai.falsePatrolRevealed || e.monsterStage === 1) return;
-  ai.falsePatrolRevealed = true;
-  e.monsterStage = 1;
-  ai.path = [];
-  ai.pi = 0;
-  ai.timer = 0;
-  if (player) ai.combatTargetId = player.id;
-  const line = reason === 'forbidden_sample'
-    ? 'Черный ликвидатор наклонил маску к пробе. Номер на ней стерся: это не зачистка.'
-    : reason === 'hermetic_door'
-      ? 'Черный ликвидатор замер у открытой гермы. Красные линзы вспыхнули не по уставу.'
-      : 'Черный ликвидатор подошел слишком ровно. Под маской нет живого дыхания.';
-  msgs.push(msg(line, time, '#f84'));
-  publishFalseLiquidatorRevealed(state, world, e, player, reason);
 }
 
 function updateNelyudCloseReveal(
@@ -2718,70 +2526,39 @@ function updateNelyudCloseReveal(
   });
 }
 
-function updateFalseLiquidatorPatrol(
-  world: World,
-  e: Entity,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  player: Entity | undefined,
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.BLACK_LIQUIDATOR || !hasAIFlag(e, 'falsePatrol')) return false;
-  const ai = e.ai!;
-  if (ai.falsePatrolRevealed || e.monsterStage === 1) return false;
-
-  if (player?.alive) {
-    const pd2 = world.dist2(e.x, e.y, player.x, player.y);
-    if (pd2 <= BLACK_LIQUIDATOR_CLOSE_REVEAL_SQ) {
-      revealFalseLiquidator(world, e, player, 'too_close', time, msgs, state);
-      return false;
-    }
-    if (pd2 <= BLACK_LIQUIDATOR_SAMPLE_REVEAL_SQ && forbiddenCleanupSample(player)) {
-      revealFalseLiquidator(world, e, player, 'forbidden_sample', time, msgs, state);
-      return false;
-    }
-    if (pd2 <= BLACK_LIQUIDATOR_DOOR_REVEAL_SQ && nearOpenHermeticDoor(world, player.x, player.y, 4)) {
-      revealFalseLiquidator(world, e, player, 'hermetic_door', time, msgs, state);
-      return false;
-    }
+/**
+ * Маскировка Чёрного ликвидатора держится на свидетелях.
+ *
+ * Пока рядом есть посторонние, он неотличим от настоящего обхода — и настоящие
+ * ликвидаторы его не трогают (`looksLiquidator` в проверке враждебности). Стоит
+ * жертве остаться одной — или самому попасть под удар — форма сбрасывается, и
+ * дальше это обычный враждебный монстр.
+ *
+ * Своих полей вид не заводит: режим различает существующий `monsterStage`, а
+ * «меня били» берётся из общей памяти угроз. Проверка идёт не каждый кадр —
+ * раз в пару секунд, вразнобой по id.
+ */
+function updateBlackLiquidatorDisguise(world: World, e: Entity, time: number): void {
+  if (e.monsterStage === BLACK_LIQUIDATOR_REVEALED_STAGE) return;
+  if (getRecentCombatThreat(e, time)) {
+    e.monsterStage = BLACK_LIQUIDATOR_REVEALED_STAGE;
+    return;
   }
+  if ((Math.floor(time * 2) + e.id) % 4 !== 0) return;
 
-  ai.goal = AIGoal.WANDER;
-  ai.combatTargetId = undefined;
-  ai.falsePatrolScanCd = (ai.falsePatrolScanCd ?? 0) - dt;
-  ai.falsePatrolKnockCd = (ai.falsePatrolKnockCd ?? 0) - dt;
-  ai.timer -= dt;
-
-  if (ai.falsePatrolScanCd <= 0 || ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-    const doorIdx = findFalsePatrolDoor(world, e);
-    ai.falsePatrolDoorIdx = doorIdx;
-    ai.falsePatrolScanCd = 2.5 + ((e.id & 3) * 0.35);
-    ai.timer = 2.2;
-    if (doorIdx !== undefined) {
-      const stand = falsePatrolDoorStandCell(world, doorIdx, e);
-      if (stand) tryAssignPathToCell(world, e, stand.x, stand.y);
-    } else {
-      wanderNearby(world, e);
-    }
+  const count = getEntityIndex().queryRadiusCapped(
+    e.x, e.y, BLACK_LIQUIDATOR_WITNESS_RADIUS, disguiseWitnessQuery, ENTITY_MASK_ACTOR, BLACK_LIQUIDATOR_WITNESS_CAP,
+  );
+  let witnesses = 0;
+  for (let i = 0; i < count; i++) {
+    const other = disguiseWitnessQuery[i];
+    if (!other.alive || other.id === e.id || other.type === EntityType.MONSTER) continue;
+    if (world.dist2(e.x, e.y, other.x, other.y) > BLACK_LIQUIDATOR_WITNESS_RADIUS * BLACK_LIQUIDATOR_WITNESS_RADIUS) continue;
+    witnesses++;
+    if (witnesses > 1) return; // есть кому заметить — форма держится
   }
-
-  const doorIdx = ai.falsePatrolDoorIdx;
-  if (doorIdx !== undefined && falsePatrolDoorValid(world, doorIdx)) {
-    const x = doorIdx % W;
-    const y = (doorIdx / W) | 0;
-    if (world.dist2(e.x, e.y, x + 0.5, y + 0.5) <= BLACK_LIQUIDATOR_KNOCK_RANGE_SQ && ai.falsePatrolKnockCd <= 0) {
-      ai.falsePatrolKnockCd = BLACK_LIQUIDATOR_KNOCK_COOLDOWN_SEC + ((e.id & 3) * 1.1);
-      msgs.push(msg('За дверью три сухих удара: "Зачистка. Откройте для сверки".', time, '#aaa'));
-      publishFalseLiquidatorKnock(state, world, e, doorIdx);
-    }
-  }
-
-  const oldSpeed = e.speed;
-  e.speed = oldSpeed * 0.62;
-  followMonsterPath(world, e, dt);
-  e.speed = oldSpeed;
-  return true;
+  // Один на один (или вовсе никого) — притворяться больше не перед кем.
+  e.monsterStage = BLACK_LIQUIDATOR_REVEALED_STAGE;
 }
 
 function cutMetalSheet(target: Entity): boolean {
@@ -2832,14 +2609,19 @@ export function findCombatTarget(
     let newTarget: Entity | null = null;
     let newBest = rangeSq;
     const queryMask = combatTargetQueryMask(typeFilter);
-    ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, Math.sqrt(rangeSq), combatQuery, queryMask, COMBAT_TARGET_SCAN_CAP);
+    const range = Math.sqrt(rangeSq);
+    // Видит ли смотрящий сквозь стены — свойство его самого, а не кандидата.
+    // Раньше обе справки о фазе и корень из радиуса брались заново на каждого
+    // кандидата в цикле; справки чистые, ответ тот же.
+    const seesThroughWalls = hasAIFlag(e, 'noclip') || !!e.phasing;
+    ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, range, combatQuery, queryMask, COMBAT_TARGET_SCAN_CAP);
     for (const other of combatQuery) {
       if (!other.alive || other.id === e.id) continue;
       if (!typeFilter(other)) continue;
       const d2 = world.dist2(e.x, e.y, other.x, other.y);
       if (d2 >= newBest) continue;
       if (!isHostile(e, other)) continue;
-      if (!hasAIFlag(e, 'falsePhase') && !hasAIFlag(e, 'noclip') && !e.phasing && !hasClearLine(world, e, other, Math.sqrt(rangeSq))) continue;
+      if (!seesThroughWalls && !hasClearLine(world, e, other, range)) continue;
       newBest = d2;
       newTarget = other;
     }
@@ -2861,8 +2643,10 @@ function findImmediateCombatTarget(
   let target: Entity | null = null;
   let best = rangeSq;
   const queryMask = combatTargetQueryMask(typeFilter);
+  const range = Math.sqrt(rangeSq);
+  const seesThroughWalls = hasAIFlag(e, 'noclip') || !!e.phasing;
   const count = getEntityIndex().queryRadiusCapped(
-    e.x, e.y, Math.sqrt(rangeSq), immediateTopCandidates, queryMask, IMMEDIATE_THREAT_SCAN_CAP
+    e.x, e.y, range, immediateTopCandidates, queryMask, IMMEDIATE_THREAT_SCAN_CAP
   );
   for (let i = 0; i < count; i++) {
     const other = immediateTopCandidates[i];
@@ -2871,7 +2655,7 @@ function findImmediateCombatTarget(
     if (!isHostile(e, other)) continue;
     const d2 = world.dist2(e.x, e.y, other.x, other.y);
     if (d2 >= best) continue;
-    if (!hasAIFlag(e, 'falsePhase') && !hasAIFlag(e, 'noclip') && !e.phasing && !hasClearLine(world, e, other, Math.sqrt(rangeSq))) continue;
+    if (!seesThroughWalls && !hasClearLine(world, e, other, range)) continue;
     best = d2;
     target = other;
   }
@@ -3128,17 +2912,30 @@ export function updateChervieNetPossessor(
 
   const pulseRadiusSq = CHERVIE_MIND_PULSE_RADIUS * CHERVIE_MIND_PULSE_RADIUS;
   let affectedNpcs = 0;
-  const falseOrder = !!player?.alive && world.dist2(e.x, e.y, player.x, player.y) <= pulseRadiusSq;
-  if (falseOrder && player?.rpg) player.rpg.psi = Math.max(0, player.rpg.psi - 1);
+  // Подменённый приказ всегда выписан на живого человека: Червие берёт ближайшего
+  // в радиусе импульса, кто не его стороны. Игрок проходит по этому правилу
+  // наравне со всеми, а без него приказ выписывают на соседа, а не на пустоту.
+  let framed: Entity | undefined;
+  let framedD2 = pulseRadiusSq;
+  for (const other of cherviePulseQuery) {
+    if (!other.alive || other.id === e.id || !canBeMonsterTarget(other) || !isHostile(e, other)) continue;
+    const d2 = world.dist2(e.x, e.y, other.x, other.y);
+    if (d2 > framedD2) continue;
+    framedD2 = d2;
+    framed = other;
+  }
+  const falseOrder = framed !== undefined;
+  if (framed?.rpg) framed.rpg.psi = Math.max(0, framed.rpg.psi - 1);
   for (const other of cherviePulseQuery) {
     if (!other.alive || other.id === e.id) continue;
     if (world.dist2(e.x, e.y, other.x, other.y) > pulseRadiusSq) continue;
-    if (other.id === playerId || isPlayerEntity(other)) continue;
     if (other.type !== EntityType.NPC || affectedNpcs >= CHERVIE_MIND_PULSE_CAP) continue;
+    // Голова мутится у всех в радиусе. Приказ исполняет тот, кто ходит по приказу:
+    // игрок получает ту же муть, но своим телом правит сам.
     other.psiMadness = Math.max(other.psiMadness ?? 0, CHERVIE_MIND_PULSE_CONFUSION_SEC);
-    if (other.ai) {
+    if (other.ai && !isPlayerEntity(other)) {
       other.ai.goal = AIGoal.HUNT;
-      other.ai.combatTargetId = falseOrder ? playerId : e.id;
+      other.ai.combatTargetId = framed && framed.id !== other.id ? framed.id : e.id;
       other.ai.timer = 0;
       other.ai.path = [];
       other.ai.pi = 0;
@@ -3149,7 +2946,7 @@ export function updateChervieNetPossessor(
   if (!falseOrder && affectedNpcs <= 0) return;
   ai.netPulseCd = CHERVIE_MIND_PULSE_COOLDOWN_SEC;
   stampCherviePulseCue(world, e, time);
-  if (falseOrder) {
+  if (isPlayerEntity(framed)) {
     msgs.push(msg('НЕТ-экран печатает свежий приказ от твоего имени. Не выполняй его: это Червие.', time, '#6f8'));
   } else {
     msgs.push(msg('Червие дернуло локальную сеть. Люди рядом слышат чужой приказ.', time, '#6f8'));
@@ -3164,19 +2961,19 @@ export function updateChervieNetPossessor(
     actorId: e.id,
     actorName: entityDisplayName(e),
     actorFaction: e.faction,
-    targetId: falseOrder ? playerId : undefined,
-    targetName: falseOrder ? player?.name ?? 'Вы' : undefined,
-    targetFaction: falseOrder ? player?.faction : undefined,
+    targetId: framed?.id,
+    targetName: framed ? entityDisplayName(framed) : undefined,
+    targetFaction: framed?.faction,
     monsterKind: MonsterKind.CHERVIE_AVATAR,
     severity: falseOrder ? 5 : 4,
-    privacy: falseOrder ? 'private' : 'local',
+    privacy: isPlayerEntity(framed) ? 'private' : 'local',
     tags: ['monster', 'chervie', 'net', 'mind_pulse', falseOrder ? 'false_order' : 'npc_confusion'],
     data: chervieSignalEventData(findChervieNetSource(world, e), {
       affectedNpcs,
       pulseCap: CHERVIE_MIND_PULSE_CAP,
       cooldownSec: CHERVIE_MIND_PULSE_COOLDOWN_SEC,
       confusionSec: CHERVIE_MIND_PULSE_CONFUSION_SEC,
-      playerPsiLoss: falseOrder ? 1 : 0,
+      psiLoss: framed?.rpg ? 1 : 0,
     }),
   });
 }
@@ -3230,12 +3027,69 @@ function pomoynyRoyScentScore(e: Entity): number {
   return score;
 }
 
-function pomoynyRoyDetectSq(e: Entity, player: Entity | undefined, fallback: number): number {
-  if (!hasAIFlag(e, 'garbageSurround') || !player?.alive) return fallback;
-  const scent = pomoynyRoyScentScore(player);
-  if (scent <= 0.2) return fallback;
-  const radius = Math.min(POMOYNY_ROY_MAX_SCENT_DETECT, Math.sqrt(fallback) + 3.5 + Math.min(5, scent) * 2.4);
-  return Math.max(fallback, radius * radius);
+/**
+ * Насколько далеко рой чует конкретного носителя. Радиус принадлежит не игроку,
+ * а приманке в чужих руках: тот же говняк у NPC тянет рой ровно так же.
+ */
+function pomoynyRoyScentDetectSq(candidate: Entity, baseSq: number): number {
+  const scent = pomoynyRoyScentScore(candidate);
+  if (scent <= 0.2) return baseSq;
+  const radius = Math.min(POMOYNY_ROY_MAX_SCENT_DETECT, Math.sqrt(baseSq) + 3.5 + Math.min(5, scent) * 2.4);
+  return Math.max(baseSq, radius * radius);
+}
+
+/**
+ * Цель роя: у каждого кандидата свой радиус притяжения по запаху, и выигрывает
+ * тот, кто глубже внутри своего. Образец — `findMeatWormTarget` олгоя.
+ */
+function findPomoynyRoyTarget(world: World, e: Entity, dt: number, baseSq: number): Entity | null {
+  const ai = e.ai!;
+  let target: Entity | null = null;
+
+  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
+  if (ai.combatTargetId !== undefined) {
+    const cached = _entityById.get(ai.combatTargetId);
+    if (cached?.alive && canBeMonsterTarget(cached) && isHostile(e, cached) &&
+        world.dist2(e.x, e.y, cached.x, cached.y) <= pomoynyRoyScentDetectSq(cached, baseSq)) {
+      target = cached;
+    }
+    if (!target) ai.combatTargetId = undefined;
+  }
+
+  // Быстрая полоса на упор — та же, что у общего поиска цели: рой не ждёт
+  // секундного каданса, если кто-то встал вплотную.
+  ai.immediateScanCd = (ai.immediateScanCd ?? 0) - dt;
+  if (!target && ai.combatScanCd > 0 && ai.immediateScanCd <= 0) {
+    ai.immediateScanCd = 0.1;
+    target = findImmediateCombatTarget(world, e, Math.min(baseSq, IMMEDIATE_THREAT_RADIUS_SQ), canBeMonsterTarget);
+    if (target) {
+      ai.combatTargetId = target.id;
+      ai.goal = AIGoal.HUNT;
+      ai.combatScanCd = Math.min(ai.combatScanCd, 0.15);
+      return target;
+    }
+  }
+
+  if (target || ai.combatScanCd > 0) return target;
+  ai.combatScanCd = fixedScanCd(e) ?? deterministicScanCd(e.id, 1.0, 0.5);
+
+  const scanRadius = Math.max(Math.sqrt(baseSq), POMOYNY_ROY_MAX_SCENT_DETECT);
+  let bestScore = 1;
+  const count = getEntityIndex().queryRadiusCapped(e.x, e.y, scanRadius, pomoynyRoyQuery, ENTITY_MASK_NPC, COMBAT_TARGET_SCAN_CAP);
+  for (let i = 0; i < count; i++) {
+    const other = pomoynyRoyQuery[i];
+    if (!other.alive || other.id === e.id || !canBeMonsterTarget(other) || !isHostile(e, other)) continue;
+    const reachSq = pomoynyRoyScentDetectSq(other, baseSq);
+    const d2 = world.dist2(e.x, e.y, other.x, other.y);
+    if (d2 > reachSq) continue;
+    const score = d2 / reachSq;
+    if (score >= bestScore) continue;
+    if (!hasClearLine(world, e, other, scanRadius)) continue;
+    bestScore = score;
+    target = other;
+  }
+  if (target) ai.combatTargetId = target.id;
+  return target;
 }
 
 function droppedScentScore(e: Entity): number {
@@ -3439,11 +3293,6 @@ function isOlgoyScentedTarget(e: Entity): boolean {
   return hasRawMeatItem(e) || isHeavyBleedingTarget(e);
 }
 
-function canOlgoyTarget(world: World, e: Entity, target: Entity): boolean {
-  const limit = isOlgoyScentedTarget(target) ? OLGOY_BLOOD_RADIUS : OLGOY_DETECT_RADIUS;
-  return world.dist2(e.x, e.y, target.x, target.y) <= limit * limit;
-}
-
 export function olgoyAmbushCell(world: World, x: number, y: number): boolean {
   const ci = world.idx(x, y);
   const cell = world.cells[ci];
@@ -3626,7 +3475,8 @@ function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null 
     let score = d2;
     if (meat) score *= 0.34;
     if (bleeding) score *= 0.52;
-    if (isPlayerEntity(other)) score *= 0.86;
+    // Прежде здесь стоял множитель «а если это игрок — то вкуснее». Олгой идёт
+    // на мясо и на кровь, а не на конкретное лицо: признаки те же для всех.
     if (score >= bestScore) continue;
     bestScore = score;
     target = other;
@@ -3988,7 +3838,7 @@ function publishBezekhiyEvent(
 function revealBezekhiy(
   world: World,
   e: Entity,
-  player: Entity,
+  target: Entity,
   time: number,
   msgs: Msg[],
   state: GameState | undefined,
@@ -3999,26 +3849,28 @@ function revealBezekhiy(
   ai.deadEchoRevealed = true;
   ai.deadEchoSpent = true;
   ai.deadEchoHold = 0;
-  msgs.push(msg('У порога пропало эхо: Безэхий уже виден, но рывок сорван.', time, '#ccc'));
-  publishBezekhiyEvent(state, world, e, player, 'bezekhiy_revealed', reason);
+  if (isPlayerEntity(target)) msgs.push(msg('У порога пропало эхо: Безэхий уже виден, но рывок сорван.', time, '#ccc'));
+  publishBezekhiyEvent(state, world, e, target, 'bezekhiy_revealed', reason);
 }
 
 function finishBezekhiyLunge(
   world: World,
+  entities: Entity[],
   e: Entity,
-  player: Entity,
+  target: Entity,
   time: number,
   msgs: Msg[],
+  nextId: { v: number },
   state: GameState | undefined,
 ): void {
   const ai = e.ai!;
   ai.deadEchoRevealed = true;
   ai.deadEchoSpent = true;
-  ai.combatTargetId = player.id;
+  ai.combatTargetId = target.id;
   ai.goal = AIGoal.HUNT;
 
-  const dx = world.delta(e.x, player.x);
-  const dy = world.delta(e.y, player.y);
+  const dx = world.delta(e.x, target.x);
+  const dy = world.delta(e.y, target.y);
   const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
   const step = Math.min(BEZEKHIY_LUNGE_STEP, Math.max(0, dist - 0.72));
   const nx = world.wrap(e.x + (dx / dist) * step);
@@ -4031,36 +3883,79 @@ function finishBezekhiyLunge(
   e.spriteScale = 1.14;
 
   let damage = 0;
-  if (player.hp !== undefined && world.dist2(e.x, e.y, player.x, player.y) <= BEZEKHIY_LUNGE_HIT_SQ) {
+  if (target.hp !== undefined && world.dist2(e.x, e.y, target.x, target.y) <= BEZEKHIY_LUNGE_HIT_SQ) {
     const def = MONSTERS[MonsterKind.BEZEKHIY];
     const level = e.rpg?.level ?? 1;
     const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-    damage = zhelemishIncomingMeleeDamage(player, time, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * BEZEKHIY_LUNGE_DAMAGE_MULT));
-    if (isDebugOnePunchManEnabled()) keepDebugOnePunchManAlive(player);
+    damage = zhelemishIncomingMeleeDamage(target, time, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * BEZEKHIY_LUNGE_DAMAGE_MULT));
+    if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) keepDebugOnePunchManAlive(target);
     else {
-      { const _dmg = calculateDamage(damage, DamageType.KINETIC, player); player.hp -= _dmg; applyHitStaggerAndKnockback(player, e.x, e.y, _dmg); }
-      recordPlayerDamage(state, e, damage, `${entityDisplayName(e)} ударил из мертвого эха: -${damage}`);
-      if (player.hp <= 0) {
-        player.alive = false;
-        player.hp = 0;
+      { const _dmg = calculateDamage(damage, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
+      notifyActorDamaged(world, target, e, damage, 'monster_special', time, state);
+      if (isPlayerEntity(target)) recordPlayerDamage(state, e, damage, `${entityDisplayName(e)} ударил из мертвого эха: -${damage}`);
+      if (target.hp <= 0) {
+        target.alive = false;
+        target.hp = 0;
       }
     }
-    spawnBloodHit(world, player.x, player.y, Math.atan2(player.y - e.y, player.x - e.x), damage, false);
+    spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), damage, false);
+    if (target.hp !== undefined && target.hp <= 0) {
+      spawnDeathPool(world, target.x, target.y, false);
+      if (target.type === EntityType.NPC && !isPlayerEntity(target)) dropNpcInventory(target, entities, nextId);
+    }
   }
 
   e.attackCd = MONSTERS[MonsterKind.BEZEKHIY].attackRate;
-  msgs.push(msg(damage > 0 ? `Безэхий сорвался с косяка за спиной: -${damage}` : 'Безэхий сорвался с косяка, но не достал.', time, damage > 0 ? '#f66' : '#fc4'));
-  publishBezekhiyEvent(state, world, e, player, 'bezekhiy_lunge', 'back_threshold_crossing', damage || undefined);
+  if (isPlayerEntity(target)) {
+    msgs.push(msg(damage > 0 ? `Безэхий сорвался с косяка за спиной: -${damage}` : 'Безэхий сорвался с косяка, но не достал.', time, damage > 0 ? '#f66' : '#fc4'));
+  } else if (damage > 0 && target.hp !== undefined && target.hp <= 0) {
+    msgs.push(msg(`${entityDisplayName(e)} снял ${entityDisplayName(target)} с порога`, time, '#f44'));
+  }
+  publishBezekhiyEvent(state, world, e, target, 'bezekhiy_lunge', 'back_threshold_crossing', damage || undefined);
   playSoundAt(playGrowl, e.x, e.y);
 }
 
+/**
+ * Кого сторожит Безэхий у порога. Ближайший живой человек в радиусе обнаружения:
+ * игрок ничем не выделен, засада работает против любого, кто идёт через дверь.
+ */
+function findBezekhiyEchoTarget(world: World, e: Entity): Entity | null {
+  if (e.monsterKind !== MonsterKind.BEZEKHIY) return null;
+  let target: Entity | null = null;
+  let best = BEZEKHIY_DETECT_SQ;
+  const count = getEntityIndex().queryRadiusCapped(
+    e.x,
+    e.y,
+    Math.sqrt(BEZEKHIY_DETECT_SQ),
+    bezekhiyEchoQuery,
+    ENTITY_MASK_NPC,
+    IMMEDIATE_THREAT_SCAN_CAP,
+  );
+  for (let i = 0; i < count; i++) {
+    const other = bezekhiyEchoQuery[i];
+    if (!other.alive || other.id === e.id || !canBeMonsterTarget(other) || !isHostile(e, other)) continue;
+    const d2 = world.dist2(e.x, e.y, other.x, other.y);
+    if (d2 >= best) continue;
+    best = d2;
+    target = other;
+  }
+  return target;
+}
+
+// Порог сторожат для одного человека за раз: сменился наблюдаемый — сбрасываем
+// его сторону двери и выдержку взгляда, иначе два прохожих по разные стороны
+// подделали бы «пересечение порога».
+const bezekhiyWatchedTarget = new WeakMap<Entity, number>();
+
 function updateBezekhiyDeadEcho(
   world: World,
+  entities: Entity[],
   e: Entity,
-  player: Entity,
+  target: Entity | null,
   dt: number,
   time: number,
   msgs: Msg[],
+  nextId: { v: number },
   state: GameState | undefined,
 ): boolean {
   if (e.monsterKind !== MonsterKind.BEZEKHIY) return false;
@@ -4069,14 +3964,23 @@ function updateBezekhiyDeadEcho(
     ai.deadEchoRevealed = true;
     return false;
   }
+  if (!target) {
+    ai.deadEchoHold = Math.max(0, (ai.deadEchoHold ?? 0) - dt * 1.5);
+    return false;
+  }
+  if (bezekhiyWatchedTarget.get(e) !== target.id) {
+    bezekhiyWatchedTarget.set(e, target.id);
+    ai.deadEchoDoorSide = undefined;
+    ai.deadEchoHold = 0;
+  }
 
-  const d2 = world.dist2(e.x, e.y, player.x, player.y);
+  const d2 = world.dist2(e.x, e.y, target.x, target.y);
   const lookedAt = d2 <= BEZEKHIY_DETECT_SQ &&
-    facingDotTo(world, player, e) >= BEZEKHIY_LOOK_DOT &&
-    hasClearLine(world, player, e, Math.sqrt(BEZEKHIY_DETECT_SQ));
+    facingDotTo(world, target, e) >= BEZEKHIY_LOOK_DOT &&
+    hasClearLine(world, target, e, Math.sqrt(BEZEKHIY_DETECT_SQ));
   ai.deadEchoHold = lookedAt ? (ai.deadEchoHold ?? 0) + dt : Math.max(0, (ai.deadEchoHold ?? 0) - dt * 1.5);
   if ((ai.deadEchoHold ?? 0) >= BEZEKHIY_LOOK_HOLD_SEC) {
-    revealBezekhiy(world, e, player, time, msgs, state, 'direct_look');
+    revealBezekhiy(world, e, target, time, msgs, state, 'direct_look');
     return false;
   }
 
@@ -4084,7 +3988,7 @@ function updateBezekhiyDeadEcho(
   if (doorIdx !== undefined) {
     const doorX = doorIdx % W;
     const doorY = (doorIdx / W) | 0;
-    const side = bezekhiyDoorSide(world, doorIdx, player);
+    const side = bezekhiyDoorSide(world, doorIdx, target);
     const previousSide = ai.deadEchoDoorIdx === doorIdx ? ai.deadEchoDoorSide : undefined;
     ai.deadEchoDoorIdx = doorIdx;
     if (side !== 0) ai.deadEchoDoorSide = side;
@@ -4092,277 +3996,16 @@ function updateBezekhiyDeadEcho(
         previousSide !== 0 &&
         side !== 0 &&
         previousSide !== side &&
-        world.dist2(player.x, player.y, doorX + 0.5, doorY + 0.5) <= BEZEKHIY_THRESHOLD_RADIUS_SQ &&
+        world.dist2(target.x, target.y, doorX + 0.5, doorY + 0.5) <= BEZEKHIY_THRESHOLD_RADIUS_SQ &&
         bezekhiyDoorOpenForLunge(world, doorIdx) &&
-        targetBackTurned(world, e, player)) {
-      finishBezekhiyLunge(world, e, player, time, msgs, state);
+        targetBackTurned(world, e, target)) {
+      finishBezekhiyLunge(world, entities, e, target, time, msgs, nextId, state);
       return true;
     }
   }
 
-  if (d2 <= BEZEKHIY_CLOSE_REVEAL_SQ) revealBezekhiy(world, e, player, time, msgs, state, 'close_radius');
+  if (d2 <= BEZEKHIY_CLOSE_REVEAL_SQ) revealBezekhiy(world, e, target, time, msgs, state, 'close_radius');
   return false;
-}
-
-export interface LozhnyyDukhPhaseMove {
-  doorIdx: number;
-  sourceX: number;
-  sourceY: number;
-  landingX: number;
-  landingY: number;
-}
-
-function lozhnyyDukhCanPhaseDoor(state: DoorState | undefined): boolean {
-  return state === DoorState.CLOSED || state === DoorState.LOCKED;
-}
-
-function lozhnyyDukhDoorStillLocal(world: World, ai: NonNullable<Entity['ai']>): boolean {
-  if (ai.falsePhaseDoorIdx === undefined || ai.falsePhaseX === undefined || ai.falsePhaseY === undefined) return false;
-  const door = world.doors.get(ai.falsePhaseDoorIdx);
-  if (!door || world.cells[ai.falsePhaseDoorIdx] !== Cell.DOOR || door.state === DoorState.HERMETIC_CLOSED) return false;
-  return !world.solid(Math.floor(ai.falsePhaseX), Math.floor(ai.falsePhaseY));
-}
-
-function lozhnyyDukhAxisSide(world: World, doorX: number, doorY: number, e: Entity, axisX: number, _axisY: number): number {
-  const v = axisX !== 0
-    ? world.delta(doorX + 0.5, e.x)
-    : world.delta(doorY + 0.5, e.y);
-  return Math.abs(v) < 0.18 ? 0 : v < 0 ? -1 : 1;
-}
-
-function lozhnyyDukhPhaseAxisMove(
-  world: World,
-  e: Entity,
-  target: Entity,
-  doorIdx: number,
-  axisX: number,
-  axisY: number,
-): LozhnyyDukhPhaseMove | undefined {
-  const doorX = doorIdx % W;
-  const doorY = (doorIdx / W) | 0;
-  const monsterSide = lozhnyyDukhAxisSide(world, doorX, doorY, e, axisX, axisY);
-  const targetSide = lozhnyyDukhAxisSide(world, doorX, doorY, target, axisX, axisY);
-  if (monsterSide === 0 || targetSide === 0 || monsterSide === targetSide) return undefined;
-
-  const sourceX = world.wrap(doorX + axisX * monsterSide);
-  const sourceY = world.wrap(doorY + axisY * monsterSide);
-  const landingCellX = world.wrap(doorX + axisX * targetSide);
-  const landingCellY = world.wrap(doorY + axisY * targetSide);
-  if (world.solid(sourceX, sourceY) || world.solid(landingCellX, landingCellY)) return undefined;
-  if (world.dist2(e.x, e.y, sourceX + 0.5, sourceY + 0.5) > FALSE_PHASE_DOOR_RANGE_SQ) return undefined;
-  if (!traceClearPoint(world, e, sourceX + 0.5, sourceY + 0.5, FALSE_PHASE_DOOR_SCAN_RADIUS + 0.75)) return undefined;
-
-  return {
-    doorIdx,
-    sourceX,
-    sourceY,
-    landingX: landingCellX + 0.5,
-    landingY: landingCellY + 0.5,
-  };
-}
-
-export function getLozhnyyDukhFalsePhaseMove(world: World, e: Entity, target: Entity): LozhnyyDukhPhaseMove | undefined {
-  const ex = Math.floor(e.x);
-  const ey = Math.floor(e.y);
-  let best: LozhnyyDukhPhaseMove | undefined;
-  let bestScore = Infinity;
-
-  for (let dy = -FALSE_PHASE_DOOR_SCAN_RADIUS; dy <= FALSE_PHASE_DOOR_SCAN_RADIUS; dy++) {
-    for (let dx = -FALSE_PHASE_DOOR_SCAN_RADIUS; dx <= FALSE_PHASE_DOOR_SCAN_RADIUS; dx++) {
-      const x = world.wrap(ex + dx);
-      const y = world.wrap(ey + dy);
-      const doorIdx = world.idx(x, y);
-      const door = world.doors.get(doorIdx);
-      if (world.cells[doorIdx] !== Cell.DOOR || !lozhnyyDukhCanPhaseDoor(door?.state)) continue;
-
-      const horizontal = !world.solid(x - 1, y) && !world.solid(x + 1, y);
-      const vertical = !world.solid(x, y - 1) && !world.solid(x, y + 1);
-      const moves = [
-        horizontal ? lozhnyyDukhPhaseAxisMove(world, e, target, doorIdx, 1, 0) : undefined,
-        vertical ? lozhnyyDukhPhaseAxisMove(world, e, target, doorIdx, 0, 1) : undefined,
-      ];
-      for (const move of moves) {
-        if (!move) continue;
-        const score = world.dist2(target.x, target.y, move.landingX, move.landingY) +
-          world.dist2(e.x, e.y, move.sourceX + 0.5, move.sourceY + 0.5) * 0.2;
-        if (score >= bestScore) continue;
-        bestScore = score;
-        best = move;
-      }
-    }
-  }
-
-  return best;
-}
-
-function tickLozhnyyDukhFalsePhase(e: Entity, dt: number): void {
-  if (e.monsterKind !== MonsterKind.LOZHNYY_DUKH || !e.ai) return;
-  const ai = e.ai;
-  if ((ai.falsePhaseCd ?? 0) > 0) ai.falsePhaseCd = Math.max(0, (ai.falsePhaseCd ?? 0) - dt);
-  if ((ai.falsePhaseActive ?? 0) > 0) {
-    ai.falsePhaseActive = Math.max(0, (ai.falsePhaseActive ?? 0) - dt);
-    if (ai.falsePhaseActive <= 0 && e.spriteScale !== undefined && e.spriteScale < 1) e.spriteScale = undefined;
-  }
-}
-
-function cancelLozhnyyDukhFalsePhase(e: Entity): void {
-  if (e.monsterKind !== MonsterKind.LOZHNYY_DUKH || !e.ai) return;
-  if (e.ai.falsePhaseDoorIdx === undefined) return;
-  e.ai.windupTimer = undefined;
-  e.ai.windupTargetId = undefined;
-  e.ai.falsePhaseDoorIdx = undefined;
-  e.ai.falsePhaseX = undefined;
-  e.ai.falsePhaseY = undefined;
-  if (e.spriteScale !== undefined && e.spriteScale > 1) e.spriteScale = undefined;
-}
-
-function finishLozhnyyDukhPhase(
-  world: World,
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state: GameState | undefined,
-): boolean {
-  const ai = e.ai!;
-  if (!lozhnyyDukhDoorStillLocal(world, ai)) {
-    cancelLozhnyyDukhFalsePhase(e);
-    ai.falsePhaseCd = Math.max(ai.falsePhaseCd ?? 0, 1.4);
-    return true;
-  }
-
-  const oldX = e.x;
-  const oldY = e.y;
-  e.x = world.wrap(ai.falsePhaseX!);
-  e.y = world.wrap(ai.falsePhaseY!);
-  e.angle = Math.atan2(world.delta(oldY, e.y), world.delta(oldX, e.x));
-  e.spriteScale = 0.86;
-  ai.path = [];
-  ai.pi = 0;
-  ai.timer = 0.4;
-  ai.windupTimer = undefined;
-  ai.windupTargetId = undefined;
-  ai.falsePhaseActive = FALSE_PHASE_ACTIVE_SEC;
-  ai.falsePhaseCd = FALSE_PHASE_COOLDOWN_SEC;
-  const doorIdx = ai.falsePhaseDoorIdx;
-  ai.falsePhaseDoorIdx = undefined;
-  ai.falsePhaseX = undefined;
-  ai.falsePhaseY = undefined;
-  e.attackCd = Math.max(e.attackCd ?? 0, 0.45);
-
-  const markX = doorIdx !== undefined ? doorIdx % W : Math.floor(e.x);
-  const markY = doorIdx !== undefined ? (doorIdx / W) | 0 : Math.floor(e.y);
-  stampMark(world, markX, markY, 0.5, 0.5, 0.72, MarkType.PSI, 40_040 + e.id * 13, 120, 190, 230, 95);
-
-  if (target.id === playerId) {
-    msgs.push(msg('Ложный Дух прошел через закрытую дверь и на миг стал тоньше. Добивайте или уходите в открытый проход.', time, '#9cf'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['lozhnyy_dukh', 'false_phase', 'door_crossing'], {
-    doorIdx,
-    activeSeconds: FALSE_PHASE_ACTIVE_SEC,
-    cooldownSeconds: FALSE_PHASE_COOLDOWN_SEC,
-    counterplay: 'do_not_turtle_behind_one_closed_door',
-  });
-  playSoundAt(playGrowl, e.x, e.y);
-  return true;
-}
-
-function updateLozhnyyDukhFalsePhase(
-  world: World,
-  e: Entity,
-  target: Entity,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.LOZHNYY_DUKH || !hasAIFlag(e, 'falsePhase')) return false;
-  const ai = e.ai!;
-
-  if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
-    e.spriteScale = 0.82;
-    return true;
-  }
-
-  if ((ai.windupTimer ?? 0) > 0 && ai.falsePhaseDoorIdx !== undefined) {
-    ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
-    e.spriteScale = 1.08 + Math.max(0, ai.windupTimer / FALSE_PHASE_WINDUP_SEC) * 0.13;
-    if (ai.windupTargetId !== target.id || !target.alive) {
-      cancelLozhnyyDukhFalsePhase(e);
-      ai.falsePhaseCd = Math.max(ai.falsePhaseCd ?? 0, 1.2);
-      return true;
-    }
-    if (ai.windupTimer <= 0) return finishLozhnyyDukhPhase(world, e, target, time, msgs, playerId, state);
-    return true;
-  }
-
-  if ((ai.falsePhaseCd ?? 0) > 0) return false;
-  if (world.dist2(e.x, e.y, target.x, target.y) > FALSE_PHASE_DETECT_SQ) return false;
-
-  const move = getLozhnyyDukhFalsePhaseMove(world, e, target);
-  if (!move) return false;
-
-  ai.windupTimer = FALSE_PHASE_WINDUP_SEC;
-  ai.windupTargetId = target.id;
-  ai.falsePhaseDoorIdx = move.doorIdx;
-  ai.falsePhaseX = move.landingX;
-  ai.falsePhaseY = move.landingY;
-  ai.path = [];
-  ai.pi = 0;
-  e.angle = Math.atan2(world.delta(e.y, move.sourceY + 0.5), world.delta(e.x, move.sourceX + 0.5));
-  e.spriteScale = 1.18;
-
-  if (target.id === playerId) {
-    msgs.push(msg('Из закрытой двери потянуло холодным сквозняком. Ложный Дух сейчас пройдет косяк: уходите в открытое место или бейте точно.', time, '#9cf'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['lozhnyy_dukh', 'false_phase', 'cold_draft'], {
-    doorIdx: move.doorIdx,
-    windupSeconds: FALSE_PHASE_WINDUP_SEC,
-    counterplay: 'move_to_open_space_or_interrupt_with_precise_ranged_or_uv',
-  });
-  playSoundAt(playGrowl, e.x, e.y);
-  return true;
-}
-
-export function lozhnyyDukhFalsePhaseVulnerable(monster: Entity): boolean {
-  if (monster.monsterKind !== MonsterKind.LOZHNYY_DUKH || !monster.ai) return false;
-  const ai = monster.ai;
-  return (ai.falsePhaseActive ?? 0) > 0 ||
-    ((ai.windupTimer ?? 0) > 0 && ai.falsePhaseDoorIdx !== undefined);
-}
-
-export function interruptLozhnyyDukhFalsePhase(
-  world: World,
-  state: GameState | undefined,
-  monster: Entity,
-  source: Entity | undefined,
-  reason: 'projectile' | 'uv_spotlight',
-): boolean {
-  if (!lozhnyyDukhFalsePhaseVulnerable(monster) || !monster.ai || (monster.hp ?? 1) <= 0) return false;
-  const ai = monster.ai;
-  ai.windupTimer = undefined;
-  ai.windupTargetId = undefined;
-  ai.falsePhaseDoorIdx = undefined;
-  ai.falsePhaseX = undefined;
-  ai.falsePhaseY = undefined;
-  ai.falsePhaseActive = Math.max(ai.falsePhaseActive ?? 0, FALSE_PHASE_INTERRUPT_WEAK_SEC);
-  ai.falsePhaseCd = Math.max(ai.falsePhaseCd ?? 0, FALSE_PHASE_COOLDOWN_SEC);
-  ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, FALSE_PHASE_INTERRUPT_STAGGER_SEC);
-  monster.attackCd = Math.max(monster.attackCd ?? 0, 1.6);
-  monster.spriteScale = 0.82;
-  if (monster.hp !== undefined) {
-    const chip = Math.max(2, Math.round((monster.maxHp ?? monster.hp) * 0.08));
-    monster.hp = Math.max(1, monster.hp - chip);
-  }
-  publishMonsterReadabilityEvent(state, world, monster, source, 'monster_windup_interrupted', 4, ['lozhnyy_dukh', 'false_phase', 'interrupted', reason], {
-    reason,
-    weakSeconds: FALSE_PHASE_INTERRUPT_WEAK_SEC,
-    counterplay: 'precise_ranged_or_uv_during_false_phase',
-  });
-  return true;
 }
 
 function entityLight(world: World, e: Entity): number {
@@ -5070,7 +4713,6 @@ function updateWaterStriderState(world: World, e: Entity, dt: number, time: numb
 }
 
 function monsterMoveMult(world: World, e: Entity, target?: Entity): number {
-  if (e.monsterKind === MonsterKind.LOZHNYY_DUKH && (e.ai?.falsePhaseActive ?? 0) > 0) return FALSE_PHASE_WEAK_MOVE_MULT;
   if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? CHERVIE_POWERED_MOVE_MULT : CHERVIE_CUT_MOVE_MULT;
   if (hasAIFlag(e, 'debrisLurker')) return inDebrisCover(world, e) ? 1.22 : 0.68;
   if (hasAIFlag(e, 'documentScent')) {
@@ -5121,7 +4763,6 @@ function monsterMoveMult(world: World, e: Entity, target?: Entity): number {
 }
 
 function monsterDmgMult(world: World, e: Entity, target?: Entity): number {
-  if (e.monsterKind === MonsterKind.LOZHNYY_DUKH && (e.ai?.falsePhaseActive ?? 0) > 0) return FALSE_PHASE_WEAK_DAMAGE_MULT;
   if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? CHERVIE_POWERED_DMG_MULT : CHERVIE_CUT_DMG_MULT;
   if (hasAIFlag(e, 'debrisLurker')) return inDebrisCover(world, e) ? 1.25 : 0.75;
   switch (e.monsterKind) {
@@ -5272,6 +4913,9 @@ function updateDikiyMertvyakCrowdShove(
   for (const other of dikiyCrowdQuery) {
     if (!other.alive || other.id === e.id || other.type === EntityType.MONSTER) continue;
     if (world.dist2(e.x, e.y, other.x, other.y) > DIKIY_SHOVE_RADIUS * DIKIY_SHOVE_RADIUS) continue;
+    // Толчок физический: сбивает с ног любого. Паника после него — уже решение
+    // того, кем управляет AI; игрок свою реакцию выбирает сам.
+    other.staggerTimer = Math.max(other.staggerTimer ?? 0, DIKIY_SHOVE_STAGGER_SEC);
     if (isPlayerEntity(other)) {
       shovedPlayer = other.id === playerId;
     } else if (other.type === EntityType.NPC && other.ai) {
@@ -5796,8 +5440,11 @@ function updateRzhavnikScrapWake(
     e.spriteScale = 1.12 + ai.scrapWakeTimer * 0.18;
     if (ai.scrapWakeTimer > 0) return true;
     const cached = ai.combatTargetId !== undefined ? _entityById.get(ai.combatTargetId) : undefined;
-    const player = _entityById.get(playerId);
-    const target = cached?.alive ? cached : player?.alive ? player : undefined;
+    // Рывок идёт в того, кого разбудили. Потеряв цель, ржавник ищет ближайшего
+    // рядом теми же глазами, что и при пробуждении, а не игрока по всему этажу.
+    const target = cached?.alive
+      ? cached
+      : findImmediateCombatTarget(world, e, RZHAVNIK_LEAP_STEP * RZHAVNIK_LEAP_STEP, canBeMonsterTarget) ?? undefined;
     finishRzhavnikLeap(world, entities, e, target, time, msgs, playerId, nextId, state);
     return true;
   }
@@ -5812,8 +5459,10 @@ function updateRzhavnikScrapWake(
   });
 
   if (damaged) {
-    const player = _entityById.get(playerId);
-    wakeRzhavnik(world, e, player?.alive ? player : closeTarget ?? undefined, e.x, e.y, time, msgs, state, 'ranged_poke');
+    // Просыпается на того, кто ткнул: источник урона лежит в памяти угроз, и он
+    // одинаков для выстрела NPC и для выстрела игрока.
+    const poker = getRecentCombatThreat(e, time)?.attacker;
+    wakeRzhavnik(world, e, poker?.alive ? poker : closeTarget ?? undefined, e.x, e.y, time, msgs, state, 'ranged_poke');
     return true;
   }
   if (closeTarget) {
@@ -5821,8 +5470,8 @@ function updateRzhavnikScrapWake(
     return true;
   }
   if (noise && rzhavnikWakeNoise(noise)) {
-    const player = noise.actorId === playerId ? _entityById.get(playerId) : undefined;
-    wakeRzhavnik(world, e, player?.alive ? player : undefined, noise.x, noise.y, time, msgs, state, 'loud_metal');
+    const noiseActor = noise.actorId !== undefined ? _entityById.get(noise.actorId) : undefined;
+    wakeRzhavnik(world, e, noiseActor?.alive ? noiseActor : undefined, noise.x, noise.y, time, msgs, state, 'loud_metal');
     return true;
   }
 
@@ -6627,7 +6276,6 @@ export function tryMonsterProjectileStagger(
 ): boolean {
   if (monster.type !== EntityType.MONSTER || !monster.ai) return false;
   if (recoilSporeCarpetFromFire(world, state, monster, projectile, playerId)) return true;
-  if (projectile.ownerId === playerId && interruptLozhnyyDukhFalsePhase(world, state, monster, _entityById.get(playerId), 'projectile')) return true;
   if (monster.monsterKind === MonsterKind.SOBRANNYY &&
       projectile.ownerId === playerId &&
       (projectile.sprite === Spr.PELLET || projectile.projType === ProjType.FLAME)) {
@@ -7998,251 +7646,6 @@ function updateTumannikFogOffset(
   return false;
 }
 
-function glubinnayaHasLightCounter(world: World, e: Entity, target: Entity): boolean {
-  return entityHasEquippedLight(target) ||
-    entityLight(world, target) >= GLUB_SECOND_BEAT_LIGHT_SAFE ||
-    entityLight(world, e) >= GLUB_SECOND_BEAT_LIGHT_SAFE ||
-    pointLight(world, e.ai?.secondBeatX ?? e.x, e.ai?.secondBeatY ?? e.y) >= GLUB_SECOND_BEAT_LIGHT_SAFE;
-}
-
-function glubinnayaCanArm(world: World, e: Entity, target: Entity): boolean {
-  return !entityHasEquippedLight(target) &&
-    entityLight(world, target) < GLUB_SECOND_BEAT_LIGHT_SAFE &&
-    entityLight(world, e) <= SHADOW_DARK_LIGHT;
-}
-
-function clearGlubinnayaSecondBeat(e: Entity): void {
-  const ai = e.ai!;
-  ai.secondBeatX = undefined;
-  ai.secondBeatY = undefined;
-  ai.secondBeatTargetX = undefined;
-  ai.secondBeatTargetY = undefined;
-  ai.secondBeatDx = undefined;
-  ai.secondBeatDy = undefined;
-  ai.secondBeatTimer = undefined;
-  ai.secondBeatHold = undefined;
-  ai.windupTargetId = undefined;
-  e.spriteScale = undefined;
-}
-
-function stampGlubinnayaAfterimage(world: World, e: Entity, time: number): void {
-  const ai = e.ai!;
-  if (ai.secondBeatX === undefined || ai.secondBeatY === undefined) return;
-  const x = world.wrap(Math.floor(ai.secondBeatX));
-  const y = world.wrap(Math.floor(ai.secondBeatY));
-  const fx = ((ai.secondBeatX % 1) + 1) % 1;
-  const fy = ((ai.secondBeatY % 1) + 1) % 1;
-  const seed = Math.imul(e.id, 33_331) ^ Math.floor(time * 12);
-  stampMark(world, x, y, fx, fy, 0.36, MarkType.PSI, seed, 32, 44, 62, 118);
-}
-
-function tryMoveGlubinnayaDodge(world: World, e: Entity, ux: number, uy: number, sx: number, sy: number): void {
-  const candidates = [
-    { side: 1, back: 1 },
-    { side: -1, back: 1 },
-    { side: 1, back: 0.55 },
-    { side: -1, back: 0.55 },
-    { side: 0, back: 1.15 },
-  ] as const;
-  for (const c of candidates) {
-    const nx = world.wrap(e.x - ux * GLUB_SECOND_BEAT_DODGE * c.back + sx * GLUB_SECOND_BEAT_DODGE * 0.72 * c.side);
-    const ny = world.wrap(e.y - uy * GLUB_SECOND_BEAT_DODGE * c.back + sy * GLUB_SECOND_BEAT_DODGE * 0.72 * c.side);
-    if (world.solid(Math.floor(nx), Math.floor(ny))) continue;
-    e.x = nx;
-    e.y = ny;
-    return;
-  }
-}
-
-function armGlubinnayaSecondBeat(
-  world: World,
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state?: GameState,
-): void {
-  const ai = e.ai!;
-  const dx = world.delta(e.x, target.x);
-  const dy = world.delta(e.y, target.y);
-  const len = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-  const ux = dx / len;
-  const uy = dy / len;
-  const sign = (e.id & 1) === 0 ? 1 : -1;
-  const sx = -uy * sign;
-  const sy = ux * sign;
-
-  ai.secondBeatX = e.x;
-  ai.secondBeatY = e.y;
-  ai.secondBeatTargetX = target.x;
-  ai.secondBeatTargetY = target.y;
-  ai.secondBeatDx = sx;
-  ai.secondBeatDy = sy;
-  ai.secondBeatTimer = GLUB_SECOND_BEAT_ARM_SEC;
-  ai.secondBeatHold = 0;
-  ai.windupTargetId = target.id;
-  e.attackCd = Math.max(e.attackCd ?? 0, 0.45);
-  e.spriteScale = 0.78;
-  stampGlubinnayaAfterimage(world, e, time);
-  tryMoveGlubinnayaDodge(world, e, ux, uy, sx, sy);
-
-  if (target.id === playerId) {
-    msgs.push(msg('Глубинная Тень оставила второй силуэт. Не догоняйте темный след: держите светлый выход.', time, '#9bd'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['glubinnaya_ten', 'second_beat', 'afterimage', 'warning'], {
-    windupSec: GLUB_SECOND_BEAT_ARM_SEC,
-    counterplay: 'hold_position_light_exit_or_flashlight_reveal',
-  });
-  playSoundAt(playGrowl, e.x, e.y);
-}
-
-function damageGlubinnayaSecondBeat(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  nextId: { v: number },
-  state?: GameState,
-): void {
-  const def = MONSTERS[MonsterKind.GLUBINNAYA_TEN];
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const rawDmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * GLUB_SECOND_BEAT_DMG_MULT * (e.monsterDmgMult ?? 1));
-  const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
-  if (target.hp === undefined) return;
-
-  const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-  if (debugImmortalPlayerHit) {
-    keepDebugOnePunchManAlive(target);
-  } else {
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
-    if (target.id === playerId) recordPlayerDamage(state, e, dmg, 'Глубинная Тень ударила вторым телом: -' + dmg);
-    if (target.hp <= 0) {
-      target.alive = false;
-      target.hp = 0;
-    }
-    const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
-    spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-    if (target.hp <= 0) {
-      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-      if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-      msgs.push(msg(`${entityDisplayName(e)} убила ${entityDisplayName(target)} вторым силуэтом`, time, '#f44'));
-    }
-  }
-
-  const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
-  msgs.push(msg(`${entityDisplayName(e)} ударила ${label} вторым телом: -${dmg}`, time, '#f44'));
-  if (state) {
-    publishEvent(state, {
-      type: 'monster_sighted',
-      zoneId: zoneIdAt(world, e.x, e.y),
-      roomId: world.roomAt(e.x, e.y)?.id,
-      x: e.x,
-      y: e.y,
-      actorId: e.id,
-      actorName: entityDisplayName(e),
-      actorFaction: e.faction,
-      targetId: target.id,
-      targetName: entityDisplayName(target),
-      targetFaction: target.faction,
-      monsterKind: MonsterKind.GLUBINNAYA_TEN,
-      severity: target.id === playerId ? 5 : 4,
-      privacy: target.id === playerId ? 'local' : 'witnessed',
-      tags: ['monster', 'glubinnaya_ten', 'second_beat', 'hit'],
-      data: {
-        rumorIds: [...GLUBINNAYA_TEN_RUMOR_IDS],
-        damage: dmg,
-        counterplay: 'do_not_chase_afterimage_in_darkness',
-      },
-    });
-  }
-  playSoundAt(playGrowl, e.x, e.y);
-}
-
-function updateGlubinnayaTenSecondBeat(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity,
-  bestDist: number,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  nextId: { v: number },
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.GLUBINNAYA_TEN) return false;
-  const ai = e.ai!;
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
-
-  if (ai.secondBeatTimer !== undefined) {
-    ai.secondBeatTimer = Math.max(0, ai.secondBeatTimer - dt);
-    const movedSq = world.dist2(target.x, target.y, ai.secondBeatTargetX ?? target.x, ai.secondBeatTargetY ?? target.y);
-    ai.secondBeatHold = movedSq <= GLUB_SECOND_BEAT_HOLD_SQ ? (ai.secondBeatHold ?? 0) + dt : 0;
-    const lightCounter = glubinnayaHasLightCounter(world, e, target);
-    const targetAtAfterimage = ai.secondBeatX !== undefined &&
-      ai.secondBeatY !== undefined &&
-      world.dist2(target.x, target.y, ai.secondBeatX, ai.secondBeatY) <= GLUB_SECOND_BEAT_TRIGGER_SQ;
-    const afterimageDark = ai.secondBeatX !== undefined &&
-      ai.secondBeatY !== undefined &&
-      pointLight(world, ai.secondBeatX, ai.secondBeatY) <= SHADOW_DARK_LIGHT;
-
-    if (targetAtAfterimage && movedSq > GLUB_SECOND_BEAT_HOLD_SQ && afterimageDark && !lightCounter && target.alive) {
-      const sx = ai.secondBeatDx ?? 0;
-      const sy = ai.secondBeatDy ?? 0;
-      const nx = world.wrap(target.x + sx * 1.05);
-      const ny = world.wrap(target.y + sy * 1.05);
-      if (!world.solid(Math.floor(nx), Math.floor(ny))) {
-        e.x = nx;
-        e.y = ny;
-      }
-      e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-      damageGlubinnayaSecondBeat(world, entities, e, target, time, msgs, playerId, nextId, state);
-      clearGlubinnayaSecondBeat(e);
-      e.attackCd = GLUB_SECOND_BEAT_COOLDOWN;
-      return true;
-    }
-
-    if (lightCounter || (ai.secondBeatHold ?? 0) >= GLUB_SECOND_BEAT_HOLD_SEC || ai.secondBeatTimer <= 0 || ai.windupTargetId !== target.id) {
-      const reason = lightCounter ? 'light' : (ai.secondBeatHold ?? 0) >= GLUB_SECOND_BEAT_HOLD_SEC ? 'held_position' : 'expired';
-      clearGlubinnayaSecondBeat(e);
-      e.attackCd = Math.max(e.attackCd ?? 0, 0.75);
-      if (target.id === playerId) {
-        msgs.push(msg(
-          reason === 'light'
-            ? 'Свет сложил второй силуэт Глубинной Тени.'
-            : 'Глубинная Тень потеряла второй темп, пока вы не гнались за следом.',
-          time,
-          '#9cf',
-        ));
-      }
-      publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, ['glubinnaya_ten', 'second_beat', 'interrupted', reason], {
-        reason,
-        counterplay: 'light_or_hold_position',
-      });
-      return true;
-    }
-
-    e.spriteScale = 0.86 + Math.max(0, ai.secondBeatTimer) * 0.05;
-    return true;
-  }
-
-  if (bestDist * bestDist <= GLUB_SECOND_BEAT_ARM_RANGE_SQ &&
-      (e.attackCd ?? 0) <= 0 &&
-      glubinnayaCanArm(world, e, target)) {
-    armGlubinnayaSecondBeat(world, e, target, time, msgs, playerId, state);
-    return true;
-  }
-
-  return false;
-}
-
 function tonkayaLineCell(world: World, x: number, y: number): boolean {
   const ci = world.idx(x, y);
   const cell = world.cells[ci];
@@ -8909,15 +8312,14 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   }
 
   const player = _entityById.get(playerId);
+  if (monsterHasAIFlag(e, 'looksLiquidator')) updateBlackLiquidatorDisguise(world, e, time);
   if (updateLishennyyBrightAvoidance(world, e, dt)) return;
   updateChervieNetPossessor(world, entities, e, dt, time, msgs, playerId, state);
   ensureMukhozhukExposed(world, e, time, msgs, player, state);
-  if (updateFalseLiquidatorPatrol(world, e, dt, time, msgs, player, state)) return;
   if (updateSlimevikMonster(world, entities, e, dt, time, msgs, player, state)) return;
   if (updateGnilushkaMonster(world, entities, e, dt, time, msgs, playerId, state)) return;
   if (updateHeadSlugParasite(world, entities, e, dt, time, msgs, nextId, state)) return;
   updateSobrannyyGrowthState(world, e, time, msgs, state);
-  tickLozhnyyDukhFalsePhase(e, dt);
   if (updateGreenDogNoiseFear(world, e, dt, time, msgs, state)) return;
   updateSlimeWomanState(world, e, time, msgs, state);
   updateWaterStriderState(world, e, dt, time);
@@ -8926,10 +8328,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
   if (updateRzhavnikScrapWake(world, entities, e, dt, time, msgs, playerId, nextId, state)) return;
-  if (player?.alive && updateBezekhiyDeadEcho(world, e, player, dt, time, msgs, state)) return;
+  if (updateBezekhiyDeadEcho(world, entities, e, findBezekhiyEchoTarget(world, e), dt, time, msgs, nextId, state)) return;
   const baseDetectSq = def && !def.isRanged && def.speed > 0 ? MONSTER_MELEE_DETECT_SQ : MONSTER_DETECT_SQ;
   let detectSq = monsterDetectSq(world, e, baseDetectSq);
-  detectSq = pomoynyRoyDetectSq(e, player, detectSq);
   let target: Entity | null;
   let lishennyyLightTarget: LishennyyLightTarget | null = null;
   const zombieApocalypse = e.monsterKind === MonsterKind.ZOMBIE && isZombieApocalypseActive(state);
@@ -8945,6 +8346,8 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     target = findChernoSlizTarget(world, e, dt);
   } else if (hasAIFlag(e, 'meatWorm')) {
     target = findMeatWormTarget(world, e, dt);
+  } else if (hasAIFlag(e, 'garbageSurround')) {
+    target = findPomoynyRoyTarget(world, e, dt, detectSq);
   } else if (isDocumentPressureHunter(e)) {
     target = findDocumentHunterTarget(world, entities, e, dt);
   } else if (hasAIFlag(e, 'closeReveal')) {
@@ -8964,31 +8367,17 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     );
   }
 
-  // Prefer player only if player is closer than current target
-  if (player?.alive && !hasAIFlag(e, 'lightFollower') && !(zombieApocalypse && target?.type === EntityType.NPC)) {
-    const pd2 = world.dist2(e.x, e.y, player.x, player.y);
-    const documentPressure = isDocumentPressureHunter(e);
-    const fallbackRangeSq = documentPressure ? documentFallbackSq(e) : PECHATEED_FALLBACK_SQ;
-    const playerHasDocs = documentPressure && hasDocumentLikeItem(player);
-    const targetHasDocs = documentPressure && target !== null ? hasDocumentLikeItem(target) : false;
-    const meatWormAllowed = !hasAIFlag(e, 'meatWorm') || canOlgoyTarget(world, e, player);
-    const garbageFoodPressure = hasAIFlag(e, 'garbageSurround') && pomoynyRoyScentScore(player) > 0.2;
-    const playerAllowed = (!documentPressure ||
-      playerHasDocs ||
-      (!targetHasDocs && pd2 < fallbackRangeSq)) &&
-      meatWormAllowed &&
-      (e.monsterKind !== MonsterKind.CHERNOSLIZ || chernoslizCanTarget(world, e, player));
-    if (playerAllowed && garbageFoodPressure && pd2 < detectSq) {
-      target = player;
-      ai.combatTargetId = player.id;
-      ai.goal = AIGoal.HUNT;
-    } else if (playerAllowed && target && target.id !== playerId) {
-      const td2 = world.dist2(e.x, e.y, target.x, target.y);
-      if (pd2 < td2 && pd2 < Math.min(PREFER_SQ, detectSq)) { target = player; ai.combatTargetId = player.id; ai.goal = AIGoal.HUNT; }
-    } else if (playerAllowed && !target) {
-      if (pd2 < detectSq) { target = player; ai.combatTargetId = player.id; ai.goal = AIGoal.HUNT; }
-    }
-  }
+  /* Здесь стоял блок «Prefer player»: после честного выбора цели монстр ещё раз
+   * мерил расстояние до ИГРОКА и переключался на него. Мерил в обход всего —
+   * мимо проверки луча, мимо кадансов сканирования и мимо враждебности. Игрока
+   * поэтому замечали сквозь стену и мгновенно, а NPC — только по видимости и по
+   * расписанию, из-за чего бои NPC против NPC рядом с игроком почти не случались.
+   *
+   * Блок снят: цель выбирают функции выше, и игрок проходит через них наравне со
+   * всеми. Особые повадки при этом сохранились — они и раньше жили не здесь, а в
+   * своих ветках выбора цели (`findDocumentHunterTarget` для печатоеда,
+   * `findMeatWormTarget` для олгоя, `findChernoSlizTarget`), и там они с самого
+   * начала написаны про любого носителя, а не про игрока. */
 
   updateGreenDogPackHowl(world, e, target, time, msgs, playerId, state);
   if (lishennyyLightTarget && followLishennyyLightTarget(world, e, lishennyyLightTarget, dt)) return;
@@ -9012,7 +8401,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updateMukhozhukLeader(world, e, target, dt, time, msgs, state);
   if (updateBloodPlantRootHive(world, e, target, dt, time, msgs, playerId, state)) return;
   if (updateBorshchevikRootedPlant(world, e, target, dt, time, msgs, playerId, state)) return;
-  updateProtokolnikProtocolPressure(world, e, target, dt, time, msgs, playerId, state);
+  updateProtokolnikProtocolPressure(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
   if (target && !target.alive) return;
   updateWallTerrainReadability(world, e, target, time, msgs, state);
   if (updateZhornayaTvar(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return;
@@ -9025,7 +8414,6 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (tryConsumeMeatChunk(world, entities, e, target, dt, time, msgs, state)) return;
 
   if (!target) {
-    cancelLozhnyyDukhFalsePhase(e);
     if (e.monsterKind === MonsterKind.TUMANNIK) clearTumannikFogOffset(e);
     if (e.monsterKind === MonsterKind.OBZHIVALSHCHIK) {
       const room = obzhivalshchikHomeRoom(world, e);
@@ -9036,14 +8424,16 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       if (runtime.dormant || runtime.isolatedUntil > time) return;
     }
     if (tryMukhozhukFoodAppetite(world, e, dt, time, msgs, state)) return;
-    if (e.monsterKind === MonsterKind.CHERNOSLIZ && isChernoSlizHidden(world, e, player)) {
+    /* Наблюдателя тут нет: цели не нашлось, значит никто рядом его не вскрыл —
+     * близость и фонарь любого носителя уже проверил `chernoslizCanTarget`. */
+    if (e.monsterKind === MonsterKind.CHERNOSLIZ && isChernoSlizHidden(world, e)) {
       const revealedByNoise = tryRevealChernoSlizByNoise(world, e, time, msgs, state);
       if (revealedByNoise) {
         if (tryFollowNoise(world, e, dt, time, msgs, state)) return;
       } else if (tryFollowNoise(world, e, dt, time, msgs, state)) {
         return;
       }
-      if (isChernoSlizHidden(world, e, player)) {
+      if (isChernoSlizHidden(world, e)) {
         e.spriteScale = 0.58;
         return;
       }
@@ -9100,17 +8490,11 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updateLampPoweredReadability(world, e, target, time, msgs, playerId, state);
   updateOlgoyReadability(world, e, target, time, msgs, playerId, state);
   updateDikiyMertvyakCrowdShove(world, e, target, dt, time, msgs, playerId, state);
-  if (updateLozhnyyDukhFalsePhase(world, e, target, dt, time, msgs, playerId, state)) return;
 
   if (e.monsterKind === MonsterKind.SOBRANNYY && trySobrannyyBreakWeakDoor(world, e, target, time, msgs, state)) return;
 
   if (bladeEliteTuning(e.monsterKind)) {
     updateBladeElite(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
-    return;
-  }
-
-  if (e.monsterKind === MonsterKind.GLUBINNAYA_TEN &&
-      updateGlubinnayaTenSecondBeat(world, entities, e, target, bestDist, dt, time, msgs, playerId, nextId, state)) {
     return;
   }
 

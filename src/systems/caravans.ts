@@ -212,8 +212,8 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
   const def = CARAVAN_LANE_BY_ID[laneId];
   if (!template || !def) return undefined;
   const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id.slice(0, 48) : `${template.id}_${Math.floor(now)}`;
-  // Route coordinate of the run itself: a caravan is spawned on the floor the
-  // player is standing on, not on the lane's destination.
+  // Route coordinate of the run itself: a caravan is spawned on the active
+  // floor, where its people are, not on the lane's destination.
   const floor = typeof raw.z === 'number' ? Math.trunc(raw.z) : laneToZ(def);
   if (!Number.isFinite(floor) || floor < FLOOR_RUN_MIN_Z || floor > FLOOR_RUN_MAX_Z) return undefined;
   const status = normalizeSmallCaravanStatus(raw.status);
@@ -540,9 +540,29 @@ function caravanSpawnScore(world: World, x: number, y: number, ox: number, oy: n
   return score;
 }
 
-function findSmallCaravanSpawn(world: World, player?: Entity): { x: number; y: number } | undefined {
-  const ox = player ? Math.floor(player.x) : 512;
-  const oy = player ? Math.floor(player.y) : 512;
+/** Пустой набор занятых мест: якорь ищется до того, как хоть кого-то забрали. */
+const NO_CLAIMED_MEMBERS: ReadonlySet<number> = new Set();
+
+/**
+ * Точка сборки малого каравана — свои же люди на активном этаже, а не камера
+ * игрока. Берётся тот, кто и так прошёл бы отбор в караванщики: если такого
+ * человека на этаже нет, воплощать нечего, и спавн отменяется целиком, не
+ * прокручивая сканирование клеток впустую.
+ */
+function findSmallCaravanSpawn(
+  state: GameState,
+  world: World,
+  entities: readonly Entity[],
+  template: SmallCaravanTemplateDef,
+): { x: number; y: number } | undefined {
+  let anchor: Entity | undefined;
+  for (const npc of entities) {
+    if (!smallCaravanMemberEligible(state, npc, template, NO_CLAIMED_MEMBERS)) continue;
+    if (!anchor || npc.id < anchor.id) anchor = npc;
+  }
+  if (!anchor) return undefined;
+  const ox = Math.floor(anchor.x);
+  const oy = Math.floor(anchor.y);
   let best: { x: number; y: number } | undefined;
   let bestScore = -Infinity;
   for (let i = 0; i < 180; i++) {
@@ -683,14 +703,13 @@ export function spawnSmallCaravanNear(
   world: World,
   entities: Entity[],
   _nextId: { v: number },
-  player?: Entity,
   templateId?: string,
 ): SmallCaravanRunState | undefined {
   const caravans = ensureCaravanState(state);
   if (currentFloorActiveSmallCaravanCount(caravans, state.currentZ, state.time) >= MAX_ACTIVE_SMALL_CARAVANS) return undefined;
   const template = chooseSmallCaravanTemplate(state, templateId);
   if (!template) return undefined;
-  const pos = findSmallCaravanSpawn(world, player);
+  const pos = findSmallCaravanSpawn(state, world, entities, template);
   if (!pos) return undefined;
 
   const run: SmallCaravanRunState = {
@@ -799,6 +818,17 @@ function markSmallCaravanLost(state: GameState, run: SmallCaravanRunState, statu
   publishSmallCaravanEvent(state, def, lane, run, status === 'abandoned' ? 'abandoned_samosbor' : 'small_caravan_raided', status === 'abandoned' ? 4 : 5, [status]);
 }
 
+/**
+ * Караван накрыт самосбором. Признак — факт мира под самим караваном, а не
+ * расстояние до игрока: фронты самосбора поднимают `world.fog` до 180..255 на
+ * каждой перепаханной клетке, и порог 100 — тот же, по которому самосбор
+ * считает клетку своей в `applySamosborFogEffectAtCell`. Одно чтение
+ * типизированного массива, никакого поиска и никаких новых систем.
+ */
+function caravanCaughtBySamosbor(world: World, run: SmallCaravanRunState): boolean {
+  return world.fog[world.idx(Math.floor(run.x), Math.floor(run.y))] > 100;
+}
+
 function pruneSmallCaravans(caravans: CaravanState, now: number): void {
   for (const [id, run] of Object.entries(caravans.active)) {
     if (run.expiresAt <= now || (terminalStatus(run.status) && run.updatedAt + SMALL_CARAVAN_TERMINAL_SECONDS <= now)) {
@@ -812,7 +842,6 @@ function updateSmallCaravans(
   elapsed: number,
   world?: World,
   entities?: Entity[],
-  player?: Entity,
   nextId?: { v: number },
 ): void {
   const caravans = ensureCaravanState(state);
@@ -825,13 +854,19 @@ function updateSmallCaravans(
     for (const id in caravans.active) {
       const run = caravans.active[id];
       if (!activeStatus(run.status)) continue;
-      if (!updateSmallCaravanPosition(run, entityMap)) {
-        markSmallCaravanLost(state, run, 'raided');
-        continue;
-      }
-      if (state.samosborActive && player && world && world.dist2(player.x, player.y, run.x, run.y) <= 48 * 48) {
-        markSmallCaravanLost(state, run, 'abandoned');
-        continue;
+      // Караван держится на своих людях, а люди есть только на активном этаже.
+      // На чужом этаже ни позиции, ни фронтов самосбора не существует — там
+      // рейс просто идёт дальше, а не объявляется разграбленным за то, что
+      // игрок уехал лифтом.
+      if (run.z === state.currentZ) {
+        if (!updateSmallCaravanPosition(run, entityMap)) {
+          markSmallCaravanLost(state, run, 'raided');
+          continue;
+        }
+        if (state.samosborActive && world && caravanCaughtBySamosbor(world, run)) {
+          markSmallCaravanLost(state, run, 'abandoned');
+          continue;
+        }
       }
       run.progress = clamp(run.progress + elapsed / (210 + run.risk * 35), 0, 1);
       run.updatedAt = state.time;
@@ -840,7 +875,7 @@ function updateSmallCaravans(
   }
 
   if (!world || !entities || !nextId || state.time < caravans.nextSmallSpawnAt || state.samosborActive) return;
-  if (spawnSmallCaravanNear(state, world, entities, nextId, player)) return;
+  if (spawnSmallCaravanNear(state, world, entities, nextId)) return;
   caravans.nextSmallSpawnAt = state.time + 60;
 }
 
@@ -851,7 +886,6 @@ export function tickCaravans(
   maxUpdates = MAX_CARAVAN_LANES_PER_TICK,
   world?: World,
   entities?: Entity[],
-  player?: Entity,
   nextId?: { v: number },
 ): number {
   if (state.tutorialMode) return 0;
@@ -875,7 +909,7 @@ export function tickCaravans(
   // One gate == one caravan tick: `dt` here is the caller's accumulator step
   // (~1 s), not the 30 s gate, so passing it made every run expire before its
   // progress could reach 1.
-  updateSmallCaravans(state, CARAVAN_TICK_SECONDS, world, entities, player, nextId);
+  updateSmallCaravans(state, CARAVAN_TICK_SECONDS, world, entities, nextId);
   return processed;
 }
 

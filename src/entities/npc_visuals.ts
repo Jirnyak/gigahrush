@@ -104,7 +104,12 @@ function floor69Variant(ctx: NpcVisualContext): number {
   return mix32((ctx.seed || 1) ^ Math.imul(atlasVariant + 1, 0x69f69f));
 }
 
-function firstPartyNpcArt(manifestId: string): Uint32Array | undefined {
+/**
+ * Запечённый арт художника по id манифеста. Единственная дверь к нему внутри
+ * слоя `entities`: сам файл артов лежит в `render/`, и тянуть туда ребро из
+ * каждого вида монстра нельзя — инвариант слоёв держит их число.
+ */
+export function firstPartyNpcArt(manifestId: string): Uint32Array | undefined {
   const row = artSpriteManifestRow(manifestId);
   if (!row || row.kind !== 'npc' || row.source !== 'first_party_art') return undefined;
   return getGeneratedArtSprite(row.id);

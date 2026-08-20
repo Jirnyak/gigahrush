@@ -1,6 +1,6 @@
 import {
   AIGoal, Cell, EntityType, Faction, Occupation, ZoneFaction,
-  type Entity, type GameState, type Item, msg,
+  type Entity, type GameState, type Item, type Zone, msg,
 } from '../core/types';
 import { World } from '../core/world';
 import {
@@ -29,7 +29,7 @@ import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { ensureRoomContainers } from './containers';
 import { controlHint } from './controls';
 import { changeResourceStock } from './economy';
-import { publishEvent } from './events';
+import { getRecentEvents, publishEvent } from './events';
 import { addItem, hasItem } from './inventory';
 import { observeRumorEvent } from './rumor';
 import { gaussianLevel, getMaxHp, randomRPG } from './rpg';
@@ -42,7 +42,7 @@ import {
   territoryOwnerAt,
   territoryOwnerAtIndex,
 } from './territory';
-import { rng, mathRng, shuffleWith } from '../core/rand';
+import { rng, shuffleWith } from '../core/rand';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -423,14 +423,14 @@ export function updateFactionEvents(
   schedulerAccum -= SCHEDULER_TICK_SEC;
   if (state.samosborActive || state.time < nextEventAt) return;
 
-  const zoneId = currentZoneId(world, player);
-  const def = pickEligibleDef(state, world, entities, zoneId, false);
+  const zoneId = pickEventZone(state, world, entities, false);
+  const def = zoneId >= 0 ? pickEligibleDef(state, world, entities, zoneId, false) : null;
   if (!def) {
     nextEventAt = state.time + 20 + rng() * 25;
     return;
   }
 
-  const result = triggerFactionEvent(state, world, player, entities, nextId, zoneId, def, false);
+  const result = triggerFactionEvent(state, world, entities, nextId, zoneId, def, false);
   nextEventAt = state.time + (result.ok ? MIN_EVENT_GAP_SEC + rng() * 70 : 25 + rng() * 35);
 }
 
@@ -443,18 +443,20 @@ export function forceFactionEvent(
   forcedId?: FactionEventKind,
 ): string {
   resetFactionEventRuntimeIfNeeded(state);
+  // Отладочный форс — единственная точка, которой сектор задаёт игрок: разработчик просит
+  // событие «здесь». Место внутри сектора всё равно выбирает мир через spawnCenter().
   const zoneId = currentZoneId(world, player);
   if (forcedId) {
     const def = FACTION_EVENT_DEFS.find(d => d.id === forcedId);
     if (!def) return `[FACTION] неизвестное событие: ${forcedId}`;
-    const result = triggerFactionEvent(state, world, player, entities, nextId, zoneId, def, true);
+    const result = triggerFactionEvent(state, world, entities, nextId, zoneId, def, true);
     return result.message;
   }
   for (let i = 0; i < FACTION_EVENT_DEFS.length; i++) {
     const def = FACTION_EVENT_DEFS[(forceCursor + i) % FACTION_EVENT_DEFS.length];
     if (!isDefEligibleForZone(world, zoneId, def)) continue;
     forceCursor = (forceCursor + i + 1) % FACTION_EVENT_DEFS.length;
-    const result = triggerFactionEvent(state, world, player, entities, nextId, zoneId, def, true);
+    const result = triggerFactionEvent(state, world, entities, nextId, zoneId, def, true);
     return result.message;
   }
   return '[FACTION] В текущей зоне нет подходящего события.';
@@ -767,10 +769,10 @@ export function tryReportLiquidatorCultClashAftermath(
 function triggerFactionClash(
   state: GameState,
   world: World,
-  player: Entity,
   entities: Entity[],
   nextId: { v: number },
   zoneId: number,
+  center: { x: number; y: number },
   def: FactionEventDef,
   force: boolean,
   taggedNpcs: number,
@@ -790,7 +792,6 @@ function triggerFactionClash(
   if (force && taggedNpcs + totalNpcs > MAX_EVENT_NPCS) return blocked('достигнут лимит NPC событий');
   if (force && entitySpawnSlots(entities, EntityType.NPC, totalNpcs) < totalNpcs) return blocked('достигнут общий лимит NPC');
 
-  const center = spawnCenter(world, player, zoneId);
   const angle = rng() * Math.PI * 2;
   const anchors = [
     { x: center.x + Math.cos(angle) * 4, y: center.y + Math.sin(angle) * 4 },
@@ -861,7 +862,8 @@ function triggerFactionClash(
     liquidatorIds,
     cultistIds,
     choices: [],
-    sawPlayer: world.dist2(player.x, player.y, center.x, center.y) <= CLASH_SEEN_DIST2,
+    // Свидетельство игрока — наблюдение, а не условие спавна: его выставит покадровая проверка.
+    sawPlayer: false,
     aftermathDone: false,
   });
 
@@ -1225,14 +1227,15 @@ function playerHasClashEvidence(player: Entity): boolean {
 function triggerFactionEvent(
   state: GameState,
   world: World,
-  player: Entity,
   entities: Entity[],
   nextId: { v: number },
   zoneId: number,
   def: FactionEventDef,
   force: boolean,
 ): TriggerResult {
-  const localOwner = territoryOwnerAt(world, player.x, player.y);
+  const center = spawnCenter(world, zoneId);
+  if (!center) return blocked('в секторе нет якоря для события');
+  const localOwner = territoryOwnerAt(world, center.x, center.y);
   if (localOwner === ZoneFaction.SAMOSBOR) return blocked('территория занята самосбором');
   const key = cooldownKey(state, zoneId, def);
   if (!force && state.time < (zoneCooldownUntil.get(key) ?? 0)) return blocked('событие на перезарядке');
@@ -1246,7 +1249,7 @@ function triggerFactionEvent(
   const eventDropSlots = entitySpawnSlots(entities, EntityType.ITEM_DROP, MAX_EVENT_DROPS - taggedDrops);
   if (eventDropSlots <= 0 && def.drops && def.drops.length > 0) return blocked('достигнут общий лимит предметов');
   if (def.clash) {
-    return triggerFactionClash(state, world, player, entities, nextId, zoneId, def, force, taggedNpcs, taggedDrops, key);
+    return triggerFactionClash(state, world, entities, nextId, zoneId, center, def, force, taggedNpcs, taggedDrops, key);
   }
 
   const faction = def.actorFaction ?? territoryOwnerToFaction(localOwner);
@@ -1255,7 +1258,6 @@ function triggerFactionEvent(
   const eventNpcCap = def.procession ? Math.min(MAX_PROCESSION_PILGRIMS, def.maxGroup) : def.maxGroup;
   const groupCap = Math.min(eventNpcCap, MAX_EVENT_NPCS - taggedNpcs, eventNpcSlots);
   const groupSize = Math.max(0, Math.min(groupCap, def.minGroup + Math.floor(rng() * (def.maxGroup - def.minGroup + 1))));
-  const center = spawnCenter(world, player, zoneId);
   let spawnedNpcs = 0;
   const spawnedNpcIds: number[] = [];
   const claimedNpcIds = new Set<number>();
@@ -1399,6 +1401,84 @@ function isDefEligibleForZone(world: World, zoneId: number, def: FactionEventDef
   return owner !== ZoneFaction.SAMOSBOR && def.zoneFactions.includes(owner);
 }
 
+function zoneHasEligibleDef(state: GameState, world: World, zoneId: number, force: boolean): boolean {
+  for (const def of FACTION_EVENT_DEFS) {
+    if (def.weight <= 0 || !isDefEligibleForZone(world, zoneId, def)) continue;
+    const key = cooldownKey(state, zoneId, def);
+    if (def.clash && spawnedFactionClashKeys.has(key)) continue;
+    if (!force && state.time < (zoneCooldownUntil.get(key) ?? 0)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** Клетки сектора, которые не принадлежат его доминирующему владельцу: цена спорной земли. */
+function contestedTerritoryCells(zone: Zone): number {
+  const counts = zone.territoryCounts;
+  if (!counts) return 0;
+  let total = 0;
+  let top = 0;
+  for (let owner = 0; owner < counts.length; owner++) {
+    if (owner === ZoneFaction.SAMOSBOR) continue;
+    total += counts[owner];
+    if (counts[owner] > top) top = counts[owner];
+  }
+  return total - top;
+}
+
+function zonePopulation(world: World, entities: readonly Entity[], zoneCount: number): number[] {
+  const counts = new Array<number>(zoneCount).fill(0);
+  for (const e of entities) {
+    if (!e.alive || e.type !== EntityType.NPC || e.faction === Faction.PLAYER) continue;
+    const zoneId = world.zoneMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
+    if (zoneId >= 0 && zoneId < zoneCount) counts[zoneId]++;
+  }
+  return counts;
+}
+
+function recentZoneActivity(state: GameState, zoneCount: number): number[] {
+  const counts = new Array<number>(zoneCount).fill(0);
+  for (const event of getRecentEvents(state, { z: state.currentZ, tags: ['faction_event'], limit: RECENT_LIMIT })) {
+    const zoneId = event.zoneId ?? -1;
+    if (zoneId >= 0 && zoneId < zoneCount) counts[zoneId]++;
+  }
+  return counts;
+}
+
+/**
+ * Где случится фракционное событие, решает этаж, а не камера: сектор взвешивается по трем
+ * уже существующим фактам мира — спорной территории (`zone.territoryCounts`), живому населению
+ * сектора и его уровню опасности. Свежая фракционная активность (`getRecentEvents`) делит вес,
+ * поэтому политика расползается по дому, а не бьет в одну точку. Игрок в счет не идет.
+ */
+function pickEventZone(state: GameState, world: World, entities: Entity[], force: boolean): number {
+  const zoneCount = world.zones.length;
+  if (zoneCount === 0) return -1;
+  const population = zonePopulation(world, entities, zoneCount);
+  const recent = recentZoneActivity(state, zoneCount);
+  const weights = new Array<number>(zoneCount).fill(0);
+  let total = 0;
+  for (let zoneId = 0; zoneId < zoneCount; zoneId++) {
+    if (!zoneHasEligibleDef(state, world, zoneId, force)) continue;
+    const zone = world.zones[zoneId];
+    const w = (1 + contestedTerritoryCells(zone) + population[zoneId])
+      * (1 + Math.max(0, zone.level))
+      / (1 + recent[zoneId]);
+    weights[zoneId] = w;
+    total += w;
+  }
+  if (total <= 0) return -1;
+  let r = rng() * total;
+  let last = -1;
+  for (let zoneId = 0; zoneId < zoneCount; zoneId++) {
+    if (weights[zoneId] <= 0) continue;
+    last = zoneId;
+    r -= weights[zoneId];
+    if (r <= 0) return zoneId;
+  }
+  return last;
+}
+
 function cooldownKey(state: GameState, zoneId: number, def: FactionEventDef): string {
   return `${state.currentZ}:${zoneId}:${def.id}`;
 }
@@ -1407,11 +1487,22 @@ function currentZoneId(world: World, actor: Entity): number {
   return currentTerritoryZoneId(world, actor.x, actor.y);
 }
 
-function spawnCenter(world: World, player: Entity, zoneId: number): { x: number; y: number } {
-  const pi = world.idx(Math.floor(player.x), Math.floor(player.y));
-  if (world.zoneMap[pi] === zoneId) return { x: player.x, y: player.y };
+/**
+ * Якорь события — место сектора, а не позиция игрока: штаб фракции, если он в секторе есть,
+ * иначе центр сектора. Если сама клетка якоря непроходима или ушла в чужой сектор,
+ * место ищется внутри того же сектора через findSpawnCell.
+ */
+function spawnCenter(world: World, zoneId: number): { x: number; y: number } | null {
   const zone = world.zones[zoneId];
-  return zone ? { x: zone.cx + 0.5, y: zone.cy + 0.5 } : { x: player.x, y: player.y };
+  if (!zone) return null;
+  const hq = zone.hqRoomId >= 0 ? world.rooms[zone.hqRoomId] : undefined;
+  const ax = world.wrap(hq ? hq.x + (hq.w >> 1) : zone.cx);
+  const ay = world.wrap(hq ? hq.y + (hq.h >> 1) : zone.cy);
+  if (world.zoneMap[world.idx(ax, ay)] === zoneId && !world.solid(ax, ay)) {
+    return { x: ax + 0.5, y: ay + 0.5 };
+  }
+  const spot = findSpawnCell(world, ax, ay, zoneId, 0, 0);
+  return spot ? { x: spot.x + 0.5, y: spot.y + 0.5 } : null;
 }
 
 function findSpawnCell(
@@ -1945,15 +2036,15 @@ function placeResidueMarks(world: World, cx: number, cy: number, zoneId: number,
 
 function stampResidueMark(world: World, x: number, y: number, mark: FactionResidueMarkDef, seed: number): void {
   const visual = residueMarkVisual(mark);
-  const fx = 0.2 + mathRng() * 0.6;
-  const fy = 0.2 + mathRng() * 0.6;
+  const fx = 0.2 + rng() * 0.6;
+  const fy = 0.2 + rng() * 0.6;
   stampMark(
     world,
     x, y,
     fx, fy,
     mark.radius,
     visual.type,
-    seed + Math.floor(mathRng() * 100_000),
+    seed + Math.floor(rng() * 100_000),
     visual.r, visual.g, visual.b,
     mark.intensity ?? visual.intensity,
   );

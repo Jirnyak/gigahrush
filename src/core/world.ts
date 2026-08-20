@@ -62,7 +62,10 @@ function nextVersion(version: number): number {
   return (version + 1) | 0;
 }
 
-const MAX_GRID_DIRTY_RECTS = 32;
+/** Past this many rects a partial upload stops paying for itself and
+ *  appendGridDirtyRects collapses to a full invalidation. Exported so bulk
+ *  callers can stop building rects they know will be thrown away. */
+export const MAX_GRID_DIRTY_RECTS = 32;
 const MAX_SURFACE_DIRTY_CELLS = 512;
 type GridDirtyRectsInput = WorldGridDirtyRect | readonly WorldGridDirtyRect[] | undefined;
 type PendingGridDirtyRects = WorldGridDirtyRect[] | null;
@@ -456,6 +459,18 @@ export class World {
     }
   }
 
+  /** Windowed relight for one changed feature cell, plus the light-version bump
+   *  render caches key off. The batch entry point for runtime systems that
+   *  mutate several light features in a frame (samosbor wave fronts, panels,
+   *  protocols): call it per changed cell instead of one W² markFeaturesDirty(true).
+   *  Sequential local bakes stay exact — each rebuilds its ±R box from every
+   *  source within ±2R, and re-propagating into an already-correct outer cell
+   *  only max-combines a value it already held. */
+  relightAround(idx: number): void {
+    this.bakeLightsLocal(idx);
+    this.lightVersion = (this.lightVersion + 1) | 0;
+  }
+
   /* toroidal helpers */
   wrap(v: number): number { return ((v % W) + W) % W; }
 
@@ -631,13 +646,11 @@ export class World {
     this.features[idx] = feature;
     // A single-cell feature change can only alter light within LIGHT_MAX_RADIUS,
     // so relight that window instead of the full W² bakeLights (the combat-frame
-    // hitch when a beam shoots out a lamp; also per-cell samosbor stamps). Bulk
-    // callers keep the full bake via markFeaturesDirty(true).
+    // hitch when a beam shoots out a lamp; also per-cell samosbor stamps).
+    // Generation-time bulk callers still take the full bake via
+    // markFeaturesDirty(true); runtime ones batch relightAround() per cell.
     const relight = rebakeLights && (lightFeature(old) || lightFeature(feature));
-    if (relight) {
-      this.bakeLightsLocal(idx);
-      this.lightVersion = (this.lightVersion + 1) | 0;
-    }
+    if (relight) this.relightAround(idx);
     this.markFeaturesDirty(false, rects);
     if (old === Feature.SCREEN && feature !== Feature.SCREEN) this.screenCells = this.screenCells.filter(i => i !== idx);
     if (feature === Feature.SCREEN && !this.screenCells.includes(idx)) this.screenCells.push(idx);

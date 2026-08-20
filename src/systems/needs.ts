@@ -17,7 +17,7 @@ import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_ch
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 import { entitySpawnSlots } from './entity_limits';
 import { stampUrineTraceCadenced } from './urination';
-import { mathRng } from '../core/rand';
+import { mathRng, rng } from '../core/rand';
 
 // Rates per second
 const FOOD_RATE  = 0.08;
@@ -261,8 +261,8 @@ function dropNpcInventory(entities: Entity[], e: Entity, nextId: { v: number } |
     dropped++;
     entities.push({
       id: nextId.v++, type: EntityType.ITEM_DROP,
-      x: e.x + (mathRng() - 0.5) * 0.5,
-      y: e.y + (mathRng() - 0.5) * 0.5,
+      x: e.x + (rng() - 0.5) * 0.5,
+      y: e.y + (rng() - 0.5) * 0.5,
       angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
       inventory: [{ defId: item.defId, count: item.count, data: item.data }],
     });

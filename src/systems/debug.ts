@@ -58,7 +58,6 @@ import { debugCreateWrongDoorRemap } from './wrong_door';
 import { debugForceHermodoorBorer } from './hermodoor_borer';
 import { debugStartSamosborWaveAtPlayer } from './samosbor_wave';
 import { debugForcePseudoliftNearPlayer, pseudoliftDebugSummary } from './pseudolift';
-import { createSwarmSourceEntity, registerSwarmNestSource } from './swarm_nests';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from '../data/design_floors';
 import { FLOOR_INSTANCES } from '../data/floor_instances';
 import { type FloorAnomalyId } from '../data/procedural_floors';
@@ -81,6 +80,16 @@ import { getAiStats } from './ai';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { CHALK_ITEM_ID } from './chalk';
 import { isPlayerEntity } from './player_actor';
+import { currentAlifeFloorKey } from './alife';
+import {
+  activeFloorSceneId,
+  floorSceneById,
+  floorScenesForSave,
+  isFloorSceneActive,
+  requestFloorScene,
+  resetFloorScenes,
+  type FloorSceneDef,
+} from './cinematics';
 import { rng, mathRng } from '../core/rand';
 import { drawNeuroPanel } from '../render/hud_fx';
 
@@ -242,6 +251,8 @@ type BaseDebugCommandId =
   | 'check_permit_access'
   | 'spoil_permit'
   | 'force_pseudolift'
+  | 'play_floor_scene'
+  | 'floor_scene_list'
   | 'debug_samosbor_small_wave';
 
 const DESIGN_FLOOR_COMMAND_ID_PREFIX = 'teleport_design_z: ';
@@ -679,41 +690,6 @@ function spawnDebugMonsterPack(
     const def = MONSTERS[kind];
     const spot = findDebugMonsterSpot(world, player, entities, i, kinds.length);
     if (!def || !spot) continue;
-    if (kind === MonsterKind.SWARM) {
-      const source = createSwarmSourceEntity(nextEntityId.v++, spot.x, spot.y, player.rpg?.level ?? 2);
-      source.angle = Math.atan2(player.y - spot.y, player.x - spot.x);
-      entities.push(source);
-      registerSwarmNestSource(world, {
-        id: `debug_swarm_nest_${source.id}`,
-        x: source.x,
-        y: source.y,
-        sourceEntityId: source.id,
-        activationRadius: 36,
-        spawnRadius: 4.5,
-        spawnCooldown: 1.2,
-        maxChildren: 6,
-      });
-      spawned++;
-      names.push(`${monsterTypeName(kind)}+source`);
-      publishEvent(state, {
-        type: 'monster_sighted',
-        zoneId: currentPlayerZone(world, player),
-        x: spot.x,
-        y: spot.y,
-        targetId: source.id,
-        targetName: source.name,
-        monsterKind: kind,
-        severity: 3,
-        privacy: 'local',
-        tags: ['debug', 'monster', 'swarm', 'source', 'verification', 'counterplay'],
-        data: {
-          source: 'debug_menu',
-          counterplay: def.counterplay,
-          maxChildren: 6,
-        },
-      });
-      continue;
-    }
     const monster: Entity = {
       id: nextEntityId.v++,
       type: EntityType.MONSTER,
@@ -1166,6 +1142,70 @@ function spoilDebugPermit(world: World, player: Entity, state: GameState): strin
     return [`испорчен: ${ITEMS[permit.itemId]?.name ?? permit.itemId}`];
   }
   return ['нет пропуска для порчи'];
+}
+
+/* ── Сцены этажа ─────────────────────────────────────────────── */
+
+// Реестр сцен не отдаёт перечисление наружу, поэтому отладка помнит только те
+// id, что уже видела: сыгранные за прогон, играющую сейчас и введённые руками.
+const debugSeenSceneIds: string[] = [];
+let debugLastSceneId = '';
+
+function rememberDebugSceneId(id: string): void {
+  if (!id || debugSeenSceneIds.includes(id)) return;
+  if (debugSeenSceneIds.length >= 16) debugSeenSceneIds.shift();
+  debugSeenSceneIds.push(id);
+}
+
+function knownDebugSceneIds(): readonly string[] {
+  for (const id of floorScenesForSave()) rememberDebugSceneId(id);
+  const playing = activeFloorSceneId();
+  if (playing) rememberDebugSceneId(playing);
+  return debugSeenSceneIds;
+}
+
+function debugSceneTriggerLabel(def: FloorSceneDef): string {
+  if (def.trigger.kind !== 'event') return def.trigger.kind;
+  return `event ${def.trigger.eventType}${def.trigger.tag ? `:${def.trigger.tag}` : ''}`;
+}
+
+function debugFloorSceneLines(state: GameState): string[] {
+  const playing = activeFloorSceneId();
+  const out = [`этаж ${currentAlifeFloorKey(state)}, играет: ${playing ?? 'нет'}`];
+  const ids = knownDebugSceneIds();
+  if (ids.length === 0) {
+    out.push('известных сцен нет: реестр списка не отдаёт, запусти сцену по id');
+    return out;
+  }
+  for (const id of ids.slice(0, 12)) {
+    const def = floorSceneById(id);
+    if (!def) {
+      out.push(`${id}: не зарегистрирована`);
+      continue;
+    }
+    out.push(`${id === playing ? '▸' : ' '} ${def.id}: ${def.floorKey}, ${debugSceneTriggerLabel(def)}, тактов ${def.beats.length}`);
+  }
+  return out;
+}
+
+function playDebugFloorScene(state: GameState): string[] {
+  // Сброс сыгранного обнуляет и активную сцену без разбора кадра, поэтому
+  // играющую сцену не трогаем: иначе актёры и sceneLock останутся висеть.
+  if (isFloorSceneActive()) return [`уже играет ${activeFloorSceneId()}, дождись конца`];
+  const entered = typeof window !== 'undefined' ? window.prompt('id сцены этажа', debugLastSceneId) : null;
+  const id = entered?.trim() ?? '';
+  if (!id) return ['id сцены не введён'];
+  const def = floorSceneById(id);
+  if (!def) return [`${id}: сцена не найдена`];
+  debugLastSceneId = id;
+  rememberDebugSceneId(id);
+  // Отладка: забываем сыгранное, иначе одну сцену не посмотреть дважды.
+  resetFloorScenes();
+  if (!requestFloorScene(id)) return [`${id}: запуск отклонён`];
+  const floorKey = currentAlifeFloorKey(state);
+  return floorKey === def.floorKey
+    ? [`${id}: запущена, тактов ${def.beats.length}, потолок ${def.maxSeconds}с`]
+    : [`${id}: в очереди, но сцене нужен этаж ${def.floorKey}, а сейчас ${floorKey}`];
 }
 
 const DEBUG_PSI_CLOT_IDS = new Set(Object.keys(PSI_WEAPON_STATS));
@@ -1805,6 +1845,14 @@ export function execDebugCommand(
       state.msgs.push(msg(`[DEBUG] Заспавнено криттеров: ${spawned}`, state.time, '#ff0'));
       break;
     }
+    case 91: { // Запустить сцену этажа по введённому id
+      for (const line of playDebugFloorScene(state)) state.msgs.push(msg(`[SCENE] ${line}`, state.time, '#dfe6e0'));
+      break;
+    }
+    case 92: { // Известные сцены этажа
+      for (const line of debugFloorSceneLines(state)) state.msgs.push(msg(`[SCENE] ${line}`, state.time, '#9ab'));
+      break;
+    }
   }
   return null;
 }
@@ -1912,6 +1960,8 @@ const BASE_CMD_DEFS = [
   { id: 'spawn_all_tools', label: 'Все инструменты' },
   { id: 'spawn_sculpture', label: 'Спавн Скульптуры' },
   { id: 'spawn_critters', label: 'DEBUG: спавн криттеров' },
+  { id: 'play_floor_scene', label: 'СЦЕНА: запустить по id' },
+  { id: 'floor_scene_list', label: 'СЦЕНЫ: список' },
 ] as const satisfies readonly DebugCommandDef[];
 
 const BASE_CMD_VISUAL_BEFORE_DESIGN = [
@@ -2004,6 +2054,8 @@ const BASE_CMD_VISUAL_AFTER_DESIGN = [
   'force_hermodoor_borer',
   'spawn_sculpture',
   'spawn_critters',
+  'play_floor_scene',
+  'floor_scene_list',
 ] as const satisfies readonly BaseDebugCommandId[];
 
 function designFloorCommandId(id: DesignFloorId): DebugCommandId {

@@ -406,10 +406,14 @@ export function resolveElevatorRoute(
   };
 }
 
+/**
+ * Слух расходится от МЕСТА события — от лифта, где щёлкнула аномалия. Ехать в
+ * нём мог кто угодно, поэтому точка отсчёта здесь координата, а не игрок.
+ */
 export function spreadElevatorInstanceRumor(
   world: World,
   entities: Entity[],
-  player: Entity,
+  origin: { x: number; y: number },
   state: GameState,
   instance: ActiveFloorInstance,
 ): number {
@@ -419,7 +423,7 @@ export function spreadElevatorInstanceRumor(
   for (const e of entities) {
     if (remembered >= 8) break;
     if (!e.alive || e.type !== EntityType.NPC) continue;
-    if (world.dist2(player.x, player.y, e.x, e.y) > 144) continue;
+    if (world.dist2(origin.x, origin.y, e.x, e.y) > 144) continue;
     if (rememberRumor(e, rumorId, state.time)) remembered++;
     rememberRumor(e, 'floor_lift_smell', state.time);
   }

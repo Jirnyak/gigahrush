@@ -24,6 +24,7 @@ export type MonsterAIFlag =
   | 'slimeScavenger'
   | 'slimeStrider'
   | 'weepingAngel'
+  | 'looksLiquidator'
   | 'melee'
   | 'meatGrowth'
   | 'blackWaterWake'
@@ -33,17 +34,14 @@ export type MonsterAIFlag =
   | 'meatWorm'
   | 'scrapWake'
   | 'baitLine'
-  | 'secondBeat'
   | 'officeField'
   | 'hostParasite'
   | 'protocolPressure'
   | 'crowdShove'
   | 'netPossessor'
   | 'deadEcho'
-  | 'falsePatrol'
   | 'defensiveNeutral'
   | 'webSpitter'
-  | 'falsePhase'
   | 'flying'
   | 'noclip'
   | 'wetLineShot'
@@ -236,6 +234,14 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SCULPTURE]: SCULPTURE_DEF,
   [MonsterKind.GNOME]:     GNOME_DEF,
 };
+
+/**
+ * Свойство вида объявлено флагом в его дефе — так его и спрашивают.
+ * Общий код не должен знать конкретных `MonsterKind`, ему хватает флага.
+ */
+export function monsterHasAIFlag(e: { monsterKind?: MonsterKind }, flag: MonsterAIFlag): boolean {
+  return e.monsterKind !== undefined && MONSTERS[e.monsterKind]?.aiFlags?.includes(flag) === true;
+}
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.SBORKA]:    genSborka,

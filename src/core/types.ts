@@ -456,14 +456,6 @@ export interface AIState {
   baitMarkerId?: number;      // cached monster bait marker id
   baitScanCd?: number;        // cooldown until next bounded bait scan
   baitLine?: MonsterBaitLineState; // Tonkaya Ten prepared dark corridor/door line
-  secondBeatX?: number;       // Glubinnaya Ten delayed afterimage anchor
-  secondBeatY?: number;
-  secondBeatTargetX?: number; // target position when the afterimage was armed
-  secondBeatTargetY?: number;
-  secondBeatDx?: number;      // offset strike direction, normalized
-  secondBeatDy?: number;
-  secondBeatTimer?: number;
-  secondBeatHold?: number;    // target stood still long enough to collapse bait
   lightScanCd?: number;       // Лишенный bounded light-source scan cooldown
   lightTargetX?: number;
   lightTargetY?: number;
@@ -476,7 +468,6 @@ export interface AIState {
   parasiteQuarantineCd?: number; // Head slug sealed-room event throttle
   meatTargetId?: number;      // Olgoy cached corpse target id
   meatScanCd?: number;        // Olgoy bounded corpse scent scan cooldown
-  meatScanOffset?: number;    // Olgoy rotating corpse scan offset
   choirCountdown?: number;    // хоровая матка: seconds until wet choir spawn
   choirCueStep?: number;      // last announced countdown step
   choirChildIds?: number[];   // capped child ids owned by a spawner encounter
@@ -517,13 +508,6 @@ export interface AIState {
   slimeTargetY?: number;
   slimeContactTimer?: number;  // Slimevik close-contact exposure timer
   slimeContactCd?: number;     // Slimevik contact risk cooldown
-  compositeDormant?: boolean;  // Sobrannyy idle state before room/contact wakeup
-  compositeArmorUntil?: number; // short wake window that ignores small damage
-  compositeIsolatedUntil?: number; // isolation feedback throttle
-  meatGrowthStacks?: number;   // bounded temporary composite growth
-  meatGrowthUntil?: number;    // time when growth stacks expire
-  meatGrowthHitWindowUntil?: number; // repeated-hit window end
-  meatGrowthHitPressure?: number; // accumulated hit pressure in current window
   deadEchoHold?: number;        // Bezekhiy direct-look reveal hold
   deadEchoRevealed?: boolean;   // Bezekhiy has become audible/ordinary
   deadEchoSpent?: boolean;      // Bezekhiy one-shot threshold bonus spent
@@ -546,21 +530,12 @@ export interface AIState {
   shoveCharge?: number;         // Dikiy Mertvyak crowd shove momentum
   shoveCooldown?: number;       // cooldown after a crowd shove burst
   shoveStartHp?: number;        // initial HP snapshot; any early damage cancels shove
-  falsePhaseCd?: number;        // Ложный Дух: cooldown before next local door phase
-  falsePhaseActive?: number;    // Ложный Дух: brief interruptible post-crossing reveal
-  falsePhaseDoorIdx?: number;   // Ложный Дух: closed door used by the queued local phase
-  falsePhaseX?: number;         // Ложный Дух: queued local door landing x
-  falsePhaseY?: number;         // Ложный Дух: queued local door landing y
   fogOffsetX?: number;          // Туманник: fake visible silhouette offset from real body
   fogOffsetY?: number;
   fogOffsetUntil?: number;      // time when the fake silhouette expires without refresh
   fogOffsetCollapsedUntil?: number; // short reveal window after light/fire/leaving fog
   fogOffsetNoiseId?: number;    // last noise record used to bias the displaced origin
   fogOffsetCueAt?: number;      // throttle for local readability messages
-  falsePatrolRevealed?: boolean; // Черный ликвидатор: fake cleanup phase has broken
-  falsePatrolDoorIdx?: number;   // Черный ликвидатор: cached local door waypoint
-  falsePatrolScanCd?: number;    // Черный ликвидатор: bounded local door scan cooldown
-  falsePatrolKnockCd?: number;   // Черный ликвидатор: door-knock event cooldown
   parasiteExposed?: boolean;    // Мухожук: reveal/readability beat already published
   parasiteCommandCd?: number;   // Мухожук: bounded local command pulse cooldown
   parasiteFoodScanCd?: number;  // Мухожук: throttled container appetite scan

@@ -33,7 +33,6 @@ interface ActorTacticContext {
   time: number;
   msgs: Msg[];
   state?: GameState;
-  player?: Entity;
   profile: ActorTacticProfile;
 }
 
@@ -64,7 +63,6 @@ interface RefreshFactsAccumulator {
   nearbyHostiles: number;
   bestTarget?: Entity;
   bestDist2: number;
-  sawPlayer: boolean;
   sx: number;
   sy: number;
 }
@@ -108,7 +106,6 @@ const refreshAccum: RefreshFactsAccumulator = {
   nearbyActors: 0,
   nearbyHostiles: 0,
   bestDist2: Infinity,
-  sawPlayer: false,
   sx: 0,
   sy: 0,
 };
@@ -259,7 +256,6 @@ function resetRefreshAccum(): RefreshFactsAccumulator {
   refreshAccum.nearbyHostiles = 0;
   refreshAccum.bestTarget = undefined;
   refreshAccum.bestDist2 = Infinity;
-  refreshAccum.sawPlayer = false;
   refreshAccum.sx = 0;
   refreshAccum.sy = 0;
   return refreshAccum;
@@ -269,14 +265,12 @@ function considerActorForFacts(
   world: World,
   actor: Entity,
   other: Entity,
-  player: Entity | undefined,
   profile: ActorTacticProfile,
   acc: RefreshFactsAccumulator,
 ): void {
   if (!other.alive || other.id === actor.id || other.type !== EntityType.NPC && other.type !== EntityType.MONSTER) return;
   const d2 = world.dist2(actor.x, actor.y, other.x, other.y);
   if (d2 > profile.senseRadius * profile.senseRadius) return;
-  if (player && other.id === player.id) acc.sawPlayer = true;
   acc.nearbyActors++;
   if (!isHostile(actor, other)) return;
   acc.nearbyHostiles++;
@@ -288,13 +282,15 @@ function considerActorForFacts(
   }
 }
 
-function refreshFacts(world: World, actor: Entity, time: number, player: Entity | undefined, profile: ActorTacticProfile): ActorTacticFacts {
+function refreshFacts(world: World, actor: Entity, time: number, profile: ActorTacticProfile): ActorTacticFacts {
   const index = getEntityIndex();
+  // Игрок — просто NPC: он лежит в том же индексе актёров и обязан пробиваться
+  // сквозь `scanCap` наравне со всеми. Дописывать его после запроса нельзя,
+  // иначе в толпе монстр всегда видит игрока и теряет соседей.
   index.queryRadiusCapped(actor.x, actor.y, profile.senseRadius, actorSenseScratch, ENTITY_MASK_ACTOR, profile.scanCap);
 
   const acc = resetRefreshAccum();
-  for (const other of actorSenseScratch) considerActorForFacts(world, actor, other, player, profile, acc);
-  if (player?.alive && !acc.sawPlayer) considerActorForFacts(world, actor, player, player, profile, acc);
+  for (const other of actorSenseScratch) considerActorForFacts(world, actor, other, profile, acc);
 
   const recentThreat = getRecentCombatThreat(actor, time);
   if (recentThreat && isHostile(actor, recentThreat.attacker)) {
@@ -602,7 +598,6 @@ export function runActorTactic(
   dt: number,
   time: number,
   msgs: Msg[],
-  player: Entity | undefined,
   state?: GameState,
 ): boolean {
   const profile = profileForActor(actor);
@@ -615,13 +610,13 @@ export function runActorTactic(
   ai.tacticEventCd = Math.max(0, (ai.tacticEventCd ?? 0) - dt);
 
   const shouldRefresh = ai.tacticSenseCd <= 0;
-  const facts = shouldRefresh ? refreshFacts(world, actor, time, player, profile) : cachedFacts(world, actor, time, profile);
+  const facts = shouldRefresh ? refreshFacts(world, actor, time, profile) : cachedFacts(world, actor, time, profile);
   if (shouldRefresh) {
     ai.tacticSenseCd = profile.senseIntervalSeconds +
       hashUnit(actor.id + Math.floor(time * 4), 0x9e37) * profile.senseJitterSeconds;
   }
 
-  const ctx: ActorTacticContext = { world, actor, dt, time, msgs, state, player, profile };
+  const ctx: ActorTacticContext = { world, actor, dt, time, msgs, state, profile };
   let handled = false;
   for (const tactic of profile.tactics) {
     const result = tactic.run(ctx, facts);

@@ -1709,8 +1709,16 @@ function captureEntityToRecord(alife: AlifeState, record: AlifeNpcRecord, entity
   );
   if (entity.age !== undefined) setRecordAge(alife, record, entity.age, recordAge(alife, record));
   setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
-  record.role = entity.role;
-  record.cinematicState = entity.cinematicState ? { ...entity.cinematicState } : undefined;
+  // Роль сцены — временное состояние КАДРА, а не свойство личности. Записав её,
+  // A-Life возвращала бы человека навсегда выключенным из симуляции: цикл AI
+  // пропускает `CINEMATIC_ACTOR` целиком. Достаточно было автосейва посреди сцены
+  // (например, когда игрок свернул вкладку), чтобы антагонист сюжета вернулся
+  // живой снаружи и мебелью внутри. Поэтому в запись уходит та роль, которой
+  // человек жил до сцены, а сама сцена в сейв не просачивается.
+  record.role = entity.role === NpcRole.CINEMATIC_ACTOR
+    ? (entity.cinematicState?.originalRole ?? NpcRole.WANDERER)
+    : entity.role;
+  record.cinematicState = undefined;
   record.weapon = entity.weapon;
   record.tool = entity.tool;
   record.inventory = inventoryCopy(entity.inventory);
@@ -1885,8 +1893,10 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     z: recordFloor(alife, record),
     faction: recordFaction(alife, record),
     occupation: recordOccupation(alife, record),
-    role: record.role,
-    cinematicState: record.cinematicState ? { ...record.cinematicState } : undefined,
+    // Страховка для записей, сделанных до этого правила: роль сцены из записи
+    // не воскрешаем, иначе человек материализуется вне цикла AI.
+    role: record.role === NpcRole.CINEMATIC_ACTOR ? NpcRole.WANDERER : record.role,
+    cinematicState: undefined,
     name: record.name,
     firstName: record.firstName,
     lastName: record.lastName,
@@ -2341,8 +2351,10 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     npcVisualId: record.npcVisualId,
     spriteSeed,
     height: generateHeight(recordAge(alife, record), recordFemale(alife, record)),
-    role: record.role,
-    cinematicState: record.cinematicState ? { ...record.cinematicState } : undefined,
+    // Страховка для записей, сделанных до этого правила: роль сцены из записи
+    // не воскрешаем, иначе человек материализуется вне цикла AI.
+    role: record.role === NpcRole.CINEMATIC_ACTOR ? NpcRole.WANDERER : record.role,
+    cinematicState: undefined,
     name: record.name,
     firstName: record.firstName,
     lastName: record.lastName,
@@ -2469,6 +2481,34 @@ function filterDeadPlotNpcs(alife: AlifeState, entities: Entity[]): void {
   entities.length = write;
 }
 
+/**
+ * Убрать сюжетных NPC, которых A-Life числит на ДРУГОМ этаже.
+ *
+ * Реестр авторских пакетов доставляет человека по объявленному дому, и только по
+ * нему: он не знает, что персонаж успел уехать. Поэтому тот, кого увели тактом
+ * `depart` или миграцией, при следующей генерации родного этажа приезжал обратно —
+ * и замысел «холодная жизнь путешествует сама» ломался о доставку.
+ *
+ * Смерть тем же способом отсекается строкой выше; уход — просто вторая половина
+ * того же правила: адрес личности хранит A-Life, а не таблица рождения.
+ */
+function filterRelocatedPlotNpcs(alife: AlifeState, entities: Entity[], floorKey: string): void {
+  const elsewhere = new Set<number>();
+  for (const record of alife.npcs) {
+    if (!record || record.plotNpcId === undefined) continue;
+    if (recordFloorKey(alife, record) === floorKey) continue;
+    elsewhere.add(record.plotNpcId);
+  }
+  if (elsewhere.size === 0) return;
+  let write = 0;
+  for (let read = 0; read < entities.length; read++) {
+    const entity = entities[read];
+    if (entity.type === EntityType.NPC && entity.id && elsewhere.has(entity.id)) continue;
+    entities[write++] = entity;
+  }
+  entities.length = write;
+}
+
 function extractAmbientNpcTemplates(entities: Entity[]): Entity[] {
   const templates: Entity[] = [];
   let write = 0;
@@ -2504,6 +2544,7 @@ export function materializeAlifeFloorPopulation(
   const alife = ensureAlifeState(state);
   reconcileExistingAlifeEntities(alife, entities);
   filterDeadPlotNpcs(alife, entities);
+  filterRelocatedPlotNpcs(alife, entities, floorKey);
   const templates = extractAmbientNpcTemplates(entities);
   if (templates.length > 0) {
     const floorIds = alife.floorIndex[floorKey] ?? [];

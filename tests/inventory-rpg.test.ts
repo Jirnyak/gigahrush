@@ -60,6 +60,7 @@ import { getRecentEvents } from '../src/systems/events';
 import { tryFactionCombat } from '../src/systems/ai/combat';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { makeGameState } from './helpers';
+import { initFactionRelations } from '../src/data/relations';
 
 function makePlayer(): Entity {
   return {
@@ -394,7 +395,50 @@ test('hostile stronger NPC chases the player instead of returning to routine AI'
   assert.equal(hunter.ai?.combatTargetId, player.id);
 });
 
-test('runtime faction combat can skip dead-player full scans with an explicit sentinel', () => {
+test('runtime faction combat needs no player at all: a hostile neighbour is enough', () => {
+  // Раньше здесь проверялся параметр-страж «не искать игрока»: боевая логика
+  // принимала игрока отдельным аргументом и от него же зависела. Теперь игрок —
+  // такой же актор, как остальные, и мирный житель обязан замечать враждебного
+  // СОСЕДА, а не только его. Ни игрока, ни его позиции в этой сцене нет вовсе.
+  const world = new World();
+  for (let y = 506; y <= 514; y++) {
+    for (let x = 506; x <= 520; x++) world.set(x, y, Cell.FLOOR);
+  }
+
+  const civilian: Entity = {
+    id: 21,
+    type: EntityType.NPC,
+    x: 510, y: 510,
+    angle: 0, pitch: 0,
+    alive: true, speed: 2, sprite: 0,
+    hp: 240, maxHp: 240,
+    faction: Faction.CITIZEN,
+    weapon: '',
+    rpg: freshRPG(30),
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+  };
+  // Дикие враждебны гражданам по матрице фракций — личного отношения не нужно.
+  const wild: Entity = {
+    id: 22,
+    type: EntityType.NPC,
+    x: 514, y: 510,
+    angle: 0, pitch: 0,
+    alive: true, speed: 2, sprite: 0,
+    hp: 20, maxHp: 20,
+    faction: Faction.WILD,
+    weapon: '',
+    rpg: freshRPG(1),
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+  };
+  const entities = [civilian, wild];
+  rebuildEntityIndex(entities);
+  initFactionRelations(); // без матрицы граждане и дикие друг другу никто
+
+  assert.equal(tryFactionCombat(world, entities, civilian, 0.1, 5, [], { v: 100 }), true);
+  assert.equal(civilian.ai?.combatTargetId, wild.id);
+});
+
+test('personal hostility toward the player still works through the same path', () => {
   const world = new World();
   for (let y = 506; y <= 514; y++) {
     for (let x = 506; x <= 520; x++) world.set(x, y, Cell.FLOOR);
@@ -425,7 +469,6 @@ test('runtime faction combat can skip dead-player full scans with an explicit se
   const entities = [player, civilian];
   rebuildEntityIndex(entities);
 
-  assert.equal(tryFactionCombat(world, entities, civilian, 0.1, 5, [], { v: 100 }, undefined, null), false);
   assert.equal(tryFactionCombat(world, entities, civilian, 0.1, 5, [], { v: 100 }), true);
   assert.equal(civilian.ai?.combatTargetId, player.id);
 });

@@ -1,4 +1,4 @@
-import { EntityType, MonsterKind, type Entity, type GameState, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
+import { EntityType, type Entity, type GameState, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
 import { isNoClipActive } from './psi';
 import type { World } from '../core/world';
 import { isPlayerEntity } from './player_actor';
@@ -108,7 +108,6 @@ export function updateBlockCrushDamage(
     // Skip noclippers and entities in phasing state
     if (e.phasing) continue;
     if (isPlayerEntity(e) && isNoClipActive()) continue;
-    if (e.monsterKind === MonsterKind.LOZHNYY_DUKH && (e.ai?.falsePhaseActive ?? 0) > 0) continue;
 
     if (world.solid(Math.floor(e.x), Math.floor(e.y))) {
       const dmg = DAMAGE_PER_SECOND * dt;
