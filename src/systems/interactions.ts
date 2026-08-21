@@ -87,7 +87,6 @@ import {
   moveNetTerminalBankPreset,
   tryUseNetTerminalGen,
 } from './net_terminal_gen';
-import { pneumomailPrompt, tryUsePneumomailTube } from './pneumomail';
 import { pseudoliftPrompt, tryUsePseudolift } from './pseudolift';
 import { floorRunLiftPrompt, currentFloorRunLabel } from './procedural_floors';
 import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } from './procedural_anomalies';
@@ -97,6 +96,7 @@ import { tryUseSamosborVariantInteraction } from './samosbor';
 import { tryCoverSeroburmalineSource } from './seroburmaline';
 import { findSlimevikInteractionTarget, tryUseSlimevikInteraction } from './slimevik';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
+import { TUTORIAL_START } from '../data/tutorial_start';
 
 export type InteractableKind =
   | 'instant'
@@ -396,9 +396,6 @@ function findNormalPriorityTargetForLook(ctx: InteractionContext): InteractionTa
     return target('lift', idx + 200000, 'lift', idx % W, (idx / W) | 0, 60, liftPrompt(ctx, idx));
   }
 
-  const pneumomail = pneumomailPrompt(ctx.world, ctx.state, ctx.lookX, ctx.lookY);
-  if (pneumomail) return target('instant', idx + 690000, 'pneumomail', idx % W, (idx / W) | 0, 61, pneumomail);
-
   const contentTarget = findContentInteractionTarget(ctx);
   if (contentTarget) return target('instant', contentTarget.id, contentTarget.targetId, contentTarget.x, contentTarget.y, contentTarget.priority, contentTarget.prompt);
 
@@ -491,25 +488,16 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
       setDoorState(ctx.world, door, DoorState.OPEN);
       ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
       publishDoorNoise(ctx.state, ctx.player, idx, false, quietDoor);
-      if (ctx.state.tutorialMode && door.isTutorialExit) {
-        import('./tutorial').then(({ advanceTutorial, TutorialStep }) => {
-          advanceTutorial(ctx.state, TutorialStep.EXIT_APARTMENT);
-          completeTutorial(ctx.state);
-        });
-        ctx.state.msgs.push(msg('Дверь со скрипом поддалась. Путь свободен.', ctx.state.time, '#4a4'));
-      } else if (ctx.state.tutorialMode && keyId === 'tut_cafe_key') {
+      // Отпертая дверь Столовой и завершает обучение: она последний его шаг.
+      if (ctx.state.tutorialMode && keyId === TUTORIAL_START.keyId) {
         completeTutorial(ctx.state);
       }
     } else {
-      if (door.isTutorialExit) {
-        ctx.state.msgs.push(msg('Заперто намертво. Нужно найти ключ.', ctx.state.time, '#f84'));
+      const broke = damageDoor(ctx.world, door, 5);
+      if (broke) {
+        ctx.state.msgs.push(msg('Дверь выбита!', ctx.state.time, '#4a4'));
       } else {
-        const broke = damageDoor(ctx.world, door, 5);
-        if (broke) {
-          ctx.state.msgs.push(msg('Дверь выбита!', ctx.state.time, '#4a4'));
-        } else {
-          ctx.state.msgs.push(msg('Заперто. Нужен ключ. (Удар -5)', ctx.state.time, '#f84'));
-        }
+        ctx.state.msgs.push(msg('Заперто. Нужен ключ. (Удар -5)', ctx.state.time, '#f84'));
       }
     }
   }
@@ -594,7 +582,6 @@ function activateNormalPriorityInteractionForLook(ctx: InteractionContext): Inte
 
   if (tryUseHeatlinePressure(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryUseCarnivorousFungus(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
-  if (tryUsePneumomailTube(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryCoverSeroburmalineSource(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true, worldChanged: true };
   if (tryUseHladonColdPocketCounter(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   const content = tryUseContentInteraction(ctx);

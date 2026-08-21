@@ -930,6 +930,21 @@ function fallbackPreferredAnchor(world: World, preferredX?: number, preferredY?:
   return null;
 }
 
+/**
+ * Ближайший лифт или его кнопка — и только они. Без отката на «любую соседнюю
+ * проходимую клетку», в отличие от якоря прибытия: уход с этажа обязан идти через
+ * лифт, иначе человек «уезжает» из середины зала на глазах у зрителя.
+ */
+export function findLiftDepartureAnchor(
+  world: World,
+  preferredX: number,
+  preferredY: number,
+  salt = 0,
+): { x: number; y: number } | null {
+  const anchor = findLiftOrButtonAnchor(world, preferredX, preferredY, salt);
+  return anchor ? { x: anchor.x, y: anchor.y } : null;
+}
+
 export function findAlifeArrivalAnchor(world: World, preferredX?: number, preferredY?: number, salt = 0): { x: number; y: number; angle?: number } | null {
   return findLiftOrButtonAnchor(world, preferredX, preferredY, salt)
     ?? fallbackPreferredAnchor(world, preferredX, preferredY);

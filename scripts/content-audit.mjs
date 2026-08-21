@@ -1621,8 +1621,10 @@ for (const ref of manifestImportRefs) {
   }
   if (ref.sideEffect) {
     const text = fs.readFileSync(path.join(root, ref.target), 'utf8');
-    if (!/register(?:SideQuest|ZoneContent)\s*\(/.test(text)) {
-      errors.push(`${ref.file}:${ref.line} side-effect manifest import "${ref.spec}" resolves to ${ref.target} but does not register zone content or a side quest`);
+    // Сцена этажа — тоже регистрация контента, и другого способа её подключить
+    // нет: своего генератора у сцены не бывает, она объявление. См. `cutscene.md`.
+    if (!/register(?:SideQuest|ZoneContent|FloorScene)\s*\(/.test(text)) {
+      errors.push(`${ref.file}:${ref.line} side-effect manifest import "${ref.spec}" resolves to ${ref.target} but does not register zone content, a side quest or a floor scene`);
     }
   }
 }

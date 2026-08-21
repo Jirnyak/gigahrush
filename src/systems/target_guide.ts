@@ -3,6 +3,7 @@ import type { World } from '../core/world';
 import { isQuestTargetOnCurrentFloor, resolveQuestTargetRoom } from './contracts';
 import { hasItem } from './inventory';
 import { getPrimaryRouteObjective } from './route_cues';
+import { TUTORIAL_START } from '../data/tutorial_start';
 import { TutorialStep } from './tutorial';
 
 /** On-screen guidance for whatever the player is supposed to reach right now.
@@ -28,11 +29,10 @@ export interface TutorialGuideTarget {
   label: string;
 }
 
-const TUTORIAL_KEY_ID = 'tut_cafe_key';
-const TUTOR_NPC_PACKAGE_ID = 'olga';
-const TUTORIAL_ROOM_TAG = 'tutorial';
-/** Needs above this still read as urgent, so the toilet stays the current step. */
-const TOILET_URGE = 15;
+/* Опознавательные знаки сиквенса — из общего договора, а не своей копией:
+ * ставит их генератор, ищет их этот файл, и расходиться им нельзя. */
+const { keyId: TUTORIAL_KEY_ID, tutorNpcPackageId: TUTOR_NPC_PACKAGE_ID,
+        roomTag: TUTORIAL_ROOM_TAG, toiletUrge: TOILET_URGE } = TUTORIAL_START;
 /** Static targets never move; re-resolving them every frame would be a world scan. */
 const RESOLVE_INTERVAL_SEC = 0.5;
 /** Quest text is a sentence; the on-screen slot is one line in a small iframe. */
@@ -77,7 +77,7 @@ export function tutorialGuideStage(state: GameState, player: Entity): TutorialGu
 
   // The tutorial flag drops the moment the locked door opens, but the handoff is
   // not finished until Ольга has actually handed out the first quest.
-  if (step === TutorialStep.EXIT_APARTMENT || step === TutorialStep.DONE) {
+  if (step === TutorialStep.DONE) {
     return state.quests.length === 0 ? 'npc' : null;
   }
   return null;
@@ -85,7 +85,10 @@ export function tutorialGuideStage(state: GameState, player: Entity): TutorialGu
 
 function tutorialRoomFeature(world: World, feature: Feature): { x: number; y: number } | null {
   for (const room of world.rooms) {
-    if (!room.tags?.includes(TUTORIAL_ROOM_TAG)) continue;
+    // Обход идёт каждый кадр из `drawHUD`, так что дыра в `world.rooms` тут
+    // валит весь игровой цикл, а не одну подсказку. Плотность обещана
+    // генерацией (`stampRoom`), но цена страховки — одно сравнение.
+    if (!room?.tags?.includes(TUTORIAL_ROOM_TAG)) continue;
     for (let y = room.y; y < room.y + room.h; y++) {
       for (let x = room.x; x < room.x + room.w; x++) {
         if (world.features[world.idx(x, y)] === feature) return { x: x + 0.5, y: y + 0.5 };

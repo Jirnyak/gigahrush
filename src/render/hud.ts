@@ -1279,6 +1279,13 @@ export interface SpeechBubbleView {
   id?: number;
 }
 
+/* Хвостик бабла опускается от нижнего края коробки на свою длину, поэтому отступ
+ * над головой РАВЕН ей: остриё приходит ровно на макушку говорящего. Отступ больше
+ * длины хвостика отрывает бабл от головы и вешает его в воздухе — так и было, восемь
+ * против пяти, и реплика читалась висящей сама по себе, особенно в тесном кадре. */
+const BARK_TAIL_LENGTH = 5;
+const BARK_HEAD_GAP = BARK_TAIL_LENGTH;
+
 export function drawWorldSpeechBubbles(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -1319,7 +1326,7 @@ export function drawWorldSpeechBubbles(
     const th = lines.length * lh;
     
     const bx = projection.screenX * sx - tw / 2 - padding;
-    const by = projection.headY * sy - th - padding * 2 - 8 * s;
+    const by = projection.headY * sy - th - padding * 2 - BARK_HEAD_GAP * s;
     
     const remaining = e.activeBark.until - time;
     const alpha = Math.min(1, remaining * 2);
@@ -1336,7 +1343,7 @@ export function drawWorldSpeechBubbles(
     ctx.beginPath();
     ctx.moveTo(bx + tw / 2 + padding - 3 * s, by + th + padding * 2);
     ctx.lineTo(bx + tw / 2 + padding + 3 * s, by + th + padding * 2);
-    ctx.lineTo(bx + tw / 2 + padding, by + th + padding * 2 + 5 * s);
+    ctx.lineTo(bx + tw / 2 + padding, by + th + padding * 2 + BARK_TAIL_LENGTH * s);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();

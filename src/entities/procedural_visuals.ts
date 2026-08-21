@@ -2,6 +2,10 @@ import { EntityType, Faction, MonsterKind, Occupation, type Entity } from '../co
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 import { MONSTER_SPRITES } from './monster';
 import { generateIdolSprite } from './idol';
+import { generateBashnyaSprite } from './bashnya';
+import { generateGnezdoSprite } from './gnezdo';
+import { generateBoecSprite } from './boec';
+import { generateLogovoSprite } from './logovo';
 import { generateKantselyarskiyIdolSprite } from './kantselyarskiy_idol';
 import { generateNightmareSprite } from './nightmare';
 import { generateProtokolnikSprite } from './protokolnik';
@@ -12,10 +16,6 @@ import {
   AUTHORED_NPC_SPRITE_GENERATORS,
   NPC_SPRITE_GENERATORS,
   generateTravelerSprite,
-  generatePilgrimSprite,
-  generateHunterSprite,
-  generatePriestSprite,
-  generatePerformerSprite,
 } from './npc';
 import {
   generateNpcVisualSprite,
@@ -314,19 +314,13 @@ function isCultVisualOccupation(occupation: Occupation): boolean {
   return occupation === Occupation.PILGRIM || occupation === Occupation.PRIEST;
 }
 
+/* Таблица занятий покрывает перечисление целиком, поэтому разбора частных случаев
+ * тут больше нет: он и прятал дыру, отдавая хвосту занятий спрайт путника. */
 function npcBaseSpriteForOccupation(occupation: Occupation): Uint32Array {
   const generator = occupation >= 0 && occupation < NPC_SPRITE_GENERATORS.length
     ? NPC_SPRITE_GENERATORS[occupation]
     : undefined;
-  if (generator) return generator();
-  switch (occupation) {
-    case Occupation.TRAVELER: return generateTravelerSprite();
-    case Occupation.PILGRIM: return generatePilgrimSprite();
-    case Occupation.HUNTER: return generateHunterSprite();
-    case Occupation.PRIEST: return generatePriestSprite();
-    case Occupation.PERFORMER: return generatePerformerSprite();
-    default: return generateTravelerSprite();
-  }
+  return (generator ?? generateTravelerSprite)();
 }
 
 function pixelRgb(c: number): RGB {
@@ -638,6 +632,13 @@ export function generateProceduralMonsterSprite(kind: MonsterKind, seed: number,
   const special = kind === MonsterKind.NIGHTMARE ? generateNightmareSprite(seed)
     : kind === MonsterKind.ROBOT ? generateRobotSprite(seed)
     : kind === MonsterKind.IDOL ? generateIdolSprite(seed)
+    // Линейные виды сторону носят в младшем бите сида: другого канала до
+    // генератора спрайта нет, а различать команды глазом обязательно. Мутацию
+    // они минуют — шум съедает цвет стороны, ради которого всё и делается.
+    : kind === MonsterKind.BASHNYA ? generateBashnyaSprite(seed)
+    : kind === MonsterKind.GNEZDO ? generateGnezdoSprite(seed)
+    : kind === MonsterKind.BOEC ? generateBoecSprite(seed)
+    : kind === MonsterKind.LOGOVO ? generateLogovoSprite(seed)
     : kind === MonsterKind.KANTSELYARSKIY_IDOL ? generateKantselyarskiyIdolSprite(seed)
     : kind === MonsterKind.PROTOKOLNIK ? generateProtokolnikSprite(seed, pressureTier)
     // Замаскированный носит чужую форму (арт ликвидатора + мел), раскрытый —

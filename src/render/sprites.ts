@@ -2,12 +2,7 @@
 
 import {
   AUTHORED_NPC_SPRITE_GENERATORS,
-  NPC_SPRITE_GENERATORS,
-  generateTravelerSprite,
-  generatePilgrimSprite,
-  generateHunterSprite,
-  generatePriestSprite,
-  generatePerformerSprite } from '../entities/npc';
+  NPC_SPRITE_GENERATORS } from '../entities/npc';
 import { MONSTERS,
   MONSTER_SPRITES,
   EYE_BOLT_SPRITE } from '../entities/monster';
@@ -25,18 +20,11 @@ export type SpriteData = Uint32Array; // S*S RGBA with alpha
 /* ── Sprite sheet — indices computed automatically by sprite_index.ts ── */
 export function generateSprites(): SpriteData[] {
   const sprites: SpriteData[] = [];
-  // Occupation NPCs
+  // Занятия — вся таблица целиком: индекс равен значению Occupation, включая
+  // путников, батюшку, перформера и хвост от уборщицы до гражданской обороны.
   for (const gen of NPC_SPRITE_GENERATORS) {
     sprites.push(gen());
   }
-  // Travelers: Путник, Паломник, Охотник
-  sprites.push(generateTravelerSprite());
-  sprites.push(generatePilgrimSprite());
-  sprites.push(generateHunterSprite());
-  // Priest: Батюшка
-  sprites.push(generatePriestSprite());
-  // Performer: Перформер
-  sprites.push(generatePerformerSprite());
   for (const def of AUTHORED_NPC_SPRITE_GENERATORS) sprites.push(def.generate());
   // Item drop
   sprites.push(gen_itemDrop());

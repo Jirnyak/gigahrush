@@ -2,7 +2,7 @@
 
 import { W, Cell, ProjType, type Entity, EntityType } from '../core/types';
 import { World } from '../core/world';
-import { stampLocalMark, stampMark, MarkType, SURFACE_MAP_MAX_CELLS } from './surface_marks';
+import { stampLocalMark, stampMark, MarkType } from './surface_marks';
 import { Spr } from '../entities/sprite_index';
 import { ensureEntityIndex } from './entity_index';
 import { markDangerFieldCell } from './danger_field';
@@ -383,8 +383,13 @@ export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: n
 // Meat chunks are permanent visual slots (and a real food resource for NPCs
 // and monsters), but every death added 2-3 forever, crowding useful geometry
 // out of the mesh instance cap. One chunk stack per cell, and the floor keeps
-// at most SURFACE_MAP_MAX_CELLS gore cells — past that the oldest cell is
-// cleared, the same ratchet bound ambient surface marks use.
+// at most GORE_CELL_MAX gore cells — past that the oldest cell is cleared.
+//
+// Потолок свой, а не общий с плоскими следами, хотя раньше был общим. Считают
+// они РАЗНОЕ: след — это килобайт памяти на клетку, кусок мяса — мешевый
+// экземпляр в кадре. Память подешевела вместе с отбором по дальности в атласе,
+// и следам потолок подняли; экземпляры в кадре от этого дешевле не стали.
+const GORE_CELL_MAX = 1024;
 const goreCellFifo: number[] = [];
 let goreFifoWorld: World | null = null;
 
@@ -393,7 +398,7 @@ function acquireGoreCell(world: World, ci: number): boolean {
   if (hasVisualSlotCode(world, ci, 34)) return false;
   if (!goreCellFifo.includes(ci)) {
     goreCellFifo.push(ci);
-    if (goreCellFifo.length > SURFACE_MAP_MAX_CELLS) {
+    if (goreCellFifo.length > GORE_CELL_MAX) {
       const oldest = goreCellFifo.shift()!;
       removeVisualSlotCode(world, oldest, 34); // corpse_meat_chunk
       removeVisualSlotCode(world, oldest, 35); // corpse_bone_chunk

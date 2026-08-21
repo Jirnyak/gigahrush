@@ -2928,10 +2928,23 @@ function buildSurfaceData(world: World, camX: number, camY: number, out?: Surfac
   slotByCell.clear();
   cellBySlot.fill(-1);
 
-  // Sort cells by toroidal distance to camera — nearest 1024 get atlas slots
-  const entries = Array.from(world.surfaceMap.entries());
+  // Атлас держит SURF_MAX_SLOTS плиток, а хранить следов мир может сколько
+  // угодно: клетка весит килобайт, и стирать их — значит терять картину боя.
+  // Поэтому кандидаты сперва ОТСЕИВАЮТСЯ ПО ДАЛЬНОСТИ, и лишь остаток
+  // сортируется. Дальше MAX_DRAW луч всё равно не доходит, так что отброшенное
+  // невидимо, зато сортировка перестаёт зависеть от размера карты следов —
+  // именно она делала пересборку дорогой и заставила когда-то ограничить память.
+  const camCX = Math.floor(camX), camCY = Math.floor(camY);
+  const visibleReach = MAX_DRAW + 8;
+  const reach2 = visibleReach * visibleReach;
+  const entries: [number, Uint8Array][] = [];
+  for (const entry of world.surfaceMap) {
+    const cx = entry[0] % W, cy = (entry[0] / W) | 0;
+    let dx = cx - camCX; if (dx > W / 2) dx -= W; else if (dx < -W / 2) dx += W;
+    let dy = cy - camCY; if (dy > W / 2) dy -= W; else if (dy < -W / 2) dy += W;
+    if (dx * dx + dy * dy <= reach2) entries.push(entry);
+  }
   if (entries.length > SURF_MAX_SLOTS) {
-    const camCX = Math.floor(camX), camCY = Math.floor(camY);
     entries.sort((a, b) => {
       const ax = a[0] % W, ay = (a[0] / W) | 0;
       const bx = b[0] % W, by = (b[0] / W) | 0;
@@ -3173,7 +3186,9 @@ function uploadSurfaceDirtyCells(world: World, glState: GLState, dirtyCells: rea
     let slot = glState.surfaceSlotByCell.get(ci) ?? 0;
     if (slot > 0 && glState.surfaceCellBySlot[slot - 1] !== ci) return false;
     if (slot <= 0) {
-      if (world.surfaceMap.size > SURF_MAX_SLOTS) return false;
+      // Раньше выход карты за размер атласа сам по себе гнал на полную пересборку,
+      // то есть на каждую новую лужу в бою. Решает не размер карты, а свободная
+      // плитка: пока она есть, кадр обходится точечной заливкой.
       slot = findFreeSurfaceSlot(glState.surfaceCellBySlot);
       if (slot <= 0) return false;
       glState.surfaceSlotByCell.set(ci, slot);

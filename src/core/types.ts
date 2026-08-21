@@ -171,7 +171,6 @@ export interface Door {
   timer: number;           // auto-close timer
   hp?: number;
   maxHp?: number;
-  isTutorialExit?: boolean;
 }
 
 // ── Entities ─────────────────────────────────────────────────────
@@ -268,6 +267,10 @@ export enum MonsterKind {
   SPORE_CARPET, // lurking domestic spore rug — ковер (просыпается у лута)
   LISHENNYY,  // deep light-following shadow guardian — лишенный
   GNOME,      // small fast humanoid mutant — гном
+  BASHNYA,    // immobile lane turret       — башня (стоит и простреливает линию)
+  GNEZDO,     // lane creep source          — гнездо (шлёт бойцов по линии)
+  BOEC,       // marching lane creep        — боец (идёт к чужому гнезду)
+  LOGOVO,     // neutral jungle camp source — логово (в скале, не достать)
 }
 
 export type CharacterSex = 'male' | 'female';
@@ -1184,7 +1187,6 @@ export interface GameState {
   sceneLock?: boolean;
   tutorialMode?: boolean;
   tutorialStep?: number;
-  tutorialExitTimer?: number;
   showInventory: boolean;
   mapMode: number;          // 0=closed, 2=full map overlay; minimap is a UI setting
   fullMapRadius?: number;   // transient full-map zoom radius in cells; not part of save shape

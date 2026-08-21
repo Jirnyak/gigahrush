@@ -107,7 +107,15 @@ These are the rules every new module must preserve.
 - No coordinate math that ignores toroidal wrap.
 - **One active floor.** At most `MAX_LIVE_WORLDS` = 2 `World` instances alive at once: the floor being played, plus a second only while a transition is in flight or as the lift's one-floor-back cache (`MAX_FLOOR_MEMORY_ENTRIES = 1`). A `World` is 42 MiB of grids, so a retained dead floor is a mobile OOM. Per-floor state belongs in `createWorldContextStore()` (`src/world/world_contexts.ts`), which holds one world keyed by room and drops it the moment a different world registers. A module keeping its own `let activeWorld` slot must register `registerFloorScopedReset()`; the single unload point is `dropWorldContextsExcept(world)` in `finishLoadedFloorVisuals()`. Never cap such storage by entry COUNT — that was the bug: caps of 4–8 contexts each pinned a whole floor plus its ~9600 entities. Enforced by `tests/world-live-count.test.ts` (worlds after forced GC, and zero entries from departed floors — the world count alone reads clean while entities leak).
 - **One floor coordinate space.** Floor `z` is the number in `DESIGN_FLOOR_ROUTES`; a theme's base comes from `designFloorBaseZ()` / `DESIGN_FLOOR_THEME_BASES`, never a retyped literal. The removed 30/60/100/140/180/200 scheme ascended with depth while this one descends, so a legacy key is not a cosmetic wart: it silently addresses a floor that does not exist, and a legacy RANGE (`z < N`) matches the wrong floors instead of none. `scripts/check-invariants.mjs` fails the build on any `z` assigned to or compared against 60/100/140/180/200.
+- **One room id space, and it is the index.** `world.rooms` is addressed by room id: `stampRoom` writes `rooms[id]`, `roomAt()` reads `rooms[roomMap[i]]`, and floor-memory restore re-forces `room.id = idx` because a patch must land in the room it was taken from. So a floor counter starts at 0 and never skips: a hole makes `for...of` yield `undefined` (unlike `forEach`/`map`/`filter`, which skip holes and keep floor tests green) and kills every one of the ~110 room walks — that is how `systems/target_guide.ts` crashed the frame loop on Стенка, база ликвидаторов and horrorfloor. Room ids are also NOT entity ids: `roomMap` is `Int16Array` and the entity counter starts at 10000, so borrowing it (outer_district did) puts every id past the end of the array and `roomAt()` returns null for the whole floor — silently, with no crash at all. Locked by `tests/rooms-dense.test.ts`.
 - No generator that seals a room without proving it is reachable.
+- **A floor never generates another floor's content.** A floor's `content_manifest.ts` may only call
+  generators that belong to that floor. Violation found 2026-08-21: the collectors manifest calls
+  `generateLiquidatorBaseArena` and stamps the liquidator base's 50×50 arena into the middle of the
+  collectors — the single call site of that generator. The damage is not cosmetic: the arena is the
+  floor's largest room by four times, it carpets 30% of its own floor with chairs, and furniture
+  stamps path blockers, so residents and monsters cannot cross their own floor. Ownership by folder
+  name is not ownership; ownership is the manifest that calls you. See `problems.md`.
 - No permanent POI on LIVING without `aptMask` protection and a corridor/door connection.
 - Feature-like gameplay must use the feature-first overlay contract: generate/map `Feature`, `Cell`, container or billboard primitives first, then attach or lazily resolve `InteractiveDef` behavior. Do not couple the number or placement of decor fixtures to interaction action code.
 - `manifest.md` is implementation fact (README.md is the public page, not a source of truth). `desdoc.md` is roadmap and tone. Root domain docs such as `samosbor.md` and `save.md` describe active systems, and `problems.md` tracks problematic non-system mechanics. This file is the engineering contract.
@@ -548,7 +556,8 @@ Yellow files, edit only with a narrow reason:
 - `src/gen/<floor>/side_quests.ts` or equivalent local registry
 - `src/data/items.ts`, `src/data/weapons.ts`, `src/data/plot.ts`
 - `src/entities/monster.ts`
-- `src/systems/debug.ts`
+- `src/systems/debug.ts` — теперь только экран и общие помощники; сама команда пишется в своей системе
+- `src/systems/debug_content.ts` — одна строка импорта на новую регистрирующую систему
 
 Red files, integrator-owned:
 
@@ -577,6 +586,17 @@ Current examples:
 - Samosbor variants/director: definitions live in `src/data/samosbor_variants.ts` and `src/data/samosbor_director.ts`; `systems/samosbor.ts` consumes active variants and bounded beats.
 - Events: systems call `publishEvent()`, consumers query ring buffers.
 - Interactive surfaces: definitions live in `src/data/interactive.ts`; broad static floor objects use `src/data/floor_object_placement.ts` plus `src/gen/floor_object_placement.ts`; local authored modules can still call `placeInteractive()` / `placeInteractiveAt()` or fixture helpers such as `maybePlaceBrokenFixture()`; `systems/interactive.ts` owns sparse per-`World` instances and action handlers.
+- Debug menu: system calls `registerDebugCommand()` / `registerDebugPanel()` from `src/systems/debug_registry.ts` next to its own code. See the contract below.
+
+### Debug Command Contract
+
+`src/systems/debug_registry.ts` is a leaf: it knows `World`, `GameState` and floor data, nothing else. A command is ONE record — `{ id, group, label, sort?, run(ctx) }` — and it lives in the system it exercises, not in `systems/debug.ts`. Output goes through `ctx.say`, which lands in the стеносводка; there is no second debug log.
+
+Menu order is a property of data, never of import order: the group comes from `DEBUG_GROUPS`, and inside a group entries sort by `sort` (route floors use `-z`, so the list runs +50 → −50) and then by label. Route-floor and procedural-anomaly teleports are generated from `DESIGN_FLOOR_ROUTES` and the anomaly table — a new floor appears in the menu by itself.
+
+The index of a command in the flat list is its menu number and the handle smoke uses (`window.__gigahrushDebugCommandIndex`). Because registration is an import side effect, a partial import graph yields a partial menu with shifted numbers. `src/systems/debug_content.ts` is therefore the assembly point — every registering module is listed there, `main.ts` and the debug tests import it, and `tests/debug-commands.test.ts` fails if a module is missing from the list.
+
+This replaced four parallel structures — an id union, a label array, an order array, and `case <number>` in a 570-line switch whose number was the position in the label array. Inserting a command in the middle silently shifted every later branch; that is how `expedition_proof_collectors_arrival` and `expedition_proof_return` ended up in the menu with no branch at all, doing nothing when pressed. Do not reintroduce a positional dispatch.
 
 Standard shape for new registries:
 

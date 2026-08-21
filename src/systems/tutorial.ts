@@ -1,23 +1,26 @@
+/* ── Обучение ──────────────────────────────────────────────────────
+ *
+ * Флаг `tutorialMode` в игре делает ровно одно: не даёт начаться самосбору, пока
+ * обучение идёт (`samosbor.ts`). Всё прочее, что на него смотрит, — подсказки и
+ * интерфейсные цели, а не механика.
+ *
+ * Шаг `tutorialStep` — не сиквенс. Сам сиквенс выводится из состояния мира
+ * (`systems/target_guide.ts`, договор в `data/tutorial_start.ts`), а этот счётчик
+ * несёт только то, что из мира не выводится: попил игрок или ещё нет. Дальше он
+ * стоит на `TOILET` и на ключе, и на двери — поэтому строить на нём шаги нельзя,
+ * и попытка такое построить оставила после себя семь недостижимых состояний и
+ * подсистему давления, которая не могла сработать ни разу. Снято 2026-08-20.
+ *
+ * Номера сохранены с пропуском намеренно: `tutorialStep` уезжает в сейв числом, и
+ * перенумеровать `DONE` значило бы задним числом переназначить смысл сохранённого.
+ */
+
 import { type Entity, type GameState, msg } from '../core/types';
-import { recordPlayerDamage } from './damage';
-import { registerContentRuntimeHook } from './content_hooks';
 
 export enum TutorialStep {
   DRINK = 0,
   TOILET = 1,
-  EAT = 2,
-  WORK = 3,
-  SAMOSBOR = 4,
-  ESCAPE = 5,
   DONE = 6,
-  FIND_KEY = 7,
-  UNLOCK_DOOR = 8,
-  EXIT_APARTMENT = 9,
-}
-
-export function advanceTutorial(state: GameState, step: TutorialStep): void {
-  if (!state.tutorialMode) return;
-  state.tutorialStep = step;
 }
 
 export function logTutorialMsg(state: GameState, text: string, time: number): void {
@@ -40,37 +43,9 @@ export function startTutorial(state: GameState, player: Entity): void {
   logTutorialMsg(state, '-я хочу пить', state.time + 15);
 }
 
-
-
 export function completeTutorial(state: GameState): void {
   if (!state.tutorialMode) return;
   state.tutorialMode = false;
   state.tutorialStep = TutorialStep.DONE;
   state.msgs.push(msg('Обучение завершено. Вы предоставлены сами себе.', state.time, '#8fc'));
 }
-
-export function updateTutorialPressure(state: GameState, dt: number): void {
-  if (state.tutorialStep === TutorialStep.UNLOCK_DOOR || state.tutorialStep === TutorialStep.FIND_KEY) {
-    const prevTimer = state.tutorialExitTimer ?? 0;
-    state.tutorialExitTimer = prevTimer + dt;
-
-    if (prevTimer < 30 && state.tutorialExitTimer >= 30) {
-      state.msgs.push(msg('В коридорах что-то гудит. Надо спешить.', state.time, '#f84'));
-    }
-
-    if (state.tutorialExitTimer > 60 && Math.floor(state.tutorialExitTimer) > Math.floor(prevTimer)) {
-      recordPlayerDamage(state, undefined, 1, 'tutorial_fog');
-    }
-  }
-}
-
-registerContentRuntimeHook({
-  id: 'tutorial_pressure',
-  phases: ['floor_activity'],
-  update: (ctx) => {
-    if (ctx.state.tutorialMode) {
-      updateTutorialPressure(ctx.state, ctx.dt);
-    }
-    return {};
-  }
-});

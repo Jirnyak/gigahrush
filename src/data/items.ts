@@ -168,7 +168,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   brass_knuckles: ['weapon', 'melee', 'contraband'],
   felt_door_pad: ['noise', 'quiet_door', 'counterplay'],
   rubber_door_wedge: ['repair', 'seal', 'hermodoor', 'counterplay'],
-  wire_coil: ['repair', 'repair_input', 'electronics', 'wire', 'tool', 'production', 'source_old_boxes', 'source_cabinets', 'trade', 'emergency_panel', 'pneumomail'],
+  wire_coil: ['repair', 'repair_input', 'electronics', 'wire', 'tool', 'production', 'source_old_boxes', 'source_cabinets', 'trade', 'emergency_panel'],
   water_filter_regulator: ['water', 'filter', 'regulator', 'repair', 'repair_input', 'production', 'maintenance', 'tools'],
   pump_impeller: ['water', 'pump', 'metal', 'repair', 'repair_input', 'production', 'maintenance'],
   rubber_tube: ['rubber', 'repair', 'repair_input', 'medical', 'production', 'brewing', 'still', 'factory_input', 'trade', 'tools'],
@@ -275,7 +275,6 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   forged_quarantine_clearance: ['document', 'permit', 'forged', 'forgery', 'contraband', 'quarantine'],
   elevator_access_order: ['document', 'permit', 'elevator', 'access', 'official'],
   void_archive_warrant: ['document', 'void', 'archive', 'warrant', 'evidence'],
-  pneumomail_capsule: ['document', 'pneumomail', 'sealed', 'evidence'],
   p14_gasmask_receipt: ['document', 'liquidator', 'receipt', 'gasmask', 'access', 'issue', 'ppe'],
   shark_scale: ['rare_trophy', 'contraband', 'water', 'fake'],
   red_mold_sample: ['blood_plant', 'red_mold', 'sample', 'contraband', 'evidence'],
@@ -626,7 +625,7 @@ export const ITEMS: Record<string, ItemDef> = {
   unpeople_detector:{ id:'unpeople_detector', name:'Детектор нелюдей', type:ItemType.TOOL, desc:'Коробка пищит рядом с подозрительным жильцом. Ошибается часто.', spawnRooms:[RoomType.OFFICE,RoomType.MEDICAL], spawnW:1, value:300, durability:60 },
   acid_bottle:{ id:'acid_bottle', name:'Кислота', type:ItemType.MISC, desc:'Промышленная кислота в бутылке без этикетки.', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:1, value:40 },
   duct_tape:{ id:'duct_tape', name:'Изолента', type:ItemType.MISC, desc:'Черная лента для проводов, швов и быстрых временных решений.', spawnRooms:[RoomType.STORAGE,RoomType.PRODUCTION,RoomType.LIVING], spawnW:1, value:8 },
-  wire_coil:{ id:'wire_coil', name:'Моток провода', type:ItemType.MISC, desc:'Изолированный провод из старого шкафа: щитки, реле и грязный ремонт. Потратьте на свет, зажмите им пневмотрубу или продайте электрику.', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:1, value:12, tags:[...ITEM_TAGS.wire_coil] },
+  wire_coil:{ id:'wire_coil', name:'Моток провода', type:ItemType.MISC, desc:'Изолированный провод из старого шкафа: щитки, реле и грязный ремонт. Потратьте на свет, пустите на щиток или продайте электрику.', spawnRooms:[RoomType.PRODUCTION,RoomType.STORAGE], spawnW:1, value:12, tags:[...ITEM_TAGS.wire_coil] },
   blueprint_t1_folder:{ id:'blueprint_t1_folder', name:'Папка чертежей Т1', type:ItemType.MISC, desc:'Папка простых схем для слесаря: полка, корпус, дверная мелочь. Можно продать, сдать в цех или оставить под заказ.', spawnRooms:[RoomType.OFFICE,RoomType.STORAGE,RoomType.LIVING], spawnW:0.6, value:46, tags:['document','blueprint','recipe','production','access','paper','tier1'], stack:3 },
   blueprint_t2_folder:{ id:'blueprint_t2_folder', name:'Папка чертежей Т2', type:ItemType.MISC, desc:'Плотная папка улучшенных схем. Цех просит ресурс, рынок просит молчание, терминал читает фиброзную капсулу.', spawnRooms:[RoomType.OFFICE,RoomType.STORAGE,RoomType.PRODUCTION], spawnW:0.22, value:140, tags:['blueprint','production','paper','tier2','valuable','terminal','fibrous_capsule'], stack:2 },
   blueprint_t3_folder:{ id:'blueprint_t3_folder', name:'Папка чертежей Т3', type:ItemType.MISC, desc:'Редкий комплект глубоких схем с холодными пятнами на бумаге. Держите отдельно от воды и лишних свидетелей.', spawnRooms:[], spawnW:0, value:420, tags:['document','blueprint','recipe','production','paper','tier3','rare','frozen','deep_route'], stack:1 },
@@ -683,7 +682,6 @@ export const ITEMS: Record<string, ItemDef> = {
   meat_rune:{ id:'meat_rune', name:'Мясная руна', type:ItemType.MISC, desc:'Культовая метка для прохода, обмана или отчёта. Носите отдельно от еды.', spawnRooms:[RoomType.COMMON,RoomType.STORAGE,RoomType.SMOKING], spawnW:1, value:220 },
   child_map:{ id:'child_map', name:'Карта детей', type:ItemType.MISC, desc:'Карандашная карта двора и соседних комнат. Может вывести к тайнику или к чужой двери.', spawnRooms:[RoomType.LIVING,RoomType.COMMON], spawnW:1, value:30 },
   metro_ticket:{ id:'metro_ticket', name:'Билет метро', type:ItemType.MISC, desc:'Билет на линию, которой официально не существует.', spawnRooms:[RoomType.CORRIDOR,RoomType.OFFICE], spawnW:1, value:25 },
-  pneumomail_capsule:{ id:'pneumomail_capsule', name:'Опечатанная пневмокапсула', type:ItemType.MISC, desc:'Латунный тубус старой пневмопочты. Можно сдать, продать или отправить как улику.', spawnRooms:[], spawnW:0, value:65, stack:1 },
   clean_health_cert:{ id:'clean_health_cert', name:'Справка об отсутствии заражения', type:ItemType.MISC, desc:'Медицинская справка с печатью. В карантинной очереди её смотрят до лица.', spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE], spawnW:1, value:35, tags:['quarantine','document'] },
   psychiatrist_referral:{ id:'psychiatrist_referral', name:'Направление к психиатру', type:ItemType.MISC, desc:'Направление из медпункта. Годится для врача, архива или неловкого разговора.', spawnRooms:[RoomType.MEDICAL,RoomType.OFFICE], spawnW:1, value:18 },
   quarantine_medcard:{ id:'quarantine_medcard', name:'Карантинная медкарта', type:ItemType.MISC, desc:'Карта пациента с красной полосой допуска.', spawnRooms:[], spawnW:0, value:45, tags:['quarantine','document','medical'] },
@@ -855,7 +853,6 @@ export const ITEMS: Record<string, ItemDef> = {
   note:      { id:'note',      name:'Записка',      type:ItemType.NOTE,     desc:'Чья-то записка: тайник, жалоба, адрес или предупреждение',         spawnRooms:[RoomType.LIVING,RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE], spawnW:1, value:1 },
 
   // ── Ключи ──
-  key_tutorial_apartment: { id: 'key_tutorial_apartment', name: 'Тяжелый ржавый ключ', type: ItemType.KEY, desc: 'Ключ от входной двери. Единственный способ выйти из блока в коридоры Гигахруща.', spawnRooms: [], spawnW: 0, value: 0, tags: ['quest', 'persistent', 'cannot_drop'] },
   tut_cafe_key:{ id:'tut_cafe_key', name:'Ключ от столовой', type:ItemType.KEY, desc:'Служебный ключ от стартовой зоны.', spawnRooms:[], spawnW:0, value:0 },
   key:       { id:'key',       name:'Ключ',         type:ItemType.KEY,      desc:'Подходит к конкретной двери. Сверяйте дверь, прежде чем бежать к ней на сирене',       spawnRooms:[],                                 spawnW:0, value:50 },
 

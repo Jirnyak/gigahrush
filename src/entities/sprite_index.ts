@@ -33,20 +33,18 @@ export const SPRITE_CONTAINER_KINDS = Object.values(ContainerKind)
   .filter((value): value is ContainerKind => typeof value === 'number')
   .sort((a, b) => a - b);
 
+/* Занятия занимают начало листа целиком: индекс спрайта равен значению
+ * `Occupation`, и отдельных блоков под путников, батюшку и перформера больше нет.
+ * Раздельные блоки и были причиной наложения: перечисление росло, а сумма блоков
+ * — нет, и хвост занятий уезжал в диапазон авторских личностей. */
 const NPC_COUNT     = NPC_SPRITE_GENERATORS.length;
-const TRAVELER_COUNT = 3;
-const PRIEST_COUNT   = 1;
-const PERFORMER_COUNT = 1;
 const AUTHORED_NPC_COUNT = AUTHORED_NPC_SPRITE_GENERATORS.length;
 const MONSTER_COUNT  = SPRITE_MONSTER_KINDS.length;
 const FEATURE_SPRITE_COUNT = SPRITE_FEATURES.length; // Feature.DESK reuses the standalone Desk slot.
 const CONTAINER_SPRITE_COUNT = SPRITE_CONTAINER_KINDS.length;
 
 let _i = 0;
-_i += NPC_COUNT;          // occupation NPC sprites
-_i += TRAVELER_COUNT;     // traveler sprites
-_i += PRIEST_COUNT;       // priest sprite
-_i += PERFORMER_COUNT;    // performer sprite
+_i += NPC_COUNT;          // occupation NPC sprites — one per Occupation value
 const _AUTHORED_NPC_BASE = _i; _i += AUTHORED_NPC_COUNT;
 const _ITEM_DROP = _i++;
 const _MON_BASE  = _i; _i += MONSTER_COUNT;

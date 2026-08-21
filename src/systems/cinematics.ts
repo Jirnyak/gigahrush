@@ -18,19 +18,22 @@ import {
   AIGoal,
   EntityType,
   Faction,
+  MonsterKind,
   NpcRole,
   Occupation,
   msg,
   type Entity,
   type GameState,
 } from '../core/types';
+import { MONSTERS } from '../entities/monster';
+import { monsterSpr } from '../entities/sprite_index';
 import { type World } from '../core/world';
 import { rng } from '../core/rand';
 import { freshNeeds, randomName } from '../data/names';
 import { getMaxHp, randomRPG } from './rpg';
 import { generateNpcLoadout } from './procedural_loot';
 import { entitySpawnSlots } from './entity_limits';
-import { rebuildEntityIndexAfterSpawnCleanup } from './entity_index';
+import { ensureEntityIndex, rebuildEntityIndexAfterSpawnCleanup } from './entity_index';
 import { setNpcPlayerRelation } from './npc_relations';
 import { isPlayerEntity } from './player_actor';
 import { extractNpcForScene, releaseAllSceneActors, releaseNpcFromScene } from './cinematic_actors';
@@ -42,7 +45,8 @@ import {
   rewriteAlifeNpcIdentityFromEntity,
   sampleAlifeFloorRecordIds,
 } from './alife';
-import { findAlifeArrivalAnchor } from './alife_migration';
+import { findAlifeArrivalAnchor, findLiftDepartureAnchor } from './alife_migration';
+import { bfsPath } from './ai/pathfinding';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerContentRuntimeHook, type ContentRuntimeContext } from './content_hooks';
 import {
@@ -68,8 +72,15 @@ function sceneAnchorRoom(world: World, alias: string) {
 
 /* ── Объявление ──────────────────────────────────────────────── */
 
-/** Точка кадра: смещение от якоря сцены в клетках либо центр масс роли. */
-export type SceneSpot = { ox: number; oy: number } | { role: string };
+/**
+ * Точка кадра: смещение от якоря сцены, центр масс роли либо тот, кто говорил
+ * последним.
+ *
+ * Центр масс годится для толпы, но не для реплики: у роли в двадцать шесть человек
+ * он не совпадает ни с кем, и бабл говорящего уходит за край кадра. `speaker`
+ * держит ось на самом человеке.
+ */
+export type SceneSpot = { ox: number; oy: number } | { role: string } | { speaker: true };
 
 export type SceneTrigger =
   /** Первый приход на этаж за прогон. */
@@ -92,8 +103,25 @@ export interface SceneActorDef {
   /** Место относительно якоря сцены, в клетках. */
   ox: number;
   oy: number;
+  /**
+   * Кто это. Без поля — люди; с ним — монстры этого вида, из общего реестра
+   * `MONSTERS`. Сцена не заводит своих тварей и не описывает их поведение:
+   * поставленный монстр дерётся ровно как любой другой на этаже.
+   */
+  monster?: MonsterKind;
   /** Разброс массовки вокруг места. */
   spread?: number;
+  /**
+   * Поставить не вокруг точки, а КОЛЬЦОМ на таком радиусе от неё. Для наплыва со
+   * всех сторон: `spread` задаёт максимум поиска места и потому всегда сажает
+   * первых у самого центра, а кольцо разносит их по окружности.
+   */
+  ring?: number;
+  /**
+   * На сколько кучек разбить массовку. Без него число выводится из плотности:
+   * ровный веер спирали читается как строй по линейке, а толпа стоит группами.
+   */
+  clusters?: number;
   /**
    * `spawn` — новые люди прямо в кадре; `alife` — уже живущие на этаже, взятые
    * из пула. Второе не создаёт личностей и потому годится для подмоги.
@@ -101,10 +129,25 @@ export interface SceneActorDef {
   source?: 'spawn' | 'alife';
   /** Воплотить не на старте сцены, а тактом `materialize`. */
   deferred?: boolean;
+  /**
+   * Свой поводок для этой роли, короче или длиннее общего (`FloorSceneDef.leash`).
+   *
+   * Общий поводок держит толпу в пределах места действия, и он заведомо шире
+   * комнаты. Тому, на ком стоит кадр, этого мало: командир с поводком в комнату
+   * шириной уходит из кадра совершенно законно. Короткий поводок держит его в
+   * середине — не запрещая драться, а возвращая обратно.
+   */
+  leash?: number;
 }
 
 export type SceneBeat =
-  /** Пролёт камеры. `wait` держит такт, пока камера не дойдёт. */
+  /**
+   * Пролёт камеры. `wait` держит такт, пока камера не дойдёт.
+   *
+   * Без `look` кадр смотрит ПО КУРСУ и поворачивает вместе с ломаной — так читается
+   * дорога. С `look` курс и взгляд разъезжаются: камера летит по маршруту, не
+   * отпуская актёров, и на длинной дороге это выглядит полётом боком.
+   */
   | { kind: 'fly'; to: SceneSpot; look?: SceneSpot; speed?: number; height?: number; wait?: boolean }
   /** Облёт вокруг точки заданное время. */
   | { kind: 'orbit'; around: SceneSpot; radius: number; speed: number; height?: number; seconds: number }
@@ -124,9 +167,34 @@ export type SceneBeat =
    * никакой «бой по обычным правилам» невозможен.
    */
   | { kind: 'release'; roles?: readonly string[] }
-  /** Увести живых с этажа без записи смерти. */
+  /** Увести живых с этажа без записи смерти. Мгновенно — годится вне кадра. */
   | { kind: 'depart'; roles: readonly string[]; toFloorKey: string }
-  | { kind: 'log'; text: string; color?: string };
+  /**
+   * Уйти своими ногами: к ближайшему лифту, и лишь там — с этажа. Такт не ждёт
+   * прихода, поэтому сцена вправе закрыться сразу после реплики.
+   *
+   * С этажа никого не снимают, ПОКА СЦЕНА ИДЁТ, и ещё выдержку после её конца:
+   * камера успевает вернуться к игроку, и только потом ушедшие развоплощаются
+   * вдалеке. Уйти в кадре — то же, что не уйти.
+   */
+  | { kind: 'walkOut'; roles: readonly string[]; toFloorKey: string }
+  /**
+   * Отправить роли своими ногами в точку сцены. Ни телепорта, ни новой механики:
+   * та же цель `GOTO`, которой ходят все, и то же ведение, что у `walkOut`, —
+   * бой и нужды сбивают курс, и его возвращают каждый кадр.
+   *
+   * Нужен, когда кадр должен застать человека В ОПРЕДЕЛЁННОМ МЕСТЕ: отпущенный в
+   * живой мир актёр забивается в угол, и облёт вокруг него упирается в стену.
+   *
+   * Это ВЕЙПОЙНТ, а не поводок: цель поставлена — и человек свободен. Держать его
+   * на точке нельзя, иначе, дойдя, он в неё утыкается и стоит вместо того, чтобы
+   * жить дальше. `wait` лишь придерживает такт, давая время дойти.
+   */
+  | { kind: 'moveTo'; roles: readonly string[]; to: SceneSpot; wait?: number };
+
+/* Такта «строка в журнал» здесь нет намеренно. Сцену смотрят, а не читают:
+ * стеносводка во время кадра закрыта, и написанное в неё не увидит никто. Всё,
+ * что сцена хочет сказать, она говорит баблом над головой — то есть `say`. */
 
 export interface FloorSceneDef {
   id: string;
@@ -139,6 +207,16 @@ export interface FloorSceneDef {
   beats: readonly SceneBeat[];
   /** Жёсткий потолок проигрывания. Не страховка сюжета — предохранитель камеры. */
   maxSeconds: number;
+  /**
+   * Насколько далеко от якоря актёрам позволено уйти, пока сцена идёт. Ушедшего
+   * дальше тянет обратно — не цепью, а целью: обычный `GOTO`, который бой и нужды
+   * вправе перебить.
+   *
+   * Нужен там, где кадр держится за людей. Отпущенные в живой мир разбегаются по
+   * этажу — кто за едой, кто в бой, — и облёт вокруг говорящего оказывается
+   * облётом вокруг пустого места, а сам говорящий уже в соседней трубе.
+   */
+  leash?: number;
 }
 
 const scenes: FloorSceneDef[] = [];
@@ -212,6 +290,19 @@ interface ActiveScene {
   elapsed: number;
   /** Секунды, потраченные на обратный пролёт к игроку; -1 пока такты не кончились. */
   returning: number;
+  /** Кто сказал последнюю реплику. По нему наводится точка кадра `speaker`. */
+  lastSpeakerId?: number;
+  /** Счётчик кадров для поводка: он правится редко, а не каждый кадр. */
+  leashTick?: number;
+  /**
+   * За кем сейчас следит кадр. Свойство СЦЕНЫ, а не такта: реплика, пауза и
+   * ожидание смерти длятся секундами, и всё это время человек ходит. Прицел,
+   * взятый один раз тактом пролёта, к концу его фразы смотрит в пустое место,
+   * где тот стоял.
+   *
+   * Не задано — кадр смотрит по курсу, и следить не за кем.
+   */
+  focus?: SceneSpot;
 }
 
 let active: ActiveScene | null = null;
@@ -252,6 +343,9 @@ registerContentRuntimeHook({
 });
 
 function updateFloorScenes(ctx: ContentRuntimeContext): boolean {
+  // Уходящие к лифту переживают свою сцену: их ведут и после того, как кадр
+  // вернулся к игроку, иначе «ушёл» снова означало бы «исчез».
+  updateSceneErrands(ctx);
   if (!sceneCamera) return false;
   if (active) return advanceScene(ctx, active);
 
@@ -353,6 +447,7 @@ function castActor(
 
   const count = Math.max(0, actor.count ?? 0);
   if (count === 0) return [];
+  if (actor.monster !== undefined) return spawnSceneMonsters(ctx, def, actor, x, y, count, occupied);
   return actor.source === 'alife'
     ? materializeFromAlife(ctx, def, actor, x, y, count, occupied)
     : spawnSceneCrowd(ctx, def, actor, x, y, count, occupied);
@@ -371,10 +466,11 @@ function spawnSceneCrowd(
   const faction = actor.faction ?? Faction.CITIZEN;
   const occupation = actor.occupation ?? Occupation.TRAVELER;
   const spread = actor.spread ?? 2;
+  const groups = clusterCenters(x, y, spread, actor.clusters, slots);
   const ids: number[] = [];
 
   for (let i = 0; i < slots; i++) {
-    const spot = freeSpotNear(ctx.world, x, y, spread, i, occupied);
+    const spot = actorSpot(ctx.world, actor, groups, x, y, i, occupied);
     if (!spot) continue;
     const rpg = randomRPG(actor.level ?? 1);
     const maxHp = getMaxHp(rpg);
@@ -415,6 +511,59 @@ function spawnSceneCrowd(
   return ids;
 }
 
+/**
+ * Твари в кадре. Собираются из общего реестра `MONSTERS` теми же слагаемыми, что
+ * и население этажа: определение вида даёт скорость, здоровье и спрайт, уровень —
+ * разброс статов. Своего поведения у них нет и быть не должно — отпущенный тактом
+ * `release` монстр дерётся ровно как любой другой на этаже.
+ */
+function spawnSceneMonsters(
+  ctx: ContentRuntimeContext,
+  def: FloorSceneDef,
+  actor: SceneActorDef,
+  x: number,
+  y: number,
+  count: number,
+  occupied: Set<number>,
+): number[] {
+  const kind = actor.monster!;
+  const monsterDef = MONSTERS[kind];
+  if (!monsterDef) return [];
+  const slots = entitySpawnSlots(ctx.entities, EntityType.MONSTER, count);
+  const groups = clusterCenters(x, y, actor.spread ?? 3, actor.clusters, slots);
+  const ids: number[] = [];
+
+  for (let i = 0; i < slots; i++) {
+    const spot = actorSpot(ctx.world, actor, groups, x, y, i, occupied);
+    if (!spot) continue;
+    const rpg = randomRPG(actor.level ?? 1);
+    const hp = Math.round(monsterDef.hp * (0.75 + rpg.level * 0.13));
+    const entity: Entity = {
+      id: ctx.nextEntityId.v++,
+      type: EntityType.MONSTER,
+      x: spot.x,
+      y: spot.y,
+      angle: rng() * Math.PI * 2,
+      pitch: 0,
+      alive: true,
+      speed: monsterDef.speed,
+      sprite: monsterSpr(kind),
+      hp,
+      maxHp: hp,
+      monsterKind: kind,
+      attackCd: 0,
+      // Цель ведёт стаю к центру сцены: без неё первый кадр расходится веером.
+      ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg,
+      role: NpcRole.CINEMATIC_ACTOR,
+      cinematicState: { originalRole: NpcRole.WANDERER, originalX: spot.x, originalY: spot.y, sceneId: def.id },
+    } as Entity;
+    ctx.entities.push(entity);
+    ids.push(entity.id);
+  }
+  return ids;
+}
+
 function materializeFromAlife(
   ctx: ContentRuntimeContext,
   def: FloorSceneDef,
@@ -428,6 +577,7 @@ function materializeFromAlife(
   const ids: number[] = [];
   const taken = new Set<number>();
   const spread = actor.spread ?? 3;
+  const groups = clusterCenters(x, y, spread, actor.clusters, count);
 
   // Выборка отдаёт не больше горсти за раз, поэтому черпаем порциями с разной солью.
   for (let round = 0; round < 4 && ids.length < count; round++) {
@@ -439,7 +589,7 @@ function materializeFromAlife(
     for (const alifeId of sampled) {
       if (ids.length >= count) break;
       taken.add(alifeId);
-      const spot = freeSpotNear(ctx.world, x, y, spread, ids.length, occupied)
+      const spot = actorSpot(ctx.world, actor, groups, x, y, ids.length, occupied)
         ?? findAlifeArrivalAnchor(ctx.world, x, y, alifeId);
       if (!spot) continue;
       const entity = materializeAlifeArrival(
@@ -461,6 +611,132 @@ function materializeFromAlife(
     }
   }
   return ids;
+}
+
+/**
+ * Центры кучек. Ровная спираль от одной точки ставит людей подряд с одинаковым
+ * шагом — это читается как строй по линейке, а не как собравшаяся толпа. Поэтому
+ * массовка сперва делится на группы со своими смещёнными центрами.
+ *
+ * Число групп выводится из плотности: кучка занимает примерно свой разброс, и
+ * отдельной ручки на это не нужно — авторский `clusters` только для случаев,
+ * когда строй нужен именно ровный (`clusters: 1`).
+ */
+function clusterCenters(
+  x: number,
+  y: number,
+  spread: number,
+  clusters: number | undefined,
+  count: number,
+): { x: number; y: number }[] {
+  const groups = Math.max(1, clusters ?? Math.round(count / Math.max(2, spread)));
+  const centers: { x: number; y: number }[] = [];
+  for (let g = 0; g < groups; g++) {
+    // И угол, и вынос кучки — из RNG прогона, а не равным шагом: равный шаг
+    // вернул бы ту же линейку, только из групп.
+    const angle = rng() * Math.PI * 2;
+    const radius = spread * (0.35 + rng() * 0.65);
+    centers.push({ x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius });
+  }
+  return centers;
+}
+
+/**
+ * Место одного участника. Две раскладки, и выбор между ними — целиком в объявлении:
+ * с `ring` — кольцо на радиусе, иначе кучки вокруг точки.
+ */
+/** Сколько азимутов пробовать, ища связное место на кольце. */
+const RING_ANGLE_ATTEMPTS = 8;
+/** Докуда искать ходибельную опору вокруг точки. */
+const NAVIGABLE_REFERENCE_REACH = 3;
+const NAVIGABLE_PROBE_STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+/**
+ * Ближайшая клетка, по которой действительно ХОДЯТ. «Не стена» этого не значит:
+ * клетку занимает обстановка, и дерево путей её не берёт. Проверяется тем же
+ * деревом — есть ли шаг до соседа.
+ */
+function navigableNear(world: World, x: number, y: number): { x: number; y: number } | null {
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  for (let radius = 0; radius <= NAVIGABLE_REFERENCE_REACH; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+        const px = world.wrap(cx + dx);
+        const py = world.wrap(cy + dy);
+        for (const [ox, oy] of NAVIGABLE_PROBE_STEPS) {
+          if (bfsPath(world, px, py, world.wrap(px + ox), world.wrap(py + oy)).length) {
+            return { x: px, y: py };
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function actorSpot(
+  world: World,
+  actor: SceneActorDef,
+  groups: readonly { x: number; y: number }[],
+  x: number,
+  y: number,
+  index: number,
+  occupied: Set<number>,
+): { x: number; y: number } | null {
+  const spread = actor.spread ?? 2;
+  if (actor.ring !== undefined) return ringSpot(world, x, y, actor.ring, spread, index, occupied);
+  const center = groups[Math.floor(rng() * groups.length)] ?? { x, y };
+  const tight = Math.max(1, Math.round(spread / 3));
+  return freeSpotNear(world, center.x, center.y, tight, index, occupied)
+    ?? freeSpotNear(world, x, y, spread, index, occupied);
+}
+
+/**
+ * Место на кольце: случайный азимут и радиус около заданного, дальше обычный поиск
+ * свободной клетки рядом. Радиус НЕ подгоняется под геометрию — не нашлось места
+ * на этом азимуте, значит с этой стороны никто и не придёт. Это честнее, чем
+ * стягивать наплыв к центру: кольцо на то и кольцо, что окружает.
+ *
+ * Место обязано быть СВЯЗАНО с центром. Свободная клетка ещё не значит достижимая:
+ * этаж полон замурованных карманов, и посаженный в такой монстр не придёт ни к
+ * кому и ни от кого не погибнет. Сцена, ждущая его смерти, тогда висит до
+ * таймаута — так первая волна форпоста и не добивалась.
+ */
+function ringSpot(
+  world: World,
+  x: number,
+  y: number,
+  ring: number,
+  spread: number,
+  index: number,
+  occupied: Set<number>,
+): { x: number; y: number } | null {
+  // Мерить связность НАПРЯМУЮ до центра нельзя: там обычно стоит обстановка —
+  // у форпоста ровно в центре лампа, и путей до неё нет ни у кого, включая самого
+  // майора. Опорой берётся ближайшая ХОДИБЕЛЬНАЯ клетка.
+  const reference = navigableNear(world, x, y);
+  let fallback: { x: number; y: number } | null = null;
+  for (let attempt = 0; attempt < RING_ANGLE_ATTEMPTS; attempt++) {
+    const angle = rng() * Math.PI * 2;
+    const radius = Math.max(1, ring * (0.75 + rng() * 0.5));
+    const spot = freeSpotNear(
+      world,
+      x + Math.cos(angle) * radius,
+      y + Math.sin(angle) * radius,
+      Math.max(2, spread),
+      index,
+      occupied,
+    );
+    if (!spot) continue;
+    fallback = fallback ?? spot;
+    if (!reference) return spot;
+    if (bfsPath(world, Math.floor(spot.x), Math.floor(spot.y), reference.x, reference.y).length) return spot;
+  }
+  // Ни один азимут не дал связного места. Ставим куда нашлось: пустое кольцо
+  // читается хуже, чем один невезучий, застрявший в кармане.
+  return fallback;
 }
 
 /**
@@ -503,7 +779,7 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
   // возвращение читалось как телепорт.
   if (scene.returning >= 0) {
     scene.returning += ctx.dt;
-    aimCinematicCamera(sceneCamera!, { lookAt: { x: ctx.player.x, y: ctx.player.y }, orbit: null, hold: true });
+    aimCinematicCamera(sceneCamera!, { lookAt: null, orbit: null, hold: true });
     if (scene.returning >= SCENE_RETURN_TIMEOUT_S || cinematicCameraArrived(sceneCamera!)) {
       endScene(ctx, scene);
       return true;
@@ -512,8 +788,10 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
   }
   if (scene.elapsed >= scene.def.maxSeconds || scene.beatIndex >= scene.def.beats.length) {
     scene.returning = 0;
+    // Домой кадр летит тоже по курсу: возврат, снятый задом наперёд с игроком в
+    // прицеле, читается как утаскивание, а не как возвращение.
     aimCinematicCamera(sceneCamera!, {
-      lookAt: { x: ctx.player.x, y: ctx.player.y },
+      lookAt: null,
       orbit: null,
       height: CAMERA_STANDING_HEIGHT,
       flySpeed: SCENE_RETURN_FLY_SPEED,
@@ -523,12 +801,19 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
     return false;
   }
 
+  holdCastNearAnchor(ctx, scene);
+
   const beat = scene.def.beats[scene.beatIndex];
   if (!scene.beatStarted) {
     scene.beatStarted = true;
     scene.beatTime = beatDuration(beat);
     enterBeat(ctx, scene, beat);
   }
+
+  // Точка внимания ЖИВАЯ: она пересчитывается каждый кадр, пока такт идёт.
+  // Взятая один раз, она остаётся там, где человек стоял в начале, — а он с тех
+  // пор дерётся, отходит и уносит с собой свой бабл за край кадра.
+  trackBeatFocus(ctx, scene);
 
   scene.beatTime -= ctx.dt;
   if (!beatFinished(ctx, scene, beat)) return false;
@@ -538,6 +823,56 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
   return false;
 }
 
+/**
+ * Стянуть разбежавшихся обратно к якорю.
+ *
+ * Тянет ЦЕЛЬЮ, а не цепью: тому, кто ушёл за поводок, ставится обычный `GOTO` к
+ * якорю, и бой с нуждами вправе его перебить — человек остаётся живым, а не
+ * приклеенным. Уже получившие поручение (`walkOut`) не трогаются: у них своя
+ * дорога, и она важнее.
+ */
+function holdCastNearAnchor(ctx: ContentRuntimeContext, scene: ActiveScene): void {
+  const sceneLeash = scene.def.leash;
+  const anyRoleLeash = scene.def.actors.some(actor => actor.leash !== undefined);
+  if (sceneLeash === undefined && !anyRoleLeash) return;
+  // Раз в несколько кадров: поводок — не рулевое управление, ему хватает редких
+  // поправок, а искать сотню актёров каждый кадр незачем.
+  if ((scene.leashTick = (scene.leashTick ?? 0) + 1) % SCENE_LEASH_INTERVAL !== 0) return;
+  const byId = ensureEntityIndex(ctx.entities).byId;
+  for (const [role, ids] of scene.cast) {
+    const leash = scene.def.actors.find(actor => actor.role === role)?.leash ?? sceneLeash;
+    if (leash === undefined) continue;
+    const leash2 = leash * leash;
+    for (const id of ids) {
+      const entity = byId.get(id);
+      if (!entity || !entity.alive || !entity.ai) continue;
+      if (entity.role === NpcRole.CINEMATIC_ACTOR) continue; // ещё на поводке сцены
+      if (errands.some(item => item.entityId === id)) continue;
+      if (ctx.world.dist2(entity.x, entity.y, scene.anchorX, scene.anchorY) <= leash2) continue;
+      // Боевая цель снимается на время возврата: иначе она возвращает курс
+      // обратно к врагу быстрее, чем поводок успевает сработать, и человек
+      // уходит всё дальше, формально оставаясь «на поводке».
+      entity.ai.combatTargetId = undefined;
+      aimAtSpot(entity, scene.anchorX, scene.anchorY);
+    }
+  }
+}
+
+/**
+ * Держать кадр на движущемся субъекте — КАЖДЫЙ КАДР И НА ЛЮБОМ ТАКТЕ.
+ *
+ * Слежение раньше жило только в тактах камеры, а реплика, пауза и ожидание смерти
+ * длятся секундами: за фразу человек уходит на несколько клеток, и кадр смотрел
+ * туда, где он стоял в начале.
+ *
+ * Правится только ВЗГЛЯД: ни маршрут, ни радиус облёта, ни фаза не трогаются —
+ * иначе каждый кадр начинал бы круг заново.
+ */
+function trackBeatFocus(ctx: ContentRuntimeContext, scene: ActiveScene): void {
+  if (!sceneCamera || !scene.focus) return;
+  aimCinematicCamera(sceneCamera, { lookAt: resolveSpot(ctx, scene, scene.focus) });
+}
+
 function beatDuration(beat: SceneBeat): number {
   switch (beat.kind) {
     // Та же зависимость длительности от длины строки, что у обычных барков:
@@ -545,6 +880,7 @@ function beatDuration(beat: SceneBeat): number {
     case 'say': return beat.seconds ?? Math.min(6, Math.max(2.5, beat.text.length * 0.12));
     case 'pause': return beat.seconds;
     case 'orbit': return beat.seconds;
+    case 'moveTo': return beat.wait ?? 0;
     case 'awaitDeath': return beat.timeout;
     case 'fly': return beat.wait === false ? 0 : Number.POSITIVE_INFINITY;
     default: return 0;
@@ -565,10 +901,12 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
   switch (beat.kind) {
     case 'fly': {
       const to = resolveSpot(ctx, scene, beat.to);
-      const look = beat.look ? resolveSpot(ctx, scene, beat.look) : to;
       routeCinematicCamera(sceneCamera!, ctx.world, to.x, to.y);
+      // Точка внимания живёт до следующего такта камеры: за кем начали следить,
+      // за тем и следим, пока кадр не переведут.
+      scene.focus = beat.look;
       aimCinematicCamera(sceneCamera!, {
-        lookAt: look,
+        lookAt: beat.look ? resolveSpot(ctx, scene, beat.look) : null,
         orbit: null,
         height: beat.height,
         flySpeed: beat.speed,
@@ -577,6 +915,7 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
       return;
     }
     case 'orbit': {
+      scene.focus = beat.around;
       const around = resolveSpot(ctx, scene, beat.around);
       aimCinematicCamera(sceneCamera!, {
         lookAt: around,
@@ -589,6 +928,7 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
     case 'say': {
       const speaker = firstLivingOfRole(ctx, scene, beat.role);
       if (!speaker) return;
+      scene.lastSpeakerId = speaker.id;
       speaker.activeBark = {
         text: beat.text,
         until: ctx.state.time + beatDuration(beat),
@@ -618,8 +958,18 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
       departRoles(ctx, scene, beat.roles, beat.toFloorKey);
       return;
     }
-    case 'log': {
-      ctx.state.msgs.push(msg(beat.text, ctx.state.time, beat.color ?? '#9ab'));
+    case 'walkOut': {
+      sendRolesOnErrand(ctx, scene, beat.roles, liftErrandTarget, beat.toFloorKey);
+      return;
+    }
+    case 'moveTo': {
+      const spot = resolveSpot(ctx, scene, beat.to);
+      // Цель приземляется на ХОДИБЕЛЬНУЮ клетку. Центр комнаты обычно занят
+      // обстановкой — у форпоста там лампа, на которой стоит сам майор, — и
+      // приказ идти в неё AI выполнить не может: человек мечется рядом и уходит.
+      const walkable = navigableNear(ctx.world, spot.x, spot.y) ?? { x: spot.x, y: spot.y };
+      const target = { x: walkable.x + 0.5, y: walkable.y + 0.5 };
+      sendRolesOnErrand(ctx, scene, beat.roles, () => target);
       return;
     }
     case 'pause':
@@ -709,6 +1059,146 @@ function departRoles(
   rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
 }
 
+/* ── Поручения актёрам ───────────────────────────────────────────
+ *
+ * Одно и то же дело у двух тактов: `moveTo` ведёт человека в точку зала, `walkOut`
+ * — к лифту и дальше с этажа. Разница ровно в одном поле: назван ли этаж, куда
+ * уезжать. Всё прочее общее — снять поводок сцены, задать цель `GOTO`, возвращать
+ * её каждый кадр, потому что бой и нужды курс сбивают.
+ *
+ * Список переживает сцену (кадр закрылся, а ноги идут), поэтому ограничен. */
+const MAX_SCENE_ERRANDS = 32;
+/**
+ * Через сколько кадров подтягивать разбежавшихся. Десятая доля секунды.
+ *
+ * Полсекунды оказалось мало: бой перебивает цель раньше, чем поводок её вернёт, и
+ * ушедший успевает уйти дальше. Проверка стоит одного взгляда в карту по id на
+ * актёра, так что чаще — не дорого.
+ */
+const SCENE_LEASH_INTERVAL = 6;
+/**
+ * Выдержка ПОСЛЕ конца сцены. Обратный пролёт камеры длится до
+ * `SCENE_RETURN_TIMEOUT_S`, но снимать людей с этажа в кадре нельзя и на нём:
+ * зритель видит, как они пропадают. Отсчёт начинается, когда сцена уже закрыта и
+ * управление у игрока, поэтому выдержке хватает нескольких секунд.
+ */
+const SCENE_WALK_OUT_GRACE_S = 6;
+
+interface SceneErrand {
+  entityId: number;
+  ax: number;
+  ay: number;
+  /** Куда уезжать. Список ведёт ТОЛЬКО уходящих: дойти до точки — вейпойнт, а не поручение. */
+  toFloorKey: string;
+  /** Когда снимать с этажа. Ставится по концу сцены, до неё — не определено. */
+  leaveAt?: number;
+}
+
+/* Состояние прогона, не сейва: id сущностей после загрузки чужие, и вести по ним
+ * некого. Загрузка список чистит, недоведённые просто остаются жить на этаже. */
+const errands: SceneErrand[] = [];
+
+/**
+ * Ближайший лифт как цель поручения. Нет лифта — нет и ухода: человек просто
+ * остаётся жить на этаже. Якорь прибытия тут не годится, он откатывается на
+ * соседнюю клетку, и «ушёл» снова стало бы «исчез через шаг».
+ */
+function liftErrandTarget(
+  ctx: ContentRuntimeContext,
+  entity: Entity,
+): { x: number; y: number } | null {
+  return findLiftDepartureAnchor(ctx.world, entity.x, entity.y, entity.id);
+}
+
+/**
+ * Отправить роли по делу. Поводок сцены снимается сразу — идти актёру нечем,
+ * пока роль `CINEMATIC_ACTOR` держит его вне цикла AI.
+ */
+function sendRolesOnErrand(
+  ctx: ContentRuntimeContext,
+  scene: ActiveScene,
+  roles: readonly string[],
+  target: (ctx: ContentRuntimeContext, entity: Entity) => { x: number; y: number } | null,
+  toFloorKey?: string,
+): void {
+  for (const role of roles) {
+    for (const entity of entitiesOfRole(ctx, scene, role)) {
+      if (isPlayerEntity(entity)) continue;
+      if (errands.length >= MAX_SCENE_ERRANDS) return;
+      const spot = target(ctx, entity);
+      if (!spot) continue;
+      releaseNpcFromScene(ctx.entities, entity.id);
+      aimAtSpot(entity, spot.x, spot.y);
+      // Без этажа назначения это ВЕЙПОЙНТ: цель поставлена, и человек свободен.
+      // Вести его дальше значило бы держать на точке — дойдя, он утыкался бы в
+      // неё и стоял, вместо того чтобы жить дальше. Ведут только уходящих с
+      // этажа: тем дойти обязательно, иначе они не уедут никогда.
+      if (toFloorKey === undefined) continue;
+      const existing = errands.find(item => item.entityId === entity.id);
+      if (existing) {
+        // Новое поручение отменяет прежнее: последнее слово за сценой.
+        existing.ax = spot.x;
+        existing.ay = spot.y;
+        existing.toFloorKey = toFloorKey;
+        existing.leaveAt = undefined;
+        continue;
+      }
+      errands.push({ entityId: entity.id, toFloorKey, ax: spot.x, ay: spot.y });
+    }
+  }
+}
+
+function aimAtSpot(entity: Entity, ax: number, ay: number): void {
+  entity.isTraveler = true;
+  entity.ai = entity.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
+  entity.ai.goal = AIGoal.GOTO;
+  entity.ai.tx = ax;
+  entity.ai.ty = ay;
+  entity.ai.path = [];
+  entity.ai.pi = 0;
+  entity.ai.stuck = 0;
+}
+
+/**
+ * Довести поручения. Ноги идут сразу, а с этажа человек снимается только если
+ * поручение было про уход, сцена уже закрыта и выдержка после неё вышла:
+ * состояние складывается в A-Life, запись переезжает, сущность выходит из
+ * массива. Раньше уход считался по приходу к лифту, и на длинном обратном пролёте
+ * камеры Стрелок успевал дойти и пропасть ещё в кадре.
+ */
+function updateSceneErrands(ctx: ContentRuntimeContext): void {
+  if (!errands.length) return;
+  let removed = false;
+  for (let i = errands.length - 1; i >= 0; i--) {
+    const item = errands[i];
+    const index = ctx.entities.findIndex(entity => entity.id === item.entityId);
+    const entity = index >= 0 ? ctx.entities[index] : undefined;
+    if (!entity || !entity.alive) {
+      errands.splice(i, 1);
+      continue;
+    }
+    // Бой и нужды сбивают курс: пока ведём — возвращаем цель.
+    if (entity.ai && entity.ai.goal !== AIGoal.GOTO) aimAtSpot(entity, item.ax, item.ay);
+
+    if (active) {
+      // Сцена ещё идёт: отсчёт не начат, и снять с этажа некого.
+      item.leaveAt = undefined;
+      continue;
+    }
+    if (item.leaveAt === undefined) item.leaveAt = ctx.state.time + SCENE_WALK_OUT_GRACE_S;
+    // Выдержка одна на всех и не сокращается приходом к лифту: дошёл он или нет,
+    // пропасть он вправе только вдалеке от вернувшегося кадра.
+    if (ctx.state.time < item.leaveAt) continue;
+
+    captureAlifeFloorState(ctx.state, [entity]);
+    if (entity.alifeId !== undefined) moveAlifeNpcRecord(ctx.state, entity.alifeId, item.toFloorKey);
+    ctx.entities.splice(index, 1);
+    errands.splice(i, 1);
+    removed = true;
+  }
+  if (removed) rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
+}
+
 function endScene(ctx: ContentRuntimeContext, scene: ActiveScene): void {
   releaseAllSceneActors(ctx.entities, scene.def.id);
   ctx.state.sceneLock = false;
@@ -731,6 +1221,9 @@ function endScene(ctx: ContentRuntimeContext, scene: ActiveScene): void {
 export function abortFloorScene(state?: GameState, entities?: Entity[]): void {
   const scene = active;
   active = null;
+  // Уходящих ведут по id сущностей, а этаж, смерть и загрузка их обнуляют. Кого
+  // не довели — тот остаётся на своём этаже обычным жильцом.
+  errands.length = 0;
   if (state) state.sceneLock = false;
   if (!scene) return;
   if (entities) releaseAllSceneActors(entities, scene.def.id);
@@ -749,8 +1242,17 @@ function entitiesOfRole(ctx: ContentRuntimeContext, scene: ActiveScene, role: st
   return found;
 }
 
+/**
+ * Кто из роли скажет реплику. Живой и ПРОИЗВОЛЬНЫЙ, а не первый по списку.
+ *
+ * Реплику массовки даёт не назначенный боец, а тот, кто до неё дожил: в бою
+ * назначенный погибает первым делом, и сцена лишалась голоса на ровном месте.
+ * Для роли из одного человека выбор вырождается в него самого.
+ */
 function firstLivingOfRole(ctx: ContentRuntimeContext, scene: ActiveScene, role: string): Entity | undefined {
-  return entitiesOfRole(ctx, scene, role)[0];
+  const alive = entitiesOfRole(ctx, scene, role);
+  if (!alive.length) return undefined;
+  return alive[Math.floor(rng() * alive.length)];
 }
 
 function roleIsGone(ctx: ContentRuntimeContext, scene: ActiveScene, role: string): boolean {
@@ -759,6 +1261,13 @@ function roleIsGone(ctx: ContentRuntimeContext, scene: ActiveScene, role: string
 
 /** Центр масс роли: кадр держится за людей, а не за координату, которую они уже покинули. */
 function resolveSpot(ctx: ContentRuntimeContext, scene: ActiveScene, spot: SceneSpot): { x: number; y: number } {
+  if ('speaker' in spot) {
+    const speaker = scene.lastSpeakerId !== undefined
+      ? ctx.entities.find(entity => entity.id === scene.lastSpeakerId && entity.alive)
+      : undefined;
+    if (speaker) return { x: speaker.x, y: speaker.y };
+    return { x: scene.anchorX, y: scene.anchorY };
+  }
   if ('role' in spot) {
     const members = entitiesOfRole(ctx, scene, spot.role);
     if (members.length) {

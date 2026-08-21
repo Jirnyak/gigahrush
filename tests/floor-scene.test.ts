@@ -10,6 +10,7 @@ import assert from 'node:assert';
 
 import {
   AIGoal,
+  Cell,
   EntityType,
   Faction,
   NpcRole,
@@ -20,7 +21,9 @@ import {
 } from '../src/core/types';
 import { World } from '../src/core/world';
 import { createRuntimeCamera } from '../src/systems/camera';
+import { isDebugOnePunchManEnabled } from '../src/systems/debug_cheats';
 import {
+  abortFloorScene,
   bindSceneCamera,
   isFloorSceneActive,
   registerFloorScene,
@@ -218,5 +221,192 @@ test('floor scene stops at its own ceiling even if beats stall', () => {
   for (let i = 0; i < 600 && isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
   assert.equal(isFloorSceneActive(), false, 'потолок сцены обязан её закрыть');
   assert.equal(state.sceneLock, false);
+  resetFloorScenes();
+});
+
+test('walkOut keeps actors on the floor until the scene is over and a grace has passed', () => {
+  resetFloorScenes();
+  registerFloorScene({
+    id: 'test_scene_walk_out',
+    floorKey: 'design:living',
+    trigger: { kind: 'manual' },
+    anchorRoomAlias: ANCHOR,
+    maxSeconds: 6,
+    actors: [{ role: 'leaving', count: 2, faction: Faction.LIQUIDATOR, ox: 0, oy: 0, spread: 2 }],
+    // Такт ухода последний и НЕ ждёт прихода к лифту: сцена обязана закрыться
+    // на нём, а ноги — идти дальше уже в живом мире.
+    beats: [{ kind: 'walkOut', roles: ['leaving'], toFloorKey: 'design:maintenance' }],
+  });
+  bindSceneCamera(createRuntimeCamera());
+
+  const world = buildWorld();
+  // Лифт в дальнем углу зала: без него ухода нет вовсе, и это тоже правило.
+  world.cells[world.idx(38, 32)] = Cell.LIFT;
+  const state = buildState();
+  const player = makePlayer();
+  const entities: Entity[] = [player];
+  const nextEntityId = { v: 4000 };
+
+  assert.equal(requestFloorScene('test_scene_walk_out'), true);
+  for (let i = 0; i < 20 && !isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  const leaving = entities.filter(e => e.id !== player.id).map(e => e.id);
+  assert.equal(leaving.length, 2);
+  // Первый кадр только поднимает сцену; такт ухода отыгрывается со следующего.
+  for (let i = 0; i < 3; i++) tick(world, entities, player, state, nextEntityId, 0.1);
+
+  const walkers = () => entities.filter(e => leaving.includes(e.id));
+  assert.ok(walkers().every(e => e.role !== NpcRole.CINEMATIC_ACTOR), 'поводок сцены снят, иначе идти нечем');
+  assert.ok(walkers().every(e => e.ai?.goal === AIGoal.GOTO), 'курс задан на лифт');
+  assert.ok(
+    walkers().every(e => world.dist2(e.ai!.tx, e.ai!.ty, 38.5, 32.5) < 9),
+    'цель обязана быть у лифта, а не у первой попавшейся клетки',
+  );
+
+  // Дошёл до лифта ПОКА СЦЕНА ИДЁТ — и всё равно остаётся: снять его с этажа
+  // сейчас значит показать зрителю, как он пропадает. Именно так и было.
+  for (const walker of walkers()) {
+    walker.x = 38.5;
+    walker.y = 32.5;
+  }
+  for (let i = 0; i < 10; i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  assert.equal(isFloorSceneActive(), true, 'сцена ещё идёт: обратный пролёт камеры не закончен');
+  assert.equal(walkers().length, 2, 'в кадре уходящие исчезать не имеют права');
+
+  // Сцена закрылась — управление у игрока, но выдержка ещё держит.
+  for (let i = 0; i < 400 && isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.2);
+  assert.equal(isFloorSceneActive(), false, 'сцена закрывается на такте ухода, не дожидаясь лифта');
+  tick(world, entities, player, state, nextEntityId, 0.1);
+  assert.equal(walkers().length, 2, 'сразу после возврата камеры развоплощать рано');
+
+  // Выдержка вышла — уходящие покидают этаж вдалеке от вернувшегося кадра.
+  for (let i = 0; i < 20 && walkers().length; i++) tick(world, entities, player, state, nextEntityId, 0.5);
+  assert.equal(walkers().length, 0, 'после выдержки уходящие обязаны покинуть этаж');
+  resetFloorScenes();
+});
+
+test('a scene makes the player invulnerable and gives it back on its own', () => {
+  /* Пока сцена держит кадр, управление отобрано: игрок не может ни отойти, ни
+   * выстрелить, ни закрыть дверь. Убивать его в это время нечестно по построению,
+   * а смерть под сценой вдобавок рвёт саму сцену — кадр возвращается посреди фразы.
+   *
+   * Неуязвимость не заводится своей: она идёт тем же путём, что и в трейлере, и
+   * снимается вместе с замком сцены — а его гасят и конец, и обрыв снаружи. Снять
+   * её отдельно нельзя, значит и забыть нельзя. */
+  resetFloorScenes();
+  registerFloorScene({
+    id: 'test_scene_immunity',
+    floorKey: 'design:living',
+    trigger: { kind: 'manual' },
+    anchorRoomAlias: ANCHOR,
+    maxSeconds: 4,
+    actors: [{ role: 'crowd', count: 1, faction: Faction.LIQUIDATOR, ox: 0, oy: 0 }],
+    beats: [{ kind: 'pause', seconds: 1 }],
+  });
+  bindSceneCamera(createRuntimeCamera());
+
+  const world = buildWorld();
+  const state = buildState();
+  const player = makePlayer();
+  const entities: Entity[] = [player];
+  const nextEntityId = { v: 7000 };
+
+  assert.equal(isDebugOnePunchManEnabled(state), false, 'до сцены игрок обычный');
+
+  assert.equal(requestFloorScene('test_scene_immunity'), true);
+  for (let i = 0; i < 20 && !isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  assert.equal(isFloorSceneActive(), true);
+  assert.equal(state.sceneLock, true);
+  assert.equal(isDebugOnePunchManEnabled(state), true, 'пока сцена держит кадр, игрок неуязвим');
+
+  // Смерть под сценой обрывает её снаружи — и неуязвимость уходит вместе с замком.
+  abortFloorScene(state, entities);
+  assert.equal(state.sceneLock, false);
+  assert.equal(isDebugOnePunchManEnabled(state), false, 'обрыв возвращает игроку смертность');
+
+  // И тот же путь при обычном конце: сцена закрывается сама.
+  resetFloorScenes();
+  assert.equal(requestFloorScene('test_scene_immunity'), true);
+  for (let i = 0; i < 20 && !isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  assert.equal(isDebugOnePunchManEnabled(state), true);
+  for (let i = 0; i < 400 && isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.2);
+  assert.equal(isFloorSceneActive(), false, 'сцена обязана закончиться сама');
+  assert.equal(isDebugOnePunchManEnabled(state), false, 'конец сцены возвращает игроку смертность');
+  resetFloorScenes();
+});
+
+test('moveTo is a waypoint: it points the role and lets go', () => {
+  resetFloorScenes();
+  registerFloorScene({
+    id: 'test_scene_move_to',
+    floorKey: 'design:living',
+    trigger: { kind: 'manual' },
+    anchorRoomAlias: ANCHOR,
+    maxSeconds: 8,
+    actors: [{ role: 'star', count: 1, faction: Faction.LIQUIDATOR, ox: -8, oy: -5 }],
+    // Отпущенный в живой мир актёр забивается в угол, и облёт вокруг него
+    // упирается в стену. Такт выводит его в середину зала своими ногами.
+    beats: [{ kind: 'moveTo', roles: ['star'], to: { ox: 0, oy: 0 }, wait: 2 }],
+  });
+  bindSceneCamera(createRuntimeCamera());
+
+  const world = buildWorld();
+  const state = buildState();
+  const player = makePlayer();
+  const entities: Entity[] = [player];
+  const nextEntityId = { v: 6000 };
+
+  assert.equal(requestFloorScene('test_scene_move_to'), true);
+  for (let i = 0; i < 20 && !isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  const star = entities.find(e => e.id !== player.id)!;
+  for (let i = 0; i < 3; i++) tick(world, entities, player, state, nextEntityId, 0.1);
+
+  // Центр испытательного зала: те же 30,27, что и якорь сцены.
+  const cx = 30;
+  const cy = 27;
+  assert.ok(star.role !== NpcRole.CINEMATIC_ACTOR, 'поводок сцены снят, иначе идти нечем');
+  assert.equal(star.ai?.goal, AIGoal.GOTO, 'курс задан');
+  assert.ok(world.dist2(star.ai!.tx, star.ai!.ty, cx, cy) < 4,
+    `цель ${star.ai!.tx},${star.ai!.ty} не в середине зала (${cx},${cy})`);
+
+  // И ОТПУСКАЕТ. Такт ставит цель один раз: дальше человек живёт сам, и сбитый
+  // курс никто не возвращает. Держать его на точке нельзя — дойдя, он утыкался бы
+  // в неё и стоял вместо того, чтобы жить дальше.
+  star.ai!.goal = AIGoal.WANDER;
+  star.ai!.tx = 0;
+  star.ai!.ty = 0;
+  tick(world, entities, player, state, nextEntityId, 0.1);
+  assert.equal(star.ai?.goal, AIGoal.WANDER, 'вейпойнт не имеет права держать человека на точке');
+  resetFloorScenes();
+});
+
+test('walkOut leaves people on the floor when there is no lift to reach', () => {
+  resetFloorScenes();
+  registerFloorScene({
+    id: 'test_scene_walk_out_no_lift',
+    floorKey: 'design:living',
+    trigger: { kind: 'manual' },
+    anchorRoomAlias: ANCHOR,
+    maxSeconds: 6,
+    actors: [{ role: 'leaving', count: 2, faction: Faction.LIQUIDATOR, ox: 0, oy: 0, spread: 2 }],
+    beats: [{ kind: 'walkOut', roles: ['leaving'], toFloorKey: 'design:maintenance' }],
+  });
+  bindSceneCamera(createRuntimeCamera());
+
+  const world = buildWorld();
+  const state = buildState();
+  const player = makePlayer();
+  const entities: Entity[] = [player];
+  const nextEntityId = { v: 5000 };
+
+  assert.equal(requestFloorScene('test_scene_walk_out_no_lift'), true);
+  for (let i = 0; i < 20 && !isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  const leaving = entities.filter(e => e.id !== player.id).map(e => e.id);
+
+  for (let i = 0; i < 120 && isFloorSceneActive(); i++) tick(world, entities, player, state, nextEntityId, 0.1);
+  for (let i = 0; i < 60; i++) tick(world, entities, player, state, nextEntityId, 0.1);
+
+  // Лифта нет — значит и уходить некуда: такт до списка уходящих никого не
+  // доводит, и люди просто остаются жить на этаже. Выдержка тут ни при чём.
+  assert.equal(entities.filter(e => leaving.includes(e.id)).length, 2);
   resetFloorScenes();
 });

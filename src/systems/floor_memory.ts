@@ -528,8 +528,8 @@ function roomsEqualExceptDoors(a: Room, b: Room): boolean {
     && a.ceilingTier === b.ceilingTier;
 }
 
-// Persisted door fields (roomA/roomB/keyId/isTutorialExit ride along in the upsert
-// payload; only these fields drive whether a door counts as "changed vs base").
+// Persisted door fields (roomA/roomB/keyId ride along in the upsert payload;
+// only these fields drive whether a door counts as "changed vs base").
 function doorsEqualForDelta(a: Door, b: Door): boolean {
   return a.state === b.state
     && a.roomA === b.roomA
@@ -614,7 +614,7 @@ export function worldForSave(world: World, base?: World | null): FloorMemoryWorl
       }
     }
     // Doors: base∖live → removed; live absent-in-base or differing → upsert (whole
-    // Door, so roomA/roomB/keyId/isTutorialExit are preserved — the full path drops the last).
+    // Door, so roomA/roomB/keyId are preserved).
     const doorsRemoved: number[] = [];
     for (const idx of base.doors.keys()) {
       if (!world.doors.has(idx)) doorsRemoved.push(idx);

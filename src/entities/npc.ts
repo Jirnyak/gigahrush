@@ -190,6 +190,90 @@ function genDirector(): Uint32Array {
   return t;
 }
 
+function genCleaner(): Uint32Array {
+  const t = genHumanoid(180, 158, 140, 96, 112, 118, 62, 66, 72, 18, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  addHat(t, 190, 196, 186, H_TOP); // косынка
+  addApron(t, 208, 204, 188, B_TOP, B_BOT);
+  // Резиновые перчатки по бокам корпуса
+  const cx = S / 2;
+  for (let y = B_TOP + 12; y < B_TOP + 18; y++) {
+    for (const side of [-1, 1]) {
+      const x = cx + side * 9;
+      if (x >= 0 && x < S) t[y * S + x] = rgba(196, 148, 60);
+    }
+  }
+  return t;
+}
+
+function genWorker69(): Uint32Array {
+  const t = genHumanoid(186, 156, 148, 128, 48, 62, 44, 40, 48, 19, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  addHair(t, 74, 40, 30, H_TOP, H_BOT);
+  // Служебный номерок на груди: этаж считает своих по бирке
+  const cx = S / 2;
+  for (let y = B_TOP + 4; y < B_TOP + 8; y++) {
+    for (let x = cx + 2; x <= cx + 6; x++) {
+      if (x < S) t[y * S + x] = rgba(206, 198, 168);
+    }
+  }
+  return t;
+}
+
+function genEngineer(): Uint32Array {
+  const t = genHumanoid(176, 152, 132, 108, 112, 100, 56, 58, 62, 20, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  addHat(t, 168, 156, 60, H_TOP); // каска
+  const cx = S / 2;
+  const eyeY = Math.floor((H_TOP + H_BOT) / 2);
+  // Очки и нагрудный карман с инструментом
+  t[eyeY * S + (cx - 3)] = rgba(180, 200, 230);
+  t[eyeY * S + (cx + 3)] = rgba(180, 200, 230);
+  for (let y = B_TOP + 5; y < B_TOP + 11; y++) {
+    const x = cx - 5;
+    if (x >= 0) t[y * S + x] = rgba(70, 74, 78);
+  }
+  return t;
+}
+
+function genTeacher(): Uint32Array {
+  const t = genHumanoid(182, 160, 142, 86, 66, 52, 52, 44, 40, 21, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  addHair(t, 92, 88, 84, H_TOP, H_BOT); // седеющие волосы
+  const cx = S / 2;
+  const eyeY = Math.floor((H_TOP + H_BOT) / 2);
+  t[eyeY * S + (cx - 3)] = rgba(190, 205, 225);
+  t[eyeY * S + (cx + 3)] = rgba(190, 205, 225);
+  for (let x = cx - 3; x <= cx + 3; x++) t[eyeY * S + x] = rgba(60, 60, 66); // оправа
+  for (let y = B_TOP; y < B_TOP + 10; y++) t[y * S + cx] = rgba(120, 100, 70); // галстук
+  return t;
+}
+
+function genCivilDefense(): Uint32Array {
+  const t = genHumanoid(174, 150, 132, 74, 86, 66, 54, 62, 50, 22, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
+  const cx = S / 2;
+  const headCy = Math.floor((H_TOP + H_BOT) / 2);
+  const headRad = Math.floor((H_BOT - H_TOP) / 2);
+  // Противогаз: маска по лицу и фильтр вниз от подбородка
+  for (let y = headCy - 3; y < H_BOT; y++) {
+    for (let x = cx - headRad + 1; x < cx + headRad - 1; x++) {
+      if (x < 0 || x >= S) continue;
+      const n = noise(x, y, 221) * 8;
+      t[y * S + x] = rgba(clamp(52 + n), clamp(56 + n), clamp(50 + n));
+    }
+  }
+  for (const side of [-2, 2]) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const px = cx + side + dx;
+      const py = headCy - 1 + dy;
+      if (px >= 0 && px < S) t[py * S + px] = rgba(150, 162, 140);
+    }
+  }
+  for (let y = H_BOT; y < B_TOP + 5; y++) {
+    for (let x = cx - 2; x <= cx + 2; x++) {
+      if (x >= 0 && x < S) t[y * S + x] = rgba(44, 48, 42);
+    }
+  }
+  addHat(t, 92, 100, 84, H_TOP); // каска ГО
+  return t;
+}
+
 function genPerformer(): Uint32Array {
   const t = genHumanoid(190, 155, 145, 118, 42, 72, 36, 34, 44, 17, H_TOP, H_BOT, B_TOP, B_BOT, L_BOT);
   const cx = S / 2;
@@ -229,7 +313,14 @@ export function generatePriestSprite(): Uint32Array { return genPriest(); }
 /** Performer sprite: Перформер (scene/service worker) */
 export function generatePerformerSprite(): Uint32Array { return genPerformer(); }
 
-/** Sprite generators indexed by Occupation enum value (0..12 = resident occupations) */
+/**
+ * Спрайты занятий, ИНДЕКС РАВЕН ЗНАЧЕНИЮ `Occupation`. Таблица обязана покрывать
+ * перечисление целиком: за её концом начинаются авторские личности, и занятие без
+ * своего спрайта молча садилось на чужое лицо. Так уборщица (18) выходила
+ * Ветераном Степанычем, работница 69-го — Гордоном Фрименом, инженер — Мадокой, а
+ * учитель — Пахомом; в зале пролога это давало ряд одинаковых дедов с медалями.
+ * Замок — `tests/sprite-occupation-space.test.ts`.
+ */
 export const NPC_SPRITE_GENERATORS: (() => Uint32Array)[] = [
   genHousewife,   // 0  HOUSEWIFE
   genLocksmith,   // 1  LOCKSMITH
@@ -244,6 +335,16 @@ export const NPC_SPRITE_GENERATORS: (() => Uint32Array)[] = [
   genScientist,   // 10 SCIENTIST
   genChild,       // 11 CHILD
   genDirector,    // 12 DIRECTOR
+  generateTravelerSprite,  // 13 TRAVELER
+  generatePilgrimSprite,   // 14 PILGRIM
+  generateHunterSprite,    // 15 HUNTER
+  genPriest,               // 16 PRIEST
+  genPerformer,            // 17 PERFORMER
+  genCleaner,              // 18 CLEANER
+  genWorker69,             // 19 WORKER69
+  genEngineer,             // 20 ENGINEER
+  genTeacher,              // 21 TEACHER
+  genCivilDefense,         // 22 CIVIL_DEFENSE
 ];
 
 /** Traveler sprite: Путник (citizen) — civilian with backpack */

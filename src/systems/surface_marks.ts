@@ -12,40 +12,68 @@
 import { W, Cell } from '../core/types';
 import type { World } from '../core/world';
 
-/* ── Bounded surface-mark storage ─────────────────────────────── *
- * world.surfaceMap holds one 1KB tile per marked cell. Ambient
- * residue (blood trails, urine drips, scorch) is stamped continuously
- * during ordinary play and is never pruned on its own, so the map grows
- * without bound. This cap MUST stay ≤ SURF_MAX_SLOTS in render/webgl.ts
- * (the surface atlas has exactly that many tiles): the moment the live
- * cell count crosses that threshold the renderer abandons cheap
- * incremental dirty-cell uploads and instead does a full O(N log N)
- * re-sort of every entry plus a ~3 MB atlas/index re-upload on every
- * camera move — the gradual-FPS-decay driver on populated floors.
- * Keeping the map bounded here holds the renderer on its incremental
- * path permanently. Functional cells (surfaceFlags != 0 — chalk-map
- * clues, craft/interactive fixtures) are never evicted; only ambient
- * decoration is FIFO-evicted oldest-first (Map preserves insertion
- * order). Black-hand cult trails are unflagged but recent and few, so
- * FIFO leaves them intact in practice. */
-export const SURFACE_MAP_MAX_CELLS = 1024;
+/* ── Surface-mark storage ─────────────────────────────────────── *
+ * world.surfaceMap holds one 1KB tile per marked cell. Ambient residue
+ * (blood trails, urine drips, scorch) is stamped continuously during play.
+ *
+ * Следы НЕ КОПЯТСЯ, а вмешиваются в клетку: залитая кровью клетка от новой
+ * крови дороже не становится, поэтому расход считается площадью, а не боем.
+ * Отсюда и потолок — про ПАМЯТЬ, и только: килобайт на клетку, шестнадцать
+ * тысяч клеток — шестнадцать мегабайт, и это вся мыслимая заляпанная площадь
+ * этажа разом.
+ *
+ * Раньше потолок стоял на тысяче и был про РЕНДЕР: атлас держит ровно
+ * SURF_MAX_SLOTS плиток, и при выходе за них он пересобирался целиком —
+ * сортировка всей карты плюс три мегабайта заливки на каждый сдвиг камеры.
+ * Это чинилось не памятью: теперь кандидаты в атлас отсеиваются по дальности
+ * (`buildSurfaceData` в `render/webgl.ts`), дальше `MAX_DRAW` луч всё равно не
+ * доходит, и стоимость пересборки перестала зависеть от размера карты. Ценой
+ * той экономии была картина боя: сотня дерущихся забивала тысячу клеток за
+ * секунды, и дальше каждый брызг стирал кровь, которой секунда от роду.
+ *
+ * Functional cells (surfaceFlags != 0 — chalk-map clues, craft/interactive
+ * fixtures) are never evicted. Дойдя до потолка, уходит САМОЕ ДАЛЬНЕЕ от
+ * свежего следа: след ставится там, где что-то происходит, значит расстояние
+ * до него и есть мера нужности. */
+export const SURFACE_MAP_MAX_CELLS = 16384;
+/* Сколько старых клеток осматривать, выбирая жертву. Полный проход — тысяча
+ * итераций на каждую новую клетку, а Map хранит порядок вставки, так что первые
+ * ключи и есть самые старые: окна по ним достаточно. */
+const SURFACE_EVICTION_WINDOW = 96;
 
-function evictOldestAmbientSurfaceCell(world: World, keepCi: number): void {
+function evictFarthestAmbientSurfaceCell(world: World, keepCi: number): void {
+  const kx = keepCi % W;
+  const ky = (keepCi / W) | 0;
+  let victim = -1;
+  let worstDist2 = -1;
+  let seen = 0;
+  let fallback = -1;
   for (const key of world.surfaceMap.keys()) {
-    if (key === keepCi) continue;
-    if (world.surfaceFlags[key] !== 0) continue; // preserve functional marks
-    world.surfaceMap.delete(key);
-    world.markSurfaceCellDirty(key); // let the renderer reclaim the freed slot
-    return;
+    if (key === keepCi || world.surfaceFlags[key] !== 0) continue; // preserve functional marks
+    if (seen++ >= SURFACE_EVICTION_WINDOW) {
+      // Окно кончилось, а в нём одни защищённые клетки: берём первую снимаемую.
+      fallback = key;
+      break;
+    }
+    const dx = world.delta(kx, key % W);
+    const dy = world.delta(ky, (key / W) | 0);
+    const dist2 = dx * dx + dy * dy;
+    if (dist2 > worstDist2) {
+      worstDist2 = dist2;
+      victim = key;
+    }
   }
-  // Every remaining cell is functional/flagged — nothing safe to evict.
+  if (victim < 0) victim = fallback;
+  if (victim < 0) return; // всё оставшееся функционально — снимать нечего
+  world.surfaceMap.delete(victim);
+  world.markSurfaceCellDirty(victim); // let the renderer reclaim the freed slot
 }
 
 /** Get the surface tile for a cell, allocating (and capping) on first touch. */
 function acquireSurfaceCell(world: World, ci: number): Uint8Array {
   let cell = world.surfaceMap.get(ci);
   if (cell) return cell;
-  if (world.surfaceMap.size >= SURFACE_MAP_MAX_CELLS) evictOldestAmbientSurfaceCell(world, ci);
+  if (world.surfaceMap.size >= SURFACE_MAP_MAX_CELLS) evictFarthestAmbientSurfaceCell(world, ci);
   cell = new Uint8Array(1024);
   world.surfaceMap.set(ci, cell);
   return cell;

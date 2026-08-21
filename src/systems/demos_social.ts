@@ -252,6 +252,37 @@ function validAlifeId(graph: DemosSocialGraph, alifeId: number): boolean {
   return Number.isInteger(alifeId) && alifeId > 0 && alifeId <= graph.total;
 }
 
+/* ── Две оси связи ────────────────────────────────────────────────
+ *
+ * ОТНОШЕНИЕ — это ЧИСЛО, и «друг/знакомый/враг» из него ВЫВОДИТСЯ. Хранить тег
+ * отдельно значит завести второй источник правды, который рано или поздно
+ * разойдётся с первым: так ребро с числом −42 носило метку «враг», хотя порог
+ * вражды −64, и системы, читающие метку, считали врагами тех, кто по числу всего
+ * лишь неприятен.
+ *
+ * СВЯЗЬ — это РОД, и он объявляется: родитель, партнёр, коллега, должник,
+ * соперник. Из числа он не выводится и выводиться не должен — коллега бывает и
+ * любимым, и ненавистным.
+ *
+ * Обе оси сходятся здесь, в единственной точке записи, поэтому забыть вывод
+ * нельзя ни на одном пути: ни генерация, ни авторская выдача, ни отклик на
+ * события не могут поставить метку вразрез с числом. Задавать вручную по-прежнему
+ * можно и нужно — задаётся ЧИСЛО (и род связи), а метка идёт следом. */
+const BOND_ROLES: ReadonlySet<DemosSocialRoleId> = new Set([
+  DemosSocialRoleId.PARENT,
+  DemosSocialRoleId.CHILD,
+  DemosSocialRoleId.PARTNER,
+  DemosSocialRoleId.WORK,
+  DemosSocialRoleId.DEBT,
+  DemosSocialRoleId.QUEST,
+  DemosSocialRoleId.RIVAL,
+]);
+
+/** Род связи сохраняется как объявлен; отношение выводится из числа. */
+function edgeRole(declared: DemosSocialRoleId, relation: number): DemosSocialRoleId {
+  return BOND_ROLES.has(declared) ? declared : roleForRelation(relation);
+}
+
 function setEdgeAtSlot(
   graph: DemosSocialGraph,
   sourceId: number,
@@ -263,10 +294,14 @@ function setEdgeAtSlot(
 ): boolean {
   if (!validAlifeId(graph, sourceId) || !validAlifeId(graph, targetId) || sourceId === targetId) return false;
   const offset = edgeOffset(sourceId, slot);
+  const clamped = clampRelation(relation);
+  // Биты отношения снимаются и ставятся заново по числу: переданные извне здесь
+  // не мнение, а пожелание, и спорить с числом им не положено.
+  const bond = flags & ~(DEMOS_EDGE_FRIEND | DEMOS_EDGE_ENEMY);
   graph.targets[offset] = targetId;
-  graph.relations[offset] = clampRelation(relation);
-  graph.flags[offset] = flags & 0xff;
-  graph.roles[offset] = role & 0xff;
+  graph.relations[offset] = clamped;
+  graph.flags[offset] = relationFlags(clamped, bond);
+  graph.roles[offset] = edgeRole(role, clamped) & 0xff;
   return true;
 }
 
@@ -335,7 +370,7 @@ function setAuthoredEdge(
   let slot = findExistingTargetSlot(graph, sourceId, targetId);
   if (slot < 0) slot = firstEmptySlot(graph, sourceId);
   if (slot < 0) slot = weakestSlot(graph, sourceId);
-  return setEdgeAtSlot(graph, sourceId, slot, targetId, relation, relationFlags(relation, flags), role);
+  return setEdgeAtSlot(graph, sourceId, slot, targetId, relation, flags, role);
 }
 
 function reverseAuthoredRole(role: DemosSocialRoleId): DemosSocialRoleId {
@@ -657,29 +692,27 @@ function describeCandidateEdge(
   }
   if (mode === 2) {
     const relation = clampRelation(48 + relationJitter(seed, source.id, target.id, salt, 24));
-    const friend = relation >= RELATION_FRIENDLY_THRESHOLD;
-    return {
-      relation,
-      flags: DEMOS_EDGE_FACTION | (friend ? DEMOS_EDGE_FRIEND : 0),
-      role: friend ? DemosSocialRoleId.FRIEND : DemosSocialRoleId.ACQUAINTANCE,
-    };
+    return { relation, flags: DEMOS_EDGE_FACTION, role: DemosSocialRoleId.ACQUAINTANCE };
   }
   if (mode === 3) {
+    // Тёмная сторона знакомства: соперничество, долг, неприязнь. Объявляется РОД
+    // связи, а «враг это или просто неприятен» решает число.
+    //
+    // Считается оно ОТ БАЗЫ ФРАКЦИЙ, а не литералом. Раньше здесь стояло жёсткое
+    // −42…−111 в обход всякой базы — и потому свои по фракции враждовали насмерть
+    // по одной лишь генерации, хотя у своих база 64 и во всех прочих режимах до
+    // порога вражды не достаёт. Теперь так же и здесь: у своих (база 64) выходит
+    // 22…−47 — неприязнь, но не вражда; у чужих база ниже, и вражда достижима.
     const roll = hash32(seed, source.id, target.id ^ salt) % 3;
-    const relation = clampRelation(-42 - (hash32(seed, target.id, source.id ^ salt) % 70));
-    if (roll === 0) return { relation, flags: DEMOS_EDGE_ENEMY, role: DemosSocialRoleId.ENEMY };
+    const relation = clampRelation(
+      factionAffinity(source.faction, target.faction) - 42 - (hash32(seed, target.id, source.id ^ salt) % 70),
+    );
     if (roll === 1) return { relation, flags: DEMOS_EDGE_DEBT, role: DemosSocialRoleId.DEBT };
-    return { relation, flags: DEMOS_EDGE_ENEMY, role: DemosSocialRoleId.RIVAL };
+    return { relation, flags: 0, role: roll === 0 ? DemosSocialRoleId.ACQUAINTANCE : DemosSocialRoleId.RIVAL };
   }
   const base = mode === 4 ? Math.round(factionAffinity(source.faction, target.faction) * 0.5) : factionAffinity(source.faction, target.faction);
   const relation = clampRelation(base + relationJitter(seed, source.id, target.id, salt, mode === 4 ? 40 : 32));
-  const friendly = relation >= RELATION_FRIENDLY_THRESHOLD;
-  const hostile = relation <= RELATION_HOSTILE_THRESHOLD;
-  return {
-    relation,
-    flags: (friendly ? DEMOS_EDGE_FRIEND : 0) | (hostile ? DEMOS_EDGE_ENEMY : 0),
-    role: friendly ? DemosSocialRoleId.FRIEND : hostile ? DemosSocialRoleId.ENEMY : DemosSocialRoleId.ACQUAINTANCE,
-  };
+  return { relation, flags: 0, role: DemosSocialRoleId.ACQUAINTANCE };
 }
 
 function pickGlobalCandidate(

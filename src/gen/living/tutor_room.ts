@@ -11,28 +11,24 @@
 /*   call it from the living/index.ts orchestrator.                */
 
 import {
-  W, Cell, ContainerKind, DoorState, Tex, RoomType, Feature,
+  W, Cell, ContainerKind, DoorState, Tex, Feature,
   type Room, type Entity,
   type Item, type WorldContainer,
   EntityType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { stampRoom, protectRoom } from '../shared';
+import { protectRoom } from '../shared';
 import { stampNamedRoom } from '../named_rooms';
 import { LIVING_NAMED_ROOMS } from './rooms';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { Spr } from '../../entities/sprite_index';
-import { spawnTutorialKey } from './tutorial_apartments';
-
-function protectTutorialWallsAsHermetic(world: World, x: number, y: number, w: number, h: number): void {
-  for (let dy = -1; dy <= h; dy++) {
-    for (let dx = -1; dx <= w; dx++) {
-      if (dx !== -1 && dx !== w && dy !== -1 && dy !== h) continue;
-      const idx = world.idx(x + dx, y + dy);
-      if (world.cells[idx] === Cell.WALL) world.hermoWall[idx] = 1;
-    }
-  }
-}
+import {
+  TUTORIAL_START_CLEARANCE,
+  addTutorialDoor,
+  generateTutorialStart,
+  protectTutorialWallsAsHermetic,
+} from './tutorial_start';
+import { TUTORIAL_START } from '../../data/tutorial_start';
 
 const STARTER_LOCKER_LOOT: readonly Item[] = [
   { defId: 'water', count: 1 },
@@ -79,8 +75,6 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
    * ================================================================ */
   const hallW = 11, hallH = 9;
   const armW = 7, armH = 14;
-  const cafeW = 8, cafeH = 8;
-  const bathW = 5, bathH = 5;
 
   // Find clear position near center — never overwrite apartments (aptMask)
   let hallX = 512 - Math.floor(hallW / 2);
@@ -91,7 +85,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
         if (world.aptMask[world.idx((bx + dx + W) % W, (by + dy + W) % W)]) return false;
     return true;
   }
-  if (!areaClear(hallX, hallY, hallW + 1 + armW, Math.max(hallH, armH + 1) + cafeH + bathH)) {
+  if (!areaClear(hallX, hallY, hallW + 1 + armW, Math.max(hallH, armH + 1) + TUTORIAL_START_CLEARANCE)) {
     // Spiral search outward from center for a clear spot
     let found = false;
     for (let r = 1; r < 200 && !found; r++)
@@ -100,7 +94,7 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
           if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
           const tx = (512 - Math.floor(hallW / 2) + dx + W) % W;
           const ty = (512 - Math.floor(hallH / 2) + dy + W) % W;
-          if (areaClear(tx, ty, hallW + 1 + armW, Math.max(hallH, armH + 1) + cafeH + bathH)) {
+          if (areaClear(tx, ty, hallW + 1 + armW, Math.max(hallH, armH + 1) + TUTORIAL_START_CLEARANCE)) {
             hallX = tx; hallY = ty; found = true;
           }
         }
@@ -159,98 +153,11 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
       spriteSeed: 90,
     });
 
-  /* ================================================================
-   *  C. Cafeteria + Bathroom (tutorial steps)
-   * ================================================================ */
-  const cafeX = hallX + Math.floor(hallW / 2) - Math.floor(cafeW / 2);
-  const cafeY = hallY - cafeH - 1;
-  const cafeteria = stampRoom(world, nextRoomId++, RoomType.COMMON, cafeX, cafeY, cafeW, cafeH, -1);
-  cafeteria.name = 'Столовая';
-  cafeteria.tags = ['tutorial'];
-  cafeteria.wallTex = Tex.TILE_W;
-  cafeteria.floorTex = Tex.F_LINO;
-  cafeteria.sealed = true;
-  protectRoom(world, cafeX, cafeY, cafeW, cafeH, Tex.TILE_W, Tex.F_LINO);
-  protectTutorialWallsAsHermetic(world, cafeX, cafeY, cafeW, cafeH);
-  
-  if (isTutorial) {
-    world.features[world.idx(cafeX + 1, cafeY + 1)] = Feature.SINK;
-    entities.push({
-      id: nextId.v++,
-      type: EntityType.ITEM_DROP,
-      x: cafeX + 1.5,
-      y: cafeY + 1.5,
-      angle: 0, pitch: 0,
-      alive: true, speed: 0,
-      sprite: Spr.ITEM_DROP, spriteScale: 1.0,
-      inventory: [{ defId: 'lighter', count: 1 }],
-    });
-  }
-
-  // Door to cafeteria starts locked. Move it to the side so it doesn't overlap the slide.
-  const hallCafeDoor = world.idx(hallX + Math.floor(hallW / 2) - 2, hallY - 1);
-  world.cells[hallCafeDoor] = Cell.DOOR;
-  world.wallTex[hallCafeDoor] = Tex.DOOR_METAL;
-  world.floorTex[hallCafeDoor] = Tex.F_LINO;
-  world.aptMask[hallCafeDoor] = 1;
-  world.hermoWall[hallCafeDoor] = 1;
-  world.doors.set(hallCafeDoor, {
-    idx: hallCafeDoor,
-    state: DoorState.LOCKED,
-    roomA: room.id,
-    roomB: cafeteria.id,
-    keyId: 'tut_cafe_key',
-    timer: 0,
-  });
-  room.doors.push(hallCafeDoor);
-  cafeteria.doors.push(hallCafeDoor);
-  world.aptMask[world.idx(hallX + Math.floor(hallW / 2) - 3, hallY - 1)] = 1;
-  world.aptMask[world.idx(hallX + Math.floor(hallW / 2) - 1, hallY - 1)] = 1;
-
-  const bathX = cafeX - bathW - 1;
-  const bathY = cafeY;
-  const bathroom = stampRoom(world, nextRoomId++, RoomType.BATHROOM, bathX, bathY, bathW, bathH, -1);
-  bathroom.name = 'Уборная';
-  bathroom.tags = ['tutorial'];
-  bathroom.wallTex = Tex.TILE_W;
-  bathroom.floorTex = Tex.F_TILE;
-  bathroom.sealed = true;
-  protectRoom(world, bathX, bathY, bathW, bathH, Tex.TILE_W, Tex.F_TILE);
-  protectTutorialWallsAsHermetic(world, bathX, bathY, bathW, bathH);
-
-  const cafeBathDoor = world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2));
-  world.cells[cafeBathDoor] = Cell.DOOR;
-  world.wallTex[cafeBathDoor] = Tex.DOOR_WOOD;
-  world.floorTex[cafeBathDoor] = Tex.F_LINO;
-  world.aptMask[cafeBathDoor] = 1;
-  world.hermoWall[cafeBathDoor] = 1;
-  world.doors.set(cafeBathDoor, {
-    idx: cafeBathDoor,
-    state: DoorState.HERMETIC_OPEN,
-    roomA: cafeteria.id,
-    roomB: bathroom.id,
-    keyId: '',
-    timer: 0,
-  });
-  cafeteria.doors.push(cafeBathDoor);
-  bathroom.doors.push(cafeBathDoor);
-  world.aptMask[world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2) - 1)] = 1;
-  world.aptMask[world.idx(cafeX - 1, cafeY + Math.floor(bathH / 2) + 1)] = 1;
-
-  world.features[world.idx(bathX + Math.floor(bathW / 2), bathY + 1)] = Feature.LAMP;
-  world.features[world.idx(bathX + Math.floor(bathW / 2), bathY + bathH - 2)] = Feature.TOILET;
-  if (isTutorial) {
-    entities.push({
-      id: nextId.v++,
-      type: EntityType.ITEM_DROP,
-      x: bathX + Math.floor(bathW / 2) + 0.5,
-      y: bathY + Math.floor(bathH / 2) + 0.5,
-      angle: 0, pitch: 0,
-      alive: true, speed: 0,
-      sprite: Spr.ITEM_DROP, spriteScale: 1.0,
-      inventory: [{ defId: 'tut_cafe_key', count: 1 }],
-    });
-  }
+  // Стартовая зона живёт своим модулем: там объявлен весь первый сиквенс и
+  // сказано, на каких четырёх знаках он держится. Точку появления игрока
+  // возвращает он же — раньше она была тернарником в конце этого файла.
+  const start = generateTutorialStart(world, nextRoomId, entities, nextId, room, hallX, hallY, hallW, isTutorial);
+  nextRoomId = start.nextRoomId;
 
   /* ================================================================
    *  B. Оружейная / Стрельбище (armory + shooting range)
@@ -271,24 +178,9 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   // ── Connecting corridor (2 cells between halls) + door ──
   const doorY = hallY + Math.floor(hallH / 2);
   const gapX = hallX + hallW;
-  const hallArmoryDoor = world.idx(gapX, doorY);
-  world.cells[hallArmoryDoor] = Cell.DOOR;
-  world.wallTex[hallArmoryDoor] = Tex.DOOR_METAL;
-  world.floorTex[hallArmoryDoor] = Tex.F_LINO;
-  world.aptMask[hallArmoryDoor] = 1;
-  world.hermoWall[hallArmoryDoor] = 1;
-  world.doors.set(hallArmoryDoor, {
-    idx: hallArmoryDoor,
-    state: DoorState.LOCKED,
-    roomA: room.id,
-    roomB: armory.id,
-    keyId: 'tut_cafe_key',
-    timer: 0,
-  });
-  room.doors.push(hallArmoryDoor);
-  armory.doors.push(hallArmoryDoor);
-  world.aptMask[world.idx(gapX, doorY - 1)] = 1;
-  world.aptMask[world.idx(gapX, doorY + 1)] = 1;
+  // Тем же ключом, что и Столовая: один ключ на всю стартовую зону.
+  addTutorialDoor(world, gapX, doorY, room, armory,
+    DoorState.LOCKED, Tex.DOOR_METAL, TUTORIAL_START.keyId, true);
 
   // ── Targets on far (south) wall ──
   for (let dx = 0; dx < armW; dx++) {
@@ -344,13 +236,10 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
     world.features[si] = Feature.SLIDE;
   }
 
-  // ── Player spawn ──
-  const spawnX = isTutorial ? cafeX + Math.floor(cafeW / 2) + 0.5 : hallX + Math.floor(hallW / 2) + 0.5;
-  const spawnY = isTutorial ? cafeY + Math.floor(cafeH / 2) + 0.5 : hallY + hallH - 2 + 0.5;
-
-  if (isTutorial) {
-    spawnTutorialKey(world, nextId, hallX + 2, hallY + 2);
-  }
+  // Игрок начинает там, где начинается сиквенс: в туториале это запертая
+  // Столовая, и место называет её модуль. Без туториала — здесь, в зале.
+  const spawnX = start.spawn?.x ?? hallX + Math.floor(hallW / 2) + 0.5;
+  const spawnY = start.spawn?.y ?? hallY + hallH - 2 + 0.5;
 
   return { room, spawnX, spawnY, nextRoomId };
 }

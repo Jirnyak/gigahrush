@@ -291,11 +291,14 @@ import {
   updateZhelemishSkinStatus,
   zhelemishMoveMult,
 } from './systems/status';
+import './systems/debug_content';
 import {
-  DEBUG_COMMAND_COUNT,
+  debugCommandCount,
   execDebugCommand,
-  moveDebugInfoPage,
-  resetDebugInfoPage,
+  isDebugCommandPage,
+  moveDebugPage,
+  resetDebugPage,
+  scrollDebugPanel,
   type DebugCommandAction,
 } from './systems/debug';
 import { debugOnePunchMeleeDamage, isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './systems/debug_cheats';
@@ -6933,7 +6936,6 @@ function loadGame(): boolean {
       state.nextQuestId = normalizedQuests.nextQuestId;
       state.tutorialMode = dataState.tutorialMode === true;
       state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
-      state.tutorialExitTimer = typeof dataState.tutorialExitTimer === 'number' ? dataState.tutorialExitTimer : undefined;
       // `floor` is the generation target (theme tags of the restored entry); the
       // run coordinate is the entry's z. Assigning the tag array here left
       // state.currentZ non-numeric until the first lift ride.
@@ -7653,7 +7655,7 @@ function openMobileMenu(menu: MobileMenuId): void {
     case 'debug':
       state.showDebug = true;
       state.debugSel = 0;
-      resetDebugInfoPage();
+      resetDebugPage();
       break;
   }
   syncPauseState();
@@ -9583,10 +9585,16 @@ function handleMenuInput(): void {
       const dnNav = menuDownNav();
       const leftNav = menuRepeatStep('left', invLeft, leftEdge);
       const rightNav = menuRepeatStep('right', invRight, rightEdge);
-      if (upNav) state.debugSel = Math.max(0, state.debugSel - 1);
-      if (dnNav) state.debugSel = Math.min(DEBUG_COMMAND_COUNT - 1, state.debugSel + 1);
-      if (leftNav) moveDebugInfoPage(-1);
-      if (rightNav) moveDebugInfoPage(1);
+      if (upNav) {
+        if (isDebugCommandPage()) state.debugSel = Math.max(0, state.debugSel - 1);
+        else scrollDebugPanel(-1);
+      }
+      if (dnNav) {
+        if (isDebugCommandPage()) state.debugSel = Math.min(debugCommandCount() - 1, state.debugSel + 1);
+        else scrollDebugPanel(1);
+      }
+      if (leftNav) moveDebugPage(-1);
+      if (rightNav) moveDebugPage(1);
       if (acceptEdge) {
         const action = execDebugCommand(state.debugSel, world, player, entities, state, nextEntityId);
         if (action) handleDebugCommandAction(action);
@@ -9617,7 +9625,7 @@ function handleMenuInput(): void {
   // ── Normal gameplay toggles ──────────────────────────────
   else {
     if (canOpenShortcutMenu) {
-      if (dbgEdge) { state.showDebug = true; state.debugSel = 0; resetDebugInfoPage(); }
+      if (dbgEdge) { state.showDebug = true; state.debugSel = 0; resetDebugPage(); }
       if (invEdge) { state.showInventory = true; state.invSel = 0; }
       if (questEdge) { state.showQuests = true; }
       if (factionEdge) { state.showFactions = true; state.factionRankScroll = 0; }
@@ -10190,7 +10198,13 @@ function gameLoop(now: number): void {
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'pre_ai', gameOver: false })) updateWorldData(world);
     lastContentHookMs += performance.now() - contentStart;
     const listener = player;
-    setListenerPos(listener.x, listener.y, world);
+    // Слышит КАДР, а не тело. Всё, что игрок слышит, он слышит оттуда, откуда
+    // смотрит: в сцене, в трейлере и на смертельном падении камера уезжает от
+    // тела на десятки клеток, и привязка слуха к телу оставляла зрителя в тишине
+    // посреди боя, который он видит. Прицел, карта и AI остаются на теле — это
+    // игровые вещи, а не подача.
+    const heard = runtimeCameraView(runtimeCamera, listener);
+    setListenerPos(heard.x, heard.y, world);
     updateRouteCues(world, listener, state);
     updateMapExploration(world, listener, state);
     const aiStart = performance.now();
@@ -10411,7 +10425,9 @@ function gameLoop(now: number): void {
     }
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'pre_ai', gameOver: true })) updateWorldData(world);
     const listener = player;
-    setListenerPos(listener.x, listener.y, world);
+    // То же и после смерти: камера-шар уезжает от тела, и слышать надо её.
+    const heard = runtimeCameraView(runtimeCamera, listener);
+    setListenerPos(heard.x, heard.y, world);
     updateMapExploration(world, listener, state);
     updatePseudolifts(world, entities, player, state);
     const aiStart = performance.now();

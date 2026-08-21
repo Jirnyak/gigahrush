@@ -6,6 +6,9 @@ import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { syncNextEntityId, withPoiGenerationMetadata } from '../content_manifest_utils';
 import { generateForpost } from './forpost';
+// Сцена обороны форпоста регистрируется импортом: своего генератора у неё нет,
+// комнату-якорь рвёт сам форпост. Контракт — `cutscene.md`.
+import './forpost_defense';
 import { generateMancobusRoom } from './mancobus_room';
 import { spawnMakhno } from './makhno';
 import { spawnIvanych } from './sant_ivanych';
@@ -51,7 +54,6 @@ import { generateRedAdhesiveTrap } from './red_adhesive_trap';
 import { generateBlackSlimeEyes } from './black_slime_eyes';
 import { generateChernayaLichinka } from './chernaya_lichinka';
 import { generateSeroburmalineNoLook } from './seroburmaline_no_look';
-import { generatePneumomailStation } from './pneumomail_station';
 import { generateBetonoedShortcut } from './betonoed_shortcut';
 import { generateKostorezLocker } from './kostorez_locker';
 import { generateSlepoglazLine } from './slepoglaz_line';
@@ -256,9 +258,6 @@ export function runMaintenanceContent(
   nextId = syncNextEntityId(entities, nextId);
 
   generateSeroburmalineNoLook({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
-  nextId = syncNextEntityId(entities, nextId);
-
-  generatePneumomailStation({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
   nextId = syncNextEntityId(entities, nextId);
 
   generateBlackSlimeEyes({ world, entities, nextId: { v: nextId }, spawnX, spawnY });

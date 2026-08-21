@@ -11,11 +11,92 @@ import {
 import { World } from '../../core/world';
 import { freshNeeds, randomName } from '../../data/catalog';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
-import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
+import { stampRoom, protectRoom, findClearArea } from '../shared';
+import { applyNamedRoom } from '../named_rooms';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { randomRPG, getMaxHp } from '../../systems/rpg';
 import { Spr } from '../../entities/sprite_index';
 import { rng } from '../../core/rand';
+
+/** Псевдоним комнаты форпоста. По нему её находит сцена обороны. */
+export const FORPOST_ANCHOR = 'forpost' as const;
+/** Ниже этого форпост уже не узел обороны: взводу негде стоять, камере негде облететь. */
+const FORPOST_MIN_W = 7;
+const FORPOST_MIN_H = 6;
+/** Докуда вести коридор наружу, если живой пол всё не встречается. */
+const FORPOST_APPROACH_REACH = 40;
+
+
+/**
+ * Что сносить нельзя: настоящее жильё и НУТРО комнат, объявленных чужим
+ * псевдонимом. Первое — чужой дом, второе — чужая ссылка: по `defId` эту комнату
+ * кто-то ищет, и форпост, севший поверх, молча её угонит.
+ *
+ * Стена при этом не нутро. Пробить в чужой стене проём — то же, что поставить
+ * дверь, и запрещать это нельзя: коридор, наткнувшийся на объявленную комнату,
+ * иначе обрывается целиком, и форпост остаётся отрезанным при полностью открытом
+ * пространстве вокруг. Ровно так он и терялся на части сидов.
+ */
+function isProtectedCell(world: World, ci: number, wallsArePassable = false): boolean {
+  const roomId = world.roomMap[ci];
+  const room = roomId !== undefined && roomId >= 0 ? world.rooms[roomId] : undefined;
+  const isWall = world.cells[ci] === Cell.WALL;
+  if (room?.defId) return !(wallsArePassable && isWall);
+  if (!world.aptMask[ci]) return false;
+  if ((room?.apartmentId ?? -1) >= 0) return true;
+  // Служебная метка без настоящего жилья: рамка чужого POI. Стену в ней открыть
+  // можно, содержимое — нет.
+  return !(wallsArePassable && isWall);
+}
+
+/**
+ * Коридоры на четыре стороны — до ближайшего проходимого.
+ *
+ * Один проём делает из форпоста тупик: твари лезут гуськом, бой не растекается по
+ * подходам, а если единственная сторона упёрлась в глухой карман, комната и вовсе
+ * остаётся недостижимой. Поэтому наружу пробивается с каждой стороны, и каждый
+ * коридор идёт, пока не выйдет на живой пол.
+ *
+ * Обстановка с полосы снимается: клетка, свободная по геометрии, но занятая
+ * тумбой, для дерева путей непроходима — коридор вышел бы нарисованным, а не
+ * проходимым.
+ *
+ * Полоса ведётся НА ВСЮ ДЛИНУ, а не до первой встреченной клетки пола. Первая
+ * попавшаяся вполне может лежать в закупоренном кармане: по геометрии связь есть,
+ * для путей — нет, и форпост оставался недостижим при совершенно живом виде.
+ * Четыре луча по сорок клеток читаются служебными трубами — ровно тем, что этот
+ * узел и держит.
+ */
+function connectForpostApproaches(world: World, rx: number, ry: number, w: number, h: number, floorTex: number): number[] {
+  const touched: number[] = [];
+  const midX = rx + Math.floor(w / 2);
+  const midY = ry + Math.floor(h / 2);
+  const sides: [number, number, number, number][] = [
+    [midX, ry - 1, 0, -1],
+    [midX, ry + h, 0, 1],
+    [rx - 1, midY, -1, 0],
+    [rx + w, midY, 1, 0],
+  ];
+  for (const [sx, sy, ddx, ddy] of sides) {
+    let x = world.wrap(sx);
+    let y = world.wrap(sy);
+    for (let step = 0; step < FORPOST_APPROACH_REACH; step++) {
+      const ci = world.idx(x, y);
+      if (!isProtectedCell(world, ci, true)) {
+        if (world.cells[ci] !== Cell.FLOOR) {
+          world.cells[ci] = Cell.FLOOR;
+          world.floorTex[ci] = floorTex;
+        }
+        world.features[ci] = Feature.NONE;
+        world.aptMask[ci] = 0;
+        touched.push(ci);
+      }
+      x = world.wrap(x + ddx);
+      y = world.wrap(y + ddy);
+    }
+  }
+  return touched;
+}
 
 export function generateForpost(
   world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
@@ -25,37 +106,82 @@ export function generateForpost(
   const cy = Math.floor(spawnY);
   const spec = PLOT_ROOMS['forpost'];
 
-  // Strategy A: find existing room very close to spawn (near tutor room coords)
+  /* Место для узла обороны.
+   *
+   * Сперва — ГОТОВАЯ комната подходящего размера. Она уже вписана в этаж, и это
+   * решает главное: собственное место ищется как сплошной блок стены, а в прорытом
+   * лабиринте такого блока нет ни на одном сиде — поиск проваливается в слепой
+   * запасной вариант, и комната штампуется поверх застройки.
+   *
+   * Расчищать место бульдозером тоже нельзя как правило: на коллекторах есть залы,
+   * забитые обстановкой почти сплошь, и поставленная внутрь такого зала комната
+   * оказывается отрезанной сколько коридоров к ней ни веди — по самому залу пути
+   * не ходят. Готовая комната этой ловушки лишена по построению.
+   *
+   * Прежний отбор брал что угодно «не меньше пяти на пять», и форпост выходил пять
+   * на шесть: взводу негде стоять, камере негде облететь командира. Теперь нижняя
+   * граница — настоящий узел, а не караулка.
+   */
   const candidates = world.rooms.filter(r => {
-    if (!r || r.w < 5 || r.h < 5) return false;
+    if (!r || r.w < FORPOST_MIN_W || r.h < FORPOST_MIN_H) return false;
     if (r.apartmentId >= 0) return false;
+    // Занимать уже объявленную комнату нельзя: её псевдоним — чужая ссылка.
+    if (r.defId) return false;
     const d = world.dist(cx, cy, r.x + Math.floor(r.w / 2), r.y + Math.floor(r.h / 2));
-    return d >= 5 && d <= 25;
+    return d >= 5 && d <= 40;
   });
 
   let room: Room;
+  let roomW: number;
+  let roomH: number;
+  let labX: number;
+  let labY: number;
 
   if (candidates.length > 0) {
-    room = candidates[Math.floor(rng() * candidates.length)];
-    room.name = spec.name;
-    room.wallTex = spec.wallTex;
-    room.floorTex = spec.floorTex;
+    // Самая просторная из подходящих: сцене нужен объём, а не первая попавшаяся.
+    room = candidates.reduce((best, r) => (r.w * r.h > best.w * best.h ? r : best));
+    roomW = room.w;
+    roomH = room.h;
+    labX = room.x;
+    labY = room.y;
     room.type = spec.roomType;
-    protectRoom(world, room.x, room.y, room.w, room.h, spec.wallTex, spec.floorTex);
-    connectProtectedRoom(world, room.x, room.y, room.w, room.h);
   } else {
-    // Strategy B: stamp a new room close to spawn
-    const pos = findClearArea(world, cx, cy, spec.w, spec.h, 5, 25);
-    const labX = pos ? pos.x : (cx + 15) % W;
-    const labY = pos ? pos.y : (cy + 15) % W;
-
-    room = stampRoom(world, nextRoomId++, spec.roomType, labX, labY, spec.w, spec.h, -1);
-    room.name = spec.name;
-    room.wallTex = spec.wallTex;
-    room.floorTex = spec.floorTex;
-    protectRoom(world, labX, labY, spec.w, spec.h, spec.wallTex, spec.floorTex);
-    connectProtectedRoom(world, labX, labY, spec.w, spec.h);
+    roomW = spec.w;
+    roomH = spec.h;
+    let pos = findClearArea(world, cx, cy, roomW, roomH, 5, 40);
+    while (!pos && roomW > FORPOST_MIN_W) {
+      roomW -= 2;
+      roomH -= 2;
+      pos = findClearArea(world, cx, cy, roomW, roomH, 5, 40);
+    }
+    labX = pos ? pos.x : (cx + 15) % W;
+    labY = pos ? pos.y : (cy + 15) % W;
+    room = stampRoom(world, nextRoomId++, spec.roomType, labX, labY, roomW, roomH, -1);
+    // Слепое место может оказаться занятым застройкой — нутро выжигаем явно.
+    for (let dy = 0; dy < roomH; dy++) {
+      for (let dx = 0; dx < roomW; dx++) {
+        const ci = world.idx(world.wrap(labX + dx), world.wrap(labY + dy));
+        if (isProtectedCell(world, ci)) continue;
+        world.cells[ci] = Cell.FLOOR;
+        world.features[ci] = Feature.NONE;
+        world.floorTex[ci] = spec.floorTex;
+        world.roomMap[ci] = room.id;
+      }
+    }
   }
+
+  room.wallTex = spec.wallTex;
+  room.floorTex = spec.floorTex;
+  protectRoom(world, labX, labY, roomW, roomH, spec.wallTex, spec.floorTex);
+  connectForpostApproaches(world, labX, labY, roomW, roomH, spec.floorTex);
+
+  // Личность комнаты объявляется здесь, каким бы путём её ни добыли: по этому
+  // псевдониму её находит сцена обороны форпоста, а не по русскому имени.
+  applyNamedRoom(room, FORPOST_ANCHOR, {
+    type: spec.roomType,
+    name: spec.name,
+    tags: ['forpost', 'liquidator'],
+  });
 
   // Lamps and furniture
   const rcx = room.x + Math.floor(room.w / 2);

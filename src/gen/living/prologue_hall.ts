@@ -413,6 +413,9 @@ registerFloorScene({
   trigger: { kind: 'first_visit' },
   // Бой на сотню человек идёт дольше, чем разговор: потолок держит верхнюю границу.
   maxSeconds: 210,
+  /* Зал держит своих: разбор идёт здесь, и разошедшийся по этажу взвод оставил бы
+   * кадр без людей. Поводок шире форпостовского — зал двадцать на четырнадцать. */
+  leash: 18,
   actors: [
     { role: 'colonel', packageId: PROLOGUE_COLONEL_ID, ox: -3, oy: 0 },
     { role: 'strelok', packageId: STRELOK_ID, ox: 4, oy: 0 },
@@ -428,26 +431,31 @@ registerFloorScene({
       oy: 1,
       spread: 7,
     },
-    // Оценивать урон сходятся не только по службе: зал полон соседей.
+    /* Соседи сходятся посмотреть, но их НЕМНОГО и стоят они по краям зала.
+     *
+     * Гражданских тут было тридцать, вперемешку со взводом, — и разбор оборачивался
+     * свалкой: шальная пуля задевает зеваку, тот отвечает, память об ударе делает
+     * из соседей врагов, и половина кадра уходит на драку взвода с уборщицами.
+     * Толпа нужна, чтобы зал был живым, а не чтобы участвовать в бою. */
     {
       role: 'cleaners',
-      count: 16,
+      count: 6,
       faction: Faction.CITIZEN,
       occupation: Occupation.CLEANER,
       level: 2,
-      ox: -7,
-      oy: -4,
-      spread: 6,
+      ox: -9,
+      oy: -5,
+      spread: 4,
     },
     {
       role: 'onlookers',
-      count: 14,
+      count: 5,
       faction: Faction.CITIZEN,
       occupation: Occupation.HOUSEWIFE,
       level: 1,
-      ox: 1,
-      oy: 5,
-      spread: 6,
+      ox: 6,
+      oy: 6,
+      spread: 4,
     },
     // Половина взвода. Стрелка с горсткой людей просто задавили числом —
     // предательство должно раскалывать зал пополам, а не быть вылазкой меньшинства.
@@ -475,13 +483,28 @@ registerFloorScene({
     },
   ],
   beats: [
-    // Дорога до зала идёт коридорами и вдвое длиннее прямой: без запаса по
-    // скорости зритель полминуты смотрит на бетон.
-    { kind: 'fly', to: { ox: -8, oy: -5 }, look: { role: 'colonel' }, speed: 22, height: 0.95 },
-    { kind: 'orbit', around: { role: 'platoon' }, radius: 7, speed: 0.28, height: 0.95, seconds: 7 },
+    // Соседи живут сами с первого кадра: ходят, стоят, разговаривают. Поводок
+    // сцены нужен только тем, у кого есть слова и очередь их говорить, — зал,
+    // замерший целиком, читается как расставленные фигурки.
+    { kind: 'release', roles: ['cleaners', 'onlookers'] },
 
-    { kind: 'say', role: 'colonel', text: 'Разбор по описи. Кто нашёл — тот и назвал, остальное за дверью.', color: COLONEL_VOICE },
-    { kind: 'say', role: 'colonel', text: 'Второй взвод — на трубу. Фильтры проверить до того, как полезете.', color: COLONEL_VOICE },
+    // Дорога до зала — около ста двадцати клеток: игрок стоит в запертой Столовой,
+    // и кадр выходит наружу через её дверь. Без `look` камера смотрит по курсу и
+    // поворачивает вместе с коридорами (около тысячи градусов за дорогу) — с
+    // точкой внимания она летела бы туда боком. Скорость выбрана по длине пути:
+    // 18 — это около семи секунд, 22 дают пять с половиной, 30 — четыре.
+    { kind: 'fly', to: { ox: -8, oy: -5 }, speed: 18, height: 0.95 },
+    // Ось — на ПОЛКОВНИКЕ, а не на центре масс взвода. Центр масс роли гуляет:
+    // люди ходят, а на каждой смерти он ещё и прыгает — кадр тащится следом и
+    // упирается в стены. Ось обязана быть человеком, если только не нужен именно
+    // общий план неподвижной толпы.
+    //
+    // Радиус помещается в зал: половина его высоты — семь клеток, и круг вровень
+    // с ней скребёт по стене каждый кадр вместо облёта.
+    { kind: 'orbit', around: { role: 'colonel' }, radius: 5, speed: 0.28, height: 0.95, seconds: 7 },
+
+    { kind: 'say', role: 'colonel', text: 'Самосбор закончился. Приступаем к ликвидационным мероприятиям и описям.', color: COLONEL_VOICE },
+    { kind: 'say', role: 'colonel', text: 'Второй взвод — обход жилого этажа. Фильтры проверить заранее.', color: COLONEL_VOICE },
     { kind: 'fly', to: { ox: 8, oy: -4 }, look: { role: 'strelok' }, speed: 5, height: 0.72 },
     { kind: 'say', role: 'strelok', text: 'Опись хорошая. Только считает не тех.', color: STRELOK_VOICE },
     { kind: 'say', role: 'colonel', text: 'Стрелок. Встал в строй.', color: COLONEL_VOICE },
@@ -490,20 +513,26 @@ registerFloorScene({
     // Предательство: смена стороны. Кто в кого стреляет, решает матрица отношений.
     { kind: 'defect', roles: ['strelok', 'traitors'], faction: Faction.WILD, playerRelation: -90 },
     { kind: 'materialize', role: 'wild' },
-    { kind: 'log', text: 'Где-то в соседнем коридоре разом стало людно.', color: '#8a7' },
     // Поводок снят: до этой строки зал был декорацией, дальше он живёт сам.
     { kind: 'release' },
 
-    { kind: 'orbit', around: { role: 'colonel' }, radius: 6, speed: -0.4, height: 0.9, seconds: 5 },
+    // Ось — НА ПОЛКОВНИКЕ, хотя говорил последним Стрелок: этот кадр про того, чью
+    // смерть сейчас будут ждать. `speaker` годится сразу после реплики, а тут
+    // кадр уже про другое.
+    { kind: 'orbit', around: { role: 'colonel' }, radius: 5, speed: -0.4, height: 0.9, seconds: 5 },
     { kind: 'awaitDeath', role: 'colonel', timeout: 90 },
 
-    { kind: 'fly', to: { ox: 2, oy: -3 }, look: { role: 'strelok' }, speed: 4, height: 0.62 },
-    { kind: 'say', role: 'strelok', text: 'Опись закрыта. Подписывать некому.', color: STRELOK_VOICE },
-    { kind: 'say', role: 'strelok', text: 'Приберите. И передайте: считать я приду сам.', color: STRELOK_VOICE },
-    { kind: 'orbit', around: { role: 'strelok' }, radius: 4, speed: 0.5, height: 0.95, seconds: 5 },
+    // Бой кончился, и Стрелок стоит там, где его застал последний выстрел —
+    // обычно в углу, куда AI прижимает всех. Облёт вокруг угла упирается в
+    // стену, поэтому сперва он выходит в середину зала своими ногами.
+    { kind: 'moveTo', roles: ['strelok'], to: { ox: 0, oy: 0 }, wait: 7 },
 
-    // Уходят живыми: запись A-Life переезжает, смерть не пишется.
-    { kind: 'depart', roles: ['strelok', 'traitors', 'wild'], toFloorKey: designNpcFloorKey('maintenance') },
-    { kind: 'pause', seconds: 2 },
+    { kind: 'fly', to: { ox: 5, oy: -4 }, look: { role: 'strelok' }, speed: 6, height: 0.72 },
+    { kind: 'say', role: 'strelok', text: 'Опись закрыта. Подписывать некому.', color: STRELOK_VOICE },
+
+    // Уходят живыми и своими ногами — к лифту. Такт не ждёт их прихода: кадр
+    // закрывается на последнем слове Стрелка, а уход досматривается в живом
+    // мире. Мгновенный `depart` тут читался как исчезновение у зрителя на глазах.
+    { kind: 'walkOut', roles: ['strelok', 'traitors', 'wild'], toFloorKey: designNpcFloorKey('maintenance') },
   ],
 });
