@@ -15,7 +15,7 @@ import {
   type Entity,
   type GameState,
   type WorldContainer,
-} from '../core/types';
+  msg } from '../core/types';
 import { type World } from '../core/world';
 import { ITEMS, freshNeeds, randomName } from '../data/catalog';
 import { getStack } from '../data/items';
@@ -34,6 +34,7 @@ import { controlBindingLabel, controlHint, menuCloseHint } from './controls';
 import { mapEditorContainerBrushes, mapEditorEntityBrushes } from './map_editor_catalog';
 import { canSpawnEntityType } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
+import { registerDebugCommand } from './debug_registry';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect';
 export type MapEditorMode = 'map' | 'menu' | 'brush' | 'details' | 'objects' | 'npc_inv' | 'npc_inv_select';
@@ -223,8 +224,7 @@ function emptyTransaction(): MapEditorTransactionState {
     territory: false,
     roomMap: false,
     dirtyCells: [],
-    dirtyOverflow: false,
-  };
+    dirtyOverflow: false };
 }
 
 const runtime: MapEditorRuntime = {
@@ -245,8 +245,7 @@ const runtime: MapEditorRuntime = {
   dirtyCells: [],
   transaction: emptyTransaction(),
   npcInventory: [],
-  npcInvSlot: 0,
-};
+  npcInvSlot: 0 };
 
 function resetTransaction(): void {
   runtime.transaction = emptyTransaction();
@@ -314,8 +313,7 @@ function normalizeContainerDef(value: unknown): MapEditorContainerDef | null {
     kind,
     itemId,
     count: cleanPositiveCount(def.count),
-    name,
-  };
+    name };
 }
 
 function normalizeMapEditorOp(value: unknown): MapEditorOp | null {
@@ -387,8 +385,7 @@ function normalizePatchState(input: Partial<MapEditorPatchState> | null | undefi
         z: typeof src.z === "number" ? src.z : undefined,
         createdAt: typeof src.createdAt === 'number' ? src.createdAt : 0,
         opCount: ops.length,
-        ops,
-      };
+        ops };
     }
   }
   const skipped = Array.isArray(input?.skipped)
@@ -707,8 +704,7 @@ export function commitMapEditorChanges(world: World | undefined = runtime.world)
     containers: tx.containers,
     territory: tx.territory,
     roomMap: tx.roomMap,
-    dirtyCellCount: tx.dirtyOverflow ? W * W : tx.dirtyCells.length,
-  };
+    dirtyCellCount: tx.dirtyOverflow ? W * W : tx.dirtyCells.length };
   if (!world || !result.changed) {
     resetTransaction();
     return result;
@@ -872,8 +868,7 @@ function recordOp(state: GameState, op: MapEditorOp): boolean {
       z: currentFloorZ(state),
       createdAt: state.time,
       opCount: 0,
-      ops: [],
-    };
+      ops: [] };
     patches.patches[key] = patch;
   }
   if (patch.ops.length >= PATCH_OP_CAP) {
@@ -947,8 +942,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
       alive: true,
       speed: 0,
       sprite: Spr.ITEM_DROP,
-      inventory: [{ defId: itemId, count: Math.max(1, Math.floor(def.count ?? 1)) }],
-    });
+      inventory: [{ defId: itemId, count: Math.max(1, Math.floor(def.count ?? 1)) }] });
     trackMapEditorChange({ entities: true }, [idx]);
   } else if (def.kind === 'monster') {
     if (!canSpawnEntityType(entities, EntityType.MONSTER)) return setError('Лимит мобов достигнут');
@@ -972,8 +966,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
       monsterKind: kind,
       attackCd: 0,
       ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      rpg,
-    };
+      rpg };
     entities.push(monster);
     trackMapEditorChange({ entities: true }, [idx]);
   } else {
@@ -997,8 +990,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
       faction,
       occupation,
       isFemale: name.female,
-      age,
-    });
+      age });
     const spriteSeed = irand(1, 0x7fffffff);
 
     entities.push({
@@ -1028,8 +1020,7 @@ function spawnEditorEntity(world: World, entities: Entity[], state: GameState, n
       isTraveler: true,
       questId: -1,
       money: 20,
-      rpg,
-    });
+      rpg });
     const npc = entities[entities.length - 1];
     if (npc && npc.type === EntityType.NPC) npcAutoEquipBestWeapon(npc);
     trackMapEditorChange({ entities: true }, [idx]);
@@ -1062,8 +1053,7 @@ function spawnEditorContainer(world: World, state: GameState, op: Extract<MapEdi
     capacitySlots: containerDef?.capacitySlots ?? 5,
     access: containerDef?.defaultAccess ?? 'public',
     discovered: true,
-    tags: ['map_editor', 'net_terminal_gen', ...(containerDef?.tags ?? [])],
-  };
+    tags: ['map_editor', 'net_terminal_gen', ...(containerDef?.tags ?? [])] };
   world.addContainer(container);
   trackMapEditorChange({ containers: true }, [idx]);
   pushDirty(idx);
@@ -1364,8 +1354,7 @@ function menuEntries(): readonly MapEditorMenuEntry[] {
       id: entry.id ?? entry.label,
       label: entry.label,
       color: entry.color,
-      active: entry.active,
-    }));
+      active: entry.active }));
   }
   if (runtime.mode === 'npc_inv') {
     const entries: MapEditorMenuEntry[] = [];
@@ -1377,8 +1366,7 @@ function menuEntries(): readonly MapEditorMenuEntry[] {
         id: i,
         label: `СЛОТ ${i + 1}: ${name}${count}`,
         color: slot ? '#dd4' : '#668090',
-        active: i === runtime.menuIndex,
-      });
+        active: i === runtime.menuIndex });
     }
     entries.push({ id: 'back', label: 'НАЗАД В МЕНЮ', color: '#ff5868', active: runtime.menuIndex === 64 });
     return entries;
@@ -1393,8 +1381,7 @@ function menuEntries(): readonly MapEditorMenuEntry[] {
         id: sorted[i].id,
         label: sorted[i].name,
         color: '#dd4',
-        active: runtime.menuIndex === i + 1,
-      });
+        active: runtime.menuIndex === i + 1 });
     }
     return entries;
   }
@@ -1403,8 +1390,7 @@ function menuEntries(): readonly MapEditorMenuEntry[] {
       id: entry.id ?? entry.label,
       label: entry.label,
       color: entry.color,
-      active: entry.active,
-    }));
+      active: entry.active }));
   }
   return [];
 }
@@ -1449,8 +1435,7 @@ export function getMapEditorSnapshot(state: GameState): MapEditorSnapshot {
     menuEntries: menuEntries(),
     hints: modeHints(),
     activeTerminalX: runtime.activeTerminalX,
-    activeTerminalY: runtime.activeTerminalY,
-  };
+    activeTerminalY: runtime.activeTerminalY };
 }
 
 export function summarizeMapEditor(state: GameState): string[] {
@@ -1464,3 +1449,38 @@ export function summarizeMapEditor(state: GameState): string[] {
     ...patches.skipped.slice(-4).map(line => `skip=${line}`),
   ];
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Open map editor */
+  id: 'open_map_editor',
+  group: 'tools',
+  label: 'РЕДАКТОР КАРТЫ: открыть',
+  run: ({ world, player, state }) => {
+    state.showDebug = false;
+    openMapEditor(world, player, state);
+  } });
+
+registerDebugCommand({
+  /* Replay current map patch */
+  id: 'replay_current_map_patch',
+  group: 'tools',
+  label: 'РЕДАКТОР КАРТЫ: повторить патч',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    const applied = replayMapEditorPatchForCurrentFloor(world, entities, player, state, nextEntityId);
+    state.msgs.push(msg(`[MAPEDIT] replay ${applied}`, state.time, applied > 0 ? '#9fdbc6' : '#888'));
+    return { type: 'refresh_world_data' };
+  } });
+
+registerDebugCommand({
+  /* Clear current map patch */
+  id: 'clear_current_map_patch',
+  group: 'tools',
+  label: 'РЕДАКТОР КАРТЫ: очистить патч',
+  run: ({ state }) => {
+    const cleared = clearCurrentMapEditorPatch(state);
+    state.msgs.push(msg(cleared ? '[MAPEDIT] patch cleared' : '[MAPEDIT] patch empty', state.time, cleared ? '#9fdbc6' : '#888'));
+  } });

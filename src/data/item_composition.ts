@@ -233,7 +233,7 @@ function applyMiscWeights(def: ItemDef, weights: MutableCraftVector): void {
   if (hasAnyTag(def, ['document', 'permit', 'coupon', 'receipt', 'form', 'paper', 'audit']) || idHasAny(def.id, ['note', 'book', 'pass', 'permit', 'coupon', 'receipt', 'order', 'warrant', 'form', 'card', 'stamp', 'tag', 'label', 'roster', 'docket', 'index'])) {
     add(weights, 'consumables', 5);
     if (idHasAny(def.id, ['stamp', 'tag', 'key', 'plate', 'seal'])) add(weights, 'metal', 1);
-    if (idHasAny(def.id, ['terminal', 'screen', 'mail', 'pneumo'])) add(weights, 'electronics', 1);
+    if (idHasAny(def.id, ['terminal', 'screen', 'mail'])) add(weights, 'electronics', 1);
   }
   if (hasAnyTag(def, ['slime', 'sample', 'zhelemish', 'fungus', 'mold', 'blood_plant']) || idHasAny(def.id, ['sample', 'slime', 'mold', 'zhelemish', 'tissue', 'swab', 'corpse'])) {
     add(weights, 'bio', 5);

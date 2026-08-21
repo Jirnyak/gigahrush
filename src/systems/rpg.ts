@@ -11,6 +11,7 @@ import {
 } from '../core/types';
 import { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
 import { rng } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 export { RPG_ATTRIBUTE_CAP, RPG_LEVEL_CAP } from '../data/rpg_progression';
 
@@ -416,3 +417,18 @@ export function questXpReward(difficulty: number): number {
 export function questMoneyReward(difficulty: number): number {
   return Math.round(5 * difficulty);
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Give 1M XP */
+  id: 'grant_xp',
+  group: 'cheat',
+  label: '1 000 000 XP',
+  run: ({ player, state }) => {
+    awardXP(player, 1_000_000, state.msgs, state.time);
+    state.msgs.push(msg('+1 000 000 XP', state.time, '#ff0'));
+  },
+});

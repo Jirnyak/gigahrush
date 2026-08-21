@@ -24,9 +24,11 @@ import {
   resolveFloorRunRoute,
   snapshotFloorRunEntry,
   type FloorRunEntrySnapshot,
+  summarizeFloorRun,
 } from './procedural_floors';
 import { floorKeyForFloorInstance } from './floor_keys';
 import { rng } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 export interface ActiveFloorInstance {
   id: string;
@@ -444,3 +446,17 @@ export function summarizeFloorInstances(state: GameState): string[] {
   out.push(`discovered=${discovered.length ? discovered.join(', ') : 'none'}`);
   return out;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Elevator floor instance state */
+  id: 'elevator_instances',
+  group: 'route',
+  label: 'Лифтовые инстансы',
+  run: ({ state }) => {
+    for (const line of summarizeFloorRun(state)) state.msgs.push(msg(`[FLOOR] ${line}`, state.time, '#8cf'));
+    for (const line of summarizeFloorInstances(state)) state.msgs.push(msg(`[LIFT] ${line}`, state.time, '#f4a'));
+  } });

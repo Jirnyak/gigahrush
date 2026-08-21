@@ -11,6 +11,7 @@ import {
   type Item,
 } from '../core/types';
 import { World } from '../core/world';
+import { summarizeMapEditor } from './map_editor';
 import { rng, hashSeed, seededRandom } from '../core/rand';
 import {
   FLOOR_RUN_MAX_Z,
@@ -53,6 +54,7 @@ import { floorInstanceLabel, floorInstanceWorldKey, getActiveFloorInstance } fro
 import { spawnSafeguardHackBacklash } from './safeguard';
 import { canSpawnEntityType } from './entity_limits';
 import { floorKeyForDesign, floorKeyForProcedural  } from './floor_keys';
+import { registerDebugCommand } from './debug_registry';
 
 export interface NetTerminalGenState {
   runSeed: number;
@@ -942,3 +944,58 @@ export function summarizeNetTerminalGen(state: GameState, player?: Entity): stri
     `terminals=${terminalRegistry.size} overlay=${runtime.mode}${runtime.terminalIdx >= 0 ? ` idx=${runtime.terminalIdx}` : ''}`,
   ];
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Grant Net Terminal Gen access */
+  id: 'grant_net_terminal_gen_access',
+  group: 'cheat',
+  label: 'НЕТ-ГЕН: выдать доступ',
+  run: ({ state }) => {
+    grantNetTerminalGenAccess(state);
+    state.msgs.push(msg('[НЕТ-ГЕН] доступ выдан', state.time, '#63f6ff'));
+  },
+});
+
+registerDebugCommand({
+  /* Place generated terminals on current floor */
+  id: 'place_net_terminal_gen_terminals',
+  group: 'tools',
+  label: 'НЕТ-ГЕН: расставить терминалы',
+  run: ({ world, state }) => {
+    const count = placeNetTerminalGenTerminalsForCurrentFloor(world, state, { debug: true, max: 4, clearExisting: true, source: 'debug' });
+    state.msgs.push(msg(`[НЕТ-ГЕН] терминалов: ${count}`, state.time, count > 0 ? '#63f6ff' : '#f84'));
+    return { type: 'refresh_world_data' };
+  },
+});
+
+registerDebugCommand({
+  /* Place terminal in front of player */
+  id: 'place_net_terminal_gen_in_front',
+  group: 'tools',
+  label: 'НЕТ-ГЕН: терминал перед игроком',
+  run: ({ world, player, state }) => {
+    const x = Math.floor(player.x + Math.cos(player.angle) * 1.5);
+    const y = Math.floor(player.y + Math.sin(player.angle) * 1.5);
+    const terminal = placeNetTerminalGenTerminal(world, x, y, undefined, 'debug');
+    state.msgs.push(msg(terminal ? `[НЕТ-ГЕН] терминал ${terminal.x},${terminal.y}` : '[НЕТ-ГЕН] нет подходящей клетки', state.time, terminal ? '#63f6ff' : '#f84'));
+    return { type: 'refresh_world_data' };
+  },
+});
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Net Terminal Gen and map editor status */
+  id: 'net_terminal_gen_status',
+  group: 'tools',
+  label: 'НЕТ-ГЕН/РЕДАКТОР: статус',
+  run: ({ player, state }) => {
+    for (const line of summarizeNetTerminalGen(state, player)) state.msgs.push(msg(`[НЕТ-ГЕН] ${line}`, state.time, '#63f6ff'));
+    for (const line of summarizeMapEditor(state)) state.msgs.push(msg(`[MAPEDIT] ${line}`, state.time, '#9fdbc6'));
+  } });

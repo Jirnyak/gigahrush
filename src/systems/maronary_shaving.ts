@@ -7,6 +7,7 @@ import {
   msg,
 } from '../core/types';
 import { ITEMS } from '../data/catalog';
+import { addItem } from './inventory';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { ITEM_OUTCOME_RULES, type ItemOutcomeRule } from '../data/item_outcomes';
 import { getPlotNpcStringId } from '../data/npc_packages';
@@ -15,6 +16,7 @@ import { addFactionRelMutual } from '../data/relations';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 import { currentFloorRunEntry, floorRunEntryKind, floorRunEntryRouteId } from './procedural_floors';
+import { registerDebugCommand } from './debug_registry';
 
 const ITEM_ID = 'maronary_shaving';
 const BASE_TAGS = ['player', 'inventory', 'maronary', 'contraband', 'evidence'];
@@ -260,3 +262,18 @@ export function tryHandleMaronaryShavingHandoff(
   });
   return true;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Grant Maronary shaving */
+  id: 'grant_maronary_shaving',
+  group: 'cheat',
+  label: 'МАРОНАРИЙ: выдать стружку',
+  run: ({ player, state }) => {
+    const ok = addItem(player, 'maronary_shaving', 1);
+    if (ok) publishMaronaryShavingAcquired(player, state, 'debug_grant');
+    state.msgs.push(msg(ok ? '[MAR] зелёная стружка выдана' : '[MAR] нет места для стружки', state.time, ok ? '#fc4' : '#f84'));
+  } });

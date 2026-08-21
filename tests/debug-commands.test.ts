@@ -1,11 +1,12 @@
-import { readFileSync } from 'node:fs';
+import '../src/systems/debug_content';
+import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  DEBUG_COMMAND_COUNT,
+  debugCommandCount,
   SMOKE_DEBUG_COMMAND_IDS,
   SMOKE_STRESS_HOOK_ID,
   getDebugCommandIds,
@@ -26,7 +27,7 @@ function quotedId(text: string, id: string): boolean {
 test('debug command ids are unique and resolve to menu indexes', () => {
   const ids = getDebugCommandIds();
 
-  assert.equal(ids.length, DEBUG_COMMAND_COUNT);
+  assert.equal(ids.length, debugCommandCount());
   assert.deepEqual(duplicateIds(ids), [], 'debug command ids must be unique');
 
   ids.forEach((id, index) => {
@@ -81,4 +82,31 @@ test('smoke playability script calls hooks by stable ids', () => {
     [],
     'smoke script must use mandatory stable hook ids',
   );
+});
+
+test('каждая система, регистрирующая команду, вписана в точку сборки меню', () => {
+  /* Команда попадает в меню побочным эффектом импорта. Забытая строка в
+   * debug_content.ts не ломает игру (main тянет системы и так), но урезает
+   * меню в любом частичном графе и двигает номера команд — а по номеру ходит
+   * smoke. Поэтому список сверяется с исходниками, а не поддерживается на
+   * доверии. */
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const systems = path.resolve(here, '../src/systems');
+  const assembly = readFileSync(path.join(systems, 'debug_content.ts'), 'utf8');
+
+  const registrars: string[] = [];
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) { walk(path.join(dir, entry.name), `${prefix}${entry.name}/`); continue; }
+      if (!entry.name.endsWith('.ts')) continue;
+      const id = `${prefix}${entry.name.replace(/\.ts$/, '')}`;
+      if (id === 'debug' || id === 'debug_registry' || id === 'debug_content') continue;
+      const source = readFileSync(path.join(dir, entry.name), 'utf8');
+      if (/register(DebugCommand|DebugPanel)\(/.test(source)) registrars.push(id);
+    }
+  };
+  walk(systems, '');
+
+  const missing = registrars.filter(id => !assembly.includes(`import './${id}';`));
+  assert.deepEqual(missing, [], 'допишите модули в src/systems/debug_content.ts');
 });

@@ -24,7 +24,7 @@ import { generateAttractorDvorDesignFloor } from '../attractor_dvor';
 import { generateBankFloorDesignFloor } from '../bank_floor';
 import { generateBolnichnyKorpusDesignFloor } from '../bolnichny_korpus';
 import { generateBlackMarket88DesignFloor, reinforceBlackMarket88AuthoredHqTerritory } from '../black_market_88';
-import { generateCantorPustotyDesignFloor } from '../cantor_pustoty';
+import { generateStenkaDesignFloor } from '../stenka';
 import { generateCayleyByuroDesignFloor } from '../cayley_byuro';
 import { generateChthonicAtticDesignFloor } from '../chthonic_attic';
 import { generateCommunalRingDesignFloor } from '../communal_ring';
@@ -117,7 +117,7 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, (seed: number) => FloorGene
   underhell: () => generateUnderhellDesignFloor(),
   podad: generatePodadDesignFloor,
   spectral_chasovnya: generateSpectralChasovnyaDesignFloor,
-  cantor_pustoty: generateCantorPustotyDesignFloor,
+  stenka: generateStenkaDesignFloor,
   darkness: generateDarknessDesignFloor,
   horrorfloor: generateHorrorFloorDesignFloor,
   living: generateLivingDesignFloor,

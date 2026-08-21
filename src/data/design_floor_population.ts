@@ -1936,32 +1936,15 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
       maxPerBucket: 12,
     },
   },
-  cantor_pustoty: {
-    monsterBiasKinds: [MonsterKind.SHADOW, MonsterKind.TONKAYA_TEN, MonsterKind.GLUBINNAYA_TEN, MonsterKind.LISHENNYY, MonsterKind.SPIRIT],
-    monsterTags: ['void', 'cantor', 'fractal', 'gap_bridge', 'dust_island', 'low_light', 'route_pressure'],
+  stenka: {
+    // Арена не населяется фоном вообще: всё, что здесь ходит, поставлено
+    // генератором этажа — гнёзда, башни и их приплод. Обычная популяция
+    // размазала бы по линиям посторонних, и бой двух сторон перестал бы
+    // читаться. Решение самого этажа, а не пояса высоты.
+    npcTarget: 0,
+    monsterTarget: 0,
     npcPlacementKind: 'void',
     monsterPlacementKind: 'void',
-    monsterPlacement: {
-      noiseScale: 112,
-      noiseStrength: 0.16,
-      openWeight: 0.82,
-      roomWeights: {
-        [RoomType.CORRIDOR]: 1.84,
-        [RoomType.COMMON]: 0.82,
-        [RoomType.LIVING]: 0.44,
-        [RoomType.HQ]: 0.16,
-      },
-      zoneWeights: {
-        [ZoneFaction.CULTIST]: 1.25,
-        [ZoneFaction.WILD]: 1.15,
-        [ZoneFaction.SAMOSBOR]: 1.35,
-        [ZoneFaction.CITIZEN]: 0.82,
-        [ZoneFaction.LIQUIDATOR]: 0.45,
-      },
-      anchors: METRO_MONSTER_ANCHORS,
-      bucketSize: 42,
-      maxPerBucket: 5,
-    },
   },
   horrorfloor: {
     monsterBiasKinds: [MonsterKind.GLUBINNAYA_TEN],

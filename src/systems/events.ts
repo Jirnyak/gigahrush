@@ -14,11 +14,12 @@ import {
   type WorldEventSeverity,
   type WorldEventState,
   type WorldEventType,
-} from '../core/types';
+  msg } from '../core/types';
 import { getMonsterEcology, monsterEcologyEventData, monsterEcologyTags } from '../data/monster_ecology';
 import { recordWorldLogEvent } from './world_log';
 import { recordRumorEvent } from './rumor';
 import { recordRoomMemoryEvent } from './room_memory';
+import { registerDebugCommand } from './debug_registry';
 
 const MAX_EVENT_TAGS = 16;
 const MAX_EVENT_TAG_LEN = 32;
@@ -280,8 +281,7 @@ function normalizeEvent(raw: unknown, fallbackId: number): WorldEvent | null {
     severity: clampSeverity(event.severity),
     privacy: normalizePrivacy(event.privacy),
     tags: cleanTags(event.tags),
-    data: compactEventData(event.data),
-  } as WorldEvent;
+    data: compactEventData(event.data) } as WorldEvent;
 }
 
 function normalizeContextFact(raw: unknown, fallbackId: number): ContextFact | null {
@@ -299,8 +299,7 @@ function normalizeContextFact(raw: unknown, fallbackId: number): ContextFact | n
     faction: Number.isFinite(fact.faction) ? fact.faction as ContextFact['faction'] : undefined,
     score: Math.max(0, Math.min(999, Number(fact.score) || 0)),
     expiresAt: Number.isFinite(fact.expiresAt) ? fact.expiresAt as number : undefined,
-    tags: cleanTags(fact.tags),
-  };
+    tags: cleanTags(fact.tags) };
 }
 
 export function createWorldEventState(): WorldEventState {
@@ -314,8 +313,7 @@ export function createWorldEventState(): WorldEventState {
     facts: [],
     nextFactId: 1,
     lastLogKey: '',
-    lastLogTime: -Infinity,
-  };
+    lastLogTime: -Infinity };
 }
 
 export function normalizeWorldEventState(input?: Partial<WorldEventState> | null): WorldEventState {
@@ -369,8 +367,7 @@ function enrichMonsterKillDraft(draft: WorldEventDraft): WorldEventDraft {
     ...draft,
     severity: ecology.rare ? clampSeverity(Math.max(draft.severity, 4)) : draft.severity,
     tags,
-    data: { ...draft.data, ...data },
-  };
+    data: { ...draft.data, ...data } };
 }
 
 function contextFactKind(event: WorldEvent): ContextFact['kind'] | undefined {
@@ -536,8 +533,7 @@ function recordContextFact(store: WorldEventState, event: WorldEvent): void {
     faction: contextFactFaction(event, kind),
     score: contextFactScore(event, kind),
     expiresAt: event.time + contextFactTtl(event, kind),
-    tags: contextFactTags(event, kind),
-  });
+    tags: contextFactTags(event, kind) });
   if (store.facts.length > WORLD_EVENT_IMPORTANT_CAPACITY) {
     store.facts.splice(0, store.facts.length - WORLD_EVENT_IMPORTANT_CAPACITY);
   }
@@ -557,8 +553,7 @@ export function publishEvent(state: GameState, draft: WorldEventDraft): WorldEve
     truth: 'fact',
     severity: clampSeverity(enriched.severity),
     tags: cleanTags(enriched.tags),
-    data: compactEventData(enriched.data),
-  };
+    data: compactEventData(enriched.data) };
 
   pushBuffer(store.recentEvents, event);
   if (event.severity >= 4) pushBuffer(store.importantEvents, event);
@@ -630,9 +625,7 @@ export function publishResourceScarcityEvent(state: GameState, draft: ResourceSc
       scarcityMultiplier: compactNumber(draft.scarcityMultiplier),
       contractPressureMultiplier: compactNumber(draft.contractPressureMultiplier),
       reason: draft.reason,
-      rumorIds: draft.rumorIds?.slice(0, MAX_RESOURCE_SCARCITY_RUMORS),
-    },
-  });
+      rumorIds: draft.rumorIds?.slice(0, MAX_RESOURCE_SCARCITY_RUMORS) } });
 }
 
 export function getRecentEvents(state: GameState, filter: EventFilter = {}): WorldEvent[] {
@@ -778,8 +771,7 @@ export function summarizeImportantEventsByFloorZone(state: GameState, limit = 12
         count: 0,
         maxSeverity: 0,
         lastId: event.id,
-        lastType: event.type,
-      };
+        lastType: event.type };
       byZone.set(key, row);
     }
     row.count++;
@@ -795,3 +787,39 @@ export function summarizeImportantEventsByFloorZone(state: GameState, limit = 12
 export function trimEventHistoryForSave(state: GameState): WorldEventState {
   return normalizeWorldEventState(ensureWorldEventState(state));
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Recent important world events */
+  id: 'recent_events',
+  group: 'world',
+  label: 'Последние события',
+  run: ({ state }) => {
+    const store = ensureWorldEventState(state);
+    state.msgs.push(msg(
+      `[EVENTS] recent=${store.recentEvents.count}/${store.recentEvents.capacity} important=${store.importantEvents.count}/${store.importantEvents.capacity}`,
+      state.time,
+      '#ff0',
+    ));
+    const important = getImportantEvents(state, 10);
+    if (important.length === 0) {
+      state.msgs.push(msg('[EVENTS] important: none', state.time, '#888'));
+      return;
+    }
+    for (let i = important.length - 1; i >= 0; i--) {
+      const e = important[i];
+      const zone = e.zoneId !== undefined ? ` z${e.zoneId + 1}` : '';
+      state.msgs.push(msg(`[EVENTS] #${e.id} ${e.type}${zone} sev${e.severity}`, state.time, '#ccf'));
+    }
+    for (const row of summarizeImportantEventsByFloorZone(state, 8)) {
+      const zone = row.zoneId >= 0 ? `z${row.zoneId + 1}` : 'z?';
+      state.msgs.push(msg(
+        `[EVENTS] floor ${row.z} ${zone}: ${row.count} imp, max${row.maxSeverity}, last ${row.lastType}#${row.lastId}`,
+        state.time,
+        '#9cf',
+      ));
+    }
+  } });

@@ -15,7 +15,7 @@ test('wire coil publishes source roles and repair decisions', () => {
   assert.deepEqual(def.spawnRooms, [RoomType.PRODUCTION, RoomType.STORAGE]);
   assert.ok(def.spawnW > 0);
 
-  for (const tag of ['repair_input', 'electronics', 'source_old_boxes', 'source_cabinets', 'trade', 'emergency_panel', 'pneumomail']) {
+  for (const tag of ['repair_input', 'electronics', 'source_old_boxes', 'source_cabinets', 'trade', 'emergency_panel']) {
     assert.ok(ITEM_TAGS.wire_coil?.includes(tag), `wire_coil must publish ${tag}`);
     assert.ok(def.tags?.includes(tag), `wire_coil item def must carry ${tag}`);
   }

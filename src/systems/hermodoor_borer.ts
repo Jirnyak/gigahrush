@@ -18,6 +18,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { isPlayerEntity, getCurrentPlayerId } from './player_actor';
 import { ensureEntityIndex } from './entity_index';
 import { rng } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 type BorerSource = 'pre_samosbor' | 'post_samosbor' | 'debug';
 type BorerPhase = 'warning' | 'damaged' | 'compromised' | 'repaired' | 'resolved';
@@ -684,3 +685,19 @@ export function debugForceHermodoorBorer(
     'kit=flashlight, uv_spotlight, sealant_tube, hermo_gasket, rubber_door_wedge, wrench; E repairs, closed door traps, killing prevents damage',
   ];
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Force hermodoor borer QA route */
+  id: 'force_hermodoor_borer',
+  group: 'world',
+  label: 'ГЕРМО: точильщик QA',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    for (const line of debugForceHermodoorBorer(world, player, entities, state, nextEntityId)) {
+      state.msgs.push(msg(`[BORER] ${line}`, state.time, '#fb6'));
+    }
+  },
+});

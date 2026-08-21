@@ -1,4 +1,6 @@
 import { rng } from '../core/rand';
+import { isSmokeDebugRun, stabilizeSmokeRecovery } from './debug_smoke';
+import { msg } from '../core/types';
 import {
   SAMOSBOR_VARIANTS,
   buildActiveSamosborVariant,
@@ -6,6 +8,7 @@ import {
   type ActiveSamosborVariant,
   type SamosborVariantId,
 } from '../data/samosbor_variants';
+import { registerDebugCommand } from './debug_registry';
 
 let activeVariant: ActiveSamosborVariant | null = null;
 let forcedNextVariant: SamosborVariantId | null = null;
@@ -81,3 +84,62 @@ export function getLastSamosborVariant(): SamosborVariantId | null {
 export function setActiveSamosborVariantForTests(variant: any): void {
   activeVariant = variant;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Cycle forced samosbor variant + start (full scale = global fronts) */
+  id: 'cycle_samosbor_variant',
+  group: 'samosbor',
+  label: 'Цикл варианта + самосбор',
+  run: ({ state }) => {
+    const variantId = cycleForcedSamosborVariant();
+    state.samosborTimer = 0;
+    state.msgs.push(msg(`[DEBUG] Следующий самосбор: ${variantId} (глобальный)`, state.time, '#ff0'));
+  },
+});
+
+registerDebugCommand({
+  /* Force Veretar variant + start (full scale) */
+  id: 'rare_samosbor',
+  group: 'samosbor',
+  label: 'ВЕРЕТАР: force + самосбор',
+  run: ({ world, player, entities, state }) => {
+    forceNextSamosborVariant('veretar');
+    if (!state.samosborActive) state.samosborTimer = 0;
+    if (isSmokeDebugRun()) stabilizeSmokeRecovery(world, player, entities);
+    state.msgs.push(msg(
+      state.samosborActive
+        ? '[DEBUG] Следующий самосбор: Веретар (глобальный) после текущего'
+        : '[DEBUG] Следующий самосбор: Веретар (глобальный)',
+      state.time,
+      '#f4f1df',
+    ));
+  },
+});
+
+registerDebugCommand({
+  /* Force Maronary variant + start (full scale) */
+  id: 'force_maronary_samosbor',
+  group: 'samosbor',
+  label: 'МАРОНАРИЙ: force + самосбор',
+  run: ({ state }) => {
+    forceNextSamosborVariant('maronary');
+    state.samosborTimer = 0;
+    state.msgs.push(msg('[DEBUG] Следующий самосбор: Маронарий (глобальный)', state.time, '#35ff66'));
+  },
+});
+
+registerDebugCommand({
+  /* Force Istotit variant + start (full scale) */
+  id: 'force_istotit_samosbor',
+  group: 'samosbor',
+  label: 'ИСТОТИТ: force + самосбор',
+  run: ({ state }) => {
+    forceNextSamosborVariant('istotit');
+    state.samosborTimer = 0;
+    state.msgs.push(msg('[DEBUG] Следующий самосбор: Истотит (глобальный)', state.time, '#d6a64b'));
+  },
+});

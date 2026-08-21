@@ -1059,6 +1059,19 @@ export function canPlaceRoom(world: World, x: number, y: number, w: number, h: n
 }
 
 /* ── Stamp a wall-enclosed room ──────────────────────────────── */
+/**
+ * `world.rooms` индексируется id комнаты: сюда кладут по `[id]`, а `roomAt()`
+ * читает `rooms[roomMap[i]]`. Отсюда два требования к счётчику этажа, и оба
+ * молчаливые — TypeScript их не видит.
+ *
+ * Счёт начинается с НУЛЯ и идёт без пропусков. `rooms[0]`, оставленный пустым
+ * счётчиком с единицы, — это дыра в массиве, а `for...of` по разреженному
+ * массиву выдаёт `undefined` (в отличие от `forEach`/`map`, которые дыры
+ * пропускают). Любой из сотни обходов `world.rooms` падает на ней насмерть.
+ *
+ * И id комнат — своё пространство, отдельное от id сущностей: `roomMap` это
+ * `Int16Array`, а счётчик сущностей стартует с 10000 и уходит выше.
+ */
 export function stampRoom(world: World, id: number, type: RoomType, x: number, y: number, w: number, h: number, aptId: number): Room {
   const def = ROOM_DEFS[type];
   const room: Room = {

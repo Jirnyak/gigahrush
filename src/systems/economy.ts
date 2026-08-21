@@ -7,7 +7,7 @@ import {
   type WorldEventSeverity,
   Faction,
   Occupation,
-} from '../core/types';
+  msg } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { type EconomyState, createEconomyFloorState, createEconomyState, normalizeEconomyState } from '../data/economy';
 import { occupationHasTradeTag } from '../data/occupation_profiles';
@@ -18,16 +18,15 @@ import {
   ECONOMY_TARIFF_RULES,
   ECONOMY_TRADE_SPREAD_RULES,
   type EconomyFloorRef,
-  type EconomyTradeSpreadRule,
-} from '../data/economy_rules';
+  type EconomyTradeSpreadRule } from '../data/economy_rules';
 import { RESOURCES, RESOURCE_BY_ID, type ResourceDef, resourceForItem, resourceForItemType } from '../data/resources';
 import {
   publishEvent,
   publishResourceScarcityEvent,
   type ResourceScarcityBand,
-  type ResourceScarcityTrend,
-} from './events';
+  type ResourceScarcityTrend } from './events';
 import { intContractRewardMult } from './rpg';
+import { registerDebugCommand } from './debug_registry';
 
 type EconomyGameState = GameState & { economy?: EconomyState };
 type CachedPrice = { price: number; multiplier: number };
@@ -98,8 +97,7 @@ const RESOURCE_SCARCITY_RANK: Record<ResourceScarcityBand, number> = {
   normal: 0,
   strained: 1,
   shortage: 2,
-  critical: 3,
-};
+  critical: 3 };
 
 function pushTag(out: string[], tag: string | undefined): void {
   if (!tag || out.length >= MAX_QUOTE_TAGS || out.includes(tag)) return;
@@ -394,8 +392,7 @@ function maybePublishScarcityThreshold(
     contractPressureMultiplier: getResourceContractPressure(state, res.id, z),
     tags: opts.tags,
     reason: opts.reason,
-    rumorIds: scarcityRumorIds(res.id, trend),
-  });
+    rumorIds: scarcityRumorIds(res.id, trend) });
 }
 
 /** Applies a stock delta and answers how much of it actually landed. The stock
@@ -529,8 +526,7 @@ export function getEconomyQuote(state: GameState, defId: string, opts: EconomyQu
       buyPrice: 0,
       sellPrice: 0,
       tags: ['unknown_item'],
-      reason: 'unknown_item',
-    };
+      reason: 'unknown_item' };
   }
 
   const floor = opts.floor ?? state.currentZ;
@@ -564,8 +560,7 @@ export function getEconomyQuote(state: GameState, defId: string, opts: EconomyQu
     sellPrice: roundedPrice(basePrice, adjustedMultiplier * spread.sellMultiplier),
     resourceId,
     tags,
-    reason: quoteReason(reasons),
-  };
+    reason: quoteReason(reasons) };
 }
 
 export function recordPlayerItemSale(
@@ -651,9 +646,7 @@ export function recordPlayerItemSale(
       direction: 'player_to_npc',
       outcome,
       deceptiveScore: deceptiveScore > 0 ? deceptiveScore : undefined,
-      ...opts.data,
-    },
-  });
+      ...opts.data } });
 }
 
 export function getScarcityAdjustedReward(
@@ -681,3 +674,19 @@ export function summarizeEconomy(state: GameState, limit = 8): string[] {
     return `${r.name}: ${Math.round(stock.stock)}/${stock.target} x${mult.toFixed(2)}`;
   });
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Economy prices */
+  id: 'economy_prices',
+  group: 'economy',
+  label: 'Цены экономики',
+  run: ({ state }) => {
+    for (const line of summarizeEconomy(state, 10)) state.msgs.push(msg(`[PRICE] ${line}`, state.time, '#ccf'));
+    for (const id of ['water', 'bread', 'bandage', 'ammo_9mm', 'pipe', 'note']) {
+      state.msgs.push(msg(`[PRICE] ${ITEMS[id]?.name ?? id}: ${getAdjustedItemPrice(state, id)}₽`, state.time, '#ccf'));
+    }
+  } });

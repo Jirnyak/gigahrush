@@ -1,3 +1,4 @@
+import '../src/systems/debug_content';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
@@ -36,8 +37,11 @@ function quotedId(text: string, id: string): boolean {
   return text.includes(`'${id}'`) || text.includes(`"${id}"`);
 }
 
+/** Ярлык читается из записи реестра: `id`, затем группа и необязательный
+ *  порядок, затем `label`. Раньше здесь искалась пара `{ id, label }` из
+ *  массива ярлыков — массива больше нет, запись у команды одна. */
 function debugLabel(source: string, id: string): string | undefined {
-  const pattern = new RegExp(`\\{\\s*id:\\s*['"]${id}['"],\\s*label:\\s*['"]([^'"]+)['"]\\s*\\}`);
+  const pattern = new RegExp(`id:\\s*['"]${id}['"],\\s*group:\\s*['"]\\w+['"],(?:\\s*sort:\\s*-?\\d+,)?\\s*label:\\s*['"]([^'"]+)['"]`);
   return pattern.exec(source)?.[1];
 }
 

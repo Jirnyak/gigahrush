@@ -1,7 +1,10 @@
-import { type Entity } from '../core/types';
+import { type Entity, EntityType, msg } from '../core/types';
+import { Spr } from '../entities/sprite_index';
+import { canSpawnEntityType } from './entity_limits';
 import { SURFACE_FLAG_CHALK_MAP, type World } from '../core/world';
 import { paintSurfacePixel } from './surface_marks';
 import { rng } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 export const CHALK_ITEM_ID = 'chalk';
 const CHALK_PIXEL_ALPHA = 235;
@@ -63,3 +66,30 @@ export function drawEquippedChalkPixel(world: World, player: Entity, maxDurabili
   world.surfaceFlags[ci] |= SURFACE_FLAG_CHALK_MAP;
   return true;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  id: 'spawn_chalk',
+  group: 'spawn',
+  label: 'спавн мелка',
+  run: ({ player, entities, state, nextEntityId }) => {
+    if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) {
+      state.msgs.push(msg('[DEBUG] лимит предметов: мелок не заспавнен', state.time, '#f84'));
+      return;
+    }
+    entities.push({
+      id: nextEntityId.v++,
+      type: EntityType.ITEM_DROP,
+      x: player.x + Math.cos(player.angle) * 1.4,
+      y: player.y + Math.sin(player.angle) * 1.4,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 0,
+      sprite: Spr.ITEM_DROP,
+      inventory: [{ defId: CHALK_ITEM_ID, count: 1 }] });
+    state.msgs.push(msg('[DEBUG] мелок заспавнен перед игроком', state.time, '#ff0'));
+  } });

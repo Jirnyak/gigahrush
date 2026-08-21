@@ -90,17 +90,38 @@ function isPersonallyHostile(attacker: Entity, target: Entity): boolean {
   return isDemosPersonalEnemy(state, from, to);
 }
 
+/* Монстр по умолчанию — экология, а не сторона: все три канала ниже отвечают за
+ * него фиксированной таблицей FACTION_VS_MONSTER. Исключение объявляет ВИД
+ * флагом `sided`, и только тогда читается его `faction`.
+ *
+ * Признаком стороны нельзя брать само наличие `faction`: поле общее для всех
+ * сущностей, его проставляют мимоходом (так делают и тестовые фабрики), и вся
+ * обычная экология молча переехала бы на человеческие правила. Флаг вида —
+ * решение автора монстра, а не побочный эффект чужого кода. */
+function factionedMonsterSide(e: Entity): Faction | undefined {
+  if (e.type !== EntityType.MONSTER) return undefined;
+  return monsterHasAIFlag(e, 'sided') ? e.faction : undefined;
+}
+
 /** Check if entity considers another entity hostile */
 export function isHostile(attacker: Entity, target: Entity): boolean {
   // PSI control: controlled entities don't attack their controller (and vice-versa)
   if (isPsiAlly(attacker, target)) return false;
   // Monsters are one ecology faction. They can compete through movement/space, but not through combat hostility.
-  if (attacker.type === EntityType.MONSTER && target.type === EntityType.MONSTER) return false;
+  // Отсекается только пара «экология против экологии»: стоит одной стороне быть
+  // объявленной (`sided`), как она уже член фракции, и вражду решают каналы ниже.
+  if (attacker.type === EntityType.MONSTER && target.type === EntityType.MONSTER
+    && factionedMonsterSide(attacker) === undefined && factionedMonsterSide(target) === undefined) return false;
   // PSI madness: mad entities attack everyone
   if (isPsiMad(attacker)) return target.id !== attacker.id;
   if (isPassiveDefensiveNeutralMonster(attacker) || isPassiveDefensiveNeutralMonster(target)) return false;
   if (isPlayerEntity(target) && attacker.id !== target.id) {
-    if (attacker.type === EntityType.MONSTER) return getFactionMonsterRelation(Faction.PLAYER) <= RELATION_HOSTILE_THRESHOLD;
+    if (attacker.type === EntityType.MONSTER) {
+      const side = factionedMonsterSide(attacker);
+      return side !== undefined
+        ? areFactionsHostile(side, Faction.PLAYER)
+        : getFactionMonsterRelation(Faction.PLAYER) <= RELATION_HOSTILE_THRESHOLD;
+    }
     if (attacker.type === EntityType.NPC && isNpcPlayerHostile(attacker)) return true;
     return areFactionsHostile(attacker.faction ?? Faction.CITIZEN, Faction.PLAYER);
   }
@@ -108,7 +129,16 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   if (attacker.type === EntityType.MONSTER) {
     // Monsters are hostile to everyone except cultists
     const tFaction = target.faction ?? Faction.CITIZEN;
-    return getFactionMonsterRelation(tFaction) <= RELATION_HOSTILE_THRESHOLD;
+    const side = factionedMonsterSide(attacker);
+    if (side === undefined) return getFactionMonsterRelation(tFaction) <= RELATION_HOSTILE_THRESHOLD;
+    // Сторонний монстр — член фракции целиком, а не только против людей: против
+    // ОБЫЧНОЙ экологии он читает ту же таблицу «фракция-монстры», что человек
+    // его фракции. Иначе боец-ликвидатор проходил бы мимо тени, которую тот же
+    // ликвидатор-человек атакует.
+    if (target.type === EntityType.MONSTER && factionedMonsterSide(target) === undefined) {
+      return getFactionMonsterRelation(side) <= RELATION_HOSTILE_THRESHOLD;
+    }
+    return areFactionsHostile(side, tFaction);
   }
   // Черный ликвидатор выглядит как свой: настоящие ликвидаторы не поднимают
   // тревогу, пока он не ударил первым. Состояния для этого не нужно — ударив,
@@ -121,7 +151,10 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   }
   if (target.type === EntityType.MONSTER) {
     const aFaction = attacker.faction ?? Faction.CITIZEN;
-    return getFactionMonsterRelation(aFaction) <= RELATION_HOSTILE_THRESHOLD;
+    const side = factionedMonsterSide(target);
+    return side !== undefined
+      ? areFactionsHostile(aFaction, side)
+      : getFactionMonsterRelation(aFaction) <= RELATION_HOSTILE_THRESHOLD;
   }
   if (attacker.type === EntityType.NPC && isPlayerEntity(target) && isNpcPlayerHostile(attacker)) {
     return true;

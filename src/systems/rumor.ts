@@ -678,7 +678,6 @@ const TAG_WORDS: Record<string, string> = {
   numbered: 'номерной',
   obzh: 'ОБЖ',
   player: 'игрок',
-  pneumomail: 'пневмопочта',
   production: 'производство',
   quest: 'задание',
   quiet: 'тихий',
@@ -751,8 +750,6 @@ function warningTagName(tag: string): string {
       return 'белый обход забрал свидетеля';
     case 'false_lead':
       return 'ложная зацепка';
-    case 'pneumomail':
-      return 'пневмопочта шумит';
     default:
       return humanizeTag(tag);
   }
@@ -947,7 +944,6 @@ function itemEventRumorId(itemId: string): string | undefined {
     case 'water_coupon': return 'lead_maintenance_watermeter_coupon';
     case 'flashlight': return 'lead_maintenance_diver_cache_flashlight';
     case 'metro_ticket': return 'lead_maintenance_metro_ticket';
-    case 'pneumomail_capsule': return 'pneumomail_contraband_note';
     case 'concentrate_coupon': return 'lead_maintenance_concentrate_press_coupon';
     case 'valve_tag': return 'lead_maintenance_heatline_valve_tag';
     case 'siren_shard': return 'lead_hell_herald_threshold_shard';

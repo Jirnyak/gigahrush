@@ -16,7 +16,7 @@ test('items 175 wire bundle is merged into existing wire coil repair item', () =
   assert.ok(def.spawnRooms.length > 0, 'wire_coil must remain reachable as room loot');
   assert.ok(def.spawnW > 0, 'wire_coil must remain reachable through generic placement');
 
-  for (const tag of ['repair', 'electronics', 'emergency_panel', 'pneumomail']) {
+  for (const tag of ['repair', 'electronics', 'emergency_panel']) {
     assert.ok(ITEM_TAGS.wire_coil?.includes(tag), `wire_coil must publish ${tag}`);
     assert.ok(def.tags?.includes(tag), `wire_coil item def must carry ${tag}`);
   }

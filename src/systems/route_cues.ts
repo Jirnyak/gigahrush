@@ -27,6 +27,7 @@ import {
   formatFloorZ,
 } from './procedural_floors';
 import { isPlayerEntity } from './player_actor';
+import { registerDebugCommand } from './debug_registry';
 
 const FLOOR_NAMES: Record<number, string> = {
   0: 'Министерство',
@@ -717,3 +718,21 @@ export function getActiveRouteCueHud(time: number, z: number): RouteCueHud | nul
 export function resetRouteCueHud(): void {
   activeHud = null;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Route cue audio/HUD smoke */
+  id: 'route_cue_nearest',
+  group: 'world',
+  label: 'Route cue: trigger nearest',
+  run: ({ world, player, state }) => {
+    const count = routeCueCount(world);
+    state.msgs.push(msg(`[CUE] registered=${count}`, state.time, count > 0 ? '#9f7' : '#fa4'));
+    for (const line of debugTriggerRouteCue(world, player, state)) {
+      state.msgs.push(msg(`[CUE] ${line}`, state.time, '#9f7'));
+    }
+  },
+});

@@ -1,7 +1,7 @@
 import {
   Cell, ContainerKind, EntityType, Faction, Feature, ItemType, RoomType,
   type ContainerAccess, type Entity, type GameState, type Item, type Room, type WorldContainer,
-} from '../core/types';
+  msg } from '../core/types';
 import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { ITEMS } from '../data/catalog';
@@ -10,13 +10,11 @@ import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   getPermitDef,
   permitAccessTagsFromContainerTags,
-  resolvePermitAccess,
-} from '../data/permits';
+  resolvePermitAccess } from '../data/permits';
 import {
   chernobogDocketContainerEventTags,
   chernobogDocketContainerRumorIds,
-  isChernobogDocketItem,
-} from '../data/chernobog_docket';
+  isChernobogDocketItem } from '../data/chernobog_docket';
 import { getStack } from '../data/items';
 import { addFactionRelMutual, applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from '../data/relations';
 import { changeResourceStock, getEconomyQuote, type EconomyQuote } from './economy';
@@ -38,17 +36,16 @@ import {
   roomMemoryRevealsStash,
   roomMemoryShouldRefuseService,
   roomMemoryShouldReportTouch,
-  type RoomMemoryRecord,
-} from './room_memory';
+  type RoomMemoryRecord } from './room_memory';
 import { observeRumorEvent } from './rumor';
 import {
   SHELTER_TALLY_ID,
   isShelterTallyItem,
-  publishShelterTallyEvent,
-} from './shelter_tally';
+  publishShelterTallyEvent } from './shelter_tally';
 import { isPlayerEntity } from './player_actor';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 import { itemAddCapacity, addItemMovedCount, consumeInventorySlot, reconcileEquippedAfterLoss } from './inventory';
+import { registerDebugCommand } from './debug_registry';
 
 const THEFT_WITNESS_RADIUS = 7;
 const THEFT_WITNESS_SCAN_CAP = 160;
@@ -174,8 +171,7 @@ const FEATURE_LOOT_BASE_KIND: Partial<Record<Feature, ContainerKind>> = {
   [Feature.APPARATUS]: ContainerKind.TOOL_LOCKER,
   [Feature.TABLE]: ContainerKind.WOODEN_CHEST,
   [Feature.CHAIR]: ContainerKind.WOODEN_CHEST,
-  [Feature.BED]: ContainerKind.WOODEN_CHEST,
-};
+  [Feature.BED]: ContainerKind.WOODEN_CHEST };
 
 const FEATURE_LOOT_UPGRADE_KINDS = [
   ContainerKind.MEDICAL_CABINET,
@@ -224,8 +220,7 @@ export function makeFeatureLootContainer(
     capacitySlots: def.capacitySlots,
     access: 'public',
     discovered: true,
-    tags: [...def.tags, FEATURE_LOOT_TAG, 'mesh_hidden'],
-  };
+    tags: [...def.tags, FEATURE_LOOT_TAG, 'mesh_hidden'] };
 }
 
 function tallyFloorAllowsStaticSeed(z: number): boolean {
@@ -268,8 +263,7 @@ function normalizeContainerInventory(input: unknown): Item[] {
     inv.push({
       defId: item.defId,
       count: Math.min(count, getStack(def)),
-      data: item.data,
-    });
+      data: item.data });
     if (inv.length >= MAX_INVENTORY_SLOTS) break;
   }
   return inv;
@@ -352,8 +346,7 @@ function normalizeSavedContainer(
     productionBlockedReason: validProductionBlockedReason(src.productionBlockedReason),
     tags: Array.isArray(src.tags)
       ? src.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 12)
-      : [...def.tags],
-  };
+      : [...def.tags] };
   if (!containerCellValid(world, z, container)) return null;
   usedIds.add(id);
   return container;
@@ -468,8 +461,7 @@ export function ensureRoomContainers(world: World, z: number, maxContainers = 12
         access: accessForRoom(room, kind),
         lockDifficulty: def.defaultAccess === 'locked' ? 2 + (room.id % 4) : undefined,
         discovered: def.defaultAccess !== 'secret',
-        tags: [...def.tags],
-      };
+        tags: [...def.tags] };
       world.addContainer(container);
       changedCells.push(world.idx(container.x, container.y));
       created++;
@@ -633,14 +625,12 @@ export function containerTheftStatus(container: WorldContainer): ContainerTheftS
     return {
       label: 'РЕВИЗИЯ',
       detail: `Пропажа записана: ${stolenCount} вид(а) предметов.`,
-      color: '#fa0',
-    };
+      color: '#fa0' };
   }
   return {
     label: 'ПРОПАЖА',
     detail: `Не хватает ${stolenCount} вид(а) предметов; владелец может заметить.`,
-    color: '#f84',
-  };
+    color: '#f84' };
 }
 
 function markStolen(container: WorldContainer, item: Item): boolean {
@@ -719,8 +709,7 @@ function containerDepositOutcome(container: WorldContainer, item: Item): {
       relationDelta: 1,
       severity: 3,
       tags: ['resident_relief', 'relief'],
-      rumorIds: ['faction_citizen_food'],
-    };
+      rumorIds: ['faction_citizen_food'] };
   }
   if (container.tags.includes('veretar_window_seal') && !container.tags.includes('veretar_window_sealed_done') && isVeretarSealItem(item.defId)) {
     addContainerTag(container, 'veretar_window_sealed_done');
@@ -732,8 +721,7 @@ function containerDepositOutcome(container: WorldContainer, item: Item): {
       relationDelta: curtain ? 1 : 2,
       severity: curtain ? 3 : 4,
       tags: ['veretar', curtain ? 'veretar_window_curtain' : 'veretar_window_seal', 'witness'],
-      rumorIds: [curtain ? 'samosbor_veretar_window_curtained' : 'samosbor_veretar_window_sealed'],
-    };
+      rumorIds: [curtain ? 'samosbor_veretar_window_curtained' : 'samosbor_veretar_window_sealed'] };
   }
   if (container.tags.includes('evidence_drop') && !container.tags.includes('evidence_drop_done') && isEvidenceItem(item.defId)) {
     addContainerTag(container, 'evidence_drop_done');
@@ -744,8 +732,7 @@ function containerDepositOutcome(container: WorldContainer, item: Item): {
       relationDelta: -2,
       severity: 4,
       tags: ['evidence', 'expose'],
-      rumorIds: ['faction_cultist_after_fog'],
-    };
+      rumorIds: ['faction_cultist_after_fog'] };
   }
   if (container.tags.includes('sabotage_drop') && !container.tags.includes('sabotage_drop_done') && isSabotageItem(item.defId)) {
     addContainerTag(container, 'sabotage_drop_done');
@@ -755,8 +742,7 @@ function containerDepositOutcome(container: WorldContainer, item: Item): {
       relationDelta: -1,
       severity: 4,
       tags: ['sabotage', 'shortage'],
-      rumorIds: ['faction_cultist_after_fog'],
-    };
+      rumorIds: ['faction_cultist_after_fog'] };
   }
   if (
     item.defId === 'maronary_shaving'
@@ -768,8 +754,7 @@ function containerDepositOutcome(container: WorldContainer, item: Item): {
       relationDelta: 0,
       severity: 3,
       tags: ['maronary', 'hidden', 'contraband'],
-      rumorIds: ['samosbor_maronary_shaving_hidden'],
-    };
+      rumorIds: ['samosbor_maronary_shaving_hidden'] };
   }
   return { outcome: 'deposit', relationDelta: 0, severity: 1, tags: [], rumorIds: [] };
 }
@@ -787,8 +772,7 @@ function containerPurchaseQuote(
     traderFaction: container.faction,
     tariffMultiplier: CONTAINER_BUY_TARIFF * memoryMultiplier,
     tags: ['container_purchase'],
-    reason: 'container_owner_stock',
-  });
+    reason: 'container_owner_stock' });
   return { unitPrice: quote.buyPrice, totalPrice: quote.buyPrice * count, quote };
 }
 
@@ -840,8 +824,7 @@ export function containerItemActionInfo(
       color: enabled ? '#ee4' : '#f84',
       enabled,
       mode: 'buy',
-      price,
-    };
+      price };
   }
   if (access.unlock) return { label: `${controlHint('interact')} отпереть и взять`, detail: access.detail, color: '#ee4', enabled: true, mode: 'unlock' };
   if (access.theft) return { label: `${controlHint('interact')} украсть`, detail: access.detail, color: '#f84', enabled: true, mode: 'steal' };
@@ -978,9 +961,7 @@ function publishTheftAuditIfDue(container: WorldContainer, actor: Entity, contex
       auditorNames: audit.auditors.map(a => a.name ?? `NPC ${a.id}`),
       auditScanCapped: audit.capped,
       stolenItemIds: container.stolenItemIds.slice(0, 8),
-      relationPenalty,
-    },
-  });
+      relationPenalty } });
   for (const auditor of audit.auditors) observeRumorEvent(auditor, event, state.time);
   return true;
 }
@@ -1040,9 +1021,7 @@ function publishRoomMemoryReportIfNeeded(container: WorldContainer, actor: Entit
       roomMemoryBits: memory?.bits ?? 0,
       roomMemorySeverity: memory?.severity ?? 0,
       roomMemoryLastEventId: memory?.lastEventId ?? 0,
-      relationPenalty,
-    },
-  });
+      relationPenalty } });
   return relationPenalty;
 }
 
@@ -1080,9 +1059,7 @@ function unlockContainerForActor(container: WorldContainer, actor: Entity, state
         containerTags: container.tags,
         accessOutcome: 'unlock',
         unlockItemId: itemId,
-        unlockItemName: ITEMS[itemId]?.name ?? itemId,
-      },
-    });
+        unlockItemName: ITEMS[itemId]?.name ?? itemId } });
     const permit = getPermitDef(itemId);
     const permitTags = permitAccessTagsFromContainerTags(container.tags);
     if (permit && permitTags.length > 0) {
@@ -1204,9 +1181,7 @@ export function takeFromContainer(
         relationPenalty: stolen ? relationPenalty : undefined,
         karmaPenalty: stolen ? karmaPenalty : undefined,
         stolenItemKnown,
-        ...(rumorIds.length > 0 ? { rumorIds } : {}),
-      },
-    });
+        ...(rumorIds.length > 0 ? { rumorIds } : {}) } });
     if (stolen) {
       for (const witness of theftWitness.witnesses) observeRumorEvent(witness, event, state.time);
       if (isPlayerEntity(actor) && isShelterTallyItem(defId)) {
@@ -1214,8 +1189,7 @@ export function takeFromContainer(
           targetId: firstWitness?.id ?? container.ownerNpcId,
           targetName: firstWitness?.name ?? container.ownerName,
           targetFaction: firstWitness?.faction ?? container.faction,
-          container,
-        });
+          container });
       }
     } else {
       publishRoomMemoryReportIfNeeded(container, actor, state);
@@ -1315,9 +1289,7 @@ export function putIntoContainer(
         witnessCount: witnesses.witnesses.length,
         witnessIds: witnesses.witnesses.map(w => w.id),
         witnessScanCapped: witnesses.capped,
-        rumorIds: outcome.rumorIds,
-      },
-    });
+        rumorIds: outcome.rumorIds } });
     for (const witness of witnesses.witnesses) observeRumorEvent(witness, event, state.time);
     if (isPlayerEntity(actor) && isShelterTallyItem(defId) && isShelterTallyHideContainer(container)
       && !container.tags.includes('shelter_tally_hidden')) {
@@ -1347,3 +1319,39 @@ export function storeNpcItemInRoomContainer(world: World, npc: Entity): boolean 
   if (!container) return false;
   return putIntoContainer(container, npc, 0, npc.inventory[0].count);
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Containers near player */
+  id: 'nearby_containers',
+  group: 'economy',
+  label: 'Контейнеры рядом',
+  run: ({ world, player, state }) => {
+    const made = ensureRoomContainers(world, state.currentZ);
+    if (made > 0) state.msgs.push(msg(`[CONT] создано: ${made}`, state.time, '#ff0'));
+    const list = nearbyContainers(world, player, 3);
+    if (list.length === 0) {
+      state.msgs.push(msg(`[CONT] рядом нет. всего=${world.containers.length}`, state.time, '#888'));
+      return;
+    }
+    for (const c of list.slice(0, 5)) state.msgs.push(msg(`[CONT] ${describeContainer(c)}`, state.time, '#ccf'));
+  } });
+
+registerDebugCommand({
+  /* Take first item from nearest container */
+  id: 'take_from_container',
+  group: 'economy',
+  label: 'Взять из контейнера',
+  run: ({ world, player, entities, state }) => {
+    ensureRoomContainers(world, state.currentZ);
+    const c = firstNearbyContainer(world, player);
+    if (!c) {
+      state.msgs.push(msg('[CONT] рядом нет контейнера', state.time, '#888'));
+      return;
+    }
+    const ok = takeFromContainer(c, player, 0, 1, { state, world, entities });
+    state.msgs.push(msg(ok ? `[CONT] взято из #${c.id}` : `[CONT] #${c.id} пуст/недоступен`, state.time, ok ? '#4f4' : '#f84'));
+  } });

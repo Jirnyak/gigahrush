@@ -597,7 +597,7 @@ test('audited survival documents, drinks, and rare trophies have economy roles',
   for (const id of [
     'official_permit_slip', 'weapon_permit_signed', 'ammo_issue_order',
     'official_quarantine_clearance', 'elevator_access_order', 'void_archive_warrant',
-    'pneumomail_capsule', 'p14_gasmask_receipt', 'cleanup_order_stub',
+    'p14_gasmask_receipt', 'cleanup_order_stub',
   ]) {
     assert.ok(byId.documents.itemIds.includes(id), `${id} must affect document scarcity`);
     assert.ok(ITEM_TAGS[id]?.includes('document'), `${id} must publish document tags`);

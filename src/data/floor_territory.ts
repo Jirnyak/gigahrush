@@ -96,7 +96,7 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   underhell: shares(7, 10, 38, 5, 28, 12),
   podad: shares(6, 9, 38, 5, 28, 14),
   spectral_chasovnya: shares(10, 8, 46, 6, 22, 8),
-  cantor_pustoty: shares(6, 8, 24, 8, 34, 20),
+  stenka: shares(4, 40, 4, 4, 44, 4),
   darkness: shares(6, 8, 24, 8, 36, 18),
   liquidatorbase: [{ owner: ZoneFaction.LIQUIDATOR, share: 1.0 }],
   horrorfloor: shares(6, 8, 24, 8, 36, 18),

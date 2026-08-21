@@ -38,6 +38,7 @@ import { canSpendResources, spendResources } from './economy';
 import { publishEvent } from './events';
 import { territoryOwnerToFaction } from '../data/factions';
 import { territoryRoomOwner } from './territory';
+import { registerDebugCommand } from './debug_registry';
 
 export interface ProductionState {
   z: number;
@@ -1100,3 +1101,18 @@ export function summarizeProduction(state: GameState, limit = 6): string[] {
   }
   return result;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Force production tick */
+  id: 'force_production_tick',
+  group: 'economy',
+  label: 'Тик производства',
+  run: ({ world, state }) => {
+    const made = tickProduction(state, world, true);
+    for (const line of summarizeProduction(state, 5)) state.msgs.push(msg(`[PROD] ${line}`, state.time, made > 0 ? '#4f4' : '#888'));
+  },
+});

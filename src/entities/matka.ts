@@ -12,6 +12,13 @@ export const DEF: MonsterDef = {
   dmg: 12,
   attackRate: 3.5,
   sprite: 0,   // auto-assigned by generateSprites() // will shift others
+  source: {
+    childKinds: [MonsterKind.SBORKA, MonsterKind.TVAR, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN],
+    cooldownSec: 60,
+    cap: 12,
+    childName: 'Приплод Матки',
+    spawnMsg: 'Матка родила %s. Источник умрёт, но приплод останется.',
+  },
   counterplay: 'Решите сразу: убить матку до нового приплода, расчистить детей или уйти с добычей. Смешанный план быстро делает комнату тесной.',
   lootHint: 'маточный узел, теплая слизь, редкая мясная руна после зачистки приплода',
 };

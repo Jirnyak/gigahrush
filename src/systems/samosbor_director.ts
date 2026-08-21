@@ -6,6 +6,7 @@ import {
   msg,
 } from '../core/types';
 import { World } from '../core/world';
+import { getActiveSamosborVariant } from './samosbor_variants_runtime';
 import {
   SAMOSBOR_DIRECTOR_EFFECT_FAIL_COOLDOWN,
   SAMOSBOR_DIRECTOR_MIN_INTERVAL,
@@ -26,6 +27,7 @@ import { observeRumorEvent } from './rumor';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
 import { assignPersistentAlifeNpcFromEntity, currentAlifeFloorKey } from './alife';
+import { registerDebugCommand } from './debug_registry';
 
 const TRACE_CAP = 300;
 
@@ -783,3 +785,46 @@ export function summarizeSamosborDirector(state: GameState): string[] {
   }
   return lines;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Samosbor director state */
+  id: 'samosbor_director_state',
+  group: 'samosbor',
+  label: 'Директор: состояние',
+  run: ({ state }) => {
+    for (const line of summarizeSamosborDirector(state)) state.msgs.push(msg(`[DIR] ${line}`, state.time, '#ccf'));
+  },
+});
+
+registerDebugCommand({
+  /* Clear samosbor director cooldowns */
+  id: 'clear_samosbor_director_cooldowns',
+  group: 'samosbor',
+  label: 'Директор: clear cooldown',
+  run: ({ state }) => {
+    clearSamosborDirectorCooldowns(state);
+    state.msgs.push(msg('[DIR] cooldowns cleared', state.time, '#ff0'));
+  },
+});
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Force next samosbor director beat */
+  id: 'force_samosbor_director_beat',
+  group: 'samosbor',
+  label: 'Директор: force beat',
+  run: ({ world, entities, state, nextEntityId }) => {
+    const result = forceNextSamosborDirectorBeat(world, entities, state, nextEntityId, getActiveSamosborVariant());
+    state.msgs.push(msg(
+      result.fired ? `[DIR] forced ${result.beatId}` : `[DIR] ${result.reasonCode}`,
+      state.time,
+      result.fired ? '#4f4' : '#f84',
+    ));
+  } });

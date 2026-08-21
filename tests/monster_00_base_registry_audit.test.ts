@@ -22,6 +22,12 @@ import { S } from '../src/core/pixutil';
 const ZERO_WEIGHT_MONSTERS = new Set<MonsterKind>([
   MonsterKind.CREATOR,
   MonsterKind.PSEUDOLIFT,
+  // Линейные виды арены: их ставит только генератор этажа, во всеобщие
+  // взвешенные выборки самосбора они не входят.
+  MonsterKind.BASHNYA,
+  MonsterKind.GNEZDO,
+  MonsterKind.BOEC,
+  MonsterKind.LOGOVO,
 ]);
 
 interface TacticalAudit {

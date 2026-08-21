@@ -1,8 +1,13 @@
-import { EntityType, type Entity, type GameState } from '../core/types';
+import { EntityType, type Entity, type GameState, msg } from '../core/types';
+import { summarizeHladonColdPockets } from './hladon';
+import { summarizeCarnivorousFungus } from './carnivorous_fungus';
+import { summarizeHeatline } from './heatline';
+import { floorCatalogDebugLines } from './floor_catalog';
 import { World } from '../core/world';
 import { countContainerItems } from './containers';
 import { summarizeEconomy } from './economy';
 import { summarizeProduction } from './production';
+import { registerDebugCommand } from './debug_registry';
 
 export function populationItemSummary(world: World, entities: Entity[], state: GameState): string[] {
   let npcs = 0, monsters = 0, drops = 0, dropItems = 0;
@@ -22,3 +27,27 @@ export function populationItemSummary(world: World, entities: Entity[], state: G
     ...summarizeProduction(state, 3),
   ];
 }
+
+const CATALOG_DEBUG_SEARCHES = [ 'numbered', '404', 'school', 'hospital', 'market'];
+let catalogDebugSearchIndex = 0;
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Population, item count, and floor pocket catalog */
+  id: 'balance_catalog',
+  group: 'economy',
+  label: 'Баланс + каталог карманов',
+  run: ({ world, player, entities, state }) => {
+    for (const line of populationItemSummary(world, entities, state)) state.msgs.push(msg(`[BAL] ${line}`, state.time, '#ccf'));
+    const search = CATALOG_DEBUG_SEARCHES[catalogDebugSearchIndex++ % CATALOG_DEBUG_SEARCHES.length];
+    const query = search
+      ? { search, limit: 6 }
+      : { baseFloor: state.currentZ, limit: 6 };
+    for (const line of floorCatalogDebugLines(query)) state.msgs.push(msg(`[CAT] ${line}`, state.time, '#ccf'));
+    for (const line of summarizeHeatline(world)) state.msgs.push(msg(line, state.time, '#f84'));
+    for (const line of summarizeCarnivorousFungus(world)) state.msgs.push(msg(line, state.time, '#bf8'));
+    for (const line of summarizeHladonColdPockets(world, player)) state.msgs.push(msg(line, state.time, '#8cf'));
+  } });

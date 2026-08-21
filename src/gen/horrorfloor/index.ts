@@ -16,7 +16,7 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
   const nextId = { v: 10000 };
-  let nextRoomId = 1;
+  let nextRoomId = 0;
 
   world.wallTex.fill(Tex.DARK);
   world.floorTex.fill(Tex.F_CONCRETE);

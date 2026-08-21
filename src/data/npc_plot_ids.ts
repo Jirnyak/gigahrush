@@ -474,7 +474,7 @@ export const PLOT_NPC_ID_ORDER: readonly string[] = [
   'maintenance_ambient_0_fb1ov',
   'maintenance_ambient_0_fyogg',
   'maintenance_ambient_0_tvcyi',
-  'maintenance_ambient_0_70wpc',
+  'maintenance_ambient_0_70wpc', // выгорел: пневмопочта вырезана, слот держится ради нумерации
   'ostavshiysya_likvidator',
   'ostliq_vyuga_report',
   'ostliq_titov_witness',

@@ -26,6 +26,7 @@ import { hideMapExplorationCells } from "./map_exploration";
 import { pruneRouteCuesInCells } from "./route_cues";
 import { isPlayerEntity } from "./player_actor";
 import { rng } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 export type SamosborWaveScale = "small" | "medium" | "full";
 
@@ -2037,3 +2038,19 @@ export function classifySamosborWaveCellForTests(
 ): WaveRole {
   return waveRole(seed, originIdx, idx, ring);
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  id: 'debug_samosbor_small_wave',
+  group: 'samosbor',
+  label: 'SAMOSBOR: малая волна у игрока',
+  run: ({ world, player, entities, state }) => {
+    for (const line of debugStartSamosborWaveAtPlayer(world, player, entities, state, 'small')) {
+      state.msgs.push(msg(`[SAMOSBOR-WAVE] ${line}`, state.time, '#c8f'));
+    }
+    return { type: 'refresh_world_data' };
+  },
+});

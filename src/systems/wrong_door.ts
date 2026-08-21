@@ -1,11 +1,12 @@
 /* ── Maronary wrong-door one-shot remap ───────────────────────── */
 
 import { stampSurfaceSplat } from './surface_marks';
-import { W, Cell, DoorState, Entity, GameState } from '../core/types';
+import { W, Cell, DoorState, Entity, GameState, msg } from '../core/types';
 import { World } from '../core/world';
 import { publishEvent } from './events';
 import { getCurrentPlayerEntity } from './player_actor';
 import { territoryOwnerAtIndex } from './territory';
+import { registerDebugCommand } from './debug_registry';
 
 export { ContainerKind, Faction, Occupation } from '../core/types';
 
@@ -162,8 +163,7 @@ function sourceDoorAt(world: World, idx: number, originX: number, originY: numbe
   return {
     idx,
     roomId: doorRoomId(door),
-    dist2: world.dist2(Math.floor(originX), Math.floor(originY), idx % W, (idx / W) | 0),
-  };
+    dist2: world.dist2(Math.floor(originX), Math.floor(originY), idx % W, (idx / W) | 0) };
 }
 
 function collectSourceDoors(world: World, originX: number, originY: number, preferredSourceIdx?: number): SourceDoor[] {
@@ -201,8 +201,7 @@ function collectTargetExits(world: World): TargetExit[] {
         doorIdx,
         idx,
         roomId: world.roomMap[idx],
-        danger: targetDanger(world, idx),
-      });
+        danger: targetDanger(world, idx) });
     }
   }
   return out;
@@ -232,8 +231,7 @@ function routeOptions(
         targetRoomId: target.roomId,
         distance2: world.dist2(sx, sy, tx, ty),
         sourceDist2: source.dist2,
-        targetDanger: target.danger,
-      });
+        targetDanger: target.danger });
     }
   }
   return out;
@@ -290,9 +288,7 @@ function publishWrongDoorEvent(
         ? 'check_door_number_or_wait_for_expiry'
         : phase === 'used'
           ? 'shortcut_taken_once_trace_recorded'
-          : 'route_distrusted_or_expired',
-    },
-  });
+          : 'route_distrusted_or_expired' } });
 }
 
 function removeRemap(world: World, store: WrongDoorStore, remap: WrongDoorRemap): void {
@@ -363,8 +359,7 @@ export function createWrongDoorRemap(
     targetRoomId: selected.targetRoomId,
     createdAt: state.time,
     expiresAt: state.time + WRONG_DOOR_TTL,
-    reason,
-  };
+    reason };
   store.remaps.push(remap);
   world.anomalyTeleports.set(remap.sourceIdx, remap.targetIdx);
 
@@ -382,8 +377,7 @@ export function createWrongDoorRemap(
     sourceY: sy,
     targetX: tx,
     targetY: ty,
-    expiresAt: remap.expiresAt,
-  };
+    expiresAt: remap.expiresAt };
 }
 
 export function createMaronaryWrongDoorRemap(
@@ -443,8 +437,25 @@ export function getWrongDoorMapCues(world: World, state: GameState | undefined):
       sourceY: (remap.sourceIdx / W) | 0,
       targetX: remap.targetIdx % W,
       targetY: (remap.targetIdx / W) | 0,
-      expiresAt: remap.expiresAt,
-    });
+      expiresAt: remap.expiresAt });
   }
   return out;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Force Maronary wrong-door remap */
+  id: 'force_maronary_wrong_door',
+  group: 'samosbor',
+  label: 'МАРОНАРИЙ: wrong door',
+  run: ({ world, player, state }) => {
+    const ok = debugCreateWrongDoorRemap(world, player, state);
+    state.msgs.push(msg(
+      ok ? '[MAR] неправильная дверь создана' : '[MAR] рядом нет подходящей пары дверей',
+      state.time,
+      ok ? '#35ff66' : '#f84',
+    ));
+  } });

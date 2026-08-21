@@ -53,7 +53,26 @@ export type MonsterAIFlag =
   | 'fractureSprint'
   | 'lurkingFurniture'
   | 'weepingAngel'
-  | 'lightFollower';
+  | 'lightFollower'
+  /* Вид воюет сторонами: его вражда решается общей матрицей отношений по
+   * полю `faction`, а не фиксированной таблицей «фракция-монстры». Флаг здесь
+   * не роскошь — без него признаком стороны было бы просто наличие `faction`,
+   * и любое случайно проставленное поле молча переводило бы обычную экологию
+   * на человеческие правила. */
+  | 'sided';
+
+/* Вид-источник: приплод, каденция и потолок живых детей. Раньше это были три
+ * константы в `systems/matka_source.ts` и жёсткая проверка на матку; теперь
+ * источником делает объявление, а шаг остался один на всех. */
+export interface MonsterSourceDef {
+  childKinds: readonly MonsterKind[];
+  cooldownSec: number;
+  cap: number;
+  /** Имя ребёнка. Родительный падеж названия вида не выводится, поэтому он тут. */
+  childName: string;
+  /** Строка в лог при рождении, `%s` — имя вида ребёнка. Без неё источник молчит. */
+  spawnMsg?: string;
+}
 
 export interface MonsterDef {
   radius?: number;
@@ -69,6 +88,7 @@ export interface MonsterDef {
   projSprite?: number;      // projectile sprite index
   projType?: ProjType;      // projectile behavior tag
   aiFlags?: readonly MonsterAIFlag[];
+  source?: MonsterSourceDef; // spawns capped persistent children on a timer
   counterplay?: string;
   lootHint?: string;
   boss?: MonsterBossReadability;
@@ -162,6 +182,10 @@ import { DEF as SWARM_DEF, generateSprite as genSwarm } from './swarm_mass';
 import { DEF as LISHENNYY_DEF, generateSprite as genLishennyy } from './lishennyy';
 import { DEF as SCULPTURE_DEF, generateSprite as genSculpture } from './sculpture';
 import { DEF as GNOME_DEF, generateSprite as genGnome } from './gnome';
+import { DEF as BASHNYA_DEF, generateSprite as genBashnya } from './bashnya';
+import { DEF as GNEZDO_DEF, generateSprite as genGnezdo } from './gnezdo';
+import { DEF as BOEC_DEF, generateSprite as genBoec } from './boec';
+import { DEF as LOGOVO_DEF, generateSprite as genLogovo } from './logovo';
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.SBORKA]:    SBORKA_DEF,
@@ -233,6 +257,10 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   [MonsterKind.LISHENNYY]: LISHENNYY_DEF,
   [MonsterKind.SCULPTURE]: SCULPTURE_DEF,
   [MonsterKind.GNOME]:     GNOME_DEF,
+  [MonsterKind.BASHNYA]:   BASHNYA_DEF,
+  [MonsterKind.GNEZDO]:    GNEZDO_DEF,
+  [MonsterKind.BOEC]:      BOEC_DEF,
+  [MonsterKind.LOGOVO]:    LOGOVO_DEF,
 };
 
 /**
@@ -313,6 +341,10 @@ export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {
   [MonsterKind.LISHENNYY]: genLishennyy,
   [MonsterKind.SCULPTURE]: genSculpture,
   [MonsterKind.GNOME]:     genGnome,
+  [MonsterKind.BASHNYA]:   genBashnya,
+  [MonsterKind.GNEZDO]:    genGnezdo,
+  [MonsterKind.BOEC]:      genBoec,
+  [MonsterKind.LOGOVO]:    genLogovo,
 };
 
 export const EYE_BOLT_SPRITE: () => Uint32Array = genEyeBolt;

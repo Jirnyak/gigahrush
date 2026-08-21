@@ -23,6 +23,7 @@ import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
 import { mathRng, rng } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 type ProtocolPhase = 'obtained' | 'started' | 'ended' | 'backlash' | 'rejected';
 
@@ -1066,3 +1067,19 @@ export function summarizeVoidProtocols(state: GameState): string[] {
   for (const tr of recent) out.push(`#${tr.id} ${tr.phase} ${tr.protocolId}: ${tr.text}`);
   return out;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* VOID protocols: grant/apply/list bounded state */
+  id: 'void_protocols',
+  group: 'route',
+  label: 'VOID: форс/список',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    for (const line of debugForceVoidProtocol(world, player, entities, state, nextEntityId)) {
+      state.msgs.push(msg(`[VOID] ${line}`, state.time, '#8ff'));
+    }
+  },
+});

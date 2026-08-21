@@ -604,7 +604,7 @@ Definition of Done:
 | [САМОСБОР вики: Гигахрущёвка](https://samosbor.fandom.com/ru/wiki/%D0%93%D0%B8%D0%B3%D0%B0%D1%85%D1%80%D1%83%D1%89%D1%91%D0%B2%D0%BA%D0%B0) | кубические строения, коридоры вместо улиц, заводы/НИИ/больницы/школы, автономная экономика, талоны, вторсырье | строить новые POI как части хозяйства, а не как isolated rooms |
 | [САМОСБОР вики: Последствия самосбора](https://samosbor.fandom.com/ru/wiki/%D0%9F%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D1%81%D1%82%D0%B2%D0%B8%D1%8F_%D1%81%D0%B0%D0%BC%D0%BE%D1%81%D0%B1%D0%BE%D1%80%D0%B0) | монстры почти не классифицируются; слизь токсична и бывает разных типов; люди могут мутировать | добавить slime ecology, residue cleanup, monster counterplay and sample contracts |
 | [САМОСБОР вики: Ликвидаторы](https://samosbor.fandom.com/ru/wiki/%D0%9B%D0%B8%D0%BA%D0%B2%D0%B8%D0%B4%D0%B0%D1%82%D0%BE%D1%80%D1%8B) | зачистка, РБХОПЗ, дробовики, топор, огнеметы, жернов, ПТРС, УФ-прожектор | сделать ликвидаторские инструменты источником новых боевых ролей и cleanup-контрактов |
-| [Хрущепедия / ShoutWiki index](https://samosbor.shoutwiki.com/) | широкий список флоры/фауны, ресурсов, НИИ, коммуникаций, религии, технологий | использовать как каталог будущих доменов: бетоноеды, гермоточильщики, лифтовая арахна, пневмопочта, Бионет |
+| [Хрущепедия / ShoutWiki index](https://samosbor.shoutwiki.com/) | широкий список флоры/фауны, ресурсов, НИИ, коммуникаций, религии, технологий | использовать как каталог будущих доменов: бетоноеды, гермоточильщики, лифтовая арахна, Бионет |
 | [Author.Today: НИИ "Слизи"](https://author.today/post/531103) | НИИ как сеть филиалов; ученые проектируют гермодвери, оружие и бытовые устройства; собирают образцы с ликвидаторами | создать научно-полевую ветку с образцами, допусками, экспериментальными инструментами и морально грязной экономикой |
 | [Самосбор Вики: Слизь](https://samosbors8878.fandom.com/ru/wiki/%D0%A1%D0%BB%D0%B8%D0%B7%D1%8C) | слизь как распространенное остаточное последствие; черная/прозрачная базовые; редкие цвета опаснее | сделать slime residue не просто декором, а ресурсом/опасностью/уликой |
 | [Самосбор вики: Культ Чернобога](https://samosb0r.fandom.com/ru/wiki/%D0%9A%D1%83%D0%BB%D1%8C%D1%82_%D0%A7%D0%B5%D1%80%D0%BD%D0%BE%D0%B1%D0%BE%D0%B3%D0%B0) | крупнейшая религиозная угроза, центральная и внешняя ячейки, конфликт с ликвидаторами | развить культистов как человеческую A-Life фракцию с вербовкой, саботажем и block takeover |
@@ -840,15 +840,14 @@ README обновлять только если поведение реальн�
 
 Что уже есть:
 
-- pressure station, steam valves, overflow, water bridge, heatline zero, metro error line, lift repair, charge/automation cage, pneumomail;
+- pressure station, steam valves, overflow, water bridge, heatline zero, metro error line, lift repair, charge/automation cage;
 - many industrial monsters and slime rooms;
 - factories/resources/containers.
 
 Что доработать:
 
-- Сгруппировать 54 maintenance manifest entries в 4-6 узнаваемых маршрутов: pressure, water, lift, slime, production, mail.
+- Сгруппировать 54 maintenance manifest entries в 4-6 узнаваемых маршрутов: pressure, water, lift, slime, production.
 - Каждый маршрут должен иметь one-sentence player goal, one route hazard, one reward type.
-- Pneumomail должен чаще создавать actionable leads, not just ambient messages.
 
 ### 22.6 Нить "Квартирный Социальный Кризис"
 

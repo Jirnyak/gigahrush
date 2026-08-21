@@ -105,6 +105,10 @@ export const MONSTER_VISUALS: Record<MonsterKind, MonsterVisualDef> = {
   [MonsterKind.LISHENNYY]: { family: 'dark_fog_phase', evidence: 'light_line_lock' },
   [MonsterKind.SCULPTURE]: { family: 'wall_concrete_metal', evidence: 'scrape_dust_crack' },
   [MonsterKind.GNOME]: { family: 'low_swarm_garbage', evidence: 'garbage_wake' },
+  [MonsterKind.BASHNYA]: { family: 'light_eye_line', evidence: 'light_line_lock', projectile: 'plasma_core' },
+  [MonsterKind.GNEZDO]: { family: 'source_hive_static', evidence: 'source_spore_thread' },
+  [MonsterKind.BOEC]: { family: 'wall_concrete_metal', evidence: 'scrape_dust_crack' },
+  [MonsterKind.LOGOVO]: { family: 'source_hive_static', evidence: 'source_spore_thread' },
 };
 
 export function monsterVisual(kind: MonsterKind | undefined): MonsterVisualDef | undefined {

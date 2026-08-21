@@ -1,9 +1,10 @@
 /* ── UI-only map exploration memory ───────────────────────────── */
 
-import { Cell, EntityType, QuestType, W, type Entity, type GameState, type Quest } from '../core/types';
+import { Cell, EntityType, QuestType, W, type Entity, type GameState, type Quest, msg } from '../core/types';
 import type { World } from '../core/world';
 import { isQuestTargetOnCurrentFloor, resolveQuestTargetRoom } from './contracts';
 import { getSamosborWaveDebugSnapshot } from './samosbor_wave';
+import { registerDebugCommand } from './debug_registry';
 
 const LOCAL_TRAIL_RADIUS = 2;
 const QUEST_MARKER_REVEAL_RADIUS = 8;
@@ -38,8 +39,7 @@ function emptyRuntime(): MapExplorationRuntime {
     lastCell: -1,
     lastSamosborWaveFogKey: '',
     currentTick: 1,
-    version: 0,
-  };
+    version: 0 };
 }
 
 function runtimeFor(world: World): MapExplorationRuntime {
@@ -193,8 +193,7 @@ function questWithMarkerFallback(q: Quest): Quest {
     ...q,
     targetRoomType: q.targetRoomType ?? marker.roomType,
     targetRoomDefId: q.targetRoomDefId ?? marker.roomDefId,
-    targetZoneTag: q.targetZoneTag ?? marker.zoneTag,
-  };
+    targetZoneTag: q.targetZoneTag ?? marker.zoneTag };
 }
 
 function questMarkerTargetOnCurrentFloor(q: Quest, state: GameState): boolean {
@@ -343,3 +342,16 @@ export function mapExplorationStats(world: World): { cells: number; rooms: numbe
   for (let i = 0; i < runtime.explored.length; i++) if (runtime.explored[i]) cells++;
   return { cells, rooms: runtime.revealedRooms.size, initialZoneId: runtime.initialZoneId };
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  id: 'revealmap',
+  group: 'cheat',
+  label: 'REVEALMAP: открыть всю карту',
+  run: ({ world, state }) => {
+    const cells = revealWholeMap(world);
+    state.msgs.push(msg(`[DEBUG] revealmap: открыто клеток ${cells}`, state.time, '#ff0'));
+  } });

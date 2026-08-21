@@ -2668,6 +2668,18 @@ function canBeMonsterTarget(other: Entity): boolean {
   return isPlayerEntity(other) || other.type === EntityType.NPC;
 }
 
+/* Монстру с ОБЪЯВЛЕННОЙ фракцией враги — тоже монстры (`isHostile` пускает такую
+ * пару в матрицу отношений). Дефолтная экология других монстров не сканирует
+ * вовсе, и запрос у неё идёт по узкой маске NPC; расширять его всем подряд
+ * значит платить кадром за то, чего в обычной игре не бывает. */
+function canBeFactionMonsterTarget(other: Entity): boolean {
+  return isPlayerEntity(other) || other.type === EntityType.NPC || other.type === EntityType.MONSTER;
+}
+
+function monsterTargetFilter(e: Entity): (other: Entity) => boolean {
+  return hasAIFlag(e, 'sided') && e.faction !== undefined ? canBeFactionMonsterTarget : canBeMonsterTarget;
+}
+
 function combatTargetQueryMask(typeFilter: (other: Entity) => boolean): number {
   return typeFilter === canBeMonsterTarget ? ENTITY_MASK_NPC : ENTITY_MASK_ACTOR;
 }
@@ -8351,19 +8363,19 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   } else if (isDocumentPressureHunter(e)) {
     target = findDocumentHunterTarget(world, entities, e, dt);
   } else if (hasAIFlag(e, 'closeReveal')) {
-    target = findCombatTarget(world, entities, e, dt, detectSq, 1.25, canBeMonsterTarget);
+    target = findCombatTarget(world, entities, e, dt, detectSq, 1.25, monsterTargetFilter(e));
   } else if (e.monsterKind === MonsterKind.KOSTOREZ || e.monsterKind === MonsterKind.SAFEGUARD) {
     detectSq = e.monsterKind === MonsterKind.SAFEGUARD ? SAFEGUARD_DETECT_SQ : KOSTOREZ_DETECT_SQ;
-    target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), canBeMonsterTarget);
+    target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), monsterTargetFilter(e));
   } else if (e.monsterKind === MonsterKind.TRESKOTNIK) {
     detectSq = TRESKOTNIK_DETECT_SQ;
-    target = findCombatTarget(world, entities, e, dt, detectSq, 0.45, canBeMonsterTarget);
+    target = findCombatTarget(world, entities, e, dt, detectSq, 0.45, monsterTargetFilter(e));
   } else {
     const scanCd = fixedScanCd(e) ?? deterministicScanCd(e.id, 1.0, 0.5);
     target = findCombatTarget(
       world, entities, e, dt,
       detectSq, scanCd,
-      canBeMonsterTarget,
+      monsterTargetFilter(e),
     );
   }
 

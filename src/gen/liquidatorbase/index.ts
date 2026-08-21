@@ -13,7 +13,7 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   const spawnX = 100;
   const spawnY = 100;
 
-  let nextRoomId = 1;
+  let nextRoomId = 0;
   const nextId = { v: 1000 };
 
   // Generate Central HQ

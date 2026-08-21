@@ -63,6 +63,7 @@ import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { intContractRewardMult } from './rpg';
 import { calculateQuestReward, type QuestRewardObjectiveKind } from './quest_rewards';
 import { getAlifeNpcTotalMoney } from './alife';
+import { registerDebugCommand } from './debug_registry';
 
 const CLEANUP_SURFACE_THRESHOLD = 480;
 const ZHELEMISH_NII_CONTRACT_ID = 'nii_zhelemish_pure_sample';
@@ -1246,3 +1247,29 @@ function questTypeName(type: ContractDef['type']): string {
   }
   return 'QUEST';
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Spawn/list system quest */
+  id: 'spawn_system_contract',
+  group: 'economy',
+  label: 'Системное задание: создать/список',
+  run: ({ state }) => {
+    spawnContract(state);
+    for (const line of summarizeContracts(state, 6)) state.msgs.push(msg(`[QUEST] ${line}`, state.time, '#6cf'));
+  },
+});
+
+registerDebugCommand({
+  /* Govnyak courier route choice */
+  id: 'govnyak_courier_contract',
+  group: 'economy',
+  label: 'ГОВНЯК: курьерский пакет',
+  run: ({ player, state }) => {
+    const created = spawnGovnyakCourierContract(state, player);
+    for (const line of summarizeContracts(state, 6)) state.msgs.push(msg(`[QUEST] ${line}`, state.time, created ? '#6cf' : '#888'));
+  },
+});

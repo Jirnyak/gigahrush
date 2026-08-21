@@ -10,7 +10,6 @@ import {
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from './design_floors';
 import type { FloorAnomalyId } from './procedural_floors';
 import { METRO_DEPOT_ROOM_DEF_ID, METRO_STATION_ROOM_DEF_ID } from './metro';
-import { PNEUMOMAIL_CONTRACT_ID, PNEUMOMAIL_SORTER_ROOM_NAME } from './pneumomail';
 import { SILVER_SLIME_SEALED_ID } from './items';
 
 export interface QuestRouteTarget {
@@ -687,8 +686,8 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     faction: Faction.CITIZEN, rank: 3, type: QuestType.FETCH,
     desc: 'Министерский приём НИИ требует карту Бетонова с отметкой Z+22. Плата пропуском и квитанцией; карта станет уликой, сменщик у шкафа строкой в деле.',
     target: {
-      z: -26, roomType: RoomType.STORAGE, roomDefId: PNEUMOMAIL_SORTER_ROOM_NAME,
-      zoneTag: 'pneumomail', hint: 'Коллекторы: пневмопочтовая сортировка и мокрые шкафы после лифта Z+22. Ищите записку-карту, не образец.',
+      z: -26, roomType: RoomType.STORAGE, roomDefId: 'Затопленный обводной склад: пломба сорвана',
+      zoneTag: 'overflow_sluice', hint: 'Коллекторы: затопленный обводной склад за шлюзом, мокрые шкафы после лифта Z+22. Ищите записку-карту, не образец.',
     },
     targetItem: 'note', targetCount: 1,
     rewardItem: 'official_permit_slip', rewardCount: 1, extraRewards: [{ defId: 'filter_receipt', count: 1 }],
@@ -1816,19 +1815,6 @@ export const CONTRACTS: ContractDef[] = [
     targetMonsterKind: MonsterKind.ROBOT, killNeeded: 1, rewardItem: 'ammo_9mm', rewardCount: 14,
     moneyReward: 110, rewardResourceId: 'ammo', rewardScarcityMax: 2.0,
     xpReward: 75, relationDelta: 7, tags: ['industry', 'ammo', 'defend', 'production', 'combat'],
-  },
-  {
-    id: PNEUMOMAIL_CONTRACT_ID, title: 'Журнал из трубы', issuer: 'Контроль пневмопочты',
-    faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
-    desc: 'Принеси журнал давления с пневмопочтовым талоном. Три коротких стука значит отход с журналом, не проверка фамилии.',
-    target: {
-      z: -26, roomType: RoomType.STORAGE, roomDefId: PNEUMOMAIL_SORTER_ROOM_NAME,
-      zoneTag: 'pneumomail', hint: 'Коллекторы: пневмопочтовый узел, сортировка чужих капсул. Журнал давления лежит в приемной или в сортировке.',
-    },
-    targetItem: 'pressure_logbook', targetCount: 1,
-    rewardItem: 'fuse', rewardCount: 2, extraRewards: [{ defId: 'water_coupon', count: 2 }],
-    moneyReward: 125, rewardResourceId: 'documents', rewardScarcityMax: 2.4,
-    xpReward: 70, relationDelta: 8, tags: ['maintenance', 'pneumomail', 'contract', 'documents', 'pressure', 'false_lead_safe'],
   },
   {
     id: 'science_clot_sample', title: 'Образец сгустка', issuer: 'Лабораторный стол',

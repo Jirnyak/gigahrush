@@ -43,6 +43,7 @@ import {
   territoryOwnerAtIndex,
 } from './territory';
 import { rng, shuffleWith } from '../core/rand';
+import { registerDebugCommand } from './debug_registry';
 
 const SCHEDULER_TICK_SEC = 10;
 const MIN_EVENT_GAP_SEC = 45;
@@ -2195,3 +2196,49 @@ function countTagged(entities: Entity[], type: EntityType): number {
   }
   return n;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Faction event scheduler */
+  id: 'faction_events',
+  group: 'world',
+  label: 'Фракционные события',
+  run: ({ world, player, entities, state }) => {
+    for (const line of summarizeFactionEvents(state, world, player, entities)) {
+      state.msgs.push(msg(`[FACT] ${line}`, state.time, '#ccf'));
+    }
+  },
+});
+
+registerDebugCommand({
+  /* Force faction event in current zone */
+  id: 'force_faction_event',
+  group: 'world',
+  label: 'Форсировать событие фракции',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId), state.time, '#ff0'));
+  },
+});
+
+registerDebugCommand({
+  /* Force cult procession in current zone */
+  id: 'force_cult_procession',
+  group: 'world',
+  label: 'Форсировать культовую процессию',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId, 'cult_procession'), state.time, '#ff0'));
+  },
+});
+
+registerDebugCommand({
+  /* Force liquidator-cult clash */
+  id: 'force_liquidator_cult_clash',
+  group: 'world',
+  label: 'Форсировать стычку ликвидаторов и культа',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId, 'cult_liquidator_clash'), state.time, '#ff0'));
+  },
+});

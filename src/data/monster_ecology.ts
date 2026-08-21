@@ -827,6 +827,78 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     rumorIds: ['ecology_herald_ceiling'],
     rareDrops: [{ itemId: 'siren_shard', chance: 0.06 }, { itemId: 'bottled_voice', chance: 0.04 }],
   },
+  /* Линейные виды: их ставит только генератор арены, и во всеобщие взвешенные
+   * выборки самосбора они не входят — отсюда нулевой вес, как у Творца и
+   * псевдолифта. Данные всё равно нужны: без них нет ни подсказки игроку, ни
+   * события экологии. */
+  {
+    kind: MonsterKind.BASHNYA,
+    role: 'Неподвижная линейная турель, держащая простреливаемый отрезок линии.',
+    cue: 'Бетонная тумба с прожектором наверху, цветная полоса выдаёт сторону.',
+    rule: 'Не двигается вообще и бьёт вдоль линии; вплотную по стене или за чужой волной она бессильна.',
+    floorFit: 'Линии и дворы баз арены двух сторон.',
+    floors: [-44],
+    rooms: [RoomType.CORRIDOR, RoomType.HQ],
+    spawnWeight: 0,
+    minSamosborCount: 99,
+    rare: true,
+    lootHint: 'обломки прожектора, стреляная гильза, редкий фокусирующий кристалл',
+    counterplay: 'Подходите вплотную вдоль стены или пропускайте вперёд чужих бойцов: башня не догоняет.',
+    deathLogHint: 'Смерть от башни должна читать открытую линию вместо стены или чужой волны.',
+    rumorIds: ['ecology_bashnya_line'],
+    rareDrops: [{ itemId: 'psi_dust', chance: 0.05 }],
+  },
+  {
+    kind: MonsterKind.GNEZDO,
+    role: 'Неподвижный источник линии: шлёт бойцов, пока стоит.',
+    cue: 'Приземистый купол с горящим зевом и сигнальным огнём стороны.',
+    rule: 'Само не ходит и не догоняет; поток кончается только вместе с гнездом.',
+    floorFit: 'Концы линий арены двух сторон.',
+    floors: [-44],
+    rooms: [RoomType.CORRIDOR, RoomType.HQ],
+    spawnWeight: 0,
+    minSamosborCount: 99,
+    rare: true,
+    lootHint: 'сырьё гнезда, обломки каркаса, редкий узел линии',
+    counterplay: 'Не воюйте с волной — идите к гнезду: пока оно стоит, бойцы не кончатся.',
+    deathLogHint: 'Смерть у гнезда должна читать бой с бесконечной волной вместо удара по источнику.',
+    rumorIds: ['ecology_gnezdo_source'],
+    rareDrops: [{ itemId: 'meat_rune', chance: 0.08 }],
+  },
+  {
+    kind: MonsterKind.BOEC,
+    role: 'Идущий по линии боец: не сворачивает и не отступает.',
+    cue: 'Шагающий силуэт с цветной перевязью стороны и глухим забралом.',
+    rule: 'Идёт к чужому рубежу по своей линии; узкое место и чужая волна ломают ему задачу.',
+    floorFit: 'Линии арены двух сторон.',
+    floors: [-44],
+    rooms: [RoomType.CORRIDOR],
+    spawnWeight: 0,
+    minSamosborCount: 99,
+    rare: false,
+    lootHint: 'паёк линии, гильзы, обломок нашивки',
+    counterplay: 'Встречайте бойца в узком месте или уступите линию встречной стороне — они разберутся сами.',
+    deathLogHint: 'Смерть от бойцов должна читать бой на открытой линии вместо узкого места.',
+    rumorIds: ['ecology_boec_march'],
+    rareDrops: [{ itemId: 'ammo_9mm', chance: 0.2 }],
+  },
+  {
+    kind: MonsterKind.LOGOVO,
+    role: 'Неубиваемый источник лесного лагеря: держит карман населённым.',
+    cue: 'Тёмное устье в скале за карманом, из которого выходит местная живность.',
+    rule: 'Логово в толще камня: до него нет ни прохода, ни линии выстрела. Лагерь чистится на время, а не насовсем.',
+    floorFit: 'Лесные карманы арены двух сторон.',
+    floors: [-44],
+    rooms: [RoomType.STORAGE],
+    spawnWeight: 0,
+    minSamosborCount: 99,
+    rare: true,
+    lootHint: 'ничего: логово в камне, добыча остаётся на его жильцах',
+    counterplay: 'Берите добычу и уходите: новая тройка соберётся, а само логово не достать.',
+    deathLogHint: 'Смерть в лесном кармане должна читать пересиживание у логова вместо ухода с добычей.',
+    rumorIds: ['ecology_logovo_camp'],
+    rareDrops: [],
+  },
   {
     kind: MonsterKind.CREATOR,
     role: 'Финальный void-босс: ресурс, укрытие и зеленый контур как экзамен.',
@@ -1439,6 +1511,23 @@ interface MonsterEcologyContext {
 }
 
 const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext>> = {
+  /* Линейные виды. Марш бойца по линии — это и есть территориальный режим:
+   * стоит ему отойти от «дома» дальше поводка, общий блок бродяжничества в
+   * `ai/monster.ts` сам прокладывает путь домой по запечённой навигации. Гнездо
+   * ставит бойцу домом ЧУЖУЮ комнату, и поводок превращается в наступление.
+   * Своего кода движения у линии поэтому нет. */
+  [MonsterKind.BOEC]: {
+    tags: ['corridor', 'pack', 'crowd', 'metal', 'open'],
+    pack: { mode: 'territorial', size: [1, 1], spread: 0 },
+  },
+  [MonsterKind.BASHNYA]: {
+    tags: ['corridor', 'open', 'metal', 'hq'],
+    pack: { mode: 'loner', size: [1, 1], spread: 0 },
+  },
+  [MonsterKind.GNEZDO]: {
+    tags: ['hq', 'spawn', 'metal'],
+    pack: { mode: 'loner', size: [1, 1], spread: 0 },
+  },
   [MonsterKind.GNOME]: {
     tags: ['maintenance', 'corridor', 'storage', 'production', 'dark', 'low_light', 'tunnels', 'pack', 'noise', 'metal'],
     anchorTags: ['maintenance', 'corridor', 'storage', 'dark', 'low_light'],

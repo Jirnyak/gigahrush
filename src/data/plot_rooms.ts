@@ -65,8 +65,10 @@ export const PLOT_ROOMS: Record<string, PlotRoomDef> = {
   },
   forpost: {
     id: 'forpost',
+    // Не караулка, а узел обороны: здесь стоит взвод, сюда лезут твари, и отсюда
+    // же снимается сцена. В девяти на семь ни взвод, ни облёт камеры не помещались.
     name: 'Форпост ликвидаторов',
-    w: 9, h: 7,
+    w: 13, h: 9,
     wallTex: Tex.METAL,
     floorTex: Tex.F_CONCRETE,
     roomType: RoomType.HQ,

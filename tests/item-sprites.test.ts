@@ -3035,7 +3035,6 @@ test('sprite bundle 030 items read as distinct pipe, launcher, plasma, service e
     ['pistol_grenade_launcher', 'Пистолет-гранатомёт', ItemType.WEAPON],
     ['plasma', 'Плазмаган', ItemType.WEAPON],
     ['plastic_sheet', 'Пластик', ItemType.MISC],
-    ['pneumomail_capsule', 'Опечатанная пневмокапсула', ItemType.MISC],
     ['portable_siren_key', 'Ключ переносной сирены', ItemType.MISC],
     ['post_samosbor_probe_kit', 'Набор замера после самосбора', ItemType.MISC],
     ['ppsh', 'ППШ', ItemType.WEAPON],
@@ -3076,11 +3075,6 @@ test('sprite bundle 030 items read as distinct pipe, launcher, plasma, service e
   assert.ok(countPixels(plastic, (r, g, b, a) => a > 120 && r > 145 && g > 145 && b > 125) > 480, 'plastic_sheet should show pale stacked plastic panels');
   assert.ok(countPixels(plastic, (r, g, b, a) => a > 80 && g > 130 && b > 120 && r < 140) > 18, 'plastic_sheet should include cyan dead pixels');
   assert.ok(countPixels(plastic, (r, g, b, a) => a > 120 && r > 130 && g < 100 && b < 95) > 15, 'plastic_sheet should include a red error slit');
-
-  const capsule = generateItemSprite('pneumomail_capsule');
-  assert.ok(countPixels(capsule, (r, g, b, a) => a > 130 && r > 135 && g > 85 && g < 195 && b < 105) > 190, 'pneumomail capsule should read as a brass tube');
-  assert.ok(countPixels(capsule, (r, g, b, a) => a > 120 && r > 130 && g < 100 && b < 95) > 80, 'pneumomail capsule should include a red seal');
-  assert.ok(countPixels(capsule, (r, g, b, a) => a > 120 && r < 75 && g < 85 && b < 90) > 300, 'pneumomail capsule should keep dark tube caps and ink');
 
   const sirenKey = generateItemSprite('portable_siren_key');
   assert.ok(countPixels(sirenKey, (r, g, b, a) => a > 130 && r > 135 && g > 85 && g < 195 && b < 105) > 70, 'portable_siren_key should show brass key teeth');

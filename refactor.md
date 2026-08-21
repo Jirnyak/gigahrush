@@ -51,7 +51,6 @@
 **Где исправлять (заменить на проверку реального биома/роли маршрута):**
 - [src/main.ts](file:///Users/jirnyak/Mirror/gigahrush/src/main.ts#L2516) (и строки 3469, 4409, 4416, 9641, 9814, 9815)
 - [src/systems/metro.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/metro.ts#L141)
-- [src/systems/pneumomail.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/pneumomail.ts#L374)
 - [src/systems/seroburmaline.ts](file:///Users/jirnyak/Mirror/gigahrush/src/systems/seroburmaline.ts#L214) (и строка 313)
 - [src/gen/maintenance/remontnik_bez_smeny.ts](file:///Users/jirnyak/Mirror/gigahrush/src/gen/maintenance/remontnik_bez_smeny.ts#L356)
 - [src/gen/maintenance/paritel_steam_bridge.ts](file:///Users/jirnyak/Mirror/gigahrush/src/gen/maintenance/paritel_steam_bridge.ts#L338) (и строка 375)

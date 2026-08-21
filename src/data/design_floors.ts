@@ -40,7 +40,7 @@ export type DesignFloorId =
   | 'underhell'
   | 'podad'
   | 'spectral_chasovnya'
-  | 'cantor_pustoty'
+  | 'stenka'
   | 'darkness'
   | 'liquidatorbase'
   | 'horrorfloor'
@@ -107,7 +107,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'underhell', z: -38, displayName: 'Нижний пропускник', themeTags: ['hell'], color: '#f44', role: 'боевой порог мясного низа', danger: 5 },
   { id: 'podad', z: -40, displayName: 'Подад', themeTags: ['hell'], color: '#d34', role: 'живые тоннели, двигающиеся стены, нижний порог', danger: 5 },
   { id: 'spectral_chasovnya', z: -42, displayName: 'Спектральная часовня', themeTags: ['hell'], color: '#d6a64b', role: 'звук, культ, слуховая геометрия', danger: 5 },
-  { id: 'cantor_pustoty', z: -44, displayName: 'Кантор пустоты', themeTags: ['void'], color: '#9cf', role: 'рекурсивные разрывы, мосты и пыльные острова', danger: 5 },
+  { id: 'stenka', z: -44, displayName: 'Стенка на стенку', themeTags: ['void'], color: '#9cf', role: 'арена двух сторон: линии, лес, башни', danger: 5 },
   { id: 'liquidatorbase', z: -16, displayName: 'База Ликвидаторов', themeTags: ['maintenance'], color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
   { id: 'darkness', z: -48, displayName: 'Темный отсек', themeTags: ['void'], color: '#88f', role: 'позднее давление', danger: 5 },
   { id: 'horrorfloor', z: -46, displayName: 'Хоррор-этаж', themeTags: ['void'], color: '#222', role: 'лабиринт, прятки', danger: 5 },

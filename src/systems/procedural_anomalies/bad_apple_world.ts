@@ -1,5 +1,7 @@
 import type { Entity, GameState } from '../../core/types';
+import { msg } from '../../core/types';
 import type { World } from '../../core/world';
+import { registerDebugCommand } from '../debug_registry';
 
 export const BAD_APPLE_EXPERIMENT_ENABLED = false;
 export const BAD_APPLE_WIDTH = 144;
@@ -62,3 +64,17 @@ export function relightBadAppleWorld(_world: World): void {
 export function summarizeBadAppleWorld(_world: World): string[] {
   return [];
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  id: 'spawn_bad_apple_world',
+  group: 'anomaly',
+  label: 'BAD APPLE: эксперимент отключён',
+  run: ({ world, player, state }) => {
+    for (const line of debugSpawnBadAppleWorld(world, player, state)) state.msgs.push(msg(`[BADAPPLE] ${line}`, state.time, '#fff'));
+    return { type: 'refresh_world_data' };
+  },
+});

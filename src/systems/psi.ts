@@ -15,6 +15,7 @@ import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { applyMonsterIncomingDamage } from './monster_traits';
 import { calculateDamage } from './combat';
 import { intPsiDurationBonusSec } from './rpg';
+import { registerDebugCommand } from './debug_registry';
 
 // ── Module state (player-only transient effects) ─────────────────
 let phaseTimer = 0;                              // phase shift remaining seconds
@@ -571,3 +572,22 @@ export function isPsiAlly(a: Entity, b: Entity): boolean {
 export function isPsiMad(e: Entity): boolean {
   return (e.psiMadness ?? 0) > 0;
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  /* Toggle noclip */
+  id: 'toggle_noclip',
+  group: 'cheat',
+  label: 'Noclip',
+  run: ({ state }) => {
+    const enabled = toggleDebugNoClip();
+    state.msgs.push(msg(
+      `[DEBUG] Noclip ${enabled ? 'включён' : 'выключен'}`,
+      state.time,
+      '#ff0',
+    ));
+  },
+});

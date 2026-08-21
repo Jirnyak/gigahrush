@@ -98,7 +98,8 @@ function scanFloor(id: DesignFloorId): FloorScan {
   const referenced = contentReferencedRoomIds(designFloorById(id)!.z);
   const sealed: Room[] = [];
   let totalRooms = 0;
-  // `world.rooms` разрежен: `stampRoom` кладёт комнату по её id, дыры законны.
+  // Дыр тут быть не должно — плотность `world.rooms` держит
+  // `tests/rooms-dense.test.ts`, — но обход дешевле оставить защищённым.
   for (const room of world.rooms) {
     if (!room) continue;
     totalRooms++;
@@ -145,7 +146,6 @@ const CEILINGS: Readonly<Record<string, FloorCeiling>> = {
   maintenance: { sealed: 9, withDefId: 0, referenced: 4, why: 'stampMaintRoom: connectProtectedRoom + дробные координаты из findMaintArea' },
   roof: { sealed: 7, withDefId: 0, referenced: 0, why: 'острова архипелага за ABYSS: carveCorridor роет только по WALL' },
   ministry: { sealed: 4, withDefId: 0, referenced: 2, why: 'createAdminRoom: единственный проём от connectProtectedRoom' },
-  cantor_pustoty: { sealed: 4, withDefId: 0, referenced: 0, why: 'узел разрывов за пропастью' },
   kvartiry: { sealed: 2, withDefId: 0, referenced: 1, why: 'social_helpers: connectProtectedRoom' },
   liquidatorbase: { sealed: 2, withDefId: 0, referenced: 0, why: 'коридор не прорыл собственную стену штаба; в другой сел маршрутный лифт' },
   antenna_court: { sealed: 1, withDefId: 0, referenced: 0, why: 'гермокапсула НИИ' },

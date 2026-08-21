@@ -34,6 +34,7 @@ import {
   getActiveMonsterBaits,
   type MonsterBaitMarker,
 } from './monster_bait';
+import { registerDebugCommand } from './debug_registry';
 
 type PseudoliftStatus = 'dormant' | 'suspected' | 'revealed' | 'fed' | 'escaped' | 'cleared';
 
@@ -647,3 +648,19 @@ export function pseudoliftDebugSummary(state: GameState): string[] {
     active ? `active=${entityDisplayName({ monsterKind: MonsterKind.PSEUDOLIFT })} ${active.status} ${active.liftX},${active.liftY}` : 'active=none',
   ];
 }
+
+/* ── Отладка ──────────────────────────────────────────────────
+ * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
+ * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */
+
+registerDebugCommand({
+  id: 'force_pseudolift',
+  group: 'route',
+  label: 'PSEUDOLIFT: ловушка у лифта',
+  run: ({ world, player, state }) => {
+    for (const line of debugForcePseudoliftNearPlayer(world, player, state)) {
+      state.msgs.push(msg(`[PSEUDOLIFT] ${line}`, state.time, '#fc4'));
+    }
+    return { type: 'refresh_world_data' };
+  },
+});

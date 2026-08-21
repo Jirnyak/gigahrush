@@ -427,7 +427,7 @@ export function paintTerritoryDisc(
       const previousOwner = territoryOwnerAtIndex(world, idx);
       if (preserveSamosbor && previousOwner === ZoneFaction.SAMOSBOR) continue;
       const roomId = world.roomMap[idx];
-      if (roomId > 0 && world.rooms[roomId]?.type === RoomType.HQ && previousOwner !== owner) continue;
+      if (roomId >= 0 && world.rooms[roomId]?.type === RoomType.HQ && previousOwner !== owner) continue;
       if (!setTerritoryOwnerAtIndex(world, idx, owner)) continue;
       options.onChange?.(idx, previousOwner);
       changed++;
@@ -470,7 +470,7 @@ function paintOwnerPatch(world: World, x: number, y: number, owner: TerritoryOwn
       if (world.aptMask[idx]) continue;
       if (world.cells[idx] === Cell.ABYSS || world.cells[idx] === Cell.LIFT) continue;
       const roomId = world.roomMap[idx];
-      if (roomId > 0 && world.rooms[roomId]?.type === RoomType.HQ && territoryOwnerAtIndex(world, idx) !== owner) continue;
+      if (roomId >= 0 && world.rooms[roomId]?.type === RoomType.HQ && territoryOwnerAtIndex(world, idx) !== owner) continue;
       if (setTerritoryOwnerAtIndex(world, idx, owner)) changed++;
     }
   }
@@ -723,7 +723,7 @@ function applyTargetTerritoryShares(world: World, shares: readonly TerritoryTarg
         for (let dx = 0; dx < TERRITORY_BUCKET_SIZE; dx++) {
           const idx = world.idx(bx * TERRITORY_BUCKET_SIZE + dx, by * TERRITORY_BUCKET_SIZE + dy);
           const roomId = world.roomMap[idx];
-          if (roomId > 0 && world.rooms[roomId]?.type === RoomType.HQ) continue;
+          if (roomId >= 0 && world.rooms[roomId]?.type === RoomType.HQ) continue;
           world.factionControl[idx] = owner;
         }
       }

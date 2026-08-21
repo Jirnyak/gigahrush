@@ -3,8 +3,7 @@
 import {
   W, Cell, Feature, RoomType, Faction, ZoneFaction, LiftDirection, EntityType, MonsterKind, Occupation, AIGoal, ItemType,
   type Entity, type GameState, type ItemDef, type WorldContainer,
-  msg,
-} from '../core/types';
+  msg } from '../core/types';
 import { World } from '../core/world';
 import { freshNeeds, randomName, ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
@@ -15,30 +14,18 @@ import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
 import { CRITTERS_POOL, MAX_CRITTERS } from '../render/critters';
-import { awardXP, randomRPG, getMaxHp } from './rpg';
-import { isDebugNoClipEnabled, toggleDebugNoClip } from './psi';
-import { cycleForcedSamosborVariant, forceNextSamosborVariant, getActiveSamosborVariant } from './samosbor_variants_runtime';
-import {
-  clearSamosborDirectorCooldowns,
-  forceNextSamosborDirectorBeat,
-  summarizeSamosborDirector,
-} from './samosbor_director';
-import { ensureWorldEventState, getImportantEvents, publishEvent, summarizeImportantEventsByFloorZone } from './events';
+import {  randomRPG, getMaxHp } from './rpg';
+import { isDebugNoClipEnabled } from './psi';
+import {   publishEvent } from './events';
 import { summarizeRoomMemoryForRoom } from './room_memory';
-import { describeContainer, ensureRoomContainers, firstNearbyContainer, nearbyContainers, takeFromContainer } from './containers';
+import { describeContainer, ensureRoomContainers } from './containers';
 import { changeResourceStock, getAdjustedItemPrice, getResourceScarcity, summarizeEconomy } from './economy';
 import { controlBindingLabel, menuCloseHint } from './controls';
-import { tickProduction, summarizeProduction } from './production';
 import { addItem, removeItem } from './inventory';
 import { findActorPermit, recordPermitAccess, recordPermitExposure } from './permits';
-import { publishMaronaryShavingAcquired } from './maronary_shaving';
-import { spawnContract, spawnContractById, spawnGovnyakCourierContract, summarizeContracts } from './contracts';
-import { debugForcePneumomailCapsule } from './pneumomail';
-import { populationItemSummary } from './balance';
+import { spawnContract, spawnContractById, summarizeContracts } from './contracts';
 import { getSamosborDebugLines } from './samosbor';
 import { territoryOwnerAtIndex } from './territory';
-import { floorCatalogDebugLines } from './floor_catalog';
-import { summarizeHeatline } from './heatline';
 import { summarizeCarnivorousFungus } from './carnivorous_fungus';
 import { summarizeHladonColdPockets } from './hladon';
 import { ensureFloorInstanceState, floorInstanceIdentityLine, floorInstanceLabel, summarizeFloorInstances } from './floor_instances';
@@ -47,38 +34,18 @@ import {
   floorRunEntryKind,
   floorRunEntryRouteId,
   resolveFloorRunRoute,
-  summarizeFloorRun,
-} from './procedural_floors';
+  summarizeFloorRun } from './procedural_floors';
 import { summarizeProceduralSmog } from './procedural_anomalies';
-import { debugSpawnBadAppleWorld, summarizeBadAppleWorld } from './procedural_anomalies/bad_apple_world';
-import { debugForceVoidProtocol } from './void_protocols';
-import { forceFactionEvent, summarizeFactionEvents } from './faction_events';
-import { debugTriggerRouteCue, routeCueCount } from './route_cues';
-import { debugCreateWrongDoorRemap } from './wrong_door';
-import { debugForceHermodoorBorer } from './hermodoor_borer';
-import { debugStartSamosborWaveAtPlayer } from './samosbor_wave';
-import { debugForcePseudoliftNearPlayer, pseudoliftDebugSummary } from './pseudolift';
+import {  summarizeBadAppleWorld } from './procedural_anomalies/bad_apple_world';
+import { forceFactionEvent } from './faction_events';
+import {  pseudoliftDebugSummary } from './pseudolift';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from '../data/design_floors';
 import { FLOOR_INSTANCES } from '../data/floor_instances';
 import { type FloorAnomalyId } from '../data/procedural_floors';
-import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive, toggleDebugOnePunchMan } from './debug_cheats';
+import { isDebugOnePunchManEnabled } from './debug_cheats';
 import { fitText } from '../render/ui_text';
-import {
-  grantNetTerminalGenAccess,
-  placeNetTerminalGenTerminal,
-  placeNetTerminalGenTerminalsForCurrentFloor,
-  summarizeNetTerminalGen,
-} from './net_terminal_gen';
-import {
-  clearCurrentMapEditorPatch,
-  openMapEditor,
-  replayMapEditorPatchForCurrentFloor,
-  summarizeMapEditor,
-} from './map_editor';
-import { revealWholeMap } from './map_exploration';
 import { getAiStats } from './ai';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
-import { CHALK_ITEM_ID } from './chalk';
 import { isPlayerEntity } from './player_actor';
 import { currentAlifeFloorKey } from './alife';
 import {
@@ -88,14 +55,29 @@ import {
   isFloorSceneActive,
   requestFloorScene,
   resetFloorScenes,
-  type FloorSceneDef,
-} from './cinematics';
+  type FloorSceneDef } from './cinematics';
 import { rng, mathRng } from '../core/rand';
+import { movePlayerToSmokeLift } from './debug_smoke';
+import {
+  DEBUG_GROUPS,
+  debugCommandIndex,
+  debugCommands,
+  debugPanels,
+  makeDebugCtx,
+  registerDebugCommand,
+  registerDebugPanel,
+  runDebugCommand,
+  type DebugAction,
+  type DebugPanelDef,
+  type DebugPanelLine } from './debug_registry';
 import { drawNeuroPanel } from '../render/hud_fx';
 
 /* ── Command execution ───────────────────────────────────────── */
 
-const CATALOG_DEBUG_SEARCHES = [ 'numbered', '404', 'school', 'hospital', 'market'];
+export type { DebugAction, DebugAction as DebugCommandAction } from './debug_registry';
+
+const DESIGN_FLOOR_COMMAND_ID_PREFIX = 'teleport_design_z: ';
+
 const DEBUG_SAMOSBOR_WARNING_SECONDS = 12;
 const DEBUG_MONSTER_SCAN_CAP = 192;
 const DEBUG_CONTAINER_ROUTE_RADIUS = 2;
@@ -132,16 +114,14 @@ export const SMOKE_DEBUG_COMMAND_IDS = {
   expeditionProofRisk: 'expedition_proof_risk',
   expeditionProofContainer: 'expedition_proof_container',
   expeditionProofSamosborWarning: 'expedition_proof_samosbor_warning',
-  expeditionProofReturn: 'expedition_proof_return',
-} as const;
+  expeditionProofReturn: 'expedition_proof_return' } as const;
 const DEBUG_MONSTER_PACKS: Record<string, readonly MonsterKind[]> = {
   ministry: [MonsterKind.PECHATEED, MonsterKind.KONTORSHCHIK, MonsterKind.PARAGRAPH, MonsterKind.PROTOKOLNIK, MonsterKind.SHOVNIK, MonsterKind.LAMPOGLAZ, MonsterKind.KANTSELYARSKIY_IDOL, MonsterKind.LOZHNYY_DUKH, MonsterKind.TONKAYA_TEN, MonsterKind.BLACK_LIQUIDATOR, MonsterKind.HEAD_SLUG, MonsterKind.CHERVIE_AVATAR, MonsterKind.MUKHOZHUK_HOST, MonsterKind.BEZEKHIY, MonsterKind.SPORE_CARPET],
   kvartiry: [MonsterKind.REBAR, MonsterKind.NELYUD, MonsterKind.KRYSNOZHKA, MonsterKind.POMOYNY_ROY, MonsterKind.GREEN_DOG, MonsterKind.PANELNIK, MonsterKind.PAUPSINA, MonsterKind.BLACK_LIQUIDATOR, MonsterKind.OBZHIVALSHCHIK, MonsterKind.ZHORNAYA_TVAR, MonsterKind.DIKIY_MERTVYAK, MonsterKind.HEAD_SLUG, MonsterKind.BEZEKHIY, MonsterKind.TRESKOTNIK, MonsterKind.GNILUSHKA, MonsterKind.SPORE_CARPET],
   living: [MonsterKind.SBORKA, MonsterKind.SHADOW, MonsterKind.NELYUD, MonsterKind.LAMPOGLAZ, MonsterKind.POMOYNY_ROY, MonsterKind.GREEN_DOG, MonsterKind.PANELNIK, MonsterKind.PAUPSINA, MonsterKind.BLACK_LIQUIDATOR, MonsterKind.OBZHIVALSHCHIK, MonsterKind.TUMANNIK, MonsterKind.FOG_SHARK, MonsterKind.ZHORNAYA_TVAR, MonsterKind.SOBRANNYY, MonsterKind.SLIME_WOMAN, MonsterKind.BORSHCHEVIK, MonsterKind.BLOOD_PLANT, MonsterKind.HEAD_SLUG, MonsterKind.LOZHNYY_DUKH, MonsterKind.DIKIY_MERTVYAK, MonsterKind.BEZEKHIY, MonsterKind.TRESKOTNIK, MonsterKind.TONKAYA_TEN, MonsterKind.GNILUSHKA, MonsterKind.SPORE_CARPET],
   maintenance: [MonsterKind.TUBE_EEL, MonsterKind.POLZUN, MonsterKind.KOSTOREZ, MonsterKind.SAFEGUARD, MonsterKind.BETONOED, MonsterKind.POMOYNY_ROY, MonsterKind.SWARM, MonsterKind.GREEN_DOG, MonsterKind.PANELNIK, MonsterKind.PAUPSINA, MonsterKind.SOBRANNYY, MonsterKind.SLIME_WOMAN, MonsterKind.BORSHCHEVIK, MonsterKind.BLOOD_PLANT, MonsterKind.OLGOY, MonsterKind.VODYANOY_KOSHMAR, MonsterKind.ZAKALENNAYA_ARMATURA, MonsterKind.HEAD_SLUG, MonsterKind.CHERVIE_AVATAR, MonsterKind.MUKHOZHUK_HOST, MonsterKind.TRUBNYY_AVTOMAT, MonsterKind.FOG_SHARK, MonsterKind.SPORE_CARPET],
   hell: [MonsterKind.HERALD, MonsterKind.KOSTOREZ, MonsterKind.KHOROVAYA_MATKA, MonsterKind.TVAR, MonsterKind.TUMANNIK, MonsterKind.FOG_SHARK, MonsterKind.ZHORNAYA_TVAR, MonsterKind.SOBRANNYY, MonsterKind.BLOOD_PLANT, MonsterKind.SWARM, MonsterKind.OLGOY, MonsterKind.ZAKALENNAYA_ARMATURA, MonsterKind.TRESKOTNIK, MonsterKind.GLUBINNAYA_TEN, MonsterKind.LISHENNYY],
-  void: [MonsterKind.PARAGRAPH, MonsterKind.EYE, MonsterKind.SPIRIT, MonsterKind.SAFEGUARD, MonsterKind.LOZHNYY_DUKH, MonsterKind.TONKAYA_TEN, MonsterKind.CHERVIE_AVATAR, MonsterKind.GLUBINNAYA_TEN, MonsterKind.LISHENNYY],
-};
+  void: [MonsterKind.PARAGRAPH, MonsterKind.EYE, MonsterKind.SPIRIT, MonsterKind.SAFEGUARD, MonsterKind.LOZHNYY_DUKH, MonsterKind.TONKAYA_TEN, MonsterKind.CHERVIE_AVATAR, MonsterKind.GLUBINNAYA_TEN, MonsterKind.LISHENNYY] };
 const DEBUG_PERMIT_PACK = [
   'official_permit_slip',
   'forged_permit_slip',
@@ -155,177 +135,9 @@ const DEBUG_PERMIT_PACK = [
   'blank_form',
   'ink_bottle',
 ] as const;
-let catalogDebugSearchIndex = 0;
 let debugVerificationContractIndex = 0;
 let debugEconomyPulseIndex = 0;
 let debugFloorInstanceCursor = 0;
-
-type BaseDebugCommandId =
-  | 'spawn_all_weapons'
-  | 'spawn_all_psi'
-  | 'spawn_all_tools'
-  | 'spawn_monsters'
-  | 'spawn_npc'
-  | 'spawn_items'
-  | 'grant_xp'
-  | 'cycle_samosbor_variant'
-  | 'toggle_noclip'
-  | 'revealmap'
-  | 'recent_events'
-  | 'economy_prices'
-  | 'nearby_containers'
-  | 'take_from_container'
-  | 'force_production_tick'
-  | 'spawn_system_contract'
-  | 'balance_catalog'
-  | 'elevator_instances'
-  | 'void_protocols'
-  | 'faction_events'
-  | 'force_faction_event'
-  | 'force_cult_procession'
-  | 'samosbor_director_state'
-  | 'force_samosbor_director_beat'
-  | 'clear_samosbor_director_cooldowns'
-  | 'teleport_ministry'
-  | 'teleport_kvartiry'
-  | 'teleport_living'
-  | 'teleport_maintenance'
-  | 'teleport_hell'
-  | 'teleport_void'
-  | 'teleport_random_procedural'
-  | 'smoke_expedition_setup'
-  | 'rare_samosbor'
-  | 'force_maronary_samosbor'
-  | 'route_cue_nearest'
-  | 'force_maronary_wrong_door'
-  | 'grant_maronary_shaving'
-  | 'force_istotit_samosbor'
-  | 'teleport_smog'
-  | 'teleport_false_safe_block'
-  | 'teleport_hladon'
-  | 'govnyak_courier_contract'
-  | 'force_pneumomail_capsule'
-  | 'force_hermodoor_borer'
-  | 'force_liquidator_cult_clash'
-  | 'debug_false_cleanup_patrol'
-  | 'debug_mukhozhuk_host'
-  | 'debug_chervie_site'
-  | 'spawn_chalk'
-  | 'toggle_onepunchman'
-  | 'grant_net_terminal_gen_access'
-  | 'place_net_terminal_gen_terminals'
-  | 'place_net_terminal_gen_in_front'
-  | 'open_map_editor'
-  | 'net_terminal_gen_status'
-  | 'replay_current_map_patch'
-  | 'clear_current_map_patch'
-  | 'teleport_fractal_floor'
-  | 'teleport_mirror_run'
-  | 'teleport_radio_chess'
-  | 'teleport_cement_memory'
-  | 'teleport_conveyor_sorter'
-  | 'teleport_wall_snake'
-  | 'teleport_section_shift'
-  | 'teleport_conway_life'
-  | 'teleport_rail_trains'
-  | 'spawn_bad_apple_world'
-  | 'spawn_sculpture'
-  | 'spawn_critters'
-  | 'verification_contract_route'
-  | 'publish_verification_event'
-  | 'route_floor_summary'
-  | 'arm_floor_instance'
-  | 'samosbor_warning_window'
-  | 'economy_scarcity_pulse'
-  | 'floor_monster_pack'
-  | 'route_to_container'
-  | 'teleport_zombie_apocalypse'
-  | 'expedition_proof_prep'
-  | 'expedition_proof_lift_ready'
-  | 'expedition_proof_collectors_arrival'
-  | 'expedition_proof_risk'
-  | 'expedition_proof_container'
-  | 'expedition_proof_samosbor_warning'
-  | 'expedition_proof_return'
-  | 'grant_permit_pack'
-  | 'check_permit_access'
-  | 'spoil_permit'
-  | 'force_pseudolift'
-  | 'play_floor_scene'
-  | 'floor_scene_list'
-  | 'debug_samosbor_small_wave';
-
-const DESIGN_FLOOR_COMMAND_ID_PREFIX = 'teleport_design_z: ';
-
-export type DebugCommandId = BaseDebugCommandId | `${typeof DESIGN_FLOOR_COMMAND_ID_PREFIX}${DesignFloorId}`;
-
-interface DebugCommandDef {
-  id: DebugCommandId;
-  label: string;
-}
-
-export type DebugCommandAction =
-  
-  | { type: 'teleport_random_procedural_floor' }
-  | { type: 'teleport_procedural_anomaly'; anomalyId: FloorAnomalyId }
-  | { type: 'teleport_design_floor'; id: DesignFloorId; themeTags: readonly string[]; z: number; label: string; color: string }
-  | { type: 'refresh_world_data' };
-
-function movePlayerToSmokeLift(world: World, player: Entity, entities: Entity[]): boolean {
-  let fallback: { x: number; y: number; angle: number } | null = null;
-  for (let i = 0; i < W * W; i++) {
-    if (world.cells[i] !== Cell.LIFT) continue;
-    const lx = i % W;
-    const ly = (i / W) | 0;
-    const dirs = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 },
-    ];
-    for (const dir of dirs) {
-      const px = world.wrap(lx + dir.dx);
-      const py = world.wrap(ly + dir.dy);
-      const pi = world.idx(px, py);
-      if (world.cells[pi] === Cell.LIFT || world.solid(px, py)) continue;
-      const spot = {
-        x: px + 0.5,
-        y: py + 0.5,
-        angle: Math.atan2((ly + 0.5) - (py + 0.5), (lx + 0.5) - (px + 0.5)),
-      };
-      fallback ??= spot;
-      const actorTooClose = entities.some(e => (
-        (e.type === EntityType.NPC || e.type === EntityType.MONSTER)
-        && e.alive
-        && world.dist2(spot.x, spot.y, e.x, e.y) < 9
-      ));
-      if (!actorTooClose) {
-        player.x = spot.x;
-        player.y = spot.y;
-        player.angle = spot.angle;
-        player.pitch = 0;
-        return true;
-      }
-    }
-  }
-  if (!fallback) return false;
-  player.x = fallback.x;
-  player.y = fallback.y;
-  player.angle = fallback.angle;
-  player.pitch = 0;
-  return true;
-}
-
-function isSmokeDebugRun(): boolean {
-  return typeof window !== 'undefined' && window.location.search.includes('smoke');
-}
-
-function stabilizeSmokeRecovery(world: World, player: Entity, entities: Entity[]): void {
-  movePlayerToSmokeLift(world, player, entities);
-  player.alive = true;
-  player.maxHp = Math.max(100, player.maxHp ?? 100);
-  player.hp = player.maxHp;
-}
 
 function formatDebugZ(z: number): string {
   return z > 0 ? `+${z}` : `${z}`;
@@ -491,8 +303,7 @@ function debugRouteFloorMetrics(world: World, player: Entity, entities: Entity[]
     reachableLifts,
     reachableLiftsUp,
     reachableLiftsDown,
-    ...countDebugBadPlacements(world, player, entities),
-  };
+    ...countDebugBadPlacements(world, player, entities) };
 }
 
 function debugRouteFloorSummaryLines(world: World, player: Entity, entities: Entity[], state: GameState): string[] {
@@ -557,9 +368,7 @@ function publishDebugVerificationEvent(world: World, player: Entity, state: Game
     data: {
       source: 'debug_menu',
       routeZ: currentFloorRunEntry(state).z,
-      samosborActive: state.samosborActive,
-    },
-  });
+      samosborActive: state.samosborActive } });
   return `published ${event.type}#${event.id} sev${event.severity}`;
 }
 
@@ -588,9 +397,7 @@ function applyDebugEconomyPulse(world: World, player: Entity, state: GameState):
         resourceId: pulse.resourceId,
         stockDelta: pulse.delta,
         scarcityBefore: before,
-        scarcityAfter: after,
-      },
-    });
+        scarcityAfter: after } });
   }
   return [
     ok
@@ -706,8 +513,7 @@ function spawnDebugMonsterPack(
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: spot.x, ty: spot.y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(player.rpg?.level ?? 1),
-      phasing: kind === MonsterKind.SPIRIT,
-    };
+      phasing: kind === MonsterKind.SPIRIT };
     entities.push(monster);
     const debugFogCells = seedDebugFogSharkPatch(world, kind, spot.x, spot.y);
     const debugLightCells = seedDebugLishennyyLight(world, player, kind);
@@ -728,9 +534,7 @@ function spawnDebugMonsterPack(
         source: 'debug_menu',
         counterplay: def.counterplay,
         debugFogCells,
-        debugLightCells,
-      },
-    });
+        debugLightCells } });
   }
   return spawned > 0
     ? [`spawned ${spawned}: ${names.join(', ')}`]
@@ -768,8 +572,7 @@ function spawnDebugFalseCleanupPatrol(
       attackCd: def.attackRate,
       ai: { goal: AIGoal.WANDER, tx: spot.x, ty: spot.y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(player.rpg?.level ?? 1),
-      spriteSeed: (nextEntityId.v * 2654435761) >>> 0,
-    });
+      spriteSeed: (nextEntityId.v * 2654435761) >>> 0 });
     spawned++;
   }
   if (spawned > 0) {
@@ -784,8 +587,7 @@ function spawnDebugFalseCleanupPatrol(
       severity: 3,
       privacy: 'local',
       tags: ['debug', 'monster', 'black_liquidator', 'false_cleanup'],
-      data: { source: 'debug_menu', monsterCount: spawned },
-    });
+      data: { source: 'debug_menu', monsterCount: spawned } });
   }
   return spawned > 0
     ? [`fake cleanup patrol spawned: ${spawned}`]
@@ -860,8 +662,7 @@ function spawnDebugMukhozhukHost(
       rpg: randomRPG(player.rpg?.level ?? 1),
       faction: Faction.LIQUIDATOR,
       occupation: Occupation.DIRECTOR,
-      inventory: [{ defId: 'quarantine_medcard', count: 1 }],
-    };
+      inventory: [{ defId: 'quarantine_medcard', count: 1 }] };
     entities.push(host);
   }
 
@@ -885,9 +686,7 @@ function spawnDebugMukhozhukHost(
       source: 'debug_menu',
       mode,
       counterplay: MONSTERS[MonsterKind.MUKHOZHUK_HOST]?.counterplay,
-      rumorIds: ['monster_mukhozhuk_host_command', 'ecology_mukhozhuk_quarantine'],
-    },
-  });
+      rumorIds: ['monster_mukhozhuk_host_command', 'ecology_mukhozhuk_quarantine'] } });
   return [`${mode}: ${host.name ?? monsterTypeName(MonsterKind.MUKHOZHUK_HOST)} #${host.id}`];
 }
 
@@ -946,8 +745,7 @@ function spawnDebugChervieSite(
     monsterKind: kind,
     attackCd: 0,
     ai: { goal: AIGoal.HUNT, tx: Math.floor(player.x), ty: Math.floor(player.y), path: [], pi: 0, stuck: 0, timer: 0, combatTargetId: player.id },
-    rpg: randomRPG(player.rpg?.level ?? 1),
-  };
+    rpg: randomRPG(player.rpg?.level ?? 1) };
   entities.push(monster);
   publishEvent(state, {
     type: 'chervie_signal',
@@ -970,9 +768,7 @@ function spawnDebugChervieSite(
       apparatus,
       screen,
       counterplay: def.counterplay,
-      rumorIds: ['monster_chervie_avatar_screen', 'ecology_chervie_avatar_disconnect'],
-    },
-  });
+      rumorIds: ['monster_chervie_avatar_screen', 'ecology_chervie_avatar_disconnect'] } });
   return [`chervie site: avatar #${monster.id}, apparatus=${apparatus ? 1 : 0}, screen=${screen ? 1 : 0}`];
 }
 
@@ -1033,8 +829,7 @@ function armLocalFloorInstance(world: World, player: Entity, state: GameState): 
     fromFloor: state.currentZ,
     intendedFloor: state.currentZ,
     direction: LiftDirection.DOWN,
-    returnFloor: state.currentZ,
-  };
+    returnFloor: state.currentZ };
   // @ts-ignore
   store.current = instance;
   store.discovered[def.id] = true;
@@ -1062,9 +857,7 @@ function armLocalFloorInstance(world: World, player: Entity, state: GameState): 
       risk: instance.risk,
       fromFloor: instance.fromFloor,
       intendedFloor: instance.intendedFloor,
-      returnFloor: instance.returnFloor,
-    },
-  });
+      returnFloor: instance.returnFloor } });
   return [
     // @ts-ignore
     `armed ${floorInstanceLabel(instance)}`,
@@ -1098,8 +891,7 @@ function spawnSmokeTarget(world: World, player: Entity, entities: Entity[], next
         hp: Math.min(def.hp, 18), maxHp: Math.min(def.hp, 18),
         monsterKind: MonsterKind.SBORKA, attackCd: 0,
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        rpg: randomRPG(player.rpg?.level ?? 1),
-      };
+        rpg: randomRPG(player.rpg?.level ?? 1) };
       entities.push(monster);
       return true;
     }
@@ -1259,8 +1051,7 @@ function debugItemDropSpot(world: World, player: Entity, index: number): { x: nu
   const radius = 2;
   return {
     x: world.wrap(player.x + Math.cos(angle) * radius),
-    y: world.wrap(player.y + Math.sin(angle) * radius),
-  };
+    y: world.wrap(player.y + Math.sin(angle) * radius) };
 }
 
 function spawnDebugItemDropsAroundPlayer(
@@ -1284,12 +1075,467 @@ function spawnDebugItemDropsAroundPlayer(
       alive: true,
       speed: 0,
       sprite: Spr.ITEM_DROP,
-      inventory: [items[i]],
-    });
+      inventory: [items[i]] });
   }
   if (slots >= items.length) return `${label}: разложено ${slots}`;
   return `${label}: разложено ${slots}/${items.length}, лимит предметов`;
 }
+
+/* ── Команды ──────────────────────────────────────────────────
+ *
+ * Одна команда — одна запись. Ни номера, ни параллельного списка порядка:
+ * место в меню задают группа и данные, исполнение — собственная функция.
+ * Чтобы добавить команду, допишите ещё один `registerDebugCommand` — здесь
+ * или, что правильнее, рядом со своей системой.
+ */
+
+/** Телепорт на дизайн-этаж по строковому id: цель берётся из маршрутных
+ *  данных, а не переписывается в отладке. */
+function designFloorTeleport(id: DesignFloorId): DebugAction | undefined {
+  const def = DESIGN_FLOOR_ROUTES.find(route => route.id === id);
+  if (!def) return undefined;
+  return {
+    type: 'teleport_design_floor',
+    id: def.id,
+    themeTags: def.themeTags ?? [],
+    z: def.z,
+    label: def.displayName,
+    color: def.color };
+}
+
+/* Этажи маршрута — тоже данные: список берётся из DESIGN_FLOOR_ROUTES и
+ * выстраивается по высоте сверху вниз, от +50 до -50. Новый этаж появляется
+ * в меню сам и на своём месте, а высота стоит первой колонкой, чтобы список
+ * читался глазом, а не перебором. */
+for (const floor of DESIGN_FLOOR_ROUTES) {
+  registerDebugCommand({
+    id: `${DESIGN_FLOOR_COMMAND_ID_PREFIX}${floor.id}`,
+    group: 'teleport',
+    sort: -floor.z,
+    label: `${formatDebugZ(floor.z).padStart(3, ' ')}  ${floor.displayName}`,
+    run: () => designFloorTeleport(floor.id) });
+}
+
+registerDebugCommand({
+  /* All physical weapons + ammo — spawn as drops around player */
+  id: 'spawn_all_weapons',
+  group: 'spawn',
+  label: 'Всё оружие + патроны',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugWeaponAndAmmoDrops(), 'оружие+патроны')}`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  /* Spawn one of each monster nearby */
+  id: 'spawn_monsters',
+  group: 'spawn',
+  label: 'Спавн монстров',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    const kinds = Object.values(MonsterKind).filter((v): v is MonsterKind => typeof v === 'number');
+    const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
+    for (let i = 0; i < slots; i++) {
+      const k = kinds[i];
+      const def = MONSTERS[k];
+      const ang = (i / kinds.length) * Math.PI * 2;
+      const monster: Entity = {
+        id: nextEntityId.v++, type: EntityType.MONSTER,
+        x: player.x + Math.cos(ang) * 4,
+        y: player.y + Math.sin(ang) * 4,
+        angle: ang + Math.PI, pitch: 0, alive: true,
+        speed: def.speed, sprite: def.sprite,
+        hp: def.hp, maxHp: def.hp,
+        monsterKind: k, attackCd: 0,
+        ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+        rpg: randomRPG(player.rpg?.level ?? 1),
+        phasing: k === MonsterKind.SPIRIT };
+      entities.push(monster);
+      seedDebugFogSharkPatch(world, k, monster.x, monster.y);
+    }
+    state.msgs.push(msg('Все монстры заспавнены', state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  /* Spawn random NPC nearby */
+  id: 'spawn_npc',
+  group: 'spawn',
+  label: 'Спавн NPC',
+  run: ({ player, entities, state, nextEntityId }) => {
+    if (!canSpawnEntityType(entities, EntityType.NPC)) {
+      state.msgs.push(msg('Лимит NPC достигнут', state.time, '#f88'));
+      return;
+    }
+    const nm = randomName();
+    const rpg = randomRPG(player.rpg?.level ?? 1);
+    const maxHp = getMaxHp(rpg);
+    const factions = [Faction.CITIZEN, Faction.LIQUIDATOR, Faction.CULTIST, Faction.WILD];
+    const faction = factions[Math.floor(rng() * factions.length)];
+    entities.push({
+      id: nextEntityId.v++, type: EntityType.NPC,
+      x: player.x + Math.cos(player.angle) * 2,
+      y: player.y + Math.sin(player.angle) * 2,
+      angle: player.angle + Math.PI, pitch: 0, alive: true,
+      speed: 1.2, sprite: Occupation.TRAVELER,
+      name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
+      needs: freshNeeds(), hp: maxHp, maxHp,
+      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      inventory: [], faction, occupation: Occupation.TRAVELER, isTraveler: true,
+      rpg, money: 20 + Math.floor(rng() * 80) });
+    state.msgs.push(msg(`NPC ${nm.name} заспавнен`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  /* Spawn all non-weapon/non-ammo/non-tool items nearby */
+  id: 'spawn_items',
+  group: 'spawn',
+  label: 'Все остальные предметы',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugOtherItemDrops(), 'остальные предметы')}`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  id: 'teleport_random_procedural',
+  group: 'anomaly',
+  label: 'случайный процедурный',
+  run: () => ({ type: 'teleport_random_procedural_floor' }) });
+
+registerDebugCommand({
+  /* Smoke expedition setup */
+  id: 'smoke_expedition_setup',
+  group: 'verify',
+  label: 'Smoke: expedition setup',
+  sort: 0,
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    addItem(player, 'makarov', 1);
+    addItem(player, 'ammo_9mm', 30);
+    player.weapon = 'makarov';
+    const moved = movePlayerToSmokeLift(world, player, entities);
+    const target = spawnSmokeTarget(world, player, entities, nextEntityId);
+    const contract = spawnContract(state);
+    state.msgs.push(msg(
+      `[SMOKE] kit=${player.weapon} lift=${moved ? 'ready' : 'missing'} target=${target ? 'spawned' : 'skipped'} contract=${contract ? 'created' : 'skipped'}`,
+      state.time,
+      moved && contract ? '#4f4' : '#f84',
+    ));
+  } });
+
+registerDebugCommand({
+  /* Verification contract route */
+  id: 'verification_contract_route',
+  group: 'economy',
+  label: 'VERIFY: контрактный маршрут',
+  run: ({ state }) => {
+    for (const line of spawnDebugVerificationContract(state)) state.msgs.push(msg(`[CONTRACT-DEBUG] ${line}`, state.time, '#6cf'));
+  } });
+
+registerDebugCommand({
+  /* Publish verification event */
+  id: 'publish_verification_event',
+  group: 'world',
+  label: 'VERIFY: событие в лог/слух',
+  run: ({ world, player, state }) => {
+    state.msgs.push(msg(`[EVENTS-DEBUG] ${publishDebugVerificationEvent(world, player, state)}`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  /* Route floor summary */
+  id: 'route_floor_summary',
+  group: 'route',
+  label: 'ROUTE: floor summary',
+  run: ({ world, player, entities, state }) => {
+    for (const line of debugRouteFloorSummaryLines(world, player, entities, state)) state.msgs.push(msg(`[ROUTE] ${line}`, state.time, '#8cf'));
+  } });
+
+registerDebugCommand({
+  /* Arm current-floor numbered lift anomaly */
+  id: 'arm_floor_instance',
+  group: 'route',
+  label: 'VERIFY: номерная петля лифта',
+  run: ({ world, player, state }) => {
+    for (const line of armLocalFloorInstance(world, player, state)) state.msgs.push(msg(`[LIFT-DEBUG] ${line}`, state.time, '#f4a'));
+  } });
+
+registerDebugCommand({
+  /* Samosbor warning window */
+  id: 'samosbor_warning_window',
+  group: 'samosbor',
+  label: 'VERIFY: окно предупреждения самосбора',
+  run: ({ state }) => {
+    state.msgs.push(msg(`[SAMOSBOR-DEBUG] ${setSamosborWarningWindow(state)}`, state.time, '#fa4'));
+  } });
+
+registerDebugCommand({
+  /* Economy scarcity pulse */
+  id: 'economy_scarcity_pulse',
+  group: 'economy',
+  label: 'VERIFY: дефицит экономики',
+  run: ({ world, player, state }) => {
+    for (const line of applyDebugEconomyPulse(world, player, state)) state.msgs.push(msg(`[ECON-DEBUG] ${line}`, state.time, '#ccf'));
+  } });
+
+registerDebugCommand({
+  /* Floor-specific monster counterplay pack */
+  id: 'floor_monster_pack',
+  group: 'spawn',
+  label: 'VERIFY: монстры этажа',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    for (const line of spawnDebugMonsterPack(world, player, entities, state, nextEntityId)) {
+      state.msgs.push(msg(`[MON-DEBUG] ${line}`, state.time, '#f88'));
+    }
+  } });
+
+registerDebugCommand({
+  /* Route to nearest useful container */
+  id: 'route_to_container',
+  group: 'economy',
+  label: 'VERIFY: маршрут к контейнеру',
+  run: ({ world, player, state }) => {
+    for (const line of routePlayerToNearestContainer(world, player, state)) state.msgs.push(msg(`[CONT-DEBUG] ${line}`, state.time, '#ccf'));
+  } });
+
+registerDebugCommand({
+  /* Expedition proof prep */
+  id: 'expedition_proof_prep',
+  group: 'verify',
+  label: 'EXPEDITION: подготовка',
+  sort: 1,
+  run: ({ player, state }) => {
+    addItem(player, 'makarov', 1);
+    addItem(player, 'ammo_9mm', 40);
+    addItem(player, 'water', 2);
+    addItem(player, 'bread', 2);
+    addItem(player, 'bandage', 2);
+    player.weapon = 'makarov';
+    const created = spawnContractById(state, EXPEDITION_PROOF_CONTRACT_ID, ['debug_route', 'expedition_proof']);
+    state.msgs.push(msg(`[EXPEDITION] prep kit=${player.weapon} contract=${created ? 'created' : 'existing'}`, state.time, '#6cf'));
+  } });
+
+registerDebugCommand({
+  /* Expedition proof lift ready */
+  id: 'expedition_proof_lift_ready',
+  group: 'verify',
+  label: 'EXPEDITION: лифт готов',
+  sort: 2,
+  run: ({ world, player, entities, state }) => {
+    const moved = movePlayerToSmokeLift(world, player, entities);
+    state.msgs.push(msg(`[EXPEDITION] lift=${moved ? 'ready' : 'missing'}`, state.time, moved ? '#4f4' : '#f84'));
+  } });
+
+registerDebugCommand({
+  id: 'expedition_proof_collectors_arrival',
+  group: 'verify',
+  sort: 3,
+  label: 'EXPEDITION: прибытие в Коллекторы',
+  run: ({ state }) => {
+    state.msgs.push(msg('[EXPEDITION] прибытие: Коллекторы', state.time, '#8cf'));
+    return designFloorTeleport('maintenance');
+  } });
+
+registerDebugCommand({
+  id: 'expedition_proof_risk',
+  group: 'verify',
+  label: 'EXPEDITION: риск маршрута',
+  sort: 4,
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId), state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  id: 'expedition_proof_container',
+  group: 'verify',
+  label: 'EXPEDITION: контейнер маршрута',
+  sort: 5,
+  run: ({ world, player, state }) => {
+    for (const line of routePlayerToNearestContainer(world, player, state)) state.msgs.push(msg(`[EXPEDITION] ${line}`, state.time, '#ccf'));
+  } });
+
+registerDebugCommand({
+  id: 'expedition_proof_samosbor_warning',
+  group: 'verify',
+  label: 'EXPEDITION: предупреждение самосбора',
+  sort: 6,
+  run: ({ state }) => {
+    state.msgs.push(msg(`[EXPEDITION] ${setSamosborWarningWindow(state)}`, state.time, '#fa4'));
+  } });
+
+registerDebugCommand({
+  id: 'expedition_proof_return',
+  group: 'verify',
+  sort: 7,
+  label: 'EXPEDITION: возврат домой',
+  run: ({ state }) => {
+    state.msgs.push(msg('[EXPEDITION] возврат: жилой этаж', state.time, '#8cf'));
+    return designFloorTeleport('living');
+  } });
+
+registerDebugCommand({
+  id: 'grant_permit_pack',
+  group: 'cheat',
+  label: 'PERMIT: выдать пакет',
+  run: ({ player, state }) => {
+    for (const line of grantDebugPermitPack(player)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#fc6'));
+  } });
+
+registerDebugCommand({
+  id: 'check_permit_access',
+  group: 'cheat',
+  label: 'PERMIT: проверить доступ',
+  run: ({ world, player, state }) => {
+    for (const line of checkDebugPermitAccess(world, player, state)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#fc6'));
+  } });
+
+registerDebugCommand({
+  id: 'spoil_permit',
+  group: 'cheat',
+  label: 'PERMIT: испортить пропуск',
+  run: ({ world, player, state }) => {
+    for (const line of spoilDebugPermit(world, player, state)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#f84'));
+  } });
+
+registerDebugCommand({
+  id: 'debug_false_cleanup_patrol',
+  group: 'spawn',
+  label: 'SAMOSBOR: ложная зачистка',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    for (const line of spawnDebugFalseCleanupPatrol(world, player, entities, state, nextEntityId)) {
+      state.msgs.push(msg(`[FALSE-CLEANUP] ${line}`, state.time, '#f84'));
+    }
+    return { type: 'refresh_world_data' };
+  } });
+
+registerDebugCommand({
+  id: 'debug_mukhozhuk_host',
+  group: 'spawn',
+  label: 'MUKHOZHUK: носитель у игрока',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    for (const line of spawnDebugMukhozhukHost(world, player, entities, state, nextEntityId)) {
+      state.msgs.push(msg(`[MUKHOZHUK] ${line}`, state.time, '#ce8'));
+    }
+    return { type: 'refresh_world_data' };
+  } });
+
+registerDebugCommand({
+  id: 'debug_chervie_site',
+  group: 'spawn',
+  label: 'CHERVIE: экранный узел',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    for (const line of spawnDebugChervieSite(world, player, entities, state, nextEntityId)) {
+      state.msgs.push(msg(`[CHERVIE] ${line}`, state.time, '#6f8'));
+    }
+    return { type: 'refresh_world_data' };
+  } });
+
+registerDebugCommand({
+  id: 'spawn_all_psi',
+  group: 'spawn',
+  label: 'Все ПСИ-сгустки',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugPsiClotDrops(), 'ПСИ-сгустки')}`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  id: 'spawn_all_tools',
+  group: 'spawn',
+  label: 'Все инструменты',
+  run: ({ world, player, entities, state, nextEntityId }) => {
+    state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugToolDrops(), 'инструменты')}`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  id: 'spawn_sculpture',
+  group: 'spawn',
+  label: 'Спавн Скульптуры',
+  run: ({ player, entities, state, nextEntityId }) => {
+    const def = MONSTERS[MonsterKind.SCULPTURE];
+    const ang = player.angle;
+    entities.push({
+      id: nextEntityId.v++, type: EntityType.MONSTER,
+      x: player.x + Math.cos(ang) * 4,
+      y: player.y + Math.sin(ang) * 4,
+      angle: ang + Math.PI, pitch: 0, alive: true,
+      speed: def.speed, sprite: def.sprite,
+      hp: def.hp, maxHp: def.hp,
+      monsterKind: MonsterKind.SCULPTURE, attackCd: 0,
+      ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+      rpg: randomRPG(player.rpg?.level ?? 1),
+      phasing: false });
+    state.msgs.push(msg('[DEBUG] Скульптура заспавнена перед игроком', state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  id: 'spawn_critters',
+  group: 'spawn',
+  label: 'спавн криттеров',
+  run: ({ world, player, state }) => {
+    let spawned = 0;
+    for (let i = 0; i < MAX_CRITTERS && spawned < 10; i++) {
+      const c = CRITTERS_POOL[i];
+      if (!c.active) {
+        const angle = mathRng() * Math.PI * 2;
+        const dist = 1 + mathRng() * 3;
+        const sx = Math.round(player.x + Math.cos(angle) * dist);
+        const sy = Math.round(player.y + Math.sin(angle) * dist);
+        if (world.get(sx, sy) === Cell.FLOOR) {
+          c.active = true;
+          const r = mathRng();
+          c.defId = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
+          c.x = sx;
+          c.y = sy;
+          c.z = 0;
+          c.targetX = sx;
+          c.targetY = sy;
+          spawned++;
+        }
+      }
+    }
+    state.msgs.push(msg(`[DEBUG] Заспавнено криттеров: ${spawned}`, state.time, '#ff0'));
+  } });
+
+registerDebugCommand({
+  /* Запустить сцену этажа по введённому id */
+  id: 'play_floor_scene',
+  group: 'tools',
+  label: 'СЦЕНА: запустить по id',
+  run: ({ state }) => {
+    for (const line of playDebugFloorScene(state)) state.msgs.push(msg(`[SCENE] ${line}`, state.time, '#dfe6e0'));
+  } });
+
+registerDebugCommand({
+  /* Известные сцены этажа */
+  id: 'floor_scene_list',
+  group: 'tools',
+  label: 'СЦЕНЫ: список',
+  run: ({ state }) => {
+    for (const line of debugFloorSceneLines(state)) state.msgs.push(msg(`[SCENE] ${line}`, state.time, '#9ab'));
+  } });
+
+/* Процедурные аномалии — данные, а не команды: id выводится из имени аномалии,
+ * поэтому новая аномалия попадает в меню одной строкой и без правки switch. */
+const ANOMALY_TELEPORTS: readonly { anomalyId: FloorAnomalyId; label: string }[] = [
+  { anomalyId: 'smog', label: 'говнячный смог' },
+  { anomalyId: 'false_safe_block', label: 'тихий блок' },
+  { anomalyId: 'hladon', label: 'хладон' },
+  { anomalyId: 'fractal_floor', label: 'фрактал' },
+  { anomalyId: 'mirror_run', label: 'зеркало' },
+  { anomalyId: 'radio_chess', label: 'радио-шахматы' },
+  { anomalyId: 'cement_memory', label: 'цементная память' },
+  { anomalyId: 'conveyor_sorter', label: 'конвейер' },
+  { anomalyId: 'wall_snake', label: 'змейка' },
+  { anomalyId: 'section_shift', label: 'секционный сдвиг' },
+  { anomalyId: 'conway_life', label: 'игра жизнь' },
+  { anomalyId: 'rail_trains', label: 'поезда' },
+  { anomalyId: 'zombie_apocalypse', label: 'зомби-апокалипсис' },
+];
+
+for (const anomaly of ANOMALY_TELEPORTS) {
+  registerDebugCommand({
+    id: `teleport_${anomaly.anomalyId}`,
+    group: 'anomaly',
+    label: anomaly.label,
+    run: () => ({ type: 'teleport_procedural_anomaly', anomalyId: anomaly.anomalyId }) });
+}
+
+/* ── Внешний вход ─────────────────────────────────────────────
+ * Индекс — это позиция в плоском списке команд; по нему ходят меню и smoke. */
 
 export function execDebugCommand(
   idx: number,
@@ -1298,563 +1544,8 @@ export function execDebugCommand(
   entities: Entity[],
   state: GameState,
   nextEntityId: { v: number },
-): DebugCommandAction | null {
-  const execIdx = debugCommandExecutionIndex(idx);
-  if (execIdx < 0) return null;
-  if (execIdx >= DESIGN_FLOOR_COMMAND_START) {
-    const def = DESIGN_FLOOR_ROUTES[execIdx - DESIGN_FLOOR_COMMAND_START];
-    if (def) {
-      return {
-        type: "teleport_design_floor",
-        id: def.id,
-        // @ts-ignore
-        themeTags: def.themeTags,
-        
-        z: def.z,
-        label: def.displayName,
-        color: def.color,
-      };
-    }
-  }
-
-  switch (execIdx) {
-    case 0: { // All physical weapons + ammo — spawn as drops around player
-      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugWeaponAndAmmoDrops(), 'оружие+патроны')}`, state.time, '#ff0'));
-      break;
-    }
-    case 1: { // Spawn one of each monster nearby
-      const kinds = Object.values(MonsterKind).filter((v): v is MonsterKind => typeof v === 'number');
-      const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
-      for (let i = 0; i < slots; i++) {
-        const k = kinds[i];
-        const def = MONSTERS[k];
-        const ang = (i / kinds.length) * Math.PI * 2;
-        const monster: Entity = {
-          id: nextEntityId.v++, type: EntityType.MONSTER,
-          x: player.x + Math.cos(ang) * 4,
-          y: player.y + Math.sin(ang) * 4,
-          angle: ang + Math.PI, pitch: 0, alive: true,
-          speed: def.speed, sprite: def.sprite,
-          hp: def.hp, maxHp: def.hp,
-          monsterKind: k, attackCd: 0,
-          ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-          rpg: randomRPG(player.rpg?.level ?? 1),
-          phasing: k === MonsterKind.SPIRIT,
-        };
-        entities.push(monster);
-        seedDebugFogSharkPatch(world, k, monster.x, monster.y);
-      }
-      state.msgs.push(msg('Все монстры заспавнены', state.time, '#ff0'));
-      break;
-    }
-    case 2: { // Spawn random NPC nearby
-      if (!canSpawnEntityType(entities, EntityType.NPC)) {
-        state.msgs.push(msg('Лимит NPC достигнут', state.time, '#f88'));
-        break;
-      }
-      const nm = randomName();
-      const rpg = randomRPG(player.rpg?.level ?? 1);
-      const maxHp = getMaxHp(rpg);
-      const factions = [Faction.CITIZEN, Faction.LIQUIDATOR, Faction.CULTIST, Faction.WILD];
-      const faction = factions[Math.floor(rng() * factions.length)];
-      entities.push({
-        id: nextEntityId.v++, type: EntityType.NPC,
-        x: player.x + Math.cos(player.angle) * 2,
-        y: player.y + Math.sin(player.angle) * 2,
-        angle: player.angle + Math.PI, pitch: 0, alive: true,
-        speed: 1.2, sprite: Occupation.TRAVELER,
-        name: nm.name, firstName: nm.firstName, lastName: nm.lastName, isFemale: nm.female,
-        needs: freshNeeds(), hp: maxHp, maxHp,
-        ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        inventory: [], faction, occupation: Occupation.TRAVELER, isTraveler: true,
-        rpg, money: 20 + Math.floor(rng() * 80),
-      });
-      state.msgs.push(msg(`NPC ${nm.name} заспавнен`, state.time, '#ff0'));
-      break;
-    }
-    case 3: { // Spawn all non-weapon/non-ammo/non-tool items nearby
-      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugOtherItemDrops(), 'остальные предметы')}`, state.time, '#ff0'));
-      break;
-    }
-    case 4: { // Give 1M XP
-      awardXP(player, 1_000_000, state.msgs, state.time);
-      state.msgs.push(msg('+1 000 000 XP', state.time, '#ff0'));
-      break;
-    }
-    case 5: { // Cycle forced samosbor variant + start (full scale = global fronts)
-      const variantId = cycleForcedSamosborVariant();
-      state.samosborTimer = 0;
-      state.msgs.push(msg(`[DEBUG] Следующий самосбор: ${variantId} (глобальный)`, state.time, '#ff0'));
-      break;
-    }
-    case 6: { // Toggle noclip
-      const enabled = toggleDebugNoClip();
-      state.msgs.push(msg(
-        `[DEBUG] Noclip ${enabled ? 'включён' : 'выключен'}`,
-        state.time,
-        '#ff0',
-      ));
-      break;
-    }
-    case 7: { // Recent important world events
-      const store = ensureWorldEventState(state);
-      state.msgs.push(msg(
-        `[EVENTS] recent=${store.recentEvents.count}/${store.recentEvents.capacity} important=${store.importantEvents.count}/${store.importantEvents.capacity}`,
-        state.time,
-        '#ff0',
-      ));
-      const important = getImportantEvents(state, 10);
-      if (important.length === 0) {
-        state.msgs.push(msg('[EVENTS] important: none', state.time, '#888'));
-        break;
-      }
-      for (let i = important.length - 1; i >= 0; i--) {
-        const e = important[i];
-        const zone = e.zoneId !== undefined ? ` z${e.zoneId + 1}` : '';
-        state.msgs.push(msg(`[EVENTS] #${e.id} ${e.type}${zone} sev${e.severity}`, state.time, '#ccf'));
-      }
-      for (const row of summarizeImportantEventsByFloorZone(state, 8)) {
-        const zone = row.zoneId >= 0 ? `z${row.zoneId + 1}` : 'z?';
-        state.msgs.push(msg(
-          `[EVENTS] floor ${row.z} ${zone}: ${row.count} imp, max${row.maxSeverity}, last ${row.lastType}#${row.lastId}`,
-          state.time,
-          '#9cf',
-        ));
-      }
-      break;
-    }
-    case 8: { // Economy prices
-      for (const line of summarizeEconomy(state, 10)) state.msgs.push(msg(`[PRICE] ${line}`, state.time, '#ccf'));
-      for (const id of ['water', 'bread', 'bandage', 'ammo_9mm', 'pipe', 'note']) {
-        state.msgs.push(msg(`[PRICE] ${ITEMS[id]?.name ?? id}: ${getAdjustedItemPrice(state, id)}₽`, state.time, '#ccf'));
-      }
-      break;
-    }
-    case 9: { // Containers near player
-      const made = ensureRoomContainers(world, state.currentZ);
-      if (made > 0) state.msgs.push(msg(`[CONT] создано: ${made}`, state.time, '#ff0'));
-      const list = nearbyContainers(world, player, 3);
-      if (list.length === 0) {
-        state.msgs.push(msg(`[CONT] рядом нет. всего=${world.containers.length}`, state.time, '#888'));
-        break;
-      }
-      for (const c of list.slice(0, 5)) state.msgs.push(msg(`[CONT] ${describeContainer(c)}`, state.time, '#ccf'));
-      break;
-    }
-    case 10: { // Take first item from nearest container
-      ensureRoomContainers(world, state.currentZ);
-      const c = firstNearbyContainer(world, player);
-      if (!c) {
-        state.msgs.push(msg('[CONT] рядом нет контейнера', state.time, '#888'));
-        break;
-      }
-      const ok = takeFromContainer(c, player, 0, 1, { state, world, entities });
-      state.msgs.push(msg(ok ? `[CONT] взято из #${c.id}` : `[CONT] #${c.id} пуст/недоступен`, state.time, ok ? '#4f4' : '#f84'));
-      break;
-    }
-    case 11: { // Force production tick
-      const made = tickProduction(state, world, true);
-      for (const line of summarizeProduction(state, 5)) state.msgs.push(msg(`[PROD] ${line}`, state.time, made > 0 ? '#4f4' : '#888'));
-      break;
-    }
-    case 12: { // Spawn/list system quest
-      spawnContract(state);
-      for (const line of summarizeContracts(state, 6)) state.msgs.push(msg(`[QUEST] ${line}`, state.time, '#6cf'));
-      break;
-    }
-    case 13: { // Population, item count, and floor pocket catalog
-      for (const line of populationItemSummary(world, entities, state)) state.msgs.push(msg(`[BAL] ${line}`, state.time, '#ccf'));
-      const search = CATALOG_DEBUG_SEARCHES[catalogDebugSearchIndex++ % CATALOG_DEBUG_SEARCHES.length];
-      const query = search
-        ? { search, limit: 6 }
-        : { baseFloor: state.currentZ, limit: 6 };
-      for (const line of floorCatalogDebugLines(query)) state.msgs.push(msg(`[CAT] ${line}`, state.time, '#ccf'));
-      for (const line of summarizeHeatline(world)) state.msgs.push(msg(line, state.time, '#f84'));
-      for (const line of summarizeCarnivorousFungus(world)) state.msgs.push(msg(line, state.time, '#bf8'));
-      for (const line of summarizeHladonColdPockets(world, player)) state.msgs.push(msg(line, state.time, '#8cf'));
-      break;
-    }
-    case 14: { // Elevator floor instance state
-      for (const line of summarizeFloorRun(state)) state.msgs.push(msg(`[FLOOR] ${line}`, state.time, '#8cf'));
-      for (const line of summarizeFloorInstances(state)) state.msgs.push(msg(`[LIFT] ${line}`, state.time, '#f4a'));
-      break;
-    }
-    case 15: { // VOID protocols: grant/apply/list bounded state
-      for (const line of debugForceVoidProtocol(world, player, entities, state, nextEntityId)) {
-        state.msgs.push(msg(`[VOID] ${line}`, state.time, '#8ff'));
-      }
-      break;
-    }
-    case 16: { // Faction event scheduler
-      for (const line of summarizeFactionEvents(state, world, player, entities)) {
-        state.msgs.push(msg(`[FACT] ${line}`, state.time, '#ccf'));
-      }
-      break;
-    }
-    case 17: { // Force faction event in current zone
-      state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId), state.time, '#ff0'));
-      break;
-    }
-    case 18: { // Force cult procession in current zone
-      state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId, 'cult_procession'), state.time, '#ff0'));
-      break;
-    }
-    case 19: { // Samosbor director state
-      for (const line of summarizeSamosborDirector(state)) state.msgs.push(msg(`[DIR] ${line}`, state.time, '#ccf'));
-      break;
-    }
-    case 20: { // Force next samosbor director beat
-      const result = forceNextSamosborDirectorBeat(world, entities, state, nextEntityId, getActiveSamosborVariant());
-      state.msgs.push(msg(
-        result.fired ? `[DIR] forced ${result.beatId}` : `[DIR] ${result.reasonCode}`,
-        state.time,
-        result.fired ? '#4f4' : '#f84',
-      ));
-      break;
-    }
-    case 21: { // Clear samosbor director cooldowns
-      clearSamosborDirectorCooldowns(state);
-      state.msgs.push(msg('[DIR] cooldowns cleared', state.time, '#ff0'));
-      break;
-    }
-                            case 28: return { type: 'teleport_random_procedural_floor' };
-    case 29: { // Smoke expedition setup
-      addItem(player, 'makarov', 1);
-      addItem(player, 'ammo_9mm', 30);
-      player.weapon = 'makarov';
-      const moved = movePlayerToSmokeLift(world, player, entities);
-      const target = spawnSmokeTarget(world, player, entities, nextEntityId);
-      const contract = spawnContract(state);
-      state.msgs.push(msg(
-        `[SMOKE] kit=${player.weapon} lift=${moved ? 'ready' : 'missing'} target=${target ? 'spawned' : 'skipped'} contract=${contract ? 'created' : 'skipped'}`,
-        state.time,
-        moved && contract ? '#4f4' : '#f84',
-      ));
-      break;
-    }
-    case 30: { // Force Veretar variant + start (full scale)
-      forceNextSamosborVariant('veretar');
-      if (!state.samosborActive) state.samosborTimer = 0;
-      if (isSmokeDebugRun()) stabilizeSmokeRecovery(world, player, entities);
-      state.msgs.push(msg(
-        state.samosborActive
-          ? '[DEBUG] Следующий самосбор: Веретар (глобальный) после текущего'
-          : '[DEBUG] Следующий самосбор: Веретар (глобальный)',
-        state.time,
-        '#f4f1df',
-      ));
-      break;
-    }
-    case 31: { // Force Maronary variant + start (full scale)
-      forceNextSamosborVariant('maronary');
-      state.samosborTimer = 0;
-      state.msgs.push(msg('[DEBUG] Следующий самосбор: Маронарий (глобальный)', state.time, '#35ff66'));
-      break;
-    }
-    case 32: { // Route cue audio/HUD smoke
-      const count = routeCueCount(world);
-      state.msgs.push(msg(`[CUE] registered=${count}`, state.time, count > 0 ? '#9f7' : '#fa4'));
-      for (const line of debugTriggerRouteCue(world, player, state)) {
-        state.msgs.push(msg(`[CUE] ${line}`, state.time, '#9f7'));
-      }
-      break;
-    }
-    case 33: { // Force Maronary wrong-door remap
-      const ok = debugCreateWrongDoorRemap(world, player, state);
-      state.msgs.push(msg(
-        ok ? '[MAR] неправильная дверь создана' : '[MAR] рядом нет подходящей пары дверей',
-        state.time,
-        ok ? '#35ff66' : '#f84',
-      ));
-      break;
-    }
-    case 34: { // Grant Maronary shaving
-      const ok = addItem(player, 'maronary_shaving', 1);
-      if (ok) publishMaronaryShavingAcquired(player, state, 'debug_grant');
-      state.msgs.push(msg(ok ? '[MAR] зелёная стружка выдана' : '[MAR] нет места для стружки', state.time, ok ? '#fc4' : '#f84'));
-      break;
-    }
-    case 35: { // Force Istotit variant + start (full scale)
-      forceNextSamosborVariant('istotit');
-      state.samosborTimer = 0;
-      state.msgs.push(msg('[DEBUG] Следующий самосбор: Истотит (глобальный)', state.time, '#d6a64b'));
-      break;
-    }
-    case 36: return { type: 'teleport_procedural_anomaly', anomalyId: 'smog' };
-    case 37: return { type: 'teleport_procedural_anomaly', anomalyId: 'false_safe_block' };
-    case 38: return { type: 'teleport_procedural_anomaly', anomalyId: 'hladon' };
-    case 39: { // Govnyak courier route choice
-      const created = spawnGovnyakCourierContract(state, player);
-      for (const line of summarizeContracts(state, 6)) state.msgs.push(msg(`[QUEST] ${line}`, state.time, created ? '#6cf' : '#888'));
-      break;
-    }
-    case 40: { // Force pneumomail capsule
-      for (const line of debugForcePneumomailCapsule(world, player, state)) {
-        state.msgs.push(msg(`[PMAIL] ${line}`, state.time, '#8cf'));
-      }
-      break;
-    }
-    case 41: { // Force hermodoor borer QA route
-      for (const line of debugForceHermodoorBorer(world, player, entities, state, nextEntityId)) {
-        state.msgs.push(msg(`[BORER] ${line}`, state.time, '#fb6'));
-      }
-      break;
-    }
-    case 42: { // Force liquidator-cult clash
-      state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId, 'cult_liquidator_clash'), state.time, '#ff0'));
-      break;
-    }
-    case 43: { // Toggle Onepunchman cheat
-      const enabled = toggleDebugOnePunchMan();
-      if (enabled) keepDebugOnePunchManAlive(player);
-      state.msgs.push(msg(
-        `[DEBUG] ONEPUNCHMAN ${enabled ? 'включён' : 'выключен'}`,
-        state.time,
-        enabled ? '#ff0' : '#888',
-      ));
-      break;
-    }
-    case 44: { // Grant Net Terminal Gen access
-      grantNetTerminalGenAccess(state);
-      state.msgs.push(msg('[НЕТ-ГЕН] доступ выдан', state.time, '#63f6ff'));
-      break;
-    }
-    case 45: { // Place generated terminals on current floor
-      const count = placeNetTerminalGenTerminalsForCurrentFloor(world, state, { debug: true, max: 4, clearExisting: true, source: 'debug' });
-      state.msgs.push(msg(`[НЕТ-ГЕН] терминалов: ${count}`, state.time, count > 0 ? '#63f6ff' : '#f84'));
-      return { type: 'refresh_world_data' };
-    }
-    case 46: { // Place terminal in front of player
-      const x = Math.floor(player.x + Math.cos(player.angle) * 1.5);
-      const y = Math.floor(player.y + Math.sin(player.angle) * 1.5);
-      const terminal = placeNetTerminalGenTerminal(world, x, y, undefined, 'debug');
-      state.msgs.push(msg(terminal ? `[НЕТ-ГЕН] терминал ${terminal.x},${terminal.y}` : '[НЕТ-ГЕН] нет подходящей клетки', state.time, terminal ? '#63f6ff' : '#f84'));
-      return { type: 'refresh_world_data' };
-    }
-    case 47: { // Open map editor
-      state.showDebug = false;
-      openMapEditor(world, player, state);
-      break;
-    }
-    case 48: { // Net Terminal Gen and map editor status
-      for (const line of summarizeNetTerminalGen(state, player)) state.msgs.push(msg(`[НЕТ-ГЕН] ${line}`, state.time, '#63f6ff'));
-      for (const line of summarizeMapEditor(state)) state.msgs.push(msg(`[MAPEDIT] ${line}`, state.time, '#9fdbc6'));
-      break;
-    }
-    case 49: { // Replay current map patch
-      const applied = replayMapEditorPatchForCurrentFloor(world, entities, player, state, nextEntityId);
-      state.msgs.push(msg(`[MAPEDIT] replay ${applied}`, state.time, applied > 0 ? '#9fdbc6' : '#888'));
-      return { type: 'refresh_world_data' };
-    }
-    case 50: { // Clear current map patch
-      const cleared = clearCurrentMapEditorPatch(state);
-      state.msgs.push(msg(cleared ? '[MAPEDIT] patch cleared' : '[MAPEDIT] patch empty', state.time, cleared ? '#9fdbc6' : '#888'));
-      break;
-    }
-    case 51: return { type: 'teleport_procedural_anomaly', anomalyId: 'fractal_floor' };
-    case 52: return { type: 'teleport_procedural_anomaly', anomalyId: 'mirror_run' };
-    case 53: return { type: 'teleport_procedural_anomaly', anomalyId: 'radio_chess' };
-    case 54: return { type: 'teleport_procedural_anomaly', anomalyId: 'cement_memory' };
-    case 55: return { type: 'teleport_procedural_anomaly', anomalyId: 'conveyor_sorter' };
-    case 56: return { type: 'teleport_procedural_anomaly', anomalyId: 'wall_snake' };
-    case 57: return { type: 'teleport_procedural_anomaly', anomalyId: 'section_shift' };
-    case 58: return { type: 'teleport_procedural_anomaly', anomalyId: 'conway_life' };
-    case 59: return { type: 'teleport_procedural_anomaly', anomalyId: 'rail_trains' };
-    case 60: {
-      for (const line of debugSpawnBadAppleWorld(world, player, state)) state.msgs.push(msg(`[BADAPPLE] ${line}`, state.time, '#fff'));
-      return { type: 'refresh_world_data' };
-    }
-    case 61: { // Verification contract route
-      for (const line of spawnDebugVerificationContract(state)) state.msgs.push(msg(`[CONTRACT-DEBUG] ${line}`, state.time, '#6cf'));
-      break;
-    }
-    case 62: { // Publish verification event
-      state.msgs.push(msg(`[EVENTS-DEBUG] ${publishDebugVerificationEvent(world, player, state)}`, state.time, '#ff0'));
-      break;
-    }
-    case 63: { // Route floor summary
-      for (const line of debugRouteFloorSummaryLines(world, player, entities, state)) state.msgs.push(msg(`[ROUTE] ${line}`, state.time, '#8cf'));
-      break;
-    }
-    case 64: { // Arm current-floor numbered lift anomaly
-      for (const line of armLocalFloorInstance(world, player, state)) state.msgs.push(msg(`[LIFT-DEBUG] ${line}`, state.time, '#f4a'));
-      break;
-    }
-    case 65: { // Samosbor warning window
-      state.msgs.push(msg(`[SAMOSBOR-DEBUG] ${setSamosborWarningWindow(state)}`, state.time, '#fa4'));
-      break;
-    }
-    case 66: { // Economy scarcity pulse
-      for (const line of applyDebugEconomyPulse(world, player, state)) state.msgs.push(msg(`[ECON-DEBUG] ${line}`, state.time, '#ccf'));
-      break;
-    }
-    case 67: { // Floor-specific monster counterplay pack
-      for (const line of spawnDebugMonsterPack(world, player, entities, state, nextEntityId)) {
-        state.msgs.push(msg(`[MON-DEBUG] ${line}`, state.time, '#f88'));
-      }
-      break;
-    }
-    case 68: { // Route to nearest useful container
-      for (const line of routePlayerToNearestContainer(world, player, state)) state.msgs.push(msg(`[CONT-DEBUG] ${line}`, state.time, '#ccf'));
-      break;
-    }
-    case 69: return { type: 'teleport_procedural_anomaly', anomalyId: 'zombie_apocalypse' };
-    case 70: { // Expedition proof prep
-      addItem(player, 'makarov', 1);
-      addItem(player, 'ammo_9mm', 40);
-      addItem(player, 'water', 2);
-      addItem(player, 'bread', 2);
-      addItem(player, 'bandage', 2);
-      player.weapon = 'makarov';
-      const created = spawnContractById(state, EXPEDITION_PROOF_CONTRACT_ID, ['debug_route', 'expedition_proof']);
-      state.msgs.push(msg(`[EXPEDITION] prep kit=${player.weapon} contract=${created ? 'created' : 'existing'}`, state.time, '#6cf'));
-      break;
-    }
-    case 71: { // Expedition proof lift ready
-      const moved = movePlayerToSmokeLift(world, player, entities);
-      state.msgs.push(msg(`[EXPEDITION] lift=${moved ? 'ready' : 'missing'}`, state.time, moved ? '#4f4' : '#f84'));
-      break;
-    }
-        case 73: {
-      state.msgs.push(msg(forceFactionEvent(state, world, player, entities, nextEntityId), state.time, '#ff0'));
-      break;
-    }
-    case 74: {
-      for (const line of routePlayerToNearestContainer(world, player, state)) state.msgs.push(msg(`[EXPEDITION] ${line}`, state.time, '#ccf'));
-      break;
-    }
-    case 75: {
-      state.msgs.push(msg(`[EXPEDITION] ${setSamosborWarningWindow(state)}`, state.time, '#fa4'));
-      break;
-    }
-        case 77: {
-      for (const line of debugStartSamosborWaveAtPlayer(world, player, entities, state, 'small')) {
-        state.msgs.push(msg(`[SAMOSBOR-WAVE] ${line}`, state.time, '#c8f'));
-      }
-      return { type: 'refresh_world_data' };
-    }
-    case 78: {
-      for (const line of grantDebugPermitPack(player)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#fc6'));
-      break;
-    }
-    case 79: {
-      for (const line of checkDebugPermitAccess(world, player, state)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#fc6'));
-      break;
-    }
-    case 80: {
-      for (const line of spoilDebugPermit(world, player, state)) state.msgs.push(msg(`[PERMIT] ${line}`, state.time, '#f84'));
-      break;
-    }
-    case 81: {
-      for (const line of debugForcePseudoliftNearPlayer(world, player, state)) {
-        state.msgs.push(msg(`[PSEUDOLIFT] ${line}`, state.time, '#fc4'));
-      }
-      return { type: 'refresh_world_data' };
-    }
-    case 82: {
-      for (const line of spawnDebugFalseCleanupPatrol(world, player, entities, state, nextEntityId)) {
-        state.msgs.push(msg(`[FALSE-CLEANUP] ${line}`, state.time, '#f84'));
-      }
-      return { type: 'refresh_world_data' };
-    }
-    case 83: {
-      for (const line of spawnDebugMukhozhukHost(world, player, entities, state, nextEntityId)) {
-        state.msgs.push(msg(`[MUKHOZHUK] ${line}`, state.time, '#ce8'));
-      }
-      return { type: 'refresh_world_data' };
-    }
-    case 84: {
-      for (const line of spawnDebugChervieSite(world, player, entities, state, nextEntityId)) {
-        state.msgs.push(msg(`[CHERVIE] ${line}`, state.time, '#6f8'));
-      }
-      return { type: 'refresh_world_data' };
-    }
-    case 85: {
-      const cells = revealWholeMap(world);
-      state.msgs.push(msg(`[DEBUG] revealmap: открыто клеток ${cells}`, state.time, '#ff0'));
-      break;
-    }
-    case 86: {
-      if (!canSpawnEntityType(entities, EntityType.ITEM_DROP)) {
-        state.msgs.push(msg('[DEBUG] лимит предметов: мелок не заспавнен', state.time, '#f84'));
-        break;
-      }
-      entities.push({
-        id: nextEntityId.v++,
-        type: EntityType.ITEM_DROP,
-        x: player.x + Math.cos(player.angle) * 1.4,
-        y: player.y + Math.sin(player.angle) * 1.4,
-        angle: 0,
-        pitch: 0,
-        alive: true,
-        speed: 0,
-        sprite: Spr.ITEM_DROP,
-        inventory: [{ defId: CHALK_ITEM_ID, count: 1 }],
-      });
-      state.msgs.push(msg('[DEBUG] мелок заспавнен перед игроком', state.time, '#ff0'));
-      break;
-    }
-    case 87: {
-      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugPsiClotDrops(), 'ПСИ-сгустки')}`, state.time, '#ff0'));
-      break;
-    }
-    case 88: {
-      state.msgs.push(msg(`[DEBUG] ${spawnDebugItemDropsAroundPlayer(world, player, entities, nextEntityId, debugToolDrops(), 'инструменты')}`, state.time, '#ff0'));
-      break;
-    }
-    case 89: {
-      const def = MONSTERS[MonsterKind.SCULPTURE];
-      const ang = player.angle;
-      entities.push({
-        id: nextEntityId.v++, type: EntityType.MONSTER,
-        x: player.x + Math.cos(ang) * 4,
-        y: player.y + Math.sin(ang) * 4,
-        angle: ang + Math.PI, pitch: 0, alive: true,
-        speed: def.speed, sprite: def.sprite,
-        hp: def.hp, maxHp: def.hp,
-        monsterKind: MonsterKind.SCULPTURE, attackCd: 0,
-        ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-        rpg: randomRPG(player.rpg?.level ?? 1),
-        phasing: false,
-      });
-      state.msgs.push(msg('[DEBUG] Скульптура заспавнена перед игроком', state.time, '#ff0'));
-      break;
-    }
-    case 90: {
-      let spawned = 0;
-      for (let i = 0; i < MAX_CRITTERS && spawned < 10; i++) {
-        const c = CRITTERS_POOL[i];
-        if (!c.active) {
-          const angle = mathRng() * Math.PI * 2;
-          const dist = 1 + mathRng() * 3;
-          const sx = Math.round(player.x + Math.cos(angle) * dist);
-          const sy = Math.round(player.y + Math.sin(angle) * dist);
-          if (world.get(sx, sy) === Cell.FLOOR) {
-            c.active = true;
-            const r = mathRng();
-            c.defId = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
-            c.x = sx;
-            c.y = sy;
-            c.z = 0;
-            c.targetX = sx;
-            c.targetY = sy;
-            spawned++;
-          }
-        }
-      }
-      state.msgs.push(msg(`[DEBUG] Заспавнено криттеров: ${spawned}`, state.time, '#ff0'));
-      break;
-    }
-    case 91: { // Запустить сцену этажа по введённому id
-      for (const line of playDebugFloorScene(state)) state.msgs.push(msg(`[SCENE] ${line}`, state.time, '#dfe6e0'));
-      break;
-    }
-    case 92: { // Известные сцены этажа
-      for (const line of debugFloorSceneLines(state)) state.msgs.push(msg(`[SCENE] ${line}`, state.time, '#9ab'));
-      break;
-    }
-  }
-  return null;
+): DebugAction | null {
+  return runDebugCommand(idx, makeDebugCtx(world, player, entities, state, nextEntityId));
 }
 
 /* ── Debug overlay rendering (fullscreen two-column) ─────────── */
@@ -1865,252 +1556,22 @@ const ZONE_FACTION_NAMES: Record<ZoneFaction, string> = {
   [ZoneFaction.CULTIST]: 'Культисты',
   [ZoneFaction.SAMOSBOR]: 'Самосбор',
   [ZoneFaction.WILD]: 'Дикие',
-  [ZoneFaction.SCIENTIST]: 'Учёные',
-};
+  [ZoneFaction.SCIENTIST]: 'Учёные' };
 
-const BASE_CMD_DEFS = [
-  { id: 'spawn_all_weapons', label: 'Всё оружие + патроны' },
-  { id: 'spawn_monsters', label: 'Спавн монстров' },
-  { id: 'spawn_npc', label: 'Спавн NPC' },
-  { id: 'spawn_items', label: 'Все остальные предметы' },
-  { id: 'grant_xp', label: '1 000 000 XP' },
-  { id: 'cycle_samosbor_variant', label: 'Цикл варианта + самосбор' },
-  { id: 'toggle_noclip', label: 'Noclip' },
-  { id: 'recent_events', label: 'Последние события' },
-  { id: 'economy_prices', label: 'Цены экономики' },
-  { id: 'nearby_containers', label: 'Контейнеры рядом' },
-  { id: 'take_from_container', label: 'Взять из контейнера' },
-  { id: 'force_production_tick', label: 'Тик производства' },
-  { id: 'spawn_system_contract', label: 'Системное задание: создать/список' },
-  { id: 'balance_catalog', label: 'Баланс + каталог карманов' },
-  { id: 'elevator_instances', label: 'Лифтовые инстансы' },
-  { id: 'void_protocols', label: 'VOID: форс/список' },
-  { id: 'faction_events', label: 'Фракционные события' },
-  { id: 'force_faction_event', label: 'Форсировать событие фракции' },
-  { id: 'force_cult_procession', label: 'Форсировать культовую процессию' },
-  { id: 'samosbor_director_state', label: 'Директор: состояние' },
-  { id: 'force_samosbor_director_beat', label: 'Директор: force beat' },
-  { id: 'clear_samosbor_director_cooldowns', label: 'Директор: clear cooldown' },
-  { id: 'teleport_ministry', label: 'ТП: Министерство' },
-  { id: 'teleport_kvartiry', label: 'ТП: Квартиры' },
-  { id: 'teleport_living', label: 'ТП: Жилая зона' },
-  { id: 'teleport_maintenance', label: 'ТП: Коллекторы' },
-  { id: 'teleport_hell', label: 'ТП: Мясной низ' },
-  { id: 'teleport_void', label: 'ТП: Пустота' },
-  { id: 'teleport_random_procedural', label: 'ТП: случайный процедурный' },
-  { id: 'smoke_expedition_setup', label: 'Smoke: expedition setup' },
-  { id: 'rare_samosbor', label: 'ВЕРЕТАР: force + самосбор' },
-  { id: 'force_maronary_samosbor', label: 'МАРОНАРИЙ: force + самосбор' },
-  { id: 'route_cue_nearest', label: 'Route cue: trigger nearest' },
-  { id: 'force_maronary_wrong_door', label: 'МАРОНАРИЙ: wrong door' },
-  { id: 'grant_maronary_shaving', label: 'МАРОНАРИЙ: выдать стружку' },
-  { id: 'force_istotit_samosbor', label: 'ИСТОТИТ: force + самосбор' },
-  { id: 'teleport_smog', label: 'ТП: говнячный смог' },
-  { id: 'teleport_false_safe_block', label: 'ТП: тихий блок' },
-  { id: 'teleport_hladon', label: 'ТП: хладон' },
-  { id: 'govnyak_courier_contract', label: 'ГОВНЯК: курьерский пакет' },
-  { id: 'force_pneumomail_capsule', label: 'ПНЕВМОПОЧТА: капсула' },
-  { id: 'force_hermodoor_borer', label: 'ГЕРМО: точильщик QA' },
-  { id: 'force_liquidator_cult_clash', label: 'Форсировать стычку ликвидаторов и культа' },
-  { id: 'toggle_onepunchman', label: 'ONEPUNCHMAN' },
-  { id: 'grant_net_terminal_gen_access', label: 'НЕТ-ГЕН: выдать доступ' },
-  { id: 'place_net_terminal_gen_terminals', label: 'НЕТ-ГЕН: расставить терминалы' },
-  { id: 'place_net_terminal_gen_in_front', label: 'НЕТ-ГЕН: терминал перед игроком' },
-  { id: 'open_map_editor', label: 'РЕДАКТОР КАРТЫ: открыть' },
-  { id: 'net_terminal_gen_status', label: 'НЕТ-ГЕН/РЕДАКТОР: статус' },
-  { id: 'replay_current_map_patch', label: 'РЕДАКТОР КАРТЫ: повторить патч' },
-  { id: 'clear_current_map_patch', label: 'РЕДАКТОР КАРТЫ: очистить патч' },
-  { id: 'teleport_fractal_floor', label: 'ТП: фрактал' },
-  { id: 'teleport_mirror_run', label: 'ТП: зеркало' },
-  { id: 'teleport_radio_chess', label: 'ТП: радио-шахматы' },
-  { id: 'teleport_cement_memory', label: 'ТП: цементная память' },
-  { id: 'teleport_conveyor_sorter', label: 'ТП: конвейер' },
-  { id: 'teleport_wall_snake', label: 'ТП: змейка' },
-  { id: 'teleport_section_shift', label: 'ТП: секционный сдвиг' },
-  { id: 'teleport_conway_life', label: 'ТП: игра жизнь' },
-  { id: 'teleport_rail_trains', label: 'ТП: поезда' },
-  { id: 'spawn_bad_apple_world', label: 'BAD APPLE: эксперимент отключён' },
-  { id: 'verification_contract_route', label: 'VERIFY: контрактный маршрут' },
-  { id: 'publish_verification_event', label: 'VERIFY: событие в лог/слух' },
-  { id: 'route_floor_summary', label: 'ROUTE: floor summary' },
-  { id: 'arm_floor_instance', label: 'VERIFY: номерная петля лифта' },
-  { id: 'samosbor_warning_window', label: 'VERIFY: окно предупреждения самосбора' },
-  { id: 'economy_scarcity_pulse', label: 'VERIFY: дефицит экономики' },
-  { id: 'floor_monster_pack', label: 'VERIFY: монстры этажа' },
-  { id: 'route_to_container', label: 'VERIFY: маршрут к контейнеру' },
-  { id: 'teleport_zombie_apocalypse', label: 'ТП: зомби-апокалипсис' },
-  { id: 'expedition_proof_prep', label: 'EXPEDITION: подготовка' },
-  { id: 'expedition_proof_lift_ready', label: 'EXPEDITION: лифт готов' },
-  { id: 'expedition_proof_collectors_arrival', label: 'EXPEDITION: прибытие в Коллекторы' },
-  { id: 'expedition_proof_risk', label: 'EXPEDITION: риск маршрута' },
-  { id: 'expedition_proof_container', label: 'EXPEDITION: контейнер маршрута' },
-  { id: 'expedition_proof_samosbor_warning', label: 'EXPEDITION: предупреждение самосбора' },
-  { id: 'expedition_proof_return', label: 'EXPEDITION: возврат домой' },
-  { id: 'debug_samosbor_small_wave', label: 'SAMOSBOR: малая волна у игрока' },
-  { id: 'grant_permit_pack', label: 'PERMIT: выдать пакет' },
-  { id: 'check_permit_access', label: 'PERMIT: проверить доступ' },
-  { id: 'spoil_permit', label: 'PERMIT: испортить пропуск' },
-  { id: 'force_pseudolift', label: 'PSEUDOLIFT: ловушка у лифта' },
-  { id: 'debug_false_cleanup_patrol', label: 'SAMOSBOR: ложная зачистка' },
-  { id: 'debug_mukhozhuk_host', label: 'MUKHOZHUK: носитель у игрока' },
-  { id: 'debug_chervie_site', label: 'CHERVIE: экранный узел' },
-  { id: 'revealmap', label: 'REVEALMAP: открыть всю карту' },
-  { id: 'spawn_chalk', label: 'DEBUG: спавн мелка' },
-  { id: 'spawn_all_psi', label: 'Все ПСИ-сгустки' },
-  { id: 'spawn_all_tools', label: 'Все инструменты' },
-  { id: 'spawn_sculpture', label: 'Спавн Скульптуры' },
-  { id: 'spawn_critters', label: 'DEBUG: спавн криттеров' },
-  { id: 'play_floor_scene', label: 'СЦЕНА: запустить по id' },
-  { id: 'floor_scene_list', label: 'СЦЕНЫ: список' },
-] as const satisfies readonly DebugCommandDef[];
-
-const BASE_CMD_VISUAL_BEFORE_DESIGN = [
-  'spawn_all_weapons',
-  'spawn_all_psi',
-  'spawn_all_tools',
-  'spawn_items',
-  'grant_xp',
-  'toggle_noclip',
-  'revealmap',
-  'toggle_onepunchman',
-  'grant_net_terminal_gen_access',
-  'place_net_terminal_gen_terminals',
-  'place_net_terminal_gen_in_front',
-  'open_map_editor',
-  'net_terminal_gen_status',
-  'replay_current_map_patch',
-  'clear_current_map_patch',
-  'grant_permit_pack',
-  'check_permit_access',
-  'spoil_permit',
-  'spawn_monsters',
-  'floor_monster_pack',
-  'spawn_npc',
-  'spawn_chalk',
-  'spawn_bad_apple_world',
-  'debug_samosbor_small_wave',
-  'debug_false_cleanup_patrol',
-  'debug_mukhozhuk_host',
-  'debug_chervie_site',
-
-  'teleport_random_procedural',
-  'teleport_smog',
-  'teleport_false_safe_block',
-  'teleport_hladon',
-  'teleport_fractal_floor',
-  'teleport_mirror_run',
-  'teleport_radio_chess',
-  'teleport_cement_memory',
-  'teleport_conveyor_sorter',
-  'teleport_wall_snake',
-  'teleport_section_shift',
-  'teleport_conway_life',
-  'teleport_rail_trains',
-  'teleport_zombie_apocalypse',
-] as const satisfies readonly BaseDebugCommandId[];
-
-const BASE_CMD_VISUAL_AFTER_DESIGN = [
-  'cycle_samosbor_variant',
-  'rare_samosbor',
-  'force_maronary_samosbor',
-  'force_istotit_samosbor',
-  'samosbor_director_state',
-  'force_samosbor_director_beat',
-  'clear_samosbor_director_cooldowns',
-  'samosbor_warning_window',
-  'recent_events',
-  'faction_events',
-  'force_faction_event',
-  'force_cult_procession',
-  'force_liquidator_cult_clash',
-  'publish_verification_event',
-  'economy_prices',
-  'economy_scarcity_pulse',
-  'force_production_tick',
-  'nearby_containers',
-  'take_from_container',
-  'route_to_container',
-  'balance_catalog',
-  'elevator_instances',
-  'route_floor_summary',
-  'arm_floor_instance',
-  'force_pseudolift',
-  'spawn_system_contract',
-  'govnyak_courier_contract',
-  'verification_contract_route',
-  'smoke_expedition_setup',
-  'expedition_proof_prep',
-  'expedition_proof_lift_ready',
-  'expedition_proof_collectors_arrival',
-  'expedition_proof_risk',
-  'expedition_proof_container',
-  'expedition_proof_samosbor_warning',
-  'expedition_proof_return',
-  'void_protocols',
-  'route_cue_nearest',
-  'force_maronary_wrong_door',
-  'grant_maronary_shaving',
-  'force_pneumomail_capsule',
-  'force_hermodoor_borer',
-  'spawn_sculpture',
-  'spawn_critters',
-  'play_floor_scene',
-  'floor_scene_list',
-] as const satisfies readonly BaseDebugCommandId[];
-
-function designFloorCommandId(id: DesignFloorId): DebugCommandId {
-  return `${DESIGN_FLOOR_COMMAND_ID_PREFIX}${id}` as DebugCommandId;
-}
-
-const DESIGN_FLOOR_COMMAND_START = BASE_CMD_DEFS.length;
-const BASE_CMD_DEF_BY_ID = new Map<BaseDebugCommandId, DebugCommandDef>();
-const BASE_CMD_EXEC_INDEX_BY_ID = new Map<BaseDebugCommandId, number>();
-for (let i = 0; i < BASE_CMD_DEFS.length; i++) {
-  BASE_CMD_DEF_BY_ID.set(BASE_CMD_DEFS[i].id, BASE_CMD_DEFS[i]);
-  BASE_CMD_EXEC_INDEX_BY_ID.set(BASE_CMD_DEFS[i].id, i);
-}
-
-function commandDef(id: BaseDebugCommandId): DebugCommandDef {
-  const def = BASE_CMD_DEF_BY_ID.get(id);
-  if (!def) throw new Error(`Unknown debug command id: ${id}`);
-  return def;
-}
-
-const CMD_DEFS: readonly DebugCommandDef[] = [
-  ...BASE_CMD_VISUAL_BEFORE_DESIGN.map(commandDef),
-  ...DESIGN_FLOOR_ROUTES.map(def => ({
-    id: designFloorCommandId(def.id),
-    label: `ТП: ${def.displayName} (${def.z > 0 ? `+${def.z}` : def.z})`,
-  })),
-  ...BASE_CMD_VISUAL_AFTER_DESIGN.map(commandDef),
-];
-const CMD_LABELS = CMD_DEFS.map(def => def.label);
-const DEBUG_COMMAND_INDEX_BY_ID = new Map<DebugCommandId, number>();
-for (let i = 0; i < CMD_DEFS.length; i++) DEBUG_COMMAND_INDEX_BY_ID.set(CMD_DEFS[i].id, i);
-
-export const DEBUG_COMMAND_COUNT = CMD_LABELS.length;
-
-function designFloorCommandIndex(id: DebugCommandId): number {
-  if (!id.startsWith(DESIGN_FLOOR_COMMAND_ID_PREFIX)) return -1;
-  const designId = id.slice(DESIGN_FLOOR_COMMAND_ID_PREFIX.length) as DesignFloorId;
-  const idx = DESIGN_FLOOR_ROUTES.findIndex(def => def.id === designId);
-  return idx < 0 ? -1 : DESIGN_FLOOR_COMMAND_START + idx;
-}
-
-function debugCommandExecutionIndex(displayIdx: number): number {
-  const def = CMD_DEFS[displayIdx];
-  if (!def) return -1;
-  const designIdx = designFloorCommandIndex(def.id);
-  if (designIdx >= 0) return designIdx;
-  return BASE_CMD_EXEC_INDEX_BY_ID.get(def.id as BaseDebugCommandId) ?? -1;
-}
+export type DebugCommandId = string;
 
 export function getDebugCommandIds(): readonly DebugCommandId[] {
-  return CMD_DEFS.map(def => def.id);
+  return debugCommands().map(def => def.id);
 }
 
 export function getDebugCommandIndex(id: DebugCommandId): number {
-  return DEBUG_COMMAND_INDEX_BY_ID.get(id) ?? -1;
+  return debugCommandIndex(id);
+}
+
+/** Счётчик — функция, а не константа: команды регистрируют сами системы, и на
+ *  момент вычисления константы часть модулей ещё не импортирована. */
+export function debugCommandCount(): number {
+  return debugCommands().length;
 }
 
 declare global {
@@ -2125,19 +1586,242 @@ if (typeof window !== 'undefined') {
   window.__gigahrushDebugCommandIds = getDebugCommandIds;
 }
 
-interface DebugInfoLine {
+/* ── Панели: то, что раньше было левым столбцом ────────────────
+ *
+ * Столбец делил экран пополам и обеим половинам было тесно. Теперь это
+ * отдельные страницы, а страница — такая же запись реестра, как команда:
+ * своя система может добавить собственную диагностику, не трогая отладку.
+ */
+
+registerDebugPanel({
+  id: 'world',
+  title: 'МИР',
+  sort: 0,
+  lines: ({ world, entities, state }) => {
+    const out: DebugPanelLine[] = [];
+    let alive = 0;
+    let items = 0;
+    let monsters = 0;
+    for (const e of entities) {
+      if (!e.alive) continue;
+      if (e.type === EntityType.NPC) alive++;
+      else if (e.type === EntityType.MONSTER) { alive++; monsters++; }
+      else if (e.type === EntityType.ITEM_DROP) items++;
+    }
+    let funcRooms = 0;
+    for (const r of world.rooms) if (r && r.type !== RoomType.CORRIDOR) funcRooms++;
+    let lifts = 0;
+    let liftsUp = 0;
+    for (let i = 0; i < W * W; i++) {
+      if (world.cells[i] !== Cell.LIFT) continue;
+      lifts++;
+      if (world.liftDir[i] === LiftDirection.UP) liftsUp++;
+    }
+    out.push({ text: `Люди: ${alive - monsters}  Монстры: ${monsters}  Предметы: ${items}`, color: '#aaa' });
+    out.push({ text: `Комнаты: ${funcRooms}  Лифты: ${lifts} (↑${liftsUp} ↓${lifts - liftsUp})`, color: '#aaa' });
+    out.push({ text: `Noclip: ${isDebugNoClipEnabled() ? 'ВКЛ' : 'выкл'}`, color: isDebugNoClipEnabled() ? '#ff0' : '#666' });
+    out.push({ text: `ONEPUNCHMAN: ${isDebugOnePunchManEnabled() ? 'ВКЛ' : 'выкл'}`, color: isDebugOnePunchManEnabled() ? '#ff0' : '#666' });
+    const ai = getAiStats();
+    out.push({ text: '', color: '#000' });
+    out.push({ text: 'ИИ', color: '#ff0' });
+    out.push({ text: `  живых ${ai.liveAi}  обновлено ${ai.updated} (npc ${ai.updatedNpc} / мобы ${ai.updatedMonster})  пропущено ${ai.skipped}`, color: '#9cf' });
+    out.push({ text: `  сюжетных ${ai.plot}  боссов ${ai.bosses}  в бою ${ai.activeAttackers}  снаряды ${ai.projectileOwners}/${ai.projectiles}`, color: '#9cf' });
+    const player = entities.find(e => isPlayerEntity(e));
+    const memory = summarizeRoomMemoryForRoom(state.currentZ, player ? currentPlayerRoom(world, player) : undefined);
+    if (memory.length) {
+      out.push({ text: '', color: '#000' });
+      out.push({ text: 'ПАМЯТЬ КОМНАТЫ', color: '#ff0' });
+      for (const line of memory) out.push({ text: `  ${line}`, color: '#dc9' });
+    }
+    return out;
+  } });
+
+registerDebugPanel({
+  id: 'factions',
+  title: 'ФРАКЦИИ И ТЕРРИТОРИЯ',
+  sort: 1,
+  lines: ({ world, entities }) => {
+    const out: DebugPanelLine[] = [];
+    const byFaction: Record<number, number> = {};
+    let monsters = 0;
+    for (const e of entities) {
+      if (!e.alive) continue;
+      if (e.type === EntityType.NPC) byFaction[e.faction ?? -1] = (byFaction[e.faction ?? -1] ?? 0) + 1;
+      else if (e.type === EntityType.MONSTER) monsters++;
+    }
+    out.push({ text: 'ЖИВЫЕ ПО ФРАКЦИЯМ', color: '#ff0' });
+    for (let f = 0; f <= 4; f++) {
+      out.push({ text: `  ${FACTION_NAMES[f as Faction] ?? `#${f}`}: ${byFaction[f] ?? 0}`, color: '#bbb' });
+    }
+    out.push({ text: `  Монстры: ${monsters}`, color: '#c66' });
+
+    const cells: Record<number, number> = {};
+    for (let i = 0; i < W * W; i++) {
+      const owner = territoryOwnerAtIndex(world, i);
+      cells[owner] = (cells[owner] ?? 0) + 1;
+    }
+    out.push({ text: '', color: '#000' });
+    out.push({ text: 'КЛЕТКИ ТЕРРИТОРИИ', color: '#ff0' });
+    for (const zf of [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD, ZoneFaction.SAMOSBOR]) {
+      out.push({ text: `  ${ZONE_FACTION_NAMES[zf]}: ${cells[zf] ?? 0}`, color: '#bbb' });
+    }
+    return out;
+  } });
+
+registerDebugPanel({
+  id: 'route',
+  title: 'ЭТАЖ, МАРШРУТ, АНОМАЛИИ',
+  sort: 2,
+  lines: ({ world, state }) => {
+    const out: DebugPanelLine[] = [];
+    const section = (title: string, lines: readonly string[], color: string) => {
+      if (!lines.length) return;
+      out.push({ text: title, color: '#ff0' });
+      for (const line of lines) out.push({ text: `  ${line}`, color });
+      out.push({ text: '', color: '#000' });
+    };
+    section('МАРШРУТ ЗАБЕГА', summarizeFloorRun(state).slice(0, 6), '#8cf');
+    section('ЛИФТОВЫЕ ИНСТАНСЫ', summarizeFloorInstances(state).slice(0, 4), '#f4a');
+    section('ПСЕВДОЛИФТ', pseudoliftDebugSummary(state).slice(0, 3), '#fc4');
+    section('САМОСБОР', getSamosborDebugLines(), '#9cf');
+    section('СМОГ', summarizeProceduralSmog(world, state).slice(0, 3), '#b98');
+    section('BAD APPLE', summarizeBadAppleWorld(world).slice(0, 3), '#eee');
+    return out;
+  } });
+
+/* ── Постраничный экран ────────────────────────────────────────
+ *
+ * Страница 0 — команды во всю ширину, столько колонок, сколько влезает.
+ * Дальше — по странице на панель. Влево/вправо листает страницы, вверх/вниз
+ * двигает выбор или прокручивает панель.
+ */
+
+const DEBUG_PAGE_COMMANDS = 0;
+const DEBUG_LABEL_CHARS = 44;
+
+let debugPage = DEBUG_PAGE_COMMANDS;
+let debugPanelScroll = 0;
+
+export function debugPageCount(): number {
+  return 1 + debugPanels().length;
+}
+
+export function isDebugCommandPage(): boolean {
+  return debugPage === DEBUG_PAGE_COMMANDS;
+}
+
+export function moveDebugPage(delta: number): void {
+  const count = debugPageCount();
+  debugPage = ((debugPage + delta) % count + count) % count;
+  debugPanelScroll = 0;
+}
+
+export function scrollDebugPanel(delta: number): void {
+  debugPanelScroll = Math.max(0, debugPanelScroll + delta);
+}
+
+export function resetDebugPage(): void {
+  debugPage = DEBUG_PAGE_COMMANDS;
+  debugPanelScroll = 0;
+}
+
+interface DebugMenuRow {
   text: string;
-  color: string;
+  /** Индекс команды в плоском списке, или -1 у заголовка группы. */
+  command: number;
 }
 
-let debugInfoPage = 0;
-
-export function moveDebugInfoPage(delta: number): void {
-  debugInfoPage = Math.max(0, debugInfoPage + delta);
+/** Строки меню: заголовок группы + её команды. Заголовки не выбираются,
+ *  поэтому индекс команды и номер строки — разные вещи. */
+function debugMenuRows(): DebugMenuRow[] {
+  const rows: DebugMenuRow[] = [];
+  let group = '';
+  debugCommands().forEach((def, index) => {
+    if (def.group !== group) {
+      group = def.group;
+      const title = DEBUG_GROUPS.find(g => g.id === def.group)?.title ?? def.group;
+      if (rows.length) rows.push({ text: '', command: -1 });
+      rows.push({ text: `── ${title} ${'─'.repeat(Math.max(2, DEBUG_LABEL_CHARS - title.length - 4))}`, command: -1 });
+    }
+    rows.push({ text: def.label, command: index });
+  });
+  return rows;
 }
 
-export function resetDebugInfoPage(): void {
-  debugInfoPage = 0;
+function drawDebugCommandPage(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  charW: number, lh: number, sx: number, sy: number,
+  debugSel: number,
+): string {
+  const rows = debugMenuRows();
+  const perColumn = Math.max(1, Math.floor(h / lh));
+  const columnW = Math.min(w, (DEBUG_LABEL_CHARS + 3) * charW);
+  const columns = Math.max(1, Math.min(Math.floor(w / columnW), Math.ceil(rows.length / perColumn)));
+  const capacity = perColumn * columns;
+
+  let start = 0;
+  if (rows.length > capacity) {
+    const selRow = Math.max(0, rows.findIndex(r => r.command === debugSel));
+    const selColumn = Math.floor(selRow / perColumn);
+    const lastColumn = Math.max(0, Math.ceil(rows.length / perColumn) - columns);
+    start = Math.min(lastColumn, Math.max(0, selColumn - columns + 1)) * perColumn;
+  }
+
+  const end = Math.min(rows.length, start + capacity);
+  for (let i = start; i < end; i++) {
+    const row = rows[i];
+    if (!row.text) continue;
+    const slot = i - start;
+    const rx = x + Math.floor(slot / perColumn) * columnW;
+    const ry = y + (slot % perColumn) * lh;
+    if (row.command < 0) {
+      ctx.fillStyle = '#775';
+      ctx.fillText(fitText(ctx, row.text, columnW - charW), rx, ry);
+      continue;
+    }
+    const selected = row.command === debugSel;
+    if (selected) {
+      ctx.fillStyle = 'rgba(255,255,0,0.14)';
+      ctx.fillRect(rx - charW * 0.4, ry - 1 * sy, columnW - charW * 0.6, lh);
+    }
+    ctx.fillStyle = selected ? '#ff0' : '#ccc';
+    ctx.fillText(fitText(ctx, `${selected ? '▸' : ' '} ${row.text}`, columnW - charW), rx, ry);
+  }
+
+  void sx;
+  return rows.length > capacity ? `${start + 1}-${end}/${rows.length}` : `${rows.length}`;
+}
+
+function drawDebugPanelPage(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  charW: number, lh: number,
+  panel: DebugPanelDef,
+  world: World, entities: Entity[], state: GameState,
+): string {
+  const lines = panel.lines({ world, entities, state });
+  const perColumn = Math.max(1, Math.floor(h / lh));
+  const columnW = Math.min(w, Math.max(60 * charW, w / 2));
+  const columns = Math.max(1, Math.min(Math.floor(w / columnW), Math.ceil(lines.length / perColumn)));
+  const capacity = perColumn * columns;
+  const maxScroll = Math.max(0, Math.ceil((lines.length - capacity) / perColumn));
+  const scroll = Math.min(debugPanelScroll, maxScroll);
+  const start = scroll * perColumn;
+  const end = Math.min(lines.length, start + capacity);
+
+  for (let i = start; i < end; i++) {
+    const line = lines[i];
+    if (!line.text) continue;
+    const slot = i - start;
+    ctx.fillStyle = line.color ?? '#bbb';
+    ctx.fillText(
+      fitText(ctx, line.text, columnW - charW),
+      x + Math.floor(slot / perColumn) * columnW,
+      y + (slot % perColumn) * lh,
+    );
+  }
+  return lines.length > capacity ? `${start + 1}-${end}/${lines.length}` : `${lines.length}`;
 }
 
 export function drawDebugOverlay(
@@ -2153,49 +1837,11 @@ export function drawDebugOverlay(
   sx = uiScale;
   sy = uiScale;
 
-  /* ── Gather stats ─────────────────────────────────────────── */
-  let totalAlive = 0;
-  let totalItems = 0;
-  // Count all living entities (NPC + monsters) by faction
-  // Monsters get their own "faction" slot = 99
-  const MONSTER_SLOT = 99;
-  const factionCount: Record<number, number> = {};
-
-  for (const e of entities) {
-    if (!e.alive) continue;
-    if (e.type === EntityType.NPC) {
-      totalAlive++;
-      factionCount[e.faction ?? -1] = (factionCount[e.faction ?? -1] || 0) + 1;
-    } else if (e.type === EntityType.MONSTER) {
-      totalAlive++;
-      factionCount[MONSTER_SLOT] = (factionCount[MONSTER_SLOT] || 0) + 1;
-    } else if (e.type === EntityType.ITEM_DROP) {
-      totalItems++;
-    }
-  }
-
-  // Territory cells per owner
-  const zoneFactionCells: Record<number, number> = {};
-  for (let i = 0; i < W * W; i++) {
-    const f = territoryOwnerAtIndex(world, i);
-    zoneFactionCells[f] = (zoneFactionCells[f] || 0) + 1;
-  }
-
-  let funcRooms = 0;
-  for (const r of world.rooms) if (r && r.type !== RoomType.CORRIDOR) funcRooms++;
-  let lifts = 0, liftsUp = 0, liftsDown = 0;
-  for (let i = 0; i < W * W; i++) if (world.cells[i] === Cell.LIFT) {
-    lifts++;
-    if (world.liftDir[i] === LiftDirection.UP) liftsUp++; else liftsDown++;
-  }
-
-  /* ── Layout ───────────────────────────────────────────────── */
   const fs = Math.round(7 * sy);
   const lh = Math.round(10 * sy);
   const pad = 12 * sx;
   const margin = 6 * sx;
 
-  // Background
   drawNeuroPanel(ctx, 0, 0, w, h, performance.now() / 1000, 150);
   ctx.strokeStyle = '#ff0';
   ctx.lineWidth = 1 * sx;
@@ -2203,134 +1849,45 @@ export function drawDebugOverlay(
 
   ctx.font = `${fs}px "Press Start 2P", monospace`;
   ctx.textBaseline = 'top';
+  const charW = Math.max(1, ctx.measureText('0').width);
 
-  // Divider at 55% width
-  const divX = Math.round(w * 0.55);
-  ctx.strokeStyle = 'rgba(255,255,0,0.2)';
+  const pages = debugPageCount();
+  const panel = debugPage === DEBUG_PAGE_COMMANDS ? undefined : debugPanels()[debugPage - 1];
+  const title = panel ? panel.title : 'КОМАНДЫ';
+
+  const x = margin + pad;
+  const top = margin + pad;
+  const bodyTop = top + lh * 2;
+  const hintY = h - margin - pad - lh;
+  const bodyH = Math.max(lh, hintY - bodyTop - lh * 0.5);
+  const bodyW = Math.max(charW * 10, w - margin * 2 - pad * 2);
+
+  ctx.save();
   ctx.beginPath();
-  ctx.moveTo(divX, margin);
-  ctx.lineTo(divX, h - margin);
+  ctx.rect(margin + 1 * sx, bodyTop - sy, w - margin * 2 - 2 * sx, bodyH + lh * 0.5);
+  ctx.clip();
+  const range = panel
+    ? drawDebugPanelPage(ctx, x, bodyTop, bodyW, bodyH, charW, lh, panel, world, entities, state)
+    : drawDebugCommandPage(ctx, x, bodyTop, bodyW, bodyH, charW, lh, sx, sy, debugSel);
+  ctx.restore();
+
+  ctx.fillStyle = '#ff0';
+  ctx.fillText(fitText(ctx, `[${debugPage + 1}/${pages}] ${title}  ·  ${range}`, bodyW), x, top);
+  ctx.strokeStyle = 'rgba(255,255,0,0.25)';
+  ctx.beginPath();
+  ctx.moveTo(x, top + lh * 1.4);
+  ctx.lineTo(w - margin - pad, top + lh * 1.4);
   ctx.stroke();
 
-  /* ── Left column ──────────────────────────────────────────── */
-  const lx = margin + pad;
-  const leftTop = margin + pad;
-  const leftHintY = h - margin - pad - lh * 1.4;
-  const leftMaxW = Math.max(20 * sx, divX - lx - pad);
-  const infoLines: DebugInfoLine[] = [];
-  const row = (t: string, c: string) => {
-    infoLines.push({ text: t, color: c });
-  };
-  const gap = () => { infoLines.push({ text: '', color: '#000' }); };
-
-  row(`Существа: ${totalAlive}  Предметы: ${totalItems}`, '#aaa');
-  row(`Комнаты: ${funcRooms}  Лифты: ${lifts} (↑${liftsUp} ↓${liftsDown})`, '#aaa');
-  row(`Noclip: ${isDebugNoClipEnabled() ? 'ON' : 'OFF'}`, isDebugNoClipEnabled() ? '#ff0' : '#666');
-  row(`ONEPUNCHMAN: ${isDebugOnePunchManEnabled() ? 'ON' : 'OFF'}`, isDebugOnePunchManEnabled() ? '#ff0' : '#666');
-  const ai = getAiStats();
-  row(`AI: live ${ai.liveAi} upd ${ai.updated} npc ${ai.updatedNpc} mob ${ai.updatedMonster} skip ${ai.skipped}`, '#9cf');
-  row(`AI факт: plot ${ai.plot} boss ${ai.bosses} atk ${ai.activeAttackers} proj ${ai.projectileOwners}/${ai.projectiles}`, '#9cf');
-  for (const line of summarizeFloorRun(state).slice(0, 2)) row(`Этажи: ${line}`, '#8cf');
-  const playerEntity = entities.find(e => isPlayerEntity(e));
-  for (const line of summarizeRoomMemoryForRoom(state.currentZ, playerEntity ? currentPlayerRoom(world, playerEntity) : undefined)) row(line, '#dc9');
-  for (const line of summarizeProceduralSmog(world, state).slice(0, 2)) row(`Смог: ${line}`, '#b98');
-  for (const line of summarizeBadAppleWorld(world).slice(0, 2)) row(`BadApple: ${line}`, '#eee');
-  for (const line of summarizeFloorInstances(state).slice(0, 2)) row(`Лифт: ${line}`, '#f4a');
-  for (const line of pseudoliftDebugSummary(state).slice(0, 2)) row(`Псевдолифт: ${line}`, '#fc4');
-  for (const line of getSamosborDebugLines()) row(line, '#9cf');
-  gap();
-
-  // All factions — unified: NPC factions + monsters
-  row('Фракции', '#ff0');
-  for (let f = 0; f <= 4; f++) {
-    const name = FACTION_NAMES[f as Faction] ?? `#${f}`;
-    row(`  ${name}: ${factionCount[f] || 0}`, '#bbb');
-  }
-  row(`  Монстры: ${factionCount[MONSTER_SLOT] || 0}`, '#c66');
-  gap();
-
-  // Territory
-  row('Территория', '#ff0');
-  const zfOrder = [ZoneFaction.CITIZEN, ZoneFaction.LIQUIDATOR, ZoneFaction.CULTIST, ZoneFaction.SCIENTIST, ZoneFaction.WILD, ZoneFaction.SAMOSBOR];
-  for (const zf of zfOrder) {
-    row(`  ${ZONE_FACTION_NAMES[zf]}: ${zoneFactionCells[zf] || 0}`, '#bbb');
-  }
-
-  const leftRows = Math.max(1, Math.floor((leftHintY - leftTop - lh * 0.4) / lh));
-  const leftPageCount = Math.max(1, Math.ceil(infoLines.length / leftRows));
-  debugInfoPage = Math.max(0, Math.min(leftPageCount - 1, debugInfoPage));
-  const leftStart = debugInfoPage * leftRows;
-  const leftEnd = Math.min(infoLines.length, leftStart + leftRows);
-  let y = leftTop;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(margin + 1 * sx, leftTop - sy, Math.max(1, divX - margin - 2 * sx), Math.max(lh, leftHintY - leftTop));
-  ctx.clip();
-
-  for (let i = leftStart; i < leftEnd; i++) {
-    const line = infoLines[i];
-    if (line.text) {
-      ctx.fillStyle = line.color;
-      ctx.fillText(fitText(ctx, line.text, leftMaxW), lx, y);
-    }
-    y += lh;
-  }
-  ctx.restore();
-
-  ctx.fillStyle = '#555';
+  const nav = panel ? 'прокрутка' : 'выбор';
+  ctx.fillStyle = '#666';
   ctx.fillText(
-    fitText(ctx, `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} инфо ${debugInfoPage + 1}/${leftPageCount}`, leftMaxW),
-    lx,
-    leftHintY + lh * 0.6,
+    fitText(
+      ctx,
+      `${controlBindingLabel('menuLeft')}/${controlBindingLabel('menuRight')} страница  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} ${nav}  ${controlBindingLabel('gameMenu')} выполнить  ${controlBindingLabel('debug')}/${menuCloseHint()} закрыть`,
+      bodyW,
+    ),
+    x,
+    hintY,
   );
-
-  /* ── Right column: commands ───────────────────────────────── */
-  const rx = divX + pad;
-  const commandTop = margin + pad;
-  const hintY = h - margin - pad - lh * 2;
-  const visibleRows = Math.max(1, Math.floor((hintY - commandTop - lh * 0.5) / lh));
-  const maxStart = Math.max(0, CMD_LABELS.length - visibleRows);
-  const scrollStart = Math.min(maxStart, Math.max(0, debugSel - Math.floor(visibleRows * 0.5)));
-  const scrollEnd = Math.min(CMD_LABELS.length, scrollStart + visibleRows);
-  let ry = commandTop;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(divX + 2 * sx, commandTop - sy, w - divX - margin - 4 * sx, Math.max(lh, hintY - commandTop));
-  ctx.clip();
-
-  for (let i = scrollStart; i < scrollEnd; i++) {
-    const sel = i === debugSel;
-    const label = fitText(ctx, `${sel ? '▸' : ' '} ${i + 1}. ${CMD_LABELS[i]}`, w - rx - margin - 12 * sx);
-    if (sel) {
-      ctx.fillStyle = 'rgba(255,255,0,0.12)';
-      ctx.fillRect(divX + 2 * sx, ry - 1 * sy, w - divX - margin - 4 * sx, lh);
-      ctx.fillStyle = '#ff0';
-      ctx.fillText(label, rx, ry);
-    } else {
-      ctx.fillStyle = '#ccc';
-      ctx.fillText(label, rx, ry);
-    }
-    ry += lh;
-  }
-  ctx.restore();
-
-  if (CMD_LABELS.length > visibleRows) {
-    const trackX = w - margin - 6 * sx;
-    const trackY = commandTop;
-    const trackH = Math.max(lh, hintY - commandTop);
-    const thumbH = Math.max(lh, trackH * (visibleRows / CMD_LABELS.length));
-    const thumbY = trackY + (trackH - thumbH) * (scrollStart / Math.max(1, maxStart));
-    ctx.fillStyle = 'rgba(255,255,0,0.14)';
-    ctx.fillRect(trackX, trackY, 2 * sx, trackH);
-    ctx.fillStyle = '#ff0';
-    ctx.fillRect(trackX, thumbY, 2 * sx, thumbH);
-  }
-
-  // Hints pinned to bottom-right
-  ry = hintY + lh * 0.6;
-  ctx.fillStyle = '#555';
-  const range = CMD_LABELS.length > visibleRows ? ` ${scrollStart + 1}-${scrollEnd}/${CMD_LABELS.length}` : '';
-  ctx.fillText(fitText(ctx, `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')}${range}  ${controlBindingLabel('gameMenu')} выбрать  ${controlBindingLabel('debug')}/${menuCloseHint()} закрыть`, w - rx - margin), rx, ry);
 }

@@ -310,23 +310,6 @@ function factionRelationText(e: WorldEvent): string {
   return `Фракционный сдвиг${e.zoneId !== undefined ? `: зона ${e.zoneId + 1}` : ""}.`;
 }
 
-function pneumomailText(e: WorldEvent): string {
-  if (!e.tags.includes("pneumomail")) return "";
-  const action =
-    typeof e.data?.capsuleEvent === "string" ? e.data.capsuleEvent : "";
-  if (action === "capsule_received")
-    return `Пневмопочта: получена капсула${e.itemName ? `, ${e.itemName}` : ""}.`;
-  if (action === "capsule_sent")
-    return `Пневмопочта: отправлена улика ${e.itemName ?? e.itemId ?? ""}.`;
-  if (action === "capsule_jammed")
-    return `Пневмопочта: труба заклинена${e.itemName ? ` через ${e.itemName}` : ""}.`;
-  if (action === "capsule_intercepted")
-    return `Пневмопочта: перехвачена ${e.itemName ?? "капсула"}.`;
-  if (action === "capsule_reported")
-    return "Пневмопочта: вскрытие сдано в контроль.";
-  return "Пневмопочта: событие в журнале.";
-}
-
 function shelterTallyText(e: WorldEvent): string {
   const target = e.targetName ? ` -> ${e.targetName}` : "";
   const consequence =
@@ -756,9 +739,6 @@ const EVENT_TEXT_HANDLERS: Partial<
 };
 
 function eventText(e: WorldEvent): string {
-  const pneumomail = pneumomailText(e);
-  if (pneumomail) return pneumomail;
-
   const handler = EVENT_TEXT_HANDLERS[e.type];
   if (handler) {
     return handler(e);
@@ -769,7 +749,6 @@ function eventText(e: WorldEvent): string {
 function shouldLog(e: WorldEvent): boolean {
   if (e.tags.includes("territory_capture") || e.tags.includes("cell_territory"))
     return false;
-  if (e.tags.includes("pneumomail")) return e.severity >= 2;
   if (e.tags.includes("false_safe_block")) return e.severity >= 3;
   if (
     TELEMETRY_ONLY.has(e.type) &&
@@ -800,7 +779,6 @@ function shouldHud(e: WorldEvent): boolean {
   if (e.type === "ammo_consumed") return false;
   return (
     e.severity >= 3 ||
-    e.tags.includes("pneumomail") ||
     e.type.startsWith("quest_") ||
     e.type.startsWith("samosbor_") ||
     e.type.startsWith("fog_boss_") ||

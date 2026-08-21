@@ -47,7 +47,10 @@ export function generateOuterDistrictDesignFloor(seed = OUTER_DISTRICT_SEED): Fl
     };
     world.rooms.push(baseRoom);
 
-    const rooms = generateOuterDistrictCity(world, rng, nextId, baseRoom.id);
+    // Свой счётчик, а не общий с сущностями: id комнаты — это индекс в
+    // `world.rooms` и значение в `roomMap`, и он обязан продолжать `baseRoom`.
+    const nextRoomId = { v: world.rooms.length };
+    const rooms = generateOuterDistrictCity(world, rng, nextRoomId, baseRoom.id);
 
     const spawnX = DISTRICT_MIN + Math.floor((DISTRICT_MAX - DISTRICT_MIN) / 2);
     const spawnY = DISTRICT_MIN + Math.floor((DISTRICT_MAX - DISTRICT_MIN) / 2);

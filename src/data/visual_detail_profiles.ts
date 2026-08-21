@@ -370,7 +370,7 @@ export const VISUAL_DETAIL_PROFILE_ROWS: readonly VisualDetailProfileRow[] = [
   { id: 'route_black_market_88_crumbs', detailId: 'crumbs', density: 7, routeIds: ['black_market_88'] },
   { id: 'route_production_belt_rust', detailId: 'rust_grit', density: 8, routeIds: ['production_belt'] },
   { id: 'route_underhell_bone', detailId: 'bone_crumbs', density: 7, routeIds: ['underhell', 'podad'] },
-  { id: 'route_cantor_pustoty_proof', detailId: 'proof_specks', density: 8, routeIds: ['cantor_pustoty', 'darkness'] },
+  { id: 'route_stenka_proof', detailId: 'proof_specks', density: 8, routeIds: ['stenka', 'darkness'] },
 ];
 
 const RULES_BY_ID = new Map<VisualDetailId, VisualDetailRule>(VISUAL_DETAIL_RULES.map(rule => [rule.id, rule]));

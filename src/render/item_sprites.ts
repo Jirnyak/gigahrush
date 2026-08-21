@@ -2443,36 +2443,6 @@ function drawMailInterceptSlipSprite(t: Uint32Array, seed: number): void {
   drawNoiseDust(t, seed + 1235, postalBlue, 7);
 }
 
-function drawPneumomailCapsuleSprite(t: Uint32Array, seed: number): void {
-  const dark: [number, number, number] = [22, 18, 14];
-  const brass: [number, number, number] = [164, 118, 48];
-  const brassLight: [number, number, number] = [230, 182, 78];
-  const paper: [number, number, number] = [214, 196, 126];
-  const ink: [number, number, number] = [24, 22, 18];
-  const red: [number, number, number] = [178, 34, 30];
-  const damp: [number, number, number] = [72, 86, 78];
-  const rust: [number, number, number] = [120, 62, 34];
-
-  ellipse(t, 33, 53, 17, 4, [8, 8, 7], seed + 2236, 80);
-  line(t, 12, 40, 53, 27, 8.2, dark, seed + 2237, 242);
-  line(t, 14, 39, 51, 28, 5.8, brass, seed + 2238, 252);
-  line(t, 16, 36, 48, 27, 1.1, brassLight, seed + 2239, 210);
-  ellipse(t, 13, 40, 6.2, 4.8, dark, seed + 2240, 244);
-  ellipse(t, 15, 39, 3.8, 2.8, brassLight, seed + 2241, 215);
-  ellipse(t, 52, 27, 5.8, 4.2, dark, seed + 2242, 242);
-  ellipse(t, 51, 28, 3.3, 2.3, brassLight, seed + 2243, 205);
-  rect(t, 25, 32, 42, 38, paper, seed + 2244, 238);
-  outlineRect(t, 25, 32, 42, 38, ink);
-  rect(t, 28, 34, 38, 35, ink, 0, 145);
-  rect(t, 29, 37, 39, 38, damp, seed + 2245, 105);
-  ellipse(t, 41, 31, 6.8, 5.2, red, seed + 2246, 220);
-  ellipse(t, 41, 31, 3.4, 2.4, brass, seed + 2247, 205);
-  line(t, 36, 31, 47, 31, 0.8, red, seed + 2248, 230);
-  line(t, 19, 39, 48, 29, 0.9, rust, seed + 2249, 132);
-  rect(t, 17, 42, 25, 45, rust, seed + 2250, 155);
-  drawNoiseDust(t, seed + 2251, rust, 10);
-}
-
 function drawScrubbedWeaponTagSprite(t: Uint32Array, seed: number): void {
   const tag: [number, number, number] = [182, 172, 132];
   const tagLight: [number, number, number] = [222, 210, 160];
@@ -3388,7 +3358,6 @@ const documentSpriteRenderers: Record<string, DocumentSpriteRenderer> = {
   'fake_pass': drawFakePassSprite,
   'foam_grenade_act': drawFoamGrenadeActSprite,
   'mail_intercept_slip': drawMailInterceptSlipSprite,
-  'pneumomail_capsule': drawPneumomailCapsuleSprite,
   'scrubbed_weapon_tag': drawScrubbedWeaponTagSprite,
   'labor_shift_card': drawLaborShiftCardSprite,
 };

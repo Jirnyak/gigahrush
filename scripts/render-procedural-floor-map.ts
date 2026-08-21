@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
-import { Cell, DoorState, Feature, FloorLevel, Tex, W, type Entity } from '../src/core/types';
+import { Cell, DoorState, Feature, Tex, W, type Entity } from '../src/core/types';
 import { auditReachability } from '../src/core/world';
 import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 import {
@@ -14,9 +14,8 @@ import {
   type FloorAnomalyId,
   type FloorGeometryId,
   type FloorMajorityId,
-  zForStoryFloor,
 } from '../src/data/procedural_floors';
-import { FLOOR_NAMES, generateFloor, type FloorGeneration } from '../src/gen/floor_manifest';
+import { type FloorGeneration } from '../src/gen/floor_manifest';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { getRouteCueMarkers } from '../src/systems/route_cues';
@@ -30,7 +29,6 @@ interface CliOptions {
   majority?: FloorMajorityId;
   anomaly?: FloorAnomalyId;
   danger?: number;
-  baseFloor?: FloorLevel;
   all: boolean;
   entry?: string;
   out: string;
@@ -63,7 +61,6 @@ function usage(): never {
     '  --majority <id>  Optional forced majority id.',
     '  --anomaly <id>   Optional forced anomaly id.',
     '  --danger <n>     Optional forced danger 1..5.',
-    '  --base-floor <n> Optional forced FloorLevel numeric id.',
     '  --out <path>     PNG output path. Default tmp/floor-maps/procedural_floor.png.',
     '  --out-dir <path> Directory output path for --all.',
   ].join('\n'));
@@ -98,7 +95,6 @@ function parseCli(): CliOptions {
   const ext = path.extname(out);
   const jsonOut = `${out.slice(0, ext ? -ext.length : undefined)}.json`;
   const dangerRaw = readArg(args, '--danger');
-  const baseFloorRaw = readArg(args, '--base-floor');
   return {
     seed,
     z,
@@ -106,7 +102,6 @@ function parseCli(): CliOptions {
     majority: readArg(args, '--majority') as FloorMajorityId | undefined,
     anomaly: readArg(args, '--anomaly') as FloorAnomalyId | undefined,
     danger: dangerRaw === undefined ? undefined : parseNumberArg(args, '--danger'),
-    baseFloor: baseFloorRaw === undefined ? undefined : parseNumberArg(args, '--base-floor') as FloorLevel,
     all,
     entry: readArg(args, '--entry'),
     out,
@@ -291,7 +286,6 @@ function proceduralSpecForCli(cli: CliOptions, z: number): ReturnType<typeof mak
     ...(cli.majority ? { majorityId: cli.majority } : {}),
     ...(cli.anomaly ? { anomalyId: cli.anomaly } : {}),
     ...(cli.danger !== undefined ? { danger: cli.danger } : {}),
-    ...(cli.baseFloor !== undefined ? { baseFloor: cli.baseFloor } : {}),
     ...(forcedGeometry || forcedMajority || forcedAnomaly
       ? {
           title: `${titlePrefix}${titleGeometry?.title ?? base.geometryId}, ${titleMajority?.title ?? base.majorityId}`,
@@ -315,7 +309,7 @@ function zLabel(z: number): string {
 }
 
 interface BatchEntry {
-  kind: 'story' | 'design' | 'procedural';
+  kind: 'design' | 'procedural';
   z: number;
   key: string;
   title: string;
@@ -324,22 +318,9 @@ interface BatchEntry {
 }
 
 function batchEntries(seed: number): BatchEntry[] {
-  const storyFloors = [
-    FloorLevel.MINISTRY,
-    FloorLevel.KVARTIRY,
-    FloorLevel.LIVING,
-    FloorLevel.MAINTENANCE,
-    FloorLevel.HELL,
-    FloorLevel.VOID,
-  ] as const;
-  const entries: BatchEntry[] = storyFloors.map(floor => ({
-    kind: 'story',
-    z: zForStoryFloor(floor),
-    key: `story_${FloorLevel[floor].toLowerCase()}`,
-    title: FLOOR_NAMES[floor],
-    generate: () => generateFloor(floor, seed),
-    spec: { floor },
-  }));
+  // Бывшие story-этажи (жилой, квартиры, министерство, коллекторы, ад, пустота)
+  // теперь обычные маршрутные дизайн-этажи и приходят из DESIGN_FLOOR_ROUTES.
+  const entries: BatchEntry[] = [];
   for (const route of DESIGN_FLOOR_ROUTES) {
     entries.push({
       kind: 'design',
