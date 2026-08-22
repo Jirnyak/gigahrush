@@ -10,6 +10,7 @@ import { entityDisplayName } from '../entities/monster';
 import { HEAD_SLUG_DETACHED_STAGE } from '../entities/head_slug';
 import { consumeToolDurability, getEquippedToolDurability } from './inventory';
 import { publishEvent } from './events';
+import { repelLishennyyFromLight } from './ai/monster';
 
 export const UV_SPOTLIGHT_ID = 'uv_spotlight';
 
@@ -206,11 +207,9 @@ function applyUvMonsterEffect(world: World, target: Entity, dirX: number, dirY: 
     }
     target.spriteScale = 0.84;
     if (target.ai) {
-      target.ai.lightAvoidTimer = Math.max(target.ai.lightAvoidTimer ?? 0, 2.4);
+      repelLishennyyFromLight(target, 2.4);
       target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, 0.75);
       target.ai.combatTargetId = undefined;
-      target.ai.lightTargetId = undefined;
-      target.ai.lightTargetKind = undefined;
       target.ai.path = [];
       target.ai.timer = 0.9;
     }

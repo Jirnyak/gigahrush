@@ -499,10 +499,10 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
   {
     id: 'exp_maint_safe_slimevik_bargain', title: 'Корм для безопасного слизневика', issuer: 'Полевой пост НИИ слизи',
     faction: Faction.SCIENTIST, rank: 2, type: QuestType.VISIT,
-    desc: 'Найди кормовую ванну, где слизневик берёт еду вместо крови. Подойди с фильтром и запасом еды или лекарств; задача - отметить пробу, а не устроить охоту.',
+    desc: 'Найди кормовую ванну, где слизневик копит проглоченное. Задача - отметить пробу на месте, а не устроить охоту.',
     target: {
       z: -26, roomType: RoomType.PRODUCTION, roomDefId: 'Кормовая ванна слизневика',
-      zoneTag: 'safe_slimevik_den', hint: 'Коллекторы: кормовая ванна слизневика. Слизневик нейтрален, но долгий контакт без фильтра садит дыхание и ПСИ; бартер едой или лекарством отмечает пробу.',
+      zoneTag: 'safe_slimevik_den', hint: 'Коллекторы: кормовая ванна слизневика. Он нейтрален и занят полом: всё брошенное там оказывается в нём.',
     },
     targetMonsterKind: MonsterKind.SLIMEVIK,
     rewardItem: 'nii_sample_container', rewardCount: 1, extraRewards: [{ defId: 'filter_layer', count: 1 }],

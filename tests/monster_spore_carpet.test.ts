@@ -12,6 +12,7 @@ import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { monsterSpr } from '../src/entities/sprite_index';
 import { S } from '../src/core/pixutil';
 import { makeGameState } from './helpers';
+import { DANGER_FIELD_DEATH_IMPULSE } from '../src/systems/danger_field';
 
 function openWorld(): World {
   const world = new World();
@@ -84,58 +85,29 @@ test('spore carpet definition, ecology, and sprite read as a domestic lurking ru
   assert.equal(DEF.kind, MonsterKind.SPORE_CARPET);
   assert.deepEqual(DEF.aiFlags, ['lurkingFurniture']);
   assert.equal(ecology?.rare, false);
-  assert.match(DEF.counterplay ?? '', /углы|жилы|жгите|фильтр/i);
+  assert.match(DEF.counterplay ?? '', /кров|след|выжиг/i);
   assert.equal(sprite.length, S * S);
   assert.equal(opaque > 300, true, 'spore carpet sprite should have a readable surface area');
 });
 
-test('spore carpet wakes up when a target gets near', () => {
+test('ковёр берёт кровь, а не прохожего', () => {
   const world = openWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
-  // Place target close enough to trigger WAKE_RADIUS_SQ
   const target = player(11, 10);
   const carpet = sporeCarpet(2, 10, 10);
   const entities = [target, carpet];
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
+  // Живой рядом ему безразличен: он растение, а не засада.
   prime(entities);
-  updateMonster(world, entities, carpet, 0.1, 1, msgs, target.id, { v: 10 }, state);
+  updateMonster(world, entities, carpet, 7, 1, msgs, target.id, { v: 10 }, state);
+  assert.equal(entities.length, 2, 'на прохожего он не реагирует');
 
-  assert.equal(carpet.monsterStage, 1, 'carpet should wake up (stage 1)');
-  const woke = getRecentEvents(state, { type: 'spore_carpet_woke', tags: ['spore_carpet'], limit: 1 })[0];
-  assert.ok(woke);
-  assert.equal(woke.data?.reason, 'near');
-});
-
-test('spore carpet burns and recoils from fire damage', () => {
-  const world = openWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(10, 15);
-  const carpet = sporeCarpet(2, 10, 10);
-  const fireProjectile: Entity = {
-    id: 3,
-    type: EntityType.PROJECTILE,
-    x: 10,
-    y: 10,
-    angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: 5,
-    sprite: 0,
-    projType: ProjType.FLAME,
-    ownerId: target.id,
-  };
-
-  const entities = [target, carpet, fireProjectile];
-  const state = makeGameState({ worldEvents: createWorldEventState(), time: 2 });
-
+  // А вот пролитая рядом кровь поднимает отросток.
+  world.dangerField[world.idx(11, 10)] = DANGER_FIELD_DEATH_IMPULSE;
   prime(entities);
-  const handled = tryMonsterProjectileStagger(world, state, carpet, fireProjectile, target.id);
-
-  assert.equal(handled, true, 'fire projectile should cause stagger recoil');
-  assert.equal(carpet.monsterStage, 1, 'carpet should wake up from fire');
-  const burned = getRecentEvents(state, { type: 'spore_carpet_burned', tags: ['spore_carpet'], limit: 1 })[0];
-  assert.ok(burned, 'should emit spore_carpet_burned event');
-  assert.ok(burned.tags.includes('fire'), 'event should be tagged with fire');
+  updateMonster(world, entities, carpet, 9, 9, msgs, target.id, { v: 10 }, state);
+  assert.equal(entities.length, 3, 'по следу пророс отросток');
+  assert.equal(world.dangerField[world.idx(11, 10)], 0);
 });

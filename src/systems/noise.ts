@@ -21,6 +21,7 @@ import { isPlayerEntity } from './player_actor';
 import { isOnlineHost } from './online_client';
 import { pushNetFx } from './online_protocol';
 import { getAcousticDistance } from './ai/pathfinding';
+import { monsterHasAIFlag } from '../entities/monster';
 
 export type NoiseSource =
   | 'weapon_fire'
@@ -181,6 +182,9 @@ function actorNoiseRadiusMult(actor: Entity | undefined, time: number): number {
 }
 
 function publishActorNoise(state: GameState, actor: Entity | undefined, draft: NoiseDraft, suppressible = true): NoiseRecord | undefined {
+  // Беззвучный не оставляет следа в слухе мира вообще: ни шага, ни двери, ни
+  // удара. Это одна дверь публикации, поэтому исключений в видах не нужно.
+  if (actor && monsterHasAIFlag(actor, 'silent')) return undefined;
   const mult = suppressible ? actorNoiseRadiusMult(actor, state.time) : 1;
   return publishNoise(state, {
     ...draft,
@@ -392,6 +396,8 @@ export function findNoiseForActor(
   options: { minSeverity?: number; scanInterval?: number; hearingMult?: number } = {},
 ): NoiseRecord | undefined {
   if (!state) return undefined;
+  // ...и сам он миру не слышит: выстрел, крик и приманка его не сдвинут.
+  if (monsterHasAIFlag(actor, 'silent')) return undefined;
   const memory = actorNoiseMemory.get(actor);
   if (memory) {
     const active = activeMemoryRecord(memory, state, time);

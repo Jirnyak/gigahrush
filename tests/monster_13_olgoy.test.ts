@@ -16,6 +16,7 @@ import {
   updateMonster,
 } from '../src/systems/ai/monster';
 import { setListenerPos } from '../src/systems/audio';
+import { DANGER_FIELD_DEATH_IMPULSE } from '../src/systems/danger_field';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import {
@@ -139,19 +140,37 @@ test('raw meat bait takes priority over a non-contact target and emits olgoy fed
   assert.ok(getRecentEvents(state, { type: 'monster_bait_consumed', limit: 1 })[0]);
 });
 
-test('olgoy eats nearby corpses when not locked in contact combat', () => {
+test('олгой идёт на место смерти по полю крови, а не на тело', () => {
   resetMonsterBaits();
   const world = openWorld();
   const state = makeGameState({ currentZ: -14, time: 15, worldEvents: createWorldEventState() });
   const threat = olgoy();
-  const corpse = makeTestNpc({ id: 3, x: 11.1, y: 10.5, alive: false, hp: 0, maxHp: 40 });
-  const entities = [threat, corpse];
+  const entities = [threat];
+  // Тела в списке нет вовсе — есть только след смерти на клетке рядом.
+  const bloodIdx = world.idx(11, 10);
+  world.dangerField[bloodIdx] = DANGER_FIELD_DEATH_IMPULSE;
 
   runOneTick(world, entities, threat, 1, state);
 
   const fed = getRecentEvents(state, { type: 'olgoy_fed', limit: 1 })[0];
-  assert.equal(fed?.targetId, corpse.id);
   assert.equal(fed?.data?.source, 'corpse');
+  assert.equal(fed?.data?.corpseType, 'remains');
+  assert.equal(world.dangerField[bloodIdx], 0, 'съеденная падаль перестаёт пахнуть');
+});
+
+test('царапина падальщика не зовёт: порог запаха выше следа раны', () => {
+  resetMonsterBaits();
+  const world = openWorld();
+  const state = makeGameState({ currentZ: -14, time: 15, worldEvents: createWorldEventState() });
+  const threat = olgoy();
+  const entities = [threat];
+  const woundIdx = world.idx(11, 10);
+  world.dangerField[woundIdx] = 20; // потолок импульса раны в blood_fx
+
+  runOneTick(world, entities, threat, 1, state);
+
+  assert.equal(getRecentEvents(state, { type: 'olgoy_fed', limit: 1 }).length, 0);
+  assert.equal(world.dangerField[woundIdx], 20);
 });
 
 test('water ambush bite drags the player toward the pipe mouth', () => {

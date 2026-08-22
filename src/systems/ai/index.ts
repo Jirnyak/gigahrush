@@ -5,7 +5,7 @@ export { tryMonsterProjectileStagger } from './monster';
 
 import {
   type Entity, type GameState, type Msg, type GameClock,
-  EntityType, MonsterKind, AIGoal, NpcRole,
+  EntityType, MonsterKind, AIGoal,
   setMsgLocationProvider,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -18,11 +18,12 @@ import { actorHasTacticProfile, runActorTactic } from './tactics';
 import { expireMonsterBaits } from '../monster_bait';
 import { ensureEntityIndex } from '../entity_index';
 import { hearingRadiusMetersForActor } from '../hearing';
-import { unstuckActorFromBlockers } from '../movement_collision';
+import { applyActorSeparation, unstuckActorFromBlockers } from '../movement_collision';
 import { isPlayerEntity } from '../player_actor';
 import { setFactionsSocialContext } from '../factions';
 import { designFloorAtZ } from '../../data/design_floors';
 import { isPlotNpc } from '../../data/plot';
+import { updateMukhozhukLarvae } from './mukhozhuk';
 
 export interface AiStats {
   frame: number;
@@ -127,6 +128,8 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setNpcContext(msgs, time, currentZ);
   setFactionsSocialContext(state);
   expireMonsterBaits(state, time);
+  // Личинки мухожука зреют сами, даже если их мать давно убита.
+  updateMukhozhukLarvae(world, entities, nextId, dt, time, msgs, state);
 
   // Main rebuilds the runtime broadphase once before simulation; AI only consumes it.
   const entityIndex = ensureEntityIndex(entities);
@@ -163,6 +166,11 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   const aiCount = entityIndex.ai.length;
   const unstuckStart = aiCount > 0 ? unstuckCursor % aiCount : 0;
   unstuckCursor = aiCount > 0 ? (unstuckStart + UNSTUCK_ACTOR_BUDGET) % aiCount : 0;
+  // Расталкивание идёт в том же окне раунд-робина, что и вызволение: бюджет на
+  // кадр фиксирован независимо от населения. Актёр попадает в окно раз в
+  // aiCount/UNSTUCK_ACTOR_BUDGET кадров, поэтому и шаг ему полагается за весь
+  // этот промежуток, иначе на людном этаже куча расходилась бы вдесятеро дольше.
+  const separationDt = dt * Math.max(1, aiCount / UNSTUCK_ACTOR_BUDGET);
   let aiIdx = -1;
   try {
     for (const e of entityIndex.ai) {
@@ -176,14 +184,22 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
         aiStats.skipped++;
         continue; // peer actors are controlled by remote players, not AI
       }
-      if (e.role === NpcRole.CINEMATIC_ACTOR) {
-        continue;
-      }
+      /* Актёра сцены цикл AI НЕ пропускает. Раньше пропускал, и это создавало
+       * вторую, несимулируемую породу людей: гражданский подходил и бил
+       * ликвидатора в строю, а тот не отвечал — не потому, что не хотел, а
+       * потому, что его AI не запускался. Кат-сцены здесь идут на движке игры,
+       * и держать актёра надо поводком и вейпойнтом, а не выключателем. */
       if (aiCount <= UNSTUCK_ACTOR_BUDGET
         || ((aiIdx - unstuckStart + aiCount) % aiCount) < UNSTUCK_ACTOR_BUDGET
         || (e.ai.combatTargetId !== undefined
           && (((aiFrame + e.id) & UNSTUCK_COMBAT_FRAME_MASK) === 0))) {
         unstuckActorFromBlockers(world, e, UNSTUCK_ACTOR_OPTIONS);
+        /* Тела больше не складываются в одну подклетку. Расталкивания в проекте
+         * не было вообще: предикаты движения принимали radius и выбрасывали его,
+         * поэтому актёры проходили друг сквозь друга и стекались в точку, как в
+         * аттрактор. Один capped-запрос по общей броадфазе, ноль аллокаций,
+         * срабатывает только при реальном перекрытии тел. */
+        applyActorSeparation(world, e, separationDt);
       }
       if (e.type === EntityType.NPC) {
         if (e.ai.npcState === undefined) {

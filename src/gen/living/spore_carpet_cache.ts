@@ -132,7 +132,7 @@ function spawnSporeCarpet(
     monsterKind: MonsterKind.SPORE_CARPET,
     monsterStage: 0,
     attackCd: def.attackRate,
-    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0, sporePuffCd: 5.8 },
+    ai: { goal: AIGoal.IDLE, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(Math.max(1, zoneLevel)),
   });
 }

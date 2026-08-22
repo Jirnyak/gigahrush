@@ -12,7 +12,8 @@ import { DEF, generateSprite } from '../src/entities/slimevik';
 import { S } from '../src/core/pixutil';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { getRecentEvents, publishEvent } from '../src/systems/events';
-import { tryUseSlimevikInteraction, updateSlimevikMonster } from '../src/systems/slimevik';
+import { peekSlimevikBelly, updateSlimevikMonster } from '../src/systems/slimevik';
+import { dropMonsterLoot } from '../src/systems/monster_drops';
 import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 function openSlimeRoom(): World {
@@ -67,54 +68,38 @@ test('Slimevik is standalone neutral scavenger content with route leads', () => 
   assert.equal(opaque > 700, true, 'Slimevik sprite should read as a full symbiote scavenger');
 });
 
-test('Slimevik stays neutral but close contact drains bounded water and PSI', () => {
+test('слизневик глотает брошенное, а смерть возвращает съеденное', () => {
   const world = openSlimeRoom();
   const state = makeGameState({ time: 12, currentZ: -14 });
-  const player = makeTestPlayer({
-    id: 1,
-    x: 10.8,
+  const threat = slimevik();
+  const drop: Entity = {
+    id: 5,
+    type: EntityType.ITEM_DROP,
+    x: 10.9,
     y: 10.5,
     angle: 0,
-    hp: 100,
-    maxHp: 100,
-    needs: { food: 80, water: 50, sleep: 80, pee: 0, poo: 0 },
-    rpg: { level: 1, xp: 0, attrPoints: 0, str: 1, agi: 1, int: 1, psi: 4, maxPsi: 4 },
-  });
-  const threat = slimevik();
+    pitch: 0,
+    alive: true,
+    speed: 0,
+    sprite: 0,
+    inventory: [{ defId: 'pills', count: 2 }],
+  };
+  const entities: Entity[] = [threat, drop];
   const msgs: Msg[] = [];
 
-  updateSlimevikMonster(world, [player, threat], threat, 2.3, state.time, msgs, player, state);
-
-  assert.equal(player.hp, 100, 'neutral contact should not be a normal melee attack');
-  assert.equal(player.needs?.water, 48);
-  assert.equal(player.rpg?.psi, 3);
-  assert.equal(threat.ai?.goal, AIGoal.WANDER);
-  assert.equal(msgs.some(m => m.text.includes('Держи дистанцию или фильтр')), true);
-  assert.equal(getRecentEvents(state, { type: 'player_status_bad_reaction', limit: 1 })[0]?.monsterKind, MonsterKind.SLIMEVIK);
-});
-
-test('Slimevik barter consumes food or medicine and marks a sample', () => {
-  const world = openSlimeRoom();
-  const state = makeGameState({ time: 18, currentZ: -14 });
-  const player = makeTestPlayer({
-    id: 1,
-    x: 10.5,
-    y: 10.5,
-    angle: 0,
-    inventory: [{ defId: 'bread', count: 1 }, { defId: 'pills', count: 1 }],
-  });
-  const target = slimevik();
-  const entities = [player, target];
-  const nextId = { v: getPlotNpcCount() + 3 }
-
   rebuildEntityIndex(entities);
-  assert.equal(tryUseSlimevikInteraction(world, player, state, entities, nextId), true);
+  updateSlimevikMonster(world, entities, threat, 2.3, state.time, msgs, state);
 
-  assert.equal(player.inventory?.some(item => item.defId === 'pills'), false);
-  assert.equal(player.inventory?.some(item => item.defId === 'bread'), true);
-  assert.equal(entities.some(e => e.type === EntityType.ITEM_DROP && e.inventory?.[0]?.defId === 'slime_sample_brown'), true);
-  assert.equal(getRecentEvents(state, { type: 'slimevik_bargain', limit: 1 })[0]?.itemId, 'pills');
-  assert.equal(getRecentEvents(state, { type: 'slimevik_harvested', limit: 1 })[0]?.itemId, 'slime_sample_brown');
+  assert.equal(drop.alive, false, 'лежащее на полу он втягивает в себя');
+  assert.equal(peekSlimevikBelly(threat)[0]?.defId, 'pills');
+  assert.equal(peekSlimevikBelly(threat)[0]?.count, 2);
+
+  // Убили — вещь возвращается через общую дверь дропа, а не через случай вида.
+  const nextId = { v: getPlotNpcCount() + 50 };
+  dropMonsterLoot(threat, entities, nextId, () => 0.5);
+  const returned = entities.filter(e => e.type === EntityType.ITEM_DROP && e.alive && e.inventory?.[0]?.defId === 'pills');
+  assert.equal(returned.length, 1, 'съеденное выпало обратно');
+  assert.equal(peekSlimevikBelly(threat).length, 0);
 });
 
 test('Hurt Slimevik flees from nearby actors through bounded broadphase', () => {
@@ -127,7 +112,7 @@ test('Hurt Slimevik flees from nearby actors through bounded broadphase', () => 
   const msgs: Msg[] = [];
 
   rebuildEntityIndex(entities);
-  assert.equal(updateSlimevikMonster(world, entities, threat, 0.2, state.time, msgs, player, state), true);
+  assert.equal(updateSlimevikMonster(world, entities, threat, 0.2, state.time, msgs, state), true);
 
   assert.equal(threat.ai?.goal, AIGoal.FLEE);
   assert.equal(threat.ai?.combatTargetId, neighbor.id);

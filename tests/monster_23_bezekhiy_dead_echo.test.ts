@@ -13,6 +13,7 @@ import { setListenerPos } from '../src/systems/audio';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
+import { findNoiseForActor, publishFootstepNoise } from '../src/systems/noise';
 import { makeGameState } from './helpers';
 
 
@@ -87,10 +88,10 @@ test('Bezekhiy is standalone door-threshold content, not silent_polzun', () => {
 
   assert.equal(DEF.kind, MonsterKind.BEZEKHIY);
   assert.equal(MONSTERS[MonsterKind.BEZEKHIY], DEF);
-  assert.deepEqual(DEF.aiFlags, ['deadEcho']);
+  assert.deepEqual(DEF.aiFlags, ['silent']);
   assert.equal(DEF.hp < MONSTERS[MonsterKind.POLZUN].hp, true);
   assert.equal(DEF.dmg <= MONSTERS[MonsterKind.POLZUN].dmg, true);
-  assert.match(DEF.counterplay ?? '', /косяк|двер|порог|спин/);
+  assert.match(DEF.counterplay ?? '', /слыш|угол|виде/);
   assert.equal(ecology?.rooms.includes(RoomType.CORRIDOR), true);
   assert.equal(ecology?.rumorIds.includes('monster_bezekhiy_dead_echo'), true);
   assert.equal(RUMORS.some(rumor => rumor.id === ['variant', 'silent', 'polzun'].join('_')), false);
@@ -122,48 +123,17 @@ test('Bezekhiy sprite reads as a flat gray crawler with door-edge fingers', () =
   assert.equal(paleEdge >= 8, true, 'door-side white fingers should be visible without glow');
 });
 
-test('Bezekhiy spends dead echo on a back-turned door crossing', () => {
+test('безэхий не шумит сам и не слышит мир', () => {
   const world = openDoorWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(9.2, 10.5, 0);
-  const threat = bezekhiy(10.5, 13.5);
-  const entities = [target, threat];
-  const msgs: Msg[] = [];
-  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const threat = bezekhiy(10.5, 10.5);
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
 
-  sync(entities);
-  updateMonster(world, entities, threat, 0, 1, msgs, target.id, { v: 3 }, state);
+  // Его шаг не попадает в слух мира вовсе.
+  assert.equal(publishFootstepNoise(state, threat, true), undefined, 'беззвучный не оставляет шума');
 
-  target.x = 11.8;
-  target.y = 10.5;
-  target.angle = 0;
-  sync(entities);
-  updateMonster(world, entities, threat, 0.1, 1.1, msgs, target.id, { v: 3 }, state);
-
-  assert.equal((target.hp ?? 100) < 100, true);
-  assert.equal(threat.ai?.deadEchoSpent, true);
-  assert.equal(threat.ai?.deadEchoRevealed, true);
-  assert.equal(msgs.some(entry => entry.text.includes('косяка')), true);
-  const event = getRecentEvents(state, { type: 'bezekhiy_lunge', tags: ['dead_echo'], limit: 1 })[0];
-  assert.ok(event);
-  assert.equal(event.monsterKind, MonsterKind.BEZEKHIY);
-});
-
-test('directly looking at Bezekhiy reveals it without the lunge', () => {
-  const world = openDoorWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(10.5, 10.5, 0);
-  const threat = bezekhiy(15, 10.5);
-  const entities = [target, threat];
-  const msgs: Msg[] = [];
-  const state = makeGameState({ worldEvents: createWorldEventState() });
-
-  sync(entities);
-  updateMonster(world, entities, threat, 0.5, 2, msgs, target.id, { v: 3 }, state);
-
-  assert.equal(target.hp, 100);
-  assert.equal(threat.ai?.deadEchoSpent, true);
-  assert.equal(threat.ai?.deadEchoRevealed, true);
-  assert.equal(getRecentEvents(state, { type: 'bezekhiy_lunge', limit: 1 }).length, 0);
-  assert.equal(getRecentEvents(state, { type: 'bezekhiy_revealed', tags: ['direct_look'], limit: 1 }).length, 1);
+  // И чужой выстрел до него не доходит.
+  const shooter = player(20.5, 10.5);
+  publishFootstepNoise(state, shooter, true);
+  assert.equal(findNoiseForActor(world, state, threat, state.time), undefined, 'глухому нечем услышать');
 });

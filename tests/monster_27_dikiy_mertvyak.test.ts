@@ -7,6 +7,7 @@ import { DEF, generateSprite } from '../src/entities/dikiy_mertvyak';
 import { MONSTERS } from '../src/entities/monster';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { updateMonster, setEntityMap } from '../src/systems/ai/monster';
+import { peekDikiyRushSpeed } from '../src/systems/ai/dikiy_mertvyak';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
@@ -82,88 +83,43 @@ test('dikiy mertvyak is a standalone fragile crowd-runner, not the old zombie va
   assert.equal(MONSTERS[MonsterKind.DIKIY_MERTVYAK], DEF);
   assert.equal(DEF.hp < MONSTERS[MonsterKind.ZOMBIE].hp, true);
   assert.equal(DEF.speed > MONSTERS[MonsterKind.ZOMBIE].speed, true);
-  assert.deepEqual(DEF.aiFlags, ['crowdShove']);
-  assert.match(ecology?.counterplay ?? '', /разгона|открытый/);
+  assert.deepEqual(DEF.aiFlags, ['noBrakes']);
+  assert.match(ecology?.counterplay ?? '', /курс|вбок|бетон/);
   assert.equal(opaque > 450, true, 'sprite should be readable as a full sprinting body');
   assert.equal(translucent > 3, true, 'sprite should include leg motion blur');
   assert.equal(brightKnuckles > 0, true, 'sprite should show pale forward knuckles');
 });
 
-test('dikiy mertvyak shoves a crowded doorway panic cluster', () => {
+test('мертвяк едет туда, где цель была, и уходит в бетон', () => {
   const world = openWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
-  const player = makeTestPlayer({ id: 1, x: 10.45, y: 10, hp: 100, maxHp: 100 });
-  const threat = dikiy();
-  const crowd = [
-    crowdNpc(3, 10.8, 10.45),
-    crowdNpc(4, 10.6, 9.45),
-    crowdNpc(5, 10.95, 9.9),
-    crowdNpc(6, 10.9, 10.25),
-  ];
-  const entities = [player, threat, ...crowd];
-  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const player = makeTestPlayer({ id: 1, x: 16.5, y: 10.5, hp: 100, maxHp: 100 });
+  const threat = dikiy({ x: 10.5, y: 10.5 });
+  const entities = [player, threat];
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   rebuildEntityIndex(entities);
   setEntityMap(new Map(entities.map(e => [e.id, e])));
-  updateMonster(world, entities, threat, 0.9, 1, msgs, player.id, { v: 10 }, state);
+  updateMonster(world, entities, threat, 0.1, 1, msgs, player.id, { v: 50 }, state);
+  const startX = threat.x;
+  assert.ok(peekDikiyRushSpeed(threat) > 0, 'увидел цель — пошёл в разгон');
 
-  const shoved = crowd.filter(e => e.ai?.goal === AIGoal.FLEE && (e.ai?.staggerTimer ?? 0) > 0);
-  assert.equal(shoved.length >= 2, true, 'crowd shove should stagger multiple nearby bodies');
-  assert.equal(msgs.some(m => m.text.includes('Открытый пол')), true);
-  const shoveEvent = getRecentEvents(state, { type: 'monster_sighted', tags: ['dikiy_mertvyak', 'crowd_shove'], limit: 1 })[0];
-  assert.ok(shoveEvent);
-  assert.equal(shoveEvent.monsterKind, MonsterKind.DIKIY_MERTVYAK);
-  assert.equal(shoveEvent.data?.counterplay, 'open_floor_or_early_damage_before_crowd_contact');
-});
+  // Цель ушла вбок, а курс уже взят: он продолжает по прямой.
+  player.y = 13.5;
+  rebuildEntityIndex(entities);
+  setEntityMap(new Map(entities.map(e => [e.id, e])));
+  updateMonster(world, entities, threat, 0.1, 1.1, msgs, player.id, { v: 50 }, state);
+  assert.ok(threat.x > startX, 'едет туда, где цель была');
+  assert.ok(Math.abs(threat.y - 10.5) < 0.2, 'курс не правит');
 
-test('dikiy mertvyak crowd shove can target NPCs and remains locally capped', () => {
-  const world = openWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const player = makeTestPlayer({ id: 1, x: 80, y: 80, hp: 100, maxHp: 100 });
-  const target = crowdNpc(3, 10.65, 10);
-  const threat = dikiy();
-  const entities = [player, target, threat];
-  for (let i = 0; i < 24; i++) {
-    const body = crowdNpc(10 + i, 11.05 + (i % 6) * 0.18, 9.55 + ((i / 6) | 0) * 0.22);
-    body.faction = Faction.CULTIST;
-    entities.push(body);
+  // Стена на его линии — удар о бетон и оглушение.
+  for (let y = 8; y <= 13; y++) world.cells[world.idx(12, y)] = Cell.WALL;
+  for (let i = 0; i < 12; i++) {
+    updateMonster(world, entities, threat, 0.1, 1.2 + i * 0.1, msgs, player.id, { v: 50 }, state);
+    if ((threat.ai?.staggerTimer ?? 0) > 0) break;
   }
-  const state = makeGameState({ worldEvents: createWorldEventState() });
-  const msgs: Msg[] = [];
-
-  rebuildEntityIndex(entities);
-  setEntityMap(new Map(entities.map(e => [e.id, e])));
-  updateMonster(world, entities, threat, 0.9, 1, msgs, player.id, { v: 10 }, state);
-
-  assert.equal(threat.ai?.combatTargetId, target.id);
-  assert.equal(target.ai?.goal, AIGoal.FLEE);
-  const shoveEvent = getRecentEvents(state, { type: 'monster_sighted', tags: ['dikiy_mertvyak', 'crowd_shove'], limit: 1 })[0];
-  assert.ok(shoveEvent);
-  assert.equal(shoveEvent.targetId, target.id);
-  assert.equal(Number(shoveEvent.data?.crowd) <= 12, true, 'shove event crowd should reflect the capped local query');
-});
-
-test('early damage cancels dikiy mertvyak shove momentum', () => {
-  const world = openWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const player = makeTestPlayer({ id: 1, x: 11.5, y: 10, hp: 100, maxHp: 100 });
-  const threat = dikiy({ hp: DEF.hp - 3 });
-  const npcA = crowdNpc(3, 10.8, 10.45);
-  const npcB = crowdNpc(4, 10.6, 9.45);
-  const entities = [player, threat, npcA, npcB];
-  const state = makeGameState({ worldEvents: createWorldEventState() });
-  const msgs: Msg[] = [];
-
-  rebuildEntityIndex(entities);
-  setEntityMap(new Map(entities.map(e => [e.id, e])));
-  updateMonster(world, entities, threat, 0.9, 1, msgs, player.id, { v: 10 }, state);
-
-  assert.notEqual(npcA.ai?.goal, AIGoal.FLEE);
-  assert.notEqual(npcB.ai?.goal, AIGoal.FLEE);
-  assert.equal(npcA.ai?.staggerTimer, undefined);
-  assert.equal(npcB.ai?.staggerTimer, undefined);
-  assert.equal(threat.ai?.shoveCharge, 0);
-  assert.equal(msgs.some(m => m.text.includes('продавил толпу')), false);
-  assert.equal(getRecentEvents(state, { type: 'monster_sighted', tags: ['dikiy_mertvyak', 'crowd_shove'], limit: 1 }).length, 0);
+  assert.ok((threat.ai?.staggerTimer ?? 0) > 0, 'влетел в бетон и осел');
+  assert.equal(peekDikiyRushSpeed(threat), 0);
+  assert.ok(msgs.some(m => m.text.includes('бетон')));
 });

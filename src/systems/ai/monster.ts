@@ -3,8 +3,8 @@
 
 import {
   W,
-  type Entity, type GameState, type MonsterBaitLineState, type Msg, type Room, type WorldContainer,
-  Cell, DoorState, Faction, Feature, ItemType, ProjType, RoomType, Tex, ZoneFaction,
+  type Entity, type GameState, type MonsterBaitLineState, type Msg, type Room,
+  Cell, DoorState, Feature, ItemType, ProjType, RoomType, Tex, ZoneFaction,
   EntityType, AIGoal, MonsterKind,
   msg,
 } from '../../core/types';
@@ -12,11 +12,8 @@ import { World } from '../../core/world';
 import { calculateDamage, applyHitStaggerAndKnockback } from '../combat';
 import { DamageType } from '../../core/types';
 import { MONSTERS, entityDisplayName, monsterHasAIFlag, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
-import { ITEMS, ITEM_TAGS, getStack } from '../../data/items';
-import { MAX_INVENTORY_SLOTS } from '../../data/inventory_limits';
-import { occupationHasProfileTag } from '../../data/occupation_profiles';
+import { ITEMS, ITEM_TAGS } from '../../data/items';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
-import { isPlotNpc } from '../../data/plot';
 import {
   playGrowl,
   playFogSharkBite,
@@ -30,10 +27,11 @@ import {
 } from '../audio';
 import { isHostile } from '../factions';
 import { scaleMonsterDmg, strMeleeDmgMult } from '../rpg';
-import { applySporeHaze, hasSporeHazeProtection, zhelemishIncomingMeleeDamage } from '../status';
+import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
 import { MarkType, stampMark } from '../surface_marks';
-import { followPath, tryAssignPathToCell, wanderFar, wanderNearby } from './pathfinding';
+import { followPath, pathTargetIs, spreadTargetCell, tryAssignPathToCell, wanderFar, wanderNearby, type AssignPathStatus } from './pathfinding';
+import { stepActorBy } from '../movement_collision';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
 import { Spr } from '../../entities/sprite_index';
@@ -54,8 +52,7 @@ import {
 import { entityInActiveCellHazard, registerCellHazardSite } from '../cell_hazards';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ENTITY_MASK_NPC, ensureEntityIndex, getEntityIndex } from '../entity_index';
-import { getRecentCombatThreat, notifyActorDamaged } from '../combat_stimulus';
-import { applyDemosRelationDelta } from '../demos_social';
+import { damageActor, getRecentCombatThreat, notifyActorDamaged } from '../combat_stimulus';
 import { updateSlimevikMonster } from '../slimevik';
 import { updateGnilushkaMonster } from '../gnilushka';
 import { territoryOwnerAtIndex } from '../territory';
@@ -91,7 +88,13 @@ import {
 } from '../monster_traits';
 import { shareLocalTarget } from './monster_pack';
 import { selectMeleeTarget } from '../melee_targeting';
-import { findMeatChunkCell, removeVisualSlotCode } from '../../world/visual_cell_slots';
+import { findMeatChunkCell, hasVisualSlotCode, removeVisualSlotCode } from '../../world/visual_cell_slots';
+import { DANGER_FIELD_DEATH_IMPULSE, clearBloodTrailCell, findBloodTrailCell } from '../danger_field';
+import { updateMukhozhukBite } from './mukhozhuk';
+import { updateTumannikReveal } from './tumannik';
+import { updateDikiyRush } from './dikiy_mertvyak';
+import { updateSporeCarpetGrowth } from './spore_carpet';
+import { speciesState } from './species_state';
 import { isCarnivoreMonster, monsterPackMode } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
@@ -131,15 +134,7 @@ const DEBRIS_LURKER_COVER_DETECT_SQ = 22 * 22;
 const DEBRIS_LURKER_EXPOSED_DETECT_SQ = 12 * 12;
 const NELYUD_REVEAL_SQ = 6 * 6;
 const BEZEKHIY_DETECT_SQ = 7.5 * 7.5;
-const BEZEKHIY_CLOSE_REVEAL_SQ = 2.7 * 2.7;
-const BEZEKHIY_LOOK_HOLD_SEC = 0.42;
-const BEZEKHIY_LOOK_DOT = 0.9;
 const BEZEKHIY_BACK_DOT = -0.18;
-const BEZEKHIY_THRESHOLD_RADIUS_SQ = 3.2 * 3.2;
-const BEZEKHIY_DOOR_SCAN_RADIUS = 3;
-const BEZEKHIY_LUNGE_STEP = 2.8;
-const BEZEKHIY_LUNGE_HIT_SQ = 1.55 * 1.55;
-const BEZEKHIY_LUNGE_DAMAGE_MULT = 2.35;
 export const TRESKOTNIK_WINDUP_SEC = 0.35;
 export const TRESKOTNIK_STAGGER_SEC = 1.35;
 const TRESKOTNIK_DETECT_SQ = 18 * 18;
@@ -148,12 +143,6 @@ const TRESKOTNIK_SPRINT_SEC = 0.62;
 const TRESKOTNIK_SPRINT_SPEED_MULT = 3.25;
 const TRESKOTNIK_HIT_SQ = 1.35 * 1.35;
 const TRESKOTNIK_BURST_DMG_MULT = 1.45;
-const DIKIY_SHOVE_RADIUS = 2.65;
-const DIKIY_SHOVE_SCAN_CAP = 12;
-const DIKIY_SHOVE_TRIGGER = 1.0;
-const DIKIY_SHOVE_COOLDOWN_SEC = 2.4;
-const DIKIY_SHOVE_STAGGER_SEC = 0.55;
-const DIKIY_SHOVE_FLEE_SEC = 0.9;
 const ZOMBIE_CROWD_PRESSURE_RADIUS = 2.35;
 const ZOMBIE_CROWD_PRESSURE_SCAN_CAP = 10;
 const ZOMBIE_CROWD_DAMAGE_BONUS = 0.12;
@@ -190,12 +179,6 @@ const HEAD_SLUG_REHOST_COOLDOWN_SEC = 1.2;
 const HEAD_SLUG_QUARANTINE_EVENT_COOLDOWN_SEC = 24;
 export const MUKHOZHUK_COMMAND_RADIUS = 11;
 export const MUKHOZHUK_COMMAND_SCAN_CAP = 16;
-const MUKHOZHUK_COMMAND_COOLDOWN_SEC = 4.2;
-const MUKHOZHUK_COMMAND_MAX_NPCS = 4;
-const MUKHOZHUK_FOOD_SCAN_RADIUS = 26;
-const MUKHOZHUK_FOOD_SCAN_CAP = 24;
-const MUKHOZHUK_FOOD_SCAN_COOLDOWN_SEC = 2.6;
-const MUKHOZHUK_FOOD_EAT_RANGE_SQ = 1.75 * 1.75;
 const POMOYNY_ROY_BASE_DETECT_SQ = 13 * 13;
 const POMOYNY_ROY_MAX_SCENT_DETECT = 34;
 const POMOYNY_ROY_SLOT_RADIUS = 1.65;
@@ -261,6 +244,9 @@ const ZHORNAYA_SCENT_SCAN_SEC = 0.14;
 const OLGOY_DETECT_RADIUS = 24;
 const OLGOY_BLOOD_RADIUS = 30;
 const OLGOY_CORPSE_RADIUS = 26;
+/* Порог запаха падали: половина импульса смерти. Царапина даёт вчетверо
+ * меньше, поэтому падальщик не бегает на каждую ссадину. */
+const CARRION_BLOOD_MIN = DANGER_FIELD_DEATH_IMPULSE / 2;
 const OLGOY_COMBAT_LOCK_SQ = 2.35 * 2.35;
 const OLGOY_AMBUSH_RADIUS = 2;
 const OLGOY_DRAG_STEP = 0.82;
@@ -330,15 +316,6 @@ const LISHENNYY_LIGHT_MIN = 0.2;
 const LISHENNYY_BRIGHT_AVOID = 0.56;
 const LISHENNYY_SCAN_SEC = 0.62;
 const LISHENNYY_CONTACT_DRAIN = 4;
-const TUMANNIK_FOG_MIN = 44;
-const TUMANNIK_FOG_TARGET_MIN = 24;
-const TUMANNIK_LIGHT_REVEAL = 0.28;
-const TUMANNIK_OFFSET_DIST = 1.85;
-const TUMANNIK_OFFSET_REFRESH_SEC = 2.8;
-const TUMANNIK_COLLAPSE_SEC = 2.4;
-const TUMANNIK_STRIKE_RANGE_SQ = 1.55 * 1.55;
-const TUMANNIK_STRIKE_DMG_MULT = 1.35;
-const TUMANNIK_OFFSET_CUE_COOLDOWN = 5.5;
 const TONKAYA_BAIT_SCAN_RADIUS = 10;
 const TONKAYA_BAIT_SCAN_RADIUS_SQ = TONKAYA_BAIT_SCAN_RADIUS * TONKAYA_BAIT_SCAN_RADIUS;
 const TONKAYA_BAIT_MAX_VISIBLE = 15;
@@ -406,26 +383,17 @@ const SHADOW_RUMOR_IDS = ['monster_shadow_silence', 'ecology_shadow_afterimage']
 const TONKAYA_TEN_RUMOR_IDS = ['monster_tonkaya_ten_follow'] as const;
 const GLUBINNAYA_TEN_RUMOR_IDS = ['monster_glubinnaya_ten_second_beat', 'ecology_glubinnaya_ten_afterimage'] as const;
 const LISHENNYY_RUMOR_IDS = ['monster_lishennyy_light_lure', 'ecology_lishennyy_contact_decay'] as const;
-const TUMANNIK_RUMOR_IDS = ['monster_tumannik_side_sound', 'ecology_tumannik_light_commit'] as const;
+const TUMANNIK_RUMOR_IDS = ['monster_tumannik_strike_reveal', 'ecology_tumannik_strike_window'] as const;
 const LOZHNYY_DUKH_RUMOR_IDS = ['ecology_lozhnyy_dukh_door'] as const;
 const RZHAVNIK_RUMOR_IDS = ['monster_rzhavnik_scrap', 'ecology_rzhavnik_first_leap'] as const;
 const TRESKOTNIK_RUMOR_IDS = ['monster_treskotnik_crack_pulse', 'ecology_treskotnik_corner'] as const;
 const NELYUD_RUMOR_IDS = ['ecology_nelyud_close'] as const;
-const MUKHOZHUK_RUMOR_IDS = ['monster_mukhozhuk_host_command', 'ecology_mukhozhuk_quarantine'] as const;
 const CHERVIE_RUMOR_IDS = ['monster_chervie_avatar_screen', 'ecology_chervie_avatar_disconnect'] as const;
 const SPORE_CARPET_RUMOR_IDS = ['monster_spore_carpet_lifted_corner', 'ecology_spore_carpet_fire_salt'] as const;
 export const SPORE_CARPET_WAKE_RADIUS = 2.15;
 export const SPORE_CARPET_PUFF_RADIUS = 3.2;
 export const SPORE_CARPET_PUFF_COOLDOWN_SEC = 5.8;
 export const SPORE_CARPET_FIRE_RECOIL_SEC = 2.35;
-const SPORE_CARPET_WAKE_RADIUS_SQ = SPORE_CARPET_WAKE_RADIUS * SPORE_CARPET_WAKE_RADIUS;
-const SPORE_CARPET_PUFF_RADIUS_SQ = SPORE_CARPET_PUFF_RADIUS * SPORE_CARPET_PUFF_RADIUS;
-const SPORE_CARPET_DETECT_SQ = 17 * 17;
-const SPORE_CARPET_DOOR_SCAN_RADIUS = 4;
-const SPORE_CARPET_CONTAINER_WAKE_RADIUS_SQ = 4.2 * 4.2;
-const SPORE_CARPET_CONTAINER_SCAN_SEC = 0.35;
-const SPORE_CARPET_PUFF_TARGET_CAP = 6;
-const SPORE_CARPET_FOG_CELL_CAP = 42;
 export const CHERVIE_MIND_PULSE_RADIUS = 7.5;
 export const CHERVIE_MIND_PULSE_CAP = 4;
 export const CHERVIE_MIND_PULSE_COOLDOWN_SEC = 8.5;
@@ -467,16 +435,12 @@ const chernoslizTargetQuery: Entity[] = [];
 const zhornayaCarrierQuery: Entity[] = [];
 const zhornayaDropQuery: Entity[] = [];
 const slepoglazBeamQuery: Entity[] = [];
-const dikiyCrowdQuery: Entity[] = [];
 const zombieCrowdQuery: Entity[] = [];
 const greenDogPackQuery: Entity[] = [];
 const fogSharkPackQuery: Entity[] = [];
 const headSlugHostQuery: Entity[] = [];
-const mukhozhukCommandQuery: Entity[] = [];
 const cherviePulseQuery: Entity[] = [];
-const bezekhiyEchoQuery: Entity[] = [];
 const pomoynyRoyQuery: Entity[] = [];
-const sporeCarpetPuffQuery: Entity[] = [];
 const lishennyyLightQuery: Entity[] = [];
 
 const lampPoweredRuntime = new WeakMap<Entity, boolean>();
@@ -624,7 +588,7 @@ function fogSharkChaseCell(world: World, e: Entity, target: Entity): { x: number
     const y = world.wrap(Math.floor(c.y));
     if (!world.solid(x, y)) return { x, y };
   }
-  return { x: Math.floor(target.x), y: Math.floor(target.y) };
+  return monsterChaseCell(world, e, target);
 }
 
 function fogSharkPackMember(candidate: Entity): boolean {
@@ -789,9 +753,8 @@ function updateGreenDogNoiseFear(
   ai.goal = AIGoal.WANDER;
   ai.combatTargetId = undefined;
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== runtime.fearX || ai.ty !== runtime.fearY) {
-    tryAssignPathToCell(world, e, runtime.fearX, runtime.fearY);
-    ai.timer = 0.9;
+  if (monsterRepathDue(world, e) || !pathTargetIs(world, e, runtime.fearX, runtime.fearY)) {
+    assignMonsterPath(world, e, runtime.fearX, runtime.fearY, 0.9);
   }
   if (ai.path.length > 0) followMonsterPath(world, e, dt);
   return true;
@@ -867,9 +830,58 @@ function updateGreenDogPackHowl(
   playSoundAt(playGrowl, e.x, e.y);
 }
 
+/* ── Пересборка пути монстра ──────────────────────────────────── */
+
+/** Срок отрицательного кэша неудачного поиска, в секундах. */
+const MONSTER_REPATH_FAIL_SEC = 1;
+/** Насколько близко к назначенной клетке считается «дошёл». */
+const MONSTER_REPATH_ARRIVED_SQ = 1;
+/**
+ * Радиус разброса цели погони. Верхняя граница жёсткая: смещённая клетка
+ * обязана оставаться внутри самой короткой стандартной дистанции ближнего боя
+ * (`monsterMeleeRange`, 1.2), иначе стая окружит цель и никогда её не достанет.
+ */
+const MONSTER_CHASE_SPREAD_R = 0.5;
+/** Округление до клетки может вынести разведённую цель дальше кольца, поэтому
+ *  результат ещё и проверяется по расстоянию: что не влезло — идёт в саму цель. */
+const MONSTER_CHASE_SPREAD_MAX_SQ = 0.9 * 0.9;
+
+/**
+ * Пора ли монстру пересобирать путь.
+ *
+ * Старый сторож `ai.path.length === 0 || ai.timer <= 0` выбрасывал статус
+ * поиска, а при 'not_found' путь остаётся пустым — значит условие снова
+ * истинно СЛЕДУЮЩИМ ЖЕ кадром. Монстр с недостижимой целью гонял полный поиск
+ * (с BFS по макроклеткам региона на каждый хоп цепочки) каждый кадр до конца
+ * этажа и при этом стоял. Пустой путь сам по себе поиска больше не открывает:
+ * «дошёл» отличается от «не нашёл» расстоянием до назначенной клетки.
+ */
+function monsterRepathDue(world: World, e: Entity): boolean {
+  const ai = e.ai!;
+  if (ai.timer <= 0) return true;
+  return ai.path.length === 0 && world.dist2(e.x, e.y, ai.tx, ai.ty) <= MONSTER_REPATH_ARRIVED_SQ;
+}
+
+/**
+ * Назначить путь и записать срок следующей попытки в тот же `ai.timer`.
+ * Провал — это и есть короткий отрицательный кэш; новых полей в `AIState` нет.
+ */
+function assignMonsterPath(world: World, e: Entity, tx: number, ty: number, okSec: number): AssignPathStatus {
+  const status = tryAssignPathToCell(world, e, tx, ty);
+  e.ai!.timer = status === 'not_found' ? MONSTER_REPATH_FAIL_SEC : okSec;
+  return status;
+}
+
+/** Клетка погони по умолчанию: цель, разведённая по непрерывному кольцу от id. */
+function monsterChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
+  const spot = spreadTargetCell(world, e, target.x, target.y, MONSTER_CHASE_SPREAD_R);
+  if (world.dist2(target.x, target.y, spot.x + 0.5, spot.y + 0.5) <= MONSTER_CHASE_SPREAD_MAX_SQ) return spot;
+  return { x: Math.floor(world.wrap(target.x)), y: Math.floor(world.wrap(target.y)) };
+}
+
 function greenDogChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
   if (hasAIFlag(e, 'garbageSurround')) return pomoynyRoyChaseCell(world, e, target);
-  if (e.monsterKind !== MonsterKind.GREEN_DOG || !hasAIFlag(e, 'packHowl')) return { x: Math.floor(target.x), y: Math.floor(target.y) };
+  if (e.monsterKind !== MonsterKind.GREEN_DOG || !hasAIFlag(e, 'packHowl')) return monsterChaseCell(world, e, target);
   const dx = world.delta(target.x, e.x);
   const dy = world.delta(target.y, e.y);
   const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
@@ -887,7 +899,7 @@ function greenDogChaseCell(world: World, e: Entity, target: Entity): { x: number
     const y = world.wrap(Math.floor(c.y));
     if (!world.solid(x, y)) return { x, y };
   }
-  return { x: Math.floor(target.x), y: Math.floor(target.y) };
+  return monsterChaseCell(world, e, target);
 }
 
 function pomoynyRoyChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
@@ -904,29 +916,7 @@ function pomoynyRoyChaseCell(world: World, e: Entity, target: Entity): { x: numb
   x = world.wrap(Math.floor(target.x - ax * 1.15));
   y = world.wrap(Math.floor(target.y - ay * 1.15));
   if (!world.solid(x, y)) return { x, y };
-  return { x: Math.floor(target.x), y: Math.floor(target.y) };
-}
-
-function mukhozhukChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
-  if (e.monsterKind !== MonsterKind.MUKHOZHUK_HOST || !hasAIFlag(e, 'parasiteLeader')) return greenDogChaseCell(world, e, target);
-  const dx = world.delta(target.x, e.x);
-  const dy = world.delta(target.y, e.y);
-  const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-  const side = ((e.id + Math.floor((e.ai?.parasiteCommandCd ?? 0) * 10)) & 1) === 0 ? 1 : -1;
-  const px = -dy / dist * side;
-  const py = dx / dist * side;
-  const wobble = 0.8 + ((e.id >> 1) & 3) * 0.25;
-  const candidates = [
-    { x: target.x + px * wobble, y: target.y + py * wobble },
-    { x: target.x - px * 0.8, y: target.y - py * 0.8 },
-    { x: target.x, y: target.y },
-  ];
-  for (const c of candidates) {
-    const x = world.wrap(Math.floor(c.x));
-    const y = world.wrap(Math.floor(c.y));
-    if (!world.solid(x, y)) return { x, y };
-  }
-  return { x: Math.floor(target.x), y: Math.floor(target.y) };
+  return monsterChaseCell(world, e, target);
 }
 
 function isHeadSlugDetached(e: Entity): boolean {
@@ -1167,9 +1157,8 @@ function updateHeadSlugParasite(
       ai.goal = AIGoal.HUNT;
       ai.combatTargetId = undefined;
       ai.timer -= dt;
-      if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-        tryAssignPathToCell(world, slug, Math.floor(host.x), Math.floor(host.y));
-        ai.timer = 0.35;
+      if (monsterRepathDue(world, slug) || ai.pi >= ai.path.length) {
+        assignMonsterPath(world, slug, Math.floor(host.x), Math.floor(host.y), 0.35);
       }
       followMonsterPath(world, slug, dt);
       return true;
@@ -1184,262 +1173,6 @@ function updateHeadSlugParasite(
   return false;
 }
 
-function publishMukhozhukEvent(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  target: Entity | undefined,
-  type: 'mukhozhuk_exposed' | 'mukhozhuk_food_spoiled',
-  severity: 3 | 4 | 5,
-  tags: string[],
-  data?: Record<string, unknown>,
-): void {
-  if (!state) return;
-  publishEvent(state, {
-    type,
-    zoneId: zoneIdAt(world, e.x, e.y),
-    roomId: world.roomAt(e.x, e.y)?.id,
-    x: e.x,
-    y: e.y,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    targetId: target?.id,
-    targetName: target ? entityDisplayName(target) : undefined,
-    targetFaction: target?.faction,
-    containerId: typeof data?.containerId === 'number' ? data.containerId : undefined,
-    monsterKind: MonsterKind.MUKHOZHUK_HOST,
-    severity,
-    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
-    tags: ['monster', 'mukhozhuk', 'parasite_leader', ...tags],
-    data: {
-      counterplay: MONSTERS[MonsterKind.MUKHOZHUK_HOST]?.counterplay,
-      rumorIds: MUKHOZHUK_RUMOR_IDS,
-      commandRadius: MUKHOZHUK_COMMAND_RADIUS,
-      commandScanCap: MUKHOZHUK_COMMAND_SCAN_CAP,
-      ...data,
-    },
-  });
-}
-
-function ensureMukhozhukExposed(
-  world: World,
-  e: Entity,
-  time: number,
-  msgs: Msg[],
-  player: Entity | undefined,
-  state?: GameState,
-): void {
-  if (e.monsterKind !== MonsterKind.MUKHOZHUK_HOST || !hasAIFlag(e, 'parasiteLeader') || !e.ai) return;
-  if (e.ai.parasiteExposed) return;
-  e.ai.parasiteExposed = true;
-  const seenByPlayer = !!player?.alive && world.dist2(e.x, e.y, player.x, player.y) <= 22 * 22;
-  if (seenByPlayer) {
-    msgs.push(msg('Под воротником начальника шевельнулся хитин. Это уже не приказ, а носитель.', time, '#ce8'));
-  }
-  publishMukhozhukEvent(state, world, e, seenByPlayer ? player : undefined, 'mukhozhuk_exposed', 4, ['exposed'], {
-    counterplayDecision: 'expose_quarantine_assassinate_or_flee',
-  });
-}
-
-function mukhozhukCommandableNpc(npc: Entity, target: Entity): boolean {
-  if (!npc.alive || npc.type !== EntityType.NPC || !npc.ai || npc.id === target.id) return false;
-  if ((npc.maxHp ?? npc.hp ?? 60) > 130 || (npc.rpg?.level ?? 1) > 6) return false;
-  if (isPlotNpc(npc)) return false;
-  const guard = npc.faction === Faction.LIQUIDATOR ||
-    npc.faction === Faction.WILD ||
-    occupationHasProfileTag(npc.occupation, 'combat');
-  const cult = npc.faction === Faction.CULTIST || occupationHasProfileTag(npc.occupation, 'cult');
-  return guard || cult || isHostile(npc, target);
-}
-
-export function commandMukhozhukNearby(
-  world: World,
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  state?: GameState,
-): number {
-  if (e.monsterKind !== MonsterKind.MUKHOZHUK_HOST || !hasAIFlag(e, 'parasiteLeader') || !target.alive || !canBeMonsterTarget(target)) return 0;
-  getEntityIndex().queryRadiusCapped(e.x, e.y, MUKHOZHUK_COMMAND_RADIUS, mukhozhukCommandQuery, ENTITY_MASK_NPC, MUKHOZHUK_COMMAND_SCAN_CAP);
-  let commanded = 0;
-  for (const npc of mukhozhukCommandQuery) {
-    if (commanded >= MUKHOZHUK_COMMAND_MAX_NPCS) break;
-    if (!mukhozhukCommandableNpc(npc, target)) continue;
-    npc.ai!.goal = AIGoal.HUNT;
-    npc.ai!.combatTargetId = target.id;
-    npc.ai!.timer = 0;
-    npc.ai!.path.length = 0;
-    npc.ai!.pi = 0;
-    if (isPlayerEntity(target)) {
-      const previous = npc.playerRelation ?? 0;
-      const next = Math.min(previous, -70);
-      npc.playerRelation = next;
-      if (state && npc.alifeId !== undefined && next !== previous) {
-        applyDemosRelationDelta(state, npc.alifeId, { targetKind: 'player' }, next - previous, {
-          reasonTag: 'mukhozhuk_command',
-        });
-      }
-    }
-    commanded++;
-  }
-  if (commanded <= 0) return 0;
-  msgs.push(msg(`Мухожук выкрикнул чужой приказ. Подчинились: ${commanded}.`, time, '#ce8'));
-  publishMukhozhukEvent(state, world, e, target, 'mukhozhuk_exposed', 4, ['command_pulse'], {
-    commandedCount: commanded,
-    capped: mukhozhukCommandQuery.length >= MUKHOZHUK_COMMAND_SCAN_CAP,
-    target: entityDisplayName(target),
-  });
-  return commanded;
-}
-
-function updateMukhozhukLeader(
-  world: World,
-  e: Entity,
-  target: Entity | null,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  state?: GameState,
-): void {
-  if (e.monsterKind !== MonsterKind.MUKHOZHUK_HOST || !hasAIFlag(e, 'parasiteLeader') || !e.ai) return;
-  const ai = e.ai;
-  ai.parasiteCommandCd = Math.max(0, (ai.parasiteCommandCd ?? 0) - dt);
-  if (!target?.alive || ai.parasiteCommandCd > 0) return;
-  ai.parasiteCommandCd = MUKHOZHUK_COMMAND_COOLDOWN_SEC + ((e.id & 3) * 0.35);
-  commandMukhozhukNearby(world, e, target, time, msgs, state);
-}
-
-function mukhozhukFoodItem(defId: string): boolean {
-  if (defId === 'sand_spoiled_ration') return false;
-  if (defId === 'alcohol_bottle') return true;
-  const def = ITEMS[defId];
-  if (!def) return false;
-  if (def.type === ItemType.FOOD || def.type === ItemType.DRINK) return true;
-  const tags = ITEM_TAGS[defId] ?? def.tags ?? [];
-  return tags.includes('bait') || tags.includes('ration') || tags.includes('drink') || tags.includes('food');
-}
-
-function containerHasMukhozhukFood(container: WorldContainer): boolean {
-  return container.inventory.some(item => item.count > 0 && mukhozhukFoodItem(item.defId));
-}
-
-function addSpoiledRation(container: WorldContainer): void {
-  const def = ITEMS.sand_spoiled_ration;
-  if (!def) return;
-  const stackMax = getStack(def);
-  const existing = container.inventory.find(item => item.defId === 'sand_spoiled_ration' && item.data === undefined && item.count < stackMax);
-  if (existing) {
-    existing.count++;
-  } else if (container.inventory.length < MAX_INVENTORY_SLOTS) {
-    container.inventory.push({ defId: 'sand_spoiled_ration', count: 1 });
-  }
-  if (!container.tags.includes('mukhozhuk_spoiled')) container.tags.push('mukhozhuk_spoiled');
-}
-
-function spoilMukhozhukFood(container: WorldContainer): string | undefined {
-  for (let i = 0; i < container.inventory.length; i++) {
-    const item = container.inventory[i];
-    if (item.count <= 0 || !mukhozhukFoodItem(item.defId)) continue;
-    const spoiledFrom = item.defId;
-    item.count--;
-    if (item.count <= 0) container.inventory.splice(i, 1);
-    addSpoiledRation(container);
-    return spoiledFrom;
-  }
-  return undefined;
-}
-
-function validMukhozhukFoodContainer(
-  world: World,
-  e: Entity,
-  container: WorldContainer | undefined,
-  state?: GameState,
-): container is WorldContainer {
-  if (!container) return false;
-  if (state && container.z !== state.currentZ) return false;
-  if (!containerHasMukhozhukFood(container)) return false;
-  return world.dist2(e.x, e.y, container.x + 0.5, container.y + 0.5) <= MUKHOZHUK_FOOD_SCAN_RADIUS * MUKHOZHUK_FOOD_SCAN_RADIUS;
-}
-
-function findMukhozhukFoodContainer(world: World, e: Entity, dt: number, state?: GameState): WorldContainer | null {
-  const ai = e.ai!;
-  const cached = ai.parasiteFoodTargetContainerId !== undefined
-    ? world.containerById.get(ai.parasiteFoodTargetContainerId)
-    : undefined;
-  if (validMukhozhukFoodContainer(world, e, cached, state)) return cached;
-  ai.parasiteFoodTargetContainerId = undefined;
-
-  ai.parasiteFoodScanCd = Math.max(0, (ai.parasiteFoodScanCd ?? 0) - dt);
-  const total = world.containers.length;
-  if (total === 0 || (ai.parasiteFoodScanCd ?? 0) > 0) return null;
-  ai.parasiteFoodScanCd = MUKHOZHUK_FOOD_SCAN_COOLDOWN_SEC;
-
-  const start = Math.max(0, Math.min(total - 1, ai.parasiteFoodScanOffset ?? (e.id % total)));
-  const limit = Math.min(total, MUKHOZHUK_FOOD_SCAN_CAP);
-  ai.parasiteFoodScanOffset = (start + limit) % total;
-  let best: WorldContainer | null = null;
-  let bestD2 = MUKHOZHUK_FOOD_SCAN_RADIUS * MUKHOZHUK_FOOD_SCAN_RADIUS;
-  for (let i = 0; i < limit; i++) {
-    const container = world.containers[(start + i) % total];
-    if (state && container.z !== state.currentZ) continue;
-    if (!containerHasMukhozhukFood(container)) continue;
-    const d2 = world.dist2(e.x, e.y, container.x + 0.5, container.y + 0.5);
-    if (d2 >= bestD2) continue;
-    best = container;
-    bestD2 = d2;
-  }
-  if (best) ai.parasiteFoodTargetContainerId = best.id;
-  return best;
-}
-
-function tryMukhozhukFoodAppetite(
-  world: World,
-  e: Entity,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.MUKHOZHUK_HOST || !hasAIFlag(e, 'parasiteLeader') || !e.ai) return false;
-  const ai = e.ai;
-  const container = findMukhozhukFoodContainer(world, e, dt, state);
-  if (!container) return false;
-
-  ai.goal = AIGoal.EAT;
-  ai.combatTargetId = undefined;
-  const tx = container.x + 0.5;
-  const ty = container.y + 0.5;
-  if (world.dist2(e.x, e.y, tx, ty) <= MUKHOZHUK_FOOD_EAT_RANGE_SQ) {
-    const spoiledFrom = spoilMukhozhukFood(container);
-    ai.parasiteFoodTargetContainerId = containerHasMukhozhukFood(container) ? container.id : undefined;
-    ai.parasiteFoodScanCd = MUKHOZHUK_FOOD_SCAN_COOLDOWN_SEC;
-    e.attackCd = Math.max(e.attackCd ?? 0, 0.8);
-    if (spoiledFrom) {
-      const itemName = ITEMS[spoiledFrom]?.name ?? spoiledFrom;
-      msgs.push(msg(`Мухожук испортил запас: ${itemName}.`, time, '#d9a'));
-      publishMukhozhukEvent(state, world, e, undefined, 'mukhozhuk_food_spoiled', 3, ['food_spoiled', 'container'], {
-        containerId: container.id,
-        containerName: container.name,
-        spoiledItemId: spoiledFrom,
-        spoiledItemName: itemName,
-      });
-    }
-    return true;
-  }
-
-  ai.timer -= dt;
-  if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0 || ai.tx !== container.x || ai.ty !== container.y) {
-    tryAssignPathToCell(world, e, container.x, container.y);
-    ai.timer = 1.1;
-  }
-  const oldSpeed = e.speed;
-  e.speed = oldSpeed * 0.72;
-  if (ai.path.length > 0) followMonsterPath(world, e, dt);
-  e.speed = oldSpeed;
-  return true;
-}
 
 function sobrannyyState(e: Entity): SobrannyyRuntime {
   const hp = Math.max(1, e.hp ?? e.maxHp ?? 1);
@@ -1937,11 +1670,10 @@ function idleObzhivalshchikInRoom(world: World, e: Entity, room: Room, dt: numbe
   ai.timer -= dt;
 
   const inside = obzhivalshchikEntityInHome(world, room, e);
-  if (!inside || ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
+  if (!inside || monsterRepathDue(world, e) || ai.pi >= ai.path.length) {
     const target = obzhivalshchikRoomCell(world, room, e.id * 17 + Math.floor(time * 3));
     if (!target) return true;
-    tryAssignPathToCell(world, e, target.x, target.y);
-    ai.timer = inside ? 1.5 + ((e.id + Math.floor(time)) % 3) * 0.35 : OBZHIVALSHCHIK_RETURN_CD;
+    assignMonsterPath(world, e, target.x, target.y, inside ? 1.5 + ((e.id + Math.floor(time)) % 3) * 0.35 : OBZHIVALSHCHIK_RETURN_CD);
   }
   followMonsterPath(world, e, dt);
   return true;
@@ -2417,8 +2149,7 @@ function applyProtokolnikPulse(
   if (target.id === playerId && isDebugOnePunchManEnabled()) {
     keepDebugOnePunchManAlive(target);
   } else {
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `Протокол сжал виски: -${dmg}`);
     if (target.hp <= 0) {
       target.alive = false;
@@ -2428,6 +2159,23 @@ function applyProtokolnikPulse(
   }
   if (target.id === playerId) msgs.push(msg(`Протокол давит: -${dmg}. Бумаги усиливают сверку.`, time, '#d8a4ff'));
   playSoundAt(playHostilePsiCast, e.x, e.y);
+}
+
+/* Давление протокола: сколько на тебя уже составлено и как давно. Свойство
+ * одного вида — держится рядом с ним, в ядре его нет. */
+interface ProtokolnikState {
+  pressure: number;
+  exposure: number;
+  pulseCd: number;
+  warnAt: number;
+}
+const protokolnikState = speciesState<ProtokolnikState>(() => ({
+  pressure: 0, exposure: 0, pulseCd: 0, warnAt: PROTOKOLNIK_PRESSURE_WARN_STEP,
+}));
+
+/** Набранное давление протокола: путь для отладки и тестов. */
+export function peekProtokolnikPressure(e: Entity): number {
+  return protokolnikState.peek(e)?.pressure ?? 0;
 }
 
 export function updateProtokolnikProtocolPressure(
@@ -2444,8 +2192,9 @@ export function updateProtokolnikProtocolPressure(
 ): void {
   if (!hasAIFlag(e, 'protocolPressure') || !e.ai || dt <= 0) return;
   const ai = e.ai;
-  const pressureBefore = ai.protocolPressure ?? 0;
-  const exposureBefore = ai.protocolExposure ?? 0;
+  const protocol = protokolnikState.of(e);
+  const pressureBefore = protocol.pressure;
+  const exposureBefore = protocol.exposure;
   const active = !!target && target.alive && protokolnikHasProtocolLine(world, e, target);
   const documentPressure = protokolnikDocumentPressure(active ? target ?? undefined : _entityById.get(playerId));
 
@@ -2456,17 +2205,14 @@ export function updateProtokolnikProtocolPressure(
       publishProtokolnikEscaped(state, world, e, player, pressureBefore, documentPressure);
     }
     ai.lastSeenTargetId = undefined;
-    ai.protocolExposure = Math.max(0, exposureBefore - dt * 1.6);
-    ai.protocolPressure = Math.max(0, pressureBefore - PROTOKOLNIK_PRESSURE_DECAY * dt);
-    if (ai.protocolPressure <= 0.05) {
-      ai.protocolPressure = undefined;
-      ai.protocolExposure = undefined;
-      ai.protocolPressurePulseCd = undefined;
-      ai.protocolPressureWarnAt = undefined;
+    protocol.exposure = Math.max(0, exposureBefore - dt * 1.6);
+    protocol.pressure = Math.max(0, pressureBefore - PROTOKOLNIK_PRESSURE_DECAY * dt);
+    if (protocol.pressure <= 0.05) {
+      protokolnikState.forget(e);
       e.protocolPressureTier = 0;
     } else {
-      e.protocolPressureTier = protokolnikPressureTier(ai.protocolPressure);
-      if (ai.protocolPressure < PROTOKOLNIK_PRESSURE_WARN_STEP * 0.55) ai.protocolPressureWarnAt = PROTOKOLNIK_PRESSURE_WARN_STEP;
+      e.protocolPressureTier = protokolnikPressureTier(protocol.pressure);
+      if (protocol.pressure < PROTOKOLNIK_PRESSURE_WARN_STEP * 0.55) protocol.warnAt = PROTOKOLNIK_PRESSURE_WARN_STEP;
     }
     return;
   }
@@ -2482,23 +2228,23 @@ export function updateProtokolnikProtocolPressure(
   }
   pressure = Math.min(PROTOKOLNIK_PRESSURE_MAX, pressure);
 
-  ai.protocolExposure = exposure;
-  ai.protocolPressure = pressure;
+  protocol.exposure = exposure;
+  protocol.pressure = pressure;
   e.protocolPressureTier = protokolnikPressureTier(pressure);
   if (target.id === playerId) ai.lastSeenTargetId = playerId;
 
-  const warnAt = ai.protocolPressureWarnAt ?? PROTOKOLNIK_PRESSURE_WARN_STEP;
+  const warnAt = protocol.warnAt;
   if (target.id === playerId && pressure >= warnAt) {
     msgs.push(msg(protokolnikPressureMessage(pressure, documentPressure), time, '#d8a4ff'));
     publishProtokolnikPressure(state, world, e, target, pressure, exposure, documentPressure);
-    ai.protocolPressureWarnAt = warnAt + PROTOKOLNIK_PRESSURE_WARN_STEP;
+    protocol.warnAt = warnAt + PROTOKOLNIK_PRESSURE_WARN_STEP;
   } else if (pressure < PROTOKOLNIK_PRESSURE_WARN_STEP * 0.55) {
-    ai.protocolPressureWarnAt = PROTOKOLNIK_PRESSURE_WARN_STEP;
+    protocol.warnAt = PROTOKOLNIK_PRESSURE_WARN_STEP;
   }
 
-  ai.protocolPressurePulseCd = (ai.protocolPressurePulseCd ?? 0) - dt;
-  if (pressure >= PROTOKOLNIK_PRESSURE_PULSE_THRESHOLD && ai.protocolPressurePulseCd <= 0) {
-    ai.protocolPressurePulseCd = PROTOKOLNIK_PRESSURE_PULSE_CD;
+  protocol.pulseCd -= dt;
+  if (pressure >= PROTOKOLNIK_PRESSURE_PULSE_THRESHOLD && protocol.pulseCd <= 0) {
+    protocol.pulseCd = PROTOKOLNIK_PRESSURE_PULSE_CD;
     applyProtokolnikPulse(world, entities, state, e, target, pressure, documentPressure, time, msgs, playerId, nextId);
   }
 }
@@ -2631,6 +2377,12 @@ export function findCombatTarget(
     }
   }
 
+  // Беззвучный не чует и не слышит: цель у него только та, что в глазах.
+  // Ушёл за угол — потерян насовсем, второго канала у него нет.
+  if (target && hasAIFlag(e, 'silent') && !hasClearLine(world, e, target, Math.sqrt(rangeSq))) {
+    ai.combatTargetId = undefined;
+    target = null;
+  }
   return target;
 }
 
@@ -2713,7 +2465,7 @@ function fixedScanCd(e: Entity): number | undefined {
   if (hasAIFlag(e, 'debrisLurker')) return 1.25;
   if (hasAIFlag(e, 'lastSoundBeam')) return 0.85;
   if (hasAIFlag(e, 'baitLine')) return 0.75;
-  if (hasAIFlag(e, 'fogOffset')) return 0.75;
+  if (hasAIFlag(e, 'strikeReveal')) return 0.75;
   if (hasAIFlag(e, 'meatWorm')) return 0.95;
   if (hasAIFlag(e, 'lightFollower')) return LISHENNYY_SCAN_SEC;
   return undefined;
@@ -2729,6 +2481,7 @@ function hasDocumentLikeItem(e: Entity): boolean {
 }
 
 function documentDetectSq(e: Entity): number {
+  if (hasAIFlag(e, 'silent')) return BEZEKHIY_DETECT_SQ;
   if (hasAIFlag(e, 'protocolPressure')) return PROTOKOLNIK_DETECT_SQ;
   return hasAIFlag(e, 'documentScent') ? KONTORSHCHIK_DETECT_SQ : PECHATEED_DETECT_SQ;
 }
@@ -2898,7 +2651,6 @@ function stampCherviePulseCue(world: World, e: Entity, time: number): void {
 
 export function updateChervieNetPossessor(
   world: World,
-  entities: Entity[],
   e: Entity,
   dt: number,
   time: number,
@@ -2907,7 +2659,9 @@ export function updateChervieNetPossessor(
   state?: GameState,
 ): void {
   if (!hasAIFlag(e, 'netPossessor') || !e.ai || dt <= 0) return;
-  const player = _entityById.get(playerId) ?? entities.find(other => other.id === playerId);
+  // Только по карте: фолбэк перебором стоил полный проход по сущностям каждый
+  // кадр на каждого червия ровно тогда, когда игрока в индексе живых нет.
+  const player = _entityById.get(playerId);
   updateChervieNetPowerState(world, e, time, msgs, player, state);
   const ai = e.ai;
   ai.netPulseCd = Math.max(0, (ai.netPulseCd ?? 0) - dt);
@@ -3368,9 +3122,35 @@ function publishOlgoyFed(
   });
 }
 
+/* Падаль — это КЛЕТКА, а не тело.
+ *
+ * Раньше олгой искал труп сущностью, перебирая весь список этажа каждый кадр:
+ * трупов нет в индексе живых, и другого способа у него не было. Но место
+ * смерти уже помечено — `blood_fx` льёт в поле запаха импульс на смерть и
+ * поменьше на рану. Падальщик идёт на пятно: тело может исчезнуть, его могли
+ * унести, оно могло вообще не остаться — запах держится сам и гаснет сам.
+ *
+ * Одна цель на всех: кусок мяса на полу или кровь. Своё состояние падальщик
+ * держит здесь, рядом с собой, а не в `AIState` у каждого актора мира.
+ */
+interface CarrionState {
+  /** Клетка цели как `world.idx`, -1 — цели нет. */
+  cell: number;
+  scanCd: number;
+}
+const carrionStateByActor = new WeakMap<Entity, CarrionState>();
+
+function carrionStateFor(e: Entity): CarrionState {
+  let state = carrionStateByActor.get(e);
+  if (!state) {
+    state = { cell: -1, scanCd: 0 };
+    carrionStateByActor.set(e, state);
+  }
+  return state;
+}
+
 function tryConsumeMeatChunk(
   world: World,
-  entities: readonly Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
@@ -3379,78 +3159,53 @@ function tryConsumeMeatChunk(
   state?: GameState,
 ): boolean {
   if (target && world.dist2(e.x, e.y, target.x, target.y) <= 12) return false;
-  
+
   const ai = e.ai!;
   const isOlgoy = hasAIFlag(e, 'meatWorm');
   const maxRadius = isOlgoy ? OLGOY_CORPSE_RADIUS : 16;
-  
+
   if (!isOlgoy && !isCarnivoreMonster(e.monsterKind)) return false;
   if (!isOlgoy && (e.hp ?? 0) >= (e.maxHp ?? 100)) return false;
 
-  if (isOlgoy) {
-    const corpse = entities.find(other => 
-      other.id !== e.id && 
-      !other.alive && 
-      world.dist2(e.x, e.y, other.x, other.y) <= maxRadius * maxRadius
-    );
-    if (corpse) {
-      if (world.dist2(e.x, e.y, corpse.x, corpse.y) <= 2.0 * 2.0) {
-        msgs.push(msg(`${entityDisplayName(e)} утянул труп ${entityDisplayName(corpse)} в коллектор`, time, '#c86'));
-        if (state) publishOlgoyFed(state, world, e, corpse, time, 'corpse', { corpseType: 'npc' });
-        return true;
-      } else {
-        ai.goal = AIGoal.HUNT;
-        ai.combatTargetId = undefined;
-        ai.timer -= dt;
-        if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== Math.floor(corpse.x) || ai.ty !== Math.floor(corpse.y)) {
-          tryAssignPathToCell(world, e, Math.floor(corpse.x), Math.floor(corpse.y));
-          ai.timer = 1.5;
-        }
-        followMonsterPath(world, e, dt);
-        return true;
-      }
-    }
+  const carrion = carrionStateFor(e);
+  carrion.scanCd -= dt;
+  if (carrion.scanCd <= 0) {
+    carrion.scanCd = deterministicScanCd(e.id, 2.5, 0.5);
+    // Кусок мяса виден глазом и потому весомее запаха: на него идут первым.
+    const cell = findMeatChunkCell(world, e.x, e.y, maxRadius)
+      ?? findBloodTrailCell(world, e.x, e.y, maxRadius, CARRION_BLOOD_MIN);
+    carrion.cell = cell ? world.idx(cell.x, cell.y) : -1;
   }
 
-  ai.meatScanCd = (ai.meatScanCd ?? 0) - dt;
-  if (ai.meatScanCd <= 0) {
-    ai.meatScanCd = deterministicScanCd(e.id, 2.5, 0.5);
-    const chunkCell = findMeatChunkCell(world, e.x, e.y, maxRadius);
-    if (chunkCell) {
-      ai.meatTargetId = chunkCell.x * 10000 + chunkCell.y;
-    } else {
-      ai.meatTargetId = undefined;
-    }
-  }
+  if (carrion.cell < 0) return false;
 
-  if (ai.meatTargetId === undefined) return false;
-  
-  const chunkX = Math.floor(ai.meatTargetId / 10000);
-  const chunkY = ai.meatTargetId % 10000;
+  const chunkX = carrion.cell % W;
+  const chunkY = (carrion.cell / W) | 0;
 
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = undefined;
-  
+
   if (world.dist2(e.x, e.y, chunkX, chunkY) <= 1.35 * 1.35) {
-    removeVisualSlotCode(world, world.idx(chunkX, chunkY), 34);
-    
+    const chunk = hasVisualSlotCode(world, carrion.cell, 34);
+    if (chunk) removeVisualSlotCode(world, carrion.cell, 34);
+    clearBloodTrailCell(world, chunkX, chunkY);
+
     if (isOlgoy) {
-      msgs.push(msg(`${entityDisplayName(e)} утянул кусок мяса в коллектор`, time, '#c86'));
-      if (state) publishOlgoyFed(state, world, e, e, time, 'corpse', { corpseType: 'chunk' });
+      msgs.push(msg(`${entityDisplayName(e)} утянул ${chunk ? 'кусок мяса' : 'останки'} в коллектор`, time, '#c86'));
+      if (state) publishOlgoyFed(state, world, e, e, time, 'corpse', { corpseType: chunk ? 'chunk' : 'remains' });
     } else {
-      msgs.push(msg(`${entityDisplayName(e)} сожрал кусок мяса`, time, '#c44'));
+      msgs.push(msg(`${entityDisplayName(e)} сожрал ${chunk ? 'кусок мяса' : 'падаль'}`, time, '#c44'));
       e.hp = Math.min(e.maxHp ?? 100, (e.hp ?? 0) + 25);
     }
-    ai.meatTargetId = undefined;
+    carrion.cell = -1;
     ai.path = [];
     ai.pi = 0;
     return true;
   }
 
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== chunkX || ai.ty !== chunkY) {
-    tryAssignPathToCell(world, e, chunkX, chunkY);
-    ai.timer = 1.5;
+  if (monsterRepathDue(world, e) || !pathTargetIs(world, e, chunkX, chunkY)) {
+    assignMonsterPath(world, e, chunkX, chunkY, 1.5);
   }
   followMonsterPath(world, e, dt);
   return true;
@@ -3774,252 +3529,10 @@ function targetBackTurned(world: World, monster: Entity, target: Entity): boolea
   return facingDotTo(world, target, monster) <= BEZEKHIY_BACK_DOT;
 }
 
-function bezekhiyDoorOpenForLunge(world: World, doorIdx: number): boolean {
-  const door = world.doors.get(doorIdx);
-  return door?.state === DoorState.OPEN || door?.state === DoorState.HERMETIC_OPEN;
-}
-
-function bezekhiyDoorSide(world: World, doorIdx: number, e: Entity): number {
-  const x = doorIdx % W;
-  const y = (doorIdx / W) | 0;
-  const fx = !world.solid(x - 1, y) || !world.solid(x + 1, y);
-  const fy = !world.solid(x, y - 1) || !world.solid(x, y + 1);
-  const dx = world.delta(x + 0.5, e.x);
-  const dy = world.delta(y + 0.5, e.y);
-  const v = fx && !fy ? dx : fy && !fx ? dy : Math.abs(dx) >= Math.abs(dy) ? dx : dy;
-  return Math.abs(v) < 0.15 ? 0 : v < 0 ? -1 : 1;
-}
-
-function nearestBezekhiyDoor(world: World, e: Entity): number | undefined {
-  const cached = e.ai?.deadEchoDoorIdx;
-  if (cached !== undefined) {
-    const x = cached % W;
-    const y = (cached / W) | 0;
-    if (world.cells[cached] === Cell.DOOR && world.dist2(e.x, e.y, x + 0.5, y + 0.5) <= BEZEKHIY_THRESHOLD_RADIUS_SQ) return cached;
-  }
-
-  const ex = Math.floor(e.x);
-  const ey = Math.floor(e.y);
-  let best: number | undefined;
-  let bestD2 = (BEZEKHIY_DOOR_SCAN_RADIUS + 0.75) * (BEZEKHIY_DOOR_SCAN_RADIUS + 0.75);
-  for (let dy = -BEZEKHIY_DOOR_SCAN_RADIUS; dy <= BEZEKHIY_DOOR_SCAN_RADIUS; dy++) {
-    for (let dx = -BEZEKHIY_DOOR_SCAN_RADIUS; dx <= BEZEKHIY_DOOR_SCAN_RADIUS; dx++) {
-      const x = world.wrap(ex + dx);
-      const y = world.wrap(ey + dy);
-      const idx = world.idx(x, y);
-      if (world.cells[idx] !== Cell.DOOR || !world.doors.has(idx)) continue;
-      const d2 = world.dist2(e.x, e.y, x + 0.5, y + 0.5);
-      if (d2 < bestD2) {
-        bestD2 = d2;
-        best = idx;
-      }
-    }
-  }
-  return best;
-}
-
-function publishBezekhiyEvent(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  target: Entity,
-  type: 'bezekhiy_revealed' | 'bezekhiy_lunge',
-  reason: string,
-  damage?: number,
-): void {
-  if (!state) return;
-  publishEvent(state, {
-    type,
-    zoneId: zoneIdAt(world, e.x, e.y),
-    x: e.x,
-    y: e.y,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    targetId: target.id,
-    targetName: entityDisplayName(target),
-    targetFaction: target.faction,
-    monsterKind: MonsterKind.BEZEKHIY,
-    severity: type === 'bezekhiy_lunge' ? 4 : 3,
-    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
-    tags: ['monster', 'bezekhiy', 'dead_echo', reason],
-    data: { reason, damage, rumorIds: ['monster_bezekhiy_dead_echo'] },
-  });
-}
-
-function revealBezekhiy(
-  world: World,
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  state: GameState | undefined,
-  reason: string,
-): void {
-  const ai = e.ai!;
-  if (ai.deadEchoRevealed) return;
-  ai.deadEchoRevealed = true;
-  ai.deadEchoSpent = true;
-  ai.deadEchoHold = 0;
-  if (isPlayerEntity(target)) msgs.push(msg('У порога пропало эхо: Безэхий уже виден, но рывок сорван.', time, '#ccc'));
-  publishBezekhiyEvent(state, world, e, target, 'bezekhiy_revealed', reason);
-}
-
-function finishBezekhiyLunge(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  nextId: { v: number },
-  state: GameState | undefined,
-): void {
-  const ai = e.ai!;
-  ai.deadEchoRevealed = true;
-  ai.deadEchoSpent = true;
-  ai.combatTargetId = target.id;
-  ai.goal = AIGoal.HUNT;
-
-  const dx = world.delta(e.x, target.x);
-  const dy = world.delta(e.y, target.y);
-  const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-  const step = Math.min(BEZEKHIY_LUNGE_STEP, Math.max(0, dist - 0.72));
-  const nx = world.wrap(e.x + (dx / dist) * step);
-  const ny = world.wrap(e.y + (dy / dist) * step);
-  if (!world.solid(Math.floor(nx), Math.floor(ny)) && traceClearPoint(world, e, nx, ny, BEZEKHIY_LUNGE_STEP + 0.4)) {
-    e.x = nx;
-    e.y = ny;
-  }
-  e.angle = Math.atan2(dy, dx);
-  e.spriteScale = 1.14;
-
-  let damage = 0;
-  if (target.hp !== undefined && world.dist2(e.x, e.y, target.x, target.y) <= BEZEKHIY_LUNGE_HIT_SQ) {
-    const def = MONSTERS[MonsterKind.BEZEKHIY];
-    const level = e.rpg?.level ?? 1;
-    const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-    damage = zhelemishIncomingMeleeDamage(target, time, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * BEZEKHIY_LUNGE_DAMAGE_MULT));
-    if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) keepDebugOnePunchManAlive(target);
-    else {
-      { const _dmg = calculateDamage(damage, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-      notifyActorDamaged(world, target, e, damage, 'monster_special', time, state);
-      if (isPlayerEntity(target)) recordPlayerDamage(state, e, damage, `${entityDisplayName(e)} ударил из мертвого эха: -${damage}`);
-      if (target.hp <= 0) {
-        target.alive = false;
-        target.hp = 0;
-      }
-    }
-    spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), damage, false);
-    if (target.hp !== undefined && target.hp <= 0) {
-      spawnDeathPool(world, target.x, target.y, false);
-      if (target.type === EntityType.NPC && !isPlayerEntity(target)) dropNpcInventory(target, entities, nextId);
-    }
-  }
-
-  e.attackCd = MONSTERS[MonsterKind.BEZEKHIY].attackRate;
-  if (isPlayerEntity(target)) {
-    msgs.push(msg(damage > 0 ? `Безэхий сорвался с косяка за спиной: -${damage}` : 'Безэхий сорвался с косяка, но не достал.', time, damage > 0 ? '#f66' : '#fc4'));
-  } else if (damage > 0 && target.hp !== undefined && target.hp <= 0) {
-    msgs.push(msg(`${entityDisplayName(e)} снял ${entityDisplayName(target)} с порога`, time, '#f44'));
-  }
-  publishBezekhiyEvent(state, world, e, target, 'bezekhiy_lunge', 'back_threshold_crossing', damage || undefined);
-  playSoundAt(playGrowl, e.x, e.y);
-}
-
 /**
  * Кого сторожит Безэхий у порога. Ближайший живой человек в радиусе обнаружения:
  * игрок ничем не выделен, засада работает против любого, кто идёт через дверь.
  */
-function findBezekhiyEchoTarget(world: World, e: Entity): Entity | null {
-  if (e.monsterKind !== MonsterKind.BEZEKHIY) return null;
-  let target: Entity | null = null;
-  let best = BEZEKHIY_DETECT_SQ;
-  const count = getEntityIndex().queryRadiusCapped(
-    e.x,
-    e.y,
-    Math.sqrt(BEZEKHIY_DETECT_SQ),
-    bezekhiyEchoQuery,
-    ENTITY_MASK_NPC,
-    IMMEDIATE_THREAT_SCAN_CAP,
-  );
-  for (let i = 0; i < count; i++) {
-    const other = bezekhiyEchoQuery[i];
-    if (!other.alive || other.id === e.id || !canBeMonsterTarget(other) || !isHostile(e, other)) continue;
-    const d2 = world.dist2(e.x, e.y, other.x, other.y);
-    if (d2 >= best) continue;
-    best = d2;
-    target = other;
-  }
-  return target;
-}
-
-// Порог сторожат для одного человека за раз: сменился наблюдаемый — сбрасываем
-// его сторону двери и выдержку взгляда, иначе два прохожих по разные стороны
-// подделали бы «пересечение порога».
-const bezekhiyWatchedTarget = new WeakMap<Entity, number>();
-
-function updateBezekhiyDeadEcho(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity | null,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  nextId: { v: number },
-  state: GameState | undefined,
-): boolean {
-  if (e.monsterKind !== MonsterKind.BEZEKHIY) return false;
-  const ai = e.ai!;
-  if (ai.deadEchoSpent) {
-    ai.deadEchoRevealed = true;
-    return false;
-  }
-  if (!target) {
-    ai.deadEchoHold = Math.max(0, (ai.deadEchoHold ?? 0) - dt * 1.5);
-    return false;
-  }
-  if (bezekhiyWatchedTarget.get(e) !== target.id) {
-    bezekhiyWatchedTarget.set(e, target.id);
-    ai.deadEchoDoorSide = undefined;
-    ai.deadEchoHold = 0;
-  }
-
-  const d2 = world.dist2(e.x, e.y, target.x, target.y);
-  const lookedAt = d2 <= BEZEKHIY_DETECT_SQ &&
-    facingDotTo(world, target, e) >= BEZEKHIY_LOOK_DOT &&
-    hasClearLine(world, target, e, Math.sqrt(BEZEKHIY_DETECT_SQ));
-  ai.deadEchoHold = lookedAt ? (ai.deadEchoHold ?? 0) + dt : Math.max(0, (ai.deadEchoHold ?? 0) - dt * 1.5);
-  if ((ai.deadEchoHold ?? 0) >= BEZEKHIY_LOOK_HOLD_SEC) {
-    revealBezekhiy(world, e, target, time, msgs, state, 'direct_look');
-    return false;
-  }
-
-  const doorIdx = nearestBezekhiyDoor(world, e);
-  if (doorIdx !== undefined) {
-    const doorX = doorIdx % W;
-    const doorY = (doorIdx / W) | 0;
-    const side = bezekhiyDoorSide(world, doorIdx, target);
-    const previousSide = ai.deadEchoDoorIdx === doorIdx ? ai.deadEchoDoorSide : undefined;
-    ai.deadEchoDoorIdx = doorIdx;
-    if (side !== 0) ai.deadEchoDoorSide = side;
-    if (previousSide !== undefined &&
-        previousSide !== 0 &&
-        side !== 0 &&
-        previousSide !== side &&
-        world.dist2(target.x, target.y, doorX + 0.5, doorY + 0.5) <= BEZEKHIY_THRESHOLD_RADIUS_SQ &&
-        bezekhiyDoorOpenForLunge(world, doorIdx) &&
-        targetBackTurned(world, e, target)) {
-      finishBezekhiyLunge(world, entities, e, target, time, msgs, nextId, state);
-      return true;
-    }
-  }
-
-  if (d2 <= BEZEKHIY_CLOSE_REVEAL_SQ) revealBezekhiy(world, e, target, time, msgs, state, 'close_radius');
-  return false;
-}
-
 function entityLight(world: World, e: Entity): number {
   return world.light[world.idx(Math.floor(e.x), Math.floor(e.y))] ?? 0;
 }
@@ -4044,6 +3557,34 @@ function lishennyyActorLightScore(world: World, e: Entity): number {
   if (nearFeature(world, e, Feature.LAMP, 1)) score = Math.max(score, 0.62);
   if (nearFeature(world, e, Feature.CANDLE, 1)) score = Math.max(score, 0.48);
   return score;
+}
+
+/* Свет, за которым идёт Лишенный: его цель, его кулдауны. Всё это касается
+ * одного вида и потому лежит рядом с ним, а не в `AIState` каждого актора. */
+interface LishennyyState {
+  scanCd: number;
+  targetX?: number;
+  targetY?: number;
+  targetId?: number;
+  targetKind?: LishennyyLightTarget['source'];
+  avoidTimer: number;
+  cueAt: number;
+}
+const lishennyyState = speciesState<LishennyyState>(() => ({ scanCd: 0, avoidTimer: 0, cueAt: -Infinity }));
+
+/** Что Лишенный считает светом прямо сейчас: путь для отладки и тестов. */
+export function peekLishennyyLightTarget(e: Entity): { id?: number; kind?: LishennyyLightTarget['source'] } | undefined {
+  const light = lishennyyState.peek(e);
+  if (!light) return undefined;
+  return { id: light.targetId, kind: light.targetKind };
+}
+
+/** Яркий свет в лицо: Лишенный отшатывается и забывает, за чем шёл. */
+export function repelLishennyyFromLight(e: Entity, seconds: number): void {
+  const light = lishennyyState.of(e);
+  light.avoidTimer = Math.max(light.avoidTimer, seconds);
+  light.targetId = undefined;
+  light.targetKind = undefined;
 }
 
 function lishennyyDropLight(drop: Entity): { score: number; itemId: string } | null {
@@ -4077,27 +3618,27 @@ function lishennyyWeightedScore(world: World, e: Entity, x: number, y: number, s
 }
 
 function lishennyyCandidateAllowed(e: Entity, score: number): boolean {
-  return (e.ai?.lightAvoidTimer ?? 0) <= 0 || score < LISHENNYY_BRIGHT_AVOID;
+  return (lishennyyState.peek(e)?.avoidTimer ?? 0) <= 0 || score < LISHENNYY_BRIGHT_AVOID;
 }
 
 function lishennyyCachedTarget(world: World, e: Entity): LishennyyLightTarget | null {
-  const ai = e.ai;
-  if (!ai || ai.lightTargetX === undefined || ai.lightTargetY === undefined || ai.lightTargetKind === undefined) return null;
-  if (ai.lightTargetKind !== 'feature' && ai.lightTargetId !== undefined) {
-    const entity = _entityById.get(ai.lightTargetId);
+  const light = lishennyyState.peek(e);
+  if (!e.ai || !light || light.targetX === undefined || light.targetY === undefined || light.targetKind === undefined) return null;
+  if (light.targetKind !== 'feature' && light.targetId !== undefined) {
+    const entity = _entityById.get(light.targetId);
     if (!entity?.alive) return null;
-    if (ai.lightTargetKind === 'actor') {
+    if (light.targetKind === 'actor') {
       const score = lishennyyActorLightScore(world, entity);
       if (score < LISHENNYY_LIGHT_MIN || !lishennyyCandidateAllowed(e, score)) return null;
       return { x: entity.x, y: entity.y, score, source: 'actor', entity };
     }
-    const light = lishennyyDropLight(entity);
-    if (!light || !lishennyyCandidateAllowed(e, light.score)) return null;
-    return { x: entity.x, y: entity.y, score: light.score, source: 'drop', entity, itemId: light.itemId };
+    const dropped = lishennyyDropLight(entity);
+    if (!dropped || !lishennyyCandidateAllowed(e, dropped.score)) return null;
+    return { x: entity.x, y: entity.y, score: dropped.score, source: 'drop', entity, itemId: dropped.itemId };
   }
-  const score = pointLight(world, ai.lightTargetX, ai.lightTargetY);
+  const score = pointLight(world, light.targetX, light.targetY);
   if (score < LISHENNYY_LIGHT_MIN || !lishennyyCandidateAllowed(e, score)) return null;
-  return { x: ai.lightTargetX, y: ai.lightTargetY, score, source: 'feature' };
+  return { x: light.targetX, y: light.targetY, score, source: 'feature' };
 }
 
 function publishLishennyyLured(
@@ -4169,11 +3710,11 @@ function findLishennyyLightTarget(
   time: number,
   state: GameState | undefined,
 ): LishennyyLightTarget | null {
-  const ai = e.ai!;
-  ai.lightScanCd = (ai.lightScanCd ?? 0) - dt;
-  if (ai.lightScanCd > 0) return lishennyyCachedTarget(world, e);
+  const light = lishennyyState.of(e);
+  light.scanCd -= dt;
+  if (light.scanCd > 0) return lishennyyCachedTarget(world, e);
 
-  ai.lightScanCd = LISHENNYY_SCAN_SEC + (e.id & 3) * 0.07;
+  light.scanCd = LISHENNYY_SCAN_SEC + (e.id & 3) * 0.07;
   let best = findLishennyyFeatureTarget(world, e);
   let bestWeight = best ? lishennyyWeightedScore(world, e, best.x, best.y, best.score, best.source) : -Infinity;
 
@@ -4199,23 +3740,23 @@ function findLishennyyLightTarget(
   }
 
   if (!best) {
-    ai.lightTargetX = undefined;
-    ai.lightTargetY = undefined;
-    ai.lightTargetId = undefined;
-    ai.lightTargetKind = undefined;
+    light.targetX = undefined;
+    light.targetY = undefined;
+    light.targetId = undefined;
+    light.targetKind = undefined;
     return null;
   }
 
-  const changed = ai.lightTargetKind !== best.source ||
-    ai.lightTargetId !== best.entity?.id ||
-    Math.floor(ai.lightTargetX ?? -999) !== Math.floor(best.x) ||
-    Math.floor(ai.lightTargetY ?? -999) !== Math.floor(best.y);
-  ai.lightTargetX = best.x;
-  ai.lightTargetY = best.y;
-  ai.lightTargetId = best.entity?.id;
-  ai.lightTargetKind = best.source;
-  if (changed && time >= (ai.lightCueAt ?? -Infinity)) {
-    ai.lightCueAt = time + 5.5;
+  const changed = light.targetKind !== best.source ||
+    light.targetId !== best.entity?.id ||
+    Math.floor(light.targetX ?? -999) !== Math.floor(best.x) ||
+    Math.floor(light.targetY ?? -999) !== Math.floor(best.y);
+  light.targetX = best.x;
+  light.targetY = best.y;
+  light.targetId = best.entity?.id;
+  light.targetKind = best.source;
+  if (changed && time >= light.cueAt) {
+    light.cueAt = time + 5.5;
     publishLishennyyLured(state, world, e, best, time);
   }
   return best;
@@ -4248,7 +3789,8 @@ function updateLishennyyBrightAvoidance(
 ): boolean {
   if (e.monsterKind !== MonsterKind.LISHENNYY || !e.ai) return false;
   const ai = e.ai;
-  ai.lightAvoidTimer = Math.max(0, (ai.lightAvoidTimer ?? 0) - dt);
+  const light = lishennyyState.of(e);
+  light.avoidTimer = Math.max(0, light.avoidTimer - dt);
   if ((ai.staggerTimer ?? 0) > 0) {
     ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
     ai.combatTargetId = undefined;
@@ -4257,15 +3799,14 @@ function updateLishennyyBrightAvoidance(
     e.spriteScale = 0.84;
     return true;
   }
-  if (ai.lightAvoidTimer <= 0 || pointLight(world, e.x, e.y) < LISHENNYY_BRIGHT_AVOID) return false;
+  if (light.avoidTimer <= 0 || pointLight(world, e.x, e.y) < LISHENNYY_BRIGHT_AVOID) return false;
   ai.combatTargetId = undefined;
   ai.goal = AIGoal.WANDER;
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
+  if (monsterRepathDue(world, e) || ai.pi >= ai.path.length) {
     const dim = lishennyyDimRetreatCell(world, e);
-    if (dim) tryAssignPathToCell(world, e, dim.x, dim.y);
-    else wanderNearby(world, e);
-    ai.timer = 0.9;
+    if (dim) assignMonsterPath(world, e, dim.x, dim.y, 0.9);
+    else { wanderNearby(world, e); ai.timer = 0.9; }
   }
   const oldSpeed = e.speed;
   e.speed = oldSpeed * 0.72;
@@ -4281,9 +3822,8 @@ function followLishennyyLightTarget(world: World, e: Entity, target: LishennyyLi
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = undefined;
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-    tryAssignPathToCell(world, e, Math.floor(target.x), Math.floor(target.y));
-    ai.timer = 1.35;
+  if (monsterRepathDue(world, e) || ai.pi >= ai.path.length) {
+    assignMonsterPath(world, e, Math.floor(target.x), Math.floor(target.y), 1.35);
   }
   const oldSpeed = e.speed;
   e.speed = oldSpeed * (target.source === 'drop' ? 1.1 : 0.92);
@@ -4732,10 +4272,6 @@ function monsterMoveMult(world: World, e: Entity, target?: Entity): number {
     return strength > 0 ? Math.min(1.78, 1.2 + strength * 0.08) : 0.68;
   }
   if (hasAIFlag(e, 'fogSwimmer')) return fogSharkMoveMultiplierForTests(world, e);
-  if (e.monsterKind === MonsterKind.DIKIY_MERTVYAK) {
-    if (dikiyMertvyakDamagedEarly(e)) return 0.96;
-    return 1 + Math.min(1.2, e.ai?.shoveCharge ?? 0) * 0.18;
-  }
   switch (e.monsterKind) {
     case MonsterKind.SHADOW: {
       const light = entityLight(world, e);
@@ -4860,6 +4396,7 @@ function updateLampPoweredReadability(
 function monsterDetectSq(world: World, e: Entity, fallback: number): number {
   if (hasAIFlag(e, 'rootedPlant')) return BORSHCHEVIK_DETECT_SQ;
   if (hasAIFlag(e, 'rootHive')) return bloodPlantTendrilRangeSq();
+  if (hasAIFlag(e, 'silent')) return BEZEKHIY_DETECT_SQ;
   if (hasAIFlag(e, 'protocolPressure')) return PROTOKOLNIK_DETECT_SQ;
   if (hasAIFlag(e, 'documentHunter')) return PECHATEED_DETECT_SQ;
   if (hasAIFlag(e, 'documentScent')) return KONTORSHCHIK_DETECT_SQ;
@@ -4867,7 +4404,7 @@ function monsterDetectSq(world: World, e: Entity, fallback: number): number {
   if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? 24 * 24 : 12 * 12;
   if (hasAIFlag(e, 'fogSwimmer')) return fogSharkHasFogPressure(world, e) ? FOG_SHARK_DETECT_SQ : FOG_SHARK_DRY_DETECT_SQ;
   if (hasAIFlag(e, 'blackWaterWake')) return chernoslizDetectSq(world, e);
-  if (hasAIFlag(e, 'deadEcho') && e.ai?.deadEchoRevealed !== true) return BEZEKHIY_DETECT_SQ;
+  if (hasAIFlag(e, 'silent')) return BEZEKHIY_DETECT_SQ;
   if (hasAIFlag(e, 'closeReveal')) return NELYUD_REVEAL_SQ;
   if (hasAIFlag(e, 'garbageSurround')) return POMOYNY_ROY_BASE_DETECT_SQ;
   if (hasAIFlag(e, 'sourceSwarm')) return SWARM_DETECT_SQ;
@@ -4876,84 +4413,6 @@ function monsterDetectSq(world: World, e: Entity, fallback: number): number {
     return inDebrisCover(world, e) ? DEBRIS_LURKER_COVER_DETECT_SQ : DEBRIS_LURKER_EXPOSED_DETECT_SQ;
   }
   return fallback;
-}
-
-function dikiyMertvyakDamagedEarly(e: Entity): boolean {
-  const ai = e.ai;
-  if (!ai) return false;
-  const fullHp = e.maxHp ?? e.hp ?? MONSTERS[MonsterKind.DIKIY_MERTVYAK].hp;
-  if (ai.shoveStartHp === undefined) ai.shoveStartHp = fullHp;
-  return e.hp !== undefined && e.hp < Math.min(ai.shoveStartHp, fullHp) - 0.5;
-}
-
-function dikiyMertvyakCrowdPressure(world: World, e: Entity, target: Entity): { crowd: number; choke: boolean } {
-  const pressure = cheapCrowdPressure(world, e, target, DIKIY_SHOVE_RADIUS, DIKIY_SHOVE_SCAN_CAP, dikiyCrowdQuery);
-  return { crowd: pressure.crowd, choke: pressure.choke };
-}
-
-function updateDikiyMertvyakCrowdShove(
-  world: World,
-  e: Entity,
-  target: Entity,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.DIKIY_MERTVYAK) return false;
-  const ai = e.ai!;
-
-  if (dikiyMertvyakDamagedEarly(e)) {
-    ai.shoveCharge = Math.max(0, (ai.shoveCharge ?? 0) - dt * 2.5);
-    ai.shoveCooldown = Math.max(ai.shoveCooldown ?? 0, 0.8);
-    return false;
-  }
-
-  ai.shoveCooldown = Math.max(0, (ai.shoveCooldown ?? 0) - dt);
-  const pressure = dikiyMertvyakCrowdPressure(world, e, target);
-  if (pressure.choke || pressure.crowd >= 2) {
-    ai.shoveCharge = Math.min(1.35, (ai.shoveCharge ?? 0) + dt * (pressure.choke ? 1.45 : 1.0) + Math.max(0, pressure.crowd - 1) * 0.12);
-  } else {
-    ai.shoveCharge = Math.max(0, (ai.shoveCharge ?? 0) - dt * 0.9);
-  }
-
-  if ((ai.shoveCharge ?? 0) < DIKIY_SHOVE_TRIGGER || (ai.shoveCooldown ?? 0) > 0 || pressure.crowd < 2) return false;
-
-  let shoved = 0;
-  let shovedPlayer = false;
-  for (const other of dikiyCrowdQuery) {
-    if (!other.alive || other.id === e.id || other.type === EntityType.MONSTER) continue;
-    if (world.dist2(e.x, e.y, other.x, other.y) > DIKIY_SHOVE_RADIUS * DIKIY_SHOVE_RADIUS) continue;
-    // Толчок физический: сбивает с ног любого. Паника после него — уже решение
-    // того, кем управляет AI; игрок свою реакцию выбирает сам.
-    other.staggerTimer = Math.max(other.staggerTimer ?? 0, DIKIY_SHOVE_STAGGER_SEC);
-    if (isPlayerEntity(other)) {
-      shovedPlayer = other.id === playerId;
-    } else if (other.type === EntityType.NPC && other.ai) {
-      other.ai.staggerTimer = Math.max(other.ai.staggerTimer ?? 0, DIKIY_SHOVE_STAGGER_SEC);
-      other.ai.goal = AIGoal.FLEE;
-      other.ai.combatTargetId = e.id;
-      other.ai.timer = Math.max(other.ai.timer ?? 0, DIKIY_SHOVE_FLEE_SEC);
-      other.ai.path.length = 0;
-      other.ai.pi = 0;
-    }
-    shoved++;
-  }
-  if (shoved <= 0) return false;
-
-  ai.shoveCharge = 0;
-  ai.shoveCooldown = DIKIY_SHOVE_COOLDOWN_SEC;
-  e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
-  if (shovedPlayer) {
-    msgs.push(msg('Дикий мертвяк продавил толпу. Открытый пол и ранний удар сбивают его рывок.', time, '#f87'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['dikiy_mertvyak', 'crowd_shove', 'panic'], {
-    crowd: shoved,
-    choke: pressure.choke,
-    counterplay: 'open_floor_or_early_damage_before_crowd_contact',
-  });
-  return true;
 }
 
 function updateBloodPlantRootHive(
@@ -5018,15 +4477,14 @@ function updateBloodPlantRootHive(
     if (target.id === playerId && isDebugOnePunchManEnabled()) {
       keepDebugOnePunchManAlive(target);
     } else {
-      { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-      notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударило корнем: -${dmg}`);
       if (target.hp <= 0) {
         target.alive = false;
         target.hp = 0;
       }
     }
-    spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), Math.max(1, dmg), target.type === EntityType.MONSTER);
+    spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), Math.max(1, dmg), target.type === EntityType.MONSTER);
     if (target.id === playerId) msgs.push(msg(`Корень кровавого растения ударил из пола: -${dmg}`, time, '#f77'));
     playSoundAt(playGrowl, e.x, e.y);
   }
@@ -5091,15 +4549,14 @@ function updateBorshchevikRootedPlant(
       if (target.id === playerId && isDebugOnePunchManEnabled()) {
         keepDebugOnePunchManAlive(target);
       } else {
-        { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-        notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+        damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
         if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} обжег кожу соком: -${dmg}`);
         if (target.hp <= 0) {
           target.alive = false;
           target.hp = 0;
         }
       }
-      spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), Math.max(1, dmg), target.type === EntityType.MONSTER);
+      spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), Math.max(1, dmg), target.type === EntityType.MONSTER);
     }
     if (target.id === playerId) msgs.push(msg(`Сок борщевика жжет кожу: -${dmg}`, time, '#df6'));
     playSoundAt(playGrowl, e.x, e.y);
@@ -5171,9 +4628,8 @@ function tryFollowMonsterBait(
   const tx = Math.floor(bait.x);
   const ty = Math.floor(bait.y);
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== tx || ai.ty !== ty) {
-    tryAssignPathToCell(world, e, tx, ty);
-    ai.timer = 1.4;
+  if (monsterRepathDue(world, e) || !pathTargetIs(world, e, tx, ty)) {
+    assignMonsterPath(world, e, tx, ty, 1.4);
   }
   if (ai.path.length === 0) return false;
   followMonsterPath(world, e, dt);
@@ -5188,7 +4644,7 @@ function tryFollowNoise(
   msgs: Msg[],
   state?: GameState,
 ): boolean {
-  if (hasAIFlag(e, 'deadEcho') && e.ai?.deadEchoRevealed !== true) return false;
+  if (hasAIFlag(e, 'silent')) return false;
   const noise = findNoiseInvestigationTarget(world, state, e, time);
   if (!noise) return false;
 
@@ -5206,9 +4662,8 @@ function tryFollowNoise(
   const tx = Math.floor(noise.x);
   const ty = Math.floor(noise.y);
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== world.wrap(tx) || ai.ty !== world.wrap(ty)) {
-    tryAssignPathToCell(world, e, tx, ty);
-    ai.timer = 1.25;
+  if (monsterRepathDue(world, e) || !pathTargetIs(world, e, tx, ty)) {
+    assignMonsterPath(world, e, tx, ty, 1.25);
   }
   if (ai.path.length === 0) return false;
   followMonsterPath(world, e, dt);
@@ -5401,7 +4856,7 @@ function finishRzhavnikLeap(
         target.alive = false;
         target.hp = 0;
       }
-      spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), damage, target.type === EntityType.MONSTER);
+      spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), damage, target.type === EntityType.MONSTER);
       if (target.hp <= 0) {
         spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
         if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
@@ -5554,11 +5009,10 @@ function damageZhornayaTarget(
   if (debugImmortalPlayerHit) {
     keepDebugOnePunchManAlive(target);
   } else {
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} врезалась в тебя на запах: -${dmg}`);
     if (target.hp <= 0) { target.alive = false; target.hp = 0; }
-    const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+    const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
     spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
     if (target.hp <= 0) {
       spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
@@ -5588,8 +5042,16 @@ function finishZhornayaLunge(
   const dy = world.delta(e.y, scent.y);
   const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
   const step = Math.min(dist, ZHORNAYA_LUNGE_STEP);
-  e.x = world.wrap(e.x + (dx / dist) * step);
-  e.y = world.wrap(e.y + (dy / dist) * step);
+  // Рывок шёл в обход коллизии и проносил тварь сквозь стены на четыре клетки.
+  // Общий предикат: до цели — только по свободному месту, упёрлась — встала.
+  const nx = world.wrap(e.x + (dx / dist) * step);
+  const ny = world.wrap(e.y + (dy / dist) * step);
+  if (!world.solid(Math.floor(nx), Math.floor(ny)) && traceClearPoint(world, e, nx, ny, step + 0.35)) {
+    e.x = nx;
+    e.y = ny;
+  } else {
+    stepActorBy(world, e, (dx / dist) * step, (dy / dist) * step);
+  }
   e.angle = Math.atan2(dy, dx);
 
   let connected = false;
@@ -5682,9 +5144,8 @@ function updateZhornayaTvar(
   const tx = Math.floor(scent.x);
   const ty = Math.floor(scent.y);
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== world.wrap(tx) || ai.ty !== world.wrap(ty)) {
-    tryAssignPathToCell(world, e, tx, ty);
-    ai.timer = 1.0;
+  if (monsterRepathDue(world, e) || !pathTargetIs(world, e, tx, ty)) {
+    assignMonsterPath(world, e, tx, ty, 1.0);
   }
   if (ai.path.length > 0) followMonsterPath(world, e, dt);
   return true;
@@ -5825,14 +5286,13 @@ function finishBladeEliteWindup(
     if (debugImmortalPlayerHit) {
       keepDebugOnePunchManAlive(target);
     } else {
-      { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-      notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${tuning.strikeVerb} тебя: -${dmg}`);
       if (target.hp <= 0) {
         target.alive = false;
         target.hp = 0;
       }
-      const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+      const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
       spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
       const targetLabel = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
       msgs.push(msg(
@@ -5929,353 +5389,12 @@ function updateBladeElite(
   }
 
   if (dist > tuning.escapeDist) ai.windupTargetId = undefined;
-  if (ai.path.length === 0 || ai.timer <= 0) {
-    tryAssignPathToCell(world, e, Math.floor(target.x), Math.floor(target.y));
-    ai.timer = 1.4;
-  }
   ai.timer -= dt;
+  if (monsterRepathDue(world, e)) {
+    const chase = monsterChaseCell(world, e, target);
+    assignMonsterPath(world, e, chase.x, chase.y, 1.4);
+  }
   followMonsterPath(world, e, dt);
-  return true;
-}
-
-function sporeCarpetRoomId(world: World, e: Entity): number | undefined {
-  const rid = world.roomMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
-  return rid >= 0 ? rid : undefined;
-}
-
-function sporeCarpetEventName(e: Entity | undefined): string | undefined {
-  if (!e) return undefined;
-  if (isPlayerEntity(e)) return 'Вы';
-  return entityDisplayName(e);
-}
-
-function publishSporeCarpetEvent(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  target: Entity | undefined,
-  type: 'spore_carpet_woke' | 'spore_carpet_burned' | 'spore_carpet_puff',
-  severity: 3 | 4,
-  tags: string[],
-  data?: Record<string, unknown>,
-): void {
-  if (!state) return;
-  publishEvent(state, {
-    type,
-    zoneId: zoneIdAt(world, e.x, e.y),
-    roomId: sporeCarpetRoomId(world, e),
-    x: e.x,
-    y: e.y,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    targetId: target?.id,
-    targetName: sporeCarpetEventName(target),
-    targetFaction: target?.faction,
-    monsterKind: MonsterKind.SPORE_CARPET,
-    severity,
-    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
-    tags: ['monster', 'spore_carpet', 'lurking_furniture', ...tags],
-    data: {
-      rumorIds: [...SPORE_CARPET_RUMOR_IDS],
-      counterplay: MONSTERS[MonsterKind.SPORE_CARPET]?.counterplay,
-      ...data,
-    },
-  });
-}
-
-function wakeSporeCarpet(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  target: Entity | undefined,
-  time: number,
-  msgs: Msg[],
-  reason: 'near' | 'damage' | 'container' | 'fire',
-): void {
-  if (e.monsterStage === 1) return;
-  e.monsterStage = 1;
-  const ai = e.ai!;
-  ai.sporePuffCd = Math.min(ai.sporePuffCd ?? 0.8, 0.8);
-  e.spriteScale = 1.06;
-  if (isPlayerEntity(target)) {
-    msgs.push(msg('Ковер поднял угол и повис в проходе. Жилы на ткани шевелятся.', time, '#bf8'));
-  }
-  publishSporeCarpetEvent(state, world, e, target, 'spore_carpet_woke', 4, ['woke', reason], {
-    reason,
-    puffCooldown: SPORE_CARPET_PUFF_COOLDOWN_SEC,
-  });
-}
-
-function sporeCarpetContainerWakeTarget(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  dt: number,
-  time: number,
-): Entity | null {
-  const ai = e.ai!;
-  ai.sporeContainerScanCd = (ai.sporeContainerScanCd ?? 0) - dt;
-  if (ai.sporeContainerScanCd > 0 || !state) return null;
-  ai.sporeContainerScanCd = SPORE_CARPET_CONTAINER_SCAN_SEC;
-
-  const sinceId = ai.sporeLastContainerEventId ?? 0;
-  const events = getRecentEvents(state, { type: 'container_opened', sinceId, limit: 6 });
-  let maxId = sinceId;
-  let target: Entity | null = null;
-  for (const event of events) {
-    if (event.id > maxId) maxId = event.id;
-    if (event.x === undefined || event.y === undefined) continue;
-    if (event.time < time - 1.8) continue;
-    if (world.dist2(e.x, e.y, event.x + 0.5, event.y + 0.5) > SPORE_CARPET_CONTAINER_WAKE_RADIUS_SQ) continue;
-    const actor = event.actorId !== undefined ? _entityById.get(event.actorId) : undefined;
-    if (actor?.alive && canBeMonsterTarget(actor) && isHostile(e, actor)) {
-      target = actor;
-      break;
-    }
-  }
-  if (events.length === 0 && state.worldEvents) {
-    maxId = Math.max(maxId, state.worldEvents.nextId - 1);
-  }
-  ai.sporeLastContainerEventId = maxId;
-  return target;
-}
-
-function sporeCarpetDoorBlockCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
-  const tx = Math.floor(target.x);
-  const ty = Math.floor(target.y);
-  let best: { x: number; y: number } | null = null;
-  let bestScore = Infinity;
-  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
-  for (let dy = -SPORE_CARPET_DOOR_SCAN_RADIUS; dy <= SPORE_CARPET_DOOR_SCAN_RADIUS; dy++) {
-    for (let dx = -SPORE_CARPET_DOOR_SCAN_RADIUS; dx <= SPORE_CARPET_DOOR_SCAN_RADIUS; dx++) {
-      const x = world.wrap(tx + dx);
-      const y = world.wrap(ty + dy);
-      if (world.cells[world.idx(x, y)] !== Cell.DOOR) continue;
-      const candidates: { x: number; y: number }[] = world.solid(x, y) ? [] : [{ x, y }];
-      for (const [ox, oy] of dirs) {
-        const ax = world.wrap(x + ox);
-        const ay = world.wrap(y + oy);
-        if (!world.solid(ax, ay)) candidates.push({ x: ax, y: ay });
-      }
-      for (const cell of candidates) {
-        const targetD2 = world.dist2(target.x, target.y, cell.x + 0.5, cell.y + 0.5);
-        const selfD2 = world.dist2(e.x, e.y, cell.x + 0.5, cell.y + 0.5);
-        const score = targetD2 * 0.72 + selfD2 * 0.18;
-        if (score >= bestScore) continue;
-        bestScore = score;
-        best = cell;
-      }
-    }
-  }
-  return best ?? { x: Math.floor(target.x), y: Math.floor(target.y) };
-}
-
-function puffSporeFog(world: World, x: number, y: number): number {
-  const cx = Math.floor(x);
-  const cy = Math.floor(y);
-  let changed = 0;
-  for (let dy = -4; dy <= 4; dy++) {
-    for (let dx = -4; dx <= 4; dx++) {
-      if (changed >= SPORE_CARPET_FOG_CELL_CAP) break;
-      const px = world.wrap(cx + dx);
-      const py = world.wrap(cy + dy);
-      if (world.solid(px, py)) continue;
-      if (world.dist2(x, y, px + 0.5, py + 0.5) > SPORE_CARPET_PUFF_RADIUS_SQ) continue;
-      const ci = world.idx(px, py);
-      const nextFog = Math.max(world.fog[ci], 58);
-      if (nextFog === world.fog[ci]) continue;
-      world.fog[ci] = nextFog;
-      changed++;
-    }
-  }
-  if (changed > 0) world.markFogDirty();
-  return changed;
-}
-
-function applySporeCarpetPuff(
-  world: World,
-  e: Entity,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state?: GameState,
-): number {
-  const fogCells = puffSporeFog(world, e.x, e.y);
-  stampMark(world, Math.floor(e.x), Math.floor(e.y), 0.5, 0.5, 0.72, MarkType.SPLAT, e.id ^ Math.floor(time * 60), 92, 128, 72, 130);
-  getEntityIndex().queryRadiusCapped(
-    e.x,
-    e.y,
-    SPORE_CARPET_PUFF_RADIUS,
-    sporeCarpetPuffQuery,
-    ENTITY_MASK_ACTOR,
-    SPORE_CARPET_PUFF_TARGET_CAP + 1,
-  );
-
-  let hits = 0;
-  let playerHit = false;
-  for (const target of sporeCarpetPuffQuery) {
-    if (!target.alive || target.id === e.id || !canBeMonsterTarget(target)) continue;
-    if (!isHostile(e, target)) continue;
-    if (world.dist2(e.x, e.y, target.x, target.y) > SPORE_CARPET_PUFF_RADIUS_SQ) continue;
-    const protectedByGear = hasSporeHazeProtection(target);
-    const dmg = protectedByGear ? 1 : 3;
-    if (target.hp !== undefined) {
-      if (target.id === playerId && isDebugOnePunchManEnabled()) {
-        keepDebugOnePunchManAlive(target);
-      } else {
-        { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-        notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
-        if (target.hp <= 0) {
-          target.hp = 0;
-          target.alive = false;
-        }
-      }
-    }
-    applySporeHaze(target, time, msgs, state, e);
-    hits++;
-    if (target.id === playerId) {
-      playerHit = true;
-      state!.dmgFlash = Math.max(state!.dmgFlash, protectedByGear ? 0.08 : 0.16);
-      state!.dmgSeed = (state!.dmgSeed + 29) | 0;
-      recordPlayerDamage(state, e, dmg, `Споры ковра режут глаза: -${dmg}`, 'hazard');
-    }
-  }
-
-  if (hits > 0) {
-    msgs.push(msg(playerHit ? 'Ковер выплюнул споры в лицо.' : `Ковер выплюнул споры: целей ${hits}.`, time, '#bf8'));
-  }
-  publishSporeCarpetEvent(state, world, e, playerHit ? _entityById.get(playerId) : undefined, 'spore_carpet_puff', playerHit ? 4 : 3, ['spores', 'cooldown_capped'], {
-    hits,
-    fogCells,
-    radius: SPORE_CARPET_PUFF_RADIUS,
-    cooldown: SPORE_CARPET_PUFF_COOLDOWN_SEC,
-  });
-  return hits;
-}
-
-function isSporeCarpetFireProjectile(projectile: Entity): boolean {
-  return (projectile.projType ?? ProjType.NORMAL) === ProjType.FLAME ||
-    projectile.sprite === Spr.FLAME_BOLT ||
-    projectile.sprite === Spr.HOSTILE_FLAME_BOLT;
-}
-
-function recoilSporeCarpetFromFire(
-  world: World,
-  state: GameState,
-  monster: Entity,
-  projectile: Entity,
-  playerId: number,
-): boolean {
-  if (monster.monsterKind !== MonsterKind.SPORE_CARPET || !monster.ai || !isSporeCarpetFireProjectile(projectile)) return false;
-  const actor = _entityById.get(projectile.ownerId ?? -1);
-  const target = actor?.alive ? actor : _entityById.get(playerId);
-  wakeSporeCarpet(state, world, monster, target, state.time, state.msgs, 'fire');
-  monster.ai.sporeRecoilTimer = SPORE_CARPET_FIRE_RECOIL_SEC;
-  monster.ai.sporePuffCd = Math.max(monster.ai.sporePuffCd ?? 0, SPORE_CARPET_FIRE_RECOIL_SEC + 1.0);
-  monster.attackCd = Math.max(monster.attackCd ?? 0, SPORE_CARPET_FIRE_RECOIL_SEC);
-  monster.spriteScale = 0.82;
-  stampMark(world, Math.floor(monster.x), Math.floor(monster.y), 0.5, 0.5, 0.58, MarkType.BURN, monster.id ^ 0x5f09, 36, 22, 12, 170);
-  if ((monster.ai.sporeBurnedAt ?? -999) <= state.time - 1.4) {
-    monster.ai.sporeBurnedAt = state.time;
-    state.msgs.push(msg('Огонь сжал Ковер: споровые жилы втянулись на пару секунд.', state.time, '#fa4'));
-    publishSporeCarpetEvent(state, world, monster, target, 'spore_carpet_burned', 4, ['fire', 'recoil', 'counterplay'], {
-      recoilSec: SPORE_CARPET_FIRE_RECOIL_SEC,
-      puffDelay: monster.ai.sporePuffCd,
-    });
-  }
-  return true;
-}
-
-function updateSporeCarpetLurkingFurniture(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.SPORE_CARPET || !hasAIFlag(e, 'lurkingFurniture')) return false;
-  const ai = e.ai!;
-  const awake = e.monsterStage === 1;
-  ai.sporePuffCd = Math.max(0, (ai.sporePuffCd ?? (awake ? 1.0 : SPORE_CARPET_PUFF_COOLDOWN_SEC)) - dt);
-
-  const damaged = (e.hp ?? 0) < (e.maxHp ?? MONSTERS[MonsterKind.SPORE_CARPET].hp);
-  let target = findCombatTarget(
-    world,
-    entities,
-    e,
-    dt,
-    awake ? SPORE_CARPET_DETECT_SQ : SPORE_CARPET_WAKE_RADIUS_SQ,
-    awake ? 0.7 : 0.35,
-    canBeMonsterTarget,
-  );
-  const containerTarget = sporeCarpetContainerWakeTarget(state, world, e, dt, time);
-  if (containerTarget) target = containerTarget;
-
-  if (!awake) {
-    if (damaged) wakeSporeCarpet(state, world, e, target ?? _entityById.get(playerId), time, msgs, 'damage');
-    else if (containerTarget) wakeSporeCarpet(state, world, e, containerTarget, time, msgs, 'container');
-    else if (target) wakeSporeCarpet(state, world, e, target, time, msgs, 'near');
-    else {
-      ai.goal = AIGoal.IDLE;
-      ai.combatTargetId = undefined;
-      ai.path.length = 0;
-      e.spriteScale = 0.72 + Math.sin(time * 1.7 + e.id) * 0.025;
-      return true;
-    }
-  }
-
-  if ((ai.sporeRecoilTimer ?? 0) > 0) {
-    ai.sporeRecoilTimer = Math.max(0, (ai.sporeRecoilTimer ?? 0) - dt);
-    ai.sporePuffCd = Math.max(ai.sporePuffCd ?? 0, ai.sporeRecoilTimer + 0.8);
-    e.spriteScale = 0.82;
-    ai.goal = AIGoal.FLEE;
-    return true;
-  }
-
-  if (!target || !target.alive) {
-    target = findCombatTarget(world, entities, e, dt, SPORE_CARPET_DETECT_SQ, 0.9, canBeMonsterTarget);
-  }
-  if (!target) {
-    ai.goal = AIGoal.WANDER;
-    ai.combatTargetId = undefined;
-    ai.timer -= dt;
-    if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-      wanderNearby(world, e);
-      ai.timer = 2.2 + ((e.id & 3) * 0.35);
-    }
-    e.spriteScale = 0.92;
-    followMonsterPath(world, e, dt);
-    return true;
-  }
-
-  ai.goal = AIGoal.HUNT;
-  ai.combatTargetId = target.id;
-  e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-  if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
-    ai.lastSeenTargetId = playerId;
-    msgs.push(msg('Ковер плывет к выходу, как домашняя тряпка с чужим дыханием.', time, '#bf8'));
-  }
-
-  const d2 = world.dist2(e.x, e.y, target.x, target.y);
-  if (d2 <= SPORE_CARPET_PUFF_RADIUS_SQ && ai.sporePuffCd <= 0) {
-    applySporeCarpetPuff(world, e, time, msgs, playerId, state);
-    ai.sporePuffCd = SPORE_CARPET_PUFF_COOLDOWN_SEC + ((e.id & 3) * 0.35);
-    e.attackCd = ai.sporePuffCd;
-    return true;
-  }
-
-  ai.timer -= dt;
-  if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0) {
-    const chase = sporeCarpetDoorBlockCell(world, e, target);
-    tryAssignPathToCell(world, e, chase.x, chase.y);
-    ai.timer = 1.15 + ((e.id & 1) * 0.3);
-  }
-  e.spriteScale = 1.0 + Math.max(0, Math.sin(time * 3.1 + e.id)) * 0.05;
-  followMonsterPath(world, e, dt, target);
   return true;
 }
 
@@ -6287,7 +5406,6 @@ export function tryMonsterProjectileStagger(
   playerId: number,
 ): boolean {
   if (monster.type !== EntityType.MONSTER || !monster.ai) return false;
-  if (recoilSporeCarpetFromFire(world, state, monster, projectile, playerId)) return true;
   if (monster.monsterKind === MonsterKind.SOBRANNYY &&
       projectile.ownerId === playerId &&
       (projectile.sprite === Spr.PELLET || projectile.projType === ProjType.FLAME)) {
@@ -6312,14 +5430,6 @@ export function tryMonsterProjectileStagger(
       (monster.ai.windupTimer ?? 0) > 0) {
     const target = monster.ai.combatTargetId !== undefined ? _entityById.get(monster.ai.combatTargetId) : undefined;
     interruptTreskotnikWindup(world, monster, target, state.time, state.msgs, 'hit', state);
-    return true;
-  }
-  if (monster.monsterKind === MonsterKind.TUMANNIK &&
-      projectile.ownerId === playerId &&
-      projectile.projType === ProjType.FLAME) {
-    const target = _entityById.get(playerId);
-    collapseTumannikFogOffset(world, monster, target, state.time, state.msgs, 'fire', state);
-    monster.spriteScale = Math.max(monster.spriteScale ?? 1, 1.04);
     return true;
   }
   const tuning = bladeEliteTuning(monster.monsterKind);
@@ -6467,9 +5577,8 @@ function tryPaupsinaRangeStep(world: World, e: Entity, target: Entity, bestDist:
   if (world.solid(tx, ty)) return false;
   const ai = e.ai!;
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== tx || ai.ty !== ty) {
-    tryAssignPathToCell(world, e, tx, ty);
-    ai.timer = 0.75;
+  if (monsterRepathDue(world, e) || !pathTargetIs(world, e, tx, ty)) {
+    assignMonsterPath(world, e, tx, ty, 0.75);
   }
   if (ai.path.length === 0) return false;
   followMonsterPath(world, e, dt);
@@ -6650,6 +5759,26 @@ function vodyanoyChaseCell(world: World, e: Entity, target: Entity): { x: number
   return { x: bestX, y: bestY };
 }
 
+/* Мокрая линия Водяного кошмара: давление, связность и его кулдауны. Всё —
+ * свойство одного вида, поэтому живёт рядом с ним, а не в `AIState` мира. */
+interface VodyanoyLineState {
+  pressure: number;
+  scanCd: number;
+  breakTimer: number;
+  pulseCd: number;
+  cueCd: number;
+  targetId?: number;
+  connected: boolean;
+}
+const vodyanoyLineState = speciesState<VodyanoyLineState>(() => ({
+  pressure: 0, scanCd: 0, breakTimer: 0, pulseCd: 0, cueCd: 0, connected: false,
+}));
+
+/** Набранное давление мокрой линии: путь для отладки и тестов. */
+export function peekVodyanoyWaterPressure(e: Entity): number {
+  return vodyanoyLineState.peek(e)?.pressure ?? 0;
+}
+
 export function updateVodyanoyWaterPressureLine(
   world: World,
   e: Entity,
@@ -6662,23 +5791,24 @@ export function updateVodyanoyWaterPressureLine(
 ): boolean {
   if (e.monsterKind !== MonsterKind.VODYANOY_KOSHMAR) return false;
   const ai = e.ai!;
-  if (ai.waterLineTargetId !== undefined && ai.waterLineTargetId !== target.id) {
-    ai.waterLineConnected = false;
-    ai.waterLineBreakTimer = 0;
-    ai.waterLinePulseCd = 0;
+  const wet = vodyanoyLineState.of(e);
+  if (wet.targetId !== undefined && wet.targetId !== target.id) {
+    wet.connected = false;
+    wet.breakTimer = 0;
+    wet.pulseCd = 0;
   }
-  ai.waterLineTargetId = target.id;
-  ai.waterLineScanCd = Math.max(0, (ai.waterLineScanCd ?? 0) - dt);
-  ai.waterLinePulseCd = Math.max(0, (ai.waterLinePulseCd ?? 0) - dt);
-  ai.waterLineCueCd = Math.max(0, (ai.waterLineCueCd ?? 0) - dt);
+  wet.targetId = target.id;
+  wet.scanCd = Math.max(0, wet.scanCd - dt);
+  wet.pulseCd = Math.max(0, wet.pulseCd - dt);
+  wet.cueCd = Math.max(0, wet.cueCd - dt);
 
   let line: VodyanoyWaterPressureLine | undefined;
-  if (ai.waterLineScanCd <= 0) {
-    ai.waterLineScanCd = VODYANOY_WET_LINE_SCAN_SEC;
+  if (wet.scanCd <= 0) {
+    wet.scanCd = VODYANOY_WET_LINE_SCAN_SEC;
     line = getVodyanoyWaterPressureLine(world, e, target);
     if (line) {
-      ai.waterLineConnected = true;
-      ai.waterLineBreakTimer = VODYANOY_WET_LINE_DRY_BREAK_SEC;
+      wet.connected = true;
+      wet.breakTimer = VODYANOY_WET_LINE_DRY_BREAK_SEC;
       if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
         ai.lastSeenTargetId = playerId;
         msgs.push(msg('Водяной кошмар держит мокрую линию. Рябь идет к вам, давление растет.', time, '#7dd'));
@@ -6690,16 +5820,16 @@ export function updateVodyanoyWaterPressureLine(
         });
       }
     } else {
-      ai.waterLineConnected = false;
+      wet.connected = false;
     }
   }
 
-  if (!line && ai.waterLineConnected !== true) {
-    const hadPressure = (ai.waterPressure ?? 0) > 0.35;
-    ai.waterLineBreakTimer = Math.max(0, (ai.waterLineBreakTimer ?? 0) - dt);
-    ai.waterPressure = Math.max(0, (ai.waterPressure ?? 0) - dt * (ai.waterLineBreakTimer > 0 ? 0.7 : 1.85));
-    e.spriteScale = ai.waterPressure > 0.2 ? 0.96 + ai.waterPressure * 0.025 : undefined;
-    if (hadPressure && ai.waterPressure <= 0.35 && target.id === playerId) {
+  if (!line && !wet.connected) {
+    const hadPressure = wet.pressure > 0.35;
+    wet.breakTimer = Math.max(0, wet.breakTimer - dt);
+    wet.pressure = Math.max(0, wet.pressure - dt * (wet.breakTimer > 0 ? 0.7 : 1.85));
+    e.spriteScale = wet.pressure > 0.2 ? 0.96 + wet.pressure * 0.025 : undefined;
+    if (hadPressure && wet.pressure <= 0.35 && target.id === playerId) {
       ai.lastSeenTargetId = undefined;
       msgs.push(msg('Сухой бетон сбил мокрую ПСИ-линию. Короткое окно для рывка или отхода.', time, '#9cf'));
       publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, ['vodyanoy_koshmar', 'water_pressure', 'dry_break'], {
@@ -6710,27 +5840,26 @@ export function updateVodyanoyWaterPressureLine(
     return false;
   }
 
-  ai.waterPressure = Math.min(VODYANOY_WET_LINE_PRESSURE_MAX, (ai.waterPressure ?? 0) + dt * 1.15);
-  e.spriteScale = 1.02 + ai.waterPressure * 0.035;
+  wet.pressure = Math.min(VODYANOY_WET_LINE_PRESSURE_MAX, wet.pressure + dt * 1.15);
+  e.spriteScale = 1.02 + wet.pressure * 0.035;
 
-  if (ai.waterLineCueCd <= 0) {
-    ai.waterLineCueCd = 0.7;
-    stampVodyanoyWetLineCue(world, e, target, time, ai.waterPressure);
+  if (wet.cueCd <= 0) {
+    wet.cueCd = 0.7;
+    stampVodyanoyWetLineCue(world, e, target, time, wet.pressure);
   }
 
-  if (ai.waterLinePulseCd <= 0 && target.hp !== undefined) {
-    ai.waterLinePulseCd = VODYANOY_WET_LINE_PULSE_SEC;
-    const dmg = Math.max(1, Math.round(1 + ai.waterPressure * 0.62));
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
-    if (target.rpg) target.rpg.psi = Math.max(0, target.rpg.psi - Math.max(1, Math.round(2 + ai.waterPressure)));
+  if (wet.pulseCd <= 0 && target.hp !== undefined) {
+    wet.pulseCd = VODYANOY_WET_LINE_PULSE_SEC;
+    const dmg = Math.max(1, Math.round(1 + wet.pressure * 0.62));
+    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
+    if (target.rpg) target.rpg.psi = Math.max(0, target.rpg.psi - Math.max(1, Math.round(2 + wet.pressure)));
     if (target.hp <= 0) {
       target.alive = false;
       spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
       msgs.push(msg(`${entityDisplayName(e)} задавил ${entityDisplayName(target)} мокрой ПСИ-линией`, time, '#7dd'));
     } else if (target.id === playerId) {
       recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} давит по мокрой линии: -${dmg}`);
-      if (ai.waterPressure > 3.2) msgs.push(msg('Давление в воде набирает силу. Сходите на сухой бетон сейчас.', time, '#7dd'));
+      if (wet.pressure > 3.2) msgs.push(msg('Давление в воде набирает силу. Сходите на сухой бетон сейчас.', time, '#7dd'));
     }
   }
 
@@ -6972,9 +6101,9 @@ function updateLampoglazLightLock(
   e.spriteScale = hasLock ? 1.04 : undefined;
   if (def.speed > 0 && bestDist > 9) {
     ai.timer -= dt;
-    if (ai.path.length === 0 || ai.timer <= 0) {
-      tryAssignPathToCell(world, e, Math.floor(target.x), Math.floor(target.y));
-      ai.timer = 2.3;
+    if (monsterRepathDue(world, e)) {
+      const chase = monsterChaseCell(world, e, target);
+      assignMonsterPath(world, e, chase.x, chase.y, 2.3);
     }
     followMonsterPath(world, e, dt);
   }
@@ -7159,8 +6288,7 @@ function fireSlepoglazBeam(
     if (debugImmortalPlayerHit) {
       keepDebugOnePunchManAlive(target);
     } else {
-      { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-      notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) {
         hitPlayer = true;
         recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} прожег старую позицию: -${dmg}`);
@@ -7246,14 +6374,13 @@ function updateSlepoglazCloseDefense(
   if (debugImmortalPlayerHit) {
     keepDebugOnePunchManAlive(target);
   } else {
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} слепо дернул нервом: -${dmg}`);
     if (target.hp <= 0) {
       target.alive = false;
       target.hp = 0;
     }
-    const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+    const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
     spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
     if (target.hp <= 0) {
       spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
@@ -7407,257 +6534,6 @@ function pointLight(world: World, x: number, y: number): number {
   return world.light[world.idx(Math.floor(x), Math.floor(y))] ?? 0;
 }
 
-function fogAt(world: World, x: number, y: number): number {
-  return world.fog[world.idx(Math.floor(x), Math.floor(y))] ?? 0;
-}
-
-function clearTumannikFogOffset(e: Entity): void {
-  const ai = e.ai;
-  if (!ai) return;
-  ai.fogOffsetX = undefined;
-  ai.fogOffsetY = undefined;
-  ai.fogOffsetUntil = undefined;
-  ai.fogOffsetNoiseId = undefined;
-  if (e.monsterKind === MonsterKind.TUMANNIK) e.spriteScale = undefined;
-}
-
-function tumannikHasOffset(e: Entity, time: number): boolean {
-  const ai = e.ai;
-  if (!ai) return false;
-  return (ai.fogOffsetUntil ?? -Infinity) > time &&
-    (Math.abs(ai.fogOffsetX ?? 0) > 0.05 || Math.abs(ai.fogOffsetY ?? 0) > 0.05);
-}
-
-function tumannikLightCounter(world: World, e: Entity, target: Entity): boolean {
-  const ai = e.ai!;
-  const fx = e.x + (ai.fogOffsetX ?? 0);
-  const fy = e.y + (ai.fogOffsetY ?? 0);
-  return entityHasEquippedLight(target) ||
-    entityLight(world, target) >= TUMANNIK_LIGHT_REVEAL ||
-    entityLight(world, e) >= TUMANNIK_LIGHT_REVEAL ||
-    pointLight(world, fx, fy) >= TUMANNIK_LIGHT_REVEAL;
-}
-
-function tumannikFogReady(world: World, e: Entity, target: Entity, time: number): boolean {
-  const ai = e.ai!;
-  if ((ai.fogOffsetCollapsedUntil ?? -Infinity) > time) return false;
-  return fogAt(world, e.x, e.y) >= TUMANNIK_FOG_MIN &&
-    fogAt(world, target.x, target.y) >= TUMANNIK_FOG_TARGET_MIN;
-}
-
-function collapseTumannikFogOffset(
-  world: World,
-  e: Entity,
-  target: Entity | undefined,
-  time: number,
-  msgs: Msg[],
-  reason: string,
-  state?: GameState,
-): void {
-  const ai = e.ai;
-  if (!ai) return;
-  const hadOffset = tumannikHasOffset(e, time);
-  clearTumannikFogOffset(e);
-  ai.fogOffsetCollapsedUntil = time + TUMANNIK_COLLAPSE_SEC;
-  e.attackCd = Math.max(e.attackCd ?? 0, 0.45);
-  if (!hadOffset) return;
-  if (isPlayerEntity(target) && hadOffset && reason !== 'strike') {
-    msgs.push(msg(reason === 'fire'
-      ? 'Огонь сложил ложный бок Туманника.'
-      : reason === 'light'
-        ? 'Свет вытащил настоящий сустав Туманника из тумана.'
-        : 'Туманник потерял ложный силуэт вне плотного тумана.', time, '#9cf'));
-  }
-  if (reason !== 'strike') {
-    publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, ['tumannik', 'fog_offset', 'collapsed', reason], {
-      reason,
-      counterplay: 'light_fire_or_leave_fog',
-    });
-  }
-}
-
-function tumannikOffsetCellOpen(world: World, x: number, y: number): boolean {
-  return !world.solid(Math.floor(x), Math.floor(y));
-}
-
-function setTumannikOffsetVector(world: World, e: Entity, ux: number, uy: number, time: number, noiseId: number): void {
-  const ai = e.ai!;
-  for (let step = 0; step < 4; step++) {
-    const mult = step === 0 ? 1 : step === 1 ? 0.72 : step === 2 ? -0.72 : 0.48;
-    const ox = ux * TUMANNIK_OFFSET_DIST * mult;
-    const oy = uy * TUMANNIK_OFFSET_DIST * mult;
-    const fx = world.wrap(Math.floor(e.x + ox)) + 0.5;
-    const fy = world.wrap(Math.floor(e.y + oy)) + 0.5;
-    if (!tumannikOffsetCellOpen(world, fx, fy)) continue;
-    ai.fogOffsetX = ox;
-    ai.fogOffsetY = oy;
-    ai.fogOffsetUntil = time + TUMANNIK_OFFSET_REFRESH_SEC;
-    ai.fogOffsetNoiseId = noiseId;
-    e.spriteScale = 0.92;
-    return;
-  }
-  clearTumannikFogOffset(e);
-}
-
-function refreshTumannikFogOffset(
-  world: World,
-  e: Entity,
-  target: Entity,
-  time: number,
-  state?: GameState,
-): void {
-  const ai = e.ai!;
-  const noise = findNoiseForActor(world, state, e, time, { minSeverity: 1, scanInterval: 0.35, hearingMult: 1.55 });
-  const useNoise = noise &&
-    noise.actorId === target.id &&
-    (noise.source === 'footstep' || noise.tags.includes('movement'));
-  if (tumannikHasOffset(e, time) && (!useNoise || ai.fogOffsetNoiseId === noise.id)) return;
-
-  let dx = useNoise ? world.delta(e.x, noise.x) : world.delta(e.x, target.x);
-  let dy = useNoise ? world.delta(e.y, noise.y) : world.delta(e.y, target.y);
-  if (!useNoise) {
-    const sign = (e.id & 1) === 0 ? 1 : -1;
-    const sx = -dy * 0.45 * sign;
-    const sy = dx * 0.45 * sign;
-    dx += sx;
-    dy += sy;
-  }
-  const len = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-  setTumannikOffsetVector(world, e, dx / len, dy / len, time, useNoise ? noise.id : 0);
-}
-
-function stampTumannikFogCue(world: World, e: Entity, time: number): void {
-  const ai = e.ai!;
-  if (!tumannikHasOffset(e, time)) return;
-  const rx = Math.floor(e.x);
-  const ry = Math.floor(e.y);
-  const fx = Math.floor(world.wrap(e.x + (ai.fogOffsetX ?? 0)));
-  const fy = Math.floor(world.wrap(e.y + (ai.fogOffsetY ?? 0)));
-  const seed = Math.imul(e.id, 72_019) ^ Math.floor(time * 7);
-  stampMark(world, fx, fy, 0.5, 0.5, 0.34, MarkType.PSI, seed, 92, 118, 132, 76);
-  stampMark(world, rx, ry, 0.5, 0.5, 0.16, MarkType.SPLAT, seed + 17, 42, 8, 12, 118);
-}
-
-function damageTumannikOffsetStrike(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  nextId: { v: number },
-  state?: GameState,
-): void {
-  const def = MONSTERS[MonsterKind.TUMANNIK];
-  const ai = e.ai!;
-  const ax = world.wrap(e.x + (ai.fogOffsetX ?? 0));
-  const ay = world.wrap(e.y + (ai.fogOffsetY ?? 0));
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const rawDmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * TUMANNIK_STRIKE_DMG_MULT * (e.monsterDmgMult ?? 1));
-  const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
-  if (target.hp === undefined) return;
-
-  const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-  if (debugImmortalPlayerHit) {
-    keepDebugOnePunchManAlive(target);
-  } else {
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
-    if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударил сбоку из тумана: -${dmg}`);
-    if (target.hp <= 0) { target.alive = false; target.hp = 0; }
-    const hitAng = Math.atan2(world.delta(ay, target.y), world.delta(ax, target.x));
-    spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-    if (target.hp <= 0) {
-      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-      if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-    }
-  }
-
-  const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
-  msgs.push(msg(`${entityDisplayName(e)} бьет ${label} не из центра силуэта: -${dmg}`, time, '#9cf'));
-  if (state) {
-    publishEvent(state, {
-      type: 'monster_sighted',
-      zoneId: zoneIdAt(world, e.x, e.y),
-      roomId: world.roomAt(e.x, e.y)?.id,
-      x: e.x,
-      y: e.y,
-      actorId: e.id,
-      actorName: entityDisplayName(e),
-      actorFaction: e.faction,
-      targetId: target.id,
-      targetName: entityDisplayName(target),
-      targetFaction: target.faction,
-      monsterKind: MonsterKind.TUMANNIK,
-      severity: target.id === playerId ? 5 : 4,
-      privacy: target.id === playerId ? 'local' : 'witnessed',
-      tags: ['monster', 'tumannik', 'fog_offset', 'side_hit'],
-      data: {
-        rumorIds: [...TUMANNIK_RUMOR_IDS],
-        attackX: ax,
-        attackY: ay,
-        damage: dmg,
-        counterplay: 'aim_by_side_sound_or_collapse_with_light_fire_exit',
-      },
-    });
-  }
-  playSoundAt(playGrowl, ax, ay);
-  collapseTumannikFogOffset(world, e, target, time, msgs, 'strike', state);
-  e.attackCd = def.attackRate;
-}
-
-function updateTumannikFogOffset(
-  world: World,
-  entities: Entity[],
-  e: Entity,
-  target: Entity,
-  dt: number,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  nextId: { v: number },
-  state?: GameState,
-): boolean {
-  if (e.monsterKind !== MonsterKind.TUMANNIK || !hasAIFlag(e, 'fogOffset')) return false;
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
-
-  if (tumannikLightCounter(world, e, target)) {
-    collapseTumannikFogOffset(world, e, target, time, msgs, 'light', state);
-    return false;
-  }
-  if (!tumannikFogReady(world, e, target, time)) {
-    if ((e.ai!.fogOffsetCollapsedUntil ?? -Infinity) <= time) {
-      collapseTumannikFogOffset(world, e, target, time, msgs, 'left_fog', state);
-    } else {
-      clearTumannikFogOffset(e);
-    }
-    return false;
-  }
-
-  refreshTumannikFogOffset(world, e, target, time, state);
-  if (!tumannikHasOffset(e, time)) return false;
-
-  const ai = e.ai!;
-  if (target.id === playerId && (ai.fogOffsetCueAt ?? -Infinity) <= time) {
-    ai.fogOffsetCueAt = time + TUMANNIK_OFFSET_CUE_COOLDOWN;
-    msgs.push(msg('Туманник звучит сбоку от силуэта. Свет, огонь или сухой шаг сложат обман.', time, '#9cf'));
-    publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['tumannik', 'fog_offset', 'side_sound'], {
-      counterplay: 'hold_corner_listen_light_or_leave_fog',
-    });
-    stampTumannikFogCue(world, e, time);
-  }
-
-  const ax = world.wrap(e.x + (ai.fogOffsetX ?? 0));
-  const ay = world.wrap(e.y + (ai.fogOffsetY ?? 0));
-  if ((e.attackCd ?? 0) <= 0 && world.dist2(ax, ay, target.x, target.y) <= TUMANNIK_STRIKE_RANGE_SQ) {
-    damageTumannikOffsetStrike(world, entities, e, target, time, msgs, playerId, nextId, state);
-    return true;
-  }
-  return false;
-}
-
 function tonkayaLineCell(world: World, x: number, y: number): boolean {
   const ci = world.idx(x, y);
   const cell = world.cells[ci];
@@ -7749,19 +6625,28 @@ function targetInsideTonkayaLine(world: World, line: MonsterBaitLineState, targe
   return Math.abs(proj) <= TONKAYA_LINE_HALF_LEN && perp <= TONKAYA_LINE_PERP;
 }
 
+/** Дальше этого фланговый бросок Тонкой Тени не переносит: он рывок, а не
+ *  телепорт через полэтажа. Длина ловушки — её же естественный предел. */
+const TONKAYA_FLANK_MAX_DIST = TONKAYA_LINE_HALF_LEN;
+
 function tonkayaMoveToFlank(world: World, e: Entity, target: Entity, line: MonsterBaitLineState): void {
   const px = -line.dy;
   const py = line.dx;
   const side = world.dist2(e.x, e.y, target.x + px, target.y + py) < world.dist2(e.x, e.y, target.x - px, target.y - py) ? 1 : -1;
-  for (const mult of [1.05, -1.05, 0.0]) {
+  for (const mult of TONKAYA_FLANK_MULTS) {
     const fx = world.wrap(Math.floor(target.x + px * side * mult));
     const fy = world.wrap(Math.floor(target.y + py * side * mult));
     if (!tonkayaLineCell(world, fx, fy)) continue;
+    // Бросок был жёстким телепортом: ни линии, ни предела дистанции — тень
+    // возникала вплотную к цели из-за стены с любого конца этажа.
+    if (!traceClearPoint(world, e, fx + 0.5, fy + 0.5, TONKAYA_FLANK_MAX_DIST)) continue;
     e.x = fx + 0.5;
     e.y = fy + 0.5;
     break;
   }
 }
+
+const TONKAYA_FLANK_MULTS = [1.05, -1.05, 0.0] as const;
 
 function damageTonkayaTenStrike(
   world: World,
@@ -7785,8 +6670,7 @@ function damageTonkayaTenStrike(
   if (debugImmortalPlayerHit) {
     keepDebugOnePunchManAlive(target);
   } else {
-    { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-    notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударила с темной линии: -${dmg}`);
     if (target.hp <= 0) { target.alive = false; target.hp = 0; }
     const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
@@ -7906,11 +6790,10 @@ function updateTonkayaTenBaitLine(
   ai.combatTargetId = target.id;
 
   if (world.dist2(e.x, e.y, lineCenterX, lineCenterY) > 0.55) {
-    if (ai.path.length === 0 || ai.timer <= 0 || ai.tx !== line.x || ai.ty !== line.y) {
-      tryAssignPathToCell(world, e, line.x, line.y);
-      ai.timer = 0.9;
-    }
     ai.timer -= dt;
+    if (monsterRepathDue(world, e) || !pathTargetIs(world, e, line.x, line.y)) {
+      assignMonsterPath(world, e, line.x, line.y, 0.9);
+    }
     followMonsterPath(world, e, dt);
     return true;
   }
@@ -7988,14 +6871,13 @@ function damageTreskotnikTarget(
     if (debugImmortalPlayerHit) {
       keepDebugOnePunchManAlive(target);
     } else {
-      { const _dmg = calculateDamage(dmg, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
-      notifyActorDamaged(world, target, e, dmg, 'monster_special', time, state);
+      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} влетел в тебя по красной трещине: -${dmg}`);
       if (target.hp <= 0) {
         target.alive = false;
         target.hp = 0;
       }
-      const hitAng = Math.atan2(target.y - e.y, target.x - e.x);
+      const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
       spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
       if (target.hp <= 0) {
         spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
@@ -8187,35 +7069,56 @@ export function dropNpcInventory(e: Entity, entities: Entity[], nextId: { v: num
   e.inventory = [];
 }
 
-function isWeepingAngelFrozen(world: World, e: Entity): boolean {
-  if (!hasAIFlag(e, 'weepingAngel')) return false;
+/* Скульптура смотрит на смотрящих: радиус, кап наблюдателей и такт.
+ * Раньше проверка шла КАЖДЫЙ кадр, аллоцировала массив, брала радиусный
+ * запрос без капа и трассировала линию на каждого найденного. */
+const WEEPING_ANGEL_RADIUS = 25;
+/** Такт проверки наблюдателей: реакция на взгляд остаётся мгновенной на глаз. */
+const WEEPING_ANGEL_SCAN_SEC = 0.2;
+const WEEPING_ANGEL_OBSERVER_CAP = 8;
+const WEEPING_ANGEL_FOV = Math.PI / 4;
 
-  const index = getEntityIndex();
-  const radius = 25;
-  const out: Entity[] = [];
-  index.queryRadius(e.x, e.y, radius, out, ENTITY_MASK_ACTOR);
+interface WeepingAngelState {
+  cd: number;
+  frozen: boolean;
+}
 
-  for (let i = 0; i < out.length; i++) {
-    const actor = out[i];
+const weepingAngelState = speciesState<WeepingAngelState>(() => ({ cd: 0, frozen: false }));
+const _weepingAngelObservers: Entity[] = [];
+
+function scanWeepingAngelObservers(world: World, e: Entity): boolean {
+  const found = getEntityIndex().queryRadiusCapped(
+    e.x, e.y, WEEPING_ANGEL_RADIUS, _weepingAngelObservers, ENTITY_MASK_NPC, WEEPING_ANGEL_OBSERVER_CAP,
+  );
+  for (let i = 0; i < found; i++) {
+    const actor = _weepingAngelObservers[i];
     if (actor.id === e.id || !actor.alive) continue;
     // Only players and NPCs count as observers — other monsters can't freeze sculptures
     if (actor.type === EntityType.MONSTER) continue;
-    if (!hasClearLine(world, actor, e, radius)) continue;
 
-    const dx = e.x - actor.x;
-    const dy = e.y - actor.y;
-    const angleToSculpture = Math.atan2(dy, dx);
-
+    // Шов тора: кандидаты приходят из запроса, который обёртку УЧИТЫВАЕТ, а угол
+    // считался голым вычитанием — за швом он переворачивался на 180°, и
+    // скульптура замирала ровно от тех, кто на неё не смотрит.
+    const angleToSculpture = Math.atan2(world.delta(actor.y, e.y), world.delta(actor.x, e.x));
     let diff = Math.abs(angleToSculpture - actor.angle);
     while (diff > Math.PI) diff -= Math.PI * 2;
     diff = Math.abs(diff);
+    if (diff > WEEPING_ANGEL_FOV) continue;
 
-    // 45 degrees field of view
-    if (diff <= Math.PI / 4) {
-      return true;
-    }
+    if (hasClearLine(world, actor, e, WEEPING_ANGEL_RADIUS)) return true;
   }
   return false;
+}
+
+function isWeepingAngelFrozen(world: World, e: Entity, dt: number): boolean {
+  if (!hasAIFlag(e, 'weepingAngel')) return false;
+  const state = weepingAngelState.of(e);
+  state.cd -= dt;
+  if (state.cd <= 0) {
+    state.cd = deterministicScanCd(e.id, WEEPING_ANGEL_SCAN_SEC, WEEPING_ANGEL_SCAN_SEC * 0.5);
+    state.frozen = scanWeepingAngelObservers(world, e);
+  }
+  return state.frozen;
 }
 
 export function tryPerformMonsterMeleeAttack(
@@ -8251,7 +7154,7 @@ export function tryPerformMonsterMeleeAttack(
         const rawDmg = Math.round(scaleMonsterDmg(baseDmg, level) * strMult * monsterDmgMult(world, e, hitTarget) * (e.monsterDmgMult ?? 1));
         const dmg = zhelemishIncomingMeleeDamage(hitTarget, time, rawDmg);
         if (tryZombieApocalypseInfection(world, e, hitTarget, state, msgs, time)) {
-          const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
+          const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
           spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, Math.max(2, Math.round(dmg * 0.35)), false);
           playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
           e.attackCd = (def?.attackRate ?? 1) * 1.5;
@@ -8278,7 +7181,7 @@ export function tryPerformMonsterMeleeAttack(
               recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
             }
             if (hitTarget.hp <= 0) { hitTarget.alive = false; hitTarget.hp = 0; }
-            const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
+            const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
             spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
             if (hitTarget.hp <= 0) {
               spawnDeathPool(world, hitTarget.x, hitTarget.y, hitTarget.type === EntityType.MONSTER);
@@ -8305,14 +7208,14 @@ export function tryPerformMonsterMeleeAttack(
 /* ── Monster AI update ────────────────────────────────────────── */
 export function updateMonster(world: World, entities: Entity[], e: Entity, dt: number, time: number, msgs: Msg[], playerId: number, nextId: { v: number }, state?: GameState): void {
   const ai = e.ai!;
-  if (isWeepingAngelFrozen(world, e)) {
+  if (isWeepingAngelFrozen(world, e, dt)) {
     return;
   }
 
   if (updateZakalennayaArmorStagger(e, dt)) return;
 
   evaluateMicroStimuli(world, e, time, msgs);
-  if (tickMicroGoal(world, entities, e, dt, time, msgs)) return;
+  if (tickMicroGoal(world, e, dt, time, msgs)) return;
 
   if (e.monsterKind === MonsterKind.KHOROVAYA_MATKA) {
     updateKhorovayaMatka(world, entities, e, dt, time, msgs, playerId, nextId, _entityById, state);
@@ -8325,10 +7228,13 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   const player = _entityById.get(playerId);
   if (monsterHasAIFlag(e, 'looksLiquidator')) updateBlackLiquidatorDisguise(world, e, time);
+  updateMukhozhukBite(world, e, dt, time, msgs, state);
+  updateTumannikReveal(world, e);
+  // Ковёр не воюет и не ходит: он растение, и вся его жизнь — этот вызов.
+  if (updateSporeCarpetGrowth(world, entities, e, nextId, dt, time, msgs, state)) return;
   if (updateLishennyyBrightAvoidance(world, e, dt)) return;
-  updateChervieNetPossessor(world, entities, e, dt, time, msgs, playerId, state);
-  ensureMukhozhukExposed(world, e, time, msgs, player, state);
-  if (updateSlimevikMonster(world, entities, e, dt, time, msgs, player, state)) return;
+  updateChervieNetPossessor(world, e, dt, time, msgs, playerId, state);
+  if (updateSlimevikMonster(world, entities, e, dt, time, msgs, state)) return;
   if (updateGnilushkaMonster(world, entities, e, dt, time, msgs, playerId, state)) return;
   if (updateHeadSlugParasite(world, entities, e, dt, time, msgs, nextId, state)) return;
   updateSobrannyyGrowthState(world, e, time, msgs, state);
@@ -8336,11 +7242,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updateSlimeWomanState(world, e, time, msgs, state);
   updateWaterStriderState(world, e, dt, time);
   updatePanelnikWallBrace(world, e, dt, time, msgs, player, state);
-  if (updateSporeCarpetLurkingFurniture(world, entities, e, dt, time, msgs, playerId, state)) return;
 
   const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
   if (updateRzhavnikScrapWake(world, entities, e, dt, time, msgs, playerId, nextId, state)) return;
-  if (updateBezekhiyDeadEcho(world, entities, e, findBezekhiyEchoTarget(world, e), dt, time, msgs, nextId, state)) return;
   const baseDetectSq = def && !def.isRanged && def.speed > 0 ? MONSTER_MELEE_DETECT_SQ : MONSTER_DETECT_SQ;
   let detectSq = monsterDetectSq(world, e, baseDetectSq);
   let target: Entity | null;
@@ -8410,7 +7314,6 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     }
   }
   updateNightmarePressure(world, e, target, dt, time, msgs, playerId, state);
-  updateMukhozhukLeader(world, e, target, dt, time, msgs, state);
   if (updateBloodPlantRootHive(world, e, target, dt, time, msgs, playerId, state)) return;
   if (updateBorshchevikRootedPlant(world, e, target, dt, time, msgs, playerId, state)) return;
   updateProtokolnikProtocolPressure(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
@@ -8423,10 +7326,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updatePomoynyRoyReadability(world, e, target, time, msgs, playerId, state);
 
   if (!hasAIFlag(e, 'scentOvercommit') && tryFollowMonsterBait(world, e, target, dt, time, msgs, state)) return;
-  if (tryConsumeMeatChunk(world, entities, e, target, dt, time, msgs, state)) return;
+  if (tryConsumeMeatChunk(world, e, target, dt, time, msgs, state)) return;
 
   if (!target) {
-    if (e.monsterKind === MonsterKind.TUMANNIK) clearTumannikFogOffset(e);
     if (e.monsterKind === MonsterKind.OBZHIVALSHCHIK) {
       const room = obzhivalshchikHomeRoom(world, e);
       if (room && idleObzhivalshchikInRoom(world, e, room, dt, time)) return;
@@ -8435,7 +7337,6 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       const runtime = sobrannyyState(e);
       if (runtime.dormant || runtime.isolatedUntil > time) return;
     }
-    if (tryMukhozhukFoodAppetite(world, e, dt, time, msgs, state)) return;
     /* Наблюдателя тут нет: цели не нашлось, значит никто рядом его не вскрыл —
      * близость и фонарь любого носителя уже проверил `chernoslizCanTarget`. */
     if (e.monsterKind === MonsterKind.CHERNOSLIZ && isChernoSlizHidden(world, e)) {
@@ -8501,7 +7402,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updateSborkaReadability(world, e, target, time, msgs, playerId, state);
   updateLampPoweredReadability(world, e, target, time, msgs, playerId, state);
   updateOlgoyReadability(world, e, target, time, msgs, playerId, state);
-  updateDikiyMertvyakCrowdShove(world, e, target, dt, time, msgs, playerId, state);
+  if (updateDikiyRush(world, e, target, dt, time, msgs, state)) return;
 
   if (e.monsterKind === MonsterKind.SOBRANNYY && trySobrannyyBreakWeakDoor(world, e, target, time, msgs, state)) return;
 
@@ -8517,10 +7418,6 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   if (e.monsterKind === MonsterKind.SHADOW &&
       updateShadowAmbushReadability(world, e, target, bestDist, dt, time, msgs, playerId, state)) {
-    return;
-  }
-
-  if (updateTumannikFogOffset(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) {
     return;
   }
 
@@ -8551,16 +7448,13 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   // Hunt: pathfind to target
   ai.timer -= dt;
-  if (ai.path.length === 0 || ai.timer <= 0) {
+  if (monsterRepathDue(world, e)) {
     const chase = e.monsterKind === MonsterKind.VODYANOY_KOSHMAR
       ? vodyanoyChaseCell(world, e, target)
       : e.monsterKind === MonsterKind.FOG_SHARK
         ? fogSharkChaseCell(world, e, target)
-        : e.monsterKind === MonsterKind.MUKHOZHUK_HOST
-          ? mukhozhukChaseCell(world, e, target)
-          : greenDogChaseCell(world, e, target);
-    tryAssignPathToCell(world, e, chase.x, chase.y);
-    ai.timer = 2;
+        : greenDogChaseCell(world, e, target);
+    assignMonsterPath(world, e, chase.x, chase.y, 2);
   }
 
   // Phasing monsters (Spirit) move directly through walls

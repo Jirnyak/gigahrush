@@ -10,9 +10,9 @@ test('mukhozhuk definition and ecology read correctly', () => {
   const ecology = getMonsterEcology(MonsterKind.MUKHOZHUK_HOST);
 
   assert.equal(DEF.kind, MonsterKind.MUKHOZHUK_HOST);
-  assert.deepEqual(DEF.aiFlags, ['parasiteLeader', 'foodBait']);
+  assert.deepEqual(DEF.aiFlags, ['larvaCarrier', 'foodBait']);
   assert.equal(ecology?.rare, true);
-  assert.match(DEF.counterplay ?? '', /свидетелях|карантиньте/i);
+  assert.match(DEF.counterplay ?? '', /личинк|ран|леч/i);
 });
 
 test('mukhozhuk sprite generation creates a valid sprite', () => {

@@ -98,7 +98,7 @@ function spawnSafeSlimevik(ctx: MaintContentCtx, x: number, y: number): void {
     maxHp: hp,
     monsterKind: MonsterKind.SLIMEVIK,
     attackCd: def.attackRate,
-    ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0, slimeTargetX: x - 2, slimeTargetY: y },
+    ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(zoneLevel),
   };
   ctx.entities.push(slimevik);

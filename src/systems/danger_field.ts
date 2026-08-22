@@ -1,158 +1,80 @@
 import { World } from '../core/world';
-import { W, Cell, DoorState } from '../core/types';
+import { FieldChannel, fieldVersion, markFieldCell } from './fields/channels';
+import { updatePerceptionFields } from './fields';
 
-const FADE_RATE = 2; // Amount to decrease per update
-const DIFFUSION = 0.25; // 25% of cell value spreads to neighbors
+/**
+ * Кровь и смерть — канал `FieldChannel.DANGER` слоя полей восприятия.
+ *
+ * Движок живёт в `systems/fields`: он многоканальный, изотропный и общий на все
+ * поля. Здесь остались только специфичные для крови запросы и совместимые имена,
+ * которыми пользуется остальная игра. `world.dangerField` — по-прежнему живой
+ * массив, это представление нулевой плоскости `world.perceptionFields`.
+ */
 
-let tickCounter = 0;
-const DIRS = [
-  { dx: 1, dy: 0 },
-  { dx: -1, dy: 0 },
-  { dx: 0, dy: 1 },
-  { dx: 0, dy: -1 },
-];
+/** Импульс поля на месте смерти. Шкалу держит поле, а не тот, кто льёт кровь:
+ *  по ней же падальщик отличает место смерти от царапины. */
+export const DANGER_FIELD_DEATH_IMPULSE = 50;
 
-let nextField: Uint8Array | null = null;
-let activeMinX = 0;
-let activeMinY = 0;
-let activeMaxX = W - 1;
-let activeMaxY = W - 1;
-let isFullScan = true;
+export function dangerFieldVersion(): number {
+  return fieldVersion(FieldChannel.DANGER);
+}
 
 /** Writers of `world.dangerField` must report the touched cell: the update below
  *  only scans the active bounding box, and an empty field collapses that box to
  *  an empty range. Without this the first idle tick would freeze the box and no
  *  later impulse would ever decay or diffuse. */
 export function markDangerFieldCell(world: World, cx: number, cy: number): void {
-  const x = world.wrap(cx);
-  const y = world.wrap(cy);
-  if (x < activeMinX) activeMinX = x;
-  if (x > activeMaxX) activeMaxX = x;
-  if (y < activeMinY) activeMinY = y;
-  if (y > activeMaxY) activeMaxY = y;
+  markFieldCell(world, FieldChannel.DANGER, cx, cy);
 }
 
+/**
+ * Точка вызова из игрового цикла. Имя и сигнатура сохранены ради `main.ts`, но
+ * такт теперь общий: за один вызов обновляются ВСЕ каналы восприятия, не только
+ * кровь.
+ */
 export function updateDangerField(world: World, dt: number): void {
-  // Update ~2 times a second to save CPU
-  tickCounter += dt;
-  if (tickCounter < 0.5) return;
-  tickCounter -= 0.5;
+  updatePerceptionFields(world, dt);
+}
 
-  const field = world.dangerField;
-  const wSq = W * W;
-  
-  if (!nextField) {
-    nextField = new Uint8Array(wSq);
-  } else {
-    // Only clear the active bounding box from last frame
-    if (isFullScan) {
-      nextField.fill(0);
-    } else {
-      for (let cy = activeMinY; cy <= activeMaxY; cy++) {
-        for (let cx = activeMinX; cx <= activeMaxX; cx++) {
-          nextField[world.idx(cx, cy)] = 0;
-        }
-      }
+/**
+ * Ближайшая клетка, где кровь ещё пахнет сильнее порога. Падальщик идёт на
+ * МЕСТО смерти, а не на тело: место помечено полем и остаётся помеченным, даже
+ * когда от тела уже ничего не осталось.
+ *
+ * Окно фиксировано радиусом и обходится по клеткам тора — списки сущностей
+ * здесь не при чём.
+ */
+export function findBloodTrailCell(
+  world: World,
+  cx: number,
+  cy: number,
+  radius: number,
+  minValue: number,
+): { x: number; y: number } | null {
+  const r = Math.ceil(radius);
+  let best: { x: number; y: number } | null = null;
+  let bestD2 = radius * radius;
+  const cxInt = Math.floor(cx);
+  const cyInt = Math.floor(cy);
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= bestD2) continue;
+      const x = world.wrap(cxInt + dx);
+      const y = world.wrap(cyInt + dy);
+      if (world.dangerField[world.idx(x, y)] < minValue) continue;
+      best = { x, y };
+      bestD2 = d2;
     }
   }
+  return best;
+}
 
-  let nextMinX = W;
-  let nextMinY = W;
-  let nextMaxX = -1;
-  let nextMaxY = -1;
-  let activeCells = 0;
-
-  const startY = isFullScan ? 0 : activeMinY;
-  const endY = isFullScan ? W - 1 : activeMaxY;
-  const startX = isFullScan ? 0 : activeMinX;
-  const endX = isFullScan ? W - 1 : activeMaxX;
-
-  for (let cy = startY; cy <= endY; cy++) {
-    for (let cx = startX; cx <= endX; cx++) {
-      const i = world.idx(cx, cy);
-      const val = field[i];
-      if (val === 0) continue;
-
-      activeCells++;
-
-      // Decay the original value
-      const decayed = Math.max(0, val - FADE_RATE);
-      if (decayed === 0) continue;
-      
-      // Update new bounding box
-      if (cx < nextMinX) nextMinX = cx;
-      if (cx > nextMaxX) nextMaxX = cx;
-      if (cy < nextMinY) nextMinY = cy;
-      if (cy > nextMaxY) nextMaxY = cy;
-      
-      // Check if cell is permeable to fluid
-      const cellId = world.cells[i];
-      const isSolid = cellId === Cell.WALL || cellId === Cell.ABYSS || cellId === Cell.LIFT;
-      let isClosedDoor = false;
-      if (cellId === Cell.DOOR) {
-        const door = world.doors.get(i);
-        isClosedDoor = !!door && (door.state === DoorState.CLOSED || door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED);
-      }
-      
-      // If solid or closed door, it just fades quickly without spreading
-      if (isSolid || isClosedDoor) {
-        nextField[i] = Math.max(nextField[i], decayed);
-        continue;
-      }
-
-      const spreadAmount = Math.floor(decayed * DIFFUSION);
-      const retainAmount = decayed - spreadAmount * 4;
-
-      nextField[i] = Math.min(255, nextField[i] + retainAmount);
-
-      if (spreadAmount > 0) {
-        for (const dir of DIRS) {
-          const nx = world.wrap(cx + dir.dx);
-          const ny = world.wrap(cy + dir.dy);
-          const ni = world.idx(nx, ny);
-          nextField[ni] = Math.min(255, nextField[ni] + spreadAmount);
-          // Expand new bounding box for spread
-          if (nx < nextMinX) nextMinX = nx;
-          if (nx > nextMaxX) nextMaxX = nx;
-          if (ny < nextMinY) nextMinY = ny;
-          if (ny > nextMaxY) nextMaxY = ny;
-        }
-      }
-    }
-  }
-
-  // Handle torus wrap expansion for bounding box
-  if (nextMinX < 0) nextMinX = 0;
-  if (nextMaxX >= W) nextMaxX = W - 1;
-  if (nextMinY < 0) nextMinY = 0;
-  if (nextMaxY >= W) nextMaxY = W - 1;
-
-  if (activeCells === 0) {
-    nextMinX = W; nextMinY = W; nextMaxX = -1; nextMaxY = -1;
-  } else {
-    // Add margin for next frame's spread
-    nextMinX = Math.max(0, nextMinX - 1);
-    nextMaxX = Math.min(W - 1, nextMaxX + 1);
-    nextMinY = Math.max(0, nextMinY - 1);
-    nextMaxY = Math.min(W - 1, nextMaxY + 1);
-  }
-
-  activeMinX = nextMinX;
-  activeMaxX = nextMaxX;
-  activeMinY = nextMinY;
-  activeMaxY = nextMaxY;
-  isFullScan = (activeCells > 0 && (activeMaxX - activeMinX >= W - 2 || activeMaxY - activeMinY >= W - 2));
-
-  // Swap fields efficiently
-  if (isFullScan) {
-    field.set(nextField);
-  } else if (activeCells > 0) {
-    // Only copy the active bounding box
-    for (let cy = activeMinY; cy <= activeMaxY; cy++) {
-      for (let cx = activeMinX; cx <= activeMaxX; cx++) {
-        const i = world.idx(cx, cy);
-        field[i] = nextField[i];
-      }
-    }
-  }
+/** Съеденная падаль больше не пахнет: поле на клетке гасится начисто. */
+export function clearBloodTrailCell(world: World, cx: number, cy: number): void {
+  const x = world.wrap(Math.floor(cx));
+  const y = world.wrap(Math.floor(cy));
+  if (world.dangerField[world.idx(x, y)] === 0) return;
+  world.dangerField[world.idx(x, y)] = 0;
+  markDangerFieldCell(world, x, y);
 }

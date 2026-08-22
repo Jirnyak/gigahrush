@@ -8,15 +8,16 @@ import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/mukhozhuk';
 import { MONSTERS } from '../src/entities/monster';
 import { S } from '../src/core/pixutil';
+import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import {
-  MUKHOZHUK_COMMAND_SCAN_CAP,
-  commandMukhozhukNearby,
-  setEntityMap,
-  updateMonster,
-} from '../src/systems/ai/monster';
+  isMukhozhukInfested,
+  mukhozhukLarvaCount,
+  resetMukhozhukLarvae,
+  updateMukhozhukLarvae,
+} from '../src/systems/ai/mukhozhuk';
 import { getEntityIndex, rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
-import { addTestRoom, makeGameState, makeTestContainer, makeTestNpc, makeTestPlayer } from './helpers';
+import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 function ministryWorld(): World {
   const world = new World();
@@ -81,12 +82,12 @@ test('mukhozhuk host keeps standalone parasite registry, ecology, rumors and spr
 
   assert.equal(DEF.kind, MonsterKind.MUKHOZHUK_HOST);
   assert.equal(MONSTERS[MonsterKind.MUKHOZHUK_HOST], DEF);
-  assert.deepEqual(DEF.aiFlags, ['parasiteLeader', 'foodBait']);
-  assert.match(DEF.counterplay ?? '', /свидетел|карантин|крика/i);
-  assert.match(DEF.lootHint ?? '', /хитин|приказ|карточка/i);
+  assert.deepEqual(DEF.aiFlags, ['larvaCarrier', 'foodBait']);
+  assert.match(DEF.counterplay ?? '', /личинк|ран|леч/i);
+  assert.match(DEF.lootHint ?? '', /хитин|кокон|карточка/i);
   assert.equal(ecology?.rare, true);
   assert.equal(ecology?.rooms.includes(RoomType.HQ), true);
-  assert.equal(ecology?.rumorIds.includes('monster_mukhozhuk_host_command'), true);
+  assert.equal(ecology?.rumorIds.includes('monster_mukhozhuk_larva'), true);
   assert.equal(RUMORS.some(r => r.id === 'ecology_mukhozhuk_quarantine'), true);
   assert.equal(sprite.length, S * S);
   assert.equal(opaque > 520, true, 'sprite should read as a full infected host');
@@ -94,83 +95,70 @@ test('mukhozhuk host keeps standalone parasite registry, ecology, rumors and spr
   assert.equal(shell > 30, true, 'sprite should include dark beetle carapace');
 });
 
-test('mukhozhuk command pulse is local, capped and does not draft ordinary civilians', () => {
+test('мухожук кладёт личинку в раненого, а здорового не трогает', () => {
   const world = ministryWorld();
-  const player = makeTestPlayer({ id: 1, x: 13, y: 12, hp: 100, maxHp: 100 });
-  const host = mukhozhuk();
-  const civilian = makeTestNpc({
-    id: 1000003,
-    x: 12.5,
-    y: 12.2,
-    faction: Faction.CITIZEN,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-  });
-  const strongGuard = makeTestNpc({
-    id: 1000004,
-    x: 12.8,
-    y: 11.8,
-    faction: Faction.LIQUIDATOR,
-    occupation: Occupation.HUNTER,
-    hp: 180,
-    maxHp: 180,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-  });
-  const guards = Array.from({ length: 24 }, (_, i) => makeTestNpc({
-    id: 1000010 + i,
-    x: 11.2 + (i % 6) * 0.45,
-    y: 11.2 + Math.floor(i / 6) * 0.45,
-    faction: i % 5 === 0 ? Faction.CULTIST : Faction.LIQUIDATOR,
-    occupation: i % 5 === 0 ? Occupation.PILGRIM : Occupation.HUNTER,
-    hp: 70,
-    maxHp: 70,
-    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-  }));
-  const entities = [player, host, civilian, strongGuard, ...guards];
-  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
-  const msgs: Msg[] = [];
-
-  prime(entities);
-  const commanded = commandMukhozhukNearby(world, host, player, 12, msgs, state);
-
-  assert.equal(commanded, 4);
-  assert.equal(civilian.ai?.combatTargetId, undefined);
-  assert.equal(strongGuard.ai?.combatTargetId, undefined);
-  assert.equal(guards.filter(g => g.ai?.combatTargetId === player.id).length, 4);
-  assert.equal(getEntityIndex().getDebugStats().queries.maxResultCount <= MUKHOZHUK_COMMAND_SCAN_CAP, true);
-  const event = getRecentEvents(state, { type: 'mukhozhuk_exposed', tags: ['mukhozhuk', 'command_pulse'], limit: 1 })[0];
-  assert.ok(event);
-  assert.equal(event.data?.commandedCount, 4);
-  assert.equal(event.data?.commandScanCap, MUKHOZHUK_COMMAND_SCAN_CAP);
-});
-
-test('idle mukhozhuk spoils nearby food containers through local appetite', () => {
-  const world = ministryWorld();
+  resetMukhozhukLarvae();
   const player = makeTestPlayer({ id: 1, x: 70, y: 70, hp: 100, maxHp: 100 });
   const host = mukhozhuk({ x: 12.5, y: 12.5 });
-  const container = makeTestContainer({
-    id: 44,
-    x: 12,
-    y: 12,
-    z: 34,
-    roomId: 0,
-    zoneId: 0,
-    name: 'Запас ревизии',
-    inventory: [{ defId: 'liquidator_ration', count: 1 }, { defId: 'alcohol_bottle', count: 1 }],
-    capacitySlots: 4,
-    tags: ['food', 'audit'],
-  });
-  world.addContainer(container);
-  const entities = [player, host];
+  const wounded = makeTestNpc({ id: 1000003, x: 12.9, y: 12.5, hp: 20, maxHp: 100 });
+  const healthy = makeTestNpc({ id: 1000004, x: 13.1, y: 12.5, hp: 100, maxHp: 100 });
+  const entities = [player, host, wounded, healthy];
   const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);
   updateMonster(world, entities, host, 0.5, 20, msgs, player.id, { v: 50 }, state);
 
-  assert.equal(container.inventory.some(item => item.defId === 'sand_spoiled_ration'), true);
-  assert.equal(container.tags.includes('mukhozhuk_spoiled'), true);
-  const event = getRecentEvents(state, { type: 'mukhozhuk_food_spoiled', tags: ['mukhozhuk', 'food_spoiled'], limit: 1 })[0];
+  assert.equal(isMukhozhukInfested(wounded), true, 'раненый получает личинку');
+  assert.equal(isMukhozhukInfested(healthy), false, 'здоровому личинку не положить');
+  const event = getRecentEvents(state, { type: 'mukhozhuk_infested', tags: ['larva'], limit: 1 })[0];
   assert.ok(event);
-  assert.equal(event.containerId, 44);
-  assert.equal(event.data?.spoiledItemId, 'liquidator_ration');
+  assert.equal(event.targetId, wounded.id);
+});
+
+test('вылеченная рана личинку не донашивает', () => {
+  const world = ministryWorld();
+  resetMukhozhukLarvae();
+  const player = makeTestPlayer({ id: 1, x: 70, y: 70, hp: 100, maxHp: 100 });
+  const host = mukhozhuk({ x: 12.5, y: 12.5 });
+  const wounded = makeTestNpc({ id: 1000003, x: 12.9, y: 12.5, hp: 20, maxHp: 100 });
+  const entities = [player, host, wounded];
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
+  const msgs: Msg[] = [];
+
+  prime(entities);
+  updateMonster(world, entities, host, 0.5, 20, msgs, player.id, { v: 50 }, state);
+  assert.equal(mukhozhukLarvaCount(), 1);
+
+  wounded.hp = 95;
+  updateMukhozhukLarvae(world, entities, { v: 60 }, 1, 21, msgs, state);
+
+  assert.equal(mukhozhukLarvaCount(), 0, 'закрытая рана снимает личинку');
+  assert.equal(wounded.alive, true);
+});
+
+test('смерть носителя выпускает мухожука немедленно', () => {
+  const world = ministryWorld();
+  resetMukhozhukLarvae();
+  const player = makeTestPlayer({ id: 1, x: 70, y: 70, hp: 100, maxHp: 100 });
+  const host = mukhozhuk({ x: 12.5, y: 12.5 });
+  const wounded = makeTestNpc({ id: 1000003, x: 12.9, y: 12.5, hp: 20, maxHp: 100 });
+  const entities = [player, host, wounded];
+  const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
+  const msgs: Msg[] = [];
+
+  prime(entities);
+  updateMonster(world, entities, host, 0.5, 20, msgs, player.id, { v: 50 }, state);
+  assert.equal(mukhozhukLarvaCount(), 1);
+
+  // Добили своего — и тем ускорили ровно то, чего боялись.
+  wounded.alive = false;
+  wounded.hp = 0;
+  prime(entities);
+  updateMukhozhukLarvae(world, entities, { v: 60 }, 1, 21, msgs, state);
+
+  assert.equal(mukhozhukLarvaCount(), 0);
+  const born = entities.filter(e => e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.MUKHOZHUK_HOST);
+  assert.equal(born.length, 2, 'из тела вышел новый мухожук');
+  assert.ok(getRecentEvents(state, { type: 'mukhozhuk_hatched', tags: ['larva'], limit: 1 })[0]);
 });

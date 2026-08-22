@@ -11,6 +11,7 @@ import { S } from '../src/core/pixutil';
 import {
   CHERVIE_MIND_PULSE_CAP,
   CHERVIE_MIND_PULSE_COOLDOWN_SEC,
+  setEntityMap,
   updateChervieNetPossessor,
 } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
@@ -159,8 +160,9 @@ test('Chervie mind pulse is capped and cooldown-gated', () => {
   const msgs: Msg[] = [];
   const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
   rebuildEntityIndex(entities);
+  setEntityMap(new Map(entities.map(e => [e.id, e])));
 
-  updateChervieNetPossessor(world, entities, threat, 1, 1, msgs, target.id, state);
+  updateChervieNetPossessor(world, threat, 1, 1, msgs, target.id, state);
   const affected = entities.filter(e => e.type === EntityType.NPC && (e.psiMadness ?? 0) > 0);
   assert.equal(threat.ai?.netPowered, true);
   assert.equal(affected.length, CHERVIE_MIND_PULSE_CAP);
@@ -168,7 +170,7 @@ test('Chervie mind pulse is capped and cooldown-gated', () => {
   assert.equal(target.rpg?.psi, 9);
   assert.equal(getRecentEvents(state, { type: 'chervie_false_order', limit: 4 }).length, 1);
 
-  updateChervieNetPossessor(world, entities, threat, 1, 2, msgs, target.id, state);
+  updateChervieNetPossessor(world, threat, 1, 2, msgs, target.id, state);
   assert.equal(getRecentEvents(state, { type: 'chervie_false_order', limit: 4 }).length, 1, 'cooldown must prevent a second pulse');
 });
 
@@ -181,11 +183,12 @@ test('cutting the local server publishes a Chervie cut event', () => {
   const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
   world.features[world.idx(11, 10)] = Feature.APPARATUS;
   rebuildEntityIndex(entities);
+  setEntityMap(new Map(entities.map(e => [e.id, e])));
 
-  updateChervieNetPossessor(world, entities, threat, 0.5, 1, msgs, target.id, state);
+  updateChervieNetPossessor(world, threat, 0.5, 1, msgs, target.id, state);
   assert.equal(threat.ai?.netPowered, true);
   world.features[world.idx(11, 10)] = Feature.NONE;
-  updateChervieNetPossessor(world, entities, threat, 0.5, 2, msgs, target.id, state);
+  updateChervieNetPossessor(world, threat, 0.5, 2, msgs, target.id, state);
 
   assert.equal(threat.ai?.netPowered, false);
   const cut = getRecentEvents(state, { type: 'chervie_server_cut', limit: 1 })[0];

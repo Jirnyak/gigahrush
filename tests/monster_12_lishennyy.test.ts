@@ -9,7 +9,7 @@ import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/lishennyy';
 import { S } from '../src/core/pixutil';
 import { setListenerPos } from '../src/systems/audio';
-import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
+import { peekLishennyyLightTarget, setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { makeGameState } from './helpers';
@@ -142,8 +142,9 @@ test('Lishennyy follows a dropped light decoy instead of a dark player', () => {
   sync(entities);
   updateMonster(world, entities, threat, 0.2, 1, msgs, target.id, { v: 20 }, state);
 
-  assert.equal(threat.ai?.lightTargetId, decoy.id);
-  assert.equal(threat.ai?.lightTargetKind, 'drop');
+  const lit = peekLishennyyLightTarget(threat);
+  assert.equal(lit?.id, decoy.id);
+  assert.equal(lit?.kind, 'drop');
   assert.equal(threat.ai?.combatTargetId, undefined);
   assert.equal(getRecentEvents(state, { type: 'lishennyy_lured', tags: ['drop'], limit: 1 })[0]?.itemId, 'flashlight');
 });

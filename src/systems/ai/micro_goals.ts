@@ -71,7 +71,7 @@ export function trySetMicroGoal(e: Entity, id: string, opts: MicroGoalOpts): boo
   return true;
 }
 
-export function tickMicroGoal(world: World, entities: Entity[], e: Entity, dt: number, _time: number, _msgs: Msg[]): boolean {
+export function tickMicroGoal(world: World, e: Entity, dt: number, _time: number, _msgs: Msg[]): boolean {
   const ai = e.ai;
   if (!ai) return false;
   
@@ -126,7 +126,7 @@ export function tickMicroGoal(world: World, entities: Entity[], e: Entity, dt: n
           e.angle = Math.atan2(steer.y, steer.x);
         } else {
           if (ai.microGoalId === 'loot_nearby' && ai.microSourceId !== undefined) {
-            const item = entities.find(x => x.id === ai.microSourceId);
+            const item = getEntityIndex().byId.get(ai.microSourceId);
             if (item && item.type === EntityType.ITEM_DROP && item.alive) {
               pickupDrop(world, item, e, _msgs, _time, undefined);
               if (e.type === EntityType.NPC) npcAutoEquipBestWeapon(e);

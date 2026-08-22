@@ -94,7 +94,6 @@ import { railTrainInteractionTargetId, tryUseRailTrain } from './rail_trains';
 import { isRouteCueTarget, routeObjectiveLiftPromptSuffix, tryUseRouteCue } from './route_cues';
 import { tryUseSamosborVariantInteraction } from './samosbor';
 import { tryCoverSeroburmalineSource } from './seroburmaline';
-import { findSlimevikInteractionTarget, tryUseSlimevikInteraction } from './slimevik';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { TUTORIAL_START } from '../data/tutorial_start';
 
@@ -436,8 +435,6 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
   const farHigh = findHighPriorityTargetForLook(ctx);
   if (farHigh) return farHigh;
 
-  const slimevik = findSlimevikInteractionTarget(ctx.world, ctx.player, ctx.entities);
-  if (slimevik) return target('instant', slimevik.id + 640000, 'slimevik', slimevik.x, slimevik.y, 55, ' слизневик');
 
   const gnilushka = findGnilushkaInteractionTarget(ctx.world, ctx.player, ctx.entities);
   if (gnilushka) return target('instant', gnilushka.id + 645000, 'gnilushka', gnilushka.x, gnilushka.y, 54, ' разговор');
@@ -621,7 +618,6 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
   if (farHigh.handled) return farHigh;
 
   if (tryUseGnilushkaInteraction(ctx.world, ctx.player, ctx.state, ctx.entities, ctx.nextEntityId)) return { handled: true, worldChanged: true };
-  if (tryUseSlimevikInteraction(ctx.world, ctx.player, ctx.state, ctx.entities, ctx.nextEntityId)) return { handled: true, worldChanged: true };
 
   const npc = findFriendlyNpc(ctx);
   if (npc) {

@@ -7,10 +7,11 @@
 
 import {
   W, Cell, TEX, Tex, MAX_DRAW, Feature, ContainerKind,
-  type Entity, EntityType, ProjType, MonsterKind,
+  type Entity, EntityType, ProjType,
 } from '../core/types';
 import { World, type WorldGridDirtyRect } from '../core/world';
 import { getCeilingHeightForTier } from '../world/ceiling_heights';
+import { forEachContainerNear } from '../world/container_index';
 import { getActiveSamosborVariant } from '../systems/samosbor_variants_runtime';
 import {
   entityUsesProceduralSprite,
@@ -21,8 +22,9 @@ import {
 import type { TexData } from './textures';
 import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
-import { getCritterRenderEnabled, CRITTERS_POOL } from './critters';
-import { CRITTER_DEFS } from '../data/critters';
+import { critterBlockSize, critterSlotsPerCell, critterSpeciesTable, getCritterRenderEnabled } from './critters';
+import { createCritterPass, type CritterPassHandle } from './critters_pass';
+import { dangerFieldVersion } from '../systems/danger_field';
 import { containerSpr, featureSpr } from '../entities/sprite_index';
 import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites';
 import {
@@ -82,6 +84,7 @@ export interface RenderSceneDebugStats {
   meshInstances: number;
   meshTriangles: number;
   meshDrawCalls: number;
+  critterInstances: number;
   activeAnimatedSprites: number;
   drawnAnimatedSprites: number;
   animatedSpriteTextureCacheSize: number;
@@ -127,6 +130,7 @@ const lastRenderSceneDebugStats: RenderSceneDebugStats = {
   meshInstances: 0,
   meshTriangles: 0,
   meshDrawCalls: 0,
+  critterInstances: 0,
   activeAnimatedSprites: 0,
   drawnAnimatedSprites: 0,
   animatedSpriteTextureCacheSize: 0,
@@ -1703,6 +1707,7 @@ uniform vec3  uFogColor;
 uniform int   uIsProjectile;
 uniform float uTime;
 uniform float uSeed;
+uniform float uSpriteAlpha;   // общая прозрачность спрайта: маскировка, туман, фаза
 uniform int   uIsShadow;      // 1 = shadow mode: sprite silhouette as floor shadow
 uniform float uShadowFloorH;  // camHeight * halfH — for per-pixel floor depth in shadow mode
 uniform vec2  uResolution;
@@ -1947,7 +1952,7 @@ void main() {
     vec3 dynLight = calculateDynamicLighting(wPos, vec3(0.0, 0.0, 1.0));
     rgb = min(vec3(1.0), rgb + rgb * dynLight);
     
-    fragColor = vec4(rgb, c.a);
+    fragColor = vec4(rgb, c.a * uSpriteAlpha);
   }
 }
 `;
@@ -2224,6 +2229,9 @@ interface GLState {
   lightTex: WebGLTexture;
   lightBlinksTex: WebGLTexture;
   fogTex: WebGLTexture;
+  dangerTex: WebGLTexture;      // W×W: поле трупного запаха, его читает живность
+  dangerVersion: number;
+  critterPass?: CritterPassHandle;
   doorStatesTex: WebGLTexture;
   atlasTex: WebGLTexture;
   dynamicSkyTex: WebGLTexture;
@@ -2296,6 +2304,7 @@ const visibleSpriteScale: number[] = [];
 const visibleSpriteZ: number[] = [];
 const visibleProjectile: number[] = [];
 const visibleSeed: number[] = [];
+const visibleSpriteAlpha: number[] = [];
 const visibleSource: VisibleSpriteSource[] = [];
 
 /* ── Shader compilation helpers ───────────────────────────────── */
@@ -2550,6 +2559,15 @@ export const _test_deps = { createMeshPass: _realCreateMeshPass };
 export const _test_createOptionalMeshPass = (gl: WebGL2RenderingContext) => {
   return createOptionalMeshPass(gl);
 };
+
+function createOptionalCritterPass(gl: WebGL2RenderingContext): CritterPassHandle | undefined {
+  try {
+    return createCritterPass(gl);
+  } catch (error) {
+    console.warn('Critter pass disabled:', error);
+    return undefined;
+  }
+}
 
 function createOptionalMeshPass(gl: WebGL2RenderingContext): MeshPassHandle | undefined {
   try {
@@ -3351,7 +3369,7 @@ export function initWebGL(
   const spriteVAO = createSpriteVAO(gl, spriteProgram);
   const spriteUniforms = getUniforms(gl, spriteProgram, [
     'uResolution', 'uScreenX', 'uShearX', 'uSpriteW', 'uSpriteH', 'uStartY', 'uDepth',
-    'uSpriteTex', 'uFogColor', 'uFogF', 'uIsShadow', 'uShadowFloorH', 'uIsProjectile', 'uTime', 'uSeed', 'uSpriteWorldPos',
+    'uSpriteTex', 'uFogColor', 'uFogF', 'uIsShadow', 'uShadowFloorH', 'uIsProjectile', 'uTime', 'uSeed', 'uSpriteWorldPos', 'uSpriteAlpha',
     'uCells', 'uDoorStates', 'uDynamicLightCount', 'uShadowTip',
     'uPos', 'uAngle', 'uLight', 'uLightBlinks', 'uAmbient', 'uSamosborAlert',
     'uFlashlight', 'uToolBeam', 'uToolBeamRange', 'uLightQuality'
@@ -3423,6 +3441,7 @@ export function initWebGL(
   const lightTex = createDataTexR32F(gl, W, W, world.light);
   const lightBlinksTex = createDataTexR8UI(gl, W, W, world.lightBlinks);
   const fogTex = createDataTexR8UI(gl, W, W, world.fog);
+  const dangerTex = createDataTexR8UI(gl, W, W, world.dangerField);
   const doorStatesData = rebuildDoorStates(world);
   const doorStatesTex = createDataTexR8UI(gl, W, W, doorStatesData);
 
@@ -3464,6 +3483,9 @@ export function initWebGL(
     particleColorData: particleBuffers.colorData,
     particleUniforms,
     cellsTex, wallTexTex, floorTexTex, featuresTex, ceilTex, lightTex, lightBlinksTex, fogTex,
+    dangerTex,
+    dangerVersion: -1,
+    critterPass: createOptionalCritterPass(gl),
     doorStatesTex, atlasTex,
     dynamicSkyTex,
     dynamicSkyW: 1,
@@ -3606,6 +3628,13 @@ export function updateWorldData(world: World): void {
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog);
   glState.fogVersion = world.fogVersion;
 
+  // Смена мира минтит свежий dangerField, а счётчик версии живёт в модуле поля и
+  // не сбрасывается — поэтому заливаем принудительно, иначе живность нового
+  // этажа читала бы кровь предыдущего.
+  gl.bindTexture(gl.TEXTURE_2D, glState.dangerTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.dangerField);
+  glState.dangerVersion = dangerFieldVersion();
+
   gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, rebuildDoorStates(world, glState.doorStatesData));
 
@@ -3657,6 +3686,14 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
   if (world.fogVersion !== glState.fogVersion) {
     uploadGridTexture(gl, glState.fogTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.fog, world.takeFogDirtyRects());
     glState.fogVersion = world.fogVersion;
+  }
+
+  // Поле трупного запаха меняется дважды в секунду и только пока в нём что-то
+  // есть; на чистом этаже эта ветка не срабатывает ни разу.
+  const dangerVersion = dangerFieldVersion();
+  if (dangerVersion !== glState.dangerVersion) {
+    uploadGridTexture(gl, glState.dangerTex, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.dangerField, null);
+    glState.dangerVersion = dangerVersion;
   }
 
   // Door states
@@ -3721,6 +3758,7 @@ export function renderSceneGL(
   visualSurfaceProfile: ResolvedVisualSurfaceProfile = EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE,
   lightingQuality = 4,
   currentFps?: number,
+  designFloorId?: string,
 ): void {
   lastRenderSceneDebugStats.meshEnabled = visualGeometryProfile.enabled;
   lastRenderSceneDebugStats.meshInstances = 0;
@@ -3856,6 +3894,7 @@ export function renderSceneGL(
     toolBeamRange,
     samosborActive,
     lightingQuality,
+    camera.mode !== 'player',
   );
 
   // ── Render transient particles into FBO ──
@@ -3865,7 +3904,7 @@ export function renderSceneGL(
 
   // ── Render critters pass ──
   if (getCritterRenderEnabled(currentFps)) {
-    drawCritters(px, py, pAngle, pPitch, fogDensity, purpleFog, fogRgb, planeLen);
+    drawCritters(px, py, pAngle, pPitch, camHeight, fogDensity, purpleFog, fogRgb, planeLen, ambientLight, flashlight, time, designFloorId);
   }
 
   gl.disable(gl.DEPTH_TEST);
@@ -3946,10 +3985,6 @@ function toroidalDelta(a: number, b: number): number {
   return d;
 }
 
-function wrapWorldFloat(v: number): number {
-  return ((v % W) + W) % W;
-}
-
 function distanceFogFactor(dist: number, fogDensity: number): number {
   if (fogDensity <= 0 || dist <= 0) return 0;
   const x = dist * fogDensity;
@@ -3971,12 +4006,6 @@ function samosborScreenFxCode(screenFx: string | undefined): number {
     case 'violet_noise':
     default: return 0;
   }
-}
-
-function hasTumannikRenderOffset(e: Entity): boolean {
-  if (e.monsterKind !== MonsterKind.TUMANNIK) return false;
-  const ai = e.ai;
-  return Math.abs(ai?.fogOffsetX ?? 0) > 0.05 || Math.abs(ai?.fogOffsetY ?? 0) > 0.05;
 }
 
 function pushVisibleSprite(
@@ -4003,6 +4032,7 @@ function pushVisibleSprite(
   visibleProjectile[count] = projectile;
   visibleSeed[count] = seed;
   visibleSource[count] = source;
+  visibleSpriteAlpha[count] = entity?.spriteAlpha ?? 1;
   visibleOrder[count] = count;
   return count + 1;
 }
@@ -4069,17 +4099,20 @@ function containerSpriteScale(kind: ContainerKind): number {
 
 function collectStaticObjectSprites(world: World, px: number, py: number, count: number): number {
   const maxDist2 = MAX_DRAW * MAX_DRAW;
-  for (const container of world.containers) {
-    if (container.access === 'secret' && !container.discovered) continue;
-    // Distance first: the tag scans below are two linear array walks, and the
-    // whole floor's container list is swept every frame.
+  // Ящики берутся из локального индекса: список этажа целиком мели каждый кадр
+  // ради десятка видимых. Радиус на клетку шире дальности — центр спрайта сдвинут.
+  let spriteCapReached = false;
+  forEachContainerNear(world, px, py, MAX_DRAW + 1, container => {
+    if (spriteCapReached) return;
+    if (container.access === 'secret' && !container.discovered) return;
+    // Distance first: the tag scans below are two linear array walks.
     const ox = container.x + 0.55;
     const oy = container.y + 0.5;
     const dx = toroidalDelta(ox, px);
     const dy = toroidalDelta(oy, py);
     const dist = dx * dx + dy * dy;
-    if (dist >= maxDist2) continue;
-    if (container.tags.includes('feature_loot') || container.tags.includes('mesh_hidden')) continue;
+    if (dist >= maxDist2) return;
+    if (container.tags.includes('feature_loot') || container.tags.includes('mesh_hidden')) return;
     count = pushVisibleSprite(
       count,
       null,
@@ -4093,8 +4126,9 @@ function collectStaticObjectSprites(world: World, px: number, py: number, count:
       container.id,
       VisibleSpriteSource.CONTAINER,
     );
-    if (count >= VISIBLE_SPRITE_CAP) return count;
-  }
+    if (count >= VISIBLE_SPRITE_CAP) spriteCapReached = true;
+  });
+  if (spriteCapReached) return count;
 
   const cx = Math.floor(px);
   const cy = Math.floor(py);
@@ -4153,6 +4187,16 @@ function renderSpritesGL(
   toolBeamRange: number = 0,
   samosborActive: boolean = false,
   lightingQuality: number = 4,
+  /**
+   * Кадр отвязан от игрока — значит его тело надо РИСОВАТЬ.
+   *
+   * В первом лице тело не рисуется, и это верно. Но кадр отвязывается: сцена
+   * этажа, смерть, свободная камера, трейлер — во всех четырёх режимах камера
+   * улетает на десятки клеток, а игрок оставался невидимкой. Заметнее всего это
+   * было по его собственному баблу речи: реплика висела в воздухе над пустым
+   * местом, где полагалось стоять человеку.
+   */
+  drawPlayerBody: boolean = false,
 ): void {
   if (!glState) return;
   const { gl } = glState;
@@ -4178,12 +4222,11 @@ function renderSpritesGL(
   getEntityIndex().queryRadiusCapped(px, py, MAX_DRAW, visibleEntityQuery, ENTITY_MASK_VISIBLE, VISIBLE_ENTITY_QUERY_CAP);
   lastRenderSceneDebugStats.visibleEntityQueryResults = visibleEntityQuery.length;
   for (const e of visibleEntityQuery) {
-    if (!e.alive || isPlayerEntity(e)) continue;
+    if (!e.alive || (!drawPlayerBody && isPlayerEntity(e))) continue;
+    if ((e.spriteAlpha ?? 1) <= 0.01) continue;
     if (meshBackedBillboardSprites && e.type === EntityType.BILLBOARD) continue;
-    const renderX = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.x + (e.ai?.fogOffsetX ?? 0)) : e.x;
-    const renderY = hasTumannikRenderOffset(e) ? wrapWorldFloat(e.y + (e.ai?.fogOffsetY ?? 0)) : e.y;
-    const dx = toroidalDelta(renderX, px);
-    const dy = toroidalDelta(renderY, py);
+    const dx = toroidalDelta(e.x, px);
+    const dy = toroidalDelta(e.y, py);
     const dist = dx * dx + dy * dy;
     if (dist < MAX_DRAW * MAX_DRAW) {
       const isProjectile = e.type === EntityType.PROJECTILE
@@ -4204,28 +4247,6 @@ function renderSpritesGL(
       );
       if (visibleCount >= VISIBLE_SPRITE_CAP) break;
     }
-    if (hasTumannikRenderOffset(e)) {
-      const realDx = toroidalDelta(e.x, px);
-      const realDy = toroidalDelta(e.y, py);
-      const realDist = realDx * realDx + realDy * realDy;
-      const realLight = world.light[world.idx(Math.floor(e.x), Math.floor(e.y))] ?? 0;
-      if (realDist < 4.2 * 4.2 || realLight >= 0.28) {
-        visibleCount = pushVisibleSprite(
-          visibleCount,
-          e,
-          realDx,
-          realDy,
-          realDist,
-          e.sprite ?? 0,
-          Math.min(0.7, entityWorldSpriteScale(e)),
-          e.spriteZ ?? 0,
-          0,
-          (e.id % 997) * 0.137 + 19,
-          VisibleSpriteSource.ENTITY,
-        );
-        if (visibleCount >= VISIBLE_SPRITE_CAP) break;
-      }
-    }
   }
   if (renderStaticObjectSprites) {
     visibleCount = collectStaticObjectSprites(world, px, py, visibleCount);
@@ -4237,6 +4258,7 @@ function renderSpritesGL(
   visibleOrder.length = visibleCount;
   visibleSpriteIdx.length = visibleCount;
   visibleSpriteScale.length = visibleCount;
+  visibleSpriteAlpha.length = visibleCount;
   visibleSpriteZ.length = visibleCount;
   visibleProjectile.length = visibleCount;
   visibleSeed.length = visibleCount;
@@ -4439,6 +4461,7 @@ function renderSpritesGL(
           gl.uniform1f(su['uFogF']!, ff);
           gl.uniform1i(su['uIsProjectile']!, 0);
           gl.uniform1f(su['uSeed']!, shadowAlpha);
+          gl.uniform1f(su['uSpriteAlpha']!, 1);
           gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
           gl.depthMask(false);
           gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -4463,6 +4486,7 @@ function renderSpritesGL(
     gl.uniform1f(su['uFogF']!, ff);
     gl.uniform1i(su['uIsProjectile']!, isProjectile);
     gl.uniform3f(su['uSpriteWorldPos']!, px + dx, py + dy, spriteZ);
+    gl.uniform1f(su['uSpriteAlpha']!, visibleSpriteAlpha[vi] ?? 1);
     if (isProjectile === 2) {
       gl.uniform1f(su['uSeed']!, visibleSeed[vi]);
     }
@@ -4494,101 +4518,49 @@ function renderSpritesGL(
 
 /* ── Transient particle rendering ─────────────────────────────── */
 
-function drawCritters(px: number, py: number, pAngle: number, pPitch: number, fogDensity: number, purpleFog: number, activeFogRgb: readonly [number, number, number], planeLen: number): void {
-  if (!glState || CRITTERS_POOL.length === 0) return;
-  const { gl } = glState;
+function drawCritters(
+  px: number, py: number, pAngle: number, pPitch: number, camHeight: number,
+  fogDensity: number, purpleFog: number,
+  activeFogRgb: readonly [number, number, number],
+  planeLen: number, ambientLight: number, flashlight: number,
+  time: number, designFloorId: string | undefined,
+): void {
+  if (!glState?.critterPass) return;
+  const species = critterSpeciesTable(designFloorId);
+  if (species.count <= 0) return;
 
-  const dirX = Math.cos(pAngle);
-  const dirY = Math.sin(pAngle);
-  const planeX = -dirY * planeLen;
-  const planeY = dirX * planeLen;
-  const horizonShift = Math.floor(pPitch * SCR_H);
-  const halfH = Math.floor(SCR_H / 2) + horizonShift;
-  const invDet = 1.0 / (planeX * dirY - dirX * planeY);
   const skyFog = activeDynamicSky?.fogTint;
   const fogR = purpleFog ? activeFogRgb[0] / 255 : skyFog ? skyFog.r / 255 : 5 / 255;
   const fogG = purpleFog ? activeFogRgb[1] / 255 : skyFog ? skyFog.g / 255 : 5 / 255;
   const fogB = purpleFog ? activeFogRgb[2] / 255 : skyFog ? skyFog.b / 255 : 8 / 255;
 
-  let visibleCount = 0;
-  const instanceData = glState.particleInstanceData;
-  const colorData = glState.particleColorData;
-  for (const c of CRITTERS_POOL) {
-    if (!c.active) continue;
-    if (visibleCount >= PARTICLE_INSTANCE_CAP) break;
-
-    let dx = c.x - px;
-    let dy = c.y - py;
-    if (dx > W / 2) dx -= W;
-    if (dx < -W / 2) dx += W;
-    if (dy > W / 2) dy -= W;
-    if (dy < -W / 2) dy += W;
-
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist >= 15) continue; // max draw dist for critters
-
-    const txf = invDet * (dirY * dx - dirX * dy);
-    const tyf = invDet * (-planeY * dx + planeX * dy);
-    if (tyf <= 0.1) continue;
-
-    const sx = Math.floor((SCR_W / 2) * (1 + txf / tyf));
-    const def = CRITTER_DEFS[c.defId];
-    if (!def) continue;
-
-    const size = def.size;
-    const screenSize = Math.min(
-      PARTICLE_MAX_SCREEN_SIZE * 2.0,
-      (SCR_H / tyf) * PARTICLE_WORLD_SCREEN_SCALE * size
-    );
-    if (screenSize < PARTICLE_MIN_SCREEN_SIZE) continue;
-    const pad = Math.ceil(screenSize + 1);
-    if (sx < -pad || sx >= SCR_W + pad) continue;
-
-    const sy = Math.floor(halfH + SCR_H / (tyf * 2) - c.z * SCR_H / tyf);
-    if (sy < -pad || sy >= SCR_H + pad) continue;
-
-    const fogF = distanceFogFactor(dist, fogDensity);
-    const alpha = 1.0 * (1 - fogF * 0.75);
-    if (alpha <= 0.03) continue;
-
-    const [r, g, b] = def.color;
-    const rNorm = r / 255;
-    const gNorm = g / 255;
-    const bNorm = b / 255;
-
-    const invFogF = 1 - fogF;
-    const normDepth = Math.max(0.0, Math.min(0.999, 1.0 - 0.1 / Math.max(0.1, tyf)));
-    const di = visibleCount << 2;
-    instanceData[di] = sx;
-    instanceData[di + 1] = sy;
-    instanceData[di + 2] = screenSize;
-    instanceData[di + 3] = normDepth;
-    colorData[di] = rNorm * invFogF + fogR * fogF;
-    colorData[di + 1] = gNorm * invFogF + fogG * fogF;
-    colorData[di + 2] = bNorm * invFogF + fogB * fogF;
-    colorData[di + 3] = alpha;
-    visibleCount++;
-  }
-
-  if (visibleCount > 0) {
-    gl.useProgram(glState.particleProgram);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.depthMask(false);
-
-    const pu = glState.particleUniforms;
-    gl.uniform2f(pu['uResolution']!, SCR_W, SCR_H);
-    gl.bindVertexArray(glState.particleVAO);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, glState.particleInstanceBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, instanceData, 0, visibleCount * 4);
-    gl.bindBuffer(gl.ARRAY_BUFFER, glState.particleColorBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, colorData, 0, visibleCount * 4);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, visibleCount);
-
-    gl.depthMask(true);
-    gl.disable(gl.BLEND);
-  }
+  lastRenderSceneDebugStats.critterInstances = glState.critterPass.render(glState.gl, {
+    posX: px,
+    posY: py,
+    angle: pAngle,
+    pitch: pPitch,
+    camHeight,
+    planeLen,
+    time,
+    ambient: ambientLight,
+    flashlight,
+    fogDensity,
+    fogColor: [fogR, fogG, fogB],
+    screenW: SCR_W,
+    screenH: SCR_H,
+    worldScreenScale: PARTICLE_WORLD_SCREEN_SCALE,
+    minScreenSize: PARTICLE_MIN_SCREEN_SIZE,
+    maxScreenSize: PARTICLE_MAX_SCREEN_SIZE * 2.0,
+    cullDist: PARTICLE_CULL_DIST,
+    cellsTex: glState.cellsTex,
+    featuresTex: glState.featuresTex,
+    lightTex: glState.lightTex,
+    dangerTex: glState.dangerTex,
+    species: species.data,
+    speciesCount: species.count,
+    block: critterBlockSize(),
+    perCell: critterSlotsPerCell(),
+  });
 }
 
 function renderParticlesGL(
@@ -4715,6 +4687,8 @@ export function disposeWebGL(): void {
   gl.deleteTexture(glState.ceilTex);
   gl.deleteTexture(glState.lightTex);
   gl.deleteTexture(glState.fogTex);
+  gl.deleteTexture(glState.dangerTex);
+  glState.critterPass?.dispose(gl);
   gl.deleteTexture(glState.doorStatesTex);
   gl.deleteTexture(glState.atlasTex);
   gl.deleteTexture(glState.dynamicSkyTex);

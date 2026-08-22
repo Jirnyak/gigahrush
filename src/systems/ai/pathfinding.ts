@@ -2,7 +2,7 @@
 
 import {
   W, Cell, DoorState,
-  type Entity, type Msg,
+  type Entity, type Msg, type Room,
   EntityType,  AIGoal, RoomType,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -10,7 +10,7 @@ import { PATH_BLOCKER_SUBDIV, PATH_BLOCKER_BYTES_PER_CELL } from '../../core/pat
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
 
 import { actorContactDoor } from '../door_state';
-import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
+import { actorOccupyRadius, stepActorBy } from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
@@ -40,6 +40,17 @@ const PATH_CHUNK_LIMIT = 1048576;
 
 const PATH_WAYPOINT_REACH = 0.18;
 const PATH_WAYPOINT_REACH_SQ = PATH_WAYPOINT_REACH * PATH_WAYPOINT_REACH;
+/* Какую долю задуманного шага надо реально отыграть по направлению к вейпойнту,
+ * чтобы кадр считался продвижением. Скольжение вдоль стены и расталкивание
+ * соседями оставляют крохи — они не должны обнулять счётчик залипания. */
+const PATH_PROGRESS_MIN_FRAC = 0.25;
+/* Окно сглаживания пути, в подклетках, и радиус дальней пробы, в клетках.
+ * Трассировка стоит ровно столько, сколько луч пробегает по ОТКРЫТОМУ месту:
+ * в квартирах он умирает о стену через пару подклеток, а в министерских залах
+ * проба до конца маршрута пробегала полсотни клеток на каждого идущего каждый
+ * кадр. Дальше двух окон хвост не схлопываем — окно и так ведёт почти прямо. */
+const PATH_SMOOTH_LOOKAHEAD = 20;
+const PATH_SMOOTH_FAR_PROBE_SQ = (2 * PATH_SMOOTH_LOOKAHEAD / PATH_BLOCKER_SUBDIV) ** 2;
 const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
 const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
@@ -286,7 +297,7 @@ export interface PathfindingStats {
   bfsVisited: number;
 }
 
-type AssignPathStatus = 'assigned' | 'same' | 'not_found';
+export type AssignPathStatus = 'assigned' | 'same' | 'not_found';
 
 const _behaviorFlowFields = new Map<string, BehaviorFlowField>();
 const _flowPathAssignments = new WeakMap<Entity, FlowPathAssignment>();
@@ -1481,8 +1492,6 @@ function continueBehaviorFlowPath(world: World, e: Entity): AssignPathStatus {
  * входе в трассировку: между вызовами геометрия уже может быть другой. */
 let _losMemoCell = -1;
 let _losMemoMask = 0;
-const _occupyOpt = { ignoreFineBlockers: false };
-
 function losSubcellPassable(world: World, si: number): boolean {
   const sx = si % SW;
   const sy = (si / SW) | 0;
@@ -1570,13 +1579,95 @@ function hasLineOfSight(world: World, x0: number, y0: number, x1: number, y1: nu
 }
 
 
+/**
+ * Цель пути нормализуется одинаково при назначении и при сравнении: обёртка по
+ * тору плюс сдвиг целой координаты в центр клетки.
+ *
+ * Сторожа пересборки пути сравнивали `ai.tx` с сырым `Math.floor(...)`, а сюда
+ * ложилось `floor + 0.5` — условие «цель сменилась» было истинным ВСЕГДА, и
+ * полноценный поиск шёл каждый кадр на каждого идущего к приманке или на шум.
+ */
+export function pathTargetCoord(world: World, v: number): number {
+  const w = world.wrap(v);
+  return Number.isInteger(w) ? w + 0.5 : w;
+}
+
+/** Совпадает ли уже назначенная цель актёра с (tx, ty) в тех же координатах. */
+export function pathTargetIs(world: World, e: Entity, tx: number, ty: number): boolean {
+  const ai = e.ai;
+  return ai !== undefined && ai.tx === pathTargetCoord(world, tx) && ai.ty === pathTargetCoord(world, ty);
+}
+
+/* Золотой угол: соседние id разводятся максимально далеко по кольцу, а не
+ * садятся в горстку слотов. */
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+/* Сопряжённая золотому сечению дробь — второй независимый разброс из того же id. */
+const GOLDEN_FRAC = 0.618033988749895;
+
+function goldenFrac(id: number, salt: number): number {
+  const v = (id + 1) * GOLDEN_FRAC + salt * 0.7548776662466927;
+  return v - Math.floor(v);
+}
+
+/**
+ * Детерминированное смещение общей цели от `e.id`.
+ *
+ * Все, кто шёл «туда же», целились в одну и ту же клетку и складывались в одну
+ * подклетку: погоня возвращала голое `floor(target)`, рутина — центр комнаты.
+ * Кольцо здесь непрерывное (золотой угол по id, радиус — из того же id), а не
+ * набор из четырёх-восьми слотов, поэтому оно не насыщается на толпе.
+ *
+ * Ноль памяти, ноль полей в `AIState`, ноль бейка. Возвращает координаты
+ * КЛЕТКИ; если смещённая клетка непроходима, пробует ту же прямую в обратную
+ * сторону и только потом сдаётся к самой цели.
+ */
+export function spreadTargetCell(
+  world: World,
+  e: Entity,
+  tx: number,
+  ty: number,
+  radius: number,
+): { x: number; y: number } {
+  const fallbackX = Math.floor(world.wrap(tx));
+  const fallbackY = Math.floor(world.wrap(ty));
+  if (!(radius > 0)) return { x: fallbackX, y: fallbackY };
+  const angle = e.id * GOLDEN_ANGLE;
+  // sqrt даёт равномерность по площади круга, а не сгущение к центру.
+  const r = radius * Math.sqrt(goldenFrac(e.id, 1));
+  const ax = Math.cos(angle) * r;
+  const ay = Math.sin(angle) * r;
+  for (const sign of SPREAD_SIGNS) {
+    const cx = Math.floor(world.wrap(tx + ax * sign));
+    const cy = Math.floor(world.wrap(ty + ay * sign));
+    if (!world.solid(cx, cy)) return { x: cx, y: cy };
+  }
+  return { x: fallbackX, y: fallbackY };
+}
+
+const SPREAD_SIGNS = [1, -1] as const;
+
+/**
+ * Точка внутри прямоугольника комнаты, своя у каждого актёра. Раньше вся рутина
+ * целилась в `room.x + floor(w/2)` — одну клетку на всю комнату, из-за чего
+ * жильцы стекались в её центр и стояли друг в друге.
+ */
+export function roomTargetCell(world: World, e: Entity, room: Room): { x: number; y: number } {
+  const innerW = room.w - 2;
+  const innerH = room.h - 2;
+  const cx = room.x + (room.w >> 1);
+  const cy = room.y + (room.h >> 1);
+  if (innerW < 1 || innerH < 1) return { x: world.wrap(cx), y: world.wrap(cy) };
+  const x = world.wrap(room.x + 1 + Math.floor(goldenFrac(e.id, 0) * innerW));
+  const y = world.wrap(room.y + 1 + Math.floor(goldenFrac(e.id, 2) * innerH));
+  if (!world.solid(x, y)) return { x, y };
+  return { x: world.wrap(cx), y: world.wrap(cy) };
+}
+
 export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: number): AssignPathStatus {
   const ai = e.ai!;
   _flowPathAssignments.delete(e);
-  tx = world.wrap(tx);
-  ty = world.wrap(ty);
-  if (Number.isInteger(tx)) tx += 0.5;
-  if (Number.isInteger(ty)) ty += 0.5;
+  tx = pathTargetCoord(world, tx);
+  ty = pathTargetCoord(world, ty);
 
   const start = subcellIdx(e.x, e.y);
   const target = subcellIdx(tx, ty);
@@ -1637,10 +1728,8 @@ export function clearEntitySteeringPath(e: Entity): void {
 }
 
 export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: number): { x: number; y: number; nextCell: number } | null {
-  tx = world.wrap(tx);
-  ty = world.wrap(ty);
-  if (Number.isInteger(tx)) tx += 0.5;
-  if (Number.isInteger(ty)) ty += 0.5;
+  tx = pathTargetCoord(world, tx);
+  ty = pathTargetCoord(world, ty);
 
   const start = subcellIdx(e.x, e.y);
   const target = subcellIdx(tx, ty);
@@ -1701,10 +1790,6 @@ export function steerEntityTowardCell(world: World, e: Entity, tx: number, ty: n
   };
 }
 
-function wrapFloat(v: number): number {
-  return ((v % W) + W) % W;
-}
-
 /* ── Follow path ──────────────────────────────────────────────── */
 // Pure grid-based follower: entities traverse the BFS path subcell by subcell.
 // Float coordinates are interpolated for visual smoothness only.
@@ -1730,7 +1815,11 @@ export function followPath(world: World, e: Entity, dt: number): void {
         emitMarkovBark(e, _barkMsgs, _barkTime, 'ambient', 'Пришли.', BARK_CHANCE_ARRIVE, '#aac');
       }
     }
-    if (e.type === EntityType.NPC && ai.goal !== AIGoal.HIDE && ai.goal !== AIGoal.FLEE) {
+    /* Выход из залипания работает для ЛЮБОГО актёра. Раньше страховка была
+     * обусловлена EntityType.NPC, и монстр с недостижимой целью просто стоял
+     * на месте до конца этажа: путь ему не строился, а поблуждать было
+     * некому. Ветка едина — видовых развилок здесь нет. */
+    if (ai.goal !== AIGoal.HIDE && ai.goal !== AIGoal.FLEE) {
       ai.stuck += dt;
       // Higher threshold reduces corridor ping-pong: NPCs linger longer before re-wandering
       if (ai.stuck > 3 + rng() * 2) {
@@ -1754,13 +1843,17 @@ export function followPath(world: World, e: Entity, dt: number): void {
 
   // Lookahead Path Smoothing (String Pulling)
   const lastIdx = ai.path.length - 1;
-  const lookaheadLimit = lastIdx < ai.pi + 20 ? lastIdx : ai.pi + 20;
+  const lookaheadLimit = lastIdx < ai.pi + PATH_SMOOTH_LOOKAHEAD ? lastIdx : ai.pi + PATH_SMOOTH_LOOKAHEAD;
   let lookaheadIndex = ai.pi;
 
   // Дальний конец пробуется первым: одна удачная линия схлопывает весь хвост.
   // Но когда окно и так достаёт до конца, эта проба — ровно первая итерация
   // цикла ниже, и раньше она стоила вторую трассировку на каждый вызов.
-  if (lookaheadLimit < lastIdx && hasLineOfSightToSubcell(world, e, ai.path[lastIdx])) {
+  // Дальний конец за радиусом пробы не трогаем: там луч почти всегда упрётся,
+  // а заплатим мы за всё открытое место, которое он до этого пробежал.
+  if (lookaheadLimit < lastIdx
+    && world.dist2(e.x, e.y, subcellWorldX(ai.path[lastIdx]), subcellWorldY(ai.path[lastIdx])) <= PATH_SMOOTH_FAR_PROBE_SQ
+    && hasLineOfSightToSubcell(world, e, ai.path[lastIdx])) {
     lookaheadIndex = lastIdx;
   } else {
     for (let i = lookaheadLimit; i > ai.pi; i--) {
@@ -1787,8 +1880,6 @@ export function followPath(world: World, e: Entity, dt: number): void {
   if (distSq < 0.0001) { ai.pi++; ai.stuck = 0; return; }
 
   const speed = aiPathMoveSpeed(e) * getCellHazardMoveMultiplier(world, e) * dt;
-  const prevX = e.x;
-  const prevY = e.y;
 
   // With string pulling, movement is a direct Euclidean step towards the target.
   const dist = Math.sqrt(distSq);
@@ -1803,24 +1894,19 @@ export function followPath(world: World, e: Entity, dt: number): void {
   openPathDoorAtWorld(world, e, e.x + nx * 0.7, e.y + ny * 0.7);
 
   const step = Math.min(speed, dist);
-  // Запрос на занятие клетки живёт ровно до двух чтений подряд и никем не
-  // удерживается: одна общая ячейка вместо объекта на каждый шаг каждого актёра.
-  const opt = _occupyOpt;
-  opt.ignoreFineBlockers = entityIgnoresFineBlockers(e);
+  // Шаг единый и изотропный: полный 2D-вектор, осевое скольжение только когда
+  // он упёрся. Радиус тела наконец реальный — actorOccupyRadius вместо нуля.
+  const radius = actorOccupyRadius(e);
+  stepActorBy(world, e, nx * step, ny * step, radius);
 
-  const testX = wrapFloat(e.x + nx * step);
-  if (canActorOccupy(world, testX, e.y, 0, opt)) {
-    e.x = testX;
-  }
-  
-  const testY = wrapFloat(e.y + ny * step);
-  if (canActorOccupy(world, e.x, testY, 0, opt)) {
-    e.y = testY;
-  }
-
-  // Stuck: did the entity actually move?
-  const moved = (e.x !== prevX || e.y !== prevY);
-  ai.stuck = moved ? 0 : ai.stuck + dt;
+  /* Залипание меряется ПРОДВИЖЕНИЕМ ПО МАРШРУТУ, а не фактом смещения.
+   * Раньше здесь стояло `e.x !== prevX || e.y !== prevY`, и упёршийся под углом
+   * в стену актёр всегда полз вдоль свободной оси: счётчик обнулялся каждый
+   * кадр, а вся лестница спасения ниже была недостижима. */
+  const advanced = step > 0
+    && dist - world.dist(e.x, e.y, subcellWorldX(targetSi), subcellWorldY(targetSi))
+      >= step * PATH_PROGRESS_MIN_FRAC;
+  ai.stuck = advanced ? 0 : ai.stuck + dt;
   if (ai.stuck > 2 && ai.pi < ai.path.length - 1) {
     ai.pi++;
     ai.stuck = 0;
@@ -1941,9 +2027,8 @@ export function gotoNearestRoomOfTypes(world: World, e: Entity, types: readonly 
     }
     if (best < 0) return false;
     const room = world.rooms[best]!;
-    const tx = room.x + Math.floor(room.w / 2) + 0.5;
-    const ty = room.y + Math.floor(room.h / 2) + 0.5;
-    return tryAssignPathToCell(world, e, tx, ty) !== 'not_found';
+    const spot = roomTargetCell(world, e, room);
+    return tryAssignPathToCell(world, e, spot.x, spot.y) !== 'not_found';
   }
   const key = roomTypeFieldKey(types);
   const status = tryAssignBehaviorFlowPath(world, e, key, roomTypeSourceProvider(types));
@@ -1970,9 +2055,8 @@ export function gotoRoom(world: World, e: Entity, targetRoomType: RoomType): Ass
   if (ids.length === 0) return 'not_found';
   
   const room = world.rooms[ids[0]];
-  const tx = room.x + Math.floor(room.w / 2) + 0.5;
-  const ty = room.y + Math.floor(room.h / 2) + 0.5;
-  return tryAssignPathToCell(world, e, tx, ty);
+  const spot = roomTargetCell(world, e, room);
+  return tryAssignPathToCell(world, e, spot.x, spot.y);
 }
 
 /* ── Helper: wander randomly nearby ───────────────────────────── */
@@ -2014,9 +2098,8 @@ export function wanderFar(world: World, e: Entity): void {
     for (let attempt = 0; attempt < ROUTINE_FAR_ATTEMPTS; attempt++) {
       const room = world.rooms[Math.floor(rng() * world.rooms.length)];
       if (!room || room.w < 2 || room.h < 2) continue;
-      const tx = room.x + Math.floor(room.w / 2);
-      const ty = room.y + Math.floor(room.h / 2);
-      const status = tryAssignPathToCell(world, e, tx, ty);
+      const spot = roomTargetCell(world, e, room);
+      const status = tryAssignPathToCell(world, e, spot.x, spot.y);
       if (status !== 'not_found') return;
     }
   }

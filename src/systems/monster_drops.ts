@@ -47,13 +47,34 @@ export function dropMonsterLoot(
 ): GeneratedLoot[] {
   if (monster.type !== EntityType.MONSTER || monster.monsterKind === undefined) return [];
 
+  // Съеденное возвращается первым и целиком: то, что монстр носил в себе, — не
+  // его лут, а чужая вещь. Общее правило, а не случай одного вида.
+  const swallowed = monster.inventory ?? [];
   const lootItems = generateMonsterLoot(monster.monsterKind, rand);
-  if (lootItems.length === 0) return [];
+  if (lootItems.length === 0 && swallowed.length === 0) return [];
 
   const spawned = [];
   // Slots are taken once and decremented locally — the per-item recheck was a
   // full entities scan per loot item on every death.
-  let slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, lootItems.length);
+  let slots = entitySpawnSlots(entities, EntityType.ITEM_DROP, lootItems.length + swallowed.length);
+  for (const item of swallowed) {
+    if (slots <= 0 || item.count <= 0) break;
+    slots--;
+    entities.push({
+      id: nextId.v++,
+      type: EntityType.ITEM_DROP,
+      x: monster.x + (rand() - 0.5) * 0.35,
+      y: monster.y + (rand() - 0.5) * 0.35,
+      angle: 0,
+      pitch: 0,
+      alive: true,
+      speed: 0,
+      sprite: Spr.ITEM_DROP,
+      inventory: [{ defId: item.defId, count: item.count, data: item.data }],
+    });
+    spawned.push({ itemDefId: item.defId, amount: item.count });
+  }
+  monster.inventory = [];
   for (const loot of lootItems) {
     if (slots <= 0) break;
     slots--;

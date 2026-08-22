@@ -5,7 +5,7 @@ import { World } from '../core/world';
 import { stampLocalMark, stampMark, MarkType } from './surface_marks';
 import { Spr } from '../entities/sprite_index';
 import { ensureEntityIndex } from './entity_index';
-import { markDangerFieldCell } from './danger_field';
+import { DANGER_FIELD_DEATH_IMPULSE, markDangerFieldCell } from './danger_field';
 import { addVisualSlotByPriority, hasVisualSlotCode, removeVisualSlotCode } from '../world/visual_cell_slots';
 import { mathRng as rng, SeedRng } from '../core/rand';
 
@@ -347,6 +347,12 @@ export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: n
   const intensity = Math.min(220, 80 + dmg * 3);
   stampMark(world, cx, cy, fx, fy, radius, MarkType.SPLAT, seed, sr, sg, sb, intensity);
 
+  // Ранение тоже пахнет — слабее смерти и пропорционально урону. Поле читают
+  // и NPC (опасность комнаты), и фоновая живность (мухи на место боя).
+  const woundIdx = world.idx(cx, cy);
+  world.dangerField[woundIdx] = Math.min(255, world.dangerField[woundIdx] + Math.min(20, 4 + dmg * 0.3));
+  markDangerFieldCell(world, cx, cy);
+
   // Directional wall splatter at impact height
   splatAdjacentWalls(world, ex, ey, radius * 0.6, Math.floor(intensity * 0.7), seed, sr, sg, sb, pvx, pvy, hitZ);
 
@@ -425,7 +431,7 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
   
   // Danger/Blood vector field impulse
   const fieldIdx = world.idx(cx, cy);
-  world.dangerField[fieldIdx] = Math.min(255, world.dangerField[fieldIdx] + 50);
+  world.dangerField[fieldIdx] = Math.min(255, world.dangerField[fieldIdx] + DANGER_FIELD_DEATH_IMPULSE);
   markDangerFieldCell(world, cx, cy);
 
   const sRng = new SeedRng(seed);

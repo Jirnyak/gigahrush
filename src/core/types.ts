@@ -459,39 +459,12 @@ export interface AIState {
   baitMarkerId?: number;      // cached monster bait marker id
   baitScanCd?: number;        // cooldown until next bounded bait scan
   baitLine?: MonsterBaitLineState; // Tonkaya Ten prepared dark corridor/door line
-  lightScanCd?: number;       // Лишенный bounded light-source scan cooldown
-  lightTargetX?: number;
-  lightTargetY?: number;
-  lightTargetId?: number;
-  lightTargetKind?: 'actor' | 'drop' | 'feature';
-  lightAvoidTimer?: number;   // short UV/bright-cell repulsion window
-  lightCueAt?: number;
   parasiteRehostCd?: number;  // Head slug bounded corpse/stunned-host scan cooldown
   parasiteScanOffset?: number; // Head slug rotating corpse scan cursor; avoids full entity scans
   parasiteQuarantineCd?: number; // Head slug sealed-room event throttle
-  meatTargetId?: number;      // Olgoy cached corpse target id
-  meatScanCd?: number;        // Olgoy bounded corpse scent scan cooldown
-  choirCountdown?: number;    // хоровая матка: seconds until wet choir spawn
-  choirCueStep?: number;      // last announced countdown step
-  choirChildIds?: number[];   // capped child ids owned by a spawner encounter
-  choirLastChildCount?: number;
-  choirSpawnedChildren?: number;
-  choirVulnerableTimer?: number;
-  choirLastHp?: number;       // damage gate memory while membranes are closed
   sourceChildIds?: number[];  // generic source/hive-owned children, cleaned when source resolves
   sourceEntityId?: number;    // child backlink to its source entity
   sourceSpawnedChildren?: number; // deterministic spawn slot cursor for source/hive children
-  protocolPressure?: number;  // Протокольник PSI pressure, capped and HUD-readable
-  protocolExposure?: number;  // seconds spent in the current protocol chase
-  protocolPressurePulseCd?: number;
-  protocolPressureWarnAt?: number;
-  waterPressure?: number;     // Водяной кошмар: capped wet-line PSI pressure
-  waterLineScanCd?: number;   // slow bounded wet-connectivity scan cooldown
-  waterLineBreakTimer?: number; // dry concrete interruption grace
-  waterLinePulseCd?: number;  // readable pressure damage/drain cadence
-  waterLineTargetId?: number; // target id validated by the last wet-line scan
-  waterLineConnected?: boolean;
-  waterLineCueCd?: number;    // visual ripple cue cooldown
   homeRoomId?: number;        // local-room leash anchor for room-bound actors
   anger?: number;             // bounded local pressure/hostility meter
   growthCount?: number;       // bounded local residue/growth marks placed
@@ -506,16 +479,6 @@ export interface AIState {
   netPowered?: boolean;        // last readable local NET power state
   netAnchorX?: number;         // local compromised server/terminal anchor
   netAnchorY?: number;
-  slimeScanCd?: number;        // Slimevik cached local slime search cooldown
-  slimeTargetX?: number;       // Slimevik cached slime mark/room target
-  slimeTargetY?: number;
-  slimeContactTimer?: number;  // Slimevik close-contact exposure timer
-  slimeContactCd?: number;     // Slimevik contact risk cooldown
-  deadEchoHold?: number;        // Bezekhiy direct-look reveal hold
-  deadEchoRevealed?: boolean;   // Bezekhiy has become audible/ordinary
-  deadEchoSpent?: boolean;      // Bezekhiy one-shot threshold bonus spent
-  deadEchoDoorIdx?: number;     // Bezekhiy cached nearest door threshold
-  deadEchoDoorSide?: number;    // Last player side of cached threshold
   wallBraceWasActive?: boolean; // Panelnik touched a wall on a previous brace tick
   wallBraceSlowTimer?: number;  // brief slowdown after wall-brace is broken in open floor
   wallBraceCueAt?: number;      // next allowed wall-brace readability message time
@@ -525,25 +488,6 @@ export interface AIState {
   scrapWakeTimer?: number;      // Rzhavnik first-leap timebox
   plantPuffCd?: number;         // rooted plant seed/sap burst cooldown
   plantRootCd?: number;         // sparse authored root-structure cooldown
-  sporePuffCd?: number;         // Spore Carpet bounded local puff cooldown
-  sporeRecoilTimer?: number;    // Spore Carpet fire recoil window
-  sporeContainerScanCd?: number; // Spore Carpet throttled nearby-container event scan
-  sporeLastContainerEventId?: number;
-  sporeBurnedAt?: number;       // fire event throttle
-  shoveCharge?: number;         // Dikiy Mertvyak crowd shove momentum
-  shoveCooldown?: number;       // cooldown after a crowd shove burst
-  shoveStartHp?: number;        // initial HP snapshot; any early damage cancels shove
-  fogOffsetX?: number;          // Туманник: fake visible silhouette offset from real body
-  fogOffsetY?: number;
-  fogOffsetUntil?: number;      // time when the fake silhouette expires without refresh
-  fogOffsetCollapsedUntil?: number; // short reveal window after light/fire/leaving fog
-  fogOffsetNoiseId?: number;    // last noise record used to bias the displaced origin
-  fogOffsetCueAt?: number;      // throttle for local readability messages
-  parasiteExposed?: boolean;    // Мухожук: reveal/readability beat already published
-  parasiteCommandCd?: number;   // Мухожук: bounded local command pulse cooldown
-  parasiteFoodScanCd?: number;  // Мухожук: throttled container appetite scan
-  parasiteFoodScanOffset?: number; // Мухожук: rotating container scan start
-  parasiteFoodTargetContainerId?: number;
   tacticId?: string;             // generic actor tactic profile state, transient
   tacticPhase?: string;          // current tactic sub-phase
   tacticTimer?: number;          // current tactic remaining seconds
@@ -637,6 +581,8 @@ export interface Entity extends InventoryHolder {
   accountRubles?: number;     // банковский счет; у игрока основной счет хранится в GameState.banking
   height?: number;            // base physical height in meters (human adults ~ 1.8)
   radius?: number;            // physical collision boundary radius override
+  /** Прозрачность спрайта 0..1; не задана — рисуется как есть. 0 — не рисуется. */
+  spriteAlpha?: number;
   spriteScale?: number;       // sprite size multiplier (child = 0.6)
   spriteZ?: number;           // vertical offset: 0=ground, 0.5=eye level (projectiles)
   plotDone?: boolean;         // story phase ended, NPC switches to post-plot dialogue
@@ -957,9 +903,7 @@ export const WORLD_EVENT_TYPES = [
   'blood_plant_root_cut',
   'blood_plant_burned',
   'red_mold_exposed',
-  'spore_carpet_woke',
-  'spore_carpet_burned',
-  'spore_carpet_puff',
+  'spore_carpet_grown',
   'paupsina_webbed',
   'paupsina_web_cut',
   'olgoy_burrowed',
@@ -1053,13 +997,11 @@ export const WORLD_EVENT_TYPES = [
   'gnilushka_spared',
   'gnilushka_hurt',
   'gnilushka_delivered',
-  'mukhozhuk_exposed',
-  'mukhozhuk_food_spoiled',
+  'mukhozhuk_infested',
+  'mukhozhuk_hatched',
   'head_slug_detached',
   'head_slug_rehosted',
   'head_slug_quarantined',
-  'bezekhiy_revealed',
-  'bezekhiy_lunge',
   'obzhivalshchik_scratched',
   'obzhivalshchik_calmed',
   'obzhivalshchik_breached',
@@ -1285,8 +1227,16 @@ export enum NpcRole {
 
 export interface CinematicState {
   originalRole: NpcRole;
-  originalX: number;
-  originalY: number;
+  /**
+   * ПОСТ актёра: место, на котором его держит поводок сцены.
+   *
+   * Раньше здесь лежала позиция ДО сцены, и её никто не читал: актёра держал не
+   * поводок, а выключенный AI. Теперь AI не выключается никогда — кат-сцена идёт
+   * на живой симуляции, — и место в строю держится тем же поводком, что и всё
+   * остальное.
+   */
+  postX: number;
+  postY: number;
   sceneId: string;
 }
 

@@ -88,17 +88,17 @@ test('Tumannik is standalone fog-offset monster content', () => {
   assert.equal(DEF.kind, MonsterKind.TUMANNIK);
   assert.equal(MONSTERS[MonsterKind.TUMANNIK], DEF);
   assert.equal(MONSTER_SPRITES[MonsterKind.TUMANNIK], generateSprite);
-  assert.deepEqual(DEF.aiFlags, ['fogOffset']);
+  assert.deepEqual(DEF.aiFlags, ['strikeReveal']);
   assert.equal(DEF.hp >= 50 && DEF.hp <= 80, true);
   assert.equal(DEF.dmg <= 10, true);
-  assert.match(DEF.counterplay ?? '', /силуэт|свет|огонь|fog/);
+  assert.match(DEF.counterplay ?? '', /удар|экран|миг/);
 
   assert.ok(ecology);
   assert.equal(ecology?.rooms.includes(RoomType.CORRIDOR), true);
-  assert.equal(ecology?.rumorIds.includes('monster_tumannik_side_sound'), true);
-  assert.equal(ecology?.rumorIds.includes('ecology_tumannik_light_commit'), true);
-  assert.equal(RUMORS.some(rumor => rumor.id === 'monster_tumannik_side_sound'), true);
-  assert.equal(RUMORS.some(rumor => rumor.id === 'ecology_tumannik_light_commit'), true);
+  assert.equal(ecology?.rumorIds.includes('monster_tumannik_strike_reveal'), true);
+  assert.equal(ecology?.rumorIds.includes('ecology_tumannik_strike_window'), true);
+  assert.equal(RUMORS.some(rumor => rumor.id === 'monster_tumannik_strike_reveal'), true);
+  assert.equal(RUMORS.some(rumor => rumor.id === 'ecology_tumannik_strike_window'), true);
 });
 
 test('Tumannik sprite keeps a fake silhouette and black-red real joints readable', () => {
@@ -132,7 +132,7 @@ test('Tumannik sprite keeps a fake silhouette and black-red real joints readable
   assert.equal(transparentCore > 45, true, 'missing center mass should stay open');
 });
 
-test('Tumannik arms a local fog offset and light collapses it', () => {
+test('туманник проступает по свету, а в миг удара виден весь', () => {
   const world = fogWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
   const target = player(16.5, 10.5);
@@ -141,57 +141,33 @@ test('Tumannik arms a local fog offset and light collapses it', () => {
   const msgs: Msg[] = [];
   const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
 
+  // Темнота: его нет вовсе.
   sync(entities);
   updateMonster(world, entities, threat, 0.1, 1, msgs, target.id, { v: 100 }, state);
+  assert.equal(threat.spriteAlpha, 0, 'в темноте его на экране нет');
 
-  assert.equal(Math.abs(threat.ai?.fogOffsetX ?? 0) > 0.5, true, 'dense fog should produce a displaced visible origin');
-  assert.equal(msgs.some(m => m.text.includes('звучит сбоку')), true);
-  assert.equal(getRecentEvents(state, { type: 'monster_sighted', tags: ['tumannik', 'fog_offset'], limit: 1 }).length, 1);
+  // Под лампой проступает, но не больше половины.
+  world.light[world.idx(10, 10)] = 1;
+  sync(entities);
+  updateMonster(world, entities, threat, 0.1, 1.1, msgs, target.id, { v: 100 }, state);
+  assert.equal(threat.spriteAlpha, 0.5, 'при полном свете читается как стекло');
 
-  world.light[world.idx(Math.floor(target.x), Math.floor(target.y))] = 0.72;
+  // Полусвет — половина от этого: фейдинг плавный.
+  world.light[world.idx(10, 10)] = 0.4;
   sync(entities);
   updateMonster(world, entities, threat, 0.1, 1.2, msgs, target.id, { v: 100 }, state);
+  assert.ok(Math.abs((threat.spriteAlpha ?? 0) - 0.2) < 1e-6, 'прозрачность идёт по свету');
 
-  assert.equal(threat.ai?.fogOffsetX, undefined);
-  assert.equal((threat.ai?.fogOffsetCollapsedUntil ?? 0) > 1.2, true);
-  assert.equal(msgs.some(m => m.text.includes('Свет вытащил настоящий сустав')), true);
-});
-
-test('Tumannik can hit from the displaced fog origin before its real body reaches melee', () => {
-  const world = fogWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = player(12.35, 10.5);
-  const threat = tumannik(10.5, 10.5);
-  const entities = [target, threat];
-  const msgs: Msg[] = [];
-  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
-
+  // Ударил — виден целиком, независимо от света.
+  world.light[world.idx(10, 10)] = 0;
+  threat.attackCd = MONSTERS[MonsterKind.TUMANNIK].attackRate;
   sync(entities);
-  updateMonster(world, entities, threat, 0.1, 2, msgs, target.id, { v: 100 }, state);
+  updateMonster(world, entities, threat, 0.05, 1.3, msgs, target.id, { v: 100 }, state);
+  assert.equal(threat.spriteAlpha, 1, 'в миг удара он виден весь и в темноте');
 
-  assert.equal((target.hp ?? 100) < 100, true, 'offset origin should be able to land the ambush hit');
-  assert.equal(world.dist2(threat.x, threat.y, target.x, target.y) > 1.2 * 1.2, true, 'real body should still be outside ordinary close contact');
-  assert.equal(threat.ai?.fogOffsetX, undefined, 'the real body commits after the side hit');
-  assert.equal(msgs.some(m => m.text.includes('не из центра силуэта')), true);
-  assert.equal(getRecentEvents(state, { type: 'monster_sighted', tags: ['tumannik', 'side_hit'], limit: 1 }).length, 1);
-});
-
-test('Tumannik fog offset collapses for a lit NPC target too', () => {
-  const world = fogWorld();
-  setListenerPos(512, 512, world.dist2.bind(world));
-  const target = npcTarget(16.5, 10.5);
-  const threat = tumannik(10.5, 10.5);
-  const entities = [target, threat];
-  const state = makeGameState({ currentZ: -26, worldEvents: createWorldEventState() });
-
+  // Окно закрылось — снова только свет.
+  threat.attackCd = 0.05;
   sync(entities);
-  updateMonster(world, entities, threat, 0.1, 5, [], 1, { v: 100 }, state);
-  assert.equal(Math.abs(threat.ai?.fogOffsetX ?? 0) > 0.5, true);
-
-  world.light[world.idx(Math.floor(target.x), Math.floor(target.y))] = 0.72;
-  sync(entities);
-  updateMonster(world, entities, threat, 0.1, 5.2, [], 1, { v: 100 }, state);
-
-  assert.equal(threat.ai?.fogOffsetX, undefined);
-  assert.equal(getRecentEvents(state, { type: 'monster_windup_interrupted', tags: ['tumannik', 'light'], limit: 1 }).length, 1);
+  updateMonster(world, entities, threat, 0.05, 3, msgs, target.id, { v: 100 }, state);
+  assert.equal(threat.spriteAlpha, 0, 'окно короткое');
 });

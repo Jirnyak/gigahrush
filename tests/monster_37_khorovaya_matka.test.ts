@@ -12,6 +12,7 @@ import {
   KHOROVAYA_MATKA_CHILD_CAP,
   KHOROVAYA_MATKA_COUNTDOWN_SEC,
   KHOROVAYA_MATKA_VULNERABLE_SEC,
+  choirStateOf,
 } from '../src/systems/ai/khorovaya_matka';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
@@ -87,13 +88,13 @@ test('Khorovaya Matka choir countdown spawns capped children', () => {
   const nextId = { v: getPlotNpcCount() + 10 }
 
   for (let i = 0; i < 5; i++) {
-    source.ai!.choirCountdown = 0.01;
+    choirStateOf(source).countdown = 0.01;
     prepare(entities);
     updateMonster(world, entities, source, 0.02, 10 + i, msgs, 1, nextId);
   }
 
   assert.equal(liveChildren(entities).length, KHOROVAYA_MATKA_CHILD_CAP);
-  assert.equal(source.ai?.choirChildIds?.length, KHOROVAYA_MATKA_CHILD_CAP);
+  assert.equal(choirStateOf(source).childIds.length, KHOROVAYA_MATKA_CHILD_CAP);
   assert.ok(msgs.some(line => line.text.includes('Хоровая Матка вывела приплод')));
 });
 
@@ -104,33 +105,33 @@ test('clearing Khorovaya Matka children opens a vulnerability window and changes
   const entities = [player(), source];
   const nextId = { v: getPlotNpcCount() + 10 }
 
-  source.ai!.choirCountdown = 0.01;
+  choirStateOf(source).countdown = 0.01;
   prepare(entities);
   updateMonster(world, entities, source, 0.02, 20, [], 1, nextId);
   for (const child of liveChildren(entities)) child.alive = false;
 
   const msgs: Msg[] = [];
-  source.ai!.choirCountdown = KHOROVAYA_MATKA_COUNTDOWN_SEC;
+  choirStateOf(source).countdown = KHOROVAYA_MATKA_COUNTDOWN_SEC;
   prepare(entities);
   updateMonster(world, entities, source, 0.1, 21, msgs, 1, nextId);
 
-  assert.equal(source.ai!.choirVulnerableTimer! > KHOROVAYA_MATKA_VULNERABLE_SEC - 0.2, true);
+  assert.equal(choirStateOf(source).vulnerableTimer > KHOROVAYA_MATKA_VULNERABLE_SEC - 0.2, true);
   assert.ok(msgs.some(line => line.text.includes('Хор сорван')));
 
-  source.ai!.choirVulnerableTimer = 0;
-  source.ai!.choirLastHp = source.hp;
+  choirStateOf(source).vulnerableTimer = 0;
+  choirStateOf(source).lastHp = source.hp;
   source.hp = (source.hp ?? 0) - 60;
   const armoredHp = source.hp;
-  source.ai!.choirCountdown = KHOROVAYA_MATKA_COUNTDOWN_SEC;
+  choirStateOf(source).countdown = KHOROVAYA_MATKA_COUNTDOWN_SEC;
   prepare(entities);
   updateMonster(world, entities, source, 0.1, 22, [], 1, nextId);
   assert.equal((source.hp ?? 0) > armoredHp, true, 'closed membrane should repair most non-window damage');
 
-  source.ai!.choirVulnerableTimer = 3;
-  source.ai!.choirLastHp = source.hp;
+  choirStateOf(source).vulnerableTimer = 3;
+  choirStateOf(source).lastHp = source.hp;
   source.hp = (source.hp ?? 0) - 40;
   const vulnerableHp = source.hp;
-  source.ai!.choirCountdown = KHOROVAYA_MATKA_COUNTDOWN_SEC;
+  choirStateOf(source).countdown = KHOROVAYA_MATKA_COUNTDOWN_SEC;
   prepare(entities);
   updateMonster(world, entities, source, 0.1, 23, [], 1, nextId);
   assert.equal(source.hp, vulnerableHp, 'vulnerability window should not repair incoming damage');

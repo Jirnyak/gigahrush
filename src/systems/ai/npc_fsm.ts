@@ -4,9 +4,11 @@ import {
   type Entity, type Msg,
   EntityType, AIGoal, RoomType, NpcState, Faction,
   ZoneFaction, Occupation, type GameClock, Cell, type TerritoryOwner, type Room,
-  ItemType,
+  ItemType, MAX_DRAW,
 } from '../../core/types';
 import { World } from '../../core/world';
+import { containersInRoom, nearestContainer } from '../../world/container_index';
+import { roomIdsAroundInto, roomRadiusCoversFloor } from '../../world/room_index';
 import { msg } from '../../core/types';
 import { entityDisplayName } from '../../entities/monster';
 import { WEAPON_STATS } from '../../data/catalog';
@@ -30,7 +32,6 @@ import {
   findFamilyRoom,
   gotoNearestRoomOfTypes,
   gotoNearestRoomType,
-  gotoRoom,
   tryAssignPathToCell,
   wanderNearby,
   wanderFar,
@@ -97,6 +98,10 @@ export function setNpcContext(msgs: Msg[], time: number, currentZ?: number): voi
   _routineZ = currentZ;
 }
 
+/* Далеко ли человек ищет ящик под рейс. Раньше он знал каждый ящик этажа и
+ * перебирал их все; теперь спрашивает только клетки вокруг себя, вдвое дальше
+ * своей видимости. Чего нет в этом круге — того для смены не существует. */
+const SUPPLY_ERRAND_RADIUS = MAX_DRAW * 2;
 const UTILITY_THREAT_RADIUS = 16;
 const UTILITY_THREAT_CAP = 32;
 const UTILITY_SWITCH_MARGIN = 7;
@@ -130,6 +135,8 @@ const routineFallbackRoomCandidates: NpcUtilityTargetCandidate[] = [];
 const routineSeenRoomIds = new Set<number>();
 const routineNearbyRoomIds: number[] = [];
 const routineNearbyKeys: number[] = [];
+/** Сырая выборка индекса комнат: надмножество круга, фильтруется на месте. */
+const routineRoomIdScratch: number[] = [];
 /** Номер комнаты влезает в младшие разряды ключа сортировки по расстоянию. */
 const ROUTINE_ROOM_KEY_SCALE = 1 << 18;
 const routineTypeInterest = new Float32Array(NPC_UTILITY_ROOM_TYPE_SLOTS);
@@ -501,7 +508,7 @@ export function updateNPC(
   }
 
   evaluateMicroStimuli(world, e, time, _barkMsgs);
-  if (tickMicroGoal(world, entities, e, dt, time, _barkMsgs)) {
+  if (tickMicroGoal(world, e, dt, time, _barkMsgs)) {
     return;
   }
 
@@ -1008,12 +1015,14 @@ function handleWorking(world: World, e: Entity, dt: number, state?: import('../.
   // Здесь закончено — решать, куда дальше, надо сейчас, а не по таймеру.
   if (outcome === 'done') ai.timer = 0;
 
-  // Куда кладовщику ехать за грузом, с грузом или с разносом — это его смена.
-  const errandRoomId = supplyErrandRoomId(world, e);
   if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
     ai.goal = AIGoal.WORK;
+    // Куда кладовщику ехать за грузом, с грузом или с разносом — это его смена.
     // Рейс — наряд, а не предпочтение: иначе кладовщик каждый раз выбирал бы
     // свой же склад, где ему по ремеслу интереснее, и за грузом не поехал.
+    // Считается он только здесь, в момент выбора цели: это перебор всех ящиков
+    // этажа, и на каждом кадре каждого работника он стоил четверть кадра.
+    const errandRoomId = supplyErrandRoomId(world, e);
     const errandRoom = errandRoomId !== undefined ? world.rooms[errandRoomId] : undefined;
     const routed = errandRoom
       ? tryAssignPathToRoomCenter(world, e, errandRoom) !== 'not_found'
@@ -1046,37 +1055,21 @@ function supplyErrandRoomId(world: World, e: Entity): number | undefined {
   if (!carrier) {
     // Порожняком обычный человек идёт на склад, только когда в его комнате пусто.
     if (!ownRoomIsShort(world, e)) return undefined;
-    let bestRoom: number | undefined;
-    let bestDist = Infinity;
-    for (const container of world.containers) {
+    return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
       const room = world.rooms[container.roomId];
-      if (!room || storeRank(room) < bestRank || !canAccessContainer(container, e)) continue;
-      if (!container.inventory.some(slot => slot.count > 0 && suppliesOwnRoom(world, e, slot.defId))) continue;
-      const d = world.dist2(e.x, e.y, container.x, container.y);
-      if (d < bestDist) {
-        bestDist = d;
-        bestRoom = room.id;
-      }
-    }
-    return bestRoom;
+      if (!room || storeRank(room) < bestRank || !canAccessContainer(container, e)) return false;
+      return container.inventory.some(slot => slot.count > 0 && suppliesOwnRoom(world, e, slot.defId));
+    })?.roomId;
   }
   const loaded = scanSpareInventory(e).first >= 0;
-  let bestRoom: number | undefined;
-  let bestDist = Infinity;
-  for (const container of world.containers) {
+  return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
     const room = world.rooms[container.roomId];
     const rank = storeRank(room);
-    if (!room || rank <= 0) continue;
-    if (loaded ? rank < bestRank : rank >= bestRank) continue;
-    if (!loaded && !container.inventory.some(slot => slot.count > 0)) continue;
-    if (!canAccessContainer(container, e)) continue;
-    const d = world.dist2(e.x, e.y, container.x, container.y);
-    if (d < bestDist) {
-      bestDist = d;
-      bestRoom = room.id;
-    }
-  }
-  return bestRoom;
+    if (!room || rank <= 0) return false;
+    if (loaded ? rank < bestRank : rank >= bestRank) return false;
+    if (!loaded && !container.inventory.some(slot => slot.count > 0)) return false;
+    return canAccessContainer(container, e);
+  })?.roomId;
 }
 
 function cleanerCanCleanCell(world: World, e: Entity, idx: number): boolean {
@@ -1232,8 +1225,8 @@ function ownRoomIsShort(world: World, e: Entity): boolean {
   const room = ownStockRoom(world, e);
   if (!room) return false;
   const need = roomStockResourceIds(room.type);
-  for (const container of world.containers) {
-    if (container.roomId !== room.id || !canAccessContainer(container, e)) continue;
+  for (const container of containersInRoom(world, room.id)) {
+    if (!canAccessContainer(container, e)) continue;
     for (const slot of container.inventory) {
       if (slot.count > 0 && need.includes(resourceForItem(slot.defId)?.id ?? '')) return false;
     }
@@ -1299,21 +1292,13 @@ function deliveryRoomTypesFor(defId: string): readonly RoomType[] {
 /** Ближайшая комната, куда эту вещь можно донести и где её примут. */
 function deliveryRoomFor(world: World, e: Entity, defId: string, count: number): number | undefined {
   const types = deliveryRoomTypesFor(defId);
-  let best: number | undefined;
-  let bestDist = Infinity;
-  for (const container of world.containers) {
+  return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
     const room = world.rooms[container.roomId];
     // Либо вещи здесь место по природе, либо встал цех и ждёт именно её.
-    if (!room || !(types.includes(room.type) || containerAwaitsInput(container, defId))) continue;
-    if (!canAccessContainer(container, e)) continue;
-    if (itemAddCapacity(container, defId, count, undefined) <= 0) continue;
-    const d = world.dist2(e.x, e.y, container.x, container.y);
-    if (d < bestDist) {
-      bestDist = d;
-      best = room.id;
-    }
-  }
-  return best;
+    if (!room || !(types.includes(room.type) || containerAwaitsInput(container, defId))) return false;
+    if (!canAccessContainer(container, e)) return false;
+    return itemAddCapacity(container, defId, count, undefined) > 0;
+  })?.roomId;
 }
 
 /**
@@ -1383,8 +1368,7 @@ function findNpcStorageContainer(
 ): import('../../core/types').WorldContainer | undefined {
   let foreign: import('../../core/types').WorldContainer | undefined;
   const raids = npcRaidsForeignContainers(e);
-  for (const container of world.containers) {
-    if (container.roomId !== room.id) continue;
+  for (const container of containersInRoom(world, room.id)) {
     if (canAccessContainer(container, e)) return container;
     if (raids && foreign === undefined && containerAccessInfo(container, e, state).canTake) foreign = container;
   }
@@ -1596,10 +1580,19 @@ function handleWander(world: World, e: Entity, dt: number): void {
   followPath(world, e, dt);
 }
 
+/**
+ * Назначенная комната — это НОМЕР, а не тип. Раньше номер уходил в
+ * `gotoRoom(world, e, type)`, где он читался как `RoomType`: путь почти никогда
+ * не находился, а фолбэк не срабатывал, потому что ветка уже была взята, — и
+ * человек вставал намертво, перезапрашивая раз в такт. Теперь номер идёт по
+ * своему пути, а фолбэк — по неудаче, а не по отсутствию назначения.
+ */
 function gotoAssignedOrNearest(world: World, e: Entity, fallbackType: RoomType): void {
-  if (e.assignedRoomId !== undefined && e.assignedRoomId >= 0 && world.rooms[e.assignedRoomId]) {
-    gotoRoom(world, e, e.assignedRoomId);
-  } else if (!gotoNearestRoomType(world, e, fallbackType)) {
+  const assigned = e.assignedRoomId !== undefined && e.assignedRoomId >= 0
+    ? world.rooms[e.assignedRoomId]
+    : undefined;
+  if (assigned && tryAssignPathToRoomCenter(world, e, assigned) !== 'not_found') return;
+  if (!gotoNearestRoomType(world, e, fallbackType)) {
     wanderNearby(world, e);
   }
 }
@@ -1691,7 +1684,15 @@ function collectNearestRoomIds(
   // Расстояние и номер в одном числе: сортировать плотный массив чисел дешевле,
   // чем держать разрежённую таблицу на весь этаж.
   let found = 0;
-  for (let id = 0; id < count; id++) {
+  // Дальше своего предела человек всё равно не пойдёт, поэтому и смотреть весь
+  // этаж незачем: пространственный индекс отдаёт только комнаты вокруг. Круг
+  // отбирается тем же `dist2`, что и раньше, — набор комнат тождественный,
+  // меняется только то, сколько лишних мимо него прошло.
+  const spatial = !roomRadiusCoversFloor(limit);
+  const scanned = spatial ? roomIdsAroundInto(world, e.x, e.y, limit, routineRoomIdScratch) : count;
+  for (let i = 0; i < scanned; i++) {
+    const id = spatial ? routineRoomIdScratch[i] : i;
+    if (id >= count) continue;
     const type = roomMirrorType[id];
     if (type === ROOM_MIRROR_HOLE || routineTypeInterest[type] <= 0) continue;
     const d2 = world.dist2(e.x, e.y, roomMirrorCx[id], roomMirrorCy[id]);
@@ -1702,6 +1703,10 @@ function collectNearestRoomIds(
   if (found > ROUTINE_NEAREST_ROOM_CAP) {
     routineNearbyKeys.sort(compareNumbers);
     routineNearbyKeys.length = ROUTINE_NEAREST_ROOM_CAP;
+  } else if (spatial) {
+    // Индекс отдаёт комнаты в порядке бакетов; сплошной проход отдавал их по
+    // номеру. Порядок дальше не решает ничего, но пусть выход будет тот же.
+    routineNearbyKeys.sort(compareRoomKeysById);
   }
   routineNearbyRoomIds.length = routineNearbyKeys.length;
   for (let i = 0; i < routineNearbyKeys.length; i++) {
@@ -1712,6 +1717,10 @@ function collectNearestRoomIds(
 
 function compareNumbers(a: number, b: number): number {
   return a - b;
+}
+
+function compareRoomKeysById(a: number, b: number): number {
+  return (a % ROUTINE_ROOM_KEY_SCALE) - (b % ROUTINE_ROOM_KEY_SCALE);
 }
 
 function routineRoomTargetCandidate(
@@ -1851,9 +1860,14 @@ function handleHiding(
       } else if (usesTravelerRoutine(e)) {
         gotoNearestRoomType(world, e, RoomType.LIVING);
       } else {
-        const targetRoom = findFamilyRoom(world, e, RoomType.LIVING);
-        if (targetRoom >= 0) gotoRoom(world, e, targetRoom);
-        else gotoNearestRoomOfTypes(world, e, [RoomType.LIVING, RoomType.HQ, RoomType.COMMON]);
+        // `findFamilyRoom` возвращает НОМЕР комнаты. Он уходил в `gotoRoom`,
+        // который ждёт ТИП, — и прятаться было некуда: путь не находился, а до
+        // фолбэка дело не доходило.
+        const familyRoomId = findFamilyRoom(world, e, RoomType.LIVING);
+        const familyRoom = familyRoomId >= 0 ? world.rooms[familyRoomId] : undefined;
+        if (!familyRoom || tryAssignPathToRoomCenter(world, e, familyRoom) === 'not_found') {
+          gotoNearestRoomOfTypes(world, e, [RoomType.LIVING, RoomType.HQ, RoomType.COMMON]);
+        }
       }
       ai.timer = 1.25;
     }

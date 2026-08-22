@@ -12,6 +12,7 @@ import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import {
   VODYANOY_WET_LINE_MAX_CELLS,
   getVodyanoyWaterPressureLine,
+  peekVodyanoyWaterPressure,
   updateVodyanoyWaterPressureLine,
 } from '../src/systems/ai/monster';
 import { makeGameState } from './helpers';
@@ -103,7 +104,7 @@ test('vodyanoy pressure ramps, drains PSI, and publishes dry-break cue', () => {
   const state = makeGameState({ currentZ: -14, worldEvents: createWorldEventState() });
 
   updateVodyanoyWaterPressureLine(world, threat, target, 0.4, 1, msgs, target.id, state);
-  assert.ok((threat.ai?.waterPressure ?? 0) > 0, 'connected wet line should ramp pressure');
+  assert.ok(peekVodyanoyWaterPressure(threat) > 0, 'connected wet line should ramp pressure');
   assert.ok((target.hp ?? 100) < 100, 'pressure pulse should damage the player');
   assert.ok((target.rpg?.psi ?? 12) < 12, 'pressure pulse should drain PSI');
   assert.ok(getRecentEvents(state, { type: 'monster_sighted', tags: ['vodyanoy_koshmar'], limit: 1 })[0]);
@@ -111,7 +112,7 @@ test('vodyanoy pressure ramps, drains PSI, and publishes dry-break cue', () => {
   target.y = 21.5;
   updateVodyanoyWaterPressureLine(world, threat, target, 0.4, 2, msgs, target.id, state);
   assert.equal(getVodyanoyWaterPressureLine(world, threat, target), undefined);
-  assert.ok((threat.ai?.waterPressure ?? 0) < 0.4, 'dry concrete should collapse pressure quickly');
+  assert.ok(peekVodyanoyWaterPressure(threat) < 0.4, 'dry concrete should collapse pressure quickly');
   assert.ok(getRecentEvents(state, { type: 'monster_windup_interrupted', tags: ['dry_break'], limit: 1 })[0]);
 });
 

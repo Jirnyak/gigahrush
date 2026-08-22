@@ -37,6 +37,8 @@ import {
   sporeHazeAimSpreadMult,
 } from '../src/systems/status';
 import { addTestRoom, makeGameState } from './helpers';
+import { DANGER_FIELD_DEATH_IMPULSE } from '../src/systems/danger_field';
+import { peekSporeCarpetChildren } from '../src/systems/ai/spore_carpet';
 
 function openWorld(): World {
   const world = new World();
@@ -153,44 +155,37 @@ test('spore carpet is standalone domestic trap content with reachable cache', ()
     container.inventory.some(item => item.defId === 'rock_salt')));
 });
 
-test('spore carpet stays idle until close, then puffs on a capped cooldown', () => {
+test('ковёр прорастает по кровяному следу и гасит его', () => {
   const world = openWorld();
-  addTestRoom(world, { id: 0, x: 8, y: 8, w: 8, h: 6, type: RoomType.STORAGE });
-  const target = player(40, 10);
-  const threat = carpet(10.5, 10.5);
-  const entities = [target, threat];
-  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 1 });
+  const carpetEntity = carpet(10.5, 10.5);
+  const entities = [carpetEntity];
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
+  const msgs: Msg[] = [];
+  const bloodIdx = world.idx(12, 10);
+  world.dangerField[bloodIdx] = DANGER_FIELD_DEATH_IMPULSE;
+
+  prime(entities);
+  updateMonster(world, entities, carpetEntity, 7, 10, msgs, 1, { v: 90 }, state);
+
+  const grown = entities.filter(e => e.monsterKind === MonsterKind.SPORE_CARPET);
+  assert.equal(grown.length, 2, 'на следе поднялся отросток');
+  assert.equal(world.dangerField[bloodIdx], 0, 'след ушёл в ковёр');
+  assert.equal(peekSporeCarpetChildren(carpetEntity), 1);
+  assert.ok(getRecentEvents(state, { type: 'spore_carpet_grown', limit: 1 })[0]);
+});
+
+test('без крови ковёр никуда не растёт', () => {
+  const world = openWorld();
+  const carpetEntity = carpet(10.5, 10.5);
+  const entities = [carpetEntity];
+  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
   prime(entities);
-  updateMonster(world, entities, threat, 0.2, 1, msgs, target.id, { v: 3 }, state);
-  assert.equal(threat.monsterStage, 0);
-  assert.equal(threat.ai?.goal, AIGoal.IDLE);
-  assert.equal(getRecentEvents(state, { type: 'spore_carpet_woke', limit: 1 }).length, 0);
+  updateMonster(world, entities, carpetEntity, 7, 10, msgs, 1, { v: 90 }, state);
 
-  target.x = 11.4;
-  target.y = 10.5;
-  prime(entities);
-  updateMonster(world, entities, threat, 0.2, 2, msgs, target.id, { v: 3 }, state);
-  assert.equal(threat.monsterStage, 1);
-  assert.equal((threat.ai?.sporePuffCd ?? 99) <= 0.8, true);
-  assert.equal(getRecentEvents(state, { type: 'spore_carpet_woke', tags: ['near'], limit: 1 })[0]?.monsterKind, MonsterKind.SPORE_CARPET);
-
-  threat.ai!.sporePuffCd = 0;
-  const hpBefore = target.hp ?? 0;
-  prime(entities);
-  updateMonster(world, entities, threat, 0.2, 3, msgs, target.id, { v: 3 }, state);
-
-  assert.equal((target.hp ?? 0) < hpBefore, true);
-  assert.ok(activeSporeHaze(target, 3));
-  assert.equal(sporeHazeAimSpreadMult(target, 3), SPORE_HAZE_AIM_SPREAD_MULT);
-  assert.equal((threat.ai?.sporePuffCd ?? 0) >= 5.8, true);
-  assert.equal(getRecentEvents(state, { type: 'spore_carpet_puff', tags: ['cooldown_capped'], limit: 1 })[0]?.monsterKind, MonsterKind.SPORE_CARPET);
-
-  const hpAfterPuff = target.hp;
-  prime(entities);
-  updateMonster(world, entities, threat, 0.2, 3.2, msgs, target.id, { v: 3 }, state);
-  assert.equal(target.hp, hpAfterPuff, 'cooldown should prevent immediate second puff');
+  assert.equal(entities.length, 1, 'сухой пол его не кормит');
+  assert.equal(peekSporeCarpetChildren(carpetEntity), 0);
 });
 
 test('ip4 gasmask counts as respiratory protection against spore haze', () => {
@@ -204,64 +199,3 @@ test('ip4 gasmask counts as respiratory protection against spore haze', () => {
   assert.equal(getRecentEvents(state, { type: 'player_status_applied', tags: ['protected'], limit: 1 })[0]?.data?.protectedByGear, true);
 });
 
-test('nearby container opening wakes spore carpet before proximity', () => {
-  const world = openWorld();
-  const target = player(30, 10);
-  const threat = carpet(10.5, 10.5);
-  const entities = [target, threat];
-  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 4 });
-  const msgs: Msg[] = [];
-
-  publishEvent(state, {
-    type: 'container_opened',
-    x: 11,
-    y: 10,
-    actorId: target.id,
-    actorName: target.name,
-    actorFaction: target.faction,
-    containerId: 77,
-    severity: 2,
-    privacy: 'local',
-    tags: ['container', 'loot'],
-  });
-
-  prime(entities);
-  updateMonster(world, entities, threat, 0.4, 4.1, msgs, target.id, { v: 3 }, state);
-
-  assert.equal(threat.monsterStage, 1);
-  const woke = getRecentEvents(state, { type: 'spore_carpet_woke', tags: ['container'], limit: 1 })[0];
-  assert.ok(woke);
-  assert.equal(woke.data?.reason, 'container');
-});
-
-test('fire projectile wakes spore carpet and delays the next puff', () => {
-  const world = openWorld();
-  const target = player(12, 10);
-  const threat = carpet(10.5, 10.5);
-  const flame: Entity = {
-    id: 99,
-    type: EntityType.PROJECTILE,
-    x: threat.x,
-    y: threat.y,
-    angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: 0,
-    sprite: Spr.FLAME_BOLT,
-    projType: ProjType.FLAME,
-    projDmg: 3,
-    ownerId: target.id,
-  };
-  const entities = [target, threat, flame];
-  const state = makeGameState({ currentZ: 0, worldEvents: createWorldEventState(), time: 8 });
-
-  prime(entities);
-  assert.equal(tryMonsterProjectileStagger(world, state, threat, flame, target.id), true);
-
-  assert.equal(threat.monsterStage, 1);
-  assert.equal((threat.ai?.sporeRecoilTimer ?? 0) > 2, true);
-  assert.equal((threat.ai?.sporePuffCd ?? 0) > 3, true);
-  const burned = getRecentEvents(state, { type: 'spore_carpet_burned', tags: ['fire'], limit: 1 })[0];
-  assert.ok(burned);
-  assert.equal(burned.monsterKind, MonsterKind.SPORE_CARPET);
-});

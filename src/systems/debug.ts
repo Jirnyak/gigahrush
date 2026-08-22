@@ -13,7 +13,7 @@ import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
 import { MONSTERS, monsterTypeName } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
-import { CRITTERS_POOL, MAX_CRITTERS } from '../render/critters';
+import { markDangerFieldCell } from './danger_field';
 import {  randomRPG, getMaxHp } from './rpg';
 import { isDebugNoClipEnabled } from './psi';
 import {   publishEvent } from './events';
@@ -56,7 +56,7 @@ import {
   requestFloorScene,
   resetFloorScenes,
   type FloorSceneDef } from './cinematics';
-import { rng, mathRng } from '../core/rand';
+import { rng } from '../core/rand';
 import { movePlayerToSmokeLift } from './debug_smoke';
 import {
   DEBUG_GROUPS,
@@ -667,7 +667,7 @@ function spawnDebugMukhozhukHost(
   }
 
   publishEvent(state, {
-    type: 'mukhozhuk_exposed',
+    type: 'mukhozhuk_infested',
     zoneId: currentPlayerZone(world, player),
     roomId: currentPlayerRoom(world, player),
     x: host.x,
@@ -681,12 +681,12 @@ function spawnDebugMukhozhukHost(
     monsterKind: MonsterKind.MUKHOZHUK_HOST,
     severity: 4,
     privacy: 'local',
-    tags: ['debug', 'monster', 'mukhozhuk', 'parasite_leader', mode],
+    tags: ['debug', 'monster', 'mukhozhuk', 'larva', mode],
     data: {
       source: 'debug_menu',
       mode,
       counterplay: MONSTERS[MonsterKind.MUKHOZHUK_HOST]?.counterplay,
-      rumorIds: ['monster_mukhozhuk_host_command', 'ecology_mukhozhuk_quarantine'] } });
+      rumorIds: ['monster_mukhozhuk_larva', 'ecology_mukhozhuk_quarantine'] } });
   return [`${mode}: ${host.name ?? monsterTypeName(MonsterKind.MUKHOZHUK_HOST)} #${host.id}`];
 }
 
@@ -1464,30 +1464,23 @@ registerDebugCommand({
 registerDebugCommand({
   id: 'spawn_critters',
   group: 'spawn',
-  label: 'спавн криттеров',
+  label: 'приманка для живности',
   run: ({ world, player, state }) => {
-    let spawned = 0;
-    for (let i = 0; i < MAX_CRITTERS && spawned < 10; i++) {
-      const c = CRITTERS_POOL[i];
-      if (!c.active) {
-        const angle = mathRng() * Math.PI * 2;
-        const dist = 1 + mathRng() * 3;
-        const sx = Math.round(player.x + Math.cos(angle) * dist);
-        const sy = Math.round(player.y + Math.sin(angle) * dist);
-        if (world.get(sx, sy) === Cell.FLOOR) {
-          c.active = true;
-          const r = mathRng();
-          c.defId = r < 0.4 ? 'roach' : (r < 0.8 ? 'rat' : 'fly');
-          c.x = sx;
-          c.y = sy;
-          c.z = 0;
-          c.targetX = sx;
-          c.targetY = sy;
-          spawned++;
-        }
+    // Особей в памяти нет: живность — функция от полей мира. Поэтому «спавн» это
+    // впрыск в поле трупного запаха, тот же путь, которым её создаёт смерть.
+    let cells = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const cx = Math.floor(player.x) + dx;
+        const cy = Math.floor(player.y) + dy;
+        if (world.get(cx, cy) !== Cell.FLOOR) continue;
+        const i = world.idx(cx, cy);
+        world.dangerField[i] = Math.min(255, world.dangerField[i] + 200);
+        markDangerFieldCell(world, cx, cy);
+        cells++;
       }
     }
-    state.msgs.push(msg(`[DEBUG] Заспавнено криттеров: ${spawned}`, state.time, '#ff0'));
+    state.msgs.push(msg(`[DEBUG] Приманка разлита, клеток: ${cells}`, state.time, '#ff0'));
   } });
 
 registerDebugCommand({

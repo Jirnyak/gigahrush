@@ -8,7 +8,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateProtokolnikSprite, generateSprite } from '../src/entities/protokolnik';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
-import { setEntityMap } from '../src/systems/ai/monster';
+import { peekProtokolnikPressure, setEntityMap } from '../src/systems/ai/monster';
 import {
   PROTOKOLNIK_PRESSURE_MAX,
   PROTOKOLNIK_PRESSURE_SAFE_CAP,
@@ -147,7 +147,7 @@ test('protocol pressure grows from carried documents, caps, and eases after pape
   assert.equal(protokolnikPressureCap(documentPressure) <= PROTOKOLNIK_PRESSURE_MAX, true);
 
   updateProtokolnikProtocolPressure(world, [target, threat], threat, target, 8, 8, msgs, target.id, { v: 900 }, state);
-  const loadedPressure = threat.ai?.protocolPressure ?? 0;
+  const loadedPressure = peekProtokolnikPressure(threat);
   assert.equal(loadedPressure > PROTOKOLNIK_PRESSURE_SAFE_CAP, true);
   assert.equal(loadedPressure <= protokolnikPressureCap(documentPressure), true);
   assert.equal((threat.protocolPressureTier ?? 0) >= 2, true);
@@ -155,8 +155,8 @@ test('protocol pressure grows from carried documents, caps, and eases after pape
 
   target.inventory = [];
   updateProtokolnikProtocolPressure(world, [target, threat], threat, target, 4, 12, msgs, target.id, { v: 900 }, state);
-  assert.equal((threat.ai?.protocolPressure ?? 0) <= PROTOKOLNIK_PRESSURE_SAFE_CAP + 0.1, true);
-  assert.equal((threat.ai?.protocolPressure ?? 0) <= loadedPressure, true);
+  assert.equal(peekProtokolnikPressure(threat) <= PROTOKOLNIK_PRESSURE_SAFE_CAP + 0.1, true);
+  assert.equal(peekProtokolnikPressure(threat) <= loadedPressure, true);
 });
 
 test('breaking protocol line publishes a protokolnik escape event', () => {
@@ -169,7 +169,7 @@ test('breaking protocol line publishes a protokolnik escape event', () => {
   syncEntities([target, threat]);
 
   updateProtokolnikProtocolPressure(world, [target, threat], threat, target, 5, 5, msgs, target.id, { v: 900 }, state);
-  assert.equal((threat.ai?.protocolPressure ?? 0) >= 18, true);
+  assert.equal(peekProtokolnikPressure(threat) >= 18, true);
 
   updateProtokolnikProtocolPressure(world, [target, threat], threat, null, 1, 6, msgs, target.id, { v: 900 }, state);
   const escaped = getRecentEvents(state, { type: 'monster_escaped', limit: 1 })[0];

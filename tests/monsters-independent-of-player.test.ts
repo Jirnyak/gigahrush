@@ -21,6 +21,7 @@ import { DEF as CHERVIE_DEF } from '../src/entities/chervie_avatar';
 import { DEF as CHERNOSLIZ_DEF } from '../src/entities/chernosliz';
 import { DEF as PROTOKOLNIK_DEF } from '../src/entities/protokolnik';
 import {
+  peekProtokolnikPressure,
   setEntityMap,
   updateMonster,
   updateChervieNetPossessor,
@@ -169,35 +170,29 @@ test('помойный рой одинаково идёт на приманку 
 });
 
 
-test('безэхий бьёт с косяка любого, кто переступил порог спиной', () => {
+test('безэхий держит того, кого видит, и теряет за стеной — игрок тут не особенный', () => {
   resetCombatStimulus();
   const world = openWorld();
-  const doorIdx = world.idx(10, 10);
-  world.cells[doorIdx] = Cell.DOOR;
-  world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.OPEN, roomA: -1, roomB: -1, keyId: '', timer: 0 });
   setListenerPos(512, 512, world.dist2.bind(world));
 
-  const walker = person(7, 9.2, 10.5);
+  const walker = person(7, 13.5, 10.5);
   const player = playerBody(1, 60, 60);
-  const threat = monster(2, MonsterKind.BEZEKHIY, BEZEKHIY_DEF, 10.5, 13.5);
+  const threat = monster(2, MonsterKind.BEZEKHIY, BEZEKHIY_DEF, 10.5, 10.5);
   const entities = [player, walker, threat];
   const state = makeGameState({ worldEvents: createWorldEventState() });
   const msgs: Msg[] = [];
 
+  // NPC в прямой видимости вблизи — цель, хотя игрок за полкарты.
   sync(entities);
-  updateMonster(world, entities, threat, 0, 1, msgs, player.id, { v: 3 }, state);
+  updateMonster(world, entities, threat, 0.1, 1, msgs, player.id, { v: 3 }, state);
+  assert.equal(threat.ai?.combatTargetId, walker.id, 'берёт того, кого видит, а не игрока');
 
-  walker.x = 11.8;
-  walker.y = 10.5;
-  walker.angle = 0;
+  // Стена между ними — и цель потеряна: другого канала у него нет.
+  for (let y = 9; y <= 12; y++) world.cells[world.idx(12, y)] = Cell.WALL;
   sync(entities);
-  updateMonster(world, entities, threat, 0.1, 1.1, msgs, player.id, { v: 3 }, state);
-
-  assert.equal((walker.hp ?? 60) < 60, true, 'NPC у порога обязан получить тот же выпад');
-  assert.equal(threat.ai?.deadEchoSpent, true);
-  assert.equal(player.hp, 100, 'игрок за полкарты не участвует в засаде');
-  const lunge = getRecentEvents(state, { type: 'bezekhiy_lunge', limit: 1 })[0];
-  assert.equal(lunge?.targetId, walker.id);
+  updateMonster(world, entities, threat, 0.1, 1.2, msgs, player.id, { v: 3 }, state);
+  assert.equal(threat.ai?.combatTargetId, undefined, 'за стеной он теряет цель насовсем');
+  assert.equal(player.hp, 100, 'игрок за полкарты не участвует');
 });
 
 // Чернослиз прячется от свойств места (чёрная вода, темнота, целая шкура), а
@@ -245,7 +240,7 @@ test('пульс протокольника бьёт NPC с бумагами н�
   // 999 — несуществующее тело игрока: сверка идёт без него.
   updateProtokolnikProtocolPressure(world, entities, threat, clerk, 8, 8, msgs, 999, { v: 900 }, state);
 
-  assert.ok((threat.ai?.protocolPressure ?? 0) > 0, 'давление обязано копиться на NPC');
+  assert.ok(peekProtokolnikPressure(threat) > 0, 'давление обязано копиться на NPC');
   assert.ok((clerk.hp ?? 60) < 60, 'пульс сверки бьёт носителя бумаг, кем бы он ни был');
 });
 
@@ -269,7 +264,7 @@ test('червие подставляет ближайшего человека 
 
   sync(entities);
   // 999 — несуществующее тело игрока: этаж без него обязан жить так же.
-  updateChervieNetPossessor(world, entities, threat, 1, 1, msgs, 999, state);
+  updateChervieNetPossessor(world, threat, 1, 1, msgs, 999, state);
 
   assert.equal(threat.ai?.netPowered, true);
   assert.equal(far.ai?.combatTargetId, near.id, 'ложный приказ выписан на ближайшего человека');

@@ -19,6 +19,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../rpg';
 import { playGrowl, playSoundAt } from '../audio';
 import { hasClearLineOfFire } from './monster';
 import { rng } from '../../core/rand';
+import { speciesState } from './species_state';
 
 export const KHOROVAYA_MATKA_CHILD_CAP = 7;
 export const KHOROVAYA_MATKA_VULNERABLE_SEC = 8;
@@ -48,16 +49,34 @@ function playerNear(world: World, e: Entity, entityById: ReadonlyMap<number, Ent
   return world.dist2(e.x, e.y, player.x, player.y) <= CHOIR_AUDIBLE_RADIUS_SQ ? player : undefined;
 }
 
+/* Хор матки: отсчёт, приплод, окно уязвимости. Всё это свойство одного вида и
+ * потому живёт здесь, рядом с ним, а не полями в `AIState` каждого актора. */
+interface ChoirState {
+  countdown?: number;
+  cueStep?: number;
+  childIds: number[];
+  lastChildCount?: number;
+  spawnedChildren: number;
+  vulnerableTimer: number;
+  lastHp?: number;
+}
+const choirState = speciesState<ChoirState>(() => ({ childIds: [], spawnedChildren: 0, vulnerableTimer: 0 }));
+
+/** Состояние хора: путь для отладки и тестов, не для игровой логики. */
+export function choirStateOf(e: Entity): ChoirState {
+  return choirState.of(e);
+}
+
 function compactChoirChildren(e: Entity, entityById: ReadonlyMap<number, Entity>): number {
-  const ai = e.ai;
-  if (!ai?.choirChildIds || ai.choirChildIds.length === 0) return 0;
+  const choir = choirState.of(e);
+  if (choir.childIds.length === 0) return 0;
   let write = 0;
-  for (const id of ai.choirChildIds) {
+  for (const id of choir.childIds) {
     const child = entityById.get(id);
     if (!child?.alive || child.type !== EntityType.MONSTER) continue;
-    ai.choirChildIds[write++] = id;
+    choir.childIds[write++] = id;
   }
-  ai.choirChildIds.length = write;
+  choir.childIds.length = write;
   return write;
 }
 
@@ -92,21 +111,21 @@ function publishChoirEvent(
 }
 
 function applyMembraneDamageGate(e: Entity): void {
-  const ai = e.ai;
-  if (!ai || e.hp === undefined) return;
-  if (ai.choirLastHp === undefined || ai.choirLastHp <= 0 || e.hp > ai.choirLastHp) {
-    ai.choirLastHp = e.hp;
+  const choir = choirState.of(e);
+  if (!e.ai || e.hp === undefined) return;
+  if (choir.lastHp === undefined || choir.lastHp <= 0 || e.hp > choir.lastHp) {
+    choir.lastHp = e.hp;
     return;
   }
-  if ((ai.choirVulnerableTimer ?? 0) > 0) {
-    ai.choirLastHp = e.hp;
+  if (choir.vulnerableTimer > 0) {
+    choir.lastHp = e.hp;
     return;
   }
-  if (e.hp >= ai.choirLastHp) return;
+  if (e.hp >= choir.lastHp) return;
 
-  const repaired = Math.max(1, Math.round((ai.choirLastHp - e.hp) * CHOIR_MEMBRANE_REPAIR));
-  e.hp = Math.min(e.maxHp ?? ai.choirLastHp, e.hp + repaired);
-  ai.choirLastHp = e.hp;
+  const repaired = Math.max(1, Math.round((choir.lastHp - e.hp) * CHOIR_MEMBRANE_REPAIR));
+  e.hp = Math.min(e.maxHp ?? choir.lastHp, e.hp + repaired);
+  choir.lastHp = e.hp;
 }
 
 function findChoirSpawnCell(world: World, e: Entity, slot: number): { x: number; y: number } | null {
@@ -173,18 +192,17 @@ function spawnChoirWave(
   nextId: { v: number },
   liveChildren: number,
 ): number {
-  const ai = e.ai!;
+  const choir = choirState.of(e);
   const slots = Math.min(CHOIR_WAVE_SIZE, KHOROVAYA_MATKA_CHILD_CAP - liveChildren);
   if (slots <= 0) return 0;
-  if (!ai.choirChildIds) ai.choirChildIds = [];
   let spawned = 0;
   for (let i = 0; i < slots; i++) {
-    const child = spawnChoirChild(world, entities, e, nextId, (ai.choirSpawnedChildren ?? 0) + i);
+    const child = spawnChoirChild(world, entities, e, nextId, choir.spawnedChildren + i);
     if (!child) continue;
-    ai.choirChildIds.push(child.id);
+    choir.childIds.push(child.id);
     spawned++;
   }
-  ai.choirSpawnedChildren = (ai.choirSpawnedChildren ?? 0) + spawned;
+  choir.spawnedChildren += spawned;
   return spawned;
 }
 
@@ -201,18 +219,18 @@ export function updateKhorovayaMatka(
   state?: GameState,
 ): void {
   if (e.monsterKind !== MonsterKind.KHOROVAYA_MATKA || !e.ai) return;
-  const ai = e.ai;
+  const choir = choirState.of(e);
   const player = playerNear(world, e, entityById, playerId);
 
   applyMembraneDamageGate(e);
 
-  ai.choirVulnerableTimer = Math.max(0, (ai.choirVulnerableTimer ?? 0) - dt);
+  choir.vulnerableTimer = Math.max(0, choir.vulnerableTimer - dt);
   const liveChildren = compactChoirChildren(e, entityById);
-  const previousChildren = ai.choirLastChildCount ?? liveChildren;
-  if ((ai.choirSpawnedChildren ?? 0) > 0 && previousChildren > 0 && liveChildren === 0) {
-    ai.choirVulnerableTimer = KHOROVAYA_MATKA_VULNERABLE_SEC;
-    ai.choirCountdown = Math.max(ai.choirCountdown ?? 0, KHOROVAYA_MATKA_COUNTDOWN_SEC * 0.55);
-    ai.choirLastHp = e.hp;
+  const previousChildren = choir.lastChildCount ?? liveChildren;
+  if (choir.spawnedChildren > 0 && previousChildren > 0 && liveChildren === 0) {
+    choir.vulnerableTimer = KHOROVAYA_MATKA_VULNERABLE_SEC;
+    choir.countdown = Math.max(choir.countdown ?? 0, KHOROVAYA_MATKA_COUNTDOWN_SEC * 0.55);
+    choir.lastHp = e.hp;
     e.spriteScale = 1.18;
     if (player) {
       msgs.push(msg('Хор сорван: детские рты закрылись. Матка открыта ненадолго.', time, '#f8c'));
@@ -224,39 +242,39 @@ export function updateKhorovayaMatka(
       counterplay: 'burst_source_during_child_clear_window',
     });
   }
-  ai.choirLastChildCount = liveChildren;
+  choir.lastChildCount = liveChildren;
 
-  if ((ai.choirVulnerableTimer ?? 0) > 0) {
-    e.spriteScale = 1.08 + Math.min(0.12, (ai.choirVulnerableTimer ?? 0) * 0.015);
+  if (choir.vulnerableTimer > 0) {
+    e.spriteScale = 1.08 + Math.min(0.12, choir.vulnerableTimer * 0.015);
   } else if (e.spriteScale !== undefined && e.spriteScale > 1) {
     e.spriteScale = undefined;
   }
 
-  ai.choirCountdown = (ai.choirCountdown ?? KHOROVAYA_MATKA_COUNTDOWN_SEC) - dt;
-  const cueStep = Math.max(0, Math.ceil((ai.choirCountdown ?? 0) / CHOIR_CUE_STEP_SEC));
-  if (ai.choirCueStep === undefined) ai.choirCueStep = cueStep;
-  if (player && cueStep < ai.choirCueStep && cueStep > 0) {
+  choir.countdown = (choir.countdown ?? KHOROVAYA_MATKA_COUNTDOWN_SEC) - dt;
+  const cueStep = Math.max(0, Math.ceil(choir.countdown / CHOIR_CUE_STEP_SEC));
+  if (choir.cueStep === undefined) choir.cueStep = cueStep;
+  if (player && cueStep < choir.cueStep && cueStep > 0) {
     const opened = Math.max(1, 6 - cueStep);
     msgs.push(msg(`Хоровая Матка открывает ${opened}-й детский рот. Припев близко.`, time, '#f8c'));
     publishChoirEvent(state, world, e, player, ['countdown'], {
-      countdown: Math.max(0, ai.choirCountdown ?? 0),
+      countdown: Math.max(0, choir.countdown),
       openFaceBud: opened,
       childCap: KHOROVAYA_MATKA_CHILD_CAP,
     });
     playSoundAt(playGrowl, e.x, e.y);
   }
-  ai.choirCueStep = cueStep;
+  choir.cueStep = cueStep;
 
-  if ((ai.choirCountdown ?? 0) > 0) return;
-  ai.choirCountdown = liveChildren >= KHOROVAYA_MATKA_CHILD_CAP
+  if (choir.countdown > 0) return;
+  choir.countdown = liveChildren >= KHOROVAYA_MATKA_CHILD_CAP
     ? CHOIR_CUE_STEP_SEC
     : KHOROVAYA_MATKA_COUNTDOWN_SEC;
-  ai.choirCueStep = Math.ceil(ai.choirCountdown / CHOIR_CUE_STEP_SEC);
+  choir.cueStep = Math.ceil(choir.countdown / CHOIR_CUE_STEP_SEC);
   if (liveChildren >= KHOROVAYA_MATKA_CHILD_CAP) return;
 
   const spawned = spawnChoirWave(world, entities, e, nextId, liveChildren);
   if (spawned <= 0) return;
-  ai.choirLastChildCount = liveChildren + spawned;
+  choir.lastChildCount = liveChildren + spawned;
   e.spriteScale = 1.16;
   if (player) {
     msgs.push(msg(`Хоровая Матка вывела приплод: ${spawned}. Чисти детей или бей источник сейчас.`, time, '#f6a'));
