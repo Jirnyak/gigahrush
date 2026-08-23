@@ -10,9 +10,10 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
+import { withSeededRandom } from '../../core/rand';
 import { ensureConnectivity, sanitizeDoors } from '../shared';
-import { DESIGN_NPC_HOME_FLOOR_KEY, CAYLEY_BYURO_ROUTE_ID, CAYLEY_BYURO_ROOM_NAMES, CayleyByuroGeneration, CAYLEY_TAGS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
-import { carveCayleyGraphField, placeLift, createCayleyMacroCampuses, connectCayleyMacroGraph, createCayleyHqClusters, createCayleyLatticeBooths, createRooms, connectCayleyGraph, populateAuthoredContent, tuneInitialZones, registerCayleyRouteCue, retainLiveCayleyDoorIds } from "./geometry";
+import { DESIGN_NPC_HOME_FLOOR_KEY, CAYLEY_BYURO_ROUTE_ID, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_BYURO_Z, CayleyByuroGeneration, CAYLEY_TAGS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
+import { carveCayleyGraphField, placeLift, createCayleyMacroCampuses, connectCayleyMacroGraph, createCayleyHqClusters, createCayleyLatticeBooths, createRooms, connectCayleyGraph, populateAuthoredContent, tuneInitialZones, registerCayleyRouteCue, retainLiveCayleyDoorIds, ensureCayleyGeneratorLocks } from "./geometry";
 import { createState } from "./npcs";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_clerk', CLERK_DEF, [
@@ -73,44 +74,48 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'cayley_byuro_inspector', INSP
   },
 ]);
 
-export function generateCayleyByuroDesignFloor(): CayleyByuroGeneration {
-  const world = new World();
-  const entities: Entity[] = [];
-  const spawnX = 512.5;
-  const spawnY = 502.5;
-  const state = createState(spawnX, spawnY);
+export function generateCayleyByuroDesignFloor(seed = CAYLEY_BYURO_Z): CayleyByuroGeneration {
+  return withSeededRandom(seed, () => {
+    const world = new World();
+    const entities: Entity[] = [];
+    const spawnX = 512.5;
+    const spawnY = 502.5;
+    const state = createState(spawnX, spawnY);
 
-  for (let i = 0; i < W * W; i++) {
-    world.wallTex[i] = Tex.MARBLE;
-    world.floorTex[i] = Tex.F_PARQUET;
-  }
+    for (let i = 0; i < W * W; i++) {
+      world.wallTex[i] = Tex.MARBLE;
+      world.floorTex[i] = Tex.F_PARQUET;
+    }
 
-  carveCayleyGraphField(world);
-  const rooms = createRooms(world, state);
-  placeLift(world, rooms.lobby.x + 8, rooms.lobby.y + 24, rooms.lobby.x + 11, rooms.lobby.y + 24, LiftDirection.UP);
-  placeLift(world, rooms.lobby.x + rooms.lobby.w - 9, rooms.lobby.y + 24, rooms.lobby.x + rooms.lobby.w - 12, rooms.lobby.y + 24, LiftDirection.DOWN);
-  const macroRooms = createCayleyMacroCampuses(world, rooms, state);
-  createCayleyHqClusters(world, macroRooms, state);
-  createCayleyLatticeBooths(world);
-  connectCayleyGraph(world, rooms, state);
-  connectCayleyMacroGraph(world, macroRooms, state);
-  tuneInitialZones(world);
-  populateAuthoredContent(world, entities, rooms, state);
-  registerCayleyRouteCue(world, rooms);
-  ensureConnectivity(world, spawnX, spawnY);
-  sanitizeDoors(world);
-  retainLiveCayleyDoorIds(world, state);
-  world.rebuildContainerMap();
-  world.bakeLights();
+    carveCayleyGraphField(world);
+    const rooms = createRooms(world, state);
+    placeLift(world, rooms.lobby.x + 8, rooms.lobby.y + 24, rooms.lobby.x + 11, rooms.lobby.y + 24, LiftDirection.UP);
+    placeLift(world, rooms.lobby.x + rooms.lobby.w - 9, rooms.lobby.y + 24, rooms.lobby.x + rooms.lobby.w - 12, rooms.lobby.y + 24, LiftDirection.DOWN);
+    const macroRooms = createCayleyMacroCampuses(world, rooms, state);
+    createCayleyHqClusters(world, macroRooms, state);
+    createCayleyLatticeBooths(world);
+    connectCayleyGraph(world, rooms, state);
+    connectCayleyMacroGraph(world, macroRooms, state);
+    tuneInitialZones(world);
+    populateAuthoredContent(world, entities, rooms, state);
+    registerCayleyRouteCue(world, rooms);
+    ensureConnectivity(world, spawnX, spawnY);
+    sanitizeDoors(world);
+    // Замки графа выдаются последним тактом геометрии: до санации гарантии нет.
+    ensureCayleyGeneratorLocks(world, rooms, macroRooms, state);
+    retainLiveCayleyDoorIds(world, state);
+    world.rebuildContainerMap();
+    world.bakeLights();
 
-  return {
-    isDecentralized: true,
-    world,
-    entities,
-    spawnX,
-    spawnY,
-    cayleyState: state,
-  };
+    return {
+      isDecentralized: true,
+      world,
+      entities,
+      spawnX,
+      spawnY,
+      cayleyState: state,
+    };
+  });
 }
 
 export * from "./meta";

@@ -21,7 +21,7 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, generateZones, stampRoom } from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
-import { CAYLEY_BYURO_Z, CayleyElement, CayleyGenerator, CayleyCoset, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_NEXT, CayleyByuroState, Point, CayleyHqSpec, CAYLEY_GRAPH_POINTS, CAYLEY_LATTICE_X, CAYLEY_LATTICE_Y, CAYLEY_TERRITORY_GRID, CAYLEY_HQ_SPECS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
+import { CAYLEY_BYURO_Z, CayleyElement, CayleyGenerator, CayleyCoset, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_NEXT, CayleyByuroState, Point, CayleyHqSpec, CAYLEY_GRAPH_POINTS, CAYLEY_GENERATOR_R_EDGES, CAYLEY_GENERATOR_S_EDGES, CAYLEY_LATTICE_X, CAYLEY_LATTICE_Y, CAYLEY_TERRITORY_GRID, CAYLEY_HQ_SPECS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
 import { spawnNpc, spawnMonster, addContainer } from "./npcs";
 
 export function cayleyApplyFormSequence(sequence: readonly CayleyGenerator[], start: CayleyElement = 'e'): CayleyElement {
@@ -173,10 +173,10 @@ export function carveCayleyGraphField(world: World): void {
   for (const y of CAYLEY_LATTICE_Y) carveCayleySegment(world, { x: 0, y }, { x: W - 1, y }, 2, Tex.MARBLE, Tex.F_PARQUET);
   for (const x of CAYLEY_LATTICE_X) carveCayleySegment(world, { x, y: 0 }, { x, y: W - 1 }, 2, Tex.MARBLE, Tex.F_PARQUET);
 
-  for (const [a, b] of [['e', 'r'], ['r', 'rr'], ['rr', 'e'], ['s', 'sr'], ['sr', 'srr'], ['srr', 's']] as const) {
+  for (const [a, b] of CAYLEY_GENERATOR_R_EDGES) {
     carveCayleySegment(world, CAYLEY_GRAPH_POINTS[a], CAYLEY_GRAPH_POINTS[b], 5, Tex.MARBLE, Tex.F_GREEN_CARPET);
   }
-  for (const [a, b] of [['e', 's'], ['r', 'srr'], ['rr', 'sr']] as const) {
+  for (const [a, b] of CAYLEY_GENERATOR_S_EDGES) {
     carveCayleySegment(world, CAYLEY_GRAPH_POINTS[a], CAYLEY_GRAPH_POINTS[b], 4, Tex.METAL, Tex.F_RED_CARPET);
   }
 
@@ -228,6 +228,78 @@ export function connectRooms(
       door.state = DoorState.CLOSED;
       door.keyId = '';
     }
+  }
+}
+
+/** Запирает клетку стены комнаты, обращённую к соседу, за которой коридор УЖЕ прорезан.
+ *  Резать сюда новый путь нельзя: carveShortcutCell не отличает дверь от стены и
+ *  превратил бы чужие двери в дыры, а санация снесла бы следом и их, и наш замок.
+ *  Косяки предпочитаем уже каменные — placeBoundaryDoor заложит их стеной. */
+export function lockEdgeBoundaryDoor(world: World, room: Room, target: Point, keyId: string, list: number[]): boolean {
+  let best: { wx: number; wy: number; ox: number; oy: number; cost: number; d2: number } | null = null;
+  const consider = (wx: number, wy: number, ox: number, oy: number): void => {
+    const idx = world.idx(wx, wy);
+    if (world.cells[idx] !== Cell.WALL || world.aptMask[idx] || world.hermoWall[idx]) return;
+    const oi = world.idx(ox, oy);
+    if (world.cells[oi] !== Cell.FLOOR || world.roomMap[oi] >= 0) return;
+
+    const jambs = wx === room.x - 1 || wx === room.x + room.w ? [[0, -1], [0, 1]] as const : [[-1, 0], [1, 0]] as const;
+    let cost = 0;
+    for (const [jx, jy] of jambs) {
+      const jc = world.cells[world.idx(wx + jx, wy + jy)];
+      if (jc === Cell.DOOR || jc === Cell.LIFT || world.roomMap[world.idx(wx + jx, wy + jy)] >= 0) return;
+      if (jc !== Cell.WALL) cost++;
+    }
+    const d2 = world.dist2(wx, wy, target.x, target.y);
+    if (!best || cost < best.cost || (cost === best.cost && d2 < best.d2)) best = { wx, wy, ox, oy, cost, d2 };
+  };
+
+  for (let dy = 0; dy < room.h; dy++) {
+    consider(room.x - 1, room.y + dy, room.x - 2, room.y + dy);
+    consider(room.x + room.w, room.y + dy, room.x + room.w + 1, room.y + dy);
+  }
+  for (let dx = 0; dx < room.w; dx++) {
+    consider(room.x + dx, room.y - 1, room.x + dx, room.y - 2);
+    consider(room.x + dx, room.y + room.h, room.x + dx, room.y + room.h + 1);
+  }
+
+  if (!best) return false;
+  const spot = best as { wx: number; wy: number; ox: number; oy: number };
+  placeBoundaryDoor(world, room, spot.wx, spot.wy, spot.ox, spot.oy, DoorState.LOCKED, keyId, list);
+  return true;
+}
+
+export function roomCarriesLockedDoor(world: World, room: Room, keyId: string): boolean {
+  return room.doors.some(idx => {
+    const door = world.doors.get(idx);
+    return !!door && door.state === DoorState.LOCKED && door.keyId === keyId;
+  });
+}
+
+/** Гарантия головоломки: каждое ребро генератора R стоит ключа. Выдаётся ПОСЛЕ
+ *  sanitizeDoors, потому что до неё гарантии нет с двух сторон — carveCorridor не делает
+ *  двери, если рот комнаты уже вскрыт предыдущим коридором, а поставленную дверь санация
+ *  вправе снести как неправильный косяк. Замок ребра живёт на комнате-ИСТОЧНИКЕ: каждый
+ *  элемент группы начинает ровно одно ребро R, поэтому «у каждого окна есть замок» — это
+ *  ровно «каждое ребро стоит ключа». */
+export function ensureCayleyGeneratorLocks(
+  world: World,
+  rooms: ReturnType<typeof createRooms>,
+  macroRooms: Record<CayleyElement, Room>,
+  state: CayleyByuroState,
+): void {
+  const graphs: Record<CayleyElement, Room>[] = [rooms, macroRooms];
+  for (const [a, b] of CAYLEY_GENERATOR_R_EDGES) {
+    for (const graph of graphs) {
+      const from = graph[a];
+      if (roomCarriesLockedDoor(world, from, 'key')) continue;
+      if (!lockEdgeBoundaryDoor(world, from, center(graph[b]), 'key', state.generatorDoorIds)) {
+        lockEdgeBoundaryDoor(world, graph[b], center(from), 'key', state.generatorDoorIds);
+      }
+    }
+  }
+  if (!roomCarriesLockedDoor(world, rooms.quotient, 'forged_permit_slip')) {
+    lockEdgeBoundaryDoor(world, rooms.quotient, center(rooms.srr), 'forged_permit_slip', state.quotientShortcutDoorIds);
   }
 }
 
@@ -485,10 +557,10 @@ export function createCayleyMacroCampuses(
 }
 
 export function connectCayleyMacroGraph(world: World, macroRooms: Record<CayleyElement, Room>, state: CayleyByuroState): void {
-  for (const [a, b] of [['e', 'r'], ['r', 'rr'], ['rr', 'e'], ['s', 'sr'], ['sr', 'srr'], ['srr', 's']] as const) {
+  for (const [a, b] of CAYLEY_GENERATOR_R_EDGES) {
     connectRooms(world, macroRooms[a], macroRooms[b], state, 'generator_r');
   }
-  for (const [a, b] of [['e', 's'], ['r', 'srr'], ['rr', 'sr']] as const) {
+  for (const [a, b] of CAYLEY_GENERATOR_S_EDGES) {
     connectRooms(world, macroRooms[a], macroRooms[b], state, 'plain');
   }
 }
@@ -623,10 +695,10 @@ export function connectCayleyGraph(world: World, rooms: ReturnType<typeof create
   connectRooms(world, rooms.lobby, rooms.audit, state, 'plain');
   connectRooms(world, rooms.lobby, rooms.quotient, state, 'plain');
 
-  for (const [a, b] of [['e', 'r'], ['r', 'rr'], ['rr', 'e'], ['s', 'sr'], ['sr', 'srr'], ['srr', 's']] as const) {
+  for (const [a, b] of CAYLEY_GENERATOR_R_EDGES) {
     connectRooms(world, rooms[a], rooms[b], state, 'generator_r');
   }
-  for (const [a, b] of [['e', 's'], ['r', 'srr'], ['rr', 'sr']] as const) {
+  for (const [a, b] of CAYLEY_GENERATOR_S_EDGES) {
     connectRooms(world, rooms[a], rooms[b], state, 'plain');
   }
   connectRooms(world, rooms.quotient, rooms.srr, state, 'quotient');

@@ -16,11 +16,28 @@ import {
   CAYLEY_BYURO_ROUTE_ID,
   CAYLEY_BYURO_TARGET_TERRITORY_SHARES,
   CAYLEY_BYURO_Z,
+  CAYLEY_GENERATOR_R_EDGES,
   cayleyApplyFormSequence,
   cayleyCosetOf,
   generateCayleyByuroDesignFloor,
   type CayleyByuroGeneration,
 } from '../src/gen/cayley_byuro';
+
+/** Головоломка этажа: каждое из шести рёбер генератора R обязано стоить ключа.
+ *  Суммарная длина generatorDoorIds этого не ловит — одно ребро может дать две двери,
+ *  другое ни одной, а сумма сойдётся. Замок ребра висит на комнате-ИСТОЧНИКЕ: каждый
+ *  элемент группы начинает ровно одно ребро R. */
+function assertEveryGeneratorEdgeCostsAKey(gen: CayleyByuroGeneration, label = ''): void {
+  for (const [from, to] of CAYLEY_GENERATOR_R_EDGES) {
+    const room = gen.world.rooms[gen.cayleyState.groupRooms[from]];
+    assert.ok(room, `${label}нет комнаты элемента ${from}`);
+    const locked = room.doors.filter(idx => {
+      const door = gen.world.doors.get(idx);
+      return !!door && door.state === DoorState.LOCKED && door.keyId === 'key';
+    });
+    assert.equal(locked.length >= 1, true, `${label}ребро ${from}→${to} проходится без ключа`);
+  }
+}
 
 test('cayley_byuro is registered as a Ministry-band authored route', () => {
   const route = designFloorById(CAYLEY_BYURO_ROUTE_ID);
@@ -57,7 +74,7 @@ test('cayley_byuro authored generator creates graph rooms, cues and decision con
     assert.equal(audit.reachable[gen.world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2))], 1);
   }
 
-  assert.equal(gen.cayleyState.generatorDoorIds.length >= 6, true);
+  assertEveryGeneratorEdgeCostsAKey(gen);
   assert.equal(gen.cayleyState.quotientShortcutDoorIds.length >= 1, true);
   assert.equal(gen.world.rooms.length >= 360, true);
   assert.equal(gen.world.doors.size >= 260, true);
@@ -83,6 +100,17 @@ test('cayley_byuro authored generator creates graph rooms, cues and decision con
     'cayley_byuro_expose_forged_identity',
   ]) {
     assert.equal(quests.has(questId), true, questId);
+  }
+});
+
+test('cayley_byuro locks every generator R edge on any seed', () => {
+  // Сид больше не берётся из глобального ГПСЧ: генератор принимает его, как соседи по
+  // маршруту, и манифест уже зовёт GENERATORS[id](seed). Покрытие замков не должно
+  // зависеть от того, какой этаж выпал.
+  for (const seed of [1, 7, 42, 1000, 65_537, 20_260_823]) {
+    const gen = generateCayleyByuroDesignFloor(seed);
+    assertEveryGeneratorEdgeCostsAKey(gen, `сид ${seed}: `);
+    assert.equal(gen.cayleyState.quotientShortcutDoorIds.length >= 1, true, `сид ${seed}: факторный ход без замка`);
   }
 });
 

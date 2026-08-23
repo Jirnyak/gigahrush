@@ -119,7 +119,7 @@ import {
 } from './render/webgl';
 import { dropWorldContextsExcept } from './world/world_contexts';
 import { drawHUD, drawPointerCaptureGate, drawSceneOverlay } from './render/hud';
-import { abortFloorScene, bindSceneCamera, floorScenesForSave, resetFloorScenes, restoreFloorScenesFromSave } from './systems/cinematics';
+import { abortFloorScene, bindSceneCamera, floorScenesForSave, releaseFloorSceneToPlayer, resetFloorScenes, restoreFloorScenesFromSave } from './systems/cinematics';
 import { drawFeedbackMenu } from './render/feedback_ui';
 import {
   spawnBloodHit, spawnDeathPool, updateBloodTrails, updateParticles, particles,
@@ -3575,6 +3575,10 @@ function tryUseVoidReturnPortal(playerCell: number): boolean {
 
 interface SmokeDebugSnapshot {
   started: boolean;
+  /* Идёт ли кат-сцена. Без этого прибор не отличает «играет пролог» от «игра
+   * сломана»: во время сцены HUD не рисуется и игрок не двигается — ровно та
+   * картина, которую смоук годами сообщал как «HUD пуст». */
+  sceneLock: boolean;
   showMenu: boolean;
   showDebug: boolean;
   debugSel: number;
@@ -3715,6 +3719,7 @@ function smokeSnapshot(): SmokeDebugSnapshot {
   const interaction = interactionTargetAhead();
   return {
       started,
+      sceneLock: state.sceneLock === true,
       showMenu: state.showMenu,
       showDebug: state.showDebug,
       debugSel: state.debugSel,
@@ -4500,6 +4505,17 @@ function applyKnockbackPhysics(dt: number): void {
 function movePlayer(dt: number): void {
   const actor = player;
   if (!actor.alive) return;
+  /* Кадр сцены забирается себе клавишей «принять» (Enter по умолчанию), а НЕ
+   * кнопкой мыши: игра браузерная, и кнопки мыши доходят до игрового ввода
+   * только при захваченном указателе (`input.ts`, ветка `pointerLockElement`).
+   * Игрок, отпустивший указатель, остался бы в сцене без выхода, а безголовый
+   * смоук не смог бы проверить этот путь вовсе — замерено, `pointerLocked` там
+   * пуст. Клавиатуре захват не нужен, поэтому путь один и работает всегда.
+   *
+   * Нажатие СЪЕДАЕТСЯ: иначе тот же, уже свободный кадр открыл бы им меню —
+   * `acceptEdge` ловит фронт `input.escape`, и съеденный флаг фронта не даёт.
+   * Сцена при этом доигрывает сама. */
+  if (state.sceneLock && releaseFloorSceneToPlayer(state, input.escape)) input.escape = false;
   if (state.sleeping || state.trailerMode || state.sceneLock) return; // no movement while sleeping, in trailer mode or during a floor scene
   // Seated at a co-op table: you are out of play until it ends. The world keeps
   // running around you — hosting means menus do not freeze the shared floor —

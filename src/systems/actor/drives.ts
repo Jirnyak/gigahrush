@@ -1,10 +1,17 @@
-import { ItemType, MAX_DRAW, Faction, NpcState, type Entity } from '../../core/types';
+import { ItemType, MAX_DRAW, Faction, NpcState, type Entity, type GameState } from '../../core/types';
 import type { RoomAffordanceId } from '../../data/room_affordances';
 import type { World } from '../../core/world';
 import { carriesFor, consumeCarried, eatMeatChunk, relieveInPlace } from './body';
 import { FieldChannel } from '../fields';
 import { CAPTURE_MIN_PRESSURE, declareTerritoryPush, territoryCaptureTarget } from '../territory';
+import { npcWorkErrandRoomId, tickNpcWorkDeed } from '../npc_work';
+import {
+  defaultDuty, defaultSociability, npcUtilityIdentityFromEntity, npcUtilityRhythmBias,
+  occupationWorkDrive, patrolDrive,
+  type NpcUtilityIdentity, type NpcUtilityIntentId,
+} from '../ai/npc_utility';
 import { clamp01, type ActorNeeds } from './needs';
+import type { ActorClock } from './clock';
 import { ACTOR_SENSE_RADIUS, sensed, sensedFar, type ActorSenses } from './senses';
 
 /**
@@ -61,6 +68,9 @@ export const DRIVE_IDS = [
   'heal',
   'capture',
   'fight',
+  'work',
+  'social',
+  'patrol',
 ] as const;
 
 export type DriveId = (typeof DRIVE_IDS)[number];
@@ -69,6 +79,7 @@ export type DriveId = (typeof DRIVE_IDS)[number];
 export interface DriveView {
   senses: ActorSenses;
   needs: ActorNeeds;
+  clock: ActorClock;
 }
 
 /**
@@ -145,6 +156,33 @@ export interface DriveDef {
    */
   routeTarget?(world: World, e: Entity): number;
   /**
+   * Цель яруса `room` в обход НАЗНАЧЕНИЯ: номер комнаты, названной самим делом.
+   * Возвращает −1, когда своего адреса у дела нет и годится обычный поиск.
+   *
+   * Нужна там же, где и `routeTarget`: назначение комнаты на этот вопрос не
+   * отвечает по своей природе. Наряд кладовщика — ровно такой случай: хлеб
+   * везут на кухню, а кухня «работой» не считается и в поиске годных комнат не
+   * появится никогда.
+   */
+  roomTarget?(world: World, e: Entity): number;
+  /**
+   * Дело, которое делается ПО ПРИХОДЕ на место, своим тактом. Драйв доводит до
+   * комнаты, а что там делать — знает тот, кто это дело ведёт: уборка
+   * поверхностей, складской цикл, разнос груза.
+   *
+   * Смысл хука в том, что перенос распорядка — это смена ТОЧКИ ВЫЗОВА, а не
+   * переписывание дела заново: за этой строчкой стоят покупка за деньги, кража
+   * со свидетелями и неотчуждаемость квестовой вещи, и второго их экземпляра
+   * быть не должно.
+   */
+  onArrived?(world: World, e: Entity, now: number, state?: GameState): void;
+  /**
+   * Намерение донорского выбора комнаты. Идентификаторы распорядка совпадают с
+   * его намерениями не случайно — это одно и то же дело под одним именем; у
+   * телесных драйвов такого намерения нет, и им остаётся нейтральное.
+   */
+  preferenceIntent?: NpcUtilityIntentId;
+  /**
    * Что драйв делает КАЖДЫЙ свой такт, пока ведёт актора. Не действие на месте,
    * а объявление намерения: система захвата переворачивает клетки только под
    * теми, кто объявил захват своей целью, и список объявивших она чистит каждый
@@ -195,6 +233,49 @@ function hostilePressure(s: ActorSenses): number {
  */
 function crowdComfort(density: number): number {
   return clamp01(density * (1 - density) * 4);
+}
+
+/* ── РАСПОРЯДОК: личность и часы ──────────────────────────────────
+ *
+ * Все числа распорядка берутся у прежнего слоя (`ai/npc_utility.ts`) и здесь не
+ * пересчитываются: кривая окна смены, личный сдвиг ±90 минут, тяга к ремеслу,
+ * долг и общительность — по одному экземпляру на проект. Второй экземпляр той
+ * же кривой разошёлся бы с первым на первой же правке.
+ */
+
+/**
+ * Личность для распорядка. Считается раз на актора: три драйва распорядка
+ * спрашивают её в одном такте решения, и строить объект второй раз незачем.
+ * Памятка держится на самом акторе, а не на времени, — цикл решения перебирает
+ * драйвы одного актора подряд.
+ */
+let routineIdentityOwner: Entity | undefined;
+let routineIdentity: NpcUtilityIdentity | undefined;
+
+function routineIdentityFor(e: Entity): NpcUtilityIdentity {
+  if (routineIdentityOwner !== e || routineIdentity === undefined) {
+    routineIdentityOwner = e;
+    routineIdentity = npcUtilityIdentityFromEntity(e);
+  }
+  return routineIdentity;
+}
+
+/**
+ * Насколько СЕЙЧАС час этого дела, 0..1. Кривая окна и личный сдвиг смены —
+ * донорские; масштаб 1, потому что здесь это множитель контекста, а не слагаемое
+ * очков. Ноль законен и означает «не моё время»: у сомножителя ноль обнуляет
+ * драйв, и это и есть смена, начинающаяся по часам.
+ */
+function routinePhase(v: DriveView, intent: NpcUtilityIntentId): number {
+  const e = v.senses.actor;
+  if (!e) return 0;
+  return npcUtilityRhythmBias(intent, v.clock.minuteOfDay, routineIdentityFor(e), 1);
+}
+
+/** Долг: сколько человек вообще склонен делать дело. Донорские числа. */
+function routineDuty(v: DriveView): number {
+  const e = v.senses.actor;
+  return e ? clamp01(defaultDuty(e.faction, e.occupation)) : 0;
 }
 
 export const DRIVES: readonly DriveDef[] = [
@@ -533,6 +614,107 @@ export const DRIVES: readonly DriveDef[] = [
     satisfyCarried: (_world, e) => consumeCarried(e, ItemType.MEDICINE),
     hasCarried: e => carriesFor(e, ItemType.MEDICINE),
   },
+  /* ── РАСПОРЯДОК ──────────────────────────────────────────────────────────
+   *
+   * Все трое устроены как тело: ярус `room`, назначение комнаты вместо поля,
+   * дорога через индекс комнат. Разница с телом одна — тянет их не давление
+   * тела, а ЧАСЫ вместе с личностью, поэтому весь распорядок и висит на
+   * контексте: не твой час — не твоё дело, каким бы прилежным ты ни был.
+   */
+  {
+    id: 'work',
+    group: 'work',
+    tier: 'room',
+    arrivedState: NpcState.WORKING,
+    affordance: 'work',
+    preferenceIntent: 'work',
+    // Канал объявлен ради единообразия строки; ярус `room` его не читает.
+    field: FieldChannel.PEOPLE,
+    sign: 1,
+    pace: 1,
+    /* Держится дольше всего прочего: смена, брошенная через шесть секунд, —
+     * это не смена. Прежний слой переспрашивал работу раз в 14–18 с. */
+    holdSec: 16,
+    reach: BODY_REACH,
+    // Долг человека и тяга его ремесла — обе величины донорские.
+    need: v => {
+      const e = v.senses.actor;
+      if (!e) return 0;
+      return clamp01(routineDuty(v) * 0.65 + occupationWorkDrive(e.occupation) * 0.35);
+    },
+    /* Час смены — множитель, а не слагаемое: ночью работы нет ни у кого, и это
+     * не запрет, а те же часы. Кровь под ногами и плохое телу гасят работу:
+     * голодный и раненый смену не тянет, а под выстрелами её не тянет никто. */
+    context: v => routinePhase(v, 'work')
+      * (1 - sensed(v.senses, FieldChannel.DANGER) * 0.8)
+      * (1 - v.needs.worst * 0.6)
+      * (v.clock.samosbor ? 0 : 1),
+    // С врагом на плечах не работают.
+    opportunity: v => (v.senses.hostiles > 0 ? 0 : 1),
+    /* Наряд бьёт назначение: везти надо туда, где ждут груз. Без этого рейсы
+     * кладовщика, кормление вставших цехов и разнос вещей по природному адресу
+     * умерли бы молча — ни одна из этих комнат «работой» не считается. */
+    roomTarget: (world, e) => npcWorkErrandRoomId(world, e),
+    /* Дойдя — работать: уборка поверхностей и складской цикл, своим тактом.
+     * `state` обязателен: на нём висят свидетели кражи и аудит сделок. */
+    onArrived: (world, e, now, state) => { tickNpcWorkDeed(world, e, now, state); },
+  },
+  {
+    id: 'social',
+    group: 'social',
+    tier: 'room',
+    arrivedState: NpcState.FREE_TIME,
+    affordance: 'social',
+    preferenceIntent: 'social',
+    field: FieldChannel.PEOPLE,
+    sign: 1,
+    pace: 0.8,
+    holdSec: 10,
+    reach: BODY_REACH,
+    need: v => {
+      const e = v.senses.actor;
+      if (!e) return 0;
+      return clamp01(defaultSociability(e.faction, e.occupation));
+    },
+    /* Говорить идут в свой час и когда тихо. Толпа тянет саму себя: в пустом
+     * баре разговаривать не с кем, в давке — уже незачем. */
+    context: v => routinePhase(v, 'social')
+      * (0.5 + crowdComfort(sensedFar(v.senses, FieldChannel.PEOPLE)))
+      * (1 - sensed(v.senses, FieldChannel.DANGER) * 0.9)
+      * (1 - v.needs.worst * 0.5)
+      * (v.clock.samosbor ? 0 : 1),
+    opportunity: v => (v.senses.hostiles > 0 ? 0 : 1),
+  },
+  {
+    id: 'patrol',
+    group: 'work',
+    tier: 'room',
+    arrivedState: NpcState.PATROL,
+    affordance: 'patrol',
+    preferenceIntent: 'patrol',
+    field: FieldChannel.PEOPLE,
+    sign: 1,
+    pace: 0.9,
+    holdSec: 12,
+    /* Обход не знает предела своей видимости — в этом всё его дело. Дальность
+     * и так ограничена радиусом поиска годной комнаты. */
+    reach: BODY_REACH,
+    /* Патруль — это просто перемещение по карте между комнатами, и назначение
+     * `patrol` уже расставлено осмысленно: коридор, штаб, общий зал, ряд.
+     * Прежний закон «патруль ходит ВНЕ комнат» не перенесён намеренно. */
+    need: v => {
+      const e = v.senses.actor;
+      if (!e) return 0;
+      return clamp01(patrolDrive(e.faction, e.occupation) * 0.67 + routineDuty(v) * 0.33);
+    },
+    /* Единственное рутинное дело, которому угроза ПОВЫШАЕТ тягу: обход затем и
+     * нужен, что где-то неспокойно. Самосбор обход не отменяет по той же
+     * причине — и это не ветка по фракции, а свойство самого дела. */
+    context: v => (0.35 + routinePhase(v, 'patrol') * 0.65)
+      * (1 + sensed(v.senses, FieldChannel.DANGER) + hostilePressure(v.senses))
+      * (1 - v.needs.worst * 0.5),
+    opportunity: v => (v.senses.hostiles > 0 ? 0 : 1),
+  },
 ];
 
 export const DRIVE_BY_ID: Readonly<Record<DriveId, DriveDef>> = Object.fromEntries(
@@ -559,6 +741,12 @@ const DRIVE_WEIGHTS: Partial<Record<DriveActorKind, Partial<Record<DriveId, numb
   [Faction.WILD]: { flee: 0.8, hide: 0.9, seek_noise: 1.1, track_scent: 1.4, capture: 1.3, fight: 1.4 },
   [Faction.CITIZEN]: { seek_noise: 0.5, huddle: 1.2, capture: 0.3, fight: 0.7 },
   beast: { flee: 0.5, hide: 0.4, seek_noise: 1.2, track_scent: 1.5, hunt: 1.4, pack: 1.2, fight: 1.6,
+    /* Распорядка у твари нет: она не работает, не разговаривает и не обходит
+     * посты. Выключено весом, а не веткой в коде и не белым списком «кому
+     * можно» — породная разница живёт ровно здесь. */
+    work: 0,
+    social: 0,
+    patrol: 0,
     /* Землю делят стороны, а не экология: у твари захват выключен весом, а не
      * веткой в коде. */
     capture: 0,

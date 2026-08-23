@@ -109,6 +109,26 @@ These are the rules every new module must preserve.
 - **One floor coordinate space.** Floor `z` is the number in `DESIGN_FLOOR_ROUTES`; a theme's base comes from `designFloorBaseZ()` / `DESIGN_FLOOR_THEME_BASES`, never a retyped literal. The removed 30/60/100/140/180/200 scheme ascended with depth while this one descends, so a legacy key is not a cosmetic wart: it silently addresses a floor that does not exist, and a legacy RANGE (`z < N`) matches the wrong floors instead of none. `scripts/check-invariants.mjs` fails the build on any `z` assigned to or compared against 60/100/140/180/200.
 - **One room id space, and it is the index.** `world.rooms` is addressed by room id: `stampRoom` writes `rooms[id]`, `roomAt()` reads `rooms[roomMap[i]]`, and floor-memory restore re-forces `room.id = idx` because a patch must land in the room it was taken from. So a floor counter starts at 0 and never skips: a hole makes `for...of` yield `undefined` (unlike `forEach`/`map`/`filter`, which skip holes and keep floor tests green) and kills every one of the ~110 room walks — that is how `systems/target_guide.ts` crashed the frame loop on Стенка, база ликвидаторов and horrorfloor. Room ids are also NOT entity ids: `roomMap` is `Int16Array` and the entity counter starts at 10000, so borrowing it (outer_district did) puts every id past the end of the array and `roomAt()` returns null for the whole floor — silently, with no crash at all. Locked by `tests/rooms-dense.test.ts`.
 - No generator that seals a room without proving it is reachable.
+- **Universal systems outrank puzzles.** Two systems are invariants of this world and every
+  authored lock must yield to them: **PSI dephasing walks through walls**, and **the world is
+  fully destructible** — anyone willing can break their own way in or out. Therefore
+  «сюда без ключа физически не попасть» IS NOT AN ACHIEVABLE GOAL and must never be a design
+  target: pursuing it breaks a universal system for one floor's benefit. A real lock means the
+  bypass COSTS a resource — the key, a PSI charge, or a tool plus time, noise, witnesses and
+  consequences. The only unacceptable state is a bypass that is **free and accidental**: the
+  player strolls around through open corridors and never learns a lock existed. That is not a
+  bypass, it is the absence of a lock. Reference point named by the owner: Caves of Qud — doors
+  exist, and nothing stops you from smashing one or phasing past it.
+  - Corollary for measurement: the honest defect metric is reachability **by ordinary walking**
+    over passable cells with no locked door in the way. PSI and demolition are lawful bypasses
+    and must stay OUT of that metric.
+  - Corollary for tests: never assert «room is unreachable without X». Unreachability is
+    guaranteed by nothing here.
+  - Live case (2026-08-23): `cayley_byuro` measured 200/200 floors with all six graph windows
+    reachable from spawn without a single locked door — `carveCayleyGraphField` cuts an open
+    lattice of through-corridors and the macro graph between campuses is locked on 0.1% of
+    edges. Григорий Кэли's key bought convenience, not passage. Owner ruled it a defect; the
+    remedy is to route the ORDINARY path through the locked edges, never to seal the floor.
 - **A floor never generates another floor's content.** A floor's `content_manifest.ts` may only call
   generators that belong to that floor. Violation found 2026-08-21: the collectors manifest calls
   `generateLiquidatorBaseArena` and stamps the liquidator base's 50×50 arena into the middle of the

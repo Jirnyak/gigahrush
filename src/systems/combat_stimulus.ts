@@ -28,7 +28,12 @@ export type CombatStimulusSource =
   | 'monster_melee'
   | 'monster_special'
   | 'projectile'
-  | 'explosion';
+  | 'explosion'
+  /* Среда: пар, огонь, ловушка этажа. Автора у такого удара нет, но жертва
+   * обязана получить всё остальное — броню, кровь, обработку смерти и повод
+   * уйти с места. Отличать его от чужой руки нужно ровно затем, чтобы никто не
+   * считал это нападением и не начинал из-за пара войну. */
+  | 'environment';
 
 export type CombatThreatReaction = 'fight' | 'flee' | 'startled';
 

@@ -290,14 +290,6 @@ export interface PlayerDamageRecord {
 }
 
 // ── Factions ─────────────────────────────────────────────────────
-export interface FactionMacroGoal {
-  id: number;
-  type: 'attack' | 'defend';
-  targetZone: number;
-  members: number[];
-  factionId: Faction;
-}
-
 export enum Faction {
   CITIZEN,     // граждане
   LIQUIDATOR,  // ликвидаторы
@@ -1207,8 +1199,6 @@ export interface GameState {
   gameWon: boolean;          // end-screen victory flag; return portal now continues freeplay
   crafting: CraftingState;    // persistent player craft materials and known recipes
   worldEvents?: WorldEventState; // bounded structured event history; old saves may omit it
-  factionGoals?: FactionMacroGoal[];
-  factionGoalsTimer?: number;
 }
 
 export interface MsgLocation {

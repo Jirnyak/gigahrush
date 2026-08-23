@@ -43,6 +43,16 @@ Core taste:
 - Elegant, universal, modular, minimal, expandable and natural.
 - Data-oriented, procedural, context-driven, physmath-friendly systems.
 - Plain functions, plain objects, typed arrays, ids and small registries.
+- **Системы и их универсальность — это основа.** Универсальная система выше любой
+  головоломки. Пси-дефазинг проводит сквозь стены, а мир разрушаем полностью — значит
+  «безвыходная» комната и «непроходимая без ключа» дверь недостижимы в принципе, и стремиться
+  к ним нельзя: это ломает общую систему ради одного этажа. Всякая авторская головоломка
+  обязана это принять и с этим мириться. Настоящий замок = обход СТОИТ ресурса (ключ,
+  пси-заряд, инструмент и время, шум и свидетели). Недопустим ровно один случай — обход
+  бесплатный и случайный, когда игрок обошёл замок по открытому коридору и даже не узнал, что
+  замок был. Образец, названный владельцем: Caves of Qud — двери есть, но сломать или пройти
+  сквозь них никто не мешает. Инженерный разбор и следствия для замеров и тестов —
+  `architecture.md`, «Non-Negotiable Invariants».
 - **Player == NPC.** The player is an NPC that the user controls. Same entity type, same combat math, same social systems, same rules. Never branch on "is player" for game mechanics — only for input source, camera, and HUD. When code says "NPC or player", it means the same thing; when it needs to exclude something, it excludes monsters (`EntityType.MONSTER`), not the player.
 
 Do not add frontend frameworks, imported UI kits, physics engines, ECS libraries, asset pipelines, runtime dependencies, or linters outside `package.json` unless there is a measured reason and explicit owner.

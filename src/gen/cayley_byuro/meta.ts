@@ -39,6 +39,17 @@ export const CAYLEY_NEXT: Readonly<Record<CayleyGenerator, Readonly<Record<Cayle
   s: { e: 's', r: 'srr', rr: 'sr', s: 'e', sr: 'rr', srr: 'r' },
 };
 
+/** Рёбра генератора R: единственный список, на который опираются прорезка поля,
+ *  авторский граф, макрограф и замок покрытия. Каждое ребро обязано стоить ключа. */
+export const CAYLEY_GENERATOR_R_EDGES: readonly (readonly [CayleyElement, CayleyElement])[] = [
+  ['e', 'r'], ['r', 'rr'], ['rr', 'e'], ['s', 'sr'], ['sr', 'srr'], ['srr', 's'],
+] as const;
+
+/** Рёбра генератора S: обычные проходы, ключа не требуют. */
+export const CAYLEY_GENERATOR_S_EDGES: readonly (readonly [CayleyElement, CayleyElement])[] = [
+  ['e', 's'], ['r', 'srr'], ['rr', 'sr'],
+] as const;
+
 export const CAYLEY_BYURO_DECISIONS = [
   {
     id: 'order_rs',

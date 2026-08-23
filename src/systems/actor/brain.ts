@@ -20,8 +20,9 @@ import {
   FieldChannel, FIELD_TICK_SECONDS, FIELD_VALUE_MAX,
 } from '../fields';
 import { actorOccupyRadius, canActorOccupy, stepActorBy } from '../movement_collision';
-import { followPath, roomTargetCell, tryAssignPathToCell } from '../ai/pathfinding';
+import { followPath, roomTargetCell, tryAssignPathToCell, wanderInRoom } from '../ai/pathfinding';
 import { speciesState } from '../ai/species_state';
+import { STORE_ACTION_BASE_SEC } from '../npc_work';
 import { clearCombatThreat } from '../combat_stimulus';
 import {
   DRIVES,
@@ -33,7 +34,9 @@ import {
   type DriveView,
 } from './drives';
 import { createActorNeeds, readActorNeeds } from './needs';
+import { createActorClock, readActorClock } from './clock';
 import { createActorSenses, senseActor } from './senses';
+import type { GameClock, GameState } from '../../core/types';
 
 /**
  * Ядро актора: один цикл на человека, тварь и игрока.
@@ -90,6 +93,8 @@ interface BrainState {
   targetId: number | undefined;
   /** Дошли до цели, и дело делается стоянием на ней (`holdsTarget`). */
   arrived: boolean;
+  /** Время следующего такта дела на месте (`onArrived`) и пересмотра наряда. */
+  deedAt: number;
   /** Откуда драйв взял актора: отсюда меряется его предел хода. */
   anchorX: number;
   anchorY: number;
@@ -107,13 +112,17 @@ const brains = speciesState<BrainState>(() => ({
   routing: false,
   targetId: undefined,
   arrived: false,
+  deedAt: -Infinity,
   anchorX: 0,
   anchorY: 0,
 }));
 
 const senses = createActorSenses();
 const needs = createActorNeeds();
-const view: DriveView = { senses, needs };
+/* Часы ОБЩИЕ на кадр: время у всех одно. Снимок переписывается один раз в
+ * точке входа, а не на каждого актора, — см. `setActorCoreContext`. */
+const clock = createActorClock();
+const view: DriveView = { senses, needs, clock };
 
 /** Расфазировка от `id`: соседние номера расходятся по всей паузе. */
 function idUnit(e: Entity): number {
@@ -202,9 +211,19 @@ const headingOut = { x: 0, y: 0 };
 /** Этаж активного прогона: ключ коммунальной памяти комнат. Подсовывается раз
  *  за кадр из точки входа — тот же приём, что у пути, боя и социального графа. */
 let _coreZ: number | undefined;
+/** Состояние прогона: нужно делу смены (аудит сделок, свидетели кражи). */
+let _coreState: GameState | undefined;
 
-export function setActorCoreContext(currentZ: number | undefined): void {
+export function setActorCoreContext(
+  currentZ: number | undefined,
+  gameClock?: GameClock,
+  samosborActive = false,
+  state?: GameState,
+): void {
   _coreZ = currentZ;
+  _coreState = state;
+  // Часы читаются ОДИН раз за кадр: время у всех одно, и снимок общий.
+  readActorClock(gameClock, samosborActive, clock);
 }
 
 /**
@@ -215,6 +234,7 @@ function releaseDrive(e: Entity, st: BrainState): void {
   st.probedCell = -1;
   st.hasDir = false;
   st.arrived = false;
+  st.deedAt = -Infinity;
   if (st.routing && e.ai) {
     e.ai.path.length = 0;
     e.ai.pi = 0;
@@ -366,32 +386,87 @@ function workRoom(
   // Где человек был — свойство человека, и кольцо у обоих слоёв одно: иначе
   // новизна у ядра и у распорядка расходилась бы и они водили бы разных людей.
   noteRoomVisit(e, here?.id);
-  if (here && roomAffordanceWeight(here.type, affordance) > 0) {
-    if (st.routing) releaseDrive(e, st);
+
+  const hereSuits = !!here && roomAffordanceWeight(here.type, affordance) > 0;
+
+  if (st.routing && e.ai) {
+    if (e.ai.path.length > 0) {
+      followPath(world, e, dt);
+      return true;
+    }
+    st.routing = false;
+    /* Наряд ведёт в комнату, которая нужного уметь НЕ обязана (кухне везут
+     * хлеб), поэтому конец дороги — это приход, а не совпадение назначения. */
+    if (def.roomTarget) st.arrived = true;
+    else if (!hereSuits) {
+      /* Дорога кончилась, а место не то. Перевыбирать цель В КАДРЕ нельзя:
+       * тогда драйв заказывает один и тот же маршрут каждый кадр — замерено,
+       * назначения пути 0.55 → 0.89/с, худший актор 25/с. Дело откладывается
+       * до следующего решения, как и всякая неудача. */
+      dropDrive(e, st);
+      return false;
+    }
+  }
+
+  if (st.arrived || hereSuits) {
     // Пришли. Отметка занятия обязательна: по ней восстановление нужд отличает
     // «лёг спать» от «стоит в комнате с кроватью», и по ней же актора читают
     // речь и анимации.
     if (def.arrivedState !== undefined && e.ai) e.ai.npcState = def.arrivedState;
+    if (def.onArrived === undefined) return true;
+    /* Дело на месте идёт своим тактом, а не каждый кадр: внутри него сделки с
+     * ящиками и уборка, и переспрашивать их шестьдесят раз в секунду незачем.
+     * На том же такте пересматривается и наряд — он стоит перебора ящиков в
+     * радиусе, и в кадр его пускать нельзя. */
+    if (now < st.deedAt) return true;
+    st.deedAt = now + DEED_INTERVAL_SEC;
+    const errand = def.roomTarget ? def.roomTarget(world, e) : -1;
+    // Наряд бьёт «здесь и так сойдёт»: если делу нужен другой адрес — идём.
+    if (errand >= 0 && errand !== here?.id) return routeToRoom(world, e, st, errand, dt);
+    def.onArrived(world, e, now, _coreState);
+    /* Дело делается НЕ СТОЯ. Работник ходит по своей комнате — это и жизнь в
+     * кадре, и то, чем прежний слой закрывал ту же смену. Маршрут забирается
+     * ядру: чужой маршрут закрыл бы шлюз входа и отдал бы актора прежнему
+     * слою на следующем же кадре. */
+    if (e.ai && e.ai.path.length === 0) {
+      wanderInRoom(world, e);
+      if (e.ai.path.length > 0) st.routing = true;
+    }
     return true;
   }
 
-  if (st.routing && e.ai && e.ai.path.length > 0) {
-    followPath(world, e, dt);
-    return true;
-  }
-
-  const target = nearestAffordingRoom(world, e, def, def.reach);
+  const errand = def.roomTarget ? def.roomTarget(world, e) : -1;
+  const target = errand >= 0 ? errand : nearestAffordingRoom(world, e, def, def.reach);
   if (target < 0) {
     dropDrive(e, st);
     return false;
   }
-  const room = world.rooms[target];
+  return routeToRoom(world, e, st, target, dt);
+}
+
+/**
+ * Пауза дела на месте. Взята у складской сделки прежнего слоя: на этом же такте
+ * там жила и своя присыпка от личности, и ускорять его нечем — сделка с ящиком
+ * не становится осмысленнее от того, что её пробуют чаще.
+ */
+const DEED_INTERVAL_SEC = STORE_ACTION_BASE_SEC;
+
+/** Проложить маршрут к комнате. Не назначилось — дело откладывается до решения. */
+function routeToRoom(
+  world: World, e: Entity, st: BrainState, roomId: number, dt: number,
+): boolean {
+  const room = world.rooms[roomId];
+  if (!room) {
+    dropDrive(e, st);
+    return false;
+  }
   const cell = roomTargetCell(world, e, room);
   if (tryAssignPathToCell(world, e, cell.x, cell.y) !== 'assigned') {
     dropDrive(e, st);
     return false;
   }
   st.routing = true;
+  st.arrived = false;
   followPath(world, e, dt);
   return true;
 }
@@ -416,6 +491,11 @@ function nearestAffordingRoom(
   if (affordance === undefined) return -1;
   const found = roomIdsAroundInto(world, e.x, e.y, reach, roomScratch);
   roomPreference.identity = npcUtilityIdentityFromEntity(e);
+  /* Намерение донорского выбора. У тела его нет и не было — назначение комнаты
+   * ведёт вместо него; у распорядка есть, и без него терпимость к опасности
+   * считалась бы по нейтральному намерению: обход перестал бы ходить туда, где
+   * неспокойно, то есть ровно туда, зачем он и нужен. */
+  roomPreference.intent = def.preferenceIntent ?? 'wander';
   roomPreference.affordance = affordance;
   roomPreference.occupation = e.occupation;
   roomPreference.faction = e.faction;

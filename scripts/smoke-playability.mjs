@@ -37,6 +37,21 @@ const mobileUserAgent = process.env.SMOKE_MOBILE_UA
   ?? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const runIosMobile = runMobile && /iphone|ipad|ipod/i.test(mobileUserAgent);
 
+/* Сколько «засвеченных» проб считаем нарисованным HUD. Порог один на прибор:
+ * им же ждут покраски титров, им же её и проверяют — иначе ожидание и проверка
+ * разъезжаются, и гейт ловит собственное нетерпение вместо дефекта игры. */
+const HUD_LIT_MIN = 10;
+
+/* Бюджет ХОЛОДНОГО СТАРТА. Титры в этой игре стоят ПОЗАДИ полной генерации
+ * случайного этажа (`bootInitialGameOrTitle` → `scheduleLoading` → `initGame`),
+ * а одна генерация стоит 0.75 с в среднем и 3.1 с в худшем случае — плюс
+ * текстуры, спрайты, инициализация WebGL, запекание навигации и полей.
+ * Прежняя слепая пауза в 1000 мс гарантированно попадала ВНУТРЬ загрузки:
+ * проба читала #hud, который либо ещё не крашен, либо уже стёрт ресайзом, и
+ * гейт годами сообщал «HUD пуст» про исправную игру. Ждать надо готовности, а
+ * не фиксированной паузы; пауза осталась только верхней границей терпения. */
+const BOOT_BUDGET_MS = 60000;
+
 const KEY = {
   enter: ['Enter', 'Enter', 13],
   escape: ['Escape', 'Escape', 27],
@@ -291,6 +306,24 @@ async function runSmokeHook(client, id, value) {
   }
 }
 
+/**
+ * Дождаться, пока титры реально нарисуются, и вернуть последнюю пробу.
+ *
+ * Возвращает пробу в любом случае — и по готовности, и по исчерпании бюджета.
+ * Проверку намеренно НЕ делает: судит `requireTitleTelemetry`, и если игра
+ * действительно не рисует, она получит честный ноль после полного бюджета, а не
+ * после одной секунды. Ожидание и приговор пользуются одним порогом.
+ */
+async function waitForTitlePaint(client) {
+  const startedAt = Date.now();
+  let sample = await sampleCanvases(client);
+  while (sample.hudLit < HUD_LIT_MIN && Date.now() - startedAt < BOOT_BUDGET_MS) {
+    await waitPage(client, 100);
+    sample = await sampleCanvases(client);
+  }
+  return sample;
+}
+
 async function waitForGameDebug(client, label, predicate, timeoutMs = 12000) {
   const startedAt = Date.now();
   let last = null;
@@ -525,24 +558,71 @@ async function holdKey(client, keySpec, holdMs) {
   await waitFrames(client, 2);
 }
 
+/**
+ * Забрать кадр у играющей кат-сцены, если она есть.
+ *
+ * Нужно НЕ только на старте: сцена привязана к первому приходу на этаж, поэтому
+ * каждый телепорт в новое место запускает свою — на техслужбах оборона форпоста,
+ * на министерстве парад гарнизона. Пока кадр у сцены, HUD не рисуется и игрок не
+ * двигается, и любая проверка после перехода мерила бы кат-сцену вместо игры.
+ *
+ * Клавиша та же, что у игрока: прибор обязан ходить его дорогой.
+ *
+ * Сцену сперва ЖДЁМ, а не спрашиваем разово: она встаёт не в тот же миг, что
+ * переход, и разовый вопрос «идёт ли сцена» ловит промежуток до её начала.
+ * `appearMs` — сколько ждать её появления; отсутствие сцены не ошибка сама по
+ * себе, судит вызывающий. Возвращает true, если сцена была и кадр отдан.
+ */
+async function releaseActiveFloorScene(client, appearMs = 4000) {
+  const appeared = await waitForGameDebug(
+    client, 'floor scene starts', st => st.sceneLock === true, appearMs,
+  ).catch(() => null);
+  if (!appeared) return false;
+  /* Жмём ПОВТОРНО, пока кадр не отдан, и это не перестраховка. Во время
+   * вступительной сцены безголовый прогон идёт около 1.7 кадра в секунду
+   * (замерено: шесть тактов симуляции за 3.5 с), то есть кадр длиннее полсекунды,
+   * а нажатие живёт 90 мс — одиночный тап целиком укладывается МЕЖДУ кадрами и
+   * теряется, не будучи ни разу прочитанным. Живому игроку на 60 кадрах это не
+   * грозит; прибору грозит. */
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < BOOT_BUDGET_MS) {
+    await tapKey(client, KEY.enter, 400, 200);
+    const st = await readGameDebug(client).catch(() => null);
+    if (st?.sceneLock === false) return true;
+  }
+  return false;
+}
+
+/**
+ * Подержать клавишу, пока симуляция не отсчитает нужные такты.
+ *
+ * Возвращает, что видел ПОКА ДЕРЖАЛ. Это важно: снимки до нажатия и после
+ * отпускания про удержание не знают ничего, и судить по ним, дошла ли клавиша, —
+ * ошибка. `sawHeld` — единственное честное свидетельство того, что игра приняла
+ * ввод; `ticks`/`elapsedMs` показывают, шла ли при этом симуляция вообще.
+ */
 async function holdKeyForSimulationTicks(client, keySpec, minTicks, timeoutMs = 3500) {
   const [code, key, vk] = keySpec;
   const before = await readGameDebug(client).catch(() => null);
-  const targetTick = Math.max(0, Number(before?.tick ?? 0)) + Math.max(1, Math.floor(minTicks));
+  const startTick = Math.max(0, Number(before?.tick ?? 0));
+  const targetTick = startTick + Math.max(1, Math.floor(minTicks));
   const startedAt = Date.now();
   let sawHeld = false;
+  let lastTick = startTick;
   await dispatchKey(client, 'rawKeyDown', code, key, vk);
   try {
     while (Date.now() - startedAt < timeoutMs) {
       const state = await readGameDebug(client).catch(() => null);
       if (state?.inputFwd === true) sawHeld = true;
-      if (Number(state?.tick ?? 0) >= targetTick && sawHeld) break;
+      lastTick = Number(state?.tick ?? lastTick);
+      if (lastTick >= targetTick && sawHeld) break;
       await waitPage(client, 50);
     }
   } finally {
     await dispatchKey(client, 'keyUp', code, key, vk);
   }
   await waitFrames(client, 2);
+  return { sawHeld, ticks: lastTick - startTick, elapsedMs: Date.now() - startedAt };
 }
 
 async function toggleDebugOverlay(client) {
@@ -1103,7 +1183,7 @@ function requireTitleTelemetry(sample, failures) {
   if (sample.gameWidth < 160 || sample.gameHeight < 120) {
     failures.push(`unexpected backing store ${sample.gameWidth}x${sample.gameHeight}`);
   }
-  if (sample.hudLit < 10) failures.push(`title/HUD canvas appears blank (${sample.hudLit} lit samples)`);
+  if (sample.hudLit < HUD_LIT_MIN) failures.push(`title/HUD canvas appears blank (${sample.hudLit} lit samples)`);
 }
 
 function requireRunningTelemetry(sample, label, failures) {
@@ -1144,7 +1224,17 @@ function requireMovementDelta(before, after, label, failures) {
   const dx = Number(after.playerX ?? 0) - Number(before.playerX ?? 0);
   const dy = Number(after.playerY ?? 0) - Number(before.playerY ?? 0);
   const moved = Math.hypot(dx, dy);
-  if (moved < 0.02) failures.push(`${label}: movement input did not move player (${moved.toFixed(3)} cells)`);
+  if (moved >= 0.02) return;
+  /* «Ноль клеток» сам по себе не диагноз: он одинаково означает и «клавиша не
+   * дошла», и «дошла, но идти некуда». Разводит их только телеметрия ввода и
+   * тиков, поэтому она едет прямо в текст падения. */
+  failures.push(`${label}: movement input did not move player (${moved.toFixed(3)} cells;`
+    + ` from ${Number(before.playerX ?? 0).toFixed(2)},${Number(before.playerY ?? 0).toFixed(2)}`
+    + ` to ${Number(after.playerX ?? 0).toFixed(2)},${Number(after.playerY ?? 0).toFixed(2)};`
+    + ` inputFwd ${before.inputFwd}→${after.inputFwd};`
+    + ` tick ${before.tick}→${after.tick};`
+    + ` sceneLock ${before.sceneLock}→${after.sceneLock};`
+    + ` paused ${before.paused}→${after.paused})`);
 }
 
 function requirePanelTelemetry(before, after, label, failures) {
@@ -1547,7 +1637,7 @@ async function main() {
     const mobileGameplayLayoutOptions = { ...mobileFullscreenLayoutOptions, requireHudBottomVitals: true };
 
     await runStep('title paint', async () => {
-      await waitPage(client, 1000);
+      await waitForTitlePaint(client);
       await installInputTrace(client);
       const title = await sampleCanvases(client);
       requireTitleTelemetry(title, failures);
@@ -1562,6 +1652,7 @@ async function main() {
     let running;
     await runStep('start and move', async () => {
       let movementStart;
+      let moveHold;
       if (runMobile) {
         await tapSelector(client, '#hud', 'mobile title canvas start', 350);
         let startup = await waitForGameDebug(client, 'mobile title one-tap start', state => state.started === true, 700)
@@ -1579,8 +1670,25 @@ async function main() {
         await clickTitleStart(client);
         await tapKeyImmediate(client, KEY.enter);
         await waitPage(client, 500);
-        const startup = await waitForGameDebug(client, 'desktop title start', state => state.started === true, 10000);
+        // Тот же бюджет холодного старта: нажатие «начать» запускает ВТОРУЮ
+        // полную генерацию этажа, и 10 секунд её не покрывают. Вдобавок
+        // `waitForGameDebug` сверяет дедлайн только МЕЖДУ итерациями, а каждая
+        // итерация ждёт главный поток, занятый синхронной генерацией.
+        const startup = await waitForGameDebug(client, 'desktop title start', state => state.started === true, BOOT_BUDGET_MS);
         requireStartupGuidance(startup, 'desktop startup guidance', failures);
+        /* Новая игра начинается КАТ-СЦЕНОЙ: на жилом этаже играет пролог, а он
+         * до 210 секунд держит камеру, ввод и HUD. Смоук годами мерил ровно
+         * внутри него и сообщал «HUD пуст» про исправную игру — при том, что
+         * скриншот показывал живой кадр с кинематографическими полосами.
+         * Забираем кадр той же клавишей «принять», что и игрок: сцена
+         * доигрывает сама. Клавиатура выбрана не случайно — кнопки мыши
+         * доходят до игрового ввода только при захваченном указателе, а в
+         * безголовом прогоне захвата нет (`pointerLocked` пуст). */
+        // Пролог играет в каждом новом прогоне, поэтому здесь ждём его дольше:
+        // он стоит позади полной генерации этажа.
+        if (!await releaseActiveFloorScene(client, BOOT_BUDGET_MS)) {
+          failures.push('intro scene never released the frame to the player');
+        }
         await tapKey(client, KEY.e, 90, 200);
         const afterInteract = await readGameDebug(client);
         if (afterInteract?.showNpcMenu || afterInteract?.paused) {
@@ -1590,10 +1698,10 @@ async function main() {
         }
         await waitPage(client, 1800);
         movementStart = await readGameDebug(client);
-        await holdKeyForSimulationTicks(client, KEY.w, 3);
+        moveHold = await holdKeyForSimulationTicks(client, KEY.w, 3);
       }
       const movementEnd = await readGameDebug(client);
-      requireMovementDelta(movementStart, movementEnd, runMobile ? 'mobile movement' : 'desktop movement', failures);
+      requireMovementDelta(movementStart, movementEnd, runMobile ? 'mobile movement' : 'desktop movement', failures, moveHold);
       running = await sampleRunning(client);
       requireRunningTelemetry(running, 'after movement', failures);
       return running;
@@ -1643,6 +1751,8 @@ async function main() {
       if (thirdWaveAudit.runtime.sampleRoute) {
         await runStep('third-wave slime/sample floor generation', async () => {
           await runDebugCommandById(client, SMOKE_HOOK_ID.teleportMaintenance, 'teleport maintenance for slime/sample route', failures, { closesOverlay: true, settleMs: 3500 });
+          // Новый этаж — новая сцена: забираем кадр, иначе меряем кат-сцену.
+          await releaseActiveFloorScene(client);
           running = await sampleRunning(client);
           requireRunningTelemetry(running, `after Maintenance sample route (${thirdWaveAudit.runtime.sampleRouteLabel})`, failures);
           return running;
@@ -1677,6 +1787,8 @@ async function main() {
       if (thirdWaveAudit.runtime.recoveryTeleport) {
         await runStep('third-wave recovery return', async () => {
           await runDebugCommandById(client, SMOKE_HOOK_ID.teleportLiving, 'return to Living after third-wave path', failures, { closesOverlay: true, settleMs: 3500 });
+          // Новый этаж — новая сцена: забираем кадр, иначе меряем кат-сцену.
+          await releaseActiveFloorScene(client);
           await holdKey(client, KEY.w, 260);
           running = await sampleRunning(client);
           requireRunningTelemetry(running, 'after third-wave recovery return', failures);

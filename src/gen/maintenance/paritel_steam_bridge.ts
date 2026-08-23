@@ -9,6 +9,7 @@ import {
 } from '../../core/types';
 import { type World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
+import { damageActor } from '../../systems/combat_stimulus';
 import { registerContentInteractionHook, registerContentRuntimeHook } from '../../systems/content_hooks';
 import { publishEvent } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -281,11 +282,19 @@ function updateParitelThreatSteam(
     if (world.roomMap[world.idx(ex, ey)] !== room.id) continue;
     if (!activeSteamCell(world, room, ex, ey, pressure)) continue;
     if (e.hp === undefined) continue;
-    e.hp -= 18 + pressure * 5;
+    /* Через единую дверь урона. Раньше здоровье вычиталось здесь напрямую, и пар
+     * убивал МИМО ВСЕГО: ни брони, ни крови, ни обработки смерти — только
+     * `alive = false`. То есть Паритель умирал без добычи и без следа, а другие
+     * твари на мосту не получали повода уйти с горячей клетки.
+     * Автора у пара нет, поэтому источник `environment`: жертва получает всё,
+     * но никто не считает это нападением и не начинает из-за пара войну. */
+    const hit = damageActor(world, state, e, {
+      damage: 18 + pressure * 5,
+      source: 'environment',
+      knockback: false,
+    });
     damaged = true;
-    if (e.hp <= 0) {
-      e.hp = 0;
-      e.alive = false;
+    if (hit.killed) {
       markThreatNeutralized(world, player, state, room, 'steam_lure');
       break;
     }

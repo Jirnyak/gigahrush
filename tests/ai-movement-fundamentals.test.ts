@@ -160,6 +160,72 @@ test('залипание считает продвижение по маршру
   assert.ok(ai.stuck > 0.4, `счётчик залипания не растёт: ${ai.stuck}`);
 });
 
+/* ── Боковой обход при лобовом упоре ──────────────────────────── */
+
+/* Актёр стоит вплотную к бетону, вейпойнт — прямо за бетоном. Север тоже
+ * бетон, свободен только юг: сторону обхода решает проба, а не жребий. */
+function makeHeadOnPress(id: number): { world: World; actor: Entity } {
+  const world = makeOpenWorld(80, 80, 5);
+  world.set(81, 80, Cell.WALL);
+  world.set(80, 81, Cell.WALL);
+  const actor = makeActor(id, 80.85, 80.5, 1.2);
+  const ai = actor.ai!;
+  ai.path = [subcellIdx(83.5, 80.5)];
+  ai.pi = 0;
+  ai.tx = 83.5;
+  ai.ty = 80.5;
+  return { world, actor };
+}
+
+test('упёршийся в лоб уходит вбок, а не ползёт вдоль оси', () => {
+  const { world, actor } = makeHeadOnPress(41);
+  const startX = actor.x;
+  const startY = actor.y;
+
+  for (let frame = 0; frame < 60; frame++) followPath(world, actor, 1 / 30);
+
+  assert.ok(
+    Math.hypot(world.delta(startX, actor.x), world.delta(startY, actor.y)) > 1,
+    `актёр остался в углу: (${actor.x.toFixed(2)}, ${actor.y.toFixed(2)})`,
+  );
+  // Обход идёт ОБЩИМ шагом, поэтому в бетон он никого не протаскивает.
+  assert.ok(canActorOccupy(world, actor.x, actor.y, actorOccupyRadius(actor)));
+});
+
+test('обход — рунг лестницы: до своей выдержки он не срабатывает', () => {
+  const { world, actor } = makeHeadOnPress(42);
+  const startY = actor.y;
+
+  // Меньше нижнего рунга (полсекунды): актёр уже упёрся, но обход ещё не его ход.
+  for (let frame = 0; frame < 12; frame++) followPath(world, actor, 1 / 30);
+
+  assert.ok(actor.ai!.stuck > 0.3, `счётчик залипания не набрался: ${actor.ai!.stuck}`);
+  assert.ok(
+    Math.abs(world.delta(startY, actor.y)) < 0.1,
+    `обход сработал раньше своего рунга: сдвиг вбок ${world.delta(startY, actor.y)}`,
+  );
+});
+
+test('продвижение сливает счётчик залипания, а не обнуляет его разом', () => {
+  const world = makeOpenWorld(60, 60, 6);
+  const actor = makeActor(43, 60.5, 60.5, 1.2);
+  const ai = actor.ai!;
+  ai.path = [subcellIdx(64.5, 60.5)];
+  ai.pi = 0;
+  ai.tx = 64.5;
+  ai.ty = 60.5;
+  ai.stuck = 1;
+
+  followPath(world, actor, 1 / 30);
+  // Разом обнулять нельзя: кроху продвижения даёт и сам обход, и тогда ступени
+  // «перешагнуть» и «бросить» становятся недостижимы.
+  assert.ok(ai.stuck > 0.9 && ai.stuck < 1, `счёт слит не сливом: ${ai.stuck}`);
+
+  // Но идущему нормально лестница пустеет до нуля и не отнимает годный маршрут.
+  for (let frame = 0; frame < 60; frame++) followPath(world, actor, 1 / 30);
+  assert.equal(ai.stuck, 0);
+});
+
 /* ── Разброс общей цели ───────────────────────────────────────── */
 
 test('общая цель разводится по кольцу, детерминированно и по тору', () => {

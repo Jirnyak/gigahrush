@@ -1391,6 +1391,14 @@ export function drawSceneOverlay(
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, bar);
   ctx.fillRect(0, h - bar, w, bar);
+  // Чем взять кадр себе. Клавиша спрашивается у реестра управления, а не пишется
+  // здесь буквами: перепривязанное действие обязано показывать свою клавишу.
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = '#8a9a92';
+  ctx.font = `${Math.max(6, Math.round(6 * sy))}px "Press Start 2P", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${controlHint('gameMenu')} взять управление`, w / 2, h - bar / 2);
   ctx.restore();
   drawWorldSpeechBubbles(ctx, world, view, entities, sx, sy, time);
 }

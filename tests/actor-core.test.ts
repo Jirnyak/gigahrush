@@ -30,6 +30,7 @@ import {
   type DriveView,
 } from '../src/systems/actor/drives';
 import { createActorNeeds, readActorNeeds } from '../src/systems/actor/needs';
+import { createActorClock, readActorClock } from '../src/systems/actor/clock';
 import { createActorSenses, sensed, sensedFar, senseActor } from '../src/systems/actor/senses';
 import {
   declaredTerritoryPushCount, ensureTerritoryFront, territoryCaptureTarget,
@@ -92,7 +93,10 @@ function viewOf(world: World, e: import('../src/core/types').Entity): DriveView 
   rebuildEntityIndex([e]);
   const senses = senseActor(world, e, createActorSenses());
   const needs = readActorNeeds(e, createActorNeeds());
-  return { senses, needs };
+  // Часы — третий вход счёта: без них формулы распорядка читали бы пустоту.
+  // Полдень взят как нейтральный час: тело и страх времени не знают вовсе.
+  const clock = readActorClock({ hour: 12, minute: 0, totalMinutes: 720 }, false, createActorClock());
+  return { senses, needs, clock };
 }
 
 /** Прогнать ядро столько времени, чтобы первое решение точно состоялось. */
@@ -665,7 +669,7 @@ test('чужая земля рядом тянет захватом, но тол�
 
   // Одиночка: ценность видит, но группы нет — контекст обнуляет драйв.
   rebuildEntityIndex([lone]);
-  const alone = { senses: senseActor(world, lone, createActorSenses()), needs: readActorNeeds(lone, createActorNeeds()) };
+  const alone = { senses: senseActor(world, lone, createActorSenses()), needs: readActorNeeds(lone, createActorNeeds()), clock: createActorClock() };
   assert.ok(alone.senses.captureValue > 0, 'у бойца на границе обязан быть виден фронт');
   assert.equal(scoreDrive(capture, alone, Faction.LIQUIDATOR), 0, 'один в поле не воин');
 
@@ -720,11 +724,11 @@ test('драка спорит с бегством одним счётом, и р
   enemy.rpg = { ...enemy.rpg!, level: 8 };
   rebuildEntityIndex([strong, weakling, enemy]);
 
-  const brave = { senses: senseActor(world, strong, createActorSenses()), needs: readActorNeeds(strong, createActorNeeds()) };
+  const brave = { senses: senseActor(world, strong, createActorSenses()), needs: readActorNeeds(strong, createActorNeeds()), clock: createActorClock() };
   assert.ok(brave.senses.hostiles > 0, 'дикий обязан читаться врагом ликвидатора');
   assert.ok(scoreDrive(fight, brave, Faction.LIQUIDATOR) > 0, 'вооружённому ликвидатору драка положена');
 
-  const scared = { senses: senseActor(world, weakling, createActorSenses()), needs: readActorNeeds(weakling, createActorNeeds()) };
+  const scared = { senses: senseActor(world, weakling, createActorSenses()), needs: readActorNeeds(weakling, createActorNeeds()), clock: createActorClock() };
   /* Спасение — это ДВА драйва, и на чистом полу выигрывает укрытие: бегство
    * ведёт вниз по опасности, а на полу без единой капли крови у страха нет
    * направления, и он честно уступает. Сравнивать драку надо с лучшим из них. */
@@ -770,7 +774,7 @@ test('драка требует ВИДЕТЬ, а страх — нет', () => {
   const enemy = makeActor({ id: 62, faction: Faction.WILD, x: wallX + 1.5, weapon: 'ak74' });
   rebuildEntityIndex([fighter, enemy]);
 
-  const v = { senses: senseActor(world, fighter, createActorSenses()), needs: readActorNeeds(fighter, createActorNeeds()) };
+  const v = { senses: senseActor(world, fighter, createActorSenses()), needs: readActorNeeds(fighter, createActorNeeds()), clock: createActorClock() };
   assert.equal(v.senses.hostiles, 1, 'враг рядом и чувствуется');
   assert.equal(v.senses.visibleHostiles, 0, 'но сквозь бетон его не видно');
   assert.equal(scoreDrive(DRIVE_BY_ID.fight, v, Faction.LIQUIDATOR), 0,

@@ -11,7 +11,7 @@ import { getCellHazardMoveMultiplier } from '../cell_hazards';
 
 import { actorContactDoor } from '../door_state';
 import {
-  actorOccupyRadius, canActorOccupy, entityIgnoresFineBlockers, stepActorBy,
+  actorOccupyRadius, canActorOccupy, entityIgnoresFineBlockers, sidestepActor, stepActorBy,
   type ActorOccupyOptions,
 } from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
@@ -47,6 +47,12 @@ const PATH_WAYPOINT_REACH_SQ = PATH_WAYPOINT_REACH * PATH_WAYPOINT_REACH;
  * чтобы кадр считался продвижением. Скольжение вдоль стены и расталкивание
  * соседями оставляют крохи — они не должны обнулять счётчик залипания. */
 const PATH_PROGRESS_MIN_FRAC = 0.25;
+/* Лестница спасения от залипания, по возрастанию цены: боковой обход (локальный,
+ * маршрут цел) → перешагнуть вейпойнт (маршрут теряет хвост) → бросить маршрут
+ * (терять всё). Рунги выводятся один из другого — своей ручки ни у одного нет. */
+const PATH_STUCK_SKIP_SEC = 2;
+const PATH_STUCK_SIDESTEP_SEC = PATH_STUCK_SKIP_SEC / 2;
+const PATH_STUCK_DROP_SEC = PATH_STUCK_SKIP_SEC * 2;
 /* Окно сглаживания пути, в подклетках, и радиус дальней пробы, в клетках.
  * Трассировка стоит ровно столько, сколько луч пробегает по ОТКРЫТОМУ месту:
  * в квартирах он умирает о стену через пару подклеток, а в министерских залах
@@ -2260,6 +2266,8 @@ export function followPath(world: World, e: Entity, dt: number): void {
   openPathDoorAtWorld(world, e, e.x + nx * 0.7, e.y + ny * 0.7);
 
   const step = Math.min(speed, dist);
+  const prevX = e.x;
+  const prevY = e.y;
   // Шаг единый и изотропный: полный 2D-вектор, осевое скольжение только когда
   // он упёрся. Радиус тела наконец реальный — actorOccupyRadius вместо нуля.
   stepActorBy(world, e, nx * step, ny * step, bodyRadius);
@@ -2271,8 +2279,35 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const advanced = step > 0
     && dist - world.dist(e.x, e.y, subcellWorldX(targetSi), subcellWorldY(targetSi))
       >= step * PATH_PROGRESS_MIN_FRAC;
-  ai.stuck = advanced ? 0 : ai.stuck + dt;
-  /* Две ступени спасения: перешагнуть застрявший вейпойнт, а если и это не
+  /* НИЖНИЙ РУНГ ЛЕСТНИЦЫ: упёрлись в лоб — шагнуть вбок. Осевое скольжение даёт
+   * ровно ТАНГЕНЦИАЛЬНУЮ составляющую, и это верная физика, но у лобового упора
+   * её нет: актёр ползёт вдоль свободной оси со скоростью, стремящейся к нулю.
+   * Ни одна ступень выше из угла не выводит — они перемалывают вейпойнты и
+   * бросают маршрут, а угол остаётся тем же.
+   *
+   * Условие — «ноги не идут», а НЕ «нет продвижения к вейпойнту»: второе верно и
+   * для честного скольжения вдоль стены поперёк курса, и обход там воюет со
+   * скольжением. Замерено: на триггере `!advanced` застревание монстров РАСТЁТ
+   * 20.4% → 31.1%, а на честном упоре без выдержки — до 25.3%. Выдержка и
+   * верхняя граница держат обход НИЖНИМ рунгом: он получает свою секунду и
+   * молча уступает ход перешагиванию, а не спорит с ним. */
+  const minMove = step * PATH_PROGRESS_MIN_FRAC;
+  if (!advanced
+    && ai.stuck > PATH_STUCK_SIDESTEP_SEC && ai.stuck <= PATH_STUCK_SKIP_SEC
+    && step > 0
+    && world.dist2(e.x, e.y, prevX, prevY) < minMove * minMove) {
+    sidestepActor(world, e, nx, ny, step, bodyRadius);
+  }
+  /* Продвижение СЛИВАЕТ счётчик с той же скоростью, с какой упор его наливает, а
+   * не обнуляет разом. Разом было нельзя: удавшийся обход даёт следующему кадру
+   * кроху продвижения, она обнуляла счёт, и ступени «перешагнуть» и «бросить»
+   * становились недостижимы — актёр со лживым маршрутом ходил вокруг угла до
+   * конца этажа. Жёсткий запрет обнуления это чинит, но роняет и здоровых:
+   * актёр, отстоявший секунду и дальше идущий нормально, доходил до «бросить» и
+   * терял годный маршрут — доля акторов без маршрута 11.8% → 18.7%. Слив
+   * различает их сам: идёшь больше, чем стоишь, — лестница пустеет. */
+  ai.stuck = advanced ? Math.max(0, ai.stuck - dt) : ai.stuck + dt;
+  /* Две верхние ступени: перешагнуть застрявший вейпойнт, а если и это не
    * помогло — бросить маршрут. Порядок и обнуление здесь принципиальны.
    *
    * Раньше ступени стояли наоборот и перешагивание обнуляло счётчик, поэтому
@@ -2286,13 +2321,13 @@ export function followPath(world: World, e: Entity, dt: number): void {
    * станет недостижимой. Само перешагивание от этого не страдает — как только
    * шаг снова отыгрывается, `advanced` обнуляет счётчик сверху, и подряд
    * перешагиваются ровно те вейпойнты, до которых актор физически не достаёт. */
-  if (ai.stuck > 4) {
+  if (ai.stuck > PATH_STUCK_DROP_SEC) {
     ai.path = [];
     ai.pi = 0;
     ai.stuck = 0;
     ai.goal = AIGoal.IDLE;
     ai.timer = 2;
-  } else if (ai.stuck > 2 && ai.pi < ai.path.length - 1) {
+  } else if (ai.stuck > PATH_STUCK_SKIP_SEC && ai.pi < ai.path.length - 1) {
     /* Перешагивание идёт БЕЗ проверки достижимости, и это проверено замером, а
      * не забыто. Разумная на вид проверка «перешагивай только на вейпойнт, до
      * которого дотянешься по прямой» ухудшает застревание монстров в полтора

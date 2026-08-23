@@ -6,9 +6,7 @@ import {
   Faction,
   type Needs,
   Occupation,
-  type Room,
   RoomType,
-  type FactionMacroGoal,
 } from "../../core/types";
 import {
   occupationHasProfileTag,
@@ -29,7 +27,6 @@ export const NPC_UTILITY_INTENTS = [
   "work",
   "social",
   "patrol",
-  "faction_assault",
   "store",
   "wander",
 ] as const;
@@ -43,9 +40,8 @@ export const NPC_UTILITY_INTENT_INDEX = {
   work: 3,
   social: 4,
   patrol: 5,
-  faction_assault: 6,
-  store: 7,
-  wander: 8,
+  store: 6,
+  wander: 7,
 } as const satisfies Record<NpcUtilityIntentId, number>;
 
 export const NPC_UTILITY_INTENT_COUNT = NPC_UTILITY_INTENTS.length;
@@ -57,7 +53,6 @@ export interface NpcUtilityIdentity {
   alifeId?: number;
   persistentNpcId?: string;
   plotNpcId?: string;
-  routineSeed?: number;
 }
 
 export interface NpcUtilityThreatSnapshot {
@@ -66,12 +61,7 @@ export interface NpcUtilityThreatSnapshot {
   hostilePower?: number;
   allyPower?: number;
   distance?: number;
-  gunfire?: number;
   monster?: number;
-  fire?: number;
-  fog?: number;
-  cornered?: boolean;
-  inShelter?: boolean;
   strongerHostile?: boolean;
 }
 
@@ -79,22 +69,11 @@ export interface NpcUtilityRoleSnapshot {
   faction?: Faction;
   occupation?: Occupation;
   duty?: number;
-  sociability?: number;
   riskTolerance?: number;
-  greed?: number;
   panicBias?: number;
   armed?: boolean;
   hasRangedWeapon?: boolean;
-  orderedCombat?: boolean;
   isTraveler?: boolean;
-}
-
-export interface NpcUtilityTargetPressure {
-  available?: boolean;
-  distance?: number;
-  crowd?: number;
-  danger?: number;
-  factionPenalty?: number;
 }
 
 export interface NpcUtilityScoreContext {
@@ -102,7 +81,6 @@ export interface NpcUtilityScoreContext {
   minuteOfDay?: number;
   totalMinutes?: number;
   samosborActive?: boolean;
-  samosborWarning?: boolean;
   currentIntent?: NpcUtilityIntentId;
   currentIntentStickiness?: number;
   needs?: Partial<Needs>;
@@ -111,8 +89,6 @@ export interface NpcUtilityScoreContext {
   threat?: NpcUtilityThreatSnapshot;
   role?: NpcUtilityRoleSnapshot;
   local?: Partial<Record<NpcUtilityIntentId, number>>;
-  target?: Partial<Record<NpcUtilityIntentId, NpcUtilityTargetPressure>>;
-  factionGoals?: FactionMacroGoal[];
 }
 
 export interface NpcUtilitySelectionOptions {
@@ -208,7 +184,6 @@ const NPC_UTILITY_INTENT_PATIENCE: Record<NpcUtilityIntentId, number> = {
   safety: 0,
   combat: 0,
   flee: 0,
-  faction_assault: 0.5,
   store: 0.85,
   social: 0.85,
   work: 0.9,
@@ -233,7 +208,6 @@ export function npcUtilityIdentityFromEntity(
 
 export function npcUtilityIdentitySeed(identity?: NpcUtilityIdentity): number {
   if (!identity) return 0x6d2b79f5;
-  if (isFiniteNumber(identity.routineSeed)) return mix32(identity.routineSeed);
   if (isFiniteNumber(identity.alifeId))
     return mix32(0xa11fe000 ^ identity.alifeId);
   if (identity.persistentNpcId)
@@ -338,13 +312,9 @@ function scoreSafety(
 ): number {
   return clampScore(
     (context.samosborActive ? 72 : 0) +
-      (context.samosborWarning ? 34 : 0) +
       threatPressure * 44 +
-      unitish(context.threat?.fire) * 26 +
-      unitish(context.threat?.fog) * 16 +
       localScore(context, "safety") +
-      currentStickiness(context, "safety", stickiness) -
-      targetPenalty(context, "safety"),
+      currentStickiness(context, "safety", stickiness),
   );
 }
 
@@ -364,16 +334,13 @@ function scoreCombat(
     visibleHostilePressure * 34 +
       closeThreatPressure * 12 +
       (armed ? 18 : -16) +
-      (context.role?.orderedCombat ? 28 : 0) +
-      (context.threat?.cornered ? 18 : 0) +
       risk * 22 +
       duty * 10 -
       hpPressure * 30 -
       panic * 12 -
       (strongerHostile ? 14 : 0) +
       localScore(context, "combat") +
-      currentStickiness(context, "combat", stickiness) -
-      targetPenalty(context, "combat"),
+      currentStickiness(context, "combat", stickiness),
   );
 }
 
@@ -392,7 +359,6 @@ function scoreFlee(
     visibleHostilePressure * 24 +
       threatPressure * 42 +
       unitish(context.threat?.monster) * 24 +
-      unitish(context.threat?.fire) * 25 +
       hpPressure * 32 +
       (strongerHostile ? 18 : 0) +
       (1 - risk) * 15 +
@@ -400,8 +366,7 @@ function scoreFlee(
       (context.samosborActive ? 8 : 0) -
       (armed ? 5 : 0) +
       localScore(context, "flee") +
-      currentStickiness(context, "flee", stickiness) -
-      targetPenalty(context, "flee"),
+      currentStickiness(context, "flee", stickiness),
   );
 }
 
@@ -425,8 +390,7 @@ function scoreWork(
       currentStickiness(context, "work", stickiness) -
       urgentNeed * 30 -
       threatPressure * 42 -
-      (context.samosborActive ? 45 : 0) -
-      targetPenalty(context, "work"),
+      (context.samosborActive ? 45 : 0),
   );
 }
 
@@ -446,8 +410,7 @@ function scoreSocial(
       currentStickiness(context, "social", stickiness) -
       urgentNeed * 15 -
       threatPressure * 34 -
-      (context.samosborActive ? 25 : 0) -
-      targetPenalty(context, "social"),
+      (context.samosborActive ? 25 : 0),
   );
 }
 
@@ -471,20 +434,8 @@ function scorePatrol(
       context.role?.faction !== Faction.LIQUIDATOR &&
       context.role?.faction !== Faction.CULTIST
         ? 24
-        : 0) -
-      targetPenalty(context, "patrol"),
+        : 0),
   );
-}
-
-function scoreFactionAssault(context: NpcUtilityScoreContext): number {
-  if (!context.factionGoals || !context.identity?.entityId) return 0;
-
-  for (const goal of context.factionGoals) {
-    if (goal.type === 'attack' && goal.members.includes(context.identity.entityId)) {
-      return 50; // High priority, above normal patrol/wander
-    }
-  }
-  return 0;
 }
 
 /**
@@ -507,8 +458,7 @@ function scoreStore(
       currentStickiness(context, "store", stickiness) -
       urgentNeed * 25 -
       threatPressure * 40 -
-      (context.samosborActive ? 40 : 0) -
-      targetPenalty(context, "store"),
+      (context.samosborActive ? 40 : 0),
   );
 }
 
@@ -527,8 +477,7 @@ function scoreWander(
       localScore(context, "wander") +
       currentStickiness(context, "wander", stickiness) -
       urgentNeed * 12 -
-      threatPressure * 22 -
-      targetPenalty(context, "wander"),
+      threatPressure * 22,
   );
 }
 
@@ -544,10 +493,7 @@ export function scoreNpcUtilities(
   const faction = role?.faction;
   const occupation = role?.occupation;
   const duty = unitTrait(role?.duty, defaultDuty(faction, occupation));
-  const sociability = unitTrait(
-    role?.sociability,
-    defaultSociability(faction, occupation),
-  );
+  const sociability = defaultSociability(faction, occupation);
   const risk = unitTrait(
     role?.riskTolerance,
     defaultRiskTolerance(faction, occupation),
@@ -643,7 +589,6 @@ export function scoreNpcUtilities(
     "store",
     scoreStore(context, minute, urgentNeed, threatPressure, stickiness),
   );
-  setScore(out, "faction_assault", scoreFactionAssault(context));
 
   addIdentityJitter(out, identity);
   return out;
@@ -811,7 +756,6 @@ export function npcUtilityRoomTypeWeightForIntent(
     case "patrol":
     case "wander":
     case "store":
-    case "faction_assault":
       return 0;
   }
 }
@@ -1007,22 +951,6 @@ export function scoreNpcUtilityTargetPreference(
   return score;
 }
 
-export function scoreNpcUtilityRoomPreference(
-  room: Room,
-  context: NpcUtilityTargetPreferenceContext,
-): number {
-  return scoreNpcUtilityTargetPreference(
-    {
-      id: room.id,
-      roomId: room.id,
-      roomType: room.type,
-      x: room.x + room.w * 0.5,
-      y: room.y + room.h * 0.5,
-    },
-    context,
-  );
-}
-
 export function chooseStableNpcUtilityTarget<
   T extends NpcUtilityTargetCandidate,
 >(
@@ -1086,21 +1014,6 @@ function localScore(
   return context.local?.[intent] ?? 0;
 }
 
-function targetPenalty(
-  context: NpcUtilityScoreContext,
-  intent: NpcUtilityIntentId,
-): number {
-  const target = context.target?.[intent];
-  if (!target) return 0;
-  return (
-    (target.available === false ? 36 : 0) +
-    clamp01(positive(target.distance) / 96) * 24 +
-    clamp01(positive(target.crowd) / 8) * 18 +
-    unitish(target.danger) * targetDangerWeight(intent) +
-    positive(target.factionPenalty)
-  );
-}
-
 function targetDangerWeight(intent: NpcUtilityIntentId): number {
   switch (intent) {
     case "combat":
@@ -1136,14 +1049,9 @@ function computeThreatPressure(
     Math.max(
       unitish(threat.danger),
       unitish(threat.monster),
-      unitish(threat.gunfire) * 0.75,
-      unitish(threat.fire),
-      unitish(threat.fog) * 0.6,
       clamp01((threat.visibleHostiles ?? 0) / 3) * 0.85,
       threat.distance === undefined ? 0 : clamp01((16 - threat.distance) / 16),
-    ) +
-      (threat.cornered ? 0.15 : 0) +
-      (threat.inShelter ? -0.18 : 0),
+    ),
   );
 }
 
@@ -1165,11 +1073,11 @@ function highNeedPressure(value: number | undefined): number {
   return smoothstep(0.35, 0.9, clamp01(value / 100));
 }
 
-function occupationWorkDrive(occupation: Occupation | undefined): number {
+export function occupationWorkDrive(occupation: Occupation | undefined): number {
   return occupationProfile(occupation)?.workDrive ?? 0.5;
 }
 
-function patrolDrive(
+export function patrolDrive(
   faction: Faction | undefined,
   occupation: Occupation | undefined,
 ): number {
@@ -1181,7 +1089,7 @@ function patrolDrive(
   return 0.08;
 }
 
-function defaultDuty(
+export function defaultDuty(
   faction: Faction | undefined,
   occupation: Occupation | undefined,
 ): number {
@@ -1191,7 +1099,7 @@ function defaultDuty(
   return occupationProfile(occupation)?.duty ?? 0.55;
 }
 
-function defaultSociability(
+export function defaultSociability(
   faction: Faction | undefined,
   occupation: Occupation | undefined,
 ): number {

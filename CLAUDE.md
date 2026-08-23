@@ -42,6 +42,13 @@ Core taste:
 - No hardcoding, no crutches.
 - Minimum code, maximum playable function.
 - Elegant, universal, modular, minimal, expandable and natural.
+- **Системы и их универсальность — это основа: универсальная система выше любой головоломки.**
+  Пси-дефазинг проводит сквозь стены, мир разрушаем полностью. Значит «безвыходная» комната и
+  «непроходимая без ключа» дверь недостижимы в принципе, и делать их целью нельзя — это ломает
+  общую систему ради одного этажа. Настоящий замок означает, что обход СТОИТ ресурса (ключ,
+  пси-заряд, инструмент и время, шум, свидетели), а недопустим только обход бесплатный и
+  случайный — когда игрок обошёл замок по открытому коридору и не узнал, что тот был. Образец:
+  Caves of Qud. Следствия для замеров и тестов — `architecture.md`, «Non-Negotiable Invariants».
 - Data-oriented, procedural, context-driven, physmath-friendly systems.
 - Plain functions, plain objects, typed arrays, ids and small registries.
 

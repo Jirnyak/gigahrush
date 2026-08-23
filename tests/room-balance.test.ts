@@ -304,7 +304,7 @@ test('на большом этаже отбирает ближних, а не н
 test('терпение выводится числом на намерение, а не списком срочных дел', () => {
   // Угроза срочна сразу, работа — почти никогда; порог растёт вместе с терпением.
   assert.equal(npcUtilityIntentPatience('flee'), 0);
-  assert.ok(npcUtilityIntentPatience('faction_assault') < npcUtilityIntentPatience('social'));
+  assert.ok(npcUtilityIntentPatience('combat') < npcUtilityIntentPatience('social'));
   assert.ok(npcUtilityIntentPatience('social') < npcUtilityIntentPatience('work'));
   assert.ok(npcUtilityIntentPatience('work') < npcUtilityIntentPatience('wander'));
   assert.ok(npcUtilityEmergencyScore('flee') < npcUtilityEmergencyScore('social'));

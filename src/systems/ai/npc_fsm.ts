@@ -3,25 +3,11 @@
 import {
   type Entity, type Msg,
   EntityType, AIGoal, RoomType, NpcState, Faction,
-  ZoneFaction, Occupation, type GameClock, Cell, type TerritoryOwner, type Room,
-  ItemType, MAX_DRAW,
+  type GameClock, Cell, type Room, ZoneFaction,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { containersInRoom, nearestContainer } from '../../world/container_index';
 import { roomIdsAroundInto, roomRadiusCoversFloor } from '../../world/room_index';
 import { WEAPON_STATS } from '../../data/catalog';
-import { ITEMS } from '../../data/items';
-import { roomAffordanceWeight } from '../../data/room_affordances';
-import { FACTORIES } from '../../data/factories';
-import { RESOURCES, resourceForItem } from '../../data/resources';
-import { itemAddCapacity } from '../inventory';
-import {
-  canAccessContainer,
-  containerAccessInfo,
-  putIntoContainer,
-  takeFromContainer,
-} from '../containers';
-import { npcAutoEquipBestWeapon } from './combat';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from '../entity_index';
 import { isHostile } from '../factions';
 import { feudRoomHoldsEnemy, tickFeudDuelWalk } from '../npc_feud';
@@ -47,7 +33,6 @@ import { chooseNpcEmergencyDecision } from './npc_emergency';
 import { tickNpcMemoryLowFrequency } from '../npc_memory';
 import { tickNpcRumorLowFrequency } from '../rumor';
 import { tickNpcSpecialRoutine } from '../npc_special_routines';
-import { factionToTerritoryOwner } from '../../data/factions';
 import {
   occupationHasAnyRoutineTag,
   occupationHasRoutineTag,
@@ -61,15 +46,31 @@ import {
 } from '../room_memory';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import { noteRoomVisit, roomVisitNovelty } from '../room_visits';
-import { cleanSurfaceArea } from '../surface_cleanup';
+/* Смена (рейс, склад, уборка) живёт своим модулем: она не про граф переходов,
+ * и звать её теперь есть кому, кроме этого слоя. Здесь только точки вызова. */
+import {
+  npcHasRangedWeapon,
+  npcIsSupplyCarrier,
+  npcRaidsForeignContainers,
+  npcStoreActionDue,
+  npcStoreDrive,
+  noteNpcStoreAction,
+  ownRoomIsShort,
+  scanSpareInventory,
+  stableTimer,
+  stableUnit,
+  supplyErrandRoomId,
+  territoryFriendlyForNpc,
+  tickNpcStorageWork,
+  tryCleanerSurfaceWork,
+  type NpcStorageOutcome,
+} from '../npc_work';
 import {
   NPC_UTILITY_INTENTS,
-  NPC_UTILITY_ROOM_TYPES,
   NPC_UTILITY_ROOM_TYPE_SLOTS,
   createNpcUtilityScoreBuffer,
   fillNpcUtilityRoomTypeInterest,
   npcUtilityIdentityFromEntity,
-  npcUtilityJitter01,
   npcUtilityIntentPatience,
   npcUtilityRoomCapacity,
   npcUtilityRoomInterest,
@@ -98,10 +99,6 @@ export function setNpcContext(msgs: Msg[], time: number, currentZ?: number): voi
   _routineZ = currentZ;
 }
 
-/* Далеко ли человек ищет ящик под рейс. Раньше он знал каждый ящик этажа и
- * перебирал их все; теперь спрашивает только клетки вокруг себя, вдвое дальше
- * своей видимости. Чего нет в этом круге — того для смены не существует. */
-const SUPPLY_ERRAND_RADIUS = MAX_DRAW * 2;
 const UTILITY_THREAT_RADIUS = 16;
 const UTILITY_THREAT_CAP = 32;
 const UTILITY_SWITCH_MARGIN = 7;
@@ -117,14 +114,6 @@ const ROUTINE_ROOM_CANDIDATE_CAP = 8;
 const ROUTINE_LOCAL_ROOM_DISTANCE = 132;
 const ROUTINE_SURVIVAL_ROOM_DISTANCE = 220;
 const ROUTINE_TRAVELER_NEED_ROOM_DISTANCE = 280;
-const CLEANER_SURFACE_RADIUS = 1.35;
-const CLEANER_SURFACE_RETRY_BASE_SEC = 2.5;
-const CLEANER_SURFACE_RETRY_SPREAD_SEC = 2.5;
-/** Сколько лишнего надо нести, чтобы вообще собраться на склад. */
-const STORE_SPARE_MIN = 2;
-const STORE_SPARE_CAP = 4;
-const STORE_ACTION_BASE_SEC = 1.5;
-const STORE_ACTION_SPREAD_SEC = 1.5;
 const emergencyLocalActors: Entity[] = [];
 const utilityLocalActors: Entity[] = [];
 const utilityScoreBuffer = createNpcUtilityScoreBuffer();
@@ -151,17 +140,6 @@ let roomCrowdRefreshedAt = -Infinity;
 const utilityIntentByNpc = new WeakMap<Entity, NpcUtilityIntentId>();
 const utilityScoreByNpc = new WeakMap<Entity, number>();
 const utilityNextDecisionAtByNpc = new WeakMap<Entity, number>();
-const cleanerNextSurfaceAtByNpc = new WeakMap<Entity, number>();
-const storeNextActionAtByNpc = new WeakMap<Entity, number>();
-
-function stableUnit(e: Entity, salt: string | number): number {
-  return npcUtilityJitter01(npcUtilityIdentityFromEntity(e), salt);
-}
-
-function stableTimer(e: Entity, salt: string | number, base: number, spread: number): number {
-  return base + stableUnit(e, salt) * spread;
-}
-
 /* Зеркало комнат в плоских массивах: центр и тип.
  *
  * Отбор ближайших идёт по всему этажу, а этаж — это до 14 тысяч комнат. Ходить
@@ -246,19 +224,6 @@ function routineRoomPreferenceContext(
     stableJitter: 2,
     distanceScale: 96,
   };
-}
-
-function ownTerritoryOwner(e: Entity): TerritoryOwner | undefined {
-  return e.faction === undefined ? undefined : factionToTerritoryOwner(e.faction);
-}
-
-function territoryFriendlyForNpc(e: Entity, owner: TerritoryOwner): boolean {
-  const own = ownTerritoryOwner(e);
-  if (own === undefined) return false;
-  if (owner === own) return true;
-  if (e.faction === Faction.SCIENTIST && owner === ZoneFaction.CITIZEN) return true;
-  if (e.faction === Faction.CITIZEN && owner === ZoneFaction.SCIENTIST) return true;
-  return false;
 }
 
 function usesTravelerRoutine(e: Entity): boolean {
@@ -370,7 +335,6 @@ function stateForIntent(intent: NpcUtilityIntentId, e: Entity, profile: NpcAiPro
       return profile === 'ministry' ? NpcState.MEETING : NpcState.FREE_TIME;
     case 'combat':
     case 'patrol':
-    case 'faction_assault':
       return NpcState.PATROL;
     case 'wander':
       return usesTravelerRoutine(e) ? NpcState.TRAVELING : NpcState.FREE_TIME;
@@ -384,7 +348,6 @@ function goalForIntent(intent: NpcUtilityIntentId): AIGoal {
     case 'work':
     case 'store': return AIGoal.WORK;
     case 'combat': return AIGoal.HUNT;
-    case 'faction_assault': return AIGoal.GOTO;
     case 'social':
     case 'patrol':
     case 'wander':
@@ -479,14 +442,14 @@ export function updateNPC(
     enterUtilityIntent(e, initialIntentForNpc(e, samosborActive, profile), 0, profile);
   }
 
-  const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile, state);
+  const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile);
   const intent = decision.intent;
 
   ai.timer -= dt;
   ai.stateTimer = (ai.stateTimer ?? 0) + dt;
 
   if (!decision.rescored && canHoldRoutineFrame(e, intent)) {
-    if (intent === 'work') tryCleanerSurfaceWork(world, e);
+    if (intent === 'work') tryCleanerSurfaceWork(world, e, _barkTime);
     tickNpcMemoryLowFrequency(e, time, clock.totalMinutes, samosborActive);
     tickNpcRumorLowFrequency(e, time, clock.totalMinutes, samosborActive);
     tryAmbientBark(e, dt, samosborActive);
@@ -509,9 +472,6 @@ export function updateNPC(
     case 'patrol':
       handlePatrol(world, e, dt);
       break;
-    case 'faction_assault':
-      handleFactionAssault(world, e, dt, state);
-      break;
     case 'store':
       handleStore(world, e, dt, state);
       break;
@@ -532,7 +492,6 @@ function selectAndEnterUtilityIntent(
   clock: GameClock,
   samosborActive: boolean,
   profile: NpcAiProfile,
-  state?: import('../../core/types').GameState,
 ): { intent: NpcUtilityIntentId; rescored: boolean } {
   const currentIntent = utilityIntentByNpc.get(e);
   const now = _barkTime;
@@ -559,7 +518,6 @@ function selectAndEnterUtilityIntent(
       isTraveler: usesTravelerRoutine(e),
     },
     local: buildLocalUtilityScores(world, e, samosborActive, profile),
-    factionGoals: state?.factionGoals,
   }, utilityScoreBuffer);
   const selected = selectNpcUtilityIntent(scores, currentIntent, {
     switchMargin: UTILITY_SWITCH_MARGIN,
@@ -723,10 +681,6 @@ function npcIsArmed(e: Entity): boolean {
   return !!ws && (ws.dmg > 3 || ws.isRanged);
 }
 
-function npcHasRangedWeapon(e: Entity): boolean {
-  return WEAPON_STATS[e.weapon ?? '']?.isRanged === true;
-}
-
 
 function tryAmbientBark(e: Entity, dt: number, samosborActive: boolean): void {
   const ai = e.ai!;
@@ -757,14 +711,14 @@ function roomSuitsIntent(e: Entity, room: Room | null | undefined, intent: NpcUt
 
 function handleWorking(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
   const ai = e.ai!;
-  tryCleanerSurfaceWork(world, e);
+  tryCleanerSurfaceWork(world, e, _barkTime);
 
   // Сперва то, что под рукой: сложить сделанное в ящик, взять со склада то, чего
   // ждут в комнатах, отдать привезённое. Это часть смены, а не отдельное дело,
   // поэтому ради ящика никто не бросает работу и не тащит выход через этаж.
   let outcome: NpcStorageOutcome = 'nothing';
-  if (ai.path.length === 0 && (storeNextActionAtByNpc.get(e) ?? -Infinity) <= _barkTime) {
-    storeNextActionAtByNpc.set(e, _barkTime + stableTimer(e, 'store_action', STORE_ACTION_BASE_SEC, STORE_ACTION_SPREAD_SEC));
+  if (ai.path.length === 0 && npcStoreActionDue(e, _barkTime)) {
+    noteNpcStoreAction(e, _barkTime);
     if (scanSpareInventory(e).first >= 0 || npcIsSupplyCarrier(e) || ownRoomIsShort(world, e)) {
       outcome = tickNpcStorageWork(world, e, state);
     }
@@ -806,429 +760,14 @@ function handleWorking(world: World, e: Entity, dt: number, state?: import('../.
   followPath(world, e, dt);
 }
 
-/**
- * Рейс кладовщика: с грузом — на склад, где есть место, порожняком — туда, где
- * товар уже лежит и ждёт вывоза. Обычному человеку рейса нет.
- */
-function supplyErrandRoomId(world: World, e: Entity): number | undefined {
-  const carrier = npcIsSupplyCarrier(e);
-  // Груз с адресом разносится раньше вывоза со склада.
-  const cargo = deliveryCargoSlot(world, e);
-  if (cargo) return cargo.roomId;
-  const bestRank = roomAffordanceWeight(RoomType.STORAGE, 'store');
-  if (!carrier) {
-    // Порожняком обычный человек идёт на склад, только когда в его комнате пусто.
-    if (!ownRoomIsShort(world, e)) return undefined;
-    return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
-      const room = world.rooms[container.roomId];
-      if (!room || storeRank(room) < bestRank || !canAccessContainer(container, e)) return false;
-      return container.inventory.some(slot => slot.count > 0 && suppliesOwnRoom(world, e, slot.defId));
-    })?.roomId;
-  }
-  const loaded = scanSpareInventory(e).first >= 0;
-  return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
-    const room = world.rooms[container.roomId];
-    const rank = storeRank(room);
-    if (!room || rank <= 0) return false;
-    if (loaded ? rank < bestRank : rank >= bestRank) return false;
-    if (!loaded && !container.inventory.some(slot => slot.count > 0)) return false;
-    return canAccessContainer(container, e);
-  })?.roomId;
-}
-
-function cleanerCanCleanCell(world: World, e: Entity, idx: number): boolean {
-  if (territoryFriendlyForNpc(e, territoryOwnerAtIndex(world, idx))) return true;
-  const roomId = world.roomMap[idx];
-  if (roomId < 0) return false;
-  if (roomId === e.assignedRoomId) return true;
-  const room = world.rooms[roomId];
-  return !!room && e.familyId !== undefined && e.familyId >= 0 && room.apartmentId === e.familyId;
-}
-
-function tryCleanerSurfaceWork(world: World, e: Entity): void {
-  if (e.occupation !== Occupation.CLEANER && !occupationHasRoutineTag(e.occupation, 'cleaning')) return;
-  const now = _barkTime;
-  if ((cleanerNextSurfaceAtByNpc.get(e) ?? -Infinity) > now) return;
-  cleanerNextSurfaceAtByNpc.set(e, now + stableTimer(e, 'cleaner_surface', CLEANER_SURFACE_RETRY_BASE_SEC, CLEANER_SURFACE_RETRY_SPREAD_SEC));
-  const cleaned = cleanSurfaceArea(world, e.x, e.y, CLEANER_SURFACE_RADIUS, {
-    shouldCleanCell: idx => cleanerCanCleanCell(world, e, idx),
-  });
-  if (cleaned <= 0 || !e.ai) return;
-  e.ai.goal = AIGoal.WORK;
-  e.ai.timer = Math.max(e.ai.timer, 0.4);
-}
-
-/* ── Склад: отнести лишнее, взять патроны ─────────────────────────
- *
- * Деятельность `store` у комнаты (`ROOM_AFFORDANCES`) до сих пор ни к чему не
- * вела: склад был достижим только по ремеслу. Теперь у него есть намерение, и
- * оно не выдумывает себе тяги — её поднимает то, что человек несёт лишнее или
- * ему нечем стрелять. Пустой карман, полный магазин — и склад проигрывает
- * прогулке.
- */
-
-/** Патроны, которые человеку нужны под его же оружие. */
-function npcAmmoTypeFor(e: Entity): string | undefined {
-  return WEAPON_STATS[e.weapon ?? '']?.ammoType;
-}
-
-/** Роль вещи в карманах: своя, личный запас или хабар. */
-type NpcItemRole = 'own' | 'reserve' | 'spare';
-
-function itemRoleForNpc(e: Entity, defId: string): NpcItemRole {
-  if (defId === e.weapon || defId === e.tool) return 'own';
-  const def = ITEMS[defId];
-  if (!def) return 'own';
-  if (def.value <= 0) return 'own';
-  if (def.tags?.some(tag => tag === 'quest' || tag === 'persistent' || tag === 'cannot_drop')) return 'own';
-  switch (def.type) {
-    case ItemType.KEY:
-    case ItemType.NOTE:
-      return 'own';
-    case ItemType.AMMO:
-      return defId === npcAmmoTypeFor(e) ? 'own' : 'spare';
-    case ItemType.FOOD:
-    case ItemType.DRINK:
-    case ItemType.MEDICINE:
-      // Одну еду человек носит при себе, остальное — излишек: иначе пекарь
-      // остался бы стоять со всей сменой хлеба в карманах. Кладовщика это
-      // правило не обходит намеренно: пусть подворовывает из груза, отдельного
-      // случая для него дешевле не заводить, чем описывать честность.
-      return 'reserve';
-    default:
-      return 'spare';
-  }
-}
-
-/**
- * Первый лишний слот и общее их число. Личный запас каждого вида оставляется
- * один раз, всё сверх него — излишек и едет на склад вместе с хабаром.
- */
-function scanSpareInventory(e: Entity): { first: number; count: number } {
-  const inv = e.inventory;
-  let first = -1;
-  let count = 0;
-  if (!inv) return { first, count };
-  let keptFood = false;
-  let keptDrink = false;
-  let keptMedicine = false;
-  for (let i = 0; i < inv.length; i++) {
-    const defId = inv[i].defId;
-    let role = itemRoleForNpc(e, defId);
-    if (role === 'reserve') {
-      const type = ITEMS[defId]?.type;
-      const kept = type === ItemType.FOOD ? keptFood : type === ItemType.DRINK ? keptDrink : keptMedicine;
-      if (!kept) {
-        if (type === ItemType.FOOD) keptFood = true;
-        else if (type === ItemType.DRINK) keptDrink = true;
-        else keptMedicine = true;
-        role = 'own';
-      } else {
-        role = 'spare';
-      }
-    }
-    if (role !== 'spare') continue;
-    if (first < 0) first = i;
-    count++;
-    if (count >= STORE_SPARE_CAP) break;
-  }
-  return { first, count };
-}
-
-function npcNeedsAmmo(e: Entity): boolean {
-  const ammo = npcAmmoTypeFor(e);
-  if (!ammo || !npcHasRangedWeapon(e)) return false;
-  return !e.inventory?.some(slot => slot.defId === ammo && slot.count > 0);
-}
-
-/** Готовность лезть в чужой запас. Не занятие и не фракция — черта человека. */
-function npcRaidsForeignContainers(e: Entity): boolean {
-  return stableUnit(e, 'store_raid') > 0.75;
-}
-
-/* ── Свой рейс у каждого ремесла ──────────────────────────────────
- *
- * Кладовщик возит по всему этажу и всегда. Остальные ходят за припасом только
- * для СВОЕЙ рабочей комнаты и только когда в ней пусто: повар за едой, врач за
- * лекарствами. Так кухня не зависит от одного человека, но и не соревнуется с
- * ним за каждый ящик.
- *
- * Что комнате положено держать, известно из той же таблицы ресурсов
- * (`ResourceDef.roomTypes`), по которой живёт экономика: еда и вода — кухне,
- * медицина — медпункту. Отдельного списка не заводим.
- */
-const ROOM_STOCK_RESOURCES: readonly (readonly string[])[] = NPC_UTILITY_ROOM_TYPES
-  .reduce<string[][]>((table: string[][], type: RoomType) => {
-    table[type] = roomAffordanceWeight(type, 'store') > 0
-      ? []
-      : RESOURCES.filter(resource => resource.roomTypes.includes(type)).map(resource => resource.id);
-    return table;
-  }, []);
-
-function roomStockResourceIds(type: RoomType): readonly string[] {
-  return ROOM_STOCK_RESOURCES[type] ?? [];
-}
-
-/** Рабочая комната человека, если она сама что-то держит: кухня, медпункт. */
-function ownStockRoom(world: World, e: Entity): Room | undefined {
-  const room = e.assignedRoomId !== undefined && e.assignedRoomId >= 0 ? world.rooms[e.assignedRoomId] : undefined;
-  if (!room || roomStockResourceIds(room.type).length === 0) return undefined;
-  return npcUtilityRoomTypeWeightForIntent('work', room.type, e.occupation) > 0 ? room : undefined;
-}
-
-/** Несёт ли человек это для своей комнаты. */
-function suppliesOwnRoom(world: World, e: Entity, defId: string): boolean {
-  const room = ownStockRoom(world, e);
-  if (!room) return false;
-  const resource = resourceForItem(defId)?.id;
-  return resource !== undefined && roomStockResourceIds(room.type).includes(resource);
-}
-
-/** Пусто ли в своей комнате по тому, что ей положено держать. */
-function ownRoomIsShort(world: World, e: Entity): boolean {
-  const room = ownStockRoom(world, e);
-  if (!room) return false;
-  const need = roomStockResourceIds(room.type);
-  for (const container of containersInRoom(world, room.id)) {
-    if (!canAccessContainer(container, e)) continue;
-    for (const slot of container.inventory) {
-      if (slot.count > 0 && need.includes(resourceForItem(slot.defId)?.id ?? '')) return false;
-    }
-  }
-  return true;
-}
-
-/** Кладовщик: его дело — возить товар оттуда, где он появился, туда, где хранят. */
-function npcIsSupplyCarrier(e: Entity): boolean {
-  return e.occupation === Occupation.STOREKEEPER || occupationHasRoutineTag(e.occupation, 'supply');
-}
-
-/** Насколько комната годится КАК ХРАНИЛИЩЕ: у склада полный вес, у цеха малый. */
-function storeRank(room: Room | null | undefined): number {
-  return room ? roomAffordanceWeight(room.type, 'store') : 0;
-}
-
-/** Годится ли вещь в сырьё этому цеховому ящику. Своё сырьё цех не отдаёт. */
-function containerUsesAsInput(container: import('../../core/types').WorldContainer, defId: string): boolean {
-  if (!container.factoryId) return false;
-  const resource = resourceForItem(defId)?.id;
-  if (!resource) return false;
-  const factory = FACTORIES.find(f => f.id === container.factoryId);
-  if (!factory) return false;
-  // Вещь, которую цех сам же и выпускает, сырьём ему не считается — иначе
-  // кладовщик возил бы туда его собственную продукцию.
-  const produced = factory.recipes.some(recipe =>
-    recipe.outputs.some(out => out.defId === defId)
-    || recipe.badBatch?.outputs.some(out => out.defId === defId) === true);
-  if (produced) return false;
-  return factory.recipes.some(recipe => recipe.inputs.some(input => input.id === resource));
-}
-
-/** Ждёт ли ящик подвоза: цех встал без входа, и вещь ему годится. */
-function containerAwaitsInput(container: import('../../core/types').WorldContainer, defId: string): boolean {
-  return container.productionBlockedReason === 'no_inputs' && containerUsesAsInput(container, defId);
-}
-
-/**
- * Куда вещь просится по своей природе: где она водится, но не хранится.
- *
- * Источник тот же, по которому вещь ложится при генерации, — `spawnRooms`.
- * Отдельной таблицы «что куда разносить» не заводим: хлеб и так объявлен
- * кухонным, бинт медпунктовым, а у патронов комнат нет вовсе, поэтому свой
- * боезапас кладовщик разносить не побежит.
- */
-function deliveryRoomTypesFor(defId: string): readonly RoomType[] {
-  // Адрес вещи — там, где она водится по генерации, И там, где её ресурсу
-  // положено лежать по экономике. Второе нужно, чтобы товар доезжал до лавок
-  // и баров без правки `spawnRooms` у четырёх сотен предметов.
-  const spawn = ITEMS[defId]?.spawnRooms ?? [];
-  const stocked = resourceForItem(defId)?.roomTypes ?? [];
-  const out: RoomType[] = [];
-  for (const type of spawn) {
-    if (roomAffordanceWeight(type, 'store') === 0) out.push(type);
-  }
-  for (const type of stocked) {
-    if (roomAffordanceWeight(type, 'store') === 0 && !out.includes(type)) out.push(type);
-  }
-  return out;
-}
-
-/** Ближайшая комната, куда эту вещь можно донести и где её примут. */
-function deliveryRoomFor(world: World, e: Entity, defId: string, count: number): number | undefined {
-  const types = deliveryRoomTypesFor(defId);
-  return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
-    const room = world.rooms[container.roomId];
-    // Либо вещи здесь место по природе, либо встал цех и ждёт именно её.
-    if (!room || !(types.includes(room.type) || containerAwaitsInput(container, defId))) return false;
-    if (!canAccessContainer(container, e)) return false;
-    return itemAddCapacity(container, defId, count, undefined) > 0;
-  })?.roomId;
-}
-
-/**
- * Что из лишнего можно сдать здесь. У кладовщика груз под разнос из этого
- * списка исключён: иначе, заходя на склад, он сдавал бы туда же то, что несёт
- * на кухню, и хлеб ездил бы по кругу.
- */
-function depositableSlot(world: World, e: Entity, carrier: boolean): number {
-  const inv = e.inventory;
-  if (!inv) return -1;
-  const spare = scanSpareInventory(e);
-  if (spare.first < 0) return spare.first;
-  for (let i = spare.first; i < inv.length; i++) {
-    const defId = inv[i].defId;
-    if (itemRoleForNpc(e, defId) === 'own') continue;
-    // Кладовщик бережёт любой груз с адресом, остальные — только припас своей
-    // комнаты: иначе хабар в карманах перестал бы сдаваться на склад вовсе.
-    if (carrier ? deliveryRoomFor(world, e, defId, inv[i].count) !== undefined : suppliesOwnRoom(world, e, defId)) continue;
-    return i;
-  }
-  return -1;
-}
-
-/** Груз, который человек несёт не себе: первый слот, которому место в другой комнате. */
-function deliveryCargoSlot(world: World, e: Entity): { slot: number; roomId: number } | undefined {
-  const inv = e.inventory;
-  if (!inv) return undefined;
-  const carrier = npcIsSupplyCarrier(e);
-  const ownRoom = carrier ? undefined : ownStockRoom(world, e);
-  for (let i = 0; i < inv.length; i++) {
-    const defId = inv[i].defId;
-    if (itemRoleForNpc(e, defId) === 'own') continue;
-    if (!carrier) {
-      // Обычный человек несёт только припас своей комнаты и только в неё.
-      if (!ownRoom || !suppliesOwnRoom(world, e, defId)) continue;
-      return { slot: i, roomId: ownRoom.id };
-    }
-    const roomId = deliveryRoomFor(world, e, defId, inv[i].count);
-    if (roomId !== undefined) return { slot: i, roomId };
-  }
-  return undefined;
-}
-
-/**
- * Насколько человеку сейчас нужен склад. Привычка носить вещи своя у каждого:
- * иначе весь этаж снимался бы к складам одновременно. Тому, кто уже стоит на
- * складе, хватает и одной лишней вещи — раз пришёл, доделай.
- */
-function npcStoreDrive(e: Entity, atStorage: boolean): number {
-  // Пустые карманы дела не отменяют: за патронами идут именно с пустыми.
-  const spare = scanSpareInventory(e).count;
-  const carry = spare >= (atStorage ? 1 : STORE_SPARE_MIN) ? 12 + spare * 10 : 0;
-  // Вооружённому без патронов склад нужнее любого хабара: это дело одного
-  // захода и возникает оно ровно после того, как человек отстрелялся.
-  const restock = npcNeedsAmmo(e) ? 40 : 0;
-  if (carry + restock <= 0) return 0;
-  // Возка кладовщику не привычка, а ремесло: множитель привычки к ней не идёт.
-  if (npcIsSupplyCarrier(e)) return carry + restock;
-  return (carry + restock) * (0.4 + 0.6 * stableUnit(e, 'store_habit'));
-}
-
-function findNpcStorageContainer(
-  world: World,
-  e: Entity,
-  room: Room,
-  state?: import('../../core/types').GameState,
-): import('../../core/types').WorldContainer | undefined {
-  let foreign: import('../../core/types').WorldContainer | undefined;
-  const raids = npcRaidsForeignContainers(e);
-  for (const container of containersInRoom(world, room.id)) {
-    if (canAccessContainer(container, e)) return container;
-    if (raids && foreign === undefined && containerAccessInfo(container, e, state).canTake) foreign = container;
-  }
-  return foreign;
-}
-
-/**
- * Что человек делает на складе прямо сейчас.
- *
- * `busy` — сделка прошла, есть смысл остаться; `done` — дело закрыто;
- * `nothing` — здесь заняться нечем, надо идти в другую комнату. Различие важно:
- * работник цеха обязан сперва попробовать местный ящик и только потом нести
- * смену через этаж.
- */
-type NpcStorageOutcome = 'busy' | 'done' | 'nothing';
-
-function tickNpcStorageWork(world: World, e: Entity, state?: import('../../core/types').GameState): NpcStorageOutcome {
-  const room = world.roomAt(e.x, e.y);
-  const rank = storeRank(room);
-  const carrier = npcIsSupplyCarrier(e);
-  // Разнос идёт раньше вывоза и не смотрит на ранг комнаты: кухне сдают хлеб,
-  // вставшему цеху — сырьё, а не ставят их на складской учёт.
-  if (room) {
-    const cargo = deliveryCargoSlot(world, e);
-    if (cargo && cargo.roomId === room.id) {
-      const target = findNpcStorageContainer(world, e, room, state);
-      const slot = e.inventory?.[cargo.slot];
-      if (!target || !slot) return 'nothing';
-      return putIntoContainer(target, e, cargo.slot, slot.count, state) ? 'busy' : 'done';
-    }
-    if (rank <= 0) return 'nothing';
-  }
-  if (!room || rank <= 0) return 'nothing';
-  const container = findNpcStorageContainer(world, e, room, state);
-  if (!container) return 'nothing';
-  const bestRank = roomAffordanceWeight(RoomType.STORAGE, 'store');
-
-  // Кладовщик в цеху не складывает, а забирает: это место, откуда возят.
-  if (carrier && rank < bestRank) {
-    const load = container.inventory.findIndex(slot => slot.count > 0 && !containerUsesAsInput(container, slot.defId));
-    if (load < 0) return 'nothing';
-    return takeFromContainer(container, e, load, container.inventory[load].count, state) ? 'busy' : 'nothing';
-  }
-
-  const spare = scanSpareInventory(e);
-  // Порожняком на складе кладовщик берёт то, чего ждут в других комнатах, и
-  // сразу уходит: иначе следующей же сделкой положил бы взятое назад.
-  const fetchesForOwnRoom = !carrier && ownRoomIsShort(world, e);
-  if ((carrier || fetchesForOwnRoom) && depositableSlot(world, e, carrier) < 0 && rank >= bestRank) {
-    for (let i = 0; i < container.inventory.length; i++) {
-      const item = container.inventory[i];
-      if (item.count <= 0) continue;
-      // Кладовщик берёт что угодно, чему есть куда ехать; остальные — только
-      // припас своей комнаты. Проверяется КОМНАТА, а не тип: вещь, которой
-      // «место на кухне», нельзя брать там, где кухни нет, иначе она поедет со
-      // склада и вернётся на склад, и так без конца.
-      const wanted = carrier
-        ? deliveryRoomFor(world, e, item.defId, item.count) !== undefined
-        : suppliesOwnRoom(world, e, item.defId);
-      if (!wanted) continue;
-      if (takeFromContainer(container, e, i, item.count, state)) return 'done';
-    }
-  }
-
-  const dropSlot = depositableSlot(world, e, carrier);
-  if (dropSlot >= 0) {
-    const slot = e.inventory?.[dropSlot];
-    if (slot && putIntoContainer(container, e, dropSlot, slot.count, state)) {
-      return depositableSlot(world, e, carrier) < 0 && !npcNeedsAmmo(e) ? 'done' : 'busy';
-    }
-    // Ящик не принял — вещь поедет туда, где место есть.
-    if (!npcNeedsAmmo(e)) return 'nothing';
-  }
-  // Кладовщику с грузом под разнос на складе делать больше нечего: пора везти.
-  if (carrier && spare.first >= 0 && dropSlot < 0) return 'done';
-
-  if (npcNeedsAmmo(e)) {
-    const ammo = npcAmmoTypeFor(e);
-    const ammoSlot = container.inventory.findIndex(slot => slot.defId === ammo && slot.count > 0);
-    if (ammoSlot < 0) return spare.first >= 0 ? 'nothing' : 'done';
-    if (takeFromContainer(container, e, ammoSlot, container.inventory[ammoSlot].count, state)) {
-      npcAutoEquipBestWeapon(e);
-      return 'busy';
-    }
-  }
-  return 'done';
-}
-
 function handleStore(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
   const ai = e.ai!;
 
   // Сперва — здесь: работник цеха кладёт смену в свой ящик, если место есть, и
   // только потом несёт её через этаж.
   let outcome: NpcStorageOutcome = 'nothing';
-  if (ai.path.length === 0 && (storeNextActionAtByNpc.get(e) ?? -Infinity) <= _barkTime) {
-    storeNextActionAtByNpc.set(e, _barkTime + stableTimer(e, 'store_action', STORE_ACTION_BASE_SEC, STORE_ACTION_SPREAD_SEC));
+  if (ai.path.length === 0 && npcStoreActionDue(e, _barkTime)) {
+    noteNpcStoreAction(e, _barkTime);
     outcome = tickNpcStorageWork(world, e, state);
     if (outcome === 'done') {
       ai.goal = AIGoal.IDLE;
@@ -1265,29 +804,6 @@ function handleSocial(world: World, e: Entity, dt: number): void {
       ai.timer = stableTimer(e, 'social_in_room', 6, 10);
     }
   }
-  followPath(world, e, dt);
-}
-
-function handleFactionAssault(world: World, e: Entity, dt: number, state?: import('../../core/types').GameState): void {
-  const ai = e.ai!;
-
-  if (ai.timer <= 0 || ai.goal === AIGoal.IDLE) {
-    ai.goal = AIGoal.GOTO;
-    ai.timer = 5;
-
-    if (state?.factionGoals) {
-      for (const goal of state.factionGoals) {
-        if (goal.type === 'attack' && goal.members.includes(e.id)) {
-          const zone = world.zones[goal.targetZone];
-          if (zone) {
-            tryAssignPathToCell(world, e, zone.cx, zone.cy);
-          }
-          break;
-        }
-      }
-    }
-  }
-
   followPath(world, e, dt);
 }
 

@@ -21,7 +21,6 @@ import { playGrowl, playSoundAt } from './audio';
 import { recordPlayerDamage } from './damage';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_MONSTER, ensureEntityIndex, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
-import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import { scaleMonsterDmg, strMeleeDmgMult } from './rpg';
 import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding';
 import { isPlayerEntity } from './player_actor';
@@ -291,19 +290,12 @@ function defensiveSlash(
      * когтями, стоял и не отвечал — удар до его AI попросту не доходил.
      * Отладочное бессмертие и обработка смерти живут внутри двери.
      *
-     * Запасной путь без состояния оставлен намеренно: зовут и оттуда, где
-     * `GameState` не протянут, и молча ронять урон там нельзя. */
-    if (state) {
-      damageActor(world, state, target, { damage: dmg, source: 'monster_melee', attacker: e });
-    } else if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) {
-      keepDebugOnePunchManAlive(target);
-    } else {
-      target.hp = Math.max(0, target.hp - dmg);
-      if (target.hp <= 0) {
-        target.alive = false;
-        target.hp = 0;
-      }
-    }
+     * Запасного пути без состояния БОЛЬШЕ НЕТ. Он был не страховкой, а дублем:
+     * `damageActor` сама принимает отсутствующее состояние и в этом случае лишь
+     * пропускает броневой конвейер, оставляя тип урона, память жертвы, смерть и
+     * отладочное бессмертие на месте. Две ветки повторяли это хуже оригинала —
+     * без памяти удара, а значит жертва не отвечала. */
+    damageActor(world, state, target, { damage: dmg, source: 'monster_melee', attacker: e });
     spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), dmg, target.type === EntityType.MONSTER);
     if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, 'Гнилушка ударила когтями из угла');
   }

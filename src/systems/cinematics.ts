@@ -272,10 +272,33 @@ export function resetFloorScenes(state?: GameState, entities?: Entity[]): void {
 /* ── Камера ──────────────────────────────────────────────────── */
 
 let sceneCamera: RuntimeCamera | null = null;
+/**
+ * Кадр отпущен игроку по его же решению. Сцена при этом ЖИВА и доигрывает свои
+ * такты, но камера ей больше не принадлежит — как и ввод, HUD и неуязвимость.
+ *
+ * Флаг один на весь проигрыватель нарочно: «наша ли камера» спрашивают восемь
+ * мест, и восемь разрозненных проверок разъехались бы на первой же правке.
+ */
+let sceneFrameReleased = false;
+/**
+ * Взведено ли требование кадра. Кнопку, ЗАЖАТУЮ ДО начала сцены, пропуском
+ * считать нельзя: то же действие держат ради фонаря, и пролог этажа пропадал бы
+ * молча у всякого, кто вошёл в дверь с включённым светом. Взводит отпускание.
+ */
+let sceneReleaseArmed = false;
 
 /** Входная точка отдаёт сцене свою рантайм-камеру. Без неё сцены просто не играют. */
 export function bindSceneCamera(camera: RuntimeCamera): void {
   sceneCamera = camera;
+}
+
+/**
+ * Камера, ПОКА ОНА СЦЕНЫ. После того как игрок забрал кадр себе, здесь null, и
+ * все камерные такты становятся пустыми: отпущенная сцена ведёт людей и реплики,
+ * а кадр — уже не её дело.
+ */
+function sceneOwnedCamera(): RuntimeCamera | null {
+  return sceneFrameReleased ? null : sceneCamera;
 }
 
 /* ── Проигрыватель ───────────────────────────────────────────── */
@@ -402,6 +425,8 @@ function startScene(ctx: ContentRuntimeContext, def: FloorSceneDef): boolean {
   active = { def, anchorX, anchorY, cast, beatIndex: 0, beatTime: 0, beatStarted: false, elapsed: 0, returning: -1 };
   if (playedScenes.size < MAX_PLAYED_SCENES) playedScenes.add(def.id);
   ctx.state.sceneLock = true;
+  sceneFrameReleased = false;
+  sceneReleaseArmed = false;
 
   startCinematicCamera(sceneCamera!, ctx.player.x, ctx.player.y, [], {
     lookAt: { x: anchorX, y: anchorY },
@@ -773,14 +798,17 @@ function freeSpotNear(
 
 function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
   scene.elapsed += ctx.dt;
+  const camera = sceneOwnedCamera();
 
   // Такты кончились (или вышло время) — камера ЛЕТИТ обратно к игроку и только
   // потом отдаёт ему управление. Раньше здесь просто переключался режим, и
   // возвращение читалось как телепорт.
   if (scene.returning >= 0) {
     scene.returning += ctx.dt;
-    aimCinematicCamera(sceneCamera!, { lookAt: null, orbit: null, hold: true });
-    if (scene.returning >= SCENE_RETURN_TIMEOUT_S || cinematicCameraArrived(sceneCamera!)) {
+    if (camera) aimCinematicCamera(camera, { lookAt: null, orbit: null, hold: true });
+    // Отпущенному кадру возвращаться некуда: камера у игрока с той секунды, как
+    // он её забрал, и ждать её прилёта значило бы держать сцену до таймаута.
+    if (!camera || scene.returning >= SCENE_RETURN_TIMEOUT_S || cinematicCameraArrived(camera)) {
       endScene(ctx, scene);
       return true;
     }
@@ -788,16 +816,17 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
   }
   if (scene.elapsed >= scene.def.maxSeconds || scene.beatIndex >= scene.def.beats.length) {
     scene.returning = 0;
+    if (!camera) return false;
     // Домой кадр летит тоже по курсу: возврат, снятый задом наперёд с игроком в
     // прицеле, читается как утаскивание, а не как возвращение.
-    aimCinematicCamera(sceneCamera!, {
+    aimCinematicCamera(camera, {
       lookAt: null,
       orbit: null,
       height: CAMERA_STANDING_HEIGHT,
       flySpeed: SCENE_RETURN_FLY_SPEED,
       hold: true,
     });
-    routeCinematicCamera(sceneCamera!, ctx.world, ctx.player.x, ctx.player.y);
+    routeCinematicCamera(camera, ctx.world, ctx.player.x, ctx.player.y);
     return false;
   }
 
@@ -900,8 +929,9 @@ function holdCastNearAnchor(ctx: ContentRuntimeContext, scene: ActiveScene): voi
  * иначе каждый кадр начинал бы круг заново.
  */
 function trackBeatFocus(ctx: ContentRuntimeContext, scene: ActiveScene): void {
-  if (!sceneCamera || !scene.focus) return;
-  aimCinematicCamera(sceneCamera, { lookAt: resolveSpot(ctx, scene, scene.focus) });
+  const camera = sceneOwnedCamera();
+  if (!camera || !scene.focus) return;
+  aimCinematicCamera(camera, { lookAt: resolveSpot(ctx, scene, scene.focus) });
 }
 
 function beatDuration(beat: SceneBeat): number {
@@ -920,7 +950,10 @@ function beatDuration(beat: SceneBeat): number {
 
 function beatFinished(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBeat): boolean {
   if (beat.kind === 'fly' && beat.wait !== false) {
-    return cinematicCameraArrived(sceneCamera!);
+    // Отпущенный кадр никуда не летит, и ждать его прилёта нечем: такт закрывается
+    // сразу, чтобы сцена дошла до своего конца, а не повисла до потолка.
+    const camera = sceneOwnedCamera();
+    return !camera || cinematicCameraArrived(camera);
   }
   if (beat.kind === 'awaitDeath') {
     return scene.beatTime <= 0 || roleIsGone(ctx, scene, beat.role);
@@ -931,12 +964,14 @@ function beatFinished(ctx: ContentRuntimeContext, scene: ActiveScene, beat: Scen
 function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBeat): void {
   switch (beat.kind) {
     case 'fly': {
+      const camera = sceneOwnedCamera();
+      if (!camera) return;
       const to = resolveSpot(ctx, scene, beat.to);
-      routeCinematicCamera(sceneCamera!, ctx.world, to.x, to.y);
+      routeCinematicCamera(camera, ctx.world, to.x, to.y);
       // Точка внимания живёт до следующего такта камеры: за кем начали следить,
       // за тем и следим, пока кадр не переведут.
       scene.focus = beat.look;
-      aimCinematicCamera(sceneCamera!, {
+      aimCinematicCamera(camera, {
         lookAt: beat.look ? resolveSpot(ctx, scene, beat.look) : null,
         orbit: null,
         height: beat.height,
@@ -946,9 +981,11 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
       return;
     }
     case 'orbit': {
+      const camera = sceneOwnedCamera();
+      if (!camera) return;
       scene.focus = beat.around;
       const around = resolveSpot(ctx, scene, beat.around);
-      aimCinematicCamera(sceneCamera!, {
+      aimCinematicCamera(camera, {
         lookAt: around,
         orbit: { radius: beat.radius, speed: beat.speed },
         height: beat.height,
@@ -1236,7 +1273,9 @@ function updateSceneErrands(ctx: ContentRuntimeContext): void {
 function endScene(ctx: ContentRuntimeContext, scene: ActiveScene): void {
   releaseAllSceneActors(ctx.entities, scene.def.id);
   ctx.state.sceneLock = false;
-  if (sceneCamera) sceneCamera.mode = 'player';
+  const camera = sceneOwnedCamera();
+  sceneFrameReleased = false;
+  if (camera) camera.mode = 'player';
   publishEvent(ctx.state, {
     type: 'scene_ended',
     severity: 2,
@@ -1259,9 +1298,41 @@ export function abortFloorScene(state?: GameState, entities?: Entity[]): void {
   // не довели — тот остаётся на своём этаже обычным жильцом.
   errands.length = 0;
   if (state) state.sceneLock = false;
+  const camera = sceneOwnedCamera();
+  sceneFrameReleased = false;
   if (!scene) return;
   if (entities) releaseAllSceneActors(entities, scene.def.id);
+  if (camera) camera.mode = 'player';
+}
+
+/**
+ * Игрок забирает кадр себе, не обрывая сцену.
+ *
+ * Сцена ЖИВЁТ дальше: актёры отыгрывают такты, говорят свои реплики и доводят
+ * события до конца — просто уже без зрителя в первом ряду. Снимается ровно то,
+ * что принадлежит зрителю: замок ввода, камера и вместе с замком неуязвимость
+ * (`debug_cheats.ts` читает тот же `sceneLock`). Так и задумано: перехватить кадр
+ * — решение игрока, и цена решения — своя шкура.
+ *
+ * Отдельного флага для ворот ввода не нужно и заводить нельзя: `sceneLock` УЖЕ
+ * означает «кадр принадлежит сцене, а не игроку», и все его читатели —
+ * игроко-обращённые.
+ *
+ * Зовут это КАЖДЫЙ КАДР сцены, и `requested` — просто «жмут ли сейчас»: взведение
+ * тоже дело проигрывателя, а не входной точки. Вернувшееся `true` означает, что
+ * кадр только что отдан, и нажатие пора съесть.
+ */
+export function releaseFloorSceneToPlayer(state: GameState, requested: boolean): boolean {
+  if (!active || sceneFrameReleased) return false;
+  if (!requested) {
+    sceneReleaseArmed = true;
+    return false;
+  }
+  if (!sceneReleaseArmed) return false;
+  sceneFrameReleased = true;
+  state.sceneLock = false;
   if (sceneCamera) sceneCamera.mode = 'player';
+  return true;
 }
 
 /* ── Разрешение ссылок ───────────────────────────────────────── */

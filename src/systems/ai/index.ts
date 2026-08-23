@@ -194,7 +194,9 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
   setNpcContext(msgs, time, currentZ);
-  setActorCoreContext(currentZ);
+  // Часы — третий род входа в счёт драйва: распорядок висит на минуте суток, а
+  // ни тело, ни восприятие времени не знают. Снимок общий на кадр.
+  setActorCoreContext(currentZ, clock, samosborActive, state);
   setFactionsSocialContext(state);
   setRoomVisitContext(state);
   expireMonsterBaits(state, time);
