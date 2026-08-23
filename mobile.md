@@ -315,6 +315,25 @@ function createRenderCanvas(width: number, height: number): HTMLCanvasElement | 
 
 Use the same fallback for temporary image canvases used by effects.
 
+## Фоновая живность на тач-устройствах
+
+С 2026-08-22 живность на мобильных **включена**. Раньше `getCritterRenderEnabled`
+жёстко возвращала `false` при `navigator.maxTouchPoints > 0` — этот запрет платил за
+CPU-симуляцию пула особей, которой больше нет: живность разворачивается в вершинном
+шейдере из полей мира (см. `architecture.md`, «Critters And Ambient VFX»).
+
+Что осталось от осторожности:
+
+- Блок клеток на тач-устройстве уже: `CRITTER_BLOCK_MOBILE = 14` против 24 на десктопе,
+  то есть примерно втрое меньше инстансов.
+- Сторож по FPS общий для всех платформ: ниже 30 кадров живность гаснет
+  (`getCritterRenderEnabled(fps)`).
+- Ручной тумблер в графических настройках никуда не делся.
+
+Проверяя мобильную производительность, помни: `navigator.maxTouchPoints > 0` больше не
+означает «живности нет». Если ищешь регрессию кадра на телефоне — тумблер и есть
+самый быстрый способ разделить проход живности и всё остальное.
+
 ## Itch.io Package
 
 For this project, build the itch package through the checked-in script:

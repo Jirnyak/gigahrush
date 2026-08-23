@@ -176,6 +176,7 @@ export interface HudPerfDebugSnapshot {
   renderMs?: number;
   hudMs?: number;
   liveAi?: number;
+  indexMs?: number;
   visibleSprites?: number;
   drawnSprites?: number;
   visibleEntityQueryResults?: number;
@@ -586,7 +587,7 @@ function drawFpsCounter(ctx: CanvasRenderingContext2D, perf: HudPerfDebugSnapsho
     `FPS ${Math.round(fps)}  кадр ${compactMs(perf?.frameMsAvg)}/${compactMs(perf?.frameMsMax)}мс`,
     `AI ${compactNumber(perf?.liveAi)} upd ${compactNumber(perf?.aiUpdated)} skip ${compactNumber(perf?.aiSkipped)}`,
     `VIS ${compactNumber(perf?.visibleSprites)} draw ${compactNumber(perf?.drawnSprites)} q ${compactNumber(perf?.visibleEntityQueryResults)}  ms SIM ${compactMs(perf?.simMs)} AI ${compactMs(perf?.aiMs)} R ${compactMs(perf?.renderMs)} HUD ${compactMs(perf?.hudMs)}`,
-    `SYS N ${compactMs(perf?.needsMs)} C ${compactMs(perf?.contentMs)} HZ ${compactMs(perf?.hazardMs)} S ${compactMs(perf?.samosborMs)} F ${compactMs(perf?.factionMs)} B ${compactMs(perf?.bloodMs)} X ${compactMs(perf?.cleanupMs)}`,
+    `SYS N ${compactMs(perf?.needsMs)} C ${compactMs(perf?.contentMs)} HZ ${compactMs(perf?.hazardMs)} S ${compactMs(perf?.samosborMs)} F ${compactMs(perf?.factionMs)} B ${compactMs(perf?.bloodMs)} X ${compactMs(perf?.cleanupMs)} IX ${compactMs(perf?.indexMs)}`,
   ];
   const padX = 3 * s;
   const padY = 2 * s;

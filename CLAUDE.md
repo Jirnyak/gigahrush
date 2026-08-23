@@ -67,6 +67,7 @@ Read additional docs only when relevant to the task:
 | Design direction, next-iteration priorities, player promise | `desdoc.md` |
 | Active-floor AI, NPC utility, pathfinding, tactics, actor cadence | `ai.md` |
 | Dynamic combat, projectiles, damage, tactical readability | `fight.md` |
+| Перестройка боя/A-Life/AI в живой симулятор: план, замеры, закрытые фронты | `simulation.md` |
 | Persistent NPC identity, deaths, relations, off-floor population | `alife.md` |
 | NPC packages, questionnaires, author-facing NPC kinds, intake transition | `npc.md` |
 | `Инфосеть Демос`, NPC social graph, feed, reactions, quest notices | `demos.md` |

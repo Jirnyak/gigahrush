@@ -11,7 +11,7 @@ import {
   questTargetLiftDirection,
   resolveQuestTargetRoom,
 } from '../systems/contracts';
-import { getActiveQuest, npcQuestMarkerState } from '../systems/quests';
+import { getActiveQuest, npcQuestMarkerState, questAddressesBySlot } from '../systems/quests';
 import { isHostile } from '../systems/factions';
 import { ENTITY_MASK_ITEM_DROP, ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import {
@@ -410,12 +410,14 @@ function nearestActorPoint(
 
 function liveQuestNpcPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
   const index = getEntityIndex();
-  if (q.targetNpcId !== undefined) {
-    const byId = entityPoint(index.byId.get(q.targetNpcId));
-    if (byId) return byId;
-  }
-  if (!q.targetNpcId) return undefined;
-  return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.id === q.targetNpcId);
+  if (q.targetNpcId === undefined) return undefined;
+  // Авторское задание адресует цель СЛОТОМ личности, процедурное — номером
+  // сущности. Спрашиваем задание, а не пробуем оба адреса подряд.
+  const bySlot = questAddressesBySlot(q);
+  const found = entityPoint(bySlot ? index.byAlifeId.get(q.targetNpcId) : index.byId.get(q.targetNpcId));
+  if (found) return found;
+  return nearestActorPoint(world, player, e => e.type === EntityType.NPC
+    && (bySlot ? e.alifeId === q.targetNpcId : e.id === q.targetNpcId));
 }
 
 function liveQuestKillPoint(q: Quest, world: World, player: Entity): QuestMapTargetPoint | undefined {
@@ -468,10 +470,12 @@ function activeQuestMapTargetPoint(world: World, player: Entity, state: GameStat
     // If it requires manual turn-in (no contractId), point to the giver
     if (q.contractId === undefined) {
       const index = getEntityIndex();
-      const giver = index.byId.get(q.giverId);
+      const bySlot = questAddressesBySlot(q);
+      const giver = bySlot ? index.byAlifeId.get(q.giverId) : index.byId.get(q.giverId);
       if (giver) return entityPoint(giver);
       if (q.giverId) {
-        return nearestActorPoint(world, player, e => e.type === EntityType.NPC && e.id === q.giverId);
+        return nearestActorPoint(world, player, e => e.type === EntityType.NPC
+          && (bySlot ? e.alifeId === q.giverId : e.id === q.giverId));
       }
       return undefined;
     }

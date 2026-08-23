@@ -22,7 +22,15 @@ import { spawnBufetchitsaGlafira } from './glafira';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng, irand } from '../../core/rand';
 
-const MINISTRY_NPC_TARGET_AT_DEFAULT_CAP = 1000;
+/**
+ * Сколько служащих несёт министерство при полном бюджете акторов.
+ *
+ * Была тысяча, и этаж читался пустым: 2.67 человека на тысячу проходимых клеток
+ * против 5.34 на жилом и 4.93 на квартирах — ровно вдвое реже при той же площади
+ * и при в пятнадцать раз меньшем числе комнат. Ведомство обязано выглядеть
+ * работающим, поэтому плотность сравнена с жилым этажом.
+ */
+const MINISTRY_NPC_TARGET_AT_DEFAULT_CAP = 2000;
 
 /* ── Weapon loadout for ministry NPCs ─────────────────────────── */
 function ministryWeaponLoadout(faction: Faction, occupation: Occupation, level: number): { weapon?: string; inv: { defId: string; count: number }[] } {
@@ -171,10 +179,15 @@ export function spawnMinistryNpcs(
           const tx = world.wrap(zone.cx + irand(-r * 3, r * 3));
           const ty = world.wrap(zone.cy + irand(-r * 3, r * 3));
           const tci = world.idx(tx, ty);
-          if (world.cells[tci] === Cell.FLOOR) {
-            sx = tx; sy = ty;
-            break;
-          }
+          if (world.cells[tci] !== Cell.FLOOR) continue;
+          /* Место ищется В КОМНАТЕ, и только на последних попытках — где придётся.
+           * Раньше годилась любая свободная клетка, и восемь из десяти служащих
+           * вставали посреди мраморных залов: этаж с тысячей человек читался
+           * пустым, потому что людей размазывало по проходам вместо кабинетов.
+           * На жилом наоборот — там в комнатах стоят 2073 человека из 2175. */
+          if (r < 24 && world.roomMap[tci] < 0) continue;
+          sx = tx; sy = ty;
+          break;
         }
         if (sx < 0) continue;
         const zoneLevel = zone.level ?? 1;

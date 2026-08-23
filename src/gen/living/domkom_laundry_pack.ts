@@ -230,7 +230,7 @@ const NPC_SPAWNS: readonly NpcSpawn[] = [
 ];
 
 function hasPlotNpc(entities: Entity[], plotNpcId: string): boolean {
-  return entities.some(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
+  return entities.some(e => e.alive && e.alifeId === getPlotNpcNumericId(plotNpcId)!);
 }
 
 function areaClear(world: World, rx: number, ry: number, w: number, h: number): boolean {

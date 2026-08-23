@@ -3,8 +3,12 @@ import assert from 'node:assert/strict';
 
 import { AIGoal, Cell, EntityType, Faction, Occupation, RoomType, Tex, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
-import { setNpcContext, updateNPC, processUrinationEvents } from '../src/systems/ai/npc_fsm';
+import { setNpcContext, processUrinationEvents } from '../src/systems/ai/npc_fsm';
 import { resetUrinationTraceCadenceForTests, stampUrineTrace } from '../src/systems/urination';
+import {
+  actorDrive, forgetActorBrain, setActorCoreContext, tickActorBrain,
+} from '../src/systems/actor/brain';
+import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { makeGameState } from './helpers';
 import { publishEvent } from '../src/systems/events';
 
@@ -170,6 +174,10 @@ test('public urination does not penalize relation if too far away', () => {
   assert.equal(observer.playerRelation, 0);
 });
 
+/* Облегчение на месте переехало в ядро актора: это первый шаг телесного драйва
+ * «туалет» — закрыть нужду тем, что уже при себе, до всякой дороги. Поэтому
+ * гоняется цикл ядра, а не рутина прежнего слоя. Ядро решает по своей паузе
+ * (не больше четырёх секунд), значит одного такта мало. */
 test('wild NPC urination is an explicit in-place routine instead of a bathroom path', () => {
   resetUrinationTraceCadenceForTests();
   const world = openWorld();
@@ -177,8 +185,15 @@ test('wild NPC urination is an explicit in-place routine instead of a bathroom p
   const wild = npc(20, Faction.WILD, 10.5, 10.5);
 
   setNpcContext([], 10);
-  updateNPC(world, [wild], wild, 1, 10, { hour: 12, minute: 0, totalMinutes: 720 }, false);
+  setActorCoreContext(0);
+  forgetActorBrain(wild);
+  for (let step = 0; step <= 9; step++) {
+    const now = step * 0.5;
+    rebuildEntityIndexForSimulation([wild], now);
+    tickActorBrain(world, wild, 0.5, now);
+  }
 
+  assert.notEqual(actorDrive(wild), 'toilet', 'нужда закрыта на месте — держать драйв не за чем');
   assert.ok((wild.needs?.pee ?? 90) < 90);
   assert.equal(wild.ai?.path.length ?? 0, 0);
   assert.ok(world.surfaceMap.size > 0);

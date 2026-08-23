@@ -1,4 +1,5 @@
 import { Faction, Occupation } from '../core/types';
+import { DEFAULT_FAUNA } from './critters';
 import type { DesignFloorId } from './design_floors';
 import {
   FLOOR_69_PERFORMER_ROLE_ID,
@@ -74,6 +75,9 @@ export interface DesignFloorPortalPolicyProfile {
 
 export interface DesignFloorRenderProfile {
   ambientLight?: number;
+  /** Фоновая живность этажа: id из `CRITTER_SPECIES`. Пустой список — этаж
+   *  безжизненный (Пустота), отсутствие поля — общий набор `DEFAULT_FAUNA`. */
+  fauna?: readonly string[];
 }
 
 export interface DesignFloorPseudoliftProfile {
@@ -97,6 +101,36 @@ export const DESIGN_FLOOR_PROFILES: readonly DesignFloorProfile[] = [
     routeId: 'outer_district',
     render: {
       ambientLight: 0.85,
+      /* Улица под небом: мошкары над фонарями много, подвальной сырости нет. */
+      fauna: ['rat', 'fly', 'moth'],
+    },
+  },
+  {
+    routeId: 'hell',
+    render: {
+      /* Мясной низ: пепел у огня, мухи над мясом, крысы по падали. */
+      fauna: ['fly', 'ash_moth', 'rat'],
+    },
+  },
+  {
+    routeId: 'void',
+    render: {
+      /* Конец маршрута: живых нет вообще, включая фоновых. */
+      fauna: [],
+    },
+  },
+  {
+    routeId: 'oranzhereya_betona',
+    render: {
+      /* Еда и вода: мокрицы под грядками, тараканы в закромах. */
+      fauna: ['woodlouse', 'roach', 'fly', 'moth', 'spider'],
+    },
+  },
+  {
+    routeId: 'harmonic_bathhouse',
+    render: {
+      /* Пар и сырость: мокрицы и пауки по углам, кухонной живности нет. */
+      fauna: ['woodlouse', 'spider', 'moth'],
     },
   },
   {
@@ -216,6 +250,10 @@ export function designFloorAmbientLight(id: string | undefined, fallback: number
   const value = designFloorProfile(id)?.render?.ambientLight;
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.max(0, Math.min(1, value));
+}
+
+export function designFloorFauna(id: string | undefined): readonly string[] {
+  return designFloorProfile(id)?.render?.fauna ?? DEFAULT_FAUNA;
 }
 
 export function designFloorPseudoliftChance(id: string | undefined): number {

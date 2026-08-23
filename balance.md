@@ -469,7 +469,7 @@ A-Life меняет главный смысл баланса: мир не refill
 
 - Relation `-100..100`.
 - Hostile threshold `-50`.
-- A-Life personal jitter `±12`.
+- Личный разброс отношения к игроку — гауссиана σ=32 (та же, что у отношения к фракциям): доля друзей задаётся расстоянием базы до порога дружбы, не своей ручкой.
 - Normal quest completion: faction `+1`, giver personal `+2..8`.
 - Forgery/theft severity should be high enough that repeated abuse closes services before it becomes best economy path.
 

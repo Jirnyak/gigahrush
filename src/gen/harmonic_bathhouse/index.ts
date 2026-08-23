@@ -10,6 +10,7 @@ import {
   generateZones,
   sanitizeDoors,
 } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, HarmonicBathhouseGeneration, SEED } from "./meta";
 import { initWorld, buildRooms, connectRooms, placeLifts, tuneBathhouseZones, expandHarmonicBathhouseRouteGeometry, placePanels, registerCues, decisionNode } from "./geometry";
 import { solveHarmonicBathhouseField, carveLevelSetCorridors, applyThermalBands, decorateRooms, alignHarmonicBathhouseAmbientNpcTerritory, registerHazards, placeContainers, spawnBathhouseNpcs, spawnBathhouseThreats } from "./npcs";
@@ -18,7 +19,7 @@ export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathh
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const rand = xorshift32(seed);
 
     initWorld(world);

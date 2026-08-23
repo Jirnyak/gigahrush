@@ -26,7 +26,6 @@ import {
   type AlifeReservedIdentityDef,
 } from '../data/alife_population_plan';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
-import { isPlotNpc } from '../data/plot';
 // import { getPlotNpcNumericId, id } from '../data/npc_packages';
 import {
   ALIFE_FACTION_PROFILES,
@@ -72,13 +71,22 @@ import {
 } from './procedural_floors';
 import { floorRunZAllowsNpcs } from '../data/procedural_floors';
 import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyZ } from './floor_keys';
+import { factionToTerritoryOwner } from '../data/factions';
+import { territoryOwnerAtIndex } from './territory';
 import { generateNpcLoadout, generateMerchantStock } from './procedural_loot';
 import { ITEMS } from '../data/catalog';
 import { getStack } from '../data/items';
-import { getFactionRel } from '../data/relations';
+import {
+  NPC_FACTION_ATTITUDE_SLOTS,
+  RELATION_MAX,
+  RELATION_MIN,
+  RELATION_UNSET,
+  attitudeSpread,
+  getFactionRel,
+  npcFactionAttitudeAtBirth,
+} from '../data/relations';
 import { HUMANOID_BASE_MOVE_SPEED, getMaxHp, getMaxPsi } from './rpg';
 import {
-  NPC_PLAYER_RELATION_FLUCTUATION,
   clampRelation,
   getFactionPlayerRelation,
 } from './npc_relations';
@@ -100,6 +108,17 @@ const ALIFE_SAVE_DEAD_IDS_CAP = 65_536;
 const ALIFE_SAVE_PLOT_DEAD_IDS_CAP = 4_096;
 const ALIFE_MONEY_CAP = 5_000_000;
 const ALIFE_PLAYER_RELATION_UNSET = -128;
+/**
+ * Сколько последних комнат помнит личность и чем помечена пустая ячейка.
+ *
+ * Кольцо жило приватным `WeakMap` в старом слое AI и умирало вместе с сущностью;
+ * когда тело переехало в ядро актора, канал «новизна» просто перестал доходить —
+ * весь этаж ходил по кругу между двумя ближайшими комнатами. Память о том, где
+ * человек был, принадлежит ЧЕЛОВЕКУ, поэтому и живёт здесь, рядом с остальной
+ * личностью: переживает смену этажа, попадает в сейв, читается обоими слоями.
+ */
+export const ALIFE_ROOM_VISIT_MEMORY = 6;
+export const ALIFE_ROOM_VISIT_EMPTY = 0xffff;
 const ALIFE_NPC_SPEED_MIN = 0.1;
 const ALIFE_NPC_SPEED_MAX = 8;
 
@@ -276,6 +295,13 @@ export interface AlifeNpcOverride {
   monsterKills?: number;
   playerRelation?: number;
   karma?: number;
+  /* Только НАКОПЛЕННОЕ отклонение от рождённого числа, по ячейке на фракцию, и
+   * только если оно есть. Само отношение выводится из семени и `id`, поэтому
+   * сохранять его целиком значит хранить то, что и так пересчитается. */
+  factionAttitude?: number[];
+  /* Кольцо последних комнат, только непустое. Ниоткуда не выводится: это факт
+   * о прожитом, а не о рождении. */
+  roomVisits?: number[];
 }
 
 export interface AlifeSaveState {
@@ -314,6 +340,15 @@ interface AlifeNumericColumns {
   monsterKills: Uint32Array;
   playerRelation: Int8Array;
   karma: Int8Array;
+  /* Восемь ячеек на личность: как этот человек смотрит на каждую фракцию.
+   * Плоско, `(id - 1) * NPC_FACTION_ATTITUDE_SLOTS + faction`. */
+  factionAttitude: Int8Array;
+  /* Кольцо последних комнат: где человек только что был. Плоско,
+   * `(id - 1) * ALIFE_ROOM_VISIT_MEMORY + позиция`, `ALIFE_ROOM_VISIT_EMPTY` —
+   * пусто. Память принадлежит ЛИЧНОСТИ, а не слою AI: она про человека, а не
+   * про то, кто его сейчас считает. Номера комнат этажные, поэтому переезд на
+   * другой этаж кольцо стирает. */
+  roomVisits: Uint16Array;
 }
 
 interface AlifeState {
@@ -397,10 +432,13 @@ function createAlifeNumericColumns(total: number): AlifeNumericColumns {
     monsterKills: new Uint32Array(bounded),
     playerRelation: new Int8Array(bounded),
     karma: new Int8Array(bounded),
+    factionAttitude: new Int8Array(bounded * NPC_FACTION_ATTITUDE_SLOTS),
+    roomVisits: new Uint16Array(bounded * ALIFE_ROOM_VISIT_MEMORY).fill(ALIFE_ROOM_VISIT_EMPTY),
   };
   columns.sprite.fill(ALIFE_SPRITE_UNSET);
   columns.sex.fill(CHARACTER_SEX_MALE);
   columns.playerRelation.fill(ALIFE_PLAYER_RELATION_UNSET);
+  columns.factionAttitude.fill(RELATION_UNSET);
   return columns;
 }
 
@@ -464,6 +502,12 @@ function ensureAlifeColumnCapacity(alife: AlifeState, requiredId: number): void 
   alife.columns.monsterKills = growUint32Array(alife.columns.monsterKills, next);
   alife.columns.playerRelation = growInt8Array(alife.columns.playerRelation, next, ALIFE_PLAYER_RELATION_UNSET);
   alife.columns.karma = growInt8Array(alife.columns.karma, next);
+  alife.columns.factionAttitude = growInt8Array(
+    alife.columns.factionAttitude, next * NPC_FACTION_ATTITUDE_SLOTS, RELATION_UNSET,
+  );
+  alife.columns.roomVisits = growUint16Array(
+    alife.columns.roomVisits, next * ALIFE_ROOM_VISIT_MEMORY, ALIFE_ROOM_VISIT_EMPTY,
+  );
 }
 
 function recordColumnIndex(record: AlifeNpcRecord): number {
@@ -487,7 +531,15 @@ function recordFloorKey(alife: AlifeState, record: AlifeNpcRecord): string {
 
 function setRecordFloorKey(alife: AlifeState, record: AlifeNpcRecord, floorKey: string): void {
   ensureAlifeColumnCapacity(alife, record.id);
-  alife.columns.floorKeyIndex[recordColumnIndex(record)] = internAlifeFloorKey(alife, floorKey);
+  const next = internAlifeFloorKey(alife, floorKey);
+  const index = recordColumnIndex(record);
+  // Номера комнат этажные: на новом этаже старое кольцо означало бы совсем
+  // другие комнаты, поэтому переезд его стирает.
+  if (alife.columns.floorKeyIndex[index] !== next) {
+    const base = index * ALIFE_ROOM_VISIT_MEMORY;
+    alife.columns.roomVisits.fill(ALIFE_ROOM_VISIT_EMPTY, base, base + ALIFE_ROOM_VISIT_MEMORY);
+  }
+  alife.columns.floorKeyIndex[index] = next;
 }
 
 function recordFloor(alife: AlifeState, record: AlifeNpcRecord): number {
@@ -516,6 +568,27 @@ function recordFaction(alife: AlifeState, record: AlifeNpcRecord): Faction {
 function setRecordFaction(alife: AlifeState, record: AlifeNpcRecord, value: Faction): void {
   ensureAlifeColumnCapacity(alife, record.id);
   alife.columns.faction[recordColumnIndex(record)] = clampInt(value, Faction.CITIZEN, Faction.CITIZEN, Faction.PLAYER);
+  resetRecordFactionAttitudes(alife, record);
+}
+
+function factionAttitudeOffset(record: AlifeNpcRecord): number {
+  return recordColumnIndex(record) * NPC_FACTION_ATTITUDE_SLOTS;
+}
+
+/* Рождение восьми ячеек личности. Зовётся из одной точки — записи собственной
+ * фракции: пока она не известна, смотреть на мир не с чего, а сменилась она —
+ * значит человек сменил и взгляд. Запасные слоты остаются `RELATION_UNSET`:
+ * читатель по нему падает на базу таблицы, и случайный ноль не выдаёт себя за
+ * мнение (столбец игрока в том числе — у него свой канал). */
+function resetRecordFactionAttitudes(alife: AlifeState, record: AlifeNpcRecord): void {
+  const viewer = recordFaction(alife, record);
+  const base = factionAttitudeOffset(record);
+  const column = alife.columns.factionAttitude;
+  for (let faction = 0; faction < NPC_FACTION_ATTITUDE_SLOTS; faction++) {
+    column[base + faction] = faction <= Faction.WILD
+      ? npcFactionAttitudeAtBirth(viewer, faction, alife.seed, record.id)
+      : RELATION_UNSET;
+  }
 }
 
 function recordOccupation(alife: AlifeState, record: AlifeNpcRecord): Occupation {
@@ -1108,10 +1181,13 @@ function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { w
   return loadout;
 }
 
+/* Отношение к игроку рождается тем же законом, что и отношение к фракциям:
+ * живая база плюс гауссиана σ=32. Прежний равномерный джиттер ±12 давал не
+ * характер, а дрожание: у всей фракции было практически одно число, и «кто за
+ * тебя вступится» решалось порогом, а не людьми. Ширина разброса и здесь задаёт
+ * ДОЛЮ — при базе +96 другом игрока рождается 84% фракции, а не все. */
 function playerRelationForRecord(faction: Faction, recordId: number, seed: number): number {
-  const base = getFactionPlayerRelation(faction);
-  const jitter = Math.round((unit(seed, recordId, 88) * 2 - 1) * NPC_PLAYER_RELATION_FLUCTUATION);
-  return clampRelation(base + jitter);
+  return clampRelation(getFactionPlayerRelation(faction) + attitudeSpread(seed, recordId, Faction.PLAYER));
 }
 
 function playerRelationForRecordToFaction(
@@ -1122,9 +1198,8 @@ function playerRelationForRecordToFaction(
   targetAlifeId = 0,
 ): number {
   const base = getFactionRel(faction, targetFaction);
-  const targetSalt = 88 + (targetAlifeId > 0 ? (targetAlifeId % 997) : targetFaction * 31);
-  const jitter = Math.round((unit(seed ^ Math.imul(targetFaction + 1, 0x45d9f3b), recordId, targetSalt) * 2 - 1) * NPC_PLAYER_RELATION_FLUCTUATION);
-  return clampRelation(base + jitter);
+  const salt = 88 + (targetAlifeId > 0 ? (targetAlifeId % 997) : targetFaction * 31);
+  return clampRelation(base + attitudeSpread(seed, recordId, salt));
 }
 
 function defaultPlayerRelationForRecord(alife: AlifeState, record: AlifeNpcRecord): number {
@@ -1611,6 +1686,48 @@ export function alifeNpcRecordCount(state: GameState): number {
   return ensureAlifeState(state).npcs.length;
 }
 
+/** Колонка «личность → фракция» как есть, без создания состояния A-Life.
+ *  Её читает самый горячий предикат игры (`isHostile`), поэтому наружу отдаётся
+ *  сам массив: ссылку подсовывают раз за кадр, дальше это одно чтение байта.
+ *  Нет состояния — нет и личных чисел, отвечает база таблицы. */
+export function existingAlifeFactionAttitudes(state: GameState): Int8Array | undefined {
+  return (state as AlifeHost).alife?.columns?.factionAttitude;
+}
+
+/** Фракция личности без сборки снимка: нужна на путях, где отношение к человеку
+ *  переносится на его фракцию. */
+export function alifeNpcFaction(state: GameState, alifeId: number): Faction | undefined {
+  const alife = (state as AlifeHost).alife;
+  const record = alife?.npcs[alifeId - 1];
+  return record ? recordFaction(alife!, record) : undefined;
+}
+
+/** Сдвинуть личное отношение человека к фракции. Возвращает новое число или
+ *  `undefined`, если такой личности нет. Помечает запись тронутой: накопленное
+ *  отклонение обязано пережить сохранение. */
+/** Колонка колец посещений, если A-Life жив. Кадровый читатель забирает её раз
+ *  за кадр, как и колонку отношений: горячий путь в состояние не лазит. */
+export function existingAlifeRoomVisits(state: unknown): Uint16Array | undefined {
+  return (state as AlifeHost).alife?.columns?.roomVisits;
+}
+
+export function addAlifeFactionAttitude(
+  state: GameState,
+  alifeId: number,
+  faction: Faction,
+  delta: number,
+): number | undefined {
+  const alife = (state as AlifeHost).alife;
+  const record = alife?.npcs[alifeId - 1];
+  if (!alife || !record || delta === 0 || faction < Faction.CITIZEN || faction > Faction.WILD) return undefined;
+  const offset = factionAttitudeOffset(record) + faction;
+  const previous = alife.columns.factionAttitude[offset];
+  const next = clampRelation(previous === RELATION_UNSET ? delta : previous + delta);
+  alife.columns.factionAttitude[offset] = next;
+  if (next !== previous) setRecordTouched(alife, record);
+  return next;
+}
+
 export function debugMarkAllAlifeNpcRecordsTouched(state: GameState): void {
   const alife = ensureAlifeState(state);
   for (let i = 0; i < alife.npcs.length; i++) {
@@ -1777,11 +1894,15 @@ export function recordAlifeNpcDeath(state: GameState, entity: Entity): void {
       alife.leaderboardVersion++;
     }
   }
-  // Личность узнаётся и по слоту A-Life, и по id сущности: авторский NPC,
-  // которому не досталось `alifeId`, всё равно остаётся тем самым человеком,
-  // и его смерть обязана быть фактом, а не молчанием.
-  if (isPlotNpc(entity) || (entity.type === EntityType.NPC && getPlotNpcPackageByNumericId(entity.id) !== undefined)) {
-    alife.deadPlotNpcIds.add(entity.id);
+  /* Личность узнаётся ТОЛЬКО по слоту. Вторая половина условия читала номер
+   * сущности — «на случай авторского NPC без `alifeId`», — и такого пути нет:
+   * все шесть дорог, которыми появляется авторский человек, слот проставляют.
+   * Зато обычная сущность с номером из слотового диапазона по нему проходила, и
+   * её смерть НАВСЕГДА записывала в сохранение чужую смерть: `deadPlotNpcIds`
+   * уезжает в сейв, вычищает личность из всех будущих генераций её этажа и
+   * переводит цели заданий на «соберите его дневник». Отменить это нечем. */
+  if (entity.alifeId !== undefined && getPlotNpcPackageByNumericId(entity.alifeId) !== undefined) {
+    alife.deadPlotNpcIds.add(entity.alifeId);
   }
 }
 
@@ -1815,17 +1936,23 @@ function attachRecordToFloor(alife: AlifeState, recordIndex: number, floorKey: s
   alife.floorIndex[floorKey] = bucket;
 }
 
+/**
+ * Высота этажа по его ключу.
+ *
+ * Отсюда берётся `z` личности при переезде, и до 2026-08-23 функция отвечала
+ * НЕВЕРНО: перебирала мёртвую шкалу 30/60/100/140/180/200 и всякому дизайн-этажу
+ * возвращала 100 — координату, которой в каноне нет вовсе. Настоящая высота
+ * лежит в самом маршруте (`DESIGN_FLOOR_ROUTES`) и в спецификации процедурного
+ * этажа; она и берётся.
+ */
 function resolvedFloorForAlifeKey(state: GameState, floorKey: string): number | undefined {
-  for (const floor of [30, 60, 100, 140, 180, 200]) {
-    if (floorKeyForDesign(String(floor)) === floorKey) return floor;
-  }
   const design = DESIGN_FLOOR_ROUTES.find(def => floorKeyForDesign(def.id) === floorKey);
-  if (design) return 100;
+  if (design) return design.z;
   if (floorKey.startsWith('procedural:')) {
     const routeId = floorKey.slice('procedural:'.length);
     const run = ensureFloorRunState(state);
     const spec = run.specs[routeId] ?? Object.values(run.specs).find(candidate => floorKeyForProcedural(candidate.key) === floorKey);
-    if (spec) return 100;
+    if (spec) return spec.z;
   }
   return undefined;
 }
@@ -2198,10 +2325,15 @@ export function assignPersistentAlifeNpcFromEntity(
   return true;
 }
 
+/**
+ * Привязать личность к её записи A-Life. `id` — СЛОТ, а не номер сущности:
+ * по умолчанию берётся `alifeId`, потому что номер сущности слотом больше не
+ * является. Дефолт `entity.id` был ловушкой для следующего вызывающего.
+ */
 export function bindReservedPlotNpcAlifeRecord(
   state: GameState,
   entity: Entity,
-  id = entity.id,
+  id = entity.alifeId,
   floorKey = currentAlifeFloorKey(state),
 ): boolean {
   if (entity.type !== EntityType.NPC || !id) return false;
@@ -2475,7 +2607,7 @@ function filterDeadPlotNpcs(alife: AlifeState, entities: Entity[]): void {
   let write = 0;
   for (let read = 0; read < entities.length; read++) {
     const entity = entities[read];
-    if (entity.type === EntityType.NPC && entity.id && alife.deadPlotNpcIds.has(entity.id)) continue;
+    if (entity.type === EntityType.NPC && entity.alifeId !== undefined && alife.deadPlotNpcIds.has(entity.alifeId)) continue;
     entities[write++] = entity;
   }
   entities.length = write;
@@ -2503,7 +2635,7 @@ function filterRelocatedPlotNpcs(alife: AlifeState, entities: Entity[], floorKey
   let write = 0;
   for (let read = 0; read < entities.length; read++) {
     const entity = entities[read];
-    if (entity.type === EntityType.NPC && entity.id && elsewhere.has(entity.id)) continue;
+    if (entity.type === EntityType.NPC && entity.alifeId !== undefined && elsewhere.has(entity.alifeId)) continue;
     entities[write++] = entity;
   }
   entities.length = write;
@@ -2534,6 +2666,65 @@ function ensureAlifeFloorCaps(alife: AlifeState): Record<string, number> {
   return alife.floorCap;
 }
 
+/**
+ * Раздатчик мест под личности.
+ *
+ * Шаблон несёт МЕСТО, и место принадлежит хозяину земли: генератор проставил
+ * шаблону фракцию той клетки, где он стоит. Личность встаёт на слот СВОЕЙ
+ * стороны и только потом — на любой свободный.
+ *
+ * Раньше пары складывались просто по порядку в массивах, и расстановка выходила
+ * изотропной при неоднородном мире: на жилом этаже на своей земле оказывались
+ * 11.7% диких, 11.1% ликвидаторов и ноль культистов. Для дикого это приговор —
+ * замер: 54 врага в восьми клетках вокруг погибшего и 75% смертности за
+ * полторы минуты, причём гибли они в бегстве, а не в драке. Зоны контроля на
+ * этаже есть; сюда они просто не доходили.
+ */
+interface AlifeTemplatePool {
+  take(faction: Faction | undefined): Entity | undefined;
+  taken(): number;
+}
+
+function createAlifeTemplatePool(world: World, templates: readonly Entity[]): AlifeTemplatePool {
+  const used = new Uint8Array(templates.length);
+  const byOwner = new Map<number, number[]>();
+  for (let i = templates.length - 1; i >= 0; i--) {
+    const template = templates[i];
+    /* Сторону слота решает ЗЕМЛЯ, а не поле `faction` шаблона: у большинства
+     * шаблонов его нет вовсе (2074 из 2175 на жилом), а хозяин клетки есть
+     * всегда — территория красится до расстановки. */
+    const owner = territoryOwnerAtIndex(world, world.idx(Math.floor(template.x), Math.floor(template.y)));
+    const list = byOwner.get(owner);
+    if (list) list.push(i);
+    else byOwner.set(owner, [i]);
+  }
+  let cursor = 0;
+  let count = 0;
+  return {
+    take(faction: Faction | undefined): Entity | undefined {
+      const own = faction === undefined ? undefined : byOwner.get(factionToTerritoryOwner(faction));
+      while (own !== undefined && own.length > 0) {
+        const index = own.pop()!;
+        if (used[index]) continue;
+        used[index] = 1;
+        count++;
+        return templates[index];
+      }
+      while (cursor < templates.length) {
+        const index = cursor++;
+        if (used[index]) continue;
+        used[index] = 1;
+        count++;
+        return templates[index];
+      }
+      return undefined;
+    },
+    taken(): number {
+      return count;
+    },
+  };
+}
+
 export function materializeAlifeFloorPopulation(
   state: GameState,
   world: World,
@@ -2554,20 +2745,27 @@ export function materializeAlifeFloorPopulation(
         floorCaps[floorKey] = templates.length;
       }
 
-      let slot = 0;
+      const pool = createAlifeTemplatePool(world, templates);
       for (const recordIndex of floorIds) {
-        if (slot >= templates.length) break;
+        if (pool.taken() >= templates.length) break;
         const record = alife.npcs[recordIndex];
         if (!record || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
-        const template = templates[slot];
-        slot++;
-        if (recordDead(alife, record)) continue;
+        if (recordDead(alife, record)) {
+          /* Мёртвый ЗАБИРАЕТ своё место и не отдаёт его никому: смерть —
+           * постоянный факт, и дыра остаётся дырой на его собственной земле.
+           * Пока слот доставался следующему живому, этаж молча дозаполнялся
+           * из пула — ровно тот рантайм-рефилл, который запрещён. */
+          pool.take(recordFaction(alife, record));
+          continue;
+        }
+        const template = pool.take(recordFaction(alife, record));
+        if (!template) break;
         const entity = materializeEntity(record, template, world, alife, nextId);
         if (!entity) continue;
         entities.push(entity);
       }
 
-      if (slot < templates.length) {
+      if (pool.taken() < templates.length) {
         const currentZ = floorKeyZ(floorKey) ?? state.currentZ ?? 100;
         const surplusFloors = Object.keys(alife.floorIndex)
           .filter(key => key !== floorKey && (alife.floorIndex[key]?.length ?? 0) > (floorCaps[key] ?? Math.min(alife.floorIndex[key]!.length, 30)))
@@ -2581,18 +2779,18 @@ export function materializeAlifeFloorPopulation(
           });
 
         for (const { key: candidateKey } of surplusFloors) {
-          if (slot >= templates.length) break;
+          if (pool.taken() >= templates.length) break;
           const candidateBucket = alife.floorIndex[candidateKey];
           if (!candidateBucket || candidateBucket.length === 0) continue;
           const cap = floorCaps[candidateKey] ?? Math.min(candidateBucket.length, 30);
           if (candidateBucket.length <= cap) continue;
 
-          for (let i = candidateBucket.length - 1; i >= cap && slot < templates.length; i--) {
+          for (let i = candidateBucket.length - 1; i >= cap && pool.taken() < templates.length; i--) {
             const recordIndex = candidateBucket[i];
             const record = alife.npcs[recordIndex];
             if (!record || recordDead(alife, record) || !recordCanMaterializeAsOrdinaryPopulation(record)) continue;
-            const template = templates[slot];
-            slot++;
+            const template = pool.take(recordFaction(alife, record));
+            if (!template) break;
             moveAlifeNpcRecord(state, record.id, floorKey, { z: currentZ });
             const entity = materializeEntity(record, template, world, alife, nextId);
             if (!entity) continue;
@@ -2738,7 +2936,72 @@ function applyOverride(alife: AlifeState, input: unknown): void {
     setRecordPlayerRelation(alife, record, input.playerRelation);
   }
   if (typeof input.karma === 'number' && Number.isFinite(input.karma)) setRecordKarma(alife, record, input.karma);
+  // Строго после фракции: её запись рождает ячейки заново, и отклонение
+  // ложится поверх уже правильной базы.
+  applyFactionAttitudeDrift(alife, record, input.factionAttitude);
+  // Строго после этажа: переезд стирает кольцо, и запись должна лечь поверх.
+  applyRoomVisits(alife, record, input.roomVisits);
   setRecordTouched(alife, record);
+}
+
+/* ── Накопленное отклонение отношения к фракциям ──────────────────
+ * Разреженно в обе стороны: пишется только ненулевое, читается только то, что
+ * записано. Диапазон отклонения — вся ширина шкалы в каждую сторону, дальше
+ * общий кламп всё равно вернёт число в байт. */
+function factionAttitudeDriftForSave(alife: AlifeState, record: AlifeNpcRecord): number[] | undefined {
+  const viewer = recordFaction(alife, record);
+  const base = factionAttitudeOffset(record);
+  const column = alife.columns.factionAttitude;
+  let out: number[] | undefined;
+  for (let faction = Faction.CITIZEN; faction <= Faction.WILD; faction++) {
+    const value = column[base + faction];
+    if (value === RELATION_UNSET) continue;
+    const drift = value - npcFactionAttitudeAtBirth(viewer, faction, alife.seed, record.id);
+    if (drift === 0) continue;
+    if (!out) out = new Array<number>(Faction.WILD + 1).fill(0);
+    out[faction] = drift;
+  }
+  return out;
+}
+
+/* ── Кольцо посещённых комнат ─────────────────────────────────────
+ * Разреженно: у большинства личностей его нет вовсе (они не были на активном
+ * этаже), и писать им пустые массивы значило бы раздуть сейв ни на что. */
+function roomVisitsForSave(alife: AlifeState, record: AlifeNpcRecord): number[] | undefined {
+  const base = recordColumnIndex(record) * ALIFE_ROOM_VISIT_MEMORY;
+  const column = alife.columns.roomVisits;
+  let out: number[] | undefined;
+  for (let i = 0; i < ALIFE_ROOM_VISIT_MEMORY; i++) {
+    const value = column[base + i];
+    if (value === ALIFE_ROOM_VISIT_EMPTY) continue;
+    if (!out) out = new Array<number>(ALIFE_ROOM_VISIT_MEMORY).fill(ALIFE_ROOM_VISIT_EMPTY);
+    out[i] = value;
+  }
+  return out;
+}
+
+function applyRoomVisits(alife: AlifeState, record: AlifeNpcRecord, input: unknown): void {
+  if (!Array.isArray(input)) return;
+  const base = recordColumnIndex(record) * ALIFE_ROOM_VISIT_MEMORY;
+  const column = alife.columns.roomVisits;
+  const limit = Math.min(input.length, ALIFE_ROOM_VISIT_MEMORY);
+  for (let i = 0; i < limit; i++) {
+    const value = clampInt(input[i], ALIFE_ROOM_VISIT_EMPTY, 0, ALIFE_ROOM_VISIT_EMPTY);
+    column[base + i] = value;
+  }
+}
+
+function applyFactionAttitudeDrift(alife: AlifeState, record: AlifeNpcRecord, input: unknown): void {
+  if (!Array.isArray(input)) return;
+  const base = factionAttitudeOffset(record);
+  const column = alife.columns.factionAttitude;
+  const viewer = recordFaction(alife, record);
+  const limit = Math.min(input.length, Faction.WILD + 1);
+  for (let faction = Faction.CITIZEN; faction < limit; faction++) {
+    const drift = clampInt(input[faction], 0, RELATION_MIN - RELATION_MAX, RELATION_MAX - RELATION_MIN);
+    if (drift === 0) continue;
+    column[base + faction] = clampRelation(npcFactionAttitudeAtBirth(viewer, faction, alife.seed, record.id) + drift);
+  }
 }
 
 function sanitizeRelationTargetFaction(input: unknown): Faction | undefined {
@@ -2824,7 +3087,22 @@ export function alifeForSave(state: GameState): AlifeSaveState {
       }
       continue;
     }
-    if (!recordTouched(alife, record) || overrides.length >= ALIFE_SAVE_OVERRIDE_CAP) continue;
+    if (overrides.length >= ALIFE_SAVE_OVERRIDE_CAP) continue;
+    if (!recordTouched(alife, record)) {
+      /* Нетронутая личность выводится из семени целиком — кроме прожитого.
+       * Кольцо посещённых комнат ниоткуда не выводится, поэтому такой человек
+       * получает КОМПАКТНЫЙ оверрайд: кто он и где был, без остальной анкеты. */
+      const walked = roomVisitsForSave(alife, record);
+      if (walked) {
+        overrides.push({
+          id: record.id,
+          floorKey: recordFloorKey(alife, record),
+          z: recordFloor(alife, record),
+          roomVisits: walked,
+        });
+      }
+      continue;
+    }
     const rpg = rpgFromRecord(alife, record);
     const hasCustomLoadout = recordCustomLoadout(alife, record);
     overrides.push({
@@ -2861,6 +3139,8 @@ export function alifeForSave(state: GameState): AlifeSaveState {
       monsterKills: recordMonsterKills(alife, record),
       playerRelation: recordPlayerRelation(alife, record),
       karma: recordKarma(alife, record),
+      factionAttitude: factionAttitudeDriftForSave(alife, record),
+      roomVisits: roomVisitsForSave(alife, record),
     });
   }
   return {

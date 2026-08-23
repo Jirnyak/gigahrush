@@ -1508,6 +1508,17 @@ interface MonsterEcologyContext {
   avoidPenalty?: number;
   /** Explicit pack behavior; when absent it is inferred from tags (swarm/crowd/pack → crowd, else loner). */
   pack?: MonsterPackShape;
+  /**
+   * Чем вид кормится СРЕДИ МОНСТРОВ: теги жертвы, которые он ловит.
+   *
+   * Одно поле держит всю пищевую цепь. До него «кто кого ест» существовало
+   * ровно одним вызовом — куском мяса на полу, — а монстр монстра не ел
+   * никогда, и хищник от падальщика отличался только строкой тега. Пустое поле
+   * значит «других тварей не трогает», и это по-прежнему поведение по умолчанию:
+   * расширять маску скана всем подряд — платить кадром за то, чего у большинства
+   * видов не бывает.
+   */
+  preyTags?: readonly string[];
 }
 
 const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext>> = {
@@ -1534,6 +1545,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     avoidTags: ['open', 'bright', 'light', 'lamp'],
     anchorPenalty: 0.3,
     avoidPenalty: 0.5,
+    pack: { mode: 'roamer', size: [3, 6], spread: 6 },
   },
   [MonsterKind.SBORKA]: {
     tags: ['corridor', 'storage', 'swarm', 'samosbor', 'meat', 'food', 'fog', 'crowd'],
@@ -1549,6 +1561,10 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     avoidTags: ['documents', 'office'],
     anchorPenalty: 0.3,
     avoidPenalty: 0.55,
+    /* Размер и разброс — те же, что выводились из тега 'pack'; объявлен только
+     * режим: собаки не сидят там, где родились, они обходят этаж стаей. */
+    pack: { mode: 'roamer', size: [3, 6], spread: 6 },
+    preyTags: ['swarm'],
   },
   [MonsterKind.POMOYNY_ROY]: {
     tags: ['residential', 'kitchen', 'storage', 'market', 'food', 'garbage', 'trash', 'swarm', 'crowd'],
@@ -1564,6 +1580,8 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
   [MonsterKind.TVAR]: {
     tags: ['residential', 'corridor', 'wall', 'predator', 'meat', 'smog', 'infection'],
     anchorTags: ['residential', 'corridor', 'wall', 'predator', 'meat'],
+    pack: { mode: 'roamer', size: [1, 2], spread: 3 },
+    preyTags: ['swarm'],
   },
   [MonsterKind.PANELNIK]: {
     tags: ['residential', 'panel', 'wall', 'corridor', 'common', 'concrete', 'service'],
@@ -1575,6 +1593,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     anchorTags: ['kitchen', 'storage', 'food', 'meat', 'corpse', 'feast', 'altar'],
     anchorPenalty: 0.32,
     pack: { mode: 'territorial', size: [2, 4], spread: 4 },
+    preyTags: ['swarm'],
   },
   [MonsterKind.POLZUN]: {
     tags: ['water', 'wet', 'bathroom', 'storage', 'industrial', 'conveyor', 'movement', 'fog', 'low'],
@@ -1623,6 +1642,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     anchorPenalty: 0.14,
     avoidPenalty: 0.22,
     pack: { mode: 'roamer', size: [2, 4], spread: 10 },
+    preyTags: ['swarm'],
   },
   [MonsterKind.BLOOD_PLANT]: {
     tags: ['plant', 'red_mold', 'mushroom', 'cult', 'contraband', 'storage', 'false_safe_block', 'meat', 'roots'],
@@ -1847,6 +1867,7 @@ const MONSTER_ECOLOGY_CONTEXT: Partial<Record<MonsterKind, MonsterEcologyContext
     avoidPenalty: 0.2,
   },
   [MonsterKind.OLGOY]: {
+    preyTags: ['swarm'],
     tags: ['water', 'wet', 'pipes', 'collectors', 'meat', 'corpse', 'food', 'mushroom', 'samosbor', 'hell', 'predator'],
     anchorTags: ['water', 'wet', 'pipes', 'collectors', 'meat', 'corpse', 'mushroom', 'samosbor'],
     avoidTags: ['dry'],
@@ -1920,6 +1941,19 @@ export function isCarnivoreMonster(kind: MonsterKind | undefined): boolean {
   const tags = MONSTER_ECOLOGY_CONTEXT[kind]?.tags;
   if (!tags) return false;
   return tags.includes('meat') || tags.includes('corpse') || tags.includes('predator') || tags.includes('food');
+}
+
+/** Ловит ли вид `hunter` вид `victim`. Пищевая цепь целиком лежит в `preyTags`. */
+export function monsterPreysOn(hunter: MonsterKind | undefined, victim: MonsterKind | undefined): boolean {
+  if (hunter === undefined || victim === undefined || hunter === victim) return false;
+  const preyTags = MONSTER_ECOLOGY_CONTEXT[hunter]?.preyTags;
+  if (!preyTags) return false;
+  return tagHits(preyTags, MONSTER_ECOLOGY_CONTEXT[victim]?.tags) > 0;
+}
+
+/** Охотится ли вид на других тварей вообще: маска скана расширяется только таким. */
+export function monsterHuntsBeasts(kind: MonsterKind | undefined): boolean {
+  return kind !== undefined && MONSTER_ECOLOGY_CONTEXT[kind]?.preyTags !== undefined;
 }
 
 // Shared cached shapes — resolvers return these references (no per-call allocation, so

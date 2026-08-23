@@ -106,6 +106,7 @@ import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { newEntityIdCursor } from '../entity_ids';
 
 
 export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
@@ -447,7 +448,7 @@ export function generateCommunalRingDesignFloor(seed = RING_SEED): FloorGenerati
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const containerId = { v: 1 };
 
     const ring = carveRing(world);

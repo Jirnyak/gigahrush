@@ -9,6 +9,7 @@ import {
   type Entity,
   type GameState,
   type Room,
+  RoomType,
   type WorldContainer,
   type WorldEventPrivacy,
   type WorldEventSeverity,
@@ -31,6 +32,7 @@ import { ITEMS } from '../data/catalog';
 import { CONTAINER_DEFS } from '../data/container_defs';
 import { getStack } from '../data/items';
 import { resourceForItem } from '../data/resources';
+import { roomIdsOfType } from '../world/room_index';
 import { ensureRoomContainers } from './containers';
 import { addItemMovedCount } from './inventory';
 import { isPlayerEntity } from './player_actor';
@@ -777,11 +779,40 @@ function publishProductionOutput(
   });
 }
 
+/* Типы комнат, которые вообще способен занять хоть один завод. Проход шёл по
+ * ВСЕМ комнатам этажа раз в секунду и на каждой звал `factoryForRoom` —
+ * `toLowerCase` плюс два поиска по списку заводов. Коридоров и жилья там
+ * подавляющее большинство, и ни один из них заводом быть не может. */
+const FACTORY_ROOM_TYPES: readonly RoomType[] = [...new Set(FACTORIES.flatMap(f => f.roomTypes))];
+const factoryRoomIdScratch: number[] = [];
+const factoryRoomScratch: Room[] = [];
+
+function compareRoomIdsAsc(a: number, b: number): number {
+  return a - b;
+}
+
+/** Комнаты, которые может занять завод, В ПОРЯДКЕ `world.rooms`: порядок решает,
+ *  кто успеет занять места производства до потолка, и меняться он не должен. */
+function factoryCandidateRooms(world: World): readonly Room[] {
+  factoryRoomIdScratch.length = 0;
+  for (const type of FACTORY_ROOM_TYPES) {
+    const ids = roomIdsOfType(world, type);
+    for (let i = 0; i < ids.length; i++) factoryRoomIdScratch.push(ids[i]);
+  }
+  factoryRoomIdScratch.sort(compareRoomIdsAsc);
+  factoryRoomScratch.length = 0;
+  for (let i = 0; i < factoryRoomIdScratch.length; i++) {
+    const room = world.rooms[factoryRoomIdScratch[i]];
+    if (room) factoryRoomScratch.push(room);
+  }
+  return factoryRoomScratch;
+}
+
 export function ensureProductionRooms(state: GameState, world: World): number {
   ensureRoomContainers(world, state.currentZ);
   pruneProductionForWorld(state, world);
   let added = 0;
-  for (const room of world.rooms) {
+  for (const room of factoryCandidateRooms(world)) {
     if (!room) continue;
     const factory = factoryForRoom(room.type, room.name);
     if (!factory) continue;

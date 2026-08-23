@@ -1,207 +1,91 @@
 import { crittersEnabled } from '../systems/ui_orchestrator';
 import { World } from '../core/world';
-import { Cell } from '../core/types';
+import { Cell, Feature } from '../core/types';
 import { playRoachCrunch, playSoundAt } from '../systems/audio';
-import { CRITTER_DEFS, getRandomCritterDefId } from '../data/critters';
-import { mathRng } from '../core/rand';
+import {
+  CRITTER_ACTIVE_SPECIES_CAP,
+  CRITTER_SPECIES_STRIDE,
+  packCritterSpecies,
+} from '../data/critters';
+import { designFloorFauna } from '../data/design_floor_profiles';
 
 /**
- * Returns whether critters (and small particles like flies/roaches) should be rendered.
- * Automatically disables them on mobile devices (maxTouchPoints > 0) or if the UI toggle is disabled.
- * A runtime FPS check can optionally be passed to disable them below 30 FPS.
+ * Сторона блока клеток вокруг игрока, из которого шейдер набирает живность.
+ * Мобильный блок уже: там дешевле пиксели, а не клетки, но и смотреть в даль
+ * на телефоне некуда.
+ */
+const CRITTER_BLOCK_DESKTOP = 24;
+const CRITTER_BLOCK_MOBILE = 14;
+/** Слотов на клетку: верхняя граница плотности, реальную решает притяжение. */
+const CRITTER_SLOTS_PER_CELL = 3;
+
+function isTouchDevice(): boolean {
+  return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+}
+
+/**
+ * Рисуем ли живность. Раньше здесь стоял запрет для тач-устройств: он платил за
+ * CPU-симуляцию пула, которой больше нет. Остался ручной тумблер и сторож по FPS.
  */
 export function getCritterRenderEnabled(fps?: number): boolean {
-  if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) {
-    return false;
-  }
-  if (fps !== undefined && fps < 30) {
-    return false;
-  }
+  if (fps !== undefined && fps < 30) return false;
   return crittersEnabled();
 }
 
-export interface Critter {
-  active: boolean;
-  defId: string;
-  x: number;
-  y: number;
-  z: number;
-  targetX: number;
-  targetY: number;
-  speed: number;
-  phase: number;
-  heading: number; // current wander heading (radians), rotated per retarget for local zigzag
+export function critterBlockSize(): number {
+  return isTouchDevice() ? CRITTER_BLOCK_MOBILE : CRITTER_BLOCK_DESKTOP;
 }
 
-export const MAX_CRITTERS = 256;
-export const CRITTERS_POOL: Critter[] = Array.from({ length: MAX_CRITTERS }, () => ({
-  active: false, defId: 'roach', x: 0, y: 0, z: 0, targetX: 0, targetY: 0, speed: 1, phase: 0, heading: 0
-}));
-
-export function updateCritters(world: World, dt: number, playerX: number, playerY: number) {
-  if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) return;
-
-  let activeCount = 0;
-  for (let i = 0; i < MAX_CRITTERS; i++) {
-    const c = CRITTERS_POOL[i];
-    if (c.active) activeCount++;
-  }
-
-  if (activeCount < MAX_CRITTERS && mathRng() < 0.1) {
-    // Attempt to spawn
-    const angle = mathRng() * Math.PI * 2;
-    const dist = 5 + mathRng() * 10; // spawn between 5 and 15 cells away
-    const sx = Math.round(playerX + Math.cos(angle) * dist);
-    const sy = Math.round(playerY + Math.sin(angle) * dist);
-    const cell = world.get(sx, sy);
-    
-    if (cell === Cell.FLOOR) {
-      const defId = getRandomCritterDefId();
-      const def = CRITTER_DEFS[defId];
-      
-      const spawnCount = def.spawnBatch[0] + Math.floor(mathRng() * (def.spawnBatch[1] - def.spawnBatch[0] + 1));
-      let spawned = 0;
-      
-      for (let i = 0; i < MAX_CRITTERS && spawned < spawnCount; i++) {
-        if (!CRITTERS_POOL[i].active) {
-          const nc = CRITTERS_POOL[i];
-          nc.active = true;
-          nc.defId = defId;
-          
-          // Spread swarms slightly, precise center for single entities
-          const offsetX = spawnCount > 1 ? (mathRng() - 0.5) * 1.5 : 0;
-          const offsetY = spawnCount > 1 ? (mathRng() - 0.5) * 1.5 : 0;
-          
-          nc.x = sx + offsetX;
-          nc.y = sy + offsetY;
-          nc.z = def.baseZ + (mathRng() - 0.5) * def.zVariance;
-          nc.targetX = nc.x;
-          nc.targetY = nc.y;
-          nc.speed = def.speed;
-          nc.phase = mathRng() * 100;
-          nc.heading = mathRng() * Math.PI * 2;
-          spawned++;
-        }
-      }
-    }
-  }
-
-  for (let i = 0; i < MAX_CRITTERS; i++) {
-    const c = CRITTERS_POOL[i];
-    if (!c.active) continue;
-
-    const def = CRITTER_DEFS[c.defId];
-    if (!def) {
-      c.active = false;
-      continue;
-    }
-
-    // Despawn if too far
-    const dxP = c.x - playerX;
-    const dyP = c.y - playerY;
-    const distP = Math.sqrt(dxP * dxP + dyP * dyP);
-    if (distP > 25) {
-      c.active = false;
-      continue;
-    }
-
-    if (def.crunchable && distP < 0.5) {
-      c.active = false;
-      playSoundAt(playRoachCrunch, c.x, c.y);
-      continue;
-    }
-
-    // Update Z for flying critters
-    if (def.zVariance > 0) {
-      c.phase += dt * 2.0; // Phase speed
-      c.z = def.baseZ + Math.sin(c.phase) * def.zVariance;
-    }
-
-    const dx = c.targetX - c.x;
-    const dy = c.targetY - c.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < 0.1) {
-      pickNewCritterTarget(world, c, playerX, playerY, def, distP);
-    } else {
-      c.x += (dx / dist) * c.speed * dt;
-      c.y += (dy / dist) * c.speed * dt;
-    }
-  }
+export function critterSlotsPerCell(): number {
+  return CRITTER_SLOTS_PER_CELL;
 }
 
-function getAdjacentFloors(world: World, x: number, y: number) {
-  const rx = Math.round(x);
-  const ry = Math.round(y);
-  const floors = [];
+const speciesTable = new Float32Array(CRITTER_ACTIVE_SPECIES_CAP * CRITTER_SPECIES_STRIDE);
+let packedForFloor: string | undefined;
+let packedCount = 0;
+
+/**
+ * Таблица активных видов для текущего этажа. Пересобирается только при смене
+ * этажа: набор живности — свойство этажа, а не кадра.
+ */
+export function critterSpeciesTable(designFloorId: string | undefined): {
+  data: Float32Array;
+  count: number;
+} {
+  if (designFloorId !== packedForFloor) {
+    packedCount = packCritterSpecies(designFloorFauna(designFloorId), speciesTable);
+    packedForFloor = designFloorId;
+  }
+  return { data: speciesTable, count: packedCount };
+}
+
+/**
+ * Хруст под ногой. Особей в памяти нет, поэтому раздавить конкретного таракана
+ * нельзя — но клетка, где шейдер их плодит, определяется теми же полями мира,
+ * и на неё можно наступить. Проверяется одна клетка на шаг игрока.
+ */
+let lastCrunchCell = -1;
+
+export function updateCritterCrunch(world: World, px: number, py: number): void {
+  const idx = world.idx(Math.floor(px), Math.floor(py));
+  if (idx === lastCrunchCell) return;
+  lastCrunchCell = idx;
+  if (!getCritterRenderEnabled()) return;
+  if (world.cells[idx] !== Cell.FLOOR) return;
+  // Тараканье место: съестное или сырость рядом, и достаточно темно.
+  if (world.light[idx] > 0.55) return;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = rx + dx;
-      const ny = ry + dy;
-      if (world.get(nx, ny) === Cell.FLOOR) {
-        floors.push({ x: nx, y: ny });
+      const f = world.features[world.idx(Math.floor(px) + dx, Math.floor(py) + dy)];
+      if (f === Feature.STOVE || f === Feature.SINK || f === Feature.TOILET || f === Feature.SHELF) {
+        playSoundAt(playRoachCrunch, px, py);
+        return;
       }
     }
   }
-  return floors;
 }
 
-export function pickNewCritterTarget(world: World, c: Critter, playerX: number, playerY: number, def: any, distToPlayer: number) {
-  if (mathRng() > 0.05) return;
-
-  if (def.behavior === 'flee_player') {
-    if (distToPlayer < def.fleeDist) {
-      c.speed = def.fleeSpeed;
-      const dx = c.x - playerX;
-      const dy = c.y - playerY;
-      c.targetX = c.x + (dx > 0 ? 1 : -1);
-      c.targetY = c.y + (dy > 0 ? 1 : -1);
-    } else {
-      c.speed = def.speed;
-      // Local zigzag wander: rotate the heading by a random +/- turn each retarget
-      // so rats dart in erratic broken lines instead of hugging walls.
-      c.heading += (mathRng() - 0.5) * Math.PI * 1.2;
-      const step = 1 + mathRng();
-      const tx = c.x + Math.cos(c.heading) * step;
-      const ty = c.y + Math.sin(c.heading) * step;
-      if (world.get(Math.round(tx), Math.round(ty)) === Cell.FLOOR) {
-        c.targetX = tx;
-        c.targetY = ty;
-      } else {
-        // Blocked ahead: bounce to a random open neighbor and reface toward it.
-        const candidates = getAdjacentFloors(world, c.x, c.y);
-        if (candidates.length > 0) {
-          const rC = candidates[Math.floor(mathRng() * candidates.length)];
-          c.targetX = rC.x;
-          c.targetY = rC.y;
-          c.heading = Math.atan2(rC.y - c.y, rC.x - c.x);
-        }
-      }
-    }
-  } else if (def.behavior === 'wander_pause') {
-    if (distToPlayer < def.fleeDist && mathRng() < 0.8) {
-      // Roaches tend to freeze when approached
-      c.speed = 0;
-    } else {
-      c.speed = def.speed;
-      const candidates = getAdjacentFloors(world, c.x, c.y);
-      if (candidates.length > 0) {
-        const rC = candidates[Math.floor(mathRng() * candidates.length)];
-        c.targetX = rC.x;
-        c.targetY = rC.y;
-      }
-    }
-  } else if (def.behavior === 'swarm') {
-    c.speed = def.speed;
-    // Erratic, tight orbit
-    const tx = c.x + (mathRng() - 0.5) * 2.0;
-    const ty = c.y + (mathRng() - 0.5) * 2.0;
-    const cell = world.get(Math.round(tx), Math.round(ty));
-    // Flies don't care too much about precise floors, but let's keep them from flying completely through walls
-    if (cell === Cell.FLOOR) {
-      c.targetX = tx;
-      c.targetY = ty;
-    }
-  }
+/** Смена этажа: следующий шаг снова может хрустнуть. */
+export function resetCritterCrunch(): void {
+  lastCrunchCell = -1;
 }

@@ -10,6 +10,7 @@ import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
 import { registerContentInteractionHook } from '../../systems/content_hooks';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, SPECTRAL_CHASOVNYA_ROUTE_ID, SPECTRAL_CHASOVNYA_Z, SPECTRAL_CHASOVNYA_ROOM_DEF_IDS, NextId, SpectralChasovnyaGeneration, NPC_ID, MIRON_DEF } from "./meta";
 import { spectralStateByWorld, expandSpectralRouteGeometry, buildRooms, dressRooms, tuneZones, buildSpectralState, reinforceSpectralChasovnyaAuthoredHqTerritory, registerSpectralRouteCues, findBellNodeForLook, ringSpectralChasovnyaBell } from "./geometry";
 import { placeContent, alignSpectralChasovnyaAmbientNpcTerritory } from "./npcs";
@@ -57,7 +58,7 @@ registerContentInteractionHook({
 export function generateSpectralChasovnyaDesignFloor(): SpectralChasovnyaGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 10000 };
+  const nextId: NextId = newEntityIdCursor();
 
   world.wallTex.fill(Tex.GUT);
   world.floorTex.fill(Tex.F_GUT);

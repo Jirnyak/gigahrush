@@ -16,11 +16,17 @@ import { primeNpcAlifeState, setNpcContext, updateNPC } from './npc_fsm';
 import { setNpcBarkLogContext } from './barks';
 import { actorHasTacticProfile, runActorTactic } from './tactics';
 import { expireMonsterBaits } from '../monster_bait';
+import { depositPendingNoise } from '../noise';
 import { ensureEntityIndex } from '../entity_index';
 import { hearingRadiusMetersForActor } from '../hearing';
-import { applyActorSeparation, unstuckActorFromBlockers } from '../movement_collision';
+import { applyActorSeparation, depositActorTrail, unstuckActorFromBlockers } from '../movement_collision';
+import {
+  depositBeasts, depositPeople, FIELD_DEPOSIT_STRIDE_MASK, FIELD_PRESENCE_DEPOSIT,
+} from '../fields';
+import { actorBrainOwnsRoute, setActorCoreContext, tickActorBrain } from '../actor/brain';
 import { isPlayerEntity } from '../player_actor';
 import { setFactionsSocialContext } from '../factions';
+import { setRoomVisitContext } from '../room_visits';
 import { designFloorAtZ } from '../../data/design_floors';
 import { isPlotNpc } from '../../data/plot';
 import { updateMukhozhukLarvae } from './mukhozhuk';
@@ -90,6 +96,68 @@ let unstuckCursor = 0;
 // каждого актёра каждый кадр. unstuckActorFromBlockers его только читает.
 const UNSTUCK_ACTOR_OPTIONS = { radius: 0, rescueFromSolid: true } as const;
 
+/**
+ * Точка входа нового ядра актора (`systems/actor`).
+ *
+ * Ядро идёт ПЕРЕД прежним слоем и берёт актора себе, только если у него есть
+ * что делать: тяга выше порога и живой склон поля под ногами. Иначе оно честно
+ * возвращает false, и ход достаётся тому, кто вёл актора до сих пор.
+ *
+ * Границы захвата ровно две, и обе — про то, чтобы не отменять чужой начатый
+ * ход, а не про вид актора:
+ *
+ *  1. Есть боевая цель — бой ведёт свой слой. В самом ядре бой станет обычным
+ *     драйвом, но забирать его у работающего кода до того рано.
+ *  2. Актёра держит сцена. Признак ЯВНЫЙ — `cinematicState` с постом, — а не
+ *     догадка по наличию маршрута. Это НЕ выключение симуляции: AI актёра
+ *     работает, он отвечает на удар и живёт по общим правилам; ядро лишь не
+ *     уводит его с поста, пока у него есть роль в сцене. Ветку
+ *     `role === CINEMATIC_ACTOR → continue` возвращать нельзя и не возвращаем:
+ *     она делала вторую, несимулируемую породу людей.
+ *
+ *  3. Уже идёт по ЧУЖОМУ маршруту. Это граница не корректности, а экономии, и
+ *     она отдельная от пункта 2 намеренно: сцену стережёт явный признак, а
+ *     здесь — просто «не переделывай чужой начатый ход». Мерено: без неё
+ *     ядро вытесняет чужие маршруты, трёпка пути падает (худший перекладчик
+ *     2.74 → 1.80/с), но кадр дорожает на 8.6%, застревание насмерть растёт
+ *     8.8 → 10.6%, а кучность 34.3 → 39.8. Бюджет берётся удешевлением
+ *     мышления, а не доплатой за него, поэтому вытеснение не взято.
+ *
+ * Своего маршрута ядра границей не считаем: стратегический драйв ведёт цель за
+ * горизонтом именно путём.
+ *
+ * Один цикл на всех: человек и тварь заходят сюда одной и той же строкой, и
+ * разница между ними живёт в весах драйвов, а не здесь.
+ */
+function tryActorCore(world: World, e: Entity, dt: number, time: number): boolean {
+  const ai = e.ai;
+  if (!ai) return false;
+  if (e.cinematicState !== undefined) return false;
+  if (ai.path.length > 0 && !actorBrainOwnsRoute(e)) return false;
+  return tickActorBrain(world, e, dt, time);
+}
+
+/**
+ * Присутствие и след одного актора.
+ *
+ * Страйд обязателен: депозит на каждом кадре насыщает байт до 255 за долю
+ * секунды, и канал перестаёт отличать «людно» от «кто-то прошёл». Фаза берётся
+ * из id, поэтому акторы разведены по кадрам и нагрузка ровная.
+ *
+ * Зовётся и для игрока — по закону «игрок — просто NPC» он такой же человек в
+ * поле. Отдельным вызовом, а не в цикле: строка `ai` у игрока есть и в индекс
+ * думающих он попадает, но цикл сравнивает с ним каждого и решения за него не
+ * принимает, поэтому депозит игрока и живёт снаружи — ровно один на кадр.
+ */
+function depositActorPresence(world: World, e: Entity, frame: number): void {
+  if (((frame + e.id) & FIELD_DEPOSIT_STRIDE_MASK) !== 0) return;
+  if (e.type === EntityType.MONSTER) depositBeasts(world, e.x, e.y, FIELD_PRESENCE_DEPOSIT);
+  else depositPeople(world, e.x, e.y, FIELD_PRESENCE_DEPOSIT);
+  // Идущие через общий шаг метят след сами, на входе в клетку. Здесь — те, кого
+  // двигает не он: игрок из main.ts и сетевые пиры.
+  depositActorTrail(world, e);
+}
+
 function isBossActor(e: Entity): boolean {
   if (e.isFogBoss) return true;
   switch (e.monsterKind) {
@@ -126,8 +194,13 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setPathContext(msgs, time, samosborActive);
   setCombatContext(msgs, time);
   setNpcContext(msgs, time, currentZ);
+  setActorCoreContext(currentZ);
   setFactionsSocialContext(state);
+  setRoomVisitContext(state);
   expireMonsterBaits(state, time);
+  // Свежие записи шума ложатся в канал NOISE: список остаётся метаданными
+  // (кто, чем, какие ярлыки), а «насколько здесь громко» живёт в поле.
+  if (state) depositPendingNoise(world, state);
   // Личинки мухожука зреют сами, даже если их мать давно убита.
   updateMukhozhukLarvae(world, entities, nextId, dt, time, msgs, state);
 
@@ -146,6 +219,9 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
     dist2: (x1, y1, x2, y2) => world.dist2(x1, y1, x2, y2),
   });
   aiFrame = (aiFrame + 1) & 0x3fffffff;
+  // Игрока цикл ниже пропускает по имени (решения за него принимает ввод), но в
+  // полях восприятия он обычный человек, и присутствие за него пишется здесь.
+  if (player?.alive) depositActorPresence(world, player, aiFrame);
   resetAiStats(aiFrame, entityIndex.ai.length, entityIndex.projectiles.length);
 
   let currentMsgActor: Entity | undefined;
@@ -176,6 +252,12 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
     for (const e of entityIndex.ai) {
       aiIdx++;
       if (!e || !e.alive || !e.ai) continue;
+      /* Присутствие пишут ВСЕ живые акторы, включая тех, кого цикл ниже
+       * пропускает: сетевых пиров и актёров сцены. Поле отвечает на вопрос
+       * «кто здесь есть», а не «кого обсчитывает AI». Это не новый проход по
+       * коллекции — цикл уже идёт. Игрок обслужен до цикла: он в него не
+       * попадает вовсе. */
+      if (e !== player) depositActorPresence(world, e, aiFrame);
       if (isPlayerEntity(e)) {
         aiStats.skipped++;
         continue;
@@ -218,6 +300,13 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
         aiStats.updatedNpc++;
         trySimulateNpcAmmoRestock(e, dt);
         if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, state)) continue;
+        /* Ядро идёт ПЕРЕД боем, а не после него, и это не перестановка строк.
+         * Пока бой стоял первым, он забирал всякого, у кого есть цель, и решение
+         * «драться или бежать» ядру не доставалось никогда — разорвать контакт
+         * было физически нечем. Теперь драка это обычный драйв яруса `actor`:
+         * победила — ядро объявляет цель и уступает ход слою (возвращает false),
+         * победил страх — ядро уводит, сняв цель и боевую память. */
+        if (tryActorCore(world, e, dt, time)) continue;
         if (!tryFactionCombat(world, entities, e, dt, time, msgs, nextId, state, {
           visualProjectiles: true,
           simple: true,
@@ -230,6 +319,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       if (e.type === EntityType.MONSTER) {
         aiStats.updatedMonster++;
         if (actorHasTacticProfile(e) && runActorTactic(world, e, dt, time, msgs, state)) continue;
+        if (tryActorCore(world, e, dt, time)) continue;
         updateMonster(world, entities, e, dt, time, msgs, playerId, nextId, state);
       }
     }

@@ -695,7 +695,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
       occupation: e.occupation,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.id,
+      plotNpcId: e.alifeId,
     });
     const key = npcVisualTextureKey(visualId, {
       seed: h,
@@ -725,7 +725,7 @@ function npcEntityVisualId(e: Entity): string | undefined {
     occupation: e.occupation,
     isFemale: e.isFemale,
     age: e.age,
-    plotNpcId: e.id,
+    plotNpcId: e.alifeId,
   });
 }
 
@@ -752,7 +752,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       occupation: e.occupation,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.id,
+      plotNpcId: e.alifeId,
     });
     const visualSeed = npcVisualTextureKey(visualId, {
       seed: deriveEntitySpriteSeed(e),
@@ -760,7 +760,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       faction: e.faction,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.id,
+      plotNpcId: e.alifeId,
       sprite: e.sprite,
     })
       ? deriveEntitySpriteSeed(e)
@@ -771,7 +771,7 @@ export function generateProceduralEntitySprite(e: Entity): Uint32Array | null {
       faction: e.faction,
       isFemale: e.isFemale,
       age: e.age,
-      plotNpcId: e.id,
+      plotNpcId: e.alifeId,
       sprite: e.sprite,
     });
     if (special) return special;

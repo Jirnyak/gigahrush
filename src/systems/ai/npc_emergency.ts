@@ -18,6 +18,7 @@ import { factionToTerritoryOwner } from '../../data/factions';
 import { RELATION_FRIENDLY_THRESHOLD } from '../../data/relations';
 import { getFactionRelation, isHostile } from '../factions';
 import { territoryOwnerAt, territoryOwnerAtIndex } from '../territory';
+import { roomTargetCell } from './pathfinding';
 
 export const NPC_EMERGENCY_DEFAULT_CANDIDATE_CAP = 12;
 export const NPC_EMERGENCY_MAX_CANDIDATE_CAP = 24;
@@ -314,7 +315,7 @@ export function scoreNpcEmergencyShelterCandidate(
 ): NpcEmergencyShelterCandidate | null {
   if (!isCandidateRoom(room, sources)) return null;
 
-  const target = resolveRoomTarget(world, room);
+  const target = resolveRoomTarget(world, npc, room);
   const dist2 = world.dist2(npc.x, npc.y, target.x + 0.5, target.y + 0.5);
   const dist = Math.sqrt(dist2);
   const door = roomDoorProfile(world, room, currentRoomId === room.id);
@@ -517,7 +518,14 @@ function isShelterLikeRoom(room: Room): boolean {
   return roomSupports(room.type, 'shelter');
 }
 
-function resolveRoomTarget(world: World, room: Room): { x: number; y: number; passable: boolean } {
+function resolveRoomTarget(world: World, npc: Entity, room: Room): { x: number; y: number; passable: boolean } {
+  /* Своя точка на каждого вместо общего центра. В убежище бежит сразу много
+   * людей, и одна клетка на комнату складывала их всех в неё: центр комнаты —
+   * такой же аттрактор, как центр толпы. Запасной перебор ниже остаётся общим
+   * на комнату — он и нужен-то только там, где своя точка непроходима. */
+  const own = roomTargetCell(world, npc, room);
+  if (roomContainsPassable(world, room, own.x, own.y)) return { x: own.x, y: own.y, passable: true };
+
   const centerX = world.wrap(room.x + Math.floor(room.w / 2));
   const centerY = world.wrap(room.y + Math.floor(room.h / 2));
   if (roomContainsPassable(world, room, centerX, centerY)) return { x: centerX, y: centerY, passable: true };

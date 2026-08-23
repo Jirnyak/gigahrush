@@ -12,6 +12,8 @@ export const DEF: MonsterDef = {
   dmg: 11,
   attackRate: 1.05,
   sprite: 0,
+  detect: 30,
+  scanSec: 0.62,
   aiFlags: ['lightFollower'],
   counterplay: 'Свет ведет Лишенного к вам: бросайте фонарь или свечу как приманку, выключайте луч перед поворотом и не держите контакт.',
   lootHint: 'пепельная пыль, черный след, редкий странный сгусток',

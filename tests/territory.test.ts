@@ -8,12 +8,14 @@ import { World } from '../src/core/world';
 import { factionToTerritoryOwner } from '../src/data/factions';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import {
+  declareTerritoryPush,
   dominantTerritoryOwnerInRoom,
   initializeCellTerritory,
   paintRoomTerritory,
   paintTerritoryDisc,
   setTerritoryOwnerAt,
   syncZoneMetadataFromTerritory,
+  territoryCaptureTarget,
   territoryOwnerAt,
   territoryRoomOwner,
   updateTerritoryCapture,
@@ -156,6 +158,12 @@ test('zone metadata sync follows dominant cell territory and stays derived', () 
   assert.equal(territoryOwnerAt(world, 64, 64), ZoneFaction.SCIENTIST);
 });
 
+function sweep(world: World, squad: Entity[], state: ReturnType<typeof makeGameState>): number {
+  // Захватывает только тот, у кого цель — захват: без объявления такт пуст.
+  for (const e of squad) declareTerritoryPush(e);
+  return updateTerritoryCapture(world, squad, state, 2.1);
+}
+
 test('territory capture needs local faction pressure, not one idle traveler', () => {
   const world = singleZoneWorld(ZoneFaction.CULTIST);
   world.factionControl.fill(ZoneFaction.CULTIST);
@@ -166,14 +174,14 @@ test('territory capture needs local faction pressure, not one idle traveler', ()
   });
 
   const one = [npc(1, Faction.LIQUIDATOR, 64.5, 64.5)];
-  assert.equal(updateTerritoryCapture(world, one, state, 2.1), 0);
+  assert.equal(sweep(world, one, state), 0);
   assert.equal(territoryOwnerAt(world, 64, 64), ZoneFaction.CULTIST);
 
   const squad = [
     npc(1, Faction.LIQUIDATOR, 64.5, 64.5),
     npc(2, Faction.LIQUIDATOR, 65.5, 64.5),
   ];
-  const changed = updateTerritoryCapture(world, squad, state, 2.1);
+  const changed = sweep(world, squad, state);
 
   assert.ok(changed > 0);
   assert.equal(territoryOwnerAt(world, 64, 64), ZoneFaction.LIQUIDATOR);
@@ -195,7 +203,7 @@ test('territory capture does not overwrite samosbor-owned cells', () => {
     npc(1, Faction.LIQUIDATOR, 64.5, 64.5),
     npc(2, Faction.LIQUIDATOR, 65.5, 64.5),
   ];
-  const changed = updateTerritoryCapture(world, squad, state, 2.1);
+  const changed = sweep(world, squad, state);
 
   assert.equal(changed > 0, true);
   assert.equal(territoryOwnerAt(world, 64, 64), ZoneFaction.SAMOSBOR);

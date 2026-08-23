@@ -21,9 +21,12 @@ import {
 export const DEMOS_SOCIAL_PLAYER_SLOT = 0;
 export const DEMOS_SOCIAL_NPC_SLOT_START = 1;
 export const DEMOS_PLAYER_SOCIAL_SLOT = DEMOS_SOCIAL_PLAYER_SLOT;
-export const DEMOS_SOCIAL_NPC_SLOTS = 9;
+/* Строка человека — степень двойки: ячейка 0 отдана игроку, 1..7 — живым
+ * людям. Ровно столько же байт (восемь) занимает его отношение к фракциям в
+ * колонках A-Life, и обе строки индексируются одним и тем же `alifeId`. */
+export const DEMOS_SOCIAL_NPC_SLOTS = 7;
 export const DEMOS_SOCIAL_INITIAL_NPC_SLOTS = 4;
-export const DEMOS_SOCIAL_PUBLIC_SLOTS = 10;
+export const DEMOS_SOCIAL_PUBLIC_SLOTS = 8;
 export const DEMOS_SOCIAL_SLOTS = DEMOS_SOCIAL_PUBLIC_SLOTS;
 export const DEMOS_SOCIAL_CANDIDATE_TRIES = 24;
 export const DEMOS_SOCIAL_OVERRIDE_CAP = 8192;

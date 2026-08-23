@@ -42,6 +42,7 @@ import {
 import {
   DarkMetroLayout,
   setFeature} from './geometry';
+import { syncNextEntityId } from '../content_manifest_utils';
 
 export function nextDarkMetroContainerId(world: World): number {
   let next = 1;
@@ -77,7 +78,7 @@ export function addDarkMetroTransitCache(world: World, room: Room, x: number, y:
 }
 
 export function nextTrainEntityId(entities: Entity[]): { v: number } {
-  return { v: entities.reduce((mx, e) => Math.max(mx, e.id), 0) + 1 };
+  return { v: syncNextEntityId(entities, 0) };
 }
 
 export function addPlatformCells(world: World, out: number[], x0: number, x1: number, y: number): void {

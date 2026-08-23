@@ -13,6 +13,7 @@ import { publishEvent } from '../../systems/events';
 import { placeLifts, finalizeExpandedFloor } from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { hashSeed, seededRandom } from '../../core/rand';
+import { newEntityIdCursor } from '../entity_ids';
 
 export function createBankFloorState(): BankFloorState {
   return {
@@ -88,7 +89,7 @@ export function publishBankFloorEvent(
 export function generateBankFloorDesignFloor(): BankFloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const bankState = createBankFloorState();
 
   for (let i = 0; i < W * W; i++) {

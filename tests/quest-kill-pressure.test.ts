@@ -29,6 +29,8 @@ function floorWorld(): World {
 function major(): Entity {
   return {
     id: getPlotNpcNumericId('major_grom') ?? 10,
+    // Слот личности — отдельное поле: задание адресует дающего им.
+    alifeId: getPlotNpcNumericId('major_grom') ?? 10,
     type: EntityType.NPC,
     x: 20.5,
     y: 20.5,

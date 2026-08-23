@@ -102,6 +102,7 @@ import {
   type RoofWeatherResult,
   type RoofLosExposureSummary,
 } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 export interface RoofGeneration extends FloorGeneration {
   routeId: typeof ROOF_ROUTE_ID;
@@ -472,7 +473,7 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   world.globalCeilingTier = 14; // Force fixed high ceiling (tier 14 -> height 8) to act as sky over the abyss
 
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   let nextContainerId = CONTAINER_ID_BASE;
 
   world.wallTex.fill(Tex.CONCRETE);

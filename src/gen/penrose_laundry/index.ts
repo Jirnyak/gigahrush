@@ -13,6 +13,7 @@ import {
 import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, PENROSE_LAUNDRY_ROUTE_ID, PENROSE_LAUNDRY_Z, PENROSE_LAUNDRY_ROOM_DEF_IDS, PenroseLaundryTileRecord, PenroseLaundryState, PenroseLaundryGeneration, C, LOCK_KEY_ID, TILE_SPECS, SYMBOL_CHAIN_IDS, DEFLATION_IDS, NPC_IDS, MARFA_DEF, IGOR_DEF, LIDIA_DEF, TONYA_DEF } from "./meta";
 import { penroseLaundryStates, buildPenroseFullFloor, stampLaundryRoom, connectTilePath, placeLifts, dressTileRoom, markSymbolCells, tunePenroseZones, dropPenroseSupplies, registerPenroseRouteCues, roomById, countCells, countFogCells } from "./geometry";
 import { placePenroseContainers, spawnPenroseThreats, spawnPlotNpc } from "./npcs";
@@ -87,7 +88,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.tonya, TONYA_DEF, [{
 export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
 
   for (let i = 0; i < W * W; i++) {
     world.wallTex[i] = Tex.PANEL;

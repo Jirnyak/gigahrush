@@ -40,6 +40,7 @@ import {
   currentAlifeFloorKey,
   captureAlifeFloorState,
 } from './alife';
+import { ensureEntityIndex } from './entity_index';
 import { canSpawnEntityType } from './entity_limits';
 import { publishEvent } from './events';
 import { cleanFloorKey } from './floor_keys';
@@ -1079,7 +1080,7 @@ function canStartDeparture(state: GameState, entity: Entity, reason: AlifeMigrat
   if (
     ('npcPackageId' in entity && (entity as any).npcPackageId !== undefined) ||
     (typeof entity.persistentNpcId === 'string' && entity.persistentNpcId !== 'player' && !entity.persistentNpcId.startsWith('alife:')) ||
-    (entity.id !== undefined && getPlotNpcStringId(entity.id) !== undefined && entity.alifeId === undefined && !entity.persistentNpcId?.startsWith('alife:'))
+    (entity.alifeId !== undefined && getPlotNpcStringId(entity.alifeId) !== undefined && entity.alifeId === undefined && !entity.persistentNpcId?.startsWith('alife:'))
   ) {
     return false;
   }
@@ -1167,6 +1168,11 @@ export function updateActiveAlifeDepartures(
   let completed = 0;
   const deferred: ActiveAlifeDeparture[] = [];
   const rotated: ActiveAlifeDeparture[] = [];
+  // Уезжающий берётся из индекса, а не перебором массива на каждого: индекс
+  // держит только живых, а мёртвый и так отсеивался следующей строкой. Место в
+  // массиве считается один раз и только на самом отъезде — он редок, перебор
+  // же шёл КАЖДЫЙ кадр на каждого из восьми.
+  const byId = ensureEntityIndex(entities).byId;
 
   for (const departure of mobility.activeDepartures) {
     if (processed >= MAX_ACTIVE_DEPARTURE_UPDATES) {
@@ -1174,8 +1180,7 @@ export function updateActiveAlifeDepartures(
       continue;
     }
     processed++;
-    const entityIndex = entities.findIndex(entity => entity.id === departure.entityId);
-    const entity = entityIndex >= 0 ? entities[entityIndex] : undefined;
+    const entity = byId.get(departure.entityId);
     if (!entity || !entity.alive || entity.alifeId !== departure.alifeId) continue;
 
     if (!assignActiveDepartureGoal(world, entity, departure.anchorX, departure.anchorY)) {
@@ -1193,7 +1198,8 @@ export function updateActiveAlifeDepartures(
       rotated.push(departure);
       continue;
     }
-    entities.splice(entityIndex, 1);
+    const entityIndex = entities.indexOf(entity);
+    if (entityIndex >= 0) entities.splice(entityIndex, 1);
     completed++;
     publishActiveMigrationEvent(state, 'departure', departure, entity, {
       floorKey: currentAlifeFloorKey(state),

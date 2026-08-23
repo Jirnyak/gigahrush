@@ -20,6 +20,7 @@ import {
   spawnMaintenanceFactionNpcSquads,
 } from './territory';
 import { rng, irand, pick } from '../../core/rand';
+import { firstRuntimeEntityId } from '../entity_ids';
 
 /* ── Coarse grid parameters ───────────────────────────────────── */
 const CELL = 6;                   // world-tiles per maze cell (walls between = 1-wide passage)
@@ -135,7 +136,7 @@ function addEllerLadderFamily(mazeOpen: Uint8Array): void {
 export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  let nextId = 1;
+  let nextId = firstRuntimeEntityId();
   let nextRoomId = 0;
 
   // Default wall texture = pipe

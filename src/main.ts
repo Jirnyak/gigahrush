@@ -2,6 +2,7 @@
 import './index.css';
 import './content';                 // реестр контента + генератор этажей для самосбора
 import './systems/demos_runtime';
+import './systems/npc_feud';        // распорядитель личных разборок (floor_activity)
 import { registerPwaServiceWorker } from './pwa';
 import {
   setOnlineMessageHandler,
@@ -87,10 +88,10 @@ import {
 import { World, replaceWorldFromGeneration } from './core/world';
 import { safeParseJson } from './core/json';
 import { rng, hashSeed, randSeed, xorshift32, irand, mathRng } from './core/rand';
-import { canActorOccupy, unstuckActorFromBlockers } from './systems/movement_collision';
+import { canActorOccupy, stepActorBy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './world/procedural_screens';
-import { updateCritters, getCritterRenderEnabled } from './render/critters';
+import { updateCritterCrunch } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
@@ -134,6 +135,7 @@ import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
 import { markNavigationCellsDirty, prewarmNavigationTreeAsync, prewarmBehaviorFlowFields } from './systems/ai/pathfinding';
+import { prewarmPerceptionFields } from './systems/fields';
 import { createWorkerRegionNextSolver } from './systems/ai/nav_worker_pool';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
@@ -247,6 +249,7 @@ import {
   notifyNpcKill,
   npcHasImportantQuestAction,
   npcQuestActionHint,
+  questAddressesBySlot,
   resetNonStoryQuestsForNewPlayer,
   toggleActiveQuest,
   updateKillQuestPressure,
@@ -330,7 +333,7 @@ import {
   publishWeaponNoise,
   resetNoiseRecords,
 } from './systems/noise';
-import { notifyActorDamaged, resetCombatStimulus } from './systems/combat_stimulus';
+import { damageActor, setActorDeathHandler, notifyActorDamaged, resetCombatStimulus } from './systems/combat_stimulus';
 import { enforceItemDropFifoCap, entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
 import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
 import { resetNpcMemoryStore } from './systems/npc_memory';
@@ -342,7 +345,7 @@ import { UV_SPOTLIGHT_FX_SECONDS, UV_SPOTLIGHT_ID, useUvSpotlight, uvSpotlightRe
 import { CHALK_ITEM_ID, drawEquippedChalkPixel } from './systems/chalk';
 import { isRidingRailTrain, updateRailTrains } from './systems/rail_trains';
 import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
-import { updateArenaDuel } from './systems/arena';
+import { updateArenaDuel, resetArenaDuel } from './systems/arena';
 import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hladon';
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
 import { updateRouteCues, resetRouteCueHud } from './systems/route_cues';
@@ -489,7 +492,7 @@ import { ensureProductionRooms, setProductionState, tickProduction } from './sys
 import {
   castInstantSpell, updatePsiEffects, psiAoeExplosion,
   isNoClipActive, resetPsiState, absorbPsiShieldDamage,
-  endPsiPossession,
+  endPsiPossession, setPsiDamageSink,
 } from './systems/psi';
 import { getCurrentPlayerId, isNativePlayerBodyEntity, isPlayerEntity, setCurrentPlayerEntity } from './systems/player_actor';
 import { fireDeletionBeam } from './systems/weapon_beams';
@@ -847,7 +850,7 @@ function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats):
   if (ws.isRanged) {
     spawnPeerPsiProjectile(actor, psiId, ws);
   } else {
-    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, (e) => handleKill(e, true, 0, 0, 1, actor));
+    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, (e) => handleKill(e, true, 0, 0, 1, actor), state);
     if (psiResult.beamLen) {
       state.beamFx = 0.35;
       state.beamAngle = actor.angle;
@@ -2512,10 +2515,21 @@ function playerDemographicSex(source: Partial<Entity>): CharacterSex {
   return playerSex;
 }
 
+/* Тело игрока — такой же актор, и строка состояния у него такая же.
+ *
+ * Раньше `ai` у игрока не было вовсе, и это делало его невыразимым для общих
+ * механик: он не попадал в индекс думающих, а всё, что пишет актору (стаггер,
+ * пси, ловушки), молча обходило его стороной — асимметрия, которой по закону
+ * «игрок — просто NPC» быть не должно. Строка есть, но ЦИКЛ РЕШЕНИЙ для него не
+ * крутится: `updateAI` пропускает игрока явной проверкой, драйвы за него не
+ * думают, его драйв — ввод. Списки, куда игрок попадать не должен (спасение при
+ * самосборе, слоты реакций фракционного события), сторожат его именем, а не
+ * отсутствием строки: «нет `ai`» больше не означает «это игрок». */
 function playerAlifeFields(source: Partial<Entity> = {}): PlayerAlife {
   const age = clampCharacterAge(source.age, playerAge);
   const sex = playerDemographicSex(source);
   return {
+    ai: source.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     persistentNpcId: 'player',
     age,
     sex,
@@ -3464,7 +3478,12 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       pitch: 0,
       alive: true,
       speed: HUMANOID_BASE_MOVE_SPEED,
-      sprite: 0,
+      /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
+       * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
+       * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
+       * раза выше стоящего рядом пира. */
+      sprite: Occupation.TRAVELER,
+      spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
       needs: savedNeeds,
       hp: savedHp,
       maxHp: savedMaxHp,
@@ -4007,7 +4026,12 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
     pitch: 0,
     alive: true,
     speed: HUMANOID_BASE_MOVE_SPEED,
-    sprite: 0,
+    /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
+     * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
+     * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
+     * раза выше стоящего рядом пира. */
+    sprite: Occupation.TRAVELER,
+    spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
     needs: freshNeeds(),
     hp: 100, maxHp: 100,
     money: 100,
@@ -4031,6 +4055,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   resetBarkState();
   resetMetroCooldown();
   clearActiveBet();
+  resetArenaDuel();
   resetCombatStimulus();
   resetMonsterBaits();
   resetRouteCueHud();
@@ -4482,10 +4507,18 @@ function movePlayer(dt: number): void {
   if (isCoopSeated(actor.id)) return;
   floorTeleportCd = Math.max(0, floorTeleportCd - dt);
 
+  /* Боль сбивает УДАР, а не ноги — ровно то же правило, что у всех остальных
+   * (`ai/combat.ts`, «Боль сбивает УДАР»). Здесь стояла ПОЛНАЯ ЗАМОРОЗКА ввода:
+   * оглушённый игрок переставал шагать вовсе, хотя у NPC и тварей ту же боль
+   * давно перевели на подъём отката атаки — оглушённый видит, отступает, идёт,
+   * но не бьёт. Асимметрия была зеркальной той, что запрещает закон: штраф за
+   * попадание платил только игрок. Убыль тика здесь, потому что цикл AI игрока
+   * не крутит; строка `ai` зеркалится, чтобы читающие её (наездники, тактики)
+   * видели то же число, а не вечное оглушение. */
   if ((actor.staggerTimer ?? 0) > 0) {
     actor.staggerTimer = Math.max(0, (actor.staggerTimer ?? 0) - dt);
   }
-  const isStaggered = (actor.staggerTimer ?? 0) > 0;
+  if (actor.ai) actor.ai.staggerTimer = actor.staggerTimer ?? 0;
 
   // Mouse look
   if (input.mouse.locked) {
@@ -4520,7 +4553,7 @@ function movePlayer(dt: number): void {
   // Movement
   let mx = 0;
   let my = 0;
-  if (!isStaggered) {
+  {
     const cos = Math.cos(actor.angle);
     const sin = Math.sin(actor.angle);
     const fwdAxis = Math.max(-1, Math.min(1, (input.fwd ? 1 : 0) - (input.back ? 1 : 0) + input.touch.moveY + inputFrame.axes.moveY));
@@ -4559,14 +4592,14 @@ function movePlayer(dt: number): void {
     const canClip = isNoClipActive();
     const beforeX = actor.x;
     const beforeY = actor.y;
-    // X/Y are checked separately so fine blockers still allow sliding.
-    const nx = actor.x + mx;
-    if (canClip || canActorOccupy(world, nx, actor.y, r)) {
-      actor.x = ((nx % W) + W) % W;
-    }
-    const ny = actor.y + my;
-    if (canClip || canActorOccupy(world, actor.x, ny, r)) {
-      actor.y = ((ny % W) + W) % W;
+    if (canClip) {
+      actor.x = (((actor.x + mx) % W) + W) % W;
+      actor.y = (((actor.y + my) % W) + W) % W;
+    } else {
+      // Same step primitive every other actor uses: isotropic 2D move with an
+      // axis-slide fallback, and a SCENT deposit when the actor enters a new
+      // cell. The player is an ordinary actor; the camera is only rendering.
+      stepActorBy(world, actor, mx, my, r);
     }
 
     if (sprintMod > 1 && (actor.x !== beforeX || actor.y !== beforeY)) consumePlayerSprintWater(actor, dt, sprintMod);
@@ -4723,6 +4756,7 @@ function castPlayerPsi(psiId: string, ws: WeaponStats): boolean {
       ws.psiEffect ?? '', player, entities, world,
       state.msgs, state.time,
       (e) => handleKill(e, true),
+      state,
     );
     if (psiResult.beamLen) {
       state.beamFx = 0.35;
@@ -4778,6 +4812,9 @@ function handlePlayerInteract(): boolean {
 function handlePlayerAttack(_dt: number): void {
   const wantsAttack = input.attack || input.mouseAttack;
   player.attackCd = Math.max(0, (player.attackCd ?? 0) - _dt);
+  // Пейн-стан игрока — тот же, что у любого актора: пока боль не отпустила,
+  // откат атаки не может быть короче её. Ноги при этом свободны.
+  player.attackCd = Math.max(player.attackCd, player.staggerTimer ?? 0);
 
   const weaponId = equippedCombatItemId(player);
   const ws = getWeaponStats(player, weaponId);
@@ -5032,6 +5069,7 @@ function tickPeerLocalCombatResources(dt: number): { fire: boolean; reload: bool
   let fire = false;
   let reload = false;
   player.attackCd = Math.max(0, (player.attackCd ?? 0) - dt);
+  player.attackCd = Math.max(player.attackCd, player.staggerTimer ?? 0);
 
   const weaponId = equippedCombatItemId(player);
   const ws = getWeaponStats(player, weaponId);
@@ -5257,8 +5295,9 @@ function isActiveKillQuestTarget(e: Entity): boolean {
       if (q.targetMonsterKind === e.monsterKind) return true;
       if (q.targetMonsterKind === undefined && q.targetNpcId === undefined && q.targetNpcId === undefined) return true;
     } else if (e.type === EntityType.NPC) {
-      if (q.targetNpcId === e.id) return true;
-      if (q.targetNpcId && e.id === q.targetNpcId) return true;
+      // Цель авторского задания — слот личности, процедурного — номер сущности.
+      if (q.targetNpcId !== undefined
+        && (questAddressesBySlot(q) ? e.alifeId === q.targetNpcId : e.id === q.targetNpcId)) return true;
     }
   }
   return false;
@@ -5360,11 +5399,25 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     }
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(killerActor, xpForNpcKill(e.rpg?.level ?? 1), killerActor === player ? state.msgs : [], state.time);
-    if (e.id && killerActor === player) notifyNpcKill(e.id, state);
+    // Счёт убийств ведётся по СЛОТУ: `targetNpcId` и `failOnNpcDeathId` авторских
+    // заданий — слоты, а номер сущности с ними совпадал лишь по совпадению.
+    if (e.alifeId !== undefined && killerActor === player) notifyNpcKill(e.alifeId, state);
   }
   const contentDeath = runContentEntityDeathHooks({ world, entities, player, state, nextEntityId, killed: e, killerIsPlayer });
   if (contentDeath.worldChanged) updateWorldData(world);
 }
+
+/* Смерть от ЛЮБОГО урона доходит до этой обработки. Обработка принадлежит точке
+ * сборки — ей нужны мир, игрок, состояние и реестр контента, — поэтому единая
+ * дверь урона получает её инъекцией, как самосбор получает генератор этажа.
+ * Раньше пути, не знавшие про `handleKill`, убивали молча: луч удаления и
+ * выжигание мозга не роняли ни лута, ни крови, и социальный слой смерти не видел. */
+setPsiDamageSink(damageActor);
+setActorDeathHandler((victim, killer, gore, vx, vy) => {
+  // Пир — тоже игрок: его убийства засчитываются так же, как хозяйские.
+  const playerSide = killer !== undefined && (killer === player || killer.peerSlot !== undefined);
+  handleKill(victim, playerSide, vx, vy, gore, killer);
+});
 
 const FLAME_COLLATERAL_ITEMS = new Set([
   'bread', 'canned', 'rawmeat', 'mushroom_mass', 'infected_mushroom',
@@ -5627,7 +5680,7 @@ function updateProjectiles(dt: number): void {
         playProjectileImpactCue(p, wallHit.x, wallHit.y);
       }
       if (p.aoeRadius && pt !== ProjType.BFG)
-        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)));
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)), state, projectileActor(p));
       p.alive = false;
       continue;
     }
@@ -5653,7 +5706,7 @@ function updateProjectiles(dt: number): void {
         playProjectileImpactCue(p, floorX, floorY);
       }
       if (p.aoeRadius)
-        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)));
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)), state, projectileActor(p));
       p.alive = false;
       continue;
     }
@@ -5746,7 +5799,7 @@ function processProjectileEntityCollision(
     p.x = hitX;
     p.y = hitY;
     p.spriteZ = hitZ;
-    psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, isPlayerOwnedProjectile(p), 0, 0, 1, projectileActor(p)));
+    psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, isPlayerOwnedProjectile(p), 0, 0, 1, projectileActor(p)), state, projectileActor(p));
   }
   // Flame projectiles pierce through (don't die on hit)
   if (pt !== ProjType.FLAME && pt !== ProjType.GRENADE) {
@@ -6260,7 +6313,12 @@ function switchFloor(
       pitch: 0,
       alive: true,
       speed: HUMANOID_BASE_MOVE_SPEED,
-      sprite: 0,
+      /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
+       * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
+       * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
+       * раза выше стоящего рядом пира. */
+      sprite: Occupation.TRAVELER,
+      spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
       needs: savedNeeds,
       hp: savedHp,
       maxHp: savedMaxHp,
@@ -6870,6 +6928,7 @@ function loadGame(): boolean {
       resetBarkState();
       resetMetroCooldown();
       clearActiveBet();
+      resetArenaDuel();
       resetCombatStimulus();
       resetMonsterBaits();
       const loaded = loadFloorForTarget(floor, generatedRunEntry);
@@ -6900,7 +6959,12 @@ function loadGame(): boolean {
         pitch: 0,
         alive: true,
         speed: HUMANOID_BASE_MOVE_SPEED,
-        sprite: 0,
+        /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
+         * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
+         * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
+         * раза выше стоящего рядом пира. */
+        sprite: Occupation.TRAVELER,
+        spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
         needs: normalizedNeeds,
         hp: clampNumber(dataPlayer.hp, normalizedMaxHp, 1, normalizedMaxHp),
         maxHp: normalizedMaxHp,
@@ -7983,7 +8047,7 @@ function activateNpcQuest(npc: Entity | undefined): void {
   for (let i = 0; i < state.quests.length; i++) {
     const q = state.quests[i];
     if (!q.done) {
-      if (q.giverId === npc.id) {
+      if (questAddressesBySlot(q) ? npc.alifeId === q.giverId : npc.id === q.giverId) {
         npcQIdx = activeCount;
         break;
       }
@@ -9714,6 +9778,10 @@ function hudPerfDebugSnapshot(fps: number) {
     renderMs: lastRenderSceneMs,
     hudMs: lastHudDrawMs,
     liveAi: entityStats.aiCount,
+    // Стоимость самого индекса — кандидат номер один на тихую регрессию: она
+    // растёт по числу дропов на этаже, а не по числу акторов, и без строки в
+    // отладке её замечают только по общей просадке fps.
+    indexMs: entityStats.rebuildMs,
     visibleSprites: renderStats.visibleSprites,
     drawnSprites: renderStats.drawnSprites,
     visibleEntityQueryResults: renderStats.visibleEntityQueryResults,
@@ -9866,6 +9934,9 @@ function gameLoop(now: number): void {
           // loading screen is still up, so the first NPC route on this floor
           // doesn't hitch. Desktop-only; no-op on mobile and mid-samosbor.
           prewarmBehaviorFlowFields(world);
+          // Same reasoning for the static openness channel (~30ms full-floor
+          // raster): pay it behind the loading screen, not on the first frame.
+          prewarmPerceptionFields(world);
           done();
         }, done);
       } else {
@@ -10301,9 +10372,7 @@ function gameLoop(now: number): void {
       updateBloodTrails(world, entities, bloodDt);
     }
     updateParticles(world, dt);
-    if (getCritterRenderEnabled()) {
-      updateCritters(world, dt, player.x, player.y);
-    }
+    updateCritterCrunch(world, player.x, player.y);
     updateDangerField(world, dt);
     lastBloodUpdateMs = performance.now() - bloodStart;
 
@@ -10592,7 +10661,7 @@ function gameLoop(now: number): void {
   const renderSceneStart = performance.now();
   renderSceneGL(world, textures, sprites, entities,
     cameraView,
-    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen, screenInterference, visualDetailProfile, visualGeometryProfile, visualSurfaceProfile, lightingQualityIndex(), currentFps);
+    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen, screenInterference, visualDetailProfile, visualGeometryProfile, visualSurfaceProfile, lightingQualityIndex(), currentFps, floorRunEntry.designFloorId);
   lastRenderSceneMs = performance.now() - renderSceneStart;
 
   // Draw HUD on 2D overlay canvas

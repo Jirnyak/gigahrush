@@ -10,6 +10,7 @@ import { genLog } from '../log';
 import { buildLayout, decorateRooms, applyZones, registerFloor69RouteCues } from './geometry';
 import { seedContainers, spawnFloor69Npcs, applyFloor69OwnershipVisibilityHeatmap, applyFloor69AmbientSpriteTemplates, seedLooseItems } from './npcs';
 import { DESIGN_FLOOR_ID, DESIGN_FLOOR_Z, FLOOR_69_DEFAULT_SEED, createFloor69State, floor69DebugLines, type Floor69Generation } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 export * from './meta';
 export * from './geometry';
@@ -22,7 +23,7 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const state = createFloor69State();
 
     const rooms = buildLayout(world);

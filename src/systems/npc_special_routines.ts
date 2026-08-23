@@ -13,7 +13,7 @@ export interface NpcSpecialRoutineTick {
 
 function routineForEntity(e: Entity): NpcSpecialRoutineDef | undefined {
   if (e.id === undefined) return undefined;
-  return getNpcSpecialRoutine(getNpcPackageByPlotNpcId(e.id)?.runtime?.specialRoutineId);
+  return getNpcSpecialRoutine(getNpcPackageByPlotNpcId(e.alifeId!)?.runtime?.specialRoutineId);
 }
 
 export function tickNpcSpecialRoutine(e: Entity, clock: GameClock): NpcSpecialRoutineTick {

@@ -15,6 +15,7 @@ import {
 import { World } from '../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../data/runtime_topology';
 import { Spr } from '../entities/sprite_index';
+import { ensureEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 
@@ -73,6 +74,19 @@ function trainStopped(train: RailTrain, state: GameState): boolean {
 function entityById(entities: Entity[], id: number): Entity | undefined {
   for (const e of entities) if (e.id === id) return e;
   return undefined;
+}
+
+/**
+ * Сегмент поезда по id.
+ *
+ * `byId` даётся только на кадровом пути: там индекс уже собран для ЭТОГО
+ * массива, и вагон находится за одно обращение вместо перебора всех сущностей
+ * этажа на КАЖДЫЙ вагон КАЖДОГО поезда. Индекс держит только живых, поэтому
+ * промах уходит в перебор — так уцелела и страховка `entity.alive = true`,
+ * которой позиционирование поднимает потерянный вагон.
+ */
+function trainSegmentById(entities: Entity[], byId: ReadonlyMap<number, Entity> | undefined, id: number): Entity | undefined {
+  return byId?.get(id) ?? entityById(entities, id);
 }
 
 function cellCenter(ci: number): { x: number; y: number } {
@@ -153,9 +167,16 @@ function publishRailEvent(
   });
 }
 
-function positionTrainEntities(world: World, entities: Entity[], track: RailTrainTrack, train: RailTrain, trainIndex: number): void {
+function positionTrainEntities(
+  world: World,
+  entities: Entity[],
+  track: RailTrainTrack,
+  train: RailTrain,
+  trainIndex: number,
+  byId?: ReadonlyMap<number, Entity>,
+): void {
   for (let i = 0; i < train.entityIds.length; i++) {
-    const entity = entityById(entities, train.entityIds[i]);
+    const entity = trainSegmentById(entities, byId, train.entityIds[i]);
     if (!entity) continue;
     const ci = trainCellAt(track, train, i);
     const p = cellCenter(ci);
@@ -582,12 +603,13 @@ export function tryUseRailTrain(
 export function updateRailTrains(world: World, entities: Entity[], player: Entity, state: GameState, dt: number): void {
   if (world.railTrains.length === 0) return;
   world.railTrainCells.clear();
+  const byId = ensureEntityIndex(entities).byId;
   for (let i = 0; i < world.railTrains.length; i++) {
     const train = world.railTrains[i];
     const track = trackById(world, train.trackId);
     if (!track || track.cells.length === 0) continue;
     updateTrainMotion(world, track, train, state, player, dt);
-    positionTrainEntities(world, entities, track, train, i);
+    positionTrainEntities(world, entities, track, train, i, byId);
     if (train.passengerId === player.id) bindPassenger(player, track, train);
   }
   updateTrainCollisions(world, entities, player, state);

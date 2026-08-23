@@ -28,6 +28,7 @@ import {
   sampleNaturalPopulationCells,
   samplePlacementFieldCells,
 } from '../population_placement';
+import { syncNextEntityId } from '../content_manifest_utils';
 
 function rand32(seed: number, serial: number, salt: number): number {
   let x = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(serial ^ 0xc2b2ae35, 0x27d4eb2d) + salt;
@@ -59,11 +60,10 @@ function isAmbientNpcTemplate(entity: Entity): boolean {
     entity.questId === -1;
 }
 
-function nextEntityId(entities: readonly Entity[]): number {
-  let next = 1;
-  for (const entity of entities) next = Math.max(next, entity.id + 1);
-  return next;
-}
+/* Своей копии счётчика тут больше нет. Она начинала с единицы, и на этаже, чей
+ * генератор почти никого не поставил, общее население садилось прямо в диапазон
+ * сюжетных слотов — у наружного микрорайона так уезжали все четыреста семьдесят
+ * шесть тварей. Порог живёт в `syncNextEntityId`, один на всю генерацию. */
 
 function makeAmbientNpcTemplate(
   id: number,
@@ -145,7 +145,7 @@ export type DesignFloorPopulationRoute = { id: string; z: number; danger?: numbe
  * them when `npcTarget` is 0.
  */
 export function populateDesignFloorAmbientNpcs(generation: Omit<FloorGeneration, 'spawnX' | 'spawnY'>, route: DesignFloorPopulationRoute): void {
-  const nextId = nextEntityId(generation.entities);
+  const nextId = syncNextEntityId(generation.entities, 0);
   spawnAmbientNpcTemplates(generation, route, nextId);
 }
 
@@ -278,6 +278,6 @@ function spawnDesignMonsterPacks(generation: Omit<FloorGeneration, 'spawnX' | 's
  * whose profile has `monsterTarget <= 0`.
  */
 export function populateDesignFloorMonsters(generation: Omit<FloorGeneration, 'spawnX' | 'spawnY'>, route: DesignFloorPopulationRoute): void {
-  const nextId = nextEntityId(generation.entities);
+  const nextId = syncNextEntityId(generation.entities, 0);
   spawnDesignMonsterPacks(generation, route, nextId);
 }

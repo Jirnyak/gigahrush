@@ -118,12 +118,14 @@ test('Demos social graph is deterministic for the same A-Life seed and state', (
   assert.deepEqual(getDemosNpcOnlySocialEdges(sameSeed, 7), first);
 });
 
-test('Demos social constants expose player plus nine NPC public slots', () => {
+test('Demos social constants expose player plus seven NPC public slots', () => {
   assert.equal(DEMOS_SOCIAL_PLAYER_SLOT, 0);
   assert.equal(DEMOS_SOCIAL_NPC_SLOT_START, 1);
-  assert.equal(DEMOS_SOCIAL_NPC_SLOTS, 9);
+  assert.equal(DEMOS_SOCIAL_NPC_SLOTS, 7);
   assert.equal(DEMOS_SOCIAL_INITIAL_NPC_SLOTS, 4);
-  assert.equal(DEMOS_SOCIAL_PUBLIC_SLOTS, 10);
+  // Строка человека — степень двойки, столько же байт занимает его отношение
+  // к фракциям в колонках A-Life.
+  assert.equal(DEMOS_SOCIAL_PUBLIC_SLOTS, 8);
 });
 
 test('Demos social graph changes at least some edges for a different seed', () => {
@@ -280,7 +282,12 @@ test('Demos social graph applies optional authored plot relations', () => {
   assert.equal((yakovToOlga?.flags ?? 0) & DEMOS_EDGE_FRIEND, DEMOS_EDGE_FRIEND);
   assert.equal(barniToOlga?.role, DemosSocialRoleId.PARTNER);
   assert.equal(vankaToYakov?.role, DemosSocialRoleId.ACQUAINTANCE);
+  // Роль выводится из числа, а не объявляется. Пока порог дружбы стоял на 32,
+  // авторское «знакомый» с числом 34 читалось как «друг» — ребро переворачивал
+  // порог, а не автор. Порог вернулся к зеркалу вражды (64), и объявленное снова
+  // совпадает с прочитанным. Род связи (работа) во флагах в любом случае.
   assert.equal(gromToYakov?.role, DemosSocialRoleId.ACQUAINTANCE);
+  assert.equal((gromToYakov?.flags ?? 0) & DEMOS_EDGE_WORK, DEMOS_EDGE_WORK);
   assert.equal(rotenbergovToNil?.role, DemosSocialRoleId.ENEMY);
   assert.equal((rotenbergovToNil?.flags ?? 0) & DEMOS_EDGE_ENEMY, DEMOS_EDGE_ENEMY);
   assert.equal((rotenbergovToNil?.flags ?? 0) & DEMOS_EDGE_DEBT, DEMOS_EDGE_DEBT);

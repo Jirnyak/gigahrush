@@ -34,7 +34,7 @@ function shouldSpawnScriptedArrival(def: ScriptedArrivalDef, state: GameState, e
   if (state.currentZ !== def.currentZ) return false;
     if (!state.quests.some(q => q.plotStepIndex === stepIndex && q.done && !q.failed)) return false;
   if (state.quests.some(q => q.plotStepIndex !== undefined && q.plotStepIndex > stepIndex)) return false;
-  if (entities.some(e => e.type === EntityType.NPC && e.alive && e.id === getPlotNpcNumericId(def.leaderPlotNpcId))) return false;
+  if (entities.some(e => e.type === EntityType.NPC && e.alive && e.alifeId === getPlotNpcNumericId(def.leaderPlotNpcId))) return false;
   return !isPlotNpcDead(state, getPlotNpcNumericId(def.leaderPlotNpcId)!);
 }
 
@@ -129,6 +129,7 @@ function spawnArrivalLeader(
   world: World,
   entities: Entity[],
   state: GameState,
+  nextId: { v: number },
   cell: number,
   anchor: { x: number; y: number },
   floorKey: string,
@@ -140,7 +141,8 @@ function spawnArrivalLeader(
   const x = cell % W;
   const y = (cell / W) | 0;
   const major: Entity & { npcPackageId: string } = {
-    id: numericId, type: EntityType.NPC,
+    // Номер сущности — из общего счётчика; личность даёт `bindReservedPlotNpcAlifeRecord` ниже.
+    id: nextId.v++, type: EntityType.NPC,
     x: x + 0.5, y: y + 0.5,
     angle: 0, pitch: 0, alive: true, speed: packageSpeed(pack),
     sprite: pack.visual.sprite ?? pack.affiliation.occupation,
@@ -223,7 +225,7 @@ function executeScriptedArrival(def: ScriptedArrivalDef, world: World, entities:
   const anchor = arrivalAnchor(def, state, world, player);
   const cell = arrivalCellNearLift(world, anchor.x, anchor.y, player.x, player.y, def.preferredLiftDirection);
   const toFloorKey = currentAlifeFloorKey(state);
-  if (!spawnArrivalLeader(def, world, entities, state, cell, anchor, toFloorKey)) return false;
+  if (!spawnArrivalLeader(def, world, entities, state, nextId, cell, anchor, toFloorKey)) return false;
   const guardAlifeIds: number[] = [];
   const escort = def.escort;
   const slots = escort ? entitySpawnSlots(entities, EntityType.NPC, escort.count) : 0;

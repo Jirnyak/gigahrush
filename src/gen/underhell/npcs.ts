@@ -18,6 +18,7 @@ import { ensureConnectivity, finalizeExpandedFloor, generateZones } from '../sha
 import { expandUnderhellRouteGeometry, reinforceUnderhellAuthoredHqTerritory } from './expansion';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { newEntityIdCursor } from '../entity_ids';
 import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, UNDERHELL_FLOOR, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
 import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhellRouteCues, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
 
@@ -141,7 +142,7 @@ export function alignUnderhellAmbientNpcTerritory(world: World, entities: Entity
 export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGate: boolean): UnderhellDesignGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
 
   paintBaseUnderhell(world);
 

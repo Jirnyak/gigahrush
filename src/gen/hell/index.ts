@@ -16,11 +16,13 @@ import { runHellContent } from './content_manifest';
 import { rng, irand, pick } from '../../core/rand';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { Spr } from '../../entities/sprite_index';
+import { syncNextEntityId } from '../content_manifest_utils';
+import { firstRuntimeEntityId } from '../entity_ids';
 
 export function generateHell(generationSeed = 0x4d594153): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  let nextId = 1;
+  let nextId = firstRuntimeEntityId();
 
   const field = buildIsingCaveField();
   paintHellTerrain(world, field);
@@ -52,9 +54,12 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
   }
   world.bakeLights();
 
-  nextId = entities.reduce((mx, e) => Math.max(mx, e.id), nextId) + 1;
-
-  seedLoot(world, entities, { v: nextId });
+  /* Счётчик обязан ПЕРЕЖИТЬ раздачу лута. Свежая коробка `{ v: nextId }` теряла
+   * продвижение наружу, и содержимое ада получало те же номера по второму разу:
+   * около трёхсот предметов-двойников на каждой генерации. */
+  const lootCursor = { v: syncNextEntityId(entities, nextId) };
+  seedLoot(world, entities, lootCursor);
+  nextId = lootCursor.v;
 
   // Manifest-owned side content
   nextId = runHellContent(world, entities, nextId);

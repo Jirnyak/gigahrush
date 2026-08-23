@@ -11,7 +11,8 @@ import {
   playHostilePsiCast, playHostileShotgun, playSoundAt,
 } from '../audio';
 import { applyDamageRelationPenalty } from '../factions';
-import { calculateDamage, applyHitStaggerAndKnockback, calculateReloadTime } from '../combat';
+import { calculateDamage, applyHitStaggerAndKnockback, calculateReloadTime, setCombatClock } from '../combat';
+import { hasLineOfSight, lineCoverCells } from '../../world/line_of_sight';
 import { clearFogInZone } from '../fog_zone';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
@@ -20,9 +21,9 @@ import { consumeDurability, getWeaponStats, removeItem, addItem, pickupDrop } fr
 import { ITEMS } from '../../data/items';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { entityDisplayName } from '../../entities/monster';
-import { followPath, tryAssignPathToCell } from './pathfinding';
+import { assignActorPath, followPath, tryAssignPathToCell } from './pathfinding';
 import { Spr, hostileProjectileSprite } from '../../entities/sprite_index';
-import { findCombatTarget, dropNpcInventory, deterministicScanCd, hasClearLineOfFire } from './monster';
+import { findCombatTarget, dropNpcInventory, deterministicScanCd } from './monster';
 import { recordEntityKill } from '../alife_rating';
 import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, getEntityIndex } from '../entity_index';
@@ -30,19 +31,19 @@ import { applyMonsterIncomingDamage } from '../monster_traits';
 import { publishWeaponNoise } from '../noise';
 import { isPlayerEntity } from '../player_actor';
 import { getRecentCombatThreat, notifyActorDamaged, npcCombatProfile } from '../combat_stimulus';
-import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
+import { stepActorBy } from '../movement_collision';
 import {
   emitMarkovBark,
   BARK_CHANCE_COMBAT,
   BARK_CHANCE_FLEE,
   BARK_CHANCE_KILL,
   BARK_CHANCE_WOUNDED,
-  pushNpcLogMessage,
 } from './barks';
 import { selectMeleeTarget } from '../melee_targeting';
 import { publishEvent } from '../events';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
+import { trySetMicroGoal } from './micro_goals';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
 let _barkMsgs: Msg[] = [];
@@ -50,6 +51,10 @@ let _barkTime = 0;
 export function setCombatContext(msgs: Msg[], time: number): void {
   _barkMsgs = msgs;
   _barkTime = time;
+  // Пейн-реакции нужен рефрактерный период, а часов у неё своих нет: удар
+  // приходит из пяти мест, и ни одно не тянет туда время. Кадр AI — то самое
+  // единственное место, где время уже на руках.
+  setCombatClock(time);
 }
 
 /* ── NPC flee from monsters (non-combatants) ─────────────────── */
@@ -153,12 +158,26 @@ export function tryFleeFromMonster(
 }
 
 /* ── NPC faction combat: attack nearby hostile entities ────────── */
+/**
+ * Докуда человек смотрит по сторонам, если не рвётся в бой.
+ *
+ * ЗАМЕРЕНО 2026-08-23, не повторять: подъём до радиуса бегства (`10`, тот же,
+ * которым небоец и так высматривает монстра) не сдвинул слепоту на реальном
+ * этаже НИ НА ДЕСЯТУЮ (42.9% до и после) и стоил +3.5% кадра на четырёх тысячах
+ * акторов. Слепота там держится стенами, а не радиусом: стенд считает дефектом
+ * любого врага в 12 клетках, включая тех, кто за бетоном.
+ */
 const NPC_COMBAT_RANGE = 8;
 const NPC_CHASE_RANGE = 18;
 const NPC_ATTACK_RANGE = 1.3;
 const NPC_COMBAT_CD = 1.2;
-const NPC_RANGED_MAX = 13.0;
-const NPC_RANGED_LOS_BREAK_CD = 0.45;
+/**
+ * Сколько живёт выпущенный снаряд. Ровно те числа, что `npcFireProjectile`
+ * кладёт в `projLife`: дальность боя обязана считаться по ТОМУ САМОМУ снаряду,
+ * который полетит, иначе стрелок целится туда, куда пуля не долетает.
+ */
+const PROJ_LIFE_FLAME_SEC = 0.7;
+const PROJ_LIFE_SEC = 3.0;
 const MELEE_KNOCKBACK_CAP = 0.65;
 const MELEE_STAGGER_CAP = 0.35;
 const KNOCKBACK_BODY_R = 0.16;
@@ -171,6 +190,17 @@ interface NpcRangedProfile {
   maxRange: number;
 }
 
+/**
+ * Наследие двух режимов боя, которых больше нет.
+ *
+ * Единственный продовый вызов шёл с `simple: true`, поэтому «полный» режим —
+ * телеграф выстрела, орбита на откате, сообщение о потере линии огня — не
+ * исполнялся НИКОГДА, а `visualProjectiles: false` открывал скрытый hitscan
+ * `npcApplyDistantRangedDamage`: шестой путь урона мимо единой двери. Всё это
+ * снесено, ценное (орбита между выстрелами) вложено в оставшийся путь. Поле
+ * держится ровно до тех пор, пока `systems/ai/index.ts` не перестанет их
+ * передавать; ни одно из них уже ни на что не влияет.
+ */
 interface FactionCombatOptions {
   visualProjectiles?: boolean;
   simple?: boolean;
@@ -183,6 +213,34 @@ interface FactionCombatOptions {
  * и этот — по-прежнему не он, то есть маска запроса та же. */
 function npcCombatTargetFilter(o: Entity): boolean {
   return o.type === EntityType.NPC || o.type === EntityType.MONSTER || isPlayerEntity(o);
+}
+
+/**
+ * Сколько актор идёт по уже назначенному боевому маршруту до пересборки.
+ * Ровно тот же порядок, что у погони монстра (0.75..2.3 с): цель за полсекунды
+ * не уходит настолько, чтобы маршрут перестал вести в её сторону.
+ */
+const NPC_COMBAT_REPATH_SEC = 0.5;
+
+/**
+ * Подойти к боевой цели.
+ *
+ * Сторож здесь ОБЯЗАН быть чистым троттлом по `ai.timer`, а не `actorRepathDue`.
+ * Причина замерена на стенде: пустой путь означает одновременно «маршрут не
+ * найден» и «цель вплотную, маршрут не нужен», а в эту ветку актор попадает и
+ * стоя рядом с целью — когда до неё перекрыта линия огня. Тогда «дошёл» истинно
+ * КАЖДЫЙ кадр, клетка цели мигает между двумя соседними от собственного шага
+ * жертвы, и `tryAssignPathToCell` каждый кадр строит новый полный маршрут:
+ * замер давал 58–60 назначений в секунду на актора против 0.1–0.3 у остальных.
+ *
+ * Неудача поиска отдельного обращения не требует: `assignActorPath` сама пишет
+ * в тот же `ai.timer` более длинный отрицательный кэш.
+ */
+function approachCombatTarget(world: World, e: Entity, target: Entity, dt: number): void {
+  const ai = e.ai!;
+  ai.timer -= dt;
+  if (ai.timer <= 0) assignActorPath(world, e, target.x, target.y, NPC_COMBAT_REPATH_SEC);
+  followPath(world, e, dt);
 }
 
 function continueFlee(world: World, e: Entity, dt: number): boolean {
@@ -224,16 +282,7 @@ function startFleeFromThreat(world: World, e: Entity, threat: Entity, dt: number
   }
 
   const step = Math.max(0.25, Math.min(0.9, e.speed * 1.5 * dt));
-  const sx = world.wrap(e.x + nx * step);
-  const sy = world.wrap(e.y + ny * step);
-  let moved = false;
-  const ignoreFineBlockers = entityIgnoresFineBlockers(e);
-  if (canActorOccupy(world, sx, e.y, KNOCKBACK_BODY_R, { ignoreFineBlockers })) e.x = sx;
-  if (e.x === sx) moved = true;
-  if (canActorOccupy(world, e.x, sy, KNOCKBACK_BODY_R, { ignoreFineBlockers })) {
-    e.y = sy;
-    moved = true;
-  }
+  const moved = stepActorBy(world, e, nx * step, ny * step, KNOCKBACK_BODY_R);
   ai.path = [];
   ai.pi = 0;
   ai.timer = 0;
@@ -281,7 +330,7 @@ function npcShouldFleeTarget(e: Entity, target: Entity, eWs?: import('../../data
 }
 
 export function tryFactionCombat(
-  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, options?: FactionCombatOptions,
+  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, _options?: FactionCombatOptions,
 ): boolean {
   tryCombatLootGrab(world, e, dt);
 
@@ -291,18 +340,22 @@ export function tryFactionCombat(
   // выше них ничего в исходе не меняет.
   const ai = e.ai!;
   if (ai.goal === AIGoal.FLEE && ai.timer > 0) return continueFlee(world, e, dt);
+  /* Боль сбивает УДАР, а не всего человека.
+   *
+   * Здесь стоял `return true`: оглушённый не делал ничего — не выбирал цель, не
+   * убегал, не шёл. Монстр с частотой атаки раз в секунду держал так NPC почти
+   * половину времени, двое — постоянно, и это читалось как «NPC тупит». Теперь
+   * стаггер поднимает только откат атаки: цель ищется, бегство работает, ноги
+   * несут. Замер порога и рефрактерного периода — `systems/combat.ts`. */
   if ((ai.staggerTimer ?? 0) > 0) {
     ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
-    e.attackCd = Math.max(e.attackCd ?? 0, 0.12);
-    return true;
+    e.attackCd = Math.max(e.attackCd ?? 0, ai.staggerTimer);
   }
 
   const combatItem = npcCombatItemId(e);
   const weaponId = combatItem.id;
   const ws = combatItem.ws;
   const rangedProfile = ws.isRanged ? npcRangedProfile(ws) : undefined;
-  const visualProjectiles = options?.visualProjectiles ?? true;
-  const simple = options?.simple === true;
 
   const damageThreat = getRecentCombatThreat(e, _time);
   const forcedTarget = damageThreat?.reaction !== 'startled' ? damageThreat?.attacker : undefined;
@@ -339,11 +392,27 @@ export function tryFactionCombat(
     );
 
   if (!target) {
-    if (ai.combatTargetId !== undefined) {
+    if (prevTarget !== undefined) {
+      /* Потеря цели — повод ПОЙТИ ИСКАТЬ, а не ослепнуть на месте.
+       *
+       * Здесь стояло `combatScanCd = 5`: пять секунд без единого скана при живом
+       * враге в десятке клеток. На реальном этаже это давало 42–45% времени
+       * контакта вообще без боевой цели. Скан открывается сразу, а ноги получают
+       * микроцель `search_lkp` — она была написана, исполнялась и не ставилась
+       * НИ ОДНИМ вызовом во всей игре. */
       ai.combatTargetId = undefined;
       ai.goal = AIGoal.WANDER;
-      ai.timer = 5;
-      ai.combatScanCd = 5; // Suppress combat scanning briefly while searching
+      ai.timer = 1;
+      ai.combatScanCd = 0;
+      const lost = getEntityIndex().byId.get(prevTarget);
+      const threat = getRecentCombatThreat(e, _time);
+      const lkpX = lost?.alive ? lost.x : threat?.lastKnownX;
+      const lkpY = lost?.alive ? lost.y : threat?.lastKnownY;
+      if (lkpX !== undefined && lkpY !== undefined) {
+        trySetMicroGoal(e, 'search_lkp', {
+          targetX: Math.floor(lkpX), targetY: Math.floor(lkpY), timer: NPC_COMBAT_CD * 4, sourceId: prevTarget,
+        });
+      }
     }
     return false;
   }
@@ -369,83 +438,39 @@ export function tryFactionCombat(
     }
     return true; // Block actions while reloading
   }
+  /* Полный магазин при первой встрече с оружием.
+   *
+   * `currentMag` ставила ТОЛЬКО автоэкипировка, а оружие от генератора приходит
+   * уже надетым — поэтому весь этаж начинал первый бой с фиктивной перезарядки:
+   * с ППШ это 3.2 секунды неподвижности под огнём. Рукопашники попадали туда же,
+   * потому что `undefined !== Infinity`. */
+  if (e.currentMag === undefined) e.currentMag = ws.magazineSize ?? 1;
   if (!ws.psiCost && (e.currentMag ?? 0) <= 0 && ws.magazineSize !== Infinity) {
     e.reloading = true;
     e.reloadTimer = calculateReloadTime(ws.reloadTime ?? 1, e.rpg?.agi ?? 0);
     return true;
   }
-  if (
-    simple &&
-    ws.isRanged &&
-    rangedProfile &&
-    bestDist < rangedProfile.maxRange &&
-    bestDist > rangedProfile.minRange &&
-    hasClearLineOfFire(world, e, target, rangedProfile.maxRange)
-  ) {
-    e.attackCd = (e.attackCd ?? 0) - dt;
-    if (e.attackCd! <= 0) {
-      if (npcCommitRangedShot(world, e, target, weaponId, ws, entities, nextId, atkSpeedMod, true, _time, state)) return true;
-      npcAutoEquipBestWeapon(e);
-      e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
-    }
-    return true;
-  }
-
-  // Ranged NPC: telegraph line-of-fire before committing the shot.
   if (ws.isRanged && rangedProfile && bestDist < rangedProfile.maxRange && bestDist > rangedProfile.minRange) {
-    const currentTarget = ai.windupTargetId === undefined || ai.windupTargetId === target.id;
-    const lineClear = currentTarget && target.alive && hasClearLineOfFire(world, e, target, rangedProfile.maxRange);
-
-    if ((ai.windupTimer ?? 0) > 0) {
-      ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
-      const dx = world.delta(e.x, target.x);
-      const dy = world.delta(e.y, target.y);
-      e.angle = Math.atan2(dy, dx);
-      if (!lineClear) {
-        ai.windupTimer = undefined;
-        ai.windupTargetId = undefined;
-        e.attackCd = Math.max(e.attackCd ?? 0, NPC_RANGED_LOS_BREAK_CD);
-        if (isPlayerEntity(target)) {
-          pushNpcLogMessage(e, msgs, _time, `${entityDisplayName(e)} потерял линию огня. Укрытие сработало.`, '#9cf');
-        }
-
-        // If we lose line of sight, try to find a cover position or slightly adjust angle instead of just walking into them
-        // We can't do full navigation easily here, so we will assign a path, but the existing pathfinding handles doors/corridors
-        if (ai.path.length === 0 || ai.timer <= 0) {
-          tryAssignPathToCell(world, e, target.x, target.y);
-          ai.timer = 2;
-        }
-        followPath(world, e, dt);
-
-        return true;
-      }
-
-      if (ai.windupTimer <= 0) {
-        if (npcCommitRangedShot(world, e, target, weaponId, ws, entities, nextId, atkSpeedMod, visualProjectiles, _time, state)) return true;
-        npcAutoEquipBestWeapon(e);
-        e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
-      }
-      return true;
-    }
-
-    if (lineClear) {
+    /* Мебель на линии огня — ШТРАФ К ПРИЦЕЛУ, а не запрет.
+     *
+     * Раньше стеллаж, станок, аппарат, стол и парта работали бетоном: клетка
+     * проходима, в ближнем бою через неё бьют, а стрелять нельзя. Стрелок стоял
+     * вплотную через стол и не стрелял. Теперь каждое укрытие на пути добавляет
+     * разброса примерно на клетку в точке цели — угловой размер помехи, а не
+     * новая ручка. Бетон по-прежнему запрещает: `cover < 0`. */
+    const cover = lineCoverCells(world, e.x, e.y, target.x, target.y, rangedProfile.maxRange);
+    if (cover >= 0) {
       e.attackCd = (e.attackCd ?? 0) - dt;
       if (e.attackCd! <= 0) {
-        if (npcCanStartRangedWindup(e, ws)) {
-          ai.windupTimer = npcRangedWindupSec(ws);
-          ai.windupTargetId = target.id;
-          if (isPlayerEntity(target) && npcRangedShouldLog(ws)) {
-            pushNpcLogMessage(e, msgs, _time, `${entityDisplayName(e)} целится: ${npcRangedThreatLabel(ws)}. Сбейте линию или дождитесь залпа.`, npcRangedCueColor(ws));
-          }
-          return true;
-        }
+        const aimError = cover > 0 ? Math.atan2(cover, Math.max(1, bestDist)) : 0;
+        if (npcCommitRangedShot(world, e, target, weaponId, ws, entities, nextId, atkSpeedMod, aimError, _time, state)) return true;
         npcAutoEquipBestWeapon(e);
+        e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
       } else {
-        // Ranged NPC: orbit while waiting for attack cooldown
-        const idealR = (rangedProfile!.maxRange + rangedProfile!.minRange) * 0.5;
-        tryCombatOrbitStep(world, e, target, idealR, (rangedProfile!.maxRange - rangedProfile!.minRange) * 0.3, dt);
-        return true;
+        // Стрелок не столбенеет между выстрелами: держит дистанцию и смещается.
+        tryCombatOrbitStep(world, e, target, bestDist, 0.6, dt);
       }
+      return true;
     }
   }
 
@@ -453,12 +478,14 @@ export function tryFactionCombat(
   const meleeWs = ws;
   const meleeRange = meleeWs.range || NPC_ATTACK_RANGE;
   const effectiveReach = meleeRange + (meleeWs.hitRadius ?? 0.6);
-  if (bestDist > effectiveReach || !hasClearLineOfFire(world, e, target, effectiveReach + 0.5)) {
-    if (ai.path.length === 0 || ai.timer <= 0) {
-      tryAssignPathToCell(world, e, target.x, target.y);
-      ai.timer = 2;
-    }
-    followPath(world, e, dt);
+  /* Проверка укрытия отсюда УБРАНА целиком, осталась только стена.
+   *
+   * Ей тут было нечего делать: за столом в ближнем бою не прячутся, клетка со
+   * столом проходима, и монстры бьют через неё свободно. Итог в квартире был
+   * такой: NPC стоит вплотную к врагу через стол, не бьёт, строит маршрут
+   * нулевой длины и через несколько секунд уходит бродить. */
+  if (bestDist > effectiveReach || !hasLineOfSight(world, e.x, e.y, target.x, target.y, effectiveReach + 0.5)) {
+    approachCombatTarget(world, e, target, dt);
     return true;
   }
 
@@ -493,7 +520,7 @@ export function tryFactionCombat(
               emitMarkovBark(hitTarget, msgs, _time, 'wounded', 'Задело!', BARK_CHANCE_WOUNDED, '#f88');
             }
           }
-          const hitAng = Math.atan2(hitTarget.y - e.y, hitTarget.x - e.x);
+          const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
           spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
           applyMeleeKnockback(world, e, hitTarget, meleeWs);
           if (hitTarget.hp <= 0) {
@@ -535,71 +562,36 @@ function applyMeleeKnockback(world: World, source: Entity, target: Entity, ws: W
     len = 1;
   }
 
-  const nx = world.wrap(target.x + dx / len * force);
-  const targetIgnoreFineBlockers = entityIgnoresFineBlockers(target);
-  if (canActorOccupy(world, nx, target.y, KNOCKBACK_BODY_R, { ignoreFineBlockers: targetIgnoreFineBlockers })) target.x = nx;
-  const ny = world.wrap(target.y + dy / len * force);
-  if (canActorOccupy(world, target.x, ny, KNOCKBACK_BODY_R, { ignoreFineBlockers: targetIgnoreFineBlockers })) target.y = ny;
+  stepActorBy(world, target, dx / len * force, dy / len * force, KNOCKBACK_BODY_R);
 
   const stagger = Math.min(MELEE_STAGGER_CAP, 0.08 + force * 0.35);
   if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, stagger);
   if (!isPlayerEntity(target)) target.attackCd = Math.max(target.attackCd ?? 0, stagger);
 }
 
+/**
+ * Сколько клеток пролетит снаряд этого оружия.
+ *
+ * Честная баллистика вместо эвристик: скорость снаряда на время его жизни — те
+ * самые числа, с которыми снаряд и родится в `npcFireProjectile`. До этого
+ * дальность выводилась потолком `NPC_RANGED_MAX = 13` и тремя порогами
+ * («быстрый снаряд», «дробовик», «тяжёлое»), и они расходились с физикой в обе
+ * стороны: макаров бил на 66 клеток, а стрелял с 13; огнемёт целился с 9, хотя
+ * струя гаснет через 4.9. Луч удаления живёт своей длиной, а не полётом.
+ */
+function npcWeaponReach(ws: WeaponStats): number {
+  if (ws.beamRange !== undefined) return ws.beamRange;
+  const life = ws.projType === ProjType.FLAME ? PROJ_LIFE_FLAME_SEC : PROJ_LIFE_SEC;
+  return (ws.projSpeed ?? 15) * life;
+}
+
 function npcRangedProfile(ws: WeaponStats): NpcRangedProfile {
-  const pellets = ws.pellets ?? 1;
-  const isShotgunLike = pellets > 1 || (ws.spread ?? 0) > 0.18;
-  const isFlame = ws.projType === ProjType.FLAME;
-  const isHeavy = ws.aoeRadius !== undefined || ws.projType === ProjType.BFG;
-  const fastProjectile = (ws.projSpeed ?? 0) >= 20;
-  const maxRange = isHeavy ? 11
-    : fastProjectile ? 15
-      : isShotgunLike || isFlame ? 9
-        : NPC_RANGED_MAX;
-  const minRange = isHeavy ? 4.2
-    : isFlame ? 2.0
-      : 0;
   return {
-    minRange,
-    maxRange,
+    // Ближе собственного взрыва не стреляют. Отдельного порога это не требует:
+    // радиус поражения у оружия уже записан.
+    minRange: ws.aoeRadius ?? 0,
+    maxRange: npcWeaponReach(ws),
   };
-}
-
-function npcRangedDamageScore(ws: WeaponStats): number {
-  return ws.dmg * (ws.pellets ?? 1) + (ws.aoeRadius ? 45 : 0);
-}
-
-function npcRangedWindupSec(ws: WeaponStats): number {
-  const score = npcRangedDamageScore(ws);
-  if (ws.aoeRadius || score >= 70) return 0.62;
-  if (ws.psiCost || score >= 35) return 0.42;
-  if (ws.speed <= 0.2) return 0.06;
-  return 0.22;
-}
-
-function npcRangedShouldLog(ws: WeaponStats): boolean {
-  return ws.psiCost !== undefined || ws.aoeRadius !== undefined || npcRangedDamageScore(ws) >= 20 || ws.speed > 0.2;
-}
-
-function npcRangedThreatLabel(ws: WeaponStats): string {
-  if (ws.psiCost) return 'ПСИ';
-  if (ws.aoeRadius) return 'взрыв';
-  if ((ws.pellets ?? 1) > 1) return 'дробь';
-  if (ws.projType === ProjType.FLAME) return 'огонь';
-  if (ws.projType === ProjType.BFG || (ws.projSprite === Spr.GAUSS_BOLT || ws.projSprite === Spr.PLASMA_BOLT)) return 'энергия';
-  return 'выстрел';
-}
-
-function npcRangedCueColor(ws: WeaponStats): string {
-  if (ws.psiCost) return '#c8f';
-  if (ws.aoeRadius) return '#fa4';
-  if (ws.projSprite === Spr.PLASMA_BOLT || ws.projSprite === Spr.GAUSS_BOLT) return '#6cf';
-  return '#fc8';
-}
-
-function npcCanStartRangedWindup(e: Entity, ws: WeaponStats): boolean {
-  if (ws.psiCost) return !!e.rpg && e.rpg.psi >= ws.psiCost;
-  return true;
 }
 
 function npcCommitRangedShot(
@@ -611,8 +603,8 @@ function npcCommitRangedShot(
   entities: Entity[],
   nextId: { v: number },
   atkSpeedMod: number,
-  visualProjectiles: boolean,
-  time: number,
+  aimError: number,
+  _time: number,
   state?: GameState,
 ): boolean {
   if (state) {
@@ -629,16 +621,10 @@ function npcCommitRangedShot(
   if (ws.psiCost) {
     if (!e.rpg || e.rpg.psi < ws.psiCost) return false;
     e.rpg.psi -= ws.psiCost;
-    if (visualProjectiles) {
-      npcFireProjectile(world, e, target, weaponId, ws, entities, nextId);
-      playSoundAt(playHostilePsiCast, e.x, e.y);
-      publishWeaponNoise(state, e, weaponId, ws);
-    } else {
-      npcApplyDistantRangedDamage(world, e, target, ws, entities, nextId, time, state);
-    }
+    npcFireProjectile(world, e, target, weaponId, ws, entities, nextId, aimError);
+    playSoundAt(playHostilePsiCast, e.x, e.y);
+    publishWeaponNoise(state, e, weaponId, ws);
     e.attackCd = ws.speed * atkSpeedMod;
-    e.ai!.windupTimer = undefined;
-    e.ai!.windupTargetId = undefined;
     return true;
   }
   if (ws.ammoType) {
@@ -647,16 +633,10 @@ function npcCommitRangedShot(
   if (ws.magazineSize !== Infinity) {
     e.currentMag = Math.max(0, (e.currentMag ?? 0) - 1);
   }
-  if (visualProjectiles) {
-    npcFireProjectile(world, e, target, weaponId, ws, entities, nextId);
-    playSoundAt(hostileWeaponSound(weaponId), e.x, e.y);
-    publishWeaponNoise(state, e, weaponId, ws);
-  } else {
-    npcApplyDistantRangedDamage(world, e, target, ws, entities, nextId, time, state);
-  }
+  npcFireProjectile(world, e, target, weaponId, ws, entities, nextId, aimError);
+  playSoundAt(hostileWeaponSound(weaponId), e.x, e.y);
+  publishWeaponNoise(state, e, weaponId, ws);
   e.attackCd = ws.speed * atkSpeedMod;
-  e.ai!.windupTimer = undefined;
-  e.ai!.windupTargetId = undefined;
   return true;
 }
 
@@ -679,45 +659,17 @@ function hostileWeaponSound(weaponId: string): () => void {
   }
 }
 
-function npcApplyDistantRangedDamage(
-  world: World,
-  e: Entity,
-  target: Entity,
-  ws: WeaponStats,
-  entities: Entity[],
-  nextId: { v: number },
-  time: number,
-  state?: GameState,
-): void {
-  if (target.hp === undefined || !target.alive) return;
-  const pelletFactor = Math.max(1, ws.pellets ?? 1);
-  let dmg = Math.max(1, Math.round(ws.dmg * pelletFactor));
-  if (target.type === EntityType.MONSTER) dmg = applyMonsterIncomingDamage(world, target, dmg);
-  const actualDmg = calculateDamage(dmg, ws.damageType, target);
-  target.hp -= actualDmg;
-  applyHitStaggerAndKnockback(target, e.x, e.y, actualDmg);
-  notifyActorDamaged(world, target, e, dmg, 'npc_ranged', time, state);
-  if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} попал: -${dmg}`);
-  if (target.type === EntityType.NPC) applyDamageRelationPenalty(e.faction, target.faction, dmg, target, e, state);
-  if (target.hp > 0) return;
-
-  recordEntityKill(e, target);
-  target.alive = false;
-  target.hp = 0;
-  if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-  if (target.isFogBoss && target.fogBossZone !== undefined) clearFogInZone(world, target.fogBossZone, _barkMsgs, time);
-}
-
 /* ── NPC: fire ranged projectile ──────────────────────────────── */
 function npcFireProjectile(
   world: World, e: Entity, target: Entity, weaponId: string, ws: typeof WEAPON_STATS[string],
-  entities: Entity[], nextId: { v: number },
+  entities: Entity[], nextId: { v: number }, aimError = 0,
 ): void {
   const dx = world.delta(e.x, target.x);
   const dy = world.delta(e.y, target.y);
   const ang = Math.atan2(dy, dx);
   const pellets = ws.pellets ?? 1;
-  const spread = ws.spread ?? 0;
+  // Разброс оружия плюс то, что набежало от мебели на линии огня.
+  const spread = (ws.spread ?? 0) + aimError;
   const spd = ws.projSpeed ?? 15;
   // Compensate gravity so projectile arrives at target height instead of hitting the floor
   const pt = ws.projType ?? ProjType.NORMAL;
@@ -743,7 +695,7 @@ function npcFireProjectile(
       vy: sin * spd,
       vz: aimVz,
       projDmg: ws.dmg,
-      projLife: pt === ProjType.FLAME ? 0.7 : 3.0,
+      projLife: pt === ProjType.FLAME ? PROJ_LIFE_FLAME_SEC : PROJ_LIFE_SEC,
       ownerId: e.id,
       weapon: weaponId,
       spriteScale: pt === ProjType.FLAME ? 0.55 : 0.25,

@@ -20,7 +20,7 @@ import {
 
 import { buildContextSnapshot } from './context';
 import { addFactionRelMutual, getFactionRel } from '../data/relations';
-import { ENTITY_MASK_MONSTER, getEntityIndex } from './entity_index';
+import { ENTITY_MASK_MONSTER, ensureEntityIndex, getEntityIndex } from './entity_index';
 import {
   PLOT_CHAIN,
   SIDE_QUESTS,
@@ -105,6 +105,15 @@ import { territoryOwnerAtIndex } from './territory';
 
 type EntityIndex = {
   byId: Map<number, Entity>;
+  /**
+   * Слот сюжетной личности → живая сущность.
+   *
+   * Отдельный адрес, а не тот же `byId`: номер сюжетной личности (`alifeId`) и
+   * номер сущности (`id`) — разные пространства. Совпадали они только потому,
+   * что доставка выдавала личности номер, равный слоту; на этом совпадении
+   * держалась вся адресация квестов, и любой предмет с чужим номером её ломал.
+   */
+  byAlifeId: Map<number, Entity>;
   byMonLive: Map<MonsterKind, Entity>;
 };
 
@@ -113,13 +122,12 @@ let _currentIndex: EntityIndex | undefined = undefined;
 function buildEntityIndex(entities: readonly Entity[]): EntityIndex {
   const index = {
     byId: new Map<number, Entity>(),
-    
-    
+    byAlifeId: new Map<number, Entity>(),
     byMonLive: new Map<MonsterKind, Entity>()
   };
   for (const e of entities) {
     index.byId.set(e.id, e);
-    
+    if (e.alifeId !== undefined) index.byAlifeId.set(e.alifeId, e);
     if (e.type === EntityType.MONSTER && e.alive && e.monsterKind !== undefined && !index.byMonLive.has(e.monsterKind)) {
       index.byMonLive.set(e.monsterKind, e);
     }
@@ -131,8 +139,22 @@ function findById(entities: readonly Entity[], id: number) {
   if (_currentIndex) return _currentIndex.byId.get(id);
   return entities.find(e => e.id === id);
 }
+/**
+ * Живой сюжетный человек по слоту.
+ *
+ * Раньше искал по `entity.id` — имя говорило «plot», а поиск шёл по номеру
+ * сущности, и совпадало это лишь пока доставка выдавала личности номер, равный
+ * слоту. На квартирах и коллекторах предметный дроп с тем же номером находился
+ * раньше человека, и цель задания «уезжала на другой уровень», стоя за стеной.
+ */
 function findByPlotLive(entities: readonly Entity[], plotId: number) {
-  const e = findById(entities, plotId);
+  // Вне `checkQuests` локального словаря нет, а спрашивают отсюда КАЖДЫЙ кадр
+  // (давление убийственных шагов). Живого сюжетного человека знает общий индекс
+  // сущностей: он держит ровно живых и адресует их по тому же слоту `alifeId`,
+  // так что перебор всего этажа тут был чистой потерей.
+  const e = _currentIndex
+    ? _currentIndex.byAlifeId.get(plotId)
+    : ensureEntityIndex(entities).byAlifeId.get(plotId);
   return (e?.type === EntityType.NPC && e.alive) ? e : undefined;
 }
 function findMonLive(entities: readonly Entity[], kind: MonsterKind) {
@@ -304,7 +326,7 @@ export function nextAvailablePlotStep(quests: readonly Quest[]): { index: number
 export function nextAvailablePlotStepForNpc(npc: Entity, state: Pick<GameState, 'quests'>): { index: number; step: PlotStep } | undefined {
   if (!npc.id) return undefined;
   const available = nextAvailablePlotStep(state.quests);
-  return available?.step.giverId === npc.id ? available : undefined;
+  return available !== undefined && npc.alifeId === available.step.giverId ? available : undefined;
 }
 
 export function activeTalkQuestForNpc(npc: Entity, state: Pick<GameState, 'quests'>): Quest | undefined {
@@ -316,7 +338,7 @@ function activeTalkQuestMatchesNpc(q: Quest, npc: Entity): boolean {
     !q.done &&
     !q.failed &&
     q.type === QuestType.TALK &&
-    q.targetNpcId === npc.id
+    questTargetIsNpc(q, npc)
   );
 }
 
@@ -332,8 +354,37 @@ function questMarkerTone(q: Quest): NpcQuestMarkerTone {
   return q.plotStepIndex !== undefined || q.sideQuestId !== undefined ? 'authored' : 'procedural';
 }
 
+/**
+ * Что за число лежит в `giverId` / `targetNpcId` этого задания.
+ *
+ * Поле по природе двух видов, и различает их только происхождение задания:
+ * АВТОРСКОЕ хранит СЛОТ личности (он переживает перегенерацию этажа и уезжает в
+ * сейв), ПРОЦЕДУРНОЕ и контрактное — номер живой сущности (личности за ним нет и
+ * хранить нечего). Пока слот и номер сущности были одним числом, разница ничего
+ * не стоила; теперь каждый читатель обязан спросить.
+ */
+export function questAddressesBySlot(q: Quest): boolean {
+  return q.plotStepIndex !== undefined || q.sideQuestId !== undefined;
+}
+
+/** Живой выдавший задание — по слоту либо по номеру сущности, смотря чьё задание. */
+function questGiverEntity(entities: readonly Entity[], q: Quest): Entity | undefined {
+  return questAddressesBySlot(q) ? findByPlotLive(entities, q.giverId) : findById(entities, q.giverId);
+}
+
+/** Этот ли человек выдал задание. Сравнивается ТОТ адрес, которым задание живёт. */
+function questGiverIsNpc(q: Quest, npc: Entity): boolean {
+  return questAddressesBySlot(q) ? npc.alifeId === q.giverId : npc.id === q.giverId;
+}
+
+/** Этот ли человек — цель задания. */
+function questTargetIsNpc(q: Quest, npc: Entity): boolean {
+  if (q.targetNpcId === undefined) return false;
+  return questAddressesBySlot(q) ? npc.alifeId === q.targetNpcId : npc.id === q.targetNpcId;
+}
+
 function npcHasAcceptedProceduralQuest(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
-  return state.quests.some(q => q.giverId === npc.id && questMarkerTone(q) === 'procedural');
+  return state.quests.some(q => questGiverIsNpc(q, npc) && questMarkerTone(q) === 'procedural');
 }
 
 function npcCanShowProceduralQuestOffer(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
@@ -345,7 +396,7 @@ function npcCanShowProceduralQuestOffer(npc: Entity, state: Pick<GameState, 'que
 }
 
 function activeQuestFromNpc(npc: Entity, state: Pick<GameState, 'quests'>): Quest | undefined {
-  return state.quests.find(q => !q.done && !q.failed && q.giverId === npc.id);
+  return state.quests.find(q => !q.done && !q.failed && questGiverIsNpc(q, npc));
 }
 
 type ActiveQuestState = Pick<GameState, 'quests' | 'activeQuestId'>;
@@ -372,7 +423,10 @@ export function toggleActiveQuest(state: ActiveQuestState, questId: number): Que
 
 export function resetNonStoryQuestsForNewPlayer(state: ActiveQuestState, entities: Entity[] = []): number {
   const removedQuestIds = new Set<number>();
-  const removedGiverIds = new Set<number>();
+  /* Снятые задания бывают обоих видов: сайд-квест адресует дающего СЛОТОМ,
+   * процедурный — номером сущности. Один общий набор сравнивать было не с чем. */
+  const removedGiverSlots = new Set<number>();
+  const removedGiverEntityIds = new Set<number>();
   const kept: Quest[] = [];
   for (const quest of state.quests) {
     if (quest.plotStepIndex !== undefined) {
@@ -380,7 +434,8 @@ export function resetNonStoryQuestsForNewPlayer(state: ActiveQuestState, entitie
       continue;
     }
     removedQuestIds.add(quest.id);
-    removedGiverIds.add(quest.giverId);
+    if (questAddressesBySlot(quest)) removedGiverSlots.add(quest.giverId);
+    else removedGiverEntityIds.add(quest.giverId);
   }
   if (removedQuestIds.size === 0) return 0;
   state.quests = kept;
@@ -388,7 +443,9 @@ export function resetNonStoryQuestsForNewPlayer(state: ActiveQuestState, entitie
     state.activeQuestId = undefined;
   }
   for (const entity of entities) {
-    if (entity.type !== EntityType.NPC || !removedGiverIds.has(entity.id)) continue;
+    const wasGiver = removedGiverEntityIds.has(entity.id)
+      || (entity.alifeId !== undefined && removedGiverSlots.has(entity.alifeId));
+    if (entity.type !== EntityType.NPC || !wasGiver) continue;
     if (removedQuestIds.has(entity.questId ?? -1)) entity.questId = -1;
     if (!isPlotNpc(entity)) entity.canGiveQuest = true;
   }
@@ -403,8 +460,8 @@ export function npcHasImportantQuestAction(npc: Entity, state: Pick<GameState, '
 export function npcCanGiveQuestNow(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive) return false;
   if (npc.canGiveQuest !== true) return false;
-  if (isPlotNpc(npc)) return hasAvailableQuest(npc.id, state.quests);
-  return !state.quests.some(q => !q.done && q.giverId === npc.id);
+  if (isPlotNpc(npc)) return hasAvailableQuest(npc.alifeId!, state.quests);
+  return !state.quests.some(q => !q.done && questGiverIsNpc(q, npc));
 }
 
 export function npcHasQuestMarker(npc: Entity, state: Pick<GameState, 'quests'>): boolean {
@@ -447,12 +504,13 @@ function questObjectiveLine(q: Quest): string {
 }
 
 function objectiveTargetEntity(q: Quest, entities: readonly Entity[]): Entity | undefined {
-  if (q.targetNpcId !== undefined) {
-    const byLiveId = findById(entities, q.targetNpcId);
-    if (byLiveId && byLiveId.alive) return byLiveId;
-  }
-  if (q.targetNpcId) return findByPlotLive(entities, q.targetNpcId);
-  return undefined;
+  if (q.targetNpcId === undefined) return undefined;
+  // Спрашиваем происхождение задания, а не пробуем оба адреса подряд: перебор
+  // «сначала по номеру сущности, потом по слоту» находил чужого — предмет с тем
+  // же номером лежит в массиве раньше человека.
+  if (questAddressesBySlot(q)) return findByPlotLive(entities, q.targetNpcId);
+  const byLiveId = findById(entities, q.targetNpcId);
+  return byLiveId?.alive ? byLiveId : undefined;
 }
 
 function activeObjectiveQuest(state: Pick<GameState, 'quests' | 'activeQuestId'>): Quest | undefined {
@@ -557,7 +615,7 @@ export function offerQuest(
     return;
   }
   // Don't give quest if already has one active from this NPC
-  if (state.quests.some(q => q.giverId === npc.id && !q.done)) {
+  if (state.quests.some(q => questGiverIsNpc(q, npc) && !q.done)) {
     pushNpcQuestMessage(npc, player, world, state, msgs, `${npc.name}: «Ещё не выполнил прошлое задание?»`, '#aaa');
     return;
   }
@@ -920,7 +978,7 @@ function grantGiverlessPlotStep(
   if (giverId !== undefined && !plotNpcSpeaksThroughDiary(giverId, player, state)) return;
   const quest = generatePlotQuest(
     {
-      id: giverId ?? GIVERLESS_QUEST_GIVER,
+      slot: giverId ?? GIVERLESS_QUEST_GIVER,
       name: giverId !== undefined ? plotNpcDisplayName(giverId) : available.step.sourceLabel,
       x: player.x, y: player.y,
     },
@@ -1122,7 +1180,7 @@ function failQuest(
 
   q.done = true;
   q.failed = true;
-  const giver = findById(entities, q.giverId);
+  const giver = questGiverEntity(entities, q);
   if (giver?.questId === q.id) giver.questId = -1;
   const contractDef = q.contractId ? CONTRACTS.find(c => c.id === q.contractId) : undefined;
 
@@ -1164,10 +1222,11 @@ export function checkTalkQuest(
     if (q.done) continue;
 
     if (q.type === QuestType.TALK) {
-      // Match by entity id OR by persistent alife id
-      const matchById = q.targetNpcId === targetNpc.id;
+      // Адрес спрашивается у самого задания: авторское живёт слотом, процедурное —
+      // номером сущности. Запасная сверка по `persistentNpcId` осталась: у
+      // человека из пула A-Life она тот же слот, но написанный строкой.
       const matchByPersistentId = q.targetNpcId !== undefined && targetNpc.persistentNpcId === `alife:${q.targetNpcId}`;
-      if (!matchById && !matchByPersistentId) continue;
+      if (!questTargetIsNpc(q, targetNpc) && !matchByPersistentId) continue;
       const pack = resolveNpcPackageForEntity(targetNpc);
       const talkQuestResponse = pack ? selectNpcLockedQuestResponse(pack, q.id) : undefined;
       if (completeQuest(q, player, entities, state, msgs)) {
@@ -1179,9 +1238,8 @@ export function checkTalkQuest(
       }
     } else if (q.type === QuestType.FETCH && q.contractId === undefined) {
       // FETCH quests from NPCs require manual turn in
-      const matchById = q.giverId === targetNpc.id;
       const matchByPersistentId = q.giverId !== undefined && targetNpc.persistentNpcId === `alife:${q.giverId}`;
-      if (!matchById && !matchByPersistentId) continue;
+      if (!questGiverIsNpc(q, targetNpc) && !matchByPersistentId) continue;
       
       let complete = false;
       if (q.targetItem === 'money') {
@@ -1203,9 +1261,8 @@ export function checkTalkQuest(
       }
     } else if (q.type === QuestType.KILL && q.contractId === undefined) {
       // KILL quests from NPCs require manual turn in
-      const matchById = q.giverId === targetNpc.id;
       const matchByPersistentId = q.giverId !== undefined && targetNpc.persistentNpcId === `alife:${q.giverId}`;
-      if (!matchById && !matchByPersistentId) continue;
+      if (!questGiverIsNpc(q, targetNpc) && !matchByPersistentId) continue;
 
       if (q.killCount !== undefined && q.killNeeded !== undefined && q.killCount >= q.killNeeded) {
         if (completeQuest(q, player, entities, state, msgs)) {
@@ -1356,7 +1413,7 @@ function completeQuest(
 
   learnQuestCraftRecipeRewards(q, state, msgs);
 
-  const giver = findById(entities, q.giverId);
+  const giver = questGiverEntity(entities, q);
   const giverFaction = giver?.faction ?? q.contractFaction ?? Faction.CITIZEN;
   const factionRelationDelta = completedQuestFactionRelationDelta(q.relationDelta);
   if (factionRelationDelta !== 0) addFactionRelMutual(Faction.PLAYER, giverFaction, factionRelationDelta);
@@ -1469,7 +1526,7 @@ function expireQuestIfNeeded(q: Quest, player: Entity, entities: Entity[], state
 
   q.done = true;
   q.failed = true;
-  const giver = findById(entities, q.giverId);
+  const giver = questGiverEntity(entities, q);
   if (giver?.questId === q.id) giver.questId = -1;
   const contractDef = q.contractId ? CONTRACTS.find(c => c.id === q.contractId) : undefined;
   if (isGovnyakCourierContractId(q.contractId)) removeItem(player, GOVNYAK_COURIER_PACKAGE_ITEM, 1);
@@ -1569,8 +1626,14 @@ function nearestRoomByName(world: World, npc: { x: number; y: number }, roomName
 }
 
 /* ── Generate plot quest from PLOT_CHAIN ──────────────────────── */
-/** Дающий сюжетного шага: живой NPC либо, для шага без дающего, `GIVERLESS_QUEST_GIVER`. */
-interface PlotQuestGiver { id: number; name?: string; x: number; y: number }
+/**
+ * Дающий сюжетного шага.
+ *
+ * `slot` — НОМЕР СЛОТА личности, а не номер сущности: им объявлены дающие в
+ * `PLOT_CHAIN`, он переживает перегенерацию этажа и уходит в сейв. Для шага без
+ * дающего — `GIVERLESS_QUEST_GIVER`.
+ */
+interface PlotQuestGiver { slot: number; name?: string; x: number; y: number }
 
 /** Отсутствие дающего в квесте: то же значение кладёт санитайзер сейва. */
 const GIVERLESS_QUEST_GIVER = -1;
@@ -1578,7 +1641,7 @@ const GIVERLESS_QUEST_GIVER = -1;
 function generatePlotQuest(
   npc: PlotQuestGiver, world: World, entities: Entity[], state: GameState,
 ): Quest | null {
-  const plotId = npc.id;
+  const plotId = npc.slot;
   for (let i = 0; i < PLOT_CHAIN.length; i++) {
     const step = PLOT_CHAIN[i];
     if ((step.giverId ?? GIVERLESS_QUEST_GIVER) !== plotId) continue;
@@ -1606,10 +1669,10 @@ function generatePlotQuest(
       const targetName = step.targetNpcId !== undefined ? plotNpcDisplayName(step.targetNpcId) : undefined;
       return {
         id, type: step.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         
         desc,
-        targetNpcId: target?.id ?? targetNumericId, targetNpcName: target?.name ?? targetName,
+        targetNpcId: targetNumericId, targetNpcName: target?.name ?? targetName,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
         extraRewards: step.extraRewards,
         relationDelta: step.relationDelta, xpReward: step.xpReward,
@@ -1623,7 +1686,7 @@ function generatePlotQuest(
     if (step.type === QuestType.FETCH) {
       return {
         id, type: step.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         
         desc,
         targetItem: step.targetItem, targetCount: step.targetCount,
@@ -1646,7 +1709,7 @@ function generatePlotQuest(
       }
       return {
         id, type: step.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc,
         targetMonsterKind: step.targetMonsterKind,
         targetNpcId: step.targetNpcId,
@@ -1667,7 +1730,7 @@ function generatePlotQuest(
         : nearestRoomOfType(world, npc, (step as any).targetRoomType!);
       return {
         id, type: step.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc,
         targetRoom: room?.id,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
@@ -1683,7 +1746,7 @@ function generatePlotQuest(
     if (step.type === QuestType.VISIT && (step as { visitFloorZ?: number }).visitFloorZ !== undefined) {
       return {
         id, type: step.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc,
         visitFloorZ: (step as { visitFloorZ: number }).visitFloorZ,
         rewardItem: step.rewardItem, rewardCount: step.rewardCount,
@@ -1707,7 +1770,7 @@ function generatePlotQuest(
       const id = state.nextQuestId++;
       return {
         id, type: sq.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc: sq.desc,
         targetItem: sq.targetItem, targetCount: sq.targetCount,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
@@ -1723,7 +1786,7 @@ function generatePlotQuest(
       const id = state.nextQuestId++;
       return {
         id, type: sq.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc: sq.desc,
         targetMonsterKind: sq.targetMonsterKind,
         targetNpcId: sq.targetNpcId,
@@ -1751,14 +1814,13 @@ function generatePlotQuest(
       }
       return {
         id, type: sq.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc,
-        // Off-floor target ⇒ findByPlotLive returns undefined; fall back to the authored
-        // plot-npc numeric id (mirrors the plot-TALK branch :1497). A plot-package NPC
-        // materializes with entity.id === its plot numeric id (plot_npc_spawn.ts:61), so
-        // checkTalkQuest matchById fires when the player reaches it. Without the fallback
-        // targetNpcId froze undefined → cross-floor TALK side quests were uncompletable.
-        targetNpcId: target?.id ?? targetNpcId,
+        // Цель авторского задания — ВСЕГДА слот, и на своём этаже, и на чужом.
+        // Раньше тут лежал живой номер сущности, когда цель оказывалась рядом, и
+        // слот — когда нет; одно поле двух видов. Держалось это на совпадении
+        // номера сущности со слотом, которого больше нет.
+        targetNpcId,
         targetNpcName: target?.name ?? targetName,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
         extraRewards: sq.extraRewards,
@@ -1773,7 +1835,7 @@ function generatePlotQuest(
       const id = state.nextQuestId++;
       return {
         id, type: sq.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc: sq.desc,
         visitFloorZ: sq.visitFloorZ,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
@@ -1797,7 +1859,7 @@ function generatePlotQuest(
       }
       return {
         id, type: sq.type,
-        giverId: npc.id, giverName: npc.name ?? '???',
+        giverId: npc.slot, giverName: npc.name ?? '???',
         desc,
         targetRoom: room.id,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
@@ -2020,7 +2082,9 @@ function generateQuest(
 ): Quest | null {
   // ── Story quest from PLOT_CHAIN ──
   if (isPlotNpc(npc)) {
-    return generatePlotQuest(npc, world, entities, state);
+    // Слот берётся из `alifeId`: он и есть личность. Раньше сюда уезжала сама
+    // сущность, и слотом работал её номер.
+    return generatePlotQuest({ slot: npc.alifeId!, name: npc.name, x: npc.x, y: npc.y }, world, entities, state);
   }
 
   const occ = npc.occupation;

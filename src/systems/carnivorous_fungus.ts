@@ -34,6 +34,12 @@ let hazardAccum = 0;
 let nextHazardMsgAt = 0;
 const discoveredRooms = new Set<number>();
 const fedCorpseIds = new Set<number>();
+// Плотоядных комнат на этаже обычно НЕТ, а кормление всё равно перебирало всех
+// сущностей три раза в секунду. Ответ переспрашивается только когда список
+// комнат вырос: имя комнате даёт генерация, переименований в рантайме нет,
+// а новая грибница — это всегда новая запись `world.rooms`.
+let fungusRoomsPresent = false;
+let fungusRoomsScannedCount = -1;
 
 function resetForWorld(world: World): void {
   if (trackedWorld === world) return;
@@ -43,6 +49,16 @@ function resetForWorld(world: World): void {
   nextHazardMsgAt = 0;
   discoveredRooms.clear();
   fedCorpseIds.clear();
+  fungusRoomsPresent = false;
+  fungusRoomsScannedCount = -1;
+}
+
+function floorHasFungusRooms(world: World): boolean {
+  if (fungusRoomsScannedCount !== world.rooms.length) {
+    fungusRoomsScannedCount = world.rooms.length;
+    fungusRoomsPresent = world.rooms.some(isCarnivorousFungusRoom);
+  }
+  return fungusRoomsPresent;
 }
 
 export function isCarnivorousFungusRoom(room: Room | null | undefined): room is Room {
@@ -367,6 +383,9 @@ function updateNearbyFeeds(
   player: Entity,
   state: GameState,
 ): void {
+  // Без плотоядных комнат кормить некого: ни одна ветка ниже не сработает,
+  // потому что каждая требует `roomActive(room)`.
+  if (!floorHasFungusRooms(world)) return;
   let handled = 0;
   for (const e of entities) {
     if (handled >= 5) break;

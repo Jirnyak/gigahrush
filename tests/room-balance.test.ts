@@ -23,6 +23,11 @@ import {
   npcUtilityEmergencyScore,
   npcUtilityIntentPatience,
 } from '../src/systems/ai/npc_utility';
+import {
+  actorDrive, forgetActorBrain, setActorCoreContext, tickActorBrain,
+} from '../src/systems/actor/brain';
+import { DRIVE_BY_ID } from '../src/systems/actor/drives';
+import { rebuildCrowdIndex } from '../src/world/crowd_index';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { addTestRoom, makeTestPlayer } from './helpers';
 
@@ -101,17 +106,52 @@ function tick(world: World, npc: Entity, minutes: number, hour: number): void {
   updateNPC(world, entities, npc, 0, minutes, clock, false);
 }
 
+/* ── Тело выбирает комнату из ядра актора ─────────────────────────────────
+ *
+ * Голод, жажда, сон, туалет и лечение живут в `systems/actor`, поэтому все
+ * телесные проверки гоняют цикл ЯДРА. Ядро решает по своей паузе,
+ * расфазированной от `id` и выведенной из такта полей (не больше четырёх
+ * секунд), а исполняет каждый кадр — одного такта не хватит ни на решение, ни
+ * на дорогу. Прежний слой остаётся здесь только там, где речь о его рутине:
+ * человек БЕЗ нужд ядру неинтересен, и разводит таких по этажу именно рутина.
+ */
+const CORE_DT = 0.5;
+const CORE_DECIDE_STEPS = Math.ceil(4 / CORE_DT) + 1;
+
+/** Такты ядра начиная с `from`. Решение НЕ сбрасывается: дело продолжается. */
+function coreSteps(
+  world: World, npc: Entity, entities: readonly Entity[], from: number, steps: number,
+): number {
+  for (let step = 0; step < steps; step++) {
+    const now = from + step * CORE_DT;
+    rebuildEntityIndexForSimulation(entities as Entity[], now);
+    rebuildCrowdIndex(world, entities, now);
+    setPathContext([], now);
+    tickActorBrain(world, npc, CORE_DT, now);
+  }
+  return from + steps * CORE_DT;
+}
+
+function tickCore(world: World, npc: Entity, bystanders: readonly Entity[] = []): void {
+  const entities = [makeTestPlayer({ id: 1, x: 126, y: 126 }), ...bystanders, npc];
+  forgetActorBrain(npc);
+  setActorCoreContext(0);
+  coreSteps(world, npc, entities, 0, CORE_DECIDE_STEPS);
+}
+
 /** Куда разошлась толпа одинаково настроенных людей: тип комнаты → сколько. */
 function targetRoomHistogram(
   world: World,
   needs: Entity['needs'],
   hour: number,
   hp = 50,
+  body = true,
 ): Map<RoomType, number> {
   const hist = new Map<RoomType, number>();
   for (let i = 0; i < CROWD; i++) {
     const npc = makeNpc(i, { ...needs! }, { hp });
-    tick(world, npc, hour * 60, hour);
+    if (body) tickCore(world, npc);
+    else tick(world, npc, hour * 60, hour);
     const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
     if (room) hist.set(room.type, (hist.get(room.type) ?? 0) + 1);
   }
@@ -148,7 +188,8 @@ test('сонного ночью ведёт домой, а не на работу
 
 test('без нужды люди расходятся, а не прут в одну комнату', () => {
   const world = makeTownFloor();
-  const hist = targetRoomHistogram(world, { food: 95, water: 95, sleep: 90, pee: 5, poo: 5 }, 12);
+  // Без нужд ядро актора актора не берёт — разводит по этажу рутина прежнего слоя.
+  const hist = targetRoomHistogram(world, { food: 95, water: 95, sleep: 90, pee: 5, poo: 5 }, 12, 50, false);
   const [, top] = dominant(hist);
 
   assert.ok(hist.size >= 4, `сытые должны разойтись хотя бы по четырём деятельностям, а разошлись по ${hist.size}`);
@@ -169,7 +210,7 @@ test('при равном интересе идут в ближнюю комна
     const x = 8 + (i % 8) * 16 + 0.5;
     const y = 8 + Math.floor(i / 8) * 16 + 0.5;
     const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 }, { x, y });
-    tick(world, npc, 720, 12);
+    tickCore(world, npc);
     const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
     if (!room) continue;
     used.add(room.id);
@@ -194,7 +235,7 @@ test('ровную ничью решает личность, а не номер 
   const hist = new Map<number, number>();
   for (let i = 0; i < CROWD; i++) {
     const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 });
-    tick(world, npc, 720, 12);
+    tickCore(world, npc);
     const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
     if (room) hist.set(room.id, (hist.get(room.id) ?? 0) + 1);
   }
@@ -222,12 +263,7 @@ test('забитая комната тянет слабее пустой, хот
   let choseEmpty = 0;
   for (let i = 0; i < 16; i++) {
     const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 });
-    const entities = [makeTestPlayer({ id: 1, x: 126, y: 126 }), ...standing, npc];
-    const minutes = 720 + i;
-    rebuildEntityIndexForSimulation(entities, minutes);
-    setPathContext([], minutes);
-    setNpcContext([], minutes, 0);
-    updateNPC(world, entities, npc, 0, minutes, { hour: 12, minute: 0, totalMinutes: minutes }, false);
+    tickCore(world, npc, standing);
     const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
     if (room?.id === empty.id) choseEmpty++;
   }
@@ -256,7 +292,7 @@ test('на большом этаже отбирает ближних, а не н
   let choseNear = 0;
   for (let i = 0; i < 16; i++) {
     const npc = makeNpc(i, { food: 3, water: 90, sleep: 90, pee: 5, poo: 5 });
-    tick(world, npc, 720 + i, 12);
+    tickCore(world, npc);
     const room = world.roomAt(npc.ai?.tx ?? -1, npc.ai?.ty ?? -1);
     if (room?.id === near.id) choseNear++;
   }
@@ -268,40 +304,61 @@ test('на большом этаже отбирает ближних, а не н
 test('терпение выводится числом на намерение, а не списком срочных дел', () => {
   // Угроза срочна сразу, работа — почти никогда; порог растёт вместе с терпением.
   assert.equal(npcUtilityIntentPatience('flee'), 0);
-  assert.ok(npcUtilityIntentPatience('toilet') < npcUtilityIntentPatience('sleep'));
-  assert.ok(npcUtilityIntentPatience('sleep') < npcUtilityIntentPatience('work'));
-  assert.ok(npcUtilityEmergencyScore('flee') < npcUtilityEmergencyScore('toilet'));
-  assert.ok(npcUtilityEmergencyScore('toilet') < npcUtilityEmergencyScore('work'));
+  assert.ok(npcUtilityIntentPatience('faction_assault') < npcUtilityIntentPatience('social'));
+  assert.ok(npcUtilityIntentPatience('social') < npcUtilityIntentPatience('work'));
+  assert.ok(npcUtilityIntentPatience('work') < npcUtilityIntentPatience('wander'));
+  assert.ok(npcUtilityEmergencyScore('flee') < npcUtilityEmergencyScore('social'));
+  assert.ok(npcUtilityEmergencyScore('social') < npcUtilityEmergencyScore('work'));
   assert.ok(npcUtilityEmergencyScore('work') > 90, 'работа обязана набрать почти предельный счёт, чтобы стать срочной');
+
+  /* Телесная половина закона уехала в ядро актора вместе с самим телом, и там
+   * терпение выражено СВОИМ числом на драйв — сроком удержания. Порядок тот же:
+   * мочевой терпит хуже сна, а лечиться человек будет дольше, чем облегчаться. */
+  assert.ok(DRIVE_BY_ID.toilet.holdSec < DRIVE_BY_ID.heal.holdSec);
+  assert.ok(DRIVE_BY_ID.heal.holdSec < DRIVE_BY_ID.sleep.holdSec);
 });
 
-test('лопнувший мочевой перебивает начатый путь, а лёгкий голод — нет', () => {
+/* Дело начато телом же: человека клонит в сон, и он идёт спать. Дальше проверка
+ * та же, что и была, — лопнувший мочевой обязан сорвать его с дела, а лёгкий
+ * голод не вправе. В ядре актора это не два списка «срочное/терпеливое», а одна
+ * физика: удержание начатого драйва (`holdSec`) плюс надбавка действующему, и
+ * поверх — сама величина тяги. Лёгкий голод не срывает никого не по запрету, а
+ * потому, что при 62 из 100 давление голода ещё РОВНО НОЛЬ: кривая нужды
+ * начинает расти только под порогом. */
+test('лопнувший мочевой перебивает начатое дело, а лёгкий голод — нет', () => {
   const world = makeTownFloor();
+  const HOLD_STEPS = Math.ceil(DRIVE_BY_ID.sleep.holdSec * 2 / CORE_DT);
   let ranToToilet = 0;
-  let keptWorking = 0;
+  let keptSleeping = 0;
 
   for (let i = 0; i < 16; i++) {
-    const npc = makeNpc(i, { food: 90, water: 90, sleep: 90, pee: 5, poo: 5 });
-    tick(world, npc, 540, 9);
-    const startedGoal = npc.ai!.goal;
-    assert.notEqual(startedGoal, AIGoal.TOILET);
+    const npc = makeNpc(i, { food: 90, water: 90, sleep: 30, pee: 5, poo: 5 });
+    const entities = [makeTestPlayer({ id: 1, x: 126, y: 126 }), npc];
+    forgetActorBrain(npc);
+    setActorCoreContext(0);
+    let now = coreSteps(world, npc, entities, 0, CORE_DECIDE_STEPS);
+    assert.equal(actorDrive(npc), 'sleep', 'дело должно начаться со сна');
 
     npc.needs!.pee = 100;
     npc.needs!.poo = 100;
-    for (let step = 1; step <= 12; step++) tick(world, npc, 540 + step, 9);
-    if (npc.ai!.goal === AIGoal.TOILET) ranToToilet++;
+    coreSteps(world, npc, entities, now, HOLD_STEPS);
+    if (actorDrive(npc) === 'toilet') ranToToilet++;
   }
 
   for (let i = 0; i < 16; i++) {
-    const npc = makeNpc(i, { food: 90, water: 90, sleep: 90, pee: 5, poo: 5 });
-    tick(world, npc, 540, 9);
-    const startedGoal = npc.ai!.goal;
-    // Лёгкий голод: дело терпит, начатый путь бросать не за чем.
+    const npc = makeNpc(i, { food: 90, water: 90, sleep: 30, pee: 5, poo: 5 });
+    const entities = [makeTestPlayer({ id: 1, x: 126, y: 126 }), npc];
+    forgetActorBrain(npc);
+    setActorCoreContext(0);
+    const now = coreSteps(world, npc, entities, 0, CORE_DECIDE_STEPS);
+    assert.equal(actorDrive(npc), 'sleep');
+
+    // Лёгкий голод: дело терпит, начатое бросать не за чем.
     npc.needs!.food = 62;
-    for (let step = 1; step <= 12; step++) tick(world, npc, 540 + step, 9);
-    if (npc.ai!.goal === startedGoal) keptWorking++;
+    coreSteps(world, npc, entities, now, HOLD_STEPS);
+    if (actorDrive(npc) === 'sleep') keptSleeping++;
   }
 
   assert.equal(ranToToilet, 16, 'с лопнувшим мочевым обязаны бросить дело и бежать');
-  assert.ok(keptWorking >= 14, `лёгкий голод сорвал с дела ${16 - keptWorking} человек из 16`);
+  assert.ok(keptSleeping >= 14, `лёгкий голод сорвал с дела ${16 - keptSleeping} человек из 16`);
 });

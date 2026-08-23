@@ -68,11 +68,12 @@ export function plotDiaryOwnerId(item: Item | undefined): number | undefined {
  * включая слоты и защиту записок от вытеснения по FIFO.
  */
 export function attachPlotDiary(entity: Entity): void {
-  if (entity.type !== EntityType.NPC || getPlotNpcPackageByNumericId(entity.id) === undefined) return;
-  const diary = plotDiaryItem(entity.id, entity.name);
+  if (entity.type !== EntityType.NPC || entity.alifeId === undefined) return;
+  if (getPlotNpcPackageByNumericId(entity.alifeId) === undefined) return;
+  const diary = plotDiaryItem(entity.alifeId!, entity.name);
   if (!diary) return;
   if (!entity.inventory) entity.inventory = [];
-  if (entity.inventory.some(slot => plotDiaryOwnerId(slot) === entity.id)) return;
+  if (entity.inventory.some(slot => plotDiaryOwnerId(slot) === entity.alifeId)) return;
   // В начало: `dropEntityInventory` берёт слоты сущностей один раз и на длинном
   // инвентаре может не дотянуться до хвоста.
   entity.inventory.unshift(diary);

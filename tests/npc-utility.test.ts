@@ -19,6 +19,13 @@ import {
   type NpcUtilityTargetCandidate,
 } from '../src/systems/ai/npc_utility';
 import { forceHide, updateNPC } from '../src/systems/ai/npc_fsm';
+import { setPathContext } from '../src/systems/ai/pathfinding';
+import {
+  actorDrive, forgetActorBrain, setActorCoreContext, tickActorBrain,
+} from '../src/systems/actor/brain';
+import { DRIVES, scoreDrive, driveActorKind, type DriveId } from '../src/systems/actor/drives';
+import { createActorNeeds, readActorNeeds } from '../src/systems/actor/needs';
+import { createActorSenses } from '../src/systems/actor/senses';
 import { getEntityIndex, rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { addTestRoom, makeTestPlayer } from './helpers';
 
@@ -62,6 +69,44 @@ function tickUtilityNpc(world: World, entities: Entity[], npc: Entity, clock: Ga
   updateNPC(world, entities, npc, 1, clock.totalMinutes, clock, false);
 }
 
+/* ── Тело считает ядро актора ─────────────────────────────────────────────
+ *
+ * Пять телесных намерений (`eat`, `drink`, `sleep`, `toilet`, `heal`) ушли из
+ * этого слоя в `systems/actor`, поэтому их и спрашивать надо там. Формула счёта
+ * драйва — чистая функция от снимка восприятия и снимка тела: часа в ней нет
+ * вовсе, что и есть «без жёсткого расписания» в самом сильном виде.
+ */
+const CORE_DT = 0.5;
+const CORE_DECIDE_STEPS = Math.ceil(4 / CORE_DT) + 1;
+const CORE_WALK_STEPS = 160;
+
+/** Сильнейший драйв тела в тихой клетке: все каналы восприятия нулевые. */
+function strongestDrive(e: Entity): DriveId | undefined {
+  const view = { senses: createActorSenses(), needs: readActorNeeds(e, createActorNeeds()) };
+  const kind = driveActorKind(e, false);
+  let best: DriveId | undefined;
+  let bestScore = 0;
+  for (const def of DRIVES) {
+    const score = scoreDrive(def, view, kind);
+    if (score > bestScore) { bestScore = score; best = def.id; }
+  }
+  return best;
+}
+
+/** Прогнать цикл ядра. Возвращает true, если ядро хоть раз повело актора само. */
+function runCore(world: World, entities: Entity[], npc: Entity, steps: number): boolean {
+  forgetActorBrain(npc);
+  setActorCoreContext(0);
+  let led = false;
+  for (let step = 0; step < steps; step++) {
+    const now = step * CORE_DT;
+    rebuildEntityIndexForSimulation(entities, now);
+    setPathContext([], now);
+    if (tickActorBrain(world, npc, CORE_DT, now)) led = true;
+  }
+  return led;
+}
+
 test('NPC utility identity seed prefers stable A-Life identity over transient entity id', () => {
   const a = { entityId: 10, alifeId: 777 };
   const b = { entityId: 999, alifeId: 777 };
@@ -73,6 +118,7 @@ test('NPC utility identity seed prefers stable A-Life identity over transient en
 });
 
 test('NPC utility scores urgent water over routine work without a hard schedule', () => {
+  // Рутина прежнего слоя в рабочий час честно выбирает работу...
   const scores = scoreNpcUtilities({
     identity: { alifeId: 42 },
     minuteOfDay: 630,
@@ -84,9 +130,15 @@ test('NPC utility scores urgent water over routine work without a hard schedule'
       riskTolerance: 0.2,
     },
   });
+  assert.equal(selectNpcUtilityIntent(scores).intent, 'work');
 
-  assert.equal(selectNpcUtilityIntent(scores).intent, 'drink');
-  assert.ok(getNpcUtilityScore(scores, 'drink') > getNpcUtilityScore(scores, 'work'));
+  // ...а тело перебивает её из ядра актора: ядро идёт ПЕРЕД прежним слоем и
+  // забирает актора себе, как только тяга поднялась. Тянет давление, а не час.
+  const thirsty = makeUtilityNpc(42, { food: 90, water: 5, sleep: 92, pee: 8, poo: 6 });
+  const sated = makeUtilityNpc(43, { food: 90, water: 90, sleep: 92, pee: 8, poo: 6 });
+
+  assert.equal(strongestDrive(thirsty), 'drink');
+  assert.equal(strongestDrive(sated), undefined, 'без нужды телу нечего сказать — ход остаётся рутине');
 });
 
 test('NPC utility rhythm is soft pressure rather than zero-or-one schedule state', () => {
@@ -171,13 +223,17 @@ test('NPC runtime utility lets urgent thirst beat work at working hours', () => 
   const entities = [player, thirsty, worker];
   const clock = { hour: 9, minute: 0, totalMinutes: 9 * 60 };
 
-  tickUtilityNpc(world, entities, thirsty, clock);
+  // Сытому телу сказать нечего, и рутина прежнего слоя ведёт его на работу.
+  assert.equal(strongestDrive(worker), undefined);
   tickUtilityNpc(world, entities, worker, clock);
-
-  assert.equal(thirsty.ai?.goal, AIGoal.DRINK);
-  assert.equal(thirsty.ai?.npcState, NpcState.LUNCH);
   assert.equal(worker.ai?.goal, AIGoal.WORK);
   assert.equal(worker.ai?.npcState, NpcState.WORKING);
+
+  // Жаждущего забирает ядро и ведёт до комнаты, где пьют; отметка занятия
+  // ставится по прибытии — по ней `systems/needs.ts` и гасит жажду.
+  assert.equal(runCore(world, entities, thirsty, CORE_WALK_STEPS), true);
+  assert.equal(actorDrive(thirsty), 'drink');
+  assert.equal(thirsty.ai?.npcState, NpcState.LUNCH);
 });
 
 test('NPC runtime utility does not force lunch from the noon clock edge', () => {

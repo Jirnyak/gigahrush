@@ -5,6 +5,7 @@ import type { World } from '../core/world';
 import { isQuestTargetOnCurrentFloor, resolveQuestTargetRoom } from './contracts';
 import { getSamosborWaveDebugSnapshot } from './samosbor_wave';
 import { registerDebugCommand } from './debug_registry';
+import { questAddressesBySlot } from './quests';
 
 const LOCAL_TRAIL_RADIUS = 2;
 const QUEST_MARKER_REVEAL_RADIUS = 8;
@@ -252,8 +253,8 @@ export function revealQuestTargetOnMap(
 
   if (!entities?.length) return;
   const targetEntity = entities.find(e =>
-    e.alive &&
-    q.targetNpcId !== undefined && e.id === q.targetNpcId,
+    e.alive && q.targetNpcId !== undefined
+    && (questAddressesBySlot(q) ? e.alifeId === q.targetNpcId : e.id === q.targetNpcId),
   );
   if (targetEntity) {
     revealQuestEntityMarker(world, targetEntity);

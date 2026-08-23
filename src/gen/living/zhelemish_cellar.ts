@@ -286,7 +286,7 @@ function spawnNpc(
   angle: number,
   weapon?: string,
 ): number {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing.id;
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {
     angle,

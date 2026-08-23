@@ -31,6 +31,7 @@ import {
   tryKvartiryContentUprising,
 } from './content_manifest';
 import { rng, irand } from '../../core/rand';
+import { firstRuntimeEntityId } from '../entity_ids';
 
 /* ── Constants ────────────────────────────────────────────────── */
 const WALL_L = 4;  // grid spacing for wall sources
@@ -153,7 +154,7 @@ function linkKvartiryDoorsToRooms(world: World): void {
 export function generateKvartiry(territorySeed = 0): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  let nextId = 1;
+  let nextId = firstRuntimeEntityId();
   let nextRoomId = 0;
   lastPickedIdx = -1; // reset room type picker
   resetKvartiryContentState();

@@ -2,6 +2,7 @@ import { currentFloorRunEntry } from './procedural_floors';
 /* ── Inventory system: items, pickup, use ─────────────────────── */
 
 import { calculateReloadTime } from './combat';
+import { ENTITY_MASK_ITEM_DROP, ensureEntityIndex } from './entity_index';
 import {
   type Entity, type InventoryHolder, type GameState, type Item, type ItemDef, type Msg,
   type WorldEventPrivacy, type WorldEventSeverity, ItemType,
@@ -2314,12 +2315,38 @@ export function pickupNearby(
   state?: GameState,
   onPickedDrop?: (drop: Entity, pickedItems: readonly Item[]) => void,
 ): void {
-  for (let i = entities.length - 1; i >= 0; i--) {
-    const drop = entities[i];
-    if (drop.type !== EntityType.ITEM_DROP || !drop.alive) continue;
-    if (world.dist(player.x, player.y, drop.x, drop.y) > 1.5) continue;
+  // Радиус подбора и раньше отсекал всё дальше полутора клеток — запрос даёт тот
+  // же набор, только не трогая весь этаж. Порядок разбора сохранён прежний
+  // (с конца массива, то есть от свежего к старому): при полном рюкзаке от него
+  // зависит, ЧТО именно достанется, и менять его молча нельзя.
+  const near = PICKUP_SCRATCH;
+  ensureEntityIndex(entities).queryRadius(player.x, player.y, PICKUP_RADIUS, near, ENTITY_MASK_ITEM_DROP);
+  if (near.length > 1) sortByReverseEntityOrder(entities, near);
+  for (const drop of near) {
     pickupDropItems(world, drop, player, msgs, time, state, onPickedDrop, false);
   }
+  near.length = 0;
+}
+
+/** Тот же радиус, что стоял в `pickupNearby` числом. */
+const PICKUP_RADIUS = 1.5;
+const PICKUP_SCRATCH: Entity[] = [];
+
+/**
+ * Вернуть найденным дропам порядок исходного массива, с конца.
+ *
+ * Запрос отдаёт их по корзинам, а разбор обязан идти от последнего к первому.
+ * Один проход по массиву — и только когда под ногами больше одного дропа.
+ */
+function sortByReverseEntityOrder(entities: readonly Entity[], found: Entity[]): void {
+  const wanted = new Set<number>();
+  for (const drop of found) wanted.add(drop.id);
+  const order = new Map<number, number>();
+  for (let i = 0; i < entities.length; i++) {
+    const id = entities[i].id;
+    if (wanted.has(id)) order.set(id, i);
+  }
+  found.sort((a, b) => (order.get(b.id) ?? -1) - (order.get(a.id) ?? -1));
 }
 
 function equippedPsiToolId(e: Entity): string {

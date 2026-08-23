@@ -12,6 +12,7 @@ export const DEF: MonsterDef = {
   dmg: 18,
   attackRate: 2.9,
   sprite: 0,
+  detect: 23,
   isRanged: true,
   projSpeed: 7.2,
   projSprite: 0,

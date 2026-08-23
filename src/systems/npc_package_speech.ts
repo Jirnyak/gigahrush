@@ -104,7 +104,7 @@ export function resolveNpcPackageForEntity(entity: Entity): NpcSpeechPackageView
     if (pack) return pack;
   }
 
-  if (isPlotNpc(entity)) return resolvePackageForPlotNpcId(entity.id);
+  if (isPlotNpc(entity)) return resolvePackageForPlotNpcId(entity.alifeId!);
   if (entity.persistentNpcId) {
     const pack = speechPackageById(cleanId(entity.persistentNpcId) ?? '');
     if (pack) return pack;

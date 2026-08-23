@@ -15,6 +15,7 @@ import {
   sanitizeDoors,
 } from '../shared';
 import { xorshift32 } from '../../core/rand';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_FLOOR_ID, HILBERT_DEPOT_ROUTE_Z, CURVE_ORDER, CURVE_STEP, CURVE_X, CURVE_Y, BAY_FIRST_INDEX, BAY_INDEX_STEP, HilbertDepotState, HilbertDepotGeneration } from "./meta";
 import { expandHilbertDepotRouteGeometry, ensureDepotHqDoorsAfterSanitize, carveSafeCurve, decorateSafeCurve, addCargoBay, addDepotChords, registerHilbertDepotRouteCues, addItemDrop, addNamedRoom, connectRoomToPoint, placeLift, hilbertTracePoints } from "./geometry";
 import { applyHilbertDepotTerritorySeeds, alignHilbertDepotAmbientNpcTerritory, addDepotPressure, refreshContainerZones } from "./npcs";
@@ -22,7 +23,7 @@ import { applyHilbertDepotTerritorySeeds, alignHilbertDepotAmbientNpcTerritory, 
 export function generateHilbertDepotDesignFloor(seed: number): HilbertDepotGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const rand = xorshift32(seed);
   const points = hilbertTracePoints(CURVE_ORDER, CURVE_X, CURVE_Y, CURVE_STEP);
   const state: HilbertDepotState = {

@@ -3,6 +3,7 @@ import { World as WorldClass } from '../../core/world';
 import type { FloorGeneration } from '../floor_manifest';
 import { stampRoom, protectRoom } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { newEntityIdCursor } from '../entity_ids';
 
 export const LIQUIDATOR_BASE_Z = -16;
 
@@ -14,7 +15,7 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   const spawnY = 100;
 
   let nextRoomId = 0;
-  const nextId = { v: 1000 };
+  const nextId = newEntityIdCursor();
 
   // Generate Central HQ
   const hq = stampRoom(world, nextRoomId++, RoomType.HQ, spawnX - 25, spawnY - 15, 50, 30, -1);

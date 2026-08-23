@@ -36,11 +36,12 @@ import {
   UPPER_BUREAU_DISPLAY_NAME,
   UPPER_BUREAU_ROUTE_ID,
 } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 10000 };
+  const nextId: NextId = newEntityIdCursor();
   const rand = xorshift32(seed);
 
   fillDefaultTextures(world);

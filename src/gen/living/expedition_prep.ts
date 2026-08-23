@@ -425,7 +425,7 @@ function spawnNpc(
   angle: number,
   weapon?: string,
 ): Entity {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing;
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);

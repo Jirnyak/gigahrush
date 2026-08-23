@@ -18,13 +18,14 @@ import './living_zone';
 
 import { expandBlackMarket88Bazaar, buildMarketRooms, linkMarketRooms, decorateMarketRooms, addAccessLifts, tuneMarketZones } from './geometry';
 import { registerBlackMarket88DesignFloorContent, spawnMarketNpcs, spawnMarketQueueCrowd, seedMarketContainers } from './npcs';
+import { newEntityIdCursor } from '../entity_ids';
 
 export function generateBlackMarket88DesignFloor(): FloorGeneration {
   registerBlackMarket88DesignFloorContent();
 
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
 
   generateZones(world);
   tuneMarketZones(world);

@@ -10,6 +10,7 @@ import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, SPETSPRIEMNIK_ROUTE_ID, SPETSPRIEMNIK_Z, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, BASE_TAGS, NPC_DEFS } from "./meta";
 import { metricsByWorld, expandSpetspriemnikRouteGeometry, reinforceSpetspriemnikRouteGates, tuneSpetspriemnikRouteZones, calculateMetrics } from "./geometry";
 import { placeContainers, buildCore, spawnAuthoredActors } from "./npcs";
@@ -151,7 +152,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_clerk_alla', NP
 export function generateSpetspriemnikDesignFloor(seed: number): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const built = buildCore(world);
   const rand = xorshift32(seed);
 

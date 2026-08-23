@@ -46,7 +46,18 @@ function packageSpeed(pack: NpcPackageDef): number {
   return Math.max(0.1, Math.min(20, pack.runtime?.speed ?? 1.2));
 }
 
+/**
+ * Тело авторской личности.
+ *
+ * `entityId` — обычный номер сущности из общего счётчика; личность живёт в
+ * `alifeId` и `npcPackageId`. Раньше оба поля получали НОМЕР СЛОТА, и на этом
+ * совпадении держалась вся адресация сюжетных людей: любая обычная сущность,
+ * попавшая в слотовый диапазон, выдавала себя за человека — панель диалога
+ * рисовалась из листовки, A-Life вычищала «переехавшего», а смерть самозванца
+ * навсегда записывала в сейв чужую смерть.
+ */
 export function plotNpcEntityFromPackage(
+  entityId: number,
   plotNpcId: string,
   x: number,
   y: number,
@@ -60,8 +71,8 @@ export function plotNpcEntityFromPackage(
   const visualSpriteScale = pack.visual.spriteScale
     ?? (pack.affiliation.occupation === Occupation.CHILD ? 0.6 : undefined);
   return {
-    id: getPlotNpcNumericId(plotNpcId)!,
-    alifeId: getPlotNpcNumericId(plotNpcId)!,
+    id: entityId,
+    alifeId: numericId,
     type: EntityType.NPC,
     x,
     y,
@@ -105,8 +116,7 @@ export function spawnPlotNpcFromPackage(
   y: number,
   options: PlotNpcSpawnOptions = {},
 ): Entity | undefined {
-  nextId.v++;
-  const entity = plotNpcEntityFromPackage(plotNpcId, x, y, options);
+  const entity = plotNpcEntityFromPackage(nextId.v, plotNpcId, x, y, options);
   if (!entity) return undefined;
   nextId.v++;
   entities.push(entity);
@@ -193,7 +203,7 @@ export function deliverFloorNpcPackages(
     const plotNpcId = pack.content?.plotNpcId;
     if (plotNpcId == null || placed.has(pack.id)) continue;
     const numericId = getPlotNpcNumericId(plotNpcId);
-    if (numericId !== undefined && entities.some(e => e.id === numericId && e.alive)) continue;
+    if (numericId !== undefined && entities.some(e => e.alifeId === numericId && e.alive)) continue;
 
     const room = roomForPlacement(world, pack.placement.roomId)
       ?? roomForOccupation(world, pack.affiliation.occupation, pack.id);

@@ -41,12 +41,13 @@ import {
   type ServiceFloorState,
   type ServiceFloorGeneration,
 } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 
 export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const serviceState = createServiceFloorState();
 
   for (let i = 0; i < W * W; i++) {

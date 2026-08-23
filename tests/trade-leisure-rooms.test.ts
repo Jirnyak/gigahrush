@@ -65,7 +65,10 @@ test('в баре скапливаются сами: он перевешивае
     npcUtilityRoomInterest(RoomType.BAR, social) > npcUtilityRoomInterest(RoomType.COMMON, social),
     'на разговор бар должен тянуть сильнее общего зала',
   );
-  const thirsty = { intent: 'drink' as const };
+  // Жажда переехала из намерений старого слоя в НАЗНАЧЕНИЕ комнаты: тело теперь
+  // ведёт ядро актора, и «чем комната полезна» спрашивается назначением, а не
+  // именем намерения. Проверяется то же самое требование — бар тянет пить.
+  const thirsty = { affordance: 'drink' as const };
   assert.ok(npcUtilityRoomInterest(RoomType.BAR, thirsty) > 0, 'жаждущего бар обязан тянуть');
   assert.ok(
     npcUtilityRoomInterest(RoomType.MARKET, { intent: 'wander' as const })

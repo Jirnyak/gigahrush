@@ -17,6 +17,7 @@ import {
   ,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { LIDA_DEF, GRANDFATHER_DEF, FIRE_LIQUIDATOR_DEF, FALSE_HEIR_DEF } from "./meta";
 import { ArchiveRooms, createArchiveRoom, paintRoom, reinforceRaionsovetArchiveAuthoredHqTerritory, expandRaionsovetArchiveGeometry, connectRoomToPoint, placeFixedLift, addDrop, decorateArchive, paintNonRoomCells, retuneRaionsovetArchiveZones } from "./geometry";
 import { spawnArchiveNpc, spawnArchiveGuard, spawnArchiveMonster, addArchiveContainer } from "./npcs";
@@ -24,7 +25,7 @@ import { spawnArchiveNpc, spawnArchiveGuard, spawnArchiveMonster, addArchiveCont
 export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const nextContainerId = { v: 1 };
 
   for (let i = 0; i < W * W; i++) {

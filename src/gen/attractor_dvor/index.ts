@@ -8,6 +8,7 @@ import { ensureConnectivity, generateZones, sanitizeDoors, scatterAmbientLights 
 import { seededRandom, hashSeed } from '../../core/rand';
 import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, ATTRACTOR_DVOR_ROOM_DEF_IDS, AttractorDvorState } from "./meta";
 import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, applyAttractorDeadCutTerritory, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, placeLifts, registerAttractorRouteCues } from "./geometry";
 import { placeContainers, spawnActors } from "./npcs";
@@ -15,7 +16,7 @@ import { placeContainers, spawnActors } from "./npcs";
 export function generateAttractorDvorDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
 
   initWorld(world);
   const rooms = buildRooms(world);

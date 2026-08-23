@@ -31,30 +31,70 @@ export function applyDamage(
   return applyMonsterArmorHit(world, state, target, { ...input, damage: typed });
 }
 
+/**
+ * Ниже какой доли максимального здоровья удар пейн-реакции НЕ даёт.
+ *
+ * Здесь стоял `0.01`: пейн-стан вешала любая царапина, и очередь из ППШ (8 урона
+ * при сотне здоровья, выстрел раз в 0.07 с) держала цель в непрерывном стан-локе.
+ * Порог читается как «заметный удар»: десятая часть здоровья за раз.
+ */
+const STAGGER_MIN_HP_RATIO = 0.1;
+
+/**
+ * Толчок остаётся на прежнем, низком пороге. Отскок — это физика попадания, а не
+ * боль: дробь по крупной твари каждой дробиной толкает и должна толкать дальше.
+ */
+const KNOCKBACK_MIN_HP_RATIO = 0.01;
+
+/**
+ * Часы боя для рефрактерного периода пейн-реакции.
+ *
+ * Вычесть время здесь не из чего: функция не получает ни мира, ни времени, а
+ * зовут её все пути урона, включая единую дверь `damageActor`. Отсчёт ставит
+ * кадр AI, у которого время и так на руках (`setCombatContext` → сюда).
+ */
+let combatClock = 0;
+export function setCombatClock(time: number): void {
+  combatClock = time;
+}
+
+/**
+ * Докуда цель уже «отболела» и новой пейн-реакции не берёт.
+ *
+ * Транзиентно и снаружи ядра: свойство схватки, а не сущности, в сейв не идёт и
+ * умирает вместе с актором. Длина периода не отдельная ручка — она РАВНА самому
+ * стаггеру, то есть больше половины времени боль занять не может даже под
+ * непрерывным огнём: `fight.md` требует ровно этого («шанс/кулдаун, чтобы не
+ * было stunlock»).
+ */
+const staggerRefractory = new WeakMap<Entity, number>();
+
 export function applyHitStaggerAndKnockback(target: Entity, sourceX: number, sourceY: number, damage: number): void {
   if (damage <= 0 || !target.alive) return;
   const maxHp = target.maxHp || 100;
   const ratio = damage / maxHp;
-  
-  // Noticeable hit -> Apply stagger and knockback
-  if (ratio > 0.01) {
-    // Asymptotic stagger up to 1 second
-    const staggerTime = Math.min(1.0, (ratio * 1.5) / (ratio * 1.5 + 0.2));
+  if (ratio <= KNOCKBACK_MIN_HP_RATIO) return;
+
+  // Asymptotic stagger up to 1 second
+  const staggerTime = Math.min(1.0, (ratio * 1.5) / (ratio * 1.5 + 0.2));
+
+  if (ratio > STAGGER_MIN_HP_RATIO && combatClock >= (staggerRefractory.get(target) ?? -Infinity)) {
+    staggerRefractory.set(target, combatClock + staggerTime * 2);
     target.staggerTimer = Math.max(target.staggerTimer ?? 0, staggerTime);
     if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, staggerTime);
-    
-    // Knockback
-    let dx = target.x - sourceX;
-    let dy = target.y - sourceY;
-    const dist = Math.hypot(dx, dy);
-    if (dist > 0.01) {
-      dx /= dist;
-      dy /= dist;
-      // push force scales with stagger intensity (cells/sec)
-      const pushForce = staggerTime * 12.0; 
-      target.vx = (target.vx ?? 0) + dx * pushForce;
-      target.vy = (target.vy ?? 0) + dy * pushForce;
-    }
+  }
+
+  // Knockback
+  let dx = target.x - sourceX;
+  let dy = target.y - sourceY;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 0.01) {
+    dx /= dist;
+    dy /= dist;
+    // push force scales with stagger intensity (cells/sec)
+    const pushForce = staggerTime * 12.0;
+    target.vx = (target.vx ?? 0) + dx * pushForce;
+    target.vy = (target.vy ?? 0) + dy * pushForce;
   }
 }
 

@@ -24,6 +24,7 @@ import {
 import {
   registerDarknessRouteCues
 } from './npcs';
+import { newEntityIdCursor } from '../entity_ids';
 
 export * from './meta';
 
@@ -32,7 +33,7 @@ export * from './meta';
 export function generateDarknessDesignFloor(): DarknessDesignGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
 
   world.wallTex.fill(Tex.DARK);
   world.floorTex.fill(Tex.F_CONCRETE);

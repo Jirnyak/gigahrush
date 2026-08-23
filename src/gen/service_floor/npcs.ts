@@ -210,7 +210,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'service_trapped_pump_worker',
 ]);
 
 export function spawnServicePumpRescue(world: World, entities: Entity[], room: Room): void {
-  if (entities.some(entity => entity.id === getPlotNpcNumericId('service_trapped_pump_worker'))) return;
+  if (entities.some(entity => entity.alifeId === getPlotNpcNumericId('service_trapped_pump_worker'))) return;
   const nextId = { v: nextServiceEntityId(entities) };
   const mitkaId = spawnPlotNpc(
     entities,

@@ -20,6 +20,7 @@ import { Spr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { carveCorridor, generateZones, stampRoom } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { CAYLEY_BYURO_Z, CayleyElement, CayleyGenerator, CayleyCoset, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_NEXT, CayleyByuroState, Point, CayleyHqSpec, CAYLEY_GRAPH_POINTS, CAYLEY_LATTICE_X, CAYLEY_LATTICE_Y, CAYLEY_TERRITORY_GRID, CAYLEY_HQ_SPECS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
 import { spawnNpc, spawnMonster, addContainer } from "./npcs";
 
@@ -653,7 +654,7 @@ export function populateAuthoredContent(
   rooms: ReturnType<typeof createRooms>,
   state: CayleyByuroState,
 ): void {
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const clerkId = spawnNpc(entities, nextId, 'cayley_byuro_clerk', CLERK_DEF, rooms.bribe, 10, 12);
   spawnNpc(entities, nextId, 'cayley_byuro_coset_masha', COSET_DEF, rooms.quotient, 16, 9);
   const inspectorId = spawnNpc(entities, nextId, 'cayley_byuro_inspector', INSPECTOR_DEF, rooms.audit, 10, 10, 'makarov');

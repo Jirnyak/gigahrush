@@ -14,6 +14,7 @@ import { registerFloorSideQuest } from '../../data/plot';
 import { scatterAmbientLights, ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CAMP_SEED, NPC_IDS, NPC_DEFS } from "./meta";
 import { expandPioneerCampFullFloor, reinforceCampDoorSlots, ensureCampHqHermeticDoors, tunePioneerCampPopulationZones, initCampWorld, buildCampCore, buildCampPaths, decorateCampCore, placeCampLifts, tuneCampZones, placeCampDrops } from "./geometry";
 import { spawnCampNpcs, placeCampContainers, spawnCampThreats } from "./npcs";
@@ -82,7 +83,7 @@ export function generatePioneerCampDesignFloor(seed = CAMP_SEED): FloorGeneratio
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     initCampWorld(world);
     const rooms = buildCampCore(world);

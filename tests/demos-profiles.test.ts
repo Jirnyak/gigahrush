@@ -239,8 +239,13 @@ test('Demos profile social links read the shared outgoing graph when no override
   const details = getDemosProfileDetails(state, 1);
   const links = buildDemosSocialLinksView(state, 1);
 
-  assert.equal(details?.friendsCount, 1);
-  assert.equal(details?.enemiesCount, 1);
+  /* Считаем связи с ЛЮДЬМИ: ребро к игроку — отдельный канал со своим разбросом,
+   * и этот тест не про него. Пока разброс был узким, оно молча укладывалось в
+   * «нейтрально» и в счётчики не попадало — счётчик мерил не то, что обещал. */
+  const peers = links.filter(link => link.targetKind !== 'player');
+  assert.equal(peers.filter(link => link.role === DemosSocialRoleId.FRIEND).length, 1);
+  assert.equal(peers.filter(link => link.role === DemosSocialRoleId.ENEMY).length, 1);
+  assert.ok((details?.friendsCount ?? 0) >= 1);
   assert.equal(links[0]?.targetKind, 'player');
   assert.equal(links.some(link => link.targetAlifeId === 3 && link.role === DemosSocialRoleId.FRIEND), true);
   assert.equal(links.some(link => link.targetAlifeId === 4 && link.role === DemosSocialRoleId.ENEMY), true);

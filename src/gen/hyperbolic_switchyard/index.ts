@@ -10,6 +10,7 @@ import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID, HYPERBOLIC_SWITCHYARD_ROUTE_Z, SEED, GUIDE_NPC_ID, HyperbolicSwitchyardGeneration, GUIDE_DEF } from "./meta";
 import { carveArcFamilies, carveGeodesicShortcut, buildSwitchyardRooms, connectSwitchyardRooms, buildSwitchyardMidMicro, placeSwitchyardGates, placeSwitchyardLifts, decorateSwitchyard, placeSwitchyardPanels, registerSwitchyardCues, tuneSwitchyardZones, summarizeArcs, summarizePlatforms } from "./geometry";
 import { spawnGuide, spawnShortcutMonsters, placeSwitchyardContainers } from "./npcs";
@@ -35,7 +36,7 @@ export function generateHyperbolicSwitchyardDesignFloor(seed = SEED): Hyperbolic
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const containerId = { v: 1 };
     const center = { x: W >> 1, y: W >> 1 };
 

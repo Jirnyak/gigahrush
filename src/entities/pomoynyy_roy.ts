@@ -12,6 +12,8 @@ export const DEF: MonsterDef = {
   dmg: 2,
   attackRate: 0.38,
   sprite: 0,
+  detect: 13,
+  scanSec: 0.55,
   aiFlags: ['foodBait', 'garbageSurround'],
   counterplay: 'Держите еду в контейнере, бросайте приманку в сторону от выхода и выжигайте или простреливайте узкий проход, пока рой расползается по флангам.',
   lootHint: 'пластиковый мусор, грязный жир, желтые крошки еды, редкое сырое мясо',

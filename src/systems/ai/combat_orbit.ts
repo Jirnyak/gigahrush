@@ -10,7 +10,7 @@
 
 import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
-import { canActorOccupy, entityIgnoresFineBlockers } from '../movement_collision';
+import { stepActorBy } from '../movement_collision';
 import { rng } from '../../core/rand';
 
 /* ── Tuning constants ────────────────────────────────────────── */
@@ -102,27 +102,8 @@ export function tryCombatOrbitStep(
   const faceY = world.delta(e.y, target.y);
   e.angle = Math.atan2(faceY, faceX);
 
-  // Try full step
-  const ignoreFine = entityIgnoresFineBlockers(e);
-  const nx = world.wrap(e.x + mx);
-  const ny = world.wrap(e.y + my);
-
-  if (canActorOccupy(world, nx, ny, ORBIT_BODY_R, { ignoreFineBlockers: ignoreFine })) {
-    e.x = nx;
-    e.y = ny;
-    return true;
-  }
-
-  // Full step blocked — try axis-separated movement
-  let moved = false;
-  if (canActorOccupy(world, nx, e.y, ORBIT_BODY_R, { ignoreFineBlockers: ignoreFine })) {
-    e.x = nx;
-    moved = true;
-  }
-  if (canActorOccupy(world, moved ? e.x : e.x, ny, ORBIT_BODY_R, { ignoreFineBlockers: ignoreFine })) {
-    e.y = ny;
-    moved = true;
-  }
+  // Общий изотропный шаг: полный 2D-вектор, осевое скольжение только как фолбэк.
+  let moved = stepActorBy(world, e, mx, my, ORBIT_BODY_R);
 
   // If completely stuck — flip orbit direction and nudge along intended radial correction
   if (!moved) {
@@ -131,13 +112,7 @@ export function tryCombatOrbitStep(
     // radialErr > 0 = too far → nudge inward; radialErr < 0 = too close → nudge outward
     const nudgeDir = radialErr > 0.1 ? -1 : radialErr < -0.1 ? 1 : 0;
     if (nudgeDir !== 0) {
-      const inX = world.wrap(e.x + rx * nudgeDir * step * 0.5);
-      const inY = world.wrap(e.y + ry * nudgeDir * step * 0.5);
-      if (canActorOccupy(world, inX, inY, ORBIT_BODY_R, { ignoreFineBlockers: ignoreFine })) {
-        e.x = inX;
-        e.y = inY;
-        moved = true;
-      }
+      moved = stepActorBy(world, e, rx * nudgeDir * step * 0.5, ry * nudgeDir * step * 0.5, ORBIT_BODY_R);
     }
   }
 

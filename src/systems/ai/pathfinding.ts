@@ -10,7 +10,10 @@ import { PATH_BLOCKER_SUBDIV, PATH_BLOCKER_BYTES_PER_CELL } from '../../core/pat
 import { getCellHazardMoveMultiplier } from '../cell_hazards';
 
 import { actorContactDoor } from '../door_state';
-import { actorOccupyRadius, stepActorBy } from '../movement_collision';
+import {
+  actorOccupyRadius, canActorOccupy, entityIgnoresFineBlockers, stepActorBy,
+  type ActorOccupyOptions,
+} from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
@@ -235,10 +238,28 @@ const NAV_PATCH_MAX_CELLS = 4096;
 const _navDirtyCells = new Set<number>();
 let _navDirtyFull = false;
 
+/* Обход внутри региона идёт по узлам «клетка + компонента связности внутри
+ * неё», поэтому очередь — не множество клеток, а список ПОСЕЩЕНИЙ: одна клетка
+ * стоит в ней столько раз, сколькими своими половинами в неё вошли. Всё, что
+ * относится к посещению, лежит по индексу слота очереди:
+ *   `_rBfsQueue`  — клетка;
+ *   `_rBfsParent` — слот, из которого пришли (−1 у старта);
+ *   `_rBfsEnter`  — локальный номер подклетки входа В ЭТУ клетку;
+ *   `_rBfsExit`   — локальный номер подклетки выхода ИЗ РОДИТЕЛЬСКОЙ.
+ * Две последние пары и есть готовые вейпойнты, поэтому маршрут собирается
+ * прямо из очереди и второй раз границы не ищутся.
+ * `_rBfsSeen` — по КЛЕТКЕ: маска уже посещённых компонент (до восьми в 4×4). */
 const _rBfsQueue = new Int32Array(MACRO_W2);
-const _rBfsDist = new Int32Array(MACRO_W2);
+const _rBfsParent = new Int32Array(MACRO_W2);
 const _rBfsEpoch = new Int32Array(MACRO_W2);
+const _rBfsEnter = new Uint8Array(MACRO_W2);
+const _rBfsExit = new Uint8Array(MACRO_W2);
+const _rBfsSeen = new Uint8Array(MACRO_W2);
 let _rBfsEpochId = 0;
+/** Локальный номер подклетки, которой последнее колено вошло в свою цель;
+ *  `MACRO_COMP_ANY` (−1), пока колено не пройдено. Константа объявлена ниже —
+ *  здесь литерал, иначе временная мёртвая зона на загрузке модуля. */
+let _legArrivalSub = -1;
 
 // Region-graph BFS scratch (grown to fit region count at bake time). The
 // visited-epoch counter lives inside computeRegionNextRows, not here.
@@ -455,15 +476,6 @@ export function subcellToCell(si: number): number {
   return ((sy / PATH_BLOCKER_SUBDIV) | 0) * W + ((sx / PATH_BLOCKER_SUBDIV) | 0);
 }
 
-function isMacroCellPassable(world: World, ci: number, c: number): boolean {
-  if (c !== Cell.FLOOR && c !== Cell.WATER && c !== Cell.DOOR) return false;
-  if (c === Cell.DOOR) {
-    const door = world.doors.get(ci);
-    if (door && (door.state === DoorState.LOCKED || door.state === DoorState.HERMETIC_CLOSED)) return false;
-  }
-  return true;
-}
-
 /**
  * A subcell is nav-passable if and only if:
  *   1. Its parent macro cell is passable (FLOOR, WATER, or openable DOOR).
@@ -516,79 +528,134 @@ function checkFlowPassable(world: World, next: Int32Array, cell: number): boolea
 }
 
 
-const MACRO_LUT = new Uint16Array(65536);
-const LUT_CONN_NE = 1;
-const LUT_CONN_NS = 2;
-const LUT_CONN_NW = 4;
-const LUT_CONN_ES = 8;
-const LUT_CONN_EW = 16;
-const LUT_CONN_SW = 32;
-const LUT_TOUCH_N = 64;
-const LUT_TOUCH_E = 128;
-const LUT_TOUCH_S = 256;
-const LUT_TOUCH_W = 512;
+/* ── Связность ВНУТРИ клетки ──────────────────────────────────────
+ *
+ * Клетка проходима как макроузел, если её тип — пол/вода/открытая дверь. Но
+ * мебель живёт на сетке подклеток, и клетка бывает разрезана ею НАПОПОЛАМ:
+ * маска `0000111111110000` — это два свободных ряда сверху и снизу и глухая
+ * перемычка между ними. Макрограф такую клетку считал сквозной, маршрут
+ * входил снизу и выходил сверху, а тело пройти не могло. Замерено на жилом
+ * этаже: внутренне несвязных клеток всего 1.0% (4006 из 393236), но маршрут
+ * длиной в сотни клеток задевает хотя бы одну почти наверняка — **21.2%
+ * построенных маршрутов содержали такой разрыв**. Актор вставал на первом же
+ * и стоял до конца этажа.
+ *
+ * Таблица отвечает на единственный вопрос: в одной ли компоненте связности
+ * две подклетки одной клетки. Индекс `маска * 16 + подклетка`, значение —
+ * номер компоненты либо `MACRO_COMP_BLOCKED`. 1 МиБ на весь мир, считается
+ * один раз при загрузке модуля — ровно тот же обход, который здесь уже шёл. */
+const MACRO_COMP_BLOCKED = 255;
+const MACRO_SUBCELLS = PATH_BLOCKER_SUBDIV * PATH_BLOCKER_SUBDIV;
+const MACRO_COMP = new Uint8Array(65536 * MACRO_SUBCELLS);
+/** Сколько компонент у клетки с такой маской. Ноль — клетка глухая, единица —
+ *  обычный случай (99% мира), и на нём весь покомпонентный учёт бесплатен. */
+const MACRO_COMP_COUNT = new Uint8Array(65536);
 
-function initMacroLut() {
+function initMacroComponents() {
+  const q = new Int32Array(MACRO_SUBCELLS);
   for (let mask = 0; mask < 65536; mask++) {
+    const base = mask * MACRO_SUBCELLS;
+    MACRO_COMP.fill(MACRO_COMP_BLOCKED, base, base + MACRO_SUBCELLS);
     const passable = (x: number, y: number) => (mask & (1 << (y * 4 + x))) === 0;
-    const comp = new Int32Array(16).fill(-1);
     let compId = 0;
     for (let y = 0; y < 4; y++) {
       for (let x = 0; x < 4; x++) {
-        if (passable(x, y) && comp[y * 4 + x] === -1) {
-          const q = [y * 4 + x];
-          comp[y * 4 + x] = compId;
-          let head = 0;
-          while (head < q.length) {
-            const curr = q[head++];
-            const cx = curr % 4;
-            const cy = Math.floor(curr / 4);
-            if (cx > 0 && passable(cx - 1, cy) && comp[cy * 4 + (cx - 1)] === -1) { comp[cy * 4 + (cx - 1)] = compId; q.push(cy * 4 + (cx - 1)); }
-            if (cx < 3 && passable(cx + 1, cy) && comp[cy * 4 + (cx + 1)] === -1) { comp[cy * 4 + (cx + 1)] = compId; q.push(cy * 4 + (cx + 1)); }
-            if (cy > 0 && passable(cx, cy - 1) && comp[(cy - 1) * 4 + cx] === -1) { comp[(cy - 1) * 4 + cx] = compId; q.push((cy - 1) * 4 + cx); }
-            if (cy < 3 && passable(cx, cy + 1) && comp[(cy + 1) * 4 + cx] === -1) { comp[(cy + 1) * 4 + cx] = compId; q.push((cy + 1) * 4 + cx); }
-          }
-          compId++;
+        if (!passable(x, y) || MACRO_COMP[base + y * 4 + x] !== MACRO_COMP_BLOCKED) continue;
+        let head = 0, tail = 0;
+        q[tail++] = y * 4 + x;
+        MACRO_COMP[base + y * 4 + x] = compId;
+        while (head < tail) {
+          const curr = q[head++];
+          const cx = curr % 4;
+          const cy = (curr / 4) | 0;
+          if (cx > 0 && passable(cx - 1, cy) && MACRO_COMP[base + cy * 4 + cx - 1] === MACRO_COMP_BLOCKED) { MACRO_COMP[base + cy * 4 + cx - 1] = compId; q[tail++] = cy * 4 + cx - 1; }
+          if (cx < 3 && passable(cx + 1, cy) && MACRO_COMP[base + cy * 4 + cx + 1] === MACRO_COMP_BLOCKED) { MACRO_COMP[base + cy * 4 + cx + 1] = compId; q[tail++] = cy * 4 + cx + 1; }
+          if (cy > 0 && passable(cx, cy - 1) && MACRO_COMP[base + (cy - 1) * 4 + cx] === MACRO_COMP_BLOCKED) { MACRO_COMP[base + (cy - 1) * 4 + cx] = compId; q[tail++] = (cy - 1) * 4 + cx; }
+          if (cy < 3 && passable(cx, cy + 1) && MACRO_COMP[base + (cy + 1) * 4 + cx] === MACRO_COMP_BLOCKED) { MACRO_COMP[base + (cy + 1) * 4 + cx] = compId; q[tail++] = (cy + 1) * 4 + cx; }
         }
+        compId++;
       }
     }
-    
-    let lutVal = 0;
-    const touchN = new Set();
-    const touchS = new Set();
-    const touchE = new Set();
-    const touchW = new Set();
-    
-    for (let x = 0; x < 4; x++) {
-      if (comp[0 * 4 + x] !== -1) touchN.add(comp[0 * 4 + x]);
-      if (comp[3 * 4 + x] !== -1) touchS.add(comp[3 * 4 + x]);
-    }
-    for (let y = 0; y < 4; y++) {
-      if (comp[y * 4 + 0] !== -1) touchW.add(comp[y * 4 + 0]);
-      if (comp[y * 4 + 3] !== -1) touchE.add(comp[y * 4 + 3]);
-    }
-    
-    if (touchN.size > 0) lutVal |= LUT_TOUCH_N;
-    if (touchE.size > 0) lutVal |= LUT_TOUCH_E;
-    if (touchS.size > 0) lutVal |= LUT_TOUCH_S;
-    if (touchW.size > 0) lutVal |= LUT_TOUCH_W;
-    
-    for (const c of touchN) {
-      if (touchE.has(c)) lutVal |= LUT_CONN_NE;
-      if (touchS.has(c)) lutVal |= LUT_CONN_NS;
-      if (touchW.has(c)) lutVal |= LUT_CONN_NW;
-    }
-    for (const c of touchE) {
-      if (touchS.has(c)) lutVal |= LUT_CONN_ES;
-      if (touchW.has(c)) lutVal |= LUT_CONN_EW;
-    }
-    for (const c of touchS) {
-      if (touchW.has(c)) lutVal |= LUT_CONN_SW;
-    }
-    MACRO_LUT[mask] = lutVal;
+    MACRO_COMP_COUNT[mask] = compId;
   }
 }
-initMacroLut();
+initMacroComponents();
+
+/** Локальный номер подклетки (0..15) внутри её клетки. */
+function subLocalIndex(si: number): number {
+  return (((si / SW) | 0) % PATH_BLOCKER_SUBDIV) * PATH_BLOCKER_SUBDIV + ((si % SW) % PATH_BLOCKER_SUBDIV);
+}
+
+/** Компонента связности подклетки внутри клетки `ci`, или MACRO_COMP_BLOCKED. */
+function subComponentOf(world: World, ci: number, localSub: number): number {
+  return MACRO_COMP[getMacroMask(world, ci) * MACRO_SUBCELLS + localSub];
+}
+
+/** «Откуда угодно»: старт первого колена и подклетка, на которой актор стоит
+ *  внутри мебели, компонентой не ограничены — иначе застрявший в шкафу вообще
+ *  перестанет получать маршруты. */
+const MACRO_COMP_ANY = -1;
+/** Маска «годится любая компонента» для цели колена (восемь бит на 4×4). */
+const MACRO_COMP_MASK_ANY = 255;
+
+/* ── Границы клеток: сторона, локальные номера, абсолютный индекс ──
+ * Сторона нумеруется как порядок соседей в обходе: 0 север, 1 восток, 2 юг,
+ * 3 запад. `t` — порядковый номер подклетки вдоль границы (0..3). Пара
+ * (сторона, t) однозначно задаёт подклетку выхода в своей клетке и подклетку
+ * входа в соседней, поэтому и поиск пары, и маска компонент, и сам обход
+ * считают одни и те же четыре пары в одном и том же порядке. */
+function borderSide(cx: number, cy: number, ncx: number, ncy: number): number {
+  if (ncx === cx) {
+    if (ncy === ((cy - 1 + W) % W)) return 0;
+    if (ncy === ((cy + 1) % W)) return 2;
+  } else if (ncy === cy) {
+    if (ncx === ((cx + 1) % W)) return 1;
+    if (ncx === ((cx - 1 + W) % W)) return 3;
+  }
+  return -1;
+}
+
+function borderLocalA(side: number, t: number): number {
+  return side === 0 ? t : side === 2 ? 12 + t : side === 1 ? t * 4 + 3 : t * 4;
+}
+
+function borderLocalB(side: number, t: number): number {
+  return side === 0 ? 12 + t : side === 2 ? t : side === 1 ? t * 4 : t * 4 + 3;
+}
+
+/** Абсолютный индекс подклетки по клетке и локальному номеру 0..15. */
+function subAbs(ci: number, local: number): number {
+  return (((ci / W) | 0) * PATH_BLOCKER_SUBDIV + ((local / PATH_BLOCKER_SUBDIV) | 0)) * SW
+    + (ci % W) * PATH_BLOCKER_SUBDIV + (local % PATH_BLOCKER_SUBDIV);
+}
+
+/* ── Регион по УЗЛУ «клетка + компонента» ────────────────────────
+ *
+ * Регион обязан быть внутренне связным, иначе региональный граф обещает
+ * проход там, где его нет, а честное колено внутри региона упирается в
+ * перемычку и возвращает «дороги нет» — ложный отказ ровно там, где обход
+ * физически есть. Замерено на жилом этаже: рваных регионов 93 из 22919 (0.4%),
+ * худший на пять кусков, и через них шло 3.6% всех запросов.
+ *
+ * Хранение выведено из той же переписи: у 99% клеток компонента одна, и её
+ * регион лежит прямо в `_regionMap` — ни байта сверху. Разрезанные мебелью
+ * клетки держатся отдельным словарём: их единицы тысяч на этаж, и заводить
+ * под них вторую таблицу на весь мир значило бы платить мегабайты за процент. */
+const _regionSplit = new Map<number, number>();
+
+function regionAtComp(mask: number, ci: number, comp: number): number {
+  if (MACRO_COMP_COUNT[mask] <= 1) return _regionMap[ci];
+  const r = _regionSplit.get(ci * MACRO_SUBCELLS + comp);
+  return r === undefined ? REGION_NONE : r;
+}
+
+function setRegionAtComp(mask: number, ci: number, comp: number, rid: number): void {
+  if (MACRO_COMP_COUNT[mask] <= 1) { _regionMap[ci] = rid; return; }
+  _regionSplit.set(ci * MACRO_SUBCELLS + comp, rid);
+  // По клетке целиком остаётся регион ПЕРВОЙ компоненты: им отвечают на вопрос
+  // «где стоит тот, кто стоит внутри мебели», у кого компоненты нет вовсе.
+  if (_regionMap[ci] === REGION_NONE) _regionMap[ci] = rid;
+}
 
 function getMacroMask(world: World, ci: number): number {
   // While frozen, read the baked snapshot so query-time path reconstruction
@@ -615,48 +682,138 @@ function computeMacroMask(world: World, ci: number): number {
 
 /* ── Region-Portal HPA* helpers ───────────────────────────────── */
 
-function macroCellsConnected(world: World, ci: number, ni: number): boolean {
+/**
+ * Пары регионов, которые сшивает граница двух клеток, стороной `side` от `ci`.
+ *
+ * Раньше вопрос был «связаны ли клетки», и ответом было «да» уже от одной
+ * проходимой пары подклеток. Но регион теперь принадлежит ПОЛОВИНЕ клетки, и
+ * разные подклетки одной границы уводят в разные половины соседа — то есть в
+ * разные регионы. Первая пара по порядку считается основной: по ней порталы
+ * группируются в отрезки ровно как прежде, поэтому на неразрезанных клетках
+ * (99% мира) состав порталов не меняется вовсе. Остальные различные пары
+ * выдаются `extras` и выпускаются отдельными порталами на одной клетке.
+ */
+const _borderRegions = { a: 0, b: 0, extras: [] as number[] };
+
+function collectBorderRegions(world: World, ci: number, ni: number, side: number): boolean {
   const curMask = getMacroMask(world, ci);
   if (curMask === 65535) return false;
   const nMask = getMacroMask(world, ni);
   if (nMask === 65535) return false;
-  const cx = ci % W, cy = (ci / W) | 0;
-  const nx = ni % W, ny = (ni / W) | 0;
-  if (ny === ((cy - 1 + W) % W) && nx === cx) {
-    for (let x = 0; x < 4; x++) if ((curMask & (1 << x)) === 0 && (nMask & (1 << (12 + x))) === 0) return true;
-  } else if (ny === ((cy + 1) % W) && nx === cx) {
-    for (let x = 0; x < 4; x++) if ((curMask & (1 << (12 + x))) === 0 && (nMask & (1 << x)) === 0) return true;
-  } else if (nx === ((cx + 1) % W) && ny === cy) {
-    for (let y = 0; y < 4; y++) if ((curMask & (1 << (y * 4 + 3))) === 0 && (nMask & (1 << (y * 4))) === 0) return true;
-  } else if (nx === ((cx - 1 + W) % W) && ny === cy) {
-    for (let y = 0; y < 4; y++) if ((curMask & (1 << (y * 4))) === 0 && (nMask & (1 << (y * 4 + 3))) === 0) return true;
+  _borderRegions.extras.length = 0;
+  let found = false;
+  for (let t = 0; t < PATH_BLOCKER_SUBDIV; t++) {
+    const la = borderLocalA(side, t);
+    if ((curMask & (1 << la)) !== 0) continue;
+    const lb = borderLocalB(side, t);
+    if ((nMask & (1 << lb)) !== 0) continue;
+    const rA = regionAtComp(curMask, ci, MACRO_COMP[curMask * MACRO_SUBCELLS + la]);
+    const rB = regionAtComp(nMask, ni, MACRO_COMP[nMask * MACRO_SUBCELLS + lb]);
+    if (!found) { _borderRegions.a = rA; _borderRegions.b = rB; found = true; continue; }
+    if (rA === _borderRegions.a && rB === _borderRegions.b) continue;
+    let dup = false;
+    for (let k = 0; k < _borderRegions.extras.length; k += 2) {
+      if (_borderRegions.extras[k] === rA && _borderRegions.extras[k + 1] === rB) { dup = true; break; }
+    }
+    if (!dup) _borderRegions.extras.push(rA, rB);
+  }
+  return found;
+}
+
+/** Годна ли пара регионов на портал. */
+function portalPairUsable(rA: number, rB: number): boolean {
+  return rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB;
+}
+
+/* Результат findBorderSubcells: пара подклеток по обе стороны границы.
+ * Общий объект, а не кортеж: пробу зовут на каждом раскрытии BFS, и пара в
+ * массиве там была бы мусором для GC на каждом узле. Живёт до следующего
+ * вызова — читать сразу. */
+const _borderPair = { a: 0, b: 0 };
+
+/**
+ * Найти пару подклеток, которой маршрут переходит из клетки (cx,cy) в соседнюю.
+ *
+ * `fromComp` — компонента связности ВНУТРИ исходной клетки, из которой мы
+ * пришли: годится только та граничная подклетка, до которой из неё физически
+ * можно дойти. `MACRO_COMP_ANY` снимает ограничение. Раньше бралась первая
+ * проходимая пара по порядку, и мебель, разрезающая клетку, молча пропускалась.
+ */
+function findBorderSubcells(
+  world: World, cx: number, cy: number, ncx: number, ncy: number, fromComp: number,
+): boolean {
+  const side = borderSide(cx, cy, ncx, ncy);
+  if (side < 0) return false;
+  const ci = cy * W + cx, ni = ncy * W + ncx;
+  const curMask = getMacroMask(world, ci);
+  const nMask = getMacroMask(world, ni);
+  for (let t = 0; t < PATH_BLOCKER_SUBDIV; t++) {
+    const la = borderLocalA(side, t);
+    if ((curMask & (1 << la)) !== 0) continue;
+    const lb = borderLocalB(side, t);
+    if ((nMask & (1 << lb)) !== 0) continue;
+    if (fromComp !== MACRO_COMP_ANY && MACRO_COMP[curMask * MACRO_SUBCELLS + la] !== fromComp) continue;
+    _borderPair.a = subAbs(ci, la); _borderPair.b = subAbs(ni, lb); return true;
   }
   return false;
 }
 
-function findBorderSubcells(world: World, cx: number, cy: number, ncx: number, ncy: number): [number, number] | null {
-  if (ncy === ((cy - 1 + W) % W) && ncx === cx) {
-    for (let x = 0; x < 4; x++) {
-      if (isSubcellNavPassable(world, (cy * 4) * SW + cx * 4 + x) && isSubcellNavPassable(world, (ncy * 4 + 3) * SW + ncx * 4 + x))
-        return [(cy * 4) * SW + cx * 4 + x, (ncy * 4 + 3) * SW + ncx * 4 + x];
-    }
-  } else if (ncy === ((cy + 1) % W) && ncx === cx) {
-    for (let x = 0; x < 4; x++) {
-      if (isSubcellNavPassable(world, (cy * 4 + 3) * SW + cx * 4 + x) && isSubcellNavPassable(world, (ncy * 4) * SW + ncx * 4 + x))
-        return [(cy * 4 + 3) * SW + cx * 4 + x, (ncy * 4) * SW + ncx * 4 + x];
-    }
-  } else if (ncx === ((cx + 1) % W) && ncy === cy) {
-    for (let y = 0; y < 4; y++) {
-      if (isSubcellNavPassable(world, (cy * 4 + y) * SW + cx * 4 + 3) && isSubcellNavPassable(world, (ncy * 4 + y) * SW + ncx * 4))
-        return [(cy * 4 + y) * SW + cx * 4 + 3, (ncy * 4 + y) * SW + ncx * 4];
-    }
-  } else if (ncx === ((cx - 1 + W) % W) && ncy === cy) {
-    for (let y = 0; y < 4; y++) {
-      if (isSubcellNavPassable(world, (cy * 4 + y) * SW + cx * 4) && isSubcellNavPassable(world, (ncy * 4 + y) * SW + ncx * 4 + 3))
-        return [(cy * 4 + y) * SW + cx * 4, (ncy * 4 + y) * SW + ncx * 4 + 3];
-    }
+/**
+ * Маска компонент клетки (cx,cy), из которых переход в соседнюю (ncx,ncy)
+ * физически возможен. Нужна коленом до портала: прийти в клетку портала мало,
+ * надо прийти в ту её ПОЛОВИНУ, из которой портал переходится, иначе честная
+ * проверка компонент отказывает там, где надо было лишь обогнуть перемычку.
+ */
+function borderComponentMask(
+  world: World, cx: number, cy: number, ncx: number, ncy: number,
+): number {
+  const side = borderSide(cx, cy, ncx, ncy);
+  if (side < 0) return 0;
+  const curMask = getMacroMask(world, cy * W + cx);
+  const nMask = getMacroMask(world, ncy * W + ncx);
+  let out = 0;
+  for (let t = 0; t < PATH_BLOCKER_SUBDIV; t++) {
+    const la = borderLocalA(side, t);
+    if ((curMask & (1 << la)) !== 0) continue;
+    if ((nMask & (1 << borderLocalB(side, t))) !== 0) continue;
+    const c = MACRO_COMP[curMask * MACRO_SUBCELLS + la];
+    if (c !== MACRO_COMP_BLOCKED) out |= 1 << c;
   }
-  return null;
+  return out;
+}
+
+/**
+ * Подклетка, которой маршрут КОНЧАЕТСЯ в клетке `ci`, придя в неё компонентой
+ * `arrivalComp`.
+ *
+ * Цель сплошь и рядом стоит В МЕБЕЛИ: раковина, кровать, верстак, плита — это
+ * и есть блокер, а точка интереса указывает на его клетку. Требовать, чтобы
+ * последний вейпойнт был проходим, значит отказать всем таким целям разом;
+ * требовать компоненту у заблокированной подклетки — значит отказать всегда,
+ * потому что у неё компоненты нет. Дойти надо ДО клетки, а встать — на ближайшей
+ * свободной подклетке той половины, в которую пришли.
+ *
+ * Возвращает −1, когда цель свободна, но лежит в ДРУГОЙ половине: это честное
+ * «дороги нет», а не повод соврать.
+ */
+function resolveEndSubcell(
+  world: World, ci: number, endLocal: number, arrivalComp: number,
+): number {
+  const mask = getMacroMask(world, ci);
+  const endComp = MACRO_COMP[mask * MACRO_SUBCELLS + endLocal];
+  if (endComp !== MACRO_COMP_BLOCKED) {
+    return arrivalComp === MACRO_COMP_ANY || arrivalComp === endComp ? subAbs(ci, endLocal) : -1;
+  }
+  const ex = endLocal % PATH_BLOCKER_SUBDIV, ey = (endLocal / PATH_BLOCKER_SUBDIV) | 0;
+  let best = -1, bestD = Infinity;
+  for (let local = 0; local < MACRO_SUBCELLS; local++) {
+    const c = MACRO_COMP[mask * MACRO_SUBCELLS + local];
+    if (c === MACRO_COMP_BLOCKED) continue;
+    if (arrivalComp !== MACRO_COMP_ANY && c !== arrivalComp) continue;
+    const d = Math.abs(local % PATH_BLOCKER_SUBDIV - ex) + Math.abs(((local / PATH_BLOCKER_SUBDIV) | 0) - ey);
+    if (d < bestD) { bestD = d; best = local; }
+  }
+  return best < 0 ? -1 : subAbs(ci, best);
 }
 
 function portalCellInRegion(portalIdx: number, regionId: number): number {
@@ -681,8 +838,17 @@ function scanHorizontalBorderRow(world: World, cy: number): void {
   let runStart = -1, runRA = 0, runRB = 0;
   for (let cx = 0; cx < W; cx++) {
     const ci = cy * W + cx, ni = ncy * W + cx;
-    const rA = _regionMap[ci], rB = _regionMap[ni];
-    const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
+    if (!collectBorderRegions(world, ci, ni, 0)) {
+      if (runStart >= 0) { emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB); runStart = -1; }
+      continue;
+    }
+    const rA = _borderRegions.a, rB = _borderRegions.b;
+    for (let k = 0; k < _borderRegions.extras.length; k += 2) {
+      if (portalPairUsable(_borderRegions.extras[k], _borderRegions.extras[k + 1])) {
+        _portals.push({ cx, cy, ncx: cx, ncy, regionA: _borderRegions.extras[k], regionB: _borderRegions.extras[k + 1] });
+      }
+    }
+    const ok = portalPairUsable(rA, rB);
     if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
       if (runStart >= 0) emitPortalFromRun(((runStart + cx - 1) / 2) | 0, true, cy, ncy, 0, 0, runRA, runRB);
       runStart = cx; runRA = rA; runRB = rB;
@@ -700,8 +866,17 @@ function scanVerticalBorderCol(world: World, cx: number): void {
   let runStart = -1, runRA = 0, runRB = 0;
   for (let cy = 0; cy < W; cy++) {
     const ci = cy * W + cx, ni = cy * W + ncx;
-    const rA = _regionMap[ci], rB = _regionMap[ni];
-    const ok = rA !== REGION_NONE && rB !== REGION_NONE && rA !== rB && macroCellsConnected(world, ci, ni);
+    if (!collectBorderRegions(world, ci, ni, 3)) {
+      if (runStart >= 0) { emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB); runStart = -1; }
+      continue;
+    }
+    const rA = _borderRegions.a, rB = _borderRegions.b;
+    for (let k = 0; k < _borderRegions.extras.length; k += 2) {
+      if (portalPairUsable(_borderRegions.extras[k], _borderRegions.extras[k + 1])) {
+        _portals.push({ cx, cy, ncx, ncy: cy, regionA: _borderRegions.extras[k], regionB: _borderRegions.extras[k + 1] });
+      }
+    }
+    const ok = portalPairUsable(rA, rB);
     if (ok && (runStart < 0 || rA !== runRA || rB !== runRB)) {
       if (runStart >= 0) emitPortalFromRun(((runStart + cy - 1) / 2) | 0, false, 0, 0, cx, ncx, runRA, runRB);
       runStart = cy; runRA = rA; runRB = rB;
@@ -721,75 +896,97 @@ function emitPortalFromRun(xOrYmid: number, isHorizontal: boolean, cy: number, n
   }
 }
 
-function localRegionMacroBfs(world: World, mStart: number, mEnd: number, regionId: number): number[] {
-  if (mStart === mEnd) return [mEnd];
+/**
+ * Обход внутри одного региона по узлам «клетка + компонента связности».
+ *
+ * Клетка, разрезанная мебелью пополам, — это ДВА разных узла: вошедший снизу
+ * наверх не выйдет. Поэтому посещение метится не клеткой, а парой: `_rBfsSeen`
+ * держит маску уже пройденных компонент клетки, и одна клетка честно стоит в
+ * очереди столько раз, сколькими половинами в неё вошли. Это и есть разница с
+ * прежним «осторожно в безопасную сторону»: тот отбрасывал второй приход и мог
+ * НЕ найти существующий обход, этот находит любой существующий и по-прежнему
+ * не возвращает того, которым не пройти.
+ *
+ * Раскрытие идёт сразу по ЧЕТЫРЁМ пограничным подклеткам стороны, а не по
+ * первой годной: разные подклетки одной границы приводят в разные половины
+ * соседа, и брать только первую значило терять вторую.
+ *
+ * Вейпойнты пишутся прямо в `out` парами «выход из клетки, вход в следующую» —
+ * их же обход и выбирал, поэтому границы второй раз не ищутся и разойтись с
+ * найденным маршрутом не с чем. `startSub` — локальный номер подклетки старта
+ * либо `MACRO_COMP_ANY`; `endCompMask` — маска компонент цели, в любую из
+ * которых прийти годится. Компонента прибытия остаётся в `_legArrivalSub`.
+ */
+function localRegionMacroBfs(
+  world: World, mStart: number, mEnd: number, regionId: number,
+  startSub: number, endCompMask: number, out: number[],
+): boolean {
+  const startComp = startSub === MACRO_COMP_ANY
+    ? MACRO_COMP_ANY : subComponentOf(world, mStart, startSub);
+  const startAny = startComp === MACRO_COMP_ANY || startComp === MACRO_COMP_BLOCKED;
+  _legArrivalSub = startAny ? MACRO_COMP_ANY : startSub;
+  if (mStart === mEnd) return startAny || (endCompMask & (1 << startComp)) !== 0;
+
   _rBfsEpochId++;
   if (_rBfsEpochId > 2000000000) { _rBfsEpoch.fill(0); _rBfsEpochId = 1; }
   _rBfsEpoch[mStart] = _rBfsEpochId;
-  _rBfsDist[mStart] = 0;
-  let head = 0, tail = 0;
-  _rBfsQueue[tail++] = mStart;
-  let found = false;
-  while (head < tail && !found) {
-    const cur = _rBfsQueue[head++];
+  _rBfsSeen[mStart] = startAny ? MACRO_COMP_MASK_ANY : (1 << startComp);
+  _rBfsQueue[0] = mStart;
+  _rBfsParent[0] = -1;
+  _rBfsEnter[0] = startAny ? MACRO_COMP_BLOCKED : startSub;
+  let head = 0, tail = 1, foundSlot = -1;
+  while (head < tail && foundSlot < 0) {
+    const slot = head++;
+    const cur = _rBfsQueue[slot];
     const curCx = cur % W, curCy = (cur / W) | 0;
-    const d = _rBfsDist[cur];
-    const nb = [
-      ((curCy - 1 + W) % W) * W + curCx,
-      curCy * W + ((curCx + 1) % W),
-      ((curCy + 1) % W) * W + curCx,
-      curCy * W + ((curCx - 1 + W) % W),
-    ];
-    for (let k = 0; k < 4; k++) {
-      const ni = nb[k];
-      if (_rBfsEpoch[ni] === _rBfsEpochId) continue;
-      if (_regionMap[ni] !== regionId) continue;
-      if (!macroCellsConnected(world, cur, ni)) continue;
-      _rBfsEpoch[ni] = _rBfsEpochId;
-      _rBfsDist[ni] = d + 1;
-      _rBfsQueue[tail++] = ni;
-      if (ni === mEnd) { found = true; break; }
-    }
-  }
-  if (!found && _rBfsEpoch[mEnd] !== _rBfsEpochId) return [];
-  const path: number[] = [];
-  let cur = mEnd;
-  let safety = 0;
-  while (cur !== mStart && safety < MACRO_W2) {
-    path.push(cur);
-    const curCx = cur % W, curCy = (cur / W) | 0;
-    const d = _rBfsDist[cur];
-    const nb = [
-      ((curCy - 1 + W) % W) * W + curCx,
-      curCy * W + ((curCx + 1) % W),
-      ((curCy + 1) % W) * W + curCx,
-      curCy * W + ((curCx - 1 + W) % W),
-    ];
-    let moved = false;
-    for (let k = 0; k < 4; k++) {
-      const ni = nb[k];
-      if (_rBfsEpoch[ni] === _rBfsEpochId && _rBfsDist[ni] === d - 1 && _regionMap[ni] === regionId) {
-        cur = ni; moved = true; break;
+    const enter = _rBfsEnter[slot];
+    const curMask = getMacroMask(world, cur);
+    const comp = enter === MACRO_COMP_BLOCKED
+      ? MACRO_COMP_ANY : MACRO_COMP[curMask * MACRO_SUBCELLS + enter];
+    for (let side = 0; side < 4 && foundSlot < 0; side++) {
+      const ni = side === 0 ? ((curCy - 1 + W) % W) * W + curCx
+        : side === 1 ? curCy * W + ((curCx + 1) % W)
+          : side === 2 ? ((curCy + 1) % W) * W + curCx
+            : curCy * W + ((curCx - 1 + W) % W);
+      const nMask = getMacroMask(world, ni);
+      // Клетка с одной компонентой (99% мира) отсеивается одним чтением, как и
+      // раньше; разрезанная спрашивается покомпонентно, ниже по подклеткам.
+      const nSingle = MACRO_COMP_COUNT[nMask] <= 1;
+      if (nSingle && _regionMap[ni] !== regionId) continue;
+      if (_rBfsEpoch[ni] !== _rBfsEpochId) { _rBfsEpoch[ni] = _rBfsEpochId; _rBfsSeen[ni] = 0; }
+      for (let t = 0; t < PATH_BLOCKER_SUBDIV; t++) {
+        const la = borderLocalA(side, t);
+        if ((curMask & (1 << la)) !== 0) continue;
+        if (comp !== MACRO_COMP_ANY && MACRO_COMP[curMask * MACRO_SUBCELLS + la] !== comp) continue;
+        const lb = borderLocalB(side, t);
+        if ((nMask & (1 << lb)) !== 0) continue;
+        const nComp = MACRO_COMP[nMask * MACRO_SUBCELLS + lb];
+        if (!nSingle && regionAtComp(nMask, ni, nComp) !== regionId) continue;
+        if ((_rBfsSeen[ni] & (1 << nComp)) !== 0) continue;
+        _rBfsSeen[ni] |= 1 << nComp;
+        if (tail >= MACRO_W2) { foundSlot = -1; head = tail; break; }
+        _rBfsQueue[tail] = ni;
+        _rBfsParent[tail] = slot;
+        _rBfsEnter[tail] = lb;
+        _rBfsExit[tail] = la;
+        if (ni === mEnd && (endCompMask & (1 << nComp)) !== 0) { foundSlot = tail; }
+        tail++;
+        if (foundSlot >= 0) break;
       }
     }
-    if (!moved) break;
-    safety++;
   }
-  path.push(mStart);
-  path.reverse();
-  return path;
-}
+  if (foundSlot < 0) return false;
 
-function macroCellPathToSubcells(world: World, macroPath: number[], endSubcell: number): number[] {
-  if (macroPath.length <= 1) return macroPath.length === 1 ? [endSubcell] : [];
-  const subcellPath: number[] = [];
-  for (let i = 0; i < macroPath.length - 1; i++) {
-    const m = macroPath[i], nextM = macroPath[i + 1];
-    const border = findBorderSubcells(world, m % W, (m / W) | 0, nextM % W, (nextM / W) | 0);
-    if (border) { subcellPath.push(border[0]); subcellPath.push(border[1]); }
+  let hops = 0;
+  for (let s = foundSlot; _rBfsParent[s] >= 0; s = _rBfsParent[s]) hops++;
+  let w = out.length + 2 * hops;
+  out.length = w;
+  for (let s = foundSlot; _rBfsParent[s] >= 0; s = _rBfsParent[s]) {
+    out[--w] = subAbs(_rBfsQueue[s], _rBfsEnter[s]);
+    out[--w] = subAbs(_rBfsQueue[_rBfsParent[s]], _rBfsExit[s]);
   }
-  if (subcellPath.length > 0) subcellPath[subcellPath.length - 1] = endSubcell;
-  return subcellPath;
+  _legArrivalSub = _rBfsEnter[foundSlot];
+  return true;
 }
 
 export function bakeNavigationTree(
@@ -833,6 +1030,56 @@ function installLowMemNav(): void {
 }
 
 /**
+ * Залить один регион от узла «клетка + компонента». Членство задаётся либо
+ * комнатой (`roomId >= 0`), либо коробкой кластера 16×16: ровно те же две
+ * границы, что и раньше, — новое здесь только то, что узлом стала половина
+ * клетки, а переход между узлами требует общей ПОГРАНИЧНОЙ подклетки, а не
+ * просто соседства клеток.
+ *
+ * Очередь общая с обходом запросов (`_rBfsQueue` / `_rBfsEnter`): запекание и
+ * запрос никогда не идут одновременно, а лишний массив на миллион клеток —
+ * четыре мегабайта на ровном месте.
+ */
+function floodRegionFrom(
+  world: World, ci0: number, comp0: number, rid: number,
+  roomId: number, baseX: number, baseY: number,
+): void {
+  setRegionAtComp(getMacroMask(world, ci0), ci0, comp0, rid);
+  let qH = 0, qT = 0;
+  _rBfsQueue[qT] = ci0; _rBfsEnter[qT] = comp0; qT++;
+  while (qH < qT) {
+    const cur = _rBfsQueue[qH]; const comp = _rBfsEnter[qH]; qH++;
+    const curMask = getMacroMask(world, cur);
+    const curCx = cur % W, curCy = (cur / W) | 0;
+    for (let side = 0; side < 4; side++) {
+      const ni = side === 0 ? ((curCy - 1 + W) % W) * W + curCx
+        : side === 1 ? curCy * W + ((curCx + 1) % W)
+          : side === 2 ? ((curCy + 1) % W) * W + curCx
+            : curCy * W + ((curCx - 1 + W) % W);
+      if (roomId >= 0) {
+        if (world.roomMap[ni] !== roomId) continue;
+      } else {
+        if (((ni % W) - baseX + W) % W >= CLUSTER_SIZE) continue;
+        if ((((ni / W) | 0) - baseY + W) % W >= CLUSTER_SIZE) continue;
+      }
+      const nMask = getMacroMask(world, ni);
+      if (nMask === 65535) continue;
+      for (let t = 0; t < PATH_BLOCKER_SUBDIV; t++) {
+        const la = borderLocalA(side, t);
+        if ((curMask & (1 << la)) !== 0) continue;
+        if (MACRO_COMP[curMask * MACRO_SUBCELLS + la] !== comp) continue;
+        const lb = borderLocalB(side, t);
+        if ((nMask & (1 << lb)) !== 0) continue;
+        const nComp = MACRO_COMP[nMask * MACRO_SUBCELLS + lb];
+        if (regionAtComp(nMask, ni, nComp) !== REGION_NONE) continue;
+        setRegionAtComp(nMask, ni, nComp, rid);
+        _rBfsQueue[qT] = ni; _rBfsEnter[qT] = nComp; qT++;
+      }
+    }
+  }
+}
+
+/**
  * Steps 1–3 of the bake: region assignment, portal detection, region→portal
  * index. Cheap (~1% of bake time) and touches live world geometry, so it always
  * runs on the main thread. Leaves `_regionMap`, `_portals`, `_numRegions`,
@@ -848,19 +1095,27 @@ function bakeNavigationRegionsAndPortals(
   _navCellVersion = cacheCellVersion;
   _navPathBlockerVersion = cachePathBlockerVersion;
 
-  /* ── Step 1: Region assignment ──────────────────────────────── */
+  /* ── Step 1: Region assignment ──────────────────────────────────
+   * Заливка идёт по УЗЛАМ «клетка + компонента связности внутри неё», а не по
+   * клеткам: иначе комната или кластер, разрезанные перемычкой мебели, носят
+   * один номер на два не сообщающихся места, и региональный граф обещает
+   * проход, которого нет. Комната больше НЕ красится прямоугольником по той же
+   * причине — прямоугольник вообще ни разу не спрашивал о связности. */
   _regionMap.fill(REGION_NONE);
+  _regionSplit.clear();
   let nextRegionId = 1;
 
   // 1a: Room regions
   for (const room of world.rooms) {
     if (!room) continue;
-    const rid = nextRegionId++;
     for (let ry = room.y; ry < room.y + room.h; ry++) {
       for (let rx = room.x; rx < room.x + room.w; rx++) {
         const ci = ((ry % W + W) % W) * W + ((rx % W + W) % W);
-        if (world.roomMap[ci] === room.id && isMacroCellPassable(world, ci, world.cells[ci])) {
-          _regionMap[ci] = rid;
+        if (world.roomMap[ci] !== room.id) continue;
+        const mask = getMacroMask(world, ci);
+        for (let comp = 0; comp < MACRO_COMP_COUNT[mask]; comp++) {
+          if (regionAtComp(mask, ci, comp) !== REGION_NONE) continue;
+          floodRegionFrom(world, ci, comp, nextRegionId++, room.id, -1, -1);
         }
       }
     }
@@ -873,35 +1128,11 @@ function bakeNavigationRegionsAndPortals(
       const baseY = clusterRow * CLUSTER_SIZE;
       for (let dy = 0; dy < CLUSTER_SIZE; dy++) {
         for (let dx = 0; dx < CLUSTER_SIZE; dx++) {
-          const cxl = (baseX + dx) % W;
-          const cyl = (baseY + dy) % W;
-          const ci = cyl * W + cxl;
-          if (_regionMap[ci] !== REGION_NONE) continue;
-          if (!isMacroCellPassable(world, ci, world.cells[ci])) continue;
-          const rid = nextRegionId++;
-          let qH = 0, qT = 0;
-          _rBfsQueue[qT++] = ci;
-          _regionMap[ci] = rid;
-          while (qH < qT) {
-            const cur = _rBfsQueue[qH++];
-            const curX = cur % W, curY = (cur / W) | 0;
-            const nb = [
-              ((curY - 1 + W) % W) * W + curX,
-              curY * W + ((curX + 1) % W),
-              ((curY + 1) % W) * W + curX,
-              curY * W + ((curX - 1 + W) % W),
-            ];
-            for (let k = 0; k < 4; k++) {
-              const ni = nb[k];
-              if (_regionMap[ni] !== REGION_NONE) continue;
-              const nx = ni % W, ny = (ni / W) | 0;
-              if (((nx - baseX + W) % W) >= CLUSTER_SIZE) continue;
-              if (((ny - baseY + W) % W) >= CLUSTER_SIZE) continue;
-              if (!isMacroCellPassable(world, ni, world.cells[ni])) continue;
-              if (!macroCellsConnected(world, cur, ni)) continue;
-              _regionMap[ni] = rid;
-              _rBfsQueue[qT++] = ni;
-            }
+          const ci = ((baseY + dy) % W) * W + ((baseX + dx) % W);
+          const mask = getMacroMask(world, ci);
+          for (let comp = 0; comp < MACRO_COMP_COUNT[mask]; comp++) {
+            if (regionAtComp(mask, ci, comp) !== REGION_NONE) continue;
+            floodRegionFrom(world, ci, comp, nextRegionId++, -1, baseX, baseY);
           }
         }
       }
@@ -1367,56 +1598,110 @@ function buildBakedTreePath(world: World, start: number, end: number): number[] 
   if (start === end) return [];
   const mStart = Math.floor((start % SW) / 4) + Math.floor((start / SW) / 4) * W;
   const mEnd = Math.floor((end % SW) / 4) + Math.floor((end / SW) / 4) * W;
-  const rS = _regionMap[mStart];
-  const rT = _regionMap[mEnd];
+  /* Регион берётся по УЗЛУ «клетка + компонента»: у разрезанной клетки половины
+   * лежат в разных регионах. Стоящий внутри мебели компоненты не имеет — за ним
+   * остаётся регион клетки целиком (первой её компоненты). */
+  const startMask = getMacroMask(world, mStart);
+  const endMaskBits = getMacroMask(world, mEnd);
+  const startCompRaw = MACRO_COMP[startMask * MACRO_SUBCELLS + subLocalIndex(start)];
+  const endCompRaw = MACRO_COMP[endMaskBits * MACRO_SUBCELLS + subLocalIndex(end)];
+  const rS = startCompRaw === MACRO_COMP_BLOCKED
+    ? _regionMap[mStart] : regionAtComp(startMask, mStart, startCompRaw);
+  const rT = endCompRaw === MACRO_COMP_BLOCKED
+    ? _regionMap[mEnd] : regionAtComp(endMaskBits, mEnd, endCompRaw);
   if (rS === REGION_NONE || rT === REGION_NONE) { _bfsMiss++; return []; }
+
+  /* Подклетка, на которой актор стоит, и подклетка цели. Через них ведётся
+   * компонента связности внутри клеток: без них маршрут проходит сквозь
+   * мебель, разрезающую клетку пополам. Стоящий ВНУТРИ мебели стартует без
+   * ограничения — иначе он вообще перестал бы получать маршруты. */
+  const startLocal = subLocalIndex(start);
+  const startSub = subComponentOf(world, mStart, startLocal) === MACRO_COMP_BLOCKED
+    ? MACRO_COMP_ANY : startLocal;
+  const endLocal = subLocalIndex(end);
+  const endComp = subComponentOf(world, mEnd, endLocal);
+  /* Цель в мебели (раковина, кровать, верстак) компоненты не имеет: годится
+   * любая половина клетки, вставать актор будет на свободной подклетке той, в
+   * которую пришёл. См. resolveEndSubcell. */
+  const endMask = endComp === MACRO_COMP_BLOCKED ? MACRO_COMP_MASK_ANY : (1 << endComp);
+
+  const path: number[] = [];
 
   // Same region: local BFS
   if (rS === rT) {
-    if (mStart === mEnd) { _bfsFound++; return [end]; }
-    const macroPath = localRegionMacroBfs(world, mStart, mEnd, rS);
-    if (macroPath.length === 0) { _bfsMiss++; return []; }
-    const sp = macroCellPathToSubcells(world, macroPath, end);
-    if (sp.length > 0) { _bfsFound++; } else { _bfsMiss++; }
-    return sp;
+    if (mStart === mEnd) {
+      const startComp = startSub === MACRO_COMP_ANY
+        ? MACRO_COMP_ANY : subComponentOf(world, mStart, startSub);
+      const only = resolveEndSubcell(world, mEnd, endLocal, startComp);
+      if (only < 0) { _bfsMiss++; return []; }
+      _bfsFound++; return [only];
+    }
+    if (!localRegionMacroBfs(world, mStart, mEnd, rS, startSub, endMask, path)
+      || !finishEndSubcell(world, path, mEnd, endLocal)) { _bfsMiss++; return []; }
+    _bfsFound++;
+    return path;
   }
 
   // Cross-region: region-node graph query. Walk the region chain, greedily
   // picking the nearest portal between consecutive regions, and stitch the
-  // macro-cell path with intra-region BFS. No portal cap, no seams.
+  // legs with intra-region BFS. No portal cap, no seams.
   const regions = regionPath(rS, rT);
   if (!regions) { _bfsMiss++; return []; }
 
-  const macroCells: number[] = [mStart];
   let cur = mStart;
+  /* Компонента связности ведётся сквозь ВСЕ колена: чем актор вошёл в клетку
+   * портала, тем он из неё и выходит. */
+  let legStartSub = startSub;
   for (let i = 0; i < regions.length - 1; i++) {
     const pi = portalBetween(regions[i], regions[i + 1], cur);
     if (pi < 0) { _bfsMiss++; return []; }
     const entry = portalCellInRegion(pi, regions[i]);
     const exit = portalCellInRegion(pi, regions[i + 1]);
-    // Route from current cell to the portal entry within regions[i].
+    /* Колено обязано привести не просто в клетку портала, а в ту её половину,
+     * из которой портал переходится: иначе честная проверка компонент
+     * отказывает там, где надо было лишь обогнуть перемычку внутри клетки. */
+    const crossMask = borderComponentMask(
+      world, entry % W, (entry / W) | 0, exit % W, (exit / W) | 0);
+    if (crossMask === 0) { _bfsMiss++; return []; }
+    let arrivalSub = legStartSub;
     if (cur !== entry) {
-      const seg = localRegionMacroBfs(world, cur, entry, regions[i]);
-      if (seg.length === 0) { _bfsMiss++; return []; }
-      for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
+      if (!localRegionMacroBfs(world, cur, entry, regions[i], legStartSub, crossMask, path)) {
+        _bfsMiss++; return [];
+      }
+      arrivalSub = _legArrivalSub;
     }
-    // Step across the portal.
-    if (macroCells[macroCells.length - 1] !== exit) macroCells.push(exit);
+    const arrivalComp = arrivalSub === MACRO_COMP_ANY
+      ? MACRO_COMP_ANY : subComponentOf(world, entry, arrivalSub);
+    if (!findBorderSubcells(world, entry % W, (entry / W) | 0, exit % W, (exit / W) | 0,
+      arrivalComp === MACRO_COMP_BLOCKED ? MACRO_COMP_ANY : arrivalComp)) { _bfsMiss++; return []; }
+    path.push(_borderPair.a);
+    path.push(_borderPair.b);
+    legStartSub = subLocalIndex(_borderPair.b);
     cur = exit;
   }
   // Final leg: last portal exit → end cell within the target region.
-  if (cur !== mEnd) {
-    const seg = localRegionMacroBfs(world, cur, mEnd, rT);
-    if (seg.length === 0) { _bfsMiss++; return []; }
-    for (let k = 1; k < seg.length; k++) macroCells.push(seg[k]);
+  if (cur !== mEnd && !localRegionMacroBfs(world, cur, mEnd, rT, legStartSub, endMask, path)) {
+    _bfsMiss++; return [];
   }
+  if (cur === mEnd) _legArrivalSub = legStartSub;
+  if (path.length === 0 || !finishEndSubcell(world, path, mEnd, endLocal)) { _bfsMiss++; return []; }
+  _bfsFound++;
+  return path;
+}
 
-  // Convert macro cell path to subcell waypoints
-  const subcellPath = macroCellPathToSubcells(world, macroCells, end);
-  if (subcellPath.length > 0) { _bfsFound++; }
-  else { _bfsMiss++; }
-  return subcellPath;
-
+/**
+ * Заменить последний вейпойнт настоящей целью. Компонента прибытия известна из
+ * `_legArrivalSub`; если цель свободна и лежит в другой половине клетки — это
+ * честный отказ, а не повод оставить маршрут, который никуда не приводит.
+ */
+function finishEndSubcell(world: World, path: number[], mEnd: number, endLocal: number): boolean {
+  const arrivalComp = _legArrivalSub === MACRO_COMP_ANY
+    ? MACRO_COMP_ANY : subComponentOf(world, mEnd, _legArrivalSub);
+  const resolved = resolveEndSubcell(world, mEnd, endLocal,
+    arrivalComp === MACRO_COMP_BLOCKED ? MACRO_COMP_ANY : arrivalComp);
+  if (resolved < 0 || path.length === 0) return false;
+  path[path.length - 1] = resolved;
+  return true;
 }
 
 function buildFlowFieldPath(field: BehaviorFlowField, start: number): number[] {
@@ -1469,6 +1754,20 @@ export function tryAssignBehaviorFlowPath(
 
   const targetCell = cellPath[cellPath.length - 1];
   const [tx, ty] = subcellToWorld(targetCell);
+  /* Поле привело туда, где актор уже стоит. Маршрут из одного вейпойнта
+   * followPath считает пройденным в тот же кадр, не сдвинув актора, потом
+   * подхватывает назначение поля и собирает его заново — и так до конца этажа.
+   * Замер: 2622 пересборки за 90 секунд у жителя, который всё это время не
+   * сдвинулся ни на клетку. Это прибытие, а не маршрут. */
+  if (world.dist2(e.x, e.y, tx, ty) <= PATH_WAYPOINT_REACH_SQ) {
+    ai.path = [];
+    ai.pi = 0;
+    ai.stuck = 0;
+    ai.tx = e.x;
+    ai.ty = e.y;
+    _flowPathAssignments.delete(e);
+    return 'same';
+  }
   const status = tryAssignPathToCell(world, e, tx, ty);
   if (status !== 'not_found') {
     _flowPathAssignments.set(e, { key, sourceProvider });
@@ -1505,6 +1804,24 @@ function losSubcellPassable(world: World, si: number): boolean {
 
 function hasLineOfSightToSubcell(world: World, e: Entity, si: number): boolean {
   return hasLineOfSight(world, e.x, e.y, subcellWorldX(si), subcellWorldY(si));
+}
+
+/* Луч сглаживания имеет нулевую толщину, а тело — нет. Клиренс тела равен
+ * половине подклетки, поэтому в полушаге от ребра клетки тело стоит сразу в
+ * ДВУХ клетках, и та, вторая, бывает стеной: луч по своей подклетке проходит,
+ * тело — нет. Замерено: монстр срезал двадцать вейпойнтов и упирался в стену,
+ * до которой по сырому маршруту не дошёл бы вовсе (он там сворачивал), после
+ * чего девяносто секунд полз вдоль свободной оси. Проба стоит одно занятие
+ * клетки и делается ПЕРЕД трассировкой — она на порядок дешевле луча. */
+const _smoothOccupyOpt: ActorOccupyOptions = { ignoreFineBlockers: false };
+
+function smoothedStepFitsBody(world: World, e: Entity, si: number, radius: number): boolean {
+  const dx = world.delta(e.x, subcellWorldX(si));
+  const dy = world.delta(e.y, subcellWorldY(si));
+  const d2 = dx * dx + dy * dy;
+  if (d2 < 1e-8) return true;
+  const k = radius / Math.sqrt(d2);
+  return canActorOccupy(world, world.wrap(e.x + dx * k), world.wrap(e.y + dy * k), radius, _smoothOccupyOpt);
 }
 
 function hasLineOfSight(world: World, x0: number, y0: number, x1: number, y1: number): boolean {
@@ -1596,6 +1913,46 @@ export function pathTargetCoord(world: World, v: number): number {
 export function pathTargetIs(world: World, e: Entity, tx: number, ty: number): boolean {
   const ai = e.ai;
   return ai !== undefined && ai.tx === pathTargetCoord(world, tx) && ai.ty === pathTargetCoord(world, ty);
+}
+
+/* ── Пересборка пути ──────────────────────────────────────────── */
+
+/** Срок отрицательного кэша неудачного поиска, в секундах. */
+export const REPATH_FAIL_SEC = 1;
+/** Насколько близко к назначенной клетке считается «дошёл». */
+const REPATH_ARRIVED_SQ = 1;
+
+/**
+ * Пора ли актёру пересобирать путь.
+ *
+ * Старый сторож `ai.path.length === 0 || ai.timer <= 0` выбрасывал статус
+ * поиска, а при 'not_found' путь остаётся пустым — значит условие снова
+ * истинно СЛЕДУЮЩИМ ЖЕ кадром. Актёр с недостижимой целью гонял полный поиск
+ * (с BFS по макроклеткам региона на каждый хоп цепочки) каждый кадр до конца
+ * этажа и при этом стоял. Пустой путь сам по себе поиска больше не открывает:
+ * «дошёл» отличается от «не нашёл» расстоянием до назначенной клетки.
+ *
+ * Внимание: «дошёл» намеренно НЕ ждёт таймера — цель погони уже ушла с этого
+ * места, и стоять до его истечения незачем. Поэтому для цели, которая движется
+ * каждый кадр (ближний бой), этот предикат не годится: там нужен чистый
+ * троттл по `ai.timer`, иначе «дошёл» истинно постоянно.
+ */
+export function actorRepathDue(world: World, e: Entity): boolean {
+  const ai = e.ai!;
+  if (ai.timer <= 0) return true;
+  return ai.path.length === 0 && world.dist2(e.x, e.y, ai.tx, ai.ty) <= REPATH_ARRIVED_SQ;
+}
+
+/**
+ * Назначить путь и записать срок следующей попытки в тот же `ai.timer`.
+ * Провал — это и есть короткий отрицательный кэш; новых полей в `AIState` нет.
+ */
+export function assignActorPath(
+  world: World, e: Entity, tx: number, ty: number, okSec: number,
+): AssignPathStatus {
+  const status = tryAssignPathToCell(world, e, tx, ty);
+  e.ai!.timer = status === 'not_found' ? REPATH_FAIL_SEC : okSec;
+  return status;
 }
 
 /* Золотой угол: соседние id разводятся максимально далеко по кольцу, а не
@@ -1846,6 +2203,9 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const lookaheadLimit = lastIdx < ai.pi + PATH_SMOOTH_LOOKAHEAD ? lastIdx : ai.pi + PATH_SMOOTH_LOOKAHEAD;
   let lookaheadIndex = ai.pi;
 
+  const bodyRadius = actorOccupyRadius(e);
+  _smoothOccupyOpt.ignoreFineBlockers = entityIgnoresFineBlockers(e);
+
   // Дальний конец пробуется первым: одна удачная линия схлопывает весь хвост.
   // Но когда окно и так достаёт до конца, эта проба — ровно первая итерация
   // цикла ниже, и раньше она стоила вторую трассировку на каждый вызов.
@@ -1864,7 +2224,13 @@ export function followPath(world: World, e: Entity, dt: number): void {
     }
   }
 
-  ai.pi = lookaheadIndex;
+  // Срезка принимается, только если по срезанной прямой пролезает ТЕЛО. Иначе
+  // остаётся сырой вейпойнт: он заведомо проходим, потому что маршрут печётся
+  // по подклеткам. Проба одна на кадр, а не на кандидата — на этаже квартир
+  // проба на каждого кандидата стоила +13% кадра при том же результате.
+  if (lookaheadIndex !== ai.pi && smoothedStepFitsBody(world, e, ai.path[lookaheadIndex], bodyRadius)) {
+    ai.pi = lookaheadIndex;
+  }
 
   // Open doors: current position, next subcell on path, and one ahead
   openPathDoorAtWorld(world, e, e.x, e.y);
@@ -1896,8 +2262,7 @@ export function followPath(world: World, e: Entity, dt: number): void {
   const step = Math.min(speed, dist);
   // Шаг единый и изотропный: полный 2D-вектор, осевое скольжение только когда
   // он упёрся. Радиус тела наконец реальный — actorOccupyRadius вместо нуля.
-  const radius = actorOccupyRadius(e);
-  stepActorBy(world, e, nx * step, ny * step, radius);
+  stepActorBy(world, e, nx * step, ny * step, bodyRadius);
 
   /* Залипание меряется ПРОДВИЖЕНИЕМ ПО МАРШРУТУ, а не фактом смещения.
    * Раньше здесь стояло `e.x !== prevX || e.y !== prevY`, и упёршийся под углом
@@ -1907,15 +2272,35 @@ export function followPath(world: World, e: Entity, dt: number): void {
     && dist - world.dist(e.x, e.y, subcellWorldX(targetSi), subcellWorldY(targetSi))
       >= step * PATH_PROGRESS_MIN_FRAC;
   ai.stuck = advanced ? 0 : ai.stuck + dt;
-  if (ai.stuck > 2 && ai.pi < ai.path.length - 1) {
-    ai.pi++;
-    ai.stuck = 0;
-  } else if (ai.stuck > 4) {
+  /* Две ступени спасения: перешагнуть застрявший вейпойнт, а если и это не
+   * помогло — бросить маршрут. Порядок и обнуление здесь принципиальны.
+   *
+   * Раньше ступени стояли наоборот и перешагивание обнуляло счётчик, поэтому
+   * на маршруте длиннее двух вейпойнтов ветка «бросить» была НЕДОСТИЖИМА: счёт
+   * шёл 0→2, вейпойнт++, снова 0→2. Актор со лживым маршрутом (а его строит
+   * клетка, разрезанная мебелью пополам) молол указатель со скоростью один
+   * вейпойнт в две секунды и стоял на месте до конца этажа — замерено: 2070
+   * вейпойнтов, 29 пройдено за 59 секунд, смещение 4.9 клетки за 90.
+   *
+   * Обнулять счётчик на перешагивании нельзя: тогда ступень «бросить» снова
+   * станет недостижимой. Само перешагивание от этого не страдает — как только
+   * шаг снова отыгрывается, `advanced` обнуляет счётчик сверху, и подряд
+   * перешагиваются ровно те вейпойнты, до которых актор физически не достаёт. */
+  if (ai.stuck > 4) {
     ai.path = [];
     ai.pi = 0;
     ai.stuck = 0;
     ai.goal = AIGoal.IDLE;
     ai.timer = 2;
+  } else if (ai.stuck > 2 && ai.pi < ai.path.length - 1) {
+    /* Перешагивание идёт БЕЗ проверки достижимости, и это проверено замером, а
+     * не забыто. Разумная на вид проверка «перешагивай только на вейпойнт, до
+     * которого дотянешься по прямой» ухудшает застревание монстров в полтора
+     * раза (20.6% → 30.5% окон без продвижения на жилом этаже): указатель,
+     * бегущий вперёд по списку, — это и есть их способ выбраться, а не дефект.
+     * Он перемалывает хвост недостижимых вейпойнтов и находит первый, к
+     * которому ноги идут; запрет оставляет актора стоять до ступени «бросить». */
+    ai.pi++;
   }
 }
 

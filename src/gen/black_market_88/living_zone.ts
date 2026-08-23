@@ -396,7 +396,7 @@ function spawnNpc(
   canGiveQuest: boolean,
   weapon?: string,
 ): void {
-  if (entities.some(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!)) return;
+  if (entities.some(e => e.alive && e.alifeId === getPlotNpcNumericId(plotNpcId)!)) return;
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);
   requireSpawnedPlotNpcFromPackage(entities, nextId, plotNpcId, x + 0.5, y + 0.5, {

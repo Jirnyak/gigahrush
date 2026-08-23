@@ -132,7 +132,8 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
 
   assert.equal(updateScriptedArrivals(world, entities, player, state, nextId), true);
 
-  const major = entities.find(e => e.id === getPlotNpcNumericId('major_grom'));
+  // Прибывший узнаётся по СЛОТУ: номер сущности у него теперь обычный.
+  const major = entities.find(e => e.alifeId === getPlotNpcNumericId('major_grom'));
   const majorPackage = getNpcPackageByPlotNpcId(getPlotNpcNumericId('major_grom')!);
   assert.ok(major, 'Major Grom should arrive once as a plot NPC');
   assert.ok(majorPackage);
@@ -140,7 +141,7 @@ test('Hell holdout arrivals keep liquidator guards inside A-Life capacity', () =
   assert.equal(major.name, npcPackageDisplayName(majorPackage));
   assert.equal(major.alifeId !== undefined, true);
   assert.equal(major.persistentNpcId, `alife:${major.alifeId}`);
-  const guards = entities.filter(e => e.faction === Faction.LIQUIDATOR && getPlotNpcStringId(e.id ?? 0) === undefined && e.id !== major.id);
+  const guards = entities.filter(e => e.faction === Faction.LIQUIDATOR && getPlotNpcStringId(e.alifeId ?? 0) === undefined && e.id !== major.id);
   assert.equal(guards.length > 0, true);
   assert.equal(guards.length <= 5, true);
   assert.equal(guards.every(e => e.alifeId !== undefined && e.persistentNpcId === `alife:${e.alifeId}`), true);
@@ -171,5 +172,5 @@ test('Hell holdout arrivals do not duplicate or replace dead Major Grom', () => 
   recordAlifeNpcDeath(state, existing);
   const entities: Entity[] = [player];
   assert.equal(updateScriptedArrivals(world, entities, player, state, { v: 200 }), false);
-  assert.equal(entities.some(e => e.id === getPlotNpcNumericId('major_grom')), false);
+  assert.equal(entities.some(e => e.alifeId === getPlotNpcNumericId('major_grom')), false);
 });

@@ -2580,6 +2580,7 @@ function buildRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; s
 }
 
 import { carveOrganicCorridor } from './shared';
+import { enforceUniqueEntityIds, newEntityIdCursor } from './entity_ids';
 
 function stitchSectorBoundaries(world: World, sectors: RecipeRegion[], seed: number): void {
   let st = seed >>> 0;
@@ -16160,7 +16161,7 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
   return withSeededRandom(spec.seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const allowNpcs = floorRunZAllowsNpcs(spec.z);
     const { rooms, spawnX, spawnY } = buildRooms(world, spec);
 
@@ -16242,6 +16243,8 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     world.bakeLights();
     relightBadAppleWorld(world);
     validateFloorGeometry(world);
+    // Та же граница, что у дизайн-этажей: номера сущностей проверяются на выходе.
+    enforceUniqueEntityIds(entities, `procedural:z=${spec.z}`);
     return { world, entities, spawnX: spawn.spawnX, spawnY: spawn.spawnY };
   });
 }

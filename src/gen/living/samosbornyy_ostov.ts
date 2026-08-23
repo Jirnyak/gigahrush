@@ -297,7 +297,7 @@ function spawnLiquidator(
   x: number,
   y: number,
 ): number {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(SAMOSBORNYY_OSTOV_LIQUIDATOR_ID)!);
   if (existing) return existing.id;
   const npc = requireSpawnedPlotNpcFromPackage(entities, nextId, SAMOSBORNYY_OSTOV_LIQUIDATOR_ID, x + 0.5, y + 0.5, {
     angle: 0,

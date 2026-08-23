@@ -612,7 +612,7 @@ export interface Entity extends InventoryHolder {
   activeBark?: { text: string; until: number; color: string; skipTranslate?: boolean; }; // UI: active world speech bubble
 }
 
-export type PlayerAlife = Pick<Entity, 'persistentNpcId' | 'age' | 'sex' | 'isFemale' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills' | 'height'>;
+export type PlayerAlife = Pick<Entity, 'persistentNpcId' | 'age' | 'sex' | 'isFemale' | 'playerRelation' | 'karma' | 'kills' | 'npcKills' | 'monsterKills' | 'height' | 'ai'>;
 
 // ── Items ────────────────────────────────────────────────────────
 
@@ -849,6 +849,8 @@ export const WORLD_EVENT_TYPES = [
   'player_use_item',
   'arena_bet_placed',
   'arena_duel_ended',
+  'npc_feud_challenge',
+  'npc_feud_resolved',
   'arena_bet_won',
   'arena_bet_lost',
   'player_disassemble_item',

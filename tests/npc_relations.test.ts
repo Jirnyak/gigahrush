@@ -3,13 +3,18 @@ import assert from 'node:assert/strict';
 
 import { EntityType, Faction, QuestType } from '../src/core/types';
 import { World } from '../src/core/world';
-import { RELATION_FRIENDLY_THRESHOLD, RELATION_HOSTILE_THRESHOLD, RELATION_MAX, RELATION_MIN, getFactionRel, initFactionRelations, setFactionRel } from '../src/data/relations';
+import { RELATION_HOSTILE_THRESHOLD, RELATION_MAX, RELATION_MIN, factionBaseRelation, getFactionRel, initFactionRelations, setFactionRel } from '../src/data/relations';
 import { applyDamageRelationPenalty, isHostile } from '../src/systems/factions';
 import { getFactionPlayerRelation } from '../src/systems/npc_relations';
 import { getRecentEvents } from '../src/systems/events';
 import { addNpcPlayerRelation } from '../src/systems/npc_relations';
 import { checkQuests, checkTalkQuest } from '../src/systems/quests';
 import { makeGameState, makeTestEntity } from './helpers';
+
+/* База «житель → игрок» читается из самой таблицы, а не переписывается числом:
+ * она уже дважды двигалась вместе с порогами, и каждый раз тест ловил не смысл,
+ * а старую константу. */
+const CITIZEN_TO_PLAYER_BASE = factionBaseRelation(Faction.CITIZEN, Faction.PLAYER);
 
 test('player attack lowers personal NPC relation and can make that NPC hostile', () => {
   initFactionRelations();
@@ -27,7 +32,7 @@ test('player attack lowers personal NPC relation and can make that NPC hostile',
 
   assert.equal(npc.playerRelation, RELATION_HOSTILE_THRESHOLD - 1);
   assert.equal(player.karma, -1);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD - 2);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE - 2);
   assert.equal(isHostile(npc, player), true);
 });
 
@@ -78,7 +83,7 @@ test('quest completion gives small faction gain and stronger giver relation gain
   checkTalkQuest(giver, player, world, [player, giver], state, state.msgs);
 
   assert.equal(state.quests[0].done, true);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD + 1);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE + 1);
   assert.equal(giver.playerRelation, 15);
   assert.equal(getRecentEvents(state, { type: 'quest_completed', limit: 1 })[0]?.data?.factionRelationDelta, 1);
 });

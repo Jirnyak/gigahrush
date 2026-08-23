@@ -3,15 +3,27 @@
 import { Cell, Tex, RoomType, Feature, type Room } from '../../core/types';
 import { World } from '../../core/world';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
+import { applyNamedRoom, findNamedRoom, type NamedRoomTable } from '../named_rooms';
 
 const PIPE_WALL = Tex.PIPE;
 const DRY_FLOOR = Tex.F_CONCRETE;
 const WATER_FLOOR = Tex.F_WATER;
-const PANEL_POWER_ROOM = 'Щитовая хорда: световой автомат';
-const PANEL_WATER_ROOM = 'Щитовая хорда: водяной байпас';
-const PANEL_DOORS_ROOM = 'Щитовая хорда: дверной обход';
-const PANEL_VENT_ROOM = 'Щитовая хорда: вентиляционный сброс';
 const REPAIR_CHORD_ROOM = 'Ремонтная обходная хорда: сухой склад';
+
+/* Щитовая хорда объявлена псевдонимами, а не только русскими именами.
+ *
+ * По этим комнатам этаж находит аварийные щиты, и они же — единственный на
+ * коллекторах адрес `panel_water`. Русского имени для такой ссылки мало:
+ * генераторы, которые занимают ГОТОВУЮ комнату вместо рытья своей (форпост),
+ * пропускают только объявленные — по `defId`. Без объявления форпост занимал
+ * «водяной байпас», переименовывал его в свой узел обороны, и щит воды пропадал
+ * с этажа целиком вместе с комнатой. */
+const PANEL_CHORD_ROOMS: NamedRoomTable = {
+  collector_panel_power: { type: RoomType.PRODUCTION, name: 'Щитовая хорда: световой автомат', tags: ['panel', 'power'] },
+  collector_panel_water: { type: RoomType.PRODUCTION, name: 'Щитовая хорда: водяной байпас', tags: ['panel', 'water'] },
+  collector_panel_doors: { type: RoomType.PRODUCTION, name: 'Щитовая хорда: дверной обход', tags: ['panel', 'doors'] },
+  collector_panel_vent: { type: RoomType.PRODUCTION, name: 'Щитовая хорда: вентиляционный сброс', tags: ['panel', 'vent'] },
+};
 
 type Dir = 'n' | 's' | 'w' | 'e';
 type PanelId = 'panel_power' | 'panel_water' | 'panel_doors' | 'panel_vent';
@@ -52,16 +64,16 @@ export function applyCollectorMacroGeometry(
 }
 
 export function placeCollectorMacroPanels(world: World, _centerX: number, _centerY: number): number {
-  const placements: readonly { roomDefId: string; dx: number; dy: number; panelId: PanelId; seed: number }[] = [
-    { roomDefId: PANEL_POWER_ROOM, dx: 3, dy: 3, panelId: 'panel_power', seed: 0x4d01 },
-    { roomDefId: PANEL_WATER_ROOM, dx: 8, dy: 3, panelId: 'panel_water', seed: 0x4d02 },
-    { roomDefId: PANEL_DOORS_ROOM, dx: 7, dy: 3, panelId: 'panel_doors', seed: 0x4d03 },
-    { roomDefId: PANEL_VENT_ROOM, dx: 4, dy: 3, panelId: 'panel_vent', seed: 0x4d04 },
+  const placements: readonly { alias: string; dx: number; dy: number; panelId: PanelId; seed: number }[] = [
+    { alias: 'collector_panel_power', dx: 3, dy: 3, panelId: 'panel_power', seed: 0x4d01 },
+    { alias: 'collector_panel_water', dx: 8, dy: 3, panelId: 'panel_water', seed: 0x4d02 },
+    { alias: 'collector_panel_doors', dx: 7, dy: 3, panelId: 'panel_doors', seed: 0x4d03 },
+    { alias: 'collector_panel_vent', dx: 4, dy: 3, panelId: 'panel_vent', seed: 0x4d04 },
   ];
 
   let placed = 0;
   for (const item of placements) {
-    const room = roomsByName(world, item.roomDefId);
+    const room = findNamedRoom(world, item.alias);
     if (!room) continue;
     const x = world.wrap(room.x + Math.max(1, Math.min(room.w - 2, item.dx)));
     const y = world.wrap(room.y + Math.max(1, Math.min(room.h - 2, item.dy)));
@@ -72,9 +84,6 @@ export function placeCollectorMacroPanels(world: World, _centerX: number, _cente
   return placed;
 }
 
-function roomsByName(world: World, name: string): Room | undefined {
-  return world.rooms.find(room => room?.name === name);
-}
 
 function stampMacroRoom(
   world: World,
@@ -480,10 +489,10 @@ function stampEmergencyPanelChordLayer(world: World, rooms: Room[], id: number, 
   carveDryH(world, cx - 108, cx + 178, cy + 36, 1);
   carveDryV(world, cx + 34, cy - 130, cy + 152, 1);
 
-  id = stampPanelChordRoom(world, rooms, id, cx - 118, cy + 26, PANEL_POWER_ROOM, 'w');
-  id = stampPanelChordRoom(world, rooms, id, cx - 22, cy + 26, PANEL_WATER_ROOM, 's');
-  id = stampPanelChordRoom(world, rooms, id, cx + 74, cy + 26, PANEL_DOORS_ROOM, 'n');
-  id = stampPanelChordRoom(world, rooms, id, cx + 162, cy + 26, PANEL_VENT_ROOM, 'e');
+  id = stampPanelChordRoom(world, rooms, id, cx - 118, cy + 26, 'collector_panel_power', 'w');
+  id = stampPanelChordRoom(world, rooms, id, cx - 22, cy + 26, 'collector_panel_water', 's');
+  id = stampPanelChordRoom(world, rooms, id, cx + 74, cy + 26, 'collector_panel_doors', 'n');
+  id = stampPanelChordRoom(world, rooms, id, cx + 162, cy + 26, 'collector_panel_vent', 'e');
 
   const repair = stampMacroRoom(world, rooms, id, RoomType.STORAGE, cx + 20, cy + 134, 28, 11, REPAIR_CHORD_ROOM);
   for (let dx = 2; dx < repair.w - 2; dx += 5) {
@@ -503,10 +512,11 @@ function stampPanelChordRoom(
   id: number,
   x: number,
   y: number,
-  name: string,
+  alias: string,
   gate: Dir,
 ): number {
-  const room = stampMacroRoom(world, rooms, id, RoomType.PRODUCTION, x, y, 13, 7, name);
+  const def = PANEL_CHORD_ROOMS[alias];
+  const room = applyNamedRoom(stampMacroRoom(world, rooms, id, def.type, x, y, 13, 7, def.name), alias, def);
   for (let dx = 2; dx < room.w - 2; dx += 3) {
     setFeature(world, room.x + dx, room.y + 2, Feature.APPARATUS);
     setFeature(world, room.x + dx, room.y + 4, Feature.MACHINE);

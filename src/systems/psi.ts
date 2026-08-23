@@ -1,11 +1,11 @@
 /* ── PSI spell system: сгустки (psychic runes) ───────────────── */
 
 import {
-  W, type Entity, type Msg, EntityType, AIGoal, DamageType,
+  W, type Entity, type GameState, type Msg, EntityType, AIGoal, DamageType,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { getPlotNpcStringId } from '../data/npc_packages';
+import { isPlotNpc } from '../data/plot';
 import { randSeed } from '../core/rand';
 import { stampMark, MarkType } from './surface_marks';
 import { WEAPON_STATS } from '../data/catalog';
@@ -16,6 +16,17 @@ import { applyMonsterIncomingDamage } from './monster_traits';
 import { calculateDamage } from './combat';
 import { intPsiDurationBonusSec } from './rpg';
 import { registerDebugCommand } from './debug_registry';
+import type { ActorDamageInput, ActorDamageResult } from './combat_stimulus';
+
+/* Дверь урона приходит ИНЪЕКЦИЕЙ, а тип — типом (при сборке стирается).
+ * Прямой импорт замкнул бы цикл `psi → combat_stimulus → factions → … → damage
+ * → psi`: матрица отношений тянет за собой пол-игры, а `damage.ts` спрашивает у
+ * пси флаг ноуклипа. Тот же приём, которым самосбор получает генератор этажа. */
+type ActorDamageSink = (world: World, state: GameState, target: Entity, input: ActorDamageInput) => ActorDamageResult;
+let damageSink: ActorDamageSink | undefined;
+export function setPsiDamageSink(sink: ActorDamageSink | undefined): void {
+  damageSink = sink;
+}
 
 // ── Module state (player-only transient effects) ─────────────────
 let phaseTimer = 0;                              // phase shift remaining seconds
@@ -49,6 +60,44 @@ export function resetPsiState(): void {
   controlTimers.clear();
 }
 
+/**
+ * Пси-удар одним ходом.
+ *
+ * Раньше каждый из трёх пси-путей вычитал здоровье сам и никому не сообщал: у
+ * жертвы не оставалось автора, и ответить она не могла — игрок со стволом
+ * получал сдачи, игрок с пси был невидимкой. Дверь урона делает всё: тип, броню,
+ * толчок, память жертвы, штраф отношениям и смерть.
+ *
+ * Запасной путь без состояния оставлен намеренно: пси зовут и из мест, где
+ * `GameState` не протянут, и молча ронять там урон нельзя.
+ */
+function psiHit(
+  world: World,
+  state: GameState | undefined,
+  target: Entity,
+  rawDamage: number,
+  attacker: Entity | undefined,
+  handleKill: (e: Entity) => void,
+): number {
+  const damage = Math.round(rawDamage);
+  if (state && damageSink) {
+    return damageSink(world, state, target, {
+      damage,
+      source: 'projectile',
+      attacker,
+      damageType: DamageType.PSI,
+      knockback: false,
+    }).applied;
+  }
+  const finalDmg = applyMonsterIncomingDamage(world, target, Math.round(calculateDamage(damage, DamageType.PSI, target)));
+  target.hp = (target.hp ?? 0) - finalDmg;
+  if ((target.hp ?? 0) <= 0) {
+    target.alive = false;
+    handleKill(target);
+  }
+  return finalDmg;
+}
+
 // ── Cast an instant (non-projectile) PSI spell ───────────────────
 export function castInstantSpell(
   effect: string,
@@ -58,10 +107,11 @@ export function castInstantSpell(
   msgs: Msg[],
   time: number,
   handleKill: (e: Entity) => void,
+  state?: GameState,
 ): { beamLen?: number; player?: Entity } {
   ensureEntityIndex(entities);
   switch (effect) {
-    case 'storm':    castStorm(player, entities, world, msgs, time, handleKill); break;
+    case 'storm':    castStorm(player, entities, world, msgs, time, handleKill, state); break;
     case 'brain_burn': castBrainBurn(player, entities, world, msgs, time, handleKill); break;
     case 'madness':  castTargeted(player, entities, world, msgs, time, 'madness'); break;
     case 'control':  castTargeted(player, entities, world, msgs, time, 'control'); break;
@@ -70,7 +120,7 @@ export function castInstantSpell(
     case 'mark':     castMark(player, msgs, time); break;
     case 'recall':   castRecall(player, msgs, time); break;
     case 'possession': return { player: castPossession(player, entities, world, msgs, time) ?? undefined };
-    case 'beam':     return { beamLen: castBeam(player, entities, world, msgs, time, handleKill) };
+    case 'beam':     return { beamLen: castBeam(player, entities, world, msgs, time, handleKill, state) };
   }
   return {};
 }
@@ -182,6 +232,7 @@ function castStorm(
   player: Entity, entities: Entity[], world: World,
   msgs: Msg[], time: number,
   handleKill: (e: Entity) => void,
+  state?: GameState,
 ): void {
   const ws = WEAPON_STATS['psi_storm'];
   const dmg = ws?.dmg ?? 10;
@@ -204,13 +255,8 @@ function castStorm(
     if (e.hp !== undefined) {
       // Same monster-trait pass as the beam and AoE paths: without it a braced
       // панельник and a wet лоточник lost their positional counterplay to storm.
-      const finalDmg = applyMonsterIncomingDamage(world, e, Math.round(calculateDamage(dmg, DamageType.PSI, e)));
-      e.hp -= finalDmg;
+      const finalDmg = psiHit(world, state, e, dmg, player, handleKill);
       spawnBloodHit(world, e.x, e.y, player.angle, finalDmg, e.type === EntityType.MONSTER);
-      if (e.hp <= 0) {
-        e.alive = false;
-        handleKill(e);
-      }
       hits++;
       if (hits >= STORM_MAX_TARGETS) break;
     }
@@ -332,7 +378,7 @@ function actorIntelligence(e: Entity): number {
 function canPossessTarget(target: Entity): boolean {
   if (!target.alive) return false;
   if (target.type !== EntityType.NPC && target.type !== EntityType.MONSTER) return false;
-  if (target.id !== undefined && getPlotNpcStringId(target.id) !== undefined) return false;
+  if (isPlotNpc(target)) return false;
   if (target.monsterKind !== undefined && MONSTERS[target.monsterKind]?.boss) return false;
   return true;
 }
@@ -437,6 +483,7 @@ function castBeam(
   player: Entity, entities: Entity[], world: World,
   msgs: Msg[], time: number,
   handleKill: (e: Entity) => void,
+  state?: GameState,
 ): number {
   const ws = WEAPON_STATS['psi_beam'];
   const dmg = ws?.dmg ?? 15;
@@ -496,13 +543,8 @@ function castBeam(
     if (perp > BEAM_WIDTH) continue;
     if (e.hp !== undefined) {
       const falloff = 1 - (along / beamEnd) * 0.3;
-      const finalDmg = applyMonsterIncomingDamage(world, e, Math.round(calculateDamage(dmg * falloff, DamageType.PSI, e)));
-      e.hp -= finalDmg;
+      const finalDmg = psiHit(world, state, e, dmg * falloff, player, handleKill);
       spawnBloodHit(world, e.x, e.y, player.angle, finalDmg, e.type === EntityType.MONSTER);
-      if (e.hp <= 0) {
-        e.alive = false;
-        handleKill(e);
-      }
       hits++;
       if (hits >= BEAM_MAX_TARGETS) break;
     }
@@ -520,6 +562,8 @@ export function psiAoeExplosion(
   proj: Entity, entities: Entity[], world: World,
   msgs: Msg[], time: number,
   handleKill: (e: Entity) => void,
+  state?: GameState,
+  owner?: Entity,
 ): void {
   const radius = proj.aoeRadius ?? 0;
   const dmg = proj.aoeDmg ?? proj.projDmg ?? 10;
@@ -541,13 +585,8 @@ export function psiAoeExplosion(
       // Damage falls off with distance
       const dist = Math.sqrt(dist2);
       const falloff = 1 - (dist / radius) * 0.5;
-      const finalDmg = applyMonsterIncomingDamage(world, e, Math.round(calculateDamage(dmg * falloff, DamageType.PSI, e)));
-      e.hp -= finalDmg;
+      const finalDmg = psiHit(world, state, e, dmg * falloff, owner, handleKill);
       spawnBloodHit(world, e.x, e.y, Math.atan2(dy, dx), finalDmg, e.type === EntityType.MONSTER);
-      if (e.hp <= 0) {
-        e.alive = false;
-        handleKill(e);
-      }
       hits++;
       if (hits >= maxHits) break;
     }
@@ -557,21 +596,11 @@ export function psiAoeExplosion(
   }
 }
 
-// ── Check if entity is PSI-controlled ally of another ────────────
-export function isPsiAlly(a: Entity, b: Entity): boolean {
-  // b is controlled by a's controller or by a itself
-  if (b.psiControlledBy !== undefined && b.psiControlledBy === a.id) return true;
-  if (a.psiControlledBy !== undefined && a.psiControlledBy === b.id) return true;
-  // Both controlled by same entity
-  if (a.psiControlledBy !== undefined && b.psiControlledBy !== undefined &&
-      a.psiControlledBy === b.psiControlledBy) return true;
-  return false;
-}
-
-// ── Check if entity is mad (attacks everyone) ────────────────────
-export function isPsiMad(e: Entity): boolean {
-  return (e.psiMadness ?? 0) > 0;
-}
+/* Предикаты пси-состояния уехали в лист `psi_state.ts`: их спрашивает матрица
+ * враждебности из горячего скана, и тянуть ради двух полей весь модуль заклятий
+ * незачем — этим импортом и замыкался цикл, стоило пси пойти через дверь урона.
+ * Реэкспорт сохранён: звать их отсюда по-прежнему законно. */
+export { isPsiAlly, isPsiMad } from './psi_state';
 
 /* ── Отладка ──────────────────────────────────────────────────
  * Команда живёт рядом со своей системой: меню собирает реестр, а не список в

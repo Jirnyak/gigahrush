@@ -11,7 +11,6 @@ import {
 // Шкала и пороги — общие, определены в `data/relations.ts`. Здесь только
 // личная половина: отношение конкретного человека к игроку.
 export { RELATION_FRIENDLY_THRESHOLD, RELATION_HOSTILE_THRESHOLD, RELATION_MAX, RELATION_MIN, clampRelation };
-export const NPC_PLAYER_RELATION_FLUCTUATION = 12;
 export const QUEST_FACTION_RELATION_DELTA = 1;
 
 export function getFactionPlayerRelation(faction: Faction | undefined): number {

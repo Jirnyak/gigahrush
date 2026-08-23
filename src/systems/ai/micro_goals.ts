@@ -5,7 +5,7 @@ import { World } from '../../core/world';
 import { emitMarkovBark } from './barks';
 import { steerEntityTowardCell, clearEntitySteeringPath } from './pathfinding';
 import { aiPathMoveSpeed } from '../rpg';
-import { canActorOccupy, actorOccupyRadius, entityIgnoresFineBlockers } from '../movement_collision';
+import { stepActorBy } from '../movement_collision';
 
 import { pickupDrop } from '../inventory';
 import { getEntityIndex, ENTITY_MASK_NPC, ENTITY_MASK_ITEM_DROP } from '../entity_index';
@@ -116,13 +116,11 @@ export function tickMicroGoal(world: World, e: Entity, dt: number, _time: number
       if (ai.microTargetX !== undefined && ai.microTargetY !== undefined) {
         const steer = steerEntityTowardCell(world, e, ai.microTargetX, ai.microTargetY);
         if (steer) {
+          // Общий шаг вместо своего пооосевого: он пробует полный 2D-шаг раньше
+          // скольжения и начинает скольжение с доминирующей оси, а не всегда с
+          // X, поэтому в симметричных углах ведёт себя симметрично.
           const speed = aiPathMoveSpeed(e) * dt;
-          const r = actorOccupyRadius(e);
-          const nx = e.x + steer.x * speed;
-          const ny = e.y + steer.y * speed;
-          const ignoreFineBlockers = entityIgnoresFineBlockers(e);
-          if (canActorOccupy(world, nx, e.y, r, { ignoreFineBlockers })) e.x = world.wrap(nx);
-          if (canActorOccupy(world, e.x, ny, r, { ignoreFineBlockers })) e.y = world.wrap(ny);
+          stepActorBy(world, e, steer.x * speed, steer.y * speed);
           e.angle = Math.atan2(steer.y, steer.x);
         } else {
           if (ai.microGoalId === 'loot_nearby' && ai.microSourceId !== undefined) {

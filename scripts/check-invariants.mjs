@@ -50,7 +50,7 @@ const ALLOWED = {
 const BASELINE = {
   'gen->render': 5,
   'systems->gen': 3,
-  'systems->render': 3,
+  'systems->render': 2,
   'data->entities': 3,
   'entities->render': 2,
   'render->gen': 2,
@@ -216,6 +216,114 @@ if (randomHits.length > MATH_RANDOM_BASELINE) {
   notes.push(`Math.random: ${randomHits.length} (было ${MATH_RANDOM_BASELINE}). Опусти MATH_RANDOM_BASELINE.`);
 }
 
+/* ── Проверка 3: рукописный старт нумерации сущностей ──────────── */
+// Номер сущности обязан приходить из `gen/entity_ids.ts`. Правило «начинать выше
+// зарезервированного диапазона сюжетных слотов» жило сорока с лишним магическими
+// числами по генераторам, и несколько копий оказались неверными: ад, квартиры и
+// коллекторы начинали с единицы, тёмная пересадка — тоже, а общий шаг населения
+// держал собственную копию счётчика. Предмет с чужим номером выдавал себя за
+// сюжетную личность: с ада каждую загрузку пропадали пять авторских NPC, а на
+// квартирах и коллекторах панель диалога рисовалась из листовки.
+const ID_CURSOR_OWNER = 'gen/entity_ids.ts';
+const idCursorHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  if (srcRel === ID_CURSOR_OWNER) continue;
+  if (!srcRel.startsWith('gen/')) continue;
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    // Счётчик сущностей, а не комнат/контейнеров: те живут в своих пространствах.
+    if (/\bnext(?:Entity)?Id\b[^=\n]*=\s*(?:\{\s*v:\s*\d+\s*\}|\d+)\s*;/.test(line)) {
+      idCursorHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+    }
+  });
+}
+if (idCursorHits.length) {
+  failures.push(`Нумерация сущностей: ${idCursorHits.length} мест заводят счётчик числом вместо newEntityIdCursor()/firstRuntimeEntityId().`);
+  failures.push(`    Владелец правила — src/${ID_CURSOR_OWNER}; порог берётся оттуда, а не переписывается.`);
+  for (const h of idCursorHits) failures.push(`    ${h}`);
+}
+
+/* ── Проверка 3.1: номер сущности как номер сюжетного слота ────── */
+// Личность живёт в `alifeId`, `id` — адрес тела. Пока доставка выдавала
+// авторскому человеку номер, равный слоту, разница ничего не стоила, и около
+// ста мест читали `entity.id` там, где имели в виду личность. Совпадения больше
+// нет: такое чтение теперь молча возвращает undefined, то есть личность просто
+// перестаёт узнаваться — ни ошибки, ни падения.
+const SLOT_LOOKUPS = 'getPlotNpcStringId|getPlotNpcNumericId|getPlotNpcPackageByNumericId|getNpcPackageByPlotNpcId|resolvePackageForPlotNpcId';
+// Получатель ограничен ИМЕНАМИ СУЩНОСТЕЙ: `.id` у описания, спецификации или
+// записи A-Life — законный строковый или слотовый идентификатор, и запрещать его
+// нельзя (`def.id`, `spawn.id`, `snapshot.id` — все три встречаются и все верны).
+const ENTITY_RECEIVERS = '(?:entity|e|npc|target|killed|actor|other|ctx\\.killed|ctx\\.npc)';
+const slotByEntityIdRe = new RegExp(`(?:${SLOT_LOOKUPS})\\s*\\(\\s*${ENTITY_RECEIVERS}\\.id\\b`);
+const slotCompareRe = new RegExp(`\\b${ENTITY_RECEIVERS}\\.id\\s*===\\s*(?:${SLOT_LOOKUPS})\\s*\\(`);
+const slotIdHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    if (slotByEntityIdRe.test(line) || slotCompareRe.test(line)) {
+      slotIdHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+    }
+  });
+}
+if (slotIdHits.length) {
+  failures.push(`Личность по номеру сущности: ${slotIdHits.length} мест читают слот из \`.id\`.`);
+  failures.push('    Слот живёт в `alifeId`; канонический предикат — `isPlotNpc` (data/plot.ts).');
+  for (const h of slotIdHits) failures.push(`    ${h}`);
+}
+
+/* ── Проверка 3.2: урон мимо единой двери ───────────────────────── */
+// Здоровье актору снимает `damageActor` (`systems/combat.ts`) и только он: он
+// считает тип и броню, толкает, СООБЩАЕТ ЖЕРТВЕ, кто ударил, начисляет штраф
+// отношениям и доводит смерть до общей обработки. Пока двери не было, каждый
+// бьющий делал это сам, и половина забывала: `notifyActorDamaged` знали три
+// файла из всех, снимавших здоровье, — пси-арсенал игрока бил без автора, а
+// гнилушка и слизевик в тишине. Жертва не узнавала, кто её ударил.
+//
+// Белый список — не поблажка, а перечень мест, где урон БЕЗАВТОРСКИЙ по природе
+// (голод, обвал, среда, поезд) либо где здоровье не отнимают, а восстанавливают
+// (лечение, загрузка сейва, синхронизация A-Life и сети, цена предмета).
+const DAMAGE_DOOR_ALLOWED = new Set([
+  'systems/combat.ts',            // сама дверь
+  'systems/damage.ts',            // обвал: автора нет
+  'systems/needs.ts',             // голод и жажда
+  'systems/cell_hazards.ts',      // газ и радиация: бегут от МЕСТА, не от лица
+  'systems/samosbor.ts',          // свечение маронария и белый туман
+  'systems/rail_trains.ts',       // поезд
+  'systems/monster_armor.ts',     // считает, не применяет
+  'systems/monster_traits.ts',    // считает, не применяет
+  'systems/alife.ts',             // восстановление записи
+  'systems/online_protocol.ts',   // сетевая синхронизация
+  'systems/debug.ts',
+]);
+const damageDoorHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  if (DAMAGE_DOOR_ALLOWED.has(srcRel)) continue;
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    // Вычитание здоровья у чужой сущности. Присваивание не ловим: им и лечат.
+    if (/\b(?:target|victim|e|entity|other|npc|monster|host|actor)\.hp\s*(?:-=|=\s*Math\.max\(0,\s*[a-zA-Z_$][\w$.]*\.hp\s*-)/.test(line)) {
+      damageDoorHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+    }
+  });
+}
+/* Осталось перевести. Все УЖЕ сообщают жертве — это доводка, а не дыра:
+ * рукопашная и самоурон монстров, рукопашная NPC, четыре пути точки сборки и
+ * два запасных пути без состояния. Число только вниз.
+ * 12 → 11 (2026-08-23): снят скрытый hitscan `npcApplyDistantRangedDamage` —
+ * шестой путь урона, недостижимый из игры (единственный вызов боя шёл с
+ * `visualProjectiles: true`). */
+const DAMAGE_DOOR_BASELINE = 11;
+if (damageDoorHits.length > DAMAGE_DOOR_BASELINE) {
+  failures.push(`Урон мимо двери: ${damageDoorHits.length} мест снимают здоровье напрямую, разрешено ${DAMAGE_DOOR_BASELINE}.`);
+  failures.push('    Здоровье актору снимает `damageActor` (systems/combat.ts) — он же сообщает жертве, кто ударил.');
+  for (const h of damageDoorHits) failures.push(`    ${h}`);
+} else if (damageDoorHits.length < DAMAGE_DOOR_BASELINE) {
+  notes.push(`Урон мимо двери: ${damageDoorHits.length} (было ${DAMAGE_DOOR_BASELINE}). Опусти DAMAGE_DOOR_BASELINE.`);
+}
+
 /* ── Проверка 4: мёртвое координатное пространство этажей ──────── */
 // Канон — числовой z из DESIGN_FLOOR_ROUTES: министерство 30, квартиры 14,
 // жилой 0, коллекторы -26, ад -36, пустота -50. Прошлая схема кодировала те же
@@ -298,4 +406,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0).`);

@@ -20,9 +20,6 @@ import { rng } from '../../core/rand';
 
 /** Псевдоним комнаты форпоста. По нему её находит сцена обороны. */
 export const FORPOST_ANCHOR = 'forpost' as const;
-/** Ниже этого форпост уже не узел обороны: взводу негде стоять, камере негде облететь. */
-const FORPOST_MIN_W = 7;
-const FORPOST_MIN_H = 6;
 /** Докуда вести коридор наружу, если живой пол всё не встречается. */
 const FORPOST_APPROACH_REACH = 40;
 
@@ -47,6 +44,32 @@ function isProtectedCell(world: World, ci: number, wallsArePassable = false): bo
   // Служебная метка без настоящего жилья: рамка чужого POI. Стену в ней открыть
   // можно, содержимое — нет.
   return !(wallsArePassable && isWall);
+}
+
+/**
+ * Место, которое ЗАКОННО расчистить. `findClearArea` ищет сплошной камень, а его
+ * в прорытом лабиринте нет ни на одном сиде; здесь же смотрят на право сноса, а
+ * не на текущее содержимое: нет чужого жилья, нет нутра объявленных комнат, нет
+ * лифта — значит, бульдозер вправе выжечь пятно под узел обороны.
+ */
+function findBulldozableArea(
+  world: World, cx: number, cy: number, w: number, h: number, minDist: number, maxDist: number,
+): { x: number; y: number } | null {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = minDist + rng() * (maxDist - minDist);
+    const tx = world.wrap(cx + Math.round(Math.cos(angle) * dist));
+    const ty = world.wrap(cy + Math.round(Math.sin(angle) * dist));
+    let ok = true;
+    for (let dy = -1; dy <= h && ok; dy++) {
+      for (let dx = -1; dx <= w && ok; dx++) {
+        const ci = world.idx(world.wrap(tx + dx), world.wrap(ty + dy));
+        if (world.cells[ci] === Cell.LIFT || isProtectedCell(world, ci)) ok = false;
+      }
+    }
+    if (ok) return { x: tx, y: ty };
+  }
+  return null;
 }
 
 /**
@@ -98,32 +121,30 @@ function connectForpostApproaches(world: World, rx: number, ry: number, w: numbe
   return touched;
 }
 
-export function generateForpost(
-  world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
-  spawnX: number, spawnY: number,
-): { room: Room; nextRoomId: number } {
-  const cx = Math.floor(spawnX);
-  const cy = Math.floor(spawnY);
-  const spec = PLOT_ROOMS['forpost'];
-
-  /* Место для узла обороны.
-   *
-   * Сперва — ГОТОВАЯ комната подходящего размера. Она уже вписана в этаж, и это
-   * решает главное: собственное место ищется как сплошной блок стены, а в прорытом
-   * лабиринте такого блока нет ни на одном сиде — поиск проваливается в слепой
-   * запасной вариант, и комната штампуется поверх застройки.
-   *
-   * Расчищать место бульдозером тоже нельзя как правило: на коллекторах есть залы,
-   * забитые обстановкой почти сплошь, и поставленная внутрь такого зала комната
-   * оказывается отрезанной сколько коридоров к ней ни веди — по самому залу пути
-   * не ходят. Готовая комната этой ловушки лишена по построению.
-   *
-   * Прежний отбор брал что угодно «не меньше пяти на пять», и форпост выходил пять
-   * на шесть: взводу негде стоять, камере негде облететь командира. Теперь нижняя
-   * граница — настоящий узел, а не караулка.
-   */
+/**
+ * Место для узла обороны.
+ *
+ * Сперва — ГОТОВАЯ комната подходящего размера. Она уже вписана в этаж, и это
+ * решает главное: собственное место ищется как сплошной блок стены, а в прорытом
+ * лабиринте такого блока нет ни на одном сиде — поиск проваливается в слепой
+ * запасной вариант, и комната штампуется поверх застройки.
+ *
+ * Расчищать место бульдозером тоже нельзя как правило: на коллекторах есть залы,
+ * забитые обстановкой почти сплошь, и поставленная внутрь такого зала комната
+ * оказывается отрезанной сколько коридоров к ней ни веди — по самому залу пути
+ * не ходят. Готовая комната этой ловушки лишена по построению.
+ *
+ * Прежний отбор брал что угодно «не меньше пяти на пять», и форпост выходил пять
+ * на шесть: взводу негде стоять, камере негде облететь командира. Нижняя граница
+ * теперь — САМ РАЗМЕР УЗЛА из таблицы: занимать имеет смысл только ту готовую
+ * комнату, в которую взвод и облёт помещаются целиком. Всё, что меньше, дешевле
+ * вырыть своё, чем ужимать сцену под чужой простенок.
+ */
+function placeForpostRoom(
+  world: World, nextRoomId: number, cx: number, cy: number, spec: typeof PLOT_ROOMS[string],
+): { room: Room; nextRoomId: number; x: number; y: number; w: number; h: number } {
   const candidates = world.rooms.filter(r => {
-    if (!r || r.w < FORPOST_MIN_W || r.h < FORPOST_MIN_H) return false;
+    if (!r || r.w < spec.w || r.h < spec.h) return false;
     if (r.apartmentId >= 0) return false;
     // Занимать уже объявленную комнату нельзя: её псевдоним — чужая ссылка.
     if (r.defId) return false;
@@ -146,14 +167,22 @@ export function generateForpost(
     labY = room.y;
     room.type = spec.roomType;
   } else {
+    /* Своё место — всегда полного размера.
+     *
+     * Ужимать было нечем: прежний цикл убавлял сразу обе стороны и сторожил
+     * только ширину, поэтому упирался в семь на ТРИ — коридор вместо узла
+     * обороны. На всех трёх проверяемых сидах форпост выходил именно таким, и
+     * командир уезжал из кадра на восемнадцать клеток, потому что стоять внутри
+     * было негде.
+     *
+     * Сплошного камня под полный размер в прорытом лабиринте нет, поэтому за
+     * глухим местом идёт РАСЧИЩАЕМОЕ: чужого жилья и нутра объявленных комнат
+     * там нет, а стены и обстановку бульдозер снимает сам — тем же проходом
+     * ниже. */
     roomW = spec.w;
     roomH = spec.h;
-    let pos = findClearArea(world, cx, cy, roomW, roomH, 5, 40);
-    while (!pos && roomW > FORPOST_MIN_W) {
-      roomW -= 2;
-      roomH -= 2;
-      pos = findClearArea(world, cx, cy, roomW, roomH, 5, 40);
-    }
+    const pos = findClearArea(world, cx, cy, roomW, roomH, 5, 40)
+      ?? findBulldozableArea(world, cx, cy, roomW, roomH, 5, 40);
     labX = pos ? pos.x : (cx + 15) % W;
     labY = pos ? pos.y : (cy + 15) % W;
     room = stampRoom(world, nextRoomId++, spec.roomType, labX, labY, roomW, roomH, -1);
@@ -169,6 +198,24 @@ export function generateForpost(
       }
     }
   }
+
+  return { room, nextRoomId, x: labX, y: labY, w: roomW, h: roomH };
+}
+
+export function generateForpost(
+  world: World, nextRoomId: number, entities: Entity[], nextId: { v: number },
+  spawnX: number, spawnY: number,
+): { room: Room; nextRoomId: number } {
+  const cx = Math.floor(spawnX);
+  const cy = Math.floor(spawnY);
+  const spec = PLOT_ROOMS['forpost'];
+  const placed = placeForpostRoom(world, nextRoomId, cx, cy, spec);
+  const room = placed.room;
+  const labX = placed.x;
+  const labY = placed.y;
+  const roomW = placed.w;
+  const roomH = placed.h;
+  nextRoomId = placed.nextRoomId;
 
   room.wallTex = spec.wallTex;
   room.floorTex = spec.floorTex;
@@ -186,7 +233,13 @@ export function generateForpost(
   // Lamps and furniture
   const rcx = room.x + Math.floor(room.w / 2);
   const rcy = room.y + Math.floor(room.h / 2);
-  world.features[world.idx(rcx, rcy)] = Feature.LAMP;
+  /* Середина зала — якорь сцены обороны и рабочее место командира, и она обязана
+   * оставаться ПРОХОДИМОЙ. Лампа стояла ровно в центре, поэтому цель, к которой
+   * сцена возвращает майора, была недостижима для поиска пути: он замирал в семи
+   * клетках от середины на всю сцену, а облетать оказывалось некого. Свет тот же,
+   * просто по краям осевой линии. */
+  world.features[world.idx(rcx - 2, rcy)] = Feature.LAMP;
+  world.features[world.idx(rcx + 2, rcy)] = Feature.LAMP;
   world.features[world.idx(room.x + 1, room.y + 1)] = Feature.TABLE;
   world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.SHELF;
   world.features[world.idx(room.x + 1, room.y + room.h - 2)] = Feature.LAMP;

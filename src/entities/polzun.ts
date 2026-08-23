@@ -12,6 +12,7 @@ export const DEF: MonsterDef = {
   dmg: 22,
   attackRate: 2.25,
   sprite: 0,   // auto-assigned by generateSprites()
+  scanSec: 1.35,
   aiFlags: ['foodBait'],
   counterplay: 'Медленный, но в двери, ванной или воде уже рядом: отходите по прямой, не спиной к сантехнике, и уводите приманкой в сторону.',
   lootHint: 'мокрая ветошь, ванная грязь, редкий фильтрующий слой',

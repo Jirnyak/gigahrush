@@ -15,6 +15,7 @@ import {
   generateZones,
   sanitizeDoors,
 } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { CX, CY, OUTER_R, ShahtaAtriumGeneration } from "./meta";
 import { carveAbyss, placeLift, buildServiceRim, buildRingsAndSpokes, buildBridges, buildServiceRooms, dressRooms, buildMidMicroServiceFabric, buildShahtaFactionHqs, paintShahtaHqTerritory, dropItem, placeCoverIslandsOnRings, registerCues, tuneShahtaZones, buildState } from "./geometry";
 import { addContainer, spawnMonster } from "./npcs";
@@ -22,7 +23,7 @@ import { addContainer, spawnMonster } from "./npcs";
 export function generateShahtaAtriumDesignFloor(): ShahtaAtriumGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
 
   world.wallTex.fill(Tex.METAL);
   world.floorTex.fill(Tex.F_CONCRETE);

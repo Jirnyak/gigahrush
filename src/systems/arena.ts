@@ -50,15 +50,14 @@ function findFighters(entities: readonly Entity[]): { fighterA: Entity | null, f
   // Pick the first two alive NPCs that are not the arena runners (matched by stable plot slot,
   // not display name). Слоты приходят из замороженного списка npc_plot_ids.ts, поэтому числа
   // определены всегда, независимо от того, загружен ли контент: раньше здесь можно было
-  // рассчитывать на undefined у незарегистрированного пакета, теперь нельзя. Совпадение по
-  // e.id остаётся осмысленным, потому что сюжетный NPC спавнится ровно со своим слотом
-  // (gen/plot_npc_spawn.ts), а обычные сущности обязаны брать id выше getPlotNpcCount().
+  // рассчитывать на undefined у незарегистрированного пакета, теперь нельзя. Сравнивается
+  // СЛОТ личности (`alifeId`): номер сущности личности больше не равен слоту.
   const markoId = getPlotNpcNumericId('marko_lolo');
   let fighterA: Entity | null = null;
   let fighterB: Entity | null = null;
 
   for (const e of entities) {
-    if (e.alive && e.type === EntityType.NPC && e.id !== markoId) {
+    if (e.alive && e.type === EntityType.NPC && e.alifeId !== markoId) {
       if (!fighterA) fighterA = e;
       else if (!fighterB) {
         fighterB = e;
@@ -75,7 +74,7 @@ export function openArena(ctx: NpcInteractionContext): void {
   arenaRuntime.npcId = ctx.npc.id;
   arenaRuntime.ctx = ctx;
   // Marko Lolo is the ring promoter: talking to him jumps straight to the "enter arena" action.
-  const enterOnly = ctx.npc.id === getPlotNpcNumericId('marko_lolo');
+  const enterOnly = ctx.npc.alifeId === getPlotNpcNumericId('marko_lolo');
   arenaRuntime.selection = enterOnly ? 6 : 0;
 
   if (!enterOnly) {

@@ -2,6 +2,7 @@ import { Entity, EntityType } from '../core/types.js';
 import { GameState } from '../core/types.js';
 import { World } from '../core/world.js';
 import { audioSuspended } from './audio.js';
+import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index.js';
 import { masterAudioEnabled, musicVolume } from './ui_orchestrator.js';
 import { mathRng } from '../core/rand.js';
 
@@ -11,7 +12,13 @@ const musicFiles = import.meta.glob('../../music/*.ogg', { eager: false, query: 
 
 export type MusicContext = 'safezone' | 'fight' | 'ambient';
 
+/** Тот же радиус боя, что стоял в `tick` как `15 * 15`, только теперь запросом. */
+const MUSIC_FIGHT_RADIUS = 15;
+
 class MusicSystem {
+  /** Буфер радиусного запроса: музыка тикает каждый кадр, массив в кадре не аллоцируется. */
+  private static readonly fightScratch: Entity[] = [];
+
   private currentContext: MusicContext = 'ambient';
   private currentTrackName: string | null = null;
   private currentAudio: HTMLAudioElement | null = null;
@@ -128,20 +135,23 @@ class MusicSystem {
     } else {
       // Check fight
       let inFight = false;
-      const fightRadius2 = 15 * 15;
-      
-      for (let i = 0; i < entities.length; i++) {
-        const e = entities[i];
+      // Радиус боя тут был и раньше: перебор всего этажа заканчивался тем же
+      // отсевом по 15 клеткам. Радиусный запрос даёт тот же набор, только без
+      // проверки тех, кто заведомо далеко.
+      const near = MusicSystem.fightScratch;
+      ensureEntityIndex(entities).queryRadius(cameraTarget.x, cameraTarget.y, MUSIC_FIGHT_RADIUS, near, ENTITY_MASK_ACTOR);
+
+      for (let i = 0; i < near.length; i++) {
+        const e = near[i];
         if (!e.alive || (e.hp !== undefined && e.hp <= 0)) continue;
         if (e.id === cameraTarget.id) continue;
-        
+
         if (e.type === EntityType.MONSTER || (e.type === EntityType.NPC && e.ai?.combatTargetId === cameraTarget.id)) {
-          if (world.dist2(e.x, e.y, cameraTarget.x, cameraTarget.y) <= fightRadius2) {
-            inFight = true;
-            break;
-          }
+          inFight = true;
+          break;
         }
       }
+      near.length = 0;
       if (inFight) {
         newContext = 'fight';
       }

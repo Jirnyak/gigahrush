@@ -12,6 +12,27 @@ The core direction is simple: ordinary NPCs should not be synchronized by a glob
 
 ## Current Baseline
 
+**Ядро актора и порядок слоёв (обновлено 2026-08-23).** `systems/actor/` (senses → needs →
+drives → brain) идёт в `updateAI` ПЕРЕД боевым слоем и перед распорядком, и берёт актора
+себе, только если у него есть решение выше порога. Драйвы — данные
+(`systems/actor/drives.ts`), четыре яруса исполнения:
+
+- `step` — шаг по склону поля под ногами (страх, укрытие, след);
+- `route` — дальняя цель через стратегический ярус полей и маршрут (охота, на выстрелы,
+  тяга к людям, стая тварей);
+- `room` — комната по НАЗНАЧЕНИЮ (еда, питьё, сон, туалет, лечение); выбор комнаты читает
+  территорию, забитость, вместимость, память комнаты, новизну (кольцо посещений живёт в
+  личности A-Life, `systems/room_visits.ts`) и опасность комнаты из того же поля
+  восприятия;
+- `actor` — противник: драйв `fight` объявляет цель и УСТУПАЕТ ход боевому слою, а если
+  побеждает не он, ядро снимает цель и боевую память (разрыв контакта).
+
+Драка требует ВИДЕТЬ (линия взгляда считается на такте решения, потолок — восемь соседей
+запроса), страх и укрытие — нет. Захват территории — такой же драйв (`capture`): цель даёт
+перепись фронта, намерение объявляется каждый такт. Отдельного фракционного отправителя на
+фронт больше нет.
+
+
 The current implementation has moved ordinary NPCs off the old global schedule path and removed active-floor proximity tiers. This full-pass isotropic model is the foundation for current-floor AI:
 
 - `src/systems/ai/index.ts` owns the single `updateAI()` entry point. It makes one full pass over the indexed live-AI list every simulation frame, regardless of distance from the player.

@@ -38,6 +38,7 @@ import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 
 export const PEREVALKA_DESIGN_FLOOR_ID = 'perevalka';
 /** Маршрутный z, а не легаси-номер этажа: контейнеры чистятся самосбором по нему. */
@@ -346,7 +347,7 @@ export function generatePerevalkaDesignFloor(seed = PEREVALKA_SEED): FloorGenera
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const containerId = { v: 1 };
 
     const layout = carvePerevalkaGalleries(world);

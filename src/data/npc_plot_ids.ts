@@ -503,4 +503,6 @@ export const PLOT_NPC_ID_ORDER: readonly string[] = [
      и вставка выше сдвинула бы чужие личности. */
   'prologue_colonel',
   'strelok',
+  /* Сцена-смотр министерского этажа. Тоже в конец и по той же причине. */
+  'general_zaslonov',
 ];

@@ -612,6 +612,26 @@ Normal route transitions also maintain lift topology after generation or memory 
 
 Future fields such as family edges, friends, rank, kills, quest seed, home/work anchors and exact inventory are allowed only with a measured storage plan. Prefer ids, small numeric fields, typed arrays and sparse overrides over large object graphs.
 
+## 3.1 Порядок слоёв активного этажа (с 2026-08-23)
+
+В `updateAI` для человека порядок такой: видовая тактика → **ядро актора** → бой →
+распорядок. Ядро идёт перед боем не для красоты: пока бой стоял первым, он забирал всякого
+с боевой целью, и решение «драться или бежать» до ядра не доходило — разорвать контакт было
+физически нечем. Ядро возвращает `false` там, где вести актора должен слой (ярус `actor`).
+
+Новые модули этого фронта:
+
+- `systems/actor/` — senses, needs, drives, brain (ядро решения);
+- `systems/room_visits.ts` — кольцо посещённых комнат: хранится колонкой личности A-Life,
+  читается обоими слоями выбора комнаты через кадровый контекст;
+- `world/crowd_index.ts`, `world/room_index.ts`, `world/line_of_sight.ts`,
+  `systems/fields/` — общие индексы и поля, на которых ядро стоит.
+
+Кадровые контексты (`setPathContext`, `setCombatContext`, `setNpcContext`,
+`setActorCoreContext`, `setFactionsSocialContext`, `setRoomVisitContext`) — единственный
+разрешённый способ подсунуть горячему пути ссылку на состояние: предикаты зовутся тысячи раз
+за кадр и в `GameState` не лазят.
+
 ## 4. Parallel Agent Ownership
 
 Use this to avoid file conflicts.

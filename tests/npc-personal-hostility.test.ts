@@ -10,12 +10,14 @@ import {
   isDemosPersonalEnemy,
   setDemosSocialEdge,
 } from '../src/systems/demos_social';
-import { isHostile, setFactionsSocialContext } from '../src/systems/factions';
+import { isHostile, isPersonalFeudEnemy, setFactionsSocialContext } from '../src/systems/factions';
 import { makeGameState, makeTestNpc } from './helpers';
 
-/* Личная вражда — свойство пары людей, а не канал «к игроку». Двое соседей
-   одной мирной фракции, ненавидящих друг друга по графу Демоса, обязаны
-   считаться врагами; та же пара без ребра — мирной. */
+/* Личная вражда — свойство пары людей, а не канал «к игроку». Читается она
+   отдельным каналом (`isPersonalFeudEnemy`) и меняет ПОВЕДЕНИЕ: отказ помочь,
+   избегание, разборка один на один (`systems/npc_feud.ts`). Боевой целью она
+   НЕ делает — иначе двое соседей дружественных фракций открывали бы огонь
+   посреди коридора, и мир выедал сам себя без игрока и без монстров. */
 
 function makeSocialState() {
   seedGlobalRng(20260820);
@@ -49,27 +51,31 @@ test('без ребра Демоса соседи одной фракции ми
   const a = first();
   const b = second();
   assert.equal(isDemosPersonalEnemy(state, 1, 2), false);
+  assert.equal(isPersonalFeudEnemy(a, b), false);
   assert.equal(isHostile(a, b), false);
   assert.equal(isHostile(b, a), false);
 });
 
-test('резко отрицательное ребро Демоса делает пару NPC враждебной', () => {
+test('резко отрицательное ребро Демоса заводит личную вражду, но не бой', () => {
   const state = makeSocialState();
   setFactionsSocialContext(state);
   const a = first();
   const b = second();
-  assert.equal(isHostile(a, b), false);
+  assert.equal(isPersonalFeudEnemy(a, b), false);
 
   assert.equal(setDemosSocialEdge(state, 1, 2, RELATION_MIN), true);
   assert.equal(isDemosPersonalEnemy(state, 1, 2), true);
-  assert.equal(isHostile(a, b), true);
-  // Число зеркалится на встречное ребро, поэтому жертва тоже видит врага.
-  assert.equal(isHostile(b, a), true);
+  assert.equal(isPersonalFeudEnemy(a, b), true);
+  // Число зеркалится на встречное ребро, поэтому вражду видят оба.
+  assert.equal(isPersonalFeudEnemy(b, a), true);
+  // И при этом ни один не считает другого боевой целью.
+  assert.equal(isHostile(a, b), false);
+  assert.equal(isHostile(b, a), false);
 
   // Третий сосед в ссоре не участвует.
   const c = makeTestNpc({ id: 103, alifeId: 3, faction: Faction.CITIZEN, name: 'Сосед Третий' });
   assert.equal(isDemosPersonalEnemy(state, 1, 3), false);
-  assert.equal(isHostile(a, c), false);
+  assert.equal(isPersonalFeudEnemy(a, c), false);
 });
 
 test('порог вражды — общий RELATION_HOSTILE_THRESHOLD', () => {
@@ -79,10 +85,10 @@ test('порог вражды — общий RELATION_HOSTILE_THRESHOLD', () => 
   const b = second();
 
   setDemosSocialEdge(state, 1, 2, RELATION_HOSTILE_THRESHOLD + 1);
-  assert.equal(isHostile(a, b), false);
+  assert.equal(isPersonalFeudEnemy(a, b), false);
 
   setDemosSocialEdge(state, 1, 2, RELATION_HOSTILE_THRESHOLD);
-  assert.equal(isHostile(a, b), true);
+  assert.equal(isPersonalFeudEnemy(a, b), true);
 });
 
 test('без контекста кадра личная вражда не читается и ничего не падает', () => {
@@ -91,6 +97,8 @@ test('без контекста кадра личная вражда не чит
   setFactionsSocialContext(undefined);
   const a = first();
   const b = second();
+  assert.equal(isPersonalFeudEnemy(a, b), false);
+  assert.equal(isPersonalFeudEnemy(b, a), false);
   assert.equal(isHostile(a, b), false);
   assert.equal(isHostile(b, a), false);
 });
@@ -101,6 +109,8 @@ test('сущность без alifeId проходит горячий путь �
   setFactionsSocialContext(state);
   const a = first();
   const nameless = makeTestNpc({ id: 104, alifeId: undefined, faction: Faction.CITIZEN, name: 'Безымянный' });
+  assert.equal(isPersonalFeudEnemy(a, nameless), false);
+  assert.equal(isPersonalFeudEnemy(nameless, a), false);
   assert.equal(isHostile(a, nameless), false);
   assert.equal(isHostile(nameless, a), false);
 });

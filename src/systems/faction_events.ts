@@ -16,12 +16,15 @@ import {
 } from '../data/faction_events';
 import { freshNeeds, ITEMS, randomName, WEAPON_STATS } from '../data/catalog';
 import {
+  factionDefaultWeapons,
+  factionPatrolOccupation,
   factionToTerritoryOwner,
   territoryOwnerName,
   territoryOwnerToFaction,
 } from '../data/factions';
 import { getStack } from '../data/items';
 import { getEntityIndex } from './entity_index';
+import { isPlayerEntity } from './player_actor';
 import { addFactionRelMutual } from '../data/relations';
 import { stampMark, MarkType } from './surface_marks';
 import { Spr } from '../entities/sprite_index';
@@ -387,7 +390,7 @@ function reactNearbyNpcsToResidue(
   let reacted = 0;
   for (const npc of nearbyNpcsByDistance(world, entities, x, y, zoneId, RESIDUE_NPC_REACT_DIST2)) {
     if (reacted >= MAX_RESIDUE_NPC_REACTIONS) break;
-    if (!npc.ai) continue;
+    if (!npc.ai || isPlayerEntity(npc)) continue;
     npc.ai.ambientBarkCd = Math.min(npc.ai.ambientBarkCd ?? 0, phase === 'start' ? 2 : 5);
     if (phase === 'start' && def.severity >= 4 && npc.faction !== def.actorFaction) {
       npc.ai.goal = AIGoal.FLEE;
@@ -1929,15 +1932,15 @@ function createFactionNpc(
   };
 }
 
+/* Кем выходит патруль — свойство фракции, а не строка события: таблица в
+ * `TERRITORY_OWNER_DEFS`. Событие своё занятие по-прежнему решает само. */
 function occupationFor(def: FactionEventDef, faction: Faction): Occupation {
   if (def.id !== 'patrol') return def.occupation;
-  if (faction === Faction.LIQUIDATOR) return Occupation.HUNTER;
-  if (faction === Faction.CULTIST) return Occupation.PILGRIM;
-  return def.occupation;
+  return factionPatrolOccupation(faction) ?? def.occupation;
 }
 
 function pickWeapon(def: FactionEventDef, faction: Faction, weapons?: readonly string[]): string | undefined {
-  const pool = weapons ?? def.weapons ?? defaultWeapons(faction);
+  const pool = weapons ?? def.weapons ?? factionDefaultWeapons(faction);
   if (pool.length === 0) return undefined;
   return pool[Math.floor(rng() * pool.length)];
 }
@@ -1946,20 +1949,15 @@ function isPsiCombatItem(itemId: string | undefined): itemId is string {
   return !!itemId && !!WEAPON_STATS[itemId]?.psiCost;
 }
 
-function defaultWeapons(faction: Faction): readonly string[] {
-  if (faction === Faction.LIQUIDATOR) return ['makarov', 'pipe'];
-  if (faction === Faction.CULTIST) return ['knife', 'psi_strike'];
-  if (faction === Faction.WILD) return ['pipe', 'knife'];
-  return ['knife'];
-}
-
+/* Патрон к стволу известен самому стволу (`WeaponStats.ammoType`) — второго
+ * списка «оружие → патрон» здесь не держим: он расходился с данными и молча
+ * оставлял без боезапаса всё, чего в нём не перечислили. Оружие, у которого
+ * боеприпас это оно само (граната), не доснаряжается. */
 function addDefaultAmmo(inventory: Item[], weapon: string | undefined): void {
   if (!weapon) return;
-  const ammo = weapon === 'shotgun' || weapon === 'toz_shotgun' ? 'ammo_shells'
-    : weapon === 'ppsh' || weapon === 'makarov' || weapon === 'homemade_pistol' ? 'ammo_9mm'
-    : weapon === 'tt_pistol' ? 'ammo_762tt'
-    : undefined;
-  if (!ammo || inventory.some(i => i.defId === ammo)) return;
+  const ammo = WEAPON_STATS[weapon]?.ammoType;
+  if (!ammo || ammo === weapon || !ITEMS[ammo]) return;
+  if (inventory.some(i => i.defId === ammo)) return;
   inventory.push({ defId: ammo, count: 8 + Math.floor(rng() * 9) });
 }
 

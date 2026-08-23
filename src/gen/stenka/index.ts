@@ -29,11 +29,12 @@ import {
 } from './geometry';
 import { placeCampDens, placeCampLoot, placeLaneActors } from './actors';
 import { BASE_A, STENKA_METRICS, STENKA_ROUTE_ID, STENKA_Z } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 export function generateStenkaDesignFloor(seed = 4404): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const nextRoomId = { v: 0 };
   const rng = seededRandom(seed);
 

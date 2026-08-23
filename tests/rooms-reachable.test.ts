@@ -143,7 +143,7 @@ const CEILINGS: Readonly<Record<string, FloorCeiling>> = {
   // Защищённые POI: connectProtectedRoom не нашла коридор, а carveCorridor
   // через aptMask не роет, поэтому ensureConnectivity их не спасает.
   living: { sealed: 44, withDefId: 1, referenced: 3, why: 'защищённые POI + прокоп зала пролога сдвинул раскладку зон; владелец решил 2026-08-20 не чинить замурованность как класс — в игре есть ПСИ-дефазинг, см. problems.md. Потолок взят по максимуму сидов, а не по SEED' },
-  maintenance: { sealed: 9, withDefId: 0, referenced: 4, why: 'stampMaintRoom: connectProtectedRoom + дробные координаты из findMaintArea' },
+  maintenance: { sealed: 3, withDefId: 0, referenced: 0, why: 'stampMaintRoom: connectProtectedRoom не нашла коридор. Дробные координаты из findMaintArea закрыты 2026-08-23: место теперь целое, и три цели слухов (мясной сборник, насосная с отражением, трубный автомат) больше не остаются невырезанными' },
   roof: { sealed: 7, withDefId: 0, referenced: 0, why: 'острова архипелага за ABYSS: carveCorridor роет только по WALL' },
   ministry: { sealed: 4, withDefId: 0, referenced: 2, why: 'createAdminRoom: единственный проём от connectProtectedRoom' },
   kvartiry: { sealed: 2, withDefId: 0, referenced: 1, why: 'social_helpers: connectProtectedRoom' },

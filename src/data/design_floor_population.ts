@@ -2004,7 +2004,11 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
     npcFactions: [{ value: Faction.CITIZEN, weight: 80 }, { value: Faction.WILD, weight: 10 }, { value: Faction.LIQUIDATOR, weight: 10 }],
   },
   ministry: {
-    npcMult: 0.4,
+    /* Держится вровень с тем, что реально ставит `spawnMinistryNpcs` (2000 при
+     * полном бюджете). При 0.4 профиль обещал 627 человек, а этаж нёс тысячу, и
+     * общий шаг населения не добавлял никого: два числа противоречили друг другу
+     * молча, и ручка выглядела живой, будучи мёртвой. */
+    npcMult: 1.28,
     monsterMult: 0.01,
     npcFactions: [{ value: Faction.CITIZEN, weight: 50 }, { value: Faction.LIQUIDATOR, weight: 30 }, { value: Faction.SCIENTIST, weight: 20 }],
   },

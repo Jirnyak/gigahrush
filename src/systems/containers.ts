@@ -6,6 +6,7 @@ import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
 import { ITEMS } from '../data/catalog';
 import { rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
+import { containersInRoom } from '../world/container_index';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   getPermitDef,
@@ -437,7 +438,9 @@ export function ensureRoomContainers(world: World, z: number, maxContainers = 12
   for (const room of world.rooms) {
     if (world.containers.length >= maxContainers) break;
     if (!room || room.type === RoomType.CORRIDOR || room.w < 3 || room.h < 3) continue;
-    if (world.containers.some(c => c.z === z && c.roomId === room.id)) continue;
+    // Спрашиваем ящики ЭТОЙ комнаты, а не перебираем весь этаж на каждую из
+    // тысяч комнат: проход стоил произведения «комнаты × ящики» раз в секунду.
+    if (containersInRoom(world, room.id).some(c => c.z === z)) continue;
     const kinds = containerKindsForRoom(room.type);
     const count = room.type === RoomType.STORAGE ? Math.min(3, kinds.length) : room.type === RoomType.PRODUCTION ? 2 : 1;
     for (let n = 0; n < count; n++) {

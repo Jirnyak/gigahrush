@@ -16,7 +16,7 @@ import { DESIGN_FLOOR_ROUTES } from '../src/data/design_floors';
 import { getPlotNpcPackageByNumericId } from '../src/data/npc_packages';
 import { CONTRACTS } from '../src/data/contracts';
 import { FACTORIES } from '../src/data/factories';
-import { MONSTER_ECOLOGY } from '../src/data/monster_ecology';
+import { MONSTER_ECOLOGY, rankMonsterEcology } from '../src/data/monster_ecology';
 import {
   PLOT_CHAIN,
   SIDE_QUESTS,
@@ -39,10 +39,16 @@ const ROOM_TYPE_IDS = new Set(Object.values(RoomType).filter(v => typeof v === '
 const FLOOR_LEVEL_IDS = new Set(DESIGN_FLOOR_ROUTES.map(r => r.z));
 const RESOURCE_IDS = new Set(RESOURCES.map(r => r.id));
 const RUMORS_BY_ID = new Map(RUMORS.map(r => [r.id, r]));
-const ZERO_WEIGHT_MONSTERS = new Set<MonsterKind>([
-  MonsterKind.CREATOR,
-  MonsterKind.PSEUDOLIFT,
-]);
+/* Нулевой вес — сознательный способ убрать вид из всеобщих взвешенных выборок:
+ * Творца, псевдолифт и линейные виды арены ставит только свой генератор. Второй
+ * рукописный список таких видов здесь не заводится — он уже был и разошёлся с
+ * monster_00, когда в бестиарий приехали башня, боец, гнездо и логово. Проверяем
+ * сам факт: нулевой вес обязан значить отсутствие в универсальной выборке, а
+ * положительный — присутствие в ней (иначе вид молча отрезан фильтром этажа). */
+const UNIVERSAL_PICK_KINDS = new Set<MonsterKind>(
+  rankMonsterEcology({ z: 14, samosborCount: 99, allowRare: true }, MONSTER_ECOLOGY.length)
+    .map(entry => entry.kind),
+);
 
 function assertUnique(values: readonly string[], label: string): void {
   const seen = new Set<string>();
@@ -251,11 +257,15 @@ test('monster ecology covers every registered monster and resolves tactical refe
     assert.equal(ecologyKinds.has(def.kind), false, `${scope} duplicate ecology entry`);
     ecologyKinds.add(def.kind);
     assert.ok(def.rooms.length > 0, `${scope} needs at least one room type`);
-    if (ZERO_WEIGHT_MONSTERS.has(def.kind)) {
-      assert.equal(def.spawnWeight, 0, `${scope} must stay data-disabled for generic spawning`);
-    } else {
-      assert.ok(def.spawnWeight > 0, `${scope} needs positive spawnWeight`);
-    }
+    assert.ok(
+      Number.isFinite(def.spawnWeight) && def.spawnWeight >= 0,
+      `${scope} needs a finite non-negative spawnWeight`,
+    );
+    assert.equal(
+      UNIVERSAL_PICK_KINDS.has(def.kind),
+      def.spawnWeight > 0,
+      `${scope} spawnWeight must match availability in universal weighted picks`,
+    );
     assert.ok(def.counterplay.trim().length >= 32, `${scope} needs concrete counterplay`);
     assert.ok(def.lootHint.trim().length >= 8, `${scope} needs lootHint`);
     assert.ok(def.rumorIds.length > 0, `${scope} needs at least one rumor`);

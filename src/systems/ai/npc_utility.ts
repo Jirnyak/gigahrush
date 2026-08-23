@@ -26,12 +26,7 @@ export const NPC_UTILITY_INTENTS = [
   "safety",
   "combat",
   "flee",
-  "toilet",
-  "drink",
-  "eat",
-  "sleep",
   "work",
-  "heal",
   "social",
   "patrol",
   "faction_assault",
@@ -45,17 +40,12 @@ export const NPC_UTILITY_INTENT_INDEX = {
   safety: 0,
   combat: 1,
   flee: 2,
-  toilet: 3,
-  drink: 4,
-  eat: 5,
-  sleep: 6,
-  work: 7,
-  heal: 8,
-  social: 9,
-  patrol: 10,
-  faction_assault: 11,
-  store: 12,
-  wander: 13,
+  work: 3,
+  social: 4,
+  patrol: 5,
+  faction_assault: 6,
+  store: 7,
+  wander: 8,
 } as const satisfies Record<NpcUtilityIntentId, number>;
 
 export const NPC_UTILITY_INTENT_COUNT = NPC_UTILITY_INTENTS.length;
@@ -175,6 +165,15 @@ export interface NpcUtilityTargetCandidate {
 export interface NpcUtilityTargetPreferenceContext {
   identity?: NpcUtilityIdentity;
   intent: NpcUtilityIntentId;
+  /**
+   * Назначение комнаты вместо назначения намерения.
+   *
+   * Тело уехало в ядро актора (`systems/actor`) и намерений этого слоя больше
+   * не имеет — но выбор комнаты со всеми его каналами (территория, толпа,
+   * память, новизна, ничья по личности) остаётся общим и переписывать его
+   * второй раз незачем. Кто знает своё назначение — называет его здесь.
+   */
+  affordance?: RoomAffordanceId;
   occupation?: Occupation;
   faction?: Faction;
   currentTargetId?: number | string;
@@ -209,12 +208,7 @@ const NPC_UTILITY_INTENT_PATIENCE: Record<NpcUtilityIntentId, number> = {
   safety: 0,
   combat: 0,
   flee: 0,
-  heal: 0.15,
-  toilet: 0.2,
-  drink: 0.3,
-  eat: 0.35,
   faction_assault: 0.5,
-  sleep: 0.6,
   store: 0.85,
   social: 0.85,
   work: 0.9,
@@ -233,7 +227,7 @@ export function npcUtilityIdentityFromEntity(
     entityId: entity.id,
     alifeId: entity.alifeId,
     persistentNpcId: entity.persistentNpcId,
-    plotNpcId: getPlotNpcStringId(entity.id),
+    plotNpcId: entity.alifeId !== undefined ? getPlotNpcStringId(entity.alifeId) : undefined,
   };
 }
 
@@ -300,33 +294,6 @@ export function npcUtilityRhythmBias(
   );
   let phase = 0;
   switch (intent) {
-    case "toilet":
-      phase = max3(
-        minuteWindow01(shifted, 430, 170),
-        minuteWindow01(shifted, 820, 130),
-        minuteWindow01(shifted, 1260, 170),
-      );
-      break;
-    case "drink":
-      phase = max3(
-        minuteWindow01(shifted, 500, 150),
-        minuteWindow01(shifted, 780, 140),
-        minuteWindow01(shifted, 1140, 170),
-      );
-      break;
-    case "eat":
-      phase = max3(
-        minuteWindow01(shifted, 470, 130),
-        minuteWindow01(shifted, 750, 130),
-        minuteWindow01(shifted, 1140, 150),
-      );
-      break;
-    case "sleep":
-      phase = Math.max(
-        minuteWindow01(shifted, 90, 330),
-        minuteWindow01(shifted, 1410, 230),
-      );
-      break;
     case "work":
       phase = Math.max(
         minuteWindow01(shifted, 630, 270),
@@ -358,7 +325,6 @@ export function npcUtilityRhythmBias(
     case "safety":
     case "combat":
     case "flee":
-    case "heal":
       phase = 0;
       break;
   }
@@ -439,75 +405,9 @@ function scoreFlee(
   );
 }
 
-function scoreToilet(
-  context: NpcUtilityScoreContext,
-  toiletPressure: number,
-  minute: number,
-  threatPressure: number,
-  stickiness: number,
-): number {
-  return clampScore(
-    toiletPressure * 92 +
-      npcUtilityRhythmBias("toilet", minute, context.identity, 8) +
-      localScore(context, "toilet") +
-      currentStickiness(context, "toilet", stickiness) -
-      threatPressure * 18 -
-      targetPenalty(context, "toilet"),
-  );
-}
 
-function scoreDrink(
-  context: NpcUtilityScoreContext,
-  drinkPressure: number,
-  minute: number,
-  threatPressure: number,
-  stickiness: number,
-): number {
-  return clampScore(
-    drinkPressure * 88 +
-      npcUtilityRhythmBias("drink", minute, context.identity, 9) +
-      localScore(context, "drink") +
-      currentStickiness(context, "drink", stickiness) -
-      threatPressure * 16 -
-      targetPenalty(context, "drink"),
-  );
-}
 
-function scoreEat(
-  context: NpcUtilityScoreContext,
-  eatPressure: number,
-  minute: number,
-  threatPressure: number,
-  stickiness: number,
-): number {
-  return clampScore(
-    eatPressure * 86 +
-      npcUtilityRhythmBias("eat", minute, context.identity, 9) +
-      localScore(context, "eat") +
-      currentStickiness(context, "eat", stickiness) -
-      threatPressure * 16 -
-      targetPenalty(context, "eat"),
-  );
-}
 
-function scoreSleep(
-  context: NpcUtilityScoreContext,
-  sleepPressure: number,
-  minute: number,
-  threatPressure: number,
-  stickiness: number,
-): number {
-  return clampScore(
-    sleepPressure * 76 +
-      npcUtilityRhythmBias("sleep", minute, context.identity, 17) +
-      (occupationProfile(context.role?.occupation)?.sleepScoreBonus ?? 0) +
-      localScore(context, "sleep") +
-      currentStickiness(context, "sleep", stickiness) -
-      threatPressure * 30 -
-      (context.samosborActive ? 18 : 0) -
-      targetPenalty(context, "sleep"),
-  );
-}
 
 function scoreWork(
   context: NpcUtilityScoreContext,
@@ -530,23 +430,6 @@ function scoreWork(
   );
 }
 
-function scoreHeal(
-  context: NpcUtilityScoreContext,
-  hpPressure: number,
-  threatPressure: number,
-  stickiness: number,
-): number {
-  return clampScore(
-    hpPressure * 105 +
-      (hpPressure < 0.01
-        ? (occupationProfile(context.role?.occupation)?.healIdleScoreBonus ?? 0)
-        : 0) +
-      localScore(context, "heal") +
-      currentStickiness(context, "heal", stickiness) -
-      threatPressure * 10 -
-      targetPenalty(context, "heal"),
-  );
-}
 
 function scoreSocial(
   context: NpcUtilityScoreContext,
@@ -730,33 +613,8 @@ export function scoreNpcUtilities(
   );
   setScore(
     out,
-    "toilet",
-    scoreToilet(context, toiletPressure, minute, threatPressure, stickiness),
-  );
-  setScore(
-    out,
-    "drink",
-    scoreDrink(context, drinkPressure, minute, threatPressure, stickiness),
-  );
-  setScore(
-    out,
-    "eat",
-    scoreEat(context, eatPressure, minute, threatPressure, stickiness),
-  );
-  setScore(
-    out,
-    "sleep",
-    scoreSleep(context, sleepPressure, minute, threatPressure, stickiness),
-  );
-  setScore(
-    out,
     "work",
     scoreWork(context, duty, minute, urgentNeed, threatPressure, stickiness),
-  );
-  setScore(
-    out,
-    "heal",
-    scoreHeal(context, hpPressure, threatPressure, stickiness),
   );
   setScore(
     out,
@@ -918,6 +776,18 @@ export function npcUtilityWorkRoomTypeWeight(
   return occupationWorkRoomTypeWeight(occupation, roomType);
 }
 
+/** Человеку нужно вдвое больше своей клетки: он сам и проход мимо него. */
+const NPC_UTILITY_PERSONAL_SPACE_CELLS = 2;
+
+/**
+ * Сколько человек комната вмещает без давки. Живёт здесь, рядом с формулой,
+ * которая делит на неё `crowd`: спрашивают вместимость и прежний слой, и ядро
+ * актора, а второй экземпляр той же константы был бы будущим рассинхроном.
+ */
+export function npcUtilityRoomCapacity(room: { w: number; h: number }): number {
+  return Math.max(1, (room.w * room.h) / NPC_UTILITY_PERSONAL_SPACE_CELLS);
+}
+
 export function npcUtilityRoomTypeWeightForIntent(
   intent: NpcUtilityIntentId,
   roomType: RoomType | undefined,
@@ -937,11 +807,6 @@ export function npcUtilityRoomTypeWeightForIntent(
         : roomType === RoomType.HQ
           ? 10
           : 0;
-    case "toilet":
-    case "drink":
-    case "eat":
-    case "sleep":
-    case "heal":
     case "social":
     case "patrol":
     case "wander":
@@ -962,11 +827,6 @@ function npcUtilityRoutineShelterWeight(roomType: RoomType): number {
 const NPC_UTILITY_INTENT_ROOM_AFFORDANCE: Partial<
   Record<NpcUtilityIntentId, RoomAffordanceId>
 > = {
-  toilet: "toilet",
-  drink: "drink",
-  eat: "eat",
-  sleep: "sleep",
-  heal: "heal",
   social: "social",
   patrol: "patrol",
   wander: "wander",
@@ -1006,7 +866,9 @@ export function npcUtilityRoomInterest(
   memory?: NpcUtilityRoomMemorySnapshot,
 ): number {
   return (
-    npcUtilityRoomTypeWeightForIntent(context.intent, roomType, context.occupation) +
+    (context.affordance !== undefined
+      ? roomAffordanceWeight(roomType, context.affordance)
+      : npcUtilityRoomTypeWeightForIntent(context.intent, roomType, context.occupation)) +
     roomNeedInterest(roomType, context) +
     roomCraftInterest(roomType, context.occupation) +
     roomMemoryInterest(memory, context)
@@ -1055,7 +917,7 @@ function roomNeedInterest(
   const heal = healthPressure(context.hp, context.maxHp);
   if (!needs && heal <= 0) return 0;
   // Назначение текущего намерения уже учтено отдельным каналом — не считаем дважды.
-  const exclude = NPC_UTILITY_INTENT_ROOM_AFFORDANCE[context.intent];
+  const exclude = context.affordance ?? NPC_UTILITY_INTENT_ROOM_AFFORDANCE[context.intent];
   const sum =
     needAffordanceInterest(roomType, "eat", exclude, lowNeedPressure(needs?.food)) +
     needAffordanceInterest(roomType, "drink", exclude, lowNeedPressure(needs?.water)) +
@@ -1413,9 +1275,6 @@ function wrapMinute(value: number): number {
   return ((value % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
 }
 
-function max3(a: number, b: number, c: number): number {
-  return Math.max(a, Math.max(b, c));
-}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);

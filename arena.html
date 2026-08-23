@@ -57,6 +57,24 @@
       pointer-events: none; white-space: pre;
       text-shadow: 0 0 6px rgba(0,255,0,0.3);
     }
+
+    #metrics-live {
+      position: absolute; top: 10px; right: 10px;
+      color: #9cf; font-size: 12px; line-height: 1.5;
+      pointer-events: none; white-space: pre;
+      background: rgba(10,10,15,0.72);
+      border: 1px solid #2a3340; padding: 8px 10px;
+      max-width: 420px;
+    }
+
+    #metrics-out {
+      position: absolute; left: 10px; bottom: 10px; right: 10px;
+      height: 34%; resize: vertical;
+      background: rgba(8,8,12,0.92); color: #cfe;
+      border: 1px solid #2a3340; padding: 8px;
+      font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.25;
+      white-space: pre; overflow: auto;
+    }
   </style>
 </head>
 <body>
@@ -85,6 +103,31 @@
     </div>
     
     <div class="panel">
+      <div class="panel-title">Сценарии и метрики</div>
+      <select id="sel-scenario" style="width:100%;background:#111;color:#0f0;border:1px solid #444;padding:4px;font-family:'Courier New',monospace;font-size:13px;margin-bottom:5px;"></select>
+      <button id="btn-scenario-load">Загрузить сцену</button>
+      <div style="display:flex;gap:5px;align-items:center;margin-bottom:5px;">
+        <input type="number" id="input-capture-sec" value="30" min="1" max="600"
+          style="width:60px;background:#111;color:#0f0;border:1px solid #444;padding:4px;font-family:'Courier New',monospace;font-size:13px;" />
+        <button id="btn-metrics-capture" style="margin:0;color:#fc0;border-color:#a80;">Замер N секунд</button>
+      </div>
+      <button id="btn-metrics-now">Сводка сейчас</button>
+      <button id="btn-metrics-reset">Сбросить счётчики</button>
+      <label style="font-size:11px;color:#888;display:block;margin:6px 0;">
+        <input type="checkbox" id="chk-separation" /> расталкивание стендом
+        <span style="color:#666;">(игра расталкивает сама)</span>
+      </label>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Текстовое зрение</div>
+      <button id="btn-dump-ascii">ASCII вокруг камеры</button>
+      <button id="btn-dump-json">JSON-снимок акторов</button>
+      <button id="btn-trace-here">Следить за ближайшим</button>
+      <button id="btn-trace-show">Трасса</button>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Controls</div>
       <div style="font-size: 11px; color: #888; line-height: 1.4;">
         WASD / Right-Click: Pan<br>
@@ -100,6 +143,9 @@
   <div id="canvas-container">
     <canvas id="c"></canvas>
     <div id="hud"></div>
+    <div id="metrics-live"></div>
+    <textarea id="metrics-out" readonly spellcheck="false"
+      placeholder="Сводка замера / ASCII-карта / трасса — выделяется и копируется"></textarea>
   </div>
   
   <script type="module" src="/src/test_arena.ts"></script>

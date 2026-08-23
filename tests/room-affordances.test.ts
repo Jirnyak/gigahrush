@@ -10,7 +10,10 @@ import {
   roomExpectedFeatures,
   roomSupports,
 } from '../src/data/room_affordances';
-import { npcUtilityRoomTypeWeightForIntent } from '../src/systems/ai/npc_utility';
+import {
+  npcUtilityRoomInterest,
+  npcUtilityRoomTypeWeightForIntent,
+} from '../src/systems/ai/npc_utility';
 
 const ALL_ROOM_TYPES = Object.values(RoomType).filter(value => typeof value === 'number') as RoomType[];
 
@@ -49,11 +52,21 @@ test('room expected features describe feature-first interactable surfaces', () =
   assert.equal(roomExpectedFeatures(RoomType.OFFICE).includes(Feature.DESK), true);
 });
 
-test('NPC utility target scoring consumes room affordance weights for base intents', () => {
-  assert.equal(npcUtilityRoomTypeWeightForIntent('eat', RoomType.KITCHEN), roomAffordanceWeight(RoomType.KITCHEN, 'eat'));
-  assert.equal(npcUtilityRoomTypeWeightForIntent('drink', RoomType.BATHROOM), roomAffordanceWeight(RoomType.BATHROOM, 'drink'));
-  assert.equal(npcUtilityRoomTypeWeightForIntent('sleep', RoomType.LIVING), roomAffordanceWeight(RoomType.LIVING, 'sleep'));
+/* Телесные намерения (`eat`, `drink`, `sleep`, `toilet`, `heal`) уехали в ядро
+ * актора и у этого слоя их больше нет: назначение комнаты называется ПРЯМО
+ * (`affordance`), а не выводится из намерения. Требование при этом не изменилось
+ * — вес по-прежнему берётся из реестра `ROOM_AFFORDANCES` и нигде не дублируется,
+ * поэтому проверяется тот же реестр, только через новую дорогу. */
+test('NPC utility target scoring consumes room affordance weights for named affordances', () => {
+  const bare = { intent: 'wander' as const };
+  assert.equal(npcUtilityRoomInterest(RoomType.KITCHEN, { ...bare, affordance: 'eat' }), roomAffordanceWeight(RoomType.KITCHEN, 'eat'));
+  assert.equal(npcUtilityRoomInterest(RoomType.BATHROOM, { ...bare, affordance: 'drink' }), roomAffordanceWeight(RoomType.BATHROOM, 'drink'));
+  assert.equal(npcUtilityRoomInterest(RoomType.LIVING, { ...bare, affordance: 'sleep' }), roomAffordanceWeight(RoomType.LIVING, 'sleep'));
+  assert.equal(npcUtilityRoomInterest(RoomType.BATHROOM, { ...bare, affordance: 'toilet' }), roomAffordanceWeight(RoomType.BATHROOM, 'toilet'));
+  assert.equal(npcUtilityRoomInterest(RoomType.MEDICAL, { ...bare, affordance: 'heal' }), roomAffordanceWeight(RoomType.MEDICAL, 'heal'));
+  // Намерения, оставшиеся у этого слоя, берут вес из того же реестра.
   assert.equal(npcUtilityRoomTypeWeightForIntent('patrol', RoomType.CORRIDOR), roomAffordanceWeight(RoomType.CORRIDOR, 'patrol'));
+  assert.equal(npcUtilityRoomTypeWeightForIntent('social', RoomType.COMMON), roomAffordanceWeight(RoomType.COMMON, 'social'));
 });
 
 test('routine safety keeps its narrower pre-registry room scoring', () => {

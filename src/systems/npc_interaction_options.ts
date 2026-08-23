@@ -163,7 +163,7 @@ function currentDesignRouteId(state: GameState): string {
 function npcMatchesProfilePredicate(npc: Entity, predicate: DesignFloorNpcPredicateProfile): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive) return false;
   const name = npc.name ?? '';
-  if (npc.id && predicate.plotNpcIds?.includes(getPlotNpcStringId(npc.id)!)) return true;
+  if (npc.alifeId && predicate.plotNpcIds?.includes(getPlotNpcStringId(npc.alifeId)!)) return true;
   if (predicate.exactNames?.includes(name)) return true;
   if (predicate.namePrefixes?.some(prefix => name.startsWith(prefix))) return true;
   if (npc.npcVisualId && predicate.npcVisualIds?.includes(npc.npcVisualId)) return true;
@@ -466,7 +466,7 @@ registerNpcInteractionOption({
   id: 'arena',
   order: 5,
   label: () => 'Арена',
-  visible: ctx => ctx.npc.id === getPlotNpcNumericId('marko_lolo'),
+  visible: ctx => ctx.npc.alifeId === getPlotNpcNumericId('marko_lolo'),
   activate: ctx => {
     openArena(ctx);
   },

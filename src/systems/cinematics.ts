@@ -57,6 +57,8 @@ import {
   startCinematicCamera,
   type RuntimeCamera,
 } from './camera';
+import { clearCombatThreat } from './combat_stimulus';
+import { stepActorBy } from './movement_collision';
 
 /**
  * Комната-якорь по объявленному псевдониму. Тот же точный поиск по `defId`, что
@@ -292,8 +294,6 @@ interface ActiveScene {
   returning: number;
   /** Кто сказал последнюю реплику. По нему наводится точка кадра `speaker`. */
   lastSpeakerId?: number;
-  /** Счётчик кадров для поводка: он правится редко, а не каждый кадр. */
-  leashTick?: number;
   /**
    * За кем сейчас следит кадр. Свойство СЦЕНЫ, а не такта: реплика, пауза и
    * ожидание смерти длятся секундами, и всё это время человек ходит. Прицел,
@@ -503,7 +503,7 @@ function spawnSceneCrowd(
       questId: -1,
       rpg,
       role: NpcRole.CINEMATIC_ACTOR,
-      cinematicState: { originalRole: NpcRole.WANDERER, originalX: spot.x, originalY: spot.y, sceneId: def.id },
+      cinematicState: { originalRole: NpcRole.WANDERER, postX: spot.x, postY: spot.y, sceneId: def.id },
     } as Entity;
     ctx.entities.push(entity);
     ids.push(entity.id);
@@ -556,7 +556,7 @@ function spawnSceneMonsters(
       ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg,
       role: NpcRole.CINEMATIC_ACTOR,
-      cinematicState: { originalRole: NpcRole.WANDERER, originalX: spot.x, originalY: spot.y, sceneId: def.id },
+      cinematicState: { originalRole: NpcRole.WANDERER, postX: spot.x, postY: spot.y, sceneId: def.id },
     } as Entity;
     ctx.entities.push(entity);
     ids.push(entity.id);
@@ -603,8 +603,8 @@ function materializeFromAlife(
       entity.role = NpcRole.CINEMATIC_ACTOR;
       entity.cinematicState = {
         originalRole,
-        originalX: entity.x,
-        originalY: entity.y,
+        postX: entity.x,
+        postY: entity.y,
         sceneId: def.id,
       };
       ids.push(entity.id);
@@ -824,36 +824,67 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
 }
 
 /**
- * Стянуть разбежавшихся обратно к якорю.
+ * Держать каст на своих местах.
  *
- * Тянет ЦЕЛЬЮ, а не цепью: тому, кто ушёл за поводок, ставится обычный `GOTO` к
- * якорю, и бой с нуждами вправе его перебить — человек остаётся живым, а не
- * приклеенным. Уже получившие поручение (`walkOut`) не трогаются: у них своя
- * дорога, и она важнее.
+ * Тянет ЦЕЛЬЮ, а не цепью: ушедшему ставится обычный `GOTO` домой, и бой с
+ * нуждами вправе его перебить — человек остаётся живым, а не приклеенным.
+ * Получившие поручение (`walkOut`, `moveTo`) не трогаются: у них своя дорога.
+ *
+ * Это ЕДИНСТВЕННЫЙ способ удержать актёра: цикл AI никого не пропускает, и
+ * выключателя, которым сцена раньше замораживала каст, больше нет. Отсюда и
+ * два режима — пост и место действия, см. тело.
+ *
+ * Проверка идёт КАЖДЫЙ КАДР, и это условие её работы: правка раз в шесть
+ * кадров оставляла бою окно перебить курс, и майор форпоста с поводком в две
+ * клетки уходил на шесть с лишним. Стоит взгляда в индекс по id и квадрата
+ * расстояния на актёра; три сотни смотра министерства проходят.
  */
 function holdCastNearAnchor(ctx: ContentRuntimeContext, scene: ActiveScene): void {
   const sceneLeash = scene.def.leash;
-  const anyRoleLeash = scene.def.actors.some(actor => actor.leash !== undefined);
-  if (sceneLeash === undefined && !anyRoleLeash) return;
-  // Раз в несколько кадров: поводок — не рулевое управление, ему хватает редких
-  // поправок, а искать сотню актёров каждый кадр незачем.
-  if ((scene.leashTick = (scene.leashTick ?? 0) + 1) % SCENE_LEASH_INTERVAL !== 0) return;
   const byId = ensureEntityIndex(ctx.entities).byId;
   for (const [role, ids] of scene.cast) {
-    const leash = scene.def.actors.find(actor => actor.role === role)?.leash ?? sceneLeash;
-    if (leash === undefined) continue;
-    const leash2 = leash * leash;
+    const roleLeash = scene.def.actors.find(actor => actor.role === role)?.leash;
     for (const id of ids) {
       const entity = byId.get(id);
       if (!entity || !entity.alive || !entity.ai) continue;
-      if (entity.role === NpcRole.CINEMATIC_ACTOR) continue; // ещё на поводке сцены
       if (errands.some(item => item.entityId === id)) continue;
-      if (ctx.world.dist2(entity.x, entity.y, scene.anchorX, scene.anchorY) <= leash2) continue;
-      // Боевая цель снимается на время возврата: иначе она возвращает курс
-      // обратно к врагу быстрее, чем поводок успевает сработать, и человек
-      // уходит всё дальше, формально оставаясь «на поводке».
+
+      /* Два режима, и различает их роль сцены.
+       *
+       * НА ПОСТУ (роль ещё на человеке): держится своего места в строю. Это и
+       * есть замена выключенному AI — актёр живёт, дышит, отвечает на удар, но
+       * с места не уходит. Поводок тут короткий: строй есть строй.
+       *
+       * ОТПУЩЕН (`release` снял роль): своего места больше нет, держится места
+       * ДЕЙСТВИЯ — якоря сцены, — и только если сцена объявила общий поводок. */
+      const held = entity.role === NpcRole.CINEMATIC_ACTOR && entity.cinematicState !== undefined;
+      const leash = held ? (roleLeash ?? SCENE_POST_LEASH) : (roleLeash ?? sceneLeash);
+      if (leash === undefined) continue;
+      const homeX = held ? entity.cinematicState!.postX : scene.anchorX;
+      const homeY = held ? entity.cinematicState!.postY : scene.anchorY;
+      const away2 = ctx.world.dist2(entity.x, entity.y, homeX, homeY);
+      if (away2 <= leash * leash) continue;
+
+      /* Возврат снимает ВСЕ ТРИ канала поиска врага: взятую цель, память об
+       * ударе и свежий скан. Двух мало — память возвращает бойца в драку тем же
+       * кадром, а скан находит ближайшую тварь заново. */
       entity.ai.combatTargetId = undefined;
-      aimAtSpot(entity, scene.anchorX, scene.anchorY);
+      clearCombatThreat(entity);
+      entity.ai.combatScanCd = SCENE_LEASH_COMBAT_BLIND_S;
+      aimAtSpot(entity, homeX, homeY);
+
+      /* И нить: актёр сцены — марионетка на верёвке конечной длины. Своя воля у
+       * него есть, он живой и отвечает на удар, но сцена его ЖЕЛАНИЯ перекрывает,
+       * а не уговаривает. Пока поводок был только курсом домой, боец с целью за
+       * спиной уходил всё равно: правка курса и погоня спорили каждый кадр, и
+       * побеждала погоня. Проверка идёт каждый кадр, поэтому перебор всегда
+       * порядка одного шага, и возврат идёт ОБЩИМ шагом с коллизией — сквозь
+       * стену верёвка никого не протаскивает. */
+      const overshoot = Math.sqrt(away2) - leash;
+      const homeDx = ctx.world.delta(entity.x, homeX);
+      const homeDy = ctx.world.delta(entity.y, homeY);
+      const homeLen = Math.hypot(homeDx, homeDy) || 1;
+      stepActorBy(ctx.world, entity, (homeDx / homeLen) * overshoot, (homeDy / homeLen) * overshoot);
     }
   }
 }
@@ -1069,20 +1100,20 @@ function departRoles(
  * Список переживает сцену (кадр закрылся, а ноги идут), поэтому ограничен. */
 const MAX_SCENE_ERRANDS = 32;
 /**
- * Через сколько кадров подтягивать разбежавшихся. Десятая доля секунды.
- *
- * Полсекунды оказалось мало: бой перебивает цель раньше, чем поводок её вернёт, и
- * ушедший успевает уйти дальше. Проверка стоит одного взгляда в карту по id на
- * актёра, так что чаще — не дорого.
- */
-const SCENE_LEASH_INTERVAL = 6;
-/**
  * Выдержка ПОСЛЕ конца сцены. Обратный пролёт камеры длится до
  * `SCENE_RETURN_TIMEOUT_S`, но снимать людей с этажа в кадре нельзя и на нём:
  * зритель видит, как они пропадают. Отсчёт начинается, когда сцена уже закрыта и
  * управление у игрока, поэтому выдержке хватает нескольких секунд.
  */
 const SCENE_WALK_OUT_GRACE_S = 6;
+/** Насколько боец слепнет к новым целям, пока поводок тянет его обратно. */
+const SCENE_LEASH_COMBAT_BLIND_S = 0.5;
+/**
+ * Поводок стоящего на посту. Короткий: строй обязан читаться строем, а не
+ * толпой. Актёр при этом жив — переминается, огрызается, отвечает на удар, —
+ * просто не уходит с места.
+ */
+const SCENE_POST_LEASH = 1.5;
 
 interface SceneErrand {
   entityId: number;
@@ -1169,10 +1200,12 @@ function aimAtSpot(entity: Entity, ax: number, ay: number): void {
 function updateSceneErrands(ctx: ContentRuntimeContext): void {
   if (!errands.length) return;
   let removed = false;
+  // Ведомого берём из индекса, а не перебором массива на каждого и каждый кадр.
+  // Место в массиве считается один раз и только на самом снятии с этажа.
+  const byId = ensureEntityIndex(ctx.entities).byId;
   for (let i = errands.length - 1; i >= 0; i--) {
     const item = errands[i];
-    const index = ctx.entities.findIndex(entity => entity.id === item.entityId);
-    const entity = index >= 0 ? ctx.entities[index] : undefined;
+    const entity = byId.get(item.entityId);
     if (!entity || !entity.alive) {
       errands.splice(i, 1);
       continue;
@@ -1192,7 +1225,8 @@ function updateSceneErrands(ctx: ContentRuntimeContext): void {
 
     captureAlifeFloorState(ctx.state, [entity]);
     if (entity.alifeId !== undefined) moveAlifeNpcRecord(ctx.state, entity.alifeId, item.toFloorKey);
-    ctx.entities.splice(index, 1);
+    const index = ctx.entities.indexOf(entity);
+    if (index >= 0) ctx.entities.splice(index, 1);
     errands.splice(i, 1);
     removed = true;
   }
@@ -1232,12 +1266,26 @@ export function abortFloorScene(state?: GameState, entities?: Entity[]): void {
 
 /* ── Разрешение ссылок ───────────────────────────────────────── */
 
+/**
+ * Живые исполнители роли.
+ *
+ * Спрашивают это КАЖДЫЙ КАДР, пока идёт сцена: за фокусом камеры и за концом
+ * такта `awaitDeath`. Раньше на каждый вопрос перебирался весь этаж, да ещё и
+ * с `ids.includes` внутри — тысячи сущностей на горстку актёров. Теперь ходим
+ * по составу роли, а сущность берём из индекса: он держит ровно живых, поэтому
+ * промах — это и есть «не дожил».
+ *
+ * Порядок стал порядком СОСТАВА, а не массива сущностей. Наружу это видно
+ * только в `firstLivingOfRole`, который и так выбирает случайного.
+ */
 function entitiesOfRole(ctx: ContentRuntimeContext, scene: ActiveScene, role: string): Entity[] {
   const ids = scene.cast.get(role);
   if (!ids || !ids.length) return [];
+  const byId = ensureEntityIndex(ctx.entities).byId;
   const found: Entity[] = [];
-  for (const entity of ctx.entities) {
-    if (entity.alive && ids.includes(entity.id)) found.push(entity);
+  for (const id of ids) {
+    const entity = byId.get(id);
+    if (entity && entity.alive) found.push(entity);
   }
   return found;
 }
@@ -1262,10 +1310,11 @@ function roleIsGone(ctx: ContentRuntimeContext, scene: ActiveScene, role: string
 /** Центр масс роли: кадр держится за людей, а не за координату, которую они уже покинули. */
 function resolveSpot(ctx: ContentRuntimeContext, scene: ActiveScene, spot: SceneSpot): { x: number; y: number } {
   if ('speaker' in spot) {
+    // Кадр держится за говорившего каждый кадр такта — по индексу, не перебором.
     const speaker = scene.lastSpeakerId !== undefined
-      ? ctx.entities.find(entity => entity.id === scene.lastSpeakerId && entity.alive)
+      ? ensureEntityIndex(ctx.entities).byId.get(scene.lastSpeakerId)
       : undefined;
-    if (speaker) return { x: speaker.x, y: speaker.y };
+    if (speaker?.alive) return { x: speaker.x, y: speaker.y };
     return { x: scene.anchorX, y: scene.anchorY };
   }
   if ('role' in spot) {

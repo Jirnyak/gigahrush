@@ -24,6 +24,7 @@ import {
 } from '../shared';
 import { genLog } from '../log';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_FUTURE_Z, REGISTRY_MORGUE_Z, CORPSE_NUMBER_TAG_ITEM, REGISTRY_MORGUE_TARGET_ROUTE, NextId, NPC_DEFS } from "./meta";
 import { createDesignRoom, linkRooms, reinforceRegistryMorgueAuthoredTerritory, expandRegistryMorgueGeometry, placeDesignLift, decorateRegistryMorgue, retuneRegistryMorgueZones } from "./geometry";
 import { spawnMorgueNpc, spawnMorgueMonster, seedRegistryMorgueContainers, seedRegistryMorgueReadables } from "./npcs";
@@ -149,7 +150,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_quarantine_sanitar', N
 export function generateRegistryMorgueDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 10000 };
+  const nextId: NextId = newEntityIdCursor();
   let nextRoomId = 0;
 
   for (let i = 0; i < W * W; i++) {

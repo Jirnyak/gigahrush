@@ -611,7 +611,7 @@ function addContainer(
 }
 
 function spawnRecruiter(world: World, entities: Entity[], nextId: { v: number }, room: Room): Entity {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(RECRUITER_ID)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(RECRUITER_ID)!);
   if (existing) return existing;
   const x = world.wrap(room.x + 6);
   const y = world.wrap(room.y + 4);
@@ -624,7 +624,7 @@ function spawnRecruiter(world: World, entities: Entity[], nextId: { v: number },
 }
 
 function spawnWitness(world: World, entities: Entity[], nextId: { v: number }, room: Room): Entity {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(WITNESS_ID)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(WITNESS_ID)!);
   if (existing) return existing;
   const x = world.wrap(room.x + 8);
   const y = world.wrap(room.y + 6);

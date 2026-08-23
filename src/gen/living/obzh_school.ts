@@ -361,7 +361,7 @@ function spawnNpc(
   classRoom: Room,
   shelter: Room,
 ): void {
-  if (entities.some(e => e.alive && e.id === getPlotNpcNumericId(spawn.id)!)) return;
+  if (entities.some(e => e.alive && e.alifeId === getPlotNpcNumericId(spawn.id)!)) return;
   const room = spawn.room === 'classroom' ? classRoom : shelter;
   requireSpawnedPlotNpcFromPackage(entities, nextId, spawn.id, room.x + spawn.dx + 0.5, room.y + spawn.dy + 0.5, {
     angle: spawn.angle,

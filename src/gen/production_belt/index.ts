@@ -11,6 +11,7 @@ import {
   sanitizeDoors,
 } from '../shared';
 import { seededRandom, hashSeed } from '../../core/rand';
+import { newEntityIdCursor } from '../entity_ids';
 import { ProductionBeltGeneration, buildRooms, placeLift, expandProductionBeltGeometry, decorateLineRooms, applyZoneRole, registerProductionMachineHazards, markConveyorSpine } from "./geometry";
 import { registerProductionBeltContent, createProductionBeltState, registerProductionBeltRouteCues, populateRooms } from "./npcs";
 
@@ -48,7 +49,7 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   decorateLineRooms(world, rooms);
 
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const containers = populateRooms(world, entities, nextId, rooms);
   const productionState = createProductionBeltState(rooms, containers);
   registerProductionBeltRouteCues(world, rooms, containers);

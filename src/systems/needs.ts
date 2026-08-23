@@ -112,6 +112,15 @@ export function updateNeeds(
       if (!e.alive || !e.needs || e.id === playerId || hotNeedIds.has(e.id)) continue;
       hotNeedIds.add(e.id);
       const elapsed = elapsedNeedsDt(e, time, dt);
+      /* Восстановление по комнате идёт и БЛИЗКИМ тоже.
+       *
+       * Раньше оно жило только на холодной ветке, а близких к игроку кормил
+       * второй, свой экземпляр той же логики в `ai/npc_fsm`. Пока телесные
+       * намерения вёл прежний слой, это просто дублировалось; теперь их ведёт
+       * ядро актора, прежний слой такого человека не касается вовсе — и без
+       * этой строки уснувший на глазах у игрока не восстанавливал бы сон,
+       * а ушедший спать в дальний угол восстанавливал. Одно место на всех. */
+      applyColdResidentCadence(e, elapsed, time, world);
       const result = applyNeedTick(entities, e, elapsed, time, msgs, playerId, nextId, state, passiveHealthRegenTimeScale);
       rememberNeedsTouch(e.id, time);
       needsDebug.hotExact++;

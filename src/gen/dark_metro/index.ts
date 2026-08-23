@@ -52,6 +52,7 @@ import {
   DARK_METRO_HQ_COMPOUNDS,
   type DarkMetroGeneration,
 } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 export function tuneDarkMetroRouteZone(zone: Zone): void {
   const lineDistance = nearestDarkMetroLineDistance(zone.cy);
@@ -122,7 +123,7 @@ export function generateDarkMetroDesignFloor(seed = DARK_METRO_DEFAULT_SEED): Da
     const ctx: BuildCtx = {
       world,
       entities,
-      nextId: { v: 1 },
+      nextId: newEntityIdCursor(),
       nextContainerId: { v: 1 },
       packedState: initialDarkMetroState(seed),
     };

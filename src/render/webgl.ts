@@ -4566,7 +4566,7 @@ function drawCritters(
 function renderParticlesGL(
   particles: BloodParticle[],
   px: number, py: number, pAngle: number, pPitch: number,
-  _camHeight: number,
+  camHeight: number,
   fogDensity: number,
   purpleFog: number,
   activeFogRgb: readonly [number, number, number],
@@ -4615,7 +4615,11 @@ function renderParticlesGL(
     const pad = Math.ceil(screenSize + 1);
     if (sx < -pad || sx >= SCR_W + pad) continue;
 
-    const sy = Math.floor(halfH + SCR_H / (tyf * 2) - p.z * SCR_H / tyf); // at impact height
+    // Экранная высота точки на высоте p.z: та же проекция, что у пола
+    // (`groundY = halfH + camHeight * SCR_H / depth`), только от роста камеры
+    // отнимается высота точки. Раньше здесь стояла захардкоженная половина,
+    // равная росту камеры по умолчанию, — и кровь не опускалась при приседании.
+    const sy = Math.floor(halfH + (camHeight - p.z) * SCR_H / tyf);
     if (sy < -pad || sy >= SCR_H + pad) continue;
 
     const distFade = dist <= PARTICLE_FADE_START

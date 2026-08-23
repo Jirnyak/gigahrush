@@ -5,8 +5,31 @@ import { AIGoal, Cell, EntityType, Faction, NpcState, Occupation, RoomType, type
 import { World } from '../src/core/world';
 import { setPathContext } from '../src/systems/ai/pathfinding';
 import { setNpcContext, updateNPC } from '../src/systems/ai/npc_fsm';
+import {
+  actorDrive, forgetActorBrain, setActorCoreContext, tickActorBrain,
+} from '../src/systems/actor/brain';
+import { rebuildCrowdIndex } from '../src/world/crowd_index';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { addTestRoom, makeTestPlayer } from './helpers';
+
+/** Цель рутины — СВОЯ точка внутри комнаты, а не её центр: `roomTargetCell`
+ *  разводит жильцов по площади, иначе центр комнаты работает аттрактором и вся
+ *  рутина этажа сходится в одну клетку. Проверяется выбор КОМНАТЫ, поэтому
+ *  сверяется попадание цели в её прямоугольник, а не конкретная клетка. */
+function assertTargetInRoom(
+  npc: Entity,
+  room: { x: number; y: number; w: number; h: number },
+  message?: string,
+): void {
+  const tx = npc.ai?.tx ?? -1;
+  const ty = npc.ai?.ty ?? -1;
+  assert.ok(
+    tx > room.x && tx < room.x + room.w && ty > room.y && ty < room.y + room.h,
+    `${message ?? 'цель должна лежать в выбранной комнате'}: цель (${tx}, ${ty}), `
+    + `комната [${room.x}..${room.x + room.w}) x [${room.y}..${room.y + room.h})`,
+  );
+}
+
 
 function makeRoutineWorld(): World {
   const world = new World();
@@ -50,6 +73,35 @@ function tickNpc(world: World, npc: Entity, clock: GameClock = { hour: 9, minute
   updateNPC(world, entities, npc, 0, clock.totalMinutes, clock, false);
 }
 
+/* ── Тело ходит через ядро актора ─────────────────────────────────────────
+ *
+ * Голод, жажда, сон, туалет и лечение уехали из рутины прежнего слоя в
+ * `systems/actor`, поэтому телесные проверки обязаны гонять цикл ЯДРА. Ядро
+ * решает по своей паузе, расфазированной от `id` и выведенной из такта полей
+ * (не больше четырёх секунд), а исполняет каждый кадр, — значит одного такта
+ * мало ни для решения, ни тем более для дороги.
+ *
+ * `CORE_DECIDE_STEPS` — сколько тактов нужно, чтобы решение точно состоялось;
+ * `CORE_WALK_STEPS` — с запасом на дорогу через весь тестовый этаж пешком.
+ */
+const CORE_DT = 0.5;
+const CORE_DECIDE_STEPS = Math.ceil(4 / CORE_DT) + 1;
+const CORE_WALK_STEPS = 160;
+
+function runCore(world: World, npc: Entity, steps: number, bystanders: readonly Entity[] = []): void {
+  const entities = [makeTestPlayer({ id: 1, x: 90, y: 90 }), ...bystanders, npc];
+  forgetActorBrain(npc);
+  setActorCoreContext(0);
+  for (let step = 0; step < steps; step++) {
+    const now = step * CORE_DT;
+    rebuildEntityIndexForSimulation(entities, now);
+    rebuildCrowdIndex(world, entities, now);
+    setPathContext([], now);
+    setNpcContext([], now, 0);
+    tickActorBrain(world, npc, CORE_DT, now);
+  }
+}
+
 function markSurfaceCell(world: World, x: number, y: number, alpha = 220): number {
   const idx = world.idx(x, y);
   const pixels = new Uint8Array(16 * 16 * 4);
@@ -78,12 +130,14 @@ test('routine thirst prefers a friendly kitchen over a closer hostile kitchen', 
   const friendly = addTestRoom(world, { id: 2, x: 54, y: 8, w: 5, h: 5, type: RoomType.KITCHEN, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
   const npc = makeNpc(10, { needs: { food: 90, water: 0, sleep: 100, pee: 0, poo: 0 } });
 
-  tickNpc(world, npc);
+  // Дорога проходится целиком: отметка занятия ставится ПО ПРИБЫТИИ, и только
+  // по ней `systems/needs.ts` отличает «сел обедать» от «стоит у кухни».
+  runCore(world, npc, CORE_WALK_STEPS);
 
-  assert.equal(npc.ai?.goal, AIGoal.DRINK);
+  assert.equal(actorDrive(npc), 'drink');
+  assertTargetInRoom(npc, friendly);
+  assert.equal(world.roomAt(npc.x, npc.y)?.id, friendly.id, 'должен дойти до дружественной кухни');
   assert.equal(npc.ai?.npcState, NpcState.LUNCH);
-  assert.equal(npc.ai?.tx, friendly.x + Math.floor(friendly.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, friendly.y + Math.floor(friendly.h / 2) + 0.5);
 });
 
 test('routine toilet pressure avoids hostile bathroom when a friendly bathroom is reachable', () => {
@@ -92,11 +146,10 @@ test('routine toilet pressure avoids hostile bathroom when a friendly bathroom i
   const friendly = addTestRoom(world, { id: 2, x: 42, y: 8, w: 5, h: 5, type: RoomType.BATHROOM, zoneId: 2, zoneFaction: ZoneFaction.CITIZEN });
   const npc = makeNpc(11, { needs: { food: 100, water: 100, sleep: 100, pee: 96, poo: 80 } });
 
-  tickNpc(world, npc);
+  runCore(world, npc, CORE_DECIDE_STEPS);
 
-  assert.equal(npc.ai?.goal, AIGoal.TOILET);
-  assert.equal(npc.ai?.tx, friendly.x + Math.floor(friendly.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, friendly.y + Math.floor(friendly.h / 2) + 0.5);
+  assert.equal(actorDrive(npc), 'toilet');
+  assertTargetInRoom(npc, friendly);
 });
 
 test('routine work uses an assigned work room only when the room is friendly', () => {
@@ -113,8 +166,7 @@ test('routine work uses an assigned work room only when the room is friendly', (
 
   assert.equal(npc.ai?.goal, AIGoal.WORK);
   assert.equal(npc.ai?.npcState, NpcState.WORKING);
-  assert.equal(npc.ai?.tx, friendly.x + Math.floor(friendly.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, friendly.y + Math.floor(friendly.h / 2) + 0.5);
+  assertTargetInRoom(npc, friendly);
 });
 
 test('routine work keeps a friendly assigned work room as the strongest anchor', () => {
@@ -130,8 +182,7 @@ test('routine work keeps a friendly assigned work room as the strongest anchor',
   tickNpc(world, npc);
 
   assert.equal(npc.ai?.goal, AIGoal.WORK);
-  assert.equal(npc.ai?.tx, assigned.x + Math.floor(assigned.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, assigned.y + Math.floor(assigned.h / 2) + 0.5);
+  assertTargetInRoom(npc, assigned);
 });
 
 test('cleaner work routine wipes nearby friendly surface marks without scanning the floor', () => {
@@ -180,11 +231,17 @@ test('routine work can target an assigned room beyond the first scan window', ()
   tickNpc(world, npc);
 
   assert.equal(npc.ai?.goal, AIGoal.WORK);
-  assert.equal(npc.ai?.tx, assigned.x + Math.floor(assigned.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, assigned.y + Math.floor(assigned.h / 2) + 0.5);
+  assertTargetInRoom(npc, assigned);
 });
 
-test('local family anchor suppresses traveler occupation routine', () => {
+/* Прежде это проверялось так: «домашняя привязка глушит рутину путешественника».
+ * Глушить больше нечего и незачем — тело идёт через ядро актора, а ядро стоит
+ * ПЕРЕД прежним слоем и забирает актора себе, как только тяга выше порога. То
+ * есть подавление рутины стало структурным и от ремесла не зависит вовсе:
+ * охотник-путешественник со сном на нуле обязан лечь спать так же, как любой
+ * житель. Проверяется теперь именно это, вместе с отметкой занятия — по ней
+ * `systems/needs.ts` и восстанавливает сон. */
+test('сонного ведёт спать домой независимо от ремесла, и по прибытии он ложится', () => {
   const world = makeRoutineWorld();
   const home = addTestRoom(world, {
     id: 1,
@@ -204,12 +261,12 @@ test('local family anchor suppresses traveler occupation routine', () => {
     needs: { food: 100, water: 100, sleep: 0, pee: 0, poo: 0 },
   });
 
-  tickNpc(world, npc, { hour: 23, minute: 0, totalMinutes: 1380 });
+  runCore(world, npc, CORE_WALK_STEPS);
 
-  assert.equal(npc.ai?.goal, AIGoal.SLEEP);
+  assert.equal(actorDrive(npc), 'sleep');
+  assertTargetInRoom(npc, home);
+  assert.equal(world.roomAt(npc.x, npc.y)?.id, home.id, 'должен дойти до жилой комнаты');
   assert.equal(npc.ai?.npcState, NpcState.SLEEPING);
-  assert.equal(npc.ai?.tx, home.x + Math.floor(home.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, home.y + Math.floor(home.h / 2) + 0.5);
 });
 
 test('survival need can trespass only after no friendly room candidate exists', () => {
@@ -217,9 +274,8 @@ test('survival need can trespass only after no friendly room candidate exists', 
   const hostileKitchen = addTestRoom(world, { id: 1, x: 16, y: 8, w: 5, h: 5, type: RoomType.KITCHEN, zoneId: 1, zoneFaction: ZoneFaction.CULTIST });
   const npc = makeNpc(14, { needs: { food: 100, water: 0, sleep: 100, pee: 0, poo: 0 } });
 
-  tickNpc(world, npc);
+  runCore(world, npc, CORE_DECIDE_STEPS);
 
-  assert.equal(npc.ai?.goal, AIGoal.DRINK);
-  assert.equal(npc.ai?.tx, hostileKitchen.x + Math.floor(hostileKitchen.w / 2) + 0.5);
-  assert.equal(npc.ai?.ty, hostileKitchen.y + Math.floor(hostileKitchen.h / 2) + 0.5);
+  assert.equal(actorDrive(npc), 'drink');
+  assertTargetInRoom(npc, hostileKitchen);
 });

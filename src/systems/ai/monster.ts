@@ -30,8 +30,15 @@ import { scaleMonsterDmg, strMeleeDmgMult } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
 import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
 import { MarkType, stampMark } from '../surface_marks';
-import { followPath, pathTargetIs, spreadTargetCell, tryAssignPathToCell, wanderFar, wanderNearby, type AssignPathStatus } from './pathfinding';
+import {
+  followPath, pathTargetIs, spreadTargetCell, tryAssignPathToCell, wanderFar, wanderNearby,
+  // Предикат и назначение общие для всех акторов и живут в pathfinding; здесь
+  // они сохраняют исторические имена, чтобы не трогать три десятка вызовов.
+  actorRepathDue as monsterRepathDue,
+  assignActorPath as assignMonsterPath,
+} from './pathfinding';
 import { stepActorBy } from '../movement_collision';
+import { hasLineOfSight, lineCoverCells } from '../../world/line_of_sight';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
 import { Spr } from '../../entities/sprite_index';
@@ -86,7 +93,7 @@ import {
   panelnikOpenFloor,
   panelnikWallBraceActive,
 } from '../monster_traits';
-import { shareLocalTarget } from './monster_pack';
+import { feedMonster, isMonsterSated, monsterWanderDrive, shareLocalTarget } from './monster_pack';
 import { selectMeleeTarget } from '../melee_targeting';
 import { findMeatChunkCell, hasVisualSlotCode, removeVisualSlotCode } from '../../world/visual_cell_slots';
 import { DANGER_FIELD_DEATH_IMPULSE, clearBloodTrailCell, findBloodTrailCell } from '../danger_field';
@@ -95,7 +102,7 @@ import { updateTumannikReveal } from './tumannik';
 import { updateDikiyRush } from './dikiy_mertvyak';
 import { updateSporeCarpetGrowth } from './spore_carpet';
 import { speciesState } from './species_state';
-import { isCarnivoreMonster, monsterPackMode } from '../../data/monster_ecology';
+import { isCarnivoreMonster, monsterHuntsBeasts, monsterPackMode, monsterPreysOn } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 
@@ -114,11 +121,8 @@ const LISHENNYY_LIGHT_SCAN_CAP = 72;
 const CHERNOSLIZ_SCAN_CAP = 64;
 const DOCUMENT_HUNTER_SCAN_CAP = 72;
 const SLEPOGLAZ_BEAM_SCAN_CAP = 96;
-const PECHATEED_DETECT_SQ = 24 * 24;
 const PECHATEED_FALLBACK_SQ = 10 * 10;
-const KONTORSHCHIK_DETECT_SQ = 28 * 28;
 const KONTORSHCHIK_FALLBACK_SQ = 7 * 7;
-const PROTOKOLNIK_DETECT_SQ = 26 * 26;
 const PROTOKOLNIK_FALLBACK_SQ = 8 * 8;
 const PROTOKOLNIK_PRESSURE_RANGE = 18;
 const PROTOKOLNIK_PRESSURE_RANGE_SQ = PROTOKOLNIK_PRESSURE_RANGE * PROTOKOLNIK_PRESSURE_RANGE;
@@ -133,7 +137,6 @@ const PROTOKOLNIK_PRESSURE_PULSE_MAX = 4;
 const DEBRIS_LURKER_COVER_DETECT_SQ = 22 * 22;
 const DEBRIS_LURKER_EXPOSED_DETECT_SQ = 12 * 12;
 const NELYUD_REVEAL_SQ = 6 * 6;
-const BEZEKHIY_DETECT_SQ = 7.5 * 7.5;
 const BEZEKHIY_BACK_DOT = -0.18;
 export const TRESKOTNIK_WINDUP_SEC = 0.35;
 export const TRESKOTNIK_STAGGER_SEC = 1.35;
@@ -179,11 +182,9 @@ const HEAD_SLUG_REHOST_COOLDOWN_SEC = 1.2;
 const HEAD_SLUG_QUARANTINE_EVENT_COOLDOWN_SEC = 24;
 export const MUKHOZHUK_COMMAND_RADIUS = 11;
 export const MUKHOZHUK_COMMAND_SCAN_CAP = 16;
-const POMOYNY_ROY_BASE_DETECT_SQ = 13 * 13;
 const POMOYNY_ROY_MAX_SCENT_DETECT = 34;
 const POMOYNY_ROY_SLOT_RADIUS = 1.65;
 const POMOYNY_ROY_SLOT_ANGLES = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.78, -Math.PI * 0.78, Math.PI, Math.PI * 0.35, -Math.PI * 0.35, 0] as const;
-const SWARM_DETECT_SQ = 20 * 20;
 const NIGHTMARE_PRESSURE_RANGE = 7.5;
 const NIGHTMARE_PRESSURE_MAX = 4;
 const NIGHTMARE_PRESSURE_GAIN = 0.74;
@@ -267,7 +268,6 @@ const PAUPSINA_WEB_SHOT_RANGE = 11.5;
 const PAUPSINA_WEB_MIN_RANGE = 3.4;
 const PAUPSINA_WEB_WINDUP_SEC = 0.48;
 const PAUPSINA_WEB_STRAFE_RANGE = 7.25;
-const KANTSELYARSKIY_IDOL_DETECT_SQ = 23 * 23;
 const KANTSELYARSKIY_IDOL_BASE_RANGE = 14.5;
 const KANTSELYARSKIY_IDOL_MIN_RANGE = 2.35;
 const KANTSELYARSKIY_IDOL_WINDUP_SEC = 1.12;
@@ -832,10 +832,6 @@ function updateGreenDogPackHowl(
 
 /* ── Пересборка пути монстра ──────────────────────────────────── */
 
-/** Срок отрицательного кэша неудачного поиска, в секундах. */
-const MONSTER_REPATH_FAIL_SEC = 1;
-/** Насколько близко к назначенной клетке считается «дошёл». */
-const MONSTER_REPATH_ARRIVED_SQ = 1;
 /**
  * Радиус разброса цели погони. Верхняя граница жёсткая: смещённая клетка
  * обязана оставаться внутри самой короткой стандартной дистанции ближнего боя
@@ -845,32 +841,6 @@ const MONSTER_CHASE_SPREAD_R = 0.5;
 /** Округление до клетки может вынести разведённую цель дальше кольца, поэтому
  *  результат ещё и проверяется по расстоянию: что не влезло — идёт в саму цель. */
 const MONSTER_CHASE_SPREAD_MAX_SQ = 0.9 * 0.9;
-
-/**
- * Пора ли монстру пересобирать путь.
- *
- * Старый сторож `ai.path.length === 0 || ai.timer <= 0` выбрасывал статус
- * поиска, а при 'not_found' путь остаётся пустым — значит условие снова
- * истинно СЛЕДУЮЩИМ ЖЕ кадром. Монстр с недостижимой целью гонял полный поиск
- * (с BFS по макроклеткам региона на каждый хоп цепочки) каждый кадр до конца
- * этажа и при этом стоял. Пустой путь сам по себе поиска больше не открывает:
- * «дошёл» отличается от «не нашёл» расстоянием до назначенной клетки.
- */
-function monsterRepathDue(world: World, e: Entity): boolean {
-  const ai = e.ai!;
-  if (ai.timer <= 0) return true;
-  return ai.path.length === 0 && world.dist2(e.x, e.y, ai.tx, ai.ty) <= MONSTER_REPATH_ARRIVED_SQ;
-}
-
-/**
- * Назначить путь и записать срок следующей попытки в тот же `ai.timer`.
- * Провал — это и есть короткий отрицательный кэш; новых полей в `AIState` нет.
- */
-function assignMonsterPath(world: World, e: Entity, tx: number, ty: number, okSec: number): AssignPathStatus {
-  const status = tryAssignPathToCell(world, e, tx, ty);
-  e.ai!.timer = status === 'not_found' ? MONSTER_REPATH_FAIL_SEC : okSec;
-  return status;
-}
 
 /** Клетка погони по умолчанию: цель, разведённая по непрерывному кольцу от id. */
 function monsterChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
@@ -1983,28 +1953,21 @@ function isLineOfFireCover(feature: Feature): boolean {
     feature === Feature.TABLE;
 }
 
-function traceClearLine(world: World, e: Entity, target: Entity, maxDist: number, coverBlocks: boolean): boolean {
-  const dx = world.delta(e.x, target.x);
-  const dy = world.delta(e.y, target.y);
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist > maxDist) return false;
-  const steps = Math.max(2, Math.ceil(dist * 2));
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps;
-    const x = Math.floor(world.wrap(e.x + dx * t));
-    const y = Math.floor(world.wrap(e.y + dy * t));
-    if (world.solid(x, y)) return false;
-    if (coverBlocks && isLineOfFireCover(world.features[world.idx(x, y)] as Feature)) return false;
-  }
-  return true;
-}
-
+/* Растеризация луча одна на всю игру — `world/line_of_sight`. Своя копия здесь
+ * шагала пробами через полклетки и не проверяла КОНЦЫ отрезка: цель, стоящая в
+ * бетоне, читалась как видимая, а первая проба падала внутрь клетки самого
+ * наблюдателя. Общий обход проходит ровно пересечённые клетки. */
 function hasClearLine(world: World, e: Entity, target: Entity, maxDist: number): boolean {
-  return traceClearLine(world, e, target, maxDist, false);
+  return hasLineOfSight(world, e.x, e.y, target.x, target.y, maxDist);
 }
 
+/* ВНИМАНИЕ, АСИММЕТРИЯ ПО РЕШЕНИЮ ВЛАДЕЛЬЦА (не «забытое место»).
+ * У людей мебель линию огня больше НЕ рвёт — она портит прицел. У монстров
+ * поведение оставлено прежним: стол по-прежнему запрещает выстрел. Менять это
+ * значит менять баланс, а не чинить баг, поэтому решение отложено до владельца.
+ * Когда решит — здесь достаточно снять `=== 0` и перейти на `>= 0`. */
 export function hasClearLineOfFire(world: World, e: Entity, target: Entity, maxDist: number): boolean {
-  return traceClearLine(world, e, target, maxDist, true);
+  return lineCoverCells(world, e.x, e.y, target.x, target.y, maxDist) === 0;
 }
 
 export interface LineThreatContext {
@@ -2319,10 +2282,14 @@ function cutMetalSheet(target: Entity): boolean {
   return false;
 }
 
+/** Пускает ли смотрящий `hunter` кандидата `other` в цели. Второй аргумент
+ *  необязателен для вызывающего: фильтр арности 1 подходит по типу. */
+export type CombatTargetFilter = (other: Entity, hunter: Entity) => boolean;
+
 export function findCombatTarget(
   world: World, entities: Entity[], e: Entity, dt: number,
   rangeSq: number, scanCd: number,
-  typeFilter: (other: Entity) => boolean,
+  typeFilter: CombatTargetFilter,
 ): Entity | null {
   const ai = e.ai!;
   let target: Entity | null = null;
@@ -2330,7 +2297,7 @@ export function findCombatTarget(
   ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
   if (ai.combatTargetId !== undefined) {
     const cached = _entityById.get(ai.combatTargetId);
-    if (cached && cached.alive && typeFilter(cached)) {
+    if (cached && cached.alive && typeFilter(cached, e)) {
       const d2 = world.dist2(e.x, e.y, cached.x, cached.y);
       if (d2 < rangeSq && isHostile(e, cached)) { target = cached; }
     }
@@ -2363,7 +2330,7 @@ export function findCombatTarget(
     ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, range, combatQuery, queryMask, COMBAT_TARGET_SCAN_CAP);
     for (const other of combatQuery) {
       if (!other.alive || other.id === e.id) continue;
-      if (!typeFilter(other)) continue;
+      if (!typeFilter(other, e)) continue;
       const d2 = world.dist2(e.x, e.y, other.x, other.y);
       if (d2 >= newBest) continue;
       if (!isHostile(e, other)) continue;
@@ -2390,7 +2357,7 @@ function findImmediateCombatTarget(
   world: World,
   e: Entity,
   rangeSq: number,
-  typeFilter: (other: Entity) => boolean,
+  typeFilter: CombatTargetFilter,
 ): Entity | null {
   let target: Entity | null = null;
   let best = rangeSq;
@@ -2403,7 +2370,7 @@ function findImmediateCombatTarget(
   for (let i = 0; i < count; i++) {
     const other = immediateTopCandidates[i];
     if (!other.alive || other.id === e.id) continue;
-    if (!typeFilter(other)) continue;
+    if (!typeFilter(other, e)) continue;
     if (!isHostile(e, other)) continue;
     const d2 = world.dist2(e.x, e.y, other.x, other.y);
     if (d2 >= best) continue;
@@ -2420,6 +2387,17 @@ function canBeMonsterTarget(other: Entity): boolean {
   return isPlayerEntity(other) || other.type === EntityType.NPC;
 }
 
+/* Хищник ест не только людей.
+ *
+ * Пищевая цепь объявлена одним полем экологии (`preyTags`), и вся её проверка —
+ * пересечение тегов. Маска скана расширяется до монстров ТОЛЬКО у видов, у
+ * которых это поле есть: остальные по-прежнему ходят по узкой маске NPC и не
+ * платят кадром за перебор тварей, которых они всё равно не тронут. */
+function canBePreyMonsterTarget(other: Entity, hunter: Entity): boolean {
+  if (isPlayerEntity(other) || other.type === EntityType.NPC) return true;
+  return other.type === EntityType.MONSTER && monsterPreysOn(hunter.monsterKind, other.monsterKind);
+}
+
 /* Монстру с ОБЪЯВЛЕННОЙ фракцией враги — тоже монстры (`isHostile` пускает такую
  * пару в матрицу отношений). Дефолтная экология других монстров не сканирует
  * вовсе, и запрос у неё идёт по узкой маске NPC; расширять его всем подряд
@@ -2428,11 +2406,12 @@ function canBeFactionMonsterTarget(other: Entity): boolean {
   return isPlayerEntity(other) || other.type === EntityType.NPC || other.type === EntityType.MONSTER;
 }
 
-function monsterTargetFilter(e: Entity): (other: Entity) => boolean {
-  return hasAIFlag(e, 'sided') && e.faction !== undefined ? canBeFactionMonsterTarget : canBeMonsterTarget;
+function monsterTargetFilter(e: Entity): CombatTargetFilter {
+  if (hasAIFlag(e, 'sided') && e.faction !== undefined) return canBeFactionMonsterTarget;
+  return monsterHuntsBeasts(e.monsterKind) ? canBePreyMonsterTarget : canBeMonsterTarget;
 }
 
-function combatTargetQueryMask(typeFilter: (other: Entity) => boolean): number {
+function combatTargetQueryMask(typeFilter: CombatTargetFilter): number {
   return typeFilter === canBeMonsterTarget ? ENTITY_MASK_NPC : ENTITY_MASK_ACTOR;
 }
 
@@ -2440,19 +2419,15 @@ function hasAIFlag(e: Entity, flag: MonsterAIFlag): boolean {
   return e.monsterKind !== undefined && MONSTERS[e.monsterKind]?.aiFlags?.includes(flag) === true;
 }
 
+/**
+ * Каданс скана целей. Своё число вид объявляет ДАННЫМИ (`MonsterDef.scanSec`);
+ * здесь остались только те, у кого каданс — следствие повадки, а не вида, и
+ * потому висит на флаге поведения. Никакого `switch` по видам тут больше нет:
+ * новый вид объявляет свою частоту в дефе и в общий AI не заглядывает.
+ */
 function fixedScanCd(e: Entity): number | undefined {
-	  switch (e.monsterKind) {
-    case MonsterKind.SBORKA: return 0.55;
-    case MonsterKind.TVAR: return 0.85;
-    case MonsterKind.POLZUN: return 1.35;
-    case MonsterKind.DIKIY_MERTVYAK: return 0.5;
-    case MonsterKind.GREEN_DOG: return 0.65;
-    case MonsterKind.POMOYNY_ROY: return 0.55;
-    case MonsterKind.SWARM: return 0.35;
-    case MonsterKind.BORSHCHEVIK: return 1.15;
-    case MonsterKind.BLOOD_PLANT: return 1.05;
-    default: break;
-  }
+  const declared = e.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.scanSec : undefined;
+  if (declared !== undefined) return declared;
   if (hasAIFlag(e, 'wallBias')) return 1.1;
   if (hasAIFlag(e, 'lampPowered')) return 1.2;
   if (hasAIFlag(e, 'lightLock')) return 0.85;
@@ -2480,10 +2455,15 @@ function hasDocumentLikeItem(e: Entity): boolean {
   return hasDocumentScent(e);
 }
 
+/** Объявленная дальность вида, в квадрате. Единственный источник числа —
+ *  деф вида; охотник за документами меряет своё чутьё тем же самым. */
+function declaredDetectSq(e: Entity, fallback: number): number {
+  const declared = e.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.detect : undefined;
+  return declared !== undefined ? declared * declared : fallback;
+}
+
 function documentDetectSq(e: Entity): number {
-  if (hasAIFlag(e, 'silent')) return BEZEKHIY_DETECT_SQ;
-  if (hasAIFlag(e, 'protocolPressure')) return PROTOKOLNIK_DETECT_SQ;
-  return hasAIFlag(e, 'documentScent') ? KONTORSHCHIK_DETECT_SQ : PECHATEED_DETECT_SQ;
+  return declaredDetectSq(e, MONSTER_DETECT_SQ);
 }
 
 function documentFallbackSq(e: Entity): number {
@@ -3197,6 +3177,9 @@ function tryConsumeMeatChunk(
       msgs.push(msg(`${entityDisplayName(e)} сожрал ${chunk ? 'кусок мяса' : 'падаль'}`, time, '#c44'));
       e.hp = Math.min(e.maxHp ?? 100, (e.hp ?? 0) + 25);
     }
+    // Наелась: чутьё падает до вытянутой руки, за скоплением она не пойдёт.
+    // Это одно из давлений, которыми мир держится от вымирания.
+    feedMonster(e, time);
     carrion.cell = -1;
     ai.path = [];
     ai.pi = 0;
@@ -3792,7 +3775,6 @@ function updateLishennyyBrightAvoidance(
   const light = lishennyyState.of(e);
   light.avoidTimer = Math.max(0, light.avoidTimer - dt);
   if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
     ai.combatTargetId = undefined;
     ai.path = [];
     e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
@@ -4393,26 +4375,30 @@ function updateLampPoweredReadability(
   });
 }
 
-function monsterDetectSq(world: World, e: Entity, fallback: number): number {
-  if (hasAIFlag(e, 'rootedPlant')) return BORSHCHEVIK_DETECT_SQ;
+/**
+ * Дальность обнаружения особи.
+ *
+ * Постоянная дальность вида — ДАННЫЕ (`MonsterDef.detect`), и она идёт первой:
+ * новый вид объявляет своё чутьё рядом со скоростью и уроном, а не двадцатью
+ * константами `*_DETECT_SQ` в теле общего AI. Ниже остались только ОБСТАНОВОЧНЫЕ
+ * дальности — те, что вид считает по туману, укрытию или питанию от сети;
+ * числом их не выразить, и данными они быть не могут.
+ *
+ * Сытость режет чутьё до радиуса непосредственной угрозы: наевшаяся тварь
+ * ушла переваривать и прохожего не выцеливает, но того, кто подошёл вплотную
+ * или ударил, всё ещё видит.
+ */
+function monsterDetectSq(world: World, e: Entity, fallback: number, time: number): number {
   if (hasAIFlag(e, 'rootHive')) return bloodPlantTendrilRangeSq();
-  if (hasAIFlag(e, 'silent')) return BEZEKHIY_DETECT_SQ;
-  if (hasAIFlag(e, 'protocolPressure')) return PROTOKOLNIK_DETECT_SQ;
-  if (hasAIFlag(e, 'documentHunter')) return PECHATEED_DETECT_SQ;
-  if (hasAIFlag(e, 'documentScent')) return KONTORSHCHIK_DETECT_SQ;
-  if (hasAIFlag(e, 'officeField')) return KANTSELYARSKIY_IDOL_DETECT_SQ;
   if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? 24 * 24 : 12 * 12;
   if (hasAIFlag(e, 'fogSwimmer')) return fogSharkHasFogPressure(world, e) ? FOG_SHARK_DETECT_SQ : FOG_SHARK_DRY_DETECT_SQ;
   if (hasAIFlag(e, 'blackWaterWake')) return chernoslizDetectSq(world, e);
-  if (hasAIFlag(e, 'silent')) return BEZEKHIY_DETECT_SQ;
-  if (hasAIFlag(e, 'closeReveal')) return NELYUD_REVEAL_SQ;
-  if (hasAIFlag(e, 'garbageSurround')) return POMOYNY_ROY_BASE_DETECT_SQ;
-  if (hasAIFlag(e, 'sourceSwarm')) return SWARM_DETECT_SQ;
-  if (hasAIFlag(e, 'lightFollower')) return LISHENNYY_DETECT_SQ;
   if (hasAIFlag(e, 'debrisLurker')) {
     return inDebrisCover(world, e) ? DEBRIS_LURKER_COVER_DETECT_SQ : DEBRIS_LURKER_EXPOSED_DETECT_SQ;
   }
-  return fallback;
+  const base = declaredDetectSq(e, fallback);
+  if (base > IMMEDIATE_THREAT_RADIUS_SQ && isMonsterSated(e, time)) return IMMEDIATE_THREAT_RADIUS_SQ;
+  return base;
 }
 
 function updateBloodPlantRootHive(
@@ -5103,8 +5089,7 @@ function updateZhornayaTvar(
   e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
 
   if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
-    e.spriteScale = 0.88 + (ai.staggerTimer > 0 ? 0 : 0.12);
+    e.spriteScale = 0.88;
     return true;
   }
   e.spriteScale = undefined;
@@ -5351,7 +5336,6 @@ function updateBladeElite(
   }
 
   if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
     e.spriteScale = 0.95;
     e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
     return true;
@@ -6425,7 +6409,6 @@ function updateSlepoglaz(
   }
 
   if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
     e.attackCd = Math.max(e.attackCd ?? 0, 0.25);
     e.spriteScale = 0.9;
     if (updateSlepoglazCloseDefense(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return true;
@@ -6921,9 +6904,8 @@ function updateTreskotnikFractureSprint(
   const def = MONSTERS[MonsterKind.TRESKOTNIK];
 
   if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
     e.attackCd = Math.max(e.attackCd ?? 0, 0.25);
-    e.spriteScale = 0.82 + Math.max(0, ai.staggerTimer / TRESKOTNIK_STAGGER_SEC) * 0.08;
+    e.spriteScale = 0.82 + Math.max(0, (ai.staggerTimer ?? 0) / TRESKOTNIK_STAGGER_SEC) * 0.08;
     return true;
   }
 
@@ -7037,13 +7019,12 @@ function updateTreskotnikFractureSprint(
   return false;
 }
 
-function updateZakalennayaArmorStagger(e: Entity, dt: number): boolean {
+function updateZakalennayaArmorStagger(e: Entity): boolean {
   if (e.monsterKind !== MonsterKind.ZAKALENNAYA_ARMATURA || !e.ai) return false;
   if ((e.ai.staggerTimer ?? 0) <= 0) {
     if (e.spriteScale !== undefined) e.spriteScale = undefined;
     return false;
   }
-  e.ai.staggerTimer = Math.max(0, (e.ai.staggerTimer ?? 0) - dt);
   e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
   e.spriteScale = (e.monsterArmorStacks ?? 0) <= 0 ? 0.88 : 0.94;
   return true;
@@ -7212,7 +7193,24 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
 
-  if (updateZakalennayaArmorStagger(e, dt)) return;
+  /* Боль сбивает УДАР — у твари ровно так же, как у человека.
+   *
+   * Штраф за попадание платил только человек: `applyHitStaggerAndKnockback`
+   * пишет `ai.staggerTimer` ЛЮБОЙ цели, но читал его общий боевой такт NPC, а
+   * монстрятник — нет. У твари он молча копился и мешался под ногами у тех
+   * пяти видов, которые тем же полем меряют СВОЮ отдачу после замаха: чужая
+   * пуля продлевала им восстановление.
+   *
+   * Убыль теперь одна на всех и живёт здесь; видовые ветки только читают
+   * остаток и рисуют свою реакцию. Второй такой убыли в монстрятнике быть не
+   * должно — иначе вид отходит от боли вдвое быстрее прочих.
+   */
+  if ((ai.staggerTimer ?? 0) > 0) {
+    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
+    e.attackCd = Math.max(e.attackCd ?? 0, ai.staggerTimer);
+  }
+
+  if (updateZakalennayaArmorStagger(e)) return;
 
   evaluateMicroStimuli(world, e, time, msgs);
   if (tickMicroGoal(world, e, dt, time, msgs)) return;
@@ -7246,7 +7244,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
   if (updateRzhavnikScrapWake(world, entities, e, dt, time, msgs, playerId, nextId, state)) return;
   const baseDetectSq = def && !def.isRanged && def.speed > 0 ? MONSTER_MELEE_DETECT_SQ : MONSTER_DETECT_SQ;
-  let detectSq = monsterDetectSq(world, e, baseDetectSq);
+  let detectSq = monsterDetectSq(world, e, baseDetectSq, time);
   let target: Entity | null;
   let lishennyyLightTarget: LishennyyLightTarget | null = null;
   const zombieApocalypse = e.monsterKind === MonsterKind.ZOMBIE && isZombieApocalypseActive(state);
@@ -7372,11 +7370,18 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       e.y = ((e.y + Math.sin(a) * spd) % W + W) % W;
     } else {
       if (ai.path.length === 0 || ai.pi >= ai.path.length) {
+        // Сначала давления по полям: не отбиться от стаи и найти, чем кормиться.
+        // Оба драйва — марш по градиенту под ногами, без единого перебора.
+        // Территориал своего дома не бросает: его поводок сильнее любого запаха.
+        const packMode = monsterPackMode(e.monsterKind);
+        const driven = packMode !== 'territorial' &&
+          monsterWanderDrive(world, e, time);
         // Pack-mode wander (mode from monster ecology): roamers patrol wide, territorial
         // packs leash back to their home room (~16-cell tether), everyone else wanders
         // locally. Iron-Law safe — only assigns paths on the baked nav, never re-bakes.
-        const packMode = monsterPackMode(e.monsterKind);
-        if (packMode === 'roamer') {
+        if (driven) {
+          // путь уже назначен драйвом
+        } else if (packMode === 'roamer') {
           wanderFar(world, e);
         } else if (packMode === 'territorial' && ai.homeRoomId !== undefined) {
           const home = world.rooms[ai.homeRoomId];

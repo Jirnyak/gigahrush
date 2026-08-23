@@ -1,4 +1,5 @@
 import { stampSurfaceSplat } from './surface_marks';
+import { roomIdsOfDefKey, roomIdsOfType } from '../world/room_index';
 import {
   AIGoal,
   Cell,
@@ -609,7 +610,10 @@ function resolveByRoomType(
   if (q.targetRoomType === undefined) return undefined;
   let best: Room | undefined;
   let bestScore = -Infinity;
-  for (const room of world.rooms) {
+  // Комнаты нужного типа берутся из проекции индекса в том же порядке, что и в
+  // `world.rooms`: набор и разрешение ничьих те же, перебора этажа больше нет.
+  for (const roomId of roomIdsOfType(world, q.targetRoomType)) {
+    const room = world.rooms[roomId];
     if (!room || room.type !== q.targetRoomType) continue;
     const score = roomDistanceScore(world, room, origin);
     if (score > bestScore) {
@@ -628,7 +632,9 @@ function resolveByRoomName(
   if (!q.targetRoomDefId) return undefined;
   let best: Room | undefined;
   let bestScore = -Infinity;
-  for (const room of world.rooms) {
+  // Тот же адрес комнаты, что и в условии ниже: авторский `defId`, иначе имя.
+  for (const roomId of roomIdsOfDefKey(world, q.targetRoomDefId)) {
+    const room = world.rooms[roomId];
     if (!room || (room.defId !== q.targetRoomDefId && (room.defId || room.name !== q.targetRoomDefId)) || !roomMatchesQuestType(q, room)) continue;
     const score = roomDistanceScore(world, room, origin);
     if (score > bestScore) {

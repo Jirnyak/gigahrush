@@ -26,6 +26,7 @@ import { scaleMonsterDmg, strMeleeDmgMult } from './rpg';
 import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding';
 import { isPlayerEntity } from './player_actor';
 import { rng } from '../core/rand';
+import { damageActor } from './combat_stimulus';
 
 const INTERACTION_RANGE = 2.15;
 const INTERACTION_FORWARD = 0.2;
@@ -285,7 +286,16 @@ function defensiveSlash(
   const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
   const dmg = Math.max(1, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * 1.25));
   if (target.hp !== undefined) {
-    if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) {
+    /* Через единую дверь урона: жертва узнаёт, кто её ударил, и вправе
+     * ответить. Раньше здесь вычиталось здоровье напрямую, и NPC, которого рвут
+     * когтями, стоял и не отвечал — удар до его AI попросту не доходил.
+     * Отладочное бессмертие и обработка смерти живут внутри двери.
+     *
+     * Запасной путь без состояния оставлен намеренно: зовут и оттуда, где
+     * `GameState` не протянут, и молча ронять урон там нельзя. */
+    if (state) {
+      damageActor(world, state, target, { damage: dmg, source: 'monster_melee', attacker: e });
+    } else if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) {
       keepDebugOnePunchManAlive(target);
     } else {
       target.hp = Math.max(0, target.hp - dmg);

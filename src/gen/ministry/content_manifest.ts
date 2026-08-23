@@ -24,6 +24,10 @@ import { generateNiiContrabandAudit } from './nii_contraband_audit';
 import { generateKartotechnikArchive } from './kartotechnik';
 import { generateMatkaDokumentovRoom } from './matka_dokumentov';
 import { runMinistryDesignFloorContent } from './route_papers_slice';
+/* Своего генератора у смотра нет: зал-якорь роет макрогеометрия, а генерала
+   ставит общая доставка авторских пакетов по `spawnRoomAlias`. Импорт нужен
+   ради регистрации сцены и личности на верхнем уровне модуля. */
+import './garrison_parade';
 
 export function runMinistryContent(
   world: World,

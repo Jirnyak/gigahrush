@@ -133,8 +133,10 @@ test('cinematic_actors - extract and release npc', () => {
   assert.equal(npc.y, 10);
   assert.ok(npc.cinematicState);
   assert.equal(npc.cinematicState.originalRole, NpcRole.WANDERER);
-  assert.equal(npc.cinematicState.originalX, 5);
-  assert.equal(npc.cinematicState.originalY, 5);
+  // Пост — место В СЦЕНЕ, а не то, откуда человека позвали: на нём его держит
+  // поводок, потому что выключателя AI больше нет.
+  assert.equal(npc.cinematicState.postX, 10);
+  assert.equal(npc.cinematicState.postY, 10);
 
   // Release
   releaseNpcFromScene(world.entities, npc.id);
@@ -154,7 +156,7 @@ test('cinematic_actors - extract and release npc', () => {
   assert.equal(npc.cinematicState, undefined);
 });
 
-test('cinematic_actors - ai skips cinematic actors', () => {
+test('cinematic_actors - цикл AI ведёт актёра сцены, а не пропускает', () => {
   const player = makeTestPlayer(0, 0);
   const state = makeGameState();
   const world: World = {
@@ -218,16 +220,19 @@ test('cinematic_actors - ai skips cinematic actors', () => {
   // Rebuild index
   rebuildEntityIndexForSimulation(world.entities, 1);
 
-  // The AI update should cleanly skip modifying intent or state of cinematic actors
-  // We can track if `ai.npcState` remains undefined which indicates it skipped the initialization phase
+  /* Раньше здесь проверялось обратное: что цикл AI актёра сцены ПРОПУСКАЕТ.
+   * Это и создавало вторую, несимулируемую породу людей — гражданский подходил
+   * и бил ликвидатора в строю, а тот не отвечал не по решению, а потому, что его
+   * AI не запускался. Кат-сцены идут на живой симуляции; держит актёра поводок и
+   * вейпойнт, а не выключатель. */
   updateAI(world, world.entities, 0.1, 100, state.msgs, player.id, state.clock, false, { v: 10 }, 1, state);
 
   const npc = world.entities[1];
-  assert.equal(npc.ai!.npcState, undefined);
+  assert.notEqual(npc.ai!.npcState, undefined,
+    'актёр сцены обязан проходить цикл AI наравне со всеми');
 
-  // Now set back to WANDERER and run again
+  // И обычный житель ведёт себя ровно так же: разницы между ними больше нет.
   npc.role = NpcRole.WANDERER;
   updateAI(world, world.entities, 0.1, 100, state.msgs, player.id, state.clock, false, { v: 10 }, 1, state);
-
-  assert.notEqual(npc.ai!.npcState, undefined); // Should be initialized
+  assert.notEqual(npc.ai!.npcState, undefined);
 });

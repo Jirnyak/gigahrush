@@ -120,7 +120,7 @@ function ruleMatchesBuyer(rule: ItemOutcomeRule, npc: Entity, roleTags: readonly
     || match.buyerRoleTags?.length
   );
   if (!hasBuyerRule) return true;
-  if (match.buyerPlotNpcIds?.includes(getPlotNpcStringId(npc.id!) ?? '')) return true;
+  if (match.buyerPlotNpcIds?.includes(getPlotNpcStringId(npc.alifeId!) ?? '')) return true;
   if (hasAny(match.buyerFactions, npc.faction)) return true;
   if (hasAny(match.buyerOccupations, npc.occupation)) return true;
   return Boolean(match.buyerRoleTags?.some(tag => roleTags.includes(tag)));

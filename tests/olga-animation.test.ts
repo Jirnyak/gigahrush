@@ -15,6 +15,8 @@ import {
 function makeOlga(overrides: Partial<Entity> = {}): Entity {
   return {
     id: getPlotNpcNumericId('olga') ?? 1,
+    // Личность живёт в `alifeId`; номер сущности ею больше не является.
+    alifeId: getPlotNpcNumericId('olga') ?? 1,
     type: EntityType.NPC,
     x: 10,
     y: 12,

@@ -11,6 +11,7 @@ import type { FloorGeneration } from '../floor_manifest';
 import { hashSeed, seededRandom, withSeededRandom } from '../../core/rand';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { MOEBIUS_PODEZD_SEED } from "./meta";
 import { expandMoebiusPodezdRouteGeometry, reinforceMoebiusPodezdAuthoredTerritory, buildMoebiusRooms, placeLifts, decorateRooms } from "./geometry";
 import { placeDecisionContainers, spawnReversedPatrols, spawnSeamThreats } from "./npcs";
@@ -19,7 +20,7 @@ export function generateMoebiusPodezdDesignFloor(seed = MOEBIUS_PODEZD_SEED): Fl
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextEntityId = { v: 1 };
+    const nextEntityId = newEntityIdCursor();
     const rooms = buildMoebiusRooms(world);
 
     placeLifts(world);

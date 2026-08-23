@@ -19,15 +19,12 @@ import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { runVoidContent } from './content_manifest';
 import { applyVoidRevealLighting, buildVoidGeometry, paintVoidDefaults } from './geometry';
 import { rng, irand } from '../../core/rand';
-import { getPlotNpcCount } from '../../data/npc_packages';
+import { firstRuntimeEntityId } from '../entity_ids';
 
 export function generateVoid(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  // Диапазон 1..getPlotNpcCount() зарезервирован под сюжетные слоты: сущность
-  // с таким id выдаёт себя за личность и сталкивается с настоящей (Жан Пустотник
-  // и Маронарный Сигнальщик делили id 12). Нумеруем выше резерва.
-  let nextId = getPlotNpcCount() + 1000;
+  let nextId = firstRuntimeEntityId();
 
   /* ══════════════════════════════════════════════════════════════
      Phase 1: Impossible-but-honest macro graph

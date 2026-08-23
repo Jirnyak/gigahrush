@@ -167,6 +167,13 @@ export function resetPeakLiveWorldCount(): void {
   peakLiveWorlds = liveWorlds;
 }
 
+/** Сколько W×W-плоскостей лежит в `perceptionFields`. Ядро знает только размер
+ *  блока; имена и смысл каналов принадлежат `systems/fields`. Плоскость 0 — это
+ *  `dangerField`, поэтому старый одноканальный код продолжает писать в неё
+ *  напрямую. Изменение этого числа обязано совпасть с `FieldChannel` там —
+ *  расхождение ловится проверкой на загрузке модуля полей. */
+export const PERCEPTION_CHANNEL_COUNT = 6;
+
 const LIGHT_MAX_RADIUS = 8;
 const LIGHT_GRID_SIZE = LIGHT_MAX_RADIUS * 2 + 1;
 const LIGHT_QUEUE_CAP = LIGHT_GRID_SIZE * LIGHT_GRID_SIZE;
@@ -224,7 +231,9 @@ export class World {
   factionControl: Uint8Array;      // per-cell faction control (ZoneFaction enum)
   fog:       Uint8Array;           // purple fog density per cell (0 = clear, 255 = full)
   tissue:    Uint8Array;           // samosbor tissue overlay per cell (0 = clean, 255 = full infection)
-  dangerField: Uint8Array;         // fluid dynamic danger/blood vector field (0-255)
+  perceptionFields: Uint8Array;    // PERCEPTION_CHANNEL_COUNT stacked W*W planes (0-255)
+  dangerField: Uint8Array;         // view over perception plane 0: danger/blood (0-255)
+  perceptionBaked = false;         // false = static perception planes still need a floor-load bake
   slideCells: number[] = [];       // cell indices of slide walls (cycle textures)
   screenCells: number[] = [];      // cell indices of procedural screen/TV walls
   surfaceMap: Map<number, Uint8Array> = new Map(); // sparse RGBA canvas, 16×16×4 per cell (floors + walls)
@@ -286,7 +295,8 @@ export class World {
     this.factionControl = new Uint8Array(n);        // per-cell faction (ZoneFaction)
     this.fog      = new Uint8Array(n);              // fog density
     this.tissue   = new Uint8Array(n);              // samosbor tissue overlay
-    this.dangerField = new Uint8Array(n);           // fluid dynamic danger/blood
+    this.perceptionFields = new Uint8Array(n * PERCEPTION_CHANNEL_COUNT);
+    this.dangerField = this.perceptionFields.subarray(0, n); // plane 0, aliased
     this.liftDir  = new Uint8Array(n);              // LiftDirection (0=DOWN, 1=UP)
     this.surfaceFlags = new Uint8Array(n);
     this.ceilHeight = new Uint8Array(n);            // 0 = standard ceiling height
@@ -316,7 +326,7 @@ export class World {
       + this.factionControl.byteLength
       + this.fog.byteLength
       + this.tissue.byteLength
-      + this.dangerField.byteLength
+      + this.perceptionFields.byteLength   // includes dangerField, which is a view into it
       + this.liftDir.byteLength
       + this.surfaceFlags.byteLength
       + this.ceilHeight.byteLength;
@@ -951,7 +961,11 @@ export function replaceWorldFromGeneration(target: World | null | undefined, gen
   target.factionControl.set(source.factionControl);
   target.fog.set(source.fog);
   target.tissue.set(source.tissue);
-  target.dangerField.set(source.dangerField);
+  // Every perception plane at once (dangerField is plane 0). The bake flag rides
+  // along: a freshly generated source carries `false`, so a reused target
+  // re-bakes its static planes for the new geometry.
+  target.perceptionFields.set(source.perceptionFields);
+  target.perceptionBaked = source.perceptionBaked;
   target.liftDir.set(source.liftDir);
   target.lampBlinks.set(source.lampBlinks);
   target.lightBlinks.set(source.lightBlinks);

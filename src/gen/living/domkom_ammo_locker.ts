@@ -252,7 +252,7 @@ function spawnNpc(
   canGiveQuest: boolean,
   weapon?: string,
 ): number {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(plotNpcId)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(plotNpcId)!);
   if (existing) return existing.id;
   const x = world.wrap(room.x + dx);
   const y = world.wrap(room.y + dy);

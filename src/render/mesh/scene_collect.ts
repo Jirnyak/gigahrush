@@ -2191,11 +2191,18 @@ function getBillboardMap(world: World, entities?: readonly Entity[]): Map<number
   const count = entities.length;
   // The entity count alone misses a same-frame death+spawn, which left a dead
   // billboard in the map; the index version changes on every rebuild.
-  const indexVersion = getEntityIndex().getVersion();
+  const index = getEntityIndex();
+  const indexVersion = index.getVersion();
   let entry = billboardCache.get(world);
   if (!entry || entry.entityCount !== count || entry.indexVersion !== indexVersion) {
-    const map = new Map<number, Entity[]>();
-    for (const e of entities) {
+    // Пересборка идёт раз в кадр (версия индекса бампается ровно раз за кадр
+    // симуляции), но собирается она из СРЕЗА билбордов, а не из всех сущностей
+    // этажа: билбордов десятки, сущностей тысячи, и вагоны поезда ездят —
+    // отменить пересборку нельзя, а платить за неё перебором этажа незачем.
+    const source = index.isBuiltFor(entities) ? index.billboards : entities;
+    const map = entry?.map ?? new Map<number, Entity[]>();
+    map.clear();
+    for (const e of source) {
       if (e.alive && e.type === EntityType.BILLBOARD) {
         const idx = world.idx(e.x, e.y);
         let list = map.get(idx);

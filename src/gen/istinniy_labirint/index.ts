@@ -10,6 +10,7 @@ import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, ISTINNIY_LABIRINT_ROUTE_ID, BASE_FLOOR, MAZE_WALL, MAZE_FLOOR, SAFE_WALL_ROOM, NPC_IDS, ARIADNA_DEF, LOST_PAVEL_DEF } from "./meta";
 import { centerOf, buildGrowingTreeMaze, carveMaze, carveSafeWallRoute, markMainThread, placeLabyrinthMidMicro, selectLockedChords, carveLockedChord, placeLift, placeActors, placeLandmarks, tuneLabyrinthZones } from "./geometry";
 import { paintLabyrinthTerritorySeeds, placeRewardStashes } from "./npcs";
@@ -85,7 +86,7 @@ export function generateIstinniyLabirintDesignFloor(): FloorGeneration {
   world.bakeLights();
 
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   placeActors(world, graph, roomsByName, entities, nextId, chords);
 
   return {

@@ -36,7 +36,7 @@ import {
 } from '../src/systems/alife';
 import { setFloorRunState } from '../src/systems/procedural_floors';
 import { getEntityIndex, rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
-import { getFactionRel, initFactionRelations } from '../src/data/relations';
+import { attitudeSpread, clampRelation, getFactionRel, initFactionRelations } from '../src/data/relations';
 import { freshRPG, RPG_LEVEL_CAP } from '../src/systems/rpg';
 import { NPC_VISUAL_FLOOR69_FEMALE, NPC_VISUAL_LIQUIDATOR_MALE } from '../src/entities/npc_visuals';
 
@@ -279,7 +279,17 @@ test('A-Life materializes ambient slots and leaves killed slots empty', () => {
   assert.equal(entities.every(entity => entity.alifeId !== undefined), true);
   const firstRelation = entities[0].playerRelation;
   assert.equal(typeof firstRelation, 'number');
-  assert.ok(Math.abs((firstRelation ?? 0) - getFactionRel(entities[0].faction ?? Faction.CITIZEN, Faction.PLAYER)) <= 12);
+  /* Отношение к игроку рождается как база фракции плюс личный разброс — тот же
+   * закон, что у отношения к фракциям, и та же гауссиана. Проверяется поэтому не
+   * узкий коридор вокруг базы (прежние ±12 были дрожанием, а не характером), а
+   * само правило: число воспроизводится из семени, личности и цели. */
+  assert.equal(
+    firstRelation,
+    clampRelation(
+      getFactionRel(entities[0].faction ?? Faction.CITIZEN, Faction.PLAYER)
+      + attitudeSpread(12345, entities[0].alifeId ?? 0, Faction.PLAYER),
+    ),
+  );
   assert.equal(typeof entities[0].karma, 'number');
   assert.ok((entities[0].karma ?? 0) >= -127 && (entities[0].karma ?? 0) <= 127);
   const killedAlifeId = entities[0].alifeId;

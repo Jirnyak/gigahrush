@@ -208,7 +208,7 @@ function dropItem(entities: Entity[], nextId: { v: number }, x: number, y: numbe
 }
 
 function spawnCartographer(world: World, entities: Entity[], nextId: { v: number }, room: Room): Entity {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(CARTOGRAPHER_ID)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(CARTOGRAPHER_ID)!);
   if (existing) return existing;
   const x = world.wrap(room.x + Math.floor(ROOM_W / 2));
   const y = world.wrap(room.y + 3);

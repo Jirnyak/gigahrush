@@ -15,8 +15,31 @@ import {
 } from '../src/core/types';
 import { World } from '../src/core/world';
 import { setPathContext } from '../src/systems/ai/pathfinding';
-import { setNpcContext, updateNPC } from '../src/systems/ai/npc_fsm';
+import { setNpcContext } from '../src/systems/ai/npc_fsm';
+import {
+  actorDrive, forgetActorBrain, setActorCoreContext, tickActorBrain,
+} from '../src/systems/actor/brain';
+import { rebuildCrowdIndex } from '../src/world/crowd_index';
 import { clearRoomMemory, recordRoomMemoryEvent } from '../src/systems/room_memory';
+
+/** Цель рутины — СВОЯ точка внутри комнаты, а не её центр: `roomTargetCell`
+ *  разводит жильцов по площади, иначе центр комнаты работает аттрактором и вся
+ *  рутина этажа сходится в одну клетку. Проверяется выбор КОМНАТЫ, поэтому
+ *  сверяется попадание цели в её прямоугольник, а не конкретная клетка. */
+function assertTargetInRoom(
+  npc: Entity,
+  room: { x: number; y: number; w: number; h: number },
+  message?: string,
+): void {
+  const tx = npc.ai?.tx ?? -1;
+  const ty = npc.ai?.ty ?? -1;
+  assert.ok(
+    tx > room.x && tx < room.x + room.w && ty > room.y && ty < room.y + room.h,
+    `${message ?? 'цель должна лежать в выбранной комнате'}: цель (${tx}, ${ty}), `
+    + `комната [${room.x}..${room.x + room.w}) x [${room.y}..${room.y + room.h})`,
+  );
+}
+
 import {
   npcUtilityRoomInterest,
   scoreNpcUtilityTargetPreference,
@@ -61,13 +84,25 @@ function makeNpc(id: number, overrides: Partial<Entity> = {}): Entity {
   };
 }
 
+/* Тело уехало в ядро актора: тягу «пить» считает `systems/actor`, а не рутина
+ * прежнего слоя. Гонять надо цикл ядра, поэтому здесь два такта — первый только
+ * разводит момент решения по паузе (она расфазирована от `id`), второй решает и
+ * ведёт. Пауза выведена из такта полей и не превышает четырёх секунд. */
+const ACTOR_DECIDE_MAX_SEC = 4;
+
 function tickNpc(world: World, npc: Entity, clock: GameClock = { hour: 9, minute: 0, totalMinutes: 540 }): void {
   const player = makeTestPlayer({ id: 1, x: 90, y: 90 });
   const entities = [player, npc];
-  rebuildEntityIndexForSimulation(entities, clock.totalMinutes);
-  setPathContext([], clock.totalMinutes);
-  setNpcContext([], clock.totalMinutes, TEST_Z);
-  updateNPC(world, entities, npc, 0, clock.totalMinutes, clock, false);
+  forgetActorBrain(npc);
+  setActorCoreContext(TEST_Z);
+  for (let step = 0; step <= 1; step++) {
+    const now = step * ACTOR_DECIDE_MAX_SEC;
+    rebuildEntityIndexForSimulation(entities, clock.totalMinutes + step);
+    rebuildCrowdIndex(world, entities, now);
+    setPathContext([], now);
+    setNpcContext([], now, TEST_Z);
+    tickActorBrain(world, npc, 1 / 60, now);
+  }
 }
 
 function rememberCombat(roomId: number, severity = 5): void {
@@ -134,10 +169,12 @@ test('белого списка типов нет: годность даёт т�
 
 test('память комнаты складывается каналом: враждебная отталкивает, тайник тянет рисковых', () => {
   clearRoomMemory();
-  const clean = npcUtilityRoomInterest(RoomType.KITCHEN, context({ intent: 'eat' }));
-  const hostile = npcUtilityRoomInterest(RoomType.KITCHEN, context({ intent: 'eat' }), { hostile: true, severity: 5 });
-  const faded = npcUtilityRoomInterest(RoomType.KITCHEN, context({ intent: 'eat' }), { hostile: true, severity: 1 });
-  const helpful = npcUtilityRoomInterest(RoomType.KITCHEN, context({ intent: 'eat' }), { helpful: true, severity: 5 });
+  // Назначение называется прямо: телесных намерений у этого слоя больше нет,
+  // но канал памяти складывается с весом назначения ровно как раньше.
+  const clean = npcUtilityRoomInterest(RoomType.KITCHEN, context({ affordance: 'eat' }));
+  const hostile = npcUtilityRoomInterest(RoomType.KITCHEN, context({ affordance: 'eat' }), { hostile: true, severity: 5 });
+  const faded = npcUtilityRoomInterest(RoomType.KITCHEN, context({ affordance: 'eat' }), { hostile: true, severity: 1 });
+  const helpful = npcUtilityRoomInterest(RoomType.KITCHEN, context({ affordance: 'eat' }), { helpful: true, severity: 5 });
 
   assert.ok(hostile < clean, 'где при нём убивали — тянет меньше');
   assert.ok(hostile < faded, 'свежая тяжёлая память отталкивает сильнее выцветшей');
@@ -169,8 +206,8 @@ test('память комнаты доходит до ног: жаждущий �
   const npc = makeNpc(21, { needs: { ...FULL_NEEDS, water: 0 } });
   tickNpc(world, npc);
 
-  assert.equal(npc.ai?.goal, AIGoal.DRINK);
-  assert.equal(npc.ai?.tx, quiet.x + Math.floor(quiet.w / 2) + 0.5, 'дальняя тихая кухня должна перевесить ближнюю с памятью о крови');
+  assert.equal(actorDrive(npc), 'drink');
+  assertTargetInRoom(npc, quiet, 'дальняя тихая кухня должна перевесить ближнюю с памятью о крови');
   clearRoomMemory();
 });
 
@@ -183,6 +220,6 @@ test('без памяти о крови жаждущий идёт в ближн�
   const npc = makeNpc(22, { needs: { ...FULL_NEEDS, water: 0 } });
   tickNpc(world, npc);
 
-  assert.equal(npc.ai?.goal, AIGoal.DRINK);
-  assert.equal(npc.ai?.tx, near.x + Math.floor(near.w / 2) + 0.5, 'контроль: без памяти выигрывает ближняя');
+  assert.equal(actorDrive(npc), 'drink');
+  assertTargetInRoom(npc, near, 'контроль: без памяти выигрывает ближняя');
 });

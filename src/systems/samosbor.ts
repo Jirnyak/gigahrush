@@ -1586,7 +1586,7 @@ function nearestIstotitNpc(world: World, entities: Entity[], player: Entity, roo
 }
 
 function guideNpcToShelter(world: World, npc: Entity, roomId: number): void {
-  if (!npc.ai) return;
+  if (!npc.ai || isPlayerEntity(npc)) return;
   const room = world.rooms[roomId];
   if (!room) return;
   const tx = world.wrap(room.x + Math.floor(room.w / 2));
@@ -3480,7 +3480,7 @@ function applyFactionPanic(
   entities: Entity[],
 ): boolean {
   const c = aftermathCenter(world, entities, pending, true);
-  const npcs = localNpcs(world, entities, c.x, c.y, def.radius, 12).filter(e => e.ai);
+  const npcs = localNpcs(world, entities, c.x, c.y, def.radius, 12).filter(e => e.ai && !isPlayerEntity(e));
   for (const npc of npcs) {
     const ai = npc.ai!;
     const dx = world.delta(c.x + 0.5, npc.x);

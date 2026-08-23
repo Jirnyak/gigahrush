@@ -77,11 +77,11 @@ function matchesVisualOrPlotFallback(def: RenderAnimationClipDef, entity: Entity
   const selector = def.selector;
   const fallbackPlotNpcId = selector.fallbackPlotNpcId ?? selector.plotNpcId;
   if (selector.npcVisualId === undefined) {
-    return matchesValue(fallbackPlotNpcId, getPlotNpcStringId(entity.id!));
+    return matchesValue(fallbackPlotNpcId, getPlotNpcStringId(entity.alifeId!));
   }
   if (matchesValue(selector.npcVisualId, entity.npcVisualId)) return true;
   if (entity.npcVisualId === undefined && fallbackPlotNpcId !== undefined) {
-    return matchesValue(fallbackPlotNpcId, getPlotNpcStringId(entity.id!));
+    return matchesValue(fallbackPlotNpcId, getPlotNpcStringId(entity.alifeId!));
   }
   return false;
 }

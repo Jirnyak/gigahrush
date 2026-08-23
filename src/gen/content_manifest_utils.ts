@@ -5,6 +5,7 @@
 
 import { EntityType, type Entity } from '../core/types';
 import { type World } from '../core/world';
+import { firstRuntimeEntityId } from './entity_ids';
 
 export type PoiDecisionHookKind =
   | 'quest'
@@ -42,8 +43,17 @@ export type PoiGenerationMetadataDef = Omit<PoiGenerationMetadata, 'roomIds' | '
 
 const poiGenerationMetadataByWorld = new WeakMap<World, PoiGenerationMetadata[]>();
 
+/**
+ * Продвинуть счётчик за уже расставленные сущности.
+ *
+ * Нижняя граница — не забота вызывающего. Общие шаги населения зовут это с
+ * нулём, и на этаже, чей генератор почти никого не поставил, «максимум плюс
+ * один» давал единицу: четыреста семьдесят шесть тварей наружного микрорайона
+ * садились ровно в диапазон сюжетных слотов. Порог живёт в одном месте —
+ * `firstRuntimeEntityId()`, — и отсюда его получают все.
+ */
 export function syncNextEntityId(entities: Entity[], nextId: number): number {
-  let max = nextId;
+  let max = Math.max(nextId, firstRuntimeEntityId());
   for (let i = 0; i < entities.length; i++) {
     if (entities[i].id >= max) max = entities[i].id + 1;
   }

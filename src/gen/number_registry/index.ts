@@ -14,6 +14,7 @@ import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, NUMBER_REGISTRY_ROUTE_ID, NUMBER_REGISTRY_Z, NextId, ROUTE_TARGET, REGISTRAR_DEF, PRIME_GUARD_DEF, COMPOSITE_DEF } from "./meta";
 import { fillDefaultTextures, stampRegistryRoom, placeLiftCell, decorateRegistryRooms, retuneZoneMap, retuneNumberRegistryZones, registerNumberRegistryRouteCues, expandNumberRegistryGeometry, carveNumberRegistryCorridors, addNumberRegistryDoors, populateNumberRegistry } from "./geometry";
 import { alignNumberRegistryAmbientNpcTerritory } from "./npcs";
@@ -122,7 +123,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_composite_wit
 export function generateNumberRegistryDesignFloor(seed: number): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 10000 };
+  const nextId: NextId = newEntityIdCursor();
   let nextRoomId = 0;
   const rand = xorshift32(seed);
 

@@ -21,6 +21,7 @@ import { isPlayerEntity } from './player_actor';
 import { isOnlineHost } from './online_client';
 import { pushNetFx } from './online_protocol';
 import { getAcousticDistance } from './ai/pathfinding';
+import { depositNoise, FIELD_VALUE_MAX } from './fields';
 import { monsterHasAIFlag } from '../entities/monster';
 
 export type NoiseSource =
@@ -111,6 +112,8 @@ const FELT_DOOR_PAD_ID = 'felt_door_pad';
 const SMOKE_CANDLE_CHECK_ID = 'smoke_candle_check';
 const noiseRecords: NoiseRecord[] = [];
 let nextNoiseId = 1;
+/** Курсор слива в поле: до какого id записи уже легли в канал NOISE. */
+let lastDepositedNoiseId = 0;
 let lastNoiseTime = -Infinity;
 let actorNoiseMemory = new WeakMap<Entity, ActorNoiseMemory>();
 let actorJammerUntil = new WeakMap<Entity, number>();
@@ -198,6 +201,7 @@ function publishActorNoise(state: GameState, actor: Entity | undefined, draft: N
 export function resetNoiseRecords(): void {
   noiseRecords.length = 0;
   nextNoiseId = 1;
+  lastDepositedNoiseId = 0;
   lastNoiseTime = -Infinity;
   actorNoiseMemory = new WeakMap<Entity, ActorNoiseMemory>();
   actorJammerUntil = new WeakMap<Entity, number>();
@@ -238,6 +242,32 @@ export function publishNoise(state: GameState, draft: NoiseDraft): NoiseRecord |
   noiseRecords.push(record);
   if (noiseRecords.length > NOISE_RECORD_CAP) noiseRecords.splice(0, noiseRecords.length - NOISE_RECORD_CAP);
   return record;
+}
+
+/**
+ * Долить свежие записи шума в канал NOISE.
+ *
+ * Слив раз в кадр вместо аргумента `world` у `publishNoise`: мир доходит не до
+ * всех продюсеров шума — наблюдатель событий, обработчик предметов и стрельба
+ * игрока публикуют его, не имея под рукой `World`. Слив ограничен числом НОВЫХ
+ * записей (обычно ноль), список упорядочен по id, поэтому обход прекращается на
+ * первой уже учтённой записи: в тишине это одно сравнение.
+ *
+ * Амплитуда выведена из уже существующего радиуса слышимости, нормированного на
+ * `NOISE_RADIUS_CAP`. Громкость — это и есть радиус: именно его срезает
+ * глушилка и именно он отличает шаг от выстрела. Новых ручек не заводим.
+ */
+export function depositPendingNoise(world: World, state: GameState): void {
+  const floor = state.currentZ;
+  for (let i = noiseRecords.length - 1; i >= 0; i--) {
+    const record = noiseRecords[i];
+    if (record.id <= lastDepositedNoiseId) break;
+    if (record.z !== floor) continue;
+    depositNoise(world, record.x, record.y, record.radius / NOISE_RADIUS_CAP * FIELD_VALUE_MAX);
+  }
+  if (noiseRecords.length > 0) {
+    lastDepositedNoiseId = Math.max(lastDepositedNoiseId, noiseRecords[noiseRecords.length - 1].id);
+  }
 }
 
 export function getRecentNoiseRecords(state: GameState, query: NoiseQuery = {}, now = state.time): NoiseRecord[] {
@@ -421,6 +451,13 @@ export function findNoiseForActor(
     if (record.severity < minSeverity) continue;
     if (record.actorId === actor.id) continue;
     const effectiveRadius = record.radius * hearingMult;
+    /* Прямое расстояние — ТОЧНАЯ нижняя граница акустического: последнее либо
+     * равно ему (источник в одном регионе с ухом), либо складывается из
+     * манхэттенских плеч через порталы, а они и по отдельности не короче
+     * прямой. Значит отсечка ничего не теряет и ничего не меняет в ответе — она
+     * лишь снимает обход цепочки регионов с подавляющего большинства пар
+     * «актор — запись», ради которых он всё равно кончился бы отказом. */
+    if (world.dist2(actor.x, actor.y, record.x, record.y) > effectiveRadius * effectiveRadius) continue;
     const d = getAcousticDistance(world, actor.x, actor.y, record.x, record.y);
     if (d > effectiveRadius) continue;
     const age = Math.max(0, time - record.time);
@@ -474,8 +511,11 @@ export function getNoiseHudCue(world: World, state: GameState, player: Entity, t
     const record = noiseRecords[i];
     if (record.z !== state.currentZ || record.severity < 2) continue;
     const own = record.actorId === player.id;
-    const d = getAcousticDistance(world, player.x, player.y, record.x, record.y);
-    if (!own && d > record.radius) continue;
+    // Свой шум слышен всегда, чужой — та же точная отсечка, что и в слухе NPC.
+    if (!own) {
+      if (world.dist2(player.x, player.y, record.x, record.y) > record.radiusSq) continue;
+      if (getAcousticDistance(world, player.x, player.y, record.x, record.y) > record.radius) continue;
+    }
     const age = Math.max(0, time - record.time);
     if (age > 2.2 && !own) continue;
     const score = record.severity * 12 + (own ? 8 : 0) - age * 3;

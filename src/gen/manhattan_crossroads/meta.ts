@@ -456,8 +456,8 @@ export function measureManhattanCrossroadsDecisionMetrics(generation: FloorGener
     crosswalkStripeCells,
     blockInteriorRooms: blockRoomIds.size,
     blockInteriorReachableCells,
-    escortNpcPresent: generation.entities.some(entity => entity.id === getPlotNpcNumericId('crossroads_zebra_granny'))
-      && generation.entities.some(entity => entity.id === getPlotNpcNumericId('crossroads_courier_dima')),
+    escortNpcPresent: generation.entities.some(entity => entity.alifeId === getPlotNpcNumericId('crossroads_zebra_granny'))
+      && generation.entities.some(entity => entity.alifeId === getPlotNpcNumericId('crossroads_courier_dima')),
     tollDoorLocked: tollDoor?.state === DoorState.LOCKED,
     tollDoorRequiresKey: !!tollDoor && audit.reachable[tollDoorIdx] === 1 && audit.gateMask[tollDoorIdx] === REACH_GATE_KEY,
     tollKeyContainers: generation.world.containers.filter(container =>

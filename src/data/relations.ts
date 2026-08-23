@@ -2,7 +2,7 @@
 
 import { Faction, Occupation } from '../core/types';
 import { OCCUPATION_PROFILES } from './occupation_profiles';
-import { rng } from '../core/rand';
+import { hash32, rng } from '../core/rand';
 
 /* ── Constants ────────────────────────────────────────────────── */
 export const FACTION_COUNT = 6; // CITIZEN, LIQUIDATOR, CULTIST, SCIENTIST, WILD, PLAYER
@@ -18,7 +18,11 @@ export const RELATION_UNSET = -128;
 export const RELATION_MIN = -127;
 export const RELATION_MAX = 127;
 export const RELATION_HOSTILE_THRESHOLD = -64;
-export const RELATION_FRIENDLY_THRESHOLD = 64;
+/* Дружба — зеркало вражды, и порог у неё выводится из того же числа, а не
+ * пишется своим. Асимметричные пороги (−64 против +32) означали, что другом
+ * становятся вдвое дешевле, чем врагом, а полосы ярлыков сверху и снизу мерили
+ * шкалу разным шагом. Разница сторон живёт в ТАБЛИЦЕ баз, а не в порогах. */
+export const RELATION_FRIENDLY_THRESHOLD = -RELATION_HOSTILE_THRESHOLD;
 
 export function clampRelation(value: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -104,24 +108,92 @@ export function applyInfrastructureRelationResponse(
 }
 
 /* ── Base faction attitudes (used for initialization) ─────────── */
-// [row faction][col faction] = base attitude.
-// Клетки записаны порогами, а не числами: «враждебны», «дружелюбны», «свои».
-// Рукописные значения тут уже разъезжались со шкалой — стоило порогу вражды
-// сдвинуться, как все пары, написанные ровно на старом пороге, молча стали
-// нейтральными, и фракции перестали воевать.
+/* [строка][столбец] = как СМОТРЯЩИЙ относится к ТОЙ фракции.
+ *
+ * Таблица асимметрична намеренно, и это её главное свойство: ликвидатор смотрит
+ * на жителя сверху вниз (−24), житель на ликвидатора — с надеждой (+16). Раньше
+ * матрица была симметричной и записана порогами, из-за чего целые пары молча
+ * меняли смысл при сдвиге порога.
+ *
+ * Числа тут — НЕ приговор, а середина распределения: живое отношение конкретного
+ * человека рождается из этой клетки плюс индивидуальный разброс (см. ниже), и
+ * именно расстояние клетки до порога вражды задаёт ДОЛЮ тех, кто считает
+ * фракцию врагом. Поэтому −64 читается не как «враги», а как «половина против».
+ *
+ * Диагональ оставлена на самом верху шкалы. Своя фракция — не мнение, а
+ * принадлежность: `areSameSide` строит на ней ответную агрессию, а личная
+ * вражда внутри стороны идёт отдельным каналом графа Демоса. При базе +64
+ * разброс родил бы примерно троих на сто тысяч, ненавидящих своих с рождения;
+ * при KIN — ни одного.
+ *
+ * Строка и столбец игрока живут своей жизнью: у игрока отдельный канал
+ * отношения, и трогать его эта работа не должна. Союз записан зеркалом вражды. */
 const HOSTILE = RELATION_HOSTILE_THRESHOLD;
-const FRIENDLY = RELATION_FRIENDLY_THRESHOLD;
+/* Зеркало полосы «ненавидит» (−96): 84% личных друзей у пары. */
+const ALLY = RELATION_FRIENDLY_THRESHOLD + 32;
 const KIN = RELATION_MAX;
-const WARY = Math.round(RELATION_HOSTILE_THRESHOLD * 0.4);
 const BASE_FACTION_MATRIX: number[][] = [
-  /*                  CIT       LIQ       CUL      SCI      WILD    PLAYER  */
-  /* CITIZEN  */ [    KIN, FRIENDLY,        0, FRIENDLY, HOSTILE, FRIENDLY ],
-  /* LIQUID.  */ [ FRIENDLY,     KIN,  HOSTILE, FRIENDLY, HOSTILE, FRIENDLY ],
-  /* CULTIST  */ [      0,  HOSTILE,      KIN,     WARY, HOSTILE,        0 ],
-  /* SCIENTIST*/ [ FRIENDLY, FRIENDLY,    WARY,      KIN, HOSTILE, FRIENDLY ],
-  /* WILD     */ [ HOSTILE,  HOSTILE,  HOSTILE,  HOSTILE,     KIN,  HOSTILE ],
-  /* PLAYER   */ [ FRIENDLY, FRIENDLY,       0, FRIENDLY, HOSTILE,      KIN ],
+  /*                CIT   LIQ   CUL   SCI  WILD   PLAYER  */
+  /* CITIZEN  */ [  KIN,   48,  -56,   72,  -72,    ALLY ],
+  /* LIQUID.  */ [  -24,  KIN, -120,   48,  -96,    ALLY ],
+  /* CULTIST  */ [  -56,  -96,  KIN,  -64,  -24,       0 ],
+  /* SCIENTIST*/ [   72,  -24,  -56,  KIN,  -96,    ALLY ],
+  /* WILD     */ [  -72, -120,  -56,  -96,  KIN, HOSTILE ],
+  /* PLAYER   */ [ ALLY, ALLY,    0, ALLY, HOSTILE,  KIN ],
 ];
+
+/** База пары «смотрящий → фракция». Неизменна за прогон: живая матрица ходит
+ *  под игроком, а рождение личности обязано быть воспроизводимым из семени. */
+export function factionBaseRelation(a: number, b: number): number {
+  return BASE_FACTION_MATRIX[a]?.[b] ?? 0;
+}
+
+/* ── Личное отношение человека к фракции ──────────────────────────
+ *
+ * Восемь знаковых байт на личность — по одному на фракцию, три про запас.
+ * Хранятся плоско рядом с остальными колонками A-Life (`systems/alife.ts`),
+ * пишутся один раз при рождении и дальше двигаются только событиями.
+ *
+ * Ширина разброса — единственная ручка, и она задаёт не «характер», а ДОЛЮ:
+ * доля тех, кто считает фракцию врагом, равна Φ((−64 − база) / σ). При σ = 32
+ * база −24 даёт 11%, −56 — 40%, −64 — ровно половину, −96 — 84%, −120 — 96%.
+ * Тем же счётом читается верх шкалы: доля личных ДРУЗЕЙ равна Φ((база − 64)/σ),
+ * то есть +96 — 84%, +72 — 60%, +48 — 31%, 0 — 2.3%. Двигать σ значит двигать
+ * все двадцать пар разом. */
+export const NPC_FACTION_ATTITUDE_SLOTS = 8;
+export const NPC_FACTION_ATTITUDE_SIGMA = 32;
+
+/* Гауссиана вокруг нуля, детерминированно от личности и цели.
+ *
+ * Сумма двенадцати равномерных (Ирвин–Холл): шестьдесят бит из двух слов хеша,
+ * по пять на слагаемое. Сумма пятибитных полей лежит в [0, 372] со средним 186
+ * и σ = 31.98 — те самые 32 с точностью 0.06%, а хвост доходит до ±5.8σ, чего
+ * требует доля 0.06% на базе +40 (это 3.25σ). Бокс-Мюллер дал бы неограниченный
+ * хвост и два логарифма на ячейку, а ячеек — восемь на каждую из ста тысяч
+ * личностей, и считаются они в один присест при создании прогона.
+ *
+ * Соль третьим аргументом — обычно номер фракции, но не обязательно им: тем же
+ * разбросом рождается личное отношение к ИГРОКУ, у которого база берётся не из
+ * таблицы, а из живой матрицы. Разброс один на все каналы отношения намеренно:
+ * доля читается по одной формуле, куда бы человек ни смотрел. */
+export function attitudeSpread(seed: number, alifeId: number, targetFaction: number): number {
+  const lo = hash32(seed, alifeId, 0x5a17 + targetFaction);
+  const hi = hash32(alifeId, targetFaction, seed ^ 0x9e3779b9);
+  let sum = 0;
+  for (let i = 0; i < 6; i++) sum += ((lo >>> (i * 5)) & 31) + ((hi >>> (i * 5)) & 31);
+  return (sum - 186) * (NPC_FACTION_ATTITUDE_SIGMA / 32);
+}
+
+/** Отношение личности к фракции при рождении: база таблицы плюс её разброс.
+ *  Кламп общий, поэтому в служебное `RELATION_UNSET` значение не попадает. */
+export function npcFactionAttitudeAtBirth(
+  viewerFaction: number,
+  targetFaction: number,
+  seed: number,
+  alifeId: number,
+): number {
+  return clampRelation(factionBaseRelation(viewerFaction, targetFaction) + attitudeSpread(seed, alifeId, targetFaction));
+}
 
 /* ── Initialize dynamic faction relations from base matrix ────── */
 export function initFactionRelations(): void {

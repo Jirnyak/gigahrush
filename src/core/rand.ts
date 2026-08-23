@@ -138,6 +138,21 @@ export function weightedPick<T extends { spawnW: number }>(defs: T[]): T | null 
   return defs[defs.length - 1];
 }
 
+/** Stable 32-bit avalanche hash of two or three integers.
+ *  Пара «личность × что-то» встречается по всему проекту (социальный граф,
+ *  A-Life, отношение к фракции), и всем нужен ОДИН и тот же ответ на одни и те
+ *  же числа. Возвращает беззнаковое 32-битное; его биты годятся и как
+ *  равномерное число, и как набор независимых полей. */
+export function hash32(a: number, b: number, c = 0): number {
+  let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x2c1b3c6d);
+  x ^= x >>> 12;
+  x = Math.imul(x, 0x297a2d39);
+  x ^= x >>> 15;
+  return x >>> 0;
+}
+
 /** Stable 32-bit hash for string ids and procedural route keys. */
 export function hashSeed(text: string, seed = 0): number {
   let h = (0x811c9dc5 ^ seed) >>> 0;

@@ -22,7 +22,7 @@ import { isHostile } from '../factions';
 import { findLocalWetAnchor, wetTerrainCell } from '../monster_terrain';
 import { isPlayerEntity } from '../player_actor';
 import { MarkType, stampMark } from '../surface_marks';
-import { followPath, tryAssignPathToCell } from './pathfinding';
+import { assignActorPath, followPath } from './pathfinding';
 
 type TacticResult = 'none' | 'passive' | 'handled';
 
@@ -369,15 +369,27 @@ function followTacticPath(world: World, actor: Entity, dt: number, speedMult = 1
   actor.speed = oldSpeed;
 }
 
+/** Такт пересборки маршрута тактики. Смена самой тактики или её фазы сбрасывает
+ *  `ai.timer` в `beginTactic`, поэтому на новую цель актор реагирует сразу, а
+ *  внутри фазы идёт по назначенному маршруту, а не пересобирает его. */
+const TACTIC_REPATH_SEC = 0.45;
+
 function assignAndFollow(world: World, actor: Entity, tx: number, ty: number, dt: number, speedMult = 1): boolean {
   const ai = actor.ai!;
   ai.timer -= dt;
   const x = world.wrap(Math.floor(tx));
   const y = world.wrap(Math.floor(ty));
-  if (ai.path.length === 0 || ai.pi >= ai.path.length || ai.timer <= 0 || ai.tx !== x || ai.ty !== y) {
-    tryAssignPathToCell(world, actor, x, y);
-    ai.timer = 0.45;
-  }
+  /* Сторож — чистый троттл по таймеру.
+   *
+   * Здесь было `ai.tx !== x || ai.ty !== y`: в `ai.tx` лежит нормализованное
+   * `floor + 0.5`, а сравнивалось оно с сырым `floor`, поэтому «цель сменилась»
+   * было истинно ВСЕГДА и полный поиск шёл каждый кадр. Сравнение чинится через
+   * `pathTargetIs`, но одного этого мало: у живой цели клетка мигает между двумя
+   * соседними от её собственного шага, и точное сравнение всё равно давало бы
+   * пересборку каждый кадр (замер на стенде: 59 назначений в секунду у актора
+   * ближнего боя против 0.1–0.3 у остальных). Пустой путь тоже убран из сторожа
+   * по причине из `actorRepathDue`: он означает и «не найдено», и «уже пришёл». */
+  if (ai.timer <= 0) assignActorPath(world, actor, x, y, TACTIC_REPATH_SEC);
   followTacticPath(world, actor, dt, speedMult);
   return true;
 }

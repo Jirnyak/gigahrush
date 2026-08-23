@@ -12,6 +12,7 @@ export const DEF: MonsterDef = {
   dmg: 9,
   attackRate: 0.82,
   sprite: 0,
+  scanSec: 0.65,
   aiFlags: ['packHowl', 'noiseFear', 'foodBait'],
   counterplay: 'Не открывайте дверь на жалобный вой. Громкий металл, шумовая банка, вентиль или дробовик пугают стаю и рвут цель на несколько секунд.',
   lootHint: 'грязная шерсть, зеленый мох, черная слюна, редкий сырой кусок',

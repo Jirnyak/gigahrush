@@ -39,10 +39,25 @@ export interface MaintContentCtx {
   spawnY: number;
 }
 
+/**
+ * Место под комнату содержимого коллекторов. Возвращает ВСЕГДА целые клетки.
+ *
+ * Центром сюда приходит точка спавна, а она стоит в середине клетки (513.5), и
+ * два последних варианта считали место как `wrap(cx + …)` — то есть с половиной
+ * клетки в остатке. Дробная координата убивает комнату молча: `carveRect`
+ * складывает индекс как `y * W + x` без округления, а запись в типизированный
+ * массив по дробному индексу просто не происходит. Комната появлялась в
+ * `world.rooms`, но не вырезалась вовсе — так на коллекторах оставались
+ * замурованными «Мясной сборник», «Насосная с отражением под полом» и «Трубный
+ * автомат», все три — цели слухов.
+ */
 export function findMaintArea(
-  world: World, cx: number, cy: number, w: number, h: number,
+  world: World, cxRaw: number, cyRaw: number, w: number, h: number,
   minDist: number, maxDist: number,
 ): { x: number; y: number } {
+  const cx = Math.floor(cxRaw);
+  const cy = Math.floor(cyRaw);
+
   function canReserve(x: number, y: number): boolean {
     for (let dy = -1; dy <= h; dy++) {
       for (let dx = -1; dx <= w; dx++) {

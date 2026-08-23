@@ -28,7 +28,10 @@ import { ECONOMY_ROUTE_STATE_CAP, createEconomyFloorState, normalizeEconomyState
 import { MAX_INVENTORY_SLOTS } from '../src/data/inventory_limits';
 import { getStack } from '../src/data/items';
 import { SIDE_QUESTS } from '../src/data/plot';
-import { RELATION_FRIENDLY_THRESHOLD, getFactionRel, initFactionRelations } from '../src/data/relations';
+import { factionBaseRelation, getFactionRel, initFactionRelations } from '../src/data/relations';
+
+/* База «житель → игрок» в матрице: союз записан зеркалом вражды. */
+const CITIZEN_TO_PLAYER_BASE = factionBaseRelation(Faction.CITIZEN, Faction.PLAYER);
 import { RESOURCES } from '../src/data/resources';
 import { getSamosborBeatDefs, registerSamosborBeat } from '../src/data/samosbor_director';
 import { SAMOSBOR_VARIANTS, type ActiveSamosborVariant } from '../src/data/samosbor_variants';
@@ -336,6 +339,8 @@ test('AG82 idol branch completion returns the idol and publishes branch context'
   const player = makeTestEntity({ inventory: [{ defId: 'idol_chernobog', count: 1 }] });
   const giver = makeTestEntity({
     id: 2,
+    // Сайд-квест адресует дающего слотом личности, а не номером сущности.
+    alifeId: 2,
     type: EntityType.NPC,
     name: 'Вера Пропускова',
     faction: Faction.CITIZEN,
@@ -675,7 +680,7 @@ test('witnessed container theft marks audit, memory, event context, and faction 
   assert.deepEqual(box.stolenItemIds, ['water']);
   assert.equal(getNpcMemory(witness, state.time).hurtByPlayer, 1);
   assert.equal(getNpcMemory(witness, state.time).trustPlayer, -14);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD - 4);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE - 4);
   assert.equal(player.karma, -3);
 });
 
@@ -731,7 +736,7 @@ test('unseen container theft stays private until a nearby owner faction audit', 
   assert.equal(unseen.data?.theftOutcome, 'unseen');
   assert.equal(box.lastAuditAt, undefined);
   assert.deepEqual(box.stolenItemIds, ['water']);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE);
   assert.equal(player.karma, -2);
 
   state.time += 121;
@@ -747,7 +752,7 @@ test('unseen container theft stays private until a nearby owner faction audit', 
   assert.equal(box.lastAuditAt, 131);
   assert.equal(getNpcMemory(auditor, state.time).hurtByPlayer, 1);
   assert.equal(getNpcMemory(auditor, state.time).trustPlayer, -8);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD - 2);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE - 2);
 });
 
 test('container audit tick surfaces unseen owner theft without reopening the box', () => {
@@ -805,7 +810,7 @@ test('container audit tick surfaces unseen owner theft without reopening the box
   assert.deepEqual(audit.data?.auditorIds, [66]);
   assert.equal(box.lastAuditAt, 141);
   assert.equal(getNpcMemory(owner, state.time).trustPlayer, -8);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), RELATION_FRIENDLY_THRESHOLD - 2);
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE - 2);
   assert.match(state.msgLog.at(-1)?.text ?? '', /Ревизия выявила кражу/);
 });
 

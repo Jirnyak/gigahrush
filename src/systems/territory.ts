@@ -1,5 +1,4 @@
 import {
-  AIGoal,
   Cell,
   DoorState,
   EntityType,
@@ -14,34 +13,72 @@ import {
   type TerritoryOwner,
 } from '../core/types';
 import { World } from '../core/world';
-import { occupationHasProfileTag } from '../data/occupation_profiles';
 import {
   HUMAN_TERRITORY_OWNERS,
   TERRITORY_OWNERS,
+  TERRITORY_OWNER_SLOTS,
   factionToTerritoryOwner,
   isTerritoryOwner,
+  territoryOwnerHqName,
+  territoryOwnerRoomWeight,
   territoryOwnerToFaction,
 } from '../data/factions';
+import {
+  CROWD_BUCKETS_PER_AXIS,
+  CROWD_BUCKET_SIZE,
+  crowdBucketAt,
+  crowdInBucket,
+  crowdRivalsInBucket,
+  ensureCrowdIndex,
+} from '../world/crowd_index';
+import { roomIdsOfType } from '../world/room_index';
+import { addAlifeFactionAttitude } from './alife';
 import { setDoorState } from './door_state';
 import { ENTITY_MASK_NPC, ensureEntityIndex, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { rng } from '../core/rand';
 
-const OWNER_BUCKETS = 8;
+const OWNER_BUCKETS = TERRITORY_OWNER_SLOTS;
 const HQ_PATCH_RADIUS = 5;
 const HQ_PATCH_MAX_CELLS = 96;
 const AUTO_HQ_MAX_ROOM_SPAN = 96;
 const AUTO_HQ_MAX_DOORS = 12;
+/** Штабы двух хозяев не стоят в соседних комнатах: база — это своя земля, а не
+ *  дверь напротив чужой. Порог тот же, которым отдельность штабов меряет
+ *  генератор коллекторов, плюс запас на смещение якоря внутри комнаты.
+ *  Без него на жилом этаже штабы учёных и культистов вставали в 14 клетках. */
+const HQ_ANCHOR_MIN_GAP = AUTO_HQ_MAX_ROOM_SPAN + 16;
+const HQ_ANCHOR_MIN_GAP2 = HQ_ANCHOR_MIN_GAP * HQ_ANCHOR_MIN_GAP;
 const TERRITORY_BUCKET_SIZE = 32;
 const TERRITORY_BUCKET_SIDE = W / TERRITORY_BUCKET_SIZE;
 const ZONE_SAMPLE_RADIUS = 60;
 const ZONE_SAMPLE_STEP = 4;
 const CAPTURE_INTERVAL_SEC = 2;
 const CAPTURE_RADIUS = 3;
-const CAPTURE_ACTOR_SCAN_RADIUS = 10;
-const CAPTURE_ACTOR_SCAN_CAP = 24;
 const CAPTURE_GLOBAL_CELL_CAP = 384;
 const CAPTURE_EVENT_LIMIT = 4;
+/** Насколько своих должно быть больше чужих в бакете, чтобы земля перевернулась.
+ *  Одиночка чужую землю не переворачивает — это и есть требование группы. */
+/** Перевес своих над чужими, без которого клетка не переворачивается. Это же
+ *  число — требование ГРУППЫ, и его читает драйв захвата: одиночке идти незачем. */
+export const CAPTURE_MIN_PRESSURE = 2;
+/** Сколько бакетов вокруг себя человек видит, выбирая, куда давить. Окно, а не
+ *  этаж: дальний фронт — это уже не его дело, а дело тех, кто там стоит. */
+const CAPTURE_TARGET_RADIUS_BUCKETS = 6;
+/** Проб на бакет при переписи фронта: сторона 16 с шагом 4 — шестнадцать. */
+const FRONT_SAMPLE_STEP = 4;
+const FRONT_SAMPLES_PER_BUCKET = (CROWD_BUCKET_SIZE / FRONT_SAMPLE_STEP) ** 2;
+const FRONT_BUCKET_COUNT = CROWD_BUCKETS_PER_AXIS * CROWD_BUCKETS_PER_AXIS;
+const FRONT_SOLID = 255;
+/** Радиус и кап тех, кто заметил потерю земли. Реагируют свидетели, а не фракция. */
+const LOSS_WITNESS_RADIUS = 16;
+const LOSS_WITNESS_CAP = 16;
+/** Насколько потеря земли роняет ЛИЧНОЕ отношение потерпевшего к обидчику.
+ *  Матрицу фракций это не трогает: её двигает только игрок. */
+const LOSS_ATTITUDE_DELTA = -2;
+/** Падение штаба — обида всей округи, а не только тех, кто стоял в комнате. */
+const HQ_LOSS_WITNESS_RADIUS = LOSS_WITNESS_RADIUS * 3;
+const HQ_LOSS_ATTITUDE_DELTA = LOSS_ATTITUDE_DELTA * 4;
 
 const ownerCountsScratch = new Uint32Array(OWNER_BUCKETS);
 const roomCountsScratch = new Uint32Array(OWNER_BUCKETS);
@@ -144,13 +181,14 @@ export function dominantTerritoryOwnerInRoom(world: World, roomId: number): Terr
   return dominantOwnerFromCounts(roomCountsScratch, ZoneFaction.CITIZEN);
 }
 
+/**
+ * Чья это комната. У штаба правило было СВОЁ — владелец центральной клетки, — и
+ * оно расходилось с правилом перекраски (`paintRoomOwner` спрашивала большинство
+ * клеток). Из-за расхождения база одновременно и падала, и не падала: захватчик,
+ * перекрасивший половину штаба мимо центра, для одной дороги уже был хозяином, а
+ * для другой ещё нет. Правило теперь одно на все комнаты — большинство клеток.
+ */
 export function territoryRoomOwner(world: World, roomId: number): TerritoryOwner {
-  const room = world.rooms[roomId];
-  if (!room) return ZoneFaction.CITIZEN;
-  if (room.type === RoomType.HQ) {
-    const center = world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1));
-    return territoryOwnerAtIndex(world, center);
-  }
   return dominantTerritoryOwnerInRoom(world, roomId);
 }
 
@@ -306,39 +344,26 @@ function roomOwnerHint(world: World, room: Room): TerritoryOwner {
   return dominantOwnerFromCounts(roomCountsScratch, ZoneFaction.CITIZEN);
 }
 
+/* Чужая квартира не берётся никогда, штаб берётся всегда — это про устройство
+ * мира, а не про вкус хозяина, поэтому оба остаются кодом. Всё остальное —
+ * строка в `TERRITORY_OWNER_DEFS`: ветка на хозяина запрещала бы заводить
+ * хозяина данными. */
 function roomPreference(owner: TerritoryOwner, room: Room): number {
   if (room.apartmentId >= 0) return -100;
   if (room.type === RoomType.HQ) return 100;
-  if (owner === ZoneFaction.LIQUIDATOR) {
-    if (room.type === RoomType.OFFICE || room.type === RoomType.STORAGE) return 40;
-    if (room.type === RoomType.CORRIDOR || room.type === RoomType.COMMON) return 20;
-  }
-  if (owner === ZoneFaction.CULTIST) {
-    if (room.type === RoomType.COMMON || room.type === RoomType.STORAGE) return 36;
-    if (room.type === RoomType.CORRIDOR) return 12;
-  }
-  if (owner === ZoneFaction.SCIENTIST) {
-    if (room.type === RoomType.MEDICAL || room.type === RoomType.OFFICE || room.type === RoomType.PRODUCTION) return 44;
-    if (room.type === RoomType.STORAGE) return 18;
-  }
-  if (owner === ZoneFaction.WILD) {
-    if (room.type === RoomType.STORAGE || room.type === RoomType.SMOKING || room.type === RoomType.CORRIDOR) return 34;
-    if (room.type === RoomType.COMMON) return 12;
-  }
-  if (owner === ZoneFaction.CITIZEN) {
-    if (room.type === RoomType.COMMON || room.type === RoomType.KITCHEN || room.type === RoomType.LIVING) return 36;
-    if (room.type === RoomType.MEDICAL) return 18;
-  }
-  return 0;
+  return territoryOwnerRoomWeight(owner, room.type);
 }
 
-function chooseAnchorRoom(world: World, owner: TerritoryOwner, usedRooms: Set<number>): Room | null {
+function chooseAnchorRoom(
+  world: World, owner: TerritoryOwner, usedRooms: Set<number>, tooClose?: (room: Room) => boolean,
+): Room | null {
   let best: Room | null = null;
   let bestScore = -Infinity;
   for (const room of world.rooms) {
     if (!room) continue;
     if (room.id === 0) continue;
     if (usedRooms.has(room.id)) continue;
+    if (tooClose?.(room)) continue;
     if (roomArea(room) > 4096) continue;
     if (!autoHqCandidateEligible(world, room)) continue;
     const hint = roomOwnerHint(world, room);
@@ -367,12 +392,14 @@ function chooseExistingHqAnchorRoom(
   owner: TerritoryOwner,
   usedRooms: ReadonlySet<number>,
   eligible: (world: World, room: Room) => boolean,
+  tooClose?: (room: Room) => boolean,
 ): Room | null {
   let best: Room | null = null;
   let bestScore = -Infinity;
   for (const room of world.rooms) {
     if (!room || room.type !== RoomType.HQ || usedRooms.has(room.id)) continue;
     if (!eligible(world, room)) continue;
+    if (tooClose?.(room)) continue;
     if (territoryRoomOwner(world, room.id) !== owner) continue;
     const score = hqAnchorSelectionScore(world, room, owner);
     if (score > bestScore) {
@@ -477,6 +504,15 @@ function paintOwnerPatch(world: World, x: number, y: number, owner: TerritoryOwn
   return changed;
 }
 
+/** Родовое имя штаба — то, что выдала таблица. Авторское имя не переписывается
+ *  ни при укреплении, ни при переходе базы в чужие руки. */
+function isGenericHqName(name: string): boolean {
+  for (const owner of TERRITORY_OWNERS) {
+    if (name === territoryOwnerHqName(owner)) return true;
+  }
+  return false;
+}
+
 function hardenHqRoom(world: World, room: Room, owner: TerritoryOwner): void {
   const existingHq = room.type === RoomType.HQ;
   if ((existingHq && !hqRoomGeometrySane(room)) || (!existingHq && !autoHqCandidateEligible(world, room))) {
@@ -486,8 +522,8 @@ function hardenHqRoom(world: World, room: Room, owner: TerritoryOwner): void {
   }
   room.type = RoomType.HQ;
   room.sealed = true;
-  if (!room.name || room.name.startsWith('Комната') || room.name.startsWith('Миништаб')) {
-    room.name = `Миништаб ${owner}`;
+  if (!room.name || room.name.startsWith('Комната') || isGenericHqName(room.name)) {
+    room.name = territoryOwnerHqName(owner);
   }
   room.wallTex = Tex.HERMO_WALL;
   for (let dy = -1; dy <= room.h; dy++) {
@@ -566,29 +602,39 @@ export function territoryHqAnchors(world: World): TerritoryHqAnchor[] {
   const anchors: TerritoryHqAnchor[] = [];
   const seen = new Set<TerritoryOwner>();
   const usedRooms = new Set<number>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) {
-    const room = chooseExistingHqAnchorRoom(world, owner, usedRooms, hqAnchorEligible);
-    if (!room) continue;
+  const claimed: { x: number; y: number }[] = [];
+  const tooClose = (room: Room): boolean => {
+    const c = roomCenter(room);
+    return claimed.some(p => world.dist2(p.x, p.y, c.x, c.y) <= HQ_ANCHOR_MIN_GAP2);
+  };
+  const claim = (room: Room, owner: TerritoryOwner): void => {
     pushTerritoryHqAnchor(anchors, room, owner);
     seen.add(owner);
     usedRooms.add(room.id);
+    claimed.push(roomCenter(room));
+  };
+  // Разнос — ПРЕДПОЧТЕНИЕ, а не запрет: хозяин без штаба хуже, чем два штаба
+  // рядом. Сначала ищем с разносом, и только если такой комнаты нет вовсе —
+  // берём любую подходящую. Иначе на тесном этаже фракция теряет базу совсем.
+  const pick = (
+    choose: (tooClose?: (room: Room) => boolean) => Room | null,
+  ): Room | null => choose(tooClose) ?? choose(undefined);
+
+  for (const owner of HUMAN_TERRITORY_OWNERS) {
+    const room = pick(g => chooseExistingHqAnchorRoom(world, owner, usedRooms, hqAnchorEligible, g));
+    if (room) claim(room, owner);
   }
   for (const owner of HUMAN_TERRITORY_OWNERS) {
     if (seen.has(owner)) continue;
-    const room = chooseExistingHqAnchorRoom(world, owner, usedRooms, authoredHqAnchorEligible);
-    if (!room) continue;
-    pushTerritoryHqAnchor(anchors, room, owner);
-    seen.add(owner);
-    usedRooms.add(room.id);
+    const room = pick(g => chooseExistingHqAnchorRoom(world, owner, usedRooms, authoredHqAnchorEligible, g));
+    if (room) claim(room, owner);
   }
   for (const owner of HUMAN_TERRITORY_OWNERS) {
     if (seen.has(owner)) continue;
-    const room = chooseAnchorRoom(world, owner, usedRooms);
+    const room = pick(g => chooseAnchorRoom(world, owner, usedRooms, g));
     if (!room) continue;
     hardenHqRoom(world, room, owner);
-    pushTerritoryHqAnchor(anchors, room, owner);
-    seen.add(owner);
-    usedRooms.add(room.id);
+    claim(room, owner);
   }
   return anchors;
 }
@@ -798,35 +844,498 @@ export function initializeCellTerritory(world: World, options: TerritoryInitiali
   syncZoneMetadataFromTerritory(world);
 }
 
-function actorCapturePressure(actor: Entity, owner: TerritoryOwner): boolean {
-  if (occupationHasProfileTag(actor.occupation, 'combat') || actor.ai?.goal === AIGoal.HUNT) return true;
-  let same = 0;
-  let enemy = 0;
-  getEntityIndex().queryRadiusCapped(actor.x, actor.y, CAPTURE_ACTOR_SCAN_RADIUS, captureQuery, ENTITY_MASK_NPC, CAPTURE_ACTOR_SCAN_CAP);
-  for (const other of captureQuery) {
-    if (!other.alive || other.type !== EntityType.NPC || other.faction === undefined) continue;
-    const otherOwner = factionToTerritoryOwner(other.faction);
-    if (otherOwner === owner) same++;
-    else enemy++;
-  }
-  captureQuery.length = 0;
-  return same >= 2 && same > enemy;
+/* ── Фронт: где чья земля крупным планом ───────────────────────────
+ *
+ * Захват начинался случайно, потому что ворота требовали, чтобы человек УЖЕ
+ * стоял на чужой клетке, — а вся его рутина, наоборот, отталкивает от чужой
+ * территории. Срабатывало на прохожих и ни к чему не вело.
+ *
+ * Чтобы захват стал ЦЕЛЬЮ, нужно уметь ответить «куда идти давить», и ответ
+ * обязан быть одинаковым у соседей: рейд — это не отряд с составом, это
+ * несколько человек, у которых от одинакового входа получилась одна и та же
+ * цель. Поэтому цель считается ИЗ СОСТОЯНИЯ МИРА и от БАКЕТА человека, а не от
+ * его точных координат и не жребием: все свои внутри одной клетки 16×16 получают
+ * буквально одну клетку-цель и идут туда общим маршрутом — цепью, потому что
+ * дорогу через двери и коридоры выбирает поиск пути, а расталкивание разводит
+ * их вбок.
+ *
+ * Сетка та же, что у скоплений и у бродфейза: своей ручки не заводим.
+ */
+
+interface TerritoryFront {
+  builtAt: number;
+  builds: number;
+  /** Доминирующий хозяин бакета; `FRONT_SOLID` — ходить не по чему. */
+  owner: Uint8Array;
+  /** Маска хозяев, для которых бакет — фронт: их земля или их люди рядом. */
+  reach: Uint8Array;
+  /** Сколько проб бакета проходимы: сквозь бетон фронта не бывает. */
+  passable: Uint8Array;
+  /** Клетка-цель внутри бакета; -1 не считана, -2 считана и её нет. */
+  targetCell: Int32Array;
+  /** Стоит ли в бакете штаб. */
+  hq: Uint8Array;
+  /**
+   * Выбор цели для пары «бакет смотрящего × сторона»: клетка (-1 не считано,
+   * -2 цели нет) и ценность участка.
+   *
+   * Это не кэш поверх решения, а само решение, записанное один раз: цель
+   * считается ОТ БАКЕТА и ни от чего больше, поэтому у всех своих в одной
+   * ячейке 16×16 она обязана совпадать — на этом и держится рейд. Пока памяти
+   * не было, каждый спрашивающий заново обходил 169 бакетов и получал тот же
+   * ответ; на живом этаже это стоило 7% кадра `updateAI`.
+   */
+  pickCell: Int32Array;
+  pickValue: Float32Array;
 }
 
-function capturePatch(world: World, x: number, y: number, owner: TerritoryOwner, cellBudget: number, affectedZones: Set<number>): number {
+const frontByWorld = new WeakMap<World, TerritoryFront>();
+/**
+ * Кто объявил, что давит. Захватывает ТОЛЬКО тот, у кого цель — захват: без
+ * объявления не переворачивается ни одна клетка, сколько бы народу ни ходило по
+ * чужой земле. Иначе большинство этажа съедало бы территорию просто тем, что
+ * оно большинство, — замерено на жилом: 1702 жителя из 2175 сносили границу
+ * всех четырёх соседей на каждом такте.
+ *
+ * Список, а не поле в акторе: свойство «сейчас давлю» принадлежит одному такту
+ * этой системы, а не сущности, и в `AIState` ему не место.
+ */
+const pushSet = new Set<Entity>();
+const frontPresenceScratch = new Uint8Array(FRONT_BUCKET_COUNT);
+const captureZonesScratch = new Set<number>();
+const captureHqScratch = new Map<number, TerritoryOwner>();
+/** Свои часы такта: `state` бывает не передан, а перепись надо чем-то мерить. */
+let captureClock = 0;
+let captureCellBudget = 0;
+let capturePublished = 0;
+
+function frontOf(world: World): TerritoryFront {
+  let front = frontByWorld.get(world);
+  if (!front) {
+    front = {
+      builtAt: -Infinity,
+      builds: 0,
+      owner: new Uint8Array(FRONT_BUCKET_COUNT).fill(FRONT_SOLID),
+      reach: new Uint8Array(FRONT_BUCKET_COUNT),
+      passable: new Uint8Array(FRONT_BUCKET_COUNT),
+      targetCell: new Int32Array(FRONT_BUCKET_COUNT).fill(-1),
+      hq: new Uint8Array(FRONT_BUCKET_COUNT),
+      pickCell: new Int32Array(FRONT_BUCKET_COUNT * TERRITORY_OWNER_SLOTS).fill(-1),
+      pickValue: new Float32Array(FRONT_BUCKET_COUNT * TERRITORY_OWNER_SLOTS),
+    };
+    frontByWorld.set(world, front);
+  }
+  return front;
+}
+
+function rebuildFrontOwners(world: World, front: TerritoryFront): void {
+  for (let by = 0; by < CROWD_BUCKETS_PER_AXIS; by++) {
+    for (let bx = 0; bx < CROWD_BUCKETS_PER_AXIS; bx++) {
+      const bucket = by * CROWD_BUCKETS_PER_AXIS + bx;
+      ownerCountsScratch.fill(0);
+      let passable = 0;
+      for (let dy = 0; dy < CROWD_BUCKET_SIZE; dy += FRONT_SAMPLE_STEP) {
+        for (let dx = 0; dx < CROWD_BUCKET_SIZE; dx += FRONT_SAMPLE_STEP) {
+          const idx = world.idx(bx * CROWD_BUCKET_SIZE + dx, by * CROWD_BUCKET_SIZE + dy);
+          if (!walkableForCapture(world.cells[idx])) continue;
+          passable++;
+          ownerCountsScratch[territoryOwnerAtIndex(world, idx)]++;
+        }
+      }
+      front.passable[bucket] = passable;
+      front.owner[bucket] = passable === 0
+        ? FRONT_SOLID
+        : dominantOwnerFromCounts(ownerCountsScratch, ZoneFaction.CITIZEN);
+    }
+  }
+}
+
+/** Присутствие себя и четырёх соседей. Земля даёт фронт соседнему бакету, люди —
+ *  тоже: безземельная банда, вставшая на чужом, создаёт фронт собой. */
+function rebuildFrontReach(world: World, front: TerritoryFront): void {
+  for (let bucket = 0; bucket < FRONT_BUCKET_COUNT; bucket++) {
+    let mask = 0;
+    const owner = front.owner[bucket];
+    if (owner !== FRONT_SOLID) mask |= 1 << owner;
+    for (let candidate = 0; candidate < TERRITORY_OWNER_SLOTS; candidate++) {
+      if (crowdInBucket(world, bucket, candidate as TerritoryOwner) > 0) mask |= 1 << candidate;
+    }
+    frontPresenceScratch[bucket] = mask;
+  }
+  const side = CROWD_BUCKETS_PER_AXIS;
+  for (let by = 0; by < side; by++) {
+    for (let bx = 0; bx < side; bx++) {
+      front.reach[by * side + bx] = frontPresenceScratch[by * side + bx]
+        | frontPresenceScratch[((by + side - 1) % side) * side + bx]
+        | frontPresenceScratch[((by + 1) % side) * side + bx]
+        | frontPresenceScratch[by * side + ((bx + side - 1) % side)]
+        | frontPresenceScratch[by * side + ((bx + 1) % side)];
+    }
+  }
+}
+
+/** Перепись фронта, если её такт истёк. Скопления должны быть переписаны раньше. */
+export function ensureTerritoryFront(world: World, time: number): void {
+  const front = frontOf(world);
+  if (time - front.builtAt < CAPTURE_INTERVAL_SEC) return;
+  front.builtAt = time;
+  front.builds++;
+  front.targetCell.fill(-1);
+  front.pickCell.fill(-1);
+  front.hq.fill(0);
+  rebuildFrontOwners(world, front);
+  rebuildFrontReach(world, front);
+  for (const roomId of roomIdsOfType(world, RoomType.HQ)) {
+    const room = world.rooms[roomId];
+    if (!room) continue;
+    const center = roomCenter(room);
+    front.hq[crowdBucketAt(center.x, center.y)] = 1;
+  }
+}
+
+/** Клетка внутри бакета, ближайшая к его центру и принадлежащая его хозяину.
+ *  Считается по первому спросу и живёт до следующей переписи фронта. */
+function frontTargetCell(world: World, front: TerritoryFront, bucket: number): number {
+  const cached = front.targetCell[bucket];
+  if (cached !== -1) return cached;
+  const owner = front.owner[bucket];
+  const originX = (bucket % CROWD_BUCKETS_PER_AXIS) * CROWD_BUCKET_SIZE;
+  const originY = ((bucket / CROWD_BUCKETS_PER_AXIS) | 0) * CROWD_BUCKET_SIZE;
+  const centerX = originX + CROWD_BUCKET_SIZE / 2;
+  const centerY = originY + CROWD_BUCKET_SIZE / 2;
+  let best = -2;
+  let bestD2 = Infinity;
+  for (let dy = 0; dy < CROWD_BUCKET_SIZE; dy++) {
+    for (let dx = 0; dx < CROWD_BUCKET_SIZE; dx++) {
+      const x = originX + dx;
+      const y = originY + dy;
+      const idx = world.idx(x, y);
+      if (!walkableForCapture(world.cells[idx])) continue;
+      if (territoryOwnerAtIndex(world, idx) !== owner) continue;
+      const d2 = (x + 0.5 - centerX) ** 2 + (y + 0.5 - centerY) ** 2;
+      if (d2 >= bestD2) continue;
+      bestD2 = d2;
+      best = idx;
+    }
+  }
+  front.targetCell[bucket] = best;
+  return best;
+}
+
+/** Верх шкалы ценности участка: сумма слагаемых формулы ниже при полном
+ *  проходимом бакете (1 своя земля + 3 штаб + 2 свои + 1 чужие). Драйву нужен,
+ *  чтобы привести ценность к общей доле 0..1, а не заводить свою шкалу. */
+export const TERRITORY_CAPTURE_VALUE_MAX = 7;
+
+export interface TerritoryCaptureTarget {
+  /** Клетка мира — цель для маршрута. Дорогу к ней прокладывает поиск пути. */
+  x: number;
+  y: number;
+  /** Бакет фронта: у всех своих в одном бакете он одинаков — из этого цепь. */
+  bucket: number;
+  /** Чей участок сейчас. */
+  owner: TerritoryOwner;
+  /** Чем участок ценен: люди, штаб, уже идущие туда свои. Для веса драйва. */
+  value: number;
+  /** Клеток по тору до цели. */
+  distance: number;
+}
+
+/**
+ * Куда этому человеку идти давить. **Это и есть вызов для драйва захвата.**
+ *
+ * Чистое чтение состояния мира: жребия нет, от личности не зависит, поэтому
+ * двое своих в одной клетке 16×16 получают ОДНУ цель и сходятся в рейд, ни о чём
+ * не договариваясь. Возвращает `null`, пока перепись фронта не построена
+ * (`updateTerritoryCapture` строит её своим тактом) и если фронта рядом нет.
+ */
+export function territoryCaptureTarget(world: World, actor: Entity): TerritoryCaptureTarget | null {
+  if (actor.faction === undefined) return null;
+  return territoryCaptureTargetFor(world, factionToTerritoryOwner(actor.faction), actor.x, actor.y);
+}
+
+export function territoryCaptureTargetFor(
+  world: World,
+  mine: TerritoryOwner,
+  x: number,
+  y: number,
+): TerritoryCaptureTarget | null {
+  if (mine === ZoneFaction.SAMOSBOR) return null;
+  const front = frontByWorld.get(world);
+  if (!front || front.builds === 0) return null;
+  const bit = 1 << mine;
+  const from = crowdBucketAt(x, y);
+  /* Решение принимается один раз на пару «бакет × сторона» и живёт до следующей
+   * переписи фронта: оно и так зависит только от них. Расстояние — единственное,
+   * что считается для каждого спрашивающего, потому что оно от его точки. */
+  const slot = from * TERRITORY_OWNER_SLOTS + mine;
+  const remembered = front.pickCell[slot];
+  if (remembered === -2) return null;
+  if (remembered >= 0) return captureTargetAt(world, front, remembered, front.pickValue[slot], x, y);
+  const fromX = from % CROWD_BUCKETS_PER_AXIS;
+  const fromY = (from / CROWD_BUCKETS_PER_AXIS) | 0;
+  let bestBucket = -1;
+  let bestScore = 0;
+  let bestValue = 0;
+  for (let dy = -CAPTURE_TARGET_RADIUS_BUCKETS; dy <= CAPTURE_TARGET_RADIUS_BUCKETS; dy++) {
+    for (let dx = -CAPTURE_TARGET_RADIUS_BUCKETS; dx <= CAPTURE_TARGET_RADIUS_BUCKETS; dx++) {
+      const bx = (fromX + dx + CROWD_BUCKETS_PER_AXIS) % CROWD_BUCKETS_PER_AXIS;
+      const by = (fromY + dy + CROWD_BUCKETS_PER_AXIS) % CROWD_BUCKETS_PER_AXIS;
+      const bucket = by * CROWD_BUCKETS_PER_AXIS + bx;
+      const owner = front.owner[bucket];
+      if (owner === FRONT_SOLID || owner === mine || owner === ZoneFaction.SAMOSBOR) continue;
+      if ((front.reach[bucket] & bit) === 0) continue;
+      const value = (1
+        + (front.hq[bucket] ? 3 : 0)
+        + Math.min(4, crowdInBucket(world, bucket, mine)) * 0.5
+        + Math.min(4, crowdRivalsInBucket(world, bucket, mine)) * 0.25)
+        * (front.passable[bucket] / FRONT_SAMPLES_PER_BUCKET);
+      // Потолок этой суммы и есть TERRITORY_CAPTURE_VALUE_MAX: 1 + 3 + 2 + 1.
+
+      const score = value / (1 + dx * dx + dy * dy);
+      if (score <= bestScore) continue;
+      bestScore = score;
+      bestBucket = bucket;
+      bestValue = value;
+    }
+  }
+  const cell = bestBucket < 0 ? -1 : frontTargetCell(world, front, bestBucket);
+  if (cell < 0) {
+    front.pickCell[slot] = -2;
+    return null;
+  }
+  front.pickCell[slot] = cell;
+  front.pickValue[slot] = bestValue;
+  return captureTargetAt(world, front, cell, bestValue, x, y);
+}
+
+/** Собрать ответ по запомненной клетке: всё, кроме расстояния, уже решено. */
+function captureTargetAt(
+  world: World,
+  front: TerritoryFront,
+  cell: number,
+  value: number,
+  x: number,
+  y: number,
+): TerritoryCaptureTarget {
+  const tx = cell % W;
+  const ty = (cell / W) | 0;
+  const bucket = crowdBucketAt(tx, ty);
+  return {
+    x: tx,
+    y: ty,
+    bucket,
+    owner: front.owner[bucket] as TerritoryOwner,
+    value,
+    distance: Math.sqrt(world.dist2(x, y, tx + 0.5, ty + 0.5)),
+  };
+}
+
+/**
+ * Перевес своих над чужими в бакете под человеком. Одно чтение переписи вместо
+ * радиусного запроса НА КАЖДОГО актора, которым это считалось раньше.
+ */
+export function territoryPressureAt(world: World, x: number, y: number, mine: TerritoryOwner): number {
+  const bucket = crowdBucketAt(x, y);
+  return crowdInBucket(world, bucket, mine) - crowdRivalsInBucket(world, bucket, mine);
+}
+
+function capturePatch(
+  world: World,
+  x: number,
+  y: number,
+  owner: TerritoryOwner,
+  radius: number,
+  cellBudget: number,
+): number {
   let changed = 0;
-  for (let dy = -CAPTURE_RADIUS; dy <= CAPTURE_RADIUS; dy++) {
-    for (let dx = -CAPTURE_RADIUS; dx <= CAPTURE_RADIUS; dx++) {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
       if (changed >= cellBudget) return changed;
-      if (dx * dx + dy * dy > CAPTURE_RADIUS * CAPTURE_RADIUS) continue;
+      if (dx * dx + dy * dy > radius * radius) continue;
       const idx = world.idx(x + dx, y + dy);
       if (!walkableForCapture(world.cells[idx])) continue;
       const prev = territoryOwnerAtIndex(world, idx);
       if (prev === owner || prev === ZoneFaction.SAMOSBOR) continue;
+      const roomId = world.roomMap[idx];
+      // Штаб теперь ПАДАЕТ: перекраску его клеток больше ничто не отменяет, но
+      // комната запоминается, чтобы после патча сменить хозяина базы целиком.
+      if (roomId >= 0 && world.rooms[roomId]?.type === RoomType.HQ && !captureHqScratch.has(roomId)) {
+        captureHqScratch.set(roomId, territoryRoomOwner(world, roomId));
+      }
       world.factionControl[idx] = owner;
-      affectedZones.add(world.zoneMap[idx]);
+      captureZonesScratch.add(world.zoneMap[idx]);
       changed++;
     }
+  }
+  return changed;
+}
+
+/**
+ * Потеря земли — обида ЛИЧНАЯ. Матрица фракций глобальна и её по закону двигает
+ * только игрок, поэтому рейд роняет личные отношения тех, кто эту землю потерял:
+ * `isSideHostileToFaction` читает именно их, и чем больше людей потерпевшей
+ * стороны считают обидчика врагом, тем вероятнее ответный рейд. Петля замыкается
+ * без единого броска кубика.
+ */
+function applyTerritoryLoss(
+  state: GameState | undefined,
+  x: number,
+  y: number,
+  loser: TerritoryOwner,
+  aggressor: TerritoryOwner,
+  radius: number,
+  delta: number,
+): number {
+  const loserFaction = territoryOwnerToFaction(loser);
+  const aggressorFaction = territoryOwnerToFaction(aggressor);
+  if (!state || loserFaction === null || aggressorFaction === null || loserFaction === aggressorFaction) return 0;
+  let moved = 0;
+  getEntityIndex().queryRadiusCapped(x, y, radius, captureQuery, ENTITY_MASK_NPC, LOSS_WITNESS_CAP);
+  for (const other of captureQuery) {
+    if (!other.alive || other.type !== EntityType.NPC) continue;
+    if (other.faction !== loserFaction || other.alifeId === undefined) continue;
+    if (addAlifeFactionAttitude(state, other.alifeId, aggressorFaction, delta) !== undefined) moved++;
+  }
+  captureQuery.length = 0;
+  return moved;
+}
+
+/** База пала: комната остаётся штабом, но хозяин у неё другой. */
+function reassignCapturedHq(
+  world: World,
+  state: GameState | undefined,
+  roomId: number,
+  previous: TerritoryOwner,
+): boolean {
+  const room = world.rooms[roomId];
+  if (!room || room.type !== RoomType.HQ) return false;
+  const owner = dominantTerritoryOwnerInRoom(world, roomId);
+  if (owner === previous) return false;
+  paintRoomOwner(world, room, owner);
+  if (isGenericHqName(room.name)) room.name = territoryOwnerHqName(owner);
+  const center = roomCenter(room);
+  const witnesses = applyTerritoryLoss(
+    state, center.x, center.y, previous, owner, HQ_LOSS_WITNESS_RADIUS, HQ_LOSS_ATTITUDE_DELTA,
+  );
+  captureZonesScratch.add(world.zoneMap[world.idx(center.x, center.y)]);
+  if (!state) return true;
+  publishEvent(state, {
+    type: 'faction_event',
+    zoneId: currentTerritoryZoneId(world, center.x, center.y),
+    x: center.x,
+    y: center.y,
+    actorFaction: territoryOwnerToFaction(owner) ?? undefined,
+    targetFaction: territoryOwnerToFaction(previous) ?? undefined,
+    severity: 5,
+    privacy: 'public',
+    tags: ['faction_event', 'territory_capture', 'cell_territory', 'hq_lost'],
+    data: {
+      phase: 'hq_lost',
+      name: 'Штаб сменил хозяина',
+      text: `${room.name}: база перешла в другие руки.`,
+      previousOwner: previous,
+      owner,
+      roomId,
+      witnesses,
+    },
+  });
+  return true;
+}
+
+function flushCapturedHqRooms(world: World, state: GameState | undefined): number {
+  let fallen = 0;
+  for (const [roomId, previous] of captureHqScratch) {
+    if (reassignCapturedHq(world, state, roomId, previous)) fallen++;
+  }
+  captureHqScratch.clear();
+  return fallen;
+}
+
+function flushCaptureZones(world: World): void {
+  if (captureZonesScratch.size === 0) return;
+  syncZoneMetadataFromTerritory(world, captureZonesScratch);
+  captureZonesScratch.clear();
+}
+
+/**
+ * Этот человек давит здесь и сейчас. **Второй вызов для драйва захвата:** пока
+ * намерение активно, драйв зовёт это каждый свой такт, и присутствие становится
+ * землёй. Кому удобнее объявить намерение и отдать такт системе — зовёт
+ * `declareTerritoryPush`; сама эта функция объявление не спрашивает, потому что
+ * её вызов и ЕСТЬ объявление.
+ *
+ * Ворот «боец / охота / путешественник» больше нет — они и делали захват
+ * случайным. Осталось физическое: под ногами чужая проходимая земля, бакет
+ * действительно фронт, и своих здесь больше чужих на `CAPTURE_MIN_PRESSURE`.
+ * Последнее и есть требование ГРУППЫ: одиночка не переворачивает ничего,
+ * сколько бы он ни ходил, а группа с общей целью собирается только рейдом.
+ */
+export function declareTerritoryPush(actor: Entity): void {
+  if (pushSet.size >= CAPTURE_GLOBAL_CELL_CAP) return;
+  pushSet.add(actor);
+}
+
+/** Сколько человек объявили захват своей целью прямо сейчас. Отладочный путь. */
+export function declaredTerritoryPushCount(): number {
+  return pushSet.size;
+}
+
+export function pressTerritory(world: World, state: GameState | undefined, actor: Entity): number {
+  if (!actor.alive || actor.type !== EntityType.NPC || actor.faction === undefined) return 0;
+  if (captureCellBudget <= 0) return 0;
+  const mine = factionToTerritoryOwner(actor.faction);
+  if (mine === ZoneFaction.SAMOSBOR) return 0;
+  const x = Math.floor(actor.x);
+  const y = Math.floor(actor.y);
+  const idx = world.idx(x, y);
+  const current = territoryOwnerAtIndex(world, idx);
+  if (current === mine || current === ZoneFaction.SAMOSBOR) return 0;
+  if (!walkableForCapture(world.cells[idx])) return 0;
+
+  const front = frontByWorld.get(world);
+  if (!front || front.builds === 0) return 0;
+  const bucket = crowdBucketAt(x, y);
+  const held = front.owner[bucket];
+  // Чужая клетка внутри СВОЕГО бакета — не фронт, а шум: там давить нечего.
+  if (held === mine || held === FRONT_SOLID || held === ZoneFaction.SAMOSBOR) return 0;
+  if ((front.reach[bucket] & (1 << mine)) === 0) return 0;
+
+  const pressure = territoryPressureAt(world, x, y, mine);
+  if (pressure < CAPTURE_MIN_PRESSURE) return 0;
+  const radius = Math.min(CAPTURE_RADIUS, 1 + Math.floor((pressure - CAPTURE_MIN_PRESSURE) / CAPTURE_MIN_PRESSURE));
+  const changed = capturePatch(world, x, y, mine, radius, captureCellBudget);
+  if (changed <= 0) return 0;
+  captureCellBudget -= changed;
+  const witnesses = applyTerritoryLoss(state, x, y, current, mine, LOSS_WITNESS_RADIUS, LOSS_ATTITUDE_DELTA);
+  const fallen = flushCapturedHqRooms(world, state);
+
+  if (state && capturePublished < CAPTURE_EVENT_LIMIT) {
+    capturePublished++;
+    publishEvent(state, {
+      type: 'faction_event',
+      zoneId: currentTerritoryZoneId(world, x, y),
+      x: actor.x,
+      y: actor.y,
+      actorId: actor.id,
+      actorName: actor.name,
+      actorFaction: actor.faction,
+      targetFaction: territoryOwnerToFaction(current) ?? undefined,
+      severity: changed >= 24 ? 4 : 3,
+      privacy: 'local',
+      tags: ['faction_event', 'territory_capture', 'cell_territory'],
+      data: {
+        phase: 'territory_capture',
+        name: 'Захват клеток',
+        text: 'Фракция продавила локальный участок территории.',
+        previousOwner: current,
+        owner: mine,
+        cells: changed,
+        pressure,
+        witnesses,
+        hqFallen: fallen,
+      },
+    });
   }
   return changed;
 }
@@ -835,51 +1344,54 @@ export function updateTerritoryCapture(world: World, entities: Entity[], state: 
   captureAccum += dt;
   if (captureAccum < CAPTURE_INTERVAL_SEC) return 0;
   captureAccum -= CAPTURE_INTERVAL_SEC;
+  captureClock += CAPTURE_INTERVAL_SEC;
 
-  const affectedZones = new Set<number>();
-  let changedCells = 0;
-  let published = 0;
   ensureEntityIndex(entities);
-  for (const actor of getEntityIndex().actors) {
-    if (changedCells >= CAPTURE_GLOBAL_CELL_CAP) break;
-    if (!actor.alive || actor.type !== EntityType.NPC || actor.faction === undefined) continue;
-    if (!actor.isTraveler && !occupationHasProfileTag(actor.occupation, 'combat') && actor.ai?.goal !== AIGoal.HUNT) continue;
-    const owner = factionToTerritoryOwner(actor.faction);
-    const x = Math.floor(actor.x);
-    const y = Math.floor(actor.y);
-    const idx = world.idx(x, y);
-    const current = territoryOwnerAtIndex(world, idx);
-    if (current === owner || current === ZoneFaction.SAMOSBOR) continue;
-    if (!actorCapturePressure(actor, owner)) continue;
-    const budget = Math.min(48, CAPTURE_GLOBAL_CELL_CAP - changedCells);
-    const changed = capturePatch(world, x, y, owner, budget, affectedZones);
-    if (changed <= 0) continue;
-    changedCells += changed;
-    if (state && published < CAPTURE_EVENT_LIMIT) {
-      published++;
-      publishEvent(state, {
-        type: 'faction_event',
-        zoneId: currentTerritoryZoneId(world, x, y),
-        x: actor.x,
-        y: actor.y,
-        actorId: actor.id,
-        actorName: actor.name,
-        actorFaction: actor.faction,
-        targetFaction: territoryOwnerToFaction(current) ?? undefined,
-        severity: changed >= 24 ? 4 : 3,
-        privacy: 'local',
-        tags: ['faction_event', 'territory_capture', 'cell_territory'],
-        data: {
-          phase: 'territory_capture',
-          name: 'Захват клеток',
-          text: 'Фракция продавила локальный участок территории.',
-          previousOwner: current,
-          owner,
-          cells: changed,
-        },
-      });
-    }
+  const actors = getEntityIndex().actors;
+  ensureCrowdIndex(world, actors, captureClock);
+  ensureTerritoryFront(world, captureClock);
+
+  captureCellBudget = CAPTURE_GLOBAL_CELL_CAP;
+  capturePublished = 0;
+  let changedCells = 0;
+  for (const actor of pushSet) {
+    if (captureCellBudget <= 0) break;
+    changedCells += pressTerritory(world, state, actor);
   }
-  if (affectedZones.size > 0) syncZoneMetadataFromTerritory(world, affectedZones);
+  pushSet.clear();
+  flushCaptureZones(world);
   return changedCells;
+}
+
+export interface TerritoryFrontStats {
+  builds: number;
+  builtAt: number;
+  /** Бакеты, которые для кого-то являются фронтом: чужая земля в досягаемости. */
+  frontBuckets: number;
+  byOwner: number[];
+  hqBuckets: number;
+  cellBudgetLeft: number;
+}
+
+/** Отладочный путь: что сейчас видит фронт. */
+export function territoryFrontStats(world: World): TerritoryFrontStats {
+  const front = frontOf(world);
+  const byOwner = new Array<number>(TERRITORY_OWNER_SLOTS).fill(0);
+  let frontBuckets = 0;
+  let hqBuckets = 0;
+  for (let bucket = 0; bucket < FRONT_BUCKET_COUNT; bucket++) {
+    const owner = front.owner[bucket];
+    if (owner === FRONT_SOLID) continue;
+    byOwner[owner]++;
+    if (front.hq[bucket]) hqBuckets++;
+    if ((front.reach[bucket] & ~(1 << owner)) !== 0) frontBuckets++;
+  }
+  return {
+    builds: front.builds,
+    builtAt: front.builtAt,
+    frontBuckets,
+    byOwner,
+    hqBuckets,
+    cellBudgetLeft: captureCellBudget,
+  };
 }

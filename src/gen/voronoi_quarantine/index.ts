@@ -39,6 +39,7 @@ export * from './meta';
 import {
   VORONOI_QUARANTINE_ROUTE_ID,
 } from './meta';
+import { newEntityIdCursor } from '../entity_ids';
 
 
 
@@ -46,7 +47,7 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     initWorld(world);
     const sites = buildSites(world, seed);

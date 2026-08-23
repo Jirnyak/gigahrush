@@ -15,6 +15,7 @@ import {
   sanitizeDoors,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { PODAD_DEFAULT_SEED, SPAWN_X, SPAWN_Y, CAPILLARY_FIELD_TAG } from "./meta";
 import { expandPodadRouteGeometry, reinforcePodadAuthoredHqTerritory, paintPodadTerrain, decoratePodadRooms, forceUpperLift, registerPodadRouteCues } from "./geometry";
 import { spawnPodadPlotNpcs, buildPodadField, carvePodadSpines, buildPodadRooms, stampPodadCapillaryField, tunePodadZones, spawnPodadHeralds, seedPodadDrops } from "./npcs";
@@ -23,7 +24,7 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     const field = buildPodadField(seed);
     paintPodadTerrain(world, field);

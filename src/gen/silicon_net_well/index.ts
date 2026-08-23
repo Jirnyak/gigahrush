@@ -11,6 +11,7 @@ import {
   sanitizeDoors,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
 import { initWorld, buildRooms, connectCore, decorateRooms, placeLifts, tuneZones, placeDrops, expandSiliconNetWellRouteGeometry, tuneSiliconNetWellRouteZones } from "./geometry";
 import { registerSiliconNetWellContent, spawnNpcs, spawnAmbientNpcs, placeContainers, spawnThreats } from "./npcs";
@@ -20,7 +21,7 @@ export function generateSiliconNetWellDesignFloor(seed = SEED): FloorGeneration 
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     initWorld(world);
     const rooms = buildRooms(world);

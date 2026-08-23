@@ -316,7 +316,7 @@ function decorate(world: World, main: Room, shortcut: Room): void {
 }
 
 function spawnWitness(world: World, entities: Entity[], nextId: { v: number }, room: Room): number {
-  const existing = entities.find(e => e.alive && e.id === getPlotNpcNumericId(WITNESS_ID)!);
+  const existing = entities.find(e => e.alive && e.alifeId === getPlotNpcNumericId(WITNESS_ID)!);
   if (existing) return existing.id;
   const x = world.wrap(room.x + Math.floor(room.w / 2));
   const y = world.wrap(room.y + 2);

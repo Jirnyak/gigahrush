@@ -5,6 +5,7 @@ import { hasItem } from './inventory';
 import { getPrimaryRouteObjective } from './route_cues';
 import { TUTORIAL_START } from '../data/tutorial_start';
 import { TutorialStep } from './tutorial';
+import { questAddressesBySlot } from './quests';
 
 /** On-screen guidance for whatever the player is supposed to reach right now.
  *
@@ -146,7 +147,8 @@ function resolveQuest(world: World, state: GameState, entities: readonly Entity[
 
   if (quest.targetNpcId !== undefined) {
     for (const e of entities) {
-      if (e.alive && e.type === EntityType.NPC && e.id === quest.targetNpcId) return { ...base, entity: e };
+      const matches = questAddressesBySlot(quest) ? e.alifeId === quest.targetNpcId : e.id === quest.targetNpcId;
+      if (e.alive && e.type === EntityType.NPC && matches) return { ...base, entity: e };
     }
   }
   const resolved = resolveQuestTargetRoom(world, quest, player);

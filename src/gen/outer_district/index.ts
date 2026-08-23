@@ -21,13 +21,14 @@ import {
 import {
   createOuterDistrictSkyProvider,
 } from './sky';
+import { newEntityIdCursor } from '../entity_ids';
 
 export function generateOuterDistrictDesignFloor(seed = OUTER_DISTRICT_SEED): FloorGeneration {
   return withSeededRandom(seed, () => {
     const rng = new SeedRng(seed);
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     // Set base outer ceiling to very high
     const baseRoom = {

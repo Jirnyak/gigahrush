@@ -3,11 +3,14 @@ import { World } from './core/world';
 import { Cell, W, EntityType, AIGoal, type Entity, MonsterKind, Faction, type GameState } from './core/types';
 import { tryAssignPathToCell, setPathContext } from './systems/ai/pathfinding';
 import { updateAI } from './systems/ai/index';
+import { rebuildEntityIndexForSimulation } from './systems/entity_index';
+import { updatePerceptionFields } from './systems/fields';
 import { setPathBlockerRow, PATH_BLOCKER_SUBDIV, getPathBlockerRow, clearPathBlockersAtCell } from './core/path_blockers';
 import { seedGlobalRng } from './core/rand';
 import { applyMapEditorOp } from './systems/map_editor';
-import { generateDesignFloor } from './gen/design_floors/manifest';
-import type { DesignFloorId } from './data/design_floors';
+import { ArenaMetrics, formatReport } from './arena_metrics';
+import { ARENA_SCENARIOS, buildScenario, stepDriver, isWalkableCell, createArenaGameState, type ArenaScene } from './arena_scenarios';
+import { dumpAscii, snapshotActors, ActorTracer } from './arena_dump';
 // ── Globals ──────────────────────────────────────────────────────────
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -34,6 +37,18 @@ let mouseSubY = 0;
 seedGlobalRng(1337);
 world.cells.fill(Cell.WALL);
 setPathContext([], 0);
+
+/* Игра расталкивает акторов САМА, внутри followPath (applyActorSeparation).
+ * Второй расталкиватель на стороне стенда прятал реальное кучкование, поэтому
+ * он выключен по умолчанию и остаётся только как ручка сравнения. */
+let arenaSeparation = false;
+let simTick = 0;
+let metrics = new ArenaMetrics('живой стенд', 1337);
+let tracer: ActorTracer | null = null;
+let activeScene: ArenaScene | null = null;
+let captureLeft = 0;
+
+let traceTargetId = -1;
 
 // Helper for UI
 function updateHUD() {
@@ -69,7 +84,67 @@ function setupSidebar() {
     const id = input?.value || 'outer_district';
     loadPresetFloor(id);
   });
+  setupMetricsSidebar();
 }
+
+function setupMetricsSidebar(): void {
+  const select = document.getElementById('sel-scenario') as HTMLSelectElement | null;
+  if (select) {
+    for (const s of ARENA_SCENARIOS) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.title;
+      select.appendChild(opt);
+    }
+  }
+  document.getElementById('btn-scenario-load')?.addEventListener('click', () => {
+    loadScenario(select?.value || 'corridor');
+    paused = false;
+  });
+  document.getElementById('btn-metrics-reset')?.addEventListener('click', () => {
+    resetMetrics(activeScene?.title ?? 'живой стенд');
+  });
+  document.getElementById('btn-metrics-capture')?.addEventListener('click', () => {
+    const secs = Number((document.getElementById('input-capture-sec') as HTMLInputElement)?.value) || 30;
+    resetMetrics(activeScene?.title ?? 'живой стенд');
+    captureLeft = secs;
+    paused = false;
+  });
+  document.getElementById('btn-metrics-now')?.addEventListener('click', () => {
+    publishSummary(formatReport(metrics.report(entities)));
+  });
+  document.getElementById('btn-dump-ascii')?.addEventListener('click', () => {
+    publishSummary(dumpAscii(world, entities, {
+      cx: Math.floor(panX), cy: Math.floor(panY), w: 72, h: 34,
+      focusId: tracer ? traceTargetId : undefined,
+    }));
+  });
+  document.getElementById('btn-dump-json')?.addEventListener('click', () => {
+    publishSummary(JSON.stringify(snapshotActors(entities, simTick, gameTime, true), null, 1));
+  });
+  document.getElementById('btn-trace-here')?.addEventListener('click', () => {
+    let best: Entity | null = null;
+    let bestD = 1e9;
+    for (const e of entities) {
+      if (!e.ai || !e.alive) continue;
+      const d = world.dist2(e.x, e.y, mouseWorldX, mouseWorldY);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    if (!best) return;
+    traceTargetId = best.id;
+    tracer = new ActorTracer(best.id);
+    publishSummary(`Трассирую актора #${best.id}. Нажми «Трасса» через несколько секунд.`);
+  });
+  document.getElementById('btn-trace-show')?.addEventListener('click', () => {
+    publishSummary(tracer ? tracer.format(1) : 'Актор не выбран: «Следить за ближайшим».');
+  });
+  const sep = document.getElementById('chk-separation') as HTMLInputElement | null;
+  if (sep) {
+    sep.checked = arenaSeparation;
+    sep.addEventListener('change', () => { arenaSeparation = sep.checked; });
+  }
+}
+
 setupSidebar();
 
 // ── Rendering ────────────────────────────────────────────────────────
@@ -228,129 +303,23 @@ function draw() {
   ctx.restore();
 
   updateHUD();
+  updateMetricsPanel();
   requestAnimationFrame(draw);
 }
 
-function createArenaState(): GameState {
-  return {
-    tick: 0,
-    time: 0,
-    clock: { hour: 8, minute: 0, totalMinutes: 0 },
-    samosborActive: false,
-    samosborTimer: 999999,
-    samosborCount: 0,
-    paused: false,
-    gameOver: false,
-    showInventory: false,
-    mapMode: 0,
-    showQuests: false,
-    invSel: 0,
-    msgs: [],
-    quests: [],
-    nextQuestId: 1,
-    currentZ: 0,
-    fogSpreadTimer: 0,
-    showMenu: false,
-    menuSel: 0,
-    showNpcMenu: false,
-    npcMenuSel: 0,
-    npcMenuTarget: 0,
-    npcMenuTab: 'main',
-    npcTalkText: '',
-    questPage: 0,
-    tradeCursorX: 0,
-    tradeCursorY: 0,
-    tradeSide: 'player',
-    showContainerMenu: false,
-    containerMenuTarget: 0,
-    containerCursorX: 0,
-    containerCursorY: 0,
-    containerSide: 'player',
-    showCraftMenu: false,
-    craftMode: 'craft',
-    craftCursor: 0,
-    craftFilter: '',
-    craftStationKind: 'any',
-    showDebug: false,
-    debugSel: 0,
-    showFactions: false,
-    factionRankScroll: 0,
-    showDemos: false,
-    showFeedback: false,
-    demosCursor: 0,
-    demosSearch: '',
-    demosSearchActive: false,
-    demosTab: 'profile',
-    demosFeedScroll: 0,
-    demosPostCursor: 0,
-    showLog: false,
-    logScroll: 0,
-    showHelp: false,
-    showControls: false,
-    controlView: 'keys',
-    controlSel: 0,
-    controlScroll: 0,
-    showUiSettings: false,
-    uiSettingsView: 'interface',
-    uiSettingsSel: 0,
-    uiSettingsScroll: 0,
-    showMapLegend: false,
-    mapLegendSel: 0,
-    mapLegendScroll: 0,
-    msgLog: [],
-    dmgFlash: 0,
-    dmgSeed: 0,
-    deathTimer: 0,
-    sleeping: false,
-    beamFx: 0,
-    beamAngle: 0,
-    beamLen: 0,
-    uvBeamFx: 0,
-    uvBeamLen: 0,
-    gameWon: false,
-    crafting: { knownRecipeIds: [], materialCount: {} },
-    worldEvents: {
-      nextId: 1,
-      recentEvents: { capacity: 100, start: 0, count: 0, items: new Array(100).fill(null) },
-      importantEvents: { capacity: 100, start: 0, count: 0, items: new Array(100).fill(null) },
-      zoneEvents: [],
-      facts: [],
-      nextFactId: 1,
-      lastLogKey: '',
-      lastLogTime: 0,
-    }
-  } as unknown as GameState;
-}
+/* Литерал состояния живёт в arena_scenarios.ts — общий с безголовым
+ * прогоном, иначе браузерные и консольные числа разъедутся. */
 
 import { ensureAlifeState } from './systems/alife';
-let arenaState = createArenaState();
+let arenaState = createArenaGameState();
 ensureAlifeState(arenaState);
 let gameTime = 0;
 const dummyPlayerId = 0;
 
 // ── Logic ────────────────────────────────────────────────────────────
-function step(dt: number) {
-  gameTime += dt;
-  const msgs: any[] = [];
-
-  updateAI(
-    world,
-    entities,
-    dt,
-    gameTime,
-    msgs,
-    dummyPlayerId,
-    arenaState.clock,
-    false, // samosborActive
-    { v: nextEntityId },
-    0, // currentZ
-    arenaState
-  );
-
+function arenaPushApart(): void {
   for (const e of entities) {
     if (!e.ai || !e.alive) continue;
-    
-    // Resolve collisions
     for (const other of entities) {
       if (other === e || !other.alive) continue;
       const dx = e.x - other.x;
@@ -369,8 +338,116 @@ function step(dt: number) {
       }
     }
   }
+}
+
+function step(dt: number) {
+  gameTime += dt;
+  const msgs: any[] = [];
+
+  if (activeScene) {
+    activeScene.entities = entities;
+    stepDriver(activeScene, dt, metrics);
+  }
+  // Тот же порядок, что в main.ts: бродфейз пересобирается ПЕРЕД симуляцией,
+  // иначе близкие акторы ищутся по позициям прошлого кадра.
+  rebuildEntityIndexForSimulation(entities, simTick);
+  // Поля восприятия тикают тем же тактом, что в игре: без них полевые драйвы
+  // в стенде инертны, и стенд врёт молча.
+  updatePerceptionFields(world, dt);
+  const nextIdRef = { v: nextEntityId };
+  const t0 = performance.now();
+  updateAI(
+    world,
+    entities,
+    dt,
+    gameTime,
+    msgs,
+    dummyPlayerId,
+    arenaState.clock,
+    false, // samosborActive
+    nextIdRef,
+    0, // currentZ
+    arenaState
+  );
+  const aiMs = performance.now() - t0;
+  nextEntityId = nextIdRef.v;
+
+  if (arenaSeparation) arenaPushApart();
+
+  metrics.observe(world, entities, dt, aiMs);
+  tracer?.sample(world, entities, simTick, gameTime);
+  simTick++;
+  if (captureLeft > 0) {
+    captureLeft -= dt;
+    if (captureLeft <= 0) {
+      captureLeft = 0;
+      publishSummary(formatReport(metrics.report(entities)));
+    }
+  }
 
   entities = entities.filter(e => e.alive);
+}
+
+/* ── Панель метрик и текстовые дампы ─────────────────────────────── */
+
+function summaryBox(): HTMLTextAreaElement | null {
+  return document.getElementById('metrics-out') as HTMLTextAreaElement | null;
+}
+
+function publishSummary(text: string): void {
+  const box = summaryBox();
+  if (box) { box.value = text; box.scrollTop = 0; }
+  console.log(text);
+}
+
+function resetMetrics(label: string): void {
+  metrics = new ArenaMetrics(label, 1337);
+  metrics.measureWalkable(world, isWalkableCell);
+  simTick = 0;
+  gameTime = 0;
+  captureLeft = 0;
+}
+
+/* Сводка сортирует выборки, поэтому панель обновляется 4 раза в секунду,
+ * а не каждый кадр: иначе прибор сам станет источником просадки. */
+let panelCd = 0;
+
+function updateMetricsPanel(): void {
+  const live = document.getElementById('metrics-live');
+  if (!live) return;
+  panelCd -= 1;
+  if (panelCd > 0) return;
+  panelCd = 15;
+  const r = metrics.report(entities);
+  const pct = (v: number) => (v * 100).toFixed(1);
+  live.innerHTML = [
+    `сцена: ${r.scenario}`,
+    `тик ${r.ticks}, сим ${r.simSeconds.toFixed(1)}c, акторов ${r.liveActors}`,
+    `updateAI ${r.aiMs.mean.toFixed(2)} мс (p95 ${r.aiMs.p95.toFixed(2)})`,
+    `кучность: соседей ${r.cluster.meanNeighbors.toFixed(2)}, индекс ${r.cluster.clumpIndex.toFixed(1)}×`,
+    `пересечений тел ${pct(r.cluster.overlapFrac)}%, макс/клетка ${r.cluster.maxPerCell}`,
+    `застряло N ${pct(r.npc.stuckFrac)}% / M ${pct(r.monster.stuckFrac)}%`,
+    `путь N ${r.npc.repathHz.toFixed(2)}/с / M ${r.monster.repathHz.toFixed(2)}/с`,
+    `провалы N ${r.npc.failHz.toFixed(2)}/с / M ${r.monster.failHz.toFixed(2)}/с`,
+    `ось/диаг ${r.aniso.axisBias.toFixed(2)}, χ²/шаг ${r.aniso.chi2PerStep.toFixed(3)}`,
+    captureLeft > 0 ? `<span style="color:#fc0">ЗАМЕР: ${captureLeft.toFixed(1)} c</span>` : '',
+  ].filter(Boolean).join('<br>');
+}
+
+function loadScenario(id: string): void {
+  const scene = buildScenario(id, 1337);
+  activeScene = scene;
+  world = scene.world;
+  entities = scene.entities;
+  nextEntityId = scene.nextId.v;
+  panX = scene.camX;
+  panY = scene.camY;
+  zoom = scene.zoom;
+  tracer = null;
+  resetMetrics(id);
+  arenaState = createArenaGameState();
+  ensureAlifeState(arenaState);
+  seedGlobalRng(1337);
 }
 
 // ── Interaction ──────────────────────────────────────────────────────
@@ -542,106 +619,26 @@ function createNPC(x: number, y: number) {
   nextEntityId = nextIdObj.v;
 }
 
-const ARENA_OFFSET = 1024;
-
-function clearArena() {
-  world.cells.fill(Cell.WALL);
-  // Carve a 64×64 arena area so HPA* has manageable regions
-  for (let dy = -2; dy < 66; dy++) {
-    for (let dx = -2; dx < 66; dx++) {
-      const ci = ((ARENA_OFFSET + dy + W) % W) * W + ((ARENA_OFFSET + dx + W) % W);
-      world.cells[ci] = Cell.FLOOR;
-    }
-  }
-  for (let i = 0; i < W*W; i++) clearPathBlockersAtCell(world, i);
-  world.cellVersion++;
-  entities = [];
-  panX = ARENA_OFFSET + 10;
-  panY = ARENA_OFFSET + 10;
-}
-
-function loadPresetEmptyCorner() {
-  clearArena();
-  for (let i = 0; i < 20; i++) {
-    for (let j = 0; j < 20; j++) {
-      world.cells[(j + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.WALL;
-    }
-  }
-  for (let i = 5; i < 15; i++) world.cells[(5 + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.FLOOR; // Horizontal
-  for (let j = 5; j < 15; j++) world.cells[(j + ARENA_OFFSET)*W + (14 + ARENA_OFFSET)] = Cell.FLOOR; // Vertical
-  createMonster(ARENA_OFFSET + 6, ARENA_OFFSET + 5.5);
-  world.cellVersion++;
-}
-
-function loadPresetMaze() {
-  clearArena();
-  for (let i = 0; i < 25; i++) {
-    for (let j = 0; j < 25; j++) {
-      world.cells[(j + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = (i % 2 === 0 && j % 2 === 0) ? Cell.WALL : Cell.FLOOR;
-    }
-  }
-  createMonster(ARENA_OFFSET + 1.5, ARENA_OFFSET + 1.5);
-  world.cellVersion++;
-}
-
-function loadPresetNarrow() {
-  clearArena();
-  for (let i = 0; i < 20; i++) {
-    for (let j = 0; j < 20; j++) {
-      world.cells[(j + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.WALL;
-    }
-  }
-  for (let i = 5; i < 15; i++) world.cells[(10 + ARENA_OFFSET)*W + (i + ARENA_OFFSET)] = Cell.FLOOR;
-  
-  // Create small blockers
-  setPathBlockerRow(world, (10 + ARENA_OFFSET)*W + (10 + ARENA_OFFSET), 0, 0b1111);
-  setPathBlockerRow(world, (10 + ARENA_OFFSET)*W + (10 + ARENA_OFFSET), 3, 0b1111);
-  
-  createMonster(ARENA_OFFSET + 6, ARENA_OFFSET + 10.5);
-  world.cellVersion++;
-}
+/* Легаси-пресеты переехали в arena_scenarios.ts вместе с починкой адресации:
+ * здесь они писались как `(y + ARENA_OFFSET) * W + (x + ARENA_OFFSET)` при
+ * ARENA_OFFSET === W, то есть всегда за границей массива клеток. Запись молча
+ * терялась — ни одна стена этих пресетов никогда не появлялась, монстр бегал
+ * по пустому полю. Функции сохранены как кнопки, но строят сцену через общий
+ * билдер, который адресует клетки через world.idx(). */
+function loadPresetEmptyCorner() { loadScenario('empty_corner'); }
+function loadPresetMaze() { loadScenario('maze'); }
+function loadPresetNarrow() { loadScenario('narrow'); }
 
 function loadPresetFloor(id: string) {
   try {
-    const gen = generateDesignFloor(id as DesignFloorId, 12345);
-    world = gen.world;
-    entities = gen.entities;
-    nextEntityId = entities.reduce((max, e) => Math.max(max, e.id), 0) + 1;
-    
-    // Find player spawn to center camera
-    let spawnX = W / 2;
-    let spawnY = W / 2;
-    for (let i = 0; i < world.cells.length; i++) {
-      if (world.cells[i] === Cell.LIFT) {
-        spawnX = i % W;
-        spawnY = Math.floor(i / W);
-        break;
-      }
-    }
-    panX = spawnX;
-    panY = spawnY;
-    zoom = 8;
+    loadScenario(`floor:${id}`);
   } catch (err) {
     alert('Failed to generate floor: ' + err);
   }
 }
 
-function loadPresetTangentStuck() {
-  clearArena();
-  world.cells[(5 + ARENA_OFFSET)*W + (5 + ARENA_OFFSET)] = Cell.WALL;
-  world.cells[(5 + ARENA_OFFSET)*W + (6 + ARENA_OFFSET)] = Cell.WALL;
-  world.cells[(6 + ARENA_OFFSET)*W + (5 + ARENA_OFFSET)] = Cell.WALL;
-  world.cells[(6 + ARENA_OFFSET)*W + (6 + ARENA_OFFSET)] = Cell.WALL;
-  
-  createMonster(ARENA_OFFSET + 4.5, ARENA_OFFSET + 7.5);
-  const e = entities[0];
-  if (e) {
-    tryAssignPathToCell(world, e, ARENA_OFFSET + 6.5, ARENA_OFFSET + 4.5);
-  }
-}
-
 // Init
-loadPresetTangentStuck();
+loadScenario('corridor');
 requestAnimationFrame(draw);
 Object.defineProperty(window, 'world', { get: () => world });
 Object.defineProperty(window, 'entities', { get: () => entities });

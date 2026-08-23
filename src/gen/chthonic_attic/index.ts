@@ -16,6 +16,7 @@ import { ATTIC_NPCS, addAtticContainers, spawnNpc, addItemDrop, spawnMonster, sp
 import { stampAtticServiceIslands } from './islands';
 import { applyChthonicAtticTerritory } from './territory';
 import { type ChthonicAtticRootChoice, type ChthonicAtticGeneration, type ChthonicAtticLayout, type ChthonicAtticRootState, type ChthonicAtticExit, type ChthonicAtticShelterCost, DESIGN_FLOOR_ID, DESIGN_FLOOR_Z } from './meta';
+import { firstRuntimeEntityId } from '../entity_ids';
 
 export * from './meta';
 export * from './geometry';
@@ -29,7 +30,7 @@ export function generateChthonicAtticDesignFloor(
   const world = new World();
   const entities: Entity[] = [];
   let nextRoomId = 0;
-  let nextEntityId = 1;
+  let nextEntityId = firstRuntimeEntityId();
 
   fillBaseTextures(world);
 

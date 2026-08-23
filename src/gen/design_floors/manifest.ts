@@ -13,6 +13,7 @@ import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
 import { syncNextEntityId } from '../content_manifest_utils';
+import { enforceUniqueEntityIds } from '../entity_ids';
 import { deliverFloorNpcPackages } from '../plot_npc_spawn';
 import { floorKeyForDesign } from '../../data/floor_keys';
 import { applyDesignFloorObjectProfile } from '../floor_object_placement';
@@ -200,6 +201,9 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     populateDesignFloorMonsters(gen, route);
     rebuildGeneratedFloorPathBlockers(gen.world, seed, gen.spawnX, gen.spawnY);
     fillVisualSlotsForWorldFeatures(gen.world, seed);
+    // Последнее слово о номерах — за границей, а не за модулем. Этаж заполняет
+    // себя сам, но выйти отсюда с двумя сущностями под одним номером не вправе.
+    enforceUniqueEntityIds(gen.entities, `design:${id}`);
     return floorRunZAllowsNpcs(route.z) ? gen : withoutNpcEntities(gen);
   });
 }

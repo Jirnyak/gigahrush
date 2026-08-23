@@ -34,6 +34,8 @@ import {
 } from '../data/npc_packages';
 import { clampRelation, getFactionRel } from '../data/relations';
 import {
+  addAlifeFactionAttitude,
+  alifeNpcFaction,
   alifeNpcRecordCount,
   alifeSeed,
   findAlifeNpcIdByReservedIdentityId,
@@ -43,7 +45,7 @@ import {
   type AlifeNpcSnapshot,
 } from './alife';
 import { createEmptyDemosSocialSaveState, type DemosRelationOverride, type DemosSocialSaveState } from './demos_save';
-import { getFactionPlayerRelation } from './npc_relations';
+import { QUEST_FACTION_RELATION_DELTA, getFactionPlayerRelation } from './npc_relations';
 import { shuffleWith, xorshift32 } from '../core/rand';
 
 export interface DemosSocialEdgeView {
@@ -1044,13 +1046,17 @@ export function clearDemosNpcSocialEdges(state: GameState, alifeId: number): voi
 
 export function demosNpcRelationBand(scoreInput: number): DemosRelationBand {
   const score = clampRelation(scoreInput);
-  if (score < -96) return { label: 'ненавидит', color: '#ff3b4f' };
+  // Полосы зеркальны, и обе стороны меряются одним шагом — половиной порога.
+  // Шагами по САМОМУ порогу верх не размечается: при пороге 64 «друг» начинался
+  // бы со 128, то есть за краем шкалы, и две верхние полосы были бы пусты.
+  const step = RELATION_FRIENDLY_THRESHOLD / 2;
+  if (score < RELATION_HOSTILE_THRESHOLD - step) return { label: 'ненавидит', color: '#ff3b4f' };
   if (score <= RELATION_HOSTILE_THRESHOLD) return { label: 'враг', color: '#ff6a3b' };
-  if (score < -32) return { label: 'недруг', color: '#f09a38' };
+  if (score < -step) return { label: 'недруг', color: '#f09a38' };
   if (score < 0) return { label: 'холодное', color: '#d7b86a' };
-  if (score < 32) return { label: 'нейтрально', color: '#b8c0a0' };
+  if (score < step) return { label: 'нейтрально', color: '#b8c0a0' };
   if (score < RELATION_FRIENDLY_THRESHOLD) return { label: 'приятель', color: '#8fd47a' };
-  if (score < 96) return { label: 'друг', color: '#51e08e' };
+  if (score < RELATION_FRIENDLY_THRESHOLD + step) return { label: 'друг', color: '#51e08e' };
   return { label: 'любовь', color: '#ff7ad9' };
 }
 
@@ -1327,6 +1333,33 @@ function propagateRelationDelta(
   }
 }
 
+/**
+ * Отношение к фракции идёт следом за отношением к человеку.
+ *
+ * Шальная пуля с чужой стороны роняет личное число жертвы к фракции стрелявшего,
+ * помощь и торговля — поднимают. Повод стоит полную цену в обиде на ЧЕЛОВЕКА
+ * (это уже посчитано выше), а на всю его фракцию переносится один шаг, тот же,
+ * что даёт выполненное поручение. Иначе одна драка перекрашивала бы весь мир —
+ * ровно та беда, из-за которой глобальную матрицу разрешили двигать только
+ * игроку.
+ *
+ * Отголоски по кругу знакомых (`propagate: false`) фракцию не двигают: слух о
+ * ссоре — не встреча с ней. Своя фракция не двигается вовсе, она принадлежность,
+ * а не мнение.
+ */
+function driftFactionAttitude(state: GameState, result: DemosRelationDeltaResult): void {
+  const targetAlifeId = result.targetAlifeId;
+  if (targetAlifeId === undefined) return;
+  const targetFaction = alifeNpcFaction(state, targetAlifeId);
+  if (targetFaction === undefined || targetFaction === alifeNpcFaction(state, result.fromAlifeId)) return;
+  addAlifeFactionAttitude(
+    state,
+    result.fromAlifeId,
+    targetFaction,
+    result.delta > 0 ? QUEST_FACTION_RELATION_DELTA : -QUEST_FACTION_RELATION_DELTA,
+  );
+}
+
 export function applyDemosRelationDelta(
   state: GameState,
   fromAlifeId: number,
@@ -1346,7 +1379,10 @@ export function applyDemosRelationDelta(
     : applyNpcRelationDelta(state, graph, fromAlifeId, clampInt(target.targetAlifeId, 0, 1, graph.total), delta, opts);
   if (result?.changed) {
     persistRelationOverride(state, graph, result);
-    if (opts.propagate !== false) propagateRelationDelta(state, graph, result);
+    if (opts.propagate !== false) {
+      if (result.targetKind === 'alife') driftFactionAttitude(state, result);
+      propagateRelationDelta(state, graph, result);
+    }
   }
   return result;
 }

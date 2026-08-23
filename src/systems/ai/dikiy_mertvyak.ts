@@ -53,7 +53,9 @@ export function updateDikiyRush(
   const rush = rushState.of(e);
 
   if ((ai.staggerTimer ?? 0) > 0) {
-    ai.staggerTimer = Math.max(0, (ai.staggerTimer ?? 0) - dt);
+    // Убыль стаггера — одна на всех, в общем такте `updateMonster`. Своя вторая
+    // здесь давала двойное вычитание за кадр: этот вид отходил от боли вдвое
+    // быстрее любого другого, и гейт такого не ловит — это тайминг, не тип.
     rush.speed = 0;
     return true;
   }

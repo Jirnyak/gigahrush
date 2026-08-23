@@ -16,6 +16,7 @@ import { Spr } from '../../entities/sprite_index';
 import { runMinistryContent } from './content_manifest';
 import { applyMinistryMacroGeometry } from './geometry';
 import { rng, irand, pick } from '../../core/rand';
+import { firstRuntimeEntityId } from '../entity_ids';
 
 
 /* ── Portrait picker — coordinate-hash like posters ───────────── */
@@ -519,7 +520,7 @@ function placeMinistryItems(rooms: Room[], entities: Entity[], nextId: number): 
 export function generateMinistry(): { world: World; entities: Entity[]; spawnX: number; spawnY: number } {
   const world = new World();
   const entities: Entity[] = [];
-  let nextId = 1;
+  let nextId = firstRuntimeEntityId();
   let nextRoomId = 0;
 
   // Default wall texture = marble everywhere

@@ -8,6 +8,7 @@ import { withSeededRandom } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, DORM_SEED, NPC_IDS, NPC_DEFS } from "./meta";
 import { carveDormSlabs, carveDormRings, buildDormRooms, buildDormRoomStacks, buildDormHqComplexes, applyDormZones, reinforceDormAuthoredTerritory, placeDormLifts, decorateDorm } from "./geometry";
 import { spawnAuthoredDormNpcs, spawnSleeperTemplates, spawnNightPatrolTemplates, placeDormContainers } from "./npcs";
@@ -67,7 +68,7 @@ export function generateObschezhitieSmenyDesignFloor(seed = DORM_SEED): FloorGen
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
     const containerId = { v: 1 };
 
     const layout = carveDormSlabs(world);

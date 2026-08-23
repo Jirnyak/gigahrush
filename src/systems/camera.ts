@@ -49,7 +49,16 @@ export interface CinematicCameraState {
   active: boolean;
   time: number;
   angleTarget: number;
+  /** Текущая скорость хода. К заданной подтягивается плавно, а не прыжком. */
   flySpeed: number;
+  /**
+   * Скорость, которую попросил такт.
+   *
+   * Раньше её ставили напрямую в `flySpeed`, и переход от дальнего подлёта к
+   * короткому кадру внутри зала (20 → 5) читался толчком: кадр тормозил за один
+   * кадр. Теперь такт задаёт ЦЕЛЬ, а ход подходит к ней экспонентой.
+   */
+  flySpeedTarget?: number;
   /* Режиссёрские поля. Без них поведение прежнее: камера летит по курсу
    * взгляда и возвращается к игроку, исчерпав путь. */
   /** Точка внимания. Задана — камера смотрит на неё, а летит куда ведёт путь. */
@@ -66,6 +75,12 @@ export interface CinematicCameraState {
   orbitTrackY?: number;
   /** Целевая высота, к которой камера подходит плавно. */
   heightTarget?: number;
+  /**
+   * Текущая высота кадра. Отдельно от заданной, потому что высота назначалась
+   * ПРЯМО: такт со своей высотой подбрасывал камеру за один кадр, и проезд вдоль
+   * строя с 1.1 на 1.8 читался скачком, а не подъёмом.
+   */
+  heightNow?: number;
   /** Исчерпав путь, держать позу вместо возврата к игроку. Владелец сцены решает, когда отпустить. */
   hold?: boolean;
   /**
@@ -160,6 +175,11 @@ const CINEMATIC_MAX_TURN_RATE = 2.0;
 const CAMERA_WALL_CLEARANCE = 0.34;
 /** С какой охотой радиус облёта подходит к заданному. Ниже — мягче вход в сцену. */
 const CINEMATIC_ORBIT_EASE = 1.2;
+/**
+ * Нижняя полка накатa. Без неё замедление у цели становится асимптотой, кадр
+ * никогда не «прибывает», и такт, ждущий прибытия, висит до потолка сцены.
+ */
+const CINEMATIC_GLIDE_FLOOR = 0.35;
 /** Сколько хода за кадр добавляет уходящий субъект. Быстрее любого человека вдвое. */
 const CINEMATIC_ORBIT_TRACK_MAX = 0.06;
 const CINEMATIC_BREATH_HEIGHT = 0.15;
@@ -351,7 +371,7 @@ export function aimCinematicCamera(camera: RuntimeCamera, aim: CinematicCameraAi
     }
   }
   if (aim.height !== undefined) ts.heightTarget = clampHeight(aim.height);
-  if (aim.flySpeed !== undefined) ts.flySpeed = Math.max(0, aim.flySpeed);
+  if (aim.flySpeed !== undefined) ts.flySpeedTarget = Math.max(0, aim.flySpeed);
   if (aim.hold !== undefined) ts.hold = aim.hold;
   if (aim.angle !== undefined) camera.free.angle = aim.angle;
 }
@@ -555,8 +575,26 @@ function flyAlongRoute(camera: RuntimeCamera, world: World, ts: CinematicCameraS
   let budget = ts.flySpeed * dt;
   if (budget <= 0) return;
   if (ts.forced) {
+    // Вынужденный ход накатом не идёт: он и так последний отрезок, а замедлять
+    // его — значит откладывать прибытие, которого такт ждёт.
     flyStraightToRouteEnd(camera, world, ts, budget);
     return;
+  }
+  /* Подъезд к точке — НАКАТОМ, а не в стену. Ход обрывался ровно на последнем
+   * узле: кадр шёл полной скоростью и в один кадр вставал, а следующий такт так
+   * же резко трогал его с места.
+   *
+   * Считается ОСТАТОК ЛОМАНОЙ, а не расстояние до конца по прямой: на дороге
+   * буквой П камера бывает в двух клетках от цели, пройдя половину пути, и
+   * замедляться ей там незачем. Нижняя полка обязательна — без неё замедление
+   * становится асимптотой и прибытия не наступает вовсе. */
+  const glideSpan = ts.flySpeed / CINEMATIC_ORBIT_EASE;
+  // Дорога из одного узла — то же, что вынужденный ход: ломаной нет, кадр
+  // пробирается к цели вслепую вдоль стен, и накат там только откладывает
+  // прибытие.
+  if (glideSpan > 0 && ts.path.length > 1) {
+    const remaining = routeRemainingLength(camera, world, ts);
+    budget *= Math.max(CINEMATIC_GLIDE_FLOOR, Math.min(1, remaining / glideSpan));
   }
   let guard = CINEMATIC_MAX_SUBSTEPS;
   const startGap = routeEndGap(camera, world, ts);
@@ -697,6 +735,24 @@ function routeCourseAngle(camera: RuntimeCamera, world: World, ts: CinematicCame
 }
 
 /** Насколько кадр не доехал до конца проложенной ломаной. */
+/** Сколько ломаной осталось пройти: от кадра до текущего узла плюс все хвостовые звенья. */
+function routeRemainingLength(camera: RuntimeCamera, world: World, ts: CinematicCameraState): number {
+  let i = ts.targetNodeIndex;
+  if (i >= ts.path.length) return 0;
+  let px = camera.free.x;
+  let py = camera.free.y;
+  let total = 0;
+  for (; i < ts.path.length; i++) {
+    const node = ts.path[i];
+    const dx = world.delta(px, node[0]);
+    const dy = world.delta(py, node[1]);
+    total += Math.sqrt(dx * dx + dy * dy);
+    px = node[0];
+    py = node[1];
+  }
+  return total;
+}
+
 function routeEndGap(camera: RuntimeCamera, world: World, ts: CinematicCameraState): number {
   const end = ts.path[ts.path.length - 1];
   if (!end) return 0;
@@ -737,6 +793,12 @@ export function updateCinematicCamera(camera: RuntimeCamera, world: World, dt: n
   if (camera.mode !== 'cinematic' || !camera.cinematic) return;
   const ts = camera.cinematic;
   ts.time += dt;
+  /* Ход подтягивается к заданному такту той же экспонентой, что и радиус облёта:
+   * у кадра одна манера двигаться, а не отдельная ручка на каждый повод. Смена
+   * скорости между тактами перестаёт быть толчком. */
+  if (ts.flySpeedTarget !== undefined) {
+    ts.flySpeed = approach(ts.flySpeed, ts.flySpeedTarget, CINEMATIC_ORBIT_EASE, dt);
+  }
   const directed = ts.lookAtX !== undefined && ts.lookAtY !== undefined;
 
   // Облёт: позиция вокруг точки внимания считается аналитически, маршрут не нужен.
@@ -870,7 +932,9 @@ function applyCinematicGaze(
   if (settled && !ts.forced) keepWallClearance(world, camera);
   // Режется итоговая высота, а не план: иначе верхняя точка покачивания упиралась
   // бы в плиту ровно на зазор, и кадр всё равно «висел под потолком».
-  const wanted = (ts.heightTarget ?? CAMERA_STANDING_HEIGHT) + Math.sin(ts.time * 0.7) * CINEMATIC_BREATH_HEIGHT;
+  const heightWanted = ts.heightTarget ?? CAMERA_STANDING_HEIGHT;
+  ts.heightNow = approach(ts.heightNow ?? camera.free.height, heightWanted, CINEMATIC_ORBIT_EASE, dt);
+  const wanted = ts.heightNow + Math.sin(ts.time * 0.7) * CINEMATIC_BREATH_HEIGHT;
   camera.free.height = ceilingLimitedHeight(world, camera.free.x, camera.free.y, wanted);
 
   if (!directed) {

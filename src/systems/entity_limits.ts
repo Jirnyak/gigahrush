@@ -1,7 +1,28 @@
 import { EntityType, ItemType, type Entity } from '../core/types';
 import { activeActorSoftLimit, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT, ITEM_DROP_FIFO_CAP } from '../data/entity_limits';
 import { ITEMS } from '../data/items';
+import { getEntityIndex } from './entity_index';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
+
+/**
+ * Срез живых актёров, если общий индекс уже собран ИМЕННО для этого массива.
+ *
+ * Мягкий предел людей и тварей считается по актёрам, а перебирался весь этаж —
+ * вместе с дропами, снарядами и билбордами, которых на полке лута не меньше,
+ * чем жильцов. Срез даёт тот же ответ по меньшему множеству.
+ *
+ * Индекс НЕ достраивается: `entity_limits` зовут из ста семидесяти мест, в том
+ * числе из генерации и из циклов, которые сами идут по срезам индекса, и
+ * перестройка из такого места подменила бы массив под чужим перебором. Индекс
+ * не наш — не готов, значит честный перебор.
+ *
+ * Срез — снимок последней пересборки, поэтому `alive` всё равно перепроверяется
+ * на месте: умерший в этом же кадре из среза не исчезает.
+ */
+function liveActorSlice(entities: readonly Entity[]): readonly Entity[] | undefined {
+  const index = getEntityIndex();
+  return index.isBuiltFor(entities) ? index.actors : undefined;
+}
 
 export function entitySoftLimit(type: EntityType): number | undefined {
   if (type === EntityType.NPC || type === EntityType.MONSTER) return activeActorSoftLimit();
@@ -24,23 +45,55 @@ function isSoftCappedActor(entity: Entity): boolean {
 }
 
 export function countLiveEntitiesOfType(entities: readonly Entity[], type: EntityType): number {
+  const cappedActor = isSoftCappedActorType(type);
+  const source = (cappedActor ? liveActorSlice(entities) : undefined) ?? entities;
   let count = 0;
-  for (const entity of entities) {
-    if (isSoftCappedActorType(type) && (isNativePlayerBodyEntity(entity) || isPlayerEntity(entity))) continue;
+  for (const entity of source) {
+    if (cappedActor && (isNativePlayerBodyEntity(entity) || isPlayerEntity(entity))) continue;
     if (entity.alive && entity.type === type) count++;
   }
   return count;
 }
 
 export function countLiveActiveActors(entities: readonly Entity[]): number {
+  const source = liveActorSlice(entities) ?? entities;
   let count = 0;
-  for (const entity of entities) {
+  for (const entity of source) {
     if (isSoftCappedActor(entity)) count++;
   }
   return count;
 }
 
+/**
+ * Сколько напольных объектов (дроп/снаряд/билборд) на этаже, по индексу.
+ *
+ * Дропов бывает до `ITEM_DROP_FIFO_CAP`, и перебор всего этажа на КАЖДУЮ
+ * попытку спавна — а спавн лута идёт на каждую смерть — стоил больше, чем сам
+ * спавн. Снаряды и билборды у индекса лежат срезами, дропы — счётчиком.
+ *
+ * Как и у актёров, цифра берётся только под `isBuiltFor()`. Пока массив не рос,
+ * она либо точна, либо завышена на умерших в этом кадре: мягкий предел от этого
+ * становится строже, а не мягче. Стоит кому-то дописать сущность — длина
+ * разъезжается, и мы возвращаемся к честному перебору.
+ */
+function indexedFloorObjectCount(entities: readonly Entity[]): number | undefined {
+  const index = getEntityIndex();
+  if (!index.isBuiltFor(entities)) return undefined;
+  return index.liveItemDropCount() + index.projectiles.length + index.billboards.length;
+}
+
+function indexedTypeCount(entities: readonly Entity[], type: EntityType): number | undefined {
+  const index = getEntityIndex();
+  if (!index.isBuiltFor(entities)) return undefined;
+  if (type === EntityType.ITEM_DROP) return index.liveItemDropCount();
+  if (type === EntityType.PROJECTILE) return index.projectiles.length;
+  if (type === EntityType.BILLBOARD) return index.billboards.length;
+  return undefined;
+}
+
 export function countLiveFloorObjects(entities: readonly Entity[]): number {
+  const indexed = indexedFloorObjectCount(entities);
+  if (indexed !== undefined) return indexed;
   let count = 0;
   for (const entity of entities) {
     if (entity.alive && isFloorObjectType(entity.type)) count++;
@@ -63,9 +116,23 @@ export function remainingEntitySpawnSlots(entities: readonly Entity[], type: Ent
   if (limit === undefined && !cappedActor && !floorObject) return Number.POSITIVE_INFINITY;
   // Spawn bursts (death loot, waves) call this per item — the type count and
   // the shared-pool count fold into one entities pass instead of two.
+  // Для людей и тварей обе цифры живут в срезе актёров, для напольных объектов —
+  // в срезах и счётчике индекса. Перебор остаётся только там, где индекс собран
+  // не для этого массива: тогда он единственный, кто знает правду.
+  if (floorObject) {
+    const indexedType = indexedTypeCount(entities, type);
+    const indexedShared = indexedType === undefined ? undefined : indexedFloorObjectCount(entities);
+    if (indexedType !== undefined && indexedShared !== undefined) {
+      const typeSlots = limit === undefined
+        ? Number.POSITIVE_INFINITY
+        : Math.max(0, limit - indexedType);
+      return Math.min(typeSlots, Math.max(0, FLOOR_OBJECT_SOFT_LIMIT - indexedShared));
+    }
+  }
+  const source = (cappedActor ? liveActorSlice(entities) : undefined) ?? entities;
   let typeCount = 0;
   let sharedCount = 0;
-  for (const entity of entities) {
+  for (const entity of source) {
     if (!entity.alive) continue;
     if (cappedActor) {
       if (isNativePlayerBodyEntity(entity) || isPlayerEntity(entity)) continue;

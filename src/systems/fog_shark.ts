@@ -2,7 +2,6 @@
 
 import {
   EntityType,
-  Faction,
   MonsterKind,
   ProjType,
   msg,
@@ -16,10 +15,10 @@ import { Spr } from '../entities/sprite_index';
 import { playExplosion, playSoundAt } from './audio';
 import { getEntityIndex, ENTITY_MASK_ACTOR } from './entity_index';
 import { publishEvent } from './events';
-import { applyDamageRelationPenalty } from './factions';
 import { publishExplosionNoise } from './noise';
 import { recordPlayerDamage } from './damage';
 import { isPlayerEntity } from './player_actor';
+import { damageActor } from './combat_stimulus';
 
 export const FOG_SHARK_IGNITION_RADIUS = 2.65;
 export const FOG_SHARK_IGNITION_DAMAGE = 16;
@@ -96,7 +95,16 @@ export function recordFogSharkIgnited(
     const dist = Math.sqrt(d2);
     const falloff = 1 - (dist / radius) * 0.45;
     const damage = Math.max(3, Math.round(FOG_SHARK_IGNITION_DAMAGE * falloff));
-    target.hp -= damage;
+    /* Автора взрыва (`actor` — тот, кто поджёг) сюда протянули и до сих пор
+     * выбрасывали: NPC, попавший под подожжённый игроком пузырь, не узнавал, кто
+     * это сделал. Дверь урона доводит и автора, и штраф отношениям. */
+    damageActor(world, state, target, {
+      damage,
+      source: 'explosion',
+      attacker: actor,
+      aoe: true,
+      knockback: false,
+    });
     hitCount++;
     hitIds.push(target.id);
     if (target.monsterKind === MonsterKind.FOG_SHARK) sharkHits++;
@@ -111,8 +119,6 @@ export function recordFogSharkIgnited(
       state.dmgFlash = Math.max(state.dmgFlash, 0.28);
       state.dmgSeed = (state.dmgSeed + 91) | 0;
       recordPlayerDamage(state, shark, damage, `Газовый взрыв туманной акулы: -${damage}`, 'hazard');
-    } else if (target.type === EntityType.NPC && actor?.faction === Faction.PLAYER) {
-      applyDamageRelationPenalty(actor.faction, target.faction, damage, target, actor, state);
     }
 
     if (target.hp <= 0) {

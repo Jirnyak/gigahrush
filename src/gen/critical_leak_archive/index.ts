@@ -11,6 +11,7 @@ import { World } from '../../core/world';
 import { hashSeed } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
 import { sanitizeDoors } from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_Z, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, CriticalLeakArchiveGeneration, NextId, TARGET_ROUTE, ARCHIVIST_DEF, LIQUIDATOR_DEF } from "./meta";
 import { addDoor, expandArchiveMidAndMicro, paintCriticalLeakHqTerritory, placeLift, decorateArchiveRooms, carveContaminatedShortcut, connectAnchors, buildRooms, tuneInitialZones } from "./geometry";
 import { buildPercolationField, carvePercolationComponent, spawnLeakNpc, populateContainers } from "./npcs";
@@ -75,7 +76,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_liquidator_egor
 export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId: NextId = { v: 10000 };
+  const nextId: NextId = newEntityIdCursor();
   const seed = hashSeed('design-z: critical-leak-archive:percolation', CRITICAL_LEAK_ARCHIVE_Z);
   const state: CriticalLeakArchiveState = {
     routeId: CRITICAL_LEAK_ARCHIVE_ROUTE_ID,

@@ -16,6 +16,14 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
+import { applyNamedRoom } from '../named_rooms';
+
+/**
+ * Псевдоним центрального вестибюля. По нему — и только по нему, не по русскому
+ * имени — сцену смотра находит проигрыватель кат-сцен. Комната детерминирована:
+ * 33x33 на скрещении обеих публичных осей, одна и та же на любом сиде.
+ */
+export const MINISTRY_VESTIBULE_ANCHOR = 'ministry_vestibule' as const;
 
 export interface MinistryMacroGeometry {
   nextRoomId: number;
@@ -1052,6 +1060,11 @@ export function applyMinistryMacroGeometry(world: World, nextRoomId: number): Mi
     33,
     Tex.F_RED_CARPET,
   );
+  applyNamedRoom(vestibule, MINISTRY_VESTIBULE_ANCHOR, {
+    type: RoomType.COMMON,
+    name: 'Центральный вестибюль входящих дел',
+    tags: ['ministry', 'parade'],
+  });
   addCarpetCellsForRoom(world, vestibule, carpetCells);
   for (let d = 4; d < vestibule.w - 3; d += 8) {
     setFeature(world, vestibule.x + d, vestibule.y + 3, Feature.LAMP);

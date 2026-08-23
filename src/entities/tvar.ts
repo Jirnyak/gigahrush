@@ -13,6 +13,7 @@ export const DEF: MonsterDef = {
   dmg: 13,
   attackRate: 1.15,
   sprite: 0,   // auto-assigned by generateSprites()
+  scanSec: 0.85,
   aiFlags: ['foodBait', 'wallBias'],
   counterplay: 'Не жмитесь к панели: держите полторы клетки и центр комнаты, а еду или говняк бросайте вбок, чтобы разорвать контакт.',
   lootHint: 'сырая органика, бетонная крошка у лап, редкий кусок мяса',

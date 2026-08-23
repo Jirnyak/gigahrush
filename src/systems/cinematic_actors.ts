@@ -36,8 +36,10 @@ export function extractNpcForScene(
 
   npc.cinematicState = {
     originalRole: npc.role || NpcRole.WANDERER,
-    originalX: npc.x,
-    originalY: npc.y,
+    // Пост — место В СЦЕНЕ, а не то, откуда человека позвали: на нём его и
+    // держит поводок, пока сцена его не отпустит.
+    postX: targetX,
+    postY: targetY,
     sceneId: sceneId,
   };
 

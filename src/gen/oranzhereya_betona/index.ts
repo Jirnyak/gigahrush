@@ -16,6 +16,7 @@ import {
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
 import { tuneOranzhereyaBetonaRouteZones, expandOranzhereyaBetonaRouteGeometry, reinforceOranzhereyaBetonaAuthoredTerritory, initWorld, buildRooms, connectRooms, decorateRooms, placeLifts, placeDrops } from "./geometry";
 import { spawnNpcs, placeContainers, spawnThreats } from "./npcs";
@@ -24,7 +25,7 @@ export function generateOranzhereyaBetonaDesignFloor(seed = SEED): FloorGenerati
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     initWorld(world);
     const rooms = buildRooms(world);

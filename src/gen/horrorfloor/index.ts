@@ -9,13 +9,14 @@ import { designFloorById } from '../../data/design_floors';
 import { LiftDirection, AIGoal } from '../../core/types';
 import { randomRPG } from '../../systems/rpg';
 import { monsterSpr } from '../../entities/sprite_index';
+import { newEntityIdCursor } from '../entity_ids';
 import { MACRO_SIZE, MACRO_GRID, OFFSET_MACRO } from "./meta";
 import { blackoutHorrorLights } from "./geometry";
 
 export function generateHorrorFloorDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   let nextRoomId = 0;
 
   world.wallTex.fill(Tex.DARK);

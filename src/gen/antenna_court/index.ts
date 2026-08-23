@@ -15,6 +15,7 @@ import {
   placeDoor,
 } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_Z, CONTAINER_ID_BASE } from "./meta";
 import { AntennaCourtGeneration, antennaCourtDebugLines, expandAntennaCourtRouteGeometry, retuneAntennaCourtRouteZones, stampAntennaCourtRooms, retuneAntennaZones, decorateAntennaCourt, placeAuthoredSignalScreens, dropItem, dropDesk, placeFixedLift } from "./geometry";
 import { createAntennaCourtSignalState, spawnPlotNpc, spawnSignalMonsters, addContainer } from "./npcs";
@@ -22,7 +23,7 @@ import { createAntennaCourtSignalState, spawnPlotNpc, spawnSignalMonsters, addCo
 export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   let nextContainerId = CONTAINER_ID_BASE;
 
   world.wallTex.fill(Tex.CONCRETE);

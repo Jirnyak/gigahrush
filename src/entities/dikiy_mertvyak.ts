@@ -12,6 +12,7 @@ export const DEF: MonsterDef = {
   dmg: 7,
   attackRate: 1.05,
   sprite: 0,
+  scanSec: 0.5,
   aiFlags: ['noBrakes'],
   counterplay: 'Он не правит курс после разгона: шаг вбок в последний момент — и он уходит в бетон. Бежать от него по прямой нельзя.',
   lootHint: 'рваная одежда, белые костяшки, мелкий бытовой хлам',

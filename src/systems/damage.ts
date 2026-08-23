@@ -1,6 +1,7 @@
 import { EntityType, type Entity, type GameState, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
 import { isNoClipActive } from './psi';
 import type { World } from '../core/world';
+import { ensureEntityIndex } from './entity_index';
 import { isPlayerEntity } from './player_actor';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { mathRng } from '../core/rand';
@@ -101,7 +102,11 @@ export function updateBlockCrushDamage(
   dt: number,
 ): void {
   const DAMAGE_PER_SECOND = 10;
-  for (const e of entities) {
+  // Давит только людей и тварей: срез актёров — это ровно они, живые. Дропы,
+  // снаряды и билборды тут не при чём, и перебирать их каждый кадр незачем.
+  // Игрок — такой же NPC и лежит в том же срезе.
+  const actors = ensureEntityIndex(entities).actors;
+  for (const e of actors) {
     if (!e.alive) continue;
     if (e.type !== EntityType.NPC && e.type !== EntityType.MONSTER && !isPlayerEntity(e)) continue;
 

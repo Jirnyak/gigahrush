@@ -9,6 +9,7 @@ import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
 import { generateZones, sanitizeDoors } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
+import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, MARKOV_STAIRWELL_ROUTE_ID, BASE_FLOOR, SPINE_X, SPINE_Y, SPINE_W, SPINE_H, NPC_IDS, WATCHER_DEF } from "./meta";
 import { markovMetrics, dropItem, tuneZones, buildGeometry, calculateMetrics } from "./geometry";
 import { spawnPlotNpc, spawnThreats, placeContainers } from "./npcs";
@@ -36,7 +37,7 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.watcher, WATCHER_DEF, 
 export function generateMarkovStairwellDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
-  const nextId = { v: 10000 };
+  const nextId = newEntityIdCursor();
   const { chain, watcherRoom, patternRoom, rareRoom, tellCells, serviceCells, lockedDoors } = buildGeometry(world);
 
   spawnPlotNpc(entities, nextId, NPC_IDS.watcher, WATCHER_DEF, watcherRoom.x + 18, watcherRoom.y + 13, 0);

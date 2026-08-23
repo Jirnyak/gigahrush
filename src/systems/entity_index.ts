@@ -152,6 +152,9 @@ export class EntityIndex {
   readonly actors: Entity[] = [];
   readonly needs: Entity[] = [];
   readonly projectiles: Entity[] = [];
+  /** Билборды отдельным срезом: их спрашивает рендер, а искать их среди всех
+   *  сущностей этажа он не должен — их десятки, а сущностей тысячи. */
+  readonly billboards: Entity[] = [];
   private builtFor: readonly Entity[] | null = null;
   private builtEntityCount = -1;
   private dirty = true;
@@ -197,6 +200,7 @@ export class EntityIndex {
     this.actors.length = 0;
     this.needs.length = 0;
     this.projectiles.length = 0;
+    this.billboards.length = 0;
 
     let liveEntityCount = 0;
     let usedBucketCount = 0;
@@ -219,6 +223,7 @@ export class EntityIndex {
       if (e.needs) this.needs.push(e);
       if (e.ai && (e.type === EntityType.NPC || e.type === EntityType.MONSTER)) this.ai.push(e);
       if (e.type === EntityType.PROJECTILE) this.projectiles.push(e);
+      if (e.type === EntityType.BILLBOARD) this.billboards.push(e);
       const staticVisible = (entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) !== 0;
       const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
       const bucket = staticVisible ? this.staticBuckets[bucketIndex] : this.buckets[bucketIndex];
@@ -263,16 +268,29 @@ export class EntityIndex {
     };
   }
 
+  /**
+   * Адреса сущности — `byId`, `byAlifeId`, `entityOrder`, `staticIndexedIds` —
+   * не меняются, пока сущность жива: они ставятся один раз при появлении и
+   * снимаются один раз при смерти. Раньше кадр симуляции стирал все четыре
+   * таблицы и набивал их заново, то есть платил тремя операциями Map за КАЖДУЮ
+   * живую сущность (включая до 16384 неподвижных дропов) ради восстановления
+   * НЕИЗМЕНИВШИХСЯ связей.
+   */
+  private forgetEntity(e: Entity): void {
+    if (this.byId.get(e.id) === e) this.byId.delete(e.id);
+    if (e.alifeId !== undefined && this.byAlifeId.get(e.alifeId) === e) this.byAlifeId.delete(e.alifeId);
+    this.entityOrder.delete(e.id);
+    this.staticIndexedIds.delete(e.id);
+  }
+
   private rebuildDynamicForSimulation(entities: readonly Entity[], simulationFrame: number): void {
     const startedAt = nowMs();
     this.clearDynamicBuckets();
-    this.byId.clear();
-    this.byAlifeId.clear();
-    this.entityOrder.clear();
     this.ai.length = 0;
     this.actors.length = 0;
     this.needs.length = 0;
     this.projectiles.length = 0;
+    this.billboards.length = 0;
     this.addEntityTailToCachedBuckets(entities);
     const staticStats = this.reindexStaticEntities();
 
@@ -284,26 +302,24 @@ export class EntityIndex {
     let monsterCount = 0;
     const itemCount = staticStats.itemCount;
 
+    // Мёртвые уходят из списка динамики тут же: раньше они оставались в нём до
+    // следующей полной пересборки, и кадр обходил их снова и снова.
+    let write = 0;
     for (let dynamicOrder = 0; dynamicOrder < this.dynamicEntities.length; dynamicOrder++) {
       const e = this.dynamicEntities[dynamicOrder];
       if (!e || !e.alive) {
-        if (e) {
-          this.byId.delete(e.id);
-          if (e.alifeId !== undefined) this.byAlifeId.delete(e.alifeId);
-          this.entityOrder.delete(e.id);
-        }
+        if (e) this.forgetEntity(e);
         continue;
       }
+      this.dynamicEntities[write++] = e;
       liveDynamicEntityCount++;
-      this.byId.set(e.id, e);
-      if (e.alifeId !== undefined) this.byAlifeId.set(e.alifeId, e);
-      this.entityOrder.set(e.id, dynamicOrder);
       if (e.type === EntityType.NPC || e.type === EntityType.MONSTER) this.actors.push(e);
       if (e.type === EntityType.NPC) npcCount++;
       else if (e.type === EntityType.MONSTER) monsterCount++;
       if (e.needs) this.needs.push(e);
       if (e.ai && (e.type === EntityType.NPC || e.type === EntityType.MONSTER)) this.ai.push(e);
       if (e.type === EntityType.PROJECTILE) this.projectiles.push(e);
+      if (e.type === EntityType.BILLBOARD) this.billboards.push(e);
 
       const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
       const bucket = this.buckets[bucketIndex];
@@ -312,6 +328,7 @@ export class EntityIndex {
       dynamicBucketedCount++;
       if (bucket.length > dynamicMaxBucketSize) dynamicMaxBucketSize = bucket.length;
     }
+    this.dynamicEntities.length = write;
 
     this.builtEntityCount = entities.length;
     this.version++;
@@ -378,24 +395,25 @@ export class EntityIndex {
   }
 
   private reindexStaticEntities(): { liveCount: number; itemCount: number } {
-    this.staticIndexedIds.clear();
     let liveCount = 0;
     let itemCount = 0;
-    // Runs every simulation frame: bucket stats are folded into the compaction
-    // loop instead of a second full pass over all buckets.
+    // Идёт каждый кадр симуляции, поэтому здесь остаётся только то, что кадр
+    // действительно может изменить: смерть. Живая статика своих адресов не
+    // трогает — они уже стоят с её появления.
     let usedBucketCount = 0;
     let maxBucketSize = 0;
     for (const bucket of this.staticBuckets) {
+      if (bucket.length === 0) continue;
       let write = 0;
       for (const e of bucket) {
-        if (!e || !e.alive || (entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) === 0) continue;
+        if (!e || !e.alive || (entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) === 0) {
+          if (e) this.forgetEntity(e);
+          continue;
+        }
         bucket[write++] = e;
-        this.staticIndexedIds.add(e.id);
-        this.byId.set(e.id, e);
-        if (e.alifeId !== undefined) this.byAlifeId.set(e.alifeId, e);
-        this.entityOrder.set(e.id, Number.MAX_SAFE_INTEGER - liveCount);
         liveCount++;
         if (e.type === EntityType.ITEM_DROP) itemCount++;
+        else if (e.type === EntityType.BILLBOARD) this.billboards.push(e);
       }
       bucket.length = write;
       if (write > 0) {
@@ -458,6 +476,10 @@ export class EntityIndex {
       const e = entities[order];
       if (!e || !e.alive) continue;
       this.byId.set(e.id, e);
+      // Дозапись обязана вести ОБА адреса. Один путь из четырёх забывал про
+      // слот, и дописанная личность оставалась ненаходимой по `alifeId` — а на
+      // ней держится вся адресация сюжетных людей.
+      if (e.alifeId !== undefined) this.byAlifeId.set(e.alifeId, e);
       this.entityOrder.set(e.id, order);
       if (e.type === EntityType.NPC || e.type === EntityType.MONSTER) this.actors.push(e);
       if (e.type === EntityType.NPC) this.debugStats.npcCount++;
@@ -469,6 +491,7 @@ export class EntityIndex {
         this.projectiles.push(e);
         this.debugStats.projectileCount++;
       }
+      if (e.type === EntityType.BILLBOARD) this.billboards.push(e);
 
       const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
       if ((entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) !== 0) {
@@ -510,6 +533,21 @@ export class EntityIndex {
 
   getVersion(): number {
     return this.version;
+  }
+
+  /**
+   * Сколько дропов лежит на этаже. Своего среза у них нет намеренно: их бывает
+   * до `ITEM_DROP_FIFO_CAP`, и складывать их в массив каждый кадр значило бы
+   * вернуть ту самую работу, ради снятия которой статику перестали переписывать.
+   * Считается он там же, где статика подметается, то есть раз в кадр.
+   *
+   * Цифра годится ТОЛЬКО под `isBuiltFor()`: пока массив не рос, она либо точна,
+   * либо завышена на умерших в этом кадре — то есть ошибается в сторону
+   * осторожности. Как только кто-то дописал сущность, длина разъезжается,
+   * `isBuiltFor()` отвечает «нет», и спрашивающий обязан считать честно.
+   */
+  liveItemDropCount(): number {
+    return this.debugStats.itemCount;
   }
 
   orderOf(entity: Entity): number {

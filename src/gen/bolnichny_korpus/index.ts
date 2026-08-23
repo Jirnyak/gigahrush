@@ -86,6 +86,7 @@ import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../
 import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
+import { newEntityIdCursor } from '../entity_ids';
 
 
 export const BOLNICHNY_KORPUS_ROUTE_ID = 'bolnichny_korpus' as const;
@@ -468,7 +469,7 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
   return withSeededRandom(seed, () => {
     const world = new World();
     const entities: Entity[] = [];
-    const nextId = { v: 10000 };
+    const nextId = newEntityIdCursor();
 
     initWorld(world);
     const rooms = buildRooms(world);
