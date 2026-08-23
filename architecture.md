@@ -283,11 +283,16 @@ belongs in `core/`, `data/`, `entities/` or `world/`.
 
 ### Critters And Ambient VFX
 
-Critters (rats, roaches, flies) and similar ambient visual effects are pure client-side visual dressing, not simulation entities.
-- They do not exist in the `entities` array, they have no hitboxes, and they cannot interact with physics or events.
-- Their logic lives in `src/render/critters.ts` and uses a lightweight 2D coordinate update loop that reads `world.get` for collision.
-- They are drawn in a single instanced array call (`gl.drawArraysInstanced`) making them effectively free for CPU and AI.
-- Future ambient life or micro-details should follow this exact pattern: data-oriented update loops producing visual particles, entirely disconnected from the heavy A-Life, saving, or AI routing systems.
+Rewritten 2026-08-22. **Живность — чистая функция от полей мира, а не популяция.** Особи не существуют ни в памяти, ни в сейве, ни в `entities`: пул и его CPU-цикл сняты целиком.
+
+- Инстансов ровно `block² × perCell` (`src/render/critters.ts`, 24 клетки на десктопе, 14 на тач-устройстве, 3 слота на клетку). Каждый берёт СВОЮ клетку из блока вокруг игрока и решает сам, кто он и есть ли он вообще.
+- Решение принимается в вершинном шейдере (`src/render/critters_pass.ts`) по уже загруженным на GPU полям: `uCells`, `uFeatures`, `uLight` и `uDanger` (`world.dangerField`). Вектор признаков клетки — `[blood, food, filth, dark, glow, cover]`; вид — вектор весов по тем же осям (`src/data/critters.ts`). Совпало — особь родилась, не совпало — вырожденный треугольник.
+- Из этого следует контекстность: мухи там, где поле трупного запаха, тараканы там, где плита и темно, мошка у ламп, паук в углу из стен. Никто никого не «расселяет», изотропность невозможна по построению.
+- Игрок отталкивает живность полем без состояния (`fleeRadius`): подошёл — прыснула, отошёл — вернулась. Сквозь стену не убегает.
+- Свет считается там же теми же слагаемыми, что у спрайтов (запечённый + ambient + фонарь + ближний свет глаза, кривая 1.32). CPU-зеркала освещения нет.
+- Набор видов этажа — `DesignFloorRenderProfile.fauna` в `src/data/design_floor_profiles.ts`, рядом с `ambientLight`. Отдельного реестра нет. Пустой список = безжизненный этаж (Пустота), отсутствие поля = `DEFAULT_FAUNA`.
+- Раздавить конкретную особь нельзя: её нет. Хруст под ногой (`updateCritterCrunch`) проверяет ОДНУ клетку на шаг игрока по тем же признакам.
+- Future ambient life should follow this pattern: поля мира на GPU + веса в данных, а не пул объектов на CPU.
 
 ### Species Property Contract
 
@@ -334,6 +339,74 @@ Use `src/gen/population_placement.ts` for floor-wide scattering:
 - This is generation-time field sampling, not runtime buckets, not per-cell spawn caps, and not a content-specific exception.
 
 Special rooms and authored POIs should influence the field with weights or anchors. They should not own broad population placement by directly pushing hundreds of entities into a small room or arena. Local scripted encounters can still spawn bounded local groups when that group is the gameplay object.
+
+### Damage Door Contract
+
+Здоровье актору снимает **одна функция** — `damageActor` (`systems/combat_stimulus.ts`). Она делает
+весь ход: тип урона и броня, толчок, сообщение жертве о том, кто ударил, штраф отношениям, смерть.
+Прямое вычитание `hp` у чужой сущности вне белого списка валит `npm run check:invariants`.
+
+Почему дверь, а не помощник: до неё общий `applyDamage` только СЧИТАЛ число, а применяли, толкали и
+сообщали вызывающие — пять шагов, которые надо было помнить. Не помнили: `notifyActorDamaged` знали
+три файла из всех, снимавших здоровье, и жертва просто не узнавала, кто её ударил. Молчание было
+поведением по умолчанию, а не исключением.
+
+Что дверь НЕ делает и почему:
+
+- **Не объявляет смерть игрока.** У неё своя дорога — щит, продолжение за другое тело, камера смерти,
+  — и флаг `alive` там не поднимают вовсе.
+- **Не обрабатывает смерть сама.** Лут, опыт, кровь, квесты и A-Life принадлежат точке сборки;
+  обработчик приходит инъекцией `setActorDeathHandler`, как самосбор получает генератор этажа.
+- **Не требует автора.** Голод, обвал, газ, поезд и самосбор бьют без виновника: `attacker` не задан,
+  и винить некого — это полноправный случай, а не недосмотр. Требуй дверь автора, эти вызывающие
+  пошли бы в обход, и молчание вернулось бы.
+
+Белый список инварианта — не поблажка, а перечень мест, где урон безавторский по природе либо где
+здоровье не отнимают, а восстанавливают (лечение, загрузка сейва, синхронизация A-Life и сети).
+
+### Entity Id Contract
+
+Номер сущности выдаёт **один владелец** — `gen/entity_ids.ts`. Генератор этажа зовёт
+`newEntityIdCursor()` (или `firstRuntimeEntityId()` для голого счётчика) и продвигает счётчик
+`syncNextEntityId()`; собственного стартового числа у этажа нет и быть не может. Этаж по-прежнему
+заполняет себя сам — своя геометрия, свои люди, свой контент; общими стали только выдача номеров и
+проверка.
+
+Два правила, и оба про то, что номер — это адрес:
+
+- **Номер уникален на этаже.** Два тела под одним номером расходятся во мнениях: `EntityIndex.byId`
+  отдаёт одно, `Array.find` — другое. Так панель диалога всех авторских жителей квартир и
+  коллекторов рисовалась из листовки, пока её же кнопки работали с настоящим человеком.
+- **Обычная сущность не садится в `1..getPlotNpcCount()`.** Там номера слотов сюжетных личностей: их
+  читают A-Life, сейв и `isPlotNpc`. Самозванец в этом диапазоне вычищается как «переехавший» — так
+  с ада каждую загрузку пропадали пять авторских NPC, — а его смерть навсегда пишет в сохранение
+  флаг «эта личность мертва».
+
+**Неположительный номер — не адрес, а заготовка.** `id <= 0` — метка шаблона обычного жителя, по
+которой `isAmbientNpcCandidate` (`systems/alife.ts`) узнаёт, кого материализовать из пула A-Life;
+настоящий номер такой человек получает при материализации. Процедурные этажи ставят так ВСЁ своё
+население, дизайн-этажи метят шаблон отсутствием имени. Выдать заготовке номер — значит сделать её
+обычным жителем без личности: этаж перестаёт брать людей из пула и начинает усыновлять новых
+(замерено: 1954 новых человека за визит вместо 1147 из пула). Поэтому обе проверки ниже заготовки
+пропускают.
+
+Замок двойной: `enforceUniqueEntityIds` стоит на выходе `generateDesignFloor` и
+`generateProceduralFloor` (вне браузера падает, в браузере молча перенумеровывает — платить за чужую
+опечатку игроку не за что), а `npm run check:invariants` запрещает заводить счётчик числом где бы то
+ни было в `gen/`. Отдельные пространства номеров — комнат, контейнеров — сюда не относятся.
+
+**Номер сущности не означает личность.** Личность живёт в `alifeId` (слот) и `npcPackageId`; `id` —
+просто адрес тела. Раньше доставка выдавала авторскому человеку `id`, равный слоту, и на этом
+совпадении держалась вся адресация: сотня мест читала `entity.id` там, где имелась в виду личность.
+Правило теперь одно — **личность спрашивают у `alifeId`**, канонический предикат `isPlotNpc`
+(`data/plot.ts`), поиск живого человека по слоту — `EntityIndex.byAlifeId`.
+
+Отдельно про сохранение: `Quest.giverId`, `Quest.targetNpcId` и `deadPlotNpcIds` хранят **слоты** —
+и хранили всегда. Но поле `giverId` по природе двух видов: авторское задание адресует слотом,
+процедурное и контрактное — номером живой сущности, потому что личности за ним нет. Различает их
+`questAddressesBySlot()` (`systems/quests.ts`), и спрашивать обязан каждый читатель: перебор
+«сначала по номеру, потом по слоту» находит чужого — предмет с тем же номером лежит в массиве раньше
+человека.
 
 ### Authored NPC Delivery Contract
 
@@ -680,6 +753,23 @@ import.meta.glob('./content/**/*.ts', { eager: true });
 ```
 
 That requires adding Vite import-meta types first. Do not introduce it casually; it is a build-contract change.
+
+## 6.1 Общие механизмы вместо случаев вида
+
+Date: 2026-08-23. Каждый пункт — обобщённая черта движка; вид приносит флаг или данные, а
+общий слой про вид не знает.
+
+| Механизм | Где | Контракт |
+| --- | --- | --- |
+| Состояние вида | `systems/ai/species_state.ts` | `speciesState(create)` → `of/peek/forget` поверх `WeakMap`. Поле в `AIState` ради одного вида запрещено: эту структуру носит каждая сущность мира, включая предметы на полу. |
+| Локальный индекс ящиков | `world/container_index.ts` | `containersInRoom`, `forEachContainerNear`, `nearestContainer`. Полный перебор `world.containers` в горячем пути запрещён — см. `optimization.md`. |
+| Прозрачность спрайта | `Entity.spriteAlpha` + `uSpriteAlpha` | 0..1, не задана — рисуется как есть, `<= 0.01` — не уходит в отрисовку вовсе. `render/webgl.ts` не знает, ЧЕЙ это эффект: маскировка, туман, фаза. |
+| Беззвучность | `systems/noise.ts`, флаг `silent` | Две двери: `publishActorNoise` (не оставляет следа в слухе мира) и `findNoiseForActor` (сам не слышит). Исключений в видах не заводить. |
+| Возврат съеденного | `systems/monster_drops.ts` | `dropMonsterLoot` вываливает `monster.inventory` ПЕРЕД сгенерированным лутом: носимая вещь — чужая, а не добыча вида. |
+| След смерти | `systems/danger_field.ts` | `blood_fx` кладёт импульс на ране и на смерти; `findBloodTrailCell` / `clearBloodTrailCell` читают его. На этом поле живут падальщик и споровый ковёр, друг о друге не зная. |
+
+Признак нарушения: `if (e.monsterKind === MonsterKind.X)` или `profile.id === 'x'` в общем
+слое. Правильная форма — флаг в `aiFlags` и проверка `monsterHasAIFlag`.
 
 ## 7. Data-Oriented Runtime Rules
 
