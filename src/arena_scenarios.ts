@@ -19,7 +19,7 @@
  * который заворачивает координаты по тору.
  */
 
-import { Cell, EntityType, AIGoal, Faction, MonsterKind, type Entity, type GameState } from './core/types';
+import { Cell, DoorState, EntityType, AIGoal, Faction, MonsterKind, type Entity, type GameState } from './core/types';
 import { W } from './core/types';
 import { World } from './core/world';
 import { seedGlobalRng, seededRandom } from './core/rand';
@@ -263,7 +263,17 @@ function buildCorridor(seed: number): ArenaScene {
   fillRect(world, O + 42, O, 10, 12, Cell.FLOOR);     // зал B
   fillRect(world, O + 10, O + 5, 32, 2, Cell.FLOOR);  // коридор в две клетки
   fillRect(world, O + 25, O + 5, 1, 2, Cell.WALL);
-  setCell(world, O + 25, O + 5, Cell.DOOR);           // перемычка в одну дверь
+  /* Перемычка в одну дверь — и обязательно С ЗАПИСЬЮ в реестре. Без записи
+   * `world.solid` держит дверную клетку сплошной НАВСЕГДА, открыть и сломать её
+   * нечем, а навигация её проходимой считает. Так эта сцена и стояла: её
+   * единственный проход между залами был фантомом, то есть коробка была
+   * запечатана наглухо, и все снятые с неё числа описывали мир, из которого
+   * нельзя выйти. Замок на класс — `tests/phantom-doors.test.ts`. */
+  const doorIdx = world.idx(O + 25, O + 5);
+  setCell(world, O + 25, O + 5, Cell.DOOR);
+  world.doors.set(doorIdx, {
+    idx: doorIdx, state: DoorState.CLOSED, roomA: -1, roomB: -1, keyId: '', timer: 0,
+  });
   world.cellVersion++;
 
   const scene = newScene(world, 'Коридор: пробка в двери', O + 26, O + 6, 14);
