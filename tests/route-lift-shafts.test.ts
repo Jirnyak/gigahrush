@@ -11,8 +11,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { W } from '../src/core/types';
+import { LiftDirection, W } from '../src/core/types';
+import { ITEMS } from '../src/data/items';
+import { PLOT_CHAIN } from '../src/data/plot';
 import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z } from '../src/data/procedural_floors';
+import { routeMoveCrossesSeam } from '../src/systems/procedural_floors';
 import {
   ROUTE_LIFTS_PER_DIRECTION,
   ROUTE_LIFT_GRID,
@@ -85,4 +88,29 @@ test('разные перегоны стоят в разных местах, о�
 test('шов кольца объявлен явно и ровно один', () => {
   const seams = ALL_Z.filter(z => isRouteSeamEdge(z));
   assert.deepEqual(seams, [FLOOR_RUN_MIN_Z], 'швов кольца должно быть ровно один');
+});
+
+/* ── Тор маршрута и цена шва ──────────────────────────────────────
+ * Маршрут замкнут по вертикали: терминусов нет, «дальше некуда» не бывает.
+ * Но шов не бесплатен — иначе с крыши уезжали бы прямо в финал, минуя весь
+ * маршрут, а это ровно тот бесплатный и случайный обход, который запрещён
+ * законом о замках. Ключ снимается с Вестников в Подаде: шаг цепочки прямо
+ * говорит, что они держат шахту. */
+
+test('шов пересекается ровно на двух шагах кольца, и больше нигде', () => {
+  const crossings: string[] = [];
+  for (const z of ALL_Z) {
+    if (routeMoveCrossesSeam(z, LiftDirection.DOWN)) crossings.push(`${z}↓`);
+    if (routeMoveCrossesSeam(z, LiftDirection.UP)) crossings.push(`${z}↑`);
+  }
+  assert.deepEqual(crossings.sort(), [`${FLOOR_RUN_MAX_Z}↑`, `${FLOOR_RUN_MIN_Z}↓`].sort());
+});
+
+test('ключ сквозной шахты выдаётся сюжетом и существует как предмет', () => {
+  assert.ok(ITEMS['through_shaft_key'], 'предмета нет в реестре');
+  const givers = PLOT_CHAIN.filter(step =>
+    step.rewardItem === 'through_shaft_key'
+    || (step.extraRewards ?? []).some(reward => reward.defId === 'through_shaft_key'));
+  assert.equal(givers.length, 1, 'ключ обязан иметь ровно один источник в цепочке');
+  assert.equal(givers[0].targetFloorZ, -40, 'источник ключа должен быть в Подаде');
 });

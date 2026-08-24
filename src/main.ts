@@ -154,6 +154,7 @@ import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
   countAmmo, removeItem, addItem, publishPlayerItemEvent, updateInventoryConditions,
+  hasItem,
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { createMobileControls, type MobileControls } from './mobile';
@@ -425,6 +426,7 @@ import {
   normalizeFloorRunSeed,
   resolveFloorRunRoute,
   floorRunSeed,
+  routeMoveCrossesSeam,
   setFloorRunState,
   type FloorRunEntry,
 } from './systems/procedural_floors';
@@ -6168,6 +6170,14 @@ function switchFloor(
   const directTargetEntry = targetEntry ?? (targetZ !== undefined ? floorRunEntryForZ(state, targetZ) : null);
   if ((targetZ !== undefined || targetEntry !== undefined) && !directTargetEntry) return;
   const fastTravel = directTargetEntry !== null;
+  // Шов кольца этажей проходим, но не бесплатен: без ключа сквозной шахты кабина
+  // не идёт. Иначе с крыши уезжали бы прямо в Пустоту, минуя весь маршрут, — тот
+  // самый бесплатный и случайный обход, который запрещён законом о замках.
+  if (!fastTravel && allowElevatorAnomaly && routeMoveCrossesSeam(state.currentZ, direction)
+      && !hasItem(player, 'through_shaft_key')) {
+    state.msgs.push(msg('Кабина не идёт: шахта сквозная, и её держат. Нужен ключ сквозной шахты.', state.time, '#f84'));
+    return;
+  }
   let nextFloor: number;
   const activeFloorInstance = (allowElevatorAnomaly && !fastTravel) ? getActiveFloorInstance(state) : null;
   let runEntry = fastTravel

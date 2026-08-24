@@ -856,6 +856,8 @@ export const ITEMS: Record<string, ItemDef> = {
   tut_cafe_key:{ id:'tut_cafe_key', name:'Ключ от столовой', type:ItemType.KEY, desc:'Служебный ключ от стартовой зоны.', spawnRooms:[], spawnW:0, value:0 },
   key:       { id:'key',       name:'Ключ',         type:ItemType.KEY,      desc:'Подходит к конкретной двери. Сверяйте дверь, прежде чем бежать к ней на сирене',       spawnRooms:[],                                 spawnW:0, value:50 },
 
+  through_shaft_key: { id:'through_shaft_key', name:'Ключ сквозной шахты', type:ItemType.KEY, desc:'Снят с Вестника, державшего шахту. Пока лифт держат, вниз с последнего яруса не уехать — и наверх с крыши тоже: шахта у мира одна и замкнута.', spawnRooms:[], spawnW:0, value:0, stack:1 },
+
   // ── Сюжетные предметы ──
   idol_chernobog: { id:'idol_chernobog', name:'Идол Чернобога', type:ItemType.MISC, desc:'Тёмная фигурка из неизвестного камня. Якову нужен целый образец, культисты ищут его как святыню.', spawnRooms:[RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE,RoomType.SMOKING], spawnW:1, value:200 },
   strange_clot: { id:'strange_clot', name:'Странный сгусток', type:ItemType.MISC, desc:'Пульсирующий остаток теневика. Яков просит держать в банке и не вскрывать в лифте.', spawnRooms:[], spawnW:0, value:500 },

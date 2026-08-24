@@ -38,6 +38,7 @@ import {
 } from './route_gates';
 import { portalBlocksDesignFloor } from './platform_bridge';
 import { rng } from '../core/rand';
+import { floorAboveZ, floorBelowZ } from '../data/route_lift_shafts';
 
 export interface FloorRunState {
   runSeed: number;
@@ -452,10 +453,24 @@ export function resolveFloorRunRoute(state: GameState, direction: LiftDirection)
   const run = ensureFloorRunState(state);
   const current = entryForZ(state, run.currentZ);
   if (current && routeDirectionBlockedByClosedGate(floorRunEntryFloorKey(current), direction, state)) return null;
-  const dz = direction === LiftDirection.DOWN ? -1 : 1;
-  const targetZ = run.currentZ + dz;
-  if (targetZ < FLOOR_RUN_MIN_Z || targetZ > FLOOR_RUN_MAX_Z) return null;
+  // Маршрут замкнут по вертикали: под последним ярусом лежит крыша. Терминусов
+  // у кольца нет, поэтому «дальше некуда» больше не бывает — бывает только шов,
+  // и он стоит ключа (см. `routeMoveCrossesSeam`).
+  const targetZ = direction === LiftDirection.DOWN ? floorBelowZ(run.currentZ) : floorAboveZ(run.currentZ);
   return entryForZ(state, targetZ);
+}
+
+/**
+ * Пересекает ли этот шаг шов кольца — единственное ребро, где «ниже» означает
+ * «на другом конце мира».
+ *
+ * Шов проходим, но не бесплатен: без ключа сквозной шахты кабина не идёт. Иначе
+ * с крыши попадали бы прямо в финал, минуя весь маршрут, — и это был бы ровно
+ * тот «бесплатный и случайный обход», который запрещён законом о замках.
+ */
+export function routeMoveCrossesSeam(currentZ: number, direction: LiftDirection): boolean {
+  const targetZ = direction === LiftDirection.DOWN ? floorBelowZ(currentZ) : floorAboveZ(currentZ);
+  return Math.abs(targetZ - currentZ) > 1;
 }
 
 export function commitFloorRunEntry(state: GameState, entry: FloorRunEntry): void {

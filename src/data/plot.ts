@@ -379,7 +379,10 @@ export const PLOT_CHAIN: PlotStep[] = [
     desc: 'Три Вестника держат шахту. Найди их в Подаде и спиши. Пока они дышат, лифты стоят, а тоннели зарастают биомассой прямо по регламенту.',
     targetMonsterKind: MonsterKind.HERALD, killNeeded: 3,
     rewardItem: 'psi_void_needle', rewardCount: 1,
-    extraRewards: [{ defId: 'antidep', count: 2 }],
+    // Ключ сквозной шахты снимается с Вестников: шаг прямо говорит, что они
+    // держат шахту и «пока они дышат, лифты стоят». Он же открывает шов кольца
+    // этажей — переход между последним ярусом и крышей.
+    extraRewards: [{ defId: 'antidep', count: 2 }, { defId: 'through_shaft_key', count: 1 }],
     targetFloorZ: -40,
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     relationDelta: 10, xpReward: 220,
