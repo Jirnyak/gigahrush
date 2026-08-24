@@ -20,6 +20,7 @@ import { pathBlockedAt } from '../src/core/path_blockers';
 import { SURFACE_FLAG_CHALK_MAP, World } from '../src/core/world';
 import { floorKeyForFloorInstance, floorKeyForProcedural, floorKeyForDesign } from '../src/data/floor_keys';
 import { PROCEDURAL_FLOOR_ZS, proceduralFloorKey } from '../src/data/procedural_floors';
+import { ROUTE_LIFTS_PER_DIRECTION } from '../src/data/route_lift_shafts';
 import {
   collectFloorLiftAnchors,
   captureFloorMemory,
@@ -579,285 +580,69 @@ test('floor memory byte budget evicts least-recent captured floors', () => {
   clearFloorMemory();
 });
 
-test('route lift layout mirrors return lifts and normalizes both directions to sixteen', () => {
-  const source = new World();
-  const target = new World();
-  for (let y = 24; y <= 72; y++) {
-    for (let x = 24; x <= 72; x++) {
-      source.cells[source.idx(x, y)] = Cell.FLOOR;
-      target.cells[target.idx(x, y)] = Cell.FLOOR;
-    }
-  }
+/* ── Маршрутные лифты: постановка по шахтам ────────────────────────
+ *
+ * Прежние десять тестов проверяли снятую машинерию: перенос якорей с этажа
+ * отправления, пин «того самого» лифта, перераспределение сгрудившихся,
+ * добор до шестнадцати. Всего этого больше нет — и не потому, что стало
+ * хуже, а потому, что стало не нужно: оба этажа перегона выводят позиции из
+ * одного ключа ребра, и обратный лифт стоит в клетке отправления по
+ * построению. Ниже проверяется новый контракт. */
 
-  const anchors = [
-    [30, 30], [38, 30], [46, 30], [54, 30],
-    [30, 46], [38, 46], [46, 46], [54, 46],
-    [62, 46], [30, 62], [38, 62], [46, 62],
-    [54, 62], [62, 62], [62, 30], [70, 62],
-  ] as const;
-  for (const [x, y] of anchors) {
-    const liftIdx = source.idx(x, y);
-    const buttonIdx = source.idx(x, y + 1);
-    source.cells[liftIdx] = Cell.LIFT;
-    source.liftDir[liftIdx] = LiftDirection.DOWN;
-    source.features[buttonIdx] = Feature.LIFT_BUTTON;
-    source.liftDir[buttonIdx] = LiftDirection.DOWN;
-    target.features[target.idx(x, y + 1)] = Feature.LIFT_BUTTON;
-    target.liftDir[target.idx(x, y + 1)] = LiftDirection.UP;
-  }
-
-  const mirror = collectFloorLiftAnchors(source, LiftDirection.DOWN);
-  const result = ensureFloorRouteLiftLayout(target, 32.5, 31.5, [LiftDirection.DOWN, LiftDirection.UP], {
-    mirror: { direction: LiftDirection.UP, anchors: mirror },
-  });
-
-  assert.equal(result.up, 16);
-  assert.equal(result.down, 16);
-  assert.equal(result.mirrored, 16);
-  for (const anchor of mirror) {
-    const liftIdx = target.idx(anchor.liftX, anchor.liftY);
-    assert.equal(target.cells[liftIdx], Cell.LIFT);
-    assert.equal(target.liftDir[liftIdx], LiftDirection.UP);
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      assert.notEqual(target.features[target.idx(anchor.liftX + dx, anchor.liftY + dy)], Feature.LIFT_BUTTON);
-    }
-  }
+test('рантайм ставит те же шестнадцать лифтов на направление, что и генерация', () => {
+  const world = openFloorWorld();
+  const result = ensureFloorRouteLiftLayout(world, 0x51ff77, 0, 228.5, 228.5);
+  assert.equal(result.up, ROUTE_LIFTS_PER_DIRECTION, `вверх ${result.up}`);
+  assert.equal(result.down, ROUTE_LIFTS_PER_DIRECTION, `вниз ${result.down}`);
 });
 
-test('route lift layout distributes filled lifts across the reachable floor', () => {
+test('постановка идемпотентна: второй прогон ничего не меняет', () => {
+  const world = openFloorWorld();
+  ensureFloorRouteLiftLayout(world, 0x51ff77, 0, 228.5, 228.5);
+  const first = liftCellSignature(world);
+  const again = ensureFloorRouteLiftLayout(world, 0x51ff77, 0, 228.5, 228.5);
+  assert.equal(again.up, ROUTE_LIFTS_PER_DIRECTION);
+  assert.equal(again.down, ROUTE_LIFTS_PER_DIRECTION);
+  assert.deepEqual(liftCellSignature(world), first, 'повторный прогон сдвинул лифты');
+});
+
+test('лифты вниз этажа совпадают с лифтами вверх этажа под ним', () => {
+  const upper = openFloorWorld();
+  const lower = openFloorWorld();
+  ensureFloorRouteLiftLayout(upper, 0x51ff77, 0, 228.5, 228.5);
+  ensureFloorRouteLiftLayout(lower, 0x51ff77, -1, 228.5, 228.5);
+  const down = liftCellSignature(upper).filter(entry => entry.endsWith(':down')).map(entry => entry.split(':')[0]);
+  const up = liftCellSignature(lower).filter(entry => entry.endsWith(':up')).map(entry => entry.split(':')[0]);
+  assert.deepEqual(down, up, 'перегон разошёлся по клеткам');
+});
+
+test('обратный лифт находится у точки отправления', () => {
+  const world = openFloorWorld();
+  const seeded = ensureFloorRouteLiftLayout(world, 0x51ff77, 0, 228.5, 228.5);
+  assert.ok(seeded.up > 0);
+  const anyUp = liftCellSignature(world).find(entry => entry.endsWith(':up'))!;
+  const idx = Number(anyUp.split(':')[0]);
+  const lx = (idx % W) + 0.5;
+  const ly = ((idx / W) | 0) + 0.5;
+  const layout = ensureFloorRouteLiftLayout(world, 0x51ff77, 0, lx, ly, LiftDirection.UP);
+  assert.equal(layout.primaryLiftIdx, idx, 'ближайшим оказался не тот лифт, у которого стоим');
+  assert.ok(layout.primaryAccessIdx >= 0, 'у лифта нет проходимой клетки перед ним');
+});
+
+function openFloorWorld(): World {
   const world = new World();
-  for (let y = 100; y < 356; y++) {
-    for (let x = 100; x < 356; x++) {
-      world.cells[world.idx(x, y)] = Cell.FLOOR;
-    }
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) world.set(x, y, Cell.FLOOR);
+  return world;
+}
+
+function liftCellSignature(world: World): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.LIFT || world.features[i] === Feature.MACHINE) continue;
+    out.push(`${i}:${world.liftDir[i] === LiftDirection.UP ? 'up' : 'down'}`);
   }
-
-  const result = ensureFloorRouteLiftLayout(world, 228.5, 228.5, [LiftDirection.DOWN], {
-    countPerDirection: 8,
-  });
-
-  assert.equal(result.down, 8);
-  assert.equal(result.placed, 8);
-  assert.equal(minLiftDistance(world, LiftDirection.DOWN) >= 96, true);
-});
-
-test('route lift layout redistributes existing clustered route lifts', () => {
-  const world = new World();
-  for (let y = 100; y < 356; y++) {
-    for (let x = 100; x < 356; x++) {
-      world.cells[world.idx(x, y)] = Cell.FLOOR;
-    }
-  }
-  for (let i = 0; i < 8; i++) {
-    const liftIdx = world.idx(220 + i, 220);
-    world.cells[liftIdx] = Cell.LIFT;
-    world.wallTex[liftIdx] = Tex.LIFT_DOOR;
-    world.liftDir[liftIdx] = LiftDirection.DOWN;
-  }
-
-  const result = ensureFloorRouteLiftLayout(world, 228.5, 228.5, [LiftDirection.DOWN], {
-    countPerDirection: 8,
-  });
-
-  assert.equal(result.down, 8);
-  assert.equal(result.demoted, 8);
-  assert.equal(result.placed, 8);
-  assert.equal(minLiftDistance(world, LiftDirection.DOWN) >= 96, true);
-});
-
-test('route lift layout recomputes zone lift flags after demotion and placement', () => {
-  const world = new World();
-  world.zones = [testZone(0, true), testZone(1, false)];
-  world.zoneMap.fill(0);
-
-  const staleLiftIdx = world.idx(12, 12);
-  world.cells[staleLiftIdx] = Cell.LIFT;
-  world.liftDir[staleLiftIdx] = LiftDirection.DOWN;
-  world.zoneMap[staleLiftIdx] = 0;
-
-  for (let y = 40; y <= 48; y++) {
-    for (let x = 40; x <= 48; x++) {
-      const idx = world.idx(x, y);
-      world.cells[idx] = Cell.FLOOR;
-      world.zoneMap[idx] = 1;
-    }
-  }
-
-  const result = ensureFloorRouteLiftLayout(world, 44.5, 44.5, [LiftDirection.UP], {
-    countPerDirection: 1,
-  });
-
-  assert.equal(result.demoted, 1);
-  assert.equal(result.up, 1);
-  assert.equal(world.zones[0]?.hasLift, false);
-  assert.equal(world.zones[1]?.hasLift, true);
-});
-
-test('route lift layout forces mirrored anchors by carving bounded access', () => {
-  const source = new World();
-  const target = new World();
-  const sourceLift = source.idx(80, 80);
-  source.cells[sourceLift] = Cell.LIFT;
-  source.liftDir[sourceLift] = LiftDirection.DOWN;
-
-  for (let x = 10; x <= 16; x++) {
-    target.cells[target.idx(x, 10)] = Cell.FLOOR;
-  }
-
-  const mirror = collectFloorLiftAnchors(source, LiftDirection.DOWN);
-  const result = ensureFloorRouteLiftLayout(target, 10.5, 10.5, [LiftDirection.UP], {
-    countPerDirection: 1,
-    mirror: { direction: LiftDirection.UP, anchors: mirror },
-  });
-
-  assert.equal(result.up, 1);
-  assert.equal(result.mirrored, 1);
-  assert.equal(target.cells[target.idx(80, 80)], Cell.LIFT);
-  assert.equal(target.liftDir[target.idx(80, 80)], LiftDirection.UP);
-  assert.equal(
-    [
-      target.idx(80, 79),
-      target.idx(80, 81),
-      target.idx(79, 80),
-      target.idx(81, 80),
-    ].some(idx => target.cells[idx] === Cell.FLOOR),
-    true,
-  );
-});
-// Round trip of the up/down mirror guarantee: ride a lift down, then ride the
-// same lift back up and arrive at a lift again. The break was on departure —
-// re-normalization redistributed the mirrored lifts (their spacing came from the
-// previous floor), including the one under the player, so the return floor
-// mirrored a set that no longer held the player's own coordinates.
-test('route lift layout pins the ridden lift so the return trip lands on a mirrored lift', () => {
-  const openFloor = (): World => {
-    const world = new World();
-    for (let y = 100; y < 356; y++) {
-      for (let x = 100; x < 356; x++) world.cells[world.idx(x, y)] = Cell.FLOOR;
-    }
-    return world;
-  };
-
-  // Departure floor: 16 DOWN lifts on a tight grid (spacing of a smaller floor).
-  const living = openFloor();
-  for (let i = 0; i < 16; i++) {
-    const idx = living.idx(120 + (i % 4) * 8, 120 + Math.floor(i / 4) * 8);
-    living.cells[idx] = Cell.LIFT;
-    living.liftDir[idx] = LiftDirection.DOWN;
-  }
-  const usedDownIdx = living.idx(120, 120);
-  const downAnchors = collectFloorLiftAnchors(living, LiftDirection.DOWN, 16);
-  assert.equal(downAnchors[0]?.liftIdx, usedDownIdx);
-
-  // Arrival below: the ridden lift is mirrored as the return UP lift next to the
-  // player's carried-over coordinates.
-  const below = openFloor();
-  const arrival = ensureFloorRouteLiftLayout(below, 120.5, 121.5, [LiftDirection.DOWN, LiftDirection.UP], {
-    countPerDirection: 16,
-    mirror: { direction: LiftDirection.UP, anchors: downAnchors },
-  });
-  assert.equal(arrival.mirrored, 16);
-  const usedUpIdx = below.idx(120, 120);
-  assert.equal(below.cells[usedUpIdx], Cell.LIFT);
-  assert.equal(below.liftDir[usedUpIdx], LiftDirection.UP);
-
-  // Departure back up: normalization must not touch the lift being ridden.
-  ensureFloorRouteLiftLayout(below, 120.5, 121.5, [LiftDirection.DOWN, LiftDirection.UP], {
-    countPerDirection: 16,
-    pinnedLiftIdx: usedUpIdx,
-  });
-  assert.equal(below.cells[usedUpIdx], Cell.LIFT);
-  assert.equal(below.liftDir[usedUpIdx], LiftDirection.UP);
-
-  const upAnchors = collectFloorLiftAnchors(below, LiftDirection.UP, 16);
-  const usedAnchor = upAnchors.findIndex(anchor => anchor.liftIdx === usedUpIdx);
-  assert.notEqual(usedAnchor, -1);
-  upAnchors.unshift(upAnchors.splice(usedAnchor, 1)[0]);
-
-  // Return: the regenerated floor above mirrors a DOWN lift back at those coords.
-  const returned = openFloor();
-  const result = ensureFloorRouteLiftLayout(returned, 120.5, 121.5, [LiftDirection.DOWN, LiftDirection.UP], {
-    countPerDirection: 16,
-    mirror: { direction: LiftDirection.DOWN, anchors: upAnchors },
-  });
-  assert.equal(result.down, 16);
-  assert.equal(returned.cells[returned.idx(120, 120)], Cell.LIFT);
-  assert.equal(returned.liftDir[returned.idx(120, 120)], LiftDirection.DOWN);
-});
-
-test('mirrored route lifts keep the ridden anchor when the anchor set exceeds the per-direction cap', () => {
-  const source = new World();
-  const target = new World();
-  for (let y = 100; y < 200; y++) {
-    for (let x = 100; x < 200; x++) {
-      source.cells[source.idx(x, y)] = Cell.FLOOR;
-      target.cells[target.idx(x, y)] = Cell.FLOOR;
-    }
-  }
-  for (let i = 0; i < 6; i++) {
-    const idx = source.idx(110 + i * 6, 110);
-    source.cells[idx] = Cell.LIFT;
-    source.liftDir[idx] = LiftDirection.DOWN;
-  }
-  const anchors = collectFloorLiftAnchors(source, LiftDirection.DOWN, 6);
-  assert.equal(anchors.length, 6);
-
-  // anchors[0] is the ridden lift: it survives the random subset slice.
-  const result = ensureFloorRouteLiftLayout(target, 110.5, 111.5, [LiftDirection.DOWN], {
-    countPerDirection: 2,
-    mirror: { direction: LiftDirection.DOWN, anchors },
-  });
-  assert.equal(result.mirrored >= 1, true);
-  assert.equal(target.cells[target.idx(110, 110)], Cell.LIFT);
-  assert.equal(target.liftDir[target.idx(110, 110)], LiftDirection.DOWN);
-});
-
-// Lifts are samosbor-proof once placed, but that does not license stamping one
-// over protected apartment space — and most anchors that fail are not protected
-// at all, they simply have nothing that can reach them. So the ridden lift
-// relocates to the nearest cell that can actually be entered, and the caller
-// spawns the player at the reported access cell.
-test('mirrored ridden lift relocates instead of overwriting protected apartment cells', () => {
-  const target = new World();
-  for (let y = 100; y < 200; y++) {
-    for (let x = 100; x < 200; x++) target.cells[target.idx(x, y)] = Cell.FLOOR;
-  }
-  // The ridden lift's coordinate lands inside a protected apartment block.
-  for (let y = 118; y <= 122; y++) {
-    for (let x = 118; x <= 122; x++) target.aptMask[target.idx(x, y)] = 1;
-  }
-
-  const source = new World();
-  for (let y = 100; y < 200; y++) {
-    for (let x = 100; x < 200; x++) source.cells[source.idx(x, y)] = Cell.FLOOR;
-  }
-  const riddenIdx = source.idx(120, 120);
-  source.cells[riddenIdx] = Cell.LIFT;
-  source.liftDir[riddenIdx] = LiftDirection.DOWN;
-  const anchors = collectFloorLiftAnchors(source, LiftDirection.DOWN, 16);
-
-  const result = ensureFloorRouteLiftLayout(target, 130.5, 130.5, [LiftDirection.UP], {
-    countPerDirection: 4,
-    mirror: { direction: LiftDirection.UP, anchors },
-  });
-
-  // Protection held.
-  assert.equal(target.cells[target.idx(120, 120)] === Cell.LIFT, false);
-  assert.equal(target.aptMask[target.idx(120, 120)], 1);
-  // The ridden lift still exists, nearby, and the reported access cell is walkable.
-  assert.equal(result.primaryLiftIdx >= 0, true);
-  assert.equal(target.cells[result.primaryLiftIdx], Cell.LIFT);
-  assert.equal(target.liftDir[result.primaryLiftIdx], LiftDirection.UP);
-  const shift = Math.abs(target.delta(120, result.primaryLiftIdx % W))
-    + Math.abs(target.delta(120, (result.primaryLiftIdx / W) | 0));
-  assert.equal(shift <= 48, true);
-  assert.equal(result.primaryAccessIdx >= 0, true);
-  assert.equal(target.cells[result.primaryAccessIdx], Cell.FLOOR);
-  // The access cell touches the lift, so the player steps out right next to it.
-  const adjacent = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) =>
-    target.idx((result.primaryLiftIdx % W) + dx, ((result.primaryLiftIdx / W) | 0) + dy) === result.primaryAccessIdx);
-  assert.equal(adjacent, true);
-});
+  return out.sort();
+}
 
 test('tryBase64ToBytes handles invalid base64 by returning null', () => {
   const originalBuffer = globalThis.Buffer;
@@ -869,32 +654,6 @@ test('tryBase64ToBytes handles invalid base64 by returning null', () => {
   }
 });
 
-test('ensureFloorRouteLiftLayout fills sparse fixed lifts up to 16 for roof and void boundary directions', () => {
-  const world = new World();
-  for (let y = 100; y < 356; y++) {
-    for (let x = 100; x < 356; x++) {
-      world.cells[world.idx(x, y)] = Cell.FLOOR;
-    }
-  }
-  for (let i = 0; i < 2; i++) {
-    const liftIdx = world.idx(150 + i * 20, 150);
-    world.cells[liftIdx] = Cell.LIFT;
-    world.wallTex[liftIdx] = Tex.LIFT_DOOR;
-    world.liftDir[liftIdx] = LiftDirection.DOWN;
-  }
-
-  const result = ensureFloorRouteLiftLayout(world, 228.5, 228.5, [LiftDirection.DOWN], {
-    countPerDirection: 16,
-  });
-
-  assert.equal(result.down, 16);
-  assert.equal(result.placed >= 14 && result.placed <= 16, true);
-  let totalDown = 0;
-  for (let i = 0; i < world.cells.length; i++) {
-    if (world.cells[i] === Cell.LIFT && world.liftDir[i] === LiftDirection.DOWN) totalDown++;
-  }
-  assert.equal(totalDown, 16);
-});
 
 test('floor memory delta round-trips a mutated dense floor against a regenerated base', () => {
   const base = buildDeltaFloor();
@@ -1056,27 +815,3 @@ test('floor memory delta survives the capture→save→restore→take pipeline',
  * W² scans inside one frame. The lock: a settled floor must come back byte-for-byte
  * identical on a repeat call and report no work, so a stale cache cannot hide a
  * lift the pass should have seen. */
-test('route lift layout is idempotent on a settled floor and reports no further work', () => {
-  const world = new World();
-  for (let y = 100; y < 356; y++) {
-    for (let x = 100; x < 356; x++) {
-      world.cells[world.idx(x, y)] = Cell.FLOOR;
-    }
-  }
-  const dirs = [LiftDirection.DOWN, LiftDirection.UP];
-
-  const first = ensureFloorRouteLiftLayout(world, 228.5, 228.5, dirs, { countPerDirection: 4 });
-  assert.equal(first.down, 4);
-  assert.equal(first.up, 4);
-  assert.equal(first.placed, 8);
-  const settled = Uint8Array.from(world.cells);
-  const settledDirs = Uint8Array.from(world.liftDir);
-
-  const second = ensureFloorRouteLiftLayout(world, 228.5, 228.5, dirs, { countPerDirection: 4 });
-  assert.equal(second.down, 4);
-  assert.equal(second.up, 4);
-  assert.equal(second.placed, 0, 'settled floor needs no new lifts');
-  assert.equal(second.demoted, 0, 'settled floor loses no lifts');
-  assert.deepEqual(Array.from(world.cells), Array.from(settled), 'cells untouched by the repeat pass');
-  assert.deepEqual(Array.from(world.liftDir), Array.from(settledDirs), 'lift directions untouched');
-});

@@ -357,6 +357,11 @@ export function unlockedFloorZs(state: GameState): readonly number[] {
   return ensureFloorRunState(state).unlockedZs;
 }
 
+/** Сид прогона: из него выводятся шахты маршрутных лифтов. */
+export function floorRunSeed(state: GameState): number {
+  return ensureFloorRunState(state).runSeed;
+}
+
 export function ensureFloorRunState(state: GameState, currentZ = state.currentZ): FloorRunState {
   const host = state as FloorRunHost;
   if (host.floorRun && normalizedFloorRuns.has(host.floorRun)) return host.floorRun;

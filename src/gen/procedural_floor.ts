@@ -27,6 +27,7 @@ import {
   type WorldContainer,
 } from '../core/types';
 import { World } from '../core/world';
+import { stampRouteLiftShafts } from '../world/route_lifts';
 import { rng, withSeededRandom, xorshift32 } from '../core/rand';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { ITEM_TAGS, getStack, spawnCount } from '../data/items';
@@ -92,7 +93,6 @@ import {
   decorateRoom,
   ensureConnectivity,
   generateZones,
-  stampRouteLiftShafts,
   isConnectivityWalkable,
   placeDoorAt,
   roomExit,

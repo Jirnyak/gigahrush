@@ -8,7 +8,8 @@ import {
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { hashSeed, withSeededRandom } from '../../core/rand';
 import { floorRunZAllowsNpcs} from '../../data/procedural_floors';
-import { generateZones, stampRouteLiftShafts } from '../shared';
+import { generateZones } from '../shared';
+import { stampRouteLiftShafts } from '../../world/route_lifts';
 import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';

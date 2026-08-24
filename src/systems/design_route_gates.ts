@@ -3,11 +3,10 @@
 import { Cell, LiftDirection, type Entity, type GameState } from '../core/types';
 import { World } from '../core/world';
 import { ensureFloorRouteLiftLayout } from './floor_memory';
+import { floorRunSeed } from './procedural_floors';
 import {
   currentFloorRunEntry,
   floorRunEntryFloorKey,
-  floorRunEntryLiftDirections,
-  ROUTE_LIFTS_PER_DIRECTION,
 } from './procedural_floors';
 import { openRouteGatesForFloor } from './route_gates';
 
@@ -24,10 +23,11 @@ export function applyDesignRouteGates(world: World, player: Entity, state: GameS
   const openGates = openRouteGatesForFloor(floorKey, state);
   const openDirections = [...new Set(openGates.flatMap(gate => gate.liftMutation.directions))];
   if (openDirections.length === 0) return false;
-  const openGateIds = new Set(openGates.map(gate => gate.id));
   const hadOpenLifts = openDirections.every(direction => hasUsableLift(world, direction));
-  ensureFloorRouteLiftLayout(world, player.x, player.y, floorRunEntryLiftDirections(entry, openGateIds), {
-    countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
-  });
+  // Постановка одна на всех: шахты ребра. Ворота маршрута больше не «добавляют
+  // направление» — оба направления есть на каждом этаже по закону, — но пересчёт
+  // после открытия ворот оставлен: он возвращает лифты на место, если геометрию
+  // между делом переписал самосбор.
+  ensureFloorRouteLiftLayout(world, floorRunSeed(state), state.currentZ, player.x, player.y);
   return !hadOpenLifts && openDirections.every(direction => hasUsableLift(world, direction));
 }

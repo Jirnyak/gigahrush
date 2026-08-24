@@ -385,7 +385,6 @@ import {
 import {
   captureFloorMemory,
   clearFloorMemory,
-  collectFloorLiftAnchors,
   ensureFloorRouteLiftLayout,
   floorMemoryStateForSave,
   floorMemoryKeyForStoryFloor,
@@ -393,9 +392,7 @@ import {
   invalidateFloorMemory,
   restoreFloorMemoryFromSave,
   takeFloorMemory,
-  type FloorLiftAnchor,
   type FloorMemoryLoad,
-  type FloorRouteLiftMirror,
 } from './systems/floor_memory';
 import { withPreservedGenerationRuntime } from './systems/generation_runtime_guard';
 import {
@@ -418,7 +415,6 @@ import {
   floorRunSaveHasRestorableRoute,
   floorRunEntryAllowsNpcs,
   floorRunEntryFloorKey,
-  floorRunEntryLiftDirections,
   floorRunEntryKindLabel,
   floorRunEntryLiftLabel,
   floorRunEntryRole,
@@ -428,11 +424,10 @@ import {
   nextFloorRunSamosborCooldown,
   normalizeFloorRunSeed,
   resolveFloorRunRoute,
-  ROUTE_LIFTS_PER_DIRECTION,
+  floorRunSeed,
   setFloorRunState,
   type FloorRunEntry,
 } from './systems/procedural_floors';
-import { openRouteGateIds } from './systems/route_gates';
 import {
   clearLiftArachnaActive,
   ensureLiftArachnaState,
@@ -3069,7 +3064,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     clearLiftArachnaActive(state);
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
-    prepareEditableFloor(undefined, false, !loaded.fromMemory);
+    prepareEditableFloor(false, !loaded.fromMemory);
     resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     restoreVoidReturnPortalForCurrentWorld();
@@ -3912,48 +3907,17 @@ function placeNetTerminalGenContentForCurrentFloor(): void {
   placeGeneratedInteractablesForCurrentFloor(world, state);
 }
 
-function currentRouteLiftDirections(): LiftDirection[] {
-  const entry = currentFloorRunEntry(state);
-  return floorRunEntryLiftDirections(entry, openRouteGateIds(state));
-}
 
-function ensureCurrentRouteLiftLayout(mirror?: FloorRouteLiftMirror, pinnedLiftIdx = -1): void {
+function ensureCurrentRouteLiftLayout(): void {
   if (getActiveFloorInstance(state)) return;
-  ensureFloorRouteLiftLayout(world, player.x, player.y, currentRouteLiftDirections(), {
-    countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
-    mirror,
-    pinnedLiftIdx,
-  });
+  ensureFloorRouteLiftLayout(world, floorRunSeed(state), state.currentZ, player.x, player.y);
 }
 
-/** The route lift cell the player is riding right now: the look cell first (same
- * 1.5-cell probe the `E` dispatcher uses to open the lift), then the 3x3 around
- * them. Departure normalization pins it, and it heads the mirror anchor list, so
- * the return lift on the next floor lands at the player's arrival coordinates. */
-function playerRouteLiftIdx(direction: LiftDirection): number {
-  const usable = (idx: number): boolean => world.cells[idx] === Cell.LIFT
-    && (world.liftDir[idx] as LiftDirection) === direction
-    && world.features[idx] !== Feature.MACHINE;
-  const lookIdx = world.idx(
-    Math.floor(player.x + Math.cos(player.angle) * 1.5),
-    Math.floor(player.y + Math.sin(player.angle) * 1.5),
-  );
-  if (usable(lookIdx)) return lookIdx;
-  const px = Math.floor(player.x);
-  const py = Math.floor(player.y);
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const idx = world.idx(px + dx, py + dy);
-      if (usable(idx)) return idx;
-    }
-  }
-  return -1;
-}
 
-function prepareEditableFloor(mirror?: FloorRouteLiftMirror, normalizeRouteLifts = true, replayEditorPatch = true): void {
+function prepareEditableFloor(normalizeRouteLifts = true, replayEditorPatch = true): void {
   if (replayEditorPatch) replayMapEditorForCurrentFloor();
   placeNetTerminalGenContentForCurrentFloor();
-  if (normalizeRouteLifts) ensureCurrentRouteLiftLayout(mirror);
+  if (normalizeRouteLifts) ensureCurrentRouteLiftLayout();
   preparePseudoliftForCurrentFloor(world, state);
 }
 
@@ -6240,18 +6204,13 @@ function switchFloor(
   if (route.activeInstance) {
     spreadElevatorInstanceRumor(world, entities, player, state, route.activeInstance);
   }
-  let departureLiftAnchors: FloorLiftAnchor[] = [];
   if (!activeFloorInstance && runEntry) {
     // The lift under the player must survive normalization and lead the mirror
     // set; otherwise a redistribution pass moves it and the return lift on the
     // next floor is mirrored somewhere the player never stood.
-    const usedLiftIdx = playerRouteLiftIdx(direction);
-    ensureCurrentRouteLiftLayout(undefined, usedLiftIdx);
-    departureLiftAnchors = collectFloorLiftAnchors(world, direction, ROUTE_LIFTS_PER_DIRECTION);
-    const usedAnchor = departureLiftAnchors.findIndex(anchor => anchor.liftIdx === usedLiftIdx);
-    if (usedAnchor > 0) {
-      departureLiftAnchors.unshift(departureLiftAnchors.splice(usedAnchor, 1)[0]);
-    }
+    // Якоря отправления больше не собираются: обратный лифт стоит в той же
+    // клетке по построению шахт, переносить нечего.
+    ensureCurrentRouteLiftLayout();
   }
 
   // Save player position for same-xy spawn
@@ -6296,10 +6255,6 @@ function switchFloor(
     nextEntityId.v = __maxId + 1;
     loadingProgress('Заселяем этаж', 55);
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
-
-    const routeLiftMirror = !activeFloorInstance && !route.activeInstance && generatedRunEntry && departureLiftAnchors.length > 0
-      ? { direction: returnDirection, anchors: departureLiftAnchors }
-      : undefined;
     // When the ridden lift's return counterpart could not land on the departure
     // coordinates (protected apartment space, or no reachable cell to open into),
     // it is relocated a few cells over — follow it, or the player steps out of a
@@ -6307,13 +6262,13 @@ function switchFloor(
     let arrivalX = savedX;
     let arrivalY = savedY;
     if (!route.activeInstance && !getActiveFloorInstance(state)) {
-      const layout = ensureFloorRouteLiftLayout(world, savedX, savedY, currentRouteLiftDirections(), {
-        countPerDirection: ROUTE_LIFTS_PER_DIRECTION,
-        mirror: routeLiftMirror,
-      });
-      const anchor = routeLiftMirror?.anchors[0];
-      const anchorIdx = anchor ? world.idx(anchor.liftX, anchor.liftY) : -1;
-      if (layout.primaryAccessIdx >= 0 && layout.primaryLiftIdx !== anchorIdx) {
+      // Обратный лифт стоит в клетке отправления по построению: оба этажа
+      // перегона выводят шахты из одного ключа ребра. Переносить якоря больше
+      // не нужно; следовать за лифтом надо только там, где шахта сошла с места
+      // (защита, дверной проём, горловина коридора).
+      const layout = ensureFloorRouteLiftLayout(world, floorRunSeed(state), state.currentZ, savedX, savedY, returnDirection);
+      const departureIdx = world.idx(Math.floor(savedX), Math.floor(savedY));
+      if (layout.primaryAccessIdx >= 0 && layout.primaryAccessIdx !== departureIdx) {
         arrivalX = (layout.primaryAccessIdx % W) + 0.5;
         arrivalY = ((layout.primaryAccessIdx / W) | 0) + 0.5;
       }
@@ -6454,7 +6409,7 @@ function switchFloor(
     loadingProgress('Расставляем лифты и двери', 70);
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
-    prepareEditableFloor(routeLiftMirror, false, !loaded.fromMemory);
+    prepareEditableFloor(false, !loaded.fromMemory);
     resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
