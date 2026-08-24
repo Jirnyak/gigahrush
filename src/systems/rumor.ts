@@ -11,6 +11,7 @@ import { chernobogDocketItemRumorId } from '../data/chernobog_docket';
 import { ITEMS, isSilverSlimeItem } from '../data/items';
 import { RUMORS, type RumorDef, type RumorLead, type RumorReveal, type RumorTopic } from '../data/rumors';
 import { monsterTypeName } from '../entities/monster';
+import { floorDisplayNameForZ } from '../data/floor_names';
 import { type ContextSnapshot } from './context';
 import { renderMarkovRumorFlavor } from './markov_rumor';
 import { routeAdapterSpeech } from './markov_router_adapters';
@@ -410,15 +411,6 @@ function renderRumor(
   }).text;
 }
 
-const FLOOR_NAMES: Record<number, string> = {
-  [34]: 'Министерство',
-  [2]: 'Квартиры',
-  [-6]: 'Жилая зона',
-  [-14]: 'Коллекторы',
-  [-40]: 'Ад',
-  [-48]: 'Пустота',
-};
-
 const ROOM_TYPE_NAMES: Record<RoomType, string> = {
   [RoomType.LIVING]: 'жилая комната',
   [RoomType.KITCHEN]: 'кухня',
@@ -479,11 +471,7 @@ function formatLeadLine(rumor: RumorDef, event?: RumorEventRecord): string {
 
 function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
-  if (lead.z !== undefined) {
-    const floorName = FLOOR_NAMES[lead.z];
-    if (floorName) parts.push(floorName);
-    else parts.push(`этаж ${lead.z}`);
-  }
+  if (lead.z !== undefined) parts.push(floorDisplayNameForZ(lead.z));
   if (lead.zoneHint) parts.push(lead.zoneHint);
   if (lead.roomDefId) parts.push(lead.roomDefId);
   else if (lead.roomType !== undefined) parts.push(ROOM_TYPE_NAMES[lead.roomType]);
@@ -521,11 +509,7 @@ function eventRoomName(event: RumorEventRecord): string {
 
 function formatEventLead(event: RumorEventRecord): string {
   const parts: string[] = [];
-  if (event.z !== undefined) {
-    const floorName = FLOOR_NAMES[event.z];
-    if (floorName) pushLeadPart(parts, floorName);
-    else pushLeadPart(parts, `этаж ${event.z}`);
-  }
+  if (event.z !== undefined) pushLeadPart(parts, floorDisplayNameForZ(event.z));
   const zoneName = eventZoneName(event);
   if (zoneName) pushLeadPart(parts, zoneName);
   else if (event.zoneId !== undefined) pushLeadPart(parts, `зона ${event.zoneId + 1}`);
@@ -594,7 +578,7 @@ export function describeRumorReveal(reveal: RumorReveal): string {
 function formatReveal(reveal: RumorReveal): string {
   switch (reveal.kind) {
     case 'floor':
-      return FLOOR_NAMES[reveal.z];
+      return floorDisplayNameForZ(reveal.z);
     case 'zone':
       if (reveal.zoneId !== undefined) return `зона ${reveal.zoneId + 1}`;
       if (reveal.faction !== undefined) return `зона: ${ZONE_FACTION_NAMES[reveal.faction] ?? 'чужая'}`;

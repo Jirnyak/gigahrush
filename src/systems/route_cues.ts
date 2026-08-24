@@ -28,15 +28,7 @@ import {
 } from './procedural_floors';
 import { isPlayerEntity } from './player_actor';
 import { registerDebugCommand } from './debug_registry';
-
-const FLOOR_NAMES: Record<number, string> = {
-  0: 'Министерство',
-  1: 'Квартиры',
-  2: 'Жилая зона',
-  3: 'Коллекторы',
-  4: 'Мясной низ',
-  5: 'Пустота',
-};
+import { floorDisplayNameForZ } from '../data/floor_names';
 
 export interface RouteCueGroup {
   id: string;
@@ -275,7 +267,7 @@ function targetLine(world: World | undefined, player: Entity | undefined, state:
   const label = questRouteTargetLabel(q, state);
   const z = questRouteFloor(q);
   if (label) return `Цель: ${label}`;
-  if (z !== undefined) return `Цель: ${FLOOR_NAMES[z]}`;
+  if (z !== undefined) return `Цель: ${floorDisplayNameForZ(z)}`;
   return 'Цель: другой маршрут';
 }
 

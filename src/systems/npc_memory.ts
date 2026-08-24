@@ -1,6 +1,7 @@
 /* ── Bounded module-level NPC memory store ────────────────────── */
 
 import { Faction, MonsterKind, type Entity } from '../core/types';
+import { floorDisplayNameForZ } from '../data/floor_names';
 
 export type NpcObservedFactKind =
   | 'theft'
@@ -304,10 +305,6 @@ export function tickNpcMemoryLowFrequency(npc: Entity, now: number, totalMinutes
   return true;
 }
 
-export function getNpcMemoryCount(): number {
-  return memories.size;
-}
-
 function pruneMemoryStore(): void {
   if (memories.size <= MAX_NPC_MEMORIES) return;
   let oldestId = -1;
@@ -493,18 +490,9 @@ function mostUsefulObservedFact(memory: NpcMemory, now: number): NpcObservedFact
   return best;
 }
 
-const FLOOR_NAMES: Record<number, string> = {
-  0: 'Министерство',
-  1: 'Квартиры',
-  2: 'Жилая зона',
-  3: 'Коллекторы',
-  4: 'Мясной низ',
-  5: 'Пустота',
-};
-
 function witnessPlace(fact: NpcObservedFact): string {
   const parts: string[] = [];
-  if (fact.z !== undefined) parts.push(FLOOR_NAMES[fact.z] ?? `этаж ${fact.z}`);
+  if (fact.z !== undefined) parts.push(floorDisplayNameForZ(fact.z));
   if (fact.zoneId !== undefined) parts.push(`зона ${fact.zoneId + 1}`);
   if (fact.roomId !== undefined) parts.push(`комната ${fact.roomId}`);
   return parts.length > 0 ? parts.join(' / ') : 'место рядом';
