@@ -1,6 +1,5 @@
 import { Cell, Feature, RoomType, W, type Room } from '../core/types';
 import { World } from '../core/world';
-import type { DesignFloorRouteDef } from '../data/design_floors';
 import {
   INTERACTIVE_SURFACE_FLAG_CRAFT_LAB_BENCH,
   INTERACTIVE_SURFACE_FLAG_CRAFT_LATHE,
@@ -14,13 +13,9 @@ import {
   CRAFT_STATION_IDS,
   DISASSEMBLY_WORKBENCH_ID,
   RECIPE_BILLBOARD_ID,
-  craftStationProfileForDesignFloor,
-  craftStationProfileForProceduralFloor,
-  craftStationProfileForStoryFloor,
   type CraftStationDefId,
   type CraftStationPlacementProfile,
 } from '../data/craft_station_placement';
-import type { ProceduralFloorSpec } from '../data/procedural_floors';
 import type { InteractiveInstance } from '../systems/interactive';
 import { placeInteractiveAt } from './interactive_placement';
 import { isConnectivityWalkable } from './shared';
@@ -469,63 +464,10 @@ export function placeLivingCraftStationPair(world: World, room: Room): CraftStat
 
 export const placeLivingExpeditionCraftStations = placeLivingCraftStationPair;
 
-export function placeCraftStationsForStoryFloor(
-  world: World,
-  spawnX: number,
-  spawnY: number,
-  biome: string,
-  options: { seed?: number } = {},
-): CraftStationPlacementSummary {
-  const profile = craftStationProfileForStoryFloor(biome);
-  return placeCraftStationsWithProfile(world, world.rooms, spawnX, spawnY, profile, {
-    seed: options.seed ?? hash32(world.rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
-  });
-}
 
-export function placeMaintenanceCraftStations(
-  world: World,
-  rooms: readonly Room[],
-  spawnX: number,
-  spawnY: number,
-): CraftStationPlacementSummary {
-  const profile = craftStationProfileForStoryFloor('maintenance');
-  return placeCraftStationsWithProfile(world, rooms, spawnX, spawnY, profile, {
-    seed: hash32(rooms.length, Math.floor(spawnX), Math.floor(spawnY)),
-  });
-}
 
-export function proceduralCraftStationCap(spec: ProceduralFloorSpec, roomCount: number): number {
-  const profile = craftStationProfileForProceduralFloor(spec);
-  return profile ? placementTarget(profile, roomCount) : 0;
-}
 
-export function placeProceduralCraftStations(
-  world: World,
-  rooms: readonly Room[],
-  spec: ProceduralFloorSpec,
-  reachableInput: Uint8Array | { reachable: Uint8Array },
-): CraftStationPlacementSummary {
-  const reachable = reachableInput instanceof Uint8Array ? reachableInput : reachableInput.reachable;
-  const profile = craftStationProfileForProceduralFloor(spec);
-  return placeCraftStationsWithProfile(world, rooms, 0, 0, profile, {
-    seed: hash32(spec.seed, spec.z, spec.danger, rooms.length),
-    reachable,
-    excludeCorridors: true,
-  });
-}
 
-export function placeDesignFloorCraftStations(
-  world: World,
-  spawnX: number,
-  spawnY: number,
-  route: DesignFloorRouteDef,
-): CraftStationPlacementSummary {
-  const profile = craftStationProfileForDesignFloor(route);
-  return placeCraftStationsWithProfile(world, world.rooms, spawnX, spawnY, profile, {
-    seed: hash32(route.z, world.rooms.length, route.danger),
-    excludeCorridors: true,
-  });
-}
 
 export function craftStationCells(world: World, defId?: CraftStationDefId): number[] {
   const out: number[] = [];

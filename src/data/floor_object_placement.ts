@@ -2,9 +2,9 @@ import { Feature, RoomType, Tex } from '../core/types';
 import type { DesignFloorRouteDef } from './design_floors';
 import type { ProceduralFloorSpec } from './procedural_floors';
 import {
+  craftStationProfileForStoryFloor,
   craftStationProfileForDesignFloor,
   craftStationProfileForProceduralFloor,
-  craftStationProfileForStoryFloor,
   type CraftStationPlacementProfile,
 } from './craft_station_placement';
 
@@ -758,6 +758,10 @@ export function floorObjectProfileDuplicateRuleIds(profile: FloorObjectPlacement
   return [...duplicates].sort();
 }
 
+
+/** Профиль объектов по биому напрямую. Генератор story-этажей снят вместе с
+ *  веткой в `generateFloor`, но таблица слоёв по биому осталась общей, и тест
+ *  содержимого профиля читает её отсюда. */
 export function floorObjectProfileForStoryFloor(biome: string): FloorObjectPlacementProfile | undefined {
   return composeProfile(
     `story_${biome}_objects`,

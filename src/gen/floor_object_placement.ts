@@ -4,7 +4,6 @@ import type { DesignFloorRouteDef } from '../data/design_floors';
 import {
   floorObjectProfileForDesignFloor,
   floorObjectProfileForProceduralFloor,
-  floorObjectProfileForStoryFloor,
   type BrokenFixturePlacementRule,
   type FeaturePlacementRule,
   type FloorObjectPlacementDensity,
@@ -637,11 +636,6 @@ export function applyFloorObjectPlacementProfile(
   return summary;
 }
 
-export function applyStoryFloorObjectProfile(world: World, spawnX: number, spawnY: number, biome: string): FloorObjectPlacementSummary | undefined {
-  return applyFloorObjectPlacementProfile(world, world.rooms, spawnX, spawnY, floorObjectProfileForStoryFloor(biome), {
-    seed: hash32(world.rooms.length, Math.floor(spawnX)),
-  });
-}
 
 export function applyDesignFloorObjectProfile(
   world: World,

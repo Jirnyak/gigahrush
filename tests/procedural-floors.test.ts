@@ -719,11 +719,29 @@ test('objective route HUD and lift prompts point down to lower route targets', (
   const state = makeGameState({ currentZ: 0 });
   setFloorRunState(state, { runSeed: 123, currentZ: 0, specs: {}, visited: {} });
 
+  /* Без квеста ориентир берётся из подсказок маршрута, и на СТАРТОВОМ этаже это
+   * именная цепочка вводной, а не общее «возьмите слух».
+   *
+   * Прежде тест требовал здесь общий текст, и это закрепляло ДЕФЕКТ, а не
+   * замысел: подсказка `living_tutorial_intro` несла поле `storyFloor: 100` —
+   * координату из выжженной шкалы этажей, — а условие отбора требовало, чтобы
+   * теги темы этажа содержали строку «100». Теги это `living`, `ministry` и им
+   * подобные, строки «100» среди них не бывает никогда, поэтому подсказка была
+   * мертва по построению, и до игрока доходил дефолт. Мёртвая координата снята
+   * (коммит «Ориентир HUD снова показывается, а мёртвые условия убраны»), и
+   * ориентир ожил.
+   *
+   * Общий текст остаётся дефолтом для этажей, у которых своей подсказки нет —
+   * это проверяется ниже, иначе снятие условия могло бы съесть его целиком. */
   const startHud = getObjectiveRouteHud(state);
-  // Default no-quest objective is now the generic rumor/contract nudge, not the
-  // named plot trio.
-  assert.match(startHud.title, /возьмите слух или контракт/);
-  assert.match(startHud.lift, /Лифт: выберите по задаче/);
+  assert.match(startHud.title, /Ольга → сержант Баринов → Яков/);
+  assert.match(startHud.target, /Жилая зона/);
+
+  const noHintState = makeGameState({ currentZ: 30 });
+  setFloorRunState(noHintState, { runSeed: 123, currentZ: 30, specs: {}, visited: {} });
+  const genericHud = getObjectiveRouteHud(noHintState);
+  assert.match(genericHud.title, /возьмите слух или контракт/,
+    'этаж без своей подсказки обязан получать общий ориентир');
 
   const quest = {
     id: 77,
