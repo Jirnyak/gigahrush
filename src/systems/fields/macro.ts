@@ -32,6 +32,8 @@ export const MACRO_W = W >> MACRO_SHIFT;
 export const MACRO_PLANE = MACRO_W * MACRO_W;
 const MACRO_MASK = MACRO_W - 1;
 /** Сколько клеток мира приходится на ячейку. */
+/** Сторона ячейки в клетках мира и её площадь. */
+const MACRO_CELLS_PER_SIDE = 1 << MACRO_SHIFT;
 const MACRO_CELLS = 1 << (MACRO_SHIFT * 2);
 
 /** Доля, уходящая соседям за такт. Вместе с распадом задаёт длину затухания:
@@ -52,6 +54,21 @@ let scratch: Float32Array | null = null;
 /** Доля проходимых клеток в ячейке, 0..1. Запекается вместе с этажом: сквозь
  *  сплошной бетон стратегия течь не должна, иначе хищник ломится в стену. */
 let passable: Float32Array | null = null;
+
+/**
+ * ПРЕДСТАВИТЕЛЬ ячейки: ближайшая к её центру ПРОХОДИМАЯ клетка мира, `-1` у
+ * глухой ячейки.
+ *
+ * Раньше цель яруса была геометрическим центром ячейки, а сторожем — только
+ * «в ячейке есть хоть одна не-стена». Замерено: центр попадает в стену на 61%
+ * ячеек жилого этажа и на 99.7% квартир — там шаг сетки квартир совпал с шагом
+ * яруса, и стратегический ярус был мёртв целиком. Комментарий «точку внутри
+ * уточнит маршрут» не соответствовал делу: поиск пути на непроходимой цели
+ * возвращает пустой путь, и драйв молча падал.
+ *
+ * Считается тем же проходом, что и проходимость: своей цены у этого нет.
+ */
+let representative: Int32Array | null = null;
 let channelCount = 0;
 
 function macroIdx(mx: number, my: number): number {
@@ -74,12 +91,35 @@ export function bakeMacroFields(world: World, channels: number): void {
     }
   }
   for (let i = 0; i < MACRO_PLANE; i++) pass[i] /= MACRO_CELLS;
+
+  /* Представитель ячейки — та её проходимая клетка, что ближе всех к центру.
+   * Меряем в КВАДРАТЕ расстояния до центра: корень тут ничего не решает. */
+  const rep = representative ?? (representative = new Int32Array(MACRO_PLANE));
+  rep.fill(-1);
+  const bestD2 = new Int32Array(MACRO_PLANE).fill(0x7fffffff);
+  const half = 1 << (MACRO_SHIFT - 1);
+  for (let y = 0; y < W; y++) {
+    const my = y >> MACRO_SHIFT;
+    const row = my * MACRO_W;
+    const dy = (y & (MACRO_CELLS_PER_SIDE - 1)) - half;
+    for (let x = 0; x < W; x++) {
+      const i = world.idx(x, y);
+      if (cells[i] === Cell.WALL) continue;
+      const mi = row + (x >> MACRO_SHIFT);
+      const dx = (x & (MACRO_CELLS_PER_SIDE - 1)) - half;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= bestD2[mi]) continue;
+      bestD2[mi] = d2;
+      rep[mi] = i;
+    }
+  }
   planes = new Float32Array(channels * MACRO_PLANE);
   scratch = new Float32Array(channels * MACRO_PLANE);
 }
 
 /** Только для тестов и смены этажа. */
 export function resetMacroFields(): void {
+  representative?.fill(-1);
   planes?.fill(0);
   scratch?.fill(0);
   channelCount = 0;
@@ -175,9 +215,7 @@ export function macroTargetCell(
     if (sign > 0 ? v > bestVal : v < bestVal) { bestVal = v; bestMx = nx; bestMy = ny; }
   }
   if (bestMx < 0) return -1;
-  // Центр ячейки: половина шага. Точку внутри неё уточнит уже маршрут.
-  const half = 1 << (MACRO_SHIFT - 1);
-  const cx = world.wrap(((bestMx & MACRO_MASK) << MACRO_SHIFT) + half);
-  const cy = world.wrap(((bestMy & MACRO_MASK) << MACRO_SHIFT) + half);
-  return world.idx(cx, cy);
+  /* Отдаём ПРЕДСТАВИТЕЛЯ ячейки, а не её геометрический центр: центр в шести
+   * случаях из десяти лежит в бетоне, и цель туда — это молча упавший драйв. */
+  return representative?.[macroIdx(bestMx, bestMy)] ?? -1;
 }

@@ -125,7 +125,51 @@ export function pushNpcBarkMessage(
   });
 }
 
-export function emitMarkovBark(e: Entity, msgs: Msg[], time: number, signal: string, fallback: string, chance: number = 1.0, color = '#cca'): void {
+
+/**
+ * Обстановка говорящего для марковского ядра.
+ *
+ * Это выравнивание с ДИАЛОГОМ, где такой контекст был всегда: `markov_dialogue`
+ * шлёт `state.*`, `need.*`, `room` и метку обычного жителя. У барка контекст
+ * строился ТОЛЬКО из авторского пакета, а пакета нет у подавляющего большинства
+ * (на жилом этаже — у всех 2131). Выходило, что человек, с которым заговорили,
+ * отвечает по обстановке, а тот же человек, говорящий сам, — из общего котла.
+ */
+/* Порог «нужда уже заметна» — тот же, по которому обстановку строит диалог
+ * (`systems/context.ts`: `isHungry: food < 20`). Своего числа не заводим: два
+ * порога одного и того же разошлись бы, и человек говорил бы о голоде, которого
+ * собеседнику не видно. */
+const NEED_TAG_THRESHOLD = 20;
+
+function barkContextTags(
+  e: Entity,
+  pack: ReturnType<typeof resolveNpcPackageForEntity>,
+  activityTag: string | undefined,
+): readonly string[] {
+  const tags: string[] = [];
+  if (!pack) tags.push('ordinary_npc');
+  // Чем занят — по драйву. Он и есть единственная правда о занятии; `npcState`
+  // рядом остаётся позой для анимаций и потому шлётся вторым, а не вместо.
+  if (activityTag) tags.push(activityTag);
+  if (e.ai?.npcState !== undefined) tags.push(`state.${e.ai.npcState}`);
+  const needs = e.needs;
+  if (needs) {
+    if (typeof needs.food === 'number' && needs.food < NEED_TAG_THRESHOLD) tags.push('need.food');
+    if (typeof needs.water === 'number' && needs.water < NEED_TAG_THRESHOLD) tags.push('need.water');
+    if (typeof needs.sleep === 'number' && needs.sleep < NEED_TAG_THRESHOLD) tags.push('need.sleep');
+  }
+  if (pack) tags.push(...npcPackageSpeechContextTags(pack, e, 'bark'));
+  return tags;
+}
+
+/**
+ * Реплика в общий марковский корпус, с контекстом того, чем человек занят.
+ *
+ * `activityTag` — что актор ДЕЛАЕТ, приходит от вызывающего. Своим импортом
+ * ядра актора это брать нельзя: `actor/brain` уже тянет этот файл, и обратное
+ * ребро замкнуло бы цикл импортов, запас по которому в проекте нулевой.
+ */
+export function emitMarkovBark(e: Entity, msgs: Msg[], time: number, signal: string, fallback: string, chance: number = 1.0, color = '#cca', activityTag?: string): void {
   if (rng() > chance) return;
   if (!e.name) return;
   const last = lastBarkByEntity.get(e.id);
@@ -156,7 +200,7 @@ export function emitMarkovBark(e: Entity, msgs: Msg[], time: number, signal: str
     exactFallback: packageFallback ?? fallback,
     seed,
     repeatIndex: Math.floor(time),
-    tags: pack ? npcPackageSpeechContextTags(pack, e, 'bark') : undefined,
+    tags: barkContextTags(e, pack, activityTag),
     routeSpeech: routeBarkSpeech,
   });
 

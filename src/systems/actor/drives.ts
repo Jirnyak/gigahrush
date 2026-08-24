@@ -229,6 +229,22 @@ export interface DriveDef {
    * Возвращает false, если курса нет. Пишет в `out` единичный вектор.
    */
   heading?(v: DriveView, out: { x: number; y: number }): boolean;
+  /**
+   * ГОЛОС ДЕЛА: что актор говорит, ВЗЯВШИСЬ за него, и что — дойдя.
+   *
+   * Решение владельца: речь это ПОБОЧНЫЙ ЭФФЕКТ ЗАНЯТИЯ, а не отдельное решение
+   * говорить. Работающий ворчит, испуганный кричит, дошедший здоровается — и
+   * реплика по построению всегда про то, чем человек действительно занят. Своего
+   * такта у речи нет: она висит на смене драйва и на приходе.
+   *
+   * `signal` — не украшение: по нему `emitMarkovBark` берёт корпус реплик, решает
+   * срочность и выбирает паузы между репликами (у боевых они короче). `line` —
+   * запасная строка на случай, если корпус промолчит.
+   *
+   * Строка едет ВМЕСТЕ с драйвом: новое поведение приезжает со своим голосом, а
+   * не требует правки где-то ещё.
+   */
+  voice?: { signal: string; line: string; arrive?: string };
 }
 
 /** Насколько актор слабее того, кто на него смотрит. 0..1. */
@@ -325,6 +341,7 @@ function routineDuty(v: DriveView): number {
 export const DRIVES: readonly DriveDef[] = [
   {
     id: 'flee',
+    voice: { signal: 'flee', line: 'Отходим!' },
     group: 'survival',
     // Тактика: от крови под ногами уходят шагом, а не маршрутом через этаж.
     tier: 'step',
@@ -348,6 +365,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'hide',
+    voice: { signal: 'alert', line: 'Тихо...' },
     group: 'survival',
     /* Тактика, и это не компромисс: просвет статичен, запечён поклеточно и
      * описывает форму укрытия — угол, косяк, чокпойнт. На ярусе 16×16 угол
@@ -371,6 +389,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'seek_noise',
+    voice: { signal: 'alert', line: 'Что там?' },
     group: 'survival',
     /* Идти на выстрелы — и теперь честно, издалека. Раньше драйв пришлось слить
      * со следом: поклеточный NOISE жил ровно одну клетку от места выстрела
@@ -457,6 +476,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'huddle',
+    voice: { signal: 'ambient', line: 'Держимся вместе.' },
     group: 'social',
     /* Ближний сбор: «держаться рядом со СВОИМИ», в отличие от `flock`/`pack`,
      * которые тянут «туда, где вообще людно». Разведены намеренно — через поле
@@ -514,6 +534,7 @@ export const DRIVES: readonly DriveDef[] = [
    */
   {
     id: 'eat',
+    voice: { signal: 'ambient', line: 'Проголодался.', arrive: 'Наконец-то поем.' },
     group: 'body',
     tier: 'room',
     arrivedState: NpcState.LUNCH,
@@ -533,6 +554,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'drink',
+    voice: { signal: 'ambient', line: 'В горле сухо.' },
     group: 'body',
     tier: 'room',
     arrivedState: NpcState.LUNCH,
@@ -550,6 +572,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'sleep',
+    voice: { signal: 'ambient', line: 'Глаза слипаются.', arrive: 'Прилягу.' },
     group: 'body',
     tier: 'room',
     arrivedState: NpcState.SLEEPING,
@@ -567,6 +590,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'toilet',
+    voice: { signal: 'ambient', line: 'Мне бы отойти.' },
     group: 'body',
     tier: 'room',
     arrivedState: NpcState.MORNING,
@@ -584,6 +608,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'fight',
+    voice: { signal: 'combat', line: 'В бой!' },
     group: 'survival',
     tier: 'actor',
     // Канал объявлен ради единообразия строки; ярус читает соседа, а не поле.
@@ -650,6 +675,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'heal',
+    voice: { signal: 'wounded', line: 'Надо перевязаться.' },
     group: 'body',
     tier: 'room',
     arrivedState: NpcState.FREE_TIME,
@@ -674,6 +700,7 @@ export const DRIVES: readonly DriveDef[] = [
    */
   {
     id: 'work',
+    voice: { signal: 'ambient', line: 'Пора на смену.', arrive: 'Приступаю.' },
     group: 'work',
     tier: 'room',
     arrivedState: NpcState.WORKING,
@@ -712,6 +739,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'social',
+    voice: { signal: 'ambient', line: 'Схожу к своим.', arrive: 'Ну, что нового?' },
     group: 'social',
     tier: 'room',
     arrivedState: NpcState.FREE_TIME,
@@ -738,6 +766,7 @@ export const DRIVES: readonly DriveDef[] = [
   },
   {
     id: 'patrol',
+    voice: { signal: 'ambient', line: 'Пройдусь по участку.' },
     group: 'work',
     tier: 'room',
     arrivedState: NpcState.PATROL,
@@ -775,6 +804,7 @@ export const DRIVES: readonly DriveDef[] = [
      * даже прогулке, потому что тяга у него честно нулевая.
      */
     id: 'store',
+    voice: { signal: 'ambient', line: 'Отнесу лишнее.' },
     group: 'work',
     tier: 'room',
     /* Носить вещи на склад — та же работа: отдельного занятия не заводим,
@@ -842,6 +872,7 @@ export const DRIVES: readonly DriveDef[] = [
      * побеждает ровно тогда, когда не победил никто.
      */
     id: 'wander',
+    voice: { signal: 'ambient', line: 'Ноги сами несут.' },
     group: 'social',
     tier: 'room',
     affordance: 'wander',

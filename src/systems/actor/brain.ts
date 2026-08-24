@@ -24,6 +24,7 @@ import { followPath, roomTargetCell, tryAssignPathToCell, wanderInRoom } from '.
 import { speciesState } from '../ai/species_state';
 import { STORE_ACTION_BASE_SEC } from '../npc_work';
 import { clearCombatThreat } from '../combat_stimulus';
+import { emitMarkovBark } from '../ai/barks';
 import {
   DRIVES,
   DRIVE_BY_ID,
@@ -36,7 +37,7 @@ import {
 import { createActorNeeds, readActorNeeds } from './needs';
 import { createActorClock, readActorClock } from './clock';
 import { createActorSenses, senseActor } from './senses';
-import type { GameClock, GameState } from '../../core/types';
+import type { GameClock, GameState, Msg } from '../../core/types';
 
 /**
  * Ядро актора: один цикл на человека, тварь и игрока.
@@ -73,6 +74,18 @@ const INCUMBENT_BONUS = 0.25;
  * прежнему слою и не притворяется, будто у него есть решение.
  */
 const CLAIM_FLOOR = 0.15;
+
+/* Как часто взявшийся за дело озвучивает это вслух. Не каждый раз: этаж на две
+ * тысячи человек, где каждый комментирует каждую свою мысль, — это не живой мир,
+ * а базар. Общую дозировку держит сам `emitMarkovBark` (кулдаун на сущность,
+ * пауза на этаж, пауза на сигнал), здесь только доля.
+ *
+ * Число выбрано ЗАМЕРОМ, а не на глаз (`tmp/floor-voice.ts`, жилой этаж, минута):
+ * при доле 1 этаж даёт 52 реплики в минуту, из них 34 бытовых, при 0.12 — 32 и
+ * 13. База до правки: 30 реплик, из них бытовых ДВЕ — этаж говорил только о бое.
+ * Решение владельца: держать прежнюю громкость, сменив содержание. */
+const DRIVE_VOICE_CHANCE = 0.12;
+const DRIVE_VOICE_COLOR = '#9ba';
 
 interface BrainState {
   drive: DriveId | undefined;
@@ -175,6 +188,12 @@ function decide(world: World, e: Entity, st: BrainState, now: number): void {
     st.anchorX = e.x;
     st.anchorY = e.y;
     st.holdUntil = bestId === undefined ? -Infinity : now + DRIVE_BY_ID[bestId].holdSec;
+    /* Голос дела. Речь — побочный эффект занятия, а не отдельное решение
+     * говорить: реплика рождается ровно в тот миг, когда человек за дело
+     * ВЗЯЛСЯ, и потому всегда про то, чем он занят. Своей дозировки заводить не
+     * нужно — `emitMarkovBark` уже несёт кулдаун на сущность, паузу на этаж и
+     * паузу на сигнал, и боевые сигналы у неё срочнее бытовых. */
+    speakDriveVoice(e, bestId, now, false);
   }
   st.score = bestScore;
 
@@ -213,15 +232,20 @@ const headingOut = { x: 0, y: 0 };
 let _coreZ: number | undefined;
 /** Состояние прогона: нужно делу смены (аудит сделок, свидетели кражи). */
 let _coreState: GameState | undefined;
+/* Список сообщений кадра — тот же приём, что у `setPathContext`: ставится раз в
+ * кадр из точки входа, а не носится по аргументам через десяток вызовов. */
+let _coreMsgs: Msg[] = [];
 
 export function setActorCoreContext(
   currentZ: number | undefined,
   gameClock?: GameClock,
   samosborActive = false,
   state?: GameState,
+  msgs: Msg[] = [],
 ): void {
   _coreZ = currentZ;
   _coreState = state;
+  _coreMsgs = msgs;
   // Часы читаются ОДИН раз за кадр: время у всех одно, и снимок общий.
   readActorClock(gameClock, samosborActive, clock);
 }
@@ -433,6 +457,9 @@ function workRoom(
       if (next >= 0 && next !== here?.id) return routeToRoom(world, e, st, next, dt);
     }
     def.onArrived(world, e, now, _coreState);
+    // Дошёл — сказал. Голос прихода отличается от голоса замысла: «пора на
+    // смену» говорят, вставая, а «приступаю» — уже на месте.
+    speakDriveVoice(e, def.id, now, true);
     /* Дело делается НЕ СТОЯ. Работник ходит по своей комнате — это и жизнь в
      * кадре, и то, чем прежний слой закрывал ту же смену. Маршрут забирается
      * ядру: чужой маршрут закрыл бы шлюз входа и отдал бы актора прежнему
@@ -672,6 +699,25 @@ export function tickActorBrain(world: World, e: Entity, dt: number, now: number)
     return false;
   }
   return true;
+}
+
+
+/**
+ * Сказать то, что говорят, берясь за дело или дойдя до него.
+ *
+ * Тварь молчит: у неё нет имени, а `emitMarkovBark` без имени и так выходит —
+ * ветки по типу сущности здесь заводить незачем.
+ */
+function speakDriveVoice(e: Entity, id: DriveId | undefined, now: number, arrived: boolean): void {
+  if (id === undefined) return;
+  const voice = DRIVE_BY_ID[id].voice;
+  if (!voice) return;
+  const line = arrived ? voice.arrive : voice.line;
+  if (!line) return;
+  /* Чем занят — уходит в марковское ядро тегом, а не остаётся в запасной строке.
+   * Иначе все бытовые дела схлопывались бы в один сигнал `ambient`, и корпус не
+   * мог бы отличить «идёт на смену» от «хочет спать». */
+  emitMarkovBark(e, _coreMsgs, now, voice.signal, line, DRIVE_VOICE_CHANCE, DRIVE_VOICE_COLOR, `activity.${id}`);
 }
 
 /** Текущий драйв актора. Для отладки, стенда и тестов. */
