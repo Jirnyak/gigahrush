@@ -78,7 +78,9 @@ const normalizedFloorRuns = new WeakSet<FloorRunState>();
 const MAX_RUN_SEED = 0x7fffffff;
 const MAX_SAVED_TITLE = 96;
 const MAX_SAVED_ID = 64;
-export const ROUTE_LIFTS_PER_DIRECTION = 16;
+/* Число лифтов на направление принадлежит системе шахт: это размер её сетки,
+ * а не отдельная ручка. Реэкспорт, чтобы прежние импорты не переписывать. */
+export { ROUTE_LIFTS_PER_DIRECTION } from '../data/route_lift_shafts';
 export const SAMOSBOR_DURATION_MIN_SEC = 20;
 export const SAMOSBOR_DURATION_MAX_SEC = 5 * 60;
 export const SAMOSBOR_COOLDOWN_MIN_SEC = 45;

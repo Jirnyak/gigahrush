@@ -28,6 +28,7 @@ import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { isNativePlayerBodyEntity } from './player_actor';
 import { rng, shuffleWith } from '../core/rand';
 import { MAX_ACTIVE_ACTOR_SOFT_LIMIT } from '../data/entity_limits';
+import { ROUTE_LIFTS_PER_DIRECTION as DEFAULT_ROUTE_LIFTS_PER_DIRECTION } from '../data/route_lift_shafts';
 
 export interface FloorMemoryEntry {
   key: string;
@@ -189,7 +190,6 @@ const FLOOR_MEMORY_MAX_BUDGET_BYTES = 3072 * BYTES_PER_MIB;
 const FLOOR_MEMORY_SAVE_BUDGET_BYTES = 3584 * 1024;
 const FLOOR_MEMORY_DEVICE_MEMORY_FRACTION = 0.5;
 const FLOOR_MEMORY_ENTRY_OVERHEAD_BYTES = 64 * 1024;
-const DEFAULT_ROUTE_LIFTS_PER_DIRECTION = 16;
 
 const CARDINALS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 const ROUTE_LIFT_CONNECTOR_MAX = W;
