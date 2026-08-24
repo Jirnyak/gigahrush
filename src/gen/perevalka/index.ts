@@ -360,8 +360,8 @@ export function generatePerevalkaDesignFloor(seed = PEREVALKA_SEED): FloorGenera
     placePerevalkaContainers(world, containerId, rooms);
     spawnPerevalkaAmbientTemplates(entities, nextId, rooms);
 
-    sanitizeDoors(world);
     ensureConnectivity(world, layout.spawnX, layout.spawnY);
+    sanitizeDoors(world);
     world.rebuildContainerMap();
     world.bakeLights();
 

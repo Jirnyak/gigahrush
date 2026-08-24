@@ -86,8 +86,8 @@ export function generateObschezhitieSmenyDesignFloor(seed = DORM_SEED): FloorGen
     spawnNightPatrolTemplates(entities, nextId, layout);
     placeDormContainers(world, containerId, rooms, owners);
 
-    sanitizeDoors(world);
     ensureConnectivity(world, layout.spawnX, layout.spawnY);
+    sanitizeDoors(world);
     world.rebuildContainerMap();
     world.bakeLights();
 

@@ -43,8 +43,8 @@ export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathh
     spawnBathhouseNpcs(entities, nextId, rooms);
     spawnBathhouseThreats(world, entities, nextId, rooms);
 
-    sanitizeDoors(world);
     ensureConnectivity(world, rooms.entry.x + 46.5, rooms.entry.y + 13.5);
+    sanitizeDoors(world);
     world.rebuildContainerMap();
     world.bakeLights();
 
