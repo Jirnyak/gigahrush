@@ -1986,6 +1986,55 @@ export function listAlifeArenaFighters(state: GameState, floorKey?: string): Ali
   return out;
 }
 
+/**
+ * Ростер лестницы: по представителю мира на каждую ступень силы.
+ *
+ * Берётся ВЕСЬ спектр населения, а не его верхний хвост. Замерено 2026-08-24 и
+ * повторять не надо: буквальный топ-8 на пуле в сотню тысяч даёт восемь
+ * личностей ур.99–100 подряд — восемь одинаковых стен, о которые новичок
+ * разбивается на первой же ступени. Обратная крайность (набор из гарнизона
+ * базы) даёт восемь одинаковых ур.1. Лестница обязана покрывать ДИАПАЗОН:
+ * верхняя ступень — сильнейший мира, нижняя — по силам тому, кто только пришёл.
+ *
+ * Два прохода по колонке уровней: первый ищет потолок фактической силы, второй
+ * раздаёт по корзине на ступень, оставляя в каждой ближайшего к её цели. Ни
+ * одного снимка личности, только байт на запись; порядка четырёх миллисекунд на
+ * сотне тысяч, и зовётся это один раз за забег.
+ *
+ * Сюжетные и авторские личности исключены намеренно: ступень лестницы гибнет, а
+ * смерть дающего задание запирает цепочку насмерть.
+ */
+export function selectAlifeArenaLadderIds(state: GameState, count: number): number[] {
+  const alife = ensureAlifeState(state);
+  const rungs = Math.max(0, Math.floor(count));
+  if (rungs === 0) return [];
+
+  const eligible = (record: AlifeNpcRecord | undefined): record is AlifeNpcRecord =>
+    record !== undefined && !record.reservedKind && !recordDead(alife, record);
+
+  let peak = 0;
+  for (const record of alife.npcs) {
+    if (!eligible(record)) continue;
+    const level = recordLevel(alife, record);
+    if (level > peak) peak = level;
+  }
+  if (peak === 0) return [];
+
+  const chosen = new Array<number>(rungs).fill(0);
+  const distance = new Array<number>(rungs).fill(Number.POSITIVE_INFINITY);
+  for (const record of alife.npcs) {
+    if (!eligible(record)) continue;
+    const level = recordLevel(alife, record);
+    // Корзина ступени по доле от потолка: ступень k целится в peak*(k+1)/rungs.
+    const rung = Math.min(rungs - 1, Math.max(0, Math.ceil(level * rungs / peak) - 1));
+    const gap = Math.abs(level - Math.round(peak * (rung + 1) / rungs));
+    if (gap >= distance[rung]) continue;
+    distance[rung] = gap;
+    chosen[rung] = record.id;
+  }
+  return chosen.filter(id => id > 0);
+}
+
 /** Слот чемпиона, `ALIFE_ARENA_CHAMPION_PLAYER` за игроком, либо ничего. */
 export function getAlifeArenaChampion(state: GameState): number | undefined {
   return ensureAlifeState(state).arenaChampionAlifeId;

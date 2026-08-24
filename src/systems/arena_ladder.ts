@@ -21,17 +21,15 @@ import {
 } from '../core/types';
 import type { World } from '../core/world';
 import { irand, rng } from '../core/rand';
-import { floorKeyForDesign } from '../data/floor_keys';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr } from '../entities/sprite_index';
 import {
   ALIFE_ARENA_CHAMPION_PLAYER,
-  alifeSeed,
   forEachAlifeNpcRecordSlice,
   getAlifeArenaChampion,
   listAlifeArenaFighters,
   materializeAlifeArrival,
-  sampleAlifeFloorRecordIds,
+  selectAlifeArenaLadderIds,
   setAlifeArenaChampion,
   setAlifeArenaFighter,
   type AlifeArenaFighter,
@@ -45,10 +43,6 @@ import { transferMoney } from './inventory';
 /** Ступеней на песке. Восемь — столько лестница показывает в меню одним экраном
  *  и столько личностей уезжает в сейв «тронутыми» ради флага. */
 const ARENA_LADDER_SIZE = 8;
-
-/** Дом арены: гарнизон Базы Ликвидаторов. Отсюда набирается первый ростер —
- *  дальше решиться выйти на песок может кто угодно и где угодно. */
-const ARENA_HOME_FLOOR_KEY = floorKeyForDesign('liquidatorbase');
 
 /* Холодная симуляция флага. Такт редкий, срез ограничен, вероятность мала:
  * при 64 личностях за 30 секунд это порядка одного решившегося за час игры. */
@@ -122,18 +116,24 @@ function isInsideArena(world: World, room: Room | undefined, e: Entity): boolean
 /* ── Ростер ───────────────────────────────────────────────────── */
 
 /**
- * Первый ростер: гарнизон базы. Зовётся один раз за забег и ничего не делает,
- * если бойцы уже есть — например, приехали из сейва.
+ * Первый ростер: сильнейшие живые мира. Зовётся один раз за забег и ничего не
+ * делает, если бойцы уже есть — например, приехали из сейва.
+ *
+ * ЗАМЕРЕНО 2026-08-24, не повторять: набор из гарнизона базы даёт ПЛОСКУЮ
+ * лестницу. На трёх сидах восемь ступеней выходили ур.1/hp100 почти целиком
+ * (1,1,1,1,1,1,2,3 · 1,1,1,2,2,3,4,5 · семь единиц и пятёрка), потому что
+ * гарнизон — обычное население первого уровня, а «сила» решалась тай-брейком
+ * по номеру. Разброс живёт на глубине, поэтому и берётся со всего мира; на
+ * песок приезжают через `bringFighterToRing`, который перевозит запись сам.
  */
 function seedArenaRoster(state: GameState): void {
   if (ladderRuntime.seeded) return;
   ladderRuntime.seeded = true;
   const existing = listAlifeArenaFighters(state);
   if (existing.length > 0) return;
-  const ids = sampleAlifeFloorRecordIds(state, ARENA_HOME_FLOOR_KEY, ARENA_LADDER_SIZE, alifeSeed(state), {
-    faction: Faction.LIQUIDATOR,
-  });
-  for (const id of ids) setAlifeArenaFighter(state, id, true);
+  for (const id of selectAlifeArenaLadderIds(state, ARENA_LADDER_SIZE)) {
+    setAlifeArenaFighter(state, id, true);
+  }
   const roster = listAlifeArenaFighters(state);
   const champion = roster[roster.length - 1];
   if (champion && getAlifeArenaChampion(state) === undefined) {

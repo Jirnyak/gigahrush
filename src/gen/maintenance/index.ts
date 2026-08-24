@@ -7,7 +7,7 @@ import {
   type Room, type Entity,
   EntityType, } from '../../core/types';
 import { World } from '../../core/world';
-import { generateZones, ensureConnectivity } from '../shared';
+import { generateZones, ensureConnectivity, ensurePermanentRoomAccess } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
 import { runMaintenanceContent } from './content_manifest';
@@ -196,6 +196,15 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
      Phase 15: Ensure all rooms are reachable (connectivity fix)
      ══════════════════════════════════════════════════════════════ */
   ensureConnectivity(world, spawnX, spawnY);
+  /* Связность одна вскрыть защищённую комнату НЕ МОЖЕТ: `carveCorridor` не роет
+   * сквозь `aptMask` по общему правилу, и запертая `protectRoom` остаётся
+   * запертой на всех четырёх проходах. Дверь ей ставит отдельный шаг — тот же,
+   * что у министерства и Базы Ликвидаторов; у коллекторов его просто не было.
+   * Замерено 2026-08-24: так висел карман в 1049 клеток — `Насосная Матка`
+   * 43×25 и четыре комнаты внутри неё, единственный «выход» кармана вёл в сам
+   * карман. Дефект плавал по сидам (0·2·1·5·3 на 1·61061·777·90210·4242), и
+   * потолок в три замурованных комнаты его прикрывал. */
+  ensurePermanentRoomAccess(world, world.rooms.length);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 16: Rare procedural monitor/gauge walls
