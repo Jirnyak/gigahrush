@@ -102,7 +102,7 @@ import { updateTumannikReveal } from './tumannik';
 import { updateDikiyRush } from './dikiy_mertvyak';
 import { updateSporeCarpetGrowth } from './spore_carpet';
 import { speciesState } from './species_state';
-import { isCarnivoreMonster, monsterHuntsBeasts, monsterPackMode, monsterPreysOn } from '../../data/monster_ecology';
+import { getMonsterEcology, isCarnivoreMonster, monsterHuntsBeasts, monsterPackMode, monsterPreysOn } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 
@@ -352,44 +352,8 @@ const SAFEGUARD_RUMOR_IDS = [
   'ecology_safeguard_windup',
   'ecology_safeguard_shotgun',
 ] as const;
-const EYE_RUMOR_IDS = ['monster_eye_lamps', 'ecology_eye_line'] as const;
-const CHERNOSLIZ_RUMOR_IDS = ['ecology_chernosliz_wake'] as const;
-const VODYANOY_KOSHMAR_RUMOR_IDS = ['ecology_vodyanoy_koshmar_line'] as const;
-const TVAR_RUMOR_IDS = ['monster_tvar_walls', 'ecology_tvar_wall'] as const;
-const SHOVNIK_RUMOR_IDS = ['ecology_shovnik_seams'] as const;
-const REBAR_RUMOR_IDS = ['monster_rebar_metal', 'ecology_rebar_still'] as const;
-const BETONOED_RUMOR_IDS = ['monster_betonoed_weak_wall', 'ecology_betonoed_shortcut'] as const;
-const PANELNIK_RUMOR_IDS = ['ecology_panelnik_wall'] as const;
-const SLEPOGLAZ_RUMOR_IDS = ['ecology_slepoglaz_last_sound'] as const;
-const LAMPOGLAZ_RUMOR_IDS = ['monster_lampoglaz_hum', 'ecology_lampoglaz_light_lock'] as const;
 const GREEN_DOG_RUMOR_IDS = ['monster_green_dog_door', 'ecology_green_dog_noise'] as const;
 const FOG_SHARK_RUMOR_IDS = ['monster_fog_shark_fog', 'ecology_fog_shark_fire'] as const;
-const SBORKA_RUMOR_IDS = ['monster_sborka_fast', 'ecology_sborka_swarm'] as const;
-const ZOMBIE_RUMOR_IDS = ['monster_zombie_human', 'ecology_zombie_neighbor'] as const;
-const DIKIY_MERTVYAK_RUMOR_IDS = ['monster_dikiy_mertvyak_shove'] as const;
-const POMOYNY_ROY_RUMOR_IDS = ['monster_pomoyny_roy'] as const;
-const SWARM_RUMOR_IDS = ['monster_swarm_source'] as const;
-const NIGHTMARE_RUMOR_IDS = ['ecology_nightmare_pressure'] as const;
-const MANCOBUS_RUMOR_IDS = ['ecology_mancobus_orders'] as const;
-const HERALD_RUMOR_IDS = ['ecology_herald_ceiling'] as const;
-const CREATOR_RUMOR_IDS = ['ecology_creator_white'] as const;
-const PARAGRAPH_RUMOR_IDS = ['ecology_paragraph_clause'] as const;
-const PROTOKOLNIK_RUMOR_IDS = ['ecology_protokolnik_protocol'] as const;
-const IDOL_RUMOR_IDS = ['monster_idol_static', 'ecology_idol_stares'] as const;
-const KANTSELYARSKIY_IDOL_RUMOR_IDS = ['monster_kantselyarskiy_idol_line', 'ecology_kantselyarskiy_idol_office_field'] as const;
-const ROBOT_RUMOR_IDS = ['ecology_robot_plasma'] as const;
-const TRUBNYY_AVTOMAT_RUMOR_IDS = ['ecology_trubnyy_avtomat_wet_line'] as const;
-const SHADOW_RUMOR_IDS = ['monster_shadow_silence', 'ecology_shadow_afterimage'] as const;
-const TONKAYA_TEN_RUMOR_IDS = ['monster_tonkaya_ten_follow'] as const;
-const GLUBINNAYA_TEN_RUMOR_IDS = ['monster_glubinnaya_ten_second_beat', 'ecology_glubinnaya_ten_afterimage'] as const;
-const LISHENNYY_RUMOR_IDS = ['monster_lishennyy_light_lure', 'ecology_lishennyy_contact_decay'] as const;
-const TUMANNIK_RUMOR_IDS = ['monster_tumannik_strike_reveal', 'ecology_tumannik_strike_window'] as const;
-const LOZHNYY_DUKH_RUMOR_IDS = ['ecology_lozhnyy_dukh_door'] as const;
-const RZHAVNIK_RUMOR_IDS = ['monster_rzhavnik_scrap', 'ecology_rzhavnik_first_leap'] as const;
-const TRESKOTNIK_RUMOR_IDS = ['monster_treskotnik_crack_pulse', 'ecology_treskotnik_corner'] as const;
-const NELYUD_RUMOR_IDS = ['ecology_nelyud_close'] as const;
-const CHERVIE_RUMOR_IDS = ['monster_chervie_avatar_screen', 'ecology_chervie_avatar_disconnect'] as const;
-const SPORE_CARPET_RUMOR_IDS = ['monster_spore_carpet_lifted_corner', 'ecology_spore_carpet_fire_salt'] as const;
 export const SPORE_CARPET_WAKE_RADIUS = 2.15;
 export const SPORE_CARPET_PUFF_RADIUS = 3.2;
 export const SPORE_CARPET_PUFF_COOLDOWN_SEC = 5.8;
@@ -1725,47 +1689,19 @@ function bladeEliteEventData(tuning: BladeEliteTuning, extra?: Record<string, un
   return { rumorIds: [...tuning.rumorIds], ...extra };
 }
 
+/** Общий пустой список: своей аллокации на каждый вид без слухов не заводим. */
+const EMPTY_RUMOR_IDS: readonly string[] = [];
+
+/* Слухи читаемости берутся из АВТОРСКИХ данных экологии, а не из рукописной
+ * копии рядом. Копия здесь была — `switch` на 37 веток и 40 констант, — и она
+ * молча отстала. Сверка по ВСЕМ видам: 36 совпадений, НОЛЬ случаев «копия знает
+ * больше», 36 видов, о которых копия молчала, хотя экология их описывает, и
+ * споровый ковёр, потерявший одну наводку. Данные экологии строго содержали
+ * копию, поэтому замена ничего не отняла и вернула читаемость половине бестиария. То есть половина бестиария не могла
+ * научить игрока контрприёму: слухи прикрепляются к событию «монстра увидели»,
+ * и без них увиденное ничему не учит. */
 function monsterReadabilityRumorIds(kind: MonsterKind | undefined): readonly string[] {
-  switch (kind) {
-    case MonsterKind.EYE: return EYE_RUMOR_IDS;
-    case MonsterKind.CHERNOSLIZ: return CHERNOSLIZ_RUMOR_IDS;
-    case MonsterKind.VODYANOY_KOSHMAR: return VODYANOY_KOSHMAR_RUMOR_IDS;
-    case MonsterKind.TVAR: return TVAR_RUMOR_IDS;
-    case MonsterKind.SHOVNIK: return SHOVNIK_RUMOR_IDS;
-    case MonsterKind.REBAR: return REBAR_RUMOR_IDS;
-    case MonsterKind.BETONOED: return BETONOED_RUMOR_IDS;
-    case MonsterKind.PANELNIK: return PANELNIK_RUMOR_IDS;
-    case MonsterKind.SLEPOGLAZ: return SLEPOGLAZ_RUMOR_IDS;
-    case MonsterKind.LAMPOGLAZ: return LAMPOGLAZ_RUMOR_IDS;
-    case MonsterKind.PARAGRAPH: return PARAGRAPH_RUMOR_IDS;
-    case MonsterKind.PROTOKOLNIK: return PROTOKOLNIK_RUMOR_IDS;
-    case MonsterKind.IDOL: return IDOL_RUMOR_IDS;
-    case MonsterKind.KANTSELYARSKIY_IDOL: return KANTSELYARSKIY_IDOL_RUMOR_IDS;
-    case MonsterKind.ROBOT: return ROBOT_RUMOR_IDS;
-    case MonsterKind.TRUBNYY_AVTOMAT: return TRUBNYY_AVTOMAT_RUMOR_IDS;
-    case MonsterKind.GREEN_DOG: return GREEN_DOG_RUMOR_IDS;
-    case MonsterKind.SBORKA: return SBORKA_RUMOR_IDS;
-    case MonsterKind.ZOMBIE: return ZOMBIE_RUMOR_IDS;
-    case MonsterKind.DIKIY_MERTVYAK: return DIKIY_MERTVYAK_RUMOR_IDS;
-    case MonsterKind.POMOYNY_ROY: return POMOYNY_ROY_RUMOR_IDS;
-    case MonsterKind.SWARM: return SWARM_RUMOR_IDS;
-    case MonsterKind.NIGHTMARE: return NIGHTMARE_RUMOR_IDS;
-    case MonsterKind.MANCOBUS: return MANCOBUS_RUMOR_IDS;
-    case MonsterKind.HERALD: return HERALD_RUMOR_IDS;
-    case MonsterKind.CREATOR: return CREATOR_RUMOR_IDS;
-    case MonsterKind.SHADOW: return SHADOW_RUMOR_IDS;
-    case MonsterKind.TONKAYA_TEN: return TONKAYA_TEN_RUMOR_IDS;
-    case MonsterKind.GLUBINNAYA_TEN: return GLUBINNAYA_TEN_RUMOR_IDS;
-    case MonsterKind.LISHENNYY: return LISHENNYY_RUMOR_IDS;
-    case MonsterKind.TUMANNIK: return TUMANNIK_RUMOR_IDS;
-    case MonsterKind.LOZHNYY_DUKH: return LOZHNYY_DUKH_RUMOR_IDS;
-    case MonsterKind.RZHAVNIK: return RZHAVNIK_RUMOR_IDS;
-    case MonsterKind.TRESKOTNIK: return TRESKOTNIK_RUMOR_IDS;
-    case MonsterKind.NELYUD: return NELYUD_RUMOR_IDS;
-    case MonsterKind.CHERVIE_AVATAR: return CHERVIE_RUMOR_IDS;
-    case MonsterKind.SPORE_CARPET: return SPORE_CARPET_RUMOR_IDS;
-    default: return [];
-  }
+  return (kind === undefined ? undefined : getMonsterEcology(kind)?.rumorIds) ?? EMPTY_RUMOR_IDS;
 }
 
 function monsterReadabilityEventData(
@@ -2535,7 +2471,7 @@ function chervieSourceLabel(feature: Feature): string {
 
 function chervieSignalEventData(source: ReturnType<typeof findChervieNetSource> | undefined, extra?: Record<string, unknown>): Record<string, unknown> {
   return {
-    rumorIds: [...CHERVIE_RUMOR_IDS],
+    rumorIds: [...monsterReadabilityRumorIds(MonsterKind.CHERVIE_AVATAR)],
     sourceX: source?.x,
     sourceY: source?.y,
     sourceFeature: source?.feature,
@@ -3657,7 +3593,7 @@ function publishLishennyyLured(
     data: {
       source: target.source,
       lightScore: target.score,
-      rumorIds: [...LISHENNYY_RUMOR_IDS],
+      rumorIds: [...monsterReadabilityRumorIds(MonsterKind.LISHENNYY)],
       counterplay: 'drop_light_decoy_or_break_contact',
     },
   });
@@ -3858,7 +3794,7 @@ function applyLishennyyContactDecay(
       damage: dmg,
       needDrain,
       psiDrain: target.rpg ? 2 : 0,
-      rumorIds: [...LISHENNYY_RUMOR_IDS],
+      rumorIds: [...monsterReadabilityRumorIds(MonsterKind.LISHENNYY)],
       counterplay: 'break_contact_and_move_light_away',
     },
   });
@@ -7298,8 +7234,15 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   target = updateSobrannyyTarget(world, e, target, time, msgs, state);
   target = updateObzhivalshchikTarget(world, e, target, dt, time, msgs, state);
 
-  // Unify Sound and Vision: Global hearing translates to HUNT vision
-  if (!target && (!ai.combatTargetId || ai.goal !== AIGoal.HUNT) && e.monsterKind !== MonsterKind.KHOROVAYA_MATKA && e.monsterKind !== MonsterKind.MATKA && e.monsterKind !== MonsterKind.ZOMBIE && e.monsterKind !== MonsterKind.CHERNOSLIZ && e.monsterKind !== MonsterKind.GREEN_DOG) {
+  /* Слух переходит в охоту — механика ОБЩАЯ на всех.
+   *
+   * Здесь стоял чёрный список из пяти видов (Хоровая Матка, Матка, Зомби,
+   * Чернослиз, Зелёный пёс), вычеркнутых из механики одной строкой. Это не
+   * свойство вида: свойство вида живёт в его дефе, а не списком исключений в
+   * общем цикле. Решение владельца 2026-08-24 — заплатка от старого бага, снести.
+   * Кто по замыслу не слышит, объявит это флагом рядом с уже существующим
+   * `silent` («не шумит»), а не отсутствием в списке. */
+  if (!target && (!ai.combatTargetId || ai.goal !== AIGoal.HUNT)) {
     const noise = findNoiseInvestigationTarget(world, state, e, time);
     if (noise && noise.id !== ai.lastSeenNoiseId) {
       ai.lastSeenNoiseId = noise.id;

@@ -319,6 +319,19 @@ export function npcIsSupplyCarrier(e: Entity): boolean {
   return e.occupation === Occupation.STOREKEEPER || occupationHasRoutineTag(e.occupation, 'supply');
 }
 
+/**
+ * Бродяга: ни дома, ни семьи, ни рабочей комнаты — дорога и есть его занятие.
+ *
+ * Живёт здесь по той же причине, что и всё остальное в этом модуле: прежний
+ * слой распорядка разбирается, а это свойство ЧЕЛОВЕКА, а не графа переходов, и
+ * читают его теперь оба — и ядро актора, и остатки прежнего слоя.
+ */
+export function usesTravelerRoutine(e: Entity): boolean {
+  return e.isTraveler === true
+    || (e.isTraveler !== false && e.assignedRoomId === undefined && e.familyId === undefined
+      && occupationHasRoutineTag(e.occupation, 'traveler'));
+}
+
 /** Насколько комната годится КАК ХРАНИЛИЩЕ: у склада полный вес, у цеха малый. */
 function storeRank(room: Room | null | undefined): number {
   return room ? roomAffordanceWeight(room.type, 'store') : 0;
@@ -423,21 +436,70 @@ function deliveryCargoSlot(world: World, e: Entity): { slot: number; roomId: num
 }
 
 /**
+ * Голая арифметика тяги, без личности. Вынесена затем, чтобы потолок тяги
+ * считался ТЕМ ЖЕ выражением, а не вторым набором тех же чисел: ядро актора
+ * переводит очки в долю, и разъехавшийся потолок молча сдвинул бы весь драйв.
+ */
+function storeDriveRaw(spare: number, needsAmmo: boolean, atStorage: boolean): number {
+  const carry = spare >= (atStorage ? 1 : STORE_SPARE_MIN) ? 12 + spare * 10 : 0;
+  // Вооружённому без патронов склад нужнее любого хабара: это дело одного
+  // захода и возникает оно ровно после того, как человек отстрелялся.
+  return carry + (needsAmmo ? 40 : 0);
+}
+
+/**
+ * Потолок тяги: ПОЛНЫЕ КАРМАНЫ лишнего. Пустой магазин в потолок намеренно не
+ * входит, хотя и складывается с возкой: «полные карманы И нечем стрелять» —
+ * стечение, а не норма, и деля на него, обычный рейс с тремя вещами получал бы
+ * треть силы вместо четырёх пятых. Перебор гасит `clamp01`.
+ */
+export const STORE_DRIVE_MAX = storeDriveRaw(STORE_SPARE_CAP, false, false);
+
+/**
  * Насколько человеку сейчас нужен склад. Привычка носить вещи своя у каждого:
  * иначе весь этаж снимался бы к складам одновременно. Тому, кто уже стоит на
  * складе, хватает и одной лишней вещи — раз пришёл, доделай.
  */
 export function npcStoreDrive(e: Entity, atStorage: boolean): number {
   // Пустые карманы дела не отменяют: за патронами идут именно с пустыми.
-  const spare = scanSpareInventory(e).count;
-  const carry = spare >= (atStorage ? 1 : STORE_SPARE_MIN) ? 12 + spare * 10 : 0;
-  // Вооружённому без патронов склад нужнее любого хабара: это дело одного
-  // захода и возникает оно ровно после того, как человек отстрелялся.
-  const restock = npcNeedsAmmo(e) ? 40 : 0;
-  if (carry + restock <= 0) return 0;
+  const raw = storeDriveRaw(scanSpareInventory(e).count, npcNeedsAmmo(e), atStorage);
+  if (raw <= 0) return 0;
   // Возка кладовщику не привычка, а ремесло: множитель привычки к ней не идёт.
-  if (npcIsSupplyCarrier(e)) return carry + restock;
-  return (carry + restock) * (0.4 + 0.6 * stableUnit(e, 'store_habit'));
+  if (npcIsSupplyCarrier(e)) return raw;
+  return raw * (0.4 + 0.6 * stableUnit(e, 'store_habit'));
+}
+
+/**
+ * Куда нести лишнее и где брать патроны: ближайший ДОСТУПНЫЙ ЯЩИК, а не
+ * ближайшая комната с назначением `store`.
+ *
+ * Разница не косметическая. Замерено на жилом этаже: назначение `store` несут
+ * 1521 комната, а ящик стоит ровно в СЕМИ из них (всего 18 ящиков на этаж).
+ * Выбор по назначению отправляет человека в пустую кладовку, и рейс кончается
+ * ничем — ровно это и показывал первый замер драйва: люди доходили до складов,
+ * а сделок не прибавлялось. Спрашивается индекс ящиков в том же круге, что и
+ * весь наряд смены; перебора ящиков этажа здесь нет.
+ *
+ * Наряд смены идёт первым: у него собственный смысл (груз с адресом, вывоз со
+ * склада, припас своей комнаты), а не «куда деть хабар». −1 — ехать некуда.
+ */
+export function npcStoreErrandRoomId(world: World, e: Entity): number {
+  const errand = supplyErrandRoomId(world, e);
+  if (errand !== undefined) return errand;
+  const ammo = npcNeedsAmmo(e) ? npcAmmoTypeFor(e) : undefined;
+  const spare = scanSpareInventory(e);
+  const slot = spare.first >= 0 ? e.inventory?.[spare.first] : undefined;
+  const raids = npcRaidsForeignContainers(e);
+  return nearestContainer(world, e.x, e.y, SUPPLY_ERRAND_RADIUS, container => {
+    if (storeRank(world.rooms[container.roomId]) <= 0) return false;
+    // В чужой запас лезет только тот, кому это позволяет личность.
+    if (!canAccessContainer(container, e)
+      && !(raids && containerAccessInfo(container, e).canTake)) return false;
+    // За патронами — туда, где они лежат; с хабаром — туда, где есть место.
+    if (ammo !== undefined
+      && container.inventory.some(s => s.defId === ammo && s.count > 0)) return true;
+    return slot !== undefined && itemAddCapacity(container, slot.defId, slot.count, undefined) > 0;
+  })?.roomId ?? -1;
 }
 
 function findNpcStorageContainer(

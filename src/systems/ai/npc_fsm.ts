@@ -63,6 +63,7 @@ import {
   territoryFriendlyForNpc,
   tickNpcStorageWork,
   tryCleanerSurfaceWork,
+  usesTravelerRoutine,
   type NpcStorageOutcome,
 } from '../npc_work';
 import {
@@ -224,11 +225,6 @@ function routineRoomPreferenceContext(
     stableJitter: 2,
     distanceScale: 96,
   };
-}
-
-function usesTravelerRoutine(e: Entity): boolean {
-  return e.isTraveler === true ||
-    (e.isTraveler !== false && e.assignedRoomId === undefined && e.familyId === undefined && occupationHasRoutineTag(e.occupation, 'traveler'));
 }
 
 function isRoutineTrespassRelaxed(e: Entity): boolean {

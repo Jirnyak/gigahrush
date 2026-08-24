@@ -419,10 +419,19 @@ function workRoom(
      * На том же такте пересматривается и наряд — он стоит перебора ящиков в
      * радиусе, и в кадр его пускать нельзя. */
     if (now < st.deedAt) return true;
-    st.deedAt = now + DEED_INTERVAL_SEC;
-    const errand = def.roomTarget ? def.roomTarget(world, e) : -1;
-    // Наряд бьёт «здесь и так сойдёт»: если делу нужен другой адрес — идём.
-    if (errand >= 0 && errand !== here?.id) return routeToRoom(world, e, st, errand, dt);
+    st.deedAt = now + (def.roamSec ?? DEED_INTERVAL_SEC);
+    const errand = def.roomTarget ? def.roomTarget(world, e, now) : -1;
+    if (errand >= 0) {
+      // Наряд бьёт «здесь и так сойдёт»: если делу нужен другой адрес — идём.
+      if (errand !== here?.id) return routeToRoom(world, e, st, errand, dt);
+    } else if (def.roamSec !== undefined) {
+      /* Дело ДОРОГИ на приходе не кончается: дойдя, роумер выбирает следующую
+       * комнату. Без этого весь этаж осел бы в первых же годных залах — а
+       * развилка внутри `roomTarget` сторожит ровно от этого и работала бы
+       * ровно один раз на человека. */
+      const next = nearestAffordingRoom(world, e, def, def.reach);
+      if (next >= 0 && next !== here?.id) return routeToRoom(world, e, st, next, dt);
+    }
     def.onArrived(world, e, now, _coreState);
     /* Дело делается НЕ СТОЯ. Работник ходит по своей комнате — это и жизнь в
      * кадре, и то, чем прежний слой закрывал ту же смену. Маршрут забирается
@@ -435,7 +444,7 @@ function workRoom(
     return true;
   }
 
-  const errand = def.roomTarget ? def.roomTarget(world, e) : -1;
+  const errand = def.roomTarget ? def.roomTarget(world, e, now) : -1;
   const target = errand >= 0 ? errand : nearestAffordingRoom(world, e, def, def.reach);
   if (target < 0) {
     dropDrive(e, st);
@@ -461,9 +470,18 @@ function routeToRoom(
     return false;
   }
   const cell = roomTargetCell(world, e, room);
-  if (tryAssignPathToCell(world, e, cell.x, cell.y) !== 'assigned') {
+  const status = tryAssignPathToCell(world, e, cell.x, cell.y);
+  if (status === 'not_found') {
     dropDrive(e, st);
     return false;
+  }
+  if (status === 'same') {
+    /* Цель — клетка, в которой уже стоим. Для дела, которое делается НА МЕСТЕ,
+     * это ПРИХОД, а не отказ: маршрута больше не надо, надо стоять и делать.
+     * Тот же приём и по той же причине, что у яруса `route` с `holdsTarget`. */
+    st.routing = false;
+    st.arrived = true;
+    return true;
   }
   st.routing = true;
   st.arrived = false;
