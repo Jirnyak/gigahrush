@@ -74,7 +74,6 @@ export interface MonsterSourceDef {
 }
 
 export interface MonsterDef {
-  radius?: number;
   kind: MonsterKind;
   name: string;
   hp: number;

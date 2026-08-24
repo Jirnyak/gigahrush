@@ -56,7 +56,7 @@ export function drawLogMenu(
   const textAvailW = maxW - stampW;
 
   // Word-wrap all log entries into visual lines (cached per draw)
-  type VLine = { stamp: string; text: string; color: string; isWrap: boolean };
+  type VLine = { stamp: string; text: string; color: string };
   const vlines: VLine[] = [];
   for (let i = 0; i < log.length; i++) {
     const entry = log[i];
@@ -67,7 +67,7 @@ export function drawLogMenu(
     const stamp = `[Д${dd} ${lhh}:${lmm}${distance}]`;
     const lines = wrapTextLines(ctx, entry.text, textAvailW, 8, { stable: true });
     for (let j = 0; j < lines.length; j++) {
-      vlines.push({ stamp: j === 0 ? stamp : '', text: lines[j], color: entry.color, isWrap: j > 0 });
+      vlines.push({ stamp: j === 0 ? stamp : '', text: lines[j], color: entry.color });
     }
   }
 
@@ -91,7 +91,7 @@ export function drawLogMenu(
     }
     ctx.fillStyle = vl.color;
     const textX = 12 * sx + stampW;
-    ctx.fillText(vl.text, vl.isWrap ? textX : textX, y);
+    ctx.fillText(vl.text, textX, y);
   }
 
   // Scrollbar indicator

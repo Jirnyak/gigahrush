@@ -41,7 +41,7 @@ const CREDITS = [
 export function drawFeedbackMenu(
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  _sx: number, sy: number,
+  sx: number, sy: number,
   uiTime = state.time,
 ): void {
   const w = ctx.canvas.width;
@@ -53,7 +53,7 @@ export function drawFeedbackMenu(
   ctx.fillRect(0, 0, w, h);
 
   // Panel
-  const pw = Math.min(w - 32 * _sx, 480 * _sx);
+  const pw = Math.min(w - 32 * sx, 480 * sx);
   const ph = Math.min(h - 32 * sy, 280 * sy);
   const px = (w - pw) / 2;
   const py = (h - ph) / 2;
@@ -75,29 +75,29 @@ export function drawFeedbackMenu(
   ctx.textAlign = 'left';
   ctx.fillStyle = '#8ab';
   ctx.font = `bold ${11 * sy}px "Press Start 2P", monospace`;
-  ctx.fillText('Команда (Титры):', px + 24 * _sx, py + 56 * sy);
+  ctx.fillText('Команда (Титры):', px + 24 * sx, py + 56 * sy);
   
   ctx.fillStyle = '#578';
   ctx.font = `${9 * sy}px "Press Start 2P", monospace`;
   for (let i = 0; i < CREDITS.length; i++) {
-    ctx.fillText(CREDITS[i], px + 24 * _sx, py + 72 * sy + i * 14 * sy);
+    ctx.fillText(CREDITS[i], px + 24 * sx, py + 72 * sy + i * 14 * sy);
   }
 
   // Right side - QR Code
   ctx.textAlign = 'right';
   ctx.fillStyle = '#8ab';
   ctx.font = `bold ${11 * sy}px "Press Start 2P", monospace`;
-  ctx.fillText('Telegram:', px + pw - 24 * _sx, py + 56 * sy);
+  ctx.fillText('Telegram:', px + pw - 24 * sx, py + 56 * sy);
 
   const qrSize = QR_CODE.length;
-  const pixelSize = Math.floor(4 * _sx);
+  const pixelSize = Math.floor(4 * sx);
   const qrW = qrSize * pixelSize;
-  const qrX = px + pw - 24 * _sx - qrW;
+  const qrX = px + pw - 24 * sx - qrW;
   const qrY = py + 64 * sy;
 
   // Draw QR code background
   ctx.fillStyle = '#fff';
-  ctx.fillRect(qrX - 4 * _sx, qrY - 4 * sy, qrW + 8 * _sx, qrW + 8 * sy);
+  ctx.fillRect(qrX - 4 * sx, qrY - 4 * sy, qrW + 8 * sx, qrW + 8 * sy);
 
   // Draw QR code blocks
   ctx.fillStyle = '#000';
@@ -111,7 +111,7 @@ export function drawFeedbackMenu(
 
   ctx.fillStyle = '#578';
   ctx.font = `${9 * sy}px "Press Start 2P", monospace`;
-  ctx.fillText('https://t.me/gigah_rush', px + pw - 24 * _sx, qrY + qrW + 16 * sy);
+  ctx.fillText('https://t.me/gigah_rush', px + pw - 24 * sx, qrY + qrW + 16 * sy);
 
   // Bottom - Thank you message
   ctx.textAlign = 'center';
@@ -123,7 +123,7 @@ export function drawFeedbackMenu(
   ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.fillText(
-    fitText(ctx, `${controlBindingLabel('gameMenu')} — открыть ссылки  |  ${menuCloseHint()} — закрыть`, pw - 12 * _sx),
+    fitText(ctx, `${controlBindingLabel('gameMenu')} — открыть ссылки  |  ${menuCloseHint()} — закрыть`, pw - 12 * sx),
     w / 2,
     py + ph - 12 * sy,
   );

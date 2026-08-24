@@ -22,6 +22,13 @@ export type RenderAnimationTriggerKind = 'moving' | 'damaged' | 'state' | 'alway
 
 export type RenderAnimationMatchValue<T extends string | number> = T | readonly T[];
 
+/** Незаданное совпадает с чем угодно, неизвестное — ни с чем. */
+export function matchesValue<T extends string | number>(expected: RenderAnimationMatchValue<T> | undefined, actual: T | undefined): boolean {
+  if (expected === undefined) return true;
+  if (actual === undefined) return false;
+  return Array.isArray(expected) ? expected.includes(actual) : expected === actual;
+}
+
 export interface RenderAnimationSelector {
   plotNpcId?: RenderAnimationMatchValue<string>;
   npcVisualId?: RenderAnimationMatchValue<string>;

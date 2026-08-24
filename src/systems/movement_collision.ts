@@ -42,11 +42,7 @@ export function entityIgnoresFineBlockers(e: Pick<Entity, 'type' | 'monsterKind'
 
 export function actorOccupyRadius(e: Pick<Entity, 'type' | 'height' | 'radius' | 'monsterKind'>): number {
   if (e.radius !== undefined) return e.radius;
-  if (e.type === EntityType.MONSTER && e.monsterKind !== undefined) {
-    const override = MONSTERS[e.monsterKind]?.radius;
-    if (override !== undefined) return override;
-    return 0.18;
-  }
+  if (e.type === EntityType.MONSTER) return 0.18;
   if (e.height !== undefined) return 0.16 * (e.height / 1.8);
   return 0.16;
 }

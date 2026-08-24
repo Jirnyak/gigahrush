@@ -332,10 +332,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
          * победила — ядро объявляет цель и уступает ход слою (возвращает false),
          * победил страх — ядро уводит, сняв цель и боевую память. */
         if (tryActorCore(world, e, dt, time)) continue;
-        if (!tryFactionCombat(world, entities, e, dt, time, msgs, nextId, state, {
-          visualProjectiles: true,
-          simple: true,
-        })) {
+        if (!tryFactionCombat(world, entities, e, dt, time, msgs, nextId, state)) {
           if (!tryFleeFromMonster(world, entities, e, dt, time)) {
             updateNPC(world, entities, e, dt, time, clock, samosborActive, isMinistry ? 'ministry' : 'default', state);
           }

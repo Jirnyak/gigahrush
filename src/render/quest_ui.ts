@@ -65,7 +65,7 @@ const QUEST_TYPE_LABELS: Record<QuestType, string> = {
   [QuestType.TALK]: 'РАЗГ',
 };
 
-type QuestKind = 'plot' | 'side' | 'system';
+export type QuestKind = 'plot' | 'side' | 'system';
 
 const QUEST_KIND_META: Record<QuestKind, { label: string; stroke: string; fill: string; text: string }> = {
   plot: { label: 'СЮЖ', stroke: '#0b5570', fill: '#0c2633', text: '#6cf' },
@@ -73,11 +73,12 @@ const QUEST_KIND_META: Record<QuestKind, { label: string; stroke: string; fill: 
   system: { label: 'СИСТ', stroke: '#76631a', fill: '#2a2309', text: '#ffd35f' },
 };
 
-function routeFloor(q: Quest): number | undefined {
+export function routeFloor(q: Quest): number | undefined {
   return questRouteFloor(q);
 }
 
-function questKind(q: Quest): QuestKind {
+/** Классификация квеста для меток: делят журнал и карта. */
+export function questKind(q: Quest): QuestKind {
   if (q.plotStepIndex !== undefined) return 'plot';
   if (q.sideQuestId !== undefined) return 'side';
   return 'system';

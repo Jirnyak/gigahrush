@@ -725,11 +725,6 @@ export function actorDrive(e: Entity): DriveId | undefined {
   return brains.peek(e)?.drive;
 }
 
-/** Счёт текущего драйва. Для отладки и тестов. */
-export function actorDriveScore(e: Entity): number {
-  return brains.peek(e)?.score ?? 0;
-}
-
 /** Ярус, на котором работает текущий драйв. Для отладки и тестов. */
 export function actorDriveTier(e: Entity): DriveDef['tier'] | undefined {
   const id = brains.peek(e)?.drive;

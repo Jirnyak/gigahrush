@@ -124,10 +124,6 @@ export function craftEntryActionText(entry: CraftEntry): string {
   return entry.canDisassemble ? `ВЫХОД: ${missingLine(entry)}` : `НЕЛЬЗЯ: ${missingLine(entry)}`;
 }
 
-export function craftEntryCanAct(entry: CraftEntry): boolean {
-  return entry.kind === 'recipe' ? entry.craftable : entry.canDisassemble;
-}
-
 function drawPanelTitle(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, sy: number, color: string): void {
   ctx.font = `${6.4 * sy}px "Press Start 2P", monospace`;
   ctx.fillStyle = color;

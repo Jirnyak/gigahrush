@@ -9,7 +9,6 @@ import { menuCloseHint } from '../systems/controls';
 import { isPlayerEntity } from '../systems/player_actor';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect' | string;
-export type MapEditorDirtyCell = number | { x: number; y: number; idx?: number };
 
 export interface MapEditorPaletteEntry {
   id?: string | number;
@@ -60,7 +59,6 @@ export interface MapEditorSnapshotLike {
   thumbnailKey?: string | number;
   thumbnailRevision?: number | string;
   thumbnailDirty?: boolean;
-  dirtyCells?: readonly MapEditorDirtyCell[];
   selectedCell?: Partial<MapEditorCellDetails>;
   tools?: readonly (MapEditorToolId | MapEditorPaletteEntry)[];
   palette?: readonly (string | MapEditorPaletteEntry)[];
@@ -142,7 +140,6 @@ const DEFAULT_FEATURE_PALETTE: readonly MapEditorPaletteEntry[] = [
 ];
 
 let thumbnailCache: ThumbnailCache | null = null;
-const pendingDirtyCells = new WeakMap<World, Set<number>>();
 const zoneRgb: number[] = [];
 
 for (let i = 0; i < 64; i++) zoneRgb.push(makeZoneRgb(i));
@@ -201,17 +198,6 @@ function roomRgb(type: RoomType | undefined): number {
   }
 }
 
-function normalizeIndex(idx: number): number {
-  const value = Math.floor(idx);
-  return ((value % WORLD_CELLS) + WORLD_CELLS) % WORLD_CELLS;
-}
-
-function dirtyCellIndex(world: World, cell: MapEditorDirtyCell): number {
-  if (typeof cell === 'number') return normalizeIndex(cell);
-  if (cell.idx !== undefined) return normalizeIndex(cell.idx);
-  return world.idx(Math.floor(cell.x), Math.floor(cell.y));
-}
-
 function cellRgb(world: World, idx: number): number {
   const cell = world.cells[idx];
   if (cell === Cell.WALL) {
@@ -247,10 +233,6 @@ function writePackedPixel(data: Uint8ClampedArray, idx: number, rgb: number): vo
   data[di + 1] = (rgb >> 8) & 255;
   data[di + 2] = rgb & 255;
   data[di + 3] = 255;
-}
-
-function writeCellPixel(cache: ThumbnailCache, world: World, idx: number): void {
-  writePackedPixel(cache.image.data, idx, cellRgb(world, idx));
 }
 
 function createThumbnailCache(): ThumbnailCache {
@@ -299,63 +281,23 @@ function buildThumbnail(cache: ThumbnailCache, world: World): void {
   cache.ctx.putImageData(cache.image, 0, 0);
 }
 
-function collectDirtyCells(world: World, state: MapEditorSnapshotLike): number[] {
-  const out: number[] = [];
-  const pending = pendingDirtyCells.get(world);
-  if (pending) {
-    for (const idx of pending) out.push(idx);
-    pending.clear();
-  }
-  if (state.dirtyCells) {
-    for (const cell of state.dirtyCells) out.push(dirtyCellIndex(world, cell));
-  }
-  return out;
-}
-
-function updateDirtyPixels(cache: ThumbnailCache, world: World, dirty: readonly number[]): void {
-  if (dirty.length === 0) return;
-  for (const idx of dirty) writeCellPixel(cache, world, normalizeIndex(idx));
-  cache.ctx.putImageData(cache.image, 0, 0);
-}
-
 function thumbnailForWorld(world: World, state: MapEditorSnapshotLike): HTMLCanvasElement {
   const cache = thumbnailCache ??= createThumbnailCache();
   const base = baseSignature(world, state);
   const revision = revisionSignature(base, state);
-  const dirty = collectDirtyCells(world, state);
+  // Signature miss rebuilds the whole thumbnail; a hit reuses the cached canvas
+  // untouched, so the full WORLD_CELLS pass never runs on an idle frame.
   const needsFullBuild = cache.world !== world
     || cache.baseSignature !== base
     || state.thumbnailDirty === true
-    || (cache.revisionSignature !== revision && dirty.length === 0);
+    || cache.revisionSignature !== revision;
 
-  if (needsFullBuild) {
-    buildThumbnail(cache, world);
-  } else {
-    updateDirtyPixels(cache, world, dirty);
-  }
+  if (needsFullBuild) buildThumbnail(cache, world);
 
   cache.world = world;
   cache.baseSignature = base;
   cache.revisionSignature = revision;
   return cache.canvas;
-}
-
-export function invalidateMapEditorThumbnail(world?: World): void {
-  if (!thumbnailCache) return;
-  if (!world || thumbnailCache.world === world) {
-    thumbnailCache.world = null;
-    thumbnailCache.baseSignature = '';
-    thumbnailCache.revisionSignature = '';
-  }
-}
-
-export function markMapEditorThumbnailDirty(world: World, cells: readonly MapEditorDirtyCell[]): void {
-  let dirty = pendingDirtyCells.get(world);
-  if (!dirty) {
-    dirty = new Set<number>();
-    pendingDirtyCells.set(world, dirty);
-  }
-  for (const cell of cells) dirty.add(dirtyCellIndex(world, cell));
 }
 
 function layoutFor(ctx: CanvasRenderingContext2D, s: number): Layout {

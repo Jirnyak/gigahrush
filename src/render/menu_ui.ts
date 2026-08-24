@@ -11,7 +11,7 @@ import { PALETTE } from './ui_utils';
 export function drawGameMenu(
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  _sx: number, sy: number,
+  sx: number, sy: number,
   uiTime = state.time,
 ): void {
   const w = ctx.canvas.width;
@@ -24,7 +24,7 @@ export function drawGameMenu(
 
   // Panel
   const itemStep = 16 * sy;
-  const pw = Math.min(w - 16 * _sx, 240 * _sx);
+  const pw = Math.min(w - 16 * sx, 240 * sx);
   const ph = Math.min(h - 16 * sy, Math.max(160 * sy, 80 * sy + GAME_MENU_ITEMS.length * itemStep));
   const px = (w - pw) / 2;
   const py = (h - ph) / 2;
@@ -58,7 +58,7 @@ export function drawGameMenu(
   ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
   ctx.fillText(
-    fitText(ctx, `${controlBindingLabel('controlsMenu')} — клавиши  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('gameMenu')} — подтвердить  |  ${menuCloseHint()} — закрыть`, pw - 12 * _sx),
+    fitText(ctx, `${controlBindingLabel('controlsMenu')} — клавиши  |  ${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} — выбор  |  ${controlBindingLabel('gameMenu')} — подтвердить  |  ${menuCloseHint()} — закрыть`, pw - 12 * sx),
     w / 2,
     py + ph - 10 * sy,
   );

@@ -1,5 +1,6 @@
 import { W } from '../../core/types';
 import type { World } from '../../core/world';
+import { wrappedDelta } from './math';
 import {
   capMeshInstances,
   collectMeshChunk,
@@ -78,13 +79,6 @@ function versionsEqual(a: MeshWorldVersions, b: MeshWorldVersions): boolean {
     a.surfaceVersion === b.surfaceVersion &&
     a.featureVersion === b.featureVersion &&
     a.visualSlotVersion === b.visualSlotVersion;
-}
-
-function wrappedDelta(from: number, to: number): number {
-  let d = to - from;
-  if (d > W / 2) d -= W;
-  if (d < -W / 2) d += W;
-  return d;
 }
 
 function chunkCandidates(context: MeshPassContext, profile: ResolvedMeshSceneProfile): ChunkCandidate[] {

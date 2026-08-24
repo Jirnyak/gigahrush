@@ -6,10 +6,6 @@ export function meshNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
-export function meshElapsedMs(startMs: number): number {
-  return Math.max(0, meshNowMs() - startMs);
-}
-
 export function clampMeshStatCount(value: number, cap = Number.MAX_SAFE_INTEGER): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.min(Math.trunc(value), Math.max(0, Math.trunc(cap)));

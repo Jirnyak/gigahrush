@@ -63,10 +63,6 @@ function pushQuad(draft: MeshDraft, a: MeshVec3, b: MeshVec3, c: MeshVec3, d: Me
   draft.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 
-function add3(a: MeshVec3, b: MeshVec3): MeshVec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-}
-
 function scale3(v: MeshVec3, s: number): MeshVec3 {
   return [v[0] * s, v[1] * s, v[2] * s];
 }
@@ -356,8 +352,4 @@ export function buildMeshTemplate(def: VisualModelDef, variantSeed = 0): MeshTem
   if (template.boundsRadius > 0) return template;
   const fallbackRadius = Math.sqrt(def.bounds.x * def.bounds.x + def.bounds.y * def.bounds.y + def.bounds.z * def.bounds.z) * 0.5;
   return { ...template, boundsRadius: fallbackRadius };
-}
-
-export function transformedPoint(position: MeshVec3, offset: MeshVec3): MeshVec3 {
-  return add3(position, offset);
 }

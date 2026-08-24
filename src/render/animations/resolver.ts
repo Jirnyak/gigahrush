@@ -1,10 +1,10 @@
 import type { Entity } from '../../core/types';
 import { allRenderAnimationClips, renderAnimationClipById, renderAnimationClipMatchesEntity } from './registry';
 import { renderAnimationRuntimeEntryFor } from './runtime';
+import { matchesValue } from './types';
 import type {
   RenderAnimationClipDef,
   RenderAnimationFrameInfo,
-  RenderAnimationMatchValue,
   RenderAnimationResolveContext,
   RenderAnimationRuntimeEntry,
   RenderAnimationSource,
@@ -14,12 +14,6 @@ import type {
 
 const DEFAULT_FPS = 8;
 const DEFAULT_MOVING_EPSILON = 0.015;
-
-function matchesValue<T extends string | number>(expected: RenderAnimationMatchValue<T> | undefined, actual: T | undefined): boolean {
-  if (expected === undefined) return true;
-  if (actual === undefined) return false;
-  return Array.isArray(expected) ? expected.includes(actual) : expected === actual;
-}
 
 function movementDistance(ctx: RenderAnimationResolveContext): number {
   const delta = ctx.movementDelta;

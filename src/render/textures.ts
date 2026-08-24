@@ -18,7 +18,7 @@ export function getCoordinateHashVariation(x: number, y: number, z: number = 0):
   return h % 64;
 }
 
-export function addCracks(_t: TexData, _size: number, seed: number, crackDensity: number, x: number, y: number, r: number, g: number, b: number): [number, number, number] {
+export function addCracks(seed: number, crackDensity: number, x: number, y: number, r: number, g: number, b: number): [number, number, number] {
   // Branching cracks using noise
   const n1 = noise(x * 2.5, y * 2.5, seed + 7);
   const n2 = noise(x * 2.5, y * 2.5, seed + 8);
@@ -30,7 +30,7 @@ export function addCracks(_t: TexData, _size: number, seed: number, crackDensity
   return [r, g, b];
 }
 
-export function addMoisturePatches(_t: TexData, _size: number, seed: number, x: number, y: number, r: number, g: number, b: number): [number, number, number] {
+export function addMoisturePatches(seed: number, x: number, y: number, r: number, g: number, b: number): [number, number, number] {
   const moisture = noise(x / 6, y / 6, seed + 12);
   if (moisture > 0.65) {
     const intensity = (moisture - 0.65) * 2.8; // scale up
@@ -40,7 +40,7 @@ export function addMoisturePatches(_t: TexData, _size: number, seed: number, x: 
   return [r, g, b];
 }
 
-export function addVerticalStreaks(_t: TexData, _size: number, seed: number, x: number, y: number, r: number, g: number, b: number, intensityScale: number = 1.0): [number, number, number] {
+export function addVerticalStreaks(seed: number, x: number, y: number, r: number, g: number, b: number, intensityScale: number = 1.0): [number, number, number] {
     const streak = Math.sin(y * 0.15) * noise(Math.floor(x / 2), 0, seed + 9) * 15 * intensityScale;
     if (streak > 0) {
       const darkening = 1.0 - (streak / (15 * intensityScale)) * 0.25;
@@ -114,9 +114,9 @@ function gen_concrete(t: TexData, br: number, bg: number, bb: number, seed: numb
     let cg = bg + n;
     let cb = bb + n;
 
-    [cr, cg, cb] = addCracks(t, S, seed + hashVar, 0.08, x, y, cr, cg, cb);
-    [cr, cg, cb] = addMoisturePatches(t, S, seed + hashVar + 1, x, y, cr, cg, cb);
-    [cr, cg, cb] = addVerticalStreaks(t, S, seed + hashVar + 2, x, y, cr, cg, cb, 0.6);
+    [cr, cg, cb] = addCracks(seed + hashVar, 0.08, x, y, cr, cg, cb);
+    [cr, cg, cb] = addMoisturePatches(seed + hashVar + 1, x, y, cr, cg, cb);
+    [cr, cg, cb] = addVerticalStreaks(seed + hashVar + 2, x, y, cr, cg, cb, 0.6);
 
     t[y * S + x] = rgba(
       clamp(cr),
@@ -142,7 +142,7 @@ function gen_brick(t: TexData) {
       let cr = 100 + n + weathering;
       let cg = 95 + n + weathering;
       let cb = 85 + n + weathering;
-      [cr, cg, cb] = addMoisturePatches(t, S, seed + 10, x, y, cr, cg, cb);
+      [cr, cg, cb] = addMoisturePatches(seed + 10, x, y, cr, cg, cb);
       t[y * S + x] = rgba(clamp(cr), clamp(cg), clamp(cb));
     } else {
       const shade = noise(Math.floor((x + offset) / 32), row, 33 + hashVar) * 30;
@@ -150,7 +150,7 @@ function gen_brick(t: TexData) {
       let cg = 60 + n + shade / 2;
       let cb = 40 + n + shade / 2;
 
-      [cr, cg, cb] = addCracks(t, S, seed + hashVar, 0.05, x, y, cr, cg, cb);
+      [cr, cg, cb] = addCracks(seed + hashVar, 0.05, x, y, cr, cg, cb);
 
       t[y * S + x] = rgba(clamp(cr), clamp(cg), clamp(cb));
     }
@@ -174,7 +174,7 @@ function gen_panel(t: TexData) {
     let cg = 165 + n + seam + grime + dent;
     let cb = 150 + n + seam + grime + dent;
 
-    [cr, cg, cb] = addVerticalStreaks(t, S, 22 + hashVar, x, y, cr, cg, cb, 0.4);
+    [cr, cg, cb] = addVerticalStreaks(22 + hashVar, x, y, cr, cg, cb, 0.4);
 
     t[y * S + x] = rgba(
       clamp(cr),
@@ -205,8 +205,8 @@ function gen_metal(t: TexData) {
     let cg = 95 + n + rivet + (rust * 0.5);
     let cb = 105 + n + rivet - rust;
 
-    [cr, cg, cb] = addVerticalStreaks(t, S, 44 + hashVar, x, y, cr, cg, cb, 1.2);
-    [cr, cg, cb] = addMoisturePatches(t, S, 45 + hashVar, x, y, cr, cg, cb);
+    [cr, cg, cb] = addVerticalStreaks(44 + hashVar, x, y, cr, cg, cb, 1.2);
+    [cr, cg, cb] = addMoisturePatches(45 + hashVar, x, y, cr, cg, cb);
 
     t[y * S + x] = rgba(
       clamp(cr),

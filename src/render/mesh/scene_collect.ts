@@ -1,4 +1,5 @@
 import { getEntityIndex } from '../../systems/entity_index';
+import { wrappedDelta } from './math';
 import {
   Cell,
   ContainerKind,
@@ -382,13 +383,6 @@ function cameraCellCenter(context: MeshPassContext): { x: number; y: number } {
     x: wrapFloat(Math.floor(context.camera.x) + 0.5),
     y: wrapFloat(Math.floor(context.camera.y) + 0.5),
   };
-}
-
-function wrappedDelta(from: number, to: number): number {
-  let d = to - from;
-  if (d > W / 2) d -= W;
-  if (d < -W / 2) d += W;
-  return d;
 }
 
 function isPassableVisualCell(world: World, idx: number): boolean {

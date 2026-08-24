@@ -2,12 +2,12 @@ import { type Entity, type GameState } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { getStack } from '../data/items';
-import { RESOURCES, RESOURCE_BY_ID } from '../data/resources';
+import { RESOURCE_BY_ID } from '../data/resources';
 import { bankingSummary } from '../systems/banking';
 import { controlHint } from '../systems/controls';
-import { getAdjustedItemPrice, getEconomyQuote, getItemPriceMultiplier, getResourceScarcity } from '../systems/economy';
+import { getAdjustedItemPrice, getEconomyQuote, getItemPriceMultiplier } from '../systems/economy';
 import { stockMarketSnapshot } from '../systems/stock_market';
-import { drawGlitchText, drawNeuroPanel } from './hud_fx';
+import { drawGlitchText } from './hud_fx';
 import { fitText } from './ui_text';
 
 type LooseRecord = Record<string, unknown>;
@@ -127,39 +127,6 @@ export function questItemStateColor(state: QuestItemState): string {
 function formatSignedRubles(value: number): string {
   const rounded = Math.round(value);
   return `${rounded >= 0 ? '+' : ''}${rounded}₽`;
-}
-
-function economyPressureLine(state: GameState): FinanceLine | null {
-  let scarceId = '';
-  let scarceMult = 1;
-  let surplusId = '';
-  let surplusMult = 1;
-  for (const res of RESOURCES) {
-    const mult = getResourceScarcity(state, res.id);
-    if (mult > scarceMult) {
-      scarceMult = mult;
-      scarceId = res.id;
-    }
-    if (mult < surplusMult) {
-      surplusMult = mult;
-      surplusId = res.id;
-    }
-  }
-  if (scarceMult >= 1.18) {
-    const band = scarcityBand(scarceMult);
-    return {
-      text: `${band.label.toLowerCase()}: ${shortResourceName(scarceId)} ${formatMult(scarceMult)}`,
-      color: band.color,
-    };
-  }
-  if (surplusMult <= 0.82) {
-    const band = scarcityBand(surplusMult);
-    return {
-      text: `${band.label.toLowerCase()}: ${shortResourceName(surplusId)} ${formatMult(surplusMult)}`,
-      color: band.color,
-    };
-  }
-  return null;
 }
 
 function readBanking(state: GameState): Pick<
@@ -286,19 +253,6 @@ export function financeDetailLines(snapshot: FinanceSnapshot): FinanceLine[] {
   return lines;
 }
 
-export function hudFinanceLines(snapshot: FinanceSnapshot, state?: GameState): FinanceLine[] {
-  const top = snapshot.hasBanking
-    ? `₽${Math.round(snapshot.cash)} сч ${Math.round(snapshot.accountRubles)}`
-    : `₽${Math.round(snapshot.cash)}`;
-  const lines: FinanceLine[] = [{ text: top, color: '#c2a24c' }];
-  if (snapshot.debtRubles > 0) lines.push({ text: `долг ${compactRubles(snapshot.debtRubles)}`, color: '#b3663f' });
-  if (state) {
-    const pressure = economyPressureLine(state);
-    if (pressure) lines.push(pressure);
-  }
-  return lines;
-}
-
 function inventoryFinanceLines(snapshot: FinanceSnapshot): FinanceLine[] {
   // One fact per line: the column is half of the right panel, and two amounts on
   // a line only ever showed the first one.
@@ -334,34 +288,6 @@ function inventoryFinanceLines(snapshot: FinanceSnapshot): FinanceLine[] {
     });
   }
   return lines;
-}
-
-export function drawHudFinanceCompact(
-  ctx: CanvasRenderingContext2D,
-  player: Entity,
-  state: GameState,
-  sx: number,
-  sy: number,
-  time: number,
-  y: number,
-): void {
-  const lines = hudFinanceLines(readFinanceSnapshot(player, state), state);
-  const w = ctx.canvas.width;
-  const panelW = Math.min(116 * sx, w - 12 * sx);
-  const lineH = 9 * sy;
-  const panelH = (8 + lines.length * 9) * sy;
-  const x = w - panelW - 6 * sx;
-  if (panelW <= 24 * sx) return;
-
-  ctx.save();
-  drawNeuroPanel(ctx, x, y, panelW, panelH, time, 280);
-  ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-  ctx.textAlign = 'left';
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillStyle = lines[i].color;
-    ctx.fillText(fitText(ctx, lines[i].text, panelW - 10 * sx), x + 5 * sx, y + (4 * sy) + i * lineH);
-  }
-  ctx.restore();
 }
 
 export function drawInventoryFinanceBlock(

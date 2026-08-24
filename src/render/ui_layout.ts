@@ -101,21 +101,6 @@ export interface HudSlots {
   screenFx: UiRect;
 }
 
-export interface InventoryPanelLayout {
-  scale: number;
-  originX: number;
-  originY: number;
-  grid: UiRect & { cell: number; cols: number; rows: number };
-  details: UiRect;
-  prep: UiRect & { cols: number; rows: number; tileW: number; tileH: number };
-  equip: UiRect;
-  vitals: UiRect;
-  attr: UiRect;
-  close: UiRect;
-  use: UiRect;
-  drop: UiRect;
-}
-
 export interface FullscreenInventoryLayout {
   scale: number;
   textScale: number;
@@ -367,36 +352,6 @@ export function allocateHudSlot(
   const y = slot.cursorY;
   slot.cursorY = Math.min(slot.y + slot.h, slot.cursorY + rectH + slot.gap);
   return { x, y, w: rectW, h: rectH };
-}
-
-export function inventoryPanelLayout(canvasW: number, canvasH: number): InventoryPanelLayout {
-  const scale = Math.max(0.2, Math.min(4.2, Math.min(canvasW / 392, canvasH / 236)));
-  const originX = Math.max(0, (canvasW - 392 * scale) * 0.5);
-  const originY = Math.max(0, (canvasH - 236 * scale) * 0.5);
-  const grid = scaledRect(originX, originY, scale, 8, 22, GRID_CELL_UNITS * GRID_COLS, GRID_CELL_UNITS * GRID_ROWS) as InventoryPanelLayout['grid'];
-  grid.cell = 22 * scale;
-  grid.cols = GRID_COLS;
-  grid.rows = GRID_ROWS;
-  const rightX = 8 + GRID_CELL_UNITS * GRID_COLS + 14;
-  const prep = scaledRect(originX, originY, scale, rightX, 22, 186, 40) as InventoryPanelLayout['prep'];
-  prep.cols = 4;
-  prep.rows = 2;
-  prep.tileW = prep.w / prep.cols;
-  prep.tileH = prep.h / prep.rows;
-  return {
-    scale,
-    originX,
-    originY,
-    grid,
-    details: scaledRect(originX, originY, scale, rightX, 66, 186, 42),
-    prep,
-    equip: scaledRect(originX, originY, scale, rightX, 112, 186, 32),
-    vitals: scaledRect(originX, originY, scale, rightX, 148, 186, 80),
-    attr: scaledRect(originX, originY, scale, rightX, 148, 186, 15),
-    close: scaledRect(originX, originY, scale, 310, 1, 74, 16),
-    use: scaledRect(originX, originY, scale, rightX, 94, 86, 14),
-    drop: scaledRect(originX, originY, scale, rightX + 92, 94, 86, 14),
-  };
 }
 
 export function fullscreenInventoryLayout(canvasW: number, canvasH: number, sx: number, sy: number): FullscreenInventoryLayout {

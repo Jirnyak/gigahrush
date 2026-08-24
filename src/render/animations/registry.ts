@@ -1,6 +1,7 @@
 import { getPlotNpcStringId } from '../../data/npc_packages';
 import type { Entity } from '../../core/types';
-import type { RenderAnimationClipDef, RenderAnimationMatchValue, RenderAnimationSource } from './types';
+import { matchesValue } from './types';
+import type { RenderAnimationClipDef, RenderAnimationSource } from './types';
 
 export type { RenderAnimationClipDef } from './types';
 
@@ -65,12 +66,6 @@ export function allRenderAnimationClips(): readonly RenderAnimationClipDef[] {
 
 export function renderAnimationClipById(id: string): RenderAnimationClipDef | undefined {
   return clipsById.get(id);
-}
-
-function matchesValue<T extends string | number>(expected: RenderAnimationMatchValue<T> | undefined, actual: T | undefined): boolean {
-  if (expected === undefined) return true;
-  if (actual === undefined) return false;
-  return Array.isArray(expected) ? expected.includes(actual) : expected === actual;
 }
 
 function matchesVisualOrPlotFallback(def: RenderAnimationClipDef, entity: Entity): boolean {

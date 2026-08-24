@@ -7,6 +7,14 @@ export const MESH_DEFAULT_FOV_RADIANS = Math.PI / 2;
 export const MESH_MIN_FOV_RADIANS = Math.PI / 3;
 export const MESH_MAX_FOV_RADIANS = (110 * Math.PI) / 180;
 
+/** Кратчайшая разность по оси тора на полной ширине мира. */
+export function wrappedDelta(from: number, to: number): number {
+  let d = to - from;
+  if (d > W / 2) d -= W;
+  if (d < -W / 2) d += W;
+  return d;
+}
+
 export function meshToroidalDelta(value: number, origin: number, size: number): number {
   const safeSize = Number.isFinite(size) && size > 0 ? size : MESH_WORLD_SIZE;
   if (!Number.isFinite(value) || !Number.isFinite(origin)) return 0;

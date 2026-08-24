@@ -139,10 +139,6 @@ export function feudRoomHoldsEnemy(world: World, actor: Entity, roomId: number):
 
 /* ── Разборка ─────────────────────────────────────────────────────── */
 
-export function isInFeudDuel(e: Entity): boolean {
-  return activeDuel !== null && (activeDuel.aId === e.id || activeDuel.bId === e.id);
-}
-
 /**
  * Дорога на разборку идёт вместо рутины, а не поверх неё.
  *

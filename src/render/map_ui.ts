@@ -7,10 +7,10 @@ import {
 import { SURFACE_FLAG_CHALK_MAP, World } from '../core/world';
 import {
   isQuestTargetOnCurrentFloor,
-  questRouteFloor,
   questTargetLiftDirection,
   resolveQuestTargetRoom,
 } from '../systems/contracts';
+import { questKind, routeFloor, type QuestKind } from './quest_ui';
 import { getActiveQuest, npcQuestMarkerState, questAddressesBySlot } from '../systems/quests';
 import { isHostile } from '../systems/factions';
 import { ENTITY_MASK_ITEM_DROP, ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
@@ -36,7 +36,6 @@ const MAP_SIZE = 80;
 const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
-type QuestKind = 'plot' | 'side' | 'system';
 type MapMarkerStyle = { stroke: string; fill: string };
 
 const activeKillKinds = new Set<MonsterKind>();
@@ -159,10 +158,6 @@ interface FloorOverview {
 
 const floorOverviewCache = new WeakMap<World, FloorOverviewCache>();
 
-function routeFloor(q: Quest): number | undefined {
-  return questRouteFloor(q);
-}
-
 function boostRgb(rgb: readonly [number, number, number], factor: number, add = 0): [number, number, number] {
   return [
     Math.min(255, Math.round(rgb[0] * factor + add)),
@@ -273,12 +268,6 @@ function drawMapCrowdBins(ctx: CanvasRenderingContext2D, mapW: number, mapH: num
     }
   }
   ctx.globalAlpha = 1;
-}
-
-function questKind(q: Quest): QuestKind {
-  if (q.plotStepIndex !== undefined) return 'plot';
-  if (q.sideQuestId !== undefined) return 'side';
-  return 'system';
 }
 
 function mergeQuestKind(current: QuestKind | undefined, next: QuestKind): QuestKind {
@@ -1097,8 +1086,7 @@ for (let i = 0; i < 64; i++) {
 /* ── Shared map renderer (used by minimap + fullmap) ──────────── */
 function drawMap(
   ctx: CanvasRenderingContext2D,
-  world: World, _entities: Entity[], player: Entity,
-  _sx: number, _sy: number,
+  world: World, player: Entity,
   mapX: number, mapY: number, mapW: number, mapH: number,
   radius: number, bgAlpha: number,
   quests?: Quest[],
@@ -1618,22 +1606,22 @@ export function drawMapLegendMenu(
 /* ── Minimap ──────────────────────────────────────────────────── */
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
-  world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: number, state?: GameState, _uiTime = state?.time ?? 0,
+  world: World, _entities: Entity[], player: Entity,
+  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: number, state?: GameState, uiTime = state?.time ?? 0,
   rect?: UiRect,
 ): void {
   const mw = rect?.w ?? MAP_SIZE * sx;
   const mh = rect?.h ?? MAP_SIZE * sy;
   const mx = rect?.x ?? ctx.canvas.width - mw - 4 * sx;
   const my = rect?.y ?? 4 * sy;
-  drawMap(ctx, world, entities, player, sx, sy, mx, my, mw, mh, 40, 0.75, quests, currentZ, state, _uiTime);
+  drawMap(ctx, world, player, mx, my, mw, mh, 40, 0.75, quests, currentZ, state, uiTime);
 }
 
 /* ── Full world map (fullscreen) ─────────────────────────────── */
 export function drawFullMap(
   ctx: CanvasRenderingContext2D,
-  world: World, entities: Entity[], player: Entity,
-  sx: number, sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: number, state?: GameState, _uiTime = state?.time ?? 0,
+  world: World, _entities: Entity[], player: Entity,
+  sx: number, _sy: number, quests?: Quest[], _floorInstanceLabel?: string, currentZ?: number, state?: GameState, uiTime = state?.time ?? 0,
 ): void {
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
@@ -1645,6 +1633,6 @@ export function drawFullMap(
     FULL_MAP_RADIUS_MIN,
     Math.min(FULL_MAP_RADIUS_MAX, Math.round(typeof rawRadius === 'number' && Number.isFinite(rawRadius) ? rawRadius : FULL_MAP_RADIUS_DEFAULT)),
   );
-  drawMap(ctx, world, entities, player, sx, sy, pad, pad, mapW, mapH, radius, 0.85, quests, currentZ, state, _uiTime);
+  drawMap(ctx, world, player, pad, pad, mapW, mapH, radius, 0.85, quests, currentZ, state, uiTime);
 
 }

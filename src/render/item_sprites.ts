@@ -12218,7 +12218,7 @@ function drawSampleSprite(t: Uint32Array, seed: number, p: Palette, defId: strin
   const ampoule = defId.includes('ampoule') || defId.includes('vial');
   rect(t, ampoule ? 27 : 22, 13, ampoule ? 37 : 42, 50, p.light, seed + 141, 170);
   rect(t, ampoule ? 28 : 24, 27, ampoule ? 36 : 40, 48, p.glow, seed + 142, 195);
-  ellipse(t, ampoule ? 32 : 32, 34, ampoule ? 5 : 11, ampoule ? 9 : 10, p.glow, seed + 143, 210);
+  ellipse(t, 32, 34, ampoule ? 5 : 11, ampoule ? 9 : 10, p.glow, seed + 143, 210);
   rect(t, ampoule ? 28 : 24, 11, ampoule ? 36 : 40, 16, p.dark, seed + 144);
   if (defId.includes('eye') || defId.includes('seroburmaline') || (seed & 7) === 3) drawEye(t, 32, 34, seed, p, 0.72);
 }
@@ -15657,8 +15657,4 @@ export function drawItemGridIcon(
   ctx.restore();
 
   drawItemIcon(ctx, defId, iconX, canvasTop, iconSize, iconSize, alpha);
-}
-
-export function clearItemIconCanvasCache(): void {
-  ICON_CANVAS_CACHE.clear();
 }

@@ -119,8 +119,3 @@ export function tryCombatOrbitStep(
   return moved;
 }
 
-/** Reset orbit state when switching targets */
-export function resetOrbitState(ai: { orbitDir?: number; orbitPulseCd?: number }): void {
-  ai.orbitDir = undefined;
-  ai.orbitPulseCd = undefined;
-}
