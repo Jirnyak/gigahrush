@@ -69,7 +69,7 @@ export function setCombatClock(time: number): void {
  */
 const staggerRefractory = new WeakMap<Entity, number>();
 
-export function applyHitStaggerAndKnockback(target: Entity, sourceX: number, sourceY: number, damage: number): void {
+export function applyHitStaggerAndKnockback(world: World, target: Entity, sourceX: number, sourceY: number, damage: number): void {
   if (damage <= 0 || !target.alive) return;
   const maxHp = target.maxHp || 100;
   const ratio = damage / maxHp;
@@ -84,9 +84,11 @@ export function applyHitStaggerAndKnockback(target: Entity, sourceX: number, sou
     if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, staggerTime);
   }
 
-  // Knockback
-  let dx = target.x - sourceX;
-  let dy = target.y - sourceY;
+  // Knockback. Направление считается через тор: сырое вычитание на шве
+  // (стрелок у x=1023, цель у x=0) даёт нормаль в минус и толкает жертву
+  // ОБРАТНО в атакующего — единственное место отдачи, где это не учитывалось.
+  let dx = world.delta(sourceX, target.x);
+  let dy = world.delta(sourceY, target.y);
   const dist = Math.hypot(dx, dy);
   if (dist > 0.01) {
     dx /= dist;

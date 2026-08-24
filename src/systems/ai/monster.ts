@@ -180,8 +180,6 @@ const HEAD_SLUG_DETACHED_HP = 18;
 const HEAD_SLUG_DETACHED_SPEED = 1.92;
 const HEAD_SLUG_REHOST_COOLDOWN_SEC = 1.2;
 const HEAD_SLUG_QUARANTINE_EVENT_COOLDOWN_SEC = 24;
-export const MUKHOZHUK_COMMAND_RADIUS = 11;
-export const MUKHOZHUK_COMMAND_SCAN_CAP = 16;
 const POMOYNY_ROY_MAX_SCENT_DETECT = 34;
 const POMOYNY_ROY_SLOT_RADIUS = 1.65;
 const POMOYNY_ROY_SLOT_ANGLES = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.78, -Math.PI * 0.78, Math.PI, Math.PI * 0.35, -Math.PI * 0.35, 0] as const;
@@ -354,10 +352,6 @@ const SAFEGUARD_RUMOR_IDS = [
 ] as const;
 const GREEN_DOG_RUMOR_IDS = ['monster_green_dog_door', 'ecology_green_dog_noise'] as const;
 const FOG_SHARK_RUMOR_IDS = ['monster_fog_shark_fog', 'ecology_fog_shark_fire'] as const;
-export const SPORE_CARPET_WAKE_RADIUS = 2.15;
-export const SPORE_CARPET_PUFF_RADIUS = 3.2;
-export const SPORE_CARPET_PUFF_COOLDOWN_SEC = 5.8;
-export const SPORE_CARPET_FIRE_RECOIL_SEC = 2.35;
 export const CHERVIE_MIND_PULSE_RADIUS = 7.5;
 export const CHERVIE_MIND_PULSE_CAP = 4;
 export const CHERVIE_MIND_PULSE_COOLDOWN_SEC = 8.5;
@@ -4769,7 +4763,7 @@ function finishRzhavnikLeap(
     if (target.id === playerId && isDebugOnePunchManEnabled()) {
       keepDebugOnePunchManAlive(target);
     } else {
-      { const _dmg = calculateDamage(damage, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(target, e.x, e.y, _dmg); }
+      { const _dmg = calculateDamage(damage, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(world, target, e.x, e.y, _dmg); }
       notifyActorDamaged(world, target, e, damage, 'monster_special', time, state);
       if (target.id === playerId) recordPlayerDamage(state, e, damage, `Ржавник ударил первым рывком: -${damage}`);
       if (target.hp <= 0) {
@@ -7070,7 +7064,7 @@ export function tryPerformMonsterMeleeAttack(
           if (debugImmortalPlayerHit) {
             keepDebugOnePunchManAlive(hitTarget);
           } else {
-            { const _dmg = calculateDamage(dmg, DamageType.KINETIC, hitTarget); hitTarget.hp -= _dmg; applyHitStaggerAndKnockback(hitTarget, e.x, e.y, _dmg); }
+            { const _dmg = calculateDamage(dmg, DamageType.KINETIC, hitTarget); hitTarget.hp -= _dmg; applyHitStaggerAndKnockback(world, hitTarget, e.x, e.y, _dmg); }
             notifyActorDamaged(world, hitTarget, e, dmg, 'monster_melee', time, state);
             applyLishennyyContactDecay(state, world, e, hitTarget, dmg, time, msgs, playerId);
             applyKontorshchikGrab(state, world, e, hitTarget, time, msgs);

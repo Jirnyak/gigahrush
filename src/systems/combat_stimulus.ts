@@ -598,7 +598,7 @@ export function damageActor(
   target.hp -= armor.damage;
   const attacker = input.attacker;
   if (input.knockback !== false && attacker) {
-    applyHitStaggerAndKnockback(target, attacker.x, attacker.y, armor.damage);
+    applyHitStaggerAndKnockback(world, target, attacker.x, attacker.y, armor.damage);
   }
   // Жертва узнаёт, кто её ударил. Без автора вызов сам обращается в ничто.
   notifyActorDamaged(world, target, attacker, input.damage, input.source, state?.time ?? 0, state);

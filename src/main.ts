@@ -5771,7 +5771,7 @@ function processProjectileEntityCollision(
     } else {
       e.hp -= dmg;
       if (p.x !== undefined && p.y !== undefined) {
-        applyHitStaggerAndKnockback(e, p.x, p.y, dmg);
+        applyHitStaggerAndKnockback(world, e, p.x, p.y, dmg);
       }
       tryMonsterProjectileStagger(world, state, e, p, player.id);
       if (e.type === EntityType.NPC && isPlayerOwnedProjectile(p)) {
@@ -5862,7 +5862,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
         continue;
       }
       e.hp -= finalDmg;
-      applyHitStaggerAndKnockback(e, p.x, p.y, finalDmg);
+      applyHitStaggerAndKnockback(world, e, p.x, p.y, finalDmg);
       if (isPlayerEntity(e)) {
         const detail = actor && !isPlayerEntity(actor)
           ? `Взрыв от ${entityDisplayName(actor)}: -${finalDmg}`

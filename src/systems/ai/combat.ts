@@ -201,10 +201,6 @@ interface NpcRangedProfile {
  * держится ровно до тех пор, пока `systems/ai/index.ts` не перестанет их
  * передавать; ни одно из них уже ни на что не влияет.
  */
-interface FactionCombatOptions {
-  visualProjectiles?: boolean;
-  simple?: boolean;
-}
 
 /* Кого боец вообще считает целью — свойство правил, а не конкретного бойца:
  * предикат ничего не захватывает. На верхнем уровне он живёт в единственном
@@ -330,7 +326,7 @@ function npcShouldFleeTarget(e: Entity, target: Entity, eWs?: import('../../data
 }
 
 export function tryFactionCombat(
-  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState, _options?: FactionCombatOptions,
+  world: World, entities: Entity[], e: Entity, dt: number, _time: number, msgs: Msg[], nextId: { v: number }, state?: GameState,
 ): boolean {
   tryCombatLootGrab(world, e, dt);
 
@@ -509,7 +505,7 @@ export function tryFactionCombat(
         } else {
           const actualDmg = calculateDamage(dmg, ws.damageType, hitTarget);
           hitTarget.hp -= actualDmg;
-          applyHitStaggerAndKnockback(hitTarget, e.x, e.y, actualDmg);
+          applyHitStaggerAndKnockback(world, hitTarget, e.x, e.y, actualDmg);
           notifyActorDamaged(world, hitTarget, e, dmg, 'npc_melee', _time, state);
           if (isPlayerEntity(hitTarget)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
           if (hitTarget.type === EntityType.NPC) {

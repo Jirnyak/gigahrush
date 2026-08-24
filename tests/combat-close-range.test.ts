@@ -88,29 +88,43 @@ test('мебель линию не рвёт, а считается', () => {
 
 test('царапина не оглушает, заметный удар оглушает один раз за рефрактерный период', () => {
   const world = openWorld();
-  void world;
   setCombatClock(0);
   const victim = fighter(1, OX + 5.5, OY + 0.5, '', Faction.CITIZEN);
 
   // 1% здоровья — прежний порог. Толчок остаётся, боли нет.
-  applyHitStaggerAndKnockback(victim, OX + 4.5, OY + 0.5, 5);
+  applyHitStaggerAndKnockback(world, victim, OX + 4.5, OY + 0.5, 5);
   assert.equal(victim.ai!.staggerTimer ?? 0, 0);
   assert.ok((victim.vx ?? 0) !== 0, 'отскок обязан работать и от мелкого попадания');
 
-  applyHitStaggerAndKnockback(victim, OX + 4.5, OY + 0.5, 25);
+  applyHitStaggerAndKnockback(world, victim, OX + 4.5, OY + 0.5, 25);
   const first = victim.ai!.staggerTimer ?? 0;
   assert.ok(first > 0, 'заметный удар обязан сбивать действие');
 
   // Второй такой же удар в тот же миг — уже отболел, повторно не оглушает.
   victim.ai!.staggerTimer = 0;
   victim.staggerTimer = 0;
-  applyHitStaggerAndKnockback(victim, OX + 4.5, OY + 0.5, 25);
+  applyHitStaggerAndKnockback(world, victim, OX + 4.5, OY + 0.5, 25);
   assert.equal(victim.ai!.staggerTimer ?? 0, 0, 'stunlock: боль наложилась сама на себя');
 
   // За рефрактерным периодом — снова можно.
   setCombatClock(first * 2 + 0.01);
-  applyHitStaggerAndKnockback(victim, OX + 4.5, OY + 0.5, 25);
+  applyHitStaggerAndKnockback(world, victim, OX + 4.5, OY + 0.5, 25);
   assert.ok((victim.ai!.staggerTimer ?? 0) > 0);
+  setCombatClock(0);
+});
+
+test('отдача на шве тора толкает ОТ атакующего, а не в него', () => {
+  // Мир замкнут: стрелок у x=1023.5 стоит вплотную к цели у x=0.5.
+  // Сырое вычитание давало разницу в 1023 клетки и разворачивало толчок назад.
+  const world = new World();
+  for (let y = OY - 1; y <= OY + 1; y++) {
+    world.set(0, y, Cell.FLOOR);
+    world.set(1023, y, Cell.FLOOR);
+  }
+  setCombatClock(0);
+  const victim = fighter(1, 0.5, OY + 0.5, '', Faction.CITIZEN);
+  applyHitStaggerAndKnockback(world, victim, 1023.5, OY + 0.5, 25);
+  assert.ok((victim.vx ?? 0) > 0, 'жертву отбросило внутрь атакующего через шов');
   setCombatClock(0);
 });
 

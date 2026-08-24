@@ -11,7 +11,6 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import { monsterHasAIFlag } from '../entities/monster';
 import { occupationHasAnyProfileTag, occupationHasProfileTag } from '../data/occupation_profiles';
-import { HUMAN_TERRITORY_OWNERS } from '../data/factions';
 import {
   NPC_FACTION_ATTITUDE_SLOTS,
   RELATION_UNSET,
@@ -218,9 +217,6 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
       ? isSideHostileToFaction(attacker, aFaction, side)
       : getFactionMonsterRelation(aFaction) <= RELATION_HOSTILE_THRESHOLD;
   }
-  if (attacker.type === EntityType.NPC && isPlayerEntity(target) && isNpcPlayerHostile(attacker)) {
-    return true;
-  }
   // Symmetric personal channel: an NPC personally hostile to the player (they
   // already attack, see the target-is-player branch) reads as hostile FROM the
   // player too, even when the faction matrix was befriended in this run
@@ -237,11 +233,6 @@ export function isHostile(attacker: Entity, target: Entity): boolean {
   // `isPersonalFeudEnemy`. Ответ на удар с чужой стороны идёт мимо этой
   // проверки, через боевую память (`notifyActorDamaged` → `forcedTarget`).
   return isSideHostileToFaction(attacker, aFaction, bFaction);
-}
-
-/* ── Territory counting per owner ────────────────────────────── */
-export interface FactionStats {
-  cells: number;
 }
 
 export interface FactionZoneUiSnapshot {
@@ -310,20 +301,6 @@ let factionUiSnapshotAccum = 0;
 
 export function getFactionUiSnapshot(): FactionUiSnapshot | undefined {
   return factionUiSnapshot;
-}
-
-export function countFactionTerritory(world: World): Map<ZoneFaction, FactionStats> {
-  const stats = new Map<ZoneFaction, FactionStats>();
-  for (const zf of HUMAN_TERRITORY_OWNERS) {
-    stats.set(zf, { cells: 0 });
-  }
-  for (const row of countTerritoryCells(world)) {
-    if (row.owner === ZoneFaction.SAMOSBOR) continue;
-    const s = stats.get(row.owner);
-    if (s) s.cells = row.cells;
-  }
-
-  return stats;
 }
 
 function factionEventString(data: Record<string, unknown> | undefined, key: string): string {
