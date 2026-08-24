@@ -2033,6 +2033,26 @@ export function ensureReachableRouteLifts(
       reachable = reachableFromPoint(world, spawnX, spawnY);
     }
   }
+  normalizeLiftCells(world);
+}
+
+/* Клетка лифта выходит из комнаты и не носит мебель предыдущего штампа.
+ *
+ * Правило генерации требует писать `cells`, `roomMap` и `features` согласованно,
+ * но постановку лифта каждый этаж писал сам — пятнадцать копий одной функции в
+ * четырёх разных семантиках, и девять из них про `roomMap`/`features` забывали.
+ * Замерено 2026-08-24: 19 дизайн-этажей из 51 отдавали клетку лифта, всё ещё
+ * приписанную к комнате. Чинить это в каждой копии значит ждать, что следующая
+ * копия не забудет; шаг стоит здесь, на пути ОБЕИХ точек генерации — и
+ * дизайн-этажей, и процедурных, — как `sanitizeDoors` для дверей.
+ *
+ * Проход генерационный, один на этаж: в самой функции уже несколько BFS. */
+function normalizeLiftCells(world: World): void {
+  for (let i = 0; i < W * W; i++) {
+    if (world.cells[i] !== Cell.LIFT) continue;
+    world.roomMap[i] = -1;
+    world.features[i] = Feature.NONE;
+  }
 }
 
 /* ── Place lift cells in corridors ───────────────────────────── */
