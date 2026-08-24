@@ -81,10 +81,6 @@ export function getLastSamosborVariant(): SamosborVariantId | null {
   return lastVariant;
 }
 
-export function setActiveSamosborVariantForTests(variant: any): void {
-  activeVariant = variant;
-}
-
 /* ── Отладка ──────────────────────────────────────────────────
  * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
  * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */

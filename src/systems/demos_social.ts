@@ -46,7 +46,7 @@ import {
 } from './alife';
 import { createEmptyDemosSocialSaveState, type DemosRelationOverride, type DemosSocialSaveState } from './demos_save';
 import { QUEST_FACTION_RELATION_DELTA, getFactionPlayerRelation } from './npc_relations';
-import { shuffleWith, xorshift32 } from '../core/rand';
+import { hash32, shuffleWith, xorshift32 } from '../core/rand';
 
 export interface DemosSocialEdgeView {
   slot: number;
@@ -142,15 +142,6 @@ interface DemosSocialBuckets {
   floorFactionAdults: Map<string, number[]>;
 }
 
-function hash32(a: number, b: number, c = 0): number {
-  let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x2c1b3c6d);
-  x ^= x >>> 12;
-  x = Math.imul(x, 0x297a2d39);
-  x ^= x >>> 15;
-  return x >>> 0;
-}
 
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;

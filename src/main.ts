@@ -91,7 +91,7 @@ import { rng, hashSeed, randSeed, xorshift32, irand, mathRng } from './core/rand
 import { canActorOccupy, stepActorBy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './world/procedural_screens';
-import { updateCritterCrunch } from './render/critters';
+import { resetCritterCrunch, updateCritterCrunch } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
@@ -4085,7 +4085,6 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
     activeQuestId: undefined,
     nextQuestId: 1,
     currentZ: initialZ,
-    fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,
     showNpcMenu: false,
@@ -6279,6 +6278,10 @@ function switchFloor(
     loadingProgress('Рисуем лабиринт этажа', 5);
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
+    // Хруст живности помнит ПОСЛЕДНЮЮ клетку по сквозному индексу мира, а он
+    // общий для всех этажей: без сброса первый шаг на новом этаже в клетку с тем
+    // же индексом молчал.
+    resetCritterCrunch();
     const loaded = loadFloorForTarget(nextFloor, generatedRunEntry);
     const gen = loaded.generation;
 

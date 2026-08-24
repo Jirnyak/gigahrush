@@ -36,16 +36,6 @@ export interface MonsterEcologyDef {
   lootTable?: readonly MonsterLootEntry[];
 }
 
-export type MonsterCueTaskChannel = 'data' | 'text' | 'sprite' | 'audio';
-
-export interface MonsterCueTask {
-  id: string;
-  kind: MonsterKind;
-  channel: MonsterCueTaskChannel;
-  cue: string;
-  task: string;
-}
-
 export interface MonsterEcologyQuery {
   z: number;
   /** Biome tags of the floor being populated (`design floor themeTags` or
@@ -138,86 +128,6 @@ export const BAIT_ATTRACTED_MONSTER_KINDS: readonly MonsterKind[] = [
 export function isBaitAttractedMonster(kind: MonsterKind | undefined): boolean {
   return kind !== undefined && BAIT_ATTRACTED_MONSTER_KINDS.includes(kind);
 }
-
-export const MONSTER_COUNTERPLAY_CUE_TASKS: readonly MonsterCueTask[] = [
-  {
-    id: 'cue_sborka_wire_crackle_audio',
-    kind: MonsterKind.SBORKA,
-    channel: 'audio',
-    cue: 'Треск проволоки до контакта.',
-    task: 'Добавить короткий procedural crackle при первом sighted/windup pack spawn, чтобы сборка читалась до укуса.',
-  },
-  {
-    id: 'cue_krysnozhka_garbage_motion_sprite',
-    kind: MonsterKind.KRYSNOZHKA,
-    channel: 'sprite',
-    cue: 'Мусор шевелится и выдает стаю.',
-    task: 'Дать помойной/обычной крысоножке маленький garbage-flicker кадр или floor mark перед первым рывком.',
-  },
-  {
-    id: 'cue_tvar_panel_scratch_text',
-    kind: MonsterKind.TVAR,
-    channel: 'text',
-    cue: 'Панель царапает сама себя.',
-    task: 'Связать sighted/log text с wallBias, чтобы игрок видел причину держать центр комнаты.',
-  },
-  {
-    id: 'cue_polzun_wet_drag_audio',
-    kind: MonsterKind.POLZUN,
-    channel: 'audio',
-    cue: 'Мокрый drag-sound перед дверью или ванной.',
-    task: 'Добавить низкий мокрый звук при входе ползуна в door/water/bathroom kill cell.',
-  },
-  {
-    id: 'cue_zombie_crowd_grab_death_text',
-    kind: MonsterKind.ZOMBIE,
-    channel: 'text',
-    cue: 'Смерть объясняет толпу, кухню или дверной хват.',
-    task: 'Добавить death-log wording для мертвяка, чтобы ошибка была социальной/позиционной, а не просто HP.',
-  },
-  {
-    id: 'cue_lampovy_light_flicker_data',
-    kind: MonsterKind.LAMPOVY,
-    channel: 'data',
-    cue: 'Лампа гудит и отмечает опасный радиус.',
-    task: 'Пробросить lampPowered cue в event data/HUD hint рядом с Feature.LAMP без per-frame full-world scan.',
-  },
-  {
-    id: 'cue_pechateed_paper_rustle_text',
-    kind: MonsterKind.PECHATEED,
-    channel: 'text',
-    cue: 'Шелест бумаги идет из кармана игрока.',
-    task: 'Показывать короткий local log, когда documentHunter выбирает цель из-за документов.',
-  },
-  {
-    id: 'cue_tube_eel_water_ripple_sprite',
-    kind: MonsterKind.TUBE_EEL,
-    channel: 'sprite',
-    cue: 'Вода рябит против течения до рывка угря.',
-    task: 'Добавить дешевый water ripple mark на route-set-piece клетках угря и в debug pack рядом с водой.',
-  },
-  {
-    id: 'cue_treskotnik_fracture_pulse_sprite',
-    kind: MonsterKind.TRESKOTNIK,
-    channel: 'sprite',
-    cue: 'Красные трещины вспыхивают за долю секунды до рывка.',
-    task: 'Держать windup-pulse через spriteScale/HUD cue без перегенерации спрайта в кадре.',
-  },
-  {
-    id: 'cue_glubinnaya_ten_second_beat_text',
-    kind: MonsterKind.GLUBINNAYA_TEN,
-    channel: 'text',
-    cue: 'Второй силуэт отстает от настоящего тела на один шаг.',
-    task: 'Сохранять local-log предупреждение при первом темном рывке: светлый выход или стояние на месте срывают второй темп.',
-  },
-  {
-    id: 'cue_gnome_concrete_scratch_audio',
-    kind: MonsterKind.GNOME,
-    channel: 'audio',
-    cue: 'Скрежет арматуры по бетону и быстрый топот в узком туннеле.',
-    task: 'Добавить звук копания и шороха камней, когда гном находится за стеной или в узком проходе.',
-  },
-];
 
 export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
   {

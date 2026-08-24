@@ -98,7 +98,7 @@ import {
   type RankStats,
 } from './alife_rating';
 import { getEntityIndex, ENTITY_MASK_NPC } from './entity_index';
-import { rng } from '../core/rand';
+import { hash32, rng } from '../core/rand';
 
 const ALIFE_VERSION = 2;
 const ALIFE_POPULATION = ALIFE_POPULATION_CAPACITY;
@@ -841,15 +841,6 @@ function setRecordRpg(alife: AlifeState, record: AlifeNpcRecord, rpg: RPGStats):
 
 // Name pools imported from '../data/names' — single source of truth
 
-function hash32(a: number, b: number, c = 0): number {
-  let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x2c1b3c6d);
-  x ^= x >>> 12;
-  x = Math.imul(x, 0x297a2d39);
-  x ^= x >>> 15;
-  return x >>> 0;
-}
 
 function unit(seed: number, index: number, salt: number): number {
   return hash32(seed, index, salt) / 0x100000000;

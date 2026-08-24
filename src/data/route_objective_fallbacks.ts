@@ -3,7 +3,6 @@ import { } from '../core/types';
 export interface RouteObjectiveFallbackDef {
   id: string;
   z?: number;
-  storyFloor?: number;
   title: string;
   target: string;
   lift: string;
@@ -15,7 +14,6 @@ export const ROUTE_OBJECTIVE_FALLBACKS: readonly RouteObjectiveFallbackDef[] = [
   {
     id: 'living_tutorial_intro',
     z: 0,
-    storyFloor: 100,
     title: 'ЦЕЛЬ: Ольга → сержант Баринов → Яков',
     target: 'Жилая зона: вводная, оружейная, лаборатория',
     lift: 'Лифт: после цели, не вслепую',

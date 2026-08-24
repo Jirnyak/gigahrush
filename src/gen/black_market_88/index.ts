@@ -58,10 +58,6 @@ export function generateBlackMarket88DesignFloor(): FloorGeneration {
   return { ...generation, isDecentralized: true as const };
 }
 
-export function generateBlackMarket88DebugFloor(): FloorGeneration {
-  return generateBlackMarket88DesignFloor();
-}
-
 export * from './geometry';
 export * from './npcs';
 

@@ -589,7 +589,6 @@ export interface Entity extends InventoryHolder {
   aoeDmg?: number;            // AoE damage on impact
   projType?: ProjType;        // special projectile behaviour
   projGore?: number;          // gore intensity 1-3 (1=clean, 3=messy)
-  burnTimer?: number;         // fire: remaining burn time on floor cell
   rpg?: RPGStats;             // RPG stats (level, XP, attributes)
   statuses?: PlayerStatus[];  // bounded timed player/NPC conditions
   statusEffects?: { istotit?: number; veretar?: number }; // Specific plot-item/Samosbor states
@@ -1133,7 +1132,6 @@ export interface GameState {
   activeQuestId?: number;    // one player-selected quest for map guidance/current objective
   nextQuestId: number;
   currentZ: number;
-  fogSpreadTimer: number;     // ticks between fog spread steps
   // ── Game menu (Enter) ──
   showMenu: boolean;
   menuSel: number;            // selected entry in the game menu

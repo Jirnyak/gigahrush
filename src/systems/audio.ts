@@ -105,14 +105,6 @@ function beginCue(id: AudioCueBudgetId): AudioContext | null {
   return claimAudioCue(id, ac.currentTime) ? ac : null;
 }
 
-export function resetAudioBudgetForTests(): void {
-  audioBudgetRuntime.clear();
-}
-
-export function claimAudioCueForTests(id: AudioCueBudgetId, now: number): boolean {
-  return claimAudioCue(id, now);
-}
-
 /* ── Distance-based volume attenuation ────────────────────────── */
 const SOUND_MAX_DIST = 25;  // beyond this, sound is silent
 const POSITIONAL_SOUND_MAX_GAIN = 0.78;

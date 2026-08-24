@@ -1,15 +1,7 @@
 /* ── Generic route gate predicates and direction guards ───────── */
 
-import { LiftDirection, QuestType, GameState, Quest } from '../core/types';
+import { QuestType, GameState, Quest } from '../core/types';
 import { ROUTE_GATE_DEFS, type RouteGateDef, type RouteGatePredicate } from '../data/route_gates';
-import { floorKeyForEntry } from './floor_keys';
-
-interface RouteGateEntryLike {
-  z?: number;
-  storyFloor?: number;
-  designFloorId?: string;
-  spec?: { key: string };
-}
 
 function questKillPredicateOpen(quest: Quest, predicate: Extract<RouteGatePredicate, { kind: 'quest_kill' }>): boolean {
   if (quest.type !== QuestType.KILL) return false;
@@ -39,36 +31,8 @@ export function openRouteGateIds(state: GameState): Set<string> {
   return out;
 }
 
-function entryFloorKey(entry: RouteGateEntryLike): string {
-  return floorKeyForEntry((entry as unknown) as Parameters<typeof floorKeyForEntry>[0]);
-}
-
 export function routeGateMatchesDirection(gate: RouteGateDef, floorKey: string, direction: number): boolean {
   return gate.targetFloorKey === floorKey && gate.blockedDirection === direction;
-}
-
-export function openRouteGateDirectionsForEntry(state: GameState, entry: RouteGateEntryLike): LiftDirection[] {
-  const floorKey = entryFloorKey(entry);
-  const out: LiftDirection[] = [];
-  for (const gate of ROUTE_GATE_DEFS) {
-    if (gate.targetFloorKey !== floorKey) continue;
-    if (!routeGateOpen(state, gate)) continue;
-    for (const direction of gate.liftMutation.directions) {
-      if (!out.includes(direction)) out.push(direction);
-    }
-  }
-  return out;
-}
-
-export function routeGateBlocksDirection(
-  entry: RouteGateEntryLike,
-  direction: LiftDirection,
-  openGateDirections: readonly LiftDirection[] = [],
-): boolean {
-  const floorKey = entryFloorKey(entry);
-  return ROUTE_GATE_DEFS.some(gate =>
-    routeGateMatchesDirection(gate, floorKey, direction) &&
-    !openGateDirections.includes(direction));
 }
 
 export function routeGateDirectionIsClosed(

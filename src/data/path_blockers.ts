@@ -9,9 +9,9 @@ export interface PathBlockerDef {
   id: string;
   tags: readonly string[];
   shapes: readonly PathBlockerShape[];
+  /** Отказ от человеческого клиренса. Боевые дефы его не выставляют — раздувание
+   *  нужно всем, — но тесты растеризации формы обязаны мерить фигуру как есть. */
   inflateForHuman?: boolean;
-  blocksProjectiles?: boolean;
-  fullCellWhenClosed?: boolean;
 }
 
 export const PATH_BLOCKER_DEFS: readonly PathBlockerDef[] = [

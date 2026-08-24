@@ -26,6 +26,7 @@ import {
   npcPackageSpeechContextTags,
   resolveNpcPackageForAlifeSnapshot,
 } from './npc_package_speech';
+import { hash32 } from '../core/rand';
 
 export type DemosMarkovIntent = 'demos_post' | 'demos_reaction';
 export type DemosMarkovSource = 'generated_markov' | 'curated_pool' | 'locked_author_text';
@@ -209,15 +210,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function hash32(a: number, b: number, c = 0): number {
-  let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x2c1b3c6d);
-  x ^= x >>> 12;
-  x = Math.imul(x, 0x297a2d39);
-  x ^= x >>> 15;
-  return x >>> 0;
-}
 
 function hashString(seed: number, value: string): number {
   let h = seed >>> 0;

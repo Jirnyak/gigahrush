@@ -1433,10 +1433,17 @@ function placeLift(world: World, x: number, y: number, buttonX: number, buttonY:
   const li = world.idx(x, y);
   world.cells[li] = Cell.LIFT;
   world.wallTex[li] = Tex.LIFT_DOOR;
+  // Клетка лифта выходит из комнаты и теряет мебель предыдущего штампа: правило
+  // генерации требует писать `cells`, `roomMap` и `features` согласованно, иначе
+  // комната продолжает числить лифт своим. Замерено: две такие клетки на этаже.
+  world.roomMap[li] = -1;
+  world.features[li] = Feature.NONE;
   world.liftDir[li] = direction;
   const bi = world.idx(buttonX, buttonY);
-  if (world.cells[bi] === Cell.FLOOR) world.features[bi] = Feature.LIFT_BUTTON;
-  world.liftDir[bi] = direction;
+  if (world.cells[bi] === Cell.FLOOR) {
+    world.features[bi] = Feature.LIFT_BUTTON;
+    world.liftDir[bi] = direction;
+  }
 }
 
 function spawnPlotNpc(

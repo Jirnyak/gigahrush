@@ -566,10 +566,6 @@ export function timeBandForMinutes(totalMinutes: number | undefined): MarkovTime
 }
 
 export const markovContextFromSnapshot = lowerContextSnapshot;
-export const markovContextFromWorldEvent = lowerWorldEventContext;
-export const markovContextFromQuest = lowerQuestContext;
-export const markovContextFromContract = lowerContractContext;
-export const markovContextFromDemosCandidate = lowerDemosCandidateContext;
 
 function addNeedTags(tags: MarkovTagBuilder, snapshot: ContextSnapshot): MarkovNeedBand {
   let band: MarkovNeedBand = 'ok';

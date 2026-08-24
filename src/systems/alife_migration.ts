@@ -47,6 +47,7 @@ import { cleanFloorKey } from './floor_keys';
 import { currentFloorRunAllowsNpcs, ensureFloorRunState } from './procedural_floors';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
 import { tryAssignPathToCell } from './ai/pathfinding';
+import { hash32 } from '../core/rand';
 
 export const MAX_ALIFE_JOURNEYS = 512;
 export const MAX_ALIFE_PENDING_ARRIVALS = 256;
@@ -176,15 +177,6 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
   return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
-function hash32(a: number, b: number, c = 0): number {
-  let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x2c1b3c6d);
-  x ^= x >>> 12;
-  x = Math.imul(x, 0x297a2d39);
-  x ^= x >>> 15;
-  return x >>> 0;
-}
 
 function unit(seed: number, a: number, b: number): number {
   return hash32(seed, a, b) / 0x100000000;

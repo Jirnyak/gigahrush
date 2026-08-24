@@ -656,18 +656,6 @@ function tickSamosborFront(
 
 /** Shared per-tick dirty cell collector — reused across fronts to avoid allocs */
 
-export function getSamosborFrontTickAccumForTests(): number {
-  return samosborFrontTickAccum;
-}
-
-export function setSamosborFrontTickAccumForTests(val: number): void {
-  samosborFrontTickAccum = val;
-}
-
-export function setActiveSamosborFrontsForTests(fronts: any[]): void {
-  activeSamosborFronts = fronts as any;
-}
-
 const frontTickDirtyCells: number[] = [];
 
 function tickAllSamosborFronts(
@@ -1969,21 +1957,6 @@ function tickMaronaryGlowDamage(
       radius: MARONARY_GLOW_RADIUS,
     },
   });
-}
-
-export function setMaronaryGlowCellsForTests(cells: readonly number[]): void {
-  maronaryGlowCells = [...cells];
-  maronaryGlowAccum = 0;
-}
-
-export function tickMaronaryGlowDamageForTests(
-  world: World,
-  entities: Entity[],
-  state: GameState,
-  dt: number,
-  variant: ActiveSamosborVariant | null,
-): void {
-  tickMaronaryGlowDamage(world, entities, state, dt, variant);
 }
 
 function canSeedRandomSamosborOrigin(world: World, idx: number): boolean {

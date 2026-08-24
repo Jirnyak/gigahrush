@@ -39,7 +39,6 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     activeQuestId: undefined,
     nextQuestId: 1,
     currentZ: 0,
-    fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,
     showNpcMenu: false,

@@ -1,4 +1,4 @@
-import { Faction, Occupation, type Item } from '../core/types';
+import { Faction, Occupation } from '../core/types';
 
 export interface WeightedValue<T> {
   value: T;
@@ -13,14 +13,6 @@ export interface AlifeFactionProfile {
   wealthMult: number;
   floorWeights: Partial<Record<number, number>>;
   occupations: readonly WeightedValue<Occupation>[];
-}
-
-export interface AlifePocketProfile {
-  faction?: Faction;
-  occupation?: Occupation;
-  minDanger?: number;
-  chance: number;
-  items: readonly WeightedValue<Item>[];
 }
 
 export const ALIFE_MAX_LEVEL = 100;
@@ -128,76 +120,6 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
       { value: Occupation.PILGRIM, weight: 20 },
       { value: Occupation.PRIEST, weight: 3 },
       { value: Occupation.TRAVELER, weight: 2 },
-    ],
-  },
-];
-
-export const ALIFE_COMMON_POCKETS: readonly AlifePocketProfile[] = [
-  {
-    chance: 0.46,
-    items: [
-      { value: { defId: 'bread', count: 1 }, weight: 16 },
-      { value: { defId: 'water', count: 1 }, weight: 16 },
-      { value: { defId: 'tea', count: 1 }, weight: 13 },
-      { value: { defId: 'cigs', count: 1 }, weight: 9 },
-      { value: { defId: 'note', count: 1 }, weight: 8 },
-      { value: { defId: 'book', count: 1 }, weight: 4 },
-      { value: { defId: 'chalk', count: 1 }, weight: 3 },
-    ],
-  },
-  {
-    occupation: Occupation.DOCTOR,
-    chance: 0.55,
-    items: [
-      { value: { defId: 'bandage', count: 1 }, weight: 12 },
-      { value: { defId: 'pills', count: 1 }, weight: 7 },
-      { value: { defId: 'antibiotic', count: 1 }, weight: 2 },
-    ],
-  },
-  {
-    faction: Faction.SCIENTIST,
-    chance: 0.42,
-    items: [
-      { value: { defId: 'temp_pass', count: 1 }, weight: 7 },
-      { value: { defId: 'blank_form', count: 1 }, weight: 5 },
-      { value: { defId: 'nii_sample_container', count: 1 }, weight: 2 },
-    ],
-  },
-  {
-    faction: Faction.LIQUIDATOR,
-    chance: 0.5,
-    items: [
-      { value: { defId: 'liquidator_ration', count: 1 }, weight: 9 },
-      { value: { defId: 'ammo_9mm', count: 8 }, weight: 7 },
-      { value: { defId: 'bandage', count: 1 }, weight: 4 },
-      { value: { defId: 'weapon_permit_signed', count: 1 }, weight: 1 },
-    ],
-  },
-  {
-    faction: Faction.CULTIST,
-    chance: 0.38,
-    items: [
-      { value: { defId: 'istotit_candle', count: 1 }, weight: 7 },
-      { value: { defId: 'holy_water', count: 1 }, weight: 2 },
-      { value: { defId: 'psi_dust', count: 1 }, weight: 1 },
-    ],
-  },
-  {
-    faction: Faction.WILD,
-    chance: 0.44,
-    items: [
-      { value: { defId: 'govnyak_roll', count: 1 }, weight: 9 },
-      { value: { defId: 'knife', count: 1 }, weight: 4 },
-      { value: { defId: 'cigs', count: 1 }, weight: 5 },
-    ],
-  },
-  {
-    minDanger: 4,
-    chance: 0.2,
-    items: [
-      { value: { defId: 'gasmask_filter', count: 1 }, weight: 6 },
-      { value: { defId: 'bandage', count: 1 }, weight: 6 },
-      { value: { defId: 'pills', count: 1 }, weight: 3 },
     ],
   },
 ];

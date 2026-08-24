@@ -21,20 +21,40 @@
  * `moveTo` — вейпойнт, а не поводок: дойдя, человек свободен, и куда он денется
  * дальше, сцене не принадлежит.
  *
- * Прогон дозирован. Замок форпоста играет все три сида целиком, потому что там
- * от сида зависит САМА комната-якорь. Здесь зал один и тот же на любом сиде, от
- * сида зависит только лабиринт вокруг — то есть дорога подлёта. Поэтому целиком
- * играется один сид, а два других идут до конца подлёта и первых кадров в зале:
- * это ровно то место, где сид ещё что-то решает. Полные три прогона стоили шесть
- * с половиной минут — половину всей матрицы генерации, — и покупали на этом
- * якоре повторение одного и того же.
+ * ── Два разных прогона, а не один длинный ─────────────────────────
+ *
+ * Замок разложен по цене проверяемого.
+ *
+ * РАССТАНОВКА (зал, генерал, плотность строя, связность поста) — факт кадра, на
+ * котором сцена поднялась, и ни один из этих ответов не меняется дальше. Он и
+ * снимается там: этаж строится, хуки контента поднимают сцену, сцена ставит
+ * каст — и всё считается ДО первого вызова `updateAI`. Симуляции в этом прогоне
+ * нет вовсе, стоит он одну генерацию этажа.
+ *
+ * КАМЕРА И «СЦЕНА ДОИГРЫВАЕТ» — это уже время, и его не сжать: сцена идёт свои
+ * две минуты, кадр обязан пройти их своим ходом и закрыться сам. Здесь сжимается
+ * не время, а ТОЛПА: цикл AI ведёт всех, кто на этаже, то есть две с лишним
+ * тысячи акторов против трёх с половиной сотен собственного каста сцены. Фон
+ * прореживается до размера каста (`tests/scene_crowd.ts`) сразу, как сцена
+ * поднялась. Замерено на сиде 61061: симуляция 239 с → 56 с, при тех же
+ * значениях перескока, разворота, доли у стены и ухода генерала.
+ *
+ * Плотность строя по прореженному прогону считать нельзя — свободных клеток там
+ * больше. Потому она и снимается отдельным, полнолюдным прогоном расстановки.
+ *
+ * Прогон камеры дозирован по сидам. Замок форпоста играет все три сида целиком,
+ * потому что там от сида зависит САМА комната-якорь. Здесь зал один и тот же на
+ * любом сиде, от сида зависит только лабиринт вокруг — то есть дорога подлёта.
+ * Поэтому целиком играется один сид, а два других идут до конца подлёта и первых
+ * кадров в зале: это ровно то место, где сид ещё что-то решает.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import '../src/content';
-import { EntityType, type Entity } from '../src/core/types';
+import { EntityType, type Entity, type GameState } from '../src/core/types';
+import type { World } from '../src/core/world';
 import { seedGlobalRng } from '../src/core/rand';
 import { initFactionRelations } from '../src/data/relations';
 import { generateFloor } from '../src/gen/floor_manifest';
@@ -46,6 +66,7 @@ import {
   createRuntimeCamera,
   runtimeCameraView,
   updateRuntimeCamera,
+  type RuntimeCamera,
 } from '../src/systems/camera';
 import {
   bindSceneCamera,
@@ -57,6 +78,7 @@ import { updateContentRuntimeHooks } from '../src/systems/content_hooks';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
 import { makeGameState, makeTestPlayer } from './helpers';
+import { thinSceneBystanders } from './scene_crowd';
 
 const MINISTRY_Z = 30;
 const FRAME = 1 / 60;
@@ -80,12 +102,17 @@ const MARCH_POST_OX = -22;
 /** Сколько человек строя проверять на связь с постом: полный обход — сотни BFS. */
 const CONNECTIVITY_SAMPLE = 16;
 
-interface Run {
+/** Факты расстановки: всё, что известно уже на кадре подъёма сцены. */
+interface Muster {
   anchorSize: string;
   generalPlaced: boolean;
-  generalWorstDrift: number;
   ranksPlaced: number;
   ranksStranded: number;
+}
+
+/** Факты проигрывания: то, ради чего сцену приходится досматривать. */
+interface Run {
+  generalWorstDrift: number;
   seconds: number;
   worstStep: number;
   worstTurn: number;
@@ -94,7 +121,22 @@ interface Run {
   finished: boolean;
 }
 
-function playParadeScene(seed: number, frames: number): Run {
+interface Stage {
+  world: World;
+  entities: Entity[];
+  player: Entity;
+  state: GameState;
+  camera: RuntimeCamera;
+  nextEntityId: { v: number };
+  anchorSize: string;
+  anchorCx: number;
+  anchorCy: number;
+  general: Entity | undefined;
+  beforeIds: Set<number>;
+}
+
+/** Живое министерство с запрошенной сценой: общая часть обоих прогонов. */
+function stageParade(seed: number): Stage {
   seedGlobalRng(0xf0f0 + seed);
   initFactionRelations();
   const gen = generateFloor(MINISTRY_Z, seed);
@@ -113,36 +155,95 @@ function playParadeScene(seed: number, frames: number): Run {
   resetFloorScenes();
   assert.equal(requestFloorScene(GARRISON_PARADE_SCENE_ID), true, 'сцена обязана быть в реестре');
 
-  const beforeIds = new Set(entities.map(e => e.id));
-  const nextEntityId = { v: 900_000 };
-  const anchorCx = anchor!.x + anchor!.w / 2;
-  const anchorCy = anchor!.y + anchor!.h / 2;
-  const general = entities.find(e => (e as { npcPackageId?: string }).npcPackageId === PARADE_GENERAL_ID);
-  const run: Run = {
+  return {
+    world,
+    entities,
+    player,
+    state,
+    camera,
+    nextEntityId: { v: 900_000 },
     anchorSize: `${anchor!.w}x${anchor!.h}`,
-    generalPlaced: general !== undefined,
+    anchorCx: anchor!.x + anchor!.w / 2,
+    anchorCy: anchor!.y + anchor!.h / 2,
+    general: entities.find(e => (e as { npcPackageId?: string }).npcPackageId === PARADE_GENERAL_ID),
+    beforeIds: new Set(entities.map(e => e.id)),
+  };
+}
+
+/** Один кадр хуков контента: он и поднимает сцену, он же ставит каст. */
+function tickHooks(stage: Stage): void {
+  stage.state.time += FRAME;
+  stage.state.tick++;
+  updateContentRuntimeHooks({
+    world: stage.world, entities: stage.entities, player: stage.player, state: stage.state,
+    nextEntityId: stage.nextEntityId, dt: FRAME, phase: 'floor_activity', gameOver: false,
+  });
+}
+
+/**
+ * Прогон расстановки: этаж, подъём сцены, счёт. НИ ОДНОГО ШАГА AI.
+ *
+ * Раньше эти же четыре факта снимались посреди двухминутной симуляции, хотя ни
+ * один из них после подъёма сцены не меняется.
+ */
+function musterParade(seed: number): Muster {
+  const stage = stageParade(seed);
+  let started = false;
+  // Потолок — на случай, если сцена не поднимется вовсе; в норме хватает кадра.
+  for (let f = 0; f < PROBE_FRAMES && !started; f++) {
+    tickHooks(stage);
+    started = isFloorSceneActive();
+  }
+  assert.equal(started, true, `сид ${seed}: сцена так и не поднялась`);
+
+  const fresh = stage.entities.filter(e => !stage.beforeIds.has(e.id) && e.type === EntityType.NPC);
+  /* Связность поста считается от самих людей строя: свободная клетка ещё не
+   * значит достижимая, а колонна, которой некуда идти, простоит весь развод
+   * на месте. Выборкой — полный обход строя это три сотни BFS по тору. */
+  const postX = Math.floor(stage.anchorCx + MARCH_POST_OX);
+  const postY = Math.floor(stage.anchorCy);
+  const step = Math.max(1, Math.floor(fresh.length / CONNECTIVITY_SAMPLE));
+  let stranded = 0;
+  for (let i = 0; i < fresh.length; i += step) {
+    const man = fresh[i];
+    if (bfsPath(stage.world, Math.floor(man.x), Math.floor(man.y), postX, postY).length === 0) stranded++;
+  }
+
+  resetFloorScenes();
+  return {
+    anchorSize: stage.anchorSize,
+    generalPlaced: stage.general !== undefined,
+    ranksPlaced: fresh.length,
+    ranksStranded: stranded,
+  };
+}
+
+/** Прогон камеры: сцена играется покадрово, фон этажа прорежен до размера каста. */
+function playParadeScene(seed: number, frames: number): Run {
+  const stage = stageParade(seed);
+  const { world, entities, player, state, camera } = stage;
+  const run: Run = {
     generalWorstDrift: 0,
-    ranksPlaced: 0, ranksStranded: 0,
     seconds: 0, worstStep: 0, worstTurn: 0, scrapePercent: 0, finished: false,
   };
 
   let cinematicFrames = 0;
   let scrapeFrames = 0;
-  let castTaken = false;
+  let thinned = false;
   let started = false;
   let prevX = -1;
   let prevY = -1;
   let prevAngle = 0;
 
   for (let f = 0; f < frames; f++) {
-    state.time += FRAME;
-    state.tick++;
-    updateContentRuntimeHooks({
-      world, entities, player, state, nextEntityId, dt: FRAME,
-      phase: 'floor_activity', gameOver: false,
-    });
+    tickHooks(stage);
+    if (isFloorSceneActive() && !thinned) {
+      // Каст уже стоит — значит, известно, кого сцене нужно, а кого нет.
+      thinned = true;
+      thinSceneBystanders(entities, player);
+    }
     rebuildEntityIndexForSimulation(entities, world);
-    updateAI(world, entities, FRAME, state.time, state.msgs, player.id, state.clock, false, nextEntityId, MINISTRY_Z, state);
+    updateAI(world, entities, FRAME, state.time, state.msgs, player.id, state.clock, false, stage.nextEntityId, MINISTRY_Z, state);
     updateRuntimeCamera(camera, world, FRAME, player);
     run.seconds = f / 60;
 
@@ -150,24 +251,9 @@ function playParadeScene(seed: number, frames: number): Run {
       started = true;
       /* Генерал — ось всей сцены и единственный, кого она не отпускает: смотр
        * принимают стоя. Уйдёт из зала — облетать станет некого. */
-      if (general?.alive) {
+      if (stage.general?.alive) {
         run.generalWorstDrift = Math.max(run.generalWorstDrift,
-          world.dist(general.x, general.y, anchorCx, anchorCy));
-      }
-    }
-    if (started && !castTaken) {
-      castTaken = true;
-      const fresh = entities.filter(e => !beforeIds.has(e.id) && e.type === EntityType.NPC);
-      run.ranksPlaced = fresh.length;
-      /* Связность поста считается от самих людей строя: свободная клетка ещё не
-       * значит достижимая, а колонна, которой некуда идти, простоит весь развод
-       * на месте. Выборкой — полный обход строя это три сотни BFS по тору. */
-      const postX = Math.floor(anchorCx + MARCH_POST_OX);
-      const postY = Math.floor(anchorCy);
-      const step = Math.max(1, Math.floor(fresh.length / CONNECTIVITY_SAMPLE));
-      for (let i = 0; i < fresh.length; i += step) {
-        const man = fresh[i];
-        if (bfsPath(world, Math.floor(man.x), Math.floor(man.y), postX, postY).length === 0) run.ranksStranded++;
+          world.dist(stage.general.x, stage.general.y, stage.anchorCx, stage.anchorCy));
       }
     }
 
@@ -204,8 +290,15 @@ function playParadeScene(seed: number, frames: number): Run {
   return run;
 }
 
-/* Прогон дорогой: на министерстве под две тысячи живых сущностей, и каждый кадр
- * их ведёт полный цикл AI. Оба замка смотрят на один и тот же прогон. */
+const musters = new Map<number, Muster>();
+function paradeMuster(seed: number): Muster {
+  const cached = musters.get(seed);
+  if (cached) return cached;
+  const muster = musterParade(seed);
+  musters.set(seed, muster);
+  return muster;
+}
+
 const runs = new Map<number, Run>();
 function paradeRun(seed: number): Run {
   const cached = runs.get(seed);
@@ -217,32 +310,32 @@ function paradeRun(seed: number): Run {
 
 test('ministry garrison parade musters the whole hall', () => {
   for (const seed of SEEDS) {
-    const run = paradeRun(seed);
-    assert.equal(run.anchorSize, '33x33',
-      `сид ${seed}: зал-якорь ${run.anchorSize}, а смещения кадра считаны от 33x33`);
-    assert.equal(run.generalPlaced, true,
+    const muster = paradeMuster(seed);
+    assert.equal(muster.anchorSize, '33x33',
+      `сид ${seed}: зал-якорь ${muster.anchorSize}, а смещения кадра считаны от 33x33`);
+    assert.equal(muster.generalPlaced, true,
       `сид ${seed}: генерала нет на этаже — доставка авторских пакетов его не нашла`);
-    // Дойти до конца обязан целиком сыгранный сид; пробы обрываются намеренно.
-    if (seed === FULL_SEED) {
-      assert.equal(run.finished, true,
-        `сид ${seed}: сцена не закончилась за ${run.seconds.toFixed(0)}с`);
-    }
 
     /* Порог не «сколько красиво», а «сколько влезает»: три сотни человек в зале
      * 33x33 занимают около трети клеток, и десятая доля потерь на тесноте —
      * ожидаемый разброс. Половина потерянного строя — это уже другая сцена. */
     assert.ok(
-      run.ranksPlaced >= DECLARED_RANKS * 0.85,
-      `сид ${seed}: поставлено ${run.ranksPlaced} из ${DECLARED_RANKS} — залу не хватило места на строй`,
+      muster.ranksPlaced >= DECLARED_RANKS * 0.85,
+      `сид ${seed}: поставлено ${muster.ranksPlaced} из ${DECLARED_RANKS} — залу не хватило места на строй`,
     );
-    assert.equal(run.ranksStranded, 0,
-      `сид ${seed}: ${run.ranksStranded} человек строя отрезаны от поста развода`);
+    assert.equal(muster.ranksStranded, 0,
+      `сид ${seed}: ${muster.ranksStranded} человек строя отрезаны от поста развода`);
   }
 });
 
 test('ministry garrison parade keeps the camera on foot: no teleports, no whip-pans', () => {
   for (const seed of SEEDS) {
     const run = paradeRun(seed);
+    // Дойти до конца обязан целиком сыгранный сид; пробы обрываются намеренно.
+    if (seed === FULL_SEED) {
+      assert.equal(run.finished, true,
+        `сид ${seed}: сцена не закончилась за ${run.seconds.toFixed(0)}с`);
+    }
     assert.ok(
       run.worstStep <= MAX_STEP_PER_FRAME,
       `сид ${seed}: перескок ${run.worstStep.toFixed(2)} клетки за кадр — `

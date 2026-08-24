@@ -33,7 +33,6 @@ export interface ScriptedArrivalDef {
   id: string;
   triggerPlotEventTag: string;
   currentZ: number;
-  currentStoryFloor?: number;
   leaderPlotNpcId: string;
   leaderWeapon?: string;
   leaderTraveler?: boolean;
@@ -50,7 +49,6 @@ export const SCRIPTED_ARRIVALS: readonly ScriptedArrivalDef[] = [
     id: 'hell_holdout_major_grom_group',
     triggerPlotEventTag: 'hell_holdout',
     currentZ: -36,
-    currentStoryFloor: 180,
     leaderPlotNpcId: 'major_grom',
     leaderWeapon: 'ak47',
     leaderTraveler: true,

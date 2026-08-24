@@ -67,10 +67,6 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
   });
 }
 
-export function generatePodadDebugFloor(seed = PODAD_DEFAULT_SEED): FloorGeneration {
-  return generatePodadDesignFloor(seed);
-}
-
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";

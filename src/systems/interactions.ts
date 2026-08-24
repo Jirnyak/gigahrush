@@ -501,8 +501,6 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
   return { handled: true };
 }
 
-export const activateDoor_FOR_TESTING = activateDoor;
-
 function activateMetro(ctx: InteractionContext): InteractionResult {
   const metro = tryUseMetroRoute(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY);
   if (!metro) return { handled: false };

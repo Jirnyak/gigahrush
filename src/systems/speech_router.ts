@@ -53,8 +53,6 @@ export interface SpeechRouterResult {
   fallbackUsed: boolean;
 }
 
-export type SpeechGenerator = (request: SpeechRouterRequest) => SpeechRouterResult | undefined;
-
 const DEFAULT_INTENT_CAPS: Record<MarkovIntent, number> = {
   talk_ambient: 120,
   talk_context: 140,
@@ -91,12 +89,6 @@ const GENERATED_BLOCKED_TAGS = new Set([
   'source.locked_author_text',
 ]);
 
-let speechGenerator: SpeechGenerator | undefined;
-
-export function setSpeechRouterGenerator(generator: SpeechGenerator | undefined): void {
-  speechGenerator = generator;
-}
-
 export function routeSpeech(request: SpeechRouterRequest): SpeechRouterResult {
   if (request.source === 'locked_author_text' || request.intent === 'locked_author_text') {
     return lockedTextResult(request);
@@ -116,24 +108,15 @@ export function routeSpeech(request: SpeechRouterRequest): SpeechRouterResult {
 export function generateMarkovText(request: SpeechRouterRequest): SpeechRouterResult {
   if (!generatedAllowed(request.context)) return curatedPoolResult(request);
 
-  let generated: SpeechRouterResult | undefined;
-  if (speechGenerator) {
-    try {
-      generated = speechGenerator(request);
-    } catch {
-      return curatedPoolResult(request);
-    }
-  } else {
-    generated = generateCoreMarkovText({
-      intent: request.intent,
-      source: 'generated_markov',
-      context: request.context,
-      exactFallback: request.exactFallback,
-      repeatIndex: request.repeatIndex,
-      maxChars: request.maxChars,
-      seed: normalizeSeed(request.seed),
-    });
-  }
+  const generated = generateCoreMarkovText({
+    intent: request.intent,
+    source: 'generated_markov',
+    context: request.context,
+    exactFallback: request.exactFallback,
+    repeatIndex: request.repeatIndex,
+    maxChars: request.maxChars,
+    seed: normalizeSeed(request.seed),
+  });
 
   if (generated && generated.source === 'generated_markov' && hasText(generated.text) && !generated.fallbackUsed) {
     return {

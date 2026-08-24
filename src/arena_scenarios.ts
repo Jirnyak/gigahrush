@@ -96,7 +96,6 @@ export function createArenaGameState(): GameState {
     quests: [],
     nextQuestId: 1,
     currentZ: 0,
-    fogSpreadTimer: 0,
     showMenu: false,
     menuSel: 0,
     showNpcMenu: false,

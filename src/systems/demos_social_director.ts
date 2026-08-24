@@ -23,6 +23,7 @@ import {
   type DemosRelationOverride,
   type DemosSocialSaveState,
 } from './demos_save';
+import { hash32 } from '../core/rand';
 
 export const DEMOS_EVENT_SCAN_PER_TICK_CAP = 32;
 export const DEMOS_POSTS_PER_TICK_CAP = 8;
@@ -83,15 +84,6 @@ function positiveId(value: unknown): number | undefined {
   return id > 0 ? Math.min(id, 0x7fffffff) : undefined;
 }
 
-function hash32(a: number, b: number, c = 0): number {
-  let x = (Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(b ^ 0xc2b2ae35, 0x27d4eb2d) + c) | 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x2c1b3c6d);
-  x ^= x >>> 12;
-  x = Math.imul(x, 0x297a2d39);
-  x ^= x >>> 15;
-  return x >>> 0;
-}
 
 function clampDelta(value: number): number {
   return Math.max(DEMOS_REACTION_DELTA_MIN, Math.min(DEMOS_REACTION_DELTA_MAX, Math.trunc(value)));

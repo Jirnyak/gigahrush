@@ -300,9 +300,7 @@ function objectiveRiskLine(_state: GameState, q: Quest): string {
 
 function fallbackObjectiveForCurrentRoute(state: GameState): ObjectiveRouteHud | undefined {
   const current = currentFloorRunEntry(state);
-  const def = ROUTE_OBJECTIVE_FALLBACKS.find(hint =>
-    (hint.z === undefined || hint.z === current.z) &&
-    (hint.storyFloor === undefined || current.themeTags.includes(String(hint.storyFloor))));
+  const def = ROUTE_OBJECTIVE_FALLBACKS.find(hint => hint.z === undefined || hint.z === current.z);
   if (!def) return undefined;
   return {
     title: def.title,

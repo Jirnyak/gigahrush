@@ -7,7 +7,6 @@ import {
   FLOOR_MAJORITY_FACTIONS,
   FLOOR_RUN_MAX_Z,
   FLOOR_RUN_MIN_Z,
-  FLOOR_RUN_VOID_Z,
   PROCEDURAL_FLOOR_COUNT,
   PROCEDURAL_FLOOR_ZS,
   anomalyById,
@@ -155,7 +154,7 @@ function createSpecDeck(runSeed: number): Record<string, ProceduralFloorSpec> {
 function normalizeZ(value: unknown, fallbackZ: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const z = Math.trunc(value);
-    if ((z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z) || z === FLOOR_RUN_VOID_Z) return z;
+    if (z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z) return z;
   }
   return fallbackZ;
 }
@@ -330,7 +329,7 @@ function sanitizeUnlockedZs(input: unknown, currentZ: number): number[] {
     for (const value of input) {
       if (typeof value !== 'number' || !Number.isFinite(value)) continue;
       const z = Math.trunc(value);
-      if ((z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z) || z === FLOOR_RUN_VOID_Z) set.add(z);
+      if (z >= FLOOR_RUN_MIN_Z && z <= FLOOR_RUN_MAX_Z) set.add(z);
     }
   }
   return [...set].sort((a, b) => b - a);

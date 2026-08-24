@@ -111,9 +111,22 @@ function flyToHall(seed: number): Flight {
   return flight;
 }
 
+/* Весь расход прогона — генерация жилого этажа: сам пролёт это меньше тысячи
+ * кадров чистой камеры, без единого шага AI. Оба замка смотрят на один и тот же
+ * пролёт, и генерировать этаж каждому из них по разу — это вдвое дороже ни за
+ * что. Кэш на сид, как в замке смотра. */
+const flights = new Map<number, Flight>();
+function hallFlight(seed: number): Flight {
+  const cached = flights.get(seed);
+  if (cached) return cached;
+  const flight = flyToHall(seed);
+  flights.set(seed, flight);
+  return flight;
+}
+
 test('prologue camera leaves the locked starting room and flies the whole way', () => {
   for (const seed of SEEDS) {
-    const flight = flyToHall(seed);
+    const flight = hallFlight(seed);
     assert.equal(flight.startRoom, 'Столовая',
       `сид ${seed}: новая игра обязана начинаться в запертой Столовой, а не в "${flight.startRoom}"`);
     assert.ok(flight.nodes > 1,
@@ -131,7 +144,7 @@ test('prologue camera flight stays short enough to open a game with', () => {
   // Не вкусовщина, а предохранитель: пролёт держит управление у сцены, и если
   // маршрут внезапно вырос вчетверо, это видно числом, а не глазами.
   for (const seed of SEEDS) {
-    const flight = flyToHall(seed);
+    const flight = hallFlight(seed);
     assert.ok(flight.frames < 60 * 12,
       `сид ${seed}: пролёт до зала занял ${(flight.frames / 60).toFixed(1)}с`);
   }
