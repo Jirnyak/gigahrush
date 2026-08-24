@@ -91,7 +91,7 @@ import { rng, hashSeed, randSeed, xorshift32, irand, mathRng } from './core/rand
 import { canActorOccupy, stepActorBy, unstuckActorFromBlockers } from './systems/movement_collision';
 import { selectMeleeTarget } from './systems/melee_targeting';
 import { updateProceduralScreens } from './world/procedural_screens';
-import { resetCritterCrunch, updateCritterCrunch } from './render/critters';
+import { updateCritterCrunch } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
@@ -3442,9 +3442,11 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   clearVoidReturnPortalState(state);
   setVoidEntryFromFloor(state, undefined);
   forceFloorRunStory(state, 0);
-  const floorInstances = ensureFloorInstanceState(state, 100);
+  // Якорь возврата — тот же жилой этаж, что выставлен в `state.currentZ` выше.
+  // Стояло 100: ключ жилого по удалённой шкале, этажа с таким z не существует.
+  const floorInstances = ensureFloorInstanceState(state, 0);
   floorInstances.current = null;
-  floorInstances.lastStableFloor = 100;
+  floorInstances.lastStableFloor = 0;
   state.msgs.push(msg(
     voidSpikeWasResolved
       ? 'Возврат принят. Последствие осталось в Пустоте. Жилая зона принимает вас обратно.'
@@ -3529,7 +3531,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       tags: ['floor', 'floor_transition', 'void', 'return_portal', 'used', 'freeplay', voidSpikeTag],
       data: {
         fromFloor,
-        toFloor: 100,
+        toFloor: 0,   // канонический жилой этаж; 100 — ключ снятой шкалы
         portalCell,
         openedAt,
         openedTick,
@@ -6270,7 +6272,10 @@ function switchFloor(
   const savedMoney = player.money ?? 100;
 
   state.currentZ = nextFloor;
-  if (nextFloor === 200) setVoidEntryFromFloor(state, fromFloor);
+  // Адрес возврата из Пустоты. Сравнение с 200 (снятая шкала) не срабатывало
+  // никогда, поэтому лифтовый спуск в Пустоту СТИРАЛ адрес, и портал Творца
+  // терял, куда возвращать. Продолжение смерти рядом (3018) считает тему верно.
+  if (runEntry?.themeTags.includes('void')) setVoidEntryFromFloor(state, fromFloor);
   else setVoidEntryFromFloor(state, undefined);
 
   // Defer heavy generation — game loop will show loading screen first
@@ -6278,10 +6283,6 @@ function switchFloor(
     loadingProgress('Рисуем лабиринт этажа', 5);
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
-    // Хруст живности помнит ПОСЛЕДНЮЮ клетку по сквозному индексу мира, а он
-    // общий для всех этажей: без сброса первый шаг на новом этаже в клетку с тем
-    // же индексом молчал.
-    resetCritterCrunch();
     const loaded = loadFloorForTarget(nextFloor, generatedRunEntry);
     const gen = loaded.generation;
 
@@ -6441,14 +6442,14 @@ function switchFloor(
     // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
     const enteredStoryHell = generatedRunEntry
       ? generatedRunEntry.themeTags.includes('hell')
-      : nextFloor === 180 && !allowElevatorAnomaly;
+      : false;   // без темы этажа прибытие не определить: сравнение с 180 было снятой шкалой
     if (!route.activeInstance && enteredStoryHell) {
       onHellArrival(player, state);
       tryCreateVoiceQuest(world, entities, state);
     }
     const enteredStoryVoid = generatedRunEntry
       ? generatedRunEntry.themeTags.includes('void')
-      : nextFloor === 200 && !allowElevatorAnomaly;
+      : false;   // то же: 200 — снятая шкала, ветка не могла исполниться
     if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
     loadingProgress('Расставляем лифты и двери', 70);
     ensureRoomContainers(world, state.currentZ);
@@ -6478,10 +6479,15 @@ function switchFloor(
     // in the save) replaces the old "!hasFloorMemory" been-here-before proxy.
     const cinematicKey = currentFloorMemoryKey();
     if (!playedCinematicKeys.has(cinematicKey)) {
+      // Тема этажа, а не координата: числа 100/180/200 — снятая шкала, и
+      // `nextFloor` (маршрутный z в [-50, 50]) не мог совпасть с ними никогда,
+      // то есть облёт камеры на жилом, в Аду и в Пустоте не запускался. Ровно
+      // так же ниже уже определяются прибытие в Ад и вход в Пустоту.
+      const cinematicTags = generatedRunEntry?.themeTags;
       const isCinematicFloor =
-        nextFloor === 100 ||
-        nextFloor === 180 ||
-        nextFloor === 200 ||
+        cinematicTags?.includes('living') ||
+        cinematicTags?.includes('hell') ||
+        cinematicTags?.includes('void') ||
         (generatedRunEntry?.designFloorId as string) === 'liquidatorbase' ||
         (generatedRunEntry?.designFloorId as string) === 'horrorfloor' ||
         (generatedRunEntry?.designFloorId as string) === 'cave_floor' ||

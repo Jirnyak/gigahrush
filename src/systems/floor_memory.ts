@@ -27,6 +27,7 @@ import { cleanFloorKey, floorKeyForDesign, floorKeyKnown, type FloorKeyResolveCo
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { isNativePlayerBodyEntity } from './player_actor';
 import { rng, shuffleWith } from '../core/rand';
+import { MAX_ACTIVE_ACTOR_SOFT_LIMIT } from '../data/entity_limits';
 
 export interface FloorMemoryEntry {
   key: string;
@@ -2144,10 +2145,15 @@ function sanitizeRestoredEntity(entity: Entity): Entity | null {
   return entity;
 }
 
+/* Единственная секция сейва, чей размер задавал недоверенный `localStorage`:
+ * ни `break` по длине, ни `slice`. Соседние секции той же формы капятся все
+ * (контейнеры, квесты, инвентарь, мёртвые id A-Life), и `save.md` этого прямо
+ * требует. Потолок берётся у мягкого лимита акторов, нового числа не заводим. */
 function restoreEntities(input: unknown): Entity[] {
   if (!Array.isArray(input)) return [];
   const out: Entity[] = [];
   for (const raw of input) {
+    if (out.length >= MAX_ACTIVE_ACTOR_SOFT_LIMIT) break;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     let entity: Entity;
     try {

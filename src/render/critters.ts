@@ -64,11 +64,20 @@ export function critterSpeciesTable(designFloorId: string | undefined): {
  * нельзя — но клетка, где шейдер их плодит, определяется теми же полями мира,
  * и на неё можно наступить. Проверяется одна клетка на шаг игрока.
  */
+/* Память привязана К МИРУ, а не к модулю. Индекс клетки сквозной для всех
+ * этажей, поэтому голая модульная переменная переживала смену мира и глушила
+ * первый шаг на новом этаже в клетку с тем же индексом. Явный сброс на смене
+ * этажа это чинил ровно на одном пути из шести (лифт), а мир заменяется ещё в
+ * загрузке сейва, продолжении смерти, возврате из Пустоты, старте игры и
+ * сетевом стриме. Сверка ссылки на мир закрывает все шесть и не требует, чтобы
+ * кто-то помнил про вызов. */
 let lastCrunchCell = -1;
+let lastCrunchWorld: World | null = null;
 
 export function updateCritterCrunch(world: World, px: number, py: number): void {
   const idx = world.idx(Math.floor(px), Math.floor(py));
-  if (idx === lastCrunchCell) return;
+  if (world === lastCrunchWorld && idx === lastCrunchCell) return;
+  lastCrunchWorld = world;
   lastCrunchCell = idx;
   if (!getCritterRenderEnabled()) return;
   if (world.cells[idx] !== Cell.FLOOR) return;
@@ -85,7 +94,4 @@ export function updateCritterCrunch(world: World, px: number, py: number): void 
   }
 }
 
-/** Смена этажа: следующий шаг снова может хрустнуть. */
-export function resetCritterCrunch(): void {
-  lastCrunchCell = -1;
-}
+

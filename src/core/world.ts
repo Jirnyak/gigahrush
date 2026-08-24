@@ -122,6 +122,11 @@ function markWorldReplaced(world: World, versions: {
   world.tissueVersion = nextVersion(versions.tissueVersion);
   world.clearPendingGridDirtyRects();
   world.markSurfaceUploadDirty();
+  // Кэш комнат по имени сбрасывался только при ИЗМЕНИВШЕЙСЯ длине списка, а
+  // стежка самосбора и стрим этажа пиру заменяют геометрию в живом мире. При
+  // совпавшем числе комнат `getRoomByName` продолжал отдавать объект прежней
+  // геометрии, и телепорт по имени комнаты уводил игрока по старым координатам.
+  world.roomsByName = null;
 }
 
 function lightFeature(feature: number): boolean {

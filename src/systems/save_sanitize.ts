@@ -7,6 +7,7 @@
  * отвергается по SAVE_SHAPE_VERSION, а не чинится.
  */
 
+import { SAVE_QUEST_CAP } from './save_payload';
 import { Faction, GameClock, Item, MonsterKind, Needs, Quest, QuestType, RPGStats, RoomType,
   WorldEventPrivacy, WorldEventSeverity } from '../core/types';
 import { ITEMS, WEAPON_STATS, freshNeeds } from '../data/catalog';
@@ -22,7 +23,7 @@ export function finiteNumber(value: unknown, fallback: number): number {
 }
 
 const SAVE_INVENTORY_SLOT_CAP = MAX_INVENTORY_SLOTS;
-const SAVE_QUEST_CAP = 512;
+
 const SAVE_TEXT_CAP = 192;
 export const MAX_SAVE_MONEY = 999_999;
 const MAX_QUEST_TIME_LIMIT_MINUTES = 5 * 24 * 60;
@@ -214,12 +215,13 @@ function normalizeQuestTargets(q: Quest, raw: Record<string, unknown>): void {
   if (targetMonsterKind !== undefined) q.targetMonsterKind = targetMonsterKind;
   if (raw.killCount !== undefined) q.killCount = clampInt(raw.killCount, 0, 0, 999);
   if (raw.killNeeded !== undefined) q.killNeeded = clampInt(raw.killNeeded, 1, 1, 999);
-  if (typeof raw.targetNpcId === 'number' && Number.isFinite(raw.targetNpcId)) {
-    q.targetNpcId = clampInt(raw.targetNpcId, -1, -1, 1_000_000);
-  }
   const targetNpcName = cleanSaveText(raw.targetNpcName, '', 96);
   if (targetNpcName) q.targetNpcName = targetNpcName;
-  if (typeof raw.targetNpcId === 'number' && !Number.isNaN(raw.targetNpcId)) {
+  // Раньше поле разбиралось ДВАЖДЫ в одной функции: первый блок допускал −1,
+  // второй тут же перетирал результат диапазоном с нуля, то есть первый не мог
+  // ни на что повлиять. Заодно вернулась строгая проверка: `!Number.isNaN`
+  // пропускает Infinity, `Number.isFinite` — нет.
+  if (typeof raw.targetNpcId === 'number' && Number.isFinite(raw.targetNpcId)) {
     q.targetNpcId = clampInt(raw.targetNpcId, 0, 0, 1_000_000);
   } else if (typeof raw.targetNpcId === 'string' && raw.targetNpcId.length > 0) {
     const numId = getPlotNpcNumericId(raw.targetNpcId)!;
@@ -301,7 +303,11 @@ function isQuestValid(q: Quest): boolean {
     if (q.type === QuestType.FETCH && !q.targetItem) return false;
     if (q.type === QuestType.VISIT && q.targetRoom === undefined && q.targetRoomDefId === undefined && q.targetRoute === undefined && q.visitFloorZ === undefined) return false;
     if (q.type === QuestType.KILL && q.targetMonsterKind === undefined && !q.targetNpcId && q.killNeeded === undefined) return false;
-    if (q.type === QuestType.TALK && q.targetNpcId === undefined && !q.targetNpcId) return false;
+    // Слоты сюжетных личностей начинаются с единицы, поэтому ноль не принадлежит
+    // никому. Стояло `=== undefined && !q.targetNpcId`: второй конъюнкт не мог
+    // добавить ни одного входа, и TALK-квест с нулевой целью проходил проверку
+    // невыполнимым — тогда как KILL строкой выше такой же ноль отбрасывал.
+    if (q.type === QuestType.TALK && !q.targetNpcId) return false;
   }
   return true;
 }
