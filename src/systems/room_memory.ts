@@ -294,10 +294,6 @@ export function roomMemoryLabels(bits: number): string[] {
   return out;
 }
 
-export function describeRoomMemory(record: RoomMemoryRecord): string {
-  const labels = roomMemoryLabels(record.bits).join(', ') || 'след';
-  return `room #${record.roomId}: ${labels}; sev${record.severity}; ttl ${Math.ceil(record.ttl)}s; event ${record.lastEventType}#${record.lastEventId}`;
-}
 
 export function summarizeRoomMemoryForRoom(z: number | undefined, roomId: number | undefined): string[] {
   const record = getRoomMemory(z, roomId);

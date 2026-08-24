@@ -646,15 +646,6 @@ export function isInteractableOverlayOpen(): boolean {
     || isFastElevatorOverlayOpen();
 }
 
-export function getInteractableOverlaySnapshot(): InteractableOverlaySnapshot {
-  if (isGamblingOverlayOpen()) return { open: true, kind: 'gambling' };
-  if (isComputerOverlayOpen()) return { open: true, kind: 'computer' };
-  if (isNetHackOverlayOpen()) return { open: true, kind: 'net_hack' };
-  if (isNetTerminalBankOpen() || isNetTerminalGenDeniedOpen()) return { open: true, kind: 'net_terminal' };
-  if (isFastElevatorOverlayOpen()) return { open: true, kind: 'fast_elevator' };
-  if (isArenaOverlayOpen()) return { open: true, kind: 'arena' };
-  return { open: false, kind: 'none' };
-}
 
 export function closeInteractableOverlay(): void {
   closeGamblingMachine();

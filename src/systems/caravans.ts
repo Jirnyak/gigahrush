@@ -1159,15 +1159,6 @@ registerEconomyTariffProvider({
   },
 });
 
-export function summarizeCaravans(state: GameState, limit = 6): string[] {
-  const caravans = ensureCaravanState(state);
-  return CARAVAN_LANES.slice(0, limit).map(def => {
-    const lane = caravans.lanes[def.id];
-    const status = lane.open ? 'открыта' : 'закрыта';
-    const tariff = getCaravanLaneTariffMultiplier(state, def.id).toFixed(2);
-    return `${def.name}: ${status}, стабильность ${Math.round(lane.stability * 100)}%, тариф x${tariff}`;
-  });
-}
 
 function handleCaravanQuestEvent(state: GameState, event: WorldEvent): boolean {
   if (event.type !== 'quest_completed' && event.type !== 'contract_completed') return false;

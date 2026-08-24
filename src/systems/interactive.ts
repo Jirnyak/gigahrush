@@ -679,10 +679,6 @@ export function interactiveAt(world: World, x: number, y: number): InteractiveIn
   });
 }
 
-export function interactiveDebugSummary(world: World): string {
-  const state = worldState(world);
-  return `[INTERACTIVE] cells=${state.byIdx.size} instances=${state.byId.size} next=${state.nextId}`;
-}
 
 registerContentInteractionHook({
   id: 'interactive_surfaces',

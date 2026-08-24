@@ -1373,25 +1373,3 @@ export interface TerritoryFrontStats {
   cellBudgetLeft: number;
 }
 
-/** Отладочный путь: что сейчас видит фронт. */
-export function territoryFrontStats(world: World): TerritoryFrontStats {
-  const front = frontOf(world);
-  const byOwner = new Array<number>(TERRITORY_OWNER_SLOTS).fill(0);
-  let frontBuckets = 0;
-  let hqBuckets = 0;
-  for (let bucket = 0; bucket < FRONT_BUCKET_COUNT; bucket++) {
-    const owner = front.owner[bucket];
-    if (owner === FRONT_SOLID) continue;
-    byOwner[owner]++;
-    if (front.hq[bucket]) hqBuckets++;
-    if ((front.reach[bucket] & ~(1 << owner)) !== 0) frontBuckets++;
-  }
-  return {
-    builds: front.builds,
-    builtAt: front.builtAt,
-    frontBuckets,
-    byOwner,
-    hqBuckets,
-    cellBudgetLeft: captureCellBudget,
-  };
-}

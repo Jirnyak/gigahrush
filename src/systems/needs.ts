@@ -159,10 +159,6 @@ export function getNeedsCohortDebugSummary(): NeedsCohortDebugSummary {
   return { ...needsDebug };
 }
 
-export function formatNeedsCohortDebugSummary(): string {
-  const s = getNeedsCohortDebugSummary();
-  return `needs total=${s.totalNeeds} player=${s.playerExact} hot=${s.hotExact} cold=${s.coldUpdated}/${s.coldBudget} skipped=${s.coldSkipped}`;
-}
 
 export function resetNeedsCohortStateForTests(): void {
   hotNeedIds.clear();

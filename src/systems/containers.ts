@@ -1314,14 +1314,6 @@ export function countContainerItems(world: World): number {
   return n;
 }
 
-export function storeNpcItemInRoomContainer(world: World, npc: Entity): boolean {
-  if (npc.type !== EntityType.NPC || !npc.inventory || npc.inventory.length === 0) return false;
-  const room = world.roomAt(npc.x, npc.y);
-  if (!room) return false;
-  const container = world.containers.find(c => c.roomId === room.id && canAccessContainer(c, npc));
-  if (!container) return false;
-  return putIntoContainer(container, npc, 0, npc.inventory[0].count);
-}
 
 /* ── Отладка ──────────────────────────────────────────────────
  * Команда живёт рядом со своей системой: меню собирает реестр, а не список в

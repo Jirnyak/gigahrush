@@ -511,12 +511,3 @@ export function stockMarketSnapshot(state: GameState): StockMarketSnapshot {
   };
 }
 
-export function summarizeStockMarket(state: GameState, limit = 5): string[] {
-  const snapshot = stockMarketSnapshot(state);
-  const rows = snapshot.quotes
-    .slice()
-    .sort((a, b) => Math.abs(b.lastDelta) - Math.abs(a.lastDelta))
-    .slice(0, limit)
-    .map(row => `${row.ticker}: ${row.price.toFixed(2)}₽ ${row.lastDelta >= 0 ? '+' : ''}${row.lastDelta.toFixed(2)}`);
-  return [`счет ${snapshot.accountRubles.toFixed(2)}₽ портфель ${snapshot.portfolioValue.toFixed(2)}₽`, ...rows];
-}
