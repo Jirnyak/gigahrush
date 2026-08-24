@@ -1,168 +1,57 @@
-import { RoomType, Tex, Cell, DoorState, EntityType, Feature } from '../../core/types';
+import { type Entity } from '../../core/types';
 import { World as WorldClass } from '../../core/world';
 import type { FloorGeneration } from '../floor_manifest';
-import { stampRoom, protectRoom, paintRoomSurfaces } from '../shared';
+import { ensureConnectivity, ensurePermanentRoomAccess, protectRoom, sanitizeDoors } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { newEntityIdCursor } from '../entity_ids';
+import { buildLiquidatorFort } from './fort';
 
 export const LIQUIDATOR_BASE_Z = -16;
+const SEED = 0x4c495144;
 
+/**
+ * База Ликвидаторов — форт гарнизона на четверть этажа и дикие земли вокруг.
+ *
+ * Прежний генератор был заглушкой, и это измерено: четыре зала на 4992
+ * проходимых клетки, из них арена занимала половину этажа, а вокруг стоял
+ * сплошной бетон. Мерка взята с жилого этажа — медиана комнаты около двадцати
+ * клеток, ни одна комната не тянет заметной доли этажа.
+ */
 export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   const world = new WorldClass();
-
-  const entities: any[] = [];
-  const spawnX = 100;
-  const spawnY = 100;
-
-  let nextRoomId = 0;
+  const entities: Entity[] = [];
   const nextId = newEntityIdCursor();
 
-  // Generate Central HQ
-  const hq = stampRoom(world, nextRoomId++, RoomType.HQ, spawnX - 25, spawnY - 15, 50, 30, -1);
-  hq.name = 'Штаб Базы';
-  hq.wallTex = Tex.HERMO_WALL;
-  hq.floorTex = Tex.F_CONCRETE;
-  // Защита — редкая метка: её носят убежища за гермостеной и системные клетки
-  // лифтов. Штаб за гермостеной ей отвечает, остальные комнаты базы — нет, они
-  // просто крашены. Раньше защищены были ВСЕ четыре: 4955 клеток из 4961, и
-  // этаж переставал принимать шахты лифтов вовсе.
-  protectRoom(world, hq.x, hq.y, hq.w, hq.h, hq.wallTex, hq.floorTex);
+  const fort = buildLiquidatorFort(world, SEED);
 
-  // Generate Armory (STORAGE)
-  const armory = stampRoom(world, nextRoomId++, RoomType.STORAGE, spawnX - 55, spawnY - 10, 25, 20, -1);
-  armory.name = 'Оружейная Базы';
-  armory.wallTex = Tex.METAL;
-  armory.floorTex = Tex.F_CONCRETE;
-  paintRoomSurfaces(world, armory.x, armory.y, armory.w, armory.h, armory.wallTex, armory.floorTex);
+  // Защиту носит только то, что по смыслу убежище: штаб за гермостеной. Раньше
+  // защищены были все комнаты этажа — 4955 клеток из 4961, — и шахтам лифтов
+  // было некуда сесть, отчего с базы нельзя было подняться.
+  protectRoom(world, fort.hq.x, fort.hq.y, fort.hq.w, fort.hq.h, fort.hq.wallTex, fort.hq.floorTex);
 
-  // Generate Medical (MEDICAL)
-  const medbay = stampRoom(world, nextRoomId++, RoomType.MEDICAL, spawnX + 30, spawnY - 10, 25, 20, -1);
-  medbay.name = 'Медпункт Базы';
-  medbay.wallTex = Tex.TILE_W;
-  medbay.floorTex = Tex.F_TILE;
-  paintRoomSurfaces(world, medbay.x, medbay.y, medbay.w, medbay.h, medbay.wallTex, medbay.floorTex);
+  // Порядок фаз обязателен: связность прорубается ДО санации дверей, иначе
+  // санация снесёт косяки, которые прорубание только что оставило.
+  ensureConnectivity(world, fort.spawnX, fort.spawnY);
+  ensurePermanentRoomAccess(world, world.rooms.length);
+  sanitizeDoors(world);
+  world.rebuildContainerMap();
+  world.bakeLights();
 
-  // Generate Arena (COMMON)
-  const arena = stampRoom(world, nextRoomId++, RoomType.COMMON, spawnX - 25, spawnY - 65, 50, 50, -1);
-  arena.name = 'Арена Базы';
-  arena.tags = ['arena'];
-  arena.wallTex = Tex.HERMO_WALL;
-  arena.floorTex = Tex.F_CONCRETE;
-  paintRoomSurfaces(world, arena.x, arena.y, arena.w, arena.h, arena.wallTex, arena.floorTex);
+  spawnBaseNpcs(entities, nextId,
+    fort.hq.x + Math.floor(fort.hq.w / 2), fort.hq.y + Math.floor(fort.hq.h / 2),
+    fort.arena.x + Math.floor(fort.arena.w / 2), fort.arena.y + Math.floor(fort.arena.h / 2));
 
-  const ringRect = { x: arena.x + 15, y: arena.y + 15, w: 20, h: 20 };
-  for (let x = ringRect.x; x < ringRect.x + ringRect.w; x++) {
-    if (x !== ringRect.x + 10 && x !== ringRect.x + 11) { // Gap for entrance
-      world.features[world.idx(x, ringRect.y)] = Feature.TABLE;
-      world.features[world.idx(x, ringRect.y + ringRect.h - 1)] = Feature.TABLE;
-    }
-  }
-  for (let y = ringRect.y; y < ringRect.y + ringRect.h; y++) {
-    if (y !== ringRect.y + 10 && y !== ringRect.y + 11) { // Gap for entrance
-      world.features[world.idx(ringRect.x, y)] = Feature.TABLE;
-      world.features[world.idx(ringRect.x + ringRect.w - 1, y)] = Feature.TABLE;
-    }
-  }
+  return { isDecentralized: true, world, entities, spawnX: fort.spawnX, spawnY: fort.spawnY };
+}
 
-  /* Трибуны — РЯДЫ, а не ковёр. Стул блокирует путь, поэтому правило «ставить в
-   * четырёх клетках из девяти» застилало зал сплошняком: 705 стульев на 2500
-   * клеток, и зрители с тварями не могли пересечь собственный этаж. Ряды идут
-   * через один (между ними всегда свободная полоса), поперёк зала прорезаны
-   * лестничные проходы, а у самого ринга остаётся кольцевой проход. */
-  const AISLE_STEP = 8;
-  for (let y = arena.y + 2; y < arena.y + arena.h - 2; y++) {
-    if ((y - arena.y) % 2 !== 0) continue;                       // ряд через один
-    for (let x = arena.x + 2; x < arena.x + arena.w - 2; x++) {
-      if ((x - arena.x) % AISLE_STEP === 0) continue;            // лестничный проход поперёк
-      if (x >= ringRect.x - 2 && x <= ringRect.x + ringRect.w + 1 && y >= ringRect.y - 2 && y <= ringRect.y + ringRect.h + 1) continue;
-      world.features[world.idx(x, y)] = Feature.CHAIR;
-    }
-  }
-
-  // Connect them
-
-  // Manual connection between rooms to avoid export issues and ensure they are accessible
-  // Дверь штаба обязана стоять на том же ряду, что коридор и дверь соседней
-  // комнаты, иначе они не встречаются: так медпункт был отрезан наглухо —
-  // 500 клеток из 500 недостижимы, медик за стеной.
-  const hqLeftDoorIdx = world.idx(hq.x, armory.y + 10);
-  world.cells[hqLeftDoorIdx] = Cell.DOOR;
-  world.doors.set(hqLeftDoorIdx, { idx: hqLeftDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: armory.id, keyId: '', timer: 0 });
-  hq.doors.push(hqLeftDoorIdx); armory.doors.push(hqLeftDoorIdx);
-  world.floorTex[hqLeftDoorIdx] = Tex.F_CONCRETE;
-
-  const hqRightDoorIdx = world.idx(hq.x + hq.w, medbay.y + 10);
-  world.cells[hqRightDoorIdx] = Cell.DOOR;
-  world.doors.set(hqRightDoorIdx, { idx: hqRightDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: medbay.id, keyId: '', timer: 0 });
-  hq.doors.push(hqRightDoorIdx); medbay.doors.push(hqRightDoorIdx);
-  world.floorTex[hqRightDoorIdx] = Tex.F_CONCRETE;
-
-  const hqTopDoorIdx = world.idx(spawnX, hq.y);
-  world.cells[hqTopDoorIdx] = Cell.DOOR;
-  world.doors.set(hqTopDoorIdx, { idx: hqTopDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: arena.id, keyId: '', timer: 0 });
-  hq.doors.push(hqTopDoorIdx); arena.doors.push(hqTopDoorIdx);
-  world.floorTex[hqTopDoorIdx] = Tex.F_CONCRETE;
-
-  const arenaBottomDoorIdx = world.idx(spawnX, arena.y + arena.h);
-  world.cells[arenaBottomDoorIdx] = Cell.DOOR;
-  world.doors.set(arenaBottomDoorIdx, { idx: arenaBottomDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: arena.id, roomB: hq.id, keyId: '', timer: 0 });
-  arena.doors.push(arenaBottomDoorIdx); hq.doors.push(arenaBottomDoorIdx);
-  world.floorTex[arenaBottomDoorIdx] = Tex.F_CONCRETE;
-
-  const armoryDoorIdx = world.idx(armory.x + armory.w, armory.y + 10);
-  world.cells[armoryDoorIdx] = Cell.DOOR;
-  world.doors.set(armoryDoorIdx, { idx: armoryDoorIdx, state: DoorState.OPEN, roomA: armory.id, roomB: hq.id, keyId: '', timer: 0 });
-  armory.doors.push(armoryDoorIdx); hq.doors.push(armoryDoorIdx);
-  world.floorTex[armoryDoorIdx] = Tex.F_CONCRETE;
-
-  const medbayDoorIdx = world.idx(medbay.x, medbay.y + 10);
-  world.cells[medbayDoorIdx] = Cell.DOOR;
-  world.doors.set(medbayDoorIdx, { idx: medbayDoorIdx, state: DoorState.OPEN, roomA: medbay.id, roomB: hq.id, keyId: '', timer: 0 });
-  medbay.doors.push(medbayDoorIdx); hq.doors.push(medbayDoorIdx);
-  world.floorTex[medbayDoorIdx] = Tex.F_TILE;
-
-  // Simple straight corridor floors between them
-  for(let x = armory.x + armory.w + 1; x < hq.x; x++) {
-    const i = world.idx(x, armory.y + 10);
-    world.cells[i] = Cell.FLOOR;
-    world.floorTex[i] = Tex.F_CONCRETE;
-  }
-  for(let x = hq.x + hq.w + 1; x < medbay.x; x++) {
-    const i = world.idx(x, medbay.y + 10);
-    world.cells[i] = Cell.FLOOR;
-    world.floorTex[i] = Tex.F_CONCRETE;
-  }
-  for(let y = arena.y + arena.h + 1; y < hq.y; y++) {
-    const i = world.idx(spawnX, y);
-    world.cells[i] = Cell.FLOOR;
-    world.floorTex[i] = Tex.F_CONCRETE;
-  }
-
-  // Add viewing windows (holes with bars/fences in the south wall of the arena)
-  for (const wx of [85, 88, 91, 94, 106, 109, 112, 115]) {
-    const wi = world.idx(wx, arena.y + arena.h);
-    world.cells[wi] = Cell.ABYSS; // Blocks movement but allows vision through
-    world.floorTex[wi] = Tex.F_CONCRETE;
-    entities.push({
-      id: nextId.v++,
-      type: EntityType.BILLBOARD,
-      x: wx,
-      y: arena.y + arena.h,
-      angle: 0,
-      pitch: 0,
-      alive: true,
-      sprite: 40, // Metal grille / prop sprite
-      spriteScale: 1.0,
-      name: 'Смотровая решетка арены',
-    });
-  }
-
-
-  // Decorate and spawn NPCs
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_quartermaster', hq.x + hq.w / 2, hq.y + hq.h / 2, { angle: Math.PI / 2 });
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'marko_lolo', hq.x + hq.w / 2 - 2, hq.y + hq.h / 2 + 2, { angle: Math.PI / 2 });
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_armorer', armory.x + armory.w / 2, armory.y + armory.h / 2, { angle: 0 });
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_medic', medbay.x + medbay.w / 2, medbay.y + medbay.h / 2, { angle: Math.PI });
-
-  return { isDecentralized: true, world, entities, spawnX, spawnY };
+/* Квартирмейстер, оружейник и гарнизонный медик — при штабе; Марко Лоло — при
+ * арене: он распорядитель песка, и искать его надо там, где дерутся. Санчасти
+ * кварталов принадлежат смене, а не ему. */
+function spawnBaseNpcs(
+  entities: Entity[], nextId: { v: number }, hqX: number, hqY: number, arenaX: number, arenaY: number,
+): void {
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_quartermaster', hqX, hqY, { angle: Math.PI / 2 });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_armorer', hqX - 4, hqY + 2, { angle: 0 });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_medic', hqX + 4, hqY + 2, { angle: Math.PI });
+  requireSpawnedPlotNpcFromPackage(entities, nextId, 'marko_lolo', arenaX, arenaY + 6, { angle: -Math.PI / 2 });
 }
