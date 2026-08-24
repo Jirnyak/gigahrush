@@ -3,23 +3,32 @@ import { World } from '../core/world';
 import { getPlotNpcNumericId } from '../data/npc_packages';
 import { NpcInteractionContext } from './npc_interaction_options';
 import { placeBet, calculateOdds, onArenaDuelEnded, refundActiveBet, getCurrentActiveBet } from './arena_betting';
+import {
+  findArenaRoom, getArenaLadderView, isArenaPlayerBoutActive,
+  requestArenaChallenge, requestArenaMutantBout,
+} from './arena_ladder';
 import { forceCombatThreat } from './combat_stimulus';
 import { getEntityIndex } from './entity_index';
 
-export interface ArenaFighterSnapshot {
-  id: string;
-  name: string;
-  hp: number;
-  armor: string;
-  weapon: string;
-  odds: number;
+/* Что предлагает распорядитель песка. Список СОБИРАЕТСЯ при открытии меню, а не
+ * задан номерами: ступень лестницы зависит от того, кто сейчас жив, а прежняя
+ * нумерация «6 значит выйти» ломалась от любой новой строки. */
+type ArenaAction =
+  | { kind: 'bet'; onA: boolean; amount: number }
+  | { kind: 'challenge'; alifeId: number }
+  | { kind: 'mutants' }
+  | { kind: 'enter' };
+
+interface ArenaMenuEntry {
+  label: string;
+  action: ArenaAction;
 }
 
 export interface ArenaOverlaySnapshot {
   open: boolean;
   selection: number;
-  fighterA?: ArenaFighterSnapshot;
-  fighterB?: ArenaFighterSnapshot;
+  championLine: string;
+  options: readonly string[];
 }
 
 export const arenaRuntime: {
@@ -30,6 +39,8 @@ export const arenaRuntime: {
   fighterB: Entity | null;
   oddsA: number;
   oddsB: number;
+  championLine: string;
+  entries: ArenaMenuEntry[];
   ctx: NpcInteractionContext | null;
 } = {
   open: false,
@@ -39,6 +50,8 @@ export const arenaRuntime: {
   fighterB: null,
   oddsA: 1.1,
   oddsB: 1.1,
+  championLine: '',
+  entries: [],
   ctx: null,
 };
 
@@ -46,47 +59,86 @@ export function isArenaOverlayOpen(): boolean {
   return arenaRuntime.open;
 }
 
-function findFighters(entities: readonly Entity[]): { fighterA: Entity | null, fighterB: Entity | null } {
-  // Pick the first two alive NPCs that are not the arena runners (matched by stable plot slot,
-  // not display name). Слоты приходят из замороженного списка npc_plot_ids.ts, поэтому числа
-  // определены всегда, независимо от того, загружен ли контент: раньше здесь можно было
-  // рассчитывать на undefined у незарегистрированного пакета, теперь нельзя. Сравнивается
-  // СЛОТ личности (`alifeId`): номер сущности личности больше не равен слоту.
+/**
+ * Двое на ставочный бой.
+ *
+ * Сначала — бойцы лестницы, стоящие на этаже: ставят на тех, кто и так дерётся
+ * за место. Если их меньше двух, берётся кто есть, кроме распорядителя песка.
+ * Слоты приходят из замороженного списка npc_plot_ids.ts, поэтому числа
+ * определены всегда, независимо от того, загружен ли контент. Сравнивается СЛОТ
+ * личности (`alifeId`): номер сущности личности больше не равен слоту.
+ */
+function findFighters(state: GameState, entities: readonly Entity[]): { fighterA: Entity | null, fighterB: Entity | null } {
   const markoId = getPlotNpcNumericId('marko_lolo');
-  let fighterA: Entity | null = null;
-  let fighterB: Entity | null = null;
+  const ladder = new Set(getArenaLadderView(state).fighters.map(f => f.id));
+  const picked: Entity[] = [];
 
-  for (const e of entities) {
-    if (e.alive && e.type === EntityType.NPC && e.alifeId !== markoId) {
-      if (!fighterA) fighterA = e;
-      else if (!fighterB) {
-        fighterB = e;
-        break;
+  for (const pass of [true, false]) {
+    for (const e of entities) {
+      if (picked.length >= 2) break;
+      if (!e.alive || e.type !== EntityType.NPC || e.alifeId === markoId) continue;
+      if (pass !== (e.alifeId !== undefined && ladder.has(e.alifeId))) continue;
+      if (picked.includes(e)) continue;
+      picked.push(e);
+    }
+  }
+
+  return { fighterA: picked[0] ?? null, fighterB: picked[1] ?? null };
+}
+
+const BET_AMOUNTS = [50, 100, 500] as const;
+
+/** Список распорядителя песка на этот заход. */
+function buildArenaMenu(ctx: NpcInteractionContext): ArenaMenuEntry[] {
+  const entries: ArenaMenuEntry[] = [];
+  const ladder = getArenaLadderView(ctx.state);
+
+  if (ladder.playerIsChampion) {
+    entries.push({ label: 'Титул за вами — ждите претендента', action: { kind: 'enter' } });
+  } else if (ladder.next) {
+    const rung = `ступень ${ladder.nextRung} из ${ladder.fighters.length}`;
+    entries.push({
+      label: `Вызвать: ${ladder.next.name} (${rung}, ур. ${ladder.next.level})`,
+      action: { kind: 'challenge', alifeId: ladder.next.id },
+    });
+  }
+
+  const { fighterA, fighterB } = arenaRuntime;
+  if (fighterA && fighterB) {
+    for (const onA of [true, false]) {
+      const fighter = onA ? fighterA : fighterB;
+      const odds = onA ? arenaRuntime.oddsA : arenaRuntime.oddsB;
+      for (const amount of BET_AMOUNTS) {
+        entries.push({
+          label: `Поставить ${amount}₽ на ${fighter.name} (x${odds.toFixed(2)})`,
+          action: { kind: 'bet', onA, amount },
+        });
       }
     }
   }
 
-  return { fighterA, fighterB };
+  entries.push({ label: 'Бой с мутантами', action: { kind: 'mutants' } });
+  entries.push({ label: 'Выйти на арену', action: { kind: 'enter' } });
+  return entries;
 }
 
 export function openArena(ctx: NpcInteractionContext): void {
   arenaRuntime.open = true;
   arenaRuntime.npcId = ctx.npc.id;
   arenaRuntime.ctx = ctx;
-  // Marko Lolo is the ring promoter: talking to him jumps straight to the "enter arena" action.
-  const enterOnly = ctx.npc.alifeId === getPlotNpcNumericId('marko_lolo');
-  arenaRuntime.selection = enterOnly ? 6 : 0;
+  arenaRuntime.selection = 0;
 
-  if (!enterOnly) {
-    const { fighterA, fighterB } = findFighters(ctx.entities ?? []);
-    arenaRuntime.fighterA = fighterA;
-    arenaRuntime.fighterB = fighterB;
-    if (fighterA && fighterB) {
-      const { oddsA, oddsB } = calculateOdds(fighterA, fighterB);
-      arenaRuntime.oddsA = oddsA;
-      arenaRuntime.oddsB = oddsB;
-    }
+  const { fighterA, fighterB } = findFighters(ctx.state, ctx.entities ?? []);
+  arenaRuntime.fighterA = fighterA;
+  arenaRuntime.fighterB = fighterB;
+  if (fighterA && fighterB) {
+    const { oddsA, oddsB } = calculateOdds(fighterA, fighterB);
+    arenaRuntime.oddsA = oddsA;
+    arenaRuntime.oddsB = oddsB;
   }
+
+  arenaRuntime.championLine = `ЧЕМПИОН: ${getArenaLadderView(ctx.state).championName}`;
+  arenaRuntime.entries = buildArenaMenu(ctx);
 
   ctx.state.showNpcMenu = false;
   ctx.state.paused = true;
@@ -98,54 +150,60 @@ export function closeArena(): void {
 }
 
 export function moveArenaSelection(delta: number): void {
-  const max = 6; // selections 0..6 (see the selection legend below)
+  const max = arenaRuntime.entries.length - 1;
+  if (max < 0) return;
   arenaRuntime.selection += delta;
   if (arenaRuntime.selection < 0) arenaRuntime.selection = max;
   if (arenaRuntime.selection > max) arenaRuntime.selection = 0;
 }
 
-// selections:
-// 0: Bet 50 on A
-// 1: Bet 100 on A
-// 2: Bet 500 on A
-// 3: Bet 50 on B
-// 4: Bet 100 on B
-// 5: Bet 500 on B
-// 6: Enter arena / Exit
-
 export function activateArenaSelection(ctx: { world: World; state: GameState; player?: Entity; switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean, targetZ?: number) => void }): void {
-  const enterOnly = arenaRuntime.npcId === getPlotNpcNumericId('marko_lolo');
-  if (enterOnly || arenaRuntime.selection === 6) {
-    if (ctx.player) {
-      // Teleport into the middle of the arena ring by scanning for the tagged arena room on the
-      // current floor (de-hardcoded from fixed coords that could land the player inside a wall).
-      const arena = ctx.world.rooms.find(r => r?.tags?.includes('arena'));
-      if (arena) {
-        ctx.player.x = ctx.world.wrap(arena.x + Math.floor(arena.w / 2)) + 0.5;
-        ctx.player.y = ctx.world.wrap(arena.y + Math.floor(arena.h / 2)) + 0.5;
-      }
-      ctx.state.msgs.push(msg('Вы выходите на арену.', ctx.state.time, '#f66'));
+  const entry = arenaRuntime.entries[arenaRuntime.selection];
+  if (!entry) return;
+  const action = entry.action;
+
+  if (action.kind === 'enter') {
+    enterArenaRing(ctx.world, ctx.state, ctx.player);
+    closeArena();
+    return;
+  }
+
+  if (action.kind === 'challenge' || action.kind === 'mutants') {
+    if (isArenaPlayerBoutActive()) {
+      ctx.state.msgs.push(msg('Бой уже идёт.', ctx.state.time, '#f44'));
+      return;
     }
+    if (action.kind === 'challenge') requestArenaChallenge(action.alifeId);
+    else requestArenaMutantBout();
+    closeArena();
+    return;
+  }
+
+  const fighterA = arenaRuntime.fighterA;
+  const fighterB = arenaRuntime.fighterB;
+  if (!fighterA || !fighterB || !ctx.player) return;
+  const fighter = action.onA ? fighterA : fighterB;
+  const odds = action.onA ? arenaRuntime.oddsA : arenaRuntime.oddsB;
+
+  if (placeBet(ctx.state, ctx.player, action.amount, String(fighter.id), odds)) {
+    ctx.state.msgs.push(msg(`Ставка принята: ${action.amount}₽ на ${fighter.name} (x${odds.toFixed(2)}).`, ctx.state.time, '#4cf'));
+    startArenaDuel(ctx.world, ctx.state, fighterA, fighterB);
     closeArena();
   } else {
-    const fighterA = arenaRuntime.fighterA;
-    const fighterB = arenaRuntime.fighterB;
-    if (fighterA && fighterB && ctx.player) {
-      const amounts = [50, 100, 500];
-      const fighter = arenaRuntime.selection < 3 ? fighterA : fighterB;
-      const odds = arenaRuntime.selection < 3 ? arenaRuntime.oddsA : arenaRuntime.oddsB;
-      const amount = amounts[arenaRuntime.selection % 3];
-
-      const success = placeBet(ctx.state, ctx.player, amount, String(fighter.id), odds);
-      if (success) {
-        ctx.state.msgs.push(msg(`Ставка принята: ${amount}₽ на ${fighter.name} (x${odds.toFixed(2)}).`, ctx.state.time, '#4cf'));
-        startArenaDuel(ctx.world, ctx.state, fighterA, fighterB);
-        closeArena();
-      } else {
-        ctx.state.msgs.push(msg('Недостаточно средств или ставка уже сделана.', ctx.state.time, '#f44'));
-      }
-    }
+    ctx.state.msgs.push(msg('Недостаточно средств или ставка уже сделана.', ctx.state.time, '#f44'));
   }
+}
+
+/** Просто выйти на песок, без боя. Комната ищется по тегу, а не по координатам:
+ *  фиксированные числа роняли игрока в стену. */
+function enterArenaRing(world: World, state: GameState, player: Entity | undefined): void {
+  if (!player) return;
+  const arena = findArenaRoom(world);
+  if (arena) {
+    player.x = world.wrap(arena.x + Math.floor(arena.w / 2)) + 0.5;
+    player.y = world.wrap(arena.y + Math.floor(arena.h / 2)) + 0.5;
+  }
+  state.msgs.push(msg('Вы выходите на арену.', state.time, '#f66'));
 }
 
 /* ── Duel simulation ──────────────────────────────────────────────
@@ -161,7 +219,7 @@ let activeDuel: { aId: number; bId: number; elapsed: number; threatAccum: number
 
 function startArenaDuel(world: World, state: GameState, a: Entity, b: Entity): void {
   // Teleport both fighters into the arena ring (same tag scan as the player entry).
-  const arena = world.rooms.find(r => r?.tags?.includes('arena'));
+  const arena = findArenaRoom(world);
   if (arena) {
     const cx = arena.x + Math.floor(arena.w / 2);
     const cy = arena.y + Math.floor(arena.h / 2);
@@ -220,21 +278,7 @@ export function getArenaOverlaySnapshot(): ArenaOverlaySnapshot {
   return {
     open: arenaRuntime.open,
     selection: arenaRuntime.selection,
-    fighterA: arenaRuntime.fighterA ? {
-      id: String(arenaRuntime.fighterA.id),
-      name: arenaRuntime.fighterA.name || 'Боец А',
-      hp: arenaRuntime.fighterA.hp || 0,
-      armor: arenaRuntime.fighterA.armorDefId || 'Нет',
-      weapon: arenaRuntime.fighterA.weapon || 'Кулаки',
-      odds: arenaRuntime.oddsA,
-    } : undefined,
-    fighterB: arenaRuntime.fighterB ? {
-      id: String(arenaRuntime.fighterB.id),
-      name: arenaRuntime.fighterB.name || 'Боец Б',
-      hp: arenaRuntime.fighterB.hp || 0,
-      armor: arenaRuntime.fighterB.armorDefId || 'Нет',
-      weapon: arenaRuntime.fighterB.weapon || 'Кулаки',
-      odds: arenaRuntime.oddsB,
-    } : undefined,
+    championLine: arenaRuntime.championLine,
+    options: arenaRuntime.entries.map(entry => entry.label),
   };
 }

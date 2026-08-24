@@ -347,6 +347,7 @@ import { CHALK_ITEM_ID, drawEquippedChalkPixel } from './systems/chalk';
 import { isRidingRailTrain, updateRailTrains } from './systems/rail_trains';
 import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
 import { updateArenaDuel, resetArenaDuel } from './systems/arena';
+import { updateArenaLadder, resetArenaLadderRuntime } from './systems/arena_ladder';
 import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hladon';
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
 import { updateRouteCues, resetRouteCueHud } from './systems/route_cues';
@@ -4029,6 +4030,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   resetMetroCooldown();
   clearActiveBet();
   resetArenaDuel();
+  resetArenaLadderRuntime();
   resetCombatStimulus();
   resetMonsterBaits();
   resetRouteCueHud();
@@ -6919,6 +6921,7 @@ function loadGame(): boolean {
       resetMetroCooldown();
       clearActiveBet();
       resetArenaDuel();
+      resetArenaLadderRuntime();
       resetCombatStimulus();
       resetMonsterBaits();
       const loaded = loadFloorForTarget(floor, generatedRunEntry);
@@ -10277,6 +10280,7 @@ function gameLoop(now: number): void {
     lastContentHookMs += performance.now() - contentStart;
     updateCarnivorousFungus(world, entities, player, state, dt, nextEntityId);
     updateArenaDuel(state, entities, dt);
+    updateArenaLadder(world, entities, player, state, nextEntityId, dt);
     const hazardStart = performance.now();
     tickCellHazards(world, entities, state, dt, player, input.fwd || input.back || input.strafeL || input.strafeR || input.touch.moveX !== 0 || input.touch.moveY !== 0);
     lastHazardUpdateMs = performance.now() - hazardStart;

@@ -33,41 +33,24 @@ export function drawArenaOverlay(
 
   drawStaticNoise(ctx, x + pad, y + pad + 16 * s, maxW, 2 * s, time, 0.4);
 
+  ctx.fillStyle = '#776';
+  ctx.font = `${7 * s}px "Press Start 2P", monospace`;
+  ctx.fillText(fitText(ctx, game.championLine, maxW), x + pad, y + pad + 28 * s);
+
   ctx.font = `${8.6 * sy}px "Press Start 2P", monospace`;
 
-  if (game.fighterA && game.fighterB) {
-    const opts = [
-      { label: `Поставить 50₽ на ${game.fighterA.name} (x${game.fighterA.odds.toFixed(2)})` },
-      { label: `Поставить 100₽ на ${game.fighterA.name} (x${game.fighterA.odds.toFixed(2)})` },
-      { label: `Поставить 500₽ на ${game.fighterA.name} (x${game.fighterA.odds.toFixed(2)})` },
-      { label: `Поставить 50₽ на ${game.fighterB.name} (x${game.fighterB.odds.toFixed(2)})` },
-      { label: `Поставить 100₽ на ${game.fighterB.name} (x${game.fighterB.odds.toFixed(2)})` },
-      { label: `Поставить 500₽ на ${game.fighterB.name} (x${game.fighterB.odds.toFixed(2)})` },
-      { label: 'Выйти на арену' },
-    ];
+  /* Строки приходят готовыми из системы: у арены нет постоянного набора пунктов —
+   * ступень лестницы зависит от того, кто сейчас жив, а ставки появляются только
+   * когда на песке есть на кого ставить. Рисовать здесь список по номерам значило
+   * бы держать вторую копию правил меню. */
+  for (let i = 0; i < game.options.length; i++) {
+    const selected = i === game.selection;
+    const yy = y + pad + 46 * s + i * 20 * s;
+    if (yy > y + panelH - pad - 20 * s) break;
+    const mj = textJitter(time, 910 + i);
 
-    for (let i = 0; i < opts.length; i++) {
-      const selected = i === game.selection;
-      const yy = y + pad + 40 * s + i * 20 * s;
-      const mj = textJitter(time, 910 + i);
-
-      ctx.fillStyle = selected ? '#9a6' : '#665';
-      ctx.fillText(`${selected ? '▶ ' : '  '}${opts[i].label}`, x + pad + mj.dx, yy + mj.dy);
-    }
-  } else {
-    const opts = [
-      { label: 'Нет бойцов для ставок' },
-      { label: 'Выйти на арену' },
-    ];
-    // if no fighters, selection handles the exit button on 0 or 6 depending on logic, but let's just render
-    for (let i = 0; i < opts.length; i++) {
-      const selected = i === game.selection || (i === 1 && game.selection === 6);
-      const yy = y + pad + 40 * s + i * 20 * s;
-      const mj = textJitter(time, 910 + i);
-
-      ctx.fillStyle = selected ? '#9a6' : '#665';
-      ctx.fillText(`${selected ? '▶ ' : '  '}${opts[i].label}`, x + pad + mj.dx, yy + mj.dy);
-    }
+    ctx.fillStyle = selected ? '#9a6' : '#665';
+    ctx.fillText(fitText(ctx, `${selected ? '▶ ' : '  '}${game.options[i]}`, maxW), x + pad + mj.dx, yy + mj.dy);
   }
 
   drawStaticNoise(ctx, x + pad, y + panelH - pad - 12 * s, maxW, 2 * s, time, 0.2);

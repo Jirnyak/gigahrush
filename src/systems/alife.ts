@@ -216,6 +216,7 @@ export interface AlifeNpcSnapshot {
   reservedIdentityId?: string;
   reservedPresence?: 'population' | 'event_only';
   plotNpcId?: number;
+  arenaFighter?: boolean;
   x?: number;
   y?: number;
   angle?: number;
@@ -302,6 +303,8 @@ export interface AlifeNpcOverride {
   /* Кольцо последних комнат, только непустое. Ниоткуда не выводится: это факт
    * о прожитом, а не о рождении. */
   roomVisits?: number[];
+  /* Вышел ли человек на песок. Ниоткуда не выводится — это решение, а не анкета. */
+  arenaFighter?: boolean;
 }
 
 export interface AlifeSaveState {
@@ -310,6 +313,10 @@ export interface AlifeSaveState {
   total: number;
   playerRelationTargetFaction?: Faction;
   playerRelationTargetAlifeId?: number;
+  /* Кто носит титул чемпиона арены: слот личности, `ALIFE_ARENA_CHAMPION_PLAYER`
+   * если титул забрал игрок, и ничего, если титул пуст. Компактный факт верхнего
+   * уровня, как и цель отношения игрока рядом: указатель на личность, а не копия. */
+  arenaChampionAlifeId?: number;
   deadIds: number[];
   deadPlotNpcIds: number[];
   overrides: AlifeNpcOverride[];
@@ -357,6 +364,7 @@ interface AlifeState {
   total: number;
   playerRelationTargetFaction?: Faction;
   playerRelationTargetAlifeId?: number;
+  arenaChampionAlifeId?: number;
   npcs: AlifeNpcRecord[];
   columns: AlifeNumericColumns;
   floorKeys: string[];
@@ -402,6 +410,10 @@ const ALIFE_FLAG_CAN_GIVE_QUEST = 1 << 1;
 const ALIFE_FLAG_DEAD = 1 << 2;
 const ALIFE_FLAG_TOUCHED = 1 << 3;
 const ALIFE_FLAG_CUSTOM_LOADOUT = 1 << 4;
+/* Боец арены — свойство ЛИЧНОСТИ, а не спавна и не поведенческой роли: человек
+ * решился выйти на песок и остаётся бойцом, пока жив, где бы он ни был. Бит в
+ * общей колонке флагов, потому что своей колонки такому факту не нужно. */
+const ALIFE_FLAG_ARENA_FIGHTER = 1 << 5;
 const ALIFE_SPRITE_UNSET = 0xffff;
 const ALIFE_SPRITE_MAX = ALIFE_SPRITE_UNSET - 1;
 
@@ -676,6 +688,14 @@ function recordCustomLoadout(alife: AlifeState, record: AlifeNpcRecord): boolean
 
 function setRecordCustomLoadout(alife: AlifeState, record: AlifeNpcRecord, value = true): void {
   setRecordFlag(alife, record, ALIFE_FLAG_CUSTOM_LOADOUT, value);
+}
+
+function recordArenaFighter(alife: AlifeState, record: AlifeNpcRecord): boolean {
+  return recordFlag(alife, record, ALIFE_FLAG_ARENA_FIGHTER);
+}
+
+function setRecordArenaFighter(alife: AlifeState, record: AlifeNpcRecord, value: boolean): void {
+  setRecordFlag(alife, record, ALIFE_FLAG_ARENA_FIGHTER, value);
 }
 
 function recordLevel(alife: AlifeState, record: AlifeNpcRecord): number {
@@ -1882,6 +1902,10 @@ export function recordAlifeNpcDeath(state: GameState, entity: Entity): void {
       setRecordDead(alife, record, true);
       setRecordHp(alife, record, 0);
       setRecordTouched(alife, record);
+      // Титул не наследуется мёртвым: чемпион пал — песок остался без хозяина, и
+      // кто его займёт, решает лестница, а не эта строка. Флаг бойца при этом НЕ
+      // снимается: он часть прожитого, и по нему потом видно, кем человек был.
+      if (alife.arenaChampionAlifeId === record.id) alife.arenaChampionAlifeId = undefined;
       alife.leaderboardVersion++;
     }
   }
@@ -1895,6 +1919,93 @@ export function recordAlifeNpcDeath(state: GameState, entity: Entity): void {
   if (entity.alifeId !== undefined && getPlotNpcPackageByNumericId(entity.alifeId) !== undefined) {
     alife.deadPlotNpcIds.add(entity.alifeId);
   }
+}
+
+/* ── Арена: боец и чемпион ────────────────────────────────────────
+ *
+ * Кто выходит на песок — свойство личности (бит флага), кто носит титул — один
+ * указатель на состоянии A-Life. Двух источников правды нет намеренно: титул
+ * ровно один, и хранить его копией в каждом бойце значило бы завести возможность
+ * двух чемпионов сразу. Оба факта переживают перезагрузку через секцию `alife`.
+ */
+export const ALIFE_ARENA_CHAMPION_PLAYER = -1;
+
+export interface AlifeArenaFighter {
+  id: number;
+  name: string;
+  floorKey: string;
+  level: number;
+  maxHp: number;
+}
+
+export function isAlifeArenaFighter(state: GameState, alifeId: number): boolean {
+  const alife = ensureAlifeState(state);
+  const record = alife.npcs[alifeId - 1];
+  return record !== undefined && !recordDead(alife, record) && recordArenaFighter(alife, record);
+}
+
+export function setAlifeArenaFighter(state: GameState, alifeId: number, value: boolean): boolean {
+  if (!Number.isInteger(alifeId) || alifeId <= 0) return false;
+  const alife = ensureAlifeState(state);
+  const record = alife.npcs[alifeId - 1];
+  if (!record || recordDead(alife, record)) return false;
+  setRecordArenaFighter(alife, record, value);
+  // Флаг ниоткуда не выводится, поэтому личность становится «тронутой»: иначе
+  // сейв соберёт её из семени заново и бойца на песке не окажется.
+  setRecordTouched(alife, record);
+  return true;
+}
+
+/**
+ * Лестница арены: живые бойцы от слабейшего к сильнейшему.
+ *
+ * Один проход по пулу личностей. Зовётся на открытии меню арены (игра в этот
+ * момент на паузе) и на редком такте холодной симуляции — не в кадре. Тот же
+ * приём, что у `getAlifeLeaderboardSnapshot` рядом.
+ */
+export function listAlifeArenaFighters(state: GameState, floorKey?: string): AlifeArenaFighter[] {
+  const alife = ensureAlifeState(state);
+  const wanted = floorKey ? cleanFloorKey(floorKey) : undefined;
+  const out: AlifeArenaFighter[] = [];
+  for (const record of alife.npcs) {
+    if (!record || recordDead(alife, record) || !recordArenaFighter(alife, record)) continue;
+    const key = recordFloorKey(alife, record);
+    if (wanted !== undefined && key !== wanted) continue;
+    out.push({
+      id: record.id,
+      name: record.name,
+      floorKey: key,
+      level: recordLevel(alife, record),
+      maxHp: recordMaxHp(alife, record),
+    });
+  }
+  /* Своей формулы силы у арены нет: сильнее тот, кто выше уровнем, а при равном
+   * уровне — кто крепче. Вес денег и кармы из рейтинга прожитого к драке на
+   * песке отношения не имеет, поэтому `rankScore` здесь не годится. */
+  out.sort((a, b) => a.level - b.level || a.maxHp - b.maxHp || a.id - b.id);
+  return out;
+}
+
+/** Слот чемпиона, `ALIFE_ARENA_CHAMPION_PLAYER` за игроком, либо ничего. */
+export function getAlifeArenaChampion(state: GameState): number | undefined {
+  return ensureAlifeState(state).arenaChampionAlifeId;
+}
+
+export function setAlifeArenaChampion(state: GameState, championAlifeId: number | undefined): void {
+  const alife = ensureAlifeState(state);
+  if (championAlifeId === undefined) {
+    alife.arenaChampionAlifeId = undefined;
+    return;
+  }
+  if (championAlifeId === ALIFE_ARENA_CHAMPION_PLAYER) {
+    alife.arenaChampionAlifeId = ALIFE_ARENA_CHAMPION_PLAYER;
+    return;
+  }
+  const record = alife.npcs[championAlifeId - 1];
+  if (!record || recordDead(alife, record)) return;
+  setRecordArenaFighter(alife, record, true);
+  setRecordTouched(alife, record);
+  alife.arenaChampionAlifeId = record.id;
 }
 
 export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Entity): void {
@@ -2038,6 +2149,7 @@ export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): Al
     reservedIdentityId: record.reservedIdentityId,
     reservedPresence: record.reservedPresence,
     plotNpcId: record.plotNpcId,
+    arenaFighter: recordArenaFighter(alife, record),
     x: record.x,
     y: record.y,
     angle: record.angle,
@@ -2932,6 +3044,7 @@ function applyOverride(alife: AlifeState, input: unknown): void {
   applyFactionAttitudeDrift(alife, record, input.factionAttitude);
   // Строго после этажа: переезд стирает кольцо, и запись должна лечь поверх.
   applyRoomVisits(alife, record, input.roomVisits);
+  if (typeof input.arenaFighter === 'boolean') setRecordArenaFighter(alife, record, input.arenaFighter);
   setRecordTouched(alife, record);
 }
 
@@ -3007,6 +3120,15 @@ function sanitizeRelationTargetAlifeId(alife: AlifeState, input: unknown): numbe
   return id > 0 && id <= alife.npcs.length ? id : undefined;
 }
 
+/** Титул носит либо игрок, либо существующая личность, либо никто. Всё прочее в
+ *  payload — мусор, и он молча становится «титул свободен». */
+function sanitizeArenaChampion(alife: AlifeState, input: unknown): number | undefined {
+  if (typeof input !== 'number' || !Number.isFinite(input)) return undefined;
+  const id = Math.trunc(input);
+  if (id === ALIFE_ARENA_CHAMPION_PLAYER) return ALIFE_ARENA_CHAMPION_PLAYER;
+  return id > 0 && id <= alife.npcs.length ? id : undefined;
+}
+
 export function setAlifeState(state: GameState, input: unknown, options?: CreateAlifeStateOptions): AlifeState {
   const save = isRecord(input) ? input : {};
   const seed = clampInt(save.seed, Math.floor(rng() * 0x7fffffff), 1, 0x7fffffff);
@@ -3016,6 +3138,7 @@ export function setAlifeState(state: GameState, input: unknown, options?: Create
   const alife = createAlifeState(state, seed, total, options);
   alife.playerRelationTargetFaction = sanitizeRelationTargetFaction(save.playerRelationTargetFaction);
   alife.playerRelationTargetAlifeId = sanitizeRelationTargetAlifeId(alife, save.playerRelationTargetAlifeId);
+  alife.arenaChampionAlifeId = sanitizeArenaChampion(alife, save.arenaChampionAlifeId);
   if (Array.isArray(save.deadIds)) {
     const seenDeadIds = new Set<number>();
     for (const rawId of save.deadIds) {
@@ -3132,6 +3255,7 @@ export function alifeForSave(state: GameState): AlifeSaveState {
       karma: recordKarma(alife, record),
       factionAttitude: factionAttitudeDriftForSave(alife, record),
       roomVisits: roomVisitsForSave(alife, record),
+      arenaFighter: recordArenaFighter(alife, record) || undefined,
     });
   }
   return {
@@ -3140,6 +3264,7 @@ export function alifeForSave(state: GameState): AlifeSaveState {
     total: alife.total,
     playerRelationTargetFaction: alife.playerRelationTargetFaction,
     playerRelationTargetAlifeId: alife.playerRelationTargetAlifeId,
+    arenaChampionAlifeId: alife.arenaChampionAlifeId,
     deadIds,
     deadPlotNpcIds: [...alife.deadPlotNpcIds],
     overrides,

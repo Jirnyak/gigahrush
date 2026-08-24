@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 25`;
+- `SAVE_SHAPE_VERSION = 26`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -124,6 +124,7 @@ A-Life saves compact identity state, not live NPC arrays:
 - up to `65_536` dead procedural A-Life ids;
 - dead plot ids;
 - sparse changed-record overrides — включая **компактный оверрайд на каждый мёртвый сюжетный слот** (`id`, `floorKey`, `z`, `x`, `y`, без личности). Место гибели не декорация: по нему возвращается дневник покойного, и без него сюжетная цепочка запиралась бы навсегда после первой же перезагрузки. Канал оверрайдов существовал раньше и уже нёс эти поля, поэтому форма сейва не менялась и `SAVE_SHAPE_VERSION` не тронут;
+- **флаг бойца арены и указатель на чемпиона** (2026-08-24). Кто вышел на песок — бит в общей колонке флагов личности, в сейв идёт полем `arenaFighter` в `AlifeNpcOverride` (только `true`, только у тронутых записей). Кто носит титул — ОДНО число `arenaChampionAlifeId` верхнего уровня секции: слот личности, `-1` за игроком, отсутствует, если титул свободен. Копии титула в каждом бойце нет намеренно — иначе форма допускала бы двух чемпионов сразу. Мусор в поле санируется в «титул свободен» (`sanitizeArenaChampion`), смерть носителя освобождает титул. `SAVE_SHAPE_VERSION` поднят с 25 до 26: секция `alife` получила поле верхнего уровня, и старый сейв читать честно нельзя. Замок — `tests/arena-ladder.test.ts`;
 - capped mobility state for cold journeys, pending active-floor arrivals and migration cursor/cadence;
 - player social/rank inputs through the current player entity state.
 
