@@ -219,10 +219,7 @@ export function minimalMemory(npc: Entity, now: number): NpcMemory {
     lastRumorEventId: 0,
     lastEventRumorId: '',
     lastEventRumorAt: -Infinity,
-    lastWitnessFactLineAt: -Infinity,
-    lastWitnessFactEventId: 0,
     lastTouchedAt: now,
-    observedFacts: [],
   };
 }
 

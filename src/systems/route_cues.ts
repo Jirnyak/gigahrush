@@ -351,56 +351,6 @@ export function getObjectiveRouteHud(
   };
 }
 
-function protectedCellAt(world: World, x: number | undefined, y: number | undefined): boolean {
-  if (x === undefined || y === undefined || !Number.isFinite(x) || !Number.isFinite(y)) return false;
-  return world.aptMask[world.idx(Math.floor(x), Math.floor(y))] !== 0;
-}
-
-function protectedRoom(world: World, roomId: number | undefined): boolean {
-  if (roomId === undefined) return true;
-  const room = world.rooms[roomId];
-  if (!room) return false;
-  for (let y = room.y; y < room.y + room.h; y++) {
-    for (let x = room.x; x < room.x + room.w; x++) {
-      if (world.aptMask[world.idx(x, y)]) return true;
-    }
-  }
-  return false;
-}
-
-function protectedRouteCueMarker(world: World, marker: RouteCueMarker): boolean {
-  return protectedCellAt(world, marker.x, marker.y)
-    && protectedCellAt(world, marker.targetX, marker.targetY)
-    && protectedRoom(world, marker.roomId)
-    && protectedRoom(world, marker.targetRoomId);
-}
-
-export function pruneRouteCuesForVolatileRebuild(world: World, z: number): number {
-  const state = cueByWorld.get(world);
-  if (!state) return 0;
-
-  const keptMarkers: RouteCueMarker[] = [];
-  const removedMarkerIds = new Set<string>();
-  for (const marker of state.markers) {
-    if (marker.z !== z || protectedRouteCueMarker(world, marker)) {
-      keptMarkers.push(marker);
-    } else {
-      removedMarkerIds.add(marker.id);
-    }
-  }
-  const removed = state.markers.length - keptMarkers.length;
-  state.markers = keptMarkers;
-
-  for (const id of removedMarkerIds) {
-    state.heardAt.delete(id);
-    state.lastPlayedAt.delete(id);
-    state.followed.delete(id);
-    state.ignored.delete(id);
-  }
-  if (activeHud?.z === z && removedMarkerIds.has(activeHud.id)) activeHud = null;
-  return removed;
-}
-
 function nearestMarker(world: World, player: Entity, requiredTag?: string): RouteCueMarker | undefined {
   const state = cueByWorld.get(world);
   if (!state || state.markers.length === 0) return undefined;

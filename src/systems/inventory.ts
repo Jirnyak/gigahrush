@@ -49,7 +49,6 @@ import { handleRationCouponUse } from './ration_coupons';
 import { recordPermitAccess, recordPermitExposure, recordPermitForged } from './permits';
 import {
   govnyakAimSpreadMult,
-  isGovnyakItem,
   updateGovnyakConditions,
   useGovnyakItem,
 } from './govnyak';
@@ -819,56 +818,6 @@ function handleIncendiary12gUse(
     });
   }
   return true;
-}
-
-export function publishItemTradeEvent(
-  state: GameState | undefined,
-  seller: Entity,
-  buyer: Entity,
-  defId: string,
-  price: number,
-  count = 1,
-): void {
-  if (!state) return;
-  const player = isPlayerEntity(seller) ? seller : isPlayerEntity(buyer) ? buyer : undefined;
-  if (!player) return;
-  const other = player === seller ? buyer : seller;
-  const def = ITEMS[defId];
-  const govnyak = isGovnyakItem(defId);
-  const playerSelling = player === seller;
-  const confiscation = govnyak && playerSelling && other.faction === Faction.LIQUIDATOR;
-  publishEvent(state, {
-    type: playerSelling ? 'player_sell_item' : 'player_handoff_item',
-    actorId: player.id,
-    actorName: player.name ?? 'Вы',
-    actorFaction: player.faction,
-    targetId: other.id,
-    targetName: other.name,
-    targetFaction: other.faction,
-    itemId: defId,
-    itemName: def?.name ?? defId,
-    itemCount: count,
-    itemValue: price,
-    severity: govnyak ? confiscation ? 4 : 3 : 1,
-    privacy: govnyak ? 'local' : 'private',
-    tags: [
-      'player',
-      'inventory',
-      'trade',
-      playerSelling ? 'sell' : 'buy',
-      ...(govnyak ? ['govnyak', 'contraband'] : []),
-      ...(confiscation ? ['confiscation', 'liquidator'] : []),
-    ],
-    data: {
-      price,
-      sellerId: seller.id,
-      sellerName: seller.name,
-      buyerId: buyer.id,
-      buyerName: buyer.name,
-      direction: playerSelling ? 'player_to_npc' : 'npc_to_player',
-      rumorIds: govnyak ? [confiscation ? 'govnyak_confiscation' : 'govnyak_trade'] : [],
-    },
-  });
 }
 
 export function consumeInventorySlot(e: InventoryHolder, slotIdx: number, count?: number): void {

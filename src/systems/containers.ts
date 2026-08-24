@@ -377,30 +377,6 @@ export function pruneContainersForWorld(world: World, z: number): number {
   return removed;
 }
 
-export function pruneVolatileContainersForRebuild(world: World, z: number): number {
-  const kept: WorldContainer[] = [];
-  const changedCells: number[] = [];
-  for (const container of world.containers) {
-    if (container.z === z && Number.isFinite(container.x) && Number.isFinite(container.y)) {
-      const x = world.wrap(Math.floor(container.x));
-      const y = world.wrap(Math.floor(container.y));
-      const idx = world.idx(x, y);
-      if (!world.aptMask[idx]) {
-        changedCells.push(idx);
-        continue;
-      }
-    }
-    kept.push(container);
-  }
-  const removed = world.containers.length - kept.length;
-  if (removed > 0) {
-    world.containers = kept;
-    world.rebuildContainerMap();
-    rebuildPathBlockersFromWorldObjects(world, undefined, changedCells);
-  }
-  return removed;
-}
-
 export function restoreValidContainers(world: World, z: number, saved: unknown, maxContainers = 128): number {
   world.containers = [];
   world.rebuildContainerMap();

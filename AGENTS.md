@@ -53,6 +53,23 @@ Core taste:
   замок был. Образец, названный владельцем: Caves of Qud — двери есть, но сломать или пройти
   сквозь них никто не мешает. Инженерный разбор и следствия для замеров и тестов —
   `architecture.md`, «Non-Negotiable Invariants».
+- **Повтор кода между равнозначными модулями контента — ЗАМЫСЕЛ, а не долг.**
+  Этажи, монстры, мини-игры, POI, аномалии — каждый пакет замкнут на себя и
+  повторяет соседа сознательно. Инкапсуляция и лёгкость менять контент дороже
+  экономии строк: перекрасить покер нельзя, задев дурака; переписать один этаж
+  нельзя, задев остальные пятьдесят. **Равнозначные модули не сливаются
+  никогда** — ни «277 одинаковых строк», ни «пятнадцать копий одной функции» не
+  являются доводом. Общий модуль между такими пакетами — регресс модульности,
+  и агент не вправе завести его по собственному почину.
+  Дублирование остаётся дефектом ровно в трёх случаях, и все три — не про
+  контент: (1) копия уже экспортированного из `core/` (так пять модулей носили
+  собственный `hash32` при живом `core/rand`); (2) две реализации ОДНОГО
+  пути к игроку, которые разошлись по смыслу (словари имён тегов слухов:
+  марковская ветка печатала `samosbor warning` вместо «риск самосбора»);
+  (3) общий инвариант генерации, который иначе каждый этаж обязан помнить сам —
+  такой шаг ставится ОДИН раз в `gen/shared.ts` рядом с `sanitizeDoors`, а копии
+  в этажах при этом не трогаются (так закрыт `roomMap` клетки лифта на 19 этажах
+  из 51). Во всех прочих случаях ответ — не трогать.
 - **Player == NPC.** The player is an NPC that the user controls. Same entity type, same combat math, same social systems, same rules. Never branch on "is player" for game mechanics — only for input source, camera, and HUD. When code says "NPC or player", it means the same thing; when it needs to exclude something, it excludes monsters (`EntityType.MONSTER`), not the player.
 
 Do not add frontend frameworks, imported UI kits, physics engines, ECS libraries, asset pipelines, runtime dependencies, or linters outside `package.json` unless there is a measured reason and explicit owner.
@@ -302,7 +319,7 @@ Use existing extension points:
 - Floor content: `content_manifest.ts` for Ministry, Kvartiry, Maintenance, Hell, Void and Living side-effect imports.
 - Design floors: `src/data/design_floors.ts` plus `src/gen/design_floors/manifest.ts`.
 - Procedural floors/anomalies: `src/data/procedural_floors.ts`, `src/gen/procedural_floor.ts`, `src/gen/procedural_anomalies/`, `src/systems/procedural_anomalies.ts`.
-- Samosbor: `src/data/samosbor_variants.ts`, `src/data/samosbor_director.ts`, `src/systems/samosbor_hooks.ts`.
+- Samosbor: `src/data/samosbor_variants.ts`, `src/data/samosbor_director.ts`.
 - Events: `publishEvent()` in `src/systems/events.ts`.
 - Interactions: shared `E` dispatcher in `src/systems/interactions.ts`.
 - POI audit/debug metadata: `withPoiGenerationMetadata()` / `recordPoiGenerationMetadata()` where manifests already use it.
@@ -518,6 +535,8 @@ Do not use README to promise unfinished work. Do not bury implementation facts o
 - Minimum constants. Before adding a new named constant or tuning knob, derive the value from an existing canonical one (`ITEM_DROP_FIFO_CAP = MAX_ACTIVE_ACTOR_SOFT_LIMIT`; the gore-cell cap reuses `SURFACE_MAP_MAX_CELLS`). A new constant needs a reason no existing constant can express, and каждая лишняя ручка — это будущий рассинхрон.
 - Keep edits close to the requested behavior.
 - Add abstraction only when it removes real duplication or matches an established local pattern.
+  «Real duplication» НЕ включает повтор между равнозначными пакетами контента — см. правило
+  в `Project Identity`. Слияние таких пакетов запрещено даже при полном совпадении тел.
 - Do not split files for arbitrary line counts.
 - Use comments only for non-obvious mechanics, math or performance constraints.
 - Preserve Russian strings and existing encoding.
@@ -575,6 +594,8 @@ Reject these:
 - A renderer feature that owns gameplay state.
 - A quest that requires hardcoding one NPC in generic AI.
 - A generator that overwrites protected apartments or seals unreachable rooms.
+- Слияние равнозначных модулей контента (этажей, монстров, мини-игр, POI) в общий модуль
+  ради экономии строк. Повтор там намеренный; см. `Project Identity`.
 - Dead data with no reachable gameplay or debug path.
 - Large refactors before playable content delivery.
 

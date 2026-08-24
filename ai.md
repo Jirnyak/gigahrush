@@ -309,7 +309,6 @@ Shelter choice is local and capped. Candidate sources:
 - family/home/assigned room;
 - nearest `getSamosborShelterRoomIds()` candidates;
 - nearby suitable rooms;
-- local shelter modules registered through `registerSamosborLocalShelter()`.
 
 Shelter score should use distance, path availability, door state, room pressure, faction ownership, fear, trust, player relation and recent player behavior.
 

@@ -56,7 +56,6 @@ import {
 import { controlHint } from './controls';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_NPC, ENTITY_MASK_VISIBLE, ensureEntityIndex, rebuildEntityIndex } from './entity_index';
 import { assignPersistentAlifeNpcFromEntity, recordAlifeNpcDeath, rewriteAlifeNpcIdentityFromEntity } from './alife';
-import { getSamosborLocalShelters } from './samosbor_hooks';
 import { replaceCellHazards } from './cell_hazards';
 import { tickSamosborDirector } from './samosbor_director';
 import { ensureRoomContainers } from './containers';
@@ -963,7 +962,6 @@ export function abortSamosborRuntime(): void {
   unfreezeNavigationCacheForWorld();
   clearSamosborRoomSirens();
   clearIstotitShelters();
-  clearLocalSamosborShelters();
   clearSamosborWarning(true);
   samosborSealed = false;
   activeSamosborZoneId = -1;
@@ -1014,7 +1012,6 @@ export function resetSamosborRuntimeForTests(): void {
   clearSamosborWarning(true);
   istotitDecisionCycle = -1;
   istotitDecision = '';
-  for (const shelter of getSamosborLocalShelters()) shelter.clear?.();
 }
 
 function hasSamosborSubsystem(variant: ActiveSamosborVariant, subsystem: SamosborSubsystemId): boolean {
@@ -1264,69 +1261,8 @@ function activeIstotitDecision(state: GameState): string | undefined {
   return istotitDecisionCycle === state.samosborCount ? istotitDecision || undefined : undefined;
 }
 
-function mergeRoomIds(ids: readonly number[], more: readonly number[]): number[] {
-  const out = [...ids];
-  for (const id of more) if (!out.includes(id)) out.push(id);
-  return out;
-}
-
-function prepareLocalSamosborShelters(
-  world: World,
-  entities: Entity[],
-  state: GameState,
-  variant: ActiveSamosborVariant,
-  zoneId: number,
-  zoneX: number,
-  zoneY: number,
-): readonly number[] {
-  let roomIds: readonly number[] = [];
-  for (const shelter of getSamosborLocalShelters()) {
-    const prepared = shelter.prepare?.({ world, entities, state, variant, zoneId, zoneX, zoneY }) ?? [];
-    if (prepared.length > 0) roomIds = mergeRoomIds(roomIds, prepared);
-  }
-  return roomIds;
-}
-
-function getLocalSamosborShelterRoomIds(state?: GameState): readonly number[] {
-  let roomIds: readonly number[] = [];
-  for (const shelter of getSamosborLocalShelters()) {
-    const ids = shelter.getRoomIds?.(state) ?? [];
-    if (ids.length > 0) roomIds = mergeRoomIds(roomIds, ids);
-  }
-  return roomIds;
-}
-
-function notifyLocalSamosborShelterEnd(
-  world: World,
-  entities: Entity[],
-  state: GameState,
-  nextId: { v: number },
-  variant: ActiveSamosborVariant | null,
-): void {
-  for (const shelter of getSamosborLocalShelters()) {
-    shelter.onEnd?.({ world, entities, state, nextId, variant });
-  }
-}
-
-function clearLocalSamosborShelters(state?: GameState): void {
-  for (const shelter of getSamosborLocalShelters()) shelter.clear?.(state);
-}
-
-function getLocalSamosborShelterDebugLines(): string[] {
-  const lines: string[] = [];
-  for (const shelter of getSamosborLocalShelters()) {
-    const line = shelter.debugLine?.();
-    if (line) lines.push(line);
-  }
-  return lines;
-}
-
 export function getSamosborShelterRoomIds(state?: GameState): readonly number[] {
-  const istotitRooms = istotitSheltersMatch(state) ? istotitShelterRoomIds : [];
-  const localRooms = getLocalSamosborShelterRoomIds(state);
-  if (localRooms.length === 0) return istotitRooms;
-  if (istotitRooms.length === 0) return localRooms;
-  return mergeRoomIds(istotitRooms, localRooms);
+  return istotitSheltersMatch(state) ? istotitShelterRoomIds : [];
 }
 
 export function getSamosborWarningSnapshot(state?: GameState): SamosborWarningSnapshot | null {
@@ -1701,9 +1637,6 @@ export function tryUseSamosborVariantInteraction(
 ): boolean {
   const active = getActiveSamosborVariant();
   if (!state.samosborActive || !active) return false;
-  for (const shelter of getSamosborLocalShelters()) {
-    if (shelter.tryInteract?.({ world, entities, player, state, nextId, variant: active, lookX, lookY })) return true;
-  }
   if (!hasSamosborSubsystem(active, 'istotit_shelters') || !istotitSheltersMatch(state)) return false;
   const lx = world.wrap(Math.floor(lookX));
   const ly = world.wrap(Math.floor(lookY));
@@ -2226,9 +2159,7 @@ function ensureSamosborWarning(
   const variant = getActiveSamosborVariant() ?? chooseSamosborVariant(currentFloorRunEntry(state).themeTags, state.currentZ);
   const zone = chooseWarningZone(world, entities);
   const seconds = Math.max(0, Math.ceil(state.samosborTimer));
-  const istotitShelterRoomIds = prepareIstotitShelters(world, state, variant, zone.cx, zone.cy);
-  const localShelterRoomIds = prepareLocalSamosborShelters(world, entities, state, variant, zone.id, zone.cx, zone.cy);
-  const shelterRoomIds = mergeRoomIds(istotitShelterRoomIds, localShelterRoomIds);
+  const shelterRoomIds = prepareIstotitShelters(world, state, variant, zone.cx, zone.cy);
   const actionLine = samosborShortActionLine(variant, shelterRoomIds.length);
   const shelterHintLine = samosborShelterHintLine(variant, shelterRoomIds.length);
   const countdownLine = warningActionLine(zone.id, seconds, variant, shelterRoomIds.length);
@@ -2595,16 +2526,12 @@ export function updateSamosbor(
     clearSamosborFronts();
     world.clearTissue();
 
-    const localShelterRoomIds = getLocalSamosborShelterRoomIds(state);
-    notifyLocalSamosborShelterEnd(world, entities, state, nextId, endedVariant ?? null);
-
     // Unseal apartment doors
     unsealApartments(world);
     if (samosborPlayerShelterRoomId >= 0) unsealRooms(world, [samosborPlayerShelterRoomId]);
-    unsealRooms(world, mergeRoomIds(istotitShelterRoomIds, localShelterRoomIds));
+    unsealRooms(world, istotitShelterRoomIds);
     samosborPlayerShelterRoomId = -1;
     clearIstotitShelters();
-    clearLocalSamosborShelters(state);
 
     // Re-roll contextual NPC assignment givers after the shock.
     reassignQuestGivers(entities);
@@ -3652,7 +3579,6 @@ export function getSamosborDebugLines(): string[] {
     ? `${Math.max(0, Math.round(knownSamosborTime - lastVeretarAreaLeakAt))}s ago`
     : '-';
   const istotitLine = `Истотит: shelters=${istotitShelterRoomIds.length} supplies=${istotitSupplyContainerIds.length} decision=${istotitDecision || '-'}`;
-  const localShelterLines = getLocalSamosborShelterDebugLines();
 
   // Front summary
   const aliveFronts = activeSamosborFronts.filter(f => !f.dead);
@@ -3668,7 +3594,6 @@ export function getSamosborDebugLines(): string[] {
     `Фронты: ${aliveFronts.length}/${activeSamosborFronts.length} alive | cells=${totalProcessed} changed=${totalChanged} mobs=${totalMonstersFromFronts}`,
     ...getSamosborWaveDebugLines(),
     ...getSamosborFrontDebugLines(),
-    ...localShelterLines,
     `Веретар: area_leak=${lastVeretarAreaLeaks} ${veretarLeakAge}`,
     `Последствия: ${beats}  cd ${hasCooldown ? cooldown : 0}s${pendingAftermath ? ' pending' : ''}`,
     `Последний aftermath: ${Number.isFinite(lastAftermathAt) ? Math.max(0, Math.round(knownSamosborTime - lastAftermathAt)) + 's ago' : '-'}`,

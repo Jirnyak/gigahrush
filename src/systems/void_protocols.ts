@@ -17,7 +17,7 @@ import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
 import { recordPlayerDamage } from './damage';
 import { setDoorState } from './door_state';
-import { addItem, removeItem } from './inventory';
+import { addItem } from './inventory';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from './events';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
@@ -62,20 +62,12 @@ let nextMarkId = 1;
 let debugProtocolCursor = 0;
 
 const BORROWED_LIGHT_PROTOCOL_ID = 'borrowed_light';
-const SPIRIT_TOLL_PROTOCOL_ID = 'spirit_toll';
 const VOID_RULE_TAG = 'void_rule';
 const BORROWED_LIGHT_TAG = 'borrowed_light';
-const SPIRIT_TOLL_TAG = 'spirit_toll';
 const CONSUME_TAG = 'consume';
 const KEEP_TAG = 'keep';
 const CONSUMED_TAG = 'consumed';
 const KEPT_TAG = 'kept';
-const OBEY_TAG = 'obey';
-const BREAK_TAG = 'break';
-const PAY_TAG = 'pay';
-const REROUTE_TAG = 'reroute';
-const EXPLOIT_TAG = 'exploit';
-const RESOLVED_TAG = 'resolved';
 
 interface VoidRuleChamberContext {
   world: World;
@@ -85,22 +77,8 @@ interface VoidRuleChamberContext {
   keepContainerId: number;
 }
 
-interface VoidSpiritTollChamberContext {
-  world: World;
-  entities: Entity[];
-  roomId: number;
-  obeyContainerId: number;
-  breakContainerId: number;
-  payContainerId: number;
-  rerouteContainerId: number;
-  exploitContainerId: number;
-  entranceDoorIdx: number;
-  tollDoorIdx: number;
-  bypassDoorIdx: number;
-}
 
 const localRuleChambers = createWorldContextStore<VoidRuleChamberContext>();
-const spiritTollChambers = createWorldContextStore<VoidSpiritTollChamberContext>();
 
 export function registerVoidBorrowedLightChamber(
   world: World,
@@ -120,47 +98,6 @@ export function registerVoidBorrowedLightChamber(
   );
 }
 
-export function registerVoidSpiritTollChamber(
-  world: World,
-  entities: Entity[],
-  roomId: number,
-  obeyContainerId: number,
-  breakContainerId: number,
-  payContainerId: number,
-  rerouteContainerId: number,
-  exploitContainerId: number,
-  entranceDoorIdx: number,
-  tollDoorIdx: number,
-  bypassDoorIdx: number,
-): void {
-  spiritTollChambers.register(
-    world, roomId,
-    {
-      world,
-      entities,
-      roomId,
-      obeyContainerId,
-      breakContainerId,
-      payContainerId,
-      rerouteContainerId,
-      exploitContainerId,
-      entranceDoorIdx,
-      tollDoorIdx,
-      bypassDoorIdx,
-    },
-    (existing, incoming) => {
-      existing.entities = incoming.entities;
-      existing.obeyContainerId = incoming.obeyContainerId;
-      existing.breakContainerId = incoming.breakContainerId;
-      existing.payContainerId = incoming.payContainerId;
-      existing.rerouteContainerId = incoming.rerouteContainerId;
-      existing.exploitContainerId = incoming.exploitContainerId;
-      existing.entranceDoorIdx = incoming.entranceDoorIdx;
-      existing.tollDoorIdx = incoming.tollDoorIdx;
-      existing.bypassDoorIdx = incoming.bypassDoorIdx;
-    },
-  );
-}
 
 function protocolEventType(phase: ProtocolPhase): WorldEventType {
   return `void_protocol_${phase}` as WorldEventType;
@@ -301,16 +238,6 @@ function findLocalRuleChamber(event: WorldEvent): VoidRuleChamberContext | undef
     ctx.consumeContainerId === containerId || ctx.keepContainerId === containerId);
 }
 
-function findSpiritTollChamber(event: WorldEvent): VoidSpiritTollChamberContext | undefined {
-  const containerId = event.containerId;
-  if (containerId === undefined) return undefined;
-  return spiritTollChambers.find(ctx =>
-    ctx.obeyContainerId === containerId
-    || ctx.breakContainerId === containerId
-    || ctx.payContainerId === containerId
-    || ctx.rerouteContainerId === containerId
-    || ctx.exploitContainerId === containerId);
-}
 
 function eventContainer(ctx: { world: World }, event: WorldEvent): WorldContainer | undefined {
   return event.containerId === undefined ? undefined : ctx.world.containerById.get(event.containerId);
@@ -337,29 +264,7 @@ function markChamberChoice(ctx: VoidRuleChamberContext, tag: string): void {
   addContainerTag(keep, tag);
 }
 
-function spiritTollChoiceMade(ctx: VoidSpiritTollChamberContext): boolean {
-  return [
-    ctx.obeyContainerId,
-    ctx.breakContainerId,
-    ctx.payContainerId,
-    ctx.rerouteContainerId,
-    ctx.exploitContainerId,
-  ].some(id => ctx.world.containerById.get(id)?.tags.includes(RESOLVED_TAG));
-}
 
-function markSpiritTollChoice(ctx: VoidSpiritTollChamberContext, tag: string): void {
-  for (const id of [
-    ctx.obeyContainerId,
-    ctx.breakContainerId,
-    ctx.payContainerId,
-    ctx.rerouteContainerId,
-    ctx.exploitContainerId,
-  ]) {
-    const container = ctx.world.containerById.get(id);
-    addContainerTag(container, RESOLVED_TAG);
-    addContainerTag(container, tag);
-  }
-}
 
 function playerInContext(ctx: { entities: Entity[] }): Entity | undefined {
   return ctx.entities.find(e => isPlayerEntity(e) && e.alive);
@@ -387,11 +292,6 @@ function markFromEvent(ctx: { world: World; roomId: number }, state: GameState, 
   };
 }
 
-function pushActiveMark(state: GameState, def: VoidProtocolDef, mark: VoidProtocolMark): void {
-  activeMarks.push(mark);
-  if (activeMarks.length > MARK_CAP) activeMarks.splice(0, activeMarks.length - MARK_CAP);
-  cooldownUntil.set(def.id, state.time + def.cooldownSec);
-}
 
 function spawnProtocolMonster(
   entities: Entity[],
@@ -774,196 +674,20 @@ function grantBorrowedLightReward(player: Entity, state: GameState): void {
   else pushHud(state, 'Протокол щелкнул: рюкзак не принял награду.', '#f84');
 }
 
-function nextRuntimeEntityId(entities: Entity[]): { v: number } {
-  let id = 1;
-  for (const e of entities) id = Math.max(id, e.id + 1);
-  return { v: id };
-}
 
-function setDoor(ctx: VoidSpiritTollChamberContext, doorIdx: number, state: DoorState, timer: number): void {
-  const door = ctx.world.doors.get(doorIdx);
-  if (!door) return;
-  setDoorState(ctx.world, door, state);
-  door.timer = timer;
-}
 
-function countItem(player: Entity, defId: string): number {
-  return (player.inventory ?? []).reduce((sum, item) => sum + (item.defId === defId ? item.count : 0), 0);
-}
 
-function paySpiritToll(player: Entity): string | undefined {
-  if (countItem(player, 'ammo_9mm') >= 3 && removeItem(player, 'ammo_9mm', 3)) return '3x ammo_9mm';
-  if (countItem(player, 'ammo_762') >= 2 && removeItem(player, 'ammo_762', 2)) return '2x ammo_762';
-  if (countItem(player, 'ammo_energy') >= 1 && removeItem(player, 'ammo_energy', 1)) return '1x ammo_energy';
-  if ((player.money ?? 0) >= 6) {
-    player.money = (player.money ?? 0) - 6;
-    return '6 money';
-  }
-  return undefined;
-}
 
-function grantSpiritTollSpike(player: Entity, state: GameState, count = 1): void {
-  if (addItem(player, 'void_spike', count)) {
-    pushHud(state, 'П-46 выдала пустотный шип.', '#8ff');
-  } else {
-    pushHud(state, 'П-46 щелкнула: рюкзак не принял шип.', '#f84');
-  }
-}
 
-function liveTollCollectorInRoom(ctx: VoidSpiritTollChamberContext): boolean {
-  return ctx.entities.some(e => (
-    e.alive
-    && e.type === EntityType.MONSTER
-    && e.monsterKind === MonsterKind.SPIRIT
-    && e.name === 'Счетчик пошлины'
-    && ctx.world.roomAt(e.x, e.y)?.id === ctx.roomId
-  ));
-}
 
-function spawnTollBacklash(ctx: VoidSpiritTollChamberContext, mark: VoidProtocolMark, kind: MonsterKind, name: string): void {
-  spawnProtocolMonster(ctx.entities, nextRuntimeEntityId(ctx.entities), kind, name, mark.x + 1, mark.y, nearestLevel(ctx.world, mark));
-}
 
-function publishSpiritTollChoice(
-  state: GameState,
-  def: VoidProtocolDef,
-  phase: ProtocolPhase,
-  choice: string,
-  line: string,
-  mark: VoidProtocolMark,
-  severity: 2 | 3 | 4,
-  extraData: Record<string, unknown> = {},
-): void {
-  publishProtocolEvent(state, def, phase, line, mark, severity, ['p46', choice], {
-    chamber: 'protocol_chamber_p46',
-    branch: choice,
-    ...extraData,
-  });
-}
 
-function startSpiritTollChoice(
-  ctx: VoidSpiritTollChamberContext,
-  state: GameState,
-  event: WorldEvent,
-  def: VoidProtocolDef,
-  choice: string,
-  line: string,
-  severity: 2 | 3 | 4,
-  extraData: Record<string, unknown> = {},
-): VoidProtocolMark {
-  grantVoidProtocol(state, def.id, 'protocol_chamber_p46');
-  const mark = markFromEvent(ctx, state, event, def);
-  pushActiveMark(state, def, mark);
-  const publicLine = acceptedProtocolLine(def, line);
-  publishSpiritTollChoice(state, def, 'started', choice, publicLine, mark, severity, {
-    resultLine: line,
-    ...extraData,
-  });
-  pushHud(state, publicLine, severity >= 4 ? '#8ff' : '#8cf');
-  return mark;
-}
 
-function obeySpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent, def: VoidProtocolDef): void {
-  markSpiritTollChoice(ctx, OBEY_TAG);
-  setDoor(ctx, ctx.tollDoorIdx, DoorState.OPEN, 0);
-  setDoor(ctx, ctx.bypassDoorIdx, DoorState.HERMETIC_CLOSED, 20);
-  const line = 'П-46 приняла повиновение: выход открыт, шип остался в строке.';
-  startSpiritTollChoice(ctx, state, event, def, OBEY_TAG, line, 3, { outcome: 'safe_no_reward' });
-}
 
-function paySpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent, def: VoidProtocolDef, player: Entity): void {
-  const paid = paySpiritToll(player);
-  const mark = markFromEvent(ctx, state, event, def);
-  if (!paid) {
-    const line = rejectedProtocolLine(def, 'не хватает патронов или денег для пошлины');
-    publishSpiritTollChoice(state, def, 'rejected', PAY_TAG, line, mark, 2, { outcome: 'missing_payment', rejectReason: 'missing_payment' });
-    pushHud(state, line, '#888');
-    return;
-  }
-  markSpiritTollChoice(ctx, PAY_TAG);
-  setDoor(ctx, ctx.tollDoorIdx, DoorState.OPEN, 0);
-  grantSpiritTollSpike(player, state);
-  startSpiritTollChoice(ctx, state, event, def, PAY_TAG, def.startLine, 4, {
-    cost: paid,
-    rewardItemId: 'void_spike',
-  });
-}
 
-function breakSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent, def: VoidProtocolDef, player: Entity): void {
-  markSpiritTollChoice(ctx, BREAK_TAG);
-  setDoor(ctx, ctx.tollDoorIdx, DoorState.OPEN, 0);
-  setDoor(ctx, ctx.entranceDoorIdx, DoorState.HERMETIC_CLOSED, 18);
-  grantSpiritTollSpike(player, state);
-  const mark = startSpiritTollChoice(ctx, state, event, def, BREAK_TAG, 'Очередь сломана. Шип ваш, выход считает до восемнадцати.', 4, {
-    rewardItemId: 'void_spike',
-    cost: 'backlash_fight',
-  });
-  publishSpiritTollChoice(state, def, 'backlash', BREAK_TAG, def.backlashLine, mark, 4, {
-    cause: def.backlashCauseLine,
-    spawned: 'paragraph',
-  });
-  pushHud(state, def.backlashLine, '#f8c');
-  spawnTollBacklash(ctx, mark, MonsterKind.PARAGRAPH, 'Параграф сорванной пошлины');
-  if (player.hp !== undefined) {
-    applyProtocolPlayerDamage(state, player, 2, 'Отдача сорванной пошлины закрыла вход: -2', 0.2);
-  }
-}
 
-function rerouteSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent, def: VoidProtocolDef): void {
-  markSpiritTollChoice(ctx, REROUTE_TAG);
-  setDoor(ctx, ctx.tollDoorIdx, DoorState.HERMETIC_CLOSED, 30);
-  setDoor(ctx, ctx.bypassDoorIdx, DoorState.OPEN, 0);
-  const mark = startSpiritTollChoice(ctx, state, event, def, REROUTE_TAG, 'Долг ушел в нижний обход. Награды нет, счетчик не проснулся.', 3, {
-    outcome: 'bypass_open_no_reward',
-  });
-  forLocalCells(ctx.world, mark, (_x, _y, ci) => {
-    if (ctx.world.fog[ci] < 16) ctx.world.fog[ci] = 16;
-  });
-  ctx.world.markFogDirty();
-}
 
-function exploitSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent, def: VoidProtocolDef, player: Entity): void {
-  markSpiritTollChoice(ctx, EXPLOIT_TAG);
-  const collectorAlive = liveTollCollectorInRoom(ctx);
-  const mark = startSpiritTollChoice(
-    ctx,
-    state,
-    event,
-    def,
-    EXPLOIT_TAG,
-    collectorAlive ? 'Квитанция попалась живому счетчику.' : 'Мертвый счетчик оплатил чужой строкой.',
-    collectorAlive ? 4 : 3,
-    { prerequisite: 'toll_collector_dead', collectorAlive },
-  );
-  if (collectorAlive) {
-    setDoor(ctx, ctx.entranceDoorIdx, DoorState.HERMETIC_CLOSED, 12);
-    publishSpiritTollChoice(state, def, 'backlash', EXPLOIT_TAG, def.backlashLine, mark, 4, {
-      cause: def.backlashCauseLine,
-      spawned: 'spirit',
-    });
-    pushHud(state, def.backlashLine, '#f8c');
-    spawnTollBacklash(ctx, mark, MonsterKind.SPIRIT, 'Счетчик подмены');
-    if (player.hp !== undefined) {
-      applyProtocolPlayerDamage(state, player, 2, 'Отдача подменной квитанции: -2', 0.22);
-    }
-    return;
-  }
-  setDoor(ctx, ctx.tollDoorIdx, DoorState.OPEN, 0);
-  grantSpiritTollSpike(player, state);
-  addItem(player, 'ammo_energy', 1);
-}
 
-function handleSpiritTollRule(ctx: VoidSpiritTollChamberContext, state: GameState, event: WorldEvent): void {
-  if (!eventContainer(ctx, event) || spiritTollChoiceMade(ctx)) return;
-  const def = getVoidProtocolDef(SPIRIT_TOLL_PROTOCOL_ID);
-  const player = playerInContext(ctx);
-  if (!def || !player) return;
-  if (eventHasTags(event, OBEY_TAG)) obeySpiritTollRule(ctx, state, event, def);
-  else if (eventHasTags(event, PAY_TAG)) paySpiritTollRule(ctx, state, event, def, player);
-  else if (eventHasTags(event, BREAK_TAG)) breakSpiritTollRule(ctx, state, event, def, player);
-  else if (eventHasTags(event, REROUTE_TAG)) rerouteSpiritTollRule(ctx, state, event, def);
-  else if (eventHasTags(event, EXPLOIT_TAG)) exploitSpiritTollRule(ctx, state, event, def, player);
-}
 
 function consumeBorrowedLightRule(ctx: VoidRuleChamberContext, state: GameState, event: WorldEvent): void {
   if (!eventContainer(ctx, event) || chamberChoiceMade(ctx)) return;
@@ -1020,11 +744,6 @@ function keepBorrowedLightRule(ctx: VoidRuleChamberContext, state: GameState, ev
 function handleVoidLocalRuleEvent(state: GameState, event: WorldEvent): void {
   if (event.type !== 'container_opened' && event.type !== 'item_stolen') return;
   if (!eventHasTags(event, VOID_RULE_TAG)) return;
-  if (eventHasTags(event, SPIRIT_TOLL_TAG)) {
-    const ctx = findSpiritTollChamber(event);
-    if (ctx) handleSpiritTollRule(ctx, state, event);
-    return;
-  }
   if (eventHasTags(event, BORROWED_LIGHT_TAG)) {
     const ctx = findLocalRuleChamber(event);
     if (!ctx) return;

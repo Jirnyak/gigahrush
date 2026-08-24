@@ -2,7 +2,7 @@
 
 > Центральный документ самосбора.
 >
-> Роль: фиксирует shipped-контракт warning, shelter, active pressure, local rebuild, variants, aftermath and events. Для реализации проверяй `src/systems/samosbor.ts`, `src/systems/samosbor_wave.ts`, `src/data/samosbor_variants.ts`, `src/data/samosbor_director.ts` и `src/systems/samosbor_hooks.ts`.
+> Роль: фиксирует shipped-контракт warning, shelter, active pressure, local rebuild, variants, aftermath and events. Для реализации проверяй `src/systems/samosbor.ts`, `src/systems/samosbor_wave.ts`, `src/data/samosbor_variants.ts` и `src/data/samosbor_director.ts`.
 
 ## Current Shape
 
@@ -32,7 +32,6 @@ Current runtime counts:
 - `src/data/samosbor_director.ts`: bounded warning/active/aftermath director beats.
 - `src/systems/samosbor.ts`: timer, warning snapshot, shelter checks, active effects, spawn pressure, aftermath application and debug lines.
 - `src/systems/samosbor_wave.ts`: bounded local cell mutation and rebuild field.
-- `src/systems/samosbor_hooks.ts`: local shelter extension points.
 - `src/gen/*`: generators must preserve protected anchors and provide enough structure for local rebuild stitching.
 - `src/systems/events.ts`: public facts for warnings, starts, shelter outcomes, aftermath and rumors.
 
@@ -57,10 +56,9 @@ Valid shelter sources:
 
 - hermetic/protected rooms already owned by a floor;
 - variant-created local shelters;
-- hook-provided shelters from `registerSamosborLocalShelter()`;
 - route/floor content that marks and preserves protected room ids.
 
-Shelter hooks must be bounded. They may prepare a few rooms, publish facts, and clean up after the event. They must not scan the whole world every frame, allocate per-entity closures or create permanent global state without save/runtime ownership.
+Отдельного реестра убежищ больше нет: `samosbor_hooks.ts` вырезан 2026-08-24 вместе с `registerSamosborLocalShelter()`. Его не звал ни один модуль, поэтому семь циклов по локальным убежищам в `samosbor.ts` крутились по пустому массиву, а документ обещал работающую точку расширения. Убежище объявляется тем, что реально читается: гермокомнатой этажа, вариантом самосбора или защищёнными id комнат в контенте маршрута. Любая такая подготовка обязана быть ограниченной: несколько комнат, публикация фактов и уборка после события — без обхода мира за кадр, без замыканий на сущность и без вечного глобального состояния вне владельца сейва.
 
 ## Multi-Front Chaos Engine
 
