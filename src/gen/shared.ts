@@ -16,6 +16,7 @@ import { SKY_TIER_THRESHOLD } from '../world/ceiling_heights';
 import { World } from '../core/world';
 import { rng, pick, pickFrom, shuffleWith, type RandomSource, irand } from '../core/rand';
 import { ROOM_DEFS } from '../data/catalog';
+import { ROUTE_LIFT_GRID_STEP, routeLiftShaftsDown, routeLiftShaftsUp } from '../data/route_lift_shafts';
 
 
 export function findRandomFloorCell(world: World, rand: RandomSource = rng, maxTries: number = 2000): { x: number; y: number } | undefined {
@@ -577,6 +578,24 @@ export function pickWalkablePlacement(
   }
 
   return best >= 0 ? { x: best % W, y: (best / W) | 0 } : null;
+}
+
+/* ── Покраска комнаты БЕЗ защиты ─────────────────────────────
+ * Защита (`aptMask = 1`) — редкая осмысленная метка: её носят кабины обеих
+ * лифтовых систем, гермостены, гермодвери и комнаты-убежища за ними. Она значит
+ * «переживает самосбор» и «шахта сюда не сядет», поэтому раздавать её всем
+ * комнатам подряд нельзя: замерено на Базе Ликвидаторов, где защищёнными
+ * оказались 4955 клеток из 4961 — этаж перестал принимать лифты вовсе.
+ * Если комнате нужны только свои текстуры, красить надо этим. */
+export function paintRoomSurfaces(world: World, rx: number, ry: number, w: number, h: number, wallTex: Tex, floorTex: Tex): void {
+  for (let dy = -1; dy <= h; dy++)
+    for (let dx = -1; dx <= w; dx++) {
+      const ci = world.idx(rx + dx, ry + dy);
+      if (world.cells[ci] === Cell.WALL) world.wallTex[ci] = wallTex;
+    }
+  for (let dy = 0; dy < h; dy++)
+    for (let dx = 0; dx < w; dx++)
+      world.floorTex[world.idx(rx + dx, ry + dy)] = floorTex;
 }
 
 /* ── Protect room with aptMask + set wall/floor textures ─────── */
@@ -1560,7 +1579,16 @@ function findBestDoorLocation(world: World, room: Room, samples: number[]): Door
   return bestLoc;
 }
 
-export function ensurePermanentRoomAccess(world: World): void {
+/**
+ * Комната без единого входа получает дверь и коридор до достижимого объёма.
+ *
+ * По умолчанию шаг смотрит только квартирные комнаты — так он и работал. Этаж
+ * вправе попросить проверить ВСЕ свои комнаты, передав их число: авторская
+ * комната-цель квеста, оставшаяся без двери, — это недостижимая цель, а не
+ * замысел. Открытые залы и дворы шагу не мешают: у них нет дверей, но они
+ * достижимы, и он их не трогает.
+ */
+export function ensurePermanentRoomAccess(world: World, roomCount = world.apartmentRoomCount): void {
   const seed = getInitialReachabilitySeed(world);
   if (seed < 0) return;
 
@@ -1573,7 +1601,7 @@ export function ensurePermanentRoomAccess(world: World): void {
   const samples: number[] = [];
   for (let i = 0; i < q.length; i += sStep) samples.push(q[i]);
 
-  for (let ri = 0; ri < world.apartmentRoomCount; ri++) {
+  for (let ri = 0; ri < roomCount; ri++) {
     const room = world.rooms[ri];
     if (!room || room.sealed) continue;
 
@@ -1719,201 +1747,26 @@ export function openVolatileDoors(world: World): void {
   }
 }
 
-const CARDINAL_DIRS = [[1,0],[-1,0],[0,1],[0,-1]] as const;
-const LIFT_CONNECTOR_MAX = 96;
 
-interface ReachableSet {
-  cells: Int32Array;
-  count: number;
-  seen: Uint8Array;
-}
 
-function isLiftWalkable(world: World, idx: number): boolean {
-  const cell = world.cells[idx];
-  return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR;
-}
 
-function findNearestLiftWalkable(world: World, x: number, y: number, radius: number): number {
-  const start = world.idx(x, y);
-  if (isLiftWalkable(world, start)) return start;
-  for (let r = 1; r <= radius; r++) {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-        const idx = world.idx(x + dx, y + dy);
-        if (isLiftWalkable(world, idx)) return idx;
-      }
-    }
-  }
-  return -1;
-}
 
-function collectReachable(world: World, startIdx: number): ReachableSet {
-  const seen = new Uint8Array(W * W);
-  const cells = new Int32Array(W * W);
-  if (startIdx < 0 || !isLiftWalkable(world, startIdx)) return { cells, count: 0, seen };
 
-  let head = 0;
-  let tail = 0;
-  seen[startIdx] = 1;
-  cells[tail++] = startIdx;
-  while (head < tail) {
-    const ci = cells[head++];
-    const x = ci % W;
-    const y = (ci / W) | 0;
-    for (const [dx, dy] of CARDINAL_DIRS) {
-      const ni = world.idx(x + dx, y + dy);
-      if (seen[ni] || !isLiftWalkable(world, ni)) continue;
-      seen[ni] = 1;
-      cells[tail++] = ni;
-    }
-  }
-  return { cells, count: tail, seen };
-}
 
-function reachableFromPoint(world: World, x: number, y: number): ReachableSet {
-  return collectReachable(world, findNearestLiftWalkable(world, Math.floor(x), Math.floor(y), 64));
-}
 
-function firstWalkableComponent(world: World): ReachableSet {
-  for (let i = 0; i < W * W; i++) {
-    if (isLiftWalkable(world, i)) return collectReachable(world, i);
-  }
-  return collectReachable(world, -1);
-}
-
-function canCarveLiftConnectorCell(world: World, idx: number): boolean {
-  return !world.aptMask[idx] && !world.hermoWall[idx] && world.cells[idx] !== Cell.LIFT;
-}
 
 function clearDoorAt(world: World, idx: number): void {
   world.removeDoorAt(idx);
 }
 
-function setConnectorFloor(world: World, idx: number, floorTex: Tex): boolean {
-  if (!canCarveLiftConnectorCell(world, idx)) return false;
-  if (world.cells[idx] === Cell.DOOR) clearDoorAt(world, idx);
-  if (world.cells[idx] !== Cell.FLOOR && world.cells[idx] !== Cell.WATER) {
-    world.cells[idx] = Cell.FLOOR;
-    world.floorTex[idx] = floorTex;
-    world.roomMap[idx] = -1;
-    world.features[idx] = Feature.NONE;
-  }
-  return true;
-}
 
-function carveBoundedLiftConnector(world: World, fromIdx: number, toIdx: number, floorTex: Tex): boolean {
-  const ax = fromIdx % W;
-  const ay = (fromIdx / W) | 0;
-  const bx = toIdx % W;
-  const by = (toIdx / W) | 0;
-  const dx = world.delta(ax, bx);
-  const dy = world.delta(ay, by);
-  if (Math.abs(dx) + Math.abs(dy) > LIFT_CONNECTOR_MAX) return false;
 
-  const touched: number[] = [];
-  let x = ax;
-  let y = ay;
-  const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-  const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
 
-  for (let s = 0; s < Math.abs(dx); s++) {
-    const idx = world.idx(x, y);
-    if (!canCarveLiftConnectorCell(world, idx)) return false;
-    touched.push(idx);
-    x = world.wrap(x + stepX);
-  }
-  for (let s = 0; s < Math.abs(dy); s++) {
-    const idx = world.idx(x, y);
-    if (!canCarveLiftConnectorCell(world, idx)) return false;
-    touched.push(idx);
-    y = world.wrap(y + stepY);
-  }
-  const last = world.idx(x, y);
-  if (!canCarveLiftConnectorCell(world, last)) return false;
-  touched.push(last);
 
-  for (const idx of touched) setConnectorFloor(world, idx, floorTex);
-  return true;
-}
 
-function nearestReachableCell(world: World, fromIdx: number, reachable: ReachableSet, maxDist: number): number {
-  const fx = fromIdx % W;
-  const fy = (fromIdx / W) | 0;
-  let best = -1;
-  let bestD = maxDist + 1;
-  const step = Math.max(1, reachable.count >> 11);
-  for (let i = 0; i < reachable.count; i += step) {
-    const ci = reachable.cells[i];
-    const d = Math.abs(world.delta(fx, ci % W)) + Math.abs(world.delta(fy, (ci / W) | 0));
-    if (d < bestD) {
-      bestD = d;
-      best = ci;
-    }
-  }
-  return bestD <= maxDist ? best : -1;
-}
 
-function routeLiftAccessReachable(world: World, liftIdx: number, reachable: ReachableSet): boolean {
-  const x = liftIdx % W;
-  const y = (liftIdx / W) | 0;
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    const ni = world.idx(x + dx, y + dy);
-    if (reachable.seen[ni] && isLiftWalkable(world, ni)) return true;
-  }
-  return false;
-}
 
-function reachableAdjacentLiftCell(world: World, liftIdx: number, reachable: ReachableSet): number {
-  const x = liftIdx % W;
-  const y = (liftIdx / W) | 0;
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    const ni = world.idx(x + dx, y + dy);
-    if (reachable.seen[ni] && isLiftWalkable(world, ni)) return ni;
-  }
-  return -1;
-}
 
-function clearAdjacentLiftButtons(world: World, liftIdx: number): void {
-  const x = liftIdx % W;
-  const y = (liftIdx / W) | 0;
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    const idx = world.idx(x + dx, y + dy);
-    if (world.features[idx] !== Feature.LIFT_BUTTON) continue;
-    world.features[idx] = Feature.NONE;
-    world.liftDir[idx] = LiftDirection.DOWN;
-  }
-}
-
-function adjacentToLift(world: World, idx: number): boolean {
-  const x = idx % W;
-  const y = (idx / W) | 0;
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    if (world.cells[world.idx(x + dx, y + dy)] === Cell.LIFT) return true;
-  }
-  return false;
-}
-
-function ensureLiftAccess(world: World, liftIdx: number, reachable: ReachableSet): boolean {
-  clearAdjacentLiftButtons(world, liftIdx);
-  if (routeLiftAccessReachable(world, liftIdx, reachable)) return true;
-  const adj = reachableAdjacentLiftCell(world, liftIdx, reachable);
-  return adj >= 0;
-}
-
-function adjacentLiftAccess(world: World, liftIdx: number, floorTex: Tex): number {
-  const x = liftIdx % W;
-  const y = (liftIdx / W) | 0;
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    const ni = world.idx(x + dx, y + dy);
-    if (isLiftWalkable(world, ni)) return ni;
-  }
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    const ni = world.idx(x + dx, y + dy);
-    if (setConnectorFloor(world, ni, floorTex)) return ni;
-  }
-  return -1;
-}
 
 function setLiftCell(world: World, idx: number, direction: LiftDirection): void {
   if (world.cells[idx] === Cell.DOOR) clearDoorAt(world, idx);
@@ -1925,7 +1778,6 @@ function setLiftCell(world: World, idx: number, direction: LiftDirection): void 
 }
 
 function demoteLiftCell(world: World, idx: number, floorTex: Tex): void {
-  clearAdjacentLiftButtons(world, idx);
   world.cells[idx] = Cell.FLOOR;
   world.roomMap[idx] = -1;
   world.floorTex[idx] = floorTex;
@@ -1933,71 +1785,10 @@ function demoteLiftCell(world: World, idx: number, floorTex: Tex): void {
   world.features[idx] = Feature.NONE;
 }
 
-function canPlaceReachableLift(world: World, idx: number, reachable: ReachableSet): number {
-  if (!reachable.seen[idx] || world.cells[idx] !== Cell.FLOOR || world.roomMap[idx] >= 0) return -1;
-  if (world.aptMask[idx] || world.hermoWall[idx] || world.features[idx] !== Feature.NONE || world.containerMap.has(idx)) return -1;
-  const x = idx % W;
-  const y = (idx / W) | 0;
-  let adj = 0;
-  let access = -1;
-  for (const [dx, dy] of CARDINAL_DIRS) {
-    const ni = world.idx(x + dx, y + dy);
-    if (!reachable.seen[ni] || world.cells[ni] !== Cell.FLOOR || world.containerMap.has(ni)) continue;
-    adj++;
-    if (world.features[ni] === Feature.NONE || world.features[ni] === Feature.LIFT_BUTTON) access = ni;
-  }
-  return adj >= 2 ? access : -1;
-}
 
-function placeReachableLift(world: World, reachable: ReachableSet, direction: LiftDirection, blockedIdx = -1): boolean {
-  if (reachable.count <= 0) return false;
-  const start = direction === LiftDirection.UP
-    ? Math.floor(reachable.count * 0.37)
-    : Math.floor(reachable.count * 0.63);
-  for (let n = 0; n < reachable.count; n++) {
-    const idx = reachable.cells[(start + n) % reachable.count];
-    if (idx === blockedIdx) continue;
-    const access = canPlaceReachableLift(world, idx, reachable);
-    if (access < 0) continue;
-    setLiftCell(world, idx, direction);
-    world.features[access] = Feature.NONE;
-    world.liftDir[access] = LiftDirection.DOWN;
-    return true;
-  }
-  return false;
-}
 
-function ensureExistingLiftReachable(
-  world: World,
-  liftIdx: number,
-  reachable: ReachableSet,
-  floorTex: Tex,
-): boolean {
-  if (ensureLiftAccess(world, liftIdx, reachable)) return true;
-  const access = adjacentLiftAccess(world, liftIdx, floorTex);
-  if (access < 0) return false;
-  const target = nearestReachableCell(world, access, reachable, LIFT_CONNECTOR_MAX);
-  if (target < 0 || !carveBoundedLiftConnector(world, access, target, floorTex)) return false;
-  const updated = collectReachable(world, target);
-  return ensureLiftAccess(world, liftIdx, updated);
-}
 
-function directionExpected(direction: LiftDirection, expected: readonly LiftDirection[]): boolean {
-  return expected.includes(direction);
-}
 
-function cleanUnexpectedRouteLifts(world: World, expected: readonly LiftDirection[], floorTex: Tex): void {
-  for (let i = 0; i < W * W; i++) {
-    if (world.cells[i] === Cell.LIFT && !directionExpected(world.liftDir[i] as LiftDirection, expected)) {
-      demoteLiftCell(world, i, floorTex);
-    }
-    if (world.features[i] === Feature.LIFT_BUTTON && !directionExpected(world.liftDir[i] as LiftDirection, expected)) {
-      world.features[i] = Feature.NONE;
-    } else if (world.features[i] === Feature.LIFT_BUTTON && adjacentToLift(world, i)) {
-      world.features[i] = Feature.NONE;
-    }
-  }
-}
 
 export function routeLiftDirections(z: number, minZ: number, maxZ: number): LiftDirection[] {
   const directions: LiftDirection[] = [];
@@ -2006,78 +1797,214 @@ export function routeLiftDirections(z: number, minZ: number, maxZ: number): Lift
   return directions;
 }
 
-export function ensureReachableRouteLifts(
+
+
+/**
+ * Маршрутные лифты этажа по единой системе шахт.
+ *
+ * Этаж не решает, где стоят его лифты: это ЕДИНСТВЕННАЯ механика, которой
+ * связаны соседние этажи, и потому она живёт вне модулей. Позиции берутся из
+ * `data/route_lift_shafts` по ключу РЕБРА, и оба этажа перегона спрашивают одну
+ * функцию с одним ключом — зеркальность выходит из арифметики, а не из
+ * договорённости между генераторами.
+ *
+ * Шаг начинается со сноса ВСЕХ прежних маршрутных лифтов, включая авторские.
+ * Кабины фаст-тревела не трогаются: это другая система (везёт на любой открытый
+ * этаж, а не на соседний), и метит она себя `Feature.MACHINE`.
+ *
+ * Замерено до системы: 12 дизайн-этажей из 51 несли разное число лифтов вверх и
+ * вниз, от 0/1 (с Базы Ликвидаторов нельзя было подняться) до 1/16.
+ */
+/* Посадка ищется в пределах своей ячейки сетки: дальше уходить нельзя, иначе
+ * обещание «одна шахта на ячейку» перестаёт что-либо значить. */
+const SHAFT_LANDING_SEARCH_RADIUS = Math.floor(ROUTE_LIFT_GRID_STEP / 2);
+const SHAFT_APPROACH_SEARCH_RADIUS = 40;
+
+export function stampRouteLiftShafts(
   world: World,
-  spawnX: number,
-  spawnY: number,
-  expectedDirections: readonly LiftDirection[],
+  runSeed: number,
+  z: number,
   floorTex: Tex = Tex.F_CONCRETE,
 ): void {
-  const expected = Array.from(new Set(expectedDirections));
-  cleanUnexpectedRouteLifts(world, expected, floorTex);
-  const spawnIdx = world.idx(Math.floor(spawnX), Math.floor(spawnY));
-  let reachable = reachableFromPoint(world, spawnX, spawnY);
-
-  for (const direction of expected) {
-    let usable = 0;
-    for (let i = 0; i < W * W; i++) {
-      if (world.cells[i] !== Cell.LIFT || world.liftDir[i] !== direction) continue;
-      if (!ensureExistingLiftReachable(world, i, reachable, floorTex)) {
-        demoteLiftCell(world, i, floorTex);
-        continue;
-      }
-      reachable = reachableFromPoint(world, spawnX, spawnY);
-      if (routeLiftAccessReachable(world, i, reachable)) usable++;
-    }
-    if (usable === 0 && placeReachableLift(world, reachable, direction, spawnIdx)) {
-      reachable = reachableFromPoint(world, spawnX, spawnY);
-    }
-  }
-  normalizeLiftCells(world);
-}
-
-/* Клетка лифта выходит из комнаты и не носит мебель предыдущего штампа.
- *
- * Правило генерации требует писать `cells`, `roomMap` и `features` согласованно,
- * но постановку лифта каждый этаж писал сам — пятнадцать копий одной функции в
- * четырёх разных семантиках, и девять из них про `roomMap`/`features` забывали.
- * Замерено 2026-08-24: 19 дизайн-этажей из 51 отдавали клетку лифта, всё ещё
- * приписанную к комнате. Чинить это в каждой копии значит ждать, что следующая
- * копия не забудет; шаг стоит здесь, на пути ОБЕИХ точек генерации — и
- * дизайн-этажей, и процедурных, — как `sanitizeDoors` для дверей.
- *
- * Проход генерационный, один на этаж: в самой функции уже несколько BFS. */
-function normalizeLiftCells(world: World): void {
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] !== Cell.LIFT) continue;
-    world.roomMap[i] = -1;
-    world.features[i] = Feature.NONE;
+    if (world.features[i] === Feature.MACHINE) continue; // кабина фаст-тревела — чужая система
+    demoteLiftCell(world, i, floorTex);
+    world.aptMask[i] = 0; // защита принадлежала лифту, а не комнате: снимаем вместе с ним
+  }
+
+  // Занятые клетки помнятся на весь проход: сдвинутая шахта не имеет права сесть
+  // на другую — иначе направление молча теряет лифт (замерено на underhell: 15
+  // вместо 16, две шахты вниз сошлись в одну клетку после сдвига).
+  const taken = new Set<number>();
+  stampShaftSide(world, routeLiftShaftsUp(runSeed, z), LiftDirection.UP, floorTex, taken);
+  stampShaftSide(world, routeLiftShaftsDown(runSeed, z), LiftDirection.DOWN, floorTex, taken);
+}
+
+function stampShaftSide(
+  world: World, shafts: readonly number[], direction: LiftDirection, floorTex: Tex, taken: Set<number>,
+): void {
+  for (const shaft of shafts) {
+    const idx = shaftLandingCell(world, shaft, taken);
+    if (idx < 0) continue;
+    taken.add(idx);
+    setLiftCell(world, idx, direction);
+    // Лифт важен системно, поэтому переживает самосбор наравне с гермокомнатой.
+    world.aptMask[idx] = 1;
+    carveShaftApproach(world, idx, floorTex);
   }
 }
 
-/* ── Place lift cells in corridors ───────────────────────────── */
-export function placeLifts(
-  world: World,
-  count: number,
-  direction: LiftDirection = LiftDirection.DOWN,
-  origin?: { x: number; y: number },
-): void {
-  let placed = 0;
-  const reachable = origin ? reachableFromPoint(world, origin.x, origin.y) : firstWalkableComponent(world);
-  const blockedIdx = origin ? world.idx(Math.floor(origin.x), Math.floor(origin.y)) : -1;
-  for (let attempt = 0; attempt < 4000 && placed < count; attempt++) {
-    const ci = reachable.count > 0
-      ? reachable.cells[irand(0, reachable.count - 1)]
-      : world.idx(irand(20, W - 20), irand(20, W - 20));
-    if (ci === blockedIdx) continue;
-    const access = canPlaceReachableLift(world, ci, reachable);
-    if (access < 0) continue;
-    setLiftCell(world, ci, direction);
-    world.features[access] = Feature.NONE;
-    world.liftDir[access] = LiftDirection.DOWN;
-    placed++;
+/* Защищённую клетку шахта не занимает: `aptMask === 1` носят кабины обеих систем,
+ * гермостены, гермодвери и комнаты-убежища за ними. Их вертикаль не двигает —
+ * шахта сходит на ближайшую незащищённую клетку. Зеркальность на таком этаже
+ * рвётся локально, и это принятая цена: иначе шахта вскрывала бы убежище. */
+
+function shaftTouchesWalkable(world: World, idx: number): boolean {
+  const x = idx % W;
+  const y = (idx / W) | 0;
+  for (let i = 0; i < 4; i++) {
+    const nx = world.wrap(x + (i === 0 ? 1 : i === 1 ? -1 : 0));
+    const ny = world.wrap(y + (i === 2 ? 1 : i === 3 ? -1 : 0));
+    const cell = world.cells[world.idx(nx, ny)];
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER) return true;
+  }
+  return false;
+}
+
+/* Горловина коридора — проходимая клетка, у которой ровно два проходимых соседа,
+ * и они напротив друг друга. Клетка лифта НЕПРОХОДИМА (`world.solid` зовёт её
+ * стеной, в которую взаимодействуют), поэтому шахта в такой клетке разрезает
+ * проход и запечатывает всё, что было за ним: замерено на министерстве — три
+ * комнаты-цели квестов оказались замурованы вместо допустимых двух. */
+function shaftSealsCorridor(world: World, idx: number): boolean {
+  const x = idx % W;
+  const y = (idx / W) | 0;
+  const cell = world.cells[idx];
+  if (cell !== Cell.FLOOR && cell !== Cell.WATER) return false;
+  const walkable = (nx: number, ny: number) => {
+    const c = world.cells[world.idx(nx, ny)];
+    return c === Cell.FLOOR || c === Cell.DOOR || c === Cell.WATER;
+  };
+  const left = walkable(x - 1, y), right = walkable(x + 1, y);
+  const up = walkable(x, y - 1), down = walkable(x, y + 1);
+  const count = (left ? 1 : 0) + (right ? 1 : 0) + (up ? 1 : 0) + (down ? 1 : 0);
+  if (count !== 2) return false;
+  return (left && right) || (up && down);
+}
+
+function shaftLandingCell(world: World, shaft: number, taken: Set<number>): number {
+  /* Дверной проём шахта не занимает: лифт непроходим, и связь через этот проём
+   * исчезла бы вместе с дверью. Замерено на «Гармоническом банном» — этаж
+   * терял 14 дверей из 680, а с ними и куски связности. */
+  const free = (idx: number) => world.aptMask[idx] !== 1 && !taken.has(idx)
+    && world.cells[idx] !== Cell.DOOR && !world.doors.has(idx);
+  if (free(shaft) && shaftTouchesWalkable(world, shaft) && !shaftSealsCorridor(world, shaft)) return shaft;
+  const sx = shaft % W;
+  const sy = (shaft / W) | 0;
+  /* Первый проход ищет клетку, У КОТОРОЙ УЖЕ ЕСТЬ проходимый сосед. Иначе шахта
+   * садится в глухой бетон, подход к ней прорубить не от чего, и на этаже
+   * остаётся карман в пару клеток: замерено — по десятку-другому клеток на
+   * шести этажах, и тесты достижимости краснели именно на них. Рыть к такой
+   * шахте коридор в сто клеток хуже, чем сдвинуть её внутри своей же ячейки. */
+  for (let r = 1; r <= SHAFT_LANDING_SEARCH_RADIUS; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const idx = world.idx(sx + dx, sy + dy);
+        if (free(idx) && shaftTouchesWalkable(world, idx) && !shaftSealsCorridor(world, idx)) return idx;
+      }
+    }
+  }
+  // Проходимого объёма в ячейке нет вовсе — берём любую незанятую клетку и
+  // прорубаем подход, как раньше.
+  for (let r = 1; r <= SHAFT_LANDING_SEARCH_RADIUS; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const idx = world.idx(sx + dx, sy + dy);
+        if (free(idx)) return idx;
+      }
+    }
+  }
+  /* Незанятой незащищённой клетки не нашлось во всей ячейке. Закон «на этаже
+   * одинаковое число лифтов вверх и вниз» важнее сохранности убежища: потеря
+   * направления отрезает этаж от соседнего, а вскрытая гермокомната — нет.
+   * Замерено на underhell: без этого этаж отдавал 15 лифтов вниз из 16.
+   * Дверной проём и здесь неприкосновенен: лифт непроходим, и связь через
+   * съеденную дверь исчезла бы вместе с ней. */
+  const usable = (idx: number) => !taken.has(idx) && world.cells[idx] !== Cell.DOOR && !world.doors.has(idx);
+  if (usable(shaft)) return shaft;
+  for (let r = 1; r <= SHAFT_LANDING_SEARCH_RADIUS; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const idx = world.idx(sx + dx, sy + dy);
+        if (usable(idx)) return idx;
+      }
+    }
+  }
+  return -1;
+}
+
+/* Шахта пробивает бетон: подход прорубается к ближайшему проходимому объёму,
+ * иначе лифт остаётся замурованным в стене и этаж теряет направление. */
+function carveShaftApproach(world: World, idx: number, floorTex: Tex): void {
+  const x = idx % W;
+  const y = (idx / W) | 0;
+  for (let i = 0; i < 4; i++) {
+    const nx = world.wrap(x + (i === 0 ? 1 : i === 1 ? -1 : 0));
+    const ny = world.wrap(y + (i === 2 ? 1 : i === 3 ? -1 : 0));
+    const cell = world.cells[world.idx(nx, ny)];
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER) return;
+  }
+  let bestX = -1, bestY = -1, bestD2 = Infinity;
+  for (let r = 1; r <= SHAFT_APPROACH_SEARCH_RADIUS && bestX < 0; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = world.wrap(x + dx), ny = world.wrap(y + dy);
+        const cell = world.cells[world.idx(nx, ny)];
+        if (cell !== Cell.FLOOR && cell !== Cell.DOOR && cell !== Cell.WATER) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; bestX = nx; bestY = ny; }
+      }
+    }
+  }
+  if (bestX < 0) {
+    carveShaftFloorCell(world, world.wrap(x + 1), y, floorTex);
+    carveShaftFloorCell(world, world.wrap(x - 1), y, floorTex);
+    return;
+  }
+  let cx = x, cy = y;
+  const stepX = Math.sign(world.delta(cx, bestX));
+  let guard = 0;
+  while (cx !== bestX && guard++ < W) {
+    cx = world.wrap(cx + stepX);
+    if (cx === bestX && cy === bestY) break;
+    carveShaftFloorCell(world, cx, cy, floorTex);
+  }
+  const stepY = Math.sign(world.delta(cy, bestY));
+  guard = 0;
+  while (cy !== bestY && guard++ < W) {
+    cy = world.wrap(cy + stepY);
+    if (cx === bestX && cy === bestY) break;
+    carveShaftFloorCell(world, cx, cy, floorTex);
   }
 }
+
+function carveShaftFloorCell(world: World, x: number, y: number, floorTex: Tex): void {
+  const idx = world.idx(x, y);
+  if (world.aptMask[idx] === 1) return; // подход не вскрывает убежище и не режет кабину
+  const cell = world.cells[idx];
+  if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER || cell === Cell.LIFT) return;
+  world.cells[idx] = Cell.FLOOR;
+  world.roomMap[idx] = -1;
+  world.floorTex[idx] = floorTex;
+  world.wallTex[idx] = Tex.CONCRETE;
+  world.features[idx] = Feature.NONE;
+}
+
 
 /* ── Zone generation: 64 organic macro-regions ~128×128 ──────── */
 const ZONE_GRID = 8;  // 8×8 = 64 zones

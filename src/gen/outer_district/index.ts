@@ -1,7 +1,7 @@
-import { LiftDirection, RoomType, type Entity } from '../../core/types';
+import { RoomType, type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { withSeededRandom, SeedRng } from '../../core/rand';
-import { ensureConnectivity, sanitizeDoors, placeLifts, finalizeExpandedFloor, generateZones } from '../shared';
+import { ensureConnectivity, sanitizeDoors, finalizeExpandedFloor, generateZones } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 
@@ -59,9 +59,6 @@ export function generateOuterDistrictDesignFloor(seed = OUTER_DISTRICT_SEED): Fl
     sanitizeDoors(world);
 
     spawnOuterDistrictNpcs(rng, world, entities, nextId, rooms);
-
-    placeLifts(world, 4, LiftDirection.UP);
-    placeLifts(world, 4, LiftDirection.DOWN);
 
     generateZones(world);
 

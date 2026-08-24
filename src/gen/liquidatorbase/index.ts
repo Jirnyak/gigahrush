@@ -1,7 +1,7 @@
 import { RoomType, Tex, Cell, DoorState, EntityType, Feature } from '../../core/types';
 import { World as WorldClass } from '../../core/world';
 import type { FloorGeneration } from '../floor_manifest';
-import { stampRoom, protectRoom } from '../shared';
+import { stampRoom, protectRoom, paintRoomSurfaces } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { newEntityIdCursor } from '../entity_ids';
 
@@ -22,6 +22,10 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   hq.name = 'Штаб Базы';
   hq.wallTex = Tex.HERMO_WALL;
   hq.floorTex = Tex.F_CONCRETE;
+  // Защита — редкая метка: её носят убежища за гермостеной и системные клетки
+  // лифтов. Штаб за гермостеной ей отвечает, остальные комнаты базы — нет, они
+  // просто крашены. Раньше защищены были ВСЕ четыре: 4955 клеток из 4961, и
+  // этаж переставал принимать шахты лифтов вовсе.
   protectRoom(world, hq.x, hq.y, hq.w, hq.h, hq.wallTex, hq.floorTex);
 
   // Generate Armory (STORAGE)
@@ -29,22 +33,22 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
   armory.name = 'Оружейная Базы';
   armory.wallTex = Tex.METAL;
   armory.floorTex = Tex.F_CONCRETE;
-  protectRoom(world, armory.x, armory.y, armory.w, armory.h, armory.wallTex, armory.floorTex);
+  paintRoomSurfaces(world, armory.x, armory.y, armory.w, armory.h, armory.wallTex, armory.floorTex);
 
   // Generate Medical (MEDICAL)
   const medbay = stampRoom(world, nextRoomId++, RoomType.MEDICAL, spawnX + 30, spawnY - 10, 25, 20, -1);
   medbay.name = 'Медпункт Базы';
   medbay.wallTex = Tex.TILE_W;
   medbay.floorTex = Tex.F_TILE;
-  protectRoom(world, medbay.x, medbay.y, medbay.w, medbay.h, medbay.wallTex, medbay.floorTex);
+  paintRoomSurfaces(world, medbay.x, medbay.y, medbay.w, medbay.h, medbay.wallTex, medbay.floorTex);
 
   // Generate Arena (COMMON)
   const arena = stampRoom(world, nextRoomId++, RoomType.COMMON, spawnX - 25, spawnY - 65, 50, 50, -1);
-  arena.name = 'liquidator_arena_main';
+  arena.name = 'Арена Базы';
   arena.tags = ['arena'];
   arena.wallTex = Tex.HERMO_WALL;
   arena.floorTex = Tex.F_CONCRETE;
-  protectRoom(world, arena.x, arena.y, arena.w, arena.h, arena.wallTex, arena.floorTex);
+  paintRoomSurfaces(world, arena.x, arena.y, arena.w, arena.h, arena.wallTex, arena.floorTex);
 
   const ringRect = { x: arena.x + 15, y: arena.y + 15, w: 20, h: 20 };
   for (let x = ringRect.x; x < ringRect.x + ringRect.w; x++) {
@@ -60,25 +64,34 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
     }
   }
 
+  /* Трибуны — РЯДЫ, а не ковёр. Стул блокирует путь, поэтому правило «ставить в
+   * четырёх клетках из девяти» застилало зал сплошняком: 705 стульев на 2500
+   * клеток, и зрители с тварями не могли пересечь собственный этаж. Ряды идут
+   * через один (между ними всегда свободная полоса), поперёк зала прорезаны
+   * лестничные проходы, а у самого ринга остаётся кольцевой проход. */
+  const AISLE_STEP = 8;
   for (let y = arena.y + 2; y < arena.y + arena.h - 2; y++) {
+    if ((y - arena.y) % 2 !== 0) continue;                       // ряд через один
     for (let x = arena.x + 2; x < arena.x + arena.w - 2; x++) {
+      if ((x - arena.x) % AISLE_STEP === 0) continue;            // лестничный проход поперёк
       if (x >= ringRect.x - 2 && x <= ringRect.x + ringRect.w + 1 && y >= ringRect.y - 2 && y <= ringRect.y + ringRect.h + 1) continue;
-      if (x % 3 !== 0 && y % 3 !== 0) {
-        world.features[world.idx(x, y)] = Feature.CHAIR;
-      }
+      world.features[world.idx(x, y)] = Feature.CHAIR;
     }
   }
 
   // Connect them
 
   // Manual connection between rooms to avoid export issues and ensure they are accessible
-  const hqLeftDoorIdx = world.idx(hq.x, hq.y + 10);
+  // Дверь штаба обязана стоять на том же ряду, что коридор и дверь соседней
+  // комнаты, иначе они не встречаются: так медпункт был отрезан наглухо —
+  // 500 клеток из 500 недостижимы, медик за стеной.
+  const hqLeftDoorIdx = world.idx(hq.x, armory.y + 10);
   world.cells[hqLeftDoorIdx] = Cell.DOOR;
   world.doors.set(hqLeftDoorIdx, { idx: hqLeftDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: armory.id, keyId: '', timer: 0 });
   hq.doors.push(hqLeftDoorIdx); armory.doors.push(hqLeftDoorIdx);
   world.floorTex[hqLeftDoorIdx] = Tex.F_CONCRETE;
 
-  const hqRightDoorIdx = world.idx(hq.x + hq.w, hq.y + 10);
+  const hqRightDoorIdx = world.idx(hq.x + hq.w, medbay.y + 10);
   world.cells[hqRightDoorIdx] = Cell.DOOR;
   world.doors.set(hqRightDoorIdx, { idx: hqRightDoorIdx, state: DoorState.HERMETIC_OPEN, roomA: hq.id, roomB: medbay.id, keyId: '', timer: 0 });
   hq.doors.push(hqRightDoorIdx); medbay.doors.push(hqRightDoorIdx);

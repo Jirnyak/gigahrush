@@ -59,7 +59,6 @@ import {
   floorRunZAllowsNpcs,
   geometryById,
   majorityById,
-  routeExpectedLiftDirections,
   proceduralFloorAnomalyRoutePressure,
   proceduralFloorRoutePressureLevel,
   // @ts-ignore
@@ -93,10 +92,9 @@ import {
   decorateRoom,
   ensureConnectivity,
   generateZones,
-  ensureReachableRouteLifts,
+  stampRouteLiftShafts,
   isConnectivityWalkable,
   placeDoorAt,
-  placeLifts,
   roomExit,
   sanitizeDoors,
   shapeRoom,
@@ -16180,8 +16178,6 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     generateZones(world);
     applyZones(world, spec);
     applyWaterAndMachines(world, rooms, spec, spawnX, spawnY);
-    placeLifts(world, 8, LiftDirection.UP);
-    placeLifts(world, 8, LiftDirection.DOWN);
     ensureSumpLiftDryAccess(world, spec, spawnX, spawnY);
     ensureCollectorDryLiftAccess(world, spec, spawnX, spawnY);
     applyRailTrains(world, rooms, entities, nextId, spec, spawnX, spawnY);
@@ -16225,9 +16221,9 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     ensureSumpRepairDryAccess(world, rooms, spec, spawn.spawnX, spawn.spawnY);
     ensureSumpLiftDryAccess(world, spec, spawn.spawnX, spawn.spawnY);
     ensureCollectorDryLiftAccess(world, spec, spawn.spawnX, spawn.spawnY);
-    // Route-contract lift guarantee: after final connectivity repair, every expected
-    // direction must have a lift reachable from spawn (stranded/unexpected lifts demoted).
-    ensureReachableRouteLifts(world, spawn.spawnX, spawn.spawnY, routeExpectedLiftDirections(spec.z));
+    // Маршрутные лифты — единая система шахт по ребру между этажами (см. манифест
+    // дизайн-этажей): этаж их не выбирает, а прежние снимаются вместе с авторскими.
+    stampRouteLiftShafts(world, spec.runSeed, spec.z);
     const reachable = reachableCellsFrom(world, spawn.spawnX, spawn.spawnY);
     ensureContainersReachable(world, rooms, spec, reachable);
     containerizeLooseProceduralDrops(world, rooms, entities, spec, reachable);

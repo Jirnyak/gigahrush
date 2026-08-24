@@ -13,7 +13,7 @@ import {
 import type { FloorGeneration } from '../floor_manifest';
 import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
-import { initWorld, buildRooms, connectCore, decorateRooms, placeLifts, tuneZones, placeDrops, expandSiliconNetWellRouteGeometry, tuneSiliconNetWellRouteZones } from "./geometry";
+import { initWorld, buildRooms, connectCore, decorateRooms, tuneZones, placeDrops, expandSiliconNetWellRouteGeometry, tuneSiliconNetWellRouteZones } from "./geometry";
 import { registerSiliconNetWellContent, spawnNpcs, spawnAmbientNpcs, placeContainers, spawnThreats } from "./npcs";
 
 export function generateSiliconNetWellDesignFloor(seed = SEED): FloorGeneration {
@@ -27,7 +27,6 @@ export function generateSiliconNetWellDesignFloor(seed = SEED): FloorGeneration 
     const rooms = buildRooms(world);
     connectCore(world, rooms);
     decorateRooms(world, rooms);
-    placeLifts(world, rooms);
     generateZones(world);
     tuneZones(world);
 

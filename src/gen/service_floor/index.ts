@@ -3,7 +3,6 @@
 import {
   ContainerKind,
   DoorState,
-  LiftDirection,
   MonsterKind,
   RoomType,
   Tex,
@@ -13,7 +12,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { registerRouteCue } from '../../systems/route_cues';
-import { ensureConnectivity, placeLifts } from '../shared';
+import { ensureConnectivity} from '../shared';
 import { finalizeExpandedFloor} from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { hashSeed, seededRandom } from '../../core/rand';
@@ -78,9 +77,6 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
   connectRoomUp(world, canteen, 562, 516, DoorState.CLOSED);
   const clerkDoor = connectRoomDown(world, clerk, 595, 512, DoorState.LOCKED);
   serviceState.scopedDoorIds.push(janitorDoor, clerkDoor);
-
-  placeLifts(world, 16, LiftDirection.UP);
-  placeLifts(world, 16, LiftDirection.DOWN);
 
   dressCorridors(world);
   dressLiftMachine(world, machine);

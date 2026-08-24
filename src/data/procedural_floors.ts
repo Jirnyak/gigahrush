@@ -102,6 +102,10 @@ export interface ProceduralFloorSpec {
   z: number;
   ordinal: number;
   seed: number;
+  /** Сид ПРОГОНА, а не этажа. Нужен шахтам лифтов: соседние этажи обязаны выводить
+   *  позиции из одного числа, а `seed` у каждого этажа свой. В сейв не попадает —
+   *  санитайз всегда пересчитывает поле из переданного runSeed. */
+  runSeed: number;
   depth: number;
   danger: 1 | 2 | 3 | 4 | 5;
   geometryId: FloorGeometryId;
@@ -753,6 +757,7 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     z,
     ordinal: proceduralOrdinal(z),
     seed,
+    runSeed,
     depth,
     danger,
     geometryId: geometry.id,

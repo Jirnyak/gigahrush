@@ -178,6 +178,9 @@ function normalizeSpec(input: unknown, runSeed: number, z: number): ProceduralFl
     key: proceduralFloorKey(z),
     z,
     seed: normalizeRunSeed(src.seed ?? fallback.seed),
+    // Из сейва НЕ читается: сид прогона приходит параметром, иначе битая запись
+    // сдвинула бы шахты лифтов и рассогласовала соседние этажи.
+    runSeed,
     ordinal: fallback.ordinal,
     depth: fallback.depth,
     danger: Math.max(1, Math.min(5, Math.round(src.danger ?? fallback.danger))) as 1 | 2 | 3 | 4 | 5,

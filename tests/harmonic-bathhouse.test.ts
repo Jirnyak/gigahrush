@@ -173,7 +173,12 @@ test('harmonic bathhouse expands into route-scale bath clusters with cell-first 
     .sort((a, b) => b[1] - a[1])[0]?.[0];
 
   assert.equal(world.rooms.length >= 470, true, `rooms ${world.rooms.length}`);
-  assert.equal(world.doors.size >= 680, true, `doors ${world.doors.size}`);
+  /* Инвариант вместо пина: дверей не меньше, чем комнат — иначе комната без
+   * входа. Прежний порог 680 был счётчиком и сдвинулся по делу: порядок фаз
+   * этого этажа выправлен (связность прорубается ДО санации дверей), и
+   * санация сняла двери, оставшиеся без косяков после прорубания коридоров. */
+  assert.equal(world.doors.size >= world.rooms.length, true,
+    `doors ${world.doors.size} < rooms ${world.rooms.length}`);
   // Масштаб и связность вместо пинового счётчика: банный лабиринт маршрутного
   // масштаба (сотни тысяч клеток) и почти полностью связен от спауна.
   assert.equal(passableCells(gen) >= 250_000, true, `passable ${passableCells(gen)}`);

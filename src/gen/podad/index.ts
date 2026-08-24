@@ -1,7 +1,6 @@
 /* ── Podad design z: living hell geometry with anomaly hooks ─ */
 
 import {
-  LiftDirection,
   
   type Entity,
 } from '../../core/types';
@@ -11,7 +10,6 @@ import {
   connectRoomsMST,
   ensureConnectivity,
   generateZones,
-  placeLifts,
   sanitizeDoors,
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
@@ -37,7 +35,6 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
 
     generateZones(world);
     tunePodadZones(world);
-    placeLifts(world, 4, LiftDirection.UP, { x: rooms.entry.x + 7, y: rooms.entry.y + 7 });
     forceUpperLift(world, rooms.upperLift);
     ensureConnectivity(world, SPAWN_X + 0.5, SPAWN_Y + 0.5);
     sanitizeDoors(world);

@@ -10,6 +10,10 @@ import {
   W,
   type Room,
 } from '../../core/types';
+import { routeLiftShaftsDown, routeLiftShaftsUp } from '../../data/route_lift_shafts';
+
+/** Маршрутная координата Квартир: шахты именуются ребром между этажами. */
+const KVARTIRY_Z = 14;
 import { World } from '../../core/world';
 import { registerRouteCue } from '../../systems/route_cues';
 import { recordPoiGenerationMetadata } from '../content_manifest_utils';
@@ -163,8 +167,9 @@ export function buildKvartirySocialMacroGraph(
   world: World,
   spawnX: number,
   spawnY: number,
+  runSeed: number,
 ): KvartirySocialMacroGraph {
-  const nodes = collectSocialNodes(world, spawnX, spawnY);
+  const nodes = collectSocialNodes(world, spawnX, spawnY, runSeed);
   let carvedCells = 0;
   let queueLoops = 0;
 
@@ -283,7 +288,7 @@ export function measureKvartiryArticulation(
 
 const CARDINAL_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 
-function collectSocialNodes(world: World, spawnX: number, spawnY: number): KvSocialMacroNode[] {
+function collectSocialNodes(world: World, spawnX: number, spawnY: number, runSeed: number): KvSocialMacroNode[] {
   const nodes: KvSocialMacroNode[] = [];
   const usedRooms = new Set<number>();
 
@@ -341,8 +346,11 @@ function collectSocialNodes(world: World, spawnX: number, spawnY: number): KvSoc
   ))[0];
   addRoom('risky_shortcut', 'shortcut', shortcut, 'wild_pressure', 1.4, ['shortcut', 'risk', 'wild']);
 
-  addLiftNode(world, nodes, LiftDirection.UP, 'lift_up', spawnX, spawnY);
-  addLiftNode(world, nodes, LiftDirection.DOWN, 'lift_down', spawnX, spawnY);
+  // Лифтов в мире на этот момент ещё НЕТ: их ставит единая система шахт после
+  // всех авторских хуков этажа. Позиции узла берутся из той же чистой функции —
+  // единственного источника истины о том, где будут лифты.
+  addLiftNode(world, nodes, routeLiftShaftsUp(runSeed, KVARTIRY_Z), LiftDirection.UP, 'lift_up', spawnX, spawnY);
+  addLiftNode(world, nodes, routeLiftShaftsDown(runSeed, KVARTIRY_Z), LiftDirection.DOWN, 'lift_down', spawnX, spawnY);
 
   return nodes;
 }
@@ -418,6 +426,7 @@ function buildDomainDescriptors(nodes: readonly KvSocialMacroNode[]): KvSocialDo
 function addLiftNode(
   world: World,
   nodes: KvSocialMacroNode[],
+  shafts: readonly number[],
   direction: LiftDirection,
   id: string,
   refX: number,
@@ -426,8 +435,7 @@ function addLiftNode(
   let best = -1;
   let bestAccess: { x: number; y: number } | null = null;
   let bestD2 = Infinity;
-  for (let cell = 0; cell < W * W; cell++) {
-    if (world.cells[cell] !== Cell.LIFT || world.liftDir[cell] !== direction) continue;
+  for (const cell of shafts) {
     const x = cell % W;
     const y = (cell / W) | 0;
     const access = nearestUnprotectedWalkableCell(world, x, y, 6);

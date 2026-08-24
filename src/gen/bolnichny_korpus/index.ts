@@ -12,7 +12,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  LiftDirection,
   MonsterKind,
   Occupation,
   QuestType,
@@ -475,7 +474,6 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
     const rooms = buildRooms(world);
     connectRoomsGraph(world, rooms);
     decorateRooms(world, rooms);
-    placeLifts(world, rooms);
     generateZones(world);
     tuneBolnichnyKorpusRouteZones(world);
     placeBolnichnyEmergencyPanels(world, rooms);
@@ -1079,10 +1077,6 @@ function stampBolnichnyOwnerPatch(world: World, cx: number, cy: number, radius: 
   }
 }
 
-function placeLifts(world: World, rooms: BolnichnyRooms): void {
-  placeLift(world, rooms.triageEntrance.x + 100, rooms.triageEntrance.y + 17, rooms.triageEntrance.x + 94, rooms.triageEntrance.y + 16, LiftDirection.UP);
-  placeLift(world, rooms.lowerLift.x + rooms.lowerLift.w - 12, rooms.lowerLift.y + 14, rooms.lowerLift.x + rooms.lowerLift.w - 18, rooms.lowerLift.y + 12, LiftDirection.DOWN);
-}
 
 function placeBolnichnyEmergencyPanels(world: World, rooms: BolnichnyRooms): void {
   placeEmergencyPanel(world, rooms.checkpoint.x + 8, rooms.checkpoint.y + 9, 'panel_doors', SEED ^ 0x51c0);
@@ -1429,22 +1423,6 @@ function markScreenWall(world: World, x: number, y: number, frame: number): void
   if (!world.screenCells.includes(idx)) world.screenCells.push(idx);
 }
 
-function placeLift(world: World, x: number, y: number, buttonX: number, buttonY: number, direction: LiftDirection): void {
-  const li = world.idx(x, y);
-  world.cells[li] = Cell.LIFT;
-  world.wallTex[li] = Tex.LIFT_DOOR;
-  // Клетка лифта выходит из комнаты и теряет мебель предыдущего штампа: правило
-  // генерации требует писать `cells`, `roomMap` и `features` согласованно, иначе
-  // комната продолжает числить лифт своим. Замерено: две такие клетки на этаже.
-  world.roomMap[li] = -1;
-  world.features[li] = Feature.NONE;
-  world.liftDir[li] = direction;
-  const bi = world.idx(buttonX, buttonY);
-  if (world.cells[bi] === Cell.FLOOR) {
-    world.features[bi] = Feature.LIFT_BUTTON;
-    world.liftDir[bi] = direction;
-  }
-}
 
 function spawnPlotNpc(
   entities: Entity[],

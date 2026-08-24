@@ -69,7 +69,12 @@ test('critical_leak_archive fills the macro with registry blocks, micro rooms an
 
   for (let i = 0; i < W * W; i++) {
     const cell = gen.world.cells[i];
-    if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR || cell === Cell.LIFT) passable++;
+    // Клетка лифта НЕ проходима: `world.solid()` объявляет её стеной, в которую
+    // взаимодействуют («lift wall — interact to use»), и канонический
+    // `auditReachability` считает так же. Пока этаж нёс один-два лифта,
+    // расхождение пряталось в допуске; с единой системой шахт их 32, и оно
+    // вылезло целиком.
+    if (cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR) passable++;
     if (audit.reachable[i]) reachable++;
   }
   for (const room of gen.world.rooms) {

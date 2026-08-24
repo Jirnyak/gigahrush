@@ -12,7 +12,6 @@ import {
   EntityType,
   Faction,
   Feature,
-  LiftDirection,
   MonsterKind,
   Occupation,
   QuestType,
@@ -443,7 +442,6 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
     const rooms = buildRooms(world);
     connectCore(world, rooms);
     decorateRooms(world, rooms);
-    placeLifts(world, rooms);
     generateZones(world);
     tuneZones(world);
     placeSlimeNiiEmergencyPanels(world, rooms);
@@ -1054,10 +1052,6 @@ function stampDrainageCells(world: World, room: Room, serial: number): void {
   }
 }
 
-function placeLifts(world: World, rooms: SlimeNiiRooms): void {
-  placeLift(world, rooms.entry.x + 9, rooms.entry.y + 12, rooms.entry.x + 15, rooms.entry.y + 12, LiftDirection.UP);
-  placeLift(world, rooms.lowerLift.x + rooms.lowerLift.w - 9, rooms.lowerLift.y + 12, rooms.lowerLift.x + rooms.lowerLift.w - 15, rooms.lowerLift.y + 12, LiftDirection.DOWN);
-}
 
 function tuneZones(world: World): void {
   for (const zone of world.zones) {
@@ -1471,15 +1465,6 @@ function markScreenWall(world: World, x: number, y: number, frame: number): void
   if (!world.screenCells.includes(idx)) world.screenCells.push(idx);
 }
 
-function placeLift(world: World, x: number, y: number, buttonX: number, buttonY: number, direction: LiftDirection): void {
-  const li = world.idx(x, y);
-  world.cells[li] = Cell.LIFT;
-  world.wallTex[li] = Tex.LIFT_DOOR;
-  world.liftDir[li] = direction;
-  const bi = world.idx(buttonX, buttonY);
-  if (world.cells[bi] === Cell.FLOOR) world.features[bi] = Feature.LIFT_BUTTON;
-  world.liftDir[bi] = direction;
-}
 
 function spawnPlotNpc(
   entities: Entity[],

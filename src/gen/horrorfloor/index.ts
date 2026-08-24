@@ -1,12 +1,12 @@
 import { World } from '../../core/world';
 import { Entity, EntityType, Tex, Cell, DoorState, W, MonsterKind, RoomType } from '../../core/types';
 import { seededRandom } from '../../core/rand';
-import { carveCorridor, ensureConnectivity, generateZones, placeDoorAt, stampRoom, sanitizeDoors, placeLifts } from '../shared';
+import { carveCorridor, ensureConnectivity, generateZones, placeDoorAt, stampRoom, sanitizeDoors} from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { finalizeExpandedFloor} from '../shared';
 
 import { designFloorById } from '../../data/design_floors';
-import { LiftDirection, AIGoal } from '../../core/types';
+import { AIGoal } from '../../core/types';
 import { randomRPG } from '../../systems/rpg';
 import { monsterSpr } from '../../entities/sprite_index';
 import { newEntityIdCursor } from '../entity_ids';
@@ -145,9 +145,6 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
   sanitizeDoors(world);
   ensureConnectivity(world, spawnX, spawnY);
   blackoutHorrorLights(world);
-
-  placeLifts(world, 16, LiftDirection.UP);
-  placeLifts(world, 16, LiftDirection.DOWN);
 
   const route = designFloorById('horrorfloor')!;
   const generation = { world, entities, spawnX, spawnY, isDecentralized: true };

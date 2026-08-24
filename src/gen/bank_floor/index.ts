@@ -7,10 +7,10 @@ export * from './npcs';
 import { BANK_ROOM_NAMES, BANK_FLOOR_ROUTE_ID, BANK_FLOOR_Z, BANK_TAGS, type BankFloorState, type BankFloorGeneration, type BankActionKind } from './meta';
 import { BANK_VAULT_RISK_RADIUS, createBankRooms, dressBankRooms, generateBankZones, expandBankFloorRouteGeometry } from './geometry';
 import { DIRECTOR_DEF, CASHIER_DEF, CREDIT_DEF, GUARD_DEF, DEBTOR_DEF, spawnBankNpc, addBankContainers, applyBankFloorTerritorySeeds } from './npcs';
-import { W, Tex, LiftDirection, type Entity, type GameState, type WorldEvent } from '../../core/types';
+import { W, Tex, type Entity, type GameState, type WorldEvent } from '../../core/types';
 import { World } from '../../core/world';
 import { publishEvent } from '../../systems/events';
-import { placeLifts, finalizeExpandedFloor } from '../shared';
+import { finalizeExpandedFloor } from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { hashSeed, seededRandom } from '../../core/rand';
 import { newEntityIdCursor } from '../entity_ids';
@@ -99,8 +99,6 @@ export function generateBankFloorDesignFloor(): BankFloorGeneration {
 
   const rooms = createBankRooms(world);
   dressBankRooms(world, rooms);
-  placeLifts(world, 16, LiftDirection.UP);
-  placeLifts(world, 16, LiftDirection.DOWN);
   generateBankZones(world);
 
   const directorId = spawnBankNpc(entities, nextId, 'bank_director_zinaida', DIRECTOR_DEF, rooms.deposit, 7, 7, Math.PI / 2);

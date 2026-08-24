@@ -4,12 +4,12 @@
 /*   Edge-aware red carpet tiling. Marble walls. Parquet floors.    */
 
 import {
-  W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
+  W, Cell, Tex, RoomType, Feature, DoorState,
   type Room, type Entity,
   EntityType,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { generateZones, ensureConnectivity, ensurePermanentRoomAccess } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
 import { Spr } from '../../entities/sprite_index';
@@ -553,7 +553,6 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
   const { spawnX, spawnY } = findMinistrySpawnPoint(world);
 
   // Phase 8: Lifts
-  placeLifts(world, 16, LiftDirection.DOWN);
 
   // Phase 9: Zones
   placeMinistryZones(world);
@@ -576,6 +575,13 @@ export function generateMinistry(): { world: World; entities: Entity[]; spawnX: 
 
   // Phase 14: Connectivity
   ensureConnectivity(world, spawnX, spawnY);
+  // Кабинеты министерства — цели квестов и слухов, и часть из них выходила из
+  // генерации без единой двери: замерено, три такие комнаты («Пропускное бюро»,
+  // «Зал невозможной очереди», «Кабинет отказных параграфов»). Раньше это
+  // маскировалось прорубанием подхода к лифтам, которое делала прежняя
+  // лифтовая система; она снята, и дефект вылез. Открытые дворы и залы шаг не
+  // трогает: у них дверей нет, но они и так достижимы.
+  ensurePermanentRoomAccess(world, world.rooms.length);
 
   // Phase 15: Rare procedural ministry monitors
   placeProceduralScreens(world, 30);

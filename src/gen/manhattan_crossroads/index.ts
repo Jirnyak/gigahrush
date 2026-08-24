@@ -1,9 +1,9 @@
 /* -- Design z: Manhattan-like indoor crossroads ------------- */
 
-import { LiftDirection, RoomType, W, ZoneFaction, type Entity, type Zone } from '../../core/types';
+import { RoomType, W, ZoneFaction, type Entity, type Zone } from '../../core/types';
 import { World } from '../../core/world';
 import { withSeededRandom, SeedRng } from '../../core/rand';
-import { ensureConnectivity, sanitizeDoors, placeLifts, finalizeExpandedFloor } from '../shared';
+import { ensureConnectivity, sanitizeDoors, finalizeExpandedFloor } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 
@@ -60,9 +60,6 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
     const npcIds = spawnCrossroadsNpcs(rng, world, entities, nextId, rooms);
     seedContainersAndDrops(world, entities, nextId, rooms, npcIds);
     spawnRoadHazards(rng, world, entities, nextId, rooms);
-
-    placeLifts(world, 16, LiftDirection.UP);
-    placeLifts(world, 16, LiftDirection.DOWN);
 
     world.bakeLights();
 

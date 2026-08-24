@@ -1,12 +1,12 @@
 /* ── Hell level generator (Floor 2) — organic ising caves ────── */
 
 import {
-  W, Cell, Tex, Feature, LiftDirection,
+  W, Cell, Tex, Feature, 
   type Entity, EntityType, ZoneFaction
 } from '../../core/types';
 import { World } from '../../core/world';
 
-import { ensureConnectivity, placeLifts, generateZones } from '../shared';
+import { ensureConnectivity, generateZones } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { calcZoneLevel } from '../../systems/rpg';
@@ -34,9 +34,6 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
 
   ensureConnectivity(world, spawnX, spawnY);
   paintMissingOrganicTextures(world);
-
-  placeLifts(world, 12, LiftDirection.UP);
-  placeLifts(world, 6, LiftDirection.DOWN);
   ensureConnectivity(world, spawnX, spawnY);
   paintMissingOrganicTextures(world);
   generateZones(world);

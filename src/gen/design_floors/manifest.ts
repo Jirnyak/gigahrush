@@ -7,8 +7,8 @@ import {
 } from '../../data/design_floors';
 import { territorySharesForDesignFloor } from '../../data/floor_territory';
 import { hashSeed, withSeededRandom } from '../../core/rand';
-import { floorRunZAllowsNpcs, routeExpectedLiftDirections } from '../../data/procedural_floors';
-import { ensureReachableRouteLifts, generateZones } from '../shared';
+import { floorRunZAllowsNpcs} from '../../data/procedural_floors';
+import { generateZones, stampRouteLiftShafts } from '../shared';
 import { initializeCellTerritory } from '../../systems/territory';
 import type { FloorGeneration } from '../floor_manifest';
 import { withoutNpcEntities } from '../entity_filters';
@@ -155,11 +155,6 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     }
     if (!route) return gen;
     gen.world.hasOpenSky = route.hasOpenSky;
-    // Route-contract lift guarantee (still geometry phase, before objects/territory):
-    // every expected direction gets a lift reachable from spawn; lifts of unexpected
-    // directions (or stranded in sealed pockets) are demoted. Void z=MIN expects [] —
-    // the intentional no-return terminus stays lift-free.
-    ensureReachableRouteLifts(gen.world, gen.spawnX, gen.spawnY, routeExpectedLiftDirections(route.z));
     applyDesignFloorObjectProfile(gen.world, gen.spawnX, gen.spawnY, route);
     if (id === 'markov_stairwell') reinforceMarkovStairwellAuthoredHqTerritory(gen.world);
     if (id === 'service_floor') reinforceServiceFloorAuthoredHqTerritory(gen.world);
@@ -181,6 +176,16 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     // Floor-authored post-territory reinforcement (HQ ownership, zone tuning) that the
     // generator deferred to a hook; previously this hook was set but never invoked.
     gen.onAfterTerritory?.(gen.world, gen.entities);
+
+    // Маршрутные лифты ставит единая система шахт, а не этаж: позиции выводятся из
+    // ребра между этажами, поэтому лифты вниз этого этажа — те же клетки, что лифты
+    // вверх этажа под ним. Прежние лифты этажа, включая авторские, снимаются здесь же.
+    //
+    // Шаг стоит ПОСЛЕ всех авторских хуков и ДО расселения: последнее слово о лифтах
+    // за системой, иначе этаж отберёт его обратно. Замерено на underhell — он
+    // перестраивает геометрию в `onAfterTerritory` и съедал один лифт вниз из
+    // шестнадцати; а расселение уже видит готовые шахты и не сажает в них людей.
+    stampRouteLiftShafts(gen.world, runSeed, route.z);
 
     // Single authoritative ambient-NPC populate for every design floor. Runs after
     // territory init so NPC faction derives from cell ownership, and uses the real

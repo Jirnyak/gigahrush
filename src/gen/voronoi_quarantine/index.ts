@@ -22,7 +22,6 @@ import {
   placeQuarantineMidMicroRooms,
   countMicroVoronoiDoors,
   decorateSites,
-  placeLifts,
   placeQuarantineEmergencyPanels,
   spawnNpcs,
   placeContainers,
@@ -58,7 +57,6 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
     placeFactionMiniHqs(world, sites, owner, seed);
     const cellStats = placeQuarantineMidMicroRooms(world, sites, owner, seed);
     decorateSites(world, sites, owner, seed);
-    placeLifts(world, sites, owner);
     generateZones(world);
     tuneVoronoiQuarantineRouteZones(world);
     placeQuarantineEmergencyPanels(world, sites, owner, seed);

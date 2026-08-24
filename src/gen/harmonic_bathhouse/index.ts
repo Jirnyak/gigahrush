@@ -12,7 +12,7 @@ import {
 } from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
 import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, HarmonicBathhouseGeneration, SEED } from "./meta";
-import { initWorld, buildRooms, connectRooms, placeLifts, tuneBathhouseZones, expandHarmonicBathhouseRouteGeometry, placePanels, registerCues, decisionNode } from "./geometry";
+import { initWorld, buildRooms, connectRooms, tuneBathhouseZones, expandHarmonicBathhouseRouteGeometry, placePanels, registerCues, decisionNode } from "./geometry";
 import { solveHarmonicBathhouseField, carveLevelSetCorridors, applyThermalBands, decorateRooms, alignHarmonicBathhouseAmbientNpcTerritory, registerHazards, placeContainers, spawnBathhouseNpcs, spawnBathhouseThreats } from "./npcs";
 
 export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathhouseGeneration {
@@ -27,7 +27,6 @@ export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathh
     carveLevelSetCorridors(world, field, seed);
     const rooms = buildRooms(world);
     connectRooms(world, rooms);
-    placeLifts(world, rooms);
     const bands = applyThermalBands(world, field, rooms, seed);
     decorateRooms(world, rooms, seed);
 

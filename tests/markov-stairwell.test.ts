@@ -168,7 +168,12 @@ function measureReachability(gen: MarkovGeneration): { reachableCells: number; p
   let passableCells = 0;
   for (let i = 0; i < W * W; i++) {
     const cell = gen.world.cells[i];
-    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.LIFT || cell === Cell.WATER) passableCells++;
+    // Клетка лифта НЕ проходима: `world.solid()` объявляет её стеной, в которую
+    // взаимодействуют («lift wall — interact to use»), и канонический
+    // `auditReachability` считает так же. Пока этаж нёс один-два лифта,
+    // расхождение пряталось в допуске; с единой системой шахт их 32, и оно
+    // вылезло целиком.
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER) passableCells++;
     if (audit.reachable[i]) reachableCells++;
   }
   return { reachableCells, passableCells };

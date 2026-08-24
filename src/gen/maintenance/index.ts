@@ -3,11 +3,11 @@
 /*   1-wide tunnel passages, rooms at junctions, pipe fragments. */
 
 import {
-  W, Cell, Tex, RoomType, Feature, LiftDirection,
+  W, Cell, Tex, RoomType, Feature, 
   type Room, type Entity,
   EntityType, } from '../../core/types';
 import { World } from '../../core/world';
-import { placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 import { calcZoneLevel } from '../../systems/rpg';
 import { runMaintenanceContent } from './content_manifest';
@@ -170,8 +170,6 @@ export function generateMaintenance(generationSeed = MAINTENANCE_TERRITORY_SEED)
   /* ══════════════════════════════════════════════════════════════
      Phase 7: Lifts
      ══════════════════════════════════════════════════════════════ */
-  placeLifts(world, 8, LiftDirection.UP);
-  placeLifts(world, 8, LiftDirection.DOWN);
 
   /* ══════════════════════════════════════════════════════════════
      Phase 8: Zones + zone levels

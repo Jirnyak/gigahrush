@@ -10,7 +10,7 @@ import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
 import { newEntityIdCursor } from '../entity_ids';
 import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, ATTRACTOR_DVOR_ROOM_DEF_IDS, AttractorDvorState } from "./meta";
-import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, applyAttractorDeadCutTerritory, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, placeLifts, registerAttractorRouteCues } from "./geometry";
+import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, applyAttractorDeadCutTerritory, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, registerAttractorRouteCues } from "./geometry";
 import { placeContainers, spawnActors } from "./npcs";
 
 export function generateAttractorDvorDesignFloor(): FloorGeneration {
@@ -23,7 +23,6 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
   const streamlines = carveAttractorStreamlines(world);
   connectRoomsGraph(world, rooms);
   decorateRooms(world, rooms);
-  placeLifts(world, rooms);
   generateZones(world);
   tuneAttractorDvorRouteZones(world);
   const switchPanels = placeAttractorDvorEmergencyPanels(world);

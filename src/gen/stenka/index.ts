@@ -10,10 +10,10 @@
  *   поводок, вражда — общая матрица, волны — общий шаг источника.
  */
 
-import { LiftDirection, type Entity } from '../../core/types';
+import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { seededRandom } from '../../core/rand';
-import { placeLifts } from '../shared';
+import {} from '../shared';
 import { finalizeExpandedFloor } from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import type { FloorGeneration } from '../floor_manifest';
@@ -59,8 +59,6 @@ export function generateStenkaDesignFloor(seed = 4404): FloorGeneration {
   placeCampLoot(world, rooms.camps);
   const dens = placeCampDens(world, entities, nextId, rooms);
   world.rebuildContainerMap();
-  placeLifts(world, 2, LiftDirection.UP, { x: spawnX, y: spawnY });
-  placeLifts(world, 2, LiftDirection.DOWN, { x: spawnX, y: spawnY });
   world.bakeLights();
 
   STENKA_METRICS.set(world, {

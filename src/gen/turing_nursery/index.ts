@@ -11,7 +11,7 @@ import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
-import { initWorld, buildNurseryRooms, connectNurseryRooms, decorateNursery, placeEmergencyPanels, placeLifts, tuneNurseryZones, placeDrops, registerStaticHazards } from "./geometry";
+import { initWorld, buildNurseryRooms, connectNurseryRooms, decorateNursery, placeEmergencyPanels, tuneNurseryZones, placeDrops, registerStaticHazards } from "./geometry";
 import { expandTuringNurseryRouteGeometry, spawnNpcs, spawnAmbientNpcs, placeContainers, spawnThreats, registerNurseryRouteCues, reactionField } from "./npcs";
 
 export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
@@ -24,7 +24,6 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
     initWorld(world);
     const rooms = buildNurseryRooms(world, field);
     connectNurseryRooms(world, rooms, field);
-    placeLifts(world, rooms);
     decorateNursery(world, rooms, field);
     generateZones(world);
     tuneNurseryZones(world);

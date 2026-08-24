@@ -6,13 +6,12 @@ import {
   Tex,
   RoomType,
   Feature,
-  LiftDirection,
   type Room,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ROOM_DEFS } from '../../data/catalog';
 import { pickPosterTex } from './posters';
-import { shuffle, connectRoomsMST, canPlaceRoom, stampRoom, decorateRoom, placeAbyssPits, connectToNetwork, ensureConnectivity, sanitizeDoors, pruneDeadEnds, placeLifts, repairRoomWalls, shapeRoom, openVolatileDoors, placeAirlocks, ensurePermanentRoomAccess, punchThinWalls } from '../shared';
+import { shuffle, connectRoomsMST, canPlaceRoom, stampRoom, decorateRoom, placeAbyssPits, connectToNetwork, ensureConnectivity, sanitizeDoors, pruneDeadEnds, repairRoomWalls, shapeRoom, openVolatileDoors, placeAirlocks, ensurePermanentRoomAccess, punchThinWalls } from '../shared';
 import { connectApartmentsToMaze } from './apartments';
 import { seedLivingMacroRouteIntent } from './geometry';
 import { maybePlaceBrokenFixture } from '../interactive_fixtures';
@@ -368,8 +367,6 @@ export function generateVolatileMaze(world: World): void {
   applyGlobalTexturesAndCorridors(world);
 
   /* ── Lifts + lightmap ──────────────────────────────── */
-  placeLifts(world, 8, LiftDirection.DOWN);  // half go down to maintenance
-  placeLifts(world, 8, LiftDirection.UP);    // half go up to kvartiry
   world.bakeLights();
 }
 

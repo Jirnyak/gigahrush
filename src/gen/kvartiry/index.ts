@@ -6,13 +6,13 @@
 /*   Rooms by zone: living, kitchen, smoking, bathroom, etc.      */
 
 import {
-  W, Cell, Tex, RoomType, Feature, LiftDirection, DoorState,
+  W, Cell, Tex, RoomType, Feature, DoorState,
   Faction,
   type Room, type Entity,
   EntityType, AIGoal, type GameState,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { placeLifts, generateZones, ensureConnectivity } from '../shared';
+import { generateZones, ensureConnectivity } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 
 import { KVARTIRY_POPULATION_PROFILE } from '../../data/population_profiles';
@@ -453,8 +453,6 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
       }
     }
   }
-  placeLifts(world, 16, LiftDirection.UP);    // up to жилая
-  placeLifts(world, 16, LiftDirection.DOWN);  // down to министерство
   // Restore roomMap for cells that didn't become lifts
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.FLOOR && world.roomMap[i] < 0) {
@@ -525,7 +523,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
   linkKvartiryDoorsToRooms(world);
 
   // ── Phase 13b: Generation-time social macro routes and debug domains
-  buildKvartirySocialMacroGraph(world, spawnX, spawnY);
+  buildKvartirySocialMacroGraph(world, spawnX, spawnY, territorySeed);
 
   // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
   placeProceduralScreens(world, 14);
