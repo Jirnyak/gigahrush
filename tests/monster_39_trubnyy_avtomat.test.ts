@@ -113,5 +113,10 @@ test('trubnyy wet-line shot charges visibly and locks out during recovery', () =
 
   assert.equal(updateTrubnyyWetLineShot(world, entities, m, target, DEF, 0.5, 3, msgs, target.id, nextId), true);
   assert.equal(entities.length, beforeShot + 1, 'recovery should not fire another projectile');
-  assert.equal((m.attackCd ?? 0) < TRUBNYY_WET_LINE_RECOVERY_SEC, true);
+  // Остывание ОТСЧИТЫВАЕТ не эта ветка: убыль `attackCd` живёт одной точкой в
+  // цикле AI (`systems/ai/index.ts`), а вид только взводит откат и читает
+  // остаток. Здесь проверяется именно это: вторая убыль тут вернула бы виду
+  // двойной темп восстановления. Сам ход отката закрыт
+  // `tests/attack-cooldown-tick.test.ts`.
+  assert.equal(m.attackCd, TRUBNYY_WET_LINE_RECOVERY_SEC, 'recovery must not tick inside the species branch');
 });

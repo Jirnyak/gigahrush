@@ -4377,7 +4377,6 @@ function updateBloodPlantRootHive(
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = target.id;
   e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
   if ((e.attackCd ?? 0) > 0) return true;
 
   const cells = traceBloodPlantTendrilCells(world, e.x, e.y, target.x, target.y, BLOOD_PLANT_TENDRIL_MAX_CELLS);
@@ -4446,7 +4445,6 @@ function updateBorshchevikRootedPlant(
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = target.id;
   e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
   ai.plantPuffCd = Math.max(0, (ai.plantPuffCd ?? 0) - dt);
   ai.plantRootCd = Math.max(0, (ai.plantRootCd ?? 1.4) - dt);
 
@@ -5022,7 +5020,6 @@ function updateZhornayaTvar(
 ): boolean {
   if (!hasAIFlag(e, 'scentOvercommit')) return false;
   const ai = e.ai!;
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
 
   if ((ai.staggerTimer ?? 0) > 0) {
     e.spriteScale = 0.88;
@@ -5278,7 +5275,6 @@ function updateBladeElite(
   }
 
   e.spriteScale = undefined;
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
 
   if ((ai.windupTimer ?? 0) > 0) {
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
@@ -5299,7 +5295,7 @@ function updateBladeElite(
     return true;
   }
 
-  if (dist <= tuning.windupRange && e.attackCd <= 0 && bladeEliteHasLine(world, e, target, tuning)) {
+  if (dist <= tuning.windupRange && (e.attackCd ?? 0) <= 0 && bladeEliteHasLine(world, e, target, tuning)) {
     ai.windupTimer = tuning.windupSec;
     ai.windupTargetId = target.id;
     e.spriteScale = 1.18;
@@ -5884,7 +5880,6 @@ export function updateTrubnyyWetLineShot(
   }
 
   if ((e.attackCd ?? 0) > 0) {
-    e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
     e.spriteScale = 0.93;
     return true;
   }
@@ -5989,7 +5984,6 @@ function updateLampoglazLightLock(
     return true;
   }
 
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
   if (hasLock && lineClear) {
     if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
       ai.lastSeenTargetId = playerId;
@@ -6000,7 +5994,7 @@ function updateLampoglazLightLock(
         counterplay: 'leave_light_or_break_line',
       });
     }
-    if (e.attackCd <= 0) {
+    if ((e.attackCd ?? 0) <= 0) {
       ai.windupTimer = lampoglazWindupSec(targetLight);
       ai.windupTargetId = target.id;
       e.spriteScale = hardLock ? 1.24 : 1.15;
@@ -6103,8 +6097,7 @@ function updateReadableMonsterRanged(
     });
   }
 
-  e.attackCd = (e.attackCd ?? 0) - dt;
-  if (e.attackCd <= 0) {
+  if ((e.attackCd ?? 0) <= 0) {
     ai.windupTimer = windupSec;
     ai.windupTargetId = target.id;
     e.spriteScale = 1.14;
@@ -6272,7 +6265,7 @@ function updateSlepoglazCloseDefense(
   entities: Entity[],
   e: Entity,
   target: Entity | null,
-  dt: number,
+  _dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
@@ -6283,8 +6276,7 @@ function updateSlepoglazCloseDefense(
   const meleeRange = monsterMeleeRange(world, e);
   if (world.dist2(e.x, e.y, target.x, target.y) > meleeRange * meleeRange) return false;
 
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
-  if (e.attackCd > 0) return true;
+  if ((e.attackCd ?? 0) > 0) return true;
 
   const level = e.rpg?.level ?? 1;
   const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
@@ -6352,8 +6344,7 @@ function updateSlepoglaz(
   }
 
   e.spriteScale = undefined;
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
-  if (e.attackCd > 0) {
+  if ((e.attackCd ?? 0) > 0) {
     if (updateSlepoglazCloseDefense(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return true;
     return true;
   }
@@ -6894,8 +6885,6 @@ function updateTreskotnikFractureSprint(
     return true;
   }
 
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
-
   if ((ai.windupTimer ?? 0) > 0) {
     if (e.hp !== undefined && ai.windupStartHp !== undefined && e.hp < ai.windupStartHp - 0.001) {
       interruptTreskotnikWindup(world, e, target ?? undefined, time, msgs, 'hit', state);
@@ -6930,7 +6919,7 @@ function updateTreskotnikFractureSprint(
   }
 
   const distSq = world.dist2(e.x, e.y, target.x, target.y);
-  if (distSq <= TRESKOTNIK_WINDUP_RANGE * TRESKOTNIK_WINDUP_RANGE && e.attackCd <= 0 && hasClearLine(world, e, target, TRESKOTNIK_WINDUP_RANGE)) {
+  if (distSq <= TRESKOTNIK_WINDUP_RANGE * TRESKOTNIK_WINDUP_RANGE && (e.attackCd ?? 0) <= 0 && hasClearLine(world, e, target, TRESKOTNIK_WINDUP_RANGE)) {
     const dx = world.delta(e.x, target.x);
     const dy = world.delta(e.y, target.y);
     ai.windupTimer = TRESKOTNIK_WINDUP_SEC;
@@ -7054,8 +7043,7 @@ export function tryPerformMonsterMeleeAttack(
 ): boolean {
   const mRange = monsterMeleeRange(world, e);
   if (bestDist < mRange) {
-    e.attackCd = (e.attackCd ?? 0) - dt;
-    if (e.attackCd! <= 0) {
+    if ((e.attackCd ?? 0) <= 0) {
       const dx = world.delta(e.x, target.x);
       const dy = world.delta(e.y, target.y);
       e.angle = Math.atan2(dy, dx);

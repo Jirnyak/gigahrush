@@ -104,14 +104,13 @@ function lashIfCornered(
   world: World,
   e: Entity,
   target: Entity,
-  dt: number,
+  _dt: number,
   time: number,
   msgs: Msg[],
   state?: GameState,
 ): void {
   if (world.dist2(e.x, e.y, target.x, target.y) > LASH_RANGE * LASH_RANGE) return;
   if (wallNeighborCount(world, e) < 2 && (e.ai?.stuck ?? 0) < 0.8) return;
-  e.attackCd = (e.attackCd ?? 0) - dt;
   if ((e.attackCd ?? 0) > 0) return;
 
   const def = MONSTERS[MonsterKind.SLIMEVIK];

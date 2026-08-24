@@ -270,15 +270,14 @@ function defensiveSlash(
   world: World,
   e: Entity,
   target: Entity,
-  dt: number,
+  _dt: number,
   time: number,
   msgs: Msg[],
   state?: GameState,
 ): boolean {
   if (world.dist2(e.x, e.y, target.x, target.y) > DEFENSIVE_RANGE * DEFENSIVE_RANGE) return false;
   if (wallNeighborCount(world, e) < 2 && (e.ai?.stuck ?? 0) < 0.65) return false;
-  e.attackCd = Math.max(0, (e.attackCd ?? 0) - dt);
-  if (e.attackCd > 0) return true;
+  if ((e.attackCd ?? 0) > 0) return true;
 
   const def = MONSTERS[MonsterKind.GNILUSHKA];
   const level = e.rpg?.level ?? 1;

@@ -27,6 +27,8 @@ import { currentFloorRunEntry } from './procedural_floors';
 import { npcHasQuestMarker } from './quests';
 import { buildContextSnapshot } from './context';
 import { renderMarkovDialogueTalk } from './markov_dialogue';
+import { actorDrive } from './actor/brain';
+import type { DriveId } from './actor/drives';
 
 export const NPC_MENU_INTERFACE_TAB = 'interface';
 
@@ -505,7 +507,7 @@ function getNpcOccupationStateText(ctx: NpcInteractionContext): string {
   });
 
   // Build a concrete factual prefix about the NPC's current activity
-  const prefix = npcActivityPrefix(ai, targetRoomName);
+  const prefix = npcActivityPrefix(actorDrive(npc), ai, targetRoomName);
   if (prefix) {
     return `${prefix} ${result.text}`;
   }
@@ -517,11 +519,55 @@ function getNpcOccupationStateText(ctx: NpcInteractionContext): string {
  * This provides concrete A-Life info (room name, goal) that Markov core
  * can't fabricate on its own.
  */
-function npcActivityPrefix(
+/**
+ * Чем человек занят — по ДРАЙВУ, потому что драйв и есть единственная правда об
+ * этом (`architecture.md`, «Actor Intent Contract»).
+ *
+ * Спрашивали по `npcState` и `ai.goal`, и это врало игроку в лицо: ядро актора
+ * ставит `npcState` только ПО ПРИБЫТИИ, а `ai.goal` не трогает вовсе — там висит
+ * значение, оставленное старым слоем. При доле населения под ядром около
+ * половины человек отвечал про дело, которого не делает.
+ *
+ * `npcState` остаётся ниже запасным вариантом (он поза, и для дошедшего он верен),
+ * `AIGoal` — тоже, но лишь пока жив старый слой: он уходит вместе с ним.
+ */
+const DRIVE_ACTIVITY_LINE: Partial<Record<DriveId, string>> = {
+  flee: 'Прячусь!',
+  hide: 'Прячусь!',
+  fight: 'Не до разговоров!',
+  seek_noise: 'Иду на шум.',
+  eat: 'Ищу, где поесть.',
+  drink: 'Ищу воду.',
+  sleep: 'Иду отдыхать.',
+  toilet: 'Занят.',
+  heal: 'Надо перевязаться.',
+  work: 'Работаю.',
+  social: 'Общаюсь по делу.',
+  patrol: 'На обходе.',
+  store: 'Разбираю хабар.',
+  wander: 'Слоняюсь.',
+  capture: 'Держим участок.',
+  huddle: 'Держусь своих.',
+};
+
+/** Что человек ответит, будучи занят этим делом. Для теста и отладки. */
+export function npcActivityLineForDrive(drive: DriveId): string | undefined {
+  return DRIVE_ACTIVITY_LINE[drive];
+}
+
+export function npcActivityPrefix(
+  drive: DriveId | undefined,
   ai: AIState | undefined,
   targetRoomName: string | undefined,
 ): string | undefined {
   if (!ai) return undefined;
+
+  if (drive !== undefined) {
+    const line = DRIVE_ACTIVITY_LINE[drive];
+    // «Иду в комнату» точнее общей строки, пока человек ещё в пути.
+    if (line && targetRoomName && ai.npcState === undefined) return `Иду в «${targetRoomName}».`;
+    if (line) return line;
+  }
 
   switch (ai.npcState) {
     case NpcState.SLEEPING: return 'Сейчас отдыхаю.';

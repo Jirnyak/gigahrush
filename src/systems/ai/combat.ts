@@ -460,8 +460,7 @@ export function tryFactionCombat(
      * новая ручка. Бетон по-прежнему запрещает: `cover < 0`. */
     const cover = lineCoverCells(world, e.x, e.y, target.x, target.y, rangedProfile.maxRange);
     if (cover >= 0) {
-      e.attackCd = (e.attackCd ?? 0) - dt;
-      if (e.attackCd! <= 0) {
+      if ((e.attackCd ?? 0) <= 0) {
         const aimError = cover > 0 ? Math.atan2(cover, Math.max(1, bestDist)) : 0;
         if (npcCommitRangedShot(world, e, target, weaponId, ws, entities, nextId, atkSpeedMod, aimError, _time, state)) return true;
         npcAutoEquipBestWeapon(e);
@@ -490,8 +489,7 @@ export function tryFactionCombat(
   }
 
   // Melee attack
-  e.attackCd = (e.attackCd ?? 0) - dt;
-  if (e.attackCd! <= 0) {
+  if ((e.attackCd ?? 0) <= 0) {
     const dx = world.delta(e.x, target.x);
     const dy = world.delta(e.y, target.y);
     e.angle = Math.atan2(dy, dx); // ensure we face target before swinging
