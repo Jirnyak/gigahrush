@@ -2014,16 +2014,44 @@ const SPREAD_SIGNS = [1, -1] as const;
  * целилась в `room.x + floor(w/2)` — одну клетку на всю комнату, из-за чего
  * жильцы стекались в её центр и стояли друг в друге.
  */
+/* Сколько точек комнаты пробуем, прежде чем сдаться. Перебирать прямоугольник
+ * целиком нельзя — комнаты бывают полсотни на полсотни, а это перебор на актора;
+ * восьми проб золотого угла хватает, чтобы найти пол в любой комнате, где он
+ * есть хоть где-то, и они детерминированы от `id`. */
+const ROOM_TARGET_PROBES = 8;
+/* Множители последовательности R2 (обратные степени пластического числа). Они
+ * не «ещё две ручки»: это математические константы конкретной последовательности,
+ * подбирать их нельзя, как нельзя подбирать число «пи». */
+const R2_ALPHA_X = 0.7548776662466927;
+const R2_ALPHA_Y = 0.5698402909980532;
+
 export function roomTargetCell(world: World, e: Entity, room: Room): { x: number; y: number } {
   const innerW = room.w - 2;
   const innerH = room.h - 2;
-  const cx = room.x + (room.w >> 1);
-  const cy = room.y + (room.h >> 1);
-  if (innerW < 1 || innerH < 1) return { x: world.wrap(cx), y: world.wrap(cy) };
-  const x = world.wrap(room.x + 1 + Math.floor(goldenFrac(e.id, 0) * innerW));
-  const y = world.wrap(room.y + 1 + Math.floor(goldenFrac(e.id, 2) * innerH));
-  if (!world.solid(x, y)) return { x, y };
-  return { x: world.wrap(cx), y: world.wrap(cy) };
+  const cx = world.wrap(room.x + (room.w >> 1));
+  const cy = world.wrap(room.y + (room.h >> 1));
+  /* Центр комнаты — ПОСЛЕДНЕЕ прибежище, и он тоже проверяется на бетон.
+   * Раньше оба запасных выхода отдавали его вслепую, тогда как основная ветка
+   * проверяла: комната с колонной или перегородкой в центре давала цель в стене,
+   * а поиск пути на непроходимой цели возвращает пустой путь и молча роняет дело.
+   * Это тот же класс, что и центр ячейки стратегического яруса, только в ярусе,
+   * которым пользуются ВСЕ телесные нужды и весь распорядок. */
+  if (innerW < 1 || innerH < 1) return { x: cx, y: cy };
+  /* Пробы идут ПОСЛЕДОВАТЕЛЬНОСТЬЮ R2, а не двумя вызовами `goldenFrac` с
+   * разными солями. Так было в первой версии этой правки, и тест поймал её: у
+   * соли период ДВА, поэтому восемь проб посещали две-три клетки вместо восьми,
+   * и комната, забитая почти целиком, не находила единственный свободный пол ни
+   * у одного из двухсот акторов. R2 — двумерная последовательность с низким
+   * расхождением: соседние индексы ложатся далеко друг от друга по обеим осям. */
+  for (let probe = 0; probe < ROOM_TARGET_PROBES; probe++) {
+    const n = e.id * ROOM_TARGET_PROBES + probe + 1;
+    const fx = n * R2_ALPHA_X;
+    const fy = n * R2_ALPHA_Y;
+    const x = world.wrap(room.x + 1 + Math.floor((fx - Math.floor(fx)) * innerW));
+    const y = world.wrap(room.y + 1 + Math.floor((fy - Math.floor(fy)) * innerH));
+    if (!world.solid(x, y)) return { x, y };
+  }
+  return { x: cx, y: cy };
 }
 
 export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: number): AssignPathStatus {
