@@ -15,6 +15,7 @@ import {
   type MarkovRouteSpeech,
 } from './markov_dialogue';
 import { type RumorEventLike } from './rumor';
+import { containerTagName, warningTagName } from '../data/rumor_tag_names';
 
 export interface MarkovRumorFlavorOptions {
   rumor?: RumorDef;
@@ -244,13 +245,13 @@ function formatReveal(reveal: RumorReveal): string {
     case 'monster':
       return reveal.monsterKind !== undefined ? monsterTypeName(reveal.monsterKind).toLowerCase() : '';
     case 'container':
-      return reveal.name ?? reveal.tag ?? '';
+      return reveal.name ?? (reveal.tag ? containerTagName(reveal.tag) : '');
     case 'item':
       return ITEMS[reveal.itemId]?.name.toLowerCase() ?? '';
     case 'faction':
       return reveal.faction !== undefined ? factionName(reveal.faction) : '';
     case 'warning':
-      return reveal.tag.replace(/_/g, ' ');
+      return warningTagName(reveal.tag);
   }
 }
 
