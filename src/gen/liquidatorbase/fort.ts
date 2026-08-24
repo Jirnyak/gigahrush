@@ -34,6 +34,16 @@ const CELL_PITCH = BLOCK + STREET;
 const ROOM_MIN = 4;
 const ROOM_MAX = 6;
 
+/* Стена форта — не глухая линия, а ПРОМЕНАД: внешняя стена, ход по стене на три
+ * клетки и внутренняя стена. По нему обходят периметр и стоят на постах, а не
+ * упираются в бетон. Ворота четверо, по одному на сторону, и от каждых в дикие
+ * земли уходит дорога. */
+const WALL_BAND = 5;
+const WALL_WALK = 3;
+const GATE_HALF = 4;
+const ROAD_HALF = 2;
+const TOWER = 11;
+
 export interface FortLayout {
   arena: Room;
   parade: Room;
@@ -102,6 +112,7 @@ export function buildLiquidatorFort(world: World, seed: number): FortLayout {
   rooms.push(hq);
 
   nextRoomId = fillFortBlocks(world, rand, rooms, nextRoomId, [arena, parade, hq]);
+  nextRoomId = buildFortWall(world, rooms, nextRoomId);
 
   return { arena, parade, hq, rooms, spawnX: parade.x + parade.w / 2, spawnY: parade.y + parade.h / 2 };
 }
@@ -228,4 +239,85 @@ function overlapsAny(x: number, y: number, w: number, h: number, others: readonl
       && y < other.y + other.h + STREET && y + h + STREET > other.y) return true;
   }
   return false;
+}
+
+/**
+ * Периметр форта: стена-променад, четыре башни по углам и четверо ворот.
+ *
+ * Стена сделана коридором намеренно: гарнизон обходит периметр поверху и держит
+ * посты, а не смотрит в глухой бетон. Ворота прорезают обе стены насквозь, и от
+ * каждых в дикие земли уходит дорога — иначе форт стоит островом без подходов,
+ * а дикие земли не читаются как то, откуда приходят.
+ */
+function buildFortWall(world: World, rooms: Room[], nextRoomId: number): number {
+  const x1 = FORT_X0 + FORT_SIDE - 1;
+  const y1 = FORT_Y0 + FORT_SIDE - 1;
+  const midX = FORT_X0 + Math.floor(FORT_SIDE / 2);
+  const midY = FORT_Y0 + Math.floor(FORT_SIDE / 2);
+
+  const isGateX = (x: number) => Math.abs(x - midX) <= GATE_HALF;
+  const isGateY = (y: number) => Math.abs(y - midY) <= GATE_HALF;
+
+  for (let band = 0; band < WALL_BAND; band++) {
+    const walkable = band >= 1 && band <= WALL_WALK;
+    for (let x = FORT_X0; x <= x1; x++) {
+      paintWallCell(world, x, FORT_Y0 + band, walkable || isGateX(x));
+      paintWallCell(world, x, y1 - band, walkable || isGateX(x));
+    }
+    for (let y = FORT_Y0; y <= y1; y++) {
+      paintWallCell(world, FORT_X0 + band, y, walkable || isGateY(y));
+      paintWallCell(world, x1 - band, y, walkable || isGateY(y));
+    }
+  }
+
+  carveRoad(world, midX, FORT_Y0 - 1, 0, -1);
+  carveRoad(world, midX, y1 + 1, 0, 1);
+  carveRoad(world, FORT_X0 - 1, midY, -1, 0);
+  carveRoad(world, x1 + 1, midY, 1, 0);
+
+  for (const [tx, ty] of [
+    [FORT_X0, FORT_Y0], [x1 - TOWER + 1, FORT_Y0],
+    [FORT_X0, y1 - TOWER + 1], [x1 - TOWER + 1, y1 - TOWER + 1],
+  ] as const) {
+    const tower = stampRoom(world, nextRoomId++, RoomType.OFFICE, tx, ty, TOWER, TOWER, -1);
+    tower.name = 'Башня периметра';
+    tower.wallTex = Tex.METAL;
+    tower.floorTex = Tex.F_CONCRETE;
+    rooms.push(tower);
+  }
+  return nextRoomId;
+}
+
+function paintWallCell(world: World, x: number, y: number, walkable: boolean): void {
+  const idx = world.idx(x, y);
+  world.roomMap[idx] = -1;
+  world.features[idx] = Feature.NONE;
+  if (walkable) {
+    world.cells[idx] = Cell.FLOOR;
+    world.floorTex[idx] = Tex.F_CONCRETE;
+  } else {
+    world.cells[idx] = Cell.WALL;
+    world.wallTex[idx] = Tex.METAL;
+  }
+}
+
+/** Дорога от ворот в дикие земли: без неё форт стоит островом без подходов. */
+function carveRoad(world: World, fromX: number, fromY: number, dx: number, dy: number): void {
+  let x = fromX;
+  let y = fromY;
+  for (let step = 0; step < W / 2; step++) {
+    for (let off = -ROAD_HALF; off <= ROAD_HALF; off++) {
+      const rx = world.wrap(dx === 0 ? x + off : x);
+      const ry = world.wrap(dy === 0 ? y + off : y);
+      const idx = world.idx(rx, ry);
+      if (world.cells[idx] === Cell.WALL) {
+        world.cells[idx] = Cell.FLOOR;
+        world.floorTex[idx] = Tex.F_CONCRETE;
+        world.roomMap[idx] = -1;
+      }
+    }
+    x = world.wrap(x + dx);
+    y = world.wrap(y + dy);
+    if (insideFort(x, y)) break;
+  }
 }

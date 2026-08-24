@@ -98,7 +98,10 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   spectral_chasovnya: shares(10, 8, 46, 6, 22, 8),
   stenka: shares(4, 40, 4, 4, 44, 4),
   darkness: shares(6, 8, 24, 8, 36, 18),
-  liquidatorbase: [{ owner: ZoneFaction.LIQUIDATOR, share: 1.0 }],
+  // Форт держит гарнизон, дикие земли вокруг — чужие. Было 100% ликвидаторов
+  // на весь этаж, и это спорило с геометрией: три четверти этажа лежат ЗА
+  // стеной. Доли примерно повторяют проходимый объём (форт 53%, дикие 47%).
+  liquidatorbase: [{ owner: ZoneFaction.LIQUIDATOR, share: 0.55 }, { owner: ZoneFaction.WILD, share: 0.45 }],
   horrorfloor: shares(6, 8, 24, 8, 36, 18),
   living: shares(64, 14, 6, 7, 9),
   kvartiry: shares(66, 12, 6, 7, 9),

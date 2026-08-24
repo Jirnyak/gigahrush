@@ -1979,15 +1979,62 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
   },
   
   liquidatorbase: {
+    // Форт гарнизона: люди держат землю внутри стены, дикие и твари — снаружи.
+    // Разделение объявляется весом ХОЗЯИНА ЗЕМЛИ, а не координатами: границу уже
+    // задала геометрия, и `onAfterTerritory` этажа красит внутренность форта в
+    // ликвидаторов, а всё за стеной — в диких. Замер до профиля: людей снаружи
+    // было 448 против 209 внутри, монстров внутри 358 — гарнизон жил в поле, а
+    // твари в казармах.
     npcMult: 0.3,
+    npcNoun: 'ликвидатор гарнизона',
     npcFactions: [
-      { value: Faction.LIQUIDATOR, weight: 50 },
-      { value: Faction.CITIZEN, weight: 10 },
-      { value: Faction.WILD, weight: 10 },
-      { value: Faction.SCIENTIST, weight: 10 },
-      { value: Faction.CULTIST, weight: 10 }
+      { value: Faction.LIQUIDATOR, weight: 72 },
+      { value: Faction.CITIZEN, weight: 14 },
+      { value: Faction.SCIENTIST, weight: 8 },
+      { value: Faction.WILD, weight: 6 },
     ],
-    monsterPlacementKind: 'roof'
+    npcOccupations: [
+      { value: Occupation.HUNTER, weight: 34 },
+      { value: Occupation.MECHANIC, weight: 20 },
+      { value: Occupation.DOCTOR, weight: 14 },
+      { value: Occupation.COOK, weight: 12 },
+      { value: Occupation.SECRETARY, weight: 10 },
+      { value: Occupation.ELECTRICIAN, weight: 10 },
+    ],
+    npcPlacement: {
+      noiseScale: 96,
+      noiseStrength: 0.12,
+      openWeight: 0.22,
+      roomWeights: {
+        [RoomType.LIVING]: 2.2, [RoomType.STORAGE]: 1.5, [RoomType.OFFICE]: 1.4,
+        [RoomType.KITCHEN]: 1.3, [RoomType.MEDICAL]: 1.2, [RoomType.HQ]: 1.1,
+        [RoomType.BATHROOM]: 0.8, [RoomType.CORRIDOR]: 0.5, [RoomType.COMMON]: 0.35,
+      },
+      zoneWeights: {
+        [ZoneFaction.LIQUIDATOR]: 2.4, [ZoneFaction.CITIZEN]: 0.5,
+        [ZoneFaction.WILD]: 0.04, [ZoneFaction.CULTIST]: 0.04, [ZoneFaction.SAMOSBOR]: 0.02,
+      },
+      anchors: [
+        { x: 512, y: 512, radius: 180, weight: 1.6 },
+        { x: 512, y: 600, radius: 90, weight: 1.3 },
+      ],
+    },
+    monsterPlacement: {
+      noiseScale: 140,
+      noiseStrength: 0.2,
+      openWeight: 1.35,
+      roomWeights: { [RoomType.CORRIDOR]: 1.2, [RoomType.COMMON]: 1.0, [RoomType.STORAGE]: 0.8, [RoomType.LIVING]: 0.5, [RoomType.HQ]: 0.2 },
+      zoneWeights: {
+        [ZoneFaction.WILD]: 2.6, [ZoneFaction.SAMOSBOR]: 1.2, [ZoneFaction.CULTIST]: 1.0,
+        [ZoneFaction.CITIZEN]: 0.4, [ZoneFaction.LIQUIDATOR]: 0.05,
+      },
+      anchors: [
+        { x: 140, y: 140, radius: 200, weight: 1.5 },
+        { x: 884, y: 140, radius: 200, weight: 1.5 },
+        { x: 140, y: 884, radius: 200, weight: 1.5 },
+        { x: 884, y: 884, radius: 200, weight: 1.5 },
+      ],
+    },
   },
   living: {
     npcMult: 0.5,

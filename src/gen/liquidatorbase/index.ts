@@ -4,7 +4,8 @@ import type { FloorGeneration } from '../floor_manifest';
 import { ensureConnectivity, ensurePermanentRoomAccess, protectRoom, sanitizeDoors } from '../shared';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { newEntityIdCursor } from '../entity_ids';
-import { buildLiquidatorFort } from './fort';
+import { FORT_SIDE, FORT_X0, FORT_Y0, buildLiquidatorFort } from './fort';
+import { ZoneFaction, W } from '../../core/types';
 
 export const LIQUIDATOR_BASE_Z = -16;
 const SEED = 0x4c495144;
@@ -41,7 +42,15 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
     fort.hq.x + Math.floor(fort.hq.w / 2), fort.hq.y + Math.floor(fort.hq.h / 2),
     fort.arena.x + Math.floor(fort.arena.w / 2), fort.arena.y + Math.floor(fort.arena.h / 2));
 
-  return { isDecentralized: true, world, entities, spawnX: fort.spawnX, spawnY: fort.spawnY };
+  return {
+    isDecentralized: true, world, entities,
+    spawnX: fort.spawnX, spawnY: fort.spawnY,
+    // `initializeCellTerritory` в манифесте перестраивает владение клетками по
+    // долям, и авторские зоны положено переобъявлять здесь — иначе общий проход
+    // размажет гарнизон по диким землям. Граница у форта не условная, а
+    // физическая: стена. Внутри неё земля ликвидаторов, снаружи — диких.
+    onAfterTerritory: paintFortTerritory,
+  };
 }
 
 /* Квартирмейстер, оружейник и гарнизонный медик — при штабе; Марко Лоло — при
@@ -54,4 +63,15 @@ function spawnBaseNpcs(
   requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_armorer', hqX - 4, hqY + 2, { angle: 0 });
   requireSpawnedPlotNpcFromPackage(entities, nextId, 'liq_medic', hqX + 4, hqY + 2, { angle: Math.PI });
   requireSpawnedPlotNpcFromPackage(entities, nextId, 'marko_lolo', arenaX, arenaY + 6, { angle: -Math.PI / 2 });
+}
+
+/** Внутри стены — земля гарнизона, снаружи — диких. Граница берётся у геометрии,
+ *  а не задаётся отдельным числом: это тот же прямоугольник форта. */
+function paintFortTerritory(world: WorldClass): void {
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const inFort = x >= FORT_X0 && x < FORT_X0 + FORT_SIDE && y >= FORT_Y0 && y < FORT_Y0 + FORT_SIDE;
+      world.factionControl[world.idx(x, y)] = inFort ? ZoneFaction.LIQUIDATOR : ZoneFaction.WILD;
+    }
+  }
 }
