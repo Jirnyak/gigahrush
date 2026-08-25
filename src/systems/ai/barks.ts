@@ -76,6 +76,26 @@ export function resolveNpcBarkContext(context?: NpcBarkLogContext): NpcBarkLogCo
   };
 }
 
+/**
+ * Дойдёт ли реплика этого актора до слушателя. Тот же ответ, что даёт
+ * `npcBarkDistanceForLog`, но без сборки объекта контекста: сторож стоит перед
+ * марковской генерацией и зовётся за кадр столько раз, сколько людей собралось
+ * заговорить. Аллокация на вызов в этом месте — цена самой проверки.
+ *
+ * Слушателя нет — слышно всем (так же, как у `npcBarkDistanceForLog`): это
+ * безголовые прогоны и стенд, где решает не расстояние.
+ */
+function barkReachesListener(e: Entity): boolean {
+  const listener = npcBarkLogContext.listener;
+  if (!listener) return true;
+  const d2 = npcBarkLogContext.dist2
+    ? npcBarkLogContext.dist2(listener.x, listener.y, e.x, e.y)
+    : (listener.x - e.x) * (listener.x - e.x) + (listener.y - e.y) * (listener.y - e.y);
+  if (!Number.isFinite(d2)) return false;
+  const radius = resolveNpcBarkLogRadiusMeters();
+  return d2 <= radius * radius;
+}
+
 export function npcBarkDistanceForLog(e: Entity, context?: NpcBarkLogContext): number | null {
   const resolved = resolveNpcBarkContext(context);
   const listener = resolved.listener;
@@ -183,6 +203,22 @@ export function emitMarkovBark(e: Entity, msgs: Msg[], time: number, signal: str
   const lastSignalTime = lastFloorBarkTimeBySignal.get(signal) ?? -100;
   const minSignalGap = isUrgentSignal ? 2.2 : 6.0;
   if (time - lastSignalTime < minSignalGap && lastSignalTime > -10) return;
+
+  /* Слышимость проверяется ДО генерации, и это не оптимизация ради оптимизации.
+   *
+   * Порядок был обратный: марковская фраза строилась всегда, а потом
+   * `pushNpcBarkMessage` выбрасывал её по расстоянию. Радиус слышимости 100
+   * клеток на мире 1024 — значит выбрасывалось подавляющее большинство. Хуже
+   * того, общие лимиты частоты ниже обновляются ТОЛЬКО у услышанного барка:
+   * невыброшенный ничего не тратил, и следующий же актор в том же кадре
+   * генерировал заново. Ограничитель в «одна реплика на 4.5 с» реальную частоту
+   * генерации не сдерживал вовсе — в профиле `generateMarkovText` стоил 3.9%
+   * кадра пачками, то есть подфризами.
+   *
+   * Ничего player-зависимого этим НЕ вносится: и `activeBark` (его читает
+   * только HUD), и запись в лог, и сами лимиты уже стояли под `if (heard)`.
+   * Убрана ровно работа, результат которой и так выбрасывался. */
+  if (!barkReachesListener(e)) return;
 
   const pack = resolveNpcPackageForEntity(e);
   const seed = e.alifeId ?? e.id;
