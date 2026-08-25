@@ -254,3 +254,34 @@ test('solid voxel counter and marching cubes planned API stay bounded', () => {
   assert.equal(mesh.triangleCount, 0);
   assert.equal(mesh.skippedReason, 'marching_cubes_planned');
 });
+
+/* Замок на переиспользуемый скретч граней греди-меша.
+ *
+ * `emitQuad` собирал семь новых массивов на КАЖДЫЙ выпущенный квад, а
+ * `buildGreedyVoxelMesh` в профиле стоит 1.9% кадра; скретч поднят в модуль.
+ * Но `normal`, `du` и `dv` пишут только ОДНУ компоненту из трёх, поэтому
+ * переиспользуемый массив обязан обнуляться. Забудь обнуление — и на первом же
+ * квадре другой оси останется хвост предыдущего: нормаль станет диагональной,
+ * а грань уедет в сторону.
+ *
+ * Проверяем инвариант, а не совпадение с прошлым прогоном: нормаль грани куба
+ * смотрит строго вдоль одной оси. Тест на детерминизм рядом такого не ловит —
+ * он сравнивает код сам с собой, и стабильно неверный меш для него стабилен.
+ */
+test('нормали граней греди-меша смотрят строго вдоль одной оси', () => {
+  // Ступенька: грани появляются по всем трём осям сразу, и порядок осей внутри
+  // меша меняется — ровно то, на чём хвост прошлой оси и вылезает.
+  const field = makeSolidField(6, 6, 6);
+  for (let z = 0; z < 3; z++) for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) setVoxel(field, x, y, z);
+  for (let z = 3; z < 5; z++) for (let y = 1; y < 3; y++) for (let x = 1; x < 3; x++) setVoxel(field, x, y, z);
+
+  const mesh = buildGreedyVoxelMesh(field);
+  assert.ok(mesh.normals.length > 0, 'ступенька обязана дать грани');
+
+  for (let i = 0; i < mesh.normals.length; i += 3) {
+    const n = [mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]];
+    const nonZero = n.filter(v => v !== 0);
+    assert.equal(nonZero.length, 1, `нормаль ${JSON.stringify(n)} не вдоль оси: остался хвост прошлой грани`);
+    assert.equal(Math.abs(nonZero[0]), 1, `нормаль ${JSON.stringify(n)} не единичная`);
+  }
+});

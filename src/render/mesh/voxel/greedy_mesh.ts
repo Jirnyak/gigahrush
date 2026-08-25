@@ -54,6 +54,16 @@ function toMesh(acc: MeshAccumulator): VoxelMeshData {
   };
 }
 
+/* Скретч граней греди-меша. Модульный и переиспользуемый: `emitQuad` зовётся
+ * на каждый выпущенный квад, а квадов на меш тысячи. */
+const QUAD_NORMAL: [number, number, number] = [0, 0, 0];
+const QUAD_P: [number, number, number] = [0, 0, 0];
+const QUAD_DU: [number, number, number] = [0, 0, 0];
+const QUAD_DV: [number, number, number] = [0, 0, 0];
+const QUAD_B: [number, number, number] = [0, 0, 0];
+const QUAD_C: [number, number, number] = [0, 0, 0];
+const QUAD_E: [number, number, number] = [0, 0, 0];
+
 function pushQuad(
   acc: MeshAccumulator,
   a: readonly [number, number, number],
@@ -132,6 +142,14 @@ export function buildGreedyVoxelMesh(field: VoxelField, options?: VoxelMeshBuild
   const acc = makeAccumulator(options);
   const dims = [field.width, field.height, field.depth] as const;
 
+  /* Скретч двух точек живёт снаружи трёх вложенных циклов. Внутри он
+   * аллоцировался ЗАНОВО на каждую клетку маски: для поля 32x32x32 это около
+   * двухсот тысяч массивов на одну сборку меша. Переиспользование безопасно —
+   * `d`, `u`, `v` это перестановка 0,1,2, поэтому обе точки перезаписываются
+   * целиком, остатка прошлой итерации не бывает. */
+  const aCoord = [0, 0, 0];
+  const bCoord = [0, 0, 0];
+
   for (let d = 0; d < 3; d++) {
     const u = (d + 1) % 3;
     const v = (d + 2) % 3;
@@ -141,8 +159,6 @@ export function buildGreedyVoxelMesh(field: VoxelField, options?: VoxelMeshBuild
       let n = 0;
       for (let j = 0; j < dims[v]; j++) {
         for (let i = 0; i < dims[u]; i++) {
-          const aCoord = [0, 0, 0];
-          const bCoord = [0, 0, 0];
           aCoord[d] = q;
           bCoord[d] = q + 1;
           aCoord[u] = i;
@@ -209,12 +225,20 @@ function pushGreedyFace(
   signedMaterial: number,
 ): boolean {
   const material = Math.abs(signedMaterial) as VoxelMaterial;
-  const normal = [0, 0, 0] as [number, number, number];
+  /* Скретч на квад, а не семь новых массивов на каждый. `pushQuad` числа
+   * КОПИРУЕТ (`push(...a)`), ссылок не держит, поэтому переиспользование
+   * безопасно. Но `normal`, `du` и `dv` пишут только ОДНУ компоненту, и
+   * обнулять их обязательно: иначе на следующем квадре другой оси останется
+   * хвост предыдущего, и грань уедет. */
+  const normal = QUAD_NORMAL;
+  normal[0] = 0; normal[1] = 0; normal[2] = 0;
   normal[d] = signedMaterial > 0 ? 1 : -1;
 
-  const p = [0, 0, 0] as [number, number, number];
-  const du = [0, 0, 0] as [number, number, number];
-  const dv = [0, 0, 0] as [number, number, number];
+  const p = QUAD_P;
+  const du = QUAD_DU;
+  const dv = QUAD_DV;
+  du[0] = 0; du[1] = 0; du[2] = 0;
+  dv[0] = 0; dv[1] = 0; dv[2] = 0;
   p[d] = plane;
   p[u] = i;
   p[v] = j;
@@ -222,9 +246,12 @@ function pushGreedyFace(
   dv[v] = rectH;
 
   const a = p;
-  const b = [p[0] + du[0], p[1] + du[1], p[2] + du[2]] as [number, number, number];
-  const c = [p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2]] as [number, number, number];
-  const e = [p[0] + dv[0], p[1] + dv[1], p[2] + dv[2]] as [number, number, number];
+  const b = QUAD_B;
+  const c = QUAD_C;
+  const e = QUAD_E;
+  b[0] = p[0] + du[0]; b[1] = p[1] + du[1]; b[2] = p[2] + du[2];
+  c[0] = p[0] + du[0] + dv[0]; c[1] = p[1] + du[1] + dv[1]; c[2] = p[2] + du[2] + dv[2];
+  e[0] = p[0] + dv[0]; e[1] = p[1] + dv[1]; e[2] = p[2] + dv[2];
   return signedMaterial > 0
     ? pushQuad(acc, a, b, c, e, normal, material)
     : pushQuad(acc, a, e, c, b, normal, material);

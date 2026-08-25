@@ -1146,13 +1146,21 @@ function localRoomCoord(room: { x: number; y: number; w: number; h: number }, x:
   return { lx, ly };
 }
 
+/* Смещения соседей — модульные константы, а не литералы в теле.
+ * `doorNear` спрашивается ПОКЛЕТОЧНО при сборе сцены и в профиле стоит чистым
+ * листом на 1.8% кадра; два литерала внутри означали две аллокации на каждый из
+ * десятков тысяч вызовов за кадр. Ровно тот случай, который в проекте запрещён
+ * прямым текстом: аллокации в горячем цикле. */
+const DOOR_NEAR_DIRS_X = [1, -1, 0, 0];
+const DOOR_NEAR_DIRS_Y = [0, 0, 1, -1];
+
 function doorNear(world: World, x: number, y: number): boolean {
   if (world.doors.size === 0) return false;
   const ci = world.idx(x, y);
   if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) return true;
-  
-  const DIRS_X = [1, -1, 0, 0];
-  const DIRS_Y = [0, 0, 1, -1];
+
+  const DIRS_X = DOOR_NEAR_DIRS_X;
+  const DIRS_Y = DOOR_NEAR_DIRS_Y;
   for (let dir = 0; dir < 4; dir++) {
     const ni = world.idx(x + DIRS_X[dir], y + DIRS_Y[dir]);
     if (world.cells[ni] === Cell.DOOR || world.doors.has(ni)) return true;
