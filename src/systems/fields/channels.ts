@@ -143,64 +143,84 @@ export function fieldBlocked(world: World, i: number): boolean {
     || door.state === DoorState.HERMETIC_CLOSED);
 }
 
-/* ── Рамка активных клеток ───────────────────────────────────────────────── */
+/* ── Грязные тайлы активных клеток ───────────────────────────────────────── */
 
 /**
- * [minX, minY, maxX, maxY] на канал. Пустая рамка — minX > maxX.
+ * Граница обхода канала — набор ГРЯЗНЫХ ТАЙЛОВ, а не одна рамка.
  *
- * Границы НЕ обёрнуты в [0, W): рамка вокруг клетки 0 честно записывается как
- * [-1, 1], а обход разворачивает её через `world.idx`, который сам маскирует
- * координату. Обрезание границ в [0, W-1] превращало бы каждое пятно у шва в
- * рамку во весь мир — и, что хуже, теряло растекание через шов.
+ * Рамкой это и было, и на разреженном поле она врала во весь мир. `SCENT` льёт
+ * каждый идущий актор и живёт ~128 с, `PEOPLE` ~32 с, поэтому через минуту
+ * выпуклая оболочка троп накрывала весь обжитый этаж, тогда как ненулевых
+ * клеток в ней проценты. Диффузия нули пропускает, но чистка скретча и
+ * обратная запись шли по ВСЕЙ рамке безусловно — два прохода на канал, пять
+ * каналов, дважды в секунду. Замерено: ~25 мс в один кадр, ровно те
+ * периодические просадки, которые видно на глаз.
+ *
+ * Тайл — квадрат `FIELD_TILE_SIZE` клеток, флаг на канал. Стоимость такта
+ * теперь пропорциональна реальной занятости, а не оболочке.
+ *
+ * Тор здесь бесплатен: координаты тайла считаются от УЖЕ обёрнутой клетки, и
+ * пятно у шва помечает тайлы обоих краёв, а не всё между ними.
  */
-const boxes = new Int32Array(DYNAMIC_FIELD_COUNT * 4);
+export const FIELD_TILE_SHIFT = 5;
+export const FIELD_TILE_SIZE = 1 << FIELD_TILE_SHIFT;
+export const FIELD_TILE_W = W >> FIELD_TILE_SHIFT;
+export const FIELD_TILE_COUNT = FIELD_TILE_W * FIELD_TILE_W;
+
+if (FIELD_TILE_W << FIELD_TILE_SHIFT !== W) {
+  throw new Error('field tile size does not divide world width');
+}
+
+/** Текущий набор грязных тайлов: флаг на (канал, тайл). */
+export const fieldTiles = new Uint8Array(DYNAMIC_FIELD_COUNT * FIELD_TILE_COUNT);
+/** Скретч набора СЛЕДУЮЩЕГО такта. Общий на все каналы: такт обходит их по
+ *  очереди и закрывает каждый до перехода к следующему. */
+export const nextFieldTiles = new Uint8Array(FIELD_TILE_COUNT);
+
 const versions = new Int32Array(PERCEPTION_CHANNEL_COUNT);
 
-export function resetFieldBoxes(): void {
-  for (let ch = 0; ch < DYNAMIC_FIELD_COUNT; ch++) {
-    const b = ch * 4;
-    boxes[b] = W;
-    boxes[b + 1] = W;
-    boxes[b + 2] = -1;
-    boxes[b + 3] = -1;
-  }
+export function resetFieldTiles(): void {
+  fieldTiles.fill(0);
+  nextFieldTiles.fill(0);
 }
-resetFieldBoxes();
 
-export function fieldBoxMinX(ch: FieldChannel): number { return boxes[ch * 4]; }
-export function fieldBoxMinY(ch: FieldChannel): number { return boxes[ch * 4 + 1]; }
-export function fieldBoxMaxX(ch: FieldChannel): number { return boxes[ch * 4 + 2]; }
-export function fieldBoxMaxY(ch: FieldChannel): number { return boxes[ch * 4 + 3]; }
-
-export function setFieldBox(
-  ch: FieldChannel, minX: number, minY: number, maxX: number, maxY: number,
-): void {
-  const b = ch * 4;
-  boxes[b] = minX;
-  boxes[b + 1] = minY;
-  boxes[b + 2] = maxX;
-  boxes[b + 3] = maxY;
+/**
+ * Пометить тайлы вокруг клетки. Запас — две клетки, и он не произволен: за тик
+ * значение уходит на соседей (одна клетка), а на следующем такте уже ОНИ
+ * растекаются на своих (вторая). Набор обязан накрывать окрестность в клетку
+ * вокруг каждой ненулевой клетки, иначе в скретч-буфер попадёт мусор прошлых
+ * тиков — он общий на все каналы и чистится ровно по этому набору.
+ *
+ * Четырёх углов запаса довольно: тайл шире запаса, поэтому дальше соседнего
+ * тайла окрестность не уходит ни по одной оси.
+ */
+function markCellTiles(flags: Uint8Array, base: number, x: number, y: number): void {
+  const tx0 = ((x - 2) & 0x3ff) >> FIELD_TILE_SHIFT;
+  const tx1 = ((x + 2) & 0x3ff) >> FIELD_TILE_SHIFT;
+  const ty0 = (((y - 2) & 0x3ff) >> FIELD_TILE_SHIFT) * FIELD_TILE_W;
+  const ty1 = (((y + 2) & 0x3ff) >> FIELD_TILE_SHIFT) * FIELD_TILE_W;
+  flags[base + ty0 + tx0] = 1;
+  flags[base + ty0 + tx1] = 1;
+  flags[base + ty1 + tx0] = 1;
+  flags[base + ty1 + tx1] = 1;
 }
 
 /**
  * Единственный протокол записи в поле: кто положил значение — тот обязан
- * назвать клетку. Обновление ходит только по рамке, и без этой отметки свежий
- * импульс на холодном участке никогда бы не затух и не растёкся.
- *
- * Рамка расширяется на клетку вокруг: за тик значение уходит ровно на соседей,
- * и место их записи обязано быть внутри рамки — иначе в скретч-буфер попадёт
- * мусор с прошлых тиков (буфер общий на все каналы и чистится по рамке).
+ * назвать клетку. Обновление ходит только по грязным тайлам, и без этой
+ * отметки свежий импульс на холодном участке никогда бы не затух и не растёкся.
  */
 export function markFieldCell(world: World, ch: FieldChannel, cx: number, cy: number): void {
   if (ch >= DYNAMIC_FIELD_COUNT) return;
   versions[ch]++;
-  const x = world.wrap(cx);
-  const y = world.wrap(cy);
-  const b = ch * 4;
-  if (x - 1 < boxes[b]) boxes[b] = x - 1;
-  if (y - 1 < boxes[b + 1]) boxes[b + 1] = y - 1;
-  if (x + 1 > boxes[b + 2]) boxes[b + 2] = x + 1;
-  if (y + 1 > boxes[b + 3]) boxes[b + 3] = y + 1;
+  markCellTiles(fieldTiles, ch * FIELD_TILE_COUNT, world.wrap(cx), world.wrap(cy));
+}
+
+/** То же для набора следующего такта: зовётся на КАЖДУЮ ненулевую клетку в
+ *  проходе диффузии, поэтому запас в две клетки и снимает нужду метить каждую
+ *  политую клетку отдельно — она заведомо внутри. */
+export function markNextFieldCell(cx: number, cy: number): void {
+  markCellTiles(nextFieldTiles, 0, cx & 0x3ff, cy & 0x3ff);
 }
 
 export function bumpFieldVersion(ch: FieldChannel): void {

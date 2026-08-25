@@ -37,6 +37,12 @@ registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_ID, MIRON_DEF, [{
 registerContentInteractionHook({
   id: 'spectral_chasovnya_bell',
   target(ctx) {
+    /* Сторож этажа обязателен ПЕРВОЙ строкой: без него `findBellNodeForLook`
+     * на чужом этаже обходит весь `world.rooms` (на квартирах их 13873), и
+     * промах не запоминается — искать нечего, класть в WeakMap нечего. Крюк
+     * зовётся из `findInteractionTarget` каждый кадр и до двух раз, поэтому
+     * замерено 4.1% кадра на жилом этаже, где колокола нет вовсе. */
+    if (ctx.state.currentZ !== SPECTRAL_CHASOVNYA_Z) return null;
     const node = findBellNodeForLook(ctx.world, ctx.player, ctx.lookX, ctx.lookY);
     if (!node) return null;
     return {
@@ -49,6 +55,7 @@ registerContentInteractionHook({
     };
   },
   use(ctx) {
+    if (ctx.state.currentZ !== SPECTRAL_CHASOVNYA_Z) return null;
     const node = findBellNodeForLook(ctx.world, ctx.player, ctx.lookX, ctx.lookY);
     if (!node) return null;
     return { handled: ringSpectralChasovnyaBell(ctx.world, ctx.state, ctx.player, ctx.entities, node.id), worldChanged: false };

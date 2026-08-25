@@ -60,6 +60,13 @@ const PATH_STUCK_DROP_SEC = PATH_STUCK_SKIP_SEC * 2;
  * кадр. Дальше двух окон хвост не схлопываем — окно и так ведёт почти прямо. */
 const PATH_SMOOTH_LOOKAHEAD = 20;
 const PATH_SMOOTH_FAR_PROBE_SQ = (2 * PATH_SMOOTH_LOOKAHEAD / PATH_BLOCKER_SUBDIV) ** 2;
+/* Насколько актор должен сдвинуться, чтобы развёртка стоила пересчёта. Мера —
+ * ПОДКЛЕТКА, разрешение самого маршрута: пол-подклетки. Мерено на жилом этаже,
+ * три сида: на этом пороге кадр `updateAI` тот же (p50 1.58→1.11, p95 2.68→1.94),
+ * а застревание возвращается в шум. На вдвое более редком пороге (радиус
+ * вейпойнта) кадр не выигрывает НИЧЕГО сверх этого, зато застревание растёт по
+ * всем трём сидам сразу: NPC +0.5 п.п., монстры +0.8. */
+const PATH_SMOOTH_RESWEEP_SQ = (0.5 / PATH_BLOCKER_SUBDIV) ** 2;
 const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
 const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
@@ -1821,6 +1828,66 @@ function hasLineOfSightToSubcell(world: World, e: Entity, si: number): boolean {
  * клетки и делается ПЕРЕД трассировкой — она на порядок дешевле луча. */
 const _smoothOccupyOpt: ActorOccupyOptions = { ignoreFineBlockers: false };
 
+/* Развёртка маршрута — ПОСТОБРАБОТКА пути, а не шаг рулёжки, и пересчитывать
+ * её каждый кадр незачем. За кадр актор проходит около сотой доли клетки при
+ * подклетке в четверть: ответ трассировки не может измениться несколько кадров
+ * подряд, а стоила она до двадцати лучей на каждого идущего каждый кадр —
+ * 22.2% кадра на жилом этаже, самый жирный лист профиля.
+ *
+ * Память хранит ровно то, при чём развёртка была верна: тот же массив маршрута
+ * (СМЕНА массива — канонический в проекте признак назначения пути, см.
+ * `arena_metrics`), тот же `pi`, та же геометрия и та же точка старта луча.
+ * Порог сдвига — `PATH_SMOOTH_RESWEEP_SQ`, пол-подклетки: ближе него актор для
+ * навигации стоит на прежнем месте.
+ *
+ * Пропуск развёртки симуляцию не меняет — он лишь откладывает срезку на
+ * несколько кадров, а до неё актор идёт по сырому вейпойнту, заведомо
+ * проходимому: маршрут печётся по подклеткам. Ни от игрока, ни от камеры
+ * условие не зависит — общий закон для всех акторов. */
+type SmoothingSweepMemo = {
+  path: readonly number[];
+  pi: number;
+  x: number;
+  y: number;
+  cellVersion: number;
+  pathBlockerVersion: number;
+};
+const _smoothingSweeps = new WeakMap<Entity, SmoothingSweepMemo>();
+
+function smoothingSweepDue(world: World, e: Entity, ai: NonNullable<Entity['ai']>): boolean {
+  const memo = _smoothingSweeps.get(e);
+  if (memo === undefined) return true;
+  if (memo.path !== ai.path || memo.pi !== ai.pi) return true;
+  if (memo.cellVersion !== world.cellVersion) return true;
+  if (memo.pathBlockerVersion !== world.pathBlockerVersion) return true;
+  const dx = world.delta(memo.x, e.x);
+  const dy = world.delta(memo.y, e.y);
+  return dx * dx + dy * dy >= PATH_SMOOTH_RESWEEP_SQ;
+}
+
+function noteSmoothingSweep(world: World, e: Entity, ai: NonNullable<Entity['ai']>): void {
+  const memo = _smoothingSweeps.get(e);
+  if (memo === undefined) {
+    _smoothingSweeps.set(e, {
+      path: ai.path,
+      pi: ai.pi,
+      x: e.x,
+      y: e.y,
+      cellVersion: world.cellVersion,
+      pathBlockerVersion: world.pathBlockerVersion,
+    });
+    return;
+  }
+  // Запись на месте: акторов тысячи, и новый объект на каждую развёртку — это
+  // мусор в горячем цикле, ровно тот, что запрещён в `Runtime Systems`.
+  memo.path = ai.path;
+  memo.pi = ai.pi;
+  memo.x = e.x;
+  memo.y = e.y;
+  memo.cellVersion = world.cellVersion;
+  memo.pathBlockerVersion = world.pathBlockerVersion;
+}
+
 function smoothedStepFitsBody(world: World, e: Entity, si: number, radius: number): boolean {
   const dx = world.delta(e.x, subcellWorldX(si));
   const dy = world.delta(e.y, subcellWorldY(si));
@@ -2233,37 +2300,42 @@ export function followPath(world: World, e: Entity, dt: number): void {
   if (ai.pi >= ai.path.length) return;
 
   // Lookahead Path Smoothing (String Pulling)
-  const lastIdx = ai.path.length - 1;
-  const lookaheadLimit = lastIdx < ai.pi + PATH_SMOOTH_LOOKAHEAD ? lastIdx : ai.pi + PATH_SMOOTH_LOOKAHEAD;
-  let lookaheadIndex = ai.pi;
-
   const bodyRadius = actorOccupyRadius(e);
-  _smoothOccupyOpt.ignoreFineBlockers = entityIgnoresFineBlockers(e);
 
-  // Дальний конец пробуется первым: одна удачная линия схлопывает весь хвост.
-  // Но когда окно и так достаёт до конца, эта проба — ровно первая итерация
-  // цикла ниже, и раньше она стоила вторую трассировку на каждый вызов.
-  // Дальний конец за радиусом пробы не трогаем: там луч почти всегда упрётся,
-  // а заплатим мы за всё открытое место, которое он до этого пробежал.
-  if (lookaheadLimit < lastIdx
-    && world.dist2(e.x, e.y, subcellWorldX(ai.path[lastIdx]), subcellWorldY(ai.path[lastIdx])) <= PATH_SMOOTH_FAR_PROBE_SQ
-    && hasLineOfSightToSubcell(world, e, ai.path[lastIdx])) {
-    lookaheadIndex = lastIdx;
-  } else {
-    for (let i = lookaheadLimit; i > ai.pi; i--) {
-      if (hasLineOfSightToSubcell(world, e, ai.path[i])) {
-        lookaheadIndex = i;
-        break;
+  if (smoothingSweepDue(world, e, ai)) {
+    const lastIdx = ai.path.length - 1;
+    const lookaheadLimit = lastIdx < ai.pi + PATH_SMOOTH_LOOKAHEAD ? lastIdx : ai.pi + PATH_SMOOTH_LOOKAHEAD;
+    let lookaheadIndex = ai.pi;
+
+    _smoothOccupyOpt.ignoreFineBlockers = entityIgnoresFineBlockers(e);
+
+    // Дальний конец пробуется первым: одна удачная линия схлопывает весь хвост.
+    // Но когда окно и так достаёт до конца, эта проба — ровно первая итерация
+    // цикла ниже, и раньше она стоила вторую трассировку на каждый вызов.
+    // Дальний конец за радиусом пробы не трогаем: там луч почти всегда упрётся,
+    // а заплатим мы за всё открытое место, которое он до этого пробежал.
+    if (lookaheadLimit < lastIdx
+      && world.dist2(e.x, e.y, subcellWorldX(ai.path[lastIdx]), subcellWorldY(ai.path[lastIdx])) <= PATH_SMOOTH_FAR_PROBE_SQ
+      && hasLineOfSightToSubcell(world, e, ai.path[lastIdx])) {
+      lookaheadIndex = lastIdx;
+    } else {
+      for (let i = lookaheadLimit; i > ai.pi; i--) {
+        if (hasLineOfSightToSubcell(world, e, ai.path[i])) {
+          lookaheadIndex = i;
+          break;
+        }
       }
     }
-  }
 
-  // Срезка принимается, только если по срезанной прямой пролезает ТЕЛО. Иначе
-  // остаётся сырой вейпойнт: он заведомо проходим, потому что маршрут печётся
-  // по подклеткам. Проба одна на кадр, а не на кандидата — на этаже квартир
-  // проба на каждого кандидата стоила +13% кадра при том же результате.
-  if (lookaheadIndex !== ai.pi && smoothedStepFitsBody(world, e, ai.path[lookaheadIndex], bodyRadius)) {
-    ai.pi = lookaheadIndex;
+    // Срезка принимается, только если по срезанной прямой пролезает ТЕЛО. Иначе
+    // остаётся сырой вейпойнт: он заведомо проходим, потому что маршрут печётся
+    // по подклеткам. Проба одна на кадр, а не на кандидата — на этаже квартир
+    // проба на каждого кандидата стоила +13% кадра при том же результате.
+    if (lookaheadIndex !== ai.pi && smoothedStepFitsBody(world, e, ai.path[lookaheadIndex], bodyRadius)) {
+      ai.pi = lookaheadIndex;
+    }
+
+    noteSmoothingSweep(world, e, ai);
   }
 
   // Open doors: current position, next subcell on path, and one ahead

@@ -14,12 +14,14 @@ import {
   fieldBlocked,
   fieldFade,
   fieldDiffusion,
-  fieldBoxMinX,
-  fieldBoxMinY,
-  fieldBoxMaxX,
-  fieldBoxMaxY,
-  setFieldBox,
-  resetFieldBoxes,
+  FIELD_TILE_SHIFT,
+  FIELD_TILE_SIZE,
+  FIELD_TILE_W,
+  FIELD_TILE_COUNT,
+  fieldTiles,
+  nextFieldTiles,
+  markNextFieldCell,
+  resetFieldTiles,
   bumpFieldVersion,
 } from './channels';
 import { bakeOpennessField } from './openness';
@@ -56,7 +58,7 @@ export { MACRO_SHIFT, MACRO_W } from './macro';
  * Многоканальный движок полей восприятия.
  *
  * Один общий проход на все динамические каналы, каданс 2 Гц, работа ограничена
- * рамкой активных клеток на канал. Диффузия 8-связная (диагональ весит 1/√2),
+ * набором грязных тайлов на канал. Диффузия 8-связная (диагональ весит 1/√2),
  * не проходит сквозь стены и закрытые двери и не срезает сомкнутый угол.
  *
  * Поля НЕ сериализуются: сейв хранит активный этаж, игрока и дельту макро-
@@ -129,16 +131,10 @@ export function fieldMacroTargetCell(
 }
 
 /** Один общий буфер записи на все каналы: каналы считаются последовательно,
- *  и каждый чистит перед собой ровно свою рамку. */
+ *  и каждый чистит перед собой ровно свои грязные тайлы. */
 let scratch: Uint8Array | null = null;
 let tickCounter = 0;
 
-/** Рамка, которую собирает текущий проход. Модульная, чтобы поливалка соседей
- *  не была замыканием: в горячем пути аллокаций быть не должно. */
-let boxMinX = W;
-let boxMinY = W;
-let boxMaxX = -1;
-let boxMaxY = -1;
 const orthBlocked = new Uint8Array(4);
 
 function ensureScratch(): Uint8Array {
@@ -146,134 +142,125 @@ function ensureScratch(): Uint8Array {
   return scratch;
 }
 
-function growBox(x: number, y: number): void {
-  if (x < boxMinX) boxMinX = x;
-  if (x > boxMaxX) boxMaxX = x;
-  if (y < boxMinY) boxMinY = y;
-  if (y > boxMaxY) boxMaxY = y;
-}
-
-function pour(next: Uint8Array, ni: number, nx: number, ny: number, amount: number): void {
+function pour(next: Uint8Array, ni: number, amount: number): void {
   const acc = next[ni] + amount;
   next[ni] = acc > 255 ? 255 : acc;
-  growBox(nx, ny);
 }
 
-/** Координаты здесь НЕ оборачиваются: рамка живёт в развёрнутом пространстве,
- *  а `world.idx` сам маскирует индекс — так шов тора не рвётся. */
+/** Координаты здесь НЕ оборачиваются: `world.idx` сам маскирует индекс, так шов
+ *  тора не рвётся. Политые клетки отдельно НЕ метятся — запас в две клетки у
+ *  `markNextFieldCell` источника накрывает и их, и их собственных соседей. */
 function spread(
   world: World, next: Uint8Array, cx: number, cy: number, orth: number, diag: number,
 ): void {
   for (let k = 0; k < 4; k++) {
-    const nx = cx + FIELD_DIR_DX[k];
-    const ny = cy + FIELD_DIR_DY[k];
-    const ni = world.idx(nx, ny);
+    const ni = world.idx(cx + FIELD_DIR_DX[k], cy + FIELD_DIR_DY[k]);
     orthBlocked[k] = fieldBlocked(world, ni) ? 1 : 0;
     // В перекрытую клетку значение всё же кладётся — оно там и умрёт, потому что
     // перекрытая клетка сама уже не растекается. Так кровь метит стену, а сквозь
     // стену поле не проходит.
-    if (orth > 0) pour(next, ni, nx, ny, orth);
+    if (orth > 0) pour(next, ni, orth);
   }
   if (diag <= 0) return;
   for (let k = 4; k < 8; k++) {
     const d = k - 4;
     if (orthBlocked[FIELD_DIAG_COMP_A[d]] !== 0 || orthBlocked[FIELD_DIAG_COMP_B[d]] !== 0) continue;
-    const nx = cx + FIELD_DIR_DX[k];
-    const ny = cy + FIELD_DIR_DY[k];
-    pour(next, world.idx(nx, ny), nx, ny, diag);
+    pour(next, world.idx(cx + FIELD_DIR_DX[k], cy + FIELD_DIR_DY[k]), diag);
   }
 }
 
 function updateChannel(world: World, ch: FieldChannel): void {
-  const minX = fieldBoxMinX(ch);
-  const minY = fieldBoxMinY(ch);
-  const maxX = fieldBoxMaxX(ch);
-  const maxY = fieldBoxMaxY(ch);
-  if (maxX < minX || maxY < minY) return; // канал спит — ни одного байта работы
-
+  const tileBase = ch * FIELD_TILE_COUNT;
   const plane = world.perceptionFields;
   const base = ch * FIELD_PLANE;
   const next = ensureScratch();
   const fade = fieldFade(ch);
   const diffusion = fieldDiffusion(ch);
 
-  // Буфер записи общий на все каналы, поэтому чистим ровно свою рамку — она же
-  // накрывает и всё, что этот проход может записать (рамка растянута на клетку).
-  for (let cy = minY; cy <= maxY; cy++) {
-    for (let cx = minX; cx <= maxX; cx++) next[world.idx(cx, cy)] = 0;
+  // Буфер записи общий на все каналы, поэтому чистим ровно свои грязные тайлы —
+  // они же накрывают и всё, что этот проход может записать (запас в две клетки
+  // вокруг каждой ненулевой клетки держит `markNextFieldCell`).
+  let dirty = 0;
+  for (let t = 0; t < FIELD_TILE_COUNT; t++) {
+    if (fieldTiles[tileBase + t] === 0) continue;
+    dirty++;
+    const x0 = (t & (FIELD_TILE_W - 1)) << FIELD_TILE_SHIFT;
+    const y0 = ((t / FIELD_TILE_W) | 0) << FIELD_TILE_SHIFT;
+    for (let cy = y0; cy < y0 + FIELD_TILE_SIZE; cy++) {
+      const row = cy * W + x0;
+      next.fill(0, row, row + FIELD_TILE_SIZE);
+    }
   }
+  if (dirty === 0) return; // канал спит — ни одного байта работы
 
-  boxMinX = W; boxMinY = W; boxMaxX = -1; boxMaxY = -1;
+  nextFieldTiles.fill(0);
   let active = 0;
 
-  for (let cy = minY; cy <= maxY; cy++) {
-    for (let cx = minX; cx <= maxX; cx++) {
-      const i = world.idx(cx, cy);
-      const val = plane[base + i];
-      if (val === 0) continue;
-      active++;
-      const decayed = val - fade;
-      if (decayed <= 0) continue;
-      growBox(cx, cy);
+  for (let t = 0; t < FIELD_TILE_COUNT; t++) {
+    if (fieldTiles[tileBase + t] === 0) continue;
+    const x0 = (t & (FIELD_TILE_W - 1)) << FIELD_TILE_SHIFT;
+    const y0 = ((t / FIELD_TILE_W) | 0) << FIELD_TILE_SHIFT;
+    for (let cy = y0; cy < y0 + FIELD_TILE_SIZE; cy++) {
+      const row = cy * W;
+      for (let cx = x0; cx < x0 + FIELD_TILE_SIZE; cx++) {
+        const i = row + cx;
+        const val = plane[base + i];
+        if (val === 0) continue;
+        active++;
+        const decayed = val - fade;
+        if (decayed <= 0) continue;
+        markNextFieldCell(cx, cy);
 
-      if (fieldBlocked(world, i)) {
-        if (decayed > next[i]) next[i] = decayed;
-        continue;
+        if (fieldBlocked(world, i)) {
+          if (decayed > next[i]) next[i] = decayed;
+          continue;
+        }
+
+        const budget = decayed * diffusion;
+        const orth = (budget * FIELD_ORTH_SHARE) | 0;
+        const diag = (budget * FIELD_DIAG_SHARE) | 0;
+        const retained = next[i] + decayed - orth * 4 - diag * 4;
+        next[i] = retained > 255 ? 255 : retained;
+        if (orth > 0 || diag > 0) spread(world, next, cx, cy, orth, diag);
       }
-
-      const budget = decayed * diffusion;
-      const orth = (budget * FIELD_ORTH_SHARE) | 0;
-      const diag = (budget * FIELD_DIAG_SHARE) | 0;
-      const retained = next[i] + decayed - orth * 4 - diag * 4;
-      next[i] = retained > 255 ? 255 : retained;
-      if (orth > 0 || diag > 0) spread(world, next, cx, cy, orth, diag);
     }
   }
 
   if (active === 0) {
-    setFieldBox(ch, W, W, -1, -1);
+    fieldTiles.fill(0, tileBase, tileBase + FIELD_TILE_COUNT);
     return;
   }
 
   bumpFieldVersion(ch);
-  // Обратно — по той же рамке, что чистили: она накрывает и все записи прохода,
+  // Обратно — по ТЕМ ЖЕ тайлам, что чистили: они накрывают и все записи прохода,
   // и клетки, догоревшие до нуля, которые иначе остались бы висеть навсегда.
-  for (let cy = minY; cy <= maxY; cy++) {
-    for (let cx = minX; cx <= maxX; cx++) {
-      const i = world.idx(cx, cy);
-      plane[base + i] = next[i];
+  for (let t = 0; t < FIELD_TILE_COUNT; t++) {
+    if (fieldTiles[tileBase + t] === 0) continue;
+    const x0 = (t & (FIELD_TILE_W - 1)) << FIELD_TILE_SHIFT;
+    const y0 = ((t / FIELD_TILE_W) | 0) << FIELD_TILE_SHIFT;
+    for (let cy = y0; cy < y0 + FIELD_TILE_SIZE; cy++) {
+      const row = cy * W;
+      for (let cx = x0; cx < x0 + FIELD_TILE_SIZE; cx++) {
+        plane[base + row + cx] = next[row + cx];
+      }
     }
   }
 
-  if (boxMaxX < 0) {
-    setFieldBox(ch, W, W, -1, -1);
-    return;
-  }
-  // Запас на клетку: за следующий тик значение уйдёт ровно на соседей, и место
-  // их записи обязано быть внутри рамки — её же чистит следующий проход.
-  let nMinX = boxMinX - 1;
-  let nMinY = boxMinY - 1;
-  let nMaxX = boxMaxX + 1;
-  let nMaxY = boxMaxY + 1;
-  // Развёрнутая рамка не имеет права перерасти мир: дальше она начала бы
-  // обходить одни и те же клетки по нескольку раз.
-  if (nMaxX - nMinX > W - 1) { nMinX = 0; nMaxX = W - 1; }
-  if (nMaxY - nMinY > W - 1) { nMinY = 0; nMaxY = W - 1; }
-  setFieldBox(ch, nMinX, nMinY, nMaxX, nMaxY);
+  fieldTiles.set(nextFieldTiles, tileBase);
 }
 
 /**
- * Подготовить поля к этажу: запечь статический просвет и обнулить рамки.
+ * Подготовить поля к этажу: запечь статический просвет и обнулить грязные тайлы.
  * Идемпотентна. O(W²) внутри — звать только с пути загрузки этажа или после
  * сшивки самосбора, никогда в кадре симуляции.
  */
 export function prewarmPerceptionFields(world: World): void {
   if (world.perceptionBaked) return;
   // Динамические каналы этаж не наследует: сейв их не хранит, и значение без
-  // рамки всё равно не затухало бы. Обнуляем ДО отметки о запекании, чтобы
+  // отметки всё равно не затухало бы. Обнуляем ДО отметки о запекании, чтобы
   // депозиты, сделанные после прогрева, пережили его.
   world.perceptionFields.fill(0, 0, DYNAMIC_FIELD_COUNT * FIELD_PLANE);
-  resetFieldBoxes();
+  resetFieldTiles();
   ensureScratch().fill(0); // в буфере лежит мусор прошлого этажа
   bakeOpennessField(world);
   bakeMacroFields(world, DYNAMIC_FIELD_COUNT);
@@ -295,10 +282,10 @@ export function updatePerceptionFields(world: World, dt: number): void {
   updateMacroFields(MACRO_DECAYS);
 }
 
-/** Только для тестов: сбросить рамки, буфер записи и накопленный такт. */
+/** Только для тестов: сбросить грязные тайлы, буфер записи и накопленный такт. */
 export function resetPerceptionFieldsState(): void {
   tickCounter = 0;
-  resetFieldBoxes();
+  resetFieldTiles();
   scratch?.fill(0);
   resetMacroFields();
 }
