@@ -170,4 +170,3 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
-export * from "./archive_poi";

@@ -11,7 +11,7 @@ import { WEAPON_STATS } from '../src/data/catalog';
 import { BLACK_MARKET_88_STOCK } from '../src/gen/black_market_88';
 import { getRecentEvents } from '../src/systems/events';
 import { getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const ITEM_ID = 'weapon_blueprint_t2';
 
@@ -76,7 +76,7 @@ test('weapon blueprint t2 can be sold instead of saved for armory production', (
   const player = makeTestPlayer({ inventory: [{ defId: ITEM_ID, count: 1 }], money: 0 });
   const state = makeGameState({ currentZ: 0, time: 160 });
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, ITEM_ID), 0);
   assert.equal(player.money, 210);

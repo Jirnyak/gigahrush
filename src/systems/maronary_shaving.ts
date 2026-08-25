@@ -99,7 +99,7 @@ function currentRouteTags(state: GameState): string[] {
   pushUnique(tags, `route:${floorRunEntryRouteId(entry)}`);
   pushUnique(tags, `route_kind:${floorRunEntryKind(entry)}`);
   pushUnique(tags, `z:${entry.z}`);
-  pushUnique(tags, `base_floor:${entry.themeTags.join(",")}`);
+  pushUnique(tags, `floor:${entry.designFloorId ?? entry.spec?.key ?? entry.z}`);
   return tags;
 }
 

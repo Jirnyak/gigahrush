@@ -391,7 +391,7 @@ function floorTag(theme: FloorThemeProfile): string {
   return (theme.routeId ? String(theme.routeId) : 'floor').toLowerCase();
 }
 
-function themeTags(theme: FloorThemeProfile): Set<string> {
+function profileTags(theme: FloorThemeProfile): Set<string> {
   const tags = new Set<string>();
   tags.add(theme.kind);
   tags.add(`kind_${theme.kind}`);
@@ -410,16 +410,10 @@ function themeTags(theme: FloorThemeProfile): Set<string> {
   for (const tag of theme.monsterPressureTags) tags.add(tag);
   for (const tag of theme.economyTags) tags.add(tag);
   for (const tag of theme.specialContentTags) tags.add(tag);
-  if (theme.themeTags.includes('hell')) tags.add('meat');
-  if (theme.themeTags.includes('ministry')) tags.add('documents');
-  if (theme.themeTags.includes('void')) {
-    tags.add('void');
-    tags.add('proof');
-  }
-  if (theme.themeTags.includes('maintenance')) {
-    tags.add('industrial');
-    tags.add('water');
-  }
+  // Теги вида дальше не дописываются по корзине темы: выше уже включены
+  // собственные теги этажа (объекты, монстры, экономика, особый контент). Кому
+  // нужен `meat`, `documents` или `industrial` — объявляет их сам, а не получает
+  // за компанию с четырнадцатью соседями по ярлыку.
   if (tags.has('silicon_net_well') || tags.has('net')) tags.add('proof');
   return tags;
 }
@@ -471,7 +465,7 @@ export function resolveVisualDetailProfile(
   theme: FloorThemeProfile,
   options: { seed?: number } = {},
 ): ResolvedVisualDetailProfile {
-  const tags = themeTags(theme);
+  const tags = profileTags(theme);
   const seed = hashSeed(`visual-detail:${theme.floorKey}:${theme.routeZ ?? 0}`, options.seed ?? 0);
   const densities = new Map<VisualDetailId, number>();
 

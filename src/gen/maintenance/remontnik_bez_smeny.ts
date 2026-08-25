@@ -362,7 +362,7 @@ function publishOutcome(state: GameState, source: WorldEvent, site: RemontnikSit
 
 function resolveOutcome(state: GameState, source: WorldEvent, outcome: RemontnikOutcome, itemId?: string): void {
   const site = activeRemontnik;
-  if (!site || !currentFloorRunEntry(state)!.themeTags.includes('maintenance') || site.outcome) return;
+  if (!site || currentFloorRunEntry(state)!.designFloorId !== 'maintenance' || site.outcome) return;
   site.outcome = outcome;
   setShortcutOpen(site, outcome !== 'welded');
   if (outcome === 'welded' || outcome === 'killed') wakeMachinery(site, state, outcome);

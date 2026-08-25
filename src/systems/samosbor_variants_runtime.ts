@@ -14,18 +14,13 @@ let activeVariant: ActiveSamosborVariant | null = null;
 let forcedNextVariant: SamosborVariantId | null = null;
 let lastVariant: SamosborVariantId | null = null;
 
-export function chooseSamosborVariant(floorTags: readonly string[], z: number): ActiveSamosborVariant {
+export function chooseSamosborVariant(): ActiveSamosborVariant {
   if (forcedNextVariant) {
     const forced = SAMOSBOR_VARIANTS.find(v => v.id === forcedNextVariant);
     forcedNextVariant = null;
-    // #61: mirror floorWeight's scope gate — validate the forced variant against
-    // its floor scope (numeric-z floors, or theme-token tags for wet/electric/
-    // meat), not the KIND-label tags. Otherwise debug-forcing maronary/istotit/
-    // veretar/classic always failed the tags gate and silently fell through.
-    const inForcedScope = forced
-      ? (forced.floors ? forced.floors.includes(z) : forced.tags.some(t => floorTags.includes(t)))
-      : false;
-    if (forced && inForcedScope) {
+    // Привязки к этажу больше нет: вариант один и тот же везде, поэтому
+    // принудительный выбор всегда исполним.
+    if (forced) {
       activeVariant = buildActiveSamosborVariant(forced);
       lastVariant = activeVariant.def.id;
       return activeVariant;
@@ -35,10 +30,10 @@ export function chooseSamosborVariant(floorTags: readonly string[], z: number): 
 
 
   let total = 0;
-  for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id, z, floorTags);
+  for (const def of SAMOSBOR_VARIANTS) total += getSamosborVariantWeight(def.id);
   let roll = rng() * Math.max(1, total);
   for (const def of SAMOSBOR_VARIANTS) {
-    roll -= getSamosborVariantWeight(def.id, z, floorTags);
+    roll -= getSamosborVariantWeight(def.id);
     if (roll <= 0) {
       activeVariant = buildActiveSamosborVariant(def);
       lastVariant = activeVariant.def.id;

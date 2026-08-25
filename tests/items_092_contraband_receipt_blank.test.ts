@@ -6,7 +6,7 @@ import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 test('contraband receipt blank is reachable forgery paperwork', () => {
   const def = ITEMS.contraband_receipt_blank;
@@ -33,7 +33,7 @@ test('contraband receipt blank can be sold as black-market document risk', () =>
   assert.equal(addItem(player, 'contraband_receipt_blank', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, 'contraband_receipt_blank'), 0);
   assert.equal(player.money, 42);

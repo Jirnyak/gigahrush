@@ -17,7 +17,7 @@ import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { registerZoneContent } from '../living/zone_content';
+import { registerZoneContent } from './zone_content';
 import { rng } from '../../core/rand';
 
 const HOSPITAL_W = 19;

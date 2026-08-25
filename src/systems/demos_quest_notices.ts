@@ -27,7 +27,7 @@ import type { AlifeNpcSnapshot } from './alife';
 import { publishEvent } from './events';
 import {
   cleanFloorKey,
-  floorKeyBaseFloor,
+  floorKeyDisplayName,
   floorKeyForDesign,
   floorKeyKind,
   floorKeyZ,
@@ -109,15 +109,6 @@ const MAX_NOTICE_TAGS = 16;
 const MAX_NOTICE_TAG_LEN = 32;
 const MAX_NOTICE_DETAIL = 132;
 const MAX_FAILED_REASON = 48;
-
-const FLOOR_LABELS_BY_TAG: Record<string, string> = {
-  'ministry': 'Министерство',
-  'kvartiry': 'Квартиры',
-  'living': 'Жилая зона',
-  'maintenance': 'Коллекторы',
-  'hell': 'Ад',
-  'void': 'Пустота',
-};
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : fallback;
@@ -220,16 +211,7 @@ function floorLabel(state: GameState, floorKey: string): string {
   const host = state as DemosQuestNoticeHost;
   const context = { proceduralSpecs: host.floorRun?.specs as Record<string, never> | undefined };
   const z = floorKeyZ(floorKey, context);
-  const baseTags = floorKeyBaseFloor(floorKey, context);
-  let baseLabel: string | undefined;
-  if (baseTags) {
-    for (const tag of baseTags) {
-      if (FLOOR_LABELS_BY_TAG[tag]) {
-        baseLabel = FLOOR_LABELS_BY_TAG[tag];
-        break;
-      }
-    }
-  }
+  const baseLabel = floorKeyDisplayName(floorKey, context);
   if (z !== undefined && baseLabel) return `Этаж ${Math.trunc(z)}, ${baseLabel}`;
   if (z !== undefined) return `Этаж ${Math.trunc(z)}`;
   if (baseLabel) return `${baseLabel}, маршрут без номера`;

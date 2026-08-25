@@ -6,7 +6,7 @@ import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 test('resident identity stub is a reachable living-block identity document', () => {
   const def = ITEMS.resident_identity_stub;
@@ -33,7 +33,7 @@ test('resident identity stub can be sold as basic papers in the living block', (
   assert.equal(addItem(player, 'resident_identity_stub', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, 'resident_identity_stub'), 0);
   assert.equal(player.money, 24);

@@ -36,6 +36,12 @@ const DECON_COMPLETION_STAMP_TAGS = ['document', 'decon', 'stamp', 'official', '
 const PART_TICKET_TAGS = ['document', 'permit', 'official', 'party', 'access', 'document_gate'] as const;
 const RAIL_SWITCH_ORDER_TAGS = ['document', 'order', 'official', 'rail', 'transport', 'route_permit', 'access', 'document_gate'] as const;
 
+/** Комната, которая ПРИНИМАЕТ бумагу и выдаёт по ней доступ. Имя лежит здесь,
+ *  а не в генераторе министерства: адресата должны знать и тот, кто его строит,
+ *  и тот, кто в нём действует, и слухи, которые до него ведут. Раньше строка
+ *  была перепечатана в пяти местах и разошлась бы при первом переименовании. */
+export const DOCUMENT_GATE_ROOM_NAME = 'Проверочный коридор N3';
+
 export const DOCUMENT_ACCESS_ITEMS: Record<string, ItemDef> = {
   liquidator_field_roster: {
     id: 'liquidator_field_roster',

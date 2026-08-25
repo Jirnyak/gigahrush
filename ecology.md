@@ -163,11 +163,29 @@ Pack placement is shared, not per-floor-family: `src/gen/monster_packs.ts` owns 
 
 Two tiny generic hooks in the WANDER branch of `src/systems/ai/monster.ts` read `monsterPackMode` for the roamer/territorial motion — no per-monster brain, all placement-time and baked-nav only.
 
-## Floor Affinity Is Biome-Keyed
+## Родной пул выбирает сам этаж
 
-`MonsterEcologyDef.floors` lists authored biome anchors as design-floor coordinates (`30 / 14 / 0 / −26 / −36 / −50`). The runtime key is the floor's **biome tags**, not its coordinate: `MonsterEcologyQuery.floorThemeTags` is matched against the tags those anchors resolve to (`designFloorAtZ(z).themeTags`, cached per kind). A raw `floors.includes(z)` test only ever matched the six even anchors, so on procedural stops (always odd `z`) the whole affinity dimension was inert — `NATIVE_FLOOR_MULT` never applied and a ministry-native creature was as likely as a collector-native one on a collector floor.
+Этажи не группируются — тем нет (снято 2026-08-25). Экология осталась общим
+словарём: `MonsterEcologyDef` описывает ВИД, а не место. Состав этажа выбирает
+его собственный генератор, и у выбора три основания, ни одно из которых не
+спрашивает соседей:
 
-Every populate passes the tags it already owns: `ProceduralFloorSpec.themeTags` for procedural floors, `route.themeTags` for design floors, `currentFloorRunEntry(state).themeTags` for samosbor waves. A query without tags falls back to the coordinate test, so authored anchors keep working unchanged. Do not convert coordinates with `floorRunProfileZ` for this: that helper inverts the scale (it maps ministry `+30` onto the collector anchor `−26`) and is meant for depth/danger profiles, not for biome identity.
+1. `monsterBiasKinds` этажа — перечисленные виды считаются родными;
+2. `monsterTags` этажа — виды, попавшие в его теги, тоже родные;
+3. `MonsterEcologyDef.floors` — авторский якорь вида, работает только на своём
+   этаже (`floors.includes(z)`), и якорями остаются шесть маршрутных координат
+   `30 / 14 / 0 / −26 / −36 / −50`.
+
+Раньше здесь стоял разворот через корзины: якорные `z` вида превращались в теги
+этажей на этих `z`, и вид считался родным для ЛЮБОГО этажа той же корзины —
+один тег отвечал за пятнадцать этажей. Разворот снят вместе с
+`MonsterEcologyQuery.floorThemeTags`.
+
+Где родного пула нет, вес ровный, а форму задаёт выбор самого этажа. Заполнение
+населения от этого не зависит: `spawnDesignMonsterPacks` добирает бюджет
+повторными проходами со свежими центрами (`MONSTER_FILL_PASSES`), потому что
+размер пачки у каждого вида свой и одного набора центров этажу с мелкими
+пачками не хватало — замерено на тёмной пересадке, 2483 из 3276.
 
 ## Implementation Lanes
 

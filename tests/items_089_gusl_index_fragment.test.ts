@@ -6,7 +6,7 @@ import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 test('gusl index fragment is reachable office paperwork for odd weapon classification', () => {
   const def = ITEMS.gusl_index_fragment;
@@ -33,7 +33,7 @@ test('gusl index fragment can be sold as a black-market weapon hint', () => {
   assert.equal(addItem(player, 'gusl_index_fragment', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, 'gusl_index_fragment'), 0);
   assert.equal(player.money, 24);

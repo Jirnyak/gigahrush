@@ -2,63 +2,60 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { _overrideRng, _restoreRng } from '../src/core/rand';
-import { getSamosborAftermathBeats, getSamosborVariantWeight } from '../src/data/samosbor_variants';
+import {
+  SAMOSBOR_VARIANTS,
+  getSamosborAftermathBeats,
+  getSamosborVariantWeight,
+} from '../src/data/samosbor_variants';
 import {
   chooseSamosborVariant,
   clearActiveSamosborVariant,
   forceNextSamosborVariant,
 } from '../src/systems/samosbor_variants_runtime';
 
-// WRONG-FIELD scope class (фаза-3 #61 + #67). Both samosbor selectors historically gated on
-// `def.tags` — but for the KIND-label variants (classic/maronary/istotit/veretar) and for every
-// aftermath beat, `tags` are self-referential/flavor labels that never appear in a floor's
-// themeTags. So the gate matched nothing and the content was dead exactly where it was authored.
-// Post Z-canon: `def.floors` is a numeric-z scope; wet/electric/meat still fall back to their
-// theme-token `tags`. These lock the polarity so it cannot silently regress; each positive
-// assertion fails on the pre-fix `.tags` predicate.
+/* Самосбор один и тот же везде.
+ *
+ * Раньше и выбор варианта, и его последствия отсекались списком этажей, а сам
+ * список выводился из шести корзин тем; сверху лежала матрица множителей вида
+ * «на министерстве электрический ×1.8, в Аду мясной ×5». Решение владельца:
+ * фундаментальная механика самосбора — перестройка этажа — едина, различия
+ * принадлежат самому варианту (истотит, маронарий, веретар, мокрый, мясной), а
+ * не месту. Тесты держат новое правило: место не участвует нигде.
+ */
 
-test('#61 samosbor variant weight gates by floor scope (.floors), not KIND-label tags', () => {
-  // Reachable where scoped — pre-fix these returned 0 on EVERY floor (KIND-label tags never
-  // intersect floorTags), so >0 is the regression-catcher. veretar/maronary declare floors=ALL_FLOORS.
-  assert.ok(getSamosborVariantWeight('veretar', -50, ['void']) > 0, 'veretar is reachable on void');
-  assert.ok(getSamosborVariantWeight('maronary', -50, ['void']) > 0, 'maronary is reachable on void');
-  assert.ok(getSamosborVariantWeight('istotit', 30, ['ministry']) > 0, 'istotit is reachable on its civil scope');
-
-  // The gate is a REAL gate, not blanket-open: istotit declares floors=CIVIL_FLOORS (∌ void),
-  // so it must stay weightless on void. Proves the >0 assertions above mean "scoped", not "always on".
-  assert.equal(getSamosborVariantWeight('istotit', -50, ['void']), 0, 'istotit stays gated out off its scope');
+test('вес варианта не зависит от этажа и у каждого варианта он есть', () => {
+  for (const def of SAMOSBOR_VARIANTS) {
+    assert.ok(
+      getSamosborVariantWeight(def.id) > 0,
+      `вариант ${def.id} обязан быть достижим: отсечки по этажу больше нет`,
+    );
+    assert.equal(getSamosborVariantWeight(def.id), def.weight);
+  }
 });
 
-test('#61 forced samosbor variant honours its theme-token scope in the runtime mirror', () => {
-  // chooseSamosborVariant's forced-pick branch mirrors floorWeight's scope gate. Pre-fix it validated
-  // the forced variant against KIND-label tags, so debug-forcing veretar/maronary/istotit/classic
-  // always failed and silently fell through to the weighted roll. With rng pinned to 0 that fallthrough
-  // deterministically selects SAMOSBOR_VARIANTS[0] (classic), so a returned 'veretar' proves the forced
-  // branch was honoured (a pre-fix mirror would return 'classic').
+test('принудительный выбор варианта исполняется всегда', () => {
+  // Раньше принудительный выбор сверялся с областью этажа и мог молча провалиться
+  // в общий бросок. При сиде 0 бросок детерминированно даёт SAMOSBOR_VARIANTS[0],
+  // поэтому возвращённый veretar доказывает, что исполнился именно приказ.
   _overrideRng(() => 0);
   try {
     clearActiveSamosborVariant();
     assert.equal(forceNextSamosborVariant('veretar'), true);
-    const chosen = chooseSamosborVariant(['void'], -50);
-    assert.equal(chosen.def.id, 'veretar', 'the forced in-scope variant is honoured, not dropped to the weighted roll');
+    assert.equal(chooseSamosborVariant().def.id, 'veretar');
   } finally {
     _restoreRng();
     clearActiveSamosborVariant();
   }
 });
 
-test('#67 samosbor aftermath beats gate by theme-token floor scope (.floors), not flavor tags', () => {
-  // aftermath_fog_residue: variants=['classic','wet','meat'], floors=CIVIL_AND_SERVICE_FLOORS
-  // (incl. ministry, NOT void), tags=['fog','route'] (flavor). Pre-fix the filter used def.tags, which
-  // never intersect a floor's themeTags, so the beat was dead even on its own scoped floor.
-  const onMinistry = getSamosborAftermathBeats('classic', 30);
-  assert.ok(onMinistry.some(b => b.id === 'aftermath_fog_residue'), 'beat fires on its scoped (ministry) floor');
+test('последствия принадлежат варианту, а не этажу', () => {
+  const classic = getSamosborAftermathBeats('classic');
+  assert.ok(classic.some(b => b.id === 'aftermath_fog_residue'), 'такт классического самосбора на месте');
 
-  // Real scope gate — absent off-scope (floors ∌ void):
-  const onVoid = getSamosborAftermathBeats('classic', -50);
-  assert.equal(onVoid.some(b => b.id === 'aftermath_fog_residue'), false, 'beat is gated out off its floor scope');
+  // Отбор по варианту — единственный оставшийся, и он настоящий.
+  const electric = getSamosborAftermathBeats('electric');
+  assert.equal(electric.some(b => b.id === 'aftermath_fog_residue'), false, 'такт уважает свой список вариантов');
 
-  // The variant half of the AND still matters — electric is not in this beat's variant list:
-  const wrongVariant = getSamosborAftermathBeats('electric', 30);
-  assert.equal(wrongVariant.some(b => b.id === 'aftermath_fog_residue'), false, 'beat respects its variant list');
+  // И он больше не зависит от места: один и тот же вариант даёт один и тот же набор.
+  assert.deepEqual(getSamosborAftermathBeats('classic').map(b => b.id), classic.map(b => b.id));
 });

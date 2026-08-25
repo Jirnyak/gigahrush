@@ -38,7 +38,6 @@ function hermeticShellCells(gen: LabyrinthGeneration, room: Room): number {
 test('istinniy_labirint is registered as a Ministry route floor', () => {
   const route = designFloorById(ISTINNIY_LABIRINT_ROUTE_ID);
   assert.equal(route?.z, ISTINNIY_LABIRINT_Z);
-  assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(route?.displayName, 'Истинный лабиринт');
   assert.equal(route?.danger, 4);
   assert.equal(designFloorAtZ(ISTINNIY_LABIRINT_Z)?.id, ISTINNIY_LABIRINT_ROUTE_ID);

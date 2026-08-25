@@ -571,7 +571,7 @@ function smokeCandleDraftResult(
 ): { result: string; text: string; severity: WorldEventSeverity } {
   const room = world?.roomAt(actor.x, actor.y);
   const designFloor = state?.currentZ !== undefined ? designFloorAtZ(state.currentZ) : undefined;
-  const maintenance = designFloor?.themeTags ? designFloor.themeTags.includes("maintenance") : false;
+  const maintenance = designFloor?.id === 'maintenance';
   if (maintenance && (room?.type === RoomType.CORRIDOR || room?.type === RoomType.PRODUCTION)) {
     return {
       result: 'pulling_draft',
@@ -627,7 +627,7 @@ function publishSmokeCandleCheckEvent(
       'inventory',
       'smoke',
       'vent_check',
-      currentFloorRunEntry(state).themeTags.includes("maintenance") ? "maintenance" : "off_floor",
+      currentFloorRunEntry(state).designFloorId === 'maintenance' ? "maintenance" : "off_floor",
       'counterplay',
     ],
     data: {

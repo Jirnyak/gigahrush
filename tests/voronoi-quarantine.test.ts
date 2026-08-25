@@ -110,7 +110,6 @@ function passableRoomCells(world: ReturnType<typeof generateDesignFloor>['world'
 test('voronoi_quarantine is registered as a Kvartiry-band authored quarantine route', () => {
   const route = designFloorById(VORONOI_QUARANTINE_ROUTE_ID);
   assert.equal(route?.z, VORONOI_QUARANTINE_Z);
-    assert.equal(route?.themeTags?.includes('kvartiry'), true);
   assert.equal(route?.displayName, 'Вороной-карантин');
   assert.equal(designFloorAtZ(VORONOI_QUARANTINE_Z)?.id, VORONOI_QUARANTINE_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(VORONOI_QUARANTINE_Z), false);

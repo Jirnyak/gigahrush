@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 26`;
+- `SAVE_SHAPE_VERSION = 27`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -54,7 +54,6 @@ Current runtime save sections include:
 - `liftArachna`;
 - `pseudolift`;
 - `floorMemory` (снапшот только текущего активного этажа);
-- `playedCinematics` (какие синематики ключевых этажей уже проиграны в этом ране, capped);
 - `playedScenes` (id уже сыгранных **сцен этажа**, `src/systems/cinematics.ts`; кап `MAX_PLAYED_SCENES = 32`, каждый id обрезается до 64 символов). Пишется из `floorScenesForSave()`, восстанавливается через `restoreFloorScenesFromSave()`, `resetFloorScenes()` чистит и сыгранное, и список посещённых этажей. Секция опциональна и добавлена аддитивно, поэтому `SAVE_SHAPE_VERSION` не менялась; сейв без неё читается как «ничего не сыграно», и `first_visit`-сцена проиграет заново. Список посещённых этажей (`visitedFloorKeys`) намеренно НЕ сохраняется: сыгранного id достаточно, чтобы сцена не повторилась;
 - `netTerminalGen`;
 - `mapEditorPatches`;

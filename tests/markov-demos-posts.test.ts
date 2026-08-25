@@ -286,5 +286,5 @@ test('Demos feed view stores rendered rows outside the transient queue only', ()
 });
 
 test('Demos persistent social batch owns the current save shape', () => {
-  assert.equal(currentSaveShapeVersion(), 26);
+  assert.equal(currentSaveShapeVersion(), 27);
 });

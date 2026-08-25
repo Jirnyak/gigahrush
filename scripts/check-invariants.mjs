@@ -73,7 +73,7 @@ const RUNTIME_CYCLE_BASELINE = 4;
 
 const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
 const MAX_FUNCTION_LINES = 200;
-const LONG_FUNCTION_BASELINE = 22;
+const LONG_FUNCTION_BASELINE = 21;
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -371,6 +371,48 @@ if (legacyZHits.length) {
   for (const h of legacyZHits) failures.push(`    ${h}`);
 }
 
+/* ── Проверка 4.1: связи между пакетами этажей ──────────────────── */
+// Этаж — замкнутый DOD-субмодуль: своя геометрия, свои личности, свой контент.
+// Между пакетами этажей связей нет вообще. Единственное исключение —
+// gen/design_floors/, это реестр маршрута, он обязан знать всех.
+// Корневые файлы gen/*.ts (shared, entity_ids, floor_manifest, plot_npc_spawn,
+// log) — общая инфраструктура и под правило не попадают: инвариант генерации
+// ставится ОДИН раз, а не копируется по 51 этажу.
+// Замерено 2026-08-24: правило нарушали 9 импортов, и все девять оказались
+// одним и тем же дефектом — файл лежал не в том этаже, где спавнится его
+// контент (толкучка и больничный карантин строились на жилом из чужих папок,
+// ошибочная линия метро — на коллекторах, Мухин объявлял домом жилой). Шесть
+// переносов закрыли все девять, ни одна клетка мира не изменилась.
+const FLOOR_PACKAGE_REGISTRY = 'design_floors';
+const genRoot = path.join(srcRoot, 'gen');
+const floorPackages = new Set(
+  fs.readdirSync(genRoot).filter((name) => fs.statSync(path.join(genRoot, name)).isDirectory()),
+);
+const floorEdges = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  if (!srcRel.startsWith('gen/')) continue;
+  const owner = srcRel.slice(4).split('/')[0];
+  if (!floorPackages.has(owner) || owner === FLOOR_PACKAGE_REGISTRY) continue;
+  const text = fs.readFileSync(file, 'utf8');
+  for (const m of text.matchAll(/(?:from\s+|^\s*import\s+|require\()['"]([^'"]+)['"]/gm)) {
+    const spec = m[1];
+    if (!spec.startsWith('.')) continue;
+    const target = path.relative(genRoot, path.resolve(path.dirname(file), spec))
+      .replaceAll(path.sep, '/');
+    if (target.startsWith('..')) continue;
+    const targetPackage = target.split('/')[0];
+    if (targetPackage === owner || !floorPackages.has(targetPackage)) continue;
+    floorEdges.push(`${srcRel}  →  gen/${targetPackage}  (${spec})`);
+  }
+}
+if (floorEdges.length) {
+  failures.push(`Связи между пакетами этажей: ${floorEdges.length}. Допускается ровно 0.`);
+  failures.push('    Этаж — замкнутый субмодуль. Если модуль нужен чужому этажу, он лежит');
+  failures.push('    не там: перенеси файл на тот этаж, где спавнится его контент.');
+  for (const h of floorEdges) failures.push(`    ${h}`);
+}
+
 /* ── Проверка 3: длина функции ─────────────────────────────────── */
 const longFunctions = [];
 for (const file of files) {
@@ -421,4 +463,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);

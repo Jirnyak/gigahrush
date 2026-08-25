@@ -56,7 +56,7 @@ export interface DebugCtx {
 export type DebugAction =
   | { type: 'teleport_random_procedural_floor' }
   | { type: 'teleport_procedural_anomaly'; anomalyId: FloorAnomalyId }
-  | { type: 'teleport_design_floor'; id: DesignFloorId; themeTags: readonly string[]; z: number; label: string; color: string }
+  | { type: 'teleport_design_floor'; id: DesignFloorId; z: number; label: string; color: string }
   | { type: 'refresh_world_data' };
 
 export interface DebugCommandDef {

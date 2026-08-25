@@ -2,7 +2,6 @@
 
 import { MonsterKind, RoomType } from '../core/types';
 import { rng } from '../core/rand';
-import { designFloorAtZ } from './design_floors';
 
 export interface MonsterLootEntry {
   itemDefId: string;
@@ -38,11 +37,6 @@ export interface MonsterEcologyDef {
 
 export interface MonsterEcologyQuery {
   z: number;
-  /** Biome tags of the floor being populated (`design floor themeTags` or
-   *  `ProceduralFloorSpec.themeTags`). Authored `floors` anchors are matched
-   *  through these, so ecology affinity works on every route stop — design,
-   *  procedural or samosbor — instead of only on the six even anchor zs. */
-  floorThemeTags?: readonly string[];
   roomType?: RoomType;
   floorTags?: readonly string[];
   roomTags?: readonly string[];
@@ -1935,30 +1929,24 @@ function ecologyWaveAllows(def: MonsterEcologyDef, query: MonsterEcologyQuery): 
 
 /** Biome tags an ecology def is native to, derived once from its authored
  *  `floors` anchors through the design-floor registry. */
-const ECOLOGY_THEME_TAGS = new Map<MonsterKind, ReadonlySet<string>>();
-
-function ecologyThemeTags(def: MonsterEcologyDef): ReadonlySet<string> {
-  let tags = ECOLOGY_THEME_TAGS.get(def.kind);
-  if (!tags) {
-    const set = new Set<string>();
-    for (const z of def.floors) {
-      for (const tag of designFloorAtZ(z)?.themeTags ?? []) set.add(tag);
-    }
-    tags = set;
-    ECOLOGY_THEME_TAGS.set(def.kind, set);
-  }
-  return tags;
-}
-
-/** Native-floor test. Theme tags are the universal key: a procedural floor never
- *  sits on an authored anchor z, so a plain `floors.includes(z)` was dead there
- *  and every monster came out equally likely. */
+/* Родной этаж вида — только его собственные якорные `z`.
+ *
+ * Раньше здесь стоял разворот через корзины тем: якорные `z` вида превращались
+ * в теги этажей на этих `z`, и вид считался родным для ЛЮБОГО этажа той же
+ * корзины — то есть один тег решал за пятнадцать этажей сразу. Этажи не
+ * группируются: что водится на этаже, выбирает его собственный генератор через
+ * `monsterBiasKinds` и `monsterTags`, и они уже учтены отдельными весами
+ * (`ecologyBiasWeight`, `ecologyTagWeight`). Где родного пула нет, вес ровный —
+ * дальше форму задаёт выбор самого этажа, а не догадка по чужому ярлыку.
+ */
 function ecologyFloorFits(def: MonsterEcologyDef, query: MonsterEcologyQuery): boolean {
-  const floorTags = query.floorThemeTags;
-  if (floorTags && floorTags.length > 0) {
-    const native = ecologyThemeTags(def);
-    for (const tag of floorTags) if (native.has(tag)) return true;
-    return false;
+  // Родной пул — то, что этаж объявил САМ: перечисленные виды и виды, попавшие
+  // в его теги. Авторский якорь вида остаётся третьим основанием и работает
+  // только на своём этаже. Ни одно из трёх не спрашивает соседей.
+  if (query.biasKinds?.includes(def.kind)) return true;
+  if (query.floorTags?.length) {
+    const context = MONSTER_ECOLOGY_CONTEXT[def.kind];
+    if (context && tagHits(context.tags, query.floorTags) > 0) return true;
   }
   return def.floors.includes(query.z);
 }

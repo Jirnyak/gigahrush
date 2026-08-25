@@ -27,14 +27,13 @@ test('floorKeyForEntry returns correct key when z is defined and valid', () => {
 });
 
 test('floorKeyForEntry falls back to default when no better info is provided', () => {
-  assert.equal(floorKeyForEntry({ themeTags: [] }), 'design:living');
-  assert.equal(floorKeyForEntry({ themeTags: ['hell'] }), 'design:living');
+  assert.equal(floorKeyForEntry({}), 'design:living');
 });
 
 test('floorKeyForEntry priority check', () => {
   // Should pick storyFloor over designFloorId, spec, z
   assert.equal(
-    floorKeyForEntry({ themeTags: [], storyFloor: 'ministry' as any, designFloorId: 'roof', spec: { key: 'test' }, z: 50 }),
+    floorKeyForEntry({ storyFloor: 'ministry' as any, designFloorId: 'roof', spec: { key: 'test' }, z: 50 }),
     'design:ministry'
   );
 

@@ -109,7 +109,6 @@ test('hilbert_depot is a maintenance authored route floor with indexed industria
   assert.ok(route);
   assert.equal(route.z, HILBERT_DEPOT_ROUTE_Z);
   //  (removed exact baseFloor check)
-  assert.equal(route.themeTags?.includes('maintenance'), true);
   assert.equal(route.displayName, 'Склад Гильберта');
   assert.equal(route.danger, 4);
   assert.equal(designFloorAtZ(HILBERT_DEPOT_ROUTE_Z)?.id, DESIGN_FLOOR_ID);

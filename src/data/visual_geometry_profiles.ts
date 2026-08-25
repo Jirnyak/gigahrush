@@ -299,7 +299,9 @@ export function visualGeometryThemeTags(theme: FloorThemeProfile): readonly stri
   const tags = new Set<string>();
   tags.add(theme.kind);
   tags.add(`kind_${theme.kind}`);
-  const floorName = (theme.themeTags && theme.themeTags[0]) || 'floor';
+  // Имя этажа — его собственный id. Раньше здесь стоял первый тег темы, и
+  // геометрия чёрного рынка называлась `living`, а крыши — `ministry`.
+  const floorName = theme.routeId ? String(theme.routeId) : 'floor';
   tags.add(floorName);
   tags.add(`floor_${floorName}`);
   tags.add(`danger_${theme.danger}`);
@@ -314,15 +316,10 @@ export function visualGeometryThemeTags(theme: FloorThemeProfile): readonly stri
     else if (depth >= 12) tags.add('mid_route');
     else tags.add('near_route');
   }
-  if (theme.themeTags.includes('living') || theme.themeTags.includes('kvartiry')) tags.add('residential');
-  if (theme.themeTags.includes('ministry')) tags.add('documents');
-  if (theme.themeTags.includes('maintenance')) {
-    tags.add('maintenance');
-    tags.add('industrial');
-    tags.add('water');
-  }
-  if (theme.themeTags.includes('hell')) tags.add('meat');
-  if (theme.themeTags.includes('void')) tags.add('void');
+  // Теги вида дальше не дописываются по корзине темы: выше уже включены
+  // собственные теги этажа (объекты, монстры, экономика, особый контент). Кому
+  // нужен `meat`, `documents` или `industrial` — объявляет их сам, а не получает
+  // за компанию с четырнадцатью соседями по ярлыку.
   return [...tags].sort();
 }
 
@@ -383,7 +380,6 @@ export function resolveVisualGeometryProfile(
 export function resolveVisualGeometryProfile(
   modeInput: VisualGeometryMode | string,
   floorKey: string,
-  themeTags?: readonly string[],
 ): ResolvedVisualGeometryProfile;
 export function resolveVisualGeometryProfile(
   modeInput: VisualGeometryMode | string,

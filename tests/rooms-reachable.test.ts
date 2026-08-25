@@ -143,7 +143,7 @@ const CEILINGS: Readonly<Record<string, FloorCeiling>> = {
   // Защищённые POI: connectProtectedRoom не нашла коридор, а carveCorridor
   // через aptMask не роет, поэтому ensureConnectivity их не спасает.
   living: { sealed: 44, withDefId: 1, referenced: 3, why: 'защищённые POI + прокоп зала пролога сдвинул раскладку зон; владелец решил 2026-08-20 не чинить замурованность как класс — в игре есть ПСИ-дефазинг, см. problems.md. Потолок взят по максимуму сидов, а не по SEED' },
-  maintenance: { sealed: 3, withDefId: 0, referenced: 0, why: 'stampMaintRoom: connectProtectedRoom не нашла коридор. Дробные координаты из findMaintArea закрыты 2026-08-23: место теперь целое, и три цели слухов (мясной сборник, насосная с отражением, трубный автомат) больше не остаются невырезанными' },
+  maintenance: { sealed: 0, withDefId: 0, referenced: 0, why: 'Закрыто 2026-08-24: этаж не звал ensurePermanentRoomAccess — единственный шаг, который вскрывает ЗАЩИЩЁННУЮ комнату дверью. Связности одной мало: carveCorridor не роет сквозь aptMask, и запертая protectRoom оставалась запертой на всех четырёх проходах. Так висел карман в 1049 клеток (Насосная Матка 43×25 и четыре комнаты внутри). Потолок был 3 и прикрывал дефект, который плавал по сидам: замурованных 0·2·1·5·3 на сидах 1·61061·777·90210·4242, теперь 0·0·1·1·0. Дробные координаты из findMaintArea закрыты раньше, 2026-08-23' },
   roof: { sealed: 7, withDefId: 0, referenced: 0, why: 'острова архипелага за ABYSS: carveCorridor роет только по WALL' },
   ministry: { sealed: 4, withDefId: 0, referenced: 2, why: 'createAdminRoom: единственный проём от connectProtectedRoom' },
   kvartiry: { sealed: 2, withDefId: 0, referenced: 1, why: 'social_helpers: connectProtectedRoom' },

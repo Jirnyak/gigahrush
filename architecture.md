@@ -60,7 +60,7 @@ The macro building is persistent route identity, not full hidden realtime simula
 
 **Modular Decentralization**: It is actively encouraged to build each design floor as a separate "mini-game" with its own rules, starting from custom 2D geometry algorithms to unique dynamics, events, and population profiles.
 
-## 1.2 Room, Territory And Floor Theme Hierarchy
+## 1.2 Room, Territory And Floor Package Hierarchy
 
 The living simulation uses three nested spatial systems. They are not alternatives and should not duplicate each other's authority.
 
@@ -72,16 +72,16 @@ The living simulation uses three nested spatial systems. They are not alternativ
 
    The authoritative ownership field is `world.factionControl` per cell. `Zone` metadata is a coarser aggregate for UI, danger, event context, HQ anchors and floor-scale summaries, and must be synchronized from the cell field when ownership changes. `territoryRoomOwner()` derives room ownership from the dominant owner of its mapped cells, so room access and NPC routine targeting depend on territory, not on the room name or floor label. Ordinary NPC routine life should prefer or require friendly territory for work, social, patrol and owned-room targets; exceptions must be explicit gameplay states such as travel, raid/capture pressure, quest, caravan, samosbor emergency, monster pressure, hack backlash or authored scene. Faction spread is bounded local pressure over cells through `systems/territory.ts`/`systems/factions.ts`, not a per-frame whole-map ownership rewrite.
 
-3. Floor theme and route package.
+3. Floor package.
 
-   The broadest level is the design/procedural floor identity: `DesignFloorId`, `ProceduralFloorSpec`, route `z`, theme tags, `majorityId`, danger, anomaly and local generator package. This level answers "what kind of floor is this": Ministry can start with liquidator/administrative control, Kvartiry and Living with citizen habitation, wild/88 floors with wild control, meat lower floors with monsters/cult/samosbor pressure, NII floors with scientists, and so on. The floor theme owns initial geometry, population profile, target territory shares, monster pressure, object profiles, special NPCs, leaders, quest content and authored rules. It must not hardcode every room decision in AI. Once the floor exists, current per-cell territory and rooms are the live truth; samosbor, capture events, quests and floor memory may change them.
+   The broadest level is the design/procedural floor identity: `DesignFloorId`, `ProceduralFloorSpec`, route `z`, `majorityId`, danger, anomaly and local generator package. This level answers "what kind of floor is this": Ministry can start with liquidator/administrative control, Kvartiry and Living with citizen habitation, wild/88 floors with wild control, meat lower floors with monsters/cult/samosbor pressure, NII floors with scientists, and so on. The floor theme owns initial geometry, population profile, target territory shares, monster pressure, object profiles, special NPCs, leaders, quest content and authored rules. It must not hardcode every room decision in AI. Once the floor exists, current per-cell territory and rooms are the live truth; samosbor, capture events, quests and floor memory may change them.
 
    `src/data/floor_theme_profiles.ts` is the read-only composition layer for these broad facts: it assembles route key, base floor, danger, NPC allowance, territory shares, population profile id, object tags, monster pressure tags and special-content tags from existing registries without owning generation or runtime decisions.
 
 Generation and runtime order follows that hierarchy:
 
 - Generate route-floor geometry, rooms, doors, fixtures, POIs and authored anchors first.
-- Apply floor theme data: population profile, target territory shares, majority/anomaly pressure and authored special content.
+- Apply the floor's own data: population profile, target territory shares, majority/anomaly pressure and authored special content.
 - Initialize/synchronize `world.factionControl` and `world.zones`; room ownership is derived from cells.
 - Materialize A-Life/NPC templates into the active floor using room affordances plus territory preference.
 - Runtime AI reads room function and territory each decision cycle; faction capture mutates cells on a bounded cadence; render and HUD only display the result.
@@ -89,8 +89,43 @@ Generation and runtime order follows that hierarchy:
 Do not collapse the hierarchy:
 
 - Do not treat `RoomType` as ownership.
-- Do not let floor theme bypass live territory for ordinary NPC routine behavior.
+- Do not let the floor package bypass live territory for ordinary NPC routine behavior.
 - Do not put floor-specific faction or leader logic in generic AI, `main.ts`, `core/world.ts` or render.
+
+### Этажи не группируются (закон владельца, 2026-08-25)
+
+51 маршрутный этаж — 51 отдельный субмодуль. Общей «темы», «полосы» или «биома»,
+объединяющих этажи в группы, в проекте НЕТ: поле `themeTags` вырезано целиком
+(303 упоминания → 0). Оно объединяло все этажи в шесть корзин, каждая названная
+именем одного своего члена, — и потому читалось как имя этажа и тихо расширяло
+правила на четырнадцать соседей.
+
+Правило замены: таблицы (монстры, предметы, клетки, текстуры, меши, обстановка,
+уклады населения, варианты самосбора) — общий словарь; **что взять, каждый этаж
+называет САМ**, и его выбор не задевает соседей. Где выбор можно не объявлять —
+его и не объявляют: спрашивается мир, а не ярлык.
+
+- Свойство места — у комнаты под игроком (`world.roomAt`), а не у этажа:
+  бумагу принимают за `RoomType.OFFICE` или в проверочном коридоре, продают в
+  `SHOP`/`MARKET`. Шлюз документов и шкаф Л-47 спрашивают свой объект, а не
+  координату.
+- Свойство воздуха и материала — у мира: `world.baseFogDensity`,
+  `world.hasMeatWalls`; объявляет собственный генератор этажа.
+- Обстановка и уклад населения — явные карты «этаж → слой»
+  (`DESIGN_FLOOR_OBJECT_LAYER`, `PROCEDURAL_GEOMETRY_OBJECT_LAYER`,
+  `DESIGN_FLOOR_POPULATION_CLASS`). Слои названы по существу
+  (`bureaucratic`, `residential`, `communal`, `industrial`, `meat`, `protocol`),
+  а не именем этажа-члена.
+- Родной пул монстров — `monsterBiasKinds`/`monsterTags` самого этажа плюс
+  авторский якорь вида; разворот якоря через корзину снят.
+- Самосбор от этажа не зависит вообще: варианты и их последствия глобальны,
+  различия принадлежат варианту.
+- Сюжетные развилки целятся в конкретный этаж по `designFloorId` — но проверяй
+  ФАКТ, а не имя: Герольд стоит на `podad`, а не на `hell`, и «очевидное»
+  сужение до `hell` закрывает главный квест насмерть.
+
+Механический замок на импорты между пакетами этажей — `npm run check:invariants`
+(«связи между этажами», допускается ровно 0).
 - Do not create off-floor room/need simulation; off-floor changes are compact A-Life/faction/event facts.
 - Do not make rooms usable by unrelated factions as routine life space unless the mechanic explicitly describes trespass, occupation, trade, invasion, shelter panic or another visible exception.
 

@@ -133,7 +133,7 @@ function spawnAmbientNpcTemplates(generation: Omit<FloorGeneration, 'spawnX' | '
   return nextId;
 }
 
-export type DesignFloorPopulationRoute = { id: string; z: number; danger?: number; themeTags?: readonly string[] };
+export type DesignFloorPopulationRoute = { id: string; z: number; danger?: number };
 
 /**
  * Central NPCs-only ambient populate for design floors. Called once per floor
@@ -228,19 +228,56 @@ function spawnDesignMonsterPacks(generation: Omit<FloorGeneration, 'spawnX' | 's
   if (budget <= 0) return firstId;
 
   const seed = hashSeed(`design-pop:monster:${route.id}:${route.z}`, route.z);
-  const floorTags = [
-    route.id,
-    ...profile.monsterTags,
-    (route.themeTags ?? []).includes('ministry') ? 'documents' : '',
-    (route.themeTags ?? []).includes('maintenance') ? 'industrial' : '',
-  ].filter(Boolean);
+  // Теги этажа — его собственные. Раньше сюда дописывались `documents` и
+  // `industrial` по членству в корзине, то есть за пятнадцать и тринадцать
+  // этажей отвечал один ярлык; кому эти теги нужны, тот объявляет их сам в
+  // `monsterTags` (так их и объявляют верхнее бюро и тёмная пересадка).
+  const floorTags = [route.id, ...profile.monsterTags].filter(Boolean);
   const routePressure = Math.min(4, Math.floor(Math.abs(route.z) / 12));
   const samosborCount = Math.max(1, route.danger ?? 1);
 
   // One center per pack; ceil(budget/2)+8 gives headroom for small packs without exceeding budget.
   const centerCount = Math.min(budget, Math.ceil(budget / 2) + 8);
-  const centers = samplePlacementFieldCells(world, centerCount, profile.monsterPlacement, seed);
   const used = new Set<number>();
+  let nextId = firstId;
+
+  /* Заполнение этажа не должно зависеть от того, КОГО этаж выбрал.
+   *
+   * Центры пачек берутся один раз, а бюджет тратится размером пачки, который у
+   * каждого вида свой. Этаж, выбравший мелкопачечные виды, исчерпывал центры
+   * раньше бюджета и недобирал население — замерено на тёмной пересадке: 2483
+   * из 3276. Раньше это маскировала общая корзина тем, подсовывавшая виды с
+   * крупными пачками из соседних этажей. Теперь этаж волен выбирать что угодно,
+   * а недостачу добирают повторные проходы со свежими центрами. Проходы
+   * ограничены: занятые клетки копятся в `used`, и пустой проход обрывает цикл.
+   */
+  for (let pass = 0; pass < MONSTER_FILL_PASSES && budget > 0; pass++) {
+    const centers = samplePlacementFieldCells(world, centerCount, profile.monsterPlacement, seed + pass * 7919);
+    const budgetBefore = budget;
+    nextId = placeMonsterPacks(generation, world, route, profile, centers, used, budget, nextId, seed, samosborCount, floorTags, routePressure, (spent) => { budget -= spent; });
+    if (budget === budgetBefore) break;
+  }
+  return nextId;
+}
+
+const MONSTER_FILL_PASSES = 4;
+
+function placeMonsterPacks(
+  generation: Omit<FloorGeneration, 'spawnX' | 'spawnY'>,
+  world: World,
+  route: DesignFloorPopulationRoute,
+  profile: ReturnType<typeof designFloorPopulationProfile>,
+  centers: readonly number[],
+  used: Set<number>,
+  budgetIn: number,
+  firstId: number,
+  seed: number,
+  samosborCount: number,
+  floorTags: readonly string[],
+  routePressure: number,
+  spend: (count: number) => void,
+): number {
+  let budget = budgetIn;
   let nextId = firstId;
 
   for (let p = 0; p < centers.length && budget > 0; p++) {
@@ -248,7 +285,6 @@ function spawnDesignMonsterPacks(generation: Omit<FloorGeneration, 'spawnX' | 's
     let roll = 0;
     const leadKind = chooseFloorMonsterKind({
       z: route.z,
-      floorThemeTags: route.themeTags,
       roomType: roomTypeAt(world, center),
       floorTags,
       samosborCount,
@@ -267,6 +303,7 @@ function spawnDesignMonsterPacks(generation: Omit<FloorGeneration, 'spawnX' | 's
     for (const cell of cells) {
       generation.entities.push(makeMonster(nextId++, cell, leadKind, route, profile.monsterLevel, world, seed, homeRoomId, centerX, centerY));
       budget--;
+      spend(1);
     }
   }
   return nextId;

@@ -238,7 +238,8 @@ function drawVoidReturnPortalHint(
   state: GameState,
   world: World,
 ): void {
-  if (currentFloorRunEntry(state)!.themeTags.includes('void') || state.samosborActive) return;
+  // Подсказка о портале возврата не нужна тому, кто уже в Пустоте.
+  if (currentFloorRunEntry(state)!.designFloorId === 'void' || state.samosborActive) return;
   const portal = voidReturnPortalHudState(state);
   if (!portal || world.floorTex[portal.cell!] !== Tex.PORTAL) return;
 

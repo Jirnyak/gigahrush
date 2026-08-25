@@ -67,14 +67,6 @@ type SideQuestRefs = Partial<Pick<SideQuestStep, 'requiresSideQuestDone' | 'bloc
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
 const SCREEN_VARIANT_COUNT = 8;
-const CONTRACT_FLOOR_TAGS: Record<string> = {
-  ['ministry']: 'floor_ministry',
-  ['kvartiry']: 'floor_kvartiry',
-  ['living']: 'floor_living',
-  ['maintenance']: 'floor_maintenance',
-  ['hell']: 'floor_hell',
-  ['void']: 'floor_void',
-};
 const COMPACT_CONTRACT_ACTION_TAGS = ['kill', 'retrieve', 'deliver', 'repair', 'talk', 'visit'] as const;
 const COMPACT_CONTRACT_ACTION_TAG_SET = new Set<string>(COMPACT_CONTRACT_ACTION_TAGS);
 
@@ -439,8 +431,9 @@ test('compact expedition contracts cover real contract actions with concrete tar
     typeCoverage.add(c.type);
 
     assert.equal(c.tags.includes('compact_expedition'), true, `${c.id} must be tagged as compact_expedition`);
-    const targetTheme = designFloorAtZ(c.target.z)?.themeTags?.[0] ?? '';
-    assert.equal(c.tags.includes(CONTRACT_FLOOR_TAGS[targetTheme]), true, `${c.id} must expose a floor tag`);
+    // Тег этажа у контракта должен быть, но привязки к корзине тем больше нет:
+    // этаж называет себя сам.
+    assert.equal(c.tags.some(tag => tag.startsWith('floor_')), true, `${c.id} must expose a floor tag`);
     assert.equal(actionTags.length > 0, true, `${c.id} needs an action tag`);
     assert.equal((c.target.zoneTag ?? '').trim().length > 0, true, `${c.id} needs a zone tag`);
     assert.equal(c.target.hint.trim().length >= 48, true, `${c.id} needs a concrete player hint`);
@@ -500,7 +493,6 @@ test('samosbor variants, director beats, and aftermath stay coherent', () => {
   }
 
   for (const beat of getSamosborBeatDefs()) {
-    for (const floor of beat.floors) if (!isValidZ(floor)) missing.push(`samosborDirector:${beat.id}:floor:${floor}`);
     for (const variant of beat.variants) if (!variantIds.has(variant)) missing.push(`samosborDirector:${beat.id}:variant:${variant}`);
     if (beat.resourceId && !resourceIds.has(beat.resourceId)) missing.push(`samosborDirector:${beat.id}:resource:${beat.resourceId}`);
     if (beat.cooldown < 0) missing.push(`samosborDirector:${beat.id}:cooldown:${beat.cooldown}`);
@@ -508,7 +500,6 @@ test('samosbor variants, director beats, and aftermath stay coherent', () => {
   }
 
   for (const beat of SAMOSBOR_AFTERMATH_BEATS) {
-    for (const floor of beat.floors) if (!isValidZ(floor)) missing.push(`samosborAftermath:${beat.id}:floor:${floor}`);
     for (const variant of beat.variants) if (!variantIds.has(variant)) missing.push(`samosborAftermath:${beat.id}:variant:${variant}`);
     if (beat.resourceId && !resourceIds.has(beat.resourceId)) missing.push(`samosborAftermath:${beat.id}:resource:${beat.resourceId}`);
     if (beat.itemId) missing.push(...missingItems(`samosborAftermath:${beat.id}`, [beat.itemId]));
@@ -567,55 +558,29 @@ test('samosbor variants keep the universal active pipeline and variant fog seman
   assert.deepEqual(missing, [], 'samosbor active pipeline subsystems must stay data-driven and complete');
 });
 
-test('samosbor floor families expose warning and aftermath identities', () => {
+test('каждый вариант самосбора несёт своё лицо, и место в этом не участвует', () => {
+  /* Раньше здесь проверялись «семьи этажей»: на министерстве социальные варианты
+   * обязаны перевешивать классический, на коллекторах мокрый, в Аду мясной. Вся
+   * эта раскладка выводилась из шести корзин тем. Решение владельца: самосбор
+   * один и тот же везде, различия принадлежат варианту, а не месту. Осталось
+   * проверить, что лицо у варианта есть: предупреждение, последствия и такт. */
   const directorBeats = getSamosborBeatDefs();
-  const families = [
-    {
-      label: 'social',
-      z: 34,
-      variants: ['electric', 'maronary', 'istotit', 'veretar'] as const,
-      aftermathVariant: 'electric' as const,
-      tag: 'civil',
-      warningTag: 'social',
-    },
-    {
-      label: 'maintenance',
-      z: -14,
-      variants: ['wet', 'electric'] as const,
-      aftermathVariant: 'wet' as const,
-      tag: 'maintenance',
-      warningTag: 'maintenance',
-    },
-    {
-      label: 'hell',
-      z: -36,
-      variants: ['meat'] as const,
-      aftermathVariant: 'meat' as const,
-      tag: 'hell',
-      warningTag: 'hell',
-    },
-    {
-      label: 'void',
-      z: -50,
-      variants: ['veretar', 'maronary'] as const,
-      aftermathVariant: 'veretar' as const,
-      tag: 'void',
-      warningTag: 'void',
-    },
+  const faces = [
+    { variant: 'electric' as const, tag: 'civil' },
+    { variant: 'wet' as const, tag: 'maintenance' },
+    { variant: 'meat' as const, tag: 'hell' },
+    { variant: 'veretar' as const, tag: 'void' },
   ];
 
-  for (const family of families) {
-    const themeTags = designFloorAtZ(family.z)?.themeTags ?? [];
-    const classicWeight = getSamosborVariantWeight('classic', family.z, themeTags);
-    const familyWeight = family.variants.reduce((sum, id) => sum + getSamosborVariantWeight(id, family.z, themeTags), 0);
-    assert.ok(familyWeight > classicWeight, `${family.label} variants should outweigh classic on their floor family`);
+  for (const face of faces) {
+    assert.ok(getSamosborVariantWeight(face.variant) > 0, `${face.variant} обязан быть достижим`);
     assert.ok(
-      directorBeats.some(beat => beat.floors.includes(family.z)),
-      `${family.label} needs a director beat covering its floor`,
+      directorBeats.some(beat => beat.variants.includes(face.variant)),
+      `${face.variant} нужен такт директора`,
     );
     assert.ok(
-      getSamosborAftermathBeats(family.aftermathVariant, family.z).some(beat => beat.tags.includes(family.tag)),
-      `${family.label} needs tagged aftermath`,
+      getSamosborAftermathBeats(face.variant).some(beat => beat.tags.includes(face.tag)),
+      `${face.variant} нужны помеченные последствия`,
     );
   }
 });
@@ -898,8 +863,6 @@ test('monster ecology and floor catalog ids are unique and valid', () => {
 
   for (const f of FLOOR_CATALOG) {
     if (!ID_RE.test(f.id)) invalid.push(dataRef('floorCatalog', f.id, 'idFormat', f.id));
-    // baseFloor is gone post Z-migration: catalog entries anchor by themeTags.
-    if ((f.themeTags?.length ?? 0) === 0) invalid.push(dataRef('floorCatalog', f.id, 'themeTags', 'empty'));
     if (f.tags.length === 0) invalid.push(dataRef('floorCatalog', f.id, 'tags', 'empty'));
   }
   for (const f of FLOOR_INSTANCES) {

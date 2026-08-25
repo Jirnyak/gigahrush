@@ -345,7 +345,7 @@ export function tryUseParitelSteamBridge(
 ): boolean {
   const room = valveRoomAtLook(world, lookX, lookY);
   if (!room) return false;
-  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance')) return false;
+  if (currentFloorRunEntry(state)!.designFloorId !== 'maintenance') return false;
   if (valveCooldownState !== state || nextValveUseAt > state.time + 10) {
     valveCooldownState = state;
     nextValveUseAt = 0;
@@ -382,7 +382,7 @@ export function updateParitelSteamBridge(
   state: GameState,
   dt: number,
 ): void {
-  if (dt <= 0 || !currentFloorRunEntry(state)!.themeTags.includes('maintenance')) return;
+  if (dt <= 0 || currentFloorRunEntry(state)!.designFloorId !== 'maintenance') return;
   if (steamTickState !== state || nextSteamTickAt > state.time + 10) {
     steamTickState = state;
     nextSteamTickAt = 0;

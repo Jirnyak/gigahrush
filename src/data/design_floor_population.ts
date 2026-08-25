@@ -2095,8 +2095,74 @@ function resolveActorTarget(value: number | 'active_actor_cap' | undefined, fall
   return activeActorCountAtDefaultSoftLimit(value ?? fallback);
 }
 
+/* ── Какой уклад населения берёт этаж ─────────────────────────────
+ *
+ * Составы фракций, занятий и множители — общий словарь; что взять, каждый этаж
+ * называет САМ. Раньше уклад читался как `route.themeTags[0]`, то есть шесть
+ * корзин раздавали население пятидесяти одному этажу, а сама корзина носила имя
+ * одного из своих членов. Значения ниже выведены из прежнего членства, поэтому
+ * население не сдвинулось; теперь любой этаж меняет свой уклад в одиночку.
+ */
+const DESIGN_FLOOR_POPULATION_CLASS: Readonly<Record<string, string>> = {
+  roof: 'ministry',
+  outer_district: 'living',
+  chthonic_attic: 'ministry',
+  radon_exchange: 'ministry',
+  antenna_court: 'ministry',
+  spetspriemnik: 'ministry',
+  pioneer_camp: 'living',
+  cayley_byuro: 'ministry',
+  upper_bureau: 'ministry',
+  number_registry: 'ministry',
+  istinniy_labirint: 'ministry',
+  bank_floor: 'ministry',
+  critical_leak_archive: 'ministry',
+  raionsovet_archive: 'ministry',
+  markov_stairwell: 'ministry',
+  registry_morgue: 'ministry',
+  bolnichny_korpus: 'kvartiry',
+  slime_nii: 'kvartiry',
+  turing_nursery: 'kvartiry',
+  manhattan_crossroads: 'kvartiry',
+  voronoi_quarantine: 'kvartiry',
+  communal_ring: 'kvartiry',
+  moebius_podezd: 'kvartiry',
+  oranzhereya_betona: 'living',
+  floor_69: 'maintenance',
+  obschezhitie_smeny: 'living',
+  penrose_laundry: 'living',
+  black_market_88: 'living',
+  perevalka: 'maintenance',
+  production_belt: 'maintenance',
+  service_floor: 'maintenance',
+  hyperbolic_switchyard: 'maintenance',
+  silicon_net_well: 'maintenance',
+  shahta_atrium: 'maintenance',
+  harmonic_bathhouse: 'maintenance',
+  hilbert_depot: 'maintenance',
+  dark_metro: 'maintenance',
+  attractor_dvor: 'maintenance',
+  underhell: 'hell',
+  podad: 'hell',
+  spectral_chasovnya: 'hell',
+  stenka: 'void',
+  liquidatorbase: 'maintenance',
+  darkness: 'void',
+  horrorfloor: 'void',
+  living: 'living',
+  kvartiry: 'kvartiry',
+  ministry: 'ministry',
+  maintenance: 'maintenance',
+  hell: 'hell',
+  void: 'void',
+};
+
+function designPopulationClass(route: DesignFloorRouteDef): string {
+  return DESIGN_FLOOR_POPULATION_CLASS[route.id] ?? 'ministry';
+}
+
 function designNpcMult(route: DesignFloorRouteDef): number {
-  const cls = route.themeTags?.[0] ?? 'ministry';
+  const cls = designPopulationClass(route);
   return cls === 'kvartiry' ? 1.22
     : cls === 'living' ? 1.14
       : cls === 'ministry' ? 0.86
@@ -2106,7 +2172,7 @@ function designNpcMult(route: DesignFloorRouteDef): number {
 }
 
 function designMonsterMult(route: DesignFloorRouteDef): number {
-  const cls = route.themeTags?.[0] ?? 'ministry';
+  const cls = designPopulationClass(route);
   return cls === 'hell' ? 1.28
     : cls === 'void' ? 1.36
       : cls === 'maintenance' ? 1.12
@@ -2141,7 +2207,7 @@ function baseMonsterTarget(route: DesignFloorRouteDef): number {
 }
 
 function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesignValue<Faction>[] {
-  const cls = route.themeTags?.[0] ?? 'ministry';
+  const cls = designPopulationClass(route);
   if (cls === 'maintenance') return INDUSTRIAL_MIX;
   if (cls === 'hell') return VETERAN_MIX;
   if (cls === 'ministry') return ADMIN_MIX;
@@ -2149,7 +2215,7 @@ function defaultNpcFactions(route: DesignFloorRouteDef): readonly WeightedDesign
 }
 
 function defaultNpcOccupations(route: DesignFloorRouteDef): readonly WeightedDesignValue<Occupation>[] {
-  const cls = route.themeTags?.[0] ?? 'ministry';
+  const cls = designPopulationClass(route);
   if (cls === 'maintenance') return INDUSTRIAL_OCCUPATIONS;
   if (cls === 'hell') return VETERAN_OCCUPATIONS;
   if (cls === 'ministry') return ADMIN_OCCUPATIONS;
@@ -2157,7 +2223,7 @@ function defaultNpcOccupations(route: DesignFloorRouteDef): readonly WeightedDes
 }
 
 function defaultNpcNoun(route: DesignFloorRouteDef): string {
-  const cls = route.themeTags?.[0] ?? 'ministry';
+  const cls = designPopulationClass(route);
   if (cls === 'maintenance') return 'работник';
   if (cls === 'hell') return 'паломник';
   if (cls === 'ministry') return 'служащий';
@@ -2165,7 +2231,7 @@ function defaultNpcNoun(route: DesignFloorRouteDef): string {
 }
 
 function defaultPlacementKind(route: DesignFloorRouteDef): PlacementKind {
-  const cls = route.themeTags?.[0] ?? 'ministry';
+  const cls = designPopulationClass(route);
   if (cls === 'maintenance') return 'industrial';
   if (cls === 'hell') return 'hell';
   if (cls === 'void') return 'void';

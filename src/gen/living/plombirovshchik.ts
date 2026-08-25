@@ -443,7 +443,7 @@ function handleKillEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handleShotEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'ammo_consumed' || !currentFloorRunEntry(state)!.themeTags.includes('living')) return;
+  if (event.type !== 'ammo_consumed' || currentFloorRunEntry(state)!.designFloorId !== 'living') return;
   const ctx = nearestActiveContextToPlayer();
   if (!ctx) return;
   ctx.shotHandled = true;
@@ -457,7 +457,7 @@ function handleShotEvent(state: GameState, event: WorldEvent): void {
 }
 
 function handlePlombirovshchikEvents(state: GameState, event: WorldEvent): void {
-  if (!currentFloorRunEntry(state)!.themeTags.includes('living')) return;
+  if (currentFloorRunEntry(state)!.designFloorId !== 'living') return;
   handleSealContainerEvent(state, event);
   handleKillEvent(state, event);
   handleShotEvent(state, event);

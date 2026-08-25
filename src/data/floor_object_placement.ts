@@ -211,11 +211,11 @@ function publicFurnitureRules(prefix: string, min: number, max: number): readonl
 }
 
 function routeTags(route: DesignFloorRouteDef): readonly string[] {
-  return [route.id, `z_${route.z}`, route.themeTags?.[0] ?? 'route'];
+  return [route.id, `z_${route.z}`, DESIGN_FLOOR_OBJECT_LAYER[route.id] ?? 'route'];
 }
 
 const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacementProfile>> = {
-  ministry: {
+  bureaucratic: {
     tags: ['base_floor', 'ministry', 'bureaucratic'],
     density: { features: 46, brokenFixtures: 6, wallDecor: 34, screens: 6, maxPerRoom: 2 },
     roomTextureRules: [
@@ -236,7 +236,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
     ],
     brokenFixtures: [sanitaryBrokenFixtures('ministry_sanitary_decay', 0.03, 6)],
   },
-  kvartiry: {
+  residential: {
     tags: ['base_floor', 'kvartiry', 'residential'],
     density: { features: 52, brokenFixtures: 14, wallDecor: 28, screens: 4, maxPerRoom: 2 },
     roomTextureRules: [
@@ -257,7 +257,7 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
     ],
     brokenFixtures: [sanitaryBrokenFixtures('kvartiry_sanitary_decay', 0.055, 14)],
   },
-  living: {
+  communal: {
     tags: ['base_floor', 'living', 'residential', 'public'],
     density: { features: 42, brokenFixtures: 8, wallDecor: 24, screens: 6, maxPerRoom: 2 },
     roomTextureRules: [
@@ -272,8 +272,10 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
       wallDecorRule('living_public_screens', 'screen', Tex.SCREEN_BASE, 1, 6, 12, { [RoomType.COMMON]: 1.0, [RoomType.MEDICAL]: 0.8, [RoomType.PRODUCTION]: 0.7 }, ['living', 'screen', 'warning'], { variantCount: 8 }),
     ],
   },
-  maintenance: {
-    tags: ['base_floor', 'maintenance', 'collectors'],
+  industrial: {
+    // `industrial` и `water` раньше дописывались визуальным слоям по корзине темы
+    // и доставались заодно тринадцати этажам. Коллекторы объявляют их за себя.
+    tags: ['base_floor', 'maintenance', 'collectors', 'industrial', 'water'],
     density: { features: 54, brokenFixtures: 5, wallDecor: 22, screens: 10, maxPerRoom: 2 },
     roomTextureRules: [
       roomTextureRule('maintenance_pipe_wet_bias', 7, 24, 5, {
@@ -293,8 +295,10 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
     ],
     brokenFixtures: [sanitaryBrokenFixtures('collectors_sanitary_decay', 0.045, 5)],
   },
-  hell: {
-    tags: ['base_floor', 'hell', 'meat_low'],
+  meat: {
+    // `meat` раньше дописывался визуальным слоям по корзине темы и доставался
+    // заодно всем четырём этажам мясного низа. Ад объявляет его за себя.
+    tags: ['base_floor', 'hell', 'meat_low', 'meat'],
     density: { features: 28, brokenFixtures: 2, wallDecor: 14, screens: 2, maxPerRoom: 1 },
     roomTextureRules: [
       roomTextureRule('hell_meaningful_gut_rooms', 2, 10, 9, {
@@ -312,8 +316,10 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
       wallDecorRule('hell_ritual_posters', 'poster', Tex.POSTER_BASE, 2, 10, 11, { [RoomType.HQ]: 1.0, [RoomType.PRODUCTION]: 0.8, [RoomType.MEDICAL]: 0.55 }, ['hell', 'ritual', 'poster'], { variantCount: 16, variantOffset: 32 }),
     ],
   },
-  void: {
-    tags: ['base_floor', 'void', 'protocol'],
+  protocol: {
+    // `proof` раньше дописывался визуальным слоям по корзине темы. Пустота
+    // объявляет его за себя — стенка, тьма и хоррор-этаж решают отдельно.
+    tags: ['base_floor', 'void', 'protocol', 'proof'],
     density: { features: 16, brokenFixtures: 0, wallDecor: 12, screens: 6, maxPerRoom: 1 },
     roomTextureRules: [
       roomTextureRule('void_dry_protocol_rooms', 3, 14, 8, {
@@ -331,6 +337,83 @@ const BASE_FLOOR_OBJECT_PROFILE_LAYERS: Record<string, Partial<FloorObjectPlacem
       wallDecorRule('void_proof_signs', 'sign', Tex.POSTER_BASE, 1, 6, 12, { [RoomType.OFFICE]: 1.0, [RoomType.HQ]: 0.75, [RoomType.COMMON]: 0.4 }, ['void', 'proof', 'sign'], { variantCount: 12, variantOffset: 48 }),
     ],
   },
+};
+
+/* ── Какой слой обстановки берёт этаж ─────────────────────────────
+ *
+ * Слои — общий словарь обстановки (бюрократия, жильё, коммуна, промзона, мясо,
+ * протокол). Что взять, каждый этаж и каждая геометрия называют САМИ. Раньше
+ * слой выбирался выражением `BASE_FLOOR_OBJECT_PROFILE_LAYERS[route.themeTags[0]]`,
+ * то есть шесть корзин обставляли пятьдесят один этаж, а сами слои назывались
+ * именами своих же членов — обстановку чёрного рынка выбирал ярлык `living`.
+ * Значения ниже выведены из прежнего членства, поэтому обстановка не сдвинулась;
+ * теперь любой этаж меняет свой слой, не задевая соседей.
+ */
+const DESIGN_FLOOR_OBJECT_LAYER: Readonly<Record<string, string>> = {
+  roof: 'bureaucratic',
+  outer_district: 'communal',
+  chthonic_attic: 'bureaucratic',
+  radon_exchange: 'bureaucratic',
+  antenna_court: 'bureaucratic',
+  spetspriemnik: 'bureaucratic',
+  pioneer_camp: 'communal',
+  cayley_byuro: 'bureaucratic',
+  upper_bureau: 'bureaucratic',
+  number_registry: 'bureaucratic',
+  istinniy_labirint: 'bureaucratic',
+  bank_floor: 'bureaucratic',
+  critical_leak_archive: 'bureaucratic',
+  raionsovet_archive: 'bureaucratic',
+  markov_stairwell: 'bureaucratic',
+  registry_morgue: 'bureaucratic',
+  bolnichny_korpus: 'residential',
+  slime_nii: 'residential',
+  turing_nursery: 'residential',
+  manhattan_crossroads: 'residential',
+  voronoi_quarantine: 'residential',
+  communal_ring: 'residential',
+  moebius_podezd: 'residential',
+  oranzhereya_betona: 'communal',
+  floor_69: 'industrial',
+  obschezhitie_smeny: 'communal',
+  penrose_laundry: 'communal',
+  black_market_88: 'communal',
+  perevalka: 'industrial',
+  production_belt: 'industrial',
+  service_floor: 'industrial',
+  hyperbolic_switchyard: 'industrial',
+  silicon_net_well: 'industrial',
+  shahta_atrium: 'industrial',
+  harmonic_bathhouse: 'industrial',
+  hilbert_depot: 'industrial',
+  dark_metro: 'industrial',
+  attractor_dvor: 'industrial',
+  underhell: 'meat',
+  podad: 'meat',
+  spectral_chasovnya: 'meat',
+  stenka: 'protocol',
+  liquidatorbase: 'industrial',
+  darkness: 'protocol',
+  horrorfloor: 'protocol',
+  living: 'communal',
+  kvartiry: 'residential',
+  ministry: 'bureaucratic',
+  maintenance: 'industrial',
+  hell: 'meat',
+  void: 'protocol',
+};
+
+const PROCEDURAL_GEOMETRY_OBJECT_LAYER: Readonly<Record<string, string>> = {
+  living_blocks: 'communal',
+  apartment_pressure: 'residential',
+  communal_knots: 'residential',
+  attic_weatherworks: 'bureaucratic',
+  archive_warrens: 'bureaucratic',
+  collectors: 'industrial',
+  workshops: 'industrial',
+  service_spines: 'industrial',
+  sump_causeways: 'industrial',
+  admin_pockets: 'bureaucratic',
 };
 
 const DESIGN_OBJECT_PROFILE_OVERRIDES: Partial<Record<string, Partial<FloorObjectPlacementProfile>>> = {
@@ -762,12 +845,13 @@ export function floorObjectProfileDuplicateRuleIds(profile: FloorObjectPlacement
 /** Профиль объектов по биому напрямую. Генератор story-этажей снят вместе с
  *  веткой в `generateFloor`, но таблица слоёв по биому осталась общей, и тест
  *  содержимого профиля читает её отсюда. */
-export function floorObjectProfileForStoryFloor(biome: string): FloorObjectPlacementProfile | undefined {
+/** Слой берётся по той же карте, что и в игре: имя этажа — не имя слоя. */
+export function floorObjectProfileForStoryFloor(floorId: string): FloorObjectPlacementProfile | undefined {
   return composeProfile(
-    `story_${biome}_objects`,
-    ['design_floor', biome],
-    craftStationProfileForStoryFloor(biome),
-    [BASE_FLOOR_OBJECT_PROFILE_LAYERS[biome]],
+    `story_${floorId}_objects`,
+    ['design_floor', floorId],
+    craftStationProfileForStoryFloor(floorId),
+    [BASE_FLOOR_OBJECT_PROFILE_LAYERS[DESIGN_FLOOR_OBJECT_LAYER[floorId] ?? floorId]],
   );
 }
 
@@ -777,7 +861,7 @@ export function floorObjectProfileForDesignFloor(route: DesignFloorRouteDef): Fl
     ['design_floor', ...routeTags(route)],
     craftStationProfileForDesignFloor(route),
     [
-      BASE_FLOOR_OBJECT_PROFILE_LAYERS[route.themeTags?.[0] ?? ''],
+      BASE_FLOOR_OBJECT_PROFILE_LAYERS[DESIGN_FLOOR_OBJECT_LAYER[route.id] ?? ''],
       DESIGN_OBJECT_PROFILE_OVERRIDES[route.id],
     ],
   );
@@ -789,7 +873,7 @@ export function floorObjectProfileForProceduralFloor(spec: ProceduralFloorSpec):
     ['procedural_floor', spec.geometryId, spec.majorityId, spec.anomalyId],
     craftStationProfileForProceduralFloor(spec),
     [
-      BASE_FLOOR_OBJECT_PROFILE_LAYERS[spec.themeTags?.[0] ?? ''],
+      BASE_FLOOR_OBJECT_PROFILE_LAYERS[PROCEDURAL_GEOMETRY_OBJECT_LAYER[spec.geometryId] ?? ''],
       PROCEDURAL_GEOMETRY_OBJECT_PROFILE_OVERRIDES[spec.geometryId],
       PROCEDURAL_MAJORITY_OBJECT_PROFILE_OVERRIDES[spec.majorityId],
       PROCEDURAL_ANOMALY_OBJECT_PROFILE_OVERRIDES[spec.anomalyId],

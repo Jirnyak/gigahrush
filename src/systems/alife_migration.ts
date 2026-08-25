@@ -43,7 +43,7 @@ import {
 import { ensureEntityIndex } from './entity_index';
 import { canSpawnEntityType } from './entity_limits';
 import { publishEvent } from './events';
-import { cleanFloorKey } from './floor_keys';
+import { cleanFloorKey, floorKeyForDesign } from './floor_keys';
 import { currentFloorRunAllowsNpcs, ensureFloorRunState } from './procedural_floors';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
 import { tryAssignPathToCell } from './ai/pathfinding';
@@ -143,7 +143,6 @@ export interface AlifeMobilitySaveState {
 
 interface RouteInfo {
   floorKey: string;
-  themeTags: readonly string[];
   z?: number;
   danger: 1 | 2 | 3 | 4 | 5;
   npcAllowed: boolean;
@@ -199,7 +198,6 @@ function designRouteInfo(): RouteInfo[] {
     const theme = themeForDesignRoute(route);
     return {
       floorKey: theme.floorKey,
-      themeTags: route.themeTags,
       z: route.z,
       danger: route.danger,
       npcAllowed: theme.npcAllowed,
@@ -215,7 +213,6 @@ function proceduralRouteInfo(specs: Record<string, ProceduralFloorSpec>): RouteI
     const anomaly = anomalyById(spec.anomalyId);
     return {
       floorKey: theme.floorKey,
-      themeTags: spec.themeTags,
       z: spec.z,
       danger: spec.danger,
       npcAllowed: theme.npcAllowed,
@@ -442,23 +439,13 @@ function selectorMatches(route: RouteInfo, selector: AlifeDestinationSelector): 
   if (selector.allowsNpcOnly !== false && !route.npcAllowed) return false;
   const absZ = Math.abs(route.z ?? 0);
   if (selector.floorKeys?.includes(route.floorKey)) return true;
-  // @ts-ignore
-  if (selector.themeTags?.some(t => route.themeTags?.includes(t))) {
-    if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
-    // @ts-ignore
-    if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
-    return true;
-  }
   if (selector.routeTags?.some(tag => route.tags.includes(tag))) {
     if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
-    // @ts-ignore
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
     return true;
   }
-  // @ts-ignore
-  if (!selector.floorKeys?.length && !selector.themeTags?.length && !selector.routeTags?.length) {
+  if (!selector.floorKeys?.length && !selector.routeTags?.length) {
     if (selector.minAbsZ !== undefined && absZ < selector.minAbsZ) return false;
-    // @ts-ignore
     if (selector.maxAbsZ !== undefined && absZ > selector.maxAbsZ) return false;
     return true;
   }
@@ -479,7 +466,9 @@ function resolveDestination(
   const source = resolveRoute(context, record.floorKey);
   const candidates = context.filter(route => {
     if (route.floorKey === record.floorKey) return false;
-    if (route.themeTags.includes('void')) return false;
+    // В Пустоту обычные жители не переезжают. Именно в Пустоту, а не во все
+    // четыре этажа бывшей корзины `void`.
+    if (route.floorKey === floorKeyForDesign('void')) return false;
     if (!selectorMatches(route, intent.destination)) return false;
     if (intent.maxRisk !== undefined) {
       const sourceRisk = source?.danger ?? 3;

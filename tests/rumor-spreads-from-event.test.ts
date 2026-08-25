@@ -22,7 +22,6 @@ function makeInstance(def = FLOOR_INSTANCES[0]): ActiveFloorInstance {
     id: def.id,
     displayNumber: def.displayNumber,
     title: def.title,
-    themeTags: [],
     seed: 1,
     seedTag: 't',
     risk: 1,

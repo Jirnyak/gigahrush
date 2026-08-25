@@ -1,4 +1,3 @@
-import { currentFloorRunEntry } from './procedural_floors';
 /* ── Inventory system: items, pickup, use ─────────────────────── */
 
 import { calculateReloadTime } from './combat';
@@ -6,13 +5,14 @@ import { ENTITY_MASK_ITEM_DROP, ensureEntityIndex } from './entity_index';
 import {
   type Entity, type InventoryHolder, type GameState, type Item, type ItemDef, type Msg,
   type WorldEventPrivacy, type WorldEventSeverity, ItemType,
-  EntityType, Faction, msg,
+  EntityType, Faction, RoomType, msg,
 } from '../core/types';
 import { ITEMS, WEAPON_ROLE_LABELS, WEAPON_ROLE_TIERS, WEAPON_STATS, type WeaponStats } from '../data/catalog';
 import { GOVNYAK_COURIER_CONTRACT_IDS, GOVNYAK_COURIER_PACKAGE_ITEM } from '../data/contracts';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import {
   DOCUMENT_ACCESS_ACTIONS,
+  DOCUMENT_GATE_ROOM_NAME,
   DOCUMENT_ACCESS_MARKET_VALUES,
   DOCUMENT_MINISTRY_GATE_ACCESS_DEFS,
   DOCUMENT_MINISTRY_GATE_OUTPUTS,
@@ -1307,6 +1307,38 @@ function documentRoomName(e: Entity, world: World | undefined): string | undefin
   return world?.roomAt(e.x, e.y)?.name;
 }
 
+/* ── Адресат бумаги: комната под игроком, а не ярлык этажа ────────
+ *
+ * Раньше эти три обработчика спрашивали `themeTags` — шесть корзин, в каждой
+ * до пятнадцати этажей. Из-за этого мазок «сдавали как провал отбора» посреди
+ * пустого коридора на крыше (у неё тег `ministry`), а документы «продавали на
+ * рынке» в чужом подъезде: деньги, репутация и ресурсы начислялись без единого
+ * живого адресата. Теперь спрашивается мир. Есть на этаже рынок — значит есть
+ * комната рынка, и продавать надо в ней; принимают бумаги — значит есть
+ * бухгалтерия или проверочный коридор. Никаких тегов этажу для этого не нужно.
+ */
+function playerRoomType(e: Entity, world: World | undefined): RoomType | undefined {
+  return world?.roomAt(e.x, e.y)?.type;
+}
+
+/** Здесь принимают бумагу под отчёт: бухгалтерия или проверочный коридор. */
+function atPaperworkDesk(e: Entity, world: World | undefined): boolean {
+  return playerRoomType(e, world) === RoomType.OFFICE
+    || documentRoomName(e, world) === DOCUMENT_GATE_ROOM_NAME;
+}
+
+/** Здесь торгуют лицом к лицу: лавка или торговый ряд. */
+function atTradingFloor(e: Entity, world: World | undefined): boolean {
+  const type = playerRoomType(e, world);
+  return type === RoomType.SHOP || type === RoomType.MARKET;
+}
+
+/** Здесь живут и собираются жильцы: комната или общий зал. */
+function amongResidents(e: Entity, world: World | undefined): boolean {
+  const type = playerRoomType(e, world);
+  return type === RoomType.LIVING || type === RoomType.COMMON;
+}
+
 function documentActionTags(defId: string, extra: readonly string[]): string[] {
   const out = new Set(['player', 'inventory', 'document']);
   for (const tag of extra) {
@@ -1469,7 +1501,7 @@ function useDocumentAtMinistryGate(
   const forged = permit?.method === 'forged' || itemHasTag(defId, 'forged') || itemHasTag(defId, 'forgery');
   const official = accessDef?.legal ?? permit?.official ?? (itemHasTag(defId, 'official') && !stolen && !forged);
   const method = accessDef?.method ?? permit?.method ?? (official ? 'legal' : stolen ? 'stolen' : 'forged');
-  const roomDefId = documentRoomName(e, world) ?? (outputId === 'key' ? 'Проверочный коридор N3' : 'архивное окно');
+  const roomDefId = documentRoomName(e, world) ?? (outputId === 'key' ? DOCUMENT_GATE_ROOM_NAME : 'архивное окно');
   if (official) {
     changeResourceStock(state, 'documents', 1, 30);
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, 1);
@@ -1629,10 +1661,10 @@ function handleContaminatedSwabUse(
     return true;
   }
 
-  const report = currentFloorRunEntry(state).themeTags.includes('ministry');
-  const market = currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry');
+  const report = atPaperworkDesk(e, world);
+  const market = !report && atTradingFloor(e, world);
   if (!report && !market) {
-    msgs.push(msg('Мазок ждёт адресата: отчёт в Министерстве или скупщик в жилом блоке.', time, '#aa8'));
+    msgs.push(msg('Мазок ждёт адресата: стол приёма бумаг или прилавок скупщика.', time, '#aa8'));
     return true;
   }
 
@@ -1706,10 +1738,10 @@ function handleAuditProofUse(
     return true;
   }
 
-  const report = currentFloorRunEntry(state).themeTags.includes('ministry');
-  const market = currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry');
+  const report = atPaperworkDesk(e, world);
+  const market = !report && atTradingFloor(e, world);
   if (!report && !market) {
-    msgs.push(msg('Номерную планку примут в Министерстве как улику или в жилом блоке как рыночный риск.', time, '#aa8'));
+    msgs.push(msg('Номерную планку примут за столом бумаг как улику или у прилавка как рыночный риск.', time, '#aa8'));
     return true;
   }
 
@@ -1781,18 +1813,18 @@ function handleDocumentPaperUse(
     return true;
   }
 
-  if (currentFloorRunEntry(state).themeTags.includes('ministry') && DOCUMENT_GATE_ITEMS.has(defId)) {
+  if (atPaperworkDesk(e, world) && DOCUMENT_GATE_ITEMS.has(defId)) {
     return useDocumentAtMinistryGate(e, defId, msgs, time, state, zoneId, world);
   }
-  if ((currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry')) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
+  if (atTradingFloor(e, world) && DOCUMENT_MARKET_VALUES[defId] !== undefined) {
     return sellDocumentToBlackMarket(e, defId, msgs, time, state, zoneId, world);
   }
 
-  msgs.push(msg('Здесь адресата нет. Документы принимают в Министерстве: N3 или архивное окно; часть бумаг продаётся на рынке жилого блока.', time, '#aa8'));
+  msgs.push(msg('Здесь адресата нет. Бумагу принимают за столом бумаг: проверочный коридор или архивное окно; часть бумаг берут у прилавка.', time, '#aa8'));
   return true;
 }
 
-function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: number, state?: GameState): boolean {
+function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: number, state?: GameState, world?: World): boolean {
   if (!isShelterTallyItem(defId)) return false;
   if (!state || !isPlayerEntity(e)) {
     msgs.push(msg(ITEMS[defId]?.desc ?? 'Бумаге нужен адресат.', time, '#aa8'));
@@ -1809,7 +1841,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (currentFloorRunEntry(state).themeTags.includes('ministry')) {
+  if (atPaperworkDesk(e, world)) {
     removeItem(e, defId, 1);
     if (!forged) {
       e.money = (e.money ?? 0) + 45;
@@ -1822,7 +1854,7 @@ function handleShelterTallyUse(e: Entity, defId: string, msgs: Msg[], time: numb
     return true;
   }
 
-  if (currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry')) {
+  if (amongResidents(e, world)) {
     removeItem(e, defId, 1);
     if (forged) {
       msgs.push(msg('Жильцы нашли лишние строки в липовом списке.', time, '#f84'));
@@ -1872,13 +1904,16 @@ function handleCraftRecipeItemSourceUse(
   time: number,
   state: GameState | undefined,
   zoneId: number | undefined,
+  world: World | undefined,
 ): boolean {
   const sources = craftRecipeSourcesForItem(defId);
   if (sources.length === 0) return false;
+  // У прилавка бумага стоит денег, поэтому продажа важнее изучения рецепта:
+  // разбирать на рецепт то, что рядом купят, игрок почти наверняка не хотел.
   if (
     state &&
     isPlayerEntity(e) &&
-    (currentFloorRunEntry(state).themeTags.includes('living') || currentFloorRunEntry(state).themeTags.includes('kvartiry')) &&
+    atTradingFloor(e, world) &&
     DOCUMENT_MARKET_VALUES[defId] !== undefined
   ) {
     return false;
@@ -1951,12 +1986,12 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
   if (handleIncendiary12gUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
   if (handleDeconFluidUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
   if (handleGasmaskFilterUse(e, slotIdx, msgs, time, state, zoneId)) return;
-  if (handleCraftRecipeItemSourceUse(e, slotIdx, def.id, msgs, time, state, zoneId)) return;
+  if (handleCraftRecipeItemSourceUse(e, slotIdx, def.id, msgs, time, state, zoneId, world)) return;
 
   if (handleContaminatedSwabUse(e, slotIdx, msgs, time, state, zoneId, world)) return;
   if (handleAuditProofUse(e, slotIdx, def.id, msgs, time, state, zoneId, world)) return;
   if (handleDocumentPaperUse(e, slotIdx, def.id, msgs, time, state, zoneId, world)) return;
-  if (handleShelterTallyUse(e, def.id, msgs, time, state)) return;
+  if (handleShelterTallyUse(e, def.id, msgs, time, state, world)) return;
   if (handleVeretarSandUse(e, slotIdx, msgs, time, state)) return;
 
   if (def.id === 'maronary_shaving') {

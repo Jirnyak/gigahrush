@@ -20,7 +20,6 @@ export interface FloorInstanceDef {
   id: string;
   displayNumber: string;
   title: string;
-  themeTags: readonly string[];
   // Base floor the pocket copies (numeric z, project canon): design_pocket
   // runs the ordinary floor generator at this z and reskins it as a loop.
   z: number;
@@ -45,7 +44,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_404',
     displayNumber: '404',
     title: 'Не найден',
-    themeTags: ['design'],
     z: 0,
 
     seedTag: 'not_found',
@@ -66,7 +64,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_556',
     displayNumber: '556',
     title: 'П-46',
-    themeTags: ['design'],
     z: 14,
 
     seedTag: 'p46_protocol',
@@ -87,7 +84,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_777',
     displayNumber: '777',
     title: 'Счастливый',
-    themeTags: ['design'],
     z: 0,
 
     seedTag: 'lucky_shelter',
@@ -108,7 +104,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_1337',
     displayNumber: '1337',
     title: 'Элитный',
-    themeTags: ['design'],
     z: -26,
 
     seedTag: 'radio_code',
@@ -129,7 +124,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_013',
     displayNumber: '013',
     title: 'Служебный',
-    themeTags: ['design'],
     z: 30,
 
     seedTag: 'service_order',
@@ -150,7 +144,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_089',
     displayNumber: '089',
     title: 'Теплый лифт',
-    themeTags: ['design'],
     z: -26,
 
     seedTag: 'warm_shaft',
@@ -178,7 +171,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_000',
     displayNumber: '000',
     title: 'Нулевой список',
-    themeTags: ['design'],
     z: -50,
 
     seedTag: 'zero_register',
@@ -199,7 +191,6 @@ export const FLOOR_INSTANCES: readonly FloorInstanceDef[] = [
     id: 'loop_912',
     displayNumber: '912',
     title: 'Чужая очередь',
-    themeTags: ['design'],
     z: 14,
 
     seedTag: 'wrong_queue',

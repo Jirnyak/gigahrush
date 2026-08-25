@@ -33,7 +33,6 @@ import { floorKeyAllowsNpcs, floorKeyForDesign, floorKeyForProcedural, floorKeyK
 
 export interface AlifePopulationBucketDef {
   floorKey: string;
-  themeTags: readonly string[];
   targetCount: number;
   populationProfileId: string;
   factionWeights?: readonly WeightedValue<Faction>[];
@@ -148,7 +147,6 @@ function designBucket(route: DesignFloorRouteDef): WeightedBucket {
   const population = designFloorPopulationProfile(route);
   return {
     floorKey: floorKeyForDesign(route.id),
-    themeTags: route.themeTags ?? [],
 
     weight: theme.npcAllowed ? population.npcTarget : 0,
     populationProfileId: theme.populationProfileId ?? `design:${route.id}`,
@@ -190,7 +188,6 @@ function proceduralBucket(spec: ProceduralFloorSpec): WeightedBucket {
   });
   return {
     floorKey: floorKeyForProcedural(spec.key),
-    themeTags: spec.themeTags ?? [],
 
     weight: theme.npcAllowed ? budget.npcs : 0,
     populationProfileId: `procedural:${budget.profileId}`,

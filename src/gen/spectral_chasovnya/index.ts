@@ -81,6 +81,7 @@ export function generateSpectralChasovnyaDesignFloor(): SpectralChasovnyaGenerat
   alignSpectralChasovnyaAmbientNpcTerritory(world, entities);
 
   world.bakeLights();
+  world.hasMeatWalls = true;
   spectralStateByWorld.set(world, spectralState);
   return { isDecentralized: true, world, entities, spawnX, spawnY, spectralState };
 }

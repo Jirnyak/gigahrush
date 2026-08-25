@@ -51,7 +51,6 @@ test('hyperbolic_switchyard is a maintenance authored route floor', () => {
   assert.ok(route);
   assert.equal(route.z, HYPERBOLIC_SWITCHYARD_ROUTE_Z);
   //  (removed exact baseFloor check)
-  assert.equal(route.themeTags?.includes('maintenance'), true);
   assert.equal(route.displayName, 'Гиперболическая стрелочная');
   assert.equal(designFloorAtZ(HYPERBOLIC_SWITCHYARD_ROUTE_Z)?.id, HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID);
 });

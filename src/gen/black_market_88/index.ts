@@ -14,7 +14,6 @@ import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 import { rng } from '../../core/rand';
-import './living_zone';
 
 import { expandBlackMarket88Bazaar, buildMarketRooms, linkMarketRooms, decorateMarketRooms, addAccessLifts, tuneMarketZones } from './geometry';
 import { registerBlackMarket88DesignFloorContent, spawnMarketNpcs, spawnMarketQueueCrowd, seedMarketContainers } from './npcs';

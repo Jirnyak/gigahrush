@@ -211,7 +211,7 @@ function publishSeroburmalineEvent(
 
 export function updateSeroburmalineExposure(world: World, player: Entity, state: GameState, dt: number): void {
   const rt = runtimeFor(state);
-  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance') || !player.alive) {
+  if (currentFloorRunEntry(state)!.designFloorId !== 'maintenance' || !player.alive) {
     fadeRuntime(rt, dt);
     return;
   }
@@ -316,7 +316,7 @@ export function tryCoverSeroburmalineSource(
   // generator (gen/maintenance/seroburmaline_no_look.ts). The prior polarity was the
   // logical inverse of :214, so the whole authored cover counterplay (covered feature,
   // fog dim, surface mute, slime_sample_seroburmaline reward) could never fire in play.
-  if (!currentFloorRunEntry(state)!.themeTags.includes('maintenance') || !isPlayerEntity(player)) return false;
+  if (currentFloorRunEntry(state)!.designFloorId !== 'maintenance' || !isPlayerEntity(player)) return false;
   const source = sourceAtCell(world, Math.floor(lookX), Math.floor(lookY), true);
   if (!source) return false;
 

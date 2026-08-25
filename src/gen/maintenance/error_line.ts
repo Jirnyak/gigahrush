@@ -24,7 +24,7 @@ import {
 import {
   type MaintContentCtx, dropItems, findMaintArea, openTile, setFeature,
   setWater, spawnMonstersNear, spawnPlotNpc, stampMaintRoom,
-} from '../maintenance/content_helpers';
+} from './content_helpers';
 
 const ZHANNA_DEF: PlotNpcDef = {
   name: 'Жанна Жетонная',

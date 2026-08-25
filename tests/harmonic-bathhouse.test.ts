@@ -100,7 +100,6 @@ test('harmonic bathhouse route data and population profile match the pressure ba
   const route = designFloorById('harmonic_bathhouse');
   assert.ok(route);
   assert.equal(route.z, -28);
-  assert.equal(route.themeTags?.includes('maintenance'), true);
   assert.equal(route.danger, 4);
 
   const profile = designFloorPopulationProfile(route);

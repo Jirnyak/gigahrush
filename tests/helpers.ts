@@ -14,9 +14,34 @@ import {
   type WorldContainer,
   ZoneFaction,
 } from '../src/core/types';
-import type { World } from '../src/core/world';
+import { World as WorldClass } from '../src/core/world';
+type World = WorldClass;
 import { createCraftingState } from '../src/systems/crafting';
 import { setFloorRunState } from '../src/systems/procedural_floors';
+
+/* ── Адресат сделки: комната под игроком ──────────────────────────
+ *
+ * Бумага и проба уходят не «этажу», а тому, кто их принимает: у прилавка
+ * покупают, за столом бумаг принимают под отчёт. Раньше это решал ярлык этажа
+ * (`themeTags`), и потому сделка проходила в пустом коридоре — тестам хватало
+ * `currentZ: 0`. Теперь тест обязан поставить игрока к адресату, как это
+ * делает игрок в игре.
+ */
+function worldWithRoomUnder(e: Entity, type: RoomType, name: string): World {
+  const world = new WorldClass();
+  addTestRoom(world, { type, name, x: Math.floor(e.x) - 1, y: Math.floor(e.y) - 1, w: 3, h: 3 });
+  return world;
+}
+
+/** Прилавок: здесь покупают. */
+export function tradingRoomWorld(e: Entity): World {
+  return worldWithRoomUnder(e, RoomType.MARKET, 'торговый ряд');
+}
+
+/** Стол бумаг: здесь принимают под отчёт. */
+export function paperworkRoomWorld(e: Entity): World {
+  return worldWithRoomUnder(e, RoomType.OFFICE, 'бухгалтерия');
+}
 
 export function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const clock = overrides.clock ?? { hour: 8, minute: 0, totalMinutes: 0 };

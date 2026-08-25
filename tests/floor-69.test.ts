@@ -97,7 +97,6 @@ function floorCellCount(gen: Floor69Generation): number {
 test('floor_69 is registered as an authored Maintenance-band route', () => {
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.equal(route?.z, DESIGN_FLOOR_Z);
-  assert.equal(route?.themeTags?.includes('maintenance'), true);
   assert.equal(route?.displayName, 'Этаж 69');
   assert.equal(designFloorAtZ(DESIGN_FLOOR_Z)?.id, DESIGN_FLOOR_ID);
 });

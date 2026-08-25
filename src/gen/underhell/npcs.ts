@@ -280,6 +280,7 @@ export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGa
   retuneUnderhellZones(world);
   spawnUnderhellAmbientVeterans(world, entities, nextId);
   const thresholdChain = scoreUnderhellThresholdChain(world, ritualState);
+  world.hasMeatWalls = true;
 
   genLog(`[FLOOR19_UNDERHELL] generated ${UNDERHELL_ROUTE_ID} seed ${seed} rooms=${world.rooms.length} gate=${voidGateCell} chain=${thresholdChain.score}/${thresholdChain.minScore}`);
 

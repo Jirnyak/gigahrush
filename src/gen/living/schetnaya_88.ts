@@ -11,7 +11,7 @@ import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { protectRoom } from '../shared';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { registerZoneContent } from '../living/zone_content';
+import { registerZoneContent } from './zone_content';
 
 const ROOM_W = 21;
 const ROOM_H = 13;

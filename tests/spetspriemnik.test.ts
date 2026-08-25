@@ -50,7 +50,6 @@ function hasReachableLift(gen: ReturnType<typeof generateDesignFloor>, direction
 test('spetspriemnik is registered as a Ministry detention route at z+40', () => {
   const route = designFloorById(SPETSPRIEMNIK_ROUTE_ID);
   assert.equal(route?.z, SPETSPRIEMNIK_Z);
-    assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(route?.displayName, 'Спецприёмник');
   assert.equal(designFloorAtZ(SPETSPRIEMNIK_Z)?.id, SPETSPRIEMNIK_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(SPETSPRIEMNIK_Z), false);

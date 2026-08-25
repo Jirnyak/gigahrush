@@ -351,7 +351,7 @@ export function craftStationProfileForDesignFloor(route: DesignFloorRouteDef): C
   const profile = DESIGN_FLOOR_CRAFT_STATION_PROFILES[route.id] ?? STORY_FLOOR_CRAFT_STATION_PROFILES[route.id];
   if (!profile) return undefined;
   return mergeProfiles(profile, {
-    tags: [route.id, `z_${route.z}`, route.themeTags?.[0]?.toLowerCase() ?? 'route'],
+    tags: [route.id, `z_${route.z}`],
   });
 }
 

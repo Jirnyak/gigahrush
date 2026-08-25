@@ -32,7 +32,6 @@ export interface FloorThemeProfile {
    * can declare a different `themeClass` to own its look and population mix
    * independently of the engine save bucket (`baseFloor`).
    */
-  themeTags: readonly string[];
   routeId?: DesignFloorId | string;
   routeZ?: number;
   kind: 'design' | 'procedural' | 'floor_instance';
@@ -79,7 +78,6 @@ export function themeForDesignRoute(route: DesignFloorRouteDef): FloorThemeProfi
     return {
     floorKey: designFloorKey(route.id),
     
-    themeTags: route.themeTags || [],
     routeId: route.id,
     routeZ: route.z,
     kind: 'design',
@@ -90,7 +88,7 @@ export function themeForDesignRoute(route: DesignFloorRouteDef): FloorThemeProfi
     majorityOwner: dominantTerritoryShareOwner(territoryShares),
     objectProfileTags: nonEmptyTags(objectProfile?.tags),
     monsterPressureTags: uniqueTags(population.monsterTags),
-    economyTags: uniqueTags([route.id, (route.themeTags && route.themeTags[0]) || 'design', ...(objectProfile?.tags ?? [])]),
+    economyTags: uniqueTags([route.id, 'design', ...(objectProfile?.tags ?? [])]),
     specialContentTags: uniqueTags([route.id, `danger_${route.danger}`]),
   };
 }
@@ -104,7 +102,6 @@ export function themeForProceduralSpec(spec: ProceduralFloorSpec): FloorThemePro
   return {
     floorKey: proceduralFloorKey(spec.key),
     
-    themeTags: spec.themeTags || [],
     routeId: spec.key,
     routeZ: spec.z,
     kind: 'procedural',

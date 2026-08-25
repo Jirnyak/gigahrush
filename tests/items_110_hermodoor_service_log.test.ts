@@ -6,10 +6,10 @@ import { World } from '../src/core/world';
 import { CONTRACTS } from '../src/data/contracts';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateHospitalQuarantine } from '../src/gen/bolnichny_korpus/hospital_quarantine';
+import { generateHospitalQuarantine } from '../src/gen/living/hospital_quarantine';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const SERVICE_LOG_ID = 'hermodoor_journal';
 
@@ -57,7 +57,7 @@ test('hermodoor journal has theft and black-market document decisions', () => {
   assert.equal(addItem(player, SERVICE_LOG_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, SERVICE_LOG_ID), 0);
   assert.equal(player.money, 52);

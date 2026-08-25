@@ -119,7 +119,6 @@ function hasReachableNear(gen: BlackMarketGeneration, reachable: Uint8Array, x: 
 test('black_market_88 is the z -10 authored Living-band route floor', () => {
   const route = designFloorById(BLACK_MARKET_88_ROUTE_ID);
   assert.equal(route?.z, BLACK_MARKET_88_FUTURE_Z);
-  assert.equal(route?.themeTags?.includes('living'), true);
   assert.equal(route?.displayName, 'Черный рынок 88');
   assert.equal(designFloorAtZ(BLACK_MARKET_88_FUTURE_Z)?.id, BLACK_MARKET_88_ROUTE_ID);
 });

@@ -9,7 +9,7 @@ import { METRO_DEPOT_ROOM_DEF_ID } from '../src/data/metro';
 import { getPlotNpcNumericId } from '../src/data/npc_packages';
 import { SIDE_QUESTS } from '../src/data/plot';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateMetroErrorLine } from '../src/gen/dark_metro/error_line';
+import { generateMetroErrorLine } from '../src/gen/maintenance/error_line';
 
 const ITEM_ID = 'rail_switch_handle';
 

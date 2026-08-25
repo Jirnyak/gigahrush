@@ -161,7 +161,7 @@ export interface ServiceTransferRoute {
 export interface ServiceFloorState {
   routeId: typeof DESIGN_FLOOR_ID;
   anchorZ: number;
-  themeTags: readonly string[];
+  tags: readonly string[];
   liftMachineState: ServiceLiftMachineState;
   masterKeyKnown: boolean;
   powerZones: ServicePowerZoneFlag[];
@@ -225,7 +225,7 @@ export function createServiceFloorState(): ServiceFloorState {
   return {
     routeId: DESIGN_FLOOR_ID,
     anchorZ: SERVICE_FLOOR_Z,
-    themeTags: ['maintenance_service', 'engineering'],
+    tags: ['maintenance_service', 'engineering'],
 
     liftMachineState: 'faulty',
     masterKeyKnown: false,
@@ -252,7 +252,7 @@ export function summarizeServiceFloorFlags(service: ServiceFloorState): string[]
     .map(z => z.id)
     .join(',') || 'none';
   return [
-    `route=${service.routeId} z=${service.anchorZ} base=${service.themeTags[0] ?? 'none'}`,
+    `route=${service.routeId} z=${service.anchorZ} base=${service.tags[0] ?? 'none'}`,
     `liftMachine=${service.liftMachineState} masterKeyKnown=${service.masterKeyKnown}`,
     `power=${powered}`,
     `reroute lower=${service.rerouteFlags.lowerStaffRouteOpen} marketRaidDiverted=${service.rerouteFlags.marketRaidDiverted} productionBypass=${service.rerouteFlags.productionBypassArmed}`,

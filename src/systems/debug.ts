@@ -163,7 +163,7 @@ function routeEntryLine(prefix: string, entry: ReturnType<typeof currentFloorRun
     ? `proc ${entry.spec.anomalyId} d${entry.spec.danger}`
     : entry.designFloorId
       ? `design ${entry.designFloorId}`
-      : `design ${entry.themeTags.join(",")}`;
+      : `design ${entry.designFloorId ?? entry.z}`;
   return `${prefix}: Z${formatDebugZ(entry.z)} ${kind} ${entry.label}`;
 }
 
@@ -310,12 +310,12 @@ function debugRouteFloorSummaryLines(world: World, player: Entity, entities: Ent
   const entry = currentFloorRunEntry(state);
   const metrics = debugRouteFloorMetrics(world, player, entities);
   const badPlacements = metrics.playerBad + metrics.entityBad + metrics.containerBad;
-  const story = entry.themeTags.join(",") ?? 'none';
+  const story = entry.designFloorId ?? 'none';
   const design = entry.designFloorId ?? 'none';
   const procedural = entry.spec?.key ?? 'none';
   const anomaly = entry.spec?.anomalyId ?? 'none';
   const out = [
-    `identity z=${formatDebugZ(entry.z)} route=${floorRunEntryRouteId(entry)} kind=${floorRunEntryKind(entry)} base=${entry.themeTags.join(",")} story=${story} design=${design} procedural=${procedural}`,
+    `identity z=${formatDebugZ(entry.z)} route=${floorRunEntryRouteId(entry)} kind=${floorRunEntryKind(entry)} story=${story} design=${design} procedural=${procedural}`,
     `label=${entry.label}`,
     floorInstanceIdentityLine(state),
     `reach cells=${metrics.reachableCells}/${metrics.passableCells} rooms=${metrics.reachableRooms}/${metrics.rooms} functional=${metrics.reachableFunctionalRooms}/${metrics.functionalRooms}`,
@@ -486,9 +486,8 @@ function spawnDebugMonsterPack(
   nextEntityId: { v: number },
 ): string[] {
   const designFloor = designFloorAtZ(state.currentZ);
-  const tags = designFloor?.themeTags ? designFloor.themeTags : ['living'];
-  const themeClass = ['ministry', 'kvartiry', 'living', 'maintenance', 'hell', 'void'].find(t => tags.includes(t)) || 'living';
-  const kinds = DEBUG_MONSTER_PACKS[themeClass] || DEBUG_MONSTER_PACKS['living'];
+  // Отладочный пак берётся по самому этажу; у кого своего нет — общий.
+  const kinds = DEBUG_MONSTER_PACKS[designFloor?.id ?? ''] || DEBUG_MONSTER_PACKS['living'];
   const slots = entitySpawnSlots(entities, EntityType.MONSTER, kinds.length);
   let spawned = 0;
   const names: string[] = [];
@@ -812,9 +811,9 @@ function routePlayerToNearestContainer(world: World, player: Entity, state: Game
 }
 
 function armLocalFloorInstance(world: World, player: Entity, state: GameState): string[] {
-  const tags = currentFloorRunEntry(state).themeTags;
-  const candidates = FLOOR_INSTANCES.filter(def => def.themeTags.some(t => tags.includes(t)));
-  if (candidates.length === 0) return [`no numbered loop uses ${tags.join(',')} as base; teleport to another story floor first`];
+  // Инстансы больше не отбираются по теме этажа: этажи не группируются.
+  const candidates = FLOOR_INSTANCES;
+  if (candidates.length === 0) return ['нет ни одного пронумерованного цикла'];
   const def = candidates[debugFloorInstanceCursor++ % candidates.length];
   const store = ensureFloorInstanceState(state, state.currentZ);
   const instance = {
@@ -1097,7 +1096,6 @@ function designFloorTeleport(id: DesignFloorId): DebugAction | undefined {
   return {
     type: 'teleport_design_floor',
     id: def.id,
-    themeTags: def.themeTags ?? [],
     z: def.z,
     label: def.displayName,
     color: def.color };

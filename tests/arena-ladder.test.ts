@@ -16,6 +16,7 @@ import {
   isAlifeArenaFighter,
   listAlifeArenaFighters,
   recordAlifeNpcDeath,
+  selectAlifeArenaLadderIds,
   setAlifeArenaChampion,
   setAlifeArenaFighter,
   setAlifeState,
@@ -71,6 +72,30 @@ function reservedIds(state: GameState): number[] {
   }
   return ids;
 }
+
+/* Ростер покрывает ДИАПАЗОН силы мира, а не его край. Обе крайности замерены и
+ * отвергнуты: набор из гарнизона базы дал восемь ур.1, буквальный топ — восемь
+ * ур.99..100. Ни то, ни другое лестницей не является. */
+test('ростер берёт по представителю на ступень, а не восемь сильнейших подряд', () => {
+  const state = arenaState();
+  const total = alifeNpcRecordCount(state);
+  assert.ok(total >= 6, 'нужен пул, по которому есть что раскладывать');
+
+  const ids = selectAlifeArenaLadderIds(state, 3);
+  assert.ok(ids.length > 0);
+  const levels = ids.map(id => getAlifeNpcRecordSnapshot(state, id)!.level);
+  // Ступени идут вверх и не повторяют одно и то же число.
+  for (let i = 1; i < levels.length; i++) assert.ok(levels[i] > levels[i - 1], `ступени растут: ${levels}`);
+  // Верхняя ступень — сильнейший мира: слабее него в пуле никого выше нет.
+  let peak = 0;
+  for (let id = 1; id <= total; id++) {
+    const s = getAlifeNpcRecordSnapshot(state, id);
+    if (s && !s.dead && !s.reservedKind && s.level > peak) peak = s.level;
+  }
+  assert.equal(levels[levels.length - 1], peak, 'вершина лестницы = потолок силы мира');
+  // Сюжетные и авторские личности на песок не выходят: их смерть запирает цепочки.
+  for (const id of ids) assert.equal(getAlifeNpcRecordSnapshot(state, id)?.reservedKind, undefined);
+});
 
 test('лестница арены строится по силе и не берёт мёртвых', () => {
   const state = arenaState();

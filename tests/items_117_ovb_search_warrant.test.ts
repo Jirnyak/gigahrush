@@ -8,7 +8,7 @@ import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { generateDocumentGate } from '../src/gen/ministry/document_gate';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const ITEM_ID = 'ovb_search_warrant';
 
@@ -37,7 +37,7 @@ test('ovb search warrant can be sold as high-risk document leverage', () => {
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter предъявить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, ITEM_ID), 0);
   assert.equal(player.money, 140);

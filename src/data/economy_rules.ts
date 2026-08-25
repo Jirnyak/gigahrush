@@ -1,4 +1,5 @@
 import { Faction, Occupation } from '../core/types';
+import { floorKeyForDesign } from './floor_keys';
 import type { SamosborVariantId } from './samosbor_variants';
 
 export type EconomyFloorRef = number | string;
@@ -55,6 +56,38 @@ export interface EconomyTradeSpreadRule {
   sellMultiplier: number;
   reason: string;
   tags: readonly string[];
+}
+
+/** Достаток обычного жителя этажа — множитель к его деньгам.
+ *
+ *  Ссылка на этаж намеренно двух видов, и это не небрежность: число значит
+ *  ВЫСОТУ, то есть весь пояс целиком вместе с процедурными этажами на нём,
+ *  а строка — ключ одного конкретного авторского этажа. Банковский этаж богат
+ *  сам по себе, а не потому, что висит на своей высоте.
+ *
+ *  Таблица живёт здесь, а не в A-Life: система считает деньги, но не обязана
+ *  знать, какой этаж богат. */
+export interface NpcWealthRule {
+  floor: EconomyFloorRef;
+  multiplier: number;
+  reason: string;
+}
+
+export const NPC_WEALTH_RULES: readonly NpcWealthRule[] = [
+  { floor: 'bank_floor', multiplier: 6.5, reason: 'сейфы, залоги и долговые книги' },
+  { floor: 30, multiplier: 2.4, reason: 'министерство: оклады и подписи' },
+  { floor: -26, multiplier: 1.25, reason: 'коллекторы: сменная оплата' },
+  { floor: -36, multiplier: 0.45, reason: 'ад: деньги почти ничего не решают' },
+];
+
+export function npcWealthMultiplier(z: number, floorKey: string): number {
+  for (const rule of NPC_WEALTH_RULES) {
+    const hit = typeof rule.floor === 'string'
+      ? floorKey === floorKeyForDesign(rule.floor)
+      : rule.floor === z;
+    if (hit) return rule.multiplier;
+  }
+  return 1;
 }
 
 export const ECONOMY_ROUTE_BLACK_MARKET_88 = 'black_market_88';

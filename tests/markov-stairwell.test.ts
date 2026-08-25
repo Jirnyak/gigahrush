@@ -52,7 +52,6 @@ function hermeticShellCells(world: MarkovGeneration['world'], room: Room): numbe
 test('markov_stairwell is registered as a Ministry route floor', () => {
   const route = designFloorById(MARKOV_STAIRWELL_ROUTE_ID);
   assert.equal(route?.z, MARKOV_STAIRWELL_Z);
-  assert.equal(route?.themeTags?.includes('ministry'), true);
   assert.equal(route?.displayName, 'Марковская лестница');
   assert.equal(route?.danger, 3);
   assert.equal(designFloorAtZ(MARKOV_STAIRWELL_Z)?.id, MARKOV_STAIRWELL_ROUTE_ID);

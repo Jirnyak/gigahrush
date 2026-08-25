@@ -113,7 +113,6 @@ test('normal lift route reaches bank_floor between Ministry and Raionsovet archi
   const leakArchive = resolveFloorRunRoute(state, LiftDirection.DOWN);
   assert.equal(leakArchive?.z, 24);
   assert.equal(leakArchive?.designFloorId, 'critical_leak_archive');
-  assert.equal(leakArchive?.themeTags?.includes('ministry'), true);
   commitFloorRunEntry(state, leakArchive!);
 
   for (const expectedZ of [23]) {

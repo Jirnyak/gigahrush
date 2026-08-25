@@ -4213,7 +4213,6 @@ function chooseProceduralMonsterKind(
 ): MonsterKind {
   return chooseFloorMonsterKind({
     z: spec.z,
-    floorThemeTags: spec.themeTags,
     roomType: roomTypeAt(world, pos.x, pos.y),
     floorTags: spec.monsterBiasTags,
     samosborCount: spec.danger,
@@ -14911,7 +14910,7 @@ function stampCultAltarNook(world: World, room: Room, spec: ProceduralFloorSpec)
     const y = world.wrap(bestY + dy);
     if (world.cells[world.idx(x, y)] === Cell.FLOOR) {
       if (placeCultRoomFeature(world, room, Feature.CANDLE, x, y)) {
-         world.floorTex[world.idx(x, y)] = spec.themeTags.includes('hell') ? Tex.F_MEAT : Tex.F_CARPET;
+         world.floorTex[world.idx(x, y)] = Tex.F_CARPET;
       }
     }
   }
@@ -15034,7 +15033,7 @@ function stampCultPhaseBoundary(
       if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
       stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.24, 118, spec.seed + marks * 193, 66, 18, 38, false);
       world.factionControl[ci] = ZoneFaction.CULTIST;
-      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags.includes('hell') ? Tex.F_MEAT : Tex.F_CARPET;
+      if ((marks & 3) === 0) world.floorTex[ci] = Tex.F_CARPET;
       marks++;
     }
   }
@@ -15056,7 +15055,7 @@ function stampCultPhaseBoundary(
       if (best > 210 * 210 || Math.abs(Math.sqrt(second) - Math.sqrt(best)) > 18) continue;
       stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.28, 128, spec.seed + marks * 313, 66, 18, 38, false);
       world.factionControl[ci] = ZoneFaction.CULTIST;
-      if ((marks & 3) === 0) world.floorTex[ci] = spec.themeTags.includes('hell') ? Tex.F_MEAT : Tex.F_CARPET;
+      if ((marks & 3) === 0) world.floorTex[ci] = Tex.F_CARPET;
       marks++;
     }
   }

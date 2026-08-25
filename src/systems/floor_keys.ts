@@ -11,7 +11,7 @@ import {
 export {
   cleanFloorKey,
   floorKeyAllowsNpcs,
-  floorKeyBaseFloor,
+  floorKeyDisplayName,
   floorKeyForDesign,
   floorKeyForFloorInstance,
   floorKeyForProcedural,
@@ -26,7 +26,6 @@ export {
 
 export interface FloorKeyEntryLike {
   z?: number;
-  themeTags: readonly string[];
   storyFloor?: number;
   designFloorId?: DesignFloorId | string;
   spec?: { key: string };

@@ -35,7 +35,6 @@ export interface ActiveFloorInstance {
   worldKey?: string;
   displayNumber: string;
   title: string;
-  themeTags: readonly string[];
   seed: number;
   seedTag: string;
   risk: number;
@@ -141,7 +140,6 @@ function normalizeActive(input: Partial<ActiveFloorInstance> | null | undefined)
     worldKey: floorInstanceWorldKey(def),
     displayNumber: def.displayNumber,
     title: def.title,
-    themeTags: def.themeTags,
     seed: normalizeSeed(input.seed),
     seedTag: typeof input.seedTag === 'string' ? input.seedTag : def.seedTag,
     risk: normalizeRisk(input.risk, def.risk),
@@ -212,7 +210,7 @@ export function floorInstanceLabel(instance: ActiveFloorInstance): string {
 export function floorInstanceIdentityLine(state: GameState): string {
   const active = getActiveFloorInstance(state);
   if (!active) return 'instance=none';
-  return `instance=${active.id} ${floorInstanceLabel(active)} tags=${active.themeTags.join(',')} risk=${active.risk} seed=${active.seed} intended=${active.intendedFloor} return=${active.returnFloor}`;
+  return `instance=${active.id} ${floorInstanceLabel(active)} risk=${active.risk} seed=${active.seed} intended=${active.intendedFloor} return=${active.returnFloor}`;
 }
 
 export function currentFloorInstanceLabel(state: GameState): string | undefined {
@@ -258,7 +256,6 @@ function makeActiveInstance(
     worldKey: floorInstanceWorldKey(def),
     displayNumber: def.displayNumber,
     title: def.title,
-    themeTags: def.themeTags,
     seed: Math.floor(rng() * 0x7fffffff),
     seedTag: def.seedTag,
     risk: def.risk,
@@ -437,7 +434,7 @@ export function summarizeFloorInstances(state: GameState): string[] {
   const active = store.current;
   const out = [
     active
-      ? `active ${floorInstanceLabel(active)} key=${floorInstanceWorldKey(active)} tags=${active.themeTags.join(',')} risk=${active.risk} seed=${active.seed}`
+      ? `active ${floorInstanceLabel(active)} key=${floorInstanceWorldKey(active)} risk=${active.risk} seed=${active.seed}`
       : 'active none',
     `anomalies=${store.anomalyCount} lastRoll=${store.lastRoll.toFixed(3)} lastStable=${store.lastStableFloor}`,
   ];

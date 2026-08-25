@@ -43,7 +43,6 @@ test('number_registry is a Ministry authored route with residue population press
   const route = designFloorById(NUMBER_REGISTRY_ROUTE_ID);
   assert.ok(route);
   assert.equal(route.z, 32);
-  assert.equal(route.themeTags?.includes('ministry'), true);
   assert.equal(route.role.includes('модули'), true);
 
   const profile = designFloorPopulationProfile(route);

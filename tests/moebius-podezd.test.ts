@@ -161,7 +161,6 @@ function hasReachableLift(gen: FloorGeneration, reachable: Uint8Array, direction
 test('moebius_podezd is registered as the z +2 residential orientation route', () => {
   const route = designFloorById(MOEBIUS_PODEZD_ROUTE_ID);
   assert.equal(route?.z, MOEBIUS_PODEZD_Z);
-    assert.equal(route?.themeTags?.includes('kvartiry'), true);
   assert.equal(route?.displayName, 'Мёбиус-подъезд');
   assert.equal(designFloorAtZ(MOEBIUS_PODEZD_Z)?.id, MOEBIUS_PODEZD_ROUTE_ID);
   assert.equal(PROCEDURAL_FLOOR_ZS.includes(MOEBIUS_PODEZD_Z), false);

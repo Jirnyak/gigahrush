@@ -3,7 +3,7 @@
 import { MonsterKind, QuestType, RoomType, Quest } from '../core/types';
 import { ITEMS } from '../data/items';
 import type { ContractDef } from '../data/contracts';
-import { DESIGN_FLOOR_THEME_BASES, designFloorAtZ } from '../data/design_floors';
+import { DESIGN_FLOOR_ROUTES, designFloorAtZ } from '../data/design_floors';
 import { monsterTypeName } from '../entities/monster';
 import type { ContextSnapshot } from './context';
 import {
@@ -377,11 +377,13 @@ function result(
 function floorName(z: number): string {
   const exact = designFloorAtZ(z);
   if (exact) return exact.displayName;
-  let nearest = DESIGN_FLOOR_THEME_BASES[0];
+  // Ближайший маршрутный этаж, а не «база темы»: тем больше нет, а сосед по
+  // высоте — понятие самого маршрута.
+  let nearest = DESIGN_FLOOR_ROUTES[0];
   let bestGap = Number.POSITIVE_INFINITY;
-  for (const base of DESIGN_FLOOR_THEME_BASES) {
-    const gap = Math.abs(z - base.z);
-    if (gap < bestGap) { bestGap = gap; nearest = base; }
+  for (const route of DESIGN_FLOOR_ROUTES) {
+    const gap = Math.abs(z - route.z);
+    if (gap < bestGap) { bestGap = gap; nearest = route; }
   }
   return nearest.displayName;
 }

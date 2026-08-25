@@ -1,8 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/* Сколько тестовых файлов крутится разом. Было жёстко два — на двенадцати ядрах
+   это давало фактическую параллель 1.64x, то есть машина простаивала. Считаем от
+   ядер, оставляя два на систему и на сам раннер; потолок шесть, потому что каждый
+   процесс держит миры по 42 МиБ сеток, и упирается это в память, а не в ядра. */
+const CONCURRENCY = Math.max(2, Math.min(6, (os.cpus().length || 4) - 2));
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const testsDir = join(root, 'tests');
 const tsxBin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
@@ -42,7 +48,7 @@ console.log(`Generation test selection: ${selected.length} files; ${skipped} uni
 const inheritedArgs = process.argv.slice(2);
 const env = { ...process.env, GIGAHRUSH_GENERATION_MATRIX: '1' };
 
-const result = spawnSync(tsxBin, ['--test', '--test-concurrency=2', ...inheritedArgs, ...selected], {
+const result = spawnSync(tsxBin, ['--test', `--test-concurrency=${CONCURRENCY}`, ...inheritedArgs, ...selected], {
   cwd: root,
   env,
   stdio: 'inherit',

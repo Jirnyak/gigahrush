@@ -12,7 +12,7 @@ import {
 import { validateAlifeMigrationProfiles, AlifeMigrationIntentDef } from '../src/data/alife_migration';
 import {
   floorKeyAllowsNpcs,
-  floorKeyBaseFloor,
+  floorKeyDisplayName,
   floorKeyKnown,
   floorKeyZ,
 } from '../src/data/floor_keys';
@@ -320,11 +320,12 @@ test('A-Life migration profiles validate statically', () => {
 test('shared floor key resolver covers story, design and procedural A-Life keys', () => {
   assert.equal(floorKeyKnown('design:living'), true);
   assert.equal(floorKeyZ('design:living'), 0);
-  assert.equal(floorKeyBaseFloor('design:living')?.includes('living'), true);
+  assert.equal(floorKeyDisplayName('design:living'), 'Жилая зона');
   assert.equal(floorKeyAllowsNpcs('design:void'), false);
 
   assert.equal(floorKeyKnown('design:floor_69'), true);
-  assert.equal(floorKeyBaseFloor('design:floor_69')?.includes('maintenance'), true);
+  // Этаж 69 зовут его собственным именем, а не именем полосы.
+  assert.equal(floorKeyDisplayName('design:floor_69'), 'Этаж 69');
 
   const proceduralZ = PROCEDURAL_FLOOR_ZS[0];
   assert.equal(floorKeyKnown(`procedural:z${proceduralZ}`), true);
@@ -413,13 +414,6 @@ test('A-Life migration profiles validate bad intents', () => {
       eventTags: ['test'],
     },
     {
-      id: 'void_base_floor',
-      reason: 'work',
-      weight: 1,
-      destination: { themeTags: ['void'] }, // VOID base floor
-      eventTags: ['test'],
-    },
-    {
       id: 'allowed_npc_bypass',
       reason: 'work',
       weight: 1,
@@ -441,7 +435,6 @@ test('A-Life migration profiles validate bad intents', () => {
   assert.ok(errors.some(e => e.includes('migration intent unknown_destination has unknown destination fake:floor')));
   assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets NPC-forbidden destination design:void')));
   assert.ok(errors.some(e => e.includes('migration intent npc_forbidden_destination targets VOID ordinary destination design:void')));
-  assert.ok(errors.some(e => e.includes('migration intent void_base_floor targets VOID base floor')));
 
   assert.ok(!errors.some(e => e.includes('migration intent allowed_npc_bypass targets NPC-forbidden destination design:void')));
   assert.ok(errors.some(e => e.includes('migration intent allowed_npc_bypass targets VOID ordinary destination design:void')));

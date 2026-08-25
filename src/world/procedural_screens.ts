@@ -10,7 +10,6 @@ import {
   type Room,
 } from '../core/types';
 import { World } from '../core/world';
-import { designFloorAtZ, designFloorBaseZ } from '../data/design_floors';
 import {
   SCREEN_SIGNAL_DEFS,
   screenSignalEligible,
@@ -44,12 +43,11 @@ const FLOOR_CAP: Record<number, number> = {
   [-50]: 0,
 };
 
+/* Потолок экранов у этажа свой. Раньше этаж без собственного значения брал его
+ * у «базового этажа своей темы» — то есть у одного из пятидесяти соседей по
+ * ярлыку. Этажи не группируются: нет своего значения — берётся общий предел. */
 function screenThemeZ(z: number): number {
-  if (z in FLOOR_CAP) return z;
-  const theme = designFloorAtZ(z)?.themeTags?.[0];
-  // Was a hand-kept copy of the six route stops. Derived now, so a retyped
-  // number cannot drift from the route table the way the old scheme did.
-  return theme !== undefined ? designFloorBaseZ(theme) : 0;
+  return z in FLOOR_CAP ? z : 0;
 }
 
 const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];

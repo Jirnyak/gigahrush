@@ -43,7 +43,6 @@ test('oranzhereya_betona is registered as the z -2 scarcity greenhouse route', (
   const route = designFloorById(ORANZHEREYA_BETONA_ROUTE_ID);
 
   assert.equal(route?.z, ORANZHEREYA_BETONA_Z);
-  assert.equal(route?.themeTags?.includes('living'), true);
     assert.equal(route?.displayName, ORANZHEREYA_BETONA_DISPLAY_NAME);
   assert.equal(route?.danger, 3);
   assert.equal(designFloorAtZ(ORANZHEREYA_BETONA_Z)?.id, ORANZHEREYA_BETONA_ROUTE_ID);

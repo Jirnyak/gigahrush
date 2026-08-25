@@ -8,7 +8,7 @@ import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { RUMORS } from '../src/data/rumors';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const ITEM_ID = 'passport_stub';
 
@@ -43,7 +43,7 @@ test('passport stub has reachable steal, reward, archive and black-market decisi
   const state = makeGameState({ currentZ: 0, time: 99 });
 
   assert.equal(addItem(player, ITEM_ID, 1), true);
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, ITEM_ID), 0);
   assert.equal(player.money, 34);

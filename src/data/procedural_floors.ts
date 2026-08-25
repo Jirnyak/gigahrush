@@ -65,7 +65,6 @@ export const FALSE_SAFE_BLOCK_RESOLVED = 'маркер сорван';
 export interface FloorGeometryDef {
   id: FloorGeometryId;
   title: string;
-  themeTags: string[];
   weight: number;
   roomCount: number;
   dangerBias: number;
@@ -109,7 +108,6 @@ export interface ProceduralFloorSpec {
   depth: number;
   danger: 1 | 2 | 3 | 4 | 5;
   geometryId: FloorGeometryId;
-  themeTags: string[];
   majorityId: FloorMajorityId;
   anomalyId: FloorAnomalyId;
   title: string;
@@ -229,7 +227,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'living_blocks',
     title: 'типовой жилой блок (класс Г)',
-    themeTags: ['living'],
     weight: 42,
     roomCount: 86,
     dangerBias: 0,
@@ -244,7 +241,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'apartment_pressure',
     title: 'уплотненный сектор Квартир',
-    themeTags: ['kvartiry'],
     weight: 30,
     roomCount: 104,
     dangerBias: 1,
@@ -259,7 +255,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'communal_knots',
     title: 'коммунально-бытовые узлы',
-    themeTags: ['kvartiry'],
     weight: 26,
     roomCount: 112,
     dangerBias: 0,
@@ -274,7 +269,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'attic_weatherworks',
     title: 'камеры воздухозабора и вентиляции',
-    themeTags: ['ministry'],
     weight: 30,
     roomCount: 360,
     dangerBias: 1,
@@ -289,7 +283,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'archive_warrens',
     title: 'архивы забытых нормативов',
-    themeTags: ['ministry'],
     weight: 28,
     roomCount: 92,
     dangerBias: 0,
@@ -304,7 +297,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'collectors',
     title: 'технические коллекторы',
-    themeTags: ['maintenance'],
     weight: 32,
     roomCount: 72,
     dangerBias: 1,
@@ -319,7 +311,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'workshops',
     title: 'уровень производственных цехов',
-    themeTags: ['maintenance'],
     weight: 26,
     roomCount: 64,
     dangerBias: 1,
@@ -334,7 +325,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'service_spines',
     title: 'магистральные сервисные штреки',
-    themeTags: ['maintenance'],
     weight: 24,
     roomCount: 176,
     dangerBias: 0,
@@ -349,7 +339,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'sump_causeways',
     title: 'нижние затопленные эстакады',
-    themeTags: ['maintenance'],
     weight: 34,
     roomCount: 56,
     dangerBias: 2,
@@ -364,7 +353,6 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'admin_pockets',
     title: 'канцелярские лабиринты',
-    themeTags: ['ministry'],
     weight: 16,
     roomCount: 240,
     dangerBias: 0,
@@ -720,9 +708,12 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     FLOOR_GEOMETRIES.filter(def => zAllowed(def, profileZ)),
     rng,
     def => {
+      // Перекрёстное опыление половин здания: внизу интереснее геометрия
+      // верха и наоборот. Раньше «верх» и «низ» определялись корзиной темы —
+      // теперь собственным поясом геометрии.
       let w = def.weight;
-      if (profileZ < 0 && def.themeTags.includes('ministry')) w *= 1.8;
-      if (profileZ > 0 && def.themeTags.includes('maintenance')) w *= 1.6;
+      if (profileZ < 0 && (def.minZ ?? 0) >= 0) w *= 1.8;
+      if (profileZ > 0 && (def.maxZ ?? 0) <= 0) w *= 1.6;
       return w;
     },
     FLOOR_GEOMETRIES[0],
@@ -761,7 +752,6 @@ export function makeProceduralFloorSpec(runSeed: number, z: number): ProceduralF
     depth,
     danger,
     geometryId: geometry.id,
-    themeTags: [...geometry.themeTags],
     majorityId: majority.id,
     anomalyId: anomaly.id,
     title: `${anomalyPrefix}${geometry.title}, ${majority.title}`,

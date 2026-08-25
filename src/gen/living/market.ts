@@ -11,7 +11,7 @@ import { World } from '../../core/world';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { registerZoneContent } from '../living/zone_content';
+import { registerZoneContent } from './zone_content';
 import { Spr } from '../../entities/sprite_index';
 import { rng } from '../../core/rand';
 

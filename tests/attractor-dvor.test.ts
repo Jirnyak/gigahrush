@@ -101,7 +101,6 @@ test('attractor_dvor is registered as a maintenance authored route floor', () =>
   const route = designFloorById(ATTRACTOR_DVOR_ROUTE_ID);
   assert.ok(route);
   assert.equal(route.z, ATTRACTOR_DVOR_Z);
-  assert.equal(route.themeTags?.includes('maintenance'), true);
   assert.equal(route.displayName, 'Аттракторный двор');
   assert.equal(route.danger, 4);
   assert.equal(designFloorAtZ(ATTRACTOR_DVOR_Z)?.id, ATTRACTOR_DVOR_ROUTE_ID);

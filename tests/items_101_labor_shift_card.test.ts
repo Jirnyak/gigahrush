@@ -9,7 +9,7 @@ import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { generateDocumentGate } from '../src/gen/ministry/document_gate';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const CARD_ID = 'labor_shift_card';
 
@@ -82,7 +82,7 @@ test('labor shift card can be sold instead of saved for access', () => {
   const state = makeGameState({ currentZ: 0, time: 102 });
 
   assert.equal(addItem(player, CARD_ID, 1), true);
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, CARD_ID), 0);
   assert.equal(player.money, 18);

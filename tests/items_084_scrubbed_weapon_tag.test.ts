@@ -7,7 +7,7 @@ import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 test('scrubbed weapon tag is black-market contraband paperwork', () => {
   const def = ITEMS.scrubbed_weapon_tag;
@@ -40,7 +40,7 @@ test('scrubbed weapon tag can be sold as audit-risk contraband in the living blo
   assert.equal(addItem(player, 'scrubbed_weapon_tag', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, 'scrubbed_weapon_tag'), 0);
   assert.equal(player.money, 46);

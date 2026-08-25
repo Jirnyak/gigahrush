@@ -47,16 +47,19 @@ export interface RumorDef {
 }
 
 import { DESIGN_FLOOR_ROUTES } from './design_floors';
+import { DOCUMENT_GATE_ROOM_NAME } from './documents_access';
 
 const ALL_FLOORS = DESIGN_FLOOR_ROUTES.map(r => r.z);
 
-const CIVIL_FLOORS = DESIGN_FLOOR_ROUTES
-  .filter(r => r.themeTags?.includes('living') || r.themeTags?.includes('kvartiry') || r.themeTags?.includes('ministry'))
-  .map(r => r.z);
+/* Где ходит слух — свойство самого слуха, и оба списка ниже просто авторская
+ * скоропись для частых наборов. Раньше они выводились из шести корзин тем, и
+ * получалось, что «обжитой ярус» решал ярлык: этаж 69 на z −4 попадал в
+ * глубину, а чёрный рынок на −10 — в гражданские. Порогом по высоте это не
+ * сводится (минимум гражданских ниже максимума глубоких), поэтому наборы
+ * выписаны поимённо и правятся поэтажно. */
+const CIVIL_FLOORS = [50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0, -2, -6, -8, -10];
 
-const DEEP_FLOORS = DESIGN_FLOOR_ROUTES
-  .filter(r => r.themeTags?.includes('maintenance') || r.themeTags?.includes('hell') || r.themeTags?.includes('void'))
-  .map(r => r.z);
+const DEEP_FLOORS = [-4, -12, -14, -16, -18, -20, -22, -24, -26, -28, -30, -32, -34, -36, -38, -40, -42, -44, -46, -48, -50];
 
 const BASE_RUMORS: readonly RumorDef[] = [
   { id: 'arena_champion_rumor', topic: 'player_action', minTrust: 0, floors: [-26, 0], text: ['Видели этого психа на ринге? Уважуха.', 'Говорят, чемпион арены выжил там, где даже ликвидаторы ложатся.', 'Золотой кубок теперь у настоящего монстра. Я бы не стал стоять у него на пути.'], reveals: { kind: 'warning', tag: 'arena_champion', confidence: 4 } },
@@ -635,7 +638,7 @@ const BASE_RUMORS: readonly RumorDef[] = [
   { id: 'ministry_access_pass', topic: 'floor', minTrust: 0, floors: [30, 0, 14], text: ['В министерство входят через корешок, печать и очередь, не через красивую дверь.', 'Без пропуска у мраморного входа охрана просит не объяснение, а бланк.'], reveals: { kind: 'floor', z: 30, confidence: 4 } },
   { id: 'ministry_stamp_queue', topic: 'floor', minTrust: 5, floors: [30], text: ['Печать открывает больше замков, чем ключ, если сургуч не размок и фамилия совпала.', 'Очередь к печати двигается, когда кто-то ушёл за второй копией и не вернулся.'], reveals: { kind: 'item', itemId: 'seal_wax', confidence: 3 } },
   { id: 'ministry_documents_bite', topic: 'floor', minTrust: 10, floors: [30], text: ['В кабинете сначала проверяют карманы, потом лицо.', 'Документ без печати там считается признанием.'], reveals: { kind: 'warning', tag: 'ministry_access', confidence: 3 } },
-  { id: 'ministry_document_gate_n3', topic: 'room', minTrust: 5, floors: [30], text: ['У проверочного коридора N3 три цены: корешок, подделка или шум.', 'В N3 официальная бумага открывает дверь, а касса рядом продает обход тем, кто рискует.'], reveals: { kind: 'room', roomDefId: 'Проверочный коридор N3', confidence: 3 } },
+  { id: 'ministry_document_gate_n3', topic: 'room', minTrust: 5, floors: [30], text: ['У проверочного коридора N3 три цены: корешок, подделка или шум.', 'В N3 официальная бумага открывает дверь, а касса рядом продает обход тем, кто рискует.'], reveals: { kind: 'room', roomDefId: DOCUMENT_GATE_ROOM_NAME, confidence: 3 } },
   { id: 'ministry_civil_minister_voice', topic: 'floor', minTrust: 5, floors: CIVIL_FLOORS, text: ['Гражданский министр говорит мягче сирены, но после его подписи секции получают временный статус.', 'Если распоряжение обещает стабильность, смотри не на слово, а на список исключений и печать внизу.'], reveals: { kind: 'floor', z: 30, confidence: 3 } },
   { id: 'ministry_civil_minister_water_norm', topic: 'economy', minTrust: 0, floors: CIVIL_FLOORS, text: ['Комиссия по воде считает пустые бутылки доказательством спокойствия: раз не пьют, значит норматив выдержан.', 'Когда сверху говорят "временное ограничение", очередь переводит это как сухую ночь без свидетелей.'], reveals: { kind: 'item', itemId: 'water_coupon', confidence: 3 } },
   { id: 'ministry_civil_minister_seal_order', topic: 'contract', minTrust: 5, floors: [30, 14, 0], text: ['Приказ о локализации не звучит как казнь. Там просто нет пункта про открытие двери.', 'Заваренную секцию в отчете называют сохраненной: ее ведь больше никто не теряет повторно.'], reveals: { kind: 'warning', tag: 'sealed_door', confidence: 4 } },
@@ -652,13 +655,13 @@ const BASE_RUMORS: readonly RumorDef[] = [
       'Кто вынесет досье ЧБ, выбирает не веру, а маршрут бумаги: печать, рынок, Яков, ликвидаторы или тишина.',
     ],
     reveals: [
-      { kind: 'room', roomDefId: 'Проверочный коридор N3', confidence: 4 },
+      { kind: 'room', roomDefId: DOCUMENT_GATE_ROOM_NAME, confidence: 4 },
       { kind: 'container', tag: 'chernobog', confidence: 4 },
       { kind: 'item', itemId: 'chernobog_cell_map', confidence: 3 },
     ],
     lead: {
       z: 30,
-      roomDefId: 'Проверочный коридор N3',
+      roomDefId: DOCUMENT_GATE_ROOM_NAME,
       itemId: 'chernobog_cell_map',
       action: 'найди досье ЧБ и реши: сдать, подделать, продать, спрятать или показать адресату',
     },

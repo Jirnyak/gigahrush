@@ -9,7 +9,7 @@ import { RESOURCES } from '../src/data/resources';
 import { BLACK_MARKET_88_STOCK } from '../src/gen/black_market_88';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const ITEM_ID = 'stolen_terminal_stamp';
 
@@ -51,7 +51,7 @@ test('stolen terminal stamp can be sold as black market document risk', () => {
   assert.equal(addItem(player, ITEM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, ITEM_ID), 0);
   assert.equal(player.money, 118);

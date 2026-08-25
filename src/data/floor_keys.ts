@@ -19,7 +19,7 @@ export type FloorKeyKind = 'design' | 'procedural' | 'floor_instance' | 'unknown
 
 
 export interface FloorKeyResolveContext {
-  proceduralSpecs?: Readonly<Record<string, { z?: number; themeTags?: readonly string[] }>>;
+  proceduralSpecs?: Readonly<Record<string, { z?: number; title?: string }>>;
   extraKnownKeys?: readonly string[] | ReadonlySet<string>;
 }
 
@@ -87,12 +87,14 @@ export function floorKeyZ(keyInput: string, context?: FloorKeyResolveContext): n
   return undefined;
 }
 
-export function floorKeyBaseFloor(keyInput: string, context?: FloorKeyResolveContext): readonly string[] | undefined {
+/** Как этаж зовут. Раньше вместо имени возвращались теги его темы, и
+ *  уведомление с крыши подписывалось «Министерство» — именем чужого этажа. */
+export function floorKeyDisplayName(keyInput: string, context?: FloorKeyResolveContext): string | undefined {
   const key = cleanFloorKey(keyInput);
   const kind = floorKeyKind(key);
-  if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.themeTags;
-  if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.themeTags;
-  if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.themeTags;
+  if (kind === 'design') return designFloorById(floorKeyRouteId(key))?.displayName;
+  if (kind === 'procedural') return context?.proceduralSpecs?.[floorKeyRouteId(key)]?.title;
+  if (kind === 'floor_instance') return floorInstanceById(floorKeyRouteId(key))?.title;
   return undefined;
 }
 

@@ -53,6 +53,7 @@ export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGenera
     spawnPodadHeralds(world, entities, nextId, SPAWN_X + 0.5, SPAWN_Y + 0.5);
     seedPodadDrops(world, entities, nextId, rooms);
     registerPodadRouteCues(world, rooms);
+    world.hasMeatWalls = true;
 
     return {
       isDecentralized: true,

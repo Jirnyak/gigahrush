@@ -7,7 +7,6 @@ export type FloorContentStatus = 'catalog_only' | 'design_doc' | 'needs_generato
 export interface FloorCatalogDef {
   readonly id: string;
   readonly displayName: string;
-  readonly themeTags: readonly string[];
   readonly tags: ReadonlySet<string>;
   readonly rarity: FloorCatalogRarity;
   readonly minDepth: number;
@@ -19,7 +18,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_404_lift_loop',
     displayName: 'Лифтовая петля 404',
-    themeTags: ['maintenance'],
     tags: new Set(['numbered', 'elevator', 'map_lie', 'lost_property']),
     rarity: 'rare',
     minDepth: 2,
@@ -29,7 +27,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_556_pressure_queue',
     displayName: 'П-46/556: очередь давления',
-    themeTags: ['ministry'],
     tags: new Set(['numbered', 'documents', 'queue', 'pressure']),
     rarity: 'rare',
     minDepth: 3,
@@ -39,7 +36,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_666_red_service',
     displayName: 'Красная служба 666',
-    themeTags: ['hell'],
     tags: new Set(['numbered', 'cult', 'combat', 'samosbor']),
     rarity: 'legendary',
     minDepth: 4,
@@ -49,7 +45,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_777_lucky_landing',
     displayName: 'Счастливая высадка 777',
-    themeTags: ['kvartiry'],
     tags: new Set(['numbered', 'luck', 'containers', 'trap']),
     rarity: 'rare',
     minDepth: 2,
@@ -59,7 +54,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_1337_radio_data',
     displayName: 'Радио DATA 1337',
-    themeTags: ['living'],
     tags: new Set(['numbered', 'radio', 'data', 'psi']),
     rarity: 'legendary',
     minDepth: 4,
@@ -69,7 +63,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_088_black_market',
     displayName: 'Черный рынок 88',
-    themeTags: ['kvartiry'],
     tags: new Set(['market', 'economy', 'debt', 'stealth']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -79,7 +72,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_school_obzh',
     displayName: 'Школа ОБЖ имени гермодвери',
-    themeTags: ['kvartiry'],
     tags: new Set(['school', 'escort', 'evacuation', 'perk']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -89,7 +81,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_hospital_quarantine',
     displayName: 'Больничный блок карантина',
-    themeTags: ['living'],
     tags: new Set(['hospital', 'medicine', 'quarantine', 'documents']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -99,7 +90,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_raionsovet_archive',
     displayName: 'Райсовет и Живой архив',
-    themeTags: ['ministry'],
     tags: new Set(['archive', 'documents', 'memory', 'access']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -109,7 +99,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_concentrate_industry',
     displayName: 'Промзона концентрата',
-    themeTags: ['maintenance'],
     tags: new Set(['industry', 'production', 'defect', 'resource']),
     rarity: 'uncommon',
     minDepth: 2,
@@ -119,7 +108,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_service_roof',
     displayName: 'Служебная крыша',
-    themeTags: ['living'],
     tags: new Set(['roof', 'signal', 'weather_fake', 'sniper']),
     rarity: 'rare',
     minDepth: 2,
@@ -129,7 +117,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_gulagium_shift',
     displayName: 'Гулагий: сменный барак',
-    themeTags: ['kvartiry'],
     tags: new Set(['labor', 'schedule', 'punishment', 'faction']),
     rarity: 'rare',
     minDepth: 3,
@@ -139,7 +126,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_mushroom_cellar',
     displayName: 'Грибная смена',
-    themeTags: ['living'],
     tags: new Set(['mushroom', 'food', 'mold', 'production']),
     rarity: 'common',
     minDepth: 0,
@@ -149,7 +135,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_metro_wrong_station',
     displayName: 'Станция ошибочной линии',
-    themeTags: ['maintenance'],
     tags: new Set(['metro', 'route', 'wrong_exit', 'travel']),
     rarity: 'rare',
     minDepth: 2,
@@ -159,7 +144,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_heatline_zero',
     displayName: 'Теплотрасса Ноль',
-    themeTags: ['maintenance'],
     tags: new Set(['heat', 'valve', 'steam', 'repair']),
     rarity: 'common',
     minDepth: 1,
@@ -169,7 +153,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_void_afterprotocol',
     displayName: 'Пустотный протокол',
-    themeTags: ['void'],
     tags: new Set(['void', 'protocol', 'backlash', 'late_game']),
     rarity: 'legendary',
     minDepth: 5,
@@ -179,7 +162,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_courtyard_well',
     displayName: 'Внутренний двор-колодец',
-    themeTags: ['living'],
     tags: new Set(['courtyard', 'vertical', 'falling_debris', 'scout']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -189,7 +171,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_laundry_flood',
     displayName: 'Прачечная с обратной водой',
-    themeTags: ['kvartiry'],
     tags: new Set(['laundry', 'water', 'contamination', 'noise']),
     rarity: 'common',
     minDepth: 0,
@@ -199,7 +180,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_black_staircase',
     displayName: 'Черная лестница',
-    themeTags: ['living'],
     tags: new Set(['staircase', 'stealth', 'shortcut', 'locked_doors']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -209,7 +189,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_kindergarten_nap',
     displayName: 'Детсад тихого часа',
-    themeTags: ['kvartiry'],
     tags: new Set(['children', 'quiet', 'escort', 'supplies']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -219,7 +198,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_morgue_registry',
     displayName: 'Морг регистраций',
-    themeTags: ['ministry'],
     tags: new Set(['morgue', 'identity', 'records', 'corpse']),
     rarity: 'rare',
     minDepth: 2,
@@ -229,7 +207,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_print_tunnel',
     displayName: 'Печатный тоннель',
-    themeTags: ['ministry'],
     tags: new Set(['printing', 'counterfeit', 'documents', 'heat']),
     rarity: 'uncommon',
     minDepth: 1,
@@ -239,7 +216,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_chapel_switchboard',
     displayName: 'Часовня коммутатора',
-    themeTags: ['hell'],
     tags: new Set(['chapel', 'signal', 'cult', 'reroute']),
     rarity: 'rare',
     minDepth: 3,
@@ -249,7 +225,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_elevator_machine_room',
     displayName: 'Машинное отделение лифта',
-    themeTags: ['maintenance'],
     tags: new Set(['elevator', 'repair', 'access', 'noise']),
     rarity: 'common',
     minDepth: 1,
@@ -259,7 +234,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_lost_property_depot',
     displayName: 'Склад потерянных вещей',
-    themeTags: ['living'],
     tags: new Set(['lost_property', 'inventory', 'theft', 'memory']),
     rarity: 'common',
     minDepth: 0,
@@ -269,7 +243,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_canteen_underpass',
     displayName: 'Подход к столовой',
-    themeTags: ['kvartiry'],
     tags: new Set(['ration', 'crowd', 'smuggling', 'hunger']),
     rarity: 'common',
     minDepth: 0,
@@ -279,7 +252,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_pump_orchestra',
     displayName: 'Оркестр насосов',
-    themeTags: ['maintenance'],
     tags: new Set(['pump', 'rhythm', 'water', 'ambush']),
     rarity: 'uncommon',
     minDepth: 2,
@@ -289,7 +261,6 @@ export const FLOOR_CATALOG: readonly FloorCatalogDef[] = [
   {
     id: 'pocket_planned_demolition',
     displayName: 'Плановый снос секции',
-    themeTags: ['living'],
     tags: new Set(['demolition', 'timer', 'walls', 'escape']),
     rarity: 'rare',
     minDepth: 2,

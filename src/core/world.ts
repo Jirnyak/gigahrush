@@ -251,6 +251,15 @@ export class World {
   railTrains: RailTrain[] = [];
   railTrainCells: Map<number, number> = new Map(); // cell idx -> train index
   hasOpenSky?: boolean;            // true if this floor has an open sky (e.g. roof)
+  // Плотность воздуха этажа. Раньше её выбирал ярлык темы в цикле кадра, и
+  // потому «как в коллекторах» дышали все тринадцать этажей их корзины. Воздух
+  // принадлежит этажу: его задаёт собственный генератор, а кто молчит — дышит
+  // обычным.
+  baseFogDensity = 0.065;
+  // Плоть этажа: самосбор выращивает по ней мясные стены. Тоже собственность
+  // этажа, а не общей темы — раньше признак брался из корзины `hell`, и её
+  // объявлял за всех один тег.
+  hasMeatWalls = false;
   cellVersion = 0;                 // bumped when runtime cell solidity changes
   surfaceVersion = 0;              // bumped when surfaceMap pixels change
   wallTexVersion = 0;              // bumped when runtime wall texture data changes

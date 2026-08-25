@@ -27,7 +27,6 @@ import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
-import './living_zone';
 
 
 import { MarketRooms, Market88ServiceGutPlacement, Market88BazaarRooms, market88OwnerFaction } from './geometry';

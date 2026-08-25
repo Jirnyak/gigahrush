@@ -1,8 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/* Модульные тесты миров не строят и памяти почти не едят, поэтому берут ядра
+   щедрее генерационных. Было жёстко три. */
+const CONCURRENCY = Math.max(3, (os.cpus().length || 4) - 2);
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const testsDir = join(root, 'tests');
 const tsxBin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
@@ -39,7 +43,7 @@ if (selected.length === 0) {
 
 console.log(`Unit test selection: ${selected.length} files; ${reserved} generation/content files reserved for npm run test:generation.`);
 
-const result = spawnSync(tsxBin, ['--test', '--test-concurrency=3', ...process.argv.slice(2), ...selected], {
+const result = spawnSync(tsxBin, ['--test', `--test-concurrency=${CONCURRENCY}`, ...process.argv.slice(2), ...selected], {
   cwd: root,
   env: process.env,
   stdio: 'inherit',

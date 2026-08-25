@@ -32,7 +32,6 @@ function nursery(): TuringGeneration {
 test('turing_nursery is registered as a Kvartiry route floor', () => {
   const route = designFloorById(TURING_NURSERY_ROUTE_ID);
   assert.equal(route?.z, TURING_NURSERY_Z);
-  assert.equal(route?.themeTags?.includes('kvartiry'), true);
     assert.equal(route?.displayName, 'Ясли Тьюринга');
   assert.equal(route?.danger, 4);
   assert.equal(designFloorAtZ(TURING_NURSERY_Z)?.id, TURING_NURSERY_ROUTE_ID);

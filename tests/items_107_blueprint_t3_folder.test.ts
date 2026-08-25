@@ -8,7 +8,7 @@ import { makeProceduralFloorSpec } from '../src/data/procedural_floors';
 import { resourceForItem } from '../src/data/resources';
 import { generateProceduralFloor } from '../src/gen/procedural_floor';
 import { useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 test('blueprint t3 folder is a rare frozen document blueprint', () => {
   const def = ITEMS.blueprint_t3_folder;
@@ -53,7 +53,7 @@ test('blueprint t3 folder can be spent as a black-market document choice', () =>
   const player = makeTestPlayer({ inventory: [{ defId: 'blueprint_t3_folder', count: 1 }], money: 0 });
   const state = makeGameState({ currentZ: 0, time: 60 });
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, 'blueprint_t3_folder'), 0);
   assert.equal(player.money, 240);

@@ -63,6 +63,10 @@ export function generateHell(generationSeed = 0x4d594153): { world: World; entit
 
   placeProceduralScreens(world, -36);
 
+  // В Аду тумана меньше обычного: ужас должно быть видно.
+  world.baseFogDensity = 0.05;
+  world.hasMeatWalls = true;
+
   return { world, entities, spawnX, spawnY };
 }
 

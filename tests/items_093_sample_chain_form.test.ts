@@ -8,7 +8,7 @@ import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { generateSlimeNiiDesignFloor } from '../src/gen/slime_nii';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const FORM_ID = 'sample_chain_form';
 
@@ -54,7 +54,7 @@ test('sample chain form can be sold instead of saved for legal handoff', () => {
   assert.equal(addItem(player, FORM_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, FORM_ID), 0);
   assert.equal(player.money, 34);

@@ -65,6 +65,31 @@ function withRandom<T>(value: number, run: () => T): T {
   }
 }
 
+/* Первый бросок выбирает такт, все следующие ищут проходимую клетку под спавн.
+ * Одной константой обе задачи не решаются: значения, попадающие в весовое окно
+ * патруля, заводят поиск клетки в детерминированный промах. Раньше это сходилось
+ * случайно — такт был почти единственным доступным, и хватало 0.99. */
+function withRandomThen<T>(first: number, rest: number, run: () => T): T {
+  const originalSeed = SeedRng.prototype.random;
+  let used = false;
+  const next = (): number => {
+    if (used) return rest;
+    used = true;
+    return first;
+  };
+  try {
+    _overrideRng(next);
+    SeedRng.prototype.random = next;
+    return run();
+  } finally {
+    _restoreRng();
+    SeedRng.prototype.random = originalSeed;
+  }
+}
+
+// Весовое окно патруля среди доступных тактов classic/active: (24/68, 40/68].
+const PATROL_ROLL = 0.45;
+
 test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refill', () => {
   initFactionRelations();
   const state = makeGameState({
@@ -80,7 +105,11 @@ test('samosbor extra patrol is a fixed-pool A-Life migration, not anonymous refi
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });
   const entities: Entity[] = [player];
   const nextId = { v: getPlotNpcCount() + 1000 };
-  const result = withRandom(0.99, () => 
+  // Такты самосбора больше не отсекаются по этажу — вариант стал единственным
+  // отбором, и на этой сцене доступных тактов стало больше. Бросок подобран так,
+  // чтобы выпал именно патруль: проверяется не выбор такта, а то, что патруль
+  // приходит переселением из фиксированного пула A-Life, а не анонимным доливом.
+  const result = withRandomThen(PATROL_ROLL, 0.99, () =>
     tickSamosborDirector(world, entities, state, nextId, classicVariant(), 'active_cadence')
   );
 
@@ -115,7 +144,7 @@ test('samosbor extra patrol fails instead of spawning when no A-Life identities 
   const player = makeTestPlayer({ id: 1, x: 10.5, y: 10.5 });
   const entities: Entity[] = [player];
 
-  const result = withRandom(0.99, () =>
+  const result = withRandomThen(PATROL_ROLL, 0.99, () =>
     tickSamosborDirector(world, entities, state, { v: 30 }, classicVariant(), 'active_cadence')
   );
 

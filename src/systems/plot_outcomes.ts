@@ -21,7 +21,6 @@ import {
 import { Spr } from '../entities/sprite_index';
 import { canSpawnEntityType } from './entity_limits';
 
-import { designFloorAtZ } from '../data/design_floors';
 import { publishEvent } from './events';
 import {
   applyStoryQuestOutcome,
@@ -89,7 +88,7 @@ function routeTags(state: GameState): string[] {
     tags.push(`route_key:${floorRunEntryFloorKey(entry)}`);
     tags.push(`route_kind:${floorRunEntryKind(entry)}`);
     tags.push(`z:${entry.z}`);
-    tags.push(`base_z: ${entry.themeTags}`);
+    tags.push(`floor: ${entry.designFloorId ?? entry.z}`);
     if (entry.designFloorId) tags.push(`design:${entry.designFloorId}`);
     const spec = entry.spec;
     if (spec && typeof spec === 'object') {
@@ -104,9 +103,9 @@ function routeTags(state: GameState): string[] {
 
 function conditionMatches(condition: StoryOutcomeCondition | undefined, state: GameState, player?: Entity): boolean {
   if (!condition) return true;
-  const designFloor = designFloorAtZ(state.currentZ);
-  const currentTheme = designFloor?.themeTags ? designFloor.themeTags[0] : "living";
-  if (condition.floorLevels?.length && !condition.floorLevels.includes(currentTheme as any)) return false;
+  // `floorLevels` — числа-высоты. Сравнивалась с ними строка темы, поэтому
+  // условие не выполнялось никогда.
+  if (condition.floorLevels?.length && !condition.floorLevels.includes(state.currentZ)) return false;
   if (condition.routeTags?.length) {
     const actual = routeTags(state);
     if (!condition.routeTags.every(tag => actual.includes(tag))) return false;

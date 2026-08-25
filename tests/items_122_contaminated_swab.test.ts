@@ -7,7 +7,7 @@ import { resourceForItem } from '../src/data/resources';
 import { generateSlimeNiiDesignFloor } from '../src/gen/slime_nii';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { paperworkRoomWorld, tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 const SWAB_ID = 'contaminated_swab';
 
@@ -51,7 +51,7 @@ test('contaminated swab can be reported or sold from inventory', () => {
   assert.equal(addItem(reporter, SWAB_ID, 1), true);
   assert.equal(getInventorySlotActionInfo(reporter, 0)?.useLabel, 'Enter сдать/сбыть');
 
-  useItem(reporter, 0, ministry.msgs, ministry.time, ministry);
+  useItem(reporter, 0, ministry.msgs, ministry.time, ministry, undefined, paperworkRoomWorld(reporter));
 
   assert.equal(countInventoryItem(reporter, SWAB_ID), 0);
   assert.equal(reporter.money, 8);
@@ -63,7 +63,7 @@ test('contaminated swab can be reported or sold from inventory', () => {
   const living = makeGameState({ currentZ: 0, time: 123 });
 
   assert.equal(addItem(seller, SWAB_ID, 1), true);
-  useItem(seller, 0, living.msgs, living.time, living);
+  useItem(seller, 0, living.msgs, living.time, living, undefined, tradingRoomWorld(seller));
 
   assert.equal(countInventoryItem(seller, SWAB_ID), 0);
   assert.equal(seller.money, 6);

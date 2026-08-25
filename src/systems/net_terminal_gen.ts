@@ -80,12 +80,8 @@ export interface NetTerminalGenTarget {
 
 export interface NetTerminalGenRouteTarget {
   z: number;
-  // @ts-ignore
-  themeTags?: readonly string[];
   key: string;
-  kind: 'story' | 'design' | 'procedural';
-  // @ts-ignore
-  themeTags: readonly string[];
+  kind: 'design' | 'procedural';
   label: string;
 }
 
@@ -199,10 +195,6 @@ function cleanHackCooldowns(input: unknown, now: number): Record<string, number>
   return out;
 }
 
-function routeKeyForStory(z: number): string {
-  return floorKeyForDesign(String(z));
-}
-
 function routeKeyForEntry(entry: FloorRunEntry): string {
   return floorRunEntryFloorKey(entry);
 }
@@ -213,43 +205,31 @@ export function currentNetTerminalGenFloorKey(state: GameState): string {
   return routeKeyForEntry(currentFloorRunEntry(state));
 }
 
+/* Колода целей нет-терминала: по одной записи на реально существующий этаж.
+ *
+ * Раньше первой строкой стояло `const story = designFloor ? designFloor.themeTags
+ * : 100`, а следом `if (story !== undefined)` — истинное ВСЕГДА, потому что и
+ * массив, и число определены. Из-за этого весь разбор ниже был мёртв: каждый
+ * этаж попадал в колоду как `kind: "story"` с подписью-литералом `"100"`, а
+ * ключ считался как `floorKeyForDesign(String(themeTags))`, что для массива
+ * `['ministry']` даёт `design:ministry` — имя КОРЗИНЫ вместо этажа. Цель
+ * терминала расходилась с собственным `targetZ`, и пятнадцать разных этажей
+ * давали один и тот же ключ. */
 function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
   const run = ensureFloorRunState(state);
   const deck: NetTerminalGenRouteTarget[] = [];
   for (let z = FLOOR_RUN_MIN_Z; z <= FLOOR_RUN_MAX_Z; z++) {
-    const designFloor = designFloorAtZ(z);
-    const story = designFloor ? designFloor.themeTags : 100;
-    if (story !== undefined) {
-      deck.push({
-        z,
-        // @ts-ignore
-        key: routeKeyForStory(story),
-        kind: "story",
-        // @ts-ignore
-        themeTags: [story],
-        label: "100",
-      });
-      continue;
-    }
-
     const design = designFloorAtZ(z);
     if (design) {
       const entry = floorRunEntryForDesignFloor(state, design.id);
       if (entry?.spec) {
-        deck.push({
-          z,
-          key: routeKeyForEntry(entry),
-          kind: 'procedural',
-          themeTags: entry.themeTags,
-          label: entry.spec.title,
-        });
+        deck.push({ z, key: routeKeyForEntry(entry), kind: 'procedural', label: entry.spec.title });
         continue;
       }
       deck.push({
         z,
-        key: entry ? routeKeyForEntry(entry) : floorKeyForDesign(design.id) || "",
-        kind: "design",
-        themeTags: design.themeTags,
+        key: entry ? routeKeyForEntry(entry) : floorKeyForDesign(design.id),
+        kind: 'design',
         label: design.displayName,
       });
       continue;
@@ -258,13 +238,7 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
     if (!isProceduralFloorZ(z)) continue;
     const key = proceduralFloorKey(z);
     const spec = run.specs[key];
-    deck.push({
-      z,
-      key: floorKeyForProcedural(key),
-      kind: 'procedural',
-      themeTags: spec?.themeTags ?? state.currentZ,
-      label: spec?.title ?? key,
-    });
+    deck.push({ z, key: floorKeyForProcedural(key), kind: 'procedural', label: spec?.title ?? key });
   }
   return deck;
 }
@@ -272,12 +246,11 @@ function buildRouteDeck(state: GameState): NetTerminalGenRouteTarget[] {
 export function deriveNetTerminalGenTarget(state: GameState): NetTerminalGenTarget {
   const run = ensureFloorRunState(state);
   const deck = buildRouteDeck(state);
-  const fallback = deck[0] ?? {
+  const fallback: NetTerminalGenRouteTarget = deck[0] ?? {
     z: 0,
-    key: routeKeyForStory(state.currentZ),
-    kind: 'story' as const,
-    themeTags: state.currentZ,
-    label: "100",
+    key: floorKeyForDesign('living'),
+    kind: 'design',
+    label: 'Жилая зона',
   };
   const deckFingerprint = deck.map(entry => entry.key).join('|');
   const routeSeed = hashSeed(deckFingerprint, run.runSeed);

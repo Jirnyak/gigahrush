@@ -24,7 +24,6 @@ export interface SaveRuntimeExtras {
   voidReturnPortal?: unknown;
   voidEntryFromFloor?: unknown;
   floorMemory?: unknown;
-  playedCinematics?: unknown;
   playedScenes?: unknown;
 }
 
@@ -48,7 +47,6 @@ export function createGameSavePayload(
       liftArachna: liftArachnaStateForSave(state),
       pseudolift: pseudoliftStateForSave(state),
       floorMemory: extras.floorMemory,
-      playedCinematics: extras.playedCinematics,
       playedScenes: extras.playedScenes,
       alife: alifeForSave(state),
       alifeMobility: alifeMobilityForSave(state),

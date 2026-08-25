@@ -147,7 +147,10 @@ export function tryUseMetroRoute(
   const route = routeAtLookCell(world, lookX, lookY);
   if (!route) return null;
 
-  if (currentFloorRunEntry(state)!.themeTags.includes('maintenance') && !route.safeReturn) {
+  // Именно коллекторы: платформу 19 строит их собственный генератор
+  // (`error_line`), и посадка на уходящие линии закрыта здесь, а не на всех
+  // тринадцати этажах бывшей корзины `maintenance`.
+  if (currentFloorRunEntry(state)!.designFloorId === 'maintenance' && !route.safeReturn) {
     return {
       route,
       wrongStop: false,

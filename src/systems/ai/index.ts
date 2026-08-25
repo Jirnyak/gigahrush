@@ -211,9 +211,10 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setEntityMap(entityIndex.byId);
   fillProjectileOwners(entityIndex.projectiles);
 
+  // Конторский распорядок — свойство самого министерства, а не пятнадцати
+  // этажей его бывшей корзины.
   const designFloor = currentZ !== undefined ? designFloorAtZ(currentZ) : undefined;
-  // @ts-ignore
-  const isMinistry = designFloor ? designFloor.themeTags?.includes('ministry') : false;
+  const isMinistry = designFloor?.id === 'ministry';
   const player = entityIndex.byId.get(playerId);
   setNpcBarkLogContext({
     listener: player,

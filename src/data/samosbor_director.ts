@@ -1,5 +1,4 @@
 import { type WorldEventSeverity } from '../core/types';
-import { designFloorZsByTheme } from './design_floors';
 import { type SamosborVariantId } from './samosbor_variants';
 
 export type SamosborBeatPhase = 'warning' | 'active' | 'aftermath';
@@ -17,7 +16,6 @@ export type SamosborBeatEffectId =
 export interface SamosborBeatDef {
   id: string;
   phase: SamosborBeatPhase;
-  floors: readonly number[];
   variants: readonly SamosborVariantId[];
   weight: number;
   cooldown: number;
@@ -46,15 +44,6 @@ export const SAMOSBOR_DIRECTOR_EFFECT_FAIL_COOLDOWN = 20;
 
 // Theme scopes derived from the authored route (the old hand-picked lists
 // held ONE stale z per theme, so beats never fired anywhere else).
-const MINISTRY_FLOORS = designFloorZsByTheme('ministry');
-const KVARTIRY_FLOORS = designFloorZsByTheme('kvartiry');
-const LIVING_FLOORS = designFloorZsByTheme('living');
-const MAINTENANCE_FLOORS = designFloorZsByTheme('maintenance');
-const HELL_FLOORS = designFloorZsByTheme('hell');
-const VOID_FLOORS = designFloorZsByTheme('void');
-const CIVIL_FLOORS = [...MINISTRY_FLOORS, ...KVARTIRY_FLOORS, ...LIVING_FLOORS] as const;
-const SERVICE_FLOORS = [...KVARTIRY_FLOORS, ...LIVING_FLOORS, ...MAINTENANCE_FLOORS] as const;
-const ALL_FLOORS = [...CIVIL_FLOORS, ...MAINTENANCE_FLOORS, ...HELL_FLOORS, ...VOID_FLOORS] as const;
 const ALL_VARIANTS = ['classic', 'wet', 'electric', 'meat', 'maronary', 'istotit', 'veretar'] as const;
 
 const registry: SamosborBeatDef[] = [];
@@ -77,7 +66,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_airlock_warning',
     phase: 'warning',
-    floors: ALL_FLOORS,
     variants: ALL_VARIANTS,
     weight: 28,
     cooldown: 180,
@@ -91,7 +79,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_corridor_rumor_seed',
     phase: 'warning',
-    floors: CIVIL_FLOORS,
     variants: ['classic', 'wet', 'electric'],
     weight: 18,
     cooldown: 240,
@@ -105,7 +92,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_social_roll_call',
     phase: 'warning',
-    floors: CIVIL_FLOORS,
     variants: ALL_VARIANTS,
     weight: 26,
     cooldown: 210,
@@ -119,7 +105,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_maintenance_pressure_gauge',
     phase: 'warning',
-    floors: MAINTENANCE_FLOORS,
     variants: ['classic', 'wet', 'electric', 'maronary', 'veretar'],
     weight: 32,
     cooldown: 210,
@@ -133,7 +118,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_hell_meat_seam',
     phase: 'warning',
-    floors: HELL_FLOORS,
     variants: ['wet', 'meat', 'maronary', 'veretar'],
     weight: 34,
     cooldown: 210,
@@ -147,7 +131,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_void_anchor_warning',
     phase: 'warning',
-    floors: VOID_FLOORS,
     variants: ['classic', 'maronary', 'veretar'],
     weight: 36,
     cooldown: 210,
@@ -161,7 +144,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_door_malfunction',
     phase: 'warning',
-    floors: ALL_FLOORS,
     variants: ['wet', 'electric', 'meat'],
     weight: 20,
     cooldown: 210,
@@ -175,7 +157,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_veretar_white_area',
     phase: 'warning',
-    floors: ALL_FLOORS,
     variants: ['veretar'],
     weight: 32,
     cooldown: 210,
@@ -189,7 +170,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_maronary_green_source',
     phase: 'warning',
-    floors: ALL_FLOORS,
     variants: ['maronary'],
     weight: 32,
     cooldown: 180,
@@ -203,7 +183,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_maronary_beep_direction',
     phase: 'warning',
-    floors: ALL_FLOORS,
     variants: ['maronary'],
     weight: 30,
     cooldown: 180,
@@ -217,7 +196,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_maronary_map_argument',
     phase: 'warning',
-    floors: ALL_FLOORS,
     variants: ['maronary'],
     weight: 24,
     cooldown: 210,
@@ -231,7 +209,6 @@ const WARNING_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'pre_istotit_bell_shelter',
     phase: 'warning',
-    floors: CIVIL_FLOORS,
     variants: ['istotit'],
     weight: 34,
     cooldown: 180,
@@ -248,7 +225,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_floor_fog_residue',
     phase: 'active',
-    floors: ALL_FLOORS,
     variants: ['classic', 'wet', 'electric', 'meat'],
     weight: 24,
     cooldown: 120,
@@ -262,7 +238,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_maronary_wrong_door',
     phase: 'active',
-    floors: ALL_FLOORS,
     variants: ['maronary'],
     weight: 24,
     cooldown: 180,
@@ -276,7 +251,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_maronary_document_rewrite',
     phase: 'active',
-    floors: CIVIL_FLOORS,
     variants: ['maronary'],
     weight: 18,
     cooldown: 240,
@@ -290,7 +264,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_maronary_green_eye',
     phase: 'active',
-    floors: ALL_FLOORS,
     variants: ['maronary'],
     weight: 22,
     cooldown: 210,
@@ -304,7 +277,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_istotit_church_cache',
     phase: 'active',
-    floors: CIVIL_FLOORS,
     variants: ['istotit'],
     weight: 18,
     cooldown: 300,
@@ -318,7 +290,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_liquidator_patrol',
     phase: 'active',
-    floors: SERVICE_FLOORS,
     variants: ['classic', 'electric'],
     weight: 16,
     cooldown: 180,
@@ -332,7 +303,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_social_shelter_argument',
     phase: 'active',
-    floors: CIVIL_FLOORS,
     variants: ['electric', 'istotit', 'veretar'],
     weight: 18,
     cooldown: 240,
@@ -346,7 +316,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_veretar_window_choice',
     phase: 'active',
-    floors: CIVIL_FLOORS,
     variants: ['veretar'],
     weight: 26,
     cooldown: 210,
@@ -360,7 +329,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_maintenance_breaker_trip',
     phase: 'active',
-    floors: MAINTENANCE_FLOORS,
     variants: ['wet', 'electric'],
     weight: 28,
     cooldown: 240,
@@ -375,7 +343,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_hell_meat_hallway',
     phase: 'active',
-    floors: HELL_FLOORS,
     variants: ['wet', 'meat'],
     weight: 26,
     cooldown: 180,
@@ -389,7 +356,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_void_false_relief',
     phase: 'active',
-    floors: VOID_FLOORS,
     variants: ['classic', 'maronary', 'veretar'],
     weight: 28,
     cooldown: 180,
@@ -403,7 +369,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_container_theft',
     phase: 'active',
-    floors: CIVIL_FLOORS,
     variants: ['meat'],
     weight: 14,
     cooldown: 300,
@@ -417,7 +382,6 @@ const ACTIVE_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'active_water_shortage',
     phase: 'active',
-    floors: SERVICE_FLOORS,
     variants: ['wet', 'electric'],
     weight: 18,
     cooldown: 240,
@@ -435,7 +399,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_food_shortage',
     phase: 'aftermath',
-    floors: CIVIL_FLOORS,
     variants: ALL_VARIANTS,
     weight: 22,
     cooldown: 420,
@@ -450,7 +413,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_monster_aftershock',
     phase: 'aftermath',
-    floors: ALL_FLOORS,
     variants: ['classic', 'wet', 'electric', 'meat'],
     weight: 18,
     cooldown: 300,
@@ -464,7 +426,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_survivor_rumor',
     phase: 'aftermath',
-    floors: ALL_FLOORS,
     variants: ALL_VARIANTS,
     weight: 20,
     cooldown: 300,
@@ -478,7 +439,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_low_cult_bread_queue',
     phase: 'aftermath',
-    floors: CIVIL_FLOORS,
     variants: ALL_VARIANTS,
     weight: 14,
     cooldown: 420,
@@ -492,7 +452,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_maronary_late_beep',
     phase: 'aftermath',
-    floors: ALL_FLOORS,
     variants: ['maronary'],
     weight: 24,
     cooldown: 300,
@@ -506,7 +465,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_maronary_same_door_sleep',
     phase: 'aftermath',
-    floors: CIVIL_FLOORS,
     variants: ['maronary'],
     weight: 20,
     cooldown: 360,
@@ -520,7 +478,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_istotit_witness_argument',
     phase: 'aftermath',
-    floors: CIVIL_FLOORS,
     variants: ['istotit'],
     weight: 26,
     cooldown: 360,
@@ -534,7 +491,6 @@ const AFTERMATH_BEATS: readonly SamosborBeatDef[] = [
   {
     id: 'after_veretar_silent_witness',
     phase: 'aftermath',
-    floors: CIVIL_FLOORS,
     variants: ['veretar'],
     weight: 24,
     cooldown: 360,

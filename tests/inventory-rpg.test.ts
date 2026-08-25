@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, Cell, ContainerKind, EntityType, Faction, ItemType, MonsterKind, RoomType, type Entity, type Msg } from '../src/core/types';
+import { AIGoal, Cell, ContainerKind, EntityType, Faction, ItemType, MonsterKind, RoomType, Tex, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
 import { CONTAINER_DEFS } from '../src/data/container_defs';
 import { ITEMS, WEAPON_STATS } from '../src/data/catalog';
@@ -61,6 +61,27 @@ import { tryFactionCombat } from '../src/systems/ai/combat';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { makeGameState } from './helpers';
 import { initFactionRelations } from '../src/data/relations';
+
+/* Адресат бумаги — комната под игроком, а не ярлык этажа: продать документ
+ * можно у прилавка, сдать — за столом бумаг. Без мира адресата нет вовсе, и
+ * это правильно: раньше эти же сделки проходили в пустоте по тегу этажа. */
+function worldWithRoomUnder(e: Entity, type: RoomType, name = 'зал'): World {
+  const world = new World();
+  const x = Math.floor(e.x);
+  const y = Math.floor(e.y);
+  world.rooms.push({
+    id: 0, type, x: x - 1, y: y - 1, w: 3, h: 3,
+    doors: [], sealed: false, name, apartmentId: -1,
+    wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE,
+  });
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      world.carve(x + dx, y + dy);
+      world.roomMap[world.idx(world.wrap(x + dx), world.wrap(y + dy))] = 0;
+    }
+  }
+  return world;
+}
 
 function makePlayer(): Entity {
   return {
@@ -657,7 +678,7 @@ test('P14 gasmask receipt is an Office/HQ document with a black-market spend pat
   const msgs: Msg[] = [];
   assert.equal(addItem(player, def.id, 1), true);
 
-  useItem(player, 0, msgs, 30, state);
+  useItem(player, 0, msgs, 30, state, undefined, worldWithRoomUnder(player, RoomType.MARKET, 'торговый ряд'));
 
   assert.equal(player.inventory?.some(item => item.defId === def.id), false);
   assert.equal(player.money, 28);
@@ -687,7 +708,7 @@ test('cleanup order stub is a liquidator document with access and sale choices',
   const msgs: Msg[] = [];
   assert.equal(addItem(player, def.id, 1), true);
 
-  useItem(player, 0, msgs, 30, state);
+  useItem(player, 0, msgs, 30, state, undefined, worldWithRoomUnder(player, RoomType.MARKET, 'торговый ряд'));
 
   assert.equal(player.inventory?.some(item => item.defId === def.id), false);
   assert.equal(player.money, 46);

@@ -32,7 +32,6 @@ import {
   setQuestTargetRoute,
 } from '../data/contracts';
 import { ITEMS } from '../data/catalog';
-import { floorLevelDisplayName } from '../data/floor_names';
 import { addFactionRelMutual } from '../data/relations';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
@@ -83,7 +82,6 @@ const GOVNYAK_COURIER_DEFS: readonly ContractDef[] = GOVNYAK_COURIER_CONTRACT_ID
 interface ZhelemishNiiTarget {
   kind: 'procedural_mushroom' | 'living_cellar';
   targetKey: string;
-  themeTags: readonly string[];
   roomType: RoomType;
   roomDefId?: string;
   z?: number;
@@ -241,9 +239,6 @@ function normalizeQuestRouteTarget(q: Quest, state: GameState): QuestRouteTarget
       if (spec) normalized = routeTargetFromSpec(normalized, spec);
       else normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     } else {
-      const designFloor = designFloorAtZ(z);
-      // @ts-ignore
-      const storyFloor = designFloor?.themeTags ? designFloor.themeTags[0] : "living";
       normalized.label = route.label ?? `Z${formatFloorZ(z)}`;
     }
   } else {
@@ -373,7 +368,6 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
     host.zhelemishNiiTarget = {
       kind: 'procedural_mushroom',
       targetKey: best.key,
-      themeTags: best.themeTags,
       roomType: RoomType.PRODUCTION,
       z: best.z,
       danger: best.danger,
@@ -384,7 +378,6 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
   host.zhelemishNiiTarget = {
     kind: "living_cellar",
     targetKey: "living_mushroom_cellar",
-    themeTags: ["living"],
     z: 0,
     roomType: RoomType.PRODUCTION,
     roomDefId: 'Грибная прачечная первой смены',
@@ -395,7 +388,7 @@ function ensureZhelemishTarget(state: GameState): ZhelemishNiiTarget {
 
 function zhelemishTargetHint(target: ZhelemishNiiTarget): string {
   if (target.kind === 'procedural_mushroom') {
-    return `НИИ: Z${formatFloorZ(target.z ?? 0)}, процедурная грибница (${floorLevelDisplayName(target.themeTags)}-основа). Ищите аппаратуру/стеллажи с желемышем; сдавайте только запечатанную пробу.`;
+    return `НИИ: Z${formatFloorZ(target.z ?? 0)}, процедурная грибница. Ищите аппаратуру/стеллажи с желемышем; сдавайте только запечатанную пробу.`;
   }
   return 'Жилая зона: грибная прачечная первой смены. Ищите аппаратный стол с пломбой НИИ; открытый комок будет загрязнён.';
 }
@@ -756,7 +749,8 @@ function findContaminatedContractSample(player: Entity, contractId: string): Ite
 function currentFloorMatchesZhelemishTarget(state: GameState, target: ZhelemishNiiTarget): boolean {
   const entry = currentFloorRunEntry(state);
   if (target.kind === 'procedural_mushroom') return entry.spec?.key === target.targetKey;
-  return entry.themeTags.includes('living') && currentFloorRunEntry(state).themeTags.includes('living');
+  // Цель и текущий этаж должны совпадать, а не «быть одной темы».
+  return entry.designFloorId === target.targetKey;
 }
 
 function currentFloorIsWrongZhelemishMycelium(state: GameState, target: ZhelemishNiiTarget): boolean {

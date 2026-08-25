@@ -10,7 +10,7 @@ import { generateLiquidatorArchive } from '../src/gen/ministry/liquidator_archiv
 import { containerAccessInfo } from '../src/systems/containers';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';
-import { countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
+import { tradingRoomWorld, countInventoryItem, makeGameState, makeTestPlayer } from './helpers';
 
 test('weapon checkout tag is official armory audit paperwork', () => {
   const def = ITEMS.weapon_checkout_tag;
@@ -58,7 +58,7 @@ test('weapon checkout tag can be sold or spent to scrub stolen weapon serials', 
   assert.equal(addItem(player, 'weapon_checkout_tag', 1), true);
   assert.equal(getInventorySlotActionInfo(player, 0)?.useLabel, 'Enter проверить');
 
-  useItem(player, 0, state.msgs, state.time, state);
+  useItem(player, 0, state.msgs, state.time, state, undefined, tradingRoomWorld(player));
 
   assert.equal(countInventoryItem(player, 'weapon_checkout_tag'), 0);
   assert.equal(player.money, 28);

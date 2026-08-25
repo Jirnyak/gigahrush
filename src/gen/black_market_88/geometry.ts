@@ -20,7 +20,6 @@ import {
 import { World } from '../../core/world';
 import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { stampRoom } from '../shared';
-import './living_zone';
 
 
 import { seedBazaarCaches, seedBazaarExpansionCaches } from './npcs';

@@ -1,8 +1,9 @@
 import { Faction, Occupation } from '../core/types';
 import type { WeightedValue } from './alife_generation';
 import {
+  floorKeyForDesign,
+  cleanFloorKey,
   floorKeyAllowsNpcs,
-  floorKeyBaseFloor,
   floorKeyKnown,
 } from './floor_keys';
 
@@ -21,7 +22,6 @@ export type AlifeMigrationReason =
 export interface AlifeDestinationSelector {
   floorKeys?: readonly string[];
   routeTags?: readonly string[];
-  themeTags?: readonly string[];
   minAbsZ?: number;
   maxAbsZ?: number;
   allowsNpcOnly?: boolean;
@@ -338,7 +338,6 @@ const INTENT_ID_RE = /^[a-z][a-z0-9_]*$/;
 function selectorEmpty(selector: AlifeDestinationSelector): boolean {
   return !selector.floorKeys?.length &&
     !selector.routeTags?.length &&
-    !selector.themeTags?.length &&
     selector.minAbsZ === undefined &&
     selector.maxAbsZ === undefined;
 }
@@ -371,12 +370,9 @@ export function validateAlifeMigrationProfiles(intents: readonly AlifeMigrationI
       if (intent.destination.allowsNpcOnly !== false && allowsNpc === false) {
         errors.push(`migration intent ${intent.id} targets NPC-forbidden destination ${key}`);
       }
-      if (floorKeyBaseFloor(key)?.includes('void')) {
+      if (cleanFloorKey(key) === floorKeyForDesign('void')) {
         errors.push(`migration intent ${intent.id} targets VOID ordinary destination ${key}`);
       }
-    }
-    if (intent.destination.themeTags?.includes('void')) {
-      errors.push(`migration intent ${intent.id} targets VOID base floor`);
     }
   }
   return errors;

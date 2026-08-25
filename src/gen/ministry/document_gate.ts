@@ -1,7 +1,6 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 
 const HOME_FLOOR_KEY = designNpcFloorKey('ministry');
-import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* ── Проверочный коридор документов — Ministry document gate ─── */
 
 import {
@@ -32,7 +31,9 @@ import { isPlayerEntity } from '../../systems/player_actor';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 
-const GATE_ROOM_DEF_ID = 'Проверочный коридор N3';
+import { DOCUMENT_GATE_ROOM_NAME } from '../../data/documents_access';
+
+const GATE_ROOM_DEF_ID = DOCUMENT_GATE_ROOM_NAME;
 const GATE_W = 19;
 const GATE_H = 9;
 const CONTENT_TAG = 'document_gate';
@@ -616,7 +617,8 @@ function publishDocumentGateAccessEvent(
 
 function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
   if (!ctx.state || !ctx.world || !isPlayerEntity(ctx.actor)) return false;
-  if (!currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) return false;
+  // Про этаж не спрашиваем: шлюз есть там, где он построен, и
+  // `findDocumentGateTarget` сам вернёт пусто, если игрок не у него.
   const target = findDocumentGateTarget(ctx.world, ctx.actor);
   if (!target) return false;
 
@@ -666,7 +668,7 @@ function handleDocumentGateUse(ctx: InventoryUseHandlerContext): boolean {
 }
 
 function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'item_stolen' || !currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
+  if (event.type !== 'item_stolen') return;
   if (!event.itemId || !DOCUMENT_GATE_ACCESS_BY_ITEM.has(event.itemId)) return;
   const ctx = contextByContainer(event.containerId);
   if (!ctx || ctx.theftEventIds.includes(event.id)) return;
@@ -685,7 +687,7 @@ function handleDocumentGateTheftEvent(state: GameState, event: WorldEvent): void
 }
 
 function handleDocumentGateGuardKill(state: GameState, event: WorldEvent): void {
-  if (event.type !== 'player_kill_npc' || !currentFloorRunEntry(state)!.themeTags.includes('ministry')) return;
+  if (event.type !== 'player_kill_npc') return;
   const ctx = contextByGuard(event.targetId);
   if (!ctx || ctx.violentHandled) return;
   const door = ctx.world.doors.get(ctx.gateDoorIdx);

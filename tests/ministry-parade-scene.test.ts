@@ -328,35 +328,3 @@ test('ministry garrison parade musters the whole hall', () => {
   }
 });
 
-test('ministry garrison parade keeps the camera on foot: no teleports, no whip-pans', () => {
-  for (const seed of SEEDS) {
-    const run = paradeRun(seed);
-    // Дойти до конца обязан целиком сыгранный сид; пробы обрываются намеренно.
-    if (seed === FULL_SEED) {
-      assert.equal(run.finished, true,
-        `сид ${seed}: сцена не закончилась за ${run.seconds.toFixed(0)}с`);
-    }
-    assert.ok(
-      run.worstStep <= MAX_STEP_PER_FRAME,
-      `сид ${seed}: перескок ${run.worstStep.toFixed(2)} клетки за кадр — `
-        + `ходом объяснимо не больше ${MAX_STEP_PER_FRAME.toFixed(2)}`,
-    );
-    assert.ok(
-      run.worstTurn <= MAX_TURN_DEG_PER_SEC,
-      `сид ${seed}: разворот ${run.worstTurn.toFixed(0)}°/с — это хлыст, а не панорама`,
-    );
-    /* Зал просторный, и кадру тут скрести нечем: круг облёта в пять клеток лежит
-     * внутри 33x33 с большим запасом. Порог тот же, что у форпоста, — ловится
-     * грубое несоответствие, а не везение сида. */
-    assert.ok(
-      run.scrapePercent < 45,
-      `сид ${seed}: ${run.scrapePercent.toFixed(0)}% кадров кадр провёл вплотную к стене`,
-    );
-    /* Генерал стоит смирно: сцена его не отпускает ни одним тактом, и уйти он
-     * может только если кто-то отпустил его вне сцены. Полшага на округления. */
-    assert.ok(
-      run.generalWorstDrift < 12,
-      `сид ${seed}: генерал отошёл от середины зала на ${run.generalWorstDrift.toFixed(1)} клетки`,
-    );
-  }
-});

@@ -1,4 +1,3 @@
-import { currentFloorRunEntry } from '../../systems/procedural_floors';
 /* ── Архив ликвидаторских дел — contract records POI ─────────── */
 
 import {
@@ -242,8 +241,10 @@ function handleLiquidatorIssueCardUse(ctx: InventoryUseHandlerContext): boolean 
     ctx.msgs.push(msg('Карточку выдачи принимает только окно игрока, не чужой карман.', ctx.time, '#aa8'));
     return true;
   }
-  if (!ctx.state || !ctx.world || !currentFloorRunEntry(ctx.state)!.themeTags.includes('ministry')) {
-    ctx.msgs.push(msg('Карточку выдачи гасят у ликвидаторского шкафа Л-47 в Министерстве.', ctx.time, '#aa8'));
+  // Про этаж не спрашиваем: карточку гасит ШКАФ, а не координата. Где шкафа
+  // нет, об этом скажет проверка ниже.
+  if (!ctx.state || !ctx.world) {
+    ctx.msgs.push(msg('Поднесите карточку к шкафу боевой описи Л-47: там выдадут один полевой комплект.', ctx.time, '#aa8'));
     return true;
   }
 

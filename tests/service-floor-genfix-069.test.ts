@@ -58,7 +58,6 @@ function roomCount(gen: ServiceFloorGeneration, pattern: RegExp): number {
 test('service_floor is registered as the z-18 Maintenance route stop', () => {
   const route = designFloorById(DESIGN_FLOOR_ID);
   assert.equal(route?.z, SERVICE_FLOOR_Z);
-  assert.equal(route?.themeTags?.includes('maintenance'), true);
   assert.equal(route?.displayName, 'Служебный этаж');
   assert.equal(designFloorAtZ(SERVICE_FLOOR_Z)?.id, DESIGN_FLOOR_ID);
 });

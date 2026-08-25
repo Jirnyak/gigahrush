@@ -6,7 +6,7 @@ import { World } from '../src/core/world';
 import { METRO_DEPOT_ROOM_DEF_ID } from '../src/data/metro';
 import { ITEM_TAGS, ITEMS } from '../src/data/items';
 import { RESOURCES, resourceForItem } from '../src/data/resources';
-import { generateMetroErrorLine } from '../src/gen/dark_metro/error_line';
+import { generateMetroErrorLine } from '../src/gen/maintenance/error_line';
 import { generateDocumentGate } from '../src/gen/ministry/document_gate';
 import { getRecentEvents } from '../src/systems/events';
 import { addItem, getInventorySlotActionInfo, inventoryItemCategory, useItem } from '../src/systems/inventory';

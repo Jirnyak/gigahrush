@@ -198,7 +198,6 @@ function rejectBeat(
   director: SamosborDirectorState,
 ): string | null {
   if (beat.phase !== snapshot.phase) return 'phase_mismatch';
-  if (!beat.floors.includes(snapshot.z)) return 'floor_mismatch';
   if (!beat.variants.includes(snapshot.variantId)) return 'samosbor_mismatch';
   if ((director.cooldowns[beat.id] ?? 0) > snapshot.time) return 'cooldown';
   if ((director.runCounts[beat.id] ?? 0) >= beat.maxPerCycle) return 'max_per_cycle';
@@ -239,7 +238,7 @@ function pickBeat(
   for (const beat of getSamosborBeatDefs()) {
     const reason = rejectBeat(beat, snapshot, director);
     if (reason) {
-      const structurallyRelevant = reason !== 'phase_mismatch' && reason !== 'floor_mismatch' && reason !== 'samosbor_mismatch';
+      const structurallyRelevant = reason !== 'phase_mismatch' && reason !== 'samosbor_mismatch';
       if (structurallyRelevant && (!rejectedTop || beat.weight > rejectedTop.weight)) {
         rejectedTop = beat;
         rejectedReason = reason;
@@ -736,7 +735,7 @@ export function forceNextSamosborDirectorBeat(
   for (let i = 0; i < beats.length; i++) {
     const idx = (director.forceCursor + i) % beats.length;
     const beat = beats[idx];
-    if (beat.phase !== snapshot.phase || !beat.floors.includes(snapshot.z) || !beat.variants.includes(snapshot.variantId)) continue;
+    if (beat.phase !== snapshot.phase || !beat.variants.includes(snapshot.variantId)) continue;
     const effect = applyBeat(beat, world, entities, state, nextId, snapshot, rng);
     director.forceCursor = (idx + 1) % beats.length;
     if (!effect.ok) {
