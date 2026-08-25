@@ -18,6 +18,7 @@ import { Spr } from '../entities/sprite_index';
 import { ensureEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
+import { killEntity } from './entity_death';
 
 const SEGMENT_STRIDE = 2;
 const BOARD_DIST2 = 3.2 * 3.2;
@@ -251,9 +252,9 @@ function damageEntity(world: World, victim: Entity, train: RailTrain, state: Gam
   const amount = isPlayerEntity(victim) ? 38 : 260;
   if (victim.hp !== undefined) {
     victim.hp = Math.max(0, victim.hp - amount);
-    if (victim.hp <= 0) victim.alive = false;
+    if (victim.hp <= 0) killEntity(victim);
   } else {
-    victim.alive = false;
+    killEntity(victim);
   }
   publishRailEvent(world, state, victim, train, 'rail_train_crush', isPlayerEntity(victim) ? 5 : 4, ['crush'], {
     damage: amount,

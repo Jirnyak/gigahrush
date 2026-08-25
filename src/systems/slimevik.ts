@@ -21,6 +21,7 @@ import { isPlayerEntity } from './player_actor';
 import { rng } from '../core/rand';
 import { speciesState } from './ai/species_state';
 import { damageActor } from './combat_stimulus';
+import { killEntity } from './entity_death';
 
 const INTERACTION_QUERY_CAP = 24;
 const FLEE_SECONDS = 2.2;
@@ -200,7 +201,7 @@ function swallowItem(e: Entity, drop: Entity, time: number, msgs: Msg[]): void {
     taken++;
   }
   if (taken <= 0) return;
-  drop.alive = false;
+  killEntity(drop);
   drop.inventory = [];
   markEntityIndexDirty();
   msgs.push(msg('Слизневик втянул в себя брошенное. Теперь это в нём.', time, '#8d8'));

@@ -35,6 +35,7 @@ import {
   type MaintContentCtx, findMaintArea, openTile, setFeature,
   stampMaintRoom,
 } from './content_helpers';
+import { killEntity } from '../../systems/entity_death';
 
 const TAG_SITE = 'chernaya_lichinka';
 const TAG_SLIME = 'slime_black';
@@ -284,7 +285,7 @@ function killSpawnedThreats(ctx: LichinkaContext): number {
   for (const id of ctx.threatIds) {
     const threat = entityMap.get(id);
     if (!threat?.alive) continue;
-    threat.alive = false;
+    killEntity(threat);
     threat.hp = 0;
     killed++;
   }

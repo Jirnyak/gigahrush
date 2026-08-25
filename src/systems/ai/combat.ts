@@ -44,6 +44,7 @@ import { publishEvent } from '../events';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 import { trySetMicroGoal } from './micro_goals';
+import { killEntity } from '../entity_death';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
 let _barkMsgs: Msg[] = [];
@@ -519,7 +520,7 @@ export function tryFactionCombat(
           applyMeleeKnockback(world, e, hitTarget, meleeWs);
           if (hitTarget.hp <= 0) {
             recordEntityKill(e, hitTarget);
-            hitTarget.alive = false;
+            killEntity(hitTarget);
             spawnDeathPool(world, hitTarget.x, hitTarget.y, hitTarget.type === EntityType.MONSTER);
             if (hitTarget.type === EntityType.NPC) dropNpcInventory(hitTarget, entities, nextId);
             emitMarkovBark(e, msgs, _time, 'combat', 'Готов.', BARK_CHANCE_KILL, '#da4');

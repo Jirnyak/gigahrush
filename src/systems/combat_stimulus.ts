@@ -20,6 +20,7 @@ import { applyDamageRelationPenalty } from './factions';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import type { MonsterArmorHitResult } from './monster_armor';
 import type { DamageType, ProjType } from '../core/types';
+import { killEntity } from './entity_death';
 
 export type CombatStimulusSource =
   | 'player_melee'
@@ -608,7 +609,7 @@ export function damageActor(
   /* Смерть игрока дверь НЕ объявляет: у неё своя дорога — щит, продолжение за
    * другое тело, камера смерти, — и флаг `alive` там не поднимают вовсе.
    * Обработчик всё равно зовётся: он первым делом пробует поглотить удар щитом. */
-  if (!isPlayerEntity(target)) target.alive = false;
+  if (!isPlayerEntity(target)) killEntity(target);
   actorDeathHandler?.(target, attacker, input.gore ?? 1, input.splashX ?? 0, input.splashY ?? 0);
   return { applied: armor.damage, killed: true, armor };
 }

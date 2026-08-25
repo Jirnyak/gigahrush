@@ -12,6 +12,7 @@ import { stampMark, MarkType } from './surface_marks';
 import { Spr } from '../entities/sprite_index';
 import { addItem, hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
+import { killEntity } from './entity_death';
 
 const ROOM_PREFIX = 'Плотоядная грибница';
 const TAG_NEUTRALIZED = '[соль 0]';
@@ -402,7 +403,7 @@ function updateNearbyFeeds(
     if (e.type === EntityType.ITEM_DROP && e.alive) {
       const bait = baitItemId(e);
       if (!bait) continue;
-      e.alive = false;
+      killEntity(e);
       feedRoom(world, entities, nextId, player, state, room, 'bait', bait);
       handled++;
       continue;

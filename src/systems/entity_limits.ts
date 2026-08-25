@@ -3,6 +3,7 @@ import { activeActorSoftLimit, ENTITY_SOFT_LIMITS, FLOOR_OBJECT_SOFT_LIMIT, ITEM
 import { ITEMS } from '../data/items';
 import { getEntityIndex } from './entity_index';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
+import { killEntity } from './entity_death';
 
 /**
  * Срез живых актёров, если общий индекс уже собран ИМЕННО для этого массива.
@@ -188,7 +189,7 @@ export function enforceItemDropFifoCap(entities: Entity[]): number {
   for (const e of entities) {
     if (toEvict <= 0) break;
     if (!isExpendableDrop(e)) continue;
-    e.alive = false;
+    killEntity(e);
     toEvict--;
     evicted++;
   }

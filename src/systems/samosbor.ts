@@ -74,6 +74,7 @@ import { pushNpcBarkMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
 import { createMaronaryWrongDoorRemap } from './wrong_door';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
+import { killEntity } from './entity_death';
 import {
   blocksHermodoorBorerSeal,
   clearHermodoorBorerForRebuild,
@@ -1802,7 +1803,7 @@ function applyMaronaryGlowDamage(world: World, state: GameState, e: Entity, amou
   } else {
     e.hp = Math.max(0, e.hp - amount);
     if (e.hp <= 0) {
-      e.alive = false;
+      killEntity(e);
       e.hp = 0;
     } else {
       forceMaronaryGlowFlee(world, e, sx, sy);
@@ -3982,7 +3983,7 @@ function applyVeretarFogEffectAtCell(
     if (isPlayerEntity(target)) {
       const damage = Math.max(9999, target.hp ?? target.maxHp ?? 100);
       target.hp = 0;
-      target.alive = false;
+      killEntity(target);
       recordPlayerDamage(state, undefined, damage, 'Веретар: белый свет удалил игрока', 'samosbor');
       state.dmgFlash = 1;
       state.dmgSeed = (state.dmgSeed + 101) | 0;
@@ -3990,7 +3991,7 @@ function applyVeretarFogEffectAtCell(
     } else {
       if (target.type === EntityType.NPC) recordAlifeNpcDeath(state, target);
       target.hp = 0;
-      target.alive = false;
+      killEntity(target);
       effect = target.type === EntityType.NPC ? 'npc_deleted' : target.type === EntityType.MONSTER ? 'monster_deleted' : 'item_deleted';
     }
   }

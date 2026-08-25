@@ -5,6 +5,7 @@ import { ensureEntityIndex } from './entity_index';
 import { isPlayerEntity } from './player_actor';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { mathRng } from '../core/rand';
+import { killEntity } from './entity_death';
 
 const DEATH_CAUSE_LOOKBACK_SEC = 4;
 const DEATH_CAUSE_LOOKAHEAD_SEC = 1.5;
@@ -126,7 +127,7 @@ export function updateBlockCrushDamage(
         if (typeof e.hp === 'number' && e.hp > 0) {
           e.hp -= dmg;
           if (e.hp <= 0) {
-            e.alive = false;
+            killEntity(e);
           }
         }
       }

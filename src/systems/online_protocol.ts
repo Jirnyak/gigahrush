@@ -21,6 +21,7 @@ import { World } from '../core/world';
 import { countAmmo, removeItem, equippedCombatItemId, getWeaponStats } from './inventory';
 import { calculateReloadTime } from './combat';
 import { resetCoopState } from './coop_session';
+import { killEntity } from './entity_death';
 
 // ── Intents (peer → host) ────────────────────────────────────
 
@@ -229,7 +230,7 @@ export function applyActorEcho(player: Entity, echo: ActorEcho, fullyAcked: bool
   player.maxHp = echo.maxHp;
   player.staggerTimer = echo.staggerTimer;
   if (echo.money !== undefined) player.money = echo.money;
-  if (!echo.alive) player.alive = false;
+  if (!echo.alive) killEntity(player);
   if (!fullyAcked) return;
   player.weapon = echo.weapon;
   player.tool = echo.tool;

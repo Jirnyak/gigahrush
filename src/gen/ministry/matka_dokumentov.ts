@@ -20,6 +20,7 @@ import {
 } from '../admin_common';
 import { genLog } from '../log';
 import { rng } from '../../core/rand';
+import { killEntity } from '../../systems/entity_death';
 
 export const MATKA_DOKUMENTOV_ID = 'matka_dokumentov';
 export const MATKA_DOKUMENTOV_ROOM = 'Матка Документов: стол размножения';
@@ -353,7 +354,7 @@ function dropSealReward(ctx: MatkaDokumentovContext): void {
 function neutralizeOneThreat(ctx: MatkaDokumentovContext): number {
   const threat = getActiveThreats(ctx)[0];
   if (!threat) return 0;
-  threat.alive = false;
+  killEntity(threat);
   threat.hp = 0;
   return 1;
 }
@@ -420,7 +421,7 @@ function clearAnchor(
   let neutralized = 0;
   if (killActive) {
     for (const threat of getActiveThreats(ctx)) {
-      threat.alive = false;
+      killEntity(threat);
       threat.hp = 0;
       neutralized++;
     }

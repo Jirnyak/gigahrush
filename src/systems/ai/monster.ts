@@ -76,6 +76,7 @@ import { documentScentStrength, hasDocumentScent, markNoisyDocument } from '../d
 import { drainLineCell, getBoundedWetConnection, wetTerrainAtEntity, wetTerrainCell, wetWaterCell } from '../monster_terrain';
 import { isPlayerEntity } from '../player_actor';
 import { damageBorshchevikRootSite, releaseBorshchevikSeedPuff } from '../borshchevik';
+import { killEntity } from '../entity_death';
 import {
   BLOOD_PLANT_HEAL_SCAN_SEC,
   BLOOD_PLANT_TENDRIL_MAX_CELLS,
@@ -993,7 +994,7 @@ function rehostHeadSlug(
   const skill = headSlugHostSkill(host);
   const hostWasAlive = host.alive;
   if (host.alive) {
-    host.alive = false;
+    killEntity(host);
     host.hp = 0;
     spawnDeathPool(world, host.x, host.y, false);
     dropNpcInventory(host, entities, nextId);
@@ -2045,7 +2046,7 @@ function applyProtokolnikPulse(
     damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `Протокол сжал виски: -${dmg}`);
     if (target.hp <= 0) {
-      target.alive = false;
+      killEntity(target);
       target.hp = 0;
       if (target.type === EntityType.NPC && target.id !== playerId) dropNpcInventory(target, entities, nextId);
     }
@@ -4395,7 +4396,7 @@ function updateBloodPlantRootHive(
       damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударило корнем: -${dmg}`);
       if (target.hp <= 0) {
-        target.alive = false;
+        killEntity(target);
         target.hp = 0;
       }
     }
@@ -4466,7 +4467,7 @@ function updateBorshchevikRootedPlant(
         damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
         if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} обжег кожу соком: -${dmg}`);
         if (target.hp <= 0) {
-          target.alive = false;
+          killEntity(target);
           target.hp = 0;
         }
       }
@@ -4767,7 +4768,7 @@ function finishRzhavnikLeap(
       notifyActorDamaged(world, target, e, damage, 'monster_special', time, state);
       if (target.id === playerId) recordPlayerDamage(state, e, damage, `Ржавник ударил первым рывком: -${damage}`);
       if (target.hp <= 0) {
-        target.alive = false;
+        killEntity(target);
         target.hp = 0;
       }
       spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), damage, target.type === EntityType.MONSTER);
@@ -4925,7 +4926,7 @@ function damageZhornayaTarget(
   } else {
     damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} врезалась в тебя на запах: -${dmg}`);
-    if (target.hp <= 0) { target.alive = false; target.hp = 0; }
+    if (target.hp <= 0) { killEntity(target); target.hp = 0; }
     const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
     spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
     if (target.hp <= 0) {
@@ -5201,7 +5202,7 @@ function finishBladeEliteWindup(
       damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${tuning.strikeVerb} тебя: -${dmg}`);
       if (target.hp <= 0) {
-        target.alive = false;
+        killEntity(target);
         target.hp = 0;
       }
       const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
@@ -5764,7 +5765,7 @@ export function updateVodyanoyWaterPressureLine(
     damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.rpg) target.rpg.psi = Math.max(0, target.rpg.psi - Math.max(1, Math.round(2 + wet.pressure)));
     if (target.hp <= 0) {
-      target.alive = false;
+      killEntity(target);
       spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
       msgs.push(msg(`${entityDisplayName(e)} задавил ${entityDisplayName(target)} мокрой ПСИ-линией`, time, '#7dd'));
     } else if (target.id === playerId) {
@@ -6201,7 +6202,7 @@ function fireSlepoglazBeam(
         recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} прожег старую позицию: -${dmg}`);
       }
       if (target.hp <= 0) {
-        target.alive = false;
+        killEntity(target);
         target.hp = 0;
       }
       spawnBloodHit(world, target.x, target.y, angle, dmg, false);
@@ -6283,7 +6284,7 @@ function updateSlepoglazCloseDefense(
     damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} слепо дернул нервом: -${dmg}`);
     if (target.hp <= 0) {
-      target.alive = false;
+      killEntity(target);
       target.hp = 0;
     }
     const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
@@ -6576,7 +6577,7 @@ function damageTonkayaTenStrike(
   } else {
     damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
     if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударила с темной линии: -${dmg}`);
-    if (target.hp <= 0) { target.alive = false; target.hp = 0; }
+    if (target.hp <= 0) { killEntity(target); target.hp = 0; }
     const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
     spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
     if (target.hp <= 0) {
@@ -6778,7 +6779,7 @@ function damageTreskotnikTarget(
       damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
       if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} влетел в тебя по красной трещине: -${dmg}`);
       if (target.hp <= 0) {
-        target.alive = false;
+        killEntity(target);
         target.hp = 0;
       }
       const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
@@ -6795,7 +6796,7 @@ function damageTreskotnikTarget(
   if (e.hp !== undefined) {
     e.hp = Math.max(0, e.hp - selfDamage);
     if (e.hp <= 0) {
-      e.alive = false;
+      killEntity(e);
       spawnDeathPool(world, e.x, e.y, true);
     }
   }
@@ -6844,7 +6845,7 @@ function updateTreskotnikFractureSprint(
         if (e.hp !== undefined) {
           e.hp = Math.max(0, e.hp - selfDamage);
           if (e.hp <= 0) {
-            e.alive = false;
+            killEntity(e);
             spawnDeathPool(world, e.x, e.y, true);
           }
         }
@@ -7079,7 +7080,7 @@ export function tryPerformMonsterMeleeAttack(
                     : 'задел';
               recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
             }
-            if (hitTarget.hp <= 0) { hitTarget.alive = false; hitTarget.hp = 0; }
+            if (hitTarget.hp <= 0) { killEntity(hitTarget); hitTarget.hp = 0; }
             const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
             spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
             if (hitTarget.hp <= 0) {

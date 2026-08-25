@@ -69,6 +69,7 @@ import {
   strHeavyWeaponSpeedMult,
   strMeleeDmgMult,
 } from './rpg';
+import { killEntity } from './entity_death';
 import {
   activeSporeHaze,
   activeZhelemishSkin,
@@ -2260,7 +2261,7 @@ function pickupDropItems(
     if (inv.length === 0) {
       removeMonsterBaitForEntity(drop.id, state, time, 'picked_up');
       onPickedDrop?.(drop, pickedItems);
-      drop.alive = false;
+      killEntity(drop);
     }
     if (player.faction === Faction.PLAYER) playPickup();
   } else if (manual && blockedByCapacity) {

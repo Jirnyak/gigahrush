@@ -30,6 +30,7 @@ import { ENTITY_MASK_ACTOR, getEntityIndex } from '../entity_index';
 import { publishEvent } from '../events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../rpg';
 import { speciesState } from './species_state';
+import { killEntity } from '../entity_death';
 
 /** Личинку кладут вплотную — это укус, а не заклинание. */
 const LARVA_INFECT_RANGE = 1.8;
@@ -161,7 +162,7 @@ function hatchLarva(
   const x = host?.x ?? larva.x;
   const y = host?.y ?? larva.y;
   if (host?.alive) {
-    host.alive = false;
+    killEntity(host);
     host.hp = 0;
   }
   spawnDeathPool(world, x, y, true);

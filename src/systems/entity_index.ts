@@ -1,4 +1,5 @@
 import { W, EntityType, type Entity } from '../core/types';
+import { entityDeathEpoch } from './entity_death';
 
 export const ENTITY_MASK_NPC = 1 << EntityType.NPC;
 export const ENTITY_MASK_MONSTER = 1 << EntityType.MONSTER;
@@ -163,6 +164,12 @@ export class EntityIndex {
   private debugStats = emptyDebugStats();
   private staticUsedBucketCount = 0;
   private staticMaxBucketSize = 0;
+  /* Эпоха смертей на момент последнего обхода статики и его итог. Обход нужен
+   * ровно затем, чтобы вынуть умерших; пока никто не умирал, искать некого, и
+   * девять с половиной тысяч предметов трогать незачем. Новая статика в обход
+   * не нуждается — её адреса ставит `addEntityTailToCachedBuckets`. */
+  private staticScanEpoch = -1;
+  private staticScanStats: { liveCount: number; itemCount: number } = { liveCount: 0, itemCount: 0 };
 
   constructor() {
     this.buckets = Array.from({ length: BUCKET_COUNT }, () => []);
@@ -201,6 +208,12 @@ export class EntityIndex {
     this.needs.length = 0;
     this.projectiles.length = 0;
     this.billboards.length = 0;
+    /* Полная пересборка строит статику заново и сама набивает срез билбордов,
+     * но НЕ считает статические итоги в той форме, в какой их ждёт кадр
+     * симуляции. Поэтому эпоха сбрасывается: следующий кадр сделает один
+     * честный обход и заполнит их. Полные пересборки редки — смена этажа и
+     * явная пометка грязи. */
+    this.staticScanEpoch = -1;
 
     let liveEntityCount = 0;
     let usedBucketCount = 0;
@@ -290,9 +303,13 @@ export class EntityIndex {
     this.actors.length = 0;
     this.needs.length = 0;
     this.projectiles.length = 0;
-    this.billboards.length = 0;
+    /* Срез билбордов НЕ чистится вслепую: его набивает обход статики, а обход
+     * теперь идёт не каждый кадр. Чистит его сам обход, когда работает, а
+     * появившиеся билборды дописывает `addEntityTailToCachedBuckets`. Билборд
+     * по маске всегда статичен (`entityMask` = `1 << type`), поэтому другого
+     * источника у среза нет. */
     this.addEntityTailToCachedBuckets(entities);
-    const staticStats = this.reindexStaticEntities();
+    const staticStats = this.scanStaticIfSomeoneDied();
 
     let liveDynamicEntityCount = 0;
     let dynamicUsedBucketCount = 0;
@@ -319,7 +336,6 @@ export class EntityIndex {
       if (e.needs) this.needs.push(e);
       if (e.ai && (e.type === EntityType.NPC || e.type === EntityType.MONSTER)) this.ai.push(e);
       if (e.type === EntityType.PROJECTILE) this.projectiles.push(e);
-      if (e.type === EntityType.BILLBOARD) this.billboards.push(e);
 
       const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
       const bucket = this.buckets[bucketIndex];
@@ -394,7 +410,24 @@ export class EntityIndex {
     return this.buckets;
   }
 
+  /**
+   * Обход статики нужен ровно затем, чтобы вынуть умерших. Пока эпоха смертей
+   * не сдвинулась, вынимать некого: живая статика своих адресов не трогает, а
+   * появившаяся уже расставлена `addEntityTailToCachedBuckets`.
+   */
+  private scanStaticIfSomeoneDied(): { liveCount: number; itemCount: number } {
+    const epoch = entityDeathEpoch();
+    if (epoch === this.staticScanEpoch) return this.staticScanStats;
+    this.staticScanEpoch = epoch;
+    this.staticScanStats = this.reindexStaticEntities();
+    return this.staticScanStats;
+  }
+
   private reindexStaticEntities(): { liveCount: number; itemCount: number } {
+    // Срез билбордов набивает этот обход и только он: билборд по маске всегда
+    // статичен (`entityMask` = `1 << type`, а бит билборда входит в
+    // ENTITY_MASK_STATIC_VISIBLE), поэтому в динамику он не попадает никогда.
+    this.billboards.length = 0;
     let liveCount = 0;
     let itemCount = 0;
     // Идёт каждый кадр симуляции, поэтому здесь остаётся только то, что кадр
@@ -437,6 +470,9 @@ export class EntityIndex {
       if ((entityMask(e) & ENTITY_MASK_STATIC_VISIBLE) !== 0) {
         if (this.staticIndexedIds.has(e.id)) continue;
         this.staticIndexedIds.add(e.id);
+        // Срез билбордов ведётся приращением: полный обход статики теперь ждёт
+        // смерти, и без этой строки новый билборд не появился бы до неё.
+        if (e.type === EntityType.BILLBOARD) this.billboards.push(e);
         const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
         const bucket = this.staticBuckets[bucketIndex];
         bucket.push(e);

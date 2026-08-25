@@ -19,6 +19,7 @@ import { isPlayerEntity, getCurrentPlayerId } from './player_actor';
 import { ensureEntityIndex } from './entity_index';
 import { rng } from '../core/rand';
 import { registerDebugCommand } from './debug_registry';
+import { killEntity } from './entity_death';
 
 type BorerSource = 'pre_samosbor' | 'post_samosbor' | 'debug';
 type BorerPhase = 'warning' | 'damaged' | 'compromised' | 'repaired' | 'resolved';
@@ -413,7 +414,7 @@ function applyTrapCounterplay(world: World, entities: readonly Entity[], state: 
   state.msgs.push(msg('Гермодверь прищемила точильщика. Он скребёт медленнее.', state.time, '#fc8'));
   playSoundAt(playDoor, doorX(runtime.targetDoorIdx) + 0.5, doorY(runtime.targetDoorIdx) + 0.5);
   if (monster.hp <= 0) {
-    monster.alive = false;
+    killEntity(monster);
     state.msgs.push(msg('Гермоточильщик затих в дверном шве.', state.time, '#9f8'));
     storeFor(world).doorRecords.delete(runtime.targetDoorIdx);
     resolveActive(storeFor(world), runtime, 'resolved');

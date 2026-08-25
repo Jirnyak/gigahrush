@@ -55,6 +55,7 @@ import { spawnSafeguardHackBacklash } from './safeguard';
 import { canSpawnEntityType } from './entity_limits';
 import { floorKeyForDesign, floorKeyForProcedural  } from './floor_keys';
 import { registerDebugCommand } from './debug_registry';
+import { killEntity } from './entity_death';
 
 export interface NetTerminalGenState {
   runSeed: number;
@@ -450,7 +451,7 @@ export function claimNetTerminalGenFleshDrop(
   const firstClaim = !ntg.found;
   ntg.found = true;
   ntg.pickupClaimed = true;
-  drop.alive = false;
+  killEntity(drop);
 
   if (firstClaim) {
     state.msgs.push(msg(NET_TERMINAL_GEN_PICKUP_MESSAGE, state.time, NET_TERMINAL_GEN_PALETTE.flesh));

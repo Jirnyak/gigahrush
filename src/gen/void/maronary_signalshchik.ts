@@ -16,6 +16,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { carveCorridor, findClearArea, placeDoorAt, stampRoom } from '../shared';
 import { isPlayerEntity } from '../../systems/player_actor';
 import { rng } from '../../core/rand';
+import { killEntity } from '../../systems/entity_death';
 
 const ENCOUNTER_ID = 'maronary_signalshchik';
 const ENCOUNTER_NAME = 'Маронарный Сигнальщик';
@@ -162,7 +163,7 @@ function disableSource(ctx: SignalshchikContext): void {
   }
   const monster = signalMonster(ctx);
   if (monster) {
-    monster.alive = false;
+    killEntity(monster);
     monster.hp = 0;
   }
   ctx.world.markWallTexDirty();

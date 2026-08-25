@@ -26,6 +26,7 @@ import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding'
 import { isPlayerEntity } from './player_actor';
 import { rng } from '../core/rand';
 import { damageActor } from './combat_stimulus';
+import { killEntity } from './entity_death';
 
 const INTERACTION_RANGE = 2.15;
 const INTERACTION_FORWARD = 0.2;
@@ -184,7 +185,7 @@ export function tryUseGnilushkaInteraction(
   const handoff = consumeFirst(player, ['nii_sample_container']);
   if (handoff) {
     gnilushka.monsterStage = DELIVERED_STAGE;
-    gnilushka.alive = false;
+    killEntity(gnilushka);
     dropGift(world, entities, nextId, gnilushka, 'slime_sample_brown', 'Серо-зеленый соскоб оставлен добровольно после передачи Гнилушки к НИИ.');
     state.msgs.push(msg('Вы дали тару НИИ и маршрут к Якову. Гнилушка ушла тихо; на полу остался сухой соскоб.', state.time, '#9d7'));
     publishGnilushkaEvent(state, world, 'gnilushka_delivered', player, gnilushka, 4, ['delivered', 'science', 'noncombat'], {

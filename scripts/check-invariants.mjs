@@ -339,6 +339,35 @@ if (damageDoorHits.length > DAMAGE_DOOR_BASELINE) {
   notes.push(`Урон мимо двери: ${damageDoorHits.length} (было ${DAMAGE_DOOR_BASELINE}). Опусти DAMAGE_DOOR_BASELINE.`);
 }
 
+/* ── Проверка: смерть сущности мимо единого пути ────────────────── *
+ * `alive = false` присваивали в 63 местах, и узнать о смерти было неоткуда —
+ * её приходилось ИСКАТЬ. Индекс сущностей платил за это полным обходом статики
+ * каждый кадр: 9795 сущностей на жилом этаже ради события раз в несколько
+ * секунд, 402 мкс на кадр. Теперь смерть проходит через `killEntity`
+ * (systems/entity_death.ts), который двигает эпоху, и обход ждёт её сдвига.
+ *
+ * Пропущенное место не падает и не шумит: подобранный предмет останется в
+ * бакете навсегда, и наткнуться на призрак можно только в игре. Поэтому
+ * механическая проверка, а не дисциплина. Число только вниз. */
+const ENTITY_DEATH_OWNER = 'systems/entity_death.ts';
+const entityDeathHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  if (srcRel === ENTITY_DEATH_OWNER) continue;
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    if (/\.alive\s*=\s*false/.test(line)) {
+      entityDeathHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+    }
+  });
+}
+const ENTITY_DEATH_BASELINE = 0;
+if (entityDeathHits.length > ENTITY_DEATH_BASELINE) {
+  failures.push(`Смерть мимо единого пути: ${entityDeathHits.length} мест гасят alive напрямую, разрешено ${ENTITY_DEATH_BASELINE}.`);
+  failures.push('    Сущность убивает `killEntity` (systems/entity_death.ts) — он же двигает эпоху смертей для индекса.');
+  for (const h of entityDeathHits) failures.push(`    ${h}`);
+}
+
 /* ── Проверка 4: мёртвое координатное пространство этажей ──────── */
 // Канон — числовой z из DESIGN_FLOOR_ROUTES: министерство 30, квартиры 14,
 // жилой 0, коллекторы -26, ад -36, пустота -50. Прошлая схема кодировала те же
@@ -463,4 +492,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);

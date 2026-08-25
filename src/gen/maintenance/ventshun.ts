@@ -15,6 +15,7 @@ import { registerRouteCue } from '../../systems/route_cues';
 import {
   type MaintContentCtx, findMaintArea, setFeature, setWater, stampMaintRoom,
 } from './content_helpers';
+import { killEntity } from '../../systems/entity_death';
 
 const CUE_ID = 'maintenance_ventshun_warning';
 const TAG_SITE = 'ventshun';
@@ -285,7 +286,7 @@ function sealVentshun(state: GameState, ctx: VentshunContext, event: WorldEvent,
   for (const id of ctx.threatIds) {
     const threat = entityMap.get(id);
     if (threat?.alive) {
-      threat.alive = false;
+      killEntity(threat);
       threat.hp = 0;
       stopped++;
     }

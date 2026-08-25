@@ -14,6 +14,7 @@ import { isDocumentScentItem } from './document_scent';
 import { publishEvent } from './events';
 import { activeFloorInstanceWorldKey } from './floor_instances';
 import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
+import { killEntity } from './entity_death';
 
 export type MonsterBaitKind = 'food' | 'meat' | 'fungal' | 'govnyak' | 'document';
 export type MonsterBaitSource = 'drop' | 'use';
@@ -545,5 +546,5 @@ export function removeMonsterBaitForEntity(entityId: number, state: GameState | 
 }
 
 export function clearDeadBaitDrop(entity: Entity): void {
-  if (entity.type === EntityType.ITEM_DROP) entity.alive = false;
+  if (entity.type === EntityType.ITEM_DROP) killEntity(entity);
 }

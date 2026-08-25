@@ -18,6 +18,7 @@ import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
 import { entitySpawnSlots } from './entity_limits';
 import { stampUrineTraceCadenced } from './urination';
 import { mathRng, rng } from '../core/rand';
+import { killEntity } from './entity_death';
 
 // Rates per second
 const FOOD_RATE  = 0.08;
@@ -237,7 +238,7 @@ function applyNeedTick(
   }
 
   if (e.hp > 0) return { died: false, droppedItems: 0 };
-  e.alive = false;
+  killEntity(e);
   e.hp = 0;
   return { died: true, droppedItems: dropNpcInventory(entities, e, nextId) };
 }

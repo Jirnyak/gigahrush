@@ -9,6 +9,7 @@ import { recordPlayerDamage } from './damage';
 import { ENTITY_MASK_ACTOR, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
+import { killEntity } from './entity_death';
 
 export type CellHazardCleanReason = 'fire' | 'solvent' | 'tool' | 'debug';
 
@@ -600,7 +601,7 @@ function applyHazardDamage(
   } else {
     e.hp = Math.max(0, e.hp - amount);
     if (e.hp <= 0) {
-      e.alive = false;
+      killEntity(e);
       e.hp = 0;
     } else {
       forceHazardFlee(e);

@@ -19,6 +19,7 @@ import { stampMark, MarkType } from './surface_marks';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
+import { killEntity } from './entity_death';
 
 export interface DeletionBeamResult {
   beamLen: number;
@@ -210,7 +211,7 @@ function killBeamTargets(
     const perp = Math.abs(dx * -dirY + dy * dirX);
     if (perp > width + 0.45) continue;
     if (target.hp !== undefined) target.hp = 0;
-    target.alive = false;
+    killEntity(target);
     handleKill(target, isPlayerEntity(actor), dirX * 16, dirY * 16, 1);
     killed++;
   }

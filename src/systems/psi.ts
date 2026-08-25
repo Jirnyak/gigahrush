@@ -17,6 +17,7 @@ import { calculateDamage } from './combat';
 import { intPsiDurationBonusSec } from './rpg';
 import { registerDebugCommand } from './debug_registry';
 import type { ActorDamageInput, ActorDamageResult } from './combat_stimulus';
+import { killEntity } from './entity_death';
 
 /* Дверь урона приходит ИНЪЕКЦИЕЙ, а тип — типом (при сборке стирается).
  * Прямой импорт замкнул бы цикл `psi → combat_stimulus → factions → … → damage
@@ -92,7 +93,7 @@ function psiHit(
   const finalDmg = applyMonsterIncomingDamage(world, target, Math.round(calculateDamage(damage, DamageType.PSI, target)));
   target.hp = (target.hp ?? 0) - finalDmg;
   if ((target.hp ?? 0) <= 0) {
-    target.alive = false;
+    killEntity(target);
     handleKill(target);
   }
   return finalDmg;
@@ -288,7 +289,7 @@ function castBrainBurn(
   // Instant kill
   if (target.hp !== undefined) {
     target.hp = 0;
-    target.alive = false;
+    killEntity(target);
     spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
     handleKill(target);
     msgs.push(msg(`Выжиг мозга! ${entityDisplayName(target)} уничтожена`, time, '#f4f'));

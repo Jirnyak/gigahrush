@@ -18,6 +18,7 @@ import { randomRPG } from '../../systems/rpg';
 import {
   type MaintContentCtx, dropItems, findMaintArea, setFeature, stampMaintRoom,
 } from './content_helpers';
+import { killEntity } from '../../systems/entity_death';
 
 const ROOM_PREFIX = 'Бетоноед';
 const NOISE_BAIT_IDS = new Set(['noise_can', 'radio', 'bottled_voice', 'siren_shard']);
@@ -200,7 +201,7 @@ function sealWeakWall(world: World, player: Entity, state: GameState, encounter:
 function driveOffBetonoed(world: World, monster: Entity, state: GameState, encounter: BetonoedState, reason: string): void {
   if (encounter.drivenOff) return;
   encounter.drivenOff = true;
-  monster.alive = false;
+  killEntity(monster);
   monster.hp = 0;
   state.msgs.push(msg(
     reason === 'fire'

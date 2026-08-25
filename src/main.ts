@@ -77,6 +77,7 @@ import {
   type ActorEcho,
   type NetFx,
 } from './systems/online_protocol';
+import { killEntity } from './systems/entity_death';
 
 import {
   W, Cell, DoorState, Feature, Tex, RoomType, LiftDirection,
@@ -943,7 +944,7 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
     }
     if (target.hp <= 0) {
       target.hp = 0;
-      target.alive = false;
+      killEntity(target);
       if (!isPlayerEntity(target)) handleKill(target, true, mVx, mVy, 1, actor);
     }
     hitSomething = true;
@@ -1689,7 +1690,7 @@ function onOnlineHostState(msgData: any): void {
         player.x = se.x;
         player.y = se.y;
       }
-      if (!se.alive) player.alive = false;
+      if (!se.alive) killEntity(player);
       continue;
     }
     let existing: Entity | undefined;
@@ -4952,7 +4953,7 @@ function handlePlayerAttack(_dt: number): void {
           spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER, mVx, mVy, 0.5);
           state.msgs.push(msg(`Удар! ${entityDisplayName(e)} -${dmg}`, state.time, '#fc4'));
           if (e.hp <= 0) {
-            e.alive = false;
+            killEntity(e);
             const meleeGore = (weaponId === 'chainsaw' || weaponId === 'axe') ? 3
               : (weaponId === 'rebar' || weaponId === 'pipe') ? 2 : 1;
             handleKill(e, true, mVx, mVy, meleeGore);
@@ -5445,7 +5446,7 @@ function burnCollateralNearFlame(x: number, y: number, radius: number, actor: En
     const def = ITEMS[slot.defId];
     slot.count--;
     if (slot.count <= 0) inv.splice(slotIndex, 1);
-    if (inv.length === 0) drop.alive = false;
+    if (inv.length === 0) killEntity(drop);
     publishEvent(state, {
       type: 'collateral_damage',
       x: drop.x,
@@ -5535,7 +5536,7 @@ function updateProjectiles(dt: number): void {
     for (const p of entityIndex.projectiles) {
       if (overflow <= 0) break;
       if (p.alive) {
-        p.alive = false;
+        killEntity(p);
         overflow--;
       }
     }
@@ -5550,7 +5551,7 @@ function updateProjectiles(dt: number): void {
       if (pt === ProjType.GRENADE || pt === ProjType.BFG) {
         triggerExplosion(p, pt);
       }
-      p.alive = false;
+      killEntity(p);
       continue;
     }
 
@@ -5573,7 +5574,7 @@ function updateProjectiles(dt: number): void {
       p.vz = 0;
       if (pt === ProjType.BFG) {
         triggerExplosion(p, pt);
-        p.alive = false;
+        killEntity(p);
         continue;
       }
       // Bounce off ceiling — reverse vz with damping
@@ -5657,7 +5658,7 @@ function updateProjectiles(dt: number): void {
       }
       if (p.aoeRadius && pt !== ProjType.BFG)
         psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)), state, projectileActor(p));
-      p.alive = false;
+      killEntity(p);
       continue;
     }
 
@@ -5683,7 +5684,7 @@ function updateProjectiles(dt: number): void {
       }
       if (p.aoeRadius)
         psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)), state, projectileActor(p));
-      p.alive = false;
+      killEntity(p);
       continue;
     }
 
@@ -5712,7 +5713,7 @@ function processProjectileEntityCollision(
     applyPaupsinaWeb(e, state.time, state.msgs, state, projectileActor(p));
     spawnProjectileBodyImpact(world, hitX, hitY, p.sprite, pt, hitZ);
     playProjectileBodyHitCue(p, e.x, e.y, isPlayerEntity(e));
-    p.alive = false;
+    killEntity(p);
     return true; // break
   }
   if (pt === ProjType.FLAME) reducePaupsinaWeb(e, state.time, state.msgs, state, projectileActor(p), 'fire');
@@ -5748,7 +5749,7 @@ function processProjectileEntityCollision(
     if (playerHit && !debugImmortalPlayerHit) reportPlayerProjectileHit(p, dmg);
     playProjectileBodyHitCue(p, e.x, e.y, playerHit);
     if (!debugImmortalPlayerHit && e.hp <= 0) {
-      e.alive = false;
+      killEntity(e);
       e.hp = 0;
       handleKill(e, isPlayerOwnedProjectile(p), p.vx ?? 0, p.vy ?? 0, p.projGore ?? 1, projectileActor(p));
       recordMonsterProjectileDeath(
@@ -5779,7 +5780,7 @@ function processProjectileEntityCollision(
   }
   // Flame projectiles pierce through (don't die on hit)
   if (pt !== ProjType.FLAME && pt !== ProjType.GRENADE) {
-    p.alive = false;
+    killEntity(p);
     return true; // break
   } else if (pt === ProjType.GRENADE) {
     return true; // break
@@ -5839,7 +5840,7 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
       }
       notifyActorDamaged(world, e, actor, finalDmg, 'explosion', state.time, state);
       if (e.hp <= 0) {
-        e.alive = false;
+        killEntity(e);
         handleKill(e, isPlayer, blastVx, blastVy, 3);
       }
       hits++;

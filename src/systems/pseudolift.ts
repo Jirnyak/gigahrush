@@ -35,6 +35,7 @@ import {
   type MonsterBaitMarker,
 } from './monster_bait';
 import { registerDebugCommand } from './debug_registry';
+import { killEntity } from './entity_death';
 
 type PseudoliftStatus = 'dormant' | 'suspected' | 'revealed' | 'fed' | 'escaped' | 'cleared';
 
@@ -536,7 +537,7 @@ function killActivePseudoliftMonster(site: PseudoliftSite, entities: Entity[] | 
   if (!entities || site.monsterId === undefined) return;
   const monster = entities.find(e => e.id === site.monsterId && e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.PSEUDOLIFT);
   if (!monster) return;
-  monster.alive = false;
+  killEntity(monster);
   monster.hp = 0;
 }
 
@@ -568,7 +569,7 @@ export function updatePseudolifts(world: World, entities: Entity[], player: Enti
   const playerD2 = world.dist2(player.x, player.y, site.liftX + 0.5, site.liftY + 0.5);
   const monsterD2 = world.dist2(monster.x, monster.y, site.liftX + 0.5, site.liftY + 0.5);
   if (playerD2 > ESCAPE_RADIUS_SQ || monsterD2 > MONSTER_ANCHOR_RADIUS_SQ) {
-    monster.alive = false;
+    killEntity(monster);
     resolveRevealed(world, state, site, 'escaped', 'Вы вышли из лифтового тамбура. Псевдолифт захлопнулся и притворился обычной кабиной.', '#8cf');
     return;
   }

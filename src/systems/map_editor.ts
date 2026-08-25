@@ -35,6 +35,7 @@ import { mapEditorContainerBrushes, mapEditorEntityBrushes } from './map_editor_
 import { canSpawnEntityType } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
 import { registerDebugCommand } from './debug_registry';
+import { killEntity } from './entity_death';
 
 export type MapEditorToolId = 'cell' | 'door' | 'texture' | 'feature' | 'entity' | 'container' | 'inspect';
 export type MapEditorMode = 'map' | 'menu' | 'brush' | 'details' | 'objects' | 'npc_inv' | 'npc_inv_select';
@@ -811,7 +812,7 @@ function removeLooseEntitiesAt(entities: Entity[], idx: number, world: World): n
   for (const entity of entities) {
     if (isPlayerEntity(entity)) continue;
     if (world.idx(Math.floor(entity.x), Math.floor(entity.y)) === idx && entity.alive) {
-      entity.alive = false;
+      killEntity(entity);
       removed++;
     }
   }
@@ -1122,7 +1123,7 @@ export function applyMapEditorOp(
   } else if (safeOp.kind === 'delete_entity') {
     const entity = entities.find(e => e.id === safeOp.entityId && !isPlayerEntity(e));
     if (!entity) return setError('Нет entity');
-    entity.alive = false;
+    killEntity(entity);
     const idx = world.idx(Math.floor(entity.x), Math.floor(entity.y));
     trackMapEditorChange({ entities: true }, [idx]);
     pushDirty(idx);

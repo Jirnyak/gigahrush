@@ -16,6 +16,7 @@ import {
   type MaintContentCtx, findMaintArea, openTile, setFeature, setWater, stampMaintRoom,
 } from './content_helpers';
 import { rng } from '../../core/rand';
+import { killEntity } from '../../systems/entity_death';
 
 const TAG_SITE = 'ag67_black_slime';
 const TAG_SLIME = 'black_slime';
@@ -289,7 +290,7 @@ function sealBlackSlime(state: GameState, ctx: BlackSlimeContext, event: WorldEv
     for (const id of ctx.eyeIds) {
       const eye = entityMap.get(id);
       if (eye?.alive) {
-        eye.alive = false;
+        killEntity(eye);
         eye.hp = 0;
         sealedEyes++;
       }

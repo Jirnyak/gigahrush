@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EntityType, Faction, type Entity } from '../src/core/types';
 import { EntityIndex, ENTITY_MASK_ITEM_DROP } from '../src/systems/entity_index';
+import { killEntity } from '../src/systems/entity_death';
 
 function entity(id: number, type: EntityType, x: number, y: number, alive = true): Entity {
   return {
@@ -63,8 +64,12 @@ test('смерть снимает адрес в том же кадре — и у
   index.rebuild(entities, 'load');
   assert.equal(index.byAlifeId.get(7), npc);
 
-  npc.alive = false;
-  drop.alive = false;
+  /* Оба через единый путь. Сырое присваивание здесь ПРОШЛО БЫ, но по
+   * случайности: полная пересборка сбрасывает эпоху, и первый же кадр делает
+   * честный обход статики. На втором кадре тот же дроп остался бы призраком в
+   * бакете — тест давал бы ложную уверенность. */
+  killEntity(npc);
+  killEntity(drop);
   index.rebuildForSimulation(entities, 1);
 
   assert.equal(index.byId.has(1), false);
@@ -112,7 +117,19 @@ test('срез билбордов держит только живых и пер
   index.rebuildForSimulation(entities, 1);
   assert.deepEqual(index.billboards.map(e => e.id).sort(), [1, 2]);
 
-  prop.alive = false;
+  /* Смерть идёт через `killEntity`, и это не косметика вызова.
+   *
+   * Обход статики больше не патрулирует каждый кадр — он ждёт сдвига эпохи
+   * смертей, потому что на жилом этаже это 9795 сущностей ради события раз в
+   * несколько секунд. Значит статику убивает единый путь, и другого способа у
+   * игры нет: `npm run check:invariants` считает сырые `alive = false` вне
+   * `systems/entity_death.ts` и разрешает ноль.
+   *
+   * Динамику (актёров, снаряды) кадр по-прежнему перебирает целиком, поэтому
+   * там сырое присваивание сработало бы и сейчас. Единый путь всё равно один
+   * на всех: две породы смерти — это ровно та развилка, из которой потом
+   * вырастает призрак в бакете. */
+  killEntity(prop);
   index.rebuildForSimulation(entities, 2);
   assert.deepEqual(index.billboards.map(e => e.id), [1]);
 });

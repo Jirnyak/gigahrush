@@ -19,6 +19,7 @@ import { publishExplosionNoise } from './noise';
 import { recordPlayerDamage } from './damage';
 import { isPlayerEntity } from './player_actor';
 import { damageActor } from './combat_stimulus';
+import { killEntity } from './entity_death';
 
 export const FOG_SHARK_IGNITION_RADIUS = 2.65;
 export const FOG_SHARK_IGNITION_DAMAGE = 16;
@@ -123,7 +124,7 @@ export function recordFogSharkIgnited(
 
     if (target.hp <= 0) {
       target.hp = 0;
-      target.alive = false;
+      killEntity(target);
       killCount++;
       onKill?.(target, blastVx, blastVy, target.type === EntityType.MONSTER ? 2 : 1);
     }
