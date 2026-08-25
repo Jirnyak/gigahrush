@@ -80,10 +80,28 @@ let mapExploredGridW = 0;
 let mapExploredGridH = 0;
 mapCrowdHashKeys.fill(MAP_CROWD_EMPTY_KEY);
 
+/* Искры в тумане тикают с этой частотой, и она же задаёт частоту пересборки
+ * растра карты: чаще растр физически не меняется. Одно число на оба места —
+ * разойдясь, они дали бы либо мёртвые искры, либо лишние пересборки. */
+const MAP_FOG_SPARK_HZ = 9;
+
 interface MapRasterBuffer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   imageData: ImageData;
+  /* При чём растр в буфере верен. Растр центрируется на игроке и целиком
+   * выводится из мира, поэтому ключ — это центр, размер, две настройки вида и
+   * такт искр. Версий мира в ключе НЕТ намеренно: такт двигается девять раз в
+   * секунду сам по себе, поэтому любая правка мира доезжает до карты не позже
+   * чем за 111 мс. Перечислять версии `cells`/`fog`/`light`/`zoneMap`/
+   * `hermoWall` пришлось бы девять штук, у части из них версий не существует
+   * вовсе, и забытая означала бы намертво замёрзшую карту. */
+  world: World | null;
+  pxI: number;
+  pyI: number;
+  highContrast: boolean;
+  questLiftDir: LiftDirection | undefined;
+  tick: number;
 }
 
 const mapRasterBuffers = new Map<number, MapRasterBuffer>();
@@ -620,7 +638,7 @@ function memoryFogPackedRgb(
 
   const light = world.light[ci];
   if (uiTime > 0 && light > 0.14 && fog > 0.22) {
-    const tick = Math.floor(uiTime * 9);
+    const tick = Math.floor(uiTime * MAP_FOG_SPARK_HZ);
     const hash = mapNoiseHash(wx, wy);
     if (((hash + tick) & 15) === 0) {
       const spark = Math.min(1, light) * fog * (highContrast ? 36 : 24);
@@ -647,10 +665,16 @@ function mapRasterBufferFor(ctx: CanvasRenderingContext2D, width: number, height
   canvas.height = height;
   const rasterCtx = canvas.getContext('2d');
   if (!rasterCtx) return null;
-  const buffer = {
+  const buffer: MapRasterBuffer = {
     canvas,
     ctx: rasterCtx,
     imageData: rasterCtx.createImageData(width, height),
+    world: null,
+    pxI: 0,
+    pyI: 0,
+    highContrast: false,
+    questLiftDir: undefined,
+    tick: -1,
   };
   mapRasterBuffers.set(key, buffer);
   return buffer;
@@ -731,14 +755,41 @@ function drawMapBaseRaster(
 ): void {
   const cols = radius * 2;
   const rows = cols;
+
+  const buffer = mapRasterBufferFor(ctx, cols, rows);
+  if (!buffer) return;
+
+  /* Растр пересобирается со своей частотой, а не с частотой кадров. Он
+   * центрирован на игроке и целиком выводится из мира — между двумя тактами
+   * искр меняться ему не с чего, а тактов девять в секунду против шестидесяти
+   * кадров. Замерено: перебор 80x80 клеток каждый кадр стоил 4.5% кадра, из них
+   * `unexploredFadeBand` 0.9% отдельным листом.
+   *
+   * Метки лифтов — побочный продукт того же перебора, и они верны при том же
+   * ключе, поэтому при попадании массивы НЕ чистятся: их читает вызывающий
+   * сразу после возврата. */
+  const tick = Math.floor(uiTime * MAP_FOG_SPARK_HZ);
+  const hit = buffer.world === world
+    && buffer.pxI === pxI && buffer.pyI === pyI
+    && buffer.highContrast === highContrast
+    && buffer.questLiftDir === questLiftDir
+    && buffer.tick === tick;
+  if (hit) {
+    blitMapRaster(ctx, buffer, mapX, mapY, mapW, mapH);
+    return;
+  }
+  buffer.world = world;
+  buffer.pxI = pxI;
+  buffer.pyI = pyI;
+  buffer.highContrast = highContrast;
+  buffer.questLiftDir = questLiftDir;
+  buffer.tick = tick;
+
   mapLiftX.length = 0;
   mapLiftY.length = 0;
   mapLiftUp.length = 0;
   mapLiftQuest.length = 0;
   mapLiftFast.length = 0;
-
-  const buffer = mapRasterBufferFor(ctx, cols, rows);
-  if (!buffer) return;
 
   const data = buffer.imageData.data;
   const exploredGridW = mapExploredGridW;
@@ -861,6 +912,13 @@ function drawMapBaseRaster(
   }
 
   buffer.ctx.putImageData(buffer.imageData, 0, 0);
+  blitMapRaster(ctx, buffer, mapX, mapY, mapW, mapH);
+}
+
+function blitMapRaster(
+  ctx: CanvasRenderingContext2D, buffer: MapRasterBuffer,
+  mapX: number, mapY: number, mapW: number, mapH: number,
+): void {
   ctx.save();
   const smoothing = ctx.imageSmoothingEnabled;
   ctx.imageSmoothingEnabled = false;
