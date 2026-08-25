@@ -2231,6 +2231,9 @@ interface GLState {
   fogTex: WebGLTexture;
   dangerTex: WebGLTexture;      // W×W: поле трупного запаха, его читает живность
   dangerVersion: number;
+  doorSyncVersion: number;
+  doorSyncCount: number;
+  doorSyncCells: number;
   critterPass?: CritterPassHandle;
   doorStatesTex: WebGLTexture;
   atlasTex: WebGLTexture;
@@ -3485,6 +3488,9 @@ export function initWebGL(
     cellsTex, wallTexTex, floorTexTex, featuresTex, ceilTex, lightTex, lightBlinksTex, fogTex,
     dangerTex,
     dangerVersion: -1,
+    doorSyncVersion: -1,
+    doorSyncCount: -1,
+    doorSyncCells: -1,
     critterPass: createOptionalCritterPass(gl),
     doorStatesTex, atlasTex,
     dynamicSkyTex,
@@ -3634,6 +3640,10 @@ export function updateWorldData(world: World): void {
   gl.bindTexture(gl.TEXTURE_2D, glState.dangerTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, world.dangerField);
   glState.dangerVersion = dangerFieldVersion();
+  // Полная перезаливка обнуляет и ключ дверей: этаж мог смениться, а числа
+  // нового мира — случайно совпасть со старыми. Пусть следующий кадр честно
+  // переберёт один раз, чем мы будем гадать.
+  glState.doorSyncVersion = -1;
 
   gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, rebuildDoorStates(world, glState.doorStatesData));
@@ -3696,10 +3706,25 @@ export function updateDynamicData(world: World, camX = 0, camY = 0): void {
     glState.dangerVersion = dangerVersion;
   }
 
-  // Door states
-  if (syncDoorStates(world, glState.doorStatesData)) {
-    gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, glState.doorStatesData);
+  /* Двери: перебор ВСЕХ створок этажа стоил 1.6% кадра и был листом — он
+   * каждый кадр выяснял, что не изменилось ничего. Ключ из трёх уже
+   * существующих чисел закрывает все пути изменения:
+   *   doorVersion  — открылась, закрылась, треснула (канонический setDoorState);
+   *   doors.size   — створку создали или снесли;
+   *   cellVersion  — правка геометрии, включая замену створки на месте
+   *                  (редактор карты сносит и ставит заново за один кадр,
+   *                  и размер при этом возвращается к прежнему).
+   * Промах ключа стоит один честный перебор, а не потерянную картинку. */
+  if (world.doorVersion !== glState.doorSyncVersion
+    || world.doors.size !== glState.doorSyncCount
+    || world.cellVersion !== glState.doorSyncCells) {
+    glState.doorSyncVersion = world.doorVersion;
+    glState.doorSyncCount = world.doors.size;
+    glState.doorSyncCells = world.cellVersion;
+    if (syncDoorStates(world, glState.doorStatesData)) {
+      gl.bindTexture(gl.TEXTURE_2D, glState.doorStatesTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, W, gl.RED_INTEGER, gl.UNSIGNED_BYTE, glState.doorStatesData);
+    }
   }
 
   // Surface marks (blood, bullet holes, etc.)

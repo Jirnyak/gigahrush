@@ -2,6 +2,7 @@
 
 import { stampSurfaceSplat } from './surface_marks';
 import { W, Cell, DoorState, Entity, GameState, msg } from '../core/types';
+import { setDoorState } from './door_state';
 import { World } from '../core/world';
 import { publishEvent } from './events';
 import { getCurrentPlayerEntity } from './player_actor';
@@ -410,7 +411,11 @@ export function tryUseWrongDoorRemap(world: World, state: GameState, player: Ent
 
   const targetDoor = world.doors.get(remap.targetDoorIdx);
   if (targetDoor && targetDoor.state === DoorState.CLOSED) {
-    targetDoor.state = DoorState.OPEN;
+    // Через канонический сеттер, а не присваиванием: он один знает про версию
+    // створки для рендера и про пометку навигации. Сырое присваивание здесь
+    // было единственным в рантайме — дверь открывалась, а картинка узнавала об
+    // этом только когда её замечал общий перебор.
+    setDoorState(world, targetDoor, DoorState.OPEN);
     targetDoor.timer = Math.max(targetDoor.timer, WRONG_DOOR_TARGET_DOOR_TIMER);
   } else if (targetDoor && targetDoor.state === DoorState.HERMETIC_OPEN) {
     targetDoor.timer = Math.max(targetDoor.timer, WRONG_DOOR_TARGET_DOOR_TIMER);

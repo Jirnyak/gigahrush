@@ -100,12 +100,32 @@ export function resetArenaLadderRuntime(): void {
   ladderRuntime.pendingChallengeAlifeId = 0;
   ladderRuntime.pendingMutants = false;
   ladderRuntime.bout = null;
+  arenaRoomWorld = undefined;
+  arenaRoomCount = -1;
+  arenaRoomFound = undefined;
 }
 
 /** Комната песка на текущем этаже. Ищется по тегу, а не по координатам: этаж
  *  генерируется заново каждый забег. */
+/* Песок ищется каждый кадр из такта лестницы и из такта дуэли, а на этаже без
+ * арены `.find` не находит ничего и потому доходит до конца ВСЕГДА: тысячи
+ * комнат и `includes` по массиву строк на каждой. Замерено на жилом этаже —
+ * 661 мс за минуту профиля, и всё это в пустоту.
+ *
+ * Ключ тот же, что у соседей по слою: тождество мира плюс число комнат
+ * (`floorHasFungusRooms` считает так же). Тег `arena` ставит генератор, и
+ * появиться он может только вместе с новой комнатой. Отрицательный ответ
+ * кешируется наравне с положительным — ради него всё и затевалось. */
+let arenaRoomWorld: World | undefined;
+let arenaRoomCount = -1;
+let arenaRoomFound: Room | undefined;
+
 export function findArenaRoom(world: World): Room | undefined {
-  return world.rooms.find(room => room?.tags?.includes('arena'));
+  if (arenaRoomWorld === world && arenaRoomCount === world.rooms.length) return arenaRoomFound;
+  arenaRoomWorld = world;
+  arenaRoomCount = world.rooms.length;
+  arenaRoomFound = world.rooms.find(room => room?.tags?.includes('arena'));
+  return arenaRoomFound;
 }
 
 function isInsideArena(world: World, room: Room | undefined, e: Entity): boolean {

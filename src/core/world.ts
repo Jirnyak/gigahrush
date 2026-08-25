@@ -261,6 +261,7 @@ export class World {
   // объявлял за всех один тег.
   hasMeatWalls = false;
   cellVersion = 0;                 // bumped when runtime cell solidity changes
+  doorVersion = 0;                 // bumped when a door's state or damage changes
   surfaceVersion = 0;              // bumped when surfaceMap pixels change
   wallTexVersion = 0;              // bumped when runtime wall texture data changes
   floorTexVersion = 0;             // bumped when runtime floor texture data changes
@@ -619,6 +620,15 @@ export class World {
   markCellsDirty(rects?: GridDirtyRectsInput): void {
     this.cellVersion = (this.cellVersion + 1) | 0;
     this.cellDirtyRects = appendGridDirtyRects(this.cellDirtyRects, rects);
+  }
+
+  /* Створка открылась, закрылась или треснула. Обычное открывание НЕ трогает
+   * `cellVersion`: для навигации открытая и закрытая створка — одно и то же
+   * (топологию меняют только LOCKED и HERMETIC_CLOSED), а для картинки — нет.
+   * Без своей версии рендер был обязан перебирать ВСЕ двери этажа каждый кадр,
+   * только чтобы заметить, что не изменилось ничего. */
+  markDoorsDirty(): void {
+    this.doorVersion = (this.doorVersion + 1) | 0;
   }
 
   markFloorTexDirty(rects?: GridDirtyRectsInput): void {

@@ -12,6 +12,9 @@ export function setDoorState(world: World, door: Door | undefined, state: DoorSt
   if (!door || door.state === state) return false;
   const oldBlocks = blocksNavigation(door.state);
   door.state = state;
+  // Картинке важна ЛЮБАЯ смена створки, а не только та, что меняет топологию:
+  // ниже `cellVersion` бампится лишь на переходах через LOCKED/HERMETIC.
+  world.markDoorsDirty();
   if (oldBlocks !== blocksNavigation(state)) {
     markNavigationCellsDirty([door.idx]);
     world.markCellsDirty();
@@ -46,6 +49,9 @@ export function damageDoor(world: World, door: Door, amount: number): boolean {
   }
 
   door.hp -= amount;
+  // Треснувшая створка рисуется иначе — рендер держит признак «hp ниже
+  // половины» отдельным битом, и заметить его он может только по версии.
+  world.markDoorsDirty();
 
   if (door.hp <= 0) {
     // Destroy: DOOR cell → FLOOR, drop from room.doors, bump dirty versions.
