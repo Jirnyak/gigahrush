@@ -10600,7 +10600,14 @@ function gameLoop(now: number): void {
 
   // Auto-recover from WebGL context loss (iOS Safari memory pressure)
   if (webglContextLost) {
-    // Context still lost — skip render, game logic continues
+    /* Кадр обязан быть заказан ЗАНОВО, иначе выход отсюда останавливает игру
+     * навсегда. Здесь стоял голый `return`, и он противоречил собственному
+     * комментарию: цикл не «продолжал логику», он умирал на первой же потере
+     * контекста. Восстановление ниже (`webglNeedsReinit`) было недостижимо —
+     * браузер возвращал контекст, а звать `gameLoop` было уже некому:
+     * `webglcontextrestored` только ставит флаги, и других точек запуска цикла
+     * в файле нет (старт при инициализации и хвост этой же функции). */
+    requestAnimationFrame(gameLoop);
     return;
   }
   if (webglNeedsReinit) {
@@ -10612,6 +10619,7 @@ function gameLoop(now: number): void {
       console.warn('[WebGL] Successfully reinitialized after context loss');
     } catch (e) {
       console.error('[WebGL] Reinit failed, will retry next frame', e);
+      requestAnimationFrame(gameLoop); // «Следующего кадра» без этой строки не бывает.
       return;
     }
   }

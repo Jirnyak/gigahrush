@@ -349,6 +349,55 @@ if (damageDoorHits.length > DAMAGE_DOOR_BASELINE) {
  * Пропущенное место не падает и не шумит: подобранный предмет останется в
  * бакете навсегда, и наткнуться на призрак можно только в игре. Поэтому
  * механическая проверка, а не дисциплина. Число только вниз. */
+/* ── Проверка: выход из кадрового цикла без перезаказа кадра ─────── *
+ * `gameLoop` держит игру живой единственным способом — вызовом
+ * `requestAnimationFrame(gameLoop)` в самом конце. Любой ранний `return`
+ * ОБЯЗАН заказать кадр сам, иначе выход отсюда останавливает игру навсегда.
+ *
+ * Так и было: `if (webglContextLost) return;` убивал цикл на первой же потере
+ * WebGL-контекста (память GPU, iOS Safari), а собственный комментарий рядом
+ * обещал «game logic continues». Код восстановления ниже был недостижим —
+ * браузер возвращал контекст, а звать `gameLoop` было уже некому. Второй такой
+ * же выход стоял в catch с обещанием «will retry next frame».
+ *
+ * Ошибка бесшумная: ни исключения, ни строки в консоли — игра просто замирает.
+ * Поэтому проверка механическая. Число только вниз. */
+const FRAME_LOOP_FILE = path.join(srcRoot, 'main.ts');
+const frameLoopDeadReturns = [];
+{
+  const lines = fs.readFileSync(FRAME_LOOP_FILE, 'utf8').split('\n');
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^function gameLoop\(/.test(lines[i])) { start = i; break; }
+  }
+  if (start < 0) {
+    failures.push('Кадровый цикл: функция `gameLoop` не найдена в src/main.ts — проверка ослепла.');
+  } else {
+    let depth = 0;
+    for (let i = start; i < lines.length; i++) {
+      depth += (lines[i].match(/\{/g) ?? []).length;
+      depth -= (lines[i].match(/\}/g) ?? []).length;
+      if (/^\s*return\s*;/.test(lines[i])) {
+        const window = lines.slice(Math.max(start, i - 3), i + 1).join('\n');
+        if (!/requestAnimationFrame\(gameLoop\)/.test(window)) {
+          frameLoopDeadReturns.push(`main.ts:${i + 1}  ${lines[i].trim()}`);
+        }
+      }
+      if (depth === 0 && i > start) break;
+    }
+  }
+}
+/* Единственный законный: `return` после `finishDeferredLoad()` — она заказывает
+ * кадр внутри себя, из вложенного `done()`. Статически это не видно. */
+const FRAME_LOOP_DEAD_RETURN_BASELINE = 1;
+if (frameLoopDeadReturns.length > FRAME_LOOP_DEAD_RETURN_BASELINE) {
+  failures.push(`Кадровый цикл: ${frameLoopDeadReturns.length} выходов не заказывают следующий кадр, разрешён ${FRAME_LOOP_DEAD_RETURN_BASELINE}.`);
+  failures.push('    Ранний выход из `gameLoop` обязан звать `requestAnimationFrame(gameLoop)` — иначе игра замирает навсегда, молча.');
+  for (const h of frameLoopDeadReturns) failures.push(`    ${h}`);
+} else if (frameLoopDeadReturns.length < FRAME_LOOP_DEAD_RETURN_BASELINE) {
+  notes.push(`Кадровый цикл: ${frameLoopDeadReturns.length} (было ${FRAME_LOOP_DEAD_RETURN_BASELINE}). Опусти FRAME_LOOP_DEAD_RETURN_BASELINE.`);
+}
+
 const ENTITY_DEATH_OWNER = 'systems/entity_death.ts';
 const entityDeathHits = [];
 for (const file of files) {
@@ -492,4 +541,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);
