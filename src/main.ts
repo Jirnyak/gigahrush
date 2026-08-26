@@ -10413,11 +10413,12 @@ function gameLoop(now: number): void {
     prevPlayerActorHp = curHp;
     updatePlayerBarAudioFeedback();
 
-    // Check player death
-    const deathActor = player;
-    if (!deathActor.alive && !state.gameOver) {
-      handlePlayerDeath(deathActor);
-    } else if (!player.alive && !state.gameOver) {
+    /* Смерть УПРАВЛЯЕМОГО тела, а не «домашнего». `player` — это и есть тело,
+     * которым сейчас правит ввод: `makeCurrentPlayer` переприсваивает его при
+     * вселении и при продолжении за другого жителя. Поэтому отдельной ветки для
+     * «настоящего» игрока не нужно — здесь стояла вторая с ТЕМ ЖЕ условием и
+     * тем же телом, недостижимая по построению. */
+    if (!player.alive && !state.gameOver) {
       handlePlayerDeath(player);
     }
     reportNetSphereProgressEvents();
