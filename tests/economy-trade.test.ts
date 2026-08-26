@@ -99,7 +99,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   resetFloor(noMoneyState);
   const poorPlayer = makeTestPlayer({ id: 1, money: 0 });
   const waterSeller = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 7 });
-  const stockBeforeBuy = resourceStock(noMoneyState, 'drink_water');
+  const stockBeforeBuy = resourceStock(noMoneyState, 0, 'drink_water');
 
   const buyResult = buyFromNpc(noMoneyState, poorPlayer, waterSeller, 0);
 
@@ -109,7 +109,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   assert.equal(poorPlayer.inventory?.length, 0);
   assert.equal(waterSeller.money, 7);
   assert.equal(waterSeller.inventory?.[0]?.count, 1);
-  assert.equal(resourceStock(noMoneyState, 'drink_water'), stockBeforeBuy);
+  assert.equal(resourceStock(noMoneyState, 0, 'drink_water'), stockBeforeBuy);
 
   const noSpaceState = makeGameState({ currentZ: 0 });
   resetFloor(noSpaceState);
@@ -120,7 +120,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
     inventory: Array.from({ length: MAX_INVENTORY_SLOTS }, () => ({ defId: 'water', count: MAX_ITEM_STACK })),
     money: 20,
   });
-  const stockBeforeSell = resourceStock(noSpaceState, 'drink_water');
+  const stockBeforeSell = resourceStock(noSpaceState, 0, 'drink_water');
 
   const sellResult = sellToNpc(noSpaceState, seller, fullNpc, 0);
 
@@ -130,7 +130,7 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   assert.equal(seller.inventory?.[0]?.count, 1);
   assert.equal(fullNpc.money, 20);
   assert.equal(fullNpc.inventory?.length, MAX_INVENTORY_SLOTS);
-  assert.equal(resourceStock(noSpaceState, 'drink_water'), stockBeforeSell);
+  assert.equal(resourceStock(noSpaceState, 0, 'drink_water'), stockBeforeSell);
 });
 
 test('primeTradePriceCache handles empty and undefined inventories safely', () => {

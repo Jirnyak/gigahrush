@@ -113,7 +113,7 @@ test('decon fluid neutralizes carnivorous fungus as a reagent counterplay', () =
   const entities: Entity[] = [];
   const state = makeGameState({ currentZ: 0, time: 20 });
 
-  assert.equal(tryUseCarnivorousFungus(world, entities, { v: 1 }, player, state), true);
+  assert.equal(tryUseCarnivorousFungus(world, entities, { v: 1 }, player, state, player.x, player.y), true);
 
   assert.equal(countInventoryItem(player, 'decon_fluid'), 0);
   assert.equal(countInventoryItem(player, 'zhelemish_boiled'), 1);
