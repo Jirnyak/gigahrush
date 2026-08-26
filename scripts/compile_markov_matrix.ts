@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ITEMS } from '../src/data/items';
-import { ItemType, Faction, RoomType, MonsterKind, Occupation } from '../src/core/types';
+import { ItemType, Faction, RoomType, MonsterKind } from '../src/core/types';
 import { ROOM_DEFS } from '../src/data/rooms';
 import { MONSTERS } from '../src/entities/monster';
 import { OCCUPATION_PROFILES } from '../src/data/occupation_profiles';
@@ -354,7 +354,12 @@ function buildAnomalyCategories(): CategoryItem[] {
 function buildZoneCategories(): CategoryItem[] {
   const items: CategoryItem[] = [];
   for (const route of DESIGN_FLOOR_ROUTES) {
-    items.push({ text: route.displayName.toLowerCase(), weight: 30, tags: ['zone', ...(route.themeTags || [])] });
+    /* Поле `themeTags` вырезано из маршрутов целиком (коммит e690df77, «тем нет,
+     * каждый этаж сам по себе»), а эта строка его пережила — скрипты не входили
+     * в tsc-скоуп, и `route.themeTags` молча читался как undefined. То есть теги
+     * зон и так собирались пустыми; правка возвращает коду честность, а не
+     * меняет матрицу. */
+    items.push({ text: route.displayName.toLowerCase(), weight: 30, tags: ['zone'] });
   }
   return items;
 }

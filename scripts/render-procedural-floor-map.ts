@@ -285,7 +285,12 @@ function proceduralSpecForCli(cli: CliOptions, z: number): ReturnType<typeof mak
     ...(cli.geometry ? { geometryId: cli.geometry } : {}),
     ...(cli.majority ? { majorityId: cli.majority } : {}),
     ...(cli.anomaly ? { anomalyId: cli.anomaly } : {}),
-    ...(cli.danger !== undefined ? { danger: cli.danger } : {}),
+    /* CLI отдаёт число, а спека требует ступень 1..5. Зажимаем на границе
+     * входа: аргумент приходит от человека, и `--danger 9` не должен пролезать
+     * в мир немым. */
+    ...(cli.danger !== undefined
+      ? { danger: Math.max(1, Math.min(5, Math.round(cli.danger))) as ReturnType<typeof makeProceduralFloorSpec>['danger'] }
+      : {}),
     ...(forcedGeometry || forcedMajority || forcedAnomaly
       ? {
           title: `${titlePrefix}${titleGeometry?.title ?? base.geometryId}, ${titleMajority?.title ?? base.majorityId}`,

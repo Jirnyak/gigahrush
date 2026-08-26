@@ -37,7 +37,7 @@
 
 import fs from 'node:fs';
 import '../src/content';
-import { EntityType, type Entity, type GameState } from '../src/core/types';
+import { EntityType, type GameState } from '../src/core/types';
 import { seedGlobalRng } from '../src/core/rand';
 import { updateAI, getAiStats } from '../src/systems/ai';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
