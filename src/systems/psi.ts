@@ -37,7 +37,16 @@ let debugNoClip = false;                        // debug override for phase move
 const psiTargetQuery: Entity[] = [];
 let hasActiveMadness = false;
 let madnessScanAccum = 0;
-let possession: { previousPlayerId: number; targetId: number; timer: number } | null = null;
+/* Вселения ЖИВЫХ, ключ — id вселившегося. Здесь стоял ОДИН слот на весь мир, и
+ * это делало способность игроцкой по устройству: пока занят слот, никто больше
+ * вселиться не мог. При этом каст уже принимал любого актора (`castInstantSpell`
+ * зовут и не за игрока), то есть NPC мог занять слот и заблокировать игрока.
+ *
+ * Форма взята с соседней строки этого же файла — `controlTimers` ровно такая же
+ * карта «id → остаток». Правда о том, кто в ком, живёт на сущностях
+ * (`psiControlledBy` / `psiAway`); карта нужна лишь как список активных для
+ * такта, чтобы не перебирать этаж. */
+const possessions = new Map<number, { targetId: number; timer: number }>();
 
 // ── Queries ──────────────────────────────────────────────────────
 export function isPhaseActive(): boolean { return phaseTimer > 0; }
@@ -57,7 +66,7 @@ export function resetPsiState(): void {
   phaseTimer = 0;
   shieldTimer = 0;
   markPos = null;
-  possession = null;
+  possessions.clear();
   controlTimers.clear();
 }
 
@@ -181,14 +190,23 @@ export function updatePsiEffects(entities: Entity[], dt: number, player: Entity,
     }
   }
 
-  if (possession) {
-    possession.timer -= dt;
+  /* Такт всех вселений, а не одного. Обход идёт по карте активных — их единицы,
+   * — а не по этажу: перебор сущностей ради редкого события запрещён. */
+  if (possessions.size > 0) {
     const byId = ensureEntityIndex(entities).byId;
-    const body = byId.get(possession.previousPlayerId);
-    const target = byId.get(possession.targetId);
-    if (!body?.alive || !target?.alive || possession.timer <= 0) {
-      return { player: endPsiPossession(entities, player, msgs, time, target?.alive ? 'expired' : 'broken') };
+    let nextPlayer: Entity | undefined;
+    for (const [hostId, live] of [...possessions]) {
+      live.timer -= dt;
+      const host = byId.get(hostId);
+      const target = byId.get(live.targetId);
+      if (host?.alive && target?.alive && live.timer > 0) continue;
+      /* Возврат управления касается ТОЛЬКО игрока: у него вход привязан к телу.
+       * NPC возвращается в себя тем же снятием полей, ничего сообщать некому. */
+      const returned = releasePossession(entities, hostId, msgs, time, target?.alive ? 'expired' : 'broken');
+      if (player && hostId === player.id) nextPlayer = returned;
+      else if (player && live.targetId === player.id) nextPlayer = returned;
     }
+    if (nextPlayer) return { player: nextPlayer };
   }
   return {};
 }
@@ -384,64 +402,90 @@ function canPossessTarget(target: Entity): boolean {
   return true;
 }
 
-function castPossession(player: Entity, entities: Entity[], world: World, msgs: Msg[], time: number): Entity | null {
-  if (possession) {
+/* Вселяться может ЛЮБОЙ актор, не только игрок. Имя параметра `caster` вместо
+ * прежнего `player` — не косметика: раньше отказ стоял на глобальном слоте, и
+ * первый вселившийся запирал способность всему миру. */
+function castPossession(caster: Entity, entities: Entity[], world: World, msgs: Msg[], time: number): Entity | null {
+  if (possessions.has(caster.id)) {
     msgs.push(msg('Вселение уже держит чужое тело', time, '#f84'));
     return null;
   }
-  const target = findLookTarget(player, entities, world, POSSESSION_RANGE);
+  const target = findLookTarget(caster, entities, world, POSSESSION_RANGE);
   if (!target) {
     msgs.push(msg('Вселение — цель не найдена', time, '#a4f'));
+    return null;
+  }
+  if (target.psiControlledBy !== undefined || target.psiAway !== undefined) {
+    msgs.push(msg(`${entityDisplayName(target)} уже занят чужой волей`, time, '#f84'));
     return null;
   }
   if (!canPossessTarget(target)) {
     msgs.push(msg(`${entityDisplayName(target)} не принимает вселение`, time, '#f84'));
     return null;
   }
-  const playerInt = actorIntelligence(player);
+  const casterInt = actorIntelligence(caster);
   const targetInt = actorIntelligence(target);
-  if (playerInt <= targetInt) {
-    msgs.push(msg(`Вселение сорвалось: интеллект цели ${targetInt}, ваш ${playerInt}`, time, '#f84'));
+  if (casterInt <= targetInt) {
+    msgs.push(msg(`Вселение сорвалось: интеллект цели ${targetInt}, ваш ${casterInt}`, time, '#f84'));
     return null;
   }
 
-  target.psiControlledBy = player.id;
+  target.psiControlledBy = caster.id;
+  /* Собственное тело остаётся в мире БЕЗВОЛЬНЫМ и уязвимым: цикл AI за него не
+   * думает (см. `psiAway` в `ai/index.ts`), защищаться оно не будет, и убить
+   * его могут, пока хозяин в чужом. Это делает вселение риском, а не бесплатным
+   * улучшением, и работает одинаково для игрока и для NPC. */
+  caster.psiAway = target.id;
   if (target.ai) {
     target.ai.combatTargetId = undefined;
     target.ai.goal = AIGoal.IDLE;
     target.ai.path = [];
     target.ai.timer = 0;
   }
-  const duration = psiEffectDurationSec(player);
-  possession = { previousPlayerId: player.id, targetId: target.id, timer: duration };
+  const duration = psiEffectDurationSec(caster);
+  possessions.set(caster.id, { targetId: target.id, timer: duration });
   msgs.push(msg(`Вселение: вы внутри ${entityDisplayName(target)} на ${Math.round(duration)}с`, time, '#4ff'));
   return target;
 }
 
-export function getPsiPossessionTarget(entities: readonly Entity[]): Entity | null {
-  if (!possession) return null;
+/** Кого сейчас ведёт этот актор, если он вселился. Раньше функция отвечала за
+ *  единственное вселение в мире и никого не спрашивала. */
+export function getPsiPossessionTarget(entities: readonly Entity[], host: Entity | undefined): Entity | null {
+  if (!host) return null;
+  const live = possessions.get(host.id);
+  if (!live) return null;
   const byId = ensureEntityIndex(entities).byId;
-  const target = byId.get(possession.targetId);
-  const body = byId.get(possession.previousPlayerId);
-  if (!target?.alive || !body?.alive) return null;
+  const target = byId.get(live.targetId);
+  if (!target?.alive || !host.alive) return null;
   return target;
 }
 
-export function getPsiPossessionTimer(): number {
-  return possession?.timer ?? 0;
+/** Сколько секунд этому актору осталось в чужом теле. */
+export function getPsiPossessionTimer(host: Entity | undefined): number {
+  return host ? (possessions.get(host.id)?.timer ?? 0) : 0;
 }
 
-export function endPsiPossession(
+/**
+ * Снять вселение и вернуть тело, которым отныне управляет хозяин.
+ *
+ * Общая для всех дверь: игрок и NPC выходят из чужого тела одним путём, разница
+ * лишь в том, что игроку возвращённое тело подставляют под ввод
+ * (`makeCurrentPlayer` в точке сборки), а NPC просто снова думает за себя.
+ */
+function releasePossession(
   entities: readonly Entity[],
-  currentPlayer?: Entity,
-  msgs?: Msg[],
-  time = 0,
-  reason: 'expired' | 'broken' | 'cancelled' | 'reset' = 'cancelled',
+  hostId: number,
+  msgs: Msg[] | undefined,
+  time: number,
+  reason: 'expired' | 'broken' | 'cancelled' | 'reset',
 ): Entity | undefined {
-  if (!possession) return currentPlayer;
+  const live = possessions.get(hostId);
+  if (!live) return undefined;
+  possessions.delete(hostId);
   const byId = ensureEntityIndex(entities).byId;
-  const previous = byId.get(possession.previousPlayerId);
-  const target = byId.get(possession.targetId);
+  const host = byId.get(hostId);
+  const target = byId.get(live.targetId);
+  if (host) host.psiAway = undefined;
   if (target) {
     target.psiControlledBy = undefined;
     if (target.ai) target.ai.combatTargetId = undefined;
@@ -450,12 +494,30 @@ export function endPsiPossession(
       hasActiveMadness = true;
     }
   }
-  possession = null;
   if (msgs && reason !== 'reset') {
     msgs.push(msg(reason === 'broken' ? 'Вселение оборвалось' : 'Вселение отпустило чужое тело', time, '#8cf'));
   }
-  if (previous?.alive) return previous;
-  return currentPlayer?.alive ? currentPlayer : undefined;
+  return host?.alive ? host : undefined;
+}
+
+/**
+ * Точка сборки зовёт это за ИГРОКА: вернуть его в своё тело. Хозяином считается
+ * тот, кто вселился, — им может быть и текущее управляемое тело (игрок внутри
+ * чужого), и оно само (игрок уже дома).
+ */
+export function endPsiPossession(
+  entities: readonly Entity[],
+  currentPlayer?: Entity,
+  msgs?: Msg[],
+  time = 0,
+  reason: 'expired' | 'broken' | 'cancelled' | 'reset' = 'cancelled',
+): Entity | undefined {
+  if (!currentPlayer) return currentPlayer;
+  /* Игрок может быть либо хозяином (ещё не вселился или уже дома), либо телом,
+   * в которое вселились. Во втором случае снимать надо вселение ХОЗЯИНА. */
+  const hostId = currentPlayer.psiControlledBy ?? currentPlayer.id;
+  const returned = releasePossession(entities, hostId, msgs, time, reason);
+  return returned ?? (currentPlayer.alive ? currentPlayer : undefined);
 }
 
 // ── Метка: save current position ─────────────────────────────────

@@ -598,6 +598,11 @@ export interface Entity extends InventoryHolder {
   matkaTimer?: number;         // матка spawn timer (seconds until next spawn)
   psiMadness?: number;         // remaining seconds of PSI madness (attacks everyone)
   psiControlledBy?: number;    // entity id of PSI controller (ally override)
+  /* Тело, в котором этот актор сейчас находится. Зеркало `psiControlledBy`:
+   * захваченное тело помнит, кто внутри, а вселившийся — где он сам. Пара
+   * нужна ради O(1) в обе стороны: цикл AI обязан за одно сравнение понять,
+   * что тело покинуто, и не думать за него. Искать хозяина перебором нельзя. */
+  psiAway?: number;            // entity id of the body this actor currently inhabits
   phasing?: boolean;           // can move through walls (spirit)
   protocolPressureTier?: number; // quantized sprite cue for Протокольник pressure
   activeBark?: { text: string; until: number; color: string; skipTranslate?: boolean; }; // UI: active world speech bubble

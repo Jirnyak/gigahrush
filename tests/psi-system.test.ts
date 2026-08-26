@@ -67,16 +67,16 @@ test('PSI possession requires higher player intelligence and expires into backla
   assert.equal(target.psiControlledBy, player.id);
   assert.equal(activePlayer, target);
   target.alive = false;
-  assert.equal(getPsiPossessionTarget(entities), null);
+  assert.equal(getPsiPossessionTarget(entities, player), null);
   target.alive = true;
   assert.equal(target.ai?.combatTargetId, undefined);
-  assert.equal(getPsiPossessionTarget(entities), target);
+  assert.equal(getPsiPossessionTarget(entities, player), target);
 
   activePlayer = updatePsiEffects(entities, 19.1, activePlayer, msgs, 17).player ?? activePlayer;
   assert.equal(target.psiControlledBy, undefined);
   assert.equal(activePlayer, player);
   assert.ok((target.psiMadness ?? 0) > 0);
-  assert.equal(getPsiPossessionTarget(entities), null);
+  assert.equal(getPsiPossessionTarget(entities, player), null);
 });
 
 test('PSI possession fails closed when target intelligence is not lower', () => {
@@ -101,7 +101,7 @@ test('PSI possession fails closed when target intelligence is not lower', () => 
   castInstantSpell('possession', player, entities, world, msgs, 1, () => {});
 
   assert.equal(target.psiControlledBy, undefined);
-  assert.equal(getPsiPossessionTarget(entities), null);
+  assert.equal(getPsiPossessionTarget(entities, player), null);
   endPsiPossession(entities, player, msgs, 2, 'reset');
 });
 
@@ -133,4 +133,70 @@ test('PSI shield can protect whichever entity is the current player', () => {
   assert.equal(absorbPsiShieldDamage(activePlayer, 20, msgs, 3), 14);
   assert.equal(activePlayer.hp, 20);
   assert.equal(activePlayer.rpg?.psi, 8.6);
+});
+
+/* Замок на универсальность вселения.
+ *
+ * Способность держалась на ОДНОМ модульном слоте на весь мир, и это делало её
+ * игроцкой по устройству: пока слот занят, вселиться не мог больше никто.
+ * Каст при этом уже принимал любого актора (`castInstantSpell` зовут и не за
+ * игрока), поэтому NPC мог занять слот и запереть способность игроку.
+ *
+ * Закон проекта — «игрок это просто NPC», значит вселение обязано работать
+ * одинаково у всех и одновременно у многих. Правда о том, кто в ком, живёт на
+ * сущностях: `psiControlledBy` у захваченного тела, зеркальное `psiAway` у
+ * ушедшего хозяина. Пара нужна ради O(1) в обе стороны — цикл AI обязан за одно
+ * сравнение понять, что тело покинуто.
+ */
+test('вселяться могут двое сразу, и ни один не мешает другому', () => {
+  resetPsiState();
+  const world = new World();
+  const msgs: Msg[] = [];
+  const smart = (id: number, x: number) => makeTestNpc({
+    id, x, y: 10, faction: Faction.WILD,
+    rpg: { level: 3, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 4, psi: 30, maxPsi: 30 },
+  });
+  const dull = (id: number, x: number) => makeTestNpc({
+    id, x, y: 10, faction: Faction.WILD,
+    rpg: { level: 1, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 1, psi: 0, maxPsi: 0 },
+    ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [1], pi: 0, stuck: 0, timer: 1, combatTargetId: 1 },
+  });
+  const base = getPlotNpcCount() + 2000;
+  const hostA = smart(base, 10);
+  const bodyA = dull(base + 1, 16);
+  const hostB = smart(base + 2, 40);
+  const bodyB = dull(base + 3, 46);
+  const entities = [hostA, bodyA, hostB, bodyB];
+
+  castInstantSpell('possession', hostA, entities, world, msgs, 1, () => {});
+  castInstantSpell('possession', hostB, entities, world, msgs, 1, () => {});
+
+  assert.equal(bodyA.psiControlledBy, hostA.id, 'первый вселился');
+  assert.equal(bodyB.psiControlledBy, hostB.id, 'второй НЕ должен упереться в чужое вселение');
+  assert.equal(hostA.psiAway, bodyA.id, 'покинутое тело помнит, где хозяин');
+  assert.equal(hostB.psiAway, bodyB.id);
+  assert.equal(getPsiPossessionTarget(entities, hostA), bodyA);
+  assert.equal(getPsiPossessionTarget(entities, hostB), bodyB);
+});
+
+test('в занятое тело второй раз не вселяются', () => {
+  resetPsiState();
+  const world = new World();
+  const msgs: Msg[] = [];
+  const base = getPlotNpcCount() + 3000;
+  const mk = (id: number, x: number, int: number) => makeTestNpc({
+    id, x, y: 10, faction: Faction.WILD,
+    rpg: { level: 3, xp: 0, attrPoints: 0, str: 0, agi: 0, int, psi: 30, maxPsi: 30 },
+  });
+  const first = mk(base, 10, 4);
+  const body = mk(base + 1, 16, 1);
+  const second = mk(base + 2, 22, 4);
+  const entities = [first, body, second];
+
+  castInstantSpell('possession', first, entities, world, msgs, 1, () => {});
+  assert.equal(body.psiControlledBy, first.id);
+
+  castInstantSpell('possession', second, entities, world, msgs, 1, () => {});
+  assert.equal(body.psiControlledBy, first.id, 'тело осталось за первым');
+  assert.equal(second.psiAway, undefined, 'второй никуда не ушёл');
 });
