@@ -201,11 +201,46 @@ function useLowMemNav(): boolean {
  *    columns at once; without a cap that is hundreds of BFS in one frame = the
  *    freeze the user saw. Throttled callers get null (no path THIS frame) and
  *    retry next frame; cache hits are never throttled. Accept-stale, bounded. */
-const LOWMEM_COLUMN_BUDGET_BYTES = 8 * 1024 * 1024; // ≈8 MB cap for the LRU.
+/* Бюджет LRU колонок. Подобран замером на квартирах — худшем этаже (R≈28k,
+ * колонка 56 КБ, рабочий набор 6922 разных целевых региона за минуту):
+ *
+ *     бюджет   слотов  попаданий  холодных BFS   память
+ *       8 МБ      145      12.1%        14 139    298 МБ
+ *      64 МБ     1165      30.3%        11 193    380 МБ
+ *     128 МБ     2330      41.7%         9 328    427 МБ
+ *     без крышки          56.1%         6 922    665 МБ
+ *
+ * 128 МБ — колено кривой: шаг 64→128 стоит 47 МБ и покупает 11.4 п.п. попаданий
+ * (4.1 МБ на пункт), а дальше 165 МБ покупают 7 п.п. (23 МБ на пункт). Верхняя
+ * граница попаданий — 56.1%, и она не в кеше: каждая ЦЕЛЬ стоит один BFS в
+ * первый раз, сколько памяти ни дай. */
+const LOWMEM_COLUMN_BUDGET_BYTES = 128 * 1024 * 1024;
 const LOWMEM_COLUMN_SLOTS_MIN = 64;
-const LOWMEM_COLUMN_SLOTS_MAX = 1024;
-const LOWMEM_COLUMN_BFS_PER_FRAME = 32; // fresh BFS budget per AI frame.
+
+/* Рацион холодных BFS на кадр. Это НЕ вторая ручка бюджета: он бережёт от
+ * всплеска (загрузка этажа, самосбор, комната, разом сменившая цель), когда
+ * сотня невиданных колонок запрашивается в одном кадре.
+ *
+ * Стояло 32, и это была не страховка, а удавка. Замер на квартирах против
+ * плотной матрицы, которую этот путь заменил:
+ *
+ *     рацион    «без маршрута» у NPC   updateAI p50
+ *     плотная матрица       3.5%          14.610
+ *        32                16.8%          15.656
+ *       128                13.9%          15.037
+ *       512                 9.7%          15.010
+ *      4096                 3.5%          15.079
+ *
+ * Отказ не бесплатен: актор остаётся без маршрута и просит СНОВА в следующем
+ * кадре, поэтому скупой рацион сам порождает лавину повторов — 24 867 отказов
+ * на 38 612 запросов. Кадр он при этом не спасал: между 32 и 4096 разница
+ * 0.6 мс p50. При 4096 средний спрос (2.6 BFS на кадр) до крышки не достаёт
+ * вовсе, и она остаётся тем, чем задумывалась, — страховкой от патологии. */
+const LOWMEM_COLUMN_BFS_PER_FRAME = 4096;
 const _regionColumns = new Map<number, Uint16Array>();
+let _colHits = 0;
+let _colMisses = 0;
+let _colThrottled = 0;
 let _lowMemColSlots = LOWMEM_COLUMN_SLOTS_MIN; // размер по R ставит installRegionGraph.
 let _lowMemColBudget = LOWMEM_COLUMN_BFS_PER_FRAME; // refilled per AI frame.
 let _regionColScratch = new Int32Array(1024); // BFS queue, grown to R at bake.
@@ -224,11 +259,13 @@ function regionColumnFor(rT: number): Uint16Array | null {
     // Refresh recency (Map preserves insertion order → delete+set = MRU).
     _regionColumns.delete(rT);
     _regionColumns.set(rT, cached);
+    _colHits++;
     return cached;
   }
   // Cache miss → one O(R+E) BFS. Ration these so a burst can't stall the tick.
-  if (_lowMemColBudget <= 0) return null;
+  if (_lowMemColBudget <= 0) { _colThrottled++; return null; }
   _lowMemColBudget--;
+  _colMisses++;
   const R = g.R;
   const col = new Uint16Array(R);
   col.fill(REGION_UNREACHABLE);
@@ -338,6 +375,14 @@ export interface PathfindingStats {
   bfsMiss: number;
   bfsLimitHits: number;
   bfsVisited: number;
+  /* Кеш колонок маршрутизации: без этих чисел у системы нет способа сказать,
+   * хватает ли ей слотов. Крышек ДВЕ (байтовый бюджет и `SLOTS_MAX`), и какая
+   * связывающая — видно только отсюда. */
+  columnHits: number;
+  columnMisses: number;
+  columnThrottled: number;
+  columnSlots: number;
+  columnResident: number;
 }
 
 export type AssignPathStatus = 'assigned' | 'same' | 'not_found';
@@ -367,6 +412,9 @@ function beginPathFrame(time: number): void {
   _bfsMiss = 0;
   _bfsLimitHits = 0;
   _bfsVisited = 0;
+  _colHits = 0;
+  _colMisses = 0;
+  _colThrottled = 0;
 }
 
 export function getPathfindingStats(out?: PathfindingStats): PathfindingStats {
@@ -381,6 +429,11 @@ export function getPathfindingStats(out?: PathfindingStats): PathfindingStats {
     bfsMiss: 0,
     bfsLimitHits: 0,
     bfsVisited: 0,
+    columnHits: 0,
+    columnMisses: 0,
+    columnThrottled: 0,
+    columnSlots: 0,
+    columnResident: 0,
   };
   stats.routineUsed = _routinePathUsed;
   stats.routineDenied = _routinePathDenied;
@@ -392,6 +445,11 @@ export function getPathfindingStats(out?: PathfindingStats): PathfindingStats {
   stats.bfsMiss = _bfsMiss;
   stats.bfsLimitHits = _bfsLimitHits;
   stats.bfsVisited = _bfsVisited;
+  stats.columnHits = _colHits;
+  stats.columnMisses = _colMisses;
+  stats.columnThrottled = _colThrottled;
+  stats.columnSlots = _lowMemColSlots;
+  stats.columnResident = _regionColumns.size;
   return stats;
 }
 
@@ -1042,9 +1100,13 @@ function installRegionGraph(): void {
   // Size the column LRU to this floor: hold as many R·2-byte columns as fit the
   // byte budget so the active target working set stays resident (few re-BFS),
   // clamped to a sane range. Big floor → fewer slots, small floor → more.
+  /* Ограничитель ОДИН — байты. Второй крышки (`SLOTS_MAX`) больше нет: на
+   * большом этаже связывали байты, на маленьком — само число регионов, потому
+   * что целей физически не больше R. Две крышки на одно место означали лишь,
+   * что заметить связывающую нельзя без замера. */
   _lowMemColSlots = Math.max(
     LOWMEM_COLUMN_SLOTS_MIN,
-    Math.min(LOWMEM_COLUMN_SLOTS_MAX, Math.floor(LOWMEM_COLUMN_BUDGET_BYTES / (R * 2))),
+    Math.floor(LOWMEM_COLUMN_BUDGET_BYTES / (R * 2)),
   );
 }
 

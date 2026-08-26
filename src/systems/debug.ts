@@ -45,6 +45,7 @@ import { type FloorAnomalyId } from '../data/procedural_floors';
 import { isDebugOnePunchManEnabled } from './debug_cheats';
 import { fitText } from '../render/ui_text';
 import { getAiStats } from './ai';
+import { getPathfindingStats } from './ai/pathfinding';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { isPlayerEntity } from './player_actor';
 import { currentAlifeFloorKey } from './alife';
@@ -1617,6 +1618,18 @@ registerDebugPanel({
     out.push({ text: 'ИИ', color: '#ff0' });
     out.push({ text: `  живых ${ai.liveAi}  обновлено ${ai.updated} (npc ${ai.updatedNpc} / мобы ${ai.updatedMonster})  пропущено ${ai.skipped}`, color: '#9cf' });
     out.push({ text: `  сюжетных ${ai.plot}  боссов ${ai.bosses}  в бою ${ai.activeAttackers}  снаряды ${ai.projectileOwners}/${ai.projectiles}`, color: '#9cf' });
+    /* Кеш колонок маршрутизации. Числа были доступны через
+     * `getPathfindingStats`, но их не читал НИКТО — API жил, потребителя не
+     * было. Без них не видно, какая крышка связывающая, и подбор бюджета
+     * превращается в гадание. `отказов` за кадр обязано быть нулём: отказ
+     * означает актора, оставшегося без маршрута до следующего кадра. */
+    const pf = getPathfindingStats();
+    const colReq = pf.columnHits + pf.columnMisses + pf.columnThrottled;
+    out.push({
+      text: `  колонки ${pf.columnResident}/${pf.columnSlots}  за кадр: попаданий ${pf.columnHits} промахов ${pf.columnMisses} отказов ${pf.columnThrottled}`
+        + (colReq > 0 ? ` (${Math.round(pf.columnHits / colReq * 100)}%)` : ''),
+      color: pf.columnThrottled > 0 ? '#fa4' : '#9cf',
+    });
     const player = entities.find(e => isPlayerEntity(e));
     const memory = summarizeRoomMemoryForRoom(state.currentZ, player ? currentPlayerRoom(world, player) : undefined);
     if (memory.length) {
