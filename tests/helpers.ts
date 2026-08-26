@@ -18,6 +18,7 @@ import { World as WorldClass } from '../src/core/world';
 type World = WorldClass;
 import { createCraftingState } from '../src/systems/crafting';
 import { setFloorRunState } from '../src/systems/procedural_floors';
+import type { FloorGeometryId, ProceduralFloorSpec } from '../src/data/procedural_floors';
 
 /* ── Адресат сделки: комната под игроком ──────────────────────────
  *
@@ -126,13 +127,19 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
   // Backfill floorRunState if not provided, ensuring test state is consistent
   if (!overrides.floorRunState) {
     const fallbackZ = state.currentZ;
-    const geometryIds: Record<number, string> = {
+    /* Тип сужен до реестра геометрий намеренно. Раньше стояло
+     * `Record<number, string>`, и в карте жили ДВА НЕСУЩЕСТВУЮЩИХ id:
+     * `meat_halls` на z −50 и `void_expanse` на z −60 (в `src/` их нет вовсе,
+     * настоящих геометрий десять). Спека уносила фантом, и всякий, кто искал
+     * геометрию по этому id, получал undefined. Подпись вдобавок врала: −50
+     * помечен «HELL», хотя −50 это Пустота, а ад на −36. Обе строки убраны —
+     * эти этажи теперь падают в общий `?? 'living_blocks'`, как и все прочие
+     * неперечисленные. */
+    const geometryIds: Record<number, FloorGeometryId> = {
       0: 'living_blocks',
       40: 'admin_pockets',
       [-2]: 'apartment_pressure',
       [-26]: 'collectors',
-      [-50]: 'meat_halls', // HELL fallback if any
-      [-60]: 'void_expanse', // VOID fallback if any
     };
     const geometryId = geometryIds[fallbackZ] ?? 'living_blocks';
 
@@ -140,24 +147,53 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
       runSeed: 1234, 
       currentZ: fallbackZ, 
       specs: {
-        [`z${fallbackZ}`]: {
+        [`z${fallbackZ}`]: makeProceduralSpecFixture({
           key: `z${fallbackZ}`,
           z: fallbackZ,
-          ordinal: 1,
-          seed: 1,
-          depth: 1,
-          danger: 1,
           geometryId,
-          majorityId: 'citizens',
-          anomalyId: 'none',
-          title: 'test',
-        }
+        })
       }, 
       visited: {} 
     }, fallbackZ);
   }
 
   return state;
+}
+
+/**
+ * Полная `ProceduralFloorSpec` из нескольких полей.
+ *
+ * Спека требует четырнадцать полей, а тесту обычно важны два-три: геометрия,
+ * большинство, аномалия. Раньше фикстуры просто не дописывали остальные, и
+ * компилятор про это молчал — ошибку «нет обязательного» перебивала ошибка про
+ * лишнее поле `baseFloor`. Убрали легаси — пропажа обнажилась сразу в четырёх
+ * местах.
+ *
+ * Помощник закрывает класс целиком: заглушки остаются короткими, но объявляют
+ * правду о своём типе. Умолчания детерминированы — тесты не имеют права
+ * зависеть от случайности.
+ */
+export function makeProceduralSpecFixture(
+  overrides: Partial<ProceduralFloorSpec> & Pick<ProceduralFloorSpec, 'key' | 'z'>,
+): ProceduralFloorSpec {
+  return {
+    ordinal: 1,
+    seed: 1,
+    /* Сид ПРОГОНА, не этажа: по нему соседние этажи выводят позиции лифтовых
+     * шахт из одного числа. Фикстурам он обычно безразличен, но пустым быть не
+     * может — иначе шахты считались бы от undefined. */
+    runSeed: 1,
+    depth: 1,
+    danger: 1,
+    geometryId: 'living_blocks',
+    majorityId: 'citizens',
+    anomalyId: 'none',
+    title: 'test',
+    lootBiasIds: [],
+    monsterBiasKinds: [],
+    monsterBiasTags: [],
+    ...overrides,
+  };
 }
 
 export function makeTestEntity(overrides: Partial<Entity> = {}): Entity {

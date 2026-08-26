@@ -11,9 +11,13 @@ function makeSpec(majorityId: FloorMajorityId, anomalyId: FloorAnomalyId): Proce
     z: 0,
     ordinal: 1,
     seed: 0,
+    runSeed: 0,
     depth: 0,
     danger: 1,
-    geometryId: 'test_geom' as any,
+    /* Настоящий id из реестра вместо `'test_geom' as any`: приведение прятало
+     * то, что геометрии с таким именем нет, а тесту она безразлична — он про
+     * большинство и аномалию. */
+    geometryId: 'living_blocks',
     majorityId,
     anomalyId,
     title: 'Test',
