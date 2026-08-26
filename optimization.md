@@ -83,12 +83,22 @@ Navigation in `src/systems/ai/pathfinding.ts` is a **2-level Region-Portal HPA\*
 
 - **Regions** = rooms + `16×16` cluster flood-fills. A cluster flood has a hard locality guard (`(nx − baseX + W) % W ≥ CLUSTER_SIZE`), so a cluster region can never spill past its own `16×16` — this is what makes scoped recompute possible.
 - **Portals** = contiguous border openings/doors between adjacent regions.
-- **Region-node next-hop matrix** `_regionNext[rS·R + rT]` = next region to step into on a fewest-hops route `rS→rT`. Built by one BFS per region over region adjacency, **O(R·E)** — NOT Floyd-Warshall O(P³), NOT a spanning tree. Every adjacent-region edge is kept, so toroidal cycles survive and there are no seams.
+- **Колонка следующих шагов** `col[cur]` = регион, в который шагнуть из `cur`, чтобы идти к `rT`.
+  Один BFS по смежности регионов на ЦЕЛЕВОЙ регион, **O(R·E)** — не Флойд-Уоршелл O(P³) и не
+  остовное дерево. Все рёбра смежности сохранены, поэтому тороидальные циклы живут и швов нет.
 
-**Two next-hop representations, device-picked once** (`useLowMemNav()`, memoised):
+**Одно представление на всех (с 2026-08-26).** `regionPath` считает колонку по требованию через
+`computeRegionNextColumn` и держит LRU `_regionColumns` размером
+`clamp(LOWMEM_COLUMN_SLOTS_MIN=64, LOWMEM_COLUMN_BUDGET_BYTES(8 МиБ)/(R*2), LOWMEM_COLUMN_SLOTS_MAX=1024)`.
+Холодные колонки рационируются по кадрам (`LOWMEM_COLUMN_BFS_PER_FRAME=32`): вызывающий получает
+отказ и повторяет в следующем кадре. Резидентно ≤8 МБ вместо сотен.
 
-- **PC (default, dense):** the full `_regionNext = Uint16Array(R·R)` matrix. The step-4 BFS-per-region bake is parallelised across Web Workers (copy-mode `postMessage`, **no `SharedArrayBuffer`**; `src/systems/ai/nav_worker_pool.ts` + `nav_worker.ts`, worker count scales with cores). The pure kernel `region_next.ts computeRegionNextRows` is shared bit-identically by workers and the sync fallback (used below `MIN_REGIONS_FOR_WORKERS`, in Node, or when Workers are absent). O(1) query; costs `R²·2` bytes (a mid floor is 250MB–1GB).
-- **Mobile (low-mem):** **no dense matrix.** `regionPath` computes ONE next-hop **column** on demand via `computeRegionNextColumn` (single BFS rooted at the target region over the immutable `RegionGraph`) and keeps an LRU of `_regionColumns` sized dynamically as `clamp(LOWMEM_COLUMN_SLOTS_MIN=64, LOWMEM_COLUMN_BUDGET_BYTES(8 MiB)/(R*2), LOWMEM_COLUMN_SLOTS_MAX=1024)`. ≤8 MB resident instead of hundreds, trading memory for a per-uncached-target BFS — this is what keeps the tab under the iOS/WebKit per-tab memory ceiling. All six bake triggers install this path identically via `installLowMemNav()`; patch/samosbor-freeze rules are unchanged. Detection is hardware-accurate and deliberately **PC-biased** (`any-hover: none` **and** no `any-pointer: fine` **and** touch present): misreading a phone as PC is preferred over the reverse, since the dense path merely costs memory a PC has. **The PC dense path is byte-for-byte unchanged by the mobile branch.**
+**Плотная матрица `_regionNext = Uint16Array(R·R)` и воркерный пул удалены.** Матрица стоила `R²·2`
+байта — жилой этаж 1132 МБ, квартиры 1720 МБ при R≈28k, — и убивала вкладку по OOM с пустой
+консолью. Пул (`nav_worker_pool.ts`, `nav_worker.ts`) существовал ТОЛЬКО чтобы строить её на
+нескольких ядрах, и ушёл вместе с ней: граф смежности строится за миллисекунды. Замер равноценности
+и цены — `architecture.md`, «Region Routing Contract». `useLowMemNav()` сохранён, но теперь означает
+ровно одно: устройство с малой памятью, которому не дают поведенческие поля потока.
 
 **Two planned full bakes ONLY** (`bakeNavigationTree`), both auto-triggered by `ensureNavigationTree`:
 
@@ -590,6 +600,13 @@ Date: 2026-08-22.
 Мера предосторожности общая: **отрицательный ответ кешируется наравне с положительным.**
 Именно промах не кешировался и у колокола часовни, и у песка арены, поэтому оба всегда
 доходили до конца списка — на этажах, где искомого не бывает в принципе.
+
+**Память — тоже бюджет кадра (2026-08-26).** Вкладка падала по OOM с пустой консолью, и это
+оказалось дороже всех оставшихся процентов. Первый же тик `updateAI` аллоцировал 1072 МБ и держал
+их всю сессию: плотная матрица маршрутов регионов `R²·2` (994 МБ) плюс поля потока по 64 МБ при
+крышке 16. Разбор и замеры — `architecture.md`, «Region Routing Contract». Урок общий: профиль
+показывает ВРЕМЯ и молчит про память, поэтому мерить надо и её — `process.memoryUsage().arrayBuffers`
+по шагам на безголовом прогоне локализует гигабайт за три запуска.
 
 **Патруль вместо извещения — тот же класс (2026-08-25).** Индекс сущностей каждый кадр обходил всю
 статику, чтобы НАЙТИ умерших: 9795 сущностей на жилом этаже ради события раз в несколько секунд,

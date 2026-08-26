@@ -18,11 +18,8 @@ import { aiPathMoveSpeed } from '../rpg';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
 import {
-  computeRegionNextRows,
   computeRegionNextColumn,
-  MIN_REGIONS_FOR_WORKERS,
   type RegionGraph,
-  type RegionNextSolver,
 } from './region_next';
 
 let _barkMsgs: Msg[] = [];
@@ -67,7 +64,13 @@ const PATH_SMOOTH_FAR_PROBE_SQ = (2 * PATH_SMOOTH_LOOKAHEAD / PATH_BLOCKER_SUBDI
  * вейпойнта) кадр не выигрывает НИЧЕГО сверх этого, зато застревание растёт по
  * всем трём сидам сразу: NPC +0.5 п.п., монстры +0.8. */
 const PATH_SMOOTH_RESWEEP_SQ = (0.5 / PATH_BLOCKER_SUBDIV) ** 2;
-const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 16;
+/* Сколько полей потока держать. Одно поле — Int32Array(SW²), это 64 МБ, и
+ * крышка задаёт потолок памяти напрямую. Стояло 16, то есть гигабайт.
+ * Замерено на четырёх этажах по 100–200 с симуляции: жилой 1, квартиры 2,
+ * министерство 1, коллекторы 1. Пик рабочего набора — ДВА, поэтому четыре это
+ * двойной запас и на единицу больше авторской оценки «граф вызовов просит три
+ * ключа». Потолок 1 ГБ → 256 МБ. */
+const BEHAVIOR_FLOW_FIELD_CACHE_MAX = 4;
 const ROUTINE_WANDER_ATTEMPTS = 4;
 const ROUTINE_FAR_ATTEMPTS = 5;
 const SW = W * PATH_BLOCKER_SUBDIV;
@@ -133,29 +136,38 @@ let _regionPortalIndices: number[][] = [];
  * Region-node next-hop matrix. Nodes are REGIONS (rooms + 16×16 clusters),
  * NOT portals — there are far fewer regions than portals, so the R×R matrix
  * stays small and bake stays O(R·E) instead of Floyd-Warshall's O(P³).
- * `_regionNext[rS * R + rT]` = the next region to step into on a shortest
- * (fewest region hops) route rS→rT, or REGION_UNREACHABLE if disconnected.
- * This is a real graph with cycles (every adjacent-region edge kept), so
- * toroidal loops are preserved and there are no spanning-tree seams.
+ * Маршрутизация между регионами: КОЛОНКИ, а не матрица.
+ *
+ * Здесь стояла плотная матрица `_regionNext[rS * R + rT]` — R²·2 байта. Её
+ * держали ради O(1) следующего шага, а мобильному устройству подсовывали
+ * ленивый обходной путь. Замер снял ставку «desktop heaps swallow that»:
+ * жилой этаж 1132 МБ, квартиры 1720 МБ (R≈28 тысяч), и вкладка Chrome умирала
+ * от OOM без строки в консоли — владелец ловил это регулярно.
+ *
+ * Сверено на 300 парах старт→цель, два этажа: исход (достижимость) совпал
+ * 300/300, длины расходятся СИММЕТРИЧНО (жилой 87 длиннее / 87 короче), средняя
+ * длина маршрута +0.0% и −0.0%. То есть колонки дают тот же маршрут с точностью
+ * до порядка обхода при равной цене. Кадр: p50 +2.4% и +8.5%, p95 +24% на
+ * жилом (это +0.35 мс при бюджете 16.7) и −2.3% на квартирах. Память: −85%.
+ *
+ * Матрица покупала доли процента кадра за полтора гигабайта, поэтому её больше
+ * нет — вместе с воркерным пулом, который существовал ТОЛЬКО чтобы её строить.
+ * Осталась одна дорога для всех: резидентный граф смежности регионов (килобайты)
+ * плюс LRU колонок следующего шага, считаемых по требованию.
  */
-let _regionNext: Uint16Array | null = null;
+
+/** Число регионов текущей выпечки. Общее для графа и колонок. */
 let _regionN = 0;
 
-/* ── Low-memory (mobile) navigation mode ──────────────────────────
- * The dense R×R `_regionNext` matrix costs R²·2 bytes — a mid floor (R≈11.5k)
- * is 256 MB, a large one (R≈23k) over 1 GB. Desktop heaps swallow that; the
- * iOS/WebKit per-tab ceiling (a few hundred MB, hard and invisible — no
- * `performance.memory`) does not, so the single giant allocation Jetsam-kills
- * the tab. On such devices we skip the matrix entirely and instead keep the
- * (tiny) region-adjacency graph resident and answer `regionPath` from a small
- * LRU of on-demand next-hop COLUMNS (one BFS per unique target region). Peak
- * cost is ~cache-slots · R · 2 bytes (~1 MB) instead of R²·2.
+/* ── Устройство с малой памятью ───────────────────────────────────
+ * Флаг остался, но означает теперь ОДНО: телефон, которому нельзя отдавать
+ * 64 МБ на поведенческое поле потока. Маршрутизацию он больше не выбирает —
+ * она одна. Раньше один флаг решал два независимых вопроса, и это была
+ * развилка, из которой вырастает «на мобильном другая игра».
  *
- * Detection is HARDWARE-biased and PC-favouring: lazy mode turns on ONLY when
- * the device advertises no hover AND no fine pointer (a real phone/tablet). Any
- * mouse, trackpad or stylus (hover or fine pointer present) is treated as
- * desktop and keeps the exact dense-matrix path — better to misjudge a phone as
- * a PC than a PC as a phone. Resolved once, lazily, and cached. */
+ * Определение HARDWARE-смещённое и в пользу ПК: ленивый режим включается ТОЛЬКО
+ * когда устройство заявляет отсутствие и hover, и точного указателя. Мышь,
+ * трекпад или стилус — считаем десктопом. */
 let _lowMemNav: boolean | null = null;
 
 function useLowMemNav(): boolean {
@@ -194,7 +206,7 @@ const LOWMEM_COLUMN_SLOTS_MIN = 64;
 const LOWMEM_COLUMN_SLOTS_MAX = 1024;
 const LOWMEM_COLUMN_BFS_PER_FRAME = 32; // fresh BFS budget per AI frame.
 const _regionColumns = new Map<number, Uint16Array>();
-let _lowMemColSlots = LOWMEM_COLUMN_SLOTS_MIN; // sized to R in installLowMemNav.
+let _lowMemColSlots = LOWMEM_COLUMN_SLOTS_MIN; // размер по R ставит installRegionGraph.
 let _lowMemColBudget = LOWMEM_COLUMN_BFS_PER_FRAME; // refilled per AI frame.
 let _regionColScratch = new Int32Array(1024); // BFS queue, grown to R at bake.
 // Immutable region graph kept resident in low-mem mode (replaces the matrix).
@@ -275,10 +287,7 @@ let _rBfsEpochId = 0;
 let _legArrivalSub = -1;
 
 // Region-graph BFS scratch (grown to fit region count at bake time). The
-// visited-epoch counter lives inside computeRegionNextRows, not here.
-let _regQueue = new Int32Array(1024);
-let _regFirstStep = new Int32Array(1024);
-let _regEpoch = new Int32Array(1024);
+// счётчик эпох посещения живёт внутри computeRegionNextColumn, не здесь.
 
 export type BehaviorFlowFieldSourceProvider = (world: World, out: number[]) => void;
 
@@ -1009,26 +1018,23 @@ export function bakeNavigationTree(
 ): void {
   bakeNavigationRegionsAndPortals(world, cacheCellVersion, cachePathBlockerVersion);
 
-  /* ── Step 4: next-hop routing ────────────────────────────────
-   * Low-mem (mobile): install the resident region graph for on-demand column
-   * BFS — no R²·2 allocation. Desktop: build the dense matrix synchronously. */
-  if (useLowMemNav()) installLowMemNav();
-  else buildRegionNext();
+  /* ── Шаг 4: маршрутизация между регионами ─────────────────────
+   * Дорога одна: резидентный граф смежности плюс колонки по требованию.
+   * Плотной матрицы R²·2 больше нет — см. заголовок файла. */
+  installRegionGraph();
 
   finishNavigationBake();
 }
 
 /**
- * Low-mem step 4: keep the immutable region-adjacency graph resident (kilobytes
- * to a couple hundred KB) and drop the dense matrix. `regionPath` then answers
- * from an LRU of on-demand next-hop columns (see regionColumnFor). Reads the
- * same steps-1–3 state as buildRegionNext; writes `_lowMemGraph`, `_regionN`,
- * clears `_regionNext` and the column cache, grows the BFS scratch to R.
+ * Шаг 4: держать неизменяемый граф смежности регионов резидентным (килобайты,
+ * в худшем случае пара сотен КБ). `regionPath` отвечает из LRU колонок
+ * следующего шага, считаемых по требованию (см. `regionColumnFor`). Пишет
+ * `_lowMemGraph` и `_regionN`, очищает кеш колонок, растит скретч BFS до R.
  */
-function installLowMemNav(): void {
+function installRegionGraph(): void {
   const R = _numRegions;
   _regionN = R;
-  _regionNext = null;
   _regionColumns.clear();
   if (R <= 1 || _numPortals === 0) { _lowMemGraph = null; return; }
   _lowMemGraph = extractRegionGraph();
@@ -1177,91 +1183,23 @@ function finishNavigationBake(): void {
 }
 
 /**
- * Parallel bake used behind the loading screen. Runs the exact same steps 1–3
- * on the main thread, then offloads step 4 (`buildRegionNext`, ~98% of bake
- * cost) to a Web Worker pool via the injected `solver`. Falls back to the
- * synchronous kernel when there is no solver (Node/no-Worker), when the floor
- * is too small to be worth the fan-out, or when a worker errors — so the result
- * is always bit-identical to `bakeNavigationTree`. This is a bake-location
- * change only: the graph, matrix and accept-stale runtime contract are
- * unchanged. Callers must keep the loading screen up until the returned promise
- * resolves (the region graph is not ready before then).
+ * Выпечка за экраном загрузки. Раньше здесь был воркерный пул: он выносил
+ * построение плотной матрицы R×R (98% стоимости выпечки) на другие ядра.
+ * Матрицы больше нет — вместе с ней ушёл и пул, потому что параллелить стало
+ * нечего: резидентный граф смежности строится за миллисекунды, а колонки
+ * считаются по требованию уже в игре, порциями по кадрам.
+ *
+ * Функция оставлена асинхронной: точка вызова держит экран загрузки до её
+ * разрешения, и менять этот контракт незачем.
  */
 export async function bakeNavigationTreeAsync(
   world: World,
-  solver: RegionNextSolver | null,
   cacheCellVersion = world.cellVersion,
   cachePathBlockerVersion = world.pathBlockerVersion,
 ): Promise<void> {
-  bakeNavigationRegionsAndPortals(world, cacheCellVersion, cachePathBlockerVersion);
-
-  const R = _numRegions;
-  _regionN = R;
-
-  // Low-mem (mobile): never allocate the R²·2 matrix — it is the OOM cause on
-  // phones. Install the resident graph + on-demand columns and return; no
-  // worker fan-out needed (there is no dense matrix to parallelize).
-  if (useLowMemNav()) {
-    _regionNext = null;
-    installLowMemNav();
-    finishNavigationBake();
-    return;
-  }
-  _lowMemGraph = null; // Desktop path: ensure no stale low-mem graph lingers.
-
-  // Steps 1–3 already re-pointed _navWorld/_regionMap/_portals at the new floor;
-  // null the stale previous-floor matrix now so a defensive query during the
-  // await can't index a mismatched-size _regionNext. (The loop is dormant behind
-  // the loading screen, so this is belt-and-braces.)
-  _regionNext = null;
-  if (R <= 1 || _numPortals === 0) {
-    _regionNext = null;
-  } else if (!solver || R < MIN_REGIONS_FOR_WORKERS) {
-    buildRegionNext();
-  } else {
-    try {
-      _regionNext = await solver(extractRegionGraph());
-    } catch {
-      // Any worker failure (spawn blocked, message error) → identical sync bake.
-      buildRegionNext();
-    }
-  }
-
-  finishNavigationBake();
+  bakeNavigationTree(world, cacheCellVersion, cachePathBlockerVersion);
 }
 
-/**
- * Rebuild the dense R×R region next-hop matrix from `_regionPortalIndices`.
- * Nodes are regions; portals are edges. One BFS per region over the
- * region-adjacency graph — a real graph (all adjacent-region edges kept,
- * cycles preserved), no spanning-tree seams, no O(P³) Floyd-Warshall, no
- * portal cap. Cost is O(R·E). Reads `_numRegions`, `_numPortals`,
- * `_regionPortalIndices`, `_portals`; writes `_regionNext`, `_regionN`.
- *
- * The inner BFS lives in the pure `computeRegionNextRows` kernel so the
- * synchronous path here and the parallel Web Workers (see bakeNavigationTree's
- * async solver) run BIT-IDENTICAL code — same output regardless of core count.
- */
-function buildRegionNext(): void {
-  const R = _numRegions;
-  _regionN = R;
-  _lowMemGraph = null; // Dense-matrix path owns routing; no low-mem graph.
-  if (R <= 1 || _numPortals === 0) { _regionNext = null; return; }
-
-  const graph = extractRegionGraph();
-  if (_regQueue.length < R) {
-    _regQueue = new Int32Array(R);
-    _regFirstStep = new Int32Array(R);
-    _regEpoch = new Int32Array(R);
-  }
-  const regionNext = new Uint16Array(R * R);
-  regionNext.fill(REGION_UNREACHABLE);
-  computeRegionNextRows(
-    R, graph.portalRegionA, graph.portalRegionB, graph.regOffsets, graph.regFlat,
-    1, R, 0, regionNext, _regQueue, _regFirstStep, _regEpoch,
-  );
-  _regionNext = regionNext;
-}
 
 /**
  * Flatten the current region-adjacency graph into transferable typed arrays
@@ -1336,7 +1274,7 @@ export function markNavigationCellsDirty(cells: Iterable<number>): void {
  *
  * This is why unreported mutators (anomaly wall-snakes, Conway life, section
  * shifts) never needed wiring — and equally why the REPORTED sites don't force a
- * rebuild either: rebuilding the all-pairs region matrix (`buildRegionNext`,
+ * rebuild either: rebuilding the region routing graph (`installRegionGraph`,
  * O(R²) alloc + one BFS per region) on a single door toggle froze large floors
  * for 10 s+. markNavigationCellsDirty() reports are now advisory: we clear the
  * bounded set so it can't overflow, and keep the hook so a future genuinely-local
@@ -1385,18 +1323,14 @@ export function prewarmNavigationTree(world: World): void {
 }
 
 /**
- * Async twin of `prewarmNavigationTree` for the loading path: same guards and
- * same cache/version decision as `ensureNavigationTree`, but when a full bake is
- * needed it routes step 4 through the Web Worker pool (`solver`) so the ~10 s
- * next-hop bake runs across cores behind the loading screen instead of freezing
- * the main thread (which trips the mobile watchdog). Identical result to the
- * sync prewarm; used by every scheduleLoading path. Callers MUST keep the
- * loading screen up until this resolves.
+ * Асинхронный близнец `prewarmNavigationTree` для пути загрузки: те же сторожа
+ * и то же решение по версиям кеша, что у `ensureNavigationTree`. Раньше полная
+ * выпечка уезжала на воркеры, чтобы не морозить главный поток на десять секунд;
+ * теперь шаг 4 стоит миллисекунды — строится только граф смежности, а не
+ * матрица всех пар. Зовётся из каждого пути scheduleLoading; вызывающий обязан
+ * держать экран загрузки до разрешения промиса.
  */
-export async function prewarmNavigationTreeAsync(
-  world: World,
-  solver: RegionNextSolver | null,
-): Promise<void> {
+export async function prewarmNavigationTreeAsync(world: World): Promise<void> {
   if (_frozenNavWorld) return;
   const cellV = navigationCacheCellVersion(world);
   const pbV = navigationCachePathBlockerVersion(world);
@@ -1408,7 +1342,7 @@ export async function prewarmNavigationTreeAsync(
     patchNavigationRegions(world, cellV, pbV); // Same world, runtime edit → accept-stale.
     return;
   }
-  await bakeNavigationTreeAsync(world, solver, cellV, pbV); // New world → full parallel bake.
+  await bakeNavigationTreeAsync(world, cellV, pbV); // Новый мир → полная выпечка.
 }
 
 function ensureBehaviorFlowField(
@@ -1526,34 +1460,21 @@ function trimBehaviorFlowFieldCache(): void {
 }
 
 
-/** Walk the region-node next-hop matrix from rS to rT. Returns the region
- *  chain [rS, …, rT] or null if unreachable. O(hops), no allocation beyond
- *  the result. Cycles are preserved in the graph so there are no seams. */
+/** Пройти по колонке следующих шагов от rS к rT. Возвращает цепочку регионов
+ *  [rS, …, rT] или null, если недостижимо. O(числа переходов), без аллокаций
+ *  сверх результата. Циклы в графе сохранены, поэтому швов нет.
+ *
+ *  `col[cur]` — следующий шаг cur→rT. Колонка считается по требованию и живёт
+ *  в LRU; раньше здесь была вторая ветка, читавшая плотную матрицу R×R. */
 function regionPath(rS: number, rT: number): number[] | null {
   const R = _regionN;
-  if (R === 0) return null;
-  // Low-mem (mobile): read the on-demand column for rT instead of the dense
-  // matrix. col[cur] = next hop cur→rT; identical walk, ~1 MB instead of R²·2.
-  if (_lowMemGraph) {
-    const col = regionColumnFor(rT);
-    if (!col || col[rS] === REGION_UNREACHABLE) return null;
-    const regions: number[] = [rS];
-    let cur = rS, safety = 0;
-    while (cur !== rT && safety <= R) {
-      const nxt = col[cur];
-      if (nxt === REGION_UNREACHABLE || nxt === cur) return null;
-      regions.push(nxt);
-      cur = nxt;
-      safety++;
-    }
-    return cur === rT ? regions : null;
-  }
-  if (!_regionNext) return null;
-  if (_regionNext[rS * R + rT] === REGION_UNREACHABLE) return null;
+  if (R === 0 || !_lowMemGraph) return null;
+  const col = regionColumnFor(rT);
+  if (!col || col[rS] === REGION_UNREACHABLE) return null;
   const regions: number[] = [rS];
   let cur = rS, safety = 0;
   while (cur !== rT && safety <= R) {
-    const nxt = _regionNext[cur * R + rT];
+    const nxt = col[cur];
     if (nxt === REGION_UNREACHABLE || nxt === cur) return null;
     regions.push(nxt);
     cur = nxt;

@@ -137,7 +137,6 @@ import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
 import { markNavigationCellsDirty, prewarmNavigationTreeAsync, prewarmBehaviorFlowFields } from './systems/ai/pathfinding';
 import { prewarmPerceptionFields } from './systems/fields';
-import { createWorkerRegionNextSolver } from './systems/ai/nav_worker_pool';
 import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
@@ -687,7 +686,6 @@ registerPwaServiceWorker();
 // every floor/samosbor rebake; workers spawn lazily on the first bake. In a
 // no-Worker environment the solver rejects and the bake falls back to the
 // synchronous kernel, so behavior is identical, just single-cored.
-const _navSolver = createWorkerRegionNextSolver();
 const PLAYER_NAME_KEY = 'gigahrush_player_name';
 const PLAYER_AGE_KEY = 'gigahrush_player_age';
 const PLAYER_SEX_KEY = 'gigahrush_player_sex';
@@ -9896,7 +9894,7 @@ function gameLoop(now: number): void {
         requestAnimationFrame(gameLoop);
       };
       if (typeof world !== 'undefined') {
-        prewarmNavigationTreeAsync(world, _navSolver).then(() => {
+        prewarmNavigationTreeAsync(world).then(() => {
           // Bake the common behavior flow fields while the (worker-rendered)
           // loading screen is still up, so the first NPC route on this floor
           // doesn't hitch. Desktop-only; no-op on mobile and mid-samosbor.
