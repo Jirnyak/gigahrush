@@ -27,10 +27,10 @@ export interface FloorThemeProfile {
   floorKey: string;
   
   /**
-   * Content/visual/population class. Equals `baseFloor` for base/procedural
+   * Content/visual/population class. Equals the route `z` for base/procedural
    * floors and for design floors that do not override it, but a design floor
    * can declare a different `themeClass` to own its look and population mix
-   * independently of the engine save bucket (`baseFloor`).
+   * independently of the engine save bucket.
    */
   routeId?: DesignFloorId | string;
   routeZ?: number;

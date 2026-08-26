@@ -803,7 +803,7 @@ test('A-Life materialization preserves template sprite identity for special floo
   const state = minimalState();
   createPrefilledAlifeState(state, 12345, 1_000, {
     version: 1, total: 1_000,
-    buckets: [{ floorKey: 'design:living', baseFloor: 'living', targetCount: 1_000, factionWeights: [], occupationWeights: [] }],
+    buckets: [{ floorKey: 'design:living', targetCount: 1_000, factionWeights: [], occupationWeights: [] }],
     reserved: []
   });
   const world = new World();

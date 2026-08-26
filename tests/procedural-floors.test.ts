@@ -1546,7 +1546,6 @@ testGenerationMatrix('collector geometry records wet basins, dry causeways and v
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'collectors',
-    baseFloor: 'maintenance',
     majorityId: 'liquidators',
     anomalyId: 'none',
     danger: 4,
@@ -1602,7 +1601,6 @@ testGenerationMatrix('sandpile perekrytie anomaly seeds a cracked arena with saf
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'workshops',
-    baseFloor: 'maintenance',
     majorityId: 'liquidators',
     anomalyId: 'sandpile_perekrytie',
     danger: 4,
@@ -2508,7 +2506,6 @@ testGenerationMatrix('cultist procedural majority imprints optional ritual geome
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'cultists',
     anomalyId: 'none',
     danger: 4,
@@ -2548,7 +2545,6 @@ testGenerationMatrix('wild procedural majority builds risky stash leaves without
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'service_spines',
-    baseFloor: 'maintenance',
     majorityId: 'wild',
     anomalyId: 'none',
     danger: 4,
@@ -2596,7 +2592,6 @@ testGenerationMatrix('liquidator procedural majority builds readable checkpoints
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'admin_pockets',
-    baseFloor: 'ministry',
     majorityId: 'liquidators',
     anomalyId: 'none',
     danger: 4,
@@ -2650,7 +2645,6 @@ testGenerationMatrix('admin pocket geometry exposes legal queue, staff chord and
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'admin_pockets',
-    baseFloor: 'ministry',
     majorityId: 'citizens',
     anomalyId: 'none',
     danger: 3,
@@ -2767,7 +2761,6 @@ testGenerationMatrix('genfix 006 admin smog liquidator floor has clustered rooms
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'admin_pockets',
-    baseFloor: 'ministry',
     majorityId: 'liquidators',
     anomalyId: 'smog',
     danger: 3,
@@ -2810,7 +2803,6 @@ testGenerationMatrix('genfix 016 admin teleport wild floor has dense pockets and
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'admin_pockets',
-    baseFloor: 'ministry',
     majorityId: 'wild',
     anomalyId: 'teleport_cells',
     danger: 3,
@@ -3035,7 +3027,6 @@ testGenerationMatrix('genfix 020 admin pockets wild floor has multi-scale rooms 
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'admin_pockets',
-    baseFloor: 'ministry',
     majorityId: 'wild',
     anomalyId: 'none',
     danger: 3,
@@ -3657,7 +3648,6 @@ testGenerationMatrix('service spine geometry carves connected maintenance trunks
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'service_spines',
-    baseFloor: 'maintenance',
     anomalyId: 'none',
     title: `сервисные штреки: ${base.title}`,
   }, 'forced service_spines seed=9127');
@@ -4119,7 +4109,6 @@ testGenerationMatrix('attic weatherworks geometry exposes wind lanes, crawl pock
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'attic_weatherworks',
-    baseFloor: 'ministry',
     majorityId: 'liquidators',
     anomalyId: 'none',
     danger: 4,
@@ -4234,7 +4223,6 @@ testGenerationMatrix('genfix 003 attic living tunnels scale up rooms and wild te
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'attic_weatherworks',
-    baseFloor: 'ministry',
     majorityId: 'wild',
     anomalyId: 'living_tunnels',
     danger: 5,
@@ -4370,7 +4358,6 @@ testGenerationMatrix('genfix 014 procedural radio chess attic wild floor keeps m
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'attic_weatherworks',
-    baseFloor: 'ministry',
     majorityId: 'wild',
     anomalyId: 'radio_chess',
     danger: 4,
@@ -4417,7 +4404,6 @@ testGenerationMatrix('sump causeway geometry builds dry repair spans and off-pat
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'sump_causeways',
-    baseFloor: 'maintenance',
     majorityId: 'liquidators',
     anomalyId: 'none',
     danger: 5,
@@ -5281,7 +5267,6 @@ testGenerationMatrix('wall snake anomaly places a visible nearby map cue and loo
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'workshops',
-    baseFloor: 'maintenance',
     majorityId: 'liquidators',
     anomalyId: 'wall_snake',
     danger: 4,
@@ -5352,7 +5337,6 @@ testGenerationMatrix('conway life anomaly seeds multiple visible nearby arenas',
   const gen = timedProceduralSpec({
     ...base,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId: 'conway_life',
     danger: 5,
@@ -6222,13 +6206,13 @@ test('smog anomaly spends gasmask filters under sustained exposure', () => {
     danger: Math.max(3, base.danger) as typeof base.danger,
     title: `говнячный смог: ${base.title}`,
   };
-  const state = makeGameState({ currentZ: spec.baseFloor, time: 10 });
+  const state = makeGameState({ currentZ: spec.z, time: 10 });
   setFloorRunState(state, {
     runSeed: 606,
     currentZ: spec.z,
     specs: { [spec.key]: spec },
     visited: {},
-  }, spec.baseFloor);
+  }, spec.z);
 
   const world = new World();
   const smogIdx = world.idx(24, 24);
@@ -6264,13 +6248,13 @@ test('smog anomaly spends wet rag bundles as short wet-cloth mitigation', () => 
     danger: Math.max(3, base.danger) as typeof base.danger,
     title: `говнячный смог: ${base.title}`,
   };
-  const state = makeGameState({ currentZ: spec.baseFloor, time: 10 });
+  const state = makeGameState({ currentZ: spec.z, time: 10 });
   setFloorRunState(state, {
     runSeed: 608,
     currentZ: spec.z,
     specs: { [spec.key]: spec },
     visited: {},
-  }, spec.baseFloor);
+  }, spec.z);
 
   const world = new World();
   const smogIdx = world.idx(30, 30);
@@ -6313,7 +6297,7 @@ test('smog anomaly runtime is scoped to the current procedural floor spec', () =
     danger: Math.max(3, baseB.danger) as typeof baseB.danger,
     title: `говнячный смог: ${baseB.title}`,
   };
-  const state = makeGameState({ currentZ: specA.baseFloor, time: 10 });
+  const state = makeGameState({ currentZ: specA.z, time: 10 });
   const smogIdx = 40 + 40 * W;
   const worldA = new World();
   worldA.cells[smogIdx] = Cell.FLOOR;
@@ -6325,7 +6309,7 @@ test('smog anomaly runtime is scoped to the current procedural floor spec', () =
     currentZ: specA.z,
     specs: { [specA.key]: specA },
     visited: {},
-  }, specA.baseFloor);
+  }, specA.z);
 
   const player = makeTestPlayer({
     id: 9003,
@@ -6345,13 +6329,13 @@ test('smog anomaly runtime is scoped to the current procedural floor spec', () =
   worldB.anomalySmogSource = smogIdx;
   worldB.anomalySmogCells = [smogIdx];
   worldB.fog[smogIdx] = 255;
-  state.currentZ = specB.baseFloor;
+  state.currentZ = specB.z;
   setFloorRunState(state, {
     runSeed: 611,
     currentZ: specB.z,
     specs: { [specB.key]: specB },
     visited: {},
-  }, specB.baseFloor);
+  }, specB.z);
   player.x = 80.5;
   player.y = 80.5;
 
@@ -6380,7 +6364,7 @@ testGenerationMatrix('living tunnels anomaly seeds roots and mutates bounded cel
   }
   assert.equal(initialGutCells >= roots.length * 4, true);
 
-  const state = makeGameState({ currentZ: spec.baseFloor });
+  const state = makeGameState({ currentZ: spec.z });
   const player = makeTestPlayer({ id: 999999, x: gen.spawnX, y: gen.spawnY, hp: 100, maxHp: 100 });
   const beforeVersion = gen.world.cellVersion;
   updateLivingTunnelsAnomaly(gen.world, player, state, 1.4);
@@ -6452,7 +6436,7 @@ testBadAppleExperiment('bad apple runtime advances the map rectangle into white 
   const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
   assert.equal(!!room, true);
 
-  const state = makeGameState({ currentZ: spec.baseFloor });
+  const state = makeGameState({ currentZ: spec.z });
   const player = {
     id: 999999,
     type: EntityType.NPC, persistentNpcId: 'player',
@@ -6526,7 +6510,7 @@ testBadAppleExperiment('bad apple projector toggles animation without breaking r
   const projectorIdx = match ? Number(match[2]) : -1;
   assert.equal(projectorIdx >= 0, true);
 
-  const state = makeGameState({ currentZ: spec.baseFloor });
+  const state = makeGameState({ currentZ: spec.z });
   const player = makeTestPlayer({
     id: 999999,
     x: projectorIdx % W + 0.5,
@@ -6561,7 +6545,6 @@ testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient 
     ...base,
     anomalyId: 'zombie_apocalypse' as const,
     geometryId: 'apartment_pressure' as const,
-    baseFloor: 'kvartiry',
     danger: 5 as const,
     monsterBiasKinds: [MonsterKind.SHADOW],
     title: `зомби-апокалипсис: ${base.title}`,

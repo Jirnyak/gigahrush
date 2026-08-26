@@ -29,7 +29,6 @@ import {
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
 const VALID_ROOM_TYPES = new Set(Object.values(RoomType).filter((value): value is number => typeof value === 'number'));
-const VALID_FLOORS = new Set(DESIGN_FLOOR_ROUTES.map(r => r.z));
 // Строки, а не `DesignFloorId`: строки в данных (`row.routeIds`) объявлены как
 // `readonly string[]`, и множество должно принимать ЛЮБУЮ строку — иначе неверный
 // id не дойдёт до проверки, а упадёт в типизации.
@@ -126,7 +125,6 @@ test('visual detail profile rows reference current route and detail data', () =>
     assert.match(row.id, ID_RE, `row id ${row.id} must stay snake_case`);
     assert.equal(VALID_RULE_IDS.has(row.detailId), true, `${row.id} references missing detail ${row.detailId}`);
     assert.ok(row.density >= 0 && row.density <= 255, `${row.id} density must fit one byte`);
-    for (const floor of row.baseFloors ?? []) assert.equal(VALID_FLOORS.has(floor), true, `${row.id} has invalid number ${floor}`);
     for (const routeId of row.routeIds ?? []) assert.equal(VALID_ROUTE_IDS.has(routeId), true, `${row.id} references missing route ${routeId}`);
     for (const tag of [...(row.requiredTags ?? []), ...(row.blockedTags ?? [])]) {
       assert.ok(KNOWN_TAGS.has(tag), `${row.id} uses unknown tag ${tag}`);

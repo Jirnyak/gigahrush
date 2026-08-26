@@ -14,7 +14,6 @@ function makeSpec(majorityId: FloorMajorityId, anomalyId: FloorAnomalyId): Proce
     depth: 0,
     danger: 1,
     geometryId: 'test_geom' as any,
-    baseFloor: 0,
     majorityId,
     anomalyId,
     title: 'Test',

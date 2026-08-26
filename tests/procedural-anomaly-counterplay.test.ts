@@ -63,7 +63,6 @@ function forcedConveyorSpec(): ProceduralFloorSpec {
   return {
     ...base,
     geometryId: 'workshops',
-    baseFloor: 'maintenance',
     anomalyId: 'conveyor_sorter',
     danger: 4,
     title: `сортировочный конвейер: ${base.title}`,

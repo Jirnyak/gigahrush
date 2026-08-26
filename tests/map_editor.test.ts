@@ -130,7 +130,6 @@ test('map editor patch replay sanitizes malformed ops and commits restored edits
     patches: {
       [key]: {
         floorKey: key,
-        baseFloor: 'living',
         createdAt: 1,
         opCount: 5,
         ops: [

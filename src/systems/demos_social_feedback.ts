@@ -78,7 +78,7 @@ interface DemosSocialFeedbackState {
 
 type DemosSocialFeedbackHost = GameState & {
   demosSocialFeedback?: DemosSocialFeedbackState;
-  floorRun?: { specs?: Record<string, { z?: number; baseFloor?: number }> };
+  floorRun?: { specs?: Record<string, { z?: number }> };
 };
 
 const DEFAULT_EVENT_LIMIT = 24;
@@ -336,9 +336,9 @@ export function processDemosSocialFeedbackEvents(
   return feedback.lastSummary;
 }
 
-function proceduralSpecsContext(state: GameState): { proceduralSpecs?: Readonly<Record<string, { z?: number; baseFloor?: number }>> } {
+function proceduralSpecsContext(state: GameState): { proceduralSpecs?: Readonly<Record<string, { z?: number }>> } {
   const specs = (state as DemosSocialFeedbackHost).floorRun?.specs;
-  return { proceduralSpecs: specs as Readonly<Record<string, { z?: number; baseFloor?: number }>> | undefined };
+  return { proceduralSpecs: specs as Readonly<Record<string, { z?: number }>> | undefined };
 }
 
 function activeEntityForAlifeId(entities: readonly Entity[] | undefined, alifeId: number): Entity | undefined {

@@ -26,7 +26,6 @@ import {
 } from '../src/data/visual_surface_profiles';
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
-const VALID_FLOORS = new Set(DESIGN_FLOOR_ROUTES.map(r => r.z));
 const VALID_ROOMS = new Set(Object.values(RoomType).filter((value): value is RoomType => typeof value === 'number'));
 // Строки, а не `DesignFloorId`: `row.routeIds` в данных объявлены как
 // `readonly string[]`, и множество должно принимать любую строку.
@@ -97,7 +96,6 @@ test('visual surface profiles are unique bounded data rows', () => {
     assert.match(row.id, ID_RE);
     assert.equal(VALID_PROFILE_IDS.has(row.profileId), true, `${row.id} references missing profile ${row.profileId}`);
     assert.equal(Number.isFinite(row.priority), true, `${row.id} priority must be finite`);
-    for (const floor of row.baseFloors ?? []) assert.equal(VALID_FLOORS.has(floor), true, `${row.id} invalid floor`);
     for (const room of row.roomTypes ?? []) assert.equal(VALID_ROOMS.has(room), true, `${row.id} invalid room`);
     for (const routeId of row.routeIds ?? []) assert.equal(VALID_ROUTE_IDS.has(routeId), true, `${row.id} invalid route`);
     for (const tex of [...(row.wallTex ?? []), ...(row.floorTex ?? [])]) assert.ok(Number.isInteger(tex) && tex >= 0 && tex < Tex.COUNT, `${row.id} invalid tex`);

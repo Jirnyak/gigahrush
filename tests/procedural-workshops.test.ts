@@ -33,7 +33,6 @@ test('forced workshops geometry exposes dock loops, tool chords and factory deci
     depth: 34,
     danger: 4,
     geometryId: 'workshops',
-    baseFloor: 'maintenance',
     majorityId: 'liquidators',
     anomalyId: 'none',
     title: 'Тестовый цеховой этаж',

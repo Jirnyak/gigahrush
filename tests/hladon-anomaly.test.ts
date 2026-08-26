@@ -82,7 +82,6 @@ test('procedural Hladon anomaly exposes cold shells, reachable warm counterplay 
   const spec: ProceduralFloorSpec = {
     ...base,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId: 'hladon',
     danger: 4,

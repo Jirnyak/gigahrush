@@ -24,7 +24,6 @@ function forcedNoneSpec(): ProceduralFloorSpec {
     ...base,
     danger: 1,
     geometryId: 'living_blocks',
-    baseFloor: 'living',
     majorityId: 'citizens',
     anomalyId: 'none',
     title: 'тестовый этаж без аномалии',

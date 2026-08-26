@@ -45,7 +45,13 @@ registerDebugCommand({
     const search = CATALOG_DEBUG_SEARCHES[catalogDebugSearchIndex++ % CATALOG_DEBUG_SEARCHES.length];
     const query = search
       ? { search, limit: 6 }
-      : { baseFloor: state.currentZ, limit: 6 };
+      /* Здесь стоял `baseFloor: state.currentZ`, а в `FloorCatalogQuery` такого
+       * поля нет вовсе: ключ молча выбрасывался, и отладка показывала первые
+       * шесть записей каталога НЕЗАВИСИМО от этажа. Компилятор промолчал,
+       * потому что литерал уходит в переменную через тернарник, а проверка
+       * лишних свойств на переменные не распространяется. Фильтра по этажу у
+       * запроса нет — если он нужен, это отдельное решение владельца. */
+      : { limit: 6 };
     for (const line of floorCatalogDebugLines(query)) state.msgs.push(msg(`[CAT] ${line}`, state.time, '#ccf'));
     for (const line of summarizeHeatline(world)) state.msgs.push(msg(line, state.time, '#f84'));
     for (const line of summarizeCarnivorousFungus(world)) state.msgs.push(msg(line, state.time, '#bf8'));

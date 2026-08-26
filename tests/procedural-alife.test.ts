@@ -26,7 +26,6 @@ function socialProceduralSpec(): ProceduralFloorSpec {
     key: 'z1',
     danger: 2,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId: 'none',
     title: 'тестовый коммунальный процедурный этаж',
@@ -37,14 +36,14 @@ function socialProceduralSpec(): ProceduralFloorSpec {
 }
 
 function stateForSpec(spec: ProceduralFloorSpec): GameState {
-  const state = { currentZ: spec.baseFloor } as GameState;
+  const state = { currentZ: spec.z } as GameState;
   const floorKey = `procedural:${spec.key}`;
   setFloorRunState(state, {
     runSeed: 17,
     currentZ: spec.z,
     specs: { [spec.key]: spec },
     visited: { [floorKey]: true },
-  }, spec.baseFloor);
+  }, spec.z);
   setAlifeState(state, { seed: 12345, total: 100_000 }, { populationPlan: 'empty_packages' });
   return state;
 }

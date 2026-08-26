@@ -231,7 +231,7 @@ function demosFloorNumberLabel(z: number | undefined): string {
 
 function demosFloorKeyZ(state: GameState, floorKeyInput: unknown, fallbackFloor?: number): number | undefined {
   const key = cleanFloorKey(floorKeyInput);
-  const host = state as GameState & { floorRun?: { specs?: Record<string, { z?: number; baseFloor?: number }> } };
+  const host = state as GameState & { floorRun?: { specs?: Record<string, { z?: number }> } };
   return floorKeyZ(key, { proceduralSpecs: host.floorRun?.specs })
     ?? (fallbackFloor !== undefined ? floorKeyZ(floorKeyForDesign(String(fallbackFloor))) : undefined);
 }

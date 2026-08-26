@@ -270,7 +270,6 @@ testGenerationMatrix('procedural craft station placement respects cap and avoids
     depth: 34,
     danger: 4,
     geometryId: 'workshops',
-    baseFloor: 'maintenance',
     majorityId: 'liquidators',
     anomalyId: 'none',
     title: 'Тестовый цеховой этаж со станциями',

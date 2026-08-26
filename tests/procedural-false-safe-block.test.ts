@@ -27,7 +27,6 @@ function forcedFalseSafeSpec(seed = 55_028, anomalyId: FloorAnomalyId = 'false_s
     ...base,
     seed,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId,
     danger: 4,
@@ -54,13 +53,13 @@ function findFalseSafeFeature(world: World, feature: Feature): { x: number; y: n
 }
 
 function installCurrentProceduralSpec(spec: ProceduralFloorSpec) {
-  const state = makeGameState({ currentZ: spec.baseFloor, samosborTimer: 120 });
+  const state = makeGameState({ currentZ: spec.z, samosborTimer: 120 });
   setFloorRunState(state, {
     runSeed: spec.seed,
     currentZ: spec.z,
     specs: { [spec.key]: spec },
     visited: {},
-  }, spec.baseFloor);
+  }, spec.z);
   return state;
 }
 

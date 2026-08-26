@@ -52,7 +52,6 @@ test('every authored design route exposes a composed floor theme profile', () =>
     assert.equal(theme.routeId, route.id);
     assert.equal(theme.routeZ, route.z);
     assert.equal(theme.floorKey, floorKeyForDesign(route.id));
-    assert.equal(theme.baseFloor, route.baseFloor);
     assert.equal(theme.danger, route.danger);
     assert.deepEqual(theme.territoryShares, territorySharesForDesignFloor(route.id));
     assert.equal(theme.majorityOwner, dominantTerritoryShareOwner(theme.territoryShares));
@@ -90,7 +89,6 @@ test('all current procedural route specs expose composed floor themes', () => {
     const theme = themeForProceduralSpec(spec);
     assert.equal(theme.kind, 'procedural');
     assert.equal(theme.routeZ, z);
-    assert.equal(theme.baseFloor, spec.baseFloor);
     assert.equal(theme.danger, spec.danger);
     assert.equal(theme.floorKey, floorKeyForProcedural(spec.key));
     assert.deepEqual(theme.territoryShares, territorySharesForProceduralSpec(spec));

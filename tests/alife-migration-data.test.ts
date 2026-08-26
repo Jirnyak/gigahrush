@@ -128,7 +128,6 @@ test('A-Life population plan keeps authored floor taste and NPC-free route stops
 
   const lowerProcedural = [...byKey.values()].filter(bucket =>
     bucket.floorKey.startsWith('procedural:') &&
-    bucket.baseFloor !== 'void' &&
     bucket.tags.some(tag => tag === 'route_pressure' || tag === 'industrial' || tag === 'samosbor' || tag === 'cult')
   );
   assert.ok(lowerProcedural.length > 0, 'lower procedural route groups should be represented by tagged buckets');

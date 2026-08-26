@@ -20,7 +20,6 @@ function forcedTeleportSpec(): ProceduralFloorSpec {
     ...base,
     danger: 4,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     anomalyId: 'teleport_cells',
     title: 'тестовый этаж с перескоками клеток',

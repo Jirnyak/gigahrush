@@ -122,7 +122,6 @@ test('queryFloorCatalog filters by multiple criteria', () => {
   const target = FLOOR_CATALOG[0];
 
   const query = {
-    baseFloor: target.baseFloor,
     rarity: target.rarity,
     contentStatus: target.contentStatus,
     minDepth: target.minDepth,
@@ -132,7 +131,6 @@ test('queryFloorCatalog filters by multiple criteria', () => {
   assert.ok(result.length > 0);
   assert.ok(result.some(def => def.id === target.id));
   assert.ok(result.every(def =>
-    def.baseFloor === target.baseFloor &&
     def.rarity === target.rarity &&
     def.contentStatus === target.contentStatus &&
     def.minDepth <= target.minDepth

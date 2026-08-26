@@ -86,7 +86,6 @@ import {
   CY,
   ROOF_ROUTE_ID,
   ROOF_FUTURE_Z,
-  ROOF_Z,
   ROOF_SKY_WIDTH,
   ROOF_SKY_HEIGHT,
   ROOF_LOS_DIRS,
@@ -223,7 +222,6 @@ export function roofDebugLines(state: RoofWeatherState): string[] {
   return [
     `route=${ROOF_ROUTE_ID}`,
     `z=${ROOF_FUTURE_Z}`,
-    `baseFloor=${ROOF_Z}`,
     `signal=${state.signalQuality}/5`,
     `skyTime=${state.skyTimeOfDay.toFixed(2)}`,
     `antenna=${state.antennaRepaired ? 'repaired' : 'broken'}`,

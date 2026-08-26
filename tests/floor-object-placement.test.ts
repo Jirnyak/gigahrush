@@ -291,10 +291,14 @@ test('procedural object profile composes base, geometry, majority, anomaly and d
     z: -42,
     ordinal: 1,
     seed: 0x1234,
+    /* Сид ПРОГОНА обязателен у спеки. Профилю объектов он не нужен — тот читает
+     * только `geometryId`/`majorityId`/`anomalyId`, — но фикстура объявляет себя
+     * полной `ProceduralFloorSpec`, значит должна ею быть. Раньше пропажу
+     * перебивала ошибка про лишнее поле `baseFloor`; убрали его — обнажилась. */
+    runSeed: 0x1234,
     depth: 42,
     danger: 4,
     geometryId: 'living_blocks',
-    baseFloor: 'living',
     majorityId: 'scientists',
     anomalyId: 'zombie_apocalypse',
     title: 'test',

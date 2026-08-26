@@ -27,8 +27,7 @@ import {
 import {
   themeForDesignRoute,
   themeForProceduralSpec,
-  // @ts-ignore
-  } from './floor_theme_profiles';
+} from './floor_theme_profiles';
 import { floorKeyAllowsNpcs, floorKeyForDesign, floorKeyForProcedural, floorKeyKnown  } from './floor_keys';
 
 export interface AlifePopulationBucketDef {
@@ -127,8 +126,6 @@ function storyBucket(z: string): WeightedBucket {
   const theme = themeForDesignFloor(String(z) as any);
   return {
     floorKey: floorKeyForDesign(String(z)),
-    // @ts-ignore
-    baseFloor: 'base_floor', // removed
     weight: floorRunZAllowsNpcs(theme.routeZ ?? 0) ? STORY_POPULATION_WEIGHT[z] : 0,
     populationProfileId: theme.populationProfileId ?? STORY_POPULATION_PROFILE[z],
     tags: uniqueTags([
@@ -420,7 +417,6 @@ export function buildAlifePopulationPlan(input: {
     tags: bucket.tags,
     npcAllowed: bucket.npcAllowed,
   }));
-  // @ts-ignore
   return { version: 1, total, buckets, reserved };
 }
 

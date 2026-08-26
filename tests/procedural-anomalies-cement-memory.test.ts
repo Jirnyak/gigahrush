@@ -21,7 +21,6 @@ function forcedCementMemorySpec(): ProceduralFloorSpec {
     anomalyId: 'cement_memory',
     danger: 4,
     geometryId: 'communal_knots',
-    baseFloor: 'kvartiry',
     majorityId: 'citizens',
     title: 'тестовая цементная память',
   };

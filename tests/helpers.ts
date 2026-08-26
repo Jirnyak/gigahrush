@@ -151,7 +151,6 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
           majorityId: 'citizens',
           anomalyId: 'none',
           title: 'test',
-          baseFloor: fallbackZ,
         }
       }, 
       visited: {} 

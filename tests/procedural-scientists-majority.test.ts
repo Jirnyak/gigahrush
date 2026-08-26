@@ -58,7 +58,6 @@ test('scientist majority procedural floors stamp labs samples and optional seale
     ...base,
     danger: 3,
     geometryId: 'living_blocks',
-    baseFloor: base.baseFloor,
     majorityId: 'scientists',
     anomalyId: 'none',
     title: `научная смена: ${base.title}`,

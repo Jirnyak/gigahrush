@@ -17,7 +17,6 @@ function forcedCitizensSpec(): ProceduralFloorSpec {
     ...base,
     danger: 2,
     geometryId: 'living_blocks',
-    baseFloor: 'living',
     majorityId: 'citizens',
     anomalyId: 'none',
     title: `гражданский тест: ${base.title}`,
