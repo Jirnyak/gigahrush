@@ -57,7 +57,7 @@ test('the whole prologue plays without a single camera teleport or whip-pan', ()
   const state = makeGameState({ currentZ: 0 });
   state.tutorialMode = true;
   setCurrentPlayerEntity(player);
-  rebuildEntityIndexForSimulation(entities, world);
+  rebuildEntityIndexForSimulation(entities, 0);
 
   const camera = createRuntimeCamera();
   bindSceneCamera(camera);

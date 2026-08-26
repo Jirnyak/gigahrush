@@ -104,7 +104,7 @@ function makeNpc(id: number, visualId: string, spriteSeed: number): Entity {
 
 test('first-party art sprite manifest validates source files and generated pixels', () => {
   const ids = new Set<string>();
-  const generatedIds = new Set(GENERATED_ART_SPRITE_IDS);
+  const generatedIds = new Set<string>(GENERATED_ART_SPRITE_IDS);
   // Floor, not exact count: new first-party art must not break the shipped gate.
   // Per-row invariants below (id shape, uniqueness, anchor bounds, generated pixels,
   // source SHA/dimensions, non-blank, bottom-trim) validate every entry regardless of length.

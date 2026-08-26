@@ -1,0 +1,55 @@
+// Конфиг ТОЛЬКО для проверки тестов, в сборку не входит.
+//
+// Тесты не входят в основной `tsconfig.json` намеренно: там 630 ошибок, и
+// большинство — частичные объекты-заглушки вместо полных `Entity`/`World`, а
+// это законная тестовая идиома. Разбор и критерий закрытия — `problems.md`,
+// строка «Тесты вне типизации».
+//
+// Этот конфиг делает критерий ИСПОЛНИМЫМ. Опасный срез ловится так:
+//   npx tsc --noEmit -p tsconfig.tests.json 2>&1 | rg 'error TS(2554|2345|2559|2769)'
+// Должно быть пусто: это «тест зовёт исходник с не той сигнатурой», а такой
+// тест может не проверять ничего и молчать об этом.
+//
+// Правила про неиспользуемые здесь выключены сознательно — они дают 196 ошибок
+// шума и прячут за собой настоящие.
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    // ES2021.WeakRef only: FinalizationRegistry backs the live-world invariant
+    // in core/world.ts. Target stays ES2020 — the registry is feature-detected.
+    "lib": ["ES2020", "ES2021.WeakRef", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "types": ["node"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /* Path mapping */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true
+  },
+    /* `scripts` входит в типизацию с 2026-08-26. Вне скоупа они гнили молча: в
+     `compile_markov_matrix.ts` жила ссылка на поле `themeTags`, вырезанное из
+     маршрутов целиком, а `gen_map.ts` импортировал несуществующий модуль, то
+     есть не запускался вовсе. `master_prompt.md` это предсказывал дословно —
+     «вне tsc-скоупа, гниёт». Цена включения оказалась три ошибки.
+
+     `tests` СЮДА НЕ ВХОДЯТ, и это замер, а не лень: 630 ошибок, из них ~284 —
+     частичные объекты-заглушки вместо полных `Entity`/`World`, законная
+     тестовая идиома. Разбор и критерий закрытия — `problems.md`. */
+  "include": ["src", "functions", "vite.config.ts", "scripts", "tests"]
+}

@@ -46,6 +46,8 @@ import {
   SAMOSBOR_AFTERMATH_BEATS,
   SAMOSBOR_MODIFIERS,
   SAMOSBOR_VARIANTS,
+  type SamosborSubsystemId,
+  type SamosborVariantId,
   buildActiveSamosborVariant,
   getSamosborAftermathBeats,
   getSamosborVariantWeight,
@@ -79,13 +81,13 @@ function numericEnumValues(enumObj: Record<string, string | number>): Set<number
   return new Set(Object.values(enumObj).filter((value): value is number => typeof value === 'number'));
 }
 
-function duplicateIds(ids: readonly string[]): string[] {
-  const counts = new Map<string, number>();
+function duplicateIds<T extends string | number>(ids: readonly T[]): T[] {
+  const counts = new Map<T, number>();
   for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
   return [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id).sort();
 }
 
-function assertUnique(label: string, ids: readonly string[]): void {
+function assertUnique<T extends string | number>(label: string, ids: readonly T[]): void {
   assert.deepEqual(duplicateIds(ids), [], `${label} ids must be unique`);
 }
 
@@ -528,7 +530,7 @@ test('samosbor variants keep the universal active pipeline and variant fog seman
   assert.deepEqual(SAMOSBOR_BASE_SUBSYSTEMS, requiredBaseSubsystems);
 
   const specialFogSubsystems = ['fog_rewrite', 'fog_create', 'fog_delete'] as const;
-  const requiredVariantSubsystems = new Map([
+  const requiredVariantSubsystems = new Map<SamosborVariantId, readonly SamosborSubsystemId[]>([
     ['classic', []],
     ['wet', []],
     ['electric', []],
@@ -768,7 +770,7 @@ test('permit and local terminal registries stay keyed and reference live data', 
   assertUnique('emergency panel domain', EMERGENCY_PANEL_DEFS.map(def => def.domain));
 
   const rumorIds = new Set(RUMORS.map(rumor => rumor.id));
-  const geometryIds = new Set(FLOOR_GEOMETRIES.map(geometry => geometry.id));
+  const geometryIds = new Set<string>(FLOOR_GEOMETRIES.map(geometry => geometry.id));
   const invalid: string[] = [];
 
   for (const def of PERMIT_DEFS) {
@@ -825,9 +827,9 @@ test('permit and local terminal registries stay keyed and reference live data', 
     if (!/^#[0-9a-f]{6}$/i.test(def.color)) invalid.push(dataRef('emergencyPanel', def.id, 'color', def.color));
     if (def.roomTypes.length === 0) invalid.push(dataRef('emergencyPanel', def.id, 'roomTypes', 'empty'));
     for (const roomType of def.roomTypes) if (!ROOM_TYPE_IDS.has(roomType)) invalid.push(dataRef('emergencyPanel', def.id, 'roomTypes', roomType));
-    for (const geometryId of Object.keys(def.geometryWeights)) {
+    for (const [geometryId, weight] of Object.entries(def.geometryWeights)) {
       if (!geometryIds.has(geometryId)) invalid.push(dataRef('emergencyPanel', def.id, 'geometryWeights', geometryId));
-      if ((def.geometryWeights[geometryId] ?? 0) <= 0) invalid.push(dataRef('emergencyPanel', def.id, `geometryWeights.${geometryId}`, def.geometryWeights[geometryId]));
+      if ((weight ?? 0) <= 0) invalid.push(dataRef('emergencyPanel', def.id, `geometryWeights.${geometryId}`, weight));
     }
     if (def.repairCost.length === 0) invalid.push(dataRef('emergencyPanel', def.id, 'repairCost', 'empty'));
     def.repairCost.forEach((cost, index) => pushItemStackRefs(invalid, 'emergencyPanel', def.id, `repairCost[${index}]`, { defId: cost.itemId, count: cost.count }));

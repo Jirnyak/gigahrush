@@ -128,7 +128,7 @@ function stageForpost(seed: number): Stage {
   const entities: Entity[] = [player, ...gen.entities];
   const state = makeGameState({ currentZ: MAINTENANCE_Z });
   setCurrentPlayerEntity(player);
-  rebuildEntityIndexForSimulation(entities, world);
+  rebuildEntityIndexForSimulation(entities, 0);
 
   const camera = createRuntimeCamera();
   bindSceneCamera(camera);
@@ -238,7 +238,7 @@ function playForpostScene(seed: number): Run {
     }
     // Бой и камеру двигает игровой цикл, а не хуки сцены. Без этих двух шагов
     // сцена «играет» в пустоту: никто не дерётся и кадр стоит на месте.
-    rebuildEntityIndexForSimulation(entities, world);
+    rebuildEntityIndexForSimulation(entities, f + 1);
     updateAI(world, entities, FRAME, state.time, state.msgs, player.id, state.clock, false, stage.nextEntityId, MAINTENANCE_Z, state);
     updateRuntimeCamera(camera, world, FRAME, player);
     run.seconds = f / 60;

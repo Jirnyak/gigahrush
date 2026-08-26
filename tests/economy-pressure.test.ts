@@ -6,12 +6,12 @@ import { ensureEconomyState, getResourceContractPressure } from '../src/systems/
 import { RESOURCES, ResourceDef } from '../src/data/resources';
 import { makeGameState } from './helpers';
 
-function resetFloor(state: GameState, floor: string): void {
+function resetFloor(state: GameState, floor: number): void {
   const economy = ensureEconomyState(state);
   economy.floors[floor] = createEconomyFloorState(floor);
 }
 
-function setResourceStock(state: GameState, floor: string, resourceId: string, stock: number, target: number = 100): void {
+function setResourceStock(state: GameState, floor: number, resourceId: string, stock: number, target: number = 100): void {
   const economy = ensureEconomyState(state);
   if (!economy.floors[floor]) {
     economy.floors[floor] = createEconomyFloorState(floor);
@@ -44,7 +44,7 @@ test('getResourceContractPressure calculates pressure correctly based on stock a
   // Test 4: Custom max multiplier
   setResourceStock(state, 0, 'drink_water', 0, 100);
   const customMax = 1.5;
-  const pressureCustomMax = getResourceContractPressure(state, 'drink_water', customMax);
+  const pressureCustomMax = getResourceContractPressure(state, 'drink_water', 0, customMax);
   assert.ok(pressureCustomMax <= customMax, `Expected pressure ${pressureCustomMax} to be capped at custom max ${customMax}`);
 });
 

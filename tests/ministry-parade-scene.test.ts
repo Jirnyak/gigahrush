@@ -148,7 +148,7 @@ function stageParade(seed: number): Stage {
   const entities: Entity[] = [player, ...gen.entities];
   const state = makeGameState({ currentZ: MINISTRY_Z });
   setCurrentPlayerEntity(player);
-  rebuildEntityIndexForSimulation(entities, world);
+  rebuildEntityIndexForSimulation(entities, 0);
 
   const camera = createRuntimeCamera();
   bindSceneCamera(camera);
@@ -242,7 +242,7 @@ function playParadeScene(seed: number, frames: number): Run {
       thinned = true;
       thinSceneBystanders(entities, player);
     }
-    rebuildEntityIndexForSimulation(entities, world);
+    rebuildEntityIndexForSimulation(entities, f + 1);
     updateAI(world, entities, FRAME, state.time, state.msgs, player.id, state.clock, false, stage.nextEntityId, MINISTRY_Z, state);
     updateRuntimeCamera(camera, world, FRAME, player);
     run.seconds = f / 60;

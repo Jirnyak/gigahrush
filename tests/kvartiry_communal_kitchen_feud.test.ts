@@ -50,6 +50,7 @@ test('communal kitchen feud registers five mutually resolving branches', () => {
     assert.equal(quest.type, QuestType.FETCH);
     // Поле давно называется giverId: `giverNpcId` читался как undefined, и
     // проверка выдающего квест молча проходила мимо пакета.
+    assert.ok(quest.giverId !== undefined, `${id} has no giver at all`);
     assert.ok(getNpcPackageByPlotNpcId(quest.giverId), `${id} has missing giver package`);
     assert.equal(quest.targetFloorZ, designFloorById('kvartiry')!.z);
     assert.equal(quest.targetRoomType, RoomType.KITCHEN);

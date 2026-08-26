@@ -15,7 +15,7 @@ import { getRecentEvents } from '../src/systems/events';
 
 test('safeguard hack backlash spawn tests', async (t) => {
   await t.test('spawns a safeguard monster successfully', () => {
-    const world = new World(1, 100);
+    const world = new World();
     // Fill with floor
     world.cells.fill(Cell.FLOOR);
 
@@ -46,7 +46,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
   });
 
   await t.test('prevents spawn if active safeguard is nearby', () => {
-    const world = new World(1, 100);
+    const world = new World();
     world.cells.fill(Cell.FLOOR);
     const state = makeGameState();
     const entities = [
@@ -69,7 +69,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
   });
 
   await t.test('prevents spawn if terminal cooldown is active', () => {
-    const world = new World(1, 100);
+    const world = new World();
     world.cells.fill(Cell.FLOOR);
     const state = makeGameState();
     const entities = [
@@ -87,7 +87,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
   });
 
   await t.test('prevents spawn if no valid spawn cells are available', () => {
-    const world = new World(1, 100);
+    const world = new World();
     world.cells.fill(Cell.WALL); // Fill with walls so no spawn is possible
     const state = makeGameState();
     const entities = [
@@ -110,7 +110,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
 
 
   await t.test('prevents spawn if entity limit is reached', () => {
-    const world = new World(1, 100);
+    const world = new World();
     world.cells.fill(Cell.FLOOR);
     const state = makeGameState();
     const entities = [
@@ -136,7 +136,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
   });
 
   await t.test('prevents spawn if floor cooldown is active', () => {
-    const world = new World(1, 100);
+    const world = new World();
     world.cells.fill(Cell.FLOOR);
     const state = makeGameState();
     const entities = [
@@ -157,7 +157,7 @@ test('safeguard hack backlash spawn tests', async (t) => {
   });
 
   await t.test('allows spawn if terminal cooldown expired', () => {
-    const world = new World(1, 100);
+    const world = new World();
     world.cells.fill(Cell.FLOOR);
     // Explicitly set time to avoid 0s and logic issues when state.time matches event.time exactly.
     const state = makeGameState({ time: 1000 });

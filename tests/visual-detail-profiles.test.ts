@@ -30,7 +30,10 @@ import {
 const ID_RE = /^[a-z][a-z0-9_]*$/;
 const VALID_ROOM_TYPES = new Set(Object.values(RoomType).filter((value): value is number => typeof value === 'number'));
 const VALID_FLOORS = new Set(DESIGN_FLOOR_ROUTES.map(r => r.z));
-const VALID_ROUTE_IDS = new Set(DESIGN_FLOOR_ROUTES.map(route => route.id));
+// Строки, а не `DesignFloorId`: строки в данных (`row.routeIds`) объявлены как
+// `readonly string[]`, и множество должно принимать ЛЮБУЮ строку — иначе неверный
+// id не дойдёт до проверки, а упадёт в типизации.
+const VALID_ROUTE_IDS: ReadonlySet<string> = new Set<string>(DESIGN_FLOOR_ROUTES.map(route => route.id));
 const VALID_RULE_IDS = new Set(VISUAL_DETAIL_RULES.map(rule => rule.id));
 const VALID_SURFACES = new Set(['floor', 'wall', 'ceiling', 'light_volume']);
 const KNOWN_TAGS = new Set<string>([

@@ -28,7 +28,9 @@ import {
 const ID_RE = /^[a-z][a-z0-9_]*$/;
 const VALID_FLOORS = new Set(DESIGN_FLOOR_ROUTES.map(r => r.z));
 const VALID_ROOMS = new Set(Object.values(RoomType).filter((value): value is RoomType => typeof value === 'number'));
-const VALID_ROUTE_IDS = new Set(DESIGN_FLOOR_ROUTES.map(route => route.id));
+// Строки, а не `DesignFloorId`: `row.routeIds` в данных объявлены как
+// `readonly string[]`, и множество должно принимать любую строку.
+const VALID_ROUTE_IDS: ReadonlySet<string> = new Set<string>(DESIGN_FLOOR_ROUTES.map(route => route.id));
 const VALID_PROFILE_IDS = new Set(VISUAL_SURFACE_PROFILES.map(profile => profile.id));
 const KNOWN_TAGS = new Set<string>([
   ...DESIGN_FLOOR_ROUTES.map(r => r.id),

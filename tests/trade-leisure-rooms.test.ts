@@ -68,7 +68,9 @@ test('в баре скапливаются сами: он перевешивае
   // Жажда переехала из намерений старого слоя в НАЗНАЧЕНИЕ комнаты: тело теперь
   // ведёт ядро актора, и «чем комната полезна» спрашивается назначением, а не
   // именем намерения. Проверяется то же самое требование — бар тянет пить.
-  const thirsty = { affordance: 'drink' as const };
+  // Имя намерения здесь ни при чём: назначение перекрывает его в самом счёте,
+  // и `wander` стоит ровно как нейтральная заглушка обязательного поля.
+  const thirsty = { intent: 'wander' as const, affordance: 'drink' as const };
   assert.ok(npcUtilityRoomInterest(RoomType.BAR, thirsty) > 0, 'жаждущего бар обязан тянуть');
   assert.ok(
     npcUtilityRoomInterest(RoomType.MARKET, { intent: 'wander' as const })

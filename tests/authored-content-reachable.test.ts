@@ -48,7 +48,7 @@ import { floorRunZAllowsNpcs, PROCEDURAL_FLOOR_ZS } from '../src/data/procedural
  * чтобы новая потеря не спряталась за старой.
  */
 
-const DESIGN_FLOOR_IDS = new Set(DESIGN_FLOOR_ROUTES.map(route => route.id));
+const DESIGN_FLOOR_IDS = new Set<string>(DESIGN_FLOOR_ROUTES.map(route => route.id));
 const DESIGN_Z_BY_ID = new Map<string, number>(DESIGN_FLOOR_ROUTES.map(route => [route.id, route.z]));
 const ROUTE_ZS = new Set<number>([...DESIGN_FLOOR_ROUTES.map(route => route.z), ...PROCEDURAL_FLOOR_ZS]);
 const SIDE_QUEST_IDS = new Set(SIDE_QUESTS.map(quest => quest.id));

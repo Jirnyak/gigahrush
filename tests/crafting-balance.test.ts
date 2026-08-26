@@ -19,7 +19,7 @@ interface CraftRecipeLike {
   tags: readonly string[];
 }
 
-const MATERIAL_INDEX = new Map(CRAFT_MATERIAL_IDS.map((id, index) => [id, index]));
+const MATERIAL_INDEX = new Map<string, number>(CRAFT_MATERIAL_IDS.map((id, index) => [id, index]));
 const compositions = ITEM_COMPOSITIONS as Record<string, CraftVectorLike>;
 const recipes = Array.from(CRAFT_RECIPES as Iterable<CraftRecipeLike>);
 

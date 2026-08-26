@@ -114,13 +114,15 @@ test('story, design and procedural route themes preserve current NPC-free bounda
 
 test('theme territory shares include a human or samosbor owner without new number values', () => {
   const allowedOwners = new Set(Object.values(ZoneFaction).filter(value => typeof value === 'number'));
-  const allowedFloors = new Set(ALL_STORY_FLOORS);
+  const allowedFloors: ReadonlySet<string> = new Set<string>(ALL_STORY_FLOORS);
   for (const theme of [
     ...STORY_THEMES,
     ...DESIGN_FLOOR_ROUTES.map(route => themeForDesignRoute(route)),
     themeForProceduralSpec(makeProceduralFloorSpec(2468, 13)),
   ]) {
-    if (theme.kind !== 'procedural') assert.equal(allowedFloors.has(theme.routeId), true, `${theme.floorKey} should use known number ${theme.routeId}`);
+    // `routeId` необязателен в теме, и отсутствие id — тоже провал проверки:
+    // раньше `.has(undefined)` возвращал false, сохраняем ровно это поведение.
+    if (theme.kind !== 'procedural') assert.equal(theme.routeId !== undefined && allowedFloors.has(theme.routeId), true, `${theme.floorKey} should use known number ${theme.routeId}`);
     assert.ok(theme.territoryShares.length > 0, `${theme.floorKey} should have territory shares`);
     for (const share of theme.territoryShares) {
       assert.equal(allowedOwners.has(share.owner), true, `${theme.floorKey} should use known territory owner ${share.owner}`);

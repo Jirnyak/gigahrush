@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Cell, Feature, LiftDirection, W } from '../src/core/types';
+import { Cell, Feature, W } from '../src/core/types';
 import { World } from '../src/core/world';
 import { injectFastElevators, isFastElevatorCell } from '../src/gen/fast_elevators';
 import { ensureFloorRouteLiftLayout } from '../src/systems/floor_memory';
@@ -89,9 +89,9 @@ test('route lift normalization never demotes fast-elevator cabins', () => {
   }
   injectFastElevators(world);
 
-  // VOID only expects UP route lifts; a naive normalizer would demote the
-  // DOWN-defaulted cabins. The guard must keep all 64 cabins intact.
-  ensureFloorRouteLiftLayout(world, 64, 64, [LiftDirection.UP], { countPerDirection: 4 });
+  // Маршрутные лифты этажа перештамповываются целиком, но кабины фаст-тревела —
+  // чужая система: ни одна из них не имеет права быть снесена или занята шахтой.
+  ensureFloorRouteLiftLayout(world, 0x51ff77, 0, 64, 64);
 
   let count = 0;
   for (let i = 0; i < world.cells.length; i++) {

@@ -18,7 +18,6 @@ import {
   VISUAL_GEOMETRY_THEME_MODULATIONS,
   normalizeVisualGeometryMode,
   resolveVisualGeometryProfile,
-  visualGeometryThemeTags,
   type ResolvedVisualGeometryProfile,
   type VisualGeometryMode,
 } from '../src/data/visual_geometry_profiles';
@@ -137,9 +136,9 @@ test('visual geometry base modes resolve with safe caps', () => {
 });
 
 test('visual geometry budgets grow monotonically by mode before theme modulation', () => {
-  const low = resolveVisualGeometryProfile('low', 'plain', []);
-  const medium = resolveVisualGeometryProfile('medium', 'plain', []);
-  const high = resolveVisualGeometryProfile('high', 'plain', []);
+  const low = resolveVisualGeometryProfile('low', 'plain');
+  const medium = resolveVisualGeometryProfile('medium', 'plain');
+  const high = resolveVisualGeometryProfile('high', 'plain');
   for (const key of [
     'radius',
     'visualSlotScanCap',
@@ -189,7 +188,7 @@ test('visual geometry theme modulation is data-only and deterministic', () => {
   assert.equal(a.modulationIds.includes('industrial_hard_detail'), true);
   assert.equal(a.corridorVolumeStyle, 'service');
   assert.equal(a.corridorCoveringId, 'collector');
-  assert.equal(a.corridorVolumeDetail > resolveVisualGeometryProfile('medium', 'plain', []).corridorVolumeDetail, true);
+  assert.equal(a.corridorVolumeDetail > resolveVisualGeometryProfile('medium', 'plain').corridorVolumeDetail, true);
 
   const hell = resolveVisualGeometryProfile('medium', 'design:hell', ['hell', 'meat', 'cult']);
   assert.equal(hell.corridorVolumeStyle, 'organic');
@@ -218,7 +217,7 @@ test('visual geometry resolves generator corridor coverings from floor tags', ()
 test('all current floor themes provide finite visual geometry profiles', () => {
   for (const route of DESIGN_FLOOR_ROUTES) {
     const theme = themeForDesignFloor(route.id);
-    const profile = resolveVisualGeometryProfile('low', theme.floorKey, visualGeometryThemeTags(theme));
+    const profile = resolveVisualGeometryProfile('low', theme);
     assertEnabledCaps(profile, `story:${route.id}`);
     assert.equal(profile.instanceCap, EXPECTED_INSTANCE_CAPS.low, `story:${route.id} low instance cap`);
     assert.equal(profile.proceduralFieldRadius, EXPECTED_FIELD_RADII.low, `story:${route.id} low field radius`);
@@ -226,7 +225,7 @@ test('all current floor themes provide finite visual geometry profiles', () => {
   }
   for (const route of DESIGN_FLOOR_ROUTES) {
     const theme = themeForDesignRoute(route);
-    const profile = resolveVisualGeometryProfile('medium', theme.floorKey, visualGeometryThemeTags(theme));
+    const profile = resolveVisualGeometryProfile('medium', theme);
     assertEnabledCaps(profile, `design:${route.id}`);
     assert.equal(profile.instanceCap, EXPECTED_INSTANCE_CAPS.medium, `design:${route.id} medium instance cap`);
     assert.equal(profile.proceduralFieldRadius, EXPECTED_FIELD_RADII.medium, `design:${route.id} medium field radius`);
@@ -235,7 +234,7 @@ test('all current floor themes provide finite visual geometry profiles', () => {
   for (const z of PROCEDURAL_FLOOR_ZS) {
     const spec = makeProceduralFloorSpec(9305, z);
     const theme = themeForProceduralSpec(spec);
-    const profile = resolveVisualGeometryProfile('high', theme.floorKey, visualGeometryThemeTags(theme));
+    const profile = resolveVisualGeometryProfile('high', theme);
     assertEnabledCaps(profile, `procedural:${spec.key}`);
     assert.equal(profile.instanceCap, EXPECTED_INSTANCE_CAPS.high, `procedural:${spec.key} high instance cap`);
     assert.equal(profile.proceduralFieldRadius, EXPECTED_FIELD_RADII.high, `procedural:${spec.key} high field radius`);

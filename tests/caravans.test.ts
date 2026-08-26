@@ -353,7 +353,7 @@ test('small caravan arrival moves surviving member A-Life records to destination
   run.toFloorKey = 'design:kvartiry';
   run.progress = 0.99;
 
-  tickCaravans(state, CARAVAN_TICK_SECONDS, true, 0, world, entities, player, { v: 3 });
+  tickCaravans(state, CARAVAN_TICK_SECONDS, true, 0, world, entities, { v: 3 });
 
   assert.equal(run.status, 'arrived');
   const moved = alifeForSave(state).overrides.find(item => item.id === npc.alifeId);

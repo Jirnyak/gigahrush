@@ -37,7 +37,7 @@ test('slime sense node is reachable through rare Maintenance slime aftermath', (
   }
 
   assert.equal(
-    beat.variants.some(v => getSamosborAftermathBeats(v, -26).some(def => def.id === 'aftermath_slime_sense_node')),
+    beat.variants.some(v => getSamosborAftermathBeats(v).some(def => def.id === 'aftermath_slime_sense_node')),
     true,
   );
 });

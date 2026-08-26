@@ -127,7 +127,7 @@ test('maintenance macro geometry exposes wet, dry, duct, panel and repair route 
   }
 
   const panels = getEmergencyPanels(gen.world);
-  const panelDefs = new Set(panels.map(panel => panel.defId));
+  const panelDefs = new Set<string>(panels.map(panel => panel.defId));
   for (const id of ['panel_power', 'panel_water', 'panel_doors', 'panel_vent']) {
     assert.equal(panelDefs.has(id), true, `${id} should be available on the maintenance panel chord`);
   }

@@ -32,7 +32,7 @@ class FakeStatement implements D1Statement {
   }
 
   async all<T = Record<string, unknown>>(): Promise<{ results?: T[] }> {
-    return { results: this.db.all(this.query, this.values) as T[] };
+    return { results: this.db.all(this.query) as T[] };
   }
 
   async run(): Promise<D1Result> {

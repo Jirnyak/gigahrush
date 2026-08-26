@@ -1406,10 +1406,11 @@ test('Net Sphere storage prune drops stale volatile rows without changing aggreg
     best_level: 8,
     best_samosbor_count: 4,
     last_floor: 'Жилая зона',
+    total_sessions: 0,
     progress_json: '{}',
   });
-  db.sessions.set('SES-OLD-1111', { session_id: 'SES-OLD-1111', net_gen: 'NET-OLD-1111', last_seen_at: now - 2 * 24 * 60 * 60 * 1000 });
-  db.sessions.set('SES-NEW-1111', { session_id: 'SES-NEW-1111', net_gen: 'NET-OLD-1111', last_seen_at: now });
+  db.sessions.set('SES-OLD-1111', { session_id: 'SES-OLD-1111', net_gen: 'NET-OLD-1111', last_seen_at: now - 2 * 24 * 60 * 60 * 1000, hosting_room: '', invaded_by: '', invaded_at: 0 });
+  db.sessions.set('SES-NEW-1111', { session_id: 'SES-NEW-1111', net_gen: 'NET-OLD-1111', last_seen_at: now, hosting_room: '', invaded_by: '', invaded_at: 0 });
   db.chat.push(
     { id: 1, net_gen: 'NET-OLD-1111', body: 'old', created_at: now - 8 * 24 * 60 * 60 * 1000 },
     { id: 2, net_gen: 'NET-OLD-1111', body: 'new', created_at: now },
@@ -1560,6 +1561,7 @@ test('Net Sphere does not expose NET-GEN-shaped legacy nicknames as public names
     best_level: 1,
     best_samosbor_count: 0,
     last_floor: 'Жилая зона',
+    total_sessions: 0,
     progress_json: '{}',
   });
   db.chat.push({ id: 1, net_gen: 'NET-LEAK-1234', body: 'эхо', created_at: now });

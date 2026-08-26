@@ -85,7 +85,7 @@ test('floor memory saves and restores floor instance worlds by instance key', ()
   const extras = floorInstanceGenerationExtrasForKey(key);
   assert.ok(extras);
 
-  assert.equal(captureFloorMemory(key, world, [memoryEntity(9)], 20.5, 20.5, 44, 1, extras), true);
+  assert.equal(captureFloorMemory(key, world, [memoryEntity(9)], 20.5, 20.5, 44, 1, { ...extras }), true);
   const saved = floorMemoryStateForSave();
   clearFloorMemory();
 

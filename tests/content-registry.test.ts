@@ -50,8 +50,8 @@ const UNIVERSAL_PICK_KINDS = new Set<MonsterKind>(
     .map(entry => entry.kind),
 );
 
-function assertUnique(values: readonly string[], label: string): void {
-  const seen = new Set<string>();
+function assertUnique<T extends string | number>(values: readonly T[], label: string): void {
+  const seen = new Set<T>();
   for (const value of values) {
     assert.equal(seen.has(value), false, `${label} duplicate: ${value}`);
     seen.add(value);

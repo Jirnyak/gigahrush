@@ -380,6 +380,14 @@ export function resolveVisualGeometryProfile(
 export function resolveVisualGeometryProfile(
   modeInput: VisualGeometryMode | string,
   floorKey: string,
+  /* Список тегов этажа. Объявление потеряло его в e690df77 — при вырезании ПОЛЯ
+   * `themeTags` замена по имени зацепила заодно и одноимённый ПАРАМЕТР, хотя
+   * это не ярлык корзины, а обычные теги. Тело функции их всё это время
+   * разбирало (`floorKeyAndTags` ветвится по `Array.isArray`), то есть
+   * объявление просто перестало говорить правду о том, что функция умеет.
+   * Разница не косметическая: с тегами `collector` покрытие коридора
+   * `collector` и три мода, без них — `concrete` и один. */
+  themeTags?: readonly string[],
 ): ResolvedVisualGeometryProfile;
 export function resolveVisualGeometryProfile(
   modeInput: VisualGeometryMode | string,

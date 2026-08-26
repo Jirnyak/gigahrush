@@ -6617,13 +6617,13 @@ testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient 
   assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
   assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
 
-  const state = makeGameState({ currentZ: spec.baseFloor, time: 1 });
+  const state = makeGameState({ currentZ: spec.z, time: 1 });
   setFloorRunState(state, {
     runSeed: 779,
     currentZ: spec.z,
     specs: { [spec.key]: spec },
     visited: {},
-  }, spec.baseFloor);
+  }, spec.z);
 
   const target = npcs[0];
   const infected = tryZombieApocalypseInfection(gen.world, patientZero!, target, state, state.msgs, state.time);

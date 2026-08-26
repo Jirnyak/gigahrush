@@ -24,6 +24,7 @@ import {
   actorDrive, forgetActorBrain, setActorCoreContext, tickActorBrain,
 } from '../src/systems/actor/brain';
 import { DRIVES, scoreDrive, driveActorKind, type DriveId } from '../src/systems/actor/drives';
+import { createActorClock } from '../src/systems/actor/clock';
 import { createActorNeeds, readActorNeeds } from '../src/systems/actor/needs';
 import { createActorSenses } from '../src/systems/actor/senses';
 import { getEntityIndex, rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
@@ -82,7 +83,7 @@ const CORE_WALK_STEPS = 160;
 
 /** Сильнейший драйв тела в тихой клетке: все каналы восприятия нулевые. */
 function strongestDrive(e: Entity): DriveId | undefined {
-  const view = { senses: createActorSenses(), needs: readActorNeeds(e, createActorNeeds()) };
+  const view = { senses: createActorSenses(), needs: readActorNeeds(e, createActorNeeds()), clock: createActorClock() };
   const kind = driveActorKind(e, false);
   let best: DriveId | undefined;
   let bestScore = 0;

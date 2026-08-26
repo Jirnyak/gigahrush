@@ -8,7 +8,7 @@ import { updateAI } from '../src/systems/ai/index';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 
 test('cinematic_actors - select cinematic extras using spatial index', () => {
-  const player = makeTestPlayer(0, 0);
+  const player = makeTestPlayer({ x: 0, y: 0 });
   const world: World = {
     cells: new Uint8Array(100),
     roomMap: new Int16Array(100).fill(-1),
@@ -65,7 +65,7 @@ test('cinematic_actors - select cinematic extras using spatial index', () => {
 });
 
 test('cinematic_actors - extract and release npc', () => {
-  const player = makeTestPlayer(0, 0);
+  const player = makeTestPlayer({ x: 0, y: 0 });
   const world: World = {
     cells: new Uint8Array(100),
     roomMap: new Int16Array(100).fill(-1),
@@ -121,7 +121,7 @@ test('cinematic_actors - extract and release npc', () => {
     solidAtIdx: () => false,
     roomAt: () => null,
   } as unknown as World;
-  addTestRoom(world, 0, 0, 9, 9);
+  addTestRoom(world, { x: 0, y: 0, w: 9, h: 9 });
 
   const npc = world.entities[1];
 
@@ -157,7 +157,7 @@ test('cinematic_actors - extract and release npc', () => {
 });
 
 test('cinematic_actors - цикл AI ведёт актёра сцены, а не пропускает', () => {
-  const player = makeTestPlayer(0, 0);
+  const player = makeTestPlayer({ x: 0, y: 0 });
   const state = makeGameState();
   const world: World = {
     cells: new Uint8Array(100),
@@ -215,7 +215,7 @@ test('cinematic_actors - цикл AI ведёт актёра сцены, а не
     roomAt: () => null,
     wrap: (x: number) => x,
   } as unknown as World;
-  addTestRoom(world, 0, 0, 9, 9);
+  addTestRoom(world, { x: 0, y: 0, w: 9, h: 9 });
 
   // Rebuild index
   rebuildEntityIndexForSimulation(world.entities, 1);

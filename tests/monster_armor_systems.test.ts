@@ -8,7 +8,7 @@ import { createWorldEventState } from '../src/systems/events';
 
 // Mock World creator
 function createMockWorld(): World {
-  const world = new World(10, 10);
+  const world = new World();
   return world;
 }
 
