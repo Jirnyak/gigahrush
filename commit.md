@@ -127,7 +127,7 @@ unzip -l itch/gigahrush-itch.zip | sed -n '1,80p'
 
 Критично: `index.html` должен лежать в корне ZIP. Если внутри архива путь выглядит как `dist/index.html` или `itch/index.html`, пакет неправильный для itch.io.
 
-Также критично: с выносом музыки из single-file (см. `keepMusicExternalPlugin` в `vite.config.ts`) архив обязан содержать рядом с `index.html` 10 `*.ogg` треков и воркеры (`loading_worker-*.js`, `nav_worker-*.js`). Загрузка одного `index.html` больше не несет музыку. Это относится и к MyIndie (тот же ZIP), и к Pikabu ZIP.
+Также критично: с выносом музыки из single-file (см. `keepMusicExternalPlugin` в `vite.config.ts`) архив обязан содержать рядом с `index.html` 10 `*.ogg` треков и воркер `loading_worker-*.js`. Загрузка одного `index.html` больше не несет музыку. Воркера `nav_worker-*.js` в архиве быть НЕ должно: он удалён вместе с матрицей маршрутов (`723ff08a`), и его отсутствие — не дефект сборки. Это относится и к MyIndie (тот же ZIP), и к Pikabu ZIP.
 
 Если пользователь отдельно просит загрузить файл на itch.io, используй свежий `itch/gigahrush-itch.zip` и настройки из `PRCampaign/itch_upload_notes.md`, свежего `itch/ITCH_UPLOAD_NOTES.txt` и `PRCampaign/itch_editor_runbook.md`.
 
