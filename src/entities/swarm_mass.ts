@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 2.75,
   dmg: 2,
   attackRate: 0.24,
+  reach: 1.05,
   damageType: DamageType.BIO,
   sprite: 0,
   detect: 20,

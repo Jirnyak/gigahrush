@@ -29,6 +29,7 @@ import {
 } from '../src/systems/ai/monster';
 import { notifyActorDamaged, resetCombatStimulus } from '../src/systems/combat_stimulus';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
+import { chervieNetPowered } from '../src/systems/monster_traits';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { resetMonsterBaits } from '../src/systems/monster_bait';
 import { setListenerPos } from '../src/systems/audio';
@@ -238,7 +239,7 @@ test('пульс протокольника бьёт NPC с бумагами н�
 
   sync(entities);
   // 999 — несуществующее тело игрока: сверка идёт без него.
-  updateProtokolnikProtocolPressure(world, entities, threat, clerk, 8, 8, msgs, 999, { v: 900 }, state);
+  updateProtokolnikProtocolPressure(world, threat, clerk, 8, 8, msgs, 999, state);
 
   assert.ok(peekProtokolnikPressure(threat) > 0, 'давление обязано копиться на NPC');
   assert.ok((clerk.hp ?? 60) < 60, 'пульс сверки бьёт носителя бумаг, кем бы он ни был');
@@ -266,7 +267,7 @@ test('червие подставляет ближайшего человека 
   // 999 — несуществующее тело игрока: этаж без него обязан жить так же.
   updateChervieNetPossessor(world, threat, 1, 1, msgs, 999, state);
 
-  assert.equal(threat.ai?.netPowered, true);
+  assert.equal(chervieNetPowered(world, threat), true);
   assert.equal(far.ai?.combatTargetId, near.id, 'ложный приказ выписан на ближайшего человека');
   assert.equal(farther.ai?.combatTargetId, near.id);
   assert.equal(near.ai?.combatTargetId, threat.id, 'подставленный не воюет сам с собой');

@@ -7,7 +7,7 @@ import { DEF, HEAD_SLUG_DETACHED_STAGE, HEAD_SLUG_HOSTED_STAGE, generateSlugSpri
 import { MONSTERS } from '../src/entities/monster';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { getRecentEvents, createWorldEventState } from '../src/systems/events';
-import { HEAD_SLUG_REHOST_SCAN_CAP, findHeadSlugRehostTarget, updateMonster, setEntityMap } from '../src/systems/ai/monster';
+import { HEAD_SLUG_REHOST_SCAN_CAP, findHeadSlugRehostTarget, headSlugVictimOf, rememberHeadSlugVictim, updateMonster, setEntityMap } from '../src/systems/ai/monster';
 import { getEntityIndex, rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
 import { S } from '../src/core/pixutil';
@@ -115,7 +115,7 @@ test('head slug detaches from a failing host and publishes a bounded warning eve
 
   assert.equal(slug.monsterStage, HEAD_SLUG_DETACHED_STAGE);
   assert.equal(slug.spriteScale, 0.58);
-  assert.equal((slug.ai?.parasiteRehostCd ?? -1) <= 0, true);
+  assert.equal(headSlugVictimOf(slug), undefined, 'сорванный слизень без своей жертвы никого не помнит');
   assert.equal(msgs.some(m => m.text.includes('переползания')), true);
   const event = getRecentEvents(state, { type: 'head_slug_detached', tags: ['head_slug'], limit: 1 })[0];
   assert.ok(event);
@@ -153,7 +153,7 @@ test('detached head slug rehosts a stunned npc through capped radius queries', (
 
   rebuildEntityIndex(entities);
   setEntityMap(new Map(entities.map(e => [e.id, e])));
-  assert.equal(findHeadSlugRehostTarget(world, entities, slug), host);
+  assert.equal(findHeadSlugRehostTarget(world, slug), host);
   updateMonster(world, entities, slug, 1.3, 2, msgs, player.id, { v: 200 }, state);
 
   assert.equal(slug.monsterStage, HEAD_SLUG_HOSTED_STAGE);
@@ -165,4 +165,58 @@ test('detached head slug rehosts a stunned npc through capped radius queries', (
   assert.ok(event);
   assert.equal(event.targetId, host.id);
   assert.equal(event.data?.hostWasAlive, true);
+});
+
+/**
+ * Правило переползания сменено 2026-08-27: слизень берёт тело СВОЕЙ жертвы.
+ *
+ * До этого он линейно обходил ВЕСЬ массив сущностей с ротационным курсором —
+ * трупов нет в индексе, и другого способа найти «любой труп на этаже» не было.
+ * Замок держит обе стороны правила: чужой труп не годится, своя жертва годится.
+ */
+test('detached head slug takes only the body it killed itself', () => {
+  const world = openMedicalWorld();
+  setListenerPos(512, 512, world.dist2.bind(world));
+  const player = makeTestPlayer({ id: 1, x: 30, y: 30, hp: 100, maxHp: 100 });
+  const slug = headSlug({
+    monsterStage: HEAD_SLUG_DETACHED_STAGE,
+    hp: 12,
+    maxHp: 18,
+    ai: { goal: AIGoal.WANDER, tx: 10, ty: 10, path: [], pi: 0, stuck: 0, timer: 0 },
+  });
+  const foreign = makeTestNpc({ id: 3, name: 'Чужой труп', x: 10.6, y: 10.1, alive: false, hp: 0 });
+  const own = makeTestNpc({ id: 4, name: 'Своя жертва', x: 12.4, y: 10, alive: false, hp: 0 });
+  const entities = [player, slug, foreign, own];
+
+  rebuildEntityIndex(entities);
+  setEntityMap(new Map(entities.map(e => [e.id, e])));
+
+  // Чужой труп лежит ВПЛОТНУЮ и всё равно не годится.
+  assert.equal(findHeadSlugRehostTarget(world, slug), null);
+
+  rememberHeadSlugVictim(slug, own);
+  assert.equal(findHeadSlugRehostTarget(world, slug), own);
+  assert.equal(headSlugVictimOf(slug), own);
+});
+
+test('head slug forgets a victim that stopped being a body', () => {
+  const world = openMedicalWorld();
+  setListenerPos(512, 512, world.dist2.bind(world));
+  const slug = headSlug({ monsterStage: HEAD_SLUG_DETACHED_STAGE, hp: 12, maxHp: 18 });
+  const victim = makeTestNpc({ id: 4, name: 'Жертва', x: 10.6, y: 10.1, alive: false, hp: 0 });
+  rebuildEntityIndex([slug, victim]);
+  setEntityMap(new Map([[slug.id, slug], [victim.id, victim]]));
+  rememberHeadSlugVictim(slug, victim);
+  assert.equal(findHeadSlugRehostTarget(world, slug), victim);
+
+  // Тело унесли за радиус переползания: память остаётся, ответ — нет.
+  victim.x = 24;
+  assert.equal(findHeadSlugRehostTarget(world, slug), null);
+  assert.equal(headSlugVictimOf(slug), victim);
+
+  // Тело перестало быть телом: память снимается совсем.
+  victim.x = 10.6;
+  victim.alive = true;
+  assert.equal(findHeadSlugRehostTarget(world, slug), null);
+  assert.equal(headSlugVictimOf(slug), undefined);
 });

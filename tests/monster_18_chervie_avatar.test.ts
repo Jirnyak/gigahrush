@@ -11,12 +11,13 @@ import { S } from '../src/core/pixutil';
 import {
   CHERVIE_MIND_PULSE_CAP,
   CHERVIE_MIND_PULSE_COOLDOWN_SEC,
+  peekCherviePulseCd,
   setEntityMap,
   updateChervieNetPossessor,
 } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
-import { CHERVIE_NET_SOURCE_RADIUS, chervieNetPowered, findChervieNetSource } from '../src/systems/monster_traits';
+import { CHERVIE_NET_SOURCE_RADIUS, chervieNetPowered, findMonsterAnchor } from '../src/systems/monster_traits';
 import { generateSiliconNetWellDesignFloor } from '../src/gen/silicon_net_well';
 import { addTestRoom, makeGameState } from './helpers';
 
@@ -126,17 +127,17 @@ test('Chervie power source is local, radius-bounded, and line-breakable', () => 
   const threat = chervie();
 
   world.features[world.idx(10 + CHERVIE_NET_SOURCE_RADIUS, 10)] = Feature.APPARATUS;
-  const source = findChervieNetSource(world, threat);
+  const source = findMonsterAnchor(world, threat);
   assert.equal(source?.feature, Feature.APPARATUS);
   assert.equal(chervieNetPowered(world, threat), true);
 
   world.features[world.idx(10 + CHERVIE_NET_SOURCE_RADIUS, 10)] = Feature.NONE;
   world.features[world.idx(10 + CHERVIE_NET_SOURCE_RADIUS + 1, 10)] = Feature.APPARATUS;
-  assert.equal(findChervieNetSource(world, threat), undefined, 'source outside radius must not power the avatar');
+  assert.equal(findMonsterAnchor(world, threat), undefined, 'source outside radius must not power the avatar');
 
   world.features[world.idx(15, 10)] = Feature.SCREEN;
   world.cells[world.idx(13, 10)] = Cell.WALL;
-  assert.equal(findChervieNetSource(world, threat), undefined, 'wall line break must cut a visible screen source');
+  assert.equal(findMonsterAnchor(world, threat), undefined, 'wall line break must cut a visible screen source');
 });
 
 test('Chervie mind pulse is capped and cooldown-gated', () => {
@@ -164,9 +165,9 @@ test('Chervie mind pulse is capped and cooldown-gated', () => {
 
   updateChervieNetPossessor(world, threat, 1, 1, msgs, target.id, state);
   const affected = entities.filter(e => e.type === EntityType.NPC && (e.psiMadness ?? 0) > 0);
-  assert.equal(threat.ai?.netPowered, true);
+  assert.equal(chervieNetPowered(world, threat), true);
   assert.equal(affected.length, CHERVIE_MIND_PULSE_CAP);
-  assert.equal(threat.ai?.netPulseCd, CHERVIE_MIND_PULSE_COOLDOWN_SEC);
+  assert.equal(peekCherviePulseCd(threat), CHERVIE_MIND_PULSE_COOLDOWN_SEC);
   assert.equal(target.rpg?.psi, 9);
   assert.equal(getRecentEvents(state, { type: 'chervie_false_order', limit: 4 }).length, 1);
 
@@ -186,11 +187,11 @@ test('cutting the local server publishes a Chervie cut event', () => {
   setEntityMap(new Map(entities.map(e => [e.id, e])));
 
   updateChervieNetPossessor(world, threat, 0.5, 1, msgs, target.id, state);
-  assert.equal(threat.ai?.netPowered, true);
+  assert.equal(chervieNetPowered(world, threat), true);
   world.features[world.idx(11, 10)] = Feature.NONE;
   updateChervieNetPossessor(world, threat, 0.5, 2, msgs, target.id, state);
 
-  assert.equal(threat.ai?.netPowered, false);
+  assert.equal(chervieNetPowered(world, threat), false);
   const cut = getRecentEvents(state, { type: 'chervie_server_cut', limit: 1 })[0];
   assert.equal(cut?.monsterKind, MonsterKind.CHERVIE_AVATAR);
   assert.equal(cut?.tags.includes('counterplay'), true);

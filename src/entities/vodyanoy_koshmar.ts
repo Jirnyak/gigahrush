@@ -16,6 +16,14 @@ export const DEF: MonsterDef = {
   aiFlags: ['waterPressureLine'],
   counterplay: 'Сухой бетон рвет мокрую ПСИ-линию: не пятитесь по воде, переходите на сухую кромку и бейте коротким burst, пока давление сбито.',
   lootHint: 'мокрый ПСИ-налет, вода с привкусом металла, редкая ПСИ-пыль из сливного лица',
+  /* Строка семьи спецудара: давление по мокрой линии. Бьёт водой и пси —
+     крови не даёт. */
+  strike: {
+    hurt: '%s давит по мокрой линии',
+    kill: '%s задавил %t мокрой ПСИ-линией',
+    killColor: '#7dd',
+    blood: false,
+  },
 };
 
 function put(t: Uint32Array, x: number, y: number, c: number): void {

@@ -1,6 +1,6 @@
 /* ── Kantselyarskiy Idol: office-field PSI hazard ────────────── */
 
-import { DamageType, MonsterKind } from '../core/types';
+import { DamageType, Feature, MonsterKind, RoomType } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -18,8 +18,36 @@ export const DEF: MonsterDef = {
   projSpeed: 7.2,
   projSprite: 0,
   aiFlags: ['officeField'],
+  /* Чем кормится офисное поле. Комната и мебель — одна таблица, а не таблица
+   * плюс список признаков плюс три литерала веса в теле общего AI. */
+  affinity: {
+    rooms: {
+      [RoomType.OFFICE]: 0.9,
+      [RoomType.STORAGE]: 0.65,
+      [RoomType.HQ]: 0.65,
+      [RoomType.COMMON]: 0.35,
+      [RoomType.CORRIDOR]: 0.35,
+    },
+    features: {
+      [Feature.DESK]: 0.34,
+      [Feature.SHELF]: 0.28,
+      [Feature.TABLE]: 0.2,
+    },
+    cap: 3.2,
+  },
   counterplay: 'Офисное поле сильнее у столов, шкафов и бумаг в кармане: прячьтесь за шкафом, сближайтесь в упор после залпа или сбросьте лишние бланки в контейнер.',
   lootHint: 'желтая бумажная пыль, грязный латунный уголок, обломок красной печати',
+  /* Строка семьи замаха: числа и тексты один в один прежние `switch`-и в `ai/monster.ts`.
+   * Дальность выстрела здесь БАЗОВАЯ: офисное поле правит её обстановкой. */
+  windup: {
+    windupSec: 1.12,
+    range: 15,
+    minRange: 2.35,
+    color: '#fd6',
+    warningLine: 'Канцелярский Идол держит офисную линию: шкафы гасят поле, бумаги в кармане усиливают залп.',
+    windupLine: 'Бумаги вокруг Канцелярского Идола выстроились в линию. Шкаф, стена или рывок в упор сорвут выстрел.',
+    interruptLine: 'Офисное поле Идола уперлось в шкаф или стену. После срыва есть окно.',
+  },
 };
 
 function put(t: Uint32Array, x: number, y: number, color: number): void {

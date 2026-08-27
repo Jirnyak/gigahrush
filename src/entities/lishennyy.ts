@@ -16,6 +16,9 @@ export const DEF: MonsterDef = {
   detect: 30,
   scanSec: 0.62,
   aiFlags: ['lightFollower'],
+  /* Свет для него — еда и поводырь, поэтому засветка в упор бьёт по главному:
+   * `blindSec` секунд он на свет не идёт. */
+  uv: { effect: 'lishennyy_light_repel', attackCd: 2.4, daze: 0.9, push: 0.55, scale: 0.84, stagger: 0.75, blindSec: 2.4 },
   counterplay: 'Свет ведет Лишенного к вам: бросайте фонарь или свечу как приманку, выключайте луч перед поворотом и не держите контакт.',
   lootHint: 'пепельная пыль, черный след, редкий странный сгусток',
 };

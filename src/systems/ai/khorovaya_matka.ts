@@ -17,7 +17,7 @@ import { canSpawnEntityType } from '../entity_limits';
 import { publishEvent } from '../events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../rpg';
 import { playGrowl, playSoundAt } from '../audio';
-import { hasClearLineOfFire } from './monster';
+import { hasClearLine } from './monster';
 import { rng } from '../../core/rand';
 import { speciesState } from './species_state';
 
@@ -140,7 +140,7 @@ function findChoirSpawnCell(world: World, e: Entity, slot: number): { x: number;
     const cell = world.cells[ci];
     if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
     if (world.solid(x, y)) continue;
-    if (world.roomMap[ci] !== sourceRoom && !hasClearLineOfFire(world, e, { x: x + 0.5, y: y + 0.5 } as Entity, dist + 1)) continue;
+    if (world.roomMap[ci] !== sourceRoom && !hasClearLine(world, e, { x: x + 0.5, y: y + 0.5 } as Entity, dist + 1, true)) continue;
     return { x, y };
   }
   return null;

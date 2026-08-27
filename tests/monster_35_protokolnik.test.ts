@@ -146,7 +146,7 @@ test('protocol pressure grows from carried documents, caps, and eases after pape
   assert.equal(documentPressure > 0, true);
   assert.equal(protokolnikPressureCap(documentPressure) <= PROTOKOLNIK_PRESSURE_MAX, true);
 
-  updateProtokolnikProtocolPressure(world, [target, threat], threat, target, 8, 8, msgs, target.id, { v: 900 }, state);
+  updateProtokolnikProtocolPressure(world, threat, target, 8, 8, msgs, target.id, state);
   const loadedPressure = peekProtokolnikPressure(threat);
   assert.equal(loadedPressure > PROTOKOLNIK_PRESSURE_SAFE_CAP, true);
   assert.equal(loadedPressure <= protokolnikPressureCap(documentPressure), true);
@@ -154,7 +154,7 @@ test('protocol pressure grows from carried documents, caps, and eases after pape
   assert.equal((target.hp ?? 100) < 100, true, 'pressure should pulse without instant death');
 
   target.inventory = [];
-  updateProtokolnikProtocolPressure(world, [target, threat], threat, target, 4, 12, msgs, target.id, { v: 900 }, state);
+  updateProtokolnikProtocolPressure(world, threat, target, 4, 12, msgs, target.id, state);
   assert.equal(peekProtokolnikPressure(threat) <= PROTOKOLNIK_PRESSURE_SAFE_CAP + 0.1, true);
   assert.equal(peekProtokolnikPressure(threat) <= loadedPressure, true);
 });
@@ -168,10 +168,10 @@ test('breaking protocol line publishes a protokolnik escape event', () => {
   const state = makeGameState({ currentZ: 34, worldEvents: createWorldEventState() });
   syncEntities([target, threat]);
 
-  updateProtokolnikProtocolPressure(world, [target, threat], threat, target, 5, 5, msgs, target.id, { v: 900 }, state);
+  updateProtokolnikProtocolPressure(world, threat, target, 5, 5, msgs, target.id, state);
   assert.equal(peekProtokolnikPressure(threat) >= 18, true);
 
-  updateProtokolnikProtocolPressure(world, [target, threat], threat, null, 1, 6, msgs, target.id, { v: 900 }, state);
+  updateProtokolnikProtocolPressure(world, threat, null, 1, 6, msgs, target.id, state);
   const escaped = getRecentEvents(state, { type: 'monster_escaped', limit: 1 })[0];
   assert.equal(escaped?.monsterKind, MonsterKind.PROTOKOLNIK);
   assert.equal(escaped?.tags.includes('protocol_pressure'), true);

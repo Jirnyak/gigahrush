@@ -439,9 +439,29 @@ export function findMonsterBaitTarget(
   candidateOk?: (marker: MonsterBaitMarker) => boolean,
 ): MonsterBaitMarker | null {
   const ai = monster.ai;
+  if (!ai) return null;
+  /* Ноль приманок на этаже — идти не за чем, и всё, что ниже, лишнее.
+   *
+   * Ниже стоит работа, которую нельзя платить впустую: `monsterBaitFloorKey`
+   * строит ключ этажа из состояния прогона, а `monsterEcologyTags` собирает
+   * НОВЫЙ МАССИВ строк (обратный поиск по enum + `toLowerCase` + шаблон) на
+   * КАЖДОГО актора в КАЖДОМ кадре. На тёмном отсеке это 3825 тварей × 60 кадров
+   * = 229 тысяч раз в секунду при пустом списке приманок.
+   *
+   * Замерено (тёмный отсек, сид 1337, 30 с): весь путь приманки стоил 11.7 %
+   * времени AI и 1.97 мс кадра при НУЛЕ приманок на этаже.
+   *
+   * Откат скана при этом продолжает идти вниз и упирается в ноль: так первая
+   * же появившаяся приманка сканируется сразу, как и до правки, где счётчик
+   * уходил в глубокий минус. */
+  if (activeBaits.length === 0) {
+    ai.baitMarkerId = undefined;
+    ai.baitScanCd = Math.max(0, (ai.baitScanCd ?? 0) - dt);
+    return null;
+  }
   const floor = currentZ ?? state?.currentZ;
   const floorKey = monsterBaitFloorKey(state);
-  if (!ai || floor === undefined || !isBaitAttractedMonster(monster.monsterKind)) return null;
+  if (floor === undefined || !isBaitAttractedMonster(monster.monsterKind)) return null;
 
   const ecologyTags = monsterEcologyTags(monster.monsterKind);
   if (ai.baitMarkerId !== undefined) {

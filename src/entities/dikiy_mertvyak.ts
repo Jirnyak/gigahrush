@@ -14,6 +14,15 @@ export const DEF: MonsterDef = {
   sprite: 0,
   scanSec: 0.5,
   aiFlags: ['noBrakes'],
+  /* Единственный, кто РАЗГОНЯЕТСЯ, а не прыгает разом: курс фиксируется в миг
+   * старта. Ближе радиуса попадания разгоняться не по чему — он уже бьёт. */
+  dash: {
+    hitRange: 1.4,
+    accel: 2.4,
+    speedMult: 2.6,
+    crashStunSec: 1.6,
+    counterplay: 'sidestep_at_the_last_moment_never_run_straight',
+  },
   counterplay: 'Он не правит курс после разгона: шаг вбок в последний момент — и он уходит в бетон. Бежать от него по прямой нельзя.',
   lootHint: 'рваная одежда, белые костяшки, мелкий бытовой хлам',
 };

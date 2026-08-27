@@ -1,7 +1,7 @@
 /* -- Slepoglaz: blind last-sound beam turret ------------------- */
 
 import { DamageType, MonsterKind } from '../core/types';
-import type { MonsterDef } from './monster';
+import type { MonsterDef, MonsterStrikeDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
 export const DEF: MonsterDef = {
@@ -16,7 +16,32 @@ export const DEF: MonsterDef = {
   aiFlags: ['lastSoundBeam'],
   counterplay: 'Слепоглаз заряжает зеленую линию туда, где вы шумели или стояли секунду назад: шумните, шагните в сторону и сближайтесь сразу после луча, пока он слеп и слаб в упоре.',
   lootHint: 'зеленая стеклянная пыль, серые перепонки, редкий слепой нерв',
+  /* Строка семьи спецудара: зелёный луч по последнему шуму. Ближний тычок
+     нервом — второй удар вида, его строка рядом с дефом (`NERVE_STRIKE`). */
+  strike: {
+    hurt: '%s прожег старую позицию',
+    kill: '%s прожег %t',
+    killColor: '#9f4',
+  },
 };
+
+/**
+ * Второй удар вида: слепой тычок нервом в упор.
+ *
+ * `MonsterDef.strike` — строка ГЛАВНОГО удара вида, и второй строки в дефе ей
+ * не нужно: удар у Слепоглаза два, а вид один. Числа тычка (урон и откат)
+ * лежали константами в общем боевом AI (`SLEPOGLAZ_MELEE_DMG`,
+ * `SLEPOGLAZ_MELEE_RATE`) — там им не место, они свойство вида, как и тексты.
+ */
+export const NERVE_STRIKE: MonsterStrikeDef = {
+  damage: 7,
+  hurt: '%s слепо дернул нервом',
+  kill: '%s добил %t нервным ударом',
+  killColor: '#9f4',
+};
+
+/** Откат слепого тычка. */
+export const NERVE_STRIKE_RATE = 1.25;
 
 export function generateSprite(): Uint32Array {
   const t = new Uint32Array(S * S).fill(CLEAR);

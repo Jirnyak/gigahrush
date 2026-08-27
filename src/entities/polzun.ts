@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 0.85,
   dmg: 22,
   attackRate: 2.25,
+  reach: 1.35,
   sprite: 0,   // auto-assigned by generateSprites()
   scanSec: 1.35,
   aiFlags: ['foodBait'],

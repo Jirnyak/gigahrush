@@ -1,6 +1,7 @@
 /* ── Generic actor tactic runner ──────────────────────────────── */
 
 import {
+  DamageType,
   AIGoal,
   Cell,
   EntityType,
@@ -457,6 +458,7 @@ function dropSlimeWomanResidue(
   registerCellHazardSite(world, {
     id: `slime_woman_tactic_residue_${actor.id}_${Math.floor(time * 10)}`,
     kind: 'slime_woman_residue',
+    damageType: DamageType.BIO,
     displayName: 'Жижевая токсичная пленка',
     cells,
     tags: ['slime', 'toxic', 'slime_woman', 'green_slime'],

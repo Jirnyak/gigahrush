@@ -32,6 +32,38 @@ export interface MonsterEcologyDef {
   rumorIds: readonly string[];
   rareDrops: readonly MonsterRareDrop[];
   lootTable?: readonly MonsterLootEntry[];
+  /** Как вид читается у стены. Нет строки — говорит общими словами. */
+  wall?: MonsterWallReadability;
+}
+
+/**
+ * Читаемость стенного преимущества: тег и три строки.
+ *
+ * Это были ТРИ `switch (kind)` подряд в боевом AI — по одному на тег, на реплику
+ * упора и на реплику потери упора, — то есть таблица, написанная трижды. Тексты
+ * вида живут там же, где `cue`, `counterplay` и `deathLogHint`: рядом с самим
+ * видом, а не в общем такте.
+ */
+export interface MonsterWallReadability {
+  /** Тег события. Общий — `wall_terrain`. */
+  tag: string;
+  /** Реплика упора. */
+  cue: string;
+  /** Реплика упора в мусоре, если вид различает мусор и кромку. */
+  cueDebris?: string;
+  /** Реплика потерянного упора. */
+  open: string;
+}
+
+const WALL_READABILITY_DEFAULT: MonsterWallReadability = {
+  tag: 'wall_terrain',
+  cue: 'Монстр получил упор от стены. Открытый пол ломает преимущество.',
+  open: 'Открытый пол снял стенное преимущество.',
+};
+
+/** Строка стенной читаемости вида. Вид без своей — говорит общими словами. */
+export function monsterWallReadability(kind: MonsterKind | undefined): MonsterWallReadability {
+  return getMonsterEcology(kind)?.wall ?? WALL_READABILITY_DEFAULT;
 }
 
 export interface MonsterEcologyQuery {
@@ -234,6 +266,11 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от твари должна указывать на прижатие к панели, слишком короткую дистанцию или проигнорированную приманку.',
     rumorIds: ['monster_tvar_walls', 'ecology_tvar_wall'],
     rareDrops: [{ itemId: 'rawmeat', chance: 0.04 }],
+    wall: {
+      tag: 'tvar',
+      cue: 'Тварь царапает панель: у стены лапа достает дальше. Центр комнаты режет давление.',
+      open: 'Тварь потеряла панель. В центре комнаты ее хват стал честнее.',
+    },
   },
   {
     kind: MonsterKind.PANELNIK,
@@ -334,6 +371,11 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
       { itemDefId: 'rawmeat', chance: 0.25, minCount: 1, maxCount: 2 },
       { itemDefId: 'metal_sheet', chance: 0.1, minCount: 1, maxCount: 1 }
     ],
+    wall: {
+      tag: 'betonoed',
+      cue: 'Бетоноед ведет челюсть вдоль бетонного шва. Шум, огонь или герметик решают темп.',
+      open: 'Бетоноед потерял бетонный шов и сбился с короткого выхода.',
+    },
   },
   {
     kind: MonsterKind.GNOME,
@@ -566,6 +608,12 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от арматуры должна указывать на наступание на ровный металл, стену или складскую стойку.',
     rumorIds: ['monster_rebar_metal', 'ecology_rebar_still'],
     rareDrops: [{ itemId: 'rebar', chance: 0.08 }, { itemId: 'wire_coil', chance: 0.04 }],
+    wall: {
+      tag: 'rebar',
+      cue: 'Арматура цепляет стену прутьями. Уводите ее от кромки.',
+      cueDebris: 'Арматура звенит в складском мусоре. Держите открытый бетон и дистанцию.',
+      open: 'Арматура вышла из железного мусора: прутья читаются, темп просел.',
+    },
   },
   {
     kind: MonsterKind.RZHAVNIK,
@@ -874,6 +922,11 @@ export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
     deathLogHint: 'Смерть от шовника должна читать бой у стены или шва вместо вывода в центр.',
     rumorIds: ['ecology_shovnik_seams'],
     rareDrops: [{ itemId: 'hermo_gasket', chance: 0.05 }, { itemId: 'sealant_tube', chance: 0.03 }],
+    wall: {
+      tag: 'shovnik',
+      cue: 'Шовник скользит по шву. У стены он быстрее и больнее; выводите в центр.',
+      open: 'Шовник вышел с шва на открытый пол и потерял ход.',
+    },
   },
   {
     kind: MonsterKind.LAMPOVY,

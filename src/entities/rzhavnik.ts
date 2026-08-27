@@ -13,8 +13,25 @@ export const DEF: MonsterDef = {
   attackRate: 1.55,
   sprite: 0,
   aiFlags: ['scrapWake'],
+  /* Прыжок стопки прутьев: встаёт НЕ ДОХОДЯ до цели и бьёт с вытянутых прутьев,
+   * поэтому зазор есть, а Жорной твари он не нужен — та влетает телом. */
+  dash: {
+    step: 4.6,
+    gap: 0.65,
+    hitRange: 1.42,
+    damageMult: 1.85,
+    slideOnBlock: true,
+    fragileHpMult: 0.58,
+    fragileDmgMult: 0.72,
+    counterplay: 'poke_straight_scrap_from_range_then_dodge_first_leap',
+  },
   counterplay: 'Ровная стопка железа у стеллажа может прыгнуть первой: проверьте ее выстрелом или держите дистанцию, переждите рывок и добейте хрупкий корпус.',
   lootHint: 'ржавчина, обломок арматуры, черная масляная ветошь, редкий годный прут',
+  /* Строка семьи спецудара: первый металлический рывок. */
+  strike: {
+    hurt: 'Ржавник ударил первым рывком',
+    kill: '%s убил %t первым металлическим рывком',
+  },
 };
 
 function put(t: Uint32Array, x: number, y: number, color: number): void {

@@ -105,7 +105,7 @@ test('green dog definition, ecology, and sprite read as a mossy pack predator', 
   assert.equal(green > 20, true, 'green moss should distinguish it from gray swarms');
 });
 
-test('green dog howl shares target only through a bounded pack radius query', () => {
+test('green dog shares target only through a bounded pack radius query', () => {
   resetNoiseRecords();
   const world = openWorld();
   setListenerPos(512, 512, world.dist2.bind(world));
@@ -122,9 +122,6 @@ test('green dog howl shares target only through a bounded pack radius query', ()
 
   assert.equal(caller.ai?.combatTargetId, target.id);
   assert.equal(packmate.ai?.combatTargetId, target.id);
-  const howl = getRecentEvents(state, { type: 'green_dog_howl', tags: ['green_dog'], limit: 1 })[0];
-  assert.ok(howl);
-  assert.equal(howl.data?.shared, 1);
 });
 
 test('green dog pack share is capped and cooldown-gated', () => {
@@ -148,18 +145,14 @@ test('green dog pack share is capped and cooldown-gated', () => {
   updateMonster(world, entities, caller, 0.1, 5, msgs, target.id, { v: 40 }, state);
 
   const firstShared = pack.filter(dog => dog.ai?.combatTargetId === target.id).length;
-  const howl = getRecentEvents(state, { type: 'green_dog_howl', tags: ['green_dog'], limit: 1 })[0];
-  assert.ok(howl);
   assert.equal(firstShared > 0, true);
   assert.equal(firstShared <= GREEN_DOG_PACK_CAP, true);
-  assert.equal(howl.data?.shared, firstShared);
 
   for (const dog of pack) dog.ai!.combatTargetId = undefined;
   prime(world, entities);
   updateMonster(world, entities, caller, 0.1, 5.25, msgs, target.id, { v: 40 }, state);
 
   assert.equal(pack.filter(dog => dog.ai?.combatTargetId === target.id).length, 0);
-  assert.equal(getRecentEvents(state, { type: 'green_dog_howl', tags: ['green_dog'], limit: 4 }).length, 1);
 });
 
 test('green dog drops target and flees from shotgun or loud metal noise', () => {

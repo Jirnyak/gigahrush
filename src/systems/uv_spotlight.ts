@@ -1,16 +1,17 @@
 /* ── Liquidator UV spotlight: short utility light pulse ───────── */
 
 import {
-  AIGoal, EntityType, MonsterKind,
+  DamageType,
+  AIGoal, EntityType,
   type Entity, type GameState,
   msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { entityDisplayName } from '../entities/monster';
-import { HEAD_SLUG_DETACHED_STAGE } from '../entities/head_slug';
+import { entityDisplayName, monsterHasAIFlag, monsterUv } from '../entities/monster';
+import { damageActorByEnvironment } from './actor_damage';
 import { consumeToolDurability, getEquippedToolDurability } from './inventory';
 import { publishEvent } from './events';
-import { repelLishennyyFromLight } from './ai/monster';
+import { repelLishennyyFromLight, delayHeadSlugRehost } from './ai/monster';
 
 export const UV_SPOTLIGHT_ID = 'uv_spotlight';
 
@@ -156,84 +157,60 @@ function targetInUvCone(world: World, player: Entity, target: Entity, beamLen: n
   return perp <= halfWidth;
 }
 
-function applyUvMonsterEffect(world: World, target: Entity, dirX: number, dirY: number): string | null {
-  if (target.type !== EntityType.MONSTER || target.monsterKind === undefined) return null;
-  if (target.monsterKind === MonsterKind.EYE) {
-    target.attackCd = Math.max(target.attackCd ?? 0, 2.2);
-    if (target.ai) {
-      target.ai.goal = AIGoal.WANDER;
-      target.ai.combatTargetId = undefined;
-      target.ai.path = [];
-      target.ai.timer = 1.4;
-    }
-    return 'eye_stun';
+/**
+ * Что луч делает с целью. Ровно один шаг на все виды.
+ *
+ * Здесь стояли ПЯТЬ подряд идущих веток по `MonsterKind`, и все пять делали
+ * одно и то же в одном и том же порядке: поднять откат, толкнуть от луча,
+ * ужать спрайт, отнять цель и маршрут, поставить паузу. Различались они
+ * числами, тегом эффекта и двумя глушителями. Числа и тег уехали строкой
+ * `MonsterDef.uv` в файл самого вида, глушители спрашиваются ФЛАГОМ вида.
+ *
+ * Общий инструмент не знает ни одного имени вида: не знает — значит и новый
+ * вид ответит на луч, просто объявив строку.
+ */
+function applyUvMonsterEffect(world: World, state: GameState, target: Entity, dirX: number, dirY: number): string | null {
+  if (target.type !== EntityType.MONSTER) return null;
+  const uv = monsterUv(target.monsterKind, target.monsterStage);
+  if (!uv) return null;
+
+  target.attackCd = Math.max(target.attackCd ?? 0, uv.attackCd);
+
+  /* Ноль означает «порога нет и доли нет» — то есть урона нет вовсе. Считается
+   * от `maxHp`: сушить раненого дешевле, чем целого, прожектор не должен.
+   * `lethal: false` — он гонит с места, а не убивает. */
+  const damage = Math.max(uv.damageMin ?? 0, Math.round((target.maxHp ?? target.hp ?? 1) * (uv.damageFrac ?? 0)));
+  if (damage > 0) {
+    damageActorByEnvironment(world, state, target, {
+      damage, damageType: DamageType.ENERGY, lethal: false, time: state.time,
+    });
   }
-  if (target.monsterKind === MonsterKind.SPIRIT) {
-    target.attackCd = Math.max(target.attackCd ?? 0, 1.6);
-    target.x = world.wrap(target.x + dirX * 0.6);
-    target.y = world.wrap(target.y + dirY * 0.6);
-    if (target.ai) {
-      target.ai.combatTargetId = undefined;
-      target.ai.path = [];
-      target.ai.timer = 1.0;
-    }
-    return 'spirit_stagger';
-  }
-  if (target.monsterKind === MonsterKind.SLIME_WOMAN) {
-    target.attackCd = Math.max(target.attackCd ?? 0, 2.1);
-    if (target.hp !== undefined) target.hp = Math.max(1, target.hp - Math.max(6, Math.round((target.maxHp ?? target.hp) * 0.08)));
-    const nx = world.wrap(target.x + dirX * 0.35);
-    const ny = world.wrap(target.y + dirY * 0.35);
-    if (!world.solid(Math.floor(nx), Math.floor(ny))) {
+
+  if (uv.push !== undefined) {
+    const nx = world.wrap(target.x + dirX * uv.push);
+    const ny = world.wrap(target.y + dirY * uv.push);
+    // Летящий проходит плотное и без луча — толкать его сквозь стену честно.
+    if (monsterHasAIFlag(target, 'flying') || !world.solid(Math.floor(nx), Math.floor(ny))) {
       target.x = nx;
       target.y = ny;
     }
-    target.spriteScale = 0.86;
-    if (target.ai) {
-      target.ai.goal = AIGoal.WANDER;
-      target.ai.combatTargetId = undefined;
-      target.ai.path = [];
-      target.ai.timer = 1.2;
-    }
-    return 'slime_humanoid_dried';
   }
-  if (target.monsterKind === MonsterKind.LISHENNYY) {
-    target.attackCd = Math.max(target.attackCd ?? 0, 2.4);
-    const nx = world.wrap(target.x + dirX * 0.55);
-    const ny = world.wrap(target.y + dirY * 0.55);
-    if (!world.solid(Math.floor(nx), Math.floor(ny))) {
-      target.x = nx;
-      target.y = ny;
-    }
-    target.spriteScale = 0.84;
-    if (target.ai) {
-      repelLishennyyFromLight(target, 2.4);
-      target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, 0.75);
-      target.ai.combatTargetId = undefined;
-      target.ai.path = [];
-      target.ai.timer = 0.9;
-    }
-    return 'lishennyy_light_repel';
+  if (uv.scale !== undefined) target.spriteScale = uv.scale;
+
+  if (uv.blindSec !== undefined) {
+    // Одно число — две механики главного дела вида; кому оно, решает флаг.
+    if (monsterHasAIFlag(target, 'lightFollower')) repelLishennyyFromLight(target, uv.blindSec);
+    if (monsterHasAIFlag(target, 'hostParasite')) delayHeadSlugRehost(target, uv.blindSec);
   }
-  if (target.monsterKind === MonsterKind.HEAD_SLUG) {
-    target.attackCd = Math.max(target.attackCd ?? 0, 2.0);
-    if (target.hp !== undefined && target.monsterStage === HEAD_SLUG_DETACHED_STAGE) target.hp = Math.max(1, target.hp - 3);
-    const nx = world.wrap(target.x + dirX * 0.45);
-    const ny = world.wrap(target.y + dirY * 0.45);
-    if (!world.solid(Math.floor(nx), Math.floor(ny))) {
-      target.x = nx;
-      target.y = ny;
-    }
-    target.spriteScale = target.monsterStage === HEAD_SLUG_DETACHED_STAGE ? 0.5 : 0.9;
-    if (target.ai) {
-      target.ai.parasiteRehostCd = Math.max(target.ai.parasiteRehostCd ?? 0, 5.5);
-      target.ai.combatTargetId = undefined;
-      target.ai.path = [];
-      target.ai.timer = 1.1;
-    }
-    return target.monsterStage === HEAD_SLUG_DETACHED_STAGE ? 'head_slug_rehost_blocked' : 'head_slug_stagger';
+
+  if (target.ai) {
+    if (uv.wander) target.ai.goal = AIGoal.WANDER;
+    if (uv.stagger !== undefined) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, uv.stagger);
+    target.ai.combatTargetId = undefined;
+    target.ai.path = [];
+    target.ai.timer = uv.daze;
   }
-  return null;
+  return uv.effect;
 }
 
 function revealSurfaceCell(cell: Uint8Array): boolean {
@@ -311,7 +288,7 @@ export function useUvSpotlight(
   for (const target of entities) {
     if (!target.alive || target.id === player.id) continue;
     if (!targetInUvCone(world, player, target, beamLen)) continue;
-    const effect = applyUvMonsterEffect(world, target, dirX, dirY);
+    const effect = applyUvMonsterEffect(world, state, target, dirX, dirY);
     if (!effect) continue;
     affected++;
     if (affectedNames.length < 2) affectedNames.push(entityDisplayName(target));
@@ -328,7 +305,7 @@ export function useUvSpotlight(
         targetId: target.id,
         targetName: entityDisplayName(target),
         targetFaction: target.faction,
-        monsterKind: MonsterKind.SLIME_WOMAN,
+        monsterKind: target.monsterKind,
         itemId: UV_SPOTLIGHT_ID,
         itemName: 'УФ-прожектор ликвидатора',
         itemValue: 950,

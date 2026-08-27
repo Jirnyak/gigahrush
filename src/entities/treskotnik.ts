@@ -13,8 +13,28 @@ export const DEF: MonsterDef = {
   attackRate: 1.65,
   sprite: 0,
   aiFlags: ['fractureSprint'],
+  /* Единственный в семье, кто платит за рывок СОБОЙ: хрупкие плиты осыпаются и
+   * о препятствие, и о цель. Мебель для него — та же стена (`coverBlocks`),
+   * поэтому дверь, стол и шкаф гасят спринт, а прочих членов семьи не гасят. */
+  dash: {
+    hitRange: 1.35,
+    damageMult: 1.45,
+    coverBlocks: true,
+    crashSelfDamage: 0.22,
+    strikeSelfDamage: 0.28,
+    crashStunSec: 0.75,
+    speedMult: 3.25,
+    minSpeed: 7.5,
+    runSec: 0.62,
+    counterplay: 'door_table_or_corner_absorbs_sprint',
+  },
   counterplay: 'Стреляйте в красный треск во время короткого замирания, ломайте прямую углом или ставьте между собой дверь, стол, шкаф.',
   lootHint: 'бетонная крошка, красная пыль из трещин, редкий кусок хрупкой плиты',
+  /* Строка семьи спецудара: контакт спринта по красной трещине. */
+  strike: {
+    hurt: '%s влетел в тебя по красной трещине',
+    kill: '%s разбил %t рывком',
+  },
 };
 
 function put(t: Uint32Array, x: number, y: number, color: number): void {

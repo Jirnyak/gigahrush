@@ -14,6 +14,30 @@ export const DEF: MonsterDef = {
   sprite: 0,
   counterplay: 'Не стойте в замахе: три шага, угол или колонна срывают рывок; дробь сбивает пилы, бронелист принимает один рез.',
   lootHint: 'резаный металл, бронелист, обломок арматуры',
+  aiFlags: ['meleeWindup'],
+  /* Строка семьи замаха. Числа — один в один прежние `KOSTOREZ_*` из общего AI. */
+  windup: {
+    windupSec: 1.35,
+    range: 2.25,
+    breakRange: 2.85,
+    minRange: 0,
+    staggerSec: 1.15,
+    escapeDist: 4.0,
+    // Пилы режут сквозь мебель: линию ему рвёт только бетон.
+    coverBlocks: false,
+    tag: 'kostorez',
+    color: '#fa4',
+    warningLine: 'Косторез увидел тебя. Держи дистанцию: замах читается.',
+    windupLine: 'Косторез заносит пилы. Отходи за угол или бей дробью!',
+    staggerLine: 'Дробь сбила замах Костореза.',
+    strikeVerb: 'режет',
+    counterplay: 'distance, obstacle, shotgun stagger, metal_sheet armor',
+  },
+  /* Строка семьи спецудара: рез по завершённому замаху. */
+  strike: {
+    hurt: '%s режет тебя',
+    kill: '%s убил %t',
+  },
 };
 
 export function generateSprite(): Uint32Array {

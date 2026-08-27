@@ -1,6 +1,6 @@
 /* ── Chervie avatar: net-borne AI serpent around screens ─────── */
 
-import { DamageType, MonsterKind } from '../core/types';
+import { DamageType, Feature, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -17,6 +17,20 @@ export const DEF: MonsterDef = {
   projSpeed: 5.8,
   projSprite: 0,
   aiFlags: ['netPossessor'],
+  /* Якорь: живой экран или серверный аппарат в прямой видимости. Пока линия
+   * цела, аватар быстрее, злее и видит вдвое дальше; перерезанная линия роняет
+   * его ниже единицы по всем трём. Аппарат в счёт идёт наравне с экраном.
+   *
+   * Ту же строку читает броня: при живом якоре тело считается `LIVE_NET`
+   * (энергия проходит насквозь), с перерезанным — `WIRING`. */
+  anchor: {
+    features: [Feature.SCREEN, Feature.APPARATUS],
+    radius: 7,
+    sight: true,
+    moveMult: 1.2, cutMoveMult: 0.62,
+    dmgMult: 1.22, cutDmgMult: 0.68,
+    detect: 24, cutDetect: 12,
+  },
   counterplay: 'Червие силен только у экранов и серверного аппарата: ломайте линию к экрану, выжигайте или отключайте локальный аппарат, затем добивайте аватар. Энергооружие и GBE решают быстрее обычной очереди.',
   lootHint: 'платы с зеленым текстом, проводка, редкая энергоячейка из локального сервера',
 };

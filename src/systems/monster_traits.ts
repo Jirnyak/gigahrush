@@ -4,6 +4,7 @@ import { ArmorType, Cell, DamageType, EntityType, Feature, MonsterKind, RoomType
 import { World } from '../core/world';
 import { armorMultiplier } from '../data/armor_matrix';
 import { MONSTERS } from '../entities/monster';
+import { hasLineToCell } from '../world/line_of_sight';
 import { wetTerrainAtEntity } from './monster_terrain';
 
 const DEFENSIVE_NEUTRAL_HOSTILE_STAGE = 1;
@@ -11,13 +12,15 @@ const DEFENSIVE_NEUTRAL_HOSTILE_STAGE = 1;
 export const PANELNIK_WALL_BRACE_DAMAGE_MULT = armorMultiplier(ArmorType.CONCRETE);
 export const PANELNIK_OPEN_SLOW_SEC = 1.35;
 export const PANELNIK_OPEN_SLOW_MULT = 0.58;
-export const CHERVIE_NET_SOURCE_RADIUS = 7;
+/** Радиус якоря Червия читается у его же строки: числа вида живут в дефе вида. */
+export const CHERVIE_NET_SOURCE_RADIUS = MONSTERS[MonsterKind.CHERVIE_AVATAR].anchor!.radius;
 
-export interface ChervieNetSource {
+/** Найденный якорь: клетка, её признак и квадрат расстояния до твари. */
+export interface MonsterAnchorPoint {
   idx: number;
   x: number;
   y: number;
-  feature: Feature.SCREEN | Feature.APPARATUS;
+  feature: Feature;
   dist2: number;
 }
 
@@ -108,35 +111,33 @@ export function lotochnikDrainArmorActive(world: World, e: Entity): boolean {
   return wetTerrainAtEntity(world, e);
 }
 
-function isChervieNetSourceFeature(feature: Feature): feature is Feature.SCREEN | Feature.APPARATUS {
-  return feature === Feature.SCREEN || feature === Feature.APPARATUS;
-}
-
-function chervieHasLineToSource(world: World, e: Entity, sourceIdx: number, sx: number, sy: number): boolean {
-  const tx = sx + 0.5;
-  const ty = sy + 0.5;
-  const dx = world.delta(e.x, tx);
-  const dy = world.delta(e.y, ty);
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  const steps = Math.max(2, Math.ceil(dist * 2));
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps;
-    const x = world.wrap(Math.floor(e.x + dx * t));
-    const y = world.wrap(Math.floor(e.y + dy * t));
-    const idx = world.idx(x, y);
-    if (idx === sourceIdx) continue;
-    if (world.solid(x, y)) return false;
-  }
-  return true;
-}
-
-export function findChervieNetSource(world: World, e: Entity, radius = CHERVIE_NET_SOURCE_RADIUS): ChervieNetSource | undefined {
-  if (e.type !== EntityType.MONSTER || e.monsterKind !== MonsterKind.CHERVIE_AVATAR) return undefined;
+/**
+ * Ближайший целый якорь вида: клетка, от которой тварь работает.
+ *
+ * Один поиск на всю семью «привязки к точке мира». Какие клетки годятся, на
+ * каком радиусе и нужна ли до них прямая — объявляет `MonsterDef.anchor`, а не
+ * тело этой функции: раньше это была персональная `findChervieNetSource` с
+ * зашитой парой признаков, а Ламповый рядом искал свой якорь ВТОРОЙ копией
+ * того же кольцевого обхода (`nearFeature`), только без прямой.
+ *
+ * Прямая — свойство вида: в экран смотрят, поэтому стена питание рвёт, и
+ * клетка самого экрана имеет право быть плотной (общий `hasLineToCell` этот
+ * пропуск и делает); лампа же светит из-за угла.
+ *
+ * Ответ НЕ кэшируется. Ближайший якорь берётся просто по расстоянию: кто из
+ * двух годных ближе, тот и якорь. Прежний перевес аппарата над экраном на 1.5
+ * снят — выбранную клетку с тех пор никто не читает, а «есть ли якорь вообще»
+ * от предпочтения не зависит ни в одной расстановке.
+ */
+export function findMonsterAnchor(world: World, e: Entity, radiusOverride?: number): MonsterAnchorPoint | undefined {
+  if (e.type !== EntityType.MONSTER || e.monsterKind === undefined) return undefined;
+  const def = MONSTERS[e.monsterKind]?.anchor;
+  if (!def) return undefined;
+  const radius = radiusOverride ?? def.radius;
   const ex = Math.floor(e.x);
   const ey = Math.floor(e.y);
   const r2 = radius * radius;
-  let best: ChervieNetSource | undefined;
-  let bestScore = Infinity;
+  let best: MonsterAnchorPoint | undefined;
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       if (dx * dx + dy * dy > r2) continue;
@@ -144,20 +145,27 @@ export function findChervieNetSource(world: World, e: Entity, radius = CHERVIE_N
       const y = world.wrap(ey + dy);
       const idx = world.idx(x, y);
       const feature = world.features[idx] as Feature;
-      if (!isChervieNetSourceFeature(feature)) continue;
+      if (!def.features.includes(feature)) continue;
       const dist2 = world.dist2(e.x, e.y, x + 0.5, y + 0.5);
-      if (dist2 > r2 || !chervieHasLineToSource(world, e, idx, x, y)) continue;
-      const score = dist2 - (feature === Feature.APPARATUS ? 1.5 : 0);
-      if (score >= bestScore) continue;
-      bestScore = score;
+      if (dist2 > r2 || (best !== undefined && dist2 >= best.dist2)) continue;
+      if (def.sight === true && !hasLineToCell(world, e.x, e.y, x + 0.5, y + 0.5, radius)) continue;
       best = { idx, x, y, feature, dist2 };
     }
   }
   return best;
 }
 
+/** Цел ли якорь вида прямо сейчас. Вид без строки якоря отвечает `false`. */
+export function monsterAnchored(world: World, e: Entity): boolean {
+  return findMonsterAnchor(world, e) !== undefined;
+}
+
+/**
+ * То же самое под прежним именем: дверь брони монстров живёт за границей этого
+ * фронта, и её импорт менять нельзя. Обёртка, а не вторая реализация.
+ */
 export function chervieNetPowered(world: World, e: Entity): boolean {
-  return findChervieNetSource(world, e) !== undefined;
+  return monsterAnchored(world, e);
 }
 
 export function isPassiveDefensiveNeutralMonster(e: Entity): boolean {

@@ -1,6 +1,6 @@
 /* ── Lampovy: light-fed monster, stronger near lamps ─────────── */
 
-import { DamageType, MonsterKind } from '../core/types';
+import { DamageType, MonsterKind, Feature } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -14,6 +14,9 @@ export const DEF: MonsterDef = {
   damageType: DamageType.ENERGY,
   sprite: 0,
   aiFlags: ['lampPowered'],
+  /* Якорь: лампа в трёх клетках. Прямая не нужна — свет достаёт и из-за угла,
+   * поэтому строка не просит `sight`. Ход и чутьё лампа не меняет; только удар. */
+  anchor: { features: [Feature.LAMP], radius: 3, dmgMult: 1.35, cutDmgMult: 0.9 },
   counterplay: 'Не деритесь под лампой: уводите на три клетки от света или за угол, а доступный выключатель используйте до сближения.',
   lootHint: 'перегоревшая нить, стекло, запах озона, редкий предохранитель',
 };

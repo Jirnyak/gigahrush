@@ -11,9 +11,13 @@ export const DEF: MonsterDef = {
   speed: 1.18,
   dmg: 17,
   attackRate: 1.55,
+  reach: 1.38,
   damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['slimeStrider'],
+  /* Жёсткий ультрафиолет для жижи — ЭНЕРГИЯ: сушит и гонит с места, но не
+   * убивает. Урон идёт единой дверью, поэтому врождённую броню он встречает. */
+  uv: { effect: 'slime_humanoid_dried', attackCd: 2.1, daze: 1.2, push: 0.35, scale: 0.86, damageFrac: 0.08, damageMin: 6, wander: true },
   counterplay: 'Не деритесь в воде: сухой освещенный бетон, УФ, огонь, чистящий комплект и сухая кромка режут темп жижевой женщины.',
   lootHint: 'редкая проба жижевого тела только в тару НИИ; без тары остается токсичный след',
 };

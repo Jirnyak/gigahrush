@@ -13,8 +13,21 @@ export const DEF: MonsterDef = {
   attackRate: 2.65,
   sprite: 0,
   aiFlags: ['foodBait', 'scentOvercommit'],
+  /* Бросок на запах: влетает В цель телом, зазора нет. */
+  dash: {
+    step: 4.35,
+    hitRange: 1.45,
+    damageMult: 1.18,
+    slideOnBlock: true,
+    counterplay: 'sealed food, side bait, punish recovery',
+  },
   counterplay: 'Запечатайте еду в контейнер или бросайте мясную приманку в сторону от своего пути: после промаха жорная тварь долго восстанавливается.',
   lootHint: 'сырой жир, зубная крошка, редкое сырое мясо',
+  /* Строка семьи спецудара: бросок на запах. */
+  strike: {
+    hurt: '%s врезалась в тебя на запах',
+    kill: '%s убила %t',
+  },
 };
 
 export function generateSprite(): Uint32Array {

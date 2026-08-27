@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 0.95,
   dmg: 22,
   attackRate: 2.25,
+  reach: 1.48,
   sprite: 0,
   aiFlags: ['foodBait', 'meatWorm'],
   counterplay: 'Не деритесь у воды, трубы или провала: Олгой медленен на сухом полу, но у коллектора кусает тяжелее и подтягивает к пасти. Сырое мясо отвлекает его лучше хлеба.',

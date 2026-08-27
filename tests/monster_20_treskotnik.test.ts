@@ -9,6 +9,7 @@ import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/treskotnik';
 import { S } from '../src/core/pixutil';
 import { setListenerPos } from '../src/systems/audio';
+import { dashRunSpeed } from '../src/systems/ai/dash';
 import { setEntityMap, TRESKOTNIK_STAGGER_SEC, TRESKOTNIK_WINDUP_SEC, updateMonster } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
@@ -166,14 +167,15 @@ test('treskotnik straight sprint damages the target and itself', () => {
 
   syncEntities(entities);
   updateMonster(world, entities, threat, TRESKOTNIK_WINDUP_SEC + 0.01, 3.4, msgs, target.id, { v: 100 }, state);
-  assert.ok((threat.ai?.sprintTimer ?? 0) > 0, 'windup completion should arm a straight sprint');
+  // Курс и остаток разгона живут рядом с семьёй рывков, а не в `AIState`.
+  assert.ok(dashRunSpeed(threat) > 0, 'windup completion should arm a straight sprint');
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.2, 3.6, msgs, target.id, { v: 100 }, state);
 
   assert.ok((target.hp ?? 100) < 100, 'sprint contact should hurt the player');
   assert.ok((threat.hp ?? DEF.hp) < DEF.hp, 'contact burst should chip the brittle monster');
-  assert.equal(threat.ai?.sprintTimer, undefined);
+  assert.equal(dashRunSpeed(threat), 0);
   assert.equal(
     getRecentEvents(state, { type: 'monster_sighted', tags: ['treskotnik', 'fracture_sprint', 'hit'], limit: 1 }).length,
     1,

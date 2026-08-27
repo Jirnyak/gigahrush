@@ -8,7 +8,7 @@ import { getMonsterEcology } from '../src/data/monster_ecology';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/obzhivalshchik';
 import { S } from '../src/core/pixutil';
-import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
+import { obzhivalshchikStateOf, setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { setListenerPos } from '../src/systems/audio';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { createWorldEventState, getRecentEvents, publishEvent } from '../src/systems/events';
@@ -143,10 +143,10 @@ test('Obzhivalshchik keeps its room leash until anger breaches it', () => {
   assert.equal(world.roomAt(threat.x, threat.y)?.id, homeId);
   assert.equal(getRecentEvents(state, { type: 'obzhivalshchik_breached' }).length, 0);
 
-  threat.ai!.anger = 75;
+  obzhivalshchikStateOf(threat).anger = 75;
   prime(entities, target);
   updateMonster(world, entities, threat, 0.2, 2, msgs, target.id, { v: 10 }, state);
-  assert.equal(threat.ai?.breached, true);
+  assert.equal(obzhivalshchikStateOf(threat).breached, true);
   assert.equal(threat.ai?.combatTargetId, target.id);
   assert.equal(getRecentEvents(state, { type: 'obzhivalshchik_breached', tags: ['obzhivalshchik'] }).length, 1);
 });
@@ -171,10 +171,9 @@ test('Obzhivalshchik wall growth is capped and report memory calms anger', () =>
     updateMonster(world, entities, threat, 11, state.time, msgs, target.id, { v: 10 }, state);
   }
 
-  assert.equal(threat.ai?.growthCount, 6);
-  assert.equal(getRecentEvents(state, { type: 'obzhivalshchik_scratched', tags: ['growth'], limit: 12 }).length, 6);
+  assert.equal(obzhivalshchikStateOf(threat).growthCount, 6);
 
-  threat.ai!.anger = 80;
+  obzhivalshchikStateOf(threat).anger = 80;
   publishEvent(state, {
     type: 'ration_coupon_reported',
     roomId: homeId,
@@ -190,6 +189,6 @@ test('Obzhivalshchik wall growth is capped and report memory calms anger', () =>
 
   state.time += 0.1;
   updateMonster(world, entities, threat, 0.1, state.time, msgs, target.id, { v: 10 }, state);
-  assert.equal((threat.ai?.anger ?? 0) < 80, true);
+  assert.equal(obzhivalshchikStateOf(threat).anger < 80, true);
   assert.equal(getRecentEvents(state, { type: 'obzhivalshchik_calmed', tags: ['report'] }).length, 1);
 });

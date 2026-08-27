@@ -17,6 +17,13 @@ export const DEF: MonsterDef = {
   damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['hostParasite'],
+  /* Две строки — две стадии. Сорванный слизень мельче, горит от ультрафиолета
+   * и, главное, столько же секунд НЕ ПЕРЕПОЛЗАЕТ: `blindSec` уходит ему через
+   * флаг `hostParasite`, а Лишенному то же число уходит через `lightFollower`. */
+  uv: [
+    { effect: 'head_slug_stagger', attackCd: 2.0, daze: 1.1, push: 0.45, scale: 0.9, blindSec: 5.5 },
+    { effect: 'head_slug_rehost_blocked', attackCd: 2.0, daze: 1.1, push: 0.45, scale: 0.5, damageMin: 3, blindSec: 5.5 },
+  ],
   counterplay: 'Убейте носителя на дистанции и добейте слизня до переползания; огонь, УФ и закрытая гермодверь покупают время.',
   lootHint: 'мокрая нервная слизь, карантинная карта, редкий антибиотик из сорванного носителя',
 };

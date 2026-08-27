@@ -3,13 +3,13 @@
 
 import {
   W,
-  type Entity, type GameState, type MonsterBaitLineState, type Msg, type Room,
+  type Entity, type GameState, type Msg, type Room,
   Cell, DoorState, Feature, ItemType, ProjType, RoomType, Tex, ZoneFaction,
   EntityType, AIGoal, MonsterKind,
   msg,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { MONSTERS, entityDisplayName, monsterHasAIFlag, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
+import { MONSTERS, entityDisplayName, monsterHasAIFlag, monsterWindup, type MonsterAIFlag, type MonsterAffinityDef, type MonsterAnchorDef, type MonsterDef, type MonsterStrikeDef, type MonsterWindupDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS } from '../../data/items';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
 import {
@@ -35,8 +35,11 @@ import {
   actorRepathDue as monsterRepathDue,
   assignActorPath as assignMonsterPath,
 } from './pathfinding';
-import { stepActorBy } from '../movement_collision';
-import { hasLineOfSight, lineCoverCells } from '../../world/line_of_sight';
+import { hasLineOfSight, isLineOfFireCover, lineBlockDistance, lineCoverCells } from '../../world/line_of_sight';
+import {
+  DashRunOutcome, DashStep, advanceDashRun, dashLanding, dashReached, dashSelfDamage,
+  dashTo, endDashRun, startDashRun,
+} from './dash';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
 import { Spr } from '../../entities/sprite_index';
@@ -63,6 +66,16 @@ import { updateGnilushkaMonster } from '../gnilushka';
 import { territoryOwnerAtIndex } from '../territory';
 import { BLACK_LIQUIDATOR_REVEALED_STAGE } from '../../entities/black_liquidator';
 import { HEAD_SLUG_DETACHED_STAGE, HEAD_SLUG_HOSTED_STAGE } from '../../entities/head_slug';
+import {
+  HARD_LIGHT_LOCK as LAMPOGLAZ_HARD_LOCK,
+  HARD_LOCK_DMG_MULT as LAMPOGLAZ_HARD_LOCK_DMG_MULT,
+  HARD_LOCK_WINDUP_SEC as LAMPOGLAZ_HARD_LOCK_WINDUP_SEC,
+  LIGHT_LOCK as LAMPOGLAZ_LIGHT_LOCK,
+  LOCK_DMG_MULT as LAMPOGLAZ_LOCK_DMG_MULT,
+} from '../../entities/lampoglaz';
+/* Второй удар Слепоглаза объявлен рядом с его дефом: числа и тексты удара —
+ * свойство вида, а не константы боевого AI. */
+import { NERVE_STRIKE as SLEPOGLAZ_NERVE_STRIKE, NERVE_STRIKE_RATE as SLEPOGLAZ_NERVE_RATE } from '../../entities/slepoglaz';
 import { updateKhorovayaMatka } from './khorovaya_matka';
 import {
   findZombieApocalypseTarget,
@@ -87,7 +100,9 @@ import {
   CHERVIE_NET_SOURCE_RADIUS,
   PANELNIK_OPEN_SLOW_MULT,
   PANELNIK_OPEN_SLOW_SEC,
-  findChervieNetSource,
+  findMonsterAnchor,
+  monsterAnchored,
+  type MonsterAnchorPoint,
   monsterWallContext,
   panelnikOpenFloor,
   panelnikWallBraceActive,
@@ -101,7 +116,7 @@ import { updateTumannikReveal } from './tumannik';
 import { updateDikiyRush } from './dikiy_mertvyak';
 import { updateSporeCarpetGrowth } from './spore_carpet';
 import { speciesState } from './species_state';
-import { getMonsterEcology, isCarnivoreMonster, monsterHuntsBeasts, monsterPackMode, monsterPreysOn } from '../../data/monster_ecology';
+import { getMonsterEcology, isCarnivoreMonster, monsterHuntsBeasts, monsterPackMode, monsterPreysOn, monsterWallReadability, type MonsterWallReadability } from '../../data/monster_ecology';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 
@@ -137,7 +152,6 @@ const PROTOKOLNIK_PRESSURE_PULSE_THRESHOLD = 35;
 const PROTOKOLNIK_PRESSURE_PULSE_CD = 2.2;
 const PROTOKOLNIK_PRESSURE_DECAY = 18;
 const PROTOKOLNIK_CAP_DECAY = 13;
-const PROTOKOLNIK_PRESSURE_PULSE_MAX = 4;
 const DEBRIS_LURKER_COVER_DETECT_SQ = 22 * 22;
 const DEBRIS_LURKER_EXPOSED_DETECT_SQ = 12 * 12;
 const NELYUD_REVEAL_SQ = 6 * 6;
@@ -146,10 +160,6 @@ export const TRESKOTNIK_WINDUP_SEC = 0.35;
 export const TRESKOTNIK_STAGGER_SEC = 1.35;
 const TRESKOTNIK_DETECT_SQ = 18 * 18;
 const TRESKOTNIK_WINDUP_RANGE = 7.5;
-const TRESKOTNIK_SPRINT_SEC = 0.62;
-const TRESKOTNIK_SPRINT_SPEED_MULT = 3.25;
-const TRESKOTNIK_HIT_SQ = 1.35 * 1.35;
-const TRESKOTNIK_BURST_DMG_MULT = 1.45;
 const ZOMBIE_CROWD_PRESSURE_RADIUS = 2.35;
 const ZOMBIE_CROWD_PRESSURE_SCAN_CAP = 10;
 const ZOMBIE_CROWD_DAMAGE_BONUS = 0.12;
@@ -157,7 +167,6 @@ const ZOMBIE_DOOR_DAMAGE_BONUS = 0.2;
 const ZOMBIE_CROWD_DAMAGE_CAP = 1.32;
 const GREEN_DOG_PACK_RADIUS = 11;
 export const GREEN_DOG_PACK_CAP = 8;
-const GREEN_DOG_HOWL_COOLDOWN_SEC = 8;
 const GREEN_DOG_SHARE_COOLDOWN_SEC = 0.75;
 const GREEN_DOG_FEAR_SEC = 4.6;
 const GREEN_DOG_FEAR_RADIUS = 18;
@@ -177,7 +186,6 @@ const FOG_SHARK_FOG_TURN_RATE = 5.6;
 const FOG_SHARK_DRY_TURN_RATE = 1.05;
 export const HEAD_SLUG_REHOST_RADIUS = 5.5;
 export const HEAD_SLUG_REHOST_SCAN_CAP = 16;
-export const HEAD_SLUG_CORPSE_SCAN_CAP = 32;
 const HEAD_SLUG_ATTACH_RANGE_SQ = 1.15 * 1.15;
 const HEAD_SLUG_DETACH_HP_RATIO = 0.38;
 const HEAD_SLUG_DETACHED_HP = 18;
@@ -193,18 +201,6 @@ const NIGHTMARE_PRESSURE_GAIN = 0.74;
 const NIGHTMARE_PRESSURE_DECAY = 2.1;
 const NIGHTMARE_HEAVY_DAMAGE_BREAK = 34;
 const NIGHTMARE_HEAVY_DAMAGE_RATIO = 0.12;
-const KOSTOREZ_DETECT_SQ = MONSTER_MELEE_DETECT_SQ;
-const KOSTOREZ_WINDUP_RANGE = 2.25;
-const KOSTOREZ_BURST_RANGE = 2.85;
-const KOSTOREZ_WINDUP_SEC = 1.35;
-const KOSTOREZ_STAGGER_SEC = 1.15;
-const KOSTOREZ_ESCAPE_DIST = 4.0;
-const SAFEGUARD_DETECT_SQ = MONSTER_MELEE_DETECT_SQ;
-const SAFEGUARD_WINDUP_RANGE = 2.1;
-const SAFEGUARD_BURST_RANGE = 2.6;
-const SAFEGUARD_WINDUP_SEC = 0.85;
-const SAFEGUARD_STAGGER_SEC = 0.9;
-const SAFEGUARD_ESCAPE_DIST = 4.4;
 const SOBRANNYY_WAKE_RADIUS_SQ = 5.75 * 5.75;
 const SOBRANNYY_DAMAGE_WINDOW_SEC = 4.2;
 const SOBRANNYY_STACK_SEC = 20;
@@ -217,6 +213,16 @@ const BORSHCHEVIK_SEED_SQ = 4.8 * 4.8;
 const BORSHCHEVIK_SAP_RANGE_SQ = 1.55 * 1.55;
 const BORSHCHEVIK_SEED_COOLDOWN_SEC = 5.6;
 const BORSHCHEVIK_ROOT_COOLDOWN_SEC = 8.5;
+/* Откаты укоренённых — рядом с видом, а не в ядре.
+ *
+ * Оба сидели в общих `ai.plantPuffCd`/`ai.plantRootCd` у КАЖДОГО актора игры, и
+ * `plantRootCd` при этом делили ДВА вида с разным смыслом: у Кровавого растения
+ * это скан плесени в ящиках, у Борщевика — таран слабой стены. Одно имя на два
+ * несовместимых счётчика — ровно тот разошедшийся общий путь, из-за которого
+ * поле и признаётся дефектом. Теперь у каждого свой, и первый тик Борщевика
+ * по-прежнему начинается с 1.4 с, как начинался. */
+const borshchevikState = speciesState<{ puffCd: number; rootCd: number }>(() => ({ puffCd: 0, rootCd: 1.4 }));
+const bloodPlantState = speciesState<{ scanCd: number }>(() => ({ scanCd: 0 }));
 // Lazily squared: blood_plant and this module import each other, so reading
 // the imported constant at module-evaluation time throws a TDZ ReferenceError
 // whenever blood_plant happens to be entered first (it did — the whole
@@ -230,6 +236,46 @@ const OBZHIVALSHCHIK_GROWTH_CAP = 6;
 const OBZHIVALSHCHIK_GROWTH_CD = 10;
 const OBZHIVALSHCHIK_SCRATCH_CD = 7;
 const OBZHIVALSHCHIK_RETURN_CD = 1.2;
+/* Комнатная злость и её следствия — рядом с видом, а не в ядре.
+ *
+ * Это были СЕМЬ полей `AIState` у КАЖДОГО актора игры ради одного вида, и одно
+ * из них (`anger`) делил с ним Гнилушка — с другим смыслом и другим темпом:
+ * у обживальщика это накопленная память комнаты со шкалой 0..100, у гнилушки —
+ * секунды оборонительной стойки. Одно имя на два несовместимых счётчика.
+ *
+ * Начальные значения оставлены прежними: `growthCd` стартует с 1.5 с, `scratchCd`
+ * с 0.8 с — ровно те умолчания, что стояли в `?? ` на первом тике. */
+interface ObzhivalshchikState {
+  anger: number;
+  growthCount: number;
+  growthCd: number;
+  scratchCd: number;
+  lastRoomMemoryEventId?: number;
+  breached: boolean;
+}
+/* «Этот шум я уже отработал» — одна памятка на всех, кто дедуплицирует шум.
+ *
+ * Смысл у Обживальщика и Чернослиза здесь ОДИН (не среагировать на одно
+ * событие дважды), поэтому и запись одна; общим полем `ai.lastNoiseId` у
+ * каждого актора игры она быть перестала. */
+const handledNoise = speciesState<{ id?: number }>(() => ({}));
+
+/** Новый ли это шум для твари. Отмечает его отработанным и отвечает `true`. */
+function takeFreshNoise(e: Entity, noiseId: number): boolean {
+  const seen = handledNoise.of(e);
+  if (seen.id === noiseId) return false;
+  seen.id = noiseId;
+  return true;
+}
+
+const obzhivalshchikState = speciesState<ObzhivalshchikState>(() => ({
+  anger: 0, growthCount: 0, growthCd: 1.5, scratchCd: 0.8, breached: false,
+}));
+
+/** Комнатная память особи: путь для отладки и тестов, как `choirStateOf`. */
+export function obzhivalshchikStateOf(e: Entity): ObzhivalshchikState {
+  return obzhivalshchikState.of(e);
+}
 const ZHORNAYA_SCENT_RADIUS = 18;
 const ZHORNAYA_SCENT_RADIUS_SQ = ZHORNAYA_SCENT_RADIUS * ZHORNAYA_SCENT_RADIUS;
 const ZHORNAYA_DROP_SCAN_RADIUS = 15;
@@ -238,8 +284,6 @@ const ZHORNAYA_CARRIER_SCAN_RADIUS = 18;
 const ZHORNAYA_CARRIER_SCAN_CAP = 10;
 const ZHORNAYA_LUNGE_RANGE = 6.8;
 const ZHORNAYA_LUNGE_RANGE_SQ = ZHORNAYA_LUNGE_RANGE * ZHORNAYA_LUNGE_RANGE;
-const ZHORNAYA_LUNGE_STEP = 4.35;
-const ZHORNAYA_HIT_RANGE_SQ = 1.45 * 1.45;
 const ZHORNAYA_MISS_RECOVERY_SEC = 1.45;
 const ZHORNAYA_HIT_RECOVERY_SEC = 0.72;
 const ZHORNAYA_MISS_COOLDOWN_SEC = 3.1;
@@ -259,43 +303,32 @@ const CHERNOSLIZ_LIGHT_RANGE = 12;
 const CHERNOSLIZ_LIGHT_RANGE_SQ = CHERNOSLIZ_LIGHT_RANGE * CHERNOSLIZ_LIGHT_RANGE;
 const CHERNOSLIZ_WATER_DETECT_SQ = 18 * 18;
 const CHERNOSLIZ_DRY_DETECT_SQ = 10 * 10;
-const CHERNOSLIZ_WINDUP_SEC = 0.55;
 const WATER_STRIDER_RIPPLE_SEC = 0.75;
 const LOTOCHNIK_WET_REGEN_PER_SEC = 1.35;
 const EYE_MIN_RANGE = 1.5;
-const EYE_WINDUP_SEC = 0.85;
 const RANGED_SHOT_RANGE = 15;
 const RANGED_LOS_BREAK_COOLDOWN = 0.75;
-const PAUPSINA_WEB_SHOT_RANGE = 11.5;
 const PAUPSINA_WEB_MIN_RANGE = 3.4;
-const PAUPSINA_WEB_WINDUP_SEC = 0.48;
 const PAUPSINA_WEB_STRAFE_RANGE = 7.25;
 const KANTSELYARSKIY_IDOL_BASE_RANGE = 14.5;
 const KANTSELYARSKIY_IDOL_MIN_RANGE = 2.35;
-const KANTSELYARSKIY_IDOL_WINDUP_SEC = 1.12;
 const SLEPOGLAZ_SHOT_RANGE = 18;
 const SLEPOGLAZ_MIN_RANGE = 2.0;
 const SLEPOGLAZ_WINDUP_SEC = 1.15;
 const SLEPOGLAZ_BEAM_WIDTH = 0.68;
 const SLEPOGLAZ_RECOVERY_SEC = 1.55;
 const SLEPOGLAZ_NOISE_HEARING_MULT = 1.45;
-const SLEPOGLAZ_MELEE_DMG = 7;
-const SLEPOGLAZ_MELEE_RATE = 1.25;
-const LAMPOGLAZ_SHOT_RANGE = 17;
-const LAMPOGLAZ_MIN_RANGE = 0.9;
-const LAMPOGLAZ_LIGHT_LOCK = 0.24;
-const LAMPOGLAZ_HARD_LOCK = 0.52;
-const LAMPOGLAZ_WINDUP_SEC = 0.95;
-const LAMPOGLAZ_HARD_WINDUP_SEC = 0.58;
-const LAMPOGLAZ_LOCK_DMG_MULT = 1.28;
-const LAMPOGLAZ_HARD_LOCK_DMG_MULT = 1.72;
-const PARAGRAPH_WINDUP_SEC = 0.8;
-const IDOL_WINDUP_SEC = 1.05;
-const ROBOT_WINDUP_SEC = 0.62;
-export const TRUBNYY_WET_LINE_MAX_CELLS = 18;
-export const TRUBNYY_WET_LINE_WINDUP_SEC = 1.05;
+/* Дальность и мёртвая зона — строка замаха вида. */
+const LAMPOGLAZ_SHOT_RANGE = MONSTERS[MonsterKind.LAMPOGLAZ].windup!.range;
+const LAMPOGLAZ_MIN_RANGE = MONSTERS[MonsterKind.LAMPOGLAZ].windup!.minRange;
+const LAMPOGLAZ_WINDUP_SEC = MONSTERS[MonsterKind.LAMPOGLAZ].windup!.windupSec;
+/* Предел мокрой прямой и длина заряда объявлены строкой замаха вида
+ * (`MONSTERS[TRUBNYY_AVTOMAT].windup`); здесь они только читаются наружу для
+ * тестов и генератора. */
+export const TRUBNYY_WET_LINE_MAX_CELLS = MONSTERS[MonsterKind.TRUBNYY_AVTOMAT].windup!.range;
+export const TRUBNYY_WET_LINE_WINDUP_SEC = MONSTERS[MonsterKind.TRUBNYY_AVTOMAT].windup!.windupSec;
 export const TRUBNYY_WET_LINE_RECOVERY_SEC = 2.75;
-const TRUBNYY_WET_LINE_MIN_RANGE = 2.25;
+const TRUBNYY_WET_LINE_MIN_RANGE = MONSTERS[MonsterKind.TRUBNYY_AVTOMAT].windup!.minRange;
 const TRUBNYY_WET_LINE_ALIGN_EPS = 0.68;
 export const VODYANOY_WET_LINE_MAX_CELLS = 160;
 export const VODYANOY_WET_LINE_MAX_DIST = 28;
@@ -303,7 +336,6 @@ export const VODYANOY_WET_LINE_SCAN_SEC = 0.35;
 export const VODYANOY_WET_LINE_DRY_BREAK_SEC = 0.7;
 export const VODYANOY_WET_LINE_PRESSURE_MAX = 6;
 const VODYANOY_WET_LINE_PULSE_SEC = 0.65;
-const HEAVY_RANGED_WINDUP_SEC = 0.95;
 const GENERIC_RANGED_WINDUP_SEC = 0.7;
 const SHADOW_WARNING_RANGE_SQ = 5.5 * 5.5;
 const SHADOW_WINDUP_SEC = 0.55;
@@ -328,14 +360,11 @@ const TONKAYA_LINE_PERP = 0.72;
 const TONKAYA_NERVE_SEC = 5.6;
 const TONKAYA_REPOSITION_CD = 0.8;
 const TONKAYA_FLANK_RANGE = 7.5;
-const TONKAYA_FLANK_MULT = 2.9;
 const RZHAVNIK_CLOSE_WAKE_SQ = 2.45 * 2.45;
 const RZHAVNIK_LEAP_WINDUP_SEC = 0.28;
-const RZHAVNIK_LEAP_STEP = 4.6;
-const RZHAVNIK_LEAP_HIT_SQ = 1.42 * 1.42;
-const RZHAVNIK_LEAP_DAMAGE_MULT = 1.85;
-const RZHAVNIK_FRAGILE_HP_MULT = 0.58;
-const RZHAVNIK_FRAGILE_DMG_MULT = 0.72;
+/* Длина прыжка живёт в строке рывка вида: здесь она нужна как радиус поиска
+ * потерянной цели и как число в событии читаемости. */
+const RZHAVNIK_LEAP_STEP = MONSTERS[MonsterKind.RZHAVNIK].dash!.step!;
 const PANELNIK_BRACE_REACH = 1.75;
 const PANELNIK_OPEN_REACH = 1.16;
 const PANELNIK_BRACE_CUE_COOLDOWN_SEC = 4.2;
@@ -343,43 +372,12 @@ const WALL_BIAS_CUE_COOLDOWN_SEC = 5.2;
 const SLIME_WOMAN_RESIDUE_COOLDOWN_SEC = 2.4;
 const SLIME_WOMAN_RESIDUE_DURATION_SEC = 18;
 const SLIME_WOMAN_DRY_EVENT_COOLDOWN_SEC = 7;
-const KOSTOREZ_RUMOR_IDS = [
-  'monster_kostorez_cuts',
-  'ecology_kostorez_windup',
-  'ecology_kostorez_shotgun',
-  'lead_maintenance_kostorez_locker',
-] as const;
-const SAFEGUARD_RUMOR_IDS = [
-  'monster_safeguard_access_denied',
-  'ecology_safeguard_windup',
-  'ecology_safeguard_shotgun',
-] as const;
 const GREEN_DOG_RUMOR_IDS = ['monster_green_dog_door', 'ecology_green_dog_noise'] as const;
 const FOG_SHARK_RUMOR_IDS = ['monster_fog_shark_fog', 'ecology_fog_shark_fire'] as const;
 export const CHERVIE_MIND_PULSE_RADIUS = 7.5;
 export const CHERVIE_MIND_PULSE_CAP = 4;
 export const CHERVIE_MIND_PULSE_COOLDOWN_SEC = 8.5;
 const CHERVIE_MIND_PULSE_CONFUSION_SEC = 4.2;
-const CHERVIE_POWERED_MOVE_MULT = 1.2;
-const CHERVIE_CUT_MOVE_MULT = 0.62;
-const CHERVIE_POWERED_DMG_MULT = 1.22;
-const CHERVIE_CUT_DMG_MULT = 0.68;
-interface BladeEliteTuning {
-  kind: MonsterKind.KOSTOREZ | MonsterKind.SAFEGUARD;
-  tag: string;
-  rumorIds: readonly string[];
-  windupRange: number;
-  burstRange: number;
-  windupSec: number;
-  staggerSec: number;
-  escapeDist: number;
-  coverBlocks: boolean;
-  sightMsg: string;
-  windupMsg: string;
-  staggerMsg: string;
-  strikeVerb: string;
-  counterplay: string;
-}
 
 /** Entity lookup map — set by updateAI each frame */
 let _entityById = new Map<number, Entity>();
@@ -448,8 +446,6 @@ const slimeWomanRuntime = new WeakMap<Entity, SlimeWomanRuntime>();
 const SLIME_WOMAN_HAZARD_TAGS = ['slime', 'toxic', 'black_slime', 'green_slime', 'slime_woman'] as const;
 
 interface GreenDogRuntime {
-  nextHowlAt: number;
-  lastHowlTargetId: number;
   nextShareAt: number;
   fearUntil: number;
   fearX: number;
@@ -475,8 +471,6 @@ function greenDogState(e: Entity): GreenDogRuntime {
   let state = greenDogRuntime.get(e);
   if (!state) {
     state = {
-      nextHowlAt: -Infinity,
-      lastHowlTargetId: -1,
       nextShareAt: -Infinity,
       fearUntil: -Infinity,
       fearX: e.x,
@@ -511,7 +505,7 @@ function fogSharkHasFogPressure(world: World, e: Entity): boolean {
 }
 
 export function fogSharkMoveMultiplierForTests(world: World, e: Entity): number {
-  if (e.monsterKind !== MonsterKind.FOG_SHARK || !hasAIFlag(e, 'fogSwimmer')) return 1;
+  if (!hasAIFlag(e, 'fogSwimmer')) return 1;
   return fogSharkHasFogPressure(world, e) ? FOG_SHARK_FOG_SPEED_MULT : FOG_SHARK_DRY_SPEED_MULT;
 }
 
@@ -532,7 +526,7 @@ function updateFogSharkTurn(world: World, e: Entity, target: Entity, dt: number)
 }
 
 function fogSharkChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
-  if (e.monsterKind !== MonsterKind.FOG_SHARK || !hasAIFlag(e, 'fogSwimmer')) return greenDogChaseCell(world, e, target);
+  if (!hasAIFlag(e, 'fogSwimmer')) return greenDogChaseCell(world, e, target);
   const dx = world.delta(target.x, e.x);
   const dy = world.delta(target.y, e.y);
   const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
@@ -566,7 +560,7 @@ function updateFogSharkPack(
   playerId: number,
   state?: GameState,
 ): void {
-  if (!target || e.monsterKind !== MonsterKind.FOG_SHARK || !hasAIFlag(e, 'fogSwimmer')) return;
+  if (!target || !hasAIFlag(e, 'fogSwimmer')) return;
   const runtime = fogSharkState(e);
   let shared = 0;
   if (runtime.nextShareAt <= time) {
@@ -678,7 +672,7 @@ function updateGreenDogNoiseFear(
   msgs: Msg[],
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.GREEN_DOG || !hasAIFlag(e, 'noiseFear')) return false;
+  if (!hasAIFlag(e, 'noiseFear')) return false;
   const runtime = greenDogState(e);
   const ai = e.ai!;
   const noise = findNoiseForActor(world, state, e, time, {
@@ -736,60 +730,23 @@ function shareGreenDogTarget(e: Entity, target: Entity, time: number): number {
 }
 
 function greenDogPackMember(dog: Entity, _actor: Entity, _target: Entity, time: number): boolean {
-  return dog.monsterKind === MonsterKind.GREEN_DOG && greenDogState(dog).fearUntil <= time;
+  return hasAIFlag(dog, 'packHowl') && greenDogState(dog).fearUntil <= time;
 }
 
-function publishGreenDogHowl(
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  target: Entity,
-  shared: number,
-): void {
-  if (!state) return;
-  publishEvent(state, {
-    type: 'green_dog_howl',
-    zoneId: zoneIdAt(world, e.x, e.y),
-    roomId: world.roomAt(e.x, e.y)?.id,
-    x: e.x,
-    y: e.y,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    targetId: target.id,
-    targetName: entityDisplayName(target),
-    targetFaction: target.faction,
-    monsterKind: MonsterKind.GREEN_DOG,
-    severity: isPlayerEntity(target) ? 3 : 2,
-    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
-    tags: ['monster', 'green_dog', 'pack_howl', 'door_pressure'],
-    data: {
-      shared,
-      radius: GREEN_DOG_PACK_RADIUS,
-      counterplay: 'do not open sad door sounds; use loud metal or shotgun',
-      rumorIds: GREEN_DOG_RUMOR_IDS,
-    },
-  });
-}
-
-function updateGreenDogPackHowl(
-  world: World,
-  e: Entity,
-  target: Entity | null,
-  time: number,
-  msgs: Msg[],
-  playerId: number,
-  state?: GameState,
-): void {
-  if (!target || e.monsterKind !== MonsterKind.GREEN_DOG || !hasAIFlag(e, 'packHowl')) return;
-  const runtime = greenDogState(e);
-  const shared = shareGreenDogTarget(e, target, time);
-  if (runtime.nextHowlAt > time && runtime.lastHowlTargetId === target.id) return;
-  runtime.nextHowlAt = time + GREEN_DOG_HOWL_COOLDOWN_SEC;
-  runtime.lastHowlTargetId = target.id;
-  if (target.id === playerId) msgs.push(msg('За дверями и в коридоре отвечает собачий вой. Стая взяла общий запах.', time, '#9f6'));
-  publishGreenDogHowl(state, world, e, target, shared);
-  playSoundAt(playGrowl, e.x, e.y);
+/**
+ * Стая делит цель — и это ВСЁ, что осталось от `packHowl`.
+ *
+ * Здесь же стоял вой: событие `green_dog_howl`, строка в лог игрока и рык. Его
+ * дроссель (8 с) сбрасывался при смене цели, а в толпе цель меняется каждый
+ * такт, поэтому на грузовом поясе он публиковал ~310 событий в минуту — шестую
+ * часть всего мирового потока — при НУЛЕ читателей: ни `contextFactKind`, ни
+ * слухи, ни речь его не разбирают, единственным потребителем был форматчик
+ * строки в `world_log`. Решение владельца: подсказка того не стоит, вой снят
+ * целиком вместе с дросселем.
+ */
+function updateGreenDogPackShare(e: Entity, target: Entity | null, time: number): void {
+  if (!target || !hasAIFlag(e, 'packHowl')) return;
+  shareGreenDogTarget(e, target, time);
 }
 
 /* ── Пересборка пути монстра ──────────────────────────────────── */
@@ -813,7 +770,7 @@ function monsterChaseCell(world: World, e: Entity, target: Entity): { x: number;
 
 function greenDogChaseCell(world: World, e: Entity, target: Entity): { x: number; y: number } {
   if (hasAIFlag(e, 'garbageSurround')) return pomoynyRoyChaseCell(world, e, target);
-  if (e.monsterKind !== MonsterKind.GREEN_DOG || !hasAIFlag(e, 'packHowl')) return monsterChaseCell(world, e, target);
+  if (!hasAIFlag(e, 'packHowl')) return monsterChaseCell(world, e, target);
   const dx = world.delta(target.x, e.x);
   const dy = world.delta(target.y, e.y);
   const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
@@ -850,6 +807,22 @@ function pomoynyRoyChaseCell(world: World, e: Entity, target: Entity): { x: numb
   if (!world.solid(x, y)) return { x, y };
   return monsterChaseCell(world, e, target);
 }
+
+/* Состояние переползания — рядом с видом, а не в ядре.
+ *
+ * Это были ТРИ поля `AIState` у каждого актора игры ради одной особи во всей
+ * игре: откат переползания, откат события карантина и ротационный курсор
+ * перебора этажа. Носитель `parasiteHostSkill` остался полем `Entity`: его
+ * ставят два генератора при спавне, а `src/gen/**` за границей этого фронта.
+ *
+ * `victim` — тело, которое слизень положил САМ. Курсора перебора здесь больше
+ * нет: правило сменилось (см. `findHeadSlugOwnVictim`), и трупы этажа слизня
+ * не интересуют. Ссылка прямая, а не id: мёртвых нет в индексе сущностей
+ * (`byId` набивается только живыми), и разыменовать их там нечем. Хранит её
+ * WeakMap самого слизня — умер слизень, ушла и память. */
+const headSlugState = speciesState<{ rehostCd: number; quarantineCd: number; victim?: Entity }>(
+  () => ({ rehostCd: 0, quarantineCd: 0 }),
+);
 
 function isHeadSlugDetached(e: Entity): boolean {
   return e.monsterKind === MonsterKind.HEAD_SLUG && e.monsterStage === HEAD_SLUG_DETACHED_STAGE;
@@ -918,7 +891,7 @@ function detachHeadSlug(
   ai.path = [];
   ai.pi = 0;
   ai.timer = 0;
-  ai.parasiteRehostCd = 0;
+  headSlugState.of(slug).rehostCd = 0;
   stampMark(world, Math.floor(slug.x), Math.floor(slug.y), 0.5, 0.5, 0.35, MarkType.SPLAT, slug.id ^ 0x51a6, 112, 62, 76, 125);
   msgs.push(msg('Головной слизень сорвался с шеи и ищет новое тело. Добейте его до переползания.', time, '#f8b'));
   publishHeadSlugEvent(state, world, slug, undefined, 'head_slug_detached', 4, ['detached', reason], {
@@ -958,29 +931,57 @@ function findHeadSlugLiveHost(world: World, slug: Entity): Entity | null {
   return best;
 }
 
-function findHeadSlugCorpseHost(world: World, entities: readonly Entity[], slug: Entity): Entity | null {
-  if (entities.length === 0) return null;
-  const ai = slug.ai!;
-  const start = Math.max(0, Math.min(entities.length - 1, ai.parasiteScanOffset ?? (slug.id % entities.length)));
-  let best: Entity | null = null;
-  let bestD2 = HEAD_SLUG_REHOST_RADIUS * HEAD_SLUG_REHOST_RADIUS;
-  let scanned = 0;
-  for (let i = 0; i < entities.length && scanned < HEAD_SLUG_CORPSE_SCAN_CAP; i++) {
-    const host = entities[(start + i) % entities.length];
-    scanned++;
-    if (host.id === slug.id || !canHeadSlugUseCorpse(host)) continue;
-    const d2 = world.dist2(slug.x, slug.y, host.x, host.y);
-    if (d2 >= bestD2) continue;
-    best = host;
-    bestD2 = d2;
+/**
+ * Тело, которое слизень положил САМ.
+ *
+ * Здесь стоял ЛИНЕЙНЫЙ ОБХОД ВСЕГО МАССИВА сущностей с ротационным курсором —
+ * трупов нет в индексе сущностей, и другого способа найти «любой труп на этаже»
+ * не существовало. Правило сменено, а не перенесено: слизень переползает в свою
+ * жертву, и тогда искать нечего — он её помнит с момента убийства.
+ *
+ * Дешевле, и по игре злее: контрплей стал «не дай ему добить», а не «где-то там
+ * был труп». Заодно ушёл артефакт курсора — на восьмидесяти трупах два вызова
+ * подряд отвечали ПО-РАЗНОМУ, потому что кап 32 из 82 сдвигал окно.
+ *
+ * Радиус тот же, что и у живого носителя: далеко уползшее тело слизень бросает.
+ */
+function findHeadSlugOwnVictim(world: World, slug: Entity): Entity | null {
+  const own = headSlugState.of(slug);
+  const victim = own.victim;
+  if (!victim) return null;
+  if (!canHeadSlugUseCorpse(victim)) {
+    // Тело подняли, вычистили или это уже не тело: память больше не о чем.
+    own.victim = undefined;
+    return null;
   }
-  ai.parasiteScanOffset = (start + scanned) % entities.length;
-  return best;
+  return world.dist2(slug.x, slug.y, victim.x, victim.y) < HEAD_SLUG_REHOST_RADIUS * HEAD_SLUG_REHOST_RADIUS
+    ? victim
+    : null;
 }
 
-export function findHeadSlugRehostTarget(world: World, entities: readonly Entity[], slug: Entity): Entity | null {
+/**
+ * Запомнить свою жертву. Зовётся из общего ближнего боя монстров на факте
+ * смерти — там же, где растёт Собранный от своего убийства.
+ */
+export function rememberHeadSlugVictim(slug: Entity, victim: Entity): void {
+  if (victim.type !== EntityType.NPC) return;
+  headSlugState.of(slug).victim = victim;
+}
+
+/** Чьё тело слизень держит на примете: путь для отладки, тестов и стендов. */
+export function headSlugVictimOf(slug: Entity): Entity | undefined {
+  return headSlugState.peek(slug)?.victim;
+}
+
+/** Отложить переползание: путь для внешних глушителей (УФ-прожектор). */
+export function delayHeadSlugRehost(slug: Entity, seconds: number): void {
+  const own = headSlugState.of(slug);
+  own.rehostCd = Math.max(own.rehostCd, seconds);
+}
+
+export function findHeadSlugRehostTarget(world: World, slug: Entity): Entity | null {
   if (!isHeadSlugDetached(slug)) return null;
-  return findHeadSlugLiveHost(world, slug) ?? findHeadSlugCorpseHost(world, entities, slug);
+  return findHeadSlugLiveHost(world, slug) ?? findHeadSlugOwnVictim(world, slug);
 }
 
 function rehostHeadSlug(
@@ -1023,8 +1024,11 @@ function rehostHeadSlug(
     slug.ai.path = [];
     slug.ai.pi = 0;
     slug.ai.timer = 0;
-    slug.ai.parasiteRehostCd = HEAD_SLUG_REHOST_COOLDOWN_SEC;
   }
+  const own = headSlugState.of(slug);
+  own.rehostCd = HEAD_SLUG_REHOST_COOLDOWN_SEC;
+  // Тело израсходовано: следующая цель — следующая своя жертва.
+  own.victim = undefined;
   msgs.push(msg(`Головной слизень переполз в ${host.name ?? 'тело'}.`, time, '#f8b'));
   publishHeadSlugEvent(state, world, slug, host, 'head_slug_rehosted', 5, ['rehosted', hostWasAlive ? 'stunned_host' : 'corpse_host'], {
     hostSkill: Math.round(skill * 100) / 100,
@@ -1062,8 +1066,9 @@ function updateHeadSlugParasite(
   if (slug.monsterKind !== MonsterKind.HEAD_SLUG || !slug.ai) return false;
   const ai = slug.ai;
   if (slug.monsterStage === undefined) slug.monsterStage = HEAD_SLUG_HOSTED_STAGE;
-  ai.parasiteRehostCd = Math.max(0, (ai.parasiteRehostCd ?? 0) - dt);
-  ai.parasiteQuarantineCd = Math.max(0, (ai.parasiteQuarantineCd ?? 0) - dt);
+  const own = headSlugState.of(slug);
+  own.rehostCd = Math.max(0, own.rehostCd - dt);
+  own.quarantineCd = Math.max(0, own.quarantineCd - dt);
 
   if (slug.monsterStage === HEAD_SLUG_HOSTED_STAGE) {
     const maxHp = Math.max(1, slug.maxHp ?? MONSTERS[MonsterKind.HEAD_SLUG].hp);
@@ -1078,9 +1083,9 @@ function updateHeadSlugParasite(
   slug.speed = HEAD_SLUG_DETACHED_SPEED;
   slug.spriteScale = 0.58;
   slug.spriteZ = 0.08;
-  if (ai.parasiteRehostCd <= 0) {
-    ai.parasiteRehostCd = HEAD_SLUG_REHOST_COOLDOWN_SEC;
-    const host = findHeadSlugRehostTarget(world, entities, slug);
+  if (own.rehostCd <= 0) {
+    own.rehostCd = HEAD_SLUG_REHOST_COOLDOWN_SEC;
+    const host = findHeadSlugRehostTarget(world, slug);
     if (host) {
       if (world.dist2(slug.x, slug.y, host.x, host.y) <= HEAD_SLUG_ATTACH_RANGE_SQ) {
         rehostHeadSlug(world, entities, slug, host, time, msgs, nextId, state);
@@ -1095,8 +1100,8 @@ function updateHeadSlugParasite(
       followMonsterPath(world, slug, dt);
       return true;
     }
-    if (ai.parasiteQuarantineCd <= 0 && headSlugQuarantineCell(world, slug)) {
-      ai.parasiteQuarantineCd = HEAD_SLUG_QUARANTINE_EVENT_COOLDOWN_SEC;
+    if (own.quarantineCd <= 0 && headSlugQuarantineCell(world, slug)) {
+      own.quarantineCd = HEAD_SLUG_QUARANTINE_EVENT_COOLDOWN_SEC;
       publishHeadSlugEvent(state, world, slug, undefined, 'head_slug_quarantined', 3, ['quarantine', 'sealed_room'], {
         rehostRadius: HEAD_SLUG_REHOST_RADIUS,
       });
@@ -1389,7 +1394,7 @@ function updateSobrannyyTarget(
 
 function clampObzhivalshchikAnger(e: Entity, value: number): number {
   const anger = Math.max(0, Math.min(OBZHIVALSHCHIK_MAX_ANGER, value));
-  e.ai!.anger = anger;
+  obzhivalshchikState.of(e).anger = anger;
   return anger;
 }
 
@@ -1407,8 +1412,9 @@ function obzhivalshchikEntityInHome(world: World, room: Room, entity: Entity): b
 }
 
 function obzhivalshchikCanBreach(e: Entity, state: GameState | undefined): boolean {
-  return e.ai!.breached === true
-    || (e.ai!.anger ?? 0) >= OBZHIVALSHCHIK_BREACH_ANGER
+  const own = obzhivalshchikState.of(e);
+  return own.breached
+    || own.anger >= OBZHIVALSHCHIK_BREACH_ANGER
     || state?.samosborActive === true;
 }
 
@@ -1417,7 +1423,7 @@ function publishObzhivalshchikEvent(
   world: World,
   e: Entity,
   target: Entity | undefined,
-  type: 'obzhivalshchik_scratched' | 'obzhivalshchik_calmed' | 'obzhivalshchik_breached',
+  type: 'obzhivalshchik_calmed' | 'obzhivalshchik_breached',
   severity: 2 | 3 | 4 | 5,
   tags: string[],
   data?: Record<string, unknown>,
@@ -1442,8 +1448,8 @@ function publishObzhivalshchikEvent(
     data: {
       rumorIds: ['monster_obzhivalshchik_room', 'ecology_obzhivalshchik_growth'],
       counterplay: MONSTERS[MonsterKind.OBZHIVALSHCHIK]?.counterplay,
-      anger: Math.round(e.ai?.anger ?? 0),
-      growthCount: e.ai?.growthCount ?? 0,
+      anger: Math.round(obzhivalshchikState.of(e).anger),
+      growthCount: obzhivalshchikState.of(e).growthCount,
       ...data,
     },
   });
@@ -1457,17 +1463,18 @@ function obzhivalshchikLowLight(world: World, e: Entity, state: GameState | unde
 
 function processObzhivalshchikNoise(world: World, e: Entity, time: number, state: GameState | undefined): void {
   const ai = e.ai!;
+  const own = obzhivalshchikState.of(e);
   const noise = findNoiseForActor(world, state, e, time, { minSeverity: 1, scanInterval: 0.85, hearingMult: 1.35 });
-  if (!noise || noise.id === ai.lastNoiseId) return;
+  if (!noise) return;
   const home = ai.homeRoomId !== undefined ? world.rooms[ai.homeRoomId] : undefined;
   if (home) {
     const noiseRoom = world.roomAt(noise.x, noise.y);
     const nearHome = noiseRoom?.id === home.id || world.dist2(e.x, e.y, noise.x, noise.y) <= 14 * 14;
     if (!nearHome) return;
   }
-  ai.lastNoiseId = noise.id;
+  if (!takeFreshNoise(e, noise.id)) return;
   const base = noise.source === 'door' ? 14 : noise.source === 'footstep' ? 4 : 8;
-  clampObzhivalshchikAnger(e, (ai.anger ?? 0) + base + noise.severity * 3);
+  clampObzhivalshchikAnger(e, own.anger + base + noise.severity * 3);
 }
 
 function processObzhivalshchikRoomMemory(
@@ -1478,16 +1485,17 @@ function processObzhivalshchikRoomMemory(
   state: GameState | undefined,
 ): void {
   const ai = e.ai!;
+  const own = obzhivalshchikState.of(e);
   const memory = getRoomMemory(state?.currentZ, ai.homeRoomId);
-  if (!memory || memory.lastEventId === ai.lastRoomMemoryEventId) return;
-  ai.lastRoomMemoryEventId = memory.lastEventId;
+  if (!memory || memory.lastEventId === own.lastRoomMemoryEventId) return;
+  own.lastRoomMemoryEventId = memory.lastEventId;
 
   if (roomMemoryHas(memory, ROOM_MEMORY_BITS.THEFT | ROOM_MEMORY_BITS.COMBAT)) {
-    clampObzhivalshchikAnger(e, (ai.anger ?? 0) + 18 + memory.severity * 5);
+    clampObzhivalshchikAnger(e, own.anger + 18 + memory.severity * 5);
   }
 
   if (roomMemoryHas(memory, ROOM_MEMORY_BITS.HELP | ROOM_MEMORY_BITS.INFORM | ROOM_MEMORY_BITS.REPAIR)) {
-    const before = ai.anger ?? 0;
+    const before = own.anger;
     const after = clampObzhivalshchikAnger(e, before - (24 + memory.severity * 8));
     if (after < before) {
       msgs.push(msg('За дверью перестали скрести: доклад или помощь сбили комнатную злость.', time, '#9cf'));
@@ -1534,26 +1542,22 @@ function growObzhivalshchikWallMatter(
   room: Room,
   time: number,
   msgs: Msg[],
-  state: GameState | undefined,
 ): void {
-  const ai = e.ai!;
-  if ((ai.growthCount ?? 0) >= OBZHIVALSHCHIK_GROWTH_CAP) return;
-  if ((ai.growthCd ?? 0) > 0) return;
+  const own = obzhivalshchikState.of(e);
+  if (own.growthCount >= OBZHIVALSHCHIK_GROWTH_CAP) return;
+  if (own.growthCd > 0) return;
 
-  const growthCount = ai.growthCount ?? 0;
+  const growthCount = own.growthCount;
   const seed = 19019 + e.id * 97 + room.id * 31 + growthCount * 53;
   const cell = obzhivalshchikGrowthCell(world, room, seed);
-  ai.growthCd = Math.max(4, OBZHIVALSHCHIK_GROWTH_CD - Math.min(4, (ai.anger ?? 0) / 25));
+  own.growthCd = Math.max(4, OBZHIVALSHCHIK_GROWTH_CD - Math.min(4, own.anger / 25));
   if (!cell) return;
 
   stampMark(world, cell.x, cell.y, 0.5, 0.5, 0.42, MarkType.SPLAT, seed, 176, 166, 132, 160, true);
-  ai.growthCount = growthCount + 1;
-  if (ai.growthCount === 1 || ai.growthCount === OBZHIVALSHCHIK_GROWTH_CAP) {
-    msgs.push(msg(`Комнатная слизь расползлась по стене: ${ai.growthCount}/${OBZHIVALSHCHIK_GROWTH_CAP}.`, time, '#db9'));
+  own.growthCount = growthCount + 1;
+  if (own.growthCount === 1 || own.growthCount === OBZHIVALSHCHIK_GROWTH_CAP) {
+    msgs.push(msg(`Комнатная слизь расползлась по стене: ${own.growthCount}/${OBZHIVALSHCHIK_GROWTH_CAP}.`, time, '#db9'));
   }
-  publishObzhivalshchikEvent(state, world, e, undefined, 'obzhivalshchik_scratched', 3, ['growth'], {
-    growthCap: OBZHIVALSHCHIK_GROWTH_CAP,
-  });
 }
 
 function tickObzhivalshchikPressure(
@@ -1565,20 +1569,23 @@ function tickObzhivalshchikPressure(
   msgs: Msg[],
   state: GameState | undefined,
 ): void {
-  const ai = e.ai!;
+  const own = obzhivalshchikState.of(e);
   processObzhivalshchikNoise(world, e, time, state);
   processObzhivalshchikRoomMemory(world, e, time, msgs, state);
 
   const lowLight = obzhivalshchikLowLight(world, e, state);
-  clampObzhivalshchikAnger(e, (ai.anger ?? 0) + (lowLight ? dt * 0.05 : -dt * 0.02));
-  ai.growthCd = (ai.growthCd ?? 1.5) - dt;
-  if (lowLight || (ai.anger ?? 0) >= 35) growObzhivalshchikWallMatter(world, e, room, time, msgs, state);
+  clampObzhivalshchikAnger(e, own.anger + (lowLight ? dt * 0.05 : -dt * 0.02));
+  own.growthCd -= dt;
+  if (lowLight || own.anger >= 35) growObzhivalshchikWallMatter(world, e, room, time, msgs);
 
-  ai.scratchCd = (ai.scratchCd ?? 0.8) - dt;
-  if ((lowLight || (ai.anger ?? 0) >= 25) && ai.scratchCd <= 0) {
-    ai.scratchCd = OBZHIVALSHCHIK_SCRATCH_CD;
+  own.scratchCd -= dt;
+  if ((lowLight || own.anger >= 25) && own.scratchCd <= 0) {
+    own.scratchCd = OBZHIVALSHCHIK_SCRATCH_CD;
+    /* Скрёб и нарост — фон комнаты, а не факт мира: событие
+     * `obzhivalshchik_scratched` не читал никто, кроме форматчика строки лога,
+     * а публиковалось оно по своему откату у каждого обживальщика. Снято;
+     * слышимая часть (строка и рык) осталась. */
     msgs.push(msg('За квартирной стеной скребут длинные пальцы. Не бей дверь без плана.', time, '#db9'));
-    publishObzhivalshchikEvent(state, world, e, undefined, 'obzhivalshchik_scratched', 2, ['scratch'], { lowLight });
     playSoundAt(playGrowl, e.x, e.y);
   }
 }
@@ -1632,59 +1639,15 @@ function updateObzhivalshchikTarget(
   if (obzhivalshchikEntityInHome(world, room, target)) return target;
   if (!mayBreach) return null;
 
-  if (!e.ai!.breached) {
-    e.ai!.breached = true;
+  const own = obzhivalshchikState.of(e);
+  if (!own.breached) {
+    own.breached = true;
     msgs.push(msg('Комнатный обживальщик вышел из квартиры. Теперь коридор тоже его.', time, '#f84'));
     publishObzhivalshchikEvent(state, world, e, target, 'obzhivalshchik_breached', 4, ['breach'], {
       reason: state?.samosborActive ? 'samosbor' : 'anger',
     });
   }
   return target;
-}
-
-function bladeEliteTuning(kind: MonsterKind | undefined): BladeEliteTuning | undefined {
-  switch (kind) {
-    case MonsterKind.KOSTOREZ:
-      return {
-        kind,
-        tag: 'kostorez',
-        rumorIds: KOSTOREZ_RUMOR_IDS,
-        windupRange: KOSTOREZ_WINDUP_RANGE,
-        burstRange: KOSTOREZ_BURST_RANGE,
-        windupSec: KOSTOREZ_WINDUP_SEC,
-        staggerSec: KOSTOREZ_STAGGER_SEC,
-        escapeDist: KOSTOREZ_ESCAPE_DIST,
-        coverBlocks: false,
-        sightMsg: 'Косторез увидел тебя. Держи дистанцию: замах читается.',
-        windupMsg: 'Косторез заносит пилы. Отходи за угол или бей дробью!',
-        staggerMsg: 'Дробь сбила замах Костореза.',
-        strikeVerb: 'режет',
-        counterplay: 'distance, obstacle, shotgun stagger, metal_sheet armor',
-      };
-    case MonsterKind.SAFEGUARD:
-      return {
-        kind,
-        tag: 'safeguard',
-        rumorIds: SAFEGUARD_RUMOR_IDS,
-        windupRange: SAFEGUARD_WINDUP_RANGE,
-        burstRange: SAFEGUARD_BURST_RANGE,
-        windupSec: SAFEGUARD_WINDUP_SEC,
-        staggerSec: SAFEGUARD_STAGGER_SEC,
-        escapeDist: SAFEGUARD_ESCAPE_DIST,
-        coverBlocks: true,
-        sightMsg: 'Сейфгард взял тебя в отказ. Ломай линию: белый замах короткий.',
-        windupMsg: 'Сейфгард разводит клинки. За дверь, аппарат или дробью!',
-        staggerMsg: 'Дробь сбила белый замах Сейфгарда.',
-        strikeVerb: 'режет',
-        counterplay: 'line break by wall, door, machine, apparatus; shotgun stagger',
-      };
-    default:
-      return undefined;
-  }
-}
-
-function bladeEliteEventData(tuning: BladeEliteTuning, extra?: Record<string, unknown>): Record<string, unknown> {
-  return { rumorIds: [...tuning.rumorIds], ...extra };
 }
 
 /** Общий пустой список: своей аллокации на каждый вид без слухов не заводим. */
@@ -1710,13 +1673,21 @@ function monsterReadabilityEventData(
   return rumorIds.length > 0 ? { rumorIds: [...rumorIds], ...extra } : { ...extra };
 }
 
+/**
+ * Событие читаемости монстра. Один публикатор на всех.
+ *
+ * Рядом стоял `publishBladeEliteEvent` — та же функция слово в слово, с
+ * собственным списком слухов и собственной меткой вида. Список слухов
+ * совпадал с `MonsterEcologyDef.rumorIds` обоих видов один в один, а метка —
+ * это просто первый элемент `tags`, как у всех остальных видов.
+ */
 function publishMonsterReadabilityEvent(
   state: GameState | undefined,
   world: World,
   e: Entity,
   target: Entity | undefined,
-  type: 'monster_sighted' | 'monster_windup_interrupted',
-  severity: 3 | 4,
+  type: 'monster_sighted' | 'monster_windup_interrupted' | 'monster_armor_cut' | 'monster_escaped',
+  severity: 3 | 4 | 5,
   tags: string[],
   data?: Record<string, unknown>,
 ): void {
@@ -1848,60 +1819,34 @@ function updateNightmarePressure(
   }
 }
 
-function publishBladeEliteEvent(
-  tuning: BladeEliteTuning,
-  state: GameState | undefined,
-  world: World,
-  e: Entity,
-  target: Entity | undefined,
-  type: 'monster_sighted' | 'monster_windup_interrupted' | 'monster_armor_cut' | 'monster_escaped',
-  severity: 3 | 4 | 5,
-  tags: string[],
-  data?: Record<string, unknown>,
-): void {
-  if (!state) return;
-  publishEvent(state, {
-    type,
-    zoneId: zoneIdAt(world, e.x, e.y),
-    x: e.x,
-    y: e.y,
-    actorId: e.id,
-    actorName: entityDisplayName(e),
-    actorFaction: e.faction,
-    targetId: target?.id,
-    targetName: target ? entityDisplayName(target) : undefined,
-    targetFaction: target?.faction,
-    monsterKind: tuning.kind,
-    severity,
-    privacy: isPlayerEntity(target) ? 'local' : 'witnessed',
-    tags: ['monster', tuning.tag, ...tags],
-    data: bladeEliteEventData(tuning, data),
-  });
-}
-
-function isLineOfFireCover(feature: Feature): boolean {
-  return feature === Feature.SHELF ||
-    feature === Feature.MACHINE ||
-    feature === Feature.APPARATUS ||
-    feature === Feature.DESK ||
-    feature === Feature.TABLE;
-}
-
 /* Растеризация луча одна на всю игру — `world/line_of_sight`. Своя копия здесь
  * шагала пробами через полклетки и не проверяла КОНЦЫ отрезка: цель, стоящая в
  * бетоне, читалась как видимая, а первая проба падала внутрь клетки самого
  * наблюдателя. Общий обход проходит ровно пересечённые клетки. */
-function hasClearLine(world: World, e: Entity, target: Entity, maxDist: number): boolean {
-  return hasLineOfSight(world, e.x, e.y, target.x, target.y, maxDist);
-}
-
-/* ВНИМАНИЕ, АСИММЕТРИЯ ПО РЕШЕНИЮ ВЛАДЕЛЬЦА (не «забытое место»).
+/**
+ * Линия до цели. `coverBlocks` — единственное, чем отличались два предиката.
+ *
+ * Их было два: `hasClearLine` (только бетон и створки) и `hasClearLineOfFire`
+ * (плюс мебель — шкаф, машина, аппарат, стол, стойка). Разница между ними не
+ * свойство КОДА, а свойство ВИДА, и теперь она колонка `MonsterWindupDef`:
+ * пилы Кострореза режут сквозь стол, клинки Сейфгарда — нет.
+ *
+ * ВНИМАНИЕ, АСИММЕТРИЯ ПО РЕШЕНИЮ ВЛАДЕЛЬЦА (не «забытое место»).
  * У людей мебель линию огня больше НЕ рвёт — она портит прицел. У монстров
  * поведение оставлено прежним: стол по-прежнему запрещает выстрел. Менять это
  * значит менять баланс, а не чинить баг, поэтому решение отложено до владельца.
- * Когда решит — здесь достаточно снять `=== 0` и перейти на `>= 0`. */
-export function hasClearLineOfFire(world: World, e: Entity, target: Entity, maxDist: number): boolean {
-  return lineCoverCells(world, e.x, e.y, target.x, target.y, maxDist) === 0;
+ * Когда решит — здесь достаточно снять `=== 0` и перейти на `>= 0`.
+ */
+export function hasClearLine(
+  world: World,
+  e: Entity,
+  target: Entity,
+  maxDist: number,
+  coverBlocks = false,
+): boolean {
+  return coverBlocks
+    ? lineCoverCells(world, e.x, e.y, target.x, target.y, maxDist) === 0
+    : hasLineOfSight(world, e.x, e.y, target.x, target.y, maxDist);
 }
 
 export interface LineThreatContext {
@@ -1913,18 +1858,26 @@ export interface LineThreatContext {
   litTarget: boolean;
 }
 
+/**
+ * Обстановка на линии: дистанция, дальность, линия и свет цели.
+ *
+ * Третьим ПРЕДИКАТОМ это не является — это связка над тем же `hasClearLine`,
+ * которая заодно считает то, что иначе каждый вид считал бы у себя. Живёт
+ * отдельно ровно потому, что её читателям нужны ещё дистанция и свет.
+ */
 export function lineThreatContext(
   world: World,
   e: Entity,
   target: Entity,
   maxRange: number,
   minRange = 0,
+  coverBlocks = true,
 ): LineThreatContext {
   const dx = world.delta(e.x, target.x);
   const dy = world.delta(e.y, target.y);
   const distance = Math.sqrt(dx * dx + dy * dy);
   const inRange = distance <= maxRange && distance > minRange;
-  const los = inRange && hasClearLineOfFire(world, e, target, maxRange);
+  const los = inRange && hasClearLine(world, e, target, maxRange, coverBlocks);
   let targetLight = entityLight(world, target);
   if (nearFeature(world, target, Feature.LAMP, 1)) targetLight = Math.max(targetLight, 0.62);
   if (nearFeature(world, target, Feature.CANDLE, 1)) targetLight = Math.max(targetLight, 0.48);
@@ -1956,7 +1909,7 @@ function protokolnikPressureTier(pressure: number): number {
 
 function protokolnikHasProtocolLine(world: World, e: Entity, target: Entity): boolean {
   if (world.dist2(e.x, e.y, target.x, target.y) > PROTOKOLNIK_PRESSURE_RANGE_SQ) return false;
-  return hasClearLineOfFire(world, e, target, PROTOKOLNIK_PRESSURE_RANGE);
+  return hasClearLine(world, e, target, PROTOKOLNIK_PRESSURE_RANGE, true);
 }
 
 function protokolnikPressureMessage(pressure: number, documentPressure: number): string {
@@ -2025,7 +1978,6 @@ function publishProtokolnikPressure(
  * и уходили целыми. */
 function applyProtokolnikPulse(
   world: World,
-  entities: Entity[],
   state: GameState | undefined,
   e: Entity,
   target: Entity,
@@ -2034,26 +1986,19 @@ function applyProtokolnikPulse(
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
 ): void {
   if (target.hp === undefined) return;
-  const dmg = Math.round(Math.min(
-    PROTOKOLNIK_PRESSURE_PULSE_MAX,
-    0.65 + pressure * 0.024 + documentPressure * 0.08,
-  ) * 10) / 10;
-  if (dmg <= 0) return;
-
-  if (target.id === playerId && isDebugOnePunchManEnabled()) {
-    keepDebugOnePunchManAlive(target);
-  } else {
-    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-    if (target.id === playerId) recordPlayerDamage(state, e, dmg, `Протокол сжал виски: -${dmg}`);
-    if (target.hp <= 0) {
-      killEntity(target);
-      target.hp = 0;
-      if (target.type === EntityType.NPC && target.id !== playerId) dropNpcInventory(target, entities, nextId);
-    }
-  }
+  /* Своя формула по существу: пульс считает не урон вида, а НАБРАННОЕ давление
+   * и вес бумаг на цели. Десятая доля — шаг этого удара, он единственный бьёт
+   * дробным числом.
+   *
+   * Потолок здесь был мёртвым числом. Давление ограничено сотней
+   * (`PROTOKOLNIK_PRESSURE_MAX`), вес бумаг — десяткой (`documentScentStrength`),
+   * значит максимум суммы 0.65 + 2.4 + 0.8 = 3.85, и `min(4, …)` не срабатывал
+   * НИ РАЗУ. Вместе с ним снят и охранник `dmg <= 0`: пульс бьёт только с
+   * порога 35, то есть не ниже 1.5. */
+  const dmg = Math.round((0.65 + pressure * 0.024 + documentPressure * 0.08) * 10) / 10;
+  applyMonsterStrike(world, state, e, target, dmg, MONSTERS[MonsterKind.PROTOKOLNIK].strike!, time, msgs, playerId);
   if (target.id === playerId) msgs.push(msg(`Протокол давит: -${dmg}. Бумаги усиливают сверку.`, time, '#d8a4ff'));
   playSoundAt(playHostilePsiCast, e.x, e.y);
 }
@@ -2077,14 +2022,12 @@ export function peekProtokolnikPressure(e: Entity): number {
 
 export function updateProtokolnikProtocolPressure(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): void {
   if (!hasAIFlag(e, 'protocolPressure') || !e.ai || dt <= 0) return;
@@ -2142,7 +2085,7 @@ export function updateProtokolnikProtocolPressure(
   protocol.pulseCd -= dt;
   if (pressure >= PROTOKOLNIK_PRESSURE_PULSE_THRESHOLD && protocol.pulseCd <= 0) {
     protocol.pulseCd = PROTOKOLNIK_PRESSURE_PULSE_CD;
-    applyProtokolnikPulse(world, entities, state, e, target, pressure, documentPressure, time, msgs, playerId, nextId);
+    applyProtokolnikPulse(world, state, e, target, pressure, documentPressure, time, msgs, playerId);
   }
 }
 
@@ -2154,7 +2097,7 @@ function updateNelyudCloseReveal(
   msgs: Msg[],
   state?: GameState,
 ): void {
-  if (!hasAIFlag(e, 'closeReveal') || e.monsterKind !== MonsterKind.NELYUD || !e.ai) return;
+  if (!hasAIFlag(e, 'closeReveal') || !e.ai) return;
   if (e.ai.lastSeenTargetId === target.id) return;
   if (world.dist2(e.x, e.y, target.x, target.y) > NELYUD_REVEAL_SQ) return;
 
@@ -2202,6 +2145,103 @@ function updateBlackLiquidatorDisguise(world: World, e: Entity, time: number): v
   }
   // Один на один (или вовсе никого) — притворяться больше не перед кем.
   e.monsterStage = BLACK_LIQUIDATOR_REVEALED_STAGE;
+}
+
+/* ── Семья спецударов: одно применение вместо одиннадцати ──────────
+ *
+ * «Посчитать урон, провести его дверью, записать игроку, добить, брызнуть
+ * кровью и сказать в лог» было написано ОДИННАДЦАТЬ раз: пульс Протокольника,
+ * корень Кровавого растения, сок Борщевика, рывок Ржавника, бросок Жорной,
+ * рез замаха Кострореза и Сейфгарда, мокрая линия Водяного, луч и тычок
+ * Слепоглаза, удар Тонкой Тени, спринт Трескотника.
+ *
+ * Расхождения между копиями замыслом не были. Записи урона игроку не хватало
+ * ровно на СМЕРТЕЛЬНОМ ударе мокрой линии — экран смерти называл не того;
+ * отладочное бессмертие игрока проверяли десять из одиннадцати, а два из этих
+ * десяти всё равно лили кровь мимо проверки; клампа `hp = 0` не было у одного.
+ * Здесь всё это одно, а тексты и кровь — колонки `MonsterDef.strike` в файле
+ * самого вида.
+ */
+
+/** Подстановка имён в строку удара: `%s` — бьющий, `%t` — цель. */
+function strikeLine(template: string, e: Entity, target: Entity): string {
+  return template.replace('%s', entityDisplayName(e)).replace('%t', entityDisplayName(target));
+}
+
+/**
+ * Урон спецудара по общей формуле вида.
+ *
+ * Уровень, сила, множитель удара, текущий множитель урона твари и скидка кожи
+ * желемыши на цели — пять сомножителей, и все пять принадлежат не удару, а
+ * бьющему и бьющемуся. Копий этой строки было девять.
+ */
+function monsterStrikeDamage(e: Entity, target: Entity, time: number, base: number, mult = 1): number {
+  const level = e.rpg?.level ?? 1;
+  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
+  return zhelemishIncomingMeleeDamage(
+    target, time,
+    Math.round(scaleMonsterDmg(base, level) * strMult * mult * (e.monsterDmgMult ?? 1)),
+  );
+}
+
+/**
+ * Приложить спецурон: единственное место, где это делается.
+ *
+ * `hitAngle` — направление брызг, если удар знает его лучше геометрии (луч
+ * Слепоглаза бьёт вдоль своей оси, а не от твари к цели). `hitLine` — строка
+ * попадания того, кому она нужна ПЕРЕД строкой убийства; остальные печатают
+ * свою после и делают это сами, потому что говорят они о состоявшемся УДАРЕ,
+ * а не о прошедшем уроне, и печатаются даже под отладочным бессмертием.
+ *
+ * Возвращает `false`, если урон не пошёл: цель без здоровья или отладочное
+ * бессмертие игрока. Последствия удара (событие читаемости, самоурон, откат)
+ * вызывающий вешает на этот ответ.
+ */
+function applyMonsterStrike(
+  world: World,
+  state: GameState | undefined,
+  e: Entity,
+  target: Entity,
+  dmg: number,
+  strike: MonsterStrikeDef,
+  time: number,
+  msgs: Msg[],
+  playerId: number,
+  hitAngle?: number,
+  hitLine?: string,
+  hitColor?: string,
+): boolean {
+  if (target.hp === undefined) return false;
+  if (target.id === playerId && isDebugOnePunchManEnabled()) {
+    keepDebugOnePunchManAlive(target);
+    return false;
+  }
+  damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e, time });
+  if (target.id === playerId && strike.hurt !== undefined) {
+    recordPlayerDamage(state, e, dmg, `${strikeLine(strike.hurt, e, target)}: -${dmg}`);
+  }
+  // Дверь смерти игрока не объявляет — у неё своя дорога; клампом здоровья
+  // спецудар закрывает шкалу, а не решает судьбу.
+  if (target.hp <= 0) {
+    killEntity(target);
+    target.hp = 0;
+  }
+  if (strike.blood !== false) {
+    /* Пол `Math.max(1, dmg)` стоял у двух копий из восьми и был мёртвым: самый
+     * слабый спецудар из бьющих по телу — слепой тычок Слепоглаза (7), самый
+     * сильный гаситель — озноб хладонца (×0.55), то есть ниже четырёх урон не
+     * опускается ни в одной комбинации. Осталась форма большинства — сырой урон. */
+    spawnBloodHit(
+      world, target.x, target.y,
+      hitAngle ?? Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)),
+      dmg, target.type === EntityType.MONSTER,
+    );
+  }
+  if (hitLine !== undefined) msgs.push(msg(hitLine, time, hitColor ?? '#f44'));
+  if (target.hp <= 0 && strike.kill !== undefined) {
+    msgs.push(msg(strikeLine(strike.kill, e, target), time, strike.killColor ?? '#f44'));
+  }
+  return true;
 }
 
 function cutMetalSheet(target: Entity): boolean {
@@ -2349,9 +2389,10 @@ function combatTargetQueryMask(typeFilter: CombatTargetFilter): number {
   return typeFilter === canBeMonsterTarget ? ENTITY_MASK_NPC : ENTITY_MASK_ACTOR;
 }
 
-function hasAIFlag(e: Entity, flag: MonsterAIFlag): boolean {
-  return e.monsterKind !== undefined && MONSTERS[e.monsterKind]?.aiFlags?.includes(flag) === true;
-}
+/* Вторая реализация того же вопроса — снята: спрашивает общий
+ * `monsterHasAIFlag`, у которого флаги вида испечены в множество. Локальное имя
+ * оставлено ради читаемости сотни мест, где оно уже стоит. */
+const hasAIFlag = monsterHasAIFlag;
 
 /**
  * Каданс скана целей. Своё число вид объявляет ДАННЫМИ (`MonsterDef.scanSec`);
@@ -2405,43 +2446,35 @@ function documentFallbackSq(e: Entity): number {
   return hasAIFlag(e, 'documentScent') ? KONTORSHCHIK_FALLBACK_SQ : PECHATEED_FALLBACK_SQ;
 }
 
-function isOfficeFieldFeature(feature: Feature): boolean {
-  return feature === Feature.DESK || feature === Feature.SHELF || feature === Feature.TABLE;
-}
-
-function officeFieldRoomWeight(roomType: RoomType | undefined): number {
-  switch (roomType) {
-    case RoomType.OFFICE: return 0.9;
-    case RoomType.STORAGE:
-    case RoomType.HQ: return 0.65;
-    case RoomType.COMMON:
-    case RoomType.CORRIDOR: return 0.35;
-    default: return 0;
-  }
-}
-
-function officeFieldZoneScore(world: World, e: Entity, radius: number): number {
-  const ex = Math.floor(e.x);
-  const ey = Math.floor(e.y);
-  let score = officeFieldRoomWeight(world.roomAt(e.x, e.y)?.type);
+/**
+ * Вес обстановки в точке мира по строке вида.
+ *
+ * Здесь стояла таблица `RoomType → число` (`switch` на пять веток), список
+ * годных признаков и тройка литералов их веса — три записи одного знания в
+ * общем боевом такте. Осталась одна, и она в дефе вида (`MonsterDef.affinity`).
+ *
+ * Строку приносит ТВАРЬ, а точку меряют любую: поле идола считает и клетки под
+ * собой, и клетки под жертвой, а жертва своей строки обстановки не имеет.
+ */
+function affinityZoneScore(world: World, affinity: MonsterAffinityDef, x: number, y: number, radius: number): number {
+  const ex = Math.floor(x);
+  const ey = Math.floor(y);
+  let score = affinity.rooms?.[world.roomAt(x, y)?.type as RoomType] ?? 0;
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       if (dx * dx + dy * dy > radius * radius) continue;
-      const feature = world.features[world.idx(ex + dx, ey + dy)] as Feature;
-      if (!isOfficeFieldFeature(feature)) continue;
-      if (feature === Feature.DESK) score += 0.34;
-      else if (feature === Feature.SHELF) score += 0.28;
-      else if (feature === Feature.TABLE) score += 0.2;
+      score += affinity.features?.[world.features[world.idx(ex + dx, ey + dy)] as Feature] ?? 0;
     }
   }
-  return Math.min(3.2, score);
+  return Math.min(affinity.cap, score);
 }
 
 function officeFieldPressure(world: World, e: Entity, target?: Entity): number {
-  if (!hasAIFlag(e, 'officeField')) return 1;
-  let score = officeFieldZoneScore(world, e, 2);
+  const affinity = e.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.affinity : undefined;
+  if (!affinity || !hasAIFlag(e, 'officeField')) return 1;
+  let score = affinityZoneScore(world, affinity, e.x, e.y, 2);
   if (target) {
-    score += officeFieldZoneScore(world, target, 1) * 0.55;
+    score += affinityZoneScore(world, affinity, target.x, target.y, 1) * 0.55;
     if (hasDocumentLikeItem(target)) score += 1.1;
     if (world.dist2(e.x, e.y, target.x, target.y) <= KANTSELYARSKIY_IDOL_MIN_RANGE * KANTSELYARSKIY_IDOL_MIN_RANGE) score -= 1.2;
   }
@@ -2463,16 +2496,30 @@ function officeFieldEventData(world: World, e: Entity, target: Entity): Record<s
   };
 }
 
-function chervieSourceLabel(feature: Feature): string {
-  return feature === Feature.APPARATUS ? 'серверный аппарат' : 'экран';
+/* Состояние Червия — рядом с видом, а не в ядре.
+ *
+ * Раньше это были ЧЕТЫРЕ поля `AIState` у каждого актора игры: откат импульса и
+ * закэшированный ответ «цела ли сеть» вместе с координатами якоря. Ответ теперь
+ * читается из мира в кадре общим `monsterAnchored`, а координаты не читал никто,
+ * кроме собственной метки. Осталось ровно то, что из мира не выводится: откат и
+ * ПРОШЛЫЙ ответ, по которому ловится сам перелом — включение и обрыв линии. */
+interface ChervieState {
+  pulseCd: number;
+  powered: boolean;
+}
+const chervieState = speciesState<ChervieState>(() => ({ pulseCd: 0, powered: false }));
+
+/** Откат импульса: путь для отладки и тестов, как у давления Протокольника. */
+export function peekCherviePulseCd(e: Entity): number {
+  return chervieState.peek(e)?.pulseCd ?? 0;
 }
 
-function chervieSignalEventData(source: ReturnType<typeof findChervieNetSource> | undefined, extra?: Record<string, unknown>): Record<string, unknown> {
+function chervieSignalEventData(anchor: MonsterAnchorPoint | undefined, extra?: Record<string, unknown>): Record<string, unknown> {
   return {
     rumorIds: [...monsterReadabilityRumorIds(MonsterKind.CHERVIE_AVATAR)],
-    sourceX: source?.x,
-    sourceY: source?.y,
-    sourceFeature: source?.feature,
+    sourceX: anchor?.x,
+    sourceY: anchor?.y,
+    sourceFeature: anchor?.feature,
     sourceRadius: CHERVIE_NET_SOURCE_RADIUS,
     pulseRadius: CHERVIE_MIND_PULSE_RADIUS,
     counterplay: 'break_screen_line_or_destroy_apparatus_then_use_energy',
@@ -2480,87 +2527,47 @@ function chervieSignalEventData(source: ReturnType<typeof findChervieNetSource> 
   };
 }
 
-function updateChervieNetPowerState(
-  world: World,
-  e: Entity,
-  time: number,
-  msgs: Msg[],
-  player: Entity | undefined,
-  state?: GameState,
+/** Перелом линии: включилась или оборвалась. Сам ответ приходит из мира. */
+function publishChervieNetEdge(
+  world: World, e: Entity, anchor: MonsterAnchorPoint | undefined,
+  time: number, msgs: Msg[], player: Entity | undefined, state?: GameState,
 ): void {
-  if (!hasAIFlag(e, 'netPossessor') || !e.ai) return;
-  const ai = e.ai;
-  const previous = ai.netPowered;
-  const previousSourceX = ai.netAnchorX;
-  const previousSourceY = ai.netAnchorY;
-  const source = findChervieNetSource(world, e);
-  const powered = source !== undefined;
-  ai.netPowered = powered;
-  if (source) {
-    ai.netAnchorX = source.x;
-    ai.netAnchorY = source.y;
-  } else {
-    ai.netAnchorX = undefined;
-    ai.netAnchorY = undefined;
-  }
-  e.spriteScale = powered ? 1.13 : 0.82;
-
-  if (powered && previous !== true) {
+  if (anchor) {
     if (player && world.dist2(e.x, e.y, player.x, player.y) <= MONSTER_DETECT_SQ) {
-      msgs.push(msg(`Червие поймало ${chervieSourceLabel(source.feature)}: зеленая линия снова держит тело.`, time, '#6f8'));
+      const label = anchor.feature === Feature.APPARATUS ? 'серверный аппарат' : 'экран';
+      msgs.push(msg(`Червие поймало ${label}: зеленая линия снова держит тело.`, time, '#6f8'));
     }
-    if (state) {
-      publishEvent(state, {
-        type: 'chervie_signal',
-        zoneId: zoneIdAt(world, e.x, e.y),
-        roomId: world.roomAt(e.x, e.y)?.id,
-        x: e.x,
-        y: e.y,
-        actorId: e.id,
-        actorName: entityDisplayName(e),
-        actorFaction: e.faction,
-        monsterKind: MonsterKind.CHERVIE_AVATAR,
-        severity: 3,
-        privacy: 'local',
-        tags: ['monster', 'chervie', 'net', 'powered', source.feature === Feature.APPARATUS ? 'apparatus' : 'screen'],
-        data: chervieSignalEventData(source),
-      });
-    }
-  } else if (!powered && previous === true) {
+  } else {
     msgs.push(msg('Зеленый свет Червие оборвался. Без экрана и аппарата кабели стали медленнее.', time, '#9cf'));
-    if (state) {
-      publishEvent(state, {
-        type: 'chervie_server_cut',
-        zoneId: zoneIdAt(world, e.x, e.y),
-        roomId: world.roomAt(e.x, e.y)?.id,
-        x: e.x,
-        y: e.y,
-        actorId: e.id,
-        actorName: entityDisplayName(e),
-        actorFaction: e.faction,
-        monsterKind: MonsterKind.CHERVIE_AVATAR,
-        severity: 4,
-        privacy: 'local',
-        tags: ['monster', 'chervie', 'net', 'server_cut', 'counterplay'],
-        data: chervieSignalEventData(undefined, {
-          previousSourceX,
-          previousSourceY,
-        }),
-      });
-    }
   }
+  if (!state) return;
+  publishEvent(state, {
+    type: anchor ? 'chervie_signal' : 'chervie_server_cut',
+    zoneId: zoneIdAt(world, e.x, e.y),
+    roomId: world.roomAt(e.x, e.y)?.id,
+    x: e.x,
+    y: e.y,
+    actorId: e.id,
+    actorName: entityDisplayName(e),
+    actorFaction: e.faction,
+    monsterKind: MonsterKind.CHERVIE_AVATAR,
+    severity: anchor ? 3 : 4,
+    privacy: 'local',
+    tags: anchor
+      ? ['monster', 'chervie', 'net', 'powered', anchor.feature === Feature.APPARATUS ? 'apparatus' : 'screen']
+      : ['monster', 'chervie', 'net', 'server_cut', 'counterplay'],
+    data: chervieSignalEventData(anchor),
+  });
 }
 
-function stampCherviePulseCue(world: World, e: Entity, time: number): void {
+function stampCherviePulseCue(world: World, e: Entity, anchor: MonsterAnchorPoint | undefined, time: number): void {
   const x = Math.floor(e.x);
   const y = Math.floor(e.y);
   const fx = ((e.x % 1) + 1) % 1;
   const fy = ((e.y % 1) + 1) % 1;
   const seed = Math.imul(e.id, 18_018) ^ Math.floor(time * 9);
   stampMark(world, x, y, fx, fy, 0.55, MarkType.PSI, seed, 58, 255, 116, 128);
-  if (e.ai?.netAnchorX !== undefined && e.ai.netAnchorY !== undefined) {
-    stampMark(world, e.ai.netAnchorX, e.ai.netAnchorY, 0.5, 0.5, 0.42, MarkType.PSI, seed ^ 0x715, 20, 220, 80, 105);
-  }
+  if (anchor) stampMark(world, anchor.x, anchor.y, 0.5, 0.5, 0.42, MarkType.PSI, seed ^ 0x715, 20, 220, 80, 105);
 }
 
 export function updateChervieNetPossessor(
@@ -2576,10 +2583,18 @@ export function updateChervieNetPossessor(
   // Только по карте: фолбэк перебором стоил полный проход по сущностям каждый
   // кадр на каждого червия ровно тогда, когда игрока в индексе живых нет.
   const player = _entityById.get(playerId);
-  updateChervieNetPowerState(world, e, time, msgs, player, state);
-  const ai = e.ai;
-  ai.netPulseCd = Math.max(0, (ai.netPulseCd ?? 0) - dt);
-  if (!ai.netPowered || ai.netPulseCd > 0) return;
+  const anchor = findMonsterAnchor(world, e);
+  const chervie = chervieState.of(e);
+  const powered = anchor !== undefined;
+  // Раздутое у экрана тело и опавшее без него — та же строка якоря, только
+  // видимая: обрыв линии читается силуэтом раньше, чем цифрами.
+  e.spriteScale = powered ? 1.13 : 0.82;
+  if (powered !== chervie.powered) {
+    publishChervieNetEdge(world, e, anchor, time, msgs, player, state);
+    chervie.powered = powered;
+  }
+  chervie.pulseCd = Math.max(0, chervie.pulseCd - dt);
+  if (!powered || chervie.pulseCd > 0) return;
 
   getEntityIndex().queryRadiusCapped(
     e.x,
@@ -2624,8 +2639,8 @@ export function updateChervieNetPossessor(
   }
 
   if (!falseOrder && affectedNpcs <= 0) return;
-  ai.netPulseCd = CHERVIE_MIND_PULSE_COOLDOWN_SEC;
-  stampCherviePulseCue(world, e, time);
+  chervie.pulseCd = CHERVIE_MIND_PULSE_COOLDOWN_SEC;
+  stampCherviePulseCue(world, e, anchor, time);
   if (isPlayerEntity(framed)) {
     msgs.push(msg('НЕТ-экран печатает свежий приказ от твоего имени. Не выполняй его: это Червие.', time, '#6f8'));
   } else {
@@ -2648,7 +2663,7 @@ export function updateChervieNetPossessor(
     severity: falseOrder ? 5 : 4,
     privacy: isPlayerEntity(framed) ? 'private' : 'local',
     tags: ['monster', 'chervie', 'net', 'mind_pulse', falseOrder ? 'false_order' : 'npc_confusion'],
-    data: chervieSignalEventData(findChervieNetSource(world, e), {
+    data: chervieSignalEventData(anchor, {
       affectedNpcs,
       pulseCap: CHERVIE_MIND_PULSE_CAP,
       cooldownSec: CHERVIE_MIND_PULSE_COOLDOWN_SEC,
@@ -2791,19 +2806,6 @@ function pointOffPlayerPath(world: World, monster: Entity, target: Entity | null
   const ly = py * t;
   const off2 = (bx - lx) * (bx - lx) + (by - ly) * (by - ly);
   return off2 > 1.15 * 1.15;
-}
-
-function traceClearPoint(world: World, e: Entity, x: number, y: number, maxDist: number): boolean {
-  const dx = world.delta(e.x, x);
-  const dy = world.delta(e.y, y);
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist > maxDist) return false;
-  const steps = Math.max(2, Math.ceil(dist * 2));
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps;
-    if (world.solid(Math.floor(world.wrap(e.x + dx * t)), Math.floor(world.wrap(e.y + dy * t)))) return false;
-  }
-  return true;
 }
 
 function findZhornayaCarrierTarget(world: World, e: Entity): ZhornayaScentTarget | null {
@@ -3284,41 +3286,15 @@ function wallTerrainOpenBreak(world: World, e: Entity, target?: Entity): boolean
   return !hasAIFlag(e, 'debrisLurker') || !targetCtx.debrisNearby;
 }
 
-function wallTerrainTag(kind: MonsterKind | undefined): string {
-  switch (kind) {
-    case MonsterKind.TVAR: return 'tvar';
-    case MonsterKind.SHOVNIK: return 'shovnik';
-    case MonsterKind.REBAR: return 'rebar';
-    case MonsterKind.BETONOED: return 'betonoed';
-    default: return 'wall_terrain';
-  }
-}
-
-function wallTerrainCueText(kind: MonsterKind | undefined, debris: boolean): string {
-  switch (kind) {
-    case MonsterKind.TVAR:
-      return 'Тварь царапает панель: у стены лапа достает дальше. Центр комнаты режет давление.';
-    case MonsterKind.SHOVNIK:
-      return 'Шовник скользит по шву. У стены он быстрее и больнее; выводите в центр.';
-    case MonsterKind.REBAR:
-      return debris
-        ? 'Арматура звенит в складском мусоре. Держите открытый бетон и дистанцию.'
-        : 'Арматура цепляет стену прутьями. Уводите ее от кромки.';
-    case MonsterKind.BETONOED:
-      return 'Бетоноед ведет челюсть вдоль бетонного шва. Шум, огонь или герметик решают темп.';
-    default:
-      return 'Монстр получил упор от стены. Открытый пол ломает преимущество.';
-  }
-}
-
-function wallTerrainOpenText(kind: MonsterKind | undefined): string {
-  switch (kind) {
-    case MonsterKind.TVAR: return 'Тварь потеряла панель. В центре комнаты ее хват стал честнее.';
-    case MonsterKind.SHOVNIK: return 'Шовник вышел с шва на открытый пол и потерял ход.';
-    case MonsterKind.REBAR: return 'Арматура вышла из железного мусора: прутья читаются, темп просел.';
-    case MonsterKind.BETONOED: return 'Бетоноед потерял бетонный шов и сбился с короткого выхода.';
-    default: return 'Открытый пол снял стенное преимущество.';
-  }
+/**
+ * Реплика упора: мусорную строку берёт только тот вид, который её объявил.
+ *
+ * Три `switch (kind)` на четыре вида — тег, реплика упора, реплика потери —
+ * были одной таблицей, написанной трижды; она уехала в `MonsterEcologyDef.wall`
+ * к остальным текстам вида.
+ */
+function wallTerrainCueText(wall: MonsterWallReadability, debris: boolean): string {
+  return debris ? wall.cueDebris ?? wall.cue : wall.cue;
 }
 
 function updateWallTerrainReadability(
@@ -3336,15 +3312,16 @@ function updateWallTerrainReadability(
   if (!active && !openBreak) return;
 
   const canCue = time >= (e.ai.wallBiasCueAt ?? -Infinity);
+  const wall = monsterWallReadability(e.monsterKind);
   if (active) {
     e.ai.wallBiasWasActive = true;
     e.spriteScale = Math.max(e.spriteScale ?? 1, e.monsterKind === MonsterKind.REBAR ? 1.05 : 1.03);
     if (!localTarget || !canCue) return;
     e.ai.wallBiasCueAt = time + WALL_BIAS_CUE_COOLDOWN_SEC;
     const actorCtx = monsterWallContext(world, e);
-    if (isPlayerEntity(localTarget)) msgs.push(msg(wallTerrainCueText(e.monsterKind, actorCtx.debrisNearby), time, '#ca6'));
+    if (isPlayerEntity(localTarget)) msgs.push(msg(wallTerrainCueText(wall, actorCtx.debrisNearby), time, '#ca6'));
     publishMonsterReadabilityEvent(state, world, e, localTarget, 'monster_sighted', isPlayerEntity(localTarget) ? 4 : 3, [
-      wallTerrainTag(e.monsterKind),
+      wall.tag,
       hasAIFlag(e, 'debrisLurker') ? 'debris_lurker' : 'wall_bias',
       actorCtx.debrisNearby ? 'debris' : 'wall_edge',
     ], monsterReadabilityEventData(e.monsterKind, {
@@ -3360,9 +3337,9 @@ function updateWallTerrainReadability(
   if (!localTarget || !canCue) return;
   e.ai.wallBiasCueAt = time + WALL_BIAS_CUE_COOLDOWN_SEC;
   e.spriteScale = e.monsterKind === MonsterKind.REBAR ? 0.94 : 0.96;
-  if (isPlayerEntity(localTarget)) msgs.push(msg(wallTerrainOpenText(e.monsterKind), time, '#9cf'));
+  if (isPlayerEntity(localTarget)) msgs.push(msg(wall.open, time, '#9cf'));
   publishMonsterReadabilityEvent(state, world, e, localTarget, 'monster_windup_interrupted', 3, [
-    wallTerrainTag(e.monsterKind),
+    wall.tag,
     'open_floor',
     'wall_advantage_broken',
   ], monsterReadabilityEventData(e.monsterKind, {
@@ -3420,18 +3397,25 @@ function inPolzunKillCell(world: World, e: Entity): boolean {
     world.features[ci] === Feature.TOILET;
 }
 
+/** Общая дальность ближнего удара: столько достаёт тварь, не объявившая своей. */
+const MONSTER_REACH = 1.2;
+/** Сорванный головной слизень — голова на щупальцах: достаёт короче носителя. */
+const HEAD_SLUG_DETACHED_REACH = 0.95;
+
+/**
+ * Дальность ближнего удара.
+ *
+ * Постоянная дальность вида — колонка `MonsterDef.reach` в файле самого вида;
+ * здесь остались только ОБСТАНОВОЧНЫЕ дальности, которые нельзя записать
+ * числом: упор Панельника в стену и стадия Головного слизня. Раньше и то, и
+ * другое лежало одним `switch (kind)` на девять веток.
+ */
 function monsterMeleeRange(world: World, e: Entity): number {
-  switch (e.monsterKind) {
-    case MonsterKind.TVAR: return 1.55;
-    case MonsterKind.POLZUN: return 1.35;
-    case MonsterKind.SLIME_WOMAN: return 1.38;
-    case MonsterKind.OLGOY: return 1.48;
-    case MonsterKind.PANELNIK: return panelnikWallBraceActive(world, e) ? PANELNIK_BRACE_REACH : PANELNIK_OPEN_REACH;
-    case MonsterKind.BLACK_LIQUIDATOR: return 1.35;
-    case MonsterKind.HEAD_SLUG: return isHeadSlugDetached(e) ? 0.95 : 1.2;
-    case MonsterKind.SWARM: return 1.05;
-    default: return 1.2;
+  if (e.monsterKind === MonsterKind.PANELNIK) {
+    return panelnikWallBraceActive(world, e) ? PANELNIK_BRACE_REACH : PANELNIK_OPEN_REACH;
   }
+  if (isHeadSlugDetached(e)) return HEAD_SLUG_DETACHED_REACH;
+  return (e.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.reach : undefined) ?? MONSTER_REACH;
 }
 
 function facingDotTo(world: World, from: Entity, to: Entity): number {
@@ -4112,10 +4096,8 @@ function tryRevealChernoSlizByNoise(
 ): boolean {
   if (e.monsterKind !== MonsterKind.CHERNOSLIZ || e.monsterStage === 1) return false;
   if (!isChernoSlizHidden(world, e)) return false;
-  const ai = e.ai!;
   const noise = findNoiseForActor(world, state, e, time, { minSeverity: 2, scanInterval: 0.65, hearingMult: 1.24 });
-  if (!noise || noise.id === ai.lastNoiseId || !chernoslizRevealNoise(noise)) return false;
-  ai.lastNoiseId = noise.id;
+  if (!noise || !chernoslizRevealNoise(noise) || !takeFreshNoise(e, noise.id)) return false;
   revealChernoSlizByNoise(world, e, noise, time, msgs, state);
   return true;
 }
@@ -4181,8 +4163,16 @@ function updateWaterStriderState(world: World, e: Entity, dt: number, time: numb
   }
 }
 
+/** Строка якоря вида, если она есть. */
+function monsterAnchorDef(e: Entity): MonsterAnchorDef | undefined {
+  return e.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.anchor : undefined;
+}
+
 function monsterMoveMult(world: World, e: Entity, target?: Entity): number {
-  if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? CHERVIE_POWERED_MOVE_MULT : CHERVIE_CUT_MOVE_MULT;
+  const anchor = monsterAnchorDef(e);
+  if (anchor?.moveMult !== undefined) {
+    return monsterAnchored(world, e) ? anchor.moveMult : (anchor.cutMoveMult ?? 1);
+  }
   if (hasAIFlag(e, 'debrisLurker')) return inDebrisCover(world, e) ? 1.22 : 0.68;
   if (hasAIFlag(e, 'documentScent')) {
     const strength = documentScentStrength(target);
@@ -4228,7 +4218,10 @@ function monsterMoveMult(world: World, e: Entity, target?: Entity): number {
 }
 
 function monsterDmgMult(world: World, e: Entity, target?: Entity): number {
-  if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? CHERVIE_POWERED_DMG_MULT : CHERVIE_CUT_DMG_MULT;
+  const anchor = monsterAnchorDef(e);
+  if (anchor?.dmgMult !== undefined) {
+    return monsterAnchored(world, e) ? anchor.dmgMult : (anchor.cutDmgMult ?? 1);
+  }
   if (hasAIFlag(e, 'debrisLurker')) return inDebrisCover(world, e) ? 1.25 : 0.75;
   switch (e.monsterKind) {
     case MonsterKind.SHADOW: {
@@ -4264,7 +4257,6 @@ function monsterDmgMult(world: World, e: Entity, target?: Entity): number {
       break;
   }
   if (hasAIFlag(e, 'wallBias')) return wallTerrainPressureActive(world, e, target) ? 1.2 : 1;
-  if (hasAIFlag(e, 'lampPowered')) return nearFeature(world, e, Feature.LAMP, 3) ? 1.35 : 0.9;
   if (hasAIFlag(e, 'documentScent')) return documentScentStrength(target) > 0 ? 1.14 : 0.82;
   if (hasAIFlag(e, 'fogSwimmer')) return fogSharkHasFogPressure(world, e) ? FOG_SHARK_FOG_DAMAGE_MULT : FOG_SHARK_DRY_DAMAGE_MULT;
   if (hasAIFlag(e, 'officeField')) return officeFieldPressure(world, e, target);
@@ -4294,8 +4286,11 @@ function updateLampPoweredReadability(
   playerId: number,
   state?: GameState,
 ): void {
-  if (!hasAIFlag(e, 'lampPowered')) return;
-  const powered = target?.alive === true && nearFeature(world, e, Feature.LAMP, 3);
+  const anchor = monsterAnchorDef(e);
+  if (!hasAIFlag(e, 'lampPowered') || !anchor) return;
+  // Тот же вопрос, что у множителя урона, и задаётся он тем же поиском: вторая
+  // копия «есть ли лампа в трёх клетках» стояла здесь своим `nearFeature`.
+  const powered = target?.alive === true && monsterAnchored(world, e);
   const wasPowered = lampPoweredRuntime.get(e) === true;
   lampPoweredRuntime.set(e, powered);
   if (!powered || wasPowered || !target) return;
@@ -4304,8 +4299,8 @@ function updateLampPoweredReadability(
     msgs.push(msg('Ламповый зазвенел под лампой: свет усилил удар. Отводите его на три клетки или за угол.', time, '#fd6'));
   }
   publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', isPlayerEntity(target) ? 4 : 3, ['lampovy', 'lamp_powered', 'light', 'warning'], {
-    lampRadius: 3,
-    damageMult: 1.35,
+    lampRadius: anchor.radius,
+    damageMult: anchor.dmgMult,
     counterplay: 'leave_lamp_cluster_or_break_line',
   });
 }
@@ -4325,7 +4320,11 @@ function updateLampPoweredReadability(
  */
 function monsterDetectSq(world: World, e: Entity, fallback: number, time: number): number {
   if (hasAIFlag(e, 'rootHive')) return bloodPlantTendrilRangeSq();
-  if (hasAIFlag(e, 'netPossessor')) return e.ai?.netPowered ? 24 * 24 : 12 * 12;
+  const anchor = monsterAnchorDef(e);
+  if (anchor?.detect !== undefined) {
+    const reach = monsterAnchored(world, e) ? anchor.detect : (anchor.cutDetect ?? anchor.detect);
+    return reach * reach;
+  }
   if (hasAIFlag(e, 'fogSwimmer')) return fogSharkHasFogPressure(world, e) ? FOG_SHARK_DETECT_SQ : FOG_SHARK_DRY_DETECT_SQ;
   if (hasAIFlag(e, 'blackWaterWake')) return chernoslizDetectSq(world, e);
   if (hasAIFlag(e, 'debrisLurker')) {
@@ -4346,18 +4345,19 @@ function updateBloodPlantRootHive(
   playerId: number,
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.BLOOD_PLANT || !hasAIFlag(e, 'rootHive')) return false;
+  if (!hasAIFlag(e, 'rootHive')) return false;
   const ai = e.ai!;
   ai.path = [];
   ai.pi = 0;
 
-  ai.plantRootCd = Math.max(0, (ai.plantRootCd ?? 0) - dt);
-  if (ai.plantRootCd <= 0) {
+  const root = bloodPlantState.of(e);
+  root.scanCd = Math.max(0, root.scanCd - dt);
+  if (root.scanCd <= 0) {
     const heal = healBloodPlantFromRedMold(world, e);
     if (heal.healed > 0 && target?.id === playerId && world.dist2(e.x, e.y, target.x, target.y) <= bloodPlantTendrilRangeSq()) {
       msgs.push(msg('Красная плесень в ящиках кормит ствол. Уберите пробу или жгите быстрее.', time, '#d66'));
     }
-    ai.plantRootCd = BLOOD_PLANT_HEAL_SCAN_SEC + ((e.id % 3) * 0.13);
+    root.scanCd = BLOOD_PLANT_HEAL_SCAN_SEC + ((e.id % 3) * 0.13);
   }
 
   if (!target?.alive || !canBeMonsterTarget(target) || !isHostile(e, target)) {
@@ -4391,20 +4391,8 @@ function updateBloodPlantRootHive(
 
   if (hit && target.hp !== undefined) {
     const def = MONSTERS[MonsterKind.BLOOD_PLANT];
-    const level = e.rpg?.level ?? 1;
-    const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-    const dmg = zhelemishIncomingMeleeDamage(target, time, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * (e.monsterDmgMult ?? 1)));
-    if (target.id === playerId && isDebugOnePunchManEnabled()) {
-      keepDebugOnePunchManAlive(target);
-    } else {
-      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-      if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударило корнем: -${dmg}`);
-      if (target.hp <= 0) {
-        killEntity(target);
-        target.hp = 0;
-      }
-    }
-    spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), Math.max(1, dmg), target.type === EntityType.MONSTER);
+    const dmg = monsterStrikeDamage(e, target, time, def.dmg);
+    applyMonsterStrike(world, state, e, target, dmg, def.strike!, time, msgs, playerId);
     if (target.id === playerId) msgs.push(msg(`Корень кровавого растения ударил из пола: -${dmg}`, time, '#f77'));
     playSoundAt(playGrowl, e.x, e.y);
   }
@@ -4423,7 +4411,7 @@ function updateBorshchevikRootedPlant(
   playerId: number,
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.BORSHCHEVIK || !hasAIFlag(e, 'rootedPlant')) return false;
+  if (!hasAIFlag(e, 'rootedPlant')) return false;
   const ai = e.ai!;
   ai.path = [];
   ai.pi = 0;
@@ -4444,39 +4432,26 @@ function updateBorshchevikRootedPlant(
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = target.id;
   e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-  ai.plantPuffCd = Math.max(0, (ai.plantPuffCd ?? 0) - dt);
-  ai.plantRootCd = Math.max(0, (ai.plantRootCd ?? 1.4) - dt);
+  const roots = borshchevikState.of(e);
+  roots.puffCd = Math.max(0, roots.puffCd - dt);
+  roots.rootCd = Math.max(0, roots.rootCd - dt);
 
-  if (d2 <= BORSHCHEVIK_SEED_SQ && (ai.plantPuffCd ?? 0) <= 0) {
+  if (d2 <= BORSHCHEVIK_SEED_SQ && roots.puffCd <= 0) {
     if (state) releaseBorshchevikSeedPuff(world, state, e, target, 'seed');
-    ai.plantPuffCd = BORSHCHEVIK_SEED_COOLDOWN_SEC + ((e.id % 5) * 0.23);
+    roots.puffCd = BORSHCHEVIK_SEED_COOLDOWN_SEC + ((e.id % 5) * 0.23);
   }
 
-  if ((ai.plantRootCd ?? 0) <= 0 && state && damageBorshchevikRootSite(world, state, e)) {
-    ai.plantRootCd = BORSHCHEVIK_ROOT_COOLDOWN_SEC;
+  if (roots.rootCd <= 0 && state && damageBorshchevikRootSite(world, state, e)) {
+    roots.rootCd = BORSHCHEVIK_ROOT_COOLDOWN_SEC;
     if (target.id === playerId) msgs.push(msg('Корни борщевика хрустнули в слабой стене. Обход меняется.', time, '#cf8'));
-  } else if ((ai.plantRootCd ?? 0) <= 0) {
-    ai.plantRootCd = BORSHCHEVIK_ROOT_COOLDOWN_SEC;
+  } else if (roots.rootCd <= 0) {
+    roots.rootCd = BORSHCHEVIK_ROOT_COOLDOWN_SEC;
   }
 
   if (d2 <= BORSHCHEVIK_SAP_RANGE_SQ && (e.attackCd ?? 0) <= 0) {
     const def = MONSTERS[MonsterKind.BORSHCHEVIK];
-    const level = e.rpg?.level ?? 1;
-    const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-    const dmg = zhelemishIncomingMeleeDamage(target, time, Math.round(scaleMonsterDmg(def.dmg, level) * strMult * (e.monsterDmgMult ?? 1)));
-    if (target.hp !== undefined) {
-      if (target.id === playerId && isDebugOnePunchManEnabled()) {
-        keepDebugOnePunchManAlive(target);
-      } else {
-        damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-        if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} обжег кожу соком: -${dmg}`);
-        if (target.hp <= 0) {
-          killEntity(target);
-          target.hp = 0;
-        }
-      }
-      spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), Math.max(1, dmg), target.type === EntityType.MONSTER);
-    }
+    const dmg = monsterStrikeDamage(e, target, time, def.dmg);
+    applyMonsterStrike(world, state, e, target, dmg, def.strike!, time, msgs, playerId);
     if (target.id === playerId) msgs.push(msg(`Сок борщевика жжет кожу: -${dmg}`, time, '#df6'));
     playSoundAt(playGrowl, e.x, e.y);
     e.attackCd = def.attackRate;
@@ -4704,7 +4679,10 @@ function wakeRzhavnik(
 ): void {
   const ai = e.ai!;
   ai.scrapWake = 1;
-  ai.scrapWakeTimer = RZHAVNIK_LEAP_WINDUP_SEC;
+  // Замах у семьи один и общий: `windupTimer`. Свой второй таймер рядом с ним
+  // означал только то, что Ржавника писали отдельно от остальных.
+  ai.windupTimer = RZHAVNIK_LEAP_WINDUP_SEC;
+  ai.windupTargetId = target?.id;
   ai.combatTargetId = target?.id;
   ai.goal = AIGoal.HUNT;
   ai.tx = world.wrap(Math.floor(x));
@@ -4720,90 +4698,83 @@ function wakeRzhavnik(
   playSoundAt(playGrowl, e.x, e.y);
 }
 
+/**
+ * Хрупкий корпус после состоявшегося рывка. Числа — колонки `dash`.
+ *
+ * Пол `Math.max(18, …)` снят как МЁРТВЫЙ. Он срабатывал бы только при
+ * `maxHp <= 31`, а нижняя граница здоровья Ржавника — 72 из его же дефа:
+ * `scaleMonsterHp` умножает на `1 + 0.12·(уровень−1)` и НИЖЕ базы не опускает
+ * ни на одном уровне, а самый скупой спавнер (`hermodoor_borer`, ×0.85 с полом
+ * 26) даёт 61. Хрупкое состояние при этом ставится РОВНО ОДИН РАЗ на особь:
+ * после рывка `scrapWake = 2`, а обратно в 1 переводит только пробуждение из
+ * спячки, закрытое проверкой `scrapWake === 2`. То есть 72·0.58 = 42, и до 18
+ * выражение не доходило ни в одной расстановке.
+ */
 function applyRzhavnikFragileState(e: Entity): void {
+  const dash = MONSTERS[MonsterKind.RZHAVNIK].dash!;
   const maxHp = e.maxHp ?? e.hp ?? MONSTERS[MonsterKind.RZHAVNIK].hp;
-  const fragileMax = Math.max(18, Math.round(maxHp * RZHAVNIK_FRAGILE_HP_MULT));
+  const fragileMax = Math.round(maxHp * (dash.fragileHpMult ?? 1));
   if (e.maxHp === undefined || e.maxHp > fragileMax) e.maxHp = fragileMax;
   if (e.hp !== undefined && e.hp > fragileMax) e.hp = fragileMax;
-  e.monsterDmgMult = Math.min(e.monsterDmgMult ?? 1, RZHAVNIK_FRAGILE_DMG_MULT);
+  e.monsterDmgMult = Math.min(e.monsterDmgMult ?? 1, dash.fragileDmgMult ?? 1);
   e.spriteScale = 0.88;
 }
 
 function finishRzhavnikLeap(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity | undefined,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): void {
   const ai = e.ai!;
+  const dash = MONSTERS[MonsterKind.RZHAVNIK].dash!;
   const tx = target?.alive ? target.x : ai.tx + 0.5;
   const ty = target?.alive ? target.y : ai.ty + 0.5;
-  const dx = world.delta(e.x, tx);
-  const dy = world.delta(e.y, ty);
-  const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-  const step = Math.min(RZHAVNIK_LEAP_STEP, Math.max(0, dist - 0.65));
-  const nx = world.wrap(e.x + (dx / dist) * step);
-  const ny = world.wrap(e.y + (dy / dist) * step);
-  if (!world.solid(Math.floor(nx), Math.floor(ny)) && traceClearPoint(world, e, nx, ny, RZHAVNIK_LEAP_STEP + 0.35)) {
-    e.x = nx;
-    e.y = ny;
-  }
-  e.angle = Math.atan2(dy, dx);
+  const landing = dashLanding(world, e, tx, ty, dash);
+  const dirAngle = Math.atan2(landing.dirY, landing.dirX);
+  /* Упёрся — значит рывка НЕ БЫЛО.
+   *
+   * Здесь стояло `if (свободно) { … }` без `else`: тварь оставалась на месте, но
+   * дальше шла та же дорога, что и после состоявшегося прыжка — проверка
+   * попадания, `scrapWake = 2` и НЕОБРАТИМЫЙ хрупкий корпус (maxHp ×0.58). То
+   * есть 42% здоровья снимались за срыв, которого не случилось; ни у одного
+   * другого члена семьи рывков срыв не наказывается необратимо.
+   *
+   * Хрупкость — цена состоявшегося удара о мир, а не о собственную стену:
+   * ржавый набор прутьев разлетается, когда долетел. Упёршийся скользит вдоль
+   * препятствия общим шагом семьи (колонка `slideOnBlock`), теряет засаду и
+   * получает ту же отдачу, но остаётся целым. */
+  const leaped = dashTo(world, e, landing.x, landing.y, dash) === DashStep.CLEAR;
+  e.angle = dirAngle;
 
   let damage = 0;
-  if (target?.alive && target.hp !== undefined && world.dist2(e.x, e.y, target.x, target.y) <= RZHAVNIK_LEAP_HIT_SQ) {
+  if (target?.alive && target.hp !== undefined && dashReached(world, e, target, dash)) {
     const def = MONSTERS[MonsterKind.RZHAVNIK];
-    const level = e.rpg?.level ?? 1;
-    const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-    damage = zhelemishIncomingMeleeDamage(
-      target,
-      time,
-      Math.round(scaleMonsterDmg(def.dmg, level) * strMult * RZHAVNIK_LEAP_DAMAGE_MULT),
-    );
-    if (target.id === playerId && isDebugOnePunchManEnabled()) {
-      keepDebugOnePunchManAlive(target);
-    } else {
-      // Единая дверь урона со всем конвейером: резист надетой брони цели и
-      // врождённая броня твари. Разбор — `ActorDamageInput.applied`.
-      // Тип удара объявляет вид, а не вызов: рывок Ржавника — та же кинетика,
-      // но она приходит из `MonsterDef`, как у всех.
-      damageActor(world, state, target, {
-        damage,
-        source: 'monster_special',
-        attacker: e,
-        time,
-        deathByCaller: true,
-      });
-      if (target.id === playerId) recordPlayerDamage(state, e, damage, `Ржавник ударил первым рывком: -${damage}`);
-      if (target.hp <= 0) {
-        killEntity(target);
-        target.hp = 0;
-      }
-      spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), damage, target.type === EntityType.MONSTER);
-      if (target.hp <= 0) {
-        spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-        if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-        msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(target)} первым металлическим рывком`, time, '#f44'));
-      }
-    }
+    // Множитель рывка — колонка `dash.damageMult`; всё прочее общая формула.
+    damage = monsterStrikeDamage(e, target, time, def.dmg, dash.damageMult ?? 1);
+    // Единая дверь урона со всем конвейером: резист надетой брони цели и
+    // врождённая броня твари. Разбор — `ActorDamageInput.applied`.
+    applyMonsterStrike(world, state, e, target, damage, def.strike!, time, msgs, playerId);
   }
 
   ai.scrapWake = 2;
-  ai.scrapWakeTimer = undefined;
+  ai.windupTimer = undefined;
+  ai.windupTargetId = undefined;
   ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, 0.42);
   e.attackCd = Math.max(e.attackCd ?? 0, MONSTERS[MonsterKind.RZHAVNIK].attackRate * 0.85);
-  applyRzhavnikFragileState(e);
+  if (leaped) applyRzhavnikFragileState(e);
+  else e.spriteScale = undefined;
   stampRzhavnikScrape(world, e, time);
   if (isPlayerEntity(target)) {
     msgs.push(msg(
       damage > 0
         ? `Ржавник попал первым рывком: -${damage}. Теперь корпус хрупкий.`
-        : 'Ржавник промахнулся первым рывком и рассыпался в хрупкую походку.',
+        : leaped
+          ? 'Ржавник промахнулся первым рывком и рассыпался в хрупкую походку.'
+          : 'Ржавник ткнулся рывком в препятствие и заскрёб вдоль него. Корпус цел.',
       time,
       damage > 0 ? '#f86' : '#fc4',
     ));
@@ -4812,35 +4783,33 @@ function finishRzhavnikLeap(
 
 function updateRzhavnikScrapWake(
   world: World,
-  entities: Entity[],
   e: Entity,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.RZHAVNIK || !hasAIFlag(e, 'scrapWake')) return false;
+  if (!hasAIFlag(e, 'scrapWake')) return false;
   const ai = e.ai!;
   if (ai.scrapWake === undefined) ai.scrapWake = rzhavnikDormantAnchor(world, e) ? 0 : 2;
 
   if (ai.scrapWake === 2) {
-    e.monsterDmgMult = Math.min(e.monsterDmgMult ?? 1, RZHAVNIK_FRAGILE_DMG_MULT);
+    e.monsterDmgMult = Math.min(e.monsterDmgMult ?? 1, MONSTERS[MonsterKind.RZHAVNIK].dash?.fragileDmgMult ?? 1);
     return false;
   }
 
   if (ai.scrapWake === 1) {
-    ai.scrapWakeTimer = Math.max(0, (ai.scrapWakeTimer ?? 0) - dt);
-    e.spriteScale = 1.12 + ai.scrapWakeTimer * 0.18;
-    if (ai.scrapWakeTimer > 0) return true;
+    ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
+    e.spriteScale = 1.12 + ai.windupTimer * 0.18;
+    if (ai.windupTimer > 0) return true;
     const cached = ai.combatTargetId !== undefined ? _entityById.get(ai.combatTargetId) : undefined;
     // Рывок идёт в того, кого разбудили. Потеряв цель, ржавник ищет ближайшего
     // рядом теми же глазами, что и при пробуждении, а не игрока по всему этажу.
     const target = cached?.alive
       ? cached
       : findImmediateCombatTarget(world, e, RZHAVNIK_LEAP_STEP * RZHAVNIK_LEAP_STEP, canBeMonsterTarget) ?? undefined;
-    finishRzhavnikLeap(world, entities, e, target, time, msgs, playerId, nextId, state);
+    finishRzhavnikLeap(world, e, target, time, msgs, playerId, state);
     return true;
   }
 
@@ -4917,37 +4886,17 @@ function publishZhornayaScentEvent(
 
 function damageZhornayaTarget(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
   const def = MONSTERS[MonsterKind.ZHORNAYA_TVAR];
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const rawDmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * 1.18 * (e.monsterDmgMult ?? 1));
-  const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
   if (target.hp === undefined) return false;
-
-  const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-  if (debugImmortalPlayerHit) {
-    keepDebugOnePunchManAlive(target);
-  } else {
-    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-    if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} врезалась в тебя на запах: -${dmg}`);
-    if (target.hp <= 0) { killEntity(target); target.hp = 0; }
-    const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-    spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-    if (target.hp <= 0) {
-      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-      if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-      msgs.push(msg(`${entityDisplayName(e)} убила ${entityDisplayName(target)}`, time, '#f44'));
-    }
-  }
+  const dmg = monsterStrikeDamage(e, target, time, def.dmg, def.dash?.damageMult ?? 1);
+  applyMonsterStrike(world, state, e, target, dmg, def.strike!, time, msgs, playerId);
 
   const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
   msgs.push(msg(`${entityDisplayName(e)} сорвалась на запах и ударила ${label}: -${dmg}`, time, '#f44'));
@@ -4956,31 +4905,22 @@ function damageZhornayaTarget(
 
 function finishZhornayaLunge(
   world: World,
-  entities: Entity[],
   e: Entity,
   scent: ZhornayaScentTarget,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): void {
   const ai = e.ai!;
-  const dx = world.delta(e.x, scent.x);
-  const dy = world.delta(e.y, scent.y);
-  const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-  const step = Math.min(dist, ZHORNAYA_LUNGE_STEP);
+  const dash = MONSTERS[MonsterKind.ZHORNAYA_TVAR].dash!;
   // Рывок шёл в обход коллизии и проносил тварь сквозь стены на четыре клетки.
-  // Общий предикат: до цели — только по свободному месту, упёрлась — встала.
-  const nx = world.wrap(e.x + (dx / dist) * step);
-  const ny = world.wrap(e.y + (dy / dist) * step);
-  if (!world.solid(Math.floor(nx), Math.floor(ny)) && traceClearPoint(world, e, nx, ny, step + 0.35)) {
-    e.x = nx;
-    e.y = ny;
-  } else {
-    stepActorBy(world, e, (dx / dist) * step, (dy / dist) * step);
-  }
-  e.angle = Math.atan2(dy, dx);
+  // Общий предикат семьи: до цели — только по свободному месту, упёрлась —
+  // соскользнула вдоль препятствия (колонка `slideOnBlock`).
+  const landing = dashLanding(world, e, scent.x, scent.y, dash);
+  const dirAngle = Math.atan2(landing.dirY, landing.dirX);
+  dashTo(world, e, landing.x, landing.y, dash);
+  e.angle = dirAngle;
 
   let connected = false;
   if (scent.bait && world.dist2(e.x, e.y, scent.bait.x, scent.bait.y) <= MONSTER_BAIT_CONSUME_RADIUS_SQ) {
@@ -4995,8 +4935,8 @@ function finishZhornayaLunge(
     clearDeadBaitDrop(scent.entity);
     msgs.push(msg(`${entityDisplayName(e)} сорвалась на пищевой запах`, time, '#ca6'));
     connected = true;
-  } else if (scent.entity && scent.entity.alive && world.dist2(e.x, e.y, scent.entity.x, scent.entity.y) <= ZHORNAYA_HIT_RANGE_SQ) {
-    connected = damageZhornayaTarget(world, entities, e, scent.entity, time, msgs, playerId, nextId, state);
+  } else if (scent.entity && dashReached(world, e, scent.entity, dash)) {
+    connected = damageZhornayaTarget(world, e, scent.entity, time, msgs, playerId, state);
   }
 
   if (!connected) {
@@ -5016,14 +4956,12 @@ function finishZhornayaLunge(
 
 function updateZhornayaTvar(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
   if (!hasAIFlag(e, 'scentOvercommit')) return false;
@@ -5062,10 +5000,11 @@ function updateZhornayaTvar(
     return true;
   }
 
-  if (d2 <= ZHORNAYA_LUNGE_RANGE_SQ && (e.attackCd ?? 0) <= 0 && traceClearPoint(world, e, scent.x, scent.y, ZHORNAYA_LUNGE_RANGE)) {
+  if (d2 <= ZHORNAYA_LUNGE_RANGE_SQ && (e.attackCd ?? 0) <= 0
+    && hasLineOfSight(world, e.x, e.y, scent.x, scent.y, ZHORNAYA_LUNGE_RANGE)) {
     e.spriteScale = 1.18;
     publishZhornayaScentEvent(state, world, e, scent, playerId, 'locked');
-    finishZhornayaLunge(world, entities, e, scent, time, msgs, playerId, nextId, state);
+    finishZhornayaLunge(world, e, scent, time, msgs, playerId, state);
     return true;
   }
 
@@ -5170,14 +5109,80 @@ function applyKontorshchikGrab(
   });
 }
 
-function bladeEliteHasLine(world: World, e: Entity, target: Entity, tuning: BladeEliteTuning): boolean {
-  return tuning.coverBlocks
-    ? hasClearLineOfFire(world, e, target, tuning.burstRange)
-    : hasClearLine(world, e, target, tuning.burstRange);
+/* ── Общий шаг замаха ─────────────────────────────────────────────
+ *
+ * Взвод, снятие и объявление замаха были написаны по копии у каждого из семи
+ * членов семьи. Разница между копиями — только числа и тексты, и они уехали в
+ * `MonsterDef.windup`. Замыканий эти помощники не принимают и ничего на актора
+ * в кадре не аллоцируют: причину срыва вызывающий считает сам и передаёт словом.
+ */
+
+/** Завести замах: длина, цель и поза взвода. */
+function armWindup(e: Entity, target: Entity, sec: number, pose: number): void {
+  const ai = e.ai!;
+  ai.windupTimer = sec;
+  ai.windupTargetId = target.id;
+  e.spriteScale = pose;
 }
 
-function publishBladeEliteEscape(
-  tuning: BladeEliteTuning,
+/** Снять замах. `breakCd` — откат после срыва, если он у вида есть. */
+function clearWindup(e: Entity, breakCd?: number): void {
+  const ai = e.ai!;
+  ai.windupTimer = undefined;
+  ai.windupTargetId = undefined;
+  e.spriteScale = undefined;
+  if (breakCd !== undefined) e.attackCd = Math.max(e.attackCd ?? 0, breakCd);
+}
+
+/** Довернуться на цель — обязательный такт любого замаха. */
+function faceWindupTarget(world: World, e: Entity, target: Entity): void {
+  e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
+}
+
+/**
+ * Вид взял цель на прицел — сказать это один раз на цель.
+ *
+ * Возвращает `true`, если объявление состоялось: у части видов за ним идёт рык.
+ * Условие «цель — игрок и она новая» было переписано шесть раз слово в слово.
+ */
+function announceWindupSighting(
+  world: World,
+  e: Entity,
+  target: Entity,
+  playerId: number,
+  time: number,
+  msgs: Msg[],
+  tags: string[],
+  data: Record<string, unknown>,
+  state?: GameState,
+): boolean {
+  const ai = e.ai!;
+  if (target.id !== playerId || ai.lastSeenTargetId === playerId) return false;
+  ai.lastSeenTargetId = playerId;
+  msgs.push(msg(rangedMonsterSightMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
+  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, tags, data);
+  return true;
+}
+
+/** Линия замаха этого вида: колонка `coverBlocks` решает, рвёт ли её мебель. */
+function windupHasLine(world: World, e: Entity, target: Entity, windup: MonsterWindupDef, maxDist: number): boolean {
+  return hasClearLine(world, e, target, maxDist, windup.coverBlocks === true);
+}
+
+/** Дальность срыва заведённого замаха. Без своей колонки — дальность взвода. */
+function windupBreakRange(windup: MonsterWindupDef): number {
+  return windup.breakRange ?? windup.range;
+}
+
+/**
+ * Замах ближнего боя (`meleeWindup`): Косторез и Сейфгард.
+ *
+ * Оба вида были ЕДИНСТВЕННЫМИ со спецповедением и без единого флага — их
+ * ворота стояли `switch`-ем по `MonsterKind`. Ворота теперь флаг, числа и
+ * тексты — строка `MonsterDef.windup`, и второй вид берёт эту механику
+ * объявлением, а не правкой общего AI.
+ */
+function publishMeleeWindupEscape(
   world: World,
   e: Entity,
   target: Entity | undefined,
@@ -5187,95 +5192,80 @@ function publishBladeEliteEscape(
 ): void {
   const ai = e.ai!;
   if (target?.id !== playerId && ai.lastSeenTargetId !== playerId) return;
-  publishBladeEliteEvent(tuning, state, world, e, target, 'monster_escaped', 4, ['escaped'], { reason });
+  publishMonsterReadabilityEvent(state, world, e, target, 'monster_escaped', 4, rangedMonsterTags(e.monsterKind, 'escaped'), { reason });
   ai.lastSeenTargetId = undefined;
 }
 
-function finishBladeEliteWindup(
-  tuning: BladeEliteTuning,
+function finishMeleeWindup(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
+  def: MonsterDef,
+  windup: MonsterWindupDef,
   time: number,
   msgs: Msg[],
-  nextId: { v: number },
   state: GameState | undefined,
   playerId: number,
 ): void {
-  const def = MONSTERS[tuning.kind];
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  let dmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * (e.monsterDmgMult ?? 1));
+  /* Урон общий (`monsterStrikeDamage`), своя здесь только цена реза: бронелист
+   * принимает один рез, и лист стоит нападающему половины урона.
+   *
+   * Скидка кожи желемыши идёт ДО реза, потому что она принадлежит цели, а рез —
+   * удару: сначала сколько дошло до тела, потом сколько съел лист. На замеренных
+   * числах порядок безразличен — пол 7 накрывает обе стороны (Косторез 17→12,
+   * рез 7 в любом порядке; Сейфгард 24→17, рез 9 в любом порядке).
+   *
+   * Нижняя граница 7 живая: срабатывает под ознобом и теперь под кожей. */
+  let dmg = monsterStrikeDamage(e, target, time, def.dmg);
   const armorCut = cutMetalSheet(target);
   if (armorCut) dmg = Math.max(7, Math.round(dmg * 0.55));
+  const strikeVerb = windup.strikeVerb ?? 'бьёт';
+  const targetLabel = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
 
-  if (target.hp !== undefined) {
-    const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-    if (debugImmortalPlayerHit) {
-      keepDebugOnePunchManAlive(target);
-    } else {
-      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-      if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${tuning.strikeVerb} тебя: -${dmg}`);
-      if (target.hp <= 0) {
-        killEntity(target);
-        target.hp = 0;
-      }
-      const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-      spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-      const targetLabel = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
-      msgs.push(msg(
-        armorCut
-          ? `${entityDisplayName(e)} срезал бронелист и задел ${targetLabel}: -${dmg}`
-          : `${entityDisplayName(e)} ${tuning.strikeVerb} ${targetLabel}: -${dmg}`,
-        time,
-        armorCut ? '#fc4' : '#f44',
-      ));
-      publishBladeEliteEvent(tuning, state, world, e, target, 'monster_armor_cut', armorCut ? 5 : 4, ['hit', armorCut ? 'armor_cut' : 'burst'], {
-        damage: dmg,
-        armorCut,
-        itemId: armorCut ? 'metal_sheet' : undefined,
-        itemName: armorCut ? ITEMS.metal_sheet?.name : undefined,
-      });
-      if (target.hp <= 0) {
-        spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-        if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-        msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(target)}`, time, '#f44'));
-      }
-    }
+  // Строка попадания идёт ПЕРЕД строкой убийства и только по прошедшему урону,
+  // поэтому её печатает общий шаг, а не вызывающий.
+  const landed = applyMonsterStrike(
+    world, state, e, target, dmg, def.strike ?? {}, time, msgs, playerId, undefined,
+    armorCut
+      ? `${entityDisplayName(e)} срезал бронелист и задел ${targetLabel}: -${dmg}`
+      : `${entityDisplayName(e)} ${strikeVerb} ${targetLabel}: -${dmg}`,
+    armorCut ? '#fc4' : '#f44',
+  );
+  if (landed) {
+    publishMonsterReadabilityEvent(state, world, e, target, 'monster_armor_cut', armorCut ? 5 : 4, rangedMonsterTags(e.monsterKind, 'hit', armorCut ? 'armor_cut' : 'burst'), {
+      damage: dmg,
+      armorCut,
+      itemId: armorCut ? 'metal_sheet' : undefined,
+      itemName: armorCut ? ITEMS.metal_sheet?.name : undefined,
+    });
   }
 
   e.attackCd = def.attackRate;
-  e.spriteScale = undefined;
-  e.ai!.windupTimer = undefined;
-  e.ai!.windupTargetId = undefined;
+  clearWindup(e);
   if (target.id === playerId) e.ai!.lastSeenTargetId = playerId;
   playSoundAt(playGrowl, e.x, e.y);
 }
 
-function updateBladeElite(
+function updateMeleeWindup(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
-  const tuning = bladeEliteTuning(e.monsterKind);
-  if (!tuning) return false;
+  const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : undefined;
+  const windup = monsterWindup(e.monsterKind);
+  if (!def || !windup) return false;
   const ai = e.ai!;
   const dist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
+  const breakRange = windupBreakRange(windup);
 
-  if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
-    ai.lastSeenTargetId = playerId;
-    publishBladeEliteEvent(tuning, state, world, e, target, 'monster_sighted', 4, ['sighted', 'warning'], {
-      counterplay: tuning.counterplay,
-    });
-    msgs.push(msg(tuning.sightMsg, time, '#fa4'));
+  if (announceWindupSighting(world, e, target, playerId, time, msgs, rangedMonsterTags(e.monsterKind, 'sighted', 'warning'), {
+    counterplay: windup.counterplay,
+  }, state)) {
     playSoundAt(playGrowl, e.x, e.y);
   }
 
@@ -5300,33 +5290,32 @@ function updateBladeElite(
 
   if ((ai.windupTimer ?? 0) > 0) {
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
-    e.angle = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
+    faceWindupTarget(world, e, target);
     e.spriteScale = 1.1 + Math.max(0, ai.windupTimer) * 0.08;
 
-    if (!target.alive || dist > tuning.burstRange || !bladeEliteHasLine(world, e, target, tuning)) {
-      publishBladeEliteEscape(tuning, world, e, target, playerId, state, dist > tuning.burstRange ? 'distance' : 'obstacle');
+    if (!target.alive || dist > breakRange || !windupHasLine(world, e, target, windup, breakRange)) {
+      publishMeleeWindupEscape(world, e, target, playerId, state, dist > breakRange ? 'distance' : 'obstacle');
       msgs.push(msg(`${entityDisplayName(e)} промахнулся: цель вышла из замаха.`, time, '#fc4'));
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
-      e.spriteScale = undefined;
+      clearWindup(e);
+      /* Присвоение, а не `Math.max`, — так было до сведения. Занизить откат
+       * оно не может: с непустой болью в этой ветке не оказываются, замах
+       * снимает стаггер выше по функции. */
       e.attackCd = 0.75;
       return true;
     }
 
-    if (ai.windupTimer <= 0) finishBladeEliteWindup(tuning, world, entities, e, target, time, msgs, nextId, state, playerId);
+    if (ai.windupTimer <= 0) finishMeleeWindup(world, e, target, def, windup, time, msgs, state, playerId);
     return true;
   }
 
-  if (dist <= tuning.windupRange && (e.attackCd ?? 0) <= 0 && bladeEliteHasLine(world, e, target, tuning)) {
-    ai.windupTimer = tuning.windupSec;
-    ai.windupTargetId = target.id;
-    e.spriteScale = 1.18;
-    msgs.push(msg(tuning.windupMsg, time, '#fa4'));
+  if (dist <= windup.range && (e.attackCd ?? 0) <= 0 && windupHasLine(world, e, target, windup, breakRange)) {
+    armWindup(e, target, windup.windupSec, 1.18);
+    msgs.push(msg(rangedMonsterWindupMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
     playSoundAt(playGrowl, e.x, e.y);
     return true;
   }
 
-  if (dist > tuning.escapeDist) ai.windupTargetId = undefined;
+  if (windup.escapeDist !== undefined && dist > windup.escapeDist) ai.windupTargetId = undefined;
   ai.timer -= dt;
   if (monsterRepathDue(world, e)) {
     const chase = monsterChaseCell(world, e, target);
@@ -5370,14 +5359,16 @@ export function tryMonsterProjectileStagger(
     interruptTreskotnikWindup(world, monster, target, state.time, state.msgs, 'hit', state);
     return true;
   }
-  const tuning = bladeEliteTuning(monster.monsterKind);
-  if (!tuning) return false;
+  /* Дробь сбивает замах у того, кто ОБЪЯВИЛ длину боли колонкой `staggerSec`, —
+   * а не у двух видов по имени. */
+  const windup = monsterWindup(monster.monsterKind);
+  if (!windup?.staggerSec) return false;
   if ((monster.hp ?? 1) <= 0) return false;
   if (projectile.ownerId !== playerId || projectile.sprite !== Spr.PELLET) return false;
 
   const ai = monster.ai;
   const wasWindup = (ai.windupTimer ?? 0) > 0;
-  ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, tuning.staggerSec);
+  ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, windup.staggerSec);
   ai.windupTimer = undefined;
   ai.windupTargetId = undefined;
   monster.attackCd = Math.max(monster.attackCd ?? 0, 0.95);
@@ -5385,10 +5376,10 @@ export function tryMonsterProjectileStagger(
 
   if (wasWindup) {
     const target = ai.combatTargetId !== undefined ? _entityById.get(ai.combatTargetId) : undefined;
-    publishBladeEliteEvent(tuning, state, world, monster, target, 'monster_windup_interrupted', 4, ['windup', 'interrupted', 'shotgun'], {
+    publishMonsterReadabilityEvent(state, world, monster, target, 'monster_windup_interrupted', 4, rangedMonsterTags(monster.monsterKind, 'windup', 'interrupted', 'shotgun'), {
       reason: 'shotgun_stagger',
     });
-    state.msgs.push(msg(tuning.staggerMsg, state.time, '#4f4'));
+    if (windup.staggerLine) state.msgs.push(msg(windup.staggerLine, state.time, '#4f4'));
   }
   return true;
 }
@@ -5465,39 +5456,31 @@ function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): 
   return playGrowl;
 }
 
+/* ── Семья: замах и телеграфируемый удар ──────────────────────────
+ *
+ * Числа и тексты замаха живут в дефе вида (`MonsterDef.windup`, у боссов —
+ * `boss`), а здесь остались только ОБЩИЕ УМОЛЧАНИЯ семьи. До сведения на их
+ * месте стояли семь `switch (kind)` на 14 дальнобойных видов, отдельная
+ * таблица `bladeEliteTuning` на два ближних и третья копия в
+ * `MonsterBossReadability` — одна мысль, написанная трижды разными руками.
+ *
+ * Умолчание — не «пустое место», а полноценный ответ: вид, которому нечего
+ * добавить (Башня, Аватар Червия), строки в дефе не заводит вовсе.
+ */
+const WINDUP_DEFAULT_COLOR = '#fc6';
+const WINDUP_RANGE_BREAK_LINE = 'Дистанция сломала выстрел: источник потерял линию.';
+const WINDUP_LINE_BREAK_LINE = 'Линия огня сорвана укрытием или углом.';
+
 function rangedMonsterWindupSec(kind: MonsterKind | undefined): number {
-  const boss = kind === undefined ? undefined : MONSTERS[kind]?.boss;
-  if (boss) return boss.windupSec;
-  switch (kind) {
-    case MonsterKind.PAUPSINA: return PAUPSINA_WEB_WINDUP_SEC;
-    case MonsterKind.EYE: return EYE_WINDUP_SEC;
-    case MonsterKind.CHERNOSLIZ: return CHERNOSLIZ_WINDUP_SEC;
-    case MonsterKind.PARAGRAPH: return PARAGRAPH_WINDUP_SEC;
-    case MonsterKind.IDOL: return IDOL_WINDUP_SEC;
-    case MonsterKind.KANTSELYARSKIY_IDOL: return KANTSELYARSKIY_IDOL_WINDUP_SEC;
-    case MonsterKind.ROBOT: return ROBOT_WINDUP_SEC;
-    case MonsterKind.MANCOBUS:
-    case MonsterKind.HERALD:
-    case MonsterKind.CREATOR:
-      return HEAVY_RANGED_WINDUP_SEC;
-    default: return GENERIC_RANGED_WINDUP_SEC;
-  }
+  return monsterWindup(kind)?.windupSec ?? GENERIC_RANGED_WINDUP_SEC;
 }
 
 function rangedMonsterMinRange(kind: MonsterKind | undefined): number {
-  const boss = kind === undefined ? undefined : MONSTERS[kind]?.boss;
-  if (boss) return boss.minRange;
-  if (kind === MonsterKind.PAUPSINA) return PAUPSINA_WEB_MIN_RANGE;
-  if (kind === MonsterKind.CHERNOSLIZ) return 0.75;
-  if (kind === MonsterKind.IDOL) return 1.25;
-  if (kind === MonsterKind.KANTSELYARSKIY_IDOL) return KANTSELYARSKIY_IDOL_MIN_RANGE;
-  return EYE_MIN_RANGE;
+  return monsterWindup(kind)?.minRange ?? EYE_MIN_RANGE;
 }
 
 function rangedMonsterShotRange(kind: MonsterKind | undefined): number {
-  const boss = kind === undefined ? undefined : MONSTERS[kind]?.boss;
-  if (boss) return boss.range;
-  return kind === MonsterKind.PAUPSINA ? PAUPSINA_WEB_SHOT_RANGE : RANGED_SHOT_RANGE;
+  return monsterWindup(kind)?.range ?? RANGED_SHOT_RANGE;
 }
 
 function tryPaupsinaRangeStep(world: World, e: Entity, target: Entity, bestDist: number, dt: number): boolean {
@@ -5525,23 +5508,12 @@ function tryPaupsinaRangeStep(world: World, e: Entity, target: Entity, bestDist:
 }
 
 function rangedMonsterColor(kind: MonsterKind | undefined): string {
-  switch (kind) {
-    case MonsterKind.PAUPSINA: return '#ddd';
-    case MonsterKind.EYE: return '#cf6';
-    case MonsterKind.CHERNOSLIZ: return '#7f9';
-    case MonsterKind.PARAGRAPH: return '#f6c';
-    case MonsterKind.IDOL: return '#c8f';
-    case MonsterKind.KANTSELYARSKIY_IDOL: return '#fd6';
-    case MonsterKind.ROBOT: return '#6cf';
-    case MonsterKind.MANCOBUS: return '#fa4';
-    case MonsterKind.HERALD: return '#c8f';
-    case MonsterKind.CREATOR: return '#9f8';
-    default: return '#fc6';
-  }
+  return monsterWindup(kind)?.color ?? WINDUP_DEFAULT_COLOR;
 }
 
 function rangedMonsterTag(kind: MonsterKind | undefined): string {
-  return kind === undefined ? 'ranged' : MonsterKind[kind].toLowerCase();
+  if (kind === undefined) return 'ranged';
+  return monsterWindup(kind)?.tag ?? MonsterKind[kind].toLowerCase();
 }
 
 function rangedMonsterTags(kind: MonsterKind | undefined, ...tags: string[]): string[] {
@@ -5551,53 +5523,27 @@ function rangedMonsterTags(kind: MonsterKind | undefined, ...tags: string[]): st
 }
 
 function rangedMonsterWindupMessage(kind: MonsterKind | undefined, name: string): string {
-  const boss = kind === undefined ? undefined : MONSTERS[kind]?.boss;
-  if (boss) return boss.windupLine;
-  switch (kind) {
-    case MonsterKind.PAUPSINA: return 'Паупсина присела на передние лапы: сейчас плюнет сетью. Шкаф, дверь или ближний напор срывают плевок.';
-    case MonsterKind.EYE: return 'Глаз разогревает зелёную линию огня. Угол, дверь или шкаф сорвут выстрел.';
-    case MonsterKind.CHERNOSLIZ: return 'Чернослиз раскрывает зеленую щель в воде. Угол, сухая кромка или свет срывают первый залп.';
-    case MonsterKind.PARAGRAPH: return 'Параграф дописывает прямую строку. Ломайте видимость или врывайтесь после залпа.';
-    case MonsterKind.IDOL: return 'Идол собирает ПСИ-луч. Стена, дверь или упорный заход гасят источник.';
-    case MonsterKind.KANTSELYARSKIY_IDOL: return 'Бумаги вокруг Канцелярского Идола выстроились в линию. Шкаф, стена или рывок в упор сорвут выстрел.';
-    case MonsterKind.ROBOT: return 'Робот раскручивает плазму. Сойдите с линии и бейте после вспышки.';
-    default: return `${name} целится по прямой. Укрытие или угол ломают линию огня.`;
-  }
+  return monsterWindup(kind)?.windupLine ??
+    `${name} целится по прямой. Укрытие или угол ломают линию огня.`;
 }
 
 function rangedMonsterSightMessage(kind: MonsterKind | undefined, name: string): string {
-  const boss = kind === undefined ? undefined : MONSTERS[kind]?.boss;
-  if (boss) return boss.warningLine;
-  switch (kind) {
-    case MonsterKind.PAUPSINA: return 'Паупсина держит липкую прямую. Сеть не убивает, но ловит ноги на несколько секунд.';
-    case MonsterKind.EYE: return 'Глаз держит прямую линию. Зеленый разогрев читается до выстрела.';
-    case MonsterKind.CHERNOSLIZ: return 'В черной воде рябь пошла против течения: чернослиз держит грязную линию.';
-    case MonsterKind.PARAGRAPH: return 'Параграф заметил вас: его пункт летит только по видимой прямой.';
-    case MonsterKind.IDOL: return 'Идол не двигается: режьте угол и входите в упор между ПСИ-залпами.';
-    case MonsterKind.KANTSELYARSKIY_IDOL: return 'Канцелярский Идол держит офисную линию: шкафы гасят поле, бумаги в кармане усиливают залп.';
-    case MonsterKind.ROBOT: return 'Робот взял линию плазмы. После залпа у него есть пауза.';
-    default: return `${name} держит линию огня. Выстрел будет с разогревом.`;
-  }
+  return monsterWindup(kind)?.warningLine ??
+    `${name} держит линию огня. Выстрел будет с разогревом.`;
 }
 
+/* Порядок ветвей прежний: у босса своя строка на ЛЮБОЙ срыв (его проверка
+ * стояла первой в старом `switch`), у остальных срыв по дистанции говорит
+ * общей строкой, а собственная строка вида отвечает за геометрию. */
 function rangedMonsterInterruptedMessage(kind: MonsterKind | undefined, reason: string): string {
   const boss = kind === undefined ? undefined : MONSTERS[kind]?.boss;
   if (boss) return boss.interruptLine;
-  if (reason === 'range') return 'Дистанция сломала выстрел: источник потерял линию.';
-  switch (kind) {
-    case MonsterKind.PAUPSINA: return 'Плевок Паупсины сорвался о бетон или мебель. Давите дистанцию, пока она переставляет лапы.';
-    case MonsterKind.EYE: return 'Выстрел Глаза сорвался о стену или укрытие. Держите угол до вспышки.';
-    case MonsterKind.CHERNOSLIZ: return 'Рябь чернослиза погасла за углом или сухой кромкой. Сейчас можно сближаться.';
-    case MonsterKind.PARAGRAPH: return 'Пункт Параграфа уперся в укрытие. Сейчас можно сближаться.';
-    case MonsterKind.IDOL: return 'ПСИ-луч Идола погас за геометрией. Источник открыт для захода.';
-    case MonsterKind.KANTSELYARSKIY_IDOL: return 'Офисное поле Идола уперлось в шкаф или стену. После срыва есть окно.';
-    case MonsterKind.ROBOT: return 'Плазменная линия Робота сорвалась. Пауза короткая, сближайтесь.';
-    default: return 'Линия огня сорвана укрытием или углом.';
-  }
+  if (reason === 'range') return WINDUP_RANGE_BREAK_LINE;
+  return monsterWindup(kind)?.interruptLine ?? WINDUP_LINE_BREAK_LINE;
 }
 
 function rangedMonsterCounterplay(kind: MonsterKind | undefined, fallback: string): string {
-  return kind === undefined ? fallback : MONSTERS[kind]?.boss?.counterplay ?? fallback;
+  return monsterWindup(kind)?.counterplay ?? fallback;
 }
 
 function updateRangedBossPhaseCue(
@@ -5788,16 +5734,15 @@ export function updateVodyanoyWaterPressureLine(
 
   if (wet.pulseCd <= 0 && target.hp !== undefined) {
     wet.pulseCd = VODYANOY_WET_LINE_PULSE_SEC;
-    const dmg = Math.max(1, Math.round(1 + wet.pressure * 0.62));
-    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-    if (target.rpg) target.rpg.psi = Math.max(0, target.rpg.psi - Math.max(1, Math.round(2 + wet.pressure)));
-    if (target.hp <= 0) {
-      killEntity(target);
-      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-      msgs.push(msg(`${entityDisplayName(e)} задавил ${entityDisplayName(target)} мокрой ПСИ-линией`, time, '#7dd'));
-    } else if (target.id === playerId) {
-      recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} давит по мокрой линии: -${dmg}`);
-      if (wet.pressure > 3.2) msgs.push(msg('Давление в воде набирает силу. Сходите на сухой бетон сейчас.', time, '#7dd'));
+    /* Своя формула по существу: пульс считает НАБРАННОЕ давление, а не урон
+     * вида. Пол в единицу здесь мёртв — давление неотрицательно, и `round(1 + …)`
+     * ниже единицы не опускается; оставлен только у пси-слива, где та же
+     * причина. Снят: числа он не менял ни разу. */
+    const dmg = Math.round(1 + wet.pressure * 0.62);
+    const landed = applyMonsterStrike(world, state, e, target, dmg, MONSTERS[MonsterKind.VODYANOY_KOSHMAR].strike!, time, msgs, playerId);
+    if (target.rpg) target.rpg.psi = Math.max(0, target.rpg.psi - Math.round(2 + wet.pressure));
+    if (landed && target.alive && target.id === playerId && wet.pressure > 3.2) {
+      msgs.push(msg('Давление в воде набирает силу. Сходите на сухой бетон сейчас.', time, '#7dd'));
     }
   }
 
@@ -5864,35 +5809,34 @@ export function updateTrubnyyWetLineShot(
   if (e.monsterKind !== MonsterKind.TRUBNYY_AVTOMAT) return false;
   const ai = e.ai!;
 
+  const windup = monsterWindup(e.monsterKind)!;
+
   if ((ai.windupTimer ?? 0) > 0) {
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
     const line = ai.windupTargetId === target.id && target.alive
       ? getTrubnyyWetLineShot(world, e, target)
       : undefined;
+    /* Причина срыва у этого вида одна и своя: мокрая прямая перестала быть
+     * мокрой или прямой. Колонка `MonsterWindupDef` её не выражает — это
+     * геометрия воды, а не дистанция и не укрытие. */
     if (!line) {
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
-      e.spriteScale = undefined;
-      e.attackCd = Math.max(e.attackCd ?? 0, RANGED_LOS_BREAK_COOLDOWN);
+      clearWindup(e, RANGED_LOS_BREAK_COOLDOWN);
       if (target.id === playerId) {
-        msgs.push(msg('Трубный Автомат потерял мокрую прямую. Фланг или сухая клетка сорвали заряд.', time, '#9cf'));
-        publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, ['trubnyy_avtomat', 'wet_line', 'interrupted'], {
+        msgs.push(msg(rangedMonsterInterruptedMessage(e.monsterKind, 'wet_line'), time, '#9cf'));
+        publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, rangedMonsterTags(e.monsterKind, 'wet_line', 'interrupted'), {
           reason: 'left_wet_line',
-          counterplay: 'step_off_wet_line_before_charge',
+          counterplay: windup.counterplay,
         });
       }
       return true;
     }
 
-    const dx = world.delta(e.x, target.x);
-    const dy = world.delta(e.y, target.y);
-    e.angle = Math.atan2(dy, dx);
-    e.spriteScale = 1.08 + Math.max(0, ai.windupTimer / TRUBNYY_WET_LINE_WINDUP_SEC) * 0.16;
+    faceWindupTarget(world, e, target);
+    e.spriteScale = 1.08 + Math.max(0, ai.windupTimer / windup.windupSec) * 0.16;
     if (ai.windupTimer <= 0) {
       fireMonsterProjectile(world, entities, e, target, def, nextId, 1.08);
       e.attackCd = TRUBNYY_WET_LINE_RECOVERY_SEC;
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
+      clearWindup(e);
       e.spriteScale = 0.9;
       if (target.id === playerId) {
         msgs.push(msg('Трубный Автомат прожег мокрую линию и ушел в остывание. Сейчас окно для упора или фланга.', time, '#6cf'));
@@ -5910,23 +5854,17 @@ export function updateTrubnyyWetLineShot(
   const line = getTrubnyyWetLineShot(world, e, target);
   if (!line) return false;
 
-  if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
-    ai.lastSeenTargetId = playerId;
-    msgs.push(msg('Трубный Автомат нашел мокрую прямую. Синяя зарядка читается до выстрела.', time, '#6cf'));
-    publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['trubnyy_avtomat', 'ranged', 'wet_line', 'warning'], {
-      wetCells: line.waterCells,
-      wetScore: line.wetScore,
-      maxCells: TRUBNYY_WET_LINE_MAX_CELLS,
-      recoverySec: TRUBNYY_WET_LINE_RECOVERY_SEC,
-      counterplay: 'step_off_wet_line_or_attack_recovery',
-    });
-  }
+  announceWindupSighting(world, e, target, playerId, time, msgs, rangedMonsterTags(e.monsterKind, 'ranged', 'wet_line', 'warning'), {
+    wetCells: line.waterCells,
+    wetScore: line.wetScore,
+    maxCells: TRUBNYY_WET_LINE_MAX_CELLS,
+    recoverySec: TRUBNYY_WET_LINE_RECOVERY_SEC,
+    counterplay: 'step_off_wet_line_or_attack_recovery',
+  }, state);
 
-  ai.windupTimer = TRUBNYY_WET_LINE_WINDUP_SEC;
-  ai.windupTargetId = target.id;
-  e.spriteScale = 1.18;
+  armWindup(e, target, windup.windupSec, 1.18);
   if (target.id === playerId) {
-    msgs.push(msg('Синие кольца Трубного Автомата ярчают по воде. Сойдите с линии до вспышки.', time, '#6cf'));
+    msgs.push(msg(rangedMonsterWindupMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
     playSoundAt(playGrowl, e.x, e.y);
   }
   return true;
@@ -5938,7 +5876,7 @@ function lampoglazTargetLight(world: World, target: Entity): number {
 }
 
 function lampoglazWindupSec(light: number): number {
-  return light >= LAMPOGLAZ_HARD_LOCK ? LAMPOGLAZ_HARD_WINDUP_SEC : LAMPOGLAZ_WINDUP_SEC;
+  return light >= LAMPOGLAZ_HARD_LOCK ? LAMPOGLAZ_HARD_LOCK_WINDUP_SEC : LAMPOGLAZ_WINDUP_SEC;
 }
 
 function lampoglazDamageMult(light: number): number {
@@ -5963,70 +5901,60 @@ function updateLampoglazLightLock(
   const targetLight = lampoglazTargetLight(world, target);
   const hasLock = targetLight >= LAMPOGLAZ_LIGHT_LOCK;
   const hardLock = targetLight >= LAMPOGLAZ_HARD_LOCK;
+  const windup = monsterWindup(e.monsterKind)!;
   const line = lineThreatContext(world, e, target, LAMPOGLAZ_SHOT_RANGE, LAMPOGLAZ_MIN_RANGE);
   const lineClear = target.alive && line.los;
   const currentTarget = ai.windupTargetId === undefined || ai.windupTargetId === target.id;
 
   if ((ai.windupTimer ?? 0) > 0) {
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
+    /* Причина срыва у этого вида своя — ТЕМНОТА: цель ушла со света.
+     * Дистанция и геометрия у него общие с дальнобойными. */
     if (!currentTarget || !lineClear || !hasLock) {
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
-      e.spriteScale = undefined;
-      e.attackCd = Math.max(e.attackCd ?? 0, RANGED_LOS_BREAK_COOLDOWN);
+      clearWindup(e, RANGED_LOS_BREAK_COOLDOWN);
       if (target.id === playerId) {
         const reason = !hasLock ? 'darkness' : !line.inRange ? 'range' : 'line_of_sight';
         msgs.push(msg(
           reason === 'darkness'
             ? 'Лампоглаз потерял световой захват. Темный угол держит паузу.'
-            : 'Зеленый захват Лампоглаза сорвался о геометрию.',
+            : windup.interruptLine ?? WINDUP_LINE_BREAK_LINE,
           time,
           '#9cf',
         ));
-        publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, ['lampoglaz', 'light_lock', 'interrupted'], {
+        publishMonsterReadabilityEvent(state, world, e, target, 'monster_windup_interrupted', 3, rangedMonsterTags(e.monsterKind, 'light_lock', 'interrupted'), {
           reason,
           targetLight,
-          counterplay: 'darkness_or_line_break',
+          counterplay: windup.counterplay,
         });
       }
       return true;
     }
 
-    const dx = world.delta(e.x, target.x);
-    const dy = world.delta(e.y, target.y);
-    e.angle = Math.atan2(dy, dx);
+    faceWindupTarget(world, e, target);
     e.spriteScale = hardLock ? 1.22 : 1.12;
     if (ai.windupTimer <= 0) {
       fireMonsterProjectile(world, entities, e, target, def, nextId, lampoglazDamageMult(targetLight));
       e.attackCd = (def.attackRate ?? 2) * (hardLock ? 0.72 : 1);
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
-      e.spriteScale = undefined;
+      clearWindup(e);
     }
     return true;
   }
 
   if (hasLock && lineClear) {
-    if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
-      ai.lastSeenTargetId = playerId;
-      msgs.push(msg('Лампоглаз держит световую линию. Желтый гул кончится зеленым выстрелом.', time, '#fd6'));
-      publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['lampoglaz', 'ranged', 'light_lock', hardLock ? 'hard_lock' : 'lit_target'], {
-        targetLight,
-        windupSec: lampoglazWindupSec(targetLight),
-        counterplay: 'leave_light_or_break_line',
-      });
-    }
+    announceWindupSighting(world, e, target, playerId, time, msgs, rangedMonsterTags(e.monsterKind, 'ranged', 'light_lock', hardLock ? 'hard_lock' : 'lit_target'), {
+      targetLight,
+      windupSec: lampoglazWindupSec(targetLight),
+      counterplay: 'leave_light_or_break_line',
+    }, state);
     if ((e.attackCd ?? 0) <= 0) {
-      ai.windupTimer = lampoglazWindupSec(targetLight);
-      ai.windupTargetId = target.id;
-      e.spriteScale = hardLock ? 1.24 : 1.15;
+      armWindup(e, target, lampoglazWindupSec(targetLight), hardLock ? 1.24 : 1.15);
       if (target.id === playerId) {
         msgs.push(msg(
           hardLock
             ? 'Лампы вокруг щелкнули резко: Лампоглаз взял точный захват. В темноту или за шкаф!'
-            : 'Лампоглаз собирает зеленую точку по светлой полосе. Срывайте линию.',
+            : rangedMonsterWindupMessage(e.monsterKind, entityDisplayName(e)),
           time,
-          '#fd6',
+          rangedMonsterColor(e.monsterKind),
         ));
         playSoundAt(playGrowl, e.x, e.y);
       }
@@ -6072,10 +6000,7 @@ function updateReadableMonsterRanged(
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
     const lineClear = currentTarget && target.alive && line.los;
     if (!lineClear) {
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
-      e.spriteScale = undefined;
-      e.attackCd = Math.max(e.attackCd ?? 0, RANGED_LOS_BREAK_COOLDOWN);
+      clearWindup(e, RANGED_LOS_BREAK_COOLDOWN);
       if (target.id === playerId) {
         const reason = !line.inRange ? 'range' : 'line_of_sight';
         msgs.push(msg(rangedMonsterInterruptedMessage(e.monsterKind, reason), time, '#9cf'));
@@ -6088,15 +6013,11 @@ function updateReadableMonsterRanged(
       return true;
     }
 
-    const dx = world.delta(e.x, target.x);
-    const dy = world.delta(e.y, target.y);
-    e.angle = Math.atan2(dy, dx);
+    faceWindupTarget(world, e, target);
     e.spriteScale = 1.05 + Math.max(0, ai.windupTimer / windupSec) * 0.12;
     if (ai.windupTimer <= 0) {
       fireMonsterProjectile(world, entities, e, target, def, nextId);
-      ai.windupTimer = undefined;
-      ai.windupTargetId = undefined;
-      e.spriteScale = undefined;
+      clearWindup(e);
     }
     return true;
   }
@@ -6107,22 +6028,16 @@ function updateReadableMonsterRanged(
   }
   if (!line.los) return false;
 
-  if (target.id === playerId && ai.lastSeenTargetId !== playerId) {
-    ai.lastSeenTargetId = playerId;
-    msgs.push(msg(rangedMonsterSightMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
-    publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, rangedMonsterTags(e.monsterKind, 'ranged', 'line_of_sight', 'warning'), {
-      windupSec,
-      shotRange: Math.round(shotRange * 10) / 10,
-      minRange: Math.round(minRange * 10) / 10,
-      counterplay: rangedMonsterCounterplay(e.monsterKind, 'corner_or_door_breaks_line'),
-      ...officeFieldEventData(world, e, target),
-    });
-  }
+  announceWindupSighting(world, e, target, playerId, time, msgs, rangedMonsterTags(e.monsterKind, 'ranged', 'line_of_sight', 'warning'), {
+    windupSec,
+    shotRange: Math.round(shotRange * 10) / 10,
+    minRange: Math.round(minRange * 10) / 10,
+    counterplay: rangedMonsterCounterplay(e.monsterKind, 'corner_or_door_breaks_line'),
+    ...officeFieldEventData(world, e, target),
+  }, state);
 
   if ((e.attackCd ?? 0) <= 0) {
-    ai.windupTimer = windupSec;
-    ai.windupTargetId = target.id;
-    e.spriteScale = 1.14;
+    armWindup(e, target, windupSec, 1.14);
     if (e.monsterKind === MonsterKind.CHERNOSLIZ) stampChernoSlizWake(world, e, time);
     if (target.id === playerId) {
       msgs.push(msg(rangedMonsterWindupMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
@@ -6152,17 +6067,18 @@ function slepoglazAimAngle(world: World, e: Entity, tx: number, ty: number): num
   return Math.atan2(dy, dx);
 }
 
+/**
+ * Докуда достаёт луч Слепоглаза.
+ *
+ * Свой марш пробами через 0.25 клетки был ЧЕТВЁРТОЙ копией одной растеризации,
+ * и мелкий шаг был не замыслом, а платой за приблизительность проб: он ловил
+ * клетки, которые луч задевает вскользь, ценой вчетверо большего числа проб.
+ * Точный обход шага не имеет вовсе и знает точку входа в бетон, поэтому луч
+ * теперь кончается РОВНО у стены, а не на четверть клетки не дойдя до неё.
+ * Пол в полклетки сохранён: упёршийся в стену бьёт хотя бы себе под ноги.
+ */
 function traceSlepoglazBeamLen(world: World, e: Entity, dirX: number, dirY: number): number {
-  let len = SLEPOGLAZ_SHOT_RANGE;
-  for (let d = 0.45; d <= SLEPOGLAZ_SHOT_RANGE; d += 0.25) {
-    const x = world.wrap(Math.floor(e.x + dirX * d));
-    const y = world.wrap(Math.floor(e.y + dirY * d));
-    if (world.solid(x, y)) {
-      len = Math.max(0.5, d - 0.25);
-      break;
-    }
-  }
-  return len;
+  return Math.max(0.5, lineBlockDistance(world, e.x, e.y, dirX, dirY, SLEPOGLAZ_SHOT_RANGE));
 }
 
 function stampSlepoglazBeam(world: World, e: Entity, dirX: number, dirY: number, len: number): void {
@@ -6184,7 +6100,6 @@ function stampSlepoglazBeam(world: World, e: Entity, dirX: number, dirY: number,
 
 function fireSlepoglazBeam(
   world: World,
-  entities: Entity[],
   e: Entity,
   def: MonsterDef,
   tx: number,
@@ -6192,16 +6107,12 @@ function fireSlepoglazBeam(
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): void {
   const angle = slepoglazAimAngle(world, e, tx, ty);
   const dirX = Math.cos(angle);
   const dirY = Math.sin(angle);
   const len = traceSlepoglazBeamLen(world, e, dirX, dirY);
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const dmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * (e.monsterDmgMult ?? 1));
   let hitCount = 0;
   let hitPlayer = false;
 
@@ -6219,25 +6130,17 @@ function fireSlepoglazBeam(
     if (perp > SLEPOGLAZ_BEAM_WIDTH) continue;
     if (target.hp === undefined) continue;
 
-    const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-    if (debugImmortalPlayerHit) {
-      keepDebugOnePunchManAlive(target);
-    } else {
-      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-      if (target.id === playerId) {
-        hitPlayer = true;
-        recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} прожег старую позицию: -${dmg}`);
-      }
-      if (target.hp <= 0) {
-        killEntity(target);
-        target.hp = 0;
-      }
-      spawnBloodHit(world, target.x, target.y, angle, dmg, false);
-      if (target.hp <= 0) {
-        spawnDeathPool(world, target.x, target.y, false);
-        if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-        msgs.push(msg(`${entityDisplayName(e)} прожег ${entityDisplayName(target)}`, time, '#9f4'));
-      }
+    /* Форма поражения у луча своя — полоса, а не одна цель, — но ПРИМЕНЕНИЕ
+     * урона внутри полосы то же самое, что у остальных десяти. Брызги идут
+     * вдоль луча, а не от твари к цели: направление удара знает здесь только он.
+     *
+     * Урон считается НА КАЖДУЮ цель, а не один раз на луч: множитель силы
+     * ближнего боя бьющего в этой формуле был с самого начала, значит и скидка
+     * ближнего урона цели принадлежит ей же. Половина правила зависит от цели,
+     * поэтому вынести её из полосы нельзя. */
+    const dmg = monsterStrikeDamage(e, target, time, def.dmg);
+    if (applyMonsterStrike(world, state, e, target, dmg, def.strike!, time, msgs, playerId, angle)) {
+      if (target.id === playerId) hitPlayer = true;
     }
     hitCount++;
   }
@@ -6284,14 +6187,11 @@ function acquireSlepoglazAim(
 
 function updateSlepoglazCloseDefense(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity | null,
-  _dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
   if (!target || !target.alive || target.hp === undefined) return false;
@@ -6300,43 +6200,21 @@ function updateSlepoglazCloseDefense(
 
   if ((e.attackCd ?? 0) > 0) return true;
 
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const rawDmg = Math.round(scaleMonsterDmg(SLEPOGLAZ_MELEE_DMG, level) * strMult * (e.monsterDmgMult ?? 1));
-  const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
-  const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-  if (debugImmortalPlayerHit) {
-    keepDebugOnePunchManAlive(target);
-  } else {
-    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-    if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} слепо дернул нервом: -${dmg}`);
-    if (target.hp <= 0) {
-      killEntity(target);
-      target.hp = 0;
-    }
-    const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-    spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-    if (target.hp <= 0) {
-      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-      if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-      msgs.push(msg(`${entityDisplayName(e)} добил ${entityDisplayName(target)} нервным ударом`, time, '#9f4'));
-    }
-  }
+  const dmg = monsterStrikeDamage(e, target, time, SLEPOGLAZ_NERVE_STRIKE.damage!);
+  applyMonsterStrike(world, state, e, target, dmg, SLEPOGLAZ_NERVE_STRIKE, time, msgs, playerId);
   playSoundAt(playGrowl, e.x, e.y);
-  e.attackCd = SLEPOGLAZ_MELEE_RATE;
+  e.attackCd = SLEPOGLAZ_NERVE_RATE;
   return true;
 }
 
 function updateSlepoglaz(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
   if (e.monsterKind !== MonsterKind.SLEPOGLAZ) return false;
@@ -6348,7 +6226,7 @@ function updateSlepoglaz(
     e.angle = slepoglazAimAngle(world, e, ai.tx, ai.ty);
     e.spriteScale = 1.08 + Math.max(0, ai.windupTimer / SLEPOGLAZ_WINDUP_SEC) * 0.16;
     if (ai.windupTimer <= 0) {
-      fireSlepoglazBeam(world, entities, e, def, ai.tx, ai.ty, time, msgs, playerId, nextId, state);
+      fireSlepoglazBeam(world, e, def, ai.tx, ai.ty, time, msgs, playerId, state);
       ai.windupTimer = undefined;
       ai.windupTargetId = undefined;
       ai.staggerTimer = SLEPOGLAZ_RECOVERY_SEC;
@@ -6367,13 +6245,13 @@ function updateSlepoglaz(
    * ту же ветку и живёт по СВОЕМУ такту луча, а не по второму, боевому. */
   e.spriteScale = (ai.staggerTimer ?? 0) > 0 ? 0.9 : undefined;
   if ((e.attackCd ?? 0) > 0) {
-    if (updateSlepoglazCloseDefense(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return true;
+    if (updateSlepoglazCloseDefense(world, e, target, time, msgs, playerId, state)) return true;
     return true;
   }
 
   const aim = acquireSlepoglazAim(world, e, target, time, playerId, state);
   if (!aim) {
-    if (updateSlepoglazCloseDefense(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return true;
+    if (updateSlepoglazCloseDefense(world, e, target, time, msgs, playerId, state)) return true;
     ai.goal = AIGoal.WANDER;
     ai.combatTargetId = undefined;
     ai.path = [];
@@ -6498,28 +6376,44 @@ function tonkayaAxisAt(world: World, x: number, y: number): { dx: number; dy: nu
   return axis.score >= 5.4 ? axis : null;
 }
 
+/** Видно ли цель из клетки ловушки. Растеризация одна на игру. */
 function tonkayaClearSight(world: World, x: number, y: number, target: Entity): boolean {
-  const sx = x + 0.5;
-  const sy = y + 0.5;
-  const dx = world.delta(sx, target.x);
-  const dy = world.delta(sy, target.y);
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist > TONKAYA_BAIT_MAX_VISIBLE) return false;
-  const steps = Math.max(2, Math.ceil(dist * 2));
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps;
-    const tx = Math.floor(world.wrap(sx + dx * t));
-    const ty = Math.floor(world.wrap(sy + dy * t));
-    if (world.solid(tx, ty)) return false;
-  }
-  return true;
+  return hasLineOfSight(world, x + 0.5, y + 0.5, target.x, target.y, TONKAYA_BAIT_MAX_VISIBLE);
 }
 
-function chooseTonkayaBaitLine(world: World, e: Entity, target: Entity): MonsterBaitLineState | undefined {
+/* Приманочная линия — рядом с видом, а не в ядре.
+ *
+ * Собственный тип `MonsterBaitLineState` жил в `core/types.ts`, а поле `baitLine`
+ * — в `AIState` у КАЖДОГО актора игры ради максимум двух особей одновременно.
+ * Откат репозиции при этом брался из общего `ai.baitScanCd`, который тем же
+ * именем ведёт скан ПИЩЕВОЙ приманки в `monster_bait.ts`: два несовместимых
+ * счётчика на одном поле. Здесь остался свой. */
+interface TonkayaLine {
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  nerve: number;
+  armed: boolean;
+  spent: boolean;
+}
+const tonkayaState = speciesState<{ line?: TonkayaLine; scanCd: number }>(() => ({ scanCd: 0 }));
+
+/** Готовая линия засады: путь для отладки, тестов и стендов. */
+export function tonkayaLineOf(e: Entity): TonkayaLine | undefined {
+  return tonkayaState.peek(e)?.line;
+}
+
+/** Поставить линию руками — стендам и тестам, чтобы не ждать её выбора. */
+export function setTonkayaLine(e: Entity, line: TonkayaLine | undefined): void {
+  tonkayaState.of(e).line = line;
+}
+
+function chooseTonkayaBaitLine(world: World, e: Entity, target: Entity): TonkayaLine | undefined {
   const ex = Math.floor(e.x);
   const ey = Math.floor(e.y);
   let bestScore = -Infinity;
-  let best: MonsterBaitLineState | undefined;
+  let best: TonkayaLine | undefined;
 
   for (let oy = -TONKAYA_BAIT_SCAN_RADIUS; oy <= TONKAYA_BAIT_SCAN_RADIUS; oy++) {
     for (let ox = -TONKAYA_BAIT_SCAN_RADIUS; ox <= TONKAYA_BAIT_SCAN_RADIUS; ox++) {
@@ -6547,7 +6441,7 @@ function chooseTonkayaBaitLine(world: World, e: Entity, target: Entity): Monster
   return best;
 }
 
-function targetInsideTonkayaLine(world: World, line: MonsterBaitLineState, target: Entity): boolean {
+function targetInsideTonkayaLine(world: World, line: TonkayaLine, target: Entity): boolean {
   const ax = line.x + 0.5;
   const ay = line.y + 0.5;
   const dx = world.delta(ax, target.x);
@@ -6561,7 +6455,8 @@ function targetInsideTonkayaLine(world: World, line: MonsterBaitLineState, targe
  *  телепорт через полэтажа. Длина ловушки — её же естественный предел. */
 const TONKAYA_FLANK_MAX_DIST = TONKAYA_LINE_HALF_LEN;
 
-function tonkayaMoveToFlank(world: World, e: Entity, target: Entity, line: MonsterBaitLineState): void {
+function tonkayaMoveToFlank(world: World, e: Entity, target: Entity, line: TonkayaLine): void {
+  const dash = MONSTERS[MonsterKind.TONKAYA_TEN].dash!;
   const px = -line.dy;
   const py = line.dx;
   const side = world.dist2(e.x, e.y, target.x + px, target.y + py) < world.dist2(e.x, e.y, target.x - px, target.y - py) ? 1 : -1;
@@ -6570,10 +6465,9 @@ function tonkayaMoveToFlank(world: World, e: Entity, target: Entity, line: Monst
     const fy = world.wrap(Math.floor(target.y + py * side * mult));
     if (!tonkayaLineCell(world, fx, fy)) continue;
     // Бросок был жёстким телепортом: ни линии, ни предела дистанции — тень
-    // возникала вплотную к цели из-за стены с любого конца этажа.
-    if (!traceClearPoint(world, e, fx + 0.5, fy + 0.5, TONKAYA_FLANK_MAX_DIST)) continue;
-    e.x = fx + 0.5;
-    e.y = fy + 0.5;
+    // возникала вплотную к цели из-за стены с любого конца этажа. Предикат
+    // теперь общий на семью: путь и место приземления, с радиусом тела.
+    if (dashTo(world, e, fx + 0.5, fy + 0.5, dash, TONKAYA_FLANK_MAX_DIST) !== DashStep.CLEAR) continue;
     break;
   }
 }
@@ -6582,37 +6476,17 @@ const TONKAYA_FLANK_MULTS = [1.05, -1.05, 0.0] as const;
 
 function damageTonkayaTenStrike(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): void {
   const def = MONSTERS[MonsterKind.TONKAYA_TEN];
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const rawDmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * TONKAYA_FLANK_MULT * (e.monsterDmgMult ?? 1));
-  const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
   if (target.hp === undefined) return;
-
-  const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-  if (debugImmortalPlayerHit) {
-    keepDebugOnePunchManAlive(target);
-  } else {
-    damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-    if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ударила с темной линии: -${dmg}`);
-    if (target.hp <= 0) { killEntity(target); target.hp = 0; }
-    const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-    spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-    if (target.hp <= 0) {
-      spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-      if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-      msgs.push(msg(`${entityDisplayName(e)} увела и убила ${entityDisplayName(target)}`, time, '#f44'));
-    }
-  }
+  const dmg = monsterStrikeDamage(e, target, time, def.dmg, def.dash?.damageMult ?? 1);
+  applyMonsterStrike(world, state, e, target, dmg, def.strike!, time, msgs, playerId);
 
   const label = isPlayerEntity(target) ? 'тебя' : entityDisplayName(target);
   msgs.push(msg(`${entityDisplayName(e)} бьет ${label} сбоку из подготовленной линии: -${dmg}`, time, '#c8f'));
@@ -6631,8 +6505,9 @@ function collapseTonkayaLine(
   reason: string,
   state?: GameState,
 ): void {
-  e.ai!.baitLine = undefined;
-  e.ai!.baitScanCd = TONKAYA_REPOSITION_CD;
+  const own = tonkayaState.of(e);
+  own.line = undefined;
+  own.scanCd = TONKAYA_REPOSITION_CD;
   e.attackCd = Math.max(e.attackCd ?? 0, 0.65);
   e.spriteScale = undefined;
   if (isPlayerEntity(target)) {
@@ -6652,44 +6527,43 @@ function collapseTonkayaLine(
 
 function updateTonkayaTenBaitLine(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
   const ai = e.ai!;
+  const own = tonkayaState.of(e);
   if (shadowHasLightCounter(world, e, target)) {
-    if (ai.baitLine) collapseTonkayaLine(world, e, target, time, msgs, 'light', state);
+    if (own.line) collapseTonkayaLine(world, e, target, time, msgs, 'light', state);
     return false;
   }
 
   const noise = findNoiseInvestigationTarget(world, state, e, time);
-  if (noise && ai.baitLine && world.dist2(noise.x, noise.y, ai.baitLine.x + 0.5, ai.baitLine.y + 0.5) > 4) {
+  if (noise && own.line && world.dist2(noise.x, noise.y, own.line.x + 0.5, own.line.y + 0.5) > 4) {
     collapseTonkayaLine(world, e, target, time, msgs, 'noise', state);
     return false;
   }
 
-  ai.baitScanCd = (ai.baitScanCd ?? 0) - dt;
-  if (!ai.baitLine && ai.baitScanCd <= 0) {
-    ai.baitLine = chooseTonkayaBaitLine(world, e, target);
-    ai.baitScanCd = TONKAYA_REPOSITION_CD;
-    if (ai.baitLine && target.id === playerId && ai.lastSeenTargetId !== playerId) {
+  own.scanCd -= dt;
+  if (!own.line && own.scanCd <= 0) {
+    own.line = chooseTonkayaBaitLine(world, e, target);
+    own.scanCd = TONKAYA_REPOSITION_CD;
+    if (own.line && target.id === playerId && ai.lastSeenTargetId !== playerId) {
       ai.lastSeenTargetId = playerId;
       msgs.push(msg('Тонкая Тень пятится к темной линии. Не входите за ней в коридор.', time, '#bce'));
       publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['tonkaya_ten', 'bait_line', 'warning'], {
         counterplay: 'hold_ground_light_or_noise',
-        lineX: ai.baitLine.x,
-        lineY: ai.baitLine.y,
+        lineX: own.line.x,
+        lineY: own.line.y,
       });
     }
   }
 
-  const line = ai.baitLine;
+  const line = own.line;
   if (!line) return false;
   const lineCenterX = line.x + 0.5;
   const lineCenterY = line.y + 0.5;
@@ -6701,8 +6575,8 @@ function updateTonkayaTenBaitLine(
   if (!line.spent && line.armed && targetInsideTonkayaLine(world, line, target) && world.dist2(e.x, e.y, target.x, target.y) <= TONKAYA_FLANK_RANGE * TONKAYA_FLANK_RANGE) {
     line.spent = true;
     tonkayaMoveToFlank(world, e, target, line);
-    damageTonkayaTenStrike(world, entities, e, target, time, msgs, playerId, nextId, state);
-    ai.baitLine = undefined;
+    damageTonkayaTenStrike(world, e, target, time, msgs, playerId, state);
+    own.line = undefined;
     e.spriteScale = undefined;
     e.attackCd = MONSTERS[MonsterKind.TONKAYA_TEN].attackRate;
     return true;
@@ -6740,17 +6614,8 @@ function clearTreskotnikBurst(e: Entity): void {
   ai.windupTimer = undefined;
   ai.windupTargetId = undefined;
   ai.windupStartHp = undefined;
-  ai.sprintTimer = undefined;
-  ai.sprintDx = undefined;
-  ai.sprintDy = undefined;
+  endDashRun(e);
   e.spriteScale = undefined;
-}
-
-function treskotnikSprintBlocked(world: World, x: number, y: number): boolean {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  if (world.solid(ix, iy)) return true;
-  return isLineOfFireCover(world.features[world.idx(ix, iy)] as Feature);
 }
 
 function interruptTreskotnikWindup(
@@ -6784,49 +6649,19 @@ function interruptTreskotnikWindup(
 
 function damageTreskotnikTarget(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): void {
   const def = MONSTERS[MonsterKind.TRESKOTNIK];
-  const level = e.rpg?.level ?? 1;
-  const strMult = e.rpg ? strMeleeDmgMult(e.rpg) : 1;
-  const rawDmg = Math.round(scaleMonsterDmg(def.dmg, level) * strMult * TRESKOTNIK_BURST_DMG_MULT * (e.monsterDmgMult ?? 1));
-  const dmg = zhelemishIncomingMeleeDamage(target, time, rawDmg);
-  if (target.hp !== undefined) {
-    const debugImmortalPlayerHit = target.id === playerId && isDebugOnePunchManEnabled();
-    if (debugImmortalPlayerHit) {
-      keepDebugOnePunchManAlive(target);
-    } else {
-      damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e });
-      if (target.id === playerId) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} влетел в тебя по красной трещине: -${dmg}`);
-      if (target.hp <= 0) {
-        killEntity(target);
-        target.hp = 0;
-      }
-      const hitAng = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
-      spawnBloodHit(world, target.x, target.y, hitAng, dmg, target.type === EntityType.MONSTER);
-      if (target.hp <= 0) {
-        spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-        if (target.type === EntityType.NPC) dropNpcInventory(target, entities, nextId);
-        msgs.push(msg(`${entityDisplayName(e)} разбил ${entityDisplayName(target)} рывком`, time, '#f44'));
-      }
-    }
-  }
+  const dash = def.dash!;
+  const dmg = monsterStrikeDamage(e, target, time, def.dmg, dash.damageMult ?? 1);
+  applyMonsterStrike(world, state, e, target, dmg, def.strike!, time, msgs, playerId);
 
-  const selfDamage = Math.max(4, Math.round((e.maxHp ?? def.hp) * 0.28));
-  if (e.hp !== undefined) {
-    e.hp = Math.max(0, e.hp - selfDamage);
-    if (e.hp <= 0) {
-      killEntity(e);
-      spawnDeathPool(world, e.x, e.y, true);
-    }
-  }
+  const selfDamage = dashSelfDamage(world, e, dash.strikeSelfDamage ?? 0);
   msgs.push(msg(`Трескотник ударил и осыпался сам: -${selfDamage}`, time, '#f86'));
   publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', isPlayerEntity(target) ? 4 : 3, ['treskotnik', 'fracture_sprint', 'hit'], {
     damage: dmg,
@@ -6838,19 +6673,19 @@ function damageTreskotnikTarget(
 
 function updateTreskotnikFractureSprint(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity | null,
   dt: number,
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.TRESKOTNIK) return false;
+  // Ворота — флаг, а не имя вида: рывок по красной трещине объявляет `aiFlags`.
+  if (!hasAIFlag(e, 'fractureSprint')) return false;
   const ai = e.ai!;
   const def = MONSTERS[MonsterKind.TRESKOTNIK];
+  const dash = def.dash!;
 
   /* Боль сбивает УДАР, а не всего зверя.
    *
@@ -6864,49 +6699,30 @@ function updateTreskotnikFractureSprint(
     e.spriteScale = 0.82 + Math.max(0, (ai.staggerTimer ?? 0) / TRESKOTNIK_STAGGER_SEC) * 0.08;
   }
 
-  if ((ai.sprintTimer ?? 0) > 0) {
-    const dx = ai.sprintDx ?? Math.cos(e.angle);
-    const dy = ai.sprintDy ?? Math.sin(e.angle);
-    const speed = Math.max(e.speed * TRESKOTNIK_SPRINT_SPEED_MULT, 7.5);
-    let remain = speed * dt;
-    while (remain > 0) {
-      const step = Math.min(0.22, remain);
-      const nx = world.wrap(e.x + dx * step);
-      const ny = world.wrap(e.y + dy * step);
-      if (treskotnikSprintBlocked(world, nx, ny)) {
-        const selfDamage = Math.max(3, Math.round((e.maxHp ?? def.hp) * 0.22));
-        if (e.hp !== undefined) {
-          e.hp = Math.max(0, e.hp - selfDamage);
-          if (e.hp <= 0) {
-            killEntity(e);
-            spawnDeathPool(world, e.x, e.y, true);
-          }
-        }
-        clearTreskotnikBurst(e);
-        ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, 0.75);
-        e.attackCd = def.attackRate;
-        msgs.push(msg(`Трескотник врезался в препятствие и осыпался: -${selfDamage}`, time, '#f86'));
-        publishMonsterReadabilityEvent(state, world, e, target ?? undefined, 'monster_windup_interrupted', 3, ['treskotnik', 'fracture_sprint', 'obstacle'], {
-          reason: 'obstacle',
-          selfDamage,
-          counterplay: 'door_table_or_corner_absorbs_sprint',
-        });
-        return true;
-      }
-      e.x = nx;
-      e.y = ny;
-      remain -= step;
-      if (target?.alive && world.dist2(e.x, e.y, target.x, target.y) <= TRESKOTNIK_HIT_SQ) {
-        damageTreskotnikTarget(world, entities, e, target, time, msgs, playerId, nextId, state);
-        clearTreskotnikBurst(e);
-        ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, 0.5);
-        e.attackCd = def.attackRate;
-        return true;
-      }
+  const running = advanceDashRun(world, e, target, dt, dash);
+  if (running !== DashRunOutcome.IDLE) {
+    if (running === DashRunOutcome.CRASHED) {
+      const selfDamage = dashSelfDamage(world, e, dash.crashSelfDamage ?? 0);
+      clearTreskotnikBurst(e);
+      ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, dash.crashStunSec ?? 0);
+      e.attackCd = def.attackRate;
+      msgs.push(msg(`Трескотник врезался в препятствие и осыпался: -${selfDamage}`, time, '#f86'));
+      publishMonsterReadabilityEvent(state, world, e, target ?? undefined, 'monster_windup_interrupted', 3, ['treskotnik', 'fracture_sprint', 'obstacle'], {
+        reason: 'obstacle',
+        selfDamage,
+        counterplay: dash.counterplay,
+      });
+      return true;
     }
-    ai.sprintTimer = Math.max(0, (ai.sprintTimer ?? 0) - dt);
+    if (running === DashRunOutcome.HIT && target?.alive) {
+      damageTreskotnikTarget(world, e, target, time, msgs, playerId, state);
+      clearTreskotnikBurst(e);
+      ai.staggerTimer = Math.max(ai.staggerTimer ?? 0, 0.5);
+      e.attackCd = def.attackRate;
+      return true;
+    }
     e.spriteScale = 1.14;
-    if (ai.sprintTimer <= 0) {
+    if (running === DashRunOutcome.SPENT) {
       clearTreskotnikBurst(e);
       e.attackCd = Math.max(e.attackCd ?? 0, 0.65);
     }
@@ -6931,9 +6747,7 @@ function updateTreskotnikFractureSprint(
     e.spriteScale = 1.18 + Math.max(0, windupTimer / TRESKOTNIK_WINDUP_SEC) * 0.16;
     ai.windupTimer = Math.max(0, windupTimer - dt);
     if (ai.windupTimer <= 0) {
-      ai.sprintDx = dx / dist;
-      ai.sprintDy = dy / dist;
-      ai.sprintTimer = TRESKOTNIK_SPRINT_SEC;
+      startDashRun(e, dx / dist, dy / dist, dash);
       ai.windupTimer = undefined;
       ai.windupStartHp = undefined;
       e.spriteScale = 1.2;
@@ -6982,7 +6796,7 @@ function updateTreskotnikFractureSprint(
  * цели остаются свободными.
  */
 function updateZakalennayaArmorStagger(e: Entity): void {
-  if (e.monsterKind !== MonsterKind.ZAKALENNAYA_ARMATURA || !e.ai) return;
+  if (!e.ai) return;
   if ((e.ai.staggerTimer ?? 0) <= 0) {
     if (e.spriteScale !== undefined) e.spriteScale = undefined;
     return;
@@ -7137,6 +6951,7 @@ export function tryPerformMonsterMeleeAttack(
               if (hitTarget.type === EntityType.NPC) dropNpcInventory(hitTarget, entities, nextId);
               msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(hitTarget)}`, time, '#f44'));
               if (e.monsterKind === MonsterKind.SOBRANNYY) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
+              if (e.monsterKind === MonsterKind.HEAD_SLUG) rememberHeadSlugVictim(e, hitTarget);
             }
           }
         }
@@ -7150,6 +6965,110 @@ export function tryPerformMonsterMeleeAttack(
       tryCombatOrbitStep(world, e, target, mRange * 0.5, 0.3, dt);
     }
     return true;
+  }
+  return false;
+}
+
+
+/* ── Такт вида: диспетчер вместо четырнадцати безусловных вызовов ──
+ *
+ * Здесь стояли четырнадцать вызовов подряд, и КАЖДЫЙ звался на КАЖДУЮ тварь в
+ * КАЖДОМ кадре только затем, чтобы первой строкой сравнить `monsterKind` и
+ * выйти. На тёмном отсеке это 3100 тварей × 14 × 60 = 2.6 миллиона вызовов в
+ * секунду ради тринадцати отказов из четырнадцати. Замерено: 5.9 % времени AI
+ * и 0.64 мс кадра.
+ *
+ * Гейт теперь объявлен РЯДОМ С ШАГОМ, а список шагов на вид печётся один раз
+ * при загрузке модуля: перебирать нечего, тварь берёт свой готовый список по
+ * `monsterKind`. Порядок шагов сохранён дословно — он значим.
+ *
+ * Гейт внутри самих шагов НЕ снят и снят не будет: пять из них живут своими
+ * пакетами (`mukhozhuk`, `tumannik`, `spore_carpet`, `slimevik`, `gnilushka`),
+ * и проверка вида там — контракт пакета, а не оптимизация. Второй раз она не
+ * стоит ничего: диспетчер зовёт шаг только для своего вида.
+ */
+interface SpeciesTickStep {
+  /** Кому шаг принадлежит: вид или его флаг. Ровно одно из двух. */
+  kind?: MonsterKind;
+  flag?: MonsterAIFlag;
+  /** `true` — такт твари закончен, дальше идти незачем. */
+  run: (c: SpeciesTickArgs) => boolean;
+}
+
+interface SpeciesTickArgs {
+  world: World;
+  entities: Entity[];
+  e: Entity;
+  dt: number;
+  time: number;
+  msgs: Msg[];
+  playerId: number;
+  nextId: { v: number };
+  player: Entity | undefined;
+  state: GameState | undefined;
+}
+
+const SPECIES_TICK_STEPS: readonly SpeciesTickStep[] = [
+  { flag: 'larvaCarrier', run: c => { updateMukhozhukBite(c.world, c.e, c.dt, c.time, c.msgs, c.state); return false; } },
+  { flag: 'strikeReveal', run: c => { updateTumannikReveal(c.world, c.e); return false; } },
+  // Ковёр не воюет и не ходит: он растение, и вся его жизнь — этот вызов.
+  { kind: MonsterKind.SPORE_CARPET, run: c => updateSporeCarpetGrowth(c.world, c.entities, c.e, c.nextId, c.dt, c.time, c.msgs, c.state) },
+  { kind: MonsterKind.LISHENNYY, run: c => updateLishennyyBrightAvoidance(c.world, c.e, c.dt) },
+  { flag: 'netPossessor', run: c => { updateChervieNetPossessor(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state); return false; } },
+  { kind: MonsterKind.SLIMEVIK, run: c => updateSlimevikMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.state) },
+  { kind: MonsterKind.GNILUSHKA, run: c => updateGnilushkaMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
+  { kind: MonsterKind.HEAD_SLUG, run: c => updateHeadSlugParasite(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.nextId, c.state) },
+  { kind: MonsterKind.SOBRANNYY, run: c => { updateSobrannyyGrowthState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
+  { flag: 'noiseFear', run: c => updateGreenDogNoiseFear(c.world, c.e, c.dt, c.time, c.msgs, c.state) },
+  { kind: MonsterKind.SLIME_WOMAN, run: c => { updateSlimeWomanState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
+  { flag: 'waterStrider', run: c => { updateWaterStriderState(c.world, c.e, c.dt, c.time); return false; } },
+  { kind: MonsterKind.PANELNIK, run: c => { updatePanelnikWallBrace(c.world, c.e, c.dt, c.time, c.msgs, c.player, c.state); return false; } },
+  { flag: 'scrapWake', run: c => updateRzhavnikScrapWake(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
+];
+
+/** Список шагов на вид, испечённый один раз. Пустой список — общая пустая ссылка. */
+const NO_SPECIES_STEPS: readonly SpeciesTickStep[] = [];
+const SPECIES_TICK_BY_KIND: (readonly SpeciesTickStep[])[] = (() => {
+  const baked: (readonly SpeciesTickStep[])[] = [];
+  for (const value of Object.values(MonsterKind)) {
+    if (typeof value !== 'number') continue;
+    const def = MONSTERS[value as MonsterKind];
+    const steps = SPECIES_TICK_STEPS.filter(step => step.kind !== undefined
+      ? step.kind === value
+      : def?.aiFlags?.includes(step.flag!) === true);
+    baked[value] = steps.length > 0 ? steps : NO_SPECIES_STEPS;
+  }
+  return baked;
+})();
+
+/* Один аргумент на все шаги, переиспользуемый: новый объект на каждую тварь в
+ * каждом кадре был бы ровно тем мусором, ради которого диспетчер и заводили.
+ * Такт монстров однопоточный и не рекурсивный, шаг чужого такта не запускает. */
+const speciesTickArgs: SpeciesTickArgs = {
+  world: undefined as unknown as World, entities: [], e: undefined as unknown as Entity,
+  dt: 0, time: 0, msgs: [], playerId: 0, nextId: { v: 0 }, player: undefined, state: undefined,
+};
+
+function runSpeciesTickSteps(
+  world: World,
+  entities: Entity[],
+  e: Entity,
+  dt: number,
+  time: number,
+  msgs: Msg[],
+  playerId: number,
+  nextId: { v: number },
+  player: Entity | undefined,
+  state: GameState | undefined,
+): boolean {
+  if (e.monsterKind === undefined) return false;
+  const steps = SPECIES_TICK_BY_KIND[e.monsterKind];
+  if (steps === undefined || steps.length === 0) return false;
+  const c = speciesTickArgs;
+  c.world = world; c.entities = entities; c.e = e; c.dt = dt; c.time = time;
+  c.msgs = msgs; c.playerId = playerId; c.nextId = nextId; c.player = player; c.state = state;
+  for (const step of steps) {
+    if (step.run(c)) return true;
   }
   return false;
 }
@@ -7178,7 +7097,11 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     e.attackCd = Math.max(e.attackCd ?? 0, ai.staggerTimer);
   }
 
-  updateZakalennayaArmorStagger(e);
+  /* Щит по виду стоит НА ВЫЗОВЕ, а не внутри: поза Закалённой арматуры — одна
+   * из немногих веток, которую общий такт звал безусловно, то есть 796 монстров
+   * × 60 кадров = ~48 тысяч вызовов в секунду ради вида, которого на этаже может
+   * не быть вовсе. */
+  if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) updateZakalennayaArmorStagger(e);
 
   evaluateMicroStimuli(world, e, time, msgs);
   if (tickMicroGoal(world, e, dt, time, msgs)) return;
@@ -7194,23 +7117,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   const player = _entityById.get(playerId);
   if (monsterHasAIFlag(e, 'looksLiquidator')) updateBlackLiquidatorDisguise(world, e, time);
-  updateMukhozhukBite(world, e, dt, time, msgs, state);
-  updateTumannikReveal(world, e);
-  // Ковёр не воюет и не ходит: он растение, и вся его жизнь — этот вызов.
-  if (updateSporeCarpetGrowth(world, entities, e, nextId, dt, time, msgs, state)) return;
-  if (updateLishennyyBrightAvoidance(world, e, dt)) return;
-  updateChervieNetPossessor(world, e, dt, time, msgs, playerId, state);
-  if (updateSlimevikMonster(world, entities, e, dt, time, msgs, state)) return;
-  if (updateGnilushkaMonster(world, entities, e, dt, time, msgs, playerId, state)) return;
-  if (updateHeadSlugParasite(world, entities, e, dt, time, msgs, nextId, state)) return;
-  updateSobrannyyGrowthState(world, e, time, msgs, state);
-  if (updateGreenDogNoiseFear(world, e, dt, time, msgs, state)) return;
-  updateSlimeWomanState(world, e, time, msgs, state);
-  updateWaterStriderState(world, e, dt, time);
-  updatePanelnikWallBrace(world, e, dt, time, msgs, player, state);
 
   const def = e.monsterKind !== undefined ? MONSTERS[e.monsterKind] : null;
-  if (updateRzhavnikScrapWake(world, entities, e, dt, time, msgs, playerId, nextId, state)) return;
+  if (runSpeciesTickSteps(world, entities, e, dt, time, msgs, playerId, nextId, player, state)) return;
   const baseDetectSq = def && !def.isRanged && def.speed > 0 ? MONSTER_MELEE_DETECT_SQ : MONSTER_DETECT_SQ;
   let detectSq = monsterDetectSq(world, e, baseDetectSq, time);
   let target: Entity | null;
@@ -7234,8 +7143,11 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     target = findDocumentHunterTarget(world, entities, e, dt);
   } else if (hasAIFlag(e, 'closeReveal')) {
     target = findCombatTarget(world, entities, e, dt, detectSq, 1.25, monsterTargetFilter(e));
-  } else if (e.monsterKind === MonsterKind.KOSTOREZ || e.monsterKind === MonsterKind.SAFEGUARD) {
-    detectSq = e.monsterKind === MonsterKind.SAFEGUARD ? SAFEGUARD_DETECT_SQ : KOSTOREZ_DETECT_SQ;
+  } else if (hasAIFlag(e, 'meleeWindup')) {
+    /* Замах ищет цель чаще обычного и сытым не жмурится. Обе константы вида
+     * (`KOSTOREZ_DETECT_SQ`, `SAFEGUARD_DETECT_SQ`) были равны общей дальности
+     * ближнего боя слово в слово — от них осталась только эта строка. */
+    detectSq = MONSTER_MELEE_DETECT_SQ;
     target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), monsterTargetFilter(e));
   } else if (e.monsterKind === MonsterKind.TRESKOTNIK) {
     detectSq = TRESKOTNIK_DETECT_SQ;
@@ -7261,7 +7173,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
    * `findMeatWormTarget` для олгоя, `findChernoSlizTarget`), и там они с самого
    * начала написаны про любого носителя, а не про игрока. */
 
-  updateGreenDogPackHowl(world, e, target, time, msgs, playerId, state);
+  updateGreenDogPackShare(e, target, time);
   if (lishennyyLightTarget && followLishennyyLightTarget(world, e, lishennyyLightTarget, dt)) return;
   target = updateSobrannyyTarget(world, e, target, time, msgs, state);
   target = updateObzhivalshchikTarget(world, e, target, dt, time, msgs, state);
@@ -7289,12 +7201,12 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updateNightmarePressure(world, e, target, dt, time, msgs, playerId, state);
   if (updateBloodPlantRootHive(world, e, target, dt, time, msgs, playerId, state)) return;
   if (updateBorshchevikRootedPlant(world, e, target, dt, time, msgs, playerId, state)) return;
-  updateProtokolnikProtocolPressure(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
+  updateProtokolnikProtocolPressure(world, e, target, dt, time, msgs, playerId, state);
   if (target && !target.alive) return;
   updateWallTerrainReadability(world, e, target, time, msgs, state);
-  if (updateZhornayaTvar(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return;
-  if (updateSlepoglaz(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return;
-  if (updateTreskotnikFractureSprint(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return;
+  if (updateZhornayaTvar(world, e, target, dt, time, msgs, playerId, state)) return;
+  if (updateSlepoglaz(world, e, target, dt, time, msgs, playerId, state)) return;
+  if (updateTreskotnikFractureSprint(world, e, target, dt, time, msgs, playerId, state)) return;
   if (target) updateVodyanoyWaterPressureLine(world, e, target, dt, time, msgs, playerId, state);
   updatePomoynyRoyReadability(world, e, target, time, msgs, playerId, state);
 
@@ -7325,9 +7237,8 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       }
     }
     if (tryFollowNoise(world, e, dt, time, msgs, state)) return;
-    const tuning = bladeEliteTuning(e.monsterKind);
-    if (tuning && ai.lastSeenTargetId === playerId) {
-      publishBladeEliteEscape(tuning, world, e, player, playerId, state, 'lost_target');
+    if (hasAIFlag(e, 'meleeWindup') && ai.lastSeenTargetId === playerId) {
+      publishMeleeWindupEscape(world, e, player, playerId, state, 'lost_target');
     }
     // Immobile monsters (Idol) just idle — no wandering
     if (def?.speed === 0) return;
@@ -7386,13 +7297,13 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
 
   if (e.monsterKind === MonsterKind.SOBRANNYY && trySobrannyyBreakWeakDoor(world, e, target, time, msgs, state)) return;
 
-  if (bladeEliteTuning(e.monsterKind)) {
-    updateBladeElite(world, entities, e, target, dt, time, msgs, playerId, nextId, state);
+  if (hasAIFlag(e, 'meleeWindup')) {
+    updateMeleeWindup(world, e, target, dt, time, msgs, playerId, state);
     return;
   }
 
   if (e.monsterKind === MonsterKind.TONKAYA_TEN &&
-      updateTonkayaTenBaitLine(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) {
+      updateTonkayaTenBaitLine(world, e, target, dt, time, msgs, playerId, state)) {
     return;
   }
 

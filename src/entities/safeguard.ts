@@ -14,6 +14,30 @@ export const DEF: MonsterDef = {
   sprite: 0,
   counterplay: 'Белый замах короткий: ломайте линию стеной, дверью, аппаратом или машиной; дробь сбивает клинки до рывка.',
   lootHint: 'белая пластина, черный суставной штифт, редкая плата отказа',
+  aiFlags: ['meleeWindup'],
+  /* Строка семьи замаха. Числа — один в один прежние `SAFEGUARD_*` из общего AI. */
+  windup: {
+    windupSec: 0.85,
+    range: 2.1,
+    breakRange: 2.6,
+    minRange: 0,
+    staggerSec: 0.9,
+    escapeDist: 4.4,
+    // Отличие от Кострореза: шкаф, машина, аппарат и стол ломают ему линию.
+    coverBlocks: true,
+    tag: 'safeguard',
+    color: '#fa4',
+    warningLine: 'Сейфгард взял тебя в отказ. Ломай линию: белый замах короткий.',
+    windupLine: 'Сейфгард разводит клинки. За дверь, аппарат или дробью!',
+    staggerLine: 'Дробь сбила белый замах Сейфгарда.',
+    strikeVerb: 'режет',
+    counterplay: 'line break by wall, door, machine, apparatus; shotgun stagger',
+  },
+  /* Строка семьи спецудара: рез по завершённому замаху. */
+  strike: {
+    hurt: '%s режет тебя',
+    kill: '%s убил %t',
+  },
 };
 
 function paintPx(t: Uint32Array, x: number, y: number, r: number, g: number, b: number, a = 255): void {

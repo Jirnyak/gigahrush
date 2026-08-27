@@ -27,6 +27,7 @@ export const DEF: MonsterDef = {
   speed: 1.22,
   dmg: 15,
   attackRate: 1.8,
+  reach: 1.35,
   sprite: 0,
   aiFlags: ['looksLiquidator'],
   counterplay: 'Не верьте обходу после тяжелого отбоя: держите дистанцию, прячьте образцы и сверяйте номер маски до открытия двери.',

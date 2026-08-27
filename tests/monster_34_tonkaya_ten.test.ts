@@ -7,7 +7,7 @@ import { MONSTERS } from '../src/entities/monster';
 import { DEF as TONKAYA_TEN_DEF, generateSprite } from '../src/entities/tonkaya_ten';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { S } from '../src/core/pixutil';
-import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
+import { setEntityMap, updateMonster, tonkayaLineOf } from '../src/systems/ai/monster';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setListenerPos } from '../src/systems/audio';
 
@@ -116,7 +116,7 @@ test('tonkaya ten arms a dark bait line and only hits hard when crossed', () => 
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.2, 10, msgs, target.id, { v: 100 });
-  const line = threat.ai?.baitLine;
+  const line = tonkayaLineOf(threat);
   assert.ok(line, 'Tonkaya Ten should select a radius-capped bait line');
 
   threat.x = line.x + 0.5;
@@ -129,7 +129,7 @@ test('tonkaya ten arms a dark bait line and only hits hard when crossed', () => 
   updateMonster(world, entities, threat, 0.2, 11, msgs, target.id, { v: 100 });
 
   assert.equal((target.hp ?? 100) <= 85, true, 'crossing the prepared line should trigger the one flank strike');
-  assert.equal(threat.ai?.baitLine, undefined, 'flank strike spends the bait line');
+  assert.equal(tonkayaLineOf(threat), undefined, 'flank strike spends the bait line');
 });
 
 test('tonkaya ten loses nerve when ignored instead of getting the flank hit', () => {
@@ -141,7 +141,7 @@ test('tonkaya ten loses nerve when ignored instead of getting the flank hit', ()
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.2, 20, [], target.id, { v: 100 });
-  const line = threat.ai?.baitLine;
+  const line = tonkayaLineOf(threat);
   assert.ok(line);
   threat.x = line.x + 0.5;
   threat.y = line.y + 0.5;
@@ -152,7 +152,7 @@ test('tonkaya ten loses nerve when ignored instead of getting the flank hit', ()
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.2, 21, [], target.id, { v: 100 });
 
-  assert.equal(threat.ai?.baitLine, undefined);
+  assert.equal(tonkayaLineOf(threat), undefined);
   assert.equal(target.hp, 100);
 });
 
@@ -165,7 +165,7 @@ test('tonkaya ten bait line can punish an NPC target that follows the silhouette
 
   syncEntities(entities);
   updateMonster(world, entities, threat, 0.2, 30, [], 1, { v: 100 });
-  const line = threat.ai?.baitLine;
+  const line = tonkayaLineOf(threat);
   assert.ok(line, 'local bait-line selection should not depend on player identity');
 
   threat.x = line.x + 0.5;
@@ -178,5 +178,5 @@ test('tonkaya ten bait line can punish an NPC target that follows the silhouette
   updateMonster(world, entities, threat, 0.2, 31, [], 1, { v: 100 });
 
   assert.equal((target.hp ?? 100) < 100, true);
-  assert.equal(threat.ai?.baitLine, undefined);
+  assert.equal(tonkayaLineOf(threat), undefined);
 });

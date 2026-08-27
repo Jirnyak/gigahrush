@@ -16,6 +16,9 @@ export const DEF: MonsterDef = {
   damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
   aiFlags: ['flying'],
+  /* Единственный, кого луч сносит СКВОЗЬ плотное: `flying` уже объявил, что он
+   * там ходит, и второй колонки на это не нужно. */
+  uv: { effect: 'spirit_stagger', attackCd: 1.6, daze: 1.0, push: 0.6 },
   counterplay: 'Двери и стены не держат духа: меняйте позицию до контакта, держите дистанцию и сбивайте темп УФ-светом.',
   lootHint: 'пустая память, холодный сквозняк, редкая ПСИ-пыль',
 };
