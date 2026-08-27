@@ -4,6 +4,7 @@ import { getPlotNpcNumericId } from '../../data/npc_packages';
 
 const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
+  DamageType,
   AIGoal, Cell, EntityType, Tex, Feature, RoomType, Faction, Occupation, QuestType,
   MonsterKind,
   type Entity,
@@ -249,6 +250,7 @@ export function generateOverflowSluice(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: `${WET_ROUTE_HAZARD_ID}_${bypass.id}`,
     kind: 'eel_water',
+    damageType: DamageType.ENERGY,
     displayName: 'Угревый мокрый ход',
     cells: wetCells,
     tags: ['maintenance', 'water', 'wet_route', 'tube_eel', 'overflow_sluice', 'harpoon', 'bait'],

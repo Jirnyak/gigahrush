@@ -1,4 +1,5 @@
 import {
+  DamageType,
   Cell,
   Feature,
   W,
@@ -6,6 +7,7 @@ import {
   type Entity,
   type GameState,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { MarkType, stampMark } from '../surface_marks';
 import { isPlayerEntity } from '../player_actor';
@@ -61,7 +63,8 @@ export function updateCementMemoryAnomaly(world: World, player: Entity, state: G
   const stage = currentStage(runtime, ci, state.time);
   if (stage >= 2 && state.time - runtime.lastHarmAt > 2.2) {
     runtime.lastHarmAt = state.time;
-    player.hp = Math.max(1, (player.hp ?? 100) - (stage === 2 ? 1 : 3));
+    // Через единую дверь урона: запёкшийся цемент режет подошвы и давит грудь — КИНЕТИКА.
+    damageActorByEnvironment(world, state, player, { damage: stage === 2 ? 1 : 3, damageType: DamageType.KINETIC, time: state.time });
     if (player.needs) player.needs.sleep = Math.max(0, player.needs.sleep - 0.3);
     if (state.time - runtime.lastMsgAt > 6) {
       runtime.lastMsgAt = state.time;

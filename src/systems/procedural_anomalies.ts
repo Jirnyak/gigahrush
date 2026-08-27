@@ -1,6 +1,7 @@
 /* ── Runtime hooks for bounded procedural floor anomalies ─────── */
 
 import {
+  DamageType,
   W,
   Cell,
   type Entity,
@@ -10,6 +11,7 @@ import {
   Feature,
   msg,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import {
@@ -472,7 +474,8 @@ export function updateProceduralAnomalies(world: World, player: Entity, state: G
 
   if (protection === 'none' || protection === 'cloth_ready') {
     const hpLoss = Math.max(1, Math.round(1 + intensity * 2));
-    player.hp = Math.max(1, (player.hp ?? 100) - hpLoss);
+    // Через единую дверь урона: смог травит лёгкие — БИО, и замкнутый контур ОЗК ему мешает.
+    damageActorByEnvironment(world, state, player, { damage: hpLoss, damageType: DamageType.BIO, time: state.time });
     if (state.time - runtime.lastMsgTime > 8) {
       runtime.lastMsgTime = state.time;
       state.msgs.push(msg(`Кашель режет горло: -${hpLoss} HP. Источник можно перекрыть или обойти.`, state.time, '#b98'));
@@ -505,7 +508,8 @@ export function tryHandleSmogSource(world: World, player: Entity, state: GameSta
   world.markFogDirty();
 
   if (!prepared) {
-    player.hp = Math.max(1, (player.hp ?? 100) - 8);
+    // Голыми руками в источнике смога — тот же БИО.
+    damageActorByEnvironment(world, state, player, { damage: 8, damageType: DamageType.BIO, time: state.time });
     if (player.needs) player.needs.water = Math.max(0, player.needs.water - 6);
   }
 

@@ -11,7 +11,7 @@ import type { World } from '../core/world';
  * это давало «стою вплотную через стол и не стреляю». Она стоит ровно столько,
  * сколько стоит на самом деле: сбивает прицел (`lineCoverCells`).
  */
-function isLineOfFireCover(feature: Feature): boolean {
+export function isLineOfFireCover(feature: Feature): boolean {
   return feature === Feature.SHELF ||
     feature === Feature.MACHINE ||
     feature === Feature.APPARATUS ||
@@ -49,7 +49,21 @@ function isLineOfFireCover(feature: Feature): boolean {
 export function hasLineOfSight(
   world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number,
 ): boolean {
-  return traceLine(world, x1, y1, x2, y2, maxDist, false) >= 0;
+  return traceLine(world, x1, y1, x2, y2, maxDist, false, true) >= 0;
+}
+
+/**
+ * Есть ли прямая до КЛЕТКИ-цели: сама она преградой не считается.
+ *
+ * Смотрят не сквозь неё, а В НЕЁ, поэтому правило конца отрезка здесь обратное
+ * взгляду: экран, аппарат, станок стоят в клетке и имеют право быть плотными.
+ * Своя копия обхода у аватара Червия держалась ровно на этом исключении и
+ * пропускала клетку источника вручную — исключение стало правилом вызова.
+ */
+export function hasLineToCell(
+  world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number,
+): boolean {
+  return traceLine(world, x1, y1, x2, y2, maxDist, false, false) >= 0;
 }
 
 /**
@@ -62,22 +76,52 @@ export function hasLineOfSight(
 export function lineCoverCells(
   world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number,
 ): number {
-  return traceLine(world, x1, y1, x2, y2, maxDist, true);
+  return traceLine(world, x1, y1, x2, y2, maxDist, true, true);
 }
 
-/** Возвращает число укрытий на пути (или 0 без подсчёта), `-1` — перекрыто. */
+/**
+ * Доля отрезка до клетки, которая его перекрыла. Осмысленна только сразу после
+ * `traceLine`, вернувшего `-1`, и только для него — сюда её кладёт сам обход,
+ * чтобы длину луча не пришлось растеризовать вторым проходом.
+ */
+let _blockT = 0;
+
+/**
+ * Насколько далеко по лучу видно, прежде чем встанет бетон.
+ *
+ * Тот же обход, что у взгляда: у Слепоглаза был СВОЙ марш пробами через 0.25
+ * клетки — четвёртая копия одной растеризации, и шаг 0.25 у него был не
+ * замыслом, а платой за приблизительность проб. Точный обход не имеет шага
+ * вовсе: он проходит ровно пересечённые клетки и знает точку входа в стену.
+ */
+export function lineBlockDistance(
+  world: World, x: number, y: number, dirX: number, dirY: number, maxDist: number,
+): number {
+  const blocked = traceLine(world, x, y, x + dirX * maxDist, y + dirY * maxDist, maxDist, false, true) < 0;
+  return blocked ? _blockT * maxDist : maxDist;
+}
+
+/**
+ * Возвращает число укрытий на пути (или 0 без подсчёта), `-1` — перекрыто.
+ *
+ * `endBlocks` — считается ли преградой клетка конца отрезка. Взгляд и выстрел
+ * говорят «да» (сквозь стену не видно даже вплотную), запрос к клетке-фикстуре
+ * — «нет» (в неё и смотрят). Клетка наблюдателя не считается преградой никогда.
+ */
 function traceLine(
-  world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number, countCover: boolean,
+  world: World, x1: number, y1: number, x2: number, y2: number, maxDist: number,
+  countCover: boolean, endBlocks: boolean,
 ): number {
   const dx = world.delta(x1, x2);
   const dy = world.delta(y1, y2);
+  _blockT = 0;
   if (dx * dx + dy * dy > maxDist * maxDist) return -1;
 
   let cx = Math.floor(x1);
   let cy = Math.floor(y1);
   const endX = Math.floor(x1 + dx);
   const endY = Math.floor(y1 + dy);
-  if (cx === endX && cy === endY) return world.solid(endX, endY) ? -1 : 0;
+  if (cx === endX && cy === endY) return endBlocks && world.solid(endX, endY) ? -1 : 0;
 
   const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
   const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
@@ -92,22 +136,29 @@ function traceLine(
   const guard = Math.abs(endX - cx) + Math.abs(endY - cy) + 2;
   let cover = 0;
   for (let i = 0; i < guard; i++) {
+    let enterT: number;
     if (tMaxX < tMaxY) {
+      enterT = tMaxX;
       cx += stepX;
       tMaxX += invX;
     } else if (tMaxY < tMaxX) {
+      enterT = tMaxY;
       cy += stepY;
       tMaxY += invY;
     } else {
       // Точная диагональ: отрезок проходит через сам угол и ни одной из боковых
       // клеток не задевает. Шагаем по обеим осям сразу.
+      enterT = tMaxX;
       cx += stepX;
       cy += stepY;
       tMaxX += invX;
       tMaxY += invY;
     }
-    if (world.solid(cx, cy)) return -1;
     const atEnd = cx === endX && cy === endY;
+    if (world.solid(cx, cy) && (endBlocks || !atEnd)) {
+      _blockT = enterT;
+      return -1;
+    }
     // Клетка самой цели укрытием не считается: за собственным столом не спрячешься.
     if (countCover && !atEnd && isLineOfFireCover(world.features[world.idx(cx, cy)] as Feature)) cover++;
     if (atEnd) return cover;

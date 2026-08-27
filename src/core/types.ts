@@ -446,15 +446,6 @@ export enum NpcState {
 
 
 
-export interface MonsterBaitLineState {
-  x: number;
-  y: number;
-  dx: number;
-  dy: number;
-  nerve: number;
-  armed: boolean;
-  spent: boolean;
-}
 
 export interface AIState {
   goal: AIGoal;
@@ -477,42 +468,21 @@ export interface AIState {
   lastSeenUrinationId?: number;
   lastSeenNoiseId?: number;   // ID of the last noise record investigated
   microScanCd?: number;       // cooldown until next micro stimulus scan
-  sprintTimer?: number;       // straight-line special burst countdown
-  sprintDx?: number;          // normalized burst direction X
-  sprintDy?: number;          // normalized burst direction Y
   bossPhaseIndex?: number;    // last announced boss phase cue
   baitMarkerId?: number;      // cached monster bait marker id
   baitScanCd?: number;        // cooldown until next bounded bait scan
-  baitLine?: MonsterBaitLineState; // Tonkaya Ten prepared dark corridor/door line
-  parasiteRehostCd?: number;  // Head slug bounded corpse/stunned-host scan cooldown
-  parasiteScanOffset?: number; // Head slug rotating corpse scan cursor; avoids full entity scans
-  parasiteQuarantineCd?: number; // Head slug sealed-room event throttle
   sourceChildIds?: number[];  // generic source/hive-owned children, cleaned when source resolves
   sourceEntityId?: number;    // child backlink to its source entity
   sourceSpawnedChildren?: number; // deterministic spawn slot cursor for source/hive children
   homeRoomId?: number;        // local-room leash anchor for room-bound actors
-  anger?: number;             // bounded local pressure/hostility meter
-  growthCount?: number;       // bounded local residue/growth marks placed
-  growthCd?: number;          // cooldown for local residue/growth
-  scratchCd?: number;         // cooldown for local audible/readable room beats
-  lastNoiseId?: number;       // last processed bounded noise record
-  lastRoomMemoryEventId?: number; // last processed communal room-memory fact
-  breached?: boolean;         // room-bound actor has crossed its leash
   ambientBarkCd?: number;     // cooldown for rare generic A-Life chatter
   wanderAngle?: number;        // phasing monster drift direction
-  netPulseCd?: number;         // Chervie/net possessor local mind pulse cooldown
-  netPowered?: boolean;        // last readable local NET power state
-  netAnchorX?: number;         // local compromised server/terminal anchor
-  netAnchorY?: number;
   wallBraceWasActive?: boolean; // Panelnik touched a wall on a previous brace tick
   wallBraceSlowTimer?: number;  // brief slowdown after wall-brace is broken in open floor
   wallBraceCueAt?: number;      // next allowed wall-brace readability message time
   wallBiasWasActive?: boolean;  // wall-edge monsters had a wall/corner advantage recently
   wallBiasCueAt?: number;       // next allowed wall-edge readability message time
   scrapWake?: number;           // Rzhavnik: 0 dormant, 1 first leap, 2 fragile walker
-  scrapWakeTimer?: number;      // Rzhavnik first-leap timebox
-  plantPuffCd?: number;         // rooted plant seed/sap burst cooldown
-  plantRootCd?: number;         // sparse authored root-structure cooldown
   tacticId?: string;             // generic actor tactic profile state, transient
   tacticPhase?: string;          // current tactic sub-phase
   tacticTimer?: number;          // current tactic remaining seconds
@@ -927,8 +897,6 @@ export const WORLD_EVENT_TYPES = [
   'monster_armor_cut',
   'monster_escaped',
   'false_liquidator_knock',
-  'false_liquidator_revealed',
-  'green_dog_howl',
   'green_dog_scared',
   'fog_shark_pack_sighted',
   'fog_shark_ignited',
@@ -1023,7 +991,6 @@ export const WORLD_EVENT_TYPES = [
   'krysnozhka_dispersed',
   'krysnozhka_nest_cleared',
   'slimevik_bargain',
-  'slimevik_harvested',
   'slimevik_killed',
   'slime_humanoid_sampled',
   'slime_humanoid_dried',
@@ -1035,7 +1002,6 @@ export const WORLD_EVENT_TYPES = [
   'head_slug_detached',
   'head_slug_rehosted',
   'head_slug_quarantined',
-  'obzhivalshchik_scratched',
   'obzhivalshchik_calmed',
   'obzhivalshchik_breached',
   'matka_child_spawned',

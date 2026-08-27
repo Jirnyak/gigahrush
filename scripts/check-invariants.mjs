@@ -273,6 +273,18 @@ if (slotIdHits.length) {
   for (const h of slotIdHits) failures.push(`    ${h}`);
 }
 
+/* Разбор AST общий на весь скрипт: файл читается и парсится ОДИН раз, дальше
+ * его берут и проверка урона, и запертые двери, и длина функций. */
+const astCache = new Map();
+function sourceFileFor(file) {
+  let sf = astCache.get(file);
+  if (!sf) {
+    sf = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true);
+    astCache.set(file, sf);
+  }
+  return sf;
+}
+
 /* ── Проверка 3.2: урон мимо единой двери ───────────────────────── */
 // Здоровье актору снимает `damageActor` (`systems/combat.ts`) и только он: он
 // считает тип и броню, толкает, СООБЩАЕТ ЖЕРТВЕ, кто ударил, начисляет штраф
@@ -281,33 +293,89 @@ if (slotIdHits.length) {
 // файла из всех, снимавших здоровье, — пси-арсенал игрока бил без автора, а
 // гнилушка и слизевик в тишине. Жертва не узнавала, кто её ударил.
 //
-// Белый список — не поблажка, а перечень мест, где урон БЕЗАВТОРСКИЙ по природе
-// (голод, обвал, среда, поезд) либо где здоровье не отнимают, а восстанавливают
-// (лечение, загрузка сейва, синхронизация A-Life и сети, цена предмета).
+/* Белый список — не поблажка, а перечень мест, где здоровье не отнимают, а
+ * восстанавливают (лечение, загрузка сейва, синхронизация A-Life и сети), плюс
+ * счётчики, которые считают, но не применяют.
+ *
+ * 11 → 7 (2026-08-27): «безавторский урон» перестал быть поводом для поблажки.
+ * Обвал, клеточная опасность, поезд и свечение маронария ушли в дверь через
+ * `damageActorByEnvironment` (`systems/actor_damage.ts`), потому что отсутствие
+ * автора НЕ означает отсутствия брони: химкомплект ОЗК за 16 000 ₽ с био-защитой
+ * 70 не мешал кислоте ровно ничем, пока кислота не знала, что она БИО.
+ * Оставшееся исключение по природе одно — голод и жажда: у них нет ни автора, ни
+ * типа, ни брони, они не удар, а исход.
+ *
+ * 8 → 9 (2026-08-27, прозрение регулярки): добавлен `data/items.ts`. Четыре
+ * функции применения предмета берут здоровье как ЦЕНУ добровольного действия
+ * (тухлая еда, снотворное, вскрытая синяя проба) — и войти в дверь не могут в
+ * принципе: `data/` не имеет права импортировать `systems/`, это первый
+ * инвариант этого же скрипта. Класс тот же, что у голода: не удар, а исход. */
 const DAMAGE_DOOR_ALLOWED = new Set([
   'systems/combat_stimulus.ts',   // сама дверь: `damageActor`
-  'systems/damage.ts',            // обвал: автора нет
-  'systems/needs.ts',             // голод и жажда
-  'systems/cell_hazards.ts',      // газ и радиация: бегут от МЕСТА, не от лица
-  'systems/samosbor.ts',          // свечение маронария и белый туман
-  'systems/rail_trains.ts',       // поезд
+  'systems/actor_damage.ts',      // ядро двери: снятие здоровья и средовой вход
+  'systems/needs.ts',             // голод и жажда: не удар, а исход
+  'data/items.ts',                // цена применения предмета; слой data/ двери не видит
   'systems/monster_armor.ts',     // считает, не применяет
   'systems/monster_traits.ts',    // считает, не применяет
   'systems/alife.ts',             // восстановление записи
   'systems/online_protocol.ts',   // сетевая синхронизация
   'systems/debug.ts',
 ]);
+/* Створка — не актор: у неё нет ни типа урона, ни брони, ни смерти, а `hp` есть.
+ * Разобрать это по типу нечем (проверка читает AST без чекера типов), поэтому
+ * получатель назван здесь. Список ровно один и расти не должен. */
+const NON_ACTOR_HP_OWNERS = new Set(['door']);
+
+/* Развернуть скобки, `??` и приведения: `(target.hp ?? 0) - dmg` — та же форма,
+ * что и `target.hp - dmg`, и до AST она не читалась вовсе. */
+function unwrapHpRead(node) {
+  let n = node;
+  for (;;) {
+    if (ts.isParenthesizedExpression(n)) { n = n.expression; continue; }
+    if (ts.isAsExpression(n) || ts.isNonNullExpression(n)) { n = n.expression; continue; }
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) { n = n.left; continue; }
+    return n;
+  }
+}
+
+/** Есть ли внутри выражения вычитание ИЗ здоровья (`… hp - x`, в любой обёртке). */
+function subtractsFromHp(node) {
+  let found = false;
+  const visit = (n) => {
+    if (found) return;
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.MinusToken) {
+      const left = unwrapHpRead(n.left);
+      if (ts.isPropertyAccessExpression(left) && left.name.text === 'hp') { found = true; return; }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+  return found;
+}
+
 const damageDoorHits = [];
 for (const file of files) {
   const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
   if (DAMAGE_DOOR_ALLOWED.has(srcRel)) continue;
-  const lines = fs.readFileSync(file, 'utf8').split('\n');
-  lines.forEach((line, i) => {
-    // Вычитание здоровья у чужой сущности. Присваивание не ловим: им и лечат.
-    if (/\b(?:target|victim|e|entity|other|npc|monster|host|actor)\.hp\s*(?:-=|=\s*Math\.max\(0,\s*[a-zA-Z_$][\w$.]*\.hp\s*-)/.test(line)) {
-      damageDoorHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
-    }
-  });
+  const sf = sourceFileFor(file);
+  const lines = sf.text.split('\n');
+  const visit = (node) => {
+    ts.forEachChild(node, visit);
+    if (!ts.isBinaryExpression(node)) return;
+    const target = node.left;
+    if (!ts.isPropertyAccessExpression(target) || target.name.text !== 'hp') return;
+    const owner = unwrapHpRead(target.expression);
+    if (ts.isIdentifier(owner) && NON_ACTOR_HP_OWNERS.has(owner.text)) return;
+    const op = node.operatorToken.kind;
+    // Уменьшение здоровья в любой форме: `-=` или присваивание, выведенное
+    // вычитанием из собственного `hp`. Прибавление не ловим — им лечат.
+    const reduces = op === ts.SyntaxKind.MinusEqualsToken
+      || (op === ts.SyntaxKind.EqualsToken && subtractsFromHp(node.right));
+    if (!reduces) return;
+    const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+    damageDoorHits.push(`${srcRel}:${line}  ${lines[line - 1].trim().slice(0, 90)}`);
+  };
+  visit(sf);
 }
 /* Осталось перевести СЕМЬ. Пять — доводка: рукопашная и рывок монстров,
  * рукопашная игрока, попадание снаряда и AoE-взрыв; жертве они сообщают, но
@@ -339,8 +407,55 @@ for (const file of files) {
  * `tests/damage-door-unification.test.ts`. Снимает эти шлюзы следующий шаг —
  * общий закон «насилие двигает репутацию» (`plot.md` §7).
  * Остаток — ровно тот отдельный класс: самоурон Трескотника, где бьющий и есть
- * жертва и сообщать некому. */
-const DAMAGE_DOOR_BASELINE = 2;
+ * жертва и сообщать некому.
+ * 2 → 2 при белом списке 11 → 8 (2026-08-27): число не сдвинулось, потому что
+ * храповик считает ТОЛЬКО `-=` и `Math.max(0, …)`, а среда писала себе
+ * `Math.max(1, hp - amount)` и в счёт не попадала вовсе. Сдвинулся сам список:
+ * из него ушли обвал, клеточная опасность, поезд и свечение маронария — четыре
+ * файла, где урон теперь идёт через дверь и встречает броню. Двадцать восемь
+ * средовых мест в `systems/` и `gen/` названы своим типом (БИО, ОГОНЬ, ЭНЕРГИЯ,
+ * КИНЕТИКА, ПСИ) и зовут `damageActorByEnvironment`. Слепое пятно регулярки к
+ * `Math.max(1, …)` осталось и записано здесь как незакрытая работа: расширять
+ * её нужно вместе с разбором того, что при этом покраснеет.
+ *
+ * 1 → 9 (2026-08-27, ПРОЗРЕНИЕ): слепое пятно закрыто, число выросло честно.
+ * Построчная регулярка видела ровно две формы — `hp -=` и `hp = Math.max(0, hp -`
+ * — и потому НЕ ВИДЕЛА ВОВСЕ ни `Math.max(1, hp - amount)` (основной способ, каким
+ * среда резала здоровье), ни `(hp ?? 0) - amount`. Проверка переехала на общий
+ * разбор AST (`sourceFileFor`, тот же кэш, что у запертых дверей и длины функций)
+ * и ловит уменьшение здоровья В ЛЮБОЙ ОБЁРТКЕ: `-=` или присваивание, чьё
+ * значение выведено вычитанием из собственного `hp`, сквозь скобки, `??` и `as`.
+ * Створка (`door.hp`) исключена по получателю: у неё нет ни брони, ни смерти.
+ *
+ * 9 → 5 (2026-08-27): ДОЛГА БОЛЬШЕ НЕТ — все четыре места, где урон шёл мимо
+ * брони, переведены в дверь, и все четыре доставались ТОЛЬКО игроку.
+ *   · обратная тяга огнемёта (`main.ts`) — ОГОНЬ, `damageActorByEnvironment`, и
+ *     обжигается теперь любой стрелок вплотную к вспышке: расстояние мерилось от
+ *     игрока, поэтому тварь с огнемётом дышала своим пламенем безнаказанно;
+ *   · давление самосбора вне рабочей гермы (`samosbor.ts`) — ПСИ: волна перешивает
+ *     связность, тем же тактом снимает пси-запас, и держит её пропитка, а не плита;
+ *   · колокол Истотита (`samosbor.ts`) — тем же ПСИ и той же дверью;
+ *   · запасной путь ПСИ (`psi.ts`) снят ЦЕЛИКОМ вместе с причиной, по которой он
+ *     существовал: `damage.ts` спрашивал флаг фазы у `psi.ts` и тем замыкал цикл,
+ *     из-за которого дверь приходила инъекцией (`setPsiDamageSink`). Флаг уехал в
+ *     лист `psi_state.ts`, цикла нет, дверь берётся прямым импортом, состояние
+ *     стало обязательным. Ронять урон молча стало нечему.
+ * Ни одно из четырёх мест ПОРОГ выживания игрока себе больше не переписывает:
+ * им владеет сама дверь (`lethal`).
+ *
+ * Пять оставшихся, каждое проверено по коду и ни одно не является долгом:
+ *   ОТДЕЛЬНЫЙ КЛАСС (бьющий и есть жертва, сообщать некому) — 1:
+ *     · `systems/ai/dash.ts:198` самоурон Трескотника о геометрию.
+ *   ЦЕНА ДОБРОВОЛЬНОГО ДЕЙСТВИЯ (не удар, а исход; ни автора, ни типа, ни брони,
+ *   пол на 1 — убить не может) — 4:
+ *     · `systems/govnyak.ts:209`      `hpCost` дозы;
+ *     · `systems/inventory.ts:894`    вскрытие пломбы синей пробы;
+ *     · `systems/inventory.ts:915`    уничтожение открытой пробы;
+ *     · `systems/maronary_shaving.ts:161` уничтожение бритвы без запаса ПСИ.
+ *   Последние четыре в дверь не просятся, но и в белый список файлом не уходят:
+ *   `inventory.ts` и `govnyak.ts` слишком велики, чтобы слепнуть на них целиком.
+ * Число только вниз. */
+const DAMAGE_DOOR_BASELINE = 5;
 if (damageDoorHits.length > DAMAGE_DOOR_BASELINE) {
   failures.push(`Урон мимо двери: ${damageDoorHits.length} мест снимают здоровье напрямую, разрешено ${DAMAGE_DOOR_BASELINE}.`);
   failures.push('    Здоровье актору снимает `damageActor` (systems/combat_stimulus.ts) — он же сообщает жертве, кто ударил.');
@@ -577,16 +692,6 @@ if (floorEdges.length) {
  * ПЕРЕМЕННЫЕ (`const state = ... LOCKED ...`, дальше уезжающие в помощника)
  * не проверяются: разбирать поток значения статически эта проверка не умеет и
  * не должна — на такой глубине она начнёт врать в обе стороны. */
-const astCache = new Map();
-function sourceFileFor(file) {
-  let sf = astCache.get(file);
-  if (!sf) {
-    sf = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true);
-    astCache.set(file, sf);
-  }
-  return sf;
-}
-
 const DOOR_STATE_PROPS = new Set(['state', 'doorState']);
 const EMPTY_STRING = /^(''|""|``)$/;
 const keyIdParamGlobal = new Map();   // имя функции → индекс параметра keyId | 'ambiguous'

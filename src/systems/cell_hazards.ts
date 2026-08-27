@@ -1,15 +1,15 @@
 /* ── Bounded sparse cell hazards ──────────────────────────────── */
 
 import {
-  W, AIGoal, EntityType, msg,
+  W, AIGoal, DamageType, EntityType, msg,
   type Entity, type GameState, type WorldEventSeverity,
 } from '../core/types';
 import { World } from '../core/world';
+import { damageActorByEnvironment } from './actor_damage';
 import { recordPlayerDamage } from './damage';
 import { ENTITY_MASK_ACTOR, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
-import { killEntity } from './entity_death';
 
 export type CellHazardCleanReason = 'fire' | 'solvent' | 'tool' | 'debug';
 
@@ -17,6 +17,13 @@ export interface CellHazardSiteDraft {
   id: string;
   kind: string;
   displayName: string;
+  /**
+   * Чем клетка бьёт. Умолчание — `BIO`, и это не заглушка: клеточная опасность
+   * заводилась под слизь, налёт, сок и мясную жилу, и девять её видов из
+   * шестнадцати именно такие. Кто бьёт иначе — прессом, кабелем, паром, — обязан
+   * назвать свой тип, иначе ОЗК будет держать разряд, а ТОК-200 кислоту.
+   */
+  damageType?: DamageType;
   cells: readonly number[];
   tags?: readonly string[];
   sticky?: boolean;
@@ -48,6 +55,7 @@ interface CellHazardSite {
   id: string;
   kind: string;
   displayName: string;
+  damageType: DamageType;
   tags: string[];
   cells: number[];
   activeCells: Set<number>;
@@ -69,7 +77,10 @@ interface CellHazardSite {
   messageCooldownSeconds: number;
   expiresAt: number;
   lastPulseMessageAt: number;
-  lastMonsterHitMessageAt: number;
+  /** Один кулдаун строки на весь участок для ВСЕХ, кроме игрока. Жилец на
+   *  кислоте ничем не отличается от твари на кислоте, а личный кулдаун у каждого
+   *  залил бы журнал десятком строк с одной лужи. */
+  lastOtherHitMessageAt: number;
   roomId?: number;
   zoneId?: number;
   centerX: number;
@@ -237,6 +248,7 @@ function normalizeSite(draft: CellHazardSiteDraft): CellHazardSite | null {
     id: draft.id,
     kind: draft.kind,
     displayName: draft.displayName,
+    damageType: draft.damageType ?? DamageType.BIO,
     tags: [...(draft.tags ?? [])],
     cells,
     activeCells: new Set(cells),
@@ -258,7 +270,7 @@ function normalizeSite(draft: CellHazardSiteDraft): CellHazardSite | null {
     messageCooldownSeconds: Math.max(0.5, draft.messageCooldownSeconds ?? 2.5),
     expiresAt: Number.isFinite(draft.expiresAt) ? Math.max(0, draft.expiresAt ?? 0) : 0,
     lastPulseMessageAt: -Infinity,
-    lastMonsterHitMessageAt: -Infinity,
+    lastOtherHitMessageAt: -Infinity,
     roomId: draft.roomId,
     zoneId: draft.zoneId,
     centerX,
@@ -590,39 +602,41 @@ function applyHazardDamage(
   if (amount <= 0) return false;
 
   subject.damageCarry -= amount;
+  /* Через единую дверь урона: клетка называет СВОЙ тип, и химкомплект встречает
+   * кислоту, а не только пулю. До этого здоровье снималось прямо здесь, и ОЗК с
+   * био-защитой 70 не мешал кислоте ровно ничем — ни игроку, ни жильцу. */
+  const actual = damageActorByEnvironment(world, state, e, {
+    damage: amount,
+    damageType: site.damageType,
+    time: state.time,
+  });
+  if (actual <= 0) return false;
   if (isPlayerEntity(e)) {
-    const before = e.hp;
-    e.hp = Math.max(1, e.hp - amount);
-    const actual = before - e.hp;
-    if (actual <= 0) return false;
     const maxHp = Math.max(1, e.maxHp ?? 100);
     state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.22 + actual / maxHp));
     recordPlayerDamage(state, undefined, actual, `${site.displayName}: -${actual}. ${site.warning}`, 'hazard');
-  } else {
-    e.hp = Math.max(0, e.hp - amount);
-    if (e.hp <= 0) {
-      killEntity(e);
-      e.hp = 0;
-    } else {
-      forceHazardFlee(e);
-    }
+  } else if (e.alive) {
+    forceHazardFlee(e);
   }
 
   const nearPlayer = isPlayerEntity(e) || world.dist2(player.x, player.y, e.x, e.y) <= HAZARD_MESSAGE_RADIUS2;
   if (!nearPlayer) return true;
 
-  if (e.type === EntityType.MONSTER) {
-    if (state.time - site.lastMonsterHitMessageAt < site.messageCooldownSeconds) return true;
+  /* Жилец и тварь на одной луже дают одну строку в журнал: разница между ними
+   * — видовая, а не правовая. Личная строка остаётся только у игрока, потому
+   * что журнал — это его HUD, а не факт мира. */
+  if (!isPlayerEntity(e)) {
+    if (state.time - site.lastOtherHitMessageAt < site.messageCooldownSeconds) return true;
     state.msgs.push(msg(e.alive
-      ? `${site.displayName} бьет ${subjectName(e)}: -${amount}`
+      ? `${site.displayName} бьет ${subjectName(e)}: -${actual}`
       : `${site.displayName} добивает ${subjectName(e)}.`,
     state.time, e.alive ? '#fa4' : '#f66'));
-    site.lastMonsterHitMessageAt = state.time;
+    site.lastOtherHitMessageAt = state.time;
     return true;
   }
 
   if (state.time - subject.lastDamageMessageAt >= site.messageCooldownSeconds) {
-    state.msgs.push(msg(`${site.displayName}: -${amount}`, state.time, '#f66'));
+    state.msgs.push(msg(`${site.displayName}: -${actual}`, state.time, '#f66'));
     subject.lastDamageMessageAt = state.time;
   }
   return true;
@@ -634,7 +648,7 @@ function tickHazardSubject(
   state: GameState,
   e: Entity,
   dt: number,
-  playerId: number,
+  player: Entity,
   playerStruggling: boolean,
 ): void {
   if (!e.alive || (!isPlayerEntity(e) && e.type !== EntityType.NPC)) return;
@@ -656,7 +670,16 @@ function tickHazardSubject(
   }
 
   subject.timeIn += dt;
-  if (e.id === playerId) applyHazardDamage(world, state, hit.site, subject, e, dt, hit.site.playerDamagePerSecond, e);
+  /* Кислота, пар, разряд и излучение бьют ВСЕХ, кто на клетке стоит: до этого
+   * `playerDamagePerSecond` доставался одному игроку, а жилец на той же луже
+   * только залипал и здоровья не терял. Следствие было не косметическое —
+   * средовая лестница брони (ОЗК против БИО, ТОК-200 против ОГНЯ) существовала
+   * ровно для одного актора из тысячи, потому что остальных среда не касалась. */
+  applyHazardDamage(world, state, hit.site, subject, e, dt, hit.site.playerDamagePerSecond, player);
+  if (!e.alive) {
+    runtime.subjects.delete(e.id);
+    return;
+  }
   if (hit.site.sticky && !subject.trapped && subject.timeIn >= hit.site.stickAfter) {
     subject.trapped = true;
     subject.escapeProgress = 0;
@@ -669,9 +692,9 @@ function tickHazardSubject(
       e.ai.pi = 0;
       e.ai.timer = Math.max(e.ai.timer, 0.5);
     }
-    const effort = e.id === playerId ? (playerStruggling ? 1 : 0.08) : 0.7;
+    const effort = e.id === player.id ? (playerStruggling ? 1 : 0.08) : 0.7;
     subject.escapeProgress += dt * effort;
-    const need = e.id === playerId ? hit.site.escapeSeconds : hit.site.npcEscapeSeconds;
+    const need = e.id === player.id ? hit.site.escapeSeconds : hit.site.npcEscapeSeconds;
     if (subject.escapeProgress >= need) {
       publishHazardEvent(state, 'hazard_escaped', hit.site, 3, e, {
         reason: 'struggle',
@@ -722,7 +745,7 @@ export function tickCellHazards(
   expireCellHazards(runtime, state.time);
   if (runtime.sites.length === 0) return;
   updateHazardPulses(world, runtime, state, player);
-  tickHazardSubject(world, runtime, state, player, dt, player.id, playerStruggling);
+  tickHazardSubject(world, runtime, state, player, dt, player, playerStruggling);
 
   runtime.npcScanAccum += dt;
   if (runtime.npcScanAccum < NPC_HAZARD_SCAN_INTERVAL) return;
@@ -744,7 +767,7 @@ export function tickCellHazards(
       scanned++;
       if (!e.alive) continue;
       if (e.type === EntityType.NPC && !isPlayerEntity(e)) {
-        tickHazardSubject(world, runtime, state, e, npcDt, player.id, false);
+        tickHazardSubject(world, runtime, state, e, npcDt, player, false);
       } else if (damagedMonsters < MONSTER_HAZARD_DAMAGE_CAP && e.type === EntityType.MONSTER) {
         if (tickMonsterHazardDamage(world, runtime, state, e, npcDt, player)) damagedMonsters++;
       }
@@ -759,7 +782,7 @@ export function tickCellHazards(
       continue;
     }
     if (e.type === EntityType.NPC && !isPlayerEntity(e)) {
-      tickHazardSubject(world, runtime, state, e, npcDt, player.id, false);
+      tickHazardSubject(world, runtime, state, e, npcDt, player, false);
     } else if (e.type === EntityType.MONSTER) {
       tickMonsterHazardDamage(world, runtime, state, e, npcDt, player);
     }

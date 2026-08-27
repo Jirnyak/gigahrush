@@ -13,7 +13,7 @@ import {
   resetPsiState,
   updatePsiEffects,
 } from '../src/systems/psi';
-import { makeTestNpc, makeTestPlayer } from './helpers';
+import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 test('PSI shield restores HP loss and spends 10 percent of blocked damage from PSI', () => {
   resetPsiState();
@@ -26,7 +26,7 @@ test('PSI shield restores HP loss and spends 10 percent of blocked damage from P
     rpg: { level: 1, xp: 0, attrPoints: 0, str: 0, agi: 0, int: 0, psi: 5, maxPsi: 10 },
   });
 
-  castInstantSpell('shield', player, [player], world, msgs, 1, () => {});
+  castInstantSpell('shield', player, [player], world, msgs, 1, makeGameState());
   assert.equal(isPsiShieldActive(), true);
 
   player.hp = 12;
@@ -71,7 +71,7 @@ test('PSI possession requires higher player intelligence and expires into backla
   });
   const entities = [player, target];
 
-  let activePlayer = castInstantSpell('possession', player, entities, world, msgs, 1, () => {}).player ?? player;
+  let activePlayer = castInstantSpell('possession', player, entities, world, msgs, 1, makeGameState()).player ?? player;
   assert.equal(target.psiControlledBy, player.id);
   assert.equal(activePlayer, target);
   target.alive = false;
@@ -106,7 +106,7 @@ test('PSI possession fails closed when target intelligence is not lower', () => 
   });
   const entities = [player, target];
 
-  castInstantSpell('possession', player, entities, world, msgs, 1, () => {});
+  castInstantSpell('possession', player, entities, world, msgs, 1, makeGameState());
 
   assert.equal(target.psiControlledBy, undefined);
   assert.equal(getPsiPossessionTarget(entities, player), null);
@@ -134,8 +134,8 @@ test('PSI shield can protect whichever entity is the current player', () => {
   });
   const entities = [player, target];
 
-  castInstantSpell('shield', player, entities, world, msgs, 1, () => {});
-  const activePlayer = castInstantSpell('possession', player, entities, world, msgs, 2, () => {}).player ?? player;
+  castInstantSpell('shield', player, entities, world, msgs, 1, makeGameState());
+  const activePlayer = castInstantSpell('possession', player, entities, world, msgs, 2, makeGameState()).player ?? player;
   activePlayer.hp = 6;
 
   assert.equal(absorbPsiShieldDamage(activePlayer, 20, msgs, 3), 14);
@@ -176,8 +176,8 @@ test('вселяться могут двое сразу, и ни один не �
   const bodyB = dull(base + 3, 46);
   const entities = [hostA, bodyA, hostB, bodyB];
 
-  castInstantSpell('possession', hostA, entities, world, msgs, 1, () => {});
-  castInstantSpell('possession', hostB, entities, world, msgs, 1, () => {});
+  castInstantSpell('possession', hostA, entities, world, msgs, 1, makeGameState());
+  castInstantSpell('possession', hostB, entities, world, msgs, 1, makeGameState());
 
   assert.equal(bodyA.psiControlledBy, hostA.id, 'первый вселился');
   assert.equal(bodyB.psiControlledBy, hostB.id, 'второй НЕ должен упереться в чужое вселение');
@@ -201,10 +201,10 @@ test('в занятое тело второй раз не вселяются', (
   const second = mk(base + 2, 22, 4);
   const entities = [first, body, second];
 
-  castInstantSpell('possession', first, entities, world, msgs, 1, () => {});
+  castInstantSpell('possession', first, entities, world, msgs, 1, makeGameState());
   assert.equal(body.psiControlledBy, first.id);
 
-  castInstantSpell('possession', second, entities, world, msgs, 1, () => {});
+  castInstantSpell('possession', second, entities, world, msgs, 1, makeGameState());
   assert.equal(body.psiControlledBy, first.id, 'тело осталось за первым');
   assert.equal(second.psiAway, undefined, 'второй никуда не ушёл');
 });

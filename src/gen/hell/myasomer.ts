@@ -1,6 +1,7 @@
 /* ── Мясомер: local post-samosbor noise discipline encounter ─── */
 
 import {
+  DamageType,
   AIGoal,
   Cell,
   ContainerKind,
@@ -298,6 +299,7 @@ function registerMyasomerVein(world: World, room: Room): Pick<MyasomerLayout, 'v
   registerCellHazardSite(world, {
     id: `${MYASOMER_ID}_listening_vein_${room.id}`,
     kind: 'myasomer_vein',
+    damageType: DamageType.BIO,
     displayName: 'Слуховая мясная жила',
     cells,
     tags: [MYASOMER_ID, 'counterplay', 'route'],

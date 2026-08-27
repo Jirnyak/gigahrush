@@ -1,4 +1,5 @@
 import {
+  DamageType,
   W,
   Cell,
   Feature,
@@ -8,6 +9,7 @@ import {
   type GameState,
   type Room,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
 import { consumeToolDurability, hasItem } from '../inventory';
@@ -577,7 +579,8 @@ export function tryUseConwayLifeAnomaly(
   world.markFogDirty();
 
   if (!prepared) {
-    player.hp = Math.max(1, (player.hp ?? 100) - 5);
+    // Через единую дверь урона: автомат бьёт через голые руки разрядом — ЭНЕРГИЯ.
+    damageActorByEnvironment(world, state, player, { damage: 5, damageType: DamageType.ENERGY, time: state.time });
     state.msgs.push(msg(`Автомат заглушен голыми руками. ${cleared} клеток осыпалось, пальцы дрожат.`, state.time, '#fa8'));
   } else {
     state.msgs.push(msg(`Глушитель поймал ритм. ${cleared} живых клеток стали полом.`, state.time, '#8cf'));

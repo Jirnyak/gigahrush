@@ -1,4 +1,5 @@
 import {
+  DamageType,
   Cell,
   Feature,
   msg,
@@ -6,6 +7,7 @@ import {
   type GameState,
   type Room,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { isPlayerEntity } from '../player_actor';
 
@@ -44,7 +46,8 @@ export function updateConveyorSorterAnomaly(world: World, player: Entity, state:
     player.x = next.x;
     player.y = next.y;
   } else {
-    player.hp = Math.max(1, (player.hp ?? 100) - 2);
+    // Через единую дверь урона: лента вжимает в препятствие — КИНЕТИКА.
+    damageActorByEnvironment(world, state, player, { damage: 2, damageType: DamageType.KINETIC, time: state.time });
   }
 
   if (state.time - cache.lastMsgAt > 10) {

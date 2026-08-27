@@ -1,4 +1,5 @@
-import { Cell, Feature, Tex, msg, type Entity, type GameState } from '../../core/types';
+import { DamageType, Cell, Feature, Tex, msg, type Entity, type GameState } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
 import { isPlayerEntity } from '../player_actor';
@@ -261,8 +262,9 @@ function findSnakeTarget(world: World, runtime: SnakeFieldRuntime, lookIdx: numb
   return null;
 }
 
-function hurtPlayer(player: Entity, state: GameState, amount: number): void {
-  player.hp = Math.max(1, (player.hp ?? 100) - amount);
+/* Через единую дверь урона: личинка жуёт живое, это БИО. */
+function hurtPlayer(world: World, player: Entity, state: GameState, amount: number): void {
+  damageActorByEnvironment(world, state, player, { damage: amount, damageType: DamageType.BIO, time: state.time });
   if (player.needs) player.needs.sleep = Math.max(0, player.needs.sleep - amount * 0.15);
   state.msgs.push(msg(`Белая личинка жует проход под ногами: -${amount} HP. Ждите хвост или клиньте экран.`, state.time, '#f84'));
 }
@@ -318,7 +320,7 @@ export function updateWallSnakeAnomaly(world: World, player: Entity, state: Game
     for (let i = 0; i < snake.length; i++) {
       if (playerOnPath(world, snake, player, snake.body[i])) {
         if (state.time >= snake.warnedUntil) {
-          hurtPlayer(player, state, 3);
+          hurtPlayer(world, player, state, 3);
           snake.warnedUntil = state.time + 1.0;
         }
         break;
@@ -345,7 +347,7 @@ export function updateWallSnakeAnomaly(world: World, player: Entity, state: Game
 
     if (playerOnPath(world, snake, player, nextHead)) {
       if (state.time >= snake.warnedUntil) {
-        hurtPlayer(player, state, 9);
+        hurtPlayer(world, player, state, 9);
         snake.warnedUntil = state.time + 1.0;
         if (state.time - snake.lastMsgTime > 3) {
           snake.lastMsgTime = state.time;

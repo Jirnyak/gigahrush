@@ -83,7 +83,7 @@ import {
   W, Cell, DoorState, Feature, Tex, RoomType, LiftDirection,
   type CharacterSex, type Entity, type GameState, type Item, type Quest, type WorldContainer,
   type PlayerDamageSourceKind, type PlayerAlife,
-  EntityType, Faction, MonsterKind, NpcRole, Occupation, ProjType, QuestType, AIGoal,
+  EntityType, Faction, MonsterKind, NpcRole, Occupation, ProjType, QuestType, AIGoal, DamageType,
   msg, setMsgClock,
 } from './core/types';
 import { World, replaceWorldFromGeneration } from './core/world';
@@ -343,6 +343,7 @@ import {
 } from './systems/noise';
 import { findActorDoorPermit, recordPermitAccess } from './systems/permits';
 import { damageActor, setActorDeathHandler, resetCombatStimulus } from './systems/combat_stimulus';
+import { damageActorByEnvironment } from './systems/actor_damage';
 import { enforceItemDropFifoCap, entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
 import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
 import { resetNpcMemoryStore } from './systems/npc_memory';
@@ -501,7 +502,7 @@ import { ensureProductionRooms, setProductionState, tickProduction } from './sys
 import {
   castInstantSpell, updatePsiEffects, psiAoeExplosion,
   isNoClipActive, resetPsiState, absorbPsiShieldDamage,
-  endPsiPossession, setPsiDamageSink,
+  endPsiPossession,
 } from './systems/psi';
 import { getCurrentPlayerId, isNativePlayerBodyEntity, isPlayerEntity, setCurrentPlayerEntity } from './systems/player_actor';
 import { fireDeletionBeam } from './systems/weapon_beams';
@@ -863,7 +864,7 @@ function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats):
   if (ws.isRanged) {
     spawnPeerPsiProjectile(actor, psiId, ws);
   } else {
-    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, (e) => handleKill(e, true, 0, 0, 1, actor), state);
+    const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, state);
     if (psiResult.beamLen) {
       state.beamFx = 0.35;
       state.beamAngle = actor.angle;
@@ -4790,9 +4791,7 @@ function castPlayerPsi(psiId: string, ws: WeaponStats): boolean {
   } else {
     const psiResult = castInstantSpell(
       ws.psiEffect ?? '', player, entities, world,
-      state.msgs, state.time,
-      (e) => handleKill(e, true),
-      state,
+      state.msgs, state.time, state,
     );
     if (psiResult.beamLen) {
       state.beamFx = 0.35;
@@ -5457,7 +5456,6 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
  * дверь урона получает её инъекцией, как самосбор получает генератор этажа.
  * Раньше пути, не знавшие про `handleKill`, убивали молча: луч удаления и
  * выжигание мозга не роняли ни лута, ни крови, и социальный слой смерти не видел. */
-setPsiDamageSink(damageActor);
 setActorDeathHandler((victim, killer, gore, vx, vy) => {
   // Пир — тоже игрок: его убийства засчитываются так же, как хозяйские.
   const playerSide = killer !== undefined && (killer === player || killer.peerSlot !== undefined);
@@ -5480,16 +5478,27 @@ function isPlayerOwnedProjectile(p: Entity): boolean {
 
 const flameCollateralQuery: Entity[] = [];
 
+/**
+ * Обратная тяга: пламя гаснет стрелку в лицо.
+ *
+ * Через единую дверь урона и как СРЕДА: у собственного дыма нет автора, поэтому
+ * репутацию он не двигает и свидетелей не зовёт, — но огнестойкий костюм от него
+ * защищает, а раньше жар шёл мимо любой брони. Обжигается ЛЮБОЙ стрелок, стоящий
+ * вплотную к вспышке: до этого расстояние мерилось от игрока, и тварь с огнемётом
+ * дышала своим пламенем безнаказанно. Вспышка экрана и строка в журнале остаются
+ * игроку — журнал его HUD, а не факт мира.
+ */
 function applyFlameBackdraft(x: number, y: number, actor: Entity | undefined): void {
   state.dmgFlash = Math.max(state.dmgFlash, 0.12);
   state.dmgSeed = 3;
-  if (actor?.id !== player.id || world.dist2(player.x, player.y, x, y) > 1.6 * 1.6) return;
-  if (isDebugOnePunchManEnabled(state)) {
-    keepDebugOnePunchManAlive(player, state);
-    return;
-  }
-  player.hp = Math.max(1, (player.hp ?? 1) - 1);
-  recordPlayerDamage(state, undefined, 1, 'Обратная тяга: дым и жар в лицо', 'hazard');
+  if (!actor?.alive || world.dist2(actor.x, actor.y, x, y) > 1.6 * 1.6) return;
+  const burn = damageActorByEnvironment(world, state, actor, {
+    damage: 1,
+    damageType: DamageType.FIRE,
+    time: state.time,
+  });
+  if (burn <= 0 || !isPlayerEntity(actor)) return;
+  recordPlayerDamage(state, undefined, burn, 'Обратная тяга: дым и жар в лицо', 'hazard');
   state.msgs.push(msg('Обратная тяга: дым и жар в лицо', state.time, '#f84'));
 }
 
@@ -5725,7 +5734,7 @@ function updateProjectiles(dt: number): void {
         playProjectileImpactCue(p, wallHit.x, wallHit.y);
       }
       if (p.aoeRadius && pt !== ProjType.BFG)
-        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)), state, projectileActor(p));
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, state, projectileActor(p));
       killEntity(p);
       continue;
     }
@@ -5751,7 +5760,7 @@ function updateProjectiles(dt: number): void {
         playProjectileImpactCue(p, floorX, floorY);
       }
       if (p.aoeRadius)
-        psiAoeExplosion(p, entities, world, state.msgs, state.time, (e) => handleKill(e, isPlayerOwnedProjectile(p)), state, projectileActor(p));
+        psiAoeExplosion(p, entities, world, state.msgs, state.time, state, projectileActor(p));
       killEntity(p);
       continue;
     }
@@ -5849,7 +5858,7 @@ function processProjectileEntityCollision(
     p.x = hitX;
     p.y = hitY;
     p.spriteZ = hitZ;
-    psiAoeExplosion(p, entities, world, state.msgs, state.time, (e2) => handleKill(e2, isPlayerOwnedProjectile(p), 0, 0, 1, projectileActor(p)), state, projectileActor(p));
+    psiAoeExplosion(p, entities, world, state.msgs, state.time, state, projectileActor(p));
   }
   // Flame projectiles pierce through (don't die on hit)
   if (pt !== ProjType.FLAME && pt !== ProjType.GRENADE) {

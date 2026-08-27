@@ -1,14 +1,29 @@
 import { EntityType, type Entity, type GameState, type MonsterKind, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
-import { isNoClipActive } from './psi';
+/* Из ЛИСТА, а не из `psi.ts`: это единственное ребро замыкало цикл
+ * `psi → combat_stimulus → factions → … → damage → psi`, из-за которого пси
+ * получал дверь урона инъекцией и держал запасной путь мимо носимой брони. */
+import { isNoClipActive } from './psi_state';
 import type { World } from '../core/world';
 import { ensureEntityIndex } from './entity_index';
 import { isPlayerEntity } from './player_actor';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { mathRng } from '../core/rand';
-import { killEntity } from './entity_death';
+import { DamageType } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 
 const DEATH_CAUSE_LOOKBACK_SEC = 4;
 const DEATH_CAUSE_LOOKAHEAD_SEC = 1.5;
+
+/**
+ * Недобранный обвалом урон, накопленный между кадрами.
+ *
+ * Дверь округляет удар до целого (`applyDamage`), а обвал давит десятью в
+ * секунду — это 0.17 за кадр, то есть ноль после округления и мёртвая механика.
+ * Тот же приём и тем же именем уже стоит у клеточной опасности
+ * (`HazardSubjectState.damageCarry`); здесь он снаружи сущности, потому что
+ * своего состояния у раздавливания нет и в сейв ему не надо.
+ */
+const crushCarry = new WeakMap<Entity, number>();
 
 function roundDamage(amount: number): number {
   return Math.max(0, Math.round(amount * 10) / 10);
@@ -129,21 +144,28 @@ export function updateBlockCrushDamage(
     if (isPlayerEntity(e) && isNoClipActive()) continue;
 
     if (world.solid(Math.floor(e.x), Math.floor(e.y))) {
-      const dmg = DAMAGE_PER_SECOND * dt;
+      const carried = (crushCarry.get(e) ?? 0) + DAMAGE_PER_SECOND * dt;
+      const dmg = Math.floor(carried);
+      crushCarry.set(e, carried - dmg);
+      if (dmg <= 0) continue;
+      /* Через единую дверь урона: бетон бьёт КИНЕТИКОЙ, и плита её держит так же,
+       * как держала бы пулю. Раньше здоровье снималось здесь напрямую, и обвал
+       * шёл сквозь любую броню целиком. Автора у обвала нет — репутацию он не
+       * двигает и войны не начинает. */
+      const applied = damageActorByEnvironment(world, state, e, {
+        damage: dmg,
+        damageType: DamageType.KINETIC,
+        time: state.time,
+      });
+      if (applied <= 0) continue;
       if (isPlayerEntity(e)) {
-        e.hp = Math.max(1, (e.hp ?? 1) - dmg);
         if (mathRng() < dt * 2) {
           state.dmgFlash = Math.max(state.dmgFlash ?? 0, 0.15);
         }
-        recordPlayerDamage(state, undefined, dmg, 'Раздавлен в структуре', 'hazard');
-      } else {
-        if (typeof e.hp === 'number' && e.hp > 0) {
-          e.hp -= dmg;
-          if (e.hp <= 0) {
-            killEntity(e);
-          }
-        }
+        recordPlayerDamage(state, undefined, applied, 'Раздавлен в структуре', 'hazard');
       }
+    } else if (crushCarry.get(e) !== undefined) {
+      crushCarry.delete(e);
     }
   }
 }

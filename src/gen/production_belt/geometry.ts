@@ -1,5 +1,6 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   Cell,
   EntityType,
   Feature,
@@ -891,6 +892,7 @@ export function registerMachineHazardSite(world: World, room: Room, serial: numb
   registerCellHazardSite(world, {
     id: `production_belt_machine_field_${room.id}`,
     kind: 'production_machine_field',
+    damageType: DamageType.KINETIC,
     displayName: 'Опасная зона станка',
     cells,
     tags: ['production_belt', 'machine_hazard', 'industrial', 'static_field'],

@@ -1,5 +1,6 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   Cell,
   DoorState,
   EntityType,
@@ -536,6 +537,7 @@ export function registerStaticHazards(world: World, rooms: NurseryRooms): void {
   registerCellHazardSite(world, {
     id: 'turing_nursery_basin_growth',
     kind: 'slime',
+    damageType: DamageType.BIO,
     displayName: 'инокуляционный налёт яслей',
     cells: basinCells,
     tags: [TURING_NURSERY_ROUTE_ID, 'inoculation', 'reaction_diffusion', 'slime', 'cleanable'],
@@ -554,6 +556,7 @@ export function registerStaticHazards(world: World, rooms: NurseryRooms): void {
   registerCellHazardSite(world, {
     id: 'turing_nursery_bridge_growth',
     kind: 'slime',
+    damageType: DamageType.BIO,
     displayName: 'слизевой мост яслей',
     cells: bridgeCells,
     tags: [TURING_NURSERY_ROUTE_ID, 'burn_bridge', 'reaction_diffusion', 'slime', 'cleanable'],

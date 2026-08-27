@@ -1,6 +1,7 @@
 /* -- MONSTER_12: Черная Личинка, local black-slime cleanup pressure -- */
 
 import {
+  DamageType,
   AIGoal, Cell, ContainerKind, EntityType, Faction, Feature, W,
   MonsterKind, Occupation, RoomType, Tex, msg,
   type Entity, type GameState, type Item, type Room, type WorldContainer,
@@ -655,6 +656,7 @@ export function generateChernayaLichinka(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: hazardId,
     kind: HAZARD_KIND,
+    damageType: DamageType.BIO,
     displayName: 'Черная Личинка',
     cells: residueCells,
     tags: [TAG_SITE, TAG_SLIME, 'slime', 'black_slime', TAG_CLEANUP, 'monster'],

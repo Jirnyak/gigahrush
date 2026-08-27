@@ -1,10 +1,12 @@
 /* ── Hermodoor borer: bounded shelter-risk encounter ─────────── */
 
 import {
+  DamageType,
   W, Cell, DoorState, EntityType, AIGoal, MonsterKind, RoomType,
   type Entity, type GameState, type Room,
   msg,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr } from '../entities/sprite_index';
@@ -19,7 +21,6 @@ import { isPlayerEntity, getCurrentPlayerId } from './player_actor';
 import { ensureEntityIndex } from './entity_index';
 import { rng } from '../core/rand';
 import { registerDebugCommand } from './debug_registry';
-import { killEntity } from './entity_death';
 
 type BorerSource = 'pre_samosbor' | 'post_samosbor' | 'debug';
 type BorerPhase = 'warning' | 'damaged' | 'compromised' | 'repaired' | 'resolved';
@@ -416,11 +417,13 @@ function applyTrapCounterplay(world: World, entities: readonly Entity[], state: 
   runtime.nextTrapAt = state.time + 2.5;
   runtime.damageAt += 4;
   rec.damageAt = runtime.damageAt;
-  monster.hp = Math.max(0, (monster.hp ?? 1) - 12);
+  /* Через единую дверь урона: створка прищемляет — это КИНЕТИКА, и врождённая
+   * броня твари её держит так же, как держала бы удар. Автора нет: механизм
+   * двери не лицо и войны не начинает. */
+  damageActorByEnvironment(world, state, monster, { damage: 12, damageType: DamageType.KINETIC, time: state.time });
   state.msgs.push(msg('Гермодверь прищемила точильщика. Он скребёт медленнее.', state.time, '#fc8'));
   playSoundAt(playDoor, doorX(runtime.targetDoorIdx) + 0.5, doorY(runtime.targetDoorIdx) + 0.5);
-  if (monster.hp <= 0) {
-    killEntity(monster);
+  if (!monster.alive) {
     state.msgs.push(msg('Гермоточильщик затих в дверном шве.', state.time, '#9f8'));
     storeFor(world).doorRecords.delete(runtime.targetDoorIdx);
     resolveActive(storeFor(world), runtime, 'resolved');

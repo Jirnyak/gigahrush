@@ -1,6 +1,7 @@
 /* ── Slime woman sump: wet/dry sample predator POI ───────────── */
 
 import {
+  DamageType,
   AIGoal,
   ContainerKind,
   EntityType,
@@ -214,6 +215,7 @@ export function generateSlimeWomanSump(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: `slime_woman_sump_${room.id}`,
     kind: 'slime_woman_sump',
+    damageType: DamageType.BIO,
     displayName: 'Жижевой отстойник',
     cells: wetCells,
     tags: ['slime', 'toxic', 'water', 'slime_woman', 'green_slime'],

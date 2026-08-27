@@ -2,6 +2,7 @@
 
 import { stampSurfaceSplat } from './surface_marks';
 import {
+  DamageType,
   W, Cell, DoorState, EntityType, Feature, MonsterKind, AIGoal,
   type Entity, type GameState, type WorldEvent, type WorldContainer, type WorldEventType,
   msg,
@@ -15,6 +16,7 @@ import {
 } from '../data/void_protocols';
 import { MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
+import { damageActorByEnvironment } from './actor_damage';
 import { recordPlayerDamage } from './damage';
 import { setDoorState } from './door_state';
 import { addItem } from './inventory';
@@ -151,17 +153,21 @@ function pushHud(state: GameState, line: string, color = '#8ff'): void {
   state.msgs.push(msg(line, state.time, color));
 }
 
+/* Через единую дверь урона. Отдача протокола Пустоты бьёт ПСИ: ряса культиста
+ * и СЗК-9 её держат, плита — нет. Автора нет: протокол не лицо. */
 function applyProtocolPlayerDamage(
+  world: World,
   state: GameState,
   player: Entity,
   amount: number,
   detail: string,
   flash: number,
 ): number {
-  if (player.hp === undefined || amount <= 0) return 0;
-  const before = player.hp;
-  player.hp = Math.max(1, player.hp - amount);
-  const applied = Math.max(0, before - player.hp);
+  const applied = damageActorByEnvironment(world, state, player, {
+    damage: amount,
+    damageType: DamageType.PSI,
+    time: state.time,
+  });
   if (applied > 0) {
     state.dmgFlash = Math.max(state.dmgFlash, flash);
     recordPlayerDamage(state, undefined, applied, detail, 'hazard');
@@ -418,7 +424,7 @@ function applyPsiBacklash(world: World, player: Entity, entities: Entity[], stat
     hits++;
   }
   if (player.hp !== undefined) {
-    applyProtocolPlayerDamage(state, player, 3, 'Протокол ПСИ-отдачи прошел через вас: -3', 0.25);
+    applyProtocolPlayerDamage(world, state, player, 3, 'Протокол ПСИ-отдачи прошел через вас: -3', 0.25);
   }
   return hits > 0 || player.hp !== undefined;
 }
@@ -498,7 +504,7 @@ function applyBorrowedLightBacklash(
   mark: VoidProtocolMark,
 ): void {
   if (player.hp !== undefined) {
-    applyProtocolPlayerDamage(state, player, 2, 'Отдача заемного света: -2', 0.2);
+    applyProtocolPlayerDamage(world, state, player, 2, 'Отдача заемного света: -2', 0.2);
   }
   for (const e of entities) {
     if (!e.alive || e.id === player.id) continue;
@@ -552,7 +558,7 @@ function resolveBacklash(
       break;
     case 'inverted_access':
       if (player.hp !== undefined) {
-        applyProtocolPlayerDamage(state, player, 1, 'Отдача обратного допуска дернула руку: -1', 0.15);
+        applyProtocolPlayerDamage(world, state, player, 1, 'Отдача обратного допуска дернула руку: -1', 0.15);
       }
       break;
     case 'borrowed_light':
@@ -560,7 +566,7 @@ function resolveBacklash(
       break;
     case 'psi_backlash':
       if (player.hp !== undefined) {
-        applyProtocolPlayerDamage(state, player, 4, 'ОТДАЧА: ПСИ-импульс вернулся вторым ударом: -4', 0.35);
+        applyProtocolPlayerDamage(world, state, player, 4, 'ОТДАЧА: ПСИ-импульс вернулся вторым ударом: -4', 0.35);
       }
       break;
     case 'floor_name_corruption': {

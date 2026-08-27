@@ -1,4 +1,5 @@
 import {
+  DamageType,
   W,
   Cell,
   Feature,
@@ -8,6 +9,7 @@ import {
   type GameState,
   type WorldEventSeverity,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
@@ -314,12 +316,13 @@ function collapseArena(world: World, player: Entity, state: GameState, arena: Sa
       if (safe) {
         player.x = safe.x + 0.5;
         player.y = safe.y + 0.5;
-        player.hp = Math.max(1, (player.hp ?? 100) - 7);
+        // Через единую дверь урона: бетон по рёбрам — КИНЕТИКА.
+        damageActorByEnvironment(world, state, player, { damage: 7, damageType: DamageType.KINETIC, time: state.time });
         state.dmgFlash = Math.max(state.dmgFlash ?? 0, 0.4);
         state.msgs.push(msg('Плита ушла вниз. Вы выскочили на несущий край, но бетон ударил по ребрам.', state.time, '#fa4'));
       } else {
         protectedIdx = world.idx(px, py);
-        player.hp = Math.max(1, (player.hp ?? 100) - 10);
+        damageActorByEnvironment(world, state, player, { damage: 10, damageType: DamageType.KINETIC, time: state.time });
         state.msgs.push(msg('Перекрытие просело, оставив под вами один дрожащий остров бетона.', state.time, '#f84'));
       }
     }

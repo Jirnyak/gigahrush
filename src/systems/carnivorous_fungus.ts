@@ -1,9 +1,11 @@
 /* ── Carnivorous fungus room: local hazard + explicit counterplay ─ */
 
 import {
+  DamageType,
   Cell, EntityType, Faction, Feature, ProjType, Tex,
   type Entity, type GameState, type Room, type WorldEventSeverity, msg,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
 import { registerFloorScopedReset } from '../world/world_contexts';
 import { ITEMS } from '../data/catalog';
@@ -118,9 +120,14 @@ function publishFungusEvent(
   });
 }
 
-function damagePlayer(player: Entity, amount: number): void {
-  if (player.hp === undefined) return;
-  player.hp = Math.max(1, player.hp - amount);
+/* Через единую дверь урона. Грибница жуёт живое — это БИО, и химкомплект ОЗК
+ * ей мешает. Автора нет: грибница не фракция и войны не начинает. */
+function damagePlayer(world: World, state: GameState, player: Entity, amount: number): number {
+  return damageActorByEnvironment(world, state, player, {
+    damage: amount,
+    damageType: DamageType.BIO,
+    time: state.time,
+  });
 }
 
 function markRoomSafe(world: World, room: Room, burned: boolean): void {
@@ -240,7 +247,7 @@ function harvestRoom(world: World, player: Entity, state: GameState, room: Room)
     return;
   }
   addRoomTag(room, TAG_HARVESTED);
-  damagePlayer(player, 12);
+  damagePlayer(world, state, player, 12);
   addItem(player, 'zhelemish_raw', 2);
   state.dmgFlash = Math.max(state.dmgFlash, 0.35);
   state.msgs.push(msg('Вы срезали желемыш из пасти. Кожа спорит, но добыча в кармане.', state.time, '#bf8'));
@@ -320,7 +327,7 @@ function updatePlayerHazard(world: World, player: Entity, state: GameState): voi
   const py = Math.floor(player.y);
   if (!fungusHazardCell(world, room, px, py)) return;
 
-  damagePlayer(player, 4);
+  damagePlayer(world, state, player, 4);
   state.dmgFlash = Math.max(state.dmgFlash, 0.2);
   if (state.time >= nextHazardMsgAt) {
     state.msgs.push(msg('Грибница цепляет подошвы и пробует кровь. К краю, к соли или к огню.', state.time, '#f84'));

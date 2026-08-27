@@ -2,6 +2,7 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   AIGoal,
   Cell,
   EntityType,
@@ -133,6 +134,7 @@ export function generateBorshchevikBlockade(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: `${BORSHCHEVIK_BLOCKADE_ID}_sap`,
     kind: 'borshchevik_sap',
+    damageType: DamageType.BIO,
     displayName: 'Сок борщевика',
     cells: sapCells,
     tags: ['plant', 'borshchevik', 'sap', 'seed', 'maintenance'],

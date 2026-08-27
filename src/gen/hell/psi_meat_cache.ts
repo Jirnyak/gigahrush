@@ -5,11 +5,13 @@ const HOME_FLOOR_KEY = designNpcFloorKey('hell');
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   W, Cell, ContainerKind, Feature, RoomType, Tex,
   type Entity, EntityType, AIGoal, Faction, Occupation, MonsterKind, QuestType,
   msg,
   type GameState, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
 import { registerFloorScopedReset } from '../../world/world_contexts';
 import { freshNeeds } from '../../data/catalog';
@@ -240,7 +242,7 @@ function applyPsiCacheBranch(state: GameState, source: WorldEvent, branch: PsiCa
 
   site.branches[branch] = true;
   const spec = BRANCH_SPECS[branch];
-  const drain = drainPlayerForCache(entities, spec.psiLoss, spec.hpPerMissingPsi);
+  const drain = drainPlayerForCache(world, state, entities, spec.psiLoss, spec.hpPerMissingPsi);
   const spawned = spawnCacheBranchBacklash(world, entities, site, spec.threats);
   const warning = psiCacheWarningText(spec, drain, spawned);
   state.msgs.push(msg(spec.message, state.time, spec.color));
@@ -286,6 +288,8 @@ function psiCacheWarningText(
 }
 
 function drainPlayerForCache(
+  world: World,
+  state: GameState,
   entities: readonly Entity[],
   psiLoss: number,
   hpPerMissingPsi: number,
@@ -303,8 +307,13 @@ function drainPlayerForCache(
   let hpLost = 0;
   const missingPsi = Math.max(0, psiLoss - psiLost);
   if (missingPsi > 0 && hpPerMissingPsi > 0 && player.hp !== undefined) {
-    hpLost = Math.min(Math.max(0, player.hp - 1), Math.ceil(missingPsi * hpPerMissingPsi));
-    player.hp = Math.max(1, player.hp - hpLost);
+    /* Через единую дверь урона: недостающее ПСИ добирают ПСИ же — тем, чем и
+     * брали. Ряса культиста и СЗК-9 здесь работают, плита нет. */
+    hpLost = damageActorByEnvironment(world, state, player, {
+      damage: Math.ceil(missingPsi * hpPerMissingPsi),
+      damageType: DamageType.PSI,
+      time: state.time,
+    });
   }
   return { psiLost, hpLost };
 }

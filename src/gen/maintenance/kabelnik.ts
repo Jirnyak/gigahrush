@@ -1,6 +1,7 @@
 /* -- Monster_06 Kabelnik: visible industrial tether/trap room -- */
 
 import {
+  DamageType,
   AIGoal, Cell, EntityType, Feature, MonsterKind, RoomType, Tex,
   type Entity,
 } from '../../core/types';
@@ -122,6 +123,7 @@ export function generateKabelnik(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: `${HAZARD_ID}_${room.id}`,
     kind: HAZARD_KIND,
+    damageType: DamageType.ENERGY,
     displayName: 'Кабельная петля',
     cells: cableCells,
     tags: ['monster', 'tether', 'electric', 'industrial', 'maintenance'],

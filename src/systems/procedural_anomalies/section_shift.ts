@@ -1,4 +1,5 @@
-import { W, Cell, Feature, Tex, msg, type Entity, type GameState } from '../../core/types';
+import { DamageType, W, Cell, Feature, Tex, msg, type Entity, type GameState } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
 import { isPlayerEntity } from '../player_actor';
@@ -437,7 +438,8 @@ export function updateSectionShiftAnomaly(world: World, player: Entity, state: G
       tintLocal(world, safe.x, safe.y, section.phase);
       state.msgs.push(msg('Комната щелкнула, и вы оказались у другого шва той же секции.', state.time, '#c8f'));
     } else {
-      player.hp = Math.max(1, (player.hp ?? 100) - 4);
+      // Через единую дверь урона: секция бьёт рёбрами перекрытия — КИНЕТИКА.
+      damageActorByEnvironment(world, state, player, { damage: 4, damageType: DamageType.KINETIC, time: state.time });
       state.msgs.push(msg('Секция дернулась, но не смогла вас замуровать. Ребра запомнили удар.', state.time, '#f84'));
     }
     const fx = world.wrap(Math.floor(player.x));

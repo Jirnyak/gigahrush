@@ -3,6 +3,7 @@ import { currentFloorRunEntry } from '../../systems/procedural_floors';
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   AIGoal, Cell, EntityType, Feature, MonsterKind, RoomType, Tex, W,
   msg,
   type Entity, type GameState, type Room, type WorldEventSeverity,
@@ -10,6 +11,7 @@ import {
 import { type World } from '../../core/world';
 import { MONSTERS } from '../../entities/monster';
 import { damageActor } from '../../systems/combat_stimulus';
+import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { registerContentInteractionHook, registerContentRuntimeHook } from '../../systems/content_hooks';
 import { publishEvent } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -235,11 +237,13 @@ function pressureText(pressure: number): string {
   }
 }
 
-function damagePlayer(player: Entity, amount: number): boolean {
-  if (player.hp === undefined) return false;
-  const before = player.hp;
-  player.hp = Math.max(1, player.hp - amount);
-  return player.hp < before;
+/* Через единую дверь урона, тем же ОГНЁМ, что и удар пара по твари ниже. */
+function damagePlayer(world: World, state: GameState, player: Entity, amount: number): boolean {
+  return damageActorByEnvironment(world, state, player, {
+    damage: amount,
+    damageType: DamageType.FIRE,
+    time: state.time,
+  }) > 0;
 }
 
 function paritelThreatAliveInRoom(world: World, room: Room, entities: Entity[]): boolean {
@@ -290,6 +294,7 @@ function updateParitelThreatSteam(
      * но никто не считает это нападением и не начинает из-за пара войну. */
     const hit = damageActor(world, state, e, {
       damage: 18 + pressure * 5,
+      damageType: DamageType.FIRE,
       source: 'environment',
       knockback: false,
     });
@@ -403,7 +408,7 @@ export function updateParitelSteamBridge(
   updateParitelThreatSteam(world, entities, player, state, room, pressure);
 
   if (pressure > 0 && isActiveSteamLocal(lx, ly, pressure)) {
-    if (damagePlayer(player, 4 + pressure)) {
+    if (damagePlayer(world, state, player, 4 + pressure)) {
       publishParitelEvent(world, player, state, room, 'paritel_steam_injury', 3, ['hazard', 'injury'], {
         damage: 4 + pressure,
         localX: lx,

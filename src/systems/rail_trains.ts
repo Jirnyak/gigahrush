@@ -1,6 +1,7 @@
 /* ── Fixed-route rail trains for metro floors and anomalies ───── */
 
 import {
+  DamageType,
   Cell,
   EntityType,
   Faction,
@@ -12,6 +13,8 @@ import {
   type RailTrainTrack,
   type WorldEventSeverity,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
+import { recordPlayerDamage } from './damage';
 import { World } from '../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../data/runtime_topology';
 import { Spr } from '../entities/sprite_index';
@@ -247,19 +250,50 @@ function updateTrainMotion(world: World, track: RailTrainTrack, train: RailTrain
   train.offset = to;
 }
 
-function damageEntity(world: World, victim: Entity, train: RailTrain, state: GameState): void {
-  if (!isPlayerEntity(victim) && victim.type !== EntityType.NPC && victim.type !== EntityType.MONSTER) return;
-  const amount = isPlayerEntity(victim) ? 38 : 260;
+/**
+ * Переезд. Одно число на всех и один кулдаун на всех.
+ *
+ * Здесь стояло `isPlayerEntity(victim) ? 38 : 260`: игрок был защищён
+ * спецслучаем ровно от того, что мгновенно убивало всех прочих, — а кулдаун
+ * переезда 0.85 с существовал тоже только у него. Осталось 260: под колёсами не
+ * выживают, и это единственная среда, которой разрешено ДОБИВАТЬ (`lethal`) —
+ * остальная выдавливает с клетки. Симметризация вниз убила бы саму механику:
+ * при 38 состав переставал давить вообще кого-либо (замер — `scripts/rail_bench.ts`).
+ *
+ * Проходимость от этого не страдает и это замерено: на длинных линиях, которые
+ * и приходится пересекать, клетка пути занята составом 2.5–2.9 % времени, а сам
+ * состав виден, слышен и объявлен отдельным предупреждением. Дорого стоит только
+ * яма платформы (37 %), но её не пересекают — по ней ходит состав.
+ *
+ * Бьёт КИНЕТИКОЙ: плита от состава что-то да значит, ткань нет. Возвращает,
+ * пережил ли удар, — кулдаун нужен ровно выжившему, чтобы его не мололо каждый
+ * кадр; погибший его не тратит, иначе состав давил бы по одному из толпы.
+ */
+function damageEntity(world: World, victim: Entity, train: RailTrain, state: GameState): boolean {
+  if (!isPlayerEntity(victim) && victim.type !== EntityType.NPC && victim.type !== EntityType.MONSTER) return false;
+  const amount = 260;
+  let applied = amount;
   if (victim.hp !== undefined) {
-    victim.hp = Math.max(0, victim.hp - amount);
-    if (victim.hp <= 0) killEntity(victim);
+    applied = damageActorByEnvironment(world, state, victim, {
+      damage: amount,
+      damageType: DamageType.KINETIC,
+      lethal: true,
+      time: state.time,
+    });
   } else {
     killEntity(victim);
   }
+  /* Журнал и причина смерти — HUD игрока, а не факт мира: печатается СНЯТОЕ, а
+   * не задуманное, иначе плита гасила бы удар, а строка врала бы про полный. */
+  if (isPlayerEntity(victim) && applied > 0) {
+    recordPlayerDamage(state, undefined, applied, `${train.label}: переезд -${applied}`, 'hazard');
+    state.msgs.push(msg(`${train.label} ударил по костям: -${applied} HP. Машинист не тормозил, двери уже закрывались.`, state.time, '#f66'));
+  }
   publishRailEvent(world, state, victim, train, 'rail_train_crush', isPlayerEntity(victim) ? 5 : 4, ['crush'], {
-    damage: amount,
+    damage: applied,
     killed: !victim.alive,
   });
+  return victim.alive && (victim.hp ?? 0) > 0;
 }
 
 /** Дрожь рельсов слышит только игрок — этой ветке незачем сидеть в общем обходе. */
@@ -292,12 +326,8 @@ function updateTrainCollisions(world: World, entities: Entity[], player: Entity,
     const track = train ? trackById(world, train.trackId) : undefined;
     if (!train || !track || trainStopped(train, state) || train.passengerId === entity.id) continue;
     if (trainDistance2(world, track, train, entity.x, entity.y) > CONTACT_DIST2) continue;
-    if (entity.id === player.id && state.time < train.nextCrushAt) continue;
-    if (entity.id === player.id) {
-      train.nextCrushAt = state.time + 0.85;
-      state.msgs.push(msg(`${train.label} ударил по костям: -38 HP. Машинист не тормозил, двери уже закрывались.`, state.time, '#f66'));
-    }
-    damageEntity(world, entity, train, state);
+    if (state.time < train.nextCrushAt) continue;
+    if (damageEntity(world, entity, train, state)) train.nextCrushAt = state.time + 0.85;
   }
 }
 

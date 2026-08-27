@@ -3,7 +3,7 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 
 const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
-import { Cell, EntityType, Faction, Feature, Occupation, RoomType, Tex } from '../../core/types';
+import { DamageType, Cell, EntityType, Faction, Feature, Occupation, RoomType, Tex } from '../../core/types';
 import { Spr } from '../../entities/sprite_index';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
 const SLIME_SCRAPER_ITEM = 'slime_scraper';import { type PlotNpcDef, registerAuthoredNpc, designNpcFloorKey } from '../../data/plot';
@@ -86,6 +86,7 @@ export function generateBrownSlimeCleanup(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: `brown_slime_cleanup_${room.id}`,
     kind: 'brown_slime_residue',
+    damageType: DamageType.BIO,
     displayName: 'Коричневая слизь',
     cells: residueCells,
     tags: ['slime', 'brown_slime', 'cleanup', 'napalm'],

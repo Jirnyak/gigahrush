@@ -15,12 +15,10 @@ import { publishEvent } from './events';
 import { applyWitnessedViolencePenalty, areSameSide, combatSideOf, isHostile, isPersonalFeudEnemy } from './factions';
 import { isPlayerEntity } from './player_actor';
 import { RELATION_FRIENDLY_THRESHOLD, getNpcPlayerRelation } from './npc_relations';
-import { applyDamage, applyHitStaggerAndKnockback, calculateDamage } from './combat';
+import { finishActorDeath, runActorDamageCore } from './actor_damage';
 import { applyCombatRelationOutcome } from './factions';
-import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import type { MonsterArmorHitResult } from './monster_armor';
 import type { DamageType, ProjType } from '../core/types';
-import { killEntity } from './entity_death';
 
 export type CombatStimulusSource =
   | 'player_melee'
@@ -129,26 +127,99 @@ function eventAllowed(key: string, time: number, cooldown: number): boolean {
   return true;
 }
 
-export function npcCombatProfile(npc: Entity): NpcCombatProfile {
-  const ws = WEAPON_STATS[npc.weapon ?? ''] ?? WEAPON_STATS[''];
-  const brave = (npc.psiMadness ?? 0) > 0 ||
-    npc.isTraveler ||
-    occupationHasAnyProfileTag(npc.occupation, ['combat', 'patrol']) ||
-    npc.faction === Faction.LIQUIDATOR ||
-    npc.faction === Faction.CULTIST ||
-    npc.faction === Faction.WILD;
+/** Занятия, при которых бой — часть работы. Список вынесен из тела справки:
+ *  литерал в аргументе аллоцировал массив на каждый вызов. */
+const BRAVE_OCCUPATION_TAGS: readonly string[] = ['combat', 'patrol'];
+
+/**
+ * ПОСТОЯННАЯ ПОЛОВИНА боевой справки: всё, что не зависит от текущего здоровья.
+ *
+ * Справку спрашивают у каждого думающего человека каждый его такт — замерено
+ * 2300 вызовов в кадр на жилом этаже, — а тяжёлое в ней ровно две вещи, и обе
+ * от здоровья не зависят: разбор тегов занятия (`toLowerCase` плюс проходы по
+ * трём спискам тегов и по словарю синонимов) и таблица оружия.
+ *
+ * Поэтому кэшируется НЕ профиль, а его постоянная половина, и ключ — полный
+ * список её входов. Их ровно шесть, и все они читаются из самой справки:
+ * оружие в руках, занятие, фракция, пси-безумие, признак странника и уровень.
+ * БРОНИ СРЕДИ НИХ НЕТ — справка её не читает вовсе, ни носимую, ни монстровую,
+ * поэтому смена брони профиль не меняет и инвалидировать его не обязана.
+ *
+ * Здоровье пересчитывается на каждом вызове и в ключ не входит: делить и
+ * умножать дешевле, чем сверять, а раненый обязан отвечать текущим числом.
+ */
+interface CombatProfileCore {
+  weapon: string;
+  occupation: Entity['occupation'];
+  faction: Faction | undefined;
+  psiMad: boolean;
+  traveler: boolean;
+  level: number;
+  brave: boolean;
+  armed: boolean;
+  ranged: boolean;
+  weaponScore: number;
+  levelScore: number;
+}
+
+let profileCores = new WeakMap<Entity, CombatProfileCore>();
+
+function combatProfileCore(npc: Entity): CombatProfileCore {
+  const weapon = npc.weapon ?? '';
+  const psiMad = (npc.psiMadness ?? 0) > 0;
+  const traveler = npc.isTraveler === true;
+  const level = Math.max(1, npc.rpg?.level ?? 1);
+  const cached = profileCores.get(npc);
+  if (cached !== undefined &&
+    cached.weapon === weapon &&
+    cached.occupation === npc.occupation &&
+    cached.faction === npc.faction &&
+    cached.psiMad === psiMad &&
+    cached.traveler === traveler &&
+    cached.level === level) return cached;
+  const ws = WEAPON_STATS[weapon] ?? WEAPON_STATS[''];
   const ranged = ws.isRanged === true;
-  const armed = ws.dmg > 3 || ranged;
+  const core: CombatProfileCore = {
+    weapon,
+    occupation: npc.occupation,
+    faction: npc.faction,
+    psiMad,
+    traveler,
+    level,
+    brave: psiMad ||
+      traveler ||
+      occupationHasAnyProfileTag(npc.occupation, BRAVE_OCCUPATION_TAGS) ||
+      npc.faction === Faction.LIQUIDATOR ||
+      npc.faction === Faction.CULTIST ||
+      npc.faction === Faction.WILD,
+    ranged,
+    armed: ws.dmg > 3 || ranged,
+    weaponScore: ranged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg,
+    levelScore: level * 3,
+  };
+  profileCores.set(npc, core);
+  return core;
+}
+
+/**
+ * Смелость отдельным входом: боевому AI из всей справки нужен ровно этот флаг,
+ * и это самый частый её потребитель. Через полный профиль он платил бы объектом
+ * на каждый вызов ни за что.
+ */
+export function npcIsBraveActor(npc: Entity): boolean {
+  return combatProfileCore(npc).brave;
+}
+
+export function npcCombatProfile(npc: Entity): NpcCombatProfile {
+  const core = combatProfileCore(npc);
   const hp = Math.max(0, npc.hp ?? 20);
   const maxHp = Math.max(1, npc.maxHp ?? (hp || 20));
-  const weaponScore = ranged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg;
-  const levelScore = Math.max(1, npc.rpg?.level ?? 1) * 3;
   return {
-    brave,
-    armed,
-    ranged,
+    brave: core.brave,
+    armed: core.armed,
+    ranged: core.ranged,
     hpRatio: hp / maxHp,
-    threatScore: hp * 0.22 + weaponScore + levelScore,
+    threatScore: hp * 0.22 + core.weaponScore + core.levelScore,
   };
 }
 
@@ -571,6 +642,7 @@ export function resetCombatStimulus(): void {
   threatMemory = new WeakMap<Entity, CombatThreatMemory>();
   killedEventTargets = new WeakSet<Entity>();
   duelLocked = new WeakSet<Entity>();
+  profileCores = new WeakMap<Entity, CombatProfileCore>();
   recentEventTimes.clear();
 }
 
@@ -588,15 +660,12 @@ export function resetCombatStimulus(): void {
  * `applyDamage` только считал число. Теперь по умолчанию — полный ход.
  */
 
-/** Кто обрабатывает смерть. Приходит инъекцией из точки сборки: сама обработка
- *  (лут, опыт, кровь, квесты, A-Life) принадлежит `main.ts`, а знать о ней
- *  систему заставлять нельзя — это ребро systems → main. */
-export type ActorDeathHandler = (victim: Entity, killer: Entity | undefined, gore: number, vx: number, vy: number) => void;
-
-let actorDeathHandler: ActorDeathHandler | undefined;
-export function setActorDeathHandler(handler: ActorDeathHandler | undefined): void {
-  actorDeathHandler = handler;
-}
+/* Обработчик смерти живёт в ядре двери; отсюда он виден как раньше, чтобы точка
+ * сборки и тесты не знали о разделении. Средовой вход отсюда НЕ реэкспортируется
+ * намеренно: импорт «из двери» вернул бы среде ребро на фракционный узел, ради
+ * снятия которого ядро и выделено. Зовите `systems/actor_damage`. */
+export { setActorDeathHandler } from './actor_damage';
+export type { ActorDeathHandler } from './actor_damage';
 
 export interface ActorDamageInput {
   damage: number;
@@ -698,9 +767,12 @@ export interface ActorDamageResult {
 /**
  * Нанести урон актору. Один ход на все семь шагов.
  *
- * Броневой конвейер дверь гонит ВСЕМ, кто не посчитал его сам: живучесть
- * существа не зависит от того, чья рука бьёт. Кто считает сам и почему — см.
- * `ActorDamageInput.applied`; там же замер, которым снято последнее исключение.
+ * Ядро удара — счёт брони, снятие здоровья, толчок и смерть — лежит в
+ * `actor_damage.ts` и одинаково для всех. Здесь к нему добавляется социальная
+ * половина: кто заплатит за насилие и кто узнает, что его ударили. Она нужна
+ * ровно тогда, когда у удара есть АВТОР, поэтому среда зовёт ядро напрямую
+ * (`damageActorByEnvironment`) — и это не обход двери, а тот же ход с пустой
+ * рукой. Кто считает броню сам и почему — см. `ActorDamageInput.applied`.
  */
 export function damageActor(
   world: World,
@@ -708,32 +780,10 @@ export function damageActor(
   target: Entity,
   input: ActorDamageInput,
 ): ActorDamageResult {
-  /* Состояние может отсутствовать: часть спецударов монстров зовётся оттуда, где
-   * `GameState` не протянут. Тогда броневой конвейер пропускается — ему нужен мир
-   * целиком, — но тип урона, память жертвы и смерть работают как всегда. Молча
-   * ронять урон нельзя ни в одном случае. */
-  const armor = input.applied !== undefined
-    ? { damage: input.applied, armorActive: false, armorStacks: 0, stripped: false, hitKind: 'weak' as const }
-    : state
-      ? applyDamage(world, state, target, input)
-      : { damage: Math.round(calculateDamage(input.damage, input.damageType, target)), armorActive: false, armorStacks: 0, stripped: false, hitKind: 'weak' as const };
-  const empty: ActorDamageResult = { applied: 0, killed: false, armor };
-  if (!target.alive || target.hp === undefined || input.damage <= 0) return empty;
+  const { armor, blocked } = runActorDamageCore(world, state, target, input);
+  if (blocked) return { applied: 0, killed: false, armor };
 
-  // Бессмертие отладочного режима — одно место на всю игру, а не по копии у
-  // каждого бьющего.
-  if (isPlayerEntity(target) && isDebugOnePunchManEnabled()) {
-    keepDebugOnePunchManAlive(target);
-    return empty;
-  }
-
-  target.hp -= armor.damage;
   const attacker = input.attacker;
-  const knockbackX = input.knockbackFromX ?? attacker?.x;
-  const knockbackY = input.knockbackFromY ?? attacker?.y;
-  if (input.knockback !== false && knockbackX !== undefined && knockbackY !== undefined) {
-    applyHitStaggerAndKnockback(world, target, knockbackX, knockbackY, armor.damage);
-  }
   const reported = input.reportedDamage ?? input.damage;
   /* Отношения — ПЕРЕД сообщением жертве. Так это делали четыре пути из шести до
    * сведения, и порядок между ними ни на что не влияет: удар внутри одной
@@ -749,13 +799,9 @@ export function damageActor(
     notifyActorDamaged(world, target, attacker, reported, input.source, input.time ?? state?.time ?? 0, state);
   }
 
-  if (target.hp > 0) return { applied: armor.damage, killed: false, armor };
+  if ((target.hp ?? 0) > 0) return { applied: armor.damage, killed: false, armor };
   // ВРЕМЕННО: пути со своей обработкой смерти (см. `deathByCaller`).
   if (input.deathByCaller === true) return { applied: armor.damage, killed: true, armor };
-  /* Смерть игрока дверь НЕ объявляет: у неё своя дорога — щит, продолжение за
-   * другое тело, камера смерти, — и флаг `alive` там не поднимают вовсе.
-   * Обработчик всё равно зовётся: он первым делом пробует поглотить удар щитом. */
-  if (!isPlayerEntity(target)) killEntity(target);
-  actorDeathHandler?.(target, attacker, input.gore ?? 1, input.splashX ?? 0, input.splashY ?? 0);
+  finishActorDeath(target, attacker, input);
   return { applied: armor.damage, killed: true, armor };
 }

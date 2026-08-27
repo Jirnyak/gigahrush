@@ -1,4 +1,5 @@
 import {
+  DamageType,
   Cell,
   Feature,
   W,
@@ -6,6 +7,7 @@ import {
   type Entity,
   type GameState,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
 import { getNetHackTerminalDef, NET_HACK_TERMINALS, type NetHackTerminalDef, type NetHackTerminalDefId } from '../data/net_hack';
 import { publishEvent } from './events';
@@ -321,7 +323,8 @@ export function attemptNetHack(
 
   lockedUntil.set(key, state.time + 55);
   if (player.rpg) player.rpg.psi = Math.max(0, player.rpg.psi - def.failPsiDamage);
-  if (player.hp !== undefined) player.hp = Math.max(1, player.hp - def.failHpDamage);
+  /* Через единую дверь урона: обратный разряд терминала — ЭНЕРГИЯ. */
+  damageActorByEnvironment(world, state, player, { damage: def.failHpDamage, damageType: DamageType.ENERGY, time: state.time });
   state.dmgFlash = Math.max(state.dmgFlash, 0.28);
   runtime.message = `${def.label}: отказ, ПСИ -${def.failPsiDamage}, сигнал поднят.`;
   publishEvent(state, {

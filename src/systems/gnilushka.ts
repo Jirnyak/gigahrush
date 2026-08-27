@@ -16,6 +16,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/items';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { Spr } from '../entities/sprite_index';
+import { speciesState } from './ai/species_state';
 import { spawnBloodHit } from './blood_fx';
 import { playGrowl, playSoundAt } from './audio';
 import { recordPlayerDamage } from './damage';
@@ -37,6 +38,13 @@ const CROWD_RADIUS = 3.6;
 const FLEE_DISTANCE = 8;
 const FLEE_SECONDS = 1.65;
 const DEFENSIVE_RANGE = 1.35;
+/* Секунды оборонительной стойки — рядом с видом, а не в ядре.
+ *
+ * Считались они общим `ai.anger`, который тем же именем вёл СОВСЕМ другой счёт
+ * у Обживальщика: там это накопленная память комнаты по шкале 0..100, здесь —
+ * убывающие секунды после удара. Общего у двух смыслов было только имя. */
+const gnilushkaState = speciesState<{ anger: number }>(() => ({ anger: 0 }));
+
 const DEFENSIVE_SECONDS = 9;
 const CALM_STAGE = 0;
 const HURT_STAGE = 1;
@@ -177,7 +185,8 @@ export function tryUseGnilushkaInteraction(
 
   if ((gnilushka.monsterStage ?? CALM_STAGE) === HURT_STAGE || (gnilushka.hp ?? 1) < (gnilushka.maxHp ?? gnilushka.hp ?? 1)) {
     gnilushka.monsterStage = HURT_STAGE;
-    if (gnilushka.ai) gnilushka.ai.anger = Math.max(gnilushka.ai.anger ?? 0, DEFENSIVE_SECONDS);
+    const own = gnilushkaState.of(gnilushka);
+    own.anger = Math.max(own.anger, DEFENSIVE_SECONDS);
     state.msgs.push(msg('Гнилушка пятится и прячет лицо в серые волосы. После удара она не верит словам.', state.time, '#9d7'));
     return true;
   }
@@ -199,10 +208,8 @@ export function tryUseGnilushkaInteraction(
   const helped = consumeHelpItem(player);
   const firstSpare = (gnilushka.monsterStage ?? CALM_STAGE) !== SPARED_STAGE;
   gnilushka.monsterStage = SPARED_STAGE;
-  if (gnilushka.ai) {
-    gnilushka.ai.anger = 0;
-    gnilushka.ai.combatTargetId = undefined;
-  }
+  gnilushkaState.of(gnilushka).anger = 0;
+  if (gnilushka.ai) gnilushka.ai.combatTargetId = undefined;
   if (helped) {
     gnilushka.hp = Math.min(gnilushka.maxHp ?? gnilushka.hp ?? 1, (gnilushka.hp ?? 1) + 8);
     if (firstSpare) dropGift(world, entities, nextId, gnilushka, 'note', 'Гнилушка шепчет: "низкий лифт шумит не хуже сирены; не стой у мягкой двери".');
@@ -311,7 +318,8 @@ function defensiveSlash(
 function publishHurtOnce(state: GameState | undefined, world: World, e: Entity, actor: Entity | undefined, time: number, msgs: Msg[]): void {
   if ((e.monsterStage ?? CALM_STAGE) === HURT_STAGE) return;
   e.monsterStage = HURT_STAGE;
-  if (e.ai) e.ai.anger = Math.max(e.ai.anger ?? 0, DEFENSIVE_SECONDS);
+  const own = gnilushkaState.of(e);
+  own.anger = Math.max(own.anger, DEFENSIVE_SECONDS);
   msgs.push(msg('Гнилушка сорвалась в бег: теперь разговор заменили углы и когти.', time, '#f96'));
   if (!state || !actor) return;
   publishGnilushkaEvent(state, world, 'gnilushka_hurt', actor, e, 4, ['hurt', 'defensive'], {
@@ -337,8 +345,9 @@ export function updateGnilushkaMonster(
   if (hurt) publishHurtOnce(state, world, e, player, time, msgs);
 
   const nearest = nearestActor(world, e, AVOID_ARMED_RADIUS);
-  const angry = (e.monsterStage ?? CALM_STAGE) === HURT_STAGE || (e.ai.anger ?? 0) > 0;
-  e.ai.anger = Math.max(0, (e.ai.anger ?? 0) - dt);
+  const own = gnilushkaState.of(e);
+  const angry = (e.monsterStage ?? CALM_STAGE) === HURT_STAGE || own.anger > 0;
+  own.anger = Math.max(0, own.anger - dt);
 
   if (angry && nearest) {
     if (defensiveSlash(world, e, nearest, dt, time, msgs, state)) return true;

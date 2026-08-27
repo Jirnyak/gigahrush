@@ -1,4 +1,5 @@
 import {
+  DamageType,
   Cell,
   Feature,
   msg,
@@ -6,6 +7,7 @@ import {
   type GameState,
   type Room,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { isPlayerEntity } from '../player_actor';
 
@@ -293,7 +295,8 @@ export function updateRadioChessAnomaly(world: World, player: Entity, state: Gam
   const movedOntoDanger = runtime.lastCell !== cell;
   runtime.lastCell = cell;
   const hpLoss = movedOntoDanger ? 3 : 1;
-  player.hp = Math.max(1, (player.hp ?? 100) - hpLoss);
+  // Через единую дверь урона: поле маяков бьёт излучением — ЭНЕРГИЯ.
+  damageActorByEnvironment(world, state, player, { damage: hpLoss, damageType: DamageType.ENERGY, time: state.time });
   if (player.needs) player.needs.sleep = Math.max(0, player.needs.sleep - (movedOntoDanger ? 0.9 : 0.25));
   if (state.time - runtime.lastMsgTime > 3.5) {
     runtime.lastMsgTime = state.time;

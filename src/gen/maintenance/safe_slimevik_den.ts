@@ -19,6 +19,7 @@ const AMBIENT_NPC_0: PlotNpcDef = {
 };
 registerAuthoredNpc({ id: 'maintenance_ambient_0_eix7g', npc: AMBIENT_NPC_0, homeFloorKey: HOME_FLOOR_KEY });
 import {
+  DamageType,
   AIGoal,
   Cell,
   EntityType,
@@ -139,6 +140,7 @@ export function generateSafeSlimevikDen(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: `safe_slimevik_feed_${room.id}`,
     kind: 'slimevik_feed_slime',
+    damageType: DamageType.BIO,
     displayName: 'Кормовая слизь',
     cells,
     tags: ['slime', 'slimevik', 'sample', 'safe_den'],

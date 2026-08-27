@@ -4,6 +4,7 @@ import { getPlotNpcNumericId } from '../../data/npc_packages';
 
 const HOME_FLOOR_KEY = designNpcFloorKey('maintenance');
 import {
+  DamageType,
   ContainerKind,
   Faction,
   Feature,
@@ -327,6 +328,7 @@ function addPressHazard(ctx: MaintContentCtx, line: Room, dangerCells: number[])
   registerCellHazardSite(ctx.world, {
     id: `${CONTENT_TAG}_${line.id}`,
     kind: 'pressovik_press',
+    damageType: DamageType.KINETIC,
     displayName: 'Прессовик: ход плиты',
     cells: dangerCells,
     tags: pressTags(['hazard', 'safe_lane']),

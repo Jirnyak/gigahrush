@@ -2,7 +2,8 @@
 
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 
-import { Cell, ContainerKind, DoorState, EntityType, AIGoal, Feature, MonsterKind, RoomType, Tex, msg, type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType } from '../../core/types';
+import { DamageType, Cell, ContainerKind, DoorState, EntityType, AIGoal, Feature, MonsterKind, RoomType, Tex, msg, type Entity, type GameState, type Item, type WorldContainer, type WorldEvent, type WorldEventType } from '../../core/types';
+import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
 import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
@@ -192,17 +193,16 @@ function markTraceBranch(ctx: TraceSealContext, branch: 'seal' | 'leave_evidence
   }
 }
 
-function spendTraceSealCost(player: Entity, state: GameState): { label: string; itemId?: string; hpCost: number } {
+function spendTraceSealCost(world: World, player: Entity, state: GameState): { label: string; itemId?: string; hpCost: number } {
   for (const cost of TRACE_SEAL_COSTS) {
     if (!hasItem(player, cost.itemId)) continue;
     removeItem(player, cost.itemId, 1);
     return { label: cost.label, itemId: cost.itemId, hpCost: 0 };
   }
-  if (player.hp !== undefined) {
-    player.hp = Math.max(1, player.hp - 4);
-    state.dmgFlash = Math.max(state.dmgFlash, 0.25);
-  }
-  return { label: 'здоровье', hpCost: 4 };
+  /* Через единую дверь урона: печать следа берёт плату самим протоколом — ПСИ. */
+  const paid = damageActorByEnvironment(world, state, player, { damage: 4, damageType: DamageType.PSI, time: state.time });
+  if (paid > 0) state.dmgFlash = Math.max(state.dmgFlash, 0.25);
+  return { label: 'здоровье', hpCost: paid };
 }
 
 function sealTraceTarget(ctx: TraceSealContext): void {
@@ -256,7 +256,7 @@ function leaveTraceEvidence(ctx: TraceSealContext): void {
 function applyTraceSeal(ctx: TraceSealContext, state: GameState, event: WorldEvent): void {
   markChoice(ctx, 'sealed');
   const player = playerInContext(ctx);
-  const cost = player ? spendTraceSealCost(player, state) : { label: 'нет плательщика', hpCost: 0 };
+  const cost = player ? spendTraceSealCost(ctx.world, player, state) : { label: 'нет плательщика', hpCost: 0 };
   sealTraceTarget(ctx);
   markTraceBranch(ctx, 'seal');
   publishProtocol(state, ctx, event, 'obtained', `Получен протокол: ${PROTOCOL_NAME}.`, 3, TAG_SEAL, {

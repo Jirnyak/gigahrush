@@ -5,6 +5,7 @@ import { currentFloorRunEntry } from './procedural_floors';
 
 import { stampSurfaceSplat } from './surface_marks';
 import {
+  DamageType,
   Cell,
   Feature,
   RoomType,
@@ -13,6 +14,7 @@ import {
   type Room,
   msg,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
 import { addItem, hasItem, removeItem } from './inventory';
 import { publishEvent } from './events';
@@ -136,9 +138,15 @@ function stampSteamResidue(world: World, room: Room, seedBase: number, hot: bool
   }
 }
 
-function damagePlayer(player: Entity, amount: number): void {
-  if (player.hp === undefined) return;
-  player.hp = Math.max(1, player.hp - amount);
+/* Через единую дверь урона. Пар из сорванного вентиля — ОГОНЬ: костюм ТОК-200
+ * заводился ровно под тепловую линию, и до этой правки он её не держал вовсе,
+ * потому что здоровье снималось здесь напрямую. Автора у пара нет. */
+function damagePlayer(world: World, state: GameState, player: Entity, amount: number): number {
+  return damageActorByEnvironment(world, state, player, {
+    damage: amount,
+    damageType: DamageType.FIRE,
+    time: state.time,
+  });
 }
 
 function publishHeatlineEvent(
@@ -340,7 +348,7 @@ export function tryUseHeatlinePressure(
     const consumed = consumeHeatlineParts(player, needCord, needSealant);
     const item = eventItem(consumed, 'manometer');
     applyPressureResolution(world, false, partialPart ?? (wasVented ? 'vented' : null));
-    damagePlayer(player, 10);
+    damagePlayer(world, state, player, 10);
     addItem(player, 'valve_tag', 1);
     state.msgs.push(msg('Слепой сброс сработал. Пар ушел в соседей, коридор открыт, кожа спорит.', state.time, '#fa4'));
     publishHeatlineEvent(world, player, state, room, 'shortcut', 4, item.id, item.name, {
@@ -398,7 +406,7 @@ export function tryUseHeatlinePressure(
   const consumed = consumeFailedPart(player, hasCord, hasSealant);
   const item = eventItem(consumed, 'manometer');
   applyPressureFailure(world);
-  damagePlayer(player, 16);
+  damagePlayer(world, state, player, 16);
   state.msgs.push(msg('Вентиль сорвался паром. Нужны асбестовый шнур и герметик; манометр спасет кожу.', state.time, '#f84'));
   publishHeatlineEvent(world, player, state, room, 'vent_failure', 3, item.id, item.name, {
     consumed,

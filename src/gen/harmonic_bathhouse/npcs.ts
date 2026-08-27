@@ -1,5 +1,6 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   AIGoal,
   Cell,
   ContainerKind,
@@ -266,6 +267,7 @@ export function registerHazards(world: World, rooms: BathhouseRooms, seed: numbe
   registerCellHazardSite(world, {
     id: 'harmonic_bathhouse_hot_fast_path',
     kind: 'steam_pressure',
+    damageType: DamageType.FIRE,
     displayName: 'Паровой сброс',
     cells: hotCells,
     tags: [HARMONIC_BATHHOUSE_ROUTE_ID, 'hot_fast_path', 'steam', 'pressure'],
@@ -306,6 +308,7 @@ export function registerHazards(world: World, rooms: BathhouseRooms, seed: numbe
   registerCellHazardSite(world, {
     id: 'harmonic_bathhouse_boiler_pressure_leak',
     kind: 'pressure_leak',
+    damageType: DamageType.FIRE,
     displayName: 'Срыв давления',
     cells: pressureCells,
     tags: [HARMONIC_BATHHOUSE_ROUTE_ID, 'turn_valve', 'repair_pressure_route', 'pressure'],

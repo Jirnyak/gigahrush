@@ -1,9 +1,11 @@
 /* -- Seryy Smotritel -- local VOID no-look encounter ------------ */
 
 import {
+  DamageType,
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Feature, MonsterKind, RoomType, Tex, msg,
   type Entity, type GameState, type Item, type Room, type WorldContainer, type WorldEvent,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
 import { createWorldContextStore } from '../../world/world_contexts';
 import { MONSTERS } from '../../entities/monster';
@@ -333,7 +335,8 @@ function applyWatched(ctx: SeryyContext, state: GameState, event: WorldEvent): v
   ctx.watched = true;
   const player = playerInContext(ctx);
   if (player) {
-    if (player.hp !== undefined) player.hp = Math.max(1, player.hp - 9);
+    /* Через единую дверь урона: прямой взгляд Смотрителя бьёт ПСИ. */
+    damageActorByEnvironment(ctx.world, state, player, { damage: 9, damageType: DamageType.PSI, time: state.time });
     if (player.rpg) player.rpg.psi = Math.max(0, player.rpg.psi - 10);
     state.dmgFlash = Math.max(state.dmgFlash, 0.36);
   }

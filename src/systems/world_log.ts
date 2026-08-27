@@ -399,12 +399,6 @@ const EVENT_TEXT_HANDLERS: Partial<
   false_liquidator_knock: (_e) => {
     return "Черная зачистка стучит в дверь. Сверьте номер маски и не показывайте пробу.";
   },
-  false_liquidator_revealed: (e) => {
-    return `Черный ликвидатор раскрыт: ${String(e.data?.reason ?? "ложный обход")}.`;
-  },
-  green_dog_howl: (_e) => {
-    return "Зеленая собака завыла у прохода. Стая делит цель: металл, банка или дробь разорвут заход.";
-  },
   green_dog_scared: (_e) => {
     return "Зеленая собака сорвалась от громкого металла. Несколько секунд стая не держит цель.";
   },
@@ -442,11 +436,6 @@ const EVENT_TEXT_HANDLERS: Partial<
   },
   composite_isolated: (e) => {
     return `${e.actorName ?? "Собранный человек"} изолирован: ${String(e.data?.reason ?? "порог")}.`;
-  },
-  obzhivalshchik_scratched: (e) => {
-    return e.tags.includes("growth")
-      ? `Комнатный обживальщик нарастил стену: ${String(e.data?.growthCount ?? "?")}/${String(e.data?.growthCap ?? "?")}.`
-      : "Комнатный обживальщик скребет квартиру. Шум и кража поднимут злость.";
   },
   obzhivalshchik_calmed: (_e) => {
     return "Комнатный обживальщик стих после доклада или помощи соседям.";

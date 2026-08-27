@@ -1,6 +1,7 @@
 /* ── AG66 red adhesive trap: room-local sparse hazard ─────────── */
 
 import {
+  DamageType,
   EntityType, Faction, Feature, MonsterKind, Occupation, RoomType, Tex,
 } from '../../core/types';
 import { registerCellHazardSite } from '../../systems/cell_hazards';
@@ -90,6 +91,7 @@ export function generateRedAdhesiveTrap(ctx: MaintContentCtx): void {
   registerCellHazardSite(ctx.world, {
     id: TRAP_ID,
     kind: 'red_adhesive',
+    damageType: DamageType.BIO,
     displayName: 'Красная липучка',
     cells: trapCells,
     tags: ['slime', 'red_slime', 'adhesive', 'maintenance', 'nii_slime'],

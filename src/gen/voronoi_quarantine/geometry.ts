@@ -3,6 +3,7 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
+  DamageType,
   AIGoal,
   Cell,
   ContainerKind,
@@ -25,6 +26,7 @@ import {
   type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
 import { rng, hashSeed } from '../../core/rand';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
@@ -1812,8 +1814,14 @@ registerContentInteractionHook({
       let monstersHurt = 0;
       for (const entity of ctx.entities) {
         if (entity.type === EntityType.MONSTER && entity.alive && entity.assignedRoomId === room.id) {
-          if (entity.hp !== undefined) {
-            entity.hp = Math.max(1, entity.hp - 25);
+          /* Через единую дверь урона: карантинный ультрафиолет — ЭНЕРГИЯ.
+           * Не добивает (`lethal: false`) — панель ослабляет, а не зачищает. */
+          if (entity.hp !== undefined && damageActorByEnvironment(ctx.world, ctx.state, entity, {
+            damage: 25,
+            damageType: DamageType.ENERGY,
+            lethal: false,
+            time: ctx.state.time,
+          }) > 0) {
             monstersHurt++;
           }
         }

@@ -1,4 +1,5 @@
 import {
+  DamageType,
   W,
   Cell,
   Feature,
@@ -8,6 +9,7 @@ import {
   type GameState,
   type WorldEventSeverity,
 } from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
 import { World } from '../../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
 import { consumeToolDurability, hasItem, removeItem } from '../inventory';
@@ -170,7 +172,8 @@ function restoreCell(world: World, player: Entity, state: GameState, runtime: Li
     world.fog[ci] = Math.max(world.fog[ci], 24);
     if (state.time >= runtime.nextMsgAt) {
       runtime.nextMsgAt = state.time + 5;
-      player.hp = Math.max(1, (player.hp ?? 100) - 3);
+      // Через единую дверь урона: живая ткань тоннеля — БИО.
+      damageActorByEnvironment(world, state, player, { damage: 3, damageType: DamageType.BIO, time: state.time });
       state.msgs.push(msg('Тоннель зарастает под ногами: бетон оставил живую царапину.', state.time, '#fa4'));
     }
     return 1;
@@ -475,7 +478,8 @@ export function tryUseLivingTunnelsAnomaly(
     consumeToolDurability(player, player.tool === 'jackhammer' ? 1 : 2, state.msgs, state.time, state);
     duration = player.tool === 'jackhammer' ? 24 : 18;
   } else {
-    player.hp = Math.max(1, (player.hp ?? 100) - 4);
+    // Голыми руками в живой ткани — БИО, тот же тип, что и у зарастающей клетки.
+    damageActorByEnvironment(world, state, player, { damage: 4, damageType: DamageType.BIO, time: state.time });
   }
 
   const cleared = clearOldTrail(world, player, state, runtime, root, method === 'bare_hands' ? 8 : 28);
