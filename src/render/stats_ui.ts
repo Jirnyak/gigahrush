@@ -433,31 +433,53 @@ function inventoryEquipmentLines(player: Entity): EquipmentLine[] {
   const toolDurLabel = toolDur ? `${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}` : '--';
 
   const armorName = player.armorDefId ? (ITEMS[player.armorDefId]?.name ?? player.armorDefId) : 'нет';
-  let armorResists = '';
-  if (player.armorDefId && ITEMS[player.armorDefId]?.resistances) {
-    const res = ITEMS[player.armorDefId].resistances;
-    const parts = [];
-    if (res![DamageType.KINETIC]) parts.push(`КИН:${res![DamageType.KINETIC]}%`);
-    if (res![DamageType.BUCKSHOT]) parts.push(`ДРБ:${res![DamageType.BUCKSHOT]}%`);
-    if (res![DamageType.ENERGY]) parts.push(`ЭНР:${res![DamageType.ENERGY]}%`);
-    if (res![DamageType.FIRE]) parts.push(`ОГН:${res![DamageType.FIRE]}%`);
-    if (res![DamageType.PSI]) parts.push(`ПСИ:${res![DamageType.PSI]}%`);
-    if (res![DamageType.BIO]) parts.push(`БИО:${res![DamageType.BIO]}%`);
-    if (parts.length > 0) armorResists = ` Защита: ${parts.join(' ')}`;
-  }
 
-  const lines: EquipmentLine[] = [
-    { text: `Броня: ${armorName}${armorResists}`, color: '#fff' },
+  const lines: EquipmentLine[] = [{ text: `Броня: ${armorName}`, color: '#fff' }];
+  const armorResists = armorResistLine(player.armorDefId);
+  if (armorResists) lines.push({ text: armorResists, color: '#9db' });
+  lines.push(
     { text: `Оружие: ${weapon.name}`, color: '#ccc' },
     { text: `${weapon.role}  ур.${weapon.damageLabel}  ${weaponState}`, color: weapon.warning ? '#f84' : '#9d9' },
+  );
+  /* Подробность ствола идёт СРАЗУ за его же двумя строками. Раньше место
+     выбирал `splice(3, ...)` по счёту от начала блока, и любая строка,
+     добавленная выше, уводила подробность в чужое место. */
+  const weaponExtra = weapon.statLabel || [weapon.reachLabel, weapon.controlLabel].filter(Boolean).join('  ');
+  if (weaponExtra) lines.push({ text: weaponExtra, color: '#8ad' });
+  lines.push(
     { text: `Инструмент: ${toolName}`, color: '#8cf' },
     { text: `износ ${toolDurLabel}`, color: '#8cf' },
-  ];
-  const weaponExtra = weapon.statLabel || [weapon.reachLabel, weapon.controlLabel].filter(Boolean).join('  ');
-  if (weaponExtra) {
-    lines.splice(3, 0, { text: weaponExtra, color: '#8ad' });
-  }
+  );
   return lines;
+}
+
+/* Подписи колонок резиста в блоке снаряжения.
+ *
+ * Шесть пар в одну строку с именем брони не влезали: `Броня: Броня Ликвидатора
+ * Защита: КИН:80% …` — это семьдесят знаков, а колонка снаряжения держит около
+ * сорока, и `fitStatText` резал строку на третьей колонке. Игрок видел начало
+ * таблицы и многоточие вместо остального.
+ *
+ * Поэтому резист живёт СОБСТВЕННОЙ строкой блока и без процентов: числа здесь
+ * и так проценты, а «Защита:» повторяет заголовок «ЭКИПИРОВКА» над блоком.
+ * Шесть пар по пять знаков с пробелами — тридцать пять знаков, и полная строка
+ * даже верхнего комплекта помещается целиком. */
+const ARMOR_RESIST_LABELS: readonly (readonly [DamageType, string])[] = [
+  [DamageType.KINETIC, 'КИН'],
+  [DamageType.BUCKSHOT, 'ДРБ'],
+  [DamageType.ENERGY, 'ЭНР'],
+  [DamageType.FIRE, 'ОГН'],
+  [DamageType.PSI, 'ПСИ'],
+  [DamageType.BIO, 'БИО'],
+];
+
+function armorResistLine(armorDefId: string | undefined): string {
+  const res = armorDefId ? ITEMS[armorDefId]?.resistances : undefined;
+  if (!res) return '';
+  return ARMOR_RESIST_LABELS
+    .filter(([type]) => res[type])
+    .map(([type, label]) => `${label}${res[type]}`)
+    .join(' ');
 }
 
 function inventoryEquipmentBlockHeight(lineCount: number, sy: number): number {

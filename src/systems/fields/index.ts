@@ -31,7 +31,7 @@ import {
   macroAt,
   macroTargetCell,
   resetMacroFields,
-  updateMacroFields,
+  updateMacroChannel,
 } from './macro';
 import { depositField as depositCell } from './channels';
 
@@ -261,30 +261,75 @@ export function prewarmPerceptionFields(world: World): void {
   // депозиты, сделанные после прогрева, пережили его.
   world.perceptionFields.fill(0, 0, DYNAMIC_FIELD_COUNT * FIELD_PLANE);
   resetFieldTiles();
+  pendingChannel = DYNAMIC_FIELD_COUNT; // новый этаж — пустая очередь каналов
   ensureScratch().fill(0); // в буфере лежит мусор прошлого этажа
   bakeOpennessField(world);
   bakeMacroFields(world, DYNAMIC_FIELD_COUNT);
   world.perceptionBaked = true;
 }
 
+/** Оба яруса одного канала за один заход: разрывать их между кадрами незачем,
+ *  стратегический стоит 4096 ячеек против миллиона у поклеточного. */
+function tickChannel(world: World, ch: FieldChannel): void {
+  updateChannel(world, ch);
+  updateMacroChannel(ch, MACRO_DECAYS[ch] ?? 1);
+}
+
+/**
+ * Какой канал ждёт своей очереди в текущем круге. `DYNAMIC_FIELD_COUNT` —
+ * круг закрыт, работы нет.
+ */
+let pendingChannel = DYNAMIC_FIELD_COUNT;
+
 /**
  * Один такт всех полей. Ленивая подготовка внутри: этаж, который никто не
  * прогрел явно, запечётся на первом же вызове (тот же контракт, что у
  * `ensureNavigationTree`). Правка геометрии в рантайме просвет НЕ перепекает —
  * принимаем устаревшее значение, как это делает навигация.
+ *
+ * ПО КАНАЛУ ЗА КАДР. Такт — это пять независимых проходов, и все пять шли
+ * подряд в одном кадре: замерено на жилом этаже 10–14 мс дважды в секунду при
+ * медиане такта 0.0008 мс. Ровно пила, а не средняя цена.
+ *
+ * Каналы не пересекаются ни байтом: у каждого свой срез плоскости, свой набор
+ * грязных тайлов и свой распад, а общий скретч-буфер каждый чистит и закрывает
+ * внутри своего вызова. Поэтому очередь ничего не портит и поле выходит то же.
+ *
+ * ВОЗРАСТ ПОЛЯ НЕ РАСТЁТ, и это главное условие: счётчик такта копится ВСЕГДА,
+ * а не пока идёт разбор очереди, поэтому круг начинается каждые
+ * `FIELD_TICK_SECONDS` независимо от того, сколько кадров ушло на прошлый.
+ * Интервал между двумя обновлениями одного канала остаётся тактом — сдвигается
+ * только фаза, на кадр за номер канала. Круг, не успевший разойтись до
+ * следующего такта (крупный `dt` у зажатой вкладки), досчитывается целиком на
+ * его границе: канал не имеет права состариться больше, чем на такт, даже ценой
+ * возврата к прежней пиле.
  */
 export function updatePerceptionFields(world: World, dt: number): void {
   prewarmPerceptionFields(world);
   tickCounter += dt;
-  if (tickCounter < FIELD_TICK_SECONDS) return;
+  if (tickCounter < FIELD_TICK_SECONDS) {
+    if (pendingChannel < DYNAMIC_FIELD_COUNT) tickChannel(world, pendingChannel++);
+    return;
+  }
   tickCounter -= FIELD_TICK_SECONDS;
-  for (let ch = 0; ch < DYNAMIC_FIELD_COUNT; ch++) updateChannel(world, ch);
-  updateMacroFields(MACRO_DECAYS);
+  // Круг не имеет права пережить свой такт: недобранное закрывается на границе.
+  while (pendingChannel < DYNAMIC_FIELD_COUNT) tickChannel(world, pendingChannel++);
+  if (dt >= FIELD_TICK_SECONDS) {
+    /* Кадр длиной в целый такт размазывать НЕ ПО ЧЕМУ: очередь тогда растянула
+     * бы круг на пять тактов вместо одного. Такой кадр идёт как раньше — весь
+     * круг разом. Это и безголовые стенды с крупным шагом, и зажатая вкладка. */
+    for (let ch = 0; ch < DYNAMIC_FIELD_COUNT; ch++) tickChannel(world, ch);
+    pendingChannel = DYNAMIC_FIELD_COUNT;
+    return;
+  }
+  pendingChannel = 0;
+  tickChannel(world, pendingChannel++);
 }
 
 /** Только для тестов: сбросить грязные тайлы, буфер записи и накопленный такт. */
 export function resetPerceptionFieldsState(): void {
   tickCounter = 0;
+  pendingChannel = DYNAMIC_FIELD_COUNT;
   resetFieldTiles();
   scratch?.fill(0);
   resetMacroFields();

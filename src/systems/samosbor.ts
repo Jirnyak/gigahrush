@@ -4,11 +4,13 @@ import { rng, xorshift32, irand, mathRng, pick } from '../core/rand';
 /*   Protected rooms, hermowalls and lifts are preserved.           */
 
 import {
+  DamageType,
   W, Cell, DoorState, ZoneFaction, RoomType, Tex, Feature, ContainerKind, Faction,
   type Entity, type GameState, type Room, type WorldContainer, type WorldEventType,
   EntityType, AIGoal, MonsterKind, Occupation,
   msg,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World, type WorldGridDirtyRect } from '../core/world';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
@@ -1111,23 +1113,32 @@ function findNearbyDoorIdx(world: World, cx: number, cy: number, radius: number)
   return bestIdx;
 }
 
-function applyUnshelteredPressure(player: Entity, state: GameState, detail: string): { hpDamage: number; psiDamage: number } {
-  let hpDamage = 0;
-  let psiDamage = 0;
-  if (player.hp !== undefined) {
-    const before = player.hp;
-    player.hp = Math.max(1, player.hp - UNSHELTERED_HP_DAMAGE);
-    hpDamage = before - player.hp;
-    if (hpDamage > 0) {
-      state.dmgFlash = Math.max(state.dmgFlash, 0.3);
-      state.dmgSeed = (state.dmgSeed + 23) | 0;
-      recordPlayerDamage(state, undefined, hpDamage, `${detail}: -${hpDamage}`, 'samosbor');
-    }
+/**
+ * Давление самосбора по тому, кто встретил печать вне рабочей гермы.
+ *
+ * Через единую дверь урона и как СРЕДА: у волны нет автора, репутацию она не
+ * двигает. Тип — ПСИ, потому что самосбор перешивает связность, а не плоть: тем
+ * же тактом он снимает пси-запас, и держит его то же, чем защищаются от пси
+ * (пропитанная ряса), а не плита. До этой правки удар шёл мимо всякой брони.
+ * Порог выживания («выдавить, но не убить») больше не переписывается здесь
+ * руками — им владеет сама дверь.
+ */
+function applyUnshelteredPressure(world: World, subject: Entity, state: GameState, detail: string): { hpDamage: number; psiDamage: number } {
+  const hpDamage = damageActorByEnvironment(world, state, subject, {
+    damage: UNSHELTERED_HP_DAMAGE,
+    damageType: DamageType.PSI,
+    time: state.time,
+  });
+  if (hpDamage > 0 && isPlayerEntity(subject)) {
+    state.dmgFlash = Math.max(state.dmgFlash, 0.3);
+    state.dmgSeed = (state.dmgSeed + 23) | 0;
+    recordPlayerDamage(state, undefined, hpDamage, `${detail}: -${hpDamage}`, 'samosbor');
   }
-  if (player.rpg) {
-    const beforePsi = player.rpg.psi;
-    player.rpg.psi = Math.max(0, player.rpg.psi - UNSHELTERED_PSI_DAMAGE);
-    psiDamage = beforePsi - player.rpg.psi;
+  let psiDamage = 0;
+  if (subject.rpg) {
+    const beforePsi = subject.rpg.psi;
+    subject.rpg.psi = Math.max(0, subject.rpg.psi - UNSHELTERED_PSI_DAMAGE);
+    psiDamage = beforePsi - subject.rpg.psi;
   }
   return { hpDamage, psiDamage };
 }
@@ -1179,7 +1190,7 @@ function resolvePlayerShelterAtSeal(
     return;
   }
 
-  const pressure = applyUnshelteredPressure(player, state, `${variant.def.displayName}: вне рабочей гермы`);
+  const pressure = applyUnshelteredPressure(world, player, state, `${variant.def.displayName}: вне рабочей гермы`);
   state.msgs.push(msg('Вы остались снаружи рабочей гермы. Давление самосбора ударило напрямую.', state.time, '#f66'));
   publishEvent(state, {
     type: 'samosbor_warning',
@@ -1556,13 +1567,18 @@ function istotitFollowBell(
   const x = world.wrap(Math.floor(lookX));
   const y = world.wrap(Math.floor(lookY));
   const dust = stampIstotitGoldDust(world, x, y, 5, 84_000 + state.samosborCount * 101);
-  if (player.hp !== undefined) {
-    const before = player.hp;
-    player.hp = Math.max(1, player.hp - 6);
-    const hpDamage = before - player.hp;
+  /* Тем же ПСИ и той же дверью, что давление вне гермы: колокол Истотита тянет
+   * не тело, а связность, и берёт свою цену пси-запасом в том же такте. Порог
+   * выживания держит дверь. */
+  const bellToll = damageActorByEnvironment(world, state, player, {
+    damage: 6,
+    damageType: DamageType.PSI,
+    time: state.time,
+  });
+  if (bellToll > 0 && isPlayerEntity(player)) {
     state.dmgFlash = Math.max(state.dmgFlash, 0.22);
     state.dmgSeed = (state.dmgSeed + 17) | 0;
-    if (hpDamage > 0) recordPlayerDamage(state, undefined, hpDamage, `Истотит: пошли на колокол -${hpDamage}`, 'samosbor');
+    recordPlayerDamage(state, undefined, bellToll, `Истотит: пошли на колокол -${bellToll}`, 'samosbor');
   }
   if (player.rpg) player.rpg.psi = Math.max(0, player.rpg.psi - 8);
   const pos = rng() < 0.45 ? findWalkableNear(world, x, y, 4, 9) : null;
@@ -1781,21 +1797,17 @@ function forceMaronaryGlowFlee(world: World, e: Entity, sx: number, sy: number):
 }
 
 function applyMaronaryGlowDamage(world: World, state: GameState, e: Entity, amount: number, sx: number, sy: number): number {
-  if (!e.alive || e.hp === undefined || amount <= 0) return 0;
-  const before = e.hp;
-  if (isPlayerEntity(e)) {
-    e.hp = Math.max(1, e.hp - amount);
-  } else {
-    e.hp = Math.max(0, e.hp - amount);
-    if (e.hp <= 0) {
-      killEntity(e);
-      e.hp = 0;
-    } else {
-      forceMaronaryGlowFlee(world, e, sx, sy);
-    }
-  }
-  const actual = before - e.hp;
+  /* Через единую дверь урона: зелёное свечение маронария — излучение, то есть
+   * ЭНЕРГИЯ. До этой правки оно шло сквозь любую броню целиком, и на источнике
+   * одинаково быстро умирали голый жилец и ликвидатор в плите. Автора у
+   * свечения нет: репутацию оно не двигает и войны не начинает. */
+  const actual = damageActorByEnvironment(world, state, e, {
+    damage: amount,
+    damageType: DamageType.ENERGY,
+    time: state.time,
+  });
   if (actual <= 0) return 0;
+  if (!isPlayerEntity(e) && e.alive) forceMaronaryGlowFlee(world, e, sx, sy);
   if (isPlayerEntity(e)) {
     const maxHp = Math.max(1, e.maxHp ?? 100);
     state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.2 + actual / maxHp));

@@ -28,7 +28,7 @@ import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, getEntityIndex } from '../entity_index';
 import { publishWeaponNoise } from '../noise';
 import { isPlayerEntity } from '../player_actor';
-import { damageActor, getRecentCombatThreat, npcCombatProfile } from '../combat_stimulus';
+import { damageActor, getRecentCombatThreat, npcIsBraveActor } from '../combat_stimulus';
 import { stepActorBy } from '../movement_collision';
 import {
   emitMarkovBark,
@@ -312,7 +312,7 @@ function startFleeFromThreat(world: World, e: Entity, threat: Entity, dt: number
 }
 
 function npcIsBrave(e: Entity): boolean {
-  return npcCombatProfile(e).brave;
+  return npcIsBraveActor(e);
 }
 
 function npcCombatItemScore(e: Entity, itemId: string | undefined, precomputedWs?: import('../../data/catalog').WeaponStats): number {

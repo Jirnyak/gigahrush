@@ -513,7 +513,12 @@ function objectiveTargetEntity(q: Quest, entities: readonly Entity[]): Entity | 
   // «сначала по номеру сущности, потом по слоту» находил чужого — предмет с тем
   // же номером лежит в массиве раньше человека.
   if (questAddressesBySlot(q)) return findByPlotLive(entities, q.targetNpcId);
-  const byLiveId = findById(entities, q.targetNpcId);
+  /* Живого адресует общий индекс сущностей — тот же, которым отвечает соседняя
+   * ветка по слоту. Здесь стоял `findById`, а он ВНЕ `checkQuests` (то есть на
+   * этом пути всегда) перебирал весь этаж: строку цели рисует HUD каждый кадр,
+   * и на жилом этаже это 9600 сравнений на кадр ради одного номера. Ответ тот
+   * же байт в байт: индекс держит ровно живых, а `.alive` тут и так требуется. */
+  const byLiveId = ensureEntityIndex(entities).byId.get(q.targetNpcId);
   return byLiveId?.alive ? byLiveId : undefined;
 }
 

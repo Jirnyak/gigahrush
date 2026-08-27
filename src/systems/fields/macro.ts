@@ -135,44 +135,46 @@ export function depositMacro(world: World, ch: number, x: number, y: number, amo
 }
 
 /**
- * Один такт яруса: распад плюс размытие по проходимости.
- * `decays` — множитель на канал за такт, приходит от владельца шкалы затухания,
+ * Один такт яруса ОДНОГО канала: распад плюс размытие по проходимости.
+ * `decay` — множитель канала за такт, приходит от владельца шкалы затухания,
  * чтобы ярусы старели согласованно и здесь не заводилось второй таблицы тюнинга.
+ *
+ * По каналу, а не по всем сразу, потому что такт полей размазан по кадрам
+ * (`./index`): каналы не пересекаются ни одной ячейкой — каждый пишет только в
+ * свой срез `base + mi`, — поэтому разбиение общего прохода на пять посильных
+ * ровно то же самое поле и даёт.
  */
-export function updateMacroFields(decays: readonly number[]): void {
+export function updateMacroChannel(ch: number, decay: number): void {
   const plane = planes;
   const next = scratch;
   const pass = passable;
-  if (!plane || !next || !pass) return;
-  next.fill(0);
+  if (!plane || !next || !pass || ch >= channelCount) return;
+  const base = ch * MACRO_PLANE;
+  next.fill(0, base, base + MACRO_PLANE);
 
-  for (let ch = 0; ch < channelCount; ch++) {
-    const base = ch * MACRO_PLANE;
-    const decay = decays[ch] ?? 1;
-    for (let my = 0; my < MACRO_W; my++) {
-      for (let mx = 0; mx < MACRO_W; mx++) {
-        const mi = macroIdx(mx, my);
-        const v = plane[base + mi] * decay;
-        if (v <= MACRO_EPSILON) continue;
-        if (pass[mi] <= 0) { next[base + mi] += v; continue; }
+  for (let my = 0; my < MACRO_W; my++) {
+    for (let mx = 0; mx < MACRO_W; mx++) {
+      const mi = macroIdx(mx, my);
+      const v = plane[base + mi] * decay;
+      if (v <= MACRO_EPSILON) continue;
+      if (pass[mi] <= 0) { next[base + mi] += v; continue; }
 
-        // Доля, ушедшая соседу, взвешена ЕГО проходимостью: глухая ячейка не
-        // принимает, и невыданный остаток честно остаётся на месте, а не
-        // исчезает — иначе поле утекало бы вдоль стен.
-        let sent = 0;
-        for (let k = 0; k < 8; k++) {
-          const ni = macroIdx(mx + DIR_DX[k], my + DIR_DY[k]);
-          const w = (k < 4 ? 1 : MACRO_DIAG) / MACRO_NEIGHBOR_SUM;
-          const share = v * MACRO_SPREAD * w * pass[ni];
-          if (share <= 0) continue;
-          next[base + ni] += share;
-          sent += share;
-        }
-        next[base + mi] += v - sent;
+      // Доля, ушедшая соседу, взвешена ЕГО проходимостью: глухая ячейка не
+      // принимает, и невыданный остаток честно остаётся на месте, а не
+      // исчезает — иначе поле утекало бы вдоль стен.
+      let sent = 0;
+      for (let k = 0; k < 8; k++) {
+        const ni = macroIdx(mx + DIR_DX[k], my + DIR_DY[k]);
+        const w = (k < 4 ? 1 : MACRO_DIAG) / MACRO_NEIGHBOR_SUM;
+        const share = v * MACRO_SPREAD * w * pass[ni];
+        if (share <= 0) continue;
+        next[base + ni] += share;
+        sent += share;
       }
+      next[base + mi] += v - sent;
     }
   }
-  plane.set(next);
+  plane.set(next.subarray(base, base + MACRO_PLANE), base);
 }
 
 /**

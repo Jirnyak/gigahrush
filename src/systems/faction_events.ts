@@ -1,7 +1,9 @@
 import {
+  DamageType,
   AIGoal, Cell, EntityType, Faction, Occupation, ZoneFaction,
   type Entity, type GameState, type Item, type Zone, msg,
 } from '../core/types';
+import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
 import {
   FACTION_EVENT_DEFS,
@@ -547,6 +549,7 @@ export function getCultProcessionPrompt(world: World, state: GameState, player: 
 }
 
 function beginCultProcessionFollow(
+  world: World,
   state: GameState,
   p: ActiveCultProcession,
   player: Entity,
@@ -558,9 +561,10 @@ function beginCultProcessionFollow(
   if (player.rpg && player.rpg.psi > 0) {
     player.rpg.psi = Math.max(0, player.rpg.psi - psiLoss);
   } else if (player.hp !== undefined) {
+    /* Через единую дверь урона: псалом давит ПСИ, и когда пси уже пусто, платит
+     * здоровье — тем же типом. Ряса культиста от него и защищает. */
     const hpLoss = 1 + Math.floor(rng() * 3);
-    player.hp = Math.max(1, player.hp - hpLoss);
-    riskText = `HP -${hpLoss}`;
+    riskText = `HP -${damageActorByEnvironment(world, state, player, { damage: hpLoss, damageType: DamageType.PSI, time: state.time })}`;
   }
   const foundRune = rng() < 0.18 && addItem(player, 'meat_rune', 1);
   publishProcessionAction(state, p, player, 'follow', 4, {
@@ -606,7 +610,7 @@ export function updateCultProcessionCompulsion(
   if (p.coverUntil > state.time) return null;
   const steering = steerEntityTowardCell(world, player, Math.floor(p.x), Math.floor(p.y));
   if (!steering) return null;
-  beginCultProcessionFollow(state, p, player);
+  beginCultProcessionFollow(world, state, p, player);
   const near = Math.max(0, 1 - dist / Math.max(1, def.procession.fearRadius));
   const strength = PROCESSION_PULL_AXIS * (0.55 + near * 0.45);
   return { x: steering.x, y: steering.y, strength, distance: dist };
@@ -1741,7 +1745,7 @@ function applyProcessionFearTick(
       player.rpg.psi = Math.max(0, player.rpg.psi - 1);
       state.msgs.push(msg('Псалом давит на ПСИ. Держите сопротивление или уходите с линии.', state.time, '#c8f'));
     } else if (player.hp !== undefined) {
-      player.hp = Math.max(1, player.hp - 1);
+      damageActorByEnvironment(world, state, player, { damage: 1, damageType: DamageType.PSI, time: state.time });
       state.msgs.push(msg('Псалом режет слух до крови. Удерживайте шаг против хода.', state.time, '#f8c'));
     }
   }
