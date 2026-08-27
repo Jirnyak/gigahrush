@@ -27,8 +27,23 @@ import { DEFAULT_TRADE_SPREAD } from '../src/data/economy_rules';
 import { Faction, Occupation } from '../src/core/types';
 import { pickNpcArmor, npcArmorChance } from '../src/systems/procedural_loot';
 
-/* Лестница снизу вверх. Порядок здесь — это и есть заявленная лестница. */
-const LADDER = ['armor_light', 'armor_medium', 'armor_cultist', 'armor_heavy', 'armor_liquidator'] as const;
+/* Лестница снизу вверх. Порядок здесь — это и есть заявленная лестница.
+ *
+ * ПРАВКА 2026-08-27, шаг «три ступени». Добавлены три записи, ни одного своего
+ * числа тест при этом не получил — все четыре правила ниже считаются как считались:
+ *   - `armor_ozk` 16 000 и `armor_tok200` 18 000 — узкие костюмы средней ступени,
+ *     обе в полосе E2 между лёгкой (12 000) и средней (20 000);
+ *   - `armor_szk9` 500 000 — универсал полосы E4, вершина лестницы. */
+const LADDER = [
+  'armor_light',
+  'armor_ozk',
+  'armor_tok200',
+  'armor_medium',
+  'armor_cultist',
+  'armor_heavy',
+  'armor_liquidator',
+  'armor_szk9',
+] as const;
 
 const BANDS: readonly EconomyProgressBand[] = ['E0', 'E1', 'E2', 'E3', 'E4'];
 

@@ -367,6 +367,15 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   ato41_atomic_flamer: ['weapon', 'liquidator', 'flame', 'atomic', 'deletion_beam', 'door_cutter', 'slime_counterplay', 'collateral', 'darkness_route', 'unique_reward'],
   gasmask_filter: ['filter', 'gasmask', 'liquidator', 'ppe', 'cleanup'],
   ozk_patch: ['repair', 'repair_input', 'liquidator', 'ppe'],
+  /* Три костюма лестницы брони, у которых теги значат место в мире, а не флаг.
+     `liquidator` намеренно НЕ висит на ОЗК и ТОК-200: в профиле лута ликвидатора
+     этот тег стоит ×5, и гарнизонный охотник вышел бы на штурм в химзащите.
+     Оба комплекта — снаряжение работ, а не строя, и в отбор носимого попадают
+     собственным скромным `spawnW`. На СЗК-9 тег безопасен: `spawnW: 0` вынимает
+     вещь из пула лута целиком, её путь — только прилавок. */
+  armor_ozk: ['ppe', 'cleanup', 'decon', 'acid', 'nii', 'samosbor', 'counterplay', 'trade'],
+  armor_tok200: ['ppe', 'heatline', 'fire_work', 'asbestos', 'production', 'counterplay', 'trade'],
+  armor_szk9: ['ppe', 'liquidator', 'military', 'hermetic', 'unique_reward', 'trade'],
   ip4_gasmask: ['liquidator', 'cleanup', 'respiratory_ppe', 'filter', 'samosbor', 'tool'],
   used_gasmask_filter: ['filter', 'gasmask', 'used', 'liquidator', 'cleanup', 'evidence', 'contaminant', 'audit', 'trade'],
   contaminated_gloves: ['liquidator', 'cleanup', 'ppe', 'contaminated', 'contaminant', 'evidence', 'contraband', 'audit', 'trade'],
@@ -422,12 +431,65 @@ export const ITEMS: Record<string, ItemDef> = {
    * между полосами растёт в двадцать раз, а кошелёк — в десять, и вещь из этого
    * промежутка в E2 не по карману, а в E3 уже валяется в сейфе. Ставить туда
    * броню — значит делать её находкой.
+   *
+   * ── Три ступени, а не восемь отдельных вещей ─────────────────────
+   *
+   * Лестница читается по ФОРМЕ строки, а не по сумме процентов:
+   *
+   *   1. НАЧАЛО (E2, 12 000..20 000) — понемногу от всего: лёгкая и средняя.
+   *   2. СПЕЦИАЛИЗАЦИЯ (E2, 16 000..18 000) — глубоко в одной колонке и почти
+   *      никак в остальных: ОЗК против био, ТОК-200 против огня. Глубина 70
+   *      не выдумана: это уже объявленная в игре глубина специалиста — ПСИ 75
+   *      у рясы культиста, единственного узкого комплекта до этого шага,
+   *      уменьшенная на шаг за то, что специалист стоит впятеро дешевле рясы.
+   *   3. УНИВЕРСАЛ (E4, 500 000) — СЗК-9 держит почти всё. Цена равна вершине
+   *      оружейной лестницы (гравилуч, 500 000): верх защиты стоит столько же,
+   *      сколько верх нападения. В лут он не попадает никогда (`spawnW: 0`,
+   *      и потолок запертого ящика на danger 5 — 250 000), только на прилавок:
+   *      витрину видно с первого завхоза, а денег на неё нет до самого конца.
+   *
+   * Специалист остаётся глубже универсала в СВОЕЙ колонке (70 и 75 против 60):
+   * иначе покупка на 500 000 отменяла бы выбор, ради которого специализация и
+   * заведена. Универсал берёт своё не глубиной, а тем, что у него нет дыр.
+   *
+   * ── Колонка БИО ─────────────────────────────────────────────────
+   *
+   * У НЕгерметичного комплекта БИО равен его же ОГНЮ: и пламя, и кислота идут
+   * по швам, и держит их одна и та же толщина (лёгкая 5, средняя 10, тяжёлая
+   * 20). Два исключения объяснены материалом, а не вкусом:
+   *
+   *   - ряса культиста: ОГНЯ у неё нет вовсе, потому что смоляная пропитка
+   *     горит лучше сухой ткани. Жидкое та же пропитка ОТТАЛКИВАЕТ, поэтому
+   *     БИО 10 у неё есть — и остаётся много ниже ПСИ 75, её настоящей темы;
+   *   - броня ликвидатора: единственная герметичная из семи. Её БИО выведен не
+   *     из толщины, а из замкнутого контура — половина глубины специалиста
+   *     (70/2 = 35). Штурмовой костюм замкнут против осадка и пыли, а не против
+   *     погружения в кислоту, поэтому до ОЗК он не достаёт вдвое.
    */
-  armor_light: { id: 'armor_light', name: 'Лёгкая броня', type: ItemType.MISC, desc: 'Базовая защита от кинетического урона и дроби.', spawnRooms: [RoomType.COMMON, RoomType.PRODUCTION], spawnW: 50, value: 12_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 20, [DamageType.BUCKSHOT]: 30, [DamageType.FIRE]: 5 } },
-  armor_medium: { id: 'armor_medium', name: 'Средняя броня', type: ItemType.MISC, desc: 'Надежная защита для патрулей. Тяжеловата.', spawnRooms: [RoomType.MEDICAL, RoomType.PRODUCTION], spawnW: 30, value: 20_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 40, [DamageType.BUCKSHOT]: 50, [DamageType.ENERGY]: 15, [DamageType.FIRE]: 10 } },
-  armor_heavy: { id: 'armor_heavy', name: 'Тяжёлая броня', type: ItemType.MISC, desc: 'Толстые пластины, способные выдержать сильный урон.', spawnRooms: [RoomType.PRODUCTION], spawnW: 10, value: 140_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 60, [DamageType.BUCKSHOT]: 70, [DamageType.ENERGY]: 30, [DamageType.FIRE]: 20 } },
-  armor_liquidator: { id: 'armor_liquidator', name: 'Броня Ликвидатора', type: ItemType.MISC, desc: 'Высочайшая защита от пуль и картечи, создана для штурмов.', spawnRooms: [RoomType.PRODUCTION], spawnW: 5, value: 200_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 80, [DamageType.BUCKSHOT]: 85, [DamageType.ENERGY]: 20, [DamageType.FIRE]: 15, [DamageType.PSI]: 5 } },
-  armor_cultist: { id: 'armor_cultist', name: 'Ряса Культиста', type: ItemType.MISC, desc: 'Странная ткань, пропитанная неизвестным составом. Защищает от ПСИ-воздействия.', spawnRooms: [RoomType.COMMON, RoomType.MEDICAL], spawnW: 15, value: 100_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 10, [DamageType.BUCKSHOT]: 10, [DamageType.ENERGY]: 40, [DamageType.PSI]: 75 } },
+  /* `spawnRooms` брони — это ещё и адрес: по нему `pickNpcArmor` понимает, чья
+   * это рабочая одежда (комнаты вещи против рабочих комнат занятия). Отсюда
+   * ровно две строки на семь комплектов:
+   *
+   *   БОЕВАЯ ОДЕЖДА (лёгкая, средняя, тяжёлая, ликвидаторская) живёт ПРИ
+   *     СЛУЖБЕ — общая комната и штаб. Внутри этого класса адрес у всех один,
+   *     и лестницу по-прежнему решают цена и `spawnW`, как решали до правки.
+   *     Пока лёгкая и средняя числились в PRODUCTION, они забирали цех у
+   *     ТОК-200 своим весом спавна (50 и 30 против 4): слесарь выходил к пару
+   *     в жилете, а «надёжная защита для патрулей» уезжала к механику — на
+   *     базе ликвидаторов средняя броня у охотников падала 8.2 % → 1.4 %,
+   *     а у механиков поднималась 0 % → 13.9 %.
+   *
+   *   СИЗ (ОЗК, ТОК-200) живёт на РАБОЧЕМ МЕСТЕ — медблок и склад у химзащиты,
+   *     цех и склад у комплекта огневых работ. Эти две строки уже были верны и
+   *     не тронуты. */
+  armor_light: { id: 'armor_light', name: 'Лёгкая броня', type: ItemType.MISC, desc: 'Базовая защита от кинетического урона и дроби.', spawnRooms: [RoomType.COMMON, RoomType.HQ], spawnW: 50, value: 12_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 20, [DamageType.BUCKSHOT]: 30, [DamageType.FIRE]: 5, [DamageType.BIO]: 5 } },
+  armor_ozk: { id: 'armor_ozk', name: 'Комплект ОЗК', type: ItemType.MISC, desc: 'Прорезиненный комплект химзащиты: капюшон, чулки, перчатки, замкнутый шов. Кислота, споры и слизь остаются снаружи; пуля входит как в занавеску.', spawnRooms: [RoomType.MEDICAL, RoomType.STORAGE], spawnW: 6, value: 16_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 5, [DamageType.BUCKSHOT]: 10, [DamageType.BIO]: 70 }, tags: [...ITEM_TAGS.armor_ozk] },
+  armor_tok200: { id: 'armor_tok200', name: 'Костюм ТОК-200', type: ItemType.MISC, desc: 'Асбестовое полотно с алюминизацией, комплект огневых работ. В пламени держит целую смену, от всего прочего не держит ничего.', spawnRooms: [RoomType.PRODUCTION, RoomType.STORAGE], spawnW: 4, value: 18_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 5, [DamageType.BUCKSHOT]: 10, [DamageType.ENERGY]: 10, [DamageType.FIRE]: 70 }, tags: [...ITEM_TAGS.armor_tok200] },
+  armor_medium: { id: 'armor_medium', name: 'Средняя броня', type: ItemType.MISC, desc: 'Надежная защита для патрулей. Тяжеловата.', spawnRooms: [RoomType.COMMON, RoomType.HQ], spawnW: 30, value: 20_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 40, [DamageType.BUCKSHOT]: 50, [DamageType.ENERGY]: 15, [DamageType.FIRE]: 10, [DamageType.BIO]: 10 } },
+  armor_heavy: { id: 'armor_heavy', name: 'Тяжёлая броня', type: ItemType.MISC, desc: 'Толстые пластины, способные выдержать сильный урон.', spawnRooms: [RoomType.COMMON, RoomType.HQ], spawnW: 10, value: 140_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 60, [DamageType.BUCKSHOT]: 70, [DamageType.ENERGY]: 30, [DamageType.FIRE]: 20, [DamageType.BIO]: 20 } },
+  armor_liquidator: { id: 'armor_liquidator', name: 'Броня Ликвидатора', type: ItemType.MISC, desc: 'Высочайшая защита от пуль и картечи, создана для штурмов. Единственный штурмовой комплект с замкнутым контуром: осадок и споры внутрь не идут.', spawnRooms: [RoomType.COMMON, RoomType.HQ], spawnW: 5, value: 200_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 80, [DamageType.BUCKSHOT]: 85, [DamageType.ENERGY]: 20, [DamageType.FIRE]: 15, [DamageType.PSI]: 5, [DamageType.BIO]: 35 } },
+  armor_cultist: { id: 'armor_cultist', name: 'Ряса Культиста', type: ItemType.MISC, desc: 'Странная ткань, пропитанная неизвестным составом. Защищает от ПСИ-воздействия. Пропитка отталкивает жидкое и горит охотнее сухой ткани.', spawnRooms: [RoomType.COMMON, RoomType.MEDICAL], spawnW: 15, value: 100_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 10, [DamageType.BUCKSHOT]: 10, [DamageType.ENERGY]: 40, [DamageType.PSI]: 75, [DamageType.BIO]: 10 } },
+  armor_szk9: { id: 'armor_szk9', name: 'Комплект СЗК-9', type: ItemType.MISC, desc: 'Сводный защитный комплект: плита, замкнутый контур и пропитка в одной вещи. Дыр у него нет ни по одной оси. Завхоз такое не выдаёт по накладной, а продаёт за цену тяжёлой установки.', spawnRooms: [], spawnW: 0, value: 500_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 85, [DamageType.BUCKSHOT]: 85, [DamageType.ENERGY]: 60, [DamageType.FIRE]: 60, [DamageType.PSI]: 60, [DamageType.BIO]: 60 }, tags: [...ITEM_TAGS.armor_szk9] },
 
   // ── Еда (дешёвая, частая) ──
   bread:     { id:'bread',     name:'Хлеб',         type:ItemType.FOOD,     desc:'Чёрствый пайковый ломоть. Сухой настолько, что им можно подпереть жалобу.',          spawnRooms:[RoomType.KITCHEN,RoomType.STORAGE], spawnW:1, value:3, use:feed(15) },

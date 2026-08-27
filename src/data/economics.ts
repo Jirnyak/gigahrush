@@ -30,12 +30,27 @@ export const ECONOMY_MONEY_BANDS: Record<EconomyProgressBand, EconomyMoneyBandDe
   E4: { id: 'E4', maxLiquidCash: 5_000_000, ordinaryQuestCap: 250_000, lootValueCap: 250_000, baseQuestCashRate: 1_200 },
 };
 
+/* Случайная находка не может обойти лучший ОБЫЧНЫЙ контракт своей полосы:
+ * иначе работа перестаёт быть источником денег, а лут становится им. Правило
+ * стоит здесь один раз и держит всю таблицу; до 2026-08-27 его держала одна
+ * рукописная строка `4: 45_000` — ровно `E3.ordinaryQuestCap`, вписанная руками
+ * в обход `E3.lootValueCap` (80 000). Число ушло, поведение то же.
+ *
+ * Отношение lootValueCap/ordinaryQuestCap по полосам: 0.36 / 0.56 / 0.5 /
+ * **1.78** / 1.0 — выброс ровно один, `E3.lootValueCap`. Двигать саму полосу
+ * нельзя молча: из её 80 000 выведены цены брони в `items.ts`
+ * (ряса 1.25×, тяжёлая 1.75×, ликвидаторская 2.5×). Это решение владельца. */
+function bandProceduralLootCap(band: EconomyProgressBand): number {
+  const def = ECONOMY_MONEY_BANDS[band];
+  return Math.min(def.lootValueCap, def.ordinaryQuestCap);
+}
+
 export const ECONOMY_PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER: Readonly<Record<1 | 2 | 3 | 4 | 5, number>> = {
-  1: ECONOMY_MONEY_BANDS.E0.lootValueCap,
-  2: ECONOMY_MONEY_BANDS.E1.lootValueCap,
-  3: ECONOMY_MONEY_BANDS.E2.lootValueCap,
-  4: 45_000,
-  5: ECONOMY_MONEY_BANDS.E4.lootValueCap,
+  1: bandProceduralLootCap('E0'),
+  2: bandProceduralLootCap('E1'),
+  3: bandProceduralLootCap('E2'),
+  4: bandProceduralLootCap('E3'),
+  5: bandProceduralLootCap('E4'),
 };
 
 const PUBLIC_CONTAINER_CAP_BY_DANGER: Readonly<Record<1 | 2 | 3 | 4 | 5, number>> = {

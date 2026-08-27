@@ -103,6 +103,17 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     routineTags: ['patrol', 'combat', 'guard'],
     demosTraits: { work: 'duty_bound', taste: 'taste_blood', quest: 'quest_kill' },
   }),
+  /* `riskTolerance` четырёх цеховых специальностей (слесарь, электрик, токарь,
+   * механик) стоял НЕЗАПОЛНЕННЫМ, а молчание анкеты `npcArmorChance` читает как
+   * ноль: «эта работа не ходит в опасность». Ответ был неверный. Слесарь лезет
+   * в трубы и гермы, электрик работает под щитком (у него и в интересах «сухие
+   * перчатки»), механик — у привода, токарь — у станка с маслом. На
+   * Гармонической бане, где пар выжигает работников, эти четверо составляли 438
+   * человек из 667 и не носили НИЧЕГО — потолок цены им и не требовался,
+   * анкета отсекала раньше.
+   * Число не новое: 0.34 — это уже данный в этом файле ответ уборщицы, ближайшей
+   * рабочей специальности, которая идёт в грязное место, но не в бой. Инженер
+   * (0.6) стоит выше их всех намеренно: он тот же цех, но с ответственностью. */
   [Occupation.LOCKSMITH]: p({
     id: 'locksmith',
     occupation: Occupation.LOCKSMITH,
@@ -113,6 +124,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     workRoomWeights: { [RoomType.PRODUCTION]: 35, [RoomType.STORAGE]: 12 },
     defaultGenerationWeight: 10,
     workDrive: 0.72,
+    riskTolerance: 0.34,
     karmaOffset: 0,
     kitchenFoodRestore: 3.5,
     medicalRecoveryMultiplier: 1,
@@ -162,6 +174,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     workRoomWeights: { [RoomType.PRODUCTION]: 35, [RoomType.STORAGE]: 12 },
     defaultGenerationWeight: 10,
     workDrive: 0.72,
+    riskTolerance: 0.34, // см. слесаря
     karmaOffset: 0,
     kitchenFoodRestore: 3.5,
     medicalRecoveryMultiplier: 1,
@@ -235,6 +248,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     workRoomWeights: { [RoomType.PRODUCTION]: 35, [RoomType.STORAGE]: 12 },
     defaultGenerationWeight: 10,
     workDrive: 0.72,
+    riskTolerance: 0.34, // см. слесаря
     karmaOffset: 0,
     kitchenFoodRestore: 3.5,
     medicalRecoveryMultiplier: 1,
@@ -257,6 +271,7 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     workRoomWeights: { [RoomType.PRODUCTION]: 35, [RoomType.STORAGE]: 12 },
     defaultGenerationWeight: 10,
     workDrive: 0.72,
+    riskTolerance: 0.34, // см. слесаря
     karmaOffset: 0,
     kitchenFoodRestore: 3.5,
     medicalRecoveryMultiplier: 1,
@@ -603,12 +618,20 @@ export const OCCUPATION_PROFILES: Readonly<Record<Occupation, OccupationProfile>
     medicalRecoveryMultiplier: 1,
     sleepScoreBonus: 0,
     interests: ['схемы', 'фильтры', 'защита'],
-    tradeItems: ['ip4_gasmask', 'gasmask_filter', 'armor_liquidator', 'armor_medium', 'fog_detector', 'armor_heavy', 'brt2_foam_projector'],
+    /* Завхоз — единственная витрина верха лестницы. СЗК-9 стоит здесь с первой
+       встречи и не по карману до самого конца: гейт у него денежный (575 000 со
+       спредом против 25 000 кошелька полосы E2), а не ранговый. */
+    tradeItems: ['ip4_gasmask', 'gasmask_filter', 'armor_liquidator', 'armor_medium', 'fog_detector', 'armor_heavy', 'brt2_foam_projector', 'armor_tok200', 'armor_szk9'],
     tradeTags: ['armor', 'tools', 'repair'],
     craftTags: ['mechanic_lesson'],
     routineTags: ['technical', 'maintenance'],
     questFetchItems: ['metal', 'tools', 'pipe', 'duct_tape'],
-    questRewardItems: ['gasmask_filter', 'armor_liquidator'],
+    /* Награда обычного процедурного поручения не проходит через денежный
+       потолок полосы (`rewardItem` кладётся в квест напрямую), поэтому вещи
+       выше полосы здесь быть не может. Броня Ликвидатора (200 000 ₽) лежала
+       тут как плата за «передай сообщение» — 4.4× от `E3.ordinaryQuestCap` и
+       прямое отрицание соседнего комментария о денежном гейте завхоза. */
+    questRewardItems: ['gasmask_filter', 'duct_tape'],
     preferredVisitRooms: [RoomType.PRODUCTION, RoomType.STORAGE, RoomType.HQ],
     demosTraits: { work: 'tool_hands', taste: 'taste_tools', quest: 'quest_repair' },
   }),
@@ -737,6 +760,25 @@ const FACTION_TRADE_OFFERS: readonly FactionTradeOffer[] = [
   { faction: Faction.LIQUIDATOR, occupation: Occupation.HUNTER, minRank: 2, defId: 'breach_charge', count: 2 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.DOCTOR, minRank: 2, defId: 'post_samosbor_probe_kit', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 3, defId: 'armor_heavy', count: 1 },
+  /* Специализация — снаряжение работ, поэтому у завхоза она лежит рано (ранг 2,
+     вместе с противогазом), а не в оружейном ряду. Универсал — ранг 4: витрина
+     видна и раньше через `tradeItems`, но гарантированный запас есть только у
+     завхоза глубокой базы. */
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 2, defId: 'armor_ozk', count: 1 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 2, defId: 'armor_tok200', count: 1 },
+  { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 4, defId: 'armor_szk9', count: 1 },
+
+  /* ОЗК за пределами гарнизона. Прилавок здесь — ЕДИНСТВЕННЫЙ путь, которым
+     химзащита доходит до НИИ: НОСИТЬ её учёный не будет ни при каком наполнении
+     лестницы, потому что доля брони равна militarization × риск, а у фракции
+     учёных нет `weaponMult` вовсе, и множитель ноль.
+
+     Выкладка ИМЕННО списком, а не пулом `tradeItems`: пул тянется случайно и тем
+     чаще, чем он короче. Замерено: те же четыре строки у ГО отдавали ОЗК 8083
+     раза на 153 этажах — каждому второму постовому, — и комплект за 16 000 ₽
+     переставал быть покупкой. Списком и с рангом 4 (с 35 уровня) выходит 7 старших
+     научных на этаж: продавца найти можно, купить — только накопив. */
+  { faction: Faction.SCIENTIST, occupation: Occupation.SCIENTIST, minRank: 4, defId: 'armor_ozk', count: 1 },
   { faction: Faction.LIQUIDATOR, occupation: Occupation.ENGINEER, minRank: 3, defId: 'brt2_foam_projector', count: 1 },
 ];
 

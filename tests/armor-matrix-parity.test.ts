@@ -33,6 +33,34 @@
  *     равен ПОЛНОМУ урону. Это не забывчивость теста, а находка: ни один предмет
  *     брони в игре не объявляет резист к био. Строка охраняет дыру, пока её не
  *     закроют в `data/items.ts`.
+ *
+ * ПРАВКА 2026-08-27, шаг 3 «лестница брони». Дыру закрыли, и охраняется теперь
+ * обратное. Правки построчно:
+ *
+ *   - имя теста: «БИО не держит никто» → «колонка БИО закрыта». Проверка внизу
+ *     перевёрнута: было `resistances[BIO] === undefined` у всех пяти, стало
+ *     `> 0` у всех семи несущих комплектов;
+ *   - Лёгкая: `[80,70,100,95,100,100]` → `[…,95]`. БИО 5 = её же ОГОНЬ: у
+ *     негерметичного комплекта и пламя, и кислота идут по швам, и держит их одна
+ *     и та же толщина. По тому же правилу Средняя `100 → 90` (ОГОНЬ 10) и
+ *     Тяжёлая `100 → 80` (ОГОНЬ 20). Первые пять чисел каждой строки НЕ ДВИНУТЫ;
+ *   - Ряса: `[90,90,60,100,25,100]` → `[…,90]`. Исключение из правила «БИО равен
+ *     ОГНЮ»: ОГНЯ у рясы нет вовсе, потому что смоляная пропитка горит охотнее
+ *     сухой ткани, — а жидкое та же пропитка отталкивает. БИО 10 много ниже
+ *     ПСИ 75, её настоящей темы;
+ *   - Броня Ликвидатора: `[20,15,80,85,95,100]` → `[…,65]`. Второе исключение и
+ *     единственный герметичный комплект из семи: её БИО выведен не из толщины, а
+ *     из замкнутого контура — половина глубины специалиста (70/2 = 35);
+ *   - три новых строки. `armor_ozk` `[95,90,100,100,100,30]` и `armor_tok200`
+ *     `[95,90,90,30,100,100]` — средняя ступень, узкая специализация: глубина 70
+ *     в своей колонке и почти ничего в остальных. `armor_szk9`
+ *     `[15,15,40,40,40,40]` — верх лестницы, полоса E4: дыр нет ни по одной оси;
+ *   - новый тест «три ступени различимы по ФОРМЕ строки»: он держит не числа, а
+ *     замысел (начало даёт понемногу от всего, специалист вчетверо глубже в своей
+ *     колонке, универсал без дыр и всё-таки уступает специалисту в его колонке).
+ *     Перецена строки его не роняет, смена формы — роняет;
+ *   - «носимая броня объявляет вид, известный матрице»: три новых записи, ткань
+ *     для обоих специалистов (полотно и резина) и пластина для СЗК-9.
  */
 
 import { test } from 'node:test';
@@ -233,15 +261,19 @@ test('матрица: материальная броня не мешает ПС
   assert.equal(armorMultiplier(ArmorType.LIVE_NET, DamageType.PSI) < 1, true);
 });
 
-test('эталон: носимая броня — резист по типам, и БИО не держит никто', () => {
+test('эталон: носимая броня — резист по типам, и колонка БИО закрыта', () => {
   const { world, state } = scene();
   const worn = (armorDefId: string): Entity => makeTestEntity({ id: 3, type: EntityType.NPC, armorDefId, x: 50, y: 50, hp: 5000, maxHp: 5000 });
+  /* Строки идут снизу вверх по цене — это и есть лестница из `data/items.ts`. */
   const table: Record<string, number[]> = {
-    armor_light: [80, 70, 100, 95, 100, 100],
-    armor_medium: [60, 50, 85, 90, 100, 100],
-    armor_heavy: [40, 30, 70, 80, 100, 100],
-    armor_liquidator: [20, 15, 80, 85, 95, 100],
-    armor_cultist: [90, 90, 60, 100, 25, 100],
+    armor_light: [80, 70, 100, 95, 100, 95],
+    armor_ozk: [95, 90, 100, 100, 100, 30],
+    armor_tok200: [95, 90, 90, 30, 100, 100],
+    armor_medium: [60, 50, 85, 90, 100, 90],
+    armor_cultist: [90, 90, 60, 100, 25, 90],
+    armor_heavy: [40, 30, 70, 80, 100, 80],
+    armor_liquidator: [20, 15, 80, 85, 95, 65],
+    armor_szk9: [15, 15, 40, 40, 40, 40],
   };
 
   for (const [defId, expected] of Object.entries(table)) {
@@ -257,11 +289,72 @@ test('эталон: носимая броня — резист по типам, 
     );
   }
 
-  /* ДЫРА, охраняемая намеренно: столбец `BIO` целиком по сотне. Ни один предмет
-   * брони не объявляет резист к био, а кислотный фартук в игре уже есть. Строка
-   * упадёт в тот день, когда лестницу брони в `data/items.ts` закроют. */
+  /* ЗАКРЫТАЯ ДЫРА: до этого шага столбец `BIO` стоял целиком по сотне — ни один
+   * предмет брони не объявлял резиста к био, и строка теста охраняла дыру. Теперь
+   * его объявляют все, кроме одного, и охраняется обратное.
+   *
+   * Единственный честный ноль — ТОК-200: асбестовое полотно держит пламя и не
+   * держит кислоту, и это ровно то «и всё», ради которого узкая специализация
+   * заведена. Ноль у него ЗАПЕРТ отдельной строкой, чтобы «забыли объявить» и
+   * «объявили ноль намеренно» не путались. */
+  const OWN_COLUMN_ONLY = 'armor_tok200';
   for (const defId of Object.keys(table)) {
-    assert.equal(ITEMS[defId].resistances?.[DamageType.BIO], undefined, `${defId}: резиста к био пока нет`);
+    if (defId === OWN_COLUMN_ONLY) continue;
+    assert.ok(
+      (ITEMS[defId].resistances?.[DamageType.BIO] ?? 0) > 0,
+      `${defId}: колонка БИО обязана быть объявлена`,
+    );
+  }
+  assert.equal(ITEMS[OWN_COLUMN_ONLY].resistances?.[DamageType.BIO], undefined, 'ТОК-200 кислоту не держит намеренно');
+});
+
+test('эталон: три ступени лестницы различимы по ФОРМЕ строки, а не по сумме', () => {
+  /* Замок замысла, а не чисел. Он держит ровно то, ради чего лестница заведена:
+   * начало даёт понемногу, специалист — глубину в одной колонке ценой всех
+   * остальных, универсал — отсутствие дыр. Значения берутся из `ITEMS`, поэтому
+   * перецена строки его не роняет, а смена ФОРМЫ роняет. */
+  const row = (defId: string): number[] => DAMAGE_TYPES.map((t) => ITEMS[defId].resistances?.[t] ?? 0);
+  const deepest = (r: number[]): number => Math.max(...r);
+  const rest = (r: number[]): number => Math.max(...r.filter((v) => v !== deepest(r)));
+
+  // 1. Начало: ни одной колонки глубже половины, и хотя бы четыре объявлены.
+  for (const defId of ['armor_light', 'armor_medium']) {
+    const r = row(defId);
+    assert.ok(deepest(r) <= 50, `${defId}: начальная ступень не бывает глубокой`);
+    assert.ok(r.filter((v) => v > 0).length >= 4, `${defId}: начальная ступень даёт понемногу ОТ ВСЕГО`);
+  }
+
+  // 2. Специализация: своя колонка минимум вчетверо глубже любой другой.
+  for (const [defId, own] of [['armor_ozk', DamageType.BIO], ['armor_tok200', DamageType.FIRE]] as const) {
+    const r = row(defId);
+    assert.equal(deepest(r), r[own], `${defId}: глубже всего обязана быть своя колонка`);
+    assert.ok(r[own] >= rest(r) * 4, `${defId}: специализация обязана быть УЗКОЙ (${r[own]} против ${rest(r)})`);
+  }
+
+  // 3. Универсал: объявлены все шесть, и самая слабая колонка не ниже 60 —
+  //    того числа, которым лестница уже называет тяжёлую защиту (кинетика
+  //    тяжёлой брони). Дыр у верхней ступени нет по определению.
+  const top = row('armor_szk9');
+  assert.equal(top.filter((v) => v > 0).length, DAMAGE_TYPES.length, 'СЗК-9 обязан объявить все шесть колонок');
+  assert.ok(Math.min(...top) >= (ITEMS.armor_heavy.resistances?.[DamageType.KINETIC] ?? 0), 'у СЗК-9 не бывает слабой оси');
+  // Баллистику он берёт на потолке лестницы — и по ОБЕИМ осям сразу, чего нет
+  // ни у одного другого комплекта.
+  const ballisticCeiling = ITEMS.armor_liquidator.resistances?.[DamageType.BUCKSHOT] ?? 0;
+  assert.equal(top[DamageType.KINETIC], ballisticCeiling);
+  assert.equal(top[DamageType.BUCKSHOT], ballisticCeiling);
+
+  // 4. Специалист остаётся глубже универсала в своей колонке: иначе покупка за
+  //    500 000 отменяет выбор, ради которого специализация и заведена.
+  assert.ok(row('armor_ozk')[DamageType.BIO] > top[DamageType.BIO]);
+  assert.ok(row('armor_tok200')[DamageType.FIRE] > top[DamageType.FIRE]);
+  assert.ok(row('armor_cultist')[DamageType.PSI] > top[DamageType.PSI]);
+
+  // 5. Универсал бьёт любой другой комплект в КАЖДОЙ прочей колонке.
+  for (const defId of ['armor_light', 'armor_medium', 'armor_heavy', 'armor_liquidator']) {
+    const r = row(defId);
+    for (const t of DAMAGE_TYPES) {
+      assert.ok(top[t] >= r[t], `${defId}: СЗК-9 не вправе уступать по ${DamageType[t]}`);
+    }
   }
 });
 
@@ -289,7 +382,10 @@ test('эталон: тип удара берётся у ВИДА бьющей т
    * тень и на кислоту одним и тем же числом. */
   assert.equal(applyDamage(world, state, worn(), { damage: RAW, attacker: biter(MonsterKind.ZOMBIE) }).damage, 20, 'мертвяк — кинетика');
   assert.equal(applyDamage(world, state, worn(), { damage: RAW, attacker: biter(MonsterKind.SHADOW) }).damage, 95, 'теневик — ПСИ');
-  assert.equal(applyDamage(world, state, worn(), { damage: RAW, attacker: biter(MonsterKind.SLIMEVIK) }).damage, 100, 'слизневик — био');
+  /* 100 → 65: с закрытием колонки БИО герметичный штурмовой комплект наконец
+   * отвечает на кислоту (резист 35). До этого шага он ловил плеть слизневика
+   * голым телом — это и была охраняемая дыра. */
+  assert.equal(applyDamage(world, state, worn(), { damage: RAW, attacker: biter(MonsterKind.SLIMEVIK) }).damage, 65, 'слизневик — био');
   assert.equal(applyDamage(world, state, worn(), { damage: RAW, attacker: biter(MonsterKind.ROBOT) }).damage, 80, 'робот — энергия');
   // Явный тип в вызове старше вида: рука решает, если сказала.
   assert.equal(
@@ -337,10 +433,13 @@ test('матрица: у каждого вида брони есть полна�
 test('матрица: носимая броня объявляет вид, известный матрице', () => {
   const declared: Record<string, ArmorType> = {
     armor_light: ArmorType.CLOTH,
+    armor_ozk: ArmorType.CLOTH,
+    armor_tok200: ArmorType.CLOTH,
     armor_medium: ArmorType.PLATE,
     armor_heavy: ArmorType.PLATE,
     armor_liquidator: ArmorType.PLATE,
     armor_cultist: ArmorType.CLOTH,
+    armor_szk9: ArmorType.PLATE,
   };
   for (const [defId, kind] of Object.entries(declared)) {
     const def = ITEMS[defId];

@@ -1,4 +1,4 @@
-import { ItemType, type ItemDef } from '../core/types';
+import { ArmorType, ItemType, type ItemDef } from '../core/types';
 import { PHYS_WEAPON_ROLE_TIERS, type WeaponRoleTier } from './weapons';
 import { PSI_WEAPON_ROLE_TIERS } from './psi';
 import { ITEMS } from './items';
@@ -308,11 +308,21 @@ function applyMiscWeights(def: ItemDef, weights: MutableCraftVector): void {
   }
   /* Броня опознаётся собственным полем стойкостей, а не тегом: у всех четырёх
      комплектов тегов нет вовсе, и они падали в общий хвост «две бумажки», то
-     есть Броня Ликвидатора за 4500 ₽ собиралась из шестнадцати расходников. */
+     есть Броня Ликвидатора за 4500 ₽ собиралась из шестнадцати расходников.
+     ИЗ ЧЕГО она сделана, решает уже объявленный `armorType`, а не одна общая
+     строка: пластина — это металл и приводы, ткань — полотно, резина и
+     пропитка. Общий металлический состав врал сразу в обе стороны — ряса
+     культиста собиралась из стали, и прорезиненный ОЗК собирался бы из неё же. */
   if (def.resistances) {
-    add(weights, 'metal', 5);
-    add(weights, 'mechanics', 3);
-    add(weights, 'chemical', 1);
+    if (def.armorType === ArmorType.CLOTH) {
+      add(weights, 'chemical', 4);
+      add(weights, 'consumables', 3);
+      add(weights, 'mechanics', 1);
+    } else {
+      add(weights, 'metal', 5);
+      add(weights, 'mechanics', 3);
+      add(weights, 'chemical', 1);
+    }
   }
   if (hasAnyTag(def, ['contraband', 'govnyak']) || idHasAny(def.id, ['govnyak', 'cigs', 'shaving'])) {
     add(weights, 'consumables', 2);
