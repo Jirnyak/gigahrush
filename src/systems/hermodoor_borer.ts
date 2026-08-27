@@ -250,7 +250,13 @@ function spawnBorerMonster(
     type: EntityType.MONSTER,
     x: pos.x + 0.5,
     y: pos.y + 0.5,
-    angle: Math.atan2((doorY(target.doorIdx) + 0.5) - (pos.y + 0.5), (doorX(target.doorIdx) + 0.5) - (pos.x + 0.5)),
+    // Точильщик встаёт на СОСЕДНЮЮ с дверью клетку, а соседство бывает через шов
+    // тора: дверь на 0, место на 1023. Сырая разность там даёт −1023 вместо +1, и
+    // тварь смотрит спиной к двери, которую грызёт.
+    angle: Math.atan2(
+      world.delta(pos.y + 0.5, doorY(target.doorIdx) + 0.5),
+      world.delta(pos.x + 0.5, doorX(target.doorIdx) + 0.5),
+    ),
     pitch: 0,
     alive: true,
     speed: scaleMonsterSpeed(def.speed * 0.95, zoneLevel),
@@ -657,7 +663,13 @@ function movePlayerToDoor(world: World, player: Entity, target: BorerRuntime): b
   if (!spot) return false;
   player.x = spot.x + 0.5;
   player.y = spot.y + 0.5;
-  player.angle = Math.atan2((doorY(target.targetDoorIdx) + 0.5) - player.y, (doorX(target.targetDoorIdx) + 0.5) - player.x);
+  // Тот же шов: игрока переносят на клетку рядом с дверью, и если пара соседних
+  // клеток лежит по разные стороны шва, камера разворачивалась на 180° от двери,
+  // к которой его только что перенесли.
+  player.angle = Math.atan2(
+    world.delta(player.y, doorY(target.targetDoorIdx) + 0.5),
+    world.delta(player.x, doorX(target.targetDoorIdx) + 0.5),
+  );
   player.pitch = 0;
   return true;
 }

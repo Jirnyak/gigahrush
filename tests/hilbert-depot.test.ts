@@ -18,6 +18,7 @@ import {
 import { designFloorAtZ, designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { activeActorSoftLimit } from '../src/data/entity_limits';
+import { floorPopulationBudget } from '../src/data/population_profiles';
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner, territoryOwnerName } from '../src/data/factions';
 import { territorySharesForDesignFloor } from '../src/data/floor_territory';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
@@ -123,10 +124,11 @@ test('hilbert_depot is a maintenance authored route floor with indexed industria
   assert.equal(profile.npcTarget >= budget * 0.1, true, `npc target ${profile.npcTarget} of budget ${budget}`);
   // Граница: и всё же давление доминирует над штатом — иначе это не danger-4.
   assert.equal(profile.monsterTarget > profile.npcTarget, true, `monster target ${profile.monsterTarget} vs npc ${profile.npcTarget}`);
-  // Закон сохранения: этаж выбирает общий бюджет активных актёров, к которому
-  // подгоняет fitActiveActorCounts(), и не переливает через мягкий лимит.
-  assert.equal(budget <= activeActorSoftLimit(), true, `actor budget ${budget} over soft limit ${activeActorSoftLimit()}`);
-  assert.equal(budget >= activeActorSoftLimit() * 0.9, true, `actor budget ${budget} under soft limit ${activeActorSoftLimit()}`);
+  // Закон сохранения: этаж выбирает бюджет СВОЕЙ высоты целиком, к которому
+  // подгоняет fitActiveActorCounts(), и никогда не касается мягкого лимита —
+  // тот потолок, а не цель.
+  assert.equal(budget < activeActorSoftLimit(), true, `actor budget ${budget} at soft limit ${activeActorSoftLimit()}`);
+  assert.equal(budget >= floorPopulationBudget(route.z) * 0.9, true, `actor budget ${budget} under floor budget ${floorPopulationBudget(route.z)}`);
   assert.equal(weightOf(profile.npcFactions, Faction.LIQUIDATOR) > weightOf(profile.npcFactions, Faction.WILD), true);
   assert.equal(weightOf(profile.npcOccupations, Occupation.STOREKEEPER) > weightOf(profile.npcOccupations, Occupation.SCIENTIST), true);
   assert.equal(profile.monsterBiasKinds.includes(MonsterKind.ROBOT), true);

@@ -112,6 +112,22 @@ export function clearActiveBet(): void {
   currentActiveBet = null;
 }
 
+/**
+ * Залог, который обязан вернуться игроку при записи сейва.
+ *
+ * Ставка — состояние кадра, а не факт личности: дуэль живёт модульной
+ * переменной `arena.ts` и указывает на сущности активного этажа, поэтому в
+ * сейв она не идёт и уйти не может. Ставка без дуэли не сыграет никогда, а
+ * деньги уже списаны. По правилу транзиентных полей (`save.md`) поле кадра
+ * приводится к персистентной форме на входе в запись — персистентная форма
+ * ставки без дуэли это возвращённые деньги, ровно как на всех прочих выходах
+ * из боя: таймаут, двойной нокаут, победитель.
+ */
+export function activeBetEscrowAmount(): number {
+  const amount = currentActiveBet?.amount ?? 0;
+  return Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 0;
+}
+
 export function getCurrentActiveBet(): ArenaBet | null {
   return currentActiveBet;
 }

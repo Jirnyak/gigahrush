@@ -234,6 +234,28 @@ const ROLE_TIER_DAMAGE_TYPES: Partial<Record<WeaponRoleTier, DamageType>> = {
   fuel_clear: DamageType.FIRE,
 };
 
+/**
+ * Вид снаряда → тип урона. Пламя ГОРИТ, луч и шар — энергия.
+ *
+ * До этой таблицы связи не было ни одной: `ProjType.FLAME` означал только след
+ * на полу и цвет искр, а огненным удар делал ролевой тир оружия. Снаряд без
+ * оружия за спиной — выстрел твари, чужая пуля из сохранёнки — не получал типа
+ * вовсе и считался кинетикой. Ключ здесь тот же самый, что и у всех остальных:
+ * тип урона, а не список идентификаторов.
+ */
+const PROJ_TYPE_DAMAGE_TYPES: Partial<Record<ProjType, DamageType>> = {
+  [ProjType.FLAME]: DamageType.FIRE,
+  [ProjType.BEAM]: DamageType.ENERGY,
+  [ProjType.BFG]: DamageType.ENERGY,
+};
+
+/** Тип урона, который несёт снаряд сам по себе. Не опознан — `undefined`. */
+export function projTypeDamageType(projType: ProjType | undefined): DamageType | undefined {
+  return projType === undefined ? undefined : PROJ_TYPE_DAMAGE_TYPES[projType];
+}
+
 for (const [id, ws] of Object.entries(PHYS_WEAPON_STATS)) {
-  ws.damageType ??= ROLE_TIER_DAMAGE_TYPES[PHYS_WEAPON_ROLE_TIERS[id]] ?? DamageType.KINETIC;
+  ws.damageType ??= projTypeDamageType(ws.projType)
+    ?? ROLE_TIER_DAMAGE_TYPES[PHYS_WEAPON_ROLE_TIERS[id]]
+    ?? DamageType.KINETIC;
 }

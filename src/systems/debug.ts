@@ -36,7 +36,6 @@ import {
   resolveFloorRunRoute,
   summarizeFloorRun } from './procedural_floors';
 import { summarizeProceduralSmog } from './procedural_anomalies';
-import {  summarizeBadAppleWorld } from './procedural_anomalies/bad_apple_world';
 import { forceFactionEvent } from './faction_events';
 import {  pseudoliftDebugSummary } from './pseudolift';
 import { DESIGN_FLOOR_ROUTES, type DesignFloorId } from '../data/design_floors';
@@ -333,7 +332,6 @@ function debugRouteFloorSummaryLines(world: World, player: Entity, entities: Ent
   for (const line of summarizeProceduralSmog(world, state).slice(0, 2)) out.push(line);
   for (const line of summarizeCarnivorousFungus(world, 2)) out.push(line);
   for (const line of summarizeHladonColdPockets(world, player, 2)) out.push(line);
-  for (const line of summarizeBadAppleWorld(world).slice(0, 2)) out.push(line);
   return out;
 }
 
@@ -830,7 +828,6 @@ function armLocalFloorInstance(world: World, player: Entity, state: GameState): 
     intendedFloor: state.currentZ,
     direction: LiftDirection.DOWN,
     returnFloor: state.currentZ };
-  // @ts-ignore
   store.current = instance;
   store.discovered[def.id] = true;
   store.anomalyCount++;
@@ -859,7 +856,6 @@ function armLocalFloorInstance(world: World, player: Entity, state: GameState): 
       intendedFloor: instance.intendedFloor,
       returnFloor: instance.returnFloor } });
   return [
-    // @ts-ignore
     `armed ${floorInstanceLabel(instance)}`,
     'use any lift once to publish loop exit and return to stable route',
   ];
@@ -1689,7 +1685,6 @@ registerDebugPanel({
     section('ПСЕВДОЛИФТ', pseudoliftDebugSummary(state).slice(0, 3), '#fc4');
     section('САМОСБОР', getSamosborDebugLines(), '#9cf');
     section('СМОГ', summarizeProceduralSmog(world, state).slice(0, 3), '#b98');
-    section('BAD APPLE', summarizeBadAppleWorld(world).slice(0, 3), '#eee');
     return out;
   } });
 

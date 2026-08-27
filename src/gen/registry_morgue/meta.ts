@@ -17,8 +17,6 @@ export const REGISTRY_MORGUE_FUTURE_Z = 18 as const;
 
 export const REGISTRY_MORGUE_Z = 18;
 
-export const REGISTRY_MORGUE_DEBUG_ENTRY = 'design_floor.registry_morgue' as const;
-
 export const CORPSE_NUMBER_TAG_ITEM = 'corpse_number_tag' as const;
 
 export const REGISTRY_MORGUE_TARGET_ROUTE = {

@@ -1298,29 +1298,6 @@ export function spawnThreats(world: World, entities: Entity[], nextId: { v: numb
   spawnMonster(world, entities, nextId, MonsterKind.BEZEKHIY, sitePoint(world, owner, sites, 'corpsePitWest', -10, -8), 3, 'Безэхий у санитарной стены');
 }
 
-export function isVoronoiAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    !entity.id &&
-    !entity.persistentNpcId &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function voronoiTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const spec of FACTION_HQ_SPECS) cells.set(spec.owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
-}
-
 export function stampContamination(world: World, sites: readonly Site[], seed: number): void {
   for (const site of sites) {
     if (!site.infected) continue;

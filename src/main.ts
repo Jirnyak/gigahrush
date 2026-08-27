@@ -120,6 +120,7 @@ import {
 } from './render/webgl';
 import { dropWorldContextsExcept } from './world/world_contexts';
 import { drawHUD, drawPointerCaptureGate, drawSceneOverlay } from './render/hud';
+import { mapLegendVisibleRows as drawMapLegendVisibleRows, clampFullMapRadius, FULL_MAP_RADIUS_DEFAULT } from './render/map_ui';
 import { abortFloorScene, bindSceneCamera, floorScenesForSave, releaseFloorSceneToPlayer, resetFloorScenes, restoreFloorScenesFromSave } from './systems/cinematics';
 import { drawFeedbackMenu } from './render/feedback_ui';
 import {
@@ -132,6 +133,10 @@ import { resetNetHackState, restoreNetHackFromSave } from './systems/net_hack';
 import { stampMark, MarkType } from './systems/surface_marks';
 import { stampUrineTrace } from './systems/urination';
 import { canvasMenuScale, containerMenuGridLayout, craftMenuLayout, fullscreenInventoryLayout, npcMenuLayout, TRADE_POOL_HALF_COLS, tradeMenuGridLayout, tradePanelOrigin } from './render/ui_layout';
+// Геометрия строк принадлежит отрисовке — слой нажатия спрашивает у неё.
+import { inventoryActionRows } from './render/stats_ui';
+import { craftListRowRect, craftListWindow } from './render/craft_ui';
+import { questLogHitRects } from './render/quest_ui';
 import { updateNeeds } from './systems/needs';
 import { startTutorial } from './systems/tutorial';
 import { updateAI, tryMonsterProjectileStagger, getAiStats, type AiStats } from './systems/ai';
@@ -141,7 +146,7 @@ import { resolveBreachChargeExplosion } from './systems/breach_charge';
 import { dropMonsterRareLoot, dropMonsterLoot } from './systems/monster_drops';
 import { generateNpcTradeItems } from './data/occupation_profiles';
 import { generateTalkText } from './systems/dialogue';
-import { updateSamosbor, rebuildWorld, updateIstotitBellCompulsion, getSamosborWarningSnapshot, abortSamosborRuntime } from './systems/samosbor';
+import { updateSamosbor, updateIstotitBellCompulsion, getSamosborWarningSnapshot, abortSamosborRuntime } from './systems/samosbor';
 import { clearFogInZone } from './systems/fog_zone';
 import { getActiveSamosborVariant } from './systems/samosbor_variants_runtime';
 import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } from './systems/cell_hazards';
@@ -149,12 +154,12 @@ import { musicSystem } from './systems/music';
 
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
 import { applyDamage } from './systems/combat';
-import { applyHitStaggerAndKnockback , calculateReloadTime } from './systems/combat';
+import { calculateReloadTime } from './systems/combat';
 import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
   countAmmo, removeItem, addItem, publishPlayerItemEvent, updateInventoryConditions,
-  hasItem,
+  hasItem, loadEquippedMagazine, stashEquippedMagazine,
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
 import { createMobileControls, type MobileControls } from './mobile';
@@ -276,7 +281,7 @@ import { cleanupToolProfile } from './systems/liquidator_cleanup_items';
 import { cleanSurfaceArea as cleanWorldSurfaceArea } from './systems/surface_cleanup';
 import { updateScriptedArrivals } from './systems/scripted_arrivals';
 import { applyDesignRouteGates } from './systems/design_route_gates';
-import { setDoorState, damageDoor } from './systems/door_state';
+import { actorHasDoorKey, doorKeyId, setDoorState, damageDoor } from './systems/door_state';
 import {
   freshRPG, awardXP, xpForMonsterKill, xpForNpcKill,
   meleeDamage, actorMoveSpeed, agiAttackSpeedMult,
@@ -329,12 +334,15 @@ import {
 } from './systems/world_log';
 import { hearingRadiusMetersForActor } from './systems/hearing';
 import {
+  consumeQuietDoorCharge,
+  publishDoorNoise,
   publishExplosionNoise,
   publishFootstepNoise,
   publishWeaponNoise,
   resetNoiseRecords,
 } from './systems/noise';
-import { damageActor, setActorDeathHandler, notifyActorDamaged, resetCombatStimulus } from './systems/combat_stimulus';
+import { findActorDoorPermit, recordPermitAccess } from './systems/permits';
+import { damageActor, setActorDeathHandler, resetCombatStimulus } from './systems/combat_stimulus';
 import { enforceItemDropFifoCap, entitySoftLimit, entitySpawnSlots, remainingActiveActorSpawnSlots } from './systems/entity_limits';
 import { clearRoomMemory, tickRoomMemory } from './systems/room_memory';
 import { resetNpcMemoryStore } from './systems/npc_memory';
@@ -425,6 +433,8 @@ import {
   forceProceduralFloorAnomaly,
   nextFloorRunSamosborCooldown,
   normalizeFloorRunSeed,
+  SAMOSBOR_COOLDOWN_MAX_SEC,
+  SAMOSBOR_COOLDOWN_MIN_SEC,
   resolveFloorRunRoute,
   floorRunSeed,
   routeMoveCrossesSeam,
@@ -446,8 +456,9 @@ import {
   setPseudoliftState,
   updatePseudolifts,
 } from './systems/pseudolift';
-import { clearWrongDoorRemaps, tryUseWrongDoorRemap, updateWrongDoorRemaps } from './systems/wrong_door';
+import { tryUseWrongDoorRemap, updateWrongDoorRemaps } from './systems/wrong_door';
 import {
+  bashContainerLock,
   containerAccessInfo,
   ensureRoomContainers,
   firstNearbyContainer,
@@ -506,7 +517,6 @@ import {
   type EntityIndexDebugStats,
 } from './systems/entity_index';
 import {
-  applyDamageRelationPenalty,
   updateFactionCapture, initFactionControl,
   updateFactionActivity,
 } from './systems/factions';
@@ -693,24 +703,30 @@ const TITLE_LANGUAGE_KEY = 'gigahrush_title_language';
 const TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY = 'gigahrush_active_actor_soft_limit';
 const SAVE_KEY = 'gigahrush_save';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
-const FULL_MAP_RADIUS_DEFAULT = 200;
-const FULL_MAP_RADIUS_MIN = 48;
-const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
 type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback' | 'character' | 'back'>;
 type TitleSetupPage = 'main' | 'character';
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 
+/* Ответ стоит РАЗБОРА ВСЕГО СЕЙВА, а титульный экран перерисовывается каждый кадр:
+ * в профиле трейлерного режима этот разбор занимал 60% времени кадра — сам меню
+ * тормозило именно им, а не миром на фоне. Меняется ответ ровно в одном месте —
+ * когда сейв пишут, — поэтому он и запоминается до записи. Стирания сейва в игре
+ * нет вовсе, а вкладка со своим `localStorage` живёт одна. */
+let savedGameValid: boolean | null = null;
+
 function hasValidSaveGame(): boolean {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return false;
-    const parsed = safeParseJson(raw);
-    return saveShapeVersionStatus(parsed) === 'current';
-  } catch {
-    return false;
+  if (savedGameValid === null) {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      const parsed = raw ? safeParseJson(raw) : null;
+      savedGameValid = raw ? saveShapeVersionStatus(parsed) === 'current' : false;
+    } catch {
+      savedGameValid = false;
+    }
   }
+  return savedGameValid;
 }
 
 // The launch menu is split into two setup pages so it always fits vertically:
@@ -928,7 +944,22 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
   if (target && target.hp !== undefined) {
     const armor = applyDamage(world, state, target, { damage: normalDmg, attacker: actor, weaponId });
     const dmg = armor.damage;
-    target.hp -= dmg;
+    damageActor(world, state, target, {
+      damage: normalDmg,
+      applied: dmg,
+      reportedDamage: dmg,
+      source: 'player_melee',
+      attacker: actor,
+      weaponId,
+      time: state.time,
+      // Толчка у этого удара нет: пир ставит жертве плоский стаггер ниже.
+      knockback: false,
+      /* Удар ко-оп-пира по ИГРОКУ жертве не сообщается — у неё свой канал
+       * `recordPlayerDamage`. Отношениями путь платит наравне с рукой игрока:
+       * пир — член фракции `PLAYER`, а не третья сущность. */
+      notifyVictim: !isPlayerEntity(target),
+      deathByCaller: true,
+    });
     target.staggerTimer = 0.15;
     const mSpd = 6;
     const mVx = Math.cos(actor.angle) * mSpd;
@@ -937,8 +968,6 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
     if (isPlayerEntity(target)) {
       recordPlayerDamage(state, actor, dmg, `Удар от ${actor.name || 'игрока'}: -${dmg}`, 'npc');
       state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.3 + dmg / (target.maxHp ?? 100) * 1.5));
-    } else {
-      notifyActorDamaged(world, target, actor, dmg, 'player_melee', state.time, state);
     }
     if (target.hp <= 0) {
       target.hp = 0;
@@ -1335,22 +1364,38 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
   }
   if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
     const door = world.doors.get(idx)!;
+    // Пир — такой же живой игрок: дверь под его рукой обязана шуметь так же, как под
+    // хозяйской, иначе гость обходит весь слуховой слой мира бесшумно.
+    const quietDoor = consumeQuietDoorCharge(actor, state.time);
     if (door.state === DoorState.CLOSED) {
       setDoorState(world, door, DoorState.OPEN);
       door.timer = 0; handled = true;
+      publishDoorNoise(state, actor, idx, false, quietDoor);
     } else if (door.state === DoorState.OPEN) {
       setDoorState(world, door, DoorState.CLOSED); handled = true;
+      publishDoorNoise(state, actor, idx, false, quietDoor);
     } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
       setDoorState(world, door, DoorState.HERMETIC_OPEN);
       door.timer = 0; handled = true;
+      publishDoorNoise(state, actor, idx, true, quietDoor);
     } else if (door.state === DoorState.HERMETIC_OPEN) {
       setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
+      publishDoorNoise(state, actor, idx, true, quietDoor);
     } else if (door.state === DoorState.LOCKED) {
-      const keyId = door.keyId || 'key';
-      if (actor.inventory?.some((i: { defId: string }) => i.defId === keyId)) {
+      // Тот же ключевой замок, что у хозяина клавиатуры: одни функции на оба
+      // пути к живому игроку, чтобы правило «пустой keyId = универсальный» и
+      // допуск по документу не разошлись между `activateDoor` и обслуживанием пира.
+      const access = actorHasDoorKey(actor, door) ? undefined : findActorDoorPermit(actor, doorKeyId(door));
+      if (actorHasDoorKey(actor, door) || access) {
         setDoorState(world, door, DoorState.OPEN);
         door.timer = 0; handled = true;
-        state.msgs.push(msg(`Игрок ${actor.peerSlot} отпер дверь ключом`, state.time, '#4a4'));
+        state.msgs.push(msg(
+          access ? access.permit.successLine : `Игрок ${actor.peerSlot} отпер дверь ключом`,
+          state.time,
+          '#4a4',
+        ));
+        publishDoorNoise(state, actor, idx, false, quietDoor);
+        if (access) recordPermitAccess(state, actor, world, access.permit, 'Запертая дверь', access.tag);
       }
     }
   }
@@ -2957,6 +3002,11 @@ function resetDeathContinuationWorldForHost(host: Entity): void {
 
 function finalizeDeathContinuationHost(host: Entity): void {
   endPsiPossession(entities, player, undefined, state.time, 'reset');
+  /* Фаза, щит и метка — модульные глобали, и они переживали смену тела: новое
+   * тело доходило остаток фазы сквозь бетон, щит списывал урон уже с ЕГО
+   * запаса ПСИ, а отзыв телепортировал его туда, где стояло прошлое. Сброс
+   * стоит здесь, потому что эта точка общая для обеих веток продолжения. */
+  resetPsiState();
   if (host.ai) {
     host.ai.combatTargetId = undefined;
     host.ai.goal = AIGoal.IDLE;
@@ -3013,7 +3063,6 @@ function continueDeathAsAlifePopulationNpc(): boolean {
   scheduleLoading(() => {
     resetNoiseRecords();
     resetGeneratedFloorPopulationState();
-    // @ts-ignore
     const loaded = loadFloorForTarget({ entry: targetEntry, instanceId: null, z: targetEntry.z });
     const gen = loaded.generation;
 
@@ -4413,7 +4462,19 @@ function playerCanOccupy(x: number, y: number, r = PLAYER_COLLISION_R): boolean 
 
 function nudgeBlockedPlayerToFloor(actor = player): void {
   if (isNoClipActive()) return;
-  unstuckActorFromBlockers(world, actor, { radius: PLAYER_COLLISION_R, maxCellRadius: 5 });
+  /* `rescueFromSolid` обязателен, и это ровно тот вызов, который цикл AI уже
+   * делает за ВСЕХ остальных (`ai/index.ts`, `UNSTUCK_ACTOR_OPTIONS`). Без него
+   * `unstuckActorFromBlockers` отказывается спасать того, кто УЖЕ внутри
+   * геометрии, — а игрок был единственным, кто флаг не передавал.
+   *
+   * Цена этого была не косметическая: пси-фазинг проводит сквозь стены, и по
+   * истечении заряда игрок оставался замурован в бетоне НАВСЕГДА. Шагнуть
+   * некуда (все соседние клетки solid), спасение отказано, умереть нельзя —
+   * урон давки в ветке игрока клампится `Math.max(1, …)`, поэтому и
+   * продолжение за другого NPC не срабатывает. Забег запирался насмерть.
+   * `maxCellRadius` снят: самосборное переселение ищет спиралью до 30, и
+   * пятиклеточный поиск из середины бетонного массива ничего не находит. */
+  unstuckActorFromBlockers(world, actor, { radius: PLAYER_COLLISION_R, rescueFromSolid: true });
 }
 
 function playerSprintMoveMultiplier(actor: Entity): number {
@@ -4937,13 +4998,18 @@ function handlePlayerAttack(_dt: number): void {
             weaponId,
           });
           const dmg = armor.damage;
-          e.hp -= dmg;
-          // Relation penalty for hitting non-hostile NPCs
-          if (e.type === EntityType.NPC) {
-            applyDamageRelationPenalty(player.faction, e.faction, dmg, e, player, state);
-            recordFactionClashPlayerHit(state, world, player, e, dmg);
-          }
-          notifyActorDamaged(world, e, player, dmg, 'player_melee', state.time, state);
+          damageActor(world, state, e, {
+            damage: rawDmg,
+            applied: dmg,
+            reportedDamage: dmg,
+            source: 'player_melee',
+            attacker: player,
+            weaponId,
+            time: state.time,
+            // Толчка у ближнего удара игрока нет и не было.
+            knockback: false,
+            deathByCaller: true,
+          });
           // Blood splatter on hit — use player facing as velocity direction
           const meleeSpd = 6;
           const mVx = Math.cos(player.angle) * meleeSpd;
@@ -5353,7 +5419,6 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
       const def = ITEMS[rareLoot.itemId];
       state.msgs.push(msg(`На месте боя осталось: ${def?.name ?? rareLoot.itemId}${rareLoot.count > 1 ? ' ×' + rareLoot.count : ''}.`, state.time, '#9cf'));
     }
-    spawnStoryDeathDrops(e, killerIsPlayer, entities, nextEntityId, state, state.msgs);
     if (killerIsPlayer) {
       awardXP(killerActor, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), killerActor === player ? state.msgs : [], state.time);
     }
@@ -5378,6 +5443,11 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     // заданий — слоты, а номер сущности с ними совпадал лишь по совпадению.
     if (e.alifeId !== undefined && killerActor === player) notifyNpcKill(e.alifeId, state);
   }
+  // Правила сюжетного дропа объявляют `plotNpcIds` и `entityTypes: [NPC]`, но вызов жил
+  // внутри монстровой ветки — смерть человека их не проходила вовсе, и фильтр по личности
+  // был недостижим. Место общее для обоих: после лута, чтобы порядок дропов у монстров
+  // не поехал, и до контентных хуков смерти.
+  spawnStoryDeathDrops(e, killerIsPlayer, entities, nextEntityId, state, state.msgs);
   const contentDeath = runContentEntityDeathHooks({ world, entities, player, state, nextEntityId, killed: e, killerIsPlayer });
   if (contentDeath.worldChanged) updateWorldData(world);
 }
@@ -5728,17 +5798,22 @@ function processProjectileEntityCollision(
     if (debugImmortalPlayerHit) {
       keepDebugOnePunchManAlive(e, state);
     } else {
-      e.hp -= dmg;
-      if (p.x !== undefined && p.y !== undefined) {
-        applyHitStaggerAndKnockback(world, e, p.x, p.y, dmg);
-      }
+      damageActor(world, state, e, {
+        damage: counterplayDmg,
+        applied: dmg,
+        reportedDamage: dmg,
+        source: 'projectile',
+        attacker: projectileActor(p),
+        weaponId: p.weapon,
+        projectileType: pt,
+        time: state.time,
+        // Толчок идёт от точки попадания, а не от стрелка: он может стоять в
+        // другом конце коридора, и нормаль от него смотрит не туда.
+        knockbackFromX: p.x,
+        knockbackFromY: p.y,
+        deathByCaller: true,
+      });
       tryMonsterProjectileStagger(world, state, e, p, player.id);
-      if (e.type === EntityType.NPC && isPlayerOwnedProjectile(p)) {
-        const shooter = projectileActor(p) ?? player;
-        applyDamageRelationPenalty(shooter.faction, e.faction, dmg, e, shooter, state);
-        recordFactionClashPlayerHit(state, world, shooter, e, dmg);
-      }
-      notifyActorDamaged(world, e, projectileActor(p), dmg, 'projectile', state.time, state);
       const hitAngle = Math.atan2(p.vy ?? 0, p.vx ?? 0);
       spawnBloodHit(world, hitX, hitY, hitAngle, dmg, e.type === EntityType.MONSTER, p.vx ?? 0, p.vy ?? 0, hitZ);
       spawnProjectileBodyImpact(world, hitX, hitY, p.sprite, pt, hitZ);
@@ -5820,8 +5895,21 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
         hits++;
         continue;
       }
-      e.hp -= finalDmg;
-      applyHitStaggerAndKnockback(world, e, p.x, p.y, finalDmg);
+      damageActor(world, state, e, {
+        damage: rawFinalDmg,
+        applied: finalDmg,
+        reportedDamage: finalDmg,
+        source: 'explosion',
+        attacker: actor,
+        weaponId: p.weapon,
+        projectileType: pt,
+        aoe: true,
+        time: state.time,
+        // Толчок идёт от эпицентра: автора у взрыва может не быть вовсе.
+        knockbackFromX: p.x,
+        knockbackFromY: p.y,
+        deathByCaller: true,
+      });
       if (isPlayerEntity(e)) {
         const detail = actor && !isPlayerEntity(actor)
           ? `Взрыв от ${entityDisplayName(actor)}: -${finalDmg}`
@@ -5832,11 +5920,6 @@ function triggerExplosion(p: Entity, pt: ProjType): void {
       const blastVx = dist > 0.1 ? (dx / dist) * 12 : 0;
       const blastVy = dist > 0.1 ? (dy / dist) * 12 : 0;
       spawnBloodHit(world, e.x, e.y, Math.atan2(dy, dx), finalDmg, e.type === EntityType.MONSTER, blastVx, blastVy, 0.4);
-      if (e.type === EntityType.NPC && isPlayer) {
-        applyDamageRelationPenalty(player.faction, e.faction, finalDmg, e, player, state);
-        recordFactionClashPlayerHit(state, world, player, e, finalDmg);
-      }
-      notifyActorDamaged(world, e, actor, finalDmg, 'explosion', state.time, state);
       if (e.hp <= 0) {
         killEntity(e);
         handleKill(e, isPlayer, blastVx, blastVy, 3);
@@ -5953,21 +6036,6 @@ function safeSpawnNear(savedX: unknown, savedY: unknown, fallbackX: number, fall
 
   if (passableSpawnCell(fallbackX, fallbackY)) return { x: fallbackX, y: fallbackY };
   return { x: world.wrap(Math.floor(fallbackX)) + 0.5, y: world.wrap(Math.floor(fallbackY)) + 0.5 };
-}
-
-function currentRouteRebuildGeneration(): FloorGeneration | undefined {
-  invalidateFloorMemory(currentFloorMemoryKey());
-  const activeInstance = getActiveFloorInstance(state);
-  if (activeInstance) {
-    return floorInstanceSamosborReplacementAllowed(activeInstance.id)
-      ? generateFloorInstance(activeInstance.id, ensureFloorRunState(state).runSeed, activeInstance.seed)
-      : undefined;
-  }
-  const entry = currentFloorRunEntry(state);
-  if (entry.spec) return generateProceduralFloor(entry.spec);
-  const runSeed = ensureFloorRunState(state).runSeed;
-  if (entry.designFloorId) return generateDesignFloor(entry.designFloorId, runSeed);
-  return undefined;
 }
 
 function currentSamosborPatchSeed(): number {
@@ -6786,6 +6854,7 @@ function saveGame(auto = false): void {
     const rawBytes = new TextEncoder().encode(raw).length;
     const compactBytes = new TextEncoder().encode(compactRaw).length;
     localStorage.setItem(SAVE_KEY, raw);
+    savedGameValid = null;
     void savePlatformRawGameSave(raw, rawBytes, {
       raw: compactRaw,
       bytes: compactBytes,
@@ -6946,6 +7015,8 @@ function loadGame(): boolean {
       };
       entities.push(player);
       applyContractFloorHooks(state, world, entities, nextEntityId, player);
+      // Патроны в стволе лежат в `data` слота оружия: поднимаем их в живой счётчик.
+      loadEquippedMagazine(player);
       syncPlayerRuntimeBaselines();
       resetPsiState();
 
@@ -6960,7 +7031,12 @@ function loadGame(): boolean {
       netReportedSamosborCount = state.samosborCount;
       netDeathReported = false;
       const savedSamosborActive = dataState.samosborActive === true;
-      state.samosborTimer = clampNumber(dataState.samosborTimer, 120, 0, 24 * 60 * 60);
+      /* Потолок берётся у ПРОИЗВОДИТЕЛЯ кулдауна, а не выдумывается заново.
+       * Здесь стояли сутки (86400) при максимуме 1500, который умеет выдать
+       * `nextFloorRunSamosborCooldown`, — то есть санитайзер не ограничивал
+       * ничего из того, что игра способна произвести, и сейв с числом 86399
+       * принимался как есть: самосбор не срабатывал за весь ран. */
+      state.samosborTimer = clampNumber(dataState.samosborTimer, 120, 0, SAMOSBOR_COOLDOWN_MAX_SEC);
       state.quests = normalizedQuests.quests;
       state.nextQuestId = normalizedQuests.nextQuestId;
       state.tutorialMode = dataState.tutorialMode === true;
@@ -6985,12 +7061,11 @@ function loadGame(): boolean {
       // Overlay saved faction standing onto the base matrix (initFactionRelations
       // ran above); malformed/absent data leaves the base intact. SB4.
       restoreFactionRelations(dataState.factionRelations);
-      // @ts-ignore
-      setProductionState(state, dataState.production, floor);
+      setProductionState(state, dataState.production, loadedRunEntry.z);
       state.samosborActive = false;
       abortSamosborRuntime();
       if (savedSamosborActive) {
-        state.samosborTimer = Math.max(state.samosborTimer, 45);
+        state.samosborTimer = Math.max(state.samosborTimer, SAMOSBOR_COOLDOWN_MIN_SEC);
         state.msgs.push(msg('Активный самосбор из сохранения сброшен: маршрут восстановлен, следующий цикл пересчитан.', state.time, '#fa4'));
       }
       state.uvBeamFx = 0;
@@ -7587,11 +7662,6 @@ function closeInterfacesForFullMap(): void {
   closeMapEditorAndRefreshWorld();
 }
 
-function clampFullMapRadius(value: unknown): number {
-  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : FULL_MAP_RADIUS_DEFAULT;
-  return Math.max(FULL_MAP_RADIUS_MIN, Math.min(FULL_MAP_RADIUS_MAX, Math.round(numeric)));
-}
-
 function currentFullMapRadius(): number {
   state.fullMapRadius = clampFullMapRadius(state.fullMapRadius);
   return state.fullMapRadius;
@@ -7962,7 +8032,12 @@ function dropInventorySelection(): void {
     const def = ITEMS[defId];
     if (def) {
       const es = itemEquipSlot(def);
-      if (es === 'weapon' && player.weapon === defId) player.weapon = '';
+      if (es === 'weapon' && player.weapon === defId) {
+        // Сетевая ветка снимает ствол мимо `dropItem`: магазин обязан уехать с ним.
+        stashEquippedMagazine(player, defId);
+        player.weapon = '';
+        loadEquippedMagazine(player);
+      }
       if (es === 'tool' && player.tool === defId) player.tool = '';
     }
     player.inventory!.splice(state.invSel, 1);
@@ -8034,7 +8109,11 @@ function activateContainerSelection(container: WorldContainer): void {
     const slot = container.inventory[idx];
     const itemName = slot ? ITEMS[slot.defId]?.name ?? slot.defId : '';
     if (!access.canTake) {
-      state.msgs.push(msg(access.label === 'ЗАПЕРТО' ? 'Заперто.' : 'Нет доступа.', state.time, '#f84'));
+      // Заперто — значит бьём, как запертую створку: непроламываемых ящиков нет.
+      const bash = bashContainerLock(container, player, { state, world, entities });
+      state.msgs.push(bash
+        ? msg(bash.message, state.time, bash.color)
+        : msg(access.label === 'ЗАПЕРТО' ? 'Заперто.' : 'Нет доступа.', state.time, '#f84'));
     } else if (slot && takeFromContainer(container, player, idx, 1, { state, world, entities })) {
       state.msgs.push(msg(`${access.theft ? 'Украдено' : 'Взято'}: ${itemName}`, state.time, access.theft ? '#f84' : '#8f8'));
     } else {
@@ -8283,8 +8362,10 @@ function keepUiSettingsSelectionVisible(): void {
 }
 
 function mapLegendVisibleRows(): number {
-  const { sy } = menuScale();
-  return Math.max(4, Math.floor((hudCanvas.height - 92 * sy) / Math.max(1, 13 * sy)));
+  // Формула живёт у отрисовки — она решает, что видно. Своя копия здесь
+  // расходилась с ней и обещала прокрутке строки, которых на экране нет.
+  const { sx, sy } = menuScale();
+  return drawMapLegendVisibleRows(hudCanvas.height, sx, sy);
 }
 
 function keepMapLegendSelectionVisible(): void {
@@ -8455,18 +8536,25 @@ function handleTapInventory(x: number, y: number, w: number, h: number, baseSx: 
       }
     }
   }
-  if (pointInRect(x, y, layout.use.x, layout.use.y, layout.use.w, layout.use.h)) {
+  // Вертикаль правой колонки — поток отрисовки, а не постоянный отступ: строки
+  // описания, урона и сопротивлений двигают всё, что ниже. Сегменты СИЛ/ЛОВ/ИНТ
+  // приходят измеренными по самой надписи, а не третями пустой колонки.
+  const rows = inventoryActionRows(ctx, player, state, baseSx, baseSy);
+  if (rows.use && pointInRect(x, y, rows.use.x, rows.use.y, rows.use.w, rows.use.h)) {
     useInventorySelection();
     return;
   }
-  if (pointInRect(x, y, layout.drop.x, layout.drop.y, layout.drop.w, layout.drop.h)) {
+  if (rows.drop && pointInRect(x, y, rows.drop.x, rows.drop.y, rows.drop.w, rows.drop.h)) {
     dropInventorySelection();
     return;
   }
-  if (player.rpg && player.rpg.attrPoints > 0 && pointInRect(x, y, layout.attr.x, layout.attr.y, layout.attr.w, layout.attr.h)) {
-    const rel = (x - layout.attr.x) / Math.max(1, layout.attr.w);
-    spendMobileAttr(rel < 0.34 ? 'str' : rel < 0.67 ? 'agi' : 'int');
-    return;
+  if (player.rpg && player.rpg.attrPoints > 0) {
+    for (const attr of rows.attr) {
+      if (pointInRect(x, y, attr.rect.x, attr.rect.y, attr.rect.w, attr.rect.h)) {
+        spendMobileAttr(attr.key);
+        return;
+      }
+    }
   }
 }
 
@@ -8487,15 +8575,14 @@ function handleTapCraftMenu(x: number, y: number, w: number, h: number): void {
     filter: state.craftFilter,
   });
   const entries = craftMenuEntries(snapshot);
-  const visibleRows = Math.max(1, Math.floor((layout.list.h - 20 * layout.scale) / layout.rowH));
   const cursor = entries.length === 0 ? 0 : Math.max(0, Math.min(entries.length - 1, state.craftCursor));
-  const first = Math.max(0, Math.min(Math.max(0, entries.length - visibleRows), cursor - Math.floor(visibleRows * 0.5)));
-  const listTop = layout.list.y + 16 * layout.scale;
-  for (let row = 0; row < visibleRows; row++) {
-    const index = first + row;
+  // Окно прокрутки и полоса строки — те же, что заливает подсветка выбора.
+  const listWindow = craftListWindow(layout, entries.length, cursor);
+  for (let row = 0; row < listWindow.visibleRows; row++) {
+    const index = listWindow.first + row;
     if (index >= entries.length) break;
-    const rowY = listTop + row * layout.rowH - 3 * layout.scale;
-    if (pointInRect(x, y, layout.list.x, rowY, layout.list.w, layout.rowH)) {
+    const rowRect = craftListRowRect(layout, listWindow, row);
+    if (pointInRect(x, y, rowRect.x, rowRect.y, rowRect.w, rowRect.h)) {
       const wasSelected = state.craftCursor === index;
       state.craftCursor = index;
       if (wasSelected) activateCraftSelection();
@@ -8508,21 +8595,23 @@ function handleTapCraftMenu(x: number, y: number, w: number, h: number): void {
   }
 }
 
-function handleTapQuests(x: number, y: number, w: number, h: number, sx: number, sy: number): void {
-  const pw = Math.min(400 * sx, w - 24 * sx);
-  const ph = Math.min(320 * sy, h - 24 * sy);
-  const px = (w - pw) / 2;
-  const py = (h - ph) / 2;
-  const total = questLogEntries().length;
-  if (pointInRect(x, y, px, py + ph - 22 * sy, pw, 22 * sy)) {
+function handleTapQuests(x: number, y: number, w: number, sx: number, sy: number): void {
+  // Полосы приходят от отрисовки. Своя копия держала переключение активной цели
+  // на 22*sy выше подсказки — там ничего не нарисовано, и тап по последней
+  // строке описания квеста менял цель на карте. Подполоса проверяется первой:
+  // она лежит ВНУТРИ полосы закрытия, под самими словами про цель.
+  const rects = questLogHitRects(ctx, state, sx, sy);
+  const toggle = rects.toggleActive;
+  if (toggle && pointInRect(x, y, toggle.x, toggle.y, toggle.w, toggle.h)) {
+    toggleSelectedQuestActive();
+    return;
+  }
+  if (pointInRect(x, y, rects.close.x, rects.close.y, rects.close.w, rects.close.h)) {
     state.showQuests = false;
     syncPauseState();
     return;
   }
-  if (pointInRect(x, y, px, py + ph - 44 * sy, pw, 22 * sy)) {
-    toggleSelectedQuestActive();
-    return;
-  }
+  const total = questLogEntries().length;
   if (total > 1) {
     state.questPage = x < w / 2
       ? Math.max(0, state.questPage - 1)
@@ -8716,7 +8805,7 @@ function handleMobileHudTap(x: number, y: number): void {
   } else if (state.showCraftMenu) {
     handleTapCraftMenu(x, y, w, h);
   } else if (state.showQuests) {
-    handleTapQuests(x, y, w, h, sx, sy);
+    handleTapQuests(x, y, w, sx, sy);
   } else if (state.showLog) {
     handleTapLog(y, h, sy);
   } else if (state.showDemos) {
@@ -10261,49 +10350,15 @@ function gameLoop(now: number): void {
     const samosborStart = performance.now();
     // v2: samosbor runs with peers connected — fronts stream as net cell
     // patches and the post-stitch rebuild re-streams the whole floor.
-    const samosborRebuild = updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
+    /* Самосбор перестраивает ЭТОТ этаж на месте, и обратного сигнала
+     * «перезагрузи мир» у него нет: все четыре выхода `updateSamosbor`
+     * возвращают `false`. Здесь стояла недостижимая ветка полной перегенерации,
+     * а внутри неё — `rebuildWorld`, который первым делом делает
+     * `entities.length = 0` и подменяет геометрию, то есть выбросил бы ровно ту
+     * сшитую карту, ради которой самосбор и работал. Свёртка A-Life, стич поля
+     * и переселение замурованных живут внутри `updateSamosbor`/`doStitch`. */
+    updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
     lastSamosborUpdateMs = performance.now() - samosborStart;
-    if (samosborRebuild) {
-      closeCraftMenu();
-      reportNetSphereProgressEvents();
-      scheduleLoading(() => {
-        restorePlayerBeforeWorldBoundary();
-        captureCurrentAlifeFloor();
-        clearWrongDoorRemaps(world, state, 'world_rebuild');
-        clearPseudoliftActive(state, entities);
-        // rebuildWorld keeps only the current player — carry peer actors over
-        const stitchPeers = isOnlineHost()
-          ? entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive && !_peerVisitEnded.has(e.peerSlot))
-          : [];
-        const replacement = currentRouteRebuildGeneration();
-        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentZ, replacement, state.tutorialMode);
-        for (const pa of stitchPeers) {
-          if (!entities.includes(pa)) {
-            pa.id = nextEntityId.v++;
-            const at = pa.faction === Faction.WILD ? invaderSpawnPoint() : { x: player.x, y: player.y };
-            pa.x = at.x;
-            pa.y = at.y;
-            entities.push(pa);
-          }
-        }
-        initFactionControl(world);
-        materializeCurrentAlifeFloor();
-        ensureProceduralSpriteSeeds(entities);
-        ensureRoomContainers(world, state.currentZ);
-        ensureProductionRooms(state, world);
-        prepareEditableFloor();
-        resetMapExploration(world);
-        updateMapExploration(world, player, state);
-        ensureProceduralSpriteSeeds(entities);
-        clearLiftArachnaActive(state);
-        restoreVoidReturnPortalForCurrentWorld();
-        applyDesignRouteGates(world, player, state);
-        finishLoadedFloorVisuals(replacement);
-        if (stitchPeers.length > 0) resyncAllPeersToCurrentFloor();
-      });
-      requestAnimationFrame(gameLoop);
-      return;
-    }
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     syncMapExplorationAfterSamosborWave(world, state);
     // Faction cell capture
@@ -10470,31 +10525,8 @@ function gameLoop(now: number): void {
     updateAI(world, entities, dt, state.time, state.msgs, listener.id, state.clock, state.samosborActive, nextEntityId, state.currentZ, state);
     lastAiUpdateMs = performance.now() - aiStart;
     tickCellHazards(world, entities, state, dt, player, false);
-    if (!isOnlineConnected() && updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch)) {
-      closeCraftMenu();
-      reportNetSphereProgressEvents();
-      scheduleLoading(() => {
-        restorePlayerBeforeWorldBoundary();
-        captureCurrentAlifeFloor();
-        clearWrongDoorRemaps(world, state, 'world_rebuild');
-        clearPseudoliftActive(state, entities);
-        const replacement = currentRouteRebuildGeneration();
-        rebuildWorld(world, entities, nextEntityId, state.samosborCount, state.currentZ, replacement, state.tutorialMode);
-        initFactionControl(world);
-        materializeCurrentAlifeFloor();
-        ensureProceduralSpriteSeeds(entities);
-        ensureRoomContainers(world, state.currentZ);
-        ensureProductionRooms(state, world);
-        prepareEditableFloor();
-        resetMapExploration(world);
-        updateMapExploration(world, player, state);
-        ensureProceduralSpriteSeeds(entities);
-        clearLiftArachnaActive(state);
-        finishLoadedFloorVisuals(replacement);
-      });
-      requestAnimationFrame(gameLoop);
-      return;
-    }
+    // Второй такой же недостижимый выход — см. разбор у первого вызова выше.
+    if (!isOnlineConnected()) updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     syncMapExplorationAfterSamosborWave(world, state);
     updateFactionCapture(world, entities, dt, state);
@@ -10648,7 +10680,7 @@ function gameLoop(now: number): void {
   const hudDrawStart = performance.now();
   if (state.sceneLock) {
     // Сцена: вместо HUD — кадр, и речь актёров проецируется от камеры, а не от игрока.
-    drawSceneOverlay(ctx, world, cameraView, entities, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, state.time);
+    drawSceneOverlay(ctx, world, cameraView, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, state.time);
   } else if (!state.trailerMode) {
     drawHUD(ctx, hudCanvas.width / SCR_W, hudCanvas.height / SCR_H, renderActor, state, world, entities, uiTime, {
       fps: currentFps,
@@ -10712,7 +10744,6 @@ function returnToTitleScreen(): void {
   input.drop = false;
   input.uiSettings = false;
   input.mapLegend = false;
-  input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;
   resetMenuRepeats();
@@ -10728,7 +10759,6 @@ function finishStartGameFromTitle(): void {
   player.isFemale = playerSex === 'female';
   started = true;
   input.escape = false;
-  input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;
   document.removeEventListener('keydown', startHandler);

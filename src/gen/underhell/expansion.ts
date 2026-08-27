@@ -132,7 +132,14 @@ const UNDERHELL_STATIONS: readonly UnderhellStationSpec[] = [
   { x: 256, y: 448, owner: ZoneFaction.CULTIST, type: RoomType.SMOKING, name: 'Курилка свидетелей снизу', radius: 34 },
   { x: 416, y: 448, owner: ZoneFaction.CULTIST, type: RoomType.PRODUCTION, name: 'Печь мелкой пошлины', radius: 38 },
   { x: 576, y: 448, owner: ZoneFaction.CULTIST, type: RoomType.COMMON, name: 'Передняя трех оплат сбоку', radius: 40 },
-  { x: 736, y: 448, owner: ZoneFaction.LIQUIDATOR, type: RoomType.OFFICE, name: 'Караульная боковой скобы', radius: 34 },
+  /* Караульная — ПОСТ, а не контора, и потому коридор.
+   *
+   * Обход (`patrol`) стоит у коридора, штаба, общего зала и рынка; у OFFICE его нет
+   * намеренно — там `work` и `sleep` дежурного за столом (`ai.md`, `room_affordances.ts`,
+   * замок `tests/room-affordances.test.ts`). Объявленная конторой караулка означала, что
+   * часовому там по данным делать нечего. Соседний «Пост счета проходящих» конторой
+   * остаётся: там считают за столом, а не ходят. */
+  { x: 736, y: 448, owner: ZoneFaction.LIQUIDATOR, type: RoomType.CORRIDOR, name: 'Караульная боковой скобы', radius: 34 },
   { x: 896, y: 448, owner: ZoneFaction.WILD, type: RoomType.STORAGE, name: 'Пошлинная боковая скоба', radius: 36 },
   { x: 112, y: 608, owner: ZoneFaction.SCIENTIST, type: RoomType.MEDICAL, name: 'Медкомната кислого мяса', radius: 32 },
   { x: 256, y: 608, owner: ZoneFaction.WILD, type: RoomType.COMMON, name: 'Лагерь у нижнего ребра', radius: 38 },

@@ -1,6 +1,6 @@
 /* -- Glubinnaya Ten: delayed second-beat deep shadow ------------- */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.82,
   dmg: 18,
   attackRate: 1.7,
+  damageType: DamageType.PSI,
   sprite: 0,
   counterplay: 'Держите светлый выход за спиной: в темноте она бьет тяжело, на свету теряет преимущество.',
   lootHint: 'холодная пыль, темный след, редкий странный сгусток из второго силуэта',

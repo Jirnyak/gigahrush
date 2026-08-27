@@ -279,9 +279,3 @@ export function publishAntennaCourtSignalEvent(
   });
 }
 
-export const ANTENNA_COURT_DEBUG_ENTRY = {
-  routeId: DESIGN_FLOOR_ID,
-  z: ANTENNA_COURT_ROUTE_Z,
-  generator: 'generateAntennaCourtDesignFloor',
-} as const;
-

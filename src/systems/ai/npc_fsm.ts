@@ -32,7 +32,6 @@ import { getRecentEvents } from '../events';
 import { chooseNpcEmergencyDecision } from './npc_emergency';
 import { tickNpcMemoryLowFrequency } from '../npc_memory';
 import { tickNpcRumorLowFrequency } from '../rumor';
-import { tickNpcSpecialRoutine } from '../npc_special_routines';
 import {
   occupationHasAnyRoutineTag,
   occupationHasRoutineTag,
@@ -372,23 +371,13 @@ function enterUtilityIntent(e: Entity, intent: NpcUtilityIntentId, score: number
   ai.timer = 0;
 }
 
-function clearUtilityState(e: Entity): void {
-  utilityIntentByNpc.delete(e);
-  utilityScoreByNpc.delete(e);
-  utilityNextDecisionAtByNpc.delete(e);
-}
-
 export function primeNpcAlifeState(
   e: Entity,
-  clock: GameClock,
   samosborActive: boolean,
   profile: NpcAiProfile = 'default',
 ): void {
   const ai = e.ai;
   if (!ai) return;
-  const special = tickNpcSpecialRoutine(e, clock);
-  if (special.clearUtility) clearUtilityState(e);
-  if (special.held) return;
   if (utilityIntentByNpc.get(e) === undefined || ai.npcState === undefined) {
     const intent = initialIntentForNpc(e, samosborActive, profile);
     enterUtilityIntent(e, intent, 0, profile);
@@ -410,17 +399,8 @@ export function updateNPC(
   const ai = e.ai!;
   refreshRoomCrowd(world, entities);
 
-  const special = tickNpcSpecialRoutine(e, clock);
-  if (special.clearUtility) {
-    ai.stateTimer = 0;
-    clearUtilityState(e);
-  }
-
   if (state) {
     processUrinationEvents(world, e, ai, state, _barkMsgs, time);
-  }
-  if (special.held) {
-    return;
   }
 
   // Дорога на объявленную разборку идёт ВМЕСТО рутины: иначе человек бросит её

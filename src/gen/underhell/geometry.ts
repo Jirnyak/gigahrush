@@ -1,18 +1,12 @@
 import { stampSurfaceSplat } from '../../systems/surface_marks';
-import {
-  Cell, DoorState, EntityType, Feature,
-  LiftDirection, RoomType,
-  Tex, W, ZoneFaction,
-  type Entity, type GameState, type Room, 
-  type WorldEvent, type WorldEventSeverity,
-} from '../../core/types';
+import { Cell, DoorState, EntityType, Feature, LiftDirection, RoomType, Tex, W, ZoneFaction, type Entity, type GameState, type Room, type WorldEvent, type WorldEventSeverity } from '../../core/types';
 import { auditReachability, World, type ReachabilityAudit } from '../../core/world';
 import { Spr } from '../../entities/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { registerRouteCue } from '../../systems/route_cues';
 import { calcZoneLevel } from '../../systems/rpg';
 import { placeDoorAt, stampRoom } from '../shared';
-import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, UNDERHELL_FLOOR, SPAWN_X, SPAWN_Y, THRESHOLD_MASK, WITNESS_MASK, UNDERHELL_THRESHOLD_CHAIN_MIN_SCORE, UNDERHELL_FLAGS, UnderhellWitnessState, UnderhellVoidGateState, UnderhellLateWarningId, UnderhellRitualState, UnderhellRitualSnapshot, UnderhellThresholdCostId, UnderhellThresholdChainRole, UnderhellThresholdChainNode, UnderhellThresholdChainScore, UnderhellSdfMetrics, UnderhellThresholdCost, UNDERHELL_THRESHOLD_COSTS, UNDERHELL_LATE_WARNINGS } from "./meta";
+import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, SPAWN_X, SPAWN_Y, THRESHOLD_MASK, WITNESS_MASK, UNDERHELL_THRESHOLD_CHAIN_MIN_SCORE, UNDERHELL_FLAGS, UnderhellWitnessState, UnderhellVoidGateState, UnderhellLateWarningId, UnderhellRitualState, UnderhellRitualSnapshot, UnderhellThresholdCostId, UnderhellThresholdChainRole, UnderhellThresholdChainNode, UnderhellThresholdChainScore, UnderhellSdfMetrics, UnderhellThresholdCost, UNDERHELL_THRESHOLD_COSTS, UNDERHELL_LATE_WARNINGS } from "./meta";
 
 export function snapshotUnderhellFlags(flags: number): UnderhellRitualSnapshot {
   const thresholdCost = thresholdCostFromFlags(flags);
@@ -99,7 +93,7 @@ export function payUnderhellThreshold(
   ritual.flags = (ritual.flags & ~THRESHOLD_MASK) | cost.flag;
   publishEvent(state, {
     type: 'quest_completed',
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     zoneId: world && player ? zoneFor(world, player) : undefined,
     actorId: player.id,
     actorName: player.name,
@@ -148,7 +142,7 @@ export function resolveUnderhellWitness(
 
   publishEvent(state, {
     type: outcome === 'rescued' ? 'quest_completed' : 'death_seen',
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     zoneId: world && actor ? zoneFor(world, actor) : undefined,
     actorId: actor?.id,
     actorName: actor?.name,
@@ -186,7 +180,7 @@ export function burnUnderhellDebt(
   });
   publishEvent(state, {
     type: 'faction_relation_changed',
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     zoneId: world ? zoneFor(world, player) : undefined,
     actorId: player.id,
     actorName: player.name,
@@ -214,7 +208,7 @@ export function breakUnderhellVoidAnchor(
   const opened = world ? tryOpenUnderhellVoidGate(world, ritual) : false;
   publishEvent(state, {
     type: 'quest_completed',
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     zoneId: world && actor ? zoneFor(world, actor) : undefined,
     actorId: actor?.id,
     actorName: actor?.name,
@@ -280,7 +274,7 @@ export function publishUnderhellBacklash(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     actorId: actor?.id,
     actorName: actor?.name,
     actorFaction: actor?.faction,
@@ -307,7 +301,7 @@ export function publishUnderhellLateWarning(
   const warning = UNDERHELL_LATE_WARNINGS.find(item => item.id === warningId);
   return publishEvent(state, {
     type: 'samosbor_warning',
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     zoneId: world && actor ? zoneFor(world, actor) : undefined,
     actorId: actor?.id,
     actorName: actor?.name,
@@ -347,7 +341,7 @@ export function registerUnderhellRouteCues(
     y: entryMarkerY,
     targetX: fallbackTargetX,
     targetY: fallbackTargetY,
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     roomId: entry.id,
     targetRoomId: fallback.id,
     zoneId: world.zoneMap[entryCell],
@@ -376,7 +370,7 @@ export function registerUnderhellRouteCues(
     y: thresholdMarkerY,
     targetX: witnessTargetX,
     targetY: witnessTargetY,
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     roomId: threshold.id,
     targetRoomId: witness.id,
     zoneId: world.zoneMap[thresholdCell],
@@ -405,7 +399,7 @@ export function registerUnderhellRouteCues(
     y: lowerMarkerY,
     targetX: lowerTargetX,
     targetY: lowerTargetY,
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     roomId: toll.id,
     targetRoomId: lowerFallback.id,
     zoneId: world.zoneMap[lowerCell],
@@ -434,7 +428,7 @@ export function registerUnderhellRouteCues(
     y: gateMarkerY,
     targetX: gateTargetX,
     targetY: gateTargetY,
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     roomId: sacrifice.id,
     targetRoomId: gate.id,
     zoneId: world.zoneMap[gateCell],

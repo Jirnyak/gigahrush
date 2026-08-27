@@ -1,9 +1,4 @@
-import {
-  AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature,
-  MonsterKind, Occupation, RoomType,
-  Tex, W, ZoneFaction,
-  type Entity, type Item, type Room, type WorldContainer,
-} from '../../core/types';
+import { AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, MonsterKind, Occupation, RoomType, Tex, W, ZoneFaction, type Entity, type Item, type Room, type WorldContainer } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { designFloorById } from '../../data/design_floors';
@@ -19,8 +14,9 @@ import { expandUnderhellRouteGeometry, reinforceUnderhellAuthoredHqTerritory } f
 import { genLog } from '../log';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { newEntityIdCursor } from '../entity_ids';
-import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, UNDERHELL_FLOOR, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
-import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhellRouteCues, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
+import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
+import { placeUnderhellDecisionAnchors } from "./decisions";
+import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhellRouteCues, payUnderhellThreshold, resolveUnderhellWitness, burnUnderhellDebt, breakUnderhellVoidAnchor, snapshotUnderhellFlags, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
 
 export function isUnderhellAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
@@ -291,6 +287,18 @@ export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGa
     onAfterTerritory: (afterWorld: World, afterEntities: Entity[]) => {
       reinforceUnderhellAuthoredHqTerritory(afterWorld);
       alignUnderhellAmbientNpcTerritory(afterWorld, afterEntities);
+      /* Четыре развилки ритуала получают клетку в мире и приглашение по `E`.
+         Шаг стоит ЗДЕСЬ, а не в теле генератора: палата поста и палата
+         якоря — комнаты типа HQ, и `reinforceUnderhellAuthoredHqTerritory`
+         перестилает их декор. Поставленный раньше якорь она стирала, и
+         развилка снова оказывалась недостижимой — замерено. */
+      placeUnderhellDecisionAnchors(afterWorld, ritualState, {
+        payThreshold: payUnderhellThreshold,
+        resolveWitness: resolveUnderhellWitness,
+        burnDebt: burnUnderhellDebt,
+        breakVoidAnchor: breakUnderhellVoidAnchor,
+        snapshot: snapshotUnderhellFlags,
+      });
     },
   };
 }
@@ -444,7 +452,7 @@ export function addUnderhellContainer(
     id,
     x,
     y,
-    z: UNDERHELL_FLOOR,
+    z: UNDERHELL_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SAFE,

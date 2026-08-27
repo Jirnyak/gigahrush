@@ -22,7 +22,7 @@ import { ACTIVE_ACTOR_SOFT_LIMIT, ENTITY_SOFT_LIMITS } from '../src/data/entity_
 import { HUMAN_TERRITORY_OWNERS, territoryOwnerToFaction } from '../src/data/factions';
 import { getMonsterEcology } from '../src/data/monster_ecology';
 import { SIDE_QUESTS } from '../src/data/plot';
-import { PROCEDURAL_POPULATION_PROFILES, expectedDangerForRouteZ, monsterShareForRouteZ, proceduralPopulationBudget } from '../src/data/population_profiles';
+import { PROCEDURAL_POPULATION_PROFILES, expectedDangerForRouteZ, floorPopulationBudget, monsterShareForRouteZ, proceduralPopulationBudget } from '../src/data/population_profiles';
 import { ROUTE_GATE_DEFS } from '../src/data/route_gates';
 import { isFloor69FemaleSprite } from '../src/entities/procedural_visuals';
 import { NPC_VISUAL_FLOOR69_FEMALE } from '../src/entities/npc_visuals';
@@ -57,15 +57,6 @@ import {
   setMapEditorPatchState,
 } from '../src/systems/map_editor';
 import { currentNetTerminalGenFloorKey } from '../src/systems/net_terminal_gen';
-import {
-  BAD_APPLE_EXPERIMENT_ENABLED,
-  BAD_APPLE_HEIGHT,
-  BAD_APPLE_WIDTH,
-  findBadAppleSiteNear,
-  stampBadAppleWorld,
-  tryUseBadAppleWorldAnomaly,
-  updateBadAppleWorldAnomaly,
-} from '../src/systems/procedural_anomalies/bad_apple_world';
 import { getProceduralSmogStatus, updateProceduralAnomalies } from '../src/systems/procedural_anomalies';
 import { updateLivingTunnelsAnomaly } from '../src/systems/procedural_anomalies/living_tunnels';
 import { tryZombieApocalypseInfection } from '../src/systems/procedural_anomalies/zombie_apocalypse';
@@ -389,7 +380,6 @@ const RUN_PROCEDURAL_FLOOR_FULL_MATRIX = process.env.GIGAHRUSH_PROCEDURAL_FLOOR_
 const PROCEDURAL_FLOOR_FULL_MATRIX_SKIP_REASON = 'run GIGAHRUSH_PROCEDURAL_FLOOR_FULL_MATRIX=1 npm run test:generation for the exhaustive procedural floor matrix';
 const RUN_PROCEDURAL_FLOOR_REGRESSION_MATRIX = process.env.GIGAHRUSH_PROCEDURAL_FLOOR_REGRESSION_MATRIX === '1';
 const PROCEDURAL_FLOOR_REGRESSION_SKIP_REASON = 'run GIGAHRUSH_PROCEDURAL_FLOOR_REGRESSION_MATRIX=1 npm run test:generation for procedural genfix regression floors';
-const BAD_APPLE_EXPERIMENT_SKIP_REASON = 'Bad Apple world experiment is disabled in the shipped path';
 const P0_REACHABILITY_FAST_CASES = [
   { runSeed: 96, z: 1 },
   { runSeed: 321, z: 9 },
@@ -411,12 +401,6 @@ function testGenerationMatrix(name: string, fn: () => void | Promise<void>, opti
 function testProceduralFloorFullMatrix(name: string, fn: () => void | Promise<void>): void {
   testGenerationMatrix(name, fn, {
     skip: RUN_PROCEDURAL_FLOOR_FULL_MATRIX ? false : PROCEDURAL_FLOOR_FULL_MATRIX_SKIP_REASON,
-  });
-}
-
-function testBadAppleExperiment(name: string, fn: () => void | Promise<void>): void {
-  testGenerationMatrix(name, fn, {
-    skip: BAD_APPLE_EXPERIMENT_ENABLED ? false : BAD_APPLE_EXPERIMENT_SKIP_REASON,
   });
 }
 
@@ -4513,79 +4497,6 @@ testGenerationMatrix('genfix 078 sump conveyor cultist floor has dense stations,
   assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
-testBadAppleExperiment('genfix 097 bad apple sump cultist floor has dense causeways, edge rooms and target territory', () => {
-  const base = makeProceduralFloorSpec(61_061, -46);
-  const spec = {
-    ...base,
-    anomalyId: 'bad_apple_world' as const,
-    danger: 5 as const,
-    title: `bad apple!: ${base.title}`,
-  };
-  assert.equal(spec.geometryId, 'sump_causeways');
-  assert.equal(spec.majorityId, 'cultists');
-  assert.equal(spec.anomalyId, 'bad_apple_world');
-  assert.equal(spec.danger, 5);
-
-  const gen = timedProceduralSpec(spec, 'genfix_097 bad apple sump cultists seed=61061 z-46');
-  const audit = reachabilityAudit(gen);
-  const dryReachable = dryReachableFromSpawn(gen);
-  const reachable = countReachableCells(audit.reachable);
-  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
-  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
-  const edgeBooths = gen.world.rooms.filter(room => room.name.startsWith('Боковой отсек эстакады'));
-  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
-  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
-  const dryEdgeBooths = edgeBooths.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
-  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
-  const badAppleRoom = gen.world.rooms.find(room => room.name.startsWith('Bad Apple!'));
-  const hqAnchors = territoryHqAnchors(gen.world);
-  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
-  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
-  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
-  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
-  const ownTerritoryNpcs = npcs.filter(entity => {
-    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
-    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
-  });
-  let waterCells = 0;
-  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
-
-  assert.equal(gen.world.rooms.length >= 620, true, `rooms ${gen.world.rooms.length}`);
-  assert.equal(gen.world.doors.size >= 700, true, `doors ${gen.world.doors.size}`);
-  assert.equal(reachable >= 185_000, true, `reachable ${reachable}`);
-  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
-  assert.equal(waterCells >= 80_000, true, `water cells ${waterCells}`);
-  assert.equal(smallRooms.length >= 430, true, `small rooms ${smallRooms.length}`);
-  assert.equal(stations.length >= 80, true, `sump stations ${stations.length}`);
-  assert.equal(microRooms.length >= 300, true, `sump micro rooms ${microRooms.length}`);
-  assert.equal(edgeBooths.length >= 100, true, `edge booths ${edgeBooths.length}`);
-  assert.equal(dryStations.length >= 50, true, `dry stations ${dryStations.length}`);
-  assert.equal(dryMicroRooms.length >= 160, true, `dry micro rooms ${dryMicroRooms.length}`);
-  assert.equal(dryEdgeBooths.length >= 80, true, `dry edge booths ${dryEdgeBooths.length}`);
-  assert.equal(badAppleRoom?.w, BAD_APPLE_WIDTH);
-  assert.equal(badAppleRoom?.h, BAD_APPLE_HEIGHT);
-  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
-  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
-  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
-  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
-
-  for (const owner of HUMAN_TERRITORY_OWNERS) {
-    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
-    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
-    const anchor = hqAnchors.find(item => item.owner === owner);
-    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
-    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
-    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
-    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
-  }
-  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.16) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
-  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.12) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
-  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.40) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
-  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
-  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.24) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
-  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
-});
-
 testGenerationMatrix('genfix 092 sump rail wild floor has station yards, micro rooms and target territory', () => {
   const spec = makeProceduralFloorSpec(61_061, -41);
   assert.equal(spec.geometryId, 'sump_causeways');
@@ -4927,78 +4838,6 @@ testGenerationMatrix('genfix 094 sump mushroom citizens floor has dense causeway
   assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
   assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.12) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
   assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.75, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
-});
-
-testBadAppleExperiment('genfix 096 procedural sump bad apple wild floor fills blank spans from HQ territory', () => {
-  const base = makeProceduralFloorSpec(61_061, -45);
-  const spec = {
-    ...base,
-    anomalyId: 'bad_apple_world' as const,
-    danger: 5 as const,
-    title: `bad apple!: ${base.title}`,
-  };
-  assert.equal(spec.geometryId, 'sump_causeways');
-  assert.equal(spec.majorityId, 'wild');
-  assert.equal(spec.anomalyId, 'bad_apple_world');
-  assert.equal(spec.danger, 5);
-
-  const gen = timedProceduralSpec(spec, 'genfix_096 sump bad apple wild seed=61061 z-45');
-  const audit = reachabilityAudit(gen);
-  const dryReachable = dryReachableFromSpawn(gen);
-  const reachable = countReachableCells(audit.reachable);
-  const stations = gen.world.rooms.filter(room => room.name.startsWith('Сухая станция эстакады'));
-  const microRooms = gen.world.rooms.filter(room => room.name.startsWith('Боковая будка эстакады'));
-  const dryStations = stations.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
-  const dryMicroRooms = microRooms.filter(room => roomHasMaskCell(gen.world, dryReachable, room));
-  const smallRooms = gen.world.rooms.filter(room => room.w * room.h <= 72);
-  const badAppleRooms = gen.world.rooms.filter(room => room.name.startsWith('Bad Apple!'));
-  const hqAnchors = territoryHqAnchors(gen.world);
-  const hqOwners = new Set(hqAnchors.map(anchor => anchor.owner));
-  const hqRooms = hqAnchors.map(anchor => gen.world.rooms[anchor.roomId]).filter(room => room?.type === RoomType.HQ);
-  const supportRooms = gen.world.rooms.filter(room => room.name.includes('штаба') && room.type !== RoomType.HQ);
-  const territoryCounts = new Map(countTerritoryCells(gen.world).map(row => [row.owner, row.cells]));
-  const share = (owner: ZoneFaction): number => (territoryCounts.get(owner) ?? 0) / (W * W);
-  const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
-  const ownTerritoryNpcs = npcs.filter(entity => {
-    const ci = gen.world.idx(Math.floor(entity.x), Math.floor(entity.y));
-    return territoryOwnerToFaction(territoryOwnerAtIndex(gen.world, ci)) === entity.faction;
-  });
-  let waterCells = 0;
-  for (const cell of gen.world.cells) if (cell === Cell.WATER) waterCells++;
-
-  assert.equal(gen.world.rooms.length >= 540, true, `rooms ${gen.world.rooms.length}`);
-  assert.equal(gen.world.doors.size >= 620, true, `doors ${gen.world.doors.size}`);
-  assert.equal(reachable >= 175_000, true, `reachable ${reachable}`);
-  assert.equal(reachableBucketCount(gen.world, audit.reachable, 128), 64);
-  assert.equal(waterCells >= 75_000, true, `water cells ${waterCells}`);
-  assert.equal(stations.length >= 90, true, `sump stations ${stations.length}`);
-  assert.equal(microRooms.length >= 330, true, `sump micro rooms ${microRooms.length}`);
-  assert.equal(dryStations.length >= 55, true, `dry stations ${dryStations.length}`);
-  assert.equal(dryMicroRooms.length >= 160, true, `dry micro rooms ${dryMicroRooms.length}`);
-  assert.equal(smallRooms.length >= 340, true, `small rooms ${smallRooms.length}`);
-  assert.equal(badAppleRooms.length >= 1, true, 'bad apple room');
-  assert.equal(hasReachableLift(gen, audit, LiftDirection.UP), true);
-  assert.equal(hasReachableLift(gen, audit, LiftDirection.DOWN), true);
-  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.UP), true);
-  assert.equal(hasDryReachableLift(gen, dryReachable, LiftDirection.DOWN), true);
-
-  for (const owner of HUMAN_TERRITORY_OWNERS) {
-    assert.equal(hqOwners.has(owner), true, `missing HQ owner ${ZoneFaction[owner]}`);
-    assert.equal((territoryCounts.get(owner) ?? 0) > 0, true, `empty territory ${ZoneFaction[owner]}`);
-    const anchor = hqAnchors.find(item => item.owner === owner);
-    const room = anchor ? gen.world.rooms[anchor.roomId] : undefined;
-    assert.equal(room?.type, RoomType.HQ, `HQ room type ${ZoneFaction[owner]}`);
-    assert.equal(room?.sealed, true, `HQ sealed ${ZoneFaction[owner]}`);
-    assert.equal(room?.doors.some(doorIdx => gen.world.doors.get(doorIdx)?.state === DoorState.HERMETIC_OPEN), true, `HQ hermetic door ${ZoneFaction[owner]}`);
-  }
-  assert.equal(hqRooms.length >= HUMAN_TERRITORY_OWNERS.length, true, `HQ rooms ${hqRooms.length}`);
-  assert.equal(supportRooms.length >= 15, true, `HQ support rooms ${supportRooms.length}`);
-  assert.equal(Math.abs(share(ZoneFaction.CITIZEN) - 0.17) <= 0.02, true, `citizen share ${share(ZoneFaction.CITIZEN)}`);
-  assert.equal(Math.abs(share(ZoneFaction.LIQUIDATOR) - 0.13) <= 0.02, true, `liquidator share ${share(ZoneFaction.LIQUIDATOR)}`);
-  assert.equal(Math.abs(share(ZoneFaction.CULTIST) - 0.12) <= 0.02, true, `cultist share ${share(ZoneFaction.CULTIST)}`);
-  assert.equal(Math.abs(share(ZoneFaction.SCIENTIST) - 0.08) <= 0.02, true, `scientist share ${share(ZoneFaction.SCIENTIST)}`);
-  assert.equal(Math.abs(share(ZoneFaction.WILD) - 0.50) <= 0.02, true, `wild share ${share(ZoneFaction.WILD)}`);
-  assert.equal(npcs.length === 0 || ownTerritoryNpcs.length / npcs.length >= 0.8, true, `own territory NPC share ${npcs.length ? ownTerritoryNpcs.length / npcs.length : 1}`);
 });
 
 testGenerationMatrix('genfix 086 sump fractal citizens floor has filled causeways and target territory', () => {
@@ -5393,8 +5232,10 @@ testGenerationMatrix('podad ships as a denser-than-Hell monster floor with gated
   assert.equal(npcs.length <= 60, true);
   assert.equal(monsters.length <= profile.monsterTarget, true);
   assert.equal(monsters.length >= profile.monsterTarget - 16, true);
-  assert.equal(monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
-  assert.equal(monsters.length >= ACTIVE_ACTOR_SOFT_LIMIT - 16, true);
+  // Подад набивает бюджет СВОЕЙ высоты целиком, но мягкого предела не касается:
+  // потолок обязан остаться свободным под рантайм-спавн.
+  assert.equal(monsters.length < ACTIVE_ACTOR_SOFT_LIMIT, true);
+  assert.equal(monsters.length >= floorPopulationBudget(route.z) - 16, true);
   assert.equal(monsters.length <= ENTITY_SOFT_LIMITS[EntityType.MONSTER], true);
   assert.equal(heralds.length, 3);
   assert.equal(nonHeraldRareMonsters.length, 0);
@@ -5491,7 +5332,9 @@ test('design floor population profiles follow route density curve and caps', () 
   assert.equal(profiles.underhell.monsterTarget >= 3000 && profiles.underhell.monsterTarget <= ACTIVE_ACTOR_SOFT_LIMIT, true, `underhell monsters ${profiles.underhell.monsterTarget}`);
   assert.equal(profiles.underhell.npcNoun, 'ветеран');
   assert.deepEqual(profiles.underhell.npcFactions.map(item => item.value), [Faction.LIQUIDATOR, Faction.CULTIST]);
-  assert.equal(profiles.podad.monsterTarget, ACTIVE_ACTOR_SOFT_LIMIT);
+  const podadRoute = DESIGN_FLOOR_ROUTES.find(def => def.id === 'podad')!;
+  assert.equal(profiles.podad.monsterTarget, floorPopulationBudget(podadRoute.z));
+  assert.equal(profiles.podad.monsterTarget < ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal((profiles.podad.monsterPlacement.anchors?.length ?? 0) >= 5, true);
   assert.equal(profiles.podad.monsterTags.includes('living_tunnels'), true);
   assert.equal(profiles.podad.monsterTags.includes('section_shift'), true);
@@ -5863,7 +5706,10 @@ testGenerationMatrix('floor 69 uses the shared field as an adult social-debt rou
   // срабатывает ни разу: 0 работниц вместо ~300+, и profile.npcNoun стал мёртвым
   // полем во всех 50 профилях. Дополнительно geometry.ts:30 требует !entity.id —
   // истинно только для id 0.
-  assert.equal(floor69FemaleSprites.length >= 300, true);
+  // Порог опущен вместе с бюджетом населения (он больше не равен мягкому
+  // пределу, а идёт кривой по |z|): толпа этажа 2762 → 2143, работниц 367 → 285.
+  // Сам сторож цел — он ловит НОЛЬ работниц, то есть неработающий промоушен.
+  assert.equal(floor69FemaleSprites.length >= 256, true, `floor_69 workers ${floor69FemaleSprites.length}`);
   assert.equal(floor69FemaleSprites.length, generatedWorkers.length);
   assert.equal(floor69FemaleSprites.every(e =>
     e.isFemale === true &&
@@ -6379,166 +6225,6 @@ testGenerationMatrix('living tunnels anomaly seeds roots and mutates bounded cel
   assert.equal(gen.world.cells[gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))], Cell.FLOOR);
 });
 
-test('bad apple frame pack decodes 144x108 binary frames', async () => {
-  const frames = await import('../src/data/bad_apple_frames');
-  assert.equal(frames.BAD_APPLE_WIDTH, BAD_APPLE_WIDTH);
-  assert.equal(frames.BAD_APPLE_HEIGHT, BAD_APPLE_HEIGHT);
-
-  const pixels = new Uint8Array(frames.BAD_APPLE_WIDTH * frames.BAD_APPLE_HEIGHT);
-  frames.drawBadAppleFrame(pixels, 60);
-
-  let black = 0;
-  for (const px of pixels) {
-    assert.equal(px === 0 || px === 1, true);
-    black += px;
-  }
-
-  assert.equal(frames.BAD_APPLE_WIDTH, 144);
-  assert.equal(frames.BAD_APPLE_HEIGHT, 108);
-  assert.equal(black > 0 && black < pixels.length, true);
-});
-
-testBadAppleExperiment('bad apple anomaly stamps an honest 144x108 map rectangle', () => {
-  const base = makeProceduralFloorSpec(777, 3);
-  const spec = {
-    ...base,
-    anomalyId: 'bad_apple_world' as const,
-    danger: Math.max(3, base.danger) as typeof base.danger,
-    title: `bad apple!: ${base.title}`,
-  };
-  const gen = timedProceduralSpec(spec, 'forced bad apple stamp seed=777');
-  const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
-
-  assert.equal(!!room, true);
-  assert.equal(room?.w, BAD_APPLE_WIDTH);
-  assert.equal(room?.h, BAD_APPLE_HEIGHT);
-  assert.equal(gen.world.cells[gen.world.idx(Math.floor(gen.spawnX), Math.floor(gen.spawnY))], Cell.FLOOR);
-
-  let owned = 0;
-  for (let dy = 0; dy < BAD_APPLE_HEIGHT; dy++) {
-    for (let dx = 0; dx < BAD_APPLE_WIDTH; dx++) {
-      const ci = gen.world.idx((room?.x ?? 0) + dx, (room?.y ?? 0) + dy);
-      if (gen.world.roomMap[ci] === room?.id) owned++;
-    }
-  }
-  assert.equal(owned, BAD_APPLE_WIDTH * BAD_APPLE_HEIGHT);
-});
-
-testBadAppleExperiment('bad apple runtime advances the map rectangle into white floor cells', () => {
-  const base = makeProceduralFloorSpec(778, 3);
-  const spec = {
-    ...base,
-    anomalyId: 'bad_apple_world' as const,
-    danger: Math.max(3, base.danger) as typeof base.danger,
-    title: `bad apple!: ${base.title}`,
-  };
-  const gen = timedProceduralSpec(spec, 'forced bad apple runtime seed=778');
-  const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
-  assert.equal(!!room, true);
-
-  const state = makeGameState({ currentZ: spec.z });
-  const player = {
-    id: 999999,
-    type: EntityType.NPC, persistentNpcId: 'player',
-    x: gen.spawnX,
-    y: gen.spawnY,
-    angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: 3,
-    sprite: 0,
-    hp: 100,
-    maxHp: 100,
-  };
-  const beforeVersion = gen.world.cellVersion;
-  updateBadAppleWorldAnomaly(gen.world, player, state, 0.4);
-
-  let whiteFloor = 0;
-  for (let dy = 0; dy < BAD_APPLE_HEIGHT; dy++) {
-    for (let dx = 0; dx < BAD_APPLE_WIDTH; dx++) {
-      const ci = gen.world.idx((room?.x ?? 0) + dx, (room?.y ?? 0) + dy);
-      if (gen.world.cells[ci] === Cell.FLOOR) whiteFloor++;
-    }
-  }
-
-  assert.equal(whiteFloor > 0, true);
-  assert.equal(gen.world.cellVersion > beforeVersion, true);
-});
-
-testBadAppleExperiment('bad apple placement searches past route-critical cells before stamping', () => {
-  const world = new World();
-  const centerX = 512;
-  const centerY = 512;
-  const hardCells: number[] = [];
-  const offsets = [
-    { x: 10, y: -Math.floor(BAD_APPLE_HEIGHT / 2) },
-    { x: -BAD_APPLE_WIDTH - 10, y: -Math.floor(BAD_APPLE_HEIGHT / 2) },
-    { x: -Math.floor(BAD_APPLE_WIDTH / 2), y: 10 },
-    { x: -Math.floor(BAD_APPLE_WIDTH / 2), y: -BAD_APPLE_HEIGHT - 10 },
-    { x: 36, y: -Math.floor(BAD_APPLE_HEIGHT / 2) },
-    { x: -BAD_APPLE_WIDTH - 36, y: -Math.floor(BAD_APPLE_HEIGHT / 2) },
-  ];
-  for (const offset of offsets) {
-    const idx = world.idx(centerX + offset.x + 5, centerY + offset.y + 5);
-    world.cells[idx] = Cell.LIFT;
-    world.features[idx] = Feature.LIFT_BUTTON;
-    hardCells.push(idx);
-  }
-
-  const site = findBadAppleSiteNear(world, centerX, centerY);
-  const placement = stampBadAppleWorld(world, site.x, site.y, { x: centerX, y: centerY });
-
-  assert.equal(placement.roomId >= 0, true);
-  for (const idx of hardCells) {
-    assert.equal(world.cells[idx], Cell.LIFT);
-    assert.equal(world.features[idx], Feature.LIFT_BUTTON);
-  }
-});
-
-testBadAppleExperiment('bad apple projector toggles animation without breaking route reachability', () => {
-  const base = makeProceduralFloorSpec(780, 3);
-  const spec = {
-    ...base,
-    anomalyId: 'bad_apple_world' as const,
-    danger: Math.max(3, base.danger) as typeof base.danger,
-    title: `bad apple!: ${base.title}`,
-  };
-  const gen = timedProceduralSpec(spec, 'forced bad apple toggle seed=780');
-  const room = gen.world.rooms.find(r => r.name.startsWith('Bad Apple!'));
-  if (!room) throw new Error('Bad Apple room missing');
-  const match = /\[bad_apple:-?\d+,-?\d+,\d+,\d+,\d+,(0|1),(-?\d+)\]/.exec(room.name);
-  const projectorIdx = match ? Number(match[2]) : -1;
-  assert.equal(projectorIdx >= 0, true);
-
-  const state = makeGameState({ currentZ: spec.z });
-  const player = makeTestPlayer({
-    id: 999999,
-    x: projectorIdx % W + 0.5,
-    y: ((projectorIdx / W) | 0) + 0.5,
-    hp: 100,
-    maxHp: 100,
-    speed: 3,
-  });
-  const reachableBefore = reachabilityAudit(gen);
-  assert.equal(hasReachableLift(gen, reachableBefore, LiftDirection.UP), true);
-  assert.equal(hasReachableLift(gen, reachableBefore, LiftDirection.DOWN), true);
-
-  assert.equal(tryUseBadAppleWorldAnomaly(gen.world, player, state, player.x, player.y), true);
-  const pausedVersion = gen.world.cellVersion;
-  updateBadAppleWorldAnomaly(gen.world, player, state, 1);
-  assert.equal(gen.world.cellVersion, pausedVersion);
-  const reachablePaused = reachabilityAudit(gen);
-  assert.equal(hasReachableLift(gen, reachablePaused, LiftDirection.UP), true);
-  assert.equal(hasReachableLift(gen, reachablePaused, LiftDirection.DOWN), true);
-
-  assert.equal(tryUseBadAppleWorldAnomaly(gen.world, player, state, player.x, player.y), true);
-  updateBadAppleWorldAnomaly(gen.world, player, state, 0.4);
-  assert.equal(gen.world.cellVersion > pausedVersion, true);
-  const reachableActive = reachabilityAudit(gen);
-  assert.equal(hasReachableLift(gen, reachableActive, LiftDirection.UP), true);
-  assert.equal(hasReachableLift(gen, reachableActive, LiftDirection.DOWN), true);
-});
-
 testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient zero infection', () => {
   const base = makeProceduralFloorSpec(779, -35);
   const spec = {
@@ -6579,7 +6265,12 @@ testGenerationMatrix('zombie apocalypse anomaly seeds a dense crowd and patient 
 
   assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(npcs.length >= budget.npcs - 16, true);
-  assert.equal(npcs.length <= budget.npcs + 16, true);
+  // Верхнего пина «ровно фоновый бюджет» здесь больше нет. Толпа заражаемых
+  // набирается самой аномалией из ОСТАВШИХСЯ слотов этажа (`crowdCount` =
+  // `entitySpawnSlots`), и пока общий бюджет был равен мягкому пределу,
+  // свободных слотов не оставалось — толпы не появлялось вовсе, а верхняя
+  // граница охраняла именно этот дефект.
+  assert.equal(npcs.length > budget.npcs, true, `zombie crowd ${npcs.length} vs ambient budget ${budget.npcs}`);
   // Толпа для заражения: аномалии нужна реальная масса живых, а не горстка.
   // Точное число уже прибито к бюджету двумя ассертами выше — здесь только
   // нижний порог «это толпа».

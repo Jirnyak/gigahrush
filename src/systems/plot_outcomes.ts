@@ -123,7 +123,9 @@ function dropRuleMatches(raw: unknown, ctx: StoryDeathContext): raw is StoryDrop
   if (source.killer === 'player' && !ctx.killerIsPlayer) return false;
   if (Array.isArray(source.entityTypes) && !source.entityTypes.includes(ctx.killed.type)) return false;
   if (Array.isArray(source.monsterKinds) && !numericArrayIncludes(source.monsterKinds, ctx.killed.monsterKind)) return false;
-  if (Array.isArray(source.ids) && !stringArrayIncludes(source.ids, getPlotNpcStringId(ctx.killed.alifeId!) ?? '')) return false;
+  // Поле объявлено как `plotNpcIds`; матчер годами читал несуществующее `source.ids`,
+  // поэтому фильтр по личности не применялся ни разу.
+  if (Array.isArray(source.plotNpcIds) && !stringArrayIncludes(source.plotNpcIds, getPlotNpcStringId(ctx.killed.alifeId!) ?? '')) return false;
   if (Array.isArray(source.actorPackageIds) && !stringArrayIncludes(source.actorPackageIds, entityPackageId(ctx.killed))) return false;
   if (Array.isArray(source.factions) && !numericArrayIncludes(source.factions, ctx.killed.faction)) return false;
   return conditionMatches(raw.condition as StoryOutcomeCondition | undefined, ctx.state);
@@ -174,6 +176,24 @@ export function spawnStoryDeathDrops(
     });
     spawned++;
     if (drop.rule.message) msgs.push(msg(drop.rule.message, state.time, drop.rule.messageColor ?? '#c8f'));
+    // Правило объявляет severity/privacy/eventTags наравне с предметным исходом ниже,
+    // но публиковать их было некому: сюжетный дроп молча падал на пол. Свой тип события
+    // под это не нужен — с точки зрения свидетеля с тела упал предмет.
+    const def = ITEMS[drop.itemId];
+    publishEvent(state, {
+      type: 'npc_drop_item',
+      actorId: killed.id,
+      actorName: killed.name ?? 'Тело',
+      actorFaction: killed.faction,
+      itemId: drop.itemId,
+      itemName: def?.name ?? drop.itemId,
+      itemCount: drop.count,
+      itemValue: def?.value ?? 0,
+      severity: drop.rule.severity ?? 3,
+      privacy: drop.rule.privacy ?? 'local',
+      tags: ['plot_outcome', 'story_drop', ...(drop.rule.eventTags ?? [])],
+      data: { ruleId: drop.rule.id },
+    });
   }
   return spawned;
 }

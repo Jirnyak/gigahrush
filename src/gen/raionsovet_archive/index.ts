@@ -33,16 +33,23 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
     world.floorTex[i] = Tex.F_MARBLE_TILE;
   }
 
-  let roomId = 0;
-  const waiting = createArchiveRoom(world, roomId++, RoomType.COMMON, 500, 500, 24, 14, 'Райсоветская очередь', Tex.MARBLE, Tex.F_RED_CARPET);
-  const clerk = createArchiveRoom(world, roomId++, RoomType.OFFICE, 500, 487, 24, 12, 'Окна выдачи маршрутов');
-  const catalog = createArchiveRoom(world, roomId++, RoomType.STORAGE, 525, 500, 22, 14, 'Каталожные коридоры', Tex.MARBLE, Tex.F_PARQUET);
-  const shelves = createArchiveRoom(world, roomId++, RoomType.STORAGE, 548, 496, 20, 22, 'Закрытые жилые полки', Tex.PANEL, Tex.F_WOOD);
-  const stamp = createArchiveRoom(world, roomId++, RoomType.OFFICE, 500, 515, 18, 12, 'Комната печатей');
-  const fire = createArchiveRoom(world, roomId++, RoomType.STORAGE, 479, 500, 20, 14, 'Западные зараженные стеллажи', Tex.ROTTEN, Tex.F_CONCRETE);
-  const heir = createArchiveRoom(world, roomId++, RoomType.OFFICE, 519, 515, 17, 12, 'Кабинет ложного наследника');
-  const market = createArchiveRoom(world, roomId++, RoomType.OFFICE, 537, 515, 10, 12, 'Лицензионная ниша рынка 88');
-  const checker = createArchiveRoom(world, roomId++, RoomType.OFFICE, 525, 487, 18, 12, 'Проверяющий пост');
+  /* Слот комнаты спрашивается у массива, а не считается своим счётчиком.
+   *
+   * `room.id` — это ИНДЕКС в `world.rooms` (замок `tests/rooms-dense.test.ts`), а
+   * `createArchiveRoom` через `stampRoom` кладёт комнату по индексу и ЗАТИРАЕТ чужую запись
+   * молча. Свой счётчик с нуля совпадал с длиной массива только потому, что авторское ядро
+   * архива работает первым по пустому миру; расширение (`stampOwnedArchiveRoom` и макро-залы
+   * в `geometry.ts`) длину уже спрашивает. Два счётчика на один массив держатся на порядке
+   * стадий — а он не обещан. */
+  const waiting = createArchiveRoom(world, world.rooms.length, RoomType.COMMON, 500, 500, 24, 14, 'Райсоветская очередь', Tex.MARBLE, Tex.F_RED_CARPET);
+  const clerk = createArchiveRoom(world, world.rooms.length, RoomType.OFFICE, 500, 487, 24, 12, 'Окна выдачи маршрутов');
+  const catalog = createArchiveRoom(world, world.rooms.length, RoomType.STORAGE, 525, 500, 22, 14, 'Каталожные коридоры', Tex.MARBLE, Tex.F_PARQUET);
+  const shelves = createArchiveRoom(world, world.rooms.length, RoomType.STORAGE, 548, 496, 20, 22, 'Закрытые жилые полки', Tex.PANEL, Tex.F_WOOD);
+  const stamp = createArchiveRoom(world, world.rooms.length, RoomType.OFFICE, 500, 515, 18, 12, 'Комната печатей');
+  const fire = createArchiveRoom(world, world.rooms.length, RoomType.STORAGE, 479, 500, 20, 14, 'Западные зараженные стеллажи', Tex.ROTTEN, Tex.F_CONCRETE);
+  const heir = createArchiveRoom(world, world.rooms.length, RoomType.OFFICE, 519, 515, 17, 12, 'Кабинет ложного наследника');
+  const market = createArchiveRoom(world, world.rooms.length, RoomType.OFFICE, 537, 515, 10, 12, 'Лицензионная ниша рынка 88');
+  const checker = createArchiveRoom(world, world.rooms.length, RoomType.OFFICE, 525, 487, 18, 12, 'Проверяющий пост');
   const rooms: ArchiveRooms = { waiting, clerk, catalog, shelves, stamp, fire, heir, market, checker };
 
   placeDoor(world, waiting, clerk, '', false);

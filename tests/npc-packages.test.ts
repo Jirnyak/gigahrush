@@ -224,7 +224,7 @@ test('full NPC package covers bio, speech, social, RPG, visual and loadout field
       speed: 1.1,
       isTraveler: false,
       canGiveQuest: true,
-      specialRoutineId: 'tutorial_lock_one_hour',
+      specialRoutineId: 'starter_post_shift',
       assignedRoomId: 1,
       initialKills: 0,
     },

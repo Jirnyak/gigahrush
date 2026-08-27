@@ -58,7 +58,6 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
     z: -6,
     severity: 3,
     privacy: 'public',
-    truth: 'fact',
     tags: [],
     ...overrides,
   };

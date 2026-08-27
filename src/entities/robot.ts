@@ -3,7 +3,7 @@
 /*   of armored blocks, sensor clusters, welded plates, treads.   */
 /*   Shoots plasma bolts. Each robot is procedurally unique.      */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -14,6 +14,7 @@ export const DEF: MonsterDef = {
   speed: 1.8,
   dmg: 18,
   attackRate: 1.8,
+  damageType: DamageType.ENERGY,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 9,

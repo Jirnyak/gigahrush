@@ -330,7 +330,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -341,7 +341,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -366,7 +365,6 @@ function dressPost(ctx: MaintContentCtx, room: Room): void {
 }
 
 function addSampleContainers(ctx: MaintContentCtx, room: Room, ownerNpcId: number): void {
-  // @ts-ignore
   addContainer(ctx, room, room.x + 2, room.y + room.h - 4, {
     kind: ContainerKind.MEDICAL_CABINET,
     name: 'Выдачный ящик порожней тары НИИ',
@@ -382,7 +380,6 @@ function addSampleContainers(ctx: MaintContentCtx, room: Room, ownerNpcId: numbe
     tags: [CONTENT_TAG, 'nii', 'slime', 'sample', 'equipment', 'public', 'issue'],
   });
 
-  // @ts-ignore
   addContainer(ctx, room, room.x + room.w - 3, room.y + 3, {
     kind: ContainerKind.MEDICAL_CABINET,
     name: 'Шкаф проб Боковой, форма 728/01-Д',

@@ -470,7 +470,6 @@ function spawnWorkshopNpcs(ctx: MaintContentCtx, post: Room, shop: Room, output:
 }
 
 function addWorkshopContainers(ctx: MaintContentCtx, shop: Room, output: Room, ownerNpcId: number): void {
-  // @ts-ignore
   addContainer(ctx, shop, shop.x + 7, shop.y + shop.h - 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Выходной бункер станка под надзором',
@@ -490,7 +489,6 @@ function addWorkshopContainers(ctx: MaintContentCtx, shop: Room, output: Room, o
     factoryId: 'metal_shop',
     tags: ['tools', 'faction', 'production_output', 'metal_shop', AG83_TAG, 'cult_access'],
   });
-  // @ts-ignore
   addContainer(ctx, output, output.x + output.w - 3, output.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Культовый выходной ящик станка',
@@ -523,7 +521,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -532,7 +530,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],

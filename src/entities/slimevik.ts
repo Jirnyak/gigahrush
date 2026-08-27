@@ -1,6 +1,6 @@
 /* ── Slimevik — neutral slime scavenger/symbiote ─────────────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.05,
   dmg: 2,
   attackRate: 1.8,
+  damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['slimeScavenger'],
   counterplay: 'Он глотает всё брошенное на пол — этим же его и уводят: киньте приманку в сторону. Хотите своё обратно — убейте и обыщите.',

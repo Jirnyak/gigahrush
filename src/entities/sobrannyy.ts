@@ -1,6 +1,6 @@
 /* ── Sobrannyy chelovek: composite post-samosbor brute ───────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.18,
   dmg: 24,
   attackRate: 3.1,
+  damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['meatGrowth'],
   counterplay: 'Не будите его без выхода: ранний огонь, токсичная слизь и герметичный порог срывают погоню, а частая стрельба раздувает мясо только до ограниченного предела.',

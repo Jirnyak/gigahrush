@@ -1,7 +1,7 @@
 /* ── Creator (Творец) — late VOID green contour encounter ───── */
 /*   Local accounting error with ranged AoE splash attacks.       */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -12,6 +12,7 @@ export const DEF: MonsterDef = {
   speed: 1.05,
   dmg: 44,
   attackRate: 2.35,
+  damageType: DamageType.ENERGY,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 7.5,

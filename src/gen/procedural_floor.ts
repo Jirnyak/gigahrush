@@ -22,7 +22,6 @@ import {
   type ItemDef,
   type RailTrainTrack,
   type Room,
-  type TerritoryOwner,
   type ContainerAccess,
   type WorldContainer,
 } from '../core/types';
@@ -62,7 +61,6 @@ import {
   majorityById,
   proceduralFloorAnomalyRoutePressure,
   proceduralFloorRoutePressureLevel,
-  // @ts-ignore
   proceduralLootValueCap,
   type ProceduralFloorSpec,
   type FloorGeometryDef,
@@ -83,7 +81,6 @@ import { addRailTrainRoute } from '../systems/rail_trains';
 import { registerRouteCue } from '../systems/route_cues';
 import { placeEmergencyPanel } from '../systems/emergency_panels';
 import { HLADON_COLD_SHELL_RADIUS } from '../systems/hladon';
-import { relightBadAppleWorld } from '../systems/procedural_anomalies/bad_apple_world';
 import {
   buildWalkablePlacementMap,
   canPlaceRoom,
@@ -113,7 +110,7 @@ import { removeNpcEntities } from './entity_filters';
 import { registerProceduralAnomalyPlacement } from './procedural_anomalies/common';
 import { sampleNaturalPopulationCells, type NaturalPopulationProfile, type PlacementFieldAnchor } from './population_placement';
 import { measureAndRecordGeometryMetrics, type GeometryAnchor } from './geometry_metrics';
-import { generateWilsonMaze, validateMazeGraph, type MazeGraph, type MazeGraphEdge, type MazeGraphNode } from './maze_graph';
+import { type MazeGraph } from './maze_graph';
 import { placeDecisionTriangle } from './decision_triangles';
 import { maybePlaceBrokenFixture } from './interactive_fixtures';
 import {
@@ -188,32 +185,7 @@ const ATTIC_REPAIR_CACHE_ITEMS: readonly Item[] = [
   { defId: 'wire_coil', count: 1 },
   { defId: 'duct_tape', count: 2 },
 ];
-const ARCHIVE_WARREN_GRID = 15;
-const ARCHIVE_WARREN_ORIGIN = 64;
-const ARCHIVE_WARREN_CELL = 64;
 const ARCHIVE_WARREN_KEY_ID = 'container_key_label';
-const ARCHIVE_WARREN_MICRO_OFFSETS = [
-  { dx: -22, dy: -22 },
-  { dx: 18, dy: -22 },
-  { dx: -22, dy: 18 },
-  { dx: 18, dy: 18 },
-] as const;
-const ARCHIVE_WARREN_EDGE_ALCOVE_OFFSETS = [0.36, 0.64] as const;
-const ARCHIVE_WARREN_HQ_OWNERS = [
-  ZoneFaction.CITIZEN,
-  ZoneFaction.LIQUIDATOR,
-  ZoneFaction.CULTIST,
-  ZoneFaction.SCIENTIST,
-  ZoneFaction.WILD,
-] as const;
-const ARCHIVE_WARREN_HQ_TARGETS: Readonly<Record<TerritoryOwner, { gx: number; gy: number }>> = {
-  [ZoneFaction.CITIZEN]: { gx: 7, gy: 7 },
-  [ZoneFaction.LIQUIDATOR]: { gx: 2, gy: 2 },
-  [ZoneFaction.CULTIST]: { gx: 12, gy: 12 },
-  [ZoneFaction.SAMOSBOR]: { gx: 7, gy: 12 },
-  [ZoneFaction.WILD]: { gx: 2, gy: 12 },
-  [ZoneFaction.SCIENTIST]: { gx: 12, gy: 2 },
-};
 const ARCHIVE_WARREN_LANDMARK_NAMES = [
   'Портретная опись',
   'Клетка клерка',
@@ -358,21 +330,6 @@ function isIndustrialGeometry(id: ProceduralFloorSpec['geometryId']): boolean {
     || id === 'service_spines'
     || id === 'attic_weatherworks'
     || id === 'sump_causeways';
-}
-
-// @ts-expect-error TS6133 — preserved as reference; replaced by recipe system
-function roomSize(type: RoomType, industrial: boolean): { w: number; h: number } {
-  if (type === RoomType.CORRIDOR) {
-    return chance(0.5)
-      ? { w: irng(18, 42), h: irng(3, 5) }
-      : { w: irng(3, 5), h: irng(18, 42) };
-  }
-  if (type === RoomType.PRODUCTION) return { w: irng(12, industrial ? 30 : 22), h: irng(9, industrial ? 24 : 18) };
-  if (type === RoomType.COMMON) return { w: irng(10, 24), h: irng(8, 20) };
-  if (type === RoomType.OFFICE) return { w: irng(7, 14), h: irng(6, 12) };
-  if (type === RoomType.BATHROOM) return { w: irng(4, 7), h: irng(4, 7) };
-  if (type === RoomType.KITCHEN) return { w: irng(5, 9), h: irng(5, 9) };
-  return { w: irng(5, 12), h: irng(5, 11) };
 }
 
 interface ProceduralMacroProfile {
@@ -1721,558 +1678,8 @@ function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { ro
   return { rooms, spawnX: spawn.x + 0.5, spawnY: spawn.y + 0.5 };
 }
 
-function archiveGridDelta(size: number, from: number, to: number): number {
-  let delta = to - from;
-  if (delta > size / 2) delta -= size;
-  if (delta < -size / 2) delta += size;
-  return delta;
-}
-
-function archiveRoomType(node: MazeGraphNode, landmarkIndex: number): RoomType {
-  if (landmarkIndex >= 0) return landmarkIndex % 3 === 1 ? RoomType.COMMON : RoomType.OFFICE;
-  if (node.degree <= 1) return RoomType.STORAGE;
-  if (node.degree >= 3) return RoomType.COMMON;
-  return RoomType.CORRIDOR;
-}
-
-function archiveRoomSize(type: RoomType, landmarkIndex: number): { w: number; h: number } {
-  if (landmarkIndex >= 0) return type === RoomType.COMMON ? { w: 17, h: 13 } : { w: 15, h: 11 };
-  if (type === RoomType.COMMON) return { w: 13, h: 11 };
-  if (type === RoomType.STORAGE) return { w: 9, h: 9 };
-  return { w: 7, h: 7 };
-}
-
-function decorateArchiveWarrenRoom(world: World, room: Room, node: MazeGraphNode, landmarkIndex: number): void {
-  room.wallTex = Tex.MARBLE;
-  room.floorTex = landmarkIndex >= 0 ? Tex.F_GREEN_CARPET : Tex.F_PARQUET;
-  applyRoomTexture(world, room, room.wallTex, room.floorTex);
-
-  if (landmarkIndex >= 0) {
-    room.name = `${ARCHIVE_WARREN_LANDMARK_NAMES[landmarkIndex % ARCHIVE_WARREN_LANDMARK_NAMES.length]} ${room.id}`;
-    placeRoomFeature(world, room, Feature.DESK, Math.floor(room.w / 2), Math.floor(room.h / 2));
-    placeRoomFeature(world, room, Feature.SCREEN, 1, 1);
-    placeRoomFeature(world, room, Feature.LAMP, room.w - 2, 1);
-    placeRoomFeature(world, room, Feature.SHELF, 1, room.h - 2);
-    const center = roomCenter(room);
-    stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.34, 0.68, node.id * 701 + room.id, 205, 190, 142, false);
-    return;
-  }
-
-  room.name = node.degree <= 1
-    ? `Тупиковый фонд ${room.id}`
-    : node.degree >= 3
-      ? `Развилка описей ${room.id}`
-      : `Архивный ход ${room.id}`;
-  const midX = Math.floor(room.w / 2);
-  const midY = Math.floor(room.h / 2);
-  for (let dy = 1; dy < room.h - 1; dy++) {
-    for (let dx = 1; dx < room.w - 1; dx++) {
-      if (dx === midX || dy === midY) continue;
-      if (((dx + node.gx) % 3 !== 0) && ((dy + node.gy) % 4 !== 0)) continue;
-      const ci = world.idx(room.x + dx, room.y + dy);
-      if (world.features[ci] === Feature.NONE) world.features[ci] = Feature.SHELF;
-    }
-  }
-  if (node.degree <= 1) placeRoomFeature(world, room, Feature.TABLE, midX, midY);
-}
-
-function ensureArchiveLockedChords(graph: MazeGraph, targetCount: number): void {
-  let locked = graph.edges.filter(edge => edge.tag === 'locked_optional').length;
-  if (locked >= targetCount) return;
-  const candidates = graph.edges
-    .filter(edge => edge.tag === 'chord')
-    .sort((a, b) => {
-      const ad = Math.max(graph.nodes[a.a].depth, graph.nodes[a.b].depth);
-      const bd = Math.max(graph.nodes[b.a].depth, graph.nodes[b.b].depth);
-      return bd - ad;
-    });
-  for (const edge of candidates) {
-    edge.tag = 'locked_optional';
-    locked++;
-    if (locked >= targetCount) break;
-  }
-}
-
-function archiveDoorPoint(world: World, room: Room, dirX: number, dirY: number): { wx: number; wy: number; ox: number; oy: number } {
-  const cx = room.x + Math.floor(room.w / 2);
-  const cy = room.y + Math.floor(room.h / 2);
-  if (dirX > 0) return { wx: world.wrap(room.x + room.w), wy: world.wrap(cy), ox: world.wrap(room.x + room.w + 1), oy: world.wrap(cy) };
-  if (dirX < 0) return { wx: world.wrap(room.x - 1), wy: world.wrap(cy), ox: world.wrap(room.x - 2), oy: world.wrap(cy) };
-  if (dirY > 0) return { wx: world.wrap(cx), wy: world.wrap(room.y + room.h), ox: world.wrap(cx), oy: world.wrap(room.y + room.h + 1) };
-  return { wx: world.wrap(cx), wy: world.wrap(room.y - 1), ox: world.wrap(cx), oy: world.wrap(room.y - 2) };
-}
-
-function openArchiveDoor(world: World, room: Room, wx: number, wy: number, state: DoorState, keyId: string): void {
-  const idx = world.idx(wx, wy);
-  if (world.aptMask[idx] || world.hermoWall[idx] || world.cells[idx] === Cell.LIFT) return;
-  world.cells[idx] = Cell.DOOR;
-  world.wallTex[idx] = state === DoorState.LOCKED ? Tex.DOOR_METAL : Tex.DOOR_WOOD;
-  world.features[idx] = Feature.NONE;
-  const existing = world.doors.get(idx);
-  if (existing) {
-    existing.state = state;
-    existing.roomA = room.id;
-    existing.keyId = keyId;
-  } else {
-    world.doors.set(idx, { idx, state, roomA: room.id, roomB: -1, keyId, timer: 0 });
-  }
-  if (!room.doors.includes(idx)) room.doors.push(idx);
-}
-
-function carveArchiveMazeCell(world: World, x: number, y: number): void {
-  const idx = world.idx(x, y);
-  if (world.aptMask[idx] || world.hermoWall[idx] || world.cells[idx] === Cell.LIFT || world.cells[idx] === Cell.DOOR) return;
-  if (world.roomMap[idx] >= 0) return;
-  world.cells[idx] = Cell.FLOOR;
-  world.roomMap[idx] = -1;
-  world.floorTex[idx] = Tex.F_PARQUET;
-  world.wallTex[idx] = Tex.MARBLE;
-  world.features[idx] = Feature.NONE;
-}
-
-function carveArchiveMazeLine(
-  world: World,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  dirX: number,
-  _dirY: number,
-  edgeIndex: number,
-): void {
-  const horizontal = dirX !== 0;
-  const delta = horizontal ? world.delta(ax, bx) : world.delta(ay, by);
-  const step = delta >= 0 ? 1 : -1;
-  const steps = Math.abs(delta);
-  let x = world.wrap(ax);
-  let y = world.wrap(ay);
-  const side = (edgeIndex & 1) === 0 ? 1 : -1;
-
-  for (let i = 0; i <= steps; i++) {
-    carveArchiveMazeCell(world, x, y);
-    if (i > 2 && i + 2 < steps) {
-      if (horizontal) carveArchiveMazeCell(world, x, y + side);
-      else carveArchiveMazeCell(world, x + side, y);
-    }
-    if (i >= steps) continue;
-    if (horizontal) x = world.wrap(x + step);
-    else y = world.wrap(y + step);
-  }
-}
-
-function connectArchiveWarrenRooms(
-  world: World,
-  graph: MazeGraph,
-  edge: MazeGraphEdge,
-  edgeIndex: number,
-  roomsByNode: readonly Room[],
-  keyDropRoomIds: number[],
-): void {
-  const nodeA = graph.nodes[edge.a];
-  const nodeB = graph.nodes[edge.b];
-  const roomA = roomsByNode[edge.a];
-  const roomB = roomsByNode[edge.b];
-  if (!nodeA || !nodeB || !roomA || !roomB) return;
-  const dx = archiveGridDelta(graph.width, nodeA.gx, nodeB.gx);
-  const dy = archiveGridDelta(graph.height, nodeA.gy, nodeB.gy);
-  const dirX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-  const dirY = dirX === 0 ? (dy > 0 ? 1 : -1) : 0;
-  const a = archiveDoorPoint(world, roomA, dirX, dirY);
-  const b = archiveDoorPoint(world, roomB, -dirX, -dirY);
-  const locked = edge.tag === 'locked_optional';
-  const state = locked ? DoorState.LOCKED : DoorState.CLOSED;
-  const keyId = locked ? ARCHIVE_WARREN_KEY_ID : '';
-  openArchiveDoor(world, roomA, a.wx, a.wy, state, keyId);
-  openArchiveDoor(world, roomB, b.wx, b.wy, locked ? DoorState.CLOSED : state, locked ? '' : keyId);
-  carveArchiveMazeLine(world, a.ox, a.oy, b.ox, b.oy, dirX, dirY, edgeIndex);
-  if (locked) {
-    const keyNodeId = nodeA.depth <= nodeB.depth ? nodeA.id : nodeB.id;
-    keyDropRoomIds.push(roomsByNode[keyNodeId].id);
-  }
-}
-
-function archiveOwnerLabel(owner: TerritoryOwner): string {
-  if (owner === ZoneFaction.LIQUIDATOR) return 'ликвидаторов';
-  if (owner === ZoneFaction.CULTIST) return 'культистов';
-  if (owner === ZoneFaction.SCIENTIST) return 'НИИ';
-  if (owner === ZoneFaction.WILD) return 'диких';
-  return 'граждан';
-}
-
 function archiveRoomHasLandmarkName(room: Room): boolean {
   return ARCHIVE_WARREN_LANDMARK_NAMES.some(name => room.name.includes(name));
-}
-
-function archiveSupportRoomType(owner: TerritoryOwner, index: number): RoomType {
-  if (owner === ZoneFaction.LIQUIDATOR) return [RoomType.OFFICE, RoomType.STORAGE, RoomType.MEDICAL, RoomType.PRODUCTION][index % 4];
-  if (owner === ZoneFaction.CULTIST) return [RoomType.COMMON, RoomType.STORAGE, RoomType.MEDICAL, RoomType.OFFICE][index % 4];
-  if (owner === ZoneFaction.SCIENTIST) return [RoomType.MEDICAL, RoomType.OFFICE, RoomType.PRODUCTION, RoomType.STORAGE][index % 4];
-  if (owner === ZoneFaction.WILD) return [RoomType.STORAGE, RoomType.COMMON, RoomType.SMOKING, RoomType.KITCHEN][index % 4];
-  return [RoomType.KITCHEN, RoomType.COMMON, RoomType.BATHROOM, RoomType.STORAGE][index % 4];
-}
-
-function archiveMicroRoomType(node: MazeGraphNode, index: number): RoomType {
-  if (node.degree <= 1 && index < 2) return RoomType.STORAGE;
-  if (node.degree >= 3 && index === 0) return RoomType.COMMON;
-  return index % 3 === 1 ? RoomType.OFFICE : RoomType.STORAGE;
-}
-
-function decorateArchiveMicroRoom(world: World, room: Room, seed: number): void {
-  applyRoomTexture(world, room, Tex.MARBLE, room.type === RoomType.OFFICE ? Tex.F_GREEN_CARPET : Tex.F_PARQUET);
-  const midX = Math.floor(room.w / 2);
-  const midY = Math.floor(room.h / 2);
-  for (let dy = 1; dy < room.h - 1; dy++) {
-    for (let dx = 1; dx < room.w - 1; dx++) {
-      const ci = world.idx(room.x + dx, room.y + dy);
-      if (world.features[ci] !== Feature.NONE) continue;
-      if (room.type === RoomType.OFFICE && (dx === midX || dy === midY)) {
-        if (((seed + dx * 13 + dy * 17) & 3) === 0) world.features[ci] = Feature.DESK;
-        continue;
-      }
-      if ((dx + dy + seed) % 3 === 0) world.features[ci] = Feature.SHELF;
-    }
-  }
-  if (room.type === RoomType.STORAGE) placeRoomFeature(world, room, Feature.SHELF, midX, midY);
-  else if (room.type === RoomType.OFFICE) placeRoomFeature(world, room, Feature.DESK, midX, midY);
-  else placeRoomFeature(world, room, Feature.TABLE, midX, midY);
-}
-
-function decorateArchiveSupportRoom(world: World, room: Room, owner: TerritoryOwner, seed: number): void {
-  const wallTex = room.type === RoomType.HQ ? Tex.HERMO_WALL : Tex.MARBLE;
-  const floorTex = room.type === RoomType.BATHROOM ? Tex.F_TILE : room.type === RoomType.MEDICAL ? Tex.F_GREEN_CARPET : Tex.F_PARQUET;
-  applyRoomTexture(world, room, wallTex, floorTex);
-  for (let dy = 1; dy < room.h - 1; dy++) {
-    for (let dx = 1; dx < room.w - 1; dx++) {
-      const ci = world.idx(room.x + dx, room.y + dy);
-      if (world.features[ci] !== Feature.NONE) continue;
-      if (((seed + dx * 19 + dy * 23) % 5) !== 0) continue;
-      if (room.type === RoomType.KITCHEN) world.features[ci] = dx & 1 ? Feature.STOVE : Feature.SINK;
-      else if (room.type === RoomType.BATHROOM) world.features[ci] = dx & 1 ? Feature.TOILET : Feature.SINK;
-      else if (room.type === RoomType.MEDICAL || room.type === RoomType.OFFICE) world.features[ci] = Feature.DESK;
-      else if (room.type === RoomType.PRODUCTION) world.features[ci] = Feature.MACHINE;
-      else if (room.type === RoomType.COMMON) world.features[ci] = Feature.TABLE;
-      else world.features[ci] = Feature.SHELF;
-    }
-  }
-  const center = roomCenter(room);
-  stampSurfaceSplat(
-    world,
-    center.x,
-    center.y,
-    0.5,
-    0.5,
-    room.type === RoomType.HQ ? 0.42 : 0.24,
-    0.62,
-    seed ^ owner * 997,
-    owner === ZoneFaction.LIQUIDATOR ? 84 : owner === ZoneFaction.CULTIST ? 118 : owner === ZoneFaction.SCIENTIST ? 78 : 164,
-    owner === ZoneFaction.WILD ? 102 : 154,
-    owner === ZoneFaction.CITIZEN ? 112 : 142,
-    false,
-  );
-}
-
-function paintArchiveRoomTerritory(world: World, room: Room, owner: TerritoryOwner): void {
-  for (let dy = -1; dy <= room.h; dy++) {
-    for (let dx = -1; dx <= room.w; dx++) {
-      const ci = world.idx(room.x + dx, room.y + dy);
-      if (world.aptMask[ci]) continue;
-      world.factionControl[ci] = owner;
-    }
-  }
-}
-
-function markArchiveHermeticShell(world: World, room: Room): void {
-  room.sealed = true;
-  for (let dy = -1; dy <= room.h; dy++) {
-    for (let dx = -1; dx <= room.w; dx++) {
-      if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
-      const ci = world.idx(room.x + dx, room.y + dy);
-      if (world.cells[ci] !== Cell.WALL) continue;
-      world.hermoWall[ci] = 1;
-      world.wallTex[ci] = Tex.HERMO_WALL;
-    }
-  }
-}
-
-function connectArchiveRoomToRoom(world: World, from: Room, to: Room): void {
-  const fromCenter = roomCenter(from);
-  const toCenter = roomCenter(to);
-  const a = roomExit(world, from, toCenter.x, toCenter.y);
-  const b = roomExit(world, to, fromCenter.x, fromCenter.y);
-  placeDoorAt(world, a.wx, a.wy, from.id);
-  placeDoorAt(world, b.wx, b.wy, to.id);
-  carveCorridor(world, a.ox, a.oy, b.ox, b.oy);
-}
-
-function connectArchiveRoomToPoint(world: World, room: Room, tx: number, ty: number): void {
-  const exit = roomExit(world, room, tx, ty);
-  placeDoorAt(world, exit.wx, exit.wy, room.id);
-  carveCorridor(world, exit.ox, exit.oy, tx, ty);
-}
-
-function tryStampArchiveRoom(
-  world: World,
-  rooms: Room[],
-  type: RoomType,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  name: string,
-  seed: number,
-): Room | null {
-  const sx = world.wrap(x);
-  const sy = world.wrap(y);
-  if (!canPlaceRoom(world, sx, sy, w, h)) return null;
-  const room = stampRoom(world, rooms.length, type, sx, sy, w, h, -1);
-  room.name = name;
-  decorateArchiveMicroRoom(world, room, seed);
-  rooms.push(room);
-  return room;
-}
-
-function addArchiveNodeMicroRooms(
-  world: World,
-  rooms: Room[],
-  node: MazeGraphNode,
-  main: Room,
-  spec: ProceduralFloorSpec,
-): Room[] {
-  const out: Room[] = [];
-  const count = 3 + Math.min(2, spec.danger);
-  for (let i = 0; i < count; i++) {
-    const offset = ARCHIVE_WARREN_MICRO_OFFSETS[i % ARCHIVE_WARREN_MICRO_OFFSETS.length];
-    const type = archiveMicroRoomType(node, i);
-    const w = 5 + ((spec.seed + node.id * 11 + i) % 3);
-    const h = 5 + ((spec.seed + node.id * 17 + i * 3) % 3);
-    const x = node.x + offset.dx - Math.floor(w / 2);
-    const y = node.y + offset.dy - Math.floor(h / 2);
-    const room = tryStampArchiveRoom(
-      world,
-      rooms,
-      type,
-      x,
-      y,
-      w,
-      h,
-      `${type === RoomType.OFFICE ? 'Архивная будка' : 'Архивная ячейка'} ${node.id}-${i + 1}`,
-      spec.seed ^ node.id * 193 ^ i * 2003,
-    );
-    if (!room) continue;
-    connectArchiveRoomToRoom(world, room, main);
-    out.push(room);
-  }
-  return out;
-}
-
-function addArchiveEdgeAlcoveRooms(
-  world: World,
-  rooms: Room[],
-  graph: MazeGraph,
-  edge: MazeGraphEdge,
-  edgeIndex: number,
-  spec: ProceduralFloorSpec,
-): void {
-  const nodeA = graph.nodes[edge.a];
-  const nodeB = graph.nodes[edge.b];
-  if (!nodeA || !nodeB) return;
-  const dx = archiveGridDelta(graph.width, nodeA.gx, nodeB.gx);
-  const horizontal = dx !== 0;
-  const worldDelta = horizontal ? world.delta(nodeA.x, nodeB.x) : world.delta(nodeA.y, nodeB.y);
-  for (let i = 0; i < ARCHIVE_WARREN_EDGE_ALCOVE_OFFSETS.length; i++) {
-    const t = ARCHIVE_WARREN_EDGE_ALCOVE_OFFSETS[i];
-    const side = ((edgeIndex + i) & 1) === 0 ? 1 : -1;
-    const px = horizontal ? world.wrap(Math.round(nodeA.x + worldDelta * t)) : nodeA.x;
-    const py = horizontal ? nodeA.y : world.wrap(Math.round(nodeA.y + worldDelta * t));
-    const w = 5 + ((spec.seed + edgeIndex * 5 + i) % 2);
-    const h = 5 + ((spec.seed + edgeIndex * 7 + i) % 2);
-    const x = horizontal ? px - Math.floor(w / 2) : px + side * 11 - Math.floor(w / 2);
-    const y = horizontal ? py + side * 11 - Math.floor(h / 2) : py - Math.floor(h / 2);
-    const room = tryStampArchiveRoom(
-      world,
-      rooms,
-      RoomType.STORAGE,
-      x,
-      y,
-      w,
-      h,
-      `Боковой регистр ${edgeIndex}-${i + 1}`,
-      spec.seed ^ edgeIndex * 811 ^ i * 131,
-    );
-    if (!room) continue;
-    connectArchiveRoomToPoint(world, room, px, py);
-  }
-}
-
-function archiveClosestNode(
-  world: World,
-  graph: MazeGraph,
-  owner: TerritoryOwner,
-  used: Set<number>,
-  landmarks: ReadonlySet<number>,
-): MazeGraphNode {
-  const target = ARCHIVE_WARREN_HQ_TARGETS[owner];
-  let best = graph.nodes[0];
-  let bestScore = Infinity;
-  for (const node of graph.nodes) {
-    if (used.has(node.id) || landmarks.has(node.id)) continue;
-    const score = world.dist2(node.gx, node.gy, target.gx, target.gy) + node.id * 0.0001;
-    if (score < bestScore) {
-      best = node;
-      bestScore = score;
-    }
-  }
-  used.add(best.id);
-  return best;
-}
-
-function configureArchiveHqRoom(world: World, room: Room, owner: TerritoryOwner, seed: number, outpost = false): void {
-  room.type = RoomType.HQ;
-  const role = outpost ? `форпост ${archiveOwnerLabel(owner)}` : `гермоштаб ${archiveOwnerLabel(owner)}`;
-  room.name = archiveRoomHasLandmarkName(room) ? `${room.name}: ${role}` : `Архивный ${role}${outpost ? ` ${room.id}` : ''}`;
-  decorateArchiveSupportRoom(world, room, owner, seed);
-  markArchiveHermeticShell(world, room);
-  paintArchiveRoomTerritory(world, room, owner);
-}
-
-function configureArchiveSupportRoom(world: World, room: Room, owner: TerritoryOwner, index: number, seed: number): void {
-  room.type = archiveSupportRoomType(owner, index);
-  room.name = `Архивная опора ${archiveOwnerLabel(owner)} ${index + 1}`;
-  decorateArchiveSupportRoom(world, room, owner, seed ^ index * 977);
-  paintArchiveRoomTerritory(world, room, owner);
-}
-
-function placeArchiveFactionHqClusters(
-  world: World,
-  graph: MazeGraph,
-  roomsByNode: readonly Room[],
-  microRoomsByNode: readonly Room[][],
-  spec: ProceduralFloorSpec,
-): void {
-  const used = new Set<number>();
-  const landmarks = new Set(graph.landmarkIds);
-  const majorityOwner = majorityById(spec.majorityId).zoneFaction;
-  for (const owner of ARCHIVE_WARREN_HQ_OWNERS) {
-    const node = archiveClosestNode(world, graph, owner, used, landmarks);
-    const hq = roomsByNode[node.id];
-    if (!hq) continue;
-    configureArchiveHqRoom(world, hq, owner, spec.seed ^ owner * 1009);
-    const supports = microRoomsByNode[node.id] ?? [];
-    for (let i = 0; i < Math.min(4, supports.length); i++) {
-      configureArchiveSupportRoom(world, supports[i], owner, i, spec.seed ^ node.id * 307 ^ owner * 571);
-    }
-  }
-  let best1: MazeGraphNode | null = null;
-  let best2: MazeGraphNode | null = null;
-  let dist1 = Infinity;
-  let dist2 = Infinity;
-  const target = ARCHIVE_WARREN_HQ_TARGETS[majorityOwner];
-
-  for (let i = 0; i < graph.nodes.length; i++) {
-    const node = graph.nodes[i];
-    if (used.has(node.id) || landmarks.has(node.id)) continue;
-    const d2 = world.dist2(node.gx, node.gy, target.gx, target.gy);
-    if (d2 < dist1) {
-      best2 = best1;
-      dist2 = dist1;
-      best1 = node;
-      dist1 = d2;
-    } else if (d2 < dist2) {
-      best2 = node;
-      dist2 = d2;
-    }
-  }
-
-  const majorityNodes: MazeGraphNode[] = [];
-  if (best1) majorityNodes.push(best1);
-  if (best2) majorityNodes.push(best2);
-  for (let i = 0; i < Math.min(2, majorityNodes.length); i++) {
-    const room = roomsByNode[majorityNodes[i].id];
-    if (!room) continue;
-    configureArchiveHqRoom(world, room, majorityOwner, spec.seed ^ majorityNodes[i].id * 811, true);
-  }
-}
-
-function restoreArchiveLandmarkNames(roomsByNode: readonly Room[], landmarkOrder: ReadonlyMap<number, number>): void {
-  for (const [nodeId, order] of landmarkOrder) {
-    const room = roomsByNode[nodeId];
-    if (!room || archiveRoomHasLandmarkName(room)) continue;
-    const landmarkName = `${ARCHIVE_WARREN_LANDMARK_NAMES[order % ARCHIVE_WARREN_LANDMARK_NAMES.length]} ${room.id}`;
-    room.name = room.type === RoomType.HQ ? `${landmarkName}: ${room.name}` : landmarkName;
-  }
-}
-
-// @ts-expect-error TS6133 — preserved as reference; replaced by recipe system
-function buildArchiveWarrenRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
-  const graph = generateWilsonMaze({
-    width: ARCHIVE_WARREN_GRID,
-    height: ARCHIVE_WARREN_GRID,
-    originX: ARCHIVE_WARREN_ORIGIN,
-    originY: ARCHIVE_WARREN_ORIGIN,
-    cellSize: ARCHIVE_WARREN_CELL,
-    startGx: Math.floor(ARCHIVE_WARREN_GRID / 2),
-    startGy: Math.floor(ARCHIVE_WARREN_GRID / 2),
-    endGx: ARCHIVE_WARREN_GRID - 2,
-    endGy: ARCHIVE_WARREN_GRID - 2,
-    braidChance: 0.3 + spec.danger * 0.04,
-    extraChordCount: 14 + spec.danger * 3,
-    lockedChordChance: 0.12 + spec.danger * 0.025,
-    rewardLeafChance: 0.56,
-    landmarkCount: 7 + spec.danger,
-    rand: xorshift32((spec.seed ^ 0x39039) >>> 0),
-  });
-  ensureArchiveLockedChords(graph, Math.min(4, 1 + Math.floor(spec.danger / 2)));
-  const validation = validateMazeGraph(graph);
-  if (!validation.liftBackboneUngated || !validation.optionalLocksValid) {
-    for (const edge of graph.edges) if (edge.tag === 'locked_optional') edge.tag = 'chord';
-  }
-
-  const rooms: Room[] = [];
-  const roomsByNode: Room[] = new Array(graph.nodes.length);
-  const landmarkOrder = new Map<number, number>();
-  for (let i = 0; i < graph.landmarkIds.length; i++) landmarkOrder.set(graph.landmarkIds[i], i);
-
-  for (const node of graph.nodes) {
-    const landmarkIndex = landmarkOrder.get(node.id) ?? -1;
-    const type = archiveRoomType(node, landmarkIndex);
-    const size = archiveRoomSize(type, landmarkIndex);
-    const x = world.wrap(node.x - Math.floor(size.w / 2));
-    const y = world.wrap(node.y - Math.floor(size.h / 2));
-    const room = stampRoom(world, rooms.length, type, x, y, size.w, size.h, -1);
-    decorateArchiveWarrenRoom(world, room, node, landmarkIndex);
-    rooms.push(room);
-    roomsByNode[node.id] = room;
-  }
-
-  const microRoomsByNode: Room[][] = Array.from({ length: graph.nodes.length }, () => []);
-  for (const node of graph.nodes) {
-    const main = roomsByNode[node.id];
-    if (!main) continue;
-    microRoomsByNode[node.id] = addArchiveNodeMicroRooms(world, rooms, node, main, spec);
-  }
-  for (let i = 0; i < graph.edges.length; i++) {
-    addArchiveEdgeAlcoveRooms(world, rooms, graph, graph.edges[i], i, spec);
-  }
-  placeArchiveFactionHqClusters(world, graph, roomsByNode, microRoomsByNode, spec);
-  restoreArchiveLandmarkNames(roomsByNode, landmarkOrder);
-
-  const keyDropRoomIds: number[] = [];
-  for (let i = 0; i < graph.edges.length; i++) {
-    connectArchiveWarrenRooms(world, graph, graph.edges[i], i, roomsByNode, keyDropRoomIds);
-  }
-
-  const landmarkAnchors = graph.landmarkIds.map((id, order) => {
-    const room = roomsByNode[id];
-    const center = roomCenter(room);
-    return { id: `archive_landmark_${order}`, x: center.x, y: center.y };
-  });
-  archiveWarrenIntents.set(world, { graph, roomsByNode, microRoomsByNode, landmarkAnchors, keyDropRoomIds });
-
-  const start = roomsByNode[graph.startId];
-  const center = roomCenter(start);
-  sanitizeDoors(world);
-  ensureConnectivity(world, center.x + 0.5, center.y + 0.5);
-  return { rooms, spawnX: center.x + 0.5, spawnY: center.y + 0.5 };
 }
 
 function adminMicroRoomSize(type: RoomType): { w: number; h: number } {
@@ -5924,21 +5331,26 @@ function connectAtticRoomToPoint(world: World, spec: ProceduralFloorSpec, room: 
   }
 }
 
-function pushAtticClusterAnchor(anchors: AtticClusterAnchor[], seen: Set<string>, x: number, y: number, score: number): void {
+function pushAtticClusterAnchor(world: World, anchors: AtticClusterAnchor[], seen: Set<string>, x: number, y: number, score: number): void {
   const cx = Math.floor(x / 56);
   const cy = Math.floor(y / 56);
   const key = `${cx}:${cy}`;
   if (seen.has(key)) return;
+  // Spacing is the only guard against two clusters stamping over each other, so it
+  // must be measured in the SAME frame the anchor is stored in (floored + clamped)
+  // and across the torus seam. Raw subtraction read a candidate at x=5 against an
+  // anchor at x=1011 as 1012 cells apart instead of 18, and let both through.
+  const ax = Math.max(12, Math.min(W - 13, Math.floor(x)));
+  const ay = Math.max(12, Math.min(W - 13, Math.floor(y)));
   for (const anchor of anchors) {
-    const dx = x - anchor.x;
-    const dy = y - anchor.y;
-    if (dx * dx + dy * dy < ATTIC_CLUSTER_MIN_SPACING) return;
+    if (world.dist2(ax, ay, anchor.x, anchor.y) < ATTIC_CLUSTER_MIN_SPACING) return;
   }
   seen.add(key);
-  anchors.push({ x: Math.max(12, Math.min(W - 13, Math.floor(x))), y: Math.max(12, Math.min(W - 13, Math.floor(y))), score });
+  anchors.push({ x: ax, y: ay, score });
 }
 
 function collectAtticClusterAnchors(
+  world: World,
   spec: ProceduralFloorSpec,
   traces: readonly AtticTrace[],
   junctions: readonly AtticJunction[],
@@ -5946,22 +5358,22 @@ function collectAtticClusterAnchors(
 ): AtticClusterAnchor[] {
   const anchors: AtticClusterAnchor[] = [];
   const seen = new Set<string>();
-  for (const junction of junctions) pushAtticClusterAnchor(anchors, seen, junction.x, junction.y, 20_000 + junction.score);
+  for (const junction of junctions) pushAtticClusterAnchor(world, anchors, seen, junction.x, junction.y, 20_000 + junction.score);
   for (const room of targets) {
     const c = roomCenter(room);
-    pushAtticClusterAnchor(anchors, seen, c.x, c.y, 12_000 + room.w * room.h);
+    pushAtticClusterAnchor(world, anchors, seen, c.x, c.y, 12_000 + room.w * room.h);
   }
   for (const trace of traces) {
     const step = Math.max(48, Math.floor(trace.cells.length / 10));
     for (let i = (spec.seed + trace.id * 23) % step; i < trace.cells.length; i += step) {
       const ci = trace.cells[i];
-      pushAtticClusterAnchor(anchors, seen, ci % W, (ci / W) | 0, 8_000 - i + trace.cells.length);
+      pushAtticClusterAnchor(world, anchors, seen, ci % W, (ci / W) | 0, 8_000 - i + trace.cells.length);
     }
   }
   for (let i = 0; i < 36; i++) {
     const x = 48 + Math.floor(atticHash01(spec.seed, i, 0, 0x7711) * (W - 96));
     const y = 48 + Math.floor(atticHash01(spec.seed, i, 1, 0x7722) * (W - 96));
-    pushAtticClusterAnchor(anchors, seen, x, y, 3_000 - i);
+    pushAtticClusterAnchor(world, anchors, seen, x, y, 3_000 - i);
   }
   return anchors.sort((a, b) => b.score - a.score);
 }
@@ -6054,7 +5466,7 @@ function placeAtticWeatherworksClusters(
   junctions: readonly AtticJunction[],
   targets: readonly Room[],
 ): void {
-  const anchors = collectAtticClusterAnchors(spec, traces, junctions, targets);
+  const anchors = collectAtticClusterAnchors(world, spec, traces, junctions, targets);
   const clusterTarget = Math.min(anchors.length, ATTIC_MID_CLUSTER_TARGET + spec.danger * 5);
   const supportBudget = { v: ATTIC_MICRO_ROOM_TARGET + spec.danger * 10 + (spec.anomalyId === 'living_tunnels' ? ATTIC_LIVING_TUNNEL_MICRO_BONUS : 0) };
   let clusters = 0;
@@ -7637,550 +7049,6 @@ function placeScientistMajorityLandmarks(world: World, rooms: Room[], spec: Proc
       'Журнал обзорной НИИ',
     );
   }
-}
-
-const LIVING_BLOCK_PROXY_SIZE = 64;
-const LIVING_BLOCK_PROXY_CELL = W / LIVING_BLOCK_PROXY_SIZE;
-const LIVING_BLOCK_MARGIN = 48;
-const LIVING_BLOCK_GRID_COLUMNS = 8;
-const LIVING_BLOCK_MIN_TARGET_ROOMS = 940;
-const LIVING_BLOCK_TARGET_ROOMS_PER_DANGER = 110;
-const LIVING_BLOCK_HQ_RESERVE_RADIUS2 = 82 * 82;
-
-interface LivingBlock {
-  id: number;
-  corridorStartX: number;
-  corridorEndX: number;
-  corridorY: number;
-  centerX: number;
-  centerY: number;
-  rooms: Room[];
-  homeRoom?: Room;
-  publicRoom?: Room;
-  serviceRoom?: Room;
-  shelterRoom?: Room;
-}
-
-interface LivingRoutePoint {
-  x: number;
-  y: number;
-}
-
-interface LivingHeapNode {
-  idx: number;
-  priority: number;
-}
-
-function livingHeapPush(heap: LivingHeapNode[], node: LivingHeapNode): void {
-  heap.push(node);
-  let i = heap.length - 1;
-  while (i > 0) {
-    const p = (i - 1) >> 1;
-    if (heap[p].priority <= node.priority) break;
-    heap[i] = heap[p];
-    i = p;
-  }
-  heap[i] = node;
-}
-
-function livingHeapPop(heap: LivingHeapNode[]): LivingHeapNode | undefined {
-  if (heap.length === 0) return undefined;
-  const top = heap[0];
-  const last = heap.pop()!;
-  if (heap.length === 0) return top;
-  let i = 0;
-  while (true) {
-    const l = i * 2 + 1;
-    const r = l + 1;
-    if (l >= heap.length) break;
-    const child = r < heap.length && heap[r].priority < heap[l].priority ? r : l;
-    if (heap[child].priority >= last.priority) break;
-    heap[i] = heap[child];
-    i = child;
-  }
-  heap[i] = last;
-  return top;
-}
-
-function livingProxyCoord(value: number): number {
-  return Math.max(0, Math.min(LIVING_BLOCK_PROXY_SIZE - 1, Math.floor(value / LIVING_BLOCK_PROXY_CELL)));
-}
-
-function livingProxyIndex(px: number, py: number): number {
-  return py * LIVING_BLOCK_PROXY_SIZE + px;
-}
-
-function livingProxyWorld(px: number): number {
-  return Math.max(2, Math.min(W - 3, Math.floor(px * LIVING_BLOCK_PROXY_CELL + LIVING_BLOCK_PROXY_CELL / 2)));
-}
-
-function livingMutableCell(world: World, ci: number): boolean {
-  return world.cells[ci] !== Cell.LIFT &&
-    world.hermoWall[ci] === 0 &&
-    world.aptMask[ci] === 0 &&
-    world.features[ci] !== Feature.LIFT_BUTTON &&
-    !world.containerMap.has(ci);
-}
-
-function livingProxyCost(world: World, px: number, py: number): number {
-  const cx = livingProxyWorld(px);
-  const cy = livingProxyWorld(py);
-  let cost = 1.2;
-  let sampled = 0;
-  for (const [dx, dy] of [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4]] as const) {
-    const ci = world.idx(cx + dx, cy + dy);
-    if (!livingMutableCell(world, ci)) return Number.POSITIVE_INFINITY;
-    sampled++;
-    const cell = world.cells[ci];
-    if (world.roomMap[ci] >= 0) cost += 8.5;
-    else if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER) cost += 2.3;
-    else cost += 0.6;
-  }
-  return cost / Math.max(1, sampled);
-}
-
-function livingWeightedProxyPath(world: World, from: LivingRoutePoint, to: LivingRoutePoint): LivingRoutePoint[] {
-  const size = LIVING_BLOCK_PROXY_SIZE;
-  const n = size * size;
-  const startX = livingProxyCoord(from.x);
-  const startY = livingProxyCoord(from.y);
-  const goalX = livingProxyCoord(to.x);
-  const goalY = livingProxyCoord(to.y);
-  const start = livingProxyIndex(startX, startY);
-  const goal = livingProxyIndex(goalX, goalY);
-  const dist = new Float32Array(n);
-  const prev = new Int32Array(n);
-  const closed = new Uint8Array(n);
-  dist.fill(Number.POSITIVE_INFINITY);
-  prev.fill(-1);
-  dist[start] = 0;
-  const heap: LivingHeapNode[] = [];
-  livingHeapPush(heap, { idx: start, priority: Math.abs(startX - goalX) + Math.abs(startY - goalY) });
-
-  while (heap.length > 0) {
-    const current = livingHeapPop(heap)!;
-    const ci = current.idx;
-    if (closed[ci]) continue;
-    closed[ci] = 1;
-    if (ci === goal) break;
-    const cx = ci % size;
-    const cy = (ci / size) | 0;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = cx + dx;
-      const ny = cy + dy;
-      if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
-      const ni = livingProxyIndex(nx, ny);
-      if (closed[ni]) continue;
-      const stepCost = livingProxyCost(world, nx, ny);
-      if (!Number.isFinite(stepCost)) continue;
-      const nextDist = dist[ci] + stepCost;
-      if (nextDist >= dist[ni]) continue;
-      dist[ni] = nextDist;
-      prev[ni] = ci;
-      const heuristic = Math.abs(nx - goalX) + Math.abs(ny - goalY);
-      livingHeapPush(heap, { idx: ni, priority: nextDist + heuristic });
-    }
-  }
-
-  if (!Number.isFinite(dist[goal])) return [from, to];
-  const reversed: number[] = [];
-  for (let at = goal; at >= 0; at = prev[at]) {
-    reversed.push(at);
-    if (at === start) break;
-  }
-  const points: LivingRoutePoint[] = [from];
-  for (let i = reversed.length - 2; i > 0; i--) {
-    const idx = reversed[i];
-    points.push({ x: livingProxyWorld(idx % size), y: livingProxyWorld((idx / size) | 0) });
-  }
-  points.push(to);
-  return points;
-}
-
-function carveLivingRouteCell(world: World, x: number, y: number, floorTex: Tex, wallTex: Tex): boolean {
-  const ci = world.idx(x, y);
-  if (!livingMutableCell(world, ci)) return false;
-  if (world.cells[ci] === Cell.DOOR || world.doors.has(ci)) return true;
-  world.cells[ci] = Cell.FLOOR;
-  world.floorTex[ci] = floorTex;
-  world.wallTex[ci] = wallTex;
-  world.roomMap[ci] = -1;
-  world.features[ci] = Feature.NONE;
-  return true;
-}
-
-function carveLivingRouteBand(
-  world: World,
-  x: number,
-  y: number,
-  horizontal: boolean,
-  radius: number,
-  floorTex: Tex,
-  wallTex: Tex,
-  spec: ProceduralFloorSpec,
-  step: number,
-  service: boolean,
-): void {
-  let opened = false;
-  for (let side = -radius; side <= radius; side++) {
-    const cx = horizontal ? x : x + side;
-    const cy = horizontal ? y + side : y;
-    opened = carveLivingRouteCell(world, cx, cy, floorTex, wallTex) || opened;
-  }
-  if (!opened) return;
-  const ci = world.idx(x, y);
-  if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) return;
-  if (service && step % 31 === 0) world.features[ci] = step % 62 === 0 ? Feature.APPARATUS : Feature.SCREEN;
-  else if (!service && step % 43 === 0) world.features[ci] = Feature.LAMP;
-  if (step % 59 === 0) {
-    stampSurfaceSplat(world, x, y, 0.5, 0.5, service ? 0.22 : 0.3, service ? 0.38 : 0.44, spec.seed ^ (step * 97), service ? 84 : 164, service ? 92 : 130, service ? 98 : 92, false);
-  }
-}
-
-function carveLivingRouteSegment(
-  world: World,
-  spec: ProceduralFloorSpec,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  horizontal: boolean,
-  radius: number,
-  floorTex: Tex,
-  wallTex: Tex,
-  stepBase: number,
-  service: boolean,
-): number {
-  const delta = horizontal ? world.delta(ax, bx) : world.delta(ay, by);
-  const stepDir = delta >= 0 ? 1 : -1;
-  const steps = Math.abs(delta);
-  let x = world.wrap(ax);
-  let y = world.wrap(ay);
-  for (let s = 0; s <= steps; s++) {
-    carveLivingRouteBand(world, x, y, horizontal, radius, floorTex, wallTex, spec, stepBase + s, service);
-    if (s < steps) {
-      if (horizontal) x = world.wrap(x + stepDir);
-      else y = world.wrap(y + stepDir);
-    }
-  }
-  return stepBase + steps + 1;
-}
-
-function carveLivingWeightedRoute(
-  world: World,
-  spec: ProceduralFloorSpec,
-  from: LivingRoutePoint,
-  to: LivingRoutePoint,
-  radius: number,
-  floorTex: Tex,
-  wallTex: Tex,
-  seed: number,
-  service: boolean,
-): void {
-  const points = livingWeightedProxyPath(world, from, to);
-  let step = seed & 4095;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    const horizontalFirst = Math.abs(world.delta(a.x, b.x)) >= Math.abs(world.delta(a.y, b.y));
-    if (horizontalFirst) {
-      step = carveLivingRouteSegment(world, spec, a.x, a.y, b.x, a.y, true, radius, floorTex, wallTex, step, service);
-      step = carveLivingRouteSegment(world, spec, b.x, a.y, b.x, b.y, false, radius, floorTex, wallTex, step, service);
-    } else {
-      step = carveLivingRouteSegment(world, spec, a.x, a.y, a.x, b.y, false, radius, floorTex, wallTex, step, service);
-      step = carveLivingRouteSegment(world, spec, a.x, b.y, b.x, b.y, true, radius, floorTex, wallTex, step, service);
-    }
-  }
-}
-
-function livingBlockRoomType(column: number, south: boolean): RoomType {
-  const north = [RoomType.LIVING, RoomType.KITCHEN, RoomType.LIVING, RoomType.BATHROOM, RoomType.STORAGE, RoomType.COMMON] as const;
-  const southRow = [RoomType.LIVING, RoomType.STORAGE, RoomType.KITCHEN, RoomType.LIVING, RoomType.BATHROOM, RoomType.COMMON] as const;
-  const row = south ? southRow : north;
-  return row[column % row.length];
-}
-
-function livingBlockRoomName(blockId: number, type: RoomType, ordinal: number): string {
-  if (type === RoomType.KITCHEN) return `Домовой блок ${blockId}: кухня ${ordinal}`;
-  if (type === RoomType.BATHROOM) return `Домовой блок ${blockId}: санузел ${ordinal}`;
-  if (type === RoomType.STORAGE) return `Домовой блок ${blockId}: кладовая ${ordinal}`;
-  if (type === RoomType.COMMON) return `Домовой блок ${blockId}: общий тамбур ${ordinal}`;
-  return `Домовой блок ${blockId}: квартира ${ordinal}`;
-}
-
-function stampLivingBlockRoom(
-  world: World,
-  rooms: Room[],
-  block: LivingBlock,
-  spec: ProceduralFloorSpec,
-  type: RoomType,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  ordinal: number,
-): Room | null {
-  if (!canPlaceRoom(world, x, y, w, h)) return null;
-  const room = stampRoom(world, rooms.length, type, x, y, w, h, -1);
-  room.name = livingBlockRoomName(block.id, type, ordinal);
-  applyRoomTexture(world, room, Tex.PANEL, Tex.F_LINO);
-  decorateProceduralRoom(world, room, spec);
-  if (type === RoomType.LIVING) {
-    placeRoomFeature(world, room, Feature.BED, 1, h - 2);
-    placeRoomFeature(world, room, Feature.CHAIR, w - 2, h - 2);
-    block.homeRoom ??= room;
-  } else if (type === RoomType.KITCHEN) {
-    placeRoomFeature(world, room, Feature.STOVE, 1, 1);
-    placeRoomFeature(world, room, Feature.SINK, w - 2, 1);
-  } else if (type === RoomType.BATHROOM) {
-    placeRoomFeature(world, room, Feature.TOILET, 1, 1);
-    placeRoomFeature(world, room, Feature.SINK, w - 2, 1);
-  } else if (type === RoomType.STORAGE) {
-    placeRoomFeature(world, room, Feature.SHELF, 1, 1);
-    block.serviceRoom ??= room;
-    block.shelterRoom ??= room;
-  } else if (type === RoomType.COMMON) {
-    placeRoomFeature(world, room, Feature.TABLE, Math.floor(w / 2), Math.floor(h / 2));
-    block.publicRoom ??= room;
-  }
-  rooms.push(room);
-  block.rooms.push(room);
-  return room;
-}
-
-function carveLivingInternalCorridor(world: World, block: LivingBlock, spec: ProceduralFloorSpec): void {
-  for (let x = block.corridorStartX; x <= block.corridorEndX; x++) {
-    for (let y = block.corridorY; y < block.corridorY + 3; y++) {
-      carveLivingRouteCell(world, x, y, Tex.F_TILE, Tex.PANEL);
-    }
-    if ((x + block.id * 17) % 47 === 0) {
-      const ci = world.idx(x, block.corridorY + 1);
-      if (world.cells[ci] === Cell.FLOOR && world.features[ci] === Feature.NONE) world.features[ci] = Feature.LAMP;
-      stampSurfaceSplat(world, x, block.corridorY + 1, 0.5, 0.5, 0.22, 0.34, spec.seed + block.id * 911 + x, 156, 124, 88, false);
-    }
-  }
-}
-
-function connectLivingBlockRoomsToCorridor(world: World, block: LivingBlock): void {
-  for (const room of block.rooms) {
-    const doorX = room.x + Math.floor(room.w / 2);
-    if (room.y < block.corridorY) placeDoorAt(world, doorX, room.y + room.h, room.id);
-    else placeDoorAt(world, doorX, room.y - 1, room.id);
-  }
-}
-
-function buildLivingBlockAt(
-  world: World,
-  rooms: Room[],
-  spec: ProceduralFloorSpec,
-  id: number,
-  x: number,
-  y: number,
-  targetColumns: number,
-): LivingBlock {
-  const topH = irng(7, 9);
-  const bottomH = irng(7, 10);
-  const corridorY = y + topH + 1;
-  const block: LivingBlock = {
-    id,
-    corridorStartX: x,
-    corridorEndX: x,
-    corridorY,
-    centerX: x,
-    centerY: corridorY + 1,
-    rooms: [],
-  };
-  let cx = x;
-  let ordinal = 1;
-  for (let col = 0; col < targetColumns; col++) {
-    const rw = irng(8, 13);
-    stampLivingBlockRoom(world, rooms, block, spec, livingBlockRoomType(col, false), cx, y, rw, topH, ordinal++);
-    stampLivingBlockRoom(world, rooms, block, spec, livingBlockRoomType(col + id, true), cx, corridorY + 4, rw, bottomH, ordinal++);
-    cx += rw + irng(3, 4);
-  }
-  block.corridorStartX = x - 2;
-  block.corridorEndX = cx - 2;
-  block.centerX = Math.floor((block.corridorStartX + block.corridorEndX) / 2);
-  carveLivingInternalCorridor(world, block, spec);
-  connectLivingBlockRoomsToCorridor(world, block);
-  return block;
-}
-
-function livingHqReserveCenters(): readonly { x: number; y: number }[] {
-  return PROCEDURAL_HQ_OWNERS.map(owner => proceduralHqBase(owner));
-}
-
-function livingSlotReservedForHq(world: World, x: number, y: number): boolean {
-  for (const reserve of livingHqReserveCenters()) {
-    if (world.dist2(x + 0.5, y + 0.5, reserve.x + 0.5, reserve.y + 0.5) <= LIVING_BLOCK_HQ_RESERVE_RADIUS2) return true;
-  }
-  return false;
-}
-
-function chooseLivingShelterBlock(blocks: readonly LivingBlock[], spawn: LivingRoutePoint, world: World): LivingBlock | undefined {
-  let best: LivingBlock | undefined;
-  let bestD2 = -1;
-  for (const block of blocks) {
-    if (!block.shelterRoom) continue;
-    const d2 = world.dist2(spawn.x, spawn.y, block.centerX + 0.5, block.centerY + 0.5);
-    if (d2 > bestD2) {
-      bestD2 = d2;
-      best = block;
-    }
-  }
-  return best;
-}
-
-function farthestLivingBlockPair(blocks: readonly LivingBlock[], world: World): [LivingBlock, LivingBlock] | null {
-  let best: [LivingBlock, LivingBlock] | null = null;
-  let bestD2 = -1;
-  for (let a = 0; a < blocks.length; a++) {
-    for (let b = a + 1; b < blocks.length; b++) {
-      const d2 = world.dist2(blocks[a].centerX + 0.5, blocks[a].centerY + 0.5, blocks[b].centerX + 0.5, blocks[b].centerY + 0.5);
-      if (d2 > bestD2) {
-        bestD2 = d2;
-        best = [blocks[a], blocks[b]];
-      }
-    }
-  }
-  return best;
-}
-
-function roomPoint(room: Room): LivingRoutePoint {
-  return { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
-}
-
-function decorateLivingShelterSpur(world: World, room: Room, spec: ProceduralFloorSpec): void {
-  room.name = `Убежищный отросток блока ${room.id}`;
-  placeRoomFeature(world, room, Feature.BED, 1, room.h - 2);
-  placeRoomFeature(world, room, Feature.APPARATUS, Math.floor(room.w / 2), Math.floor(room.h / 2));
-  placeRoomFeature(world, room, Feature.LAMP, room.w - 2, 1);
-  const center = roomCenter(room);
-  stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.36, 0.52, spec.seed ^ (room.id * 733), 112, 132, 116, false);
-}
-
-function registerLivingCue(
-  world: World,
-  spec: ProceduralFloorSpec,
-  id: string,
-  marker: LivingRoutePoint,
-  target: LivingRoutePoint,
-  targetRoom: Room | undefined,
-  label: string,
-  hint: string,
-  targetName: string,
-  color: string,
-  tags: readonly string[],
-): void {
-  registerRouteCue(world, {
-    id: `procedural_${spec.key}_${id}`,
-    x: marker.x + 0.5,
-    y: marker.y + 0.5,
-    targetX: target.x + 0.5,
-    targetY: target.y + 0.5,
-    z: spec.z,
-    roomId: targetRoom?.id,
-    targetRoomId: targetRoom?.id,
-    label,
-    hint,
-    targetName,
-    color,
-    tags: ['procedural_floor', 'living_blocks', ...tags],
-    toneSeed: (spec.seed ^ (id.length * 1709) ^ (targetRoom?.id ?? 0)) >>> 0,
-    radius: 10,
-    targetRadius: 3,
-    cooldownSec: 28,
-    heardText: `${label}: слышно, куда ведет ${hint}.`,
-    followedText: `${targetName}: маршрут найден, решение за вами.`,
-    ignoredText: `${label}: бетонная развилка осталась позади.`,
-    routeGroup: {
-      id,
-      lead: label,
-      risk: spec.danger <= 2 ? 'низкий бытовой риск' : 'жилая толчея с чужими замками',
-      decision: hint,
-      reward: targetName,
-    },
-  });
-}
-
-function registerLivingBlockRouteCues(world: World, blocks: readonly LivingBlock[], spec: ProceduralFloorSpec, spawn: LivingRoutePoint): void {
-  if (blocks.length === 0) return;
-  const first = blocks[0];
-  const farPair = farthestLivingBlockPair(blocks, world);
-  const last = blocks[blocks.length - 1];
-  const publicTargetRoom = last.publicRoom ?? last.homeRoom ?? last.rooms[0];
-  const serviceA = farPair?.[0].serviceRoom ?? first.serviceRoom ?? first.rooms[0];
-  const serviceB = farPair?.[1].serviceRoom ?? last.serviceRoom ?? last.rooms[0];
-  const shelterRoom = blocks.find(block => block.shelterRoom?.name.startsWith('Убежищный отросток'))?.shelterRoom;
-  const homeRoom = first.homeRoom ?? first.rooms[0];
-
-  if (homeRoom) registerLivingCue(world, spec, 'home_route', spawn, roomPoint(homeRoom), homeRoom, 'домовой ход', 'идти через квартиры', 'квартира с бытовым лутом', '#ffd39a', ['home_route']);
-  if (publicTargetRoom) registerLivingCue(world, spec, 'public_route', { x: first.centerX, y: first.centerY }, roomPoint(publicTargetRoom), publicTargetRoom, 'общий проход', 'держаться широкого коридора', 'дальний общий тамбур', '#f2c47a', ['public_route']);
-  if (serviceA && serviceB) registerLivingCue(world, spec, 'service_cut', roomPoint(serviceA), roomPoint(serviceB), serviceB, 'служебный срез', 'срезать через бетонную технину', 'кладовая у сервисной хорды', '#9ec6d8', ['service_cut']);
-  if (shelterRoom) registerLivingCue(world, spec, 'shelter_spur', { x: last.centerX, y: last.centerY }, roomPoint(shelterRoom), shelterRoom, 'убежищный отросток', 'уйти в короткий тупик укрытия', 'кладовая с шансом переждать давление', '#b8d7a2', ['shelter_spur']);
-}
-
-// @ts-expect-error TS6133 — preserved as reference; replaced by recipe system
-function buildLivingBlockRooms(world: World, spec: ProceduralFloorSpec): { rooms: Room[]; spawnX: number; spawnY: number } {
-  const geom = geometryById(spec.geometryId);
-  const rooms: Room[] = [];
-  const blocks: LivingBlock[] = [];
-  const targetRooms = Math.max(
-    geom.roomCount + spec.danger * 6,
-    LIVING_BLOCK_MIN_TARGET_ROOMS + spec.danger * LIVING_BLOCK_TARGET_ROOMS_PER_DANGER,
-  );
-  const blockCount = Math.max(72, Math.min(132, Math.ceil(targetRooms / 10)));
-  const gridCols = LIVING_BLOCK_GRID_COLUMNS;
-  const gridRows = Math.ceil((blockCount + PROCEDURAL_HQ_OWNERS.length * 2) / gridCols);
-  const cellW = Math.floor((W - LIVING_BLOCK_MARGIN * 2) / gridCols);
-  const cellH = Math.floor((W - LIVING_BLOCK_MARGIN * 2) / gridRows);
-
-  for (let slot = 0; blocks.length < blockCount && slot < gridCols * gridRows; slot++) {
-    const col = slot % gridCols;
-    const row = Math.floor(slot / gridCols);
-    const slotCenterX = LIVING_BLOCK_MARGIN + col * cellW + Math.floor(cellW / 2);
-    const slotCenterY = LIVING_BLOCK_MARGIN + row * cellH + Math.floor(cellH / 2);
-    if (livingSlotReservedForHq(world, slotCenterX, slotCenterY)) continue;
-    const remainingBlocks = Math.max(1, blockCount - blocks.length);
-    const wantedColumns = Math.ceil((targetRooms - rooms.length) / Math.max(1, remainingBlocks * 2));
-    const maxColumnsForCell = Math.max(3, Math.min(6, Math.floor((cellW - 14) / 15)));
-    const columns = Math.max(3, Math.min(6, maxColumnsForCell, wantedColumns));
-    const x = LIVING_BLOCK_MARGIN + col * cellW + irng(6, Math.max(7, Math.floor(cellW * 0.13)));
-    const y = LIVING_BLOCK_MARGIN + row * cellH + irng(5, Math.max(6, Math.floor(cellH * 0.16)));
-    const block = buildLivingBlockAt(world, rooms, spec, blocks.length + 1, x, y, columns);
-    if (block.rooms.length > 0) blocks.push(block);
-  }
-
-  const ordered = blocks
-    .slice()
-    .sort((a, b) => a.corridorY === b.corridorY ? a.centerX - b.centerX : a.corridorY - b.corridorY);
-  for (let i = 1; i < ordered.length; i++) {
-    carveLivingWeightedRoute(world, spec, { x: ordered[i - 1].centerX, y: ordered[i - 1].centerY }, { x: ordered[i].centerX, y: ordered[i].centerY }, 1, Tex.F_TILE, Tex.PANEL, spec.seed + i * 577, false);
-  }
-
-  const pair = farthestLivingBlockPair(blocks, world);
-  if (pair) {
-    const a = pair[0].serviceRoom ?? pair[0].rooms[0];
-    const b = pair[1].serviceRoom ?? pair[1].rooms[0];
-    if (a && b) carveLivingWeightedRoute(world, spec, roomPoint(a), roomPoint(b), 0, Tex.F_CONCRETE, Tex.PIPE, spec.seed ^ 0x515e, true);
-  }
-
-  const first = blocks[0];
-  const spawnRoom = first?.homeRoom ?? first?.rooms[0];
-  const spawn = spawnRoom ? roomPoint(spawnRoom) : { x: W / 2, y: W / 2 };
-  const shelterBlock = chooseLivingShelterBlock(blocks, spawn, world);
-  const shelterRoom = shelterBlock?.shelterRoom;
-  if (shelterBlock && shelterRoom) {
-    decorateLivingShelterSpur(world, shelterRoom, spec);
-    carveLivingWeightedRoute(world, spec, { x: shelterBlock.centerX, y: shelterBlock.centerY }, roomPoint(shelterRoom), 0, Tex.F_CONCRETE, Tex.PANEL, spec.seed ^ 0x5afe, true);
-  }
-
-  const spawnX = spawn.x + 0.5;
-  const spawnY = spawn.y + 0.5;
-  ensureConnectivity(world, spawnX, spawnY);
-  sanitizeDoors(world);
-  registerLivingBlockRouteCues(world, blocks, spec, spawn);
-  return { rooms, spawnX, spawnY };
 }
 
 const ADMIN_LEGAL_ITEMS: readonly Item[] = [
@@ -10147,7 +9015,6 @@ function addSumpServiceRoomsForScale(
   const fractalBonus = spec.anomalyId === 'fractal_floor'
     ? (scale === 'mid' ? SUMP_FRACTAL_STATION_BONUS : SUMP_FRACTAL_MICRO_BONUS)
     : 0;
-  const badAppleBonus = spec.anomalyId === 'bad_apple_world' ? (scale === 'mid' ? 30 : 120) : 0;
   const wildBonus = spec.majorityId === 'wild' ? (scale === 'mid' ? 8 : 32) : 0;
   const myceliumBonus = spec.anomalyId === 'mushroom_mycelium'
     ? (scale === 'mid' ? SUMP_MYCELIUM_STATION_BONUS : SUMP_MYCELIUM_MICRO_BONUS)
@@ -10160,8 +9027,8 @@ function addSumpServiceRoomsForScale(
     : 0;
   const railBonus = spec.anomalyId === 'rail_trains' ? (scale === 'mid' ? 10 : 44) : 0;
   const target = scale === 'mid'
-    ? 28 + spec.danger * 6 + conveyorBonus + fractalBonus + badAppleBonus + wildBonus + myceliumBonus + deepBonus + noAnomalyBonus + railBonus
-    : 112 + spec.danger * 16 + conveyorBonus + fractalBonus + badAppleBonus + wildBonus + myceliumBonus + deepBonus + noAnomalyBonus + railBonus;
+    ? 28 + spec.danger * 6 + conveyorBonus + fractalBonus + wildBonus + myceliumBonus + deepBonus + noAnomalyBonus + railBonus
+    : 112 + spec.danger * 16 + conveyorBonus + fractalBonus + wildBonus + myceliumBonus + deepBonus + noAnomalyBonus + railBonus;
   const candidates = allSortedSumpProxyCells(spec, scale === 'mid' ? 0x920 : 0x921);
   let reachable = reachableSumpDryCells(world, spawnX, spawnY);
   let placed = 0;
@@ -10219,7 +9086,6 @@ function sumpEdgeBoothTarget(spec: ProceduralFloorSpec): number {
     (spec.anomalyId === 'none' ? 42 : 0) +
     (spec.depth >= 40 ? 24 : 0) +
     (spec.anomalyId === 'conveyor_sorter' ? 18 : 0) +
-    (spec.anomalyId === 'bad_apple_world' ? 42 : 0) +
     (spec.anomalyId === 'mushroom_mycelium' ? 24 : 0) +
     (spec.anomalyId === 'fractal_floor' ? 20 : 0) +
     (spec.anomalyId === 'rail_trains' ? 16 : 0);
@@ -10476,9 +9342,9 @@ function applySumpCauseways(world: World, rooms: Room[], spec: ProceduralFloorSp
   const sourceRooms = anchors.length > 0 ? anchors : rooms;
   if (sourceRooms.length === 0) return;
   const lineCount = Math.min(
-    spec.anomalyId === 'bad_apple_world' ? 7 : 6,
+    6,
     3 + Math.floor(spec.danger / 2) + (
-      spec.anomalyId === 'fractal_floor' || spec.anomalyId === 'mushroom_mycelium' || spec.anomalyId === 'bad_apple_world' || spec.depth >= 40 ? 1 : 0
+      spec.anomalyId === 'fractal_floor' || spec.anomalyId === 'mushroom_mycelium' || spec.depth >= 40 ? 1 : 0
     ),
   );
   const ambientChanged = carveSumpAmbientField(world, spec);
@@ -16212,7 +15078,6 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     applyMushrooms(world, rooms, entities, nextId, spec, placement.reachable, spawnX, spawnY);
     applyCarnivorousFungusRooms(world, rooms, entities, nextId, spec, placement.reachable);
     applyHladon(world, rooms, entities, nextId, spec, spawnX, spawnY);
-    applyTeleports(world, spec, placement);
     applyFalseSafeBlock(world, rooms, entities, nextId, spec, allowNpcs);
     applyProceduralAnomalyProfile({ world, rooms, entities, nextId, spec, spawnX, spawnY, placement });
     const spawn = repairFinalProceduralConnectivity(world, spawnX, spawnY, spec);
@@ -16223,6 +15088,10 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     // Маршрутные лифты — единая система шахт по ребру между этажами (см. манифест
     // дизайн-этажей): этаж их не выбирает, а прежние снимаются вместе с авторскими.
     stampRouteLiftShafts(world, spec.runSeed, spec.z);
+    // Телепорты ставятся ПОСЛЕ маршрутных шахт: их проверка просвета
+    // (`nearLiftBackbone`) не видит шахту, которой ещё нет, и раньше выход мог
+    // оказаться прямо на стволе лифта — тест ловил это только по удаче розыгрыша.
+    applyTeleports(world, spec, placement);
     const reachable = reachableCellsFrom(world, spawn.spawnX, spawn.spawnY);
     ensureContainersReachable(world, rooms, spec, reachable);
     containerizeLooseProceduralDrops(world, rooms, entities, spec, reachable);
@@ -16236,7 +15105,6 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     world.initializeLampBlinks(spec.seed);
 
     world.bakeLights();
-    relightBadAppleWorld(world);
     validateFloorGeometry(world);
     // Та же граница, что у дизайн-этажей: номера сущностей проверяются на выходе.
     enforceUniqueEntityIds(entities, `procedural:z=${spec.z}`);

@@ -1,6 +1,6 @@
 /* ── Ложный Дух — local door phaser ─────────────────────────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 2.25,
   dmg: 9,
   attackRate: 1.65,
+  damageType: DamageType.PSI,
   sprite: 0,
   aiFlags: ['noclip'],
   counterplay: 'Видит сквозь стены и не путается в хламе: закрытая дверь его не задержит, а открытый бой — да.',

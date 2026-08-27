@@ -228,12 +228,6 @@ export function resetAudioSuspensionForTests(): void {
   if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
 }
 
-export function primeBadAppleProjectorAudio(): void {
-}
-
-export function updateBadAppleProjectorLoop(_active: boolean, _x: number, _y: number, _frame: number, _maxDist = SOUND_MAX_DIST): void {
-}
-
 /* ── Footstep: short low thump ───────────────────────────────── */
 export function playFootstep(): void {
   const ac = beginCue('footstep');

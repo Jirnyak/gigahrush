@@ -99,6 +99,25 @@ Recipe contract:
 - tier is `0..4`, derived from total cost and rare material gates;
 - recipes are discoverable unless future data documents an exception.
 
+**Крафтится ВСЁ, и списка исключений быть не должно.** `makeRecipeRegistry`
+отображает весь `ITEMS`: рецепт есть у каждого предмета по построению, а
+`CRAFT_RECIPE_EXCEPTIONS` пуст намеренно. Универсальность здесь важнее частных
+запретов — решение владельца 2026-08-27.
+
+Ловушка, в которую легко попасть при чтении: видишь, что собирается ключ от
+тамбура лифта за 10 000 ₽, и заключаешь «напечатал ключ — замок стоил ноль,
+надо запретить». Это НЕВЕРНО, и вот почему: **гейт — не список, а знание**.
+Рецепт ключа не известен по умолчанию, он открывается только разбором самого
+ключа, то есть собрать второй можно лишь после того, как нашёл первый. Замок к
+тому моменту уже стоил ресурса — за ним сходили. То же с чертежами (собрать
+чертёж можно, лишь разобрав чертёж) и с трофеем арены.
+
+Замерено на 455 рецептах: известны сразу **девять**, самый дорогой из них — труба
+за 40 ₽ (дальше нож, бинт, мел, хлеб, вода). Рецептов «ни известен, ни
+открываем» — ноль. Гейт целый, дырок в нём нет; заводить рядом рукописный
+перечень запрещённого значило бы завести вторую разметку, которая разойдётся с
+первой.
+
 Default known recipe item ids:
 
 ```txt
@@ -120,10 +139,19 @@ Unknown recipes are not listed in the craft UI. The menu shows only known recipe
 Station kinds are semantic recipe requirements:
 
 - `any`: simple survival/document recipes that do not need a special station (22 рецепта).
-- `workbench`: ordinary workbench crafting and the only valid disassembly station (242 рецепта).
-- `lathe`: mechanical, weapon, ammo and metal/tool crafting (92 рецепта).
-- `lab`: medical, PSI, slime/sample and reagent crafting (77 рецептов).
+- `workbench`: ordinary workbench crafting and the only valid disassembly station (251 рецепт).
+- `lathe`: mechanical, weapon, ammo and metal/tool crafting (93 рецепта).
+- `lab`: medical, PSI, slime/sample and reagent crafting (71 рецепт).
 - `net_terminal`: cybernetic, NET, terminal-tagged and metamatter recipes (18 рецептов).
+
+Станция выводится ИЗ ВЕКТОРА состава, а не назначается рукой. Ловушка, вскрытая
+2026-08-27: когда дорогие стволы получили кибернетику на входе, простое наличие
+редкого бита унесло восемнадцать обычных огнестрелов с токарного станка к
+сетевому терминалу. Прицельная электроника внутри ствола ствол не переносит —
+терминал держит энергетическое оружие, метаматерию и сетевые вещи. Реестр
+носителей редкого бита (`INTENTIONAL_RARE_MATERIAL_ITEMS`) теперь тоже
+ВЫВОДИТСЯ из готовых составов: ценовой потолок вправе снять замысел с вещи, и
+рукописный список после этого лгал бы.
 
 Current interactive station ids:
 

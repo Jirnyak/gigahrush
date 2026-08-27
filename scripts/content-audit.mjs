@@ -1623,8 +1623,11 @@ for (const ref of manifestImportRefs) {
     const text = fs.readFileSync(path.join(root, ref.target), 'utf8');
     // Сцена этажа — тоже регистрация контента, и другого способа её подключить
     // нет: своего генератора у сцены не бывает, она объявление. См. `cutscene.md`.
-    if (!/register(?:SideQuest|ZoneContent|FloorScene)\s*\(/.test(text)) {
-      errors.push(`${ref.file}:${ref.line} side-effect manifest import "${ref.spec}" resolves to ${ref.target} but does not register zone content, a side quest or a floor scene`);
+    // Наблюдатель мировых событий — тот же случай: модуль этажа, который реагирует
+    // на факт мира (последствие сюжетного шага, миграция, авария), объявляется, а не
+    // вызывается. Генератора у него тоже нет.
+    if (!/register(?:SideQuest|ZoneContent|FloorScene|WorldEventObserver)\s*\(/.test(text)) {
+      errors.push(`${ref.file}:${ref.line} side-effect manifest import "${ref.spec}" resolves to ${ref.target} but does not register zone content, a side quest, a floor scene or a world event observer`);
     }
   }
 }
@@ -1706,7 +1709,6 @@ if (!ostovMetaObject) {
 const helperModules = new Set([
   'admin_common.ts',
   'apartments.ts',
-  'bad_apple_world.ts',
   'common.ts',
   'content_helpers.ts',
   'content_manifest.ts',

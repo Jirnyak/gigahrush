@@ -98,9 +98,11 @@ import {
   SKY_GRID_H,
   SKY_UPDATE_INTERVAL,
   type RoofWeatherState,
+  type RoofWeatherAction,
   type RoofWeatherResult,
   type RoofLosExposureSummary,
 } from './meta';
+import { placeRoofDecisionAnchors } from './decisions';
 import { newEntityIdCursor } from '../entity_ids';
 
 export interface RoofGeneration extends FloorGeneration {
@@ -216,6 +218,21 @@ export function publishRoofWeatherEvent(
       logLine: result.logLine,
     },
   });
+}
+
+/** Диспетчер развилок: единственное место, где действие превращается в
+ *  вызов авторской функции. Он же — связка, которую генератор передаёт в
+ *  `placeRoofDecisionAnchors`; сам реестр якорей генератор не импортирует
+ *  обратно, поэтому пакет остаётся без внутреннего цикла импортов. */
+export function runRoofWeatherDecision(state: RoofWeatherState, action: RoofWeatherAction): RoofWeatherResult {
+  switch (action) {
+    case 'repair_signal': return repairRoofSignal(state);
+    case 'false_weather_exposed': return exposeRoofFalseWeather(state, false);
+    case 'false_weather_forged': return exposeRoofFalseWeather(state, true);
+    case 'sniper_lane_darkened': return darkenRoofSniperLane(state);
+    case 'cloud_frame_printed': return printRoofCloudFrame(state);
+    case 'clean_water_collected': return collectRoofCleanWater(state);
+  }
 }
 
 export function roofDebugLines(state: RoofWeatherState): string[] {
@@ -542,6 +559,13 @@ export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   applyUniformSkyLight(world);
 
   const weatherState = createRoofWeatherState(seed);
+  /* Пять развилок погоды получают клетку в мире и приглашение по `E`.
+     Шаг стоит ПОСЛЕ контейнеров и предметов: якорь ищет свободную клетку
+     и не вправе занять место, которое комната ещё собиралась застроить. */
+  placeRoofDecisionAnchors(world, rooms, weatherState, {
+    run: runRoofWeatherDecision,
+    publish: publishRoofWeatherEvent,
+  });
   const skyProvider = createRoofSkyTextureProvider(seed, weatherState.skyTimeOfDay);
   genLog(`[DESIGN_FLOOR] ${ROOF_ROUTE_ID} z=${ROOF_FUTURE_Z} rooms=${Object.keys(rooms).length} seed=${seed}`);
   const generation = {

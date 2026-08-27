@@ -121,7 +121,10 @@ test('voronoi_quarantine population profile targets sanitary staff and infected 
   const profile = designFloorPopulationProfile(route);
 
   assert.ok(profile.npcTarget >= 98 && profile.npcTarget <= 9800, 'npcTarget in bounds');
-  assert.ok(profile.monsterTarget >= 142 && profile.monsterTarget <= 14200, 'monsterTarget in bounds');
+  // Нижняя граница опущена вместе с бюджетом населения: он больше не равен
+  // мягкому пределу, а идёт кривой по |z|. Порог остаётся тем же по смыслу —
+  // «инфицированных не горстка», — но выражен степенью двойки.
+  assert.ok(profile.monsterTarget >= 128 && profile.monsterTarget <= 14200, 'monsterTarget in bounds');
   assert.equal(profile.npcNoun, 'санитар ячейки');
   assert.equal(profile.npcFactions.some(entry => entry.value === Faction.SCIENTIST && entry.weight >= 30), true);
   assert.equal(profile.npcFactions.some(entry => entry.value === Faction.LIQUIDATOR && entry.weight >= 30), true);

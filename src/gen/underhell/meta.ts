@@ -1,10 +1,4 @@
-import {
-  Faction, 
-  Occupation, 
-  W, 
-  type Entity, type Item
-  ,
-} from '../../core/types';
+import { Faction, Occupation, W, type Entity, type Item } from '../../core/types';
 import { World } from '../../core/world';
 import { designNpcFloorKey, type PlotNpcDef } from '../../data/plot';
 
@@ -18,7 +12,9 @@ export const UNDERHELL_Z = -38;
 
 export const UNDERHELL_DEFAULT_SEED = 19032;
 
-export const UNDERHELL_FLOOR = 180;
+/* Здесь стояло `UNDERHELL_FLOOR = 180` — вторая константа на ту же высоту,
+ * и значение в ней было из выжженной шкалы. В дело шла именно она: `z:` комнат
+ * и ящиков этажа. Правильные −38 лежали строкой выше и не использовались. */
 
 export const SPAWN_X = W >> 1;
 

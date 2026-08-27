@@ -3,7 +3,6 @@
 import {
   Cell,
   MonsterKind,
-  ProjType,
   W,
   msg,
   type Entity,
@@ -12,7 +11,6 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS } from '../data/items';
-import { Spr } from '../entities/sprite_index';
 import { entityDisplayName } from '../entities/monster';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';
@@ -232,20 +230,10 @@ export function traceBloodPlantTendrilCells(
   return cells;
 }
 
-export function isBloodPlantFireProjectile(projectile: Entity): boolean {
-  return (projectile.projType ?? ProjType.NORMAL) === ProjType.FLAME ||
-    projectile.sprite === Spr.FLAME_BOLT ||
-    projectile.sprite === Spr.HOSTILE_FLAME_BOLT;
-}
-
+/* Огонь опознаётся ТИПОМ УРОНА, порог живучести объявлен в `DEF.damageFloor`.
+ * Режущий инструмент остался списком: это про лезвие, а не про тип урона. */
 export function isBloodPlantCuttingWeapon(weaponId: string | undefined): boolean {
   return weaponId !== undefined && BLOOD_PLANT_CUT_WEAPONS.has(weaponId);
-}
-
-export function bloodPlantProjectileDamage(target: Entity, projectile: Entity, baseDamage: number): number {
-  if (target.monsterKind !== MonsterKind.BLOOD_PLANT || !isBloodPlantFireProjectile(projectile)) return baseDamage;
-  const maxHp = Math.max(1, target.maxHp ?? target.hp ?? 1);
-  return Math.max(baseDamage, Math.ceil(maxHp * 0.38));
 }
 
 export function recordBloodPlantBurned(world: World, state: GameState, plant: Entity, actor?: Entity): number {

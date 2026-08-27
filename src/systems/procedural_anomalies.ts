@@ -27,11 +27,6 @@ import { updateCementMemoryAnomaly, tryUseCementMemoryAnomaly } from './procedur
 import { updateConveyorSorterAnomaly, tryUseConveyorSorterAnomaly } from './procedural_anomalies/conveyor_sorter';
 import { updateConwayLifeAnomaly, tryUseConwayLifeAnomaly } from './procedural_anomalies/conway_life';
 import {
-  badAppleWorldInteractionTargetId,
-  tryUseBadAppleWorldAnomaly,
-  updateBadAppleWorldAnomaly,
-} from './procedural_anomalies/bad_apple_world';
-import {
   livingTunnelsInteractionTargetId,
   tryUseLivingTunnelsAnomaly,
   updateLivingTunnelsAnomaly,
@@ -124,7 +119,6 @@ function anomalyTags(spec: ProceduralFloorSpec): string[] {
   if (spec.anomalyId === 'section_shift') tags.push('topology', 'moving_rooms', 'crush', 'toroid');
   if (spec.anomalyId === 'conway_life') tags.push('cellular', 'topology', 'moving_walls', 'math');
   if (spec.anomalyId === 'rail_trains') tags.push('rail', 'transit', 'crush', 'industrial');
-  if (spec.anomalyId === 'bad_apple_world') tags.push('video', 'screen', 'topology', 'cult_media');
   if (spec.anomalyId === 'zombie_apocalypse') tags.push('zombie', 'crowd', 'infection', 'quarantine');
   if (spec.anomalyId === 'sandpile_perekrytie') tags.push('topology', 'collapse', 'crush', 'pressure', 'industrial');
   return tags;
@@ -411,7 +405,6 @@ export function proceduralSmogFogDensityBonus(world: World, player: Entity, stat
 }
 
 export function updateProceduralAnomalies(world: World, player: Entity, state: GameState, dt: number): void {
-  updateBadAppleWorldAnomaly(world, player, state, dt);
   const topologyTags = dynamicTopologyTags(world);
   if (topologyTags.wallSnake) updateWallSnakeAnomaly(world, player, state, dt);
   if (topologyTags.livingTunnels) updateLivingTunnelsAnomaly(world, player, state, dt);
@@ -767,8 +760,6 @@ export function proceduralAnomalyInteractionTargetId(
   const y = world.wrap(Math.floor(lookY));
   const ci = world.idx(x, y);
   const feature = world.features[ci] as Feature;
-  const badAppleTarget = badAppleWorldInteractionTargetId(world, lookX, lookY);
-  if (badAppleTarget !== null) return badAppleTarget;
   const topologyTags = dynamicTopologyTags(world);
   if (topologyTags.sandpilePerekrytie) {
     const sandpileTarget = sandpilePerekrytieInteractionTargetId(world, lookX, lookY);
@@ -805,7 +796,6 @@ export function tryUseProceduralFloorAnomaly(
   lookY: number,
 ): boolean {
   if (tryHandleSmogSource(world, player, state, lookX, lookY)) return true;
-  if (tryUseBadAppleWorldAnomaly(world, player, state, lookX, lookY)) return true;
   if (tryUseTeleportCellsCounter(world, player, state, lookX, lookY)) return true;
   const topologyTags = dynamicTopologyTags(world);
   if (topologyTags.wallSnake && tryUseWallSnakeAnomaly(world, player, state, lookX, lookY)) return true;

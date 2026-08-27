@@ -65,7 +65,15 @@ test('rare craft material usage is bounded and documented', () => {
     if (used.length > 0) actualRareUsers.set(itemId, used);
   }
 
-  assert.ok(actualRareUsers.size <= 45, `rare material user set is too broad: ${actualRareUsers.size}`);
+  /* Потолок 45 → 52: восемнадцать стволов и четыре ключа тамбура получили
+     кибернетику на входе, четырнадцать дешёвых безделушек её потеряли. Это
+     грубая рамка от тихого расползания; настоящий замок теперь ценовой и живёт
+     в `tests/craft-economy-loop.test.ts`.
+     52 → 57: перецена брони по полосам экономики (12 000..200 000 ₽ вместо
+     500..4 500 ₽) подняла все пять комплектов выше `RARE_GEAR_VALUE`, а правило
+     «вещь дороже порога снаряги обязана требовать редкий бит» выдало им
+     кибернетику. Рост счётчика здесь — следствие правила, а не расползание. */
+  assert.ok(actualRareUsers.size <= 57, `rare material user set is too broad: ${actualRareUsers.size}`);
 
   for (const [itemId, used] of actualRareUsers) {
     assert.deepEqual(used.sort(), [...(documented.get(itemId) ?? [])].sort(), `${itemId} rare materials must be intentional`);

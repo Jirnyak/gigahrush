@@ -9,7 +9,7 @@ import { isPlotNpc } from '../data/plot';
 import { randSeed } from '../core/rand';
 import { stampMark, MarkType } from './surface_marks';
 import { WEAPON_STATS } from '../data/catalog';
-import { spawnBloodHit, spawnDeathPool } from './blood_fx';
+import { spawnBloodHit } from './blood_fx';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { applyMonsterIncomingDamage } from './monster_traits';
@@ -68,6 +68,12 @@ export function resetPsiState(): void {
   markPos = null;
   possessions.clear();
   controlTimers.clear();
+  /* Признак «в мире есть безумные» и его накопитель тоже обязаны сброситься:
+   * оставшись `true`, он гонит ПОЛНЫЙ проход по срезу акторов каждый кадр на
+   * новом этаже, где безумных нет, — вместо ленивого скана раз в полсекунды,
+   * ради которого накопитель и заведён. */
+  hasActiveMadness = false;
+  madnessScanAccum = 0;
 }
 
 /**
@@ -99,7 +105,14 @@ function psiHit(
       knockback: false,
     }).applied;
   }
-  const finalDmg = applyMonsterIncomingDamage(world, target, Math.round(calculateDamage(damage, DamageType.PSI, target)));
+  /* Тип идёт и во врождённую броню твари, а не только в резист носимой: без
+   * него ПСИ-удар молча читался кинетикой и упирался в бетон Панельника. */
+  const finalDmg = applyMonsterIncomingDamage(
+    world,
+    target,
+    Math.round(calculateDamage(damage, DamageType.PSI, target)),
+    DamageType.PSI,
+  );
   target.hp = (target.hp ?? 0) - finalDmg;
   if ((target.hp ?? 0) <= 0) {
     killEntity(target);
@@ -122,7 +135,7 @@ export function castInstantSpell(
   ensureEntityIndex(entities);
   switch (effect) {
     case 'storm':    castStorm(player, entities, world, msgs, time, handleKill, state); break;
-    case 'brain_burn': castBrainBurn(player, entities, world, msgs, time, handleKill); break;
+    case 'brain_burn': castBrainBurn(player, entities, world, msgs, time, handleKill, state); break;
     case 'madness':  castTargeted(player, entities, world, msgs, time, 'madness'); break;
     case 'control':  castTargeted(player, entities, world, msgs, time, 'control'); break;
     case 'phase':    castPhase(player, msgs, time); break;
@@ -214,7 +227,21 @@ export function updatePsiEffects(entities: Entity[], dt: number, player: Entity,
 // ── Control timer tracking ───────────────────────────────────────
 const controlTimers = new Map<number, number>();  // entityId → remaining seconds
 
-// ── Find target in player's line of sight ────────────────────────
+/**
+ * Кого сейчас держит взгляд: дистанция и створ в 15°, БЕЗ проверки стен.
+ *
+ * ЭТО ЗАМЫСЕЛ, А НЕ ПРОБЕЛ. Решение владельца, 2026-08-27: пси проходит сквозь
+ * материю — на этом же стоит и дефазинг, которым закрыт вопрос «непроходимых»
+ * мест в мире. Поэтому выжиг мозга, вселение, безумие и контроль достают цель
+ * через бетон, и трассировку сюда добавлять НЕ НАДО.
+ *
+ * Расхождение с `castBeam`, который ведёт честный DDA и обрубается о стену, —
+ * тоже замысел, и оно универсально: ЛУЧ сквозь стены не проходит никогда,
+ * потому что он физический. Пси — нет.
+ *
+ * Ловушка для читающего: рядом легко увидеть «урон сквозь бетон при честном
+ * луче в соседней функции» и принять это за дефект. Не принимай.
+ */
 function findLookTarget(
   player: Entity, entities: Entity[], world: World, maxRange: number,
 ): Entity | null {
@@ -292,6 +319,7 @@ function castBrainBurn(
   player: Entity, entities: Entity[], world: World,
   msgs: Msg[], time: number,
   handleKill: (e: Entity) => void,
+  state?: GameState,
 ): void {
   const target = findLookTarget(player, entities, world, 12);
   if (!target) {
@@ -304,12 +332,15 @@ function castBrainBurn(
     msgs.push(msg(`${entityDisplayName(target)} слишком сильна для выжига!`, time, '#f84'));
     return;
   }
-  // Instant kill
+  /* Убийство идёт через ту же дверь, что весь остальной ПСИ-урон.
+   *
+   * Здесь стояло ручное обнуление здоровья мимо `psiHit`, и выжиг был
+   * ЕДИНСТВЕННЫМ способом убить бесследно: за дверью живут штраф отношениям и
+   * тревога свидетелей, а прямая запись их минует. Человек падал замертво,
+   * фракция не портилась, стоящие рядом не реагировали, память комнаты не
+   * писалась — платили все прочие способы убийства, кроме этого. */
   if (target.hp !== undefined) {
-    target.hp = 0;
-    killEntity(target);
-    spawnDeathPool(world, target.x, target.y, target.type === EntityType.MONSTER);
-    handleKill(target);
+    psiHit(world, state, target, target.hp, player, handleKill);
     msgs.push(msg(`Выжиг мозга! ${entityDisplayName(target)} уничтожена`, time, '#f4f'));
   }
 }
@@ -364,13 +395,17 @@ export function absorbPsiShieldDamage(player: Entity, hpBefore: number, msgs: Ms
   const hpAfter = player.hp;
   const lost = Math.max(0, hpBefore - hpAfter);
   if (lost <= 0) return 0;
-  if (player.rpg.psi <= 0) {
+  /* Порог считается ПО ЦЕНЕ ЭТОГО удара, а не «есть ли хоть сколько-то».
+   * Стояло `psi <= 0` перед тратой, поэтому остатка в 0.1 ПСИ хватало, чтобы
+   * поглотить удар на десять тысяч: цена щита не зависела от размера урона,
+   * а откат здоровья был полным. */
+  const psiLoss = Math.round(lost * 0.1 * 10) / 10;
+  if (player.rpg.psi < psiLoss) {
     shieldTimer = 0;
-    msgs.push(msg('ПСИ-щит погас: запас ПСИ пуст', time, '#f84'));
+    msgs.push(msg('ПСИ-щит погас: запаса ПСИ не хватило на удар', time, '#f84'));
     return 0;
   }
 
-  const psiLoss = Math.round(lost * 0.1 * 10) / 10;
   player.rpg.psi = Math.max(0, player.rpg.psi - psiLoss);
   player.hp = Math.min(player.maxHp ?? hpBefore, hpBefore);
   player.alive = true;
@@ -406,7 +441,15 @@ function canPossessTarget(target: Entity): boolean {
  * прежнего `player` — не косметика: раньше отказ стоял на глобальном слоте, и
  * первый вселившийся запирал способность всему миру. */
 function castPossession(caster: Entity, entities: Entity[], world: World, msgs: Msg[], time: number): Entity | null {
-  if (possessions.has(caster.id)) {
+  /* Второе условие закрывает ЦЕПОЧКУ. Ключ в карте — id ХОЗЯИНА, а после
+   * вселения `player` указывает на захваченное тело, поэтому для уже
+   * вселившегося `possessions.has(caster.id)` всегда ложно и охрана выше
+   * недостижима. Ход «вселиться в A, из тела A вселиться в B» заводил в карту
+   * два входа; внешний истекал первым, возврат в родное тело терялся, и игрок
+   * оставался телом A НАВСЕГДА — вместе с чужими уровнем и максимумом ПСИ,
+   * тогда как родное тело со всем инвентарём, деньгами и `alifeId` оставалось
+   * живым манекеном без `ai`. Следующее сохранение закрепляло подмену. */
+  if (possessions.has(caster.id) || caster.psiControlledBy !== undefined) {
     msgs.push(msg('Вселение уже держит чужое тело', time, '#f84'));
     return null;
   }

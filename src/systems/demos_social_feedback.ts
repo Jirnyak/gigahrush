@@ -40,7 +40,7 @@ import {
   type DemosRelationDeltaResult,
   type DemosRelationDeltaTarget,
 } from './demos_social';
-import { getRecentEvents, publishEvent } from './events';
+import { compareEventPriority, getRecentEvents, publishEvent } from './events';
 import { isNativePlayerBodyEntity, isPlayerEntity } from './player_actor';
 
 export interface DemosSocialFeedbackSummary {
@@ -310,9 +310,11 @@ export function processDemosSocialFeedbackEvents(
     remaining: clampInt(opts.maxOutcomes, DEFAULT_OUTCOME_LIMIT, 1, 32),
     published: 0,
   };
+  // Тот же порядок, что у ленты: бюджет последствий тоже узкий, и смерть должна
+  // добраться до круга близких раньше, чем его выест рутина.
   const events = (opts.events ?? getRecentEvents(state, { limit: maxEvents }))
     .slice()
-    .sort((a, b) => a.id - b.id);
+    .sort(compareEventPriority);
   let processedEvents = 0;
   let relationChanges = 0;
   let lastEventId = feedback.lastEventId;

@@ -421,6 +421,17 @@ function collectRoomFloorDecorCandidates(
   return out;
 }
 
+/* Локальная координата клетки внутри комнаты — ПО ТОРУ. Кандидат хранит
+ * ЗАВЁРНУТУЮ координату (см. `world.wrap` выше), а `room.x`/`room.y` лежат
+ * сырыми, поэтому у комнаты, начинающейся на 1023, сырая разность давала −1020.
+ * Дальше её сравнивали с габаритом и брали по ней фазу сетки — и завёрнутая
+ * половина такой комнаты не получала ни колонн, ни потолочного декора, а фаза
+ * прыгала: `%` в JS отдаёт отрицательный остаток. Комнат через шов: жилой 41,
+ * министерство 8, voronoi_quarantine 37. Здесь это ЗАПЕКАЕТСЯ в этаж. */
+function roomLocalCoord(value: number, origin: number): number {
+  return (value - origin + W) % W;
+}
+
 // ── Floor-class decor ─────────────────────────────────────────────
 // The table lives in data/floor_mesh_decor.ts because the render mesh pass
 // resolves from the same rows; keeping a private copy here is what let
@@ -561,8 +572,8 @@ function placeCeilingVisualDecor(
       room.type !== RoomType.HQ
     ) continue;
     for (const candidate of collectRoomFloorDecorCandidates(world, room, hash32(options.seed, room.id, 0x6365), options.reachable, true)) {
-      const lx = candidate.x - room.x;
-      const ly = candidate.y - room.y;
+      const lx = roomLocalCoord(candidate.x, room.x);
+      const ly = roomLocalCoord(candidate.y, room.y);
       const spacing = room.type === RoomType.CORRIDOR ? 4 : 6;
       const h = hash32(options.seed, candidate.idx, room.id, 0x7370);
       if ((lx + (h & 3)) % spacing !== 0 && (ly + ((h >>> 4) & 3)) % spacing !== 0) continue;
@@ -596,8 +607,8 @@ function placeColumnVisualDecor(
   for (const room of rooms) {
     if (!roomEligibleForDecor(room) || room.type === RoomType.CORRIDOR || room.w < 8 || room.h < 8) continue;
     for (const candidate of collectRoomFloorDecorCandidates(world, room, hash32(options.seed, room.id, 0x636f), options.reachable, true)) {
-      const lx = candidate.x - room.x;
-      const ly = candidate.y - room.y;
+      const lx = roomLocalCoord(candidate.x, room.x);
+      const ly = roomLocalCoord(candidate.y, room.y);
       if (lx < 2 || ly < 2 || lx >= room.w - 2 || ly >= room.h - 2) continue;
       if (options.avoidX !== undefined && options.avoidY !== undefined) {
         const dx = world.delta(candidate.x + 0.5, options.avoidX);

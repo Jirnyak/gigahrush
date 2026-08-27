@@ -45,6 +45,49 @@ test('core living affordances are centralized by room type', () => {
   assert.equal(roomSupports(RoomType.HQ, 'shelter'), true);
 });
 
+/* ── Обход адресуется проходным и общим комнатам, а не рабочим ──────
+ *
+ * `patrol` ненулевой ровно у CORRIDOR 24, HQ 20, COMMON 12, MARKET 10, и это
+ * ЗАМЫСЕЛ, а не пропуск: обход стоит там, где ходят все, — проход, штаб, общий
+ * зал, ряд. Ноль у OFFICE читается как дефект («часовому на караулке нечего
+ * делать») и уже дважды предлагался к правке, поэтому правило закреплено здесь,
+ * а не в комментарии этажа.
+ *
+ * Замерено: OFFICE по игре — это контора, а не пост. На шести крупных этажах
+ * 2312 комнат типа OFFICE, и караульных среди них 281 — все 279 с одного этажа
+ * (`Караулка` в жребии кварталов `src/gen/liquidatorbase/fort.ts`); на жилом,
+ * министерстве, квартирах и аду их ноль. Выдача `patrol: 12` типу OFFICE объём
+ * обхода НЕ поднимает (жилой 9.1% → 8.9%, база 11.5% → 11.1%: объём задаёт тяга
+ * драйва, а не запас комнат) и лишь уводит часовых в чужие кабинеты — на жилом
+ * доля обхода, проведённая в OFFICE, 1.9% → 10.3%. Значит починка не здесь: пост,
+ * объявленный конторой, чинится типом СВОЕЙ комнаты.
+ *
+ * Правило берётся из тегов самой таблицы, а не из списка типов: список пришлось
+ * бы править под каждый новый тип, а тег «проходная/общая/караульная» — это и
+ * есть то свойство, из-за которого комнату обходят. Обратное неверно намеренно:
+ * SHOP и BAR публичны, но обход в них не стоит.
+ */
+const PATROLLABLE_TAGS = ['passage', 'public', 'hall', 'guard'] as const;
+
+test('patrol is offered only by through/public/guard rooms', () => {
+  for (const type of ALL_ROOM_TYPES) {
+    if (roomAffordanceWeight(type, 'patrol') <= 0) continue;
+    const tags = roomAffordanceTags(type);
+    assert.ok(
+      PATROLLABLE_TAGS.some(tag => tags.includes(tag)),
+      `${RoomType[type]} предлагает обход, но по тегам не проходная и не общая: ${tags.join(', ')}`,
+    );
+  }
+});
+
+test('office is a workroom, not a guard post', () => {
+  assert.equal(roomSupports(RoomType.OFFICE, 'work'), true);
+  assert.equal(
+    roomAffordanceWeight(RoomType.OFFICE, 'patrol'), 0,
+    'контора — рабочая комната; караульный пост чинится типом своей комнаты, а не строкой OFFICE',
+  );
+});
+
 test('room expected features describe feature-first interactable surfaces', () => {
   assert.equal(roomExpectedFeatures(RoomType.KITCHEN).includes(Feature.STOVE), true);
   assert.equal(roomExpectedFeatures(RoomType.BATHROOM).includes(Feature.TOILET), true);

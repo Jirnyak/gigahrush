@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert';
 import { applyMonsterArmorHit, ZAKALENNAYA_ARMATURA_ARMOR_STACKS } from '../src/systems/monster_armor';
-import { EntityType, MonsterKind, ProjType, Feature } from '../src/core/types';
+import { DamageType, EntityType, MonsterKind, ProjType, Feature } from '../src/core/types';
 import type { Entity, GameState } from '../src/core/types';
 import { World } from '../src/core/world';
 import { createWorldEventState } from '../src/systems/events';
@@ -78,7 +78,10 @@ describe('monster_armor', () => {
     assert.strictEqual(res1.armorStacks, 0);
 
     // 2. Unpowered + Energy hit
-    const res2 = applyMonsterArmorHit(world, state, monster, { damage: 100, projectileType: ProjType.BEAM });
+    /* Тип урона выводит ЕДИНАЯ ДВЕРЬ (`applyDamage`), слой брони его только
+     * читает: с 2026-08-27 у живой сети нет собственного ключа энергии. Луч
+     * значит энергию сам (`projTypeDamageType`), здесь она названа прямо. */
+    const res2 = applyMonsterArmorHit(world, state, monster, { damage: 100, projectileType: ProjType.BEAM, damageType: DamageType.ENERGY });
     assert.strictEqual(res2.damage, 134); // Unpowered energy is 1.34 mult
     assert.strictEqual(res2.armorActive, false);
     assert.strictEqual(res2.armorStacks, 0);
@@ -94,7 +97,7 @@ describe('monster_armor', () => {
     assert.strictEqual(res3.armorStacks, 1);
 
     // 4. Powered + Energy hit
-    const res4 = applyMonsterArmorHit(world, state, monster, { damage: 100, projectileType: ProjType.BEAM });
+    const res4 = applyMonsterArmorHit(world, state, monster, { damage: 100, projectileType: ProjType.BEAM, damageType: DamageType.ENERGY });
     assert.strictEqual(res4.damage, 108); // Powered energy is 1.08 mult
     assert.strictEqual(res4.armorActive, false); // Energy pierces the armor entirely
     assert.strictEqual(res4.armorStacks, 0);

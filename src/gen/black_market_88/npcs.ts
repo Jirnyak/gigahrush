@@ -4,24 +4,7 @@
  */
 
 import { getPlotNpcNumericId } from '../../data/npc_packages';
-import {
-  AIGoal,
-  Cell,
-  ContainerKind,
-  EntityType,
-  Faction,
-  Feature,
-  Occupation,
-  QuestType,
-  W,
-  ZoneFaction,
-  type ContainerAccess,
-  type Entity,
-  type Item,
-  type Room,
-  type TerritoryOwner,
-  type WorldContainer,
-} from '../../core/types';
+import { AIGoal, ContainerKind, EntityType, Faction, Occupation, QuestType, ZoneFaction, type ContainerAccess, type Entity, type Item, type Room, type WorldContainer } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest } from '../../data/plot';
@@ -30,7 +13,7 @@ import { rng } from '../../core/rand';
 
 
 import { MarketRooms, Market88ServiceGutPlacement, Market88BazaarRooms, market88OwnerFaction } from './geometry';
-import { DESIGN_NPC_HOME_FLOOR_KEY, BLACK_MARKET_88_ROUTE_ID, BLACK_MARKET_88_CONTAINER_FLOOR } from './meta';
+import { DESIGN_NPC_HOME_FLOOR_KEY, BLACK_MARKET_88_ROUTE_ID, BLACK_MARKET_88_FUTURE_Z } from './meta';
 export const MARKET88_QUEUE_CROWD_CAP = 16;
 
 export const NPC_DEFS: Record<string, PlotNpcDef> = {
@@ -715,7 +698,7 @@ export function addContainer(
     id: world.containers.length + 1,
     x,
     y,
-    z: BLACK_MARKET_88_CONTAINER_FLOOR,
+    z: BLACK_MARKET_88_FUTURE_Z,
     roomId: room.id,
     zoneId: world.zoneMap[world.idx(x, y)],
     kind,
@@ -731,34 +714,5 @@ export function addContainer(
     tags,
   };
   world.addContainer(container);
-}
-
-export function isBlackMarket88AmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    entity.alive &&
-    !entity.id &&
-    !entity.persistentNpcId &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function blackMarket88TerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>([
-    [ZoneFaction.CITIZEN, []],
-    [ZoneFaction.LIQUIDATOR, []],
-    [ZoneFaction.CULTIST, []],
-    [ZoneFaction.SCIENTIST, []],
-    [ZoneFaction.WILD, []],
-  ]);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
 }
 

@@ -53,6 +53,9 @@ export type DesignFloorId =
   | 'perevalka'
   | 'void';
 
+/** Середина шкалы 1..5: чем отвечать на вопрос об этаже, которого нет в маршруте. */
+export const DESIGN_FLOOR_DEFAULT_DANGER = 3 as const;
+
 export interface DesignFloorRouteDef {
   id: DesignFloorId;
   z: number;
@@ -93,7 +96,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'obschezhitie_smeny', z: -6, displayName: 'Общежитие смены', color: '#d6b37a', role: 'сон, тихая кража, свидетели и укрытие', danger: 2 },
   { id: 'penrose_laundry', z: -8, displayName: 'Прачечная Пенроуза', color: '#9ef', role: 'апериодичная прачечная, пар, тайники', danger: 3 },
   { id: 'black_market_88', z: -10, displayName: 'Черный рынок 88', color: '#fd4', role: 'торговля, контрабанда, долги', danger: 3 },
-  { id: 'perevalka', z: -12, displayName: 'Перевалка', color: '#c9a', role: 'грузовой ярус: досмотр, серый обход, спуск в промзону', danger: 3 },
+  { id: 'perevalka', z: -16, displayName: 'Перевалка', color: '#c9a', role: 'грузовой ярус: досмотр, серый обход, перевалка грузов из промзоны вниз', danger: 3 },
   { id: 'production_belt', z: -14, displayName: 'Производственный пояс', color: '#fd6', role: 'хабар и ремонт', danger: 4 },
   { id: 'service_floor', z: -18, displayName: 'Служебный этаж', color: '#8cf', role: 'служебный обход и ремонт', danger: 3 },
   { id: 'hyperbolic_switchyard', z: -20, displayName: 'Гиперболическая стрелочная', color: '#7ff0b8', role: 'дуги, ложные платформы, стрелочные семейства', danger: 4 },
@@ -107,7 +110,7 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'podad', z: -40, displayName: 'Подад', color: '#d34', role: 'живые тоннели, двигающиеся стены, нижний порог', danger: 5 },
   { id: 'spectral_chasovnya', z: -42, displayName: 'Спектральная часовня', color: '#d6a64b', role: 'звук, культ, слуховая геометрия', danger: 5 },
   { id: 'stenka', z: -44, displayName: 'Стенка на стенку', color: '#9cf', role: 'арена двух сторон: линии, лес, башни', danger: 5 },
-  { id: 'liquidatorbase', z: -16, displayName: 'База Ликвидаторов', color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
+  { id: 'liquidatorbase', z: -12, displayName: 'База Ликвидаторов', color: '#f66', role: 'штаб, торговля, ликвидаторы', danger: 4 },
   { id: 'darkness', z: -48, displayName: 'Темный отсек', color: '#88f', role: 'позднее давление', danger: 5 },
   { id: 'horrorfloor', z: -46, displayName: 'Хоррор-этаж', color: '#222', role: 'лабиринт, прятки', danger: 5 },
   { id: 'living', z: 0, displayName: 'Жилая зона', color: '#4af', role: 'основной этаж, начало пути', danger: 1 },

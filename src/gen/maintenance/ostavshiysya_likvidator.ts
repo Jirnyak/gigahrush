@@ -313,7 +313,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -322,7 +322,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -420,7 +419,6 @@ export function generateOstavshiysyaLikvidator(ctx: MaintContentCtx): void {
   });
   spawnPlotNpc(ctx, MECHANIC_ID, MECHANIC_DEF, witness.x + 4, witness.y + 3, 0);
 
-  // @ts-ignore
   addContainer(ctx, stash, stash.x + 5, stash.y + 3, {
     kind: ContainerKind.WEAPON_CRATE,
     name: 'Ящик смены оставшегося ликвидатора',

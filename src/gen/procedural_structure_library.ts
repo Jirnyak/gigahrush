@@ -33,7 +33,6 @@ const GEOMETRY_STRUCTURE_FAMILY: Readonly<Partial<Record<FloorGeometryId, Proced
 };
 
 const GEOMETRY_OWNING_ANOMALIES: ReadonlySet<FloorAnomalyId> = new Set([
-  'bad_apple_world',
   'conway_life',
   'fractal_floor',
   'rail_trains',

@@ -28,6 +28,10 @@ import { runMinistryDesignFloorContent } from './route_papers_slice';
    ставит общая доставка авторских пакетов по `spawnRoomAlias`. Импорт нужен
    ради регистрации сцены и личности на верхнем уровне модуля. */
 import './garrison_parade';
+/* Тот же случай: разворот Заслонова стоит на том же зале-якоре и зовёт того же
+   генерала ролью `packageId`. Своего генератора у сцены нет, импорт нужен ради
+   регистрации на верхнем уровне модуля. */
+import './general_betrayal';
 
 export function runMinistryContent(
   world: World,
@@ -44,8 +48,7 @@ export function runMinistryContent(
   const idRef = { v: nextId };
   const permit = withPoiGenerationMetadata(world, entities, {
     id: 'ministry_permit_office',
-    // @ts-ignore
-    z: 'ministry',
+    floor: 'ministry',
     debugLabel: 'Министерство: Пропускное бюро',
     decisionHooks: [
       { kind: 'quest', id: 'permit_ballot_blanks', label: 'получить пропуск через бюллетени' },
@@ -78,8 +81,7 @@ export function runMinistryContent(
 
   const nii = withPoiGenerationMetadata(world, entities, {
     id: 'ministry_nii_contraband_audit',
-    // @ts-ignore
-    z: 'ministry',
+    floor: 'ministry',
     debugLabel: 'Министерство: ревизионная НИИ',
     decisionHooks: [
       { kind: 'quest', id: 'nii_audit_find_room', label: 'найти ревизионную НИИ' },

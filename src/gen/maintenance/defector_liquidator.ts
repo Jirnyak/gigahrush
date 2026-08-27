@@ -427,7 +427,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -436,7 +436,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -514,7 +513,6 @@ export function generateDefectorLiquidator(ctx: MaintContentCtx): void {
   spawnPlotNpc(ctx, RADIO_ID, RADIO_DEF, wire.x + 4, wire.y + 3, Math.PI / 2);
   spawnPlotNpc(ctx, CULT_ID, CULT_DEF, alcove.x + 5, alcove.y + 3, Math.PI);
 
-  // @ts-ignore
   addContainer(ctx, stash, stash.x + 5, stash.y + 3, {
     kind: ContainerKind.SECRET_STASH,
     name: 'Срывной мешок Митьки',

@@ -7,17 +7,14 @@ import {
   Feature,
   MonsterKind,
   Occupation,
-  W,
   type Entity,
   type Item,
   type Room,
-  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef, type SideQuestStep, registerFloorSideQuest , registerAuthoredNpc } from '../../data/plot';
 
 const AMBIENT_NPC_0: PlotNpcDef = {
@@ -99,29 +96,6 @@ export function registerSiliconNetWellContent(): void {
    SIDE_QUESTS, ни в плане населения A-Life. Вызов из тела генератора оставлен —
    он идемпотентен. */
 registerSiliconNetWellContent();
-
-export function isSiliconAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    entity.alive &&
-    entity.id === undefined &&
-    entity.persistentNpcId === undefined &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function siliconTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const list = cells.get(world.factionControl[i] as TerritoryOwner);
-    if (list) list.push(i);
-  }
-  return cells;
-}
 
 export function spawnNpcs(
   entities: Entity[],

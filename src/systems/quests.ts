@@ -24,10 +24,12 @@ import { ENTITY_MASK_MONSTER, ensureEntityIndex, getEntityIndex } from './entity
 import {
   PLOT_CHAIN,
   SIDE_QUESTS,
+  applyPlotSampleLottery,
   hasAvailableQuest,
   isPlotNpc,
   sideQuestGiverId,
   sideQuestPrereqsMet,
+  sideQuestVisitTargetDeclared,
   type KillPressureDef,
   type PlotStep,
 } from '../data/plot';
@@ -103,17 +105,23 @@ import {
 } from './crafting';
 import { territoryOwnerAtIndex } from './territory';
 
+/**
+ * Локальный кадровый индекс проверки квестов.
+ *
+ * Держит РОВНО то, чего нет у общего индекса сущностей:
+ * - `byId` включает и МЁРТВЫХ (общий индекс держит только живых, а квест обязан
+ *   узнать своего погибшего выдавшего);
+ * - `byMonLive` — первый живой монстр каждого вида, адрес, которого у общего
+ *   индекса нет вовсе.
+ *
+ * Слот сюжетной личности (`alifeId` → живая сущность) здесь лежал ТРЕТЬЕЙ
+ * таблицей и был побайтной копией того, что общий индекс поддерживает
+ * инкрементально: единственный потребитель (`findByPlotLive`) всё равно требует
+ * живого, а у него уже есть запасная дорога ровно туда же. Копия стоила Map на
+ * ~9600 вставок дважды в секунду ВНУТРИ одного кадра.
+ */
 type EntityIndex = {
   byId: Map<number, Entity>;
-  /**
-   * Слот сюжетной личности → живая сущность.
-   *
-   * Отдельный адрес, а не тот же `byId`: номер сюжетной личности (`alifeId`) и
-   * номер сущности (`id`) — разные пространства. Совпадали они только потому,
-   * что доставка выдавала личности номер, равный слоту; на этом совпадении
-   * держалась вся адресация квестов, и любой предмет с чужим номером её ломал.
-   */
-  byAlifeId: Map<number, Entity>;
   byMonLive: Map<MonsterKind, Entity>;
 };
 
@@ -122,12 +130,10 @@ let _currentIndex: EntityIndex | undefined = undefined;
 function buildEntityIndex(entities: readonly Entity[]): EntityIndex {
   const index = {
     byId: new Map<number, Entity>(),
-    byAlifeId: new Map<number, Entity>(),
     byMonLive: new Map<MonsterKind, Entity>()
   };
   for (const e of entities) {
     index.byId.set(e.id, e);
-    if (e.alifeId !== undefined) index.byAlifeId.set(e.alifeId, e);
     if (e.type === EntityType.MONSTER && e.alive && e.monsterKind !== undefined && !index.byMonLive.has(e.monsterKind)) {
       index.byMonLive.set(e.monsterKind, e);
     }
@@ -152,9 +158,7 @@ function findByPlotLive(entities: readonly Entity[], plotId: number) {
   // (давление убийственных шагов). Живого сюжетного человека знает общий индекс
   // сущностей: он держит ровно живых и адресует их по тому же слоту `alifeId`,
   // так что перебор всего этажа тут был чистой потерей.
-  const e = _currentIndex
-    ? _currentIndex.byAlifeId.get(plotId)
-    : ensureEntityIndex(entities).byAlifeId.get(plotId);
+  const e = ensureEntityIndex(entities).byAlifeId.get(plotId);
   return (e?.type === EntityType.NPC && e.alive) ? e : undefined;
 }
 function findMonLive(entities: readonly Entity[], kind: MonsterKind) {
@@ -1642,6 +1646,13 @@ function generatePlotQuest(
   npc: PlotQuestGiver, world: World, entities: Entity[], state: GameState,
 ): Quest | null {
   const plotId = npc.slot;
+  // Виды образцов НИИ разыгрываются от сида прогона. Разыграть их может только
+  // слой, который видит `state` и знает русские имена монстров, — сами данные не
+  // видят ни того, ни другого. Вызов идемпотентен по сиду и стоит O(1) на повторе.
+  applyPlotSampleLottery(
+    (state as { floorRun?: { runSeed?: number } }).floorRun?.runSeed ?? 0,
+    kind => MONSTERS[kind]?.name ?? 'тварь',
+  );
   for (let i = 0; i < PLOT_CHAIN.length; i++) {
     const step = PLOT_CHAIN[i];
     if ((step.giverId ?? GIVERLESS_QUEST_GIVER) !== plotId) continue;
@@ -1847,21 +1858,33 @@ function generatePlotQuest(
         done: false,
       };
     }
-    if (sq.type === QuestType.VISIT && ((sq as any).targetRoomType !== undefined || (sq as any).targetRoom !== undefined)) {
-      const room = (sq as any).targetRoom
-        ? nearestRoomByName(world, npc, (sq as any).targetRoom)
-        : nearestRoomOfType(world, npc, (sq as any).targetRoomType!);
-      if (!room) continue;
+    /* Место назначения можно объявить пятью способами, и завершение
+     * (`visitNeedsConcreteTarget`) понимает все пять. Выдача же знала только
+     * этаж и тип комнаты, поэтому 23 сайд-квеста, чья цель задана одним лишь
+     * `targetRoomDefId` (плюс шесть, ждавших их в цепочке), не предлагались
+     * никогда: цикл молча уходил к следующему, а над дающим при этом горел «!».
+     * Ветка ниже — общий случай: комнату ищем сразу, когда можем (она нужна для
+     * {dir} и метки на карте), иначе её найдёт `resolveQuestTargetRoom`. */
+    if (sq.type === QuestType.VISIT && sideQuestVisitTargetDeclared(sq)) {
+      const room = sq.targetRoomDefId !== undefined
+        ? nearestRoomByName(world, npc, sq.targetRoomDefId)
+        : sq.targetRoomType !== undefined
+          ? nearestRoomOfType(world, npc, sq.targetRoomType)
+          : null;
+      // Тип комнаты — единственная зацепка, и такой комнаты рядом нет: предлагать нечего.
+      if (!room && sq.targetRoomType !== undefined && sq.targetRoomDefId === undefined) continue;
       const id = state.nextQuestId++;
       let desc = sq.desc;
       if (desc.includes('{dir}')) {
-        desc = desc.replace('{dir}', toroidalDirection(world, npc.x, npc.y, room.x + room.w / 2, room.y + room.h / 2));
+        desc = desc.replace('{dir}', room
+          ? toroidalDirection(world, npc.x, npc.y, room.x + room.w / 2, room.y + room.h / 2)
+          : 'на другом уровне');
       }
       return {
         id, type: sq.type,
         giverId: npc.slot, giverName: npc.name ?? '???',
         desc,
-        targetRoom: room.id,
+        targetRoom: room?.id,
         rewardItem: sq.rewardItem, rewardCount: sq.rewardCount,
         extraRewards: sq.extraRewards,
         relationDelta: sq.relationDelta, xpReward: sq.xpReward,

@@ -152,7 +152,7 @@ Command intent:
 - `npm run test:unit`: Node unit tests through `tsx --test`.
 - `npm run test:generation`: expanded generation matrix (294 files, sets `GIGAHRUSH_GENERATION_MATRIX=1`). Green since 2026-08-15 and part of `npm run check`.
 - `npm run content:audit`: static source/content audit.
-- `npm run check:invariants`: layer boundaries, raw `Math.random()` ban, function-length ceiling, dead floor-coordinate keys (60/100/140/180/200). Add `--report` for the full listing.
+- `npm run check:invariants`: layer boundaries, raw `Math.random()` ban, blanket `@ts-ignore` ban (0 allowed; `@ts-expect-error` is fine — it names the error and expires with it), function-length ceiling, dead floor-coordinate keys (60/100/140/180/200, including the `case N:` and `[N]:` forms). Add `--report` for the full listing.
 - `npm run check:readonly`: typecheck, unit tests, content audit, invariants; safest broad agent gate.
 - `npm run build`: production browser build; writes `dist/` — single-file `index.html` plus lazily-fetched `*.ogg` music files and workers alongside it (uploads must ship the whole `dist/` set, not just `index.html`).
 - `npm run smoke`: headless browser playability smoke; requires existing `dist/` and Chrome or `CHROME_BIN`.
@@ -279,7 +279,7 @@ If a task needs a red file, make the smallest generic hook/API change, then keep
 - **Even-numbered floors** (`Z % 2 === 0`) are separate, independent design modules. Each is authored as a standalone package without inheriting biomes.
 - **Odd-numbered floors** (`Z % 2 !== 0`) are procedurally assembled by randomly mixing pieces of other floors and introducing procedural anomalies.
 
-Normal lift travel uses the per-run vertical route in `src/systems/procedural_floors.ts` and route definitions in `src/data/design_floors.ts` / `src/data/procedural_floors.ts`. Authored design floors are string-id route stops generated through `src/gen/design_floors/manifest.ts` and expanded through `src/gen/design_floors/full_floor.ts`.
+Normal lift travel uses the per-run vertical route in `src/systems/procedural_floors.ts` and route definitions in `src/data/design_floors.ts` / `src/data/procedural_floors.ts`. Authored design floors are string-id route stops generated through `src/gen/design_floors/manifest.ts`. Expansion is NOT centralized: the former `src/gen/design_floors/full_floor.ts` integration layer was deleted and its hooks moved into each floor's own `src/gen/<floor_id>/` package — the directory holds only `manifest.ts` and `population.ts`.
 
 When adding route content:
 
@@ -401,7 +401,7 @@ Allowed new actors must declare their reason: quest, faction event, caravan, sam
 
 ## Save And Load
 
-The browser save lives in `localStorage` under `gigahrush_save`. The authoritative save shape constant is `SAVE_SHAPE_VERSION` in `src/systems/save_runtime.ts`.
+The browser save lives in `localStorage` under `gigahrush_save`. The authoritative save shape constant is `SAVE_SHAPE_VERSION` in `src/core/save_shape.ts` (a dependency-free leaf; `save_runtime.ts` only imports it). It is `28` as of 2026-08-27.
 
 Only the current save shape is supported. If a change breaks shape compatibility, bump `SAVE_SHAPE_VERSION` and reject stale saves explicitly. Do not add cross-version migration code by default.
 

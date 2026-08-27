@@ -11,6 +11,11 @@ export interface AlifeFactionProfile {
   baseWeight: number;
   dangerBias: number;
   wealthMult: number;
+  /* Ключ — каноническая высота `z` из `DESIGN_FLOOR_ROUTES`: жилой 0, квартиры
+   * 14, министерство 30, коллекторы −26, мясной низ −36. Таблица годами стояла
+   * на выжженной шкале (100/60/30/140/180), поэтому совпадало только
+   * министерство, а все прочие этажи брали дефолт: культисты весили 0.08 там,
+   * где автор написал 9.5. Второй шкалы здесь быть не должно. */
   floorWeights: Partial<Record<number, number>>;
   occupations: readonly WeightedValue<Occupation>[];
 }
@@ -25,11 +30,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: -0.06,
     wealthMult: 1,
     floorWeights: {
-      [100]: 1.25,
-      [60]: 1.15,
+      [0]: 1.25,
+      [14]: 1.15,
       [30]: 0.75,
-      [140]: 0.62,
-      [180]: 0.04,
+      [-26]: 0.62,
+      [-36]: 0.04,
     },
     occupations: [
       { value: Occupation.HOUSEWIFE, weight: 18 },
@@ -51,11 +56,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.18,
     wealthMult: 1.8,
     floorWeights: {
-      [100]: 0.6,
-      [60]: 0.95,
+      [0]: 0.6,
+      [14]: 0.95,
       [30]: 1.75,
-      [140]: 1.55,
-      [180]: 2.1,
+      [-26]: 1.55,
+      [-36]: 2.1,
     },
     occupations: [
       { value: Occupation.HUNTER, weight: 30 },
@@ -70,11 +75,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.12,
     wealthMult: 0.65,
     floorWeights: {
-      [100]: 0.5,
-      [60]: 1.8,
+      [0]: 0.5,
+      [14]: 1.8,
       [30]: 0.45,
-      [140]: 1.15,
-      [180]: 0.28,
+      [-26]: 1.15,
+      [-36]: 0.28,
     },
     occupations: [
       { value: Occupation.TRAVELER, weight: 16 },
@@ -90,11 +95,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.04,
     wealthMult: 2.4,
     floorWeights: {
-      [100]: 0.2,
-      [60]: 0.18,
+      [0]: 0.2,
+      [14]: 0.18,
       [30]: 1.85,
-      [140]: 1.35,
-      [180]: 0.2,
+      [-26]: 1.35,
+      [-36]: 0.2,
     },
     occupations: [
       { value: Occupation.SCIENTIST, weight: 20 },
@@ -110,11 +115,11 @@ export const ALIFE_FACTION_PROFILES: readonly AlifeFactionProfile[] = [
     dangerBias: 0.28,
     wealthMult: 0.9,
     floorWeights: {
-      [100]: 0.08,
-      [60]: 0.18,
+      [0]: 0.08,
+      [14]: 0.18,
       [30]: 0.55,
-      [140]: 0.85,
-      [180]: 9.5,
+      [-26]: 0.85,
+      [-36]: 9.5,
     },
     occupations: [
       { value: Occupation.PILGRIM, weight: 20 },

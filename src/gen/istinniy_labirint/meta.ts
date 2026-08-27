@@ -1,3 +1,4 @@
+import { designFloorById } from '../../data/design_floors';
 import {
   Faction,
   Feature,
@@ -18,7 +19,12 @@ export const ISTINNIY_LABIRINT_Z = 28;
 
 export const ISTINNIY_LABIRINT_CHORD_KEY = 'key';
 
-export const BASE_FLOOR = 30;
+/* Высота ВЫВОДИТСЯ из маршрута, а не перепечатывается. Здесь стояло рукописное
+ * число 30 — остаток выжженной шестиключевой шкалы, переживший вырезание
+ * самого поля `baseFloor`. Канон этого этажа 28, и расхождение было живым:
+ * значение уезжало в `targetFloorZ` двух квестов, то есть отправляло игрока на министерство. Механическая проверка мёртвых координат
+ * его не видела — число пряталось за именем константы. */
+export const BASE_FLOOR = designFloorById(ISTINNIY_LABIRINT_ROUTE_ID)?.z ?? 28;
 
 export const GRID_W = 63;
 

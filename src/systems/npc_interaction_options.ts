@@ -577,7 +577,6 @@ export function npcActivityPrefix(
     case NpcState.HIDING: return 'Прячусь!';
     case NpcState.PATROL: return 'На обходе.';
     case NpcState.MEETING: return 'Общаюсь по делу.';
-    case NpcState.BREAK: return 'Отдыхаю.';
     case NpcState.TRAVELING:
       if (targetRoomName) return `Иду в «${targetRoomName}».`;
       return 'В пути.';

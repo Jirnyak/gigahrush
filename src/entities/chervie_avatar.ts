@@ -1,6 +1,6 @@
 /* ── Chervie avatar: net-borne AI serpent around screens ─────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.45,
   dmg: 17,
   attackRate: 2.15,
+  damageType: DamageType.ENERGY,
   sprite: 0,
   isRanged: true,
   projSpeed: 5.8,

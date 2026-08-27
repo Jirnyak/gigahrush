@@ -9,11 +9,9 @@ import {
   W,
   type Entity,
   type Room,
-  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
@@ -131,27 +129,5 @@ export function addContainer(
     tags,
   });
   if (world.features[ci] === Feature.NONE) world.features[ci] = Feature.SHELF;
-}
-
-export function isHyperbolicSwitchyardAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    !entity.id &&
-    !entity.persistentNpcId &&
-    entity.alifeId === undefined &&
-    entity.questId === -1;
-}
-
-export function hyperbolicSwitchyardTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
 }
 

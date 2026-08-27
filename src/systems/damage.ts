@@ -1,4 +1,4 @@
-import { EntityType, type Entity, type GameState, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
+import { EntityType, type Entity, type GameState, type MonsterKind, type PlayerDamageRecord, type PlayerDamageSourceKind } from '../core/types';
 import { isNoClipActive } from './psi';
 import type { World } from '../core/world';
 import { ensureEntityIndex } from './entity_index';
@@ -89,6 +89,19 @@ export function formatLastPlayerDamageCause(
   if (!last) return undefined;
   if (last.time < deathTime - DEATH_CAUSE_LOOKBACK_SEC || last.time > deathTime + DEATH_CAUSE_LOOKAHEAD_SEC) return undefined;
   return last.detail || `${last.sourceName}: -${last.amount}`;
+}
+
+/**
+ * Кто нанёс смертельный удар, если это была тварь.
+ *
+ * Окно то же, что у причины смерти, и живёт оно ЗДЕСЬ: у экрана смерти своей
+ * копии этих двух чисел быть не должно.
+ */
+export function lastPlayerDamageMonsterKind(state: GameState, deathTime: number): MonsterKind | undefined {
+  const last: PlayerDamageRecord | undefined = state.lastDamage;
+  if (!last || last.monsterKind === undefined) return undefined;
+  if (last.time < deathTime - DEATH_CAUSE_LOOKBACK_SEC || last.time > deathTime + DEATH_CAUSE_LOOKAHEAD_SEC) return undefined;
+  return last.monsterKind;
 }
 
 export function hasFreshPlayerDamageRecord(state: GameState, tick: number, time: number): boolean {

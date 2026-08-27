@@ -10,8 +10,198 @@ import { zhelemishStatsLine } from '../systems/status';
 import { drawNeuroPanel, drawGlitchText, textJitter, flicker } from './hud_fx';
 import { fitTextStable as fitStatText, formatUiNumber, wrapTextLines } from './ui_text';
 import { drawInventoryFinanceBlock, readFinanceSnapshot } from './economy_ui';
-import { fullscreenInventoryLayout } from './ui_layout';
+import { fullscreenInventoryLayout, type FullscreenInventoryLayout, type UiRect } from './ui_layout';
 import { drawItemGridIcon } from './item_sprites';
+
+function damageTypeLabel(dt: DamageType | undefined): { text: string; color: string } {
+  switch (dt) {
+    case DamageType.FIRE: return { text: '🔴 огонь', color: '#b35a3f' };
+    case DamageType.ENERGY: return { text: '🔵 энерго', color: '#4d8fa0' };
+    case DamageType.PSI: return { text: '🟣 пси', color: '#9a6a9c' };
+    case DamageType.BUCKSHOT: return { text: '🟡 дробь', color: '#c2a24c' };
+    case DamageType.BIO: return { text: '🟢 био', color: '#6f9a55' };
+    case DamageType.KINETIC:
+    default: return { text: '⚫ кинетика', color: '#aaa' };
+  }
+}
+
+/** Одна строка правой колонки: текст, цвет, кегль в текстовых единицах и
+ *  БАЗОВАЯ ЛИНИЯ, по которой её кладёт `fillText`. */
+interface InventoryDetailLine {
+  text: string;
+  color: string;
+  fontUnits: number;
+  y: number;
+}
+
+/** Вертикаль правой колонки инвентаря — ПОТОК, а не постоянный отступ: описание
+ *  предмета занимает от одной до четырёх строк, ниже могут встать строка урона,
+ *  заголовок сопротивлений и по строке на каждое сопротивление. Всё, что ниже,
+ *  уезжает вместе с ними.
+ *
+ *  Это единственная арифметика вертикали: рисование идёт по ней, слой нажатия
+ *  спрашивает её через `inventoryActionRows`. Второй копии быть не должно —
+ *  именно она стоила игроку строки «ИСП./ВЫК.»: попадание считалось по
+ *  фиксированному `details.y + 37*ts`, а текст рисовался по потоку, и полосы не
+ *  пересекались ни на одном размере холста. */
+interface InventoryDetailFlow {
+  lines: InventoryDetailLine[];
+  hasItem: boolean;
+  hasUse: boolean;
+  priceY: number;
+  priceText: string;
+  /** Базовая линия строки «ИСП./ВЫК.». */
+  actionY: number;
+  /** Базовая линия строки имени игрока. */
+  titleY: number;
+  /** Базовая линия строки СИЛ/ЛОВ/ИНТ. */
+  attrY: number;
+}
+
+function inventoryDetailFlow(
+  ctx: CanvasRenderingContext2D,
+  player: Entity,
+  state: GameState,
+  layout: FullscreenInventoryLayout,
+): InventoryDetailFlow {
+  const ts = layout.textScale;
+  const details = layout.details;
+  const inv = player.inventory ?? [];
+  const validInvSelection = state.invSel < inv.length;
+  const item = validInvSelection ? inv[state.invSel] : undefined;
+  const def = item ? ITEMS[item.defId] : undefined;
+  const lines: InventoryDetailLine[] = [];
+  let infoY = details.y + 7.5 * ts;
+  let priceY = infoY;
+  let priceText = '';
+  let actionY = infoY;
+  let hasUse = false;
+
+  if (item && def) {
+    ctx.font = `${5.6 * ts}px "Press Start 2P", monospace`;
+    for (const text of wrapTextLines(ctx, def.desc, details.w, 4, { stable: true, mode: 'clip' })) {
+      lines.push({ text, color: '#999', fontUnits: 5.6, y: infoY });
+      infoY += 6.6 * ts;
+    }
+    if (def.type === ItemType.WEAPON) {
+      const ws = WEAPON_STATS[def.id];
+      if (ws) {
+        const dt = damageTypeLabel(ws.damageType);
+        lines.push({ text: `Урон: ${dt.text}`, color: dt.color, fontUnits: 5.6, y: infoY });
+        infoY += 6.6 * ts;
+      }
+    }
+    if (def.resistances) {
+      lines.push({ text: 'Сопротивления:', color: '#7996a4', fontUnits: 5.6, y: infoY });
+      infoY += 6.6 * ts;
+      for (const [dtStr, val] of Object.entries(def.resistances)) {
+        const dt = parseInt(dtStr, 10) as DamageType;
+        if (!isNaN(dt) && val) {
+          const dtInfo = damageTypeLabel(dt);
+          lines.push({ text: `  ${dtInfo.text}: ${val}%`, color: dtInfo.color, fontUnits: 5.6, y: infoY });
+          infoY += 6.6 * ts;
+        }
+      }
+    }
+    priceY = infoY + 1.4 * ts;
+    priceText = `Цена: ${def.value ?? 0}₽`;
+    actionY = infoY + 7.4 * ts;
+    hasUse = !!(def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL || def.resistances);
+    infoY = actionY + 4 * ts;
+  } else if (!validInvSelection) {
+    lines.push({ text: 'Пустой слот', color: '#555', fontUnits: 5.2, y: infoY });
+    infoY += 3 * ts;
+  }
+
+  const titleY = Math.max(infoY + 4 * ts, details.y + 12 * ts);
+  return {
+    lines,
+    hasItem: !!(item && def),
+    hasUse,
+    priceY,
+    priceText,
+    actionY,
+    titleY,
+    attrY: titleY + 6.6 * ts,
+  };
+}
+
+export type InventoryAttrKey = 'str' | 'agi' | 'int';
+
+const ATTR_SEPARATOR = '  ';
+
+/** Сегменты строки характеристик ровно в том виде, в каком их склеивает
+ *  `fillText`: ключ подсказки показывается только пока есть что тратить. */
+function inventoryAttrSegments(rpg: NonNullable<Entity['rpg']>): { key: InventoryAttrKey; text: string }[] {
+  const hint = rpg.attrPoints > 0;
+  return [
+    { key: 'str', text: `${hint ? controlHint('attrStr') : ''}СИЛ ${rpg.str}` },
+    { key: 'agi', text: `${hint ? controlHint('attrAgi') : ''}ЛОВ ${rpg.agi}` },
+    { key: 'int', text: `${hint ? controlHint('attrInt') : ''}ИНТ ${rpg.int}` },
+  ];
+}
+
+function inventoryAttrLine(rpg: NonNullable<Entity['rpg']>): string {
+  return inventoryAttrSegments(rpg).map(seg => seg.text).join(ATTR_SEPARATOR);
+}
+
+export interface InventoryActionRows {
+  /** Полоса «ИСП.» — только когда строка действительно нарисована. */
+  use?: UiRect;
+  /** Полоса «ВЫК.». */
+  drop?: UiRect;
+  /** Сегменты строки СИЛ/ЛОВ/ИНТ, каждый под своими же буквами. */
+  attr: { key: InventoryAttrKey; rect: UiRect }[];
+}
+
+/** Полосы попадания строк инвентаря, которые ставит поток отрисовки.
+ *
+ *  Горизонталь (две колонки действий и ширина колонки характеристик) принадлежит
+ *  `fullscreenInventoryLayout`; вертикаль — только потоку выше. Полосы намеренно
+ *  узкие: сверху к строке действий примыкает «Цена», снизу — имя игрока, и
+ *  расширять полосу значило бы снова ловить палец на чужой надписи. */
+export function inventoryActionRows(
+  ctx: CanvasRenderingContext2D,
+  player: Entity,
+  state: GameState,
+  sx: number,
+  sy: number,
+): InventoryActionRows {
+  const layout = fullscreenInventoryLayout(ctx.canvas.width, ctx.canvas.height, sx, sy);
+  const ts = layout.textScale;
+  const flow = inventoryDetailFlow(ctx, player, state, layout);
+  const rows: InventoryActionRows = { attr: [] };
+
+  if (flow.hasItem) {
+    const y = flow.actionY - 6 * ts;
+    const h = 8.4 * ts;
+    if (flow.hasUse) rows.use = { x: layout.use.x, y, w: layout.use.w, h };
+    rows.drop = { x: layout.drop.x, y, w: layout.drop.w, h };
+  }
+
+  const rpg = player.rpg;
+  if (rpg) {
+    ctx.font = `${5 * ts}px "Press Start 2P", monospace`;
+    const barW = Math.max(24 * layout.scale, layout.attr.w);
+    const segs = inventoryAttrSegments(rpg);
+    // Мерить надо ровно ту строку, которую положил fillText: `fitStatText` и
+    // обрезает, и переводит, так что сегменты берутся из НЕЁ, а не из исходных.
+    const parts = fitStatText(ctx, inventoryAttrLine(rpg), barW).split(ATTR_SEPARATOR);
+    if (parts.length === segs.length) {
+      const sepW = ctx.measureText(ATTR_SEPARATOR).width;
+      const top = flow.attrY - 6.4 * ts;
+      const h = 8 * ts;
+      let from = 0;
+      for (let i = 0; i < segs.length; i++) {
+        const w = ctx.measureText(parts[i]).width + (i < segs.length - 1 ? sepW : 0);
+        if (w > 0) rows.attr.push({ key: segs[i].key, rect: { x: layout.attr.x + from, y: top, w, h } });
+        from += w;
+      }
+    }
+  }
+
+  return rows;
+}
 
 export function drawInventory(
   ctx: CanvasRenderingContext2D,
@@ -91,88 +281,41 @@ export function drawInventory(
     }
   }
 
-  const damageTypeLabel = (dt: DamageType | undefined) => {
-    switch (dt) {
-      case DamageType.FIRE: return { text: '🔴 огонь', color: '#b35a3f' };
-      case DamageType.ENERGY: return { text: '🔵 энерго', color: '#4d8fa0' };
-      case DamageType.PSI: return { text: '🟣 пси', color: '#9a6a9c' };
-      case DamageType.BUCKSHOT: return { text: '🟡 дробь', color: '#c2a24c' };
-      case DamageType.KINETIC:
-      default: return { text: '⚫ кинетика', color: '#aaa' };
-    }
-  };
-
   // Selected item details live in the right column so the 8x8 grid keeps the left side.
   const details = layout.details;
   ctx.textAlign = 'left';
 
-  const validInvSelection = state.invSel < inv.length;
-  let infoY = details.y + 7.5 * ts;
+  // Одна арифметика вертикали на отрисовку и на тап — см. `inventoryDetailFlow`.
+  const flow = inventoryDetailFlow(ctx, player, state, layout);
 
-  if (validInvSelection) {
+  if (flow.hasItem) {
     const item = inv[state.invSel];
-    const def = ITEMS[item.defId];
-    if (def) {
-      ctx.fillStyle = '#ccc';
-      ctx.font = `${6.2 * ts}px "Press Start 2P", monospace`;
-      ctx.fillText(fitStatText(ctx, `${itemInstanceName(item)} ×${item.count}`, details.w), details.x, details.y);
-      ctx.fillStyle = '#999';
-      ctx.font = `${5.6 * ts}px "Press Start 2P", monospace`;
-      const descLines = wrapTextLines(ctx, def.desc, details.w, 4, { stable: true, mode: 'clip' });
-      for (const line of descLines) {
-        ctx.fillText(line, details.x, infoY);
-        infoY += 6.6 * ts;
-      }
-      if (def.type === ItemType.WEAPON) {
-        const ws = WEAPON_STATS[def.id];
-        if (ws) {
-          const dt = damageTypeLabel(ws.damageType);
-          ctx.fillStyle = dt.color;
-          ctx.fillText(`Урон: ${dt.text}`, details.x, infoY);
-          infoY += 6.6 * ts;
-        }
-      }
+    ctx.fillStyle = '#ccc';
+    ctx.font = `${6.2 * ts}px "Press Start 2P", monospace`;
+    ctx.fillText(fitStatText(ctx, `${itemInstanceName(item)} ×${item.count}`, details.w), details.x, details.y);
+  }
+  for (const line of flow.lines) {
+    ctx.fillStyle = line.color;
+    ctx.font = `${line.fontUnits * ts}px "Press Start 2P", monospace`;
+    ctx.fillText(line.text, details.x, line.y);
+  }
+  if (flow.hasItem) {
+    ctx.fillStyle = '#ab8339';
+    ctx.font = `${5.1 * ts}px "Press Start 2P", monospace`;
+    ctx.fillText(fitStatText(ctx, flow.priceText, details.w), details.x, flow.priceY);
 
-      if (def.resistances) {
-        ctx.fillStyle = '#7996a4';
-        ctx.fillText('Сопротивления:', details.x, infoY);
-        infoY += 6.6 * ts;
-        for (const [dtStr, val] of Object.entries(def.resistances)) {
-          const dt = parseInt(dtStr, 10) as DamageType;
-          if (!isNaN(dt) && val) {
-            const dtInfo = damageTypeLabel(dt);
-            ctx.fillStyle = dtInfo.color;
-            ctx.fillText(`  ${dtInfo.text}: ${val}%`, details.x, infoY);
-            infoY += 6.6 * ts;
-          }
-        }
-      }
-
-      ctx.fillStyle = '#ab8339';
-      ctx.font = `${5.1 * ts}px "Press Start 2P", monospace`;
-      ctx.fillText(fitStatText(ctx, `Цена: ${def.value ?? 0}₽`, details.w), details.x, infoY + 1.4 * ts);
-      
-      const actionY = infoY + 7.4 * ts;
-      if (def.use || def.type === ItemType.WEAPON || def.type === ItemType.TOOL || def.resistances) {
-        ctx.fillStyle = '#5f8a5f';
-        ctx.fillText(fitStatText(ctx, `${controlHint('gameMenu')} исп.`, layout.use.w), layout.use.x, actionY);
-      }
-      ctx.fillStyle = '#a86';
-      ctx.fillText(fitStatText(ctx, `${controlHint('drop')} вык.`, layout.drop.w), layout.drop.x, actionY);
-      
-      infoY = actionY + 4 * ts;
+    if (flow.hasUse) {
+      ctx.fillStyle = '#5f8a5f';
+      ctx.fillText(fitStatText(ctx, `${controlHint('gameMenu')} исп.`, layout.use.w), layout.use.x, flow.actionY);
     }
-  } else {
-    ctx.fillStyle = '#555';
-    ctx.font = `${5.2 * ts}px "Press Start 2P", monospace`;
-    ctx.fillText('Пустой слот', details.x, infoY);
-    infoY += 3 * ts;
+    ctx.fillStyle = '#a86';
+    ctx.fillText(fitStatText(ctx, `${controlHint('drop')} вык.`, layout.drop.w), layout.drop.x, flow.actionY);
   }
 
   // ── RIGHT COLUMN: stats ──────────────────────────────────
   const stX = details.x;
   const barW = Math.max(24 * sx, details.w);
-  let stY = Math.max(infoY + 4 * ts, details.y + 12 * ts);
+  let stY = flow.titleY;
   // The right column runs to the bottom of the canvas: it stopped at the grid
   // bottom, so shrinking the grid stole rows from finance and equipment.
   const contentBottom = ch - 6 * ts;
@@ -190,13 +333,9 @@ export function drawInventory(
   // Attributes in their own compact row; the keys are shown only while there is
   // something to spend on them.
   if (player.rpg) {
-    const rpg = player.rpg;
-    const attrLine = rpg.attrPoints > 0
-      ? `${controlHint('attrStr')}СИЛ ${rpg.str}  ${controlHint('attrAgi')}ЛОВ ${rpg.agi}  ${controlHint('attrInt')}ИНТ ${rpg.int}`
-      : `СИЛ ${rpg.str}  ЛОВ ${rpg.agi}  ИНТ ${rpg.int}`;
     ctx.font = `${5 * ts}px "Press Start 2P", monospace`;
     ctx.fillStyle = '#b3703f';
-    ctx.fillText(fitStatText(ctx, attrLine, barW), stX, stY);
+    ctx.fillText(fitStatText(ctx, inventoryAttrLine(player.rpg), barW), stX, stY);
     stY += 6.2 * ts;
   }
 
@@ -303,6 +442,7 @@ function inventoryEquipmentLines(player: Entity): EquipmentLine[] {
     if (res![DamageType.ENERGY]) parts.push(`ЭНР:${res![DamageType.ENERGY]}%`);
     if (res![DamageType.FIRE]) parts.push(`ОГН:${res![DamageType.FIRE]}%`);
     if (res![DamageType.PSI]) parts.push(`ПСИ:${res![DamageType.PSI]}%`);
+    if (res![DamageType.BIO]) parts.push(`БИО:${res![DamageType.BIO]}%`);
     if (parts.length > 0) armorResists = ` Защита: ${parts.join(' ')}`;
   }
 

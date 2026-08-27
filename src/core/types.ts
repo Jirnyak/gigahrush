@@ -180,8 +180,6 @@ export enum EntityType {
   ITEM_DROP,
   PROJECTILE,
   BILLBOARD, // non-interactive visible prop entity: desks, train cars, large decor
-  EFFECT,
-  LIGHT,
 }
 
 /** Special projectile behaviour tags */
@@ -194,7 +192,43 @@ export enum ProjType {
   WEB,          // sticky monster shot, applies bounded web slow/root
 }
 
-export enum DamageType { KINETIC = 0, BUCKSHOT = 1, ENERGY = 2, FIRE = 3, PSI = 4 }
+/**
+ * Чем ударили. Один тип — одна колонка матрицы брони и одна строка резиста.
+ *
+ * `BIO` — кислота, споры, слизь, гниль и газ ОДНИМ членом, а не слоем химии
+ * поверх боя: у всех перечисленных не было типа урона вовсе, и слизневик с
+ * кислотной плетью бил ту же кинетику, что и кувалда. Имя выбрано по источнику
+ * (плоть, гриб, жижа), а не по эффекту: «токсин» не покрывает споры, «химия» не
+ * покрывает слизь.
+ */
+export enum DamageType { KINETIC = 0, BUCKSHOT = 1, ENERGY = 2, FIRE = 3, PSI = 4, BIO = 5 }
+
+/**
+ * Вид защиты, а не предмет и не тварь.
+ *
+ * Условие (упор в стену, мокрый грунт, живая сеть, целые плиты) решает, КАКАЯ
+ * броня сейчас активна; `ARMOR_MATRIX` в `data/armor_matrix.ts` решает, сколько
+ * снимет удар данного типа. Один и тот же вид носят и предмет, и тварь: разница
+ * между лёгкой и тяжёлой пластиной — глубина резиста, а не закон материала.
+ *
+ * Перечислено только то, что реально есть в игре, — ни одной записи под будущее.
+ */
+export enum ArmorType {
+  /** Без брони: обычная плоть, спецовка, роба. Матрица её не трогает вовсе. */
+  NONE = 0,
+  /** Ткань: ряса культиста, мягкий бронежилет. */
+  CLOTH = 1,
+  /** Жёсткая пластина: тяжёлая броня, бронеплиты Закалённой Арматуры. */
+  PLATE = 2,
+  /** Бетонная панель: рука Панельника, упёртая в стену. */
+  CONCRETE = 3,
+  /** Мокрая шкура: Лоточник, стоящий в лотке. */
+  WET_HIDE = 4,
+  /** Кабельная плоть Червия без питания: не защищает, но энергию проводит. */
+  WIRING = 5,
+  /** Живая сеть: Червие у экрана или аппарата. */
+  LIVE_NET = 6,
+}
 
 export enum MonsterKind {
   SBORKA,     // fast, weak               — бегает быстро
@@ -408,7 +442,6 @@ export enum NpcState {
   TRAVELING,   // traveler movement intent
   MEETING,     // social/coordination intent
   PATROL,      // patrol/combat-readiness intent
-  BREAK,       // legacy display label for short rest
 }
 
 
@@ -623,6 +656,8 @@ export interface ItemDef {
   spawnW: number;             // spawn weight
   value: number;              // price in рубли (0 = worthless)
   resistances?: Partial<Record<DamageType, number>>;
+  /** Вид защиты предмета. Глубину резиста задаёт `resistances`, закон материала — вид. */
+  armorType?: ArmorType;
   tags?: readonly string[];   // small content labels for events/economy hooks
   scienceValue?: number;      // 0-100: value to NII/scientists; scales special handoff interactions
   contrabandScore?: number;   // 0-100: degree of illegality; scales liquidator confiscation chance/severity
@@ -838,6 +873,7 @@ export const WORLD_EVENT_TYPES = [
   'urination_public',
   'npc_kill_monster',
   'npc_kill_npc',
+  'npc_hurt_npc',
   'player_kill_monster',
   'player_kill_npc',
   'player_hurt_npc',
@@ -914,8 +950,6 @@ export const WORLD_EVENT_TYPES = [
   'smog_entered',
   'smog_source_found',
   'smog_source_handled',
-  'bad_apple_spawned',
-  'bad_apple_toggled',
   'metro_route_taken',
   'metro_wrong_stop',
   'rail_train_boarded',
@@ -1041,18 +1075,16 @@ export interface WorldEvent {
   containerFaction?: Faction;
   severity: WorldEventSeverity;
   privacy: WorldEventPrivacy;
-  truth: 'fact';
   tags: string[];
   data?: Record<string, unknown>;
 }
 
-export type WorldEventDraft = Omit<WorldEvent, 'id' | 'time' | 'day' | 'hour' | 'minute' | 'z' | 'truth'> & {
+export type WorldEventDraft = Omit<WorldEvent, 'id' | 'time' | 'day' | 'hour' | 'minute' | 'z'> & {
   time?: number;
   day?: number;
   hour?: number;
   minute?: number;
   z?: number;
-  truth?: 'fact';
 };
 
 export interface ContextFact {
@@ -1320,7 +1352,6 @@ export interface InputState {
   sleep: boolean;               // Z key — hold to sleep
   controls: boolean;            // Tab by default — hotkey / rebind screen
   uiSettings: boolean;          // U key — configurable HUD element screen
-  controlEdit: boolean;         // reserved command slot for hotkey screens
   controlReset: boolean;        // selected-bind clear command from current controls
   controlClose: boolean;        // keyboard close/back command from current controls
   mouse: { dx: number; dy: number; menuDx: number; menuDy: number; locked: boolean; };

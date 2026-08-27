@@ -24,7 +24,6 @@ const EXPECTED_RUNTIME_TOPOLOGY_IDS = [
   'sandpile_perekrytie',
   'conway_life',
   'rail_trains',
-  'bad_apple_world',
 ] as const;
 
 function topologyVersions(world: World): {

@@ -815,7 +815,10 @@ function triggerFactionClash(
         : claimFactionEventNpc(world, entities, zoneId, side.faction, anchors[s].x, anchors[s].y, claimedIds);
       if (!npc) continue;
       if (force) createdIds.add(npc.id);
-      npc.angle = Math.atan2(anchors[1 - s].y - npc.y, anchors[1 - s].x - npc.x);
+      // Якоря сторон строятся от центра стычки БЕЗ обёртки (`center ± cos*4`), а
+      // NPC уже завёрнут. Стычка ближе четырёх клеток к шву давала сырую разность
+      // около 1020 вместо −4, и обе стороны разворачивались друг от друга на 180°.
+      npc.angle = Math.atan2(world.delta(npc.y, anchors[1 - s].y), world.delta(npc.x, anchors[1 - s].x));
       npc.ai!.goal = AIGoal.HUNT;
       npc.ai!.tx = Math.floor(anchors[1 - s].x);
       npc.ai!.ty = Math.floor(anchors[1 - s].y);

@@ -44,6 +44,7 @@ import {
   moveAlifeNpcRecord,
   rewriteAlifeNpcIdentityFromEntity,
   sampleAlifeFloorRecordIds,
+  setAlifeNpcFactionOverride,
 } from './alife';
 import { findAlifeArrivalAnchor, findLiftDepartureAnchor } from './alife_migration';
 import { bfsPath } from './ai/pathfinding';
@@ -163,10 +164,14 @@ export type SceneBeat =
   /** Воплотить отложенных актёров роли. */
   | { kind: 'materialize'; role: string }
   /**
-   * Отпустить актёров в живой мир. До этого такта они декорация: цикл AI
-   * пропускает всех с ролью CINEMATIC_ACTOR целиком (`ai/index.ts`), и пока
-   * роль на них — они не сканируют, не ходят и не стреляют. Без этого такта
-   * никакой «бой по обычным правилам» невозможен.
+   * Отпустить актёров в живой мир. До этого такта их держит ПОСТ, а не
+   * выключенный AI: цикл AI прогоняет актёра сцены наравне со всеми
+   * (`ai/index.ts` — ветка `role === CINEMATIC_ACTOR → continue` снята
+   * намеренно, она делала вторую, несимулируемую породу людей), а с места его
+   * не пускает короткий поводок `holdCastNearAnchor`, снимающий на время
+   * возврата цель, память об ударе и скан. То есть актёр на посту живёт и
+   * отвечает на удар, но своей волей строй не покидает и врага не ищет.
+   * `release` снимает роль — и человек начинает воевать по обычным правилам.
    */
   | { kind: 'release'; roles?: readonly string[] }
   /** Увести живых с этажа без записи смерти. Мгновенно — годится вне кадра. */
@@ -252,6 +257,11 @@ export function floorScenesForSave(): string[] {
 
 export function restoreFloorScenesFromSave(raw: unknown): void {
   playedScenes.clear();
+  // Запрос сцены принадлежит ПРОГОНУ, а не игре: загруженный прогон о нём не
+  // знает, и переживший загрузку запрос поднял бы чужую сцену на первом же
+  // подходящем этаже. В сейв запросы не едут — только сыгранное.
+  pendingSceneId = null;
+  deferredSceneId = null;
   if (!Array.isArray(raw)) return;
   for (const id of raw) {
     if (typeof id !== 'string' || !id) continue;
@@ -267,6 +277,7 @@ export function resetFloorScenes(state?: GameState, entities?: Entity[]): void {
   playedScenes.clear();
   visitedFloorKeys.clear();
   pendingSceneId = null;
+  deferredSceneId = null;
 }
 
 /* ── Камера ──────────────────────────────────────────────────── */
@@ -317,6 +328,15 @@ interface ActiveScene {
   returning: number;
   /** Кто сказал последнюю реплику. По нему наводится точка кадра `speaker`. */
   lastSpeakerId?: number;
+  /* Клетки, уже занятые кастом этой сцены.
+   *
+   * Набор ведётся ОДИН на всю расстановку: `startScene` так и делал, а
+   * отложенный такт `materialize` заводил свежий и потому не знал, где стоит
+   * первый каст. Вторая волна (подкрепление, второй заход обороны) вставала в
+   * тех, кто уже на месте: поиск свободной клетки смотрит на стены, но не на
+   * соседа. Тот же запрет записан в самом `startScene` — «сотня человек без
+   * общего учёта встала бы штабелем в одну точку». */
+  occupied: Set<number>;
   /**
    * За кем сейчас следит кадр. Свойство СЦЕНЫ, а не такта: реплика, пауза и
    * ожидание смерти длятся секундами, и всё это время человек ходит. Прицел,
@@ -330,6 +350,34 @@ interface ActiveScene {
 
 let active: ActiveScene | null = null;
 let pendingSceneId: string | null = null;
+/**
+ * Второй запрос, пришедший пока первый ещё ждёт своей комнаты или своего этажа.
+ *
+ * Слот ровно ОДИН, и это не полумера. Событие в шине не повторяется: пропущенное
+ * наблюдателем не вернуть ниоткуда, поэтому «два подряд» обязано пережить хотя бы
+ * друг друга. А очередь произвольной длины — машинерия под задачу, которой нет:
+ * событийная сцена привязана к своему этажу, и трёх сразу на одном этаже не
+ * бывает. Переполнение теперь честное — `queueScene` возвращает `false`, а не
+ * молчит.
+ */
+let deferredSceneId: string | null = null;
+
+/**
+ * Поставить сцену в очередь запросов. Слотов два: первый ждёт своего этажа,
+ * второй ждёт первого. Одна и та же сцена оба слота занять не может.
+ */
+function queueScene(id: string): boolean {
+  if (id === pendingSceneId || id === deferredSceneId || active?.def.id === id) return false;
+  if (!pendingSceneId) { pendingSceneId = id; return true; }
+  if (!deferredSceneId) { deferredSceneId = id; return true; }
+  return false;
+}
+
+/** Снять текущий запрос и поднять на его место отложенный. */
+function shiftPendingScene(): void {
+  pendingSceneId = deferredSceneId;
+  deferredSceneId = null;
+}
 
 export function isFloorSceneActive(): boolean {
   return active !== null;
@@ -343,19 +391,22 @@ export function activeFloorSceneId(): string | null {
 export function requestFloorScene(id: string): boolean {
   if (active || playedScenes.has(id)) return false;
   if (!floorSceneById(id)) return false;
-  pendingSceneId = id;
-  return true;
+  return queueScene(id);
 }
 
 registerWorldEventObserver((_state, event) => {
-  if (active || pendingSceneId) return;
+  // Занятый первый слот — не повод терять событие: пока свободен второй, оно
+  // ложится туда. Прежний выход на `active || pendingSceneId` выбрасывал такое
+  // событие молча, и взять его снова было неоткуда — шина событий не повторяет
+  // прошлое. Стреляло бы это ровно тогда, когда событийных сцен станет больше
+  // одной на прогон.
+  if (pendingSceneId && deferredSceneId) return;
   for (const scene of scenes) {
     if (scene.trigger.kind !== 'event') continue;
     if (playedScenes.has(scene.id)) continue;
     if (scene.trigger.eventType !== event.type) continue;
     if (scene.trigger.tag && !event.tags?.includes(scene.trigger.tag)) continue;
-    pendingSceneId = scene.id;
-    return;
+    if (queueScene(scene.id)) return;
   }
 });
 
@@ -376,12 +427,25 @@ function updateFloorScenes(ctx: ContentRuntimeContext): boolean {
 
   // Запрос ждёт своего этажа. Снимать его на чужом значило бы терять и сам
   // запрос, и — вместе с засчитанным визитом — пролог этажа, куда приехали.
-  const pending = pendingSceneId ? floorSceneById(pendingSceneId) : undefined;
-  if (!pending || playedScenes.has(pending.id)) pendingSceneId = null;
+  // Отыгранный или неизвестный запрос снимается, и на его место сразу встаёт
+  // отложенный: иначе второе событие ждало бы вечно за мёртвым первым. Цикл
+  // ограничен двумя слотами — `shiftPendingScene` обнуляет второй.
+  while (pendingSceneId && (!floorSceneById(pendingSceneId) || playedScenes.has(pendingSceneId))) {
+    shiftPendingScene();
+  }
+  if (deferredSceneId && (!floorSceneById(deferredSceneId) || playedScenes.has(deferredSceneId))) {
+    deferredSceneId = null;
+  }
 
-  const candidate = pending && pending.floorKey === floorKey && !playedScenes.has(pending.id)
-    ? pending
-    : (!visitedFloorKeys.has(floorKey)
+  // Своего этажа ждёт КАЖДЫЙ слот сам по себе: первый может ждать министерства,
+  // пока игрок стоит на аду, где ждёт второй. Порядок слотов — приоритет, а не
+  // очередь на исполнение, иначе отложенный запрос запирался бы первым.
+  const pending = [pendingSceneId, deferredSceneId]
+    .map(id => (id ? floorSceneById(id) : undefined))
+    .find(scene => scene?.floorKey === floorKey);
+
+  const candidate = pending
+    ?? (!visitedFloorKeys.has(floorKey)
         ? scenes.find(scene =>
             scene.trigger.kind === 'first_visit'
             && scene.floorKey === floorKey
@@ -396,7 +460,10 @@ function updateFloorScenes(ctx: ContentRuntimeContext): boolean {
   // значило бы: не нашлась комната-якорь на первом кадре — и пролог потерян молча.
   const started = startScene(ctx, candidate);
   if (!started) return false;
-  if (candidate === pending) pendingSceneId = null;
+  if (candidate === pending) {
+    if (candidate.id === pendingSceneId) shiftPendingScene();
+    else deferredSceneId = null;
+  }
   markFloorVisited(floorKey);
   return true;
 }
@@ -422,7 +489,7 @@ function startScene(ctx: ContentRuntimeContext, def: FloorSceneDef): boolean {
   }
   rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
 
-  active = { def, anchorX, anchorY, cast, beatIndex: 0, beatTime: 0, beatStarted: false, elapsed: 0, returning: -1 };
+  active = { def, anchorX, anchorY, cast, beatIndex: 0, beatTime: 0, beatStarted: false, elapsed: 0, returning: -1, occupied };
   if (playedScenes.size < MAX_PLAYED_SCENES) playedScenes.add(def.id);
   ctx.state.sceneLock = true;
   sceneFrameReleased = false;
@@ -466,7 +533,22 @@ function castActor(
       && e.type === EntityType.NPC
       && (e as Entity & { npcPackageId?: string }).npcPackageId === actor.packageId);
     if (!existing) return [];
-    extractNpcForScene(ctx.entities, existing.id, def.id, x, y);
+    /* Говорящий ставится по СВОБОДНОЙ клетке, как и массовка.
+     *
+     * Здесь стоял сырой `anchor + offset` без единой проверки: массовка идёт
+     * через `actorSpot` → `freeSpotNear` и в стену не попадает, а именно актёр
+     * с репликами — попадал. Комната-якорь переменного размера, в центре комнат
+     * стоит обстановка, и промах означал говорящего в бетоне: `holdCastNearAnchor`
+     * держит его там постом, выйти он не может, а орбита камеры вокруг
+     * говорящего упирается в стену. `cutscene.md` §8 обещает обратное дословно —
+     * «никто не окажется в стене или внутри соседа», — и для `packageId` это
+     * было неправдой. Клетка помечается занятой: иначе следующий актёр встанет
+     * в того же. */
+    const spot = freeSpotNear(ctx.world, x, y, 2, 0, occupied) ?? navigableNear(ctx.world, x, y);
+    const px = spot?.x ?? x;
+    const py = spot?.y ?? y;
+    occupied.add(ctx.world.idx(Math.floor(px), Math.floor(py)));
+    extractNpcForScene(ctx.entities, existing.id, def.id, px, py);
     return [existing.id];
   }
 
@@ -1013,7 +1095,7 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
     case 'materialize': {
       const actor = scene.def.actors.find(a => a.role === beat.role);
       if (!actor) return;
-      const ids = castActor(ctx, scene.def, actor, scene.anchorX, scene.anchorY, new Set<number>());
+      const ids = castActor(ctx, scene.def, actor, scene.anchorX, scene.anchorY, scene.occupied);
       scene.cast.set(beat.role, [...(scene.cast.get(beat.role) ?? []), ...ids]);
       rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
       return;
@@ -1066,7 +1148,17 @@ function applyDefection(
         entity.ai.combatScanCd = 0;
       }
       if (playerRelation !== undefined) setNpcPlayerRelation(entity, playerRelation);
-      if (entity.alifeId !== undefined) rewriteAlifeNpcIdentityFromEntity(ctx.state, entity);
+      if (entity.alifeId !== undefined) {
+        /* Смена стороны — постоянный факт, а не поза на время кадра. Записать её
+         * одной обратной дорогой (запись ← сущность) мало: тело авторской
+         * личности рождается из анкеты пакета ЗАНОВО на каждой генерации этажа,
+         * и перебежчик возвращался бы своим при первом же выходе с этажа. Факт
+         * кладётся событийным оверрайдом A-Life, который анкету перебивает и
+         * уезжает в сейв. Массовке сцены переживать нечего: у созданных сценой
+         * людей нет личности, и `alifeId` у них не бывает. */
+        setAlifeNpcFactionOverride(ctx.state, entity.alifeId, faction);
+        rewriteAlifeNpcIdentityFromEntity(ctx.state, entity);
+      }
     }
   }
   publishEvent(ctx.state, {
@@ -1179,8 +1271,10 @@ function liftErrandTarget(
 }
 
 /**
- * Отправить роли по делу. Поводок сцены снимается сразу — идти актёру нечем,
- * пока роль `CINEMATIC_ACTOR` держит его вне цикла AI.
+ * Отправить роли по делу. Роль сцены снимается сразу: не потому, что она
+ * выключает AI — цикл AI актёра прогоняет, — а потому, что пока роль на нём,
+ * поводок поста возвращает его в строй каждым кадром и до цели поручения он не
+ * дойдёт никогда.
  */
 function sendRolesOnErrand(
   ctx: ContentRuntimeContext,

@@ -492,9 +492,19 @@ export function buildPerimeterGuardWalk(world: World, mask: Uint8Array): void {
   ];
   for (const [ax, ay, bx, by] of spokes) carveSafeLine(world, mask, ax, ay, bx, by, 5, Tex.F_CONCRETE, Tex.METAL);
   let serial = 0;
+  /* Караульная будка обхода — ПОСТ, а не контора и не кладовая, и потому коридор.
+   *
+   * Обход (`patrol`) стоит у коридора, штаба, общего зала и рынка; у OFFICE его нет
+   * намеренно — там `work` и `sleep` дежурного за столом (`ai.md`, `room_affordances.ts`,
+   * замок `tests/room-affordances.test.ts`), а у STORAGE занятий нет и подавно. Будка с
+   * обходом в самом имени не несла обхода ни одним из двух типов.
+   *
+   * Два ряда — одна и та же будка периметра, поэтому и тип у них теперь один. Разные
+   * типы при одинаковом имени были расхождением копипасты, а не северо-южным замыслом:
+   * никакой другой признак ряды не различает. */
   for (let x = 120; x <= 904; x += 112) {
-    tryStampOwnedRoom(world, mask, RoomType.OFFICE, x, 62, 14, 10, `Караульная будка обхода ${++serial}`, Tex.METAL, Tex.F_CONCRETE, 'north', ZoneFaction.LIQUIDATOR);
-    tryStampOwnedRoom(world, mask, RoomType.STORAGE, x, 952, 14, 10, `Караульная будка обхода ${++serial}`, Tex.METAL, Tex.F_CONCRETE, 'south', ZoneFaction.LIQUIDATOR);
+    tryStampOwnedRoom(world, mask, RoomType.CORRIDOR, x, 62, 14, 10, `Караульная будка обхода ${++serial}`, Tex.METAL, Tex.F_CONCRETE, 'north', ZoneFaction.LIQUIDATOR);
+    tryStampOwnedRoom(world, mask, RoomType.CORRIDOR, x, 952, 14, 10, `Караульная будка обхода ${++serial}`, Tex.METAL, Tex.F_CONCRETE, 'south', ZoneFaction.LIQUIDATOR);
   }
   for (let x = 96; x <= 928; x += 64) {
     setFeature(world, x, 48, x % 128 === 96 ? Feature.SCREEN : Feature.LAMP);

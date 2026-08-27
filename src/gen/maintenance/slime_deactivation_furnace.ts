@@ -133,7 +133,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -142,7 +142,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -180,7 +179,6 @@ function scorchFurnace(ctx: MaintContentCtx, room: Room): void {
 }
 
 function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room, fuel: Room, operatorId: number): void {
-  // @ts-ignore
   addContainer(ctx, furnace, furnace.x + furnace.w - 3, furnace.y + 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Приёмный бункер печи гашения',
@@ -200,7 +198,6 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     factoryId: FACTORY_ID,
     tags: [CONTENT_TAG, 'production_output', 'cleanup', 'slime', 'sample', 'deactivation_furnace'],
   });
-  // @ts-ignore
   addContainer(ctx, fuel, fuel.x + fuel.w - 2, fuel.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Опломбированный шкаф топлива печи',
@@ -219,7 +216,6 @@ function addFurnaceContainers(ctx: MaintContentCtx, intake: Room, furnace: Room,
     discovered: true,
     tags: [CONTENT_TAG, 'fuel', 'locked', 'liquidator', 'theft', 'slime'],
   });
-  // @ts-ignore
   addContainer(ctx, intake, intake.x + 2, intake.y + intake.h - 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Мокрая тара до гашения',

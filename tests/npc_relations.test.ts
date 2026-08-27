@@ -32,7 +32,13 @@ test('player attack lowers personal NPC relation and can make that NPC hostile',
 
   assert.equal(npc.playerRelation, RELATION_HOSTILE_THRESHOLD - 1);
   assert.equal(player.karma, -1);
-  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE - 2);
+  /* Матрица НЕ двигается, и это второй шаг закона «насилие двигает репутацию»
+   * (`plot.md` §7). Раньше здесь стояло `BASE − 2`: удар игрока был единственным
+   * событием в игре, разворачивавшим целую фракцию на всех этажах разом, — то
+   * есть каналом, которого нет ни у одного NPC. Цена насилия стала местной:
+   * помнят жертва и те, кто видел. Фракция как целое помнит кражи, память
+   * комнат, инфраструктуру и пропуска — договор и имущество, а не трупы. */
+  assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), CITIZEN_TO_PLAYER_BASE);
   assert.equal(isHostile(npc, player), true);
 });
 

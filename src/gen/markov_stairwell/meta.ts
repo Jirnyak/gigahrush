@@ -1,3 +1,4 @@
+import { designFloorById } from '../../data/design_floors';
 import {
   Faction,
   Feature,
@@ -17,7 +18,12 @@ export const MARKOV_STAIRWELL_Z = 20;
 
 export const MARKOV_STAIRWELL_BYPASS_KEY = 'container_key_label';
 
-export const BASE_FLOOR = 30;
+/* Высота ВЫВОДИТСЯ из маршрута, а не перепечатывается. Здесь стояло рукописное
+ * число 30 — остаток выжженной шестиключевой шкалы, переживший вырезание
+ * самого поля `baseFloor`. Канон этого этажа 20, и расхождение было живым:
+ * значение уезжало в `targetFloorZ` квеста и координату личностей. Механическая проверка мёртвых координат
+ * его не видела — число пряталось за именем константы. */
+export const BASE_FLOOR = designFloorById(MARKOV_STAIRWELL_ROUTE_ID)?.z ?? 20;
 
 export const SPINE_X = 494;
 

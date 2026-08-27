@@ -34,15 +34,6 @@ export interface CameraView extends CameraPose {
   fovRadians: number;
 }
 
-export interface TrailerCameraState {
-  path: number[];
-  targetNodeIndex: number;
-  active: boolean;
-  time: number;
-  angleTarget: number;
-  flySpeed: number;
-}
-
 export interface CinematicCameraState {
   path: number[][];
   targetNodeIndex: number;
@@ -51,6 +42,14 @@ export interface CinematicCameraState {
   angleTarget: number;
   /** Текущая скорость хода. К заданной подтягивается плавно, а не прыжком. */
   flySpeed: number;
+  /**
+   * Угловая скорость кадра, рад/с. Разворот — это не мгновенное «повернуть на
+   * столько-то», а тело с инерцией: скорость сама разгоняется и сама гаснет.
+   * Без неё панорама начиналась рывком с нуля до потолка в первом же кадре.
+   */
+  angleRate?: number;
+  /** Текущий наклон. Отдельно от геометрического — тот прыгает при смене оси. */
+  pitchNow?: number;
   /**
    * Скорость, которую попросил такт.
    *
@@ -108,7 +107,8 @@ export interface RuntimeCamera {
   mode: CameraMode;
   free: CameraPose;
   bob: CameraBobState;
-  trailer?: TrailerCameraState;
+  /* Один пролёт на все режимы кадра. Трейлер — это тот же полёт по ломаной, ему
+   * лишь дописывают маршрут, пока он летит; своей манеры двигаться у него нет. */
   cinematic?: CinematicCameraState;
 }
 
@@ -166,9 +166,16 @@ const FREE_CAMERA_MIN_HEIGHT = 0.08;
 const FREE_CAMERA_MAX_HEIGHT = 8.0;
 /* Общий почерк пролёта: трейлер и сцена летят и дышат одинаково. */
 const CINEMATIC_FLY_SPEED = 4.0;
-const CINEMATIC_TURN_RATE = 6.0;
+/**
+ * Жёсткость разворота, рад/с². Пружина критического затухания: до цели она
+ * доводит примерно за `4.7 / w` секунды, то есть около секунды, и делает это без
+ * перелёта — кадр не качается вокруг курса.
+ */
+const CINEMATIC_TURN_RATE = 5.0;
 /** Потолок скорости разворота, рад/с. Примерно 115°/с — панорама, а не хлыст. */
 const CINEMATIC_MAX_TURN_RATE = 2.0;
+/** С какой охотой наклон идёт к геометрическому. Той же манерой, что высота и радиус. */
+const CINEMATIC_PITCH_EASE = 2.4;
 /* Зазор от плоскости стены, в долях клетки. Треть клетки — это около метра с
  * четвертью при масштабе 3.6 м на клетку: ближе кадр уже читается упором. Больше
  * половины ставить нельзя — в клетке шириной один зазор с двух сторон не сойдётся. */
@@ -194,9 +201,24 @@ const CINEMATIC_BREATH_PITCH = 0.1;
  * камера идёт ровно по ломаной, а упереться ей больше не во что.
  * Потолок субшагов — предохранитель от длинного кадра, не тюнинг. */
 const CINEMATIC_NODE_REACH = 0.5 / PATH_BLOCKER_SUBDIV;
-/** Насколько далеко по ломаной смотреть, выбирая курс: три клетки в узлах сетки. */
-const CINEMATIC_LOOKAHEAD_NODES = 3 * PATH_BLOCKER_SUBDIV;
+/**
+ * Насколько далеко по ломаной смотреть, выбирая курс, В КЛЕТКАХ.
+ *
+ * Считалось это в УЗЛАХ — двенадцать штук сетки, то есть те же три клетки, пока
+ * узлы стояли ровным шагом по подклеткам. После разглаживания шаг перестал быть
+ * ровным: на прямом перегоне между узлами бывает десяток клеток, и счёт в узлах
+ * унёс бы прицел за поворот, который кадр ещё не прошёл.
+ */
+const CINEMATIC_LOOKAHEAD = 3;
 const CINEMATIC_MAX_SUBSTEPS = 64;
+/**
+ * Доля звена, отдаваемая под срез угла. Четверть — предел: отступ берётся с
+ * обоих концов звена, и больше четверти они бы перекрылись.
+ * Нижняя доля — предохранитель поджатия: срез мельче четверти подклетки уже не
+ * скругление, а тот же излом.
+ */
+const CORNER_CUT_SHARE = 0.25;
+const CORNER_CUT_MIN_SHARE = CINEMATIC_NODE_REACH / 2;
 
 const DEATH_BALL_RADIUS = 0.2;
 const DEATH_FRICTION = 0.65;
@@ -407,7 +429,10 @@ export function routeCinematicCamera(camera: RuntimeCamera, world: World, tx: nu
     Math.floor(landed.y),
   );
   waypoints.push([landed.x, landed.y]);
-  setCinematicCameraPath(camera, waypoints);
+  // Точка приземления дописана уже ПОСЛЕ разглаживания, и потому вносит свой,
+  // последний излом. Проход среза углов по готовому маршруту его и снимает:
+  // подъезд к кадру перестаёт быть поворотом в последний момент.
+  setCinematicCameraPath(camera, cutCorners(world, waypoints));
 }
 
 /* Сколько искать дверь для выхода из запертого объёма и сколько проёмов пробовать.
@@ -416,6 +441,18 @@ const CAMERA_DOOR_HOP_REACH = 48;
 const CAMERA_DOOR_HOP_CANDIDATES = 12;
 /** Докуда искать проходимую клетку под точку кадра, если автор промахнулся. */
 const CAMERA_TARGET_LANDING_REACH = 6;
+/**
+ * Желаемая длина перегона трейлера, в клетках: на четырёх клетках в секунду это
+ * около восьми секунд хода, то есть один план. Не предел, а масштаб оценки — за
+ * ним комнаты дешевеют, но остаются доступны.
+ */
+const TRAILER_HOP_REACH = 32;
+/** Ближе этого лететь незачем: кадр туда уже смотрит по упреждению курса. */
+const TRAILER_HOP_MIN = CINEMATIC_LOOKAHEAD;
+/** С какой площади комната считается просторной. Зал 20x14 — заведомо да, каморка — нет. */
+const TRAILER_ROOMY_AREA = 200;
+/** Сколько последних комнат помнить, чтобы трейлер не ходил одним кругом. */
+const TRAILER_VISITED_MEMORY = 8;
 
 /**
  * Ближайшая к точке кадра клетка, куда камера вообще может встать. Сама точка
@@ -455,7 +492,7 @@ function nearestCameraSpot(world: World, tx: number, ty: number): { x: number; y
  */
 function cameraRouteWaypoints(world: World, sx: number, sy: number, tx: number, ty: number): number[][] {
   const direct = bakedRouteLeg(world, sx, sy, tx, ty);
-  if (direct) return direct;
+  if (direct) return smoothCameraRoute(world, direct);
 
   // Двери ищутся у ОБОИХ концов. Запирающая створка стоит там, где заперто, а не
   // там, где мы стоим: возврат к игроку из зала пролога упирался в стену именно
@@ -486,10 +523,123 @@ function cameraRouteWaypoints(world: World, sx: number, sy: number, tx: number, 
       if (!toDoor) continue;
       const fromDoor = bakedRouteLeg(world, far.x, far.y, tx, ty);
       if (!fromDoor) continue;
-      return [...toDoor, [doorX, doorY], ...fromDoor];
+      // Разглаживается КАЖДОЕ ПЛЕЧО ОТДЕЛЬНО, а створка остаётся узлом как есть:
+      // спрямление поперёк проёма срезало бы косяк, а это единственное место
+      // маршрута, где камера обязана пройти строго по оси.
+      return [
+        ...smoothCameraRoute(world, toDoor),
+        [doorX, doorY],
+        ...smoothCameraRoute(world, fromDoor),
+      ];
     }
   }
   return [];
+}
+
+/**
+ * РАЗГЛАДИТЬ МАРШРУТ. Один раз на маршрут, не на кадре.
+ *
+ * Запечённое дерево путей отдаёт ломаную по сетке подклеток: узел через каждую
+ * четверть клетки, ходы только по осям. Диагональный перегон из-за этого не
+ * прямая, а лесенка, и кадр, идущий по ней ТОЧНО (а он обязан идти точно, иначе
+ * режет углы простенков), физически виляет каждую четверть клетки. Замерено на
+ * дороге до зала пролога: 234 узла, суммарный излом ломаной 3526° на 113 клеток
+ * хода, и курс самого хода набирал 2450° поворота за восемь секунд, из них 21
+ * рывок круче сорока пяти градусов. Это и есть «стрейфы и дёрганые повороты» —
+ * не манера камеры, а форма дороги, которую ей дали.
+ *
+ * Лечится дорога, а не камера, и в два приёма. Сперва натяжение: узел выживает,
+ * только если от последнего выжившего до СЛЕДУЮЩЕГО за ним по прямой нет
+ * преграды, — лесенка схлопывается в отрезок. Затем срез углов, дважды:
+ * оставшиеся настоящие повороты перестают быть изломом и становятся дугой.
+ *
+ * Обе пробы идут по правилу камеры как ТЕЛА: прямая проверяется не только по
+ * оси, но и на ширину по бокам. Иначе спрямление прошло бы по диагонали между
+ * двумя углами простенка — формально по свободным клеткам, а на деле сквозь бетон.
+ */
+function smoothCameraRoute(world: World, path: number[][]): number[][] {
+  if (path.length < 3) return path;
+  const pulled: number[][] = [path[0]];
+  let anchor = path[0];
+  for (let i = 1; i < path.length - 1; i++) {
+    if (clearForCamera(world, anchor, path[i + 1])) continue;
+    anchor = path[i];
+    pulled.push(anchor);
+  }
+  pulled.push(path[path.length - 1]);
+  return cutCorners(world, cutCorners(world, pulled));
+}
+
+/** Пройдёт ли камера по прямой между двумя точками, не задев стену бортом. */
+function clearForCamera(world: World, from: number[], to: number[]): boolean {
+  const dx = world.delta(from[0], to[0]);
+  const dy = world.delta(from[1], to[1]);
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist <= 0) return true;
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const steps = Math.ceil(dist / CINEMATIC_NODE_REACH);
+  for (let s = 0; s <= steps; s++) {
+    const t = (s / steps) * dist;
+    const x = from[0] + nx * t;
+    const y = from[1] + ny * t;
+    // Борта проверяются по нормали к ходу: сама ось может лечь ровно в щель
+    // между углами двух простенков, и тогда осевая проба ничего не заметит.
+    //
+    // Отступ — ПОЛОВИНА ПОДКЛЕТКИ, то есть разрешение самой сетки путей, а не
+    // зазор от стены. Зазор здесь строже дороги, по которой камера и так летела:
+    // узлы дерева стоят по подклеткам и сами лежат в четверти клетки от бетона,
+    // так что проба с зазором браковала почти всякое спрямление. Замерено на
+    // дороге до зала: с зазором ломаная жала 222 узла в 79, с половиной
+    // подклетки — в 11, и это настоящее число поворотов коридора.
+    if (cameraBlocked(world, x, y)) return false;
+    if (cameraBlocked(world, x - ny * CINEMATIC_NODE_REACH, y + nx * CINEMATIC_NODE_REACH)) return false;
+    if (cameraBlocked(world, x + ny * CINEMATIC_NODE_REACH, y - nx * CINEMATIC_NODE_REACH)) return false;
+  }
+  return true;
+}
+
+/**
+ * Срезать углы: излом заменяется хордой, отступающей от вершины по обоим звеньям.
+ * Концы маршрута неприкосновенны — начало это место кадра, конец это заказанная точка.
+ *
+ * Проверяется не точка среза, а САМА ХОРДА. Точки лежат на уже проверенном звене
+ * и потому свободны всегда, а вот хорда идёт ЧЕРЕЗ ВЕРШИНУ угла — и ровно она
+ * уводит кадр внутрь простенка. Замерено: без этой проверки сцена пролога
+ * проводила в бетоне полтора процента кадров, хотя каждая точка среза была
+ * свободна.
+ *
+ * И срез не «да или нет», а НАСКОЛЬКО ВЛЕЗЕТ: доля отступа поджимается вдвое,
+ * пока хорда не пройдёт, — тот же приём, которым радиус облёта поджимается к
+ * стене. Отказ от среза целиком оставлял острый угол ровно там, где скруглить
+ * нужнее всего: в тесном повороте коридора.
+ *
+ * Отсюда инвариант, который держит весь разглаженный маршрут: КАЖДОЕ звено на
+ * выходе — либо часть уже проверенного звена, либо проверенная хорда. Четверть
+ * сверху обязательна: отступ с обоих концов звена не должен перекрываться.
+ */
+function cutCorners(world: World, path: number[][]): number[][] {
+  if (path.length < 3) return path;
+  const out: number[][] = [path[0]];
+  for (let i = 1; i < path.length - 1; i++) {
+    const prev = path[i - 1];
+    const here = path[i];
+    const next = path[i + 1];
+    const inX = world.delta(here[0], prev[0]);
+    const inY = world.delta(here[1], prev[1]);
+    const outX = world.delta(here[0], next[0]);
+    const outY = world.delta(here[1], next[1]);
+    let cut: number[][] | null = null;
+    for (let f = CORNER_CUT_SHARE; f >= CORNER_CUT_MIN_SHARE; f /= 2) {
+      const from = [wrapCoord(here[0] + inX * f), wrapCoord(here[1] + inY * f)];
+      const to = [wrapCoord(here[0] + outX * f), wrapCoord(here[1] + outY * f)];
+      if (clearForCamera(world, from, to)) { cut = [from, to]; break; }
+    }
+    if (cut) out.push(cut[0], cut[1]);
+    else out.push(here);
+  }
+  out.push(path[path.length - 1]);
+  return out;
 }
 
 /** Отрезок по запечённому дереву. `null` — дороги нет; пустой список — уже на месте. */
@@ -697,6 +847,12 @@ function flyStraightToRouteEnd(
  *
  * Марш наружу обрезает радиус ПЕРВОЙ преградой: круг поджимается к стене, а
  * оператор остаётся в той же комнате, что и актёры.
+ *
+ * Обрезается он С ЗАЗОРОМ — тем же, что держит всякий кадр от плоскости стены.
+ * Без него круг поджимался ВПЛОТНУЮ, и облёт вокруг человека у стены превращался
+ * в скрёб носом по бетону на трети оборота. Толкать оттуда уже поздно: общий
+ * зазор правит клетку, в которой кадр стоит, и внутреннего угла — где бетон по
+ * диагонали — он не видит вовсе.
  */
 function clearRadius(
   world: World,
@@ -711,23 +867,38 @@ function clearRadius(
     if (cameraBlocked(world, cx + dirX * r, cy + dirY * r)) break;
     reach = r;
   }
-  return reach;
+  // Зазор нужен с ОБЕИХ сторон: если после отступа от стены до актёров осталось
+  // меньше того же зазора, места на круг нет вовсе — и честнее сказать это прямо,
+  // чем поставить оператора вплотную к людям.
+  const gapped = reach - CAMERA_WALL_CLEARANCE;
+  return gapped >= CAMERA_WALL_CLEARANCE ? gapped : 0;
 }
 
 /**
  * Курс кадра — на точку в НЕСКОЛЬКИХ КЛЕТКАХ впереди по ломаной, а не на
  * ближайший узел.
  *
- * Узлы стоят по сетке подклеток, через четверть клетки, и целиться в ближайший
- * значит переставлять курс на каждом шаге: направление на соседний узел скачет
- * между осевым и диагональным, и кадр дёргается вместо поворота. Дальняя точка
- * меняется медленно, поэтому поворот выходит один и плавный — тот же приём, что
- * делает мягким трейлерный пролёт, только там он получался сам собой из грубого
- * допуска на узел.
+ * Целиться в ближайший узел значит переставлять курс на каждом шаге: направление
+ * на соседний узел скачет между осевым и диагональным, и кадр дёргается вместо
+ * поворота. Дальняя точка меняется медленно, поэтому поворот выходит один и плавный.
+ *
+ * Отсчёт идёт В КЛЕТКАХ ПО ЛОМАНОЙ, а не в узлах: после разглаживания шаг узлов
+ * неровен, и «двенадцать узлов вперёд» на прямом перегоне унесло бы прицел за
+ * поворот, в который кадр ещё не вошёл.
  */
 function routeCourseAngle(camera: RuntimeCamera, world: World, ts: CinematicCameraState): number {
-  const ahead = Math.min(ts.path.length - 1, ts.targetNodeIndex + CINEMATIC_LOOKAHEAD_NODES);
-  const node = ts.path[ahead] ?? ts.path[ts.path.length - 1];
+  let px = camera.free.x;
+  let py = camera.free.y;
+  let left = CINEMATIC_LOOKAHEAD;
+  let node = ts.path[ts.targetNodeIndex] ?? ts.path[ts.path.length - 1];
+  for (let i = ts.targetNodeIndex; i < ts.path.length && left > 0; i++) {
+    node = ts.path[i];
+    const dx = world.delta(px, node[0]);
+    const dy = world.delta(py, node[1]);
+    left -= Math.sqrt(dx * dx + dy * dy);
+    px = node[0];
+    py = node[1];
+  }
   if (!node) return ts.angleTarget;
   const dx = world.delta(camera.free.x, node[0]);
   const dy = world.delta(camera.free.y, node[1]);
@@ -791,7 +962,15 @@ export function cinematicCameraArrived(camera: RuntimeCamera): boolean {
 
 export function updateCinematicCamera(camera: RuntimeCamera, world: World, dt: number): void {
   if (camera.mode !== 'cinematic' || !camera.cinematic) return;
-  const ts = camera.cinematic;
+  flyCinematicFrame(camera, world, camera.cinematic, dt);
+}
+
+/**
+ * Кадр пролёта. Один на все режимы, у которых камера летит сама: и сцена этажа,
+ * и трейлер главного меню идут ровно этим ходом, этим разворотом и этим дыханием.
+ * Разница между ними только в том, кто прокладывает маршрут.
+ */
+function flyCinematicFrame(camera: RuntimeCamera, world: World, ts: CinematicCameraState, dt: number): void {
   ts.time += dt;
   /* Ход подтягивается к заданному такту той же экспонентой, что и радиус облёта:
    * у кадра одна манера двигаться, а не отдельная ручка на каждый повод. Смена
@@ -938,38 +1117,56 @@ function applyCinematicGaze(
   camera.free.height = ceilingLimitedHeight(world, camera.free.x, camera.free.y, wanted);
 
   if (!directed) {
-    turnToward(camera, ts.angleTarget, dt);
-    camera.free.pitch = Math.sin(ts.time * 1.1) * CINEMATIC_BREATH_PITCH;
+    turnToward(camera, ts, ts.angleTarget, dt);
+    pitchToward(camera, ts, Math.sin(ts.time * 1.1) * CINEMATIC_BREATH_PITCH, dt);
     return;
   }
 
   const dx = world.delta(camera.free.x, ts.lookAtX!);
   const dy = world.delta(camera.free.y, ts.lookAtY!);
-  turnToward(camera, Math.atan2(dy, dx), dt);
+  turnToward(camera, ts, Math.atan2(dy, dx), dt);
 
   // Экранное смещение точки высоты h на дистанции d равно (camHeight - h) / d в долях экрана,
   // а pitch задан в тех же долях (webgl.ts horizonShift). Положительный pitch поднимает взгляд,
   // поэтому камера выше цели наклоняется вниз.
   const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-  camera.free.pitch = clampPitch((CAMERA_STANDING_HEIGHT - camera.free.height) / dist);
+  pitchToward(camera, ts, (CAMERA_STANDING_HEIGHT - camera.free.height) / dist, dt);
 }
 
 /**
- * Довернуть кадр к цели: экспонентой, но НЕ БЫСТРЕЕ предела.
+ * Довернуть кадр к цели — С ИНЕРЦИЕЙ, но НЕ БЫСТРЕЕ предела.
  *
- * Одна экспонента мелкие правки курса берёт мягко, а большой разворот начинает
- * рывком: смена субъекта на сто пятьдесят градусов давала девятьсот градусов в
- * секунду в первом же кадре — хлыст вместо панорамы. Предел превращает такой
- * разворот в ровный проезд взгляда и не мешает поворотам в коридорах, где
- * расхождение мало и экспонента до предела не доходит.
+ * Разворот вели одной экспонентой, и у неё нет разгона: угловая скорость в первом
+ * же кадре прыгала с нуля до потолка, а у цели так же обрывалась в ноль. Оба конца
+ * панорамы читались толчком — ровно та «недостаточная кинематографичность», на
+ * которую жалуются, и заметнее всего она в коридорных поворотах, где цель курса
+ * переставляется каждые несколько клеток.
+ *
+ * Поэтому кадр разворачивает не положение, а СКОРОСТЬ: пружина критического
+ * затухания разгоняет её и сама же гасит у цели, без перелёта и без раскачки.
+ * Потолок остаётся сверху и остаётся нужным: на развороте в сто восемьдесят
+ * градусов пружина просит около шести радиан в секунду — это снова хлыст.
  */
-function turnToward(camera: RuntimeCamera, target: number, dt: number): void {
+function turnToward(camera: RuntimeCamera, ts: CinematicCameraState, target: number, dt: number): void {
   let diff = target - camera.free.angle;
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
-  const eased = diff * Math.min(1, dt * CINEMATIC_TURN_RATE);
-  const ceiling = CINEMATIC_MAX_TURN_RATE * dt;
-  camera.free.angle += Math.max(-ceiling, Math.min(ceiling, eased));
+  const w = CINEMATIC_TURN_RATE;
+  const rate = (ts.angleRate ?? 0) + (w * w * diff - 2 * w * (ts.angleRate ?? 0)) * dt;
+  // Потолок кладётся на САМУ скорость, а не на шаг: иначе пружина копит запас,
+  // которого не отдаёт, и после долгого упора в потолок кадр проскакивает цель.
+  ts.angleRate = Math.max(-CINEMATIC_MAX_TURN_RATE, Math.min(CINEMATIC_MAX_TURN_RATE, rate));
+  camera.free.angle += ts.angleRate * dt;
+}
+
+/**
+ * Наклон — тоже ход, а не назначение. Геометрический наклон прыгает при каждой
+ * смене оси взгляда и при каждом скачке дистанции до неё, и назначенный напрямую
+ * он давал кивок на всю разницу за один кадр.
+ */
+function pitchToward(camera: RuntimeCamera, ts: CinematicCameraState, target: number, dt: number): void {
+  ts.pitchNow = approach(ts.pitchNow ?? camera.free.pitch, clampPitch(target), CINEMATIC_PITCH_EASE, dt);
+  camera.free.pitch = clampPitch(ts.pitchNow);
 }
 
 export function startTrailerCamera(
@@ -987,81 +1184,129 @@ export function startTrailerCamera(
     height: CAMERA_STANDING_HEIGHT,
     fovRadians: camera.free.fovRadians,
   };
-  camera.trailer = {
+  camera.cinematic = {
     path: [],
     targetNodeIndex: 0,
     active: true,
     time: 0,
     angleTarget: 0,
-    flySpeed: 2.5,
+    flySpeed: CINEMATIC_FLY_SPEED,
+    // Кадр никому не отдаётся: за трейлером нет игрока, к которому возвращаться.
+    hold: true,
   };
+  trailerVisitedRooms.delete(camera);
 }
 
-function findNewTrailerTarget(world: World, cx: number, cy: number): { x: number; y: number } | null {
-  for (let i = 0; i < 50; i++) {
-    const rx = Math.floor(rng() * W);
-    const ry = Math.floor(rng() * W);
-    if (!world.solid(rx, ry)) {
-      const dx = world.delta(cx, rx);
-      const dy = world.delta(cy, ry);
-      if (Math.sqrt(dx * dx + dy * dy) > 10) return { x: rx, y: ry };
+/**
+ * Куда лететь дальше — В ТОЧКУ ИНТЕРЕСА, а не «куда-нибудь подальше».
+ *
+ * Здесь сменились обе половины замысла. Случайная клетка тора не годится
+ * потому, что интереса у неё нет вовсе: перегон выходил на сотни клеток одного
+ * коридора. Но и лотерея по кольцу расстояний не годится тоже — на этаже, где
+ * комнаты стоят редко, в кольцо не попадает НИ ОДНА, и кадр просто висит на
+ * месте. Замерено: на Аду ближайшая комната в шестидесяти клетках, кольцо до
+ * тридцати двух пусто, за минуту камера не сдвинулась ни разу.
+ *
+ * Поэтому не жребий, а ВЫБОР ЛУЧШЕЙ: комнаты перебираются целиком (это раз в
+ * несколько секунд, не на кадре) и получают оценку. Дороже авторская комната —
+ * у неё есть имя и назначение, то есть она и есть точка интереса; дороже
+ * просторная — каморка в кадре не читается; дешевле дальняя — перегон должен
+ * быть планом, а не перелётом через этаж. Случайная доля не решает, куда лететь,
+ * а только не даёт трейлеру ходить одним и тем же кругом.
+ *
+ * Верхнего предела расстоянию нет намеренно: лучше долгий перелёт до
+ * единственной комнаты, чем неподвижный кадр.
+ */
+function findTrailerTarget(
+  world: World,
+  cx: number,
+  cy: number,
+  visited: readonly number[],
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestScore = -Infinity;
+  for (const room of world.rooms) {
+    if (!room || visited.includes(room.id)) continue;
+    const x = wrapCoord(room.x + Math.floor(room.w / 2)) + 0.5;
+    const y = wrapCoord(room.y + Math.floor(room.h / 2)) + 0.5;
+    const dx = world.delta(cx, x);
+    const dy = world.delta(cy, y);
+    const dist2 = dx * dx + dy * dy;
+    if (dist2 < TRAILER_HOP_MIN * TRAILER_HOP_MIN) continue;
+    const score = (room.defId ? 1 : 0)
+      + Math.min(1, (room.w * room.h) / TRAILER_ROOMY_AREA)
+      - Math.sqrt(dist2) / TRAILER_HOP_REACH
+      + rng();
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x, y };
     }
   }
-  return null;
+  return best;
+}
+
+/** Куда кадр уже слетал. Общая манера модуля хранить состояние режима вне камеры. */
+const trailerVisitedRooms = new WeakMap<RuntimeCamera, number[]>();
+
+function rememberTrailerRoom(camera: RuntimeCamera, world: World, x: number, y: number): void {
+  const seen = trailerVisitedRooms.get(camera) ?? [];
+  const roomId = world.roomMap[world.idx(Math.floor(x), Math.floor(y))];
+  if (roomId === undefined || roomId < 0) return;
+  seen.push(roomId);
+  while (seen.length > TRAILER_VISITED_MEMORY) seen.shift();
+  trailerVisitedRooms.set(camera, seen);
+}
+
+/**
+ * Дописать перегон к хвосту маршрута — ПОКА КАДР ЕЩЁ ЛЕТИТ.
+ *
+ * Ждать конца ломаной нельзя: у самой цели пролёт идёт накатом и почти
+ * останавливается, а следующий перегон трогает его с места заново. Трейлер из
+ * такого выходит пульсирующим. Маршрут поэтому продлевается заранее, и кадр не
+ * знает, что перегон сменился.
+ */
+function extendTrailerRoute(camera: RuntimeCamera, world: World, ts: CinematicCameraState): void {
+  const tail = ts.path[ts.path.length - 1];
+  const fromX = tail ? tail[0] : camera.free.x;
+  const fromY = tail ? tail[1] : camera.free.y;
+  const visited = trailerVisitedRooms.get(camera) ?? [];
+  const target = findTrailerTarget(world, fromX, fromY, visited);
+  if (!target) return;
+  const landed = nearestCameraSpot(world, target.x, target.y);
+  // Комната записывается в память СРАЗУ, а не по прибытии. Дороги к ней может и
+  // не оказаться — запечённое дерево не выходит из запертых и отрезанных объёмов, —
+  // и без этой записи следующий кадр выбирал бы ту же лучшую по оценке комнату
+  // снова и снова. Замерено на министерстве: кадр стоял пятую часть времени,
+  // раз за разом упираясь в один и тот же недостижимый зал.
+  rememberTrailerRoom(camera, world, landed.x, landed.y);
+  const leg = cameraRouteWaypoints(
+    world,
+    world.wrap(Math.floor(fromX)),
+    world.wrap(Math.floor(fromY)),
+    Math.floor(landed.x),
+    Math.floor(landed.y),
+  );
+  if (!leg.length) return;
+  leg.push([landed.x, landed.y]);
+  for (const node of leg) ts.path.push(node);
+  // Пройденный хвост срезается: меню живёт часами, и без этого ломаная растёт
+  // без потолка, а вместе с ней — перебор остатка на каждом кадре.
+  ts.path.splice(0, ts.targetNodeIndex);
+  ts.targetNodeIndex = 0;
 }
 
 export function updateTrailerCamera(camera: RuntimeCamera, world: World, dt: number): void {
-  if (camera.mode !== 'trailer' || !camera.trailer) return;
-  const ts = camera.trailer;
-  ts.time += dt;
-  ts.flySpeed = CINEMATIC_FLY_SPEED; // Cinematic flight (not too fast to avoid wide orbits)
-
-  // Path navigation
-  if (ts.path.length === 0 || ts.targetNodeIndex >= ts.path.length) {
-    const target = findNewTrailerTarget(world, camera.free.x, camera.free.y);
-    if (target) {
-      ts.path = bfsPath(world, camera.free.x, camera.free.y, target.x, target.y);
-      ts.targetNodeIndex = 0;
-    } else {
-      ts.path = [];
-    }
-  }
-
-  // Follow the path
-  while (ts.targetNodeIndex < ts.path.length) {
-    const [tx, ty] = subcellToWorld(ts.path[ts.targetNodeIndex]);
-    const dx = world.delta(camera.free.x, tx);
-    const dy = world.delta(camera.free.y, ty);
-    const dist2 = dx * dx + dy * dy;
-    
-    if (dist2 < 0.64) {
-      // Consume the node if we are within 0.8 units radius. This tight radius prevents corner cutting
-      // and forces the camera to naturally stay in the center of corridors.
-      ts.targetNodeIndex++;
-    } else {
-      // Calculate required angle to the next valid node
-      ts.angleTarget = Math.atan2(dy, dx);
-      break;
-    }
-  }
-
-  // Calculate forward velocity based on camera's current viewing angle
-  let vx = Math.cos(camera.free.angle) * ts.flySpeed * dt;
-  let vy = Math.sin(camera.free.angle) * ts.flySpeed * dt;
-  
-  const nx = wrapCoord(camera.free.x + vx);
-  const ny = wrapCoord(camera.free.y + vy);
-
-  // Noclip: directly apply velocity without solid checks
-  camera.free.x = nx;
-  camera.free.y = ny;
-
-  // Smoothly interpolate angle (fast enough to not overshoot tight corners)
-  turnToward(camera, ts.angleTarget, dt);
-
-  // Cinematic bob and pitch
-  camera.free.height = CAMERA_STANDING_HEIGHT + Math.sin(ts.time * 0.7) * CINEMATIC_BREATH_HEIGHT;
-  camera.free.pitch = Math.sin(ts.time * 1.1) * CINEMATIC_BREATH_PITCH;
+  if (camera.mode !== 'trailer' || !camera.cinematic) return;
+  const ts = camera.cinematic;
+  /* Порог не подобран, а выведен: перегон дописывается раньше, чем пролёт войдёт
+   * в накат (`flySpeed / CINEMATIC_ORBIT_EASE`) и раньше, чем кончится то, что
+   * кадр уже держит в прицеле (упреждение курса). */
+  const left = routeRemainingLength(camera, world, ts);
+  const refill = ts.flySpeed / CINEMATIC_ORBIT_EASE + CINEMATIC_LOOKAHEAD;
+  // Дороги может и не найтись — кадр в запертом объёме, комнаты не подошли. Тогда
+  // он стоит и дышит, а не летит сквозь бетон: следующий кадр попробует снова.
+  if (left < refill) extendTrailerRoute(camera, world, ts);
+  flyCinematicFrame(camera, world, ts, dt);
 }
 
 export function updateRuntimeCamera(camera: RuntimeCamera, world: World, dt: number, subject?: CameraSubject): void {

@@ -313,8 +313,25 @@ function hqAnchorEligible(world: World, room: Room): boolean {
     hqShellCapacity(world, room) > 0;
 }
 
+/**
+ * Из чего можно ПРОИЗВЕСТИ штаб. Не найдя готового, проход берёт подходящую
+ * комнату этажа и переписывает ей тип, имя и оболочку (`hardenHqRoom`), — и
+ * авторское имя он бережёт особо (`isGenericHqName`), а тип не берёг никак.
+ * Тип — это ПОВЕДЕНИЕ (`rooms.md`): по нему ядро актора выбирает, куда идти
+ * работать, спать и обходить, поэтому объявленный складом «Склад трофеев снизу»
+ * уходил с этажа штабом гарнизона, а «Пост южных ворот» — вместе со всей
+ * процедурой возвращения. Выбор идёт по весу хозяина к типу плюс ПЛОЩАДЬ, а
+ * самые крупные комнаты этажа — как раз авторские: замерено 8 сидов из 24 на
+ * Базе Ликвидаторов.
+ *
+ * Отсюда правило: комната с объявленной личностью (`room.defId`, то есть
+ * `applyNamedRoom`/`stampNamedRoom`) под авто-штаб не берётся никогда. Уже
+ * объявленный автором ШТАБ это не трогает — он приходит готовым и идёт мимо
+ * этой проверки (`existingHq` в `hardenHqRoom`, `chooseExistingHqAnchorRoom`).
+ */
 function autoHqCandidateEligible(world: World, room: Room): boolean {
   return room.apartmentId < 0 &&
+    room.defId === undefined &&
     autoHqRoomSpanEligible(room) &&
     autoHqDoorEligible(room) &&
     roomHasMappedCell(world, room) &&

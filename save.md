@@ -10,7 +10,7 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 27`;
+- `SAVE_SHAPE_VERSION = 28`;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.
@@ -23,6 +23,26 @@ Current authoritative shape:
 - `src/systems/save_runtime.ts`: top-level payload creation and runtime section gathering.
 - `src/systems/save_payload.ts`: compact payload construction, payload size accounting, portal compaction and section normalization.
 - Domain systems own their own compact serializers/sanitizers where possible.
+
+### Загрузка была сломана целиком (закрыто 2026-08-27)
+
+`loadGame` звал `setProductionState(state, dataState.production, floor)` — имени
+`floor` в модуле нет. Оно было целью генерации (набором тегов темы) и вырезано
+при переводе этажей на числовые координаты; комментарий двумя строками выше это
+прямо описывает, а сама ссылка осталась под `// @ts-ignore`. В браузере это
+`ReferenceError`, и происходил он ВНУТРИ обратного вызова загрузчика, который
+зовётся голым `fn()`, — собственный `try/catch` у `loadGame` к тому моменту уже
+вернул `true`. Всё, что стоит после этой строки (сброс самосбора, портал
+возврата из Пустоты, повтор правок редактора карт, восстановление контейнеров,
+комнаты производства, сброс карты, финализация визуала этажа), не выполнялось
+никогда, и кадр не перезаказывался: **«Продолжить» вешало игру на экране
+загрузки навсегда, без единой строки в консоли.**
+
+Заметить это было нечем: правило проекта «тестируем в новой версии, без
+сохранений и загрузок» означает, что путь не проходили руками, а `@ts-ignore`
+закрывал его от компилятора. Теперь третьим аргументом идёт `loadedRunEntry.z`
+(то же число уже присвоено в `state.currentZ` семнадцатью строками выше), а
+блaнкетный `@ts-ignore` в `src/` запрещён механически — `npm run check:invariants`.
 
 ## Autosave
 
@@ -124,6 +144,7 @@ A-Life saves compact identity state, not live NPC arrays:
 - dead plot ids;
 - sparse changed-record overrides — включая **компактный оверрайд на каждый мёртвый сюжетный слот** (`id`, `floorKey`, `z`, `x`, `y`, без личности). Место гибели не декорация: по нему возвращается дневник покойного, и без него сюжетная цепочка запиралась бы навсегда после первой же перезагрузки. Канал оверрайдов существовал раньше и уже нёс эти поля, поэтому форма сейва не менялась и `SAVE_SHAPE_VERSION` не тронут;
 - **флаг бойца арены и указатель на чемпиона** (2026-08-24). Кто вышел на песок — бит в общей колонке флагов личности, в сейв идёт полем `arenaFighter` в `AlifeNpcOverride` (только `true`, только у тронутых записей). Кто носит титул — ОДНО число `arenaChampionAlifeId` верхнего уровня секции: слот личности, `-1` за игроком, отсутствует, если титул свободен. Копии титула в каждом бойце нет намеренно — иначе форма допускала бы двух чемпионов сразу. Мусор в поле санируется в «титул свободен» (`sanitizeArenaChampion`), смерть носителя освобождает титул. `SAVE_SHAPE_VERSION` поднят с 25 до 26: секция `alife` получила поле верхнего уровня, и старый сейв читать честно нельзя. Замок — `tests/arena-ladder.test.ts`;
+- **событийная принадлежность личности и свершившиеся переселения** (2026-08-27). `alife.factionOverrides` — плоские пары «слот, фракция», только у тех, кому сторону переписало событие; на чистом прогоне поля нет вовсе. Оверрайд нужен потому, что колонка фракций у сюжетного слота живёт лишь до следующей генерации его этажа: тело авторского NPC делается из пакета заново (`plotNpcEntityFromPackage`), и анкетная сторона приезжает обратно в мир. Санитайзер отбрасывает неизвестный слот целиком (а не прижимает номер к границе — прижатый сел бы на постороннего), нецелые числа и фракции вне диапазона; кап общий с реестром мёртвых сюжетных слотов. `alife.migrations` — по факту на случившееся переселение: `id`, оба ключа этажей и число уехавших. Списка людей у него нет намеренно, адреса переехавших уже уходят в сейв обычными оверрайдами; число нужно, чтобы после загрузки вернуть плану раздачи мест сдвинутые цели этажей, а `id` — чтобы событие не привезло вторую волну. `SAVE_SHAPE_VERSION` поднят с 27 до 28: секция `alife` получила два поля верхнего уровня. Замки — `tests/alife-faction-override.test.ts`, `tests/alife-population-migration.test.ts`;
 - capped mobility state for cold journeys, pending active-floor arrivals and migration cursor/cadence;
 - player social/rank inputs through the current player entity state.
 
@@ -151,7 +172,7 @@ Live materialized NPCs fold back before transitions, samosbor rebuilds and save.
 игроку ради риска, который требует совпадения двух редких условий сразу: сейв старше
 2026-08-15 И взаимодействие ровно с одним из девяти конкретных людей из стотысячного
 пула. Если решение окажется неверным, лечится одной строкой: поднять
-`SAVE_SHAPE_VERSION` в `src/systems/save_runtime.ts`.
+`SAVE_SHAPE_VERSION` в `src/core/save_shape.ts`.
 
 ## Events, Economy And Production
 

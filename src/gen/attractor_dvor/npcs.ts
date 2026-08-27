@@ -5,12 +5,10 @@ import {
   ContainerKind,
   EntityType,
   Faction,
-  Feature,
   MonsterKind,
   Occupation,
   RoomType,
   Tex,
-  W,
   type Entity,
   type Room,
   type TerritoryOwner,
@@ -18,7 +16,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -66,29 +63,6 @@ export function spawnActors(world: World, entities: Entity[], nextId: { v: numbe
   spawnMonster(world, entities, nextId, MonsterKind.TRUBNYY_AVTOMAT, rooms.transitCache.x + 34, rooms.transitCache.y + 28, 4, 'Трубный автомат обходного течения');
   spawnMonster(world, entities, nextId, MonsterKind.RZHAVNIK, rooms.westSpine.x + 14, rooms.westSpine.y + 180, 3, 'Ржавник желтой петли');
   void world;
-}
-
-export function isAttractorAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    entity.alive &&
-    entity.id === undefined &&
-    entity.persistentNpcId === undefined &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function attractorTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const list = cells.get(world.factionControl[i] as TerritoryOwner);
-    if (list) list.push(i);
-  }
-  return cells;
 }
 
 export function carvePolyline(world: World, points: readonly Point[], radius: number, floorTex: Tex, seed: number, tint: readonly [number, number, number]): number {

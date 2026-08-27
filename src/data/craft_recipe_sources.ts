@@ -291,12 +291,11 @@ export function craftRecipeSourceIdFromNoteData(data: unknown): string | undefin
   return typeof id === 'string' && id.trim() === id && id ? id : undefined;
 }
 
+/** Расходуемость объявляет только флаг `consume`. Тега-синонима нет намеренно:
+ *  `tags` тут — авторские метки для отбора и поиска, и разметка ими поведения
+ *  давала бы второй, молча неработающий способ сказать то же самое. */
 export function craftRecipeSourceConsumesItem(source: CraftRecipeSourceDef): boolean {
-  return source.consume === true || source.tags.includes('consume_item');
-}
-
-export function craftRecipeSourcePassesThroughItemUse(source: CraftRecipeSourceDef): boolean {
-  return source.tags.includes('pass_through_item_use');
+  return source.consume === true;
 }
 
 export function craftRecipeNoteData(sourceId: string, text?: string): CraftRecipeSourceNoteData {

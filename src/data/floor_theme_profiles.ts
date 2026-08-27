@@ -13,7 +13,6 @@ import {
   proceduralFloorMonsterBiasTags,
   type ProceduralFloorSpec,
 } from './procedural_floors';
-// @ts-ignore
 import {
   proceduralPopulationProfileId,
 } from './population_profiles';

@@ -10,6 +10,15 @@ import { registerRouteCue } from '../../systems/route_cues';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
 import { Spr } from '../../entities/sprite_index';
 
+/**
+ * Псевдоним комнаты-якоря. Имя И ЕСТЬ адрес: шаг цепочки адресует зону строкой
+ * `targetRoomDefId: 'Зона закрепления'` (`data/plot.ts`), и той же строкой её
+ * ищут скриптовое прибытие группы Громного и якорь кат-сцены. Оба ищут ТОЧНЫМ
+ * сравнением по `defId`, а комната его не несла: квест выживал только на
+ * запасной ветке по имени, а прибытие молча откатывалось на позицию игрока.
+ */
+export const HELL_ANCHOR_ZONE_ALIAS = PLOT_ROOMS.hell_anchor_zone.name;
+
 export function generateHellPlotChain(
   world: World, entities: Entity[], nextId: { v: number },
 ): void {
@@ -70,6 +79,9 @@ function stampPlotRoom(
   const y = pos ? pos.y : world.wrap(ay + fallbackShift);
   const room = stampRoom(world, world.rooms.length, spec.roomType, x, y, spec.w, spec.h, -1);
   room.name = spec.name;
+  // Адрес комнаты для систем. Совпадает с именем намеренно: так его записал шаг
+  // цепочки, и обе дороги поиска (`defId`, иначе `name`) ведут в одну комнату.
+  room.defId = spec.name;
   room.wallTex = spec.wallTex;
   room.floorTex = spec.floorTex;
   protectRoom(world, room.x, room.y, room.w, room.h, spec.wallTex, spec.floorTex);

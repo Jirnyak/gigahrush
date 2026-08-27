@@ -105,6 +105,13 @@ import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
+import { applyNamedRoom } from '../named_rooms';
+import {
+  GALLERY_W,
+  GALLERY_X,
+  SLIME_NII_ENTRY_ANCHOR,
+  SLIME_NII_GALLERY_ANCHOR,
+} from './tour_scene';
 import './olevia';
 
 
@@ -142,6 +149,8 @@ interface SlimeNiiRooms {
   lowerLift: Room;
   bypass: Room;
   cameras: Room[];
+  /** Смотровая галерея перед западными камерами: одна линия вместо четырёх тупиков. */
+  gallery: Room;
 }
 
 interface DoorSite {
@@ -585,17 +594,16 @@ function buildSlimeNiiResearchDistricts(world: World, rng: () => number): void {
     const spec = SLIME_NII_DISTRICTS[i];
     const ox = Math.floor((rng() - 0.5) * 22);
     const oy = Math.floor((rng() - 0.5) * 18);
-    const lab = tryAddSlimeRoom(
-      world,
-      spec.type,
-      spec.x + ox,
-      spec.y + oy,
-      62 + (i % 3) * 8,
-      34 + (i % 2) * 8,
-      `НИИ слизи: ${spec.name}`,
-      spec.wallTex,
-      spec.floorTex,
-    );
+    const labW = 62 + (i % 3) * 8;
+    const labH = 34 + (i % 2) * 8;
+    const labName = `НИИ слизи: ${spec.name}`;
+    /* Дрожание — украшение адреса, а не сам адрес. Сдвинутый на десяток клеток
+     * район упирается в соседа и пропадает ЦЕЛИКОМ — вместе со складом,
+     * кабинетом, мокрым шлюзом, гермокамерой и микроблоком. Не влезло с
+     * дрожанием — ставим по объявленному месту; жребий при этом уже брошен, и
+     * поток случайных чисел вторая попытка не двигает. */
+    const lab = tryAddSlimeRoom(world, spec.type, spec.x + ox, spec.y + oy, labW, labH, labName, spec.wallTex, spec.floorTex)
+      ?? tryAddSlimeRoom(world, spec.type, spec.x, spec.y, labW, labH, labName, spec.wallTex, spec.floorTex);
     if (!lab) continue;
     paintRoomTerritory(world, lab, spec.owner);
     decorateResearchLab(world, lab, i, spec.wet);
@@ -930,7 +938,54 @@ function buildRooms(world: World): SlimeNiiRooms {
   const lowerLift = addRoom(world, RoomType.CORRIDOR, CX - 34, CY - 238, 68, 24, 'Нижняя кабина к перекрёсткам', Tex.PIPE, Tex.F_CONCRETE);
   const bypass = addRoom(world, RoomType.CORRIDOR, CX - 212, CY - 118, 72, 30, 'Старый квартирный обход, занятый НИИ', Tex.BRICK, Tex.F_LINO);
   const cameras = buildCameraBanks(world);
-  return { entry, atrium, checkpoint, admin, secretary, cleanLab, coldStorage, drainWard, volunteerWard, liquidatorPost, lowerLift, bypass, cameras };
+  /* Галерея рвётся ДО `connectCore`: коридоры камер идут на восток сквозь неё и
+   * сами пробивают её стену тремя клетками на каждую дверь. Вырытая после,
+   * галерея встала бы поперёк этих коридоров глухой стеной. */
+  const gallery = buildCameraGallery(world, cameras);
+  // Якорь сцены-экскурсии: комната ищется точным `defId`, а не русским именем.
+  applyNamedRoom(entry, SLIME_NII_ENTRY_ANCHOR, {
+    type: entry.type,
+    name: entry.name,
+    tags: ['slime_nii', 'tour', 'entry'],
+  });
+  return { entry, atrium, checkpoint, admin, secretary, cleanLab, coldStorage, drainWard, volunteerWard, liquidatorPost, lowerLift, bypass, cameras, gallery };
+}
+
+/**
+ * Смотровая галерея западной батареи. Четыре гермокамеры стояли каждая на своём
+ * тупиковом коридоре, и пройти вдоль них было нельзя ни камере кадра, ни человеку:
+ * между соседними дверьми лежал крюк в три сотни клеток. Одна колонна перед
+ * дверьми связывает их в линию — и она же держит место от застройки расширения
+ * этажа: занятые `roomMap` клетки `canStampSlimeRoom` больше не берёт.
+ */
+function buildCameraGallery(world: World, cameras: readonly Room[]): Room {
+  /* Полоса ровно по своим камерам и ни клеткой больше: запас «чтобы линия
+   * читалась коридором» отнимал место у карантинной приёмной расширения —
+   * `canStampSlimeRoom` требует чистую рамку в клетку вокруг новой комнаты, и
+   * этаж терял целый район ради вида торца. */
+  let top = W;
+  let bottom = 0;
+  for (const camera of cameras) {
+    if (camera.x >= CX) continue;
+    top = Math.min(top, camera.y);
+    bottom = Math.max(bottom, camera.y + camera.h);
+  }
+  const gallery = addRoom(
+    world,
+    RoomType.CORRIDOR,
+    GALLERY_X,
+    top,
+    GALLERY_W,
+    bottom - top,
+    'Смотровая галерея западных гермокамер',
+    Tex.TILE_W,
+    Tex.F_TILE,
+  );
+  return applyNamedRoom(gallery, SLIME_NII_GALLERY_ANCHOR, {
+    type: RoomType.CORRIDOR,
+    name: gallery.name,
+    tags: ['slime_nii', 'tour', 'containment'],
+  });
 }
 
 function buildCameraBanks(world: World): Room[] {
@@ -1007,6 +1062,20 @@ function decorateRooms(world: World, rooms: SlimeNiiRooms): void {
   setFeature(world, rooms.bypass.x + 14, rooms.bypass.y + 14, Feature.TABLE);
 
   for (let i = 0; i < rooms.cameras.length; i++) decorateCamera(world, rooms.cameras[i], i);
+  decorateCameraGallery(world, rooms.gallery);
+}
+
+/**
+ * Галерея освещена и подписана: это рабочий коридор учреждения, а не подвал.
+ * Лампы стоят вдоль ВОСТОЧНОЙ стены и между рядами камер — так они не садятся на
+ * проёмы коридоров (те идут ровно по осям дверей) и не сужают проход.
+ */
+function decorateCameraGallery(world: World, gallery: Room): void {
+  for (let y = gallery.y + 8; y < gallery.y + gallery.h - 6; y += 19) {
+    setFeature(world, gallery.x + gallery.w - 1, y, Feature.LAMP);
+  }
+  markScreenWall(world, gallery.x + 3, gallery.y - 1, 3);
+  markScreenWall(world, gallery.x + 3, gallery.y + gallery.h, 6);
 }
 
 function placeSlimeNiiEmergencyPanels(world: World, rooms: SlimeNiiRooms): void {

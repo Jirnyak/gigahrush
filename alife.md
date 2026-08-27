@@ -382,6 +382,7 @@ Current shipped behavior:
 - Authored named NPCs keep `plotNpcId`.
 - A-Life records killed `plotNpcId` values and filters those named NPCs on later floor generation.
 - **Адрес личности хранит A-Life, а не таблица рождения.** `filterRelocatedPlotNpcs` стоит рядом с `filterDeadPlotNpcs` в том же проходе материализации (`src/systems/alife.ts`): сюжетный NPC, чья запись числится в ЧУЖОМ бакете, снимается с этажа так же, как снимается мёртвый. Без этого доставка авторских пакетов (`deliverFloorNpcPackages` ставит человека по объявленному `homeFloorKey` и о переездах не знает) возвращала увезённого домой при следующей генерации его родного этажа — а увезти его вправе и такт сцены `depart`, и миграция A-Life. Смерть и уход — две половины одного правила: живой мир решает, где человек сейчас, а таблица рождения решает только, где он появился впервые.
+- **Принадлежность может переписать СОБЫТИЕ, и это сильнее анкеты.** `setAlifeNpcFactionOverride` / `getAlifeNpcFactionOverride` (`src/systems/alife.ts`) держат разреженную карту «слот → фракция», которая переживает и перегенерацию этажа, и загрузку. Отдельный факт понадобился потому, что колонка фракций у сюжетного слота живёт лишь до следующей генерации его этажа: тело авторского NPC рождается из пакета заново, и анкетная сторона приезжает обратно в мир. Оверрайд накладывается в проходе материализации, рядом с `filterDeadPlotNpcs` и `filterRelocatedPlotNpcs` — это третья половина того же правила, — и запрещает обратной дороге (`rewriteAlifeNpcIdentityFromEntity`, а значит и `bindReservedPlotNpcAlifeRecord`) затирать себя анкетным значением: там поправляется СУЩНОСТЬ, а не запись. Восемь ячеек взгляда на фракции при смене стороны пересобираются (`setRecordFaction` → `resetRecordFactionAttitudes`): перебежчик со взглядом прежней стороны считал бы врагами своих новых. Личное отношение к игроку, наоборот, не сбрасывается — сдвигается только база под ним, на разницу баз старой и новой стороны, поэтому дела помнятся, а сторона всё-таки меняется. Замок — `tests/alife-faction-override.test.ts`.
 - **Смерть сюжетной личности записывает место, а не только факт.** `recordAlifeNpcDeath` через `captureEntityToRecord` кладёт `record.x/y` и приколачивает `floorKey` к этажу гибели, а не к объявленному дому: у части пакетов эти этажи расходятся. Личность узнаётся и по слоту A-Life, и по id сущности — авторский NPC без `alifeId` всё равно тот самый человек. По этому месту система следа возвращает дневник покойного (`quests.md`, «След покойного»).
 - Persistent A-Life NPCs can be quest candidates through their stable `canGiveQuest` affordance. It is a `10%` roll, not a separate population caste and not true for every persistent NPC.
 
@@ -491,6 +492,21 @@ Forbidden off-floor updates:
 This preserves the fantasy of a living building without spending CPU on invisible theatre.
 
 Lazy off-floor work is allowed only as expandable aggregate A-Life. It must never become honest current-floor simulation for floors the player cannot see.
+
+**Переселение части населения — законное последствие события, и это ПЕРЕВОЗКА, а не спавн.**
+`migrateAlifePopulation(state, { id, faction, fromFloorKey, toFloorKey, count })`
+(`src/systems/alife.ts`) увозит существующие личности заданной стороны с этажа-донора на
+этаж-получатель: у донора население убывает ровно на столько, на сколько прибывает у
+получателя, вместе с людьми переезжают и цели раздачи мест (`floorCap`), а факт публикуется
+событием `alife_migration`. Кто именно поедет, решается детерминированно от семени A-Life и
+ИМЕНИ события, одним проходом по бакету донора — пул целиком здесь ни при чём, кадрового
+такта у механики нет. Именные личности (`reservedKind`) пакетом не увозятся: у авторского
+человека своя причина переехать. Верхняя граница одного события — минимальный пул этажа
+(`ALIFE_MIGRATION_BATCH_CAP`), больше — это уже стёртый донор. Имя случившегося переселения
+лежит в сейве, поэтому повторный вызов (в том числе после загрузки) не приводит вторую волну
+тех же людей; пустой донор — законный ноль, никто не приходит из воздуха. Соседняя механика
+`systems/alife_migration.ts` — про другое: одиночные холодные путешествия по собственным
+намерениям. Замок — `tests/alife-population-migration.test.ts`.
 
 The active floor is different: it is the honest live simulation surface. Every materialized NPC/monster receives the active-floor AI pass regardless of distance from the player. This full-pass model is the current AI foundation; cheap combat, cached target scans and actor-local decision cooldowns are performance mechanics, not absence of life. If a current-floor NPC or monster dies, wounds someone, drops inventory, creates blood/bullet marks, changes relation or publishes a compact event, that fact must be visible when the player reaches the place or when the live state folds back into A-Life/floor memory.
 

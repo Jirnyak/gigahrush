@@ -37,7 +37,6 @@
    идут в том же порядке. Абсолютные индексы массивов при этом сдвинуты, потому
    что девять пакетов чёрного рынка и кремниевого колодца встали в середину:
    раньше они регистрировались только при первой генерации своего этажа. */
-import { regrowMaze } from './gen/living';
 import './gen/kvartiry';
 import { generateFloor } from './gen/floor_manifest';
 import { setSamosborGenServices } from './systems/samosbor';
@@ -48,4 +47,4 @@ import './data/plot';
 
 /* Самосбор перестраивает этаж, но не знает, кто его порождает: слой systems
    стоит под gen и звать его не имеет права. Стройка ставится здесь. */
-setSamosborGenServices({ generateFloor, regrowMaze });
+setSamosborGenServices({ generateFloor });

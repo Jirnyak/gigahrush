@@ -12,7 +12,6 @@ import {
   QuestType,
   RoomType,
   Tex,
-  W,
   type Entity,
   type Item,
   type Room,
@@ -77,7 +76,7 @@ import { monsterSpr } from '../../entities/sprite_index';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { DESIGN_NPC_HOME_FLOOR_KEY, TURING_NURSERY_ROUTE_ID, TURING_NURSERY_Z, TURING_NURSERY_ROOM_PREFIX, SEED, FIELD_SIZE, FIELD_CELLS, FIELD_STEPS, TURING_HQ_SPECS, NPC_DEFS } from "./meta";
+import { DESIGN_NPC_HOME_FLOOR_KEY, TURING_NURSERY_ROUTE_ID, TURING_NURSERY_Z, TURING_NURSERY_ROOM_PREFIX, SEED, FIELD_SIZE, FIELD_CELLS, FIELD_STEPS, NPC_DEFS } from "./meta";
 import { NextId, ReactionField, NurseryRooms, carveTuringMacroNetwork, buildTuringHqSuites, buildTuringDistricts, buildTuringCabinetStrips, buildTuringOuterAnnexes, buildTuringStateGraphRooms, reinforceTuringNurseryDoorSlots, tryAddTuringRoom, connectRoomsNarrow, paintRoomTerritory, decorateMicroRoom, stainReactionRoom, stampReactionWater, laplace, fieldWrap, clamp01, addWetCell, setFeature, markScreenWall, roomCx, roomCy } from "./geometry";
 
 export type TuringNpcId =
@@ -484,32 +483,6 @@ export function spawnAmbientNpc(
     occupation,
     questId: -1,
   });
-}
-
-export function isTuringAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    entity.alive &&
-    entity.id === undefined &&
-    entity.persistentNpcId === undefined &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function turingTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const spec of TURING_HQ_SPECS) {
-    if (!cells.has(spec.owner)) cells.set(spec.owner, []);
-  }
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
 }
 
 export function spawnMonster(

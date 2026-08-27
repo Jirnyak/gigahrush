@@ -193,7 +193,6 @@ function uniqueTags(tags: readonly string[], cap = 16): readonly string[] {
 }
 
 function designRouteInfo(): RouteInfo[] {
-  // @ts-ignore
   return DESIGN_FLOOR_ROUTES.map(route => {
     const theme = themeForDesignRoute(route);
     return {

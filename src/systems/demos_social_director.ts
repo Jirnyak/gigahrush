@@ -3,9 +3,9 @@ import {
   DEMOS_PERSISTENT_POST_CAP,
   DEMOS_PERSISTENT_REACTION_CAP,
   DEMOS_REACTIONS_PER_POST_CAP,
-  DEMOS_RELATION_OVERRIDE_CAP,
   type DemosReactionKind,
 } from '../data/demos_posts';
+import { DEMOS_SOCIAL_OVERRIDE_CAP } from '../data/demos_social';
 import type { GameState, WorldEvent } from '../core/types';
 import {
   chooseDemosReactionKind,
@@ -15,6 +15,7 @@ import {
   type DemosPostAuthorFact,
 } from './demos_posts';
 import { clampRelation } from '../data/relations';
+import { compareEventPriority, WORLD_EVENT_IMPORTANT_SEVERITY } from './events';
 import {
   DEMOS_REACTION_DELTA_MAX,
   DEMOS_REACTION_DELTA_MIN,
@@ -66,6 +67,9 @@ export interface DemosSocialDirectorOptions {
 
 export interface DemosSocialDirectorResult {
   eventsConsumed: number;
+  /* Сколько из разобранного было важным. Нужно вызывающему, чтобы отличить
+   * законный недобор рутины от потери смерти. */
+  importantConsumed: number;
   postsCreated: number;
   reactionsCreated: number;
   repliesCreated: number;
@@ -152,7 +156,7 @@ function applyRelationDelta(
   };
   if (existingIndex >= 0) social.relationOverrides[existingIndex] = next;
   else social.relationOverrides.push(next);
-  while (social.relationOverrides.length > DEMOS_RELATION_OVERRIDE_CAP) social.relationOverrides.shift();
+  while (social.relationOverrides.length > DEMOS_SOCIAL_OVERRIDE_CAP) social.relationOverrides.shift();
 
   opts.applyRelationDelta?.(
     opts.gameState ?? ({} as GameState),
@@ -229,6 +233,7 @@ export function runDemosSocialDirector(
   const maxReactions = intIn(opts.maxReactions, DEMOS_REACTIONS_PER_TICK_CAP, 0, DEMOS_REACTIONS_PER_TICK_CAP);
   const result: DemosSocialDirectorResult = {
     eventsConsumed: 0,
+    importantConsumed: 0,
     postsCreated: 0,
     reactionsCreated: 0,
     repliesCreated: 0,
@@ -237,15 +242,19 @@ export function runDemosSocialDirector(
   };
   if (maxEvents <= 0 || maxPosts <= 0) return result;
 
+  /* Разбор идёт по важности, а не по свежести: постов за такт всего `maxPosts`,
+   * и рутина не вправе занять их раньше смерти. Потребитель забирает ПРЕФИКС
+   * этого порядка — на этом стоит счётчик потерь в `demos_runtime`. */
   const fresh = events
     .filter(event => event.id > social.eventCursor)
     .slice()
-    .sort((a, b) => a.id - b.id)
+    .sort(compareEventPriority)
     .slice(0, maxEvents);
 
   for (const event of fresh) {
     if (result.postsCreated + result.repliesCreated >= maxPosts) break;
     result.eventsConsumed++;
+    if (event.severity >= WORLD_EVENT_IMPORTANT_SEVERITY) result.importantConsumed++;
     social.eventCursor = Math.max(social.eventCursor, event.id);
     result.eventCursor = social.eventCursor;
     if (!eventAllowed(event, opts.allowPrivateEvents === true)) continue;

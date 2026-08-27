@@ -35,7 +35,6 @@ const PROCEDURAL_ANOMALY_GENERATION_REGISTRY: Record<FloorAnomalyId, ProceduralA
   wall_snake: { mode: 'module', apply: applyWallSnake },
   living_tunnels: { mode: 'module', apply: applyLivingTunnels },
   rail_trains: { mode: 'inline' },
-  bad_apple_world: { mode: 'none' },
   zombie_apocalypse: { mode: 'module', apply: applyZombieApocalypse },
   sandpile_perekrytie: { mode: 'module', apply: applySandpilePerekrytie },
   section_shift: { mode: 'module', apply: applySectionShift },

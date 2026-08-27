@@ -42,9 +42,12 @@ test('createCraftingState initializes materials, default recipes, and metadata',
   assert.equal(crafting.materials.length, 9);
   assert.deepEqual(crafting.materials, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-  assert.equal(crafting.knownRecipes.craft_item_bread, true);
-  assert.equal(Object.keys(crafting.knownRecipes).length > 0, true);
-  assert.equal(crafting.learnedCount, Object.keys(crafting.knownRecipes).length);
+  /* Стартовых рецептов нет ни одного: гейт крафта — знание, и оно целиком
+   * добывается разбором. Здесь стояло обратное — что хлеб известен даром, —
+   * то есть тест закреплял рукописный перечень исключений из правила
+   * «крафтится всё, гейт один». Перечень снят, замок держит пустоту. */
+  assert.deepEqual(crafting.knownRecipes, {}, 'на старте не должно быть известных рецептов');
+  assert.equal(crafting.learnedCount, 0);
   assert.equal(crafting.lastChangedAt, 0);
 });
 
@@ -53,9 +56,10 @@ test('createCraftingState initializes fields to defaults', () => {
   assert.deepEqual(crafting.materials, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(typeof crafting.knownRecipes, 'object');
   assert.equal(crafting.learnedCount, Object.keys(crafting.knownRecipes).length);
+  assert.equal(crafting.learnedCount, 0, 'на старте не должно быть известных рецептов');
   assert.equal(crafting.lastChangedAt, 0);
-  assert.ok(crafting.knownRecipes['craft_item_bread']);
-  assert.ok(crafting.knownRecipes['craft_item_bandage']);
+  assert.equal(crafting.knownRecipes['craft_item_bread'], undefined);
+  assert.equal(crafting.knownRecipes['craft_item_bandage'], undefined);
 });
 
 test('sanitizeCraftingState with non-record input creates default state', () => {
@@ -95,26 +99,36 @@ test('learning a craft recipe returns true once and false on duplicates', () => 
   assert.equal(event?.data?.recipeId, recipeId);
 });
 
-test('disassembly picks deterministic material, removes one item, and can learn recipe below chance threshold', () => {
+/* Разбор возвращает ПОЛОВИНУ вектора состава, всеми типами сразу.
+ *
+ * Здесь стоял жребий: `weightedMaterial` выдавал ОДНУ единицу ОДНОГО СЛУЧАЙНОГО
+ * типа, и заряд из 4 механики, 7 химии и 5 металла отдавал ровно столько же,
+ * сколько пустая бутылка. Выход был плоским, а состав растёт со стоимостью,
+ * поэтому мусор оказался самым дешёвым источником материала в игре. */
+test('разбор возвращает половину состава всеми типами', () => {
   const state = makeGameState({ time: 20 });
   const player = makeTestPlayer({ inventory: [{ defId: 'breach_charge', count: 2 }] });
   const recipe = craftRecipeByItemId('breach_charge');
   assert.ok(recipe, 'breach_charge recipe must exist');
-  const materialId = firstMaterial(recipe.components);
 
   const result = disassembleInventorySlot({
     actor: player,
     state,
     stationKind: 'workbench',
     slotIndex: 0,
-    rng: sequence([0, 0.49]),
+    rng: sequence([0.49]), // единственный бросок: шанс вспомнить рецепт
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.materialId, materialId);
   assert.equal(result.learnedRecipeId, recipe.id);
   assert.equal(countInventoryItem(player, 'breach_charge'), 1);
-  assert.equal(ensureCraftingState(state).materials[craftMaterialIndex(materialId)], 1);
+  // Состав заряда: механика 4, химия 7, металл 5 → половина каждого.
+  const materials = ensureCraftingState(state).materials;
+  assert.equal(materials[craftMaterialIndex('mechanics')], 2);
+  assert.equal(materials[craftMaterialIndex('chemical')], 3);
+  assert.equal(materials[craftMaterialIndex('metal')], 2);
+  // Подпись называет самый дорогой из возвращённых, а не жребий.
+  assert.equal(result.materialId, 'chemical');
   assert.equal(hasCraftRecipe(state, recipe.id), true);
 });
 
@@ -128,18 +142,18 @@ test('disassembly removes the selected slot when duplicate item ids carry differ
   });
   const recipe = craftRecipeByItemId('pipe');
   assert.ok(recipe, 'pipe recipe must exist');
-  const materialId = firstMaterial(recipe.components);
 
   const result = disassembleInventorySlot({
     actor: player,
     state,
     stationKind: 'workbench',
     slotIndex: 0,
-    rng: sequence([0, 0.5]),
+    rng: sequence([0.5]), // единственный бросок: шанс вспомнить рецепт
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.materialId, materialId);
+  // Труба: механика 2, металл 3 → по одной каждого, подпись по металлу.
+  assert.equal(result.materialId, 'metal');
   assert.equal(player.inventory?.length, 1);
   assert.equal(player.inventory?.[0]?.defId, 'pipe');
   assert.deepEqual(player.inventory?.[0]?.data, { dur: 9 });
@@ -156,7 +170,7 @@ test('disassembly learn chance does not learn recipe at or above threshold', () 
     state,
     stationKind: 'workbench',
     slotIndex: 0,
-    rng: sequence([0, 0.5]),
+    rng: sequence([0.5]), // единственный бросок: шанс вспомнить рецепт
   });
 
   assert.equal(result.ok, true);
@@ -236,4 +250,49 @@ test('crafting success consumes exact material vector and adds output item atomi
   assert.equal(countInventoryItem(player, recipe.itemId), recipe.resultCount);
   const event = getRecentEvents(state, { type: 'player_craft_item', limit: 1 })[0];
   assert.equal(event?.data?.recipeId, recipe.id);
+});
+
+/* Разобранное перестаёт быть надетым.
+ *
+ * Разборка была единственным путём потери вещи без `reconcileEquippedAfterLoss`
+ * — торговля, ящик и выброс его зовут. Из-за этого разобранный нож оставался в
+ * руке навсегда: урон считается по `e.weapon`, а износ искал вещь в рюкзаке и
+ * молча не находил, так что оружие не могло даже сломаться. Броня — так же:
+ * резист продолжал применяться от вещи, которой уже нет.
+ * Обратная сторона правила: стопка переживает разбор, снимаем только пустую. */
+
+test('разбор снимает надетое, если вещи в рюкзаке больше нет', () => {
+  const state = makeGameState({ time: 20 });
+  const player = makeTestPlayer({ inventory: [{ defId: 'knife', count: 1 }] });
+  player.weapon = 'knife';
+
+  const result = disassembleInventorySlot({
+    actor: player,
+    state,
+    stationKind: 'workbench',
+    slotIndex: 0,
+    rng: sequence([0, 0.99]),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(countInventoryItem(player, 'knife'), 0);
+  assert.equal(player.weapon, '', 'разобранный нож остался в руке');
+});
+
+test('разбор одной вещи из стопки не разоружает', () => {
+  const state = makeGameState({ time: 20 });
+  const player = makeTestPlayer({ inventory: [{ defId: 'knife', count: 2 }] });
+  player.weapon = 'knife';
+
+  const result = disassembleInventorySlot({
+    actor: player,
+    state,
+    stationKind: 'workbench',
+    slotIndex: 0,
+    rng: sequence([0, 0.99]),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(countInventoryItem(player, 'knife'), 1);
+  assert.equal(player.weapon, 'knife', 'нож сняли, хотя второй остался в рюкзаке');
 });

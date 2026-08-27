@@ -1,6 +1,6 @@
 /* ── Gnilushka: altered neutral woman, defensive only ───────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.42,
   dmg: 16,
   attackRate: 1.05,
+  damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['defensiveNeutral'],
   counterplay: 'Не загоняйте в угол и не начинайте первым: спокойный разговор или тара НИИ закрывают встречу без боя, а раненая Гнилушка делает короткий опасный рывок только в тесноте.',

@@ -11,7 +11,6 @@
 import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { stepActorBy } from '../movement_collision';
-import { rng } from '../../core/rand';
 
 /* ── Tuning constants ────────────────────────────────────────── */
 
@@ -25,11 +24,11 @@ const ORBIT_BODY_R = 0.16;
  *  Higher = more radial correction, less strafe.  0.35 feels natural. */
 const RADIAL_WEIGHT = 0.35;
 
-/** Cooldown range for random radius-delta pulses (seconds) */
+/** Полоса периодов дыхания по радиусу (секунды); свой период у каждого актора */
 const PULSE_CD_MIN = 0.8;
 const PULSE_CD_MAX = 2.2;
 
-/** Max random offset added to idealRadius during a pulse */
+/** Амплитуда дыхания: насколько идеальный радиус ходит в обе стороны */
 const PULSE_DELTA_MAX = 1.5;
 
 /**
@@ -68,13 +67,25 @@ export function tryCombatOrbitStep(
   const tx = -ry * ai.orbitDir;
   const ty = rx * ai.orbitDir;
 
-  // Pulse: periodically jitter the ideal radius for organic movement
-  ai.orbitPulseCd = (ai.orbitPulseCd ?? 0) - dt;
-  let pulseOffset = 0;
-  if (ai.orbitPulseCd <= 0) {
-    ai.orbitPulseCd = PULSE_CD_MIN + rng() * (PULSE_CD_MAX - PULSE_CD_MIN);
-    pulseOffset = (rng() - 0.5) * 2 * Math.min(radiusDelta, PULSE_DELTA_MAX);
-  }
+  /* Дыхание полосы — НЕПРЕРЫВНАЯ функция фазы, а не однокадровый рывок.
+   *
+   * Здесь стоял бросок, живший ровно тот кадр, в котором откат перешёл ноль:
+   * один кадр из ста с лишним. И возмущал он шаг, уже ограниченный
+   * `e.speed * ORBIT_SPEED_FRAC * dt` — около двух сотых клетки при 60 к/с.
+   * Задуманного «стрелки дышат по своей полосе» не происходило никогда, а
+   * `PULSE_DELTA_MAX` и обе `PULSE_CD_*` были инертны.
+   *
+   * Теперь `orbitPulseCd` — это ФАЗА: она набегает временем и оборачивается на
+   * полном круге, поэтому синус непрерывен и на самом обороте (sin 0 = sin 2π).
+   * Период — свойство актора, а не броска в момент сброса: хранить его негде, а
+   * нового поля `AIState` он не стоит. Остаток id раскладывает соседей по всей
+   * объявленной полосе тем же приёмом, каким строкой выше выбрано направление
+   * орбиты, поэтому толпа не дышит в такт.
+   */
+  const pulsePeriod = PULSE_CD_MIN + ((e.id % 8) / 8) * (PULSE_CD_MAX - PULSE_CD_MIN);
+  ai.orbitPulseCd = ((ai.orbitPulseCd ?? 0) + dt) % pulsePeriod;
+  const pulseOffset = Math.sin((ai.orbitPulseCd / pulsePeriod) * Math.PI * 2)
+    * Math.min(radiusDelta, PULSE_DELTA_MAX);
 
   // Radial error: positive = too far, negative = too close
   const effectiveIdeal = idealRadius + pulseOffset;

@@ -2,7 +2,6 @@ import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { stampSurfaceSplat } from '../../systems/surface_marks';
 import {
   AIGoal,
-  Cell,
   ContainerKind,
   EntityType,
   Faction,
@@ -12,11 +11,9 @@ import {
   W,
   type Entity,
   type Room,
-  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { registerRouteCue } from '../../systems/route_cues';
@@ -113,31 +110,6 @@ export interface ProductionBeltContainers {
   quarantine: WorldContainer;
   lockers: WorldContainer;
   loading: WorldContainer;
-}
-
-export function productionBeltTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
-}
-
-export function isProductionBeltAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    entity.alive &&
-    entity.name?.startsWith('Производственный пояс: работник') === true &&
-    entity.id === undefined &&
-    entity.persistentNpcId === undefined &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
 }
 
 export function seedExpandedProductionCaches(world: World, dockRooms: readonly Room[], hazardRooms: readonly Room[]): void {

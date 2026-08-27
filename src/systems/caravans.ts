@@ -6,13 +6,25 @@ import {
   Faction,
   RoomType,
   msg,
+  W,
   type Entity,
   type GameState,
   type WorldEvent,
 } from '../core/types';
 import type { World } from '../core/world';
 import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z } from '../data/procedural_floors';
-import { CARAVAN_LANE_BY_ID, CARAVAN_LANES, SMALL_CARAVAN_TEMPLATES, laneFromZ, laneToZ, type CaravanLaneDef, type SmallCaravanTemplateDef } from '../data/caravans';
+import {
+  CARAVAN_CONTRACT_OUTCOMES,
+  CARAVAN_LANE_BY_ID,
+  CARAVAN_LANES,
+  SMALL_CARAVAN_TEMPLATES,
+  SMALL_CARAVAN_TEMPLATE_BY_ID,
+  SMALL_CARAVAN_TEMPLATE_BY_LANE_ID,
+  laneFromZ,
+  laneToZ,
+  type CaravanLaneDef,
+  type SmallCaravanTemplateDef,
+} from '../data/caravans';
 import type { EconomyFloorRef } from '../data/economy_rules';
 import { addFactionRelMutual } from '../data/relations';
 import { isPlotNpc } from '../data/plot';
@@ -94,20 +106,6 @@ export interface CaravanState {
 
 type CaravanGameState = GameState & { caravans?: CaravanState };
 const normalizedStates = new WeakMap<GameState, CaravanState>();
-
-const CARAVAN_CONTRACT_OUTCOMES: Record<string, { action: 'escort' | 'raid' | 'reroute' | 'report' | 'seat'; laneId: string }> = {
-  caravan_escort_queue_porters: { action: 'escort', laneId: 'kvartiry_living_food_water' },
-  caravan_raid_queue_cargo: { action: 'raid', laneId: 'kvartiry_living_food_water' },
-  caravan_buy_queue_seat: { action: 'seat', laneId: 'kvartiry_living_food_water' },
-  caravan_escort_repair_crew: { action: 'escort', laneId: 'maintenance_living_tools' },
-  caravan_reroute_repair_crew: { action: 'reroute', laneId: 'maintenance_living_tools' },
-  caravan_raid_market88_smugglers: { action: 'raid', laneId: 'production_black_market_88' },
-  caravan_report_market88_smugglers: { action: 'report', laneId: 'production_black_market_88' },
-  caravan_escort_ministry_forms: { action: 'escort', laneId: 'ministry_market_docs' },
-  caravan_reroute_ministry_forms: { action: 'reroute', laneId: 'ministry_market_docs' },
-  caravan_escort_net_signalers: { action: 'escort', laneId: 'net_exchange_data' },
-  caravan_reroute_net_signalers: { action: 'reroute', laneId: 'net_exchange_data' },
-};
 
 function clamp(value: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, value));
@@ -207,7 +205,7 @@ function lanePrimaryToFloorKey(def: CaravanLaneDef): string {
 function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunState | undefined {
   if (!isRecord(raw)) return undefined;
   const templateId = typeof raw.templateId === 'string' ? raw.templateId : '';
-  const template = SMALL_CARAVAN_TEMPLATES.find(item => item.id === templateId);
+  const template = SMALL_CARAVAN_TEMPLATE_BY_ID[templateId];
   const laneId = typeof raw.laneId === 'string' ? raw.laneId : template?.laneId ?? '';
   const def = CARAVAN_LANE_BY_ID[laneId];
   if (!template || !def) return undefined;
@@ -224,8 +222,11 @@ function normalizeSmallCaravanRun(raw: unknown, now: number): SmallCaravanRunSta
     id,
     templateId,
     laneId,
-        x: clamp(saneNumber(raw.x, 0), 0, 1024),
-    y: clamp(saneNumber(raw.y, 0), 0, 1024),
+    /* Клетки мира — `0..W-1`. Здесь стоял литерал 1024 и верхняя граница
+     * включала его: санитайзер принимал координату, которая на торе есть образ
+     * нуля, и восстановленный караван оказывался строкой мимо. */
+    x: clamp(saneNumber(raw.x, 0), 0, W - 1),
+    y: clamp(saneNumber(raw.y, 0), 0, W - 1),
     status,
     spawnedAt: saneNumber(raw.spawnedAt, now),
     updatedAt: saneNumber(raw.updatedAt, now),
@@ -305,7 +306,7 @@ function rumorIdsFor(def: CaravanLaneDef): string[] {
 }
 
 function templateForLane(laneId: string): SmallCaravanTemplateDef | undefined {
-  return SMALL_CARAVAN_TEMPLATES.find(template => template.laneId === laneId);
+  return SMALL_CARAVAN_TEMPLATE_BY_LANE_ID[laneId];
 }
 
 function activeStatus(status: SmallCaravanStatus): boolean {
@@ -583,7 +584,7 @@ function findSmallCaravanSpawn(
 
 function chooseSmallCaravanTemplate(state: GameState, requestedId?: string): SmallCaravanTemplateDef | undefined {
   if (requestedId) {
-    const requested = SMALL_CARAVAN_TEMPLATES.find(template => template.id === requestedId);
+    const requested = SMALL_CARAVAN_TEMPLATE_BY_ID[requestedId];
     const lane = requested ? ensureCaravanState(state).lanes[requested.laneId] : undefined;
     const def = requested ? CARAVAN_LANE_BY_ID[requested.laneId] : undefined;
     return requested && lane?.open && def && floorMatchesLane(state.currentZ, def) ? requested : undefined;
@@ -786,7 +787,7 @@ function completeSmallCaravanArrival(state: GameState, run: SmallCaravanRunState
   if (!def) return;
   const caravans = ensureCaravanState(state);
   const lane = caravans.lanes[def.id];
-  const template = SMALL_CARAVAN_TEMPLATES.find(item => item.id === run.templateId);
+  const template = SMALL_CARAVAN_TEMPLATE_BY_ID[run.templateId];
   const counts = applyLaneCargo(state, def, template?.cargo ?? def.resourceDeltas, 0.55, 'small_caravan_arrival');
   const migratedMembers = moveSmallCaravanAlifeMembers(state, run, def, entities);
   lane.runs++;
@@ -1128,7 +1129,7 @@ export function getNearestSmallCaravan(
     }
   }
   if (!best) return undefined;
-  const template = SMALL_CARAVAN_TEMPLATES.find(item => item.id === best.templateId);
+  const template = SMALL_CARAVAN_TEMPLATE_BY_ID[best.templateId];
   const tariff = getCaravanLaneTariffMultiplier(state, best.laneId).toFixed(2);
   return {
     id: best.id,

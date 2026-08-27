@@ -1,6 +1,6 @@
 /* ── Lishennyy: deep light-following shadow guardian ------------ */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.72,
   dmg: 11,
   attackRate: 1.05,
+  damageType: DamageType.PSI,
   sprite: 0,
   detect: 30,
   scanSec: 0.62,

@@ -3,6 +3,7 @@ import { World } from '../core/world';
 import { ITEMS } from '../data/catalog';
 import {
   getPermitDef,
+  resolvePermitAccess,
   type PermitAccessTag,
   type PermitDef,
   type PermitForgeryRecipe,
@@ -19,23 +20,44 @@ function actorItemIds(actor: Entity): string[] {
   return out;
 }
 
+/** Выбор пермита у актора. Сам отбор и приоритет живут ОДИН раз — в
+ *  `resolvePermitAccess`; здесь только чтение инвентаря. Своя копия отбора
+ *  успела разойтись: краденый документ она считала худшим (40 вместо 50) и
+ *  проигрывала его любой подделке. */
 export function findActorPermit(
   actor: Entity,
   tags: readonly PermitAccessTag[],
 ): PermitDef | undefined {
-  const ids = actorItemIds(actor);
-  let best: PermitDef | undefined;
-  let bestScore = -1;
-  for (const itemId of ids) {
-    const def = getPermitDef(itemId);
-    if (!def || !tags.some(tag => def.accessTags.includes(tag))) continue;
-    const score = def.official ? 100 : def.method === 'expose' ? 90 : def.method === 'debt' ? 80 : 40;
-    if (score > bestScore) {
-      best = def;
-      bestScore = score;
-    }
-  }
-  return best;
+  return resolvePermitAccess(actorItemIds(actor), tags);
+}
+
+/**
+ * Дверь, чей `keyId` — сам документ доступа, запирается на КЛАСС допуска, а не
+ * на конкретную бумажку: генераторы уже кладут в `keyId` то официальный, то
+ * поддельный вариант одного и того же пропуска (`ridgeDoorState` карантина
+ * чередует их по серийному номеру). Точное совпадение id делало из одного
+ * замка два несовместимых: официальный допуск не открывал дверь, помеченную
+ * подделкой, а подделка — дверь, помеченную официальным, то есть весь смысл
+ * подделки как обхода на двери пропадал.
+ *
+ * Спрашивается только ПРОФИЛЬНЫЙ допуск бумаги — её первый тег. Весь остальной
+ * хвост у пермитов кончается общим `general_admin`, и приняв его, дверь стала бы
+ * отмычкой для любой конторской бумажки. На контейнерах хвост уместен: там
+ * набор тегов собирает сам ящик из своих меток.
+ *
+ * Обычные ключи сюда не попадают: `getPermitDef` знает только предметы-пермиты.
+ */
+export function findActorDoorPermit(
+  actor: Entity,
+  doorKeyId: string,
+): { permit: PermitDef; tag: PermitAccessTag } | undefined {
+  const required = getPermitDef(doorKeyId);
+  const tag = required?.accessTags[0];
+  if (!tag) return undefined;
+  const permit = findActorPermit(actor, [tag]);
+  // Записывается допуск, которого потребовала ДВЕРЬ: у предъявленной бумаги
+  // профильный тег может быть другим (райсоветский пропуск открывает архив).
+  return permit ? { permit, tag } : undefined;
 }
 
 function relationDeltas(def: PermitDef): FactionRelationDelta[] {

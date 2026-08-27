@@ -37,9 +37,15 @@ import {
   VENT_JUNCTION,
   STAFF_CANTEEN,
   createServiceFloorState,
+  learnServiceMasterKey,
+  repairServiceLiftMachine,
+  restoreServicePowerZone,
+  rerouteServiceRaid,
+  summarizeServiceFloorFlags,
   type ServiceFloorState,
   type ServiceFloorGeneration,
 } from './meta';
+import { placeServiceDecisionAnchors } from './decisions';
 import { newEntityIdCursor } from '../entity_ids';
 
 
@@ -180,6 +186,16 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
 
   reinforceServiceFloorAuthoredHqTerritory(world);
   alignServiceFloorAmbientNpcTerritory(world, entities);
+  /* Пять развилок этажа получают клетку в мире и приглашение по `E`.
+     Шаг стоит ПОСЛЕ финализации и панелей: якорь ищет свободную клетку
+     и не вправе занять место, которое комната ещё собиралась застроить. */
+  placeServiceDecisionAnchors(world, serviceState, {
+    learnMasterKey: learnServiceMasterKey,
+    repairLift: repairServiceLiftMachine,
+    restorePower: restoreServicePowerZone,
+    rerouteRaid: rerouteServiceRaid,
+    summarize: summarizeServiceFloorFlags,
+  });
 
   world.bakeLights();
   return { ...generation, isDecentralized: true as const };

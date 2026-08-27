@@ -1,6 +1,6 @@
 /* -- Slepoglaz: blind last-sound beam turret ------------------- */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 0.62,
   dmg: 24,
   attackRate: 3.4,
+  damageType: DamageType.ENERGY,
   sprite: 0,
   aiFlags: ['lastSoundBeam'],
   counterplay: 'Слепоглаз заряжает зеленую линию туда, где вы шумели или стояли секунду назад: шумните, шагните в сторону и сближайтесь сразу после луча, пока он слеп и слаб в упоре.',

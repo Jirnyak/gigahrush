@@ -3,6 +3,7 @@ import type { World } from '../core/world';
 import { hasLineOfSight } from '../world/line_of_sight';
 
 import { WEAPON_STATS } from '../data/catalog';
+import { isHostile } from './factions';
 
 const MELEE_TARGET_EPSILON = 1e-9;
 
@@ -13,6 +14,15 @@ const MELEE_TARGET_EPSILON = 1e-9;
  * Everything inside the circle can be hit.  Scoring prefers targets aligned
  * with the attacker's facing direction, but does NOT hard-reject targets
  * behind — only applies a soft angular penalty so point-blank hits always land.
+ *
+ * `hostileOnly` — для замаха, который выбирает не человек, а ИИ. Управляемый
+ * актор целится сам и вправе ударить кого угодно: так начинается драка с
+ * мирным. У ИИ такого решения нет — он замахивается на проверенного врага, а
+ * разрешение удара до этой развилки смотрело только на тип и жизнь, поэтому
+ * ближайший союзник перед мордой забирал удар на себя. Урон при этом ложился
+ * настоящий, а `notifyActorDamaged` пару «экология против экологии» отбрасывает,
+ * так что жертва не узнавала, кто её бьёт: стая тихо выкашивала сама себя.
+ * Политика записана в `fight.md`: «monster-vs-monster не является базовой».
  */
 export function selectMeleeTarget(
   world: World,
@@ -20,6 +30,7 @@ export function selectMeleeTarget(
   candidates: readonly Entity[],
   reach: number,
   weaponId?: string,
+  hostileOnly = false,
 ): Entity | undefined {
   const hitRadius = WEAPON_STATS[weaponId || '']?.hitRadius ?? 0.6;
 
@@ -33,6 +44,7 @@ export function selectMeleeTarget(
   for (const candidate of candidates) {
     if ((candidate.type !== EntityType.MONSTER && candidate.type !== EntityType.NPC) || !candidate.alive) continue;
     if (candidate.id === attacker.id) continue;
+    if (hostileOnly && !isHostile(attacker, candidate)) continue;
 
     const dx = world.delta(attacker.x, candidate.x);
     const dy = world.delta(attacker.y, candidate.y);

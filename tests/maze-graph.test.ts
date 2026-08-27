@@ -4,7 +4,6 @@ import * as assert from 'node:assert/strict';
 import { xorshift32 } from '../src/core/rand';
 import {
   generateGrowingTreeMaze,
-  generateWilsonMaze,
   validateMazeGraph,
   type MazeGraph,
 } from '../src/gen/maze_graph';
@@ -102,29 +101,4 @@ test('maze validation rejects optional locks on required bridge corridors', () =
   assert.equal(validation.connected, true);
   assert.equal(validation.optionalLocksValid, false);
   assert.equal(validation.errors.some(error => error.includes('optional lock')), true);
-});
-
-test('wilson maze emits a uniform spanning tree when braiding is disabled', () => {
-  const graph = generateWilsonMaze({
-    width: 8,
-    height: 8,
-    originX: 4,
-    originY: 4,
-    cellSize: 20,
-    startGx: 1,
-    startGy: 1,
-    braidChance: 0,
-    extraChordCount: 0,
-    lockedChordChance: 0,
-    rewardLeafChance: 0,
-    landmarkCount: 5,
-    rand: xorshift32(99),
-  });
-  const validation = validateMazeGraph(graph);
-
-  assert.deepEqual(validation.errors, []);
-  assert.equal(graph.edges.length, graph.nodes.length - 1);
-  assert.equal(graph.loopCount, 0);
-  assert.equal(graph.landmarkIds.length, 5);
-  assert.equal(validation.connected, true);
 });

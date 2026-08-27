@@ -18,8 +18,10 @@ import {
   Occupation,
   MonsterKind,
   } from '../core/types';
+import { hashSeed, seededRandom } from '../core/rand';
 import type { QuestRouteTarget } from './contracts';
 import { designFloorAtZ, designFloorById } from './design_floors';
+import { rankMonsterEcology } from './monster_ecology';
 import { floorKeyForDesign, floorKeyForProcedural } from './floor_keys';
 import { proceduralFloorKey } from './procedural_floors';
 import {
@@ -179,6 +181,45 @@ export function allPlotNpcIds(): readonly number[] {
   return allPlotNpcEntries().map(([id]) => id);
 }
 
+/* ── Жребий трёх образцов НИИ ─────────────────────────────────────
+ *
+ * Виды, с которых Гущин просит срез, в данных НЕ записаны: они разыгрываются
+ * от сида прогона среди тех, у кого есть ненулевой вес спавна. Подсказки, где
+ * искать, нет и не будет — это охота, а убийство засчитывается на любом этаже.
+ *
+ * Почему жребий живёт здесь, а разыгрывает его чужой слой: сид прогона лежит в
+ * `state`, а данные `state` не видят по контракту слоёв (`data → core`). Поэтому
+ * данные держат сам жребий и тексты, а вызывающий приносит два внешних факта —
+ * сид и способ назвать вид по-русски (имена монстров живут в `entities/`, куда
+ * данным ходу нет). Вид попадает В КВЕСТ: `generatePlotQuest` копирует
+ * `targetMonsterKind` в объект квеста, и после загрузки цель восстанавливается
+ * из сейва, а не из шага.
+ */
+const NII_SAMPLE_TAG = 'nii_sample';
+const NII_SAMPLE_KIND_TOKEN = '{вид}';
+
+/** Тексты трёх поручений. `{вид}` подставляет жребий; до него токен виден только тестам. */
+const NII_SAMPLE_DESCS: readonly string[] = [
+  `Гущин ставит на стол пустую тару: «Первый срез. Мне нужна ткань, и ткань конкретная — ${NII_SAMPLE_KIND_TOKEN}. Свежая, целая, без вашего героического энтузиазма на срезе.»`,
+  `«Второй срез, коллега. Теперь ${NII_SAMPLE_KIND_TOKEN}. Не спрашивайте, где искать: я биолог, а не диспетчер лифтов. Они ходят там, где им есть чем питаться.»`,
+  `«Третий, и выборка закрыта: ${NII_SAMPLE_KIND_TOKEN}. После него я скажу, на что отвечает ваша пластина, — а до него не скажу ничего, и не уговаривайте.»`,
+];
+
+const NII_SAMPLE_HINTS: readonly string[] = [
+  `Добыть срез ткани: ${NII_SAMPLE_KIND_TOKEN}. Засчитывается на любом этаже, добить нужно самому.`,
+  `Второй образец: ${NII_SAMPLE_KIND_TOKEN}. Тара НИИ у Гущина, если довезти надо целым.`,
+  `Последний образец: ${NII_SAMPLE_KIND_TOKEN}. После него Гущин закроет журнал.`,
+];
+
+/** Поля шага с образцом, общие для всех трёх: текст, подсказка и метка жребия. */
+function niiSampleStep(order: number): Pick<PlotStep, 'desc' | 'targetHint' | 'eventTags'> {
+  return {
+    desc: NII_SAMPLE_DESCS[order],
+    targetHint: NII_SAMPLE_HINTS[order],
+    eventTags: ['nii', NII_SAMPLE_TAG, 'black_rune'],
+  };
+}
+
 /* ── Linear quest chain ──────────────────────────────────────── */
 /* Step N is available when all steps 0..N-1 are done AND         */
 /* giverId matches the NPC the player is talking to.           */
@@ -265,12 +306,13 @@ export const PLOT_CHAIN: PlotStep[] = [
     extraRewards: [{ defId: 'pills', count: 1 }],
     relationDelta: 15, xpReward: 40,
   },
-  // Step 7: Yakov → go to maintenance floor, meet Major Grom
+  // Step 7: Yakov → down to the liquidator base, meet starshina Blinkov
   {
     giverId: getPlotNpcNumericId('yakov')!,
     type: QuestType.TALK,
-    desc: 'Яков закрыл акт, и лишние руки ему больше не нужны. Неси рапорт вниз, к майору Громному в коллекторы. На глубине всегда недобор смены.',
-    targetNpcId: getPlotNpcNumericId('major_grom')!,
+    desc: 'Яков закрыл акт, и лишние руки ему больше не нужны. Спускайся на базу ликвидаторов к старшине Блинкову: мы с ним с одного набора. Он один говорит вслух, кого сейчас пускают вниз, а кому только ставят печать.',
+    activeObjective: 'Найти старшину Блинкова на Базе Ликвидаторов.',
+    targetNpcId: getPlotNpcNumericId('blinkov')!,
     rewardItem: 'psi_rupture', rewardCount: 1,
     relationDelta: 20, xpReward: 60, moneyReward: 80,
     eventTags: ['craft_recipe_reward'],
@@ -279,7 +321,29 @@ export const PLOT_CHAIN: PlotStep[] = [
       craftRecipeIds: ['craft_item_psi_stabilizer'],
     },
   },
-  // Step 8: Major Grom → kill monsters (defend outpost)
+  // Step 8: Blinkov → the lower levels are sealed by order; ask the Ministry
+  {
+    giverId: getPlotNpcNumericId('blinkov')!,
+    type: QuestType.TALK,
+    desc: 'Блинков разводит руками: низ закрыт не завалом, а приказом. Самосборы участились, и всё, что ниже промзоны, ходит по спецдопуску. Подписывают наверху. Поднимайся в Министерство и спроси допуск у министра в лицо.',
+    activeObjective: 'Подняться в Министерство и спросить спецдопуск у министра Ротенбергова.',
+    targetNpcId: getPlotNpcNumericId('rotenbergov')!,
+    rewardItem: 'ammo_9mm', rewardCount: 24,
+    extraRewards: [{ defId: 'bandage', count: 2 }, { defId: 'gasmask_filter', count: 1 }],
+    relationDelta: 14, xpReward: 70, moneyReward: 60,
+  },
+  // Step 9: Minister → the permit goes nowhere; report to Major Grom yourself
+  {
+    giverId: getPlotNpcNumericId('rotenbergov')!,
+    type: QuestType.TALK,
+    desc: 'Министр не поднимает глаз от сметы: спецдопуск выдаёт Партия, запрос уйдёт, срок — как выйдет. Вниз спускайся своим ходом и своей ценой. Доложишься майору Громному в коллекторах — он там ждёт смену дольше, чем бумагу.',
+    activeObjective: 'Спуститься в Коллекторы к майору Громному. Дорогу вниз ищи сам.',
+    targetNpcId: getPlotNpcNumericId('major_grom')!,
+    rewardItem: 'official_permit_slip', rewardCount: 1,
+    extraRewards: [{ defId: 'antidep', count: 1 }],
+    relationDelta: 10, xpReward: 90, moneyReward: 150,
+  },
+  // Step 10: Major Grom → kill monsters (defend outpost)
   {
     giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.KILL,
@@ -299,7 +363,7 @@ export const PLOT_CHAIN: PlotStep[] = [
       monsterKinds: [MonsterKind.TVAR, MonsterKind.SBORKA, MonsterKind.ZOMBIE, MonsterKind.SHADOW, MonsterKind.POLZUN],
     },
   },
-  // Step 9: Major Grom → storm — kill the Mancobus
+  // Step 11: Major Grom → storm — kill the Mancobus
   {
     giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.KILL,
@@ -309,7 +373,93 @@ export const PLOT_CHAIN: PlotStep[] = [
     extraRewards: [{ defId: 'bandage', count: 5 }, { defId: 'ammo_762', count: 30 }],
     relationDelta: 30, xpReward: 150, moneyReward: 200,
   },
-  // Step 10: Major Grom → anchor a Hell foothold
+  // Step 12: Major Grom → go to Ministry for ammo.
+  // Здесь же разворачивается Заслонов: тег `zaslonov_betrayal` поднимает
+  // событийную сцену предательства на министерском этаже.
+  {
+    giverId: getPlotNpcNumericId('major_grom')!,
+    type: QuestType.VISIT,
+    desc: 'Нужны патроны. Иди в Министерство, запроси снабжение. И посмотри там на людей: у нас внизу считают, что приказ закрыть низ пришёл не от снабжения.',
+    targetFloorZ: 30,
+    targetRoute: { designFloorId: 'ministry', label: 'Z+30 Министерство' },
+    targetHint: 'Поднимайся лифтами на Z+30: Министерство.',
+    visitFloorZ: 30,
+    rewardItem: 'ammo_762', rewardCount: 30,
+    relationDelta: 20, xpReward: 100,
+    eventTags: ['ministry', 'design_route', 'upper_route', 'zaslonov_betrayal'],
+    eventData: { routeId: 'ministry', floorZ: 30 },
+  },
+  // Step 13: рунa с генерала. Дающего нет и быть не может: тот, кто мог бы
+  // выдать это поручение, только что перешёл на другую сторону. Шаг закрывается
+  // подбором руны, а убийство генерала идёт по общим правилам боя, не скриптом.
+  {
+    type: QuestType.FETCH,
+    sourceLabel: 'Министерство',
+    desc: 'Генерал Заслонов увёл своих прямо со смотра, и на шее у него висит чёрная пластина с прорезанной надписью. Пока руна на нём, объяснять случившееся некому. Забери её.',
+    activeObjective: 'Забрать чёрную руну у генерала Заслонова.',
+    targetItem: 'black_rune', targetCount: 1,
+    // Руна возвращается на руки: она нужна дальше — Якову, потом Гущину, потом
+    // баку со слизью. Тот же приём держит ветки идола.
+    rewardItem: 'black_rune', rewardCount: 1,
+    extraRewards: [{ defId: 'ammo_762', count: 30 }, { defId: 'antidep', count: 1 }],
+    relationDelta: 8, xpReward: 200,
+    eventTags: ['ministry', 'zaslonov_betrayal', 'black_rune', 'cult'],
+    eventTargetName: 'Чёрная руна снята с генерала Заслонова.',
+  },
+  // Step 14: Yakov reads the rune → his old classmate at the Slime Institute
+  {
+    giverId: getPlotNpcNumericId('yakov')!,
+    type: QuestType.TALK,
+    desc: 'Яков вертит руну под лампой и впервые не спорит: «Это не Чернобог и не наш алфавит, коллега. Знак живой.» Своих приборов ему мало. В НИИ слизи сидит завлаб Гущин, с которым они делили общежитие и один микроскоп; поднимайся к нему с руной.',
+    activeObjective: 'Подняться в НИИ слизи к завлабу Гущину с чёрной руной.',
+    targetNpcId: getPlotNpcNumericId('nii_gushchin')!,
+    rewardItem: 'psi_stabilizer', rewardCount: 1,
+    extraRewards: [{ defId: 'antidep', count: 2 }],
+    relationDelta: 16, xpReward: 130, moneyReward: 90,
+  },
+  // Steps 15..17: три образца. Вид каждого разыгрывается от сида прогона —
+  // см. `applyPlotSampleLottery` ниже; в данных вида нет и быть не должно.
+  {
+    giverId: getPlotNpcNumericId('nii_gushchin')!,
+    type: QuestType.KILL,
+    ...niiSampleStep(0),
+    killNeeded: 1,
+    rewardItem: 'mutant_tissue_sample', rewardCount: 1,
+    extraRewards: [{ defId: 'nii_sample_container', count: 1 }],
+    relationDelta: 10, xpReward: 140, moneyReward: 120,
+  },
+  {
+    giverId: getPlotNpcNumericId('nii_gushchin')!,
+    type: QuestType.KILL,
+    ...niiSampleStep(1),
+    killNeeded: 1,
+    rewardItem: 'mutant_tissue_sample', rewardCount: 1,
+    extraRewards: [{ defId: 'nii_sample_container', count: 1 }, { defId: 'bandage', count: 3 }],
+    relationDelta: 10, xpReward: 160, moneyReward: 140,
+  },
+  {
+    giverId: getPlotNpcNumericId('nii_gushchin')!,
+    type: QuestType.KILL,
+    ...niiSampleStep(2),
+    killNeeded: 1,
+    rewardItem: 'mutant_tissue_sample', rewardCount: 1,
+    extraRewards: [{ defId: 'psi_stabilizer', count: 1 }, { defId: 'antidep', count: 1 }],
+    relationDelta: 12, xpReward: 180, moneyReward: 160,
+  },
+  // Step 18: Gushchin closes the sample series → the answer is below
+  {
+    giverId: getPlotNpcNumericId('nii_gushchin')!,
+    type: QuestType.TALK,
+    desc: 'Выборка сошлась. Колония повторяет знак и тянется ко дну бака — всегда ко дну, коллега, при любом освещении. Гущин закрывает журнал: ответ не у него и не в НИИ, ответ под нами. Возвращайся к майору Громному в коллекторы.',
+    activeObjective: 'Вернуться к майору Громному в Коллекторы с выводом Гущина.',
+    targetNpcId: getPlotNpcNumericId('major_grom')!,
+    rewardItem: 'psi_void_needle', rewardCount: 1,
+    extraRewards: [{ defId: 'holy_water', count: 1 }],
+    relationDelta: 12, xpReward: 200, moneyReward: 100,
+    eventTags: ['nii', 'black_rune', 'lower_route'],
+    eventTargetName: 'Слизь НИИ повторила знак чёрной руны и указала вниз.',
+  },
+  // Step 19: Major Grom → anchor a Hell foothold
   {
     giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
@@ -331,21 +481,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     eventData: { routeId: 'design:hell', floorZ: -36, holdSeconds: 300 },
     eventTargetName: 'Зона закрепления в Мясном низу удержана.',
   },
-  // Step 11: Major Grom → go to Ministry for ammo
-  {
-    giverId: getPlotNpcNumericId('major_grom')!,
-    type: QuestType.VISIT,
-    desc: 'Нужны патроны. Иди в Министерство, запроси снабжение.',
-    targetFloorZ: 30,
-    targetRoute: { designFloorId: 'ministry', label: 'Z+30 Министерство' },
-    targetHint: 'Поднимайся лифтами на Z+30: Министерство.',
-    visitFloorZ: 30,
-    rewardItem: 'ammo_762', rewardCount: 30,
-    relationDelta: 20, xpReward: 100,
-    eventTags: ['ministry', 'design_route', 'upper_route'],
-    eventData: { routeId: 'ministry', floorZ: 30 },
-  },
-  // Step 12: Major Grom → go to Podad
+  // Step 20: Major Grom → go to Podad
   {
     giverId: getPlotNpcNumericId('major_grom')!,
     type: QuestType.VISIT,
@@ -360,7 +496,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     eventTags: ['podad', 'design_route', 'lower_route'],
     eventData: { routeId: 'podad', floorZ: -40 },
   },
-  // Step 12: Hell contact → talk to Herald watcher in Podad
+  // Step 21: Hell contact → talk to Herald watcher in Podad
   {
     giverId: getPlotNpcNumericId('hell_contact')!,
     type: QuestType.TALK,
@@ -372,7 +508,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     targetRoute: { designFloorId: 'podad', label: 'Z-40 Подад' },
     relationDelta: 8, xpReward: 70,
   },
-  // Step 13: Herald clue → kill three Heralds in Podad
+  // Step 22: Herald clue → kill three Heralds in Podad
   {
     giverId: getPlotNpcNumericId('herald_clue')!,
     type: QuestType.KILL,
@@ -389,7 +525,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     eventTags: ['podad', 'herald_gate', 'lower_route_unlocked'],
     eventData: { routeId: 'podad', floorZ: -40 },
   },
-  // Step 14: Herald clue → descend to the bottom route
+  // Step 23: Herald clue → descend to the bottom route
   {
     giverId: getPlotNpcNumericId('herald_clue')!,
     type: QuestType.VISIT,
@@ -405,7 +541,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     eventData: { routeId: 'design:void', floorZ: -50 },
     eventTargetName: 'Путь ниже открыт до Z-50.',
   },
-  // Step 15: порог Пустоты отвечает чужим голосом — забрать банку
+  // Step 24: порог Пустоты отвечает чужим голосом — забрать банку
   {
     type: QuestType.FETCH,
     sourceLabel: 'Пустота',
@@ -415,7 +551,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     extraRewards: [{ defId: 'antidep', count: 1 }],
     relationDelta: 6, xpReward: 140,
   },
-  // Step 16: списать Творца
+  // Step 25: списать Творца
   {
     type: QuestType.KILL,
     sourceLabel: 'Пустота',
@@ -425,7 +561,7 @@ export const PLOT_CHAIN: PlotStep[] = [
     extraRewards: [{ defId: 'psi_stabilizer', count: 1 }],
     relationDelta: 12, xpReward: 500,
   },
-  // Step 17: вынести последствие возвращения
+  // Step 26: вынести последствие возвращения
   {
     type: QuestType.FETCH,
     sourceLabel: 'Пустота',
@@ -436,6 +572,73 @@ export const PLOT_CHAIN: PlotStep[] = [
     relationDelta: 10, xpReward: 160,
   },
 ];
+
+/** Шаги с образцами ищутся по метке, а не по номеру: цепочка вправе расти. */
+function niiSampleStepIndexes(): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < PLOT_CHAIN.length; i++) {
+    if (PLOT_CHAIN[i].eventTags?.includes(NII_SAMPLE_TAG)) out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Три РАЗНЫХ вида, взвешенно по экологии и детерминированно по сиду.
+ *
+ * `rankMonsterEcology` сама отбрасывает нулевой вес, поэтому «мебельные» виды
+ * (гнёзда, башни, псевдолифт, Творец) в жребий не попадают вовсе.
+ * `floorAffinity: 'none'` снимает привязку к этажу — охота засчитывается везде,
+ * значит и жребий не должен зависеть от того, где игрок стоял в момент выдачи;
+ * `z` при этом остаётся обязательным полем запроса и на вес не влияет.
+ */
+export function plotSampleKindsForSeed(seed: number): MonsterKind[] {
+  const pool = rankMonsterEcology({ z: 0, floorAffinity: 'none' })
+    .map(entry => ({ kind: entry.kind, weight: entry.weight }));
+  const rand = seededRandom(hashSeed('nii_tissue_samples', seed | 0));
+  const out: MonsterKind[] = [];
+  while (out.length < NII_SAMPLE_DESCS.length && pool.length > 0) {
+    let total = 0;
+    for (const entry of pool) total += entry.weight;
+    let roll = rand() * total;
+    let picked = pool.length - 1;
+    for (let i = 0; i < pool.length; i++) {
+      roll -= pool[i].weight;
+      if (roll <= 0) { picked = i; break; }
+    }
+    out.push(pool[picked].kind);
+    pool.splice(picked, 1);
+  }
+  return out;
+}
+
+/** Сид, на котором тексты уже переписаны. Пересчёт того же сида ничего не стоит. */
+let appliedSampleSeed: number | undefined;
+
+/**
+ * Разыграть виды образцов от сида прогона.
+ *
+ * Без `monsterName` (вызов при загрузке модуля) ставится только вид, чтобы
+ * данные никогда не несли KILL-шаг без цели; тексты остаются с токеном и будут
+ * переписаны первым же настоящим вызовом. Идемпотентно по сиду.
+ */
+export function applyPlotSampleLottery(seed: number, monsterName?: (kind: MonsterKind) => string): void {
+  const normalized = seed | 0;
+  if (monsterName && appliedSampleSeed === normalized) return;
+  const indexes = niiSampleStepIndexes();
+  const kinds = plotSampleKindsForSeed(normalized);
+  if (indexes.length !== kinds.length) return;
+  for (let n = 0; n < indexes.length; n++) {
+    const step = PLOT_CHAIN[indexes[n]];
+    step.targetMonsterKind = kinds[n];
+    if (!monsterName) continue;
+    const name = monsterName(kinds[n]);
+    step.desc = NII_SAMPLE_DESCS[n].split(NII_SAMPLE_KIND_TOKEN).join(name);
+    step.targetHint = NII_SAMPLE_HINTS[n].split(NII_SAMPLE_KIND_TOKEN).join(name);
+  }
+  if (monsterName) appliedSampleSeed = normalized;
+}
+
+applyPlotSampleLottery(0);
 
 export interface KillPressureAnchorDef {
   kind: 'plot_npc';
@@ -630,7 +833,9 @@ export const SIDE_QUESTS: SideQuestStep[] = [
     rewardItem: 'idol_chernobog', rewardCount: 1,
     extraRewards: [{ defId: 'meat_rune', count: 1 }, { defId: 'holy_water', count: 1 }],
     relationDelta: 5, xpReward: 80, moneyReward: 0,
-    requiresPlotStepDone: 12,
+    // Шаг «спуститься в Подад»: раньше он стоял двенадцатым, после переноса ада
+    // в поздний гейм стоит двадцатым. Раньше него Никанора просто не встретить.
+    requiresPlotStepDone: 20,
     eventTargetName: 'Никанор проверил идол Чернобога как культовую улику и вернул его для цепочки Якова.',
     eventSeverity: 4,
     eventPrivacy: 'local',
@@ -824,6 +1029,29 @@ export function sideQuestGiverId(sq: SideQuestStep): number | undefined {
   return undefined;
 }
 
+/** Объявлено ли у шага VISIT место назначения — любым из пяти способов. */
+export function sideQuestVisitTargetDeclared(sq: SideQuestStep): boolean {
+  return sq.visitFloorZ !== undefined
+    || sq.targetRoomType !== undefined
+    || sq.targetRoomDefId !== undefined
+    || sq.targetZoneTag !== undefined
+    || sq.targetFloorZ !== undefined;
+}
+
+/**
+ * Может ли выдача вообще построить этот сайд-квест.
+ *
+ * Один предикат на две стороны: по нему `generatePlotQuest` строит шаг, по нему
+ * же гаснет «!» над дающим. Пока условия жили двумя независимыми списками,
+ * маркер обещал разговор, которого выдача дать не могла, и над десятком
+ * личностей знак горел вечно.
+ */
+export function sideQuestIsIssuable(sq: SideQuestStep): boolean {
+  if (sq.type === QuestType.TALK) return !!sq.targetNpcId;
+  if (sq.type === QuestType.VISIT) return sideQuestVisitTargetDeclared(sq);
+  return true;
+}
+
 export function registerFloorSideQuest(
   homeFloorKey: string,
   npcId: string,
@@ -892,6 +1120,7 @@ export function hasAvailableQuest(plotNpcId: number, quests: Quest[]): boolean {
     if (sideQuestGiverId(sq) !== plotNpcId) continue;
     if (quests.some(q => q.sideQuestId === sq.id)) continue;
     if (!sideQuestPrereqsMet(sq, quests)) continue;
+    if (!sideQuestIsIssuable(sq)) continue;
     return true;
   }
   return false;

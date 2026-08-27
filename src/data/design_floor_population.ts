@@ -18,6 +18,7 @@ import {
 } from './entity_limits';
 import {
   basePopulationTotalAtDefaultSoftLimit,
+  floorPopulationBudget,
   monsterShareForRouteZ,
   populationLevelForRouteZ,
 } from './population_profiles';
@@ -1325,6 +1326,80 @@ const DESIGN_FLOOR_POPULATION_OVERRIDES: Readonly<Record<string, DesignFloorPopu
         { x: 914, y: 512, radius: 150, weight: 1.65 },
         { x: 512, y: 708, radius: 130, weight: 1.5 },
       ],
+    },
+  },
+  /* Перевалка: ярус на сто девяносто восемь тысяч проходимых клеток и триста
+   * комнат. Без своей записи расселение садило людей ровно по площади, то есть
+   * во двор: пять человек из шести стояли на грузовой авеню, а ночлежки,
+   * столовая и рынок пустовали. Ключ здесь не в весах комнат, а в `openWeight`:
+   * ничейный бетон яруса вчетверо больше всей его застройки, и пока он весит
+   * единицу, никакая комната его не перевесит. */
+  perevalka: {
+    npcNoun: 'грузчик',
+    npcFactions: [
+      { value: Faction.CITIZEN, weight: 40 },
+      { value: Faction.LIQUIDATOR, weight: 24 },
+      { value: Faction.WILD, weight: 22 },
+      { value: Faction.SCIENTIST, weight: 14 },
+    ],
+    npcOccupations: [
+      { value: Occupation.STOREKEEPER, weight: 26 },
+      { value: Occupation.TRAVELER, weight: 18 },
+      { value: Occupation.HUNTER, weight: 14 },
+      { value: Occupation.MECHANIC, weight: 12 },
+      { value: Occupation.COOK, weight: 8 },
+      { value: Occupation.SECRETARY, weight: 8 },
+      { value: Occupation.DOCTOR, weight: 6 },
+      { value: Occupation.SCIENTIST, weight: 4 },
+      { value: Occupation.CHILD, weight: 4 },
+    ],
+    monsterBiasKinds: [MonsterKind.RZHAVNIK, MonsterKind.REBAR, MonsterKind.POLZUN, MonsterKind.SHADOW, MonsterKind.SBORKA],
+    monsterTags: ['industrial', 'freight', 'open', 'dark'],
+    npcPlacementKind: 'industrial',
+    monsterPlacementKind: 'industrial',
+    npcPlacement: {
+      openWeight: 0.12,
+      roomWeights: {
+        [RoomType.MARKET]: 1.8,
+        [RoomType.LIVING]: 1.7,
+        [RoomType.SHOP]: 1.55,
+        [RoomType.COMMON]: 1.45,
+        [RoomType.KITCHEN]: 1.4,
+        [RoomType.OFFICE]: 1.3,
+        [RoomType.PRODUCTION]: 1.24,
+        [RoomType.SMOKING]: 1.15,
+        [RoomType.HQ]: 1.1,
+        [RoomType.CLASSROOM]: 1.05,
+        [RoomType.MEDICAL]: 0.85,
+        [RoomType.STORAGE]: 0.8,
+        [RoomType.BATHROOM]: 0.7,
+        [RoomType.CORRIDOR]: 0.42,
+      },
+      zoneWeights: {
+        [ZoneFaction.CITIZEN]: 1.25,
+        [ZoneFaction.LIQUIDATOR]: 1.1,
+        [ZoneFaction.WILD]: 1.05,
+        [ZoneFaction.SCIENTIST]: 0.85,
+        [ZoneFaction.CULTIST]: 0.2,
+      },
+      bucketSize: 32,
+      maxPerBucket: 26,
+    },
+    monsterPlacement: {
+      // Твари живут во дворе и в штабелях: там их и ловят, а не в ночлежке.
+      openWeight: 1.3,
+      roomWeights: {
+        [RoomType.STORAGE]: 1.35,
+        [RoomType.CORRIDOR]: 1.2,
+        [RoomType.PRODUCTION]: 1.05,
+        [RoomType.MEDICAL]: 0.8,
+        [RoomType.OFFICE]: 0.5,
+        [RoomType.COMMON]: 0.45,
+        [RoomType.MARKET]: 0.3,
+        [RoomType.SHOP]: 0.3,
+        [RoomType.LIVING]: 0.3,
+        [RoomType.HQ]: 0.28,
+      },
     },
   },
   production_belt: {
@@ -2700,7 +2775,12 @@ export function designFloorPopulationProfile(route: DesignFloorRouteDef): Design
   const tinyAuthoredMonster = typeof override.monsterTarget === 'number' && override.monsterTarget > 0 && override.monsterTarget <= 16;
   const rawNpcTarget = clampInt((tinyAuthoredNpc ? activeActorCountAtDefaultSoftLimit(override.npcTarget as number) : resolveActorTarget(override.npcTarget, npcBase)) * (override.npcMult ?? 1), 0, entityNpcCap());
   const rawMonsterTarget = clampInt((tinyAuthoredMonster ? activeActorCountAtDefaultSoftLimit(override.monsterTarget as number) : resolveActorTarget(override.monsterTarget, monsterBase)) * (override.monsterMult ?? 1), 0, entityMonsterCap());
-  const fitted = fitActiveActorCounts(rawNpcTarget, rawMonsterTarget);
+  // Обе цели ужимаются под бюджет ЭТАЖА, а не под мягкий предел. Иначе
+  // авторский множитель (`hell` носит monsterMult 2.0) переливает через край, и
+  // подгонка сажает сумму ровно на потолок: этаж перестаёт принимать любой
+  // рантайм-спавн, ничего об этом не сообщая. Бюджет ниже потолка всегда, так
+  // что запас остаётся у каждого этажа маршрута.
+  const fitted = fitActiveActorCounts(rawNpcTarget, rawMonsterTarget, floorPopulationBudget(route.z));
   const npcTarget = fitted.npcs;
   const monsterTarget = fitted.monsters;
   const baseLevel = populationLevelForRouteZ(route.z, route.danger);

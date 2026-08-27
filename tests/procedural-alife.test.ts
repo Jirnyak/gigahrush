@@ -129,7 +129,10 @@ testGenerationMatrix('floor 69 adult sprite templates survive A-Life materializa
   );
   assert.equal(templateSprites.length, templateWorkers.length);
   assert.equal(templateVisitors.every(entity => !isFloor69FemaleSprite(entity.sprite)), true);
-  assert.equal(templateSprites.length >= 300, true, 'floor_69 generation should expose adult sprite templates');
+  // Порог опущен вместе с бюджетом населения: он больше не равен мягкому
+  // пределу, а идёт кривой по |z| (этаж 69 на z=-4: толпа 2762 → 2143, значит и
+  // работниц пропорционально меньше). Сторож цел: он ловит НОЛЬ работниц.
+  assert.equal(templateSprites.length >= 256, true, `floor_69 generation should expose adult sprite templates: ${templateSprites.length}`);
 
   const nextId = { v: generated.entities.reduce((max, entity) => Math.max(max, entity.id), 0) + 1 };
   materializeAlifeFloorPopulation(state, generated.world, generated.entities, nextId, 'design:floor_69');
@@ -143,7 +146,7 @@ testGenerationMatrix('floor 69 adult sprite templates survive A-Life materializa
   );
 
   assert.equal(ordinaryNpcCount(generated.entities), 0, 'ordinary floor_69 templates should not survive activation');
-  assert.equal(materializedSprites.length >= 300, true, 'floor_69 A-Life activation should keep a visible adult sprite cohort');
+  assert.equal(materializedSprites.length >= 256, true, `floor_69 A-Life activation should keep a visible adult sprite cohort: ${materializedSprites.length}`);
   assert.equal(materializedSprites.length <= templateSprites.length, true);
   assert.equal(materializedSprites.every(entity =>
     entity.isFemale === true &&

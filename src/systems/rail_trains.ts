@@ -262,25 +262,31 @@ function damageEntity(world: World, victim: Entity, train: RailTrain, state: Gam
   });
 }
 
+/** Дрожь рельсов слышит только игрок — этой ветке незачем сидеть в общем обходе. */
+function warnPlayerAboutTrains(world: World, player: Entity, state: GameState): void {
+  if (world.railTrainCells.get(world.idx(Math.floor(player.x), Math.floor(player.y))) !== undefined) return;
+  for (const train of world.railTrains) {
+    const track = trackById(world, train.trackId);
+    if (!track || trainStopped(train, state) || train.passengerId === player.id) continue;
+    if (state.time >= train.nextWarnAt && trainDistance2(world, track, train, player.x, player.y) < WARN_DIST2) {
+      train.nextWarnAt = state.time + 4;
+      state.msgs.push(msg('Рельсы дрожат: поезд близко. Уходите на платформу, пока кабина не вошла в поворот.', state.time, '#fa4'));
+    }
+  }
+}
+
 function updateTrainCollisions(world: World, entities: Entity[], player: Entity, state: GameState): void {
   if (world.railTrainCells.size === 0) return;
-  for (const entity of entities) {
+  warnPlayerAboutTrains(world, player, state);
+  /* Под поезд попадают только акторы, и индекс держит их отдельным списком.
+   * Здесь шёл обход ВСЕХ сущностей этажа каждый кадр — 9577 на жилом против
+   * 2154 акторов, — и почти весь он тратился на выброшенные предметы и трупы,
+   * которые давить нечем. */
+  for (const entity of ensureEntityIndex(entities).actors) {
     if (!entity.alive) continue;
     const ci = world.idx(Math.floor(entity.x), Math.floor(entity.y));
     const trainIndex = world.railTrainCells.get(ci);
-    if (trainIndex === undefined) {
-      if (entity.id === player.id) {
-        for (const train of world.railTrains) {
-          const track = trackById(world, train.trackId);
-          if (!track || trainStopped(train, state) || train.passengerId === player.id) continue;
-          if (state.time >= train.nextWarnAt && trainDistance2(world, track, train, player.x, player.y) < WARN_DIST2) {
-            train.nextWarnAt = state.time + 4;
-            state.msgs.push(msg('Рельсы дрожат: поезд близко. Уходите на платформу, пока кабина не вошла в поворот.', state.time, '#fa4'));
-          }
-        }
-      }
-      continue;
-    }
+    if (trainIndex === undefined) continue;
 
     const train = world.railTrains[trainIndex];
     const track = train ? trackById(world, train.trackId) : undefined;

@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import { EntityType, MonsterKind, ProjType, Feature } from '../src/core/types';
 import { World } from '../src/core/world';
 import { applyMonsterArmorHit, ZAKALENNAYA_ARMATURA_ARMOR_STACKS } from '../src/systems/monster_armor';
+import { applyDamage } from '../src/systems/combat';
 import { makeGameState, makeTestEntity } from './helpers';
 
 test('applyMonsterArmorHit passes full damage to generic unarmored monster', () => {
@@ -24,6 +25,9 @@ test('applyMonsterArmorHit passes full damage to generic unarmored monster', () 
   assert.equal(result.stripped, false);
 });
 
+/* Червие гоняется через ЕДИНУЮ ДВЕРЬ, а не через слой брони напрямую: тип
+ * урона выводится из оружия ровно в ней, и с 2026-08-27 это единственный ключ
+ * энергии у живой сети (был собственный список `weaponId` внутри слоя). */
 test('applyMonsterArmorHit processes Chervie Avatar interactions correctly', () => {
   const world = new World();
   const state = makeGameState();
@@ -31,7 +35,7 @@ test('applyMonsterArmorHit processes Chervie Avatar interactions correctly', () 
   const attacker = makeTestEntity();
 
   // Test 1: Unpowered, Non-Energy (multiplier 1)
-  const unpoweredKinetic = applyMonsterArmorHit(world, state, target, {
+  const unpoweredKinetic = applyDamage(world, state, target, {
     damage: 100,
     attacker,
     weaponId: 'makarov',
@@ -41,7 +45,7 @@ test('applyMonsterArmorHit processes Chervie Avatar interactions correctly', () 
   assert.equal(unpoweredKinetic.armorStacks, 0);
 
   // Test 2: Unpowered, Energy (multiplier 1.34)
-  const unpoweredEnergy = applyMonsterArmorHit(world, state, target, {
+  const unpoweredEnergy = applyDamage(world, state, target, {
     damage: 100,
     attacker,
     weaponId: 'plasma',
@@ -56,7 +60,7 @@ test('applyMonsterArmorHit processes Chervie Avatar interactions correctly', () 
   world.features[world.idx(Math.floor(target.x), Math.floor(target.y))] = Feature.APPARATUS;
 
   // Test 3: Powered, Non-Energy (multiplier 0.56)
-  const poweredKinetic = applyMonsterArmorHit(world, state, target, {
+  const poweredKinetic = applyDamage(world, state, target, {
     damage: 100,
     attacker,
     weaponId: 'makarov',
@@ -66,7 +70,7 @@ test('applyMonsterArmorHit processes Chervie Avatar interactions correctly', () 
   assert.equal(poweredKinetic.armorStacks, 1);
 
   // Test 4: Powered, Energy (multiplier 1.08)
-  const poweredEnergy = applyMonsterArmorHit(world, state, target, {
+  const poweredEnergy = applyDamage(world, state, target, {
     damage: 100,
     attacker,
     weaponId: 'plasma',
@@ -190,11 +194,13 @@ test('applyMonsterArmorHit categorizes hit kinds correctly', () => {
   const target = makeTestEntity({ type: EntityType.MONSTER, monsterKind: MonsterKind.ZAKALENNAYA_ARMATURA });
   const attacker = makeTestEntity();
 
-  // Tool weapon test
+  // Tool weapon test.
+  // Бралcя `jackhammer`, которого в `WEAPON_STATS` нет вовсе: тест проверял мёртвый id и
+  // прошёл бы даже с пустым списком инструментов. `fire_hook` — настоящее оружие.
   const toolHit = applyMonsterArmorHit(world, state, target, {
     damage: 100,
     attacker,
-    weaponId: 'jackhammer',
+    weaponId: 'fire_hook',
   });
   assert.equal(toolHit.hitKind, 'tool');
 

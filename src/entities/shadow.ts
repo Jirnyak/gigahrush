@@ -1,7 +1,7 @@
 /* ── Shadow — dark ambush silhouette (теневик) ────────────────── */
 /*   Black humanoid figure with readable violet rim and eye cues. */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { rgba, noise, clamp, CLEAR, outline } from '../core/pixutil';
 const S = 128;
@@ -13,6 +13,7 @@ export const DEF: MonsterDef = {
   speed: 2.4,
   dmg: 12,
   attackRate: 1.0,
+  damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
   counterplay: 'Темный рывок читается паузой силуэта: шагните в свет, включите фонарь или разорвите дистанцию до первого удара.',
   lootHint: 'темный след, холодная пыль, редкий странный сгусток',

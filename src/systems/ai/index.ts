@@ -13,6 +13,7 @@ import { setPathContext } from './pathfinding';
 import { setEntityMap, updateMonster } from './monster';
 import { setCombatContext, tryFactionCombat, tryFleeFromMonster, trySimulateNpcAmmoRestock } from './combat';
 import { primeNpcAlifeState, setNpcContext, updateNPC } from './npc_fsm';
+import { setRoomLeashMinute } from '../room_leash';
 import { setNpcBarkLogContext } from './barks';
 import { actorHasTacticProfile, runActorTactic } from './tactics';
 import { expireMonsterBaits } from '../monster_bait';
@@ -128,6 +129,13 @@ const UNSTUCK_ACTOR_OPTIONS = { radius: 0, rescueFromSolid: true } as const;
  *
  * Один цикл на всех: человек и тварь заходят сюда одной и той же строкой, и
  * разница между ними живёт в весах драйвов, а не здесь.
+ *
+ * Авторский пост (`systems/room_leash.ts`) границей здесь НЕ является, и это
+ * решение, а не упущение. Пост запрещает выйти из комнаты, а не думать: ядро
+ * ведёт поставленного человека как всякого другого — он ходит по своей комнате,
+ * ест из карманов, работает, — и упирается в поводок ровно там, где заказывает
+ * дорогу за порог. Выключать ему здесь ядро значило бы вернуть столб вместо
+ * человека, ради чего пост и переписан.
  */
 function tryActorCore(world: World, e: Entity, dt: number, time: number): boolean {
   const ai = e.ai;
@@ -197,6 +205,9 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   // Часы — третий род входа в счёт драйва: распорядок висит на минуте суток, а
   // ни тело, ни восприятие времени не знают. Снимок общий на кадр.
   setActorCoreContext(currentZ, clock, samosborActive, state, msgs);
+  // Срок авторского поста меряется игровыми часами, а назначение маршрута их не
+  // знает. Снимок общий на кадр — тот же приём, что у пути, боя и ядра.
+  setRoomLeashMinute(clock.totalMinutes);
   setFactionsSocialContext(state);
   setRoomVisitContext(state);
   expireMonsterBaits(state, time);
@@ -319,7 +330,7 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
       }
       if (e.type === EntityType.NPC) {
         if (e.ai.npcState === undefined) {
-          primeNpcAlifeState(e, clock, samosborActive, isMinistry ? 'ministry' : 'default');
+          primeNpcAlifeState(e, samosborActive, isMinistry ? 'ministry' : 'default');
         }
       } else if (e.type === EntityType.MONSTER && e.ai.goal === AIGoal.IDLE && e.ai.combatTargetId === undefined && e.speed > 0) {
         e.ai.goal = AIGoal.WANDER;

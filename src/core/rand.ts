@@ -178,6 +178,15 @@ export function seededRandom(seed: number): () => number {
 /** Run rng()-based generators under a local deterministic seed.
  *  Swaps the global xorshift state, restores on return. */
 export function withSeededRandom<T>(seed: number, fn: () => T): T {
+  /* Тестовый оверрайд перекрывает сид молча: `rng()` спрашивает `_rngOverride`
+   * ПЕРВЫМ и до `_s` не доходит. Значит файл тестов, который поставил
+   * `_overrideRng` и забыл `_restoreRng`, расседлает ВСЮ последующую генерацию
+   * в процессе — а падать будет чужой файл, запущенный следом. Симптом читается
+   * как «этот тест красный, только если гнать его вместе с тем», то есть как
+   * недетерминизм генерации, которого на самом деле нет. Лучше упасть здесь. */
+  if (_rngOverride) {
+    throw new Error('[rand] withSeededRandom под тестовым оверрайдом rng(): сид не действует, нужен _restoreRng()');
+  }
   const prev = _s;
   _s = (seed | 0) || 1;
   try {

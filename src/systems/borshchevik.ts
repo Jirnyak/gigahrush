@@ -4,13 +4,11 @@ import {
   W,
   Cell,
   MonsterKind,
-  ProjType,
   msg,
   type Entity,
   type GameState,
 } from '../core/types';
 import { World } from '../core/world';
-import { Spr } from '../entities/sprite_index';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
 import { hasAirborneHazardProtection } from './status';
@@ -252,20 +250,11 @@ export function recordBorshchevikCut(world: World, state: GameState, plant: Enti
   return cleanedHazards;
 }
 
-export function isBorshchevikFireProjectile(projectile: Entity): boolean {
-  return (projectile.projType ?? ProjType.NORMAL) === ProjType.FLAME ||
-    projectile.sprite === Spr.FLAME_BOLT ||
-    projectile.sprite === Spr.HOSTILE_FLAME_BOLT;
-}
-
+/* Огонь по борщевику опознаётся ТИПОМ УРОНА, а не видом снаряда и спрайтом:
+ * порог живучести объявлен в `DEF.damageFloor` и считается за общей дверью, а
+ * рубка осталась списком инструмента — это про лезвие, а не про тип. */
 export function isBorshchevikCuttingWeapon(weaponId: string | undefined): boolean {
   return weaponId !== undefined && BORSCH_CUT_WEAPONS.has(weaponId);
-}
-
-export function borshchevikProjectileDamage(target: Entity, projectile: Entity, baseDamage: number): number {
-  if (target.monsterKind !== MonsterKind.BORSHCHEVIK || !isBorshchevikFireProjectile(projectile)) return baseDamage;
-  const maxHp = Math.max(1, target.maxHp ?? target.hp ?? 1);
-  return Math.max(baseDamage, Math.ceil(maxHp * 0.44));
 }
 
 export function damageBorshchevikRootSite(world: World, state: GameState, plant: Entity): boolean {

@@ -569,6 +569,17 @@ const EVENT_TEXT_HANDLERS: Partial<
   npc_kill_npc: (e) => {
     return `${e.actorName ?? "NPC"} убил ${e.targetName ?? "NPC"}.`;
   },
+  /* Начало чужой схватки. Событие приходит ОДИН раз на драку пары, а не на
+   * попадание (`publishActorHurtEvent`), поэтому строка читается как «завязалось»
+   * и не превращается в перечисление выстрелов. */
+  npc_hurt_npc: (e) => {
+    return `${e.actorName ?? "NPC"} бьёт ${e.targetName ?? "NPC"}.`;
+  },
+  /* До 2026-08-27 у этого типа обработчика не было вовсе, и стеносводка честно
+   * печатала игроку `player_hurt_npc: зона 3.` */
+  player_hurt_npc: (e) => {
+    return `Вы ударили: ${e.targetName ?? "жилец"}.`;
+  },
   quest_created: (e) => {
     return `Принято задание: ${e.targetName ?? e.data?.desc ?? "без описания"}.`;
   },
@@ -777,6 +788,11 @@ function shouldLog(e: WorldEvent): boolean {
 function shouldHud(e: WorldEvent): boolean {
   if (!shouldLog(e)) return false;
   if (e.type === "ammo_consumed") return false;
+  /* Чужая драка — строка стеносводки, но не всплывающее сообщение поверх
+   * прицела. Замер жилого этажа: 63 завязки в минуту, и это без игрока; смерть
+   * (severity 4) всплывать по-прежнему вправе, потому что случается раз в жизнь
+   * и её уже видно по счётчику `npc_kill_npc` — 6 в минуту. */
+  if (e.type === "npc_hurt_npc") return false;
   return (
     e.severity >= 3 ||
     e.type.startsWith("quest_") ||

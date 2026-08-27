@@ -8,16 +8,13 @@ import {
   Faction,
   Feature,
   MonsterKind,
-  RoomType,
   W,
   type Entity,
   type RailTrainTrack,
   type Room,
-  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../entities/sprite_index';
@@ -25,7 +22,6 @@ import { addRailTrainRoute } from '../../systems/rail_trains';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
-import { territoryOwnerAtIndex } from '../../systems/territory';
 
 import {
   DARK_METRO_Z,
@@ -385,38 +381,6 @@ export function registerDarkMetroRouteCues(ctx: BuildCtx, layout: DarkMetroLayou
     followedText: 'Служебный выход найден. Можно потратить предохранитель на путь или сохранить его для ремонта.',
     ignoredText: 'Стрелочный коридор погас. Служебный короткий путь остался на табло.',
   });
-}
-
-export function isDarkMetroAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    !entity.id &&
-    !entity.persistentNpcId &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function darkMetroTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.DOOR) continue;
-    const owner = territoryOwnerAtIndex(world, i);
-    const list = cells.get(owner);
-    if (!list) continue;
-    const roomId = world.roomMap[i];
-    if (roomId >= 0) {
-      const room = world.rooms[roomId];
-      if (room?.type === RoomType.HQ || room?.type === RoomType.COMMON || room?.type === RoomType.STORAGE || room?.type === RoomType.PRODUCTION) {
-        list.push(i);
-        list.push(i);
-        continue;
-      }
-    }
-    list.push(i);
-  }
-  return cells;
 }
 
 export function applyDarkMetroAmbientLight(world: World, layout: DarkMetroLayout, packedState: DarkMetroPackedState): void {

@@ -28,7 +28,7 @@ function addBridgeContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -37,7 +37,6 @@ function addBridgeContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -145,7 +144,6 @@ export function generateWaterBridge(ctx: MaintContentCtx): void {
   setFeature(ctx.world, room.x + room.w - 5, room.y + room.h - 3, Feature.SHELF);
   setFeature(ctx.world, room.x + room.w - 3, room.y + 3, Feature.MACHINE);
 
-  // @ts-ignore
   addBridgeContainer(ctx, room, room.x + room.w - 5, room.y + room.h - 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Маршрутный ящик сухого моста',

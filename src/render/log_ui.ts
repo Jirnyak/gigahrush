@@ -41,6 +41,10 @@ export function drawLogMenu(
     ctx.fillStyle = '#8a9';
     ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
     ctx.fillText('Пусто.', 12 * sx, 34 * sy);
+    // Без этого выход минует `restore()` в конце функции, и каждый кадр с
+    // пустой сводкой навсегда оставляет на стеке холста лишнее состояние —
+    // вместе с `textBaseline='middle'`, который наследует весь HUD после.
+    ctx.restore();
     return;
   }
 

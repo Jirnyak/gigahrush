@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { AIGoal, NpcState } from '../src/core/types';
+import { AIGoal } from '../src/core/types';
 import { getPlotNpcNumericId, getNpcPackageByPlotNpcId, npcPackageDisplayName } from '../src/data/npc_packages';
-import { tickNpcSpecialRoutine } from '../src/systems/npc_special_routines';
+import { postNpcToRoom } from '../src/systems/npc_special_routines';
+import {
+  actorLeashRoom, bindActorToRoom, releaseActorFromRoom,
+  resetRoomLeashClockForTests, setRoomLeashMinute,
+} from '../src/systems/room_leash';
 import { getNpcSpecialRoutine } from '../src/data/npc_special_routines';
 import { makeTestNpc } from './helpers';
 import '../src/data/npc_plot_packages';
@@ -14,86 +18,90 @@ function plotNpcName(plotNpcId: string): string {
   return npcPackageDisplayName(pack);
 }
 
-test('Olga tutorial lock is selected from package data and expires to ordinary AI', () => {
-  const pack = getNpcPackageByPlotNpcId(getPlotNpcNumericId('olga')!);
-  assert.equal(pack?.runtime?.specialRoutineId, 'tutorial_lock_one_hour');
-
-  const olga = makeTestNpc({
-    id: getPlotNpcNumericId('olga'),
-    name: plotNpcName('olga'),
+function testNpc(plotNpcId: string) {
+  return makeTestNpc({
+    id: getPlotNpcNumericId(plotNpcId),
+    name: plotNpcName(plotNpcId),
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [1, 2], pi: 1, stuck: 0, timer: 0 },
-    plotDone: false,
   });
+}
 
-  const held = tickNpcSpecialRoutine(olga, { hour: 8, minute: 30, totalMinutes: 30 });
-  assert.deepEqual(held, {
-    routineId: 'tutorial_lock_one_hour',
-    held: true,
-    expired: false,
-    clearUtility: false,
-  });
-  assert.equal(olga.ai?.goal, AIGoal.IDLE);
-  assert.equal(olga.ai?.npcState, NpcState.FREE_TIME);
-  assert.deepEqual(olga.ai?.path, []);
-  assert.equal(olga.plotDone, false);
+test('starter tutors declare a post and it binds them to the room they are placed in', () => {
+  resetRoomLeashClockForTests();
+  const olga = testNpc('olga');
+  const barni = testNpc('barni');
 
-  const expired = tickNpcSpecialRoutine(olga, { hour: 12, minute: 0, totalMinutes: 240 });
-  assert.deepEqual(expired, {
-    routineId: 'tutorial_lock_one_hour',
-    held: false,
-    expired: true,
-    clearUtility: true,
-  });
-  assert.equal(olga.plotDone, true);
+  assert.equal(getNpcPackageByPlotNpcId(getPlotNpcNumericId('olga')!)?.runtime?.specialRoutineId, 'starter_post_shift');
+  assert.equal(getNpcPackageByPlotNpcId(getPlotNpcNumericId('barni')!)?.runtime?.specialRoutineId, 'starter_post_shift');
 
-  const fallback = tickNpcSpecialRoutine(olga, { hour: 12, minute: 1, totalMinutes: 241 });
-  assert.deepEqual(fallback, {
-    routineId: 'tutorial_lock_one_hour',
-    held: false,
-    expired: false,
-    clearUtility: false,
-  });
+  assert.equal(postNpcToRoom(olga, 7), true);
+  assert.equal(postNpcToRoom(barni, 9), true);
+  assert.equal(actorLeashRoom(olga), 7);
+  assert.equal(actorLeashRoom(barni), 9);
+});
+
+test('the post lasts eight in-game hours and then releases itself, with no tick to run it', () => {
+  resetRoomLeashClockForTests();
+  const olga = testNpc('olga');
+  postNpcToRoom(olga, 7);
+
+  setRoomLeashMinute(0);
+  assert.equal(actorLeashRoom(olga), 7);
+  setRoomLeashMinute(8 * 60 - 1);
+  assert.equal(actorLeashRoom(olga), 7);
+  setRoomLeashMinute(8 * 60);
+  assert.equal(actorLeashRoom(olga), undefined);
+  // Отпустил — и обратно сам не берёт: срок абсолютный, а не остаток.
+  setRoomLeashMinute(0);
+  assert.equal(actorLeashRoom(olga), undefined);
+});
+
+test('the post no longer hangs on plot flags: finishing the tutorial quest does not release it', () => {
+  resetRoomLeashClockForTests();
+  const olga = testNpc('olga');
+  postNpcToRoom(olga, 7);
+  // Вводная цепочка закрыта: `systems/quests.ts` ставит это дающему за пару
+  // игровых минут, и раньше ровно на этом наставники уходили с постов.
+  olga.plotDone = true;
+  setRoomLeashMinute(10);
+  assert.equal(actorLeashRoom(olga), 7);
+});
+
+test('the post leaves the actor otherwise untouched: no pinned goal, no emptied path', () => {
+  resetRoomLeashClockForTests();
+  const barni = testNpc('barni');
+  postNpcToRoom(barni, 9);
+  setRoomLeashMinute(30);
+
+  // Пост запрещает выйти за порог, а не думать и не ходить.
+  assert.equal(barni.ai?.goal, AIGoal.WANDER);
+  assert.deepEqual(barni.ai?.path, [1, 2]);
+});
+
+test('NPCs without a declared post are never leashed', () => {
+  resetRoomLeashClockForTests();
+  const yakov = testNpc('yakov');
+  assert.equal(postNpcToRoom(yakov, 3), false);
+  assert.equal(actorLeashRoom(yakov), undefined);
+});
+
+test('room leash is a generic binding: any system may bind and release an actor', () => {
+  resetRoomLeashClockForTests();
+  const anyone = makeTestNpc({ id: 4242, name: 'Прохожий' });
+
+  bindActorToRoom(anyone, 12, 100);
+  setRoomLeashMinute(50);
+  assert.equal(actorLeashRoom(anyone), 12);
+  releaseActorFromRoom(anyone);
+  assert.equal(actorLeashRoom(anyone), undefined);
 });
 
 test('getNpcSpecialRoutine returns the correct routine or undefined', () => {
-  const routine = getNpcSpecialRoutine('tutorial_lock_one_hour');
+  const routine = getNpcSpecialRoutine('starter_post_shift');
   assert.ok(routine);
-  assert.equal(routine.id, 'tutorial_lock_one_hour');
-  assert.equal(routine.holdGoal, AIGoal.IDLE);
+  assert.equal(routine.id, 'starter_post_shift');
+  assert.equal(routine.boundToRoomUntilMinutes, 8 * 60);
 
   assert.equal(getNpcSpecialRoutine(undefined), undefined);
   assert.equal(getNpcSpecialRoutine('unknown_id'), undefined);
-});
-
-test('Barinov uses the starter range lock from package data', () => {
-  const barni = makeTestNpc({
-    id: getPlotNpcNumericId('barni'),
-    name: plotNpcName('barni'),
-    ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [4, 5], pi: 1, stuck: 0, timer: 0 },
-  });
-
-  assert.equal(getNpcPackageByPlotNpcId(getPlotNpcNumericId('barni')!)?.runtime?.specialRoutineId, 'tutorial_lock_one_hour');
-  assert.deepEqual(tickNpcSpecialRoutine(barni, { hour: 8, minute: 0, totalMinutes: 0 }), {
-    routineId: 'tutorial_lock_one_hour',
-    held: true,
-    expired: false,
-    clearUtility: false,
-  });
-  assert.equal(barni.ai?.goal, AIGoal.IDLE);
-  assert.equal(barni.ai?.npcState, NpcState.FREE_TIME);
-  assert.deepEqual(barni.ai?.path, []);
-});
-
-test('NPCs without package special routine fall through to occupation AI', () => {
-  const yakov = makeTestNpc({
-    id: getPlotNpcNumericId('yakov'),
-    name: plotNpcName('yakov'),
-    ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-  });
-
-  assert.deepEqual(tickNpcSpecialRoutine(yakov, { hour: 8, minute: 0, totalMinutes: 0 }), {
-    held: false,
-    expired: false,
-    clearUtility: false,
-  });
 });

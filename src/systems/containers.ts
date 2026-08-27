@@ -4,7 +4,7 @@ import {
   msg } from '../core/types';
 import { World } from '../core/world';
 import { CONTAINER_DEFS, containerKindsForRoom } from '../data/container_defs';
-import { ITEMS } from '../data/catalog';
+import { ITEMS, WEAPON_STATS } from '../data/catalog';
 import { rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { containersInRoom } from '../world/container_index';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
@@ -45,7 +45,14 @@ import {
   publishShelterTallyEvent } from './shelter_tally';
 import { isPlayerEntity } from './player_actor';
 import { ENTITY_MASK_NPC, ensureEntityIndex } from './entity_index';
-import { itemAddCapacity, addItemMovedCount, consumeInventorySlot, reconcileEquippedAfterLoss } from './inventory';
+import {
+  itemAddCapacity,
+  addItemMovedCount,
+  consumeDurability,
+  consumeInventorySlot,
+  reconcileEquippedAfterLoss,
+  removeItem } from './inventory';
+import { publishNoise } from './noise';
 import { registerDebugCommand } from './debug_registry';
 
 const THEFT_WITNESS_RADIUS = 7;
@@ -57,13 +64,16 @@ const THEFT_AUDIT_SCAN_CAP = 160;
 const THEFT_AUDIT_REPORT_CAP = 2;
 const THEFT_AUDIT_TICK_CONTAINER_CAP = 8;
 const CONTAINER_BUY_TARIFF = 1.12;
-const CONTAINER_UNLOCK_ITEM_IDS = [
-  'container_key_label',
-  'key',
-  'official_permit_slip',
-  'official_quarantine_clearance',
-  'elevator_access_order',
-] as const;
+/**
+ * Прочность замка за один тир `lockDifficulty`. Пятый тир даёт 150 — ровно
+ * `defaultDoorMaxHp(LOCKED)` из `systems/door_state.ts`: сейф высшего авторского
+ * тира стоит игроку столько же ударов, сколько запертая створка. Своей шкалы у
+ * контейнеров не заводим, тиры 2..7 уже расставлены авторами по данным.
+ */
+const CONTAINER_LOCK_HP_PER_TIER = 30;
+/** Шум сорванного замка — тот же, что у двери, выбитой руками (`publishDoorNoise`). */
+const CONTAINER_LOCK_NOISE_RADIUS = 7;
+const CONTAINER_LOCK_NOISE_TTL = 2.2;
 
 let theftAuditCursor = 0;
 const theftWitnessQuery: Entity[] = [];
@@ -488,32 +498,85 @@ export function firstNearbyContainer(world: World, player: Entity, state?: GameS
   return list.length > 0 ? list[0] : null;
 }
 
-function inventoryHasAny(actor: Entity, defIds: readonly string[]): string | undefined {
-  const inv = actor.inventory;
-  if (!inv) return undefined;
-  for (const defId of defIds) {
-    if (inv.some(item => item.defId === defId && item.count > 0)) return defId;
-  }
-  return undefined;
+/** Ящик со сломанным замком: брать из него можно, но это по-прежнему чужое. */
+export const CONTAINER_FORCED_TAG = 'forced';
+
+/** Замок этого ящика уже открыт — своим допуском или сорван силой. */
+function containerLockOpened(container: WorldContainer): boolean {
+  return container.tags.includes('unlocked') || container.tags.includes(CONTAINER_FORCED_TAG);
 }
 
+/**
+ * Ключ ОТ ЭТОГО замка — или ничего.
+ *
+ * Класс допуска ящика задан его собственными тегами через
+ * `permitAccessTagsFromContainerTags`, и другой разметки замков в данных нет;
+ * заводить вторую нельзя. Поэтому запертый ящик признаёт ровно ту бумагу, чей
+ * класс совпал с его классом, и никакую другую. Ящик без класса допуска — это
+ * законный «замок без ключа»: внутрь только через `bashContainerLock`. Правила
+ * «у каждого замка обязан быть ключ» в проекте нет.
+ *
+ * До 2026-08-27 функция заканчивалась безусловным перебором пятёрки предметов,
+ * и один `key`, который министерское окно штампует любому просителю за любую
+ * бумагу, отпирал ВСЕ запертые контейнеры игры: 36 из 36 на шести обмеренных
+ * этажах. Это и есть «бесплатный и случайный обход» из закона о замках.
+ */
 function containerUnlockItemId(container: WorldContainer, actor: Entity): string | undefined {
-  if (container.access !== 'locked' || container.tags.includes('unlocked')) return undefined;
+  if (container.access !== 'locked' || containerLockOpened(container)) return undefined;
   const permitTags = permitAccessTagsFromContainerTags(container.tags);
-  if (permitTags.length > 0) {
-    const itemIds = actor.inventory?.filter(item => item.count > 0).map(item => item.defId) ?? [];
-    const permit = resolvePermitAccess(itemIds, permitTags);
-    if (permit) return permit.itemId;
-  }
-  if (container.tags.includes('quarantine')) {
-    const quarantine = inventoryHasAny(actor, ['official_quarantine_clearance', 'key', 'container_key_label']);
-    if (quarantine) return quarantine;
-  }
-  if (container.tags.includes('paper') || container.tags.includes('permit')) {
-    const paper = inventoryHasAny(actor, ['official_permit_slip', 'elevator_access_order', 'key', 'container_key_label']);
-    if (paper) return paper;
-  }
-  return inventoryHasAny(actor, CONTAINER_UNLOCK_ITEM_IDS);
+  if (permitTags.length === 0) return undefined;
+  const itemIds = actor.inventory?.filter(item => item.count > 0).map(item => item.defId) ?? [];
+  return resolvePermitAccess(itemIds, permitTags)?.itemId;
+}
+
+/* ── Цена обхода замка ────────────────────────────────────────────
+ * `lockDifficulty` до 2026-08-27 не читал НИКТО: авторские тиры 2..7 в двадцати
+ * с лишним модулях контента были мёртвыми данными. Тир — это не запрет, а цена:
+ * сколько ударов, шума и износа стоит войти без своей бумаги. Механику берём
+ * дверную (`damageDoor` + `publishDoorNoise`), а не пишем вторую: прочность в
+ * данных, удар снимает урон оружия в руке, каждый удар слышно.
+ *
+ * Прогресс живёт в `WeakMap`, а не в поле `WorldContainer`: сорванный замок и
+ * так сохраняется тегом, а недобитый — состояние одной попытки, ради которого
+ * не стоит трогать форму сейва. */
+const containerLockDamage = new WeakMap<WorldContainer, number>();
+
+/** Тир замка. Отсутствие `lockDifficulty` — самый дешёвый замок, а не бесконечный. */
+export function containerLockTier(container: WorldContainer): number {
+  const tier = Math.floor(Number(container.lockDifficulty));
+  return Number.isFinite(tier) && tier > 0 ? tier : 1;
+}
+
+export function containerLockMaxHp(container: WorldContainer): number {
+  return containerLockTier(container) * CONTAINER_LOCK_HP_PER_TIER;
+}
+
+/** Сколько прочности осталось в замке. Открытый замок — ноль. */
+export function containerLockRemainingHp(container: WorldContainer): number {
+  if (container.access !== 'locked' || containerLockOpened(container)) return 0;
+  return Math.max(0, containerLockMaxHp(container) - (containerLockDamage.get(container) ?? 0));
+}
+
+/**
+ * Урон, который актор снимает с замка за один удар. Лом (24) снимает его в
+ * восемь раз быстрее голых рук (3); из ствола замок не сбивают — стреляют в бою,
+ * замок ломают железом, поэтому дальнобойное оружие считается за пустые руки.
+ */
+export function containerLockBashDamage(actor: Entity): number {
+  const stats = WEAPON_STATS[actor.weapon ?? ''];
+  const fists = WEAPON_STATS['']?.dmg ?? 1;
+  // Пси в руке — не удар по железу: у пси свой путь сквозь стены и свой расход.
+  const physicalMelee = stats && !stats.isRanged && !stats.psiCost;
+  return Math.max(1, physicalMelee ? stats.dmg : fists);
+}
+
+export interface ContainerBashResult {
+  broken: boolean;
+  damage: number;
+  remainingHp: number;
+  maxHp: number;
+  message: string;
+  color: string;
 }
 
 function isBuyableContainer(container: WorldContainer): boolean {
@@ -534,7 +597,7 @@ export function canAccessContainer(container: WorldContainer, actor: Entity): bo
   if (container.access === 'public' || container.access === 'room') return true;
   if (container.access === 'faction') return actor.faction !== undefined && actor.faction === container.faction;
   if (container.access === 'owner') return actor.id === container.ownerNpcId;
-  if (container.access === 'locked') return container.tags.includes('unlocked')
+  if (container.access === 'locked') return containerLockOpened(container)
     || (actor.faction === container.faction && actor.faction !== undefined);
   if (container.access === 'secret') return container.discovered;
   return false;
@@ -583,13 +646,23 @@ export function containerAccessInfo(container: WorldContainer, actor: Entity, st
       return hasAccess
         ? { label: 'ВЛАДЕЛЕЦ', detail: `Владелец: ${container.ownerName ?? 'вы'}.${memorySuffix}`, color: '#8f8', canTake: true, canPut: true, theft: false, mode: 'free', service }
         : { label: 'ЧУЖОЕ', detail: `Владелец: ${container.ownerName ?? 'неизвестен'}. Свидетели до ${THEFT_WITNESS_RADIUS} м или ревизия через ${Math.round(THEFT_AUDIT_COOLDOWN_S / 60)} мин поднимут слух.${memorySuffix}`, color: '#f84', canTake: true, canPut: true, theft: true, mode: 'steal', service };
-    case 'locked':
+    case 'locked': {
       if (!hasAccess && unlockItemId) {
-        return { label: 'МОЖНО ОТПЕРЕТЬ', detail: `Подойдёт: ${ITEMS[unlockItemId]?.name ?? unlockItemId}. Открытие будет записано.${memorySuffix}`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'unlock', unlock: true, service };
+        return { label: 'МОЖНО ОТПЕРЕТЬ', detail: `Подойдёт: ${ITEMS[unlockItemId]?.name ?? unlockItemId}. Бумага уйдёт, ящик останется открыт. Открытие будет записано.${memorySuffix}`, color: '#ee4', canTake: true, canPut: true, theft: false, mode: 'unlock', unlock: true, service };
       }
-      return hasAccess
-        ? { label: 'ОТПЕРТО', detail: `Замок признаёт ваш доступ.${memorySuffix}`, color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service }
-        : { label: 'ЗАПЕРТО', detail: `Нужен ключ, код или фракционный доступ.${memorySuffix}`, color: '#f84', canTake: false, canPut: false, theft: false, mode: 'locked', service };
+      // Сорванный замок открывает ящик, но не делает содержимое своим: дальше
+      // работает обычный путь кражи со свидетелями, ревизией и кармой.
+      if (hasAccess && container.tags.includes(CONTAINER_FORCED_TAG)) {
+        return { label: 'ВЗЛОМАНО', detail: `Замок сорван. Брать можно, но это кража.${memorySuffix}`, color: '#f84', canTake: true, canPut: true, theft: true, mode: 'steal', service };
+      }
+      if (hasAccess) {
+        return { label: 'ОТПЕРТО', detail: `Замок признаёт ваш доступ.${memorySuffix}`, color: '#8cf', canTake: true, canPut: true, theft: false, mode: 'free', service };
+      }
+      const tier = containerLockTier(container);
+      const left = containerLockRemainingHp(container);
+      const hits = Math.ceil(left / containerLockBashDamage(actor));
+      return { label: 'ЗАПЕРТО', detail: `Замок тира ${tier}: нужен допуск своего класса, фракция — или ${hits} удар(ов), которые слышно.${memorySuffix}`, color: '#f84', canTake: false, canPut: false, theft: false, mode: 'locked', service };
+    }
     case 'secret':
       return container.discovered
         ? { label: container.tags.includes('room_memory_revealed') ? 'ТАЙНИК ПО СЛУХУ' : 'ТАЙНИК', detail: `Тайник найден. Свидетелей нет.${memorySuffix}`, color: '#c8f', canTake: true, canPut: true, theft: false, mode: 'secret', service }
@@ -1009,6 +1082,9 @@ function unlockContainerForActor(container: WorldContainer, actor: Entity, state
   if (!itemId) return null;
   addContainerTag(container, 'unlocked');
   container.discovered = true;
+  // Бумага одноразовая: класс допуска обменивается на НАВСЕГДА открытый ящик.
+  // Иначе один корешок открывал бы весь этаж — та же дыра, что и общий ключ.
+  removeItem(actor, itemId, 1);
   if (state) {
     publishEvent(state, {
       type: 'container_opened',
@@ -1048,6 +1124,108 @@ function unlockContainerForActor(container: WorldContainer, actor: Entity, state
   return { itemId };
 }
 
+/**
+ * Один удар по замку. Непроламываемых ящиков не бывает — как и непроламываемых
+ * створок: в структуре разрушаемо всё, поэтому «внутрь никак» недостижимо в
+ * принципе. Тир замка делает обход не запретным, а дорогим: удары, износ железа
+ * в руке и шум, на который приходят.
+ *
+ * Возвращает `null`, если ломать нечего (ящик не заперт или замок уже открыт).
+ */
+export function bashContainerLock(
+  container: WorldContainer,
+  actor: Entity,
+  input?: GameState | ContainerInteractionContext,
+): ContainerBashResult | null {
+  if (container.access !== 'locked' || containerLockOpened(container)) return null;
+  const context = normalizeContext(input);
+  const state = context.state;
+  const maxHp = containerLockMaxHp(container);
+  const damage = containerLockBashDamage(actor);
+  const dealt = Math.min(maxHp, (containerLockDamage.get(container) ?? 0) + damage);
+  containerLockDamage.set(container, dealt);
+  const remainingHp = maxHp - dealt;
+
+  if (state) {
+    // Износ железа — тот же расход, что и на живой цели: лом стачивается о замок.
+    consumeDurability(actor, state.msgs, state.time, state, actor.weapon ?? '');
+    // Удар по замку слышен ровно так же, как удар по створке, и на каждое нажатие.
+    publishNoise(state, {
+      x: container.x + 0.5,
+      y: container.y + 0.5,
+      z: container.z,
+      radius: CONTAINER_LOCK_NOISE_RADIUS,
+      ttl: CONTAINER_LOCK_NOISE_TTL,
+      source: 'melee',
+      severity: 2,
+      actorId: actor.id,
+      actorFaction: actor.faction,
+      tags: ['container', 'lock', 'bash'] });
+  }
+
+  if (remainingHp > 0) {
+    return {
+      broken: false,
+      damage,
+      remainingHp,
+      maxHp,
+      message: `Замок держит: ${remainingHp}/${maxHp}.`,
+      color: '#f84' };
+  }
+
+  addContainerTag(container, 'unlocked');
+  addContainerTag(container, CONTAINER_FORCED_TAG);
+  container.discovered = true;
+  container.lastOpenedBy = actor.id;
+  container.lastOpenedAt = state?.time;
+  if (state) {
+    const witness = findTheftWitnesses(context.world, context.entities, actor, container);
+    const firstWitness = witness.witnesses[0];
+    const event = publishEvent(state, {
+      type: 'container_opened',
+      zoneId: container.zoneId,
+      roomId: container.roomId,
+      x: container.x,
+      y: container.y,
+      actorId: actor.id,
+      actorName: actor.name,
+      actorFaction: actor.faction,
+      targetId: firstWitness?.id ?? container.ownerNpcId,
+      targetName: firstWitness?.name ?? container.ownerName,
+      targetFaction: firstWitness?.faction ?? container.faction,
+      itemId: actor.weapon || undefined,
+      itemName: ITEMS[actor.weapon ?? '']?.name,
+      itemCount: 0,
+      itemValue: 0,
+      containerId: container.id,
+      containerOwnerId: container.ownerNpcId,
+      containerFaction: container.faction,
+      severity: witness.witnesses.length > 0 ? 4 : 3,
+      privacy: witness.witnesses.length > 0 ? 'witnessed' : 'local',
+      tags: ['container', 'access', 'unlock', CONTAINER_FORCED_TAG, 'break_in', ...container.tags]
+        .filter((tag, idx, all) => all.indexOf(tag) === idx),
+      data: {
+        containerName: container.name,
+        containerAccess: container.access,
+        containerTags: container.tags,
+        accessOutcome: 'forced',
+        lockTier: containerLockTier(container),
+        lockMaxHp: maxHp,
+        bashDamage: damage,
+        witnessCount: witness.witnesses.length,
+        witnessIds: witness.witnesses.map(w => w.id),
+        witnessScanCapped: witness.capped } });
+    for (const w of witness.witnesses) observeRumorEvent(w, event, state.time);
+  }
+  return {
+    broken: true,
+    damage,
+    remainingHp: 0,
+    maxHp,
+    message: 'Замок сорван.',
+    color: '#4a4' };
+}
+
 export function takeFromContainer(
   container: WorldContainer,
   actor: Entity,
@@ -1071,7 +1249,6 @@ export function takeFromContainer(
   publishTheftAuditIfDue(container, actor, context);
   const defId = slot.defId;
   const itemName = def.name;
-  if (take > slot.count) return false;
   const originalData = slot.data;
   consumeInventorySlot(container, slotIdx, take);
   const moved = addItemMovedCount(actor, defId, take, originalData);

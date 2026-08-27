@@ -84,8 +84,6 @@ export interface GrowingTreeMazeOptions extends MazeBaseOptions {
   selectionWeights?: MazeSelectionWeights;
 }
 
-export interface WilsonMazeOptions extends MazeBaseOptions {}
-
 interface MazeContext {
   width: number;
   height: number;
@@ -480,51 +478,6 @@ export function generateGrowingTreeMaze(options: GrowingTreeMazeOptions): MazeGr
     visited[next] = 1;
     addEdge(edges, edgeSet, context.width, context.height, id, next, 'backbone');
     active.push(next);
-  }
-
-  return finalizeMazeGraph(context, edges, options, rand);
-}
-
-export function generateWilsonMaze(options: WilsonMazeOptions): MazeGraph {
-  const rand = options.rand ?? rng;
-  const context = normalizeContext(options);
-  const visited = new Uint8Array(context.n);
-  const edges: MazeGraphEdge[] = [];
-  const edgeSet = new Set<string>();
-  let remaining = context.n - 1;
-  visited[context.startId] = 1;
-
-  while (remaining > 0) {
-    let walkStart = randomNodeId(context.n, rand);
-    while (visited[walkStart]) walkStart = (walkStart + 1) % context.n;
-
-    const path: number[] = [walkStart];
-    const positions = new Map<number, number>([[walkStart, 0]]);
-    let current = walkStart;
-    while (!visited[current]) {
-      const nextOptions = neighbors(context.width, context.height, current);
-      const next = nextOptions[pickIndex(nextOptions, rand)];
-      const existing = positions.get(next);
-      if (existing !== undefined) {
-        path.length = existing + 1;
-        positions.clear();
-        for (let i = 0; i < path.length; i++) positions.set(path[i], i);
-      } else {
-        path.push(next);
-        positions.set(next, path.length - 1);
-      }
-      current = next;
-    }
-
-    for (let i = 0; i + 1 < path.length; i++) {
-      const a = path[i];
-      const b = path[i + 1];
-      addEdge(edges, edgeSet, context.width, context.height, a, b, 'backbone');
-      if (!visited[a]) {
-        visited[a] = 1;
-        remaining--;
-      }
-    }
   }
 
   return finalizeMazeGraph(context, edges, options, rand);

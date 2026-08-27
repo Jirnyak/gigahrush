@@ -106,7 +106,10 @@ test('maintenance macro geometry exposes wet, dry, duct, panel and repair route 
   assert.equal(gen.world.rooms.length >= 4_000 && gen.world.rooms.length <= 5_200, true, `maintenance reference room count: ${gen.world.rooms.length}`);
   assert.equal(gen.world.doors.size >= 65 && gen.world.doors.size <= 150, true, `maintenance reference door count: ${gen.world.doors.size}`);
   assert.equal(gen.world.containers.length >= 30 && gen.world.containers.length <= 150, true, `maintenance reference container count: ${gen.world.containers.length}`);
-  assert.equal(gen.entities.length >= 8_200 && gen.entities.length <= 9_000, true, `maintenance reference entity count: ${gen.entities.length}`);
+  // Нижняя граница опущена вместе с бюджетом населения: он больше не равен
+  // мягкому пределу, а идёт кривой по |z| (на z=-26 это 3598 из 4096), и штат
+  // коллекторов поехал за ней на те же двенадцать процентов.
+  assert.equal(gen.entities.length >= 8_000 && gen.entities.length <= 9_000, true, `maintenance reference entity count: ${gen.entities.length}`);
   assert.equal(reachableCellCount(reachable) >= 280_000 && reachableCellCount(reachable) <= 305_000, true, `maintenance reference reachability: ${reachableCellCount(reachable)}`);
   assert.equal(passableCellCount(gen.world) >= 280_000 && passableCellCount(gen.world) <= 305_000, true, `maintenance reference passable cells: ${passableCellCount(gen.world)}`);
   assert.equal(wallCellCount(gen.world) >= 740_000 && wallCellCount(gen.world) <= 775_000, true, `maintenance reference wall cells: ${wallCellCount(gen.world)}`);

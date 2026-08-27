@@ -45,8 +45,11 @@ test('sanitizeCraftingState handles bad inputs gracefully', () => {
   assert.deepEqual(defaultState.materials, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
   // default known recipes are included
+  /* Стартовых рецептов нет ни одного: гейт крафта — знание, добываемое разбором.
+   * Здесь требовалось обратное — что хоть что-то известно даром, — то есть тест
+   * закреплял рукописный перечень исключений из правила «крафтится всё». */
   const defaultKnownCount = Object.keys(defaultState.knownRecipes).length;
-  assert.ok(defaultKnownCount > 0);
+  assert.equal(defaultKnownCount, 0, 'на старте не должно быть известных рецептов');
   assert.equal(defaultState.learnedCount, defaultKnownCount);
   assert.equal(typeof defaultState.lastChangedAt, 'number');
 

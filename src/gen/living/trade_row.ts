@@ -14,7 +14,7 @@ import {
   AIGoal, Cell, ContainerKind, DoorState, EntityType, Faction, Feature, NpcState, Occupation, RoomType, Tex,
   type Entity, type Room, type WorldContainer,
 } from '../../core/types';
-import { World } from '../../core/world';
+import { World, classifyReachabilityCell } from '../../core/world';
 import { freshNeeds } from '../../data/names';
 import { connectProtectedRoom, protectRoom } from '../shared';
 import { genLog } from '../log';
@@ -104,15 +104,95 @@ function makeRoom(
   return room;
 }
 
-/** Дверной проём в стене, разделяющей ряд и нижние комнаты. */
-function openDoorway(world: World, x: number, y: number, market: Room, room: Room): void {
-  const ci = world.idx(x, y);
-  if (world.aptMask[ci]) return;
-  world.cells[ci] = Cell.DOOR;
-  world.roomMap[ci] = room.id;
-  world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA: market.id, roomB: room.id, keyId: '', timer: 0 });
-  room.doors.push(ci);
-  market.doors.push(ci);
+/** Клетка, по которой можно пройти: пол, вода или любая дверь. */
+function walkable(world: World, x: number, y: number): boolean {
+  return classifyReachabilityCell(world, world.idx(x, y)).passable;
+}
+
+/**
+ * Дверной проём в стене, разделяющей ряд и нижнюю комнату.
+ *
+ * Столбец объявлен серединой комнаты, но середина может прийтись на клетку
+ * соседней квартиры: та защищена `aptMask`, и проём там не рубится. Раньше
+ * такой случай молча пропускался — а другого входа у нижней комнаты нет, и
+ * лавка оставалась замурована. Теперь берётся ближайший к середине рабочий
+ * столбец: незащищённый и такой, где по обе стороны стены действительно пол.
+ */
+function openDoorway(world: World, market: Room, room: Room, wallY: number): void {
+  const mid = Math.floor(room.w / 2);
+  for (let step = 0; step < room.w; step++) {
+    const dx = mid + (step % 2 === 0 ? step >> 1 : -((step + 1) >> 1));
+    if (dx < 0 || dx >= room.w) continue;
+    const x = room.x + dx;
+    const ci = world.idx(x, wallY);
+    if (world.aptMask[ci]) continue;
+    if (!walkable(world, x, wallY - 1) || !walkable(world, x, wallY + 1)) continue;
+    world.cells[ci] = Cell.DOOR;
+    world.roomMap[ci] = room.id;
+    world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA: market.id, roomB: room.id, keyId: '', timer: 0 });
+    room.doors.push(ci);
+    market.doors.push(ci);
+    return;
+  }
+  genLog(`[TRADE_ROW] "${room.name}": стена с рядом сплошь защищена, проёма нет`);
+}
+
+/** Столько же щупает `connectProtectedRoom`: толще стены на этаже не бывает. */
+const CARVE_REACH = 30;
+
+/**
+ * Выходы торгового угла — по одному на каждую сторону кольца.
+ *
+ * Раньше выход был один и случайный: `connectProtectedRoom` пробивал наугад
+ * клетку кольца, у которой СНАРУЖИ есть пол, не проверяя, есть ли пол ИЗНУТРИ.
+ * Дыра, пришедшаяся на угол кольца или ровно на перегородку между лавками,
+ * вела в стену, и весь угол — ряд, обе лавки и бар — оказывался замурован
+ * целиком. Спасти его было уже некому: `ensureConnectivity` рубит коридор
+ * `carveCorridor`, а тот никогда не идёт сквозь `aptMask`, и для компоненты,
+ * почти целиком защищённой, спасательный ход не рубится вовсе. Один же
+ * уцелевший выход мог упереться в отрезанный огрызок коридора, который сам
+ * бульдозер кольца и осиротил.
+ *
+ * Поэтому выход не один. Ряд у лифта — проходной двор, а не крепость: с каждой
+ * из четырёх сторон от заведомого пола наружу прорубается ход до первой клетки
+ * этажа. Жребий при этом не бросается ни разу — поток случайных чисел здесь не
+ * двигается, как и во втором заходе на район в НИИ слизи.
+ */
+function carveRowExit(world: World, sx: number, sy: number, ddx: number, ddy: number): void {
+  const path: number[] = [];
+  let cx = sx, cy = sy;
+  for (let step = 0; step < CARVE_REACH; step++) {
+    const ci = world.idx(cx, cy);
+    if (world.cells[ci] === Cell.FLOOR && !world.aptMask[ci]) {
+      for (const pi of path) {
+        world.cells[pi] = Cell.FLOOR;
+        world.roomMap[pi] = -1;
+        world.aptMask[pi] = 0;
+      }
+      return;
+    }
+    path.push(ci);
+    cx += ddx;
+    cy += ddy;
+  }
+  genLog('[TRADE_ROW] с одной из сторон хода наружу нет: за кольцом сплошной массив');
+}
+
+function openRowExits(world: World, rx: number, ry: number): void {
+  // Ход начинается от клетки кольца НАД заведомым полом: иначе дыра ведёт в
+  // собственную перегородку ряда, ровно как у слепого жребия.
+  for (let dx = 0; dx < AREA_W; dx++) {
+    if (walkable(world, rx + dx, ry)) { carveRowExit(world, rx + dx, ry - 1, 0, -1); break; }
+  }
+  for (let dx = AREA_W - 1; dx >= 0; dx--) {
+    if (walkable(world, rx + dx, ry + AREA_H - 1)) { carveRowExit(world, rx + dx, ry + AREA_H, 0, 1); break; }
+  }
+  for (let dy = 0; dy < AREA_H; dy++) {
+    if (walkable(world, rx, ry + dy)) { carveRowExit(world, rx - 1, ry + dy, -1, 0); break; }
+  }
+  for (let dy = AREA_H - 1; dy >= 0; dy--) {
+    if (walkable(world, rx + AREA_W - 1, ry + dy)) { carveRowExit(world, rx + AREA_W, ry + dy, 1, 0); break; }
+  }
 }
 
 function addCounter(
@@ -226,6 +306,13 @@ function generateTradeRow(
     for (let dx = -1; dx <= AREA_W; dx++) {
       const ci = world.idx(rx + dx, ry + dy);
       if (world.aptMask[ci]) continue;
+      /* Угол ставится поверх коридоров лабиринта, а в них есть двери. Клетку
+       * перезаписать мало: запись в `world.doors` переживает бульдозер, и потом
+       * `sanitizeDoors` находит дверь, под которой уже не дверь, и «чинит» её —
+       * а поскольку `protectRoom` объявил весь угол защищённым, чинит В СТЕНУ.
+       * Так внутри ряда и лавок вырастали случайные столбы, а стоило столбу
+       * встать под дырой кольца — торговый угол оказывался замурован целиком. */
+      world.removeDoorAt(ci);
       world.cells[ci] = Cell.WALL;
       world.wallTex[ci] = Tex.PANEL;
       world.floorTex[ci] = Tex.F_CONCRETE;
@@ -248,11 +335,12 @@ function generateTradeRow(
 
   // Из ряда — по проёму в каждую нижнюю комнату.
   for (const room of [...shops, bar]) {
-    openDoorway(world, room.x + Math.floor(room.w / 2), ry + MARKET_H, market, room);
+    openDoorway(world, market, room, ry + MARKET_H);
   }
 
   protectRoom(world, market.x, market.y, AREA_W, AREA_H, Tex.PANEL, Tex.F_CONCRETE);
   connectProtectedRoom(world, market.x, market.y, AREA_W, AREA_H);
+  openRowExits(world, market.x, market.y);
 
   // Прилавки: у лавок свои, у бара стойка с выпивкой.
   for (let i = 0; i < shops.length; i++) {

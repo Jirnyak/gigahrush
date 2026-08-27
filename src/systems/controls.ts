@@ -244,7 +244,6 @@ export function clearControlInputs(input: InputState): void {
     cleared[key] = true;
   }
   input.interactHeld = false;
-  input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;
   input.menuAccept = false;

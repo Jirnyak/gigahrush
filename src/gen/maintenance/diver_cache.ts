@@ -26,7 +26,7 @@ function addDiverPrepLocker(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -35,7 +35,6 @@ function addDiverPrepLocker(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -66,7 +65,6 @@ export function generateDiverCache(ctx: MaintContentCtx): void {
   setFeature(ctx.world, room.x + 4, room.y + 3, Feature.SHELF);
   setFeature(ctx.world, room.x + 6, room.y + 2, Feature.APPARATUS);
 
-  // @ts-ignore
   addDiverPrepLocker(ctx, room, room.x + 4, room.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Сухой ящик водолазов: мостовой комплект',

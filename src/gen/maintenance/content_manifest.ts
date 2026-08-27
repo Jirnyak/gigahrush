@@ -9,6 +9,9 @@ import { generateForpost } from './forpost';
 // Сцена обороны форпоста регистрируется импортом: своего генератора у неё нет,
 // комнату-якорь рвёт сам форпост. Контракт — `cutscene.md`.
 import './forpost_defense';
+// Пополнение гарнизона Громного: своего генератора нет, модуль слушает факт мира
+// о снятой с генерала руне и зовёт общее переселение A-Life.
+import './garrison_reinforcement';
 import { generateMancobusRoom } from './mancobus_room';
 import { spawnMakhno } from './makhno';
 import { spawnIvanych } from './sant_ivanych';
@@ -94,8 +97,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_pressure_station',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: станция давления',
     decisionHooks: [
       { kind: 'quest', id: 'ag04_pressure_wrenches', label: 'принести ключи диспетчеру давления' },
@@ -122,8 +124,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_olgoy_meat_cache',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: мясной сборник Олгой-Хорхоя',
     decisionHooks: [
       { kind: 'flee', id: 'olgoy_dry_floor', label: 'увести Олгой-Хорхоя с воды на сухой пол' },
@@ -135,8 +136,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_vodyanoy_koshmar_line',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: насосная водяного кошмара',
     decisionHooks: [
       { kind: 'flee', id: 'vodyanoy_koshmar_dry_break', label: 'сойти с мокрой линии на сухой бетон' },
@@ -147,8 +147,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_trubnyy_avtomat_line',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: мокрая линия трубного автомата',
     decisionHooks: [
       { kind: 'kill', id: 'trubnyy_avtomat_wet_line', label: 'сойти с мокрой прямой и ударить на остывании' },
@@ -219,8 +218,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'safe_slimevik_den',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: кормовая ванна слизневика',
     decisionHooks: [
       { kind: 'quest', id: 'exp_maint_safe_slimevik_bargain', label: 'найти безопасного слизневика и обменять корм на пробу' },
@@ -232,8 +230,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'slime_woman_sump',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: жижевой отстойник НИИ',
     decisionHooks: [
       { kind: 'flee', id: 'slime_woman_dry_edge', label: 'уйти из воды на сухой освещенный край' },
@@ -266,8 +263,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_betonoed_shortcut',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: слабая стена Бетоноеда',
     decisionHooks: [
       { kind: 'repair', id: 'betonoed_seal_weak_wall', label: 'запечатать шов герметиком или блок-комплектом' },
@@ -280,8 +276,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_borshchevik_blockade',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: борщевик на сервисном обходе',
     decisionHooks: [
       { kind: 'kill', id: 'borshchevik_cut_path', label: 'рубить стебли и чистить сок без дыма' },
@@ -296,8 +291,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_rzhavnik_shelf',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: стеллаж ровного металла',
     decisionHooks: [
       { kind: 'kill', id: 'rzhavnik_first_leap', label: 'проверить ровные прутья издали и пережить первый рывок' },
@@ -309,8 +303,7 @@ export function runMaintenanceContent(
 
   withPoiGenerationMetadata(world, entities, {
     id: 'maint_slepoglaz_line',
-    // @ts-ignore
-    z: 'maintenance',
+    floor: 'maintenance',
     debugLabel: 'Коллекторы: коридор слепого прострела',
     decisionHooks: [
       { kind: 'flee', id: 'slepoglaz_sidesteps', label: 'шумнуть, уйти с линии и сблизиться после луча' },

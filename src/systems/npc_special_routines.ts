@@ -1,45 +1,28 @@
-/* ── Generic executor for authored NPC special routines ──────── */
+/* ── Постановка авторских постов ──────────────────────────────────
+ *
+ * Один шаг, один раз, при спавне: анкета человека объявляет пост
+ * (`runtime.specialRoutineId`), генератор говорит, в какой он комнате, — и
+ * поводок комнаты делает остальное сам. Такта у этого модуля нет и не нужно:
+ * срок поста — абсолютная минута игровых часов, и он снимает себя сам в момент,
+ * когда у поводка спрашивают (`systems/room_leash.ts`).
+ */
 
-import { type Entity, type GameClock } from '../core/types';
+import { type Entity } from '../core/types';
 import { getNpcPackageByPlotNpcId } from '../data/npc_packages';
-import { getNpcSpecialRoutine, type NpcSpecialRoutineDef } from '../data/npc_special_routines';
+import { getNpcSpecialRoutine } from '../data/npc_special_routines';
+import { bindActorToRoom } from './room_leash';
 
-export interface NpcSpecialRoutineTick {
-  routineId?: string;
-  held: boolean;
-  expired: boolean;
-  clearUtility: boolean;
-}
-
-function routineForEntity(e: Entity): NpcSpecialRoutineDef | undefined {
-  if (e.id === undefined) return undefined;
-  return getNpcSpecialRoutine(getNpcPackageByPlotNpcId(e.alifeId!)?.runtime?.specialRoutineId);
-}
-
-export function tickNpcSpecialRoutine(e: Entity, clock: GameClock): NpcSpecialRoutineTick {
-  const def = routineForEntity(e);
-  if (!def) return { held: false, expired: false, clearUtility: false };
-  if (def.activeUntilPlotDone && e.plotDone) {
-    return { routineId: def.id, held: false, expired: false, clearUtility: false };
-  }
-
-  if (def.expireAtTotalMinutes !== undefined && clock.totalMinutes >= def.expireAtTotalMinutes) {
-    if (def.setPlotDoneOnExpire) e.plotDone = true;
-    return {
-      routineId: def.id,
-      held: false,
-      expired: true,
-      clearUtility: def.clearUtilityOnExpire === true,
-    };
-  }
-
-  const ai = e.ai;
-  if (ai) {
-    if (def.holdGoal !== undefined) ai.goal = def.holdGoal;
-    if (def.holdNpcState !== undefined) ai.npcState = def.holdNpcState;
-    ai.path = [];
-    ai.pi = 0;
-    ai.timer = def.holdTimerSec ?? 1;
-  }
-  return { routineId: def.id, held: true, expired: false, clearUtility: false };
+/**
+ * Поставить человека на объявленный им пост в этой комнате.
+ *
+ * Возвращает `true`, если пост действительно объявлен анкетой. Не объявлен —
+ * тихо ничего не делает: это обычный случай, а не ошибка, постов на весь проект
+ * единицы.
+ */
+export function postNpcToRoom(e: Entity, roomId: number): boolean {
+  if (e.alifeId === undefined) return false;
+  const def = getNpcSpecialRoutine(getNpcPackageByPlotNpcId(e.alifeId)?.runtime?.specialRoutineId);
+  if (!def) return false;
+  bindActorToRoom(e, roomId, def.boundToRoomUntilMinutes);
+  return true;
 }

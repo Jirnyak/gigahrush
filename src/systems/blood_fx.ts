@@ -449,8 +449,8 @@ export function spawnDeathPool(world: World, ex: number, ey: number, gore = fals
     const biasX = dirX * 0.4, biasY = dirY * 0.4;
     const sx = ex + Math.cos(ang) * dist + biasX;
     const sy = ey + Math.sin(ang) * dist + biasY;
-    const scx = Math.floor(((sx % 1024) + 1024) % 1024);
-    const scy = Math.floor(((sy % 1024) + 1024) % 1024);
+    const scx = world.wrap(Math.floor(sx));
+    const scy = world.wrap(Math.floor(sy));
     if (world.solid(scx, scy)) continue;
     const splatRadius = 0.12 + goreLevel * 0.06 + sRng.random() * 0.08;
     const splatIntensity = 160 + sRng.int(0, 60);

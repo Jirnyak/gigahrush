@@ -1,6 +1,8 @@
 import { Entity, DamageType, type GameState } from '../core/types';
 import type { World } from '../core/world';
 import { ITEMS, WEAPON_STATS } from '../data/catalog';
+import { projTypeDamageType } from '../data/weapons';
+import { monsterAttackDamageType } from '../entities/monster';
 import { applyMonsterArmorHit, type MonsterArmorHitInput, type MonsterArmorHitResult } from './monster_armor';
 
 export function calculateDamage(baseDamage: number, damageType: DamageType | undefined, target: Entity): number {
@@ -15,20 +17,40 @@ export function calculateDamage(baseDamage: number, damageType: DamageType | und
   return Math.max(0, baseDamage * (100 - resist) / 100);
 }
 
+/**
+ * Чем ударили, если бьющий не сказал этого прямо.
+ *
+ * Порядок от частного к общему и ЕДИНСТВЕННЫЙ на всю игру: оружие в руке
+ * старше вида снаряда (одним и тем же огненным болтом стреляют из четырёх
+ * стволов), вид снаряда старше вида твари (тварь может кинуть чужое), а вид
+ * твари — последнее слово перед кинетикой. Раньше последней ступени не было
+ * вовсе, и КАЖДЫЙ удар любой твари считался кинетикой.
+ */
+function resolveDamageType(input: MonsterArmorHitInput): DamageType | undefined {
+  return input.damageType
+    ?? (input.weaponId !== undefined ? WEAPON_STATS[input.weaponId]?.damageType : undefined)
+    ?? projTypeDamageType(input.projectileType)
+    ?? monsterAttackDamageType(input.attacker);
+}
+
 /* Единый конвейер урона: резист надетой брони цели (по типу урона оружия),
    затем врождённая броня монстров. Тип берётся из input.damageType, иначе
-   из реестра оружия по weaponId, иначе кинетика. */
+   из реестра оружия по weaponId, иначе из вида снаряда, иначе у бьющей твари,
+   иначе кинетика. */
 export function applyDamage(
   world: World,
   state: GameState,
   target: Entity,
-  input: MonsterArmorHitInput & { damageType?: DamageType },
+  input: MonsterArmorHitInput,
 ): MonsterArmorHitResult {
-  const damageType = input.damageType
-    ?? (input.weaponId !== undefined ? WEAPON_STATS[input.weaponId]?.damageType : undefined);
+  const damageType = resolveDamageType(input);
   const typed = Math.round(calculateDamage(input.damage, damageType, target));
-  if (typed === input.damage) return applyMonsterArmorHit(world, state, target, input);
-  return applyMonsterArmorHit(world, state, target, { ...input, damage: typed });
+  // Тип идёт ДАЛЬШЕ, во врождённую броню твари: выведенный из оружия он там
+  // нужен ровно так же, как в резисте носимой брони.
+  if (typed === input.damage && damageType === input.damageType) {
+    return applyMonsterArmorHit(world, state, target, input);
+  }
+  return applyMonsterArmorHit(world, state, target, { ...input, damage: typed, damageType });
 }
 
 /**

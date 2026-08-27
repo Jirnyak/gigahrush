@@ -237,7 +237,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): WorldContainer {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -246,7 +246,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -354,7 +353,6 @@ function dressBypass(ctx: MaintContentCtx, bypass: Room): void {
 }
 
 function addPressContainers(ctx: MaintContentCtx, bypass: Room, output: Room, ownerId: number): { stop: WorldContainer; output: WorldContainer } {
-  // @ts-ignore
   const stop = addContainer(ctx, bypass, bypass.x + Math.floor(bypass.w / 2), bypass.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Пульт ручного стопа Прессовика',
@@ -371,7 +369,6 @@ function addPressContainers(ctx: MaintContentCtx, bypass: Room, output: Room, ow
     tags: pressTags([STOP_TAG, 'bypass', 'repair', 'tool']),
   });
 
-  // @ts-ignore
   const out = addContainer(ctx, output, output.x + output.w - 3, output.y + 2, {
     kind: ContainerKind.METAL_CABINET,
     name: 'Выходная кассета Прессовика',

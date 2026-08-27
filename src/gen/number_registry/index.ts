@@ -124,20 +124,26 @@ export function generateNumberRegistryDesignFloor(seed: number): FloorGeneration
   const world = new World();
   const entities: Entity[] = [];
   const nextId: NextId = newEntityIdCursor();
-  let nextRoomId = 0;
   const rand = xorshift32(seed);
 
   fillDefaultTextures(world);
 
+  /* Слот комнаты спрашивается у массива, а не считается своим счётчиком.
+   *
+   * `room.id` — это ИНДЕКС в `world.rooms` (замок `tests/rooms-dense.test.ts`), а
+   * `stampRoom` кладёт комнату по индексу и ЗАТИРАЕТ чужую запись молча. Свой счётчик
+   * с нуля совпадал с длиной массива только потому, что ядро реестра работает первым по
+   * пустому миру; расширение (`expandNumberRegistryGeometry`) длину уже спрашивает.
+   * Два счётчика на один массив держатся на порядке стадий — а он не обещан. */
   const rooms = {
-    hub: stampRegistryRoom(world, nextRoomId++, RoomType.COMMON, 'Зал сверки остатков', 480, 492, 64, 38, Tex.F_PARQUET),
-    mod5: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Окно остатка 2 mod 5', 430, 468, 36, 18, Tex.F_MARBLE_TILE),
-    mod7: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Касса модуля 7', 430, 532, 36, 18, Tex.F_GREEN_CARPET),
-    mod11: stampRegistryRoom(world, nextRoomId++, RoomType.OFFICE, 'Окно остатка 4 mod 11', 462, 562, 42, 18, Tex.F_MARBLE_TILE),
-    prime: stampRegistryRoom(world, nextRoomId++, RoomType.CORRIDOR, 'Простой рискованный коридор', 556, 456, 94, 18, Tex.F_RED_CARPET),
-    composite: stampRegistryRoom(world, nextRoomId++, RoomType.COMMON, 'Составной публичный обход', 556, 536, 102, 24, Tex.F_GREEN_CARPET),
-    crt: stampRegistryRoom(world, nextRoomId++, RoomType.STORAGE, 'Китайская пересечная картотека', 674, 494, 42, 30, Tex.F_MARBLE_TILE),
-    safe: stampRegistryRoom(world, nextRoomId++, RoomType.HQ, 'Сейф общего остатка', 724, 500, 24, 18, Tex.F_RED_CARPET),
+    hub: stampRegistryRoom(world, world.rooms.length, RoomType.COMMON, 'Зал сверки остатков', 480, 492, 64, 38, Tex.F_PARQUET),
+    mod5: stampRegistryRoom(world, world.rooms.length, RoomType.OFFICE, 'Окно остатка 2 mod 5', 430, 468, 36, 18, Tex.F_MARBLE_TILE),
+    mod7: stampRegistryRoom(world, world.rooms.length, RoomType.OFFICE, 'Касса модуля 7', 430, 532, 36, 18, Tex.F_GREEN_CARPET),
+    mod11: stampRegistryRoom(world, world.rooms.length, RoomType.OFFICE, 'Окно остатка 4 mod 11', 462, 562, 42, 18, Tex.F_MARBLE_TILE),
+    prime: stampRegistryRoom(world, world.rooms.length, RoomType.CORRIDOR, 'Простой рискованный коридор', 556, 456, 94, 18, Tex.F_RED_CARPET),
+    composite: stampRegistryRoom(world, world.rooms.length, RoomType.COMMON, 'Составной публичный обход', 556, 536, 102, 24, Tex.F_GREEN_CARPET),
+    crt: stampRegistryRoom(world, world.rooms.length, RoomType.STORAGE, 'Китайская пересечная картотека', 674, 494, 42, 30, Tex.F_MARBLE_TILE),
+    safe: stampRegistryRoom(world, world.rooms.length, RoomType.HQ, 'Сейф общего остатка', 724, 500, 24, 18, Tex.F_RED_CARPET),
   };
 
   carveNumberRegistryCorridors(world, rooms);

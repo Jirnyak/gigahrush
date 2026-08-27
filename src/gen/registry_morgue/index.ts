@@ -151,7 +151,6 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
   const world = new World();
   const entities: Entity[] = [];
   const nextId: NextId = newEntityIdCursor();
-  let nextRoomId = 0;
 
   for (let i = 0; i < W * W; i++) {
     world.wallTex[i] = Tex.TILE_W;
@@ -166,40 +165,47 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
 
   const ox = 488;
   const oy = 500;
+  /* Слот комнаты спрашивается у массива, а не считается своим счётчиком.
+   *
+   * `room.id` — это ИНДЕКС в `world.rooms` (замок `tests/rooms-dense.test.ts`), а
+   * `createDesignRoom` через `stampRoom` кладёт комнату по индексу и ЗАТИРАЕТ чужую запись
+   * молча. Свой счётчик с нуля совпадал с длиной массива только потому, что авторское ядро
+   * морга работает первым по пустому миру; расширение (`addMorgueGeometryRoom`) длину уже
+   * спрашивает. Два счётчика на один массив держатся на порядке стадий — а он не обещан. */
   const washing = createDesignRoom(
-    world, nextRoomId++, RoomType.MEDICAL,
+    world, world.rooms.length, RoomType.MEDICAL,
     ox, oy, 16, 11,
     'Моечный коридор регистрации',
     Tex.TILE_W, Tex.F_TILE,
   );
   const cold = createDesignRoom(
-    world, nextRoomId++, RoomType.STORAGE,
+    world, world.rooms.length, RoomType.STORAGE,
     ox + 17, oy, 28, 11,
     'Холодная камера-укрытие',
     Tex.HERMO_WALL, Tex.F_TILE,
     true,
   );
   const contaminated = createDesignRoom(
-    world, nextRoomId++, RoomType.MEDICAL,
+    world, world.rooms.length, RoomType.MEDICAL,
     ox + 46, oy, 13, 11,
     'Зараженная камера сверки',
     Tex.HERMO_WALL, Tex.F_TILE,
     true,
   );
   const reception = createDesignRoom(
-    world, nextRoomId++, RoomType.OFFICE,
+    world, world.rooms.length, RoomType.OFFICE,
     ox, oy + 12, 16, 10,
     'Окно приема смертей',
     Tex.TILE_W, Tex.F_LINO,
   );
   const tagRoom = createDesignRoom(
-    world, nextRoomId++, RoomType.OFFICE,
+    world, world.rooms.length, RoomType.OFFICE,
     ox + 17, oy + 12, 12, 10,
     'Бирочная',
     Tex.TILE_W, Tex.F_LINO,
   );
   const ledger = createDesignRoom(
-    world, nextRoomId++, RoomType.OFFICE,
+    world, world.rooms.length, RoomType.OFFICE,
     ox + 30, oy + 12, 16, 10,
     'Кабинет книги умерших',
     Tex.MARBLE, Tex.F_PARQUET,
@@ -258,7 +264,7 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
 
   const spawnX = reception.x + 6.5;
   const spawnY = reception.y + 5.5;
-  genLog(`[DESIGN_FLOOR] ${REGISTRY_MORGUE_ROUTE_ID} z=${REGISTRY_MORGUE_FUTURE_Z} at (${ox}, ${oy}) rooms=${nextRoomId}`);
+  genLog(`[DESIGN_FLOOR] ${REGISTRY_MORGUE_ROUTE_ID} z=${REGISTRY_MORGUE_FUTURE_Z} at (${ox}, ${oy}) rooms=${world.rooms.length}`);
     const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX, spawnY };
 
   const rngFn = seededRandom(hashSeed('design-full:registry_morgue:18', 18));

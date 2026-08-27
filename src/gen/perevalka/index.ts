@@ -1,18 +1,15 @@
 /**
- * Перевалка (route z = -12).
+ * Перевалка (route z = -16).
  *
- * Единственный чётный слот маршрута, у которого не было дизайн-этажа: лифт
- * проваливался в fallback-шаг ±2 и курсор маршрута застревал, отрезая всю
- * нижнюю половину авторских этажей. Этот модуль закрывает дыру.
+ * Грузовой перевалочный ярус и физический замок вертикали: ВСЕ лифты вниз
+ * лежат внутри баз четырёх фракций, за запертыми дверьми. Спуск отсюда стоит
+ * решённого вопроса с ОДНОЙ базой на выбор — её поручение, её хозяин, её
+ * прилавок или пробивной заряд в её бетон. Ничего скриптового: замок собран из
+ * `DoorState.LOCKED` + `Door.keyId` + обычных стен.
  *
- * Смысл места: грузовой ярус между Чёрным рынком 88 (z=-10) и Производственным
- * поясом (z=-14). Сверху приходит товар с рынка, вниз уходит в промзону.
- * Ликвидаторы держат весовую и досмотр посреди галереи; Wild держат серый обход
- * понизу. У игрока есть выбор маршрута: через досмотр или в обход.
- *
- * Первая версия сознательно компактная — геометрия, комнаты, лифты обоих
- * направлений, территория, контейнеры и амбиентная популяция. Авторские NPC,
- * побочные квесты и досмотровая механика наращиваются поверх этого каркаса.
+ * Куда лягут лифты — не решение этажа. Их ставит единая система шахт
+ * (`world/route_lifts.ts`), этаж их ЧИТАЕТ и обносит территорией баз в
+ * `onAfterPopulate`. Смотри `lift_gates.ts`.
  */
 import {
   AIGoal,
@@ -37,13 +34,26 @@ import { World } from '../../core/world';
 import { withSeededRandom } from '../../core/rand';
 import { freshNeeds } from '../../data/catalog';
 import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../shared';
+import { applyNamedRoom } from '../named_rooms';
 import type { FloorGeneration } from '../floor_manifest';
 import { newEntityIdCursor } from '../entity_ids';
-
-export const PEREVALKA_DESIGN_FLOOR_ID = 'perevalka';
-/** Маршрутный z, а не легаси-номер этажа: контейнеры чистятся самосбором по нему. */
-export const PEREVALKA_Z = -12;
-export const PEREVALKA_SEED = 0x9e12;
+import {
+  PEREVALKA_BASES,
+  PEREVALKA_DESIGN_FLOOR_ID,
+  PEREVALKA_DOCK,
+  PEREVALKA_DOCK_ALIAS,
+  PEREVALKA_ROOMS,
+  PEREVALKA_SEED,
+  PEREVALKA_Z,
+} from './meta';
+import { buildPerevalkaBases, carvePerevalkaFreightYard } from './yard';
+import { encloseDownLiftsInPerevalkaBases, perevalkaGatesByWorld } from './lift_gates';
+import { spawnPerevalkaKeyholders } from './npcs';
+import { refreshPerevalkaTourScene } from './tour_scene';
+import { buildPerevalkaStackYards } from './stacks';
+import { buildPerevalkaDistricts, districtOwnerTag, type PerevalkaDistrict } from './districts';
+import { buildPerevalkaInspection } from './inspection';
+import { buildPerevalkaLifeQuarters } from './life';
 
 const GALLERY_Y = 512;
 const NORTH_AISLE_Y = 470;
@@ -172,11 +182,21 @@ export function carvePerevalkaGalleries(world: World): PerevalkaLayout {
 }
 
 export function buildPerevalkaRooms(world: World): PerevalkaRooms {
-  const dock = createRoom(world, RoomType.PRODUCTION, 432, 424, 64, 34, 'Погрузочная площадка', Tex.CONCRETE, Tex.F_CONCRETE);
+  // Двор объявлен именованной комнатой: на него ссылается сцена знакомства.
+  const dockDef = PEREVALKA_ROOMS[PEREVALKA_DOCK_ALIAS];
+  const dock = createRoom(
+    world, dockDef.type,
+    PEREVALKA_DOCK.x, PEREVALKA_DOCK.y, PEREVALKA_DOCK.w, PEREVALKA_DOCK.h,
+    dockDef.name, Tex.CONCRETE, Tex.F_CONCRETE,
+  );
+  applyNamedRoom(dock, PEREVALKA_DOCK_ALIAS, dockDef);
   connectRoomToPoint(world, dock, dock.x + 32, dock.y + dock.h, dock.x + 32, NORTH_AISLE_Y, DoorState.OPEN);
 
   const weighing = createRoom(world, RoomType.OFFICE, 596, 478, 44, 26, 'Весовая ликвидаторов', Tex.PANEL, Tex.F_LINO);
-  connectRoomToPoint(world, weighing, weighing.x - 1, weighing.y + 13, 624, weighing.y + 13, DoorState.CLOSED);
+  // Цель подхода — вертикальный проход x=512, а НЕ x=624: тот лежит внутри самой
+  // весовой (она занимает 596..639), и «коридор» к её западной двери рылся у неё
+  // же в полу. Комната висела вне связности, и её каждый раз спасала страховка.
+  connectRoomToPoint(world, weighing, weighing.x - 1, weighing.y + 13, 512, weighing.y + 13, DoorState.CLOSED);
 
   const checkpoint = createRoom(world, RoomType.HQ, 640, 522, 34, 24, 'Пост досмотра', Tex.PANEL, Tex.F_LINO);
   connectRoomToPoint(world, checkpoint, checkpoint.x + 17, checkpoint.y - 1, checkpoint.x + 17, GALLERY_Y + 1, DoorState.CLOSED);
@@ -197,7 +217,12 @@ export function buildPerevalkaRooms(world: World): PerevalkaRooms {
   for (let i = 0; i < 4; i++) {
     const x = 336 + i * 108;
     const store = createRoom(world, RoomType.STORAGE, x, 432, 30, 24, `Времянка ${i + 1}`, Tex.CONCRETE, Tex.F_CONCRETE);
-    connectRoomToPoint(world, store, store.x + 15, store.y + store.h, store.x + 15, NORTH_AISLE_Y, i === 3 ? DoorState.LOCKED : DoorState.CLOSED, i === 3 ? 'key' : '');
+    // Замок на этаже ровно один — лифтовые тамбуры баз. Времянка держала
+    // `DoorState.LOCKED` с дефолтным ключом `'key'`, и лифт вверх, севший в её
+    // стену, запирал приехавшего сверху игрока внутри склада (замерено на
+    // сиде 0x4453474e, шахта 683,456). Ценность прячет запертый ЯЩИК, а не
+    // комната: дверь склада закрыта, содержимое под замком.
+    connectRoomToPoint(world, store, store.x + 15, store.y + store.h, store.x + 15, NORTH_AISLE_Y, DoorState.CLOSED);
     stores.push(store);
   }
 
@@ -210,13 +235,22 @@ export function placePerevalkaLifts(world: World): void {
   placeLift(world, EAST_X - 2, GALLERY_Y, EAST_X - 6, GALLERY_Y, LiftDirection.DOWN);
 }
 
-export function applyPerevalkaZones(world: World): void {
+export function applyPerevalkaZones(world: World, districts: readonly PerevalkaDistrict[] = []): void {
   for (const zone of world.zones) {
     zone.level = 3;
     zone.faction = ZoneFaction.CITIZEN;
     // Восток галереи — ликвидаторский досмотр, низ — серый обход перевозчиков.
     if (zone.cx > 590 && zone.cy > 460 && zone.cy < 560) zone.faction = ZoneFaction.LIQUIDATOR;
     if (zone.cy > 566) zone.faction = ZoneFaction.WILD;
+    // Микрорайон перекрывает географию: зона, чей центр лёг в квартал базы,
+    // принадлежит этой базе, а не тому, что о ней думают координаты.
+    for (const district of districts) {
+      const spec = PEREVALKA_BASES.find(base => base.id === district.id);
+      if (!spec) continue;
+      const inX = Math.abs(world.delta(zone.cx, district.x + district.w / 2)) <= district.w / 2;
+      const inY = Math.abs(world.delta(zone.cy, district.y + district.h / 2)) <= district.h / 2;
+      if (inX && inY) zone.faction = spec.owner;
+    }
     zone.fogged = false;
   }
   for (let i = 0; i < world.factionControl.length; i++) {
@@ -224,10 +258,27 @@ export function applyPerevalkaZones(world: World): void {
   }
 }
 
+/**
+ * Вернуть авторскую территорию после общей раздачи долей.
+ *
+ * Зовётся манифестом ПОСЛЕ `initializeCellTerritory`, и это единственное место,
+ * где принадлежность комнаты переживает раздачу. Владельца называет МЕТКА
+ * комнаты (`district:<база>`), а не её координаты: микрорайоны стоят по всему
+ * ярусу, и координатное правило врало бы на каждом втором.
+ */
 export function reinforcePerevalkaAuthoredHqTerritory(world: World): void {
+  const byTag = new Map<string, ZoneFaction>();
+  for (const spec of PEREVALKA_BASES) {
+    byTag.set(districtOwnerTag(spec.id), spec.owner);
+    // Двор базы принадлежит базе по тем же правилам, что и её микрорайон:
+    // до этого штаб артели диких доставался ликвидаторам по общему правилу HQ.
+    byTag.set(spec.hqAlias, spec.owner);
+    byTag.set(spec.workAlias, spec.owner);
+  }
   for (const room of world.rooms) {
-    if (room.type !== RoomType.HQ) continue;
-    const owner = room.name.includes('Серая') ? ZoneFaction.WILD : ZoneFaction.LIQUIDATOR;
+    const tagged = room.tags?.map(tag => byTag.get(tag)).find(owner => owner !== undefined);
+    if (tagged === undefined && room.type !== RoomType.HQ) continue;
+    const owner = tagged ?? (room.name.includes('Серая') ? ZoneFaction.WILD : ZoneFaction.LIQUIDATOR);
     for (let dy = 0; dy < room.h; dy++) {
       for (let dx = 0; dx < room.w; dx++) {
         const idx = world.idx(room.x + dx, room.y + dy);
@@ -350,21 +401,67 @@ export function generatePerevalkaDesignFloor(seed = PEREVALKA_SEED): FloorGenera
     const nextId = newEntityIdCursor();
     const containerId = { v: 1 };
 
+    // Двор режется ПЕРВЫМ и на весь ярус: сетка шахт покрывает весь мир, и без
+    // проходимого объёма рядом с её клетками лифт уезжает искать пол за сотню
+    // клеток и садится у чужой шахты. Комнаты штампуются поверх авеню.
+    carvePerevalkaFreightYard(world);
     const layout = carvePerevalkaGalleries(world);
     const rooms = buildPerevalkaRooms(world);
+    const bases = buildPerevalkaBases(world);
+
+    /* ── Четыре слоя застройки ─────────────────────────────────────
+     * Каждый кладётся ПОВЕРХ готового и целиком до связности: порядок общий —
+     * расширение, связность, санация дверей, страховки. Слой, вырытый после
+     * `ensureConnectivity`, остался бы отдельной компонентой, а его комнаты
+     * замурованными (так на других этажах набирали по полторы сотни разом).
+     *
+     * Между собой слои не спорят: у каждого свои кварталы решётки авеню, и
+     * кромка квартала касается дороги сама — прошивать их нечем и не надо. */
+    buildPerevalkaStackYards(world);           // 1. вертикаль: штабеля и эстакады
+    const districts = buildPerevalkaDistricts(world); // 2. четыре архитектуры
+    buildPerevalkaInspection(world);           // 3. досмотр и серый обход
+    buildPerevalkaLifeQuarters(world);         // 4. жизнь яруса
+
     generateZones(world);
-    applyPerevalkaZones(world);
+    applyPerevalkaZones(world, districts);
     reinforcePerevalkaAuthoredHqTerritory(world);
     placePerevalkaLifts(world);
     decoratePerevalka(world, rooms);
     placePerevalkaContainers(world, containerId, rooms);
     spawnPerevalkaAmbientTemplates(entities, nextId, rooms);
+    spawnPerevalkaKeyholders(entities, nextId, bases);
 
     ensureConnectivity(world, layout.spawnX, layout.spawnY);
     sanitizeDoors(world);
     world.rebuildContainerMap();
     world.bakeLights();
 
-    return { world, entities, spawnX: layout.spawnX, spawnY: layout.spawnY };
+    return {
+      world,
+      entities,
+      spawnX: layout.spawnX,
+      spawnY: layout.spawnY,
+      // Единственный хук этажа, который видит уже поставленные маршрутные
+      // шахты: манифест зовёт `stampRouteLiftShafts` после территории и до
+      // расселения, а этот хук — сразу после расселения.
+      onAfterPopulate: (w: World) => {
+        const report = encloseDownLiftsInPerevalkaBases(w, layout.spawnX, layout.spawnY);
+        perevalkaGatesByWorld.set(w, report);
+        // Тамбуры садятся туда, куда легли шахты, и их координаты — знание этой
+        // генерации, а не автора. Сцена знакомства узнаёт свой показательный
+        // замок здесь и нигде раньше: до этого шага его просто не существует.
+        refreshPerevalkaTourScene(report);
+      },
+    };
   });
 }
+
+export * from './meta';
+export * from './yard';
+export * from './lift_gates';
+export * from './npcs';
+export * from './tour_scene';
+export * from './stacks';
+export * from './districts';
+export * from './inspection';
+export * from './life';

@@ -15,12 +15,11 @@ import {
   NPC_FACTION_ATTITUDE_SLOTS,
   RELATION_UNSET,
   getFactionRel,
-  addFactionRelMutual,
 } from '../data/relations';
-import { existingAlifeFactionAttitudes } from './alife';
+import { addAlifeFactionAttitude, existingAlifeFactionAttitudes } from './alife';
 import { isPsiMad, isPsiAlly } from './psi_state';
 import { isPlayerEntity } from './player_actor';
-import { updateFactionEvents } from './faction_events';
+import { recordFactionClashPlayerHit, updateFactionEvents } from './faction_events';
 import { MAX_CARAVAN_LANES_PER_TICK, tickCaravans } from './caravans';
 import { getRecentEvents, publishEvent } from './events';
 import { getRecentNoiseRecords, type NoiseRecord } from './noise';
@@ -34,6 +33,7 @@ import {
   updateTerritoryCapture,
 } from './territory';
 import {
+  QUEST_FACTION_RELATION_DELTA,
   RELATION_HOSTILE_THRESHOLD,
   addNpcPlayerRelation,
   isNpcPlayerHostile,
@@ -159,9 +159,20 @@ function factionedMonsterSide(e: Entity): Faction | undefined {
  * врагом — там вражда идёт только личным каналом, — а между разными делает.
  */
 export function areSameSide(a: Entity, b: Entity): boolean {
-  const sideA = a.type === EntityType.MONSTER ? factionedMonsterSide(a) : (a.faction ?? Faction.CITIZEN);
-  const sideB = b.type === EntityType.MONSTER ? factionedMonsterSide(b) : (b.faction ?? Faction.CITIZEN);
-  return sideA === sideB;
+  return combatSideOf(a) === combatSideOf(b);
+}
+
+/**
+ * Сторона актора в счёте отношений — или её отсутствие.
+ *
+ * У человека и у игрока сторона есть всегда, у монстра — только объявленная
+ * флагом `sided`. Обычная экология стороны НЕ имеет, и это ответ, а не пробел:
+ * укус крысы не портит жителям мнение о диких, а очередь по гнилушке не
+ * ссорит стрелка ни с кем. Через это отсутствие закон «насилие двигает
+ * репутацию» сам отсекает всю экологию, и списка исключений ему не нужно.
+ */
+export function combatSideOf(e: Entity): Faction | undefined {
+  return e.type === EntityType.MONSTER ? factionedMonsterSide(e) : (e.faction ?? Faction.CITIZEN);
 }
 
 /** Check if entity considers another entity hostile */
@@ -570,20 +581,59 @@ function addPlayerRelationDelta(state: GameState | undefined, npc: Entity, delta
 }
 
 /**
- * Свидетель видел, как игрок ударил человека.
+ * Во сколько раз смерть весомее удара.
  *
- * Репутация игрока перестаёт быть только глобальной цифрой: удар помнят не
- * абстрактная фракция, а те, кто стоял рядом. Платит свидетель половину — он
- * видел, а не почувствовал (тем же шагом, что и разница «замечена кража» против
- * «выявлена ревизией»). Кого считать свидетелем, решает вызывающий: у него уже
- * есть радиусный запрос и комната, и второго запроса на удар мы не делаем.
+ * Одно число на оба канала свидетеля — и на личную ячейку к фракции обидчика, и
+ * на личное отношение к игроку, — потому что факт один: «при мне убили» против
+ * «при мне ударили». Четвёрка выбрана по расстоянию до порога вражды: сосед
+ * жителя смотрит на ликвидаторов с +48, до вражды ему 112 шагов, то есть
+ * двадцать восемь увиденных убийств. Резня в жилом блоке разворачивает квартал
+ * против её автора, одиночный труп — нет.
  */
-export function applyWitnessedPlayerHitPenalty(state: GameState | undefined, witness: Entity, damage: number): number {
-  const penalty = Math.min(-1, Math.round(damageRelationPenalty(damage) / 2));
-  addPlayerRelationDelta(state, witness, penalty);
-  return penalty;
+export const WITNESS_KILL_WEIGHT = 4;
+
+/**
+ * Свидетель видел насилие — и помнит того, кто его учинил.
+ *
+ * Платит свидетель половину цены жертвы: он видел, а не почувствовал (тем же
+ * шагом, что и разница «замечена кража» против «выявлена ревизией»). Кого
+ * считать свидетелем, решает вызывающий: у него уже есть радиусный запрос и
+ * комната, и второго запроса на удар мы не делаем.
+ *
+ * Канала два, потому что у отношения к игроку и отношения к фракции разные
+ * хранилища, а не разные законы: сторона `PLAYER` синтетическая, её членов
+ * помнят личным числом `playerRelation`, все прочие — своей ячейкой к фракции.
+ * В восемь ячеек `Faction.PLAYER` писать нельзя, там нет такого столбца.
+ *
+ * Своя фракция не двигается: она принадлежность, а не мнение.
+ */
+export function applyWitnessedViolencePenalty(
+  state: GameState | undefined,
+  witness: Entity,
+  attackerSide: Faction,
+  damage: number,
+  killed: boolean,
+): number {
+  if ((witness.faction ?? Faction.CITIZEN) === attackerSide) return 0;
+  const weight = killed ? WITNESS_KILL_WEIGHT : 1;
+  if (attackerSide === Faction.PLAYER) {
+    const penalty = Math.min(-1, Math.round(damageRelationPenalty(damage) / 2)) * weight;
+    addPlayerRelationDelta(state, witness, penalty);
+    return penalty;
+  }
+  if (!state || witness.alifeId === undefined) return 0;
+  const penalty = -QUEST_FACTION_RELATION_DELTA * weight;
+  return addAlifeFactionAttitude(state, witness.alifeId, attackerSide, penalty) === undefined ? 0 : penalty;
 }
 
+/**
+ * Чем удар платит отношениям.
+ *
+ * Закон один на всех: атакующий — это ЕГО ФРАКЦИЯ, и только. Отдельного пути
+ * для игрока здесь больше нет; единственное, что осталось от прежних шести
+ * веток «атакующий — игрок», — запись в ГЛОБАЛЬНУЮ матрицу, и это решение с
+ * замером, а не недосмотр (см. ниже).
+ */
 export function applyDamageRelationPenalty(
   attackerFaction: Faction | undefined, targetFaction: Faction | undefined,
   damage: number,
@@ -595,7 +645,15 @@ export function applyDamageRelationPenalty(
   if (attackerFaction === targetFaction) return;
 
   const wasFactionEnemy = areFactionsHostile(attackerFaction, targetFaction);
-  const wasPersonalEnemy = attackerFaction === Faction.PLAYER && target?.type === EntityType.NPC && isNpcPlayerHostile(target);
+  /* «Он и так меня ненавидел» — довод не только игрока. У жертвы-человека
+   * личная вражда к обидчику читается тем же графом Демоса, каким читается
+   * вражда к игроку; раньше эту ветку спрашивали только для `Faction.PLAYER`,
+   * и удар по своему давнему врагу стоил NPC кармы, а игроку — нет. */
+  const wasPersonalEnemy = target !== undefined && (
+    attackerFaction === Faction.PLAYER
+      ? target.type === EntityType.NPC && isNpcPlayerHostile(target)
+      : attacker !== undefined && isPersonalFeudEnemy(target, attacker)
+  );
   const wasNonEnemy = !wasFactionEnemy && !wasPersonalEnemy;
   const penalty = damageRelationPenalty(damage);
   if (attackerFaction === Faction.PLAYER && target?.type === EntityType.NPC) {
@@ -605,16 +663,50 @@ export function applyDamageRelationPenalty(
       reasonTag: 'damage',
     });
   }
-  // Politics move on intent, never on accident. A stray round or a blast that
-  // catches a neutral is a grudge between those two people (recorded above),
-  // not a diplomatic act — the faction matrix is global, so one brawl used to
-  // declare war on every floor at once: measured 64 -> -64 between residents
-  // and liquidators in ten seconds, 690 deaths out of 2175 in ninety.
-  // Only the player, the one deliberate agent in the world, moves the matrix.
-  if (wasNonEnemy) {
-    if (attackerFaction === Faction.PLAYER) addFactionRelMutual(attackerFaction, targetFaction, penalty);
-    if (attacker) addKarma(attacker, -Math.max(1, Math.min(4, Math.floor(damage / 20) || 1)));
+  /* Насилие — цена МЕСТНАЯ, и ничья больше. Глобальную матрицу фракций бой не
+   * двигает ни от чьей руки, включая игрока: она общая на все этажи, и одна
+   * драка объявляла войну везде разом (замер `simulation.md`, «Политика
+   * фракций»: 64 → −64 между жителями и ликвидаторами за десять секунд, 690
+   * смертей из 2175 за 90 с). Раньше исключение было ровно одно — игрок, «единственный
+   * намеренный агент», — и оно же было последним местом, где закон «игрок —
+   * просто NPC» не выполнялся: у игрока имелся канал, которого нет ни у кого.
+   *
+   * Что осталось у фракции как у целого: кражи (`applyTheftRelationPenalty`),
+   * память комнат, инфраструктура, пропуска и поручения. То есть договор и
+   * имущество — а не трупы. Трупы помнят те, кто их видел.
+   *
+   * Карма — не матрица: это личный счёт бьющего, и он общий для всех. */
+  if (wasNonEnemy && attacker) {
+    addKarma(attacker, -Math.max(1, Math.min(4, Math.floor(damage / 20) || 1)));
   }
+}
+
+/**
+ * Чем удар платит отношениям — одно место на все пути урона.
+ *
+ * Зовётся ТОЛЬКО из единой двери урона (`systems/combat_stimulus.ts`,
+ * `damageActor`), и решает всё по одному признаку: кто ударил и какой он
+ * стороны. Шести веток «атакующий — игрок» не осталось ни одной. Глобальную
+ * матрицу бой не двигает больше НИ ОТ ЧЬЕЙ руки: насилие стало ценой местной,
+ * и платят за него те, кто был рядом.
+ *
+ * Единственная запись, спрашивающая про игрока, — выбор стороны в фракционной
+ * стычке (`recordFactionClashPlayerHit`), и она не про репутацию: это ход
+ * СЮЖЕТА. Запись говорит, кому игрок помог, и по ней считается развязка
+ * стычки; у NPC такой записи нет и быть не может — стычку разрешает не он.
+ *
+ * Стороны берутся у `combatSideOf`, поэтому вся обычная экология выпадает из
+ * закона сама: у монстра без флага `sided` стороны нет.
+ */
+export function applyCombatRelationOutcome(
+  world: World,
+  state: GameState | undefined,
+  attacker: Entity,
+  victim: Entity,
+  damage: number,
+): void {
+  applyDamageRelationPenalty(combatSideOf(attacker), combatSideOf(victim), damage, victim, attacker, state);
+  if (state && isPlayerEntity(attacker)) recordFactionClashPlayerHit(state, world, attacker, victim, damage);
 }
 
 /* ── Фронт: кто идёт давить ────────────────────────────────────────

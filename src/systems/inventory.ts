@@ -1,7 +1,7 @@
 /* ── Inventory system: items, pickup, use ─────────────────────── */
 
 import { calculateReloadTime } from './combat';
-import { ENTITY_MASK_ITEM_DROP, ensureEntityIndex } from './entity_index';
+import { ENTITY_MASK_ITEM_DROP, ensureEntityIndex, type EntityIndex } from './entity_index';
 import {
   type Entity, type InventoryHolder, type GameState, type Item, type ItemDef, type Msg,
   type WorldEventPrivacy, type WorldEventSeverity, ItemType,
@@ -32,7 +32,6 @@ import {
   craftRecipeNoteText,
   craftRecipeSourceConsumesItem,
   craftRecipeSourceIdFromNoteData,
-  craftRecipeSourcePassesThroughItemUse,
   craftRecipeSourcesForItem,
   getCraftRecipeSource,
   type CraftRecipeSourceDef,
@@ -1921,17 +1920,13 @@ function handleCraftRecipeItemSourceUse(
   }
 
   let learned = 0;
-  let duplicate = 0;
   let unknown = 0;
   let shouldConsume = false;
-  let passThrough = false;
 
   for (const source of sources) {
-    if (craftRecipeSourcePassesThroughItemUse(source)) passThrough = true;
     const result = learnCraftRecipeSource(source, state, msgs, time);
     if (!result) continue;
     learned += result.learned.length;
-    duplicate += result.duplicate.length;
     unknown += result.unknown.length;
     if (result.learned.length > 0 && craftRecipeSourceConsumesItem(source)) shouldConsume = true;
   }
@@ -1940,7 +1935,11 @@ function handleCraftRecipeItemSourceUse(
     publishPlayerItemEvent(state, e, 'player_use_item', defId, 1, unknown > 0 ? 2 : 3, zoneId);
   }
   if (shouldConsume) decrementInventorySlot(e.inventory ?? [], slotIdx);
-  return shouldConsume || !passThrough || (learned === 0 && duplicate === 0 && unknown === 0);
+  // Предмет-источник рецептов забирает нажатие себе целиком: у него есть свой
+  // ответ игроку в любом исходе (изучил, уже знал, не смог). Право пропустить
+  // нажатие дальше по цепочке `useItem` объявлять некому — источники предметов
+  // ниже по списку обработчиков не встречаются.
+  return true;
 }
 
 function noteText(data: unknown): string {
@@ -2004,13 +2003,17 @@ export function useItem(e: Entity, slotIdx: number, msgs: Msg[], time: number, s
 
   // Weapons: equip
   if (equipSlot === 'weapon') {
+    // Магазин остаётся в стволе, который сняли, и приходит из того, который надели.
+    stashEquippedMagazine(e);
     if (e.weapon === def.id) {
       e.weapon = '';
+      loadEquippedMagazine(e);
       msgs.push(msg(`Оружие снято: ${def.name}`, time, '#ccc'));
       publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
       return;
     }
     e.weapon = def.id;
+    loadEquippedMagazine(e, def.id);
     msgs.push(msg(`Экипировано: ${def.name}`, time, '#ccc'));
     publishPlayerItemEvent(state, e, 'player_use_item', def.id, 1, 2, zoneId);
     return;
@@ -2134,7 +2137,10 @@ export function dropItem(
 
   // If dropping equipped weapon, unequip
   if (equipSlot === 'weapon' && player.weapon === def.id) {
+    // Патроны уезжают в `slot.data` и падают на пол вместе со стволом.
+    stashEquippedMagazine(player, def.id);
     player.weapon = '';
+    loadEquippedMagazine(player);
   }
   if (equipSlot === 'tool' && player.tool === def.id) {
     player.tool = '';
@@ -2305,8 +2311,9 @@ export function pickupNearby(
   // (с конца массива, то есть от свежего к старому): при полном рюкзаке от него
   // зависит, ЧТО именно достанется, и менять его молча нельзя.
   const near = PICKUP_SCRATCH;
-  ensureEntityIndex(entities).queryRadius(player.x, player.y, PICKUP_RADIUS, near, ENTITY_MASK_ITEM_DROP);
-  if (near.length > 1) sortByReverseEntityOrder(entities, near);
+  const index = ensureEntityIndex(entities);
+  index.queryRadius(player.x, player.y, PICKUP_RADIUS, near, ENTITY_MASK_ITEM_DROP);
+  if (near.length > 1) sortByReverseEntityOrder(index, near);
   for (const drop of near) {
     pickupDropItems(world, drop, player, msgs, time, state, onPickedDrop, false);
   }
@@ -2323,15 +2330,16 @@ const PICKUP_SCRATCH: Entity[] = [];
  * Запрос отдаёт их по корзинам, а разбор обязан идти от последнего к первому.
  * Один проход по массиву — и только когда под ногами больше одного дропа.
  */
-function sortByReverseEntityOrder(entities: readonly Entity[], found: Entity[]): void {
-  const wanted = new Set<number>();
-  for (const drop of found) wanted.add(drop.id);
-  const order = new Map<number, number>();
-  for (let i = 0; i < entities.length; i++) {
-    const id = entities[i].id;
-    if (wanted.has(id)) order.set(id, i);
-  }
-  found.sort((a, b) => (order.get(b.id) ?? -1) - (order.get(a.id) ?? -1));
+/* Позиция в массиве сущностей уже поддерживается индексом инкрементально.
+ * Здесь ради неё строились `Set` и `Map` и перебирались ВСЕ сущности этажа —
+ * и так до четырёх раз в секунду, стоит игроку встать на пару выброшенных
+ * вещей, то есть после каждой перестрелки. */
+function sortByReverseEntityOrder(index: EntityIndex, found: Entity[]): void {
+  const rank = (e: Entity): number => {
+    const order = index.orderOf(e);
+    return order === Number.MAX_SAFE_INTEGER ? -1 : order;
+  };
+  found.sort((a, b) => rank(b) - rank(a));
 }
 
 function equippedPsiToolId(e: Entity): string {
@@ -2458,6 +2466,64 @@ export function consumeToolDurability(e: Entity, amount: number, msgs: Msg[], ti
     return true;
   }
   return false;
+}
+
+/* ── Магазин принадлежит стволу, а не бойцу ────────────────────────
+ *
+ * `currentMag` — одно живое число на сущности, и оно не помнит, из какого
+ * оружия эти патроны. Пока смена ствола его не трогала, магазин ППШ (71 патрон
+ * 9 мм) переезжал в АК целиком: ручная перезарядка молчала (needed = 30 − 71),
+ * автоперезарядка не включалась (магазин не пуст), а гейт выстрела смотрел
+ * только на `currentMag > 0` — 71 бесплатный выстрел патроном, которого нет.
+ *
+ * Патроны в стволе лежат там же, где прочность ближнего оружия, — в `data`
+ * слота инвентаря (`consumeDurability` кладёт туда `dur`). Поэтому магазин
+ * помнит КАЖДЫЙ ствол, уезжает вместе с выброшенным оружием и переживает
+ * сохранение без новой секции: `inventoryForSave` уже возит `data`.
+ * `currentMag` остаётся живым счётчиком надетого ствола — его читают бой, HUD
+ * и боевой AI, у которого свой закон (`undefined` = полный магазин). */
+interface MagazineSlotData { mag?: number }
+
+/** Магазин расходует настоящий патрон, значит принадлежит стволу: не ближний
+ *  замах (магазин 1 без боеприпаса) и не лента, которая стреляет из рюкзака. */
+function magazineBelongsToWeapon(ws: WeaponStats | undefined): boolean {
+  return !!ws && !!ws.ammoType && ws.magazineSize !== Infinity && (ws.magazineSize ?? 0) > 0;
+}
+
+function magazineSlotOf(e: Entity, itemId: string): Item | undefined {
+  return itemId ? (e.inventory ?? []).find(s => s.defId === itemId) : undefined;
+}
+
+function clampMagazine(value: number, ws: WeaponStats): number {
+  return Math.max(0, Math.min(ws.magazineSize ?? 1, Math.floor(value)));
+}
+
+/** Убрать патроны надетого ствола обратно в него. Звать ДО смены оружия. */
+export function stashEquippedMagazine(e: Entity, itemId = equippedCombatItemId(e)): void {
+  const ws = WEAPON_STATS[itemId];
+  if (!magazineBelongsToWeapon(ws)) return;
+  const slot = magazineSlotOf(e, itemId);
+  if (!slot) return;
+  const data = (slot.data && typeof slot.data === 'object' && !Array.isArray(slot.data))
+    ? slot.data as MagazineSlotData
+    : {} as MagazineSlotData;
+  data.mag = clampMagazine(e.currentMag ?? 0, ws!);
+  slot.data = data;
+}
+
+/** Достать патроны нового ствола. Звать ПОСЛЕ смены оружия. Ствол, которого
+ *  боец ещё не заряжал, приходит пустым — первый выстрел уйдёт в перезарядку. */
+export function loadEquippedMagazine(e: Entity, itemId = equippedCombatItemId(e)): void {
+  const ws = WEAPON_STATS[itemId] ?? WEAPON_STATS[''];
+  if (e.reloading) { e.reloading = false; e.reloadTimer = 0; }
+  if (ws.magazineSize === Infinity) { e.currentMag = Infinity; return; }
+  if (!magazineBelongsToWeapon(ws)) {
+    // Ближний бой и ПСИ: магазин — это такт замаха, он готов сразу.
+    e.currentMag = ws.magazineSize ?? 1;
+    return;
+  }
+  const stored = (magazineSlotOf(e, itemId)?.data as MagazineSlotData | undefined)?.mag;
+  e.currentMag = typeof stored === 'number' && Number.isFinite(stored) ? clampMagazine(stored, ws) : 0;
 }
 
 /* ── Consume ammo for ranged weapon. Returns true if ammo available */

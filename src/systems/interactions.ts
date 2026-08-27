@@ -7,6 +7,7 @@ import {
   LiftDirection,
   W,
   msg,
+  type Door,
   type Entity,
   type GameState,
   type Item,
@@ -39,7 +40,7 @@ import {
 } from './computers';
 import { getCultProcessionPrompt, tryInteractCultProcession } from './faction_events';
 import { isHostile } from './factions';
-import { setDoorState, damageDoor } from './door_state';
+import { actorHasDoorKey, setDoorState, damageDoor, doorKeyId } from './door_state';
 import { getActiveFloorInstance } from './floor_instances';
 import { findGnilushkaInteractionTarget, tryUseGnilushkaInteraction } from './gnilushka';
 import {
@@ -87,6 +88,7 @@ import {
   moveNetTerminalBankPreset,
   tryUseNetTerminalGen,
 } from './net_terminal_gen';
+import { findActorDoorPermit, recordPermitAccess } from './permits';
 import { pseudoliftPrompt, tryUsePseudolift } from './pseudolift';
 import { floorRunLiftPrompt, currentFloorRunLabel } from './procedural_floors';
 import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } from './procedural_anomalies';
@@ -452,18 +454,29 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
   return findNormalPriorityTargetForLook(ctx);
 }
 
+/**
+ * Единственная ветка, где `E` снимает дверное здоровье: прохода нет, ключа нет,
+ * игрок бьёт створку руками. Проламывание остаётся законным путём, но перестаёт
+ * быть бесплатным — удар слышен ровно так же, как та же дверь, открытая ручкой,
+ * и приводит на шум всех, кто в радиусе. Войлочная накладка здесь не тратится и
+ * не помогает: она глушит защёлку, а не удар, поэтому `quiet = false`.
+ */
+function bashBlockedDoor(ctx: InteractionContext, door: Door, idx: number, blockedText: string): void {
+  const hermetic = door.state === DoorState.HERMETIC_CLOSED;
+  const broke = damageDoor(ctx.world, door, 5);
+  ctx.state.msgs.push(broke
+    ? msg('Дверь выбита!', ctx.state.time, '#4a4')
+    : msg(blockedText, ctx.state.time, hermetic ? '#f44' : '#f84'));
+  publishDoorNoise(ctx.state, ctx.player, idx, hermetic, false);
+}
+
 function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
   const door = ctx.world.doors.get(idx);
   if (!door) return { handled: false };
   const hermeticDoor = door.state === DoorState.HERMETIC_CLOSED || door.state === DoorState.HERMETIC_OPEN;
   if (door.state === DoorState.CLOSED || door.state === DoorState.HERMETIC_CLOSED) {
     if (door.state === DoorState.HERMETIC_CLOSED && ctx.state.samosborActive) {
-      const broke = damageDoor(ctx.world, door, 5);
-      if (broke) {
-        ctx.state.msgs.push(msg('Дверь выбита!', ctx.state.time, '#4a4'));
-      } else {
-        ctx.state.msgs.push(msg('Дверь герметично заперта! (Удар -5)', ctx.state.time, '#f44'));
-      }
+      bashBlockedDoor(ctx, door, idx, 'Дверь герметично заперта! (Удар -5)');
     } else {
       const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
       setDoorState(ctx.world, door, door.state === DoorState.HERMETIC_CLOSED ? DoorState.HERMETIC_OPEN : DoorState.OPEN);
@@ -479,23 +492,26 @@ function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {
     ctx.playDoor?.();
     publishDoorNoise(ctx.state, ctx.player, idx, hermeticDoor, quietDoor);
   } else if (door.state === DoorState.LOCKED) {
-    const keyId = door.keyId || 'key';
-    if (ctx.player.inventory?.some(i => i.defId === keyId)) {
+    const keyId = doorKeyId(door);
+    // Ключ — точное совпадение; документ доступа — весь класс допуска той же двери.
+    const access = actorHasDoorKey(ctx.player, door) ? undefined : findActorDoorPermit(ctx.player, keyId);
+    if (actorHasDoorKey(ctx.player, door) || access) {
       const quietDoor = consumeQuietDoorCharge(ctx.player, ctx.state.time);
       setDoorState(ctx.world, door, DoorState.OPEN);
-      ctx.state.msgs.push(msg(quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом', ctx.state.time, quietDoor ? '#8cf' : '#4a4'));
+      ctx.state.msgs.push(msg(
+        access ? access.permit.successLine : quietDoor ? 'Дверь отперта тихо' : 'Дверь отперта ключом',
+        ctx.state.time,
+        quietDoor ? '#8cf' : '#4a4',
+      ));
       publishDoorNoise(ctx.state, ctx.player, idx, false, quietDoor);
+      // Бумага стоит репутации ровно так же, как на контейнере и в гейте министерства.
+      if (access) recordPermitAccess(ctx.state, ctx.player, ctx.world, access.permit, 'Запертая дверь', access.tag);
       // Отпертая дверь Столовой и завершает обучение: она последний его шаг.
       if (ctx.state.tutorialMode && keyId === TUTORIAL_START.keyId) {
         completeTutorial(ctx.state);
       }
     } else {
-      const broke = damageDoor(ctx.world, door, 5);
-      if (broke) {
-        ctx.state.msgs.push(msg('Дверь выбита!', ctx.state.time, '#4a4'));
-      } else {
-        ctx.state.msgs.push(msg('Заперто. Нужен ключ. (Удар -5)', ctx.state.time, '#f84'));
-      }
+      bashBlockedDoor(ctx, door, idx, 'Заперто. Нужен ключ. (Удар -5)');
     }
   }
   return { handled: true };

@@ -7,47 +7,19 @@ import {
   Feature,
   MonsterKind,
   Occupation,
-  W,
   type Entity,
   type Item,
   type Room,
-  type TerritoryOwner,
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { freshNeeds } from '../../data/catalog';
-import { HUMAN_TERRITORY_OWNERS } from '../../data/factions';
 import { MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { rng } from '../../core/rand';
 import { MOEBIUS_PODEZD_Z, SHORTCUT_X, SEAM_KEY_ID } from "./meta";
 import { MoebiusRooms, NextId, setFeature } from "./geometry";
-
-export function isMoebiusAmbientNpc(entity: Entity): boolean {
-  return entity.type === EntityType.NPC &&
-    entity.alive &&
-    entity.name?.startsWith('Мёбиус-подъезд:') === true &&
-    entity.id === undefined &&
-    entity.persistentNpcId === undefined &&
-    entity.alifeId === undefined &&
-    entity.questId === -1 &&
-    entity.faction !== undefined;
-}
-
-export function moebiusTerritorySpawnCells(world: World): Map<TerritoryOwner, number[]> {
-  const cells = new Map<TerritoryOwner, number[]>();
-  for (const owner of HUMAN_TERRITORY_OWNERS) cells.set(owner, []);
-  for (let i = 0; i < W * W; i++) {
-    const cell = world.cells[i];
-    if (cell !== Cell.FLOOR && cell !== Cell.WATER) continue;
-    if (world.aptMask[i] || world.hermoWall[i] || world.containerMap.has(i) || world.features[i] === Feature.LIFT_BUTTON) continue;
-    const owner = world.factionControl[i] as TerritoryOwner;
-    const list = cells.get(owner);
-    if (list) list.push(i);
-  }
-  return cells;
-}
 
 export function placeDecisionContainers(world: World, rooms: MoebiusRooms): void {
   addContainer(world, rooms.seamNorth, rooms.seamNorth.x + 8, rooms.seamNorth.y + 10, ContainerKind.FILING_CABINET, 'Журнал прямой стороны подъезда', 'public', [

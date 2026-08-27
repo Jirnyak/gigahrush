@@ -1,5 +1,11 @@
 import { RoomType, ZoneFaction } from '../core/types';
-import { activeActorCountAtDefaultSoftLimit, activeActorSoftLimit, DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT, fitActiveActorCounts } from './entity_limits';
+import {
+  activeActorCountAtDefaultSoftLimit,
+  activeActorSoftLimit,
+  DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT,
+  fitActiveActorCounts,
+  MIN_ACTIVE_ACTOR_SOFT_LIMIT,
+} from './entity_limits';
 
 export interface NpcPopulationProfile {
   /** Relative share inside this floor's universal population budget. */
@@ -286,8 +292,40 @@ export function populationDepth01(z: number): number {
   return Math.max(0, Math.min(1, Math.abs(z) / 50));
 }
 
-export function basePopulationTotalAtDefaultSoftLimit(_z: number): number {
-  return DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
+/**
+ * Актёрских слотов, которые этаж этой высоты обязан оставить свободными.
+ *
+ * Мягкий предел — ПОТОЛОК, а не цель. Этаж, набивший его ровно, глушит весь
+ * рантайм-спавн молча: `entitySpawnSlots` отдаёт ноль, и кат-сцены, волны
+ * сюжетного удержания, караваны и самосбор просто не появляются. Раньше это
+ * било по двадцати четырём этажам из пятидесяти одного — общий бюджет был
+ * равен потолку, и `fitActiveActorCounts` сажала сумму точно на него.
+ *
+ * Поэтому запас задан явно и гладко: у верха шахты он равен целому
+ * МИНИМАЛЬНОМУ бюджету актёров, а на спуске умножается на `MIN/DEFAULT`
+ * (= 1/4), то есть уполовинивается дважды за всю шахту. Новых чисел здесь нет:
+ * обе константы — канонические границы того же бюджета.
+ */
+export function populationHeadroomAtDefaultSoftLimit(z: number): number {
+  const decay = MIN_ACTIVE_ACTOR_SOFT_LIMIT / DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT;
+  return MIN_ACTIVE_ACTOR_SOFT_LIMIT * Math.pow(decay, populationDepth01(z));
+}
+
+/**
+ * Сколько актёров этаж этой высоты населяет при дефолтном мягком пределе.
+ *
+ * Монотонно растёт по |z|, гладко, и подходит к пределу асимптотически:
+ * 3072 у жилого этажа (|z| = 0), 3584 на середине, 3840 у терминусов — то есть
+ * даже на |z| = 50 остаётся 256 свободных слотов. Каждый узел — степень двойки
+ * от бюджета актёров, а фактическое заселение плавает вокруг цели.
+ */
+export function basePopulationTotalAtDefaultSoftLimit(z: number): number {
+  return Math.round(DEFAULT_ACTIVE_ACTOR_SOFT_LIMIT - populationHeadroomAtDefaultSoftLimit(z));
+}
+
+/** Тот же бюджет, пересчитанный в живые слоты текущего мягкого предела. */
+export function floorPopulationBudget(z: number): number {
+  return activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(z));
 }
 
 export function baseMonsterPopulationAtDefaultSoftLimit(z: number): number {
@@ -367,7 +405,9 @@ export function proceduralPopulationBudget(input: ProceduralPopulationBudgetInpu
     input.anomalyPressure,
     input.industrial ? profile.monsters.industrialMult : 0,
   );
-  const fitted = fitActiveActorCounts(rawNpcs, rawMonsters);
+  // Подгонка идёт под бюджет ЭТАЖА, а не под мягкий предел: иначе множители
+  // опасности и аномалий сажают глубокий процедурный этаж ровно на потолок.
+  const fitted = fitActiveActorCounts(rawNpcs, rawMonsters, floorPopulationBudget(input.z));
   return {
     profileId: profile.id,
     band,

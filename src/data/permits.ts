@@ -333,12 +333,26 @@ export function resolvePermitAccess(
   itemIds: readonly string[],
   tags: readonly PermitAccessTag[],
 ): PermitDef | undefined {
+  /* Узкое требование ящика побеждает его же широкое.
+   *
+   * Ящик перечисляет всё, что о нём известно, и `general_admin` приписан ему по
+   * СОДЕРЖИМОМУ: тег `paper`/`permit`/`document` значит «внутри бумаги», а не
+   * «замок общий». Совпадения по любому классу хватало, поэтому сейф с бумагами
+   * открывали 15 пропусков из 17, а точно такой же сейф без бумаг — два. Замок
+   * зависел от того, что в нём лежит.
+   *
+   * `general_admin` при этом ни у одного пропуска не единственный класс — он
+   * всегда приписка, — так что правило ни у кого не отнимает его назначения.
+   * Обычный бумажный шкаф просит только `general_admin`, его по-прежнему
+   * открывает любая бумага: это и есть общий административный доступ. */
+  const specific = tags.filter(tag => tag !== 'general_admin');
+  const required = specific.length > 0 ? specific : tags;
   let best: PermitDef | undefined;
   let bestScore = -1;
   for (const itemId of itemIds) {
     const def = getPermitDef(itemId);
     if (!def) continue;
-    if (!tags.some(tag => def.accessTags.includes(tag))) continue;
+    if (!required.some(tag => def.accessTags.includes(tag))) continue;
     const score = permitScore(def);
     if (score > bestScore) {
       best = def;

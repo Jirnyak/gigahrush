@@ -3,7 +3,6 @@
 import {
   EntityType,
   MonsterKind,
-  ProjType,
   msg,
   type Entity,
   type GameState,
@@ -11,7 +10,6 @@ import {
 import { World } from '../core/world';
 import { entityDisplayName } from '../entities/monster';
 import { MarkType, stampMark } from './surface_marks';
-import { Spr } from '../entities/sprite_index';
 import { playExplosion, playSoundAt } from './audio';
 import { getEntityIndex, ENTITY_MASK_ACTOR } from './entity_index';
 import { publishEvent } from './events';
@@ -27,7 +25,6 @@ export const FOG_SHARK_IGNITION_TARGET_CAP = 8;
 
 const FOG_SHARK_IGNITION_QUERY_CAP = FOG_SHARK_IGNITION_TARGET_CAP * 4 + 1;
 const FOG_SHARK_RUMOR_IDS = ['monster_fog_shark_fog', 'ecology_fog_shark_fire'] as const;
-const FOG_SHARK_FIRE_WEAPONS = new Set(['fire_hook']);
 const fogSharkIgnitionQuery: Entity[] = [];
 
 export type FogSharkCollateralKillHandler = (target: Entity, pvx: number, pvy: number, goreLevel: number) => void;
@@ -48,21 +45,12 @@ function actorName(e: Entity | undefined): string | undefined {
   return entityDisplayName(e);
 }
 
-export function isFogSharkFireProjectile(projectile: Entity): boolean {
-  return (projectile.projType ?? ProjType.NORMAL) === ProjType.FLAME ||
-    projectile.sprite === Spr.FLAME_BOLT ||
-    projectile.sprite === Spr.HOSTILE_FLAME_BOLT;
-}
-
-export function isFogSharkFireWeapon(weaponId: string | undefined): boolean {
-  return weaponId !== undefined && FOG_SHARK_FIRE_WEAPONS.has(weaponId);
-}
-
-export function fogSharkProjectileDamage(target: Entity, projectile: Entity, baseDamage: number): number {
-  if (target.monsterKind !== MonsterKind.FOG_SHARK || !isFogSharkFireProjectile(projectile)) return baseDamage;
-  const maxHp = Math.max(1, target.maxHp ?? target.hp ?? 1);
-  return Math.max(baseDamage, maxHp + 1);
-}
+/* Газовое брюхо поджигает ОГОНЬ — тип урона, а не список стволов и спрайт
+ * болта. Списка `fire_hook` здесь больше нет: багор — стальной крюк ролевого
+ * тира `melee_reach`, он бьёт кинетикой, и «поджечь» им акулу было третьим
+ * ключом к тому же факту. Зато огнём теперь считается ЛЮБОЙ огонь: чужой
+ * огнемёт поджигает акулу так же, как свой. Смертельность объявлена в
+ * `DEF.damageFloor` и считается за общей дверью урона. */
 
 export function recordFogSharkIgnited(
   world: World,

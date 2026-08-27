@@ -1,4 +1,4 @@
-import { rng, xorshift32, irand, mathRng, pick, weightedPick } from '../core/rand';
+import { rng, xorshift32, irand, mathRng, pick } from '../core/rand';
 /* ── САМОСБОР — the maze restructures itself ─────────────────── */
 /*   Every floor runs a local wave from a random mutable map point. */
 /*   Protected rooms, hermowalls and lifts are preserved.           */
@@ -9,7 +9,7 @@ import {
   EntityType, AIGoal, MonsterKind, Occupation,
   msg,
 } from '../core/types';
-import { World, replaceWorldFromGeneration, type WorldGridDirtyRect } from '../core/world';
+import { World, type WorldGridDirtyRect } from '../core/world';
 import { ITEMS, NOTES, freshNeeds, randomName } from '../data/catalog';
 import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { addFactionRelMutual } from '../data/relations';
@@ -37,7 +37,6 @@ import { recordPlayerDamage } from './damage';
 import { reassignQuestGivers } from './quests';
 import type { FloorGeneration } from '../gen/floor_manifest';
 import { floorDisplayNameForZ } from '../data/floor_names';
-import { clearPathBlockerRegion, rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { flashSamosborWarningScreens } from '../world/procedural_screens';
 import { getMaxHp, scaleMonsterHp, scaleMonsterSpeed, randomRPG } from './rpg';
 import { publishEvent } from './events';
@@ -54,12 +53,9 @@ import {
 } from './procedural_floors';
 import { controlHint } from './controls';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_NPC, ENTITY_MASK_VISIBLE, ensureEntityIndex, rebuildEntityIndex } from './entity_index';
-import { assignPersistentAlifeNpcFromEntity, recordAlifeNpcDeath, rewriteAlifeNpcIdentityFromEntity } from './alife';
-import { replaceCellHazards } from './cell_hazards';
+import { assignPersistentAlifeNpcFromEntity, captureAlifeFloorState, recordAlifeNpcDeath, rewriteAlifeNpcIdentityFromEntity } from './alife';
 import { tickSamosborDirector } from './samosbor_director';
 import { ensureRoomContainers } from './containers';
-import { replaceRouteCueStateForRebuild } from './route_cues';
-import { replaceEmergencyPanelStateForRebuild } from './emergency_panels';
 import { changeResourceStock } from './economy';
 import { observeRumorEvent } from './rumor';
 import { publishNoise } from './noise';
@@ -77,7 +73,6 @@ import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { killEntity } from './entity_death';
 import {
   blocksHermodoorBorerSeal,
-  clearHermodoorBorerForRebuild,
   queuePostSamosborHermodoorBorer,
   updateHermodoorBorer,
 } from './hermodoor_borer';
@@ -125,8 +120,6 @@ import {
 export interface SamosborGenServices {
   /** Полная генерация этажа: конец волны сшивает результат с уцелевшей частью мира. */
   generateFloor(z: number, runSeed?: number, isTutorial?: boolean): FloorGeneration;
-  /** Пересев волатильного лабиринта жилого этажа после волны. */
-  regrowMaze(world: World): void;
 }
 
 let genServices: SamosborGenServices | undefined;
@@ -144,10 +137,6 @@ function genService(): SamosborGenServices {
 
 function generateFloor(z: number, runSeed?: number, isTutorial?: boolean): FloorGeneration {
   return genService().generateFloor(z, runSeed, isTutorial);
-}
-
-function regrowMaze(world: World): void {
-  genService().regrowMaze(world);
 }
 
 const MONSTERS_PER_SAMOSBOR = 16;
@@ -734,8 +723,6 @@ const aftermathRuntime = new Map<string, AftermathRuntime>();
 let pendingAftermath: PendingAftermath | null = null;
 let lastAftermathAt = -Infinity;
 let lastAftermathBeatIds: string[] = [];
-// @ts-ignore
-let lastAftermathFloor: number | undefined = undefined;
 let lastVeretarAreaLeaks = 0;
 let lastVeretarAreaLeakAt = -Infinity;
 let lastSamosborFogEffectNoticeAt = -Infinity;
@@ -992,8 +979,6 @@ export function resetSamosborRuntimeForTests(): void {
   pendingAftermath = null;
   lastAftermathAt = -Infinity;
   lastAftermathBeatIds = [];
-  // @ts-ignore
-  lastAftermathFloor = ["living"];
   lastVeretarAreaLeaks = 0;
   lastVeretarAreaLeakAt = -Infinity;
   lastSamosborFogEffectNoticeAt = -Infinity;
@@ -2268,6 +2253,19 @@ export function updateSamosbor(
 ): boolean {
   if (state.gameOver) return false;
   if (state.tutorialMode) return false;
+  /* Кат-сцена держит самосбор ровно так же, как обучение.
+   *
+   * Сцена авторская, самосбор процедурный — уступает процедурный. Обрывать
+   * сцену было бы хуже: `first_visit` уже помечен сыгранным, второго раза не
+   * будет. А доиграть её ПОВЕРХ перестройки нельзя: `doStitch` меняет геометрию
+   * под ногами актёров, и `anchorX/anchorY` вместе с постами каста могут
+   * оказаться в новом бетоне — тогда `holdCastNearAnchor` каждый кадр жмёт
+   * говорящего в стену, а камера уходит в вынужденный прямой ход.
+   *
+   * Таймер при этом НЕ замораживается: он идёт дальше и досчитывает, поэтому
+   * волна начнётся сразу после сцены, а не отменится. Своего флага не заводим —
+   * `sceneLock` уже означает «кадр не у игрока» и его же читает отладка. */
+  if (state.sceneLock) return false;
 
   knownSamosborTime = state.time;
   state.samosborTimer -= dt;
@@ -2545,8 +2543,19 @@ export function updateSamosbor(
     const touched = new Set(frontTouchedCells);
     frontTouchedCells.clear();
     const doStitch = (): void => {
+      /* Свёртка ПЕРЕД перестройкой. Самосбор не меняет этаж на другой, поэтому
+       * обычной точки свёртки (переход по лифту) здесь нет, а стич сейчас
+       * подвинет тела и часть из них переселит. Записанные после этого
+       * координаты — уже координаты последствия, и следующий выход с этажа
+       * закрепил бы их в A-Life как «где человек жил». */
+      captureAlifeFloorState(state, entities);
       const replacement = replacementProvider?.() ?? generateFloor(stitchFloor, ensureFloorRunState(state).runSeed, state.tutorialMode);
       applyFrontFieldStitch(world, state, touched, replacement);
+      /* Стич пишет клетки и не смотрит, кто на них стоял: замена WALL/ABYSS
+       * замуровывает тело внутри геометрии, и наружу оно уже не выйдет. Поиск
+       * ближайшего пола — спираль радиусом 30 по клеткам, без BFS и без
+       * перебэйка nav-кэша: Iron Law не нарушается. */
+      relocateBlockedEntities(world, entities);
       applyPendingSamosborAftermathAfterWave(world, entities, nextId, stitchFloor);
     };
     if (scheduleLocalPatch) {
@@ -2641,127 +2650,6 @@ function unsealRooms(world: World, roomIds: readonly number[]): void {
       }
     }
   }
-}
-
-/* ── Full world rebuild (except apartments) — runs AFTER samosbor ends ── */
-
-function fogCanRemainAfterRebuild(cell: number): boolean {
-  return cell === Cell.FLOOR || cell === Cell.WATER;
-}
-
-function preserveSamosborFogAfterRebuild(world: World, previousFog: Uint8Array): void {
-  for (let i = 0; i < previousFog.length; i++) {
-    const fog = previousFog[i];
-    if (fog <= world.fog[i]) continue;
-    if (!fogCanRemainAfterRebuild(world.cells[i])) continue;
-    world.fog[i] = fog;
-  }
-}
-
-export function rebuildWorld(
-  world: World, entities: Entity[], nextId: { v: number }, _samosborCount: number,
-  z: number = 0,
-  replacement?: FloorGeneration,
-  isTutorial?: boolean,
-): void {
-  clearHermodoorBorerForRebuild(world);
-  if (replacement || z !== 0) {
-    // Non-living floors fully regenerate; generated NPCs/monsters are replaced, player survives.
-    const kept: Entity[] = [];
-    for (const e of entities) {
-      if (!e.alive) continue;
-      if (isPlayerEntity(e)) {
-        kept.push(e);
-      }
-    }
-    entities.length = 0;
-    const gen = replacement ?? generateFloor(z, undefined, isTutorial);
-    const previousFog = world.fog.slice();
-    // Full-floor rebuilds use the fresh generator-owned masks exactly:
-    // authored shelters may keep aptMask/hermoWall, while unmarked volatile cells lose stale protection.
-    replaceWorldFromGeneration(world, gen);
-    preserveSamosborFogAfterRebuild(world, previousFog);
-    replaceCellHazards(world, gen.world);
-    replaceRouteCueStateForRebuild(world, gen.world);
-    replaceEmergencyPanelStateForRebuild(world, gen.world);
-    // Restore kept entities + merge new entities from generator
-    for (const e of kept) entities.push(e);
-    for (const e of gen.entities) {
-      e.id = nextId.v++;
-      entities.push(e);
-    }
-    relocateBlockedEntities(world, entities);
-    ensureRoomContainers(world, z);
-    applyPendingSamosborAftermath(world, entities, nextId, z);
-    refreshPathBlockersAfterSamosborRebuild(world, entities, _samosborCount);
-    return;
-  }
-
-  // Living z: only rebuild volatile maze, keep apartments
-  const aptCount = world.apartmentRoomCount;
-
-  // Kill projectiles and remove loose visible props outside apartments
-  let writeIdx = 0;
-  for (let i = 0; i < entities.length; i++) {
-    const e = entities[i];
-    if (e.type === EntityType.PROJECTILE) {
-      continue;
-    }
-    if (e.type === EntityType.ITEM_DROP || e.type === EntityType.BILLBOARD) {
-      const rid = world.roomMap[world.idx(Math.floor(e.x), Math.floor(e.y))];
-      if (rid < 0 || rid >= aptCount) {
-        continue;
-      }
-    }
-    entities[writeIdx++] = e;
-  }
-  entities.length = writeIdx;
-
-  // Regenerate the entire volatile maze
-  replaceRouteCueStateForRebuild(world);
-  replaceEmergencyPanelStateForRebuild(world);
-  regrowMaze(world);
-  relocateBlockedEntities(world, entities);
-
-  // Spawn new items in volatile rooms within the shared item soft limit.
-  let itemSlots = entitySpawnSlots(entities, EntityType.ITEM_DROP, Number.MAX_SAFE_INTEGER);
-  for (let ri = aptCount; ri < world.rooms.length; ri++) {
-    if (itemSlots <= 0) break;
-    const room = world.rooms[ri];
-    if (!room || room.w < 3 || room.h < 3) continue;
-    const ci = world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2));
-    const zid = world.zoneMap[ci];
-    const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
-    const valueThreshold = zoneLevel * 15 + 10;
-    const adjusted = Object.values(ITEMS)
-      .filter(it => it.spawnRooms.includes(room.type))
-      .map(it => ({ ...it, spawnW: (1000 / (it.value + 10)) * Math.min(1, (valueThreshold + 5) / Math.max(1, it.value)) }))
-      .filter(it => it.spawnW >= 0.01);
-    const numItems = irand(0, 1);
-    for (let n = 0; n < numItems; n++) {
-      if (itemSlots <= 0) break;
-      const def = weightedPick(adjusted);
-      if (!def) continue;
-      const ix = room.x + irand(1, Math.max(1, room.w - 2));
-      const iy = room.y + irand(1, Math.max(1, room.h - 2));
-      entities.push({
-        id: nextId.v++, type: EntityType.ITEM_DROP,
-        x: ix + 0.5, y: iy + 0.5, angle: 0, pitch: 0, alive: true, speed: 0, sprite: Spr.ITEM_DROP,
-        inventory: [{ defId: def.id, count: irand(1, spawnCount(def)), data: def.id === 'note' ? pick(NOTES) : undefined }],
-      });
-      itemSlots--;
-    }
-  }
-  ensureRoomContainers(world, z);
-  applyPendingSamosborAftermath(world, entities, nextId, z);
-  refreshPathBlockersAfterSamosborRebuild(world, entities, _samosborCount);
-}
-
-function refreshPathBlockersAfterSamosborRebuild(world: World, entities: readonly Entity[], seed: number): void {
-  rebuildPathBlockersFromWorldObjects(world, seed);
-  const player = findPlayer(entities);
-  if (!player) return;
-  clearPathBlockerRegion(world, Math.floor(player.x) - 1, Math.floor(player.y) - 1, 3, 3);
 }
 
 function findPlayer(entities: readonly Entity[]): Entity | undefined {
@@ -2914,8 +2802,6 @@ function applyPendingSamosborAftermath(
   if (applied.length > 0) {
     lastAftermathAt = state.time;
     lastAftermathBeatIds = applied;
-    // @ts-ignore
-    lastAftermathFloor = ["living"];
   }
   tickSamosborDirector(world, entities, state, nextId, pending.variant, 'post_samosbor');
 }

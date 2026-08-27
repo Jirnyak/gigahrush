@@ -53,7 +53,6 @@ export type FloorAnomalyId =
   | 'section_shift'
   | 'conway_life'
   | 'rail_trains'
-  | 'bad_apple_world'
   | 'zombie_apocalypse'
   | 'sandpile_perekrytie';
 
@@ -146,7 +145,6 @@ export const PROCEDURAL_LOOT_ANOMALY_TAGS: Readonly<Record<FloorAnomalyId, reado
   section_shift: ['section_shift', 'topology'],
   conway_life: ['conway_life', 'cellular'],
   rail_trains: ['rail', 'transit_cache'],
-  bad_apple_world: ['bad_apple_world', 'media_cache'],
   zombie_apocalypse: ['zombie', 'quarantine', 'contaminated'],
   sandpile_perekrytie: ['crush_risk', 'repair_cache', 'industrial_cache'],
 };
@@ -177,7 +175,6 @@ export const PROCEDURAL_LOOT_ANOMALY_KIND_BIAS: Readonly<Record<FloorAnomalyId, 
   section_shift: [ContainerKind.SECRET_STASH, ContainerKind.TOOL_LOCKER, ContainerKind.FILING_CABINET],
   conway_life: [ContainerKind.METAL_CABINET, ContainerKind.FILING_CABINET, ContainerKind.SECRET_STASH],
   rail_trains: [ContainerKind.TOOL_LOCKER, ContainerKind.METAL_CABINET, ContainerKind.EMERGENCY_BOX],
-  bad_apple_world: [ContainerKind.FILING_CABINET, ContainerKind.SECRET_STASH, ContainerKind.METAL_CABINET],
   zombie_apocalypse: [ContainerKind.MEDICAL_CABINET, ContainerKind.EMERGENCY_BOX, ContainerKind.SECRET_STASH],
   sandpile_perekrytie: [ContainerKind.TOOL_LOCKER, ContainerKind.METAL_CABINET, ContainerKind.EMERGENCY_BOX],
 };
@@ -427,7 +424,6 @@ export const FLOOR_ANOMALIES: readonly FloorAnomalyDef[] = [
   { id: 'wall_snake', title: 'блуждающие перекрытия', weight: 4, minDanger: 2, dangerBias: 2, tags: ['moving_walls', 'predator', 'crush', 'loot_sink'] },
   { id: 'living_tunnels', title: 'биологическое сужение стен', weight: 4, minDanger: 2, dangerBias: 2, tags: ['living_tunnels', 'topology', 'moving_walls', 'repair', 'route_pressure'] },
   { id: 'rail_trains', title: 'рабочие технические дрезины', weight: 8, minDanger: 2, dangerBias: 1, tags: ['rail', 'transit', 'crush', 'industrial'] },
-  { id: 'bad_apple_world', title: 'эксперимент BAD_APPLE (отключен)', weight: 0, minDanger: 3, dangerBias: 1, tags: ['video', 'screen', 'topology', 'cult_media'] },
   { id: 'zombie_apocalypse', title: 'массовое психотропное заражение', weight: 4, minDanger: 2, dangerBias: 2, tags: ['zombie', 'crowd', 'infection', 'quarantine', 'residential'] },
   { id: 'sandpile_perekrytie', title: 'оползень песчаных перекрытий', weight: 4, minDanger: 2, dangerBias: 2, tags: ['topology', 'crush', 'pressure', 'industrial', 'route_pressure'] },
   { id: 'section_shift', title: 'сейсмический сдвиг секции', weight: 4, minDanger: 3, dangerBias: 2, tags: ['topology', 'moving_rooms', 'crush', 'toroid'] },

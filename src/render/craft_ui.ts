@@ -15,8 +15,36 @@ import {
 } from '../systems/crafting';
 import { drawGlitchText, drawNeuroPanel, drawStaticNoise } from './hud_fx';
 import { drawItemGridIcon } from './item_sprites';
-import { craftMenuLayout } from './ui_layout';
+import { craftMenuLayout, type CraftMenuLayout, type UiRect } from './ui_layout';
 import { drawWrappedText, fitTextStable } from './ui_text';
+
+export interface CraftListWindow {
+  listTop: number;
+  visibleRows: number;
+  first: number;
+}
+
+/** Окно прокрутки списка рецептов. Отрисовка и тап обязаны брать его отсюда. */
+export function craftListWindow(layout: CraftMenuLayout, entryCount: number, cursor: number): CraftListWindow {
+  const visibleRows = Math.max(1, Math.floor((layout.list.h - 20 * layout.scale) / layout.rowH));
+  const first = Math.max(0, Math.min(Math.max(0, entryCount - visibleRows), cursor - Math.floor(visibleRows * 0.5)));
+  return { listTop: layout.list.y + 16 * layout.scale, visibleRows, first };
+}
+
+/** Полоса строки списка — ровно та, которую заливает подсветка выбора.
+ *
+ *  Слой нажатия держал свою копию с началом `-3*scale` вместо `-2*scale`: шаг
+ *  строки 12*scale, расхождение 1*scale, и верхняя полоска каждого рецепта
+ *  выбирала соседа сверху. Базовая линия текста — `rect.y + 2*scale`. */
+export function craftListRowRect(layout: CraftMenuLayout, window: CraftListWindow, row: number): UiRect {
+  const s = layout.scale;
+  return {
+    x: layout.list.x + 3 * s,
+    y: window.listTop + row * layout.rowH - 2 * s,
+    w: layout.list.w - 6 * s,
+    h: layout.rowH,
+  };
+}
 
 export type CraftEntry =
   | CraftMenuRecipeEntry
@@ -263,24 +291,24 @@ export function drawCraftMenu(
 
   drawPanelTitle(ctx, snapshot.mode === 'craft' ? 'РЕЦЕПТЫ' : 'ИНВЕНТАРЬ', layout.list.x + 5 * sx, layout.list.y + 4 * sy, layout.list.w - 10 * sx, sy, '#8cf');
   ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-  const listTop = layout.list.y + 16 * sy;
-  const visibleRows = Math.max(1, Math.floor((layout.list.h - 20 * sy) / layout.rowH));
-  const first = Math.max(0, Math.min(Math.max(0, entries.length - visibleRows), cursor - Math.floor(visibleRows * 0.5)));
+  const listWindow = craftListWindow(layout, entries.length, cursor);
+  const listTop = listWindow.listTop;
   if (entries.length === 0) {
     ctx.fillStyle = '#8a9';
     drawWrappedText(ctx, craftMenuFallbackText(snapshot.mode), layout.list.x + 5 * sx, listTop, layout.list.w - 10 * sx, 9 * sy, 3);
   } else {
-    for (let row = 0; row < visibleRows; row++) {
-      const index = first + row;
+    for (let row = 0; row < listWindow.visibleRows; row++) {
+      const index = listWindow.first + row;
       const entry = entries[index];
       if (!entry) break;
-      const y = listTop + row * layout.rowH;
+      const rect = craftListRowRect(layout, listWindow, row);
+      const y = rect.y + 2 * sy;
       const selected = index === cursor;
       if (selected) {
         ctx.fillStyle = 'rgba(0,90,82,0.55)';
-        ctx.fillRect(layout.list.x + 3 * sx, y - 2 * sy, layout.list.w - 6 * sx, layout.rowH);
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
         ctx.strokeStyle = 'rgba(80,255,220,0.5)';
-        ctx.strokeRect(layout.list.x + 3 * sx + 0.5, y - 2 * sy + 0.5, layout.list.w - 6 * sx - 1, layout.rowH - 1);
+        ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
       }
       ctx.fillStyle = entryColor(entry, selected);
       ctx.fillText(fitTextStable(ctx, entryName(entry), layout.list.w - 12 * sx), layout.list.x + 6 * sx, y);

@@ -15,6 +15,7 @@ import {
   type ActorOccupyOptions,
 } from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
+import { actorLeashRoom } from '../room_leash';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
 import {
@@ -1728,6 +1729,16 @@ export function tryAssignBehaviorFlowPath(
   // impossible regardless of caller. Unreachable today on mobile, but future-proof.
   if (useLowMemNav()) return 'not_found';
   const ai = e.ai!;
+  /* Вторая дверь того же поводка. Поле поведения ведёт к БЛИЖАЙШЕЙ комнате
+   * нужного рода по всему этажу, цели у него нет вовсе, поэтому подправить её,
+   * как в `tryAssignPathToCell`, нечем: привязанному такой заказ просто не
+   * оформляется. Дорогу домой ему при этом закажет любой другой вызов. */
+  if (actorLeashRoom(e) !== undefined) {
+    ai.path = [];
+    ai.pi = 0;
+    _flowPathAssignments.delete(e);
+    return 'not_found';
+  }
   const start = subcellIdx(e.x, e.y);
   const field = ensureBehaviorFlowField(world, key, sourceProvider);
   if (!field || field.next[start] < 0) {
@@ -2104,11 +2115,45 @@ export function roomTargetCell(world: World, e: Entity, room: Room): { x: number
   return { x: cx, y: cy };
 }
 
+/**
+ * Поводок комнаты на единственном шве, через который ходят все.
+ *
+ * Возвращает цель, которую актору РАЗРЕШЕНО заказать, или `undefined`, если
+ * заказывать нечего. Оба правила поводка живут здесь и больше нигде: стоящего
+ * дома за порог не выпускаем, оказавшегося снаружи зовём домой. Разбор — в
+ * `systems/room_leash.ts`.
+ *
+ * Ставить это в вызывающих было бы ошибкой: дорогу заказывают и прежний слой, и
+ * ядро актора, и мелкие побуждения, и страховка от залипания, — и забытый
+ * вызывающий означал бы дыру в поводке, а не отсутствие правила.
+ */
+function leashedTarget(
+  world: World, e: Entity, tx: number, ty: number,
+): { x: number; y: number } | undefined {
+  const leashRoom = actorLeashRoom(e);
+  if (leashRoom === undefined) return { x: tx, y: ty };
+  if (world.roomMap[world.idx(tx, ty)] === leashRoom) return { x: tx, y: ty };
+  const home = world.rooms[leashRoom];
+  if (!home) return { x: tx, y: ty };
+  // Уже дома — значит, заказана дорога наружу, и её просто нет.
+  if (world.roomMap[world.idx(Math.floor(e.x), Math.floor(e.y))] === leashRoom) return undefined;
+  return roomTargetCell(world, e, home);
+}
+
 export function tryAssignPathToCell(world: World, e: Entity, tx: number, ty: number): AssignPathStatus {
   const ai = e.ai!;
   _flowPathAssignments.delete(e);
   tx = pathTargetCoord(world, tx);
   ty = pathTargetCoord(world, ty);
+
+  const allowed = leashedTarget(world, e, tx, ty);
+  if (allowed === undefined) {
+    ai.path = [];
+    ai.pi = 0;
+    return 'not_found';
+  }
+  tx = pathTargetCoord(world, allowed.x);
+  ty = pathTargetCoord(world, allowed.y);
 
   const start = subcellIdx(e.x, e.y);
   const target = subcellIdx(tx, ty);
@@ -2552,7 +2597,9 @@ export function findFamilyRoom(world: World, e: Entity, type: RoomType): number 
 
 /* ── Helper: set path to room center ──────────────────────────── */
 export function gotoRoom(world: World, e: Entity, targetRoomType: RoomType): AssignPathStatus {
-  if (e.y < 0 || e.y >= 1024) return 'not_found';
+  // Обе координаты, а не одна: страховка от порченого актора симметрична по осям,
+  // и положительная форма проверки отсекает заодно NaN.
+  if (!(e.x >= 0 && e.x < W && e.y >= 0 && e.y < W)) return 'not_found';
   
   const ids = roomsOfType(world, targetRoomType);
   if (ids.length === 0) return 'not_found';

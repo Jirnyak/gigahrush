@@ -90,6 +90,9 @@ const GENERAL_DEF: PlotNpcDef = {
   spawnRoomAlias: MINISTRY_VESTIBULE_ANCHOR,
   hp: 1200, maxHp: 1200, money: 1400, speed: 1.1,
   inventory: [
+    // Первым слотом — чёрная руна: инвентарь высыпается при смерти целиком, и
+    // это единственный источник руны в игре (шаг 13 цепочки, `data/plot.ts`).
+    { defId: 'black_rune', count: 1 },
     { defId: 'ppsh', count: 1 },
     { defId: 'ammo_9mm', count: 60 },
     { defId: 'grenade', count: 3 },

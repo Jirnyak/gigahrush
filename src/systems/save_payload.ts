@@ -453,6 +453,11 @@ function compactAlifeForPortal(input: unknown): unknown {
     deadPlotNpcIds: Array.isArray(input.deadPlotNpcIds)
       ? input.deadPlotNpcIds.map(x => typeof x === 'string' ? (getPlotNpcNumericId(x)! ?? NaN) : Number(x)).filter(n => !Number.isNaN(n)).slice(0, PORTAL_COMPACT_ALIFE_PLOT_DEATH_CAP)
       : [],
+    // Событийная принадлежность и свершившиеся переселения переживают ужатие
+    // целиком: это по паре чисел на факт, а теряются при этом не украшения, а
+    // необратимые изменения мира — кто чью сторону принял и кто куда переехал.
+    factionOverrides: Array.isArray(input.factionOverrides) ? input.factionOverrides : undefined,
+    migrations: Array.isArray(input.migrations) ? input.migrations : undefined,
     overrides: Array.isArray(input.overrides) ? input.overrides.slice(0, PORTAL_COMPACT_ALIFE_OVERRIDE_CAP) : [],
   };
 }
@@ -496,8 +501,13 @@ export function createPortalCompactSavePayload<T extends VersionedSavePayload>(p
       stockMarket: compactStockMarketForPortal(payload.state.stockMarket),
       production: payload.state.production.slice(0, PORTAL_COMPACT_PRODUCTION_CAP),
       containers: containersForSave(payload.state.containers, PORTAL_COMPACT_CONTAINER_CAP),
-      voidReturnPortal: undefined,
-      voidEntryFromFloor: undefined,
+      // `voidReturnPortal` и `voidEntryFromFloor` ужатие переживают и обнулены
+      // быть не могут: у Пустоты нет лифтов вовсе (`routeExpectedLiftDirections`
+      // отдаёт пустой список при `z <= FLOOR_RUN_MIN_Z`), и портал — её
+      // единственная дверь наружу. Компактный пейлоад отгружается автоматически
+      // при превышении порога размера и грузится обратно, так что стёртый
+      // портал запирал игрока с большим сейвом в Пустоте навсегда. Это один
+      // маленький объект и два числа — размерной проблемы здесь нет.
     },
   } as T;
 }

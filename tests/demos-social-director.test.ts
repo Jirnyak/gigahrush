@@ -21,7 +21,6 @@ function event(id: number, overrides: Partial<WorldEvent> = {}): WorldEvent {
     z: -6,
     severity: 3,
     privacy: 'public',
-    truth: 'fact',
     tags: [],
     data: { actorAlifeId: 1, targetAlifeId: 2 },
     ...overrides,

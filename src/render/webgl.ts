@@ -38,7 +38,7 @@ import {
 import { ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
 import type { CameraView } from '../systems/camera';
 import { uiElementEnabled } from '../systems/ui_orchestrator';
-import { isPlayerEntity } from '../systems/player_actor';
+import { getCurrentPlayerId, isPlayerEntity } from '../systems/player_actor';
 import {
   EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE,
   VISUAL_DETAIL_FAMILY_CODES,
@@ -3170,7 +3170,7 @@ function uploadShadowCasters(
   let shadowCasterCount = 0;
   for (const e of entities) {
     if (shadowCasterCount >= 32) break;
-    if (e.type === EntityType.PROJECTILE || e.type === EntityType.EFFECT || e.type === EntityType.BILLBOARD || e.type === EntityType.LIGHT) continue;
+    if (e.type === EntityType.PROJECTILE || e.type === EntityType.BILLBOARD) continue;
 
     let radius = 0.25;
     let height = 0.8;
@@ -3992,7 +3992,8 @@ export function renderSceneGL(
   gl.uniform3f(glState.blitUniforms['uSamosborTint']!, fogRgb[0] / 255, fogRgb[1] / 255, fogRgb[2] / 255);
   gl.uniform1f(glState.blitUniforms['uScreenInterference']!, Math.max(0, Math.min(1, screenInterference)));
 
-  const thePlayer = entities.find(isPlayerEntity);
+  // Индекс вместо перебора всех сущностей этажа каждый кадр ради двух чисел.
+  const thePlayer = getEntityIndex().byId.get(getCurrentPlayerId() ?? -1);
   const showStatusFx = uiElementEnabled('status_fx');
   const istotitLevel = showStatusFx ? Math.min((thePlayer?.statusEffects?.istotit || 0) / 100, 1.0) : 0.0;
   const veretarLevel = showStatusFx ? Math.min((thePlayer?.statusEffects?.veretar || 0) / 100, 1.0) : 0.0;

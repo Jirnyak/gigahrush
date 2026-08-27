@@ -194,6 +194,31 @@ function normalizeQuestTargetRoute(value: unknown): Quest['targetRoute'] | undef
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/* Компактный адрес поручения для карты и речи NPC: `map_exploration` рисует по
+ * нему метку цели, `markov_context` — маршрутизирует реплику. Писатель у поля
+ * был всегда (спред `{...quest}` в `questsForSave`), а читателя не было вовсе:
+ * `normalizeQuest` собирает квест заново, и метка молча исчезала на первой же
+ * загрузке — квест оставался активным и вёл в никуда. Разбор по образцу
+ * соседнего `normalizeQuestTargetRoute`. */
+function normalizeQuestTargetMarker(value: unknown): Quest['targetMarker'] | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: NonNullable<Quest['targetMarker']> = {};
+  if (isValidZ(value.z)) out.z = value.z;
+  const roomType = normalizeRoomType(value.roomType);
+  if (roomType !== undefined) out.roomType = roomType;
+  const roomDefId = cleanSaveText(value.roomDefId, '', 96);
+  if (roomDefId) out.roomDefId = roomDefId;
+  const zoneTag = cleanSaveText(value.zoneTag, '', 48);
+  if (zoneTag) out.zoneTag = zoneTag;
+  const designFloorId = cleanSaveText(value.designFloorId, '', 64);
+  if (designFloorId && DESIGN_FLOOR_ROUTES.some(route => route.id === designFloorId)) out.designFloorId = designFloorId;
+  const proceduralTag = cleanSaveText(value.proceduralTag, '', 64);
+  if (proceduralTag) out.proceduralTag = proceduralTag;
+  if (typeof value.routeZ === 'number' && Number.isFinite(value.routeZ)) out.routeZ = clampInt(value.routeZ, 0, -50, 50);
+  if (value.risk !== undefined) out.risk = clampInt(value.risk, 1, 1, 5);
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function normalizeQuestTargets(q: Quest, raw: Record<string, unknown>): void {
   const targetItem = cleanSaveText(raw.targetItem, '', 64);
   if (targetItem === 'money' || ITEMS[targetItem]) q.targetItem = targetItem;
@@ -208,6 +233,7 @@ function normalizeQuestTargets(q: Quest, raw: Record<string, unknown>): void {
   if (targetRoomDefId) q.targetRoomDefId = targetRoomDefId;
   const targetZoneTag = cleanSaveText(raw.targetZoneTag, '', 48);
   if (targetZoneTag) q.targetZoneTag = targetZoneTag;
+  q.targetMarker = normalizeQuestTargetMarker(raw.targetMarker);
   q.targetRoute = normalizeQuestTargetRoute(raw.targetRoute);
   const targetHint = cleanSaveText(raw.targetHint);
   if (targetHint) q.targetHint = targetHint;

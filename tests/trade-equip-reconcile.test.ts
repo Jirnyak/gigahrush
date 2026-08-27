@@ -6,6 +6,7 @@ import { buyFromNpc, sellToNpc } from '../src/systems/trade';
 import { reconcileEquippedAfterLoss } from '../src/systems/inventory';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 import { type GameState } from '../src/core/types';
+import { ITEMS } from '../src/data/items';
 
 function resetFloor(state: GameState): void {
   const economy = ensureEconomyState(state);
@@ -40,7 +41,10 @@ test('selling equipped armor unequips it', () => {
   const state = makeGameState({ currentZ: 0 });
   resetFloor(state);
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'armor_light', count: 1 }], armorDefId: 'armor_light', money: 0 });
-  const npc = makeTestNpc({ id: 2, name: 'Торговец', money: 5000 });
+  // Кошелёк торговца выведен из цены товара, а не вписан числом: броня стоит
+  // десятки тысяч (полоса E2), и рукописные 5 000 ₽ делали сделку неоплатной —
+  // тест падал на бедности покупателя, а проверял снятие надетого.
+  const npc = makeTestNpc({ id: 2, name: 'Торговец', money: ITEMS.armor_light.value });
 
   const result = sellToNpc(state, player, npc, 0);
 

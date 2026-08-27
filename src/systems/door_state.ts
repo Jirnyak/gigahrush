@@ -33,6 +33,37 @@ function defaultDoorMaxHp(state: DoorState): number {
 }
 
 /**
+ * Броня створки: то, что записал генератор в саму запись двери, иначе базовое
+ * значение по состоянию. Генератор ставит `maxHp` прямо в литерале `Door` —
+ * отдельной таблицы материалов для этого не нужно, поле уже есть в типе.
+ */
+function doorMaxHp(door: Door): number {
+  const authored = door.maxHp;
+  return authored !== undefined && authored > 0 && Number.isFinite(authored)
+    ? authored
+    : defaultDoorMaxHp(door.state);
+}
+
+/**
+ * Ключ от этой створки. Пустое поле в данных означает универсальный `key`.
+ *
+ * Правило живёт здесь, а не у вызывающих, потому что путей к запертой двери
+ * ровно два и оба ведут к живому игроку: `activateDoor` в `interactions.ts` за
+ * этим компьютером и обслуживание гостя-пира хостом в `main.ts`. Это одна
+ * механика с двумя реализациями — тот самый случай, когда общий модуль не
+ * регресс модульности, а страховка от расхождения.
+ */
+export function doorKeyId(door: Door): string {
+  return door.keyId || 'key';
+}
+
+/** Несёт ли актор ключ, отпирающий эту дверь. */
+export function actorHasDoorKey(actor: Entity, door: Door): boolean {
+  const keyId = doorKeyId(door);
+  return actor.inventory?.some(i => i.defId === keyId) === true;
+}
+
+/**
  * Apply `amount` damage to a door. A broken door is DESTROYED (removed → floor),
  * not opened — everything in the structure is destructible, and a smashed door
  * leaves a real hole, not a swinging leaf that auto-closes behind the attacker.
@@ -43,10 +74,12 @@ export function damageDoor(world: World, door: Door, amount: number): boolean {
     return false; // Cannot damage open doors
   }
 
-  if (door.maxHp === undefined || door.hp === undefined) {
-    door.maxHp = defaultDoorMaxHp(door.state);
-    door.hp = door.maxHp;
-  }
+  // Ленивая раздача здоровья не имеет права затирать авторскую броню. Генератор
+  // пишет в литерале двери только `maxHp` (текущее `hp` ему знать неоткуда), а
+  // прежнее условие «нет ОДНОГО из двух → перезаписать ОБА» молча сводило такую
+  // дверь к базовому значению по состоянию.
+  if (door.maxHp === undefined || !(door.maxHp > 0)) door.maxHp = doorMaxHp(door);
+  if (door.hp === undefined) door.hp = door.maxHp;
 
   door.hp -= amount;
   // Треснувшая створка рисуется иначе — рендер держит признак «hp ниже

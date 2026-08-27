@@ -296,7 +296,10 @@ function defensiveSlash(
      * отладочное бессмертие на месте. Две ветки повторяли это хуже оригинала —
      * без памяти удара, а значит жертва не отвечала. */
     damageActor(world, state, target, { damage: dmg, source: 'monster_melee', attacker: e });
-    spawnBloodHit(world, target.x, target.y, Math.atan2(target.y - e.y, target.x - e.x), dmg, target.type === EntityType.MONSTER);
+    // Направление брызг — по тору: удар контактный, бьющий и жертва стоят в
+    // соседних клетках, и эта пара бывает разложена по разные стороны шва. Сырая
+    // разность отправляла кровь на 180° не туда.
+    spawnBloodHit(world, target.x, target.y, Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x)), dmg, target.type === EntityType.MONSTER);
     if (isPlayerEntity(target)) recordPlayerDamage(state, e, dmg, 'Гнилушка ударила когтями из угла');
   }
   msgs.push(msg(`Гнилушка ударила ${isPlayerEntity(target) ? 'вас' : entityDisplayName(target)} когтями: -${dmg}`, time, '#f96'));

@@ -394,21 +394,6 @@ export function pruneVolatileSideArrays(world: World): { screenCells: number; su
 }
 
 /* ── Wipe all volatile (non-apartment) data ──────────────────── */
-export function wipeVolatile(world: World): void {
-  pruneVolatileSideArrays(world);
-  for (let i = 0; i < W * W; i++) {
-    if (world.aptMask[i]) continue;
-    world.cells[i] = Cell.WALL;
-    world.roomMap[i] = -1;
-    world.wallTex[i] = 0;
-    world.floorTex[i] = 0;
-    world.features[i] = 0;
-    world.light[i] = 0;
-    world.hermoWall[i] = 0;
-    world.liftDir[i] = 0;
-  }
-  for (const [idx] of Array.from(world.doors)) {
-    if (world.aptMask[idx]) continue;
-    world.removeDoorAt(idx);
-  }
-}
+/* Здесь стоял `wipeVolatile` — стирание волатильного объёма жилого этажа.
+ * Его звал только `regrowMaze`, а того — только `rebuildWorld` из недостижимой
+ * ветки полной перегенерации в `main.ts`. Ветка снята, каскад ушёл следом. */

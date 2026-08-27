@@ -135,9 +135,11 @@ export function buildContextSnapshot(npc: Entity, options: ContextBuildOptions =
       || hasRecentFact(state, 'danger', now, undefined, 12, ['samosbor_zone_captured']),
     hasRecentSamosborAftermath: hasRecentEvent(state, 'samosbor_ended', now, undefined, 8)
       || hasRecentFact(state, 'danger', now, undefined, 8, ['samosbor_ended']),
-    hasRecentProductionOutput: hasRecentEvent(state, 'room_produced_items', now, undefined, 12),
+    hasRecentProductionOutput: hasRecentEvent(state, 'room_produced_items', now, undefined, 12)
+      || hasRecentFact(state, 'production', now, undefined, 12),
     hasRecentProductionShortage: hasRecentEvent(state, 'room_lacked_resources', now, undefined, 12)
-      || hasRecentEvent(state, 'room_blocked_production', now, undefined, 12),
+      || hasRecentEvent(state, 'room_blocked_production', now, undefined, 12)
+      || hasRecentFact(state, 'shortage', now, undefined, 12),
     hasRecentMetroEvent: hasRecentEvent(state, 'metro_route_taken', now, undefined, 12)
       || hasRecentEvent(state, 'metro_wrong_stop', now, undefined, 12)
       || hasRecentEvent(state, 'elevator_anomaly', now, undefined, 12)
@@ -209,6 +211,23 @@ function screenRumorsNear(world: World, x: number, y: number): readonly string[]
   return ids;
 }
 
+/* Тот же счёт, что и у фактов: `limit` считает события ЗАПРОШЕННОГО рода, а не
+ * все просмотренные. Замер на производственном поясе — 1396 мировых событий в
+ * минуту: старое окно из 12 записей покрывало 0.5 секунды при горизонте, который
+ * тут же рядом объявлен равным `RECENT_EVENT_WINDOW_S`. Охранники лифта, метро и
+ * ящика опоры на факты не имеют вовсе (их типы фактов не порождают), так что для
+ * них это окно было единственным, и на людном этаже они молчали всегда.
+ *
+ * Выход по времени — `break`, а не `continue`: кольцо `recentEvents` не убывает
+ * по времени. Событию его ставит `publishEvent` из `state.time`, которое только
+ * растёт (`+= dt` в кадре, разовый скачок вперёд на поездке лифта, при загрузке
+ * берётся из того же сейва, что и сами события). Три места задают время явно
+ * (`ai/tactics.ts`, оба вызова `ai/mukhozhuk.ts`) — все передают текущее
+ * модельное время. Значит, дойдя назад до слишком старого события, дальше можно
+ * не смотреть: всё, что раньше, ещё старше. Событие с нулевым временем
+ * (несохранённое) по-прежнему пропускается, а не рвёт обход. */
+const RECENT_EVENT_WINDOW_S = 360;
+
 function hasRecentEvent(
   state: ContextBuildOptions['state'] | undefined,
   type: WorldEventType,
@@ -218,18 +237,27 @@ function hasRecentEvent(
 ): boolean {
   const buffer = state?.worldEvents?.recentEvents;
   if (!buffer || buffer.capacity <= 0) return false;
-  const total = Math.min(buffer.count, limit);
-  for (let i = 0; i < total; i++) {
+  let checked = 0;
+  for (let i = 0; i < buffer.count && checked < limit; i++) {
     const idx = (buffer.start + buffer.count - 1 - i + buffer.capacity) % buffer.capacity;
     const event = buffer.items[idx];
-    if (!event || event.type !== type) continue;
+    if (!event) continue;
+    if (now > 0 && event.time > 0 && now - event.time > RECENT_EVENT_WINDOW_S) break;
+    if (event.type !== type) continue;
+    checked++;
     if (actorId !== undefined && event.actorId !== actorId) continue;
-    if (now > 0 && event.time > 0 && now - event.time > 360) continue;
     return true;
   }
   return false;
 }
 
+/* `limit` считает факты ЗАПРОШЕННОГО рода, а не все просмотренные. Иначе бюджет
+ * съедает поток чужого рода: на производственном поясе 86% кольца — это `death`
+ * (NPC режут монстров пачками, 439 фактов в минуту), и окно из 12 записей
+ * покрывало 1.6 секунды вместо обещанных TTL'ем 480..900. Кража, о которой NPC
+ * обязан помнить 12 минут, переставала существовать через полторы секунды.
+ * Дорого это не выходит: снимок собирается только на разговоре с NPC (диалог,
+ * меню, выдача квеста) — три вызова на весь проект, ни одного в кадре. */
 function hasRecentFact(
   state: ContextBuildOptions['state'] | undefined,
   kind: ContextFact['kind'],
@@ -243,8 +271,8 @@ function hasRecentFact(
   let checked = 0;
   for (let i = facts.length - 1; i >= 0 && checked < limit; i--) {
     const fact = facts[i];
-    checked++;
     if (fact.kind !== kind) continue;
+    checked++;
     if (subjectId !== undefined && fact.subjectId !== subjectId) continue;
     if (fact.expiresAt !== undefined && now > 0 && now > fact.expiresAt) continue;
     if (tags.length > 0 && !tags.every(tag => fact.tags.includes(tag))) continue;

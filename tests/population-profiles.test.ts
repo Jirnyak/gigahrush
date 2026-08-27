@@ -7,6 +7,7 @@ import {
   KVARTIRY_POPULATION_PROFILE,
   PROCEDURAL_POPULATION_PROFILES,
   basePopulationTotalAtDefaultSoftLimit,
+  floorPopulationBudget,
   proceduralAnomalyPressure,
   proceduralPopulationBudget,
   proceduralPopulationProfileId,
@@ -99,8 +100,10 @@ testGenerationMatrix('KVARTIRY starts as a power-of-two actor AI floor', () => {
   // вместо тысяч.
   const gen = generateDesignFloor('kvartiry');
   const actors = liveActors(gen.entities);
-  assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
-  assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
+  // Планка — бюджет СВОЕЙ высоты, а не мягкий предел: предел этаж не трогает,
+  // иначе `entitySpawnSlots` глушит рантайм-спавн.
+  assert.equal(actors.length < ACTIVE_ACTOR_SOFT_LIMIT, true);
+  assert.equal(actors.length >= floorPopulationBudget(designFloorById('kvartiry')!.z) - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
   // Старое выражение требовало 5407 NPC при кэпе акторов 4096 — недостижимо по
   // построению. Контракт квартир в другом: это человеческий этаж, и люди
@@ -119,8 +122,11 @@ testGenerationMatrix('HELL starts as a power-of-two actor AI floor', () => {
   const actors = liveActors(gen.entities);
   const monsters = gen.entities.filter(e => e.alive && e.type === EntityType.MONSTER);
   const sightlineCues = getRouteCueMarkers(gen.world).filter(marker => marker.tags.includes('sightline') && marker.tags.includes('fallback'));
-  assert.equal(actors.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);
-  assert.equal(actors.length >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
+  // Ад — не дно шахты, под ним ещё семь стопов маршрута, и упираться в мягкий
+  // предел он не вправе: набитый под потолок этаж молча глушит волны шага
+  // удержания сюжетной цепочки.
+  assert.equal(actors.length < ACTIVE_ACTOR_SOFT_LIMIT, true);
+  assert.equal(actors.length >= floorPopulationBudget(-36) - 128, true);
   assert.equal(liveAiActors(gen.entities).length, actors.length);
   assert.equal(monsters.length >= activeActorCountAtDefaultSoftLimit(basePopulationTotalAtDefaultSoftLimit(-36) * HELL_POPULATION_PROFILE.densityMult * (HELL_POPULATION_PROFILE.monsters.share ?? 0)), true);
   // Не блоб: ни один квадрат 32×32 не держит больше процента населения этажа.
@@ -201,7 +207,10 @@ test('procedural population budget scales by danger anomaly pressure and route b
   assert.equal(calm.npcs < dangerous.npcs, true);
   assert.equal(dangerous.monsters < pressured.monsters, true);
   assert.equal(pressured.monsters < deep.monsters, true);
-  assert.equal(capped.npcs + capped.monsters, ACTIVE_ACTOR_SOFT_LIMIT);
+  // Переполненный запрос садится на бюджет СВОЕЙ высоты, а не на мягкий предел:
+  // потолок обязан оставаться недостижимым, иначе рантайм-спавн глохнет молча.
+  assert.equal(capped.npcs + capped.monsters, floorPopulationBudget(29));
+  assert.equal(capped.npcs + capped.monsters < ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(capped.monsters > capped.npcs, true);
   assert.equal(capped.npcs <= PROCEDURAL_POPULATION_PROFILES.highDensity.npcs.cap, true);
   assert.equal(capped.monsters <= PROCEDURAL_POPULATION_PROFILES.highDensity.monsters.cap, true);
@@ -261,7 +270,12 @@ test('procedural population deck keeps random slots normal-density unless the ra
   assert.equal(summary.slots, PROCEDURAL_FLOOR_ZS.length * seeds.length);
   assert.equal(summary.highDensity > 0, true);
   assert.equal(summary.normal > summary.highDensity, true);
-  assert.equal(summary.maxNormalActors >= ACTIVE_ACTOR_SOFT_LIMIT - 128, true);
+  // Самый плотный обычный слот должен дотягивать до бюджета своей высоты —
+  // но бюджет ниже мягкого предела на весь запас глубины, и раньше здесь стоял
+  // сам предел, то есть проверка требовала упереться в потолок.
+  const deepestProceduralBudget = Math.max(...PROCEDURAL_FLOOR_ZS.map(floorPopulationBudget));
+  assert.equal(summary.maxNormalActors >= deepestProceduralBudget - 128, true);
+  assert.equal(summary.maxNormalActors < ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal(summary.maxHighDensityActors >= summary.maxNormalActors, true);
   assert.equal(summary.npcFreeRouteSlots > 0, true);
 });
@@ -284,7 +298,11 @@ test('actor population targets derive from the active actor soft cap', () => {
     // от любой правки кривой и ничего не охраняют.
     assert.ok(procedural.npcs + procedural.monsters <= 2_048, `бюджет в пределах кэпа: ${procedural.npcs}+${procedural.monsters}`);
     assert.ok(procedural.npcs > procedural.monsters * 10, `тихий этаж людный: ${procedural.npcs} против ${procedural.monsters}`);
-    assert.ok(procedural.npcs >= 700 && procedural.npcs <= 1_100, `NPC масштабируются от кэпа: ${procedural.npcs}`);
+    const shallowBudget = floorPopulationBudget(2);
+    assert.ok(
+      procedural.npcs >= shallowBudget * 0.35 && procedural.npcs <= shallowBudget * 0.7,
+      `NPC масштабируются от кэпа: ${procedural.npcs} при бюджете ${shallowBudget}`,
+    );
 
     const blackMarket = DESIGN_FLOOR_ROUTES.find(route => route.id === 'black_market_88');
     assert.ok(blackMarket);
@@ -294,7 +312,10 @@ test('actor population targets derive from the active actor soft cap', () => {
 
     const podad = DESIGN_FLOOR_ROUTES.find(route => route.id === 'podad');
     assert.ok(podad);
-    assert.equal(designFloorPopulationProfile(podad).monsterTarget, ACTIVE_ACTOR_SOFT_LIMIT);
+    // Безлюдный глубокий этаж отдаёт монстрам ВЕСЬ свой бюджет — и всё равно
+    // не касается мягкого предела.
+    assert.equal(designFloorPopulationProfile(podad).monsterTarget, floorPopulationBudget(podad.z));
+    assert.equal(designFloorPopulationProfile(podad).monsterTarget < ACTIVE_ACTOR_SOFT_LIMIT, true);
   } finally {
     setActiveActorSoftLimit(previous);
   }

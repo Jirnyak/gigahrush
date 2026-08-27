@@ -120,6 +120,11 @@ export function containerTagName(tag: string): string {
   }
 }
 
+/** Аргумент — `reveal.tag` слуха с `kind: 'warning'`, а НЕ тег мирового события
+ *  и не id слуха. Пространства разные: `veretar_window_sample` и
+ *  `veretar_photo_taken` — теги события, по ним `veretarWindowEventRumorId`
+ *  выбирает слух, а сами те слухи раскрывают предмет, а не предупреждение.
+ *  Ветки на такие имена сюда не доходят никогда. */
 export function warningTagName(tag: string): string {
   switch (tag) {
     case 'samosbor_warning':
@@ -142,14 +147,8 @@ export function warningTagName(tag: string): string {
       return 'белую щель заклеили';
     case 'veretar_window_curtain':
       return 'белое окно занавесили';
-    case 'veretar_window_sample':
-      return 'с белого подоконника взяли песок';
-    case 'veretar_photo_taken':
-      return 'засвеченный кадр вынесли из белого прохода';
     case 'veretar_window_lost':
       return 'белый обход забрал свидетеля';
-    case 'false_lead':
-      return 'ложная зацепка';
     default:
       return humanizeTag(tag);
   }

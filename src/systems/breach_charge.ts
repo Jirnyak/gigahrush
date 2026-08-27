@@ -16,9 +16,40 @@ import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 
 export const BREACH_CHARGE_ID = 'breach_charge';
+export const CONCRETE_BREAKER_ID = 'concrete_breaker_grenade';
 
 const MAX_BREACHED_DOORS = 6;
 const MAX_BREACHED_WALLS = 18;
+
+interface BreachProfile {
+  doorCap: number;
+  wallCap: number;
+  biomass: boolean;
+}
+
+/**
+ * Что именно вскрывает взрыв. Пробивной заряд — эталон: двери, биомасса и весь
+ * набор стен; его теги (`door_work`, `biomass`, `collateral`) перечисляют ровно
+ * это.
+ *
+ * «Бетонобойная граната» ломала бетон только на словах: система знала один id,
+ * и предмет с тегами `breach`+`concrete` (единственный `concrete` во всём
+ * каталоге) и обещанием «сберечь до тупика» ничего не пробивал. Тегов
+ * `door_work` и `biomass` у него нет — значит ни двери, ни мясо ему не по зубам,
+ * остаётся бетон. Слабее заряда он ровно во столько, во сколько дешевле:
+ * 620₽ против 740₽. Своего числа здесь нет — доля берётся из каталога, и урон
+ * (105 против 130) даёт ту же долю независимо.
+ */
+function breachProfile(weaponId: string | undefined): BreachProfile | undefined {
+  if (weaponId === BREACH_CHARGE_ID) {
+    return { doorCap: MAX_BREACHED_DOORS, wallCap: MAX_BREACHED_WALLS, biomass: true };
+  }
+  if (weaponId === CONCRETE_BREAKER_ID) {
+    const share = (ITEMS[CONCRETE_BREAKER_ID]?.value ?? 0) / (ITEMS[BREACH_CHARGE_ID]?.value ?? 1);
+    return { doorCap: 0, wallCap: Math.round(MAX_BREACHED_WALLS * share), biomass: false };
+  }
+  return undefined;
+}
 
 const BREACHABLE_WALL_TEX = new Set<number>([
   Tex.CONCRETE,
@@ -142,6 +173,7 @@ function publishBreachEvent(
   world: World,
   state: GameState | undefined,
   actor: Entity | undefined,
+  weaponId: string,
   x: number,
   y: number,
   radius: number,
@@ -150,7 +182,7 @@ function publishBreachEvent(
   if (!state) return;
   const centerIdx = world.idx(Math.floor(x), Math.floor(y));
   const roomId = world.roomMap[centerIdx] ?? -1;
-  const item = ITEMS[BREACH_CHARGE_ID];
+  const item = ITEMS[weaponId];
   const changed = result.changedCells > 0;
   publishEvent(state, {
     type: 'collateral_damage',
@@ -161,7 +193,7 @@ function publishBreachEvent(
     actorId: actor?.id,
     actorName: actor?.name,
     actorFaction: actor?.faction,
-    itemId: BREACH_CHARGE_ID,
+    itemId: weaponId,
     itemName: item?.name ?? 'Пробивной заряд',
     itemCount: 1,
     itemValue: item?.value ?? 0,
@@ -170,7 +202,7 @@ function publishBreachEvent(
     privacy: 'local',
     tags: [
       isPlayerEntity(actor) ? 'player' : 'actor',
-      'breach_charge',
+      weaponId,
       'breach',
       'explosive',
       'collateral',
@@ -178,7 +210,7 @@ function publishBreachEvent(
       result.breachedBiomass > 0 ? 'biomass' : 'concrete',
     ],
     data: {
-      weaponId: BREACH_CHARGE_ID,
+      weaponId,
       changedCells: result.changedCells,
       breachedDoors: result.breachedDoors,
       breachedWalls: result.breachedWalls,
@@ -205,12 +237,13 @@ export function resolveBreachChargeExplosion(
     breachedBiomass: 0,
     protectedBlocked: 0,
   };
-  if (weaponId !== BREACH_CHARGE_ID) return result;
+  const profile = breachProfile(weaponId);
+  if (!profile || weaponId === undefined) return result;
   const changedCellIndices: number[] = [];
 
   for (const candidate of collectBreachCandidates(world, x, y, radius)) {
     if (candidate.kind === 'door') {
-      if (result.breachedDoors >= MAX_BREACHED_DOORS) continue;
+      if (result.breachedDoors >= profile.doorCap) continue;
       if (isProtectedCell(world, candidate.idx) || isHermeticDoor(world, candidate.idx)) {
         result.protectedBlocked++;
         continue;
@@ -226,13 +259,14 @@ export function resolveBreachChargeExplosion(
       continue;
     }
 
-    if (result.breachedWalls >= MAX_BREACHED_WALLS) continue;
+    if (result.breachedWalls >= profile.wallCap) continue;
     if (isProtectedCell(world, candidate.idx)) {
       result.protectedBlocked++;
       continue;
     }
     const wallTex = world.wallTex[candidate.idx];
     if (!BREACHABLE_WALL_TEX.has(wallTex)) continue;
+    if (!profile.biomass && isBiomassTex(wallTex)) continue;
     const info = neighborFloorInfo(world, candidate.x, candidate.y);
     if (!info) continue;
     applyFloorOpening(world, candidate, info);
@@ -251,6 +285,6 @@ export function resolveBreachChargeExplosion(
     world.markFeaturesDirty();
     spawnBreachDust(world, x, y, radius, result.changedCells, result.breachedBiomass > 0);
   }
-  publishBreachEvent(world, state, actor, x, y, radius, result);
+  publishBreachEvent(world, state, actor, weaponId, x, y, radius, result);
   return result;
 }

@@ -198,7 +198,11 @@ test('fog shark flame kill is lethal and ignition burst is bounded to one event'
     projDmg: 4,
   } satisfies Entity;
 
-  assert.equal(adjustMonsterProjectileDamage(shark, projectile, projectile.projDmg ?? 0) > DEF.hp, true);
+  /* Порог живучести объявлен видом (`DEF.damageFloor[FIRE] = 1`) и означает
+   * ровно «весь запас за попадание»: здоровье уходит в ноль, а ноль и есть
+   * смерть. Прежняя формула снимала `maxHp + 1` — лишняя единица ничего не
+   * решала и жила в теле функции, а не в объявлении вида. */
+  assert.equal(adjustMonsterProjectileDamage(shark, projectile, projectile.projDmg ?? 0) >= DEF.hp, true);
 
   rebuildEntityIndex(entities);
   shark.alive = false;

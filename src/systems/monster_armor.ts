@@ -1,11 +1,11 @@
 /* ── Standalone monster armor hooks ───────────────────────────── */
 
-import { EntityType, MonsterKind, ProjType, msg, type Entity, type GameState } from '../core/types';
+import { ArmorType, DamageType, EntityType, MonsterKind, ProjType, msg, type Entity, type GameState } from '../core/types';
 import type { World } from '../core/world';
-import { entityDisplayName } from '../entities/monster';
+import { armorMultiplier, type ArmorImpact } from '../data/armor_matrix';
+import { entityDisplayName, monsterDamageFloor } from '../entities/monster';
 import { publishEvent } from './events';
 import {
-  PANELNIK_WALL_BRACE_DAMAGE_MULT,
   applyMonsterIncomingDamage,
   chervieNetPowered,
   panelnikWallBraceActive,
@@ -15,9 +15,6 @@ import { isPlayerEntity } from './player_actor';
 export const ZAKALENNAYA_ARMATURA_ARMOR_STACKS = 3;
 
 const STRIP_COOLDOWN_S = 0.18;
-const WEAK_DAMAGE_MULT = 0.28;
-const HEAVY_DAMAGE_MULT = 0.68;
-const FINAL_STRIP_DAMAGE_MULT = 0.92;
 const WEAK_CHIP_THRESHOLD = 24;
 const WEAK_CHIP_MULT = 0.07;
 const WEAK_MESSAGE_COOLDOWN_S = 0.75;
@@ -40,18 +37,12 @@ const ARMOR_STRIP_WEAPONS = new Set([
   'metal_chair',
 ]);
 
+/* Списки опознают удар по ID ОРУЖИЯ, поэтому запись, которой нет в `WEAPON_STATS`,
+ * не срабатывает никогда и молча создаёт вид работающего правила. Отсюда сняты
+ * `jackhammer` и `uv_spotlight`: оба `ItemType.TOOL` и оружием не являются. */
 const ARMOR_TOOL_WEAPONS = new Set([
-  'jackhammer',
   'fire_hook',
   'rebar',
-]);
-
-const CHERVIE_ENERGY_WEAPONS = new Set([
-  'gauss',
-  'plasma',
-  'bfg',
-  'gravity_beam_emitter',
-  'uv_spotlight',
 ]);
 
 export type MonsterArmorHitKind = 'weak' | 'heavy' | 'tool';
@@ -60,6 +51,11 @@ export interface MonsterArmorHitInput {
   damage: number;
   attacker?: Entity;
   weaponId?: string;
+  /**
+   * Чем бьют. Матрица брони выбирает по нему столбец; не передали — кинетика,
+   * как и у резиста носимой брони.
+   */
+  damageType?: DamageType;
   projectileType?: ProjType;
   aoe?: boolean;
 }
@@ -85,10 +81,18 @@ function hitKind(input: MonsterArmorHitInput): MonsterArmorHitKind {
   return 'weak';
 }
 
+/**
+ * Пробит ли Червие энергией.
+ *
+ * Ключ ОДИН — тип урона, и он же выбирает столбец матрицы. Прежде здесь стоял
+ * собственный список `weaponId` плюс два вида снаряда, и он врал в обе стороны:
+ * `grn420_gravizhernov` энергия по ролевому тиру, но в списке его не было, и
+ * Червие держал гравижернов за кинетику; чужой энергетический выстрел без
+ * `weaponId` не опознавался вовсе. Луч и шар не потерялись: `ProjType.BEAM` и
+ * `ProjType.BFG` теперь сами значат энергию (`projTypeDamageType`).
+ */
 function isChervieEnergyHit(input: MonsterArmorHitInput): boolean {
-  return input.projectileType === ProjType.BEAM ||
-    input.projectileType === ProjType.BFG ||
-    CHERVIE_ENERGY_WEAPONS.has(input.weaponId ?? '');
+  return input.damageType === DamageType.ENERGY;
 }
 
 function zoneIdAt(world: World, e: Entity): number | undefined {
@@ -153,8 +157,10 @@ function applyPanelnikWallBraceHit(
   kind: MonsterArmorHitKind,
 ): MonsterArmorHitResult | undefined {
   if (!panelnikWallBraceActive(world, monster)) return undefined;
+  // Условие — упор в стену — уже сработало; сколько снимет удар, решает матрица.
+  const mult = armorMultiplier(ArmorType.CONCRETE, input.damageType);
   const result: MonsterArmorHitResult = {
-    damage: Math.max(1, Math.round(rawDamage * PANELNIK_WALL_BRACE_DAMAGE_MULT)),
+    damage: Math.max(1, Math.round(rawDamage * mult)),
     armorActive: true,
     armorStacks: 1,
     stripped: false,
@@ -185,7 +191,7 @@ function applyPanelnikWallBraceHit(
       data: {
         rawDamage,
         damage: result.damage,
-        damageMult: PANELNIK_WALL_BRACE_DAMAGE_MULT,
+        damageMult: mult,
         counterplay: 'bait_to_open_floor',
         rumorIds: ['ecology_panelnik_wall'],
       },
@@ -195,7 +201,28 @@ function applyPanelnikWallBraceHit(
   return result;
 }
 
+/**
+ * Броня твари плюс объявленный видом пол урона по типу.
+ *
+ * Пол — вторая, независимая половина закона уязвимости, и она НЕ множитель:
+ * «огонь доводит растение до порога от его максимума». Живёт она здесь, за
+ * общей дверью, поэтому срабатывает от любой руки — от чужого огнемёта и от
+ * пожара так же, как от снаряда игрока. Ключ у неё тот же единственный: тип
+ * урона. Действие идемпотентно (`max`), так что путь, посчитавший порог до
+ * двери, ничего не удваивает.
+ */
 export function applyMonsterArmorHit(
+  world: World,
+  state: GameState,
+  monster: Entity,
+  input: MonsterArmorHitInput,
+): MonsterArmorHitResult {
+  const result = applyMonsterArmorLayers(world, state, monster, input);
+  const floor = monsterDamageFloor(monster, input.damageType);
+  return floor > result.damage ? { ...result, damage: floor } : result;
+}
+
+function applyMonsterArmorLayers(
   world: World,
   state: GameState,
   monster: Entity,
@@ -206,11 +233,10 @@ export function applyMonsterArmorHit(
   const panelnikBrace = applyPanelnikWallBraceHit(world, state, monster, input, rawDamage, kind);
   if (panelnikBrace) return panelnikBrace;
   if (monster.type === EntityType.MONSTER && monster.monsterKind === MonsterKind.CHERVIE_AVATAR) {
+    // Условие — живая сеть рядом — выбирает броню, матрица считает удар.
     const powered = chervieNetPowered(world, monster);
     const energy = isChervieEnergyHit(input);
-    const mult = powered
-      ? energy ? 1.08 : 0.56
-      : energy ? 1.34 : 1;
+    const mult = armorMultiplier(powered ? ArmorType.LIVE_NET : ArmorType.WIRING, input.damageType);
     return {
       damage: Math.max(1, Math.round(rawDamage * mult)),
       armorActive: powered && !energy,
@@ -219,7 +245,7 @@ export function applyMonsterArmorHit(
       hitKind: kind,
     };
   }
-  const incomingDamage = applyMonsterIncomingDamage(world, monster, rawDamage);
+  const incomingDamage = applyMonsterIncomingDamage(world, monster, rawDamage, input.damageType);
 
   if (monster.type !== EntityType.MONSTER || monster.monsterKind !== MonsterKind.ZAKALENNAYA_ARMATURA) {
     return { damage: incomingDamage, armorActive: false, armorStacks: 0, stripped: false, hitKind: kind };
@@ -260,11 +286,10 @@ export function applyMonsterArmorHit(
     monster.spriteScale = monster.monsterArmorStacks <= 0 ? 0.88 : 0.94;
   }
 
-  const mult = stripped && monster.monsterArmorStacks <= 0
-    ? FINAL_STRIP_DAMAGE_MULT
-    : heavy
-    ? HEAVY_DAMAGE_MULT
-    : WEAK_DAMAGE_MULT;
+  // Ось «чем ударили» ортогональна типу урона и потому идёт в матрицу отдельным
+  // ключом: кувалда кинетическая, но плиту срывает.
+  const impact: ArmorImpact = stripped && monster.monsterArmorStacks <= 0 ? 'final' : kind;
+  const mult = armorMultiplier(ArmorType.PLATE, input.damageType, impact);
   const result: MonsterArmorHitResult = {
     damage: Math.max(1, Math.round(rawDamage * mult)),
     armorActive: true,

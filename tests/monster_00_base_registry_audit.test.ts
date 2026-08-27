@@ -32,7 +32,6 @@ const ZERO_WEIGHT_MONSTERS = new Set<MonsterKind>([
 
 interface TacticalAudit {
   kind: MonsterKind;
-  floors: readonly number[];
   rare: boolean;
   aiFlags?: readonly string[];
   defCounterplay: RegExp;
@@ -48,10 +47,6 @@ function enumMonsterKinds(): MonsterKind[] {
 
 function monsterKinds(): MonsterKind[] {
   return (Object.keys(MONSTERS).map(Number) as MonsterKind[]).sort((a, b) => a - b);
-}
-
-function sortedFloors(floors: readonly number[] | undefined): number[] {
-  return [...(floors ?? [])].sort((a, b) => a - b);
 }
 
 function spriteHash(sprite: Uint32Array): number {
@@ -81,9 +76,7 @@ test('base monster registry keeps stable enum ids, ecology tags, and floor data'
     assert.ok(ecology, `${MonsterKind[kind]} needs ecology data`);
     assert.equal(def.kind, kind, `${MonsterKind[kind]} registry entry points at another kind`);
     assert.equal(def.name.trim().length >= 3, true, `${MonsterKind[kind]} needs a display name`);
-    const localFloors = sortedFloors(def.floors);
-    if (localFloors.length > 0) {
-    }
+    assert.equal(ecology.floors.length > 0, true, `${MonsterKind[kind]} ecology needs floor placement`);
     assert.equal(ecology.counterplay.trim().length >= 32, true, `${MonsterKind[kind]} needs concrete ecology counterplay`);
     assert.equal((def.counterplay ?? '').trim().length >= 32, true, `${MonsterKind[kind]} needs local counterplay`);
     assert.equal((def.lootHint ?? '').trim().length >= 8, true, `${MonsterKind[kind]} needs local loot hint`);
@@ -119,7 +112,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
   const audits: TacticalAudit[] = [
     {
       kind: MonsterKind.SBORKA,
-      floors: [34, 2, -6, -14, -40],
       rare: false,
       aiFlags: ['foodBait'],
       defCounterplay: /широк|еда|говняк|дроб/,
@@ -132,7 +124,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.TVAR,
-      floors: [2, -6, -14, -40],
       rare: false,
       aiFlags: ['foodBait', 'wallBias'],
       defCounterplay: /средн|стен|еда|говняк/,
@@ -145,7 +136,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.EYE,
-      floors: [34, -6, -14, -40, -48],
       rare: false,
       defCounterplay: /линию огня|после выстрела|коридор/,
       ecologyCounterplay: /Ломайте линию|после выстрела|коридор/,
@@ -157,7 +147,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.SHADOW,
-      floors: [34, 2, -6, -40, -48],
       rare: false,
       defCounterplay: /освещ|широк|дистанц/,
       ecologyCounterplay: /Двиг|просвет|темнот/,
@@ -168,7 +157,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.REBAR,
-      floors: [-6, -14, -40, -48],
       rare: true,
       defCounterplay: /желез|стеллаж|дистанц|голыми руками/,
       ecologyCounterplay: /желез|склад|дистанц|руками/,
@@ -180,7 +168,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.NELYUD,
-      floors: [34, 2, -6],
       rare: true,
       aiFlags: ['closeReveal'],
       defCounterplay: /дистанц|молчалив|свидетел|выход/,
@@ -192,7 +179,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.KRYSNOZHKA,
-      floors: [2, -6, -14],
       rare: false,
       aiFlags: ['foodBait'],
       defCounterplay: /мало здоровья|дроб|еда|говняк|ловушк/,
@@ -205,7 +191,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.KOSTOREZ,
-      floors: [-14, -40],
       rare: true,
       defCounterplay: /замах|дистанц|колонна|дроб|лист металла/,
       ecologyCounterplay: /замах|дистанц|колонна|дроб/,
@@ -217,7 +202,6 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     },
     {
       kind: MonsterKind.SAFEGUARD,
-      floors: [-14, -48],
       rare: true,
       defCounterplay: /Белый замах|машин|дроб/,
       ecologyCounterplay: /прямом коридоре|машин|дроб/,
@@ -244,13 +228,17 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
 test('monster ecology selection respects floor placement and rare gates', () => {
   const rngSamples = [0, 0.13, 0.37, 0.71, 0.99];
 
-  for (const floor of [
-    34, 2, -6, -14, -40, -48,
+  // Канонические `z` маршрута. Раньше здесь стояло поле `floor` со старой шкалой
+  // (34/2/-6/-14/-40/-48): запрос читает `z`, поэтому выбор гонялся с `z === undefined`,
+  // строгая привязка обнуляла веса всем видам и тест всегда получал одну и ту же
+  // запасную SBORKA.
+  for (const z of [
+    30, 14, 0, -26, -36, -50,
   ]) {
     for (const allowRare of [false, true]) {
       for (const sample of rngSamples) {
         const kind = chooseFloorMonsterKind({
-          floor,
+          z,
           floorAffinity: 'strict',
           samosborCount: 6,
           allowRare,
@@ -258,6 +246,9 @@ test('monster ecology selection respects floor placement and rare gates', () => 
         });
         const ecology = getMonsterEcology(kind);
         assert.ok(ecology, `${MonsterKind[kind]} must resolve after selection`);
+        // `strict` обязан выбирать только из родного пула этажа — это и есть
+        // «floor placement» из названия теста.
+        assert.equal(ecology.floors.includes(z), true, `${MonsterKind[kind]} is not native to z=${z} but strict affinity picked it`);
         if (!allowRare) assert.equal(ecology.rare, false, `${MonsterKind[kind]} selected rare monster without allowRare`);
       }
     }

@@ -36,6 +36,7 @@ import {
   UPPER_BUREAU_DISPLAY_NAME,
   UPPER_BUREAU_ROUTE_ID,
 } from './meta';
+import { registerUpperBureauDecisionCues } from './decisions';
 import { newEntityIdCursor } from '../entity_ids';
 
 export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
@@ -68,6 +69,10 @@ export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
   ensureConnectivity(world, spawnX, spawnY);
   retuneUpperBureauZones(world);
   reinforceUpperBureauAuthoredHqTerritory(world);
+  /* Два авторских каталога развилок кладутся на карту подсказками.
+     Шаг стоит ПОСЛЕ расширения: до него комнаты каталога ещё могут
+     сдвинуться, и подсказка указала бы в снесённую клетку. */
+  registerUpperBureauDecisionCues(world, rooms.salon);
 
   genLog(`[UPPER_BUREAU] ${UPPER_BUREAU_DISPLAY_NAME} ${UPPER_BUREAU_ROUTE_ID} z=${UPPER_BUREAU_ANCHOR_Z} spawn=(${spawnX}, ${spawnY})`);
   return { isDecentralized: true, world, entities, spawnX, spawnY };
@@ -77,3 +82,4 @@ export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
 
 export * from './geometry';
 export * from './npcs';
+export * from './decisions';

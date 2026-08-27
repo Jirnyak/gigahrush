@@ -16,8 +16,9 @@ import {
 } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 import { newEntityIdCursor } from '../entity_ids';
-import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_Z, CONTAINER_ID_BASE } from "./meta";
-import { AntennaCourtGeneration, antennaCourtDebugLines, expandAntennaCourtRouteGeometry, retuneAntennaCourtRouteZones, stampAntennaCourtRooms, retuneAntennaZones, decorateAntennaCourt, placeAuthoredSignalScreens, dropItem, dropDesk, placeFixedLift } from "./geometry";
+import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_Z, CONTAINER_ID_BASE, publishAntennaCourtSignalEvent } from "./meta";
+import { placeAntennaDecisionAnchors } from "./decisions";
+import { AntennaCourtGeneration, antennaCourtDebugLines, expandAntennaCourtRouteGeometry, retuneAntennaCourtRouteZones, stampAntennaCourtRooms, retuneAntennaZones, decorateAntennaCourt, placeAuthoredSignalScreens, dropItem, dropDesk, placeFixedLift, repairAntennaCourtSignal, jamAntennaCourtSignal, recordAntennaCourtAnomaly, exposeAntennaCourtSignal, markAntennaCourtBatteryTaken } from "./geometry";
 import { createAntennaCourtSignalState, spawnPlotNpc, spawnSignalMonsters, addContainer } from "./npcs";
 
 export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneration {
@@ -120,6 +121,18 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   const rngFn = seededRandom(hashSeed('design-full:antenna_court:42', 42));
   expandAntennaCourtRouteGeometry(world, rngFn);
   retuneAntennaCourtRouteZones(world);
+  /* Пять развилок сигнала получают клетку в мире и приглашение по `E`.
+     Шаг стоит ПОСЛЕ расширения: до него авторские комнаты ещё могут
+     сдвинуться, и якорь встал бы в снесённую клетку. */
+  placeAntennaDecisionAnchors(world, signalState, {
+    repair: repairAntennaCourtSignal,
+    jam: jamAntennaCourtSignal,
+    record: recordAntennaCourtAnomaly,
+    expose: exposeAntennaCourtSignal,
+    battery: markAntennaCourtBatteryTaken,
+    publish: publishAntennaCourtSignalEvent,
+    debugLines: antennaCourtDebugLines,
+  });
 
   return { ...generation, isDecentralized: true as const };
 }

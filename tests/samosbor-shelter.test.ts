@@ -35,7 +35,6 @@ import {
   getSamosborActiveInstructionSnapshot,
   getSamosborWarningSnapshot,
   applySamosborFogEffectAtCellForTests,
-  rebuildWorld,
   resetSamosborRuntimeForTests,
   resolvePlayerShelterAtSealForTests,
   spawnSamosborPlayerPressureMonsterForTests,
@@ -892,77 +891,4 @@ test('local samosbor patch can be deferred before replacement generation', () =>
   scheduledPatch();
 
   assert.equal(replacementCalls, 1);
-});
-
-function runReplacementRebuild(seed: number, z: number): RuntimeGenerationCase {
-  const ctx = makeRuntimeGenerationCase(seed, z);
-  rebuildWorld(ctx.target, ctx.entities, ctx.nextId, seed, z, ctx.generation);
-  return ctx;
-}
-
-function assertDirtyVersionsBumped(ctx: RuntimeGenerationCase): void {
-  assert.equal(ctx.target.cellVersion, (ctx.before.cellVersion + 1) | 0);
-  assert.equal(ctx.target.surfaceVersion, (ctx.before.surfaceVersion + 1) | 0);
-  assert.equal(ctx.target.wallTexVersion, (ctx.before.wallTexVersion + 1) | 0);
-  assert.equal(ctx.target.floorTexVersion, (ctx.before.floorTexVersion + 1) | 0);
-  assert.equal(ctx.target.fogVersion, (ctx.before.fogVersion + 1) | 0);
-}
-
-test('story-floor samosbor rebuild copies generated protected state and bumps dirty versions', () => {
-  const ctx = runReplacementRebuild(1, 30);
-
-  assert.equal(ctx.target.aptMask[ctx.protectedIdx], 1);
-  assert.equal(ctx.target.hermoWall[ctx.protectedIdx], 1);
-  assert.equal(ctx.target.aptMask[ctx.staleIdx], 0);
-  assert.equal(ctx.target.hermoWall[ctx.staleIdx], 0);
-  assert.equal(ctx.target.apartmentRoomCount, 1);
-  assert.equal(ctx.entities.some(e => e.persistentNpcId === 'player'), true);
-  assert.equal(ctx.entities.some(e => e.type === EntityType.NPC && e.id >= 1000), true);
-  assertDirtyVersionsBumped(ctx);
-});
-
-test('design-floor samosbor rebuild resets stale screens and surfaces from replacement', () => {
-  const ctx = runReplacementRebuild(2, 0);
-
-  assert.deepEqual(ctx.target.screenCells, [ctx.screenIdx]);
-  assert.equal(ctx.target.surfaceMap.has(ctx.surfaceIdx), true);
-  assert.equal(ctx.target.surfaceMap.has(ctx.staleIdx), false);
-  assert.equal(ctx.target.containers.some(c => c.id === ctx.containerId), true);
-  assert.equal(ctx.target.containerById.get(ctx.containerId)?.name, 'Runtime locker 2');
-  assert.equal(ctx.target.containerMap.get(ctx.target.idx(ctx.generation.world.containers[0].x, ctx.generation.world.containers[0].y))?.includes(ctx.containerId), true);
-  assertDirtyVersionsBumped(ctx);
-});
-
-test('procedural samosbor rebuild copies anomaly, smog, fog and rail runtime state', () => {
-  const ctx = runReplacementRebuild(3, -26);
-
-  assert.equal(ctx.target.anomalyTeleports.get(ctx.teleportA), ctx.teleportB);
-  assert.equal(ctx.target.anomalyTeleports.has(ctx.staleIdx), false);
-  assert.equal(ctx.target.anomalySmogSource, ctx.smogIdx);
-  assert.deepEqual(ctx.target.anomalySmogCells, [ctx.smogIdx, ctx.smogNeighborIdx]);
-  assert.equal(ctx.target.anomalySmogHandled, false);
-  assert.equal(ctx.target.fog[ctx.smogIdx], 77);
-  assert.equal(ctx.target.fog[ctx.staleIdx], 0);
-  assert.equal(ctx.target.railTracks[0]?.id, ctx.trackId);
-  assert.equal(ctx.target.railTrains[0]?.trackId, ctx.trackId);
-  assert.equal(ctx.target.railTrainCells.get(ctx.trackCell), 0);
-  assert.equal(ctx.target.liftDir[ctx.teleportA], LiftDirection.UP);
-  assertDirtyVersionsBumped(ctx);
-});
-
-test('full samosbor rebuild preserves old fog on walkable regenerated cells only', () => {
-  const ctx = makeRuntimeGenerationCase(4, 30);
-  ctx.generation.world.cells[ctx.staleIdx] = Cell.FLOOR;
-  ctx.generation.world.floorTex[ctx.staleIdx] = Tex.F_CONCRETE;
-  ctx.generation.world.wallTex[ctx.staleIdx] = Tex.CONCRETE;
-  ctx.generation.world.zoneMap[ctx.staleIdx] = 0;
-  ctx.generation.world.fog[ctx.staleIdx] = 0;
-
-  rebuildWorld(ctx.target, ctx.entities, ctx.nextId, 4, 30, ctx.generation);
-
-  assert.equal(ctx.target.cells[ctx.staleIdx], Cell.FLOOR);
-  assert.equal(ctx.target.aptMask[ctx.staleIdx], 0);
-  assert.equal(ctx.target.hermoWall[ctx.staleIdx], 0);
-  assert.equal(ctx.target.fog[ctx.staleIdx], 220);
-  assertDirtyVersionsBumped(ctx);
 });

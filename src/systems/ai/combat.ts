@@ -10,8 +10,7 @@ import {
   playAttack, playHostileEnergyShot, playHostileFlame, playHostileGunshot, playHostileNailgun,
   playHostilePsiCast, playHostileShotgun, playSoundAt,
 } from '../audio';
-import { applyDamageRelationPenalty } from '../factions';
-import { calculateDamage, applyHitStaggerAndKnockback, calculateReloadTime, setCombatClock } from '../combat';
+import { calculateReloadTime, setCombatClock } from '../combat';
 import { hasLineOfSight, lineCoverCells } from '../../world/line_of_sight';
 import { clearFogInZone } from '../fog_zone';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
@@ -27,10 +26,9 @@ import { findCombatTarget, dropNpcInventory, deterministicScanCd } from './monst
 import { recordEntityKill } from '../alife_rating';
 import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, getEntityIndex } from '../entity_index';
-import { applyMonsterIncomingDamage } from '../monster_traits';
 import { publishWeaponNoise } from '../noise';
 import { isPlayerEntity } from '../player_actor';
-import { getRecentCombatThreat, notifyActorDamaged, npcCombatProfile } from '../combat_stimulus';
+import { damageActor, getRecentCombatThreat, npcCombatProfile } from '../combat_stimulus';
 import { stepActorBy } from '../movement_collision';
 import {
   emitMarkovBark,
@@ -40,7 +38,6 @@ import {
   BARK_CHANCE_WOUNDED,
 } from './barks';
 import { selectMeleeTarget } from '../melee_targeting';
-import { publishEvent } from '../events';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 import { trySetMicroGoal } from './micro_goals';
@@ -62,6 +59,14 @@ export function setCombatContext(msgs: Msg[], time: number): void {
 const NPC_FLEE_DETECT_SQ = 10 * 10;
 const NPC_FLEE_SCAN_CD = 1.5;
 const NPC_FLEE_MONSTER_SCAN_CAP = 32;
+/**
+ * Каданс флигового скана — СВОЙ, а не чужой счётчик. Разбор в `tryFleeFromMonster`.
+ *
+ * Транзиентно и снаружи ядра: это свойство кадра, а не сущности, в сейв не идёт
+ * и умирает вместе с актором. Тот же приём, что у рефрактерного периода боли
+ * (`staggerRefractory` в `systems/combat.ts`).
+ */
+const fleeScanCd = new WeakMap<Entity, number>();
 const fleeMonsterQuery: Entity[] = [];
 const npcMeleeHitQuery: Entity[] = [];
 const combatLootQuery: Entity[] = [];
@@ -129,9 +134,29 @@ export function tryFleeFromMonster(
     return startFleeFromThreat(world, e, damageThreat.attacker, dt);
   }
 
-  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
-  if (ai.combatScanCd! > 0 && ai.goal !== AIGoal.FLEE) return false;
-  ai.combatScanCd = NPC_FLEE_SCAN_CD;
+  /* Каданс здесь СВОЙ, потому что `ai.combatScanCd` принадлежит `findCombatTarget`.
+   *
+   * Тот вычитает из него dt в ТОМ ЖЕ кадре и на том же акторе: `tryFactionCombat`
+   * зовёт его выше по цепочке (`ai/index.ts`), а сюда управление доходит ровно
+   * тогда, когда он цели не нашёл и вернул false. Вторая убыль сливала общий
+   * счётчик вдвое быстрее объявленного.
+   *
+   * Замерено на 512 акторах по десять минут при 60 к/с: дорогой радиусный скан
+   * боевой цели шёл в 1.39 раза чаще объявленного, а у ПОЛОВИНЫ акторов — ровно
+   * вдвое (1.82 против 0.91 в секунду). У этой же половины флиговый скан не
+   * срабатывал НИ РАЗУ за десять минут: чей счётчик перейдёт ноль первым,
+   * решала чётность кадров, а не `NPC_FLEE_SCAN_CD` — тот не управлял ничем, и
+   * «оглядывается ли горожанин на монстра» было свойством чужой арифметики.
+   *
+   * Первый взгляд разведён по акторам тем же детерминированным разбросом, что и
+   * боевые сканы: иначе весь этаж смотрел бы по сторонам одним кадром.
+   */
+  const fleeCd = (fleeScanCd.get(e) ?? deterministicScanCd(e.id, 0, NPC_FLEE_SCAN_CD)) - dt;
+  if (fleeCd > 0 && ai.goal !== AIGoal.FLEE) {
+    fleeScanCd.set(e, fleeCd);
+    return false;
+  }
+  fleeScanCd.set(e, NPC_FLEE_SCAN_CD);
 
   let nearestMonster: Entity | null = null;
   let nearestD2 = NPC_FLEE_DETECT_SQ;
@@ -492,31 +517,40 @@ export function tryFactionCombat(
     e.angle = Math.atan2(dy, dx); // ensure we face target before swinging
     
     getEntityIndex().queryRadius(e.x, e.y, effectiveReach + 0.5, npcMeleeHitQuery, ENTITY_MASK_ACTOR);
-    const hitTarget = selectMeleeTarget(world, e, npcMeleeHitQuery, meleeRange, weaponId);
+    const hitTarget = selectMeleeTarget(world, e, npcMeleeHitQuery, meleeRange, weaponId, true);
     
     if (hitTarget) {
       const baseDmg = meleeWs.dmg > 0 ? meleeWs.dmg : (5 + Math.floor(rng() * 8));
       const rawDmg = meleeDamage(e.rpg, weaponId, baseDmg);
-      let dmg = zhelemishIncomingMeleeDamage(hitTarget, _time, rawDmg);
-      if (hitTarget.type === EntityType.MONSTER) dmg = applyMonsterIncomingDamage(world, hitTarget, dmg);
+      const dmg = zhelemishIncomingMeleeDamage(hitTarget, _time, rawDmg);
       if (hitTarget.hp !== undefined) {
         const debugImmortalPlayerHit = isPlayerEntity(hitTarget) && isDebugOnePunchManEnabled();
         if (debugImmortalPlayerHit) {
           keepDebugOnePunchManAlive(hitTarget);
         } else {
-          const actualDmg = calculateDamage(dmg, ws.damageType, hitTarget);
-          hitTarget.hp -= actualDmg;
-          applyHitStaggerAndKnockback(world, hitTarget, e.x, e.y, actualDmg);
-          notifyActorDamaged(world, hitTarget, e, dmg, 'npc_melee', _time, state);
+          /* Единая дверь урона со ВСЕМ конвейером: резист надетой брони цели и
+           * врождённая броня твари. Считать их здесь нельзя — конвейер брони с
+           * побочными действиями (срывает плиты, печатает реплики), и второй
+           * прогон удвоил бы их. Разбор и замер — `ActorDamageInput.applied`. */
+          const hit = damageActor(world, state, hitTarget, {
+            damage: dmg,
+            damageType: ws.damageType,
+            source: 'npc_melee',
+            attacker: e,
+            weaponId,
+            time: _time,
+            deathByCaller: true,
+          });
           if (isPlayerEntity(hitTarget)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
-          if (hitTarget.type === EntityType.NPC) {
-            applyDamageRelationPenalty(e.faction, hitTarget.faction, dmg, hitTarget, e, state);
-            if (hitTarget.hp > 0 && hitTarget.hp < (hitTarget.maxHp ?? 100) * 0.5) {
-              emitMarkovBark(hitTarget, msgs, _time, 'wounded', 'Задело!', BARK_CHANCE_WOUNDED, '#f88');
-            }
+          if (hitTarget.type === EntityType.NPC && hitTarget.hp > 0
+            && hitTarget.hp < (hitTarget.maxHp ?? 100) * 0.5) {
+            emitMarkovBark(hitTarget, msgs, _time, 'wounded', 'Задело!', BARK_CHANCE_WOUNDED, '#f88');
           }
           const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
-          spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
+          // Крови столько, сколько РЕАЛЬНО сняли: по-другому броня твари была бы
+          // видна на числе здоровья и не видна на луже. Так же делают мили и
+          // снаряд игрока в точке сборки.
+          spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, hit.applied, hitTarget.type === EntityType.MONSTER);
           applyMeleeKnockback(world, e, hitTarget, meleeWs);
           if (hitTarget.hp <= 0) {
             recordEntityKill(e, hitTarget);
@@ -559,9 +593,23 @@ function applyMeleeKnockback(world: World, source: Entity, target: Entity, ws: W
 
   stepActorBy(world, target, dx / len * force, dy / len * force, KNOCKBACK_BODY_R);
 
+  /* Стаггер от нокбэка пишется В ОБА поля и ВСЕМ, как общий путь боли.
+   *
+   * Канон живёт на уровне сущности (`target.staggerTimer`), `ai.staggerTimer` —
+   * его зеркало для боевого такта; `applyHitStaggerAndKnockback` пишет оба
+   * (`systems/combat.ts`). Здесь писалось только зеркало, а `movePlayer` его
+   * КАЖДЫЙ кадр перетирает канонм (`if (actor.ai) actor.ai.staggerTimer =
+   * actor.staggerTimer ?? 0`) — то есть у игрока запись жила один кадр. Второй
+   * канал (откат атаки) игрока пропускал явным `!isPlayerEntity`. Из двух
+   * записей одна была пропущена, вторая стиралась: кувалда сбивала удар всем,
+   * кроме игрока. Это нарушение закона «игрок — просто NPC» в его пользу, и
+   * ветки по лицу здесь быть не должно — откат игрока тикает `handlePlayerAttack`
+   * тем же вычитанием, что и цикл AI у прочих.
+   */
   const stagger = Math.min(MELEE_STAGGER_CAP, 0.08 + force * 0.35);
+  target.staggerTimer = Math.max(target.staggerTimer ?? 0, stagger);
   if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, stagger);
-  if (!isPlayerEntity(target)) target.attackCd = Math.max(target.attackCd ?? 0, stagger);
+  target.attackCd = Math.max(target.attackCd ?? 0, stagger);
 }
 
 /**
@@ -602,17 +650,12 @@ function npcCommitRangedShot(
   _time: number,
   state?: GameState,
 ): boolean {
-  if (state) {
-    publishEvent(state, {
-      type: 'faction_event',
-      x: e.x, y: e.y,
-      severity: 3,
-      privacy: 'public',
-      tags: ['gunfire'],
-      data: { volume: 40 }
-    });
-  }
-
+  /* Выстрел объявляет о себе ОДИН раз — через `publishWeaponNoise` ниже, на
+   * обеих ветках. Второе объявление здесь было легаси доношумовой эпохи:
+   * мировое событие типа `faction_event` с тегом `gunfire` и громкостью в
+   * данных, которое никто в проекте не читал. Живого действия у него не
+   * осталось, зато оно давало 273–394 события в минуту на жилом этаже — две
+   * трети всего потока — и вытесняло из ленты Демоса смерти людей. */
   if (ws.psiCost) {
     if (!e.rpg || e.rpg.psi < ws.psiCost) return false;
     e.rpg.psi -= ws.psiCost;

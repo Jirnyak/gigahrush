@@ -248,6 +248,20 @@ export const MESH_FEATURE_MODEL_IDS: Readonly<Partial<Record<Feature, string>>> 
 const MAX_MERGE_RUN = 16;
 const MAX_CLUSTER_CELLS = 16;
 const MAX_CORRIDOR_CEILING_RUN = 14;
+/* Сколько раз решётка, режущая длинный служебный прогон на куски, повторяется
+ * на КОЛЬЦЕ мира. Клетке с комнатой это не нужно: её точка отсчёта — угол
+ * комнаты (`localRoomCoord`, замок — `tests/torus-seam-room-local.test.ts`), и
+ * период внутри комнаты произволен. У клетки БЕЗ комнаты точка отсчёта одна на
+ * весь мир, а период 14 на кольце 1024 не замыкается: 1024 = 14*73 + 2. Из-за
+ * этого на линии шва соседние начала расходились на 16 клеток при длине куска
+ * максимум 14, и две клетки потолка оставались голыми — разрыв ровно по x=0 и
+ * y=0. Замерено на сиде 61061: 4797 безкомнатных клеток шва несут прогон вдоль
+ * самого шва, на 33 этажах из 51.
+ *
+ * Поэтому безкомнатная решётка считает не «каждые 14 клеток», а «N равных
+ * долей кольца», где N — наименьшее число долей с шагом НЕ БОЛЬШЕ 14. Шаг
+ * выходит 13–14, плотность прежняя, и решётка замыкается на торе точно. */
+const TORUS_CEILING_RUN_STARTS = Math.ceil(W / MAX_CORRIDOR_CEILING_RUN);
 const FIELD_COVERAGE_RING_COUNT = 4;
 const DEFAULT_CHUNK_SIZE = 8;
 const DEFAULT_MAX_CHUNKS_PER_FRAME = 8;
@@ -1139,10 +1153,19 @@ function roomForCell(world: World, idx: number): Room | undefined {
   return world.rooms[roomId];
 }
 
+/* Локальная координата клетки внутри комнаты — ПО ТОРУ. `x`/`y` приходят
+ * завёрнутыми (`scanLocalRadiusCells`/`collectMeshChunk` зовут `world.wrap`), а
+ * `room.x` хранится сырым, поэтому у комнаты, начинающейся на 1023, сырая
+ * разность давала −1020 и отбрасывала завёрнутую половину: 478 клеток в 41
+ * комнате на жилом, 332 в 8 на министерстве. Видно это было так, что на второй
+ * половине такой комнаты не появлялось потолочных деталей, а фаза служебных
+ * прогонов прыгала ровно на линии шва — потолок рвался. Модульная разность
+ * принимает обе половины; проверку «снаружи комнаты» несёт ОДНО сравнение с
+ * габаритом, и убирать его нельзя — без него формула примет любую клетку. */
 function localRoomCoord(room: { x: number; y: number; w: number; h: number }, x: number, y: number): { lx: number; ly: number } | null {
-  const lx = x - room.x;
-  const ly = y - room.y;
-  if (lx < 0 || ly < 0 || lx >= room.w || ly >= room.h) return null;
+  const lx = positiveModulo(x - room.x, W);
+  const ly = positiveModulo(y - room.y, W);
+  if (lx >= room.w || ly >= room.h) return null;
   return { lx, ly };
 }
 
@@ -1504,6 +1527,14 @@ function serviceCeilingGate(
   return corridorRunCoverageGate(context.seed, x, y, roomId, salt, detail, weight);
 }
 
+/* Кусок кончается там, где начинается следующий, — а не через фиксированные
+ * MAX_CORRIDOR_CEILING_RUN клеток. Пока решётка шла ровно шагом 14, эти два
+ * правила совпадали, и разошлись они ровно на шве: решётке на кольце 1024 шаг
+ * 14 не даётся (см. TORUS_CEILING_RUN_STARTS), и после выравнивания шага он
+ * стал 13–14. Кусок длиной 14 при шаге 13 клал бы второй пучок поверх первого,
+ * а старый кусок при шаге 16 не доставал до следующего — это и был разрыв.
+ * Спрашивать начало вперёд дороже на один хеш за шаг, но шагов не больше
+ * четырнадцати и делаются они только при ВЫДАЧЕ пучка, а не на каждой клетке. */
 function serviceCeilingRunLength(
   context: MeshPassContext,
   x: number,
@@ -1511,6 +1542,7 @@ function serviceCeilingRunLength(
   covering: VisualCorridorCoveringDef,
   detail: number,
   axis: Axis,
+  roomId: number,
 ): number {
   const dx = axis === 'x' ? 1 : 0;
   const dy = axis === 'y' ? 1 : 0;
@@ -1520,18 +1552,10 @@ function serviceCeilingRunLength(
     const ny = context.world.wrap(y + dy * length);
     const ni = context.world.idx(nx, ny);
     if (!serviceCeilingGate(context, ni, nx, ny, covering, detail, axis)) break;
+    if (serviceCeilingRunSegmentStart(context, nx, ny, axis, covering, context.world.roomMap[ni] ?? roomId)) break;
     length++;
   }
   return length;
-}
-
-function serviceCeilingRunCoord(context: MeshPassContext, x: number, y: number, axis: Axis): number {
-  const room = roomForCell(context.world, context.world.idx(x, y));
-  if (room) {
-    const local = localRoomCoord(room, x, y);
-    if (local) return axis === 'x' ? local.lx : local.ly;
-  }
-  return axis === 'x' ? x : y;
 }
 
 function positiveModulo(value: number, mod: number): number {
@@ -1546,11 +1570,21 @@ function serviceCeilingRunSegmentStart(
   covering: VisualCorridorCoveringDef,
   roomId: number,
 ): boolean {
-  const coord = serviceCeilingRunCoord(context, x, y, axis);
   const phase = covering.id === 'collector'
     ? 0
     : mixHash(context.seed, roomId, axis === 'x' ? 0x7861 : 0x7961, corridorContextSalt(context, 0x736567)) % MAX_CORRIDOR_CEILING_RUN;
-  return positiveModulo(coord - phase, MAX_CORRIDOR_CEILING_RUN) === 0;
+  const room = roomForCell(context.world, context.world.idx(x, y));
+  const local = room ? localRoomCoord(room, x, y) : null;
+  if (local) {
+    // Комната сама себе точка отсчёта — решётка живёт в её локальных координатах.
+    const coord = axis === 'x' ? local.lx : local.ly;
+    return positiveModulo(coord - phase, MAX_CORRIDOR_CEILING_RUN) === 0;
+  }
+  // Точки отсчёта нет: решётка обязана замкнуться на самом кольце.
+  const coord = positiveModulo((axis === 'x' ? x : y) - phase, W);
+  const previous = positiveModulo(coord - 1, W);
+  return Math.floor(coord * TORUS_CEILING_RUN_STARTS / W)
+    !== Math.floor(previous * TORUS_CEILING_RUN_STARTS / W);
 }
 
 function serviceCeilingLateralRoomWidth(world: World, x: number, y: number, axis: Axis): number {
@@ -1647,7 +1681,7 @@ function emitCorridorCeilingVolume(
       !serviceCeilingRunSegmentStart(context, x, y, axis, covering, roomId)
     ) return;
 
-    const length = serviceCeilingRunLength(context, x, y, covering, serviceDetail, axis);
+    const length = serviceCeilingRunLength(context, x, y, covering, serviceDetail, axis, roomId);
     const modelId: VisualModelId = ((h >>> 19) & 1) === 0 ? 'ceiling_pipe_bundle' : 'ceiling_cable_bundle';
     const lane = serviceCeilingLanePosition(context, x, y, axis, length, roomId);
     emitInstance(out, {

@@ -35,7 +35,6 @@ function worldEvent(overrides: Partial<WorldEvent> = {}): WorldEvent {
     z: -6,
     severity: 3,
     privacy: 'public',
-    truth: 'fact',
     tags: [],
     ...overrides,
   };
@@ -286,5 +285,5 @@ test('Demos feed view stores rendered rows outside the transient queue only', ()
 });
 
 test('Demos persistent social batch owns the current save shape', () => {
-  assert.equal(currentSaveShapeVersion(), 27);
+  assert.equal(currentSaveShapeVersion(), 28);
 });

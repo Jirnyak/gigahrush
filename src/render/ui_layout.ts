@@ -381,6 +381,11 @@ export function fullscreenInventoryLayout(canvasW: number, canvasH: number, sx: 
   const detailsY = Math.max(8 * textScale, gridY - 4 * gridScale);
   const detailsH = 58 * textScale;
   const actionW = Math.min(82 * textScale, rightW);
+  // Горизонталь колонок действий и характеристик принадлежит раскладке, ВЕРТИКАЛЬ
+  // — нет: строка «ИСП./ВЫК.» и строка СИЛ/ЛОВ/ИНТ стоят по потоку правой колонки
+  // (одна-четыре строки описания, урон, сопротивления), и постоянный отступ
+  // промахивался мимо них на любом холсте. Вертикаль отдана слою отрисовки:
+  // `inventoryActionRows` в `stats_ui.ts` — её и обязан спрашивать слой нажатия.
   const actionY = detailsY + 37 * textScale;
   const grid = { x: gridX, y: gridY, w: gridW, h: gridH, cell, cols: GRID_COLS, rows: GRID_ROWS };
   return {

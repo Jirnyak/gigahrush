@@ -1,3 +1,4 @@
+import { designFloorById } from '../../data/design_floors';
 import {
   Faction,
   Occupation,
@@ -14,7 +15,12 @@ export const OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID = 'obschezhitie_smeny' as const;
 
 export const OBSCHEZHITIE_SMENY_ROUTE_Z = -6;
 
-export const BASE_FLOOR = 100;
+/* Высота ВЫВОДИТСЯ из маршрута, а не перепечатывается. Здесь стояло рукописное
+ * число 100 — остаток выжженной шестиключевой шкалы, переживший вырезание
+ * самого поля `baseFloor`. Канон этого этажа -6, и расхождение было живым:
+ * значение уезжало в координату личностей этажа. Механическая проверка мёртвых координат
+ * его не видела — число пряталось за именем константы. */
+export const BASE_FLOOR = designFloorById(OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID)?.z ?? -6;
 
 export const DORM_SEED = hashSeed(OBSCHEZHITIE_SMENY_DESIGN_FLOOR_ID);
 

@@ -2,7 +2,7 @@
 /*   Whitish distorted face with hollow eye sockets.             */
 /*   Floats through walls.                                       */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -13,6 +13,7 @@ export const DEF: MonsterDef = {
   speed: 2.0,
   dmg: 15,
   attackRate: 1.5,
+  damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
   aiFlags: ['flying'],
   counterplay: 'Двери и стены не держат духа: меняйте позицию до контакта, держите дистанцию и сбивайте темп УФ-светом.',

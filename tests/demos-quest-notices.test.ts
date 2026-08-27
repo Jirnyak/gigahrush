@@ -100,7 +100,6 @@ function event(overrides: Partial<WorldEvent> = {}): WorldEvent {
     z: -6,
     severity: 3,
     privacy: 'local',
-    truth: 'fact',
     tags: ['supply', 'resource_shortage'],
     ...overrides,
   };

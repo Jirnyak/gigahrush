@@ -3,7 +3,7 @@
 /*   organic growths. Every nightmare is unique — the seed        */
 /*   controls stalk count/placement, mouth positions, body shape. */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { rgba, noise, clamp, CLEAR, outline } from '../core/pixutil';
 const S = 128;
@@ -15,6 +15,7 @@ export const DEF: MonsterDef = {
   speed: 1.35,
   dmg: 32,
   attackRate: 1.15,
+  damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
   counterplay: 'Не играйте в длинный бой: либо сразу вливайте тяжелый урон с выходом за спиной, либо уходите из комнаты до давления.',
   lootHint: 'психический налет, ПСИ-пыль, редкий антидепрессант из мокрой памяти',

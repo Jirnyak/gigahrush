@@ -6,16 +6,16 @@ import {
   DEMOS_POST_MENTIONS_CAP,
   DEMOS_POST_TAG_MAX_CHARS,
   DEMOS_POST_TAGS_CAP,
-  DEMOS_RELATION_OVERRIDE_CAP,
   type DemosPostPrivacy,
   type DemosReactionKind,
 } from '../data/demos_posts';
+import { DEMOS_SOCIAL_OVERRIDE_CAP } from '../data/demos_social';
+// Шкала отношений одна на проект и живёт в `data/relations.ts`. Второй копии
+// здесь быть не должно: сохранение и рантайм обязаны клампить одним числом.
+import { RELATION_MAX, RELATION_UNSET } from '../data/relations';
 import type { GameState } from '../core/types';
 
 export const DEMOS_SOCIAL_SAVE_VERSION = 1;
-export const RELATION_UNSET = -128;
-export const RELATION_MIN = -127;
-export const RELATION_MAX = 127;
 export const DEMOS_REACTION_DELTA_MIN = -8;
 export const DEMOS_REACTION_DELTA_MAX = 8;
 
@@ -158,6 +158,10 @@ function sanitizeRelationOverride(raw: unknown): DemosRelationOverride | undefin
   const targetAlifeId = raw.targetKind === 'alife' ? positiveId(raw.targetAlifeId) : undefined;
   if (fromAlifeId === undefined) return undefined;
   if (raw.targetKind === 'alife' && (targetAlifeId === undefined || fromAlifeId === targetAlifeId)) return undefined;
+  // Шкала — из `data/relations.ts`, второй копии здесь нет. Нижняя граница —
+  // сам сентинел: всё, что не дотягивает до шкалы, читается как «строки нет» и
+  // отбрасывается, а переполнение вверх зажимается. Асимметрия намеренная и
+  // закреплена `tests/demos-posts-persistence.test.ts`.
   const value = intIn(raw.value, RELATION_UNSET, RELATION_UNSET, RELATION_MAX);
   if (value === RELATION_UNSET) return undefined;
   const postId = positiveId(raw.postId);
@@ -262,7 +266,7 @@ export function sanitizeDemosSocialSave(input: unknown): DemosSocialSaveState {
   }
 
   const relationOverrides: DemosRelationOverride[] = [];
-  for (const raw of Array.isArray(input.relationOverrides) ? input.relationOverrides.slice(-DEMOS_RELATION_OVERRIDE_CAP) : []) {
+  for (const raw of Array.isArray(input.relationOverrides) ? input.relationOverrides.slice(-DEMOS_SOCIAL_OVERRIDE_CAP) : []) {
     const override = sanitizeRelationOverride(raw);
     if (override) relationOverrides.push(override);
   }

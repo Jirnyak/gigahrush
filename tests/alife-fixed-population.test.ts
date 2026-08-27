@@ -19,6 +19,7 @@ import {
   assignPersistentAlifeNpcFromEntity,
   defaultAlifePopulation,
   ensureAlifeState,
+  getAlifeNpcRecordSnapshot,
   setAlifeState,
 } from '../src/systems/alife';
 import { setFloorRunState } from '../src/systems/procedural_floors';
@@ -116,7 +117,14 @@ test('A-Life rejects implausibly undersized saved totals back to the run-sized t
   assert.equal(alifeForSave(state).total, expected);
 });
 
-test('A-Life event arrivals reserve fixed-pool identities without growing the pool', () => {
+/* Исчерпанный пул — отказ, а не место.
+ *
+ * Этот замок ОХРАНЯЛ дефект: он набивал пул до потолка и требовал, чтобы
+ * прибывший всё равно получил личность — то есть требовал затирания живого.
+ * `reserveArrivalRecordIndex` и правда переписывал запись НЕТРОНУТОГО жителя
+ * на месте: имя, фракцию, семью, ячейки отношений. Человек исчезал не умерев,
+ * а рёбра социального графа начинали указывать на постороннего. */
+test('исчерпанный пул A-Life отказывает прибывшему, а не переписывает живого', () => {
   const state = minimalState();
   const alife = setAlifeState(state, { seed: 12345, total: 1_000_000 }, { populationPlan: 'empty_packages' }) as {
     total: number;
@@ -141,9 +149,16 @@ test('A-Life event arrivals reserve fixed-pool identities without growing the po
     questId: -1,
   };
 
-  assert.equal(assignPersistentAlifeNpcFromEntity(state, npc, []), true);
+  const resident = getAlifeNpcRecordSnapshot(state, 1);
+  assert.ok(resident, 'в пуле обязан быть хоть один житель');
+
+  assert.equal(assignPersistentAlifeNpcFromEntity(state, npc, []), false);
   assert.equal(alife.total, ALIFE_POPULATION_CAPACITY);
   assert.equal(alife.npcs.length, ALIFE_POPULATION_CAPACITY);
-  assert.equal(typeof npc.alifeId, 'number');
-  assert.equal(npc.persistentNpcId, `alife:${npc.alifeId}`);
+  assert.equal(npc.alifeId, undefined);
+  assert.equal(npc.persistentNpcId, undefined);
+
+  const after = getAlifeNpcRecordSnapshot(state, 1);
+  assert.equal(after?.name, resident.name);
+  assert.equal(after?.faction, resident.faction);
 });

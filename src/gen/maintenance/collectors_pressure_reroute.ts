@@ -314,7 +314,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -323,7 +323,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -421,7 +420,6 @@ function dressDebtorRoom(ctx: MaintContentCtx, room: Room): void {
 }
 
 function addLockers(ctx: MaintContentCtx, valves: Room, hunter: Room, debtor: Room, varyaId: number, ilyasId: number, debtorId: number): void {
-  // @ts-ignore
   addContainer(ctx, valves, valves.x + 13, valves.y + 2, {
     kind: ContainerKind.FILING_CABINET,
     name: 'Шкаф разрешений узла 16',
@@ -440,7 +438,6 @@ function addLockers(ctx: MaintContentCtx, valves: Room, hunter: Room, debtor: Ro
     discovered: true,
     tags: ['collectors', 'water', 'permit', 'pressure', 'theft'],
   });
-  // @ts-ignore
   addContainer(ctx, hunter, hunter.x + hunter.w - 2, hunter.y + 2, {
     kind: ContainerKind.WEAPON_CRATE,
     name: 'Сухой ящик гарпунов',
@@ -458,7 +455,6 @@ function addLockers(ctx: MaintContentCtx, valves: Room, hunter: Room, debtor: Ro
     discovered: true,
     tags: ['collectors', 'eel', 'weapon', 'hunter', 'theft'],
   });
-  // @ts-ignore
   addContainer(ctx, debtor, debtor.x + 2, debtor.y + 2, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Сорванный шкаф пломб',

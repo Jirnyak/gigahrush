@@ -10,7 +10,10 @@ export const DEMOS_AUTHOR_FALLBACK_CAP = 8;
 export const DEMOS_REACTIONS_PER_POST_CAP = 4;
 export const DEMOS_PERSISTENT_POST_CAP = 1024;
 export const DEMOS_PERSISTENT_REACTION_CAP = 4096;
-export const DEMOS_RELATION_OVERRIDE_CAP = 8192;
+// Предел `relationOverrides` — один на проект и живёт рядом с самим социальным
+// графом (`DEMOS_SOCIAL_OVERRIDE_CAP` в `data/demos_social.ts`). Второй предел
+// на тот же массив означал бы, что рантайм и сейв режут его по-разному, и
+// отношения молча пропадали бы через сохранение.
 export const DEMOS_POST_MENTIONS_CAP = 4;
 export const DEMOS_PERSISTENT_POST_ARG_MAX_CHARS = 48;
 

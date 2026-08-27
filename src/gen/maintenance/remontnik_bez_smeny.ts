@@ -113,7 +113,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): number {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -123,7 +123,6 @@ function addContainer(
     id,
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -203,7 +202,6 @@ function dressRooms(ctx: MaintContentCtx, left: Room, closet: Room, right: Room)
 }
 
 function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: number): { lockerId: number; cartId: number } {
-  // @ts-ignore
   const cartId = addContainer(ctx, closet, closet.x + 2, closet.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Наряд-тележка Ремонтника: положить деталь или герметик',
@@ -213,7 +211,6 @@ function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: numbe
     discovered: true,
     tags: [CONTENT_TAG, 'remontnik_cart', 'maintenance', 'repair', 'route_denial', 'tools'],
   });
-  // @ts-ignore
   const lockerId = addContainer(ctx, closet, closet.x + closet.w - 3, closet.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Личный шкаф смены, которой нет',

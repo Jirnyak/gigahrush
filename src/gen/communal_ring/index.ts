@@ -112,7 +112,12 @@ import { newEntityIdCursor } from '../entity_ids';
 export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
 export const COMMUNAL_RING_ROUTE_Z = 4;
 
-const BASE_FLOOR = 60;
+/* Высота ВЫВОДИТСЯ из маршрута, а не перепечатывается. Здесь стояло рукописное
+ * число 60 — остаток выжженной шестиключевой шкалы, переживший вырезание
+ * самого поля `baseFloor`. Канон этого этажа 4, и расхождение было живым:
+ * значение уезжало в координату каждого создаваемого ящика. Механическая проверка мёртвых координат
+ * его не видела — число пряталось за именем константы. */
+const BASE_FLOOR = designFloorById(COMMUNAL_RING_DESIGN_FLOOR_ID)?.z ?? 4;
 const RING_SEED = hashSeed(COMMUNAL_RING_DESIGN_FLOOR_ID);
 const COMMUNAL_QUEUE_CROWD_CAP = 12;
 

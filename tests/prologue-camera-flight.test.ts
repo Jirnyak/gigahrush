@@ -24,13 +24,16 @@ import assert from 'node:assert/strict';
 
 import '../src/content';
 import { Cell } from '../src/core/types';
+import { World } from '../src/core/world';
 import { generateFloor } from '../src/gen/floor_manifest';
 import {
   cinematicCameraArrived,
   createRuntimeCamera,
   routeCinematicCamera,
   startCinematicCamera,
+  startTrailerCamera,
   updateCinematicCamera,
+  updateTrailerCamera,
 } from '../src/systems/camera';
 import { PROLOGUE_HALL_ALIAS } from '../src/gen/living/prologue_hall';
 
@@ -55,8 +58,19 @@ interface Flight {
   startRoom: string;
 }
 
-function flyToHall(seed: number): Flight {
+/* Этаж строится ОДИН РАЗ на сид и достаётся всем замкам файла: генерация жилого —
+ * весь расход прогона, сами пролёты это тысячи кадров чистой камеры. */
+const floors = new Map<number, ReturnType<typeof generateFloor>>();
+function livingFloor(seed: number): ReturnType<typeof generateFloor> {
+  const cached = floors.get(seed);
+  if (cached) return cached;
   const gen = generateFloor(0, seed, true);
+  floors.set(seed, gen);
+  return gen;
+}
+
+function flyToHall(seed: number): Flight {
+  const gen = livingFloor(seed);
   const world = gen.world;
   const hall = world.rooms.find(room => room?.defId === PROLOGUE_HALL_ALIAS);
   assert.ok(hall, 'зал пролога обязан быть на жилом этаже');
@@ -137,6 +151,51 @@ test('prologue camera leaves the locked starting room and flies the whole way', 
     assert.equal(flight.worstCell, null,
       `сид ${seed}: камера побывала в непроходимой клетке (${flight.worstCell})`);
     assert.ok(flight.gap < 1, `сид ${seed}: камера встала в ${flight.gap.toFixed(1)} клетках от кадра`);
+  }
+});
+
+/* Трейлерный кадр главного меню — ТОТ ЖЕ ПРОЛЁТ, что у сцены, ему лишь дописывают
+ * маршрут на ходу. Замок ловит ровно ту поломку, из-за которой его переписали:
+ * прежний кадр летел не по ломаной, а по собственному курсу, доворачивая к узлу
+ * экспонентой. Радиус разворота при этом (скорость / потолок разворота = две
+ * клетки) заведомо больше допуска на узел, поэтому узел был недостижим в принципе:
+ * кадр наматывал вокруг него круги, а поскольку ход шёл без проверки преград —
+ * наматывал их сквозь бетон. Замерено на живом этаже: за две минуты кадр не
+ * покидал одной комнаты и четверть времени проводил внутри стен.
+ *
+ * Поэтому и мерятся две вещи: побывал ли кадр в бетоне (ни разу) и сколько комнат
+ * он показал (больше одной — значит летит, а не кружит).
+ *
+ * Сид ОДИН, и это не экономия на охвате: поломка структурная, а не сидовая — на
+ * всех трёх сидах она давала одну и ту же комнату и те же двадцать процентов
+ * времени в бетоне. Зато смена сида здесь стоит дорого не генерацией (этаж уже
+ * в кэше файла), а перепечкой дерева путей: оно кэшируется на ОДИН мир, и каждый
+ * переход на другой этаж перепекает его целиком — три сида это плюс минута к
+ * матрице ни за что. */
+test('the title trailer camera tours rooms instead of circling through concrete', () => {
+  const FRAME = 1 / 60;
+  const SECONDS = 90;
+  for (const seed of SEEDS.slice(0, 1)) {
+    const gen = livingFloor(seed);
+    const world: World = gen.world;
+    const camera = createRuntimeCamera();
+    startTrailerCamera(camera, gen.spawnX, gen.spawnY);
+
+    const rooms = new Set<number>();
+    let inSolid = 0;
+    for (let f = 0; f < SECONDS * 60; f++) {
+      updateTrailerCamera(camera, world, FRAME);
+      const ci = world.idx(Math.floor(camera.free.x), Math.floor(camera.free.y));
+      const cell = world.cells[ci];
+      if (cell !== Cell.FLOOR && cell !== Cell.WATER && cell !== Cell.DOOR) inSolid++;
+      const roomId = world.roomMap[ci];
+      if (roomId !== undefined && roomId >= 0) rooms.add(roomId);
+    }
+
+    assert.equal(inSolid, 0,
+      `сид ${seed}: кадр трейлера ${inSolid} раз оказался внутри непроходимой клетки`);
+    assert.ok(rooms.size > 1,
+      `сид ${seed}: кадр за ${SECONDS}с показал комнат: ${rooms.size} — это круг на месте, а не пролёт`);
   }
 });
 

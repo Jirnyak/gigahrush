@@ -329,8 +329,18 @@ for (const file of files) {
  * `environment`. Это единственное из мест, где консолидация дала НОВОЕ
  * поведение, а не гигиену: Паритель умирал без добычи, без крови и без
  * обработки смерти, а соседние твари не получали повода уйти с горячей клетки.
- * Решение владельца: «баг — перевести на единую дверь». */
-const DAMAGE_DOOR_BASELINE = 7;
+ * Решение владельца: «баг — перевести на единую дверь».
+ * 7 → 2 (2026-08-27): переведены все пять оставшихся боевых путей — рукопашная
+ * NPC, рукопашная и рывок монстра, рукопашная игрока, попадание снаряда, взрыв,
+ * рукопашная ко-оп-пира. Поведение не сдвинуто ни на одну дельту: расхождения
+ * между путями сохранены временными шлюзами на входе двери (`relationPenalty`,
+ * `relationAttacker`, `factionClash`, `notifyVictim`, `applied`,
+ * `reportedDamage`, `deathByCaller`) и закреплены таблицей
+ * `tests/damage-door-unification.test.ts`. Снимает эти шлюзы следующий шаг —
+ * общий закон «насилие двигает репутацию» (`plot.md` §7).
+ * Остаток — ровно тот отдельный класс: самоурон Трескотника, где бьющий и есть
+ * жертва и сообщать некому. */
+const DAMAGE_DOOR_BASELINE = 2;
 if (damageDoorHits.length > DAMAGE_DOOR_BASELINE) {
   failures.push(`Урон мимо двери: ${damageDoorHits.length} мест снимают здоровье напрямую, разрешено ${DAMAGE_DOOR_BASELINE}.`);
   failures.push('    Здоровье актору снимает `damageActor` (systems/combat_stimulus.ts) — он же сообщает жертве, кто ударил.');
@@ -398,6 +408,40 @@ if (frameLoopDeadReturns.length > FRAME_LOOP_DEAD_RETURN_BASELINE) {
   notes.push(`Кадровый цикл: ${frameLoopDeadReturns.length} (было ${FRAME_LOOP_DEAD_RETURN_BASELINE}). Опусти FRAME_LOOP_DEAD_RETURN_BASELINE.`);
 }
 
+/* ── Проверка: компилятор ослеплён вручную ──────────────────────── *
+ * `// @ts-ignore` гасит ОДНУ строку целиком и навсегда, не говоря, что именно
+ * он гасит. Измерено 2026-08-27: под двадцатью шестью такими строками пряталось
+ * 53 ошибки типов, и почти все были следами переименований, которым просто
+ * заткнули рот.
+ *
+ * Цена была не гигиеническая. Под одной из них в `loadGame` жила ссылка на
+ * несуществующее имя `floor`: загрузка сохранения падала с `ReferenceError`
+ * внутри обратного вызова загрузчика, кадр не перезаказывался, и «Продолжить»
+ * навсегда вешало игру на экране загрузки. Под другой — `floorDanger`, который
+ * разбирал выжженную шкалу этажей и возвращал `undefined` на любом настоящем
+ * этаже, из-за чего весь мир населялся первым уровнем.
+ *
+ * Ловится именно БЛАНКЕТНЫЙ `@ts-ignore`. `@ts-expect-error` — форма честная и
+ * под запрет не попадает: она называет код ошибки и сама падает, когда ошибка
+ * уходит, то есть не переживает собственную причину. Если тип не нравится —
+ * либо почини тип, либо назови ошибку. Число только вниз, и оно уже ноль. */
+const TS_IGNORE_BASELINE = 0;
+const tsIgnoreHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    if (/^\s*\/\/\s*@ts-ignore\b/.test(line)) {
+      tsIgnoreHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+    }
+  });
+}
+if (tsIgnoreHits.length > TS_IGNORE_BASELINE) {
+  failures.push(`Ослеплённый компилятор: ${tsIgnoreHits.length} строк под @ts-ignore, разрешено ${TS_IGNORE_BASELINE}.`);
+  failures.push('    `@ts-ignore` гасит строку целиком и молча. Почини тип, а не сообщение о нём.');
+  for (const h of tsIgnoreHits) failures.push(`    ${h}`);
+}
+
 const ENTITY_DEATH_OWNER = 'systems/entity_death.ts';
 const entityDeathHits = [];
 for (const file of files) {
@@ -431,12 +475,31 @@ const legacyZHits = [];
 for (const file of files) {
   const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
   const lines = fs.readFileSync(file, 'utf8').split('\n');
+  /* Разбор и ключ таблицы кодируют шкалу так же, но мимо двух форм ниже они
+   * проходили годами: `switch (z) { case 100: ... }` в `floorDanger` и
+   * `floorWeights: { [180]: 9.5 }` — пять профилей населения. Оба места
+   * выглядели рабочими и на каноническом этаже молча промахивались мимо всех
+   * веток. У `case` предмет разбора стоит СТРОКОЙ ВЫШЕ, поэтому его надо
+   * помнить: иначе либо слепота, либо ложные срабатывания на чужих `case 100:`. */
+  let switchSubjectIsFloor = false;
   lines.forEach((line, i) => {
+    const opened = /\bswitch\s*\(\s*([A-Za-z_$][\w$.]*)\s*\)/.exec(line);
+    if (opened) switchSubjectIsFloor = /(^|\.)z$|floor|Z$/i.test(opened[1]);
     for (const key of LEGACY_FLOOR_KEYS) {
       // Только z-контекст: те же числа законны как радиус, hp или процент.
       const asValue = new RegExp(`\\bz\\s*[:=]\\s*${key}\\b`);
       const asCompare = new RegExp(`\\bz\\s*(===|!==|>=|<=|>|<)\\s*${key}\\b`);
-      if (asValue.test(line) || asCompare.test(line)) {
+      const asSwitchCase = new RegExp(`\\bcase\\s+${key}\\s*:`);
+      const asTableKey = new RegExp(`\\[\\s*${key}\\s*\\]\\s*:`);
+      /* Число, спрятанное за ИМЕНЕМ константы. Так пережили вырезание поля
+       * `baseFloor` четыре `const BASE_FLOOR = 60|30|30|100` в пакетах этажей:
+       * значение ехало в `z` ящиков и в `targetFloorZ` квестов, и лабиринт с
+       * лестницей отправляли игрока на министерство вместо себя. Проверка
+       * смотрела на литерал рядом с `z`, а тут литерал стоял рядом с именем.
+       * Ловим только имена, которые сами говорят про этаж. */
+      const asFloorConst = new RegExp(`\\bconst\\s+[A-Z][A-Z0-9_]*(?:FLOOR|_Z)\\s*=\\s*${key}\\b`);
+      if (asValue.test(line) || asCompare.test(line) || asTableKey.test(line) || asFloorConst.test(line)
+        || (asSwitchCase.test(line) && switchSubjectIsFloor)) {
         legacyZHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
         break;
       }
@@ -491,11 +554,194 @@ if (floorEdges.length) {
   for (const h of floorEdges) failures.push(`    ${h}`);
 }
 
+/* ── Проверка 4.2: запертая дверь без ключа ─────────────────────── *
+ * Ключ от створки читает `doorKeyId` (systems/door_state.ts), и пустое поле в
+ * данных он трактует как универсальный предмет `key`. Умолчание удобное, его
+ * никто не отменяет — но полагаться на него МОЛЧА нельзя: `DoorState.LOCKED`
+ * с пустым `keyId` даёт дверь, которая выглядит замком, а открывается первой
+ * же связкой, подобранной этажом выше. Разницы между «замок на класс допуска»
+ * и «замок ни на что» в коде не видно ни на глаз, ни компилятору: половина
+ * генераторов ключ называет, половина полагается на умолчание не думая.
+ *
+ * Поведение проверка НЕ меняет. Она мешает новому генератору лечь на умолчание,
+ * не заметив этого.
+ *
+ * Ловятся три формы, в которых замок виден статически:
+ *   1. литерал спецификации со свойством `state`/`doorState` — у него обязано
+ *      быть непустое `keyId`;
+ *   2. `DoorState.LOCKED` прямым аргументом вызова — у помощника с параметром
+ *      `keyId` соответствующий аргумент обязан быть и быть непустым;
+ *   3. присваивание `дверь.state = ...LOCKED...` — ключ обязан называться тут же,
+ *      в том же блоке (`door.keyId = ...` строкой ниже — законная и частая форма).
+ * Сравнения, `case`, значения по умолчанию у параметров, элементы массивов и
+ * ПЕРЕМЕННЫЕ (`const state = ... LOCKED ...`, дальше уезжающие в помощника)
+ * не проверяются: разбирать поток значения статически эта проверка не умеет и
+ * не должна — на такой глубине она начнёт врать в обе стороны. */
+const astCache = new Map();
+function sourceFileFor(file) {
+  let sf = astCache.get(file);
+  if (!sf) {
+    sf = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true);
+    astCache.set(file, sf);
+  }
+  return sf;
+}
+
+const DOOR_STATE_PROPS = new Set(['state', 'doorState']);
+const EMPTY_STRING = /^(''|""|``)$/;
+const keyIdParamGlobal = new Map();   // имя функции → индекс параметра keyId | 'ambiguous'
+const keyIdParamLocal = new Map();    // файл → та же карта, но только своих функций
+const importOrigin = new Map();       // файл → (имя → файл, откуда оно пришло)
+
+function recordKeyIdParam(map, name, params) {
+  if (!name || !params) return;
+  let idx = -1;
+  params.forEach((p, i) => { if (ts.isIdentifier(p.name) && p.name.text === 'keyId') idx = i; });
+  if (idx < 0) return;
+  const prev = map.get(name);
+  map.set(name, prev !== undefined && prev !== idx ? 'ambiguous' : idx);
+}
+
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  const local = new Map();
+  keyIdParamLocal.set(srcRel, local);
+  // Помощники дверей носят одинаковые имена во всех пакетах этажей (`addDoor`,
+  // `connectRoomToPoint`), поэтому по одному имени сигнатуру не найти: надо
+  // спросить именно тот модуль, откуда имя импортировано.
+  const origin = new Map();
+  importOrigin.set(srcRel, origin);
+  for (const m of fs.readFileSync(file, 'utf8').matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"](\.[^'"]+)['"]/g)) {
+    let target = path.relative(srcRoot, path.resolve(path.dirname(file), m[2])).replaceAll(path.sep, '/');
+    if (target.startsWith('..')) continue;
+    if (!fs.existsSync(path.join(srcRoot, `${target}.ts`))) target = `${target}/index`;
+    for (const spec of m[1].split(',')) {
+      const name = spec.trim().replace(/^type\s+/, '').split(/\s+as\s+/).pop()?.trim();
+      if (name) origin.set(name, `${target}.ts`);
+    }
+  }
+  const collect = (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      recordKeyIdParam(keyIdParamGlobal, node.name.text, node.parameters);
+      recordKeyIdParam(local, node.name.text, node.parameters);
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+      && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+      recordKeyIdParam(keyIdParamGlobal, node.name.text, node.initializer.parameters);
+      recordKeyIdParam(local, node.name.text, node.initializer.parameters);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFileFor(file));
+}
+
+const lockedNoKeyHits = [];
+for (const file of files) {
+  const srcRel = path.relative(srcRoot, file).replaceAll(path.sep, '/');
+  const sf = sourceFileFor(file);
+  const lines = sf.text.split('\n');
+  const local = keyIdParamLocal.get(srcRel);
+
+  // Ключ назван рядом: `door.state = LOCKED; door.keyId = ...` — законная форма.
+  const namesKeyNearby = (node) => {
+    let scope = node.parent;
+    while (scope && !ts.isBlock(scope) && !ts.isSourceFile(scope)) scope = scope.parent;
+    return !!scope && /\bkeyId\b/.test(scope.getText(sf));
+  };
+
+  const report = (node, why) => {
+    const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+    lockedNoKeyHits.push(`${srcRel}:${line}  ${why}  ${lines[line - 1].trim().slice(0, 88)}`);
+  };
+
+  const inspect = (node) => {
+    // Сравнение и `case` разбирают состояние, а не создают его.
+    let n = node;
+    while (n.parent) {
+      const p = n.parent;
+      if (ts.isBinaryExpression(p) && (p.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+        || p.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken)) return;
+      if (ts.isCaseClause(p) || ts.isArrayLiteralExpression(p) || ts.isParameter(p)
+        || ts.isVariableDeclaration(p)) return;
+      if (ts.isCallExpression(p) || ts.isObjectLiteralExpression(p) || ts.isPropertyAssignment(p)
+        || ts.isReturnStatement(p) || ts.isBinaryExpression(p)) break;
+      n = p;
+    }
+
+    // 3. Присваивание состояния живой двери.
+    let assign = node.parent;
+    while (assign && !ts.isBinaryExpression(assign) && !ts.isCallExpression(assign)
+      && !ts.isObjectLiteralExpression(assign)) assign = assign.parent;
+    if (assign && ts.isBinaryExpression(assign) && assign.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      if (!namesKeyNearby(assign)) report(node, 'состояние выставлено в LOCKED, ключ рядом не назван');
+      return;
+    }
+
+    // 1 и 2: ближайший владелец — спецификация или вызов.
+    let owner = node.parent, arg = node;
+    while (owner) {
+      if (ts.isObjectLiteralExpression(owner)) break;
+      if (ts.isCallExpression(owner) && owner.arguments.includes(arg)) break;
+      arg = owner; owner = owner.parent;
+    }
+    if (!owner) return;
+
+    if (ts.isObjectLiteralExpression(owner)) {
+      let holder = node.parent;
+      while (holder && holder !== owner && !ts.isPropertyAssignment(holder)) holder = holder.parent;
+      if (!holder || holder === owner || !DOOR_STATE_PROPS.has(holder.name.getText(sf))) return;
+      const key = owner.properties.find(p => p.name && p.name.getText(sf) === 'keyId');
+      if (!key) { report(node, 'спецификация двери без keyId'); return; }
+      const init = ts.isPropertyAssignment(key) ? key.initializer.getText(sf) : key.getText(sf);
+      if (EMPTY_STRING.test(init.trim())) report(node, "спецификация двери с keyId: ''");
+      return;
+    }
+
+    const callee = ts.isIdentifier(owner.expression) ? owner.expression.text
+      : ts.isPropertyAccessExpression(owner.expression) ? owner.expression.name.text : null;
+    const from = callee ? importOrigin.get(srcRel)?.get(callee) : undefined;
+    const known = callee
+      ? (local.get(callee) ?? keyIdParamLocal.get(from)?.get(callee) ?? keyIdParamGlobal.get(callee))
+      : undefined;
+    if (typeof known !== 'number') {
+      // Помощник ключа не принимает вовсе (или одноимённых помощников много):
+      // тогда ключ обязан называться в том же блоке, что и вызов.
+      if (!namesKeyNearby(owner)) report(node, `${callee}() не называет ключ`);
+      return;
+    }
+    const keyArg = owner.arguments[known];
+    if (!keyArg) { report(node, `${callee}() вызван без аргумента keyId`); return; }
+    if (EMPTY_STRING.test(keyArg.getText(sf).trim())) report(node, `${callee}(keyId = '')`);
+  };
+
+  const visit = (node) => {
+    if (ts.isPropertyAccessExpression(node) && node.getText(sf) === 'DoorState.LOCKED') inspect(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+}
+/* Замерено 2026-08-27: четыре места. Тёмная пересадка запирает каждую четвёртую
+ * слепую подсобку спецификацией `DarkMetroOwnedRoomSpec`, в которой поля ключа
+ * нет вообще; технический этаж запирает каморку уборщика и клетушку клерка
+ * помощниками с умолчанием `keyId = ''`; пломбировщик на жилом ставит СЮЖЕТНУЮ
+ * запечатанную створку своим локальным `addDoor`, который ключ не принимает —
+ * то есть «печать» снимается любым найденным ключом. Все четыре — авторские
+ * решения контентных пакетов, и правит их владелец этажа, а не эта проверка.
+ * Число только вниз. */
+const LOCKED_DOOR_NO_KEY_BASELINE = 4;
+if (lockedNoKeyHits.length > LOCKED_DOOR_NO_KEY_BASELINE) {
+  failures.push(`Запертая дверь без ключа: ${lockedNoKeyHits.length} мест, разрешено ${LOCKED_DOOR_NO_KEY_BASELINE}.`);
+  failures.push("    Пустой `keyId` у LOCKED означает универсальный предмет `key` — замок, который открывает любая связка.");
+  failures.push('    Назови ключ явно (`keyId: \'key\'` — тоже ответ) или не запирай створку.');
+  for (const h of lockedNoKeyHits) failures.push(`    ${h}`);
+} else if (lockedNoKeyHits.length < LOCKED_DOOR_NO_KEY_BASELINE) {
+  notes.push(`Запертая дверь без ключа: ${lockedNoKeyHits.length} (было ${LOCKED_DOOR_NO_KEY_BASELINE}). Опусти LOCKED_DOOR_NO_KEY_BASELINE.`);
+}
+
 /* ── Проверка 3: длина функции ─────────────────────────────────── */
 const longFunctions = [];
 for (const file of files) {
-  const text = fs.readFileSync(file, 'utf8');
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
+  const sf = sourceFileFor(file);
 
   const visit = (node) => {
     const isFn = ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)
@@ -541,4 +787,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), @ts-ignore (${tsIgnoreHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), запертая дверь без ключа (${lockedNoKeyHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);

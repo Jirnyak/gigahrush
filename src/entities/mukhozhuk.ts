@@ -1,6 +1,6 @@
 /* -- Mukhozhuk: exposed parasite authority host ---------------- */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 1.28,
   dmg: 13,
   attackRate: 1.28,
+  damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['larvaCarrier', 'foodBait'],
   counterplay: 'Лечите раненых при нём и себя тоже: личинка не приживается в закрытой ране. Добить своего — значит выпустить мухожука сразу.',

@@ -3,7 +3,7 @@
 /*   but attacks with devastating PSI bolts. Each idol is unique */
 /*   — procedural shape from entity name hash.                   */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -14,6 +14,7 @@ export const DEF: MonsterDef = {
   speed: 0,            // immobile — does not move
   dmg: 30,
   attackRate: 2.0,
+  damageType: DamageType.PSI,
   sprite: 0,           // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 12,

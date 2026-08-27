@@ -11,6 +11,7 @@ import {
   resolveQuestTargetRoom,
 } from '../systems/contracts';
 import { questKind, routeFloor, type QuestKind } from './quest_ui';
+import { roomIdsOfType } from '../world/room_index';
 import { getActiveQuest, npcQuestMarkerState, questAddressesBySlot } from '../systems/quests';
 import { isHostile } from '../systems/factions';
 import { ENTITY_MASK_ITEM_DROP, ENTITY_MASK_VISIBLE, getEntityIndex } from '../systems/entity_index';
@@ -33,9 +34,19 @@ import { isPlayerEntity } from '../systems/player_actor';
 import { fitTextStable } from './ui_text';
 
 const MAP_SIZE = 80;
-const FULL_MAP_RADIUS_DEFAULT = 200;
-const FULL_MAP_RADIUS_MIN = 48;
-const FULL_MAP_RADIUS_MAX = W / 2;
+/* Границы обзора полной карты и кламп к ним — одни на проект. Поле
+ * `state.fullMapRadius` пишет ввод (зум), читает эта отрисовка; два независимых
+ * набора границ означали бы, что нарисованный охват не равен сохранённому. */
+export const FULL_MAP_RADIUS_DEFAULT = 200;
+export const FULL_MAP_RADIUS_MIN = 48;
+export const FULL_MAP_RADIUS_MAX = W / 2;
+
+/** Привести любой вход (в том числе из сейва) к допустимому охвату карты. */
+export function clampFullMapRadius(value: unknown): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : FULL_MAP_RADIUS_DEFAULT;
+  return Math.max(FULL_MAP_RADIUS_MIN, Math.min(FULL_MAP_RADIUS_MAX, Math.round(numeric)));
+}
+
 type MapMarkerStyle = { stroke: string; fill: string };
 
 const activeKillKinds = new Set<MonsterKind>();
@@ -927,6 +938,41 @@ function blitMapRaster(
   ctx.restore();
 }
 
+/** Одна отметка цели. Вынесено из цикла, чтобы обход не заводил замыкание в кадре. */
+function markQuestRoom(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  roomId: number,
+  kind: QuestKind,
+  pxI: number,
+  pyI: number,
+  mapX: number,
+  mapY: number,
+  radius: number,
+  cellW: number,
+  cellH: number,
+): void {
+  if (drawnTargetRooms.has(roomId)) return;
+  const room = world.rooms[roomId];
+  if (!room || room.id !== roomId) return;
+  const cx = world.wrap(Math.floor(room.x + room.w / 2));
+  const cy = world.wrap(Math.floor(room.y + room.h / 2));
+  const ci = world.idx(cx, cy);
+  const cell = world.cells[ci];
+  if ((cell !== Cell.FLOOR && cell !== Cell.DOOR) || !isMapCellExplored(world, ci)) return;
+  const dx = world.delta(pxI, cx);
+  const dy = world.delta(pyI, cy);
+  if (Math.abs(dx) > radius || Math.abs(dy) > radius) return;
+  drawQuestMarker(ctx, mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, 5, 3, kind);
+  drawnTargetRooms.add(roomId);
+}
+
+/* Отметки целей ищутся от САМИХ целей, а не перебором этажа. Здесь стоял обход
+ * всех комнат мира — до 10231 на жилом этаже, КАЖДЫЙ кадр, пока у игрока есть
+ * хоть один квест с комнатой. Конкретных отметок не больше восьми
+ * (`MAX_CONCRETE_QUEST_ROOM_MARKERS`), а комнаты нужного типа уже собраны в
+ * проекции `roomIdsOfType`. Приоритет прежний: явная комната перекрывает тип —
+ * её проход идёт первым, а `drawnTargetRooms` не даёт нарисовать дважды. */
 function drawMapRoomQuestMarkers(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -939,21 +985,13 @@ function drawMapRoomQuestMarkers(
   cellH: number,
 ): void {
   if (activeTargetRooms.size === 0 && activeTargetRoomTypes.size === 0) return;
-  for (const room of world.rooms) {
-    if (!room || drawnTargetRooms.has(room.id)) continue;
-    let markerKind = activeTargetRooms.get(room.id);
-    if (!markerKind) markerKind = activeTargetRoomTypes.get(room.type);
-    if (!markerKind) continue;
-    const cx = world.wrap(Math.floor(room.x + room.w / 2));
-    const cy = world.wrap(Math.floor(room.y + room.h / 2));
-    const ci = world.idx(cx, cy);
-    const cell = world.cells[ci];
-    if ((cell !== Cell.FLOOR && cell !== Cell.DOOR) || !isMapCellExplored(world, ci)) continue;
-    const dx = world.delta(pxI, cx);
-    const dy = world.delta(pyI, cy);
-    if (Math.abs(dx) > radius || Math.abs(dy) > radius) continue;
-    drawQuestMarker(ctx, mapX + (dx + radius) * cellW, mapY + (dy + radius) * cellH, 5, 3, markerKind);
-    drawnTargetRooms.add(room.id);
+  for (const [roomId, kind] of activeTargetRooms) {
+    markQuestRoom(ctx, world, roomId, kind, pxI, pyI, mapX, mapY, radius, cellW, cellH);
+  }
+  for (const [type, kind] of activeTargetRoomTypes) {
+    for (const roomId of roomIdsOfType(world, type)) {
+      markQuestRoom(ctx, world, roomId, kind, pxI, pyI, mapX, mapY, radius, cellW, cellH);
+    }
   }
 }
 
@@ -1142,6 +1180,25 @@ for (let i = 0; i < 64; i++) {
 }
 
 /* ── Shared map renderer (used by minimap + fullmap) ──────────── */
+/**
+ * Подложка виджета и обрезка по его рамке.
+ *
+ * Метки ставятся по смещению клетки и рисуются от центра, поэтому метка на
+ * последнем кольце садится ровно на границу и вываливает свою половину (до 6 px)
+ * на соседнюю панель HUD. Обрезаем всё по виджету.
+ */
+function clipMapWidget(
+  ctx: CanvasRenderingContext2D,
+  mapX: number, mapY: number, mapW: number, mapH: number, bgAlpha: number,
+): void {
+  ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
+  ctx.fillRect(mapX, mapY, mapW, mapH);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mapX, mapY, mapW, mapH);
+  ctx.clip();
+}
+
 function drawMap(
   ctx: CanvasRenderingContext2D,
   world: World, player: Entity,
@@ -1152,16 +1209,7 @@ function drawMap(
   state?: GameState,
   uiTime = state?.time ?? 0,
 ): void {
-  ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
-  ctx.fillRect(mapX, mapY, mapW, mapH);
-
-  // Markers are placed by cell offset and drawn centred, so a marker on the last
-  // ring lands exactly on the border and spills its half-size (up to 6px) onto
-  // whatever HUD panel sits next to the minimap. Clip everything to the widget.
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(mapX, mapY, mapW, mapH);
-  ctx.clip();
+  clipMapWidget(ctx, mapX, mapY, mapW, mapH, bgAlpha);
 
   const pxI = Math.floor(player.x);
   const pyI = Math.floor(player.y);
@@ -1557,6 +1605,23 @@ function drawLegendMenuRow(
   ctx.fillText(fitTextStable(ctx, value, valueW), x + groupW + labelW + 20 * sx, textY);
 }
 
+/**
+ * Сколько строк легенды влезает на экран.
+ *
+ * Отрисовка и прокрутка обязаны считать это одной формулой. Прокрутка в
+ * `main.ts` держала свою — другой отступ сверху (92 против 66), другой шаг
+ * строки (13 против 18) и без полосы образцов внизу, — и на любом окне ниже
+ * ~500 px канваса давала 9 строк там, где рисуются 4: выделение уезжало в
+ * невидимую часть списка, а сам список не прокручивался никогда.
+ */
+export function mapLegendVisibleRows(canvasHeight: number, sx: number, sy: number): number {
+  const s = Math.max(1, Math.min(1.68, Math.min(sx, sy)));
+  const top = 66 * s;
+  const rowH = 18 * s;
+  const bottom = Math.max(top + rowH * 4, (canvasHeight - 70 * s) - 16 * s);
+  return Math.max(4, Math.floor((bottom - top) / rowH));
+}
+
 export function drawMapLegendMenu(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -1581,8 +1646,7 @@ export function drawMapLegendMenu(
   const top = 66 * s;
   const rowH = 18 * s;
   const swatchY = h - 70 * s;
-  const bottom = Math.max(top + rowH * 4, swatchY - 16 * s);
-  const visibleRows = Math.max(4, Math.floor((bottom - top) / rowH));
+  const visibleRows = mapLegendVisibleRows(h, sx, sy);
   const rowCount = mapLegendRowCount();
   const maxScroll = Math.max(0, rowCount - visibleRows);
   const scroll = Math.max(0, Math.min(maxScroll, state.mapLegendScroll));
@@ -1686,11 +1750,7 @@ export function drawFullMap(
   const pad = 4 * sx;
   const mapW = cw - pad * 2;
   const mapH = ch - pad * 2;
-  const rawRadius = state?.fullMapRadius;
-  const radius = Math.max(
-    FULL_MAP_RADIUS_MIN,
-    Math.min(FULL_MAP_RADIUS_MAX, Math.round(typeof rawRadius === 'number' && Number.isFinite(rawRadius) ? rawRadius : FULL_MAP_RADIUS_DEFAULT)),
-  );
+  const radius = clampFullMapRadius(state?.fullMapRadius);
   drawMap(ctx, world, player, pad, pad, mapW, mapH, radius, 0.85, quests, currentZ, state, uiTime);
 
 }

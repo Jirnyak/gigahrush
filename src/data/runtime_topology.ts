@@ -12,7 +12,7 @@ export type RuntimeTopologyDirtyFlag =
 
 export type RuntimeTopologyFeatureId = Extract<
   FloorAnomalyId,
-  'wall_snake' | 'living_tunnels' | 'section_shift' | 'conway_life' | 'rail_trains' | 'bad_apple_world' | 'sandpile_perekrytie'
+  'wall_snake' | 'living_tunnels' | 'section_shift' | 'conway_life' | 'rail_trains' | 'sandpile_perekrytie'
 >;
 
 export interface RuntimeTopologyContract {
@@ -42,8 +42,6 @@ export const RUNTIME_TOPOLOGY_LIMITS = {
   sectionShiftMaxSectionCells: 720,
   sandpileMaxArenas: 3,
   sandpileMaxArenaCells: 40 * 32,
-  badAppleMaxScreens: 2,
-  badApplePixelsPerScreen: 144 * 108,
   railTrainMaxTrains: 8,
   railTrainMaxLength: 16,
 } as const;
@@ -126,18 +124,6 @@ export const RUNTIME_TOPOLOGY_CONTRACTS: readonly RuntimeTopologyContract[] = [
     routeCriticalProtections: ['platform safe-exit search', 'non-wall platform cells', 'train cells do not rewrite World.cells'],
     counterplay: ['wait on platform', 'board only while stopped', 'exit at platform', 'avoid rail cells when warned'],
     saveBehavior: 'Runtime train offsets are snapshotted for rebuild; cell occupancy map is rebuilt each update.',
-  },
-  {
-    id: 'bad_apple_world',
-    cadence: 'source frame step from packed video, about 15 fps while active',
-    maxArenaCells: RUNTIME_TOPOLOGY_LIMITS.badAppleMaxScreens * RUNTIME_TOPOLOGY_LIMITS.badApplePixelsPerScreen,
-    maxArenaCount: RUNTIME_TOPOLOGY_LIMITS.badAppleMaxScreens,
-    cacheKey: 'WeakMap<World, BadAppleRuntime | null> from [bad_apple:*] room tags',
-    invalidatesOn: ['new World object', 'route transition/load', 'samosbor rebuild', 'debug spawn', 'relight pass'],
-    dirtyFlags: ['cells', 'wallTex', 'floorTex', 'features', 'fog', 'containerMap', 'doors'],
-    routeCriticalProtections: ['site scorer avoids hard-protected cells', 'projector corridor is explicit', 'player cell stays floor with damage warning'],
-    counterplay: ['toggle projector with E', 'stand on white/safe cells', 'leave the screen rectangle'],
-    saveBehavior: 'No custom save section; frame and active state are stored in room tag.',
   },
 ] as const;
 

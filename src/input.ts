@@ -19,7 +19,6 @@ export const JOYSTICK_CONFIG = {
 
 export function triggerHapticFeedback(duration: number = 10): void {
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-    // @ts-ignore
     navigator.vibrate(duration);
   }
 }
@@ -44,7 +43,6 @@ export function createInput(): InputState {
     sleep: false,
     controls: false,
     uiSettings: false,
-    controlEdit: false,
     controlReset: false,
     controlClose: false,
     mouse: { dx: 0, dy: 0, menuDx: 0, menuDy: 0, locked: false },
@@ -84,7 +82,6 @@ function clearPointerState(input: InputState): void {
 
 function clearLostInputState(input: InputState, canvas: HTMLCanvasElement): void {
   clearControlInputs(input);
-  input.controlEdit = false;
   input.controlReset = false;
   input.controlClose = false;
   input.menuAccept = false;
@@ -279,7 +276,6 @@ class InputBinder {
     this.input.mouse.locked = document.pointerLockElement === this.canvas;
     if (!this.input.mouse.locked) {
       clearPointerState(this.input);
-      this.input.controlEdit = false;
       this.input.controlReset = false;
       this.input.controlClose = false;
       this.input.menuAccept = false;

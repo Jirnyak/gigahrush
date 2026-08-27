@@ -65,7 +65,6 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   upper_bureau: shares(42, 26, 8, 16, 8),
   number_registry: shares(30, 18, 10, 34, 8),
   istinniy_labirint: shares(24, 16, 16, 10, 34),
-  // @ts-ignore
   bank_floor: shares(42, 28, 8, 10, 12),
   critical_leak_archive: shares(28, 34, 8, 18, 12),
   raionsovet_archive: shares(44, 22, 8, 14, 12),
@@ -83,7 +82,10 @@ const DESIGN_TERRITORY: Readonly<Record<DesignFloorId, readonly FloorTerritorySh
   obschezhitie_smeny: shares(56, 16, 7, 8, 13),
   penrose_laundry: shares(56, 17, 7, 8, 12),
   black_market_88: shares(16, 9, 8, 7, 60),
-  perevalka: shares(30, 34, 6, 6, 24),
+  /* Четыре равнозначные базы держат все лифты вниз — доли поровну, а культистов
+     на грузовом ярусе нет вовсе: базы четыре, и пятого владельца земли здесь
+     быть не должно. */
+  perevalka: shares(25, 25, 0, 25, 25),
   production_belt: shares(14, 50, 6, 18, 12),
   service_floor: shares(16, 52, 6, 12, 14),
   hyperbolic_switchyard: shares(12, 44, 8, 16, 20),

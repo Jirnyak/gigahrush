@@ -1,6 +1,6 @@
 /* ── Item definitions — еда, напитки, медицина, оружие, амуниция, разное ── */
 
-import { RoomType, ItemType, type Item, type ItemDef, type Entity, DamageType } from '../core/types';
+import { ArmorType, RoomType, ItemType, type Item, type ItemDef, type Entity, DamageType } from '../core/types';
 import { CHERNOBOG_DOCKET_ITEMS, CHERNOBOG_DOCKET_ITEM_TAGS } from './chernobog_docket';
 import { DOCUMENT_ACCESS_ITEMS, DOCUMENT_ACCESS_ITEM_TAGS } from './documents_access';
 import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from './inventory_limits';
@@ -401,12 +401,33 @@ export const ITEMS: Record<string, ItemDef> = {
     tags: ['arena_reward', 'trophy'],
   },
 
-  // ── Armor ────────────────────────────────────────────────────────
-  armor_light: { id: 'armor_light', name: 'Лёгкая броня', type: ItemType.MISC, desc: 'Базовая защита от кинетического урона и дроби.', spawnRooms: [RoomType.COMMON, RoomType.PRODUCTION], spawnW: 50, value: 500, resistances: { [DamageType.KINETIC]: 20, [DamageType.BUCKSHOT]: 30, [DamageType.FIRE]: 5 } },
-  armor_medium: { id: 'armor_medium', name: 'Средняя броня', type: ItemType.MISC, desc: 'Надежная защита для патрулей. Тяжеловата.', spawnRooms: [RoomType.MEDICAL, RoomType.PRODUCTION], spawnW: 30, value: 1200, resistances: { [DamageType.KINETIC]: 40, [DamageType.BUCKSHOT]: 50, [DamageType.ENERGY]: 15, [DamageType.FIRE]: 10 } },
-  armor_heavy: { id: 'armor_heavy', name: 'Тяжёлая броня', type: ItemType.MISC, desc: 'Толстые пластины, способные выдержать сильный урон.', spawnRooms: [RoomType.PRODUCTION], spawnW: 10, value: 3000, resistances: { [DamageType.KINETIC]: 60, [DamageType.BUCKSHOT]: 70, [DamageType.ENERGY]: 30, [DamageType.FIRE]: 20 } },
-  armor_liquidator: { id: 'armor_liquidator', name: 'Броня Ликвидатора', type: ItemType.MISC, desc: 'Высочайшая защита от пуль и картечи, создана для штурмов.', spawnRooms: [RoomType.PRODUCTION], spawnW: 5, value: 4500, resistances: { [DamageType.KINETIC]: 80, [DamageType.BUCKSHOT]: 85, [DamageType.ENERGY]: 20, [DamageType.FIRE]: 15, [DamageType.PSI]: 5 } },
-  armor_cultist: { id: 'armor_cultist', name: 'Ряса Культиста', type: ItemType.MISC, desc: 'Странная ткань, пропитанная неизвестным составом. Защищает от ПСИ-воздействия.', spawnRooms: [RoomType.COMMON, RoomType.MEDICAL], spawnW: 15, value: 2000, resistances: { [DamageType.KINETIC]: 10, [DamageType.BUCKSHOT]: 10, [DamageType.ENERGY]: 40, [DamageType.PSI]: 75 } },
+  /* ── Armor ──────────────────────────────────────────────────────
+   *
+   * Броня — ПОКУПКА, а не находка, и цена каждой выведена из полосы экономики
+   * (`ECONOMY_MONEY_BANDS`, `economics.md` §5), а не из вкуса. Полоса даёт два
+   * числа: `lootValueCap` — потолок, выше которого вещь перестаёт быть обычным
+   * лутом, и `maxLiquidCash` — сколько игрок в этой полосе вообще держит на
+   * руках. Комплект обязан стоять ВЫШЕ первого и НИЖЕ второго со спредом
+   * покупки 1.15 — тогда он виден на прилавке, но за него надо заработать.
+   *
+   * E2 (`lootValueCap` 4 000, `maxLiquidCash` 25 000) — средний маршрут:
+   *   лёгкая  12 000 = 3× потолка лута, 55 % кошелька полосы;
+   *   средняя 20 000 = 5× потолка лута, 23 000 со спредом — последняя покупка E2.
+   * E3 (`lootValueCap` 80 000, `maxLiquidCash` 250 000) — поздний маршрут:
+   *   ряса    100 000 = 1.25× потолка лута и потолок полосы ПСИ (§6: 25 000..100 000₽+);
+   *   тяжёлая 140 000 = 1.75× потолка лута, верх полосы «поздние энергетические»;
+   *   ликвид. 200 000 = 2.5× потолка лута, 230 000 со спредом — последняя покупка E3.
+   *
+   * Дырка 22 000..80 000 между E2 и E3 не заполнена намеренно: потолок лута
+   * между полосами растёт в двадцать раз, а кошелёк — в десять, и вещь из этого
+   * промежутка в E2 не по карману, а в E3 уже валяется в сейфе. Ставить туда
+   * броню — значит делать её находкой.
+   */
+  armor_light: { id: 'armor_light', name: 'Лёгкая броня', type: ItemType.MISC, desc: 'Базовая защита от кинетического урона и дроби.', spawnRooms: [RoomType.COMMON, RoomType.PRODUCTION], spawnW: 50, value: 12_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 20, [DamageType.BUCKSHOT]: 30, [DamageType.FIRE]: 5 } },
+  armor_medium: { id: 'armor_medium', name: 'Средняя броня', type: ItemType.MISC, desc: 'Надежная защита для патрулей. Тяжеловата.', spawnRooms: [RoomType.MEDICAL, RoomType.PRODUCTION], spawnW: 30, value: 20_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 40, [DamageType.BUCKSHOT]: 50, [DamageType.ENERGY]: 15, [DamageType.FIRE]: 10 } },
+  armor_heavy: { id: 'armor_heavy', name: 'Тяжёлая броня', type: ItemType.MISC, desc: 'Толстые пластины, способные выдержать сильный урон.', spawnRooms: [RoomType.PRODUCTION], spawnW: 10, value: 140_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 60, [DamageType.BUCKSHOT]: 70, [DamageType.ENERGY]: 30, [DamageType.FIRE]: 20 } },
+  armor_liquidator: { id: 'armor_liquidator', name: 'Броня Ликвидатора', type: ItemType.MISC, desc: 'Высочайшая защита от пуль и картечи, создана для штурмов.', spawnRooms: [RoomType.PRODUCTION], spawnW: 5, value: 200_000, armorType: ArmorType.PLATE, resistances: { [DamageType.KINETIC]: 80, [DamageType.BUCKSHOT]: 85, [DamageType.ENERGY]: 20, [DamageType.FIRE]: 15, [DamageType.PSI]: 5 } },
+  armor_cultist: { id: 'armor_cultist', name: 'Ряса Культиста', type: ItemType.MISC, desc: 'Странная ткань, пропитанная неизвестным составом. Защищает от ПСИ-воздействия.', spawnRooms: [RoomType.COMMON, RoomType.MEDICAL], spawnW: 15, value: 100_000, armorType: ArmorType.CLOTH, resistances: { [DamageType.KINETIC]: 10, [DamageType.BUCKSHOT]: 10, [DamageType.ENERGY]: 40, [DamageType.PSI]: 75 } },
 
   // ── Еда (дешёвая, частая) ──
   bread:     { id:'bread',     name:'Хлеб',         type:ItemType.FOOD,     desc:'Чёрствый пайковый ломоть. Сухой настолько, что им можно подпереть жалобу.',          spawnRooms:[RoomType.KITCHEN,RoomType.STORAGE], spawnW:1, value:3, use:feed(15) },
@@ -858,9 +879,20 @@ export const ITEMS: Record<string, ItemDef> = {
 
   through_shaft_key: { id:'through_shaft_key', name:'Ключ сквозной шахты', type:ItemType.KEY, desc:'Снят с Вестника, державшего шахту. Пока лифт держат, вниз с последнего яруса не уехать — и наверх с крыши тоже: шахта у мира одна и замкнута.', spawnRooms:[], spawnW:0, value:0, stack:1 },
 
+  /* Перевалка: четыре базы держат все лифты вниз, у каждой свой ключ ко ВСЕМ
+     своим тамбурам. Цена одинаковая и высокая — купить можно, но это дорогой
+     из четырёх путей. В мире не валяется: только квест, труп, карман, прилавок. */
+  perevalka_key_wild: { id:'perevalka_key_wild', name:'Ключ грибной артели', type:ItemType.KEY, desc:'Долевой ключ Дантеса от нижних тамбуров дикой артели. Пахнет грибницей и чужой уверенностью.', spawnRooms:[], spawnW:0, value:10000, stack:1, tags:['perevalka','lift_gate','wild'] },
+  perevalka_key_citizen: { id:'perevalka_key_citizen', name:'Ключ общинной перевалки', type:ItemType.KEY, desc:'Ключ Ариэль от нижних тамбуров общины. Выдаётся за услугу, а не за выстрел.', spawnRooms:[], spawnW:0, value:10000, stack:1, tags:['perevalka','lift_gate','citizen'] },
+  perevalka_key_liquidator: { id:'perevalka_key_liquidator', name:'Ключ досмотровой заставы', type:ItemType.KEY, desc:'Ключ Томилова от нижних тамбуров заставы. По журналу он не выдавался и не терялся.', spawnRooms:[], spawnW:0, value:10000, stack:1, tags:['perevalka','lift_gate','liquidator'] },
+  perevalka_key_science: { id:'perevalka_key_science', name:'Ключ теневой лаборатории', type:ItemType.KEY, desc:'Ключ Жирняка от нижних тамбуров лаборатории. Ему он не нужен: внизу темнее, а значит теневиков больше.', spawnRooms:[], spawnW:0, value:10000, stack:1, tags:['perevalka','lift_gate','scientist'] },
+
   // ── Сюжетные предметы ──
   idol_chernobog: { id:'idol_chernobog', name:'Идол Чернобога', type:ItemType.MISC, desc:'Тёмная фигурка из неизвестного камня. Якову нужен целый образец, культисты ищут его как святыню.', spawnRooms:[RoomType.COMMON,RoomType.STORAGE,RoomType.OFFICE,RoomType.SMOKING], spawnW:1, value:200 },
   strange_clot: { id:'strange_clot', name:'Странный сгусток', type:ItemType.MISC, desc:'Пульсирующий остаток теневика. Яков просит держать в банке и не вскрывать в лифте.', spawnRooms:[], spawnW:0, value:500 },
+  /* Выпадает из инвентаря генерала Заслонова, когда тот перестаёт быть своим.
+     В мире не лежит нигде: одна руна на прогон, и она всегда на ком-то. */
+  black_rune: { id:'black_rune', name:'Чёрная руна', type:ItemType.MISC, desc:'Плоская чёрная пластина с прорезанной надписью. Язык не читается ни в одном словаре Гигахруща, а линии держат тепло руки дольше, чем должен камень.', spawnRooms:[], spawnW:0, value:900, stack:1, tags:['rare_trophy','psi','evidence','cult','plot'] },
   blue_glow_sample_sealed: { id:'blue_glow_sample_sealed', name:'Герметичный синий образец', type:ItemType.MISC, desc:'Запаянная ампула с голубым свечением. НИИ платит за целую герму и чистый журнал эксперимента.', spawnRooms:[], spawnW:0, value:420, stack:1, use:openBlueGlowSample },
   blue_glow_sample_open: { id:'blue_glow_sample_open', name:'Открытый синий образец', type:ItemType.MISC, desc:'Синяя проба без гермы. Дает короткий прилив, но пачкает руки, журнал и ближайший протокол.', spawnRooms:[], spawnW:0, value:90, stack:1, use:useOpenBlueGlowSample },
   ballot: { id:'ballot', name:'Бюллетень', type:ItemType.MISC, desc:'Избирательный бюллетень. Галочка стоит заранее, но очередь всё равно нужна.', spawnRooms:[RoomType.OFFICE,RoomType.COMMON,RoomType.LIVING,RoomType.CORRIDOR], spawnW:1, value:1 },

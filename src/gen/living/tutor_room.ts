@@ -13,7 +13,7 @@
 import {
   W, Cell, ContainerKind, DoorState, Tex, Feature,
   type Room, type Entity,
-  type Item, type WorldContainer,
+  type Item, type Needs, type WorldContainer,
   EntityType,
 } from '../../core/types';
 import { World } from '../../core/world';
@@ -21,6 +21,7 @@ import { protectRoom } from '../shared';
 import { stampNamedRoom } from '../named_rooms';
 import { LIVING_NAMED_ROOMS } from './rooms';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
+import { postNpcToRoom } from '../../systems/npc_special_routines';
 import { Spr } from '../../entities/sprite_index';
 import {
   TUTORIAL_START_CLEARANCE,
@@ -29,6 +30,22 @@ import {
   protectTutorialWallsAsHermetic,
 } from './tutorial_start';
 import { TUTORIAL_START } from '../../data/tutorial_start';
+
+/*
+ * Смена начинается сытой.
+ *
+ * Обоих держит в их комнатах авторский пост (`starter_post_shift`), но пост
+ * запрещает выйти за порог, а не жить: тело у них общее со всеми, голод и жажда
+ * копятся как у всех. `freshNeeds()` раздаёт разброс — вплоть до мочевого в
+ * тридцать пунктов, — и тогда первое же решение уводит инструктора в уборную у
+ * игрока на глазах, а на посту он вместо этого просто упрётся в поводок и
+ * бросит дело. Полная шкала это гасит: восемь часов поста целиком помещаются в
+ * бюджет полного тела, ноль по нуждам не достигается ни разу (счёт — в
+ * `data/npc_special_routines.ts`). Что накопится, ядро закроет НА МЕСТЕ из
+ * карманов, не сходя с точки (`systems/actor/body.ts`, `consumeCarried`): у
+ * Ольги две воды и два хлеба, у Баринова консерва.
+ */
+const POST_SHIFT_NEEDS: Needs = { food: 100, water: 100, sleep: 100, pee: 0, poo: 0 };
 
 const STARTER_LOCKER_LOOT: readonly Item[] = [
   { defId: 'water', count: 1 },
@@ -145,13 +162,15 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
   world.features[world.idx(hallX + hallW - 3, hallY + 2)] = Feature.LAMP;
   addStarterLocker(world, room, hallX + 1, hallY + hallH - 2);
 
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'olga',
+  // Пост объявлен анкетой, комнату называет тот, кто ставит человека сюда.
+  postNpcToRoom(requireSpawnedPlotNpcFromPackage(entities, nextId, 'olga',
     hallX + Math.floor(hallW / 2) + 0.5,
     hallY + 1.5,
     {
       angle: Math.PI / 2,
       spriteSeed: 90,
-    });
+      needs: POST_SHIFT_NEEDS,
+    }), room.id);
 
   // Стартовая зона живёт своим модулем: там объявлен весь первый сиквенс и
   // сказано, на каких четырёх знаках он держится. Точку появления игрока
@@ -211,9 +230,10 @@ export function generateTutorRoom(world: World, nextRoomId: number, entities: En
     inventory: [{ defId: 'ammo_9mm', count: 8 }],
   });
 
-  requireSpawnedPlotNpcFromPackage(entities, nextId, 'barni', armX + 2.5, armY + 1.5, { 
+  postNpcToRoom(requireSpawnedPlotNpcFromPackage(entities, nextId, 'barni', armX + 2.5, armY + 1.5, {
     angle: Math.PI,
-  });
+    needs: POST_SHIFT_NEEDS,
+  }), armory.id);
 
   // ── East wall hint posters ──
   {

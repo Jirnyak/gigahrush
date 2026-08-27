@@ -115,7 +115,7 @@ function addContainer(
   room: Room,
   x: number,
   y: number,
-  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'floor' | 'roomId' | 'zoneId'>,
+  container: Omit<WorldContainer, 'id' | 'x' | 'y' | 'z' | 'roomId' | 'zoneId'>,
 ): void {
   const wx = ctx.world.wrap(x);
   const wy = ctx.world.wrap(y);
@@ -124,7 +124,6 @@ function addContainer(
     id: nextContainerId(ctx),
     x: wx,
     y: wy,
-    // @ts-ignore
     z: -26,
     roomId: room.id,
     zoneId: ctx.world.zoneMap[ci],
@@ -243,7 +242,6 @@ function addValveControl(
   setFeature(ctx.world, x, y, Feature.APPARATUS);
   setFeature(ctx.world, x + (lx < ROOM_W / 2 ? 1 : -1), y, Feature.MACHINE);
   stampSurfaceSplat(ctx.world, x, y, 0.5, 0.5, 0.42, 150, room.id * 1200 + valveNo, 125, 170, 120, true);
-  // @ts-ignore
   addContainer(ctx, room, x, y, {
     kind: ContainerKind.EMERGENCY_BOX,
     name: `Вентиль ${valveNo}: ${label}`,
@@ -262,7 +260,6 @@ function addRewardLocker(ctx: MaintContentCtx, room: Room): void {
   const x = room.x + 23;
   const y = room.y + 12;
   setFeature(ctx.world, x, y, Feature.SHELF);
-  // @ts-ignore
   addContainer(ctx, room, x, y, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Сухой шкаф Насосной Матки',

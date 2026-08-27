@@ -13,6 +13,7 @@ import { registerFloorSideQuest } from '../../data/plot';
 import { withSeededRandom } from '../../core/rand';
 import { ensureConnectivity, sanitizeDoors } from '../shared';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CAYLEY_BYURO_ROUTE_ID, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_BYURO_Z, CayleyByuroGeneration, CAYLEY_TAGS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
+import { registerCayleyDecisionCues } from "./decisions";
 import { carveCayleyGraphField, placeLift, createCayleyMacroCampuses, connectCayleyMacroGraph, createCayleyHqClusters, createCayleyLatticeBooths, createRooms, connectCayleyGraph, populateAuthoredContent, tuneInitialZones, registerCayleyRouteCue, retainLiveCayleyDoorIds, ensureCayleyGeneratorLocks } from "./geometry";
 import { createState } from "./npcs";
 
@@ -99,6 +100,9 @@ export function generateCayleyByuroDesignFloor(seed = CAYLEY_BYURO_Z): CayleyByu
     tuneInitialZones(world);
     populateAuthoredContent(world, entities, rooms, state);
     registerCayleyRouteCue(world, rooms);
+    /* Три развилки каталога получают собственные подсказки; текст берётся
+       из `CAYLEY_BYURO_DECISIONS`, а не переписывается второй раз. */
+    registerCayleyDecisionCues(world, rooms.lobby);
     ensureConnectivity(world, spawnX, spawnY);
     sanitizeDoors(world);
     // Замки графа выдаются последним тактом геометрии: до санации гарантии нет.

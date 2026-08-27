@@ -1700,16 +1700,22 @@ export type NpcIds = {
 };
 
 export function stampUpperBureauRooms(world: World): UpperBureauRooms {
-  let nextRoomId = 0;
-  const salon = stampBureauRoom(world, nextRoomId++, RoomType.COMMON, 'Салон ожидания верхнего бюро', 486, 497, 31, 21, Tex.F_RED_CARPET);
-  const executive = stampBureauRoom(world, nextRoomId++, RoomType.OFFICE, 'Кабинет предварительных решений', 544, 493, 20, 14, Tex.F_PARQUET);
-  const files = stampBureauRoom(world, nextRoomId++, RoomType.STORAGE, 'Нулевая картотека стертых имен', 568, 493, 18, 14, Tex.F_MARBLE_TILE);
-  const audit = stampBureauRoom(world, nextRoomId++, RoomType.OFFICE, 'Аудиторская Льва', 535, 474, 22, 13, Tex.F_GREEN_CARPET);
-  const cleaner = stampBureauRoom(world, nextRoomId++, RoomType.STORAGE, 'Чистая кладовая Толика', 494, 526, 15, 10, Tex.F_TILE);
-  const staffDesk = stampBureauRoom(world, nextRoomId++, RoomType.OFFICE, 'Служебный стол обходных листов', 552, 526, 20, 10, Tex.F_MARBLE_TILE);
-  const shelter = stampBureauRoom(world, nextRoomId++, RoomType.COMMON, 'Политическое укрытие при салоне', 464, 496, 16, 14, Tex.F_GREEN_CARPET);
-  const archiveToll = stampBureauRoom(world, nextRoomId++, RoomType.OFFICE, 'Платный архивный проход', 588, 526, 22, 12, Tex.F_GREEN_CARPET);
-  const permitAmbush = stampBureauRoom(world, nextRoomId++, RoomType.HQ, 'Засада поддельных корешков', 520, 548, 24, 12, Tex.F_RED_CARPET);
+  /* Слот комнаты спрашивается у массива, а не считается своим счётчиком.
+   *
+   * `room.id` — это ИНДЕКС в `world.rooms` (замок `tests/rooms-dense.test.ts`), а
+   * `stampBureauRoom` через `stampRoom` кладёт комнату по индексу и ЗАТИРАЕТ чужую запись
+   * молча. Свой счётчик с нуля совпадал с длиной массива только потому, что авторское ядро
+   * бюро работает первым по пустому миру; расширение (`stampExpansionRoom`) длину уже
+   * спрашивает. Два счётчика на один массив держатся на порядке стадий — а он не обещан. */
+  const salon = stampBureauRoom(world, world.rooms.length, RoomType.COMMON, 'Салон ожидания верхнего бюро', 486, 497, 31, 21, Tex.F_RED_CARPET);
+  const executive = stampBureauRoom(world, world.rooms.length, RoomType.OFFICE, 'Кабинет предварительных решений', 544, 493, 20, 14, Tex.F_PARQUET);
+  const files = stampBureauRoom(world, world.rooms.length, RoomType.STORAGE, 'Нулевая картотека стертых имен', 568, 493, 18, 14, Tex.F_MARBLE_TILE);
+  const audit = stampBureauRoom(world, world.rooms.length, RoomType.OFFICE, 'Аудиторская Льва', 535, 474, 22, 13, Tex.F_GREEN_CARPET);
+  const cleaner = stampBureauRoom(world, world.rooms.length, RoomType.STORAGE, 'Чистая кладовая Толика', 494, 526, 15, 10, Tex.F_TILE);
+  const staffDesk = stampBureauRoom(world, world.rooms.length, RoomType.OFFICE, 'Служебный стол обходных листов', 552, 526, 20, 10, Tex.F_MARBLE_TILE);
+  const shelter = stampBureauRoom(world, world.rooms.length, RoomType.COMMON, 'Политическое укрытие при салоне', 464, 496, 16, 14, Tex.F_GREEN_CARPET);
+  const archiveToll = stampBureauRoom(world, world.rooms.length, RoomType.OFFICE, 'Платный архивный проход', 588, 526, 22, 12, Tex.F_GREEN_CARPET);
+  const permitAmbush = stampBureauRoom(world, world.rooms.length, RoomType.HQ, 'Засада поддельных корешков', 520, 548, 24, 12, Tex.F_RED_CARPET);
 
   return { salon, executive, files, audit, cleaner, staffDesk, shelter, archiveToll, permitAmbush };
 }

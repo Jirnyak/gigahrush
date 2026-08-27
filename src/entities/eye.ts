@@ -1,7 +1,7 @@
 /* ── Eye — flying demonic eye (глаз) ──────────────────────────── */
 /*   Ranged monster: shoots projectiles like a cacodemon.        */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { rgba, noise, clamp, CLEAR, outline } from '../core/pixutil';
 const S = 128;
@@ -13,6 +13,7 @@ export const DEF: MonsterDef = {
   speed: 2.2,
   dmg: 14,
   attackRate: 2.5,
+  damageType: DamageType.ENERGY,
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 8,

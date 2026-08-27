@@ -17,6 +17,7 @@ import { currentFloorRunEntry, floorRunEntryMapLabel, formatFloorZ } from '../sy
 import { formatQuestMinutes, questDeadlineText, questHasDeadline, questRemainingMinutes } from '../systems/quest_deadlines';
 import { getActiveQuest, isQuestSelectableAsActive, type CurrentObjective } from '../systems/quests';
 import { drawNeuroPanel, drawGlitchText } from './hud_fx';
+import type { UiRect } from './ui_layout';
 import { drawWrappedText, fitText } from './ui_text';
 
 // Quest route floors are plain route coordinates. Only the six base floors get a
@@ -234,6 +235,76 @@ function failedQuestText(q: Quest, state: GameState): string {
   return 'Сорвано';
 }
 
+const QUEST_HINT_SEPARATOR = '  |  ';
+
+/** Коробка журнала. Одна на отрисовку и на тап. */
+function questLogPanel(canvasW: number, canvasH: number, sx: number, sy: number): UiRect {
+  const w = Math.min(400 * sx, canvasW - 24 * sx);
+  const h = Math.min(320 * sy, canvasH - 24 * sy);
+  return { x: (canvasW - w) / 2, y: (canvasH - h) / 2, w, h };
+}
+
+function questLogPages(state: GameState): Quest[] {
+  return [...state.quests.filter(q => !q.done), ...state.quests.filter(q => q.done)];
+}
+
+/** Сегменты нижней подсказки в порядке отрисовки. Слой нажатия берёт полосу
+ *  «цель на карте» отсюда: своя полоса у него лежала ВЫШЕ подсказки, на
+ *  последних строках описания квеста, и тап по тексту менял цель на карте. */
+function questLogHintSegments(state: GameState): { id: 'page' | 'active' | 'close'; text: string }[] {
+  const all = questLogPages(state);
+  const close = { id: 'close' as const, text: `${menuCloseHint()} закрыть` };
+  if (all.length === 0) return [close];
+  const q = all[Math.min(state.questPage, all.length - 1)];
+  const segments: { id: 'page' | 'active' | 'close'; text: string }[] = [];
+  if (all.length > 1) {
+    segments.push({ id: 'page', text: `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать` });
+  }
+  if (isQuestSelectableAsActive(q)) {
+    const isActiveQuest = getActiveQuest(state)?.id === q.id;
+    segments.push({ id: 'active', text: `${controlHint('gameMenu')} ${isActiveQuest ? 'снять цель' : 'цель на карте'}` });
+  }
+  segments.push(close);
+  return segments;
+}
+
+function questLogHintText(state: GameState): string {
+  return questLogHintSegments(state).map(seg => seg.text).join(QUEST_HINT_SEPARATOR);
+}
+
+export interface QuestLogHitRects {
+  panel: UiRect;
+  /** Нижняя полоса подсказки целиком — закрыть; она и нарисована как «закрыть». */
+  close: UiRect;
+  /** Полоса под словами «цель на карте» / «снять цель», если они нарисованы. */
+  toggleActive?: UiRect;
+}
+
+/** Полосы нажатия журнала заданий, выведенные из нарисованной подсказки. */
+export function questLogHitRects(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  sx: number,
+  sy: number,
+): QuestLogHitRects {
+  const panel = questLogPanel(ctx.canvas.width, ctx.canvas.height, sx, sy);
+  const strip: UiRect = { x: panel.x, y: panel.y + panel.h - 22 * sy, w: panel.w, h: 22 * sy };
+  const rects: QuestLogHitRects = { panel, close: strip };
+  const segments = questLogHintSegments(state);
+  const index = segments.findIndex(seg => seg.id === 'active');
+  if (index < 0) return rects;
+
+  ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
+  // Разбирается ИМЕННО нарисованная строка: fitText и обрезает, и переводит.
+  const parts = fitText(ctx, questLogHintText(state), panel.w - 16 * sx).split(QUEST_HINT_SEPARATOR);
+  if (parts.length !== segments.length) return rects;
+  const before = index > 0 ? parts.slice(0, index).join(QUEST_HINT_SEPARATOR) + QUEST_HINT_SEPARATOR : '';
+  const from = ctx.measureText(before).width;
+  const w = ctx.measureText(parts[index]).width;
+  if (w > 0) rects.toggleActive = { x: panel.x + 8 * sx + from, y: strip.y, w, h: strip.h };
+  return rects;
+}
+
 export function drawQuestLog(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -241,10 +312,11 @@ export function drawQuestLog(
   uiTime = state.time,
   currentObjective?: CurrentObjective | null,
 ): void {
-  const pw = Math.min(400 * sx, ctx.canvas.width - 24 * sx);
-  const ph = Math.min(320 * sy, ctx.canvas.height - 24 * sy);
-  const px = (ctx.canvas.width - pw) / 2;
-  const py = (ctx.canvas.height - ph) / 2;
+  const panel = questLogPanel(ctx.canvas.width, ctx.canvas.height, sx, sy);
+  const pw = panel.w;
+  const ph = panel.h;
+  const px = panel.x;
+  const py = panel.y;
   const time = uiTime;
 
   ctx.fillStyle = '#00040a';
@@ -266,7 +338,7 @@ export function drawQuestLog(
     // Close hint even when empty — never leave the player without a visible exit.
     ctx.fillStyle = '#7a93a0';
     ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-    ctx.fillText(fitText(ctx, `${menuCloseHint()} закрыть`, pw - 16 * sx), px + 8 * sx, py + ph - 8 * sy);
+    ctx.fillText(fitText(ctx, questLogHintText(state), pw - 16 * sx), px + 8 * sx, py + ph - 8 * sy);
     return;
   }
 
@@ -371,8 +443,5 @@ export function drawQuestLog(
   // Bottom hint
   ctx.fillStyle = '#7a93a0';
   ctx.font = `${7 * sy}px "Press Start 2P", monospace`;
-  const pageHint = all.length > 1 ? `${controlBindingLabel('menuUp')}/${controlBindingLabel('menuDown')} листать` : '';
-  const activeHint = isQuestSelectableAsActive(q) ? `${controlHint('gameMenu')} ${isActiveQuest ? 'снять цель' : 'цель на карте'}` : '';
-  const hint = [pageHint, activeHint, `${menuCloseHint()} закрыть`].filter(Boolean).join('  |  ');
-  ctx.fillText(fitText(ctx, hint, maxW), px + 8 * sx, py + ph - 8 * sy);
+  ctx.fillText(fitText(ctx, questLogHintText(state), maxW), px + 8 * sx, py + ph - 8 * sy);
 }

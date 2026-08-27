@@ -662,18 +662,24 @@ export function createCayleyLatticeBooths(world: World): void {
 }
 
 export function createRooms(world: World, state: CayleyByuroState): Record<CayleyElement | 'lobby' | 'bribe' | 'audit' | 'quotient', Room> {
-  let roomId = 0;
+  /* Слот комнаты спрашивается у массива, а не считается своим счётчиком.
+   *
+   * `room.id` — это ИНДЕКС в `world.rooms` (замок `tests/rooms-dense.test.ts`), а `addRoom`
+   * через `stampRoom` кладёт комнату по индексу и ЗАТИРАЕТ чужую запись молча. Свой счётчик
+   * с нуля совпадал с длиной массива только потому, что таблица Кэли строится первой по
+   * пустому миру; расширение (`addAutoRoom`) длину уже спрашивает. Два счётчика на один
+   * массив держатся на порядке стадий — а он не обещан. */
   const rooms = {
-    lobby: addRoom(world, roomId++, RoomType.COMMON, 470, 476, 84, 50, CAYLEY_BYURO_ROOM_NAMES.lobby, Tex.MARBLE, Tex.F_MARBLE_TILE),
-    e: addRoom(world, roomId++, RoomType.OFFICE, 448, 264, 64, 32, CAYLEY_BYURO_ROOM_NAMES.e),
-    r: addRoom(world, roomId++, RoomType.OFFICE, 580, 350, 66, 34, CAYLEY_BYURO_ROOM_NAMES.r),
-    rr: addRoom(world, roomId++, RoomType.OFFICE, 580, 540, 66, 34, CAYLEY_BYURO_ROOM_NAMES.rr),
-    s: addRoom(world, roomId++, RoomType.OFFICE, 448, 666, 64, 32, CAYLEY_BYURO_ROOM_NAMES.s),
-    sr: addRoom(world, roomId++, RoomType.OFFICE, 316, 540, 66, 34, CAYLEY_BYURO_ROOM_NAMES.sr),
-    srr: addRoom(world, roomId++, RoomType.OFFICE, 316, 350, 66, 34, CAYLEY_BYURO_ROOM_NAMES.srr),
-    bribe: addRoom(world, roomId++, RoomType.OFFICE, 202, 464, 72, 40, CAYLEY_BYURO_ROOM_NAMES.bribe, Tex.PANEL, Tex.F_GREEN_CARPET),
-    audit: addRoom(world, roomId++, RoomType.OFFICE, 750, 464, 74, 42, CAYLEY_BYURO_ROOM_NAMES.audit, Tex.METAL, Tex.F_CONCRETE),
-    quotient: addRoom(world, roomId++, RoomType.CORRIDOR, 470, 590, 84, 34, CAYLEY_BYURO_ROOM_NAMES.quotient, Tex.METAL, Tex.F_RED_CARPET),
+    lobby: addRoom(world, world.rooms.length, RoomType.COMMON, 470, 476, 84, 50, CAYLEY_BYURO_ROOM_NAMES.lobby, Tex.MARBLE, Tex.F_MARBLE_TILE),
+    e: addRoom(world, world.rooms.length, RoomType.OFFICE, 448, 264, 64, 32, CAYLEY_BYURO_ROOM_NAMES.e),
+    r: addRoom(world, world.rooms.length, RoomType.OFFICE, 580, 350, 66, 34, CAYLEY_BYURO_ROOM_NAMES.r),
+    rr: addRoom(world, world.rooms.length, RoomType.OFFICE, 580, 540, 66, 34, CAYLEY_BYURO_ROOM_NAMES.rr),
+    s: addRoom(world, world.rooms.length, RoomType.OFFICE, 448, 666, 64, 32, CAYLEY_BYURO_ROOM_NAMES.s),
+    sr: addRoom(world, world.rooms.length, RoomType.OFFICE, 316, 540, 66, 34, CAYLEY_BYURO_ROOM_NAMES.sr),
+    srr: addRoom(world, world.rooms.length, RoomType.OFFICE, 316, 350, 66, 34, CAYLEY_BYURO_ROOM_NAMES.srr),
+    bribe: addRoom(world, world.rooms.length, RoomType.OFFICE, 202, 464, 72, 40, CAYLEY_BYURO_ROOM_NAMES.bribe, Tex.PANEL, Tex.F_GREEN_CARPET),
+    audit: addRoom(world, world.rooms.length, RoomType.OFFICE, 750, 464, 74, 42, CAYLEY_BYURO_ROOM_NAMES.audit, Tex.METAL, Tex.F_CONCRETE),
+    quotient: addRoom(world, world.rooms.length, RoomType.CORRIDOR, 470, 590, 84, 34, CAYLEY_BYURO_ROOM_NAMES.quotient, Tex.METAL, Tex.F_RED_CARPET),
   };
 
   for (const element of ['e', 'r', 'rr', 's', 'sr', 'srr'] as const) {

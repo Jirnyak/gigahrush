@@ -3,7 +3,6 @@
 /*   VOLATILE — regenerated every samosbor.                      */
 /*                                                               */
 /*   generateWorld()  = apartments(once) + volatile maze + NPCs  */
-/*   regrowMaze()     = wipe volatile + regenerate volatile maze  */
 /*                                                               */
 /*   Content modules live in sibling files:                      */
 /*     apartments.ts  — permanent apartment clusters             */
@@ -41,7 +40,7 @@ import { designFloorPopulationProfile } from '../../data/design_floor_population
 import { DESIGN_FLOOR_ROUTES } from '../../data/design_floors';
 import { Faction } from '../../core/types';
 import { generateApartments } from './apartments';
-import { generateVolatileMaze, wipeVolatile } from './volatile';
+import { generateVolatileMaze } from './volatile';
 import { generateTutorRoom } from './tutor_room';
 import { generateYakovLab } from './yakov_lab';
 import { generateVankaDen, spawnVankaShadows } from './vanka_den';
@@ -217,10 +216,3 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
   };
 }
 
-/* ── regrowMaze — called every samosbor ──────────────────────── */
-export function regrowMaze(world: World): void {
-  wipeVolatile(world);
-  generateVolatileMaze(world);
-  placeProceduralScreens(world, 0);
-  buildLivingHubGeometry(world);
-}

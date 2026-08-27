@@ -25,7 +25,6 @@ test('createInput returns an initial InputState with correct default values', ()
     sleep: false,
     controls: false,
     uiSettings: false,
-    controlEdit: false,
     controlReset: false,
     controlClose: false,
     mouse: { dx: 0, dy: 0, menuDx: 0, menuDy: 0, locked: false },

@@ -12,7 +12,9 @@ import { ITEMS } from '../data/catalog';
 import { getEquippedToolDurability, getWeaponReadiness, type WeaponReadiness } from '../systems/inventory';
 import { getPlayerHazardWarning } from '../systems/cell_hazards';
 import { controlHint, menuCloseHint } from '../systems/controls';
-import { formatLastPlayerDamageCause } from '../systems/damage';
+import { formatLastPlayerDamageCause, lastPlayerDamageMonsterKind } from '../systems/damage';
+import { getMonsterEcology } from '../data/monster_ecology';
+import { COMBAT_TARGET_SCAN_CAP } from '../systems/ai/monster';
 import { RPG_LEVEL_CAP, xpForLevel } from '../systems/rpg';
 import { zhelemishHudLine } from '../systems/status';
 import { drawDebugOverlay } from '../systems/debug';
@@ -97,7 +99,7 @@ import { getLocalizationLanguage } from '../systems/localization';
 const VITAL_LABEL_FONT = 5.0;
 const VITAL_PERCENT_FONT = 5.0;
 const NEEDS_PANEL_H = 20;
-const COMBAT_TARGET_SCAN_CAP = 160;
+// Горизонт боевой цели принадлежит AI — он же и делает настоящий запрос.
 const COMBAT_TARGET_QUERY_CAP = COMBAT_TARGET_SCAN_CAP * 2;
 const COMBAT_TARGET_MAX_D2 = 18 * 18;
 const COMBAT_TARGET_BODY_RADIUS = 0.3;
@@ -105,6 +107,9 @@ const COMBAT_TARGET_RAY_STEP_CAP = 48;
 const DEATH_NEARBY_QUERY_CAP = 96;
 const aimTargetQuery: Entity[] = [];
 const deathNearbyQuery: Entity[] = [];
+const speechBubbleQuery: Entity[] = [];
+/** Дальше этого реплику над головой не читают — она и не рисовалась. */
+const SPEECH_BUBBLE_RANGE = 16;
 
 function toPercent(current: number, max: number): number {
   if (max <= 0) return 0;
@@ -671,9 +676,14 @@ function samosborHudTitle(variantId: string | undefined, variantName?: string): 
     case 'maronary': return 'МАРОНАРИЙ';
     case 'istotit': return 'ИСТОТИТ';
     case 'veretar': return 'ВЕРЕТАР';
+    // Обычный самосбор подписывается просто «САМОСБОР». Охранка сравнивала
+    // отображаемое имя со строкой «Классический», которой ни у одного варианта
+    // нет: `classic` зовётся «Типовой (ГОСТ-С)», и игрок читал
+    // «ТИПОВОЙ (ГОСТ-С) САМОСБОР». Опознаём вариант по id, а не по тексту.
+    case 'classic': return 'САМОСБОР';
     default: {
       const name = variantName?.trim();
-      return name && name !== 'Классический' ? `${name.toUpperCase()} САМОСБОР` : 'САМОСБОР';
+      return name ? `${name.toUpperCase()} САМОСБОР` : 'САМОСБОР';
     }
   }
 }
@@ -1025,6 +1035,20 @@ function inferDeathCause(state: GameState, player: Entity, world: World): { titl
   return { title: 'Причина смерти', detail: 'источник урона не распознан' };
 }
 
+/**
+ * Чему учит эта смерть.
+ *
+ * Противодействие каждой твари автор уже написал — в `monster_ecology.ts` лежат
+ * 73 строки голосом игрока («Быстрая, слабая и часто не одна: принимайте в
+ * широком месте…»). До экрана смерти они не доходили: игрок узнавал ЧТО его
+ * убило, но не узнавал, как это бьют. Убийца известен точно — `monsterKind`
+ * лежит в записи последнего урона, гадать по ближайшему телу не нужно.
+ */
+function deathLesson(state: GameState): string | undefined {
+  const kind = lastPlayerDamageMonsterKind(state, state.time - state.deathTimer);
+  return kind === undefined ? undefined : getMonsterEcology(kind)?.counterplay;
+}
+
 export function drawPointerCaptureGate(ctx: CanvasRenderingContext2D, time = 0): void {
   const lang = titleLanguageDef(getLocalizationLanguage());
   const w = ctx.canvas.width;
@@ -1292,7 +1316,6 @@ export function drawWorldSpeechBubbles(
   ctx: CanvasRenderingContext2D,
   world: World,
   view: SpeechBubbleView,
-  entities: Entity[],
   sx: number,
   sy: number,
   time: number,
@@ -1301,14 +1324,18 @@ export function drawWorldSpeechBubbles(
   const sa = Math.sin(view.angle);
   const s = Math.max(1, Math.min(sx, sy));
 
-  for (const e of entities) {
+  /* Пузыри ищутся в радиусе слышимости, а не перебором этажа. Здесь шёл обход
+   * ВСЕХ сущностей каждый кадр — 9577 на жилом — ради тех единиц, у кого прямо
+   * сейчас есть реплика; проверка на те же 16 клеток стояла уже ПОСЛЕ обхода. */
+  getEntityIndex().queryRadius(view.x, view.y, SPEECH_BUBBLE_RANGE, speechBubbleQuery, ENTITY_MASK_ACTOR);
+  for (const e of speechBubbleQuery) {
     if (!e.alive || e.id === view.id || !e.activeBark) continue;
     if (time > e.activeBark.until) continue;
 
     const dx = world.delta(view.x, e.x);
     const dy = world.delta(view.y, e.y);
     const d2 = dx * dx + dy * dy;
-    if (d2 > 16 * 16) continue; // max 16 meters
+    if (d2 > SPEECH_BUBBLE_RANGE * SPEECH_BUBBLE_RANGE) continue;
 
     const forward = dx * ca + dy * sa;
     if (forward <= 0.35) continue; // Behind camera
@@ -1379,7 +1406,6 @@ export function drawSceneOverlay(
   ctx: CanvasRenderingContext2D,
   world: World,
   view: SpeechBubbleView,
-  entities: Entity[],
   sx: number,
   sy: number,
   time: number,
@@ -1401,7 +1427,7 @@ export function drawSceneOverlay(
   ctx.textBaseline = 'middle';
   ctx.fillText(`${controlHint('gameMenu')} взять управление`, w / 2, h - bar / 2);
   ctx.restore();
-  drawWorldSpeechBubbles(ctx, world, view, entities, sx, sy, time);
+  drawWorldSpeechBubbles(ctx, world, view, sx, sy, time);
 }
 
 function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: number): void {
@@ -1655,10 +1681,24 @@ if (state.gameOver && state.gameWon) {
   ctx.fillText(deathCause.title, w / 2, h / 2 + 10 * sy);
   ctx.font = `${8 * sy}px "Press Start 2P", monospace`;
   ctx.fillText(fitHudText(ctx, deathCause.detail, w * 0.82), w / 2, h / 2 + 24 * sy);
+  // Урок этой смерти: как эту тварь бьют. Строк может быть две — противодействие
+  // написано фразой, а не заголовком, и обрезать его на полуслове нельзя.
+  const lesson = deathLesson(state);
+  let lessonRows = 0;
+  if (lesson) {
+    ctx.font = `${6 * sy}px "Press Start 2P", monospace`;
+    ctx.fillStyle = `rgba(154,170,160,${Math.min(1, state.deathTimer * 0.5)})`;
+    for (const line of wrapHudText(ctx, lesson, w * 0.78, 2)) {
+      ctx.fillText(line, w / 2, h / 2 + (36 + lessonRows * 8) * sy);
+      lessonRows++;
+    }
+    ctx.fillStyle = `rgba(136,136,136,${Math.min(1, state.deathTimer * 0.5)})`;
+  }
+  const menuY = 44 + (lessonRows > 0 ? lessonRows * 8 + 4 : 0);
   ctx.font = `${10 * sy}px "Press Start 2P", monospace`;
-  ctx.fillText('[R] — заново', w / 2, h / 2 + 44 * sy);
-  ctx.fillText('[Enter] — продолжить путь', w / 2, h / 2 + 60 * sy);
-  ctx.fillText('за случайного человека', w / 2, h / 2 + 74 * sy);
+  ctx.fillText('[R] — заново', w / 2, h / 2 + menuY * sy);
+  ctx.fillText('[Enter] — продолжить путь', w / 2, h / 2 + (menuY + 16) * sy);
+  ctx.fillText('за случайного человека', w / 2, h / 2 + (menuY + 30) * sy);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -1889,8 +1929,9 @@ export function drawHUD(
     };
   }
 
-  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-  const isEmergencyMobile = (w / dpr) <= 320;
+  // `w` — уже ПОЛОВИНА CSS-ширины и на DPR не умножается (`mobile.md`).
+  // Деление на DPR здесь было вторым: «ретина» теряла полHUD на широком экране.
+  const isEmergencyMobile = w <= 320;
 
   const showBottomTabs = uiElementEnabled('bottom_tabs');
   const showWeaponPanel = uiElementEnabled('weapon_panel');
@@ -2189,7 +2230,7 @@ export function drawHUD(
   }
 
   if (!quietHud && uiElementEnabled('npc_barks')) {
-    drawWorldSpeechBubbles(ctx, world, player, entities, sx, sy, gameTime);
+    drawWorldSpeechBubbles(ctx, world, player, sx, sy, gameTime);
   }
 
   drawLocationPanel(ctx, player, state, world, sx, sy, time, bottomVitals, barY, showCompactPanels, showLocationPanel, reducedHudMotion);

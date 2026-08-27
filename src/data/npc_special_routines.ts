@@ -1,30 +1,44 @@
-/* ── Authored NPC special-routine definitions ───────────────── */
-
-import { AIGoal, NpcState } from '../core/types';
+/* ── Авторские посты: «этот человек стоит вот здесь и вот до этой минуты» ──
+ *
+ * Пост — это НЕ выключенный AI и не отдельная порода людей. Он говорит ровно
+ * одно: до объявленной минуты игровых часов актор не выходит за порог своей
+ * комнаты. Всё остальное у него общее со всеми — ядро актора думает за него,
+ * он ходит по комнате, ест из карманов, отвечает на удар и говорит. Исполняет
+ * это `systems/room_leash.ts` через единственный шов назначения маршрута.
+ *
+ * Раньше здесь стоял не пост, а пришпиливание: `goal = IDLE`, путь в ноль,
+ * каждый кадр. Оно и человека делало столбом, и — главное — не работало вовсе:
+ * пришпиливал прежний слой (`ai/npc_fsm`), а перед ним идёт ядро актора, и до
+ * прежнего слоя ход просто не доходил.
+ */
 
 export interface NpcSpecialRoutineDef {
   id: string;
   label: string;
-  activeUntilPlotDone?: boolean;
-  expireAtTotalMinutes?: number;
-  setPlotDoneOnExpire?: boolean;
-  clearUtilityOnExpire?: boolean;
-  holdGoal?: AIGoal;
-  holdNpcState?: NpcState;
-  holdTimerSec?: number;
+  /** Минута игровых часов, после которой пост снимается сам. */
+  boundToRoomUntilMinutes: number;
 }
 
 export const NPC_SPECIAL_ROUTINES: readonly NpcSpecialRoutineDef[] = [
   {
-    id: 'tutorial_lock_one_hour',
-    label: 'tutorial lock until 4 hours expire',
-    activeUntilPlotDone: true,
-    expireAtTotalMinutes: 240,
-    setPlotDoneOnExpire: true,
-    clearUtilityOnExpire: true,
-    holdGoal: AIGoal.IDLE,
-    holdNpcState: NpcState.FREE_TIME,
-    holdTimerSec: 1,
+    id: 'starter_post_shift',
+    label: 'starter tutors hold their rooms for the first eight in-game hours',
+    /* Восемь игровых часов — это восемь реальных минут: такт игры «реальная
+     * секунда = игровая минута» (`main.ts`, `state.clock.totalMinutes += dt`).
+     *
+     * Срок выбран не на глаз, а по бюджету тела. Нужды текут в тех же секундах:
+     * при `WATER_RATE = 0.12/с` и `agi = 0` полная шкала воды выгорает за 833
+     * минуты, еды при `FOOD_RATE = 0.08/с` — за 1250. Пост в 480 минут целиком
+     * помещается внутрь обоих: к его концу у наставников остаётся 42 воды и 62
+     * еды, ноль по нуждам не достигается ни разу, урона от истощения нет вовсе,
+     * и поднимать им уровень или запас здоровья под это не требуется. Сутки,
+     * стоявшие здесь до этого, в бюджет не помещались: воду они выжигали на
+     * четырнадцатой реальной минуте и добирали остаток поста уроном.
+     *
+     * Прежний срок, четыре часа, снимался вдобавок флагом `plotDone` — то есть
+     * закрытием вводного задания через пару игровых минут. Срок поста меряется
+     * часами, а не успехами игрока, и от сюжетных флагов больше не зависит. */
+    boundToRoomUntilMinutes: 8 * 60,
   },
 ] as const;
 

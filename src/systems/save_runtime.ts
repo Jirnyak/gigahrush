@@ -1,6 +1,7 @@
 import { type Entity, type GameState, type WorldContainer } from '../core/types';
 import { SAVE_SHAPE_VERSION } from '../core/save_shape';
 import { snapshotFactionRelations } from '../data/relations';
+import { activeBetEscrowAmount } from './arena_betting';
 import { alifeMobilityForSave } from './alife_migration';
 import { bankingForSave } from './banking';
 import { alifeForSave } from './alife';
@@ -64,6 +65,15 @@ export function createGameSavePayload(
       factionRelations: snapshotFactionRelations(),
     },
   });
+  // Залог арены возвращается игроку прямо в снимке: дуэль в сейв не идёт
+  // (модульное состояние на сущностях активного этажа), а ставка без дуэли не
+  // сыграет — деньги при этом уже списаны. Это правило транзиентных полей из
+  // `save.md`, а не отдельная секция: сохранять нечего, кроме суммы, которая
+  // и так обязана вернуться. Живой кошелёк не трогается — `buildSavePayload`
+  // строит игроку отдельный объект, и текущий прогон доигрывает ставку как
+  // обычно.
+  const arenaEscrow = activeBetEscrowAmount();
+  if (arenaEscrow > 0) payload.player.money = (payload.player.money ?? 0) + arenaEscrow;
   return {
     version: SAVE_SHAPE_VERSION,
     ...payload,

@@ -34,11 +34,19 @@ test('PSI shield restores HP loss and spends 10 percent of blocked damage from P
   assert.equal(player.hp, 20);
   assert.equal(player.rpg?.psi, 4.2);
 
+  /* Щит платит ЗА ЭТОТ удар, а не «лишь бы запас был непустой».
+   *
+   * Здесь стояло обратное утверждение: остаток в 0.1 ПСИ поглощал потерю пяти
+   * единиц здоровья и гас, отдав ноль. Порог считался как `psi <= 0` ПЕРЕД
+   * тратой, поэтому цена щита не зависела от размера удара — с долей единицы в
+   * запасе он откатывал любой урон, хоть десять тысяч, и внутри своего окна
+   * игрок был неубиваем. Теперь не хватило на удар — щит гаснет, а урон
+   * остаётся на месте. */
   player.rpg!.psi = 0.1;
   player.hp = 15;
-  absorbPsiShieldDamage(player, 20, msgs, 3);
-  assert.equal(player.hp, 20);
-  assert.equal(player.rpg?.psi, 0);
+  assert.equal(absorbPsiShieldDamage(player, 20, msgs, 3), 0);
+  assert.equal(player.hp, 15, 'щит откатил урон, который не смог оплатить');
+  assert.equal(player.rpg?.psi, 0.1, 'щит списал ПСИ, ничего не поглотив');
   assert.equal(isPsiShieldActive(), false);
 });
 

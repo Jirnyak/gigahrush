@@ -1,6 +1,6 @@
 /* ── Monster shared types & registry ──────────────────────────── */
 
-import { MonsterKind, type ProjType } from '../core/types';
+import { DamageType, MonsterKind, type ProjType } from '../core/types';
 
 export type MonsterAIFlag =
   | 'wallBias'
@@ -80,6 +80,26 @@ export interface MonsterDef {
   speed: number;
   dmg: number;
   attackRate: number;
+  /**
+   * Чем бьёт вид. Нет поля — кинетика: зубы, кулак, обрезок арматуры.
+   *
+   * Раньше поля не было вовсе, и кинетикой был КАЖДЫЙ удар твари: кислотная
+   * плеть слизневика, споровый выдох ковра и удар тени считались тем же, чем
+   * кувалда, и упирались в те же проценты бронеплиты. Тип объявляется здесь,
+   * а не ветками в общем AI: `damageActor` берёт его у бьющего сам.
+   */
+  damageType?: DamageType;
+  /**
+   * Пол урона по типу: доля `maxHp`, ниже которой удар этого типа не опускается.
+   *
+   * Механика «уязвимость доводит до порога», а не «уязвимость множит»: огнемёт
+   * снимает шесть за впрыск, и никакой множитель ниже трёх не сделает огонь
+   * ответом на девяносто шесть здоровья растения. Порог отвечает на вопрос
+   * «сколькими попаданиями», множитель — на «насколько эффективнее»; это разные
+   * вопросы, и растению нужен первый. Читает поле единая дверь урона, поэтому
+   * порог работает от ЛЮБОЙ руки, а не только на пути снаряда игрока.
+   */
+  damageFloor?: Partial<Record<DamageType, number>>;
   sprite: number;
   /**
    * Дальность обнаружения в клетках. Раньше это была общая константа на всех
@@ -277,6 +297,28 @@ export const MONSTERS: Record<MonsterKind, MonsterDef> = {
  */
 export function monsterHasAIFlag(e: { monsterKind?: MonsterKind }, flag: MonsterAIFlag): boolean {
   return e.monsterKind !== undefined && MONSTERS[e.monsterKind]?.aiFlags?.includes(flag) === true;
+}
+
+/** Чем бьёт эта тварь. Не тварь или вид молчит — `undefined`, то есть кинетика. */
+export function monsterAttackDamageType(e: { monsterKind?: MonsterKind } | undefined): DamageType | undefined {
+  return e?.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.damageType : undefined;
+}
+
+/**
+ * Сколько здоровья удар этого типа снимет с этой твари КАК МИНИМУМ.
+ *
+ * Ноль означает «порога нет» и ничего не меняет: цель не тварь, вид порогов не
+ * объявлял или тип не тот. Считается от `maxHp`, а не от текущего здоровья, —
+ * иначе добить раненого стоило бы дешевле, чем целого.
+ */
+export function monsterDamageFloor(
+  target: { monsterKind?: MonsterKind; maxHp?: number; hp?: number },
+  damageType: DamageType | undefined,
+): number {
+  if (target.monsterKind === undefined || damageType === undefined) return 0;
+  const share = MONSTERS[target.monsterKind]?.damageFloor?.[damageType];
+  if (share === undefined) return 0;
+  return Math.ceil(Math.max(1, target.maxHp ?? target.hp ?? 1) * share);
 }
 
 export const MONSTER_SPRITES: Record<MonsterKind, () => Uint32Array> = {

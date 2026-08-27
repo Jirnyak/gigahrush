@@ -37,17 +37,19 @@ const WEAPON_ROLE_TIERS: Record<string, WeaponRoleTier> = {
   ...PSI_WEAPON_ROLE_TIERS,
 };
 
-const DEFAULT_KNOWN_RECIPE_IDS = new Set([
-  'bread',
-  'water',
-  'bandage',
-  'wet_rag_bundle',
-  'knife',
-  'pipe',
-  'chalk',
-  'note',
-  'ammo_9mm',
-]);
+/* Стартовых рецептов НЕТ НИ ОДНОГО, и это решение владельца (2026-08-27).
+ *
+ * Гейт крафта — знание, и оно целиком добывается разбором: собрать вещь можно
+ * лишь после того, как разобрал такую же. Раньше девять рецептов выдавались
+ * даром рукописным списком (хлеб, вода, бинт, нож, труба, мел, записка,
+ * патрон 9 мм, мокрая ветошь) — то есть рядом с правилом «крафтится всё, гейт
+ * один» стоял перечень исключений из него же.
+ *
+ * Список не заменён другим списком и не должен быть: пустое множество выражает
+ * правило без второй разметки, которая рано или поздно разойдётся с первой.
+ * Поле `knownByDefault` оставлено — оно часть формы рецепта и сейва, — но
+ * истинным не бывает ни у кого. */
+const DEFAULT_KNOWN_RECIPE_IDS: ReadonlySet<string> = new Set<string>();
 
 function tagsOf(def: ItemDef): readonly string[] {
   return def.tags ?? [];
@@ -65,9 +67,15 @@ function stationForItem(def: ItemDef, components: CraftVector): CraftStationKind
   const psi = components[craftMaterialIndex('psimatter')] > 0;
 
   if (total <= 2 && (def.type === ItemType.FOOD || def.type === ItemType.DRINK || def.type === ItemType.NOTE || def.id === 'wet_rag_bundle')) return 'any';
-  if (meta || rareCyber || hasTag(def, 'net') || hasTag(def, 'terminal') || hasTag(def, 'cybernetics')) return 'net_terminal';
+  if (meta || hasTag(def, 'net') || hasTag(def, 'terminal') || hasTag(def, 'cybernetics')) return 'net_terminal';
   if (psi || def.type === ItemType.MEDICINE || role === 'psi' || hasTag(def, 'sample') || hasTag(def, 'slime') || hasTag(def, 'reagent')) return 'lab';
-  if (def.type === ItemType.AMMO || def.type === ItemType.WEAPON || hasTag(def, 'weapon_part') || hasTag(def, 'metal') || hasTag(def, 'repair_input')) return 'lathe';
+  /* Прицельная электроника внутри ствола не переносит ствол к сетевому терминалу:
+     обычное огнестрельное точат на станке и с ней. Терминал держит энергетическое
+     оружие, метаматерию и сетевые вещи — например кодовый ключ тамбура. */
+  if (def.type === ItemType.AMMO || def.type === ItemType.WEAPON || hasTag(def, 'weapon_part') || hasTag(def, 'metal') || hasTag(def, 'repair_input')) {
+    return role === 'rare_energy' ? 'net_terminal' : 'lathe';
+  }
+  if (rareCyber) return 'net_terminal';
   return 'workbench';
 }
 

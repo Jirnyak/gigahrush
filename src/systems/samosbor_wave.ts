@@ -1015,9 +1015,15 @@ function pruneScreenAndSlideCells(world: World, touchedSet: Set<number>): void {
     );
 }
 
+/** Счётчики уборки поля. Волна (`SamosborWave`) подходит структурно, поэтому
+ *  тот же помощник обслуживает и отладочную волну, и боевой стич фронтов. */
+interface FieldCleanupCounters {
+  deletedContainers: number;
+}
+
 function cleanupContainers(
   world: World,
-  wave: SamosborWave,
+  counters: FieldCleanupCounters,
   touchedSet: Set<number>,
   z: number,
 ): void {
@@ -1029,7 +1035,7 @@ function cleanupContainers(
     if (!touchedSet.has(idx)) continue;
     if (!walkableCell(world.cells[idx])) {
       world.containers.splice(i, 1);
-      wave.deletedContainers++;
+      counters.deletedContainers++;
       changed = true;
       continue;
     }
@@ -1464,6 +1470,48 @@ export function clearSamosborWaveSnapshot(): void {
  * This repairs the chaotic geometry left by fronts after samosbor ends.
  * Returns the number of cells patched.
  */
+/**
+ * Осадить сшитое поле: производные списки, побочные эффекты клеток, блокираторы
+ * пути, подсказки маршрута, ящики, туман и грязные прямоугольники.
+ *
+ * Вынесено из `applyFrontFieldStitch` не ради длины, а потому что это одна
+ * ответственность: «поле переписано — привести мир в согласие с ним». Возвращает
+ * число снесённых ящиков для события.
+ */
+function settleStitchedField(
+  world: World,
+  source: World,
+  state: GameState,
+  mask: Uint8Array,
+  allIndices: readonly number[],
+  fieldSet: Set<number>,
+  fieldRects: ReturnType<typeof dirtyRectsForIndices>,
+  visualFlags: DirtyFlags,
+): number {
+  refreshPassiveFeatureLists(world, source, mask);
+  clearFieldSideEffects(world, mask);
+  rebuildPathBlockersFromWorldObjects(world, (rng() * 0xffffffff) | 0, allIndices);
+  pruneRouteCuesInCells(world, fieldSet);
+  /* Ящик держал `roomId` комнаты, которая клеткой больше не владеет, а под
+   * замурованным ящиком карта контейнеров указывала в стену. Уборка та же, что
+   * у отладочной волны: снести накрытые геометрией, перепривязать уцелевшие и
+   * пересобрать карту один раз. */
+  const counters: FieldCleanupCounters = { deletedContainers: 0 };
+  cleanupContainers(world, counters, fieldSet, state.currentZ);
+
+  // Re-fog stitched areas so player must re-explore the changed geometry
+  hideMapExplorationCells(world, fieldSet);
+
+  world.markCellsDirty(fieldRects);
+  world.markWallTexDirty(fieldRects);
+  world.markFloorTexDirty(fieldRects);
+  world.markFeaturesDirty(true, fieldRects);
+  world.markFogDirty(fieldRects);
+  world.markSurfaceDirty();
+  if (visualFlags.visualSlots) world.markVisualSlotsDirty();
+  return counters.deletedContainers;
+}
+
 export function applyFrontFieldStitch(
   world: World,
   state: GameState,
@@ -1627,25 +1675,9 @@ export function applyFrontFieldStitch(
     patchRoom.h = patchMaxDy - patchMinDy + 1;
   }
 
-  refreshPassiveFeatureLists(world, source, mask);
-  clearFieldSideEffects(world, mask);
-  rebuildPathBlockersFromWorldObjects(
-    world,
-    (rng() * 0xffffffff) | 0,
-    allIndices,
+  const deletedContainers = settleStitchedField(
+    world, source, state, mask, allIndices, fieldSet, fieldRects, visualFlags,
   );
-  pruneRouteCuesInCells(world, fieldSet);
-
-  // Re-fog stitched areas so player must re-explore the changed geometry
-  hideMapExplorationCells(world, fieldSet);
-
-  world.markCellsDirty(fieldRects);
-  world.markWallTexDirty(fieldRects);
-  world.markFloorTexDirty(fieldRects);
-  world.markFeaturesDirty(true, fieldRects);
-  world.markFogDirty(fieldRects);
-  world.markSurfaceDirty();
-  if (visualFlags.visualSlots) world.markVisualSlotsDirty();
 
   state.msgs.push(
     msg(`Самосбор перестроил ${copied} клеток.`, state.time, "#c8f"),
@@ -1661,6 +1693,7 @@ export function applyFrontFieldStitch(
       scale: "full" as SamosborWaveScale,
       fieldCells: allIndices.length,
       regeneratedCells: copied,
+      deletedContainers,
     },
   });
 

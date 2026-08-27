@@ -25,7 +25,7 @@ import {
   type AlifePopulationPlanDef,
   type AlifeReservedIdentityDef,
 } from '../data/alife_population_plan';
-import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
+import { DESIGN_FLOOR_DEFAULT_DANGER, DESIGN_FLOOR_ROUTES, designFloorAtZ } from '../data/design_floors';
 import { npcWealthMultiplier } from '../data/economy_rules';
 // import { getPlotNpcNumericId, id } from '../data/npc_packages';
 import {
@@ -70,13 +70,13 @@ import {
   currentFloorRunEntry,
   floorRunEntryForDesignFloor,
 } from './procedural_floors';
-import { floorRunZAllowsNpcs } from '../data/procedural_floors';
+import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z, floorRunZAllowsNpcs } from '../data/procedural_floors';
 import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyZ } from './floor_keys';
 import { factionToTerritoryOwner } from '../data/factions';
 import { territoryOwnerAtIndex } from './territory';
 import { generateNpcLoadout, generateMerchantStock } from './procedural_loot';
 import { ITEMS } from '../data/catalog';
-import { getStack } from '../data/items';
+import { getStack, itemEquipSlot } from '../data/items';
 import {
   NPC_FACTION_ATTITUDE_SLOTS,
   RELATION_MAX,
@@ -85,6 +85,7 @@ import {
   attitudeSpread,
   getFactionRel,
   npcFactionAttitudeAtBirth,
+  relationDecayStep,
 } from '../data/relations';
 import { HUMANOID_BASE_MOVE_SPEED, getMaxHp, getMaxPsi } from './rpg';
 import {
@@ -99,7 +100,8 @@ import {
   type RankStats,
 } from './alife_rating';
 import { getEntityIndex, ENTITY_MASK_NPC } from './entity_index';
-import { hash32, rng } from '../core/rand';
+import { publishEvent } from './events';
+import { hash32, hashSeed, rng } from '../core/rand';
 
 const ALIFE_VERSION = 2;
 const ALIFE_POPULATION = ALIFE_POPULATION_CAPACITY;
@@ -308,6 +310,21 @@ export interface AlifeNpcOverride {
   arenaFighter?: boolean;
 }
 
+/**
+ * Свершившееся переселение: имя факта и его размер, а не список людей.
+ *
+ * Кто именно уехал, уже записано в самих личностях (их `floorKey` уходит в сейв
+ * обычным оверрайдом), поэтому дублировать здесь список слотов незачем. Нужны
+ * ровно две вещи: имя, чтобы событие не случилось дважды, и число, чтобы после
+ * загрузки вернуть плану раздачи мест сдвинутые цели этажей.
+ */
+export interface AlifeAppliedMigration {
+  id: string;
+  fromFloorKey: string;
+  toFloorKey: string;
+  moved: number;
+}
+
 export interface AlifeSaveState {
   version: number;
   seed: number;
@@ -320,12 +337,18 @@ export interface AlifeSaveState {
   arenaChampionAlifeId?: number;
   deadIds: number[];
   deadPlotNpcIds: number[];
+  /* Плоские пары «слот, фракция» и только для тех, у кого принадлежность
+   * переписана событием. Разреженно, как дрейф ячеек рядом. */
+  factionOverrides?: number[];
+  migrations?: AlifeAppliedMigration[];
   overrides: AlifeNpcOverride[];
 }
 
 interface AlifeNumericColumns {
   floorKeyIndex: Uint16Array;
-  z: Uint8Array;
+  /* Знаковая: канон убывает с глубиной и уходит в минус (пустота −50).
+   * Беззнаковая колонка осталась от старой шкалы 30..200 и вмещала только верх. */
+  z: Int8Array;
   danger: Uint8Array;
   faction: Uint8Array;
   occupation: Uint8Array;
@@ -373,6 +396,12 @@ interface AlifeState {
   floorIndex: Record<string, number[]>;
   floorCap?: Record<string, number>;
   deadPlotNpcIds: Set<number>;
+  /* Принадлежность, переписанная СОБЫТИЕМ, а не анкетой. Живёт отдельно от
+   * колонки фракций именно потому, что колонку пересобирает всякое рождение
+   * личности из пакета: тело сюжетного NPC делается заново на каждой генерации
+   * этажа, и без этой карты предатель возвращался бы своим. */
+  factionOverrides: Map<number, Faction>;
+  migrations: AlifeAppliedMigration[];
   leaderboardVersion: number;
   leaderboardCache?: AlifeLeaderboardSnapshot & { signature: string; limit: number };
 }
@@ -422,7 +451,7 @@ function createAlifeNumericColumns(total: number): AlifeNumericColumns {
   const bounded = Math.max(0, Math.floor(total));
   const columns: AlifeNumericColumns = {
     floorKeyIndex: new Uint16Array(bounded),
-    z: new Uint8Array(bounded),
+    z: new Int8Array(bounded),
     danger: new Uint8Array(bounded),
     faction: new Uint8Array(bounded),
     occupation: new Uint8Array(bounded),
@@ -490,7 +519,7 @@ function ensureAlifeColumnCapacity(alife: AlifeState, requiredId: number): void 
   if (alife.columns.level.length >= required) return;
   const next = Math.max(required, alife.columns.level.length * 2, 32);
   alife.columns.floorKeyIndex = growUint16Array(alife.columns.floorKeyIndex, next);
-  alife.columns.z = growUint8Array(alife.columns.z, next);
+  alife.columns.z = growInt8Array(alife.columns.z, next);
   alife.columns.danger = growUint8Array(alife.columns.danger, next);
   alife.columns.faction = growUint8Array(alife.columns.faction, next);
   alife.columns.occupation = growUint8Array(alife.columns.occupation, next);
@@ -556,12 +585,12 @@ function setRecordFloorKey(alife: AlifeState, record: AlifeNpcRecord, floorKey: 
 }
 
 function recordFloor(alife: AlifeState, record: AlifeNpcRecord): number {
-  return (alife.columns.z[recordColumnIndex(record)] ?? 100);
+  return (alife.columns.z[recordColumnIndex(record)] ?? 0);
 }
 
 function setRecordFloor(alife: AlifeState, record: AlifeNpcRecord, value: number): void {
   ensureAlifeColumnCapacity(alife, record.id);
-  alife.columns.z[recordColumnIndex(record)] = sanitizeFloor(value, 100);
+  alife.columns.z[recordColumnIndex(record)] = sanitizeFloor(value, 0);
 }
 
 function recordDanger(alife: AlifeState, record: AlifeNpcRecord): 1 | 2 | 3 | 4 | 5 {
@@ -939,16 +968,20 @@ function recordCanMaterializeAsOrdinaryPopulation(record: AlifeNpcRecord): boole
   return record.reservedPresence === 'population' && recordPackageId(record) !== undefined;
 }
 
-// @ts-ignore
+/**
+ * Опасность этажа по его высоте.
+ *
+ * Здесь стоял `switch` по старой шкале (100/60/30/140/180/200) под `@ts-ignore`,
+ * который глушил «не все пути возвращают значение». Из тех шести чисел канону
+ * принадлежит только 30, поэтому на всех прочих этажах функция возвращала
+ * `undefined`, `setRecordDanger` клал единицу, а `levelForRecord` считал
+ * `1.46 - undefined * 0.11` = NaN и ронял уровень в единицу. Мясной низ
+ * населялся ровно так же, как жилой.
+ *
+ * Второй шкалы не заводим: опасность уже объявлена автором в самом маршруте.
+ */
 function floorDanger(z: number): 1 | 2 | 3 | 4 | 5 {
-  switch (z) {
-    case 100: return 1;
-    case 60:
-    case 30: return 3;
-    case 140: return 4;
-    case 180:
-    case 200: return 5;
-  }
+  return designFloorAtZ(z)?.danger ?? DESIGN_FLOOR_DEFAULT_DANGER;
 }
 
 function allocatedCounts(plans: readonly AlifeFloorPlan[], total: number): number[] {
@@ -1153,11 +1186,11 @@ function wealthForRecord(plan: AlifeFloorPlan, profile: AlifeFactionProfile, lev
   return Math.max(0, Math.min(ALIFE_MONEY_CAP, money));
 }
 
-function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { weapon?: string; tool?: string; inventory?: Item[] } {
+function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { weapon?: string; tool?: string; armorDefId?: string; inventory?: Item[] } {
   const faction = recordFaction(alife, record);
   const danger = recordDanger(alife, record);
   const level = recordLevel(alife, record);
-  
+
   const rollWeapon = unit(alife.seed, record.id, 51);
   const rollPockets = [
     unit(alife.seed, record.id, 700),
@@ -1165,9 +1198,13 @@ function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { w
     unit(alife.seed, record.id, 702),
   ];
 
-  const loadout = generateNpcLoadout(faction, level, danger, rollWeapon, rollPockets);
-  
   const occupation = recordOccupation(alife, record);
+  const loadout = generateNpcLoadout(faction, level, danger, rollWeapon, rollPockets, {
+    occupation,
+    rollWear: unit(alife.seed, record.id, 703),
+    rollPick: unit(alife.seed, record.id, 704),
+  });
+
   if (occupation === Occupation.STOREKEEPER) {
     const rollStock: number[] = [];
     for (let i = 0; i < 15; i++) {
@@ -1187,6 +1224,30 @@ function defaultLoadoutForRecord(alife: AlifeState, record: AlifeNpcRecord): { w
   }
 
   return loadout;
+}
+
+/* Надето то, что человек НЕСЁТ. Своего поля в записи A-Life броня не заводит,
+ * и это не экономия: свёртка этажа (`captureAlifeFloorState`) записывает карман
+ * и помечает снаряжение авторским, после чего генератор снаряжения к этой
+ * личности больше не зовут. Отдельное поле пришлось бы складывать в сейв, а
+ * забытая строчка молча раздевала бы гарнизон при каждом возвращении на этаж.
+ * Карман переживает свёртку сам, и броня возвращается вместе с ним — заодно
+ * одеваются авторские личности, которым броню положили в анкету, и раздеваются
+ * те, кто её продал.
+ *
+ * Лучшей считается самая дорогая: цена — единственная общая мера качества вещи
+ * в этой игре, и таблица резистов её уже уважает (4500 у ликвидаторской против
+ * 500 у лёгкой). */
+function wornArmorFromInventory(inventory: readonly Item[] | undefined): string | undefined {
+  let bestId: string | undefined;
+  let bestValue = -1;
+  for (const slot of inventory ?? []) {
+    const def = ITEMS[slot.defId];
+    if (!def || itemEquipSlot(def) !== 'armor') continue;
+    const value = def.value ?? 0;
+    if (value > bestValue) { bestValue = value; bestId = def.id; }
+  }
+  return bestId;
 }
 
 /* Отношение к игроку рождается тем же законом, что и отношение к фракциям:
@@ -1279,7 +1340,7 @@ function createRecord(alife: AlifeState, id: number, plan: AlifeFloorPlan, seed:
 function populationBucketToFloorPlan(bucket: AlifePopulationBucket): AlifeFloorPlan | null {
   const key = cleanFloorKey(bucket.floorKey);
   if (!key) return null;
-  const floor = sanitizeFloor(bucket.z, 100);
+  const floor = sanitizeFloor(bucket.z, floorKeyZ(key) ?? 0);
   return {
     key,
     z: floor,
@@ -1360,10 +1421,11 @@ function normalizePopulationPlan(plan: AlifePopulationPlan | AlifePopulationPlan
 
   for (const [floorKey, reserved] of reservedByFloor) {
     if (usedFloors.has(floorKey)) continue;
-    const first = plan.reserved.find(def => def.floorKey === floorKey);
     buckets.push({
       floorKey,
-      z: first?.faction === Faction.LIQUIDATOR ? 30 : 100,
+      // Высота — у самого этажа. Здесь стояло `фракция === ликвидаторы ? 30 : 100`:
+      // угаданная координата старой шкалы вместо той, что уже лежит в ключе.
+      z: floorKeyZ(floorKey) ?? 0,
       targetCount: reserved.length,
       reserved,
     });
@@ -1549,6 +1611,8 @@ export function buildAlifeStateFromPopulationPlan(
     floorIndex,
     floorCap,
     deadPlotNpcIds: new Set(),
+    factionOverrides: new Map(),
+    migrations: [],
     leaderboardVersion: 0,
   };
   const counts = populationPlanCounts(plan, planTotal);
@@ -1738,6 +1802,81 @@ export function addAlifeFactionAttitude(
   return next;
 }
 
+/**
+ * Двинуть личное отношение к игроку. Возвращает `true`, если сдвинулось.
+ *
+ * Хранилищ у этого числа три (граф Демоса, колонка A-Life, живое тело), и
+ * держать их в согласии умеет только `applyDemosRelationDelta`. Поэтому шаг
+ * приходит инъекцией: обход знает, КОГО и НА СКОЛЬКО двигать, а КАК — знает
+ * социальный слой. Прямая запись в колонку отсюда была бы отменена первой же
+ * сверткой этажа: живое тело помнит своё число и кладёт его поверх записи.
+ */
+export type AlifePlayerRelationDecay = (alifeId: number, step: number) => boolean;
+
+/**
+ * Затухание личных отношений: тянет живое число обратно к рождению.
+ *
+ * Двигаются оба личных канала — восемь ячеек к фракциям и отношение к игроку.
+ * Закон один и константа одна: у обид нет двух скоростей, иначе одна половина
+ * мира остывала бы, а вторая копила.
+ *
+ * Разреженно и с бюджетом. Обход идёт по бакету ЭТАЖА, а не по всему пулу
+ * (сто тысяч личностей), и внутри бакета работа делается только для записей с
+ * пометкой `touched` — накопленный дрейф всегда её ставит
+ * (`addAlifeFactionAttitude`, `setRecordPlayerRelation`), а нетронутая запись по
+ * определению сидит на рождении и стоить ничего не должна. Курсор держит
+ * зовущий, поэтому обход продолжается с того места, где кончился прошлый такт.
+ *
+ * Бюджет списывается ТОЛЬКО за реально сдвинутую ячейку — упор в мёртвую зону
+ * затухания не платит (образец: `demos_social_feedback.ts`).
+ */
+export function decayAlifeRelations(
+  state: GameState,
+  floorKeyInput: string,
+  cursor: number,
+  scanCap: number,
+  budget: { remaining: number },
+  decayPlayerRelation?: AlifePlayerRelationDecay,
+): { moved: number; scanned: number; nextCursor: number } {
+  const alife = (state as AlifeHost).alife;
+  const bucket = alife?.floorIndex[cleanFloorKey(floorKeyInput)];
+  if (!alife || !bucket || bucket.length === 0) return { moved: 0, scanned: 0, nextCursor: 0 };
+  const column = alife.columns.factionAttitude;
+  const limit = Math.min(bucket.length, Math.max(0, Math.floor(scanCap)));
+  let index = Math.max(0, Math.floor(cursor)) % bucket.length;
+  let scanned = 0;
+  let moved = 0;
+  while (scanned < limit && budget.remaining > 0) {
+    const record = alife.npcs[bucket[index]];
+    index = (index + 1) % bucket.length;
+    scanned++;
+    if (!record || !recordTouched(alife, record)) continue;
+    const viewer = recordFaction(alife, record);
+    const base = factionAttitudeOffset(record);
+    for (let faction = Faction.CITIZEN; faction <= Faction.WILD; faction++) {
+      if (budget.remaining <= 0) break;
+      const value = column[base + faction];
+      if (value === RELATION_UNSET) continue;
+      const step = relationDecayStep(value, npcFactionAttitudeAtBirth(viewer, faction, alife.seed, record.id));
+      if (step === 0) continue;
+      column[base + faction] = clampRelation(value + step);
+      budget.remaining--;
+      moved++;
+    }
+    if (!decayPlayerRelation || budget.remaining <= 0) continue;
+    /* Рождение отношения к игроку берётся из ЖИВОЙ матрицы, а не из таблицы:
+     * у игрока база — это то, как его фракцию видят сегодня. Значит кражи,
+     * пропуска и поручения двигают не только само число, но и точку, к которой
+     * оно возвращается, — а бой не двигает ни того, ни другого. */
+    const bornToPlayer = defaultPlayerRelationForRecord(alife, record);
+    const playerStep = relationDecayStep(ensureRecordPlayerRelation(alife, record), bornToPlayer);
+    if (playerStep === 0 || !decayPlayerRelation(record.id, playerStep)) continue;
+    budget.remaining--;
+    moved++;
+  }
+  return { moved, scanned, nextCursor: index };
+}
+
 export function debugMarkAllAlifeNpcRecordsTouched(state: GameState): void {
   const alife = ensureAlifeState(state);
   for (let i = 0; i < alife.npcs.length; i++) {
@@ -1789,8 +1928,13 @@ function rpgFromRecord(alife: AlifeState, record: AlifeNpcRecord): RPGStats {
   return { ...shell, psi: maxPsi, maxPsi };
 }
 
+/* Границы берутся у самого маршрута. Здесь стояло `>= 30 && <= 200` — окно
+ * старой шестиключевой шкалы, которая росла с глубиной. Канон убывает и уходит
+ * в минус, поэтому окно отвергало всё ниже министерства: жилой этаж, квартиры,
+ * коллекторы, ад и пустоту — и подменяло их на 100, координату, которой нет. */
 function sanitizeFloor(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 30 && value <= 200
+  return typeof value === 'number' && Number.isFinite(value)
+    && value >= FLOOR_RUN_MIN_Z && value <= FLOOR_RUN_MAX_Z
     ? Math.trunc(value)
     : fallback;
 }
@@ -1809,9 +1953,29 @@ export function needsAlifeAdoption(entity: Entity): boolean {
     !('plotNpcId' in entity && (entity as Entity & { plotNpcId?: unknown }).plotNpcId !== undefined);
 }
 
-function isAmbientNpcCandidate(entity: Entity): boolean {
+/**
+ * Шаблон расстановки — это ТЕЛО БЕЗ ЛИЧНОСТИ: место, поза, спрайт, комната и
+ * фракция земли, но ни записи A-Life, ни авторского пакета, ни сюжетного слота,
+ * ни выданного квеста. Личность в такое тело приходит из пула.
+ *
+ * Здесь стояло ещё и `!entity.id || entity.id <= 0 || entity.name === undefined`,
+ * то есть «шаблон — это безымянный». Имя шаблона в мир всё равно не попадает:
+ * `materializeEntity` берёт `record.name`, а имя шаблона читает только через
+ * `adoptTemplateProfile`, и то лишь когда у шаблона ЕСТЬ особый визуал
+ * (`sprite !== occupation`), — так живут женские спрайты этажа 69. Поэтому
+ * условие ничего не охраняло, зато вырезало из мира целые этажи: генератор
+ * министерства даёт имя каждому служащему (`nm.name`), и на этаже находилось
+ * НОЛЬ шаблонов из 2070 тел. Блок материализации пропускался целиком, а следом
+ * цикл усыновления заводил 2000 НОВЫХ личностей за визит — то есть вырезанный
+ * игроком этаж воскресал после поездки на лифте, а пул рос примерно на 3300
+ * человек за круг маршрута и на потолке начинал затирать живых.
+ *
+ * `alive` — вторая половина того же правила: труп личности не несёт, но и
+ * местом для чужой личности не является. Раньше его прикрывало условие про имя.
+ */
+export function isAmbientNpcCandidate(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
-    (!entity.id || entity.id <= 0 || entity.name === undefined) &&
+    entity.alive &&
     !entity.persistentNpcId &&
     entity.alifeId === undefined &&
     entity.questId === -1 &&
@@ -2056,6 +2220,104 @@ export function setAlifeArenaChampion(state: GameState, championAlifeId: number 
   alife.arenaChampionAlifeId = record.id;
 }
 
+/* ── Принадлежность, переписанная событием ────────────────────────
+ *
+ * Общая механика: у личности бывает СОБЫТИЙНАЯ принадлежность, которая сильнее
+ * её анкеты. Заводится она не потому, что кому-то понадобился один предатель, а
+ * потому, что колонка фракций у сюжетного слота живёт ровно до следующей
+ * генерации его этажа: тело авторского NPC делается из пакета заново
+ * (`plotNpcEntityFromPackage`), и анкетная фракция приезжает обратно в мир.
+ * Запись же пережила бы всё — ломается СУЩНОСТЬ. Поэтому оверрайд хранится
+ * отдельным разреженным фактом, применяется к телу в единственной точке, где
+ * этаж встречается с A-Life (`materializeAlifeFloorPopulation`, там же, где
+ * снимаются мёртвые и уехавшие), и запрещает обратной дороге (запись ← сущность)
+ * затирать себя анкетным значением.
+ *
+ * Кап общий с реестром мёртвых сюжетных слотов: обе таблицы — про авторские
+ * личности, и второй ручки под тот же порядок величин заводить незачем.
+ */
+function recordFactionOverride(alife: AlifeState, record: AlifeNpcRecord): Faction | undefined {
+  return alife.factionOverrides.get(record.id);
+}
+
+export function getAlifeNpcFactionOverride(state: GameState, alifeId: number): Faction | undefined {
+  return (state as AlifeHost).alife?.factionOverrides.get(alifeId);
+}
+
+/**
+ * Поставить (или снять, передав `undefined`) событийную принадлежность личности.
+ *
+ * Восемь ячеек взгляда на фракции пересобираются: это делает общий
+ * `setRecordFaction`, и звать его тут — решение, а не побочный эффект. Ячейки
+ * рождаются ОТ собственной стороны смотрящего (`resetRecordFactionAttitudes`),
+ * поэтому перебежчик, сохранивший взгляд прежней стороны, считал бы врагами
+ * своих новых и друзьями прежних — то есть смена стороны не значила бы ничего.
+ * Накопленный дрейф при этом теряется, и это тот же контракт, что записан у
+ * самой функции: сменил принадлежность — сменил и взгляд.
+ *
+ * Личное отношение к ИГРОКУ, наоборот, не сбрасывается: оно хранит дела, а не
+ * анкету. Сдвигается только база под ним — на разницу баз старой и новой
+ * стороны, — так что помощь игроку помнится, а сторона всё-таки меняется.
+ */
+export function setAlifeNpcFactionOverride(
+  state: GameState,
+  alifeId: number,
+  faction: Faction | undefined,
+): boolean {
+  if (!Number.isInteger(alifeId) || alifeId <= 0) return false;
+  const alife = ensureAlifeState(state);
+  const record = alife.npcs[alifeId - 1];
+  if (!record) return false;
+  if (faction === undefined) {
+    alife.factionOverrides.delete(record.id);
+    return true;
+  }
+  if (!alife.factionOverrides.has(record.id) && alife.factionOverrides.size >= ALIFE_SAVE_PLOT_DEAD_IDS_CAP) return false;
+  const next = clampInt(faction, Faction.CITIZEN, Faction.CITIZEN, Faction.PLAYER) as Faction;
+  const previous = recordFaction(alife, record);
+  alife.factionOverrides.set(record.id, next);
+  if (next !== previous) {
+    setRecordFaction(alife, record, next);
+    shiftRecordPlayerRelationBase(alife, record, previous, next);
+  }
+  setRecordTouched(alife, record);
+  alife.leaderboardVersion++;
+  return true;
+}
+
+function shiftRecordPlayerRelationBase(
+  alife: AlifeState,
+  record: AlifeNpcRecord,
+  from: Faction,
+  to: Faction,
+): void {
+  const stored = recordPlayerRelation(alife, record);
+  // Незаписанного отношения нет и трогать нечего: оно выведется из НОВОЙ стороны
+  // при первой же материализации.
+  if (stored === undefined) return;
+  const shift = getFactionPlayerRelation(to) - getFactionPlayerRelation(from);
+  if (shift === 0) return;
+  setRecordPlayerRelation(alife, record, stored + shift);
+}
+
+/**
+ * Наложить событийную принадлежность на тела, которые этаж только что родил.
+ *
+ * Одна из точек прохода материализации, рядом с `filterDeadPlotNpcs` и
+ * `filterRelocatedPlotNpcs`: это третья половина того же правила — что стало с
+ * человеком, знает A-Life, а таблица рождения знает только, каким он родился.
+ * Проход по сущностям этажа и только при непустой карте.
+ */
+function applyFactionOverridesToEntities(alife: AlifeState, entities: readonly Entity[]): void {
+  if (alife.factionOverrides.size === 0) return;
+  for (const entity of entities) {
+    if (entity.type !== EntityType.NPC || entity.alifeId === undefined) continue;
+    const faction = alife.factionOverrides.get(entity.alifeId);
+    if (faction === undefined || entity.faction === faction) continue;
+    entity.faction = faction;
+  }
+}
+
 export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Entity): void {
   if (entity.alifeId === undefined) return;
   const alife = ensureAlifeState(state);
@@ -2066,7 +2328,17 @@ export function rewriteAlifeNpcIdentityFromEntity(state: GameState, entity: Enti
   if (entity.lastName) record.lastName = entity.lastName.slice(0, 40);
   if (entity.age !== undefined) setRecordAge(alife, record, entity.age, recordAge(alife, record));
   setRecordSexFromInput(alife, record, entity.sex, entity.isFemale);
-  if (entity.faction !== undefined) setRecordFaction(alife, record, entity.faction);
+  /* Обратная дорога слабее события. Тело сюжетного NPC рождается из анкеты
+   * заново на каждой генерации этажа, и всякий, кто привяжет такое тело к записи
+   * (`bindReservedPlotNpcAlifeRecord`), нёс бы сюда анкетную фракцию — то есть
+   * молча отменял бы уже случившийся переход. Пока оверрайд стоит, поправляется
+   * СУЩНОСТЬ, а не запись. */
+  const factionOverride = recordFactionOverride(alife, record);
+  if (factionOverride !== undefined) {
+    entity.faction = factionOverride;
+  } else if (entity.faction !== undefined) {
+    setRecordFaction(alife, record, entity.faction);
+  }
   if (entity.occupation !== undefined) setRecordOccupation(alife, record, entity.occupation);
   if (entity.familyId !== undefined) setRecordFamilyId(alife, record, entity.familyId);
   if (entity.canGiveQuest !== undefined) setRecordCanGiveQuest(alife, record, entity.canGiveQuest);
@@ -2157,6 +2429,122 @@ export function moveAlifeNpcRecord(
   if (isFiniteNumber(opts.angle)) record.angle = normalizeAngle(opts.angle);
   if (opts.markTouched !== false) setRecordTouched(alife, record);
   return true;
+}
+
+/* ── Переселение как последствие события ──────────────────────────
+ *
+ * Общая механика: событие увозит N человек заданной стороны с одного этажа на
+ * другой. Именно УВОЗИТ — у донора население убывает ровно на столько, на
+ * сколько прибывает у получателя, потому что переезжают существующие личности, а
+ * не рождаются новые (`alife.md`, «There is no ordinary background refill»).
+ *
+ * Одно событие — один вызов, кадрового такта у механики нет. Повтор с тем же
+ * именем не делает ничего: имя случившегося переселения лежит в сейве, и второй
+ * вызов после перезагрузки не приведёт вторую волну тех же людей.
+ *
+ * Верхняя граница вывода одним событием — минимальный пул этажа: больше — это
+ * уже не «часть населения переехала», а стёртый донор. Своей ручки под это нет
+ * намеренно.
+ */
+export const ALIFE_MIGRATION_BATCH_CAP = ALIFE_MIN_FLOOR_POOL;
+
+export interface AlifePopulationMigrationRequest {
+  /** Имя случившегося факта. По нему переселение опознаётся как уже прошедшее. */
+  id: string;
+  faction: Faction;
+  fromFloorKey: string;
+  toFloorKey: string;
+  count: number;
+}
+
+export function alifeMigrationApplied(state: GameState, migrationIdInput: string): boolean {
+  const id = cleanFloorKey(migrationIdInput);
+  if (!id) return false;
+  const alife = (state as AlifeHost).alife;
+  return alife?.migrations.some(entry => entry.id === id) ?? false;
+}
+
+/**
+ * Кого увезти. Только бакет донора и ровно один проход по нему: пул целиком
+ * здесь не при чём.
+ *
+ * Выбор детерминирован от семени A-Life и ИМЕНИ события: один и тот же прогон
+ * уводит одних и тех же людей, разные события — разных. Случайность берётся
+ * только из `hash32`, недетерминированного источника здесь нет вовсе.
+ *
+ * Именные личности (`reservedKind`) не берутся: у авторского человека свой
+ * адрес и своя причина переехать, и увозить его пакетом наравне с массовкой
+ * значило бы решать за автора.
+ */
+function selectMigrationRecordIds(
+  alife: AlifeState,
+  migrationId: string,
+  fromFloorKey: string,
+  faction: Faction,
+  count: number,
+): number[] {
+  const bucket = alife.floorIndex[fromFloorKey];
+  if (!bucket || bucket.length === 0) return [];
+  const candidates: number[] = [];
+  for (const recordIndex of bucket) {
+    const record = alife.npcs[recordIndex];
+    if (!record || recordDead(alife, record) || record.reservedKind) continue;
+    if (recordFaction(alife, record) !== faction) continue;
+    candidates.push(record.id);
+  }
+  if (candidates.length <= count) return candidates;
+  const salt = hashSeed(migrationId, alife.seed);
+  candidates.sort((a, b) => (hash32(alife.seed, a, salt) - hash32(alife.seed, b, salt)) || (a - b));
+  candidates.length = count;
+  return candidates;
+}
+
+/* План раздачи мест переезжает вместе с людьми. Без этого следующая
+ * материализация видит у получателя лишних сверх его цели, объявляет их
+ * «излишком» и раздаёт обратно на первый же этаж, где не хватило шаблонов. */
+function shiftAlifeFloorCaps(alife: AlifeState, fromFloorKey: string, toFloorKey: string, moved: number): void {
+  const caps = ensureAlifeFloorCaps(alife);
+  caps[fromFloorKey] = Math.max(0, (caps[fromFloorKey] ?? 0) - moved);
+  caps[toFloorKey] = Math.max(0, (caps[toFloorKey] ?? 0) + moved);
+}
+
+/**
+ * Переселить часть населения фракции с этажа-донора на этаж-получатель.
+ *
+ * Возвращает, сколько человек реально уехало. Ноль — законный ответ: донор мог
+ * быть выбит или пуст, и тогда никто не приходит из воздуха. Факт всё равно
+ * записывается: событие случилось один раз, и повторять его перебор не за чем.
+ */
+export function migrateAlifePopulation(state: GameState, request: AlifePopulationMigrationRequest): number {
+  const id = cleanFloorKey(request.id);
+  const fromFloorKey = cleanFloorKey(request.fromFloorKey);
+  const toFloorKey = cleanFloorKey(request.toFloorKey);
+  if (!id || !fromFloorKey || !toFloorKey || fromFloorKey === toFloorKey) return 0;
+  const alife = ensureAlifeState(state);
+  if (alife.migrations.some(entry => entry.id === id)) return 0;
+  const count = clampInt(request.count, 0, 0, ALIFE_MIGRATION_BATCH_CAP);
+  const faction = clampInt(request.faction, Faction.CITIZEN, Faction.CITIZEN, Faction.PLAYER) as Faction;
+  // Выбор до переезда: `moveAlifeNpcRecord` вынимает запись из бакета донора, а
+  // выбирали мы по нему же.
+  const ids = count > 0 ? selectMigrationRecordIds(alife, id, fromFloorKey, faction, count) : [];
+  let moved = 0;
+  for (const alifeId of ids) {
+    if (moveAlifeNpcRecord(state, alifeId, toFloorKey)) moved++;
+  }
+  if (moved > 0) shiftAlifeFloorCaps(alife, fromFloorKey, toFloorKey, moved);
+  if (alife.migrations.length < ALIFE_SAVE_PLOT_DEAD_IDS_CAP) {
+    alife.migrations.push({ id, fromFloorKey, toFloorKey, moved });
+  }
+  publishEvent(state, {
+    type: 'alife_migration',
+    severity: 3,
+    privacy: 'public',
+    actorFaction: faction,
+    tags: ['alife_migration', 'migration', 'resettlement'],
+    data: { migrationId: id, fromFloorKey, toFloorKey, faction, moved },
+  });
+  alife.leaderboardVersion++;
+  return moved;
 }
 
 export function getAlifeNpcRecordSnapshot(state: GameState, alifeId: number): AlifeNpcSnapshot | undefined {
@@ -2411,43 +2799,15 @@ function copyArrivalSocialFieldsToEntity(alife: AlifeState, record: AlifeNpcReco
   entity.monsterKills = recordMonsterKills(alife, record);
 }
 
-function liveAlifeIds(entities: readonly Entity[]): Set<number> {
-  const ids = new Set<number>();
-  for (const entity of entities) {
-    if (entity.type === EntityType.NPC && entity.alifeId !== undefined && entity.alive) ids.add(entity.alifeId);
-  }
-  return ids;
-}
-
-function arrivalRecordReusable(alife: AlifeState, record: AlifeNpcRecord, activeIds: ReadonlySet<number>): boolean {
-  return !recordDead(alife, record) &&
-    !record.reservedKind &&
-    !recordTouched(alife, record) &&
-    !activeIds.has(record.id) &&
-    recordPlayerRelation(alife, record) === undefined &&
-    recordKills(alife, record) === 0 &&
-    recordNpcKills(alife, record) === 0 &&
-    recordMonsterKills(alife, record) === 0;
-}
-
-function reserveArrivalRecordIndex(alife: AlifeState, entities: readonly Entity[], floorKey: string): number {
-  const activeIds = liveAlifeIds(entities);
-  const bucket = alife.floorIndex[floorKey] ?? [];
-  for (const recordIndex of bucket) {
-    const record = alife.npcs[recordIndex];
-    if (record && arrivalRecordReusable(alife, record, activeIds)) return recordIndex;
-  }
-  for (let recordIndex = 0; recordIndex < alife.npcs.length; recordIndex++) {
-    const record = alife.npcs[recordIndex];
-    if (record && arrivalRecordReusable(alife, record, activeIds)) return recordIndex;
-  }
-  return -1;
-}
-
+/**
+ * Прибытие человека, которого в пуле ещё нет: караванщик, эвакуированный,
+ * актёр события, житель без записи. `_entities` остаётся в подписи ради четырёх
+ * зовущих систем — здесь он больше не нужен, см. отказ на исчерпанном пуле ниже.
+ */
 export function assignPersistentAlifeNpcFromEntity(
   state: GameState,
   entity: Entity,
-  entities: readonly Entity[],
+  _entities: readonly Entity[],
   floorKey = currentAlifeFloorKey(state),
 ): boolean {
   if (entity.type !== EntityType.NPC || ('plotNpcId' in entity && (entity as any).plotNpcId !== undefined) || (entity.alifeId !== undefined && entity.alifeId >= 1 && entity.alifeId <= getPlotNpcCount()) || entity.persistentNpcId) return false;
@@ -2456,18 +2816,18 @@ export function assignPersistentAlifeNpcFromEntity(
     return true;
   }
   const alife = ensureAlifeState(state);
-  let recordIndex = alife.npcs.length;
-  let record: AlifeNpcRecord;
-  if (recordIndex < ALIFE_POPULATION) {
-    record = arrivalRecordFromEntity(alife, recordIndex + 1, state, floorKey, entity);
-    alife.npcs.push(record);
-    alife.total = alife.npcs.length;
-  } else {
-    recordIndex = reserveArrivalRecordIndex(alife, entities, floorKey);
-    if (recordIndex < 0) return false;
-    record = arrivalRecordFromEntity(alife, alife.npcs[recordIndex].id, state, floorKey, entity);
-    alife.npcs[recordIndex] = record;
-  }
+  const recordIndex = alife.npcs.length;
+  /* Исчерпанный пул — это отказ, а не место. Здесь стоял поиск «подходящей»
+   * чужой записи (`reserveArrivalRecordIndex`), и подходящей считалась любая
+   * НЕТРОНУТАЯ: живой человек, которого игрок просто ещё не встречал. Его
+   * запись переписывалась на месте — имя, фракция, семья, отношения, — и
+   * личность исчезала, не умерев, а рёбра графа Демоса начинали указывать на
+   * постороннего. Ни один прибывший не стоит стёртого жителя: пусть событие
+   * останется без человека. */
+  if (recordIndex >= ALIFE_POPULATION) return false;
+  const record = arrivalRecordFromEntity(alife, recordIndex + 1, state, floorKey, entity);
+  alife.npcs.push(record);
+  alife.total = alife.npcs.length;
   attachRecordToFloor(alife, recordIndex, floorKey);
   copyArrivalSocialFieldsToEntity(alife, record, entity);
   entity.alifeId = record.id;
@@ -2615,6 +2975,7 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
   const karma = recordKarma(alife, record);
   const rpg = rpgFromRecord(alife, record);
   const generatedLoadout = recordCustomLoadout(alife, record) ? undefined : defaultLoadoutForRecord(alife, record);
+  const inventory = inventoryCopy(record.inventory ?? generatedLoadout?.inventory) ?? [];
   const templateHasLocalAnchor = template?.familyId !== undefined || template?.assignedRoomId !== undefined;
   const isTraveler = record.isTraveler ?? template?.isTraveler ?? (templateHasLocalAnchor ? false : occupationHasRoutineTag(occupation, 'traveler'));
   const familyId = template?.familyId ?? recordFamilyId(alife, record);
@@ -2648,9 +3009,10 @@ function materializeEntity(record: AlifeNpcRecord, template: Entity | undefined,
     money: recordMoney(alife, record),
     accountRubles: recordAccountRubles(alife, record),
     ai,
-    inventory: inventoryCopy(record.inventory ?? generatedLoadout?.inventory) ?? [],
+    inventory,
     weapon: record.weapon ?? generatedLoadout?.weapon,
     tool: record.tool ?? generatedLoadout?.tool,
+    armorDefId: wornArmorFromInventory(inventory),
     faction,
     occupation,
     playerRelation,
@@ -2887,6 +3249,7 @@ export function materializeAlifeFloorPopulation(
   reconcileExistingAlifeEntities(alife, entities);
   filterDeadPlotNpcs(alife, entities);
   filterRelocatedPlotNpcs(alife, entities, floorKey);
+  applyFactionOverridesToEntities(alife, entities);
   const templates = extractAmbientNpcTemplates(entities);
   if (templates.length > 0) {
     const floorIds = alife.floorIndex[floorKey] ?? [];
@@ -2917,7 +3280,7 @@ export function materializeAlifeFloorPopulation(
       }
 
       if (pool.taken() < templates.length) {
-        const currentZ = floorKeyZ(floorKey) ?? state.currentZ ?? 100;
+        const currentZ = floorKeyZ(floorKey) ?? state.currentZ ?? 0;
         const surplusFloors = Object.keys(alife.floorIndex)
           .filter(key => key !== floorKey && (alife.floorIndex[key]?.length ?? 0) > (floorCaps[key] ?? Math.min(alife.floorIndex[key]!.length, 30)))
           .map(key => ({ key, z: floorKeyZ(key) }))
@@ -3156,6 +3519,63 @@ function applyFactionAttitudeDrift(alife: AlifeState, record: AlifeNpcRecord, in
   }
 }
 
+/* ── Событийная принадлежность и переселения в сейве ──────────────
+ * Оба факта разрежены: на чистом прогоне их нет вовсе. Оверрайд — плоские пары
+ * «слот, фракция»; переселение — имя, две стороны и число уехавших. Списка людей
+ * у переселения нет намеренно: их адреса уже уехали в сейв обычными оверрайдами,
+ * а числа хватает, чтобы вернуть плану раздачи мест сдвинутые цели этажей. */
+function factionOverridesForSave(alife: AlifeState): number[] | undefined {
+  if (alife.factionOverrides.size === 0) return undefined;
+  const out: number[] = [];
+  for (const [id, faction] of alife.factionOverrides) {
+    if (out.length >= ALIFE_SAVE_PLOT_DEAD_IDS_CAP * 2) break;
+    out.push(id, faction);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function applySavedFactionOverrides(alife: AlifeState, input: unknown): void {
+  if (!Array.isArray(input)) return;
+  for (let i = 0; i + 1 < input.length; i += 2) {
+    if (alife.factionOverrides.size >= ALIFE_SAVE_PLOT_DEAD_IDS_CAP) break;
+    const rawId = input[i];
+    const rawFaction = input[i + 1];
+    if (typeof rawId !== 'number' || !Number.isInteger(rawId)) continue;
+    if (typeof rawFaction !== 'number' || !Number.isInteger(rawFaction)) continue;
+    // Неизвестный слот отбрасывается, а НЕ прижимается к границе: прижатый номер
+    // сел бы на постороннего человека и переписал бы ему сторону.
+    if (rawId < 1 || rawId > alife.npcs.length) continue;
+    if (rawFaction < Faction.CITIZEN || rawFaction > Faction.PLAYER) continue;
+    const record = alife.npcs[rawId - 1];
+    if (!record) continue;
+    const faction = rawFaction as Faction;
+    alife.factionOverrides.set(record.id, faction);
+    /* База отношения к игроку здесь НЕ сдвигается: сдвиг случился в тот момент,
+     * когда сторона менялась, и его результат уже лежит в оверрайде записи.
+     * Повторить его на загрузке значило бы применить один и тот же шаг дважды. */
+    if (recordFaction(alife, record) !== faction) setRecordFaction(alife, record, faction);
+    setRecordTouched(alife, record);
+  }
+}
+
+function applySavedMigrations(alife: AlifeState, input: unknown): void {
+  if (!Array.isArray(input)) return;
+  for (const raw of input) {
+    if (alife.migrations.length >= ALIFE_SAVE_PLOT_DEAD_IDS_CAP) break;
+    if (!isRecord(raw)) continue;
+    const id = cleanFloorKey(raw.id);
+    const fromFloorKey = cleanFloorKey(raw.fromFloorKey);
+    const toFloorKey = cleanFloorKey(raw.toFloorKey);
+    if (!id || !fromFloorKey || !toFloorKey || fromFloorKey === toFloorKey) continue;
+    if (alife.migrations.some(entry => entry.id === id)) continue;
+    const moved = clampInt(raw.moved, 0, 0, ALIFE_MIGRATION_BATCH_CAP);
+    alife.migrations.push({ id, fromFloorKey, toFloorKey, moved });
+    // Сами люди уже стоят на своих этажах — их привезли оверрайды выше. Здесь
+    // возвращаются только сдвинутые цели раздачи мест.
+    if (moved > 0) shiftAlifeFloorCaps(alife, fromFloorKey, toFloorKey, moved);
+  }
+}
+
 function sanitizeRelationTargetFaction(input: unknown): Faction | undefined {
   if (typeof input !== 'number' || !Number.isFinite(input)) return undefined;
   const faction = Math.trunc(input);
@@ -3222,6 +3642,10 @@ export function setAlifeState(state: GameState, input: unknown, options?: Create
       applyOverride(alife, item);
     }
   }
+  // Строго после оверрайдов: они несут собственную фракцию личности и её адрес,
+  // а событийная принадлежность и цели раздачи мест ложатся уже поверх.
+  applySavedFactionOverrides(alife, save.factionOverrides);
+  applySavedMigrations(alife, save.migrations);
   (state as AlifeHost).alife = alife;
   return alife;
 }
@@ -3315,6 +3739,8 @@ export function alifeForSave(state: GameState): AlifeSaveState {
     arenaChampionAlifeId: alife.arenaChampionAlifeId,
     deadIds,
     deadPlotNpcIds: [...alife.deadPlotNpcIds],
+    factionOverrides: factionOverridesForSave(alife),
+    migrations: alife.migrations.length > 0 ? alife.migrations.map(entry => ({ ...entry })) : undefined,
     overrides,
   };
 }

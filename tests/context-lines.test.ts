@@ -112,7 +112,6 @@ function snapshotFor(type: WorldEvent['type'], overrides: Partial<WorldEvent> = 
     monsterKind: undefined,
     severity: 3,
     privacy: 'local',
-    truth: 'fact',
     tags: [],
     ...overrides,
   };

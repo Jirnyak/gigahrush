@@ -1,12 +1,14 @@
 /* ── Standalone monster trait helpers ────────────────────────── */
 
-import { Cell, EntityType, Feature, MonsterKind, RoomType, type Entity } from '../core/types';
+import { ArmorType, Cell, DamageType, EntityType, Feature, MonsterKind, RoomType, type Entity } from '../core/types';
 import { World } from '../core/world';
+import { armorMultiplier } from '../data/armor_matrix';
 import { MONSTERS } from '../entities/monster';
 import { wetTerrainAtEntity } from './monster_terrain';
 
 const DEFENSIVE_NEUTRAL_HOSTILE_STAGE = 1;
-export const PANELNIK_WALL_BRACE_DAMAGE_MULT = 0.58;
+/** Числа у бетона живут в матрице брони; здесь — имя, которым его зовут снаружи. */
+export const PANELNIK_WALL_BRACE_DAMAGE_MULT = armorMultiplier(ArmorType.CONCRETE);
 export const PANELNIK_OPEN_SLOW_SEC = 1.35;
 export const PANELNIK_OPEN_SLOW_MULT = 0.58;
 export const CHERVIE_NET_SOURCE_RADIUS = 7;
@@ -165,8 +167,27 @@ export function isPassiveDefensiveNeutralMonster(e: Entity): boolean {
     && e.monsterStage !== DEFENSIVE_NEUTRAL_HOSTILE_STAGE;
 }
 
-export function applyMonsterIncomingDamage(world: World, target: Entity, damage: number): number {
-  if (panelnikWallBraceActive(world, target)) return Math.max(1, Math.round(damage * PANELNIK_WALL_BRACE_DAMAGE_MULT));
-  if (!lotochnikDrainArmorActive(world, target)) return damage;
-  return Math.max(1, Math.round(damage * 0.58));
+/**
+ * Условие → активный вид брони. Порядок значим: упор в стену старше мокрого
+ * лотка, потому что таким он был до сведения множителей в матрицу.
+ *
+ * Сколько снимет удар, здесь не считают — это работа `ARMOR_MATRIX`.
+ */
+export function monsterTraitArmorType(world: World, target: Entity): ArmorType | undefined {
+  if (panelnikWallBraceActive(world, target)) return ArmorType.CONCRETE;
+  if (lotochnikDrainArmorActive(world, target)) return ArmorType.WET_HIDE;
+  return undefined;
+}
+
+export function applyMonsterIncomingDamage(
+  world: World,
+  target: Entity,
+  damage: number,
+  damageType?: DamageType,
+): number {
+  const armor = monsterTraitArmorType(world, target);
+  // Без брони урон проходит НЕТРОНУТЫМ: ни округления, ни пола в единицу. Ноль
+  // обязан остаться нулём — иначе царапина превратится в удар.
+  if (armor === undefined) return damage;
+  return Math.max(1, Math.round(damage * armorMultiplier(armor, damageType)));
 }

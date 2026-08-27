@@ -1,6 +1,7 @@
-import { Faction, type ItemDef, ItemType, type Item, MonsterKind } from '../core/types';
+import { Faction, type ItemDef, ItemType, type Item, MonsterKind, type Occupation } from '../core/types';
 import { getMonsterEcology } from '../data/monster_ecology';
 import { ITEMS, itemEquipSlot, itemDefHasTag } from '../data/items';
+import { occupationProfile } from '../data/occupation_profiles';
 import { WEAPON_STATS } from '../data/catalog';
 import { shuffleWith } from '../core/rand';
 
@@ -93,7 +94,64 @@ export function pickLootFromPool(pool: { item: ItemDef, weight: number }[], roll
   return selected;
 }
 
-export function generateNpcLoadout(faction: Faction, level: number, danger: number, rollWeapon: number, rollPockets: number[]): { weapon?: string; tool?: string; inventory?: Item[] } {
+/* ── Носимая броня ────────────────────────────────────────────────
+ *
+ * Броня — такой же выдаваемый слот, как оружие, и берётся тем же механизмом:
+ * `buildLootPool` под тем же ценовым потолком `calculateMaxLootValue`. Ничего
+ * своего она не заводит — экономическая полоса уже гасит дорогие пластины
+ * (4500 у брони ликвидатора против потолка 1800), а редкость несёт `spawnW`.
+ *
+ * Кому её выдают, решают ДВА уже существующих числа, перемноженных:
+ *   1. militarization — `weaponMult` строки фракции в этой же таблице,
+ *      нормированный на самую вооружённую фракцию таблицы. Своего числа тут
+ *      нет: перепишут таблицу — доля поедет за ней. Фракция без `weaponMult`
+ *      (гражданские, учёные) объявила, что оружие ей не свойственно, — брони
+ *      она не носит тоже.
+ *   2. `riskTolerance` анкеты занятия. Отсутствие поля читается как ноль:
+ *      «эта работа не ходит в опасность». Повар и домохозяйка брони не носят
+ *      ни в какой фракции, охотник гарнизона (0.78) носит почти всегда.
+ */
+const MAX_FACTION_WEAPON_MULT = Math.max(
+  ...Object.values(FACTION_LOOT_PROFILES).map(p => p.weaponMult ?? 0),
+);
+
+export function npcArmorChance(faction: Faction, occupation: Occupation | undefined): number {
+  const militarization = (FACTION_LOOT_PROFILES[faction]?.weaponMult ?? 0) / MAX_FACTION_WEAPON_MULT;
+  return militarization * (occupationProfile(occupation)?.riskTolerance ?? 0);
+}
+
+export function pickNpcArmor(
+  faction: Faction,
+  occupation: Occupation | undefined,
+  level: number,
+  danger: number,
+  rollWear: number,
+  rollPick: number,
+): ItemDef | undefined {
+  if (rollWear >= npcArmorChance(faction, occupation)) return undefined;
+  const profile = FACTION_LOOT_PROFILES[faction] || {};
+  // Множители по типу предмета сняты: вся броня — MISC, они одинаковы для всех
+  // пяти и в отборе всё равно сокращаются. Веса тегов оставлены: появится у
+  // брони тег — она сама встанет в строй фракции без правки этого места.
+  const pool = buildLootPool({ tagWeights: { ...profile.tagWeights } }, calculateMaxLootValue(level, danger, faction))
+    .filter(p => itemEquipSlot(p.item) === 'armor');
+  return pickLootFromPool(pool, rollPick);
+}
+
+export interface NpcArmorRolls {
+  occupation?: Occupation;
+  rollWear: number;
+  rollPick: number;
+}
+
+export function generateNpcLoadout(
+  faction: Faction,
+  level: number,
+  danger: number,
+  rollWeapon: number,
+  rollPockets: number[],
+  armorRolls?: NpcArmorRolls,
+): { weapon?: string; tool?: string; armorDefId?: string; inventory?: Item[] } {
   const profile = FACTION_LOOT_PROFILES[faction] || {};
   const maxVal = calculateMaxLootValue(level, danger, faction);
   
@@ -133,11 +191,26 @@ export function generateNpcLoadout(faction: Faction, level: number, danger: numb
     }
   }
 
-  // 2. Pick pockets
+  // 2. Pick armor — тем же способом, что и оружие, и в тот же карман: броня
+  // обязана выпасть с трупа и лечь на прилавок наравне со стволом.
+  let armorDefId: string | undefined;
+  if (armorRolls) {
+    const armorDef = pickNpcArmor(faction, armorRolls.occupation, level, danger, armorRolls.rollWear, armorRolls.rollPick);
+    if (armorDef) {
+      armorDefId = armorDef.id;
+      inventory.push({ defId: armorDef.id, count: 1 });
+    }
+  }
+
+  // 3. Pick pockets. Броня из карманов исключена: она выдаётся слотом выше и
+  // только тем, кому положена. Пока её никто не носил, лёгкая броня (MISC,
+  // spawnW 50) была для карманов обычным хламом — и на жилом этаже её случайно
+  // таскала половина населения. Одетые домохозяйки — это карман, а не замысел.
   const pocketProfile = { ...profile };
   pocketProfile.weaponMult = 0;
-  const pocketPool = buildLootPool(pocketProfile, Math.max(5, maxVal * 0.5));
-  
+  const pocketPool = buildLootPool(pocketProfile, Math.max(5, maxVal * 0.5))
+    .filter(p => itemEquipSlot(p.item) !== 'armor');
+
   for (const r of rollPockets) {
     const item = pickLootFromPool(pocketPool, r);
     if (item) {
@@ -145,7 +218,7 @@ export function generateNpcLoadout(faction: Faction, level: number, danger: numb
     }
   }
 
-  return { weapon: weaponId, tool: toolId, inventory: inventory.length > 0 ? inventory : undefined };
+  return { weapon: weaponId, tool: toolId, armorDefId, inventory: inventory.length > 0 ? inventory : undefined };
 }
 
 export function generateContainerLoot(tags: readonly string[], proceduralValueCap: number | undefined, level: number, rollItems: number[]): Item[] {

@@ -119,7 +119,6 @@ function rememberCombat(roomId: number, severity = 5): void {
     actorFaction: Faction.PLAYER,
     severity: severity as WorldEvent['severity'],
     privacy: 'public',
-    truth: 'fact',
     tags: ['combat'],
   } as WorldEvent;
   assert.ok(recordRoomMemoryEvent(event), 'событие должно осесть в памяти комнаты');

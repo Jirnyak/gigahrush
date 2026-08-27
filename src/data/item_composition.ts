@@ -17,7 +17,27 @@ const WEAPON_ROLE_TIERS: Record<string, WeaponRoleTier> = {
   ...PSI_WEAPON_ROLE_TIERS,
 };
 
-export const INTENTIONAL_RARE_MATERIAL_ITEMS: Record<string, readonly CraftMaterialId[]> = {
+/* Ступени ценовой лестницы `totalForItem`, получившие имя, потому что редкий
+   бит — ресурс крафта, а не товар, и его редкость обязана быть ценовым фактом.
+
+   RARE_UNIT_VALUE — авторская цена вещи, которую стоит ОДНА единица редкого бита.
+   Вещь дешевле неё не содержит редкого вовсе: бумажка, свечка и патрон отдают
+   расходники и химию, а не метаматерию. Так закрыта дыра, где ордер Пустоты за
+   120 ₽ нёс 34 единицы метаматерии (4 ₽/ед) и был самым дешёвым её источником
+   в игре — дешевле обычного металла.
+
+   RARE_GEAR_VALUE — порог дорогой снаряги. Выше него вещь не бывает собрана
+   целиком из общедоступного бита: у ствола это прицельная электроника и приводы,
+   у ключа — электронная часть замка. Так закрыта обратная дыра, где ленточный
+   дробовик за 220 000 ₽ собирался из 128 обычных единиц ценой 847 ₽ — выгода 260×.
+
+   ENDGAME_TOTAL — состав вещи финала. Метаматерия и он неразделимы. */
+const RARE_UNIT_VALUE = 400;
+const RARE_GEAR_VALUE = 5_000;
+const RARE_GEAR_TOTAL = 35;
+const ENDGAME_TOTAL = 90;
+
+const AUTHORED_RARE_MATERIAL_ITEMS: Record<string, readonly CraftMaterialId[]> = {
   gauss: ['cybernetics'],
   plasma: ['cybernetics'],
   bfg: ['cybernetics', 'metamatter'],
@@ -60,6 +80,34 @@ export const INTENTIONAL_RARE_MATERIAL_ITEMS: Record<string, readonly CraftMater
   void_archive_warrant: ['metamatter'],
   chernobog_redacted_central_note: ['metamatter'],
 };
+
+/* Сколько единиц редкого бита вещь способна оплатить собственной ценой. */
+function rareBudget(def: ItemDef): number {
+  return Math.floor(def.value / RARE_UNIT_VALUE);
+}
+
+/* Какие редкие биты вещь несёт: авторский замысел, если он ей по карману, иначе
+   производное правило дорогой снаряги. Функция НЕ зовёт `totalForItem`: тот сам
+   спрашивает её про метаматерию. */
+function rareMaterialsFor(def: ItemDef): readonly CraftMaterialId[] {
+  const budget = rareBudget(def);
+  if (budget < 1) return [];
+  const authored = AUTHORED_RARE_MATERIAL_ITEMS[def.id];
+  if (!authored) return def.value > RARE_GEAR_VALUE ? ['cybernetics'] : [];
+  /* Метаматерия и потолок состава в ENDGAME_TOTAL — один и тот же факт: вещь
+     финала. Пустотный шип за 1500 ₽ этого не тянет, а был самым дешёвым
+     источником метаматерии после ордера Пустоты. */
+  return budget >= ENDGAME_TOTAL ? authored : authored.filter(material => material !== 'metamatter');
+}
+
+/* Доля редкого в дорогой снаряге растёт со ступенью цены и с ролью ствола:
+   точное и скорострельное огнестрельное несёт лишний шаг прицельной электроники,
+   огнемёт и подствольник — только приводы. */
+function derivedRareWeight(def: ItemDef, total: number): number {
+  const role = WEAPON_ROLE_TIERS[def.id];
+  const precise = role === 'ammo_burn' || role === 'rifle_precision' || role === 'shotgun_corridor_stop';
+  return Math.ceil(total / RARE_GEAR_TOTAL) + (precise ? 1 : 0);
+}
 
 const MATERIAL_TAGS: Readonly<Record<CraftMaterialId, readonly string[]>> = {
   mechanics: ['tool', 'repair', 'machine', 'weapon_part', 'breach', 'door_work', 'pump', 'filter', 'seal'],
@@ -111,10 +159,10 @@ function totalForItem(def: ItemDef): number {
       : v <= 20 ? 3
         : v <= 60 ? 5
           : v <= 150 ? 8
-            : v <= 400 ? 11
+            : v <= RARE_UNIT_VALUE ? 11
               : v <= 1_200 ? 16
-                : v <= 5_000 ? 24
-                  : v <= 15_000 ? 35
+                : v <= RARE_GEAR_VALUE ? 24
+                  : v <= 15_000 ? RARE_GEAR_TOTAL
                     : v <= 50_000 ? 58
                       : v <= 100_000 ? 82
                         : v <= 250_000 ? 128
@@ -122,10 +170,15 @@ function totalForItem(def: ItemDef): number {
 
   if (def.type === ItemType.AMMO) total = Math.max(2, Math.round(total * 0.55));
   if (def.type === ItemType.FOOD || def.type === ItemType.DRINK) total = Math.min(total, v >= 30 ? 6 : 4);
-  if (def.type === ItemType.NOTE || hasAnyTag(def, ['document', 'permit', 'coupon', 'receipt', 'form'])) total = Math.min(total, v >= 100 ? 8 : 5);
+  /* Бумажный потолок — только для бумаги. Тег `permit` у ствола значит «нужно
+     разрешение на ношение», а не «сделан из бумаги»: Автомат Ералашникова за
+     5200 ₽ из-за него имел состав документа в 8 единиц вместо 35. */
+  const paperLike = def.type === ItemType.NOTE
+    || (def.type === ItemType.MISC && hasAnyTag(def, ['document', 'permit', 'coupon', 'receipt', 'form']));
+  if (paperLike) total = Math.min(total, v >= 100 ? 8 : 5);
   if (def.type === ItemType.KEY) total = Math.max(total, 3);
-  if (WEAPON_ROLE_TIERS[def.id] === 'rare_energy' || WEAPON_ROLE_TIERS[def.id] === 'psi') total = Math.max(total, 35);
-  if (INTENTIONAL_RARE_MATERIAL_ITEMS[def.id]?.includes('metamatter')) total = Math.max(total, 90);
+  if (WEAPON_ROLE_TIERS[def.id] === 'rare_energy' || WEAPON_ROLE_TIERS[def.id] === 'psi') total = Math.max(total, RARE_GEAR_TOTAL);
+  if (rareMaterialsFor(def).includes('metamatter')) total = Math.max(total, ENDGAME_TOTAL);
   return total;
 }
 
@@ -216,14 +269,14 @@ function baseWeights(def: ItemDef): MutableCraftVector {
     if (hasAnyTag(def, MATERIAL_TAGS[material])) add(weights, material, 1);
   }
 
-  for (const material of INTENTIONAL_RARE_MATERIAL_ITEMS[def.id] ?? []) {
-    add(weights, material, material === 'metamatter' ? 3 : 2);
+  const rare = rareMaterialsFor(def);
+  const authored = !!AUTHORED_RARE_MATERIAL_ITEMS[def.id];
+  for (const material of rare) {
+    add(weights, material, authored ? (material === 'metamatter' ? 3 : 2) : derivedRareWeight(def, totalForItem(def)));
   }
 
   for (const material of RARE_MATERIALS) {
-    if (!INTENTIONAL_RARE_MATERIAL_ITEMS[def.id]?.includes(material)) {
-      weights[craftMaterialIndex(material)] = 0;
-    }
+    if (!rare.includes(material)) weights[craftMaterialIndex(material)] = 0;
   }
 
   return weights;
@@ -252,6 +305,14 @@ function applyMiscWeights(def: ItemDef, weights: MutableCraftVector): void {
   if (hasAnyTag(def, ['metal', 'repair_input', 'weapon_component', 'rail']) || idHasAny(def.id, ['metal', 'gear', 'spring', 'barrel', 'magazine', 'plate', 'bolt', 'spike', 'rail'])) {
     add(weights, 'metal', 5);
     add(weights, 'mechanics', 3);
+  }
+  /* Броня опознаётся собственным полем стойкостей, а не тегом: у всех четырёх
+     комплектов тегов нет вовсе, и они падали в общий хвост «две бумажки», то
+     есть Броня Ликвидатора за 4500 ₽ собиралась из шестнадцати расходников. */
+  if (def.resistances) {
+    add(weights, 'metal', 5);
+    add(weights, 'mechanics', 3);
+    add(weights, 'chemical', 1);
   }
   if (hasAnyTag(def, ['contraband', 'govnyak']) || idHasAny(def.id, ['govnyak', 'cigs', 'shaving'])) {
     add(weights, 'consumables', 2);
@@ -290,8 +351,8 @@ function allocate(total: number, weights: MutableCraftVector): CraftVector {
   return out;
 }
 
-function ensureIntentionalRareMinimum(itemId: string, vector: CraftVector): CraftVector {
-  const intended = INTENTIONAL_RARE_MATERIAL_ITEMS[itemId] ?? [];
+function ensureIntentionalRareMinimum(def: ItemDef, vector: CraftVector): CraftVector {
+  const intended = rareMaterialsFor(def);
   if (intended.length === 0) return vector;
   const out: MutableCraftVector = [...vector];
   for (const material of intended) {
@@ -307,12 +368,44 @@ function ensureIntentionalRareMinimum(itemId: string, vector: CraftVector): Craf
   return out;
 }
 
+/* Потолок редкого по цене вещи. Общий размер состава не меняется: лишние редкие
+   единицы возвращаются в самый крупный обычный материал, а не исчезают. */
+function capRareByValue(def: ItemDef, vector: CraftVector): CraftVector {
+  const budget = rareBudget(def);
+  const out: MutableCraftVector = [...vector];
+  const rareIndices = RARE_MATERIALS.map(material => craftMaterialIndex(material));
+  let rareTotal = rareIndices.reduce((sum, index) => sum + out[index], 0);
+  while (rareTotal > budget) {
+    const from = rareIndices.reduce((best, index) => (out[index] > out[best] ? index : best), rareIndices[0]);
+    if (out[from] <= 0) break;
+    const donor = out.reduce(
+      (best, value, index) => (!rareIndices.includes(index) && value > out[best] ? index : best),
+      craftMaterialIndex('consumables'),
+    );
+    out[from]--;
+    out[donor]++;
+    rareTotal--;
+  }
+  return out;
+}
+
 export function compositionForItemDef(def: ItemDef): CraftVector {
-  return ensureIntentionalRareMinimum(def.id, allocate(totalForItem(def), baseWeights(def)));
+  return capRareByValue(def, ensureIntentionalRareMinimum(def, allocate(totalForItem(def), baseWeights(def))));
 }
 
 export const ITEM_COMPOSITIONS: Record<string, CraftVector> = Object.freeze(
   Object.fromEntries(Object.values(ITEMS).map(def => [def.id, compositionForItemDef(def)])),
+);
+
+/* Реестр носителей редкого бита выводится из готовых составов, а не пишется рукой:
+   ценовой потолок вправе снять замысел с вещи, которая его не оплачивает, и
+   расписанный вручную список тогда лгал бы. */
+export const INTENTIONAL_RARE_MATERIAL_ITEMS: Record<string, readonly CraftMaterialId[]> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(ITEM_COMPOSITIONS)
+      .map(([itemId, vector]) => [itemId, RARE_MATERIALS.filter(material => vector[craftMaterialIndex(material)] > 0)] as const)
+      .filter(([, materials]) => materials.length > 0),
+  ),
 );
 
 export interface ItemCompositionDef {

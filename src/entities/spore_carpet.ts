@@ -1,6 +1,6 @@
 /* ── Spore Carpet: domestic lurking rug trap ─────────────────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 0.82,
   dmg: 4,
   attackRate: 1.4,
+  damageType: DamageType.BIO,
   sprite: 0,
   aiFlags: ['lurkingFurniture'],
   counterplay: 'Он не ходит и не нападает — он разрастается по кровяному следу. Уводи бой в сторону или выжигай след сразу.',

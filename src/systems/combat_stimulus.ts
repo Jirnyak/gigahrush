@@ -12,11 +12,11 @@ import { occupationHasAnyProfileTag } from '../data/occupation_profiles';
 import { entityDisplayName } from '../entities/monster';
 import { ENTITY_MASK_NPC, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
-import { applyWitnessedPlayerHitPenalty, areSameSide, isHostile, isPersonalFeudEnemy } from './factions';
+import { applyWitnessedViolencePenalty, areSameSide, combatSideOf, isHostile, isPersonalFeudEnemy } from './factions';
 import { isPlayerEntity } from './player_actor';
 import { RELATION_FRIENDLY_THRESHOLD, getNpcPlayerRelation } from './npc_relations';
 import { applyDamage, applyHitStaggerAndKnockback, calculateDamage } from './combat';
-import { applyDamageRelationPenalty } from './factions';
+import { applyCombatRelationOutcome } from './factions';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from './debug_cheats';
 import type { MonsterArmorHitResult } from './monster_armor';
 import type { DamageType, ProjType } from '../core/types';
@@ -78,7 +78,10 @@ const ASSIST_SIGHT_RADIUS = 12;
 /** Потолок отзывающихся на один зов: драка своих, а не всеобщая мобилизация. */
 const ASSIST_ALERT_CAP = 8;
 const assistScratch: Entity[] = [];
-const PLAYER_HURT_NPC_EVENT_COOLDOWN = 0.7;
+/** Нижняя граница между двумя схватками одной и той же пары. Второй слой поверх
+ *  боевой памяти: она держит пять секунд, но истечь и начаться заново может и
+ *  быстрее, а лента этого повторять не обязана. */
+const HURT_EVENT_COOLDOWN = 0.7;
 
 let threatMemory = new WeakMap<Entity, CombatThreatMemory>();
 const recentEventTimes = new Map<string, number>();
@@ -280,13 +283,54 @@ function applyVictimReaction(victim: Entity, attacker: Entity, reaction: CombatT
   else applyFightHint(victim, attacker);
 }
 
-function publishPlayerHurtNpcEvent(world: World, state: GameState | undefined, attacker: Entity, victim: Entity, damage: number, source: CombatStimulusSource, time: number): void {
-  if (!state || !isPlayerEntity(attacker) || victim.type !== EntityType.NPC || isPlayerEntity(victim)) return;
-  const key = `player_hurt_npc:${attacker.id}:${victim.id}`;
-  if (!eventAllowed(key, time, PLAYER_HURT_NPC_EVENT_COOLDOWN) && damage < 18) return;
+/**
+ * Удар между людьми.
+ *
+ * Игрок здесь — просто ещё один атакующий: его рука меняет только ИМЯ типа
+ * (`player_hurt_npc` против `npc_hurt_npc`) и больше ничего. Ровно так устроен
+ * слой убийств, где давно живут обе стороны — `player_kill_npc` и
+ * `npc_kill_npc`. Отдельной ветки «а если это игрок» в теле нет и заводить её
+ * обратно нельзя: до 2026-08-27 события «NPC ранил NPC» не существовало вовсе, и
+ * это была последняя ветка класса «игрок особенный» в событийном слое.
+ *
+ * Двумя типами, а не одним общим, — потому что читатели `player_hurt_npc`
+ * спрашивают именно про руку игрока и никак иначе: коммунальная память комнаты
+ * опознаёт его по `type.startsWith('player_')`, а хоровая подать и пси-схрон
+ * ветвят сюжет на «игрок напал на культиста». Один общий тип соврал бы всем
+ * троим, и каждый пришлось бы учить новому вопросу.
+ *
+ * ТРОТТЛ — по образцу `alertWitnesses`: событие про то, что СХВАТКА НАЧАЛАСЬ, а
+ * не про то, что прилетела пуля. Боевая память жертвы живёт `COMBAT_THREAT_TTL`
+ * и продлевается каждым попаданием, поэтому пока пара дерётся, второго события
+ * не будет: очередь ППШ в четырнадцать выстрелов стоит одного. Замер живого
+ * этажа без игрока: 1200–3500 попаданий NPC↔NPC в минуту, и события на каждое
+ * хватило бы, чтобы одним боем вымыть и кольцо `recentEvents`, и окно ленты
+ * Демоса (64 события на такт в 30 секунд).
+ *
+ * Память сверяется ПО ПАРЕ, а не «жертва вообще с кем-то дерётся»: иначе
+ * вступление третьего в идущую драку молчит, и хоровая подать не узнала бы про
+ * игрока, ударившего уже занятого боем сборщика.
+ */
+function publishActorHurtEvent(
+  world: World,
+  state: GameState | undefined,
+  attacker: Entity,
+  victim: Entity,
+  damage: number,
+  source: CombatStimulusSource,
+  time: number,
+  engagedWithAttacker: boolean,
+): void {
+  if (!state || engagedWithAttacker) return;
+  // Тварь бьёт молча: своего типа у неё нет, а `npc_hurt_npc` про неё соврал бы.
+  // На слое убийств у монстра ровно та же доля — там он попадает в `death_seen`.
+  if (attacker.type !== EntityType.NPC) return;
+  if (victim.type !== EntityType.NPC || isPlayerEntity(victim)) return;
+  const type = isPlayerEntity(attacker) ? 'player_hurt_npc' : 'npc_hurt_npc';
+  if (!eventAllowed(`${type}:${attacker.id}:${victim.id}`, time, HURT_EVENT_COOLDOWN)) return;
   const loc = eventLocation(world, victim);
   publishEvent(state, {
-    type: 'player_hurt_npc',
+    type,
     ...loc,
     x: victim.x,
     y: victim.y,
@@ -367,16 +411,24 @@ export function notifyActorDamaged(
 
   const prev = threatMemory.get(victim);
   const alreadyEngaged = prev !== undefined && prev.expiresAt > time;
+  // Та же боевая память, но спрошенная про ПАРУ: «эта драка уже идёт» для зова
+  // свидетелей и «этот бьёт этого уже не впервые» для ленты — разные вопросы.
+  const engagedWithAttacker = alreadyEngaged && prev!.attackerId === attacker.id;
   const reaction = threatReaction(victim, attacker, source, damage);
   setThreatMemory(victim, attacker, damage, source, time, reaction);
   applyVictimReaction(victim, attacker, reaction);
+  const killed = (victim.hp ?? 1) <= 0;
   /* Соседи оборачиваются на ПЕРВЫЙ удар схватки, а не на каждый. Живая боевая
    * память и есть признак «эта драка уже идёт»: пока она не истекла, второй зов
    * не нужен, и запрос по радиусу не повторяется на каждое попадание. Очередь
-   * автомата поэтому не стоит игроку восьми репутаций за секунду. */
-  if (!alreadyEngaged) alertWitnesses(world, victim, attacker, damage, time, reaction, state);
-  publishPlayerHurtNpcEvent(world, state, attacker, victim, damage, source, time);
-  if ((victim.hp ?? 1) <= 0) publishActorKillEvent(world, state, attacker, victim, source);
+   * автомата поэтому не стоит стрелку восьми репутаций за секунду.
+   *
+   * Смерть — исключение, и единственное: она случается один раз на жизнь, стоит
+   * отдельной, более крупной дельты и обязана быть увиденной даже посреди уже
+   * идущей схватки. Второй запрос по радиусу за драку, а не за попадание. */
+  if (!alreadyEngaged || killed) alertWitnesses(world, victim, attacker, damage, time, reaction, killed, state);
+  publishActorHurtEvent(world, state, attacker, victim, damage, source, time, engagedWithAttacker);
+  if (killed) publishActorKillEvent(world, state, attacker, victim, source);
 }
 
 /**
@@ -408,11 +460,15 @@ function standsUpFor(mate: Entity, victim: Entity): boolean {
  * без памяти же `findCombatTarget` сверит цель с матрицей фракций, вражды не
  * найдёт и сбросит её на следующем кадре.
  *
- * Свидетели. Репутация игрока перестаёт быть глобальной цифрой: удар помнят те,
- * кто стоял рядом, — включая тех, кто вступаться не стал. Считается и тогда,
- * когда жертва убегает: видеть — не значит драться.
+ * Свидетели. Репутация перестаёт быть глобальной цифрой: удар помнят те, кто
+ * стоял рядом, — включая тех, кто вступаться не стал. Считается и тогда, когда
+ * жертва убегает: видеть — не значит драться. Платят за ЛЮБОГО обидчика со
+ * стороной, а не только за руку игрока: закон «игрок — просто NPC» не терпит
+ * канала, которого нет у остальных. Экология выпадает сама — у монстра без
+ * флага `sided` стороны нет, и крыса не портит никому репутацию.
  *
- * Ограничено втройне: радиус, потолок и одна тревога на схватку.
+ * Ограничено втройне: радиус, потолок и одна тревога на схватку (плюс одна на
+ * смерть).
  */
 function alertWitnesses(
   world: World,
@@ -421,6 +477,7 @@ function alertWitnesses(
   damage: number,
   time: number,
   reaction: CombatThreatReaction,
+  killed: boolean,
   state?: GameState,
 ): void {
   if (victim.type !== EntityType.NPC) return;
@@ -428,8 +485,11 @@ function alertWitnesses(
   // не вступаются, иначе разборка тут же превращается в свалку.
   if (isDuelLocked(victim) || isDuelLocked(attacker)) return;
   const rally = reaction === 'fight';
-  const playerHitNpc = isPlayerEntity(attacker) && !isPlayerEntity(victim);
-  if (!rally && !playerHitNpc) return;
+  const attackerSide = combatSideOf(attacker);
+  // Внутри одной стороны свидетелю платить не за что: там вражда идёт личным
+  // ребром графа Демоса, а не мнением о фракции.
+  const witnessed = attackerSide !== undefined && attackerSide !== combatSideOf(victim);
+  if (!rally && !witnessed) return;
   const room = world.roomMap[world.idx(Math.floor(victim.x), Math.floor(victim.y))];
   getEntityIndex().queryRadiusCapped(
     victim.x, victim.y, ASSIST_SIGHT_RADIUS, assistScratch, ENTITY_MASK_NPC, ASSIST_ALERT_CAP,
@@ -438,7 +498,7 @@ function alertWitnesses(
     if (mate.id === victim.id || mate.id === attacker.id) continue;
     if (!mate.alive || isPlayerEntity(mate)) continue;
     if (world.roomMap[world.idx(Math.floor(mate.x), Math.floor(mate.y))] !== room) continue;
-    if (playerHitNpc) applyWitnessedPlayerHitPenalty(state, mate, damage);
+    if (witnessed) applyWitnessedViolencePenalty(state, mate, attackerSide!, damage, killed);
     if (!rally || !mate.ai || !standsUpFor(mate, victim)) continue;
     // Личная неприязнь — отказ помочь: сосед, ненавидящий пострадавшего, не
     // вступается за него. Это первое, чем вражда платит вместо трупа.
@@ -553,10 +613,79 @@ export interface ActorDamageInput {
   aoe?: boolean;
   /** Толчок от удара. Выключается там, где толкать нечем — среда, голод. */
   knockback?: boolean;
+  /**
+   * Откуда толкает удар, если толкает не сама рука: точка попадания снаряда,
+   * эпицентр взрыва. По умолчанию — позиция атакующего. Задаётся отдельно,
+   * потому что у снаряда автор и источник импульса — разные точки, а у взрыва
+   * автора может не быть вовсе.
+   */
+  knockbackFromX?: number;
+  knockbackFromY?: number;
+  /**
+   * Часы боя. Без них дверь берёт `state.time`, а без состояния — ноль; кадр AI
+   * своё время знает точнее и обязан его передавать.
+   */
+  time?: number;
   /** Уровень кровищи при смерти и вектор разлёта. */
   gore?: number;
   splashX?: number;
   splashY?: number;
+
+  /* ── ОСТАТОК ШЛЮЗОВ СВЕДЕНИЯ ──────────────────────────────────────
+   *
+   * Шесть путей урона пришли к этой двери каждый со своим законом, и поля ниже
+   * были слепком этих расхождений. Три сняты целиком вместе с вызовами:
+   * `relationPenalty`, `relationAttacker`, `factionClash`. Платит тот, кто
+   * ударил, по своей стороне (`combatSideOf`), и спорить с этим на входе больше
+   * нечем.
+   *
+   * Осталось четыре, и все четыре — настоящие расхождения путей, а не выбор
+   * закона. Правило прежнее: любое поле отсюда, которое перестанет что-то
+   * значить, — незакрытая работа.
+   */
+
+  /**
+   * Сколько снять на самом деле, если конвейер типа и брони посчитал сам
+   * вызывающий.
+   *
+   * Остался ровно один повод: точка сборки зовёт `applyDamage` ДО двери, потому
+   * что число нужно ей самой — кровь, сообщение об уроне, отладочное бессмертие.
+   * Второй раз конвейер гонять нельзя, он с побочными действиями: срывает
+   * бронеплиты и печатает реплики.
+   *
+   * БОЕВОЙ AI ЭТО ПОЛЕ БОЛЬШЕ НЕ ЗАПОЛНЯЕТ (с 2026-08-27). Он заполнял: ближний
+   * бой NPC и ближний бой с рывком монстра приходили с готовым числом и
+   * `applyMonsterArmorHit` минули целиком — бронированная тварь держала удар
+   * только от игрока. Замер живых этажей без игрока (60 с, по два сида): из
+   * 38 256 таких ударов 606 пришлись по бронированной твари, из них 74 — по
+   * Червие с живой сетью, то есть 100 урона вместо 56; авторский «Червие
+   * НЕТ-ветки» на Кремниевом колодце погибал в обоих сидах. Панельник и Лоточник
+   * не пострадали ни разу: их множитель путь NPC применял отдельным вызовом
+   * `applyMonsterIncomingDamage`, замер дал ровно 1.00. Монстр по бронированной
+   * твари не попал НИ РАЗУ (0 из 38 256) — его ветку сняли за компанию, чтобы у
+   * двери не осталось второго закона. После: твари 35.74% → 35.63%, люди 37.65%
+   * → 38.41%, реплик в логе не прибавилось. Таблица —
+   * `tests/damage-door-unification.test.ts`, вторая половина.
+   */
+  applied?: number;
+  /**
+   * Какое число узнают жертва и отношения. По умолчанию — `damage`. Точка сборки
+   * рассказывает урон ПОСЛЕ брони, боевой AI — ДО резиста типа; разница в числе,
+   * которое идёт в штраф отношений.
+   */
+  reportedDamage?: number;
+  /**
+   * Сообщать ли жертве, кто её ударил. Выключено ровно в одном месте: удар
+   * ко-оп-пира по игроку. У игрока свой канал (`recordPlayerDamage`), и боевой
+   * памяти ему сегодня не ставят.
+   */
+  notifyVictim?: boolean;
+  /**
+   * Смерть обрабатывает вызывающий. У каждого пути своя обработка — лут,
+   * приписка опыта пиру, свои сообщения и кровь, — и свести их в общий
+   * `actorDeathHandler` без смены поведения нельзя.
+   */
+  deathByCaller?: boolean;
 }
 
 export interface ActorDamageResult {
@@ -569,9 +698,9 @@ export interface ActorDamageResult {
 /**
  * Нанести урон актору. Один ход на все семь шагов.
  *
- * Броня работает ДЛЯ ВСЕХ, а не только против игрока: до двери её конвейер
- * читали четыре места, все в точке сборки, и удары NPC и монстров проходили
- * мимо — бронированная тварь была живучей только в руках игрока.
+ * Броневой конвейер дверь гонит ВСЕМ, кто не посчитал его сам: живучесть
+ * существа не зависит от того, чья рука бьёт. Кто считает сам и почему — см.
+ * `ActorDamageInput.applied`; там же замер, которым снято последнее исключение.
  */
 export function damageActor(
   world: World,
@@ -583,9 +712,11 @@ export function damageActor(
    * `GameState` не протянут. Тогда броневой конвейер пропускается — ему нужен мир
    * целиком, — но тип урона, память жертвы и смерть работают как всегда. Молча
    * ронять урон нельзя ни в одном случае. */
-  const armor = state
-    ? applyDamage(world, state, target, input)
-    : { damage: Math.round(calculateDamage(input.damage, input.damageType, target)), armorActive: false, armorStacks: 0, stripped: false, hitKind: 'weak' as const };
+  const armor = input.applied !== undefined
+    ? { damage: input.applied, armorActive: false, armorStacks: 0, stripped: false, hitKind: 'weak' as const }
+    : state
+      ? applyDamage(world, state, target, input)
+      : { damage: Math.round(calculateDamage(input.damage, input.damageType, target)), armorActive: false, armorStacks: 0, stripped: false, hitKind: 'weak' as const };
   const empty: ActorDamageResult = { applied: 0, killed: false, armor };
   if (!target.alive || target.hp === undefined || input.damage <= 0) return empty;
 
@@ -598,14 +729,29 @@ export function damageActor(
 
   target.hp -= armor.damage;
   const attacker = input.attacker;
-  if (input.knockback !== false && attacker) {
-    applyHitStaggerAndKnockback(world, target, attacker.x, attacker.y, armor.damage);
+  const knockbackX = input.knockbackFromX ?? attacker?.x;
+  const knockbackY = input.knockbackFromY ?? attacker?.y;
+  if (input.knockback !== false && knockbackX !== undefined && knockbackY !== undefined) {
+    applyHitStaggerAndKnockback(world, target, knockbackX, knockbackY, armor.damage);
   }
+  const reported = input.reportedDamage ?? input.damage;
+  /* Отношения — ПЕРЕД сообщением жертве. Так это делали четыре пути из шести до
+   * сведения, и порядок между ними ни на что не влияет: удар внутри одной
+   * стороны штрафа не даёт вовсе, а между сторонами жертва считает обидчика
+   * врагом и без всякого штрафа (`isCombatRelevantThreat`). Обратного чтения
+   * нет: зов свидетелей трогает соседей, а не жертву.
+   *
+   * Условие ровно одно и оно про АВТОРА: есть рука — есть счёт. Пар, обвал и
+   * голод бьют без виновника, и винить там некого. */
+  if (attacker) applyCombatRelationOutcome(world, state, attacker, target, reported);
   // Жертва узнаёт, кто её ударил. Без автора вызов сам обращается в ничто.
-  notifyActorDamaged(world, target, attacker, input.damage, input.source, state?.time ?? 0, state);
-  if (attacker) applyDamageRelationPenalty(attacker.faction, target.faction, input.damage, target, attacker, state);
+  if (input.notifyVictim !== false) {
+    notifyActorDamaged(world, target, attacker, reported, input.source, input.time ?? state?.time ?? 0, state);
+  }
 
   if (target.hp > 0) return { applied: armor.damage, killed: false, armor };
+  // ВРЕМЕННО: пути со своей обработкой смерти (см. `deathByCaller`).
+  if (input.deathByCaller === true) return { applied: armor.damage, killed: true, armor };
   /* Смерть игрока дверь НЕ объявляет: у неё своя дорога — щит, продолжение за
    * другое тело, камера смерти, — и флаг `alive` там не поднимают вовсе.
    * Обработчик всё равно зовётся: он первым делом пробует поглотить удар щитом. */

@@ -23,6 +23,7 @@ import {
   proceduralScreenHash01,
   proceduralScreenTex,
 } from '../data/procedural_screen_textures';
+import { FALSE_SAFE_BLOCK_ROOM_PREFIX } from '../data/procedural_floors';
 import { rng } from '../core/rand';
 
 export { SCREEN_FRAMES, SCREEN_VARIANTS } from '../data/procedural_screen_textures';
@@ -128,8 +129,20 @@ function isPlainWallTexture(tex: number): boolean {
     || tex === Tex.METAL || tex === Tex.PIPE || tex === Tex.MARBLE || tex === Tex.MEAT || tex === Tex.GUT;
 }
 
+/* Комната адресуется своим `defId`, а не отображаемым именем: имя переводится и
+ * переписывается сценарием, `defId` — тот самый ключ, которым её ставит
+ * `applyNamedRoom`. Учебный зал остаётся без экранов: слайды в нём авторские. */
+const SCREENLESS_ROOM_DEF_IDS: ReadonlySet<string> = new Set(['tutor_hall']);
+
+/* Это НЕ белый список этажей. Решение «висят ли на этаже экраны» принимает сам
+ * этаж в `gen/`, вызывая (или не вызывая) `placeProceduralScreens`; сюда доходят
+ * только те, кто позвал. `screenThemeZ` уже свернул их z к теме, поэтому здесь
+ * бывают ровно шесть значений: −50 отсекается нулевым потолком, −36 уходит в
+ * `placeHellScreens`, остальные четыре разобраны ниже. Таблица описывает, какие
+ * КОМНАТЫ темы носят экран, — и этому месту она принадлежит: рядом с потолком и
+ * шансом той же темы. `default` недостижим и стоит страховкой. */
 function isRoomEligible(z: number, room: Room): boolean {
-  if (room.name === 'Актовый зал') return false;
+  if (room.defId !== undefined && SCREENLESS_ROOM_DEF_IDS.has(room.defId)) return false;
   switch (z) {
     case 30:
       return room.type === RoomType.OFFICE || room.type === RoomType.COMMON || room.type === RoomType.CORRIDOR
@@ -293,7 +306,9 @@ function buildSignalContext(world: World, room: Room | undefined, ci: number): S
     nearRail: hasRailNear(world, x, y),
     nearSmog,
     samosborZone: zone?.faction === ZoneFaction.SAMOSBOR || zone?.fogged === true || nearSmog,
-    falseSafeRoom: room?.name.includes('Тихий блок') === true,
+    // Тот же предикат, что у самой аномалии (`procedural_anomalies.falseSafeRoom`):
+    // имя ложного укрытия склеено из общей приставки, и приставка одна на проект.
+    falseSafeRoom: room?.name.includes(FALSE_SAFE_BLOCK_ROOM_PREFIX) === true,
   };
 }
 

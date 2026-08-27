@@ -78,12 +78,6 @@ export const PRODUCTION_BELT_PIPELINE_DEPENDENCIES: readonly ProductionBeltPipel
   },
 ];
 
-export const PRODUCTION_BELT_DEBUG_ENTRY = {
-  routeId: DESIGN_FLOOR_ID,
-  z: PRODUCTION_BELT_ROUTE_Z,
-  spawnHint: 'Проходная смены 14',
-} as const;
-
 export const FOREMAN_DEF: PlotNpcDef = {
   name: 'Галина Нормировщица',
   isFemale: true,

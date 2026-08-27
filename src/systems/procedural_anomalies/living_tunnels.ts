@@ -18,7 +18,14 @@ import { stampSurfaceSplat } from '../surface_marks';
 const LIVING_TUNNEL_RE = /\[living_tunnel:(-?\d+),(-?\d+),(-?\d+),(\d+)\]/g;
 const LIVING_TUNNEL_TICK_SECONDS = 0.42;
 const PLAYER_CELL_PROTECT_R2 = 1.35 * 1.35;
-const ROUTE_ANCHOR_PROTECT_RADIUS = 2;
+/* Тот же радиус, что у половины-генератора этой же аномалии (`gen/…/living_tunnels.ts`).
+ * Здесь стояло 2 против её 3, и проверка при этом байт в байт одинаковая. Цена
+ * расхождения: генерация отказывается прорубать в 7×7 вокруг лифта, а живой рост
+ * тоннелей отказывался только в 5×5 — то есть рантайм съедал ровно то кольцо,
+ * которым `stampRouteLiftShafts` прорубает подход к маршрутному лифту.
+ * Инвариант держался на входе в этаж и ломался во время игры.
+ * Соседняя аномалия (`sandpile_perekrytie`) сама с собой согласована: 3 и 3. */
+const ROUTE_ANCHOR_PROTECT_RADIUS = 3;
 const DIRS = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },

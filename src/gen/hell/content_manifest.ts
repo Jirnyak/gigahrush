@@ -10,6 +10,9 @@ import { generateThinWallChapel } from './thin_wall_chapel';
 import { spawnHellAltarArena } from './altar_arena';
 import { generateHell18ChoirTax } from './choir_tax';
 import { generateMyasomer } from './myasomer';
+/* Сцена входа гарнизона: своего генератора у неё нет — комнату-якорь роет
+ * `plot_chain`, — поэтому подключается голым импортом ради регистрации. */
+import './garrison_entry';
 
 export function runHellContent(world: World, entities: Entity[], nextId: number): number {
   generateHellPlotChain(world, entities, { v: nextId });

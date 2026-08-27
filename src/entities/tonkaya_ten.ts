@@ -1,6 +1,6 @@
 /* ── Tonkaya Ten: cowardly bait-and-retreat shadow ───────────── */
 
-import { MonsterKind } from '../core/types';
+import { DamageType, MonsterKind } from '../core/types';
 import type { MonsterDef } from './monster';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 
@@ -11,6 +11,7 @@ export const DEF: MonsterDef = {
   speed: 2.95,
   dmg: 5,
   attackRate: 1.45,
+  damageType: DamageType.PSI,
   sprite: 0,
   aiFlags: ['baitLine'],
   counterplay: 'Не гонитесь за тонкой тенью в темный коридор: держите место, включайте свет или шумите, чтобы она потеряла линию и вернулась слабой.',

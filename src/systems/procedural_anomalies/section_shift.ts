@@ -213,12 +213,35 @@ function isSeamCell(section: ShiftSection, cycle: number, lx: number, ly: number
   return !isWarningCorridor(section, lx, ly) && (lx === seam.x || ly === seam.y);
 }
 
+/**
+ * Буфер вокруг маршрутного якоря — тот же, что у соседних рантайм-аномалий.
+ *
+ * Проверять РОВНО клетку лифта мало: живая мутация переводит клетку ПОДХОДА, и
+ * подойти к шахте становится нечем. Генерационные аномалии этим не опасны —
+ * `stampRouteLiftShafts` идёт ПОСЛЕ них и сам прорубает подход; рантайм же
+ * чинить некому, поэтому буфер обязателен именно здесь.
+ */
+const ROUTE_ANCHOR_PROTECT_RADIUS = 3;
+
+function routeAnchorNearby(world: World, ci: number): boolean {
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  for (let dy = -ROUTE_ANCHOR_PROTECT_RADIUS; dy <= ROUTE_ANCHOR_PROTECT_RADIUS; dy++) {
+    for (let dx = -ROUTE_ANCHOR_PROTECT_RADIUS; dx <= ROUTE_ANCHOR_PROTECT_RADIUS; dx++) {
+      const ni = world.idx(x + dx, y + dy);
+      if (world.cells[ni] === Cell.LIFT || world.features[ni] === Feature.LIFT_BUTTON) return true;
+    }
+  }
+  return false;
+}
+
 function mutableShiftCell(world: World, section: ShiftSection, lx: number, ly: number, protectedIdx = -1): boolean {
   const ci = sectionIdx(world, section, lx, ly);
   if (ci === protectedIdx || ci === section.apparatus) return false;
   const cell = section.baseCells[localIndex(section, lx, ly)] as Cell;
   if (cell !== Cell.FLOOR && cell !== Cell.WATER) return false;
-  if (world.cells[ci] === Cell.LIFT || world.cells[ci] === Cell.DOOR || world.cells[ci] === Cell.ABYSS) return false;
+  if (world.cells[ci] === Cell.DOOR || world.cells[ci] === Cell.ABYSS) return false;
+  if (routeAnchorNearby(world, ci)) return false;
   if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0 || world.doors.has(ci) || world.containerMap.has(ci)) return false;
   return world.features[ci] === Feature.NONE;
 }
@@ -324,7 +347,26 @@ function applyTopologyShift(world: World, section: ShiftSection, protectedIdx: n
 function ensureEscapePocket(world: World, section: ShiftSection, x: number, y: number): number {
   let changed = 0;
   const ci = world.idx(x, y);
-  if (world.cells[ci] !== Cell.FLOOR) {
+  /* Единственное место модуля, писавшее клетку МИМО `mutableShiftCell`.
+   *
+   * Клетка под игроком после сдвига — не обязательно пол: в дверном проёме
+   * стоять штатно. Створка молча превращалась в `Cell.FLOOR`, а запись в
+   * `world.doors` оставалась: `removeDoorAt` не звался, `room.doors` не
+   * чистился, `door.idx` продолжал указывать на пол. Дальше `world.solid`
+   * отвечал «проходимо» помимо состояния двери — дверь переставала рисоваться и
+   * запираться, оставаясь при этом в мире. То же с водой.
+   *
+   * Проверка та же, что у остального модуля: дверь, лифт, пропасть, гермостену,
+   * защищённую квартиру, ящик и буфер маршрутного якоря карман не трогает.
+   * Выхода это не лишает — ниже он ищется по соседям. */
+  if (world.cells[ci] !== Cell.FLOOR
+    && world.cells[ci] !== Cell.DOOR
+    && !world.doors.has(ci)
+    && world.hermoWall[ci] === 0
+    && world.aptMask[ci] === 0
+    && world.cells[ci] !== Cell.LIFT
+    && world.cells[ci] !== Cell.ABYSS
+    && !routeAnchorNearby(world, ci)) {
     world.cells[ci] = Cell.FLOOR;
     changed++;
   }

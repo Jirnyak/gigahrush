@@ -10,7 +10,9 @@ import {
   CRAFT_MATERIAL_COUNT,
   CRAFT_MATERIAL_DEFS,
   CRAFT_MATERIAL_IDS,
+  CRAFT_MATERIALS,
   craftMaterialIndex,
+  craftVectorTotal,
   emptyCraftVector,
   isCraftMaterialId,
   type CraftMaterialId,
@@ -28,7 +30,7 @@ import {
   type CraftRecipeSourceDef,
 } from '../data/craft_recipe_sources';
 import { itemComposition } from '../data/item_composition';
-import { addItem, canAddItem } from './inventory';
+import { addItem, canAddItem, reconcileEquippedAfterLoss } from './inventory';
 import { publishEvent } from './events';
 import { rng } from '../core/rand';
 
@@ -256,16 +258,68 @@ function removeInventorySlotItem(actor: Entity, slotIndex: number, defId: string
   return true;
 }
 
-function weightedMaterial(components: CraftVector, rand?: () => number): CraftMaterialId | undefined {
-  let total = 0;
-  for (const count of components) total += cleanMaterialCount(count);
-  if (total <= 0) return undefined;
-  let roll = randomUnit(rand) * total;
+/** Ступень материала: чем реже, тем «дороже». Словарь уже объявлен в `CRAFT_MATERIALS`. */
+function materialTierRank(materialId: CraftMaterialId): number {
+  const rarity = CRAFT_MATERIALS[materialId]?.rarity;
+  return rarity === 'rare' ? 2 : rarity === 'specific' ? 1 : 0;
+}
+
+/**
+ * Самый дорогой материал состава: сначала по ступени, при равной ступени — по
+ * доле в составе. Порядок в `CRAFT_MATERIAL_IDS` решающим НЕ делаем: место в
+ * массиве — не физика мира.
+ */
+function richestMaterial(components: CraftVector): CraftMaterialId | undefined {
+  let best: CraftMaterialId | undefined;
+  let bestTier = -1;
+  let bestCount = 0;
   for (let i = 0; i < CRAFT_MATERIAL_COUNT; i++) {
-    roll -= cleanMaterialCount(components[i]);
-    if (roll < 0) return CRAFT_MATERIAL_IDS[i];
+    const count = cleanMaterialCount(components[i]);
+    if (count <= 0) continue;
+    const id = CRAFT_MATERIAL_IDS[i];
+    const tier = materialTierRank(id);
+    if (tier > bestTier || (tier === bestTier && count > bestCount)) {
+      best = id;
+      bestTier = tier;
+      bestCount = count;
+    }
   }
-  return CRAFT_MATERIAL_IDS[CRAFT_MATERIAL_COUNT - 1];
+  return best;
+}
+
+/**
+ * Что вернёт разбор: ПОЛОВИНА вектора состава, всеми типами сразу.
+ *
+ * Раньше разбор выдавал ОДНУ единицу ОДНОГО СЛУЧАЙНОГО типа: винтовка из
+ * 18 механики, 9 электроники, 4 химии и 27 металла могла отдать одну химию —
+ * и ровно столько же отдавала пустая бутылка. Выход был плоским, а состав
+ * растёт со стоимостью, поэтому мусор был самым дешёвым источником материала
+ * в игре, и из него собиралось что угодно.
+ *
+ * Округление вниз, но не в ноль: у вещи, чей состав меньше двух единиц,
+ * остаётся одна — и это ОБЯЗАТЕЛЬНО самый дорогой материал состава, а не
+ * жребий. Разобрать что-то ценное всегда осмысленнее, чем что-то дешёвое.
+ */
+function disassemblyRefund(components: CraftVector): MutableCraftVector {
+  const refund = emptyCraftVector();
+  let total = 0;
+  for (let i = 0; i < CRAFT_MATERIAL_COUNT; i++) {
+    const half = Math.floor(cleanMaterialCount(components[i]) / 2);
+    refund[i] = half;
+    total += half;
+  }
+  if (total > 0) return refund;
+  /* Утешительная единица — только вещи, чей состав есть что делить пополам.
+   * Иначе однорублёвый хлам (сырое мясо, свёрток курьера) становится источником
+   * обычного бита ПО РУБЛЮ ЗА ЕДИНИЦУ и остаётся топливом денежной петли:
+   * замерено, снятие этой страховки роняет максимальную выгоду крафта
+   * 52.5× → 17.5×, а 95-й перцентиль 15.3× → 5.5×. Вещь беднее двух единиц
+   * состава просто не даёт ничего — разбирать ценное по-прежнему осмысленнее. */
+  if (craftVectorTotal(components) >= 2) {
+    const richest = richestMaterial(components);
+    if (richest) refund[craftMaterialIndex(richest)] = 1;
+  }
+  return refund;
 }
 
 function canDisassembleAtStation(station: CraftStationKind): boolean {
@@ -459,11 +513,23 @@ export function disassembleInventorySlot(ctx: CraftingActionContext): CraftingAc
   if (!itemDef) return fail('unknown_item', 'Предмет не найден.');
   const composition = itemComposition(slot.defId);
   if (!composition) return fail('no_composition', 'У предмета нет состава.');
-  const materialId = weightedMaterial(composition.components, ctx.rng);
+  const refund = disassemblyRefund(composition.components);
+  const materialId = richestMaterial(refund);
   if (!materialId) return fail('no_composition', 'У предмета пустой состав.');
-  if (!removeInventorySlotItem(ctx.actor, slotIndex, slot.defId)) return fail('inventory_remove_failed', 'Не удалось снять предмет со слота.');
+  const removedDefId = slot.defId;
+  if (!removeInventorySlotItem(ctx.actor, slotIndex, removedDefId)) return fail('inventory_remove_failed', 'Не удалось снять предмет со слота.');
+  /* Разобранное перестаёт быть надетым. Это делают ВСЕ прочие пути потери вещи
+   * (торговля, ящик, выброс) — разборка была единственным, который не делал.
+   * Из-за этого разобранный нож оставался в руке навсегда: урон считается по
+   * `e.weapon`, а износ молча ничего не находил, так что оружие ещё и не
+   * ломалось. То же с разобранной надетой бронёй и её резистом.
+   * Снимает только когда вещи в рюкзаке больше нет — стопка переживает разбор. */
+  reconcileEquippedAfterLoss(ctx.actor, [removedDefId]);
 
-  addCraftMaterial(ctx.state, materialId, 1);
+  for (let i = 0; i < CRAFT_MATERIAL_COUNT; i++) {
+    if (refund[i] > 0) addCraftMaterial(ctx.state, CRAFT_MATERIAL_IDS[i], refund[i]);
+  }
+  const refundTotal = craftVectorTotal(refund);
   const recipe = craftRecipeByItemId(slot.defId);
   let learnedRecipeId: string | undefined;
   if (recipe && recipe.discoverable && randomUnit(ctx.rng) < 0.5) {
@@ -480,12 +546,12 @@ export function disassembleInventorySlot(ctx: CraftingActionContext): CraftingAc
     itemCount: 1,
     severity: learnedRecipeId ? 3 : 2,
     privacy: 'private',
-    tags: ['crafting', 'disassembly', 'recipe', `material_${materialId}`],
-    data: { itemId: slot.defId, recipeId: recipe?.id, materialId, stationKind: station, source: 'disassembly' },
+    tags: ['crafting', 'disassembly', 'recipe', ...materialTags(refund, 5)],
+    data: { itemId: slot.defId, recipeId: recipe?.id, materialId, materialCount: refundTotal, stationKind: station, source: 'disassembly' },
   });
 
   const learnedText = learnedRecipeId ? ' Рецепт всплыл в голове.' : '';
-  const message = `Разобрано: ${itemDef.name}. Материал: ${materialLabel(materialId)}.${learnedText}`;
+  const message = `Разобрано: ${itemDef.name}. Материала: ${refundTotal} ед., в основном ${materialLabel(materialId)}.${learnedText}`;
   ctx.state.msgs.push(msg(message, ctx.state.time, learnedRecipeId ? '#8cf' : '#ccc'));
   return { ok: true, message, itemId: slot.defId, recipeId: recipe?.id, materialId, learnedRecipeId };
 }

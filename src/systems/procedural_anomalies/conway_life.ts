@@ -107,13 +107,35 @@ function nearDoor(world: World, x: number, y: number): boolean {
   return false;
 }
 
+/**
+ * Буфер вокруг маршрутного якоря.
+ *
+ * Радиус тот же, что у соседних аномалий (`living_tunnels`,
+ * `sandpile_perekrytie`): защищать РОВНО клетку лифта мало — автомат переводит
+ * клетку ПОДХОДА из пола в стену, и подойти к шахте становится нечем. Замер на
+ * коллекторах: из четырёх кнопок лифта у одной мутабельный пол стоял вплотную,
+ * у двух — в радиусе трёх. Мировое поле садится случайно по всему тору, значит
+ * рано или поздно накрывает шахту, а противодействия у мирового поля нет вовсе.
+ */
+const ROUTE_ANCHOR_PROTECT_RADIUS = 3;
+
+function routeAnchorNearby(world: World, x: number, y: number): boolean {
+  for (let dy = -ROUTE_ANCHOR_PROTECT_RADIUS; dy <= ROUTE_ANCHOR_PROTECT_RADIUS; dy++) {
+    for (let dx = -ROUTE_ANCHOR_PROTECT_RADIUS; dx <= ROUTE_ANCHOR_PROTECT_RADIUS; dx++) {
+      const ni = world.idx(x + dx, y + dy);
+      if (world.cells[ni] === Cell.LIFT || world.features[ni] === Feature.LIFT_BUTTON) return true;
+    }
+  }
+  return false;
+}
+
 function mutableRuntimeCell(world: World, room: Room, x: number, y: number): boolean {
   const ci = world.idx(x, y);
   if (world.roomMap[ci] !== room.id) return false;
   if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0) return false;
   if (world.doors.has(ci) || nearDoor(world, x, y)) return false;
   if (world.containerMap.has(ci)) return false;
-  if (world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return false;
+  if (routeAnchorNearby(world, x, y)) return false;
   const feature = world.features[ci] as Feature;
   if (feature !== Feature.NONE && feature !== Feature.LAMP) return false;
   return world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WALL;
@@ -124,7 +146,7 @@ function mutableFieldCell(world: World, x: number, y: number): boolean {
   if (world.hermoWall[ci] !== 0 || world.aptMask[ci] !== 0) return false;
   if (world.doors.has(ci) || nearDoor(world, x, y)) return false;
   if (world.containerMap.has(ci)) return false;
-  if (world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return false;
+  if (routeAnchorNearby(world, x, y)) return false;
   const feature = world.features[ci] as Feature;
   if (feature !== Feature.NONE && feature !== Feature.LAMP) return false;
   return world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WALL;
@@ -475,10 +497,21 @@ function disableArena(world: World, arena: ConwayLifeArena): number {
 
 export function updateConwayLifeAnomaly(world: World, player: Entity, state: GameState, dt: number): void {
   const runtime = runtimeFor(world);
-  selectFieldWindow(world, state, runtime.field);
   runtime.accum += dt;
   if (runtime.accum < LIFE_TICK_SECONDS) return;
   runtime.accum %= LIFE_TICK_SECONDS;
+  /* Выбор окна стоит ЗА каденцией, а не перед ней.
+   *
+   * Раньше он звался каждый кадр. Пока поле активно, ранний выход отбивал его
+   * бесплатно — но `tickField` гасит `field.active`, как только мутабельных
+   * клеток в окне осталось меньше порога, и тогда условие выхода становится
+   * ложным до самой смены токена, то есть на минуту. Всю эту минуту окно
+   * выбиралось заново КАЖДЫЙ КАДР (сид зависит от `state.tick`) и сканировалось
+   * целиком: 16 384 клетки, внутри каждой `nearDoor` — девять обращений к карте
+   * дверей, около 150 тысяч на кадр. Это ровно запрещённый полный скан ради
+   * одной аномалии. Перестановка ничего не меняет по смыслу: окно нужно только
+   * тому такту, который следом и считает поле. */
+  selectFieldWindow(world, state, runtime.field);
 
   let changed = 0;
   let active = runtime.field.active ? 1 : 0;

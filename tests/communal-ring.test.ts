@@ -15,6 +15,7 @@ import {
 } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { ACTIVE_ACTOR_SOFT_LIMIT } from '../src/data/entity_limits';
+import { floorPopulationBudget } from '../src/data/population_profiles';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
@@ -106,7 +107,10 @@ test('communal_ring uses the design population field as a dense social floor', (
 
   const npcs = gen.entities.filter(entity => entity.type === EntityType.NPC);
   const monsters = gen.entities.filter(entity => entity.type === EntityType.MONSTER);
-  assert.equal(profile.npcTarget + profile.monsterTarget, ACTIVE_ACTOR_SOFT_LIMIT);
+  // Этаж выбирает бюджет СВОЕЙ высоты целиком, но мягкий предел остаётся
+  // недостижимым: набитый под потолок этаж молча глушит рантайм-спавн.
+  assert.equal(profile.npcTarget + profile.monsterTarget, floorPopulationBudget(route.z));
+  assert.equal(profile.npcTarget + profile.monsterTarget < ACTIVE_ACTOR_SOFT_LIMIT, true);
   assert.equal((profile.npcPlacement.anchors?.length ?? 0) >= 5, true);
   assert.equal((profile.monsterPlacement.anchors?.length ?? 0) >= 4, true);
   assert.equal(npcs.length + monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true);

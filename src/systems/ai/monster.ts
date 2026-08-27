@@ -9,8 +9,6 @@ import {
   msg,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { calculateDamage, applyHitStaggerAndKnockback } from '../combat';
-import { DamageType } from '../../core/types';
 import { MONSTERS, entityDisplayName, monsterHasAIFlag, type MonsterAIFlag, type MonsterDef } from '../../entities/monster';
 import { ITEMS, ITEM_TAGS } from '../../data/items';
 import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
@@ -59,7 +57,7 @@ import {
 import { entityInActiveCellHazard, registerCellHazardSite } from '../cell_hazards';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ENTITY_MASK_NPC, ensureEntityIndex, getEntityIndex } from '../entity_index';
-import { damageActor, getRecentCombatThreat, notifyActorDamaged } from '../combat_stimulus';
+import { damageActor, getRecentCombatThreat } from '../combat_stimulus';
 import { updateSlimevikMonster } from '../slimevik';
 import { updateGnilushkaMonster } from '../gnilushka';
 import { territoryOwnerAtIndex } from '../territory';
@@ -114,7 +112,12 @@ const MONSTER_DETECT_SQ = MONSTER_DETECT * MONSTER_DETECT;
 const MONSTER_MELEE_DETECT_SQ = MONSTER_MELEE_DETECT * MONSTER_MELEE_DETECT;
 const IMMEDIATE_THREAT_RADIUS = 10;
 const IMMEDIATE_THREAT_RADIUS_SQ = IMMEDIATE_THREAT_RADIUS * IMMEDIATE_THREAT_RADIUS;
-const COMBAT_TARGET_SCAN_CAP = 80;
+/* Сколько тел актор вообще рассматривает как боевую цель за один поиск.
+ * Экспортируется, потому что прицел HUD обязан смотреть ровно на тот же
+ * горизонт: до 2026-08-27 он держал СВОЮ копию с числом 160 и называл игроку
+ * цель, до которой собственный AI этого же актора не дотягивается. Закон
+ * «Игрок == NPC» требует одной боевой математики, а не двух похожих. */
+export const COMBAT_TARGET_SCAN_CAP = 80;
 const IMMEDIATE_THREAT_SCAN_CAP = 40;
 
 const OLGOY_SCENT_SCAN_CAP = 64;
@@ -3705,13 +3708,14 @@ function updateLishennyyBrightAvoidance(
   const ai = e.ai;
   const light = lishennyyState.of(e);
   light.avoidTimer = Math.max(0, light.avoidTimer - dt);
-  if ((ai.staggerTimer ?? 0) > 0) {
-    ai.combatTargetId = undefined;
-    ai.path = [];
-    e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
-    e.spriteScale = 0.84;
-    return true;
-  }
+  /* Боль сбивает УДАР, а не всего зверя: ни цели, ни маршрута она не отменяет.
+   *
+   * Здесь стояло `return true` вместе с чисткой `combatTargetId` и `path` —
+   * оглушённый Лишённый переставал видеть врага и терял дорогу, а плоские 0.35
+   * не имели отношения к длине самого стаггера. Верную половину делает общий
+   * обработчик в начале `updateMonster`: он вычитает боль и держит откат атаки
+   * ровно на её остатке. Здесь остаётся только читаемая поза. */
+  if ((ai.staggerTimer ?? 0) > 0) e.spriteScale = 0.84;
   if (light.avoidTimer <= 0 || pointLight(world, e.x, e.y) < LISHENNYY_BRIGHT_AVOID) return false;
   ai.combatTargetId = undefined;
   ai.goal = AIGoal.WANDER;
@@ -4074,7 +4078,7 @@ function chernoslizRevealNoise(noise: NoiseRecord): boolean {
   if (noise.source === 'decoy' || noise.source === 'explosion') return true;
   if (noise.source === 'weapon_fire' && noise.severity >= 2) return true;
   if (noise.source === 'melee' && (noise.tags.includes('metal') || noise.tags.includes('pipe'))) return true;
-  return noise.itemId === 'noise_can' || noise.tags.includes('counterplay') || noise.tags.includes('probe');
+  return noise.itemId === 'noise_can' || noise.tags.includes('counterplay');
 }
 
 function revealChernoSlizByNoise(
@@ -4764,8 +4768,17 @@ function finishRzhavnikLeap(
     if (target.id === playerId && isDebugOnePunchManEnabled()) {
       keepDebugOnePunchManAlive(target);
     } else {
-      { const _dmg = calculateDamage(damage, DamageType.KINETIC, target); target.hp -= _dmg; applyHitStaggerAndKnockback(world, target, e.x, e.y, _dmg); }
-      notifyActorDamaged(world, target, e, damage, 'monster_special', time, state);
+      // Единая дверь урона со всем конвейером: резист надетой брони цели и
+      // врождённая броня твари. Разбор — `ActorDamageInput.applied`.
+      // Тип удара объявляет вид, а не вызов: рывок Ржавника — та же кинетика,
+      // но она приходит из `MonsterDef`, как у всех.
+      damageActor(world, state, target, {
+        damage,
+        source: 'monster_special',
+        attacker: e,
+        time,
+        deathByCaller: true,
+      });
       if (target.id === playerId) recordPlayerDamage(state, e, damage, `Ржавник ударил первым рывком: -${damage}`);
       if (target.hp <= 0) {
         killEntity(target);
@@ -5016,11 +5029,14 @@ function updateZhornayaTvar(
   if (!hasAIFlag(e, 'scentOvercommit')) return false;
   const ai = e.ai!;
 
-  if ((ai.staggerTimer ?? 0) > 0) {
-    e.spriteScale = 0.88;
-    return true;
-  }
-  e.spriteScale = undefined;
+  /* Боль сбивает УДАР, а не всего зверя.
+   *
+   * Здесь стояло `return true`: оглушённая тварь не нюхала, не шла и не меняла
+   * цели — статуя на всю длину стаггера. Рывок и без того закрыт откатом атаки
+   * ниже (`(e.attackCd ?? 0) <= 0`), а откат держит на остатке боли общий
+   * обработчик в начале `updateMonster`. Осталась читаемая поза. */
+  const staggered = (ai.staggerTimer ?? 0) > 0;
+  e.spriteScale = staggered ? 0.88 : undefined;
 
   const scent = findZhornayaScentTarget(world, e, target, dt, time, state);
   if (!scent) return false;
@@ -5053,7 +5069,7 @@ function updateZhornayaTvar(
     return true;
   }
 
-  e.spriteScale = 1.08;
+  e.spriteScale = staggered ? 0.88 : 1.08;
   const tx = Math.floor(scent.x);
   const ty = Math.floor(scent.y);
   ai.timer -= dt;
@@ -5263,13 +5279,24 @@ function updateBladeElite(
     playSoundAt(playGrowl, e.x, e.y);
   }
 
-  if ((ai.staggerTimer ?? 0) > 0) {
-    e.spriteScale = 0.95;
-    e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
-    return true;
+  /* Боль сбивает УДАР, а не всего зверя.
+   *
+   * Здесь стояло `return true`: элита на всю длину стаггера становилась статуей —
+   * не шла, не перецеливалась, не разрывала дистанцию. Дробь по элите даёт до
+   * секунды боли, и два попадания с интервалом в секунду держали её замороженной
+   * насмерть — ровно тот стан-лок, против которого подняли `STAGGER_MIN_HP_RATIO`
+   * и рефрактерное окно в `systems/combat.ts`.
+   *
+   * Замах боль СРЫВАЕТ (так же, как попадание дробью в `tryMonsterProjectileStagger`),
+   * а новый закрыт откатом атаки ниже; сам откат держит на остатке боли общий
+   * обработчик в начале `updateMonster`. Плоские 0.35 к длине стаггера отношения
+   * не имели и потому сняты. */
+  const staggered = (ai.staggerTimer ?? 0) > 0;
+  if (staggered) {
+    ai.windupTimer = undefined;
+    ai.windupTargetId = undefined;
   }
-
-  e.spriteScale = undefined;
+  e.spriteScale = staggered ? 0.95 : undefined;
 
   if ((ai.windupTimer ?? 0) > 0) {
     ai.windupTimer = Math.max(0, (ai.windupTimer ?? 0) - dt);
@@ -6331,14 +6358,14 @@ function updateSlepoglaz(
     return true;
   }
 
-  if ((ai.staggerTimer ?? 0) > 0) {
-    e.attackCd = Math.max(e.attackCd ?? 0, 0.25);
-    e.spriteScale = 0.9;
-    if (updateSlepoglazCloseDefense(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return true;
-    return true;
-  }
-
-  e.spriteScale = undefined;
+  /* Отдельной ветки у боли здесь нет: она была ДУБЛЁМ соседней.
+   *
+   * Стояло `attackCd = max(, 0.25)` и `return true` — то же самое, что делает
+   * ветка отката строкой ниже, только с плоским числом, не связанным с длиной
+   * стаггера. Откат и так не может быть короче остатка боли: его держит общий
+   * обработчик в начале `updateMonster`, поэтому оглушённый Слепоглаз заходит в
+   * ту же ветку и живёт по СВОЕМУ такту луча, а не по второму, боевому. */
+  e.spriteScale = (ai.staggerTimer ?? 0) > 0 ? 0.9 : undefined;
   if ((e.attackCd ?? 0) > 0) {
     if (updateSlepoglazCloseDefense(world, entities, e, target, dt, time, msgs, playerId, nextId, state)) return true;
     return true;
@@ -6825,10 +6852,16 @@ function updateTreskotnikFractureSprint(
   const ai = e.ai!;
   const def = MONSTERS[MonsterKind.TRESKOTNIK];
 
+  /* Боль сбивает УДАР, а не всего зверя.
+   *
+   * Здесь стояло `return true`: оглушённый Трескотник не шёл, не перецеливался и
+   * не доводил уже начатый рывок — статуя на всю длину стаггера. Новый замах
+   * закрыт откатом атаки ниже, а откат держит на остатке боли общий обработчик в
+   * начале `updateMonster`; сам замах срывается отдельно, по потере здоровья
+   * (`windupStartHp`). Плоские 0.25 к длине стаггера отношения не имели.
+   * Осталась читаемая поза — она и так считалась от остатка боли. */
   if ((ai.staggerTimer ?? 0) > 0) {
-    e.attackCd = Math.max(e.attackCd ?? 0, 0.25);
     e.spriteScale = 0.82 + Math.max(0, (ai.staggerTimer ?? 0) / TRESKOTNIK_STAGGER_SEC) * 0.08;
-    return true;
   }
 
   if ((ai.sprintTimer ?? 0) > 0) {
@@ -6939,15 +6972,22 @@ function updateTreskotnikFractureSprint(
   return false;
 }
 
-function updateZakalennayaArmorStagger(e: Entity): boolean {
-  if (e.monsterKind !== MonsterKind.ZAKALENNAYA_ARMATURA || !e.ai) return false;
+/**
+ * Поза Закалённой арматуры под болью. Только поза.
+ *
+ * Функция возвращала `true`, а вызов в `updateMonster` был `if (...) return;` —
+ * жёсткая заморозка на всю длину стаггера, плюс плоские 0.35 отката, не
+ * связанные с ней ничем. Боль сбивает УДАР, а не всего зверя: откат держит на
+ * остатке боли общий обработчик строкой выше по вызову, а ноги, глаза и выбор
+ * цели остаются свободными.
+ */
+function updateZakalennayaArmorStagger(e: Entity): void {
+  if (e.monsterKind !== MonsterKind.ZAKALENNAYA_ARMATURA || !e.ai) return;
   if ((e.ai.staggerTimer ?? 0) <= 0) {
     if (e.spriteScale !== undefined) e.spriteScale = undefined;
-    return false;
+    return;
   }
-  e.attackCd = Math.max(e.attackCd ?? 0, 0.35);
   e.spriteScale = (e.monsterArmorStacks ?? 0) <= 0 ? 0.88 : 0.94;
-  return true;
 }
 
 /* ── Drop NPC inventory as ITEM_DROP entities ─────────────────── */
@@ -7044,7 +7084,7 @@ export function tryPerformMonsterMeleeAttack(
       e.angle = Math.atan2(dy, dx);
 
       getEntityIndex().queryRadius(e.x, e.y, mRange + 0.5, monsterMeleeHitQuery, ENTITY_MASK_ACTOR);
-      const hitTarget = selectMeleeTarget(world, e, monsterMeleeHitQuery, mRange);
+      const hitTarget = selectMeleeTarget(world, e, monsterMeleeHitQuery, mRange, undefined, true);
 
       if (hitTarget) {
         updateZombieCrowdReadability(world, e, hitTarget, time, msgs, playerId, state);
@@ -7065,8 +7105,17 @@ export function tryPerformMonsterMeleeAttack(
           if (debugImmortalPlayerHit) {
             keepDebugOnePunchManAlive(hitTarget);
           } else {
-            { const _dmg = calculateDamage(dmg, DamageType.KINETIC, hitTarget); hitTarget.hp -= _dmg; applyHitStaggerAndKnockback(world, hitTarget, e.x, e.y, _dmg); }
-            notifyActorDamaged(world, hitTarget, e, dmg, 'monster_melee', time, state);
+            // Единая дверь урона со всем конвейером: резист надетой брони цели
+            // и врождённая броня твари. Разбор — `ActorDamageInput.applied`.
+            /* Тип удара НЕ прибивается кинетикой: его объявляет вид
+             * (`MonsterDef.damageType`), и дверь берёт его у бьющего сама. */
+            damageActor(world, state, hitTarget, {
+              damage: dmg,
+              source: 'monster_melee',
+              attacker: e,
+              time,
+              deathByCaller: true,
+            });
             applyLishennyyContactDecay(state, world, e, hitTarget, dmg, time, msgs, playerId);
             applyKontorshchikGrab(state, world, e, hitTarget, time, msgs);
             dropSlimeWomanResidue(world, e, hitTarget, time, state, 'grab');
@@ -7129,7 +7178,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     e.attackCd = Math.max(e.attackCd ?? 0, ai.staggerTimer);
   }
 
-  if (updateZakalennayaArmorStagger(e)) return;
+  updateZakalennayaArmorStagger(e);
 
   evaluateMicroStimuli(world, e, time, msgs);
   if (tickMicroGoal(world, e, dt, time, msgs)) return;

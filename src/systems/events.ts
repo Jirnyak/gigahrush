@@ -29,9 +29,16 @@ const MAX_EVENT_DATA_STRING_LEN = 96;
 const MAX_EVENT_DATA_ARRAY = 8;
 const MAX_EVENT_DATA_DEPTH = 2;
 const EVENT_PRIVACIES = new Set(['public', 'local', 'witnessed', 'private', 'secret']);
-const CONTEXT_FACT_KINDS = new Set([
+const CONTEXT_FACT_KIND_LIST: readonly ContextFact['kind'][] = [
   'danger', 'shortage', 'theft', 'death', 'production', 'need', 'quest_hook', 'social', 'territory',
-]);
+];
+const CONTEXT_FACT_KINDS = new Set<string>(CONTEXT_FACT_KIND_LIST);
+const CONTEXT_FACT_KIND_SLOT = new Map<string, number>(CONTEXT_FACT_KIND_LIST.map((k, i) => [k, i]));
+
+/* Порог важности события. С него оно ложится в кольцо `importantEvents`, с него
+ * же обгоняет рутину в любой выборке с узким бюджетом. Одно число на оба
+ * смысла: «важное» и «то, что нельзя терять» — это одно и то же. */
+export const WORLD_EVENT_IMPORTANT_SEVERITY = 4;
 
 const RESOURCE_SCARCITY_EVENT_COOLDOWN_S = 600;
 const MAX_RESOURCE_SCARCITY_RUMORS = 4;
@@ -277,7 +284,6 @@ function normalizeEvent(raw: unknown, fallbackId: number): WorldEvent | null {
     containerId: Number.isFinite(event.containerId) ? event.containerId as number : undefined,
     containerOwnerId: Number.isFinite(event.containerOwnerId) ? event.containerOwnerId as number : undefined,
     containerFaction: Number.isFinite(event.containerFaction) ? event.containerFaction as WorldEvent['containerFaction'] : undefined,
-    truth: 'fact',
     severity: clampSeverity(event.severity),
     privacy: normalizePrivacy(event.privacy),
     tags: cleanTags(event.tags),
@@ -518,7 +524,93 @@ function contextFactFaction(event: WorldEvent, kind: ContextFact['kind']): Conte
   return event.targetFaction ?? event.actorFaction ?? event.containerFaction;
 }
 
+/* ── Учёт потока контекстных фактов ────────────────────────────
+ * Кольцо фактов — единственная память, которую NPC спрашивает о прошлом
+ * дольше одного кадра, и терять из неё нечего незаметно. Замер на живом
+ * этаже: жилой даёт 19..22 факта в минуту (кольцо оборачивается за ~23 мин),
+ * а производственный пояс — 439 в минуту, и там 512 ячеек кончаются за 70 с
+ * при обещанном сроке жизни факта 480..900 с.
+ *
+ * Поднимать кап нельзя: он стоит ради кадра. Поэтому вытесняет не возраст, а
+ * ДАВЛЕНИЕ РОДА — уходит самый старый факт самого многочисленного рода. На
+ * поясе это 86% фактов рода `death` (NPC режут монстров пачками), и редкая
+ * кража с TTL 720 с больше не выдавливается их потоком. */
+interface ContextFactStreamStats {
+  seen: number;
+  kept: number;
+  dropped: number;
+  droppedUnexpired: number;
+  keptByKind: Int32Array;
+  droppedUnexpiredByKind: Int32Array;
+}
+
+const factStream: ContextFactStreamStats = {
+  seen: 0,
+  kept: 0,
+  dropped: 0,
+  droppedUnexpired: 0,
+  keptByKind: new Int32Array(CONTEXT_FACT_KIND_LIST.length),
+  droppedUnexpiredByKind: new Int32Array(CONTEXT_FACT_KIND_LIST.length) };
+
+/* Счётчики родов переиспользуются между вытеснениями: аллокация на каждое
+ * вытеснение шла бы семь раз в секунду на насыщенном этаже. */
+const factKindCount = new Int32Array(CONTEXT_FACT_KIND_LIST.length);
+const factKindFirst = new Int32Array(CONTEXT_FACT_KIND_LIST.length);
+
+export function getContextFactStreamStats(): {
+  seen: number; kept: number; dropped: number; droppedUnexpired: number;
+  keptByKind: readonly number[]; droppedUnexpiredByKind: readonly number[];
+  kinds: readonly string[];
+} {
+  return {
+    seen: factStream.seen,
+    kept: factStream.kept,
+    dropped: factStream.dropped,
+    droppedUnexpired: factStream.droppedUnexpired,
+    keptByKind: Array.from(factStream.keptByKind),
+    droppedUnexpiredByKind: Array.from(factStream.droppedUnexpiredByKind),
+    kinds: CONTEXT_FACT_KIND_LIST };
+}
+
+export function resetContextFactStreamStats(): void {
+  factStream.seen = 0;
+  factStream.kept = 0;
+  factStream.dropped = 0;
+  factStream.droppedUnexpired = 0;
+  factStream.keptByKind.fill(0);
+  factStream.droppedUnexpiredByKind.fill(0);
+}
+
+/** Вытесняет один факт: самый старый из рода, который занимает больше всех. */
+function dropOneContextFact(store: WorldEventState, now: number): void {
+  const facts = store.facts;
+  if (facts.length === 0) return;
+  factKindCount.fill(0);
+  factKindFirst.fill(-1);
+  for (let i = 0; i < facts.length; i++) {
+    const slot = CONTEXT_FACT_KIND_SLOT.get(facts[i].kind);
+    if (slot === undefined) continue;
+    if (factKindCount[slot]++ === 0) factKindFirst[slot] = i;
+  }
+  let at = 0;
+  let best = 0;
+  for (let slot = 0; slot < factKindCount.length; slot++) {
+    if (factKindCount[slot] <= best) continue;
+    best = factKindCount[slot];
+    at = factKindFirst[slot];
+  }
+  const [victim] = facts.splice(at, 1);
+  factStream.dropped++;
+  if (!victim) return;
+  const slot = CONTEXT_FACT_KIND_SLOT.get(victim.kind);
+  if (victim.expiresAt === undefined || now <= victim.expiresAt) {
+    factStream.droppedUnexpired++;
+    if (slot !== undefined) factStream.droppedUnexpiredByKind[slot]++;
+  }
+}
+
 function recordContextFact(store: WorldEventState, event: WorldEvent): void {
+  factStream.seen++;
   const kind = contextFactKind(event);
   if (!kind) return;
   store.facts.push({
@@ -534,8 +626,11 @@ function recordContextFact(store: WorldEventState, event: WorldEvent): void {
     score: contextFactScore(event, kind),
     expiresAt: event.time + contextFactTtl(event, kind),
     tags: contextFactTags(event, kind) });
-  if (store.facts.length > WORLD_EVENT_IMPORTANT_CAPACITY) {
-    store.facts.splice(0, store.facts.length - WORLD_EVENT_IMPORTANT_CAPACITY);
+  factStream.kept++;
+  const slot = CONTEXT_FACT_KIND_SLOT.get(kind);
+  if (slot !== undefined) factStream.keptByKind[slot]++;
+  while (store.facts.length > WORLD_EVENT_IMPORTANT_CAPACITY) {
+    dropOneContextFact(store, event.time);
   }
 }
 
@@ -550,13 +645,12 @@ export function publishEvent(state: GameState, draft: WorldEventDraft): WorldEve
     hour: enriched.hour ?? state.clock.hour,
     minute: enriched.minute ?? state.clock.minute,
     z: enriched.z ?? state.currentZ,
-    truth: 'fact',
     severity: clampSeverity(enriched.severity),
     tags: cleanTags(enriched.tags),
     data: compactEventData(enriched.data) };
 
   pushBuffer(store.recentEvents, event);
-  if (event.severity >= 4) pushBuffer(store.importantEvents, event);
+  if (event.severity >= WORLD_EVENT_IMPORTANT_SEVERITY) pushBuffer(store.importantEvents, event);
   if (event.zoneId !== undefined && event.zoneId >= 0 && event.zoneId < store.zoneEvents.length) {
     pushBuffer(store.zoneEvents[event.zoneId], event);
   }
@@ -734,6 +828,28 @@ export function getZoneEvents(state: GameState, zoneId: number, filter: EventFil
   return out;
 }
 
+/**
+ * Порядок разбора событий потребителем, у которого бюджет уже кончился:
+ * сначала важное, внутри каждого разряда — по времени.
+ *
+ * Разрядов ровно два, и порог у них тот же, по которому событие попадает в
+ * кольцо `importantEvents`. Внутри разряда порядок хронологический НЕ для
+ * красоты: потребители помнят прочитанное одним курсором «максимальный
+ * разобранный id», и только при разборе важного по возрастанию id этот курсор
+ * означает то, что обещает. Отсортируй важное по убыванию тяжести — и
+ * недобранное важное с меньшим id окажется «под курсором», то есть потеряно
+ * молча. Ровно так и терялись смерти.
+ *
+ * Компаратор один на всех потребителей нарочно. Свой у каждого означал бы, что
+ * смерть доезжает до ленты Демоса, но не доезжает до отношений её круга, — а
+ * это одно и то же событие и один и тот же бюджет.
+ */
+export function compareEventPriority(a: WorldEvent, b: WorldEvent): number {
+  const aImportant = a.severity >= WORLD_EVENT_IMPORTANT_SEVERITY ? 1 : 0;
+  const bImportant = b.severity >= WORLD_EVENT_IMPORTANT_SEVERITY ? 1 : 0;
+  return bImportant - aImportant || a.id - b.id;
+}
+
 export function getImportantEvents(state: GameState, limit = 10): WorldEvent[] {
   const store = ensureWorldEventState(state);
   return readBuffer(store.importantEvents, limit);
@@ -820,6 +936,36 @@ registerDebugCommand({
         `[EVENTS] floor ${row.z} ${zone}: ${row.count} imp, max${row.maxSeverity}, last ${row.lastType}#${row.lastId}`,
         state.time,
         '#9cf',
+      ));
+    }
+  } });
+
+registerDebugCommand({
+  /* Context fact ring throughput and dropped facts */
+  id: 'context_facts',
+  group: 'world',
+  label: 'Кольцо фактов: поток',
+  run: ({ state }) => {
+    const store = ensureWorldEventState(state);
+    const stats = getContextFactStreamStats();
+    const share = stats.seen > 0 ? Math.round(stats.kept / stats.seen * 100) : 0;
+    state.msgs.push(msg(
+      `[FACTS] кольцо ${store.facts.length}/${WORLD_EVENT_IMPORTANT_CAPACITY}, из событий ${stats.kept}/${stats.seen} (${share}%)`,
+      state.time,
+      '#ff0',
+    ));
+    state.msgs.push(msg(
+      `[FACTS] вытеснено ${stats.dropped}, из них живых ${stats.droppedUnexpired}`,
+      state.time,
+      stats.droppedUnexpired > 0 ? '#f88' : '#9cf',
+    ));
+    for (let slot = 0; slot < stats.kinds.length; slot++) {
+      const kept = stats.keptByKind[slot];
+      if (kept === 0) continue;
+      state.msgs.push(msg(
+        `[FACTS] ${stats.kinds[slot]}: записано ${kept}, потеряно живыми ${stats.droppedUnexpiredByKind[slot]}`,
+        state.time,
+        '#ccf',
       ));
     }
   } });

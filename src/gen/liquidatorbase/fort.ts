@@ -15,6 +15,8 @@ import { Cell, Feature, RoomType, Tex, W, type Room } from '../../core/types';
 import type { World } from '../../core/world';
 import { SeedRng } from '../../core/rand';
 import { stampRoom } from '../shared';
+import { applyNamedRoom } from '../named_rooms';
+import { LIQUIDATOR_BASE_ARENA_ANCHOR, LIQUIDATOR_BASE_NAMED_ROOMS } from './rooms';
 
 /** Сторона форта: четверть этажа по площади. */
 export const FORT_SIDE = 512;
@@ -23,6 +25,26 @@ export const FORT_Y0 = FORT_X0;
 
 /** Арена в сердце форта. Доли процента этажа, а не половина, как было. */
 export const ARENA_SIDE = 56;
+/** Насколько ринг (столы по периметру песка) отступает от стены арены. */
+export const ARENA_RING_INSET = 16;
+/**
+ * Половина ПЕСКА в клетках: от середины арены до внутренней кромки столов.
+ *
+ * Считается, а не пишется: столы — путевая преграда (`table_slab_blocker`), то
+ * есть песок это настоящая клетка с четырьмя воротами, и всякий, кто мерит бой
+ * или кадр от середины арены, обязан мерить от ТОЙ ЖЕ границы, что её строит.
+ */
+export const ARENA_SAND_HALF = ARENA_SIDE / 2 - ARENA_RING_INSET - 1;
+/**
+ * Рабочий ряд трибуны: столько клеток от середины арены до места, где стоят
+ * распорядитель и зрители.
+ *
+ * Он глубоко в креслах, а не у первого стола, и это не вкус: боец берёт боевую
+ * цель в восьми клетках (`NPC_COMBAT_RANGE`, `ai/combat.ts`), а на песке
+ * дерутся в пределах его половины. Двадцать минус одиннадцать даёт зазор,
+ * которого не хватает бойцу, чтобы позвать трибуну в свою драку.
+ */
+export const ARENA_STAND_ROW = 20;
 
 /* Квартал форта и улица между кварталами. Из этих двух чисел выводится всё
  * остальное: сколько кварталов влезло, где улицы, куда встают комнаты. */
@@ -43,6 +65,21 @@ const WALL_WALK = 3;
 const GATE_HALF = 4;
 const ROAD_HALF = 2;
 const TOWER = 11;
+
+/**
+ * Прямоугольник фортовой земли, занятый чем-то авторским.
+ *
+ * `Room` подходит под него структурно, поэтому одна и та же проверка накрытия
+ * работает и для арены со штабом, и для КВАРТАЛОВ, которые кладут слои поверх
+ * форта (`order.ts`, `arena_quarter.ts`, `frontline.ts`, `supply.ts`). Слой
+ * объявляет своё пятно константой, а не роет по факту: кварталы обязаны
+ * появиться на чистой земле, иначе процедурные комнаты квартала окажутся
+ * наполовину перештампованы и в `world.rooms` останутся записи, чьи клетки уже
+ * принадлежат соседу.
+ */
+export interface FortRect {
+  x: number; y: number; w: number; h: number;
+}
 
 export interface FortLayout {
   arena: Room;
@@ -69,16 +106,39 @@ const DISTRICTS: readonly District[] = [
   { name: 'Оружейная', type: RoomType.STORAGE, floorTex: Tex.F_CONCRETE, wallTex: Tex.METAL },
   { name: 'Стрельбище', type: RoomType.CORRIDOR, floorTex: Tex.F_CONCRETE, wallTex: Tex.METAL, long: true },
   { name: 'Каптёрка', type: RoomType.STORAGE, floorTex: Tex.F_CONCRETE, wallTex: Tex.CONCRETE },
-  { name: 'Караулка', type: RoomType.OFFICE, floorTex: Tex.F_CONCRETE, wallTex: Tex.CONCRETE },
+  /* Караулка — ПОСТ, а не контора, и потому коридор.
+   *
+   * Обход (`patrol`) стоит у коридора, штаба, общего зала и рынка; у OFFICE его нет
+   * намеренно — там `work` и `sleep` дежурного за столом (`ai.md`, `room_affordances.ts`,
+   * замок `tests/room-affordances.test.ts`). Замер: обход 11.5% → 12.3%, присутствие в
+   * коридорах 28.9 → 37.1, ни один драйв не оголился. Дать обход самому OFFICE нельзя —
+   * это переселит часовых в чужие канцелярии на всех 51 этаже ради одного, а объём обхода
+   * не вырастет: его задаёт тяга драйва, а не запас годных комнат. */
+  { name: 'Караулка', type: RoomType.CORRIDOR, floorTex: Tex.F_CONCRETE, wallTex: Tex.CONCRETE },
   { name: 'Умывальня', type: RoomType.BATHROOM, floorTex: Tex.F_TILE, wallTex: Tex.TILE_W },
   { name: 'Столовая смены', type: RoomType.KITCHEN, floorTex: Tex.F_TILE, wallTex: Tex.TILE_W },
   { name: 'Санчасть', type: RoomType.MEDICAL, floorTex: Tex.F_TILE, wallTex: Tex.TILE_W },
 ];
 
-export function buildLiquidatorFort(world: World, seed: number): FortLayout {
+/**
+ * Слот комнаты у этажа один, и владелец у него один — сам `world.rooms`.
+ *
+ * `room.id` — это ИНДЕКС в массиве, плотный, без дыр (замок
+ * `tests/rooms-dense.test.ts`), а `stampRoom` кладёт комнату по индексу
+ * (`world.rooms[id] = room`), то есть ЗАТИРАЕТ чужую запись молча. Форт вёл
+ * собственный счётчик с нуля и совпадал с длиной массива только потому, что
+ * работает первым по пустому миру; слои (`order.ts`, `arena_quarter.ts`,
+ * `frontline.ts`, `supply.ts`) уже спрашивают длину. Два счётчика на один массив
+ * держатся на порядке вызовов — стоит слою поработать до форта, и форт сотрёт
+ * его комнаты. Спрашиваем длину везде: она и есть счётчик.
+ */
+function nextRoomSlot(world: World): number {
+  return world.rooms.length;
+}
+
+export function buildLiquidatorFort(world: World, seed: number, reserved: readonly FortRect[] = []): FortLayout {
   const rand = new SeedRng(seed);
   const rooms: Room[] = [];
-  let nextRoomId = 0;
 
   fillSolid(world);
   carveWilds(world, rand);
@@ -87,32 +147,41 @@ export function buildLiquidatorFort(world: World, seed: number): FortLayout {
   const cx = FORT_X0 + Math.floor(FORT_SIDE / 2);
   const cy = FORT_Y0 + Math.floor(FORT_SIDE / 2);
 
-  const arena = stampRoom(world, nextRoomId++, RoomType.COMMON,
+  const arena = stampRoom(world, nextRoomSlot(world), RoomType.COMMON,
     cx - Math.floor(ARENA_SIDE / 2), cy - Math.floor(ARENA_SIDE / 2), ARENA_SIDE, ARENA_SIDE, -1);
-  arena.name = 'Арена Базы';
+  /* Два адреса у одной комнаты, и оба нужны.
+   *
+   * Тег `arena` ищет дуэльная система (`findArenaRoom` в `arena_ladder.ts`) —
+   * по нему на песок приходят бойцы лестницы и сам игрок. Псевдоним `defId`
+   * ищет проигрыватель сцен ТОЧНЫМ сравнением, тега ему мало.
+   *
+   * `applyNamedRoom` списки СЛИВАЕТ, а не затирает, поэтому порядок здесь
+   * значим ровно в одну сторону: тег ставится до вызова. */
   arena.tags = ['arena'];
+  applyNamedRoom(arena, LIQUIDATOR_BASE_ARENA_ANCHOR,
+    LIQUIDATOR_BASE_NAMED_ROOMS[LIQUIDATOR_BASE_ARENA_ANCHOR]);
   arena.wallTex = Tex.METAL;
   arena.floorTex = Tex.F_CONCRETE;
   rooms.push(arena);
   buildArenaRing(world, arena);
 
   /* Плац примыкает к арене с юга: строй выходит на песок, не пересекая форт. */
-  const parade = stampRoom(world, nextRoomId++, RoomType.COMMON,
+  const parade = stampRoom(world, nextRoomSlot(world), RoomType.COMMON,
     cx - 40, arena.y + arena.h + STREET, 80, 40, -1);
   parade.name = 'Плац';
   parade.wallTex = Tex.CONCRETE;
   parade.floorTex = Tex.F_CONCRETE;
   rooms.push(parade);
 
-  const hq = stampRoom(world, nextRoomId++, RoomType.HQ,
+  const hq = stampRoom(world, nextRoomSlot(world), RoomType.HQ,
     cx - 22, arena.y - STREET - 30, 44, 30, -1);
   hq.name = 'Штаб гарнизона';
   hq.wallTex = Tex.HERMO_WALL;
   hq.floorTex = Tex.F_CONCRETE;
   rooms.push(hq);
 
-  nextRoomId = fillFortBlocks(world, rand, rooms, nextRoomId, [arena, parade, hq]);
-  nextRoomId = buildFortWall(world, rooms, nextRoomId);
+  fillFortBlocks(world, rand, rooms, [arena, parade, hq, ...reserved]);
+  buildFortWall(world, rooms);
 
   return { arena, parade, hq, rooms, spawnX: parade.x + parade.w / 2, spawnY: parade.y + parade.h / 2 };
 }
@@ -169,7 +238,12 @@ function insideFort(x: number, y: number): boolean {
  * рядами через один — стул путь не блокирует, но сплошной ковёр стульев читается
  * как мусор, а не как трибуна. */
 function buildArenaRing(world: World, arena: Room): void {
-  const ring = { x: arena.x + 16, y: arena.y + 16, w: ARENA_SIDE - 32, h: ARENA_SIDE - 32 };
+  const ring = {
+    x: arena.x + ARENA_RING_INSET,
+    y: arena.y + ARENA_RING_INSET,
+    w: ARENA_SIDE - ARENA_RING_INSET * 2,
+    h: ARENA_SIDE - ARENA_RING_INSET * 2,
+  };
   const gate = (v: number, from: number, len: number) => Math.abs(v - (from + len / 2)) < 2;
   for (let x = ring.x; x < ring.x + ring.w; x++) {
     if (!gate(x, ring.x, ring.w)) {
@@ -194,21 +268,20 @@ function buildArenaRing(world: World, arena: Room): void {
 
 /** Кварталы форта: сетка блоков, разрезанная улицами, внутри блока — комнаты. */
 function fillFortBlocks(
-  world: World, rand: SeedRng, rooms: Room[], nextRoomId: number, keepOut: readonly Room[],
-): number {
+  world: World, rand: SeedRng, rooms: Room[], keepOut: readonly FortRect[],
+): void {
   for (let by = FORT_Y0 + STREET; by + BLOCK <= FORT_Y0 + FORT_SIDE; by += CELL_PITCH) {
     for (let bx = FORT_X0 + STREET; bx + BLOCK <= FORT_X0 + FORT_SIDE; bx += CELL_PITCH) {
       if (overlapsAny(bx, by, BLOCK, BLOCK, keepOut)) continue;
       const district = DISTRICTS[rand.int(0, DISTRICTS.length - 1)];
-      nextRoomId = fillBlock(world, rand, rooms, nextRoomId, bx, by, district);
+      fillBlock(world, rand, rooms, bx, by, district);
     }
   }
-  return nextRoomId;
 }
 
 function fillBlock(
-  world: World, rand: SeedRng, rooms: Room[], nextRoomId: number, bx: number, by: number, district: District,
-): number {
+  world: World, rand: SeedRng, rooms: Room[], bx: number, by: number, district: District,
+): void {
   let y = by;
   while (y + ROOM_MIN <= by + BLOCK) {
     const h = district.long
@@ -221,7 +294,7 @@ function fillBlock(
         ? Math.min(BLOCK - (x - bx), ROOM_MAX * 3)
         : rand.int(ROOM_MIN, ROOM_MAX);
       if (x + w > bx + BLOCK) break;
-      const room = stampRoom(world, nextRoomId++, district.type, x, y, w, h, -1);
+      const room = stampRoom(world, nextRoomSlot(world), district.type, x, y, w, h, -1);
       room.name = district.name;
       room.wallTex = district.wallTex;
       room.floorTex = district.floorTex;
@@ -230,10 +303,9 @@ function fillBlock(
     }
     y += h + 1;
   }
-  return nextRoomId;
 }
 
-function overlapsAny(x: number, y: number, w: number, h: number, others: readonly Room[]): boolean {
+function overlapsAny(x: number, y: number, w: number, h: number, others: readonly FortRect[]): boolean {
   for (const other of others) {
     if (x < other.x + other.w + STREET && x + w + STREET > other.x
       && y < other.y + other.h + STREET && y + h + STREET > other.y) return true;
@@ -249,7 +321,7 @@ function overlapsAny(x: number, y: number, w: number, h: number, others: readonl
  * каждых в дикие земли уходит дорога — иначе форт стоит островом без подходов,
  * а дикие земли не читаются как то, откуда приходят.
  */
-function buildFortWall(world: World, rooms: Room[], nextRoomId: number): number {
+function buildFortWall(world: World, rooms: Room[]): void {
   const x1 = FORT_X0 + FORT_SIDE - 1;
   const y1 = FORT_Y0 + FORT_SIDE - 1;
   const midX = FORT_X0 + Math.floor(FORT_SIDE / 2);
@@ -279,13 +351,13 @@ function buildFortWall(world: World, rooms: Room[], nextRoomId: number): number 
     [FORT_X0, FORT_Y0], [x1 - TOWER + 1, FORT_Y0],
     [FORT_X0, y1 - TOWER + 1], [x1 - TOWER + 1, y1 - TOWER + 1],
   ] as const) {
-    const tower = stampRoom(world, nextRoomId++, RoomType.OFFICE, tx, ty, TOWER, TOWER, -1);
+    // Тот же класс, что и караулка: башня периметра — пост обхода, не кабинет.
+    const tower = stampRoom(world, nextRoomSlot(world), RoomType.CORRIDOR, tx, ty, TOWER, TOWER, -1);
     tower.name = 'Башня периметра';
     tower.wallTex = Tex.METAL;
     tower.floorTex = Tex.F_CONCRETE;
     rooms.push(tower);
   }
-  return nextRoomId;
 }
 
 function paintWallCell(world: World, x: number, y: number, walkable: boolean): void {

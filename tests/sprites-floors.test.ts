@@ -28,7 +28,6 @@ import {
 } from '../src/entities/sprite_index';
 import { generateSprites } from '../src/render/sprites';
 import { generateTextures } from '../src/render/textures';
-import { rebuildWorld } from '../src/systems/samosbor';
 import { getPlotNpcStringId } from '../src/data/npc_packages';
 import { testGenerationMatrix } from './generator_helpers';
 
@@ -611,54 +610,4 @@ testGenerationMatrix('floor 69 floor screens are registered as signal screen cel
   for (const ci of screenFeatureCells) {
     assert.equal(generated.world.screenCells.includes(ci), true, `screen feature cell ${ci} should be in screenCells`);
   }
-});
-
-testGenerationMatrix('non-living samosbor rebuild replaces stale generated actors but keeps player', () => {
-  const generated = generateFloor(-26);
-  const entities = [...generated.entities];
-  entities.push(
-    {
-      id: 9001,
-      type: EntityType.NPC, persistentNpcId: 'player',
-      x: generated.spawnX,
-      y: generated.spawnY,
-      angle: 0,
-      pitch: 0,
-      alive: true,
-      speed: 0,
-      sprite: 0,
-    },
-    {
-      id: 9002,
-      type: EntityType.NPC,
-      x: generated.spawnX + 1,
-      y: generated.spawnY,
-      angle: 0,
-      pitch: 0,
-      alive: true,
-      speed: 0,
-      sprite: 0,
-    },
-    {
-      id: 9003,
-      type: EntityType.MONSTER,
-      x: generated.spawnX + 2,
-      y: generated.spawnY,
-      angle: 0,
-      pitch: 0,
-      alive: true,
-      speed: 0,
-      sprite: 0,
-    },
-  );
-
-  rebuildWorld(generated.world, entities, { v: 10000 }, 1, -26);
-
-  const player = entities.find(e => e.id === 9001);
-  assert.ok(player);
-  assert.equal(entities.some(e => e.id === 9002), false);
-  assert.equal(entities.some(e => e.id === 9003), false);
-  assert.ok(entities.some(e => e.id >= 10000 && (e.type === EntityType.NPC || e.type === EntityType.MONSTER)));
-  const playerCell = generated.world.cells[generated.world.idx(Math.floor(player.x), Math.floor(player.y))];
-  assert.ok(playerCell === Cell.FLOOR || playerCell === Cell.WATER);
 });

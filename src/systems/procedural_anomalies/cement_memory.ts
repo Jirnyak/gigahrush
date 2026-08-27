@@ -205,9 +205,31 @@ function entryCanBeCleared(
   return includeRecent && time - entry.enteredAt <= RECENT_CLEAR_SECONDS;
 }
 
+/**
+ * Буфер вокруг маршрутного якоря — тот же, что у соседних рантайм-аномалий.
+ *
+ * Проверять РОВНО клетку лифта мало: живая мутация переводит клетку ПОДХОДА, и
+ * подойти к шахте становится нечем. Генерационные аномалии этим не опасны —
+ * `stampRouteLiftShafts` идёт ПОСЛЕ них и сам прорубает подход; рантайм же
+ * чинить некому, поэтому буфер обязателен именно здесь.
+ */
+const ROUTE_ANCHOR_PROTECT_RADIUS = 3;
+
+function routeAnchorNearby(world: World, ci: number): boolean {
+  const x = ci % W;
+  const y = (ci / W) | 0;
+  for (let dy = -ROUTE_ANCHOR_PROTECT_RADIUS; dy <= ROUTE_ANCHOR_PROTECT_RADIUS; dy++) {
+    for (let dx = -ROUTE_ANCHOR_PROTECT_RADIUS; dx <= ROUTE_ANCHOR_PROTECT_RADIUS; dx++) {
+      const ni = world.idx(x + dx, y + dy);
+      if (world.cells[ni] === Cell.LIFT || world.features[ni] === Feature.LIFT_BUTTON) return true;
+    }
+  }
+  return false;
+}
+
 function isRecordable(world: World, ci: number): boolean {
   return (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) &&
-    world.features[ci] !== Feature.LIFT_BUTTON &&
+    !routeAnchorNearby(world, ci) &&
     world.hermoWall[ci] === 0 &&
     world.aptMask[ci] === 0 &&
     !world.doors.has(ci);
