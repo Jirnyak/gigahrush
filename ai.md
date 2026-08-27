@@ -293,6 +293,39 @@ Examples:
 
 No routine AI should scan the whole event ring every frame.
 
+### A Bounded Window Must Count The Requested Kind (2026-08-27)
+
+The bounded reads above were silently lying, and the class is worth stating as a rule: **a window,
+`limit` or cap must never return a wrong answer instead of refusing.** Nothing broke — the functions
+returned a valid value, just not the right one, and tests pinned to the current number were green.
+
+What was measured and fixed:
+
+- **`hasRecentFact` counted every fact it inspected, not facts of the requested kind.** With ~1400
+  world events a minute a theft whose TTL is **720 s** was "recent" for about **1.6 s** on a crowded
+  floor, and on Maintenance never at all. The ring now counts per kind, evicts **by kind pressure**
+  (the oldest fact of the most numerous kind, not simply the oldest — otherwise a rare fact is
+  pushed out by a common one), and keeps loss counters
+  (`seen / kept / dropped / droppedUnexpired`, per kind) behind a debug line.
+- **`hasRecentEvent` had a 12-record budget against the same stream.** The guards for «открыт
+  ящик», «аномалия лифта» and «поездка на метро» — read by NPC speech and rumour topic choice —
+  never fired on a crowded floor. Same fix: the budget counts events of the requested type, and the
+  scan breaks on age instead of skipping.
+- **The Demos feed lost every human death.** The cursor took the 64 newest and jumped to the
+  maximum; measured 901 events → 17 reached the feed, all 13 deaths among the lost. Selection is
+  now priority-ordered (important ring first, fresh routine top-up) with the same loss counters.
+- **The loudest noise source was removed at the source, not capped.** `npcCommitRangedShot`
+  published a world event on **every NPC shot** — 273–394 per minute on a living floor, with a tag
+  no file reads. Noise is announced once through `publishWeaponNoise`. Raise a cap last; look for
+  noise at the source first.
+- **`npc_hurt_npc` now exists.** Only the player's hand was published (`player_hurt_npc`); the
+  publisher picks the type by attacker, with no player-special branch, throttled per attacker→victim
+  pair and silent when the victim is already engaged with that attacker.
+
+Locks: `tests/context-fact-ring.test.ts`, `tests/demos-feed-priority.test.ts`,
+`tests/npc-hurt-npc-event.test.ts`. Full class write-up: `problems.md`, «Молчаливое окно и
+молчаливый порог».
+
 ## Samosbor Reaction
 
 `state.samosborActive` and warning state are global pressure, not global orders. The actual reaction is per NPC:
@@ -372,6 +405,40 @@ Rule of the project since 2026-08-20. A species declares its property as a flag 
 - **Cadence:** a species check that does not need every frame must not run every frame. The Black Liquidator witness scan runs about twice a second, staggered by entity id (`(Math.floor(time * 2) + e.id) % 4`), and reads «I was hit» from the shared threat memory (`getRecentCombatThreat`) instead of storing its own flag.
 
 The cleanup that established this rule removed 25 fields from `AIState` and roughly 800 lines from `ai/monster.ts`. The census of the species clusters still left in `AIState` is in `problems.md`.
+
+### Families Collapsed Into Data (2026-08-27)
+
+The second wave applied the same rule to whole **families** — mechanics written once per carrier
+inside the shared `ai/monster.ts`. Four of them are now `MonsterDef` columns, so the shared AI reads
+a row instead of branching on a kind:
+
+| family | data column | code | carriers |
+| --- | --- | --- | ---: |
+| windup / telegraphed hit | `MonsterDef.windup` | `monsterWindup()` | 11 + 3 bosses |
+| dash / vector charge | `MonsterDef.dash` | `src/systems/ai/dash.ts` | 5 |
+| special-damage application | `MonsterDef.strike` | `applyMonsterStrike` | 11 |
+| world-point anchor | `MonsterDef.anchor` | `findMonsterAnchor` (`systems/monster_traits.ts`) | 2 |
+
+`MonsterBossReadability` was generalized, not deleted: it now `extends MonsterWindupDef`, and
+`monsterWindup()` returns `windup ?? boss`. Ray marching collapsed to one rasterizer in
+`src/world/line_of_sight.ts` (`hasLineOfSight` / `hasLineToCell` / `lineCoverCells` /
+`lineBlockDistance` / `isLineOfFireCover`); the memoized copy in `ai/pathfinding.ts` serves path
+smoothing and is deliberately separate. The dash family also fixed a real defect: **four collision
+predicates became one, and body radius is now read by all five carriers** — three of the four
+copies used to fly as a point.
+
+This removed a further **21 fields from `AIState`** plus the whole `MonsterBaitLineState` type.
+Dash run state lives in `speciesState` next to the species logic, as this section requires.
+
+The gating rule holds through the change: what used to be `kind === KOSTOREZ || kind === SAFEGUARD`
+in three places is now the `meleeWindup` flag, and the stagger window is a **column**
+(`staggerSec`), not a name — a species declares that its windup is interruptible.
+
+Four dead event types went with it: `green_dog_howl` (≈310 publications/min, a sixth of the whole
+world stream, zero readers), `obzhivalshchik_scratched`, `false_liquidator_revealed`,
+`slimevik_harvested`. The audible half (log line, growl) stayed. Locked by
+`tests/dead-monster-events.test.ts`. Rule of thumb from two measurements: **removing an event makes
+the STREAM cheaper, not the frame.**
 
 ## Monster Stimuli
 

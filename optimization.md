@@ -17,11 +17,26 @@ This file is the central optimization document and also preserves the full May 2
 - "Safe optimization" here means semantics-preserving: cache, index, defer, split dirty state or remove duplicate work. Any visible simplification must be treated as a separate design change.
 - Validate performance changes with `npm run check`; use `npm run check:browser` or `npm run check:full` for render, input, UI, mobile and browser-storage changes.
 
-## Iron Law: No Real-Time BFS
+## Iron Law: No Unbounded Real-Time Recomputation
 
-Date: 2026-06-14.
+Date: 2026-06-14. Reworded 2026-08-27 to match what actually ships.
 
-**During active gameplay everything is pre-baked. No BFS, no full-world scans, no O(W×W) recomputation.**
+**During active gameplay everything over the cell world is pre-baked. No full-world scans, no O(W×W) recomputation, no unrationed search in a gameplay frame.**
+
+**The banned thing is «unbounded», not «BFS».** One search does run in-frame, deliberately and
+by measurement: `computeRegionNextColumn` (`src/systems/ai/region_next.ts`) walks the immutable
+region-adjacency graph, not the 1024×1024 cells. It is legal because it satisfies all four
+conditions at once, and any future in-frame search must satisfy the same four:
+
+1. it runs over a **small immutable graph** (`O(R·E)`), never over `W²` cells;
+2. it is **rationed per frame** (`LOWMEM_COLUMN_BFS_PER_FRAME`) — a caller past the ration is
+   refused and retries next frame, it does not queue work;
+3. its result is **cached in a bounded LRU** under an explicit byte budget;
+4. it **removes an inadmissible cost** rather than adding one. The dense `R×R` next-hop matrix it
+   replaced cost 1132 MB on the living floor and 1720 MB on Kvartiry and killed the browser tab by
+   OOM with an empty console. Memory is a frame budget too.
+
+Everything below in this section stays exactly as strict for the cell world.
 
 Baking (navigation tree, flow fields, light maps, path blockers, connectivity) happens at exactly two boundaries:
 
@@ -89,9 +104,15 @@ Navigation in `src/systems/ai/pathfinding.ts` is a **2-level Region-Portal HPA\*
 
 **Одно представление на всех (с 2026-08-26).** `regionPath` считает колонку по требованию через
 `computeRegionNextColumn` и держит LRU `_regionColumns` размером
-`clamp(LOWMEM_COLUMN_SLOTS_MIN=64, LOWMEM_COLUMN_BUDGET_BYTES(8 МиБ)/(R*2), LOWMEM_COLUMN_SLOTS_MAX=1024)`.
-Холодные колонки рационируются по кадрам (`LOWMEM_COLUMN_BFS_PER_FRAME=32`): вызывающий получает
-отказ и повторяет в следующем кадре. Резидентно ≤8 МБ вместо сотен.
+`max(LOWMEM_COLUMN_SLOTS_MIN=64, LOWMEM_COLUMN_BUDGET_BYTES(128 МБ)/(R*2))`.
+Холодные колонки рационируются по кадрам (`LOWMEM_COLUMN_BFS_PER_FRAME=4096`): вызывающий получает
+отказ и повторяет в следующем кадре. Резидентно ≤128 МБ вместо гигабайтов.
+
+Числа именно эти, и они замерены, а не выбраны: первая редакция стояла на 8 МБ и рационе 32, и это
+была не экономия, а поломка навигации — доля NPC «без маршрута» 3.5% → **16.8%**. Виноват был
+РАЦИОН: отказ не бесплатен, актор просит снова в следующем кадре, и скупой рацион сам порождает
+лавину повторов. Вторая крышка `LOWMEM_COLUMN_SLOTS_MAX` снята — ограничитель один, байты.
+Полная таблица замера — `architecture.md`, «Region Routing Contract».
 
 **Плотная матрица `_regionNext = Uint16Array(R·R)` и воркерный пул удалены.** Матрица стоила `R²·2`
 байта — жилой этаж 1132 МБ, квартиры 1720 МБ при R≈28k, — и убивала вкладку по OOM с пустой
@@ -167,6 +188,29 @@ Current A-Life implementation:
 - Full-population route/numeric facts are typed columns: `floorKeyIndex`, `floor`, `danger`, `faction`, `occupation`, flags, RPG bytes, HP/max HP, money/account rubles, family id, sprite/sprite seed, kill counters, `playerRelation` and `karma`. Route strings are interned once in an A-Life floor-key dictionary.
 - Ordinary generated loadout is deterministic and lazy. Untouched records do not carry a `weapon` string or `inventory` array; materialization reconstructs loadout from seed, faction, occupation, danger and level. Captured or save-overridden loadout is sparse and flagged as custom.
 - Actor inventory stack counts are byte-capped at `255`; oversized save/runtime stacks split into physical slots where the actor inventory model is used.
+
+## Ядро двери урона вынесено ради графа импортов (2026-08-27)
+
+Date: 2026-08-27.
+
+Полная дверь урона (`damageActor`, `systems/combat_stimulus.ts`) импортирует фракционный узел:
+удару с АВТОРОМ надо начислить штраф отношениям и позвать свидетелей. `factions` через свой
+кадровый такт тянет `ai/pathfinding`, `noise` и `inventory`, а те лежат НАД клеточной опасностью.
+Пока среда звала полную дверь, **цикл рантайм-импортов вырастал с 4 файлов до 18** — то есть газ,
+кислота и обвал не могли войти в дверь вовсе и каждый снимал здоровье сам, мимо всякой брони.
+
+Решение — вынести ЯДРО двери в отдельный лист `src/systems/actor_damage.ts`, который `factions`
+не импортирует: `runActorDamageCore` (тип, броня, снятие здоровья, толчок), `finishActorDeath` и
+тонкий средовой вход `damageActorByEnvironment`. Социальная половина удара при этом не теряется —
+она нужна только когда автор ЕСТЬ, а у среды его нет по определению.
+
+Правило на будущее: **если новый вызывающий снизу не может позвать общую дверь из-за цикла, ответ
+— вынести её ядро листом, а не завести вторую дверь.** Вторая дверь всегда расходится с первой.
+
+Цена в кадре замерена (`scripts/hazard_bench.ts`, живой этаж без игрока, 60 с, чередующиеся пары):
+Гармоническая баня медиана `9.96 → 10.80 мс`, разброс в обе стороны, одна пара «после» ниже всех
+пар «до». Добавленной работы — около трёх вызовов двери на кадр; дельта идёт от разбежавшихся NPC
+(среда впервые ставит им `AIGoal.FLEE`), а не от самого такта опасности.
 
 ## Review Pass
 

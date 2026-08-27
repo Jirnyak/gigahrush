@@ -126,6 +126,26 @@ Required meaning:
 
 HP-only or sprite-only additions are not ecology. A monster can be simple, but it still needs a learnable rule.
 
+### Damage Type And Damage Floor Are Ecology Data (2026-08-27)
+
+Two `MonsterDef` columns now carry the ecological half of "what it does to you" and "what takes it
+down", and both are data, not AI branches:
+
+- **`damageType`** — what the creature's own hit is made of. Declared by 31 kinds of 73 (12 `BIO`,
+  12 `PSI`, 7 `ENERGY`). Silence means `KINETIC`, and **declaring kinetic out loud is forbidden by
+  a test** — otherwise the default stops being a default. `BIO` was added in the same pass and
+  covers acid, spores, slime, rot and gas as one member; before it a slime whip dealt the same
+  kinetic damage as a sledgehammer.
+- **`damageFloor`** — a `DamageType → share of maxHp` map: "this type is guaranteed to bite this
+  creature this hard". Plant vulnerability to fire moved here out of a separate projectile list and
+  therefore works **from any hand**, not only along the player's shot: Borshchevik 0.44, Blood
+  Plant 0.38, Fog Shark 1.
+
+Innate creature armour is an `ArmorType` row in `src/data/armor_matrix.ts`. Cell hazards read the
+declared damage type as a **ceiling** (armour may only reduce it), so a `damageFloor` of 1 does not
+let a 1.2/s steam vent one-shot a species. Counterplay text in the ecology card must agree with
+these two columns: they are what the player actually learns.
+
 ## Archetypes
 
 Use these archetypes before inventing bespoke behavior:

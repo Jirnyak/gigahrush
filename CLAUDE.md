@@ -378,9 +378,10 @@ Avoid:
 - DOM work in systems.
 - Renderer-side gameplay state.
 - Periodic refill-to-cap population spawners.
-- **Real-time BFS or O(W²) recomputation.** Navigation tree, flow fields, light maps and path blockers are baked at floor load and after samosbor stitch — never during active simulation. During samosbor the nav cache must stay frozen; no system may unfreeze or re-bake it until samosbor ends. Stale paths during geometry mutation are acceptable. See `optimization.md` Iron Law.
+- **UNBOUNDED real-time recomputation, including any O(W²) work in a gameplay frame.** Navigation tree, flow fields, light maps and path blockers are baked at floor load and after samosbor stitch — never during active simulation. During samosbor the nav cache must stay frozen; no system may unfreeze or re-bake it until samosbor ends. Stale paths during geometry mutation are acceptable. See `optimization.md` Iron Law.
+  **BFS as such is not the banned thing — an unbounded one is.** A search over the small immutable region-adjacency graph (`computeRegionNextColumn`, `src/systems/ai/region_next.ts`) runs in-frame on purpose: it is `O(R·E)`, it is rationed per frame (`LOWMEM_COLUMN_BFS_PER_FRAME`, a refused caller simply retries next frame) and cached in an LRU under a byte budget. It exists **because it replaces memory that was not allowed**: the dense `R×R` next-hop matrix cost 1132 MB on the living floor and 1720 MB on Kvartiry and killed the tab by OOM. A bounded, rationed, cached search that removes an inadmissible allocation is legal; an unrationed one over the 1024×1024 cell world is not.
 
-Use `systems/entity_index.ts` for broadphase-style nearby entity queries and follow existing AI/pathfinding field patterns instead of starting per-actor BFS work.
+Use `systems/entity_index.ts` for broadphase-style nearby entity queries and follow existing AI/pathfinding field patterns instead of starting per-actor unbounded BFS work.
 
 ## A-Life And Population
 
@@ -575,7 +576,7 @@ Reject these:
 - A new `FloorLevel` for a design-floor route stop, catalog entry or lift anomaly.
 - Runtime population refill that replaces killed ordinary NPCs.
 - Per-frame full-world scans.
-- Real-time BFS, `bakeNavigationTree` or `bakeLights` during active gameplay. All O(W²) work happens at floor load or post-samosbor stitch only.
+- Unrationed real-time search, `bakeNavigationTree` or `bakeLights` during active gameplay. All O(W²) work happens at floor load or post-samosbor stitch only. The in-frame region-graph BFS (`computeRegionNextColumn`) is the sanctioned exception: bounded by the region graph, rationed per frame, LRU-cached, and shipped precisely to remove the `R×R` matrix that cost gigabytes.
 - A renderer feature that owns gameplay state.
 - A quest that requires hardcoding one NPC in generic AI.
 - A generator that overwrites protected apartments or seals unreachable rooms.
