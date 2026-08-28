@@ -18,6 +18,7 @@ import { placeProceduralScreens } from '../../world/procedural_screens';
 import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_FLOOR_ID, ANTENNA_COURT_ROUTE_Z, ANTENNA_COURT_Z, CONTAINER_ID_BASE, publishAntennaCourtSignalEvent } from "./meta";
 import { placeAntennaDecisionAnchors } from "./decisions";
+import { lightAntennaCourt } from "./lighting";
 import { AntennaCourtGeneration, antennaCourtDebugLines, expandAntennaCourtRouteGeometry, retuneAntennaCourtRouteZones, stampAntennaCourtRooms, retuneAntennaZones, decorateAntennaCourt, placeAuthoredSignalScreens, dropItem, dropDesk, placeFixedLift, repairAntennaCourtSignal, jamAntennaCourtSignal, recordAntennaCourtAnomaly, exposeAntennaCourtSignal, markAntennaCourtBatteryTaken } from "./geometry";
 import { createAntennaCourtSignalState, spawnPlotNpc, spawnSignalMonsters, addContainer } from "./npcs";
 
@@ -104,7 +105,6 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
   const spawnX = rooms.entry.x + 5.5;
   const spawnY = rooms.entry.y + 5.5;
   ensureConnectivity(world, spawnX, spawnY);
-  world.bakeLights();
 
   const signalState = createAntennaCourtSignalState(seed);
     const generation = { isDecentralized: true as const,
@@ -133,6 +133,11 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
     publish: publishAntennaCourtSignalEvent,
     debugLines: antennaCourtDebugLines,
   });
+
+  // Свет ставится последним и бейк идёт за ним. Раньше бейк стоял до расширения
+  // маршрутной геометрии, и всё принесённое расширением оставалось чёрным.
+  lightAntennaCourt(world);
+  world.bakeLights();
 
   return { ...generation, isDecentralized: true as const };
 }

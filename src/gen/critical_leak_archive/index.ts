@@ -15,6 +15,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_Z, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, CriticalLeakArchiveGeneration, NextId, TARGET_ROUTE, ARCHIVIST_DEF, LIQUIDATOR_DEF } from "./meta";
 import { addDoor, expandArchiveMidAndMicro, paintCriticalLeakHqTerritory, placeLift, decorateArchiveRooms, carveContaminatedShortcut, connectAnchors, buildRooms, tuneInitialZones } from "./geometry";
 import { buildPercolationField, carvePercolationComponent, spawnLeakNpc, populateContainers } from "./npcs";
+import { lightCriticalLeakArchive } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'critical_leak_archivist_varvara', ARCHIVIST_DEF, [
   {
@@ -145,6 +146,9 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
 
   sanitizeDoors(world);
   world.rebuildContainerMap();
+  // Свет ставится после санации дверей и до выпечки: санация сносит косяки, и
+  // светильник, повешенный раньше, ушёл бы вместе с ними.
+  lightCriticalLeakArchive(world);
   world.bakeLights();
 
   state.debugEntry.summary = `largest=${state.largestComponentCells} bridges=${state.bridgesAdded} wet=${state.wetCausewayCells} dry=${state.dryCausewayCells} blocks=${state.midArchiveBlocks} micro=${state.microArchiveRooms}`;

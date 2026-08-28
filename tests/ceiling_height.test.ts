@@ -83,6 +83,45 @@ describe('Ceiling Height Tiering', () => {
     assert.equal(W, world.ceilHeight.length / W, 'мир перестал быть квадратным — проверка выше врёт');
   });
 
+  /* Свод — единственная форма потолка, которую выведение построить не может: оно
+   * специально берёт вписанный радиус ОДИН на комнату, «иначе потолок провиснет
+   * куполом к стенам». Зал, объявивший свод, получает ровно тот купол обратно. */
+  it('raises an authored dome toward the middle of the hall', () => {
+    const world = new World();
+    const side = 56;
+    const x0 = 400, y0 = 400;
+    const arena: Room = {
+      id: 0, type: RoomType.COMMON, x: x0, y: y0, w: side, h: side, doors: [], sealed: false,
+      name: 'арена', apartmentId: -1, wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE,
+      ceilingDomeTier: 7,
+    };
+    for (let y = y0; y < y0 + side; y++) {
+      for (let x = x0; x < x0 + side; x++) {
+        const i = world.idx(x, y);
+        world.cells[i] = Cell.FLOOR;
+        world.roomMap[i] = arena.id;
+      }
+    }
+    world.rooms = [arena];
+    stampCeilingHeights(world);
+
+    const cx = x0 + (side >> 1), cy = y0 + (side >> 1);
+    const middle = cellCeilingTier(world, cx, cy);
+    const edge = cellCeilingTier(world, x0 + 1, cy);
+    assert.equal(middle, 7, `середина свода ${middle}, а объявлено 7`);
+    assert.ok(edge < middle, `у стены ${edge} не ниже середины ${middle} — свод сплющило`);
+    assert.ok(middle < SKY_TIER_THRESHOLD, 'свод достал до полосы неба — с потолка перестанет что-либо свисать');
+
+    // Монотонность: к середине потолок только растёт. Иначе это не свод, а рябь.
+    let prev = edge;
+    for (let d = 1; d <= side >> 1; d++) {
+      const tier = cellCeilingTier(world, x0 + d, cy);
+      assert.ok(tier >= prev, `на ${d} клетке от стены потолок просел: ${tier} после ${prev}`);
+      assert.ok(tier - prev <= 1, `ступенька в два яруса на ${d} клетке от стены`);
+      prev = tier;
+    }
+  });
+
   it('mirrors the GLSL formula in the raycaster', () => {
     // Смысл функции — быть TS-зеркалом шейдера. Разъедутся стороны — разъедется
     // геометрия потолка между растеризацией и рейкастером, молча.

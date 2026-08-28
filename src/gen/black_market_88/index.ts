@@ -18,6 +18,7 @@ import { rng } from '../../core/rand';
 import { expandBlackMarket88Bazaar, buildMarketRooms, linkMarketRooms, decorateMarketRooms, addAccessLifts, tuneMarketZones } from './geometry';
 import { registerBlackMarket88DesignFloorContent, spawnMarketNpcs, spawnMarketQueueCrowd, seedMarketContainers } from './npcs';
 import { newEntityIdCursor } from '../entity_ids';
+import { lightBlackMarket88 } from './lighting';
 
 export function generateBlackMarket88DesignFloor(): FloorGeneration {
   registerBlackMarket88DesignFloorContent();
@@ -53,6 +54,12 @@ export function generateBlackMarket88DesignFloor(): FloorGeneration {
   };
 
   finalizeExpandedFloor(generation, route, rngGen);
+
+  // Свет вешается ПОСЛЕ базарного расширения и санации дверей: до них половины
+  // рядов ещё нет, а лавки, над которыми он висит, могут не встать. Бейк в
+  // `finalizeExpandedFloor` света уже не видит, поэтому пересчёт идёт здесь.
+  lightBlackMarket88(world);
+  world.bakeLights();
 
   return { ...generation, isDecentralized: true as const };
 }

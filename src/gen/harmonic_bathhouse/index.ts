@@ -14,6 +14,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, HarmonicBathhouseGeneration, SEED } from "./meta";
 import { initWorld, buildRooms, connectRooms, tuneBathhouseZones, expandHarmonicBathhouseRouteGeometry, placePanels, registerCues, decisionNode } from "./geometry";
 import { solveHarmonicBathhouseField, carveLevelSetCorridors, applyThermalBands, decorateRooms, alignHarmonicBathhouseAmbientNpcTerritory, registerHazards, placeContainers, spawnBathhouseNpcs, spawnBathhouseThreats } from "./npcs";
+import { lightHarmonicBathhouse } from "./lighting";
 
 export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathhouseGeneration {
   return withSeededRandom(seed, () => {
@@ -45,6 +46,9 @@ export function generateHarmonicBathhouseDesignFloor(seed = SEED): HarmonicBathh
     ensureConnectivity(world, rooms.entry.x + 46.5, rooms.entry.y + 13.5);
     sanitizeDoors(world);
     world.rebuildContainerMap();
+    // Свет ставится после санации дверей и до выпечки: она сносит косяки, а
+    // светильник в снесённом косяке пропал бы вместе с ним.
+    lightHarmonicBathhouse(world);
     world.bakeLights();
 
     return {

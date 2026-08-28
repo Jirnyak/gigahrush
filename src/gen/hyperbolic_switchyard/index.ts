@@ -14,6 +14,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID, HYPERBOLIC_SWITCHYARD_ROUTE_Z, SEED, GUIDE_NPC_ID, HyperbolicSwitchyardGeneration, GUIDE_DEF } from "./meta";
 import { carveArcFamilies, carveGeodesicShortcut, buildSwitchyardRooms, connectSwitchyardRooms, buildSwitchyardMidMicro, placeSwitchyardGates, placeSwitchyardLifts, decorateSwitchyard, placeSwitchyardPanels, registerSwitchyardCues, tuneSwitchyardZones, summarizeArcs, summarizePlatforms } from "./geometry";
 import { spawnGuide, spawnShortcutMonsters, placeSwitchyardContainers } from "./npcs";
+import { lightHyperbolicSwitchyard } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, GUIDE_NPC_ID, GUIDE_DEF, [{
   id: 'hyperbolic_switchyard_pay_guide',
@@ -59,6 +60,9 @@ export function generateHyperbolicSwitchyardDesignFloor(seed = SEED): Hyperbolic
 
     sanitizeDoors(world);
     ensureConnectivity(world, rooms.guide.x + 4.5, rooms.guide.y + rooms.guide.h - 1.5);
+    // Свет ставится после санации дверей и перед бейком: сетка платформ
+    // должна лечь на окончательный пол, а бейк — увидеть её целиком.
+    lightHyperbolicSwitchyard(world);
     world.bakeLights();
 
     return {

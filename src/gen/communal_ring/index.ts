@@ -107,6 +107,7 @@ import { ensureConnectivity, generateZones, sanitizeDoors, stampRoom } from '../
 import type { FloorGeneration } from '../floor_manifest';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { newEntityIdCursor } from '../entity_ids';
+import { lightCommunalRing } from './lighting';
 
 
 export const COMMUNAL_RING_DESIGN_FLOOR_ID = 'communal_ring' as const;
@@ -505,6 +506,10 @@ export function generateCommunalRingDesignFloor(seed = RING_SEED): FloorGenerati
         roomPrefix: 'Коммунальный квартал',
       });
       labelCommunalRingPopulationRooms(world);
+      // Свет ставится по расширенному кварталу: финальный бейк живёт внутри
+      // `finalizeExpandedFloor`, и до расширения кольцо ещё не знает своих
+      // выгородок, а значит и того, где общий счётчик, а где чужой угол.
+      lightCommunalRing(world);
       finalizeExpandedFloor(generation, route, rngFn);
     }
 

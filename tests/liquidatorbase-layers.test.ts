@@ -296,10 +296,14 @@ test('хозяева стоят в своих комнатах и ровно п�
 test('слои не положили внутрь арены ни одной новой преграды', () => {
   const world = base().world;
   const arena = roomByAlias(world, LIQUIDATOR_BASE_ARENA_ANCHOR);
-  /* Чаша принадлежит сцене боя. Внутри неё законны ровно два предмета — столы
-   * ринга и кресла трибун (`buildArenaRing`), и ни одной стены: любая лишняя
-   * клетка ломает расстановку трибун и облёт камеры. */
-  const allowed = new Set<number>([Feature.NONE, Feature.TABLE, Feature.CHAIR]);
+  /* Чаша принадлежит сцене боя. Внутри неё законно только то, что ставит сама
+   * арена (`buildArenaRing`): столы ринга, кресла трибун и её собственные
+   * прожектора, и ни одной стены. Любая лишняя клетка ломает расстановку трибун
+   * и облёт камеры — поэтому запрет тут на ЧУЖОЕ, а не на свет: лампа не путевая
+   * преграда (`data/path_blockers.ts` знает про TABLE, но не про LAMP), она
+   * ничего не запирает и ни трибуну, ни камеру не двигает. Слой, уронивший в
+   * чашу стол или койку, тест по-прежнему валит. */
+  const allowed = new Set<number>([Feature.NONE, Feature.TABLE, Feature.CHAIR, Feature.LAMP]);
   let carpet = 0;
   for (let y = arena.y; y < arena.y + arena.h; y++) {
     for (let x = arena.x; x < arena.x + arena.w; x++) {

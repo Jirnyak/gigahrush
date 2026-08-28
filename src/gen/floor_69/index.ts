@@ -9,6 +9,7 @@ import { genLog } from '../log';
 
 import { buildLayout, decorateRooms, applyZones, registerFloor69RouteCues } from './geometry';
 import { seedContainers, spawnFloor69Npcs, applyFloor69OwnershipVisibilityHeatmap, applyFloor69AmbientSpriteTemplates, seedLooseItems } from './npcs';
+import { lightFloor69 } from './lighting';
 import { DESIGN_FLOOR_ID, DESIGN_FLOOR_Z, FLOOR_69_DEFAULT_SEED, createFloor69State, floor69DebugLines, type Floor69Generation } from './meta';
 import { newEntityIdCursor } from '../entity_ids';
 
@@ -17,6 +18,7 @@ export * from './geometry';
 export * from './npcs';
 export * from './districts';
 export * from './routes';
+export * from './lighting';
 
 export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor69Generation {
 
@@ -39,10 +41,15 @@ export function generateFloor69DesignFloor(seed = FLOOR_69_DEFAULT_SEED): Floor6
     const spawnY = rooms.publicCorridor.y + 3.5;
     ensureConnectivity(world, spawnX, spawnY);
     sanitizeDoors(world);
-    world.bakeLights();
 
     const generation = { isDecentralized: true as const, world, entities };
     expandFloor69FullFloor(generation as any, rng);
+
+    // Бейк идёт ПОСЛЕ расширения. Раньше он стоял до него, и 766 источников,
+    // которые ставит `expandFloor69FullFloor`, не светили вовсе: карта света
+    // была запечена по старой геометрии и больше не пересчитывалась.
+    lightFloor69(world);
+    world.bakeLights();
 
     genLog(`[F69] design floor seed=${seed} rooms=${world.rooms.length} spawn=(${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
     return {

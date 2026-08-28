@@ -516,7 +516,8 @@ function roomsEqualExceptDoors(a: Room, b: Room): boolean {
     && a.apartmentId === b.apartmentId
     && a.wallTex === b.wallTex
     && a.floorTex === b.floorTex
-    && a.ceilingTier === b.ceilingTier;
+    && a.ceilingTier === b.ceilingTier
+    && a.ceilingDomeTier === b.ceilingDomeTier;
 }
 
 // Persisted door fields (roomA/roomB/keyId ride along in the upsert payload;
@@ -752,6 +753,11 @@ function sanitizeRoomFields(raw: Record<string, unknown>, id: number): Room {
     floorTex: finiteIntRange(raw.floorTex, 0, Tex.COUNT - 1, Tex.F_CONCRETE) as Tex,
     ceilingTier: typeof raw.ceilingTier === 'number' && Number.isFinite(raw.ceilingTier)
       ? Math.max(0, Math.min(255, Math.floor(raw.ceilingTier)))
+      : undefined,
+    // Свод переживает возврат на этаж вместе с плоским ярусом: без этой строки
+    // арена восстанавливалась из памяти этажа с ровной крышкой в 2.5 м.
+    ceilingDomeTier: typeof raw.ceilingDomeTier === 'number' && Number.isFinite(raw.ceilingDomeTier)
+      ? Math.max(0, Math.min(255, Math.floor(raw.ceilingDomeTier)))
       : undefined,
   };
 }

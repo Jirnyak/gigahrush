@@ -15,6 +15,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
 import { initWorld, buildRooms, connectCore, decorateRooms, tuneZones, placeDrops, expandSiliconNetWellRouteGeometry, tuneSiliconNetWellRouteZones } from "./geometry";
 import { registerSiliconNetWellContent, spawnNpcs, spawnAmbientNpcs, placeContainers, spawnThreats } from "./npcs";
+import { lightSiliconNetWell } from "./lighting";
 
 export function generateSiliconNetWellDesignFloor(seed = SEED): FloorGeneration {
   registerSiliconNetWellContent();
@@ -44,6 +45,9 @@ export function generateSiliconNetWellDesignFloor(seed = SEED): FloorGeneration 
     sanitizeDoors(world);
     ensureConnectivity(world, rooms.entry.x + 14.5, rooms.entry.y + 11.5);
     world.rebuildContainerMap();
+    // Свет — последний шаг по готовой геометрии: после расширения, санации
+    // дверей и связности, и только потом печётся карта освещения.
+    lightSiliconNetWell(world, rooms);
     world.bakeLights();
 
     return {

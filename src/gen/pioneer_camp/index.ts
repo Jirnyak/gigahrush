@@ -18,6 +18,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CAMP_SEED, NPC_IDS, NPC_DEFS } from "./meta";
 import { expandPioneerCampFullFloor, reinforceCampDoorSlots, ensureCampHqHermeticDoors, tunePioneerCampPopulationZones, initCampWorld, buildCampCore, buildCampPaths, decorateCampCore, placeCampLifts, tuneCampZones, placeCampDrops } from "./geometry";
 import { spawnCampNpcs, placeCampContainers, spawnCampThreats } from "./npcs";
+import { lightPioneerCamp } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.shift, NPC_DEFS.camp_shift_tamara, [{
   id: 'camp_verify_roster',
@@ -117,6 +118,10 @@ export function generatePioneerCampDesignFloor(seed = CAMP_SEED): FloorGeneratio
     ensureConnectivity(world, rooms.gate.x + 8.5, rooms.gate.y + 8.5);
     world.rebuildContainerMap();
     scatterAmbientLights(world, rngFn, 260);
+    // Свет смены ставится ПОСЛЕ санации дверей, страховки связности и авторской
+    // россыпи: он занимает только оставшиеся свободные клетки и потому ничего
+    // из объявленного выше не переписывает. И строго ДО бейка — иначе не светит.
+    lightPioneerCamp(world, rooms);
     world.bakeLights();
 
     const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: rooms.gate.x + 8.5, spawnY: rooms.gate.y + 8.5 };

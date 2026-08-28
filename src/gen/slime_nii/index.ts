@@ -106,6 +106,7 @@ import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
 import { applyNamedRoom } from '../named_rooms';
+import { lightSlimeNii } from './lighting';
 import {
   GALLERY_W,
   GALLERY_X,
@@ -475,6 +476,11 @@ export function generateSlimeNiiDesignFloor(seed = SEED): FloorGeneration {
     const route = designFloorById('slime_nii')!;
     const rngGen = () => rng();
     expandSlimeNiiRouteGeometry(world, rngGen);
+
+    // Свет ставится после расширения и до `finalizeExpandedFloor`: тот сам
+    // санирует двери и закрывается полным `bakeLights()`, а бейк начинается с
+    // `light.fill(0)` — источник, поставленный позже, в карту не попадёт.
+    lightSlimeNii(world);
 
     const generation = {
       world,

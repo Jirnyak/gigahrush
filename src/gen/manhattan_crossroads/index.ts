@@ -31,6 +31,7 @@ import {
   seedContainersAndDrops,
   spawnRoadHazards,
 } from './npcs';
+import { lightManhattanCrossroads } from './lighting';
 import { newEntityIdCursor } from '../entity_ids';
 
 export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROADS_SEED): FloorGeneration {
@@ -61,13 +62,18 @@ export function generateManhattanCrossroadsDesignFloor(seed = MANHATTAN_CROSSROA
     seedContainersAndDrops(world, entities, nextId, rooms, npcIds);
     spawnRoadHazards(rng, world, entities, nextId, rooms);
 
-    world.bakeLights();
-
     const route = designFloorById(DESIGN_FLOOR_ID)!;
     const generation = { world, entities, spawnX, spawnY, isDecentralized: true as const };
 
     expandManhattanCrossroadsRouteShell(world, () => rng.random());
     finalizeExpandedFloor(generation, route, () => rng.random());
+
+    // Свет ставится ПОСЛЕ расширения и санации дверей: до них половины магистралей
+    // ещё нет, а бордюр, на который садится фонарь, может уехать. Бейк в
+    // `finalizeExpandedFloor` при этом остаётся холостым, поэтому пересчёт идёт
+    // здесь — прежний бейк до расширения света вообще не видел.
+    lightManhattanCrossroads(world);
+    world.bakeLights();
 
     // Небо объявляют ТОЛЬКО три уличные комнаты (выше по функции), и расширение
     // маршрутной оболочки переиспользует их же. Бланкетного прохода по всем

@@ -13,6 +13,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
 import { initWorld, buildNurseryRooms, connectNurseryRooms, decorateNursery, placeEmergencyPanels, tuneNurseryZones, placeDrops, registerStaticHazards } from "./geometry";
 import { expandTuringNurseryRouteGeometry, spawnNpcs, spawnAmbientNpcs, placeContainers, spawnThreats, registerNurseryRouteCues, reactionField } from "./npcs";
+import { lightTuringNursery } from "./lighting";
 
 export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
   return withSeededRandom(seed, () => {
@@ -48,6 +49,11 @@ export function generateTuringNurseryDesignFloor(seed = SEED): FloorGeneration {
     const route = designFloorById('turing_nursery')!;
     const rngGen = () => rng();
     expandTuringNurseryRouteGeometry(world, rngGen);
+
+    // Свет — после расширения и до `finalizeExpandedFloor`: тот закрывается
+    // полным `bakeLights()`, а бейк начинается с `light.fill(0)`, и всё
+    // поставленное после него в карту освещённости не попадает.
+    lightTuringNursery(world, field);
 
     const generation = {
       world,

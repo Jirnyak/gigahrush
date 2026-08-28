@@ -23,6 +23,7 @@ import { initializeCellTerritory } from '../../systems/territory';
 import { calcZoneLevel } from '../../systems/rpg';
 import { Spr } from '../../entities/sprite_index';
 import { buildKvartirySocialMacroGraph } from './social_macro_graph';
+import { lightKvartiry } from './lighting';
 import {
   resetKvartiryContentState,
   publishKvartiryContentUprising,
@@ -468,10 +469,7 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
     }
   }
 
-  // ── Phase 8: Light map ────────────────────────────────────────
-  world.bakeLights();
-
-  // ── Phase 8b: Cell territory before population placement ─────
+  // ── Phase 8: Cell territory before population placement ──────
   initializeCellTerritory(world, {
     seed: territorySeed,
     targetShares: territorySharesForDesignFloor('kvartiry'),
@@ -527,6 +525,13 @@ export function generateKvartiry(territorySeed = 0): { world: World; entities: E
 
   // ── Phase 14: Rare procedural TVs/monitors on suitable room walls
   placeProceduralScreens(world, 14);
+
+  // ── Phase 15: Light map ───────────────────────────────────────
+  // Бейк стоит ПОСЛЕ фаз 13-14: манифестные комнаты и экраны прорубают
+  // геометрию, и запечённый до них свет оставлял их в нуле. Между старым
+  // местом бейка и этим никто карту света не читает.
+  lightKvartiry(world);
+  world.bakeLights();
 
   return { world, entities, spawnX, spawnY };
 }

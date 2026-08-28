@@ -3,6 +3,7 @@
 export * from './meta';
 export * from './geometry';
 export * from './npcs';
+export * from './lighting';
 
 import { BANK_ROOM_NAMES, BANK_FLOOR_ROUTE_ID, BANK_FLOOR_Z, BANK_TAGS, type BankFloorState, type BankFloorGeneration, type BankActionKind } from './meta';
 import { BANK_VAULT_RISK_RADIUS, createBankRooms, dressBankRooms, generateBankZones, expandBankFloorRouteGeometry } from './geometry';
@@ -14,6 +15,7 @@ import { finalizeExpandedFloor } from '../shared';
 import { designFloorById } from '../../data/design_floors';
 import { hashSeed, seededRandom } from '../../core/rand';
 import { newEntityIdCursor } from '../entity_ids';
+import { lightBankFloor } from './lighting';
 
 export function createBankFloorState(): BankFloorState {
   return {
@@ -124,7 +126,11 @@ export function generateBankFloorDesignFloor(): BankFloorGeneration {
   };
   finalizeExpandedFloor(generation, route, rng);
   applyBankFloorTerritorySeeds(world);
-  
+
+  /* Свет ставится после `finalizeExpandedFloor` (там прошли зоны, санация
+     дверей и связность) и перед последним бейком. Бейк внутри финализации
+     этого света ещё не знает — потому он тут и повторён. */
+  lightBankFloor(world);
   world.bakeLights();
 
   return generation;

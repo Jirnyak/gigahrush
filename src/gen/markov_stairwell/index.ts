@@ -13,6 +13,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, MARKOV_STAIRWELL_ROUTE_ID, BASE_FLOOR, SPINE_X, SPINE_Y, SPINE_W, SPINE_H, NPC_IDS, WATCHER_DEF } from "./meta";
 import { markovMetrics, dropItem, tuneZones, buildGeometry, calculateMetrics } from "./geometry";
 import { spawnPlotNpc, spawnThreats, placeContainers } from "./npcs";
+import { lightMarkovStairwell } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.watcher, WATCHER_DEF, [{
   id: 'markov_stairwell_pattern_stash',
@@ -48,6 +49,9 @@ export function generateMarkovStairwellDesignFloor(): FloorGeneration {
   generateZones(world);
   tuneZones(world);
   sanitizeDoors(world);
+  // Свет ставится после санации дверей и перед бейком: сетка площадок
+  // должна лечь на окончательный пол, а бейк — увидеть её целиком.
+  lightMarkovStairwell(world);
   world.rebuildContainerMap();
   world.bakeLights();
 

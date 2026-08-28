@@ -14,6 +14,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, SPETSPRIEMNIK_ROUTE_ID, SPETSPRIEMNIK_Z, SPETSPRIEMNIK_CELL_KEY, SPETSPRIEMNIK_PERMIT_KEY, SPETSPRIEMNIK_GUARD_KEY, SPETSPRIEMNIK_ROOM_NAMES, CX, BASE_TAGS, NPC_DEFS } from "./meta";
 import { metricsByWorld, expandSpetspriemnikRouteGeometry, reinforceSpetspriemnikRouteGates, tuneSpetspriemnikRouteZones, calculateMetrics } from "./geometry";
 import { placeContainers, buildCore, spawnAuthoredActors } from "./npcs";
+import { lightSpetspriemnik } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'spetspriemnik_nachalnik_krivda', NPC_DEFS.spetspriemnik_nachalnik_krivda, [
   {
@@ -170,6 +171,9 @@ export function generateSpetspriemnikDesignFloor(seed: number): FloorGeneration 
 
   sanitizeDoors(world);
   world.rebuildContainerMap();
+  // Свет — после санации дверей и строго до бейка: `bakeLights()` начинается с
+  // `light.fill(0)`, и поставленный позже светильник в карту не попадёт.
+  lightSpetspriemnik(world, built.cellRooms, [built.contraband]);
   world.bakeLights();
 
   metricsByWorld.set(world, calculateMetrics(world, built));

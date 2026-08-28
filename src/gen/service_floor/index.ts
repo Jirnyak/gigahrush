@@ -46,6 +46,7 @@ import {
   type ServiceFloorGeneration,
 } from './meta';
 import { placeServiceDecisionAnchors } from './decisions';
+import { lightServiceFloor } from './lighting';
 import { newEntityIdCursor } from '../entity_ids';
 
 
@@ -197,6 +198,9 @@ export function generateServiceFloorDesignFloor(): ServiceFloorGeneration {
     summarize: summarizeServiceFloorFlags,
   });
 
+  // Свет последним шагом: после финализации (она сама санирует двери и сшивает
+  // связность), после панелей и якорей развилок — и только потом бэйк.
+  lightServiceFloor(world);
   world.bakeLights();
   return { ...generation, isDecentralized: true as const };
 }

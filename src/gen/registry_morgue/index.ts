@@ -28,6 +28,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, REGISTRY_MORGUE_ROUTE_ID, REGISTRY_MORGUE_FUTURE_Z, REGISTRY_MORGUE_Z, CORPSE_NUMBER_TAG_ITEM, REGISTRY_MORGUE_TARGET_ROUTE, NextId, NPC_DEFS } from "./meta";
 import { createDesignRoom, linkRooms, reinforceRegistryMorgueAuthoredTerritory, expandRegistryMorgueGeometry, placeDesignLift, decorateRegistryMorgue, retuneRegistryMorgueZones } from "./geometry";
 import { spawnMorgueNpc, spawnMorgueMonster, seedRegistryMorgueContainers, seedRegistryMorgueReadables } from "./npcs";
+import { lightRegistryMorgue } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'morgue_registrar_faina', NPC_DEFS.morgue_registrar_faina, [
   {
@@ -260,8 +261,6 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
     'Печатеед свидетельств',
   );
 
-  world.bakeLights();
-
   const spawnX = reception.x + 6.5;
   const spawnY = reception.y + 5.5;
   genLog(`[DESIGN_FLOOR] ${REGISTRY_MORGUE_ROUTE_ID} z=${REGISTRY_MORGUE_FUTURE_Z} at (${ox}, ${oy}) rooms=${world.rooms.length}`);
@@ -272,9 +271,16 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
   reinforceRegistryMorgueAuthoredTerritory(world);
   retuneRegistryMorgueZones(world);
 
+  /* Свет и бейк — последними. Раньше `bakeLights()` стоял до расширения корпуса:
+     запекались шесть авторских комнат, а весь остальной морг оставался чёрным
+     при 436 стоящих лампах (0.3% освещённых клеток). */
+  lightRegistryMorgue(world);
+  world.bakeLights();
+
   return generation;
 }
 
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./lighting";

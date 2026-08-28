@@ -130,6 +130,7 @@ export interface Room {
   wallTex: Tex;
   floorTex: Tex;
   ceilingTier?: number;     // optional custom ceiling tier
+  ceilingDomeTier?: number; // свод: ярус в середине зала, к стенам спадает до выведенного
 }
 
 // ── Cell features (one per cell) ─────────────────────────────────

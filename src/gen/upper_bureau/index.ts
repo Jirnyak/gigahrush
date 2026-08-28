@@ -37,6 +37,7 @@ import {
   UPPER_BUREAU_ROUTE_ID,
 } from './meta';
 import { registerUpperBureauDecisionCues } from './decisions';
+import { lightUpperBureau } from './lighting';
 import { newEntityIdCursor } from '../entity_ids';
 
 export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
@@ -74,6 +75,12 @@ export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
      сдвинуться, и подсказка указала бы в снесённую клетку. */
   registerUpperBureauDecisionCues(world, rooms.salon);
 
+  /* Свет — последним тактом, после расширения и связности: до них половины
+     кабинетов и всей земли между ярусами ещё не существует. Бейк идёт следом
+     за расстановкой, иначе лампы стоят, а этаж чёрный. */
+  lightUpperBureau(world);
+  world.bakeLights();
+
   genLog(`[UPPER_BUREAU] ${UPPER_BUREAU_DISPLAY_NAME} ${UPPER_BUREAU_ROUTE_ID} z=${UPPER_BUREAU_ANCHOR_Z} spawn=(${spawnX}, ${spawnY})`);
   return { isDecentralized: true, world, entities, spawnX, spawnY };
 }
@@ -83,3 +90,4 @@ export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
 export * from './geometry';
 export * from './npcs';
 export * from './decisions';
+export * from './lighting';

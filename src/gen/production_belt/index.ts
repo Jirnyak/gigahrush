@@ -14,6 +14,7 @@ import { seededRandom, hashSeed } from '../../core/rand';
 import { newEntityIdCursor } from '../entity_ids';
 import { ProductionBeltGeneration, buildRooms, placeLift, expandProductionBeltGeometry, decorateLineRooms, applyZoneRole, registerProductionMachineHazards, markConveyorSpine } from "./geometry";
 import { registerProductionBeltContent, createProductionBeltState, registerProductionBeltRouteCues, populateRooms } from "./npcs";
+import { lightProductionBelt } from "./lighting";
 
 export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   registerProductionBeltContent();
@@ -56,6 +57,9 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   markConveyorSpine(world, rooms.corridor.x + 1, rooms.corridor.y + 3, rooms.corridor.x + rooms.corridor.w - 2, rooms.corridor.y + 3, 91);
   registerProductionMachineHazards(world, [rooms.metalLine, rooms.chargeLine, rooms.ammoLine, rooms.quarantine], 4);
 
+  // Свет ставится последним шагом геометрии — после санации дверей и всей
+  // расстановки, — и только потом печётся карта освещения.
+  lightProductionBelt(world);
   world.bakeLights();
   const generation = { isDecentralized: true as const, world, entities, spawnX, spawnY, productionState };
     return { ...generation, isDecentralized: true as const };

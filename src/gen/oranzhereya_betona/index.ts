@@ -12,7 +12,6 @@ import {
   ensureConnectivity,
   generateZones,
   sanitizeDoors,
-  scatterAmbientLights
 } from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
 import type { DesignFloorGeneration } from '../floor_manifest';
@@ -20,6 +19,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { SEED } from "./meta";
 import { tuneOranzhereyaBetonaRouteZones, expandOranzhereyaBetonaRouteGeometry, reinforceOranzhereyaBetonaAuthoredTerritory, initWorld, buildRooms, connectRooms, decorateRooms, placeDrops } from "./geometry";
 import { spawnNpcs, placeContainers, spawnThreats } from "./npcs";
+import { lightOranzhereyaBetona } from "./lighting";
 
 export function generateOranzhereyaBetonaDesignFloor(seed = SEED): FloorGeneration {
   return withSeededRandom(seed, () => {
@@ -51,7 +51,9 @@ export function generateOranzhereyaBetonaDesignFloor(seed = SEED): FloorGenerati
     sanitizeDoors(world);
     ensureConnectivity(world, rooms.entry.x + 10.5, rooms.entry.y + 14.5);
     world.rebuildContainerMap();
-    scatterAmbientLights(world, rngFn, 260);
+    // Общая россыпь ламп по всей карте заменена собственным проходом: она сеяла
+    // свет наугад, одинаково над грядкой и над глухим бетоном.
+    lightOranzhereyaBetona(world);
     world.bakeLights();
 
     const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: rooms.entry.x + 10.5, spawnY: rooms.entry.y + 14.5 };

@@ -21,6 +21,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { LIDA_DEF, GRANDFATHER_DEF, FIRE_LIQUIDATOR_DEF, FALSE_HEIR_DEF } from "./meta";
 import { ArchiveRooms, createArchiveRoom, paintRoom, reinforceRaionsovetArchiveAuthoredHqTerritory, expandRaionsovetArchiveGeometry, connectRoomToPoint, placeFixedLift, addDrop, decorateArchive, paintNonRoomCells, retuneRaionsovetArchiveZones } from "./geometry";
 import { spawnArchiveNpc, spawnArchiveGuard, spawnArchiveMonster, addArchiveContainer } from "./npcs";
+import { lightRaionsovetArchive } from "./lighting";
 
 export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   const world = new World();
@@ -163,13 +164,18 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   spawnArchiveMonster(world, entities, nextId, catalog.x + catalog.w - 5, catalog.y + Math.floor(catalog.h / 2), MonsterKind.PROTOKOLNIK);
   spawnArchiveMonster(world, entities, nextId, fire.x + 8, fire.y + 4, MonsterKind.PECHATEED);
 
-  world.bakeLights();
-    const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: 512.5, spawnY: 507.5 };
+  const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: 512.5, spawnY: 507.5 };
 
   const rngFn = seededRandom(hashSeed('design-full:raionsovet_archive:22', 22));
   expandRaionsovetArchiveGeometry(world, rngFn);
   retuneRaionsovetArchiveZones(world);
   reinforceRaionsovetArchiveAuthoredHqTerritory(world);
+
+  /* Свет и бейк — последними. Раньше `bakeLights()` стоял тут же, но ДО
+     расширения: запекались девять авторских комнат, а квартал вокруг них,
+     который игрок и обходит, оставался чёрным (3.3% освещённых клеток). */
+  lightRaionsovetArchive(world);
+  world.bakeLights();
 
   return generation;
 }
@@ -177,3 +183,4 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./lighting";

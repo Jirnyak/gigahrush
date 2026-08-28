@@ -18,6 +18,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, NUMBER_REGISTRY_ROUTE_ID, NUMBER_REGISTRY_Z, NextId, ROUTE_TARGET, REGISTRAR_DEF, PRIME_GUARD_DEF, COMPOSITE_DEF } from "./meta";
 import { fillDefaultTextures, stampRegistryRoom, placeLiftCell, decorateRegistryRooms, retuneZoneMap, retuneNumberRegistryZones, registerNumberRegistryRouteCues, expandNumberRegistryGeometry, carveNumberRegistryCorridors, addNumberRegistryDoors, populateNumberRegistry } from "./geometry";
 import { alignNumberRegistryAmbientNpcTerritory } from "./npcs";
+import { lightNumberRegistry } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, 'number_registry_vera_modulus', REGISTRAR_DEF, [
   {
@@ -167,6 +168,9 @@ export function generateNumberRegistryDesignFloor(seed: number): FloorGeneration
   sanitizeDoors(world);
   ensureConnectivity(world, rooms.hub.x + 8, rooms.hub.y + 20);
   world.rebuildContainerMap();
+  // Свет ставится после санации дверей и связности, но перед бейком: раньше
+  // расширенных коридоров ещё нет, позже бейк их уже не увидит.
+  lightNumberRegistry(world);
   world.bakeLights();
 
   return {
@@ -181,3 +185,4 @@ export function generateNumberRegistryDesignFloor(seed: number): FloorGeneration
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./lighting";

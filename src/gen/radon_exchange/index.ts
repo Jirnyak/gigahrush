@@ -10,6 +10,7 @@ import type { FloorGeneration } from '../floor_manifest';
 import { RADON_EXCHANGE_PROJECTION_KEY, CX, CY, SHUTTER_DOORS } from "./meta";
 import { addShutterDoorAt, placeLift, stampRadonRooms, buildRadonExchangeGeometry, applyRadonExchangeTerritory } from "./geometry";
 import { addContainer, registerRadonRouteCues } from "./npcs";
+import { lightRadonExchange } from "./lighting";
 
 export function generateRadonExchangeDesignFloor(): FloorGeneration {
   const world = new World();
@@ -37,6 +38,9 @@ export function generateRadonExchangeDesignFloor(): FloorGeneration {
   ensureConnectivity(world, CX + 0.5, CY + 0.5);
   sanitizeDoors(world);
   world.rebuildContainerMap();
+  // Скан-линии ставятся ПОСЛЕ санации дверей и страховки связности: до них
+  // решётка ходов ещё меняется, и полоса легла бы в снесённую клетку.
+  lightRadonExchange(world);
   world.bakeLights();
   world.markFogDirty();
   applyRadonExchangeTerritory(world);

@@ -33,6 +33,7 @@ import {
   findSiteCell,
   siteId,
   countSiteCells} from './geometry';
+import { lightVoronoiQuarantine } from './lighting';
 
 export * from './meta';
 import {
@@ -71,6 +72,9 @@ export function generateVoronoiQuarantineDesignFloor(seed = SEED): FloorGenerati
     sanitizeDoors(world);
     ensureConnectivity(world, spawn.x + 0.5, spawn.y + 0.5);
     world.rebuildContainerMap();
+    // Свет — после санации дверей и связности, но строго до бейка: тот
+    // начинается с `light.fill(0)`, и всё, что поставлено позже, не светит.
+    lightVoronoiQuarantine(world, sites, owner);
     world.bakeLights();
 
     layouts.set(world, {

@@ -19,6 +19,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_FLOOR_ID, HILBERT_DEPOT_ROUTE_Z, CURVE_ORDER, CURVE_STEP, CURVE_X, CURVE_Y, BAY_FIRST_INDEX, BAY_INDEX_STEP, HilbertDepotState, HilbertDepotGeneration } from "./meta";
 import { expandHilbertDepotRouteGeometry, ensureDepotHqDoorsAfterSanitize, carveSafeCurve, decorateSafeCurve, addCargoBay, addDepotChords, registerHilbertDepotRouteCues, addItemDrop, addNamedRoom, connectRoomToPoint, placeLift, hilbertTracePoints } from "./geometry";
 import { applyHilbertDepotTerritorySeeds, alignHilbertDepotAmbientNpcTerritory, addDepotPressure, refreshContainerZones } from "./npcs";
+import { lightHilbertDepot } from "./lighting";
 
 export function generateHilbertDepotDesignFloor(seed: number): HilbertDepotGeneration {
   const world = new World();
@@ -79,6 +80,9 @@ export function generateHilbertDepotDesignFloor(seed: number): HilbertDepotGener
   ensureDepotHqDoorsAfterSanitize(world);
   world.rebuildContainerMap();
   registerHilbertDepotRouteCues(world, state, points, entry, exit);
+  // Свет ложится последним шагом по готовой геометрии — после санации дверей и
+  // ремонта косяков гермопостов, — и только потом печётся карта освещения.
+  lightHilbertDepot(world);
   world.bakeLights();
 
   return {

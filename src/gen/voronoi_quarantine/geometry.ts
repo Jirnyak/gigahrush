@@ -1344,7 +1344,10 @@ export function openOwnedCell(world: World, idx: number, roomId: number, site: S
   world.hermoWall[idx] = 0;
   world.factionControl[idx] = site.faction;
   world.fog[idx] = site.infected ? Math.max(world.fog[idx], site.role === 'corpse_pit' ? 58 : 34) : Math.max(2, world.fog[idx] - 3);
-  world.light[idx] = site.infected ? 0.1 : site.role === 'clinic' || site.role === 'checkpoint' ? 0.32 : 0.18;
+  // Освещённость здесь не пишется. Она принадлежит `world.bakeLights()`, а тот
+  // начинается с `light.fill(0)` — заливка по роли, стоявшая на этой строке, до
+  // игры не доживала ни разу. Роль ячейки теперь говорит плотностью источников:
+  // см. `lightVoronoiQuarantine` в `lighting.ts`.
 }
 
 export function recordRidgeCandidate(

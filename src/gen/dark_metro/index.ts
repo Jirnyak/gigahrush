@@ -53,6 +53,7 @@ import {
   type DarkMetroGeneration,
 } from './meta';
 import { newEntityIdCursor } from '../entity_ids';
+import { lightDarkMetro } from './lighting';
 
 export function tuneDarkMetroRouteZone(zone: Zone): void {
   const lineDistance = nearestDarkMetroLineDistance(zone.cy);
@@ -154,13 +155,14 @@ export function generateDarkMetroDesignFloor(seed = DARK_METRO_DEFAULT_SEED): Da
     
     ensureConnectivity(world, spawnX, spawnY);
     sanitizeDoors(world);
-    
-    // For dark metro, we scatter lights as well
-        // Actually full_floor.ts used to scatterAmbientLights, but we need that function!
-    // I can just import it from shared? Wait, scatterAmbientLights was defined in full_floor.ts!
-    // If we need it, we must copy it or export it. Wait!
-    // Is scatterAmbientLights needed? Yes, it was called in full_floor.ts!
+
+    // Свет пересадки — собственный проход этажа, а не общая россыпь: светятся
+    // помещения, перегоны остаются чёрными. Ставится после санации дверей и
+    // ДО бейка, потому что кладёт фичи.
+    lightDarkMetro(world);
     world.bakeLights();
+    // А эта — ПОСЛЕ бейка: она пишет в `world.light[]` напрямую, и бейк,
+    // встав следом, стёр бы её работу.
     applyDarkMetroAmbientLight(world, layout, ctx.packedState);
     world.markFogDirty();
 

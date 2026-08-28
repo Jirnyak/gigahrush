@@ -5,6 +5,7 @@ import { ensureConnectivity, ensurePermanentRoomAccess, protectRoom, sanitizeDoo
 import { newEntityIdCursor } from '../entity_ids';
 import { assertNamedRooms } from '../named_rooms';
 import { FORT_SIDE, FORT_X0, FORT_Y0, buildLiquidatorFort } from './fort';
+import { lightLiquidatorBase } from './lighting';
 import { LIQUIDATOR_BASE_NAMED_ROOMS } from './rooms';
 import { ORDER_QUARTER, buildGarrisonOrder } from './order';
 import { ARENA_QUARTER, buildArenaQuarter } from './arena_quarter';
@@ -70,6 +71,9 @@ export function generateLiquidatorBaseDesignFloor(): FloorGeneration {
 
   // ── Стадия 5: страховки ──────────────────────────────────────────
   world.rebuildContainerMap();
+  // Свет ставится ПОСЛЕ санации дверей и ДО выпечки: санация двигает косяки, а
+  // выпечка — единственный шаг, который переводит фичу в освещённость.
+  lightLiquidatorBase(world);
   world.bakeLights();
   // Объявленное обязано быть вырыто: без псевдонима у арены сцена боя не найдёт
   // якоря и молча не начнётся, а визит на этаж при этом не засчитается. Теперь

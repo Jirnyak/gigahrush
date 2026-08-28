@@ -35,7 +35,9 @@ import { Cell, type Room, RoomType, W } from '../core/types';
  *      ограничивает, — луч бьёт в стену, а она несёт объём пространства за ней.
  *
  * Авторская воля выше формулы: `room.ceilingTier` и `world.globalCeilingTier`
- * ставятся как есть и диффузией не размываются. Так этаж вправе объявить
+ * ставятся как есть и диффузией не размываются. `room.ceilingDomeTier` объявляет
+ * СВОД: ярус растёт от стен к середине по свободному радиусу клетки — тот самый
+ * купол, который проход 0 гасит для рядовой комнаты, здесь разрешён явно. Так этаж вправе объявить
  * геометрию потолка локально (перекрёстки, крыша, улица), не заводя таблицу
  * «тип комнаты → высота» — те две таблички, что были у министерства и
  * коллекторов, формула съела.
@@ -177,6 +179,28 @@ function authoredTier(rooms: readonly (Room | undefined)[], rid: number): number
   return rid >= 0 ? rooms[rid]?.ceilingTier : undefined;
 }
 
+/** Комната с объявленным потолком — плоским или сводчатым. Диффузия её не трогает:
+ *  свод обязан держать свои кольца, иначе проход 2 сгладит его в плоскость. */
+function hasAuthoredCeiling(rooms: readonly (Room | undefined)[], rid: number): boolean {
+  if (rid < 0) return false;
+  const room = rooms[rid];
+  return room !== undefined && (room.ceilingTier !== undefined || room.ceilingDomeTier !== undefined);
+}
+
+/**
+ * Свод: ярус растёт от стен к середине зала пропорционально свободному радиусу
+ * КЛЕТКИ. Это ровно тот купол, который выведение специально гасит для обычной
+ * комнаты — проход 0 берёт вписанный радиус один на всю, «иначе потолок провиснет
+ * куполом к стенам». Для рядовой комнаты это дефект; для зала, объявившего свод,
+ * это и есть форма. Ступень яруса = 0.5 м, поэтому зал 56×56 с пиком 7 читается
+ * как четыре концентрических кольца, а не как крышка.
+ */
+function domeTier(peak: number, base: number, cellRadius: number, roomRadius: number): number {
+  if (roomRadius <= 1 || peak <= base) return base;
+  const t = Math.min(1, cellRadius / roomRadius);
+  return base + Math.round((peak - base) * t);
+}
+
 export function stampCeilingHeights(world: World): void {
   const { cells, roomMap, rooms } = world;
   const ceil = world.ceilHeight;
@@ -208,9 +232,17 @@ export function stampCeilingHeights(world: World): void {
     }
     const rid = roomMap[i];
     const authored = authoredTier(rooms, rid);
-    if (authored !== undefined) { ceil[i] = authored; continue; }
     const room = rid >= 0 ? rooms[rid] : undefined;
     const r = room && roomRadius ? roomRadius[rid] : radius![i];
+    // Свод считается ПЕРВЫМ: у зала со сводом `ceilingTier` — это высота у стен,
+    // а не всей комнаты, поэтому плоская ветка его перехватить не должна.
+    if (room?.ceilingDomeTier !== undefined && radius && roomRadius) {
+      const derivedBase = tierFromRadius(roomRadius[rid]) + roleShift(room.type);
+      const base = authored ?? (derivedBase < 0 ? 0 : derivedBase > TIER_GRAND ? TIER_GRAND : derivedBase);
+      ceil[i] = domeTier(room.ceilingDomeTier, base, radius[i], roomRadius[rid]);
+      continue;
+    }
+    if (authored !== undefined) { ceil[i] = authored; continue; }
     // Потолок ВЫВЕДЕННОГО яруса — прежний парадный: выше начинается то, что
     // освещение уже не несёт (лампы печены под низкий потолок, и зал на ярусе 5
     // уходил в черноту). Всё, что выше, объявляется автором явно.
@@ -231,7 +263,7 @@ export function stampCeilingHeights(world: World): void {
       for (let x = 0; x < W; x++) {
         const i = rowMid + x;
         if (cells[i] === Cell.WALL) continue;
-        if (authoredTier(rooms, roomMap[i]) !== undefined) continue;
+        if (hasAuthoredCeiling(rooms, roomMap[i])) continue;
         let m = src[i];
         const j0 = rowUp + x;
         const j1 = rowDn + x;

@@ -17,6 +17,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, PENROSE_LAUNDRY_ROUTE_ID, PENROSE_LAUNDRY_Z, PENROSE_LAUNDRY_ROOM_DEF_IDS, PenroseLaundryTileRecord, PenroseLaundryState, PenroseLaundryGeneration, C, LOCK_KEY_ID, TILE_SPECS, SYMBOL_CHAIN_IDS, DEFLATION_IDS, NPC_IDS, MARFA_DEF, IGOR_DEF, LIDIA_DEF, TONYA_DEF } from "./meta";
 import { penroseLaundryStates, buildPenroseFullFloor, stampLaundryRoom, connectTilePath, dressTileRoom, markSymbolCells, tunePenroseZones, dropPenroseSupplies, registerPenroseRouteCues, roomById, countCells, countFogCells } from "./geometry";
 import { placePenroseContainers, spawnPenroseThreats, spawnPlotNpc } from "./npcs";
+import { lightPenroseLaundry } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.marfa, MARFA_DEF, [{
   id: 'penrose_laundry_follow_matching_symbols',
@@ -141,6 +142,9 @@ export function generatePenroseLaundryDesignFloor(): PenroseLaundryGeneration {
   sanitizeDoors(world);
   ensureConnectivity(world, C - 23.5, C - 10.5);
   world.rebuildContainerMap();
+  // Свет — после санации дверей и связности, до выпечки: расширение связности
+  // ещё режет пол, и лампа, поставленная раньше, стояла бы в снесённой стене.
+  lightPenroseLaundry(world);
   world.bakeLights();
 
   const state: PenroseLaundryState = {

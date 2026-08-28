@@ -28,6 +28,7 @@ import {
   stampCamps,
 } from './geometry';
 import { placeCampDens, placeCampLoot, placeLaneActors } from './actors';
+import { lightStenka } from './lighting';
 import { BASE_A, STENKA_METRICS, STENKA_ROUTE_ID, STENKA_Z } from './meta';
 import { newEntityIdCursor } from '../entity_ids';
 
@@ -58,6 +59,9 @@ export function generateStenkaDesignFloor(seed = 4404): FloorGeneration {
 
   placeCampLoot(world, rooms.camps);
   const dens = placeCampDens(world, entities, nextId, rooms);
+  // Свет ставится после `finalizeExpandedFloor` (там санация дверей) и
+  // после лута с логовами: занятую клетку проход не переписывает.
+  lightStenka(world, rooms);
   world.rebuildContainerMap();
   world.bakeLights();
 

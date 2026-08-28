@@ -86,6 +86,7 @@ import { type FloorGeneration } from '../floor_manifest';
 import { designFloorById } from '../../data/design_floors';
 import { finalizeExpandedFloor} from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
+import { lightBolnichnyKorpus } from './lighting';
 
 
 export const BOLNICHNY_KORPUS_ROUTE_ID = 'bolnichny_korpus' as const;
@@ -492,6 +493,15 @@ export function generateBolnichnyKorpusDesignFloor(seed = SEED): FloorGeneration
     const rngGen = () => rng();
     expandBolnichnyKorpusRouteGeometry(world, rngGen);
     reinforceBolnichnyKorpusGates(world);
+
+    // Свет — после расширения и до `finalizeExpandedFloor`: тот закрывается
+    // полным `bakeLights()`, а бейк начинается с `light.fill(0)`, и источник,
+    // поставленный после него, в карту освещённости не попадёт.
+    lightBolnichnyKorpus(
+      world,
+      [rooms.pharmacy, rooms.coldStore, rooms.cleanLoopNorth],
+      [rooms.feverWard, rooms.redWard, rooms.blackWard],
+    );
 
     const generation = {
       world,
@@ -1379,15 +1389,13 @@ function stampInfectionVoronoi(world: World, rooms: BolnichnyRooms, salt: number
   }
 }
 
+// Холодная половина корпуса раньше подсвечивалась здесь заливкой прямо в
+// `world.light` (0.34) — и не доживала до игры: `finalizeExpandedFloor`
+// закрывается полным `bakeLights()`, а тот начинается с `light.fill(0)`.
+// Освещённость принадлежит бейку, и говорить с ней надо фичами: плотную сетку
+// ламп аптеке, холодному шкафу и северной петле ставит `lightBolnichnyKorpus`.
+// Здесь осталась только поверхность грязных палат — её бейк не трогает.
 function applyColdWarmShells(world: World, rooms: BolnichnyRooms): void {
-  for (const room of [rooms.pharmacy, rooms.coldStore, rooms.cleanLoopNorth]) {
-    for (let y = room.y; y < room.y + room.h; y++) {
-      for (let x = room.x; x < room.x + room.w; x++) {
-        const ci = world.idx(x, y);
-        if (world.cells[ci] === Cell.FLOOR) world.light[ci] = Math.max(world.light[ci], 0.34);
-      }
-    }
-  }
   for (const room of [rooms.feverWard, rooms.redWard, rooms.blackWard]) {
     stampWardSurface(world, room, room.id, room === rooms.blackWard ? 7 : 5);
   }

@@ -19,6 +19,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { CX, CY, OUTER_R, ShahtaAtriumGeneration } from "./meta";
 import { carveAbyss, placeLift, buildServiceRim, buildRingsAndSpokes, buildBridges, buildServiceRooms, dressRooms, buildMidMicroServiceFabric, buildShahtaFactionHqs, paintShahtaHqTerritory, dropItem, placeCoverIslandsOnRings, registerCues, tuneShahtaZones, buildState } from "./geometry";
 import { addContainer, spawnMonster } from "./npcs";
+import { lightShahtaAtrium } from "./lighting";
 
 export function generateShahtaAtriumDesignFloor(): ShahtaAtriumGeneration {
   const world = new World();
@@ -85,6 +86,10 @@ export function generateShahtaAtriumDesignFloor(): ShahtaAtriumGeneration {
     bridges,
   );
   registerCues(world, rooms, state);
+
+  // Свет ставится после санации дверей и до выпечки: `markFeaturesDirty(true)`
+  // сам зовёт `bakeLights`, поэтому светильники обязаны стоять уже здесь.
+  lightShahtaAtrium(world);
 
   world.markCellsDirty();
   world.markFloorTexDirty();

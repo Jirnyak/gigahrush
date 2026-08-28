@@ -14,6 +14,7 @@ import { publishEvent } from '../../systems/events';
 import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, ATTIC_CHAMBERS, ATTIC_SPINE, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, retuneAtticZones, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticRootStubs, stampAtticChokepoints, stampAtticLowCeilingShells, stampAtticCapillaryCracks, stampAtticExitCues, carveChthonicLabyrinth, nearestAtticAnchorPressure, traceChthonicAtticExitPaths, setDoorState, scorchRoom } from './geometry';
 import { ATTIC_NPCS, addAtticContainers, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticShaftCaches } from './npcs';
 import { stampAtticServiceIslands } from './islands';
+import { lightChthonicAttic } from './lighting';
 import { applyChthonicAtticTerritory } from './territory';
 import { type ChthonicAtticRootChoice, type ChthonicAtticGeneration, type ChthonicAtticLayout, type ChthonicAtticRootState, type ChthonicAtticExit, type ChthonicAtticShelterCost, DESIGN_FLOOR_ID, DESIGN_FLOOR_Z } from './meta';
 import { firstRuntimeEntityId } from '../entity_ids';
@@ -128,7 +129,6 @@ export function generateChthonicAtticDesignFloor(
   };
 
   const rootState = applyChthonicAtticRootChoice(world, layout, rootChoice);
-  world.bakeLights();
 
   const spawnX = spawn.x + 9.5;
   const spawnY = spawn.y + 9.5;
@@ -155,6 +155,12 @@ export function generateChthonicAtticDesignFloor(
   const rngFn = seededRandom(hashSeed('design-full:chthonic_attic:46', 46));
   expandChthonicAtticRootNetwork(generation.world, generation.entities, rngFn);
   retuneExpandedChthonicAtticEcology(world);
+
+  // Бейк стоял ДО расширения, и потому 4697 источников корневой сети не светили
+  // ни одной клетки: этаж выходил чёрным при почти пяти тысячах ламп. Свет
+  // считается ПОСЛЕ того, как расставлен весь — и авторский, и наращённый.
+  lightChthonicAttic(world);
+  world.bakeLights();
 
   return generation;
 }

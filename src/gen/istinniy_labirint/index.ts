@@ -14,6 +14,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, ISTINNIY_LABIRINT_ROUTE_ID, BASE_FLOOR, MAZE_WALL, MAZE_FLOOR, SAFE_WALL_ROOM, NPC_IDS, ARIADNA_DEF, LOST_PAVEL_DEF } from "./meta";
 import { centerOf, buildGrowingTreeMaze, carveMaze, carveSafeWallRoute, markMainThread, placeLabyrinthMidMicro, selectLockedChords, carveLockedChord, placeLift, placeActors, placeLandmarks, tuneLabyrinthZones } from "./geometry";
 import { paintLabyrinthTerritorySeeds, placeRewardStashes } from "./npcs";
+import { lightIstinniyLabirint } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.ariadna, ARIADNA_DEF, [{
   id: 'labyrinth_rechalk_safe_wall',
@@ -62,7 +63,7 @@ export function generateIstinniyLabirintDesignFloor(): FloorGeneration {
 
   const graph = buildGrowingTreeMaze();
   carveMaze(world, graph);
-  carveSafeWallRoute(world, graph);
+  const safeRoute = carveSafeWallRoute(world, graph);
   markMainThread(world, graph);
 
   const roomsByName = placeLandmarks(world, graph);
@@ -82,6 +83,9 @@ export function generateIstinniyLabirintDesignFloor(): FloorGeneration {
   paintLabyrinthTerritorySeeds(world, ownedRooms);
   ensureConnectivity(world, start.x + 0.5, start.y + 0.5);
   sanitizeDoors(world);
+  // Метки пути ставятся после санации дверей и перед бейком: они кладут
+  // фичи, и бейк обязан увидеть их все.
+  lightIstinniyLabirint(world, graph, safeRoute);
   world.rebuildContainerMap();
   world.bakeLights();
 

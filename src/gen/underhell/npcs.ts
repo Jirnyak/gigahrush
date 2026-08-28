@@ -16,6 +16,7 @@ import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { newEntityIdCursor } from '../entity_ids';
 import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
 import { placeUnderhellDecisionAnchors } from "./decisions";
+import { lightUnderhell, lightUnderhellPosts } from "./lighting";
 import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhellRouteCues, payUnderhellThreshold, resolveUnderhellWitness, burnUnderhellDebt, breakUnderhellVoidAnchor, snapshotUnderhellFlags, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
 
 export function isUnderhellAmbientNpc(entity: Entity): boolean {
@@ -274,6 +275,12 @@ export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGa
   finalizeExpandedFloor(generation, route, rngGen);
   restoreUnderhellWitnessDoors(world, ritualState);
   retuneUnderhellZones(world);
+  /* Свет пропускника ставится ПОСЛЕ общей финализации: она сама санирует
+     двери и бейкает свет, и проход, вставший до неё, лёг бы на ещё не
+     окончательный пол. Поэтому фичи кладутся здесь, а бейк повторяется
+     следом — иначе ни одна поставленная свеча не светит. */
+  lightUnderhell(world);
+  world.bakeLights();
   spawnUnderhellAmbientVeterans(world, entities, nextId);
   const thresholdChain = scoreUnderhellThresholdChain(world, ritualState);
   world.hasMeatWalls = true;
@@ -286,6 +293,10 @@ export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGa
     thresholdChain,
     onAfterTerritory: (afterWorld: World, afterEntities: Entity[]) => {
       reinforceUnderhellAuthoredHqTerritory(afterWorld);
+      /* Свет постов восстанавливается ровно ЗДЕСЬ и по той же причине, что
+         и якоря развилок ниже: перестилка HQ гасит в палате каждый
+         источник, а бейк к этому моменту уже прошёл. */
+      lightUnderhellPosts(afterWorld);
       alignUnderhellAmbientNpcTerritory(afterWorld, afterEntities);
       /* Четыре развилки ритуала получают клетку в мире и приглашение по `E`.
          Шаг стоит ЗДЕСЬ, а не в теле генератора: палата поста и палата

@@ -14,6 +14,7 @@ import { withSeededRandom } from '../../core/rand';
 import { ensureConnectivity, sanitizeDoors } from '../shared';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CAYLEY_BYURO_ROUTE_ID, CAYLEY_BYURO_ROOM_NAMES, CAYLEY_BYURO_Z, CayleyByuroGeneration, CAYLEY_TAGS, CLERK_DEF, COSET_DEF, INSPECTOR_DEF } from "./meta";
 import { registerCayleyDecisionCues } from "./decisions";
+import { lightCayleyByuro } from "./lighting";
 import { carveCayleyGraphField, placeLift, createCayleyMacroCampuses, connectCayleyMacroGraph, createCayleyHqClusters, createCayleyLatticeBooths, createRooms, connectCayleyGraph, populateAuthoredContent, tuneInitialZones, registerCayleyRouteCue, retainLiveCayleyDoorIds, ensureCayleyGeneratorLocks } from "./geometry";
 import { createState } from "./npcs";
 
@@ -109,6 +110,9 @@ export function generateCayleyByuroDesignFloor(seed = CAYLEY_BYURO_Z): CayleyByu
     ensureCayleyGeneratorLocks(world, rooms, macroRooms, state);
     retainLiveCayleyDoorIds(world, state);
     world.rebuildContainerMap();
+    // Свет ставится ПОСЛЕ санации дверей и замков графа: до них часть проходов
+    // ещё может закрыться, и лампа встала бы в глухой карман.
+    lightCayleyByuro(world);
     world.bakeLights();
 
     return {
@@ -125,3 +129,4 @@ export function generateCayleyByuroDesignFloor(seed = CAYLEY_BYURO_Z): CayleyByu
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./lighting";

@@ -54,6 +54,7 @@ import { buildPerevalkaStackYards } from './stacks';
 import { buildPerevalkaDistricts, districtOwnerTag, type PerevalkaDistrict } from './districts';
 import { buildPerevalkaInspection } from './inspection';
 import { buildPerevalkaLifeQuarters } from './life';
+import { lightPerevalka } from './lighting';
 
 const GALLERY_Y = 512;
 const NORTH_AISLE_Y = 470;
@@ -434,6 +435,10 @@ export function generatePerevalkaDesignFloor(seed = PEREVALKA_SEED): FloorGenera
     ensureConnectivity(world, layout.spawnX, layout.spawnY);
     sanitizeDoors(world);
     world.rebuildContainerMap();
+    // Свет ставится последним шагом по готовой геометрии — после связности и
+    // санации дверей, — и только потом печётся карта. Обнос лифтов в
+    // `onAfterPopulate` режет геометрию заново и печёт её ещё раз сам.
+    lightPerevalka(world);
     world.bakeLights();
 
     return {

@@ -12,6 +12,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, DORM_SEED, NPC_IDS, NPC_DEFS } from "./meta";
 import { carveDormSlabs, carveDormRings, buildDormRooms, buildDormRoomStacks, buildDormHqComplexes, applyDormZones, reinforceDormAuthoredTerritory, placeDormLifts, decorateDorm } from "./geometry";
 import { spawnAuthoredDormNpcs, spawnSleeperTemplates, spawnNightPatrolTemplates, placeDormContainers } from "./npcs";
+import { lightObschezhitieSmeny } from "./lighting";
 
 registerFloorSideQuest(DESIGN_NPC_HOME_FLOOR_KEY, NPC_IDS.rita, NPC_DEFS.obschezhitie_rita_starshaya, [{
   id: 'obschezhitie_shelter_rollcall',
@@ -89,6 +90,7 @@ export function generateObschezhitieSmenyDesignFloor(seed = DORM_SEED): FloorGen
     ensureConnectivity(world, layout.spawnX, layout.spawnY);
     sanitizeDoors(world);
     world.rebuildContainerMap();
+    lightObschezhitieSmeny(world);
     world.bakeLights();
 
     return { world, entities, spawnX: layout.spawnX, spawnY: layout.spawnY };
@@ -98,3 +100,4 @@ export function generateObschezhitieSmenyDesignFloor(seed = DORM_SEED): FloorGen
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./lighting";

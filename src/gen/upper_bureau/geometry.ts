@@ -1890,6 +1890,9 @@ export function finalizeUpperBureauFloor(world: World, salon: Room): void {
 
   ensureConnectivity(world, salon.x + 8.5, salon.y + 10.5);
   placeProceduralScreens(world, UPPER_BUREAU_Z);
-  world.bakeLights();
+  /* Свет здесь НЕ запекается. Этот такт идёт до `expandUpperBureauGeometry`, и
+     запечённый тут свет не знал ни одной клетки расширенного квартала: этаж
+     показывал 1.5% освещённости при 644 лампах. Бейк — последний шаг генерации
+     в `index.ts`, после `lightUpperBureau`. */
 }
 

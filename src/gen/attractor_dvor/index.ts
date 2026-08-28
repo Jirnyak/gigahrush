@@ -12,6 +12,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { ATTRACTOR_DVOR_ROUTE_ID, ATTRACTOR_DVOR_Z, ATTRACTOR_DVOR_ROOM_DEF_IDS, AttractorDvorState } from "./meta";
 import { attractorStates, expandAttractorDvorRouteGeometry, tuneAttractorDvorRouteZones, applyAttractorDeadCutTerritory, placeAttractorDvorEmergencyPanels, initWorld, buildRooms, carveAttractorStreamlines, connectRoomsGraph, decorateRooms, registerAttractorRouteCues } from "./geometry";
 import { placeContainers, spawnActors } from "./npcs";
+import { lightAttractorDvor } from "./lighting";
 
 export function generateAttractorDvorDesignFloor(): FloorGeneration {
   const world = new World();
@@ -91,6 +92,9 @@ export function generateAttractorDvorDesignFloor(): FloorGeneration {
     
     placeAttractorDvorEmergencyPanels(world);
     scatterAmbientLights(world, rngFn, 260);
+    // Свет двора ставится после санации дверей и перед бейком: струи и
+    // сетки помещений должны лечь на окончательный пол.
+    lightAttractorDvor(world);
     world.rebuildContainerMap();
     world.bakeLights();
     return generation;

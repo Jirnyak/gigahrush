@@ -125,6 +125,11 @@ function pushAnchor(
 ): void {
   if (cell < 0) return;
   world.features[cell] = feature;
+  /* Якоря ставятся ПОСЛЕ `world.bakeLights()`, поэтому их свет надо внести
+     руками: три платы поста — свечи, и без досветки они горели бы в мире
+     чёрными. `relightAround` честен в обе стороны — он же гасит клетку,
+     если якорь сел поверх прежнего источника. */
+  world.relightAround(cell);
   anchors.push({ ...anchor, cell, x: (cell % W) + 0.5, y: ((cell / W) | 0) + 0.5 });
 }
 

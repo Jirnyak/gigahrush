@@ -162,6 +162,12 @@ export function buildLiquidatorFort(world: World, seed: number, reserved: readon
     LIQUIDATOR_BASE_NAMED_ROOMS[LIQUIDATOR_BASE_ARENA_ANCHOR]);
   arena.wallTex = Tex.METAL;
   arena.floorTex = Tex.F_CONCRETE;
+  /* Свод над песком. Выведение дало бы арене ярус 3 — ту же крышку в 2.5 м, что и
+   * каморке на шесть клеток, потому что вписанный радиус берётся один на комнату.
+   * Зал 56×56 со сводом поднимается кольцами до 4.5 м в середине: над песком объём,
+   * у трибун потолок опускается к зрителю. Выше семи начинается небо
+   * (`SKY_TIER_THRESHOLD`), а с ним с потолка перестаёт что-либо свисать. */
+  arena.ceilingDomeTier = 7;
   rooms.push(arena);
   buildArenaRing(world, arena);
 
@@ -263,6 +269,36 @@ function buildArenaRing(world: World, arena: Room): void {
       if (x >= ring.x - 2 && x <= ring.x + ring.w + 1 && y >= ring.y - 2 && y <= ring.y + ring.h + 1) continue;
       world.features[world.idx(x, y)] = Feature.CHAIR;
     }
+  }
+  lightArena(world, arena, ring);
+}
+
+/**
+ * Свет арены: боевое пятно, а не заливка.
+ *
+ * Лампа несёт радиус 8 (`featureLightParams`, `core/world.ts`), а песок от
+ * середины до столов — одиннадцать клеток. Поэтому одна плафонная лампа над
+ * серединой и кольцо прожекторов по кромке ринга через шесть клеток: песок
+ * освещён целиком, первые ряды трибун освещены, дальние углы зала 56×56 остаются
+ * в полутьме — там сидят, а не дерутся. Лампа не путевая преграда, так что на
+ * песке она отнимает у бойца видимость, а не место.
+ */
+function lightArena(world: World, arena: Room, ring: { x: number; y: number; w: number; h: number }): void {
+  const lamp = (x: number, y: number) => {
+    const idx = world.idx(x, y);
+    if (world.cells[idx] !== Cell.FLOOR) return;
+    if (world.features[idx] !== Feature.NONE) return;
+    world.features[idx] = Feature.LAMP;
+  };
+  lamp(arena.x + Math.floor(arena.w / 2), arena.y + Math.floor(arena.h / 2));
+  const step = 6;
+  for (let x = ring.x; x < ring.x + ring.w; x += step) {
+    lamp(x, ring.y - 1);
+    lamp(x, ring.y + ring.h);
+  }
+  for (let y = ring.y; y < ring.y + ring.h; y += step) {
+    lamp(ring.x - 1, y);
+    lamp(ring.x + ring.w, y);
   }
 }
 

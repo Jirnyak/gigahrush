@@ -15,6 +15,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { MOEBIUS_PODEZD_SEED } from "./meta";
 import { expandMoebiusPodezdRouteGeometry, reinforceMoebiusPodezdAuthoredTerritory, buildMoebiusRooms, placeLifts, decorateRooms } from "./geometry";
 import { placeDecisionContainers, spawnReversedPatrols, spawnSeamThreats } from "./npcs";
+import { lightMoebiusPodezd } from "./lighting";
 
 export function generateMoebiusPodezdDesignFloor(seed = MOEBIUS_PODEZD_SEED): FloorGeneration {
   return withSeededRandom(seed, () => {
@@ -49,6 +50,10 @@ export function generateMoebiusPodezdDesignFloor(seed = MOEBIUS_PODEZD_SEED): Fl
     const rngFn = seededRandom(hashSeed(`design-full:${route.id}:${route.z}`, route.z));
 
     expandMoebiusPodezdRouteGeometry(world, rngFn);
+    // Свет ставится по расширенной геометрии: финальный бейк живёт внутри
+    // `finalizeExpandedFloor`, и всё, что поставлено до расширения, площадок
+    // квартала не видит.
+    lightMoebiusPodezd(world);
     finalizeExpandedFloor(generation, route, rngFn);
 
     return { ...generation, isDecentralized: true as const };
@@ -58,3 +63,4 @@ export function generateMoebiusPodezdDesignFloor(seed = MOEBIUS_PODEZD_SEED): Fl
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./lighting";
