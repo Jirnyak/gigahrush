@@ -24,6 +24,8 @@ import type { SpriteData } from './sprites';
 import type { BloodParticle } from './blood';
 import { critterBlockSize, critterSlotsPerCell, critterSpeciesTable, getCritterRenderEnabled } from './critters';
 import { createCritterPass, type CritterPassHandle } from './critters_pass';
+import { createViewmodelPass, type ViewmodelPassHandle } from './viewmodel/pass';
+import { viewmodelFrame } from './viewmodel/runtime';
 import { dangerFieldVersion } from '../systems/danger_field';
 import { containerSpr, featureSpr } from '../entities/sprite_index';
 import { generateItemSprite, itemDropDefId, itemSpriteKey } from './item_sprites';
@@ -85,6 +87,8 @@ export interface RenderSceneDebugStats {
   meshTriangles: number;
   meshDrawCalls: number;
   critterInstances: number;
+  /** Квадов вьюмодели в кадре: рука, инструмент, дульная вспышка. */
+  viewmodelQuads: number;
   activeAnimatedSprites: number;
   drawnAnimatedSprites: number;
   animatedSpriteTextureCacheSize: number;
@@ -131,6 +135,7 @@ const lastRenderSceneDebugStats: RenderSceneDebugStats = {
   meshTriangles: 0,
   meshDrawCalls: 0,
   critterInstances: 0,
+  viewmodelQuads: 0,
   activeAnimatedSprites: 0,
   drawnAnimatedSprites: 0,
   animatedSpriteTextureCacheSize: 0,
@@ -2235,6 +2240,7 @@ interface GLState {
   doorSyncCount: number;
   doorSyncCells: number;
   critterPass?: CritterPassHandle;
+  viewmodelPass?: ViewmodelPassHandle;
   doorStatesTex: WebGLTexture;
   atlasTex: WebGLTexture;
   dynamicSkyTex: WebGLTexture;
@@ -2568,6 +2574,15 @@ function createOptionalCritterPass(gl: WebGL2RenderingContext): CritterPassHandl
     return createCritterPass(gl);
   } catch (error) {
     console.warn('Critter pass disabled:', error);
+    return undefined;
+  }
+}
+
+function createOptionalViewmodelPass(gl: WebGL2RenderingContext): ViewmodelPassHandle | undefined {
+  try {
+    return createViewmodelPass(gl);
+  } catch (error) {
+    console.warn('Viewmodel pass disabled:', error);
     return undefined;
   }
 }
@@ -3492,6 +3507,7 @@ export function initWebGL(
     doorSyncCount: -1,
     doorSyncCells: -1,
     critterPass: createOptionalCritterPass(gl),
+    viewmodelPass: createOptionalViewmodelPass(gl),
     doorStatesTex, atlasTex,
     dynamicSkyTex,
     dynamicSkyW: 1,
@@ -3933,6 +3949,18 @@ export function renderSceneGL(
   }
 
   gl.disable(gl.DEPTH_TEST);
+
+  /* ── Вьюмодель: то, что боец держит в руках ──
+   * Рисуется в тот же низкий кадр и до блума — оттого её красит свет этажа,
+   * мнёт самосбор, а дульная вспышка попадает в свечение. Что именно рисовать,
+   * решено в `viewmodel/runtime` до захода сюда; проход ничего не выбирает. */
+  if (glState.viewmodelPass) {
+    lastRenderSceneDebugStats.viewmodelQuads = glState.viewmodelPass.render(gl, {
+      screenW: SCR_W,
+      screenH: SCR_H,
+      frame: viewmodelFrame(),
+    });
+  }
 
   // ── Pass 1.5: Bloom (bright-pass prefilter + separable Gaussian blur) ──
   // Render-only glow; gated to high/experimental lighting quality. Result lands in bloomTexA.
@@ -4719,6 +4747,7 @@ export function disposeWebGL(): void {
   gl.deleteTexture(glState.fogTex);
   gl.deleteTexture(glState.dangerTex);
   glState.critterPass?.dispose(gl);
+  glState.viewmodelPass?.dispose(gl);
   gl.deleteTexture(glState.doorStatesTex);
   gl.deleteTexture(glState.atlasTex);
   gl.deleteTexture(glState.dynamicSkyTex);

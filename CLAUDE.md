@@ -114,6 +114,7 @@ Read additional docs only when relevant to the task:
 | Optional online mode design boundaries; single-player remains primary | `online.md` |
 | Optional Cloudflare Net Sphere deployment, Worker/D1, network payloads | `cloudflare.md` |
 | Player-facing text, lore voice, scenario/domain packets | `scenarist.md`; use `../gatbage/reference/scenario_writers/README.md` only for broad text-pass work |
+| Оружие и инструмент в руках от первого лица, пакеты силуэтов, приём арта | `viewmodel.md` |
 | Visual/audio/UI/atmosphere taste decisions | `taste.md` |
 | Высота потолков, шахты, пропасти, небо, высота стен | `vertical.md` |
 | Authored route-floor briefs and expansion packets | `../gatbage/reference/design_floors/`, `../gatbage/reference/expansions/` only for floor/route planning tasks |

@@ -970,6 +970,8 @@ Current floor matrix:
 
 Generic render hooks are allowed when a floor or item family needs a reusable presentation channel. The roof uses this pattern: `src/gen/design_floors/roof.ts` exposes a 1024x1024 dynamic sky texture provider, and `src/render/webgl.ts` only owns the generic dynamic ceiling texture slot, not roof gameplay. Item drops use the same rule: `render/webgl.ts` only asks for a generic procedural texture by item id, while item-specific visual language lives in `src/render/item_sprites.ts`. Procedural actor/item visuals are allowed, but they must be generated at game/floor load boundaries into the shared renderer cache, not lazily in the hot render path.
 
+The viewmodel pass is the third instance of the same rule: `src/render/webgl.ts` owns one seam — a screen-quad pass invoked after sprites/particles/critters and before bloom — while `src/render/viewmodel/` owns silhouettes, motion and caches, and per-weapon visual language lives in its `defs/` packages. The renderer never learns a weapon by name: what to draw is decided in `viewmodel/runtime.ts` from the actor's own `weapon`/`tool` fields before the pass runs, which is also what makes possession swap the hands for free. Contract: `viewmodel.md`.
+
 The mesh pass follows the same rule at a larger scale: `src/render/webgl.ts` owns only the generic pass seam, `src/render/mesh/` owns collection/buffers/shaders, and content-specific visual language lives in data/profile/generation modules. Physical path blockers for bulky objects are not part of mesh; use the explicit `block.md` field/data/generation contract when implementing collision.
 
 Corridor-volume dressing is part of this render contract. It may derive wall

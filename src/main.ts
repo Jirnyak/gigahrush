@@ -118,6 +118,7 @@ import {
   disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
   webglContextLost, webglNeedsReinit, clearWebGLReinitFlag,
 } from './render/webgl';
+import { resetViewmodel, updateViewmodel } from './render/viewmodel';
 import { dropWorldContextsExcept } from './world/world_contexts';
 import { drawHUD, drawPointerCaptureGate, drawSceneOverlay } from './render/hud';
 import { mapLegendVisibleRows as drawMapLegendVisibleRows, clampFullMapRadius, FULL_MAP_RADIUS_DEFAULT } from './render/map_ui';
@@ -3932,6 +3933,9 @@ function finishLoadedFloorVisuals(gen?: FloorGeneration): void {
   setGeneratedDynamicSky(gen);
   updateWorldData(world);
   rebuildProceduralSpriteCache(entities);
+  // Руки уезжают вместе с этажом: чужая фаза шага и недогасшая отдача на новом
+  // этаже читались бы рывком в первом же кадре.
+  resetViewmodel();
 }
 
 function updateGeneratedDynamicSky(dt: number): void {
@@ -10672,6 +10676,21 @@ function gameLoop(now: number): void {
   const visualDetailProfile = currentVisualDetailProfile(floorRunEntry);
   const visualGeometryProfile = currentVisualGeometryProfile(floorRunEntry);
   const visualSurfaceProfile = currentVisualSurfaceProfile(floorRunEntry);
+  /* Вьюмодель считается ОТ АКТОРА, а не от глобала игрока: одержимость меняет
+   * тело, и руки обязаны смениться вместе с ним. Проход отрисовки заберёт
+   * готовый кадр сам. */
+  updateViewmodel({
+    actor: renderActor,
+    world,
+    dt: frameDt,
+    time: uiTime,
+    screenW: SCR_W,
+    screenH: SCR_H,
+    ambient: ambientLight,
+    flashlight,
+    hidden: !!(state.gameOver || state.sleeping || state.sceneLock || state.trailerMode),
+  });
+
   const renderSceneStart = performance.now();
   renderSceneGL(world, textures, sprites, entities,
     cameraView,

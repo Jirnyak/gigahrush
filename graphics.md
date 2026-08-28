@@ -78,6 +78,10 @@ Per frame:
 3. `renderSceneGL()` draws the 3D scene into a low-res FBO.
 4. Depth-tested sprites and instanced transient particles are drawn into that
    same FBO.
+4.5. Вьюмодель (`src/render/viewmodel/pass.ts`) кладёт в тот же FBO от нуля до
+   трёх экранных квадов: инструмент в левой руке, оружие в правой, дульная
+   вспышка. Depth-тест уже выключен, блум ещё не считан — оттого руки живут в
+   мире и светят в свечение. Контракт — `viewmodel.md`.
 5. A final blit shader copies the low-res image to the visible canvas and applies
    only active state/user filters.
 6. HUD, maps, menus and text panels render separately through 2D canvas modules.
