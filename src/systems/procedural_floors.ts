@@ -37,7 +37,7 @@ import {
   routeGateDirectionIsClosed,
 } from './route_gates';
 import { portalBlocksDesignFloor } from './platform_bridge';
-import { rng } from '../core/rand';
+import { entropySeed, rng } from '../core/rand';
 import { floorAboveZ, floorBelowZ } from '../data/route_lift_shafts';
 
 export interface FloorRunState {
@@ -88,8 +88,20 @@ const VALID_GEOMETRY_IDS = new Set<FloorGeometryId>(FLOOR_GEOMETRIES.map(def => 
 const VALID_MAJORITY_IDS = new Set<FloorMajorityId>(FLOOR_MAJORITY_FACTIONS.map(def => def.id));
 const VALID_ANOMALY_IDS = new Set<FloorAnomalyId>(FLOOR_ANOMALIES.map(def => def.id));
 
+/**
+ * Сид забега, когда игрок не ввёл свой.
+ *
+ * Берёт энтропию НАПРЯМУЮ (`entropySeed`), а не из игрового потока. Раньше брал
+ * из `rng()`, и это работало по случайности: начальное состояние глобального
+ * ГСЧ снималось со стенных часов, то есть вся разница между забегами держалась
+ * на побочном эффекте. Как только часы из ГСЧ убрали ради воспроизводимости,
+ * каждый игрок при каждой первой загрузке получал бы ОДИН И ТОТ ЖЕ мир.
+ *
+ * Энтропия и воспроизводимость живут теперь раздельно и явно: сид выбирается
+ * здесь, а весь дальнейший ход событий выводится из него.
+ */
 function randomRunSeed(): number {
-  return Math.floor(rng() * 0x7fffffff);
+  return entropySeed();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

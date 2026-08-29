@@ -6,7 +6,23 @@ export type RandomSource = () => number;
 
 /* ── Global xorshift32 state ────────────────────────────────── */
 
-let _s = (Date.now() | 0) || 1;
+/* Начальное состояние — КОНСТАНТА, а не стенные часы.
+ *
+ * Раньше здесь стояло `(Date.now() | 0) || 1`, и это делало недетерминированным
+ * весь процесс, а не только «первые пару чисел». Контент в проекте регистрируется
+ * побочным эффектом импорта (см. `src/content.ts`), и модуль вправе снять
+ * случайное значение НА ВЕРХНЕМ УРОВНЕ — до того, как кто-либо позвал
+ * `seedGlobalRng`. Такое значение уже не сбросить: `seedGlobalRng` чинит поток
+ * `_s`, но не переписывает число, которое чужой модуль успел положить себе в
+ * переменную. Замерено: `systems/faction_events.ts:209` (`nextEventAt`) выдавал
+ * 36 c в одном процессе и 45 c в соседнем на одном и том же сиде, и один и тот
+ * же прогон жилого этажа расходился по контрольной сумме между запусками.
+ *
+ * Теперь расхождение запусков приходит ТОЛЬКО из явного `seedGlobalRng`, а
+ * энтропия для нового забега берётся один раз и по имени — `entropySeed()`. */
+const INITIAL_STATE = 0x1f123bb5 | 0;
+
+let _s = INITIAL_STATE;
 let _rngOverride: (() => number) | null = null;
 
 /** Global game RNG — the single source of randomness. Returns [0, 1). */
@@ -21,6 +37,24 @@ export function rng(): number {
 /** Re-seed the global game RNG. */
 export function seedGlobalRng(seed: number): void {
   _s = (seed | 0) || 1;
+}
+
+/** Энтропия для ВЫБОРА сида нового забега — единственное место, где проекту
+ *  нужна разница между запусками процесса.
+ *
+ *  Это не источник случайности для игры: полученным числом полагается ЗАСЕЯТЬ
+ *  поток (`seedGlobalRng`) или положить его в `runSeed`, после чего забег снова
+ *  воспроизводим от одного числа. Не звать из кода, который исполняется на
+ *  импорте: тогда вернётся межпроцессный разброс, ради устранения которого
+ *  начальное `_s` и сделано константой. */
+export function entropySeed(): number {
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint32Array) => void } }).crypto;
+  if (c?.getRandomValues) {
+    const a = new Uint32Array(1);
+    c.getRandomValues(a);
+    return a[0] % 0x7fffffff;
+  }
+  return (Date.now() ^ (Date.now() >>> 16)) % 0x7fffffff;
 }
 
 /** Local game RNG — based on Math.random(). Returns [0, 1).
