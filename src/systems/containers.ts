@@ -154,9 +154,19 @@ function seedInventory(kind: ContainerKind, roomId: number, level = 0): Item[] {
   }
   const proceduralItems = generateContainerLoot(def.tags, def.proceduralValueCap, level, rollItems);
   for (const item of proceduralItems) {
-    const existing = inv.find(i => i.defId === item.defId && i.count < getStack(ITEMS[item.defId]));
+    const stack = getStack(ITEMS[item.defId]);
+    const existing = inv.find(i => i.defId === item.defId && i.count < stack);
     if (existing) {
-      existing.count++;
+      /* Кладём СТОЛЬКО, СКОЛЬКО ВЫПАЛО, а не одну штуку. Прежний `existing.count++`
+       * молча выбрасывал `item.count`: ящик, куда патроны попадали вторым
+       * заходом, получал один патрон вместо стопки, и «стабильный источник»
+       * зависел от порядка выпадения. Остаток сверх стопки не теряем — он
+       * уходит новым слотом, если место есть. */
+      const room = stack - existing.count;
+      const moved = Math.min(room, item.count);
+      existing.count += moved;
+      const rest = item.count - moved;
+      if (rest > 0 && inv.length < MAX_INVENTORY_SLOTS) inv.push({ defId: item.defId, count: rest });
     } else if (inv.length < MAX_INVENTORY_SLOTS) {
       inv.push(item);
     }

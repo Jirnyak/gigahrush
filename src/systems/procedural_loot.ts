@@ -1,6 +1,6 @@
 import { ArmorType, Faction, type ItemDef, ItemType, type Item, MonsterKind, type Occupation } from '../core/types';
 import { getMonsterEcology } from '../data/monster_ecology';
-import { ITEMS, itemEquipSlot, itemDefHasTag } from '../data/items';
+import { ITEMS, itemEquipSlot, itemDefHasTag, spawnCount } from '../data/items';
 import { occupationProfile, occupationWorkRoomTypeWeight } from '../data/occupation_profiles';
 import { ECONOMY_PROCEDURAL_LOOT_VALUE_CAP_BY_DANGER } from '../data/economics';
 import { ALIFE_MAX_LEVEL } from '../data/alife_generation';
@@ -274,6 +274,19 @@ export interface NpcArmorRolls {
   rollPick: number;
 }
 
+/**
+ * Сколько магазинов носит вооружённый человек — от одного до этого числа.
+ *
+ * Единица измерения боезапаса в проекте одна и она не абсолютная: магазин
+ * СВОЕГО ствола. Ни одна существующая константа этого не выражает, поэтому
+ * число заведено здесь, а не выведено. Три — потому что один магазин (как было)
+ * означает «расстрелялся в первой же стычке и больше не боец», а стрелку нужен
+ * запас на дорогу до ящика: рейс за патронами в игре есть
+ * (`npc_work.ts`, `npcStoreErrandRoomId` — «за патронами туда, где они лежат»),
+ * и он должен успевать сработать.
+ */
+const NPC_CARRIED_MAGAZINES = 3;
+
 export function generateNpcLoadout(
   faction: Faction,
   level: number,
@@ -310,13 +323,27 @@ export function generateNpcLoadout(
     
     inventory.push({ defId: weaponDef.id, count: 1 });
     
-    // Give starting ammo based on the weapon's actual ammoType
+    /* Боезапас меряется МАГАЗИНАМИ своего же ствола, а не абсолютным числом
+     * патронов: у дробовика магазин на шесть, у автомата на тридцать, и «десять
+     * штук» значило для них противоположное. Отдельная ветка под дробовик была
+     * ровно этим — заплатой на месте недостающей единицы измерения, — и она
+     * снята.
+     *
+     * Замерено до правки на всём маршруте: у стрелка медиана ОДИН магазин
+     * (на министерстве — один патрон), а в мире 0.5–2.7 патрона на стрелка.
+     * Стрелок отстреливался досуха 442 раза за 600 секунд на базе ликвидаторов,
+     * и пополнял его единственный настоящий источник — досыпка из воздуха. */
     const wStats = WEAPON_STATS[weaponDef.id];
     if (wStats?.ammoType && wStats.ammoType !== weaponDef.id) {
       const magSize = wStats.magazineSize ?? 1;
+      /* Пол в десять патронов сохранён из прежней формулы и не случаен: у
+       * винтовки магазин на пять, и «три магазина» дали бы ей пятнадцать
+       * патронов вместо прежних двадцати восьми — щедрость обернулась бы
+       * урезанием. Полоса носимого задаётся не размером магазина, а тем,
+       * сколько человек успевает истратить. */
+      const perMag = Math.max(10, magSize);
       const ammoCount = magSize === Infinity ? 0
-        : (wStats.pellets ?? 1) > 1 ? 4 + Math.floor(rollWeapon * 8)   // shotgun-like
-        : Math.max(10, magSize) + Math.floor(rollWeapon * 20);           // normal
+        : perMag * NPC_CARRIED_MAGAZINES + Math.floor(rollWeapon * perMag);
       if (ammoCount > 0) inventory.push({ defId: wStats.ammoType, count: ammoCount });
     }
   }
@@ -373,7 +400,11 @@ export function generateContainerLoot(tags: readonly string[], proceduralValueCa
   for (const r of rollItems) {
     const itemDef = pickLootFromPool(pool, r);
     if (itemDef) {
-      inventory.push({ defId: itemDef.id, count: 1 });
+      /* Ящик отдаёт СТОПКУ, а не штуку. `spawnCount` — канон проекта ровно на
+       * этот вопрос («дешёвое — больше, дорогое — меньше, но не выше правил
+       * стопки»), и он здесь просто не звался: ящик с боеприпасом содержал один
+       * патрон, а торговец продавал один патрон. Своего правила не завожу. */
+      inventory.push({ defId: itemDef.id, count: spawnCount(itemDef) });
     }
   }
   return inventory;
@@ -390,7 +421,8 @@ export function generateMerchantStock(faction: Faction | undefined, level: numbe
   for (const r of rollItems) {
     const itemDef = pickLootFromPool(pool, r);
     if (itemDef) {
-      inventory.push({ defId: itemDef.id, count: 1 });
+      // Прилавок тем же каноном: торговать поштучно патронами бессмысленно.
+      inventory.push({ defId: itemDef.id, count: spawnCount(itemDef) });
     }
   }
   return inventory;
