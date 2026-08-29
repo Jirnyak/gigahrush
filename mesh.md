@@ -194,6 +194,13 @@ Modes live in `src/data/visual_geometry_profiles.ts`:
 | `medium` | yes | 8 | 256 | 4 | 32 | 48000 | medium | no |
 | `high` | yes | 16 | 512 | 8 | 64 | 96000 | high | yes, radius 12 |
 
+`Radius` is the near disc, not the draw distance. The distance geometry is
+actually collected and dissolved at is derived from it — `min(fog reach,
+radius * 2)`, i.e. 8 / 16 / 31 cells — and resolved in one place,
+`meshDrawRadiusForContext`. Read that helper, not the mode number, when you need
+the real bound; the value used to be recomputed in three places and one copy had
+already drifted.
+
 The resolver applies deterministic theme modulation from floor key/tags:
 
 - Maintenance/industrial floors bias toward pipes, cables, ceiling detail and
@@ -404,9 +411,52 @@ cell does not reshuffle the visible mesh set. Local procedural mesh fields use
 the same camera-cell center for radius checks and a deterministic radial-ring
 coverage cap, so capped pipes, cables, surface scraps and similar generated
 details keep coverage across the local radius instead of being selected from a
-camera-fraction-dependent random edge. The shader also fades mesh color toward
-the current fog color near the active mesh radius, reducing visible hard pops
-when a camera-cell boundary changes the local collection window.
+camera-fraction-dependent random edge.
+
+### Draw Radius And View Cone
+
+Collection runs out to `meshDrawRadius = min(fog reach, radius * 2)`, giving a
+mode ladder of 8 / 16 / 31 cells. Two separate bounds meet there: there is no
+point drawing past the fog, and doubling the radius quadruples the disc area,
+which is exactly what view-cone culling gives back.
+
+This used to be `max(radius, fog reach)`, and it went nowhere. Geometry was
+collected at `profile.radius` while the shader received the fog-stretched value,
+so the dissolve band sat at 28–31 cells where instances never existed. Measured
+on five floors at seed 61061: the old collector scanned 805 cells — `pi * 16^2` —
+on *every* floor regardless of the radius it advertised. Meshes ended at 16 cells
+at full brightness while walls and sprites drew to `MAX_DRAW = 40`. That was the
+"meshes appear out of nowhere" bubble.
+
+Culling has three stages, and each exists for a reason:
+
+1. **Near disc, never culled.** Inside `profile.radius` collection is byte-for-byte
+   what it was. Merged runs re-anchor at the scope boundary and derive their model
+   variant from the anchor cell, so a boundary sweeping across the near field would
+   swap variants of runs that are on screen.
+2. **Far annulus, cone-culled per cell.** `cellInScope` and the scan loop share one
+   predicate — they must, or a cell would yield its run start to a neighbour the
+   loop never visits.
+3. **Instances, cone-culled after collection.** Dropping a finished instance is
+   free of anchoring concerns, and this is where the money is: sort, vertex
+   expansion and the full `bufferSubData` upload all sit downstream.
+
+The margin is `MESH_CONE_MARGIN_CELLS = 2` for cells, plus half the instance's own
+horizontal scale for instances, so a 14-cell merged run is not clipped by its
+anchor point.
+
+Measured effect of the cone alone (same radius, cone forced true vs live):
+instances −49 % to −69 %, cells −43 % to −55 %, triangles −50 % to −71 %. It is
+weaker than the theoretical 75 % by exactly the three deliberate exemptions: the
+near disc, the margin, and procedural fields.
+
+Net result at double the draw distance: instances +4.8 % (living) to −14.8 %
+(maintenance), triangles +6 % to −15 %, vertex build flat, cell scan +39 % to
++80 %, collect CPU +47 % to +58 %. Nothing hits a cap on any floor — `instanceCap`
+peaks at 434/512, `triangleCap` at 41 %, `visualSlotScanCap` at 0.4 %. Without
+the cone the same radius would put hell at 93.5 % of `instanceCap` and 68 % of
+frames hard against it, so the cone is not an optimization here — it is the thing
+that makes the radius affordable.
 
 Instance flags distinguish:
 
@@ -418,6 +468,13 @@ Instance flags distinguish:
 - wall-mounted instances;
 - emissive instances.
 - corridor-volume instances.
+- procedural-field instances (local pipe network and floor scatter).
+
+The procedural-field flag exists because those two sources are not collected per
+cell: they pick candidates across the whole local disc and then select a stable
+subset (`selectStableFieldCoverage`) that does not churn as the camera moves.
+They are therefore exempt from view-cone culling — culling them would both
+quarter their visible density and make the selection re-shuffle on every turn.
 
 ### Wall Anchoring
 
@@ -621,7 +678,30 @@ Uniforms:
 - `uLight` baked lightmap sampler and `uLightOn` flag.
 
 The shader projects world-space triangles into the same low-res render target as
-the raycaster and writes compatible depth. Fog is simple distance-based tinting.
+the raycaster, and writes **exactly** the raycaster's depth. That equality is not
+obvious from the source and is easy to destroy, so it is worth spelling out.
+
+The raycaster writes `gl_FragDepth = 1 - 0.1/dist` directly in window space. The
+mesh goes through the ordinary pipeline instead: `gl_Position = vec4(tx, clipY,
+ty - 0.2, ty)`, so `z/w = 1 - 0.2/ty` in NDC, and the window depth is `(z/w+1)/2
+= 1 - 0.1/ty`. The `0.2` is therefore **not a bias** — it is the factor two that
+cancels the NDC-to-window halving. Both sides measure perpendicular distance, the
+depth func is `LEQUAL`, and the mesh draws after the raycaster, so ties go to the
+mesh via `polygonOffset(-1, -2)`.
+
+Reading that `0.2` as a safety margin and shrinking it does the opposite of what
+it looks like: it pushes the mesh *behind* the surface it stands on. Measured the
+expensive way — `0.125` gives a window depth of `1 - 0.0625/ty`, which is farther
+than floor, wall and ceiling at every distance by far more than any polygon
+offset can recover, and the entire mesh layer disappears from the game while the
+raycaster world still renders normally.
+
+Fog is distance-based tinting on view-space depth, and it saturates at its own
+`0.92` clamp, so fog alone never hides a mesh completely. The last three cells of
+the draw radius are dissolved by `edgeFade`, which mixes fully to fog color at
+`uMeshRadius`. That uniform must equal the radius the CPU actually collected at
+(`meshDrawRadiusForContext`); when the two drifted apart the fade band sat where
+no geometry ever existed and never fired at all.
 
 Lighting shares the raycaster system: when `uLightOn` is set, the fragment shader
 samples the same baked `world.light` lightmap by fragment world position

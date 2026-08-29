@@ -11,6 +11,7 @@ import { createMeshProgram } from './shaders';
 import {
   MeshInstanceFlag,
   collectMeshSceneWithStats,
+  meshDrawRadiusForContext,
   type MeshInstance as SceneMeshInstance,
 } from './scene_collect';
 import { emptyMeshPassStats, type MeshPassContext, type MeshPassHandle, type MeshPassStats } from './types';
@@ -126,16 +127,17 @@ function classifyVoxelVisualSlot(code: number): VoxelVisualFamily | undefined {
   return def ? voxelFamilyForVisualCell(def.family) : undefined;
 }
 
-function collectVoxelMeshes(context: MeshPassContext, out: VoxelChunkMesh[], stats: MeshPassStats): void {
+function collectVoxelMeshes(
+  context: MeshPassContext,
+  out: VoxelChunkMesh[],
+  stats: MeshPassStats,
+  meshDrawRadius: number,
+): void {
   out.length = 0;
   const profile = context.profile;
   // No resolved geometry profile means nothing to draw (synthetic/test context).
   if (!profile) return;
   if (!profile.voxelEnabled || profile.voxelRadius <= 0 || profile.triangleCap <= 0) return;
-  const dynamicDrawRadius = context.fogDensity !== undefined && context.fogDensity > 0.0
-    ? Math.max(profile.radius, Math.ceil(2.0 / context.fogDensity))
-    : profile.radius;
-  const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(dynamicDrawRadius)));
   const voxelTriangleCap = Math.max(48, Math.min(900, Math.floor(profile.triangleCap * 0.16)));
   const voxelProfile: VoxelProfile = {
     voxelEnabled: true,
@@ -265,8 +267,12 @@ class MeshPass implements MeshPassHandle {
     }
     const instanceOut = this.instanceScratch;
     const passContext = { ...context, profile };
+    // Одно разрешение дальности на кадр: его же видит воксельная ветка и его же
+    // показывает отладка, поэтому расхождению взяться неоткуда.
+    const drawRadius = meshDrawRadiusForContext(passContext);
+    stats.drawRadius = drawRadius;
     collectMeshInstances(passContext, instanceOut, stats);
-    collectVoxelMeshes(passContext, this.voxelScratch, stats);
+    collectVoxelMeshes(passContext, this.voxelScratch, stats, drawRadius);
     const bufferStart = nowMs();
     const result = buildMeshVertexBatch(
       instanceOut,
@@ -317,11 +323,10 @@ class MeshPass implements MeshPassHandle {
     gl.uniform2f(uniforms.uPlane, planeX, planeY);
     gl.uniform2f(uniforms.uPitchHeight, context.camera.pitch, context.camera.height);
     gl.uniform2f(uniforms.uResolution, 320, 200);
-    const profileRadius = context.profile?.radius ?? 0;
-    const dynamicDrawRadius = context.fogDensity !== undefined && context.fogDensity > 0.0
-      ? Math.max(profileRadius, Math.ceil(2.0 / context.fogDensity))
-      : profileRadius;
-    const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(dynamicDrawRadius)));
+    // Ровно та дальность, по которой инстансы и отобраны: полоса растворения в
+    // шейдере обязана стоять на настоящей кромке поля, иначе она не сработает
+    // ни разу и меш будет обрываться на полной яркости.
+    const meshDrawRadius = meshDrawRadiusForContext(context);
 
     gl.uniform1f(uniforms.uInvDet, invDet);
     gl.uniform1f(uniforms.uWorldSize, W);

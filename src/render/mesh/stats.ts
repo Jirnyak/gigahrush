@@ -32,6 +32,7 @@ export function createMeshPassStats(overrides: Partial<MeshPassStats> = {}): Mes
     cpuUpdateMs: cpuMs,
     cpuBufferMs: Math.max(0, overrides.cpuBufferMs ?? EMPTY_MESH_PASS_STATS.cpuBufferMs),
     cpuUploadMs: Math.max(0, overrides.cpuUploadMs ?? EMPTY_MESH_PASS_STATS.cpuUploadMs),
+    drawRadius: Math.max(0, overrides.drawRadius ?? EMPTY_MESH_PASS_STATS.drawRadius),
   };
 }
 

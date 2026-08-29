@@ -1,5 +1,5 @@
 import { getEntityIndex } from '../../systems/entity_index';
-import { wrappedDelta } from './math';
+import { meshFovScale, wrappedDelta } from './math';
 import {
   Cell,
   ContainerKind,
@@ -51,6 +51,14 @@ export const MeshInstanceFlag = {
   WallMount: 1 << 5,
   Emissive: 1 << 6,
   CorridorVolume: 1 << 7,
+  /* Инстанс пришёл из процедурного поля вокруг камеры (потолочные трассы,
+   * напольный мусор), а не из обхода клеток. Поле работает иначе: оно берёт
+   * кандидатов со ВСЕГО круга и отбирает из них `proceduralFieldInstanceCap`
+   * штук так, чтобы набор не менялся при движении камеры
+   * (`selectStableFieldCoverage`). Отсечь такой набор конусом значит и разредить
+   * его вчетверо, и заставить мусор переползать при повороте — то есть завести
+   * ровно то мигание, ради устранения которого конус и добавлен. */
+  ProceduralField: 1 << 8,
 } as const;
 
 export interface MeshInstance {
@@ -266,6 +274,13 @@ const FIELD_COVERAGE_RING_COUNT = 4;
 const DEFAULT_CHUNK_SIZE = 8;
 const DEFAULT_MAX_CHUNKS_PER_FRAME = 8;
 const DEFAULT_VISUAL_SLOT_SCAN_CAP = 24_000;
+/* Насколько конус отбора шире экрана, в клетках. Клетка отдаёт инстансы не из
+ * своего центра: настенная фикстура садится на грань, хлам смещается до 0.375,
+ * слитый прогон растянут по оси. Главное же — прогон переанкеривается на границе
+ * области сбора (`cellInScope` в `emitMergedWallLine`/`emitMergedLine4`), а
+ * вариант модели считается от клетки-начала: смена анкера прямо на кромке кадра
+ * читалась бы миганием. Двух клеток хватает на всё перечисленное с запасом. */
+const MESH_CONE_MARGIN_CELLS = 2;
 
 type FaceDir = 0 | 1 | 2 | 3;
 type Axis = 'x' | 'y';
@@ -295,9 +310,29 @@ interface CellScanScope {
   centerX: number;
   centerY: number;
   radius: number;
+  /** Базис камеры и половина угла обзора: боковое отсечение дальнего поля. */
+  cone: CameraCone;
   chunkX?: number;
   chunkY?: number;
   chunkSize?: number;
+}
+
+/**
+ * Конус взгляда для отсечения. Сбор шёл диском на 360°, а в кадр попадает
+ * четверть: замерено 25.5 % собранного при обзоре 90°. Проверка идёт в базисе
+ * камеры и стоит два скалярных произведения — тригонометрии в кадре нет.
+ *
+ * `nearRadius` — круг вокруг камеры, который отсекать нельзя: внутри него сбор
+ * обязан остаться ровно таким, как был, иначе слитые прогоны начнут менять
+ * анкер (а с ним и вариант модели) у самой кромки кадра. Это и делает правку
+ * строго добавочной: ближнее поле не трогается, конусом режется только то
+ * дальнее поле, которого раньше не было вовсе.
+ */
+interface CameraCone {
+  dirX: number;
+  dirY: number;
+  tanHalfFov: number;
+  nearRadius: number;
 }
 
 interface PipeNetworkCandidate {
@@ -397,6 +432,36 @@ function cameraCellCenter(context: MeshPassContext): { x: number; y: number } {
     x: wrapFloat(Math.floor(context.camera.x) + 0.5),
     y: wrapFloat(Math.floor(context.camera.y) + 0.5),
   };
+}
+
+function cameraConeFor(context: MeshPassContext, profile: ResolvedMeshSceneProfile): CameraCone {
+  const angle = context.camera.angle;
+  // Без направления взгляда конуса нет. Молча отсечь тут значило бы вычистить всю
+  // сцену: Math.cos(undefined) даёт NaN, а любое сравнение с NaN ложно, и наружу
+  // это вышло бы не ошибкой, а пустым кадром.
+  if (!Number.isFinite(angle)) {
+    return { dirX: 1, dirY: 0, tanHalfFov: 0, nearRadius: Number.POSITIVE_INFINITY };
+  }
+  return {
+    dirX: Math.cos(angle),
+    dirY: Math.sin(angle),
+    // meshFovScale — тот же tan(fov/2), которым шейдер строит плоскость экрана
+    // (`uPlane` в pass.ts), поэтому конус отбора совпадает с кромкой кадра, а не
+    // приближает её вторым числом.
+    tanHalfFov: meshFovScale(context.camera.fovRadians),
+    nearRadius: profile.radius,
+  };
+}
+
+/**
+ * Попадает ли точка на расстоянии (dx, dy) от камеры в конус кадра, если ей
+ * прощён радиус тела `bounds`. Ближний круг не отсекается никогда.
+ */
+function withinCameraCone(cone: CameraCone, dx: number, dy: number, bounds: number): boolean {
+  if (dx * dx + dy * dy <= cone.nearRadius * cone.nearRadius) return true;
+  const forward = dx * cone.dirX + dy * cone.dirY;
+  const right = dy * cone.dirX - dx * cone.dirY;
+  return Math.abs(right) <= forward * cone.tanHalfFov + bounds;
 }
 
 function isPassableVisualCell(world: World, idx: number): boolean {
@@ -517,10 +582,29 @@ export function resolveMeshSceneProfile(context: MeshPassContext): ResolvedMeshS
   const mode = context.mode ?? 'medium';
   const budget = VISUAL_GEOMETRY_MODE_BUDGETS[mode] ?? VISUAL_GEOMETRY_MODE_BUDGETS.medium;
   const radius = Math.max(0, Math.min(MAX_DRAW, Math.floor(source.radius ?? budget.radius)));
-  const dynamicDrawRadius = context.fogDensity !== undefined && context.fogDensity > 0.0
-    ? Math.max(radius, Math.ceil(2.0 / context.fogDensity))
-    : radius;
-  const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(dynamicDrawRadius)));
+  /* Дальность отбора мешей. Раньше здесь стояло max(радиус режима, дальность
+   * тумана) — бюджет режима просто игнорировался, и low с его радиусом 4
+   * превращался в 31. Хуже того, эта величина никуда не доходила: геометрия
+   * собиралась по `radius`, а в шейдер уходила ОНА (`uMeshRadius`), из-за чего
+   * полоса растворения стояла на 28..31 клетке, где инстансов не бывает никогда.
+   * Растворение не срабатывало ни разу, и меш обрывался на 16 клетках сразу с
+   * полной яркостью — это и есть «пузырь мешей вокруг камеры».
+   *
+   * Теперь дальность выводится из двух настоящих границ. Боковое отсечение
+   * оставляет от диска примерно четверть (замер: 25.5 % при обзоре 90°), значит
+   * по площади можно вырасти вчетверо — а это ровно вдвое по радиусу. Дальше
+   * тумана расти незачем: там уже ничего не видно. Ladder режимов сохраняется —
+   * 8 / 16 / 31 вместо 4 / 8 / 16. */
+  const fogReach = context.fogDensity !== undefined && context.fogDensity > 0.0
+    ? Math.ceil(2.0 / context.fogDensity)
+    : radius * 2;
+  /* Нижний пол — радиус режима. Дальность тумана только ПОДНИМАЕТ поле, опустить
+   * его ниже бюджета она не вправе: густой туман бывает не от этажа, а от
+   * события. Самосбор множит плотность на три (около 0.26 — дальность вышла бы
+   * 8 при радиусе 16), предупреждение о нём тянет к 0.15 (дальность 14), смог
+   * добавляет свою долю. Без этого пола геометрия в тумане собиралась бы ближе,
+   * чем до всей правки, — и заметнее всего там, где кадр и так тяжёлый. */
+  const meshDrawRadius = Math.max(0, Math.min(MAX_DRAW, Math.floor(Math.max(radius, Math.min(fogReach, radius * 2)))));
   const proceduralFieldRadius = Math.max(
     0,
     Math.min(MAX_DRAW, Math.floor(source.proceduralFieldRadius ?? budget.proceduralFieldRadius)),
@@ -574,6 +658,17 @@ export function resolveMeshSceneProfile(context: MeshPassContext): ResolvedMeshS
   };
 }
 
+/**
+ * Дальность отбора мешей одним числом для всех, кому она нужна вне сборки:
+ * шейдерного `uMeshRadius` и вокселей. Формула жила в трёх копиях, и копия в
+ * шейдере разошлась со сборкой — из-за чего полоса растворения стояла там, где
+ * геометрии не бывает. Один резолвер снимает вопрос: считает ровно то же, что
+ * собрано.
+ */
+export function meshDrawRadiusForContext(context: MeshPassContext): number {
+  return resolveMeshSceneProfile(context).meshDrawRadius;
+}
+
 function cellInScope(world: World, scope: CellScanScope, x: number, y: number): boolean {
   if (scope.kind === 'chunk') {
     const size = scope.chunkSize ?? DEFAULT_CHUNK_SIZE;
@@ -583,7 +678,11 @@ function cellInScope(world: World, scope: CellScanScope, x: number, y: number): 
   }
   const dx = wrappedDelta(scope.centerX, x + 0.5);
   const dy = wrappedDelta(scope.centerY, y + 0.5);
-  return Math.abs(dx) <= scope.radius + 0.75 && Math.abs(dy) <= scope.radius + 0.75;
+  if (Math.abs(dx) > scope.radius + 0.75 || Math.abs(dy) > scope.radius + 0.75) return false;
+  // Тот же конус, что и в цикле обхода: границы области сбора обязаны совпадать
+  // до клетки. Разойдись они — клетка уступила бы начало прогона соседу, которого
+  // обход не посещает, и прогон не вышел бы вовсе.
+  return withinCameraCone(scope.cone, dx, dy, MESH_CONE_MARGIN_CELLS);
 }
 
 function visualSlotBase(idx: number): number {
@@ -1662,6 +1761,7 @@ function emitCorridorCeilingVolume(
   y: number,
   covering: VisualCorridorCoveringDef,
   organicDetail: number,
+  scope: CellScanScope,
   out: MeshInstance[],
 ): void {
   const world = context.world;
@@ -1676,7 +1776,14 @@ function emitCorridorCeilingVolume(
     const px = world.wrap(x - dx);
     const py = world.wrap(y - dy);
     const pi = world.idx(px, py);
+    /* Уступить начало прогона соседу можно только тому, кого обход посещает.
+     * Проверки области здесь не было, и прогон, чьё начало по решётке лежит ЗА
+     * границей сбора, терялся целиком: каждая его клетка внутри области уступала
+     * наружу, а наружную никто не сканировал. Слитые прогоны слотов это правило
+     * несут с самого начала (`emitMergedWallLine`), потолочные служб — нет, и
+     * дыра у кромки поля была видна и до бокового отсечения. */
     if (
+      cellInScope(world, scope, px, py) &&
       serviceCeilingGate(context, pi, px, py, covering, serviceDetail, axis) &&
       !serviceCeilingRunSegmentStart(context, x, y, axis, covering, roomId)
     ) return;
@@ -1727,6 +1834,7 @@ function collectCorridorVolumeAtCell(
   x: number,
   y: number,
   profile: ResolvedMeshSceneProfile,
+  scope: CellScanScope,
   out: MeshInstance[],
 ): void {
   if (!profile.includeCorridorVolumes || profile.corridorVolumeDetail <= 0) return;
@@ -1735,7 +1843,7 @@ function collectCorridorVolumeAtCell(
   const detail = covering.style === 'void' ? profile.corridorVolumeDetail * 0.55 : profile.corridorVolumeDetail;
   emitCorridorWallVolume(context, idx, x, y, covering, detail, out);
   emitCorridorThreshold(context, idx, x, y, covering, detail, Math.max(detail, profile.organicVolumeDetail), out);
-  emitCorridorCeilingVolume(context, idx, x, y, covering, Math.max(detail, profile.organicVolumeDetail), out);
+  emitCorridorCeilingVolume(context, idx, x, y, covering, Math.max(detail, profile.organicVolumeDetail), scope, out);
 }
 
 function pipeNetworkEnabled(profile: ResolvedMeshSceneProfile, covering: VisualCorridorCoveringDef): boolean {
@@ -1872,7 +1980,7 @@ function collectProceduralCeilingPipeNetwork(
       scaleY: candidate.scaleY,
       scaleZ: candidate.scaleZ,
       seed: candidate.seed,
-      flags: MeshInstanceFlag.CorridorVolume,
+      flags: MeshInstanceFlag.CorridorVolume | MeshInstanceFlag.ProceduralField,
     });
   }
 }
@@ -2059,7 +2167,7 @@ function collectProceduralFloorScatter(
       scaleY: candidate.scaleY,
       scaleZ: candidate.scaleZ,
       seed: candidate.seed,
-      flags: MeshInstanceFlag.CorridorVolume,
+      flags: MeshInstanceFlag.CorridorVolume | MeshInstanceFlag.ProceduralField,
     });
   }
 }
@@ -2141,8 +2249,8 @@ function scanCell(
   if (profile.includeFeatures) collectFeatureAtCell(context, idx, x, y, out);
   if (profile.includeContainers) collectContainersAtCell(context, idx, x, y, out);
   collectOptionalCeilingAtCell(context, idx, x, y, profile, out);
-  collectCorridorVolumeAtCell(context, idx, x, y, profile, out);
-  collectBillboardsAtCell(context, idx, out);
+  collectCorridorVolumeAtCell(context, idx, x, y, profile, scope, out);
+  collectBillboardsAtCell(context, idx, out, profile);
 }
 
 function scanLocalRadiusCells(
@@ -2155,12 +2263,16 @@ function scanLocalRadiusCells(
   const cy = Math.floor(context.camera.y);
   const center = cameraCellCenter(context);
   const radius = profile.radiusCells;
-  const r2 = profile.radius * profile.radius;
+  // Раньше здесь стоял profile.radius при границе цикла radiusCells: обход ходил
+  // по 3969 клеткам и выбрасывал 3165 из них. Теперь диск и граница цикла — одна
+  // величина, а лишнее снимает конус.
+  const r2 = profile.meshDrawRadius * profile.meshDrawRadius;
   const scope: CellScanScope = {
     kind: 'radius',
     centerX: center.x,
     centerY: center.y,
-    radius: profile.radius,
+    radius: profile.meshDrawRadius,
+    cone: cameraConeFor(context, profile),
   };
   for (let oy = -radius; oy <= radius; oy++) {
     const y = context.world.wrap(cy + oy);
@@ -2169,6 +2281,7 @@ function scanLocalRadiusCells(
       const dx = wrappedDelta(center.x, x + 0.5);
       const dy = wrappedDelta(center.y, y + 0.5);
       if (dx * dx + dy * dy > r2 + 1) continue;
+      if (!withinCameraCone(scope.cone, dx, dy, MESH_CONE_MARGIN_CELLS)) continue;
       scanCell(context, context.world.idx(x, y), x, y, profile, scope, out, stats);
     }
   }
@@ -2197,6 +2310,7 @@ export function collectMeshChunk(
     centerX: center.x,
     centerY: center.y,
     radius: profile.radius,
+    cone: cameraConeFor(context, profile),
     chunkX: cx,
     chunkY: cy,
     chunkSize: size,
@@ -2255,8 +2369,16 @@ function getBillboardMap(world: World, entities?: readonly Entity[]): Map<number
   return entry.map;
 }
 
-export function collectBillboardsAtCell(context: MeshPassContext, idx: number, out: MeshInstance[]): void {
-  const profile = resolveMeshSceneProfile(context);
+// Профиль приходит сверху: обход зовёт эту функцию на КАЖДУЮ клетку, и
+// resolveMeshSceneProfile собирал здесь свежий объект из двух десятков полей
+// сотни раз за кадр — ровно тот случай, который сорока строками выше запрещён
+// комментарием про `doorNear`.
+export function collectBillboardsAtCell(
+  context: MeshPassContext,
+  idx: number,
+  out: MeshInstance[],
+  profile: ResolvedMeshSceneProfile = resolveMeshSceneProfile(context),
+): void {
   if (!profile.enabled || !profile.includeEntities) return;
   const map = getBillboardMap(context.world, context.entities);
   if (!map) return;
@@ -2349,6 +2471,13 @@ export function capMeshInstances(
   out.length = 0;
   if (!profile.enabled || raw.length <= 0) return out;
   const capCenter = cameraCellCenter(context);
+  // Второй проход конусом, теперь по готовым инстансам. Клетку отсекать по
+  // ближнему кругу нельзя (переанкерятся слитые прогоны), а инстанс — можно: он
+  // уже собран, его выброс не меняет ничего, кроме объёма работы ниже по течению.
+  // Ниже по течению — сортировка, разворачивание вершин и заливка буфера, то
+  // есть почти вся цена прохода.
+  const cone = cameraConeFor(context, profile);
+  const instanceCone: CameraCone = { ...cone, nearRadius: 0 };
   // Fused map+filter+score in a single pass: only in-radius instances get a
   // scored wrapper (and only they pay priorityForModel). The old
   // raw.map(...).filter(...) allocated a wrapper for every raw instance —
@@ -2369,9 +2498,16 @@ export function capMeshInstances(
     const stableDy = wrappedDelta(capCenter.y, instance.y);
     const stableD2 = stableDx * stableDx + stableDy * stableDy;
     const radius = (instance.flags & MeshInstanceFlag.CorridorVolume) !== 0
-      ? Math.max(profile.radius, profile.proceduralFieldRadius)
-      : profile.radius;
+      ? Math.max(profile.meshDrawRadius, profile.proceduralFieldRadius)
+      : profile.meshDrawRadius;
     if (stableD2 > radius * radius + 2) continue;
+    if ((instance.flags & MeshInstanceFlag.ProceduralField) === 0) {
+      // Радиус тела: слитый прогон несёт свою длину в масштабе, и обрезать его по
+      // точке-анкеру значило бы терять прогон, половина которого в кадре.
+      const bounds = MESH_CONE_MARGIN_CELLS
+        + 0.5 * Math.max(Math.abs(instance.scaleX), Math.abs(instance.scaleY));
+      if (!withinCameraCone(instanceCone, stableDx, stableDy, bounds)) continue;
+    }
     scored.push({
       instance,
       order,

@@ -187,6 +187,12 @@ export interface HudPerfDebugSnapshot {
   visibleEntityQueryResults?: number;
   aiUpdated?: number;
   aiSkipped?: number;
+  meshInstances?: number;
+  meshTriangles?: number;
+  meshRadius?: number;
+  meshCollectMs?: number;
+  meshBufferMs?: number;
+  meshUploadMs?: number;
 }
 
 export function hudMessageAgeSeconds(messageTime: number, gameTime: number): number {
@@ -594,6 +600,11 @@ function drawFpsCounter(ctx: CanvasRenderingContext2D, perf: HudPerfDebugSnapsho
     `AI ${compactNumber(perf?.liveAi)} upd ${compactNumber(perf?.aiUpdated)} skip ${compactNumber(perf?.aiSkipped)}`,
     `VIS ${compactNumber(perf?.visibleSprites)} draw ${compactNumber(perf?.drawnSprites)} q ${compactNumber(perf?.visibleEntityQueryResults)}  ms SIM ${compactMs(perf?.simMs)} AI ${compactMs(perf?.aiMs)} R ${compactMs(perf?.renderMs)} HUD ${compactMs(perf?.hudMs)}`,
     `SYS N ${compactMs(perf?.needsMs)} C ${compactMs(perf?.contentMs)} HZ ${compactMs(perf?.hazardMs)} S ${compactMs(perf?.samosborMs)} F ${compactMs(perf?.factionMs)} B ${compactMs(perf?.bloodMs)} X ${compactMs(perf?.cleanupMs)} IX ${compactMs(perf?.indexMs)}`,
+    // Меш-проход стоит отдельной строкой и с РАЗБИВКОЙ по стадиям, потому что
+    // они дорожают от разных причин: сбор — от радиуса и площади, буфер — от
+    // числа инстансов, заливка — от их геометрии. Без разбивки видно только
+    // общую просадку, и лечить начинают не ту стадию.
+    `MESH ${compactNumber(perf?.meshInstances)} tri ${compactNumber(perf?.meshTriangles)} R ${compactNumber(perf?.meshRadius)}  ms col ${compactMs(perf?.meshCollectMs)} buf ${compactMs(perf?.meshBufferMs)} up ${compactMs(perf?.meshUploadMs)}`,
   ];
   const padX = 3 * s;
   const padY = 2 * s;
@@ -2068,7 +2079,10 @@ export function drawHUD(
 
   if (showCompactPanels && uiElementEnabled('fps_counter') && perfDebug) {
     const s = Math.max(1, Math.min(sx, sy));
-    const fpsH = 28 * s;
+    // Высота слота считается по строкам панели (8 на строку плюс поля), а не
+    // круглым числом: при 28 фон обрезался уже на четвёртой строке, и текст
+    // висел на кадре без подложки.
+    const fpsH = 44 * s;
     const fpsW = Math.min(slots.topLeftEvent.w, 224 * s);
     if (fpsW >= 96 * s) {
       const rect = allocateHudSlot(slots.topLeftEvent, fpsH, fpsW, 'left');

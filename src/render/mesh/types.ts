@@ -50,6 +50,8 @@ export interface MeshPassStats {
   cpuUpdateMs: number;
   cpuBufferMs: number;
   cpuUploadMs: number;
+  /** Дальность, по которой кадр реально собран (`meshDrawRadiusForContext`). */
+  drawRadius: number;
 }
 
 export interface MeshPassHandle {
@@ -77,6 +79,7 @@ export function emptyMeshPassStats(skippedReason = ''): MeshPassStats {
     cpuUpdateMs: 0,
     cpuBufferMs: 0,
     cpuUploadMs: 0,
+    drawRadius: 0,
   };
 }
 

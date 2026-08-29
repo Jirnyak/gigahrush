@@ -138,6 +138,7 @@ npm run test:unit
 npm run test:generation
 npm run content:audit
 npm run check:invariants
+npm run check:shaders
 npm run check:readonly
 npm run build
 npm run smoke
@@ -154,11 +155,12 @@ Command intent:
 - `npm run test:generation`: expanded generation matrix (294 files, sets `GIGAHRUSH_GENERATION_MATRIX=1`). Green since 2026-08-15 and part of `npm run check`.
 - `npm run content:audit`: static source/content audit.
 - `npm run check:invariants`: layer boundaries, raw `Math.random()` ban, blanket `@ts-ignore` ban (0 allowed; `@ts-expect-error` is fine — it names the error and expires with it), function-length ceiling, dead floor-coordinate keys (60/100/140/180/200, including the `case N:` and `[N]:` forms). Add `--report` for the full listing.
-- `npm run check:readonly`: typecheck, unit tests, content audit, invariants; safest broad agent gate.
+- `npm run check:shaders`: compiles and links every WebGL program in `src/render/` in headless Chrome, ~6 s, writes nothing. **Run it after ANY edit to GLSL.** Nothing else catches a shader error: `typecheck` cannot see inside a template string, `createOptional*Pass` swallows the exception into `console.warn`, and `smoke` only fails on `console.error` — so a broken shader means a silently disabled pass under a fully green gate. The script self-tests both ways before trusting itself (a deliberately broken shader must be rejected, a good one accepted) and exits 2 calling itself defective if either side fails. `--prove` corrupts one real shader in memory, without touching any file, to demonstrate the report actually turns red.
+- `npm run check:readonly`: typecheck, unit tests, content audit, invariants; safest broad agent gate. Deliberately free of browser dependencies — shaders are NOT in it.
 - `npm run build`: production browser build; writes `dist/` — single-file `index.html` plus lazily-fetched `*.ogg` music files and workers alongside it (uploads must ship the whole `dist/` set, not just `index.html`).
 - `npm run smoke`: headless browser playability smoke; requires existing `dist/` and Chrome or `CHROME_BIN`.
 - `npm run check`: default CI gate; typecheck + unit + **generation matrix** + audit + invariants + build. Writes `dist/`. Roughly 20 minutes: the generation matrix alone is ~13. For a fast loop use `check:readonly`, which does not include it.
-- `npm run check:browser` / `npm run check:full`: use for render, UI, mobile, canvas, input, or smoke-risk changes when Chrome is available.
+- `npm run check:browser` / `npm run check:full`: use for render, UI, mobile, canvas, input, or smoke-risk changes when Chrome is available. Both start with `check:shaders` — six seconds before the build is cheaper than learning about a broken shader twenty minutes after it.
 - `npm run check:release`: release artifact gate; writes `dist/` and `itch/`.
 
 Localization scripts exist and may write reports or locale files:

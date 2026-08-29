@@ -240,17 +240,23 @@ export function buildPerevalkaTourScene(gate: PerevalkaLiftGate | null): FloorSc
       },
     ],
     beats: [
+      /* Лестница высот идёт за скоростью: шоссе 1.6, улица 1.5, подъезд к
+       * воротам 1.4, выезд из них 1.3, подход к двери и комната 1.2 и ниже.
+       * Верх лестницы упёрт в потолок авеню (ярус 2 = 2.0) минус зазор камеры,
+       * то есть 1.66. Раньше верх был выписан выше потолка — 1.6/1.8/1.9/2.0
+       * схлопывались клампом в одно и то же число, и вся градация проезда
+       * существовала только в исходнике. */
       /* ── Двор: с чего всё грузится ─────────────────────────── */
-      { kind: 'fly', to: DOCK, look: { role: 'dockers' }, speed: 28, height: 1.8 },
+      { kind: 'fly', to: DOCK, look: { role: 'dockers' }, speed: 28, height: 1.5 },
       { kind: 'say', role: 'dockers', text: 'Перевалка. Всё, что идёт вниз, идёт отсюда.', color: DOCKER_VOICE, seconds: 3.4 },
       { kind: 'orbit', around: { speaker: true }, radius: DOCK_ORBIT, speed: 0.22, height: 1.3, seconds: 5 },
       { kind: 'say', role: 'dockers', text: 'И ничего не идёт просто так.', color: DOCKER_VOICE, seconds: 2.8 },
 
       /* ── Северо-запад: дикие ───────────────────────────────── */
-      { kind: 'fly', to: DOCK_OUT, speed: V_APPROACH, height: 1.6 },
-      { kind: 'fly', to: AV_RING_EAST, speed: V_STREET, height: 1.9 },
-      { kind: 'fly', to: AV_RING_WEST, speed: V_HIGHWAY, height: 2.0 },
-      { kind: 'fly', to: GATE_OUT(WILD), speed: V_HIGHWAY, height: 1.9 },
+      { kind: 'fly', to: DOCK_OUT, speed: V_APPROACH, height: 1.4 },
+      { kind: 'fly', to: AV_RING_EAST, speed: V_STREET, height: 1.5 },
+      { kind: 'fly', to: AV_RING_WEST, speed: V_HIGHWAY, height: 1.6 },
+      { kind: 'fly', to: GATE_OUT(WILD), speed: V_HIGHWAY, height: 1.5 },
       { kind: 'fly', to: DOOR_IN(WILD), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_MID(WILD), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_SHARE(WILD), speed: V_ROOM, height: 1.1 },
@@ -262,11 +268,11 @@ export function buildPerevalkaTourScene(gate: PerevalkaLiftGate | null): FloorSc
 
       /* ── Северо-восток: гражданские ────────────────────────── */
       { kind: 'fly', to: HQ_SHARE(WILD), speed: V_ROOM, height: 1.2 },
-      { kind: 'fly', to: DOOR_IN(WILD), speed: V_APPROACH, height: 1.3 },
-      { kind: 'fly', to: GATE_OUT(WILD), speed: V_APPROACH, height: 1.5 },
-      { kind: 'fly', to: AV_NORTH_WEST, speed: V_STREET, height: 1.9 },
-      { kind: 'fly', to: AV_NORTH_EAST, speed: V_HIGHWAY, height: 2.0 },
-      { kind: 'fly', to: GATE_OUT(CITIZEN), speed: V_APPROACH, height: 1.6 },
+      { kind: 'fly', to: DOOR_IN(WILD), speed: V_APPROACH, height: 1.2 },
+      { kind: 'fly', to: GATE_OUT(WILD), speed: V_APPROACH, height: 1.3 },
+      { kind: 'fly', to: AV_NORTH_WEST, speed: V_STREET, height: 1.5 },
+      { kind: 'fly', to: AV_NORTH_EAST, speed: V_HIGHWAY, height: 1.6 },
+      { kind: 'fly', to: GATE_OUT(CITIZEN), speed: V_APPROACH, height: 1.4 },
       { kind: 'fly', to: DOOR_IN(CITIZEN), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_MID(CITIZEN), look: { role: 'ariel' }, speed: V_CLOSE, height: 1.1 },
       { kind: 'say', role: 'ariel', text: 'Дантес сказал «гастащили»? Ах. Никто ничего не тащил.', color: ARIEL_VOICE, seconds: 4.0 },
@@ -274,10 +280,10 @@ export function buildPerevalkaTourScene(gate: PerevalkaLiftGate | null): FloorSc
       { kind: 'say', role: 'ariel', text: 'Все сели за стол. Встали уже с долями. Стол накгывала я.', color: ARIEL_VOICE, seconds: 4.2 },
 
       /* ── Юго-восток: учёные ────────────────────────────────── */
-      { kind: 'fly', to: DOOR_IN(CITIZEN), speed: V_APPROACH, height: 1.3 },
-      { kind: 'fly', to: GATE_OUT(CITIZEN), speed: V_APPROACH, height: 1.5 },
-      { kind: 'fly', to: AV_EAST_SOUTH, speed: V_HIGHWAY, height: 2.0 },
-      { kind: 'fly', to: GATE_OUT(SCIENCE), speed: V_APPROACH, height: 1.6 },
+      { kind: 'fly', to: DOOR_IN(CITIZEN), speed: V_APPROACH, height: 1.2 },
+      { kind: 'fly', to: GATE_OUT(CITIZEN), speed: V_APPROACH, height: 1.3 },
+      { kind: 'fly', to: AV_EAST_SOUTH, speed: V_HIGHWAY, height: 1.6 },
+      { kind: 'fly', to: GATE_OUT(SCIENCE), speed: V_APPROACH, height: 1.4 },
       { kind: 'fly', to: DOOR_IN(SCIENCE), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_MID(SCIENCE), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_SHARE(SCIENCE), speed: V_ROOM, height: 1.1 },
@@ -288,11 +294,11 @@ export function buildPerevalkaTourScene(gate: PerevalkaLiftGate | null): FloorSc
 
       /* ── Юго-запад: ликвидаторы, и с ними правда ───────────── */
       { kind: 'fly', to: HQ_SHARE(SCIENCE), speed: V_ROOM, height: 1.2 },
-      { kind: 'fly', to: DOOR_IN(SCIENCE), speed: V_APPROACH, height: 1.3 },
-      { kind: 'fly', to: GATE_OUT(SCIENCE), speed: V_APPROACH, height: 1.5 },
-      { kind: 'fly', to: AV_EAST_SOUTH, speed: V_STREET, height: 1.8 },
-      { kind: 'fly', to: AV_SOUTH_WEST, speed: V_HIGHWAY, height: 2.0 },
-      { kind: 'fly', to: GATE_OUT(LIQUIDATOR), speed: V_APPROACH, height: 1.6 },
+      { kind: 'fly', to: DOOR_IN(SCIENCE), speed: V_APPROACH, height: 1.2 },
+      { kind: 'fly', to: GATE_OUT(SCIENCE), speed: V_APPROACH, height: 1.3 },
+      { kind: 'fly', to: AV_EAST_SOUTH, speed: V_STREET, height: 1.5 },
+      { kind: 'fly', to: AV_SOUTH_WEST, speed: V_HIGHWAY, height: 1.6 },
+      { kind: 'fly', to: GATE_OUT(LIQUIDATOR), speed: V_APPROACH, height: 1.4 },
       { kind: 'fly', to: DOOR_IN(LIQUIDATOR), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_MID(LIQUIDATOR), speed: V_ROOM, height: 1.2 },
       { kind: 'fly', to: HQ_SHARE(LIQUIDATOR), speed: V_ROOM, height: 1.1 },
@@ -304,13 +310,13 @@ export function buildPerevalkaTourScene(gate: PerevalkaLiftGate | null): FloorSc
 
       /* ── Замок: его показывают, а не рассказывают ──────────── */
       { kind: 'fly', to: HQ_SHARE(LIQUIDATOR), speed: V_ROOM, height: 1.2 },
-      { kind: 'fly', to: DOOR_IN(LIQUIDATOR), speed: V_APPROACH, height: 1.3 },
-      { kind: 'fly', to: GATE_OUT(LIQUIDATOR), speed: V_APPROACH, height: 1.5 },
-      { kind: 'fly', to: AV_RING_WEST, speed: V_HIGHWAY, height: 1.9 },
+      { kind: 'fly', to: DOOR_IN(LIQUIDATOR), speed: V_APPROACH, height: 1.2 },
+      { kind: 'fly', to: GATE_OUT(LIQUIDATOR), speed: V_APPROACH, height: 1.3 },
+      { kind: 'fly', to: AV_RING_WEST, speed: V_HIGHWAY, height: 1.6 },
       ...lockBeats(gate),
 
       /* ── Домой, на двор ────────────────────────────────────── */
-      { kind: 'fly', to: DOCK, look: { role: 'dockers' }, speed: V_STREET, height: 1.6 },
+      { kind: 'fly', to: DOCK, look: { role: 'dockers' }, speed: V_STREET, height: 1.5 },
       { kind: 'say', role: 'dockers', text: 'Ключей у нас нет. Мы грузим. Ключей на ярусе всего четыре.', color: DOCKER_VOICE, seconds: 4.4 },
     ],
   };
