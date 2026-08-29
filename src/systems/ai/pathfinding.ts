@@ -15,7 +15,7 @@ import {
   type ActorOccupyOptions,
 } from '../movement_collision';
 import { aiPathMoveSpeed } from '../rpg';
-import { actorLeashRoom } from '../room_leash';
+import { actorIsLeashed, actorLeashRoom, actorLeashSpot } from '../room_leash';
 import { emitMarkovBark, BARK_CHANCE_ARRIVE } from './barks';
 import { rng } from '../../core/rand';
 import {
@@ -1733,7 +1733,7 @@ export function tryAssignBehaviorFlowPath(
    * нужного рода по всему этажу, цели у него нет вовсе, поэтому подправить её,
    * как в `tryAssignPathToCell`, нечем: привязанному такой заказ просто не
    * оформляется. Дорогу домой ему при этом закажет любой другой вызов. */
-  if (actorLeashRoom(e) !== undefined) {
+  if (actorIsLeashed(e)) {
     ai.path = [];
     ai.pi = 0;
     _flowPathAssignments.delete(e);
@@ -2116,12 +2116,17 @@ export function roomTargetCell(world: World, e: Entity, room: Room): { x: number
 }
 
 /**
- * Поводок комнаты на единственном шве, через который ходят все.
+ * Поводок места на единственном шве, через который ходят все.
  *
  * Возвращает цель, которую актору РАЗРЕШЕНО заказать, или `undefined`, если
  * заказывать нечего. Оба правила поводка живут здесь и больше нигде: стоящего
  * дома за порог не выпускаем, оказавшегося снаружи зовём домой. Разбор — в
  * `systems/room_leash.ts`.
+ *
+ * Форм у места две, правила у них ОДНИ И ТЕ ЖЕ: комната названа `roomMap`,
+ * круг — точкой и радиусом. Круг нужен там, где места не отвечает ни одна
+ * комната: место действия кат-сцены шире своего зала намеренно, а кольцевая
+ * волна стоит и вовсе снаружи.
  *
  * Ставить это в вызывающих было бы ошибкой: дорогу заказывают и прежний слой, и
  * ядро актора, и мелкие побуждения, и страховка от залипания, — и забытый
@@ -2130,6 +2135,23 @@ export function roomTargetCell(world: World, e: Entity, room: Room): { x: number
 function leashedTarget(
   world: World, e: Entity, tx: number, ty: number,
 ): { x: number; y: number } | undefined {
+  const leashSpot = actorLeashSpot(e);
+  if (leashSpot !== undefined) {
+    const r2 = leashSpot.radius * leashSpot.radius;
+    if (world.dist2(tx, ty, leashSpot.x, leashSpot.y) <= r2) return { x: tx, y: ty };
+    // Уже внутри — значит, заказана дорога наружу, и её просто нет.
+    if (world.dist2(e.x, e.y, leashSpot.x, leashSpot.y) <= r2) return undefined;
+    /* Снаружи зовём не в середину круга, а на его КРАЙ со своей стороны: боец,
+     * которого поводок застал в погоне, обязан вернуться на место действия, а
+     * не бросать врага и уходить к якорю. */
+    const dx = world.delta(leashSpot.x, e.x);
+    const dy = world.delta(leashSpot.y, e.y);
+    const len = Math.hypot(dx, dy) || 1;
+    return {
+      x: world.wrap(leashSpot.x + (dx / len) * leashSpot.radius),
+      y: world.wrap(leashSpot.y + (dy / len) * leashSpot.radius),
+    };
+  }
   const leashRoom = actorLeashRoom(e);
   if (leashRoom === undefined) return { x: tx, y: ty };
   if (world.roomMap[world.idx(tx, ty)] === leashRoom) return { x: tx, y: ty };

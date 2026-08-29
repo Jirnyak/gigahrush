@@ -59,8 +59,7 @@ import {
   startCinematicCamera,
   type RuntimeCamera,
 } from './camera';
-import { clearCombatThreat } from './combat_stimulus';
-import { stepActorBy } from './movement_collision';
+import { bindActorToRoom, bindActorToSpot, releaseActorFromRoom } from './room_leash';
 
 /**
  * Комната-якорь по объявленному псевдониму. Тот же точный поиск по `defId`, что
@@ -152,7 +151,8 @@ export interface SceneActorDef {
   /** Воплотить не на старте сцены, а тактом `materialize`. */
   deferred?: boolean;
   /**
-   * Свой поводок для этой роли, короче или длиннее общего (`FloorSceneDef.leash`).
+   * Свой поводок ОТПУЩЕННОЙ роли, короче или длиннее общего
+   * (`FloorSceneDef.leash`).
    *
    * Общий поводок держит толпу в пределах места действия, и он заведомо шире
    * комнаты. Тому, на ком стоит кадр, этого мало: командир с поводком в комнату
@@ -160,6 +160,19 @@ export interface SceneActorDef {
    * середине — не запрещая драться, а возвращая обратно.
    */
   leash?: number;
+  /**
+   * Свой радиус ПОСТА: держать роль у её места в строю, а не в зале.
+   *
+   * По умолчанию пост держится комнатой-якорем (`bindCastToStage`): человек
+   * ходит по залу, говорит и остаётся в кадре, ни с кем не споря. Радиус нужен
+   * там, где само расстояние и есть содержание кадра, — двое враждебных на
+   * одном песке разойдутся по краям только по объявленному числу.
+   *
+   * Отдельным полем, а не тем же `leash`, потому что это ДРУГОЙ смысл, и жили
+   * они на одном поле напрасно: поводок дуэлянта на песке обязан быть коротким
+   * до сигнала и широким после него. Одно число не бывает и тем и другим.
+   */
+  post?: number;
 }
 
 export type SceneBeat =
@@ -187,10 +200,11 @@ export type SceneBeat =
    * выключенный AI: цикл AI прогоняет актёра сцены наравне со всеми
    * (`ai/index.ts` — ветка `role === CINEMATIC_ACTOR → continue` снята
    * намеренно, она делала вторую, несимулируемую породу людей), а с места его
-   * не пускает короткий поводок `holdCastNearAnchor`, снимающий на время
-   * возврата цель, память об ударе и скан. То есть актёр на посту живёт и
-   * отвечает на удар, но своей волей строй не покидает и врага не ищет.
-   * `release` снимает роль — и человек начинает воевать по обычным правилам.
+   * не пускает поводок места (`bindCastToStage`): дорога за порог зала или за
+   * радиус поста ему просто не назначается. То есть актёр на посту живёт,
+   * говорит и отвечает на удар, но своей волей места не покидает. `release`
+   * снимает роль вместе с постом и ставит взамен поводок МЕСТА ДЕЙСТВИЯ, если
+   * сцена его объявила.
    */
   | { kind: 'release'; roles?: readonly string[] }
   /** Увести живых с этажа без записи смерти. Мгновенно — годится вне кадра. */
@@ -372,6 +386,10 @@ interface ActiveScene {
    * соседа. Тот же запрет записан в самом `startScene` — «сотня человек без
    * общего учёта встала бы штабелем в одну точку». */
   occupied: Set<number>;
+  /** Комната-якорь: ею же держится каст, поставленный внутри неё (`bindCastToStage`). */
+  anchorRoomId: number;
+  /** Поднятую верёвку снимают с отпущенных один раз, а не каждый кадр. */
+  leashLiftApplied: boolean;
   /**
    * Верёвка поднята: ОТПУЩЕННЫХ место действия больше не держит.
    *
@@ -577,11 +595,12 @@ function startScene(ctx: ContentRuntimeContext, def: FloorSceneDef): boolean {
     cast.set(actor.role, castActor(ctx, def, actor, anchorX, anchorY, occupied));
   }
   rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
+  for (const actor of def.actors) bindCastToStage(ctx, def, anchor.id, actor, cast.get(actor.role) ?? []);
 
   active = {
     def, anchorX, anchorY, cast,
     beatIndex: 0, beatTime: 0, beatStarted: false, elapsed: 0, returning: -1,
-    occupied, leashLifted: false,
+    occupied, anchorRoomId: anchor.id, leashLifted: false, leashLiftApplied: false,
   };
   if (playedScenes.size < MAX_PLAYED_SCENES) playedScenes.add(def.id);
   ctx.state.sceneLock = true;
@@ -672,8 +691,8 @@ function castActor(
      * Здесь стоял сырой `anchor + offset` без единой проверки: массовка идёт
      * через `actorSpot` → `freeSpotNear` и в стену не попадает, а именно актёр
      * с репликами — попадал. Комната-якорь переменного размера, в центре комнат
-     * стоит обстановка, и промах означал говорящего в бетоне: `holdCastNearAnchor`
-     * держит его там постом, выйти он не может, а орбита камеры вокруг
+     * стоит обстановка, и промах означал говорящего в бетоне: пост держит его
+     * там, выйти он не может, а орбита камеры вокруг
      * говорящего упирается в стену. `cutscene.md` §8 обещает обратное дословно —
      * «никто не окажется в стене или внутри соседа», — и для `packageId` это
      * было неправдой. Клетка помечается занятой: иначе следующий актёр встанет
@@ -692,6 +711,65 @@ function castActor(
   return actor.source === 'alife'
     ? materializeFromAlife(ctx, def, actor, x, y, count, occupied)
     : spawnSceneCrowd(ctx, def, actor, x, y, count, occupied);
+}
+
+/**
+ * Привязать поставленный каст к его месту.
+ *
+ * ПОСТ — ЭТО МЕСТО, А НЕ НИТЬ, и разница здесь не в длине поводка, а в том,
+ * спорит сцена с волей актёра или снимает вопрос. Нить правила ТЕЛО и оставляла
+ * желание нетронутым: человек, чьё утилити выбрало цель за двадцать клеток, шёл
+ * к ней, на радиусе получал приказ домой, доходил до клетки поста — приказ по
+ * своему закону гас (`goto_order.ts`, «приказ конечен»), — и то же желание вело
+ * его наружу снова. Замерено на прологе (сид 61061,
+ * `tmp/prologue_jitter_probe.ts`): предельный цикл периодом ровно секунда и
+ * амплитудой в клетку, полсотни человек шли КАЖДЫЙ кадр и за двадцать пять
+ * секунд наматывали по 57 клеток при смещении в одну. Со стороны — дрожь строя.
+ * У отпущенных та же нить давала ту же дрожь на своём радиусе, только злее:
+ * ноги шли на работу, нить тянула к якорю, оба шага случались в одном кадре, и
+ * человек стоял на месте, дрожа тринадцать раз в секунду.
+ *
+ * Поводок места (`room_leash.ts`) держит за другое: он не пускает НАЗНАЧИТЬ
+ * дорогу наружу. Спорить становится не о чем — маршрута наружу просто не
+ * существует, — а человек остаётся живым: ходит, говорит, отвечает на удар. Тот
+ * же шов, что у авторских постов Ольги и Баринова.
+ *
+ * Форму выбирает сама расстановка, и своего решения у проигрывателя тут нет:
+ *
+ *   `post` объявлен      → круг этого радиуса вокруг места в строю;
+ *   пост внутри якоря    → комната-якоря: человек живёт в зале;
+ *   пост снаружи якоря   → круг `SCENE_POST_LEASH` (кольцевые волны, роли за
+ *                          краем зала — комнатой их не выразить).
+ *
+ * Объявленный `post` содержателен: на арене Базы дуэлянты стоят по краям песка
+ * с зазором, выведенным из длины арматуры, а зал их обоих пускает друг к другу,
+ * и размен начинался бы до сигнала.
+ *
+ * Срок — потолок самой сцены (игровая минута идёт за реальную секунду), и это
+ * страховка, а не механизм: привязку снимают `release` (ставя взамен поводок
+ * места действия), поручение, конец сцены и обрыв.
+ */
+function bindCastToStage(
+  ctx: ContentRuntimeContext,
+  def: FloorSceneDef,
+  anchorRoomId: number,
+  actor: SceneActorDef,
+  ids: number[],
+): void {
+  if (!ids.length) return;
+  const until = ctx.state.clock.totalMinutes + def.maxSeconds;
+  const byId = ensureEntityIndex(ctx.entities).byId;
+  for (const id of ids) {
+    const entity = byId.get(id);
+    const post = entity?.cinematicState;
+    if (!entity || !post) continue;
+    const cell = ctx.world.idx(Math.floor(post.postX), Math.floor(post.postY));
+    if (actor.post === undefined && ctx.world.roomMap[cell] === anchorRoomId && anchorRoomId >= 0) {
+      bindActorToRoom(entity, anchorRoomId, until);
+      continue;
+    }
+    bindActorToSpot(entity, post.postX, post.postY, actor.post ?? SCENE_POST_LEASH, until);
+  }
 }
 
 function spawnSceneCrowd(
@@ -1054,7 +1132,7 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
     return false;
   }
 
-  holdCastNearAnchor(ctx, scene);
+  applyLiftedLeash(ctx, scene);
 
   const beat = scene.def.beats[scene.beatIndex];
   if (!scene.beatStarted) {
@@ -1077,94 +1155,34 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
 }
 
 /**
- * Держать каст на своих местах.
+ * Снять поводок места действия, когда сцена объявила дело конченым.
  *
- * Тянет НИТЬЮ, а стоящего в строю — ещё и целью: тело не пускают дальше
- * радиуса, а тому, кто на посту, вдобавок ставят курс домой. Получившие
- * поручение (`walkOut`, `moveTo`) не трогаются: у них своя дорога.
+ * Верёвку поднимает ПАКЕТ ЭТАЖА (`liftSceneLeash`), а снимает её отсюда
+ * проигрыватель — один раз, а не каждый кадр: привязка живёт в поводке места
+ * (`room_leash.ts`), и снимать её повторно нечего.
  *
- * Это ЕДИНСТВЕННЫЙ способ удержать актёра: цикл AI никого не пропускает, и
- * выключателя, которым сцена раньше замораживала каст, больше нет. Отсюда и
- * два режима — пост и место действия, см. тело. Различаются они не длиной
- * поводка, а тем, чем поводок ВПРАВЕ распоряжаться: на посту — волей человека,
- * у отпущенного — только его положением.
- *
- * Проверка идёт КАЖДЫЙ КАДР, и это условие её работы: правка раз в шесть
- * кадров оставляла бою окно перебить курс, и майор форпоста с поводком в две
- * клетки уходил на шесть с лишним. Стоит взгляда в индекс по id и квадрата
- * расстояния на актёра; три сотни смотра министерства проходят.
+ * Стоящих на посту это не касается: пост живёт до конца сцены.
  */
-function holdCastNearAnchor(ctx: ContentRuntimeContext, scene: ActiveScene): void {
-  const sceneLeash = scene.def.leash;
+function applyLiftedLeash(ctx: ContentRuntimeContext, scene: ActiveScene): void {
+  if (!scene.leashLifted || scene.leashLiftApplied) return;
+  scene.leashLiftApplied = true;
   const byId = ensureEntityIndex(ctx.entities).byId;
-  for (const [role, ids] of scene.cast) {
-    const roleLeash = scene.def.actors.find(actor => actor.role === role)?.leash;
+  for (const ids of scene.cast.values()) {
     for (const id of ids) {
       const entity = byId.get(id);
-      if (!entity || !entity.alive || !entity.ai) continue;
-      if (errands.some(item => item.entityId === id)) continue;
+      // На посту — не трогаем: верёвка места действия принадлежит отпущенным.
+      if (entity && entity.cinematicState === undefined) releaseActorFromRoom(entity);
+    }
+  }
+}
 
-      /* Два режима, и различает их роль сцены.
-       *
-       * НА ПОСТУ (роль ещё на человеке): держится своего места в строю. Это и
-       * есть замена выключенному AI — актёр живёт, дышит, отвечает на удар, но
-       * с места не уходит. Поводок тут короткий: строй есть строй.
-       *
-       * ОТПУЩЕН (`release` снял роль): своего места больше нет, держится места
-       * ДЕЙСТВИЯ — якоря сцены, — и только если сцена объявила общий поводок. */
-      const held = entity.role === NpcRole.CINEMATIC_ACTOR && entity.cinematicState !== undefined;
-      // Поднятая верёвка отпускает ровно ОТПУЩЕННЫХ: дело их в кадре кончено, и
-      // держать их на радиусе больше не за что. Пост поднятие не читает — он
-      // заменяет выключенный AI и стоит до конца сцены.
-      if (!held && scene.leashLifted) continue;
-      const leash = held ? (roleLeash ?? SCENE_POST_LEASH) : (roleLeash ?? sceneLeash);
-      if (leash === undefined) continue;
-      const homeX = held ? entity.cinematicState!.postX : scene.anchorX;
-      const homeY = held ? entity.cinematicState!.postY : scene.anchorY;
-      const away2 = ctx.world.dist2(entity.x, entity.y, homeX, homeY);
-      if (away2 <= leash * leash) continue;
-
-      /* НА ПОСТУ возврат перекрывает ВОЛЮ: снимаются все три канала поиска
-       * врага — взятая цель, память об ударе и свежий скан, — и ставится курс
-       * домой. Двух каналов мало: память возвращает бойца в драку тем же
-       * кадром, а скан находит ближайшую тварь заново. Это и есть замена
-       * выключенному AI, ради которой пост существует.
-       *
-       * Курс при этом ставится ОДИН РАЗ на приход: `aimAtSpot` обнуляет
-       * маршрут, и человек, которому его переписывают шестьдесят раз в секунду,
-       * не делает ни шага.
-       *
-       * ОТПУЩЕННОМУ не трогают НИ ОДНОГО из этих полей, и это не поблажка, а
-       * другая работа. Отпущенный живёт по общим правилам, и гасить ему цель
-       * значит разваливать тот самый бой, ради которого его и отпускали, а
-       * писать курс — стирать маршрут, который его собственный слой только что
-       * построил. Поводок отпущенного — это СТЕНА (шаг ниже), и ничего кроме.
-       *
-       * Замерено на арене Базы: победитель дуэли шёл к месту павшего (тот лёг в
-       * 10.2 клетки при поводке в 10), упирался в поводок — и стоял там до
-       * конца сцены, слепой к новым целям и с маршрутом, который ему обнуляли
-       * каждым кадром. Пятьдесят секунд из шестидесяти. */
-      if (held) {
-        entity.ai.combatTargetId = undefined;
-        clearCombatThreat(entity);
-        entity.ai.combatScanCd = SCENE_LEASH_COMBAT_BLIND_S;
-        if (entity.ai.goal !== AIGoal.GOTO || entity.ai.tx !== homeX || entity.ai.ty !== homeY) {
-          aimAtSpot(entity, homeX, homeY);
-        }
-      }
-
-      /* И нить: актёр сцены — марионетка на верёвке конечной длины. Своя воля у
-       * него есть, он живой и отвечает на удар, но сцена его ЖЕЛАНИЯ перекрывает,
-       * а не уговаривает. Пока поводок был только курсом домой, боец с целью за
-       * спиной уходил всё равно: правка курса и погоня спорили каждый кадр, и
-       * побеждала погоня. Проверка идёт каждый кадр, поэтому перебор всегда
-       * порядка одного шага, и возврат идёт ОБЩИМ шагом с коллизией — сквозь
-       * стену верёвка никого не протаскивает. */
-      const overshoot = Math.sqrt(away2) - leash;
-      const homeDx = ctx.world.delta(entity.x, homeX);
-      const homeDy = ctx.world.delta(entity.y, homeY);
-      const homeLen = Math.hypot(homeDx, homeDy) || 1;
-      stepActorBy(ctx.world, entity, (homeDx / homeLen) * overshoot, (homeDy / homeLen) * overshoot);
+/** Снять поводок со всего каста: сцена кончилась или оборвана. */
+function unleashWholeCast(entities: Entity[], scene: ActiveScene): void {
+  const byId = ensureEntityIndex(entities).byId;
+  for (const ids of scene.cast.values()) {
+    for (const id of ids) {
+      const entity = byId.get(id);
+      if (entity) releaseActorFromRoom(entity);
     }
   }
 }
@@ -1267,6 +1285,7 @@ function enterBeat(ctx: ContentRuntimeContext, scene: ActiveScene, beat: SceneBe
       const ids = castActor(ctx, scene.def, actor, scene.anchorX, scene.anchorY, scene.occupied);
       scene.cast.set(beat.role, [...(scene.cast.get(beat.role) ?? []), ...ids]);
       rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
+      bindCastToStage(ctx, scene.def, scene.anchorRoomId, actor, ids);
       return;
     }
     case 'release': {
@@ -1344,13 +1363,41 @@ function applyDefection(
  * Без списка ролей отпускаются все, кого сцена держит.
  */
 function releaseRoles(ctx: ContentRuntimeContext, scene: ActiveScene, roles?: readonly string[]): void {
-  if (!roles) {
-    releaseAllSceneActors(ctx.entities, scene.def.id);
+  for (const role of roles ?? [...scene.cast.keys()]) {
+    for (const entity of entitiesOfRole(ctx, scene, role)) {
+      releaseNpcFromScene(ctx.entities, entity.id);
+      stageWallFor(ctx, scene, role, entity);
+    }
+  }
+  // Кого сцена держала помимо каста (доставленный `packageId`, чья роль уже
+  // снята) — тому роль снимает общий проход: он идёт по `cinematicState`.
+  if (!roles) releaseAllSceneActors(ctx.entities, scene.def.id);
+}
+
+/**
+ * Поводок МЕСТА ДЕЙСТВИЯ отпущенному: тем же кругом, что и пост.
+ *
+ * Пост снят — своего места у человека больше нет, но кадр ещё идёт, и
+ * разбежавшийся по этажу каст оставил бы сцену без людей. Радиус берётся у роли
+ * (`leash`) либо у сцены (`FloorSceneDef.leash`); не объявлен ни там, ни там —
+ * человек свободен совсем.
+ *
+ * Круг, а не нить, ровно по той же причине, что и на посту: нить спорит с волей
+ * каждый кадр и оставляет человека дрожать на радиусе. Целей, памяти об ударе и
+ * скана поводок при этом не трогает вовсе — бой отпущенного не его дело.
+ */
+function stageWallFor(
+  ctx: ContentRuntimeContext, scene: ActiveScene, role: string, entity: Entity,
+): void {
+  const radius = scene.def.actors.find(actor => actor.role === role)?.leash ?? scene.def.leash;
+  if (radius === undefined || scene.leashLifted) {
+    releaseActorFromRoom(entity);
     return;
   }
-  for (const role of roles) {
-    for (const entity of entitiesOfRole(ctx, scene, role)) releaseNpcFromScene(ctx.entities, entity.id);
-  }
+  bindActorToSpot(
+    entity, scene.anchorX, scene.anchorY, radius,
+    ctx.state.clock.totalMinutes + scene.def.maxSeconds,
+  );
 }
 
 /**
@@ -1404,8 +1451,6 @@ const MAX_SCENE_ERRANDS = 32;
  * управление у игрока, поэтому выдержке хватает нескольких секунд.
  */
 const SCENE_WALK_OUT_GRACE_S = 6;
-/** Насколько боец слепнет к новым целям, пока поводок тянет его обратно. */
-const SCENE_LEASH_COMBAT_BLIND_S = 0.5;
 /**
  * Поводок стоящего на посту. Короткий: строй обязан читаться строем, а не
  * толпой. Актёр при этом жив — переминается, огрызается, отвечает на удар, —
@@ -1555,6 +1600,7 @@ function updateSceneErrands(ctx: ContentRuntimeContext): void {
 }
 
 function endScene(ctx: ContentRuntimeContext, scene: ActiveScene): void {
+  unleashWholeCast(ctx.entities, scene);
   releaseAllSceneActors(ctx.entities, scene.def.id);
   ctx.state.sceneLock = false;
   const camera = sceneOwnedCamera();
@@ -1585,7 +1631,10 @@ export function abortFloorScene(state?: GameState, entities?: Entity[]): void {
   const camera = sceneOwnedCamera();
   sceneFrameReleased = false;
   if (!scene) return;
-  if (entities) releaseAllSceneActors(entities, scene.def.id);
+  if (entities) {
+    unleashWholeCast(entities, scene);
+    releaseAllSceneActors(entities, scene.def.id);
+  }
   if (camera) camera.mode = 'player';
 }
 

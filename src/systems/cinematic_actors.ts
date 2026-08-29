@@ -1,5 +1,6 @@
 import { type Entity, NpcRole } from '../core/types';
 import { getEntityIndex, ENTITY_MASK_NPC } from './entity_index';
+import { releaseActorFromRoom } from './room_leash';
 
 export function selectCinematicExtras(
   count: number,
@@ -51,10 +52,20 @@ export function extractNpcForScene(
   return true;
 }
 
+/**
+ * Снять с поста. Вместе с ролью снимается и привязка к залу сцены
+ * (`bindCastToStage`): пост держится комнатой, и отпустить человека, оставив
+ * ему запрет выходить за порог, значило бы отпустить его на словах.
+ *
+ * Свой пост актёра при этом теряется: сцена его перезаписала, когда забирала
+ * человека на площадку. Сегодня это никого не задевает — постов в проекте два
+ * (Ольга и Баринов), и ни один не занят ни в одной сцене.
+ */
 export function releaseNpcFromScene(entities: Entity[], npcId: number): void {
   const npc = entities.find((e: Entity) => e.id === npcId);
   if (!npc || !npc.cinematicState) return;
 
+  releaseActorFromRoom(npc);
   npc.role = npc.cinematicState.originalRole;
   npc.cinematicState = undefined;
 }
