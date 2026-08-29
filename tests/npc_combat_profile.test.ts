@@ -52,11 +52,38 @@ test('npcCombatProfile: weapon logic (armed & ranged)', async (t) => {
     assert.equal(profile.ranged, false);
   });
 
-  await t.test('armed with ranged weapon', () => {
-    const npc = makeTestEntity({ id: 9, type: EntityType.NPC, weapon: 'gauss' });
-    const profile = npcCombatProfile(npc);
-    assert.equal(profile.armed, true);
-    assert.equal(profile.ranged, true);
+  /* Стволу нужен ПАТРОН, и с 2026-08-29 справка это знает. До этого стрелок с
+   * пустым магазином числился вооружённым: по расчёту сил он оставался бойцом,
+   * поэтому стоял на месте и «отстреливался» вхолостую вместо того, чтобы
+   * разорвать контакт и сходить за патронами. Замер на базе ликвидаторов: 61
+   * стрелок из 171 опустошался за десять минут, и вернуться к патронам
+   * удавалось двоим. */
+  await t.test('armed with ranged weapon — только с патронами', () => {
+    const ws = WEAPON_STATS['gauss'];
+    assert.ok(ws?.ammoType, 'тест держится на том, что гауссу нужен патрон');
+
+    const dry = makeTestEntity({ id: 9, type: EntityType.NPC, weapon: 'gauss' });
+    assert.equal(npcCombatProfile(dry).armed, false, 'пустой ствол — не оружие');
+    assert.equal(npcCombatProfile(dry).ranged, true, 'но он всё ещё дальнобойный');
+
+    const loaded = makeTestEntity({
+      id: 19, type: EntityType.NPC, weapon: 'gauss',
+      inventory: [{ defId: ws!.ammoType!, count: 10 }],
+    });
+    assert.equal(npcCombatProfile(loaded).armed, true);
+    assert.equal(npcCombatProfile(loaded).ranged, true);
+  });
+
+  /* Чужой магазин со стороны НЕ виден: вес актора читают соседи, когда решают,
+   * драться ли. Пустота ствола меняет решение только своего хозяина. */
+  await t.test('пустой магазин не делает стрелка менее страшным для других', () => {
+    const ws = WEAPON_STATS['gauss'];
+    const dry = makeTestEntity({ id: 29, type: EntityType.NPC, weapon: 'gauss', hp: 50, maxHp: 50 });
+    const loaded = makeTestEntity({
+      id: 39, type: EntityType.NPC, weapon: 'gauss', hp: 50, maxHp: 50,
+      inventory: [{ defId: ws!.ammoType!, count: 10 }],
+    });
+    assert.equal(npcCombatProfile(dry).threatScore, npcCombatProfile(loaded).threatScore);
   });
 });
 

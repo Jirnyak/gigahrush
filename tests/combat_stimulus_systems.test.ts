@@ -87,6 +87,9 @@ test('combat_stimulus: npcCombatProfile', async (t) => {
 
   await t.test('calculates profile for ranged weapon', () => {
     const rangedWeaponId = Object.keys(WEAPON_STATS).find(key => WEAPON_STATS[key].isRanged) || 'pistol';
+    /* С патронами: с 2026-08-29 пустой ствол оружием не считается
+     * (`weaponCanFire`), и справка честно вернула бы `armed: false`. */
+    const ammoType = WEAPON_STATS[rangedWeaponId]?.ammoType;
 
     const npc = {
       id: 5,
@@ -95,6 +98,7 @@ test('combat_stimulus: npcCombatProfile', async (t) => {
       x: 0,
       y: 0,
       weapon: rangedWeaponId,
+      inventory: ammoType ? [{ defId: ammoType, count: 24 }] : undefined,
       hp: 20,
       maxHp: 20,
       rpg: { level: 2 }

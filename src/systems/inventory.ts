@@ -2553,6 +2553,25 @@ export function countAmmo(e: Entity, itemId = equippedCombatItemId(e)): number {
   return total;
 }
 
+/**
+ * Может ли актор ВООБЩЕ выстрелить своим оружием прямо сейчас.
+ *
+ * Отвечает ровно на «есть ли чем бить», а не «хорошо ли бьёт»: ножу, трубе и
+ * пси патрон не нужен, стволу нужен. Заведено потому, что справки о силе
+ * (`armed`, вес актора в раскладе) читали только НАЛИЧИЕ ствола: стрелок с
+ * пустым магазином числился вооружённым, стоял на месте и «отстреливался»
+ * вхолостую вместо того, чтобы разорвать контакт и сходить за патронами.
+ *
+ * Расход ПСИ здесь НЕ проверяется намеренно: он восстанавливается сам, и
+ * пустой на секунду пси-боец не перестаёт быть бойцом. Патрон сам не появится.
+ */
+export function weaponCanFire(e: Entity, itemId = equippedCombatItemId(e)): boolean {
+  const ws = WEAPON_STATS[itemId];
+  if (!ws) return false;
+  if (!ws.ammoType) return true;
+  return countAmmo(e, itemId) > 0;
+}
+
 export function updateInventoryConditions(e: Entity, state: GameState): void {
   updateGovnyakConditions(e, state);
 }

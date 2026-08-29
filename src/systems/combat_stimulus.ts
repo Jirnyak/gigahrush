@@ -15,7 +15,7 @@ import { publishEvent } from './events';
 import { applyWitnessedViolencePenalty, areSameSide, combatSideOf, isHostile, isPersonalFeudEnemy } from './factions';
 import { isPlayerEntity } from './player_actor';
 import { hasLineOfSight } from '../world/line_of_sight';
-import { equippedCombatItemId } from './inventory';
+import { equippedCombatItemId, weaponCanFire } from './inventory';
 import { RELATION_FRIENDLY_THRESHOLD, getNpcPlayerRelation } from './npc_relations';
 import { finishActorDeath, runActorDamageCore } from './actor_damage';
 import { applyCombatRelationOutcome } from './factions';
@@ -158,6 +158,8 @@ interface CombatProfileCore {
   psiMad: boolean;
   traveler: boolean;
   level: number;
+  /** Есть ли чем стрелять: пустой магазин делает ствол бесполезным. */
+  canFire: boolean;
   brave: boolean;
   armed: boolean;
   ranged: boolean;
@@ -177,8 +179,13 @@ function combatProfileCore(npc: Entity): CombatProfileCore {
   const psiMad = (npc.psiMadness ?? 0) > 0;
   const traveler = npc.isTraveler === true;
   const level = Math.max(1, npc.rpg?.level ?? 1);
+  /* Патроны кончаются ЧАЩЕ, чем меняется оружие, поэтому признак входит в ключ
+   * кэша: иначе опустевший стрелок числился бы вооружённым до самой смены
+   * ствола. Проверка — обход собственных карманов, а их единицы. */
+  const canFire = weaponCanFire(npc, weapon);
   const cached = profileCores.get(npc);
   if (cached !== undefined &&
+    cached.canFire === canFire &&
     cached.weapon === weapon &&
     cached.occupation === npc.occupation &&
     cached.faction === npc.faction &&
@@ -194,6 +201,7 @@ function combatProfileCore(npc: Entity): CombatProfileCore {
     psiMad,
     traveler,
     level,
+    canFire,
     brave: psiMad ||
       traveler ||
       occupationHasAnyProfileTag(npc.occupation, BRAVE_OCCUPATION_TAGS) ||
@@ -201,7 +209,17 @@ function combatProfileCore(npc: Entity): CombatProfileCore {
       npc.faction === Faction.CULTIST ||
       npc.faction === Faction.WILD,
     ranged,
-    armed: ws.dmg > 3 || ranged,
+    /* Пустой ствол не оружие. Без этого стрелок с нулём патронов числился
+     * вооружённым, стоял на месте и «отстреливался» вхолостую: разорвать
+     * контакт и сходить за патронами ему было незачем, потому что расчёт сил
+     * считал его бойцом. Теперь он читается как безоружный, уходит из-под огня
+     * — и там уже срабатывает складской рейс, у которого `opportunity` равен
+     * нулю, пока рядом враг (`actor/drives.ts`). */
+    armed: canFire && (ws.dmg > 3 || ranged),
+    /* Вес НЕ зависит от патронов, и это не недосмотр: `weaponScore` читают
+     * ДРУГИЕ — через `actorThreatScore`, когда решают, драться ли с этим
+     * человеком. Чужой магазин со стороны не виден. Пустой ствол меняет
+     * решение только своего хозяина (`armed` выше), а пугает он ровно так же. */
     weaponScore: ranged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg,
     levelScore: level * 3,
   };

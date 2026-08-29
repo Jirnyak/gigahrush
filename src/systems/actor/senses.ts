@@ -2,7 +2,7 @@ import { MAX_DRAW, EntityType, type Entity } from '../../core/types';
 import { PERCEPTION_CHANNEL_COUNT, type World } from '../../core/world';
 import { WEAPON_STATS } from '../../data/catalog';
 import { ENTITY_MASK_ACTOR, getEntityIndex } from '../entity_index';
-import { equippedCombatItemId } from '../inventory';
+import { equippedCombatItemId, weaponCanFire } from '../inventory';
 import { getRecentCombatThreat } from '../combat_stimulus';
 import { isHostile } from '../factions';
 import { hasLineOfSight } from '../../world/line_of_sight';
@@ -43,6 +43,9 @@ const ACTOR_SENSE_CAP = 8;
  *  делал пси-бойца невесомым в раскладе сил. */
 export function actorPower(e: Entity): number {
   const ws = WEAPON_STATS[equippedCombatItemId(e)] ?? WEAPON_STATS[''];
+  /* Патроны здесь НЕ спрашиваются намеренно: вес актора читают соседи (свои и
+   * чужие), а чужой магазин со стороны не виден. Пустота ствола меняет решение
+   * только своего хозяина — см. `out.armed`. */
   const weapon = ws ? (ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg) : 0;
   return Math.max(0, e.hp ?? 20) * 0.22 + weapon + Math.max(1, e.rpg?.level ?? 1) * 3;
 }
@@ -156,8 +159,9 @@ export function senseActor(world: World, e: Entity, out: ActorSenses, now?: numb
     out.macro[ch] = fieldMacroAt(world, ch, e.x, e.y) / FIELD_VALUE_MAX;
   }
 
-  const ws = WEAPON_STATS[equippedCombatItemId(e)];
-  out.armed = !!ws && (ws.dmg > 3 || ws.isRanged);
+  const weaponId = equippedCombatItemId(e);
+  const ws = WEAPON_STATS[weaponId];
+  out.armed = !!ws && weaponCanFire(e, weaponId) && (ws.dmg > 3 || ws.isRanged);
 
   out.hostiles = 0;
   out.hostilePower = 0;

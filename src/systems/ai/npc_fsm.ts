@@ -44,7 +44,7 @@ import {
   roomMemoryIsHostile,
   roomMemoryRevealsStash,
 } from '../room_memory';
-import { equippedCombatItemId } from '../inventory';
+import { equippedCombatItemId, weaponCanFire } from '../inventory';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import { noteRoomVisit, roomVisitNovelty } from '../room_visits';
 /* Смена (рейс, склад, уборка) живёт своим модулем: она не про граф переходов,
@@ -669,6 +669,7 @@ function buildThreatSnapshot(world: World, entities: readonly Entity[], e: Entit
  * вызовом, каким берёт оружие сам бой. По одному слоту `weapon` пси-боец числился
  * безоружным и невесомым. */
 function actorPower(e: Entity): number {
+  // Патроны не спрашиваются: вес читают соседи, чужой магазин им не виден.
   const ws = WEAPON_STATS[equippedCombatItemId(e)] ?? WEAPON_STATS[''];
   const weapon = ws ? (ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg) : 0;
   const hp = Math.max(0, e.hp ?? 20) * 0.22;
@@ -677,8 +678,9 @@ function actorPower(e: Entity): number {
 }
 
 function npcIsArmed(e: Entity): boolean {
-  const ws = WEAPON_STATS[equippedCombatItemId(e)];
-  return !!ws && (ws.dmg > 3 || ws.isRanged);
+  const id = equippedCombatItemId(e);
+  const ws = WEAPON_STATS[id];
+  return !!ws && weaponCanFire(e, id) && (ws.dmg > 3 || ws.isRanged);
 }
 
 
