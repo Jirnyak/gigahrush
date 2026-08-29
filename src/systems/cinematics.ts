@@ -33,7 +33,7 @@ import { freshNeeds, randomName } from '../data/names';
 import { getMaxHp, randomRPG } from './rpg';
 import { generateNpcLoadout } from './procedural_loot';
 import { entitySpawnSlots } from './entity_limits';
-import { ensureEntityIndex, rebuildEntityIndexAfterSpawnCleanup } from './entity_index';
+import { ENTITY_MASK_ACTOR, ensureEntityIndex, rebuildEntityIndexAfterSpawnCleanup } from './entity_index';
 import { setNpcPlayerRelation } from './npc_relations';
 import { isPlayerEntity } from './player_actor';
 import { extractNpcForScene, releaseAllSceneActors, releaseNpcFromScene } from './cinematic_actors';
@@ -114,6 +114,24 @@ export interface SceneActorDef {
   monster?: MonsterKind;
   /** Разброс массовки вокруг места. */
   spread?: number;
+  /**
+   * Чем роль вооружена. Без поля — по фракционному профилю, как у любого
+   * жителя этажа (`generateNpcLoadout`).
+   *
+   * Нужно там, где оружие — условие СЦЕНЫ, а не имущество человека: на песок
+   * арены выходят с тем, что дали, и обоим дают одно и то же. Профиль фракции
+   * этого не выражает и выразить не должен — культисту он выдаёт пси-сгусток
+   * вместо ствола ВСЕГДА, и объявленный дуэлянтом пленный выходил драться с
+   * пустыми руками (`senses.armed` читает слот оружия, а не пси-инструмент).
+   *
+   * Патронов сцена не выдаёт, и это не упущение: магазин NPC пополняется сам
+   * (`ai/combat.ts`, ветка перезарядки), из инвентаря ничего не расходуется.
+   *
+   * Только для массовки, которую сцена создаёт сама. У человека из пула
+   * (`source: 'alife'`) и у авторского жителя своё имущество, и переписывать
+   * его сцена не вправе: он переживёт кадр и уйдёт с ним дальше жить.
+   */
+  weapon?: string;
   /**
    * Поставить не вокруг точки, а КОЛЬЦОМ на таком радиусе от неё. Для наплыва со
    * всех сторон: `spread` задаёт максимум поиска места и потому всегда сажает
@@ -224,6 +242,22 @@ export interface FloorSceneDef {
    * облётом вокруг пустого места, а сам говорящий уже в соседней трубе.
    */
   leash?: number;
+  /**
+   * Расчистить место действия перед расстановкой: посторонние акторы внутри
+   * этого радиуса от якоря отходят наружу.
+   *
+   * Не всякой сцене это нужно, поэтому и не по умолчанию. Нужно там, где кадр
+   * держится на том, КТО стоит в середине: случайный жилец, оказавшийся на
+   * песке арены, — это не зевака, а третий боец, враждебный одному из двоих по
+   * той же матрице отношений. Замерено на Базе (сид 20881): на песке стоял
+   * посторонний ликвидатор, и дуэль двоих превращалась в травлю пленного.
+   *
+   * Отход — перестановка на свободную клетку за радиусом, а не удаление и не
+   * приказ уйти. Приказ проигрывает гонку с камерой (человек идёт клетку в
+   * секунду, кадр доезжает за десять), а на самой перестановке смотреть ещё
+   * некому: сцена поднимается, когда игрок только вошёл на этаж.
+   */
+  clearRadius?: number;
 }
 
 const scenes: FloorSceneDef[] = [];
@@ -483,6 +517,9 @@ function startScene(ctx: ContentRuntimeContext, def: FloorSceneDef): boolean {
   // Клетки, уже занятые актёрами этой сцены: сотня человек без общего учёта
   // встала бы штабелем в одну точку.
   const occupied = new Set<number>();
+  // Расчистка идёт ДО расстановки: иначе каст встаёт вперемешку с теми, кого
+  // сцена сейчас отсюда уберёт, и половина мест на площадке уже занята.
+  if (def.clearRadius !== undefined) clearSceneStage(ctx, anchorX, anchorY, def.clearRadius, occupied);
   for (const actor of def.actors) {
     if (actor.deferred) continue;
     cast.set(actor.role, castActor(ctx, def, actor, anchorX, anchorY, occupied));
@@ -514,6 +551,47 @@ function startScene(ctx: ContentRuntimeContext, def: FloorSceneDef): boolean {
 }
 
 /* ── Расстановка актёров ─────────────────────────────────────── */
+
+/**
+ * Убрать посторонних с места действия. Разбор — в `FloorSceneDef.clearRadius`.
+ *
+ * Один запрос к индексу на подъёме сцены, без единого прохода по кадрам:
+ * расчистка — это часть расстановки, а не система.
+ */
+function clearSceneStage(
+  ctx: ContentRuntimeContext,
+  anchorX: number,
+  anchorY: number,
+  radius: number,
+  occupied: Set<number>,
+): void {
+  const found: Entity[] = [];
+  ensureEntityIndex(ctx.entities).queryRadius(anchorX, anchorY, radius, found, ENTITY_MASK_ACTOR);
+  let index = 0;
+  for (const entity of found) {
+    if (!entity.alive || entity.cinematicState !== undefined || isPlayerEntity(entity)) continue;
+    /* Наружу — по своему же азимуту: человек отходит с площадки по кратчайшей,
+     * а не сгоняется в одну кучу с противоположного края. Клетка ищется тем же
+     * поиском и с тем же учётом занятого, что у каста, поэтому в стену и в
+     * соседа никто не встанет. Места не нашлось — человек остаётся где стоял:
+     * лучше лишний в кадре, чем актёр в бетоне. */
+    const dx = ctx.world.delta(entity.x, anchorX);
+    const dy = ctx.world.delta(entity.y, anchorY);
+    const away = Math.hypot(dx, dy) || 1;
+    const out = radius + 2;
+    const spot = freeSpotNear(
+      ctx.world,
+      anchorX - (dx / away) * out,
+      anchorY - (dy / away) * out,
+      out - radius + 2,
+      index++,
+      occupied,
+    );
+    if (!spot) continue;
+    entity.x = spot.x;
+    entity.y = spot.y;
+  }
+}
 
 function castActor(
   ctx: ContentRuntimeContext,
@@ -583,6 +661,14 @@ function spawnSceneCrowd(
     const maxHp = getMaxHp(rpg);
     const named = randomName(faction);
     const loadout = generateNpcLoadout(faction, rpg.level, 3, rng(), [rng(), rng()]);
+    /* Объявленное оружие вытесняет выпавшее — и в слоте, и в карманах: с трупа
+     * обязано упасть то, чем он дрался, а не то, что ему выкатил профиль
+     * фракции. Пси-инструмент при этом остаётся: он в другой руке и в другом
+     * слоте, и отнимать его сцене незачем. */
+    const rolled = loadout.inventory ?? [];
+    const inventory = actor.weapon === undefined
+      ? rolled
+      : [...rolled.filter(item => item.defId !== loadout.weapon), { defId: actor.weapon, count: 1 }];
     const entity: Entity = {
       id: ctx.nextEntityId.v++,
       type: EntityType.NPC,
@@ -602,8 +688,8 @@ function spawnSceneCrowd(
       maxHp,
       money: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      inventory: loadout.inventory ?? [],
-      weapon: loadout.weapon,
+      inventory,
+      weapon: actor.weapon ?? loadout.weapon,
       tool: loadout.tool,
       faction,
       occupation,
@@ -937,13 +1023,15 @@ function advanceScene(ctx: ContentRuntimeContext, scene: ActiveScene): boolean {
 /**
  * Держать каст на своих местах.
  *
- * Тянет ЦЕЛЬЮ, а не цепью: ушедшему ставится обычный `GOTO` домой, и бой с
- * нуждами вправе его перебить — человек остаётся живым, а не приклеенным.
- * Получившие поручение (`walkOut`, `moveTo`) не трогаются: у них своя дорога.
+ * Тянет НИТЬЮ, а стоящего в строю — ещё и целью: тело не пускают дальше
+ * радиуса, а тому, кто на посту, вдобавок ставят курс домой. Получившие
+ * поручение (`walkOut`, `moveTo`) не трогаются: у них своя дорога.
  *
  * Это ЕДИНСТВЕННЫЙ способ удержать актёра: цикл AI никого не пропускает, и
  * выключателя, которым сцена раньше замораживала каст, больше нет. Отсюда и
- * два режима — пост и место действия, см. тело.
+ * два режима — пост и место действия, см. тело. Различаются они не длиной
+ * поводка, а тем, чем поводок ВПРАВЕ распоряжаться: на посту — волей человека,
+ * у отпущенного — только его положением.
  *
  * Проверка идёт КАЖДЫЙ КАДР, и это условие её работы: правка раз в шесть
  * кадров оставляла бою окно перебить курс, и майор форпоста с поводком в две
@@ -976,13 +1064,34 @@ function holdCastNearAnchor(ctx: ContentRuntimeContext, scene: ActiveScene): voi
       const away2 = ctx.world.dist2(entity.x, entity.y, homeX, homeY);
       if (away2 <= leash * leash) continue;
 
-      /* Возврат снимает ВСЕ ТРИ канала поиска врага: взятую цель, память об
-       * ударе и свежий скан. Двух мало — память возвращает бойца в драку тем же
-       * кадром, а скан находит ближайшую тварь заново. */
-      entity.ai.combatTargetId = undefined;
-      clearCombatThreat(entity);
-      entity.ai.combatScanCd = SCENE_LEASH_COMBAT_BLIND_S;
-      aimAtSpot(entity, homeX, homeY);
+      /* НА ПОСТУ возврат перекрывает ВОЛЮ: снимаются все три канала поиска
+       * врага — взятая цель, память об ударе и свежий скан, — и ставится курс
+       * домой. Двух каналов мало: память возвращает бойца в драку тем же
+       * кадром, а скан находит ближайшую тварь заново. Это и есть замена
+       * выключенному AI, ради которой пост существует.
+       *
+       * Курс при этом ставится ОДИН РАЗ на приход: `aimAtSpot` обнуляет
+       * маршрут, и человек, которому его переписывают шестьдесят раз в секунду,
+       * не делает ни шага.
+       *
+       * ОТПУЩЕННОМУ не трогают НИ ОДНОГО из этих полей, и это не поблажка, а
+       * другая работа. Отпущенный живёт по общим правилам, и гасить ему цель
+       * значит разваливать тот самый бой, ради которого его и отпускали, а
+       * писать курс — стирать маршрут, который его собственный слой только что
+       * построил. Поводок отпущенного — это СТЕНА (шаг ниже), и ничего кроме.
+       *
+       * Замерено на арене Базы: победитель дуэли шёл к месту павшего (тот лёг в
+       * 10.2 клетки при поводке в 10), упирался в поводок — и стоял там до
+       * конца сцены, слепой к новым целям и с маршрутом, который ему обнуляли
+       * каждым кадром. Пятьдесят секунд из шестидесяти. */
+      if (held) {
+        entity.ai.combatTargetId = undefined;
+        clearCombatThreat(entity);
+        entity.ai.combatScanCd = SCENE_LEASH_COMBAT_BLIND_S;
+        if (entity.ai.goal !== AIGoal.GOTO || entity.ai.tx !== homeX || entity.ai.ty !== homeY) {
+          aimAtSpot(entity, homeX, homeY);
+        }
+      }
 
       /* И нить: актёр сцены — марионетка на верёвке конечной длины. Своя воля у
        * него есть, он живой и отвечает на удар, но сцена его ЖЕЛАНИЯ перекрывает,
@@ -1310,6 +1419,14 @@ function sendRolesOnErrand(
   }
 }
 
+/**
+ * Отдать приказ «иди в точку». Исполняет его `tickGotoOrder`
+ * (`systems/ai/npc_fsm.ts`) — там же разбор канала и замер.
+ *
+ * Маршрут ОБНУЛЯЕТСЯ: приказ отменяет прежнюю дорогу, а новую строит уже
+ * исполнитель. Поэтому звать это каждый кадр нельзя — человеку, которому
+ * стирают маршрут шестьдесят раз в секунду, шага не сделать.
+ */
 function aimAtSpot(entity: Entity, ax: number, ay: number): void {
   entity.isTraveler = true;
   entity.ai = entity.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };

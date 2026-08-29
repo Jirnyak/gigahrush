@@ -62,7 +62,12 @@ const CIVIL_FLOORS = [50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22
 const DEEP_FLOORS = [-4, -12, -14, -16, -18, -20, -22, -24, -26, -28, -30, -32, -34, -36, -38, -40, -42, -44, -46, -48, -50];
 
 const BASE_RUMORS: readonly RumorDef[] = [
-  { id: 'arena_champion_rumor', topic: 'player_action', minTrust: 0, floors: [-26, 0], text: ['Видели этого психа на ринге? Уважуха.', 'Говорят, чемпион арены выжил там, где даже ликвидаторы ложатся.', 'Золотой кубок теперь у настоящего монстра. Я бы не стал стоять у него на пути.'], reveals: { kind: 'warning', tag: 'arena_champion', confidence: 4 } },
+  /* Арена стоит на БАЗЕ ЛИКВИДАТОРОВ (z = −12), и слух о её чемпионе обязан
+   * звучать там же и по соседству. До 2026-08-29 здесь стояло `[-26, 0]` —
+   * старый адрес: арену перенесли с коллекторов, а слух остался при прежних
+   * этажах, то есть звучал ровно там, где арены нет, и не звучал ни разу там,
+   * где она есть. */
+  { id: 'arena_champion_rumor', topic: 'player_action', minTrust: 0, floors: [-12, -14, 0], text: ['Видели этого психа на ринге? Уважуха.', 'Говорят, чемпион арены выжил там, где даже ликвидаторы ложатся.', 'Золотой кубок теперь у настоящего монстра. Я бы не стал стоять у него на пути.'], reveals: { kind: 'warning', tag: 'arena_champion', confidence: 4 } },
   { id: 'gnome_sighting_1', topic: 'monster', minTrust: -10, floors: ALL_FLOORS, text: ['Слышал шорох в вентиляции ночью. Опять эти мелкие твари с технического этажа скребутся. Прячь ценности.'], reveals: { kind: 'monster', monsterKind: MonsterKind.GNOME, confidence: 2 } },
   { id: 'gnome_nest_2', topic: 'monster', minTrust: 0, floors: ALL_FLOORS, text: ['Говорят, если найти гнездо карликов, там столько хабара натащено... Но они стаей и слона загрызут.'], reveals: { kind: 'monster', monsterKind: MonsterKind.GNOME, confidence: 2 } },
   { id: 'samosbor_vent_first', topic: 'samosbor', minTrust: -40, floors: ALL_FLOORS, text: ['Перед сиреной вентиляция первой тянет сыростью и старой водой.', 'Почуял сырой сквозняк из решетки - не стой слушать, иди к герме или за границу зоны.'], reveals: { kind: 'warning', tag: 'samosbor_warning', confidence: 2 } },

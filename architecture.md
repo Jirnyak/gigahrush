@@ -165,11 +165,16 @@ These are the rules every new module must preserve.
     edges. Григорий Кэли's key bought convenience, not passage. Owner ruled it a defect; the
     remedy is to route the ORDINARY path through the locked edges, never to seal the floor.
 - **A floor never generates another floor's content.** A floor's `content_manifest.ts` may only call
-  generators that belong to that floor. Violation found 2026-08-21: the collectors manifest calls
-  `generateLiquidatorBaseArena` and stamps the liquidator base's 50×50 arena into the middle of the
-  collectors — the single call site of that generator. The damage is not cosmetic: the arena is the
+  generators that belong to that floor. **Closed 2026-08-25 (commit `e690df77`), re-measured
+  2026-08-29: import edges between floor packages are now 0 across all 54 packages, and
+  `check:invariants` counts them.** The violation, kept here as precedent: the collectors manifest
+  called `generateLiquidatorBaseArena` and stamped the liquidator base's 50×50 arena into the middle
+  of the collectors — the single call site of that generator. The damage is not cosmetic: the arena is the
   floor's largest room by four times, it carpets 30% of its own floor with chairs, and furniture
-  stamps path blockers, so residents and monsters cannot cross their own floor. Ownership by folder
+  stamps path blockers, so residents and monsters cannot cross their own floor. Measured before/after
+  on seeds 1 · 61061 · 4242: rooms tagged `arena` 1 → **0**, chairs on the floor 627·637·586 → **17**,
+  largest room 50×50=2500 → 43×25=1075. Lock — `tests/maintenance-no-foreign-content.test.ts`
+  (both sides: no cross-package import, and the generated collectors carry no arena). Ownership by folder
   name is not ownership; ownership is the manifest that calls you. See `problems.md`.
 - No permanent POI on LIVING without `aptMask` protection and a corridor/door connection.
 - Feature-like gameplay must use the feature-first overlay contract: generate/map `Feature`, `Cell`, container or billboard primitives first, then attach or lazily resolve `InteractiveDef` behavior. Do not couple the number or placement of decor fixtures to interaction action code.
