@@ -115,7 +115,7 @@ import { generateSprites } from './render/sprites';
 import { Spr, monsterSpr } from './entities/sprite_index';
 import {
   SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData,
-  disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
+  disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, getMeshPassDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
   webglContextLost, webglNeedsReinit, clearWebGLReinitFlag,
 } from './render/webgl';
 import { resetViewmodel, updateViewmodel } from './render/viewmodel';
@@ -507,6 +507,7 @@ import {
 } from './systems/psi';
 import { getCurrentPlayerId, isNativePlayerBodyEntity, isPlayerEntity, setCurrentPlayerEntity } from './systems/player_actor';
 import { fireDeletionBeam } from './systems/weapon_beams';
+import { launchProjectile, projectileHitsForward, projectileSparesOwner } from './systems/projectiles';
 import { traceFirstSolidCell, wrapWorld } from './systems/local_space';
 import {
   ENTITY_MASK_ACTOR,
@@ -793,69 +794,56 @@ let _snapReceived = 0;
 let _snapSpawnX = W / 2;
 let _snapSpawnY = W / 2;
 
-function spawnPeerProjectile(actor: Entity, weaponId: string, ws: WeaponStats): void {
-  const cos = Math.cos(actor.angle);
-  const sin = Math.sin(actor.angle);
+/**
+ * Чем оружие рвёт тело. Пути игрока и ко-оп-пира несли по своей копии этого
+ * выражения; боевой AI не ставит `projGore` вовсе, и это расхождение вынесено
+ * наружу дверью, а не сглажено здесь.
+ */
+function playerWeaponGore(weaponId: string, pt: ProjType): number {
+  if (pt === ProjType.GRENADE || pt === ProjType.BFG) return 3;
+  if (weaponId === 'shotgun' || weaponId === 'chainsaw') return 3;
+  if (weaponId === 'ak47' || weaponId === 'machinegun' || weaponId === 'nailgun'
+    || weaponId === 'gauss' || weaponId === 'plasma') return 2;
+  return 1;
+}
+
+/** Размер снаряда в кадре у путей игрока и пира: четыре случая против двух у AI. */
+function playerProjScale(pt: ProjType): number {
+  if (pt === ProjType.BFG) return 0.6;
+  if (pt === ProjType.FLAME) return 0.55 + rng() * 0.25;
+  if (pt === ProjType.GRENADE) return 0.35;
+  return 0.25;
+}
+
+function spawnHumanProjectile(actor: Entity, weaponId: string, ws: WeaponStats): void {
   const pellets = ws.pellets ?? 1;
   const spread = ws.spread ?? 0;
   const pt = ws.projType ?? ProjType.NORMAL;
+  const spd = ws.projSpeed ?? 15;
   for (let p = 0; p < pellets; p++) {
-    const ang = actor.angle + (rng() - 0.5) * spread;
-    const spd = ws.projSpeed ?? 15;
-    const proj: Entity = {
-      id: nextEntityId.v++,
-      type: EntityType.PROJECTILE,
-      x: actor.x + cos * 0.85,
-      y: actor.y + sin * 0.85,
-      angle: ang, pitch: 0,
-      alive: true, speed: 0,
-      sprite: ws.projSprite ?? Spr.BULLET,
-      vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd,
+    launchProjectile(world, entities, nextEntityId, actor, weaponId, ws, {
+      angle: actor.angle + (rng() - 0.5) * spread,
+      speed: spd,
       vz: (actor.pitch ?? 0) * spd * 0.5 + (pt === ProjType.FLAME ? (rng() - 0.5) * 0.8 : 0),
-      projDmg: ws.dmg,
-      projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
-      ownerId: actor.id,
-      weapon: weaponId,
-      spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + rng() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
-      spriteZ: 0.5,
+      sprite: ws.projSprite ?? Spr.BULLET,
+      life: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
+      spriteScale: playerProjScale(pt),
+      gore: playerWeaponGore(weaponId, pt),
       projType: pt,
-      projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
-        : (weaponId === 'shotgun' || weaponId === 'chainsaw') ? 3
-        : (weaponId === 'ak47' || weaponId === 'machinegun' || weaponId === 'nailgun' || weaponId === 'gauss' || weaponId === 'plasma') ? 2
-        : pt === ProjType.FLAME ? 1 : 1,
-    };
-    if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
-    entities.push(proj);
+    });
   }
 }
 
-function spawnPeerPsiProjectile(actor: Entity, psiId: string, ws: WeaponStats): void {
-  const cos = Math.cos(actor.angle);
-  const sin = Math.sin(actor.angle);
+function spawnHumanPsiProjectile(actor: Entity, psiId: string, ws: WeaponStats): void {
   const spd = ws.projSpeed ?? 14;
-  const proj: Entity = {
-    id: nextEntityId.v++,
-    type: EntityType.PROJECTILE,
-    x: actor.x + cos * 0.85,
-    y: actor.y + sin * 0.85,
+  launchProjectile(world, entities, nextEntityId, actor, psiId, ws, {
     angle: actor.angle,
-    pitch: 0,
-    alive: true,
-    speed: 0,
-    sprite: ws.projSprite ?? Spr.PSI_BOLT,
-    vx: Math.cos(actor.angle) * spd,
-    vy: Math.sin(actor.angle) * spd,
+    speed: spd,
     vz: (actor.pitch ?? 0) * spd * 0.5,
-    projDmg: ws.dmg,
-    projLife: 3.0,
-    ownerId: actor.id,
-    weapon: psiId,
+    sprite: ws.projSprite ?? Spr.PSI_BOLT,
+    life: 3.0,
     spriteScale: 0.3,
-    spriteZ: 0.5,
-  };
-  if (ws.aoeRadius) { proj.aoeRadius = ws.aoeRadius; proj.aoeDmg = ws.dmg; }
-  entities.push(proj);
+  });
 }
 
 function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats): void {
@@ -863,7 +851,7 @@ function applyPeerPsiWorldEffect(actor: Entity, psiId: string, ws: WeaponStats):
   if (!ws.isRanged && (effect === 'phase' || effect === 'shield' || effect === 'mark' || effect === 'recall' || effect === 'possession')) return;
 
   if (ws.isRanged) {
-    spawnPeerPsiProjectile(actor, psiId, ws);
+    spawnHumanPsiProjectile(actor, psiId, ws);
   } else {
     const psiResult = castInstantSpell(effect, actor, entities, world, state.msgs, state.time, state);
     if (psiResult.beamLen) {
@@ -905,7 +893,7 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
       fireDeletionBeam(world, entities, actor, state, weaponId, ws,
         (e, kp, vx, vy, gore) => handleKill(e, kp, vx, vy, gore, actor));
     } else {
-      spawnPeerProjectile(actor, weaponId, ws);
+      spawnHumanProjectile(actor, weaponId, ws);
     }
     playWeaponSound(weaponId, ws);
     publishWeaponNoise(state, actor, weaponId, ws);
@@ -4764,34 +4752,9 @@ function castPlayerPsi(psiId: string, ws: WeaponStats): boolean {
 
   player.rpg.psi -= cost;
   if (ws.isRanged) {
-    const cos = Math.cos(player.angle);
-    const sin = Math.sin(player.angle);
-    const spd = ws.projSpeed ?? 14;
-    const proj: Entity = {
-      id: nextEntityId.v++,
-      type: EntityType.PROJECTILE,
-      x: player.x + cos * 0.85,
-      y: player.y + sin * 0.85,
-      angle: player.angle,
-      pitch: 0,
-      alive: true,
-      speed: 0,
-      sprite: ws.projSprite ?? Spr.PSI_BOLT,
-      vx: Math.cos(player.angle) * spd,
-      vy: Math.sin(player.angle) * spd,
-      vz: player.pitch * spd * 0.5,
-      projDmg: ws.dmg,
-      projLife: 3.0,
-      ownerId: player.id,
-      weapon: psiId,
-      spriteScale: 0.3,
-      spriteZ: 0.5,
-    };
-    if (ws.aoeRadius) {
-      proj.aoeRadius = ws.aoeRadius;
-      proj.aoeDmg = ws.dmg;
-    }
-    entities.push(proj);
+    // Тот же путь, что у ко-оп-пира: разницы между ними здесь не было никогда,
+    // кроме имени переменной, — и обе копии несли одно и то же смещение 0.85.
+    spawnHumanPsiProjectile(player, psiId, ws);
   } else {
     const psiResult = castInstantSpell(
       ws.psiEffect ?? '', player, entities, world,
@@ -4923,45 +4886,9 @@ function handlePlayerAttack(_dt: number): void {
           state.beamAngle = player.angle;
           state.beamLen = result.beamLen;
         } else {
-          const cos = Math.cos(player.angle);
-          const sin = Math.sin(player.angle);
-          const pellets = ws.pellets ?? 1;
-          const spread = ws.spread ?? 0;
-          const pt = ws.projType ?? ProjType.NORMAL;
-          for (let p = 0; p < pellets; p++) {
-            const ang = player.angle + (rng() - 0.5) * spread;
-            const spd = ws.projSpeed ?? 15;
-            const proj: Entity = {
-              id: nextEntityId.v++,
-              type: EntityType.PROJECTILE,
-              x: player.x + cos * 0.85,
-              y: player.y + sin * 0.85,
-              angle: ang,
-              pitch: 0,
-              alive: true,
-              speed: 0,
-              sprite: ws.projSprite ?? Spr.BULLET,
-              vx: Math.cos(ang) * spd,
-              vy: Math.sin(ang) * spd,
-              vz: player.pitch * spd * 0.5 + (pt === ProjType.FLAME ? (rng() - 0.5) * 0.8 : 0),
-              projDmg: ws.dmg,
-              projLife: pt === ProjType.GRENADE ? 1.5 : pt === ProjType.FLAME ? 0.7 : 3.0,
-              ownerId: player.id,
-              weapon: weaponId,
-              spriteScale: pt === ProjType.BFG ? 0.6 : pt === ProjType.FLAME ? (0.55 + rng() * 0.25) : pt === ProjType.GRENADE ? 0.35 : 0.25,
-              spriteZ: 0.5,
-              projType: pt,
-              projGore: pt === ProjType.GRENADE || pt === ProjType.BFG ? 3
-                : (weaponId === 'shotgun' || weaponId === 'chainsaw') ? 3
-                : (weaponId === 'ak47' || weaponId === 'machinegun' || weaponId === 'nailgun' || weaponId === 'gauss' || weaponId === 'plasma') ? 2
-                : pt === ProjType.FLAME ? 1 : 1,
-            };
-            if (ws.aoeRadius) {
-              proj.aoeRadius = ws.aoeRadius;
-              proj.aoeDmg = ws.dmg;
-            }
-            entities.push(proj);
-          }
+          // Тот же путь, что у ко-оп-пира: копии были байт в байт, включая
+          // смещение 0.85, из-за которого выстрел в упор не попадал никогда.
+          spawnHumanProjectile(player, weaponId, ws);
         }
         // Play weapon-specific sound
         pushAttackFeedback('Выстрел.');
@@ -5691,6 +5618,8 @@ function updateProjectiles(dt: number): void {
       for (const e of projectileHitQuery) {
         if (!e.alive) continue;
         if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
+        if (projectileSparesOwner(world, p, e, hitRadius)) continue;
+        if (!projectileHitsForward(world, prevX, prevY, moveX, moveY, e)) continue;
         const hitT = projectilePathHitT({ x0: prevX, y0: prevY, x1: wx, y1: wy, e, radius: hitRadius });
         if (hitT <= blockingT + 0.000001) {
           if (processProjectileEntityCollision(p, e, pt, hitT, prevX, wx, prevY, wy, prevSpriteZ, nextSpriteZ, baseDmg)) {
@@ -5704,6 +5633,13 @@ function updateProjectiles(dt: number): void {
       for (const e of projectileHitQuery) {
         if (!e.alive) continue;
         if (e.type !== EntityType.MONSTER && e.type !== EntityType.NPC) continue;
+        /* Стрелок не ловит собственную пулю, пока она не покинула его тело, и
+         * бить можно только вперёд по курсу. Вдвоём эти две строки заменяют
+         * смещение точки рождения на 0.85 клетки — прежний обход отсутствующей
+         * проверки, из-за которого отрезок от груди стрелка до 0.85 не
+         * проверялся вовсе и выстрел в упор промахивался геометрически. */
+        if (projectileSparesOwner(world, p, e, hitRadius)) continue;
+        if (!projectileHitsForward(world, prevX, prevY, moveX, moveY, e)) continue;
         const hitT = projectilePathHitT({ x0: prevX, y0: prevY, x1: wx, y1: wy, e, radius: hitRadius });
         if (hitT <= blockingT + 0.000001 && hitT < nearestHitT) {
           nearestHit = e;
@@ -9829,6 +9765,7 @@ function hudPerfDebugSnapshot(fps: number) {
   const ai = getAiStats();
   const entityStats = getEntityIndex().getDebugStats();
   const renderStats = getRenderSceneDebugStats();
+  const meshStats = getMeshPassDebugStats();
   return {
     fps,
     frameMsAvg: displayedFrameMsAvg,
@@ -9854,6 +9791,16 @@ function hudPerfDebugSnapshot(fps: number) {
     visibleEntityQueryResults: renderStats.visibleEntityQueryResults,
     aiUpdated: ai.updated,
     aiSkipped: ai.skipped,
+    meshInstances: meshStats.visibleInstances,
+    meshTriangles: meshStats.submittedTriangles,
+    meshRadius: meshStats.drawRadius,
+    // `cpuUpdateMs` меряет ВЕСЬ update, включая сборку вершин, поэтому стадию
+    // сбора надо выделить вычитанием — иначе строка показывает её завышенной
+    // ровно на `buf`, и решение «что оптимизировать» принимается по неверному
+    // числу. Три стадии в панели складываются в общее время прохода.
+    meshCollectMs: Math.max(0, meshStats.cpuUpdateMs - meshStats.cpuBufferMs),
+    meshBufferMs: meshStats.cpuBufferMs,
+    meshUploadMs: meshStats.cpuUploadMs,
   };
 }
 

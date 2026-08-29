@@ -26,6 +26,7 @@ import { findCombatTarget, dropNpcInventory, deterministicScanCd } from './monst
 import { recordEntityKill } from '../alife_rating';
 import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, getEntityIndex } from '../entity_index';
+import { launchProjectile } from '../projectiles';
 import { publishWeaponNoise } from '../noise';
 import { isPlayerEntity } from '../player_actor';
 import { damageActor, getRecentCombatThreat, npcIsBraveActor } from '../combat_stimulus';
@@ -716,35 +717,15 @@ function npcFireProjectile(
   const flightTime = dist / Math.max(1, spd);
   const aimVz = 0.5 * gravity * flightTime;
   for (let p = 0; p < pellets; p++) {
-    const a = ang + (rng() - 0.5) * spread;
-    const cos = Math.cos(a);
-    const sin = Math.sin(a);
-    const proj: Entity = {
-      id: nextId.v++,
-      type: EntityType.PROJECTILE,
-      x: world.wrap(e.x + Math.cos(ang) * 0.85),
-      y: world.wrap(e.y + Math.sin(ang) * 0.85),
-      angle: a,
-      pitch: 0,
-      alive: true,
-      speed: 0,
-      sprite: hostileProjectileSprite(ws.projSprite ?? Spr.BULLET),
-      vx: cos * spd,
-      vy: sin * spd,
+    launchProjectile(world, entities, nextId, e, weaponId, ws, {
+      angle: ang + (rng() - 0.5) * spread,
+      speed: spd,
       vz: aimVz,
-      projDmg: ws.dmg,
-      projLife: pt === ProjType.FLAME ? PROJ_LIFE_FLAME_SEC : PROJ_LIFE_SEC,
-      ownerId: e.id,
-      weapon: weaponId,
+      sprite: hostileProjectileSprite(ws.projSprite ?? Spr.BULLET),
+      life: pt === ProjType.FLAME ? PROJ_LIFE_FLAME_SEC : PROJ_LIFE_SEC,
       spriteScale: pt === ProjType.FLAME ? 0.55 : 0.25,
-      spriteZ: 0.5,
       projType: ws.projType,
-    };
-    if (ws.aoeRadius) {
-      proj.aoeRadius = ws.aoeRadius;
-      proj.aoeDmg = ws.dmg;
-    }
-    entities.push(proj);
+    });
   }
 }
 
