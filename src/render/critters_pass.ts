@@ -96,6 +96,10 @@ out vec2  vLocal;
 out float vDepth;
 out float vWing;
 out float vAspect;
+/** 0 — тельце-клякса; ±1 — зверёк с головой и хвостом, знак задаёт, куда мордой. */
+out float vShape;
+/** Фаза походки: виляние хвоста, чтобы он не был палкой. */
+out float vPhase;
 
 const int   W_SIZE = ${W};
 const float W_F    = ${W}.0;
@@ -104,6 +108,18 @@ float hash21(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
+}
+
+/** Гладкий шум по клеткам: соседние клетки коррелируют, поэтому выходят пятна. */
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
 ivec2 wrapCell(ivec2 c) { return ivec2(c.x & (W_SIZE - 1), c.y & (W_SIZE - 1)); }
@@ -163,8 +179,16 @@ void main() {
   float dark  = 1.0 - clamp(lit, 0.0, 1.0);
   glow *= clamp(lit * 1.6, 0.0, 1.0);
 
-  // Вид клетки выбирается сравнением её признаков с весами. Нормировка на
-  // максимальный вес даёт смысл «главная ось удовлетворена — вид присутствует».
+  /* Вид клетки выбирается сравнением её признаков с весами. Нормировка на
+   * максимальный вес даёт смысл «главная ось удовлетворена — вид присутствует».
+   *
+   * Оси делятся на ИСТОЧНИКИ (труп, еда, сырость, лампа) и ФОН (тьма, укрытие).
+   * Источник — это причина в конкретной точке; фон есть почти на каждой клетке
+   * пола, и вид, чьё присутствие держится только на нём, раньше рождался ВЕЗДЕ,
+   * ровно по одной особи на клетку — отсюда и брала начало решётка чёрных точек.
+   * Поэтому доля фона в счёте гасится колониальным шумом: гладкое поле по
+   * клеткам со своим сдвигом на вид даёт пятна размером с половину комнаты, а
+   * между ними пусто. Особь у трупа или лампы шум не трогает: там причина есть. */
   float cellNoise = hash21(vec2(cell));
   int   best = -1;
   float bestScore = 0.0;
@@ -174,8 +198,11 @@ void main() {
     vec4 wB = uSpecies[i * 4 + 3];
     float peak = max(max(max(wA.x, wA.y), max(wA.z, wA.w)), max(wB.x, wB.y));
     if (peak <= 0.0) continue;
-    float sc = wA.x * blood + wA.y * food + wA.z * filth + wA.w * dark + wB.x * glow + wB.y * cover;
-    sc = clamp(sc / peak, 0.0, 1.0);
+    float src = wA.x * blood + wA.y * food + wA.z * filth + wB.x * glow;
+    float amb = wA.w * dark + wB.y * cover;
+    float sc  = clamp((src + amb) / peak, 0.0, 1.0);
+    float colony = vnoise(vec2(cell) * 0.15 + vec2(float(i) * 37.0, float(i) * -19.0));
+    sc *= mix(1.0, smoothstep(0.50, 0.88, colony), amb / max(1e-4, src + amb));
     sc *= 0.7 + 0.6 * hash21(vec2(cellNoise * 91.7, float(i)));
     if (sc > bestScore) { bestScore = sc; best = i; }
   }
@@ -196,8 +223,12 @@ void main() {
   float seed = hash21(vec2(float(cell.x * 31 + cell.y), float(member) * 13.7 + 1.3));
   vec2  offset;
   float z = s1.x;
+  // Куда особь обращена: направление шага, а при испуге — направление бегства.
+  vec2  head  = vec2(0.0);
+  float gait  = 0.0;
 
-  if (motion == ${CritterMotion.GROUND}) {
+  bool onFoot = motion == ${CritterMotion.GROUND} || motion == ${CritterMotion.SCURRY};
+  if (onFoot) {
     // Рывок — пауза — рывок: цель меняется ступенями, между ними сглаживание.
     float t   = uTime * s1.w * 0.5 + seed * 10.0;
     float leg = floor(t);
@@ -205,9 +236,10 @@ void main() {
     vec2 a = vec2(hash21(vec2(leg, seed)), hash21(vec2(leg + 0.5, seed)));
     vec2 b = vec2(hash21(vec2(leg + 1.0, seed)), hash21(vec2(leg + 1.5, seed)));
     offset = s1.z * (mix(a, b, f) - 0.5) * 2.0;
-  } else if (motion == ${CritterMotion.STILL}) {
-    offset = s1.z * (vec2(hash21(vec2(seed, 3.1)), hash21(vec2(seed, 7.7))) - 0.5) * 2.0;
-    offset += 0.02 * sin(uTime * 1.7 + seed * 30.0);
+    head   = b - a;
+    gait   = t * 12.566;
+    // Покачивание тела на бегу: пик приходится на середину рывка, а не на паузу.
+    if (motion == ${CritterMotion.SCURRY}) z += 0.022 * abs(sin(gait)) * (1.0 - abs(fract(t) * 2.0 - 1.0));
   } else {
     // Рой и нимб: орбита вокруг клетки, у нимба шире и выше.
     float halo = motion == ${CritterMotion.HALO} ? 1.7 : 1.0;
@@ -219,20 +251,41 @@ void main() {
 
   vec2 pos = vec2(cell) + 0.5 + offset;
 
-  // Отталкивание от игрока без состояния: подошёл — прыснула, отошёл — вернулась.
+  /* Испуг без состояния. Раньше особь ровно вытеснялась на границу радиуса и там
+   * висела, а отойдёшь — упруго возвращалась; на решётке одинаковых особей это
+   * читалось не как бегство, а как натянутая и отпущенная сеть. Правки три, и
+   * все против «поля»: свой радиус срабатывания у каждой особи, свой угол и своя
+   * длина рывка, и главное — добежав, особь ГАСНЕТ, а не встаёт на границе. */
   vec2 d = pos - uPos;
   d -= W_F * floor(d / W_F + 0.5);
   float dl = length(d);
+  float fade = 1.0;
+  flee *= 0.6 + 0.8 * hash21(vec2(seed, 17.3));
   if (flee > 0.0 && dl < flee) {
-    vec2 away = dl > 1e-4 ? d / dl : vec2(1.0, 0.0);
-    vec2 fled = pos + away * (flee - dl) * 1.15;
-    // Сквозь стену не убегаем: не вышло — остаёмся на месте.
-    if (cellAt(ivec2(floor(fled))) == ${Cell.FLOOR}u) {
-      pos = fled;
-      d = pos - uPos;
-      d -= W_F * floor(d / W_F + 0.5);
-      dl = length(d);
+    float panic = 1.0 - dl / flee;
+    vec2  away  = dl > 1e-4 ? d / dl : vec2(1.0, 0.0);
+    float ja    = (hash21(vec2(seed, 5.3)) - 0.5) * 1.1;
+    away = vec2(away.x * cos(ja) - away.y * sin(ja), away.x * sin(ja) + away.y * cos(ja));
+    // Уйти далеко, а не отступить на шаг: до границы радиуса плюс своя длина
+    // сверх неё. Путь шагается по полклетки с запасом, поэтому рывок не может
+    // перепрыгнуть стену и оказаться в соседней комнате; упёрлась — встала там.
+    float run   = (flee - dl) + flee * (0.6 + hash21(vec2(seed, 2.1))) * panic;
+    vec2  stepv = away * min(0.7, run * 0.125);
+    vec2  fled  = pos;
+    for (int k = 0; k < 8; k++) {
+      vec2 nxt = fled + stepv;
+      if (cellAt(ivec2(floor(nxt))) != ${Cell.FLOOR}u) break;
+      fled = nxt;
     }
+    // Гаснет ровно настолько, насколько успела убежать: загнанная в угол особь
+    // остаётся видимой, а не растворяется на месте.
+    float moved = clamp(length(fled - pos) / max(1e-3, run), 0.0, 1.0);
+    pos  = fled;
+    head = away;
+    d = pos - uPos;
+    d -= W_F * floor(d / W_F + 0.5);
+    dl = length(d);
+    fade = 1.0 - panic * panic * moved;
   }
   if (dl > uCullDist) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
 
@@ -270,9 +323,22 @@ void main() {
 
   float fogF  = uFogDensity <= 0.0 ? 0.0 : min(0.985, max(0.0, 1.0 - exp(-dl * uFogDensity)));
   vec3  rgb   = mix(s0.rgb * cellLit, uFogColor, fogF);
-  float alpha = 1.0 - fogF * 0.75;
+  float alpha = (1.0 - fogF * 0.75) * fade;
 
-  vAspect = motion == ${CritterMotion.GROUND} ? 1.6 : 1.0;
+  /* Куда мордой на ЭКРАНЕ. Проецируем точку чуть впереди особи тем же
+   * преобразованием и сравниваем экранные абсциссы: знак и есть направление
+   * силуэта. Дешевле, чем тянуть в шейдер отдельный поворот. */
+  vShape = 0.0;
+  if (motion == ${CritterMotion.SCURRY}) {
+    vec2 dh = pos + head * 0.3 - uPos;
+    dh -= W_F * floor(dh / W_F + 0.5);
+    float txh = invDet * (dir.y * dh.x - dir.x * dh.y);
+    float tyh = invDet * (-plane.y * dh.x + plane.x * dh.y);
+    float sxh = tyh > 0.1 ? (uResolution.x * 0.5) * (1.0 + txh / tyh) : sx;
+    vShape = sxh >= sx ? 1.0 : -1.0;
+  }
+  vPhase  = gait;
+  vAspect = motion == ${CritterMotion.SCURRY} ? 1.9 : (motion == ${CritterMotion.GROUND} ? 1.6 : 1.0);
   vWing   = (motion == ${CritterMotion.HOVER} || motion == ${CritterMotion.HALO}) ? 1.0 : 0.0;
   vColor  = vec4(rgb, alpha);
   vLocal  = aPos;
@@ -294,17 +360,42 @@ in vec4  vColor;
 in vec2  vLocal;
 in float vDepth;
 in float vWing;
+in float vShape;
+in float vPhase;
 out vec4 fragColor;
+
+/**
+ * Силуэт зверька: тело, голова и виляющий хвост. Локальный +x — вперёд,
+ * +y — вниз к полу, поэтому тело смещено вниз и стоит на ногах, а не висит
+ * серединой квада. Квад растянут по горизонтали (vAspect), так что локальный
+ * круг ложится на экран нужной вытянутости.
+ */
+float beastMask(vec2 p, float phase) {
+  float body = 1.0 - smoothstep(0.74, 1.0, length((p - vec2(0.02, 0.22)) / vec2(0.30, 0.24)));
+  float head = 1.0 - smoothstep(0.72, 1.0, length((p - vec2(0.30, 0.18)) / vec2(0.15, 0.13)));
+  float tx   = clamp(-p.x - 0.12, 0.0, 0.36);
+  float wave = 0.10 * sin(tx * 14.0 - phase);
+  float th   = 0.06 * (1.0 - tx / 0.44);
+  float tail = p.x < -0.10 ? 1.0 - smoothstep(th * 0.4, th, abs(p.y - 0.20 - wave)) : 0.0;
+  return clamp(max(max(body, head), tail), 0.0, 1.0);
+}
+
 void main() {
-  // Квад уже растянут по горизонтали на vAspect, поэтому круг в локальных
-  // координатах ложится на экран вытянутым телом наземной особи.
-  float d = length(vLocal);
-  if (d > 0.5) discard;
-  float edge = 1.0 - smoothstep(0.18, 0.5, d);
+  float mask;
+  if (vShape != 0.0) {
+    mask = beastMask(vec2(vLocal.x * vShape, vLocal.y), vPhase);
+    if (mask <= 0.01) discard;
+  } else {
+    // Квад уже растянут по горизонтали на vAspect, поэтому круг в локальных
+    // координатах ложится на экран вытянутым телом наземной особи.
+    float d = length(vLocal);
+    if (d > 0.5) discard;
+    mask = 1.0 - smoothstep(0.18, 0.5, d);
+  }
   // Взмах крыла: летающая особь то плотнее, то прозрачнее.
   float wing = 1.0 - vWing * 0.45;
   gl_FragDepth = vDepth;
-  fragColor = vec4(vColor.rgb, vColor.a * edge * wing);
+  fragColor = vec4(vColor.rgb, vColor.a * mask * wing);
 }
 `;
 
