@@ -92,5 +92,35 @@ test('mesh buffer builder appends capped voxel chunk geometry', () => {
   assert.equal(result.vertices[0], 5);
   assert.equal(result.vertices[1], 6);
   assert.equal(result.vertices[2], 0);
-  assert.equal(result.vertices[20], 0.5);
+  // Смещение считается ОТ шага, а не вписывается числом: раньше здесь стояло
+  // `vertices[20]`, и добавление поля в вершину превратило проверку глубины
+  // третьей вершины в проверку её же координаты X — тест покраснел не по делу.
+  assert.equal(result.vertices[2 * MESH_VERTEX_STRIDE + 2], 0.5, 'z третьей вершины = 2 * (1/fieldDepth)');
+});
+
+test('mesh buffer writes a per-vertex fade radius', () => {
+  // Дистанция растворения — свойство вершины, а не прохода: у процедурных полей
+  // край свой и вчетверо ближе клеточного. Ноль сюда попадать не должен ни при
+  // каких обстоятельствах — он означал бы edgeFade = 1, то есть невидимый меш.
+  const result = buildMeshVertexBatch(
+    [{ kind: 'debug_column', x: 2, y: 3, z: 0, yaw: 0, scaleX: 1, scaleY: 1, scaleZ: 1, color: [90, 90, 90], seed: 1, fadeRadius: 8 }],
+    64,
+  );
+  assert.equal(result.vertexCount > 0, true);
+  for (let v = 0; v < result.vertexCount; v++) {
+    assert.equal(result.vertices[v * MESH_VERTEX_STRIDE + 9], 8, `вершина ${v} несёт свою дистанцию растворения`);
+  }
+});
+
+test('mesh buffer never writes a zero or NaN fade radius', () => {
+  // Тесты типами не проверяются, поэтому недостающее поле реально доходит сюда.
+  // Нулевой или нечисловой край не должен гасить геометрию — он означает
+  // «не растворять».
+  const broken = { kind: 'debug_column', x: 2, y: 3, z: 0, yaw: 0, scaleX: 1, scaleY: 1, scaleZ: 1, color: [90, 90, 90], seed: 1 } as never;
+  const result = buildMeshVertexBatch([broken], 64);
+  assert.equal(result.vertexCount > 0, true);
+  for (let v = 0; v < result.vertexCount; v++) {
+    const fade = result.vertices[v * MESH_VERTEX_STRIDE + 9];
+    assert.equal(Number.isFinite(fade) && fade > 0, true, `вершина ${v}: край ${fade} погасил бы меш`);
+  }
 });

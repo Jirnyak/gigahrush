@@ -68,8 +68,16 @@ function colorForSceneInstance(instance: SceneMeshInstance): readonly [number, n
   return color;
 }
 
-function drawInstanceFromScene(instance: SceneMeshInstance): DrawMeshInstance {
+function drawInstanceFromScene(
+  instance: SceneMeshInstance,
+  drawRadius: number,
+  fieldRadius: number,
+): DrawMeshInstance {
   return {
+    // Свой край у каждого источника: поле обрывается на своём радиусе, всё
+    // остальное — на дальности сбора. Один юниформ на оба не годился — полоса
+    // стояла по дальнему краю и до ближнего не доставала.
+    fadeRadius: (instance.flags & MeshInstanceFlag.ProceduralField) !== 0 ? fieldRadius : drawRadius,
     kind: instance.modelId,
     x: instance.x,
     y: instance.y,
@@ -87,10 +95,16 @@ function drawInstanceFromScene(instance: SceneMeshInstance): DrawMeshInstance {
 // though collectMeshSceneWithStats already accepts a reusable out array.
 const _sceneCollectScratch: SceneMeshInstance[] = [];
 
-function collectMeshInstances(context: MeshPassContext, out: DrawMeshInstance[], stats: MeshPassStats): void {
+function collectMeshInstances(
+  context: MeshPassContext,
+  out: DrawMeshInstance[],
+  stats: MeshPassStats,
+  drawRadius: number,
+): void {
   out.length = 0;
   const scene = collectMeshSceneWithStats(context, _sceneCollectScratch);
-  for (const instance of scene.instances) out.push(drawInstanceFromScene(instance));
+  const fieldRadius = Math.max(0.1, context.profile?.proceduralFieldRadius ?? drawRadius);
+  for (const instance of scene.instances) out.push(drawInstanceFromScene(instance, drawRadius, fieldRadius));
   const chunkArea = Math.max(1, Math.floor(context.profile?.chunkSize || 8) ** 2);
   const chunks = Math.ceil(scene.stats.cellsScanned / chunkArea);
   stats.chunksConsidered = chunks;
@@ -174,7 +188,6 @@ function getUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): Record<
     'uInvDet',
     'uWorldSize',
     'uMaxDraw',
-    'uMeshRadius',
     'uFogColor',
     'uFogDensity',
     'uAmbient',
@@ -220,6 +233,7 @@ function createResources(gl: WebGL2RenderingContext): MeshGlResources {
   bindAttrib('aWorld', 3, 0);
   bindAttrib('aNormal', 3, 3 * 4);
   bindAttrib('aColor', 3, 6 * 4);
+  bindAttrib('aFade', 1, 9 * 4);
   gl.bindVertexArray(null);
   return { program, vao, vertexBuffer, uniforms: getUniforms(gl, program) };
 }
@@ -271,7 +285,7 @@ class MeshPass implements MeshPassHandle {
     // показывает отладка, поэтому расхождению взяться неоткуда.
     const drawRadius = meshDrawRadiusForContext(passContext);
     stats.drawRadius = drawRadius;
-    collectMeshInstances(passContext, instanceOut, stats);
+    collectMeshInstances(passContext, instanceOut, stats, drawRadius);
     collectVoxelMeshes(passContext, this.voxelScratch, stats, drawRadius);
     const bufferStart = nowMs();
     const result = buildMeshVertexBatch(
@@ -279,6 +293,7 @@ class MeshPass implements MeshPassHandle {
       Math.min(MAX_GPU_TRIANGLES, Math.max(0, profile.triangleCap)),
       this.vertexData,
       this.voxelScratch,
+      drawRadius,
     );
     stats.cpuBufferMs = nowMs() - bufferStart;
     stats.enabled = result.vertexCount > 0 && result.triangleCount > 0;
@@ -323,15 +338,12 @@ class MeshPass implements MeshPassHandle {
     gl.uniform2f(uniforms.uPlane, planeX, planeY);
     gl.uniform2f(uniforms.uPitchHeight, context.camera.pitch, context.camera.height);
     gl.uniform2f(uniforms.uResolution, 320, 200);
-    // Ровно та дальность, по которой инстансы и отобраны: полоса растворения в
-    // шейдере обязана стоять на настоящей кромке поля, иначе она не сработает
-    // ни разу и меш будет обрываться на полной яркости.
-    const meshDrawRadius = meshDrawRadiusForContext(context);
-
+    // Дальности растворения здесь нет и быть не должно: она уехала в вершину
+    // (`aFade`). Юниформ был один на весь проход, а краёв у прохода два, и
+    // ближний из них так и не растворялся.
     gl.uniform1f(uniforms.uInvDet, invDet);
     gl.uniform1f(uniforms.uWorldSize, W);
     gl.uniform1f(uniforms.uMaxDraw, MAX_DRAW);
-    gl.uniform1f(uniforms.uMeshRadius, Math.max(0.1, meshDrawRadius));
     gl.uniform3f(uniforms.uFogColor, fog[0] / 255, fog[1] / 255, fog[2] / 255);
     gl.uniform1f(uniforms.uFogDensity, fogDensity);
     gl.uniform1f(uniforms.uAmbient, context.ambient ?? 0.18);

@@ -7,6 +7,7 @@ precision highp float;
 in vec3 aWorld;
 in vec3 aNormal;
 in vec3 aColor;
+in float aFade;
 
 uniform vec2 uCam;
 uniform vec2 uDir;
@@ -16,12 +17,12 @@ uniform vec2 uResolution;
 uniform float uInvDet;
 uniform float uWorldSize;
 uniform float uMaxDraw;
-uniform float uMeshRadius;
 
 out vec3 vColor;
 out vec3 vNormal;
 out float vForward;
 out float vDistance;
+out float vFade;
 out vec2 vWorldXY;
 
 float torusDelta(float value, float origin) {
@@ -56,6 +57,7 @@ void main() {
   vNormal = normalize(aNormal);
   vForward = ty;
   vDistance = length(vec2(dx, dy));
+  vFade = aFade;
   vWorldXY = aWorld.xy;
 }
 `;
@@ -67,6 +69,7 @@ in vec3 vColor;
 in vec3 vNormal;
 in float vForward;
 in float vDistance;
+in float vFade;
 in vec2 vWorldXY;
 
 uniform vec3 uFogColor;
@@ -74,7 +77,6 @@ uniform float uFogDensity;
 uniform float uAmbient;
 uniform float uTime;
 uniform float uMaxDraw;
-uniform float uMeshRadius;
 uniform float uWorldSize;
 uniform sampler2D uLight;
 uniform float uLightOn;     // 1.0 when the baked lightmap is bound
@@ -184,8 +186,11 @@ void main() {
   
   float fogBase = max(0.0, vForward * max(0.02, uFogDensity));
   float fog = clamp(1.0 - exp(-fogBase * fogBase * 1.15), 0.0, 0.92);
-  float fadeWidth = clamp(uMeshRadius * 0.22, 1.0, 3.0);
-  float edgeFade = smoothstep(max(0.0, uMeshRadius - fadeWidth), uMeshRadius, vDistance);
+  // Край свой у каждой вершины: клеточные слоты гаснут на дальности сбора,
+  // процедурные поля — на своём радиусе, который туману не подчиняется и вчетверо
+  // ближе. Общий юниформ стоял по дальнему краю и до ближнего не доставал никогда.
+  float fadeWidth = clamp(vFade * 0.22, 1.0, 3.0);
+  float edgeFade = smoothstep(max(0.0, vFade - fadeWidth), vFade, vDistance);
   vec3 finalColor = vColor * shade;
   
   // Basic heuristic for emissive meshes: very bright yellow colors or when samosbor alert is active

@@ -1,9 +1,22 @@
+import { MAX_DRAW } from '../../core/types';
 import { maybeVisualModelDef, type VisualModelId } from '../../data/visual_models';
 import { getMeshTemplate } from './model_cache';
 import type { MeshTemplate } from './primitives';
 import type { VoxelChunkMesh } from './voxel/types';
 
-export const MESH_VERTEX_STRIDE = 9;
+/* Позиция, нормаль, цвет и ДИСТАНЦИЯ РАСТВОРЕНИЯ этой вершины.
+ *
+ * Последнее поле появилось потому, что краёв у прохода два, а не один. Клеточные
+ * слоты обрываются на дальности сбора (8/16/31 клетки), а процедурные поля
+ * вокруг камеры — на своём радиусе (2/4/8), и он туману не подчиняется. Пока
+ * дистанция растворения была одним юниформом на весь проход, полоса стояла по
+ * дальнему краю, до ближнего не доставала никогда, и мусор под ногами возникал
+ * на восьми клетках, показывая 73 % своего цвета: туман там всего 0.27. Это и
+ * есть «панели материализуются из воздуха при приближении».
+ *
+ * Радиуса теперь ровно столько, сколько источников, и добавить третий стоит
+ * одного присваивания. Цена — 4 байта на вершину, 36 → 40. */
+export const MESH_VERTEX_STRIDE = 10;
 
 export type MeshModelKind =
   | 'column_concrete_square'
@@ -27,6 +40,8 @@ export interface MeshInstance {
   scaleZ: number;
   color: readonly [number, number, number];
   seed: number;
+  /** Дистанция, на которой этот инстанс должен полностью раствориться в тумане. */
+  fadeRadius: number;
 }
 
 export interface MeshBuildResult {
@@ -45,6 +60,10 @@ interface BuildCursor {
   triangleCount: number;
   maxTriangles: number;
   truncated: boolean;
+  /* Дистанция растворения постоянна внутри инстанса, поэтому живёт на курсоре, а
+   * не в параметрах: иначе её пришлось бы протаскивать через каждый appendBox и
+   * платить лишним аргументом на каждой вершине. */
+  fadeRadius: number;
 }
 
 const FACE_TRIANGLES = 2;
@@ -103,6 +122,7 @@ function pushVertex(
   cursor.data[i + 6] = color01(r);
   cursor.data[i + 7] = color01(g);
   cursor.data[i + 8] = color01(b);
+  cursor.data[i + 9] = cursor.fadeRadius;
   cursor.offset = i + MESH_VERTEX_STRIDE;
 }
 
@@ -185,6 +205,12 @@ function tint(color: readonly [number, number, number], factor: number): readonl
 }
 
 function appendInstance(cursor: BuildCursor, instance: MeshInstance): boolean {
+  /* Невалидная дистанция обязана означать «не растворять», а не ноль: нулевой
+   * край даёт edgeFade = 1 на любой дистанции, то есть инстанс молча исчезает.
+   * NaN хуже вдвое — он растекается по всей вершине и уносит с собой геометрию.
+   * Тесты типами не проверяются (`tsconfig` не включает `tests/`), так что сюда
+   * действительно может прийти undefined. */
+  cursor.fadeRadius = instance.fadeRadius > 0 ? instance.fadeRadius : MAX_DRAW;
   if (maybeVisualModelDef(instance.kind)) {
     return appendTemplateInstance(cursor, instance, getMeshTemplate(instance.kind as VisualModelId, instance.seed));
   }
@@ -279,6 +305,8 @@ export function buildMeshVertexBatch(
   maxTriangles: number,
   out?: Float32Array,
   voxelChunks: readonly VoxelChunkMesh[] = [],
+  // Воксели живут на дальности сбора: они лепят рельеф бетона, а не мелочь у ног.
+  voxelFadeRadius = 0,
 ): MeshBuildResult {
   const data = ensureCapacity(instances, maxTriangles, out);
   const cursor: BuildCursor = {
@@ -287,6 +315,7 @@ export function buildMeshVertexBatch(
     triangleCount: 0,
     maxTriangles: Math.max(0, Math.floor(maxTriangles)),
     truncated: false,
+    fadeRadius: voxelFadeRadius > 0 ? voxelFadeRadius : MAX_DRAW,
   };
   let submittedInstances = 0;
   let skippedInstances = 0;
@@ -297,6 +326,7 @@ export function buildMeshVertexBatch(
     if (cursor.truncated) break;
   }
   if (!cursor.truncated) {
+    cursor.fadeRadius = voxelFadeRadius > 0 ? voxelFadeRadius : MAX_DRAW;
     for (const chunk of voxelChunks) {
       if (appendVoxelChunk(cursor, chunk)) submittedChunks++;
       if (cursor.truncated) break;

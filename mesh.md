@@ -697,11 +697,27 @@ offset can recover, and the entire mesh layer disappears from the game while the
 raycaster world still renders normally.
 
 Fog is distance-based tinting on view-space depth, and it saturates at its own
-`0.92` clamp, so fog alone never hides a mesh completely. The last three cells of
-the draw radius are dissolved by `edgeFade`, which mixes fully to fog color at
-`uMeshRadius`. That uniform must equal the radius the CPU actually collected at
-(`meshDrawRadiusForContext`); when the two drifted apart the fade band sat where
-no geometry ever existed and never fired at all.
+`0.92` clamp, so fog alone never hides a mesh completely. Everything visible is
+therefore dissolved by `edgeFade` over the last few cells before its own edge.
+
+**The dissolve distance is a per-vertex attribute (`aFade`), not a uniform, and
+that is the whole point.** The pass has two independent edges: cell slots end at
+the collection radius (8/16/31 cells), while the procedural fields around the
+camera end at `proceduralFieldRadius` (2/4/8) and do not follow fog at all. One
+uniform could only ever describe one of them. It described the far one, so the
+near one — floor scatter and ceiling runs, the densest layer and the one right in
+front of the player — was cut hard with no dissolve whatsoever. Fog at 8 cells is
+only `0.27`, so those objects appeared showing **73 %** of their colour; on
+`medium` the edge is 4 cells and fog `0.075`, i.e. **92 %**. That is the pop-in
+players actually reported, and fixing the far edge alone changed nothing they
+could see.
+
+Adding a third source with its own edge now costs one assignment in
+`drawInstanceFromScene`. The vertex grew from 9 floats to 10 (36 → 40 bytes) to
+carry it. A fade radius of zero or `NaN` would silently erase geometry —
+`edgeFade` would be 1 everywhere — so `appendInstance` treats any non-positive
+value as `MAX_DRAW`, meaning "do not dissolve"; `tests/mesh-buffers.test.ts`
+locks both that guard and the per-vertex value.
 
 Lighting shares the raycaster system: when `uLightOn` is set, the fragment shader
 samples the same baked `world.light` lightmap by fragment world position
