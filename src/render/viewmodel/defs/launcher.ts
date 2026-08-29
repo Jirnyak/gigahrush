@@ -1,107 +1,106 @@
 /**
- * Пусковая: короткая труба большого калибра с раструбом и соплом.
+ * Пусковая: короткая труба большого калибра, венчик сопла сзади, обе руки.
  *
- * Написана по образцу `pistol.ts` и держит те же четыре правила:
+ * ФОРМУ ЗАДАЁТ АВТОРСКАЯ ПИКСЕЛЬНАЯ КАРТА, МАТЕРИАЛ СЧИТАЕТСЯ ИЗ БОЕВЫХ ЧИСЕЛ —
+ * тот же приём, что в образцовом `pistol.ts`. Прежняя версия собирала трубу из
+ * наклонных плашек с цилиндрической затенкой и попиксельным шумом: на холсте,
+ * который занимает в кадре полсотни пикселей, градиент превращается в мыло, а шум
+ * — в грязь. Форму на этом размере несут СИЛУЭТ, ЖЁСТКИЙ КОНТУР И РЕЗКИЕ ГРАНИЦЫ
+ * ТОНОВ, и ничего больше.
  *
- * 1. ТРИ ЧЕТВЕРТИ, А НЕ АНФАС. Труба развёрнута боком и наклонена: видно и
- *    раструб на срезе, и венчик сопла сзади, и то, что рукоять висит ПОД
- *    трубой. Прежняя версия смотрела строго в торец и читалась жестяным ведром.
- * 2. СБОРКА ОТ ПЯТКИ РУКОЯТИ. Пятка задаёт низ, рукоять поднимает трубу, труба
- *    идёт от сопла к объявленному срезу. Двигая пятку, двигаешь всё разом.
- * 3. ГАБАРИТ ЗАДАН, ОБЛИК ДЕЛИТ ЕГО. Длина трубы — это расстояние от сопла до
- *    среза, а калибр из `skin` решает только толщину и ширину раструба. Труба
- *    нарочно короткая и толстая: этим она и отличается от дробовика.
- * 4. РУКИ РАСТУТ ИЗ УГЛОВ. Правая на рукояти уходит вправо-вниз, левая с
- *    передней ручки — влево-вниз, и обе за край кадра.
+ * В карте нет ни одного цвета: символ называет МАТЕРИАЛ, а какого он оттенка,
+ * насколько ржав и заряжена ли труба, решают числа конкретной вещи. Один силуэт
+ * обслуживает шесть пусковых, и все шесть выглядят по-разному.
  *
- * Безопасная зона холста: читаемое живёт в строках 22..100, ниже полоса HUD —
- * туда идёт только масса предплечий и пятка рукояти.
+ * Клетка карты — два пикселя, но КРОМКИ рисуются по одному: светлая фаска сверху
+ * и слева, тёмная снизу и справа. Это «свет сверху-слева» из рефов.
+ *
+ * Безопасная зона холста: читаемое живёт в строках 22..100, строки 100..127
+ * закрывает полоса HUD — туда идёт только масса предплечий. В БОКОВЫЕ края
+ * упираться нельзя: они приходятся на треть ширины экрана, и силуэт оборвался бы
+ * прямым срезом в воздухе. Наружу можно только вниз — поэтому и на перезарядке
+ * труба уводится строго ВНИЗ, а не вправо.
  */
 
-import { clamp, noise, rgba } from '../../../core/pixutil';
+import { clamp, rgba } from '../../../core/pixutil';
 import { registerViewmodel } from '../registry';
-import { contour, ellipse, skinTone } from '../draw';
+import { contour, ellipse, line, put } from '../draw';
 import { VM } from '../types';
 
-/** Пятка пистолетной рукояти — якорь сборки. Уходит под полосу HUD. */
-const BUTT_X = 78;
-const BUTT_Y = 118;
-/** Центр венчика сопла: задний конец трубы. */
-const TAIL_X = 102;
-const TAIL_Y = 88;
+/** Левый верхний угол карты на холсте. Клетка карты — два пикселя. */
+const MAP_X = 16;
+const MAP_Y = 24;
+const CELL = 2;
+
 /** Дульный срез. Из него светит вспышка, поэтому он объявлен, а не выведен. */
-const MUZZLE_X = 40;
-const MUZZLE_Y = 36;
-
-/* Ось трубы, ОТ СОПЛА К СРЕЗУ. */
-const SPAN_X = MUZZLE_X - TAIL_X;
-const SPAN_Y = MUZZLE_Y - TAIL_Y;
-const SPAN = Math.hypot(SPAN_X, SPAN_Y);
-const AX = SPAN_X / SPAN;
-const AY = SPAN_Y / SPAN;
-/** Поперечная трубы: `+` — верх, `−` — низ, туда висят рукояти. */
-const NX = -AY;
-const NY = AX;
-
-/** Станция рукояти на оси трубы, считая от сопла. */
-const GRIP_U = 26;
-/** Станция передней ручки: она заметно ближе к срезу. */
-const FORE_U = 52;
-
-/* Ось рукояти, ОТ ПЯТКИ К ТРУБЕ. Знак важен: перепутав его, вся кисть уезжает
- * за нижний край и от руки остаётся одно пятно предплечья. */
-const GRIP_DX = TAIL_X + AX * GRIP_U - BUTT_X;
-const GRIP_DY = TAIL_Y + AY * GRIP_U - BUTT_Y;
-const GRIP_LEN = Math.hypot(GRIP_DX, GRIP_DY);
-const UPX = GRIP_DX / GRIP_LEN;
-const UPY = GRIP_DY / GRIP_LEN;
+const MUZZLE_X = MAP_X + 6 * CELL;
+const MUZZLE_Y = MAP_Y + 5 * CELL;
+/** Центр венчика сопла: труба уходит за плечо и там плюётся на выстреле. */
+const VENT_X = MAP_X + 38 * CELL;
+const VENT_Y = MAP_Y + 25 * CELL;
 
 /**
- * Наклонная плашка со скруглёнными торцами и цилиндрической затенкой.
+ * Силуэт.
  *
- * Собственный примитив пакета, а не общий: у каждого силуэта своя геометрия, и
- * повтор между пакетами здесь замысел. `tube` из `draw.ts` рисует только по
- * осям и наклонное тело выразить не может.
+ * `.` пусто · `B` труба · `O` канал и жерло сопла · `C` бандаж · `D` венчик сопла
+ * `V` прицельная планка и мушка · `G` рукоять
+ * `H` перчатка · `K` сустав пальца · `J` щель между пальцами · `U` манжет
+ *
+ * ПРОФИЛЬ, А НЕ ВИД В ТОРЕЦ. Труба уходит вверх-влево по диагонали, и зритель
+ * видит БОКОВУЮ плоскость: развальцованный срез, бандажи, планку на верхней
+ * образующей, обе рукояти ПОД трубой и венчик сопла сзади. Прежняя версия
+ * смотрела строго в торец и читалась жестяным ведром: на плоских тонах торцу
+ * показывать нечего.
+ *
+ * Калибр читается ПУСТОТОЙ: чёрный канал во весь диаметр — это и есть «большой
+ * калибр», и убрать его нельзя ничем другим. Венчик сзади обязателен по той же
+ * причине, по какой обязателен раструб спереди: без него труба просто обрывается.
  */
-function slab(
-  buf: Uint32Array,
-  x: number, y: number, ax: number, ay: number,
-  len: number, half: number,
-  base: readonly [number, number, number],
-  seed: number, wear: number, round = 0,
-): void {
-  const nx = -ay;
-  const ny = ax;
-  const pad = Math.ceil(half + 2);
-  const x0 = Math.max(0, Math.floor(Math.min(x, x + ax * len) - pad));
-  const x1 = Math.min(VM - 1, Math.ceil(Math.max(x, x + ax * len) + pad));
-  const y0 = Math.max(0, Math.floor(Math.min(y, y + ay * len) - pad));
-  const y1 = Math.min(VM - 1, Math.ceil(Math.max(y, y + ay * len) + pad));
-  for (let py = y0; py <= y1; py++) {
-    for (let px = x0; px <= x1; px++) {
-      const dx = px - x;
-      const dy = py - y;
-      const u = dx * ax + dy * ay;
-      const v = dx * nx + dy * ny;
-      if (u < -round || u > len + round) continue;
-      let w = half;
-      if (round > 0) {
-        if (u < round) w = half * Math.sqrt(Math.max(0, 1 - ((round - u) / round) ** 2));
-        else if (u > len - round) w = half * Math.sqrt(Math.max(0, 1 - ((u - (len - round)) / round) ** 2));
-      }
-      if (w <= 0 || Math.abs(v) > w) continue;
-      /* Свет с одной стороны: блик ближе к левой кромке, тень к правой. Именно
-       * это читается как «круглое»; ровная заливка читается наклейкой. */
-      const t = v / half;
-      const lit = 1.3 - (t + 0.46) * (t + 0.46) * 1.0;
-      const n = (noise(px, py, seed) - 0.5) * (10 + wear * 40);
-      const rust = wear > 0 && noise(px * 3, py * 3, seed + 7) < wear * 0.3;
-      const r = rust ? base[0] * 0.6 + 60 : base[0];
-      const g = rust ? base[1] * 0.48 + 28 : base[1];
-      const b = rust ? base[2] * 0.42 + 15 : base[2];
-      buf[py * VM + px] = rgba(clamp(r * lit + n), clamp(g * lit + n), clamp(b * lit + n));
-    }
-  }
+const MAP: readonly string[] = [
+  '...OCCOBBB....................................',
+  '..OCCCOOOBBB..................................',
+  '.OOCCOOOOBBBBB....VVV.........................',
+  '.OCCOOOOOOBBBBB..VVVVV........................',
+  '.CCCOOOOOOBBBBBBCVVVVVVV......................',
+  '.CCOOOOOOOBBBBBCCB...VVVV.....................',
+  'CCOOOOOOOOBBBBCCCBBB..VVVVV.VV................',
+  'CCOOOOOOOBBBBBCCBBBBBB..VVVVVVV...............',
+  'CBBOOOOOBBBBBCCBBBBBBBBC.VVVVV................',
+  'BBBBBBBBBBBBCCCBBBBBBBCCBVVV..................',
+  'BBBBBBBBBBBBCCBBBBBBBCCCBBV...................',
+  '....BBBBBBBCCBBBBBBBBCCBBBBB..................',
+  '......BBBBCCCBBBBBBBCCBBBBBBBC................',
+  '.......BBBCCBBBBBBBCCCBBBBBBBCCB..............',
+  '........BCCBBBBBBBBCCBBBBBBBCCCBB.............',
+  '.........CCBBBGGBBCCBBBBBBBCCCBBBBB...........',
+  '...........GGGGGBCCCBBBBBBBCCBBBBBBBB.........',
+  '..........GGGHHHKKCBBBBBBBCCCBBBBBBBDDDDDDD...',
+  '..........HHKKKKKKBBBBBBBCCCBBBBBBBBDDDDDD....',
+  '..........GHKKKJJJKBBBBBBCCBBBBBBBBDDDDDD.....',
+  '..........KKJJHKKKKBBBBBCCCBBBBBBBDDDDDDD.....',
+  '..........KKKKKKKHJBBBBCCCBBBBBBBBDDDDDD......',
+  '...........KKKJJJKKBBBBCCBBBBBBBBDDOOOD.......',
+  '...........KKJKKKKKK.BCCCBBBBBBBDDOOOOO.......',
+  '...........KHKKK.JJ...CCBBBBGGBBDOOOOOOO......',
+  '.............JJJUUU....BBGGGKKKDDOOOOOOO......',
+  '............UUUUUUUU...GGKKKKKJJDOOOOOOO......',
+  '.............UUUUUUU...GGKKJJJKKDDOOOOO.......',
+  '.............UUUUUU.....HJHKKKKKDDDOOO........',
+  '.............UUU........GHKKKJJJDDD...........',
+  '........................KKJJJKKKKD............',
+  '........................KKKKKKKHJ.............',
+  '........................KKKKHJJKK.............',
+  '.........................KKJKKKKKK............',
+  '.........................KKKKKKJJ.............',
+  '..........................HGJJGGGU............',
+  '..........................GGGGUUUU............',
+  '...........................UUUUUUU............',
+];
+
+/** Пять ступеней материала и ни одной между ними. */
+function ramp(base: readonly [number, number, number]): readonly number[] {
+  const at = (k: number) => rgba(clamp(base[0] * k), clamp(base[1] * k), clamp(base[2] * k));
+  return [at(0.5), at(0.82), at(1.15), at(1.5), at(1.95)];
 }
 
 registerViewmodel({
@@ -111,183 +110,136 @@ registerViewmodel({
   muzzle: [MUZZLE_X, MUZZLE_Y],
   motion: { recoil: 2.4, bob: 0.85, swap: 1.1, flash: 0.11 },
   draw({ buf, frame, skin, rand }) {
-    const tone = skinTone(rand);
-    const flesh = (k: number) => rgba(clamp(tone[0] * k), clamp(tone[1] * k), clamp(tone[2] * k));
-    const tint = (c: readonly [number, number, number], k: number) =>
-      rgba(clamp(c[0] * k), clamp(c[1] * k), clamp(c[2] * k));
-
+    const fire = frame === 'fire';
     const reload = frame === 'reload';
-    /* На перезарядке трубу уводят ВНИЗ, и только вниз: вправо её вести нельзя —
-     * венчик сопла упрётся в правый край холста, а он приходится на треть
-     * ширины экрана и режет силуэт прямой вертикальной линией в воздухе. */
-    const dip = reload ? 8 : 0;
-    const bx0 = BUTT_X;
-    const by0 = BUTT_Y + dip;
-    const tx0 = TAIL_X;
-    const ty0 = TAIL_Y + dip;
-    /** Точка на оси трубы: `u` вдоль неё от сопла, `s` поперёк. */
-    const at = (u: number, s = 0) => [tx0 + AX * u + NX * s, ty0 + AY * u + NY * s] as const;
+    const [bD2, bD1, bM, bL, bH] = ramp(skin.body);
+    const [, cD1, cM, cL] = ramp(skin.accent);
+    const [gD2, , gM, gL] = ramp(skin.grip);
+    const BORE = rgba(12, 11, 13);
+    /** Тёмная деталь: планка, мушка, тень венчика. */
+    const IRON = rgba(clamp(skin.body[0] * 0.44), clamp(skin.body[1] * 0.44), clamp(skin.body[2] * 0.48));
+    /* Перчатка ликвидатора, а не голая кисть: голая рука — большое бледное пятно
+     * тона бетона, и она сливается со стеной при любой анатомии. Резина СВЕТЛЕЕ
+     * воронёной трубы, и это обязательное условие, а не вкус: тёмная перчатка на
+     * тёмном железе слилась бы в одно пятно, где не читаются ни пальцы, ни граница
+     * между рукой и оружием. */
+    const gt = rand();
+    const [vD2, vD1, vM, vL] = ramp([86 + gt * 16, 90 + gt * 16, 98 + gt * 18]);
+    /** Холодный рефлекс: у резины блик голубовато-серый, а не телесный. */
+    const RIM = rgba(122, 138, 160);
+    const CUFF = rgba(96, 58, 30);
+    const CUFF_LIT = rgba(134, 86, 46);
 
-    // Калибр — главный признак пусковой, и он идёт прямо от массы боеприпаса.
-    const half = 8 + skin.bulk * 0.17;
-    const flare = half * 0.2 + 1;
-
-    /* ── Рукояти ── */
-    // Рисуются ДО трубы: труба накрывает их корни, и стык выходит чистым.
-    const gripHalf = 7 + skin.bulk * 0.08;
-    slab(buf, bx0, by0, UPX, UPY, GRIP_LEN, gripHalf, skin.grip, 11, skin.wear * 0.7, 3);
-    for (let i = 0; i < 5; i++) {
-      const u = 9 + i * 4.5;
-      const px1 = bx0 + UPX * u;
-      const py1 = by0 + UPY * u;
-      for (let s = -gripHalf * 0.7; s <= gripHalf * 0.7; s += 0.5) {
-        const qx = (px1 - UPY * s * 0.4 + s * 0.9) | 0;
-        const qy = (py1 + UPX * s * 0.4) | 0;
-        if (qx < 0 || qy < 0 || qx >= VM || qy >= VM) continue;
-        if (((buf[qy * VM + qx] >>> 24) & 0xff) === 0) continue;
-        buf[qy * VM + qx] = tint(skin.grip, 0.66);
-      }
-    }
-    // Передняя ручка: короткий пенёк под трубой, за неё держит левая.
-    const [fgX, fgY] = at(FORE_U, -half * 0.4);
-    slab(buf, fgX, fgY, -UPX, -UPY, 22, gripHalf * 0.86, skin.grip, 13, skin.wear * 0.7, 3);
-
-    /* ── Труба ── */
-    slab(buf, tx0, ty0, AX, AY, SPAN - 6, half, skin.body, 17, skin.wear, 0);
-    /* Раструб: развальцован у самого среза, поэтому набирается кольцами, а не
-     * одной плашкой. Он нарочно КОРОТКИЙ: длинный конус даёт в силуэте не
-     * венчик, а чёрный клин — тень по правой образующей растёт вместе с ним. */
-    for (let i = 0; i <= 6; i++) {
-      const [rx, ry] = at(SPAN - 6 + i);
-      slab(buf, rx, ry, AX, AY, 1.4, half + i * (flare / 6), skin.body, 19 + i, skin.wear, 0);
-    }
-    /* Кромка раструба одной плашкой ПОПЕРЁК среза, со скруглёнными торцами.
-     * Без неё конус кончается острым чёрным рогом: правая образующая у него в
-     * тени, и растущие кольца дают в силуэте шип, а не венчик. */
-    const [lipX, lipY] = at(SPAN - 2, -(half + flare));
-    slab(buf, lipX, lipY, NX, NY, (half + flare) * 2, 2.8,
-      [skin.body[0] * 1.2 + 14, skin.body[1] * 1.2 + 14, skin.body[2] * 1.16 + 14], 27, 0, 2.6);
-    // Усилительные бандажи: труба тонкостенная, без обручей она читается ведром.
-    for (let b = 0; b < 3; b++) {
-      const [bxs, bys] = at(14 + b * 14, -half * 0.92);
-      slab(buf, bxs, bys, NX, NY, half * 1.8, 1.6,
-        [skin.accent[0] * 0.72, skin.accent[1] * 0.66, skin.accent[2] * 0.58], 31 + b, 0, 1);
-    }
-    // Прицельная планка на верхней образующей, мушка на её же конце.
-    const [rsX, rsY] = at(SPAN * 0.5, half * 0.7);
-    slab(buf, rsX, rsY, AX, AY, 15, 2.4,
-      [skin.body[0] * 0.62, skin.body[1] * 0.62, skin.body[2] * 0.66], 37, 0, 1);
-    const [rbX, rbY] = at(SPAN * 0.5 + 14, half * 0.92);
-    ellipse(buf, rbX, rbY, 2.4, 2.2, tint(skin.body, 0.4));
-
-    /* ── Венчик сопла ── */
-    // Труба уходит за плечо и расширяется назад: без венчика она обрывается.
-    for (let i = 0; i <= 6; i++) {
-      const [nxs, nys] = at(-i);
-      slab(buf, nxs, nys, -AX, -AY, 1.4, half + i * 0.9, skin.body, 41 + i, skin.wear, 0);
-    }
-    const [nzX, nzY] = at(-6);
-    ellipse(buf, nzX, nzY, half * 0.5, half * 0.44, rgba(14, 13, 15));
-
-    /* Спусковая скоба под трубой. Рисуется ПОСЛЕ трубы, потому что висит перед
-     * ней, и именно она с одного взгляда говорит «пистолетная рукоять», а не
-     * «труба, которую зачем-то держат». */
-    const perpX = -UPY;
-    const perpY = UPX;
-    const gdX = bx0 + UPX * 32 - perpX * 9;
-    const gdY = by0 + UPY * 32 - perpY * 9;
-    ellipse(buf, gdX, gdY, 10, 9, tint(skin.body, 0.62));
-    ellipse(buf, gdX - 0.5, gdY + 0.5, 6.6, 5.8, rgba(0, 0, 0, 0));
-    ellipse(buf, gdX + 2, gdY - 3, 2.2, 3.4, tint(skin.body, 0.4));
-
-    /* ── Канал ── */
-    // Чёрная дыра во весь калибр — это и есть «большой калибр».
-    const [chX, chY] = at(SPAN - 4);
-    ellipse(buf, chX, chY, (half + flare) * 0.5, (half + flare) * 0.46, rgba(12, 11, 13));
-    if (frame === 'fire') {
-      // Сразу после схода раскалены и кромка канала, и стенка раструба.
-      ellipse(buf, chX, chY, (half + flare) * 0.46, (half + flare) * 0.42,
-        rgba(clamp(skin.accent[0] * 1.5), clamp(skin.accent[1] * 1.05), clamp(skin.accent[2] * 0.5)));
-      ellipse(buf, chX, chY, (half + flare) * 0.26, (half + flare) * 0.23, rgba(20, 16, 14));
-      // Сопло тоже плюётся: без этого выстрел из трубы выглядит выстрелом из ружья.
-      ellipse(buf, nzX, nzY, half * 0.6, half * 0.54,
-        rgba(clamp(skin.accent[0] * 1.2), clamp(skin.accent[1] * 0.8), clamp(skin.accent[2] * 0.4)));
-    } else {
-      // Тупая головка гранаты в канале: заряжено видно, не открывая ничего.
-      const head: readonly [number, number, number] = [
-        skin.accent[0] * 0.44, skin.accent[1] * 0.52, skin.accent[2] * 0.34,
-      ];
-      const [hdX, hdY] = at(SPAN - 5);
-      ellipse(buf, hdX, hdY, half * 0.44, half * 0.4, rgba(clamp(head[0]), clamp(head[1]), clamp(head[2])));
-      ellipse(buf, hdX + NX * half * 0.18, hdY + NY * half * 0.18, half * 0.15, half * 0.13,
-        rgba(clamp(head[0] * 1.3), clamp(head[1] * 1.25), clamp(head[2] * 1.15)));
-    }
-
-    /* ── Кисти ── */
-    /* Пальцы — отдельные валики ПОПЕРЁК рукояти: сплошное телесное пятно
-     * читается куском мяса, а не хватом. */
-    const grab = (
-      hx: number, hy: number, ux: number, uy: number, seed: number, count: number,
-    ) => {
-      const px = -uy;
-      const py = ux;
-      slab(buf, hx - ux * 10, hy - uy * 10, ux, uy, 22, 10.5, tone, seed, 0, 5);
-      for (let f = 0; f < count; f++) {
-        const u = 4 - f * 5.5;
-        const fx = hx + ux * u;
-        const fy = hy + uy * u;
-        const len = 16 - Math.abs(f - 1.4) * 1.4;
-        slab(buf, fx - px * 10 + 1, fy - py * 10 + 1.5, px, py, len, 3.4, [26, 18, 16], seed + 3 + f, 0, 2.6);
-        slab(buf, fx - px * 10, fy - py * 10, px, py, len, 2.9,
-          [tone[0] * 0.99, tone[1] * 0.96, tone[2] * 0.94], seed + 11 + f, 0, 2.6);
-        ellipse(buf, fx - px * 3, fy - py * 3, 2.7, 2.5, flesh(1.18));
-      }
-      slab(buf, hx + px * 7 - ux * 4, hy + py * 7 - uy * 4,
-        ux * 0.8 + px * 0.6, uy * 0.8 + py * 0.6, 17, 3.6,
-        [tone[0] * 1.06, tone[1] * 1.01, tone[2] * 0.97], seed + 19, 0, 3);
+    /** Тело, светлая кромка, тёмная кромка — по одному на материал. */
+    const MATERIAL: Readonly<Record<string, readonly [number, number, number]>> = {
+      B: [bM, bH, bD2],
+      O: [BORE, BORE, BORE],
+      // Бандажи латунные, но ПРИГЛУШЁННЫЕ: во всю яркость акцента труба
+      // читалась осой в жёлтую полоску, а не воронёным железом со стяжками.
+      C: [cD1, cM, bD2],
+      D: [bD1, bM, bD2],
+      V: [IRON, bL, BORE],
+      G: [gM, gL, gD2],
+      H: [vM, vL, vD2],
+      K: [vL, RIM, vD1],
+      J: [vD2, vD1, vD2],
+      U: [CUFF, CUFF_LIT, rgba(48, 28, 14)],
     };
 
-    const rhX = bx0 + UPX * 20;
-    const rhY = by0 + UPY * 20;
-    const lhX = fgX - UPX * 13;
-    const lhY = fgY - UPY * 13;
-    if (!reload) grab(lhX, lhY, -UPX, -UPY, 53, 3);
-    grab(rhX, rhY, UPX, UPY, 71, 4);
+    /* На перезарядке трубу уводят ВНИЗ, и только вниз: вправо её вести нельзя —
+     * венчик сопла упрётся в правый край холста, а он приходится на треть ширины
+     * экрана и режет силуэт прямой вертикальной линией в воздухе. */
+    const ox = MAP_X;
+    const oy = MAP_Y + (reload ? 14 : 0);
 
+    const cellAt = (gx: number, gy: number): string => {
+      if (gy < 0 || gy >= MAP.length) return '.';
+      const row = MAP[gy];
+      return gx < 0 || gx >= row.length ? '.' : row[gx];
+    };
+
+    /* ── Предплечья ──
+     * Пишутся ДО карты: кисти обязаны лечь ПОВЕРХ руки, иначе предплечье
+     * накрывает собственные пальцы и от хвата остаётся серый клин.
+     * Обе руки уходят в нижние углы и ЗА них. Левая — вниз-влево, но НЕ в левый
+     * край холста: там был бы прямой вертикальный срез посреди экрана. */
+    const leftX = ox + 13 * CELL;
+    const leftY = oy + 28 * CELL;
+    line(buf, leftX, leftY, 22, VM + 30, vD1, 18);
+    line(buf, leftX - 6, leftY - 4, 14, VM + 22, vM, 5);
+    line(buf, leftX + 6, leftY + 4, 32, VM + 34, vD2, 6);
+
+    const rightX = ox + 30 * CELL;
+    const rightY = oy + 36 * CELL;
+    line(buf, rightX, rightY, VM - 8, VM + 34, vD1, 19);
+    line(buf, rightX - 6, rightY - 5, VM - 18, VM + 26, vM, 5);
+    line(buf, rightX + 6, rightY + 5, VM, VM + 38, vD2, 6);
+
+    /* ── Тела ── */
+    for (let gy = 0; gy < MAP.length; gy++) {
+      for (let gx = 0; gx < MAP[0].length; gx++) {
+        const mat = MATERIAL[cellAt(gx, gy)];
+        if (!mat) continue;
+        const x = ox + gx * CELL;
+        const y = oy + gy * CELL;
+        for (let dy = 0; dy < CELL; dy++) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y + dy, mat[0]);
+      }
+    }
+
+    /* ── Кромки ──
+     * Клетка крупная, кромка тонкая: светлая грань сверху и слева, тёмная снизу
+     * и справа. Канал кромки не получает — дыра не имеет фаски. */
+    for (let gy = 0; gy < MAP.length; gy++) {
+      for (let gx = 0; gx < MAP[0].length; gx++) {
+        const ch = cellAt(gx, gy);
+        if (ch === 'O') continue;
+        const mat = MATERIAL[ch];
+        if (!mat) continue;
+        const x = ox + gx * CELL;
+        const y = oy + gy * CELL;
+        const open = (dx: number, dy: number) => cellAt(gx + dx, gy + dy) !== ch;
+        if (open(0, -1)) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y, mat[1]);
+        if (open(-1, 0)) for (let dy = 0; dy < CELL; dy++) put(buf, x, y + dy, mat[1]);
+        if (open(0, 1)) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y + CELL - 1, mat[2]);
+        if (open(1, 0)) for (let dy = 0; dy < CELL; dy++) put(buf, x + CELL - 1, y + dy, mat[2]);
+      }
+    }
+
+    /* ── Что решают числа вещи ── */
+    // Сколы на воронении трубы: у дешёвой пусковой их больше. Точками по кромке,
+    // а не краплением по телу — крапление читается грязью, а не сколом.
+    const chips = Math.round(skin.wear * 9);
+    for (let i = 0; i < chips; i++) {
+      const gy = 9 + Math.floor(rand() * 12);
+      const gx = 6 + Math.floor(rand() * 20);
+      if (cellAt(gx, gy) !== 'B') continue;
+      put(buf, ox + gx * CELL, oy + gy * CELL + 1, bL);
+    }
+
+    const mx = ox + 6 * CELL;
+    const my = oy + 5 * CELL;
+    if (fire) {
+      /* Сразу после схода раскалены и кромка канала, и стенка венчика. Сопло
+       * тоже плюётся: без этого выстрел из трубы выглядит выстрелом из ружья. */
+      ellipse(buf, mx, my, 7, 5.6, rgba(clamp(skin.accent[0] * 1.6), clamp(skin.accent[1] * 1.1), clamp(skin.accent[2] * 0.5)));
+      ellipse(buf, mx, my, 3.6, 2.8, rgba(255, 236, 190));
+      ellipse(buf, VENT_X, VENT_Y, 5.4, 4.4, rgba(clamp(skin.accent[0] * 1.3), clamp(skin.accent[1] * 0.9), clamp(skin.accent[2] * 0.42)));
+      ellipse(buf, VENT_X, VENT_Y, 2.4, 2, rgba(255, 226, 176));
+    } else if (skin.magazine > 0) {
+      /* Тупая головка гранаты в канале: заряжено видно, не открывая ничего.
+       * Размер прямо от ёмкости — однозарядная труба показывает её крупнее. */
+      const r = 3.4 + Math.max(0, 12 - skin.magazine) * 0.16;
+      ellipse(buf, mx, my, r, r * 0.82, rgba(clamp(skin.accent[0] * 0.5), clamp(skin.accent[1] * 0.56), clamp(skin.accent[2] * 0.38)));
+      ellipse(buf, mx - 1, my - 1, r * 0.44, r * 0.36, rgba(clamp(skin.accent[0] * 0.9), clamp(skin.accent[1] * 0.86), clamp(skin.accent[2] * 0.7)));
+    }
     if (reload) {
       /* Свежая граната поднимается к срезу СБОКУ-СНИЗУ, а не висит перед дулом:
-       * вынесенная вперёд, она уводит вторую руку в верхний левый угол, и
-       * предплечье встаёт поперёк кадра колонной мяса. */
-      const [gX, gY] = at(SPAN * 0.8, -half * 2.4);
-      const head: readonly [number, number, number] = [
-        skin.accent[0] * 0.74, skin.accent[1] * 0.8, skin.accent[2] * 0.46,
-      ];
-      slab(buf, gX, gY, -AX, -AY, 17, half * 0.46, head, 97, 0, 5);
-      slab(buf, gX - AX * 17, gY - AY * 17, -AX, -AY, 7, half * 0.36, skin.accent, 101, 0, 1);
-      grab(gX - AX * 9, gY - AY * 9, -AX, -AY, 103, 3);
+       * вынесенная вперёд, она уводит взгляд в верхний левый угол, где у холста
+       * оружия нет ни места, ни права быть. */
+      ellipse(buf, mx - 4, my + 20, 4.2, 3.4, rgba(clamp(skin.accent[0] * 0.72), clamp(skin.accent[1] * 0.78), clamp(skin.accent[2] * 0.46)));
+      ellipse(buf, mx - 4, my + 27, 3.2, 4.6, cM);
+      ellipse(buf, mx - 5, my + 18, 1.8, 1.4, cL);
     }
-
-    /* ── Предплечья ── */
-    // Конусы в нижние углы и ЗА них: руки растут из кадра, а не висят.
-    const arm = (sx: number, sy: number, tx: number, ty: number, seed: number) => {
-      for (let i = 0; i <= 30; i++) {
-        const t = i / 30;
-        const r = 10.5 + t * 9;
-        ellipse(buf, sx + (tx - sx) * t, sy + (ty - sy) * t, r, r, flesh(0.84 - t * 0.12));
-      }
-      for (let i = 0; i <= 30; i++) {
-        const t = i / 30;
-        ellipse(buf, sx - 6 + (tx - 6 - sx) * t, sy - 7 + (ty - 7 - sy) * t,
-          5.2 - t * 1.7, 4.4 - t * 1.3, flesh(1.02 + noise(seed, i, 3) * 0.06));
-      }
-    };
-    if (reload) {
-      const [gX, gY] = at(SPAN * 0.8, -half * 2.4);
-      arm(gX - AX * 4, gY - AY * 4, 10, VM + 26, 5);
-    } else {
-      arm(lhX - UPX * 8, lhY - UPY * 8, 8, VM + 22, 5);
-    }
-    arm(rhX - UPX * 12, rhY - UPY * 12, VM + 10, VM + 26, 9);
 
     contour(buf);
   },

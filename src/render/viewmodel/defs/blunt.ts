@@ -1,107 +1,214 @@
 /**
- * Дробящее в правой руке: труба, молоток, кувалда, лом, дубинка, разводной ключ.
+ * Дробящее в правой руке: труба, молоток, кувалда, лом, дубинка, разводной ключ,
+ * стул, шокер.
  *
- * Пакет держит те же правила, что образцовый `pistol.ts`:
+ * ФОРМУ ЗАДАЁТ КЛЕТОЧНАЯ КАРТА, МАТЕРИАЛ СЧИТАЕТСЯ ИЗ БОЕВЫХ ЧИСЕЛ. Приём тот
+ * же, что у образцового `pistol.ts`, и принят он по той же причине: холст 128×128
+ * ложится в кадр 320×200 пиксель в пиксель, и на таком размере любой градиент —
+ * мыло, а шум — грязь. Прежняя версия пакета рисовала наклонные плашки с
+ * цилиндрической затенкой и попиксельным шумом; выходило гладкое серое пятно без
+ * граней, в котором голова не отличалась от древка.
  *
- * 1. ТРИ ЧЕТВЕРТИ, А НЕ АНФАС. Древко идёт по диагонали, кисть сломана
- *    относительно него на `cant`, а голова насажена ПОПЕРЁК древка и развёрнута
- *    к зрителю бойком. Виден профиль обуха и круглый торец — именно так вещь
- *    читается железом на палке, а не куском трубы анфас.
- * 2. СБОРКА ОТ ПЯТКИ ДРЕВКА. Пятка задаёт низ, древко поднимает шейку, на
- *    шейке сидит голова. Сдвинув пятку, двигаешь всю позу целиком.
- * 3. ГАБАРИТ ЗАДАН, ОБЛИК ДЕЛИТ ЕГО. Длина — расстояние от пятки до объявленного
- *    центра бойка, а не сумма кусков по `skin`. Иначе тяжёлая голова
- *    перерастает отведённое место и обрубается о боковой край холста, который
- *    приходится на треть ширины экрана.
- * 4. РУКА РАСТЁТ ИЗ УГЛА. Предплечье уходит в нижний правый угол и за него.
+ * Разница с пистолетом одна, и она вынужденная: у дубины ТРИ такта удара, и
+ * между ними она ходит через весь кадр под разными углами. Поэтому карта здесь
+ * СОБИРАЕТСЯ: геометрия такта штампует в сетку 64×64 не цвета, а КОДЫ
+ * МАТЕРИАЛОВ, и дальше идут ровно два прохода пистолета — тела клетками 2×2 и
+ * кромки по одному пикселю. Клетка остаётся клеткой, тонов пять, свет
+ * сверху-слева. Кисть при этом рукописная: её форму никакая геометрия не выражает.
  *
- * Насколько тяжела голова, решает `skin.bulk` (он идёт от урона), насколько
- * ржаво древко — `skin.wear` (он идёт от цены вещи). Поэтому кувалда и резиновая
- * дубинка живут в одном силуэте и всё равно читаются по-разному: у первой
- * поперечина вылезает за древко вдвое, у второй голова лишь чуть толще палки.
+ * Опознавательный знак класса — МАССА НА КОНЦЕ ПРИ ТОНКОЙ РУКОЯТИ. Кувалда (урон
+ * 52) и резиновая дубинка (урон 8) живут в одном силуэте и обязаны читаться
+ * по-разному: разницу несёт `skin.bulk`, выведенный из урона, и он же решает и
+ * вылет поперечины, и толщину древка. У первой голова вылезает за древко втрое,
+ * у второй — лишь чуть толще палки.
+ *
+ * Ракурс выбран вариатором, а не на глаз: шесть карт дубинки и кувалды под
+ * углами 70°..25° к вертикали были отрисованы одним листом. Пологая (70°)
+ * укладывается поперёк кадра, и масса на конце теряется у самого края холста;
+ * отвесная (25°) повторяет ошибку «вида в торец», от которой отказался пистолет.
+ * Диагональ около 40° держит и длину рычага, и голову целиком в кадре — она
+ * шире клинка, и боковой запас ей нужен больше.
  *
  * Безопасная зона холста: читаемое живёт в строках 22..100, строки ниже сотой
  * закрывает полоса HUD — туда идёт только масса предплечья и пятка древка.
+ * В БОКОВЫЕ края упираться нельзя: они приходятся на треть ширины экрана.
  */
 
-import { clamp, noise, rgba } from '../../../core/pixutil';
+import { clamp, rgba } from '../../../core/pixutil';
 import { registerViewmodel } from '../registry';
-import { blend, contour, ellipse, skinTone } from '../draw';
+import { blend, contour, put } from '../draw';
 import { VM } from '../types';
 
-/** Поза одного такта удара. */
-interface BluntPose {
-  /** Пятка древка: якорь сборки, уходит под полосу HUD. */
-  bx: number; by: number;
-  /** Центр бойка: объявленная рабочая точка, до неё меряется габарит. */
-  kx: number; ky: number;
-  /** Излом кисти относительно линии «пятка → боёк», радианы. */
-  cant: number;
+/** Клетка карты — два пикселя, ровно как у пистолета. */
+const CELL = 2;
+const GW = VM / CELL;
+const GH = VM / CELL;
+
+/**
+ * Границы сетки — не вкус, а пороги холста, вбитые в саму запись клетки.
+ *
+ * Строка 10 — это пиксель 20: выше него силуэт лезет к прицелу, и первым туда
+ * уходит именно голова на пике замаха. Столбцы 0 и 63 — боковые края холста, они
+ * приходятся на треть ширины экрана, и дошедший до них силуэт обрывается
+ * вертикальным срезом в воздухе. Наружу можно только вниз.
+ */
+const TOP_ROW = 10;
+
+/** Коды материалов. Символ называет МАТЕРИАЛ, а не цвет: оттенок решает `skin`. */
+const enum M {
+  EMPTY = 0,
+  STEEL,   // древко и голова
+  DARK,    // проушина, тень железа
+  FACE,    // боёк: круглый торец, смотрящий на зрителя
+  WRAP,    // обмотка под кулаком
+  RING,    // кольцо шейки
+  GLOVE,   // резина перчатки
+  KNUCK,   // сустав пальца
+  GAP,     // щель между пальцами
+  THUMB,   // большой палец
+  CUFF,    // кожаный манжет
+  SLEEVE,  // рукав
+}
+
+/** Поза одного такта. Угол считается ОТ ВЕРТИКАЛИ, влево — плюс. */
+interface Pose {
+  /** Кисть на древке, клетки. */
+  hx: number; hy: number;
+  /** Наклон древка от вертикали, градусы. */
+  deg: number;
+  /** Габарит от кисти до центра бойка, клетки. */
+  len: number;
   /** Разворот головы от поперечника древка: с ним боёк смотрит на зрителя. */
   turn: number;
-  /** Приближение к глазу: на пике замаха железо крупнее. */
-  zoom: number;
+  /** Приближение к глазу: во столько раз крупнее железо и кисть. */
+  z: number;
 }
 
 /**
- * Три такта ОДНОГО удара, и они нарочно разные: покой роняет голову вправо-вниз
- * и не загораживает кадр, пик замаха заносит её широко влево и вплотную к глазу,
- * проводка проносит её вниз-поперёк. Три похожие картинки означали бы, что удара
- * в кадре не видно вовсе.
+ * Три такта ОДНОГО движения, а не три разные руки.
+ *
+ * Голова ПРИБЛИЖАЕТСЯ к глазу и встаёт круче (занос), потом проносится поперёк
+ * кадра вниз-влево (проводка) и возвращается. Похожие картинки означали бы, что
+ * удара в кадре не видно вовсе.
  */
-const POSES: Readonly<Record<string, BluntPose>> = {
-  idle: { bx: 112, by: 120, kx: 76, ky: 44, cant: 0.30, turn: 0.38, zoom: 1 },
-  swing: { bx: 114, by: 112, kx: 34, ky: 46, cant: 0.40, turn: 0.30, zoom: 1.3 },
-  swing2: { bx: 96, by: 116, kx: 24, ky: 76, cant: 0.24, turn: 0.5, zoom: 1.12 },
+const POSES: Readonly<Record<string, Pose>> = {
+  idle: { hx: 46, hy: 45, deg: 40, len: 42, turn: 0.38, z: 1.0 },
+  swing: { hx: 50, hy: 48, deg: 23, len: 40, turn: 0.30, z: 1.15 },
+  swing2: { hx: 48, hy: 42, deg: 71, len: 39, turn: 0.50, z: 1.05 },
 };
 
+/** Пять ступеней материала и ни одной между ними. */
+function ramp(base: readonly [number, number, number]): readonly number[] {
+  const at = (k: number) => rgba(clamp(base[0] * k), clamp(base[1] * k), clamp(base[2] * k));
+  return [at(0.5), at(0.82), at(1.15), at(1.5), at(1.95)];
+}
+
 /**
- * Наклонная плашка со скруглёнными торцами и цилиндрической затенкой.
+ * Кисть в перчатке ликвидатора, сжатая на древке.
  *
- * Собственный примитив пакета, а не общий: силуэт каждого класса — его
- * собственное дело, и повтор между равнозначными пакетами здесь замысел.
- * `tube` из `draw.ts` рисует только по осям холста и наклонное тело выразить
- * не может, а древко в кадре наклонено всегда.
+ * Пальцы — ПОЛОСАМИ ПОПЕРЁК хвата: ряд сустава, ряд щели, снова ряд сустава.
+ * Сплошное пятно резины читается куском, а не хватом, — то же правило, по
+ * которому у пистолета чередуются `K` и `J`. Ось `y` карты идёт вдоль хвата, от
+ * железа к локтю, и карта поворачивается вместе с ним.
  */
+const FIST: readonly string[] = [
+  '...NNNNNN...',
+  '..NNNNNNNN..',
+  '.NNNNNNNNNN.',
+  '.NNNNNNNNNN.',
+  '.JJJJJJJJJJ.',
+  '.HHHHHHHHHT.',
+  '.NNNNNNNNTT.',
+  '.JJJJJJJJJT.',
+  '.HHHHHHHHTT.',
+  '.NNNNNNNNTT.',
+  '.JJJJJJJJJT.',
+  '..HHHHHHHT..',
+  '..HHHHHHH...',
+  '..CCCCCCC...',
+  '..CCCCCCC...',
+];
+
+const FIST_CODES: Readonly<Record<string, M>> = {
+  N: M.KNUCK, H: M.GLOVE, J: M.GAP, T: M.THUMB, C: M.CUFF,
+};
+
+/** Запись клетки. Пороги холста проверяются здесь, а не глазами по картинке. */
+function set(g: Uint8Array, gx: number, gy: number, code: M): void {
+  const x = Math.round(gx);
+  const y = Math.round(gy);
+  if (x < 1 || x > GW - 2 || y < TOP_ROW || y >= GH) return;
+  g[y * GW + x] = code;
+}
+
+function at(g: Uint8Array, gx: number, gy: number): M {
+  return (gx < 0 || gy < 0 || gx >= GW || gy >= GH) ? M.EMPTY : (g[gy * GW + gx] as M);
+}
+
+/** Наклонная плашка в клетках, с сужением от корня к концу. */
 function slab(
-  buf: Uint32Array,
-  x: number, y: number, ax: number, ay: number,
-  len: number, half: number,
-  base: readonly [number, number, number],
-  seed: number, wear: number, round = 0,
+  g: Uint8Array, x: number, y: number, ax: number, ay: number,
+  len: number, h0: number, h1: number, code: M,
 ): void {
   const nx = -ay;
   const ny = ax;
-  const pad = Math.ceil(half + 2);
-  const x0 = Math.max(0, Math.floor(Math.min(x, x + ax * len) - pad));
-  const x1 = Math.min(VM - 1, Math.ceil(Math.max(x, x + ax * len) + pad));
-  const y0 = Math.max(0, Math.floor(Math.min(y, y + ay * len) - pad));
-  const y1 = Math.min(VM - 1, Math.ceil(Math.max(y, y + ay * len) + pad));
-  for (let py = y0; py <= y1; py++) {
-    for (let px = x0; px <= x1; px++) {
-      const dx = px - x;
-      const dy = py - y;
-      const u = dx * ax + dy * ay;
-      const v = dx * nx + dy * ny;
-      if (u < -round || u > len + round) continue;
-      let w = half;
-      if (round > 0) {
-        if (u < round) w = half * Math.sqrt(Math.max(0, 1 - ((round - u) / round) ** 2));
-        else if (u > len - round) w = half * Math.sqrt(Math.max(0, 1 - ((u - (len - round)) / round) ** 2));
-      }
-      if (w <= 0 || Math.abs(v) > w) continue;
-      /* Свет с одной стороны: блик ближе к левой кромке, тень к правой. Именно
-       * это читается как «круглое»; ровная заливка читается наклейкой. */
-      const t = v / half;
-      const lit = 1.3 - (t + 0.46) * (t + 0.46) * 1.0;
-      const n = (noise(px, py, seed) - 0.5) * (10 + wear * 40);
-      const rust = wear > 0 && noise(px * 3, py * 3, seed + 7) < wear * 0.3;
-      const r = rust ? base[0] * 0.6 + 60 : base[0];
-      const g = rust ? base[1] * 0.48 + 28 : base[1];
-      const b = rust ? base[2] * 0.42 + 15 : base[2];
-      buf[py * VM + px] = rgba(clamp(r * lit + n), clamp(g * lit + n), clamp(b * lit + n));
+  const steps = Math.max(1, Math.ceil(len * 2));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const u = t * len;
+    const h = h0 + (h1 - h0) * t;
+    for (let s = -h; s <= h; s += 0.5) set(g, x + ax * u + nx * s, y + ay * u + ny * s, code);
+  }
+}
+
+/** Диск в клетках. Боёк — это диск, а не эллипс с градиентом. */
+function disc(g: Uint8Array, cx: number, cy: number, r: number, code: M): void {
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) set(g, x, y, code);
     }
   }
+}
+
+/**
+ * Авторская карта, повёрнутая вдоль оси хвата.
+ *
+ * Обратным отображением, а не прямым: прямое рвёт карту в решето на любом угле,
+ * кроме кратного 45°, и кисть рассыпается на отдельные клетки.
+ */
+function stampFist(g: Uint8Array, cx: number, cy: number, ax: number, ay: number, scale: number): void {
+  const w = FIST[0].length;
+  const h = FIST.length;
+  const rad = Math.ceil((Math.max(w, h) * scale) / 2) + 2;
+  const nx = -ay;
+  const ny = ax;
+  for (let y = Math.round(cy - rad); y <= cy + rad; y++) {
+    for (let x = Math.round(cx - rad); x <= cx + rad; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const ly = Math.round((dx * ax + dy * ay) / scale + h / 2);
+      const lx = Math.round((dx * nx + dy * ny) / scale + w / 2);
+      if (ly < 0 || ly >= h || lx < 0 || lx >= w) continue;
+      const code = FIST_CODES[FIST[ly][lx]];
+      if (code) set(g, x, y, code);
+    }
+  }
+}
+
+/**
+ * Предплечье: конус ВНИЗ и за нижний срез — рука растёт из кадра, а не висит.
+ *
+ * Уходит вниз, а не в боковой угол: кулак ближнего боя сидит на строках 84..100,
+ * и конус из него в угол пересёк бы правый край холста ВЫШЕ полосы HUD, где край
+ * приходится на треть ширины экрана.
+ */
+function forearm(g: Uint8Array, wx: number, wy: number, tx: number, ty: number, r0: number): void {
+  const d = Math.max(0.001, Math.hypot(tx - wx, ty - wy));
+  const ax = (tx - wx) / d;
+  const ay = (ty - wy) / d;
+  slab(g, wx, wy, ax, ay, d, r0, r0 + 3, M.SLEEVE);
+  // Светлая грань по верхне-левой стороне: ею рука и становится круглой.
+  slab(g, wx - ay * (r0 - 1), wy + ax * (r0 - 1), ax, ay, d, 1, 1.5, M.GLOVE);
 }
 
 registerViewmodel({
@@ -110,41 +217,68 @@ registerViewmodel({
   frames: ['idle', 'swing', 'swing2'],
   motion: { recoil: 1.35, bob: 1.25, swap: 0.26 },
   draw({ buf, frame, skin, rand }) {
-    const tone = skinTone(rand);
-    const flesh = (k: number) => rgba(clamp(tone[0] * k), clamp(tone[1] * k), clamp(tone[2] * k));
-    const shade = (c: readonly [number, number, number], k: number) =>
-      [c[0] * k, c[1] * k, c[2] * k] as const;
+    const [bD2, bD1, bM, bL, bH] = ramp(skin.body);
+    const [gD2, , gM, gL] = ramp(skin.grip);
+    const [, aD1, aM] = ramp(skin.accent);
+    /* Перчатка ликвидатора, а не голая кисть: голая рука — большое бледное пятно
+     * тона бетона, и на пятидесяти пикселях она сливается со стеной при любой
+     * анатомии. Тёмная резина держит силуэт, вспышку и кровь.
+     *
+     * Она ТЕМНЕЕ железа, и это ровно та же задача, что у пистолета, решённая в
+     * другую сторону. Там корпус вороненый, и резину пришлось поднять, иначе
+     * рука и ствол слипались в одно чёрное пятно. Здесь корпус — светлая сталь,
+     * и та же резина слилась бы с ней в одно серое поле. Правило — КОНТРАСТ
+     * рука/железо, а не число. */
+    const gt = rand();
+    const [vD2, vD1, vM, vL] = ramp([54 + gt * 12, 57 + gt * 12, 66 + gt * 14]);
+    /** Холодный рефлекс: у резины блик голубовато-серый, а не телесный. */
+    const RIM = rgba(122, 138, 160);
+    const CUFF = rgba(96, 58, 30);
+    const CUFF_LIT = rgba(134, 86, 46);
+
+    /** Тело, светлая кромка, тёмная кромка — по одному на материал. */
+    const MATERIAL: Readonly<Record<number, readonly [number, number, number]>> = {
+      [M.STEEL]: [bM, bH, bD2],
+      [M.DARK]: [bD2, bD1, bD2],
+      [M.FACE]: [bL, bH, bM],
+      [M.WRAP]: [gM, gL, gD2],
+      [M.RING]: [aD1, aM, aD1],
+      [M.GLOVE]: [vD1, vM, vD2],
+      [M.KNUCK]: [vM, RIM, vD2],
+      [M.GAP]: [vD2, vD1, vD2],
+      [M.THUMB]: [vM, vL, vD2],
+      [M.CUFF]: [CUFF, CUFF_LIT, rgba(48, 28, 14)],
+      [M.SLEEVE]: [vD2, vD1, vD2],
+    };
 
     const pose = POSES[frame] ?? POSES.idle;
-    const z = pose.zoom;
-
-    /* ── Габарит ── */
-    const spanX = pose.kx - pose.bx;
-    const spanY = pose.ky - pose.by;
-    const span = Math.hypot(spanX, spanY);
-    const ax = spanX / span;
-    const ay = spanY / span;
+    const z = pose.z;
+    const rad = (pose.deg * Math.PI) / 180;
+    const ax = -Math.sin(rad);
+    const ay = -Math.cos(rad);
     const nx = -ay;
     const ny = ax;
-    // Излом кисти: ось хвата не совпадает с осью древка, и ровно это
-    // поворачивает вещь в три четверти. Совпадающие оси дают анфас.
-    const gux = ax * Math.cos(pose.cant) - ay * Math.sin(pose.cant);
-    const guy = ax * Math.sin(pose.cant) + ay * Math.cos(pose.cant);
 
-    // Тяжесть головы. Дубинке хватает утолщения, кувалде нужна поперечина.
-    const heavy = Math.max(0, Math.min(1, (skin.bulk - 12) / 8));
-    const shaftHalf = (2.4 + skin.bulk * 0.17) * z;
-    // Голова тем длиннее рычага, чем легче: тяжёлую сажают ближе к кулаку.
-    const headLen = (6 + skin.bulk * 0.5 + heavy * 11) * z;
-    const headHalf = (3.2 + skin.bulk * 0.3) * z;
-    // Шейка — граница древка и железа. Всё, что выше неё, это уже голова.
-    const neckU = span - headHalf * 0.9;
+    /* ── Габарит ──
+     * Длина — расстояние от кисти до объявленного центра бойка, а не сумма
+     * кусков по `skin`. Иначе тяжёлая голова перерастает отведённое место и
+     * обрубается о боковой край холста. */
+    const span = pose.len * (0.9 + skin.barrel / 480);
+    /* Тяжесть головы: дубинке хватает утолщения, кувалде нужна поперечина.
+     * Считается от `skin.bulk`, который идёт от урона, — и это единственная
+     * настоящая разница внутри класса. */
+    const heavy = Math.max(0, Math.min(1, (skin.bulk - 12) / 7));
+
+    const g = new Uint8Array(GW * GH);
 
     /* ── Древко ── */
-    // Пятка нарочно выступает за кулак: обрезанная у самой кисти труба читается
-    // палкой, растущей из ладони.
-    slab(buf, pose.bx - ax * 12 * z, pose.by - ay * 12 * z, ax, ay,
-      neckU + 12 * z, shaftHalf, skin.body, 21, skin.wear, 3);
+    // Тонкое нарочно: масса читается только по контрасту с рукоятью, и толстая
+    // палка отбирает у головы весь вес силуэта. Пятка выступает ЗА кулак —
+    // обрезанная у самой кисти труба читается палкой, растущей из ладони.
+    const shaft = (1.2 + heavy * 1.5) * z;
+    const headHalf = (1.9 + heavy * 3.0) * z;
+    const neck = span - headHalf * 0.9;
+    slab(g, pose.hx - ax * 12 * z, pose.hy - ay * 12 * z, ax, ay, neck + 12 * z, shaft, shaft, M.STEEL);
 
     /* ── Голова ── */
     // Поперечина насажена НАИСКОСЬ поперёк древка: строго перпендикулярная
@@ -153,105 +287,107 @@ registerViewmodel({
     const huy = nx * Math.sin(pose.turn) + ny * Math.cos(pose.turn);
     // Обух короче бойка: голова несимметрична, и по этому она читается железом,
     // а не гантелью.
+    const headLen = (3.6 + heavy * 9) * z;
     const back = headLen * 0.34;
+    const kx = pose.hx + ax * span;
+    const ky = pose.hy + ay * span;
+    slab(g, kx - hux * back, ky - huy * back, hux, huy, headLen, headHalf, headHalf, M.STEEL);
+    /* Тёмная проушина вокруг древка: ею голова и садится на палку. УЗКАЯ: широкая
+     * закрывала железо целиком, и голова читалась чёрным пятном на палке. */
+    slab(g, kx - ax * headHalf * 0.45, ky - ay * headHalf * 0.45, ax, ay,
+      headHalf * 0.9, headHalf * 0.38, headHalf * 0.38, M.DARK);
+    // Боёк смотрит на зрителя: круглый светлый торец — вторая половина объёма,
+    // ради которой голова и развёрнута.
     const face = headLen - back;
-    const kx = pose.kx;
-    const ky = pose.ky;
-    slab(buf, kx - hux * back, ky - huy * back, hux, huy, headLen, headHalf,
-      skin.body, 33, skin.wear, headHalf * 0.55);
-    // Тёмный проушник вокруг древка: им голова и садится на палку.
-    slab(buf, kx - ax * headHalf * 0.85, ky - ay * headHalf * 0.85, ax, ay,
-      headHalf * 1.7, headHalf * 1.05, shade(skin.body, 0.52), 35, skin.wear, 2);
-    // Боёк смотрит на зрителя: круглый торец со светом — вторая половина
-    // объёма, ради которой голова и развёрнута.
-    const faceX = kx + hux * face;
-    const faceY = ky + huy * face;
-    ellipse(buf, faceX, faceY, headHalf * 1.02, headHalf * 0.92,
-      rgba(clamp(skin.body[0] * 1.24 + 16), clamp(skin.body[1] * 1.24 + 18), clamp(skin.body[2] * 1.22 + 20)));
-    ellipse(buf, faceX - hux * 1.6, faceY - huy * 1.6, headHalf * 0.62, headHalf * 0.55,
-      rgba(clamp(skin.body[0] * 0.76), clamp(skin.body[1] * 0.76), clamp(skin.body[2] * 0.8)));
-    // Кольцо шейки отделяет железо от древка одной тёмной чертой.
-    const ringHalf = shaftHalf * 1.5;
-    slab(buf, pose.bx + ax * neckU - nx * ringHalf, pose.by + ay * neckU - ny * ringHalf,
-      nx, ny, ringHalf * 2, 1.8 * z, shade(skin.accent, 0.4), 39, 0, 1);
+    disc(g, kx + hux * face, ky + huy * face, headHalf * 0.85, M.FACE);
+    // Кольцо шейки отделяет железо от древка одной чертой.
+    slab(g, pose.hx + ax * neck - nx * shaft * 1.5, pose.hy + ay * neck - ny * shaft * 1.5,
+      nx, ny, shaft * 3, 0.5 * z, 0.5 * z, M.RING);
 
     /* ── Обмотка ── */
     // Единственное на этом оружии, что не металл: под кулаком древко обмотано.
-    const handU = span * 0.3;
-    const hx = pose.bx + ax * handU;
-    const hy = pose.by + ay * handU;
-    slab(buf, hx - ax * 13 * z, hy - ay * 13 * z, ax, ay, 26 * z, shaftHalf * 1.28,
-      skin.grip, 27, skin.wear * 0.4, 2);
+    slab(g, pose.hx - ax * 11 * z, pose.hy - ay * 11 * z, ax, ay, 22 * z,
+      shaft * 1.6, shaft * 1.6, M.WRAP);
 
-    /* ── Кисть ── */
-    /* Пальцы — отдельные валики ПОПЕРЁК древка с тёмной щелью под каждым.
-     * Сплошное телесное пятно читается варежкой, а не хватом. */
-    const fpx = -guy;
-    const fpy = gux;
-    slab(buf, hx - gux * 11, hy - guy * 11, gux, guy, 24 * z, 11.5 * z, tone, 47, 0, 5);
-    for (let f = 0; f < 4; f++) {
-      const u = 6 * z - f * 5.4 * z;
-      const fx = hx + gux * u;
-      const fy = hy + guy * u;
-      const len = (16.5 - Math.abs(f - 1.4) * 1.6) * z;
-      slab(buf, fx - fpx * 10 + 1, fy - fpy * 10 + 1.5, fpx, fpy, len, 3.5 * z, [26, 18, 16], 53 + f, 0, 2.6);
-      slab(buf, fx - fpx * 10, fy - fpy * 10, fpx, fpy, len, 3 * z,
-        [tone[0] * 0.99, tone[1] * 0.96, tone[2] * 0.94], 59 + f, 0, 2.6);
-      // Сустав ловит свет — без него пальцы читаются трубками.
-      ellipse(buf, fx - fpx * 3.5, fy - fpy * 3.5, 2.8 * z, 2.5 * z, flesh(1.2));
-    }
-    // Большой палец лежит вдоль древка с ближней стороны.
-    slab(buf, hx + fpx * 7.5 - gux * 3, hy + fpy * 7.5 - guy * 3,
-      gux * 0.82 + fpx * 0.57, guy * 0.82 + fpy * 0.57, 18 * z, 3.7 * z,
-      [tone[0] * 1.06, tone[1] * 1.01, tone[2] * 0.97], 67, 0, 3);
+    /* ── Рука ── */
+    /* Предплечье входит из нижнего ПРАВОГО угла и уходит за него: рука растёт из
+     * кадра, а не висит в нём. Толщина здесь не украшение — тонкий рукав под
+     * полосой HUD не читается вовсе, и дубина повисает в воздухе сама по себе. */
+    forearm(g, pose.hx - ax * 10 * z, pose.hy - ay * 10 * z, 56, GH + 10, 8 * z);
+    stampFist(g, pose.hx, pose.hy, ax, ay, 1.24 * z);
 
-    /* ── Предплечье ── */
-    /* Конус вниз и ЗА нижний край: рука растёт из кадра, а не висит в нём.
-     *
-     * Уходит он вниз, а не в угол: кулак ближнего боя сидит на строках 84..104,
-     * и конус из него в угол пересекает правый край холста ВЫШЕ полосы HUD.
-     * Там край приходится на треть ширины экрана, и рука обрывается прямым
-     * вертикальным срезом в воздухе. Наружу можно только вниз. */
-    const wristX = hx - gux * 13;
-    const wristY = hy - guy * 13;
-    const outX = VM - 16;
-    const outY = VM + 36;
-    const steps = 30;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const r = 10.5 + t * 12;
-      ellipse(buf, wristX + (outX - wristX) * t, wristY + (outY - wristY) * t, r, r,
-        flesh(0.84 - t * 0.12));
+    /* ── Ржавчина ──
+     * У дешёвой трубы её больше. Щербинами вдоль ОДНОЙ стороны древка, а не
+     * краплением по всему телу: крапление читается грязью, а не ржавчиной. */
+    const chips = Math.round(skin.wear * 7);
+    for (let i = 0; i < chips; i++) {
+      const u = neck * (0.2 + rand() * 0.7);
+      const s = shaft * (0.3 + rand() * 0.7);
+      const cx = Math.round(pose.hx + ax * u + nx * s);
+      const cy = Math.round(pose.hy + ay * u + ny * s);
+      if (at(g, cx, cy) === M.STEEL) set(g, cx, cy, M.DARK);
     }
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      ellipse(buf, wristX - 6 + (outX - 12 - wristX) * t, wristY - 8 + (outY - 6 - wristY) * t,
-        5.4 - t * 1.8, 4.5 - t * 1.4, flesh(1.05));
+
+    /* ── Тела ── */
+    for (let gy = 0; gy < GH; gy++) {
+      for (let gx = 0; gx < GW; gx++) {
+        const mat = MATERIAL[at(g, gx, gy)];
+        if (!mat) continue;
+        const x = gx * CELL;
+        const y = gy * CELL;
+        for (let dy = 0; dy < CELL; dy++) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y + dy, mat[0]);
+      }
+    }
+
+    /* ── Кромки ──
+     * Клетка крупная, кромка тонкая: светлая грань сверху и слева, тёмная снизу
+     * и справа. Это и есть «свет сверху-слева», и ровно этим плоская заливка
+     * перестаёт быть наклейкой. */
+    for (let gy = 0; gy < GH; gy++) {
+      for (let gx = 0; gx < GW; gx++) {
+        const ch = at(g, gx, gy);
+        const mat = MATERIAL[ch];
+        if (!mat) continue;
+        const x = gx * CELL;
+        const y = gy * CELL;
+        if (at(g, gx, gy - 1) !== ch) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y, mat[1]);
+        if (at(g, gx - 1, gy) !== ch) for (let dy = 0; dy < CELL; dy++) put(buf, x, y + dy, mat[1]);
+        if (at(g, gx, gy + 1) !== ch) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y + CELL - 1, mat[2]);
+        if (at(g, gx + 1, gy) !== ch) for (let dy = 0; dy < CELL; dy++) put(buf, x + CELL - 1, y + dy, mat[2]);
+      }
     }
 
     contour(buf);
 
-    /* ── Проводка ── */
-    /* На втором такте за головой стоит смаз пройденной дуги: без него удар
-     * читается сменой позы, а не движением.
+    /* ── Проводка ──
+     * Смаз пройденной дуги за головой: без него удар читается сменой позы, а не
+     * движением. Кладётся ПОСЛЕ контура и только им: обведённый контуром, он
+     * перестаёт быть смазом и становится вторым телом — залитым сектором в
+     * чёрной рамке, который закрывает само оружие.
      *
-     * Смаз кладётся ПОСЛЕ контура и только им. Обведённый контуром, он
-     * перестаёт быть смазом и становится вторым телом: залитый сектор в чёрной
-     * рамке, который закрывает само оружие. */
+     * Дуга идёт НАЗАД по ходу удара и ЖЁСТКАЯ, в две ступени плотности с
+     * прореживанием через пиксель: плавная заливка по альфе даёт на этом размере
+     * серое облако — то самое мыло, ради отказа от которого пакет и переписан. */
     if (frame === 'swing2') {
-      const trail = rgba(
-        clamp(skin.body[0] * 1.2 + 46), clamp(skin.body[1] * 1.2 + 50), clamp(skin.body[2] * 1.2 + 56));
-      const arcSpan = 0.84;
-      const band = headHalf * 1.4;
-      for (let r = span - band; r <= span + band; r += 0.5) {
-        // Шаг по углу привязан к радиусу: иначе дуга рассыпается в гребёнку.
-        const step = 0.8 / r;
-        const across = 1 - Math.abs(r - span) / band;
-        for (let a = 0.16; a <= arcSpan; a += step) {
+      const trail = rgba(clamp(skin.body[0] * 1.2 + 46), clamp(skin.body[1] * 1.2 + 50), clamp(skin.body[2] * 1.2 + 56));
+      const px = pose.hx * CELL;
+      const py = pose.hy * CELL;
+      const mid = span * CELL;
+      for (const [off, dens] of [[0, 0.62], [-5, 0.34], [5, 0.34]] as const) {
+        const r = mid + off;
+        const step = 0.9 / r;
+        for (let a = 0.2; a <= 0.82; a += step) {
           const rx = ax * Math.cos(a) - ay * Math.sin(a);
           const ry = ax * Math.sin(a) + ay * Math.cos(a);
-          blend(buf, pose.bx + rx * r, pose.by + ry * r, trail,
-            across * Math.pow(1 - a / arcSpan, 0.8) * 0.5);
+          const x = Math.round(px + rx * r);
+          const y = Math.round(py + ry * r);
+          if (((x + y) & 1) === 0) continue;
+          /* Смаз подчиняется тем же порогам холста, что и сама карта: он идёт
+           * ПОСЛЕ контура, минуя сетку, и без этой проверки уходил выше строки
+           * прицела и за боковые столбцы — там, где силуэту нельзя, а следу от
+           * него, стало быть, тоже. */
+          if (y < TOP_ROW * CELL || x < CELL || x >= VM - CELL) continue;
+          blend(buf, x, y, trail, dens * (1 - a / 0.82));
         }
       }
     }

@@ -1,137 +1,113 @@
 /**
- * Ручной фонарь в левом кулаке.
+ * Ручной фонарь в левом кулаке. Тот же пакет носит прожектор ликвидатора.
  *
- * Самая частая вещь в левой руке за всю игру, поэтому силуэт разобран подробнее
- * соседей. Собран по правилам образцового пакета `pistol.ts`:
+ * ФОРМУ ЗАДАЁТ АВТОРСКАЯ ПИКСЕЛЬНАЯ КАРТА, МАТЕРИАЛ СЧИТАЕТСЯ ИЗ ЧИСЕЛ ВЕЩИ —
+ * тот же приём, что в образцовом пакете `pistol.ts`, и по той же причине. Здесь
+ * стояла параметрическая сборка из наклонных плашек с цилиндрической затенкой и
+ * шумом: на холсте, который занимает в кадре полсотни пикселей, градиент читается
+ * мылом, а шум грязью. Карта держит форму прямо в исходнике: символ называет
+ * МАТЕРИАЛ, клетка — два пикселя, а какого материал оттенка и насколько ржав,
+ * решает `skin`, то есть характеристики самой вещи.
  *
- * 1. ТРИ ЧЕТВЕРТИ, А НЕ АНФАС. Фонарь завален вправо-вверх, срез отражателя
- *    виден наклонным овалом, рифление идёт поперёк оси. Строго анфас он читался
- *    куском трубы, приклеенным к краю кадра.
- * 2. СБОРКА ОТ ЯКОРЯ. Якорь — ПЯТКА КОРПУСА В КУЛАКЕ. От неё вверх по оси идут
- *    рукоять, корпус, раструб и стекло; вниз-влево из того же места растёт
- *    предплечье. Сдвинув якорь, двигаешь всю сборку целиком.
- * 3. ГАБАРИТ ЗАДАН, ОБЛИК ДЕЛИТ ЕГО. Длина — это расстояние от якоря до стекла,
- *    и рукоять с корпусом делят её между собой, а не суммируются в неё.
- * 4. РУКА РАСТЁТ ИЗ УГЛА. Предплечье уходит в нижний левый угол и ЗА него.
+ * Четыре правила силуэта:
  *
- * Тот же пакет получает и переносной прожектор ликвидатора: боевых чисел у
- * фонарей нет, облик у обоих один, и развести их может только зерно, засеянное
- * идентификатором вещи. Поэтому калибр берётся из него — прожектор выходит
- * заметно крупнее фонарика.
+ * 1. ТРИ ЧЕТВЕРТИ, А НЕ АНФАС. Ось завалена вправо-вверх на четверть прямого
+ *    угла, и оттого срез отражателя виден наклонной полосой стекла, а не кружком:
+ *    его левый край стоит отвесно, правый уходит вниз. Строго анфас фонарь
+ *    читался куском трубы, приклеенным к краю кадра.
+ * 2. СБОРКА ОТ ЯКОРЯ. Якорь — левый верхний угол карты; от него считается всё,
+ *    включая предплечье. Сдвинув якорь, двигаешь сборку целиком.
+ * 3. ГАБАРИТ ЗАДАН КАРТОЙ. Длина фонаря — это длина карты, а не сумма кусков,
+ *    и облик делит её между рукоятью, корпусом и головой.
+ * 4. РУКА РАСТЁТ ИЗ УГЛА. Предплечье уходит в нижний ЛЕВЫЙ угол и за него.
  *
- * Холст инструмента прижат к ЛЕВОМУ краю кадра и утоплен под нижний срез:
- * строка холста `r` — это строка экрана `80 + r`. Читаемое живёт в строках
- * 30..100, ниже всё съедает полоса HUD, а правее столбца 74 начинается оружие.
+ * ГЕОМЕТРИЯ ХОЛСТА ИНСТРУМЕНТА ДРУГАЯ, ЧЕМ У ОРУЖИЯ. Холст прижат к левому краю
+ * кадра: столбец холста — это столбец экрана. Левый край холста есть край
+ * экрана, и упираться в него МОЖНО — срез там не виден. Правее столбца 74 лезть
+ * нельзя: там начинается холст оружия по центру, и оно перекроет инструмент.
+ * Строка холста `r` — строка экрана `80 + r`; читаемое живёт в строках 30..100,
+ * ниже всё съедает полоса HUD.
  */
 
-import { clamp, noise, rgba } from '../../../core/pixutil';
+import { clamp, rgba } from '../../../core/pixutil';
 import { registerViewmodel } from '../registry';
-import { contour, ellipse, line, skinTone } from '../draw';
+import { contour, line, put } from '../draw';
 import { VM } from '../types';
 
-/** Якорь: пятка корпуса, зажатая в кулаке. Уходит под полосу HUD. */
-const HEEL_X = 15;
-const HEEL_Y = 103;
-/** Наклон оси от вертикали: фонарь завален вправо-вверх, отсюда три четверти. */
-const TILT = 0.52;
-/** Ось ОТ ПЯТКИ К СТЕКЛУ. */
-const AX = Math.sin(TILT);
-const AY = -Math.cos(TILT);
-/** Поперечная ось: вправо-вниз, ближняя к зрителю сторона корпуса. */
-const NX = -AY;
-const NY = AX;
-/** Габарит от якоря до стекла: фонарик у нижней границы, прожектор у верхней. */
-const REACH_MIN = 64;
-const REACH_MAX = 70;
+/** Левый верхний угол карты на холсте. Клетка карты — два пикселя. */
+const MAP_X = 1;
+const MAP_Y = 28;
+const CELL = 2;
 
 /**
- * Наклонная плашка со скруглёнными торцами и цилиндрической затенкой.
+ * Силуэт.
  *
- * Собственный примитив пакета, а не общий: у каждого силуэта своя геометрия, и
- * повтор между пакетами здесь замысел. `tube` из `draw.ts` рисует только по
- * осям и наклонное тело выразить не может.
+ * `.` пусто · `E` стекло · `N` нить накала · `Z` ободок отражателя
+ * `R` отражатель · `W` хомут · `D` корпус · `P` кнопка · `G` резиновая рукоять
+ * `H` ладонь · `K` палец · `J` щель между пальцами · `B` большой палец
+ * `C` манжет · `A` рукав
+ *
+ * Хват читается по трём вещам разом: пальцы идут ВАЛИКАМИ ПОПЕРЁК корпуса и
+ * выглядывают с дальней стороны (`K` правее корпуса), между ними тёмные щели
+ * `J`, а большой палец `B` лежит вдоль трубы с ближней стороны. Без выглянувших
+ * кончиков кисть читается стоящей РЯДОМ с фонарём, а не держащей его: ровно этим
+ * хват отличается от двух предметов в одном кадре.
  */
-function slab(
-  buf: Uint32Array,
-  x: number, y: number, ax: number, ay: number,
-  len: number, half: number,
-  base: readonly [number, number, number],
-  seed: number, wear: number, round = 0,
-): void {
-  const nx = -ay;
-  const ny = ax;
-  const pad = Math.ceil(half + 2);
-  const x0 = Math.max(0, Math.floor(Math.min(x, x + ax * len) - pad));
-  const x1 = Math.min(VM - 1, Math.ceil(Math.max(x, x + ax * len) + pad));
-  const y0 = Math.max(0, Math.floor(Math.min(y, y + ay * len) - pad));
-  const y1 = Math.min(VM - 1, Math.ceil(Math.max(y, y + ay * len) + pad));
-  for (let py = y0; py <= y1; py++) {
-    for (let px = x0; px <= x1; px++) {
-      const dx = px - x;
-      const dy = py - y;
-      const u = dx * ax + dy * ay;
-      const v = dx * nx + dy * ny;
-      if (u < -round || u > len + round) continue;
-      let w = half;
-      if (round > 0) {
-        if (u < round) w = half * Math.sqrt(Math.max(0, 1 - ((round - u) / round) ** 2));
-        else if (u > len - round) w = half * Math.sqrt(Math.max(0, 1 - ((u - (len - round)) / round) ** 2));
-      }
-      if (w <= 0 || Math.abs(v) > w) continue;
-      /* Свет с одной стороны: блик ближе к левой кромке, тень к правой. Именно
-       * это читается как «круглое»; ровная заливка читается наклейкой. */
-      const t = v / half;
-      const lit = 1.3 - (t + 0.46) * (t + 0.46) * 1.0;
-      const n = (noise(px, py, seed) - 0.5) * (10 + wear * 40);
-      const rust = wear > 0 && noise(px * 3, py * 3, seed + 7) < wear * 0.3;
-      const r = rust ? base[0] * 0.6 + 60 : base[0];
-      const g = rust ? base[1] * 0.48 + 28 : base[1];
-      const b = rust ? base[2] * 0.42 + 15 : base[2];
-      buf[py * VM + px] = rgba(clamp(r * lit + n), clamp(g * lit + n), clamp(b * lit + n));
-    }
-  }
-}
+const MAP: readonly string[] = [
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '.......................ZZZ',
+  '....................ZZZZZZZZZ',
+  '....................ZZEEEEEEZZZ',
+  '...................ZZEEEEEEEEEZZ',
+  '...................ZZEEEEENEEEEZZ',
+  '...................ZZEEEENNNNEEEZZ',
+  '....................ZZEEENNNNNEEEZZ',
+  '....................ZZEEEENNNEEEEZZ',
+  '....................RZZZEEEEEEEEEZZ',
+  '....................RRRZZEEEEEEEEZZ',
+  '...................RRRRRZZZZZEEZZZ',
+  '..................RRRRRRRRRRRRRZZ',
+  '..................RRRRRRRRRRRRR',
+  '.................WWWWWWWWWWWWW',
+  '...................DDDDDDDDD',
+  '..................DDDDDDDDDBB',
+  '..................DDDDDDDDDBBB',
+  '............KKKKKKDDDDDDDDDBBB',
+  '..........KKKKKKKDDDDDDDDDBBB',
+  '.........JJJJJJJJDDDDDPPPDBBB',
+  '........KKKKKKKKDDDDDPPPDBBB',
+  '.......KKKKKKKKKDDDDDPPPDBBB',
+  '......JJJJJJJJJDDDDDPPPDBBB',
+  '.....KKKKKKKKKKDDDDDDDDDBBB',
+  '....KKKKKKKKKKDDDDDDDDDBBB',
+  '....JJJJJJJJJJDDDDDDDDDKK',
+  '...KKKKKKKKKKKGGGGGGGGGKK',
+  '...KKKKKKKKKKGGGGGGGGGKK',
+  '...JJJJJJJJJJGGGGGGGGGKK',
+  '...HHHHHHHHHGGGGGGGGGKK',
+  '...HHHHHHHHHGGGGGGGGG',
+  '....HHHHHHHGGGGGGGGG',
+  '....HHHHHHHGGGGGGGGG',
+  '.....HHHHHGGGGGGGGG',
+  '...CCCCCCCCCCCCCCCCCCC',
+  '...CCCCCCCCCCCCCCCCCCC',
+  '..CCCCCCCCCCCCCCCCCC',
+  '..AAAAAAAAAAAAAAAAA',
+];
 
-/**
- * Раструб отражателя: та же наклонная заливка, но полуширина растёт к срезу.
- *
- * Конус — половина всей узнаваемости фонаря, и выразить его стопкой `slab`
- * нельзя: скруглённые торцы каждого куска дали бы гармошку вместо кромки.
- */
-function flare(
-  buf: Uint32Array,
-  x: number, y: number, ax: number, ay: number,
-  len: number, half0: number, half1: number,
-  base: readonly [number, number, number],
-  seed: number, wear: number,
-): void {
-  const nx = -ay;
-  const ny = ax;
-  const pad = Math.ceil(Math.max(half0, half1) + 2);
-  const x0 = Math.max(0, Math.floor(Math.min(x, x + ax * len) - pad));
-  const x1 = Math.min(VM - 1, Math.ceil(Math.max(x, x + ax * len) + pad));
-  const y0 = Math.max(0, Math.floor(Math.min(y, y + ay * len) - pad));
-  const y1 = Math.min(VM - 1, Math.ceil(Math.max(y, y + ay * len) + pad));
-  for (let py = y0; py <= y1; py++) {
-    for (let px = x0; px <= x1; px++) {
-      const dx = px - x;
-      const dy = py - y;
-      const u = dx * ax + dy * ay;
-      const v = dx * nx + dy * ny;
-      if (u < 0 || u > len) continue;
-      const t = u / len;
-      // Развал почти прямой: чистая парабола дала бы трубу горниста, а не
-      // отражатель фонаря.
-      const w = half0 + (half1 - half0) * t * (0.78 + t * 0.22);
-      if (Math.abs(v) > w) continue;
-      const s = v / w;
-      const lit = 1.28 - (s + 0.44) * (s + 0.44) * 0.95;
-      const n = (noise(px, py, seed) - 0.5) * (10 + wear * 40);
-      buf[py * VM + px] = rgba(
-        clamp(base[0] * lit + n), clamp(base[1] * lit + n), clamp(base[2] * lit + n),
-      );
-    }
-  }
+/** Ширина считается по самой длинной строке: хвостовые точки в карте не пишем. */
+const MAP_W = MAP.reduce((w, r) => Math.max(w, r.length), 0);
+
+/** Пять ступеней материала и ни одной между ними. */
+function ramp(base: readonly [number, number, number]): readonly number[] {
+  const at = (k: number) => rgba(clamp(base[0] * k), clamp(base[1] * k), clamp(base[2] * k));
+  return [at(0.5), at(0.82), at(1.15), at(1.5), at(1.95)];
 }
 
 registerViewmodel({
@@ -139,139 +115,149 @@ registerViewmodel({
   slot: 'tool',
   frames: ['idle'],
   draw({ buf, skin, rand }) {
-    const tone = skinTone(rand);
-    const flesh = (k: number) => rgba(clamp(tone[0] * k), clamp(tone[1] * k), clamp(tone[2] * k));
-    const tint = (c: readonly [number, number, number], k: number) =>
-      rgba(clamp(c[0] * k), clamp(c[1] * k), clamp(c[2] * k));
-
-    // Насколько высоко кулак сидит на рукояти.
-    const hold = 7 + rand() * 3;
-    // Калибр: фонарик и прожектор ликвидатора делят и пакет, и облик; отличает
-    // их только зерно вещи. Прожектор выходит длиннее и толще — это и есть та
-    // разница, по которой их различают в руке.
-    const grade = rand();
-    const span = REACH_MIN + (REACH_MAX - REACH_MIN) * grade;
-    /** Точка на оси корпуса: `u` вдоль неё от пятки, `s` поперёк. */
-    const at = (u: number, s = 0) => [HEEL_X + AX * u + NX * s, HEEL_Y + AY * u + NY * s] as const;
-
-    const half = (4.4 + skin.bulk * 0.26) * (0.88 + grade * 0.3);
-    const headHalf = half * (1.38 + grade * 0.26);
-    // Облик делит объявленный габарит, а не удлиняет его: длинная рукоять
-    // означает короткий корпус, и наоборот.
-    const gripLen = span * Math.min(0.52, Math.max(0.34, skin.barrel / 38));
-    const headLen = span * 0.2;
-    /** Ободок отражателя: цилиндрический поясок перед стеклом. */
-    const bezelLen = 3.5;
-
-    /* ── Корпус ── */
-    // Металлическая труба от рукояти до раструба.
-    const [bodyX, bodyY] = at(gripLen - 3);
-    slab(buf, bodyX, bodyY, AX, AY, span - headLen - bezelLen - gripLen + 3, half,
-      skin.body, 17, skin.wear * 0.4, 2);
-    // Резиновая рукоять: чуть толще корпуса, пятка скруглена.
-    slab(buf, HEEL_X, HEEL_Y, AX, AY, gripLen, half * 1.08, skin.grip, 23, skin.wear * 0.5, 3);
-    // Рифление рукояти: тёмная канавка поперёк оси и светлое ребро над ней. По
-    // ним рукоять читается резиной, а не продолжением трубы.
-    const ribDark = tint(skin.grip, 0.42);
-    const ribLit = tint(skin.grip, 1.9);
-    for (let u = 3; u < gripLen - 1.5; u += 3.4) {
-      for (let s = -half * 1.05; s <= half * 1.05; s += 0.5) {
-        const [gx, gy] = at(u, s);
-        const qx = gx | 0;
-        const qy = gy | 0;
-        if (qx < 0 || qy < 0 || qx >= VM || qy >= VM) continue;
-        if (((buf[qy * VM + qx] >>> 24) & 0xff) === 0) continue;
-        buf[qy * VM + qx] = ribDark;
-      }
-      for (let s = -half * 0.85; s <= half * 0.45; s += 0.5) {
-        const [gx, gy] = at(u + 1, s);
-        const qx = gx | 0;
-        const qy = gy | 0;
-        if (qx < 0 || qy < 0 || qx >= VM || qy >= VM) continue;
-        if (((buf[qy * VM + qx] >>> 24) & 0xff) === 0) continue;
-        buf[qy * VM + qx] = ribLit;
-      }
-    }
-    // Хомут между рукоятью и корпусом: без него стык не читается.
-    const [clX, clY] = at(gripLen - 2);
-    slab(buf, clX, clY, AX, AY, 3, half * 1.14, skin.accent, 29, skin.wear * 0.4, 1);
-    // Кнопка на ближней стороне корпуса: тёмный резиновый колпачок с латунным
-    // ободком. Без неё цилиндр остаётся трубой.
-    const [btX, btY] = at(gripLen + 4, half * 0.5);
-    slab(buf, btX, btY, AX, AY, 7, 2.6, [30, 28, 30], 31, 0, 2.4);
-    slab(buf, btX + NX * 0.9, btY + NY * 0.9, AX, AY, 7, 1.3, skin.accent, 33, 0, 1.2);
-
-    /* ── Отражатель и стекло ── */
-    // Конус отражателя, а за ним прямой поясок: голый конус читается раструбом
-    // трубы, поясок делает из него голову фонаря.
-    flare(buf, ...at(span - headLen - bezelLen), AX, AY, headLen, half, headHalf * 0.96,
-      skin.body, 37, skin.wear * 0.4);
-    slab(buf, ...at(span - bezelLen), AX, AY, bezelLen, headHalf, skin.body, 39, skin.wear * 0.3);
-    const [lensX, lensY] = at(span - 1.2);
-    // Ободок отражателя: наклонный овал среза. Собирается плашкой ПОПЕРЁК оси —
-    // осевой эллипс из `draw.ts` встал бы горизонтально и убил три четверти.
-    slab(buf, lensX - NX * headHalf, lensY - NY * headHalf, NX, NY, headHalf * 2, 4.8,
-      [skin.body[0] * 0.3, skin.body[1] * 0.3, skin.body[2] * 0.34], 41, 0, 4.4);
-    // Горячее стекло внутри ободка: плоская заливка вдоль того же овала.
+    const [bD2, bD1, bM, bL, bH] = ramp(skin.body);
+    const [gD2, gD1, gM, gL] = ramp(skin.grip);
+    const [, aD1, aM, aL] = ramp(skin.accent);
+    /* Перчатка ликвидатора, а не голая кисть: голая рука — большое бледное пятно
+     * тона бетона, она сливается со стеной при любой анатомии. Тёмная резина
+     * спецовки держит силуэт и кровь.
+     *
+     * ПАЛИТРА РЕЗИНЫ ЗДЕСЬ ТЕМНЕЕ ПИСТОЛЕТНОЙ, И ЭТО НЕ РАЗНОБОЙ, А ТО ЖЕ САМОЕ
+     * ПРАВИЛО. У пистолета ствол воронёный, тёмный, и резину пришлось поднять
+     * СВЕТЛЕЕ железа, иначе рука и оружие слились в одно чёрное пятно. Здесь
+     * железо светлое — полированная сталь фонаря, — и пистолетная резина встала
+     * с ним тон в тон: рука и труба слились в один серый столб. Правило не «резина
+     * светлее», а «рука и предмет расходятся на две ступени рампы»; знак разницы
+     * задаёт материал предмета. Отсюда тёмная резина и стальные верхние ступени. */
+    const gt = rand();
+    const [vD2, vD1, vM, vL] = ramp([52 + gt * 12, 55 + gt * 12, 63 + gt * 14]);
+    /** Холодный рефлекс: у резины блик голубовато-серый, а не телесный. */
+    const RIM = rgba(122, 138, 160);
+    const CUFF = rgba(96, 58, 30);
+    const CUFF_LIT = rgba(134, 86, 46);
+    /** Стекло и нить: свечение фонаря — его главный опознавательный знак. */
     const glow = skin.glow;
-    const core = rgba(
-      clamp(skin.accent[0] * 0.4 + 200 * glow),
-      clamp(skin.accent[1] * 0.4 + 186 * glow),
-      clamp(skin.accent[2] * 0.35 + 150 * glow),
+    const LENS = rgba(
+      clamp(skin.accent[0] * 0.16 + 108 + 118 * glow),
+      clamp(skin.accent[1] * 0.16 + 110 + 114 * glow),
+      clamp(skin.accent[2] * 0.16 + 104 + 96 * glow),
     );
-    for (let s = -headHalf * 0.66; s <= headHalf * 0.66; s += 0.6) {
-      ellipse(buf, lensX + NX * s, lensY + NY * s, 2.4, 2.2, core);
-    }
-    // Нить накала: одна яркая точка, иначе стекло читается плоской заплаткой.
-    ellipse(buf, lensX - NX * headHalf * 0.22, lensY - NY * headHalf * 0.22, 2.4, 2.2,
-      rgba(clamp(196 + 56 * glow), clamp(192 + 52 * glow), clamp(174 + 48 * glow)));
-    // Короткий выхлоп света над стеклом. Длиннее делать нельзя: `contour`
-    // обводит всё непрозрачное, и дальний ореол стал бы чёрной каймой.
-    for (let i = 1; i <= 3; i++) {
-      const w = headHalf * (0.58 - i * 0.13);
-      const [ax0, ay0] = at(span - 1.2 + i * 1.3, -w);
-      const [ax1, ay1] = at(span - 1.2 + i * 1.3, w);
-      line(buf, ax0, ay0, ax1, ay1, core, 1);
-    }
+    const LENS_LIT = rgba(clamp(206 + 48 * glow), clamp(204 + 48 * glow), clamp(188 + 50 * glow));
+    const HOT = rgba(255, 254, 246);
+    const BEZEL = rgba(20, 19, 22);
 
-    /* ── Кисть ── */
-    /* Пальцы — отдельные валики ПОПЕРЁК корпуса, и именно они отличают руку от
-     * варежки. Между пальцами идёт тёмная щель, иначе они слипаются в одну
-     * колбасу. Кисть ЛЕВАЯ: масса уходит влево, к самому краю кадра, а большой
-     * палец лежит вдоль корпуса с левой стороны — зеркально правой руке. */
-    const [palmX, palmY] = at(hold - 10);
-    slab(buf, palmX, palmY, AX, AY, 24, 11.5, tone, 47, 0, 5);
-    for (let f = 0; f < 4; f++) {
-      const u = hold + 11 - f * 5.4;
-      const len = 20 - Math.abs(f - 1.3) * 1.7;
-      const [fx, fy] = at(u, -len * 0.72);
-      slab(buf, fx + 1, fy + 1.5, NX, NY, len, 3.6, [26, 18, 16], 53 + f, 0, 2.6);
-      slab(buf, fx, fy, NX, NY, len, 3.1,
-        [tone[0] * 0.99, tone[1] * 0.96, tone[2] * 0.94], 59 + f, 0, 2.6);
-      // Сустав ловит свет — без него пальцы читаются трубками.
-      const [kx, ky] = at(u, -len * 0.34);
-      ellipse(buf, kx, ky, 2.9, 2.6, flesh(1.2));
-    }
-    const [thX, thY] = at(hold - 4, -half * 1.5);
-    slab(buf, thX, thY, AX * 0.86 + NX * 0.5, AY * 0.86 + NY * 0.5, 19, 3.8,
-      [tone[0] * 1.06, tone[1] * 1.01, tone[2] * 0.97], 67, 0, 3);
+    /** Тело, светлая кромка, тёмная кромка — по одному на материал. */
+    const MATERIAL: Readonly<Record<string, readonly [number, number, number]>> = {
+      E: [LENS, LENS_LIT, aD1],
+      N: [HOT, HOT, LENS_LIT],
+      Z: [bD2, bD1, BEZEL],
+      // Отражатель полированный: он идёт по ВЕРХНИМ ступеням и потому светлее
+      // корпуса. Без этой разницы голова фонаря сливается с трубой в один столб.
+      R: [bL, bH, bD1],
+      W: [aM, aL, aD1],
+      D: [bM, bL, bD2],
+      P: [rgba(34, 32, 36), aM, rgba(12, 11, 13)],
+      G: [gM, gL, gD2],
+      H: [vD1, vM, vD2],
+      K: [vM, RIM, vD2],
+      J: [vD2, vD1, vD2],
+      B: [vL, RIM, vD1],
+      C: [CUFF, CUFF_LIT, rgba(48, 28, 14)],
+      A: [vD1, vM, vD2],
+    };
+
+    const cellAt = (gx: number, gy: number): string => {
+      if (gy < 0 || gy >= MAP.length) return '.';
+      const row = MAP[gy];
+      return gx < 0 || gx >= row.length ? '.' : row[gx];
+    };
 
     /* ── Предплечье ── */
-    // Конус в нижний левый угол и ЗА него: рука растёт из кадра, а не висит.
-    const [wristX, wristY] = at(hold - 15);
-    const steps = 30;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const r = 12 + t * 10;
-      ellipse(buf, wristX + (-16 - wristX) * t, wristY + (VM + 20 - wristY) * t, r, r,
-        flesh(0.84 - t * 0.12));
+    /* Кладётся ДО карты: карта обязана лечь ПОВЕРХ рукава, иначе широкая полоса
+     * предплечья закрывает манжет, ладонь и пятку фонаря одним серым клином —
+     * ровно это и вышло с первого захода.
+     *
+     * Рука входит из нижнего ЛЕВОГО угла и уходит ЗА него: у инструмента левый
+     * край холста есть край экрана, срез там не виден. Полосами, а не конусом:
+     * конус даёт ровную заливку без граней и читается доской. */
+    const wristX = MAP_X + 11 * CELL;
+    const wristY = MAP_Y + 42 * CELL;
+    const elbowX = -10;
+    const elbowY = VM + 30;
+    line(buf, wristX, wristY, elbowX, elbowY, vD2, 17);
+    line(buf, wristX - 3, wristY - 5, elbowX - 5, elbowY - 10, vD1, 6);
+    line(buf, wristX + 5, wristY + 5, elbowX + 7, elbowY + 5, vD2, 6);
+
+    /* ── Тела ── */
+    for (let gy = 0; gy < MAP.length; gy++) {
+      for (let gx = 0; gx < MAP_W; gx++) {
+        const mat = MATERIAL[cellAt(gx, gy)];
+        if (!mat) continue;
+        const x = MAP_X + gx * CELL;
+        const y = MAP_Y + gy * CELL;
+        for (let dy = 0; dy < CELL; dy++) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y + dy, mat[0]);
+      }
     }
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      ellipse(buf, wristX + 6 + (-4 - wristX) * t, wristY - 6 + (VM - 4 - wristY) * t,
-        5.5 - t * 1.8, 4.6 - t * 1.4, flesh(1.05));
+
+    /* ── Кромки ──
+     * Клетка крупная, кромка тонкая: светлая грань сверху и слева, тёмная снизу
+     * и справа. Это и есть «свет сверху-слева», и ровно этим плоская заливка
+     * перестаёт быть наклейкой. */
+    for (let gy = 0; gy < MAP.length; gy++) {
+      for (let gx = 0; gx < MAP_W; gx++) {
+        const ch = cellAt(gx, gy);
+        const mat = MATERIAL[ch];
+        if (!mat) continue;
+        const x = MAP_X + gx * CELL;
+        const y = MAP_Y + gy * CELL;
+        const open = (dx: number, dy: number) => cellAt(gx + dx, gy + dy) !== ch;
+        if (open(0, -1)) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y, mat[1]);
+        if (open(-1, 0)) for (let dy = 0; dy < CELL; dy++) put(buf, x, y + dy, mat[1]);
+        if (open(0, 1)) for (let dx = 0; dx < CELL; dx++) put(buf, x + dx, y + CELL - 1, mat[2]);
+        if (open(1, 0)) for (let dy = 0; dy < CELL; dy++) put(buf, x + CELL - 1, y + dy, mat[2]);
+      }
+    }
+
+    /* ── Что решают числа вещи ── */
+    /* Калибр: фонарик и прожектор ликвидатора делят и пакет, и облик, боевых
+     * чисел у них нет, и развести их может только зерно, засеянное
+     * идентификатором вещи. Прожектор получает вторую насечку на рукояти и
+     * лишний поясок на хомуте — карта одна, а вещи в руке разные. */
+    const grade = rand();
+    for (let i = 0; i < 3 + Math.round(grade * 2); i++) {
+      const gy = 34 + i * 2;
+      for (let gx = 0; gx < MAP_W; gx++) {
+        if (cellAt(gx, gy) !== 'G') continue;
+        for (let dx = 0; dx < CELL; dx++) put(buf, MAP_X + gx * CELL + dx, MAP_Y + gy * CELL, gD1);
+      }
+    }
+    if (grade > 0.5) {
+      for (let gx = 0; gx < MAP_W; gx++) {
+        if (cellAt(gx, 21) !== 'D') continue;
+        for (let dx = 0; dx < CELL; dx++) put(buf, MAP_X + gx * CELL + dx, MAP_Y + 21 * CELL, aL);
+      }
+    }
+    // Сколы на анодировке: у дешёвого фонаря их больше. Точками по кромке, а не
+    // краплением по телу — крапление читается грязью, а не сколом.
+    const chips = Math.round(skin.wear * 8);
+    for (let i = 0; i < chips; i++) {
+      const gy = 21 + Math.floor(rand() * 11);
+      const gx = 16 + Math.floor(rand() * 9);
+      if (cellAt(gx, gy) !== 'D') continue;
+      put(buf, MAP_X + gx * CELL, MAP_Y + gy * CELL + 1, bD2);
     }
 
     contour(buf);
+
+    /* Выхлоп света кладётся ПОСЛЕ контура, и это не мелочь: `contour` обводит
+     * тёмным всё непрозрачное, и обведённые лучи читались тремя палками,
+     * приклеенными к голове. Свет — единственное, что обводить нельзя.
+     * Идут они ПАРАЛЛЕЛЬНО срезу стекла: веером они читались мусором. */
+    for (let i = 1; i <= 3; i++) {
+      const y = MAP_Y + (9 - i * 2) * CELL;
+      const x0 = MAP_X + (20 + i * 2) * CELL;
+      const x1 = MAP_X + (30 + i * 2) * CELL;
+      line(buf, x0, y, x1, y + 9, i === 1 ? LENS_LIT : LENS, 1);
+    }
   },
 });
