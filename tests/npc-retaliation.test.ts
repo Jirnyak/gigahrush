@@ -16,7 +16,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import { AIGoal, EntityType, Faction } from '../src/core/types';
+import { AIGoal, Cell, EntityType, Faction } from '../src/core/types';
 import { World } from '../src/core/world';
 import {
   getRecentCombatThreat,
@@ -31,6 +31,19 @@ import { makeGameState, makeTestNpc } from './helpers';
 
 const TIME = 100;
 
+/**
+ * Мир с полом. `new World()` — сплошная скала (`cells.fill(Cell.WALL)`), а
+ * свидетелем и вступающимся считается тот, кто ВИДИТ место по прямой
+ * (`hasLineOfSight` в `alertWitnesses`). В невырубленном мире луч не проходит
+ * ни от кого, и «никто не вступился» означало бы не закон, а забытую вырубку.
+ * Ловушка общая для всех тестов, строящих голый мир.
+ */
+function openWorld(): World {
+  const world = new World();
+  world.cells.fill(Cell.FLOOR);
+  return world;
+}
+
 function npcAt(id: number, faction: Faction, x: number, y: number) {
   const npc = makeTestNpc({ id, faction, x, y, hp: 100, maxHp: 100 });
   npc.alive = true;
@@ -40,7 +53,7 @@ function npcAt(id: number, faction: Faction, x: number, y: number) {
 
 test('ликвидатор отвечает гражданскому, который его ударил', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const liquidator = npcAt(600_001, Faction.LIQUIDATOR, 20.5, 20.5);
@@ -59,7 +72,7 @@ test('ликвидатор отвечает гражданскому, котор
 
 test('свои в той же комнате вступаются за товарища', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const victim = npcAt(600_011, Faction.LIQUIDATOR, 30.5, 30.5);
@@ -78,7 +91,7 @@ test('свои в той же комнате вступаются за това�
 
 test('далёкий свой не слышит драки', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const victim = npcAt(600_021, Faction.LIQUIDATOR, 40.5, 40.5);
@@ -93,7 +106,7 @@ test('далёкий свой не слышит драки', () => {
 
 test('своя сторона не ссорится ни очередью, ни рукой', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const hit = npcAt(600_031, Faction.LIQUIDATOR, 50.5, 50.5);
@@ -111,7 +124,7 @@ test('своя сторона не ссорится ни очередью, ни 
 
 test('чужая сторона ссорится ЛЮБЫМ уроном, включая взрыв', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   for (const source of ['explosion', 'projectile', 'npc_ranged', 'npc_melee'] as const) {
@@ -130,7 +143,7 @@ test('чужая сторона ссорится ЛЮБЫМ уроном, вкл
 
 test('экология остаётся исключением: монстр монстру не враг даже от удара', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const victim = npcAt(600_051, Faction.WILD, 70.5, 70.5);
@@ -155,7 +168,7 @@ test('экология остаётся исключением: монстр м�
 
 test('за игрока вступается друг, но не равнодушный', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const player = npcAt(600_061, Faction.PLAYER, 80.5, 80.5);
@@ -185,7 +198,7 @@ test('за игрока вступается друг, но не равноду�
 
 test('свидетель удара игрока помнит его сам, и вдвое слабее жертвы', () => {
   resetCombatStimulus();
-  const world = new World();
+  const world = openWorld();
   const state = makeGameState();
 
   const player = npcAt(600_071, Faction.PLAYER, 90.5, 90.5);
@@ -203,8 +216,13 @@ test('свидетель удара игрока помнит его сам, и 
     applyDamageRelationPenalty(player.faction, victim.faction, 20, victim, player, state);
     notifyActorDamaged(world, victim, player, 20, 'player_melee', TIME, state);
 
-    assert.equal(victim.playerRelation, 36, 'жертва платит полным штрафом за 20 урона');
-    assert.equal(witness.playerRelation, 38, 'свидетель — половиной: он видел, а не почувствовал');
+    /* Двадцать урона из ста — пятая часть полоски, то есть 2/5 пути до вражды:
+     * вражду даёт ПОЛОВИНА полоски, поэтому 191 × 0.2 / 0.5 = 76, а свидетелю
+     * половина = 38. Числа выросли с −4/−2 не подкруткой, а сменой единицы
+     * измерения (`damageRelationPenalty` считает долю HP, а не абсолютный урон);
+     * прежняя шкала требовала сорока попаданий по жертве, живущей десять. */
+    assert.equal(victim.playerRelation, -36, 'жертва платит полным штрафом за 20 урона');
+    assert.equal(witness.playerRelation, 2, 'свидетель — половиной: он видел, а не почувствовал');
     assert.equal(blind.playerRelation, 40, 'кто далеко, тот ничего не видел');
   } finally {
     setCurrentPlayerEntity(undefined);

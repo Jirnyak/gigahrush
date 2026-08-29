@@ -1,17 +1,33 @@
-/* Закон «насилие двигает репутацию» и его единственный ограничитель.
+/* Закон «насилие двигает репутацию».
  *
- * Две половины одной механики, и вводятся они только вместе:
+ * Удар и убийство двигают отношение — у жертвы и у всех, кто это ВИДЕЛ. Цена
+ * местная: глобальную матрицу фракций бой не двигает ни от чьей руки, включая
+ * руку игрока. Кого считать видевшим, решает линия взгляда, а не совпадение
+ * номера комнаты.
  *
- *  1. Удар и убийство по члену чужой фракции двигают отношение — у жертвы и у
- *     всех, кто это видел. Атакующий — это его ФРАКЦИЯ, отдельного пути для
- *     игрока нет.
- *  2. Живое число медленно тянется обратно к рождению. Без этого любая обида
- *     вечна: влить в неё можно бесконечно, вылить нечем, и долгий прогон
- *     неизбежно сползает во всеобщую войну.
+ * ПРАВКА 2026-08-29, три части — и каждая закрывала свой отказ закона:
  *
- * Замок именно на паре: свидетели без затухания множат существующий раскрут
- * (личная ячейка падала на −1 за каждое попадание, база LIQ→CIT −24, порог
- * вражды −64, то есть сорок попаданий — восемь секунд ножом).
+ *  1. ШКАЛА. Штраф считается долей снятого здоровья, а не абсолютным уроном.
+ *     Прежняя форма (−1 за каждые пять урона) требовала сорока попаданий до
+ *     порога вражды по жертве, умирающей за десять: враждебность по урону была
+ *     недостижима арифметически, и жалоба «бью NPC, а они терпят» описывала
+ *     ровно это. Половина полоски здоровья теперь проводит от любой дружбы,
+ *     какую байт способен выразить, до вражды.
+ *  2. ВИДИМОСТЬ. Свидетель — тот, у кого есть луч до места. Проверка «та же
+ *     комната» была неверна в обе стороны разом: `roomMap = -1` стоит и в
+ *     дверных клетках, и во всех коридорах, то есть была не «нет комнаты», а
+ *     ОДНА псевдокомната на весь этаж.
+ *  3. СВОЯ СТОРОНА. Совпадение фракций больше не отменяет цену удара. Оно
+ *     отменяло её целиком — и это било по единственному случаю, когда игрок
+ *     носит чужую нашивку: после смерти и вселения в жителя его удары по
+ *     жителям не замечал никто.
+ *
+ * ЗАТУХАНИЯ БОЛЬШЕ НЕТ. Вторая половина этого файла запирала обратную тягу к
+ * рождению (`relationDecayStep`, `decayAlifeRelations`, `relation_decay.ts`);
+ * механизм снят целиком по решению владельца, и тесты сняты вместе с ним. Довод
+ * в его пользу («влить в обиду можно бесконечно, вылить нечем») был измерен
+ * тогда, когда бой ещё двигал глобальную матрицу; сейчас разгон перекрыт у
+ * истока. Мир помнит навсегда — см. `src/data/relations.ts`.
  */
 
 import test from 'node:test';
@@ -21,20 +37,12 @@ import { AIGoal, Cell, Faction, Occupation, type Entity, type GameState } from '
 import { World } from '../src/core/world';
 import { seedGlobalRng } from '../src/core/rand';
 import {
-  RELATION_DECAY_SHIFT,
-  addFactionRelMutual,
-  decayFactionMatrixTowardBase,
-  factionBaseRelation,
   getFactionRel,
   applyTheftRelationPenalty,
   initFactionRelations,
-  npcFactionAttitudeAtBirth,
-  relationDecayStep,
 } from '../src/data/relations';
 import {
-  addAlifeFactionAttitude,
   createPrefilledAlifeState,
-  decayAlifeRelations,
   existingAlifeFactionAttitudes,
   getAlifeNpcRecordSnapshot,
 } from '../src/systems/alife';
@@ -43,21 +51,21 @@ import {
   WITNESS_KILL_WEIGHT,
   applyDamageRelationPenalty,
   combatSideOf,
+  damageRelationPenalty,
   setFactionsSocialContext,
 } from '../src/systems/factions';
-import { applyDemosRelationDelta, setDemosSocialEdge } from '../src/systems/demos_social';
+import { getDemosNpcOnlySocialEdges } from '../src/systems/demos_social';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
-import { setNpcPlayerRelation } from '../src/systems/npc_relations';
+import { RELATION_HOSTILE_THRESHOLD, getNpcPlayerRelation, isNpcPlayerHostile } from '../src/systems/npc_relations';
 import { notifyActorDamaged, resetCombatStimulus } from '../src/systems/combat_stimulus';
 import { QUEST_FACTION_RELATION_DELTA } from '../src/systems/npc_relations';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { createWorldEventState } from '../src/systems/events';
-import { decayRelationsTick, resetRelationDecay } from '../src/systems/relation_decay';
 import { makeGameState, makeTestNpc, makeTestEntity, addTestRoom } from './helpers';
 import { EntityType } from '../src/core/types';
 
 const FLOOR_KEY = floorKeyForDesign('living');
-/** Одна комната на всех: свидетелем считается только сосед по комнате. */
+/** Комната на всех. Стены её самой и служат преградой в тесте видимости. */
 const ROOM = { id: 0, x: 4, y: 4, w: 24, h: 24 };
 
 function openWorld(): World {
@@ -95,6 +103,14 @@ function cell(state: GameState, alifeId: number, faction: Faction): number {
   return existingAlifeFactionAttitudes(state)![(alifeId - 1) * 8 + faction];
 }
 
+/** Личное ребро графа Демоса «от кого → к кому», 0 — ребра нет. */
+function edgeTo(state: GameState, fromAlifeId: number, toAlifeId: number): number {
+  for (const edge of getDemosNpcOnlySocialEdges(state, fromAlifeId)) {
+    if (edge.targetAlifeId === toAlifeId) return edge.relation;
+  }
+  return 0;
+}
+
 function person(id: number, alifeId: number, faction: Faction, x: number): Entity {
   return makeTestNpc({ id, alifeId, faction, name: `Тело ${id}`, x, y: 10, hp: 60, maxHp: 60, ai: ai() });
 }
@@ -102,12 +118,42 @@ function person(id: number, alifeId: number, faction: Faction, x: number): Entit
 test.beforeEach(() => {
   initFactionRelations();
   resetCombatStimulus();
-  resetRelationDecay();
 });
 
 test.afterEach(() => {
   setFactionsSocialContext(undefined);
+  setCurrentPlayerEntity(undefined);
   resetCombatStimulus();
+});
+
+/* ── Шкала ────────────────────────────────────────────────────────── */
+
+test('цена удара — доля снятого здоровья, а не абсолютный урон', () => {
+  const weak = makeTestEntity({ id: 1, type: EntityType.NPC, hp: 20, maxHp: 20 });
+  const tough = makeTestEntity({ id: 2, type: EntityType.NPC, hp: 200, maxHp: 200 });
+  /* Один и тот же урон стоит РАЗНОГО, и это весь смысл: десять по хилому — это
+   * половина его жизни, по толстому — двадцатая часть. Прежняя форма считала их
+   * одинаково обиженными. */
+  assert.ok(damageRelationPenalty(10, weak) < damageRelationPenalty(10, tough));
+});
+
+test('половина полоски здоровья делает врагом кого угодно, даже преданного друга', () => {
+  /* Гарантия, а не среднее. Размах взят от `RELATION_MAX` до порога вражды, то
+   * есть от самой преданной дружбы, какую байт вообще способен выразить, —
+   * поэтому проверять достаточно самого верхнего случая. */
+  const victim = makeTestEntity({ id: 1, type: EntityType.NPC, hp: 100, maxHp: 100 });
+  const half = damageRelationPenalty(50, victim);
+  assert.ok(127 + half <= RELATION_HOSTILE_THRESHOLD,
+    `с самой верхушки шкалы полполоски обязаны довести до вражды, а довели до ${127 + half}`);
+  // Четверть полоски — ещё не вражда: избиение и убийство должны различаться.
+  assert.ok(127 + damageRelationPenalty(25, victim) > RELATION_HOSTILE_THRESHOLD);
+});
+
+test('смерть считается снятой полоской целиком, чем бы ни добили', () => {
+  const victim = makeTestEntity({ id: 1, type: EntityType.NPC, hp: 100, maxHp: 100 });
+  /* Цена трупа есть цена жизни, а не цена последнего тычка. Добивающий удар в
+   * единицу урона обязан стоить столько же, сколько удар во всю полоску. */
+  assert.equal(damageRelationPenalty(1, victim, true), damageRelationPenalty(100, victim, false));
 });
 
 /* ── Свидетели ────────────────────────────────────────────────────── */
@@ -125,11 +171,31 @@ test('свидетель платит за ЛЮБОГО обидчика, а н�
   assert.equal(
     cell(state, 3, Faction.LIQUIDATOR),
     before - QUEST_FACTION_RELATION_DELTA,
-    'сосед по комнате запомнил ликвидаторов на ступень хуже',
+    'видевший сосед запомнил ликвидаторов на ступень хуже',
   );
 });
 
-test('убийство весит вчетверо против удара — и то, и другое для свидетеля', () => {
+test('свидетеля за стеной нет: считается луч, а не номер комнаты', () => {
+  const state = socialState();
+  const world = openWorld();
+  /* Прежняя проверка сравнивала `roomMap`, и оба эти тела читались бы как одна
+   * комната: `carveCorridor` вне комнат `roomMap` не пишет вовсе, а `stampRoom`
+   * кладёт −1 в стенное кольцо. Псевдокомната −1 сводила весь этаж в одну.  */
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const attacker = person(102, 2, Faction.LIQUIDATOR, 11);
+  const outside = person(103, 3, Faction.CITIZEN, 14);
+  // Все трое стоят на одной строке y=10, поэтому одна клетка бетона между ними
+  // и есть вся преграда: луч идёт ровно по этим клеткам.
+  world.set(12, 10, Cell.WALL);
+  rebuildEntityIndexForSimulation([victim, attacker, outside], 1);
+
+  const before = cell(state, 3, Faction.LIQUIDATOR);
+  notifyActorDamaged(world, victim, attacker, 12, 'npc_melee', 1, state);
+  assert.equal(cell(state, 3, Faction.LIQUIDATOR), before,
+    'бетон между ними — и он ничего не видел, хоть и в радиусе');
+});
+
+test('убийство весит вчетверо против удара — для ячейки мнения о фракции', () => {
   const state = socialState();
   const world = openWorld();
   const victim = person(101, 1, Faction.CITIZEN, 10);
@@ -168,18 +234,26 @@ test('смерть опрашивает свидетелей даже посре
   );
 });
 
-test('свидетель своей фракции не платит: принадлежность — не мнение', () => {
+test('свой бьёт своего: мнение о фракции стоит, а личное ребро падает', () => {
   const state = socialState();
   const world = openWorld();
-  // Бьёт житель — свидетель тоже житель.
-  const victim = person(101, 2, Faction.LIQUIDATOR, 10);
+  // Бьёт житель, свидетель тоже житель — одна нашивка на всех троих сторонах.
+  const victim = person(101, 2, Faction.CITIZEN, 10);
   const attacker = person(102, 1, Faction.CITIZEN, 11);
   const witness = person(103, 3, Faction.CITIZEN, 12);
   rebuildEntityIndexForSimulation([victim, attacker, witness], 1);
 
-  const before = cell(state, 3, Faction.CITIZEN);
+  const factionBefore = cell(state, 3, Faction.CITIZEN);
+  const edgeBefore = edgeTo(state, 3, 1);
   notifyActorDamaged(world, victim, attacker, 12, 'npc_melee', 1, state);
-  assert.equal(cell(state, 3, Faction.CITIZEN), before);
+
+  /* Принадлежность — не мнение: от драки своих житель не начинает хуже думать о
+   * ЖИТЕЛЯХ. Но и бесплатным это больше не остаётся — платит личное ребро к
+   * тому, кто поднял руку. Раньше здесь стояла полная тишина, и ровно через неё
+   * проваливался игрок в чужом теле: нашивка совпала — счёта нет. */
+  assert.equal(cell(state, 3, Faction.CITIZEN), factionBefore, 'о своей фракции мнение не меняется');
+  const edgeAfter = edgeTo(state, 3, 1);
+  assert.ok(edgeAfter < edgeBefore, `свидетель запомнил обидчика лично: ${edgeBefore} → ${edgeAfter}`);
 });
 
 test('экология счёта не открывает: у монстра без стороны репутации нет', () => {
@@ -199,97 +273,10 @@ test('экология счёта не открывает: у монстра б�
   assert.equal(cell(state, 3, Faction.WILD), before, 'укус крысы не портит мнение о диких');
 });
 
-/* ── Затухание ────────────────────────────────────────────────────── */
-
-test('шаг затухания — четверть отклонения, и мёртвая зона берётся из неё же', () => {
-  assert.equal(relationDecayStep(0, 0), 0);
-  // Всё, что меньше 1 << SHIFT, не рассасывается вовсе.
-  const deadband = 1 << RELATION_DECAY_SHIFT;
-  for (let drift = 1; drift < deadband; drift++) {
-    assert.equal(relationDecayStep(drift, 0), 0, `дрейф ${drift} в мёртвой зоне`);
-    assert.equal(relationDecayStep(-drift, 0), 0, `дрейф −${drift} в мёртвой зоне`);
-  }
-  assert.equal(relationDecayStep(-40, 0), 10, 'тянет вверх к базе');
-  assert.equal(relationDecayStep(40, 0), -10, 'и вниз к ней же');
-  assert.equal(relationDecayStep(-24, -64), -10, 'база не обязана быть нулём');
-});
-
-test('личная ячейка возвращается к рождению, и приходит именно туда', () => {
-  const state = socialState();
-  const born = npcFactionAttitudeAtBirth(Faction.CITIZEN, Faction.LIQUIDATOR, 909, 1);
-  assert.equal(cell(state, 1, Faction.LIQUIDATOR), born);
-  addAlifeFactionAttitude(state, 1, Faction.LIQUIDATOR, -60);
-  assert.equal(cell(state, 1, Faction.LIQUIDATOR), born - 60);
-
-  const deadband = 1 << RELATION_DECAY_SHIFT;
-  let visits = 0;
-  for (; visits < 64; visits++) {
-    const budget = { remaining: 64 };
-    const step = decayAlifeRelations(state, FLOOR_KEY, 0, 64, budget);
-    if (step.moved === 0) break;
-  }
-  assert.ok(visits > 0 && visits < 24, `дрейф −60 рассасывается за ${visits} визитов`);
-  // Приходит именно к рождению, с точностью до мёртвой зоны, и там встаёт.
-  assert.ok(born - cell(state, 1, Faction.LIQUIDATOR) < deadband, 'вернулось к рождению');
-});
-
-test('бюджет списывается только за реальный сдвиг', () => {
-  const state = socialState();
-  addAlifeFactionAttitude(state, 1, Faction.LIQUIDATOR, -60);
-  const budget = { remaining: 8 };
-  const moved = decayAlifeRelations(state, FLOOR_KEY, 0, 64, budget);
-  assert.equal(moved.moved, 1, 'сдвинулась ровно одна ячейка');
-  assert.equal(budget.remaining, 7, 'и списана ровно одна единица бюджета');
-  // Нетронутые записи бюджета не стоят вовсе, сколько бы их ни просмотрели.
-  const idle = { remaining: 8 };
-  decayAlifeRelations(state, FLOOR_KEY, moved.nextCursor, 64, idle);
-  assert.ok(idle.remaining >= 7, 'упор в мёртвую зону не платит');
-});
-
-test('нетронутые записи обход пропускает: работа идёт только по дрейфу', () => {
-  const state = socialState();
-  const budget = { remaining: 64 };
-  const clean = decayAlifeRelations(state, FLOOR_KEY, 0, 64, budget);
-  assert.equal(clean.moved, 0);
-  assert.equal(budget.remaining, 64, 'свежий этаж затуханию ничего не стоит');
-  assert.ok(clean.scanned > 0, 'бакет при этом всё-таки просмотрен');
-});
-
-test('матрица тянется к базе, а награда в одну единицу переживает затухание', () => {
-  initFactionRelations();
-  // Резня увела пару далеко от базы.
-  addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -80);
-  const base = factionBaseRelation(Faction.PLAYER, Faction.CITIZEN);
-  assert.ok(getFactionRel(Faction.PLAYER, Faction.CITIZEN) < base - 32);
-  for (let i = 0; i < 32; i++) decayFactionMatrixTowardBase();
-  assert.ok(
-    getFactionRel(Faction.PLAYER, Faction.CITIZEN) > base - (1 << RELATION_DECAY_SHIFT),
-    'мир остыл почти до базы',
-  );
-
-  // А заслуга в одну ступень лежит в мёртвой зоне и не рассасывается никогда.
-  initFactionRelations();
-  addFactionRelMutual(Faction.PLAYER, Faction.SCIENTIST, QUEST_FACTION_RELATION_DELTA);
-  const earned = getFactionRel(Faction.PLAYER, Faction.SCIENTIST);
-  for (let i = 0; i < 64; i++) decayFactionMatrixTowardBase();
-  assert.equal(getFactionRel(Faction.PLAYER, Faction.SCIENTIST), earned);
-});
-
-test('такт затухания двигает оба канала разом', () => {
-  const state = socialState();
-  addAlifeFactionAttitude(state, 1, Faction.LIQUIDATOR, -60);
-  addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, -80);
-  const result = decayRelationsTick(state, 64);
-  assert.equal(result.cells, 1);
-  assert.ok(result.matrix >= 2, 'обе стороны пары двинулись');
-  assert.ok(result.scanned > 0);
-});
-
 /* ── Игрок в общем законе ─────────────────────────────────────────── */
 
 test('удар игрока глобальную матрицу больше не двигает', () => {
   const state = socialState();
-  const world = openWorld();
   const victim = person(101, 1, Faction.CITIZEN, 10);
   const player = makeTestNpc({
     id: 900_001, alifeId: undefined, faction: Faction.PLAYER, name: 'Вы',
@@ -300,12 +287,61 @@ test('удар игрока глобальную матрицу больше н�
 
   const before = getFactionRel(Faction.PLAYER, Faction.CITIZEN);
   const personalBefore = getAlifeNpcRecordSnapshot(state, 1)!.playerRelation;
-  applyDamageRelationPenalty(Faction.PLAYER, Faction.CITIZEN, 40, victim, player, state);
+  applyDamageRelationPenalty(Faction.PLAYER, Faction.CITIZEN, 12, victim, player, state);
   assert.equal(getFactionRel(Faction.PLAYER, Faction.CITIZEN), before, 'фракция как целое не вздрагивает');
   assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), before, 'и с обратной стороны тоже');
-  // Личное — двигается, и в этом весь смысл: цена насилия стала местной.
-  assert.equal(victim.playerRelation, personalBefore - 8, 'жертва запомнила сама, −1 за каждые пять урона');
-  setCurrentPlayerEntity(undefined);
+  /* Личное — двигается, и в этом весь смысл: цена насилия местная. Двенадцать
+   * из шестидесяти — пятая часть полоски, то есть 2/5 пути до вражды: 191 × 0.2
+   * / 0.5 = 76. */
+  assert.equal(victim.playerRelation, personalBefore - 76, 'жертва запомнила сама, долей снятого HP');
+});
+
+test('игрок в ЧУЖОМ теле остаётся узнаваемым: удар не растворяется в нашивке', () => {
+  const state = socialState();
+  const world = openWorld();
+  /* Ровно тот отказ, с которого начался разбор: после смерти игрок продолжает в
+   * теле жителя, `makeCurrentPlayer` фракцию не меняет, — и до правки удар по
+   * жителю упирался в замок «одна фракция», а свидетели не считались вовсе,
+   * потому что канал выбирался по нашивке `PLAYER`, которой у него больше нет. */
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const possessed = makeTestNpc({
+    id: 900_002, alifeId: undefined, faction: Faction.CITIZEN, name: 'Носитель',
+    x: 11, y: 10, hp: 100, maxHp: 100, karma: 0,
+  });
+  const witness = person(103, 3, Faction.CITIZEN, 12);
+  setCurrentPlayerEntity(possessed);
+  rebuildEntityIndexForSimulation([victim, possessed, witness], 1);
+
+  /* Читается ЧЕРЕЗ `getNpcPlayerRelation`, а не полем тела: у свежесозданного
+   * тела `playerRelation` ещё не заполнено, и сравнение с `?? 0` меряло бы не
+   * сдвиг, а первую инициализацию из записи A-Life. */
+  const victimBefore = getNpcPlayerRelation(victim);
+  const witnessBefore = getNpcPlayerRelation(witness);
+  applyDamageRelationPenalty(
+    combatSideOf(possessed), combatSideOf(victim), 12, victim, possessed, state,
+  );
+  notifyActorDamaged(world, victim, possessed, 12, 'player_melee', 1, state);
+
+  assert.ok(getNpcPlayerRelation(victim) < victimBefore, 'жертва помнит ИГРОКА, а не «жителя вообще»');
+  assert.ok(getNpcPlayerRelation(witness) < witnessBefore, 'и свидетель тоже');
+});
+
+test('убийство при свидетелях делает врагом всякого, кто это видел', () => {
+  const state = socialState();
+  const world = openWorld();
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const player = makeTestNpc({
+    id: 900_003, alifeId: undefined, faction: Faction.PLAYER, name: 'Вы',
+    x: 11, y: 10, hp: 100, maxHp: 100, karma: 0,
+  });
+  const witness = person(103, 3, Faction.CITIZEN, 12);
+  setCurrentPlayerEntity(player);
+  rebuildEntityIndexForSimulation([victim, player, witness], 1);
+
+  victim.hp = 0;
+  notifyActorDamaged(world, victim, player, 12, 'player_melee', 1, state);
+  assert.ok(isNpcPlayerHostile(witness),
+    `видевший убийство обязан стать врагом, а стал ${witness.playerRelation}`);
 });
 
 test('фракции по-прежнему помнят кражу: у целого остались договор и имущество', () => {
@@ -316,40 +352,16 @@ test('фракции по-прежнему помнят кражу: у цело�
   assert.equal(getFactionRel(Faction.CITIZEN, Faction.PLAYER), before - 4);
 });
 
-test('отношение к игроку затухает тем же законом — и в записи, и в живом теле', () => {
-  const state = socialState();
-  const body = person(101, 1, Faction.CITIZEN, 10);
-  const born = getAlifeNpcRecordSnapshot(state, 1)!.playerRelation;
+/* ── Затухания нет ────────────────────────────────────────────────── */
 
-  // Резня: −40 к личному отношению одного свидетеля.
-  const hit = applyDemosRelationDelta(state, 1, { targetKind: 'player' }, -40, { reasonTag: 'damage' });
-  assert.equal(hit?.changed, true);
-  setNpcPlayerRelation(body, hit!.relation);
-  assert.equal(body.playerRelation, born - 40);
-
-  let ticks = 0;
-  for (; ticks < 64; ticks++) {
-    const result = decayRelationsTick(state, 64, [body]);
-    if (result.cells === 0) break;
+test('обида не рассасывается: механизма затухания в проекте больше нет', async () => {
+  /* Замок на ОТСУТСТВИЕ. Пока обратная тяга существовала, вражда испарялась за
+   * пару минут стояния в стороне, и порог, взятый ударами, тут же отдавался
+   * назад. Возврат тяги — отдельное решение владельца, и заводить её надо не
+   * таймером забывания, а поступком (извинение, откуп, услуга, смена тела). */
+  const relations = await import('../src/data/relations');
+  for (const name of ['relationDecayStep', 'decayFactionMatrixTowardBase', 'RELATION_DECAY_SHIFT']) {
+    assert.equal((relations as Record<string, unknown>)[name], undefined,
+      `${name} снят вместе с механизмом затухания`);
   }
-  assert.ok(ticks > 0 && ticks < 24, `остывает за ${ticks} тактов`);
-  const cooled = getAlifeNpcRecordSnapshot(state, 1)!.playerRelation;
-  assert.ok(born - cooled < (1 << RELATION_DECAY_SHIFT), 'запись вернулась к рождению');
-  assert.equal(body.playerRelation, cooled, 'живое тело не осталось при своём старом числе');
-});
-
-test('затухание не разносится по кругу знакомых: остывание — не новость', () => {
-  const state = socialState();
-  // Близкий круг у первого есть, и обычная дельта по нему расходится: это
-  // проверяет соседний тест графа. Здесь важно обратное — что ОСТЫВАНИЕ по
-  // нему не идёт, иначе затухание само себя размножало бы по всему этажу.
-  assert.equal(setDemosSocialEdge(state, 1, 3, 96), true);
-  applyDemosRelationDelta(state, 1, { targetKind: 'player' }, -40, {
-    reasonTag: 'damage',
-    propagate: false,
-  });
-  const neighbourBefore = getAlifeNpcRecordSnapshot(state, 3)!.playerRelation;
-  const result = decayRelationsTick(state, 64);
-  assert.ok(result.cells > 0, 'первому было что остужать');
-  assert.equal(getAlifeNpcRecordSnapshot(state, 3)!.playerRelation, neighbourBefore, 'соседа не двинуло');
 });

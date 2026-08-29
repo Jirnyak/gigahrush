@@ -158,7 +158,7 @@ function decideInterval(e: Entity): number {
  * арифметика по снимку.
  */
 function decide(world: World, e: Entity, st: BrainState, now: number): void {
-  senseActor(world, e, senses);
+  senseActor(world, e, senses, now);
   readActorNeeds(e, needs);
   const kind = driveActorKind(e, senses.beast);
 

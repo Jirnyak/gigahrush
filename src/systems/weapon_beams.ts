@@ -20,6 +20,8 @@ import { ENTITY_MASK_ACTOR, ensureEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 import { killEntity } from './entity_death';
+import { notifyActorDamaged } from './combat_stimulus';
+import { applyCombatRelationOutcome } from './factions';
 
 export interface DeletionBeamResult {
   beamLen: number;
@@ -92,7 +94,7 @@ export function fireDeletionBeam(
     rebuildPathBlockersFromWorldObjects(world, state.tick, Array.from(touched));
     markNavigationCellsDirty(touched);
   }
-  const targetsKilled = killBeamTargets(world, entities, actor, beamLen, width, handleKill);
+  const targetsKilled = killBeamTargets(world, entities, actor, state, beamLen, width, handleKill);
   if (cellsDeleted > 0 || doorsDeleted > 0 || featuresCleared > 0) {
     world.markCellsDirty();
     world.markWallTexDirty();
@@ -191,6 +193,7 @@ function killBeamTargets(
   world: World,
   entities: Entity[],
   actor: Entity,
+  state: GameState,
   beamLen: number,
   width: number,
   handleKill: (e: Entity, killerIsPlayer: boolean, vx?: number, vy?: number, goreLevel?: number) => void,
@@ -210,7 +213,20 @@ function killBeamTargets(
     if (along < 0.5 || along > beamLen + 0.5) continue;
     const perp = Math.abs(dx * -dirY + dy * dirX);
     if (perp > width + 0.45) continue;
+    /* Здоровье луч снимает МИМО двери урона, и это замысел: удаление не спорит
+     * с бронёй. Но социальная половина двери к броне отношения не имеет — цена
+     * насилия и опрос свидетелей нужны здесь ровно те же, что у ножа. Без этих
+     * двух вызовов убийство лучом было единственным БЕСПЛАТНЫМ убийством в
+     * игре: ни жертва, ни свидетели о нём не узнавали, и стереть человека при
+     * толпе не стоило ничего.
+     *
+     * Порядок обязателен: оба спрашивают живую жертву (`notifyActorDamaged`
+     * выходит на `!victim.alive`), поэтому зовутся ДО `killEntity`, но ПОСЛЕ
+     * обнуления здоровья — по нему они и читают, что это смерть, а не удар. */
+    const lethal = Math.max(1, target.maxHp ?? target.hp ?? 1);
     if (target.hp !== undefined) target.hp = 0;
+    applyCombatRelationOutcome(world, state, actor, target, lethal);
+    notifyActorDamaged(world, target, actor, lethal, 'projectile', state.time, state);
     killEntity(target);
     handleKill(target, isPlayerEntity(actor), dirX * 16, dirY * 16, 1);
     killed++;

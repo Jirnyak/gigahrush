@@ -14,6 +14,8 @@ import { ENTITY_MASK_NPC, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { applyWitnessedViolencePenalty, areSameSide, combatSideOf, isHostile, isPersonalFeudEnemy } from './factions';
 import { isPlayerEntity } from './player_actor';
+import { hasLineOfSight } from '../world/line_of_sight';
+import { equippedCombatItemId } from './inventory';
 import { RELATION_FRIENDLY_THRESHOLD, getNpcPlayerRelation } from './npc_relations';
 import { finishActorDeath, runActorDamageCore } from './actor_damage';
 import { applyCombatRelationOutcome } from './factions';
@@ -68,9 +70,10 @@ interface CombatThreatMemory {
 const COMBAT_THREAT_TTL = 5.0;
 const COMBAT_THREAT_PRESSURE_CAP = 120;
 /**
- * Докуда доносится драка. «В зоне видимости» здесь читается по-мировому: свои
- * отзываются, если стоят в ТОЙ ЖЕ КОМНАТЕ и в пределах этого радиуса. Комната —
- * основа мира, и потасовка в кабинете не обязана поднимать коридор.
+ * Докуда доносится драка. «В зоне видимости» читается буквально: сосед считается
+ * свидетелем, если стоит в этом радиусе И видит место по прямой
+ * (`hasLineOfSight`). Стены и закрытые двери держат — потасовка в кабинете не
+ * поднимает коридор, а бетон между двумя коридорами не делает их одной комнатой.
  */
 const ASSIST_SIGHT_RADIUS = 12;
 /** Потолок отзывающихся на один зов: драка своих, а не всеобщая мобилизация. */
@@ -165,7 +168,12 @@ interface CombatProfileCore {
 let profileCores = new WeakMap<Entity, CombatProfileCore>();
 
 function combatProfileCore(npc: Entity): CombatProfileCore {
-  const weapon = npc.weapon ?? '';
+  /* Чем человек дерётся, знает `equippedCombatItemId`: слот оружия ИЛИ пси-
+   * инструмент. Читать один слот `weapon` нельзя — бой берёт пси именно этим
+   * вызовом, и справка расходилась с боем. Культист с пси-крюком на 50 урона
+   * числился БЕЗОРУЖНЫМ, а значит по `npcShouldFightThreat` всегда уходил в
+   * бегство и не весил в раскладе сил ничего сверх здоровья и уровня. */
+  const weapon = equippedCombatItemId(npc);
   const psiMad = (npc.psiMadness ?? 0) > 0;
   const traveler = npc.isTraveler === true;
   const level = Math.max(1, npc.rpg?.level ?? 1);
@@ -497,7 +505,7 @@ export function notifyActorDamaged(
    * Смерть — исключение, и единственное: она случается один раз на жизнь, стоит
    * отдельной, более крупной дельты и обязана быть увиденной даже посреди уже
    * идущей схватки. Второй запрос по радиусу за драку, а не за попадание. */
-  if (!alreadyEngaged || killed) alertWitnesses(world, victim, attacker, damage, time, reaction, killed, state);
+  if (!alreadyEngaged || killed) alertWitnesses(world, victim, attacker, damage, time, killed, state);
   publishActorHurtEvent(world, state, attacker, victim, damage, source, time, engagedWithAttacker);
   if (killed) publishActorKillEvent(world, state, attacker, victim, source);
 }
@@ -536,10 +544,12 @@ function standsUpFor(mate: Entity, victim: Entity): boolean {
  * жертва убегает: видеть — не значит драться. Платят за ЛЮБОГО обидчика со
  * стороной, а не только за руку игрока: закон «игрок — просто NPC» не терпит
  * канала, которого нет у остальных. Экология выпадает сама — у монстра без
- * флага `sided` стороны нет, и крыса не портит никому репутацию.
+ * флага `sided` стороны нет, и крыса не портит никому репутацию. Совпадение
+ * нашивок обидчика и жертвы тоже никого не освобождает: свой, избивающий
+ * своего, платит личным ребром — см. `applyWitnessedViolencePenalty`.
  *
- * Ограничено втройне: радиус, потолок и одна тревога на схватку (плюс одна на
- * смерть).
+ * Ограничено вчетверо: радиус, линия взгляда, потолок и одна тревога на схватку
+ * (плюс одна на смерть).
  */
 function alertWitnesses(
   world: World,
@@ -547,7 +557,6 @@ function alertWitnesses(
   attacker: Entity,
   damage: number,
   time: number,
-  reaction: CombatThreatReaction,
   killed: boolean,
   state?: GameState,
 ): void {
@@ -555,22 +564,35 @@ function alertWitnesses(
   // Объявленный поединок — дело двоих. Ни свои жертвы, ни свои обидчика в него
   // не вступаются, иначе разборка тут же превращается в свалку.
   if (isDuelLocked(victim) || isDuelLocked(attacker)) return;
-  const rally = reaction === 'fight';
+  /* Вступаются и за УБЕГАЮЩЕГО. Раньше подъём своих был заведён на реакцию
+   * жертвы (`reaction === 'fight'`), а безоружный житель по расчёту сил всегда
+   * получает `flee`, — то есть за обычного человека не вставал никто и никогда,
+   * даже когда рядом стоял вооружённый сосед. Кто вступится, по-прежнему решают
+   * `standsUpFor` и личная неприязнь; решает не то, дал ли жертва сдачи. */
   const attackerSide = combatSideOf(attacker);
-  // Внутри одной стороны свидетелю платить не за что: там вражда идёт личным
-  // ребром графа Демоса, а не мнением о фракции.
-  const witnessed = attackerSide !== undefined && attackerSide !== combatSideOf(victim);
-  if (!rally && !witnessed) return;
-  const room = world.roomMap[world.idx(Math.floor(victim.x), Math.floor(victim.y))];
+  // Экология выпадает сама: у монстра без флага `sided` стороны нет, и крыса
+  // никому репутацию не портит.
+  const witnessed = attackerSide !== undefined;
+  if (!witnessed) return;
   getEntityIndex().queryRadiusCapped(
     victim.x, victim.y, ASSIST_SIGHT_RADIUS, assistScratch, ENTITY_MASK_NPC, ASSIST_ALERT_CAP,
   );
   for (const mate of assistScratch) {
     if (mate.id === victim.id || mate.id === attacker.id) continue;
     if (!mate.alive || isPlayerEntity(mate)) continue;
-    if (world.roomMap[world.idx(Math.floor(mate.x), Math.floor(mate.y))] !== room) continue;
-    if (witnessed) applyWitnessedViolencePenalty(state, mate, attackerSide!, damage, killed);
-    if (!rally || !mate.ai || !standsUpFor(mate, victim)) continue;
+    /* Свидетель — тот, кто ВИДЕЛ. Прежняя проверка «та же комната» была неверна
+     * в обе стороны разом: `stampRoom` пишет в дверные клетки −1, а
+     * `carveCorridor` не пишет `roomMap` вовсе, поэтому −1 — это не «нет
+     * комнаты», а ОДНА псевдокомната на весь этаж. Свидетеля в дверном проёме
+     * она молча пропускала, а двоих в разных коридорах по разные стороны
+     * бетонной стены считала свидетелями друг друга.
+     *
+     * Луч читает живые `cells`/`doors`, поэтому пробитая стена учитывается тем
+     * же кадром и инвалидировать нечего. Цена — обход клеток отрезка, и она
+     * платится дважды за схватку, а не на каждое попадание (см. вызов). */
+    if (!hasLineOfSight(world, mate.x, mate.y, victim.x, victim.y, ASSIST_SIGHT_RADIUS)) continue;
+    applyWitnessedViolencePenalty(state, mate, attacker, victim, damage, killed);
+    if (!mate.ai || !standsUpFor(mate, victim)) continue;
     // Личная неприязнь — отказ помочь: сосед, ненавидящий пострадавшего, не
     // вступается за него. Это первое, чем вражда платит вместо трупа.
     if (isPersonalFeudEnemy(mate, victim)) continue;

@@ -26,11 +26,18 @@ test('player attack lowers personal NPC relation and can make that NPC hostile',
     faction: Faction.CITIZEN,
     // На волосок над порогом вражды: удар обязан перевести черту.
     playerRelation: RELATION_HOSTILE_THRESHOLD + 1,
+    /* Здоровье объявлено ЯВНО, потому что штраф считается долей снятого HP
+     * (`damageRelationPenalty`): без полоски цена удара неопределима, а
+     * умолчание фабрики — не факт об этом тесте. Десять из ста — десятая часть
+     * полоски, то есть пятая часть пути до вражды (191 × 0.1 / 0.5 = 38). */
+    hp: 100,
+    maxHp: 100,
   });
 
   applyDamageRelationPenalty(player.faction, npc.faction, 10, npc, player);
 
-  assert.equal(npc.playerRelation, RELATION_HOSTILE_THRESHOLD - 1);
+  assert.equal(npc.playerRelation, RELATION_HOSTILE_THRESHOLD + 1 - 38);
+  assert.ok((npc.playerRelation ?? 0) <= RELATION_HOSTILE_THRESHOLD, 'черта перейдена');
   assert.equal(player.karma, -1);
   /* Матрица НЕ двигается, и это второй шаг закона «насилие двигает репутацию»
    * (`plot.md` §7). Раньше здесь стояло `BASE − 2`: удар игрока был единственным

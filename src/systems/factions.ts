@@ -35,6 +35,7 @@ import {
 import {
   QUEST_FACTION_RELATION_DELTA,
   RELATION_HOSTILE_THRESHOLD,
+  RELATION_MAX,
   addNpcPlayerRelation,
   isNpcPlayerHostile,
   setNpcPlayerRelation,
@@ -560,9 +561,40 @@ function updateNoisePatrolResponse(world: World, entities: Entity[], state: Game
 /** Recalculate which faction owns each zone based on cell majority.
  *  Only checks zones in the given set (those that had cells flipped). */
 /* ── Apply damage relation penalty between factions ──────────── */
-/** Штраф отношений за удар: −1 за каждые пять урона, но не меньше единицы. */
-export function damageRelationPenalty(damage: number): number {
-  return -Math.max(1, Math.floor(damage / 5));
+/**
+ * Какая ДОЛЯ здоровья превращает кого угодно во врага.
+ *
+ * Единственная ручка этого закона, и она отвечает на вопрос, на который не
+ * отвечает ни одна существующая константа: сколько надо отнять, чтобы тебя
+ * возненавидели. Половина — потому что при доле в целую полоску жертва
+ * доходила бы до порога вражды ровно в тот миг, когда умирает, то есть
+ * никогда, а именно на это и жаловались: «бью, а он даже сам не звереет».
+ */
+export const RELATION_HEALTH_SHARE_TO_HOSTILE = 0.5;
+
+/**
+ * Во что удар обходится отношению жертвы к обидчику.
+ *
+ * Считается ДОЛЕЙ снятого здоровья, а не абсолютным уроном: обида — это
+ * «сколько от меня отняли», и она не вправе зависеть от того, крыса перед
+ * тобой или ликвидатор со стольником очков. Прежняя форма (−1 за каждые пять
+ * урона) давала −4 за нормальное попадание при расстоянии до вражды в 160
+ * очков — сорок попаданий, то есть враждебность по урону была недостижима не
+ * «плохо настроена», а арифметически.
+ *
+ * Размах взят от `RELATION_MAX` до порога вражды, то есть от самой преданной
+ * дружбы, какую байт вообще способен выразить. Поэтому доля выше —
+ * ГАРАНТИЯ, а не среднее: снял человеку половину полоски — он тебе враг, кем
+ * бы ты ему до этого ни был.
+ *
+ * Смерть — снятая полоска ЦЕЛИКОМ, чем бы ни добили: цена трупа есть цена
+ * жизни, а не цена последнего тычка.
+ */
+export function damageRelationPenalty(damage: number, victim?: Entity, killed = false): number {
+  const maxHp = Math.max(1, victim?.maxHp ?? victim?.hp ?? damage);
+  const share = killed ? 1 : Math.min(1, Math.max(0, damage) / maxHp);
+  const span = RELATION_MAX - RELATION_HOSTILE_THRESHOLD;
+  return -Math.max(1, Math.round(span * share / RELATION_HEALTH_SHARE_TO_HOSTILE));
 }
 
 /**
@@ -581,16 +613,35 @@ function addPlayerRelationDelta(state: GameState | undefined, npc: Entity, delta
 }
 
 /**
- * Во сколько раз смерть весомее удара.
+ * Во сколько раз смерть весомее удара — для ячейки мнения о ФРАКЦИИ.
  *
- * Одно число на оба канала свидетеля — и на личную ячейку к фракции обидчика, и
- * на личное отношение к игроку, — потому что факт один: «при мне убили» против
- * «при мне ударили». Четвёрка выбрана по расстоянию до порога вражды: сосед
- * жителя смотрит на ликвидаторов с +48, до вражды ему 112 шагов, то есть
- * двадцать восемь увиденных убийств. Резня в жилом блоке разворачивает квартал
- * против её автора, одиночный труп — нет.
+ * Четвёрка выбрана по расстоянию до порога вражды: сосед жителя смотрит на
+ * ликвидаторов с +48, до вражды ему 112 шагов, то есть двадцать восемь
+ * увиденных убийств. Резня в квартале разворачивает квартал против её автора,
+ * одиночный труп — нет.
+ *
+ * ЛИЧНЫМ каналам этот множитель больше не нужен и на них не действует: там
+ * смерть уже выражена честнее — как снятая полоска здоровья ЦЕЛИКОМ
+ * (`damageRelationPenalty`), и удваивать её ещё и весом значило бы считать
+ * один и тот же факт дважды.
  */
 export const WITNESS_KILL_WEIGHT = 4;
+
+/**
+ * Чьё насилие помнится ЛИЧНЫМ числом (`playerRelation`), а не ячейкой мнения о
+ * фракции.
+ *
+ * Признака два, и нужны оба. Нашивка `PLAYER` — потому что сторона игрока
+ * синтетическая: кроме него и ко-оп-пиров, членов у неё нет, и «мнение о
+ * фракции PLAYER» есть мнение о них лично; по одной этой ветке пир и платил
+ * раньше. Личность — потому что после смерти игрок продолжает в ЧУЖОМ теле с
+ * чужой нашивкой (`makeCurrentPlayer` её не меняет, и `resetAlifePlayerRelations`
+ * на это рассчитывает), и признак нашивки там не срабатывает ни разу: удары
+ * уходили в «мнение о жителях», а свидетели-жители не замечали их вовсе.
+ */
+export function isPlayerSideActor(attacker: Entity): boolean {
+  return attacker.faction === Faction.PLAYER || isPlayerEntity(attacker);
+}
 
 /**
  * Свидетель видел насилие — и помнит того, кто его учинил.
@@ -598,41 +649,58 @@ export const WITNESS_KILL_WEIGHT = 4;
  * Платит свидетель половину цены жертвы: он видел, а не почувствовал (тем же
  * шагом, что и разница «замечена кража» против «выявлена ревизией»). Кого
  * считать свидетелем, решает вызывающий: у него уже есть радиусный запрос и
- * комната, и второго запроса на удар мы не делаем.
+ * линия взгляда, и второго запроса на удар мы не делаем.
  *
- * Канала два, потому что у отношения к игроку и отношения к фракции разные
- * хранилища, а не разные законы: сторона `PLAYER` синтетическая, её членов
- * помнят личным числом `playerRelation`, все прочие — своей ячейкой к фракции.
- * В восемь ячеек `Faction.PLAYER` писать нельзя, там нет такого столбца.
- *
- * Своя фракция не двигается: она принадлежность, а не мнение.
+ * Канала ТРИ, и все три — про хранилище, а не про разные законы. Игрок и
+ * ко-оп-пир: сторона `PLAYER` синтетическая, её членов помнят личным числом
+ * `playerRelation`, и в восемь ячеек `Faction.PLAYER` писать нельзя — такого
+ * столбца там нет. Чужая нашивка: своя ячейка мнения о ней. Своя нашивка:
+ * личное ребро графа Демоса, потому что мнение о собственной фракции от драки
+ * своих не меняется — принадлежность не мнение, — но и бесплатным насилие
+ * внутри стороны быть не должно.
  */
 export function applyWitnessedViolencePenalty(
   state: GameState | undefined,
   witness: Entity,
-  attackerSide: Faction,
+  attacker: Entity,
+  victim: Entity,
   damage: number,
   killed: boolean,
 ): number {
-  if ((witness.faction ?? Faction.CITIZEN) === attackerSide) return 0;
-  const weight = killed ? WITNESS_KILL_WEIGHT : 1;
-  if (attackerSide === Faction.PLAYER) {
-    const penalty = Math.min(-1, Math.round(damageRelationPenalty(damage) / 2)) * weight;
+  if (isPlayerSideActor(attacker)) {
+    const penalty = Math.min(-1, Math.round(damageRelationPenalty(damage, victim, killed) / 2));
     addPlayerRelationDelta(state, witness, penalty);
     return penalty;
   }
   if (!state || witness.alifeId === undefined) return 0;
-  const penalty = -QUEST_FACTION_RELATION_DELTA * weight;
+  const attackerSide = attacker.faction ?? Faction.CITIZEN;
+  /* Свой бьёт своего: нашивка тут ни при чём — мнение о фракции от этого не
+   * меняется, она принадлежность, а не мнение. Платит личное ребро графа: тот,
+   * кто при мне избил сослуживца, стал хуже ЛИЧНО, а не «ликвидаторы стали
+   * хуже». Без этой ветки насилие внутри стороны было бесплатным вовсе. */
+  if ((witness.faction ?? Faction.CITIZEN) === attackerSide) {
+    if (attacker.alifeId === undefined) return 0;
+    const penalty = Math.min(-1, Math.round(damageRelationPenalty(damage, victim, killed) / 2));
+    return applyDemosRelationDelta(state, witness.alifeId,
+      { targetKind: 'alife', targetAlifeId: attacker.alifeId }, penalty, { reasonTag: 'damage' })
+      ? penalty : 0;
+  }
+  const penalty = -QUEST_FACTION_RELATION_DELTA * (killed ? WITNESS_KILL_WEIGHT : 1);
   return addAlifeFactionAttitude(state, witness.alifeId, attackerSide, penalty) === undefined ? 0 : penalty;
 }
 
 /**
  * Чем удар платит отношениям.
  *
- * Закон один на всех: атакующий — это ЕГО ФРАКЦИЯ, и только. Отдельного пути
- * для игрока здесь больше нет; единственное, что осталось от прежних шести
- * веток «атакующий — игрок», — запись в ГЛОБАЛЬНУЮ матрицу, и это решение с
- * замером, а не недосмотр (см. ниже).
+ * Закон один на всех, и отдельного ПУТИ для игрока здесь нет. Про игрока
+ * спрашивается ровно один раз и ровно про склад: личное мнение о нём хранится
+ * не там, где личное мнение об NPC (`playerRelation` против ребра графа
+ * Демоса), потому что сторона `PLAYER` синтетическая и других членов у неё
+ * нет. Это вопрос «куда писать», а не «сколько списать» — сумма считается всем
+ * одинаково.
+ *
+ * Спрашивается он через `isPlayerSideActor` — по нашивке ИЛИ по личности:
+ * нашивка держит ко-оп-пиров, личность держит игрока в чужом теле после смерти.
  */
 export function applyDamageRelationPenalty(
   attackerFaction: Faction | undefined, targetFaction: Faction | undefined,
@@ -642,21 +710,37 @@ export function applyDamageRelationPenalty(
   state?: GameState,
 ): void {
   if (attackerFaction === undefined || targetFaction === undefined) return;
-  if (attackerFaction === targetFaction) return;
+  /* Совпадение нашивок больше НЕ отменяет цену удара. Раньше здесь стоял выход,
+   * и он делал бесплатным всё насилие внутри стороны — включая единственный
+   * случай, когда игрок носит чужую фракцию: после смерти и вселения в жителя
+   * его удары по жителям упирались ровно сюда, и мир не замечал их вовсе.
+   * Чинится это не исключением для игрока, а снятием исключения: бьёшь своего —
+   * платишь тем же личным каналом, каким платит любой другой. Мнение о фракции
+   * при этом по-прежнему не двигается — ниже за это отвечает выбор канала. */
 
+  const attackerIsPlayer = attacker !== undefined
+    ? isPlayerSideActor(attacker)
+    : attackerFaction === Faction.PLAYER;
   const wasFactionEnemy = areFactionsHostile(attackerFaction, targetFaction);
   /* «Он и так меня ненавидел» — довод не только игрока. У жертвы-человека
    * личная вражда к обидчику читается тем же графом Демоса, каким читается
    * вражда к игроку; раньше эту ветку спрашивали только для `Faction.PLAYER`,
    * и удар по своему давнему врагу стоил NPC кармы, а игроку — нет. */
   const wasPersonalEnemy = target !== undefined && (
-    attackerFaction === Faction.PLAYER
+    attackerIsPlayer
       ? target.type === EntityType.NPC && isNpcPlayerHostile(target)
       : attacker !== undefined && isPersonalFeudEnemy(target, attacker)
   );
   const wasNonEnemy = !wasFactionEnemy && !wasPersonalEnemy;
-  const penalty = damageRelationPenalty(damage);
-  if (attackerFaction === Faction.PLAYER && target?.type === EntityType.NPC) {
+  /* Смерть спрашивается у тела, а не отдельным доводом: дверь урона зовёт этот
+   * закон уже ПОСЛЕ списания здоровья, тем же признаком, каким её определяет
+   * `notifyActorDamaged`. Второго флага под один и тот же факт не заводим. */
+  const penalty = damageRelationPenalty(damage, target, (target?.hp ?? 1) <= 0);
+  /* Жертва со стороны игрока в личный канал не пишется: `playerRelation` — это
+   * «что ЭТОТ человек думает об игроке», и у самого игрока (как и у ко-оп-пира)
+   * такого мнения о себе нет. Карму за удар по своему при этом платят обычную:
+   * снятый выше замок «одна фракция» освободил не от закона, а от тишины. */
+  if (attackerIsPlayer && target?.type === EntityType.NPC && !isPlayerSideActor(target)) {
     addPlayerRelationDelta(state, target, penalty);
   } else if (state && target?.type === EntityType.NPC && attacker?.type === EntityType.NPC && target.alifeId !== undefined && attacker.alifeId !== undefined) {
     applyDemosRelationDelta(state, target.alifeId, { targetKind: 'alife', targetAlifeId: attacker.alifeId }, penalty, {

@@ -18,7 +18,6 @@ import { runDemosSocialDirector } from './demos_social_director';
 import { getDemosNpcOnlySocialEdges, applyDemosRelationDelta } from './demos_social';
 import type { DemosOutgoingSocialEdge } from './demos_posts';
 import { processDemosSocialFeedbackEvents, requestDemosSocialJourney } from './demos_social_feedback';
-import { decayRelationsTick } from './relation_decay';
 import { refreshDemosQuestNoticesFromSnapshots } from './demos_quest_notices';
 import {
   getImportantEvents,
@@ -230,10 +229,6 @@ registerContentRuntimeHook({
       maxOutcomesPerEvent: DEMOS_RUNTIME_OUTCOMES_PER_TICK,
     });
     const journeyRequested = requestOneSocialJourney(state, world, entities, snapshots);
-    /* Затухание отношений едет на этом же такте. Своего каданса у него нет и не
-     * должно быть: это тот же социальный слой, и вторая ручка времени тут же
-     * разъехалась бы с первой. Бюджет — та же мерка, что и у выборки записей. */
-    decayRelationsTick(state, DEMOS_RUNTIME_RECORDS_PER_TICK, entities);
 
     /* Учёт потерь. Id событий плотные — их выдаёт один счётчик, — поэтому в
      * промежутке (cursorBefore, eventCursor] ровно столько событий, на сколько

@@ -121,3 +121,35 @@ test('npcCombatProfile: threatScore logic', async (t) => {
     assert.equal(gaussProfile.threatScore, 10 * 0.22 + (180 * 1 * 1.6) + 15);
   });
 });
+
+/* Пси-инструмент — тоже оружие, и все три справки о силе обязаны это видеть.
+ *
+ * До 2026-08-29 они читали ОДИН слот `weapon`, а бой берёт оружие через
+ * `equippedCombatItemId` (слот ИЛИ пси-инструмент). Расхождение стоило дорого:
+ * культист с пси-крюком на 50 урона числился безоружным, а `npcShouldFightThreat`
+ * безоружному и несмелому всегда отвечает «беги» — то есть целый род бойцов не
+ * дрался вовсе и ничего не весил в раскладе сил сверх здоровья и уровня.
+ * Замерено на маршруте: 2 таких человека из 7225 в населении этажей, но 100% из
+ * них судились неверно, а сцены раздают культистам пси-удар штатным
+ * `generateNpcLoadout`.
+ */
+test('пси в руках — это вооружён: справка о силе читает то же, чем дерётся бой', () => {
+  const psiId = Object.keys(WEAPON_STATS).find(id => (WEAPON_STATS[id]?.psiCost ?? 0) > 0
+    && (WEAPON_STATS[id]?.dmg ?? 0) > 3);
+  assert.ok(psiId, 'в каталоге обязан быть хоть один боевой пси-инструмент');
+
+  const bare = makeTestEntity({
+    id: 900, type: EntityType.NPC, faction: Faction.CITIZEN,
+    occupation: Occupation.HOUSEWIFE, hp: 100, maxHp: 100,
+  });
+  const psi = makeTestEntity({
+    id: 901, type: EntityType.NPC, faction: Faction.CITIZEN,
+    occupation: Occupation.HOUSEWIFE, hp: 100, maxHp: 100, tool: psiId,
+  });
+
+  assert.equal(npcCombatProfile(bare).armed, false, 'с пустыми руками — безоружен');
+  assert.equal(npcCombatProfile(psi).armed, true, 'с боевым пси в руках — вооружён');
+  // И весит он больше пустых рук: иначе расклад сил по-прежнему его не считает.
+  assert.ok(npcCombatProfile(psi).threatScore > npcCombatProfile(bare).threatScore,
+    'пси обязано добавлять веса в раскладе сил');
+});

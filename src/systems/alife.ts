@@ -85,7 +85,6 @@ import {
   attitudeSpread,
   getFactionRel,
   npcFactionAttitudeAtBirth,
-  relationDecayStep,
 } from '../data/relations';
 import { HUMANOID_BASE_MOVE_SPEED, getMaxHp, getMaxPsi } from './rpg';
 import {
@@ -1800,81 +1799,6 @@ export function addAlifeFactionAttitude(
   alife.columns.factionAttitude[offset] = next;
   if (next !== previous) setRecordTouched(alife, record);
   return next;
-}
-
-/**
- * Двинуть личное отношение к игроку. Возвращает `true`, если сдвинулось.
- *
- * Хранилищ у этого числа три (граф Демоса, колонка A-Life, живое тело), и
- * держать их в согласии умеет только `applyDemosRelationDelta`. Поэтому шаг
- * приходит инъекцией: обход знает, КОГО и НА СКОЛЬКО двигать, а КАК — знает
- * социальный слой. Прямая запись в колонку отсюда была бы отменена первой же
- * сверткой этажа: живое тело помнит своё число и кладёт его поверх записи.
- */
-export type AlifePlayerRelationDecay = (alifeId: number, step: number) => boolean;
-
-/**
- * Затухание личных отношений: тянет живое число обратно к рождению.
- *
- * Двигаются оба личных канала — восемь ячеек к фракциям и отношение к игроку.
- * Закон один и константа одна: у обид нет двух скоростей, иначе одна половина
- * мира остывала бы, а вторая копила.
- *
- * Разреженно и с бюджетом. Обход идёт по бакету ЭТАЖА, а не по всему пулу
- * (сто тысяч личностей), и внутри бакета работа делается только для записей с
- * пометкой `touched` — накопленный дрейф всегда её ставит
- * (`addAlifeFactionAttitude`, `setRecordPlayerRelation`), а нетронутая запись по
- * определению сидит на рождении и стоить ничего не должна. Курсор держит
- * зовущий, поэтому обход продолжается с того места, где кончился прошлый такт.
- *
- * Бюджет списывается ТОЛЬКО за реально сдвинутую ячейку — упор в мёртвую зону
- * затухания не платит (образец: `demos_social_feedback.ts`).
- */
-export function decayAlifeRelations(
-  state: GameState,
-  floorKeyInput: string,
-  cursor: number,
-  scanCap: number,
-  budget: { remaining: number },
-  decayPlayerRelation?: AlifePlayerRelationDecay,
-): { moved: number; scanned: number; nextCursor: number } {
-  const alife = (state as AlifeHost).alife;
-  const bucket = alife?.floorIndex[cleanFloorKey(floorKeyInput)];
-  if (!alife || !bucket || bucket.length === 0) return { moved: 0, scanned: 0, nextCursor: 0 };
-  const column = alife.columns.factionAttitude;
-  const limit = Math.min(bucket.length, Math.max(0, Math.floor(scanCap)));
-  let index = Math.max(0, Math.floor(cursor)) % bucket.length;
-  let scanned = 0;
-  let moved = 0;
-  while (scanned < limit && budget.remaining > 0) {
-    const record = alife.npcs[bucket[index]];
-    index = (index + 1) % bucket.length;
-    scanned++;
-    if (!record || !recordTouched(alife, record)) continue;
-    const viewer = recordFaction(alife, record);
-    const base = factionAttitudeOffset(record);
-    for (let faction = Faction.CITIZEN; faction <= Faction.WILD; faction++) {
-      if (budget.remaining <= 0) break;
-      const value = column[base + faction];
-      if (value === RELATION_UNSET) continue;
-      const step = relationDecayStep(value, npcFactionAttitudeAtBirth(viewer, faction, alife.seed, record.id));
-      if (step === 0) continue;
-      column[base + faction] = clampRelation(value + step);
-      budget.remaining--;
-      moved++;
-    }
-    if (!decayPlayerRelation || budget.remaining <= 0) continue;
-    /* Рождение отношения к игроку берётся из ЖИВОЙ матрицы, а не из таблицы:
-     * у игрока база — это то, как его фракцию видят сегодня. Значит кражи,
-     * пропуска и поручения двигают не только само число, но и точку, к которой
-     * оно возвращается, — а бой не двигает ни того, ни другого. */
-    const bornToPlayer = defaultPlayerRelationForRecord(alife, record);
-    const playerStep = relationDecayStep(ensureRecordPlayerRelation(alife, record), bornToPlayer);
-    if (playerStep === 0 || !decayPlayerRelation(record.id, playerStep)) continue;
-    budget.remaining--;
-    moved++;
-  }
-  return { moved, scanned, nextCursor: index };
 }
 
 export function debugMarkAllAlifeNpcRecordsTouched(state: GameState): void {
