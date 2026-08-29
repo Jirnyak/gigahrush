@@ -373,6 +373,20 @@ interface ActiveScene {
    * общего учёта встала бы штабелем в одну точку». */
   occupied: Set<number>;
   /**
+   * Верёвка поднята: ОТПУЩЕННЫХ место действия больше не держит.
+   *
+   * Поводок нужен ровно до тех пор, пока актёру есть что делать в кадре. Пока
+   * дело не решено, он честно не даёт разбежаться; как только решено — держать
+   * человека на радиусе значит превращать его в столб. Кто и когда решает, что
+   * дело кончено, знает только сам пакет этажа: у одного это смерть бойца, у
+   * другого — приход подкрепления, и проигрывателю знать об этом нечего
+   * (`liftSceneLeash`).
+   *
+   * Стоящих НА ПОСТУ это не касается вовсе: пост — замена выключенному AI, и он
+   * держится до конца сцены. Зрителей на трибуне не отпускает никто.
+   */
+  leashLifted: boolean;
+  /**
    * За кем сейчас следит кадр. Свойство СЦЕНЫ, а не такта: реплика, пауза и
    * ожидание смерти длятся секундами, и всё это время человек ходит. Прицел,
    * взятый один раз тактом пролёта, к концу его фразы смотрит в пустое место,
@@ -420,6 +434,43 @@ export function isFloorSceneActive(): boolean {
 
 export function activeFloorSceneId(): string | null {
   return active?.def.id ?? null;
+}
+
+const NO_SCENE_ACTORS: readonly number[] = [];
+
+/**
+ * Состав роли идущей сцены. Пусто, если сцена не играет или играет другая.
+ *
+ * Наружу отдаются id, а не сущности: спрашивает это пакет этажа, у которого на
+ * руках свой кадр со своим индексом, и второй проход по массиву ему не нужен.
+ * Мёртвые из состава не вычёркиваются — сцена обязана знать, кого потеряла, —
+ * поэтому «жив ли» спрашивающий решает сам.
+ */
+export function floorSceneRoleIds(sceneId: string, role: string): readonly number[] {
+  if (!active || active.def.id !== sceneId) return NO_SCENE_ACTORS;
+  return active.cast.get(role) ?? NO_SCENE_ACTORS;
+}
+
+/**
+ * Поднять поводок места действия: с этой секунды он не держит ОТПУЩЕННЫХ.
+ *
+ * Общий глагол, а не услуга одному этажу. Поводок сцены — не декорация и не
+ * страховка на всякий случай: он стоит ровно столько, сколько актёру есть что
+ * делать в кадре. Дело кончилось — верёвку снимают, иначе живой человек
+ * упирается в невидимую стену и стоит столбом до конца сцены (замерено на арене
+ * Базы: победитель дуэли простоял на радиусе двадцать две секунды из шестидесяти
+ * и пошёл только на закрытии сцены).
+ *
+ * Когда именно дело кончено, проигрывателю знать неоткуда, и угадывать он не
+ * вправе: у дуэли это смерть одного из двоих, у обороны — отбитая волна, у
+ * смотра — прошедшая мимо колонна. Решает пакет этажа и зовёт это сам.
+ *
+ * Возвращает, сработало ли: сцена не та, не идёт или верёвка уже поднята — `false`.
+ */
+export function liftSceneLeash(sceneId: string): boolean {
+  if (!active || active.def.id !== sceneId || active.leashLifted) return false;
+  active.leashLifted = true;
+  return true;
 }
 
 /** Запросить сцену вручную: сюжетным шагом, отладкой или триггером события. */
@@ -527,7 +578,11 @@ function startScene(ctx: ContentRuntimeContext, def: FloorSceneDef): boolean {
   }
   rebuildEntityIndexAfterSpawnCleanup(ctx.entities);
 
-  active = { def, anchorX, anchorY, cast, beatIndex: 0, beatTime: 0, beatStarted: false, elapsed: 0, returning: -1, occupied };
+  active = {
+    def, anchorX, anchorY, cast,
+    beatIndex: 0, beatTime: 0, beatStarted: false, elapsed: 0, returning: -1,
+    occupied, leashLifted: false,
+  };
   if (playedScenes.size < MAX_PLAYED_SCENES) playedScenes.add(def.id);
   ctx.state.sceneLock = true;
   sceneFrameReleased = false;
@@ -1058,6 +1113,10 @@ function holdCastNearAnchor(ctx: ContentRuntimeContext, scene: ActiveScene): voi
        * ОТПУЩЕН (`release` снял роль): своего места больше нет, держится места
        * ДЕЙСТВИЯ — якоря сцены, — и только если сцена объявила общий поводок. */
       const held = entity.role === NpcRole.CINEMATIC_ACTOR && entity.cinematicState !== undefined;
+      // Поднятая верёвка отпускает ровно ОТПУЩЕННЫХ: дело их в кадре кончено, и
+      // держать их на радиусе больше не за что. Пост поднятие не читает — он
+      // заменяет выключенный AI и стоит до конца сцены.
+      if (!held && scene.leashLifted) continue;
       const leash = held ? (roleLeash ?? SCENE_POST_LEASH) : (roleLeash ?? sceneLeash);
       if (leash === undefined) continue;
       const homeX = held ? entity.cinematicState!.postX : scene.anchorX;

@@ -37,7 +37,15 @@
 
 import { Faction, Occupation } from '../../core/types';
 import { designNpcFloorKey } from '../../data/plot';
-import { registerFloorScene, type SceneActorDef } from '../../systems/cinematics';
+import {
+  activeFloorSceneId,
+  floorSceneRoleIds,
+  liftSceneLeash,
+  registerFloorScene,
+  type SceneActorDef,
+} from '../../systems/cinematics';
+import { registerContentRuntimeHook } from '../../systems/content_hooks';
+import { ensureEntityIndex } from '../../systems/entity_index';
 import { ARENA_SAND_HALF, ARENA_STAND_ROW } from './fort';
 import { LIQUIDATOR_BASE_ARENA_ANCHOR } from './rooms';
 
@@ -244,11 +252,69 @@ registerFloorScene({
      * культистом на песке. */
     { kind: 'awaitDeath', role: 'prisoner', timeout: 26 },
 
-    { kind: 'orbit', around: { role: 'gladiator' }, radius: ORBIT_RADIUS, speed: 0.42, height: 1.6, seconds: 5 },
+    /* Прощальный облёт держится ПЕСКА, а не победителя.
+     *
+     * Раньше он был привязан к человеку и это сходило с рук ровно потому, что
+     * человека держала верёвка: уйти он не мог. Как только поводок стали снимать
+     * по исходу дуэли, боец пошёл прочь — и увёл камеру за пределы арены
+     * (`cam_r` 8 → 29 к сорок шестой секунде на обоих сидах), а прощальная
+     * реплика Марко зазвучала вне кадра.
+     *
+     * Место здесь и по смыслу вернее человека: последнее слово сцены — «Песок
+     * всё спишет», и смотреть на этих словах надо на песок, с которого только
+     * что унесли одного из двоих. Победитель волен уходить, кадр остаётся. */
+    { kind: 'orbit', around: { ox: 0, oy: 0 }, radius: ORBIT_RADIUS, speed: 0.42, height: 1.6, seconds: 5 },
     // DRAFT
     { kind: 'say', role: 'marko', text: 'Песок всё спишет. Следующий заход — через смену.', color: MARKO_VOICE },
 
     // Дальше камера сама уходит к игроку. Досматривать нечего: если бой ещё
     // идёт, игрок досмотрит его своими ногами.
   ],
+});
+
+/* ── Когда дуэль решена ──────────────────────────────────────────
+ *
+ * Поводок песка нужен, пока на песке идёт дуэль: без него двое разошлись бы по
+ * форту, и вместо боя в кадре осталась бы пустая арена. Как только один лёг,
+ * держать второго нечем — дело его в кадре кончено, а верёвка остаётся, и живой
+ * человек упирается в неё столбом. Замерено (`tmp/arena_probe.ts`, сид 7):
+ * пленный умирал на двадцатой секунде, победитель выходил на радиус поводка к
+ * тридцать второй и стоял там до пятьдесят шестой, когда сцена закрывалась сама.
+ *
+ * Решает это ПАКЕТ, а не проигрыватель: «дуэль решена» — факт арены, у соседних
+ * сцен свои. Проигрывателю остаётся общий глагол `liftSceneLeash`, поднимающий
+ * верёвку с отпущенных; трибуну и распорядителя он не трогает, их держит пост.
+ *
+ * Такт свой, потому что своего у сцены нет: словарь тактов ждёт условий, а не
+ * следит за ними. Хук узкий — пока идёт эта сцена и не чаще, чем раз в
+ * `DUEL_SETTLED_CHECK_S`; два взгляда в индекс по id, никаких проходов по этажу.
+ * Хук смерти сюда не годится: он висит на игровом цикле входной точки, а бой на
+ * песке идёт в `updateAI`, и на замерах его не видно вовсе.
+ */
+const DUEL_ROLES = ['gladiator', 'prisoner'] as const;
+/** Каданс опроса исхода. Сцена меряется десятками секунд — полусекунды хватает. */
+const DUEL_SETTLED_CHECK_S = 0.5;
+let duelSettledCd = 0;
+
+registerContentRuntimeHook({
+  id: 'liquidatorbase_arena_duel',
+  phases: ['floor_activity'],
+  update(ctx) {
+    if (activeFloorSceneId() !== ARENA_DUEL_SCENE_ID) {
+      duelSettledCd = 0;
+      return;
+    }
+    duelSettledCd -= ctx.dt;
+    if (duelSettledCd > 0) return;
+    duelSettledCd = DUEL_SETTLED_CHECK_S;
+
+    const byId = ensureEntityIndex(ctx.entities).byId;
+    // Пустой состав — не исход, а несостоявшаяся расстановка: верёвку по нему
+    // снимать нельзя, иначе она упала бы на первом же кадре сцены.
+    const settled = DUEL_ROLES.some(role => {
+      const ids = floorSceneRoleIds(ARENA_DUEL_SCENE_ID, role);
+      return ids.length > 0 && ids.every(id => !byId.get(id)?.alive);
+    });
+    if (settled) liftSceneLeash(ARENA_DUEL_SCENE_ID);
+  },
 });
