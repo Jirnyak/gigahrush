@@ -43,6 +43,15 @@ const HALL_W = 20;
 const HALL_H = 14;
 /** Насколько зал отнесён от Актового: столько камера и летит. */
 const HALL_DISTANCE = 40;
+/**
+ * Докуда дорога до зала считается задуманной, а не крюком, в шагах.
+ *
+ * Камера летит не по прямой, а по коридорам, и мерить пролёт нужно дорогой.
+ * Задуманная дорога — `HALL_DISTANCE`; вдвое против неё это ещё план, дальше
+ * начинается блуждание по лабиринту вместо выхода к залу. Своего числа тут нет
+ * намеренно: потолок обязан ехать за расстоянием до зала, а не жить отдельно.
+ */
+const HALL_WALK_LIMIT = HALL_DISTANCE * 2;
 /** Сколько свободных клеток и в какой рамке нужно рядом, чтобы зал не замуровало. */
 const HALL_APPROACH_CELLS = 6;
 const HALL_APPROACH_RING = 6;
@@ -146,13 +155,22 @@ function isApartmentCell(world: World, ci: number): boolean {
   return (world.rooms[roomId]?.apartmentId ?? -1) >= 0;
 }
 
-/** Что достижимо пешком от стартовой комнаты. */
-function reachableFromStart(world: World): Uint8Array {
-  const mask = new Uint8Array(W * W);
+/**
+ * Сколько шагов пешком от стартовой комнаты до каждой клетки; `-1` — не дойти.
+ *
+ * Именно ШАГОВ, а не «достижимо/нет». Прежняя маска отвечала только на второй
+ * вопрос, и место для зала выбиралось по прямой: сорок клеток по азимуту от
+ * Актового. По прямой камера не летает — она идёт по коридорам, и на неудачном
+ * лабиринте те же сорок клеток оборачивались дорогой в триста шагов вокруг
+ * жилого массива (замерено: сид 7 — 290 шагов при 32 клетках по прямой, пролёт
+ * на шестнадцатой секунде вместо седьмой).
+ */
+function walkStepsFromStart(world: World): Int32Array {
+  const steps = new Int32Array(W * W).fill(-1);
   const start = findNamedRoom(world, 'tutor_hall');
-  if (!start) return mask;
+  if (!start) return steps;
   const queue = [world.idx(world.wrap(start.x + Math.floor(start.w / 2)), world.wrap(start.y + Math.floor(start.h / 2)))];
-  mask[queue[0]] = 1;
+  steps[queue[0]] = 0;
   for (let head = 0; head < queue.length; head++) {
     const ci = queue[head];
     const x = ci % W;
@@ -161,12 +179,12 @@ function reachableFromStart(world: World): Uint8Array {
       const nx = world.wrap(x + dx);
       const ny = world.wrap(y + dy);
       const ni = world.idx(nx, ny);
-      if (mask[ni] || world.solid(nx, ny)) continue;
-      mask[ni] = 1;
+      if (steps[ni] >= 0 || world.solid(nx, ny)) continue;
+      steps[ni] = steps[ci] + 1;
       queue.push(ni);
     }
   }
-  return mask;
+  return steps;
 }
 
 /**
@@ -186,21 +204,29 @@ function freeOfApartments(world: World, rx: number, ry: number): boolean {
 }
 
 /**
- * Место для зала: достижимая клетка примерно в `HALL_DISTANCE` от Актового,
- * вокруг которой помещается прямоугольник, не задевающий чужие квартиры.
+ * Место для зала: клетка примерно в `HALL_DISTANCE` от Актового, до которой
+ * ближе всего ИДТИ, и вокруг которой помещается прямоугольник, не задевающий
+ * чужие квартиры.
  *
  * Раньше место искалось вслепую по азимуту, а связность добывалась потом —
  * проёмом или прокопом. На трети этажей это не удавалось, и зал вставал глухим
  * блоком: игрок в него не попадал, камера дороги не находила и летела напрямую,
  * то есть сквозь стены. Теперь наоборот: сначала связное место, потом стройка.
+ *
+ * Но одной связности мало: она отвечает «дойти можно», а не «дойти близко».
+ * Место брали ПЕРВОЕ подошедшее, и на неудачном лабиринте сорок клеток по прямой
+ * складывались в триста шагов кругом. Поэтому из целого кольца берётся не первый
+ * годный азимут, а самый близкий ПЕШКОМ.
  */
-function findHallOrigin(world: World, reachable: Uint8Array): { x: number; y: number } {
+function findHallOrigin(world: World, walk: Int32Array): { x: number; y: number } {
   const start = findNamedRoom(world, 'tutor_hall');
   const fromX = start ? start.x + Math.floor(start.w / 2) : Math.floor(W / 2);
   const fromY = start ? start.y + Math.floor(start.h / 2) : Math.floor(W / 2);
   const bearing = rng() * Math.PI * 2;
 
   let fallback: { x: number; y: number } | null = null;
+  let best: { x: number; y: number } | null = null;
+  let bestSteps = Infinity;
   for (let ring = 0; ring <= HALL_SEARCH_REACH; ring += 2) {
     for (let step = 0; step < 32; step++) {
       const angle = bearing + (step / 32) * Math.PI * 2;
@@ -209,29 +235,42 @@ function findHallOrigin(world: World, reachable: Uint8Array): { x: number; y: nu
       const cy = world.wrap(fromY + Math.round(Math.sin(angle) * reach));
       // Якорь обязан быть уже связан с миром — тогда зал строится вокруг живого
       // коридора, а не рядом с ним.
-      if (!reachable[world.idx(cx, cy)]) continue;
+      const steps = walk[world.idx(cx, cy)];
+      if (steps < 0) continue;
+      // Крюк длиннее уже найденного проверять незачем, и это же снимает цену
+      // полного обхода колец: дорогие проверки квартир и подхода не доходят до
+      // заведомо худшего азимута.
+      if (steps >= bestSteps) continue;
       const x = world.wrap(cx - Math.floor(HALL_W / 2));
       const y = world.wrap(cy - Math.floor(HALL_H / 2));
       if (!freeOfApartments(world, x, y)) continue;
       if (!fallback) fallback = { x, y };
-      if (countReachableAround(world, x, y, reachable) >= HALL_APPROACH_CELLS) return { x, y };
+      if (countReachableAround(world, x, y, walk) < HALL_APPROACH_CELLS) continue;
+      bestSteps = steps;
+      best = { x, y };
     }
+    // Кольцо просмотрено целиком. Дальние кольца лежат дальше и по прямой, так
+    // что искать в них стоит, только пока найденное — крюк. Уложились в
+    // задуманную дорогу — дальше не ходим.
+    if (best && bestSteps <= HALL_WALK_LIMIT) break;
   }
-  return fallback ?? { x: world.wrap(fromX + HALL_DISTANCE), y: world.wrap(fromY - Math.floor(HALL_H / 2)) };
+  return best ?? fallback ?? { x: world.wrap(fromX + HALL_DISTANCE), y: world.wrap(fromY - Math.floor(HALL_H / 2)) };
 }
 
 /** Сколько связанных с миром клеток лежит в рамке вокруг будущих стен. */
-function countReachableAround(world: World, rx: number, ry: number, reachable: Uint8Array): number {
+function countReachableAround(world: World, rx: number, ry: number, walk: Int32Array): number {
   let found = 0;
   for (let ring = 1; ring <= HALL_APPROACH_RING; ring++) {
     for (let dx = -ring; dx <= HALL_W - 1 + ring; dx++) {
       for (const dy of [-ring, HALL_H - 1 + ring]) {
-        if (reachable[world.idx(rx + dx, ry + dy)]) found++;
+        // Недостижимая клетка помечена `-1`, а он истинный: сравнение обязано
+        // быть с нулём, иначе «связано» вернёт весь бетон этажа.
+        if (walk[world.idx(rx + dx, ry + dy)] >= 0) found++;
       }
     }
     for (let dy = -ring; dy <= HALL_H - 1 + ring; dy++) {
       for (const dx of [-ring, HALL_W - 1 + ring]) {
-        if (reachable[world.idx(rx + dx, ry + dy)]) found++;
+        if (walk[world.idx(rx + dx, ry + dy)] >= 0) found++;
       }
     }
     if (found >= HALL_APPROACH_CELLS) break;
@@ -256,25 +295,33 @@ function stainHall(world: World, rx: number, ry: number): void {
 }
 
 /**
- * Прокопать зал к остальному этажу, если общий соединитель не справился.
+ * Прокопать зал к остальному этажу, если дороги к нему нет или она — крюк.
  *
  * `connectProtectedRoom` пробивает один проём в ближайший коридор и ищет его не
  * дальше тридцати клеток. В глухом жилом массиве этого не хватает, и зал
  * оставался замурованным: недостижимым для игрока и без дороги для камеры,
  * из-за чего та летела к нему напрямую — сквозь стены.
  *
- * Поэтому здесь честная проверка достижимости от стартовой комнаты и, если её
- * нет, прокоп волной: ищем кратчайшую цепочку клеток от зала до уже достижимого
- * пространства, идя ТОЛЬКО по тем клеткам, которые копать можно. Чужие квартиры
- * (`aptMask`) непроходимы для этой волны — их бульдозерить нельзя.
+ * Поэтому здесь честный ЗАМЕР дороги от стартовой комнаты и, если её нет или она
+ * длиннее задуманной, прокоп волной: ищем кратчайшую цепочку клеток от зала до
+ * места, откуда до старта действительно близко, идя ТОЛЬКО по тем клеткам,
+ * которые копать можно. Чужие квартиры (`aptMask`) непроходимы для этой волны —
+ * их бульдозерить нельзя.
+ *
+ * Замер именно ЗДЕСЬ, а не при выборе места, потому что зал меняет дорогу под
+ * собой: двадцать на четырнадцать вместе с защитной рамкой ложатся поперёк того
+ * самого коридора, которым место и было близким, и обход остаётся кругом через
+ * весь массив. Выбор места по шагам сокращает такие случаи, но гарантию даёт
+ * только замер после стройки.
  */
 function ensureHallReachable(world: World, hx: number, hy: number): void {
-  // Маску считаем ЗАНОВО, уже по вырытому залу. Прежняя, снятая до постройки,
-  // помнила на этом месте коридор и уверяла, что всё достижимо, — из-за чего
+  // Замер делаем ЗАНОВО, уже по вырытому залу. Прежний, снятый до постройки,
+  // помнил на этом месте коридор и уверял, что всё достижимо, — из-за чего
   // прокоп молча не выполнялся ни разу.
-  const reachable = reachableFromStart(world);
+  const reachable = walkStepsFromStart(world);
   const inside = world.idx(world.wrap(hx + 1), world.wrap(hy + 1));
-  if (reachable[inside]) return;
+  const near = (ci: number): boolean => reachable[ci] >= 0 && reachable[ci] <= HALL_WALK_LIMIT;
+  if (near(inside)) return;
 
   // Волна от зала по копаемым клеткам до первой достижимой.
   const prev = new Int32Array(W * W).fill(-1);
@@ -311,14 +358,16 @@ function ensureHallReachable(world: World, hx: number, hy: number): void {
       if (isApartmentCell(world, ni) || world.cells[ni] === Cell.LIFT) continue;
       seen[ni] = 1;
       prev[ni] = ci;
-      if (reachable[ni]) { hit = ni; break; }
+      if (near(ni)) { hit = ni; break; }
       dig.push(ni);
     }
   }
   if (hit < 0) {
-    // Волна не выбралась: зал в кольце чужих квартир. Тогда режем напрямую к
-    // стартовой комнате, снося всё на линии, кроме самих квартир и лифтов —
-    // перестроить коридор не жалко, чужое жильё трогать нельзя.
+    // Волна не нашла, куда выйти: зал в кольце чужих квартир, либо всё близкое
+    // к старту от него отгорожено жильём. Тогда режем напрямую к стартовой
+    // комнате, снося всё на линии, кроме самих квартир и лифтов — перестроить
+    // коридор не жалко, чужое жильё трогать нельзя. Прямая короче любого крюка,
+    // так что дорога заведомо укладывается в задуманную.
     carveStraightApproach(world, hx, hy);
     return;
   }
@@ -387,8 +436,8 @@ function carveStraightApproach(world: World, hx: number, hy: number): void {
  * ищет готовые коридоры, а до них соединять не с чем.
  */
 export function carvePrologueHall(world: World, nextRoomId: number): void {
-  const reachable = reachableFromStart(world);
-  const at = findHallOrigin(world, reachable);
+  const walk = walkStepsFromStart(world);
+  const at = findHallOrigin(world, walk);
   const room = stampRoom(world, nextRoomId, RoomType.COMMON, at.x, at.y, HALL_W, HALL_H, -1);
   applyNamedRoom(room, PROLOGUE_HALL_ALIAS, LIVING_NAMED_ROOMS[PROLOGUE_HALL_ALIAS]);
   protectRoom(world, at.x, at.y, HALL_W, HALL_H, Tex.CONCRETE, Tex.CONCRETE);
