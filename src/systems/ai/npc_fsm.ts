@@ -22,7 +22,7 @@ import {
   wanderFar,
   wanderInRoom,
 } from './pathfinding';
-import { tickGotoOrder } from './goto_order';
+import { actorUnderOrder, tickGotoOrder } from './goto_order';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import {
   emitMarkovBark,
@@ -377,7 +377,7 @@ function enterUtilityIntent(e: Entity, intent: NpcUtilityIntentId, score: number
    * первый кадр не пережил НИ ОДИН, дошли 0 из 12. Приказом при спавне живут
    * шесть мест — подъезд Мёбиуса, приманка бетоноеда, белая комната, белая
    * прислушка и мигрант A-Life (`opts.goalX/goalY`). */
-  if (ai.combatTargetId !== undefined || ai.goal === AIGoal.GOTO) return;
+  if (ai.combatTargetId !== undefined || actorUnderOrder(e)) return;
 
   ai.goal = goalForIntent(intent);
   ai.path = [];

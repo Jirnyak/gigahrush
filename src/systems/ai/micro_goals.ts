@@ -4,6 +4,7 @@ import { AIGoal, Entity, EntityType, Msg, ItemType } from '../../core/types';
 import { World } from '../../core/world';
 import { emitMarkovBark } from './barks';
 import { steerEntityTowardCell, clearEntitySteeringPath } from './pathfinding';
+import { actorUnderOrder } from './goto_order';
 import { aiPathMoveSpeed } from '../rpg';
 import { stepActorBy } from '../movement_collision';
 
@@ -74,7 +75,24 @@ export function trySetMicroGoal(e: Entity, id: string, opts: MicroGoalOpts): boo
 export function tickMicroGoal(world: World, e: Entity, dt: number, _time: number, _msgs: Msg[]): boolean {
   const ai = e.ai;
   if (!ai) return false;
-  
+  /* На акторе стоит ПРИКАЗ — микроцель отказывается, ровно как ядро актора
+   * (`ai/index.ts`, `tryActorCore`) и тактика (`ai/tactics.ts`,
+   * `runActorTactic`), и по той же причине: волю задали снаружи, и своего хода
+   * микроцель взамен неё не берёт. Отказ полный, до тиков кулдаунов: начатая
+   * микроцель замирает и доигрывается, когда приказ погаснет.
+   *
+   * Это не новый закон, а починка асимметрии. У человека такт микроцелей стоит
+   * НИЖЕ приказа (`updateNPC`) и под приказом не выполнялся никогда; у твари он
+   * стоит ВЫШЕ (`updateMonster`), потому что бой у неё живёт внутри того же
+   * такта, — и молча отнимал у неё кадр. Ставить второй закон для твари нельзя,
+   * поэтому отказ общий и живёт здесь, у самой микроцели.
+   *
+   * Единственный, кто ставит микроцель твари, — потеря цели в бою
+   * (`search_lkp`, `ai/combat.ts`), а он и так отказывает при живой боевой цели.
+   * Замирает поэтому не поиск врага, а его остывший след. */
+  if (actorUnderOrder(e)) return false;
+
+
   if (ai.microCooldowns) {
     let hasDeletes = false;
     const keys = Object.keys(ai.microCooldowns);

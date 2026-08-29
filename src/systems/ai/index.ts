@@ -11,6 +11,7 @@ import {
 import { World } from '../../core/world';
 import { setPathContext } from './pathfinding';
 import { setEntityMap, updateMonster } from './monster';
+import { actorUnderOrder, adoptActorOrder } from './goto_order';
 import { setCombatContext, tryFactionCombat, tryFleeFromMonster, trySimulateNpcAmmoRestock } from './combat';
 import { primeNpcAlifeState, setNpcContext, updateNPC } from './npc_fsm';
 import { setRoomLeashMinute } from '../room_leash';
@@ -124,8 +125,10 @@ const UNSTUCK_ACTOR_OPTIONS = { radius: 0, rescueFromSolid: true } as const;
  *     8.8 → 10.6%, а кучность 34.3 → 39.8. Бюджет берётся удешевлением
  *     мышления, а не доплатой за него, поэтому вытеснение не взято.
  *
- *  4. На акторе стоит ПРИКАЗ — `AIGoal.GOTO` (`ai/goto_order.ts`,
- *     `tickGotoOrder`). Это тот же случай, что и пункт 2, только выраженный не
+ *  4. На акторе стоит ПРИКАЗ (`ai/goto_order.ts`, `actorUnderOrder`). Признак —
+ *     запись приказа, а не курс `AIGoal.GOTO`: курс живёт один такт и стирается
+ *     первой же дракой, а приказ переживает её и после боя возобновляется.
+ *     Это тот же случай, что и пункт 2, только выраженный не
  *     ролью в сцене, а курсом: волю актору задали снаружи, и ядро её не
  *     отменяет. Признак нужен ОТДЕЛЬНО от пункта 3, потому что свежий приказ
  *     приходит с пустым маршрутом — ровно в это окно ядро и перехватывало
@@ -154,7 +157,7 @@ function tryActorCore(world: World, e: Entity, dt: number, time: number): boolea
   const ai = e.ai;
   if (!ai) return false;
   if (e.cinematicState !== undefined) return false;
-  if (ai.goal === AIGoal.GOTO) return false;
+  if (actorUnderOrder(e)) return false;
   if (ai.path.length > 0 && !actorBrainOwnsRoute(e)) return false;
   return tickActorBrain(world, e, dt, time);
 }
@@ -302,6 +305,15 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
         aiStats.skipped++;
         continue;
       }
+      /* Усыновление сырого приказа — ОДНО место на весь проект, и оно здесь.
+       *
+       * Четырнадцать мест снаружи задают волю актору сырьём: `ai.goal =
+       * AIGoal.GOTO` плюс `tx/ty`. Своей записи (`ai.orderX/orderY`) они не
+       * ставят и ставить не обязаны — переписывать четырнадцать вызывающих
+       * ради этого значило бы завести четырнадцать способов ошибиться. Цикл
+       * видит КАЖДОГО думающего актора каждый кадр и до всякого, кто пишет в
+       * `goal`, поэтому приказ заводится ровно один раз и ровно здесь. */
+      adoptActorOrder(e);
       /* Откат атаки убывает ЗДЕСЬ и только здесь — ровно как пейн-стан.
        *
        * Он жил по видовым веткам и тикал ТОЛЬКО в тех кадрах, где тварь уже

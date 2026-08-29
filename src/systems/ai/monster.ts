@@ -40,7 +40,7 @@ import {
   DashRunOutcome, DashStep, advanceDashRun, dashLanding, dashReached, dashSelfDamage,
   dashTo, endDashRun, startDashRun,
 } from './dash';
-import { tickGotoOrder } from './goto_order';
+import { actorUnderOrder, tickGotoOrder } from './goto_order';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
 import { Spr } from '../../entities/sprite_index';
@@ -6992,6 +6992,24 @@ interface SpeciesTickStep {
   /** Кому шаг принадлежит: вид или его флаг. Ровно одно из двух. */
   kind?: MonsterKind;
   flag?: MonsterAIFlag;
+  /**
+   * Шаг — РУТИНА вида, и под приказом он уступает.
+   *
+   * Приказ идёт поверх рутины, но не поверх боя и страха, и здесь это правило
+   * доводится до видовых тактов. Помечены те, чьё занятие кадром — блуждание и
+   * кормёжка: жижевик бродит и глотает мусор, гнилушка бродит. Не помечены
+   * охота (головастик ищет и цепляет носителя, ржавник лежит в засаде и прыгает),
+   * паника (зелёный пёс шарахается от металла, Лишённый уходит из-под света) и
+   * рост (споровый ковёр — растение со скоростью ноль, приказ его всё равно не
+   * сдвинет, а уступив кадр, он замер бы навсегда: у приказа нет срока).
+   *
+   * Гейт при этом НЕ статический: рутина уступает, только когда твари ничего не
+   * угрожает. У помеченных шагов рутина и страх живут одной функцией в чужом
+   * пакете (`systems/slimevik.ts`, `systems/gnilushka.ts`), и разделить их
+   * отсюда нельзя, — поэтому битая или занятая боем тварь получает свой шаг
+   * целиком, как и раньше.
+   */
+  routine?: true;
   /** `true` — такт твари закончен, дальше идти незачем. */
   run: (c: SpeciesTickArgs) => boolean;
 }
@@ -7016,8 +7034,8 @@ const SPECIES_TICK_STEPS: readonly SpeciesTickStep[] = [
   { kind: MonsterKind.SPORE_CARPET, run: c => updateSporeCarpetGrowth(c.world, c.entities, c.e, c.nextId, c.dt, c.time, c.msgs, c.state) },
   { kind: MonsterKind.LISHENNYY, run: c => updateLishennyyBrightAvoidance(c.world, c.e, c.dt) },
   { flag: 'netPossessor', run: c => { updateChervieNetPossessor(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state); return false; } },
-  { kind: MonsterKind.SLIMEVIK, run: c => updateSlimevikMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.state) },
-  { kind: MonsterKind.GNILUSHKA, run: c => updateGnilushkaMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
+  { kind: MonsterKind.SLIMEVIK, routine: true, run: c => updateSlimevikMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.state) },
+  { kind: MonsterKind.GNILUSHKA, routine: true, run: c => updateGnilushkaMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
   { kind: MonsterKind.HEAD_SLUG, run: c => updateHeadSlugParasite(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.nextId, c.state) },
   { kind: MonsterKind.SOBRANNYY, run: c => { updateSobrannyyGrowthState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
   { flag: 'noiseFear', run: c => updateGreenDogNoiseFear(c.world, c.e, c.dt, c.time, c.msgs, c.state) },
@@ -7068,7 +7086,36 @@ function runSpeciesTickSteps(
   const c = speciesTickArgs;
   c.world = world; c.entities = entities; c.e = e; c.dt = dt; c.time = time;
   c.msgs = msgs; c.playerId = playerId; c.nextId = nextId; c.player = player; c.state = state;
+  /* Рутина вида уступает приказу, и только рутина. Условие «твари ничего не
+   * угрожает» — то же самое, которым бой и страх стоят выше приказа везде:
+   * живая боевая цель или свежая память об ударе. Ударили — условие ложно тем
+   * же кадром, шаг вида получает своё, и тварь отвечает как ей положено видом.
+   *
+   * Отказ ДО вызова, а не после: шаг успевает пройти свой `followPath`, и
+   * «отнять результат задним числом» значило бы двигать тварь дважды за кадр —
+   * своим блужданием и приказом.
+   *
+   * Кадр забирает САМ ПРИКАЗ, а не общий монстрятник ниже, и это существенно.
+   * Просто пропустить рутинный шаг нельзя: у жижевика и гнилушки этот шаг —
+   * вся их жизнь, и он же держит их подальше от общего боевого поиска. Замерено
+   * (`tmp/order_combat_probe.ts`): пропущенный шаг проваливал жижевика в общий
+   * поиск цели, тот находил враждебного гражданина в дальности обнаружения, и
+   * мирный собиратель мусора уходил в `HUNT`. Приказ не вправе менять то, чем
+   * тварь является.
+   *
+   * Приказ при этом НЕ поднят выше боя: он берёт кадр только у помеченной
+   * рутины и только пока твари ничего не угрожает. Поиск цели она в этот кадр
+   * не делает — но именно эти два вида его и не делают никогда, их шаг
+   * забирает такт раньше. Для всех прочих видов строка ничего не меняет. */
+  const yieldRoutine = actorUnderOrder(e)
+    && e.ai!.combatTargetId === undefined
+    && getRecentCombatThreat(e, time) === undefined;
   for (const step of steps) {
+    if (yieldRoutine && step.routine) {
+      if (tickGotoOrder(world, e, dt, monsterMoveMult(world, e))) return true;
+      // Приказ погас на этом же кадре (пришли, или дороги нет) — рутина
+      // забирает свой кадр обратно, и тварь не простаивает.
+    }
     if (step.run(c)) return true;
   }
   return false;
@@ -7196,7 +7243,16 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
    *
    * Шаг отдаётся под закон породы: `monsterMoveMult` — та же поправка на
    * местность, с которой тварь ходит и в охоте, и в блуждании. */
-  if (!target && tickGotoOrder(world, e, dt, monsterMoveMult(world, e))) return;
+  if (!target && tickGotoOrder(world, e, dt, monsterMoveMult(world, e))) {
+    /* Цели нет — значит нет и боевой памяти о ней. Ветка `!target` ниже чистит
+     * `combatTargetId` именно поэтому, но приказ возвращает такт РАНЬШЕ неё, и
+     * ушедший из виду враг оставался в поле навсегда. На поведение это не
+     * влияло, а вот счётчик `activeAttackers` (`ai/index.ts`, `isActiveAttacker`)
+     * врал: он считает всякого, у кого есть живая цель и невыстывший откат
+     * атаки, и марширующая по приказу тварь числилась в нём дерущейся. */
+    ai.combatTargetId = undefined;
+    return;
+  }
 
   /* Слух переходит в охоту — механика ОБЩАЯ на всех.
    *

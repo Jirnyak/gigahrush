@@ -455,6 +455,17 @@ export interface AIState {
   pi: number;                 // path index
   stuck: number;
   timer: number;
+  /* Приказ «иди в точку» — своя запись, а не `goal`/`tx`/`ty`.
+   *
+   * Курс живёт ровно один такт: бой пишет в `goal` свой `HUNT`, страх — `FLEE`,
+   * и приказ, хранившийся там же, исчезал безвозвратно — подрался, и сцена или
+   * караван молча теряли актора навсегда. Запись переживает и бой, и страх, а
+   * `AIGoal.GOTO` остаётся отметкой «исполняю прямо сейчас».
+   *
+   * Гаснет по приходу, по отсутствию дороги и по явной отмене — и ничем иным:
+   * срока годности у приказа нет. Владелец и исполнитель — `ai/goto_order.ts`. */
+  orderX?: number;
+  orderY?: number;
   npcState?: NpcState;        // visible/debug state derived from the current NPC intent
   stateTimer?: number;        // elapsed time in current sub-activity
   combatTargetId?: number;    // cached hostile target entity id

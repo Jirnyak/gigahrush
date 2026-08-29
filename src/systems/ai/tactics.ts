@@ -24,6 +24,7 @@ import { findLocalWetAnchor, wetTerrainCell } from '../monster_terrain';
 import { isPlayerEntity } from '../player_actor';
 import { MarkType, stampMark } from '../surface_marks';
 import { assignActorPath, followPath } from './pathfinding';
+import { actorUnderOrder } from './goto_order';
 
 type TacticResult = 'none' | 'passive' | 'handled';
 
@@ -626,8 +627,12 @@ export function runActorTactic(
    * Тактический профиль зарегистрирован пока один (`slime_woman`), но дыра не
    * про вид: любой профиль уводил бы своего актора из-под приказа. Замерено на
    * коллекторах (`tmp/goto_holes_probe.ts`): жижевые женщины под приказом
-   * проводили под управлением тактики до 811 кадров из 1800, дошли 0 из 8. */
-  if (ai.goal === AIGoal.GOTO) return false;
+   * проводили под управлением тактики до 811 кадров из 1800, дошли 0 из 8.
+   *
+   * Признак — запись приказа, а не курс `AIGoal.GOTO`: курс стирает первая же
+   * драка, а приказ её переживает, и тактика не вправе забрать актора в окно
+   * между концом боя и возобновлением приказа. */
+  if (actorUnderOrder(actor)) return false;
 
   ai.tacticCooldown = Math.max(0, (ai.tacticCooldown ?? 0) - dt);
   ai.tacticSenseCd = Math.max(0, (ai.tacticSenseCd ?? 0) - dt);
