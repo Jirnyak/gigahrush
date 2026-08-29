@@ -22,6 +22,7 @@ import {
   wanderFar,
   wanderInRoom,
 } from './pathfinding';
+import { tickGotoOrder } from './goto_order';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import {
   emitMarkovBark,
@@ -43,6 +44,7 @@ import {
   roomMemoryIsHostile,
   roomMemoryRevealsStash,
 } from '../room_memory';
+import { equippedCombatItemId } from '../inventory';
 import { territoryOwnerAtIndex, territoryRoomOwner } from '../territory';
 import { noteRoomVisit, roomVisitNovelty } from '../room_visits';
 /* Смена (рейс, склад, уборка) живёт своим модулем: она не про граф переходов,
@@ -362,7 +364,20 @@ function enterUtilityIntent(e: Entity, intent: NpcUtilityIntentId, score: number
 
   ai.npcState = nextState;
   ai.stateTimer = 0;
-  if (ai.combatTargetId !== undefined) return;
+  /* Курс переписывает только тот, кто им и владеет. Боевая цель тут стояла с
+   * самого начала; приказ снаружи (`AIGoal.GOTO`, `goto_order.ts`) — ровно тот
+   * же случай и та же строка: волю актору задали не намерением, и намерение её
+   * не отменяет. Гасит приказ его собственный исполнитель — приходом в клетку
+   * или отсутствием дороги.
+   *
+   * Без этого приказ, поставленный ПРИ СПАВНЕ, не доживал до первого своего
+   * исполнения: `primeNpcAlifeState` зовут на первом же кадре жизни NPC, и он
+   * заходит сюда. Замерено на жилом этаже (сид 20881,
+   * `tmp/goto_holes_probe.ts`): из двенадцати получивших приказ при создании
+   * первый кадр не пережил НИ ОДИН, дошли 0 из 12. Приказом при спавне живут
+   * шесть мест — подъезд Мёбиуса, приманка бетоноеда, белая комната, белая
+   * прислушка и мигрант A-Life (`opts.goalX/goalY`). */
+  if (ai.combatTargetId !== undefined || ai.goal === AIGoal.GOTO) return;
 
   ai.goal = goalForIntent(intent);
   ai.path = [];
@@ -406,6 +421,12 @@ export function updateNPC(
   // Дорога на объявленную разборку идёт ВМЕСТО рутины: иначе человек бросит её
   // на первом же переборе намерений и на место так и не придёт.
   if (tickFeudDuelWalk(world, e, dt)) {
+    return;
+  }
+
+  // Приказ «иди в точку» тоже идёт ВМЕСТО рутины и по той же причине, что
+  // дорога на разборку. Разбор — у `tickGotoOrder`.
+  if (tickGotoOrder(world, e, dt)) {
     return;
   }
 
@@ -644,8 +665,11 @@ function buildThreatSnapshot(world: World, entities: readonly Entity[], e: Entit
   };
 }
 
+/* «Чем бьёт» — у `equippedCombatItemId`: слот оружия ИЛИ пси-инструмент, тем же
+ * вызовом, каким берёт оружие сам бой. По одному слоту `weapon` пси-боец числился
+ * безоружным и невесомым. */
 function actorPower(e: Entity): number {
-  const ws = WEAPON_STATS[e.weapon ?? ''] ?? WEAPON_STATS[''];
+  const ws = WEAPON_STATS[equippedCombatItemId(e)] ?? WEAPON_STATS[''];
   const weapon = ws ? (ws.isRanged ? ws.dmg * (ws.pellets ?? 1) * 1.6 : ws.dmg) : 0;
   const hp = Math.max(0, e.hp ?? 20) * 0.22;
   const level = Math.max(1, e.rpg?.level ?? 1) * 3;
@@ -653,7 +677,7 @@ function actorPower(e: Entity): number {
 }
 
 function npcIsArmed(e: Entity): boolean {
-  const ws = WEAPON_STATS[e.weapon ?? ''];
+  const ws = WEAPON_STATS[equippedCombatItemId(e)];
   return !!ws && (ws.dmg > 3 || ws.isRanged);
 }
 

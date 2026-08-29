@@ -37,6 +37,14 @@ interface BetonoedState {
   weakIdx: number;
   weakX: number;
   weakY: number;
+  /* Куда ЗВАТЬ тварь к стене. Приказ нельзя адресовать в саму слабую стену: она
+   * `Cell.WALL` по построению, дороги в неё нет ни у кого, и приказ гаснет по
+   * `not_found` в тот же кадр. До 2026-08-29 сюда и целились — приманка на шум
+   * поэтому не работала даже после того, как канал приказов ожил. Это клетка
+   * ПЕРЕД стеной со стороны приманки, найденная при генерации, а не угаданная в
+   * рантайме. */
+  approachX: number;
+  approachY: number;
   nearRoomId: number;
   farRoomId: number;
   monsterId: number;
@@ -254,8 +262,8 @@ function applyNoiseLure(world: World, monster: Entity, state: GameState, encount
     monster.ai = {
       ...(monster.ai ?? { goal: AIGoal.WANDER, tx: encounter.weakX, ty: encounter.weakY, path: [], pi: 0, stuck: 0, timer: 0 }),
       goal: AIGoal.GOTO,
-      tx: encounter.weakX,
-      ty: encounter.weakY,
+      tx: encounter.approachX,
+      ty: encounter.approachY,
       path: [],
       pi: 0,
       timer: 0,
@@ -326,6 +334,24 @@ function worldFloorCell(world: World, room: Room, preferredX: number, preferredY
   return { x: world.wrap(room.x + 1), y: world.wrap(room.y + 1) };
 }
 
+/**
+ * Клетка, с которой тварь грызёт стену.
+ *
+ * Ищется СО СТОРОНЫ ПРИМАНКИ (там же, где стоит сам бетоноед) и по-настоящему
+ * проходимая: приказ, адресованный в стену, гаснет по `not_found`, а не приводит
+ * к ней. Порядок перебора — сперва прямо перед проломом, затем наискось: так
+ * тварь встаёт лицом к слабому месту, а не сбоку от него. Крайний случай отдан
+ * общему `worldFloorCell`, который уже умеет находить пол в комнате.
+ */
+function wallApproachCell(world: World, room: Room, weakX: number, weakY: number): { x: number; y: number } {
+  for (const dy of [0, -1, 1, -2, 2]) {
+    const x = world.wrap(weakX - 1);
+    const y = world.wrap(weakY + dy);
+    if (world.cells[world.idx(x, y)] === Cell.FLOOR) return { x, y };
+  }
+  return worldFloorCell(world, room, weakX - 2, weakY);
+}
+
 export function generateBetonoedShortcut(ctx: MaintContentCtx): void {
   const cx = Math.floor(ctx.spawnX);
   const cy = Math.floor(ctx.spawnY);
@@ -377,10 +403,13 @@ export function generateBetonoedShortcut(ctx: MaintContentCtx): void {
   dropItems(ctx, shortcut, ['rebar', 'ammo_fuel', 'psi_concrete_splinter']);
 
   const monsterId = spawnBetonoed(ctx, bait, weakX, weakY);
+  const approach = wallApproachCell(ctx.world, bait, weakX, weakY);
   activeBetonoed = {
     weakIdx,
     weakX,
     weakY,
+    approachX: approach.x,
+    approachY: approach.y,
     nearRoomId: bait.id,
     farRoomId: shortcut.id,
     monsterId,
@@ -540,7 +569,11 @@ export function summarizeBetonoedShortcut(): string[] {
   const encounter = activeBetonoed;
   if (!encounter) return ['[BETONOED] encounter=none'];
   return [
-    `[BETONOED] weak=${cellX(encounter.weakIdx)},${cellY(encounter.weakIdx)} monster=${encounter.monsterId} breached=${encounter.breached ? 1 : 0} sealed=${encounter.sealed ? 1 : 0} used=${encounter.used ? 1 : 0} drivenOff=${encounter.drivenOff ? 1 : 0}`,
+    /* `approach` в отладке не для красоты: приказ звать тварь к пролому ведёт
+     * именно туда, и если эта клетка окажется непроходимой, приманка на шум
+     * молча перестанет работать — ровно так она и была сломана. Видно должно
+     * быть обе клетки: стена и подход к ней. */
+    `[BETONOED] weak=${cellX(encounter.weakIdx)},${cellY(encounter.weakIdx)} approach=${encounter.approachX},${encounter.approachY} monster=${encounter.monsterId} breached=${encounter.breached ? 1 : 0} sealed=${encounter.sealed ? 1 : 0} used=${encounter.used ? 1 : 0} drivenOff=${encounter.drivenOff ? 1 : 0}`,
   ];
 }
 

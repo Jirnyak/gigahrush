@@ -40,6 +40,7 @@ import {
   DashRunOutcome, DashStep, advanceDashRun, dashLanding, dashReached, dashSelfDamage,
   dashTo, endDashRun, startDashRun,
 } from './dash';
+import { tickGotoOrder } from './goto_order';
 import { evaluateMicroStimuli, tickMicroGoal } from './micro_goals';
 import { emitMarkovBark } from './barks';
 import { Spr } from '../../entities/sprite_index';
@@ -7177,6 +7178,25 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (lishennyyLightTarget && followLishennyyLightTarget(world, e, lishennyyLightTarget, dt)) return;
   target = updateSobrannyyTarget(world, e, target, time, msgs, state);
   target = updateObzhivalshchikTarget(world, e, target, dt, time, msgs, state);
+
+  /* Приказ «иди в точку» тварь читает ТЕМ ЖЕ каналом, что и человек, — общим
+   * исполнителем `tickGotoOrder` (`ai/goto_order.ts`). Своей ветки под `GOTO` в
+   * монстрятнике не было вовсе, поэтому авторская сцена, адресующая ОДНУ тварь
+   * в ОДНУ клетку, была мертва: приманка бетоноеда на шум
+   * (`gen/maintenance/betonoed_shortcut.ts`) ставит `goal = GOTO` на слабую
+   * стену, а тварь тут же уходила блуждать строкой `ai.goal = AIGoal.WANDER`
+   * ниже. Замерено на коллекторах (`tmp/goto_holes_probe.ts`): из десяти
+   * тварей под приказом первый кадр не пережила ни одна.
+   *
+   * Место строки — существенное. Приказ читается ПОСЛЕ поиска цели и только
+   * при её отсутствии: у твари бой живёт внутри этого такта, и подъём приказа
+   * выше отнял бы у неё ответ на удар. Он же идёт ДО расследования шума ниже —
+   * иначе шум переписал бы `goal` и `tx/ty` приказа своей охотой, как рутина
+   * переписывала его у человека.
+   *
+   * Шаг отдаётся под закон породы: `monsterMoveMult` — та же поправка на
+   * местность, с которой тварь ходит и в охоте, и в блуждании. */
+  if (!target && tickGotoOrder(world, e, dt, monsterMoveMult(world, e))) return;
 
   /* Слух переходит в охоту — механика ОБЩАЯ на всех.
    *

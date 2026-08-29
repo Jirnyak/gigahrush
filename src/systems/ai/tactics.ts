@@ -617,6 +617,17 @@ export function runActorTactic(
   const profile = profileForActor(actor);
   const ai = actor.ai;
   if (!profile || !ai || !actor.alive) return false;
+  /* На акторе стоит ПРИКАЗ — тактика отказывается, ровно как ядро актора
+   * (`ai/index.ts`, `tryActorCore`, пункт 4 списка границ захвата) и по той же
+   * причине: волю задали снаружи, и своего хода тактика взамен неё не берёт.
+   * Отказ полный, до тиков кулдаунов: начатая тактика замирает как есть и
+   * доигрывается, когда приказ погаснет.
+   *
+   * Тактический профиль зарегистрирован пока один (`slime_woman`), но дыра не
+   * про вид: любой профиль уводил бы своего актора из-под приказа. Замерено на
+   * коллекторах (`tmp/goto_holes_probe.ts`): жижевые женщины под приказом
+   * проводили под управлением тактики до 811 кадров из 1800, дошли 0 из 8. */
+  if (ai.goal === AIGoal.GOTO) return false;
 
   ai.tacticCooldown = Math.max(0, (ai.tacticCooldown ?? 0) - dt);
   ai.tacticSenseCd = Math.max(0, (ai.tacticSenseCd ?? 0) - dt);

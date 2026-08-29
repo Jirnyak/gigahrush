@@ -473,3 +473,82 @@ test('NPC killing a monster through damage stimulus publishes npc kill event', (
   assert.equal(events[0].actorId, guard.id);
   assert.equal(events[0].targetId, mob.id);
 });
+
+/* ── Приказ «иди в точку» ─────────────────────────────────────── */
+
+/* `AIGoal.GOTO` — единственный канал, которым человека посылают в место снаружи
+ * его воли: такты сцены `moveTo` / `walkOut`, возврат актёра на пост, сбор
+ * каравана, созыв по тревожной панели, шествие, приход мигранта A-Life.
+ * Исполнителя у канала не было вовсе — приказ ставили, а идти по нему было
+ * некому, и «актёр уходит своими ногами» не работало никогда. */
+
+/** Прогнать кадры, пока не выполнено условие или не вышел бюджет. */
+function runUntil(
+  world: World,
+  entities: Entity[],
+  clock: GameClock,
+  seconds: number,
+  done: () => boolean,
+): number {
+  const dt = 1 / 60;
+  const frames = Math.ceil(seconds * 60);
+  for (let f = 0; f < frames; f++) {
+    if (done()) return f;
+    tick(world, entities, dt, f * dt, clock);
+  }
+  return done() ? frames : -1;
+}
+
+test('приказ GOTO доводит обычного NPC до заказанной клетки', () => {
+  const world = makeOpenWorld();
+  const clock = { hour: 8, minute: 0, totalMinutes: 0 };
+  const walker = npc(2, 20.5);
+  const entities = [player(), walker];
+
+  // Кадр прогрева: `primeNpcAlifeState` заводит намерение тому, у кого его нет,
+  // и стирает вместе с ним любой приказ, поставленный до первого кадра.
+  tick(world, entities, 1 / 60, 0, clock);
+
+  const tx = 32.5;
+  const ty = 10.5;
+  const ai = walker.ai!;
+  ai.goal = AIGoal.GOTO;
+  ai.tx = tx;
+  ai.ty = ty;
+  ai.path = [];
+  ai.pi = 0;
+  ai.stuck = 0;
+
+  const atTarget = (): boolean =>
+    world.idx(Math.floor(walker.x), Math.floor(walker.y)) === world.idx(Math.floor(tx), Math.floor(ty));
+  const frames = runUntil(world, entities, clock, 45, atTarget);
+
+  assert.notEqual(frames, -1, `не дошёл за 45с: стоит на ${walker.x.toFixed(1)},${walker.y.toFixed(1)}`);
+  // Приказ КОНЕЧЕН: пришёл — гаснет, и человек возвращается к своим делам.
+  // Иначе одна сцена вынимала бы его из симуляции навсегда.
+  tick(world, entities, 1 / 60, frames / 60, clock);
+  assert.notEqual(walker.ai!.goal, AIGoal.GOTO, 'приказ не погас на месте назначения');
+});
+
+test('приказ GOTO в недостижимую точку гаснет, а не держит человека столбом', () => {
+  const world = makeOpenWorld();
+  const clock = { hour: 8, minute: 0, totalMinutes: 0 };
+  // Каморка в бетоне: пола внутри нет, дороги туда нет ни у кого.
+  for (let y = 40; y <= 42; y++) {
+    for (let x = 40; x <= 42; x++) world.set(x, y, Cell.WALL);
+  }
+  const walker = npc(2, 20.5);
+  const entities = [player(), walker];
+  tick(world, entities, 1 / 60, 0, clock);
+
+  const ai = walker.ai!;
+  ai.goal = AIGoal.GOTO;
+  ai.tx = 41.5;
+  ai.ty = 41.5;
+  ai.path = [];
+  ai.pi = 0;
+  ai.stuck = 0;
+
+  const frames = runUntil(world, entities, clock, 5, () => walker.ai!.goal !== AIGoal.GOTO);
+  assert.notEqual(frames, -1, 'приказ в бетон не погас за 5с');
+});
