@@ -26,7 +26,7 @@ import { scaleMonsterDmg, strMeleeDmgMult } from './rpg';
 import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding';
 import { isPlayerEntity } from './player_actor';
 import { rng } from '../core/rand';
-import { damageActor } from './combat_stimulus';
+import { damageActor, getRecentCombatThreat } from './combat_stimulus';
 import { killEntity } from './entity_death';
 
 const INTERACTION_RANGE = 2.15;
@@ -344,23 +344,42 @@ export function updateGnilushkaMonster(
   const hurt = (e.hp ?? 1) < (e.maxHp ?? e.hp ?? 1);
   if (hurt) publishHurtOnce(state, world, e, player, time, msgs);
 
-  const nearest = nearestActor(world, e, AVOID_ARMED_RADIUS);
   const own = gnilushkaState.of(e);
   const angry = (e.monsterStage ?? CALM_STAGE) === HURT_STAGE || own.anger > 0;
   own.anger = Math.max(0, own.anger - dt);
 
-  if (angry && nearest) {
-    if (defensiveSlash(world, e, nearest, dt, time, msgs, state)) return true;
-    fleeFrom(world, e, nearest, dt);
+  /* ── РЕАКЦИЯ ── ответ на угрозу, доказанную ударом: когти из угла, а если
+   * угла нет — бег от ударившего.
+   *
+   * Такт гнилушки помечен рутинным (`ai/monster.ts`) и рутиной уступает кадр
+   * приказу «иди в точку» — ровно пока пуста та же боевая память, которую
+   * читает эта ветка. Признак с обеих сторон один, поэтому отнять у неё ответ
+   * на удар приказ не может ни в одном кадре.
+   *
+   * Раньше признаком были её собственные секунды злости (девять) и клеймо
+   * `HURT_STAGE`, а бой шёл с БЛИЖАЙШИМ, кто бы он ни был. Окна не совпадали:
+   * память удара живёт пять секунд, и в оставшиеся четыре гейт кадр уже
+   * уступал, а гнилушка ещё хотела драться — оборона молча пропадала. Клеймо
+   * же не снимается вовсе, и битая однажды гнилушка дралась с любым встречным
+   * до конца этажа. */
+  const attacker = getRecentCombatThreat(e, time)?.attacker;
+  if (attacker?.alive) {
+    if (defensiveSlash(world, e, attacker, dt, time, msgs, state)) return true;
+    fleeFrom(world, e, attacker, dt);
     return true;
   }
 
-  const threat = nearest && (
+  /* ── РУТИНА ── застенчивость и блуждание. Она пуглива и без всякого удара:
+   * держится подальше от вооружённого игрока и от тесноты, а битая однажды —
+   * от всех разом. Это её быт, а не оборона, и приказу он уступает. */
+  const nearest = nearestActor(world, e, AVOID_ARMED_RADIUS);
+  const shy = nearest && (
+    angry ||
     (nearest.id === playerId && actorLooksArmed(nearest)) ||
     world.dist2(e.x, e.y, nearest.x, nearest.y) <= CROWD_RADIUS * CROWD_RADIUS
   ) ? nearest : null;
-  if (threat) {
-    fleeFrom(world, e, threat, dt);
+  if (shy) {
+    fleeFrom(world, e, shy, dt);
     return true;
   }
 

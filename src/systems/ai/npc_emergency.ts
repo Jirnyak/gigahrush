@@ -18,6 +18,7 @@ import { factionToTerritoryOwner } from '../../data/factions';
 import { RELATION_FRIENDLY_THRESHOLD } from '../../data/relations';
 import { getFactionRelation, isHostile } from '../factions';
 import { territoryOwnerAt, territoryOwnerAtIndex } from '../territory';
+import { clearActorOrder, setActorOrder } from './goto_order';
 import { roomTargetCell } from './pathfinding';
 
 export const NPC_EMERGENCY_DEFAULT_CANDIDATE_CAP = 12;
@@ -289,17 +290,41 @@ export function chooseNpcEmergencyDecision(world: World, npc: Entity, options: N
   };
 }
 
+/**
+ * Приложить решение. Это ПЕРЕРЕШЕНИЕ по кадансу, а не подсказка: человек в
+ * тревоге пересчитывает укрытие раз в `rethinkAfterSec`, и прошлый адрес к
+ * этому моменту устарел — комнату завалило, туда набежала толпа, там встал
+ * враг. Поэтому решение перебивает стоящий приказ, и обе его половины делают
+ * это явно.
+ *
+ * Идущему в точку (`AIGoal.GOTO` — караул, ритуал, налёт на склад, вывод
+ * гражданских) отдаётся НОВЫЙ приказ. Сырой записи курса тут мало: усыновление
+ * подбирает сырой `GOTO` только когда записи ещё нет, и занятый приказом
+ * человек молча уходил по первому адресу. Замерено
+ * (`tmp/order_retarget_probe.ts`): под приказом, перерешив на двадцатом кадре,
+ * он приходил на СТАРУЮ точку (кадр 75), а на новой не оказывался за 400
+ * кадров ни разу.
+ *
+ * Прячущемуся и бегущему стоящий приказ СНИМАЕТСЯ. Иначе исполнитель приказа
+ * восстановит свой курс следующим же кадром и потащит человека под завал: страх
+ * выше приказа везде, и здесь — тоже.
+ */
 export function applyNpcEmergencyDecision(npc: Entity, decision: NpcEmergencyDecision): boolean {
   if (npc.type !== EntityType.NPC || !npc.alive || !npc.ai) return false;
   const ai = npc.ai;
-  ai.goal = decision.intent.aiGoal;
+  if (decision.intent.aiGoal === AIGoal.GOTO) {
+    setActorOrder(npc, decision.targetCellX, decision.targetCellY);
+  } else {
+    clearActorOrder(npc);
+    ai.goal = decision.intent.aiGoal;
+    ai.tx = decision.targetCellX;
+    ai.ty = decision.targetCellY;
+    ai.path = [];
+    ai.pi = 0;
+    ai.stuck = 0;
+    ai.timer = 0;
+  }
   if (decision.intent.npcState !== undefined) ai.npcState = decision.intent.npcState;
-  ai.tx = decision.targetCellX;
-  ai.ty = decision.targetCellY;
-  ai.path = [];
-  ai.pi = 0;
-  ai.stuck = 0;
-  ai.timer = 0;
   ai.stateTimer = 0;
   return true;
 }

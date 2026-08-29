@@ -48,6 +48,7 @@ import {
 } from './alife';
 import { findAlifeArrivalAnchor, findLiftDepartureAnchor } from './alife_migration';
 import { bfsPath } from './ai/pathfinding';
+import { setActorOrder } from './ai/goto_order';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerContentRuntimeHook, type ContentRuntimeContext } from './content_hooks';
 import {
@@ -1420,8 +1421,21 @@ function sendRolesOnErrand(
 }
 
 /**
- * Отдать приказ «иди в точку». Исполняет его `tickGotoOrder`
- * (`systems/ai/npc_fsm.ts`) — там же разбор канала и замер.
+ * Отдать приказ «иди в точку» ЯВНЫМ входом в канал (`setActorOrder`), а не
+ * сырой записью курса. Исполняет приказ `tickGotoOrder` (`ai/goto_order.ts`) —
+ * там же разбор канала и замер.
+ *
+ * Сырая запись здесь была не равнозначна явной: усыновление сырого курса
+ * работает строго «когда записи ещё нет», иначе бегство твари подменяло бы
+ * приказ. Из-за этого сцена не могла ПЕРЕНАЦЕЛИТЬ занятого актёра: и такт
+ * `moveTo`, и `walkOut`, и возврат по поводку писали новую точку в пустоту, а
+ * человек продолжал идти по первому адресу. Замерено
+ * (`tmp/order_retarget_probe.ts`): актёр под приказом, которому на двадцатом
+ * кадре дали новую точку, сырой записью уходил на СТАРУЮ (кадр 75) и на новой
+ * не оказывался ни разу за 400 кадров; явной — приходил на новую (кадр 141).
+ *
+ * Сцена — последнее слово: у неё приказ всегда НОВЫЙ вместо старого, потому
+ * что и такт, и поводок выражают волю самой сцены, а не подсказку.
  *
  * Маршрут ОБНУЛЯЕТСЯ: приказ отменяет прежнюю дорогу, а новую строит уже
  * исполнитель. Поэтому звать это каждый кадр нельзя — человеку, которому
@@ -1430,12 +1444,7 @@ function sendRolesOnErrand(
 function aimAtSpot(entity: Entity, ax: number, ay: number): void {
   entity.isTraveler = true;
   entity.ai = entity.ai ?? { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
-  entity.ai.goal = AIGoal.GOTO;
-  entity.ai.tx = ax;
-  entity.ai.ty = ay;
-  entity.ai.path = [];
-  entity.ai.pi = 0;
-  entity.ai.stuck = 0;
+  setActorOrder(entity, ax, ay);
 }
 
 /**
@@ -1458,7 +1467,12 @@ function updateSceneErrands(ctx: ContentRuntimeContext): void {
       errands.splice(i, 1);
       continue;
     }
-    // Бой и нужды сбивают курс: пока ведём — возвращаем цель.
+    /* Бой и нужды сбивают курс: пока ведём — ВОЗВРАЩАЕМ прежнюю цель, а не
+     * ставим новую. Отсюда и условие «курса в точку нет вовсе»: перенацеливать
+     * ведомого вправе только сама сцена, и делает она это `sendRolesOnErrand`,
+     * который и точку поручения перепишет, и приказ отдаст. Стоящий приказ в
+     * другое место эта строка поэтому не трогает: иначе поручение спорило бы
+     * тут каждый кадр с чужой волей и всегда побеждало. */
     if (entity.ai && entity.ai.goal !== AIGoal.GOTO) aimAtSpot(entity, item.ax, item.ay);
 
     if (active) {

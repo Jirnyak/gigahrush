@@ -13,21 +13,20 @@ import {
 import { World } from '../core/world';
 import { MONSTERS, entityDisplayName } from '../entities/monster';
 import { recordPlayerDamage } from './damage';
-import { ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, ensureEntityIndex, getEntityIndex, markEntityIndexDirty } from './entity_index';
+import { ENTITY_MASK_ITEM_DROP, ensureEntityIndex, getEntityIndex, markEntityIndexDirty } from './entity_index';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { scaleMonsterDmg, strMeleeDmgMult } from './rpg';
 import { followPath, tryAssignPathToCell, wanderNearby } from './ai/pathfinding';
 import { isPlayerEntity } from './player_actor';
 import { rng } from '../core/rand';
 import { speciesState } from './ai/species_state';
-import { damageActor } from './combat_stimulus';
+import { damageActor, getRecentCombatThreat } from './combat_stimulus';
 import { killEntity } from './entity_death';
 
-const INTERACTION_QUERY_CAP = 24;
 const FLEE_SECONDS = 2.2;
 const FLEE_DISTANCE = 8;
 const LASH_RANGE = 1.35;
-const slimevikActorQuery: Entity[] = [];
+const slimevikForageQuery: Entity[] = [];
 
 registerWorldEventObserver((state, event) => {
   if (
@@ -67,21 +66,6 @@ function wallNeighborCount(world: World, e: Entity): number {
   if (world.solid(x, y - 1)) n++;
   if (world.solid(x, y + 1)) n++;
   return n;
-}
-
-function nearestActor(world: World, entities: readonly Entity[], e: Entity): Entity | null {
-  let best: Entity | null = null;
-  let bestD2 = FLEE_DISTANCE * FLEE_DISTANCE;
-  ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, FLEE_DISTANCE, slimevikActorQuery, ENTITY_MASK_ACTOR, INTERACTION_QUERY_CAP);
-  for (const other of slimevikActorQuery) {
-    if (!other.alive || other.id === e.id || (!isPlayerEntity(other) && other.type !== EntityType.NPC)) continue;
-    const d2 = world.dist2(e.x, e.y, other.x, other.y);
-    if (d2 < bestD2) {
-      best = other;
-      bestD2 = d2;
-    }
-  }
-  return best;
 }
 
 function fleeFrom(world: World, e: Entity, threat: Entity, dt: number): void {
@@ -179,8 +163,8 @@ function findLooseItemNear(world: World, entities: readonly Entity[], e: Entity)
   if ((e.inventory?.length ?? 0) >= SLIMEVIK_BELLY_CAP) return undefined;
   let best: Entity | undefined;
   let bestD2 = FORAGE_RADIUS * FORAGE_RADIUS;
-  ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, FORAGE_RADIUS, slimevikActorQuery, ENTITY_MASK_ITEM_DROP, FORAGE_SCAN_CAP);
-  for (const drop of slimevikActorQuery) {
+  ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, FORAGE_RADIUS, slimevikForageQuery, ENTITY_MASK_ITEM_DROP, FORAGE_SCAN_CAP);
+  for (const drop of slimevikForageQuery) {
     if (!drop.alive || !drop.inventory?.length) continue;
     const d2 = world.dist2(e.x, e.y, drop.x, drop.y);
     if (d2 >= bestD2) continue;
@@ -218,16 +202,34 @@ export function updateSlimevikMonster(
 ): boolean {
   if (e.monsterKind !== MonsterKind.SLIMEVIK || !e.ai) return false;
 
-  const hurt = (e.hp ?? 1) < (e.maxHp ?? e.hp ?? 1);
-  if (hurt) {
-    const threat = nearestActor(world, entities, e);
-    if (threat) {
-      lashIfCornered(world, e, threat, dt, time, msgs, state);
-      fleeFrom(world, e, threat, dt);
-      return true;
-    }
+  /* ── РЕАКЦИЯ ── ответ на угрозу, доказанную ударом.
+   *
+   * Такт жижевика помечен рутинным (`ai/monster.ts`), и рутиной он уступает
+   * кадр приказу «иди в точку». Уступает ровно пока ему ничего не угрожает —
+   * то есть пока пуста та же боевая память, которую читает эта ветка. Признак
+   * один и тот же с обеих сторон, поэтому приказ не может отнять ответ на удар
+   * ни в одном кадре: ударили — память свежа, гейт кадра не забирает, ветка
+   * ниже своё получает.
+   *
+   * Признаком раньше было `hp < maxHp` плюс ближайший в восьми клетках, и это
+   * два разных дефекта в одной строке. Студень не заживает, поэтому раз битый
+   * жижевик шарахался от каждого прохожего ДО КОНЦА ЭТАЖА и больше не подбирал
+   * ничего: замерено (`tmp/order_retarget_probe.ts`) 116 кадров бегства из 300
+   * спустя восемь секунд после единственного удара, и 11.5 клетки бегства от
+   * стоящего столбом обидчика. И шарахался он не от ударившего, а от
+   * ближайшего — от того, кто просто мимо шёл.
+   *
+   * Пожизненный испуг при этом ещё и зависел от того, дали ли твари приказ:
+   * под приказом гейт его молча снимал, без приказа он правил. Теперь правило
+   * одно на оба случая. */
+  const attacker = getRecentCombatThreat(e, time)?.attacker;
+  if (attacker?.alive) {
+    lashIfCornered(world, e, attacker, dt, time, msgs, state);
+    fleeFrom(world, e, attacker, dt);
+    return true;
   }
 
+  /* ── РУТИНА ── всё остальное: он ищет брошенное и бродит. */
   const ai = e.ai;
   ai.goal = AIGoal.WANDER;
   ai.combatTargetId = undefined;

@@ -20,6 +20,7 @@ import { monsterSpr } from '../src/entities/sprite_index';
 import { S } from '../src/core/pixutil';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { isHostile } from '../src/systems/factions';
+import { damageActor, getRecentCombatThreat } from '../src/systems/combat_stimulus';
 import { activateInteraction, findInteractionTarget } from '../src/systems/interactions';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
@@ -147,15 +148,20 @@ test('gnilushka flees while calm and only turns dangerous after being hurt and c
   assert.equal(calm.ai?.combatTargetId, undefined);
   assert.equal(player.hp, 80);
 
+  /* Загнанная в угол отвечает когтями ТОМУ, КТО ЕЁ УДАРИЛ, и отвечает пока
+   * удар свеж. Рана сама по себе больше не признак: она не заживает, и по ней
+   * битая однажды гнилушка дралась бы с любым встречным до конца этажа. Признак
+   * теперь один и тот же с гейтом рутины (`ai/monster.ts`), который уступает
+   * кадр приказу «иди в точку», — поэтому приказ не может отнять у неё ответ. */
   const cornerWorld = openWorld();
   cornerWorld.cells[cornerWorld.idx(20, 19)] = Cell.WALL;
   cornerWorld.cells[cornerWorld.idx(20, 21)] = Cell.WALL;
   const cornerPlayer = makeTestPlayer({ id: 10, x: 21.25, y: 20.5, hp: 80, maxHp: 80 });
   const hurt = gnilushka(11, 20.5, 20.5);
-  hurt.hp = (hurt.maxHp ?? DEF.hp) - 5;
   const cornerEntities = [cornerPlayer, hurt];
-  const cornerState = makeGameState({ currentZ: 0, worldEvents: createWorldEventState() });
+  const cornerState = makeGameState({ time: 2, currentZ: 0, worldEvents: createWorldEventState() });
   prime(cornerEntities);
+  damageActor(cornerWorld, cornerState, hurt, { damage: 5, source: 'player_melee', attacker: cornerPlayer, time: 2 });
   updateMonster(cornerWorld, cornerEntities, hurt, 0.2, 2, [], cornerPlayer.id, { v: 12 }, cornerState);
 
   assert.equal(hurt.monsterStage, 1);
@@ -163,6 +169,20 @@ test('gnilushka flees while calm and only turns dangerous after being hurt and c
   assert.equal((cornerPlayer.hp ?? 0) < 80, true, 'cornered hurt gnilushka should slash defensively');
   const hurtEvent = getRecentEvents(cornerState, { type: 'gnilushka_hurt', tags: ['defensive'], limit: 1 })[0];
   assert.ok(hurtEvent);
+
+  /* НЕГАТИВНЫЙ КОНТРОЛЬ к той же правке: удар остыл (память живёт
+   * `COMBAT_THREAT_TTL`), а рана осталась. Тот же угол, тот же вплотную стоящий
+   * игрок — когтей больше нет, гнилушка вернулась к своему быту. Без этого
+   * контроля проверка выше зелена и на прежнем признаке `hp < maxHp`. */
+  const staleHp = cornerPlayer.hp ?? 80;
+  cornerPlayer.attackCd = 0;
+  hurt.attackCd = 0;
+  const staleTime = 60;
+  cornerState.time = staleTime;
+  assert.equal(getRecentCombatThreat(hurt, staleTime), undefined, 'память удара обязана истечь');
+  updateMonster(cornerWorld, cornerEntities, hurt, 0.2, staleTime, [], cornerPlayer.id, { v: 12 }, cornerState);
+  assert.equal(cornerPlayer.hp, staleHp, 'остывший удар не даёт права бить: рана — не угроза');
+  assert.equal(hurt.ai?.goal, AIGoal.FLEE, 'битая гнилушка сторонится, но это её быт, а не оборона');
 });
 
 test('living lost cell spawns reachable gnilushka content and handoff supplies', () => {

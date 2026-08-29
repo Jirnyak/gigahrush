@@ -12,6 +12,7 @@ import { DEF, generateSprite } from '../src/entities/slimevik';
 import { S } from '../src/core/pixutil';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { getRecentEvents, publishEvent } from '../src/systems/events';
+import { damageActor, getRecentCombatThreat } from '../src/systems/combat_stimulus';
 import { peekSlimevikBelly, updateSlimevikMonster } from '../src/systems/slimevik';
 import { dropMonsterLoot } from '../src/systems/monster_drops';
 import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
@@ -102,21 +103,37 @@ test('слизневик глотает брошенное, а смерть во
   assert.equal(peekSlimevikBelly(threat).length, 0);
 });
 
-test('Hurt Slimevik flees from nearby actors through bounded broadphase', () => {
+test('слизневик шарахается от ударившего, а не от прохожего', () => {
+  /* Признак бегства — свежая память удара, а не рана: студень не заживает, и по
+   * ране раз битый жижевик шарахался от каждого встречного до конца этажа,
+   * бросив собирательство навсегда. Признак теперь тот же, которым гейт рутины
+   * (`ai/monster.ts`) уступает кадр приказу «иди в точку», — поэтому ответ на
+   * удар приказ отнять не может. */
   const world = openSlimeRoom();
   const state = makeGameState({ time: 21, currentZ: -14 });
   const player = makeTestPlayer({ id: 1, x: 80, y: 80 });
-  const neighbor = makeTestNpc({ id: 3, x: 12.8, y: 10.5, faction: Faction.CITIZEN });
-  const threat = slimevik({ id: 2, hp: DEF.hp - 4 });
-  const entities = [player, neighbor, threat];
+  const bully = makeTestNpc({ id: 3, x: 12.8, y: 10.5, faction: Faction.CITIZEN });
+  const threat = slimevik({ id: 2 });
+  const entities = [player, bully, threat];
   const msgs: Msg[] = [];
 
   rebuildEntityIndex(entities);
+  damageActor(world, state, threat, { damage: 4, source: 'npc_melee', attacker: bully, time: state.time });
   assert.equal(updateSlimevikMonster(world, entities, threat, 0.2, state.time, msgs, state), true);
 
   assert.equal(threat.ai?.goal, AIGoal.FLEE);
-  assert.equal(threat.ai?.combatTargetId, neighbor.id);
-  assert.equal(neighbor.hp, undefined, 'hurt slimevik should flee before attacking in open floor');
+  assert.equal(threat.ai?.combatTargetId, bully.id);
+  assert.equal(bully.hp, undefined, 'на открытом полу он бежит, а не хлещет');
+
+  /* НЕГАТИВНЫЙ КОНТРОЛЬ к той же правке: удар остыл, рана осталась, обидчик
+   * стоит на том же месте — жижевик вернулся к своим делам. Без этой половины
+   * проверка выше зелена и на прежнем признаке `hp < maxHp`. */
+  const staleTime = 60;
+  state.time = staleTime;
+  assert.equal(getRecentCombatThreat(threat, staleTime), undefined, 'память удара обязана истечь');
+  assert.equal(updateSlimevikMonster(world, entities, threat, 0.2, staleTime, msgs, state), true);
+  assert.notEqual(threat.ai?.goal, AIGoal.FLEE, 'остывший удар не держит труса в бегстве');
+  assert.equal(threat.ai?.combatTargetId, undefined);
 });
 
 test('Slimevik kill events publish the standalone slimevik_killed fact', () => {
