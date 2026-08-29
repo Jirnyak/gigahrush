@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { AIGoal, Cell, EntityType, Faction, Occupation, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
 import { initFactionRelations, RELATION_HOSTILE_THRESHOLD, RELATION_MAX, RELATION_MIN } from '../src/data/relations';
+import { WEAPON_STATS } from '../src/data/catalog';
 import { seedGlobalRng } from '../src/core/rand';
 import { addAlifeFactionAttitude, createPrefilledAlifeState } from '../src/systems/alife';
 import { floorKeyForDesign } from '../src/systems/floor_keys';
@@ -60,9 +61,16 @@ function socialState() {
 }
 
 function neighbour(id: number, alifeId: number, x: number, y: number, weapon?: string): Entity {
+  /* Со стволом идут ПАТРОНЫ. С 2026-08-29 пустой магазин делает ствол не
+   * оружием (`weaponCanFire`), и безоружный по расчёту сил уходит в бегство —
+   * то есть сосед с пустым «макаровым» на ринг бы просто не вышел. В живой игре
+   * боец выходит с тремя магазинами (`generateNpcLoadout`), фикстура повторяет
+   * это, а не обходит закон. */
+  const ammoType = weapon ? WEAPON_STATS[weapon]?.ammoType : undefined;
   return makeTestNpc({
     id, alifeId, faction: Faction.CITIZEN, name: `Сосед ${alifeId}`,
     x, y, hp: 60, maxHp: 60, ai: aiState(), occupation: Occupation.WORKER, weapon,
+    inventory: ammoType ? [{ defId: ammoType, count: 24 }] : undefined,
   });
 }
 
