@@ -72,7 +72,8 @@ test('utility scrap trade and production definitions are present and keyed', () 
 
   assert.equal(ITEMS.black_market_shells.type, ItemType.AMMO);
   assert.deepEqual(ITEMS.black_market_shells.spawnRooms, []);
-  assert.equal(ITEMS.black_market_shells.spawnW, 0);
+  // Патрон в общем луте — канон 2026-08-29; дефицит держит цена, а не запрет.
+  assert.ok(ITEMS.black_market_shells.spawnW > 0);
   assert.equal(ITEMS.sugar_pack.type, ItemType.FOOD);
 
   for (const id of ['weapon_blueprint_t2', 'stolen_filter_pack', 'contraband_shocker_parts', 'stolen_terminal_stamp']) {

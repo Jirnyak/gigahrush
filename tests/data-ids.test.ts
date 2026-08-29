@@ -197,18 +197,28 @@ test('item ids are unique, keyed by id, and weapon items have stats', () => {
   assert.deepEqual(missingAmmoItems, [], 'physical weapon ammo types must reference item definitions');
 });
 
-test('ammo uses planned sources and explicit scarcity resources', () => {
+/* ПРАВКА 2026-08-29, решение владельца: таблица лута УНИВЕРСАЛЬНА и агностична,
+ * и патрон в ней такой же предмет, как всякий другой. Прежний закон требовал
+ * обратного — «ни у одного патрона нет общего веса спавна», — и цена оказалась
+ * велика: патрон не мог попасть НИ В ОДИН процедурный ящик, карман или на
+ * прилавок, все патроны на этажах были расставлены вручную, а написанные
+ * множители `ammoMult: 3` и `4` в профилях фракций и теги ящиков
+ * `'ammo'`/`'weapon'` умножали ноль и были мёртвыми ручками. Замер до правки:
+ * 0.9 патрона на стрелка во всём мире базы ликвидаторов при 442 опустошениях за
+ * десять минут.
+ *
+ * Дефицит остаётся, но выражается ЦЕНОЙ и ресурсом, а не запретом на спавн:
+ * сколько ляжет в ящик, решает общий `spawnCount` (дешёвое — больше, дорогое —
+ * меньше), поэтому химический патрон НИИ за 90 ₽ и без запрета остаётся
+ * редкостью, а девятка за 3 ₽ лежит пачкой. Проверки ресурса и плановых
+ * источников ниже сохранены целиком — снят ровно запрет на общий лут. */
+test('ammo enters the generic loot table like any other item', () => {
   const ammoEntries = Object.values(ITEMS).filter(def => def.type === ItemType.AMMO);
 
   assert.deepEqual(
-    ammoEntries.filter(def => def.spawnRooms.length > 0).map(def => def.id),
+    ammoEntries.filter(def => def.spawnW === 0).map(def => def.id),
     [],
-    'ammo must not enter generic room loot tables',
-  );
-  assert.deepEqual(
-    ammoEntries.filter(def => def.spawnW !== 0).map(def => def.id),
-    [],
-    'ammo generic spawn weight must stay zero',
+    'патрон обязан иметь общий вес спавна: таблица лута одна на все предметы',
   );
   assert.deepEqual(
     ammoEntries.filter(def => !resourceForItem(def.id)).map(def => def.id),

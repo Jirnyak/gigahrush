@@ -18,7 +18,12 @@ test('chemical 12g shell is explicit NII liquidator ammo with reagent fallback',
   assert.equal(def.name, 'Химический патрон 12 калибра');
   assert.equal(def.type, ItemType.AMMO);
   assert.deepEqual(def.spawnRooms, []);
-  assert.equal(def.spawnW, 0);
+  /* Патрон в общем луте — КАНОН (решение владельца 2026-08-29): таблица лута
+   * универсальна и агностична, патрон в ней такой же предмет, как всякий
+   * другой. Дефицит выражается ЦЕНОЙ и ресурсом, а не запретом на спавн:
+   * `spawnCount` сам делает дорогое редким. Прежний ноль означал, что патрон
+   * не мог попасть ни в один процедурный ящик, карман или на прилавок. */
+  assert.ok(def.spawnW > 0, 'патрон обязан быть в общем луте');
   assert.equal(def.stack, 6);
   assert.equal(resourceForItem(def.id)?.id, 'ammo');
 

@@ -20,7 +20,12 @@ test('incendiary 12g shells are rare ammo with cleanup tags and resource pressur
   assert.equal(def.type, ItemType.AMMO);
   assert.equal(def.name, 'Зажигательная дробь');
   assert.deepEqual(def.spawnRooms, []);
-  assert.equal(def.spawnW, 0);
+  /* Патрон в общем луте — КАНОН (решение владельца 2026-08-29): таблица лута
+   * универсальна и агностична, патрон в ней такой же предмет, как всякий
+   * другой. Дефицит выражается ЦЕНОЙ и ресурсом, а не запретом на спавн:
+   * `spawnCount` сам делает дорогое редким. Прежний ноль означал, что патрон
+   * не мог попасть ни в один процедурный ящик, карман или на прилавок. */
+  assert.ok(def.spawnW > 0, 'патрон обязан быть в общем луте');
   assert.equal(def.stack, 12);
   assert.equal(resourceForItem(def.id)?.id, 'ammo');
 
