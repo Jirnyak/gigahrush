@@ -589,7 +589,9 @@ import {
 import {
   activateInteraction,
   closeInteractableOverlay,
+  findFriendlyNpcForActor,
   findInteractionTarget,
+  findItemDropForActor,
   handleInteractableOverlayInput,
   isInteractableOverlayOpen,
   placeGeneratedInteractablesForCurrentFloor,
@@ -788,6 +790,36 @@ const _peerVisitEnded = new Set<number>();         // host: slots whose visit al
 const PEER_REMOTE_CONTAINER_ID = -777001;
 const ONLINE_PLAYER_SPRITE_SCALE = 0.65;
 let _peerRemoteContainerCell: { x: number; y: number } | null = null;
+
+/* Локальный id игрока-пира — ЗАРЕЗЕРВИРОВАН далеко за пределами хостового
+ * пространства id. Общая последовательность продолжает расти на хосте, поэтому
+ * взять здесь `nextEntityId.v++` значит ГАРАНТИРОВАННО столкнуться со следующей
+ * сущностью хоста: два актора с одним номером, и isPlayerEntity() прятал
+ * хостовую копию из рендера. */
+const PEER_LOCAL_PLAYER_ID_BASE = 0x40000000;
+
+// ── Liveness: heartbeat + ватчдоги на некорректный обрыв ─────
+// Чистый close вкладки долетает через DO, но убитый процесс/отвал сети may
+// молчать минуты — вторая сторона зависала навсегда. Ping идёт с обеих сторон
+// раз в секунду (без rAF: фоновая вкладка его останавливает); полная тишина
+// дольше NET_SILENCE_KICK_MS = сторона мертва. Порог 90с переживает даже
+// удушение таймеров скрытой вкладки Chrome до 1/мин.
+const NET_PING_INTERVAL_MS = 1000;
+const NET_SILENCE_KICK_MS = 90_000;
+const NET_HOST_STALL_WARN_MS = 8000;
+let _lastNetInAt = 0;       // peer: последнее ЛЮБОЕ сообщение от хоста/сервера
+let _lastHostStateAt = 0;   // peer: последний host_state (мир реально тикает)
+let _netStallWarnedAt = 0;
+const _peerLastMsgAt = new Map<number, number>(); // host: последнее сообщение слота
+
+// Сетевой отладочный лог: localStorage.gigahrush_net_debug = '1' в ОБОИХ окнах.
+const NET_DEBUG = (() => {
+  try { return localStorage.getItem('gigahrush_net_debug') === '1'; } catch { return false; }
+})();
+let _netlogLastSummaryAt = 0;
+function netlog(...args: unknown[]): void {
+  if (NET_DEBUG) console.log(`[netdbg ${Math.round(performance.now() / 100) / 10}s]`, ...args);
+}
 
 // Peer-side floor checkpoint reassembly (chunks arrive in order from host).
 let _snapChunks: (string | undefined)[] | null = null;
@@ -997,6 +1029,7 @@ function sendFloorSnapshotToPeer(peerSlot: number, spawnX: number, spawnY: numbe
     nextEntityId: nextEntityId.v,
   });
   const chunks = chunkFloorSnapshot(serializeFloorSnapshot(snapshot));
+  netlog('host: снапшот этажа слоту', peerSlot, '—', chunks.length, 'чанков, z =', state.currentZ);
   sendOnlineMessage({
     type: 'floor_snapshot_begin',
     _targetSlot: peerSlot,
@@ -1041,6 +1074,9 @@ function peerReturnHome(exp: ReturnType<typeof sanitizeVisitExport>, note: strin
   if (_peerReturningHome) return;
   _peerReturningHome = true;
   onlinePeerFloorReady = false;
+  _lastNetInAt = 0;
+  _lastHostStateAt = 0;
+  _netStallWarnedAt = 0;
   disconnectOnline();
   scheduleLoading(() => {
     if (loadGame()) {
@@ -1296,6 +1332,7 @@ function onOnlinePeerJoin(msgData: any): void {
   if (isInvader) remoteActor.playerRelation = -100;
   entities.push(remoteActor);
   _peerVisitEnded.delete(peerSlot);
+  netlog('host: peer_join слот', peerSlot, remoteActor.name, 'id', remoteActor.id, isInvader ? 'ВТОРЖЕНИЕ' : '', 'спавн', `(${spawnX.toFixed(1)},${spawnY.toFixed(1)})`);
   sendFloorSnapshotToPeer(peerSlot, spawnX, spawnY);
 }
 
@@ -1352,6 +1389,8 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
     rebuildEntityIndex(entities, 'load');
     hostClearSlot(slot);
     hostSetOpenContainer(slot, null);
+    _peerLastMsgAt.delete(slot);
+    netlog('host: слот', slot, 'эвакуировался лифтом');
     return;
   }
   if (world.cells[idx] === Cell.DOOR && world.doors.has(idx)) {
@@ -1391,21 +1430,12 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
       }
     }
   }
-  // Try NPC (talk/trade) — same E priority the host player gets. The
-  // host resolves the NPC, generates its trade stock and dialog line,
-  // and streams a menu copy; the peer's menu runs on the synced entity.
+  // Try NPC (talk/trade) — same E priority AND the same aim the host player
+  // gets: the shared cone-with-ray from interactions.ts. The old circular
+  // radius-1.7 search around the look point handed E to a bystander NPC while
+  // the peer was looking straight at a container («вместо ящика — разговор»).
   if (!handled) {
-    const tx = world.wrap(lx);
-    const ty = world.wrap(ly);
-    let bestNpc: Entity | null = null;
-    let bestNpcD2 = 1.7 * 1.7;
-    const npcQuery: Entity[] = [];
-    getEntityIndex().queryRadius(tx, ty, 1.7, npcQuery, ENTITY_MASK_ACTOR);
-    for (const e of npcQuery) {
-      if (!e.alive || e.type !== EntityType.NPC || e.peerSlot !== undefined || e === actor) continue;
-      const d2 = world.dist2(tx, ty, e.x, e.y);
-      if (d2 < bestNpcD2) { bestNpc = e; bestNpcD2 = d2; }
-    }
+    const bestNpc = findFriendlyNpcForActor(world, entities, actor, true);
     if (bestNpc) {
       if (!bestNpc.inventory || bestNpc.inventory.length === 0) {
         bestNpc.inventory = generateNpcTradeItems(bestNpc);
@@ -1421,21 +1451,18 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
         },
         talk: generateTalkText(bestNpc, { world, state, player: actor, time: state.time }),
       });
+      netlog('host: E пира', slot, '→ npc_open', bestNpc.id, bestNpc.name);
       handled = true;
     }
   }
-  // Try item pickup if door wasn't toggled
+  // Try item pickup if door wasn't toggled — the same aim cone as the local E
+  // (a plain radius-2.5 circle around the actor stole E from a faced container).
   if (!handled) {
-    let bestDrop: Entity | null = null;
-    let bestD2 = 2.5 * 2.5; // max 2.5 cell range
-    for (const e of entities) {
-      if (e.type !== EntityType.ITEM_DROP || !e.alive) continue;
-      const d2 = world.dist2(actor.x, actor.y, e.x, e.y);
-      if (d2 < bestD2) { bestDrop = e; bestD2 = d2; }
-    }
+    const bestDrop = findItemDropForActor(world, entities, actor);
     if (bestDrop) {
       // actor_echo carries the authoritative inventory next sync tick
       handled = pickupDrop(world, bestDrop, actor, state.msgs, state.time, state).handled;
+      if (handled) netlog('host: E пира', slot, '→ подбор дропа', bestDrop.id);
     }
   }
   // Try opening / searching a container in front of the peer. Host is the
@@ -1459,6 +1486,7 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
         _targetSlot: actor.peerSlot,
         container: containerSyncPayload(container),
       });
+      netlog('host: E пира', slot, '→ container_open', container.id, container.name, `(${container.x},${container.y})`);
     }
   }
 }
@@ -1667,7 +1695,7 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
 
     // Create local player actor for camera attachment
     const localPlayer: Entity = {
-      id: nextEntityId.v++,
+      id: PEER_LOCAL_PLAYER_ID_BASE + (peerMySlot ?? 0),
       type: EntityType.NPC,
       x: spawnX, y: spawnY,
       angle: -Math.PI / 2, pitch: 0,
@@ -1693,6 +1721,9 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
     finishLoadedFloorVisuals();
     rebuildEntityIndex(entities, 'load');
     onlinePeerFloorReady = true;
+    _lastHostStateAt = performance.now();
+    _netStallWarnedAt = 0;
+    netlog('peer: этаж загружен, z =', unpacked.meta.z, ', сущностей', entities.length, ', мой id', localPlayer.id);
     state.msgs.push(msg('Этаж загружен. Синхронизация...', state.time, '#8cf'));
   }, false); // never autosave the host's floor over the peer's home save
 }
@@ -1701,6 +1732,7 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
 // fx, cell patches, container updates, samosbor flag ──
 function onOnlineHostState(msgData: any): void {
   const nowMs = performance.now();
+  _lastHostStateAt = nowMs;
   const mySlot = getOnlineSlot();
 
   // 1. Authoritative own-actor echo (replaces the old actorGen machinery)
@@ -1753,7 +1785,7 @@ function onOnlineHostState(msgData: any): void {
         id: se.id, type: se.type,
         x: se.x, y: se.y, angle: se.angle, pitch: se.pitch,
         alive: se.alive, hp: se.hp, maxHp: se.maxHp,
-        sprite: se.sprite, weapon: se.weapon, tool: se.tool,
+        sprite: se.sprite, spriteScale: se.spriteScale, weapon: se.weapon, tool: se.tool,
         name: se.name, peerSlot: se.peerSlot, netGen: se.netGen, money: se.money,
         sex: se.sex, npcVisualId: se.npcVisualId,
         faction: se.faction, staggerTimer: se.staggerTimer,
@@ -1762,7 +1794,20 @@ function onOnlineHostState(msgData: any): void {
         inventory: se.dropDefId ? [{ defId: se.dropDefId, count: se.dropCount ?? 1, data: se.dropData }] : undefined,
       } as Entity);
       noteNetSample(se.id, se.x, se.y, se.angle, nowMs);
+      if (se.peerSlot !== undefined) netlog('peer: появился сетевой игрок', se.peerSlot, se.name, 'id', se.id);
     }
+  }
+  if (NET_DEBUG && nowMs - _netlogLastSummaryAt > 2000) {
+    _netlogLastSummaryAt = nowMs;
+    const hostSe = syncEntities.find(se => se.peerSlot === 0);
+    const hostLocal = entities.find(e => e.peerSlot === 0 && e !== player);
+    netlog('peer summary:',
+      'пакет', syncEntities.length, 'сущ.,', 'локально', entities.length,
+      '| хост в пакете:', hostSe ? `id=${hostSe.id} (${hostSe.x.toFixed(1)},${hostSe.y.toFixed(1)})` : 'НЕТ',
+      '| хост локально:', hostLocal
+        ? `id=${hostLocal.id} dist=${Math.sqrt(world.dist2(player.x, player.y, hostLocal.x, hostLocal.y)).toFixed(1)} alive=${hostLocal.alive} sprite=${hostLocal.sprite} scale=${hostLocal.spriteScale}`
+        : 'НЕТ',
+      '| echo lastSeq', echo?.lastSeq, '/ отправлено', peerLastSentSeq());
   }
   // Remove entities not in sync (except local player)
   for (let i = entities.length - 1; i >= 0; i--) {
@@ -1982,6 +2027,7 @@ function pushCoopViews(): void {
 /** Host: propose a table. The invited side has to agree before anything opens. */
 function hostProposeCoop(from: Entity, to: Entity, activityId: string): void {
   const result = proposeCoopSession(activityId, from, to, state.time);
+  netlog('host: coop_propose', activityId, from.id, '→', to.id, result.ok ? 'ок' : result.reason);
   if (!result.ok) { coopNotify(from, result.reason); return; }
   const invite = result.invite;
   coopNotify(from, `Приглашение отправлено: ${to.name || 'игрок'}.`, '#8cf');
@@ -2005,6 +2051,7 @@ function hostResolveCoopReply(accept: boolean): void {
     return;
   }
   const opened = openCoopSession({ state, player: from, npc: to }, invite.activityId, invite.stake);
+  netlog('host: coop_reply accept, стол', invite.activityId, opened.ok ? 'открыт' : `НЕ открыт: ${opened.ok === false ? opened.reason : ''}`);
   if (!opened.ok) { coopNotify(from, opened.reason); coopNotify(to, opened.reason); return; }
   const def = coopActivity(invite.activityId);
   for (const seat of ['player', 'npc'] as CoopSeat[]) {
@@ -2047,6 +2094,7 @@ function routeCoopInput(input: CoopInput, confirm = false): void {
   const seat = coopSeatOf(player.id);
   if (!session || !seat) return;
   if (isOnlinePeer()) {
+    netlog('peer: coop_input →', JSON.stringify(input), confirm ? '+confirm' : '');
     sendPeerIntent({ kind: 'coop_input', input, confirm });
     return;
   }
@@ -2055,6 +2103,7 @@ function routeCoopInput(input: CoopInput, confirm = false): void {
 
 function hostApplyCoopInput(seat: CoopSeat, input: CoopInput, confirm: boolean): void {
   const ctx = coopTableCtx();
+  netlog('host: coop_input кресло', seat, JSON.stringify(input), ctx ? '' : 'ctx ПОТЕРЯН');
   if (!ctx) { hostEndCoopSession(undefined, 'Партнер пропал из-за стола.'); return; }
   const result = applyCoopInput(ctx, seat, input, confirm ? { confirm: true } : undefined);
   if (result?.closeInterface) {
@@ -2151,11 +2200,23 @@ function onOnlineCoopInvite(msgData: any): void {
 function onOnlineCoopOpen(msgData: any): void {
   const activityId = String(msgData.activityId ?? '').slice(0, 24);
   if (!coopActivity(activityId)) return;
-  const playerId = Math.floor(Number(msgData.playerId) || 0);
-  const npcId = Math.floor(Number(msgData.npcId) || 0);
-  adoptCoopSession({ activityId, playerId, npcId, stake: Math.max(0, Math.floor(Number(msgData.stake) || 0)) });
+  const stake = Math.max(0, Math.floor(Number(msgData.stake) || 0));
+  const seat: CoopSeat = msgData.seat === 'npc' ? 'npc' : 'player';
+  const hostPlayerId = Math.floor(Number(msgData.playerId) || 0);
+  const hostNpcId = Math.floor(Number(msgData.npcId) || 0);
+  /* Ids сессии приходят в ХОСТОВОМ id-пространстве, а наш актор существует
+   * здесь только как локальный `player` с независимым id. Не подставив его в
+   * своё кресло, coopSeatOf(player.id) не совпадает никогда — стол открывался,
+   * но каждый ввод молча выбрасывался («играть так и не вышло»). */
+  adoptCoopSession({
+    activityId,
+    playerId: seat === 'player' ? player.id : hostPlayerId,
+    npcId: seat === 'npc' ? player.id : hostNpcId,
+    stake,
+  });
   const opponent = ensureEntityIndex(entities).byId.get(Math.floor(Number(msgData.opponentId) || 0));
-  if (opponent) openCoopInterfaceLocally(opponent, activityId, Math.max(0, Math.floor(Number(msgData.stake) || 0)));
+  netlog('peer: coop_open', activityId, 'кресло', seat, 'оппонент', msgData.opponentId, opponent ? 'найден' : 'НЕ НАЙДЕН');
+  if (opponent) openCoopInterfaceLocally(opponent, activityId, stake);
 }
 
 function onOnlineCoopView(msgData: any): void {
@@ -2163,6 +2224,7 @@ function onOnlineCoopView(msgData: any): void {
 }
 
 function onOnlineCoopEnd(msgData: any): void {
+  netlog('peer: coop_end', msgData.note ?? '');
   endCoopSession();
   adoptCoopSession(null);
   closeCoopInterfaceLocally();
@@ -2175,11 +2237,27 @@ function onOnlineCoopNote(msgData: any): void {
   if (text) state.msgs.push(msg(text, state.time, typeof msgData.color === 'string' ? msgData.color.slice(0, 9) : '#8cf'));
 }
 
-// ── HOST: peer disconnected ──
-function onOnlinePeerDisconnected(msgData: any): void {
-  // Remove remote actor for the disconnected peer
-  const slot = msgData.slot;
+// ── HOST: peer disconnected (clean close relayed by the DO) or watchdog-dropped ──
+function dropPeerSlot(slot: number, note: string): void {
   const idx = entities.findIndex(e => e.peerSlot === slot);
+  const actor = idx >= 0 ? entities[idx] : undefined;
+  if (actor) {
+    // Стол не переживает исчезновение кресла: раньше сессия оставалась висеть,
+    // хост сидел замороженным (isCoopSeated) до случайного нажатия. Дисконнект
+    // считается сдачей — ставка уходит оставшемуся (решение владельца 2026-09-02).
+    const seat = coopSeatOf(actor.id);
+    if (seat) hostEndCoopSession(seat, `${actor.name || `Игрок ${slot}`} пропал из-за стола.`);
+    const inv = pendingCoopInvite();
+    if (inv && (inv.fromId === actor.id || inv.toId === actor.id)) {
+      const otherId = inv.fromId === actor.id ? inv.toId : inv.fromId;
+      clearCoopInvite();
+      const other = otherId === player.id ? player : ensureEntityIndex(entities).byId.get(otherId);
+      if (other) coopNotify(other, 'Приглашение отменено: игрок отключился.', '#aa6');
+      if (other && other.id !== player.id && other.peerSlot !== undefined && other.peerSlot > 0) {
+        sendOnlineMessage({ type: 'coop_invite', _targetSlot: other.peerSlot, invite: null });
+      }
+    }
+  }
   if (idx >= 0) {
     entities.splice(idx, 1);
     rebuildEntityIndex(entities, 'load');
@@ -2189,7 +2267,13 @@ function onOnlinePeerDisconnected(msgData: any): void {
   _peerNextFireAt.delete(slot);
   _peerNextToolAt.delete(slot);
   _peerVisitEnded.delete(slot);
-  state.msgs.push(msg(`Игрок ${slot} отключился.`, state.time, '#f88'));
+  _peerLastMsgAt.delete(slot);
+  netlog('host: слот выброшен', slot, note);
+  state.msgs.push(msg(note, state.time, '#f88'));
+}
+
+function onOnlinePeerDisconnected(msgData: any): void {
+  dropPeerSlot(msgData.slot, `Игрок ${msgData.slot} отключился.`);
 }
 
 // ── PEER: host disconnected — the world is gone, wake up at home ──
@@ -2218,6 +2302,14 @@ function onOnlineDisconnected(_msgData: any): void {
 }
 
 setOnlineMessageHandler((msgData: any) => {
+  // Штамп живости раньше любых веток: ватчдоги считают тишину от него.
+  const liveNowMs = performance.now();
+  if (isOnlineHost() && typeof msgData._peerSlot === 'number') {
+    _peerLastMsgAt.set(msgData._peerSlot, liveNowMs);
+  } else if (!isOnlineHost()) {
+    _lastNetInAt = liveNowMs;
+  }
+  if (msgData.type === 'ping') return;
   if (msgData.type === 'chat_ping') { onOnlineChatPing(msgData); return; }
   if (msgData.type === 'welcome' && !isOnlineHost() && msgData.role === 'peer') { onOnlineWelcome(msgData); return; }
   if (msgData.type === 'peer_join' && isOnlineHost()) { onOnlinePeerJoin(msgData); return; }
@@ -2240,6 +2332,14 @@ setOnlineMessageHandler((msgData: any) => {
   if (msgData.type === 'server_error') { onOnlineServerError(msgData); return; }
   if (msgData.type === 'disconnected') { onOnlineDisconnected(msgData); return; }
 });
+
+/* Heartbeat живости. Единственный санкционированный setInterval онлайн-слоя:
+ * ехать на rAF нельзя — фоновая вкладка его останавливает, и именно тогда
+ * ping и нужен, чтобы вторая сторона отличала «хост отошёл» от «хост мёртв». */
+setInterval(() => {
+  if (!isOnlineConnected()) return;
+  sendOnlineMessage({ type: 'ping' });
+}, NET_PING_INTERVAL_MS);
 
 function looksLikeNetGenName(value: string): boolean {
   const clean = value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32);
@@ -6187,6 +6287,9 @@ function switchFloor(
   const travelingPeers = isOnlineHost()
     ? entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive && !_peerVisitEnded.has(e.peerSlot))
     : [];
+  // Стол не переезжает: пир-акторы на новом этаже получают НОВЫЕ id, и сессия
+  // со старыми молча зависла бы для обоих кресел.
+  if (isOnlineHost() && activeCoopSession()) hostEndCoopSession(undefined, 'Стол распался: лифт уехал.');
   captureCurrentAlifeFloor();
   // Fast elevator / debug teleport: jump straight to an arbitrary route floor,
   // bypassing single-step route resolution and elevator anomaly machinery.
@@ -9885,6 +9988,20 @@ function gameLoop(now: number): void {
   // ── Online: peer streams position; actions go out as immediate intents ──
   if (isOnlineConnected()) {
     if (isOnlinePeer()) {
+      // Ватчдог хоста: ping жив, а host_state молчит = хост свернул окно (rAF
+      // стоит) — ждём и говорим об этом; полная тишина 90с = хост мёртв без
+      // close-фрейма — уезжаем домой сами, а не висим в замёрзшем мире.
+      if (onlinePeerFloorReady && !_peerReturningHome && _lastNetInAt > 0) {
+        const liveMs = performance.now();
+        if (liveMs - _lastNetInAt > NET_SILENCE_KICK_MS) {
+          netlog('peer: ватчдог — полная тишина', Math.round((liveMs - _lastNetInAt) / 1000), 'с');
+          peerReturnHome(null, 'Хост так и не ответил. Вы очнулись дома без сессионной добычи.', '#f44');
+        } else if (_lastHostStateAt > 0 && liveMs - _lastHostStateAt > NET_HOST_STALL_WARN_MS
+          && liveMs - _netStallWarnedAt > 30_000) {
+          _netStallWarnedAt = liveMs;
+          state.msgs.push(msg('Хост отошёл: мир замер, ждём его возвращения.', state.time, '#f84'));
+        }
+      }
       const peerMenuOpen = state.showContainerMenu || state.showInventory || state.showNpcMenu
         || state.showCraftMenu || state.showMenu;
       maybeSendPeerMove({
@@ -9907,6 +10024,17 @@ function gameLoop(now: number): void {
       // so carrying that slot is what lets a peer tell a human from an NPC.
       if (player.peerSlot === undefined) player.peerSlot = 0;
       const peerActors = entities.filter(e => e.peerSlot !== undefined && e.peerSlot > 0);
+      // Ватчдог: чистый close долетает как peer_disconnected, но убитая вкладка
+      // может молчать вечно — актор-призрак стоял на этаже, а стол с ним висел.
+      {
+        const liveMs = performance.now();
+        for (const pa of peerActors) {
+          const slot = pa.peerSlot!;
+          const last = _peerLastMsgAt.get(slot);
+          if (last === undefined) { _peerLastMsgAt.set(slot, liveMs); continue; }
+          if (liveMs - last > NET_SILENCE_KICK_MS) dropPeerSlot(slot, `Игрок ${slot} потерян: связь молчит.`);
+        }
+      }
       // Host owns peer resources: tick cooldowns/reloads every frame, and
       // close the visit once for any peer who died this frame.
       for (const pa of peerActors) {
@@ -9925,9 +10053,11 @@ function gameLoop(now: number): void {
         const candidates: { e: Entity; minD2: number }[] = [];
         for (const e of entities) {
           if (!e.alive) continue;
-          // Always include peer actors and host player
+          // Always include peer actors; the host player rides the explicit
+          // push below — added here too, he went into the packet TWICE, and the
+          // duplicate collapsed the peer's interpolation window to zero.
           if (e.peerSlot !== undefined) {
-            candidates.push({ e, minD2: -1 });
+            if (e !== player) candidates.push({ e, minD2: -1 });
             continue;
           }
           // Find nearest peer distance

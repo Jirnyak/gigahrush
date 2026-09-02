@@ -236,30 +236,41 @@ function interactionRayBlocked(world: World, px: number, py: number, dirX: numbe
   return false;
 }
 
-function findFriendlyNpc(ctx: InteractionContext): Entity | null {
-  const dirX = Math.cos(ctx.player.angle);
-  const dirY = Math.sin(ctx.player.angle);
+/** Тот же конус-с-лучом, которым локальный E целится в NPC, но от произвольного
+ *  актора: хост обслуживает интент пира этим же прицелом. Круговой поиск вокруг
+ *  точки взгляда здесь запрещён — он отдавал E соседнему NPC, когда пир смотрел
+ *  в упор на ящик. `skipNetworkedActors` — для пути пира: человек-оппонент
+ *  обслуживается локальным меню предложений, а не npc_open хоста. */
+export function findFriendlyNpcForActor(
+  world: World,
+  entities: Entity[],
+  actor: Entity,
+  skipNetworkedActors = false,
+): Entity | null {
+  const dirX = Math.cos(actor.angle);
+  const dirY = Math.sin(actor.angle);
   let best: Entity | null = null;
   let bestScore = Infinity;
-  ensureEntityIndex(ctx.entities).queryRadiusCapped(
-    ctx.player.x,
-    ctx.player.y,
+  ensureEntityIndex(entities).queryRadiusCapped(
+    actor.x,
+    actor.y,
     NPC_INTERACTION_RANGE,
     npcInteractionQuery,
     ENTITY_MASK_NPC,
     NPC_INTERACTION_QUERY_CAP,
   );
   for (const e of npcInteractionQuery) {
-    if (e.type !== EntityType.NPC || !e.alive) continue;
-    if (isHostile(e, ctx.player) || isHostile(ctx.player, e)) continue;
-    const dx = ctx.world.delta(ctx.player.x, e.x);
-    const dy = ctx.world.delta(ctx.player.y, e.y);
+    if (e.type !== EntityType.NPC || !e.alive || e === actor) continue;
+    if (skipNetworkedActors && e.peerSlot !== undefined) continue;
+    if (isHostile(e, actor) || isHostile(actor, e)) continue;
+    const dx = world.delta(actor.x, e.x);
+    const dy = world.delta(actor.y, e.y);
     const forward = dx * dirX + dy * dirY;
     if (forward <= NPC_INTERACTION_MIN_FORWARD || forward > NPC_INTERACTION_RANGE) continue;
     const side = -dx * dirY + dy * dirX;
     const bodyRadius = Math.max(0.18, Math.min(0.5, NPC_INTERACTION_BODY_RADIUS * interactionSpriteScale(e)));
     if (Math.abs(side) > bodyRadius) continue;
-    if (interactionRayBlocked(ctx.world, ctx.player.x, ctx.player.y, dirX, dirY, forward - bodyRadius)) continue;
+    if (interactionRayBlocked(world, actor.x, actor.y, dirX, dirY, forward - bodyRadius)) continue;
     const score = forward + Math.abs(side) * 0.5;
     if (score < bestScore) {
       best = e;
@@ -269,6 +280,10 @@ function findFriendlyNpc(ctx: InteractionContext): Entity | null {
   return best;
 }
 
+function findFriendlyNpc(ctx: InteractionContext): Entity | null {
+  return findFriendlyNpcForActor(ctx.world, ctx.entities, ctx.player);
+}
+
 function firstPickupItem(drop: Entity): { defId: string; count: number } | null {
   for (const item of drop.inventory ?? []) {
     if (item && item.count > 0 && typeof item.defId === 'string') return { defId: item.defId, count: item.count };
@@ -276,14 +291,16 @@ function firstPickupItem(drop: Entity): { defId: string; count: number } | null 
   return null;
 }
 
-function findItemDrop(ctx: InteractionContext): Entity | null {
-  const dirX = Math.cos(ctx.player.angle);
-  const dirY = Math.sin(ctx.player.angle);
+/** Конус подбора предмета от произвольного актора — общий для локального E и
+ *  обслуживания интента пира (круг радиусом вокруг актора крал E у ящика). */
+export function findItemDropForActor(world: World, entities: Entity[], actor: Entity): Entity | null {
+  const dirX = Math.cos(actor.angle);
+  const dirY = Math.sin(actor.angle);
   let best: Entity | null = null;
   let bestScore = Infinity;
-  ensureEntityIndex(ctx.entities).queryRadiusCapped(
-    ctx.player.x,
-    ctx.player.y,
+  ensureEntityIndex(entities).queryRadiusCapped(
+    actor.x,
+    actor.y,
     ITEM_INTERACTION_RANGE,
     itemInteractionQuery,
     ENTITY_MASK_ITEM_DROP,
@@ -291,14 +308,14 @@ function findItemDrop(ctx: InteractionContext): Entity | null {
   );
   for (const e of itemInteractionQuery) {
     if (e.type !== EntityType.ITEM_DROP || !e.alive || !firstPickupItem(e)) continue;
-    const dx = ctx.world.delta(ctx.player.x, e.x);
-    const dy = ctx.world.delta(ctx.player.y, e.y);
+    const dx = world.delta(actor.x, e.x);
+    const dy = world.delta(actor.y, e.y);
     const forward = dx * dirX + dy * dirY;
     if (forward <= ITEM_INTERACTION_MIN_FORWARD || forward > ITEM_INTERACTION_RANGE) continue;
     const side = -dx * dirY + dy * dirX;
     const bodyRadius = Math.max(0.25, Math.min(0.65, ITEM_INTERACTION_BODY_RADIUS * interactionSpriteScale(e)));
     if (Math.abs(side) > bodyRadius) continue;
-    if (interactionRayBlocked(ctx.world, ctx.player.x, ctx.player.y, dirX, dirY, forward - bodyRadius)) continue;
+    if (interactionRayBlocked(world, actor.x, actor.y, dirX, dirY, forward - bodyRadius)) continue;
     const score = forward + Math.abs(side) * 0.75;
     if (score < bestScore) {
       best = e;
@@ -306,6 +323,10 @@ function findItemDrop(ctx: InteractionContext): Entity | null {
     }
   }
   return best;
+}
+
+function findItemDrop(ctx: InteractionContext): Entity | null {
+  return findItemDropForActor(ctx.world, ctx.entities, ctx.player);
 }
 
 function itemDropInteractionTarget(drop: Entity): InteractionTarget | null {

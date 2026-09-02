@@ -6,6 +6,17 @@
 
 Status: feasibility roadmap and implementation decision, not shipped behavior and not a public promise. Created 2026-05-24, revised 2026-05-25 after second architecture review, no-anti-cheat correction and critical host-AOI review, revised 2026-06-02 after host-player Cloudflare test planning and hundreds-player server-track review, revised 2026-07-12 after successful peer inventory sync, container loot tests and Net Sphere chat synchronization fixes.
 
+## SHIPPED: Стабилизация сессии — liveness, кооп-кресла, прицел E пира (2026-09-02)
+
+Пять исправленных дефектов + heartbeat-протокол; всё в `main.ts` / `systems/interactions.ts`:
+
+- **Кооп-кресло пира заработало.** `coop_open` нёс ids сессии в ХОСТОВОМ id-пространстве, а локальный игрок пира минтится с независимым id — `coopSeatOf(player.id)` не совпадал никогда, и каждый ввод за столом молча выбрасывался (стол открывался, «играть не выходило»). Пир теперь подставляет `player.id` в своё кресло по полю `seat` из `coop_open`.
+- **Heartbeat + ватчдоги.** Обе стороны шлют `{type:'ping'}` раз в секунду с собственного `setInterval` (rAF в фоновой вкладке стоит — потому не на нём; единственный санкционированный setInterval онлайн-слоя). Полная тишина > 90 с (переживает удушение таймеров скрытой вкладки Chrome до 1/мин): пир уезжает домой без экспорта, хост выбрасывает слот через общий `dropPeerSlot`. Отдельно: ping жив, а `host_state` молчит > 8 с = «Хост отошёл: мир замер» — пир ЖДЁТ, не вылетая.
+- **Дисконнект за столом = сдача.** `dropPeerSlot` (чистый `peer_disconnected` и ватчдог — одна точка) закрывает кооп-сессию с forfeit исчезнувшего кресла (решение владельца: обрыв = сдача, ставка уходит оставшемуся) и снимает висящее приглашение с уведомлением второй стороны. Раньше сессия оставалась, и хост сидел замороженным `isCoopSeated` навсегда. Лифт хоста тоже закрывает стол («Стол распался: лифт уехал»): пир-акторы на новом этаже получают новые id, сессия осиротела бы.
+- **E пира целится как локальный E.** Хост обслуживал `interact`-интент круговым поиском радиусом 1.7 вокруг точки взгляда — E уходил соседнему NPC, когда пир смотрел в упор на ящик («вместо ящика — разговор»). Теперь общий конус-с-лучом из `interactions.ts` (`findFriendlyNpcForActor` / `findItemDropForActor`), те же константы и порядок, что у `activateInteraction`.
+- **Гигиена entity_sync.** (1) Локальный игрок пира получает зарезервированный id `0x40000000 + slot`: прежний `nextEntityId.v++` ГАРАНТИРОВАННО совпадал со следующей сущностью хоста (снапшот несёт `meta.nextEntityId`, хост продолжает с него же), и `isPlayerEntity()` прятал хостовую сущность-тёзку из рендера. (2) Хост-игрок ехал в пакете ДВАЖДЫ (ветка `peerSlot !== undefined` + явный push) — двойной `noteNetSample` с одним timestamp схлопывал окно интерполяции в ноль. (3) Свежесозданная у пира сущность теряла `spriteScale` до второго тика.
+- **Отладочный лог**: `localStorage.gigahrush_net_debug = '1'` в обоих окнах → `[netdbg]`-строки в консоли (снапшоты, peer_join, ветка E-интента, кооп-события, сводка пира раз в 2 с: хост в пакете/локально, дистанция, echo lastSeq).
+
 ## SHIPPED: Co-op tables — turn-based sub-games between players (2026-08-19)
 
 `systems/coop_session.ts` is the generic layer; each activity registers itself
