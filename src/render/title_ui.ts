@@ -5,7 +5,7 @@ import { GAME_BUILD_VERSION } from '../core/version';
 import { drawNeuroPanel, drawStaticNoise } from './hud_fx';
 
 export type TitleScreenMode = 'language' | 'setup' | 'feedback';
-export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'addNpc' | 'trailer' | 'start' | 'continue' | 'feedback' | 'character' | 'back';
+export type TitleHitField = 'language' | 'name' | 'age' | 'sex' | 'seed' | 'addNpc' | 'start' | 'continue' | 'feedback' | 'character' | 'back';
 
 export interface TitleLanguageHit {
   id?: TitleLanguageId;

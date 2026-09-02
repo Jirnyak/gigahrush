@@ -433,6 +433,7 @@ import {
   floorRunEntryRouteId,
   forceFloorRunStory,
   forceProceduralFloorAnomaly,
+  formatFloorZ,
   nextFloorRunSamosborCooldown,
   normalizeFloorRunSeed,
   SAMOSBOR_COOLDOWN_MAX_SEC,
@@ -569,8 +570,7 @@ import {
   setNetSphereChatHandler,
   tickNetSphere,
   consumeNetSphereNotices,
-  hashNetGen,
-  _test_storage
+  hashNetGen
 } from './systems/net_sphere';
 
 // We add local system message directly via the internal net sphere storage logic 
@@ -663,7 +663,6 @@ import {
 } from './render/title_ui';
 import { installCanvasLocalization, setCanvasTextGlitchPressure, setLocalizationLanguage } from './systems/localization';
 import {
-  ACTIVE_ACTOR_SOFT_LIMIT_STEP,
   normalizeActiveActorSoftLimit,
   setActiveActorSoftLimit,
 } from './data/entity_limits';
@@ -707,7 +706,10 @@ const TITLE_ACTIVE_ACTOR_SOFT_LIMIT_KEY = 'gigahrush_active_actor_soft_limit';
 const SAVE_KEY = 'gigahrush_save';
 const NET_GEN_NAME_RE = /^NET-[A-Z0-9-]{4,28}$/;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback' | 'character' | 'back'>;
+/* Без 'actorCap' и 'trailer': ни getTitleSetupFields, ни titleSetupRows их не
+   выдают, поэтому ветки под них были недостижимы. Сама заставка по-прежнему
+   выбирает этаж из TRAILER_ZS — переключать его вручную было нечем. */
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'addNpc' | 'start' | 'continue' | 'feedback' | 'character' | 'back'>;
 type TitleSetupPage = 'main' | 'character';
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
@@ -2394,12 +2396,6 @@ function cycleTitleLanguage(dir: number): void {
   showTitle();
 }
 
-function adjustTitleActiveActorSoftLimit(dir: number): void {
-  const step = ACTIVE_ACTOR_SOFT_LIMIT_STEP * Math.sign(dir || 1);
-  saveTitleActiveActorSoftLimit(titleActiveActorSoftLimit + step);
-  showTitle();
-}
-
 function setTitleSelection(field: TitleInputField): void {
   const fields = getTitleSetupFields();
   const index = fields.indexOf(field);
@@ -2462,13 +2458,6 @@ function editTitleFieldFromPointer(field: TitleInputField): void {
   }
   if (field === 'language') {
     cycleTitleLanguage(1);
-    return;
-  }
-  if (field === 'actorCap') {
-    const lang = titleLanguageDef(titleLanguageId);
-    const next = typeof window !== 'undefined' ? window.prompt(lang.setupActorCapLabel, String(titleActiveActorSoftLimit)) : null;
-    if (next !== null) saveTitleActiveActorSoftLimit(Number(next));
-    showTitle();
     return;
   }
   if (field === 'age') {
@@ -2764,6 +2753,19 @@ if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'player', { get: () => player });
 }
 let nextEntityId = { v: 1000000 };
+
+/* Пересадить счётчик номеров на только что собранный состав этажа.
+   Стоял пятью дословными копиями в местах, где `entities` заменяется
+   целиком: прибытие A-Life, возврат из Пустоты, старт игры, смена этажа,
+   загрузка сейва. Поведение сохранено ровно как было. */
+function resetEntityIdCursorToEntities(): void {
+  let maxId = 0;
+  for (let i = 0; i < entities.length; i++) {
+    const id = entities[i].id;
+    if (id > maxId) maxId = id;
+  }
+  nextEntityId.v = maxId + 1;
+}
 let prevPlayerActorId = -1;
 let prevPlayerActorHp = 100; // track current player actor HP changes for damage flash
 let lastProjectileHitMsgTick = -999;
@@ -3058,12 +3060,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
 
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
-    let __maxId = 0;
-    for (let i = 0; i < entities.length; i++) {
-      const id = entities[i].id;
-      if (id > __maxId) __maxId = id;
-    }
-    nextEntityId.v = __maxId + 1;
+    resetEntityIdCursorToEntities();
     materializeCurrentAlifeFloor(snapshot.floorKey);
 
     let host = getEntityIndex().byAlifeId.get(snapshot.id);
@@ -3491,12 +3488,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     const gen = loaded.generation;
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
-    let __maxId = 0;
-    for (let i = 0; i < entities.length; i++) {
-      const id = entities[i].id;
-      if (id > __maxId) __maxId = id;
-    }
-    nextEntityId.v = __maxId + 1;
+    resetEntityIdCursorToEntities();
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
 
     player = {
@@ -4016,12 +4008,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   stampCeilingHeights(gen.world);
   world = replaceWorldFromGeneration(null, gen);
   entities = gen.entities;
-  let __maxId = 0;
-  for (let i = 0; i < entities.length; i++) {
-    const id = entities[i].id;
-    if (id > __maxId) __maxId = id;
-  }
-  nextEntityId.v = __maxId + 1;
+  resetEntityIdCursorToEntities();
 
   player = {
     id: nextEntityId.v++,
@@ -6293,12 +6280,7 @@ function switchFloor(
 
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
-    let __maxId = 0;
-    for (let i = 0; i < entities.length; i++) {
-      const id = entities[i].id;
-      if (id > __maxId) __maxId = id;
-    }
-    nextEntityId.v = __maxId + 1;
+    resetEntityIdCursorToEntities();
     loadingProgress('Заселяем этаж', 55);
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
     // When the ridden lift's return counterpart could not land on the departure
@@ -6485,10 +6467,6 @@ function switchFloor(
   }, true);
 }
 
-function formatFloorZ(z: number): string {
-  return z > 0 ? `+${z}` : `${z}`;
-}
-
 function debugTeleportTo(
   targetEntry: FloorRunEntry,
   overrideArrivalText?: string,
@@ -6651,29 +6629,7 @@ function closeCraftMenu(): void {
 }
 
 function closeInterfacesForCraftMenu(): void {
-  clearTradeOffers(state);
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeNpcInteractionInterface();
-  closeContainerMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showDemos = false;
-  state.demosSearchActive = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.showUiSettings = false;
-  state.showMapLegend = false;
-  cancelControlCapture();
-  state.mapMode = 0;
-  closeNetSphere();
-  closeNetTerminalGen();
-  closeInteractableOverlay();
-  closeEmergencyPanelMenu();
-  closeMapEditorAndRefreshWorld();
+  closeUiSurfacesExcept('craft');
 }
 
 function openCraftMenu(request: ContentCraftMenuRequest): void {
@@ -6919,12 +6875,7 @@ function loadGame(): boolean {
 
       world = replaceWorldFromGeneration(null, gen);
       entities = gen.entities;
-      let __maxId = 0;
-      for (let i = 0; i < entities.length; i++) {
-        const id = entities[i].id;
-        if (id > __maxId) __maxId = id;
-      }
-      nextEntityId.v = __maxId + 1;
+      resetEntityIdCursorToEntities();
       materializeCurrentAlifeFloor(generatedRunEntry ? floorRunEntryFloorKey(generatedRunEntry) : currentFloorMemoryKey());
       const spawn = safeSpawnNear(
         finiteNumber(dataPlayer.x, gen.spawnX),
@@ -7496,23 +7447,81 @@ function clearPausedPointerGameplayInputs(): void {
   input.touch.active = false;
 }
 
+/* ── UI surfaces: one source of truth ──────────────────────────────
+   Every overlay is declared once, here. Whether it takes the pointer,
+   hides the mobile pads, eats the wheel or freezes the world is read
+   off this table and nowhere else.
+
+   It replaces four hand-kept lists that had already drifted apart:
+   the feedback screen was in NONE of them (the world kept simulating
+   behind it, mouse movement turned the camera, right mouse fired the
+   held tool, and Enter — the only key that closed it — opened Telegram
+   on the way out), and the full map was missing from the pause list
+   while its neighbour the legend was in it.
+
+   Two columns vary, so only two columns exist. The full map does not
+   pause: it is the minimap stretched to the screen and the world keeps
+   running under it, by design. Net Sphere handles its own wheel.
+   Everything else — taking the pointer, hiding the pads — is true for
+   every surface and is therefore derived from "any surface open"
+   rather than written out per row and forgotten on the next one. */
+type UiSurface = { readonly id: string; readonly isOpen: () => boolean; readonly close: () => void; readonly pausesWorld: boolean; readonly takesWheel: boolean; };
+
+const UI_SURFACES: readonly UiSurface[] = [
+  { id: 'menu',           isOpen: () => state.showMenu,          close: () => { state.showMenu = false; },          pausesWorld: true,  takesWheel: true  },
+  { id: 'inventory',      isOpen: () => state.showInventory,     close: () => { state.showInventory = false; },     pausesWorld: true,  takesWheel: true  },
+  { id: 'npc',            isOpen: () => state.showNpcMenu,       close: () => { state.showNpcMenu = false; closeNpcInteractionInterface(); }, pausesWorld: true, takesWheel: true },
+  { id: 'container',      isOpen: () => state.showContainerMenu, close: closeContainerMenu,                         pausesWorld: true,  takesWheel: true  },
+  { id: 'craft',          isOpen: () => state.showCraftMenu,     close: closeCraftMenu,                             pausesWorld: true,  takesWheel: true  },
+  { id: 'quests',         isOpen: () => state.showQuests,        close: () => { state.showQuests = false; },        pausesWorld: true,  takesWheel: true  },
+  { id: 'debug',          isOpen: () => state.showDebug,         close: () => { state.showDebug = false; },         pausesWorld: true,  takesWheel: true  },
+  { id: 'factions',       isOpen: () => state.showFactions,      close: () => { state.showFactions = false; },      pausesWorld: true,  takesWheel: true  },
+  { id: 'demos',          isOpen: () => state.showDemos,         close: () => { state.showDemos = false; state.demosSearchActive = false; }, pausesWorld: true, takesWheel: true },
+  { id: 'log',            isOpen: () => state.showLog,           close: () => { state.showLog = false; },           pausesWorld: true,  takesWheel: true  },
+  { id: 'help',           isOpen: () => state.showHelp,          close: () => { state.showHelp = false; },          pausesWorld: true,  takesWheel: true  },
+  { id: 'controls',       isOpen: () => state.showControls,      close: () => { state.showControls = false; cancelControlCapture(); }, pausesWorld: true, takesWheel: true },
+  { id: 'uiSettings',     isOpen: () => state.showUiSettings,    close: () => { state.showUiSettings = false; },    pausesWorld: true,  takesWheel: true  },
+  { id: 'mapLegend',      isOpen: () => state.showMapLegend,     close: () => { state.showMapLegend = false; },     pausesWorld: true,  takesWheel: true  },
+  { id: 'feedback',       isOpen: () => state.showFeedback,      close: () => { state.showFeedback = false; },      pausesWorld: true,  takesWheel: true  },
+  { id: 'fullMap',        isOpen: () => state.mapMode === 2,     close: () => { state.mapMode = 0; },               pausesWorld: false, takesWheel: true  },
+  { id: 'netSphere',      isOpen: isNetSphereOpen,               close: closeNetSphere,                             pausesWorld: true,  takesWheel: false },
+  { id: 'netTerminalGen', isOpen: isNetTerminalGenOpen,          close: closeNetTerminalGen,                        pausesWorld: true,  takesWheel: true  },
+  { id: 'interactable',   isOpen: isInteractableOverlayOpen,     close: closeInteractableOverlay,                   pausesWorld: true,  takesWheel: true  },
+  { id: 'emergencyPanel', isOpen: isEmergencyPanelMenuOpen,      close: closeEmergencyPanelMenu,                    pausesWorld: true,  takesWheel: true  },
+  { id: 'mapEditor',      isOpen: isMapEditorOpen,               close: closeMapEditorAndRefreshWorld,              pausesWorld: true,  takesWheel: true  },
+];
+
+/* Закрыть всё, кроме одной поверхности. Стояло ЧЕТЫРНАДЦАТЬЮ рукописными
+   вариантами, и ни один не совпадал с другим: открытие полной карты не гасило
+   легенду, четыре экрана из шести не звали closeNpcInteractionInterface, а
+   closeNetSphere отсутствовал в половине. Каждое такое расхождение — панель,
+   нарисованная поверх другой. */
+function closeUiSurfacesExcept(keep?: string): void {
+  if (typeof state === 'undefined') return;
+  clearTradeOffers(state);
+  for (const s of UI_SURFACES) if (s.id !== keep) s.close();
+}
+
+function anyUiSurfaceOpen(pick?: (s: UiSurface) => boolean): boolean {
+  if (typeof state === 'undefined') return false;
+  for (const s of UI_SURFACES) if ((!pick || pick(s)) && s.isOpen()) return true;
+  return false;
+}
+
 function shouldHandleMenuPointerInput(): boolean {
   if (!started || pendingLoad || typeof state === 'undefined' || state.gameOver || pointerCaptureGateVisible()) return false;
-  return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
-    state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
+  return anyUiSurfaceOpen();
 }
 
 function shouldHandleMenuWheelInput(): boolean {
-  return shouldHandleMenuPointerInput() && !isNetSphereOpen();
+  if (!started || pendingLoad || typeof state === 'undefined' || state.gameOver || pointerCaptureGateVisible()) return false;
+  return anyUiSurfaceOpen(s => s.takesWheel) && !isNetSphereOpen();
 }
 
 function syncPauseState(): void {
   if (typeof state === 'undefined') return;
   const wasPaused = state.paused;
-  const menuPause = state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
-    isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
+  const menuPause = anyUiSurfaceOpen(s => s.pausesWorld);
   // Hosting a live session: menus must not freeze the shared world — peers
   // keep playing. Standard multiplayer semantics; the menu is at your own risk.
   const hostWithPeers = isOnlineHost() && typeof entities !== 'undefined'
@@ -7539,10 +7548,7 @@ function syncPlatformGameplayState(): void {
 }
 
 function isMobileMenuOpen(): boolean {
-  if (typeof state === 'undefined') return false;
-  return state.showMenu || state.showInventory || state.showNpcMenu || state.showContainerMenu || state.showCraftMenu ||
-    state.showQuests || state.showDebug || state.showFactions || state.showDemos || state.showLog || state.showHelp || state.showControls || state.showUiSettings || state.showMapLegend ||
-    state.mapMode === 2 || isNetSphereOpen() || isNetTerminalGenOpen() || isInteractableOverlayOpen() || isEmergencyPanelMenuOpen() || isMapEditorOpen();
+  return anyUiSurfaceOpen();
 }
 
 function canOpenMenuFromGameplay(): boolean {
@@ -7558,57 +7564,15 @@ function menuShortcutInputActive(): boolean {
 
 function closeMobilePanels(includeMap = true): void {
   if (typeof state === 'undefined') return;
-  clearTradeOffers(state);
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeNpcInteractionInterface();
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showDemos = false;
-  state.demosSearchActive = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.showUiSettings = false;
-  state.showMapLegend = false;
-  cancelControlCapture();
-  if (includeMap) state.mapMode = 0;
-  closeNetSphere();
-  closeNetTerminalGen();
-  closeInteractableOverlay();
-  closeEmergencyPanelMenu();
-  closeMapEditorAndRefreshWorld();
+  closeUiSurfacesExcept(includeMap ? undefined : 'fullMap');
   syncPauseState();
   updateMobileContext(true);
 }
 
 function closeInterfacesForFullMap(): void {
-  clearTradeOffers(state);
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeNpcInteractionInterface();
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showDemos = false;
-  state.demosSearchActive = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.showUiSettings = false;
-  cancelControlCapture();
-  closeNetSphere();
-  closeNetTerminalGen();
-  closeInteractableOverlay();
-  closeEmergencyPanelMenu();
-  closeMapEditorAndRefreshWorld();
+  // Гасит и легенду тоже: рукописный список её пропускал, и легенда карты
+  // оставалась нарисованной поверх развёрнутой карты.
+  closeUiSurfacesExcept('fullMap');
 }
 
 function currentFullMapRadius(): number {
@@ -7823,23 +7787,8 @@ function runGameMenuSelection(sel: number): void {
 }
 
 function openFeedbackMenu(): void {
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.showUiSettings = false;
-  state.showMapLegend = false;
-  state.showDemos = false;
-  state.mapMode = 0;
+  closeUiSurfacesExcept();
   state.showFeedback = true;
-  cancelControlCapture();
   resetMenuRepeats();
   syncPauseState();
   updateMobileContext(true);
@@ -7852,25 +7801,11 @@ function closeFeedbackMenu(): void {
 }
 
 function openDemosMenu(): void {
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.showUiSettings = false;
-  state.showMapLegend = false;
-  state.mapMode = 0;
+  closeUiSurfacesExcept();
   state.showDemos = true;
   state.demosCursor = findDemosCursor(state, state.demosSearch, state.demosCursor, 1);
   state.demosSearchActive = false;
   input.textInput = '';
-  cancelControlCapture();
   resetMenuRepeats();
   syncPauseState();
 }
@@ -7916,26 +7851,8 @@ function closeDemosMenu(): void {
 }
 
 function openHelpMenu(): void {
-  clearTradeOffers(state);
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeNpcInteractionInterface();
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showDemos = false;
-  state.demosSearchActive = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.showUiSettings = false;
-  state.showMapLegend = false;
-  state.mapMode = 0;
+  closeUiSurfacesExcept();
   state.showHelp = true;
-  cancelControlCapture();
   resetMenuRepeats();
   syncPauseState();
   updateMobileContext(true);
@@ -8329,24 +8246,9 @@ function keepMapLegendSelectionVisible(): void {
 }
 
 function openControlsMenu(view: GameState['controlView'] = 'keys'): void {
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showDemos = false;
-  state.demosSearchActive = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showUiSettings = false;
-  state.showMapLegend = false;
-  state.mapMode = 0;
+  closeUiSurfacesExcept();
   state.controlView = view;
   state.showControls = true;
-  cancelControlCapture();
   keepControlSelectionVisible();
   syncPauseState();
 }
@@ -8365,26 +8267,11 @@ function findUiSettingsRowByKind(kind: string, view: UiSettingsView): number {
 }
 
 function openUiSettingsMenu(view: UiSettingsView = 'interface', focusKind?: string): void {
-  state.showMenu = false;
-  state.showInventory = false;
-  state.showQuests = false;
-  state.showNpcMenu = false;
-  closeContainerMenu();
-  closeCraftMenu();
-  state.showDebug = false;
-  state.showFactions = false;
-  state.showDemos = false;
-  state.demosSearchActive = false;
-  state.showLog = false;
-  state.showHelp = false;
-  state.showControls = false;
-  state.mapMode = 0;
-  state.showMapLegend = false;
+  closeUiSurfacesExcept();
   state.showUiSettings = true;
   state.uiSettingsView = view;
   state.uiSettingsSel = 0;
   state.uiSettingsScroll = 0;
-  cancelControlCapture();
   if (focusKind) {
     const row = findUiSettingsRowByKind(focusKind, view);
     if (row >= 0) state.uiSettingsSel = row;
@@ -8869,6 +8756,12 @@ function handleMenuInput(): void {
     state.showControls = false;
     state.showUiSettings = false;
     state.showMapLegend = false;
+    // Death closes every surface in UI_SURFACES. These two used to be
+    // missed, and the block returns unconditionally below — so a feedback
+    // screen or full map opened before dying stayed drawn over the death
+    // screen with no input path left to close it.
+    state.showFeedback = false;
+    state.mapMode = 0;
     cancelControlCapture();
     closeNetSphere();
     closeNetTerminalGen();
@@ -9488,34 +9381,11 @@ function handleMenuInput(): void {
           state.containerCursorX = 0;
         }
       }
-      if (acceptEdge) {
-        if (isOnlinePeer()) {
-          peerContainerActivate(container);
-        } else {
-        const idx = state.containerCursorY * INVENTORY_GRID_COLS + state.containerCursorX;
-        const access = containerAccessInfo(container, player, state);
-        if (state.containerSide === 'container') {
-          const slot = container.inventory[idx];
-          const itemName = slot ? ITEMS[slot.defId]?.name ?? slot.defId : '';
-          if (!access.canTake) {
-            state.msgs.push(msg(access.label === 'ЗАПЕРТО' ? 'Заперто.' : 'Нет доступа.', state.time, '#f84'));
-          } else if (slot && takeFromContainer(container, player, idx, 1, { state, world, entities })) {
-            state.msgs.push(msg(`${access.theft ? 'Украдено' : 'Взято'}: ${itemName}`, state.time, access.theft ? '#f84' : '#8f8'));
-          } else {
-            state.msgs.push(msg(slot ? 'Нет места.' : 'Пустой слот.', state.time, '#888'));
-          }
-        } else {
-          const slot = player.inventory?.[idx];
-          if (!access.canPut) {
-            state.msgs.push(msg('Нет доступа.', state.time, '#f84'));
-          } else if (slot && putIntoContainer(container, player, idx, 1, { state, world, entities })) {
-            state.msgs.push(msg(`Положено: ${ITEMS[slot.defId]?.name ?? slot.defId}`, state.time, '#8cf'));
-          } else {
-            state.msgs.push(msg(slot ? 'Контейнер полон.' : 'Пустой слот.', state.time, '#888'));
-          }
-        }
-        }
-      }
+      // One path for one action. This branch used to be a verbatim copy of
+      // activateContainerSelection minus the bashContainerLock case, so a
+      // locked crate could be forced with the mouse and not with the
+      // keyboard — the same crate, the same player, two answers.
+      if (acceptEdge) activateContainerSelection(container);
     }
   }
   // ── NPC menu navigation ──────────────────────────────────
@@ -10752,17 +10622,12 @@ function startGameFromTitle(): void {
   savePlayerAge(Number(titlePlayerAgeText));
   savePlayerSex(playerSex);
   const seedOverride = titleRunSeedOverride();
-  const trailerSelected = titleInputField === 'trailer';
   const isNewGame = titleInputField === 'start';
-  
-  if (seedOverride !== undefined || titleStartNeedsInit || trailerSelected || isNewGame) {
+
+  if (seedOverride !== undefined || titleStartNeedsInit || isNewGame) {
     scheduleLoading(() => {
       initGame(seedOverride, undefined, isNewGame);
       titleStartNeedsInit = false;
-      if (trailerSelected) {
-        state.trailerMode = true;
-        state.currentZ = TRAILER_ZS[titleTrailerFloorIdx];
-      }
       if (isNewGame) {
         startTutorial(state, player);
       }
@@ -10836,20 +10701,6 @@ function startHandler(e: KeyboardEvent): void {
   }
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
     if (titleInputField === 'language') cycleTitleLanguage(e.code === 'ArrowRight' ? 1 : -1);
-    else if (titleInputField === 'trailer') {
-      titleTrailerFloorIdx = (titleTrailerFloorIdx + (e.code === 'ArrowRight' ? 1 : TRAILER_ZS.length - 1)) % TRAILER_ZS.length;
-      if (!started && typeof state !== 'undefined') {
-        scheduleLoading(() => {
-          const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
-          initGame(undefined, floorZ);
-          state.trailerMode = true;
-          titleStartNeedsInit = true;
-        });
-      } else {
-        showTitle();
-      }
-    }
-    else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(e.code === 'ArrowRight' ? 1 : -1);
     else if (titleInputField === 'age') {
       titlePlayerAgeText = String(clampCharacterAge(Number(titlePlayerAgeText || DEFAULT_PLAYER_AGE) + (e.code === 'ArrowRight' ? 1 : -1), DEFAULT_PLAYER_AGE));
       showTitle();
@@ -10862,7 +10713,7 @@ function startHandler(e: KeyboardEvent): void {
   if (e.code === 'Enter') {
     e.preventDefault();
     if (titleInputField === 'continue') continueGameFromTitle();
-    else if (titleInputField === 'start' || titleInputField === 'trailer') startGameFromTitle();
+    else if (titleInputField === 'start') startGameFromTitle();
     else if (titleInputField === 'feedback') {
       titleMode = 'feedback';
       showTitle();
@@ -10871,7 +10722,6 @@ function startHandler(e: KeyboardEvent): void {
     else if (titleInputField === 'character') openTitleSetupPage('character');
     else if (titleInputField === 'back') openTitleSetupPage('main');
     else if (titleInputField === 'language') cycleTitleLanguage(1);
-    else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'age') moveTitleSelection(1);
     else if (titleInputField === 'sex') cyclePlayerSex();
     else moveTitleSelection(1);
@@ -10961,20 +10811,6 @@ function handleTitleGamepadInput(frame: InputFrame): void {
   if (navLeft || navRight) {
     const dir = navRight ? 1 : -1;
     if (titleInputField === 'language') cycleTitleLanguage(dir);
-    else if (titleInputField === 'trailer') {
-      titleTrailerFloorIdx = (titleTrailerFloorIdx + (dir > 0 ? 1 : TRAILER_ZS.length - 1)) % TRAILER_ZS.length;
-      if (!started && typeof state !== 'undefined') {
-        scheduleLoading(() => {
-          const floorZ = TRAILER_ZS[titleTrailerFloorIdx];
-          initGame(undefined, floorZ);
-          state.trailerMode = true;
-          titleStartNeedsInit = true;
-        });
-      } else {
-        showTitle();
-      }
-    }
-    else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(dir);
     else if (titleInputField === 'age') {
       titlePlayerAgeText = String(clampCharacterAge(Number(titlePlayerAgeText || DEFAULT_PLAYER_AGE) + dir, DEFAULT_PLAYER_AGE));
       showTitle();
@@ -10991,7 +10827,6 @@ function handleTitleGamepadInput(frame: InputFrame): void {
     else if (titleInputField === 'character') openTitleSetupPage('character');
     else if (titleInputField === 'back') openTitleSetupPage('main');
     else if (titleInputField === 'language') cycleTitleLanguage(1);
-    else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'sex') cyclePlayerSex();
     else moveTitleSelection(1);
   }
